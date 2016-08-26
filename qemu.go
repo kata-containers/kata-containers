@@ -14,6 +14,14 @@
 // limitations under the License.
 */
 
+// Package qemu provides methods and types for launching and managing QEMU
+// instances.  Instances can be launched with the LaunchQemu function and
+// managed thereafter via QMPStart and the QMP object that this function
+// returns.  To manage a qemu instance after it has been launched you need
+// to pass the -qmp option during launch requesting the qemu instance to create
+// a QMP unix domain manageent socket, e.g.,
+// -qmp unix:/tmp/qmp-socket,server,nowait.  For more information see the
+// example below.
 package qemu
 
 import (
