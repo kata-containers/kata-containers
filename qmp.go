@@ -29,9 +29,6 @@ import (
 	"golang.org/x/net/context"
 )
 
-// Code to launch qemu
-// move to package and document
-
 // QMPLog is a logging interface used by the qemu package to log various
 // interesting pieces of information.  Rather than introduce a dependency
 // on a given logging package, qemu presents this interface that allows
