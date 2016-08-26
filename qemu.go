@@ -51,7 +51,7 @@ import (
 func LaunchQemu(ctx context.Context, params []string, fds []*os.File, logger QMPLog) (string, error) {
 	errStr := ""
 	cmd := exec.Command("qemu-system-x86_64", params...)
-	if fds != nil {
+	if len(fds) > 0 {
 		logger.Infof("Adding extra file %v", fds)
 		cmd.ExtraFiles = fds
 	}
