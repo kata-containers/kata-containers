@@ -346,7 +346,7 @@ func (q *QMP) mainLoop() {
 
 DONE:
 	for {
-		ok := false
+		var ok bool
 		select {
 		case cmd, ok := <-q.cmdCh:
 			if !ok {
