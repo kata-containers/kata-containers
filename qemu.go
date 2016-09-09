@@ -49,6 +49,10 @@ import (
 // will be returned if the launch succeeds.  Otherwise a string containing
 // the contents of stderr + a Go error object will be returned.
 func LaunchQemu(ctx context.Context, params []string, fds []*os.File, logger QMPLog) (string, error) {
+	if logger == nil {
+		logger = qmpNullLogger{}
+	}
+
 	errStr := ""
 	cmd := exec.Command("qemu-system-x86_64", params...)
 	if len(fds) > 0 {
