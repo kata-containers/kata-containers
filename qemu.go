@@ -34,6 +34,28 @@ import (
 	"context"
 )
 
+// Device describes a device to be created by qemu.
+type Device struct {
+	// Type is the qemu device type
+	Type string
+
+	// ID is the user defined device ID.
+	ID string
+
+	// MemDev is the device memory identifier.
+	MemDev string
+
+	// FSDev is the device filesystem identifier.
+	FSDev string
+
+	// MountTag is the device filesystem mount point tag.
+	// It is only relevant when combined with FSDev.
+	MountTag string
+
+	// CharDev is the device character device identifier.
+	CharDev string
+}
+
 // QMPSocket represents a qemu QMP socket configuration.
 type QMPSocket struct {
 	// Type is the socket type (e.g. "unix").
@@ -70,8 +92,11 @@ type Config struct {
 	// CPUModel is the CPU model to be used by qemu.
 	CPUModel string
 
-	// QMPSocket is the QMP socket description
+	// QMPSocket is the QMP socket description.
 	QMPSocket QMPSocket
+
+	// Devices is a list of devices for qemu to create.
+	Devices []Device
 
 	// ExtraParams is a slice of options to pass to qemu.
 	ExtraParams []string
@@ -127,6 +152,41 @@ func appendQMPSocket(params []string, config Config) []string {
 	return params
 }
 
+func appendDevices(params []string, config Config) []string {
+	for _, d := range config.Devices {
+		if d.Type != "" {
+			var deviceParams []string
+
+			deviceParams = append(deviceParams, fmt.Sprintf("%s", d.Type))
+
+			if d.ID != "" {
+				deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", d.ID))
+			}
+
+			if d.MemDev != "" {
+				deviceParams = append(deviceParams, fmt.Sprintf(",memdev=%s", d.MemDev))
+			}
+
+			if d.CharDev != "" {
+				deviceParams = append(deviceParams, fmt.Sprintf(",chardev=%s", d.CharDev))
+			}
+
+			if d.FSDev != "" {
+				deviceParams = append(deviceParams, fmt.Sprintf(",fsdev=%s", d.FSDev))
+
+				if d.MountTag != "" {
+					deviceParams = append(deviceParams, fmt.Sprintf(",mount_tag=%s", d.MountTag))
+				}
+			}
+
+			params = append(params, "-device")
+			params = append(params, strings.Join(deviceParams, ""))
+		}
+	}
+
+	return params
+}
+
 // LaunchQemu can be used to launch a new qemu instance.
 //
 // The Config parameter contains a set of qemu parameters and settings.
@@ -143,6 +203,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendMachineParams(params, config)
 	params = appendCPUModel(params, config)
 	params = appendQMPSocket(params, config)
+	params = appendDevices(params, config)
 
 	params = append(params, config.ExtraParams...)
 
