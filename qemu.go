@@ -42,6 +42,9 @@ type Config struct {
 	// Ctx is not used at the moment.
 	Ctx context.Context
 
+	// Name is the qemu guest name
+	Name string
+	
 	// MachineType is the machine type to be used by qemu.
 	MachineType string
 
@@ -56,6 +59,15 @@ type Config struct {
 
 	// FDs is a list of open file descriptors to be passed to the spawned qemu process
 	FDs []*os.File
+}
+
+func appendName(params []string, config Config) []string {
+	if config.Name != "" {
+		params = append(params, "-name")
+		params = append(params, config.Name)
+	}
+
+	return params
 }
 
 func appendMachineParams(params []string, config Config) []string {
@@ -88,6 +100,7 @@ func appendCPUModel(params []string, config Config) []string {
 func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	var params []string
 
+	params = appendName(params, config)
 	params = appendMachineParams(params, config)
 	params = appendCPUModel(params, config)
 	params = append(params, config.ExtraParams...)
