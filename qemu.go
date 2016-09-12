@@ -175,11 +175,14 @@ type Config struct {
 	// Name is the qemu guest name
 	Name string
 
-	// Machine
-	Machine Machine
+	// UUID is the qemu process UUID.
+	UUID string
 
 	// CPUModel is the CPU model to be used by qemu.
 	CPUModel string
+
+	// Machine
+	Machine Machine
 
 	// QMPSocket is the QMP socket description.
 	QMPSocket QMPSocket
@@ -202,9 +205,6 @@ type Config struct {
 	// VGA is the qemu VGA mode.
 	VGA string
 
-	// UUID is the qemu process UUID.
-	UUID string
-
 	// Kernel is the guest kernel configuration.
 	Kernel Kernel
 
@@ -216,9 +216,6 @@ type Config struct {
 
 	// GlobalParam is the -global parameter
 	GlobalParam string
-
-	// ExtraParams is a slice of options to pass to qemu.
-	ExtraParams []string
 
 	// FDs is a list of open file descriptors to be passed to the spawned qemu process
 	FDs []*os.File
@@ -512,8 +509,6 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendKernel(params, config)
 	params = appendGlobalParam(params, config)
 	params = appendVGA(params, config)
-
-	params = append(params, config.ExtraParams...)
 
 	return LaunchCustomQemu(config.Ctx, config.Path, params, config.FDs, logger)
 }
