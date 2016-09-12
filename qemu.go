@@ -193,6 +193,9 @@ type Config struct {
 	// RTC is the qemu Real Time Clock configuration
 	RTC RTC
 
+	// VGA is the qemu VGA mode.
+	VGA string
+
 	// UUID is the qemu process UUID.
 	UUID string
 
@@ -445,6 +448,15 @@ func appendGlobalParam(params []string, config Config) []string {
 	return params
 }
 
+func appendVGA(params []string, config Config) []string {
+	if config.VGA != "" {
+		params = append(params, "-vga")
+		params = append(params, config.VGA)
+	}
+
+	return params
+}
+
 func appendKernel(params []string, config Config) []string {
 	if config.Kernel.Path != "" {
 		params = append(params, "-kernel")
@@ -485,6 +497,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendRTC(params, config)
 	params = appendKernel(params, config)
 	params = appendGlobalParam(params, config)
+	params = appendVGA(params, config)
 
 	params = append(params, config.ExtraParams...)
 
