@@ -148,6 +148,9 @@ type Config struct {
 	// FilesystemDevices is a list of filesystem devices.
 	FilesystemDevices []FSDevice
 
+	// UUID is the qemu process UUID.
+	UUID string
+
 	// Kernel is the guest kernel configuration.
 	Kernel Kernel
 
@@ -303,6 +306,15 @@ func appendFilesystemDevices(params []string, config Config) []string {
 	return params
 }
 
+func appendUUID(params []string, config Config) []string {
+	if config.UUID != "" {
+		params = append(params, "-uuid")
+		params = append(params, config.UUID)
+	}
+
+	return params
+}
+
 func appendKernel(params []string, config Config) []string {
 	if config.Kernel.Path != "" {
 		params = append(params, "-kernel")
@@ -330,6 +342,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	var params []string
 
 	params = appendName(params, config)
+	params = appendUUID(params, config)
 	params = appendMachineParams(params, config)
 	params = appendCPUModel(params, config)
 	params = appendQMPSocket(params, config)
