@@ -26,14 +26,78 @@ package qemu
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 
 	"context"
 )
 
-// LaunchQemu can be used to launch a new qemu instance by invoking the
-// qemu-system-x86_64 binary.
+// Config is the qemu configuration structure.
+// It allows for passing custom settings and parameters to the qemu API.
+type Config struct {
+	// Path is the qemu binary path.
+	Path string
+
+	// Ctx is not used at the moment.
+	Ctx context.Context
+
+	// MachineType is the machine type to be used by qemu.
+	MachineType string
+
+	// MachineTypeAcceleration are the machine acceleration option to be used by qemu.
+	MachineTypeAcceleration string
+
+	// CPUModel is the CPU model to be used by qemu.
+	CPUModel string
+
+	// ExtraParams is a slice of options to pass to qemu.
+	ExtraParams []string
+
+	// FDs is a list of open file descriptors to be passed to the spawned qemu process
+	FDs []*os.File
+}
+
+func appendMachineParams(params []string, config Config) []string {
+	if config.MachineType != "" && config.MachineTypeAcceleration != "" {
+		params = append(params, "-machine")
+		params = append(params, fmt.Sprintf("%s,accel=%s", config.MachineType, config.MachineTypeAcceleration))
+	}
+
+	return params
+}
+
+func appendCPUModel(params []string, config Config) []string {
+	if config.CPUModel != "" {
+		params = append(params, "-cpu")
+		params = append(params, config.CPUModel)
+	}
+
+	return params
+}
+
+// LaunchQemu can be used to launch a new qemu instance.
+//
+// The Config parameter contains a set of qemu parameters and settings.
+//
+// This function writes its log output via logger parameter.
+//
+// The function will block until the launched qemu process exits.  "", nil
+// will be returned if the launch succeeds.  Otherwise a string containing
+// the contents of stderr + a Go error object will be returned.
+func LaunchQemu(config Config, logger QMPLog) (string, error) {
+	var params []string
+
+	params = appendMachineParams(params, config)
+	params = appendCPUModel(params, config)
+	params = append(params, config.ExtraParams...)
+
+	return LaunchCustomQemu(config.Ctx, config.Path, params, config.FDs, logger)
+}
+
+// LaunchCustomQemu can be used to launch a new qemu instance.
+//
+// The path parameter is used to pass the qemu executable path.
 //
 // The ctx parameter is not currently used but has been added so that the
 // signature of this function will not need to change when launch cancellation
@@ -48,13 +112,18 @@ import (
 // The function will block until the launched qemu process exits.  "", nil
 // will be returned if the launch succeeds.  Otherwise a string containing
 // the contents of stderr + a Go error object will be returned.
-func LaunchQemu(ctx context.Context, params []string, fds []*os.File, logger QMPLog) (string, error) {
+func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*os.File, logger QMPLog) (string, error) {
 	if logger == nil {
 		logger = qmpNullLogger{}
 	}
 
 	errStr := ""
-	cmd := exec.Command("qemu-system-x86_64", params...)
+
+	if path == "" {
+		path = "qemu-system-x86_64"
+	}
+
+	cmd := exec.Command(path, params...)
 	if len(fds) > 0 {
 		logger.Infof("Adding extra file %v", fds)
 		cmd.ExtraFiles = fds
