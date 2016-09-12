@@ -103,6 +103,21 @@ type QMPSocket struct {
 	NoWait bool
 }
 
+// SMP is the multi processors configuration structure.
+type SMP struct {
+	// CPUs is the number of VCPUs made available to qemu.
+	CPUs uint32
+
+	// Cores is the number of cores made available to qemu.
+	Cores uint32
+
+	// Threads is the number of threads made available to qemu.
+	Threads uint32
+
+	// Sockets is the number of sockets made available to qemu.
+	Sockets uint32
+}
+
 // Memory is the guest memory configuration structure.
 type Memory struct {
 	// Size is the amount of memory made available to the guest.
@@ -171,6 +186,9 @@ type Config struct {
 
 	// Memory is the guest memory configuration.
 	Memory Memory
+
+	// SMP is the quest multi processors configuration.
+	SMP SMP
 
 	// ExtraParams is a slice of options to pass to qemu.
 	ExtraParams []string
@@ -354,6 +372,31 @@ func appendMemory(params []string, config Config) []string {
 	return params
 }
 
+func appendCPUs(params []string, config Config) []string {
+	if config.SMP.CPUs > 0 {
+		var SMPParams []string
+
+		SMPParams = append(SMPParams, fmt.Sprintf("%d", config.SMP.CPUs))
+
+		if config.SMP.Cores > 0 {
+			SMPParams = append(SMPParams, fmt.Sprintf(",cores=%d", config.SMP.Cores))
+		}
+
+		if config.SMP.Threads > 0 {
+			SMPParams = append(SMPParams, fmt.Sprintf(",threads=%d", config.SMP.Threads))
+		}
+
+		if config.SMP.Sockets > 0 {
+			SMPParams = append(SMPParams, fmt.Sprintf(",sockets=%d", config.SMP.Sockets))
+		}
+
+		params = append(params, "-smp")
+		params = append(params, strings.Join(SMPParams, ""))
+	}
+
+	return params
+}
+
 func appendKernel(params []string, config Config) []string {
 	if config.Kernel.Path != "" {
 		params = append(params, "-kernel")
@@ -386,6 +429,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendCPUModel(params, config)
 	params = appendQMPSocket(params, config)
 	params = appendMemory(params, config)
+	params = appendCPUs(params, config)
 	params = appendDevices(params, config)
 	params = appendCharDevices(params, config)
 	params = appendFilesystemDevices(params, config)
