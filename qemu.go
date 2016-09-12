@@ -88,6 +88,18 @@ type FSDevice struct {
 	SecurityModel string
 }
 
+// RTC represents a qemu Real Time Clock configuration.
+type RTC struct {
+	// Base is the RTC start time.
+	Base string
+
+	// Clock is the is the RTC clock driver.
+	Clock string
+
+	// DriftFix is the drift fixing mechanism.
+	DriftFix string
+}
+
 // QMPSocket represents a qemu QMP socket configuration.
 type QMPSocket struct {
 	// Type is the socket type (e.g. "unix").
@@ -177,6 +189,9 @@ type Config struct {
 
 	// FilesystemDevices is a list of filesystem devices.
 	FilesystemDevices []FSDevice
+
+	// RTC is the qemu Real Time Clock configuration
+	RTC RTC
 
 	// UUID is the qemu process UUID.
 	UUID string
@@ -397,6 +412,27 @@ func appendCPUs(params []string, config Config) []string {
 	return params
 }
 
+func appendRTC(params []string, config Config) []string {
+	if config.RTC.Base != "" {
+		var RTCParams []string
+
+		RTCParams = append(RTCParams, fmt.Sprintf("base=%s", config.RTC.Base))
+
+		if config.RTC.DriftFix != "" {
+			RTCParams = append(RTCParams, fmt.Sprintf(",driftfix=%s", config.RTC.DriftFix))
+		}
+
+		if config.RTC.Clock != "" {
+			RTCParams = append(RTCParams, fmt.Sprintf(",clock=%s", config.RTC.Clock))
+		}
+
+		params = append(params, "-rtc")
+		params = append(params, strings.Join(RTCParams, ""))
+	}
+
+	return params
+}
+
 func appendKernel(params []string, config Config) []string {
 	if config.Kernel.Path != "" {
 		params = append(params, "-kernel")
@@ -434,6 +470,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendCharDevices(params, config)
 	params = appendFilesystemDevices(params, config)
 	params = appendObjects(params, config)
+	params = appendRTC(params, config)
 	params = appendKernel(params, config)
 
 	params = append(params, config.ExtraParams...)
