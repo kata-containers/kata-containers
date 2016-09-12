@@ -34,6 +34,15 @@ import (
 	"context"
 )
 
+// Machine describes the machine type qemu will emulate.
+type Machine struct {
+	// Type is the machine type to be used by qemu.
+	Type string
+
+	// Acceleration are the machine acceleration options to be used by qemu.
+	Acceleration string
+}
+
 // Device describes a device to be created by qemu.
 type Device struct {
 	// Type is the qemu device type
@@ -166,11 +175,8 @@ type Config struct {
 	// Name is the qemu guest name
 	Name string
 
-	// MachineType is the machine type to be used by qemu.
-	MachineType string
-
-	// MachineTypeAcceleration are the machine acceleration option to be used by qemu.
-	MachineTypeAcceleration string
+	// Machine
+	Machine Machine
 
 	// CPUModel is the CPU model to be used by qemu.
 	CPUModel string
@@ -227,10 +233,18 @@ func appendName(params []string, config Config) []string {
 	return params
 }
 
-func appendMachineParams(params []string, config Config) []string {
-	if config.MachineType != "" && config.MachineTypeAcceleration != "" {
+func appendMachine(params []string, config Config) []string {
+	if config.Machine.Type != "" {
+		var machineParams []string
+
+		machineParams = append(machineParams, config.Machine.Type)
+
+		if config.Machine.Acceleration != "" {
+			machineParams = append(machineParams, fmt.Sprintf(",accel=%s", config.Machine.Acceleration))
+		}
+
 		params = append(params, "-machine")
-		params = append(params, fmt.Sprintf("%s,accel=%s", config.MachineType, config.MachineTypeAcceleration))
+		params = append(params, strings.Join(machineParams, ""))
 	}
 
 	return params
@@ -485,7 +499,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 
 	params = appendName(params, config)
 	params = appendUUID(params, config)
-	params = appendMachineParams(params, config)
+	params = appendMachine(params, config)
 	params = appendCPUModel(params, config)
 	params = appendQMPSocket(params, config)
 	params = appendMemory(params, config)
