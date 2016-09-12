@@ -139,6 +139,9 @@ type Config struct {
 	// Devices is a list of devices for qemu to create.
 	Devices []Device
 
+	// CharDevices is a list of character devices for qemu to export.
+	CharDevices []string
+
 	// Objects is a list of objects for qemu to create.
 	Objects []Object
 
@@ -237,6 +240,15 @@ func appendDevices(params []string, config Config) []string {
 	return params
 }
 
+func appendCharDevices(params []string, config Config) []string {
+	for _, c := range config.CharDevices {
+		params = append(params, "-chardev")
+		params = append(params, c)
+	}
+
+	return params
+}
+
 func appendObjects(params []string, config Config) []string {
 	for _, o := range config.Objects {
 		if o.Type != "" {
@@ -322,6 +334,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendCPUModel(params, config)
 	params = appendQMPSocket(params, config)
 	params = appendDevices(params, config)
+	params = appendCharDevices(params, config)
 	params = appendFilesystemDevices(params, config)
 	params = appendObjects(params, config)
 	params = appendKernel(params, config)
