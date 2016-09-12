@@ -103,6 +103,21 @@ type QMPSocket struct {
 	NoWait bool
 }
 
+// Memory is the guest memory configuration structure.
+type Memory struct {
+	// Size is the amount of memory made available to the guest.
+	// It should be suffixed with M or G for sizes in megabytes or
+	// gigabytes respectively.
+	Size string
+
+	// Slots is the amount of memory slots made available to the guest.
+	Slots uint8
+
+	// MaxMem is the maximum amount of memory that can be made available
+	// to the guest through e.g. hot pluggable memory.
+	MaxMem string
+}
+
 // Kernel is the guest kernel configuration structure.
 type Kernel struct {
 	// Path is the guest kernel path on the host filesystem.
@@ -153,6 +168,9 @@ type Config struct {
 
 	// Kernel is the guest kernel configuration.
 	Kernel Kernel
+
+	// Memory is the guest memory configuration.
+	Memory Memory
 
 	// ExtraParams is a slice of options to pass to qemu.
 	ExtraParams []string
@@ -315,6 +333,27 @@ func appendUUID(params []string, config Config) []string {
 	return params
 }
 
+func appendMemory(params []string, config Config) []string {
+	if config.Memory.Size != "" {
+		var memoryParams []string
+
+		memoryParams = append(memoryParams, config.Memory.Size)
+
+		if config.Memory.Slots > 0 {
+			memoryParams = append(memoryParams, fmt.Sprintf(",slots=%d", config.Memory.Slots))
+		}
+
+		if config.Memory.MaxMem != "" {
+			memoryParams = append(memoryParams, fmt.Sprintf(",maxmem=%s", config.Memory.MaxMem))
+		}
+
+		params = append(params, "-m")
+		params = append(params, strings.Join(memoryParams, ""))
+	}
+
+	return params
+}
+
 func appendKernel(params []string, config Config) []string {
 	if config.Kernel.Path != "" {
 		params = append(params, "-kernel")
@@ -346,6 +385,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendMachineParams(params, config)
 	params = appendCPUModel(params, config)
 	params = appendQMPSocket(params, config)
+	params = appendMemory(params, config)
 	params = appendDevices(params, config)
 	params = appendCharDevices(params, config)
 	params = appendFilesystemDevices(params, config)
