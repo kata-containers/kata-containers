@@ -56,6 +56,22 @@ type Device struct {
 	CharDev string
 }
 
+// Object is a qemu object representation.
+type Object struct {
+	// Type is the qemu object type
+	Type string
+
+	// ID is the user defined object ID.
+	ID string
+
+	// MemPath is the object's memory path.
+	// This is only relevant for memory objects
+	MemPath string
+
+	// Size is the object size in bytes
+	Size uint64
+}
+
 // QMPSocket represents a qemu QMP socket configuration.
 type QMPSocket struct {
 	// Type is the socket type (e.g. "unix").
@@ -97,6 +113,9 @@ type Config struct {
 
 	// Devices is a list of devices for qemu to create.
 	Devices []Device
+
+	// Objects is a list of objects for qemu to create.
+	Objects []Object
 
 	// ExtraParams is a slice of options to pass to qemu.
 	ExtraParams []string
@@ -187,6 +206,33 @@ func appendDevices(params []string, config Config) []string {
 	return params
 }
 
+func appendObjects(params []string, config Config) []string {
+	for _, o := range config.Objects {
+		if o.Type != "" {
+			var objectParams []string
+
+			objectParams = append(objectParams, o.Type)
+
+			if o.ID != "" {
+				objectParams = append(objectParams, fmt.Sprintf(",id=%s", o.ID))
+			}
+
+			if o.MemPath != "" {
+				objectParams = append(objectParams, fmt.Sprintf(",mem-path=%s", o.MemPath))
+			}
+
+			if o.Size > 0 {
+				objectParams = append(objectParams, fmt.Sprintf(",size=%d", o.Size))
+			}
+
+			params = append(params, "-object")
+			params = append(params, strings.Join(objectParams, ""))
+		}
+	}
+
+	return params
+}
+
 // LaunchQemu can be used to launch a new qemu instance.
 //
 // The Config parameter contains a set of qemu parameters and settings.
@@ -204,6 +250,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendCPUModel(params, config)
 	params = appendQMPSocket(params, config)
 	params = appendDevices(params, config)
+	params = appendObjects(params, config)
 
 	params = append(params, config.ExtraParams...)
 
