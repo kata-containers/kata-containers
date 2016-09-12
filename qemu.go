@@ -29,9 +29,25 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"context"
 )
+
+// QMPSocket represents a qemu QMP socket configuration.
+type QMPSocket struct {
+	// Type is the socket type (e.g. "unix").
+	Type string
+
+	// Name is the socket name.
+	Name string
+
+	// Server tells if this is a server socket.
+	Server bool
+
+	// NoWait tells if qemu should block waiting for a client to connect.
+	NoWait bool
+}
 
 // Config is the qemu configuration structure.
 // It allows for passing custom settings and parameters to the qemu API.
@@ -44,7 +60,7 @@ type Config struct {
 
 	// Name is the qemu guest name
 	Name string
-	
+
 	// MachineType is the machine type to be used by qemu.
 	MachineType string
 
@@ -53,6 +69,9 @@ type Config struct {
 
 	// CPUModel is the CPU model to be used by qemu.
 	CPUModel string
+
+	// QMPSocket is the QMP socket description
+	QMPSocket QMPSocket
 
 	// ExtraParams is a slice of options to pass to qemu.
 	ExtraParams []string
@@ -88,6 +107,26 @@ func appendCPUModel(params []string, config Config) []string {
 	return params
 }
 
+func appendQMPSocket(params []string, config Config) []string {
+	if config.QMPSocket.Type != "" && config.QMPSocket.Name != "" {
+		var qmpParams []string
+
+		qmpParams = append(qmpParams, fmt.Sprintf("%s:", config.QMPSocket.Type))
+		qmpParams = append(qmpParams, fmt.Sprintf("%s", config.QMPSocket.Name))
+		if config.QMPSocket.Server == true {
+			qmpParams = append(qmpParams, ",server")
+			if config.QMPSocket.NoWait == true {
+				qmpParams = append(qmpParams, ",nowait")
+			}
+		}
+
+		params = append(params, "-qmp")
+		params = append(params, strings.Join(qmpParams, ""))
+	}
+
+	return params
+}
+
 // LaunchQemu can be used to launch a new qemu instance.
 //
 // The Config parameter contains a set of qemu parameters and settings.
@@ -103,6 +142,8 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendName(params, config)
 	params = appendMachineParams(params, config)
 	params = appendCPUModel(params, config)
+	params = appendQMPSocket(params, config)
+
 	params = append(params, config.ExtraParams...)
 
 	return LaunchCustomQemu(config.Ctx, config.Path, params, config.FDs, logger)
