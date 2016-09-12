@@ -29,7 +29,7 @@ import (
 	"os"
 	"os/exec"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 // LaunchQemu can be used to launch a new qemu instance by invoking the

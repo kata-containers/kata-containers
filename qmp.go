@@ -26,7 +26,7 @@ import (
 	"net"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 // QMPLog is a logging interface used by the qemu package to log various

@@ -19,8 +19,9 @@ package qemu_test
 import (
 	"time"
 
+	"context"
+
 	"github.com/01org/ciao/qemu"
-	"golang.org/x/net/context"
 )
 
 func Example() {

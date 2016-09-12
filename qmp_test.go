@@ -26,7 +26,7 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/01org/ciao/testutil"
 )
