@@ -72,6 +72,22 @@ type Object struct {
 	Size uint64
 }
 
+// FSDevice represents a qemu filesystem configuration.
+type FSDevice struct {
+	// Type is the filesystem device type (e.g. "local")
+	Type string
+
+	// ID is the filesystem identifier.
+	// It should match an existing Device ID.
+	ID string
+
+	// Path is the host root path for this filesystem.
+	Path string
+
+	// SecurityModel is the security model for this filesystem device.
+	SecurityModel string
+}
+
 // QMPSocket represents a qemu QMP socket configuration.
 type QMPSocket struct {
 	// Type is the socket type (e.g. "unix").
@@ -125,6 +141,9 @@ type Config struct {
 
 	// Objects is a list of objects for qemu to create.
 	Objects []Object
+
+	// FilesystemDevices is a list of filesystem devices.
+	FilesystemDevices []FSDevice
 
 	// Kernel is the guest kernel configuration.
 	Kernel Kernel
@@ -245,6 +264,33 @@ func appendObjects(params []string, config Config) []string {
 	return params
 }
 
+func appendFilesystemDevices(params []string, config Config) []string {
+	for _, f := range config.FilesystemDevices {
+		if f.Type != "" {
+			var fsParams []string
+
+			fsParams = append(fsParams, fmt.Sprintf("%s", f.Type))
+
+			if f.ID != "" {
+				fsParams = append(fsParams, fmt.Sprintf(",id=%s", f.ID))
+			}
+
+			if f.Path != "" {
+				fsParams = append(fsParams, fmt.Sprintf(",path=%s", f.Path))
+			}
+
+			if f.SecurityModel != "" {
+				fsParams = append(fsParams, fmt.Sprintf(",security-model=%s", f.SecurityModel))
+			}
+
+			params = append(params, "-fsdev")
+			params = append(params, strings.Join(fsParams, ""))
+		}
+	}
+
+	return params
+}
+
 func appendKernel(params []string, config Config) []string {
 	if config.Kernel.Path != "" {
 		params = append(params, "-kernel")
@@ -276,6 +322,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendCPUModel(params, config)
 	params = appendQMPSocket(params, config)
 	params = appendDevices(params, config)
+	params = appendFilesystemDevices(params, config)
 	params = appendObjects(params, config)
 	params = appendKernel(params, config)
 
