@@ -163,6 +163,18 @@ type Kernel struct {
 	Params string
 }
 
+// Knobs regroups a set of qemu boolean settings
+type Knobs struct {
+	// NoUserConfig prevents qemu from loading user config files.
+	NoUserConfig bool
+
+	// NoDefaults prevents qemu from creating default devices.
+	NoDefaults bool
+
+	// NoGraphic completely disables graphic output.
+	NoGraphic bool
+}
+
 // Config is the qemu configuration structure.
 // It allows for passing custom settings and parameters to the qemu API.
 type Config struct {
@@ -214,8 +226,11 @@ type Config struct {
 	// SMP is the quest multi processors configuration.
 	SMP SMP
 
-	// GlobalParam is the -global parameter
+	// GlobalParam is the -global parameter.
 	GlobalParam string
+
+	// Knobs is a set of qemu boolean settings.
+	Knobs Knobs
 
 	// FDs is a list of open file descriptors to be passed to the spawned qemu process
 	FDs []*os.File
@@ -482,6 +497,22 @@ func appendKernel(params []string, config Config) []string {
 	return params
 }
 
+func appendKnobs(params []string, config Config) []string {
+	if config.Knobs.NoUserConfig == true {
+		params = append(params, "-no-user-config")
+	}
+
+	if config.Knobs.NoDefaults == true {
+		params = append(params, "-nodefaults")
+	}
+
+	if config.Knobs.NoGraphic == true {
+		params = append(params, "-nographic")
+	}
+
+	return params
+}
+
 // LaunchQemu can be used to launch a new qemu instance.
 //
 // The Config parameter contains a set of qemu parameters and settings.
@@ -509,6 +540,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendKernel(params, config)
 	params = appendGlobalParam(params, config)
 	params = appendVGA(params, config)
+	params = appendKnobs(params, config)
 
 	return LaunchCustomQemu(config.Ctx, config.Path, params, config.FDs, logger)
 }
