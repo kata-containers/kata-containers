@@ -205,6 +205,9 @@ type Config struct {
 	// SMP is the quest multi processors configuration.
 	SMP SMP
 
+	// GlobalParam is the -global parameter
+	GlobalParam string
+
 	// ExtraParams is a slice of options to pass to qemu.
 	ExtraParams []string
 
@@ -433,6 +436,15 @@ func appendRTC(params []string, config Config) []string {
 	return params
 }
 
+func appendGlobalParam(params []string, config Config) []string {
+	if config.GlobalParam != "" {
+		params = append(params, "-global")
+		params = append(params, config.GlobalParam)
+	}
+
+	return params
+}
+
 func appendKernel(params []string, config Config) []string {
 	if config.Kernel.Path != "" {
 		params = append(params, "-kernel")
@@ -472,6 +484,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendObjects(params, config)
 	params = appendRTC(params, config)
 	params = appendKernel(params, config)
+	params = appendGlobalParam(params, config)
 
 	params = append(params, config.ExtraParams...)
 
