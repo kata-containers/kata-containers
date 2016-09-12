@@ -87,6 +87,15 @@ type QMPSocket struct {
 	NoWait bool
 }
 
+// Kernel is the guest kernel configuration structure.
+type Kernel struct {
+	// Path is the guest kernel path on the host filesystem.
+	Path string
+
+	// Params is the kernel parameters string.
+	Params string
+}
+
 // Config is the qemu configuration structure.
 // It allows for passing custom settings and parameters to the qemu API.
 type Config struct {
@@ -116,6 +125,9 @@ type Config struct {
 
 	// Objects is a list of objects for qemu to create.
 	Objects []Object
+
+	// Kernel is the guest kernel configuration.
+	Kernel Kernel
 
 	// ExtraParams is a slice of options to pass to qemu.
 	ExtraParams []string
@@ -233,6 +245,20 @@ func appendObjects(params []string, config Config) []string {
 	return params
 }
 
+func appendKernel(params []string, config Config) []string {
+	if config.Kernel.Path != "" {
+		params = append(params, "-kernel")
+		params = append(params, config.Kernel.Path)
+
+		if config.Kernel.Params != "" {
+			params = append(params, "-append")
+			params = append(params, config.Kernel.Params)
+		}
+	}
+
+	return params
+}
+
 // LaunchQemu can be used to launch a new qemu instance.
 //
 // The Config parameter contains a set of qemu parameters and settings.
@@ -251,6 +277,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendQMPSocket(params, config)
 	params = appendDevices(params, config)
 	params = appendObjects(params, config)
+	params = appendKernel(params, config)
 
 	params = append(params, config.ExtraParams...)
 
