@@ -53,6 +53,13 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 		}
 
 		params = appendKnobs([]string{}, config)
+
+	case Kernel:
+		config := Config{
+			Kernel: s,
+		}
+
+		params = appendKernel([]string{}, config)
 	}
 
 	result := strings.Join(params, " ")
@@ -147,4 +154,15 @@ func TestAppendKnobsAllFalse(t *testing.T) {
 	}
 
 	testAppend(knobs, "", t)
+}
+
+var kernelString = "-kernel /opt/vmlinux.container -append root=/dev/pmem0p1 rootflags=dax,data=ordered,errors=remount-ro rw rootfstype=ext4 tsc=reliable"
+
+func TestAppendKernel(t *testing.T) {
+	kernel := Kernel{
+		Path:   "/opt/vmlinux.container",
+		Params: "root=/dev/pmem0p1 rootflags=dax,data=ordered,errors=remount-ro rw rootfstype=ext4 tsc=reliable",
+	}
+
+	testAppend(kernel, kernelString, t)
 }
