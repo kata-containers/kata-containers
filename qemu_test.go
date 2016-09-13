@@ -46,6 +46,13 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 		}
 
 		params = appendObjects([]string{}, config)
+
+	case Knobs:
+		config := Config{
+			Knobs: s,
+		}
+
+		params = appendKnobs([]string{}, config)
 	}
 
 	result := strings.Join(params, " ")
@@ -118,4 +125,26 @@ func TestAppendEmptyObject(t *testing.T) {
 	device := Device{}
 
 	testAppend(device, "", t)
+}
+
+var knobsString = "-no-user-config -nodefaults -nographic"
+
+func TestAppendKnobsAllTrue(t *testing.T) {
+	knobs := Knobs{
+		NoUserConfig: true,
+		NoDefaults:   true,
+		NoGraphic:    true,
+	}
+
+	testAppend(knobs, knobsString, t)
+}
+
+func TestAppendKnobsAllFalse(t *testing.T) {
+	knobs := Knobs{
+		NoUserConfig: false,
+		NoDefaults:   false,
+		NoGraphic:    false,
+	}
+
+	testAppend(knobs, "", t)
 }
