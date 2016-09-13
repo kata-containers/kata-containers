@@ -175,6 +175,24 @@ type Knobs struct {
 	NoGraphic bool
 }
 
+// NetDevice represents a guest networking device
+type NetDevice struct {
+	// Type is the netdev type (e.g. tap).
+	Type string
+
+	// ID is the netdevice identifier.
+	ID string
+
+	// IfName is the interface name,
+	IfName string
+
+	// DownScript is the tap interface deconfiguration script.
+	DownScript string
+
+	// Script is the tap interface configuration script.
+	Script string
+}
+
 // Config is the qemu configuration structure.
 // It allows for passing custom settings and parameters to the qemu API.
 type Config struct {
@@ -201,6 +219,9 @@ type Config struct {
 
 	// Devices is a list of devices for qemu to create.
 	Devices []Device
+
+	// NetDevices is a list of networking devices for qemu to create.
+	NetDevices []NetDevice
 
 	// CharDevices is a list of character devices for qemu to export.
 	CharDevices []string
@@ -513,6 +534,37 @@ func appendKnobs(params []string, config Config) []string {
 	return params
 }
 
+func appendNetDevices(params []string, config Config) []string {
+	for _, d := range config.NetDevices {
+		if d.Type != "" {
+			var netdevParams []string
+
+			netdevParams = append(netdevParams, fmt.Sprintf("%s", d.Type))
+
+			if d.ID != "" {
+				netdevParams = append(netdevParams, fmt.Sprintf(",id=%s", d.ID))
+			}
+
+			if d.IfName != "" {
+				netdevParams = append(netdevParams, fmt.Sprintf(",ifname=%s", d.IfName))
+			}
+
+			if d.DownScript != "" {
+				netdevParams = append(netdevParams, fmt.Sprintf(",downscript=%s", d.DownScript))
+			}
+
+			if d.Script != "" {
+				netdevParams = append(netdevParams, fmt.Sprintf(",script=%s", d.Script))
+			}
+
+			params = append(params, "-netdev")
+			params = append(params, strings.Join(netdevParams, ""))
+		}
+	}
+
+	return params
+}
+
 // LaunchQemu can be used to launch a new qemu instance.
 //
 // The Config parameter contains a set of qemu parameters and settings.
@@ -533,6 +585,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendMemory(params, config)
 	params = appendCPUs(params, config)
 	params = appendDevices(params, config)
+	params = appendNetDevices(params, config)
 	params = appendCharDevices(params, config)
 	params = appendFilesystemDevices(params, config)
 	params = appendObjects(params, config)

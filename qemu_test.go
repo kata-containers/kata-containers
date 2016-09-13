@@ -81,6 +81,13 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 		}
 
 		params = appendQMPSocket([]string{}, config)
+
+	case NetDevice:
+		config := Config{
+			NetDevices: []NetDevice{s},
+		}
+
+		params = appendNetDevices([]string{}, config)
 	}
 
 	result := strings.Join(params, " ")
@@ -257,4 +264,18 @@ func TestAppendStrings(t *testing.T) {
 	if result != qemuString {
 		t.Fatalf("Failed to append parameters [%s] != [%s]", result, qemuString)
 	}
+}
+
+var netdevString = "-netdev tap,id=ceth0,ifname=ceth0,downscript=no,script=no"
+
+func TestAppendNetDevices(t *testing.T) {
+	netdev := NetDevice{
+		Type:       "tap",
+		ID:         "ceth0",
+		IfName:     "ceth0",
+		Script:     "no",
+		DownScript: "no",
+	}
+
+	testAppend(netdev, netdevString, t)
 }
