@@ -60,6 +60,20 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 		}
 
 		params = appendKernel([]string{}, config)
+
+	case Memory:
+		config := Config{
+			Memory: s,
+		}
+
+		params = appendMemory([]string{}, config)
+
+	case SMP:
+		config := Config{
+			SMP: s,
+		}
+
+		params = appendCPUs([]string{}, config)
 	}
 
 	result := strings.Join(params, " ")
@@ -165,4 +179,29 @@ func TestAppendKernel(t *testing.T) {
 	}
 
 	testAppend(kernel, kernelString, t)
+}
+
+var memoryString = "-m 2G,slots=2,maxmem=3G"
+
+func TestAppendMemory(t *testing.T) {
+	memory := Memory{
+		Size:   "2G",
+		Slots:  2,
+		MaxMem: "3G",
+	}
+
+	testAppend(memory, memoryString, t)
+}
+
+var cpusString = "-smp 2,cores=1,threads=2,sockets=2"
+
+func TestAppendCPUs(t *testing.T) {
+	smp := SMP{
+		CPUs:    2,
+		Sockets: 2,
+		Cores:   1,
+		Threads: 2,
+	}
+
+	testAppend(smp, cpusString, t)
 }
