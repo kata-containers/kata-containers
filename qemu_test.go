@@ -236,3 +236,25 @@ func TestAppendQMPSocket(t *testing.T) {
 
 	testAppend(qmp, qmpSocketString, t)
 }
+
+var qemuString = "-name cc-qemu -cpu host -uuid 123456789"
+
+func TestAppendStrings(t *testing.T) {
+	var params []string
+
+	config := Config{
+		Path:     "qemu",
+		Name:     "cc-qemu",
+		UUID:     "123456789",
+		CPUModel: "host",
+	}
+
+	params = appendName(params, config)
+	params = appendCPUModel(params, config)
+	params = appendUUID(params, config)
+
+	result := strings.Join(params, " ")
+	if result != qemuString {
+		t.Fatalf("Failed to append parameters [%s] != [%s]", result, qemuString)
+	}
+}
