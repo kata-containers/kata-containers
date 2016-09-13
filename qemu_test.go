@@ -39,11 +39,18 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 		}
 
 		params = appendDevices([]string{}, config)
+
+	case Object:
+		config := Config{
+			Objects: []Object{s},
+		}
+
+		params = appendObjects([]string{}, config)
 	}
 
 	result := strings.Join(params, " ")
 	if result != expected {
-		t.Fatalf("Failed to append Machine [%s] != [%s]", result, expected)
+		t.Fatalf("Failed to append parameters [%s] != [%s]", result, expected)
 	}
 }
 
@@ -89,6 +96,25 @@ func TestAppendDeviceFS(t *testing.T) {
 }
 
 func TestAppendEmptyDevice(t *testing.T) {
+	device := Device{}
+
+	testAppend(device, "", t)
+}
+
+var objectMemoryString = "-object memory-backend-file,id=mem0,mem-path=/root,size=65536"
+
+func TestAppendObjectMemory(t *testing.T) {
+	object := Object{
+		Type:    "memory-backend-file",
+		ID:      "mem0",
+		MemPath: "/root",
+		Size:    1 << 16,
+	}
+
+	testAppend(object, objectMemoryString, t)
+}
+
+func TestAppendEmptyObject(t *testing.T) {
 	device := Device{}
 
 	testAppend(device, "", t)
