@@ -74,6 +74,13 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 		}
 
 		params = appendCPUs([]string{}, config)
+
+	case QMPSocket:
+		config := Config{
+			QMPSocket: s,
+		}
+
+		params = appendQMPSocket([]string{}, config)
 	}
 
 	result := strings.Join(params, " ")
@@ -204,4 +211,28 @@ func TestAppendCPUs(t *testing.T) {
 	}
 
 	testAppend(smp, cpusString, t)
+}
+
+var qmpSocketServerString = "-qmp unix:cc-qmp,server,nowait"
+var qmpSocketString = "-qmp unix:cc-qmp"
+
+func TestAppendQMPSocketServer(t *testing.T) {
+	qmp := QMPSocket{
+		Type:   "unix",
+		Name:   "cc-qmp",
+		Server: true,
+		NoWait: true,
+	}
+
+	testAppend(qmp, qmpSocketServerString, t)
+}
+
+func TestAppendQMPSocket(t *testing.T) {
+	qmp := QMPSocket{
+		Type:   "unix",
+		Name:   "cc-qmp",
+		Server: false,
+	}
+
+	testAppend(qmp, qmpSocketString, t)
 }
