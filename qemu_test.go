@@ -266,15 +266,16 @@ func TestAppendStrings(t *testing.T) {
 	}
 }
 
-var netdevString = "-netdev tap,id=ceth0,ifname=ceth0,downscript=no,script=no"
+var netdevString = "-netdev tap,id=ceth0,downscript=no,script=no,fds=8:9:10,vhost=on"
 
 func TestAppendNetDevices(t *testing.T) {
 	netdev := NetDevice{
 		Type:       "tap",
 		ID:         "ceth0",
-		IfName:     "ceth0",
 		Script:     "no",
 		DownScript: "no",
+		FDs:        []int{8, 9, 10},
+		VHost:      true,
 	}
 
 	testAppend(netdev, netdevString, t)

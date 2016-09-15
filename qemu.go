@@ -191,6 +191,13 @@ type NetDevice struct {
 
 	// Script is the tap interface configuration script.
 	Script string
+
+	// FDs represents the list of already existing file descriptors to be used.
+	// This is mostly useful for mq support.
+	FDs []int
+
+	// VHost enables virtio device emulation from the host kernel instead of from qemu.
+	VHost bool
 }
 
 // Config is the qemu configuration structure.
@@ -555,6 +562,20 @@ func appendNetDevices(params []string, config Config) []string {
 
 			if d.Script != "" {
 				netdevParams = append(netdevParams, fmt.Sprintf(",script=%s", d.Script))
+			}
+
+			if len(d.FDs) > 0 {
+				var fdParams []string
+
+				for _, fd := range d.FDs {
+					fdParams = append(fdParams, fmt.Sprintf("%d", fd))
+				}
+
+				netdevParams = append(netdevParams, fmt.Sprintf(",fds=%s", strings.Join(fdParams, ":")))
+			}
+
+			if d.VHost == true {
+				netdevParams = append(netdevParams, ",vhost=on")
 			}
 
 			params = append(params, "-netdev")
