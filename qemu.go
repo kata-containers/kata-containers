@@ -45,8 +45,8 @@ type Machine struct {
 
 // Device describes a device to be created by qemu.
 type Device struct {
-	// Type is the qemu device type
-	Type string
+	// Driver is the qemu device driver
+	Driver string
 
 	// ID is the user defined device ID.
 	ID string
@@ -57,12 +57,18 @@ type Device struct {
 	// FSDev is the device filesystem identifier.
 	FSDev string
 
+	// NetDev is the networking device identifier.
+	NetDev string
+
 	// MountTag is the device filesystem mount point tag.
 	// It is only relevant when combined with FSDev.
 	MountTag string
 
 	// CharDev is the device character device identifier.
 	CharDev string
+
+	// MACAddress is the networking device interface MAC address.
+	MACAddress string
 }
 
 // Object is a qemu object representation.
@@ -321,10 +327,10 @@ func appendQMPSocket(params []string, config Config) []string {
 
 func appendDevices(params []string, config Config) []string {
 	for _, d := range config.Devices {
-		if d.Type != "" {
+		if d.Driver != "" {
 			var deviceParams []string
 
-			deviceParams = append(deviceParams, fmt.Sprintf("%s", d.Type))
+			deviceParams = append(deviceParams, fmt.Sprintf("%s", d.Driver))
 
 			if d.ID != "" {
 				deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", d.ID))
@@ -343,6 +349,14 @@ func appendDevices(params []string, config Config) []string {
 
 				if d.MountTag != "" {
 					deviceParams = append(deviceParams, fmt.Sprintf(",mount_tag=%s", d.MountTag))
+				}
+			}
+
+			if d.NetDev != "" {
+				deviceParams = append(deviceParams, fmt.Sprintf(",netdev=%s", d.NetDev))
+
+				if d.MACAddress != "" {
+					deviceParams = append(deviceParams, fmt.Sprintf(",mac=%s", d.MACAddress))
 				}
 			}
 
