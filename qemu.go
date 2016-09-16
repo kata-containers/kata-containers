@@ -319,6 +319,9 @@ type NetDeviceType string
 const (
 	// TAP is a TAP networking device type.
 	TAP NetDeviceType = "tap"
+
+	// MACVTAP is a MAC virtual TAP networking device type.
+	MACVTAP = "macvtap"
 )
 
 // NetDevice represents a guest networking device
@@ -360,6 +363,8 @@ func (netdev NetDevice) Valid() bool {
 
 	switch netdev.Type {
 	case TAP:
+		return true
+	case MACVTAP:
 		return true
 	default:
 		return false
