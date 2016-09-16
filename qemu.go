@@ -65,6 +65,9 @@ const (
 	// VirtioSerial is the serial device driver.
 	VirtioSerial = "virtio-serial-pci"
 
+	// VirtioBlock is the block device driver.
+	VirtioBlock = "virtio-blk"
+
 	// Console is the console device driver.
 	Console = "virtconsole"
 )
@@ -444,6 +447,88 @@ func (dev SerialDevice) QemuParams() []string {
 
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
+
+	return qemuParams
+}
+
+// BlockDeviceInterface defines the type of interface the device is connected to.
+type BlockDeviceInterface string
+
+// BlockDeviceAIO defines the type of asynchronous I/O the block device should use.
+type BlockDeviceAIO string
+
+// BlockDeviceFormat defines the image format used on a block device.
+type BlockDeviceFormat string
+
+const (
+	// NoInterface for block devices with no interfaces.
+	NoInterface BlockDeviceInterface = "none"
+
+	// SCSI represents a SCSI block device interface.
+	SCSI = "scsi"
+)
+
+const (
+	// Threads is the pthread asynchronous I/O implementation.
+	Threads BlockDeviceAIO = "threads"
+
+	// Native is the pthread asynchronous I/O implementation.
+	Native = "native"
+)
+
+const (
+	// QCOW2 is the Qemu Copy On Write v2 image format.
+	QCOW2 BlockDeviceFormat = "qcow2"
+)
+
+// BlockDevice represents a qemu block device.
+type BlockDevice struct {
+	Driver    DeviceDriver
+	ID        string
+	File      string
+	Interface BlockDeviceInterface
+	AIO       BlockDeviceAIO
+	Format    BlockDeviceFormat
+	SCSI      bool
+	WCE       bool
+}
+
+// Valid returns true if the BlockDevice structure is valid and complete.
+func (blkdev BlockDevice) Valid() bool {
+	if blkdev.Driver == "" || blkdev.ID == "" || blkdev.File == "" {
+		return false
+	}
+
+	return true
+}
+
+// QemuParams returns the qemu parameters built out of this block device.
+func (blkdev BlockDevice) QemuParams() []string {
+	var blkParams []string
+	var deviceParams []string
+	var qemuParams []string
+
+	deviceParams = append(deviceParams, fmt.Sprintf("%s", blkdev.Driver))
+	deviceParams = append(deviceParams, fmt.Sprintf(",drive=%s", blkdev.ID))
+	if blkdev.SCSI == false {
+		deviceParams = append(deviceParams, ",scsi=off")
+	}
+
+	if blkdev.WCE == false {
+		deviceParams = append(deviceParams, ",config-wce=off")
+	}
+
+	blkParams = append(blkParams, fmt.Sprintf("id=%s", blkdev.ID))
+	blkParams = append(blkParams, fmt.Sprintf(",file=%s", blkdev.File))
+	blkParams = append(blkParams, fmt.Sprintf(",aio=%s", blkdev.AIO))
+	blkParams = append(blkParams, fmt.Sprintf(",format=%s", blkdev.Format))
+	blkParams = append(blkParams, fmt.Sprintf(",if=%s", blkdev.Interface))
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
+
+	qemuParams = append(qemuParams, "-drive")
+	qemuParams = append(qemuParams, strings.Join(blkParams, ""))
 
 	return qemuParams
 }

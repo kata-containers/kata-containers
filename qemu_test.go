@@ -166,6 +166,23 @@ func TestAppendDeviceSerial(t *testing.T) {
 	testAppend(sdev, deviceSerialString, t)
 }
 
+var deviceBlockString = "-device virtio-blk,drive=hd0,scsi=off,config-wce=off -drive id=hd0,file=/var/lib/ciao.img,aio=threads,format=qcow2,if=none"
+
+func TestAppendDeviceBlock(t *testing.T) {
+	blkdev := BlockDevice{
+		Driver:    VirtioBlock,
+		ID:        "hd0",
+		File:      "/var/lib/ciao.img",
+		AIO:       Threads,
+		Format:    QCOW2,
+		Interface: NoInterface,
+		SCSI:      false,
+		WCE:       false,
+	}
+
+	testAppend(blkdev, deviceBlockString, t)
+}
+
 func TestAppendEmptyDevice(t *testing.T) {
 	device := SerialDevice{}
 
