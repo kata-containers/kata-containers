@@ -34,12 +34,12 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 
 		params = appendMachine([]string{}, config)
 
-	case Driver:
+	case Device:
 		config := Config{
-			Drivers: []Driver{s},
+			Devices: []Device{s},
 		}
 
-		params = appendDrivers([]string{}, config)
+		params = appendDevices([]string{}, config)
 
 	case Knobs:
 		config := Config{
@@ -107,48 +107,41 @@ func TestAppendEmptyMachine(t *testing.T) {
 	testAppend(machine, "", t)
 }
 
-var deviceNVDIMMString = "-object memory-backend-file,id=mem0,mem-path=/root,size=65536 -device nvdimm,id=nv0,memdev=mem0"
+var deviceNVDIMMString = "-device nvdimm,id=nv0,memdev=mem0 -object memory-backend-file,id=mem0,mem-path=/root,size=65536"
 
 func TestAppendDeviceNVDIMM(t *testing.T) {
 	object := Object{
-		Type:    MemoryBackendFile,
-		ID:      "mem0",
-		MemPath: "/root",
-		Size:    1 << 16,
+		Driver:   NVDIMM,
+		Type:     MemoryBackendFile,
+		DeviceID: "nv0",
+		ID:       "mem0",
+		MemPath:  "/root",
+		Size:     1 << 16,
 	}
 
-	driver := Driver{
-		Driver: NVDIMM,
-		ID:     "nv0",
-		Device: object,
-	}
-
-	testAppend(driver, deviceNVDIMMString, t)
+	testAppend(object, deviceNVDIMMString, t)
 }
 
-var deviceFSString = "-fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security-model=none -device virtio-9p-pci,fsdev=workload9p,mount_tag=rootfs"
+var deviceFSString = "-device virtio-9p-pci,fsdev=workload9p,mount_tag=rootfs -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security-model=none"
 
 func TestAppendDeviceFS(t *testing.T) {
 	fsdev := FSDevice{
-		Driver:        Local,
+		Driver:        Virtio9P,
+		FSDriver:      Local,
 		ID:            "workload9p",
 		Path:          "/var/lib/docker/devicemapper/mnt/e31ebda2",
 		MountTag:      "rootfs",
 		SecurityModel: None,
 	}
 
-	driver := Driver{
-		Driver: Virtio9P,
-		Device: fsdev,
-	}
-
-	testAppend(driver, deviceFSString, t)
+	testAppend(fsdev, deviceFSString, t)
 }
 
-var deviceNetworkString = "-netdev tap,id=tap0,ifname=ceth0,downscript=no,script=no,fds=8:9:10,vhost=on -device virtio-net,netdev=tap0,mac=01:02:de:ad:be:ef"
+var deviceNetworkString = "-device virtio-net,netdev=tap0,mac=01:02:de:ad:be:ef -netdev tap,id=tap0,ifname=ceth0,downscript=no,script=no,fds=8:9:10,vhost=on"
 
 func TestAppendDeviceNetwork(t *testing.T) {
 	netdev := NetDevice{
+		Driver:     VirtioNet,
 		Type:       TAP,
 		ID:         "tap0",
 		IFName:     "ceth0",
@@ -159,30 +152,24 @@ func TestAppendDeviceNetwork(t *testing.T) {
 		MACAddress: "01:02:de:ad:be:ef",
 	}
 
-	driver := Driver{
-		Driver: VirtioNet,
-		Device: netdev,
-	}
-
-	testAppend(driver, deviceNetworkString, t)
+	testAppend(netdev, deviceNetworkString, t)
 }
 
 var deviceSerialString = "-device virtio-serial-pci,id=serial0"
 
 func TestAppendDeviceSerial(t *testing.T) {
-	driver := Driver{
+	sdev := SerialDevice{
 		Driver: VirtioSerial,
 		ID:     "serial0",
-		Device: SerialDevice{},
 	}
 
-	testAppend(driver, deviceSerialString, t)
+	testAppend(sdev, deviceSerialString, t)
 }
 
 func TestAppendEmptyDevice(t *testing.T) {
-	driver := Driver{}
+	device := SerialDevice{}
 
-	testAppend(driver, "", t)
+	testAppend(device, "", t)
 }
 
 var knobsString = "-no-user-config -nodefaults -nographic"

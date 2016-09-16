@@ -46,9 +46,10 @@ type Machine struct {
 // Device is the qemu device interface.
 type Device interface {
 	Valid() bool
+	QemuParams() []string
 }
 
-// DeviceDriver is the Device driver string.
+// DeviceDriver is the device driver string.
 type DeviceDriver string
 
 const (
@@ -68,74 +69,6 @@ const (
 	Console = "virtconsole"
 )
 
-// Driver describes a driver to be used by qemu.
-type Driver struct {
-	// Driver is the qemu device driver
-	Driver DeviceDriver
-
-	// ID is the user defined device ID.
-	ID string
-
-	// Device is the device to be associated with this driver.
-	Device Device
-}
-
-func (driver Driver) deviceMatch() bool {
-	switch driver.Device.(type) {
-	case Object:
-		if driver.Driver != NVDIMM {
-			return false
-		}
-
-	case FSDevice:
-		if driver.Driver != Virtio9P {
-			return false
-		}
-
-	case SerialDevice:
-		if driver.Driver != VirtioSerial {
-			return false
-		}
-
-	case CharDevice:
-		if driver.Driver != Console {
-			return false
-		}
-
-	case NetDevice:
-		if driver.Driver != VirtioNet {
-			return false
-		}
-
-	default:
-		return false
-	}
-
-	return true
-}
-
-// Valid returns true if the Driver structure is valid and complete.
-func (driver Driver) Valid() bool {
-	switch driver.Driver {
-	case NVDIMM:
-	case Console:
-	case VirtioSerial:
-		if driver.ID == "" || driver.Device.Valid() == false {
-			return false
-		}
-
-	case Virtio9P:
-	case VirtioNet:
-		return driver.Device.Valid()
-
-	default:
-		return false
-	}
-
-	// Verify that the Device type matches the Driver.
-	return driver.deviceMatch()
-}
-
 // ObjectType is a string representing a qemu object type.
 type ObjectType string
 
@@ -146,11 +79,17 @@ const (
 
 // Object is a qemu object representation.
 type Object struct {
+	// Driver is the qemu device driver
+	Driver DeviceDriver
+
 	// Type is the qemu object type.
 	Type ObjectType
 
 	// ID is the user defined object ID.
 	ID string
+
+	// DeviceID is the user defined device ID.
+	DeviceID string
 
 	// MemPath is the object's memory path.
 	// This is only relevant for memory objects
@@ -167,9 +106,40 @@ func (object Object) Valid() bool {
 		if object.ID == "" || object.MemPath == "" || object.Size == 0 {
 			return false
 		}
+
+	default:
+		return false
 	}
 
 	return true
+}
+
+// QemuParams returns the qemu parameters built out of this Object device.
+func (object Object) QemuParams() []string {
+	var objectParams []string
+	var deviceParams []string
+	var qemuParams []string
+
+	deviceParams = append(deviceParams, string(object.Driver))
+	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", object.DeviceID))
+
+	switch object.Type {
+	case MemoryBackendFile:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf(",id=%s", object.ID))
+		objectParams = append(objectParams, fmt.Sprintf(",mem-path=%s", object.MemPath))
+		objectParams = append(objectParams, fmt.Sprintf(",size=%d", object.Size))
+
+		deviceParams = append(deviceParams, fmt.Sprintf(",memdev=%s", object.ID))
+	}
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
+
+	qemuParams = append(qemuParams, "-object")
+	qemuParams = append(qemuParams, strings.Join(objectParams, ""))
+
+	return qemuParams
 }
 
 // FSDriver represents a qemu filesystem driver.
@@ -205,8 +175,11 @@ const (
 
 // FSDevice represents a qemu filesystem configuration.
 type FSDevice struct {
-	// Driver is the filesystem driver backend.
-	Driver FSDriver
+	// Driver is the qemu device driver
+	Driver DeviceDriver
+
+	// FSDriver is the filesystem driver backend.
+	FSDriver FSDriver
 
 	// ID is the filesystem identifier.
 	ID string
@@ -228,6 +201,30 @@ func (fsdev FSDevice) Valid() bool {
 	}
 
 	return true
+}
+
+// QemuParams returns the qemu parameters built out of this filesystem device.
+func (fsdev FSDevice) QemuParams() []string {
+	var fsParams []string
+	var deviceParams []string
+	var qemuParams []string
+
+	deviceParams = append(deviceParams, fmt.Sprintf("%s", fsdev.Driver))
+	deviceParams = append(deviceParams, fmt.Sprintf(",fsdev=%s", fsdev.ID))
+	deviceParams = append(deviceParams, fmt.Sprintf(",mount_tag=%s", fsdev.MountTag))
+
+	fsParams = append(fsParams, string(fsdev.FSDriver))
+	fsParams = append(fsParams, fmt.Sprintf(",id=%s", fsdev.ID))
+	fsParams = append(fsParams, fmt.Sprintf(",path=%s", fsdev.Path))
+	fsParams = append(fsParams, fmt.Sprintf(",security-model=%s", fsdev.SecurityModel))
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
+
+	qemuParams = append(qemuParams, "-fsdev")
+	qemuParams = append(qemuParams, strings.Join(fsParams, ""))
+
+	return qemuParams
 }
 
 // CharDeviceBackend is the character device backend for qemu
@@ -257,6 +254,12 @@ const (
 type CharDevice struct {
 	Backend CharDeviceBackend
 
+	// Driver is the qemu device driver
+	Driver DeviceDriver
+
+	// DeviceID is the user defined device ID.
+	DeviceID string
+
 	ID   string
 	Path string
 }
@@ -268,6 +271,46 @@ func (cdev CharDevice) Valid() bool {
 	}
 
 	return true
+}
+
+func appendCharDevice(params []string, cdev CharDevice) ([]string, error) {
+	if cdev.Valid() == false {
+		return nil, fmt.Errorf("Invalid character device")
+	}
+
+	var cdevParams []string
+
+	cdevParams = append(cdevParams, string(cdev.Backend))
+	cdevParams = append(cdevParams, fmt.Sprintf(",id=%s", cdev.ID))
+	cdevParams = append(cdevParams, fmt.Sprintf(",path=%s", cdev.Path))
+
+	params = append(params, "-chardev")
+	params = append(params, strings.Join(cdevParams, ""))
+
+	return params, nil
+}
+
+// QemuParams returns the qemu parameters built out of this character device.
+func (cdev CharDevice) QemuParams() []string {
+	var cdevParams []string
+	var deviceParams []string
+	var qemuParams []string
+
+	deviceParams = append(deviceParams, fmt.Sprintf("%s", cdev.Driver))
+	deviceParams = append(deviceParams, fmt.Sprintf(",chardev=%s", cdev.ID))
+	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", cdev.DeviceID))
+
+	cdevParams = append(cdevParams, string(cdev.Backend))
+	cdevParams = append(cdevParams, fmt.Sprintf(",id=%s", cdev.ID))
+	cdevParams = append(cdevParams, fmt.Sprintf(",path=%s", cdev.Path))
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
+
+	qemuParams = append(qemuParams, "-chardev")
+	qemuParams = append(qemuParams, strings.Join(cdevParams, ""))
+
+	return qemuParams
 }
 
 // NetDeviceType is a qemu networing device type.
@@ -282,6 +325,9 @@ const (
 type NetDevice struct {
 	// Type is the netdev type (e.g. tap).
 	Type NetDeviceType
+
+	// Driver is the qemu device driver
+	Driver DeviceDriver
 
 	// ID is the netdevice identifier.
 	ID string
@@ -320,13 +366,81 @@ func (netdev NetDevice) Valid() bool {
 	}
 }
 
+// QemuParams returns the qemu parameters built out of this network device.
+func (netdev NetDevice) QemuParams() []string {
+	var netdevParams []string
+	var deviceParams []string
+	var qemuParams []string
+
+	deviceParams = append(deviceParams, fmt.Sprintf("%s", netdev.Driver))
+	deviceParams = append(deviceParams, fmt.Sprintf(",netdev=%s", netdev.ID))
+	deviceParams = append(deviceParams, fmt.Sprintf(",mac=%s", netdev.MACAddress))
+
+	netdevParams = append(netdevParams, string(netdev.Type))
+	netdevParams = append(netdevParams, fmt.Sprintf(",id=%s", netdev.ID))
+	netdevParams = append(netdevParams, fmt.Sprintf(",ifname=%s", netdev.IFName))
+
+	if netdev.DownScript != "" {
+		netdevParams = append(netdevParams, fmt.Sprintf(",downscript=%s", netdev.DownScript))
+	}
+
+	if netdev.Script != "" {
+		netdevParams = append(netdevParams, fmt.Sprintf(",script=%s", netdev.Script))
+	}
+
+	if len(netdev.FDs) > 0 {
+		var fdParams []string
+
+		for _, fd := range netdev.FDs {
+			fdParams = append(fdParams, fmt.Sprintf("%d", fd))
+		}
+
+		netdevParams = append(netdevParams, fmt.Sprintf(",fds=%s", strings.Join(fdParams, ":")))
+	}
+
+	if netdev.VHost == true {
+		netdevParams = append(netdevParams, ",vhost=on")
+	}
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
+
+	qemuParams = append(qemuParams, "-netdev")
+	qemuParams = append(qemuParams, strings.Join(netdevParams, ""))
+
+	return qemuParams
+}
+
 // SerialDevice represents a qemu serial device.
 type SerialDevice struct {
+	// Driver is the qemu device driver
+	Driver DeviceDriver
+
+	// ID is the serial device identifier.
+	ID string
 }
 
 // Valid returns true if the SerialDevice structure is valid and complete.
 func (dev SerialDevice) Valid() bool {
+	if dev.Driver == "" || dev.ID == "" {
+		return false
+	}
+
 	return true
+}
+
+// QemuParams returns the qemu parameters built out of this serial device.
+func (dev SerialDevice) QemuParams() []string {
+	var deviceParams []string
+	var qemuParams []string
+
+	deviceParams = append(deviceParams, fmt.Sprintf("%s", dev.Driver))
+	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", dev.ID))
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
+
+	return qemuParams
 }
 
 // RTCBaseType is the qemu RTC base time type.
@@ -420,6 +534,10 @@ func (qmp QMPSocket) Valid() bool {
 		return false
 	}
 
+	if qmp.Type != Unix {
+		return false
+	}
+
 	return true
 }
 
@@ -498,8 +616,8 @@ type Config struct {
 	// QMPSocket is the QMP socket description.
 	QMPSocket QMPSocket
 
-	// Drivers is a list of device drivers for qemu to use.
-	Drivers []Driver
+	// Devices is a list of devices for qemu to create and drive.
+	Devices []Device
 
 	// RTC is the qemu Real Time Clock configuration
 	RTC RTC
@@ -583,156 +701,13 @@ func appendQMPSocket(params []string, config Config) []string {
 	return params
 }
 
-func appendObject(params []string, object Object) ([]string, error) {
-	if object.Valid() == false {
-		return nil, fmt.Errorf("Invalid Object")
-	}
-
-	var objectParams []string
-
-	objectParams = append(objectParams, string(object.Type))
-
-	switch object.Type {
-	case MemoryBackendFile:
-		objectParams = append(objectParams, fmt.Sprintf(",id=%s", object.ID))
-		objectParams = append(objectParams, fmt.Sprintf(",mem-path=%s", object.MemPath))
-		objectParams = append(objectParams, fmt.Sprintf(",size=%d", object.Size))
-	}
-
-	params = append(params, "-object")
-	params = append(params, strings.Join(objectParams, ""))
-
-	return params, nil
-}
-
-func appendFilesystemDevice(params []string, fsdev FSDevice) ([]string, error) {
-	if fsdev.Valid() == false {
-		return nil, fmt.Errorf("Invalid filesystem device")
-	}
-
-	var fsParams []string
-
-	fsParams = append(fsParams, string(fsdev.Driver))
-	fsParams = append(fsParams, fmt.Sprintf(",id=%s", fsdev.ID))
-	fsParams = append(fsParams, fmt.Sprintf(",path=%s", fsdev.Path))
-	fsParams = append(fsParams, fmt.Sprintf(",security-model=%s", fsdev.SecurityModel))
-
-	params = append(params, "-fsdev")
-	params = append(params, strings.Join(fsParams, ""))
-
-	return params, nil
-}
-
-func appendCharDevice(params []string, cdev CharDevice) ([]string, error) {
-	if cdev.Valid() == false {
-		return nil, fmt.Errorf("Invalid character device")
-	}
-
-	var cdevParams []string
-
-	cdevParams = append(cdevParams, string(cdev.Backend))
-	cdevParams = append(cdevParams, fmt.Sprintf(",id=%s", cdev.ID))
-	cdevParams = append(cdevParams, fmt.Sprintf(",path=%s", cdev.Path))
-
-	params = append(params, "-chardev")
-	params = append(params, strings.Join(cdevParams, ""))
-
-	return params, nil
-}
-
-func appendNetDevice(params []string, netdev NetDevice) ([]string, error) {
-	if netdev.Valid() == false {
-		return nil, fmt.Errorf("Invalid network device")
-	}
-
-	var netdevParams []string
-
-	netdevParams = append(netdevParams, string(netdev.Type))
-	netdevParams = append(netdevParams, fmt.Sprintf(",id=%s", netdev.ID))
-	netdevParams = append(netdevParams, fmt.Sprintf(",ifname=%s", netdev.IFName))
-
-	if netdev.DownScript != "" {
-		netdevParams = append(netdevParams, fmt.Sprintf(",downscript=%s", netdev.DownScript))
-	}
-
-	if netdev.Script != "" {
-		netdevParams = append(netdevParams, fmt.Sprintf(",script=%s", netdev.Script))
-	}
-
-	if len(netdev.FDs) > 0 {
-		var fdParams []string
-
-		for _, fd := range netdev.FDs {
-			fdParams = append(fdParams, fmt.Sprintf("%d", fd))
-		}
-
-		netdevParams = append(netdevParams, fmt.Sprintf(",fds=%s", strings.Join(fdParams, ":")))
-	}
-
-	if netdev.VHost == true {
-		netdevParams = append(netdevParams, ",vhost=on")
-	}
-
-	params = append(params, "-netdev")
-	params = append(params, strings.Join(netdevParams, ""))
-
-	return params, nil
-}
-
-func appendDrivers(params []string, config Config) []string {
-	for _, d := range config.Drivers {
+func appendDevices(params []string, config Config) []string {
+	for _, d := range config.Devices {
 		if d.Valid() == false {
 			continue
 		}
 
-		var driverParams []string
-		var err error
-
-		driverParams = append(driverParams, fmt.Sprintf("%s", d.Driver))
-
-		switch device := d.Device.(type) {
-		case Object:
-			params, err = appendObject(params, device)
-			if err != nil {
-				continue
-			}
-
-			driverParams = append(driverParams, fmt.Sprintf(",id=%s", d.ID))
-			driverParams = append(driverParams, fmt.Sprintf(",memdev=%s", device.ID))
-
-		case FSDevice:
-			params, err = appendFilesystemDevice(params, device)
-			if err != nil {
-				continue
-			}
-
-			driverParams = append(driverParams, fmt.Sprintf(",fsdev=%s", device.ID))
-			driverParams = append(driverParams, fmt.Sprintf(",mount_tag=%s", device.MountTag))
-
-		case SerialDevice:
-			driverParams = append(driverParams, fmt.Sprintf(",id=%s", d.ID))
-
-		case CharDevice:
-			params, err = appendCharDevice(params, device)
-			if err != nil {
-				continue
-			}
-
-			driverParams = append(driverParams, fmt.Sprintf(",chardev=%s", device.ID))
-			driverParams = append(driverParams, fmt.Sprintf(",id=%s", d.ID))
-
-		case NetDevice:
-			params, err = appendNetDevice(params, device)
-			if err != nil {
-				continue
-			}
-
-			driverParams = append(driverParams, fmt.Sprintf(",netdev=%s", device.ID))
-			driverParams = append(driverParams, fmt.Sprintf(",mac=%s", device.MACAddress))
-		}
-
-		params = append(params, "-device")
-		params = append(params, strings.Join(driverParams, ""))
+		params = append(params, d.QemuParams()...)
 	}
 
 	return params
@@ -883,7 +858,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	params = appendQMPSocket(params, config)
 	params = appendMemory(params, config)
 	params = appendCPUs(params, config)
-	params = appendDrivers(params, config)
+	params = appendDevices(params, config)
 	params = appendRTC(params, config)
 	params = appendGlobalParam(params, config)
 	params = appendVGA(params, config)
