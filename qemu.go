@@ -329,16 +329,66 @@ func (dev SerialDevice) Valid() bool {
 	return true
 }
 
+// RTCBaseType is the qemu RTC base time type.
+type RTCBaseType string
+
+// RTCClock is the qemu RTC clock type.
+type RTCClock string
+
+// RTCDriftFix is the qemu RTC drift fix type.
+type RTCDriftFix string
+
+const (
+	// UTC is the UTC base time for qemu RTC.
+	UTC RTCBaseType = "utc"
+
+	// LocalTime is the local base time for qemu RTC.
+	LocalTime = "localtime"
+)
+
+const (
+	// Host is for using the host clock as a reference.
+	Host RTCClock = "host"
+
+	// VM is for using the guest clock as a reference
+	VM = "vm"
+)
+
+const (
+	// Slew is the qemu RTC Drift fix mechanism.
+	Slew RTCDriftFix = "slew"
+
+	// NoDriftFix means we don't want/need to fix qemu's RTC drift.
+	NoDriftFix = "none"
+)
+
 // RTC represents a qemu Real Time Clock configuration.
 type RTC struct {
 	// Base is the RTC start time.
-	Base string
+	Base RTCBaseType
 
 	// Clock is the is the RTC clock driver.
-	Clock string
+	Clock RTCClock
 
 	// DriftFix is the drift fixing mechanism.
-	DriftFix string
+	DriftFix RTCDriftFix
+}
+
+// Valid returns true if the RTC structure is valid and complete.
+func (rtc RTC) Valid() bool {
+	if rtc.Clock != "" {
+		if rtc.Clock != Host && rtc.Clock != VM {
+			return false
+		}
+	}
+
+	if rtc.DriftFix != "" {
+		if rtc.DriftFix != Slew && rtc.DriftFix != NoDriftFix {
+			return false
+		}
+	}
+
+	return true
 }
 
 // QMPSocket represents a qemu QMP socket configuration.
@@ -725,22 +775,24 @@ func appendCPUs(params []string, config Config) []string {
 }
 
 func appendRTC(params []string, config Config) []string {
-	if config.RTC.Base != "" {
-		var RTCParams []string
-
-		RTCParams = append(RTCParams, fmt.Sprintf("base=%s", config.RTC.Base))
-
-		if config.RTC.DriftFix != "" {
-			RTCParams = append(RTCParams, fmt.Sprintf(",driftfix=%s", config.RTC.DriftFix))
-		}
-
-		if config.RTC.Clock != "" {
-			RTCParams = append(RTCParams, fmt.Sprintf(",clock=%s", config.RTC.Clock))
-		}
-
-		params = append(params, "-rtc")
-		params = append(params, strings.Join(RTCParams, ""))
+	if config.RTC.Valid() == false {
+		return nil
 	}
+
+	var RTCParams []string
+
+	RTCParams = append(RTCParams, fmt.Sprintf("base=%s", string(config.RTC.Base)))
+
+	if config.RTC.DriftFix != "" {
+		RTCParams = append(RTCParams, fmt.Sprintf(",driftfix=%s", config.RTC.DriftFix))
+	}
+
+	if config.RTC.Clock != "" {
+		RTCParams = append(RTCParams, fmt.Sprintf(",clock=%s", config.RTC.Clock))
+	}
+
+	params = append(params, "-rtc")
+	params = append(params, strings.Join(RTCParams, ""))
 
 	return params
 }
