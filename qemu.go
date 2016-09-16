@@ -391,10 +391,18 @@ func (rtc RTC) Valid() bool {
 	return true
 }
 
+// QMPSocketType is the type of socket used for QMP communication.
+type QMPSocketType string
+
+const (
+	// Unix socket for QMP.
+	Unix QMPSocketType = "unix"
+)
+
 // QMPSocket represents a qemu QMP socket configuration.
 type QMPSocket struct {
 	// Type is the socket type (e.g. "unix").
-	Type string
+	Type QMPSocketType
 
 	// Name is the socket name.
 	Name string
@@ -404,6 +412,15 @@ type QMPSocket struct {
 
 	// NoWait tells if qemu should block waiting for a client to connect.
 	NoWait bool
+}
+
+// Valid returns true if the QMPSocket structure is valid and complete.
+func (qmp QMPSocket) Valid() bool {
+	if qmp.Type == "" || qmp.Name == "" {
+		return false
+	}
+
+	return true
 }
 
 // SMP is the multi processors configuration structure.
@@ -545,21 +562,23 @@ func appendCPUModel(params []string, config Config) []string {
 }
 
 func appendQMPSocket(params []string, config Config) []string {
-	if config.QMPSocket.Type != "" && config.QMPSocket.Name != "" {
-		var qmpParams []string
-
-		qmpParams = append(qmpParams, fmt.Sprintf("%s:", config.QMPSocket.Type))
-		qmpParams = append(qmpParams, fmt.Sprintf("%s", config.QMPSocket.Name))
-		if config.QMPSocket.Server == true {
-			qmpParams = append(qmpParams, ",server")
-			if config.QMPSocket.NoWait == true {
-				qmpParams = append(qmpParams, ",nowait")
-			}
-		}
-
-		params = append(params, "-qmp")
-		params = append(params, strings.Join(qmpParams, ""))
+	if config.QMPSocket.Valid() == false {
+		return nil
 	}
+
+	var qmpParams []string
+
+	qmpParams = append(qmpParams, fmt.Sprintf("%s:", config.QMPSocket.Type))
+	qmpParams = append(qmpParams, fmt.Sprintf("%s", config.QMPSocket.Name))
+	if config.QMPSocket.Server == true {
+		qmpParams = append(qmpParams, ",server")
+		if config.QMPSocket.NoWait == true {
+			qmpParams = append(qmpParams, ",nowait")
+		}
+	}
+
+	params = append(params, "-qmp")
+	params = append(params, strings.Join(qmpParams, ""))
 
 	return params
 }

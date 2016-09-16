@@ -259,7 +259,7 @@ func TestAppendQMPSocketServer(t *testing.T) {
 
 func TestAppendQMPSocket(t *testing.T) {
 	qmp := QMPSocket{
-		Type:   "unix",
+		Type:   Unix,
 		Name:   "cc-qmp",
 		Server: false,
 	}
