@@ -17,9 +17,10 @@
 package qemu
 
 import (
-	//	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/01org/ciao/testutil"
 )
 
 func testAppend(structure interface{}, expected string, t *testing.T) {
@@ -33,19 +34,12 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 
 		params = appendMachine([]string{}, config)
 
-	case Device:
+	case Driver:
 		config := Config{
-			Devices: []Device{s},
+			Drivers: []Driver{s},
 		}
 
-		params = appendDevices([]string{}, config)
-
-	case Object:
-		config := Config{
-			Objects: []Object{s},
-		}
-
-		params = appendObjects([]string{}, config)
+		params = appendDrivers([]string{}, config)
 
 	case Knobs:
 		config := Config{
@@ -81,13 +75,6 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 		}
 
 		params = appendQMPSocket([]string{}, config)
-
-	case NetDevice:
-		config := Config{
-			NetDevices: []NetDevice{s},
-		}
-
-		params = appendNetDevices([]string{}, config)
 	}
 
 	result := strings.Join(params, " ")
@@ -113,65 +100,82 @@ func TestAppendEmptyMachine(t *testing.T) {
 	testAppend(machine, "", t)
 }
 
-var deviceNVDIMMString = "-device nvdimm,id=nv0,memdev=mem0"
+var deviceNVDIMMString = "-object memory-backend-file,id=mem0,mem-path=/root,size=65536 -device nvdimm,id=nv0,memdev=mem0"
 
 func TestAppendDeviceNVDIMM(t *testing.T) {
-	device := Device{
-		Driver: "nvdimm",
-		ID:     "nv0",
-		MemDev: "mem0",
-	}
-
-	testAppend(device, deviceNVDIMMString, t)
-}
-
-var deviceFSString = "-device virtio-9p-pci,fsdev=workload9p,mount_tag=rootfs"
-
-func TestAppendDeviceFS(t *testing.T) {
-	device := Device{
-		Driver:   "virtio-9p-pci",
-		FSDev:    "workload9p",
-		MountTag: "rootfs",
-	}
-
-	testAppend(device, deviceFSString, t)
-}
-
-var deviceNetworkString = "-device virtio-net-pci,netdev=eth0,mac=01:02:de:ad:be:ef"
-
-func TestAppendDeviceNetwork(t *testing.T) {
-	device := Device{
-		Driver:     "virtio-net-pci",
-		NetDev:     "eth0",
-		MACAddress: "01:02:de:ad:be:ef",
-	}
-
-	testAppend(device, deviceNetworkString, t)
-}
-
-func TestAppendEmptyDevice(t *testing.T) {
-	device := Device{}
-
-	testAppend(device, "", t)
-}
-
-var objectMemoryString = "-object memory-backend-file,id=mem0,mem-path=/root,size=65536"
-
-func TestAppendObjectMemory(t *testing.T) {
 	object := Object{
-		Type:    "memory-backend-file",
+		Type:    MemoryBackendFile,
 		ID:      "mem0",
 		MemPath: "/root",
 		Size:    1 << 16,
 	}
 
-	testAppend(object, objectMemoryString, t)
+	driver := Driver{
+		Driver: NVDIMM,
+		ID:     "nv0",
+		Device: object,
+	}
+
+	testAppend(driver, deviceNVDIMMString, t)
 }
 
-func TestAppendEmptyObject(t *testing.T) {
-	device := Device{}
+var deviceFSString = "-fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security-model=none -device virtio-9p-pci,fsdev=workload9p,mount_tag=rootfs"
 
-	testAppend(device, "", t)
+func TestAppendDeviceFS(t *testing.T) {
+	fsdev := FSDevice{
+		Driver:        Local,
+		ID:            "workload9p",
+		Path:          "/var/lib/docker/devicemapper/mnt/e31ebda2",
+		MountTag:      "rootfs",
+		SecurityModel: None,
+	}
+
+	driver := Driver{
+		Driver: Virtio9P,
+		Device: fsdev,
+	}
+
+	testAppend(driver, deviceFSString, t)
+}
+
+var deviceNetworkString = "-netdev tap,id=tap0,ifname=ceth0,downscript=no,script=no,fds=8:9:10,vhost=on -device virtio-net,netdev=tap0,mac=01:02:de:ad:be:ef"
+
+func TestAppendDeviceNetwork(t *testing.T) {
+	netdev := NetDevice{
+		Type:       TAP,
+		ID:         "tap0",
+		IFName:     "ceth0",
+		Script:     "no",
+		DownScript: "no",
+		FDs:        []int{8, 9, 10},
+		VHost:      true,
+		MACAddress: "01:02:de:ad:be:ef",
+	}
+
+	driver := Driver{
+		Driver: VirtioNet,
+		Device: netdev,
+	}
+
+	testAppend(driver, deviceNetworkString, t)
+}
+
+var deviceSerialString = "-device virtio-serial-pci,id=serial0"
+
+func TestAppendDeviceSerial(t *testing.T) {
+	driver := Driver{
+		Driver: VirtioSerial,
+		ID:     "serial0",
+		Device: SerialDevice{},
+	}
+
+	testAppend(driver, deviceSerialString, t)
+}
+
+func TestAppendEmptyDevice(t *testing.T) {
+	driver := Driver{}
+
+	testAppend(driver, "", t)
 }
 
 var knobsString = "-no-user-config -nodefaults -nographic"
@@ -256,7 +260,7 @@ func TestAppendQMPSocket(t *testing.T) {
 	testAppend(qmp, qmpSocketString, t)
 }
 
-var qemuString = "-name cc-qemu -cpu host -uuid 123456789"
+var qemuString = "-name cc-qemu -cpu host -uuid " + testutil.AgentUUID
 
 func TestAppendStrings(t *testing.T) {
 	var params []string
@@ -264,7 +268,7 @@ func TestAppendStrings(t *testing.T) {
 	config := Config{
 		Path:     "qemu",
 		Name:     "cc-qemu",
-		UUID:     "123456789",
+		UUID:     testutil.AgentUUID,
 		CPUModel: "host",
 	}
 
@@ -276,19 +280,4 @@ func TestAppendStrings(t *testing.T) {
 	if result != qemuString {
 		t.Fatalf("Failed to append parameters [%s] != [%s]", result, qemuString)
 	}
-}
-
-var netdevString = "-netdev tap,id=ceth0,downscript=no,script=no,fds=8:9:10,vhost=on"
-
-func TestAppendNetDevices(t *testing.T) {
-	netdev := NetDevice{
-		Type:       "tap",
-		ID:         "ceth0",
-		Script:     "no",
-		DownScript: "no",
-		FDs:        []int{8, 9, 10},
-		VHost:      true,
-	}
-
-	testAppend(netdev, netdevString, t)
 }
