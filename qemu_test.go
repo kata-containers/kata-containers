@@ -17,6 +17,8 @@
 package qemu
 
 import (
+	"io/ioutil"
+	"os"
 	"strings"
 	"testing"
 
@@ -113,9 +115,15 @@ func TestAppendDeviceFS(t *testing.T) {
 	testAppend(fsdev, deviceFSString, t)
 }
 
-var deviceNetworkString = "-device virtio-net,netdev=tap0,mac=01:02:de:ad:be:ef -netdev tap,id=tap0,ifname=ceth0,downscript=no,script=no,fds=8:9:10,vhost=on"
+var deviceNetworkString = "-device virtio-net,netdev=tap0,mac=01:02:de:ad:be:ef -netdev tap,id=tap0,ifname=ceth0,downscript=no,script=no,fds=3:4,vhost=on"
 
 func TestAppendDeviceNetwork(t *testing.T) {
+	foo, _ := ioutil.TempFile(os.TempDir(), "qemu-ciao-test")
+	bar, _ := ioutil.TempFile(os.TempDir(), "qemu-ciao-test")
+
+	defer os.Remove(foo.Name())
+	defer os.Remove(bar.Name())
+
 	netdev := NetDevice{
 		Driver:     VirtioNet,
 		Type:       TAP,
@@ -123,7 +131,7 @@ func TestAppendDeviceNetwork(t *testing.T) {
 		IFName:     "ceth0",
 		Script:     "no",
 		DownScript: "no",
-		FDs:        []int{8, 9, 10},
+		FDs:        []*os.File{foo, bar},
 		VHost:      true,
 		MACAddress: "01:02:de:ad:be:ef",
 	}

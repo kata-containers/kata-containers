@@ -46,7 +46,7 @@ type Machine struct {
 // Device is the qemu device interface.
 type Device interface {
 	Valid() bool
-	QemuParams() []string
+	QemuParams(config *Config) []string
 }
 
 // DeviceDriver is the device driver string.
@@ -118,7 +118,7 @@ func (object Object) Valid() bool {
 }
 
 // QemuParams returns the qemu parameters built out of this Object device.
-func (object Object) QemuParams() []string {
+func (object Object) QemuParams(config *Config) []string {
 	var objectParams []string
 	var deviceParams []string
 	var qemuParams []string
@@ -207,7 +207,7 @@ func (fsdev FSDevice) Valid() bool {
 }
 
 // QemuParams returns the qemu parameters built out of this filesystem device.
-func (fsdev FSDevice) QemuParams() []string {
+func (fsdev FSDevice) QemuParams(config *Config) []string {
 	var fsParams []string
 	var deviceParams []string
 	var qemuParams []string
@@ -294,7 +294,7 @@ func appendCharDevice(params []string, cdev CharDevice) ([]string, error) {
 }
 
 // QemuParams returns the qemu parameters built out of this character device.
-func (cdev CharDevice) QemuParams() []string {
+func (cdev CharDevice) QemuParams(config *Config) []string {
 	var cdevParams []string
 	var deviceParams []string
 	var qemuParams []string
@@ -349,7 +349,7 @@ type NetDevice struct {
 
 	// FDs represents the list of already existing file descriptors to be used.
 	// This is mostly useful for mq support.
-	FDs []int
+	FDs []*os.File
 
 	// VHost enables virtio device emulation from the host kernel instead of from qemu.
 	VHost bool
@@ -375,7 +375,7 @@ func (netdev NetDevice) Valid() bool {
 }
 
 // QemuParams returns the qemu parameters built out of this network device.
-func (netdev NetDevice) QemuParams() []string {
+func (netdev NetDevice) QemuParams(config *Config) []string {
 	var netdevParams []string
 	var deviceParams []string
 	var qemuParams []string
@@ -399,7 +399,9 @@ func (netdev NetDevice) QemuParams() []string {
 	if len(netdev.FDs) > 0 {
 		var fdParams []string
 
-		for _, fd := range netdev.FDs {
+		qemuFDs := config.appendFDs(netdev.FDs)
+
+		for _, fd := range qemuFDs {
 			fdParams = append(fdParams, fmt.Sprintf("%d", fd))
 		}
 
@@ -438,7 +440,7 @@ func (dev SerialDevice) Valid() bool {
 }
 
 // QemuParams returns the qemu parameters built out of this serial device.
-func (dev SerialDevice) QemuParams() []string {
+func (dev SerialDevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 	var qemuParams []string
 
@@ -503,7 +505,7 @@ func (blkdev BlockDevice) Valid() bool {
 }
 
 // QemuParams returns the qemu parameters built out of this block device.
-func (blkdev BlockDevice) QemuParams() []string {
+func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	var blkParams []string
 	var deviceParams []string
 	var qemuParams []string
@@ -730,10 +732,30 @@ type Config struct {
 	// Knobs is a set of qemu boolean settings.
 	Knobs Knobs
 
-	// FDs is a list of open file descriptors to be passed to the spawned qemu process
-	FDs []*os.File
+	// fds is a list of open file descriptors to be passed to the spawned qemu process
+	fds []*os.File
 
 	qemuParams []string
+}
+
+// appendFDs append a list of file descriptors to the qemu configuration and
+// returns a slice of offset file descriptors that will be seen by the qemu process.
+func (config *Config) appendFDs(fds []*os.File) []int {
+	var fdInts []int
+
+	oldLen := len(config.fds)
+
+	config.fds = append(config.fds, fds...)
+
+	// The magic 3 offset comes from https://golang.org/src/os/exec/exec.go:
+	//     ExtraFiles specifies additional open files to be inherited by the
+	//     new process. It does not include standard input, standard output, or
+	//     standard error. If non-nil, entry i becomes file descriptor 3+i.
+	for i := range fds {
+		fdInts = append(fdInts, oldLen+3+i)
+	}
+
+	return fdInts
 }
 
 func (config *Config) appendName() {
@@ -791,7 +813,7 @@ func (config *Config) appendDevices() {
 			continue
 		}
 
-		config.qemuParams = append(config.qemuParams, d.QemuParams()...)
+		config.qemuParams = append(config.qemuParams, d.QemuParams(config)...)
 	}
 }
 
@@ -929,7 +951,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendKnobs()
 	config.appendKernel()
 
-	return LaunchCustomQemu(config.Ctx, config.Path, config.qemuParams, config.FDs, logger)
+	return LaunchCustomQemu(config.Ctx, config.Path, config.qemuParams, config.fds, logger)
 }
 
 // LaunchCustomQemu can be used to launch a new qemu instance.
