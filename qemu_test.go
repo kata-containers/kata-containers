@@ -24,67 +24,43 @@ import (
 )
 
 func testAppend(structure interface{}, expected string, t *testing.T) {
-	var params []string
+	var config Config
 
 	switch s := structure.(type) {
 	case Machine:
-		config := Config{
-			Machine: s,
-		}
-
-		params = appendMachine([]string{}, config)
+		config.Machine = s
+		config.appendMachine()
 
 	case Device:
-		config := Config{
-			Devices: []Device{s},
-		}
-
-		params = appendDevices([]string{}, config)
+		config.Devices = []Device{s}
+		config.appendDevices()
 
 	case Knobs:
-		config := Config{
-			Knobs: s,
-		}
-
-		params = appendKnobs([]string{}, config)
+		config.Knobs = s
+		config.appendKnobs()
 
 	case Kernel:
-		config := Config{
-			Kernel: s,
-		}
-
-		params = appendKernel([]string{}, config)
+		config.Kernel = s
+		config.appendKernel()
 
 	case Memory:
-		config := Config{
-			Memory: s,
-		}
-
-		params = appendMemory([]string{}, config)
+		config.Memory = s
+		config.appendMemory()
 
 	case SMP:
-		config := Config{
-			SMP: s,
-		}
-
-		params = appendCPUs([]string{}, config)
+		config.SMP = s
+		config.appendCPUs()
 
 	case QMPSocket:
-		config := Config{
-			QMPSocket: s,
-		}
-
-		params = appendQMPSocket([]string{}, config)
+		config.QMPSocket = s
+		config.appendQMPSocket()
 
 	case RTC:
-		config := Config{
-			RTC: s,
-		}
-
-		params = appendRTC([]string{}, config)
+		config.RTC = s
+		config.appendRTC()
 	}
 
-	result := strings.Join(params, " ")
+	result := strings.Join(config.qemuParams, " ")
 	if result != expected {
 		t.Fatalf("Failed to append parameters [%s] != [%s]", result, expected)
 	}
@@ -274,8 +250,6 @@ func TestAppendQMPSocket(t *testing.T) {
 var qemuString = "-name cc-qemu -cpu host -uuid " + testutil.AgentUUID
 
 func TestAppendStrings(t *testing.T) {
-	var params []string
-
 	config := Config{
 		Path:     "qemu",
 		Name:     "cc-qemu",
@@ -283,11 +257,11 @@ func TestAppendStrings(t *testing.T) {
 		CPUModel: "host",
 	}
 
-	params = appendName(params, config)
-	params = appendCPUModel(params, config)
-	params = appendUUID(params, config)
+	config.appendName()
+	config.appendCPUModel()
+	config.appendUUID()
 
-	result := strings.Join(params, " ")
+	result := strings.Join(config.qemuParams, " ")
 	if result != qemuString {
 		t.Fatalf("Failed to append parameters [%s] != [%s]", result, qemuString)
 	}

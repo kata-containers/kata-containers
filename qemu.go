@@ -732,18 +732,18 @@ type Config struct {
 
 	// FDs is a list of open file descriptors to be passed to the spawned qemu process
 	FDs []*os.File
+
+	qemuParams []string
 }
 
-func appendName(params []string, config Config) []string {
+func (config *Config) appendName() {
 	if config.Name != "" {
-		params = append(params, "-name")
-		params = append(params, config.Name)
+		config.qemuParams = append(config.qemuParams, "-name")
+		config.qemuParams = append(config.qemuParams, config.Name)
 	}
-
-	return params
 }
 
-func appendMachine(params []string, config Config) []string {
+func (config *Config) appendMachine() {
 	if config.Machine.Type != "" {
 		var machineParams []string
 
@@ -753,25 +753,21 @@ func appendMachine(params []string, config Config) []string {
 			machineParams = append(machineParams, fmt.Sprintf(",accel=%s", config.Machine.Acceleration))
 		}
 
-		params = append(params, "-machine")
-		params = append(params, strings.Join(machineParams, ""))
+		config.qemuParams = append(config.qemuParams, "-machine")
+		config.qemuParams = append(config.qemuParams, strings.Join(machineParams, ""))
 	}
-
-	return params
 }
 
-func appendCPUModel(params []string, config Config) []string {
+func (config *Config) appendCPUModel() {
 	if config.CPUModel != "" {
-		params = append(params, "-cpu")
-		params = append(params, config.CPUModel)
+		config.qemuParams = append(config.qemuParams, "-cpu")
+		config.qemuParams = append(config.qemuParams, config.CPUModel)
 	}
-
-	return params
 }
 
-func appendQMPSocket(params []string, config Config) []string {
+func (config *Config) appendQMPSocket() {
 	if config.QMPSocket.Valid() == false {
-		return nil
+		return
 	}
 
 	var qmpParams []string
@@ -785,34 +781,28 @@ func appendQMPSocket(params []string, config Config) []string {
 		}
 	}
 
-	params = append(params, "-qmp")
-	params = append(params, strings.Join(qmpParams, ""))
-
-	return params
+	config.qemuParams = append(config.qemuParams, "-qmp")
+	config.qemuParams = append(config.qemuParams, strings.Join(qmpParams, ""))
 }
 
-func appendDevices(params []string, config Config) []string {
+func (config *Config) appendDevices() {
 	for _, d := range config.Devices {
 		if d.Valid() == false {
 			continue
 		}
 
-		params = append(params, d.QemuParams()...)
+		config.qemuParams = append(config.qemuParams, d.QemuParams()...)
 	}
-
-	return params
 }
 
-func appendUUID(params []string, config Config) []string {
+func (config *Config) appendUUID() {
 	if config.UUID != "" {
-		params = append(params, "-uuid")
-		params = append(params, config.UUID)
+		config.qemuParams = append(config.qemuParams, "-uuid")
+		config.qemuParams = append(config.qemuParams, config.UUID)
 	}
-
-	return params
 }
 
-func appendMemory(params []string, config Config) []string {
+func (config *Config) appendMemory() {
 	if config.Memory.Size != "" {
 		var memoryParams []string
 
@@ -826,14 +816,12 @@ func appendMemory(params []string, config Config) []string {
 			memoryParams = append(memoryParams, fmt.Sprintf(",maxmem=%s", config.Memory.MaxMem))
 		}
 
-		params = append(params, "-m")
-		params = append(params, strings.Join(memoryParams, ""))
+		config.qemuParams = append(config.qemuParams, "-m")
+		config.qemuParams = append(config.qemuParams, strings.Join(memoryParams, ""))
 	}
-
-	return params
 }
 
-func appendCPUs(params []string, config Config) []string {
+func (config *Config) appendCPUs() {
 	if config.SMP.CPUs > 0 {
 		var SMPParams []string
 
@@ -851,16 +839,14 @@ func appendCPUs(params []string, config Config) []string {
 			SMPParams = append(SMPParams, fmt.Sprintf(",sockets=%d", config.SMP.Sockets))
 		}
 
-		params = append(params, "-smp")
-		params = append(params, strings.Join(SMPParams, ""))
+		config.qemuParams = append(config.qemuParams, "-smp")
+		config.qemuParams = append(config.qemuParams, strings.Join(SMPParams, ""))
 	}
-
-	return params
 }
 
-func appendRTC(params []string, config Config) []string {
+func (config *Config) appendRTC() {
 	if config.RTC.Valid() == false {
-		return nil
+		return
 	}
 
 	var RTCParams []string
@@ -875,58 +861,48 @@ func appendRTC(params []string, config Config) []string {
 		RTCParams = append(RTCParams, fmt.Sprintf(",clock=%s", config.RTC.Clock))
 	}
 
-	params = append(params, "-rtc")
-	params = append(params, strings.Join(RTCParams, ""))
-
-	return params
+	config.qemuParams = append(config.qemuParams, "-rtc")
+	config.qemuParams = append(config.qemuParams, strings.Join(RTCParams, ""))
 }
 
-func appendGlobalParam(params []string, config Config) []string {
+func (config *Config) appendGlobalParam() {
 	if config.GlobalParam != "" {
-		params = append(params, "-global")
-		params = append(params, config.GlobalParam)
+		config.qemuParams = append(config.qemuParams, "-global")
+		config.qemuParams = append(config.qemuParams, config.GlobalParam)
 	}
-
-	return params
 }
 
-func appendVGA(params []string, config Config) []string {
+func (config *Config) appendVGA() {
 	if config.VGA != "" {
-		params = append(params, "-vga")
-		params = append(params, config.VGA)
+		config.qemuParams = append(config.qemuParams, "-vga")
+		config.qemuParams = append(config.qemuParams, config.VGA)
 	}
-
-	return params
 }
 
-func appendKernel(params []string, config Config) []string {
+func (config *Config) appendKernel() {
 	if config.Kernel.Path != "" {
-		params = append(params, "-kernel")
-		params = append(params, config.Kernel.Path)
+		config.qemuParams = append(config.qemuParams, "-kernel")
+		config.qemuParams = append(config.qemuParams, config.Kernel.Path)
 
 		if config.Kernel.Params != "" {
-			params = append(params, "-append")
-			params = append(params, config.Kernel.Params)
+			config.qemuParams = append(config.qemuParams, "-append")
+			config.qemuParams = append(config.qemuParams, config.Kernel.Params)
 		}
 	}
-
-	return params
 }
 
-func appendKnobs(params []string, config Config) []string {
+func (config *Config) appendKnobs() {
 	if config.Knobs.NoUserConfig == true {
-		params = append(params, "-no-user-config")
+		config.qemuParams = append(config.qemuParams, "-no-user-config")
 	}
 
 	if config.Knobs.NoDefaults == true {
-		params = append(params, "-nodefaults")
+		config.qemuParams = append(config.qemuParams, "-nodefaults")
 	}
 
 	if config.Knobs.NoGraphic == true {
-		params = append(params, "-nographic")
+		config.qemuParams = append(config.qemuParams, "-nographic")
 	}
-
-	return params
 }
 
 // LaunchQemu can be used to launch a new qemu instance.
@@ -939,23 +915,21 @@ func appendKnobs(params []string, config Config) []string {
 // will be returned if the launch succeeds.  Otherwise a string containing
 // the contents of stderr + a Go error object will be returned.
 func LaunchQemu(config Config, logger QMPLog) (string, error) {
-	var params []string
+	config.appendName()
+	config.appendUUID()
+	config.appendMachine()
+	config.appendCPUModel()
+	config.appendQMPSocket()
+	config.appendMemory()
+	config.appendCPUs()
+	config.appendDevices()
+	config.appendRTC()
+	config.appendGlobalParam()
+	config.appendVGA()
+	config.appendKnobs()
+	config.appendKernel()
 
-	params = appendName(params, config)
-	params = appendUUID(params, config)
-	params = appendMachine(params, config)
-	params = appendCPUModel(params, config)
-	params = appendQMPSocket(params, config)
-	params = appendMemory(params, config)
-	params = appendCPUs(params, config)
-	params = appendDevices(params, config)
-	params = appendRTC(params, config)
-	params = appendGlobalParam(params, config)
-	params = appendVGA(params, config)
-	params = appendKnobs(params, config)
-	params = appendKernel(params, config)
-
-	return LaunchCustomQemu(config.Ctx, config.Path, params, config.FDs, logger)
+	return LaunchCustomQemu(config.Ctx, config.Path, config.qemuParams, config.FDs, logger)
 }
 
 // LaunchCustomQemu can be used to launch a new qemu instance.
@@ -966,7 +940,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 // signature of this function will not need to change when launch cancellation
 // is implemented.
 //
-// params is a slice of options to pass to qemu-system-x86_64 and fds is a
+// config.qemuParams is a slice of options to pass to qemu-system-x86_64 and fds is a
 // list of open file descriptors that are to be passed to the spawned qemu
 // process.
 //
