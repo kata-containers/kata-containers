@@ -219,7 +219,7 @@ func (fsdev FSDevice) QemuParams(config *Config) []string {
 	fsParams = append(fsParams, string(fsdev.FSDriver))
 	fsParams = append(fsParams, fmt.Sprintf(",id=%s", fsdev.ID))
 	fsParams = append(fsParams, fmt.Sprintf(",path=%s", fsdev.Path))
-	fsParams = append(fsParams, fmt.Sprintf(",security-model=%s", fsdev.SecurityModel))
+	fsParams = append(fsParams, fmt.Sprintf(",security_model=%s", fsdev.SecurityModel))
 
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))

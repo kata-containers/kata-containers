@@ -100,7 +100,7 @@ func TestAppendDeviceNVDIMM(t *testing.T) {
 	testAppend(object, deviceNVDIMMString, t)
 }
 
-var deviceFSString = "-device virtio-9p-pci,fsdev=workload9p,mount_tag=rootfs -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security-model=none"
+var deviceFSString = "-device virtio-9p-pci,fsdev=workload9p,mount_tag=rootfs -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none"
 
 func TestAppendDeviceFS(t *testing.T) {
 	fsdev := FSDevice{
