@@ -669,6 +669,9 @@ type Knobs struct {
 
 	// NoGraphic completely disables graphic output.
 	NoGraphic bool
+
+	// Daemonize will turn the qemu process into a daemon
+	Daemonize bool
 }
 
 // Config is the qemu configuration structure.
@@ -911,6 +914,10 @@ func (config *Config) appendKnobs() {
 
 	if config.Knobs.NoGraphic == true {
 		config.qemuParams = append(config.qemuParams, "-nographic")
+	}
+
+	if config.Knobs.Daemonize == true {
+		config.qemuParams = append(config.qemuParams, "-daemonize")
 	}
 }
 

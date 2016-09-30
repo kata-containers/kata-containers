@@ -173,13 +173,14 @@ func TestAppendEmptyDevice(t *testing.T) {
 	testAppend(device, "", t)
 }
 
-var knobsString = "-no-user-config -nodefaults -nographic"
+var knobsString = "-no-user-config -nodefaults -nographic -daemonize"
 
 func TestAppendKnobsAllTrue(t *testing.T) {
 	knobs := Knobs{
 		NoUserConfig: true,
 		NoDefaults:   true,
 		NoGraphic:    true,
+		Daemonize:    true,
 	}
 
 	testAppend(knobs, knobsString, t)
