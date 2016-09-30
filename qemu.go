@@ -276,23 +276,6 @@ func (cdev CharDevice) Valid() bool {
 	return true
 }
 
-func appendCharDevice(params []string, cdev CharDevice) ([]string, error) {
-	if cdev.Valid() == false {
-		return nil, fmt.Errorf("Invalid character device")
-	}
-
-	var cdevParams []string
-
-	cdevParams = append(cdevParams, string(cdev.Backend))
-	cdevParams = append(cdevParams, fmt.Sprintf(",id=%s", cdev.ID))
-	cdevParams = append(cdevParams, fmt.Sprintf(",path=%s", cdev.Path))
-
-	params = append(params, "-chardev")
-	params = append(params, strings.Join(cdevParams, ""))
-
-	return params, nil
-}
-
 // QemuParams returns the qemu parameters built out of this character device.
 func (cdev CharDevice) QemuParams(config *Config) []string {
 	var cdevParams []string
