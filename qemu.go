@@ -305,7 +305,11 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 
 	cdevParams = append(cdevParams, string(cdev.Backend))
 	cdevParams = append(cdevParams, fmt.Sprintf(",id=%s", cdev.ID))
-	cdevParams = append(cdevParams, fmt.Sprintf(",path=%s", cdev.Path))
+	if cdev.Backend == Socket {
+		cdevParams = append(cdevParams, fmt.Sprintf(",path=%s,server,nowait", cdev.Path))
+	} else {
+		cdevParams = append(cdevParams, fmt.Sprintf(",path=%s", cdev.Path))
+	}
 
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
