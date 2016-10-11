@@ -695,8 +695,8 @@ type Config struct {
 	// Machine
 	Machine Machine
 
-	// QMPSocket is the QMP socket description.
-	QMPSocket QMPSocket
+	// QMPSockets is a slice of QMP socket description.
+	QMPSockets []QMPSocket
 
 	// Devices is a list of devices for qemu to create and drive.
 	Devices []Device
@@ -777,24 +777,24 @@ func (config *Config) appendCPUModel() {
 	}
 }
 
-func (config *Config) appendQMPSocket() {
-	if config.QMPSocket.Valid() == false {
-		return
-	}
-
-	var qmpParams []string
-
-	qmpParams = append(qmpParams, fmt.Sprintf("%s:", config.QMPSocket.Type))
-	qmpParams = append(qmpParams, fmt.Sprintf("%s", config.QMPSocket.Name))
-	if config.QMPSocket.Server == true {
-		qmpParams = append(qmpParams, ",server")
-		if config.QMPSocket.NoWait == true {
-			qmpParams = append(qmpParams, ",nowait")
+func (config *Config) appendQMPSockets() {
+	for _, q := range config.QMPSockets {
+		if q.Valid() == false {
+			continue
 		}
-	}
 
-	config.qemuParams = append(config.qemuParams, "-qmp")
-	config.qemuParams = append(config.qemuParams, strings.Join(qmpParams, ""))
+		qmpParams := append([]string{}, fmt.Sprintf("%s:", q.Type))
+		qmpParams = append(qmpParams, fmt.Sprintf("%s", q.Name))
+		if q.Server == true {
+			qmpParams = append(qmpParams, ",server")
+			if q.NoWait == true {
+				qmpParams = append(qmpParams, ",nowait")
+			}
+		}
+
+		config.qemuParams = append(config.qemuParams, "-qmp")
+		config.qemuParams = append(config.qemuParams, strings.Join(qmpParams, ""))
+	}
 }
 
 func (config *Config) appendDevices() {
@@ -935,7 +935,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendUUID()
 	config.appendMachine()
 	config.appendCPUModel()
-	config.appendQMPSocket()
+	config.appendQMPSockets()
 	config.appendMemory()
 	config.appendCPUs()
 	config.appendDevices()

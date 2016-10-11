@@ -54,8 +54,12 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 		config.appendCPUs()
 
 	case QMPSocket:
-		config.QMPSocket = s
-		config.appendQMPSocket()
+		config.QMPSockets = []QMPSocket{s}
+		config.appendQMPSockets()
+
+	case []QMPSocket:
+		config.QMPSockets = s
+		config.appendQMPSockets()
 
 	case RTC:
 		config.RTC = s
@@ -232,10 +236,10 @@ func TestAppendCPUs(t *testing.T) {
 	testAppend(smp, cpusString, t)
 }
 
-var qmpSocketServerString = "-qmp unix:cc-qmp,server,nowait"
-var qmpSocketString = "-qmp unix:cc-qmp"
+var qmpSingleSocketServerString = "-qmp unix:cc-qmp,server,nowait"
+var qmpSingleSocketString = "-qmp unix:cc-qmp"
 
-func TestAppendQMPSocketServer(t *testing.T) {
+func TestAppendSingleQMPSocketServer(t *testing.T) {
 	qmp := QMPSocket{
 		Type:   "unix",
 		Name:   "cc-qmp",
@@ -243,17 +247,38 @@ func TestAppendQMPSocketServer(t *testing.T) {
 		NoWait: true,
 	}
 
-	testAppend(qmp, qmpSocketServerString, t)
+	testAppend(qmp, qmpSingleSocketServerString, t)
 }
 
-func TestAppendQMPSocket(t *testing.T) {
+func TestAppendSingleQMPSocket(t *testing.T) {
 	qmp := QMPSocket{
 		Type:   Unix,
 		Name:   "cc-qmp",
 		Server: false,
 	}
 
-	testAppend(qmp, qmpSocketString, t)
+	testAppend(qmp, qmpSingleSocketString, t)
+}
+
+var qmpSocketServerString = "-qmp unix:cc-qmp-1,server,nowait -qmp unix:cc-qmp-2,server,nowait"
+
+func TestAppendQMPSocketServer(t *testing.T) {
+	qmp := []QMPSocket{
+		{
+			Type:   "unix",
+			Name:   "cc-qmp-1",
+			Server: true,
+			NoWait: true,
+		},
+		{
+			Type:   "unix",
+			Name:   "cc-qmp-2",
+			Server: true,
+			NoWait: true,
+		},
+	}
+
+	testAppend(qmp, qmpSocketServerString, t)
 }
 
 var qemuString = "-name cc-qemu -cpu host -uuid " + testutil.AgentUUID
