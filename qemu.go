@@ -70,6 +70,9 @@ const (
 
 	// Console is the console device driver.
 	Console = "virtconsole"
+
+	// VirtioSerialPort is the serial port device driver.
+	VirtioSerialPort = "virtserialport"
 )
 
 // ObjectType is a string representing a qemu object type.
@@ -265,6 +268,7 @@ type CharDevice struct {
 
 	ID   string
 	Path string
+	Name string
 }
 
 // Valid returns true if the CharDevice structure is valid and complete.
@@ -285,6 +289,9 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf("%s", cdev.Driver))
 	deviceParams = append(deviceParams, fmt.Sprintf(",chardev=%s", cdev.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", cdev.DeviceID))
+	if cdev.Name != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf(",name=%s", cdev.Name))
+	}
 
 	cdevParams = append(cdevParams, string(cdev.Backend))
 	cdevParams = append(cdevParams, fmt.Sprintf(",id=%s", cdev.ID))

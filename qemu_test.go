@@ -154,6 +154,21 @@ func TestAppendDeviceSerial(t *testing.T) {
 	testAppend(sdev, deviceSerialString, t)
 }
 
+var deviceSerialPortString = "-device virtserialport,chardev=char0,id=channel0,name=channel.0 -chardev socket,id=char0,path=/tmp/char.sock,server,nowait"
+
+func TestAppendDeviceSerialPort(t *testing.T) {
+	chardev := CharDevice{
+		Driver:   VirtioSerialPort,
+		Backend:  Socket,
+		ID:       "char0",
+		DeviceID: "channel0",
+		Path:     "/tmp/char.sock",
+		Name:     "channel.0",
+	}
+
+	testAppend(chardev, deviceSerialPortString, t)
+}
+
 var deviceBlockString = "-device virtio-blk,drive=hd0,scsi=off,config-wce=off -drive id=hd0,file=/var/lib/ciao.img,aio=threads,format=qcow2,if=none"
 
 func TestAppendDeviceBlock(t *testing.T) {
