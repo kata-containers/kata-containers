@@ -263,6 +263,9 @@ type CharDevice struct {
 	// Driver is the qemu device driver
 	Driver DeviceDriver
 
+	// Bus is the serial bus associated to this device.
+	Bus string
+
 	// DeviceID is the user defined device ID.
 	DeviceID string
 
@@ -287,6 +290,9 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s", cdev.Driver))
+	if cdev.Bus != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf(",bus=%s", cdev.Bus))
+	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",chardev=%s", cdev.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", cdev.DeviceID))
 	if cdev.Name != "" {
