@@ -254,6 +254,15 @@ func (q *QMP) processQMPInput(line []byte, cmdQueue *list.List) {
 	}
 }
 
+func currentCommandDoneCh(cmdQueue *list.List) <-chan struct{} {
+	cmdEl := cmdQueue.Front()
+	if cmdEl == nil {
+		return nil
+	}
+	cmd := cmdEl.Value.(*qmpCommand)
+	return cmd.ctx.Done()
+}
+
 func (q *QMP) writeNextQMPCommand(cmdQueue *list.List) {
 	cmdEl := cmdQueue.Front()
 	cmd := cmdEl.Value.(*qmpCommand)
@@ -290,6 +299,16 @@ func failOutstandingCommands(cmdQueue *list.List) {
 		}:
 		case <-cmd.ctx.Done():
 		}
+	}
+}
+
+func (q *QMP) cancelCurrentCommand(cmdQueue *list.List) {
+	cmdEl := cmdQueue.Front()
+	cmd := cmdEl.Value.(*qmpCommand)
+	if cmd.resultReceived {
+		q.finaliseCommand(cmdEl, cmdQueue, false)
+	} else {
+		cmd.filter = nil
 	}
 }
 
@@ -343,6 +362,7 @@ func (q *QMP) mainLoop() {
 	}()
 
 	version := []byte{}
+	var cmdDoneCh <-chan struct{}
 
 DONE:
 	for {
@@ -359,6 +379,7 @@ DONE:
 			}
 			if cmdQueue.Len() >= 1 {
 				q.writeNextQMPCommand(cmdQueue)
+				cmdDoneCh = currentCommandDoneCh(cmdQueue)
 			}
 			break DONE
 		}
@@ -373,14 +394,25 @@ DONE:
 				return
 			}
 			_ = cmdQueue.PushBack(&cmd)
-			if cmdQueue.Len() >= 1 {
+
+			// We only want to execute the new cmd if there
+			// are no other commands pending.  If there are
+			// commands pending our new command will get
+			// run when the pending commands complete.
+
+			if cmdQueue.Len() == 1 {
 				q.writeNextQMPCommand(cmdQueue)
+				cmdDoneCh = currentCommandDoneCh(cmdQueue)
 			}
 		case line, ok := <-fromVMCh:
 			if !ok {
 				return
 			}
 			q.processQMPInput(line, cmdQueue)
+			cmdDoneCh = currentCommandDoneCh(cmdQueue)
+		case <-cmdDoneCh:
+			q.cancelCurrentCommand(cmdQueue)
+			cmdDoneCh = currentCommandDoneCh(cmdQueue)
 		}
 	}
 }
