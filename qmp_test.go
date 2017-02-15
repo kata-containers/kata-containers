@@ -133,7 +133,7 @@ func (b *qmpTestCommandBuffer) startEventLoop(wg *sync.WaitGroup) {
 	}()
 }
 
-func (b *qmpTestCommandBuffer) AddCommmand(name string, args map[string]interface{},
+func (b *qmpTestCommandBuffer) AddCommand(name string, args map[string]interface{},
 	result string, data map[string]interface{}) {
 	b.cmds = append(b.cmds, qmpTestCommand{name, args})
 	if data == nil {
@@ -265,7 +265,7 @@ func TestQMPCapabilities(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommmand("qmp_capabilities", nil, "return", nil)
+	buf.AddCommand("qmp_capabilities", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
@@ -288,7 +288,7 @@ func TestQMPStop(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommmand("stop", nil, "return", nil)
+	buf.AddCommand("stop", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
@@ -311,7 +311,7 @@ func TestQMPCont(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommmand("cont", nil, "return", nil)
+	buf.AddCommand("cont", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
@@ -333,7 +333,7 @@ func TestQMPQuit(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommmand("quit", nil, "return", nil)
+	buf.AddCommand("quit", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
@@ -355,7 +355,7 @@ func TestQMPBlockdevAdd(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommmand("blockdev-add", nil, "return", nil)
+	buf.AddCommand("blockdev-add", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
@@ -378,7 +378,7 @@ func TestQMPDeviceAdd(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommmand("device_add", nil, "return", nil)
+	buf.AddCommand("device_add", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
@@ -403,7 +403,7 @@ func TestQMPXBlockdevDel(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommmand("x-blockdev-del", nil, "return", nil)
+	buf.AddCommand("x-blockdev-del", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
@@ -437,7 +437,7 @@ func TestQMPDeviceDel(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommmand("device_del", nil, "return", nil)
+	buf.AddCommand("device_del", nil, "return", nil)
 	buf.AddEvent("DEVICE_DELETED", time.Millisecond*200,
 		map[string]interface{}{
 			"path": path,
@@ -502,7 +502,7 @@ func TestQMPDeviceDelTimeout(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommmand("device_del", nil, "return", nil)
+	buf.AddCommand("device_del", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
@@ -529,8 +529,8 @@ func TestQMPCancel(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommmand("qmp_capabilities", nil, "return", nil)
-	buf.AddCommmand("qmp_capabilities", nil, "return", nil)
+	buf.AddCommand("qmp_capabilities", nil, "return", nil)
+	buf.AddCommand("qmp_capabilities", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
@@ -564,7 +564,7 @@ func TestQMPSystemPowerdown(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommmand("system_powerdown", nil, "return", nil)
+	buf.AddCommand("system_powerdown", nil, "return", nil)
 	buf.AddEvent("SHUTDOWN", time.Millisecond*100,
 		nil,
 		map[string]interface{}{
@@ -599,8 +599,8 @@ func TestQMPEventedCommandCancel(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommmand("system_powerdown", nil, "return", nil)
-	buf.AddCommmand("quit", nil, "return", nil)
+	buf.AddCommand("system_powerdown", nil, "return", nil)
+	buf.AddCommand("quit", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
@@ -642,8 +642,8 @@ func TestQMPEventedCommandCancelConcurrent(t *testing.T) {
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
 
-	buf.AddCommmand("system_powerdown", nil, "error", nil)
-	buf.AddCommmand("qmp_capabilities", nil, "return", nil)
+	buf.AddCommand("system_powerdown", nil, "error", nil)
+	buf.AddCommand("qmp_capabilities", nil, "return", nil)
 
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
@@ -780,13 +780,13 @@ func TestQMPLostLoop(t *testing.T) {
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
 	close(buf.forceFail)
-	buf.AddCommmand("qmp_capabilities", nil, "return", nil)
+	buf.AddCommand("qmp_capabilities", nil, "return", nil)
 	err := q.ExecuteQMPCapabilities(context.Background())
 	if err == nil {
 		t.Error("Expected executeQMPCapabilities to fail")
 	}
 	<-disconnectedCh
-	buf.AddCommmand("qmp_capabilities", nil, "return", nil)
+	buf.AddCommand("qmp_capabilities", nil, "return", nil)
 	err = q.ExecuteQMPCapabilities(context.Background())
 	if err == nil {
 		t.Error("Expected executeQMPCapabilities to fail")
