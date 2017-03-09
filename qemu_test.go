@@ -143,6 +143,32 @@ func TestAppendDeviceNetwork(t *testing.T) {
 	testAppend(netdev, deviceNetworkString, t)
 }
 
+var deviceNetworkPCIString = "-device virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff -netdev tap,id=tap0,ifname=ceth0,downscript=no,script=no,fds=3:4,vhost=on"
+
+func TestAppendDeviceNetworkPCI(t *testing.T) {
+	foo, _ := ioutil.TempFile(os.TempDir(), "qemu-ciao-test")
+	bar, _ := ioutil.TempFile(os.TempDir(), "qemu-ciao-test")
+
+	defer os.Remove(foo.Name())
+	defer os.Remove(bar.Name())
+
+	netdev := NetDevice{
+		Driver:     VirtioNetPCI,
+		Type:       TAP,
+		ID:         "tap0",
+		IFName:     "ceth0",
+		Bus:        "/pci-bus/pcie.0",
+		Addr:       "255",
+		Script:     "no",
+		DownScript: "no",
+		FDs:        []*os.File{foo, bar},
+		VHost:      true,
+		MACAddress: "01:02:de:ad:be:ef",
+	}
+
+	testAppend(netdev, deviceNetworkPCIString, t)
+}
+
 var deviceSerialString = "-device virtio-serial-pci,id=serial0"
 
 func TestAppendDeviceSerial(t *testing.T) {
