@@ -32,17 +32,15 @@ import (
 )
 
 const (
-	microStr   = "50"
-	minorStr   = "6"
-	majorStr   = "2"
-	micro      = 50
-	minor      = 6
-	major      = 2
-	cap1       = "one"
-	cap2       = "two"
-	qmpHello   = `{ "QMP": { "version": { "qemu": { "micro": ` + microStr + `, "minor": ` + minorStr + `, "major": ` + majorStr + ` }, "package": ""}, "capabilities": ["` + cap1 + `","` + cap2 + `"]}}` + "\n"
-	qmpSuccess = `{ "return": {}}` + "\n"
-	qmpFailure = `{ "error": {}}` + "\n"
+	microStr = "50"
+	minorStr = "6"
+	majorStr = "2"
+	micro    = 50
+	minor    = 6
+	major    = 2
+	cap1     = "one"
+	cap2     = "two"
+	qmpHello = `{ "QMP": { "version": { "qemu": { "micro": ` + microStr + `, "minor": ` + minorStr + `, "major": ` + majorStr + ` }, "package": ""}, "capabilities": ["` + cap1 + `","` + cap2 + `"]}}` + "\n"
 )
 
 type qmpTestLogger struct{}
