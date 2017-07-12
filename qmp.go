@@ -107,8 +107,7 @@ type QMPEvent struct {
 }
 
 type qmpResult struct {
-	err  error
-	data map[string]interface{}
+	err error
 }
 
 type qmpCommand struct {
