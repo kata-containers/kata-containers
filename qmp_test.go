@@ -489,13 +489,6 @@ func TestQMPDeviceDel(t *testing.T) {
 // The device_del command should timeout after 1 second and the QMP loop
 // should exit gracefully.
 func TestQMPDeviceDelTimeout(t *testing.T) {
-	const (
-		seconds         = 1352167040730
-		microsecondsEv1 = 123456
-		device          = "device_" + testutil.VolumeUUID
-		path            = "/dev/rbd0"
-	)
-
 	var wg sync.WaitGroup
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
