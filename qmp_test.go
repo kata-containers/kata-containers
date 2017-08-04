@@ -212,7 +212,7 @@ func (b *qmpTestCommandBuffer) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-func checkVersion(t *testing.T, connectedCh <-chan *QMPVersion) {
+func checkVersion(t *testing.T, connectedCh <-chan *QMPVersion) *QMPVersion {
 	var version *QMPVersion
 	select {
 	case <-time.After(time.Second):
@@ -233,6 +233,8 @@ func checkVersion(t *testing.T, connectedCh <-chan *QMPVersion) {
 			t.Fatal("Invalid capabilities")
 		}
 	}
+
+	return version
 }
 
 // Checks that a QMP Loop can be started and shutdown.
@@ -356,7 +358,7 @@ func TestQMPBlockdevAdd(t *testing.T) {
 	buf.AddCommand("blockdev-add", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
-	checkVersion(t, connectedCh)
+	q.version = checkVersion(t, connectedCh)
 	err := q.ExecuteBlockdevAdd(context.Background(), "/dev/rbd0",
 		fmt.Sprintf("drive_%s", testutil.VolumeUUID))
 	if err != nil {

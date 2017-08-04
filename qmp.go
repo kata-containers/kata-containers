@@ -127,6 +127,7 @@ type QMP struct {
 	cfg            QMPConfig
 	connectedCh    chan<- *QMPVersion
 	disconnectedCh chan struct{}
+	version        *QMPVersion
 }
 
 // QMPVersion contains the version number and the capabailities of a QEMU
@@ -533,7 +534,6 @@ func QMPStart(ctx context.Context, socket string, cfg QMPConfig, disconnectedCh 
 
 	connectedCh := make(chan *QMPVersion)
 
-	var version *QMPVersion
 	q := startQMPLoop(conn, cfg, connectedCh, disconnectedCh)
 	select {
 	case <-ctx.Done():
@@ -542,13 +542,13 @@ func QMPStart(ctx context.Context, socket string, cfg QMPConfig, disconnectedCh 
 		return nil, nil, fmt.Errorf("Canceled by caller")
 	case <-disconnectedCh:
 		return nil, nil, fmt.Errorf("Lost connection to VM")
-	case version = <-connectedCh:
-		if version == nil {
+	case q.version = <-connectedCh:
+		if q.version == nil {
 			return nil, nil, fmt.Errorf("Failed to find QMP version information")
 		}
 	}
 
-	return q, version, nil
+	return q, q.version, nil
 }
 
 // Shutdown closes the domain socket used to monitor a QEMU instance and
@@ -602,16 +602,26 @@ func (q *QMP) ExecuteQuit(ctx context.Context) error {
 // used to name the device.  As this identifier will be passed directly to QMP,
 // it must obey QMP's naming rules, e,g., it must start with a letter.
 func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID string) error {
-	args := map[string]interface{}{
-		"options": map[string]interface{}{
-			"driver": "raw",
-			"file": map[string]interface{}{
-				"driver":   "file",
-				"filename": device,
-			},
-			"id": blockdevID,
+	var args map[string]interface{}
+
+	blockdevArgs := map[string]interface{}{
+		"driver": "raw",
+		"file": map[string]interface{}{
+			"driver":   "file",
+			"filename": device,
 		},
 	}
+
+	if q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 9) {
+		blockdevArgs["node-name"] = blockdevID
+		args = blockdevArgs
+	} else {
+		blockdevArgs["id"] = blockdevID
+		args = map[string]interface{}{
+			"options": blockdevArgs,
+		}
+	}
+
 	return q.executeCommand(ctx, "blockdev-add", args, nil)
 }
 
