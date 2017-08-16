@@ -202,6 +202,9 @@ type FSDevice struct {
 
 	// SecurityModel is the security model for this filesystem device.
 	SecurityModel SecurityModelType
+
+	// DisableModern prevents qemu from relying on fast MMIO.
+	DisableModern bool
 }
 
 // Valid returns true if the FSDevice structure is valid and complete.
@@ -220,6 +223,9 @@ func (fsdev FSDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s", fsdev.Driver))
+	if fsdev.DisableModern {
+		deviceParams = append(deviceParams, ",disable-modern=true")
+	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",fsdev=%s", fsdev.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",mount_tag=%s", fsdev.MountTag))
 
@@ -276,6 +282,9 @@ type CharDevice struct {
 	ID   string
 	Path string
 	Name string
+
+	// DisableModern prevents qemu from relying on fast MMIO.
+	DisableModern bool
 }
 
 // Valid returns true if the CharDevice structure is valid and complete.
@@ -294,6 +303,9 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s", cdev.Driver))
+	if cdev.DisableModern {
+		deviceParams = append(deviceParams, ",disable-modern=true")
+	}
 	if cdev.Bus != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",bus=%s", cdev.Bus))
 	}
@@ -366,6 +378,9 @@ type NetDevice struct {
 
 	// MACAddress is the networking device interface MAC address.
 	MACAddress string
+
+	// DisableModern prevents qemu from relying on fast MMIO.
+	DisableModern bool
 }
 
 // Valid returns true if the NetDevice structure is valid and complete.
@@ -394,6 +409,9 @@ func (netdev NetDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, "driver=")
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf("%s", netdev.Driver))
+	if netdev.DisableModern {
+		deviceParams = append(deviceParams, ",disable-modern=true")
+	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",netdev=%s", netdev.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",mac=%s", netdev.MACAddress))
 
@@ -454,6 +472,9 @@ type SerialDevice struct {
 
 	// ID is the serial device identifier.
 	ID string
+
+	// DisableModern prevents qemu from relying on fast MMIO.
+	DisableModern bool
 }
 
 // Valid returns true if the SerialDevice structure is valid and complete.
@@ -471,6 +492,9 @@ func (dev SerialDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s", dev.Driver))
+	if dev.DisableModern {
+		deviceParams = append(deviceParams, ",disable-modern=true")
+	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", dev.ID))
 
 	qemuParams = append(qemuParams, "-device")
@@ -519,6 +543,9 @@ type BlockDevice struct {
 	Format    BlockDeviceFormat
 	SCSI      bool
 	WCE       bool
+
+	// DisableModern prevents qemu from relying on fast MMIO.
+	DisableModern bool
 }
 
 // Valid returns true if the BlockDevice structure is valid and complete.
@@ -537,6 +564,9 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s", blkdev.Driver))
+	if blkdev.DisableModern {
+		deviceParams = append(deviceParams, ",disable-modern=true")
+	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",drive=%s", blkdev.ID))
 	if blkdev.SCSI == false {
 		deviceParams = append(deviceParams, ",scsi=off")

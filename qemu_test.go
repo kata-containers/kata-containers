@@ -104,7 +104,7 @@ func TestAppendDeviceNVDIMM(t *testing.T) {
 	testAppend(object, deviceNVDIMMString, t)
 }
 
-var deviceFSString = "-device virtio-9p-pci,fsdev=workload9p,mount_tag=rootfs -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none"
+var deviceFSString = "-device virtio-9p-pci,disable-modern=true,fsdev=workload9p,mount_tag=rootfs -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none"
 
 func TestAppendDeviceFS(t *testing.T) {
 	fsdev := FSDevice{
@@ -114,12 +114,13 @@ func TestAppendDeviceFS(t *testing.T) {
 		Path:          "/var/lib/docker/devicemapper/mnt/e31ebda2",
 		MountTag:      "rootfs",
 		SecurityModel: None,
+		DisableModern: true,
 	}
 
 	testAppend(fsdev, deviceFSString, t)
 }
 
-var deviceNetworkString = "-device virtio-net,netdev=tap0,mac=01:02:de:ad:be:ef -netdev tap,id=tap0,ifname=ceth0,downscript=no,script=no,fds=3:4,vhost=on"
+var deviceNetworkString = "-device virtio-net,disable-modern=true,netdev=tap0,mac=01:02:de:ad:be:ef -netdev tap,id=tap0,ifname=ceth0,downscript=no,script=no,fds=3:4,vhost=on"
 
 func TestAppendDeviceNetwork(t *testing.T) {
 	foo, _ := ioutil.TempFile(os.TempDir(), "qemu-ciao-test")
@@ -129,21 +130,22 @@ func TestAppendDeviceNetwork(t *testing.T) {
 	defer os.Remove(bar.Name())
 
 	netdev := NetDevice{
-		Driver:     VirtioNet,
-		Type:       TAP,
-		ID:         "tap0",
-		IFName:     "ceth0",
-		Script:     "no",
-		DownScript: "no",
-		FDs:        []*os.File{foo, bar},
-		VHost:      true,
-		MACAddress: "01:02:de:ad:be:ef",
+		Driver:        VirtioNet,
+		Type:          TAP,
+		ID:            "tap0",
+		IFName:        "ceth0",
+		Script:        "no",
+		DownScript:    "no",
+		FDs:           []*os.File{foo, bar},
+		VHost:         true,
+		MACAddress:    "01:02:de:ad:be:ef",
+		DisableModern: true,
 	}
 
 	testAppend(netdev, deviceNetworkString, t)
 }
 
-var deviceNetworkPCIString = "-device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff -netdev tap,id=tap0,ifname=ceth0,downscript=no,script=no,fds=3:4,vhost=on"
+var deviceNetworkPCIString = "-device driver=virtio-net-pci,disable-modern=true,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff -netdev tap,id=tap0,ifname=ceth0,downscript=no,script=no,fds=3:4,vhost=on"
 
 func TestAppendDeviceNetworkPCI(t *testing.T) {
 	foo, _ := ioutil.TempFile(os.TempDir(), "qemu-ciao-test")
@@ -153,28 +155,30 @@ func TestAppendDeviceNetworkPCI(t *testing.T) {
 	defer os.Remove(bar.Name())
 
 	netdev := NetDevice{
-		Driver:     VirtioNetPCI,
-		Type:       TAP,
-		ID:         "tap0",
-		IFName:     "ceth0",
-		Bus:        "/pci-bus/pcie.0",
-		Addr:       "255",
-		Script:     "no",
-		DownScript: "no",
-		FDs:        []*os.File{foo, bar},
-		VHost:      true,
-		MACAddress: "01:02:de:ad:be:ef",
+		Driver:        VirtioNetPCI,
+		Type:          TAP,
+		ID:            "tap0",
+		IFName:        "ceth0",
+		Bus:           "/pci-bus/pcie.0",
+		Addr:          "255",
+		Script:        "no",
+		DownScript:    "no",
+		FDs:           []*os.File{foo, bar},
+		VHost:         true,
+		MACAddress:    "01:02:de:ad:be:ef",
+		DisableModern: true,
 	}
 
 	testAppend(netdev, deviceNetworkPCIString, t)
 }
 
-var deviceSerialString = "-device virtio-serial-pci,id=serial0"
+var deviceSerialString = "-device virtio-serial-pci,disable-modern=true,id=serial0"
 
 func TestAppendDeviceSerial(t *testing.T) {
 	sdev := SerialDevice{
-		Driver: VirtioSerial,
-		ID:     "serial0",
+		Driver:        VirtioSerial,
+		ID:            "serial0",
+		DisableModern: true,
 	}
 
 	testAppend(sdev, deviceSerialString, t)
@@ -195,18 +199,19 @@ func TestAppendDeviceSerialPort(t *testing.T) {
 	testAppend(chardev, deviceSerialPortString, t)
 }
 
-var deviceBlockString = "-device virtio-blk,drive=hd0,scsi=off,config-wce=off -drive id=hd0,file=/var/lib/ciao.img,aio=threads,format=qcow2,if=none"
+var deviceBlockString = "-device virtio-blk,disable-modern=true,drive=hd0,scsi=off,config-wce=off -drive id=hd0,file=/var/lib/ciao.img,aio=threads,format=qcow2,if=none"
 
 func TestAppendDeviceBlock(t *testing.T) {
 	blkdev := BlockDevice{
-		Driver:    VirtioBlock,
-		ID:        "hd0",
-		File:      "/var/lib/ciao.img",
-		AIO:       Threads,
-		Format:    QCOW2,
-		Interface: NoInterface,
-		SCSI:      false,
-		WCE:       false,
+		Driver:        VirtioBlock,
+		ID:            "hd0",
+		File:          "/var/lib/ciao.img",
+		AIO:           Threads,
+		Format:        QCOW2,
+		Interface:     NoInterface,
+		SCSI:          false,
+		WCE:           false,
+		DisableModern: true,
 	}
 
 	testAppend(blkdev, deviceBlockString, t)
