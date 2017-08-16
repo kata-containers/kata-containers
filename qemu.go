@@ -390,6 +390,9 @@ func (netdev NetDevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 	var qemuParams []string
 
+	if netdev.Driver == VirtioNetPCI {
+		deviceParams = append(deviceParams, "driver=")
+	}
 	deviceParams = append(deviceParams, fmt.Sprintf("%s", netdev.Driver))
 	deviceParams = append(deviceParams, fmt.Sprintf(",netdev=%s", netdev.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",mac=%s", netdev.MACAddress))
