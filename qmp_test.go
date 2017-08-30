@@ -406,8 +406,8 @@ func TestQMPXBlockdevDel(t *testing.T) {
 	buf.AddCommand("x-blockdev-del", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
-	checkVersion(t, connectedCh)
-	err := q.ExecuteXBlockdevDel(context.Background(),
+	q.version = checkVersion(t, connectedCh)
+	err := q.ExecuteBlockdevDel(context.Background(),
 		fmt.Sprintf("drive_%s", testutil.VolumeUUID))
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)

@@ -642,13 +642,19 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
-// ExecuteXBlockdevDel deletes a block device by sending a x-blockdev-del command.
+// ExecuteBlockdevDel deletes a block device by sending a x-blockdev-del command
+// for qemu versions < 2.9. It sends the updated blockdev-del command for qemu>=2.9.
 // blockdevID is the id of the block device to be deleted.  Typically, this will
 // match the id passed to ExecuteBlockdevAdd.  It must be a valid QMP id.
-func (q *QMP) ExecuteXBlockdevDel(ctx context.Context, blockdevID string) error {
-	args := map[string]interface{}{
-		"id": blockdevID,
+func (q *QMP) ExecuteBlockdevDel(ctx context.Context, blockdevID string) error {
+	args := map[string]interface{}{}
+
+	if q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 9) {
+		args["node-name"] = blockdevID
+		return q.executeCommand(ctx, "blockdev-del", args, nil)
 	}
+
+	args["id"] = blockdevID
 	return q.executeCommand(ctx, "x-blockdev-del", args, nil)
 }
 
