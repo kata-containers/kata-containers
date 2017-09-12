@@ -231,6 +231,7 @@ func TestAppendKnobsAllTrue(t *testing.T) {
 		NoDefaults:   true,
 		NoGraphic:    true,
 		Daemonize:    true,
+		MemPrealloc:  true,
 	}
 
 	testAppend(knobs, knobsString, t)
@@ -241,6 +242,7 @@ func TestAppendKnobsAllFalse(t *testing.T) {
 		NoUserConfig: false,
 		NoDefaults:   false,
 		NoGraphic:    false,
+		MemPrealloc:  false,
 	}
 
 	testAppend(knobs, "", t)

@@ -741,6 +741,9 @@ type Knobs struct {
 
 	// Daemonize will turn the qemu process into a daemon
 	Daemonize bool
+
+	// MemPrealloc will allocate all the RAM upfront
+	MemPrealloc bool
 }
 
 // Config is the qemu configuration structure.
@@ -987,6 +990,20 @@ func (config *Config) appendKnobs() {
 
 	if config.Knobs.Daemonize == true {
 		config.qemuParams = append(config.qemuParams, "-daemonize")
+	}
+
+	if config.Knobs.MemPrealloc == true {
+		if config.Memory.Size != "" {
+			dimmName := "dimm1"
+			objMemParam := "memory-backend-ram,id=" + dimmName + ",size=" + config.Memory.Size + ",prealloc=on"
+			deviceMemParam := "pc-dimm,id=" + dimmName + ",memdev=" + dimmName
+
+			config.qemuParams = append(config.qemuParams, "-object")
+			config.qemuParams = append(config.qemuParams, objMemParam)
+
+			config.qemuParams = append(config.qemuParams, "-device")
+			config.qemuParams = append(config.qemuParams, deviceMemParam)
+		}
 	}
 }
 
