@@ -744,6 +744,13 @@ type Knobs struct {
 
 	// MemPrealloc will allocate all the RAM upfront
 	MemPrealloc bool
+
+	// Mlock will control locking of memory
+	// Only active when Realtime is set to true
+	Mlock bool
+
+	// Realtime will enable realtime QEMU
+	Realtime bool
 }
 
 // Config is the qemu configuration structure.
@@ -1003,6 +1010,15 @@ func (config *Config) appendKnobs() {
 
 			config.qemuParams = append(config.qemuParams, "-device")
 			config.qemuParams = append(config.qemuParams, deviceMemParam)
+		}
+	}
+
+	if config.Knobs.Realtime == true {
+		config.qemuParams = append(config.qemuParams, "-realtime")
+		if config.Knobs.Mlock == true {
+			config.qemuParams = append(config.qemuParams, "mlock=on")
+		} else {
+			config.qemuParams = append(config.qemuParams, "mlock=off")
 		}
 	}
 }
