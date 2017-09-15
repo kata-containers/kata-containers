@@ -1015,9 +1015,20 @@ func (config *Config) appendKnobs() {
 
 	if config.Knobs.Realtime == true {
 		config.qemuParams = append(config.qemuParams, "-realtime")
+		// This path is redundant as the default behaviour is locked memory
+		// Realtime today does not control any other feature even though
+		// other features may be added in the future
+		// https://lists.gnu.org/archive/html/qemu-devel/2012-12/msg03330.html
 		if config.Knobs.Mlock == true {
 			config.qemuParams = append(config.qemuParams, "mlock=on")
 		} else {
+			config.qemuParams = append(config.qemuParams, "mlock=off")
+		}
+	} else {
+		// In order to turn mlock off we need the -realtime option as well
+		if config.Knobs.Mlock == false {
+			//Enable realtime anyway just to get the right swapping behaviour
+			config.qemuParams = append(config.qemuParams, "-realtime")
 			config.qemuParams = append(config.qemuParams, "mlock=off")
 		}
 	}

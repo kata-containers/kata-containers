@@ -223,9 +223,8 @@ func TestAppendEmptyDevice(t *testing.T) {
 	testAppend(device, "", t)
 }
 
-var knobsString = "-no-user-config -nodefaults -nographic -daemonize -realtime mlock=on"
-
 func TestAppendKnobsAllTrue(t *testing.T) {
+	var knobsString = "-no-user-config -nodefaults -nographic -daemonize -realtime mlock=on"
 	knobs := Knobs{
 		NoUserConfig: true,
 		NoDefaults:   true,
@@ -240,6 +239,7 @@ func TestAppendKnobsAllTrue(t *testing.T) {
 }
 
 func TestAppendKnobsAllFalse(t *testing.T) {
+	var knobsString = "-realtime mlock=off"
 	knobs := Knobs{
 		NoUserConfig: false,
 		NoDefaults:   false,
@@ -249,7 +249,7 @@ func TestAppendKnobsAllFalse(t *testing.T) {
 		Mlock:        false,
 	}
 
-	testAppend(knobs, "", t)
+	testAppend(knobs, knobsString, t)
 }
 
 var kernelString = "-kernel /opt/vmlinux.container -append root=/dev/pmem0p1 rootflags=dax,data=ordered,errors=remount-ro rw rootfstype=ext4 tsc=reliable"
