@@ -28,7 +28,7 @@ import (
 
 	"context"
 
-	"github.com/01org/ciao/testutil"
+	"github.com/ciao-project/ciao/testutil"
 )
 
 const (

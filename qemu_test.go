@@ -22,7 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/01org/ciao/testutil"
+	"github.com/ciao-project/ciao/testutil"
 )
 
 func testAppend(structure interface{}, expected string, t *testing.T) {
