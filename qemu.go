@@ -591,6 +591,32 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	return qemuParams
 }
 
+// VFIODevice represents a qemu vfio device meant for direct access by guest OS.
+type VFIODevice struct {
+	// Bus-Device-Function of device
+	BDF string
+}
+
+// Valid returns true if the VFIODevice structure is valid and complete.
+func (vfioDev VFIODevice) Valid() bool {
+	if vfioDev.BDF == "" {
+		return false
+	}
+
+	return true
+}
+
+// QemuParams returns the qemu parameters built out of this vfio device.
+func (vfioDev VFIODevice) QemuParams(config *Config) []string {
+	var qemuParams []string
+
+	deviceParam := fmt.Sprintf("vfio-pci,host=%s", vfioDev.BDF)
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, deviceParam)
+
+	return qemuParams
+}
+
 // RTCBaseType is the qemu RTC base time type.
 type RTCBaseType string
 
