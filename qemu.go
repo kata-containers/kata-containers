@@ -837,6 +837,9 @@ type Config struct {
 	// Knobs is a set of qemu boolean settings.
 	Knobs Knobs
 
+	// Bios is the -bios parameter
+	Bios string
+
 	// fds is a list of open file descriptors to be passed to the spawned qemu process
 	fds []*os.File
 
@@ -1082,6 +1085,13 @@ func (config *Config) appendKnobs() {
 	}
 }
 
+func (config *Config) appendBios() {
+	if config.Bios != "" {
+		config.qemuParams = append(config.qemuParams, "-bios")
+		config.qemuParams = append(config.qemuParams, config.Bios)
+	}
+}
+
 // LaunchQemu can be used to launch a new qemu instance.
 //
 // The Config parameter contains a set of qemu parameters and settings.
@@ -1105,6 +1115,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendVGA()
 	config.appendKnobs()
 	config.appendKernel()
+	config.appendBios()
 
 	return LaunchCustomQemu(config.Ctx, config.Path, config.qemuParams, config.fds, logger)
 }
