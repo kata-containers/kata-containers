@@ -719,6 +719,73 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 	return qemuParams
 }
 
+// BridgeType is the type of the bridge
+type BridgeType uint
+
+const (
+	// PCIBridge is a pci bridge
+	PCIBridge BridgeType = iota
+
+	// PCIEBridge is a pcie bridge
+	PCIEBridge
+)
+
+// BridgeDevice represents a qemu bridge device like pci-bridge, pxb, etc.
+type BridgeDevice struct {
+	// Type of the bridge
+	Type BridgeType
+
+	// Bus number where the bridge is plugged, typically pci.0 or pcie.0
+	Bus string
+
+	// ID is used to identify the bridge in qemu
+	ID string
+
+	// Chassis number
+	Chassis int
+
+	// SHPC is used to enable or disable the standard hot plug controller
+	SHPC bool
+}
+
+// Valid returns true if the BridgeDevice structure is valid and complete.
+func (bridgeDev BridgeDevice) Valid() bool {
+	if bridgeDev.Type != PCIBridge && bridgeDev.Type != PCIEBridge {
+		return false
+	}
+
+	if bridgeDev.Bus == "" {
+		return false
+	}
+
+	if bridgeDev.ID == "" {
+		return false
+	}
+
+	return true
+}
+
+// QemuParams returns the qemu parameters built out of this bridge device.
+func (bridgeDev BridgeDevice) QemuParams(config *Config) []string {
+	var qemuParams []string
+
+	shpc := "off"
+	if bridgeDev.SHPC {
+		shpc = "on"
+	}
+
+	deviceName := "pci-bridge"
+	if bridgeDev.Type == PCIEBridge {
+		deviceName = "pcie-pci-bridge"
+	}
+
+	deviceParam := fmt.Sprintf("%s,bus=%s,id=%s,chassis_nr=%d,shpc=%s", deviceName, bridgeDev.Bus, bridgeDev.ID, bridgeDev.Chassis, shpc)
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, deviceParam)
+
+	return qemuParams
+}
+
 // RTCBaseType is the qemu RTC base time type.
 type RTCBaseType string
 
