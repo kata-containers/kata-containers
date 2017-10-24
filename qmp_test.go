@@ -785,3 +785,28 @@ func TestQMPLostLoop(t *testing.T) {
 		t.Error("Expected executeQMPCapabilities to fail")
 	}
 }
+
+// Checks that PCI devices are correctly added using device_add.
+//
+// We start a QMPLoop, send the device_add command and stop the loop.
+//
+// The device_add command should be correctly sent and the QMP loop should
+// exit gracefully.
+func TestQMPPCIDeviceAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	blockdevID := fmt.Sprintf("drive_%s", testutil.VolumeUUID)
+	devID := fmt.Sprintf("device_%s", testutil.VolumeUUID)
+	err := q.ExecutePCIDeviceAdd(context.Background(), blockdevID, devID,
+		"virtio-blk-pci", "0x1", "")
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}

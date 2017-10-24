@@ -675,3 +675,19 @@ func (q *QMP) ExecuteDeviceDel(ctx context.Context, devID string) error {
 	}
 	return q.executeCommand(ctx, "device_del", args, filter)
 }
+
+// ExecutePCIDeviceAdd is the PCI version of ExecuteDeviceAdd. This function can be used
+// to hot plug PCI devices on PCI(E) bridges, unlike ExecuteDeviceAdd this function receive the
+// device address on its parent bus. bus is optional.
+func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus string) error {
+	args := map[string]interface{}{
+		"id":     devID,
+		"driver": driver,
+		"drive":  blockdevID,
+		"addr":   addr,
+	}
+	if bus != "" {
+		args["bus"] = bus
+	}
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
