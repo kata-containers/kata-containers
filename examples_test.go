@@ -41,7 +41,7 @@ func Example() {
 	// LaunchCustomQemu should return as soon as the instance has launched as we
 	// are using the --daemonize flag.  It will set up a unix domain socket
 	// called /tmp/qmp-socket that we can use to manage the instance.
-	_, err := qemu.LaunchCustomQemu(context.Background(), "", params, nil, nil)
+	_, err := qemu.LaunchCustomQemu(context.Background(), "", params, nil, nil, nil)
 	if err != nil {
 		panic(err)
 	}

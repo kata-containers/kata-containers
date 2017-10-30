@@ -31,6 +31,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"context"
 )
@@ -1296,7 +1297,8 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendKernel()
 	config.appendBios()
 
-	return LaunchCustomQemu(config.Ctx, config.Path, config.qemuParams, config.fds, logger)
+	return LaunchCustomQemu(config.Ctx, config.Path, config.qemuParams,
+		config.fds, nil, logger)
 }
 
 // LaunchCustomQemu can be used to launch a new qemu instance.
@@ -1307,16 +1309,19 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 // signature of this function will not need to change when launch cancellation
 // is implemented.
 //
-// config.qemuParams is a slice of options to pass to qemu-system-x86_64 and fds is a
+// params is a slice of options to pass to qemu-system-x86_64 and fds is a
 // list of open file descriptors that are to be passed to the spawned qemu
-// process.
+// process.  The attrs parameter can be used to control aspects of the
+// newly created qemu process, such as the user and group under which it
+// runs.  It may be nil.
 //
 // This function writes its log output via logger parameter.
 //
 // The function will block until the launched qemu process exits.  "", nil
 // will be returned if the launch succeeds.  Otherwise a string containing
 // the contents of stderr + a Go error object will be returned.
-func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*os.File, logger QMPLog) (string, error) {
+func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*os.File,
+	attr *syscall.SysProcAttr, logger QMPLog) (string, error) {
 	if logger == nil {
 		logger = qmpNullLogger{}
 	}
@@ -1332,6 +1337,8 @@ func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*
 		logger.Infof("Adding extra file %v", fds)
 		cmd.ExtraFiles = fds
 	}
+
+	cmd.SysProcAttr = attr
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
