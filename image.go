@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"syscall"
 )
 
 // CreateCloudInitISO creates a cloud-init ConfigDrive ISO image.  This is
@@ -34,8 +35,10 @@ import (
 // isoPath contains the desired path of the ISO image to be created.  The
 // userdata and metadata parameters are byte slices that contain the
 // ConfigDrive userdata and metadata that will be stored with the ISO image.
+// The attrs parameter can be used to control aspects of the newly created
+// qemu process, such as the user and group under which it runs.  It may be nil.
 func CreateCloudInitISO(ctx context.Context, scratchDir, isoPath string,
-	userData, metaData []byte) error {
+	userData, metaData []byte, attr *syscall.SysProcAttr) error {
 	configDrivePath := path.Join(scratchDir, "clr-cloud-init")
 	dataDirPath := path.Join(configDrivePath, "openstack", "latest")
 	metaDataPath := path.Join(dataDirPath, "meta_data.json")
@@ -63,6 +66,7 @@ func CreateCloudInitISO(ctx context.Context, scratchDir, isoPath string,
 
 	cmd := exec.CommandContext(ctx, "xorriso", "-as", "mkisofs", "-R", "-V", "config-2",
 		"-o", isoPath, configDrivePath)
+	cmd.SysProcAttr = attr
 	err = cmd.Run()
 	if err != nil {
 		return fmt.Errorf("Unable to create cloudinit iso image %v", err)
