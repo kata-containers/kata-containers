@@ -425,7 +425,8 @@ type NetDevice struct {
 
 	// FDs represents the list of already existing file descriptors to be used.
 	// This is mostly useful for mq support.
-	FDs []*os.File
+	FDs      []*os.File
+	VhostFDs []*os.File
 
 	// VHost enables virtio device emulation from the host kernel instead of from qemu.
 	VHost bool
@@ -511,8 +512,17 @@ func (netdev NetDevice) QemuNetdevParams(config *Config) []string {
 
 	netdevParams = append(netdevParams, netdev.Type.QemuNetdevParam())
 	netdevParams = append(netdevParams, fmt.Sprintf(",id=%s", netdev.ID))
+
 	if netdev.VHost == true {
 		netdevParams = append(netdevParams, ",vhost=on")
+		if len(netdev.VhostFDs) > 0 {
+			var fdParams []string
+			qemuFDs := config.appendFDs(netdev.VhostFDs)
+			for _, fd := range qemuFDs {
+				fdParams = append(fdParams, fmt.Sprintf("%d", fd))
+			}
+			netdevParams = append(netdevParams, fmt.Sprintf(",vhostfds=%s", strings.Join(fdParams, ":")))
+		}
 	}
 
 	if len(netdev.FDs) > 0 {
