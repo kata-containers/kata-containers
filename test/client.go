@@ -90,8 +90,8 @@ func main() {
 	sum2 := fmt.Sprintf("%x", h.Sum(nil))
 
 	if sum1 != sum2 {
-		fmt.Printf("unmatched checksum:\norig:\t%s\nnew:\t%s\n", sum1, sum2)
+		fmt.Printf("FAIL: unmatched checksum:\norig:\t%s\nnew:\t%s\n", sum1, sum2)
 	} else {
-		fmt.Printf("matched checksum: %s\n", sum1)
+		fmt.Printf("SUCCESS: matched checksum: %s\n", sum1)
 	}
 }
