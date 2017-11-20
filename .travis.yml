@@ -1,3 +1,9 @@
+#
+# Copyright 2017 HyperHQ Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
 sudo: required
 dist: trusty
 
@@ -12,8 +18,7 @@ before_install:
   - sudo apt-get install -y -qq automake
 
 install:
-  - cd ${TRAVIS_BUILD_DIR}
-  - make
+  - cd ${TRAVIS_BUILD_DIR} && make
 
 script:
   - cd ${TRAVIS_BUILD_DIR} && make test

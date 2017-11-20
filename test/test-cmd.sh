@@ -1,3 +1,9 @@
+#
+# Copyright 2017 HyperHQ Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
 #! /bin/bash
 
 PROXYADDR=/tmp/proxy.sock

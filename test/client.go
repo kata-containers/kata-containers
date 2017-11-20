@@ -1,6 +1,9 @@
 // A simple proxy that multiplexes a unix socket connection
 //
 // Copyright 2017 HyperHQ Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
 
 package main
 
