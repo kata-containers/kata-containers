@@ -8,6 +8,7 @@ import (
 	"flag"
 	"io"
 	"net"
+	"strings"
 	"sync"
 
 	"github.com/golang/glog"
@@ -65,18 +66,32 @@ func serv(servConn io.ReadWriteCloser, proto, addr string) error {
 }
 
 func main() {
-	channel := flag.String("s", "/tmp/target.sock", "unix socket to multiplex on")
-	proxyAddr := flag.String("l", "/tmp/proxy.sock", "unix socket to listen at")
+	var channel, proxyAddr string
+	flag.StringVar(&channel, "s", "", "unix socket to multiplex on")
+	flag.StringVar(&proxyAddr, "l", "", "unix socket to listen on")
 
 	flag.Parse()
 
+	unixURI := "unix://"
+	if strings.HasPrefix(channel, unixURI) {
+		channel = channel[len(unixURI):]
+	}
+	if strings.HasPrefix(proxyAddr, unixURI) {
+		proxyAddr = proxyAddr[len(unixURI):]
+	}
+
+	if channel == "" || proxyAddr == "" {
+		glog.Error("channel and proxy address must be set")
+		return
+	}
+
 	// yamux connection
-	servConn, err := net.Dial("unix", *channel)
+	servConn, err := net.Dial("unix", channel)
 	if err != nil {
 		glog.Errorf("fail to dial channel(%s): %s", channel, err)
 		return
 	}
 	defer servConn.Close()
 
-	serv(servConn, "unix", *proxyAddr)
+	serv(servConn, "unix", proxyAddr)
 }
