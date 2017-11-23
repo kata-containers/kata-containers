@@ -28,8 +28,6 @@ import (
 	"time"
 
 	"context"
-
-	"github.com/ciao-project/ciao/testutil"
 )
 
 const (
@@ -358,7 +356,7 @@ func TestQMPBlockdevAdd(t *testing.T) {
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	q.version = checkVersion(t, connectedCh)
 	err := q.ExecuteBlockdevAdd(context.Background(), "/dev/rbd0",
-		fmt.Sprintf("drive_%s", testutil.VolumeUUID))
+		fmt.Sprintf("drive_%s", volumeUUID))
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -380,8 +378,8 @@ func TestQMPDeviceAdd(t *testing.T) {
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
-	blockdevID := fmt.Sprintf("drive_%s", testutil.VolumeUUID)
-	devID := fmt.Sprintf("device_%s", testutil.VolumeUUID)
+	blockdevID := fmt.Sprintf("drive_%s", volumeUUID)
+	devID := fmt.Sprintf("device_%s", volumeUUID)
 	err := q.ExecuteDeviceAdd(context.Background(), blockdevID, devID,
 		"virtio-blk-pci", "")
 	if err != nil {
@@ -406,7 +404,7 @@ func TestQMPXBlockdevDel(t *testing.T) {
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	q.version = checkVersion(t, connectedCh)
 	err := q.ExecuteBlockdevDel(context.Background(),
-		fmt.Sprintf("drive_%s", testutil.VolumeUUID))
+		fmt.Sprintf("drive_%s", volumeUUID))
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -427,7 +425,7 @@ func TestQMPDeviceDel(t *testing.T) {
 		seconds         = 1352167040730
 		microsecondsEv1 = 123456
 		microsecondsEv2 = 123556
-		device          = "device_" + testutil.VolumeUUID
+		device          = "device_" + volumeUUID
 		path            = "/dev/rbd0"
 	)
 
@@ -470,7 +468,7 @@ func TestQMPDeviceDel(t *testing.T) {
 	checkVersion(t, connectedCh)
 	buf.startEventLoop(&wg)
 	err := q.ExecuteDeviceDel(context.Background(),
-		fmt.Sprintf("device_%s", testutil.VolumeUUID))
+		fmt.Sprintf("device_%s", volumeUUID))
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -499,7 +497,7 @@ func TestQMPDeviceDelTimeout(t *testing.T) {
 	checkVersion(t, connectedCh)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	err := q.ExecuteDeviceDel(ctx,
-		fmt.Sprintf("device_%s", testutil.VolumeUUID))
+		fmt.Sprintf("device_%s", volumeUUID))
 	cancel()
 	if err != context.DeadlineExceeded {
 		t.Fatalf("Timeout expected found %v", err)
@@ -683,7 +681,7 @@ func TestQMPEvents(t *testing.T) {
 		seconds         = 1352167040730
 		microsecondsEv1 = 123456
 		microsecondsEv2 = 123556
-		device          = "device_" + testutil.VolumeUUID
+		device          = "device_" + volumeUUID
 		path            = "/dev/rbd0"
 	)
 	var wg sync.WaitGroup
@@ -721,7 +719,7 @@ func TestQMPEvents(t *testing.T) {
 	deviceName := ev.Data["device"].(string)
 	if deviceName != device {
 		t.Errorf("Unexpected device field.  Expected %s, found %s",
-			"device_"+testutil.VolumeUUID, device)
+			"device_"+volumeUUID, device)
 	}
 	pathName := ev.Data["path"].(string)
 	if pathName != path {
@@ -798,8 +796,8 @@ func TestQMPPCIDeviceAdd(t *testing.T) {
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
-	blockdevID := fmt.Sprintf("drive_%s", testutil.VolumeUUID)
-	devID := fmt.Sprintf("device_%s", testutil.VolumeUUID)
+	blockdevID := fmt.Sprintf("drive_%s", volumeUUID)
+	devID := fmt.Sprintf("device_%s", volumeUUID)
 	err := q.ExecutePCIDeviceAdd(context.Background(), blockdevID, devID,
 		"virtio-blk-pci", "0x1", "")
 	if err != nil {

@@ -21,7 +21,7 @@ import (
 
 	"context"
 
-	"github.com/ciao-project/ciao/qemu"
+	"github.com/intel/govmm/qemu"
 )
 
 func Example() {
