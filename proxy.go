@@ -8,17 +8,18 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"io"
 	"net"
-	"strings"
+	"net/url"
 	"sync"
 
 	"github.com/golang/glog"
 	"github.com/hashicorp/yamux"
 )
 
-func serv(servConn io.ReadWriteCloser, proto, addr string) error {
+func serve(servConn io.ReadWriteCloser, proto, addr string) error {
 	session, err := yamux.Client(servConn, nil)
 	if err != nil {
 		glog.Errorf("fail to create yamux client: %s", err)
@@ -39,62 +40,81 @@ func serv(servConn io.ReadWriteCloser, proto, addr string) error {
 			glog.Errorf("fail to accept new connection: %s", err)
 			return err
 		}
+
 		stream, err := session.Open()
 		if err != nil {
 			glog.Errorf("fail to open yamux stream: %s", err)
 			return err
 		}
-		wg := &sync.WaitGroup{}
-		once := &sync.Once{}
-		cleanup := func() {
-			conn.Close()
-			stream.Close()
-		}
-		copyStream := func(dst io.Writer, src io.Reader) {
-			_, err := io.Copy(dst, src)
-			if err != nil {
-				once.Do(cleanup)
-			}
-			wg.Done()
-		}
 
-		wg.Add(2)
-		go copyStream(conn, stream)
-		go copyStream(stream, conn)
-		go func() {
-			wg.Wait()
-			once.Do(cleanup)
-		}()
+		go proxyConn(conn, stream)
 	}
+}
+
+func proxyConn(conn1 net.Conn, conn2 net.Conn) {
+	wg := &sync.WaitGroup{}
+	once := &sync.Once{}
+	cleanup := func() {
+		conn1.Close()
+		conn2.Close()
+	}
+	copyStream := func(dst io.Writer, src io.Reader) {
+		_, err := io.Copy(dst, src)
+		if err != nil {
+			once.Do(cleanup)
+		}
+		wg.Done()
+	}
+
+	wg.Add(2)
+	go copyStream(conn1, conn2)
+	go copyStream(conn2, conn1)
+	go func() {
+		wg.Wait()
+		once.Do(cleanup)
+	}()
+}
+
+func unixAddr(uri string) (string, error) {
+	if len(uri) == 0 {
+		return "", errors.New("empty uri")
+
+	}
+	addr, err := url.Parse(uri)
+	if err != nil {
+		return "", err
+	}
+	if addr.Scheme != "" && addr.Scheme != "unix" {
+		return "", errors.New("invalid address scheme")
+	}
+	return addr.Host + addr.Path, nil
 }
 
 func main() {
 	var channel, proxyAddr string
-	flag.StringVar(&channel, "s", "", "unix socket to multiplex on")
-	flag.StringVar(&proxyAddr, "l", "", "unix socket to listen on")
+	flag.StringVar(&channel, "mux-socket", "", "unix socket to multiplex on")
+	flag.StringVar(&proxyAddr, "listen-socket", "", "unix socket to listen on")
 
 	flag.Parse()
 
-	unixURI := "unix://"
-	if strings.HasPrefix(channel, unixURI) {
-		channel = channel[len(unixURI):]
+	muxAddr, err := unixAddr(channel)
+	if err != nil {
+		glog.Error("invalid mux socket address")
+		return
 	}
-	if strings.HasPrefix(proxyAddr, unixURI) {
-		proxyAddr = proxyAddr[len(unixURI):]
-	}
-
-	if channel == "" || proxyAddr == "" {
-		glog.Error("channel and proxy address must be set")
+	listenAddr, err := unixAddr(proxyAddr)
+	if err != nil {
+		glog.Error("invalid listen socket address")
 		return
 	}
 
 	// yamux connection
-	servConn, err := net.Dial("unix", channel)
+	servConn, err := net.Dial("unix", muxAddr)
 	if err != nil {
-		glog.Errorf("fail to dial channel(%s): %s", channel, err)
+		glog.Errorf("fail to dial channel(%s): %s", muxAddr, err)
 		return
 	}
 	defer servConn.Close()
 
-	serv(servConn, "unix", proxyAddr)
+	serve(servConn, "unix", listenAddr)
 }

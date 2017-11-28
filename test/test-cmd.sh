@@ -17,7 +17,7 @@ set -e
 sleep 2
 
 # start proxy
-../proxy -l ${PROXYADDR} -s "unix://"${TARGETADDR} &
+../proxy -listen-socket ${PROXYADDR} -mux-socket "unix://"${TARGETADDR} &
 
 # do test
 

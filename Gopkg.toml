@@ -22,9 +22,9 @@
 
 
 [[constraint]]
-  branch = "master"
+  revision = "23def4e6c"
   name = "github.com/golang/glog"
 
 [[constraint]]
-  branch = "master"
+  revision = "f5742cb6"
   name = "github.com/hashicorp/yamux"

@@ -2,20 +2,18 @@
 
 
 [[projects]]
-  branch = "master"
   name = "github.com/golang/glog"
   packages = ["."]
-  revision = "23def4e6c14b4da8ac2ed8007337bc5eb5007998"
+  revision = "23def4e6c"
 
 [[projects]]
-  branch = "master"
   name = "github.com/hashicorp/yamux"
   packages = ["."]
-  revision = "f5742cb6b85602e7fa834e9d5d91a7d7fa850824"
+  revision = "f5742cb6"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8c0af418da8a21b04459efb02c1762e09af142494739d8e2cd5dccc88c6e0fa0"
+  inputs-digest = "b2cfa7aa8eac46e44b38ced7e9187fab5604b0038cd46a9e1745409b8ee2964e"
   solver-name = "gps-cdcl"
   solver-version = 1
