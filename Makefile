@@ -8,7 +8,7 @@ all:
 	go build proxy.go
 
 test: all
-	go test -v
+	go test -v -race -coverprofile=coverage.txt -covermode=atomic
 
 clean:
 	rm -f proxy
