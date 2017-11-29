@@ -31,6 +31,7 @@ func client(proxyAddr, file string) error {
 
 	var sum1 string
 	var expected int64
+	copyCh := make(chan error)
 	if file != "" {
 		f, err := os.Open(file)
 		if err != nil {
@@ -49,7 +50,10 @@ func client(proxyAddr, file string) error {
 		if err != nil {
 			return err
 		}
-		go io.Copy(conn, f)
+		go func() {
+			_, err := io.Copy(conn, f)
+			copyCh <- err
+		}()
 
 	} else {
 		sum1 = fmt.Sprintf("%x", md5.Sum(buf))
@@ -59,6 +63,7 @@ func client(proxyAddr, file string) error {
 			return err
 		}
 		expected = int64(size)
+		copyCh <- nil
 	}
 
 	// read from server
@@ -89,7 +94,7 @@ func client(proxyAddr, file string) error {
 		return fmt.Errorf("unmatched checksum on file %s:\norig:\t%s\nnew:\t%s\n", file, sum1, sum2)
 	}
 
-	return nil
+	return <-copyCh
 }
 
 func server(listener net.Listener) error {
