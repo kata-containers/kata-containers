@@ -52,7 +52,7 @@ options to build a `rootfs` run `./rootfs.sh -h`, it will show
 
 Now that a new directory structure was created is need to:
 
-- If needed , add configuration variables to `rootfs-builder/my_new_awesome_rootfs/config.sh`
+- If needed, add configuration variables to `rootfs-builder/my_new_awesome_rootfs/config.sh`
 - Implement the stub `build_rootfs()` function from `rootfs-builder/my_new_awesome_rootfs/rootfs_lib.sh`
 
 ### Expected `rootfs` directory content ###
