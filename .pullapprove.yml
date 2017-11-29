@@ -1,0 +1,31 @@
+version: 2
+
+requirements:
+  signed_off_by:
+    required: true
+
+# Disallow approval of PRs still under development
+always_pending:
+  title_regex: 'WIP'
+  labels:
+    - do-not-merge
+    - wip
+  explanation: 'Work in progress - do not merge'
+
+group_defaults:
+  approve_by_comment:
+    enabled: true
+    approve_regex: '^(LGTM|lgtm|Approved|\+1|:\+1:)'
+    reject_regex: '^(Rejected|-1|:-1:)'
+  reset_on_push:
+    enabled: false
+  reset_on_reopened:
+    enabled: false
+  author_approval:
+    ignored: true
+
+groups:
+  approvers:
+    required: 1
+    teams:
+      - proxy
