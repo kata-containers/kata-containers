@@ -15,21 +15,19 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/golang/glog"
+	"github.com/Sirupsen/logrus"
 	"github.com/hashicorp/yamux"
 )
 
 func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) error {
 	session, err := yamux.Client(servConn, nil)
 	if err != nil {
-		glog.Errorf("fail to create yamux client: %s", err)
 		return err
 	}
 
 	// serving connection
 	l, err := net.Listen(proto, addr)
 	if err != nil {
-		glog.Errorf("fail to listen on %s:%s: %s", proto, addr, err)
 		return err
 	}
 
@@ -44,13 +42,11 @@ func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) 
 			var conn, stream net.Conn
 			conn, err = l.Accept()
 			if err != nil {
-				glog.Errorf("fail to accept new connection: %s", err)
 				return
 			}
 
 			stream, err = session.Open()
 			if err != nil {
-				glog.Errorf("fail to open yamux stream: %s", err)
 				return
 			}
 
@@ -100,37 +96,59 @@ func unixAddr(uri string) (string, error) {
 	return addr.Host + addr.Path, nil
 }
 
+func setupLoger(logLevel string) error {
+
+	level, err := logrus.ParseLevel(logLevel)
+	if err != nil {
+		return err
+	}
+
+	logrus.SetLevel(level)
+	return nil
+}
+
 func main() {
-	var channel, proxyAddr string
+	var channel, proxyAddr, logLevel string
 	flag.StringVar(&channel, "mux-socket", "", "unix socket to multiplex on")
 	flag.StringVar(&proxyAddr, "listen-socket", "", "unix socket to listen on")
 
+	flag.StringVar(&logLevel, "log", "warn",
+		"log messages above specified level: debug, warn, error, fatal or panic")
+
 	flag.Parse()
+
+	err := setupLoger(logLevel)
+	if err != nil {
+		logrus.Fatal(err)
+	}
 
 	muxAddr, err := unixAddr(channel)
 	if err != nil {
-		glog.Error("invalid mux socket address")
-		return
+		logrus.Fatal("invalid mux socket address")
 	}
 	listenAddr, err := unixAddr(proxyAddr)
 	if err != nil {
-		glog.Error("invalid listen socket address")
+		logrus.Fatal("invalid listen socket address")
 		return
 	}
 
 	// yamux connection
 	servConn, err := net.Dial("unix", muxAddr)
 	if err != nil {
-		glog.Errorf("fail to dial channel(%s): %s", muxAddr, err)
+		logrus.Fatal("fail to dial channel(%s): %s", muxAddr, err)
 		return
 	}
 	defer servConn.Close()
 
-	result := make(chan error)
-	err = serve(servConn, "unix", listenAddr, result)
+	results := make(chan error)
+	err = serve(servConn, "unix", listenAddr, results)
 	if err != nil {
-		return
+		logrus.Fatal(err)
 	}
 
-	<-result
+	for err = range results {
+		if err != nil {
+			logrus.Fatal(err)
+		}
+	}
 }
