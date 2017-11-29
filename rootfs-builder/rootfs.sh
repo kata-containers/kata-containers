@@ -33,13 +33,16 @@ Supported Linux distributions:
 $(get_distros)
 
 Options:
--h  : Show this help message
 -a  : agent version DEFAULT: ${AGENT_VERSION} ENV: AGENT_VERSION 
+-h  : Show this help message
 -r  : rootfs directory DEFAULT: ${ROOTFS_DIR} ENV: ROOTFS_DIR
 
 ENV VARIABLES:
 GO_AGENT_PKG: Change the golang package url to get the agent source code
-            DEFAULT: ${AGENT_REPO}
+            DEFAULT: ${GO_AGENT_PKG}
+AGENT_BIN   : Name of the agent binary (needed to check if agent is installed)
+USE_DOCKER: If set will build rootfs in a Docker Container (requries docker)
+            DEFAULT: not set
 EOT
 exit "${error}"
 }
@@ -101,6 +104,36 @@ source "${rootfs_config}"
 
 CONFIG_DIR=${distro_config_dir}
 check_function_exist "build_rootfs"
+
+if [ -n "${USE_DOCKER}" ] ; then
+	image_name="${distro}-rootfs-osbuilder"
+
+	docker build  \
+		--build-arg http_proxy="${http_proxy}" \
+		--build-arg https_proxy="${https_proxy}" \
+		-t "${image_name}" "${distro_config_dir}"
+
+	#Make sure we use a compatible runtime to build rootfs
+	# In case Clear Containers Runtime is installed we dont want to hit issue:
+	#https://github.com/clearcontainers/runtime/issues/828
+	docker run  \
+		--runtime runc  \
+		--env https_proxy="${https_proxy}" \
+		--env http_proxy="${http_proxy}" \
+		--env AGENT_VERSION="${AGENT_VERSION}" \
+		--env ROOTFS_DIR="/rootfs" \
+		--env GO_AGENT_PKG="${GO_AGENT_PKG}" \
+		--env AGENT_BIN="${AGENT_BIN}" \
+		--env GOPATH="${GOPATH}" \
+		-v "${script_dir}":"/osbuilder" \
+		-v "${ROOTFS_DIR}":"/rootfs" \
+		-v "${GOPATH}":"${GOPATH}" \
+		${image_name} \
+		bash /osbuilder/rootfs.sh "${distro}"
+
+	exit $?
+fi
+
 mkdir -p ${ROOTFS_DIR}
 build_rootfs ${ROOTFS_DIR}
 
