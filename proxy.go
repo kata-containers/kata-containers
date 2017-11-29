@@ -19,7 +19,7 @@ import (
 	"github.com/hashicorp/yamux"
 )
 
-func serve(servConn io.ReadWriteCloser, proto, addr string) error {
+func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) error {
 	session, err := yamux.Client(servConn, nil)
 	if err != nil {
 		glog.Errorf("fail to create yamux client: %s", err)
@@ -32,23 +32,33 @@ func serve(servConn io.ReadWriteCloser, proto, addr string) error {
 		glog.Errorf("fail to listen on %s:%s: %s", proto, addr, err)
 		return err
 	}
-	defer l.Close()
 
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			glog.Errorf("fail to accept new connection: %s", err)
-			return err
+	go func() {
+		var err error
+		defer func() {
+			l.Close()
+			results <- err
+		}()
+
+		for {
+			var conn, stream net.Conn
+			conn, err = l.Accept()
+			if err != nil {
+				glog.Errorf("fail to accept new connection: %s", err)
+				return
+			}
+
+			stream, err = session.Open()
+			if err != nil {
+				glog.Errorf("fail to open yamux stream: %s", err)
+				return
+			}
+
+			go proxyConn(conn, stream)
 		}
+	}()
 
-		stream, err := session.Open()
-		if err != nil {
-			glog.Errorf("fail to open yamux stream: %s", err)
-			return err
-		}
-
-		go proxyConn(conn, stream)
-	}
+	return nil
 }
 
 func proxyConn(conn1 net.Conn, conn2 net.Conn) {
@@ -116,5 +126,11 @@ func main() {
 	}
 	defer servConn.Close()
 
-	serve(servConn, "unix", listenAddr)
+	result := make(chan error)
+	err = serve(servConn, "unix", listenAddr, result)
+	if err != nil {
+		return
+	}
+
+	<-result
 }

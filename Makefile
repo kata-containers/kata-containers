@@ -6,11 +6,9 @@
 
 all:
 	go build proxy.go
-	make -C test
 
 test: all
-	make -C test test
+	go test -v
 
 clean:
 	rm -f proxy
-	make -C test clean
