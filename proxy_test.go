@@ -9,7 +9,6 @@ package main
 
 import (
 	"crypto/md5"
-	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -23,8 +22,6 @@ import (
 
 func client(proxyAddr, file string) error {
 	buf := []byte("hello proxy")
-
-	flag.Parse()
 
 	conn, err := net.Dial("unix", proxyAddr)
 	if err != nil {
