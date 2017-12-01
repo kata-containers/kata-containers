@@ -15,8 +15,8 @@ import (
 	"net/url"
 	"sync"
 
-	"github.com/sirupsen/logrus"
 	"github.com/hashicorp/yamux"
+	"github.com/sirupsen/logrus"
 )
 
 func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) error {
@@ -135,7 +135,7 @@ func main() {
 	// yamux connection
 	servConn, err := net.Dial("unix", muxAddr)
 	if err != nil {
-		logrus.Fatal("fail to dial channel(%s): %s", muxAddr, err)
+		logrus.Fatalf("failed to dial channel(%q): %s", muxAddr, err)
 		return
 	}
 	defer servConn.Close()
