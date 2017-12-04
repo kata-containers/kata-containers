@@ -1,0 +1,213 @@
+//
+// Copyright 2017 HyperHQ Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
+syntax = "proto3";
+
+package grpc;
+
+import "oci.proto";
+import "google/protobuf/empty.proto";
+
+
+// unstable
+service AgentService {
+	// execution
+	rpc CreateContainer(CreateContainerRequest) returns (google.protobuf.Empty);
+	rpc StartContainer(StartContainerRequest) returns (NewProcessResponse);
+
+	// RemoveContainer will tear down an existing container by forcibly terminating
+	// all processes running inside that container and releasing all internal
+	// resources associated with it.
+	// RemoveContainer will wait for all processes termination before returning.
+	// If any process can not be killed or if it can not be killed after
+	// the RemoveContainerRequest timeout, RemoveContainer will return an error.
+	rpc RemoveContainer(RemoveContainerRequest) returns (google.protobuf.Empty);
+	rpc ExecProcess(ExecProcessRequest) returns (NewProcessResponse);
+	rpc SignalProcess(SignalProcessRequest) returns (google.protobuf.Empty);
+	rpc WaitProcess(WaitProcessRequest) returns (WaitProcessResponse); // wait & reap like waitpid(2)
+
+	// stdio
+	rpc WriteStdin(WriteStreamRequest) returns (WriteStreamResponse);
+	rpc ReadStdout(ReadStreamRequest) returns (ReadStreamResponse);
+	rpc ReadStderr(ReadStreamRequest) returns (ReadStreamResponse);
+	rpc CloseStdin(CloseStdinRequest) returns (google.protobuf.Empty);
+	rpc TtyWinResize(TtyWinResizeRequest) returns (google.protobuf.Empty);
+
+	// networking
+	rpc AddInterface(AddInterfaceRequest) returns (google.protobuf.Empty);
+	rpc RemoveInterface(RemoveInterfaceRequest) returns (google.protobuf.Empty);
+	rpc UpdateInterface(UpdateInterfaceRequest) returns (google.protobuf.Empty);
+	rpc AddRoute(RouteRequest) returns (google.protobuf.Empty);
+	rpc RemoveRoute(RouteRequest) returns (google.protobuf.Empty);
+
+	// misc (TODO: some rpcs can be replaced by hyperstart-exec)
+	rpc CreateSandbox(CreateSandboxRequest) returns (google.protobuf.Empty);
+	rpc DestroySandbox(DestroySandboxRequest) returns (google.protobuf.Empty);
+	rpc OnlineCPUMem(OnlineCPUMemRequest) returns (google.protobuf.Empty);
+}
+
+message CreateContainerRequest {
+	string container_id = 1;
+	StringUser string_user = 2;
+	repeated Storage storages = 3;
+	Spec OCI = 4;
+}
+
+message StartContainerRequest {
+	string container_id = 1;
+}
+
+message RemoveContainerRequest {
+	string container_id = 1;
+
+	// RemoveContainer will return an error if
+	// it could not kill some container processes
+	// after timeout seconds.
+	// Setting timeout to 0 means RemoveContainer will
+	// wait for ever.
+	uint32 timeout = 2;
+}
+
+// NewProcessResponse contains a Linux PID for a process
+// that the agent created and manages.
+// Any gRPC request from the host for a PID that is not managed
+// by the agent will result in an error. For example, calling
+// WaitProcess() with a WaitProcessRequest pid field set to a
+// PID that was not created by the agent will return an error
+// back to the caller.
+message NewProcessResponse {
+	uint32 PID = 1;
+}
+
+message ExecProcessRequest {
+	string container_id = 1;
+	StringUser string_user = 3;
+	Process process = 4;
+}
+
+message SignalProcessRequest {
+	string container_id = 1;
+	uint32 PID = 2;
+	uint32 signal = 3;
+}
+
+message WaitProcessRequest {
+	string container_id = 1;
+	uint32 PID = 2;
+}
+
+message WaitProcessResponse {
+	int32 status = 1;
+}
+
+message WriteStreamRequest {
+	string container_id = 1;
+	uint32 PID = 2;
+	bytes data = 3;
+}
+
+message WriteStreamResponse {
+	uint32 len = 1;
+}
+
+message ReadStreamRequest {
+	string container_id = 1;
+	uint32 PID = 2;
+	uint32 len = 3;
+}
+
+message ReadStreamResponse {
+	bytes data = 1;
+}
+
+message CloseStdinRequest {
+	string container_id = 1;
+	uint32 PID = 2;
+}
+
+message TtyWinResizeRequest {
+	string container_id = 1;
+	uint32 PID = 2;
+	uint32 row = 3;
+	uint32 column = 4;
+}
+
+message CreateSandboxRequest {
+	string hostname = 1;
+	repeated string dns = 2;
+	repeated Storage storages = 3;
+	bool sandbox_pidns = 4;
+}
+
+message DestroySandboxRequest {
+}
+
+enum IPFamily {
+	v4 = 0;
+	v6 = 1;
+}
+
+message IPAddress {
+	IPFamily family = 1;
+	string address = 2;
+	string mask = 3;
+}
+
+message Interface {
+	string device = 1;
+	string name = 2;
+	repeated IPAddress ipAddresses = 3;
+	uint64 mtu = 4;
+	string hwAddr = 5;
+}
+
+message Route {
+	string dest = 1;
+	string gateway = 2;
+	string device = 3;
+}
+
+enum UpdateType {
+	None = 0;
+	AddIP = 1;
+	RemoveIP = 2;
+	Name = 4;
+	MTU = 8;
+}
+
+message AddInterfaceRequest {
+	Interface interface = 1;
+}
+
+message RemoveInterfaceRequest {
+	string name = 1;
+}
+
+message UpdateInterfaceRequest {
+	UpdateType type = 1;
+	Interface interface = 2;
+}
+
+message RouteRequest {
+	Route route = 1;
+}
+
+message OnlineCPUMemRequest {
+}
+
+message Storage {
+	string driver = 1;           // empty in most cases. it will support "drbd", "bcache" ...
+	string source = 2;           // "/dev/sdb", "/dev/disk/by-scsi/xxxx", "none",...
+	string fstype = 3;           // "xfs", "ext4" etc. for block dev, or "9p" for shared fs, or  "tmpfs" for shared /dev/shm for all containers ...
+	repeated string options = 4; // options for the storage device, might required by some special devices.
+	string mount_point = 5;      // mount_point is only visible by VM, not by containers. This mount point can be used on oci.Mount.Source as "/Stroage/mount/point/{rootfs|_data}".
+}
+
+message StringUser {
+	string uid = 1;
+	string gid = 2;
+	repeated string additionalGids = 3;
+}
