@@ -4,11 +4,15 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-all:
-	go build proxy.go
+TARGET = kata-proxy
+
+all: $(TARGET)
+
+$(TARGET):
+	go build -o $@ proxy.go
 
 test: all
 	go test -v -race -coverprofile=coverage.txt -covermode=atomic
 
 clean:
-	rm -f proxy
+	rm -f $(TARGET)
