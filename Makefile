@@ -1,7 +1,7 @@
 all:
 	go build -o kata-shim
 
-test: all
+test:
 	go test -v -race
 
 clean:
