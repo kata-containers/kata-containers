@@ -704,6 +704,78 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	return qemuParams
 }
 
+// VhostUserDeviceType is a qemu networking device type.
+type VhostUserDeviceType string
+
+const (
+	//VhostUserSCSI represents a SCSI vhostuser device type
+	VhostUserSCSI = "vhost-user-scsi-pci"
+	//VhostUserNet represents a net vhostuser device type
+	VhostUserNet = "virtio-net-pci"
+)
+
+// VhostUserDevice represents a qemu vhost-user network device meant to be passed
+// in to the guest
+type VhostUserDevice struct {
+	SocketPath    string //path to vhostuser socket on host
+	CharDevID     string
+	TypeDevID     string //id (SCSI) or netdev (net) device parameter
+	MacAddress    string //only valid if device type is  VhostUserNet
+	VhostUserType VhostUserDeviceType
+}
+
+// Valid returns true if there is a valid socket path defined for VhostUserDevice
+func (vhostuserDev VhostUserDevice) Valid() bool {
+	if vhostuserDev.SocketPath == "" || vhostuserDev.CharDevID == "" ||
+		vhostuserDev.TypeDevID == "" ||
+		(vhostuserDev.VhostUserType == VhostUserNet && vhostuserDev.MacAddress == "") {
+		return false
+	}
+
+	return true
+}
+
+// QemuParams returns the qemu parameters built out of this vhostuser device.
+func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
+	var qemuParams []string
+	var charParams []string
+	var netParams []string
+	var devParams []string
+
+	charParams = append(charParams, "socket")
+	charParams = append(charParams, fmt.Sprintf("id=%s", vhostuserDev.CharDevID))
+	charParams = append(charParams, fmt.Sprintf("path=%s", vhostuserDev.SocketPath))
+
+	// if network based vhost device:
+	if vhostuserDev.VhostUserType == VhostUserNet {
+		netParams = append(netParams, "type=vhost-user")
+		netParams = append(netParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
+		netParams = append(netParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
+		netParams = append(netParams, "vhostforce")
+
+		devParams = append(devParams, VhostUserNet)
+		devParams = append(devParams, fmt.Sprintf("netdev=%s", vhostuserDev.TypeDevID))
+		devParams = append(devParams, fmt.Sprintf("mac=%s", vhostuserDev.MacAddress))
+	} else {
+		devParams = append(devParams, VhostUserSCSI)
+		devParams = append(devParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
+		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
+	}
+
+	qemuParams = append(qemuParams, "-chardev")
+	qemuParams = append(qemuParams, strings.Join(charParams, ","))
+
+	// if network based vhost device:
+	if vhostuserDev.VhostUserType == VhostUserNet {
+		qemuParams = append(qemuParams, "-netdev")
+		qemuParams = append(qemuParams, strings.Join(netParams, ","))
+	}
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(devParams, ","))
+
+	return qemuParams
+}
+
 // VFIODevice represents a qemu vfio device meant for direct access by guest OS.
 type VFIODevice struct {
 	// Bus-Device-Function of device
