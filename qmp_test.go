@@ -810,3 +810,25 @@ func TestQMPPCIDeviceAdd(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+// Checks that CPU are correctly added using device_add
+func TestQMPCPUDeviceAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	driver := "qemu64-x86_64-cpu"
+	cpuID := "cpu-0"
+	socketID := "0"
+	coreID := "1"
+	threadID := "0"
+	err := q.ExecuteCPUDeviceAdd(context.Background(), driver, cpuID, socketID, coreID, threadID)
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}

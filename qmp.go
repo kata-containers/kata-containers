@@ -736,3 +736,18 @@ func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus
 	}
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
+
+// ExecuteCPUDeviceAdd adds a CPU to a QEMU instance using the device_add command.
+// driver is the CPU model, cpuID must be a unique ID to identify the CPU, socketID is the socket number within
+// node/board the CPU belongs to, coreID is the core number within socket the CPU belongs to, threadID is the
+// thread number within core the CPU belongs to.
+func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, coreID, threadID string) error {
+	args := map[string]interface{}{
+		"driver":    driver,
+		"id":        cpuID,
+		"socket-id": socketID,
+		"core-id":   coreID,
+		"thread-id": threadID,
+	}
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
