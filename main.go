@@ -86,7 +86,7 @@ func main() {
 		os.Exit(exitFailure)
 	}
 	defer term.RestoreTerminal(os.Stdin.Fd(), s)
-	shim.monitorTtySize()
+	shim.monitorTtySize(os.Stdin)
 
 	// signals
 	sigc := shim.forwardAllSignals()
