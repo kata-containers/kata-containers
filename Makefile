@@ -11,7 +11,7 @@ all: $(TARGET)
 $(TARGET):
 	go build -o $@ proxy.go
 
-test: all
+test:
 	go test -v -race -coverprofile=coverage.txt -covermode=atomic
 
 clean:
