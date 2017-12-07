@@ -1,8 +1,10 @@
-all:
-	go build -o kata-shim
+TARGET = kata-shim
+
+$(TARGET):
+	go build -o $@
 
 test:
 	go test -v -race
 
 clean:
-	rm -f kata-shim
+	rm -f $(TARGET)
