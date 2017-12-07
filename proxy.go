@@ -10,6 +10,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"net"
 	"net/url"
@@ -21,6 +22,9 @@ import (
 )
 
 const proxyName = "kata-proxy"
+
+// version is the proxy version. This variable is populated at build time.
+var version = "unknown"
 
 var proxyLog = logrus.WithFields(logrus.Fields{
 	"name": proxyName,
@@ -112,11 +116,17 @@ func setupLoger(logLevel string) error {
 	}
 
 	logrus.SetLevel(level)
+
+	proxyLog.WithField("version", version).Info()
+
 	return nil
 }
 
 func main() {
 	var channel, proxyAddr, logLevel string
+	var showVersion bool
+
+	flag.BoolVar(&showVersion, "version", false, "display program version and exit")
 	flag.StringVar(&channel, "mux-socket", "", "unix socket to multiplex on")
 	flag.StringVar(&proxyAddr, "listen-socket", "", "unix socket to listen on")
 
@@ -124,6 +134,11 @@ func main() {
 		"log messages above specified level: debug, warn, error, fatal or panic")
 
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("%v version %v\n", proxyName, version)
+		os.Exit(0)
+	}
 
 	err := setupLoger(logLevel)
 	if err != nil {
