@@ -108,8 +108,7 @@ func unixAddr(uri string) (string, error) {
 	return addr.Host + addr.Path, nil
 }
 
-func setupLoger(logLevel string) error {
-
+func setupLogger(logLevel string) error {
 	level, err := logrus.ParseLevel(logLevel)
 	if err != nil {
 		return err
@@ -140,7 +139,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	err := setupLoger(logLevel)
+	err := setupLogger(logLevel)
 	if err != nil {
 		proxyLog.Fatal(err)
 	}
