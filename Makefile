@@ -5,10 +5,9 @@
 #
 
 TARGET = kata-proxy
+SOURCES := $(shell find . 2>&1 | grep -E '.*\.go$$')
 
-all: $(TARGET)
-
-$(TARGET):
+$(TARGET): $(SOURCES)
 	go build -o $@ proxy.go
 
 test:
