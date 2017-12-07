@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -75,7 +76,7 @@ type qmpTestEvent struct {
 
 type qmpTestResult struct {
 	result string
-	data   map[string]interface{}
+	data   interface{}
 }
 
 type qmpTestCommandBuffer struct {
@@ -132,11 +133,8 @@ func (b *qmpTestCommandBuffer) startEventLoop(wg *sync.WaitGroup) {
 }
 
 func (b *qmpTestCommandBuffer) AddCommand(name string, args map[string]interface{},
-	result string, data map[string]interface{}) {
+	result string, data interface{}) {
 	b.cmds = append(b.cmds, qmpTestCommand{name, args})
-	if data == nil {
-		data = make(map[string]interface{})
-	}
 	b.results = append(b.results, qmpTestResult{result, data})
 }
 
@@ -828,6 +826,40 @@ func TestQMPCPUDeviceAdd(t *testing.T) {
 	err := q.ExecuteCPUDeviceAdd(context.Background(), driver, cpuID, socketID, coreID, threadID)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
+// Checks that hotpluggable CPUs are listed correctly
+func TestQMPExecuteQueryHotpluggableCPUs(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	hotCPU := HotpluggableCPU{
+		Type:       "host-x86",
+		VcpusCount: 5,
+		Properties: CPUProperties{
+			Node:   1,
+			Socket: 3,
+			Core:   2,
+			Thread: 4,
+		},
+		QOMPath: "/abc/123/rgb",
+	}
+	buf.AddCommand("query-hotpluggable-cpus", nil, "return", []interface{}{hotCPU})
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	hotCPUs, err := q.ExecuteQueryHotpluggableCPUs(context.Background())
+	if err != nil {
+		t.Fatalf("Unexpected error: %v\n", err)
+	}
+	if len(hotCPUs) != 1 {
+		t.Fatalf("Expected hot CPUs length equals to 1\n")
+	}
+	if reflect.DeepEqual(hotCPUs[0], hotCPU) == false {
+		t.Fatalf("Expected %v equals to %v\n", hotCPUs[0], hotCPU)
 	}
 	q.Shutdown()
 	<-disconnectedCh

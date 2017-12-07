@@ -140,6 +140,22 @@ type QMPVersion struct {
 	Capabilities []string
 }
 
+// CPUProperties contains the properties to be used for hotplugging a CPU instance
+type CPUProperties struct {
+	Node   int `json:"node-id"`
+	Socket int `json:"socket-id"`
+	Core   int `json:"core-id"`
+	Thread int `json:"thread-id"`
+}
+
+// HotpluggableCPU represents a hotpluggable CPU
+type HotpluggableCPU struct {
+	Type       string        `json:"type"`
+	VcpusCount int           `json:"vcpus-count"`
+	Properties CPUProperties `json:"props"`
+	QOMPath    string        `json:"qom-path"`
+}
+
 func (q *QMP) readLoop(fromVMCh chan<- []byte) {
 	scanner := bufio.NewScanner(q.conn)
 	for scanner.Scan() {
@@ -750,4 +766,26 @@ func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, 
 		"thread-id": threadID,
 	}
 	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
+// ExecuteQueryHotpluggableCPUs returns a slice with the list of hotpluggable CPUs
+func (q *QMP) ExecuteQueryHotpluggableCPUs(ctx context.Context) ([]HotpluggableCPU, error) {
+	response, err := q.executeCommandWithResponse(ctx, "query-hotpluggable-cpus", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// convert response to json
+	data, err := json.Marshal(response)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to extract CPU information: %v", err)
+	}
+
+	var cpus []HotpluggableCPU
+	// convert json to []HotpluggableCPU
+	if err = json.Unmarshal(data, &cpus); err != nil {
+		return nil, fmt.Errorf("Unable to convert json to hotpluggable CPU: %v", err)
+	}
+
+	return cpus, nil
 }
