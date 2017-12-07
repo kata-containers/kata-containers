@@ -1,6 +1,7 @@
 TARGET = kata-shim
+SOURCES := $(shell find . 2>&1 | grep -E '.*\.go$$')
 
-$(TARGET):
+$(TARGET): $(SOURCES)
 	go build -o $@
 
 test:
