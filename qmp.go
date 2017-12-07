@@ -107,7 +107,8 @@ type QMPEvent struct {
 }
 
 type qmpResult struct {
-	err error
+	response interface{}
+	err      error
 }
 
 type qmpCommand struct {
@@ -203,14 +204,14 @@ func (q *QMP) processQMPEvent(cmdQueue *list.List, name interface{}, data interf
 	}
 }
 
-func (q *QMP) finaliseCommand(cmdEl *list.Element, cmdQueue *list.List, succeeded bool) {
+func (q *QMP) finaliseCommandWithResponse(cmdEl *list.Element, cmdQueue *list.List, succeeded bool, response interface{}) {
 	cmd := cmdEl.Value.(*qmpCommand)
 	cmdQueue.Remove(cmdEl)
 	select {
 	case <-cmd.ctx.Done():
 	default:
 		if succeeded {
-			cmd.res <- qmpResult{}
+			cmd.res <- qmpResult{response: response}
 		} else {
 			cmd.res <- qmpResult{err: fmt.Errorf("QMP command failed")}
 		}
@@ -218,6 +219,10 @@ func (q *QMP) finaliseCommand(cmdEl *list.Element, cmdQueue *list.List, succeede
 	if cmdQueue.Len() > 0 {
 		q.writeNextQMPCommand(cmdQueue)
 	}
+}
+
+func (q *QMP) finaliseCommand(cmdEl *list.Element, cmdQueue *list.List, succeeded bool) {
+	q.finaliseCommandWithResponse(cmdEl, cmdQueue, succeeded, nil)
 }
 
 func (q *QMP) processQMPInput(line []byte, cmdQueue *list.List) {
@@ -233,7 +238,7 @@ func (q *QMP) processQMPInput(line []byte, cmdQueue *list.List) {
 		return
 	}
 
-	_, succeeded := vmData["return"]
+	response, succeeded := vmData["return"]
 	_, failed := vmData["error"]
 
 	if !succeeded && !failed {
@@ -248,7 +253,7 @@ func (q *QMP) processQMPInput(line []byte, cmdQueue *list.List) {
 	}
 	cmd := cmdEl.Value.(*qmpCommand)
 	if failed || cmd.filter == nil {
-		q.finaliseCommand(cmdEl, cmdQueue, succeeded)
+		q.finaliseCommandWithResponse(cmdEl, cmdQueue, succeeded, response)
 	} else {
 		cmd.resultReceived = true
 	}
@@ -463,9 +468,10 @@ func startQMPLoop(conn io.ReadWriteCloser, cfg QMPConfig,
 	return q
 }
 
-func (q *QMP) executeCommand(ctx context.Context, name string, args map[string]interface{},
-	filter *qmpEventFilter) error {
+func (q *QMP) executeCommandWithResponse(ctx context.Context, name string, args map[string]interface{},
+	filter *qmpEventFilter) (interface{}, error) {
 	var err error
+	var response interface{}
 	resCh := make(chan qmpResult)
 	select {
 	case <-q.disconnectedCh:
@@ -480,16 +486,24 @@ func (q *QMP) executeCommand(ctx context.Context, name string, args map[string]i
 	}
 
 	if err != nil {
-		return err
+		return response, err
 	}
 
 	select {
 	case res := <-resCh:
 		err = res.err
+		response = res.response
 	case <-ctx.Done():
 		err = ctx.Err()
 	}
 
+	return response, err
+}
+
+func (q *QMP) executeCommand(ctx context.Context, name string, args map[string]interface{},
+	filter *qmpEventFilter) error {
+
+	_, err := q.executeCommandWithResponse(ctx, name, args, filter)
 	return err
 }
 
