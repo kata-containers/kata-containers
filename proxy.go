@@ -13,11 +13,19 @@ import (
 	"io"
 	"net"
 	"net/url"
+	"os"
 	"sync"
 
 	"github.com/hashicorp/yamux"
 	"github.com/sirupsen/logrus"
 )
+
+const proxyName = "kata-proxy"
+
+var proxyLog = logrus.WithFields(logrus.Fields{
+	"name": proxyName,
+	"pid":  os.Getpid(),
+})
 
 func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) error {
 	session, err := yamux.Client(servConn, nil)
@@ -119,23 +127,23 @@ func main() {
 
 	err := setupLoger(logLevel)
 	if err != nil {
-		logrus.Fatal(err)
+		proxyLog.Fatal(err)
 	}
 
 	muxAddr, err := unixAddr(channel)
 	if err != nil {
-		logrus.Fatal("invalid mux socket address")
+		proxyLog.Fatal("invalid mux socket address")
 	}
 	listenAddr, err := unixAddr(proxyAddr)
 	if err != nil {
-		logrus.Fatal("invalid listen socket address")
+		proxyLog.Fatal("invalid listen socket address")
 		return
 	}
 
 	// yamux connection
 	servConn, err := net.Dial("unix", muxAddr)
 	if err != nil {
-		logrus.Fatalf("failed to dial channel(%q): %s", muxAddr, err)
+		proxyLog.Fatalf("failed to dial channel(%q): %s", muxAddr, err)
 		return
 	}
 	defer servConn.Close()
@@ -143,12 +151,12 @@ func main() {
 	results := make(chan error)
 	err = serve(servConn, "unix", listenAddr, results)
 	if err != nil {
-		logrus.Fatal(err)
+		proxyLog.Fatal(err)
 	}
 
 	for err = range results {
 		if err != nil {
-			logrus.Fatal(err)
+			proxyLog.Fatal(err)
 		}
 	}
 }
