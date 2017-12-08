@@ -9,8 +9,8 @@ import (
 	"os/signal"
 	"sync"
 	"testing"
-	"os"
 
+	"github.com/kr/pty"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -42,7 +42,11 @@ func TestShimOps(t *testing.T) {
 	assert.Nil(t, err, "%s", err)
 	defer shim.agent.Close()
 
-	shim.resizeTty(os.Stdin)
+	_, tty, err := pty.Open()
+	assert.Nil(t, err, "%s", err)
+	defer tty.Close()
+
+	shim.resizeTty(tty)
 
 	wg := &sync.WaitGroup{}
 	shim.proxyStdio(wg)
@@ -50,7 +54,7 @@ func TestShimOps(t *testing.T) {
 	sigc := shim.forwardAllSignals()
 	defer signal.Stop(sigc)
 
-	shim.monitorTtySize(os.Stdin)
+	shim.monitorTtySize(tty)
 
 	status, err := shim.wait()
 	assert.Nil(t, err, "%s", err)
