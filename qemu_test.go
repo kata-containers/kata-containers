@@ -264,6 +264,29 @@ func TestAppendDeviceBlock(t *testing.T) {
 	testAppend(blkdev, deviceBlockString, t)
 }
 
+var deviceVhostUserNetString = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -netdev type=vhost-user,id=net1,chardev=char1,vhostforce -device virtio-net-pci,netdev=net1,mac=00:11:22:33:44:55"
+var deviceVhostUserSCSIString = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -device vhost-user-scsi-pci,id=scsi1,chardev=char1"
+
+func TestAppendDeviceVhostUser(t *testing.T) {
+	vhostuserSCSIDevice := VhostUserDevice{
+		SocketPath:    "/tmp/nonexistentsocket.socket",
+		CharDevID:     "char1",
+		TypeDevID:     "scsi1",
+		MacAddress:    "",
+		VhostUserType: VhostUserSCSI,
+	}
+	testAppend(vhostuserSCSIDevice, deviceVhostUserSCSIString, t)
+
+	vhostuserNetDevice := VhostUserDevice{
+		SocketPath:    "/tmp/nonexistentsocket.socket",
+		CharDevID:     "char1",
+		TypeDevID:     "net1",
+		MacAddress:    "00:11:22:33:44:55",
+		VhostUserType: VhostUserNet,
+	}
+	testAppend(vhostuserNetDevice, deviceVhostUserNetString, t)
+}
+
 var deviceVFIOString = "-device vfio-pci,host=02:10.0"
 
 func TestAppendDeviceVFIO(t *testing.T) {
