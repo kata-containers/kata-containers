@@ -72,7 +72,7 @@ for a protocol buffer variable v:
 
   - Names are turned from camel_case to CamelCase for export.
   - There are no methods on v to set fields; just treat
-	them as structure fields.
+  	them as structure fields.
   - There are getters that return a field's value if set,
 	and return the field's default value if unset.
 	The getters work even if the receiver is a nil message.
@@ -94,7 +94,7 @@ for a protocol buffer variable v:
 	Enum values are prefixed with the enum's type name. Enum types have
 	a String method, and a Enum method to assist in message construction.
   - Nested groups and enums have type names prefixed with the name of
-	the surrounding message type.
+  	the surrounding message type.
   - Extensions are given descriptor names that start with E_,
 	followed by an underscore-delimited list of the nested messages
 	that contain it (if any) followed by the CamelCased name of the
@@ -114,9 +114,9 @@ Consider file test.proto, containing
 ```proto
 	syntax = "proto2";
 	package example;
-
+	
 	enum FOO { X = 17; };
-
+	
 	message Test {
 	  required string label = 1;
 	  optional int32 type = 2 [default=77];

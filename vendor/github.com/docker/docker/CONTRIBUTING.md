@@ -2,7 +2,7 @@
 
 Want to hack on the Moby Project? Awesome! We have a contributor's guide that explains
 [setting up a development environment and the contribution
-process](docs/contributing/).
+process](docs/contributing/). 
 
 [![Contributors guide](docs/static_files/contributors.png)](https://docs.docker.com/opensource/project/who-written-for/)
 
@@ -123,7 +123,7 @@ the contributors guide.
 Fork the repository and make changes on your fork in a feature branch:
 
 - If it's a bug fix branch, name it XXXX-something where XXXX is the number of
-	the issue.
+	the issue. 
 - If it's a feature branch, create an enhancement issue to announce
 	your intentions, and name it XXXX-something where XXXX is the number of the
 	issue.
@@ -302,7 +302,7 @@ commit automatically with `git commit -s`.
 
 ### How can I become a maintainer?
 
-The procedures for adding new maintainers are explained in the
+The procedures for adding new maintainers are explained in the 
 global [MAINTAINERS](https://github.com/docker/opensource/blob/master/MAINTAINERS)
 file in the [https://github.com/docker/opensource/](https://github.com/docker/opensource/)
 repository.
@@ -314,7 +314,7 @@ maintainer to make a difference on the project!
 ### Manage issues and pull requests using the Derek bot
 
 If you want to help label, assign, close or reopen issues or pull requests
-without commit rights, ask a maintainer to add your Github handle to the
+without commit rights, ask a maintainer to add your Github handle to the 
 `.DEREK.yml` file. [Derek](https://github.com/alexellis/derek) is a bot that extends
 Github's user permissions to help non-committers to manage issues and pull requests simply by commenting.
 

@@ -37,3 +37,4 @@
 
 %.pb.go:	%.proto
 	protoc --go_out=. $<
+

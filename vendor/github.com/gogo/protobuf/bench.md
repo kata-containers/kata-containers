@@ -15,9 +15,9 @@ Benchmarks ran on Revision:  11c56be39364
 
 June 2013
 
-Processor 2,66 GHz Intel Core i7
+Processor 2,66 GHz Intel Core i7 
 
-Memory 8 GB 1067 MHz DDR3
+Memory 8 GB 1067 MHz DDR3 
 
 ## Marshaler
 

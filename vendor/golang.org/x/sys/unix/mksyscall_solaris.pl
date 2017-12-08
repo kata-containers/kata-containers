@@ -171,7 +171,7 @@ while(<>) {
 				push @args, "uintptr($name)", "uintptr($name >> 32)";
 			}
 		} elsif($type eq "bool") {
-			$text .= "\tvar _p$n uint32\n";
+ 			$text .= "\tvar _p$n uint32\n";
 			$text .= "\tif $name {\n\t\t_p$n = 1\n\t} else {\n\t\t_p$n = 0\n\t}\n";
 			push @args, "uintptr(_p$n)";
 			$n++;
