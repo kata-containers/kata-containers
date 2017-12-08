@@ -2,7 +2,7 @@
 
 Want to hack on Docker? Awesome!  We have a contributor's guide that explains
 [setting up a Docker development environment and the contribution
-process](https://docs.docker.com/opensource/project/who-written-for/).
+process](https://docs.docker.com/opensource/project/who-written-for/). 
 
 [![Contributors guide](docs/static_files/contributors.png)](https://docs.docker.com/opensource/project/who-written-for/)
 
@@ -121,7 +121,7 @@ However, there might be a way to implement that feature *on top of* Docker.
     <td>
       The <a href="https://groups.google.com/forum/#!forum/docker-dev" target="_blank">docker-dev</a>
       group is for contributors and other people contributing to the Docker project.
-      You can join them without a google account by sending an email to
+      You can join them without a google account by sending an email to 
       <a href="mailto:docker-dev+subscribe@googlegroups.com">docker-dev+subscribe@googlegroups.com</a>.
       After receiving the join-request message, you can simply reply to that to confirm the subscription.
     </td>
@@ -150,7 +150,7 @@ However, there might be a way to implement that feature *on top of* Docker.
 Fork the repository and make changes on your fork in a feature branch:
 
 - If it's a bug fix branch, name it XXXX-something where XXXX is the number of
-	the issue.
+	the issue. 
 - If it's a feature branch, create an enhancement issue to announce
 	your intentions, and name it XXXX-something where XXXX is the number of the
 	issue.
@@ -279,7 +279,7 @@ commit automatically with `git commit -s`.
 
 ### How can I become a maintainer?
 
-The procedures for adding new maintainers are explained in the
+The procedures for adding new maintainers are explained in the 
 global [MAINTAINERS](https://github.com/docker/opensource/blob/master/MAINTAINERS)
 file in the [https://github.com/docker/opensource/](https://github.com/docker/opensource/)
 repository.

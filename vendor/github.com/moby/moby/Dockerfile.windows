@@ -11,9 +11,9 @@
 # Prerequisites:
 # --------------
 #
-# 1. Windows Server 2016 or Windows 10 with all Windows updates applied. The major
-#    build number must be at least 14393. This can be confirmed, for example, by
-#    running the following from an elevated PowerShell prompt - this sample output
+# 1. Windows Server 2016 or Windows 10 with all Windows updates applied. The major 
+#    build number must be at least 14393. This can be confirmed, for example, by 
+#    running the following from an elevated PowerShell prompt - this sample output 
 #    is from a fully up to date machine as at mid-November 2016:
 #
 #    >> PS C:\> $(gin).WindowsBuildLabEx
@@ -26,9 +26,9 @@
 #    https://github.com/docker/labs/blob/master/windows/windows-containers/Setup.md
 #
 # 4. If building in a Hyper-V VM: For Windows Server 2016 using Windows Server
-#    containers as the default option, it is recommended you have at least 1GB
+#    containers as the default option, it is recommended you have at least 1GB 
 #    of memory assigned; For Windows 10 where Hyper-V Containers are employed, you
-#    should have at least 4GB of memory assigned. Note also, to run Hyper-V
+#    should have at least 4GB of memory assigned. Note also, to run Hyper-V 
 #    containers in a VM, it is necessary to configure the VM for nested virtualization.
 
 # -----------------------------------------------------------------------------------------
@@ -37,7 +37,7 @@
 # Usage:
 # -----
 #
-#  The following steps should be run from an (elevated*) Windows PowerShell prompt.
+#  The following steps should be run from an (elevated*) Windows PowerShell prompt. 
 #
 #  (*In a default installation of containers on Windows following the quick-start guidance at
 #    https://msdn.microsoft.com/en-us/virtualization/windowscontainers/quick_start/quick_start,
@@ -59,13 +59,13 @@
 #
 # 2. Change directory to the cloned docker sources:
 #
-#    >>   cd C:\go\src\github.com\docker\docker
+#    >>   cd C:\go\src\github.com\docker\docker 
 #
 #
 # 3. Build a docker image with the components required to build the docker binaries from source
 #    by running one of the following:
 #
-#    >>   docker build -t nativebuildimage -f Dockerfile.windows .
+#    >>   docker build -t nativebuildimage -f Dockerfile.windows .          
 #    >>   docker build -t nativebuildimage -f Dockerfile.windows -m 2GB .    (if using Hyper-V containers)
 #
 #
@@ -75,7 +75,7 @@
 #    >>   docker run --name binaries -m 2GB nativebuildimage hack\make.ps1 -Binary    (if using Hyper-V containers)
 #
 #
-# 5. Copy the binaries out of the container, replacing HostPath with an appropriate destination
+# 5. Copy the binaries out of the container, replacing HostPath with an appropriate destination 
 #    folder on the host system where you want the binaries to be located.
 #
 #    >>   docker cp binaries:C:\go\src\github.com\docker\docker\bundles\docker.exe C:\HostPath\docker.exe
@@ -124,7 +124,7 @@
 # -----------------------------------------------------------------------------------------
 
 
-#  To run all tests and binary build, ensure you have created the nativebuildimage above. Then
+#  To run all tests and binary build, ensure you have created the nativebuildimage above. Then 
 #  run one of the following from an (elevated) Windows PowerShell prompt:
 #
 #    >>   docker run nativebuildimage hack\make.ps1 -All
@@ -137,20 +137,20 @@
 # ---------------
 #
 # Don't attempt to use a bind-mount to pass a local directory as the bundles target
-# directory. It does not work (golang attempts for follow a mapped folder incorrectly).
+# directory. It does not work (golang attempts for follow a mapped folder incorrectly). 
 # Instead, use docker cp as per the example.
 #
 # go.zip is not removed from the image as it is used by the Windows CI servers
 # to ensure the host and image are running consistent versions of go.
 #
-# Nanoserver support is a work in progress. Although the image will build if the
-# FROM statement is updated, it will not work when running autogen through hack\make.ps1.
+# Nanoserver support is a work in progress. Although the image will build if the 
+# FROM statement is updated, it will not work when running autogen through hack\make.ps1. 
 # It is suspected that the required GCC utilities (eg gcc, windres, windmc) silently
 # quit due to the use of console hooks which are not available.
 #
 # The docker integration tests do not currently run in a container on Windows, predominantly
 # due to Windows not supporting privileged mode, so anything using a volume would fail.
-# They (along with the rest of the docker CI suite) can be run using
+# They (along with the rest of the docker CI suite) can be run using 
 # https://github.com/jhowardmsft/docker-w2wCIScripts/blob/master/runCI/Invoke-DockerCI.ps1.
 #
 # -----------------------------------------------------------------------------------------

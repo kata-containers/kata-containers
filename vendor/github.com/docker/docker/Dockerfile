@@ -194,3 +194,4 @@ ENV GOMETALINTER_OPTS="--deadline 2m"
 
 # Upload docker source
 COPY . /go/src/github.com/docker/docker
+
