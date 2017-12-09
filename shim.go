@@ -111,8 +111,8 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 	return sigc
 }
 
-func (s *shim) resizeTty() error {
-	ws, err := term.GetWinsize(os.Stdin.Fd())
+func (s *shim) resizeTty(fromTty *os.File) error {
+	ws, err := term.GetWinsize(fromTty.Fd())
 	if err != nil {
 		shimLog.WithError(err).Info("Error getting size")
 		return nil
@@ -130,13 +130,13 @@ func (s *shim) resizeTty() error {
 	return err
 }
 
-func (s *shim) monitorTtySize() {
-	s.resizeTty()
+func (s *shim) monitorTtySize(tty *os.File) {
+	s.resizeTty(tty)
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGWINCH)
 	go func() {
 		for range sigchan {
-			s.resizeTty()
+			s.resizeTty(tty)
 		}
 	}()
 }
