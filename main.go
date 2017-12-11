@@ -7,6 +7,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"sync"
@@ -20,6 +21,9 @@ const (
 	shimName    = "kata-shim"
 	exitFailure = 1
 )
+
+// version is the shim version. This variable is populated at build time.
+var version = "unknown"
 
 var shimLog = logrus.WithFields(logrus.Fields{
 	"name": shimName,
@@ -36,6 +40,8 @@ func initLogger(logLevel string) error {
 
 	logrus.SetLevel(level)
 
+	shimLog.WithField("version", version).Info()
+
 	return nil
 }
 
@@ -46,8 +52,10 @@ func main() {
 		container     string
 		pid           uint
 		proxyExitCode bool
+		showVersion   bool
 	)
 
+	flag.BoolVar(&showVersion, "version", false, "display program version and exit")
 	flag.StringVar(&logLevel, "log", "warn", "set shim log level: debug, info, warn, error, fatal or panic")
 	flag.StringVar(&agentAddr, "agent", "", "agent gRPC socket endpoint")
 
@@ -56,6 +64,11 @@ func main() {
 	flag.BoolVar(&proxyExitCode, "proxy-exit-code", true, "proxy exit code of the process")
 
 	flag.Parse()
+
+	if showVersion {
+		fmt.Printf("%v version %v\n", shimName, version)
+		os.Exit(0)
+	}
 
 	if agentAddr == "" || container == "" || pid == 0 {
 		shimLog.WithField("agentAddr", agentAddr).WithField("container", container).WithField("pid", pid).Error("container ID, process ID and agent socket endpoint must be set")
