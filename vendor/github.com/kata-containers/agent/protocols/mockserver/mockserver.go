@@ -7,17 +7,21 @@
 package mockserver
 
 import (
-	"errors"
-	"fmt"
+	"sync"
 
 	google_protobuf2 "github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	pb "github.com/kata-containers/agent/protocols/grpc"
 )
 
 const podStartingPid = 100
+
+// If an rpc changes any pod/container/process, take a write lock.
+var mockLock sync.RWMutex
 
 type pod struct {
 	nextPid    uint32
@@ -50,7 +54,7 @@ func NewMockServer() *grpc.Server {
 
 func validateOCISpec(spec *pb.Spec) error {
 	if spec == nil || spec.Process == nil {
-		return errors.New("invalid container spec")
+		return status.Error(codes.InvalidArgument, "invalid container spec")
 	}
 	return nil
 }
@@ -63,30 +67,30 @@ func (m *mockServer) nextPid() uint32 {
 
 func (m *mockServer) checkExist(containerId string, pid uint32, createContainer, checkProcess bool) error {
 	if m.pod == nil {
-		return errors.New("pod not created")
+		return status.Error(codes.NotFound, "pod not created")
 	}
 	if containerId == "" {
-		return errors.New("container ID must be set")
+		return status.Error(codes.InvalidArgument, "container ID must be set")
 	}
 	if checkProcess && pid == 0 {
-		return errors.New("process ID must be set")
+		return status.Error(codes.InvalidArgument, "process ID must be set")
 	}
 
 	// Check container existence
 	if createContainer {
 		if m.pod.containers[containerId] != nil {
-			return fmt.Errorf("container ID %s already taken", containerId)
+			return status.Errorf(codes.AlreadyExists, "container ID %s already taken", containerId)
 		}
 		return nil
 	} else if m.pod.containers[containerId] == nil {
-		return fmt.Errorf("container %s does not exist", containerId)
+		return status.Errorf(codes.NotFound, "container %s does not exist", containerId)
 	}
 
 	// Check process existence
 	if checkProcess {
 		c := m.pod.containers[containerId]
 		if c.proc[pid] == nil {
-			return fmt.Errorf("process %d does not exist", pid)
+			return status.Errorf(codes.NotFound, "process %d does not exist", pid)
 		}
 	}
 
@@ -107,12 +111,14 @@ func (m *mockServer) containerNonExist(containerId string) error {
 
 func (m *mockServer) podExist() error {
 	if m.pod == nil {
-		return errors.New("pod not created")
+		return status.Error(codes.NotFound, "pod not created")
 	}
 	return nil
 }
 
 func (m *mockServer) CreateContainer(ctx context.Context, req *pb.CreateContainerRequest) (*google_protobuf2.Empty, error) {
+	mockLock.Lock()
+	defer mockLock.Unlock()
 	if err := m.containerNonExist(req.ContainerId); err != nil {
 		return nil, err
 	}
@@ -136,6 +142,8 @@ func (m *mockServer) CreateContainer(ctx context.Context, req *pb.CreateContaine
 }
 
 func (m *mockServer) StartContainer(ctx context.Context, req *pb.StartContainerRequest) (*pb.NewProcessResponse, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
 	if err := m.containerExist(req.ContainerId); err != nil {
 		return nil, err
 	}
@@ -144,6 +152,8 @@ func (m *mockServer) StartContainer(ctx context.Context, req *pb.StartContainerR
 }
 
 func (m *mockServer) RemoveContainer(ctx context.Context, req *pb.RemoveContainerRequest) (*google_protobuf2.Empty, error) {
+	mockLock.Lock()
+	defer mockLock.Unlock()
 	if err := m.containerExist(req.ContainerId); err != nil {
 		return nil, err
 	}
@@ -152,6 +162,8 @@ func (m *mockServer) RemoveContainer(ctx context.Context, req *pb.RemoveContaine
 }
 
 func (m *mockServer) ExecProcess(ctx context.Context, req *pb.ExecProcessRequest) (*pb.NewProcessResponse, error) {
+	mockLock.Lock()
+	defer mockLock.Unlock()
 	if err := m.containerExist(req.ContainerId); err != nil {
 		return nil, err
 	}
@@ -166,6 +178,8 @@ func (m *mockServer) ExecProcess(ctx context.Context, req *pb.ExecProcessRequest
 }
 
 func (m *mockServer) SignalProcess(ctx context.Context, req *pb.SignalProcessRequest) (*google_protobuf2.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
 	if err := m.processExist(req.ContainerId, req.PID); err != nil {
 		return nil, err
 	}
@@ -174,6 +188,8 @@ func (m *mockServer) SignalProcess(ctx context.Context, req *pb.SignalProcessReq
 }
 
 func (m *mockServer) WaitProcess(ctx context.Context, req *pb.WaitProcessRequest) (*pb.WaitProcessResponse, error) {
+	mockLock.Lock()
+	defer mockLock.Unlock()
 	if err := m.processExist(req.ContainerId, req.PID); err != nil {
 		return nil, err
 	}
@@ -190,6 +206,8 @@ func (m *mockServer) WaitProcess(ctx context.Context, req *pb.WaitProcessRequest
 }
 
 func (m *mockServer) WriteStdin(ctx context.Context, req *pb.WriteStreamRequest) (*pb.WriteStreamResponse, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
 	if err := m.processExist(req.ContainerId, req.PID); err != nil {
 		return nil, err
 	}
@@ -198,6 +216,8 @@ func (m *mockServer) WriteStdin(ctx context.Context, req *pb.WriteStreamRequest)
 }
 
 func (m *mockServer) ReadStdout(ctx context.Context, req *pb.ReadStreamRequest) (*pb.ReadStreamResponse, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
 	if err := m.processExist(req.ContainerId, req.PID); err != nil {
 		return nil, err
 	}
@@ -206,6 +226,8 @@ func (m *mockServer) ReadStdout(ctx context.Context, req *pb.ReadStreamRequest) 
 }
 
 func (m *mockServer) ReadStderr(ctx context.Context, req *pb.ReadStreamRequest) (*pb.ReadStreamResponse, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
 	if err := m.processExist(req.ContainerId, req.PID); err != nil {
 		return nil, err
 	}
@@ -214,6 +236,8 @@ func (m *mockServer) ReadStderr(ctx context.Context, req *pb.ReadStreamRequest) 
 }
 
 func (m *mockServer) CloseStdin(ctx context.Context, req *pb.CloseStdinRequest) (*google_protobuf2.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
 	if err := m.processExist(req.ContainerId, req.PID); err != nil {
 		return nil, err
 	}
@@ -222,6 +246,8 @@ func (m *mockServer) CloseStdin(ctx context.Context, req *pb.CloseStdinRequest) 
 }
 
 func (m *mockServer) TtyWinResize(ctx context.Context, req *pb.TtyWinResizeRequest) (*google_protobuf2.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
 	if err := m.processExist(req.ContainerId, req.PID); err != nil {
 		return nil, err
 	}
@@ -230,8 +256,10 @@ func (m *mockServer) TtyWinResize(ctx context.Context, req *pb.TtyWinResizeReque
 }
 
 func (m *mockServer) CreateSandbox(ctx context.Context, req *pb.CreateSandboxRequest) (*google_protobuf2.Empty, error) {
+	mockLock.Lock()
+	defer mockLock.Unlock()
 	if m.pod != nil {
-		return nil, errors.New("pod already created")
+		return nil, status.Error(codes.AlreadyExists, "pod already created")
 	}
 	m.pod = &pod{
 		nextPid:    podStartingPid,
@@ -241,6 +269,8 @@ func (m *mockServer) CreateSandbox(ctx context.Context, req *pb.CreateSandboxReq
 }
 
 func (m *mockServer) DestroySandbox(ctx context.Context, req *pb.DestroySandboxRequest) (*google_protobuf2.Empty, error) {
+	mockLock.Lock()
+	defer mockLock.Unlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
@@ -250,6 +280,8 @@ func (m *mockServer) DestroySandbox(ctx context.Context, req *pb.DestroySandboxR
 }
 
 func (m *mockServer) AddInterface(context.Context, *pb.AddInterfaceRequest) (*google_protobuf2.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
@@ -258,6 +290,8 @@ func (m *mockServer) AddInterface(context.Context, *pb.AddInterfaceRequest) (*go
 }
 
 func (m *mockServer) RemoveInterface(context.Context, *pb.RemoveInterfaceRequest) (*google_protobuf2.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
@@ -266,6 +300,8 @@ func (m *mockServer) RemoveInterface(context.Context, *pb.RemoveInterfaceRequest
 }
 
 func (m *mockServer) RemoveRoute(context.Context, *pb.RouteRequest) (*google_protobuf2.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
@@ -274,6 +310,8 @@ func (m *mockServer) RemoveRoute(context.Context, *pb.RouteRequest) (*google_pro
 }
 
 func (m *mockServer) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*google_protobuf2.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
@@ -282,6 +320,8 @@ func (m *mockServer) UpdateInterface(ctx context.Context, req *pb.UpdateInterfac
 }
 
 func (m *mockServer) AddRoute(ctx context.Context, req *pb.RouteRequest) (*google_protobuf2.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
@@ -290,6 +330,8 @@ func (m *mockServer) AddRoute(ctx context.Context, req *pb.RouteRequest) (*googl
 }
 
 func (m *mockServer) OnlineCPUMem(ctx context.Context, req *pb.OnlineCPUMemRequest) (*google_protobuf2.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}

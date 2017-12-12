@@ -68,6 +68,7 @@ type serverTester struct {
 
 func init() {
 	testHookOnPanicMu = new(sync.Mutex)
+	goAwayTimeout = 25 * time.Millisecond
 }
 
 func resetHooks() {
@@ -142,7 +143,6 @@ func newServerTester(t testing.TB, handler http.HandlerFunc, opts ...interface{}
 		st.scMu.Lock()
 		defer st.scMu.Unlock()
 		st.sc = v
-		st.sc.testHookCh = make(chan func(int))
 	}
 	log.SetOutput(io.MultiWriter(stderrv(), twriter{t: t, st: st}))
 	if !onlyServer {
@@ -187,7 +187,7 @@ func (st *serverTester) addLogFilter(phrase string) {
 
 func (st *serverTester) stream(id uint32) *stream {
 	ch := make(chan *stream, 1)
-	st.sc.testHookCh <- func(int) {
+	st.sc.serveMsgCh <- func(int) {
 		ch <- st.sc.streams[id]
 	}
 	return <-ch
@@ -195,7 +195,7 @@ func (st *serverTester) stream(id uint32) *stream {
 
 func (st *serverTester) streamState(id uint32) streamState {
 	ch := make(chan streamState, 1)
-	st.sc.testHookCh <- func(int) {
+	st.sc.serveMsgCh <- func(int) {
 		state, _ := st.sc.state(id)
 		ch <- state
 	}
@@ -205,7 +205,7 @@ func (st *serverTester) streamState(id uint32) streamState {
 // loopNum reports how many times this conn's select loop has gone around.
 func (st *serverTester) loopNum() int {
 	lastc := make(chan int, 1)
-	st.sc.testHookCh <- func(loopNum int) {
+	st.sc.serveMsgCh <- func(loopNum int) {
 		lastc <- loopNum
 	}
 	return <-lastc
@@ -287,7 +287,7 @@ func (st *serverTester) greetAndCheckSettings(checkSetting func(s Setting) error
 
 		case *WindowUpdateFrame:
 			if f.FrameHeader.StreamID != 0 {
-				st.t.Fatalf("WindowUpdate StreamID = %d; want 0", f.FrameHeader.StreamID, 0)
+				st.t.Fatalf("WindowUpdate StreamID = %d; want 0", f.FrameHeader.StreamID)
 			}
 			incr := uint32((&Server{}).initialConnRecvWindowSize() - initialWindowSize)
 			if f.Increment != incr {
@@ -1718,7 +1718,6 @@ func TestServer_Response_NoData_Header_FooBar(t *testing.T) {
 		wanth := [][2]string{
 			{":status", "200"},
 			{"foo-bar", "some-value"},
-			{"content-type", "text/plain; charset=utf-8"},
 			{"content-length", "0"},
 		}
 		if !reflect.DeepEqual(goth, wanth) {
@@ -2352,7 +2351,7 @@ func TestServer_NoCrash_HandlerClose_Then_ClientClose(t *testing.T) {
 
 		// Sent when the a Handler closes while a client has
 		// indicated it's still sending DATA:
-		st.wantRSTStream(1, ErrCodeCancel)
+		st.wantRSTStream(1, ErrCodeNo)
 
 		// Now the handler has ended, so it's ended its
 		// stream, but the client hasn't closed its side
@@ -2432,6 +2431,7 @@ func TestServer_Rejects_TLSBadCipher(t *testing.T) {
 			tls.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,
 			tls.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
 			tls.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+			cipher_TLS_RSA_WITH_AES_128_CBC_SHA256,
 		}
 	})
 	defer st.Close()
@@ -2952,7 +2952,6 @@ func TestServerDoesntWriteInvalidHeaders(t *testing.T) {
 		wanth := [][2]string{
 			{":status", "200"},
 			{"ok1", "x"},
-			{"content-type", "text/plain; charset=utf-8"},
 			{"content-length", "0"},
 		}
 		if !reflect.DeepEqual(goth, wanth) {
@@ -3189,11 +3188,17 @@ func TestConfigureServer(t *testing.T) {
 			},
 		},
 		{
+			name: "just the alternative required cipher suite",
+			tlsConfig: &tls.Config{
+				CipherSuites: []uint16{tls.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256},
+			},
+		},
+		{
 			name: "missing required cipher suite",
 			tlsConfig: &tls.Config{
 				CipherSuites: []uint16{tls.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384},
 			},
-			wantErr: "is missing HTTP/2-required TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+			wantErr: "is missing an HTTP/2-required AES_128_GCM_SHA256 cipher.",
 		},
 		{
 			name: "required after bad",
@@ -3259,7 +3264,6 @@ func TestServerNoAutoContentLengthOnHead(t *testing.T) {
 	headers := st.decodeHeader(h.HeaderBlockFragment())
 	want := [][2]string{
 		{":status", "200"},
-		{"content-type", "text/plain; charset=utf-8"},
 	}
 	if !reflect.DeepEqual(headers, want) {
 		t.Errorf("Headers mismatch.\n got: %q\nwant: %q\n", headers, want)
@@ -3414,8 +3418,9 @@ func TestServerHandleCustomConn(t *testing.T) {
 	}()
 	const testString = "my custom ConnectionState"
 	fakeConnState := tls.ConnectionState{
-		ServerName: testString,
-		Version:    tls.VersionTLS12,
+		ServerName:  testString,
+		Version:     tls.VersionTLS12,
+		CipherSuite: cipher_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 	}
 	go s.ServeConn(connStateConn{c1, fakeConnState}, &ServeConnOpts{
 		BaseConfig: &http.Server{
@@ -3685,47 +3690,36 @@ func TestRequestBodyReadCloseRace(t *testing.T) {
 	}
 }
 
-func TestServerGracefulShutdown(t *testing.T) {
-	shutdownCh := make(chan struct{})
-	defer func() { testh1ServerShutdownChan = nil }()
-	testh1ServerShutdownChan = func(*http.Server) <-chan struct{} { return shutdownCh }
+func TestIssue20704Race(t *testing.T) {
+	if testing.Short() && os.Getenv("GO_BUILDER_NAME") == "" {
+		t.Skip("skipping in short mode")
+	}
+	const (
+		itemSize  = 1 << 10
+		itemCount = 100
+	)
 
-	var st *serverTester
-	handlerDone := make(chan struct{})
-	st = newServerTester(t, func(w http.ResponseWriter, r *http.Request) {
-		defer close(handlerDone)
-		close(shutdownCh)
-
-		ga := st.wantGoAway()
-		if ga.ErrCode != ErrCodeNo {
-			t.Errorf("GOAWAY error = %v; want ErrCodeNo", ga.ErrCode)
+	st := newServerTester(t, func(w http.ResponseWriter, r *http.Request) {
+		for i := 0; i < itemCount; i++ {
+			_, err := w.Write(make([]byte, itemSize))
+			if err != nil {
+				return
+			}
 		}
-		if ga.LastStreamID != 1 {
-			t.Errorf("GOAWAY LastStreamID = %v; want 1", ga.LastStreamID)
-		}
-
-		w.Header().Set("x-foo", "bar")
-	})
+	}, optOnlyServer)
 	defer st.Close()
 
-	st.greet()
-	st.bodylessReq1()
+	tr := &Transport{TLSClientConfig: tlsConfigInsecure}
+	defer tr.CloseIdleConnections()
+	cl := &http.Client{Transport: tr}
 
-	<-handlerDone
-	hf := st.wantHeaders()
-	goth := st.decodeHeader(hf.HeaderBlockFragment())
-	wanth := [][2]string{
-		{":status", "200"},
-		{"x-foo", "bar"},
-		{"content-type", "text/plain; charset=utf-8"},
-		{"content-length", "0"},
-	}
-	if !reflect.DeepEqual(goth, wanth) {
-		t.Errorf("Got headers %v; want %v", goth, wanth)
-	}
-
-	n, err := st.cc.Read([]byte{0})
-	if n != 0 || err == nil {
-		t.Errorf("Read = %v, %v; want 0, non-nil", n, err)
+	for i := 0; i < 1000; i++ {
+		resp, err := cl.Get(st.ts.URL)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Force a RST stream to the server by closing without
+		// reading the body:
+		resp.Body.Close()
 	}
 }

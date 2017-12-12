@@ -17,6 +17,7 @@ import (
 	"github.com/kata-containers/agent/pkg/uevent"
 	pb "github.com/kata-containers/agent/protocols/grpc"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -25,6 +26,36 @@ const (
 	timeoutHotplug = 3
 	mountPerm      = os.FileMode(0755)
 )
+
+var flagList = map[string]int{
+	"acl":         unix.MS_POSIXACL,
+	"bind":        unix.MS_BIND,
+	"defaults":    0,
+	"dirsync":     unix.MS_DIRSYNC,
+	"iversion":    unix.MS_I_VERSION,
+	"lazytime":    unix.MS_LAZYTIME,
+	"mand":        unix.MS_MANDLOCK,
+	"noatime":     unix.MS_NOATIME,
+	"nodev":       unix.MS_NODEV,
+	"nodiratime":  unix.MS_NODIRATIME,
+	"noexec":      unix.MS_NOEXEC,
+	"nosuid":      unix.MS_NOSUID,
+	"rbind":       unix.MS_BIND | unix.MS_REC,
+	"relatime":    unix.MS_RELATIME,
+	"remount":     unix.MS_REMOUNT,
+	"ro":          unix.MS_RDONLY,
+	"silent":      unix.MS_SILENT,
+	"strictatime": unix.MS_STRICTATIME,
+	"sync":        unix.MS_SYNCHRONOUS,
+	"private":     unix.MS_PRIVATE,
+	"shared":      unix.MS_SHARED,
+	"slave":       unix.MS_SLAVE,
+	"unbindable":  unix.MS_UNBINDABLE,
+	"rprivate":    unix.MS_PRIVATE | unix.MS_REC,
+	"rshared":     unix.MS_SHARED | unix.MS_REC,
+	"rslave":      unix.MS_SLAVE | unix.MS_REC,
+	"runbindable": unix.MS_UNBINDABLE | unix.MS_REC,
+}
 
 // mount mounts a source in to a destination. This will do some bookkeeping:
 // * evaluate all symlinks
@@ -145,6 +176,25 @@ func waitForDevice(devicePath string) error {
 	return nil
 }
 
+func parseMountFlagsAndOptions(optionList []string) (int, string, error) {
+	var (
+		flags   int
+		options []string
+	)
+
+	for _, opt := range optionList {
+		flag, ok := flagList[opt]
+		if ok {
+			flags |= flag
+			continue
+		}
+
+		options = append(options, opt)
+	}
+
+	return flags, strings.Join(options, ","), nil
+}
+
 func addMounts(mounts []*pb.Storage) ([]string, error) {
 	var mountList []string
 
@@ -164,18 +214,15 @@ func addMounts(mounts []*pb.Storage) ([]string, error) {
 			}
 		}
 
-		if err := mount(mnt.Source, mnt.MountPoint, mnt.Fstype,
-			0, strings.Join(mnt.Options, ",")); err != nil {
+		flags, options, err := parseMountFlagsAndOptions(mnt.Options)
+		if err != nil {
 			return nil, err
 		}
 
-		// Expect the protocol to be updated with a Flags parameter.
-		/*
-			if err := mount(mnt.Source, mnt.MountPoint, mnt.Fstype,
-				mnt.Flags, strings.Join(mnt.Options, ",")); err != nil {
-				return nil, err
-			}
-		*/
+		if err := mount(mnt.Source, mnt.MountPoint, mnt.Fstype,
+			flags, options); err != nil {
+			return nil, err
+		}
 
 		// Prepend mount point to mount list.
 		mountList = append([]string{mnt.MountPoint}, mountList...)

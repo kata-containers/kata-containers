@@ -21,6 +21,7 @@ import (
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
 )
@@ -303,7 +304,7 @@ func (a *agentGRPC) CreateContainer(ctx context.Context, req *pb.CreateContainer
 	// re-scan PCI bus
 	// looking for hidden devices
 	if err := ioutil.WriteFile(pciBusRescanFile, []byte("1"), pciBusMode); err != nil {
-		agentLog.WithError(err).Warnf("Could not rescan PCI bus")
+		agentLog.WithError(err).Warn("Could not rescan PCI bus")
 	}
 
 	mountList, err := addMounts(req.Storages)
@@ -465,8 +466,11 @@ func (a *agentGRPC) SignalProcess(ctx context.Context, req *pb.SignalProcessRequ
 	signal := syscall.Signal(req.Signal)
 
 	if status == libcontainer.Stopped {
-		agentLog.Info("Container %s is Stopped on sandbox %s, discard signal %s", req.ContainerId, a.sandbox.id, signal.String())
-		return emptyResp, nil
+		agentLog.WithFields(logrus.Fields{
+			"containerID": req.ContainerId,
+			"sandbox":     a.sandbox.id,
+			"signal":      signal.String(),
+		}).Info("discarding signal as container stopped")
 	}
 
 	// If the process is the container process, let's use the container
