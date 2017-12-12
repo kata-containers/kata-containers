@@ -1,0 +1,21 @@
+language: go
+
+go:
+    - 1.8
+    - 1.9
+    - tip
+
+go_import_path: github.com/intel/govmm
+
+matrix:
+  allow_failures:
+  - go: tip
+
+before_install:
+  - go get github.com/alecthomas/gometalinter
+  - gometalinter --install
+
+script:
+   - go env
+   - go test -v ./...
+   - gometalinter --tests --vendor --disable-all --enable=misspell --enable=vet --enable=ineffassign --enable=gofmt --enable=gocyclo --cyclo-over=15 --enable=golint --enable=errcheck --enable=deadcode ./...

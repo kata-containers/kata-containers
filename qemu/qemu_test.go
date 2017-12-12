@@ -146,10 +146,10 @@ func TestAppendDeviceNetworkMq(t *testing.T) {
 	bar, _ := ioutil.TempFile(os.TempDir(), "govmm-qemu-test")
 
 	defer func() {
-		foo.Close()
-		bar.Close()
-		os.Remove(foo.Name())
-		os.Remove(bar.Name())
+		_ = foo.Close()
+		_ = bar.Close()
+		_ = os.Remove(foo.Name())
+		_ = os.Remove(bar.Name())
 	}()
 
 	netdev := NetDevice{
@@ -196,10 +196,10 @@ func TestAppendDeviceNetworkPCIMq(t *testing.T) {
 	bar, _ := ioutil.TempFile(os.TempDir(), "govmm-qemu-test")
 
 	defer func() {
-		foo.Close()
-		bar.Close()
-		os.Remove(foo.Name())
-		os.Remove(bar.Name())
+		_ = foo.Close()
+		_ = bar.Close()
+		_ = os.Remove(foo.Name())
+		_ = os.Remove(bar.Name())
 	}()
 
 	netdev := NetDevice{
