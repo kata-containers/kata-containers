@@ -273,7 +273,7 @@ func TestAppendDeviceVhostUser(t *testing.T) {
 		SocketPath:    "/tmp/nonexistentsocket.socket",
 		CharDevID:     "char1",
 		TypeDevID:     "scsi1",
-		MacAddress:    "",
+		Address:       "",
 		VhostUserType: VhostUserSCSI,
 	}
 	testAppend(vhostuserSCSIDevice, deviceVhostUserSCSIString, t)
@@ -282,7 +282,7 @@ func TestAppendDeviceVhostUser(t *testing.T) {
 		SocketPath:    "/tmp/nonexistentsocket.socket",
 		CharDevID:     "char1",
 		TypeDevID:     "net1",
-		MacAddress:    "00:11:22:33:44:55",
+		Address:       "00:11:22:33:44:55",
 		VhostUserType: VhostUserNet,
 	}
 	testAppend(vhostuserNetDevice, deviceVhostUserNetString, t)

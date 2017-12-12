@@ -704,7 +704,7 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	return qemuParams
 }
 
-// VhostUserDeviceType is a qemu networking device type.
+// VhostUserDeviceType is a qemu vhost-user device type.
 type VhostUserDeviceType string
 
 const (
@@ -714,21 +714,21 @@ const (
 	VhostUserNet = "virtio-net-pci"
 )
 
-// VhostUserDevice represents a qemu vhost-user network device meant to be passed
+// VhostUserDevice represents a qemu vhost-user device meant to be passed
 // in to the guest
 type VhostUserDevice struct {
 	SocketPath    string //path to vhostuser socket on host
 	CharDevID     string
-	TypeDevID     string //id (SCSI) or netdev (net) device parameter
-	MacAddress    string //only valid if device type is  VhostUserNet
+	TypeDevID     string //variable QEMU parameter based on value of VhostUserType
+	Address       string //used for MAC address in net case
 	VhostUserType VhostUserDeviceType
 }
 
-// Valid returns true if there is a valid socket path defined for VhostUserDevice
+// Valid returns true if there is a valid structure defined for VhostUserDevice
 func (vhostuserDev VhostUserDevice) Valid() bool {
 	if vhostuserDev.SocketPath == "" || vhostuserDev.CharDevID == "" ||
 		vhostuserDev.TypeDevID == "" ||
-		(vhostuserDev.VhostUserType == VhostUserNet && vhostuserDev.MacAddress == "") {
+		(vhostuserDev.VhostUserType == VhostUserNet && vhostuserDev.Address == "") {
 		return false
 	}
 
@@ -755,7 +755,7 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 
 		devParams = append(devParams, VhostUserNet)
 		devParams = append(devParams, fmt.Sprintf("netdev=%s", vhostuserDev.TypeDevID))
-		devParams = append(devParams, fmt.Sprintf("mac=%s", vhostuserDev.MacAddress))
+		devParams = append(devParams, fmt.Sprintf("mac=%s", vhostuserDev.Address))
 	} else {
 		devParams = append(devParams, VhostUserSCSI)
 		devParams = append(devParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
