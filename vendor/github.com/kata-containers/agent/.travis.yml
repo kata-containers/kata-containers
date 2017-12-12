@@ -1,0 +1,27 @@
+#
+# Copyright 2017 HyperHQ Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+sudo: required
+dist: trusty
+
+language: go
+go_import_path: github.com/kata-containers/agent
+
+go:
+  - 1.8
+
+before_install:
+  - sudo apt-get update -qq
+  - sudo apt-get install -y -qq automake
+
+install:
+  - cd ${TRAVIS_BUILD_DIR} && make
+
+script:
+  - cd ${TRAVIS_BUILD_DIR} && make test
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

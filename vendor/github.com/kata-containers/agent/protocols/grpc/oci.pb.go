@@ -1497,10 +1497,7 @@ func init() {
 }
 func (this *Spec) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*Spec)
@@ -1513,10 +1510,7 @@ func (this *Spec) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -1564,10 +1558,7 @@ func (this *Spec) Equal(that interface{}) bool {
 }
 func (this *Process) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*Process)
@@ -1580,10 +1571,7 @@ func (this *Process) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -1642,10 +1630,7 @@ func (this *Process) Equal(that interface{}) bool {
 }
 func (this *Box) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*Box)
@@ -1658,10 +1643,7 @@ func (this *Box) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -1675,10 +1657,7 @@ func (this *Box) Equal(that interface{}) bool {
 }
 func (this *User) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*User)
@@ -1691,10 +1670,7 @@ func (this *User) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -1719,10 +1695,7 @@ func (this *User) Equal(that interface{}) bool {
 }
 func (this *LinuxCapabilities) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxCapabilities)
@@ -1735,10 +1708,7 @@ func (this *LinuxCapabilities) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -1786,10 +1756,7 @@ func (this *LinuxCapabilities) Equal(that interface{}) bool {
 }
 func (this *POSIXRlimit) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*POSIXRlimit)
@@ -1802,10 +1769,7 @@ func (this *POSIXRlimit) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -1822,10 +1786,7 @@ func (this *POSIXRlimit) Equal(that interface{}) bool {
 }
 func (this *Mount) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*Mount)
@@ -1838,10 +1799,7 @@ func (this *Mount) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -1866,10 +1824,7 @@ func (this *Mount) Equal(that interface{}) bool {
 }
 func (this *Root) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*Root)
@@ -1882,10 +1837,7 @@ func (this *Root) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -1899,10 +1851,7 @@ func (this *Root) Equal(that interface{}) bool {
 }
 func (this *Hooks) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*Hooks)
@@ -1915,10 +1864,7 @@ func (this *Hooks) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -1950,10 +1896,7 @@ func (this *Hooks) Equal(that interface{}) bool {
 }
 func (this *Hook) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*Hook)
@@ -1966,10 +1909,7 @@ func (this *Hook) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -1999,10 +1939,7 @@ func (this *Hook) Equal(that interface{}) bool {
 }
 func (this *Linux) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*Linux)
@@ -2015,10 +1952,7 @@ func (this *Linux) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2100,10 +2034,7 @@ func (this *Linux) Equal(that interface{}) bool {
 }
 func (this *Windows) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*Windows)
@@ -2116,10 +2047,7 @@ func (this *Windows) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2130,10 +2058,7 @@ func (this *Windows) Equal(that interface{}) bool {
 }
 func (this *Solaris) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*Solaris)
@@ -2146,10 +2071,7 @@ func (this *Solaris) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2160,10 +2082,7 @@ func (this *Solaris) Equal(that interface{}) bool {
 }
 func (this *LinuxIDMapping) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxIDMapping)
@@ -2176,10 +2095,7 @@ func (this *LinuxIDMapping) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2196,10 +2112,7 @@ func (this *LinuxIDMapping) Equal(that interface{}) bool {
 }
 func (this *LinuxNamespace) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxNamespace)
@@ -2212,10 +2125,7 @@ func (this *LinuxNamespace) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2229,10 +2139,7 @@ func (this *LinuxNamespace) Equal(that interface{}) bool {
 }
 func (this *LinuxDevice) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxDevice)
@@ -2245,10 +2152,7 @@ func (this *LinuxDevice) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2277,10 +2181,7 @@ func (this *LinuxDevice) Equal(that interface{}) bool {
 }
 func (this *LinuxResources) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxResources)
@@ -2293,10 +2194,7 @@ func (this *LinuxResources) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2335,10 +2233,7 @@ func (this *LinuxResources) Equal(that interface{}) bool {
 }
 func (this *LinuxMemory) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxMemory)
@@ -2351,10 +2246,7 @@ func (this *LinuxMemory) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2383,10 +2275,7 @@ func (this *LinuxMemory) Equal(that interface{}) bool {
 }
 func (this *LinuxCPU) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxCPU)
@@ -2399,10 +2288,7 @@ func (this *LinuxCPU) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2431,10 +2317,7 @@ func (this *LinuxCPU) Equal(that interface{}) bool {
 }
 func (this *LinuxWeightDevice) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxWeightDevice)
@@ -2447,10 +2330,7 @@ func (this *LinuxWeightDevice) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2470,10 +2350,7 @@ func (this *LinuxWeightDevice) Equal(that interface{}) bool {
 }
 func (this *LinuxThrottleDevice) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxThrottleDevice)
@@ -2486,10 +2363,7 @@ func (this *LinuxThrottleDevice) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2506,10 +2380,7 @@ func (this *LinuxThrottleDevice) Equal(that interface{}) bool {
 }
 func (this *LinuxBlockIO) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxBlockIO)
@@ -2522,10 +2393,7 @@ func (this *LinuxBlockIO) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2579,10 +2447,7 @@ func (this *LinuxBlockIO) Equal(that interface{}) bool {
 }
 func (this *LinuxPids) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxPids)
@@ -2595,10 +2460,7 @@ func (this *LinuxPids) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2609,10 +2471,7 @@ func (this *LinuxPids) Equal(that interface{}) bool {
 }
 func (this *LinuxDeviceCgroup) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxDeviceCgroup)
@@ -2625,10 +2484,7 @@ func (this *LinuxDeviceCgroup) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2651,10 +2507,7 @@ func (this *LinuxDeviceCgroup) Equal(that interface{}) bool {
 }
 func (this *LinuxNetwork) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxNetwork)
@@ -2667,10 +2520,7 @@ func (this *LinuxNetwork) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2689,10 +2539,7 @@ func (this *LinuxNetwork) Equal(that interface{}) bool {
 }
 func (this *LinuxHugepageLimit) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxHugepageLimit)
@@ -2705,10 +2552,7 @@ func (this *LinuxHugepageLimit) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2722,10 +2566,7 @@ func (this *LinuxHugepageLimit) Equal(that interface{}) bool {
 }
 func (this *LinuxInterfacePriority) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxInterfacePriority)
@@ -2738,10 +2579,7 @@ func (this *LinuxInterfacePriority) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2755,10 +2593,7 @@ func (this *LinuxInterfacePriority) Equal(that interface{}) bool {
 }
 func (this *LinuxSeccomp) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxSeccomp)
@@ -2771,10 +2606,7 @@ func (this *LinuxSeccomp) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2801,10 +2633,7 @@ func (this *LinuxSeccomp) Equal(that interface{}) bool {
 }
 func (this *LinuxSeccompArg) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxSeccompArg)
@@ -2817,10 +2646,7 @@ func (this *LinuxSeccompArg) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2840,10 +2666,7 @@ func (this *LinuxSeccompArg) Equal(that interface{}) bool {
 }
 func (this *LinuxSyscall) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxSyscall)
@@ -2856,10 +2679,7 @@ func (this *LinuxSyscall) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}
@@ -2886,10 +2706,7 @@ func (this *LinuxSyscall) Equal(that interface{}) bool {
 }
 func (this *LinuxIntelRdt) Equal(that interface{}) bool {
 	if that == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	}
 
 	that1, ok := that.(*LinuxIntelRdt)
@@ -2902,10 +2719,7 @@ func (this *LinuxIntelRdt) Equal(that interface{}) bool {
 		}
 	}
 	if that1 == nil {
-		if this == nil {
-			return true
-		}
-		return false
+		return this == nil
 	} else if this == nil {
 		return false
 	}

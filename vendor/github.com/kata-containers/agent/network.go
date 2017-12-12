@@ -229,7 +229,7 @@ func (s *sandbox) updateInterface(netHandle *netlink.Handle, iface *pb.Interface
 		return fmt.Errorf("Interface HwAddr and Name are both empty")
 	}
 
-	fieldLogger.WithField("link", fmt.Sprintf("%+v", link)).Infof("Link found")
+	fieldLogger.WithField("link", fmt.Sprintf("%+v", link)).Info("Link found")
 
 	lAttrs := link.Attrs()
 	if lAttrs != nil && (lAttrs.Flags&net.FlagUp) == net.FlagUp {

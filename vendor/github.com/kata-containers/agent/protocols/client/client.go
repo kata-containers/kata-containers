@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mdlayher/vsock"
@@ -40,13 +41,13 @@ type dialer func(string, time.Duration) (net.Conn, error)
 //   - vsock://<cid>:<port>
 //   - <unix socket path>
 func NewAgentClient(sock string) (*AgentClient, error) {
-	addr, err := parse(sock)
+	grpcAddr, parsedAddr, err := parse(sock)
 	if err != nil {
 		return nil, err
 	}
 	dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(dialTimeout)}
-	dialOpts = append(dialOpts, grpc.WithDialer(agentDialer(addr)))
-	conn, err := grpc.Dial(sock, dialOpts...)
+	dialOpts = append(dialOpts, grpc.WithDialer(agentDialer(parsedAddr)))
+	conn, err := grpc.Dial(grpcAddr, dialOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -62,29 +63,51 @@ func (c *AgentClient) Close() error {
 	return c.conn.Close()
 }
 
-func parse(sock string) (*url.URL, error) {
+// vsock scheme is self-defined to be kept from being parsed by grpc.
+// Any format starting with "scheme://" will be parsed by grpc and we lose
+// all address information because vsock scheme is not supported by grpc.
+// Therefore we use the format vsock:<cid>:<port> for vsock address.
+//
+// See https://github.com/grpc/grpc/blob/master/doc/naming.md
+//
+// In the long term, we should patch grpc to support vsock scheme and also
+// upstream the timed vsock dialer.
+func parse(sock string) (string, *url.URL, error) {
 	addr, err := url.Parse(sock)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
+	var grpcAddr string
 	// validate more
 	switch addr.Scheme {
 	case vsockSocketScheme:
 		if addr.Hostname() == "" || addr.Port() == "" || addr.Path != "" {
-			return nil, fmt.Errorf("Invalid vsock scheme: %s", sock)
+			return "", nil, fmt.Errorf("Invalid vsock scheme: %s", sock)
 		}
+		if _, err := strconv.ParseUint(addr.Hostname(), 10, 32); err != nil {
+			return "", nil, fmt.Errorf("Invalid vsock cid: %s", sock)
+		}
+		if _, err := strconv.ParseUint(addr.Port(), 10, 32); err != nil {
+			return "", nil, fmt.Errorf("Invalid vsock port: %s", sock)
+		}
+		grpcAddr = vsockSocketScheme + ":" + addr.Host
 	case unixSocketScheme:
 		fallthrough
 	case "":
 		if (addr.Host == "" && addr.Path == "") || addr.Port() != "" {
-			return nil, fmt.Errorf("Invalid unix scheme: %s", sock)
+			return "", nil, fmt.Errorf("Invalid unix scheme: %s", sock)
+		}
+		if addr.Host == "" {
+			grpcAddr = unixSocketScheme + ":///" + addr.Path
+		} else {
+			grpcAddr = unixSocketScheme + ":///" + addr.Host + "/" + addr.Path
 		}
 	default:
-		return nil, fmt.Errorf("Invalid scheme: %s", sock)
+		return "", nil, fmt.Errorf("Invalid scheme: %s", sock)
 	}
 
-	return addr, nil
+	return grpcAddr, addr, nil
 }
 
 func agentDialer(addr *url.URL) dialer {
@@ -98,37 +121,36 @@ func agentDialer(addr *url.URL) dialer {
 	}
 }
 
+// unix addr are parsed by grpc
 func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
-	addr, err := parse(sock)
+	return net.DialTimeout("unix", sock, timeout)
+}
+
+func parseGrpcVsockAddr(sock string) (uint32, uint32, error) {
+	sp := strings.Split(sock, ":")
+	if len(sp) != 3 {
+		return 0, 0, fmt.Errorf("Invalid vsock address: %s", sock)
+	}
+	if sp[0] != vsockSocketScheme {
+		return 0, 0, fmt.Errorf("Invalid vsock URL scheme: %s", sp[0])
+	}
+
+	cid, err := strconv.ParseUint(sp[1], 10, 32)
 	if err != nil {
-		return nil, err
+		return 0, 0, fmt.Errorf("Invalid vsock cid: %s", sp[1])
+	}
+	port, err := strconv.ParseUint(sp[2], 10, 32)
+	if err != nil {
+		return 0, 0, fmt.Errorf("Invalid vsock port: %s", sp[2])
 	}
 
-	if addr.Scheme != unixSocketScheme && addr.Scheme != "" {
-		return nil, fmt.Errorf("Invalid URL scheme: %s", addr.Scheme)
-	}
-
-	return net.DialTimeout("unix", addr.Host+addr.Path, timeout)
+	return uint32(cid), uint32(port), nil
 }
 
 func vsockDialer(sock string, timeout time.Duration) (net.Conn, error) {
-	addr, err := parse(sock)
+	cid, port, err := parseGrpcVsockAddr(sock)
 	if err != nil {
 		return nil, err
-	}
-
-	if addr.Scheme != vsockSocketScheme {
-		return nil, fmt.Errorf("Invalid URL scheme: %s", addr.Scheme)
-	}
-
-	invalidVsockMsgErr := fmt.Errorf("invalid vsock destination: %s", sock)
-	cid, err := strconv.ParseUint(addr.Hostname(), 10, 32)
-	if err != nil {
-		return nil, invalidVsockMsgErr
-	}
-	port, err := strconv.ParseUint(addr.Port(), 10, 32)
-	if err != nil {
-		return nil, invalidVsockMsgErr
 	}
 
 	t := time.NewTimer(timeout)
@@ -143,7 +165,7 @@ func vsockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 			default:
 			}
 
-			conn, err := vsock.Dial(uint32(cid), uint32(port))
+			conn, err := vsock.Dial(cid, port)
 			if err == nil {
 				// Send conn back iff timer is not fired
 				// Otherwise there might be no one left reading it
@@ -161,9 +183,6 @@ func vsockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	var ok bool
 	timeoutErrMsg := fmt.Errorf("timed out connecting to vsock %d:%d", cid, port)
 	select {
-	case <-t.C:
-		cancel <- true
-		return nil, timeoutErrMsg
 	case conn, ok = <-ch:
 		if !ok {
 			return nil, timeoutErrMsg

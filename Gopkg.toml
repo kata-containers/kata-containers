@@ -25,7 +25,7 @@
   go-tests = true
 
 [[constraint]]
-  revision = "505229f166923b2ec15b7ef52edfc9c6b9f40676"
+  revision = "7a9d93a07ef49cc823d75da46afd9257c9ae9a2c"
   name = "github.com/kata-containers/agent"
 
 [[constraint]]
@@ -41,7 +41,7 @@
   version = "1.1.4"
 
 [[constraint]]
-  revision = "d379faa25cbdc04d653984913a2ceb43b0bc46d7"
+  revision = "a8b9294777976932365dabb6640cf1468d95c70f"
   name = "golang.org/x/net"
 
 [[constraint]]
