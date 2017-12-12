@@ -712,6 +712,8 @@ const (
 	VhostUserSCSI = "vhost-user-scsi-pci"
 	//VhostUserNet represents a net vhostuser device type
 	VhostUserNet = "virtio-net-pci"
+	//VhostUserBlk represents a block vhostuser device type
+	VhostUserBlk = "vhost-user-blk-pci"
 )
 
 // VhostUserDevice represents a qemu vhost-user device meant to be passed
@@ -726,9 +728,22 @@ type VhostUserDevice struct {
 
 // Valid returns true if there is a valid structure defined for VhostUserDevice
 func (vhostuserDev VhostUserDevice) Valid() bool {
-	if vhostuserDev.SocketPath == "" || vhostuserDev.CharDevID == "" ||
-		vhostuserDev.TypeDevID == "" ||
-		(vhostuserDev.VhostUserType == VhostUserNet && vhostuserDev.Address == "") {
+
+	if vhostuserDev.SocketPath == "" || vhostuserDev.CharDevID == "" {
+		return false
+	}
+
+	switch vhostuserDev.VhostUserType {
+	case VhostUserNet:
+		if vhostuserDev.TypeDevID == "" || vhostuserDev.Address == "" {
+			return false
+		}
+	case VhostUserSCSI:
+		if vhostuserDev.TypeDevID == "" {
+			return false
+		}
+	case VhostUserBlk:
+	default:
 		return false
 	}
 
@@ -746,8 +761,9 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 	charParams = append(charParams, fmt.Sprintf("id=%s", vhostuserDev.CharDevID))
 	charParams = append(charParams, fmt.Sprintf("path=%s", vhostuserDev.SocketPath))
 
+	switch vhostuserDev.VhostUserType {
 	// if network based vhost device:
-	if vhostuserDev.VhostUserType == VhostUserNet {
+	case VhostUserNet:
 		netParams = append(netParams, "type=vhost-user")
 		netParams = append(netParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
 		netParams = append(netParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
@@ -756,10 +772,17 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 		devParams = append(devParams, VhostUserNet)
 		devParams = append(devParams, fmt.Sprintf("netdev=%s", vhostuserDev.TypeDevID))
 		devParams = append(devParams, fmt.Sprintf("mac=%s", vhostuserDev.Address))
-	} else {
+	case VhostUserSCSI:
 		devParams = append(devParams, VhostUserSCSI)
 		devParams = append(devParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
 		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
+	case VhostUserBlk:
+		devParams = append(devParams, VhostUserBlk)
+		devParams = append(devParams, "logical_block_size=4096")
+		devParams = append(devParams, "size=512M")
+		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
+	default:
+		return nil
 	}
 
 	qemuParams = append(qemuParams, "-chardev")
