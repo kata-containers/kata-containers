@@ -52,7 +52,9 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 
 	case SMP:
 		config.SMP = s
-		config.appendCPUs()
+		if err := config.appendCPUs(); err != nil {
+			t.Fatalf("Unexpected error: %v\n", err)
+		}
 
 	case QMPSocket:
 		config.QMPSockets = []QMPSocket{s}
@@ -356,7 +358,7 @@ func TestAppendMemory(t *testing.T) {
 	testAppend(memory, memoryString, t)
 }
 
-var cpusString = "-smp 2,cores=1,threads=2,sockets=2"
+var cpusString = "-smp 2,cores=1,threads=2,sockets=2,maxcpus=6"
 
 func TestAppendCPUs(t *testing.T) {
 	smp := SMP{
@@ -364,9 +366,26 @@ func TestAppendCPUs(t *testing.T) {
 		Sockets: 2,
 		Cores:   1,
 		Threads: 2,
+		MaxCPUs: 6,
 	}
 
 	testAppend(smp, cpusString, t)
+}
+
+func TestFailToAppendCPUs(t *testing.T) {
+	config := Config{
+		SMP: SMP{
+			CPUs:    2,
+			Sockets: 2,
+			Cores:   1,
+			Threads: 2,
+			MaxCPUs: 1,
+		},
+	}
+
+	if err := config.appendCPUs(); err == nil {
+		t.Fatalf("Expected appendCPUs to fail")
+	}
 }
 
 var qmpSingleSocketServerString = "-qmp unix:cc-qmp,server,nowait"

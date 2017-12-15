@@ -980,6 +980,10 @@ type SMP struct {
 
 	// Sockets is the number of sockets made available to qemu.
 	Sockets uint32
+
+	// MaxCPUs is the maximum number of VCPUs that a VM can have.
+	// This value, if non-zero, MUST BE equal to or greater than CPUs
+	MaxCPUs uint32
 }
 
 // Memory is the guest memory configuration structure.
@@ -1203,7 +1207,7 @@ func (config *Config) appendMemory() {
 	}
 }
 
-func (config *Config) appendCPUs() {
+func (config *Config) appendCPUs() error {
 	if config.SMP.CPUs > 0 {
 		var SMPParams []string
 
@@ -1221,9 +1225,19 @@ func (config *Config) appendCPUs() {
 			SMPParams = append(SMPParams, fmt.Sprintf(",sockets=%d", config.SMP.Sockets))
 		}
 
+		if config.SMP.MaxCPUs > 0 {
+			if config.SMP.MaxCPUs < config.SMP.CPUs {
+				return fmt.Errorf("MaxCPUs %d must be equal to or greater than CPUs %d",
+					config.SMP.MaxCPUs, config.SMP.CPUs)
+			}
+			SMPParams = append(SMPParams, fmt.Sprintf(",maxcpus=%d", config.SMP.MaxCPUs))
+		}
+
 		config.qemuParams = append(config.qemuParams, "-smp")
 		config.qemuParams = append(config.qemuParams, strings.Join(SMPParams, ""))
 	}
+
+	return nil
 }
 
 func (config *Config) appendRTC() {
@@ -1360,7 +1374,6 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendCPUModel()
 	config.appendQMPSockets()
 	config.appendMemory()
-	config.appendCPUs()
 	config.appendDevices()
 	config.appendRTC()
 	config.appendGlobalParam()
@@ -1368,6 +1381,10 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendKnobs()
 	config.appendKernel()
 	config.appendBios()
+
+	if err := config.appendCPUs(); err != nil {
+		return "", err
+	}
 
 	return LaunchCustomQemu(config.Ctx, config.Path, config.qemuParams,
 		config.fds, nil, logger)
