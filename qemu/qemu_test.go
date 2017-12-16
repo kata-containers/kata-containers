@@ -339,6 +339,20 @@ func TestVSOCKValid(t *testing.T) {
 	}
 }
 
+var deviceSCSIControllerStr = "-device virtio-scsi-pci,id=foo"
+var deviceSCSIControllerBusAddrStr = "-device virtio-scsi-pci,id=foo,bus=pci.0,addr=00:04.0"
+
+func TestAppendDeviceSCSIController(t *testing.T) {
+	scsiCon := SCSIController{
+		ID: "foo",
+	}
+	testAppend(scsiCon, deviceSCSIControllerStr, t)
+
+	scsiCon.Bus = "pci.0"
+	scsiCon.Addr = "00:04.0"
+	testAppend(scsiCon, deviceSCSIControllerBusAddrStr, t)
+}
+
 func TestAppendEmptyDevice(t *testing.T) {
 	device := SerialDevice{}
 
