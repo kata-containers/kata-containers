@@ -26,6 +26,6 @@ group_defaults:
 
 groups:
   approvers:
-    required: 1
+    required: 2
     teams:
       - proxy
