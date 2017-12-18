@@ -6,10 +6,11 @@ requirements:
 
 # Disallow approval of PRs still under development
 always_pending:
-  title_regex: 'WIP'
+  title_regex: '(WIP|RFC)'
   labels:
     - do-not-merge
     - wip
+    - rfc
   explanation: 'Work in progress - do not merge'
 
 group_defaults:
