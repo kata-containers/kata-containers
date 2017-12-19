@@ -311,6 +311,34 @@ func TestAppendDeviceVFIO(t *testing.T) {
 	testAppend(vfioDevice, deviceVFIOString, t)
 }
 
+var deviceVSOCKString = "-device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=4"
+
+func TestAppendVSOCK(t *testing.T) {
+	vsockDevice := VSOCKDevice{
+		ID:        "vhost-vsock-pci0",
+		ContextID: 4,
+	}
+
+	testAppend(vsockDevice, deviceVSOCKString, t)
+}
+
+func TestVSOCKValid(t *testing.T) {
+	vsockDevice := VSOCKDevice{
+		ID:        "vhost-vsock-pci0",
+		ContextID: MinimalGuestCID - 1,
+	}
+
+	if vsockDevice.Valid() {
+		t.Fatalf("VSOCK Context ID is not valid")
+	}
+
+	vsockDevice.ID = ""
+
+	if vsockDevice.Valid() {
+		t.Fatalf("VSOCK ID is not valid")
+	}
+}
+
 func TestAppendEmptyDevice(t *testing.T) {
 	device := SerialDevice{}
 

@@ -892,6 +892,45 @@ func (bridgeDev BridgeDevice) QemuParams(config *Config) []string {
 	return qemuParams
 }
 
+// VSOCKDevice represents a AF_VSOCK socket.
+type VSOCKDevice struct {
+	ID string
+
+	ContextID uint32
+}
+
+const (
+	// MinimalGuestCID is the smallest valid context ID for a guest.
+	MinimalGuestCID uint32 = 3
+
+	// VhostVSOCKPCI is the VSOCK vhost device type.
+	VhostVSOCKPCI = "vhost-vsock-pci"
+
+	// VSOCKGuestCID is the VSOCK guest CID parameter.
+	VSOCKGuestCID = "guest-cid"
+)
+
+// Valid returns true if the VSOCKDevice structure is valid and complete.
+func (vsock VSOCKDevice) Valid() bool {
+	if vsock.ID == "" || vsock.ContextID < MinimalGuestCID {
+		return false
+	}
+
+	return true
+}
+
+// QemuParams returns the qemu parameters built out of the VSOCK device.
+func (vsock VSOCKDevice) QemuParams(config *Config) []string {
+	var qemuParams []string
+
+	deviceParam := fmt.Sprintf("%s,id=%s,%s=%d", VhostVSOCKPCI, vsock.ID, VSOCKGuestCID, vsock.ContextID)
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, deviceParam)
+
+	return qemuParams
+}
+
 // RTCBaseType is the qemu RTC base time type.
 type RTCBaseType string
 
