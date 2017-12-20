@@ -9,7 +9,7 @@ package mockserver
 import (
 	"sync"
 
-	google_protobuf2 "github.com/golang/protobuf/ptypes/empty"
+	"github.com/gogo/protobuf/types"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -18,7 +18,11 @@ import (
 	pb "github.com/kata-containers/agent/protocols/grpc"
 )
 
-const podStartingPid = 100
+const (
+	MockServerVersion = "mock.0.1"
+
+	podStartingPid = 100
+)
 
 // If an rpc changes any pod/container/process, take a write lock.
 var mockLock sync.RWMutex
@@ -48,6 +52,7 @@ func NewMockServer() *grpc.Server {
 	mock := &mockServer{}
 	serv := grpc.NewServer()
 	pb.RegisterAgentServiceServer(serv, mock)
+	pb.RegisterHealthServer(serv, mock)
 
 	return serv
 }
@@ -116,7 +121,18 @@ func (m *mockServer) podExist() error {
 	return nil
 }
 
-func (m *mockServer) CreateContainer(ctx context.Context, req *pb.CreateContainerRequest) (*google_protobuf2.Empty, error) {
+func (m *mockServer) Check(ctx context.Context, req *pb.CheckRequest) (*pb.HealthCheckResponse, error) {
+	return &pb.HealthCheckResponse{Status: pb.HealthCheckResponse_SERVING}, nil
+}
+
+func (m *mockServer) Version(ctx context.Context, req *pb.CheckRequest) (*pb.VersionCheckResponse, error) {
+	return &pb.VersionCheckResponse{
+		GrpcVersion:  pb.APIVersion,
+		AgentVersion: MockServerVersion,
+	}, nil
+}
+
+func (m *mockServer) CreateContainer(ctx context.Context, req *pb.CreateContainerRequest) (*types.Empty, error) {
 	mockLock.Lock()
 	defer mockLock.Unlock()
 	if err := m.containerNonExist(req.ContainerId); err != nil {
@@ -138,7 +154,7 @@ func (m *mockServer) CreateContainer(ctx context.Context, req *pb.CreateContaine
 	}
 	m.pod.containers[req.ContainerId] = c
 
-	return &google_protobuf2.Empty{}, nil
+	return &types.Empty{}, nil
 }
 
 func (m *mockServer) StartContainer(ctx context.Context, req *pb.StartContainerRequest) (*pb.NewProcessResponse, error) {
@@ -151,14 +167,14 @@ func (m *mockServer) StartContainer(ctx context.Context, req *pb.StartContainerR
 	return &pb.NewProcessResponse{PID: m.pod.containers[req.ContainerId].initPid}, nil
 }
 
-func (m *mockServer) RemoveContainer(ctx context.Context, req *pb.RemoveContainerRequest) (*google_protobuf2.Empty, error) {
+func (m *mockServer) RemoveContainer(ctx context.Context, req *pb.RemoveContainerRequest) (*types.Empty, error) {
 	mockLock.Lock()
 	defer mockLock.Unlock()
 	if err := m.containerExist(req.ContainerId); err != nil {
 		return nil, err
 	}
 
-	return &google_protobuf2.Empty{}, nil
+	return &types.Empty{}, nil
 }
 
 func (m *mockServer) ExecProcess(ctx context.Context, req *pb.ExecProcessRequest) (*pb.NewProcessResponse, error) {
@@ -177,14 +193,14 @@ func (m *mockServer) ExecProcess(ctx context.Context, req *pb.ExecProcessRequest
 	return &pb.NewProcessResponse{PID: pid}, nil
 }
 
-func (m *mockServer) SignalProcess(ctx context.Context, req *pb.SignalProcessRequest) (*google_protobuf2.Empty, error) {
+func (m *mockServer) SignalProcess(ctx context.Context, req *pb.SignalProcessRequest) (*types.Empty, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.processExist(req.ContainerId, req.PID); err != nil {
 		return nil, err
 	}
 
-	return &google_protobuf2.Empty{}, nil
+	return &types.Empty{}, nil
 }
 
 func (m *mockServer) WaitProcess(ctx context.Context, req *pb.WaitProcessRequest) (*pb.WaitProcessResponse, error) {
@@ -235,27 +251,27 @@ func (m *mockServer) ReadStderr(ctx context.Context, req *pb.ReadStreamRequest) 
 	return &pb.ReadStreamResponse{}, nil
 }
 
-func (m *mockServer) CloseStdin(ctx context.Context, req *pb.CloseStdinRequest) (*google_protobuf2.Empty, error) {
+func (m *mockServer) CloseStdin(ctx context.Context, req *pb.CloseStdinRequest) (*types.Empty, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.processExist(req.ContainerId, req.PID); err != nil {
 		return nil, err
 	}
 
-	return &google_protobuf2.Empty{}, nil
+	return &types.Empty{}, nil
 }
 
-func (m *mockServer) TtyWinResize(ctx context.Context, req *pb.TtyWinResizeRequest) (*google_protobuf2.Empty, error) {
+func (m *mockServer) TtyWinResize(ctx context.Context, req *pb.TtyWinResizeRequest) (*types.Empty, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.processExist(req.ContainerId, req.PID); err != nil {
 		return nil, err
 	}
 
-	return &google_protobuf2.Empty{}, nil
+	return &types.Empty{}, nil
 }
 
-func (m *mockServer) CreateSandbox(ctx context.Context, req *pb.CreateSandboxRequest) (*google_protobuf2.Empty, error) {
+func (m *mockServer) CreateSandbox(ctx context.Context, req *pb.CreateSandboxRequest) (*types.Empty, error) {
 	mockLock.Lock()
 	defer mockLock.Unlock()
 	if m.pod != nil {
@@ -265,10 +281,10 @@ func (m *mockServer) CreateSandbox(ctx context.Context, req *pb.CreateSandboxReq
 		nextPid:    podStartingPid,
 		containers: make(map[string]*container),
 	}
-	return &google_protobuf2.Empty{}, nil
+	return &types.Empty{}, nil
 }
 
-func (m *mockServer) DestroySandbox(ctx context.Context, req *pb.DestroySandboxRequest) (*google_protobuf2.Empty, error) {
+func (m *mockServer) DestroySandbox(ctx context.Context, req *pb.DestroySandboxRequest) (*types.Empty, error) {
 	mockLock.Lock()
 	defer mockLock.Unlock()
 	if err := m.podExist(); err != nil {
@@ -276,65 +292,65 @@ func (m *mockServer) DestroySandbox(ctx context.Context, req *pb.DestroySandboxR
 	}
 
 	m.pod = nil
-	return &google_protobuf2.Empty{}, nil
+	return &types.Empty{}, nil
 }
 
-func (m *mockServer) AddInterface(context.Context, *pb.AddInterfaceRequest) (*google_protobuf2.Empty, error) {
+func (m *mockServer) AddInterface(context.Context, *pb.AddInterfaceRequest) (*types.Empty, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
 
-	return &google_protobuf2.Empty{}, nil
+	return &types.Empty{}, nil
 }
 
-func (m *mockServer) RemoveInterface(context.Context, *pb.RemoveInterfaceRequest) (*google_protobuf2.Empty, error) {
+func (m *mockServer) RemoveInterface(context.Context, *pb.RemoveInterfaceRequest) (*types.Empty, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
 
-	return &google_protobuf2.Empty{}, nil
+	return &types.Empty{}, nil
 }
 
-func (m *mockServer) RemoveRoute(context.Context, *pb.RouteRequest) (*google_protobuf2.Empty, error) {
+func (m *mockServer) RemoveRoute(context.Context, *pb.RouteRequest) (*types.Empty, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
 
-	return &google_protobuf2.Empty{}, nil
+	return &types.Empty{}, nil
 }
 
-func (m *mockServer) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*google_protobuf2.Empty, error) {
+func (m *mockServer) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*types.Empty, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
 
-	return &google_protobuf2.Empty{}, nil
+	return &types.Empty{}, nil
 }
 
-func (m *mockServer) AddRoute(ctx context.Context, req *pb.RouteRequest) (*google_protobuf2.Empty, error) {
+func (m *mockServer) AddRoute(ctx context.Context, req *pb.RouteRequest) (*types.Empty, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
 
-	return &google_protobuf2.Empty{}, nil
+	return &types.Empty{}, nil
 }
 
-func (m *mockServer) OnlineCPUMem(ctx context.Context, req *pb.OnlineCPUMemRequest) (*google_protobuf2.Empty, error) {
+func (m *mockServer) OnlineCPUMem(ctx context.Context, req *pb.OnlineCPUMemRequest) (*types.Empty, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
 
-	return &google_protobuf2.Empty{}, nil
+	return &types.Empty{}, nil
 }

@@ -236,3 +236,19 @@ func GRPCtoOCI(grpcSpec *Spec) (*specs.Spec, error) {
 
 	return s, err
 }
+
+func ProcessOCItoGRPC(ociProcess *specs.Process) (*Process, error) {
+	s := &Process{}
+
+	err := copyStruct(s, ociProcess)
+
+	return s, err
+}
+
+func ProcessGRPCtoOCI(grpcProcess *Process) (*specs.Process, error) {
+	s := &specs.Process{}
+
+	err := copyStruct(s, grpcProcess)
+
+	return s, err
+}
