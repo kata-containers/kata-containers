@@ -29,6 +29,7 @@ const (
 // AgentClient is an agent gRPC client connection wrapper for agentgrpc.AgentServiceClient
 type AgentClient struct {
 	agentgrpc.AgentServiceClient
+	agentgrpc.HealthClient
 	conn *grpc.ClientConn
 }
 
@@ -54,6 +55,7 @@ func NewAgentClient(sock string) (*AgentClient, error) {
 
 	return &AgentClient{
 		AgentServiceClient: agentgrpc.NewAgentServiceClient(conn),
+		HealthClient:       agentgrpc.NewHealthClient(conn),
 		conn:               conn,
 	}, nil
 }

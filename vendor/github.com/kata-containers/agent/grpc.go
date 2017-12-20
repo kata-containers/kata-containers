@@ -10,13 +10,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"syscall"
 	"time"
 
-	gpb "github.com/golang/protobuf/ptypes/empty"
+	gpb "github.com/gogo/protobuf/types"
 	pb "github.com/kata-containers/agent/protocols/grpc"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/configs"
@@ -28,20 +27,13 @@ import (
 
 type agentGRPC struct {
 	sandbox *sandbox
+	version string
 }
 
 // PCI scanning
 const (
 	pciBusRescanFile = "/sys/bus/pci/rescan"
 	pciBusMode       = 0220
-)
-
-// Signals
-const (
-	// If a process terminates because of signal "n"
-	// The exit code is "128 + signal_number"
-	// http://tldp.org/LDP/abs/html/exitcodes.html
-	exitSignalOffset = 128
 )
 
 // CPU and Memory hotplug
@@ -168,7 +160,7 @@ func buildProcess(agentProcess *pb.Process) (*process, error) {
 	user := agentProcess.User.Username
 	if user == "" {
 		// We can specify the user and the group separated by ":"
-		user = fmt.Sprintf("%s:%s", agentProcess.User.UID, agentProcess.User.GID)
+		user = fmt.Sprintf("%d:%d", agentProcess.User.UID, agentProcess.User.GID)
 	}
 
 	additionalGids := []string{}
@@ -224,6 +216,18 @@ func buildProcess(agentProcess *pb.Process) (*process, error) {
 	return proc, nil
 }
 
+func (a *agentGRPC) Check(ctx context.Context, req *pb.CheckRequest) (*pb.HealthCheckResponse, error) {
+	return &pb.HealthCheckResponse{Status: pb.HealthCheckResponse_SERVING}, nil
+}
+
+func (a *agentGRPC) Version(ctx context.Context, req *pb.CheckRequest) (*pb.VersionCheckResponse, error) {
+	return &pb.VersionCheckResponse{
+		GrpcVersion:  pb.APIVersion,
+		AgentVersion: a.version,
+	}, nil
+
+}
+
 // Shared function between StartContainer and ExecProcess, because those expect
 // a process to be run. The difference being the process does not exist yet in
 // case of ExecProcess.
@@ -260,6 +264,15 @@ func (a *agentGRPC) runProcess(cid string, agentProcess *pb.Process) (pid int, e
 		proc = ctr.initProcess
 	}
 
+	// This lock is very important to avoid any race with reaper.reap().
+	// Indeed, if we don't lock this here, we could potentially get the
+	// SIGCHLD signal before the channel has been created, meaning we will
+	// miss the opportunity to get the exit code, leading WaitProcess() to
+	// wait forever on the new channel.
+	// This lock has to be taken before we run the new process.
+	a.sandbox.subreaper.RLock()
+	defer a.sandbox.subreaper.RUnlock()
+
 	if err := ctr.container.Run(&(proc.process)); err != nil {
 		return -1, fmt.Errorf("Could not run process: %v", err)
 	}
@@ -270,6 +283,11 @@ func (a *agentGRPC) runProcess(cid string, agentProcess *pb.Process) (pid int, e
 	if err != nil {
 		return -1, err
 	}
+
+	// Create process channel to allow WaitProcess to wait on it.
+	// This channel is buffered so that reaper.reap() will not
+	// block until WaitProcess listen onto this channel.
+	a.sandbox.subreaper.setExitCodeCh(pid, make(chan int, 1))
 
 	// Setup terminal if enabled.
 	if proc.consoleSock != nil {
@@ -336,6 +354,11 @@ func (a *agentGRPC) CreateContainer(ctx context.Context, req *pb.CreateContainer
 			},
 			{
 				Type: configs.NEWPID,
+				// In case the path is empty because we
+				// don't expect the containers to share
+				// the same PID namespace, a new PID ns
+				// is going to be created.
+				Path: a.sandbox.sharedPidNs.path,
 			},
 		}),
 		Cgroups: &configs.Cgroup{
@@ -502,34 +525,11 @@ func (a *agentGRPC) WaitProcess(ctx context.Context, req *pb.WaitProcessRequest)
 		ctr.deleteProcess(proc.id)
 	}()
 
-	fieldLogger := agentLog.WithField("container-pid", proc.id)
-
-	processState, err := proc.process.Wait()
-	// Ignore error if process fails because of an unsuccessful exit code
-	if _, ok := err.(*exec.ExitError); err != nil && !ok {
-		fieldLogger.WithError(err).Error("Process wait failed")
-	}
-
-	// Get exit code
-	exitCode := 255
-	if processState != nil {
-		fieldLogger = fieldLogger.WithField("process-state", fmt.Sprintf("%+v", processState))
-		fieldLogger.Info("Got process state")
-
-		if waitStatus, ok := processState.Sys().(syscall.WaitStatus); ok {
-			exitStatus := waitStatus.ExitStatus()
-
-			if waitStatus.Signaled() {
-				exitCode = exitSignalOffset + int(waitStatus.Signal())
-				fieldLogger.WithField("exit-code", exitCode).Info("process was signaled")
-			} else {
-				exitCode = exitStatus
-				fieldLogger.WithField("exit-code", exitCode).Info("got wait exit code")
-			}
-		}
-
-	} else {
-		fieldLogger.Error("Process state is nil could not get process exit code")
+	// Using helper function wait() to deal with the subreaper.
+	libContProcess := (*reaperLibcontainerProcess)(&(proc.process))
+	exitCode, err := a.sandbox.subreaper.wait(proc.id, libContProcess)
+	if err != nil {
+		return &pb.WaitProcessResponse{}, err
 	}
 
 	return &pb.WaitProcessResponse{
@@ -671,9 +671,15 @@ func (a *agentGRPC) CreateSandbox(ctx context.Context, req *pb.CreateSandboxRequ
 	}
 
 	a.sandbox.id = req.Hostname
+	a.sandbox.containers = make(map[string]*container)
 	a.sandbox.network.dns = req.Dns
 	a.sandbox.running = true
-	a.sandbox.sharedPidNs = req.SandboxPidns
+
+	if req.SandboxPidns {
+		if err := a.sandbox.setupSharedPidNs(); err != nil {
+			return emptyResp, err
+		}
+	}
 
 	mountList, err := addMounts(req.Storages)
 	if err != nil {
@@ -713,12 +719,15 @@ func (a *agentGRPC) DestroySandbox(ctx context.Context, req *pb.DestroySandboxRe
 		return emptyResp, err
 	}
 
+	if err := a.sandbox.teardownSharedPidNs(); err != nil {
+		return emptyResp, err
+	}
+
 	a.sandbox.id = ""
 	a.sandbox.containers = make(map[string]*container)
 	a.sandbox.running = false
 	a.sandbox.network = network{}
 	a.sandbox.mounts = []string{}
-	a.sandbox.sharedPidNs = false
 
 	// Synchronize the caches on the system. This is needed to ensure
 	// there is no pending transactions left before the VM is shut down.

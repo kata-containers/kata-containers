@@ -11,14 +11,18 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
+	"os/signal"
 	"runtime"
 	"sync"
+	"syscall"
 	"time"
 
 	pb "github.com/kata-containers/agent/protocols/grpc"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 )
 
@@ -53,8 +57,14 @@ type sandbox struct {
 	network      network
 	wg           sync.WaitGroup
 	grpcListener net.Listener
-	sharedPidNs  bool
+	sharedPidNs  namespace
 	mounts       []string
+	subreaper    *reaper
+}
+
+type namespace struct {
+	path string
+	init *os.Process
 }
 
 var agentLog = logrus.WithFields(logrus.Fields{
@@ -224,6 +234,87 @@ func (s *sandbox) readStdio(cid string, pid int, length int, stdout bool) ([]byt
 	return buf, nil
 }
 
+// setupSharedPidNs will reexec this binary in order to execute the C routine
+// defined into pause.go file. The pauseBinArg is very important since that is
+// the flag allowing the C function to determine it should run the "pause".
+// This pause binary will ensure that we always have the init process of the
+// new PID namespace running into the namespace, preventing the namespace to
+// be destroyed if other processes are terminated.
+func (s *sandbox) setupSharedPidNs() error {
+	cmd := &exec.Cmd{
+		Path: selfBinPath,
+		Args: []string{os.Args[0], pauseBinArg},
+	}
+
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags: syscall.CLONE_NEWPID,
+	}
+
+	if err := s.subreaper.start(cmd); err != nil {
+		return err
+	}
+
+	// Save info about this namespace inside sandbox structure.
+	s.sharedPidNs = namespace{
+		path: fmt.Sprintf("/proc/%d/ns/pid", cmd.Process.Pid),
+		init: cmd.Process,
+	}
+
+	return nil
+}
+
+func (s *sandbox) teardownSharedPidNs() error {
+	if s.sharedPidNs.path == "" {
+		// Nothing needs to be done because we are not in a case
+		// where a PID namespace is shared across containers.
+		return nil
+	}
+
+	// Terminates the "init" process of the PID namespace.
+	if err := s.sharedPidNs.init.Kill(); err != nil {
+		return err
+	}
+
+	// Using helper function wait() to deal with the subreaper.
+	osProcess := (*reaperOSProcess)(s.sharedPidNs.init)
+	if _, err := s.subreaper.wait(osProcess.Pid, osProcess); err != nil {
+		return err
+	}
+
+	// Empty the sandbox structure.
+	s.sharedPidNs = namespace{}
+
+	return nil
+}
+
+// This loop is meant to be run inside a separate Go routine.
+func (s *sandbox) reaperLoop(sigCh chan os.Signal) {
+	for sig := range sigCh {
+		switch sig {
+		case unix.SIGCHLD:
+			if err := s.subreaper.reap(); err != nil {
+				agentLog.Error(err)
+				return
+			}
+		default:
+			agentLog.Infof("Unexpected signal %s, nothing to do...", sig.String())
+		}
+	}
+}
+
+func (s *sandbox) setSubreaper() error {
+	if err := unix.Prctl(unix.PR_SET_CHILD_SUBREAPER, uintptr(1), 0, 0, 0); err != nil {
+		return err
+	}
+
+	sigCh := make(chan os.Signal, 512)
+	signal.Notify(sigCh, unix.SIGCHLD)
+
+	go s.reaperLoop(sigCh)
+
+	return nil
+}
+
 func (s *sandbox) initLogger() error {
 	agentLog.Logger.Formatter = &logrus.TextFormatter{TimestampFormat: time.RFC3339Nano}
 
@@ -259,10 +350,12 @@ func (s *sandbox) startGRPC() error {
 
 	grpcImpl := &agentGRPC{
 		sandbox: s,
+		version: version,
 	}
 
 	grpcServer := grpc.NewServer()
 	pb.RegisterAgentServiceServer(grpcServer, grpcImpl)
+	pb.RegisterHealthServer(grpcServer, grpcImpl)
 
 	s.wg.Add(1)
 	go func() {
@@ -320,9 +413,17 @@ func main() {
 	s := &sandbox{
 		containers: make(map[string]*container),
 		running:    false,
+		subreaper: &reaper{
+			exitCodeChans: make(map[int]chan int),
+		},
 	}
 
 	if err = s.initLogger(); err != nil {
+		return
+	}
+
+	// Set agent as subreaper.
+	if err = s.setSubreaper(); err != nil {
 		return
 	}
 

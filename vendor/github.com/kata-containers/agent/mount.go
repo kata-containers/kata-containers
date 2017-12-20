@@ -61,14 +61,20 @@ var flagList = map[string]int{
 // * evaluate all symlinks
 // * ensure the source exists
 func mount(source, destination, fsType string, flags int, options string) error {
-	absSource, err := filepath.EvalSymlinks(source)
-	if err != nil {
-		return fmt.Errorf("Could not resolve symlink for source %v", source)
-	}
+	var absSource string
 
-	if err := ensureDestinationExists(absSource, destination, fsType); err != nil {
-		return fmt.Errorf("Could not create destination mount point: %v: %v",
-			destination, err)
+	if fsType != type9pFs {
+		absSource, err := filepath.EvalSymlinks(source)
+		if err != nil {
+			return fmt.Errorf("Could not resolve symlink for source %v", source)
+		}
+
+		if err := ensureDestinationExists(absSource, destination, fsType); err != nil {
+			return fmt.Errorf("Could not create destination mount point: %v: %v",
+				destination, err)
+		}
+	} else {
+		absSource = source
 	}
 
 	if err := syscall.Mount(absSource, destination,

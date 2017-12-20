@@ -18,22 +18,29 @@ import (
 
 const ociConfigFile = "config.json"
 
+func assertProcessIsEqual(t *testing.T, ociProcess *specs.Process, grpcProcess *Process) {
+	assert := assert.New(t)
+
+	// Process checks: User
+	assert.Equal(grpcProcess.User.UID, ociProcess.User.UID)
+	assert.Equal(grpcProcess.User.GID, ociProcess.User.GID)
+
+	// Process checks: Capabilities
+	assert.Equal(grpcProcess.Capabilities.Bounding, ociProcess.Capabilities.Bounding)
+	assert.Equal(grpcProcess.Capabilities.Effective, ociProcess.Capabilities.Effective)
+	assert.Equal(grpcProcess.Capabilities.Inheritable, ociProcess.Capabilities.Inheritable)
+	assert.Equal(grpcProcess.Capabilities.Permitted, ociProcess.Capabilities.Permitted)
+	assert.Equal(grpcProcess.Capabilities.Ambient, ociProcess.Capabilities.Ambient)
+}
+
 func assertIsEqual(t *testing.T, ociSpec *specs.Spec, grpcSpec *Spec) {
 	assert := assert.New(t)
 
 	// Version check
 	assert.Equal(grpcSpec.Version, ociSpec.Version)
 
-	// Process checks: User
-	assert.Equal(grpcSpec.Process.User.UID, ociSpec.Process.User.UID)
-	assert.Equal(grpcSpec.Process.User.GID, ociSpec.Process.User.GID)
-
-	// Process checks: Capabilities
-	assert.Equal(grpcSpec.Process.Capabilities.Bounding, ociSpec.Process.Capabilities.Bounding)
-	assert.Equal(grpcSpec.Process.Capabilities.Effective, ociSpec.Process.Capabilities.Effective)
-	assert.Equal(grpcSpec.Process.Capabilities.Inheritable, ociSpec.Process.Capabilities.Inheritable)
-	assert.Equal(grpcSpec.Process.Capabilities.Permitted, ociSpec.Process.Capabilities.Permitted)
-	assert.Equal(grpcSpec.Process.Capabilities.Ambient, ociSpec.Process.Capabilities.Ambient)
+	// Process checks:
+	assertProcessIsEqual(t, ociSpec.Process, grpcSpec.Process)
 
 	// Annotations checks: Annotations
 	assert.Equal(len(grpcSpec.Annotations), len(ociSpec.Annotations))
@@ -104,6 +111,41 @@ func TestGRPCtoOCI(t *testing.T) {
 	assert.NoError(err, "Could not convert gRPC structure")
 
 	assertIsEqual(t, newOciSpec, grpcSpec)
+}
+
+func TestProcessOCItoGRPC(t *testing.T) {
+	assert := assert.New(t)
+	var ociSpec specs.Spec
+
+	configJsonBytes, err := ioutil.ReadFile(ociConfigFile)
+	assert.NoError(err, "Could not open OCI config file")
+
+	err = json.Unmarshal(configJsonBytes, &ociSpec)
+	assert.NoError(err, "Could not unmarshall OCI config file")
+
+	process, err := ProcessOCItoGRPC(ociSpec.Process)
+	assert.NoError(err, "Could not convert OCI config file")
+	assertProcessIsEqual(t, ociSpec.Process, process)
+}
+
+func TestProcessGRPCtoOCI(t *testing.T) {
+	assert := assert.New(t)
+
+	var ociSpec specs.Spec
+
+	configJsonBytes, err := ioutil.ReadFile(ociConfigFile)
+	assert.NoError(err, "Could not open OCI config file")
+
+	err = json.Unmarshal(configJsonBytes, &ociSpec)
+	assert.NoError(err, "Could not unmarshall OCI config file")
+
+	grpcProcess, err := ProcessOCItoGRPC(ociSpec.Process)
+	assert.NoError(err, "Could not convert OCI config file")
+
+	newOciProcess, err := ProcessGRPCtoOCI(grpcProcess)
+	assert.NoError(err, "Could not convert gRPC structure")
+
+	assertProcessIsEqual(t, newOciProcess, grpcProcess)
 }
 
 func testCopyValue(t *testing.T, to, from interface{}) {

@@ -1,6 +1,7 @@
-// Protocol Buffers - Google's data interchange format
-// Copyright 2008 Google Inc.  All rights reserved.
-// https://developers.google.com/protocol-buffers/
+// Go support for Protocol Buffers - Google's data interchange format
+//
+// Copyright 2016 The Go Authors.  All rights reserved.
+// https://github.com/golang/protobuf
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -28,25 +29,7 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-syntax = "proto3";
-
-package google.protobuf;
-
-option csharp_namespace = "Google.Protobuf.WellKnownTypes";
-option go_package = "github.com/golang/protobuf/ptypes/empty";
-option java_package = "com.google.protobuf";
-option java_outer_classname = "EmptyProto";
-option java_multiple_files = true;
-option objc_class_prefix = "GPB";
-option cc_enable_arenas = true;
-
-// A generic empty message that you can re-use to avoid defining duplicated
-// empty messages in your APIs. A typical example is to use it as the request
-// or the response type of an API method. For instance:
-//
-//     service Foo {
-//       rpc Bar(google.protobuf.Empty) returns (google.protobuf.Empty);
-//     }
-//
-// The JSON representation for `Empty` is empty JSON object `{}`.
-message Empty {}
+/*
+Package types contains code for interacting with well-known types.
+*/
+package types
