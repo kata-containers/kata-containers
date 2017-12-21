@@ -13,6 +13,9 @@ go_import_path: github.com/kata-containers/proxy
 go:
   - 1.8
 
+before_script:
+  - ".ci/static-checks.sh"
+
 before_install:
   - sudo apt-get update -qq
   - sudo apt-get install -y -qq automake
