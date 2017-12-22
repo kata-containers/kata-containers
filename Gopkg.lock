@@ -30,9 +30,10 @@
   revision = "1e59b77b52bf8e4b449a57e6f79f21226d571845"
 
 [[projects]]
+  branch = "master"
   name = "github.com/kata-containers/agent"
   packages = ["protocols/client","protocols/grpc","protocols/mockserver"]
-  revision = "9b50dbac719a0def765e3f4ad11eaa44d77b17e5"
+  revision = "8f22514ae5790f3b6953cf93692e663fa29469e3"
 
 [[projects]]
   name = "github.com/kr/pty"
@@ -112,6 +113,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "078abd4515403436b3faab35da3ca699b26031ce518a86c83c46d75b3f5d2dde"
+  inputs-digest = "030ac0204af3a20262e1228f3433c0eb02a69c8233c4dc7dd4ff28b60749e552"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -106,22 +106,23 @@ func newTestSpec() *pb.Spec {
 	}
 }
 
-func (t *testAgent) addContainer(containerId string) (uint32, error) {
+func (t *testAgent) addContainer(containerId, execId string) error {
 	_, err := t.client.CreateContainer(t.ctx, &pb.CreateContainerRequest{
 		ContainerId: containerId,
+		ExecId:      execId,
 		StringUser:  &pb.StringUser{Uid: "root", Gid: "root"},
 		OCI:         newTestSpec(),
 	})
 	if err != nil {
-		return 0, fmt.Errorf("failed to create new container: %s", err)
+		return fmt.Errorf("failed to create new container: %s", err)
 	}
 
-	resp, err := t.client.StartContainer(t.ctx, &pb.StartContainerRequest{ContainerId: containerId})
+	_, err = t.client.StartContainer(t.ctx, &pb.StartContainerRequest{ContainerId: containerId})
 	if err != nil {
-		return 0, fmt.Errorf("failed to create new container: %s", err)
+		return fmt.Errorf("failed to create new container: %s", err)
 	}
 
-	return resp.PID, nil
+	return nil
 }
 
 func TestNewShimAgent(t *testing.T) {
@@ -152,9 +153,10 @@ func TestAddContainer(t *testing.T) {
 	agent := testSetup(t)
 	defer testTearDown(agent)
 
-	id := "foobar"
-	_, err := agent.addContainer(id)
+	contId := "testContainer"
+	execId := "testExec"
+	err := agent.addContainer(contId, execId)
 	assert.Nil(t, err, "%s", err)
-	_, err = agent.addContainer(id)
+	err = agent.addContainer(contId, execId)
 	assert.NotNil(t, err, "unexpected success when adding duplicated container")
 }

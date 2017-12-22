@@ -28,19 +28,18 @@ const (
 var mockLock sync.RWMutex
 
 type pod struct {
-	nextPid    uint32
 	containers map[string]*container
 }
 
 // container init process pid is always
 type container struct {
 	id      string
-	initPid uint32
-	proc    map[uint32]*process
+	initPid string
+	proc    map[string]*process
 }
 
 type process struct {
-	pid  uint32
+	pid  string
 	proc *pb.Process
 }
 
@@ -64,20 +63,14 @@ func validateOCISpec(spec *pb.Spec) error {
 	return nil
 }
 
-func (m *mockServer) nextPid() uint32 {
-	pid := m.pod.nextPid
-	m.pod.nextPid += 1
-	return pid
-}
-
-func (m *mockServer) checkExist(containerId string, pid uint32, createContainer, checkProcess bool) error {
+func (m *mockServer) checkExist(containerId, execId string, createContainer, checkProcess bool) error {
 	if m.pod == nil {
 		return status.Error(codes.NotFound, "pod not created")
 	}
 	if containerId == "" {
 		return status.Error(codes.InvalidArgument, "container ID must be set")
 	}
-	if checkProcess && pid == 0 {
+	if checkProcess && execId == "0" {
 		return status.Error(codes.InvalidArgument, "process ID must be set")
 	}
 
@@ -94,24 +87,24 @@ func (m *mockServer) checkExist(containerId string, pid uint32, createContainer,
 	// Check process existence
 	if checkProcess {
 		c := m.pod.containers[containerId]
-		if c.proc[pid] == nil {
-			return status.Errorf(codes.NotFound, "process %d does not exist", pid)
+		if c.proc[execId] == nil {
+			return status.Errorf(codes.NotFound, "process %s does not exist", execId)
 		}
 	}
 
 	return nil
 }
 
-func (m *mockServer) processExist(containerId string, pid uint32) error {
-	return m.checkExist(containerId, pid, false, true)
+func (m *mockServer) processExist(containerId string, execId string) error {
+	return m.checkExist(containerId, execId, false, true)
 }
 
 func (m *mockServer) containerExist(containerId string) error {
-	return m.checkExist(containerId, 0, false, false)
+	return m.checkExist(containerId, "0", false, false)
 }
 
 func (m *mockServer) containerNonExist(containerId string) error {
-	return m.checkExist(containerId, 0, true, false)
+	return m.checkExist(containerId, "0", true, false)
 }
 
 func (m *mockServer) podExist() error {
@@ -145,9 +138,9 @@ func (m *mockServer) CreateContainer(ctx context.Context, req *pb.CreateContaine
 
 	c := &container{
 		id:   req.ContainerId,
-		proc: make(map[uint32]*process),
+		proc: make(map[string]*process),
 	}
-	c.initPid = m.nextPid()
+	c.initPid = req.ExecId
 	c.proc[c.initPid] = &process{
 		pid:  c.initPid,
 		proc: req.OCI.Process,
@@ -157,14 +150,14 @@ func (m *mockServer) CreateContainer(ctx context.Context, req *pb.CreateContaine
 	return &types.Empty{}, nil
 }
 
-func (m *mockServer) StartContainer(ctx context.Context, req *pb.StartContainerRequest) (*pb.NewProcessResponse, error) {
+func (m *mockServer) StartContainer(ctx context.Context, req *pb.StartContainerRequest) (*types.Empty, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.containerExist(req.ContainerId); err != nil {
 		return nil, err
 	}
 
-	return &pb.NewProcessResponse{PID: m.pod.containers[req.ContainerId].initPid}, nil
+	return &types.Empty{}, nil
 }
 
 func (m *mockServer) RemoveContainer(ctx context.Context, req *pb.RemoveContainerRequest) (*types.Empty, error) {
@@ -177,7 +170,7 @@ func (m *mockServer) RemoveContainer(ctx context.Context, req *pb.RemoveContaine
 	return &types.Empty{}, nil
 }
 
-func (m *mockServer) ExecProcess(ctx context.Context, req *pb.ExecProcessRequest) (*pb.NewProcessResponse, error) {
+func (m *mockServer) ExecProcess(ctx context.Context, req *pb.ExecProcessRequest) (*types.Empty, error) {
 	mockLock.Lock()
 	defer mockLock.Unlock()
 	if err := m.containerExist(req.ContainerId); err != nil {
@@ -185,18 +178,17 @@ func (m *mockServer) ExecProcess(ctx context.Context, req *pb.ExecProcessRequest
 	}
 
 	c := m.pod.containers[req.ContainerId]
-	pid := m.nextPid()
-	c.proc[pid] = &process{
-		pid:  pid,
+	c.proc[req.ExecId] = &process{
+		pid:  req.ExecId,
 		proc: req.Process,
 	}
-	return &pb.NewProcessResponse{PID: pid}, nil
+	return &types.Empty{}, nil
 }
 
 func (m *mockServer) SignalProcess(ctx context.Context, req *pb.SignalProcessRequest) (*types.Empty, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
-	if err := m.processExist(req.ContainerId, req.PID); err != nil {
+	if err := m.processExist(req.ContainerId, req.ExecId); err != nil {
 		return nil, err
 	}
 
@@ -206,15 +198,15 @@ func (m *mockServer) SignalProcess(ctx context.Context, req *pb.SignalProcessReq
 func (m *mockServer) WaitProcess(ctx context.Context, req *pb.WaitProcessRequest) (*pb.WaitProcessResponse, error) {
 	mockLock.Lock()
 	defer mockLock.Unlock()
-	if err := m.processExist(req.ContainerId, req.PID); err != nil {
+	if err := m.processExist(req.ContainerId, req.ExecId); err != nil {
 		return nil, err
 	}
 
 	// remove process once it is waited
 	c := m.pod.containers[req.ContainerId]
-	c.proc[req.PID] = nil
+	c.proc[req.ExecId] = nil
 	// container gone, clean it up
-	if c.initPid == req.PID {
+	if c.initPid == req.ExecId {
 		m.pod.containers[req.ContainerId] = nil
 	}
 
@@ -224,7 +216,7 @@ func (m *mockServer) WaitProcess(ctx context.Context, req *pb.WaitProcessRequest
 func (m *mockServer) WriteStdin(ctx context.Context, req *pb.WriteStreamRequest) (*pb.WriteStreamResponse, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
-	if err := m.processExist(req.ContainerId, req.PID); err != nil {
+	if err := m.processExist(req.ContainerId, req.ExecId); err != nil {
 		return nil, err
 	}
 
@@ -234,7 +226,7 @@ func (m *mockServer) WriteStdin(ctx context.Context, req *pb.WriteStreamRequest)
 func (m *mockServer) ReadStdout(ctx context.Context, req *pb.ReadStreamRequest) (*pb.ReadStreamResponse, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
-	if err := m.processExist(req.ContainerId, req.PID); err != nil {
+	if err := m.processExist(req.ContainerId, req.ExecId); err != nil {
 		return nil, err
 	}
 
@@ -244,7 +236,7 @@ func (m *mockServer) ReadStdout(ctx context.Context, req *pb.ReadStreamRequest) 
 func (m *mockServer) ReadStderr(ctx context.Context, req *pb.ReadStreamRequest) (*pb.ReadStreamResponse, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
-	if err := m.processExist(req.ContainerId, req.PID); err != nil {
+	if err := m.processExist(req.ContainerId, req.ExecId); err != nil {
 		return nil, err
 	}
 
@@ -254,7 +246,7 @@ func (m *mockServer) ReadStderr(ctx context.Context, req *pb.ReadStreamRequest) 
 func (m *mockServer) CloseStdin(ctx context.Context, req *pb.CloseStdinRequest) (*types.Empty, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
-	if err := m.processExist(req.ContainerId, req.PID); err != nil {
+	if err := m.processExist(req.ContainerId, req.ExecId); err != nil {
 		return nil, err
 	}
 
@@ -264,7 +256,7 @@ func (m *mockServer) CloseStdin(ctx context.Context, req *pb.CloseStdinRequest) 
 func (m *mockServer) TtyWinResize(ctx context.Context, req *pb.TtyWinResizeRequest) (*types.Empty, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
-	if err := m.processExist(req.ContainerId, req.PID); err != nil {
+	if err := m.processExist(req.ContainerId, req.ExecId); err != nil {
 		return nil, err
 	}
 
@@ -278,7 +270,6 @@ func (m *mockServer) CreateSandbox(ctx context.Context, req *pb.CreateSandboxReq
 		return nil, status.Error(codes.AlreadyExists, "pod already created")
 	}
 	m.pod = &pod{
-		nextPid:    podStartingPid,
 		containers: make(map[string]*container),
 	}
 	return &types.Empty{}, nil

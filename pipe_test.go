@@ -16,10 +16,11 @@ func TestPipe(t *testing.T) {
 	defer testTearDown(agent)
 
 	containerId := "testContainer"
-	pid, err := agent.addContainer(containerId)
+	execId := "testExec"
+	err := agent.addContainer(containerId, execId)
 	assert.Nil(t, err, "failed to add new container: %s", err)
 
-	inPipe, outPipe, errPipe := shimStdioPipe(agent.ctx, agent.client, containerId, pid)
+	inPipe, outPipe, errPipe := shimStdioPipe(agent.ctx, agent.client, containerId, execId)
 
 	buf := []byte("foobar")
 	size, err := inPipe.Write(buf[:])
@@ -35,7 +36,7 @@ func TestPipe(t *testing.T) {
 	assert.Equal(t, size, 0, "unmatched write stdin pipe len %d:%d", 0, size)
 
 	// wrong process
-	inPipe, outPipe, errPipe = shimStdioPipe(agent.ctx, agent.client, containerId, pid+100)
+	inPipe, outPipe, errPipe = shimStdioPipe(agent.ctx, agent.client, containerId, execId+"foobar")
 	_, err = inPipe.Write(buf[:])
 	assert.NotNil(t, err, "Unexpected success writing stdin pipe")
 
