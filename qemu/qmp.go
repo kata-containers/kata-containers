@@ -672,6 +672,45 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
+// ExecuteSCSIDeviceAdd adds the guest portion of a block device to a QEMU instance
+// using a SCSI driver with the device_add command.  blockdevID should match the
+// blockdevID passed to a previous call to ExecuteBlockdevAdd.  devID is the id of
+// the device to add.  Both strings must be valid QMP identifiers.  driver is the name of the
+// scsi driver,e.g., scsi-hd, and bus is the name of a SCSI controller bus.
+// scsiID is the SCSI id, lun is logical unit number. scsiID and lun are optional, a negative value
+// for scsiID and lun is ignored.
+func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus string, scsiID, lun int) error {
+	// TBD: Add drivers for scsi passthrough like scsi-generic and scsi-block
+	drivers := []string{"scsi-hd", "scsi-cd", "scsi-disk"}
+
+	isSCSIDriver := false
+	for _, d := range drivers {
+		if driver == d {
+			isSCSIDriver = true
+			break
+		}
+	}
+
+	if !isSCSIDriver {
+		return fmt.Errorf("Invalid SCSI driver provided %s", driver)
+	}
+
+	args := map[string]interface{}{
+		"id":     devID,
+		"driver": driver,
+		"drive":  blockdevID,
+		"bus":    bus,
+	}
+	if scsiID >= 0 {
+		args["scsi-id"] = scsiID
+	}
+	if lun >= 0 {
+		args["lun"] = lun
+	}
+
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
 // ExecuteBlockdevDel deletes a block device by sending a x-blockdev-del command
 // for qemu versions < 2.9. It sends the updated blockdev-del command for qemu>=2.9.
 // blockdevID is the id of the block device to be deleted.  Typically, this will
