@@ -825,6 +825,45 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 	return qemuParams
 }
 
+// SCSIController represents a SCSI controller device.
+type SCSIController struct {
+	ID string
+
+	// Bus on which the SCSI controller is attached, this is optional
+	Bus string
+
+	// Addr is the PCI address offset, this is optional
+	Addr string
+}
+
+// Valid returns true if the SCSIController structure is valid and complete.
+func (scsiCon SCSIController) Valid() bool {
+	if scsiCon.ID == "" {
+		return false
+	}
+
+	return true
+}
+
+// QemuParams returns the qemu parameters built out of this SCSIController device.
+func (scsiCon SCSIController) QemuParams(config *Config) []string {
+	var qemuParams []string
+	var devParams []string
+
+	devParams = append(devParams, fmt.Sprintf("virtio-scsi-pci,id=%s", scsiCon.ID))
+	if scsiCon.Bus != "" {
+		devParams = append(devParams, fmt.Sprintf("bus=%s", scsiCon.Bus))
+	}
+	if scsiCon.Addr != "" {
+		devParams = append(devParams, fmt.Sprintf("addr=%s", scsiCon.Addr))
+	}
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(devParams, ","))
+
+	return qemuParams
+}
+
 // BridgeType is the type of the bridge
 type BridgeType uint
 
