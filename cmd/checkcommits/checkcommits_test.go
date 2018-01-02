@@ -34,14 +34,14 @@ var restoreSet map[string]TestEnvVal
 var travisPREnv = map[string]TestEnvVal{
 	"TRAVIS":                     {"true", true},
 	"TRAVIS_BRANCH":              {"master", true},
-	"TRAVIS_COMMIT":              {"travis-commit", true},
+	"TRAVIS_COMMIT":              {"HEAD", true},
 	"TRAVIS_PULL_REQUEST_BRANCH": {"travis-pr", true},
 }
 
 var travisNonPREnv = map[string]TestEnvVal{
 	"TRAVIS":                     {"true", true},
 	"TRAVIS_BRANCH":              {"master", true},
-	"TRAVIS_COMMIT":              {"travis-commit", true},
+	"TRAVIS_COMMIT":              {"HEAD", true},
 	"TRAVIS_PULL_REQUEST_BRANCH": {"", true},
 }
 
