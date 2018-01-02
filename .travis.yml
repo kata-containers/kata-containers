@@ -1,0 +1,16 @@
+#
+# Copyright (c) 2017-2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+dist: trusty
+
+language: go
+
+go:
+  - 1.8
+  - stable
+
+before_script:
+  - ".ci/static-checks.sh"
