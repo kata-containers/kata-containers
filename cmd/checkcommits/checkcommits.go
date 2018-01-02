@@ -49,6 +49,8 @@ const (
 
 	defaultCommit = "HEAD"
 	defaultBranch = "master"
+
+	versionSuffix = "for kata-containers"
 )
 
 var (
@@ -637,7 +639,7 @@ func main() {
 		fmt.Fprintf(os.Stdout, "%s version %s %s\n",
 			c.App.Name,
 			c.App.Version,
-			"for kata-containers")
+			versionSuffix)
 	}
 
 	app.Flags = []cli.Flag{
@@ -699,7 +701,7 @@ func main() {
 		}
 
 		if verbose {
-			fmt.Printf("Running %v version %s\n", c.App.Name, c.App.Version)
+			fmt.Printf("Running %v version %s %s\n", c.App.Name, c.App.Version, versionSuffix)
 		}
 
 		commit, branch, err := getCommitAndBranchWithContext(c)
