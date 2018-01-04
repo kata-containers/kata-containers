@@ -3,6 +3,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/intel/govmm)](https://goreportcard.com/report/github.com/intel/govmm)
 [![Build Status](https://travis-ci.org/intel/govmm.svg?branch=master)](https://travis-ci.org/intel/govmm)
 [![GoDoc](https://godoc.org/github.com/intel/govmm/qemu?status.svg)](https://godoc.org/github.com/intel/govmm/qemu)
+[![Coverage Status](https://coveralls.io/repos/github/intel/govmm/badge.svg?branch=master)](https://coveralls.io/github/intel/govmm?branch=master)
 
 Virtual Machine Manager for Go (govmm) is a suite of packages that
 provide Go APIs for creating and managing virtual machines.  There's
