@@ -49,6 +49,8 @@ const (
 
 	defaultCommit = "HEAD"
 	defaultBranch = "master"
+
+	versionSuffix = "for kata-containers"
 )
 
 var (
@@ -380,7 +382,12 @@ func detectCIEnvironment() (commit, dstBranch, srcBranch string) {
 	if os.Getenv("TRAVIS") != "" {
 		name = "TravisCI"
 
-		commit = os.Getenv("TRAVIS_COMMIT")
+		// Travis provides a TRAVIS_COMMIT variable that is _supposed_
+		// to specify the HEAD commit of the branch. However, it
+		// *can* lie, so we cannot trust it. See:
+		//
+		//   https://github.com/travis-ci/travis-ci/issues/7830
+		commit = "HEAD"
 
 		srcBranch = os.Getenv("TRAVIS_PULL_REQUEST_BRANCH")
 		dstBranch = os.Getenv("TRAVIS_BRANCH")
@@ -637,7 +644,7 @@ func main() {
 		fmt.Fprintf(os.Stdout, "%s version %s %s\n",
 			c.App.Name,
 			c.App.Version,
-			"for kata-containers")
+			versionSuffix)
 	}
 
 	app.Flags = []cli.Flag{
@@ -699,7 +706,7 @@ func main() {
 		}
 
 		if verbose {
-			fmt.Printf("Running %v version %s\n", c.App.Name, c.App.Version)
+			fmt.Printf("Running %v version %s %s\n", c.App.Name, c.App.Version, versionSuffix)
 		}
 
 		commit, branch, err := getCommitAndBranchWithContext(c)
