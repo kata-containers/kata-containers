@@ -21,7 +21,7 @@ type reaper struct {
 	sync.RWMutex
 
 	chansLock     sync.RWMutex
-	exitCodeChans map[int]chan int
+	exitCodeChans map[int]chan<- int
 }
 
 func exitStatus(status unix.WaitStatus) int {
@@ -32,19 +32,19 @@ func exitStatus(status unix.WaitStatus) int {
 	return status.ExitStatus()
 }
 
-func (r *reaper) getExitCodeCh(pid int) (chan int, error) {
+func (r *reaper) getExitCodeCh(pid int) (chan<- int, error) {
 	r.chansLock.RLock()
 	defer r.chansLock.RUnlock()
 
 	exitCodeCh, exist := r.exitCodeChans[pid]
 	if !exist {
-		return nil, fmt.Errorf("Process %d not found", pid)
+		return nil, fmt.Errorf("PID %d not found", pid)
 	}
 
 	return exitCodeCh, nil
 }
 
-func (r *reaper) setExitCodeCh(pid int, exitCodeCh chan int) {
+func (r *reaper) setExitCodeCh(pid int, exitCodeCh chan<- int) {
 	r.chansLock.Lock()
 	defer r.chansLock.Unlock()
 
@@ -54,13 +54,6 @@ func (r *reaper) setExitCodeCh(pid int, exitCodeCh chan int) {
 func (r *reaper) deleteExitCodeCh(pid int) {
 	r.chansLock.Lock()
 	defer r.chansLock.Unlock()
-
-	exitCodeCh, exist := r.exitCodeChans[pid]
-	if !exist {
-		return
-	}
-
-	close(exitCodeCh)
 
 	delete(r.exitCodeChans, pid)
 }
@@ -108,18 +101,24 @@ func (r *reaper) reap() error {
 			continue
 		}
 
+		// Let's delete the entry here since the channel has been
+		// stored by the caller, in order to wait for the exit code.
+		r.deleteExitCodeCh(pid)
+
 		// Here, we have to signal the routine listening on
 		// this channel so that it can complete the cleanup
 		// of the process and return the exit code to the
 		// caller of WaitProcess().
 		exitCodeCh <- status
+
+		close(exitCodeCh)
 	}
 }
 
 // start starts the exec command and registers the process to the reaper.
 // This function is a helper for exec.Cmd.Start() since this needs to be
 // in sync with exec.Cmd.Wait().
-func (r *reaper) start(c *exec.Cmd) error {
+func (r *reaper) start(c *exec.Cmd) (<-chan int, error) {
 	// This lock is very important to avoid any race with reaper.reap().
 	// We don't want the reaper to reap a process before we have added
 	// it to the exit code channel list.
@@ -127,26 +126,23 @@ func (r *reaper) start(c *exec.Cmd) error {
 	defer r.RUnlock()
 
 	if err := c.Start(); err != nil {
-		return err
+		return nil, err
 	}
+
+	exitCodeCh := make(chan int, 1)
 
 	// This channel is buffered so that reaper.reap() will not
 	// block until reaper.wait() listen onto this channel.
-	r.setExitCodeCh(c.Process.Pid, make(chan int, 1))
+	r.setExitCodeCh(c.Process.Pid, exitCodeCh)
 
-	return nil
+	return exitCodeCh, nil
 }
 
 // wait blocks until the expected process has been reaped. After the reaping
 // from the subreaper, the exit code is sent through the provided channel.
 // This function is a helper for exec.Cmd.Wait() and os.Process.Wait() since
 // both cannot be used directly, because of the subreaper.
-func (r *reaper) wait(pid int, proc waitProcess) (int, error) {
-	exitCodeCh, err := r.getExitCodeCh(pid)
-	if err != nil {
-		return -1, err
-	}
-
+func (r *reaper) wait(exitCodeCh <-chan int, proc waitProcess) (int, error) {
 	// Wait for the subreaper to receive the SIGCHLD signal. Once it gets
 	// it, this channel will be notified by receiving the exit code of the
 	// corresponding process.
@@ -156,8 +152,6 @@ func (r *reaper) wait(pid int, proc waitProcess) (int, error) {
 	// subreaping loop. This call is only used to make sure libcontainer
 	// properly cleans up its internal structures and pipes.
 	proc.wait()
-
-	r.deleteExitCodeCh(pid)
 
 	return exitCode, nil
 }

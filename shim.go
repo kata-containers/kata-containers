@@ -32,20 +32,20 @@ var sigIgnored = map[syscall.Signal]bool{
 
 type shim struct {
 	containerId string
-	pid         uint32
+	execId      string
 
 	ctx   context.Context
 	agent *shimAgent
 }
 
-func newShim(addr, containerId string, pid uint32) (*shim, error) {
+func newShim(addr, containerId, execId string) (*shim, error) {
 	if agent, err := newShimAgent(addr); err != nil {
 		return nil, err
 	} else {
 		return &shim{containerId: containerId,
-			pid:   pid,
-			ctx:   context.Background(),
-			agent: agent}, nil
+			execId: execId,
+			ctx:    context.Background(),
+			agent:  agent}, nil
 	}
 }
 
@@ -53,12 +53,12 @@ func (s *shim) proxyStdio(wg *sync.WaitGroup) {
 	// don't wait the copying of the stdin, because `io.Copy(inPipe, os.Stdin)`
 	// can't terminate when no input. todo: find a better way.
 	wg.Add(2)
-	inPipe, outPipe, errPipe := shimStdioPipe(s.ctx, s.agent, s.containerId, s.pid)
+	inPipe, outPipe, errPipe := shimStdioPipe(s.ctx, s.agent, s.containerId, s.execId)
 	go func() {
 		_, err1 := io.Copy(inPipe, os.Stdin)
 		_, err2 := s.agent.CloseStdin(s.ctx, &pb.CloseStdinRequest{
 			ContainerId: s.containerId,
-			PID:         s.pid})
+			ExecId:      s.execId})
 		if err1 != nil {
 			shimLog.WithError(err1).Warn("copy stdin failed")
 		}
@@ -101,7 +101,7 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 			// forward this signal to container
 			_, err := s.agent.SignalProcess(s.ctx, &pb.SignalProcessRequest{
 				ContainerId: s.containerId,
-				PID:         s.pid,
+				ExecId:      s.execId,
 				Signal:      uint32(sysSig)})
 			if err != nil {
 				shimLog.WithError(err).WithField("signal", sig.String()).Error("forward signal failed")
@@ -120,7 +120,7 @@ func (s *shim) resizeTty(fromTty *os.File) error {
 
 	_, err = s.agent.TtyWinResize(s.ctx, &pb.TtyWinResizeRequest{
 		ContainerId: s.containerId,
-		PID:         s.pid,
+		ExecId:      s.execId,
 		Row:         uint32(ws.Height),
 		Column:      uint32(ws.Width)})
 	if err != nil {
@@ -144,7 +144,7 @@ func (s *shim) monitorTtySize(tty *os.File) {
 func (s *shim) wait() (int32, error) {
 	resp, err := s.agent.WaitProcess(s.ctx, &pb.WaitProcessRequest{
 		ContainerId: s.containerId,
-		PID:         s.pid})
+		ExecId:      s.execId})
 	if err != nil {
 		return 0, err
 	}

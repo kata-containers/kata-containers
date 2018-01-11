@@ -18,15 +18,16 @@ func TestNewShim(t *testing.T) {
 	agent := testSetup(t)
 	defer testTearDown(agent)
 
-	id := "foobar"
-	pid, err := agent.addContainer(id)
+	contId := "foobarContainer"
+	execId := "testExec"
+	err := agent.addContainer(contId, execId)
 	assert.Nil(t, err, "%s", err)
 
-	shim, err := newShim(mockSockAddr, id, pid)
+	shim, err := newShim(mockSockAddr, contId, execId)
 	assert.Nil(t, err, "%s", err)
 	defer shim.agent.Close()
 
-	_, err = newShim(badMockAddr, id, pid)
+	_, err = newShim(badMockAddr, contId, execId)
 	assert.NotNil(t, err, "New shim with wrong socket address should fail")
 }
 
@@ -34,11 +35,12 @@ func TestShimOps(t *testing.T) {
 	agent := testSetup(t)
 	defer testTearDown(agent)
 
-	id := "foobar"
-	pid, err := agent.addContainer(id)
+	contId := "foobarContainer"
+	execId := "testExec"
+	err := agent.addContainer(contId, execId)
 	assert.Nil(t, err, "%s", err)
 
-	shim, err := newShim(mockSockAddr, id, pid)
+	shim, err := newShim(mockSockAddr, contId, execId)
 	assert.Nil(t, err, "%s", err)
 	defer shim.agent.Close()
 

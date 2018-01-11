@@ -19,7 +19,9 @@ import (
 	pb "github.com/kata-containers/agent/protocols/grpc"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/opencontainers/runc/libcontainer/specconv"
 	"github.com/opencontainers/runc/libcontainer/utils"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"golang.org/x/sys/unix"
@@ -107,6 +109,50 @@ var fullCapsList = []string{
 	"CAP_WAKE_ALARM",
 }
 
+var defaultMountFlags = unix.MS_NOEXEC | unix.MS_NOSUID | unix.MS_NODEV
+
+var defaultMounts = []*configs.Mount{
+	{
+		Source:      "proc",
+		Destination: "/proc",
+		Device:      "proc",
+		Flags:       defaultMountFlags,
+	},
+	{
+		Source:      "tmpfs",
+		Destination: "/dev",
+		Device:      "tmpfs",
+		Flags:       syscall.MS_NOSUID | syscall.MS_STRICTATIME,
+		Data:        "mode=755",
+	},
+	{
+		Source:      "devpts",
+		Destination: "/dev/pts",
+		Device:      "devpts",
+		Flags:       syscall.MS_NOSUID | syscall.MS_NOEXEC,
+		Data:        "newinstance,ptmxmode=0666,mode=0620,gid=5",
+	},
+	{
+		Device:      "tmpfs",
+		Source:      "shm",
+		Destination: "/dev/shm",
+		Data:        "mode=1777,size=65536k",
+		Flags:       defaultMountFlags,
+	},
+	{
+		Source:      "mqueue",
+		Destination: "/dev/mqueue",
+		Device:      "mqueue",
+		Flags:       defaultMountFlags,
+	},
+	{
+		Source:      "sysfs",
+		Destination: "/sys",
+		Device:      "sysfs",
+		Flags:       defaultMountFlags,
+	},
+}
+
 var emptyResp = &gpb.Empty{}
 
 func onlineCPUMem() error {
@@ -156,7 +202,7 @@ func setConsoleCarriageReturn(fd int) error {
 	return unix.IoctlSetTermios(fd, unix.TCSETS, termios)
 }
 
-func buildProcess(agentProcess *pb.Process) (*process, error) {
+func buildProcess(agentProcess *pb.Process, procID string) (*process, error) {
 	user := agentProcess.User.Username
 	if user == "" {
 		// We can specify the user and the group separated by ":"
@@ -169,6 +215,7 @@ func buildProcess(agentProcess *pb.Process) (*process, error) {
 	}
 
 	proc := &process{
+		id: procID,
 		process: libcontainer.Process{
 			Cwd:              agentProcess.Cwd,
 			Args:             agentProcess.Args,
@@ -231,34 +278,34 @@ func (a *agentGRPC) Version(ctx context.Context, req *pb.CheckRequest) (*pb.Vers
 // Shared function between StartContainer and ExecProcess, because those expect
 // a process to be run. The difference being the process does not exist yet in
 // case of ExecProcess.
-func (a *agentGRPC) runProcess(cid string, agentProcess *pb.Process) (pid int, err error) {
+func (a *agentGRPC) runProcess(cid, execID string, agentProcess *pb.Process) (err error) {
 	if a.sandbox.running == false {
-		return -1, fmt.Errorf("Sandbox not started")
+		return fmt.Errorf("Sandbox not started")
 	}
 
 	ctr, err := a.sandbox.getContainer(cid)
 	if err != nil {
-		return -1, err
+		return err
 	}
 
 	status, err := ctr.container.Status()
 	if err != nil {
-		return -1, err
+		return err
 	}
 
 	var proc *process
-	if agentProcess != nil {
+	if agentProcess != nil && execID != "" {
 		if status != libcontainer.Running {
-			return -1, fmt.Errorf("Container %s status %s, should be %s", cid, status.String(), libcontainer.Running.String())
+			return fmt.Errorf("Container %s status %s, should be %s", cid, status.String(), libcontainer.Running.String())
 		}
 
-		proc, err = buildProcess(agentProcess)
+		proc, err = buildProcess(agentProcess, execID)
 		if err != nil {
-			return -1, err
+			return err
 		}
 	} else {
 		if status != libcontainer.Created {
-			return -1, fmt.Errorf("Container %s status %s, should be %s", cid, status.String(), libcontainer.Created.String())
+			return fmt.Errorf("Container %s status %s, should be %s", cid, status.String(), libcontainer.Created.String())
 		}
 
 		proc = ctr.initProcess
@@ -274,40 +321,98 @@ func (a *agentGRPC) runProcess(cid string, agentProcess *pb.Process) (pid int, e
 	defer a.sandbox.subreaper.RUnlock()
 
 	if err := ctr.container.Run(&(proc.process)); err != nil {
-		return -1, fmt.Errorf("Could not run process: %v", err)
+		return fmt.Errorf("Could not run process: %v", err)
 	}
 	defer proc.closePostStartFDs()
 
 	// Get process PID
-	pid, err = proc.process.Pid()
+	pid, err := proc.process.Pid()
 	if err != nil {
-		return -1, err
+		return err
 	}
+
+	proc.exitCodeCh = make(chan int, 1)
 
 	// Create process channel to allow WaitProcess to wait on it.
 	// This channel is buffered so that reaper.reap() will not
 	// block until WaitProcess listen onto this channel.
-	a.sandbox.subreaper.setExitCodeCh(pid, make(chan int, 1))
+	a.sandbox.subreaper.setExitCodeCh(pid, proc.exitCodeCh)
 
 	// Setup terminal if enabled.
 	if proc.consoleSock != nil {
 		termMaster, err := utils.RecvFd(proc.consoleSock)
 		if err != nil {
-			return -1, err
+			return err
 		}
 
 		if err := setConsoleCarriageReturn(int(termMaster.Fd())); err != nil {
-			return -1, err
+			return err
 		}
 
 		proc.termMaster = termMaster
 	}
 
 	// Save process info.
-	proc.id = pid
-	ctr.setProcess(pid, proc)
+	ctr.setProcess(execID, proc)
 
-	return pid, nil
+	return nil
+}
+
+// This function updates the container namespaces configuration based on the
+// sandbox information. When the sandbox is created, it can be setup in a way
+// that all containers will share some specific namespaces. This is the agent
+// responsibility to create those namespaces so that they can be shared across
+// several containers.
+// If the sandbox has not been setup to share namespaces, then we assume all
+// containers will be started in their own new namespace.
+// The value of a.sandbox.sharedPidNs.path will always override the namespace
+// path set by the spec, since we will always ignore it. Indeed, it makes no
+// sense to rely on the namespace path provided by the host since namespaces
+// are different inside the guest.
+func (a *agentGRPC) updateContainerConfigNamespaces(config *configs.Config) error {
+	// Update shared PID namespace.
+	for idx, ns := range config.Namespaces {
+		if ns.Type == configs.NEWPID {
+			// In case the path is empty because we don't expect
+			// the containers to share the same PID namespace, a
+			// new PID ns is going to be created.
+			config.Namespaces[idx].Path = a.sandbox.sharedPidNs.path
+			return nil
+		}
+	}
+
+	// If no NEWPID type was found, let's make sure we add it. Otherwise,
+	// the container could end up in the same PID namespace than the agent
+	// and we want to prevent this for security reasons.
+	newPidNs := configs.Namespace{
+		Type: configs.NEWPID,
+		Path: a.sandbox.sharedPidNs.path,
+	}
+
+	config.Namespaces = append(config.Namespaces, newPidNs)
+
+	return nil
+}
+
+func (a *agentGRPC) updateContainerConfigPrivileges(spec *specs.Spec, config *configs.Config) error {
+	if spec == nil || spec.Process == nil {
+		// Don't throw an error in case the Spec does not contain any
+		// information about NoNewPrivileges.
+		return nil
+	}
+
+	// Add the value for NoNewPrivileges option.
+	config.NoNewPrivileges = spec.Process.NoNewPrivileges
+
+	return nil
+}
+
+func (a *agentGRPC) updateContainerConfig(spec *specs.Spec, config *configs.Config) error {
+	if err := a.updateContainerConfigNamespaces(config); err != nil {
+		return err
+	}
+
+	return a.updateContainerConfigPrivileges(spec, config)
 }
 
 func (a *agentGRPC) CreateContainer(ctx context.Context, req *pb.CreateContainerRequest) (*gpb.Empty, error) {
@@ -330,93 +435,26 @@ func (a *agentGRPC) CreateContainer(ctx context.Context, req *pb.CreateContainer
 		return emptyResp, err
 	}
 
-	defaultMountFlags := syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV
+	// Convert the spec to an actual OCI specification structure.
+	ociSpec, err := pb.GRPCtoOCI(req.OCI)
+	if err != nil {
+		return emptyResp, err
+	}
 
-	config := configs.Config{
-		Rootfs:     req.OCI.Root.Path,
-		Readonlyfs: req.OCI.Root.Readonly,
-		Capabilities: &configs.Capabilities{
-			Bounding:    defaultCapsList,
-			Effective:   defaultCapsList,
-			Inheritable: defaultCapsList,
-			Permitted:   defaultCapsList,
-			Ambient:     defaultCapsList,
-		},
-		Namespaces: configs.Namespaces([]configs.Namespace{
-			{
-				Type: configs.NEWNS,
-			},
-			{
-				Type: configs.NEWUTS,
-			},
-			{
-				Type: configs.NEWIPC,
-			},
-			{
-				Type: configs.NEWPID,
-				// In case the path is empty because we
-				// don't expect the containers to share
-				// the same PID namespace, a new PID ns
-				// is going to be created.
-				Path: a.sandbox.sharedPidNs.path,
-			},
-		}),
-		Cgroups: &configs.Cgroup{
-			Name:   req.ContainerId,
-			Parent: "system",
-			Resources: &configs.Resources{
-				MemorySwappiness: nil,
-				AllowAllDevices:  nil,
-				AllowedDevices:   configs.DefaultAllowedDevices,
-			},
-		},
-		Devices: configs.DefaultAutoCreatedDevices,
+	// Convert the OCI specification into a libcontainer configuration.
+	config, err := specconv.CreateLibcontainerConfig(&specconv.CreateOpts{
+		CgroupName:   req.ContainerId,
+		NoNewKeyring: true,
+		Spec:         ociSpec,
+	})
+	if err != nil {
+		return emptyResp, err
+	}
 
-		Hostname: a.sandbox.id,
-		Mounts: []*configs.Mount{
-			{
-				Source:      "proc",
-				Destination: "/proc",
-				Device:      "proc",
-				Flags:       defaultMountFlags,
-			},
-			{
-				Source:      "tmpfs",
-				Destination: "/dev",
-				Device:      "tmpfs",
-				Flags:       syscall.MS_NOSUID | syscall.MS_STRICTATIME,
-				Data:        "mode=755",
-			},
-			{
-				Source:      "devpts",
-				Destination: "/dev/pts",
-				Device:      "devpts",
-				Flags:       syscall.MS_NOSUID | syscall.MS_NOEXEC,
-				Data:        "newinstance,ptmxmode=0666,mode=0620,gid=5",
-			},
-			{
-				Device:      "tmpfs",
-				Source:      "shm",
-				Destination: "/dev/shm",
-				Data:        "mode=1777,size=65536k",
-				Flags:       defaultMountFlags,
-			},
-			{
-				Source:      "mqueue",
-				Destination: "/dev/mqueue",
-				Device:      "mqueue",
-				Flags:       defaultMountFlags,
-			},
-			{
-				Source:      "sysfs",
-				Destination: "/sys",
-				Device:      "sysfs",
-				Flags:       defaultMountFlags,
-			},
-		},
-
-		NoNewKeyring:    true,
-		NoNewPrivileges: req.OCI.Process.NoNewPrivileges,
+	// Update libcontainer configuration for specific cases not handled
+	// by the specconv converter.
+	if err := a.updateContainerConfig(ociSpec, config); err != nil {
+		return emptyResp, err
 	}
 
 	containerPath := filepath.Join("/tmp/libcontainer", a.sandbox.id)
@@ -425,12 +463,12 @@ func (a *agentGRPC) CreateContainer(ctx context.Context, req *pb.CreateContainer
 		return emptyResp, err
 	}
 
-	libContContainer, err := factory.Create(req.ContainerId, &config)
+	libContContainer, err := factory.Create(req.ContainerId, config)
 	if err != nil {
 		return emptyResp, err
 	}
 
-	builtProcess, err := buildProcess(req.OCI.Process)
+	builtProcess, err := buildProcess(req.OCI.Process, req.ExecId)
 	if err != nil {
 		return emptyResp, err
 	}
@@ -439,8 +477,8 @@ func (a *agentGRPC) CreateContainer(ctx context.Context, req *pb.CreateContainer
 		id:          req.ContainerId,
 		initProcess: builtProcess,
 		container:   libContContainer,
-		config:      config,
-		processes:   make(map[int]*process),
+		config:      *config,
+		processes:   make(map[string]*process),
 		mounts:      mountList,
 	}
 
@@ -449,26 +487,20 @@ func (a *agentGRPC) CreateContainer(ctx context.Context, req *pb.CreateContainer
 	return emptyResp, nil
 }
 
-func (a *agentGRPC) StartContainer(ctx context.Context, req *pb.StartContainerRequest) (*pb.NewProcessResponse, error) {
-	pid, err := a.runProcess(req.ContainerId, nil)
-	if err != nil {
-		return nil, err
+func (a *agentGRPC) StartContainer(ctx context.Context, req *pb.StartContainerRequest) (*gpb.Empty, error) {
+	if err := a.runProcess(req.ContainerId, "", nil); err != nil {
+		return emptyResp, err
 	}
 
-	return &pb.NewProcessResponse{
-		PID: uint32(pid),
-	}, nil
+	return emptyResp, nil
 }
 
-func (a *agentGRPC) ExecProcess(ctx context.Context, req *pb.ExecProcessRequest) (*pb.NewProcessResponse, error) {
-	pid, err := a.runProcess(req.ContainerId, req.Process)
-	if err != nil {
-		return nil, err
+func (a *agentGRPC) ExecProcess(ctx context.Context, req *pb.ExecProcessRequest) (*gpb.Empty, error) {
+	if err := a.runProcess(req.ContainerId, req.ExecId, req.Process); err != nil {
+		return emptyResp, err
 	}
 
-	return &pb.NewProcessResponse{
-		PID: uint32(pid),
-	}, nil
+	return emptyResp, nil
 }
 
 func (a *agentGRPC) SignalProcess(ctx context.Context, req *pb.SignalProcessRequest) (*gpb.Empty, error) {
@@ -478,7 +510,7 @@ func (a *agentGRPC) SignalProcess(ctx context.Context, req *pb.SignalProcessRequ
 
 	ctr, err := a.sandbox.getContainer(req.ContainerId)
 	if err != nil {
-		return emptyResp, fmt.Errorf("Could not signal process %d: %v", req.PID, err)
+		return emptyResp, fmt.Errorf("Could not signal process %s: %v", req.ExecId, err)
 	}
 
 	status, err := ctr.container.Status()
@@ -496,13 +528,17 @@ func (a *agentGRPC) SignalProcess(ctx context.Context, req *pb.SignalProcessRequ
 		}).Info("discarding signal as container stopped")
 	}
 
+	// If the exec ID provided is empty, let's apply the signal to all
+	// processes inside the container.
 	// If the process is the container process, let's use the container
 	// API for that.
-	if ctr.initProcess.id == int(req.PID) {
+	if req.ExecId == "" {
+		return emptyResp, ctr.container.Signal(signal, true)
+	} else if ctr.initProcess.id == req.ExecId {
 		return emptyResp, ctr.container.Signal(signal, false)
 	}
 
-	proc, err := ctr.getProcess(int(req.PID))
+	proc, err := ctr.getProcess(req.ExecId)
 	if err != nil {
 		return emptyResp, fmt.Errorf("Could not signal process: %v", err)
 	}
@@ -515,7 +551,7 @@ func (a *agentGRPC) SignalProcess(ctx context.Context, req *pb.SignalProcessRequ
 }
 
 func (a *agentGRPC) WaitProcess(ctx context.Context, req *pb.WaitProcessRequest) (*pb.WaitProcessResponse, error) {
-	proc, ctr, err := a.sandbox.getRunningProcess(req.ContainerId, int(req.PID))
+	proc, ctr, err := a.sandbox.getRunningProcess(req.ContainerId, req.ExecId)
 	if err != nil {
 		return &pb.WaitProcessResponse{}, err
 	}
@@ -527,7 +563,7 @@ func (a *agentGRPC) WaitProcess(ctx context.Context, req *pb.WaitProcessRequest)
 
 	// Using helper function wait() to deal with the subreaper.
 	libContProcess := (*reaperLibcontainerProcess)(&(proc.process))
-	exitCode, err := a.sandbox.subreaper.wait(proc.id, libContProcess)
+	exitCode, err := a.sandbox.subreaper.wait(proc.exitCodeCh, libContProcess)
 	if err != nil {
 		return &pb.WaitProcessResponse{}, err
 	}
@@ -578,7 +614,7 @@ func (a *agentGRPC) RemoveContainer(ctx context.Context, req *pb.RemoveContainer
 }
 
 func (a *agentGRPC) WriteStdin(ctx context.Context, req *pb.WriteStreamRequest) (*pb.WriteStreamResponse, error) {
-	proc, _, err := a.sandbox.getRunningProcess(req.ContainerId, int(req.PID))
+	proc, _, err := a.sandbox.getRunningProcess(req.ContainerId, req.ExecId)
 	if err != nil {
 		return &pb.WriteStreamResponse{}, err
 	}
@@ -601,7 +637,7 @@ func (a *agentGRPC) WriteStdin(ctx context.Context, req *pb.WriteStreamRequest) 
 }
 
 func (a *agentGRPC) ReadStdout(ctx context.Context, req *pb.ReadStreamRequest) (*pb.ReadStreamResponse, error) {
-	data, err := a.sandbox.readStdio(req.ContainerId, int(req.PID), int(req.Len), true)
+	data, err := a.sandbox.readStdio(req.ContainerId, req.ExecId, int(req.Len), true)
 	if err != nil {
 		return &pb.ReadStreamResponse{}, err
 	}
@@ -612,7 +648,7 @@ func (a *agentGRPC) ReadStdout(ctx context.Context, req *pb.ReadStreamRequest) (
 }
 
 func (a *agentGRPC) ReadStderr(ctx context.Context, req *pb.ReadStreamRequest) (*pb.ReadStreamResponse, error) {
-	data, err := a.sandbox.readStdio(req.ContainerId, int(req.PID), int(req.Len), false)
+	data, err := a.sandbox.readStdio(req.ContainerId, req.ExecId, int(req.Len), false)
 	if err != nil {
 		return &pb.ReadStreamResponse{}, err
 	}
@@ -623,7 +659,7 @@ func (a *agentGRPC) ReadStderr(ctx context.Context, req *pb.ReadStreamRequest) (
 }
 
 func (a *agentGRPC) CloseStdin(ctx context.Context, req *pb.CloseStdinRequest) (*gpb.Empty, error) {
-	proc, _, err := a.sandbox.getRunningProcess(req.ContainerId, int(req.PID))
+	proc, _, err := a.sandbox.getRunningProcess(req.ContainerId, req.ExecId)
 	if err != nil {
 		return emptyResp, err
 	}
@@ -643,7 +679,7 @@ func (a *agentGRPC) CloseStdin(ctx context.Context, req *pb.CloseStdinRequest) (
 }
 
 func (a *agentGRPC) TtyWinResize(ctx context.Context, req *pb.TtyWinResizeRequest) (*gpb.Empty, error) {
-	proc, _, err := a.sandbox.getRunningProcess(req.ContainerId, int(req.PID))
+	proc, _, err := a.sandbox.getRunningProcess(req.ContainerId, req.ExecId)
 	if err != nil {
 		return emptyResp, err
 	}

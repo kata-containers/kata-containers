@@ -16,7 +16,7 @@ import "google/protobuf/empty.proto";
 service AgentService {
 	// execution
 	rpc CreateContainer(CreateContainerRequest) returns (google.protobuf.Empty);
-	rpc StartContainer(StartContainerRequest) returns (NewProcessResponse);
+	rpc StartContainer(StartContainerRequest) returns (google.protobuf.Empty);
 
 	// RemoveContainer will tear down an existing container by forcibly terminating
 	// all processes running inside that container and releasing all internal
@@ -25,7 +25,7 @@ service AgentService {
 	// If any process can not be killed or if it can not be killed after
 	// the RemoveContainerRequest timeout, RemoveContainer will return an error.
 	rpc RemoveContainer(RemoveContainerRequest) returns (google.protobuf.Empty);
-	rpc ExecProcess(ExecProcessRequest) returns (NewProcessResponse);
+	rpc ExecProcess(ExecProcessRequest) returns (google.protobuf.Empty);
 	rpc SignalProcess(SignalProcessRequest) returns (google.protobuf.Empty);
 	rpc WaitProcess(WaitProcessRequest) returns (WaitProcessResponse); // wait & reap like waitpid(2)
 
@@ -51,9 +51,10 @@ service AgentService {
 
 message CreateContainerRequest {
 	string container_id = 1;
-	StringUser string_user = 2;
-	repeated Storage storages = 3;
-	Spec OCI = 4;
+	string exec_id = 2;
+	StringUser string_user = 3;
+	repeated Storage storages = 4;
+	Spec OCI = 5;
 }
 
 message StartContainerRequest {
@@ -71,32 +72,26 @@ message RemoveContainerRequest {
 	uint32 timeout = 2;
 }
 
-// NewProcessResponse contains a Linux PID for a process
-// that the agent created and manages.
-// Any gRPC request from the host for a PID that is not managed
-// by the agent will result in an error. For example, calling
-// WaitProcess() with a WaitProcessRequest pid field set to a
-// PID that was not created by the agent will return an error
-// back to the caller.
-message NewProcessResponse {
-	uint32 PID = 1;
-}
-
 message ExecProcessRequest {
 	string container_id = 1;
+	string exec_id = 2;
 	StringUser string_user = 3;
 	Process process = 4;
 }
 
 message SignalProcessRequest {
 	string container_id = 1;
-	uint32 PID = 2;
+
+	// Special case for SignalProcess(): exec_id can be empty(""),
+	// which means to send the signal to all the processes including their descendants.
+	// Other APIs with exec_id should treat empty exec_id as an invalid request.
+	string exec_id = 2;
 	uint32 signal = 3;
 }
 
 message WaitProcessRequest {
 	string container_id = 1;
-	uint32 PID = 2;
+	string exec_id = 2;
 }
 
 message WaitProcessResponse {
@@ -105,7 +100,7 @@ message WaitProcessResponse {
 
 message WriteStreamRequest {
 	string container_id = 1;
-	uint32 PID = 2;
+	string exec_id = 2;
 	bytes data = 3;
 }
 
@@ -115,7 +110,7 @@ message WriteStreamResponse {
 
 message ReadStreamRequest {
 	string container_id = 1;
-	uint32 PID = 2;
+	string exec_id = 2;
 	uint32 len = 3;
 }
 
@@ -125,12 +120,12 @@ message ReadStreamResponse {
 
 message CloseStdinRequest {
 	string container_id = 1;
-	uint32 PID = 2;
+	string exec_id = 2;
 }
 
 message TtyWinResizeRequest {
 	string container_id = 1;
-	uint32 PID = 2;
+	string exec_id = 2;
 	uint32 row = 3;
 	uint32 column = 4;
 }

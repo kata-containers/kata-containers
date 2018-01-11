@@ -50,7 +50,7 @@ func main() {
 		logLevel      string
 		agentAddr     string
 		container     string
-		pid           uint
+		execId        string
 		proxyExitCode bool
 		showVersion   bool
 	)
@@ -60,7 +60,7 @@ func main() {
 	flag.StringVar(&agentAddr, "agent", "", "agent gRPC socket endpoint")
 
 	flag.StringVar(&container, "container", "", "container id for the shim")
-	flag.UintVar(&pid, "pid", 0, "process id for the shim")
+	flag.StringVar(&execId, "exec-id", "", "process id for the shim")
 	flag.BoolVar(&proxyExitCode, "proxy-exit-code", true, "proxy exit code of the process")
 
 	flag.Parse()
@@ -70,8 +70,8 @@ func main() {
 		os.Exit(0)
 	}
 
-	if agentAddr == "" || container == "" || pid == 0 {
-		shimLog.WithField("agentAddr", agentAddr).WithField("container", container).WithField("pid", pid).Error("container ID, process ID and agent socket endpoint must be set")
+	if agentAddr == "" || container == "" || execId == "" {
+		shimLog.WithField("agentAddr", agentAddr).WithField("container", container).WithField("exec-id", execId).Error("container ID, exec ID and agent socket endpoint must be set")
 		os.Exit(exitFailure)
 	}
 
@@ -81,7 +81,7 @@ func main() {
 		os.Exit(exitFailure)
 	}
 
-	shim, err := newShim(agentAddr, container, uint32(pid))
+	shim, err := newShim(agentAddr, container, execId)
 	if err != nil {
 		shimLog.WithError(err).Error("failed to create new shim")
 		os.Exit(exitFailure)
@@ -108,7 +108,7 @@ func main() {
 	// wait until exit
 	exitcode, err := shim.wait()
 	if err != nil {
-		shimLog.WithError(err).WithField("pid", pid).Error("failed waiting for process")
+		shimLog.WithError(err).WithField("exec-id", execId).Error("failed waiting for process")
 		os.Exit(exitFailure)
 	} else if proxyExitCode {
 		shimLog.WithField("exitcode", exitcode).Info("using shim to proxy exit code")

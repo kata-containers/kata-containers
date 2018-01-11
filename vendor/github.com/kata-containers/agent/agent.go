@@ -27,13 +27,14 @@ import (
 )
 
 type process struct {
-	id          int
+	id          string
 	process     libcontainer.Process
 	stdin       *os.File
 	stdout      *os.File
 	stderr      *os.File
 	consoleSock *os.File
 	termMaster  *os.File
+	exitCodeCh  chan int
 }
 
 type container struct {
@@ -43,7 +44,7 @@ type container struct {
 	initProcess *process
 	container   libcontainer.Container
 	config      configs.Config
-	processes   map[int]*process
+	processes   map[string]*process
 	mounts      []string
 }
 
@@ -63,8 +64,9 @@ type sandbox struct {
 }
 
 type namespace struct {
-	path string
-	init *os.Process
+	path       string
+	init       *os.Process
+	exitCodeCh <-chan int
 }
 
 var agentLog = logrus.WithFields(logrus.Fields{
@@ -122,15 +124,15 @@ func (p *process) closePostExitFDs() {
 	}
 }
 
-func (c *container) setProcess(pid int, process *process) {
+func (c *container) setProcess(execID string, process *process) {
 	c.Lock()
-	c.processes[pid] = process
+	c.processes[execID] = process
 	c.Unlock()
 }
 
-func (c *container) deleteProcess(pid int) {
+func (c *container) deleteProcess(execID string) {
 	c.Lock()
-	delete(c.processes, pid)
+	delete(c.processes, execID)
 	c.Unlock()
 }
 
@@ -145,13 +147,13 @@ func (c *container) removeContainer() error {
 	return removeMounts(c.mounts)
 }
 
-func (c *container) getProcess(pid int) (*process, error) {
+func (c *container) getProcess(execID string) (*process, error) {
 	c.RLock()
 	defer c.RUnlock()
 
-	proc, exist := c.processes[pid]
+	proc, exist := c.processes[execID]
 	if !exist {
-		return nil, fmt.Errorf("Process %d not found (container %s)", pid, c.id)
+		return nil, fmt.Errorf("Process %s not found (container %s)", execID, c.id)
 	}
 
 	return proc, nil
@@ -181,7 +183,7 @@ func (s *sandbox) deleteContainer(id string) {
 	s.Unlock()
 }
 
-func (s *sandbox) getRunningProcess(cid string, pid int) (*process, *container, error) {
+func (s *sandbox) getRunningProcess(cid, execID string) (*process, *container, error) {
 	if s.running == false {
 		return nil, nil, fmt.Errorf("Sandbox not started")
 	}
@@ -200,7 +202,7 @@ func (s *sandbox) getRunningProcess(cid string, pid int) (*process, *container, 
 		return nil, nil, fmt.Errorf("Container %s %s, should be %s", cid, status.String(), libcontainer.Running.String())
 	}
 
-	proc, err := ctr.getProcess(pid)
+	proc, err := ctr.getProcess(execID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -208,8 +210,8 @@ func (s *sandbox) getRunningProcess(cid string, pid int) (*process, *container, 
 	return proc, ctr, nil
 }
 
-func (s *sandbox) readStdio(cid string, pid int, length int, stdout bool) ([]byte, error) {
-	proc, _, err := s.getRunningProcess(cid, pid)
+func (s *sandbox) readStdio(cid, execID string, length int, stdout bool) ([]byte, error) {
+	proc, _, err := s.getRunningProcess(cid, execID)
 	if err != nil {
 		return nil, err
 	}
@@ -250,14 +252,16 @@ func (s *sandbox) setupSharedPidNs() error {
 		Cloneflags: syscall.CLONE_NEWPID,
 	}
 
-	if err := s.subreaper.start(cmd); err != nil {
+	exitCodeCh, err := s.subreaper.start(cmd)
+	if err != nil {
 		return err
 	}
 
 	// Save info about this namespace inside sandbox structure.
 	s.sharedPidNs = namespace{
-		path: fmt.Sprintf("/proc/%d/ns/pid", cmd.Process.Pid),
-		init: cmd.Process,
+		path:       fmt.Sprintf("/proc/%d/ns/pid", cmd.Process.Pid),
+		init:       cmd.Process,
+		exitCodeCh: exitCodeCh,
 	}
 
 	return nil
@@ -277,7 +281,7 @@ func (s *sandbox) teardownSharedPidNs() error {
 
 	// Using helper function wait() to deal with the subreaper.
 	osProcess := (*reaperOSProcess)(s.sharedPidNs.init)
-	if _, err := s.subreaper.wait(osProcess.Pid, osProcess); err != nil {
+	if _, err := s.subreaper.wait(s.sharedPidNs.exitCodeCh, osProcess); err != nil {
 		return err
 	}
 
@@ -414,7 +418,7 @@ func main() {
 		containers: make(map[string]*container),
 		running:    false,
 		subreaper: &reaper{
-			exitCodeChans: make(map[int]chan int),
+			exitCodeChans: make(map[int]chan<- int),
 		},
 	}
 

@@ -25,7 +25,7 @@
   go-tests = true
 
 [[constraint]]
-  revision = "9b50dbac719a0def765e3f4ad11eaa44d77b17e5"
+  revision = "8f22514ae5790f3b6953cf93692e663fa29469e3"
   name = "github.com/kata-containers/agent"
 
 [[constraint]]

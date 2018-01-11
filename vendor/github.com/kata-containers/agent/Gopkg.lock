@@ -44,7 +44,7 @@
 
 [[projects]]
   name = "github.com/golang/protobuf"
-  packages = ["proto","ptypes","ptypes/any","ptypes/duration","ptypes/empty","ptypes/timestamp","ptypes/wrappers"]
+  packages = ["proto","ptypes","ptypes/any","ptypes/duration","ptypes/timestamp"]
   revision = "1e59b77b52bf8e4b449a57e6f79f21226d571845"
 
 [[projects]]
@@ -65,7 +65,7 @@
 
 [[projects]]
   name = "github.com/opencontainers/runc"
-  packages = ["libcontainer","libcontainer/apparmor","libcontainer/cgroups","libcontainer/cgroups/fs","libcontainer/cgroups/rootless","libcontainer/cgroups/systemd","libcontainer/configs","libcontainer/configs/validate","libcontainer/criurpc","libcontainer/keys","libcontainer/seccomp","libcontainer/stacktrace","libcontainer/system","libcontainer/user","libcontainer/utils"]
+  packages = ["libcontainer","libcontainer/apparmor","libcontainer/cgroups","libcontainer/cgroups/fs","libcontainer/cgroups/rootless","libcontainer/cgroups/systemd","libcontainer/configs","libcontainer/configs/validate","libcontainer/criurpc","libcontainer/keys","libcontainer/seccomp","libcontainer/specconv","libcontainer/stacktrace","libcontainer/system","libcontainer/user","libcontainer/utils"]
   revision = "2e7cfe036e2c6dc51ccca6eb7fa3ee6b63976dcd"
 
 [[projects]]
@@ -154,6 +154,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "11bc69fc5db2b10dc1fa6906c4a2b6f60ab9a6234540615a1d58b9a64a4460ba"
+  inputs-digest = "4f58481ed90edce8331933de5df28b3386c6374da473796ff0c48e846c209c36"
   solver-name = "gps-cdcl"
   solver-version = 1
