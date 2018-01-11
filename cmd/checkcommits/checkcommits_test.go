@@ -179,7 +179,7 @@ func clearCIVariables() {
 	}
 
 	for _, envVar := range envVars {
-		os.Unsetenv(envVar)
+		_ = os.Unsetenv(envVar)
 	}
 }
 
@@ -570,15 +570,15 @@ func TestDetectCIEnvironment(t *testing.T) {
 		commit, dstBranch, srcBranch := detectCIEnvironment()
 
 		if commit != d.expectedCommit {
-			t.Fatalf("Unexpected commit %v (%+v)", commit, d)
+			t.Fatalf("Unexpected commit %v (%v: %+v)", commit, d.name, d)
 		}
 
 		if dstBranch != d.expectedDstBranch {
-			t.Fatalf("Unexpected destination branch %v (%+v)", dstBranch, d)
+			t.Fatalf("Unexpected destination branch %v (%v: %+v)", dstBranch, d.name, d)
 		}
 
 		if srcBranch != d.expectedSrcBranch {
-			t.Fatalf("Unexpected source branch %v (%+v)", srcBranch, d)
+			t.Fatalf("Unexpected source branch %v (%v: %+v)", srcBranch, d.name, d)
 		}
 
 		// Crudely undo the changes (it'll be fully undone later
@@ -654,11 +654,11 @@ func TestGetCommitAndBranch(t *testing.T) {
 		}
 
 		if commit != d.expectedCommit {
-			t.Fatalf("Unexpected commit %v (%+v)", commit, d)
+			t.Fatalf("Unexpected commit %v (%v: %+v)", commit, d.name, d)
 		}
 
 		if dstBranch != d.expectedDstBranch {
-			t.Fatalf("Unexpected destination branch %v (%+v)", dstBranch, d)
+			t.Fatalf("Unexpected destination branch %v (%v: %+v)", dstBranch, d.name, d)
 		}
 
 		// Crudely undo the changes (it'll be fully undone later

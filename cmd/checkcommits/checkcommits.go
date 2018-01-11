@@ -72,6 +72,7 @@ func init() {
 	var err error
 	gitPath, err = exec.LookPath("git")
 	if err != nil {
+		// #nosec
 		fmt.Fprintf(os.Stderr, "ERROR: cannot find git in PATH\n")
 		os.Exit(1)
 	}
@@ -458,6 +459,7 @@ func preChecks(config *CommitConfig, commit, branch string) error {
 func runCommand(args []string) (stdout []string, err error) {
 	var outBytes, errBytes bytes.Buffer
 
+	// #nosec
 	cmd := exec.Command(args[0], args[1:]...)
 
 	cmdline := strings.Join(args, " ")
@@ -641,6 +643,7 @@ func main() {
 	app.UsageText += fmt.Sprintf("     to %q and branch to %q.", defaultCommit, defaultBranch)
 
 	cli.VersionPrinter = func(c *cli.Context) {
+		// #nosec
 		fmt.Fprintf(os.Stdout, "%s version %s %s\n",
 			c.App.Name,
 			c.App.Version,
@@ -726,6 +729,7 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
+		// #nosec
 		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
 		os.Exit(1)
 	}
