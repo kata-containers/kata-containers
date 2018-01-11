@@ -10,8 +10,12 @@
 
 set -e
 
+# Since this script is called from another repositories directory,
+# ensure the utility is built before running it.
+self="$GOPATH/src/github.com/kata-containers/tests"
+(cd "$self" && make checkcommits)
+
 # Check the commits in the branch
-make checkcommits
 checkcommits \
 	--need-fixes \
 	--need-sign-offs \
