@@ -389,6 +389,31 @@ func TestQMPDeviceAdd(t *testing.T) {
 	<-disconnectedCh
 }
 
+// Checks that the device_add command for scsi is correctly sent.
+//
+// We start a QMPLoop, send the device_add command and stop the loop.
+//
+// The device_add command should be correctly sent and the QMP loop should
+// exit gracefully.
+func TestQMPSCSIDeviceAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	blockdevID := fmt.Sprintf("drive_%s", volumeUUID)
+	devID := fmt.Sprintf("device_%s", volumeUUID)
+	err := q.ExecuteSCSIDeviceAdd(context.Background(), blockdevID, devID,
+		"scsi-hd", "scsi0.0", 1, 2)
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks that the x-blockdev-del command is correctly sent.
 //
 // We start a QMPLoop, send the x-blockdev-del command and stop the loop.
