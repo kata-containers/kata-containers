@@ -22,9 +22,9 @@
 
 
 [[constraint]]
-  revision = "23def4e6c"
-  name = "github.com/golang/glog"
+  name = "github.com/sirupsen/logrus"
+  version = "v1.0.4"
 
 [[constraint]]
-  revision = "f5742cb6"
   name = "github.com/hashicorp/yamux"
+  revision = "f5742cb6"
