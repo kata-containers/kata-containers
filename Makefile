@@ -4,6 +4,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+PREFIX := /usr
+LIBEXECDIR := $(PREFIX)/libexec
+
 TARGET = kata-proxy
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.go$$')
 
@@ -21,3 +24,6 @@ test:
 
 clean:
 	rm -f $(TARGET)
+
+install:
+	install -D $(TARGET) $(LIBEXECDIR)/kata-containers/$(TARGET)
