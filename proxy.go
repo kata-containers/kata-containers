@@ -8,6 +8,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -132,13 +133,58 @@ func setupLogger(logLevel string) error {
 	return nil
 }
 
+func printAgentLogs(sock string) error {
+	// Don't return an error if nothing has been provided.
+	// This flag is optional.
+	if sock == "" {
+		return nil
+	}
+
+	agentLogsAddr, err := unixAddr(sock)
+	if err != nil {
+		logger().WithField("socket-address", sock).Fatal("invalid agent logs socket address")
+		return err
+	}
+
+	// Check permissions socket for "other" is 0.
+	fileInfo, err := os.Stat(agentLogsAddr)
+	if err != nil {
+		return err
+	}
+
+	otherMask := 0007
+	other := int(fileInfo.Mode().Perm()) & otherMask
+	if other != 0 {
+		return fmt.Errorf("All socket permissions for 'other' should be disabled, got %3.3o", other)
+	}
+
+	conn, err := net.Dial("unix", agentLogsAddr)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		scanner := bufio.NewScanner(conn)
+		for scanner.Scan() {
+			logger().Infof("%s\n", scanner.Text())
+		}
+
+		if err := scanner.Err(); err != nil {
+			logger().Errorf("Failed reading agent logs from socket: %v", err)
+		}
+	}()
+
+	return nil
+}
+
 func main() {
-	var channel, proxyAddr, logLevel string
+	var channel, proxyAddr, agentLogsSocket, logLevel string
 	var showVersion bool
 
 	flag.BoolVar(&showVersion, "version", false, "display program version and exit")
 	flag.StringVar(&channel, "mux-socket", "", "unix socket to multiplex on")
 	flag.StringVar(&proxyAddr, "listen-socket", "", "unix socket to listen on")
+	flag.StringVar(&agentLogsSocket, "agent-logs-socket", "", "socket to listen on to retrieve agent logs")
 
 	flag.StringVar(&logLevel, "log", "warn",
 		"log messages above specified level: debug, warn, error, fatal or panic")
@@ -150,9 +196,13 @@ func main() {
 		os.Exit(0)
 	}
 
-	err := setupLogger(logLevel)
-	if err != nil {
+	if err := setupLogger(logLevel); err != nil {
 		logger().Fatal(err)
+	}
+
+	if err := printAgentLogs(agentLogsSocket); err != nil {
+		logger().Fatal(err)
+		return
 	}
 
 	muxAddr, err := unixAddr(channel)
