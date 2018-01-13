@@ -12,6 +12,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/syslog"
 	"net"
 	"net/url"
 	"os"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/hashicorp/yamux"
 	"github.com/sirupsen/logrus"
+	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 )
 
 const proxyName = "kata-proxy"
@@ -26,10 +28,7 @@ const proxyName = "kata-proxy"
 // version is the proxy version. This variable is populated at build time.
 var version = "unknown"
 
-var proxyLog = logrus.WithFields(logrus.Fields{
-	"name": proxyName,
-	"pid":  os.Getpid(),
-})
+var proxyLog = logrus.New()
 
 func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) error {
 	session, err := yamux.Client(servConn, nil)
@@ -108,15 +107,27 @@ func unixAddr(uri string) (string, error) {
 	return addr.Host + addr.Path, nil
 }
 
+func logger() *logrus.Entry {
+	return proxyLog.WithFields(logrus.Fields{
+		"name": proxyName,
+		"pid":  os.Getpid(),
+	})
+}
+
 func setupLogger(logLevel string) error {
 	level, err := logrus.ParseLevel(logLevel)
 	if err != nil {
 		return err
 	}
 
-	logrus.SetLevel(level)
+	proxyLog.SetLevel(level)
 
-	proxyLog.WithField("version", version).Info()
+	hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO, "")
+	if err == nil {
+		proxyLog.AddHook(hook)
+	}
+
+	logger().WithField("version", version).Info()
 
 	return nil
 }
@@ -141,23 +152,23 @@ func main() {
 
 	err := setupLogger(logLevel)
 	if err != nil {
-		proxyLog.Fatal(err)
+		logger().Fatal(err)
 	}
 
 	muxAddr, err := unixAddr(channel)
 	if err != nil {
-		proxyLog.Fatal("invalid mux socket address")
+		logger().Fatal("invalid mux socket address")
 	}
 	listenAddr, err := unixAddr(proxyAddr)
 	if err != nil {
-		proxyLog.Fatal("invalid listen socket address")
+		logger().Fatal("invalid listen socket address")
 		return
 	}
 
 	// yamux connection
 	servConn, err := net.Dial("unix", muxAddr)
 	if err != nil {
-		proxyLog.Fatalf("failed to dial channel(%q): %s", muxAddr, err)
+		logger().Fatalf("failed to dial channel(%q): %s", muxAddr, err)
 		return
 	}
 	defer servConn.Close()
@@ -165,12 +176,12 @@ func main() {
 	results := make(chan error)
 	err = serve(servConn, "unix", listenAddr, results)
 	if err != nil {
-		proxyLog.Fatal(err)
+		logger().Fatal(err)
 	}
 
 	for err = range results {
 		if err != nil {
-			proxyLog.Fatal(err)
+			logger().Fatal(err)
 		}
 	}
 }
