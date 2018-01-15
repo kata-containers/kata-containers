@@ -32,7 +32,9 @@ then
 fi
 
 # Ignore vendor directories
-linter_args="--vendor"
+# Note: There is also a "--vendor" flag which claims to do what we want, but
+# it doesn't work :(
+linter_args="--exclude=\"\\bvendor/.*\""
 
 # Check test code too
 linter_args+=" --tests"
