@@ -21,6 +21,9 @@ checkcommits \
 	--need-sign-offs \
 	--verbose
 
+go_packages=$(go list ./... 2>/dev/null || true)
+[ -z "$go_packages" ] && exit 0
+
 # Run golang checks
 if [ ! $(command -v gometalinter) ]
 then
