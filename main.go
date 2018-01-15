@@ -8,6 +8,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log/syslog"
 	"os"
 	"os/signal"
 	"sync"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/moby/moby/pkg/term"
 	"github.com/sirupsen/logrus"
+	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 )
 
 const (
@@ -25,22 +27,31 @@ const (
 // version is the shim version. This variable is populated at build time.
 var version = "unknown"
 
-var shimLog = logrus.WithFields(logrus.Fields{
-	"name": shimName,
-	"pid":  os.Getpid(),
-})
+var shimLog = logrus.New()
+
+func logger() *logrus.Entry {
+	return shimLog.WithFields(logrus.Fields{
+		"name": shimName,
+		"pid":  os.Getpid(),
+	})
+}
 
 func initLogger(logLevel string) error {
-	shimLog.Logger.Formatter = &logrus.TextFormatter{TimestampFormat: time.RFC3339Nano}
+	shimLog.Formatter = &logrus.TextFormatter{TimestampFormat: time.RFC3339Nano}
 
 	level, err := logrus.ParseLevel(logLevel)
 	if err != nil {
 		return err
 	}
 
-	logrus.SetLevel(level)
+	shimLog.SetLevel(level)
 
-	shimLog.WithField("version", version).Info()
+	hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO, "")
+	if err == nil {
+		shimLog.AddHook(hook)
+	}
+
+	logger().WithField("version", version).Info()
 
 	return nil
 }
@@ -71,19 +82,19 @@ func main() {
 	}
 
 	if agentAddr == "" || container == "" || execId == "" {
-		shimLog.WithField("agentAddr", agentAddr).WithField("container", container).WithField("exec-id", execId).Error("container ID, exec ID and agent socket endpoint must be set")
+		logger().WithField("agentAddr", agentAddr).WithField("container", container).WithField("exec-id", execId).Error("container ID, exec ID and agent socket endpoint must be set")
 		os.Exit(exitFailure)
 	}
 
 	err := initLogger(logLevel)
 	if err != nil {
-		shimLog.WithError(err).WithField("loglevel", logLevel).Error("invalid log level")
+		logger().WithError(err).WithField("loglevel", logLevel).Error("invalid log level")
 		os.Exit(exitFailure)
 	}
 
 	shim, err := newShim(agentAddr, container, execId)
 	if err != nil {
-		shimLog.WithError(err).Error("failed to create new shim")
+		logger().WithError(err).Error("failed to create new shim")
 		os.Exit(exitFailure)
 	}
 
@@ -95,7 +106,7 @@ func main() {
 	// winsize
 	s, err := term.SetRawTerminal(os.Stdin.Fd())
 	if err != nil {
-		shimLog.WithError(err).Error("failed to set raw terminal")
+		logger().WithError(err).Error("failed to set raw terminal")
 		os.Exit(exitFailure)
 	}
 	defer term.RestoreTerminal(os.Stdin.Fd(), s)
@@ -108,10 +119,10 @@ func main() {
 	// wait until exit
 	exitcode, err := shim.wait()
 	if err != nil {
-		shimLog.WithError(err).WithField("exec-id", execId).Error("failed waiting for process")
+		logger().WithError(err).WithField("exec-id", execId).Error("failed waiting for process")
 		os.Exit(exitFailure)
 	} else if proxyExitCode {
-		shimLog.WithField("exitcode", exitcode).Info("using shim to proxy exit code")
+		logger().WithField("exitcode", exitcode).Info("using shim to proxy exit code")
 		if exitcode != 0 {
 			os.Exit(int(exitcode))
 		}

@@ -17,7 +17,7 @@
   branch = "master"
   name = "github.com/docker/docker"
   packages = ["pkg/term/windows"]
-  revision = "d94164867c2df977ceb8d9df3d90364d0a682d05"
+  revision = "bc183a0062c1283cfc47f42ec78501868629dd2b"
 
 [[projects]]
   name = "github.com/gogo/protobuf"
@@ -25,12 +25,12 @@
   revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
 
 [[projects]]
+  branch = "master"
   name = "github.com/golang/protobuf"
   packages = ["proto","ptypes","ptypes/any","ptypes/duration","ptypes/timestamp"]
   revision = "1e59b77b52bf8e4b449a57e6f79f21226d571845"
 
 [[projects]]
-  branch = "master"
   name = "github.com/kata-containers/agent"
   packages = ["protocols/client","protocols/grpc","protocols/mockserver"]
   revision = "8f22514ae5790f3b6953cf93692e663fa29469e3"
@@ -38,8 +38,8 @@
 [[projects]]
   name = "github.com/kr/pty"
   packages = ["."]
-  revision = "95d05c1eef33a45bd58676b6ce28d105839b8d0b"
-  version = "v1.0.1"
+  revision = "1278f20d9cf7455f0465f3bf74a73d1eeb555c0f"
+  version = "v1.1.0"
 
 [[projects]]
   name = "github.com/mdlayher/vsock"
@@ -65,21 +65,21 @@
 
 [[projects]]
   name = "github.com/sirupsen/logrus"
-  packages = ["."]
-  revision = "f006c2ac4710855cf0f916dd6b77acf6b048dc6e"
-  version = "v1.0.3"
+  packages = [".","hooks/syslog"]
+  revision = "d682213848ed68c0a260ca37d6dd5ace8423f5ba"
+  version = "v1.0.4"
 
 [[projects]]
   name = "github.com/stretchr/testify"
   packages = ["assert"]
-  revision = "69483b4bd14f5845b5a1e55bca19e954e827f1d0"
-  version = "v1.1.4"
+  revision = "b91bfb9ebec76498946beb6af7c0230c7cc7ba6c"
+  version = "v1.2.0"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
-  revision = "94eea52f7b742c7cbe0b03b22f0c4c8631ece122"
+  revision = "13931e22f9e72ea58bb73048bc752b48c6d4d4ac"
 
 [[projects]]
   name = "golang.org/x/net"
@@ -90,19 +90,19 @@
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix","windows"]
-  revision = "8b4580aae2a0dd0c231a45d3ccb8434ff533b840"
+  revision = "810d7000345868fc619eb81f46307107118f4ae1"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/text"
   packages = ["collate","collate/build","internal/colltab","internal/gen","internal/tag","internal/triegen","internal/ucd","language","secure/bidirule","transform","unicode/bidi","unicode/cldr","unicode/norm","unicode/rangetable"]
-  revision = "3b24cac7bc3a458991ab409aa2a339ac9e0d60d6"
+  revision = "e19ae1496984b1c655b8044a65c0300a3c878dd3"
 
 [[projects]]
   branch = "master"
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
-  revision = "7f0da29060c682909f650ad8ed4e515bd74fa12a"
+  revision = "a8101f21cf983e773d0c1133ebc5424792003214"
 
 [[projects]]
   name = "google.golang.org/grpc"
@@ -113,6 +113,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "030ac0204af3a20262e1228f3433c0eb02a69c8233c4dc7dd4ff28b60749e552"
+  inputs-digest = "cf93da06b667cea7c7a26b35ec253051a06f67b16b36d1bceff6c399076bc26b"
   solver-name = "gps-cdcl"
   solver-version = 1
