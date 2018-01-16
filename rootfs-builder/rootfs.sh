@@ -91,6 +91,8 @@ done
 
 shift $(($OPTIND - 1))
 
+[ -z "$GOPATH" ] && die "GOPATH not set"
+
 distro="$1"
 
 [ -n "${distro}" ] || usage 1
