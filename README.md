@@ -1,33 +1,35 @@
-# Overview #
+* [Overview](#overview)
+* [Terms](#terms)
 
-`Kata Containers runtime` creates a Virtual Machine to isolate a set of
-container workloads. The Virtual Machine requires a operating system
-operating (`Guest OS`) to boot and create containers inside the guest
+# Overview
+
+The Kata Containers runtime creates a virtual machine (VM) to isolate a set of
+container workloads. The VM requires a guest kernel and a guest operating system
+("guest OS") to boot and create containers inside the guest
 environment.
 
-This repository contains tools to create a `Guest OS` for `Kata
-Containers`.
+This repository contains tools to create a guest OS disk image.
 
-## Terms ##
+# Terms
 
-This section describe the terms used as along all this document.
+This section describes the terms used for all documentation in this repository.
 
-- `Guest OS`
+- rootfs
 
- It is the collection of a `virtual disk` or `disk image` and `kernel`
- that in conjunction work as an operating system and it is different than
- the host operating system.
+  The root filesystem or "rootfs" is the set of files contained in the
+  guest root directory that builds into a filesystem.
 
- - `Virtual disk` or `Guest Image`
+  See [the rootfs builder documentation](rootfs-builder/README.md).
 
- It is a virtual disk witch contains a `rootfs` that will be used to boot
- a Virtual Machine by for the `Kata Containers runtime`.
+- "Guest OS" (or "Guest Image")
 
- - `rootfs`
+  A "virtual disk" or "disk image" built from a rootfs. It contains a
+  filesystem that is used by the VM, in conjunction with a guest kernel, to
+  create an environment to host the container. Neither the guest OS nor the
+  guest kernel need to be the same as the host operating system.
 
-  The root filesystem or rootfs is the filesystem that is contained in the
-  guest root directory. It can be built from any Linux Distribution but
-  must provide at least the following components:
-	- Kata agent
-	- A `init` system (for example `systemd`) witch allow to start
-	  Kata agent at boot time.
+  See [the image builder documentation](image-builder/README.md).
+
+- "Base OS"
+
+  A particular version of a Linux distribution used to create a Guest OS from.
