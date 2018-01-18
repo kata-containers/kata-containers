@@ -18,16 +18,16 @@ func TestNewShim(t *testing.T) {
 	agent := testSetup(t)
 	defer testTearDown(agent)
 
-	contId := "foobarContainer"
-	execId := "testExec"
-	err := agent.addContainer(contId, execId)
+	contID := "foobarContainer"
+	execID := "testExec"
+	err := agent.addContainer(contID, execID)
 	assert.Nil(t, err, "%s", err)
 
-	shim, err := newShim(mockSockAddr, contId, execId)
+	shim, err := newShim(mockSockAddr, contID, execID)
 	assert.Nil(t, err, "%s", err)
 	defer shim.agent.Close()
 
-	_, err = newShim(badMockAddr, contId, execId)
+	_, err = newShim(badMockAddr, contID, execID)
 	assert.NotNil(t, err, "New shim with wrong socket address should fail")
 }
 
@@ -35,12 +35,12 @@ func TestShimOps(t *testing.T) {
 	agent := testSetup(t)
 	defer testTearDown(agent)
 
-	contId := "foobarContainer"
-	execId := "testExec"
-	err := agent.addContainer(contId, execId)
+	contID := "foobarContainer"
+	execID := "testExec"
+	err := agent.addContainer(contID, execID)
 	assert.Nil(t, err, "%s", err)
 
-	shim, err := newShim(mockSockAddr, contId, execId)
+	shim, err := newShim(mockSockAddr, contID, execID)
 	assert.Nil(t, err, "%s", err)
 	defer shim.agent.Close()
 
