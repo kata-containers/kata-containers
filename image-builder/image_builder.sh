@@ -5,6 +5,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set -e
+
+script_name="${0##*/}"
+script_dir="$(dirname $(readlink -f $0))"
+
 if [ -n "$DEBUG" ] ; then
 	set -x
 fi
@@ -46,7 +50,9 @@ Options:
 	-s Image size in MB (default $IMG_SIZE) ENV: IMG_SIZE
 
 Extra environment variables:
-	AGENT_BIN: use it to change the expected agent binary name"
+	AGENT_BIN:  use it to change the expected agent binary name"
+	USE_DOCKER: If set will build image in a Docker Container (requries docker)
+	            DEFAULT: not set
 EOT
 exit "${error}"
 }
@@ -64,14 +70,45 @@ shift $(( $OPTIND - 1 ))
 
 ROOTFS="$1"
 
+
 [ -n "${ROOTFS}" ] || usage
 [ -d "${ROOTFS}" ] || die "${ROOTFS} is not a directory"
+
+ROOTFS=$(readlink -f ${ROOTFS})
+IMAGE_DIR=$(dirname ${IMAGE})
+IMAGE_DIR=$(readlink -f ${IMAGE_DIR})
+IMAGE_NAME=$(basename ${IMAGE})
+
+if [ -n "${USE_DOCKER}" ] ; then
+	image_name="image-builder-osbuilder"
+
+	docker build  \
+		--build-arg http_proxy="${http_proxy}" \
+		--build-arg https_proxy="${https_proxy}" \
+		-t "${image_name}" "${script_dir}"
+
+	#Make sure we use a compatible runtime to build rootfs
+	# In case Clear Containers Runtime is installed we dont want to hit issue:
+	#https://github.com/clearcontainers/runtime/issues/828
+	docker run  \
+		--runtime runc  \
+		--privileged \
+		--env IMG_SIZE="${IMG_SIZE}" \
+		-v /dev:/dev \
+		-v "${script_dir}":"/osbuilder" \
+		-v "${ROOTFS}":"/rootfs" \
+		-v "${IMAGE_DIR}":"/image" \
+		${image_name} \
+		bash "/osbuilder/${script_name}" -o "/image/${IMAGE_NAME}" /rootfs
+
+	exit $?
+fi
 # The kata rootfs image expect init and kata-agent to be installed
-init="${ROOTFS_DIR}/sbin/init"
+init="${ROOTFS}/sbin/init"
 [ -x "${init}" ] || [ -L ${init} ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 OK "init is installed"
 [ -x "${ROOTFS}/bin/${AGENT_BIN}" ] || \
-	die "/bin/${AGENT_BIN} is not installed in ${ROOTFS_DIR}
+	die "/bin/${AGENT_BIN} is not installed in ${ROOTFS}
 	use AGENT_BIN env variable to change the expected agent binary name"
 OK "Agent installed"
 [ "$(id -u)" -eq 0 ] || die "$0: must be run as root"
