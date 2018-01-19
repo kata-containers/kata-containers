@@ -7,7 +7,7 @@
 set -e
 
 script_name="${0##*/}"
-script_dir="$(dirname $(realpath -s $0))"
+script_dir="$(dirname $(readlink -f $0))"
 ROOTFS_DIR=${ROOTFS_DIR:-${PWD}/rootfs}
 AGENT_VERSION=${AGENT_VERSION:-master}
 GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
