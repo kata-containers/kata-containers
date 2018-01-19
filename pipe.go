@@ -18,14 +18,14 @@ import (
 type inPipe struct {
 	ctx         context.Context
 	agent       *shimAgent
-	containerId string
-	execId      string
+	containerID string
+	execID      string
 }
 
 func (p *inPipe) Write(data []byte) (n int, err error) {
 	resp, err := p.agent.WriteStdin(p.ctx, &pb.WriteStreamRequest{
-		ContainerId: p.containerId,
-		ExecId:      p.execId,
+		ContainerId: p.containerID,
+		ExecId:      p.execID,
 		Data:        data})
 	if err != nil {
 		return 0, err
@@ -36,18 +36,18 @@ func (p *inPipe) Write(data []byte) (n int, err error) {
 
 func (p *inPipe) Close() error {
 	_, err := p.agent.CloseStdin(p.ctx, &pb.CloseStdinRequest{
-		ContainerId: p.containerId,
-		ExecId:      p.execId})
+		ContainerId: p.containerID,
+		ExecId:      p.execID})
 
 	return err
 }
 
 type readFn func(context.Context, *pb.ReadStreamRequest, ...grpc.CallOption) (*pb.ReadStreamResponse, error)
 
-func pipeRead(ctx context.Context, containerId, execId string, data []byte, read readFn) (n int, err error) {
+func pipeRead(ctx context.Context, containerID, execID string, data []byte, read readFn) (n int, err error) {
 	resp, err := read(ctx, &pb.ReadStreamRequest{
-		ContainerId: containerId,
-		ExecId:      execId,
+		ContainerId: containerID,
+		ExecId:      execID,
 		Len:         uint32(len(data))})
 	if err == nil {
 		copy(data, resp.Data)
@@ -64,26 +64,26 @@ func pipeRead(ctx context.Context, containerId, execId string, data []byte, read
 type outPipe struct {
 	ctx         context.Context
 	agent       *shimAgent
-	containerId string
-	execId      string
+	containerID string
+	execID      string
 }
 
 func (p *outPipe) Read(data []byte) (n int, err error) {
-	return pipeRead(p.ctx, p.containerId, p.execId, data, p.agent.ReadStdout)
+	return pipeRead(p.ctx, p.containerID, p.execID, data, p.agent.ReadStdout)
 }
 
 type errPipe struct {
 	ctx         context.Context
 	agent       *shimAgent
-	containerId string
-	execId      string
+	containerID string
+	execID      string
 }
 
 func (p *errPipe) Read(data []byte) (n int, err error) {
-	return pipeRead(p.ctx, p.containerId, p.execId, data, p.agent.ReadStderr)
+	return pipeRead(p.ctx, p.containerID, p.execID, data, p.agent.ReadStderr)
 }
 
-func shimStdioPipe(ctx context.Context, agent *shimAgent, containerId, execId string) (io.WriteCloser, io.Reader, io.Reader) {
-	return &inPipe{ctx: ctx, agent: agent, containerId: containerId, execId: execId},
-		&outPipe{ctx: ctx, agent: agent, containerId: containerId, execId: execId}, &errPipe{ctx: ctx, agent: agent, containerId: containerId, execId: execId}
+func shimStdioPipe(ctx context.Context, agent *shimAgent, containerID, execID string) (io.WriteCloser, io.Reader, io.Reader) {
+	return &inPipe{ctx: ctx, agent: agent, containerID: containerID, execID: execID},
+		&outPipe{ctx: ctx, agent: agent, containerID: containerID, execID: execID}, &errPipe{ctx: ctx, agent: agent, containerID: containerID, execID: execID}
 }
