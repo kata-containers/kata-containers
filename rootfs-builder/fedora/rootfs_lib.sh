@@ -28,9 +28,9 @@ installonly_limit=3
 reposdir=/root/mash
 
 [kata]
-name=fedora
+name=Fedora \$releasever - \$basearch
 failovermethod=priority
-baseurl=${REPO_URL}
+metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-\$releasever&arch=\$basearch
 enabled=1
 gpgcheck=0
 EOF
@@ -40,10 +40,6 @@ build_rootfs()
 {
 	# Mandatory
 	local ROOTFS_DIR=$1
-
-	#In case rootfs is created usig repositories allow user to modify
-	# the default URL
-	local REPO_URL=${REPO_URL:-http://mirror.math.princeton.edu/pub/fedora/linux/releases/$OS_VERSION/Everything/x86_64/os/}
 
 	# In case of support EXTRA packages, use it to allow
 	# users add more packages to the base rootfs
@@ -69,8 +65,6 @@ build_rootfs()
 	else
 		die "neither yum nor dnf is installed"
 	fi
-
-	info "Using : ${PKG_MANAGER} to pull packages from ${REPO_URL}"
 
 	DNF="${PKG_MANAGER} --config=$DNF_CONF -y --installroot=${ROOTFS_DIR} --noplugins"
 	$DNF install ${EXTRA_PKGS} ${PACKAGES}
