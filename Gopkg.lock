@@ -2,14 +2,38 @@
 
 
 [[projects]]
+  name = "github.com/onsi/ginkgo"
+  packages = [".","config","extensions/table","internal/codelocation","internal/containernode","internal/failer","internal/leafnodes","internal/remote","internal/spec","internal/spec_iterator","internal/specrunner","internal/suite","internal/testingtproxy","internal/writer","reporters","reporters/stenographer","reporters/stenographer/support/go-colorable","reporters/stenographer/support/go-isatty","types"]
+  revision = "77a8c1e5c40d6bb6c5eb4dd4bdce9763564f6298"
+  version = "v1.3.1"
+
+[[projects]]
+  name = "github.com/onsi/gomega"
+  packages = [".","format","internal/assertion","internal/asyncassertion","internal/oraclematcher","internal/testingtsupport","matchers","matchers/support/goraph/bipartitegraph","matchers/support/goraph/edge","matchers/support/goraph/node","matchers/support/goraph/util","types"]
+  revision = "334b8f472b3af5d541c5642701c1e29e2126f486"
+  version = "v1.1.0"
+
+[[projects]]
   name = "github.com/urfave/cli"
   packages = ["."]
   revision = "cfb38830724cc34fedffe9a2a29fb54fa9169cd1"
   version = "v1.20.0"
 
+[[projects]]
+  branch = "master"
+  name = "golang.org/x/sys"
+  packages = ["unix"]
+  revision = "2c42eef0765b9837fbdab12011af7830f55f88f0"
+
+[[projects]]
+  branch = "v2"
+  name = "gopkg.in/yaml.v2"
+  packages = ["."]
+  revision = "d670f9405373e636a5a2765eea47fac0c9bc91a4"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "df4a79a3008603763e1d51475bb94e1290af5af71be4761ef9369093fcce7009"
+  inputs-digest = "8be1214e10185aaf858374654b16b6b4a5fa9aec77a9fb53f66a6995a2fc5a8c"
   solver-name = "gps-cdcl"
   solver-version = 1
