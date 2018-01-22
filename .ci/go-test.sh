@@ -11,8 +11,12 @@
 # "go test -timeout X"
 timeout_value=${KATA_GO_TEST_TIMEOUT:-10s}
 
+# -race flag is supported only on amd64/x86_64 arch , hence 
+# enabling the flag depending on the arch.
+[ $(go env GOARCH) = "amd64" ] && race="-race"
+
 # KATA_GO_TEST_FLAGS can be set to change the flags passed to "go test".
-go_test_flags=${KATA_GO_TEST_FLAGS:-"-v -race -timeout $timeout_value"}
+go_test_flags=${KATA_GO_TEST_FLAGS:-"-v $race -timeout $timeout_value"}
 
 test_packages=$(go list ./... 2>/dev/null || true)
 
