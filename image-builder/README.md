@@ -11,7 +11,7 @@ This uses a rootfs directory created by the `rootfs-builder/rootfs.sh` script.
 To create a guest OS image run:
 
 ```
-$ ./image_builder.sh path/to/rootfs
+$ sudo ./image_builder.sh path/to/rootfs
 ```
 
 Where `path/to/rootfs` is the directory populated by `rootfs.sh`.
