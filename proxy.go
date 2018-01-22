@@ -123,7 +123,7 @@ func setupLogger(logLevel string) error {
 
 	proxyLog.SetLevel(level)
 
-	hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO, proxyName)
+	hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO|syslog.LOG_USER, proxyName)
 	if err == nil {
 		proxyLog.AddHook(hook)
 	}
