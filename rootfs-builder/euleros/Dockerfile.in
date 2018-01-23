@@ -1,0 +1,5 @@
+FROM euleros:@OS_VERSION@
+
+RUN yum -y update && yum install -y yum git make gcc
+# This will install the proper golang to build Kata components
+@INSTALL_GO@

@@ -12,6 +12,9 @@ ROOTFS_DIR=${ROOTFS_DIR:-${PWD}/rootfs}
 AGENT_VERSION=${AGENT_VERSION:-master}
 GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
+#Load default vesions for golang and other componets
+source "${script_dir}/versions.txt"
+
 # Name of file that will implement build_rootfs
 typeset -r LIB_SH="rootfs_lib.sh"
 
@@ -79,6 +82,29 @@ check_function_exist() {
 	[ "$(type -t ${function_name})" == "function" ] || die "${function_name} function was not defined"
 }
 
+generate_dockerfile() {
+	dir="$1"
+
+	readonly install_go="
+ADD https://storage.googleapis.com/golang/go${GO_VERSION}.linux-amd64.tar.gz /tmp
+RUN tar -C /usr/ -xzf /tmp/go${GO_VERSION}.linux-amd64.tar.gz
+ENV GOROOT=/usr/go
+ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
+"
+
+	readonly dockerfile_template="Dockerfile.in"
+	[ -d "${dir}" ] || die "${dir}: not a directory"
+	pushd ${dir}
+	[ -f "${dockerfile_template}" ] || die "${dockerfile_template}: file not found"
+	set -x
+	sed \
+		-e "s|@OS_VERSION@|${OS_VERSION}|g" \
+		-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
+		${dockerfile_template} > Dockerfile
+	set +x
+	popd
+}
+
 
 while getopts c:hr: opt
 do
@@ -110,6 +136,7 @@ check_function_exist "build_rootfs"
 if [ -n "${USE_DOCKER}" ] ; then
 	image_name="${distro}-rootfs-osbuilder"
 
+	generate_dockerfile "${distro_config_dir}"
 	docker build  \
 		--build-arg http_proxy="${http_proxy}" \
 		--build-arg https_proxy="${https_proxy}" \
