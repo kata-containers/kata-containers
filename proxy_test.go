@@ -91,7 +91,7 @@ func client(proxyAddr, file string) error {
 	sum2 := fmt.Sprintf("%x", h.Sum(nil))
 
 	if sum1 != sum2 {
-		return fmt.Errorf("unmatched checksum on file %s:\norig:\t%s\nnew:\t%s\n", file, sum1, sum2)
+		return fmt.Errorf("unmatched checksum on file %s:\norig:\t%s\nnew:\t%s", file, sum1, sum2)
 	}
 
 	return <-copyCh
@@ -121,8 +121,6 @@ func server(listener net.Listener) error {
 			stream.Close()
 		}()
 	}
-
-	return nil
 }
 
 func TestUnixAddrParsing(T *testing.T) {
