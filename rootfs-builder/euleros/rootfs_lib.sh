@@ -27,8 +27,8 @@ logfile=/var/log/yum-euleros.log
 exactarch=1
 
 [Base]
-name=EulerOS-2.2 Base
-baseurl=http://developer.huawei.com/ict/site-euleros/euleros/repo/yum/2.2/os/x86_64/
+name=EulerOS-${OS_VERSION} Base
+baseurl=http://developer.huawei.com/ict/site-euleros/euleros/repo/yum/${OS_VERSION}/os/x86_64/
 enabled=1
 gpgcheck=1
 gpgkey=file://${CONFIG_DIR}/RPM-GPG-KEY-EulerOS

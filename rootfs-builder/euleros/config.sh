@@ -6,7 +6,7 @@
 # Remove them or add more 
 
 # EulerOS Version
-OS_VERSION=${OS_VERSION:-2}
+OS_VERSION=${OS_VERSION:-2.2}
 
 #Mandatory Packages that must be installed
 # systemd: An init system that will start kata-agent
