@@ -46,7 +46,7 @@ func initLogger(logLevel string) error {
 
 	shimLog.SetLevel(level)
 
-	hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO, "")
+	hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO|syslog.LOG_USER, "")
 	if err == nil {
 		shimLog.AddHook(hook)
 	}
