@@ -14,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/moby/moby/pkg/term"
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 )
@@ -62,6 +61,7 @@ func main() {
 		agentAddr     string
 		container     string
 		execID        string
+		terminal      bool
 		proxyExitCode bool
 		showVersion   bool
 	)
@@ -72,6 +72,7 @@ func main() {
 
 	flag.StringVar(&container, "container", "", "container id for the shim")
 	flag.StringVar(&execID, "exec-id", "", "process id for the shim")
+	flag.BoolVar(&terminal, "terminal", false, "specify if a terminal is setup")
 	flag.BoolVar(&proxyExitCode, "proxy-exit-code", true, "proxy exit code of the process")
 
 	flag.Parse()
@@ -104,12 +105,14 @@ func main() {
 	defer wg.Wait()
 
 	// winsize
-	s, err := term.SetRawTerminal(os.Stdin.Fd())
-	if err != nil {
-		logger().WithError(err).Error("failed to set raw terminal")
-		os.Exit(exitFailure)
+	if terminal {
+		termios, err := setupTerminal(int(os.Stdin.Fd()))
+		if err != nil {
+			logger().WithError(err).Error("failed to set raw terminal")
+			os.Exit(exitFailure)
+		}
+		defer restoreTerminal(int(os.Stdin.Fd()), termios)
 	}
-	defer term.RestoreTerminal(os.Stdin.Fd(), s)
 	shim.monitorTtySize(os.Stdin)
 
 	// signals
