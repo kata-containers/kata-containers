@@ -1,6 +1,16 @@
 // Copyright (c) 2017-2018 Intel Corporation
 //
-// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package main
 
@@ -9,6 +19,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const testFixesString = "Fixes"
@@ -34,14 +46,14 @@ var restoreSet map[string]TestEnvVal
 var travisPREnv = map[string]TestEnvVal{
 	"TRAVIS":                     {"true", true},
 	"TRAVIS_BRANCH":              {"master", true},
-	"TRAVIS_COMMIT":              {"HEAD", true},
+	"TRAVIS_COMMIT":              {"travis-commit", true},
 	"TRAVIS_PULL_REQUEST_BRANCH": {"travis-pr", true},
 }
 
 var travisNonPREnv = map[string]TestEnvVal{
 	"TRAVIS":                     {"true", true},
 	"TRAVIS_BRANCH":              {"master", true},
-	"TRAVIS_COMMIT":              {"HEAD", true},
+	"TRAVIS_COMMIT":              {"travis-commit", true},
 	"TRAVIS_PULL_REQUEST_BRANCH": {"", true},
 }
 
@@ -100,6 +112,7 @@ func createCommitConfig() (config *CommitConfig) {
 	return NewCommitConfig(true, true,
 		testFixesString,
 		"Signed-off-by",
+		"",
 		defaultMaxBodyLineLength,
 		defaultMaxSubjectLineLength)
 }
@@ -179,7 +192,7 @@ func clearCIVariables() {
 	}
 
 	for _, envVar := range envVars {
-		_ = os.Unsetenv(envVar)
+		os.Unsetenv(envVar)
 	}
 }
 
@@ -196,7 +209,6 @@ func unsetCIVariables(env map[string]TestEnvVal) (err error) {
 }
 
 func TestCheckCommits(t *testing.T) {
-
 	err := checkCommits(nil, nil)
 	if err == nil {
 		t.Fatal("expected failure")
@@ -244,104 +256,179 @@ func TestCheckCommits(t *testing.T) {
 	}
 }
 
-func TestCheckCommit(t *testing.T) {
-	err := checkCommit(nil, "")
-	if err == nil {
-		t.Errorf("expected error when no config specified")
-	}
+func TestCheckCommitsDetails(t *testing.T) {
+	assert := assert.New(t)
 
-	config := NewCommitConfig(true, true, "", "", 0, 0)
-	err = checkCommit(config, "")
-	if err == nil {
-		t.Errorf("expected error when no commit specified")
-	}
-}
+	ignoreSubsystem := "release"
 
-func TestCheckCommitSubject(t *testing.T) {
-	config := createCommitConfig()
+	makeConfigWithIgnoreSubsys := func(ignoreFixesSubsystem string) *CommitConfig {
+		return NewCommitConfig(true, true,
+			testFixesString,
+			"Signed-off-by",
+			ignoreFixesSubsystem,
+			defaultMaxBodyLineLength,
+			defaultMaxSubjectLineLength)
+	}
 
 	type testData struct {
-		commit      string
-		subject     string
-		config      *CommitConfig
-		expectFail  bool
-		expectFixes bool
+		config     *CommitConfig
+		commits    []Commit
+		expectFail bool
+	}
+
+	makeCommits := func(subsystem, fixesLine string) []Commit {
+		return []Commit{
+			{
+				"",
+				fmt.Sprintf("%s: bar baz", subsystem),
+				"",
+				[]string{
+					"body line 1",
+					"body line 2",
+					"\n",
+					fixesLine,
+					"\n",
+					"Signed-off-by: foo@bar.com",
+				},
+			},
+		}
 	}
 
 	data := []testData{
-		// invalid commit
-		{"", "", nil, true, false},
-		{"", "A subject", nil, true, false},
-		{"", "subsystem: A subject", nil, true, false},
-		{"", "subsystem: much too long!!!", nil, true, false},
-		{"", "this subject is much too long!!!", nil, true, false},
-		{"", "foo", config, true, false},
-		{"", "bar", nil, true, false},
-		{"", "baz", config, true, false},
-		{"", "subsystem: A subject", config, true, false},
-		{"", strings.Repeat("a", (defaultMaxSubjectLineLength/2)-1), nil, true, false},
-		{"", strings.Repeat("b", defaultMaxSubjectLineLength/2), nil, true, false},
-		{"", strings.Repeat("c", (defaultMaxSubjectLineLength/2)+1), nil, true, false},
-		{"", strings.Repeat("d:", (defaultMaxSubjectLineLength/2)-1), nil, true, false},
-		{"", strings.Repeat("e:", defaultMaxSubjectLineLength/2), nil, true, false},
-		{"", strings.Repeat("f:", (defaultMaxSubjectLineLength/2)+1), nil, true, false},
+		// A "normal" commit
+		{makeConfigWithIgnoreSubsys(""), makeCommits("foo", "Fixes #123"), false},
 
-		// invalid subject
-		{"HEAD", "", nil, true, false},
-		{"HEAD", "", config, true, false},
-		{"HEAD", "", nil, true, false},
-		{"HEAD", "", config, true, false},
-		{"HEAD", "          ", config, true, false},
-		{"HEAD", "\t\t\t", config, true, false},
-		{"HEAD", "\n", config, true, false},
-		{"HEAD", "\r", config, true, false},
-		{"HEAD", "\r\n", config, true, false},
-		{"HEAD", "\n\r", config, true, false},
-		{"HEAD", " \n\r", config, true, false},
-		{"HEAD", "\n\r ", config, true, false},
-		{"HEAD", " \n\r ", config, true, false},
-		{"HEAD", "invalid as no subsystem", config, true, false},
+		// Releases don't require a Fixes comment
+		{makeConfigWithIgnoreSubsys(ignoreSubsystem), makeCommits(ignoreSubsystem, "foo"), false},
 
-		{"HEAD", strings.Repeat("g:", (defaultMaxSubjectLineLength/2)+1), config, true, false},
+		// Valid since there is no instance of ignoreSubsystem and the
+		// commits are "well-formed".
+		{makeConfigWithIgnoreSubsys(ignoreSubsystem), makeCommits("foo", "Fixes #123"), false},
 
-		// valid (no fixes)
-		{"HEAD", "subsystem: A subject", config, false, false},
-		{"HEAD", "我很好: 你好", config, false, false},
-		{"HEAD", strings.Repeat("h:", (defaultMaxSubjectLineLength/2)-1), config, false, false},
-		{"HEAD", strings.Repeat("i:", (defaultMaxSubjectLineLength / 2)), config, false, false},
-
-		// valid (with fixes)
-		{"HEAD", "subsystem: A subject fixes #1", config, false, true},
-		{"HEAD", "subsystem: A subject fixes # 1", config, false, false},
-		{"HEAD", "subsystem: A subject fixes #11", config, false, true},
-		{"HEAD", "subsystem: A subject fixes #999", config, false, true},
-		{"HEAD", "我很好: 你好", config, false, false},
-		{"HEAD", "我很好: fixes #12345. 你好", config, false, true},
-		{"HEAD", strings.Repeat("j:", (defaultMaxSubjectLineLength/2)-1), config, false, false},
-		{"HEAD", strings.Repeat("k:", (defaultMaxSubjectLineLength / 2)), config, false, false},
+		// Fails as no "Fixes #XXX"
+		{makeConfigWithIgnoreSubsys(""), makeCommits(ignoreSubsystem, "foo"), true},
 	}
 
 	for _, d := range data {
+		err := checkCommitsDetails(d.config, d.commits)
+		if d.expectFail {
+			assert.Error(err, "config: %+v, commits: %+v", d.config, d.commits)
+			continue
+		}
 
+		assert.NoError(err, "config: %+v, commits: %+v", d.config, d.commits)
+	}
+}
+
+func TestCheckCommit(t *testing.T) {
+	assert := assert.New(t)
+
+	err := checkCommit(nil, nil)
+	assert.Error(err, "expected error when no config specified")
+
+	config := NewCommitConfig(true, true, "", "", "", 0, 0)
+	err = checkCommit(config, nil)
+	assert.Error(err, "expected error when no commit specified")
+
+	commit := &Commit{
+		hash: "HEAD",
+	}
+
+	err = checkCommit(config, commit)
+	assert.Error(err, "expected error when no commit subject specified")
+
+	commit.subject = "subsystem: a subject"
+	err = checkCommit(config, commit)
+	assert.Error(err, "expected error when no commit body specified")
+
+	commit.body = []string{"hello", "world", "Signed-off-by: me@foo.com"}
+	err = checkCommit(config, commit)
+	assert.NoError(err)
+}
+
+func TestCheckCommitSubject(t *testing.T) {
+	assert := assert.New(t)
+
+	config := createCommitConfig()
+
+	type testData struct {
+		subject           string
+		config            *CommitConfig
+		expectedSubsystem string
+		expectFail        bool
+		expectFixes       bool
+	}
+
+	data := []testData{
+		// invalid subject
+		{"", nil, "", true, false},
+		{"", config, "", true, false},
+		{"", nil, "", true, false},
+		{"", config, "", true, false},
+		{"          ", config, "", true, false},
+		{"\t\t\t", config, "", true, false},
+		{"\n", config, "", true, false},
+		{"\r", config, "", true, false},
+		{"\r\n", config, "", true, false},
+		{"\n\r", config, "", true, false},
+		{" \n\r", config, "", true, false},
+		{"\n\r ", config, "", true, false},
+		{" \n\r ", config, "", true, false},
+		{"invalid as no subsystem", config, "", true, false},
+
+		{strings.Repeat("g:", (defaultMaxSubjectLineLength/2)+1), config, "", true, false},
+
+		{"foo bar: some words", config, "foo bar", true, false},
+
+		// valid (no fixes)
+		{"subsystem: A subject", config, "subsystem", false, false},
+		{"我很好: 你好", config, "我很好", false, false},
+		{strings.Repeat("h:", (defaultMaxSubjectLineLength/2)-1), config, "h", false, false},
+		{strings.Repeat("i:", (defaultMaxSubjectLineLength / 2)), config, "i", false, false},
+		{"foo: some words", config, "foo", false, false},
+		{"foo/bar: some words", config, "foo/bar", false, false},
+		{"foo-bar: some words", config, "foo-bar", false, false},
+		{"foo.bar: some words", config, "foo.bar", false, false},
+		{"foo&bar: some words", config, "foo&bar", false, false},
+		{"foo+bar: some words", config, "foo+bar", false, false},
+		{"foo=bar: some words", config, "foo=bar", false, false},
+		{"release: version 1.2.3-2foo", config, "release", false, false},
+		{"release: version 1.2.3-2foo. fixes #212351", config, "release", false, true},
+
+		// valid (with fixes)
+		{"subsystem: A subject fixes #1", config, "subsystem", false, true},
+		{"subsystem: A subject fixes # 1", config, "subsystem", false, false},
+		{"subsystem: A subject fixes #11", config, "subsystem", false, true},
+		{"subsystem: A subject fixes #999", config, "subsystem", false, true},
+		{"我很好: 你好", config, "我很好", false, false},
+		{"我很好: fixes #12345. 你好", config, "我很好", false, true},
+		{strings.Repeat("j:", (defaultMaxSubjectLineLength/2)-1), config, "j", false, false},
+		{strings.Repeat("k:", (defaultMaxSubjectLineLength / 2)), config, "k", false, false},
+	}
+
+	for _, d := range data {
 		if d.config != nil {
 			d.config.FoundFixes = false
 		}
 
-		err := checkCommitSubject(d.config,
-			d.commit,
-			d.subject)
-		if d.expectFail {
-			if err == nil {
-				t.Errorf("expected checkCommitSubject(%+v) to fail", d)
-			}
-		} else {
-			if err != nil {
-				t.Errorf("unexpected checkCommitSubject(%+v) failure: %v", d, err)
-			}
+		commit := &Commit{
+			subject: d.subject,
 		}
 
+		err := checkCommitSubject(d.config, commit)
+		if d.expectFail {
+			assert.Errorf(err, "expected checkCommitSubject(%+v) to fail", d)
+			continue
+		}
+
+		assert.NoErrorf(err, "unexpected checkCommitSubject(%+v) failure", d)
+
+		assert.Equal(commit.subsystem, d.expectedSubsystem,
+			"expected subsystem %q, got %q",
+			d.expectedSubsystem, commit.subsystem)
+
 		if d.expectFixes && !d.config.FoundFixes {
-			t.Errorf("Expected fixes to be found: %+v", d)
+			t.Errorf("expected fixes to be found: %+v", d)
 		}
 	}
 }
@@ -357,10 +444,11 @@ func makeLongFixes(count int) string {
 }
 
 func TestCheckCommitBody(t *testing.T) {
+	assert := assert.New(t)
+
 	config := createCommitConfig()
 
 	type testData struct {
-		commit      string
 		body        []string
 		config      *CommitConfig
 		expectFail  bool
@@ -372,139 +460,126 @@ func TestCheckCommitBody(t *testing.T) {
 	lotsOfFixes := makeLongFixes(defaultMaxBodyLineLength)
 
 	data := []testData{
-		// invalid commit
-		{"", []string{}, nil, true, false},
-		{"", []string{}, nil, true, false},
-		{"", []string{}, nil, true, false},
-		{"", []string{}, config, true, false},
-		{"", []string{}, nil, true, false},
-		{"", []string{}, config, true, false},
-		{"", nil, config, true, false},
-		{"", []string{"", ""}, config, true, false},
-		{"", []string{"", "", " "}, config, true, false},
-		{"", []string{"", "", " ", ""}, config, true, false},
-		{"", []string{"hello", "", "world"}, config, true, false},
-
 		// invalid body
-		{"HEAD", []string{}, nil, true, false},
-		{"HEAD", []string{""}, nil, true, false},
-		{"HEAD", []string{" "}, nil, true, false},
-		{"HEAD", []string{" ", " ", " ", " "}, nil, true, false},
-		{"HEAD", []string{"\n"}, nil, true, false},
-		{"HEAD", []string{"\r"}, nil, true, false},
-		{"HEAD", []string{"\r\n", " "}, nil, true, false},
-		{"HEAD", []string{"\r\n", "\t"}, nil, true, false},
+		{[]string{}, nil, true, false},
+		{[]string{""}, nil, true, false},
+		{[]string{" "}, nil, true, false},
+		{[]string{" ", " ", " ", " "}, nil, true, false},
+		{[]string{"\n"}, nil, true, false},
+		{[]string{"\r"}, nil, true, false},
+		{[]string{"\r\n", " "}, nil, true, false},
+		{[]string{"\r\n", "\t"}, nil, true, false},
 
-		{"HEAD", []string{"foo"}, nil, true, false},
-		{"HEAD", []string{"foo"}, config, true, false},
-		{"HEAD", []string{"foo"}, nil, true, false},
-		{"HEAD", []string{"foo"}, config, true, false},
-		{"HEAD", []string{"", "Signed-off-by: me@foo.com"}, config, true, false},
-		{"HEAD", []string{" ", "Signed-off-by: me@foo.com"}, config, true, false},
-		{"HEAD", []string{"Signed-off-by: me@foo.com"}, config, true, false},
-		{"HEAD", []string{"Signed-off-by: me@foo.com", ""}, config, true, false},
-		{"HEAD", []string{"Signed-off-by: me@foo.com", " "}, config, true, false},
+		{[]string{"foo"}, nil, true, false},
+		{[]string{"foo"}, config, true, false},
+		{[]string{"foo"}, nil, true, false},
+		{[]string{"foo"}, config, true, false},
+		{[]string{"", "Signed-off-by: me@foo.com"}, config, true, false},
+		{[]string{" ", "Signed-off-by: me@foo.com"}, config, true, false},
+		{[]string{"Signed-off-by: me@foo.com"}, config, true, false},
+		{[]string{"Signed-off-by: me@foo.com", ""}, config, true, false},
+		{[]string{"Signed-off-by: me@foo.com", " "}, config, true, false},
 
 		// SOB must be at the start of the line
-		{"HEAD", []string{"foo", " Signed-off-by: me@foo.com"}, config, true, false},
-		{"HEAD", []string{"foo", "  Signed-off-by: me@foo.com"}, config, true, false},
-		{"HEAD", []string{"foo", "\tSigned-off-by: me@foo.com"}, config, true, false},
-		{"HEAD", []string{"foo", " \tSigned-off-by: me@foo.com"}, config, true, false},
-		{"HEAD", []string{"foo", "\t Signed-off-by: me@foo.com"}, config, true, false},
-		{"HEAD", []string{"foo", " \t Signed-off-by: me@foo.com"}, config, true, false},
+		{[]string{"foo", " Signed-off-by: me@foo.com"}, config, true, false},
+		{[]string{"foo", "  Signed-off-by: me@foo.com"}, config, true, false},
+		{[]string{"foo", "\tSigned-off-by: me@foo.com"}, config, true, false},
+		{[]string{"foo", " \tSigned-off-by: me@foo.com"}, config, true, false},
+		{[]string{"foo", "\t Signed-off-by: me@foo.com"}, config, true, false},
+		{[]string{"foo", " \t Signed-off-by: me@foo.com"}, config, true, false},
 
 		// valid
 
 		// single-word long lines should be accepted
-		{"HEAD", []string{strings.Repeat("l", (defaultMaxBodyLineLength)+1), "Signed-off-by: me@foo.com"}, config, false, false},
-		{"HEAD", []string{"https://this-is-a-really-really-really-reeeeally-loooooooong-and-silly-unique-resource-locator-that-nobody-should-ever-have-to-type/27706e53e877987138d758bcfcac6af623059be7/yet-another-silly-long-file-name-foo.html", "Signed-off-by: me@foo.com"}, config, false, false},
+		{[]string{strings.Repeat("l", (defaultMaxBodyLineLength)+1), "Signed-off-by: me@foo.com"}, config, false, false},
+		{[]string{"https://this-is-a-really-really-really-reeeeally-loooooooong-and-silly-unique-resource-locator-that-nobody-should-ever-have-to-type/27706e53e877987138d758bcfcac6af623059be7/yet-another-silly-long-file-name-foo.html", "Signed-off-by: me@foo.com"}, config, false, false},
 		// indented URL
-		{"HEAD", []string{" https://this-is-a-really-really-really-reeeeally-loooooooong-and-silly-unique-resource-locator-that-nobody-should-ever-have-to-type/27706e53e877987138d758bcfcac6af623059be7/yet-another-silly-long-file-name-foo.html", "Signed-off-by: me@foo.com"}, config, false, false},
+		{[]string{" https://this-is-a-really-really-really-reeeeally-loooooooong-and-silly-unique-resource-locator-that-nobody-should-ever-have-to-type/27706e53e877987138d758bcfcac6af623059be7/yet-another-silly-long-file-name-foo.html", "Signed-off-by: me@foo.com"}, config, false, false},
 
 		// multi-word long lines should not be accepted
-		{"HEAD", []string{
+		{[]string{
 			fmt.Sprintf("%s %s",
 				strings.Repeat("l", (defaultMaxBodyLineLength/2)+1),
 				strings.Repeat("l", (defaultMaxBodyLineLength/2)+1),
 			),
 			"Signed-off-by: me@foo.com"}, config, false, false},
 
-		{"HEAD", []string{"foo", "Signed-off-by: me@foo.com"}, config, false, false},
-		{"HEAD", []string{"你好", "Signed-off-by: me@foo.com"}, config, false, false},
+		{[]string{"foo", "Signed-off-by: me@foo.com"}, config, false, false},
+		{[]string{"你好", "Signed-off-by: me@foo.com"}, config, false, false},
 
-		{"HEAD", []string{"foo", "Fixes #1", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"你好", "Fixes: #1", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"你好", "Fixes  # 1", "Signed-off-by: me@foo.com"}, config, false, false},
-		{"HEAD", []string{"你好", "Fixes  #999", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"bar1", "  Fixes  #999", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"bar2", "  fixes: #999", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"bar3", "	Fixes  #999", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"bar4", "	fixes  #999", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"bar5", "	fixes	#999", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"bar6", "	Fixes:	#999", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"bar7", "	Fixes:	 #999", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"bar8", "	Fixes:	  #999", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"bar9", "	Fixes: 	  #999", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"你好", "fixes: #999", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"你好", "fixes #19123", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"你好", "fixes #123, #234. Fixes: #3456.", "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"moo", lotsOfFixes, "Signed-off-by: me@foo.com"}, config, false, true},
-		{"HEAD", []string{"moo", fmt.Sprintf("  %s", lotsOfFixes), "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"foo", "Fixes #1", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"你好", "Fixes: #1", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"你好", "Fixes  # 1", "Signed-off-by: me@foo.com"}, config, false, false},
+		{[]string{"你好", "Fixes  #999", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"bar1", "  Fixes  #999", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"bar2", "  fixes: #999", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"bar3", "	Fixes  #999", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"bar4", "	fixes  #999", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"bar5", "	fixes	#999", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"bar6", "	Fixes:	#999", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"bar7", "	Fixes:	 #999", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"bar8", "	Fixes:	  #999", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"bar9", "	Fixes: 	  #999", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"你好", "fixes: #999", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"你好", "fixes #19123", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"你好", "fixes #123, #234. Fixes: #3456.", "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"moo", lotsOfFixes, "Signed-off-by: me@foo.com"}, config, false, true},
+		{[]string{"moo", fmt.Sprintf("  %s", lotsOfFixes), "Signed-off-by: me@foo.com"}, config, false, true},
 
 		// SOB can be any length
-		{"HEAD", []string{"foo",
+		{[]string{"foo",
 			fmt.Sprintf("Signed-off-by: %s@foo.com", strings.Repeat("m", defaultMaxBodyLineLength*13))},
 			config, false, false},
 
 		// Non-alphabetic lines can be any length
-		{"HEAD", []string{"foo",
+		{[]string{"foo",
 			fmt.Sprintf("0%s", strings.Repeat("n", defaultMaxBodyLineLength*7)),
 			fmt.Sprintf("Signed-off-by: me@foo.com")},
 			config, false, false},
 
-		{"HEAD", []string{"foo",
+		{[]string{"foo",
 			fmt.Sprintf("1%s", strings.Repeat("o", defaultMaxBodyLineLength*7)),
 			fmt.Sprintf("Signed-off-by: me@foo.com")},
 			config, false, false},
 
-		{"HEAD", []string{"foo",
+		{[]string{"foo",
 			fmt.Sprintf("9%s", strings.Repeat("p", defaultMaxBodyLineLength*7)),
 			fmt.Sprintf("Signed-off-by: me@foo.com")},
 			config, false, false},
 
-		{"HEAD", []string{"foo",
+		{[]string{"foo",
 			fmt.Sprintf("_%s", strings.Repeat("q", defaultMaxBodyLineLength*7)),
 			fmt.Sprintf("Signed-off-by: me@foo.com")},
 			config, false, false},
 
-		{"HEAD", []string{"foo",
+		{[]string{"foo",
 			fmt.Sprintf(".%s", strings.Repeat("r", defaultMaxBodyLineLength*7)),
 			fmt.Sprintf("Signed-off-by: me@foo.com")},
 			config, false, false},
 
-		{"HEAD", []string{"foo",
+		{[]string{"foo",
 			fmt.Sprintf("!%s", strings.Repeat("s", defaultMaxBodyLineLength*7)),
 			fmt.Sprintf("Signed-off-by: me@foo.com")},
 			config, false, false},
 
-		{"HEAD", []string{"foo",
+		{[]string{"foo",
 			fmt.Sprintf("?%s", strings.Repeat("t", defaultMaxBodyLineLength*7)),
 			fmt.Sprintf("Signed-off-by: me@foo.com")},
 			config, false, false},
 
 		// Indented data can be any length
-		{"HEAD", []string{"foo",
+		{[]string{"foo",
 			fmt.Sprintf(" %s", strings.Repeat("u", defaultMaxBodyLineLength*7)),
 			fmt.Sprintf("Signed-off-by: me@foo.com")},
 			config, false, false},
 
-		{"HEAD", []string{"foo",
+		{[]string{"foo",
 			fmt.Sprintf(" %s", strings.Repeat("月", defaultMaxBodyLineLength*7)),
 			fmt.Sprintf("Signed-off-by: me@foo.com")},
 			config, false, false},
 
-		{"HEAD", []string{strings.Repeat("v", (defaultMaxBodyLineLength)-1), "Signed-off-by: me@foo.com"}, config, false, false},
-		{"HEAD", []string{strings.Repeat("w", defaultMaxBodyLineLength), "Signed-off-by: me@foo.com"}, config, false, false},
+		{[]string{strings.Repeat("v", (defaultMaxBodyLineLength)-1), "Signed-off-by: me@foo.com"}, config, false, false},
+		{[]string{strings.Repeat("w", defaultMaxBodyLineLength), "Signed-off-by: me@foo.com"}, config, false, false},
 	}
 
 	for _, d := range data {
@@ -512,17 +587,15 @@ func TestCheckCommitBody(t *testing.T) {
 			d.config.FoundFixes = false
 		}
 
-		err := checkCommitBody(d.config,
-			d.commit,
-			d.body)
+		commit := &Commit{
+			body: d.body,
+		}
+
+		err := checkCommitBody(d.config, commit)
 		if d.expectFail {
-			if err == nil {
-				t.Errorf("expected checkCommitBody(%+v) to fail", d)
-			}
+			assert.Errorf(err, "expected checkCommitBody(%+v) to fail", d)
 		} else {
-			if err != nil {
-				t.Errorf("unexpected checkCommitBody(%+v) failure: %v", d, err)
-			}
+			assert.NoErrorf(err, "unexpected checkCommitBody(%+v) failure", d)
 		}
 
 		if d.expectFixes && !d.config.FoundFixes {
@@ -570,15 +643,15 @@ func TestDetectCIEnvironment(t *testing.T) {
 		commit, dstBranch, srcBranch := detectCIEnvironment()
 
 		if commit != d.expectedCommit {
-			t.Fatalf("Unexpected commit %v (%v: %+v)", commit, d.name, d)
+			t.Fatalf("Unexpected commit %v (%+v)", commit, d)
 		}
 
 		if dstBranch != d.expectedDstBranch {
-			t.Fatalf("Unexpected destination branch %v (%v: %+v)", dstBranch, d.name, d)
+			t.Fatalf("Unexpected destination branch %v (%+v)", dstBranch, d)
 		}
 
 		if srcBranch != d.expectedSrcBranch {
-			t.Fatalf("Unexpected source branch %v (%v: %+v)", srcBranch, d.name, d)
+			t.Fatalf("Unexpected source branch %v (%+v)", srcBranch, d)
 		}
 
 		// Crudely undo the changes (it'll be fully undone later
@@ -654,11 +727,11 @@ func TestGetCommitAndBranch(t *testing.T) {
 		}
 
 		if commit != d.expectedCommit {
-			t.Fatalf("Unexpected commit %v (%v: %+v)", commit, d.name, d)
+			t.Fatalf("Unexpected commit %v (%+v)", commit, d)
 		}
 
 		if dstBranch != d.expectedDstBranch {
-			t.Fatalf("Unexpected destination branch %v (%v: %+v)", dstBranch, d.name, d)
+			t.Fatalf("Unexpected destination branch %v (%+v)", dstBranch, d)
 		}
 
 		// Crudely undo the changes (it'll be fully undone later

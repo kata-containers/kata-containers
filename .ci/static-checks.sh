@@ -19,6 +19,7 @@ self="$GOPATH/src/github.com/kata-containers/tests"
 checkcommits \
 	--need-fixes \
 	--need-sign-offs \
+	--ignore-fixes-for-subsystem "release" \
 	--verbose
 
 go_packages=$(go list ./... 2>/dev/null || true)
