@@ -30,6 +30,12 @@ coverage_file_mode=0644
 # Name of HTML format coverage file
 html_report_file="coverage.html"
 
+warn()
+{
+	local msg="$*"
+	echo >&2 "WARNING: $msg"
+}
+
 # Run a command as either root or the current user (which might still be root).
 #
 # If the first argument is "root", run using sudo, else run as the current
@@ -64,16 +70,22 @@ test_coverage()
 {
 	echo "mode: atomic" > "$test_coverage_file"
 
+	users="current"
+
 	if [ $(id -u) -eq 0 ]; then
-		echo >&2 "WARNING: Already running as root so will not re-run tests as non-root user."
-		echo >&2 "WARNING: As a result, only a subset of tests will be run"
-		echo >&2 "WARNING: (run this script as a non-privileged to ensure all tests are run)."
-		users="current"
+		warn "Already running as root so will not re-run tests as non-root user."
+		warn "As a result, only a subset of tests will be run"
+		warn "(run this script as a non-privileged to ensure all tests are run)."
 	else
-		# Run the unit-tests *twice* (since some must run as root and
-		# others must run as non-root), combining the resulting test
-		# coverage files.
-		users="current root"
+		if [ -n "$KATA_DEV_MODE" ]; then
+			warn "Dangerous to set CI and KATA_DEV_MODE together."
+			warn "NOT running tests as root."
+		else
+			# Run the unit-tests *twice* (since some must run as root and
+			# others must run as non-root), combining the resulting test
+			# coverage files.
+			users+=" root"
+		fi
 	fi
 
 	echo "INFO: Currently running as user '$(id -un)'"
