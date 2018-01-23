@@ -20,31 +20,32 @@ $ go get -d github.com/kata-containers/tests
 ## CI Content
 
 This repository contains a [number of scripts](https://github.com/kata-containers/tests/tree/master/.ci)
-designed to be run from under a "CI" (Continuous Integration) system.
+that run from under a "CI" (Continuous Integration) system.
 
 ### Centralised scripts
 
-The CI scripts in this repository are used for testing changes to the content
-of this repository. But they are also used by the *other* Kata Containers code
-repositories. The advantages of this approach are:
+The CI scripts in this repository are used to test changes to the content of
+this repository. These scripts are also used by the other Kata Containers code
+repositories.
+
+The advantages of this approach are:
 
 - Functionality is defined once.
   - Easy to make changes affecting all code repositories centrally.
 
-- Assurance that all the code repositories are being tested in the same way
-  and to the same standard.
+- Assurance that all the code repositories are tested in this same way.
 
 ### CI setup
 
 WARNING:
 
-The CI scripts need to perform a lot of setup before running content under a
+The CI scripts perform a lot of setup before running content under a
 CI. Some of this setup runs as the `root` user and **could break a developer's
 system**. See [Developer Mode](#developer-mode).
 
 ### Detecting a CI system
 
-The strategy for checking if the tests are running under a CI system is to see
+The strategy to check if the tests are running under a CI system is to see
 if the `CI` variable is set to the value `true`. For example, in shell syntax:
 
 ```bash
@@ -61,8 +62,8 @@ Developers need a way to run as much test content as possible locally, but as
 explained in [CI Setup](#ci-setup), running *all* the content in this
 repository could be dangerous.
 
-The recommended approach to resolving this issue is to set the variable below
-**before using *any* content from this repository**:
+The recommended approach to resolve this issue is to set the following variable
+to any non-blank value **before using *any* content from this repository**:
 
 ```
 export KATA_DEV_MODE=true
@@ -70,7 +71,7 @@ export KATA_DEV_MODE=true
 
 Setting this variable has the following effects:
 
-- Disables content that may not be safe for developers to run locally.
+- Disables content that might not be safe for developers to run locally.
 - Ignores the effect of the `CI` variable being set (for extra safety).
 
 You should be aware that setting this variable provides a safe *subset* of
