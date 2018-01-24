@@ -30,3 +30,15 @@ groups:
     required: 2
     teams:
       - tests
+
+  documentation:
+    required: 1
+    teams:
+      - documentation
+    conditions:
+      files:
+        include:
+          - "*.md"
+        exclude:
+          - "vendor/*"
+          - "*/vendor/*"
