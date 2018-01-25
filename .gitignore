@@ -2,3 +2,5 @@ proxy
 kata-proxy
 test/server
 test/client
+profie.cov
+coverage.html
