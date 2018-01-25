@@ -345,6 +345,11 @@ func dockerInfo() (string, string, int) {
 	return runDockerCommand("info")
 }
 
+// dockerInspect returns low-level information on Docker objects
+func dockerInspect(args ...string) (string, string, int) {
+	return runDockerCommand("inspect", args...)
+}
+
 // dockerLoad loads a tarred repository
 func dockerLoad(args ...string) (string, string, int) {
 	return runDockerCommand("load", args...)
