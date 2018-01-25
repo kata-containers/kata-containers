@@ -34,7 +34,7 @@ check_go()
 	[ -z "$go_packages" ] && exit 0
 
 	# Run golang checks
-	if [ ! $(command -v gometalinter) ]
+	if [ ! "$(command -v gometalinter)" ]
 	then
 		go get github.com/alecthomas/gometalinter
 		gometalinter --install --vendor
@@ -63,7 +63,7 @@ check_go()
 	# linter in the CI).
 	#
 	# Developers may set KATA_DEV_MODE to any value for the same behaviour.
-	[ "$CI" = true -o -n "$KATA_DEV_MODE" ] && linter_args+=" --disable-all"
+	[ "$CI" = true ] || [ -n "$KATA_DEV_MODE" ] && linter_args+=" --disable-all"
 
 	linter_args+=" --enable=misspell"
 	linter_args+=" --enable=vet"
