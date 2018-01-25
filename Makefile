@@ -27,3 +27,8 @@ clean:
 
 install:
 	install -D $(TARGET) $(LIBEXECDIR)/kata-containers/$(TARGET)
+
+check: check-go-static
+
+check-go-static:
+	bash .ci/static-checks.sh
