@@ -45,9 +45,5 @@ function build_image()
 }
 
 @test "Can create euleros image" {
-	if [ "$TRAVIS" = true ]
-	then
-		skip "travis timout, see: https://github.com/kata-containers/osbuilder/issues/46"
-	fi
 	build_image euleros
 }

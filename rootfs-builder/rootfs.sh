@@ -96,12 +96,10 @@ ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
 	[ -d "${dir}" ] || die "${dir}: not a directory"
 	pushd ${dir}
 	[ -f "${dockerfile_template}" ] || die "${dockerfile_template}: file not found"
-	set -x
 	sed \
 		-e "s|@OS_VERSION@|${OS_VERSION}|g" \
 		-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
 		${dockerfile_template} > Dockerfile
-	set +x
 	popd
 }
 
