@@ -1,1 +1,0 @@
-FROM centos:7

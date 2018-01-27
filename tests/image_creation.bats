@@ -28,7 +28,7 @@ function build_image()
 	distro="$1"
 	[ -n "$distro" ]
 	local rootfs="${tmp_dir}/rootfs-osbuilder"
-	sudo -E ${rootfs_sh} -r "${rootfs}" fedora
+	sudo -E ${rootfs_sh} -r "${rootfs}" "${distro}"
 	sudo ${image_builder_sh} -s ${image_size} -o "${tmp_dir}/image.img" "${rootfs}"
 }
 
