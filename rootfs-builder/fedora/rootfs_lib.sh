@@ -26,11 +26,12 @@ installonly_limit=3
 #Dont use the default dnf reposdir
 #this will prevent to use host repositories
 reposdir=/root/mash
+retries=5
 
 [kata]
-name=Fedora \$releasever - \$basearch
+name=Fedora ${OS_VERSION} - \$basearch
 failovermethod=priority
-metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-\$releasever&arch=\$basearch
+metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-${OS_VERSION}&arch=\$basearch
 enabled=1
 gpgcheck=0
 EOF

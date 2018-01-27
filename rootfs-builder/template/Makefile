@@ -13,3 +13,8 @@ endif
 	mkdir -p $(DESTDIR)
 	cp "$(MK_DIR)/rootfs_lib_template.sh" "$(DESTDIR)/rootfs_lib.sh"
 	cp "$(MK_DIR)/config_template.sh" "$(DESTDIR)/config.sh"
+	sed \
+		-e "s|@distro@|$(ROOTFS_BASE_NAME)|g" \
+		Dockerfile.template > $(DESTDIR)/Dockerfile.in
+
+
