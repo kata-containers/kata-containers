@@ -1,6 +1,6 @@
 [submodule "cc-runtime"]
 	path = cc-runtime
 	url = https://github.com/clearcontainers/runtime
-[submodule "runvcli"]
+[submodule "runv"]
 	path = runv
-	url = https://github.com/hyperhq/runvcli.git
+	url = https://github.com/hyperhq/runv.git

@@ -37,6 +37,9 @@ endif
 ifeq (runv,$(KATA_RUNTIME))
 	RUNTIME_DIR = runv
 	RUNTIME_NAME = runv
+	BUILD_ROOT = $(shell pwd)/build-runv
+	HYPER_ROOT = $(BUILD_ROOT)/src/github.com/hyperhq
+	RUNV_ROOT = $(HYPER_ROOT)/runv
 	DESTTARGET = $(DESTBINDIR)/$(RUNTIME_NAME)
 endif
 
@@ -47,7 +50,8 @@ ifeq (cc,$(KATA_RUNTIME))
 	make -C $(RUNTIME_DIR) build-kata-system TARGET=$(TARGET) DESTTARGET=$(DESTTARGET)
 endif
 ifeq (runv,$(KATA_RUNTIME))
-	(cd $(RUNTIME_DIR) && [ -e configure ] || ./autogen.sh && ./configure && make)
+	mkdir -p $(HYPER_ROOT) && ln -sf $(shell pwd)/$(RUNTIME_DIR) $(RUNV_ROOT)
+	cd $(RUNV_ROOT) && [ -e configure ] || ./autogen.sh && ./configure && make GOPATH=$(BUILD_ROOT)
 endif
 
 install: install-runtime create-symlink
@@ -57,7 +61,7 @@ ifeq (cc,$(KATA_RUNTIME))
 	make -C $(RUNTIME_DIR) install-kata-system TARGET=$(TARGET) DESTTARGET=$(DESTTARGET)
 endif
 ifeq (runv,$(KATA_RUNTIME))
-	make -C $(RUNTIME_DIR) install
+	make -C $(RUNV_ROOT) install-exec-local
 endif
 
 create-symlink:
@@ -71,7 +75,7 @@ ifeq (cc,$(KATA_RUNTIME))
 	make -C $(RUNTIME_DIR) clean TARGET=$(TARGET)
 endif
 ifeq (runv,$(KATA_RUNTIME))
-	make -C $(RUNTIME_DIR) clean
+	make -C $(RUNV_ROOT) clean
 endif
 
 help:
