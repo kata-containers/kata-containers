@@ -108,11 +108,11 @@ func checkCommitSubject(config *CommitConfig, commit *Commit) error {
 	subject := commit.subject
 
 	if subject == "" {
-		return fmt.Errorf("Commit %v: empty subject", commit)
+		return fmt.Errorf("Commit %v: empty subject", commit.hash)
 	}
 
 	if strings.TrimSpace(subject) == "" {
-		return fmt.Errorf("Commit %v: pure whitespace subject", commit)
+		return fmt.Errorf("Commit %v: pure whitespace subject", commit.hash)
 	}
 
 	subsystemPattern := regexp.MustCompile(`^[[:blank:]]*([^:[:blank:]]*)[[:blank:]]*:`)
@@ -122,7 +122,7 @@ func checkCommitSubject(config *CommitConfig, commit *Commit) error {
 	var subsystem string
 
 	if matches == nil || len(matches) != 2 {
-		return fmt.Errorf("Commit %v: Failed to find subsystem in subject: %q", commit, subject)
+		return fmt.Errorf("Commit %v: Failed to find subsystem in subject: %q", commit.hash, subject)
 	}
 
 	// matches[0]: the entire matching string
@@ -131,8 +131,8 @@ func checkCommitSubject(config *CommitConfig, commit *Commit) error {
 
 	length := len(subject)
 	if length > config.MaxSubjectLineLength {
-		return fmt.Errorf("commit %v: subject too long (max %v, got %v): %q",
-			commit, config.MaxSubjectLineLength, length, subject)
+		return fmt.Errorf("Commit %v: subject too long (max %v, got %v): %q",
+			commit.hash, config.MaxSubjectLineLength, length, subject)
 	}
 
 	commit.subsystem = subsystem
@@ -210,7 +210,7 @@ func checkCommitBodyLine(config *CommitConfig, commit *Commit, line string,
 	length := len(line)
 	if length > config.MaxBodyLineLength && !singleWordLine {
 		return fmt.Errorf("commit %v: body line %d too long (max %v, got %v): %q",
-			commit, 1+lineNum, config.MaxBodyLineLength, length, line)
+			commit.hash, 1+lineNum, config.MaxBodyLineLength, length, line)
 	}
 
 	return nil
@@ -223,7 +223,7 @@ func checkCommitBody(config *CommitConfig, commit *Commit) error {
 
 	body := commit.body
 	if body == nil {
-		return fmt.Errorf("Commit %v: empty body", commit)
+		return fmt.Errorf("Commit %v: empty body", commit.hash)
 	}
 
 	// line number which contains a sign-off line.
@@ -241,15 +241,15 @@ func checkCommitBody(config *CommitConfig, commit *Commit) error {
 	}
 
 	if nonWhitespaceOnlyLine == -1 {
-		return fmt.Errorf("Commit %v: pure whitespace body", commit)
+		return fmt.Errorf("Commit %v: pure whitespace body", commit.hash)
 	}
 
 	if config.NeedSOBS && sobLine == -1 {
-		return fmt.Errorf("Commit %v: no %v specified", commit, config.SobString)
+		return fmt.Errorf("Commit %v: no %v specified", commit.hash, config.SobString)
 	}
 
 	if sobLine == nonWhitespaceOnlyLine {
-		return fmt.Errorf("Commit %v: single-line %q body not permitted", commit, config.SobString)
+		return fmt.Errorf("Commit %v: single-line %q body not permitted", commit.hash, config.SobString)
 	}
 
 	return nil
