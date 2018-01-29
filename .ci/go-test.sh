@@ -13,7 +13,7 @@ timeout_value=${KATA_GO_TEST_TIMEOUT:-10s}
 
 # -race flag is supported only on amd64/x86_64 arch , hence 
 # enabling the flag depending on the arch.
-[ $(go env GOARCH) = "amd64" ] && race="-race"
+[ "$(go env GOARCH)" = "amd64" ] && race="-race"
 
 # KATA_GO_TEST_FLAGS can be set to change the flags passed to "go test".
 go_test_flags=${KATA_GO_TEST_FLAGS:-"-v $race -timeout $timeout_value"}
@@ -76,7 +76,7 @@ test_coverage()
 
 	users="current"
 
-	if [ $(id -u) -eq 0 ]; then
+	if [ "$(id -u)" -eq 0 ]; then
 		warn "Already running as root so will not re-run tests as non-root user."
 		warn "As a result, only a subset of tests will be run"
 		warn "(run this script as a non-privileged to ensure all tests are run)."
@@ -99,7 +99,7 @@ test_coverage()
 			printf "INFO: Running 'go test' as %s user on package '%s' with flags '%s'\n" \
 				"$user" "$pkg" "$go_test_flags"
 
-			run_as_user "$user" go test $go_test_flags -covermode=atomic -coverprofile="$tmp_coverage_file" "$pkg"
+			eval run_as_user "$user" go test "$go_test_flags" -covermode=atomic -coverprofile="$tmp_coverage_file" "$pkg"
 
 			# Check for the temporary coverage file since if will
 			# not be generated unless a package actually contains
@@ -118,7 +118,7 @@ test_coverage()
 # Run the tests locally
 test_local()
 {
-	go test $go_test_flags $test_packages
+	eval go test "$go_test_flags" "$test_packages"
 }
 
 main()

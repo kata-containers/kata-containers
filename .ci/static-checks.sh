@@ -10,60 +10,72 @@
 
 set -e
 
-# Since this script is called from another repositories directory,
-# ensure the utility is built before running it.
-self="$GOPATH/src/github.com/kata-containers/tests"
-(cd "$self" && make checkcommits)
+check_commits()
+{
+	# Since this script is called from another repositories directory,
+	# ensure the utility is built before running it.
+	local self="$GOPATH/src/github.com/kata-containers/tests"
+	(cd "$self" && make checkcommits)
 
-# Check the commits in the branch
-checkcommits \
-	--need-fixes \
-	--need-sign-offs \
-	--ignore-fixes-for-subsystem "release" \
-	--verbose
+	# Check the commits in the branch
+	checkcommits \
+		--need-fixes \
+		--need-sign-offs \
+		--ignore-fixes-for-subsystem "release" \
+		--verbose
+}
 
-go_packages=$(go list ./... 2>/dev/null || true)
-[ -z "$go_packages" ] && exit 0
+check_go()
+{
+	local go_packages
 
-# Run golang checks
-if [ ! $(command -v gometalinter) ]
-then
-	go get github.com/alecthomas/gometalinter
-	gometalinter --install --vendor
-fi
+	go_packages=$(go list ./... 2>/dev/null || true)
 
-# Ignore vendor directories
-# Note: There is also a "--vendor" flag which claims to do what we want, but
-# it doesn't work :(
-linter_args="--exclude=\"\\bvendor/.*\""
+	[ -z "$go_packages" ] && exit 0
 
-# Check test code too
-linter_args+=" --tests"
+	# Run golang checks
+	if [ ! "$(command -v gometalinter)" ]
+	then
+		go get github.com/alecthomas/gometalinter
+		gometalinter --install --vendor
+	fi
 
-# Ignore auto-generated protobuf code.
-#
-# Note that "--exclude=" patterns are *not* anchored meaning this will apply
-# anywhere in the tree.
-linter_args+=" --exclude=\"protocols/grpc/.*\.pb\.go\""
+	# Ignore vendor directories
+	# Note: There is also a "--vendor" flag which claims to do what we want, but
+	# it doesn't work :(
+	local linter_args="--exclude=\"\\bvendor/.*\""
 
-# When running the linters in a CI environment we need to disable them all
-# by default and then explicitly enable the ones we are care about. This is
-# necessary since *if* gometalinter adds a new linter, that linter may cause
-# the CI build to fail when it really shouldn't. However, when this script is
-# run locally, all linters should be run to allow the developer to review any
-# failures (and potentially decide whether we need to explicitly enable a new
-# linter in the CI).
-#
-# Developers may set KATA_DEV_MODE to any value for the same behaviour.
-[ "$CI" = true -o -n "$KATA_DEV_MODE" ] && linter_args+=" --disable-all"
+	# Check test code too
+	linter_args+=" --tests"
 
-linter_args+=" --enable=misspell"
-linter_args+=" --enable=vet"
-linter_args+=" --enable=ineffassign"
-linter_args+=" --enable=gofmt"
-linter_args+=" --enable=gocyclo"
-linter_args+=" --cyclo-over=15"
-linter_args+=" --enable=golint"
-linter_args+=" --deadline=600s"
+	# Ignore auto-generated protobuf code.
+	#
+	# Note that "--exclude=" patterns are *not* anchored meaning this will apply
+	# anywhere in the tree.
+	linter_args+=" --exclude=\"protocols/grpc/.*\.pb\.go\""
 
-eval gometalinter "${linter_args}" ./...
+	# When running the linters in a CI environment we need to disable them all
+	# by default and then explicitly enable the ones we are care about. This is
+	# necessary since *if* gometalinter adds a new linter, that linter may cause
+	# the CI build to fail when it really shouldn't. However, when this script is
+	# run locally, all linters should be run to allow the developer to review any
+	# failures (and potentially decide whether we need to explicitly enable a new
+	# linter in the CI).
+	#
+	# Developers may set KATA_DEV_MODE to any value for the same behaviour.
+	[ "$CI" = true ] || [ -n "$KATA_DEV_MODE" ] && linter_args+=" --disable-all"
+
+	linter_args+=" --enable=misspell"
+	linter_args+=" --enable=vet"
+	linter_args+=" --enable=ineffassign"
+	linter_args+=" --enable=gofmt"
+	linter_args+=" --enable=gocyclo"
+	linter_args+=" --cyclo-over=15"
+	linter_args+=" --enable=golint"
+	linter_args+=" --deadline=600s"
+
+	eval gometalinter "${linter_args}" ./...
+}
+
+check_commits
+check_go
