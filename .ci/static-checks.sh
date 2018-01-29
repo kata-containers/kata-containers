@@ -18,11 +18,26 @@ check_commits()
 	(cd "$self" && make checkcommits)
 
 	# Check the commits in the branch
-	checkcommits \
-		--need-fixes \
-		--need-sign-offs \
-		--ignore-fixes-for-subsystem "release" \
-		--verbose
+	{
+		checkcommits \
+			--need-fixes \
+			--need-sign-offs \
+			--ignore-fixes-for-subsystem "release" \
+			--verbose; \
+			rc="$?";
+	} || true
+
+	if [ "$rc" -ne 0 ]
+	then
+		cat >&2 <<-EOT
+	ERROR: checkcommits failed. See the document below for help on formatting
+	commits for the project.
+
+		https://github.com/kata-containers/community/blob/master/CONTRIBUTING.md#patch-format
+
+EOT
+		exit 1
+	fi
 }
 
 check_go()
