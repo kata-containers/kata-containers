@@ -5,6 +5,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+cidir=$(dirname "$0")
+bash "${cidir}/static-checks.sh"
+
 #Note: If add clearlinux as supported CI use a stateless os-release file
 source /etc/os-release
 
