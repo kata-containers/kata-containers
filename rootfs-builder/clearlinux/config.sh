@@ -5,4 +5,5 @@
 
 #Use "latest" to always pull the last Clear Linux Release
 OS_VERSION=${OS_VERSION:-latest}
-PACKAGES="systemd iptables-bin libudev0-shim"
+PACKAGES="iptables-bin libudev0-shim"
+[ "$AGENT_INIT" == "no" ] && PACKAGES+=" systemd" || true
