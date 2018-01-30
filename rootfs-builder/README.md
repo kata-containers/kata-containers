@@ -38,6 +38,8 @@ The rootfs must provide at least the following components:
 
   Path: `/sbin/init` - init binary called by the kernel.
 
+When `AGENT_INIT` environment variable is set to `yes`, use Kata agent as `/sbin/init`.
+
 ## Creating a rootfs
 
 To build a rootfs for your chosen distribution, run:
