@@ -46,6 +46,14 @@ check_go()
 
 	go_packages=$(go list ./... 2>/dev/null || true)
 
+	# Ignore the runtime repo which uses submodules. The runtimes it
+	# imports are assumed to be tested independently so do not (and should
+	# not) need to be re-tested here.
+	local runtime_repo="github.com/kata-containers/runtime"
+
+	[ -e ".gitmodules" ] && go_packages=$(echo "$go_packages" |\
+		grep -v "$runtime_repo" || true)
+
 	[ -z "$go_packages" ] && return
 
 	# Run golang checks
