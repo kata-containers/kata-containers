@@ -16,6 +16,7 @@ fi
 SCRIPT_NAME="${0##*/}"
 IMAGE="${IMAGE:-kata-containers.img}"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
+AGENT_INIT=${AGENT_INIT:-no}
 
 die()
 {
@@ -50,7 +51,8 @@ Options:
 	-s Image size in MB (default $IMG_SIZE) ENV: IMG_SIZE
 
 Extra environment variables:
-	AGENT_BIN:  use it to change the expected agent binary name"
+	AGENT_BIN:  use it to change the expected agent binary name
+	AGENT_INIT: use kata agent as init process
 	USE_DOCKER: If set will build image in a Docker Container (requries docker)
 	            DEFAULT: not set
 EOT
@@ -107,7 +109,7 @@ fi
 init="${ROOTFS}/sbin/init"
 [ -x "${init}" ] || [ -L ${init} ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 OK "init is installed"
-[ -x "${ROOTFS}/bin/${AGENT_BIN}" ] || \
+[ "${AGENT_INIT}" == "yes" ] || [ -x "${ROOTFS}/bin/${AGENT_BIN}" ] || \
 	die "/bin/${AGENT_BIN} is not installed in ${ROOTFS}
 	use AGENT_BIN env variable to change the expected agent binary name"
 OK "Agent installed"

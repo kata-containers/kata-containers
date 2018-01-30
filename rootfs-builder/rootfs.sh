@@ -12,6 +12,8 @@ ROOTFS_DIR=${ROOTFS_DIR:-${PWD}/rootfs}
 AGENT_VERSION=${AGENT_VERSION:-master}
 GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
+AGENT_INIT=${AGENT_INIT:-no}
+
 #Load default vesions for golang and other componets
 source "${script_dir}/versions.txt"
 
@@ -46,6 +48,8 @@ GO_AGENT_PKG: Change the golang package url to get the agent source code
 AGENT_BIN   : Name of the agent binary (needed to check if agent is installed)
 USE_DOCKER: If set will build rootfs in a Docker Container (requries docker)
             DEFAULT: not set
+AGENT_INIT  : Use $(AGENT_BIN) as init process.
+            DEFAULT: no
 EOT
 exit "${error}"
 }
@@ -103,6 +107,14 @@ ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
 	popd
 }
 
+setup_agent_init() {
+	agent_bin="$1"
+	init_bin="$2"
+	info "Install $agent_bin as init process"
+	mv -f "${agent_bin}" ${init_bin}
+	OK "Agent is installed as init process"
+}
+
 
 while getopts c:hr: opt
 do
@@ -117,7 +129,10 @@ shift $(($OPTIND - 1))
 
 [ -z "$GOPATH" ] && die "GOPATH not set"
 
+[ "$AGENT_INIT" == "yes" -o "$AGENT_INIT" == "no" ] || die "AGENT_INIT($AGENT_INIT) is invalid (must be yes or no)"
+
 distro="$1"
+init="${ROOTFS_DIR}/sbin/init"
 
 [ -n "${distro}" ] || usage 1
 distro_config_dir="${script_dir}/${distro}"
@@ -151,6 +166,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--env ROOTFS_DIR="/rootfs" \
 		--env GO_AGENT_PKG="${GO_AGENT_PKG}" \
 		--env AGENT_BIN="${AGENT_BIN}" \
+		--env AGENT_INIT="${AGENT_INIT}" \
 		--env GOPATH="${GOPATH}" \
 		-v "${script_dir}":"/osbuilder" \
 		-v "${ROOTFS_DIR}":"/rootfs" \
@@ -164,19 +180,20 @@ fi
 mkdir -p ${ROOTFS_DIR}
 build_rootfs ${ROOTFS_DIR}
 
-info "Check init is installed"
-init="${ROOTFS_DIR}/sbin/init"
-[ -x "${init}" ] || [ -L ${init} ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
-OK "init is installed"
-
 info "Pull Agent source code"
 go get -d "${GO_AGENT_PKG}" || true
 OK "Pull Agent source code"
 
 info "Build agent"
 pushd "${GOPATH}/src/${GO_AGENT_PKG}"
-make INIT=no
-make install DESTDIR="${ROOTFS_DIR}" INIT=no
+make INIT=${AGENT_INIT}
+make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT}
 popd
 [ -x "${ROOTFS_DIR}/bin/${AGENT_BIN}" ] || die "/bin/${AGENT_BIN} is not installed in ${ROOTFS_DIR}"
 OK "Agent installed"
+
+[ "${AGENT_INIT}" == "yes" ] && setup_agent_init "${ROOTFS_DIR}/bin/${AGENT_BIN}" "${init}"
+
+info "Check init is installed"
+[ -x "${init}" ] || [ -L ${init} ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
+OK "init is installed"
