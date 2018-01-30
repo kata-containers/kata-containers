@@ -51,7 +51,7 @@ func TestShimOps(t *testing.T) {
 	shim.resizeTty(tty)
 
 	wg := &sync.WaitGroup{}
-	shim.proxyStdio(wg)
+	shim.proxyStdio(wg, true)
 
 	sigc := shim.forwardAllSignals()
 	defer signal.Stop(sigc)
