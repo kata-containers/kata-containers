@@ -1,0 +1,25 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+sudo: required
+dist: trusty
+
+language: go
+
+env:
+  - KATA_RUNTIME=cc
+  - KATA_RUNTIME=runv
+
+go:
+  - 1.8
+
+before_script:
+  - ".ci/static-checks.sh"
+
+install:
+  - cd ${TRAVIS_BUILD_DIR}
+  - make KATA_RUNTIME=${KATA_RUNTIME}
+  - sudo -E PATH=$PATH make KATA_RUNTIME=${KATA_RUNTIME} install
