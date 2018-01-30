@@ -46,7 +46,7 @@ check_go()
 
 	go_packages=$(go list ./... 2>/dev/null || true)
 
-	[ -z "$go_packages" ] && exit 0
+	[ -z "$go_packages" ] && return
 
 	# Run golang checks
 	if [ ! "$(command -v gometalinter)" ]
