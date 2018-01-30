@@ -96,6 +96,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--runtime runc  \
 		--privileged \
 		--env IMG_SIZE="${IMG_SIZE}" \
+		--env AGENT_INIT=${AGENT_INIT} \
 		-v /dev:/dev \
 		-v "${script_dir}":"/osbuilder" \
 		-v "${ROOTFS}":"/rootfs" \
