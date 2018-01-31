@@ -20,7 +20,7 @@ $(TARGET): $(SOURCES)
 	go build -o $@ -ldflags "-X main.version=$(VERSION_COMMIT)"
 
 test:
-	go test -v -race -coverprofile=coverage.txt -covermode=atomic
+	bash .ci/go-test.sh
 
 clean:
 	rm -f $(TARGET)
