@@ -575,7 +575,7 @@ func NewCommitConfig(needFixes, needSignOffs bool, fixesPrefix, signoffPrefix, i
 	}
 
 	if config.NeedFixes {
-		config.FixesPattern = regexp.MustCompile(fmt.Sprintf(`(?i:%s:*\s+#\d+)`, config.FixesString))
+		config.FixesPattern = regexp.MustCompile(fmt.Sprintf(`(?i:%s\s*:?\s*#\d+)`, config.FixesString))
 	}
 
 	if config.NeedSOBS {
