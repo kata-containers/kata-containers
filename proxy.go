@@ -94,7 +94,7 @@ func proxyConn(conn1 net.Conn, conn2 net.Conn) {
 }
 
 func unixAddr(uri string) (string, error) {
-	if len(uri) == 0 {
+	if uri == "" {
 		return "", errors.New("empty uri")
 
 	}
@@ -196,6 +196,11 @@ func main() {
 		os.Exit(0)
 	}
 
+	if channel == "" || proxyAddr == "" {
+		fmt.Printf("Option -mux-socket and -listen-socket required\n")
+		os.Exit(0)
+	}
+
 	if err := setupLogger(logLevel); err != nil {
 		logger().Fatal(err)
 	}
@@ -207,7 +212,7 @@ func main() {
 
 	muxAddr, err := unixAddr(channel)
 	if err != nil {
-		logger().Fatal("invalid mux socket address")
+		logger().WithError(err).Fatal("invalid mux socket address")
 	}
 	listenAddr, err := unixAddr(proxyAddr)
 	if err != nil {
