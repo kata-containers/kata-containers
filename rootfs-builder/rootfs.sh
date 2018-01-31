@@ -104,6 +104,7 @@ ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
 	pushd ${dir}
 	[ -f "${dockerfile_template}" ] || die "${dockerfile_template}: file not found"
 	sed \
+		-e "s|@GO_VERSION@|${GO_VERSION}|g" \
 		-e "s|@OS_VERSION@|${OS_VERSION}|g" \
 		-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
 		${dockerfile_template} > Dockerfile
@@ -209,6 +210,7 @@ OK "Pull Agent source code"
 
 info "Build agent"
 pushd "${GOPATH}/src/${GO_AGENT_PKG}"
+make clean
 make INIT=${AGENT_INIT}
 make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT}
 popd
