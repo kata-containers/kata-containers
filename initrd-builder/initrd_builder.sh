@@ -87,8 +87,8 @@ IMAGE_NAME=$(basename ${INITRD_IMAGE})
 init="${ROOTFS}/sbin/init"
 [ -x "${init}" ] || [ -L ${init} ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 OK "init is installed"
-[ "${AGENT_INIT}" == "yes" ] || [ -x "${ROOTFS}/bin/${AGENT_BIN}" ] || \
-	die "/bin/${AGENT_BIN} is not installed in ${ROOTFS}
+[ "${AGENT_INIT}" == "yes" ] || [ -x "${ROOTFS}/usr/bin/${AGENT_BIN}" ] || \
+	die "/usr/bin/${AGENT_BIN} is not installed in ${ROOTFS}
 	use AGENT_BIN env variable to change the expected agent binary name"
 OK "Agent is installed"
 
