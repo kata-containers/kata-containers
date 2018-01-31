@@ -17,30 +17,35 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
 	"github.com/hashicorp/yamux"
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 )
 
-const proxyName = "kata-proxy"
+const (
+	proxyName  = "kata-proxy"
+	termSignal = syscall.SIGTERM
+)
 
 // version is the proxy version. This variable is populated at build time.
 var version = "unknown"
 
 var proxyLog = logrus.New()
 
-func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) error {
+func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) (net.Listener, error) {
 	session, err := yamux.Client(servConn, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// serving connection
 	l, err := net.Listen(proto, addr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	go func() {
@@ -66,7 +71,7 @@ func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) 
 		}
 	}()
 
-	return nil
+	return l, nil
 }
 
 func proxyConn(conn1 net.Conn, conn2 net.Conn) {
@@ -177,6 +182,45 @@ func printAgentLogs(sock string) error {
 	return nil
 }
 
+func setupNotifier() chan os.Signal {
+	sigCh := make(chan os.Signal)
+	signal.Notify(sigCh, termSignal)
+
+	return sigCh
+}
+
+// Blocking function waiting for a SIGTERM signal.
+func handleSignal(sigCh chan os.Signal, vmConn *net.Conn, proxyListener *net.Listener) error {
+	if sigCh == nil {
+		return fmt.Errorf("Signal channel cannot be nil, it has to be initialized")
+	}
+
+	// Blocking here waiting for the signal to be received.
+	sig := <-sigCh
+	if sig != termSignal {
+		return fmt.Errorf("Signal received should be %q, got %q instead", termSignal.String(), sig.String())
+	}
+
+	// Let's first close the connection with the shim/runtime so that we
+	// don't get any more requests.
+	if proxyListener != nil {
+		if err := (*proxyListener).Close(); err != nil {
+			return err
+		}
+		*proxyListener = nil
+	}
+
+	// Now let's close the connection with the VM/agent.
+	if vmConn != nil {
+		if err := (*vmConn).Close(); err != nil {
+			return err
+		}
+		*vmConn = nil
+	}
+
+	return nil
+}
+
 func main() {
 	var channel, proxyAddr, agentLogsSocket, logLevel string
 	var showVersion bool
@@ -200,6 +244,8 @@ func main() {
 		fmt.Printf("Option -mux-socket and -listen-socket required\n")
 		os.Exit(0)
 	}
+
+	sigCh := setupNotifier()
 
 	if err := setupLogger(logLevel); err != nil {
 		logger().Fatal(err)
@@ -226,17 +272,34 @@ func main() {
 		logger().Fatalf("failed to dial channel(%q): %s", muxAddr, err)
 		return
 	}
-	defer servConn.Close()
+	defer func() {
+		if servConn != nil {
+			servConn.Close()
+		}
+	}()
 
 	results := make(chan error)
-	err = serve(servConn, "unix", listenAddr, results)
+	l, err := serve(servConn, "unix", listenAddr, results)
 	if err != nil {
 		logger().Fatal(err)
+		return
 	}
-
-	for err = range results {
-		if err != nil {
-			logger().Fatal(err)
+	defer func() {
+		if l != nil {
+			l.Close()
 		}
+	}()
+
+	go func() {
+		for err := range results {
+			if err != nil {
+				logger().Fatal(err)
+			}
+		}
+	}()
+
+	if err := handleSignal(sigCh, &servConn, &l); err != nil {
+		logger().Fatal(err)
+		return
 	}
 }

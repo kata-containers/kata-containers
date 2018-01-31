@@ -14,10 +14,13 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"testing"
 
 	"github.com/hashicorp/yamux"
+	"github.com/stretchr/testify/assert"
 )
 
 func client(proxyAddr, file string) error {
@@ -190,7 +193,7 @@ func TestProxy(t *testing.T) {
 	defer servConn.Close()
 
 	results := make(chan error)
-	err = serve(servConn, "unix", listenSock, results)
+	_, err = serve(servConn, "unix", listenSock, results)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,4 +226,31 @@ func TestProxy(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func TestSetupSigtermNotifier(t *testing.T) {
+	sigCh := setupNotifier()
+	assert.NotNil(t, sigCh, "Signal channel should not be nil")
+
+	signal.Reset()
+}
+
+func TestHandleSigtermSignalNilSignalChannelFailure(t *testing.T) {
+	err := handleSignal(nil, nil, nil)
+	assert.NotNil(t, err, "Should throw an error because signal channel provided was nil")
+}
+
+func TestHandleSigtermSignalWrongSignalFailure(t *testing.T) {
+	sig := syscall.SIGUSR1
+	sigCh := make(chan os.Signal, 1)
+	sigCh <- sig
+	err := handleSignal(sigCh, nil, nil)
+	assert.NotNil(t, err, "Should throw an error because signal sent was %q", sig.String())
+}
+
+func TestHandleSigtermSignalNilConnectionsSuccess(t *testing.T) {
+	sigCh := make(chan os.Signal, 1)
+	sigCh <- termSignal
+	err := handleSignal(sigCh, nil, nil)
+	assert.Nil(t, err, "Should not fail: %v", err)
 }
