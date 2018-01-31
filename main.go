@@ -101,7 +101,7 @@ func main() {
 
 	// stdio
 	wg := &sync.WaitGroup{}
-	shim.proxyStdio(wg)
+	shim.proxyStdio(wg, terminal)
 	defer wg.Wait()
 
 	// winsize
