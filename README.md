@@ -1,7 +1,4 @@
-* [Overview](#overview)
-* [Terms](#terms)
-
-# Overview
+# osbuilder [![Build Status](https://travis-ci.org/kata-containers/osbuilder.svg?branch=master)](https://travis-ci.org/kata-containers/osbuilder) 
 
 The Kata Containers runtime creates a virtual machine (VM) to isolate a set of
 container workloads. The VM requires a guest kernel and a guest operating system
@@ -10,7 +7,10 @@ environment.
 
 This repository contains tools to create a guest OS disk image.
 
-# Terms
+## Table of Contents
+* [Terms](#terms)
+
+## Terms
 
 This section describes the terms used for all documentation in this repository.
 
