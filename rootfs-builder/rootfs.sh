@@ -13,6 +13,7 @@ AGENT_VERSION=${AGENT_VERSION:-master}
 GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
+KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 
 #Load default vesions for golang and other componets
 source "${script_dir}/versions.txt"
@@ -50,6 +51,8 @@ USE_DOCKER: If set will build rootfs in a Docker Container (requries docker)
             DEFAULT: not set
 AGENT_INIT  : Use $(AGENT_BIN) as init process.
             DEFAULT: no
+KERNEL_MODULES_DIR: Optional kernel modules to put into the rootfs.
+		    DEFAULT: ""
 EOT
 exit "${error}"
 }
@@ -115,6 +118,17 @@ setup_agent_init() {
 	OK "Agent is installed as init process"
 }
 
+copy_kernel_modules() {
+	local module_dir=$1
+	local rootfs_dir=$2
+
+	[ -z "module_dir" -o -z "rootfs_dir" ] && die "module dir and rootfs dir must be specified"
+
+	info "Copy kernel modules from ${KERNEL_MODULES_DIR}"
+	mkdir -p ${rootfs_dir}/lib/modules/
+	cp -a ${KERNEL_MODULES_DIR} ${rootfs_dir}/lib/modules/
+	OK "Kernel modules copied"
+}
 
 while getopts c:hr: opt
 do
@@ -130,6 +144,8 @@ shift $(($OPTIND - 1))
 [ -z "$GOPATH" ] && die "GOPATH not set"
 
 [ "$AGENT_INIT" == "yes" -o "$AGENT_INIT" == "no" ] || die "AGENT_INIT($AGENT_INIT) is invalid (must be yes or no)"
+
+[ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
 
 distro="$1"
 init="${ROOTFS_DIR}/sbin/init"
@@ -155,6 +171,9 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--build-arg https_proxy="${https_proxy}" \
 		-t "${image_name}" "${distro_config_dir}"
 
+	# fake mapping if KERNEL_MODULES_DIR is unset
+	kernel_mod_dir=${KERNEL_MODULES_DIR:-${ROOTFS_DIR}}
+
 	#Make sure we use a compatible runtime to build rootfs
 	# In case Clear Containers Runtime is installed we dont want to hit issue:
 	#https://github.com/clearcontainers/runtime/issues/828
@@ -168,8 +187,10 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--env AGENT_BIN="${AGENT_BIN}" \
 		--env AGENT_INIT="${AGENT_INIT}" \
 		--env GOPATH="${GOPATH}" \
+		--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 		-v "${script_dir}":"/osbuilder" \
 		-v "${ROOTFS_DIR}":"/rootfs" \
+		-v "${kernel_mod_dir}":"${kernel_mod_dir}" \
 		-v "${GOPATH}":"${GOPATH}" \
 		${image_name} \
 		bash /osbuilder/rootfs.sh "${distro}"
@@ -179,6 +200,8 @@ fi
 
 mkdir -p ${ROOTFS_DIR}
 build_rootfs ${ROOTFS_DIR}
+
+[ -n "${KERNEL_MODULES_DIR}" ] && copy_kernel_modules ${KERNEL_MODULES_DIR} ${ROOTFS_DIR}
 
 info "Pull Agent source code"
 go get -d "${GO_AGENT_PKG}" || true

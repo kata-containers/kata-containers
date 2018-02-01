@@ -1,5 +1,6 @@
 * [Supported base OSs](#supported-base-oss)
 * [Creating a rootfs](#creating-a-rootfs)
+* [Creating a rootfs with kernel modules](#creating-a-rootfs-with-kenrel-modules)
 * [Build a rootfs using Docker*](#build-a-rootfs-using-docker*)
 * [Adding support for a new guest OS](#adding-support-for-a-new-guest-os)
     * [Create template files](#create-template-files)
@@ -47,6 +48,15 @@ To build a rootfs for your chosen distribution, run:
 ```
 $ sudo ./rootfs.sh <distro>
 ```
+
+## Creating a rootfs with kernel modules
+
+To build a rootfs with additional kernel modules, run:
+```
+$ sudo KERNEL_MODULES_DIR=${kernel_mod_dir} ./rootfs.sh <distro>
+```
+Where `kernel_mod_dir` points to the kernel modules directory to be put under
+`/lib/modules/` directory of the created rootfs.
 
 ## Build a rootfs using Docker*
 
