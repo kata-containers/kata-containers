@@ -62,6 +62,10 @@ function build_rootfs_image_initrd()
 }
 
 @test "Can create euleros image" {
+	if [ "$TRAVIS" = true ]
+	then
+		skip "travis timeout, see: https://github.com/kata-containers/osbuilder/issues/46"
+	fi
 	build_rootfs_image_initrd euleros
 }
 
