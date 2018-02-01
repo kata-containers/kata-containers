@@ -30,6 +30,14 @@ This section describes the terms used for all documentation in this repository.
 
   See [the image builder documentation](image-builder/README.md).
 
+- initrd (or "initramfs")
+
+  A compressed cpio archive loaded into memory and used as part of the Linux
+  startup process. During startup, the kernel unpacks it into a special
+  instance of a tmpfs that becomes the initial root file system.
+
+  See [the initrd builder documentation](initrd-builder/README.md).
+
 - "Base OS"
 
   A particular version of a Linux distribution used to create a Guest OS from.
