@@ -88,10 +88,11 @@ check_go()
 	# Developers may set KATA_DEV_MODE to any value for the same behaviour.
 	[ "$CI" = true ] || [ -n "$KATA_DEV_MODE" ] && linter_args+=" --disable-all"
 
+	[ "$TRAVIS_GO_VERSION" != "tip" ] && linter_args+=" --enable=gofmt"
+
 	linter_args+=" --enable=misspell"
 	linter_args+=" --enable=vet"
 	linter_args+=" --enable=ineffassign"
-	linter_args+=" --enable=gofmt"
 	linter_args+=" --enable=gocyclo"
 	linter_args+=" --cyclo-over=15"
 	linter_args+=" --enable=golint"
