@@ -14,8 +14,10 @@
         * [Additional](#additional)
             * [Hypervisor](#hypervisor)
             * [Kernel](#kernel)
+    * [CI](#ci)
     * [Community](#community)
     * [Documentation](#documentation)
+    * [Packaging](#packaging)
     * [Test code](#test-code)
     * [Utilities](#utilities)
         * [OS builder](#os-builder)
@@ -47,6 +49,11 @@ issues](https://github.com/kata-containers/kata-containers/issues/new):
 >   components repository.
 
 ## Kata Containers repositories
+
+### CI
+
+The [CI](https://github.com/kata-containers/ci) repository stores Continuous
+Integration (CI) system configuration information.
 
 ### Community
 
@@ -103,6 +110,13 @@ The [Linux\*](https://github.com/kata-containers/linux) kernel is used by the hy
 
 The [documentation](https://github.com/kata-containers/documentation)
 repository hosts documentation common to all code components.
+
+### Packaging
+
+The [packaging](https://github.com/kata-containers/packaging) repository is
+used for creating packages for [system
+components](#kata-containers-developed-components) including
+[rootfs](#os-builder) and [kernel](#kernel) images.
 
 ### Test code
 
