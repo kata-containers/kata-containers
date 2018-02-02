@@ -97,16 +97,16 @@ create virtual machines for hosting the containers.
 
 ##### Kernel
 
-The [`linux`](https://github.com/kata-containers/linux) kernel is used by the hypervisor to boot the guest image.
+The [Linux\*](https://github.com/kata-containers/linux) kernel is used by the hypervisor to boot the guest image.
 
 ### Documentation
 
-The [`documentation`](https://github.com/kata-containers/documentation)
+The [documentation](https://github.com/kata-containers/documentation)
 repository hosts documentation common to all code components.
 
 ### Test code
 
-The [Tests](https://github.com/kata-containers/tests) repository hosts all
+The [tests](https://github.com/kata-containers/tests) repository hosts all
 test code except the unit testing code (which is kept in the same repository
 as the component it tests).
 
