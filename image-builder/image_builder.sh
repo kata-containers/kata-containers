@@ -85,7 +85,7 @@ do
 		h)	usage ;;
 		o)	IMAGE="${OPTARG}" ;;
 		s)	IMG_SIZE=${OPTARG}
-                        if [ ${IMG_SIZE} -lt 0 ]; then
+                        if [ ${IMG_SIZE} -le 0 ]; then
                                 die "Image size has to be greater than 0 MB."
                         fi
                         if [ ${IMG_SIZE} -gt ${MAX_IMG_SIZE_MB} ]; then
