@@ -129,6 +129,7 @@ build_rootfs() {
 
 	DNF="${PKG_MANAGER} --config=$DNF_CONF -y --installroot=${ROOTFS_DIR} --noplugins"
 	$DNF install ${EXTRA_PKGS} ${PACKAGES}
+	$DNF clean all
 
 	[ -n "${ROOTFS_DIR}" ]  && rm -r "${ROOTFS_DIR}/var/cache/centos-osbuilder"
 }

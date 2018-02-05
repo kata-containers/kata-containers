@@ -9,7 +9,10 @@
 OS_VERSION=${OS_VERSION:-2.2}
 
 #Mandatory Packages that must be installed
-# systemd: An init system that will start kata-agent
 # iptables: Need by Kata agent
-# udevlib.so: Need by Kata agent
-PACKAGES="systemd iptables"
+PACKAGES="iptables"
+
+#Optional packages:
+# systemd: An init system that will start kata-agent if kata-agent
+#          itself is not configured as init process.
+[ "$AGENT_INIT" == "no" ] && PACKAGES+=" systemd" || true
