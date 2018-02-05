@@ -9,11 +9,15 @@ dist: trusty
 
 language: bash
 
+env:
+  - AGENT_INIT=no
+  - AGENT_INIT=yes
+
 services:
   - docker
 
 before_script:
   - ".ci/setup.sh"
 
-script: 
+script:
 - "travis_wait .ci/run.sh"

@@ -5,4 +5,5 @@
 
 #Fedora version to use
 OS_VERSION=${OS_VERSION:-27}
-PACKAGES="systemd iptables"
+PACKAGES="iptables"
+[ "$AGENT_INIT" == "no" ] && PACKAGES+=" systemd" || true
