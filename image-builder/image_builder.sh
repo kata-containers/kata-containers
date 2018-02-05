@@ -138,8 +138,8 @@ fi
 init="${ROOTFS}/sbin/init"
 [ -x "${init}" ] || [ -L ${init} ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 OK "init is installed"
-[ "${AGENT_INIT}" == "yes" ] || [ -x "${ROOTFS}/bin/${AGENT_BIN}" ] || \
-	die "/bin/${AGENT_BIN} is not installed in ${ROOTFS}
+[ "${AGENT_INIT}" == "yes" ] || [ -x "${ROOTFS}/usr/bin/${AGENT_BIN}" ] || \
+	die "/usr/bin/${AGENT_BIN} is not installed in ${ROOTFS}
 	use AGENT_BIN env variable to change the expected agent binary name"
 OK "Agent installed"
 [ "$(id -u)" -eq 0 ] || die "$0: must be run as root"
