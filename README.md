@@ -52,7 +52,7 @@ issues](https://github.com/kata-containers/kata-containers/issues/new):
 
 ### CI
 
-The [CI](https://github.com/kata-containers/ci) repository stores Continuous
+The [CI](https://github.com/kata-containers/ci) repository stores the Continuous
 Integration (CI) system configuration information.
 
 ### Community
@@ -104,7 +104,7 @@ create virtual machines for hosting the containers.
 
 ##### Kernel
 
-The [Linux\*](https://github.com/kata-containers/linux) kernel is used by the hypervisor to boot the guest image.
+The hypervisor uses a [Linux\* kernel](https://github.com/kata-containers/linux) to boot the guest image.
 
 ### Documentation
 
@@ -113,8 +113,8 @@ repository hosts documentation common to all code components.
 
 ### Packaging
 
-The [packaging](https://github.com/kata-containers/packaging) repository is
-used for creating packages for [system
+We use the [packaging](https://github.com/kata-containers/packaging)
+repository to create packages for the [system
 components](#kata-containers-developed-components) including
 [rootfs](#os-builder) and [kernel](#kernel) images.
 
