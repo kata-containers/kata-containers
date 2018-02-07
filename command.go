@@ -45,11 +45,20 @@ func NewCommand(path string, args ...string) *Command {
 
 // Run runs a command returning its stdout, stderr and exit code
 func (c *Command) Run() (string, string, int) {
+	return c.RunWithPipe(nil)
+}
+
+// RunWithPipe runs a command with stdin as an input and returning its stdout, stderr and exit code
+func (c *Command) RunWithPipe(stdin *bytes.Buffer) (string, string, int) {
 	LogIfFail("Running command '%s %s'\n", c.cmd.Path, c.cmd.Args)
 
 	var stdout, stderr bytes.Buffer
 	c.cmd.Stdout = &stdout
 	c.cmd.Stderr = &stderr
+
+	if stdin != nil {
+		c.cmd.Stdin = stdin
+	}
 
 	if err := c.cmd.Start(); err != nil {
 		LogIfFail("could no start command: %v\n", err)

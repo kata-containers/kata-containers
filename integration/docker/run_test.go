@@ -5,6 +5,7 @@
 package docker
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -267,8 +268,11 @@ var _ = Describe("run", func() {
 
 var _ = Describe("run", func() {
 	var (
-		args []string
-		id   string
+		args     []string
+		id       string
+		stderr   string
+		stdout   string
+		exitCode int
 	)
 
 	BeforeEach(func() {
@@ -282,7 +286,7 @@ var _ = Describe("run", func() {
 	Context("stdout using run", func() {
 		It("should not display the output", func() {
 			args = []string{"--rm", "--name", id, Image, "sh", "-c", "ls /etc/resolv.conf"}
-			stdout, _, exitCode := dockerRun(args...)
+			stdout, _, exitCode = dockerRun(args...)
 			Expect(exitCode).To(Equal(0))
 			Expect(stdout).To(ContainSubstring("/etc/resolv.conf"))
 		})
@@ -291,10 +295,20 @@ var _ = Describe("run", func() {
 	Context("stderr using run", func() {
 		It("should not display the output", func() {
 			args = []string{"--rm", "--name", id, Image, "sh", "-c", "ls /etc/foo"}
-			stdout, stderr, exitCode := dockerRun(args...)
+			stdout, stderr, exitCode = dockerRun(args...)
 			Expect(exitCode).To(Equal(1))
 			Expect(stdout).To(BeEmpty())
 			Expect(stderr).To(ContainSubstring("ls: /etc/foo: No such file or directory"))
+		})
+	})
+
+	Context("stdin using run", func() {
+		It("should not display the stderr", func() {
+			stdin := bytes.NewBufferString("hello")
+			args = []string{"-i", "--rm", "--name", id, Image}
+			_, stderr, exitCode = dockerRunWithPipe(stdin, args...)
+			Expect(exitCode).NotTo(Equal(0))
+			Expect(stderr).To(ContainSubstring("sh: hello: not found"))
 		})
 	})
 })
