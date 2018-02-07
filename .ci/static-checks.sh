@@ -97,6 +97,9 @@ check_go()
 	linter_args+=" --cyclo-over=15"
 	linter_args+=" --enable=golint"
 	linter_args+=" --deadline=600s"
+	linter_args+=" --enable=structcheck"
+	linter_args+=" --enable=unused"
+	linter_args+=" --enable=staticcheck"
 
 	eval gometalinter "${linter_args}" ./...
 }
