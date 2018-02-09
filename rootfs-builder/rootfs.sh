@@ -92,9 +92,19 @@ check_function_exist() {
 generate_dockerfile() {
 	dir="$1"
 
+	case "$(arch)" in
+		"aarch64")
+			goarch=arm64
+			;;
+
+		*)
+			goarch=amd64
+			;;
+	esac
+
 	readonly install_go="
-ADD https://storage.googleapis.com/golang/go${GO_VERSION}.linux-amd64.tar.gz /tmp
-RUN tar -C /usr/ -xzf /tmp/go${GO_VERSION}.linux-amd64.tar.gz
+ADD https://storage.googleapis.com/golang/go${GO_VERSION}.linux-${goarch}.tar.gz /tmp
+RUN tar -C /usr/ -xzf /tmp/go${GO_VERSION}.linux-${goarch}.tar.gz
 ENV GOROOT=/usr/go
 ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
 "
