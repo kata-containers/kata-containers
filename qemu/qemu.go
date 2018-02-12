@@ -43,6 +43,10 @@ type Machine struct {
 
 	// Acceleration are the machine acceleration options to be used by qemu.
 	Acceleration string
+
+	// Options are options for the machine type
+	// For example gic-version=host and usb=off
+	Options string
 }
 
 // Device is the qemu device interface.
@@ -1238,6 +1242,10 @@ func (config *Config) appendMachine() {
 
 		if config.Machine.Acceleration != "" {
 			machineParams = append(machineParams, fmt.Sprintf(",accel=%s", config.Machine.Acceleration))
+		}
+
+		if config.Machine.Options != "" {
+			machineParams = append(machineParams, fmt.Sprintf(",%s", config.Machine.Options))
 		}
 
 		config.qemuParams = append(config.qemuParams, "-machine")

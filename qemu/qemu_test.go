@@ -75,14 +75,20 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 	}
 }
 
-var machineString = "-machine pc-lite,accel=kvm,kernel_irqchip,nvdimm"
-
 func TestAppendMachine(t *testing.T) {
+	machineString := "-machine pc-lite,accel=kvm,kernel_irqchip,nvdimm"
 	machine := Machine{
 		Type:         "pc-lite",
 		Acceleration: "kvm,kernel_irqchip,nvdimm",
 	}
+	testAppend(machine, machineString, t)
 
+	machineString = "-machine pc-lite,accel=kvm,kernel_irqchip,nvdimm,gic-version=host,usb=off"
+	machine = Machine{
+		Type:         "pc-lite",
+		Acceleration: "kvm,kernel_irqchip,nvdimm",
+		Options:      "gic-version=host,usb=off",
+	}
 	testAppend(machine, machineString, t)
 }
 
