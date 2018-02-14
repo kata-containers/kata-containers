@@ -10,6 +10,7 @@ set -e
 cidir=$(dirname "$0")
 
 source "${cidir}/lib.sh"
+source /etc/os-release
 
 # Modify the runtimes build-time defaults
 
@@ -33,7 +34,10 @@ NEW_RUNTIME_CONFIG="${PKGDEFAULTSDIR}/configuration.toml"
 clone_build_and_install "github.com/kata-containers/runtime"
 
 # Check system supports running Kata Containers
-kata-runtime kata-check
+# Fedora has issues with the symbolic link
+if [ "$ID" == "ubuntu" ]; then
+	kata-runtime kata-check
+fi
 
 if [ -e "${NEW_RUNTIME_CONFIG}" ]; then
 	# Remove the legacy config file

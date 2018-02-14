@@ -12,18 +12,6 @@ source "/etc/os-release"
 source "${cidir}/lib.sh"
 get_cc_versions
 
-arch=$(arch)
-
-if [ "$arch" = x86_64 ]; then
-	if grep -q "N" /sys/module/kvm_intel/parameters/nested; then
-		echo "enable Nested Virtualization"
-		sudo modprobe -r kvm_intel
-		sudo modprobe kvm_intel nested=1
-	fi
-else
-	die "Unsupported architecture: $arch"
-fi
-
 echo "Update apt repositories"
 sudo -E apt update
 

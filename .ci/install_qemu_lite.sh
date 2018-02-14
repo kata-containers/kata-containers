@@ -31,6 +31,9 @@ curl -LO "https://download.clearlinux.org/releases/${clear_release}/clear/${arch
 if [ "$distro" == "ubuntu" ];  then
 	sudo alien -i "./${qemu_lite_bin}"
 	sudo alien -i "./${qemu_lite_data}"
+elif [ "$distro" == "fedora" ]; then
+	sudo rpm -ihv "./${qemu_lite_bin}" --nodeps
+	sudo rpm -ihv "./${qemu_lite_data}" --nodeps
 fi
 
 # cleanup

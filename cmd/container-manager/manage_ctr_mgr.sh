@@ -244,8 +244,13 @@ configure_docker(){
 		if [ "$runtime" == "kata-runtime" ]  ; then
 			# Try to find kata-runtime in $PATH, if it is not present
 			# then the default location will be /usr/local/bin/kata-runtime
-			kata_runtime_bin="$(which $runtime)" || \
-				die "$runtime cannot be found in $PATH, please make sure it is installed"
+			if [ "$ID" == "fedora" ]; then
+				kata_runtime_bin="$(whereis $runtime | cut -f2 -d':' | tr -d "[:space:]")" || \
+					die "$runtime cannot be found in $PATH, please make sure it is installed"
+			else
+				kata_runtime_bin="$(which $runtime)" || \
+					die "$runtime cannot be found in $PATH, please make sure it is installed"
+			fi
 			docker_options="-D --add-runtime $runtime=$kata_runtime_bin"
 			modify_docker_service "$docker_options"
 		elif [ "$runtime" == "runc" ]  ; then
