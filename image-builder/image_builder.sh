@@ -57,6 +57,7 @@ Options:
 	-h Show this help
 	-o path to generate image file ENV: IMAGE
 	-s Image size in MB ENV: IMG_SIZE
+	-r Free space of the root partition in MB ENV: ROOT_FREE_SPACE
 
 Extra environment variables:
 	AGENT_BIN:  use it to change the expected agent binary name
@@ -79,11 +80,12 @@ MEM_BOUNDARY=128
 MAX_ATTEMPTS=5
 
 ATTEMPT_NUM=0
-while getopts "ho:s:f:" opt
+while getopts "ho:r:s:f:" opt
 do
 	case "$opt" in
 		h)	usage ;;
 		o)	IMAGE="${OPTARG}" ;;
+		r)	ROOT_FREE_SPACE="${OPTARG}" ;;
 		s)	IMG_SIZE=${OPTARG}
                         if [ ${IMG_SIZE} -le 0 ]; then
                                 die "Image size has to be greater than 0 MB."
@@ -162,6 +164,11 @@ calculate_img_size()
 {
     IMG_SIZE=${IMG_SIZE:-$MEM_BOUNDARY}
     align_memory
+    if [ -n "$ROOT_FREE_SPACE" ] && [ "$IMG_SIZE" -gt "$ROOTFS_SIZE" ]; then
+	info "Ensure that root partition has at least ${ROOT_FREE_SPACE}MB of free space"
+	IMG_SIZE=$(($IMG_SIZE + $ROOT_FREE_SPACE))
+    fi
+
 }
 
 # Cleanup
@@ -244,4 +251,4 @@ OK "rootfs copied"
 
 cleanup
 
-info "Image created. Size: ${IMG_SIZE}MB."
+info "Image created. Virtual size: ${IMG_SIZE}MB."
