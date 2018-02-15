@@ -8,6 +8,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log/syslog"
 	"os"
 	"os/signal"
@@ -44,6 +45,9 @@ func initLogger(logLevel string) error {
 	}
 
 	shimLog.SetLevel(level)
+
+	// Make sure all output going to stdout/stderr is actually discarded.
+	shimLog.Out = ioutil.Discard
 
 	hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO|syslog.LOG_USER, shimName)
 	if err == nil {
