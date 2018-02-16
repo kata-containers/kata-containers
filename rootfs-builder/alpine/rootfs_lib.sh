@@ -4,14 +4,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-check_root()
-{
-	if [ "$(id -u)" != "0" ]; then
-		echo "Root is needed"
-		exit 1
-	fi
-}
-
 # - Arguments
 # rootfs_dir=$1
 #
