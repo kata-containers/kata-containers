@@ -1,15 +1,11 @@
-# This is a configuration file add extra variables to
-# be used by build_rootfs() from rootfs_lib.sh the variables will be
-# loaded just before call the function.
+OS_NAME="EulerOS"
 
-# Here there are a couple of variables you may need.
-# Remove them or add more 
-
-# EulerOS Version
 OS_VERSION=${OS_VERSION:-2.2}
 
-#Mandatory Packages that must be installed
-# iptables: Need by Kata agent
+BASE_URL="http://developer.huawei.com/ict/site-euleros/euleros/repo/yum/${OS_VERSION}/os/${ARCH}/"
+
+GPG_KEY_FILE="RPM-GPG-KEY-EulerOS"
+
 PACKAGES="iptables"
 
 #Optional packages:
