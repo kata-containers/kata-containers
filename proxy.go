@@ -20,6 +20,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/hashicorp/yamux"
 	"github.com/sirupsen/logrus"
@@ -127,6 +128,8 @@ func setupLogger(logLevel string) error {
 	}
 
 	proxyLog.SetLevel(level)
+
+	proxyLog.Formatter = &logrus.TextFormatter{TimestampFormat: time.RFC3339Nano}
 
 	hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO|syslog.LOG_USER, proxyName)
 	if err == nil {
