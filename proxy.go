@@ -183,7 +183,7 @@ func printAgentLogs(sock string) error {
 }
 
 func setupNotifier() chan os.Signal {
-	sigCh := make(chan os.Signal)
+	sigCh := make(chan os.Signal, 8)
 	signal.Notify(sigCh, termSignal)
 
 	return sigCh
