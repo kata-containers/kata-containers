@@ -309,4 +309,6 @@ func main() {
 		logger().Fatal(err)
 		return
 	}
+
+	logger().Debug("shutting down")
 }
