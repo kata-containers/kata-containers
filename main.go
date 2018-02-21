@@ -103,11 +103,6 @@ func main() {
 		os.Exit(exitFailure)
 	}
 
-	// stdio
-	wg := &sync.WaitGroup{}
-	shim.proxyStdio(wg, terminal)
-	defer wg.Wait()
-
 	// winsize
 	if terminal {
 		termios, err := setupTerminal(int(os.Stdin.Fd()))
@@ -122,6 +117,15 @@ func main() {
 	// signals
 	sigc := shim.forwardAllSignals()
 	defer signal.Stop(sigc)
+
+	// This wait call cannot be deferred and has to wait for every
+	// input/output to return before the code tries to go further
+	// and wait for the process. Indeed, after the process has been
+	// waited for, we cannot expect to do any more calls related to
+	// this process since it is going to be removed from the agent.
+	wg := &sync.WaitGroup{}
+	shim.proxyStdio(wg, terminal)
+	wg.Wait()
 
 	// wait until exit
 	exitcode, err := shim.wait()
