@@ -31,8 +31,9 @@ var shimLog = logrus.New()
 
 func logger() *logrus.Entry {
 	return shimLog.WithFields(logrus.Fields{
-		"name": shimName,
-		"pid":  os.Getpid(),
+		"name":   shimName,
+		"pid":    os.Getpid(),
+		"source": "shim",
 	})
 }
 
