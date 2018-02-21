@@ -23,3 +23,7 @@ ifeq ($(RUNTIME),)
 else
 	./ginkgo -v -focus "${FOCUS}" ./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 endif
+
+check: integration
+
+.PHONY: check checkcommits integration ginkgo
