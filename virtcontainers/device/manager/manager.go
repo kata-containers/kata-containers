@@ -121,6 +121,12 @@ func (dm *deviceManager) createDevice(devInfo config.DeviceInfo) (dev api.Device
 	}
 	if isVFIO(path) {
 		return drivers.NewVFIODevice(&devInfo), nil
+	} else if isVhostUserBlk(devInfo) {
+		if devInfo.DriverOptions == nil {
+			devInfo.DriverOptions = make(map[string]string)
+		}
+		devInfo.DriverOptions["block-driver"] = dm.blockDriver
+		return drivers.NewVhostUserBlkDevice(&devInfo), nil
 	} else if isBlock(devInfo) {
 		if devInfo.DriverOptions == nil {
 			devInfo.DriverOptions = make(map[string]string)

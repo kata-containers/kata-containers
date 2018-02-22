@@ -18,6 +18,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/kata-containers/runtime/virtcontainers/types"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
@@ -219,6 +220,27 @@ func TestQemuAddDeviceFsDev(t *testing.T) {
 	}
 
 	testQemuAddDevice(t, volume, fsDev, expectedOut)
+}
+
+func TestQemuAddDeviceVhostUserBlk(t *testing.T) {
+	socketPath := "/test/socket/path"
+	devID := "testDevID"
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.VhostUserDevice{
+			SocketPath:    socketPath,
+			CharDevID:     utils.MakeNameID("char", devID, maxDevIDSize),
+			VhostUserType: govmmQemu.VhostUserBlk,
+		},
+	}
+
+	vDevice := config.VhostUserDeviceAttrs{
+		DevID:      devID,
+		SocketPath: socketPath,
+		Type:       config.VhostUserBlk,
+	}
+
+	testQemuAddDevice(t, vDevice, vhostuserDev, expectedOut)
 }
 
 func TestQemuAddDeviceSerialPortDev(t *testing.T) {
