@@ -53,3 +53,39 @@ func TestIsBlock(t *testing.T) {
 		assert.Equal(t, d.expected, isBlock)
 	}
 }
+
+func TestIsVhostUserBlk(t *testing.T) {
+	type testData struct {
+		major    int64
+		expected bool
+	}
+
+	data := []testData{
+		{config.VhostUserBlkMajor, true},
+		{config.VhostUserSCSIMajor, false},
+		{240, false},
+	}
+
+	for _, d := range data {
+		isVhostUserBlk := isVhostUserBlk(config.DeviceInfo{Major: d.major})
+		assert.Equal(t, d.expected, isVhostUserBlk)
+	}
+}
+
+func TestIsVhostUserSCSI(t *testing.T) {
+	type testData struct {
+		major    int64
+		expected bool
+	}
+
+	data := []testData{
+		{config.VhostUserBlkMajor, false},
+		{config.VhostUserSCSIMajor, true},
+		{240, false},
+	}
+
+	for _, d := range data {
+		isVhostUserSCSI := isVhostUserSCSI(config.DeviceInfo{Major: d.major})
+		assert.Equal(t, d.expected, isVhostUserSCSI)
+	}
+}

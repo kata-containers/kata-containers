@@ -60,7 +60,8 @@ func TestMinimalSandboxConfig(t *testing.T) {
 	savedFunc := config.GetHostPathFunc
 
 	// Simply assign container path to host path for device.
-	config.GetHostPathFunc = func(devInfo config.DeviceInfo) (string, error) {
+	config.GetHostPathFunc = func(devInfo config.DeviceInfo, vhostUserStoreEnabled bool,
+		vhostUserStorePath string) (string, error) {
 		return devInfo.ContainerPath, nil
 	}
 
