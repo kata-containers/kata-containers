@@ -7,18 +7,27 @@
 package drivers
 
 import (
-	"encoding/hex"
-
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
+	"github.com/sirupsen/logrus"
 )
 
 // VhostUserBlkDevice is a block vhost-user based device
 type VhostUserBlkDevice struct {
 	*GenericDevice
-	config.VhostUserDeviceAttrs
+	VhostUserDeviceAttrs *config.VhostUserDeviceAttrs
+}
+
+// NewVhostUserBlkDevice creates a new vhost-user block device based on DeviceInfo
+func NewVhostUserBlkDevice(devInfo *config.DeviceInfo) *VhostUserBlkDevice {
+	return &VhostUserBlkDevice{
+		GenericDevice: &GenericDevice{
+			ID:         devInfo.ID,
+			DeviceInfo: devInfo,
+		},
+	}
 }
 
 //
@@ -35,30 +44,103 @@ func (device *VhostUserBlkDevice) Attach(devReceiver api.DeviceReceiver) (err er
 	if skip {
 		return nil
 	}
+
+	// From the explanation of function attach in block.go, block index of
+	// a general block device is utilized for some situation.
+	// Since vhost-user-blk uses "vd" prefix in Linux kernel, not "sd",
+	// sandbox block index should be updated only if sandbox default block
+	// driver is "virtio-blk"/"virtio-blk-ccw"/"virtio-mmio" which uses
+	// "vd" prefix in Linux kernel.
+	index := -1
+	updateBlockIndex := isVirtioBlkBlockDriver(device.DeviceInfo.DriverOptions)
+	if updateBlockIndex {
+		index, err = devReceiver.GetAndSetSandboxBlockIndex()
+	}
+
 	defer func() {
 		if err != nil {
+			if updateBlockIndex {
+				devReceiver.UnsetSandboxBlockIndex(index)
+			}
 			device.bumpAttachCount(false)
 		}
 	}()
 
-	// generate a unique ID to be used for hypervisor commandline fields
-	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
 		return err
 	}
-	id := hex.EncodeToString(randBytes)
 
-	device.DevID = id
-	device.Type = device.DeviceType()
+	vAttrs := &config.VhostUserDeviceAttrs{
+		DevID:      utils.MakeNameID("blk", device.DeviceInfo.ID, maxDevIDSize),
+		SocketPath: device.DeviceInfo.HostPath,
+		Type:       config.VhostUserBlk,
+		Index:      index,
+	}
 
-	return devReceiver.AppendDevice(device)
+	deviceLogger().WithFields(logrus.Fields{
+		"device":     device.DeviceInfo.HostPath,
+		"SocketPath": vAttrs.SocketPath,
+		"Type":       config.VhostUserBlk,
+		"Index":      index,
+	}).Info("Attaching device")
+
+	device.VhostUserDeviceAttrs = vAttrs
+	if err = devReceiver.HotplugAddDevice(device, config.VhostUserBlk); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func isVirtioBlkBlockDriver(customOptions map[string]string) bool {
+	var blockDriverOption string
+
+	if customOptions == nil {
+		// User has not chosen a specific block device type
+		// Default to SCSI
+		blockDriverOption = "virtio-scsi"
+	} else {
+		blockDriverOption = customOptions["block-driver"]
+	}
+
+	if blockDriverOption == "virtio-blk" ||
+		blockDriverOption == "virtio-blk-ccw" ||
+		blockDriverOption == "virtio-mmio" {
+		return true
+	}
+
+	return false
 }
 
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
 func (device *VhostUserBlkDevice) Detach(devReceiver api.DeviceReceiver) error {
-	_, err := device.bumpAttachCount(false)
-	return err
+	skip, err := device.bumpAttachCount(false)
+	if err != nil {
+		return err
+	}
+	if skip {
+		return nil
+	}
+
+	defer func() {
+		if err != nil {
+			device.bumpAttachCount(true)
+		} else {
+			updateBlockIndex := isVirtioBlkBlockDriver(device.DeviceInfo.DriverOptions)
+			if updateBlockIndex {
+				devReceiver.UnsetSandboxBlockIndex(device.VhostUserDeviceAttrs.Index)
+			}
+		}
+	}()
+
+	deviceLogger().WithField("device", device.DeviceInfo.HostPath).Info("Unplugging vhost-user-blk device")
+
+	if err = devReceiver.HotplugRemoveDevice(device, config.VhostUserBlk); err != nil {
+		deviceLogger().WithError(err).Error("Failed to unplug vhost-user-blk device")
+		return err
+	}
+	return nil
 }
 
 // DeviceType is standard interface of api.Device, it returns device type
@@ -68,19 +150,23 @@ func (device *VhostUserBlkDevice) DeviceType() config.DeviceType {
 
 // GetDeviceInfo returns device information used for creating
 func (device *VhostUserBlkDevice) GetDeviceInfo() interface{} {
-	device.Type = device.DeviceType()
-	return &device.VhostUserDeviceAttrs
+	return device.VhostUserDeviceAttrs
 }
 
 // Save converts Device to DeviceState
 func (device *VhostUserBlkDevice) Save() persistapi.DeviceState {
 	ds := device.GenericDevice.Save()
 	ds.Type = string(device.DeviceType())
-	ds.VhostUserDev = &persistapi.VhostUserDeviceAttrs{
-		DevID:      device.DevID,
-		SocketPath: device.SocketPath,
-		Type:       string(device.Type),
-		MacAddress: device.MacAddress,
+
+	vAttr := device.VhostUserDeviceAttrs
+	if vAttr != nil {
+		ds.VhostUserDev = &persistapi.VhostUserDeviceAttrs{
+			DevID:      vAttr.DevID,
+			SocketPath: vAttr.SocketPath,
+			Type:       string(vAttr.Type),
+			PCIAddr:    vAttr.PCIAddr,
+			Index:      vAttr.Index,
+		}
 	}
 	return ds
 }
@@ -95,11 +181,12 @@ func (device *VhostUserBlkDevice) Load(ds persistapi.DeviceState) {
 		return
 	}
 
-	device.VhostUserDeviceAttrs = config.VhostUserDeviceAttrs{
+	device.VhostUserDeviceAttrs = &config.VhostUserDeviceAttrs{
 		DevID:      dev.DevID,
 		SocketPath: dev.SocketPath,
 		Type:       config.DeviceType(dev.Type),
-		MacAddress: dev.MacAddress,
+		PCIAddr:    dev.PCIAddr,
+		Index:      dev.Index,
 	}
 }
 
