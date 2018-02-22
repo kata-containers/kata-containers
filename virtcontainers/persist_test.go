@@ -31,7 +31,7 @@ func TestSandboxRestore(t *testing.T) {
 	sandbox := Sandbox{
 		id:         "test-exp",
 		containers: container,
-		devManager: manager.NewDeviceManager(manager.VirtioSCSI, nil),
+		devManager: manager.NewDeviceManager(manager.VirtioSCSI, false, "", nil),
 		hypervisor: &mockHypervisor{},
 		ctx:        context.Background(),
 		config:     &sconfig,

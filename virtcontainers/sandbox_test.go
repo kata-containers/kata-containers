@@ -696,7 +696,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 		config.SysIOMMUPath = savedIOMMUPath
 	}()
 
-	dm := manager.NewDeviceManager(manager.VirtioSCSI, nil)
+	dm := manager.NewDeviceManager(manager.VirtioSCSI, false, "", nil)
 	path := filepath.Join(vfioPath, testFDIOGroup)
 	deviceInfo := config.DeviceInfo{
 		HostPath:      path,
@@ -1174,7 +1174,7 @@ func TestAttachBlockDevice(t *testing.T) {
 		DevType:       "b",
 	}
 
-	dm := manager.NewDeviceManager(config.VirtioBlock, nil)
+	dm := manager.NewDeviceManager(config.VirtioBlock, false, "", nil)
 	device, err := dm.NewDevice(deviceInfo)
 	assert.Nil(t, err)
 	_, ok := device.(*drivers.BlockDevice)
@@ -1230,7 +1230,7 @@ func TestPreAddDevice(t *testing.T) {
 		HypervisorConfig: hConfig,
 	}
 
-	dm := manager.NewDeviceManager(config.VirtioBlock, nil)
+	dm := manager.NewDeviceManager(config.VirtioBlock, false, "", nil)
 	// create a sandbox first
 	sandbox := &Sandbox{
 		id:         testSandboxID,

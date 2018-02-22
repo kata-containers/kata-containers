@@ -8,11 +8,13 @@ package config
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
 
 	"github.com/go-ini/ini"
+	"golang.org/x/sys/unix"
 )
 
 // DeviceType indicates device type
@@ -64,6 +66,14 @@ const (
 
 	// VirtioFS means use virtio-fs for the shared file system
 	VirtioFS = "virtio-fs"
+)
+
+const (
+	// The OCI spec requires the major-minor number to be provided for a
+	// device. We have chosen the below major numbers to represent
+	// vhost-user devices.
+	VhostUserBlkMajor  = 241
+	VhostUserSCSIMajor = 242
 )
 
 // Defining these as a variable instead of a const, to allow
@@ -223,15 +233,26 @@ type VhostUserDeviceAttrs struct {
 	Tag       string
 	CacheSize uint32
 	Cache     string
+
+	// PCIAddr is the PCI address used to identify the slot at which the drive is attached.
+	// It is only meaningful for vhost user block devices
+	PCIAddr string
+
+	// Block index of the device if assigned
+	Index int
 }
 
 // GetHostPathFunc is function pointer used to mock GetHostPath in tests.
 var GetHostPathFunc = GetHostPath
 
+// GetVhostUserNodeStatFunc is function pointer used to mock GetVhostUserNodeStat
+// in tests. Through this functon, user can get device type information.
+var GetVhostUserNodeStatFunc = GetVhostUserNodeStat
+
 // GetHostPath is used to fetch the host path for the device.
 // The path passed in the spec refers to the path that should appear inside the container.
 // We need to find the actual device path on the host based on the major-minor numbers of the device.
-func GetHostPath(devInfo DeviceInfo) (string, error) {
+func GetHostPath(devInfo DeviceInfo, vhostUserStoreEnabled bool, vhostUserStorePath string) (string, error) {
 	if devInfo.ContainerPath == "" {
 		return "", fmt.Errorf("Empty path provided for device")
 	}
@@ -247,6 +268,12 @@ func GetHostPath(devInfo DeviceInfo) (string, error) {
 		// Unsupported device types. Return nil error to ignore devices
 		// that cannot be handled currently.
 		return "", nil
+	}
+
+	// Filter out vhost-user storage devices by device Major numbers.
+	if vhostUserStoreEnabled && devInfo.DevType == "b" &&
+		(devInfo.Major == VhostUserSCSIMajor || devInfo.Major == VhostUserBlkMajor) {
+		return getVhostUserHostPath(devInfo, vhostUserStorePath)
 	}
 
 	format := strconv.FormatInt(devInfo.Major, 10) + ":" + strconv.FormatInt(devInfo.Minor, 10)
@@ -277,4 +304,59 @@ func GetHostPath(devInfo DeviceInfo) (string, error) {
 	}
 
 	return filepath.Join("/dev", devName.String()), nil
+}
+
+// getVhostUserHostPath is used to fetch host path for the vhost-user device.
+// For vhost-user block device like vhost-user-blk or vhost-user-scsi, its
+// socket should be under directory "<vhostUserStorePath>/block/sockets/";
+// its corresponding device node should be under directory
+// "<vhostUserStorePath>/block/devices/"
+func getVhostUserHostPath(devInfo DeviceInfo, vhostUserStorePath string) (string, error) {
+	vhostUserDevNodePath := filepath.Join(vhostUserStorePath, "/block/devices/")
+	vhostUserSockPath := filepath.Join(vhostUserStorePath, "/block/sockets/")
+
+	sockFileName, err := getVhostUserDevName(vhostUserDevNodePath,
+		uint32(devInfo.Major), uint32(devInfo.Minor))
+	if err != nil {
+		return "", err
+	}
+
+	// Locate socket path of vhost-user device
+	sockFilePath := filepath.Join(vhostUserSockPath, sockFileName)
+	if _, err = os.Stat(sockFilePath); os.IsNotExist(err) {
+		return "", err
+	}
+
+	return sockFilePath, nil
+}
+
+func GetVhostUserNodeStat(devNodePath string, devNodeStat *unix.Stat_t) (err error) {
+	return unix.Stat(devNodePath, devNodeStat)
+}
+
+// Filter out name of the device node whose device type is Major:Minor from directory
+func getVhostUserDevName(dirname string, majorNum, minorNum uint32) (string, error) {
+	files, err := ioutil.ReadDir(dirname)
+	if err != nil {
+		return "", err
+	}
+
+	for _, file := range files {
+		var devStat unix.Stat_t
+
+		devFilePath := filepath.Join(dirname, file.Name())
+		err = GetVhostUserNodeStatFunc(devFilePath, &devStat)
+		if err != nil {
+			return "", err
+		}
+
+		devMajor := unix.Major(devStat.Rdev)
+		devMinor := unix.Minor(devStat.Rdev)
+		if devMajor == majorNum && devMinor == minorNum {
+			return file.Name(), nil
+		}
+	}
+
+	return "", fmt.Errorf("Required device node (%d:%d) doesn't exist under directory %s",
+		majorNum, minorNum, dirname)
 }
