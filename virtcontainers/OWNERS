@@ -1,0 +1,7 @@
+reviewers:
+- virtcontainers-maintainers
+
+approvers:
+- sameo
+- sboeuf
+- jodh-intel

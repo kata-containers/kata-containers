@@ -1,0 +1,138 @@
+1.0.8:
+	Added support for CPU hotplug
+	Added SCSI support for drives and volumes
+	Added networking support for Kata Containers
+	Added block device hotplug support for Kata Containers
+	Added support for starting shim inside their own PID namespace
+
+1.0.7:
+	Added ARM64 support
+	Added Kata Containers support
+	Added dockershim support
+	Added govmm support
+	Added support for the one proxy per VM model
+	Added 1.0 API documentation
+	Added hotplug support for QEMU's Q35 machine type
+	Fixed the agent, proxy and shim hierarchy
+	Fixed the state storage implementation
+
+1.0.6:
+	Added SRIOV support
+	Added Multi-OS support
+	Removed Travis CI
+
+1.0.5:
+	Added full CI (unit, functional and integration tests)
+	Added docker ps command support
+	Added multi-queue macvtap to the list of networking models
+	Added --device support for block devices (emulated)
+	Added pod shared locks for more efficient locking
+	Removed the ciao uuid package dependency
+
+1.0.4:
+	Added shim debug output
+	Added support for custom qemu accelerators
+	Added structured logging
+	Added drive hotplug support for all containers
+	Fixed pod block index accounting
+	Fixed vendoring model
+
+1.0.3:
+	Added initial device assignment framework
+	Added VFIO devices assignment initial support
+	Fixed pod locking
+	Fixed unconfigured interfaces handling
+
+1.0.2:
+	Added James Hunt as maintainer
+	Added huge pages support
+	Added option for disabling nesting optimizations
+	Fixed the rootfs readonly support
+
+1.0.1:
+	Added QEMU memory locking support
+
+1.0.0:
+	Added support for memory and cpu reservation
+	Added stroage hotplug support
+	Added code of conduct
+	Added memory pre-allocation, realtime and memory locking support
+	Fixed nested virtualization support
+	Fixed log verbosity
+	Fixed pod cleanup
+
+1.0.0-rc.4:
+	Added new project approvers
+	Fixed gometalinter
+	Increased unit test coverage
+	Added "pc" machine type for Qemu hypervisor
+	Fixed "kill" and "stop" container
+
+1.0.0-rc.3:
+	Added support for assigning the container rootfs underlying block device to the VM (when using devicemapper)
+	Changed qemu to use virtio-net vhost by default
+	Changed qemu parameters to not be Clear Containers specific
+	Fixed MTU passing to hyperstart
+
+1.0.0-rc.2:
+	Added support for transitioning from Ready to Stopped
+	Fixed pod container creation
+	Fixed CRI-O support for sandbox identifiers
+
+1.0.0-rc.1:
+	Added standard error for invalid pod resources
+	Fixed docker gateway routing
+
+1.0.0-rc.0:
+	Added pod pause and resume support
+	Added bind mounts support
+	Added CRI-O support
+	Added QEMU Q35 machine type support
+	Added readonly rootfs support
+	Added annotations passing to the OCI config file
+	Fixed hyperstart users and groups management
+	Fixed the installation and build scripts
+	Fixed networking MAC address configuration
+
+0.7.0:
+	Added Clear Containers 3.0 shim support
+	Added Clear Containers 3.0 proxy protocol support
+	Added self contained hyperstart package
+	Added full build scripts
+	Added hypervisor and pod debug options
+	Added command line and function arguments validity checks
+	Added logrus support, replacing glog
+	Added OCI runtime vendoring
+	Added structured and separated error definitions
+	Fixed networking support and unit testing
+	Fixed code layering by keeping generic code out of interface implementations
+	Fixed benchmarks
+
+0.6.0:
+	Added pullapprove support
+	Added Slack integration
+	Added KillContainer API
+	Added networking documentation
+	Added a Process structure for describing container processes
+	Added a more complete pod and container status structure
+	Fixed hyperstart implementation for stopping containers
+
+0.5.0:
+	Changed the CreatePod/StartPod logic
+	Added an OCI config file conversion package
+	Added initial benchmarks
+	Added more CNI network unit tests
+	Moved all non virtcontainers packages under pkg/
+	Fixed netns race conditions
+
+0.4.0:
+	Added CNM network model support
+	Added hyperstart asynchronous events support
+	Added low level CTL routines
+	Added OCI compatible hooks support
+	Added Travis code coverage report
+
+0.3.0:
+	Added support for the latest hyperstart changes
+	Added proxy interface and cc-proxy implementation
+	Added CNI unit tests
