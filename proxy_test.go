@@ -49,7 +49,7 @@ func client(proxyAddr, file string) error {
 		}
 		sum1 = fmt.Sprintf("%x", h.Sum(nil))
 
-		_, err = f.Seek(0, os.SEEK_SET)
+		_, err = f.Seek(0, io.SeekStart)
 		if err != nil {
 			return err
 		}

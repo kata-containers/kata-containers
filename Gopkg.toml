@@ -28,3 +28,8 @@
 [[constraint]]
   name = "github.com/hashicorp/yamux"
   revision = "f5742cb6"
+
+[prune]
+  non-go = true
+  go-tests = true
+  unused-packages = true
