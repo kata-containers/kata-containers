@@ -67,23 +67,23 @@ func (s *shim) proxyStdio(wg *sync.WaitGroup, terminal bool) {
 			ContainerId: s.containerID,
 			ExecId:      s.execID})
 		if err1 != nil {
-			shimLog.WithError(err1).Warn("copy stdin failed")
+			logger().WithError(err1).Warn("copy stdin failed")
 		}
 		if err2 != nil {
-			shimLog.WithError(err2).Warn("close stdin failed")
+			logger().WithError(err2).Warn("close stdin failed")
 		}
 	}()
 
 	go func() {
 		_, err := io.Copy(os.Stdout, outPipe)
-		shimLog.WithError(err).Info("copy stdout failed")
+		logger().WithError(err).Info("copy stdout failed")
 		wg.Done()
 	}()
 
 	if !terminal {
 		go func() {
 			_, err := io.Copy(os.Stderr, errPipe)
-			shimLog.WithError(err).Info("copy stderr failed")
+			logger().WithError(err).Info("copy stderr failed")
 			wg.Done()
 		}()
 	}
@@ -100,7 +100,7 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 			sysSig, ok := sig.(syscall.Signal)
 			if !ok {
 				err := errors.New("unknown signal")
-				shimLog.WithError(err).WithField("signal", sig.String()).Error("")
+				logger().WithError(err).WithField("signal", sig.String()).Error("")
 				continue
 			}
 			if sigIgnored[sysSig] {
@@ -113,7 +113,7 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 				ExecId:      s.execID,
 				Signal:      uint32(sysSig)})
 			if err != nil {
-				shimLog.WithError(err).WithField("signal", sig.String()).Error("forward signal failed")
+				logger().WithError(err).WithField("signal", sig.String()).Error("forward signal failed")
 			}
 		}
 	}()
@@ -123,7 +123,7 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 func (s *shim) resizeTty(fromTty *os.File) error {
 	ws, err := term.GetWinsize(fromTty.Fd())
 	if err != nil {
-		shimLog.WithError(err).Info("Error getting size")
+		logger().WithError(err).Info("Error getting size")
 		return nil
 	}
 
@@ -133,7 +133,7 @@ func (s *shim) resizeTty(fromTty *os.File) error {
 		Row:         uint32(ws.Height),
 		Column:      uint32(ws.Width)})
 	if err != nil {
-		shimLog.WithError(err).Error("set winsize failed")
+		logger().WithError(err).Error("set winsize failed")
 	}
 
 	return err
