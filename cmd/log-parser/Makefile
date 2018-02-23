@@ -1,0 +1,31 @@
+#
+# Copyright (c) 2017-2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+TARGET = kata-log-parser
+SOURCES = $(shell find . 2>&1 | grep -E '.*\.go$$')
+
+VERSION := ${shell cat ./VERSION}
+COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
+COMMIT := $(if $(shell git status --porcelain --untracked-files=no),"${COMMIT_NO}-dirty","${COMMIT_NO}")
+
+BINDIR := $(GOPATH)/bin
+DESTTARGET := $(abspath $(BINDIR)/$(TARGET))
+
+default: install
+
+check:
+	go test -v .
+
+$(TARGET): $(SOURCES) check
+	go build -o "$(TARGET)" -ldflags "-X main.name=${TARGET} -X main.commit=${COMMIT} -X main.version=${VERSION}" .
+
+install: $(TARGET)
+	install -D $(TARGET) $(DESTTARGET)
+
+clean:
+	rm -f $(TARGET)
+
+.PHONY: check install clean

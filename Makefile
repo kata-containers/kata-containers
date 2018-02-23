@@ -24,6 +24,9 @@ else
 	./ginkgo -v -focus "${FOCUS}" ./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 endif
 
+log-parser:
+	make -C cmd/log-parser
+
 check: integration
 
-.PHONY: check checkcommits integration ginkgo
+.PHONY: check checkcommits integration ginkgo log-parser
