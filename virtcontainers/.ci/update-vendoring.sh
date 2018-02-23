@@ -22,7 +22,7 @@ set -e
 
 proxy_repo="github.com/clearcontainers/proxy"
 runtime_repo="github.com/clearcontainers/runtime"
-virtcontainers_repo="github.com/containers/virtcontainers"
+virtcontainers_repo="github.com/kata-containers/runtime/virtcontainers"
 
 function apply_depends_on(){
 	pushd "${GOPATH}/src/${virtcontainers_repo}"

@@ -26,8 +26,8 @@ import (
 	"time"
 
 	proxyClient "github.com/clearcontainers/proxy/client"
-	"github.com/containers/virtcontainers/pkg/hyperstart"
-	ns "github.com/containers/virtcontainers/pkg/nsenter"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart"
+	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )

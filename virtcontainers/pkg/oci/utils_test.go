@@ -26,8 +26,8 @@ import (
 	"reflect"
 	"testing"
 
-	vc "github.com/containers/virtcontainers"
-	vcAnnotations "github.com/containers/virtcontainers/pkg/annotations"
+	vc "github.com/kata-containers/runtime/virtcontainers"
+	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kubernetes-incubator/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"

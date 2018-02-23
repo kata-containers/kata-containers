@@ -23,8 +23,8 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/containers/virtcontainers/pkg/hyperstart"
-	"github.com/containers/virtcontainers/pkg/hyperstart/mock"
+	. "github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart/mock"
 )
 
 const (

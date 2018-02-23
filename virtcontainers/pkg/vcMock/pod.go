@@ -15,7 +15,7 @@
 package vcMock
 
 import (
-	vc "github.com/containers/virtcontainers"
+	vc "github.com/kata-containers/runtime/virtcontainers"
 )
 
 // ID implements the VCPod function of the same name.

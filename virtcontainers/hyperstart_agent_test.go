@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/containers/virtcontainers/pkg/hyperstart"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart"
 	"github.com/vishvananda/netlink"
 )
 

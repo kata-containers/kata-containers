@@ -23,7 +23,7 @@ import (
 	"io/ioutil"
 	"path/filepath"
 
-	"github.com/containers/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 )
 
 type assetType string

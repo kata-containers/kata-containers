@@ -27,9 +27,9 @@ import (
 	"strings"
 	"syscall"
 
-	vcAnnotations "github.com/containers/virtcontainers/pkg/annotations"
-	ns "github.com/containers/virtcontainers/pkg/nsenter"
-	"github.com/containers/virtcontainers/pkg/uuid"
+	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	kataclient "github.com/kata-containers/agent/protocols/client"
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/opencontainers/runtime-spec/specs-go"

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	vc "github.com/containers/virtcontainers"
+	vc "github.com/kata-containers/runtime/virtcontainers"
 )
 
 const containerRootfs = "/var/lib/container/bundle/"

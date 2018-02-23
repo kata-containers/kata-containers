@@ -70,8 +70,8 @@ echo "Clone cni"
 git clone https://github.com/containernetworking/plugins.git
 
 echo "Copy CNI config files"
-sudo cp $GOPATH/src/github.com/containers/virtcontainers/test/cni/10-mynet.conf ${ETCDIR}/cni/net.d/
-sudo cp $GOPATH/src/github.com/containers/virtcontainers/test/cni/99-loopback.conf ${ETCDIR}/cni/net.d/
+cp $GOPATH/src/github.com/kata-containers/runtime/virtcontainers/test/cni/10-mynet.conf ${ETCDIR}/cni/net.d/
+cp $GOPATH/src/github.com/kata-containers/runtime/virtcontainers/test/cni/99-loopback.conf ${ETCDIR}/cni/net.d/
 
 pushd plugins
 ./build.sh

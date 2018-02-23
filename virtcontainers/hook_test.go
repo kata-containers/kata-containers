@@ -23,7 +23,7 @@ import (
 	"reflect"
 	"testing"
 
-	. "github.com/containers/virtcontainers/pkg/mock"
+	. "github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 

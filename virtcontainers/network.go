@@ -30,8 +30,8 @@ import (
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/containers/virtcontainers/pkg/ethtool"
-	"github.com/containers/virtcontainers/pkg/uuid"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/ethtool"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
