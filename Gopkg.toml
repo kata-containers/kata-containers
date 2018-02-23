@@ -31,3 +31,12 @@
 [[constraint]]
   name = "github.com/onsi/gomega"
   version = "=1.1.0"
+
+[prune]
+  non-go = true
+  go-tests = true
+  unused-packages = true
+
+[[constraint]]
+  name = "github.com/opencontainers/specs"
+  version = "1.0.1"
