@@ -22,7 +22,7 @@ import (
 	cniTypes "github.com/containernetworking/cni/pkg/types"
 	cniV2Types "github.com/containernetworking/cni/pkg/types/020"
 	cniLatestTypes "github.com/containernetworking/cni/pkg/types/current"
-	cniPlugin "github.com/containers/virtcontainers/pkg/cni"
+	cniPlugin "github.com/kata-containers/runtime/virtcontainers/pkg/cni"
 	"github.com/sirupsen/logrus"
 )
 

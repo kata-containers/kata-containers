@@ -28,7 +28,7 @@ import (
 	"fmt"
 	"syscall"
 
-	vc "github.com/containers/virtcontainers"
+	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/sirupsen/logrus"
 )
 

@@ -28,7 +28,7 @@ import (
 	"time"
 	"unsafe"
 
-	. "github.com/containers/virtcontainers/pkg/mock"
+	. "github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 )
 
 // These tests don't care about the format of the container ID

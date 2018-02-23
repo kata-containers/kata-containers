@@ -17,7 +17,7 @@
 package main
 
 import (
-	"github.com/containers/virtcontainers/pkg/mock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 )
 
 func main() {

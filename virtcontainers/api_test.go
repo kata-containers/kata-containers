@@ -27,7 +27,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/containers/virtcontainers/pkg/mock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	"github.com/stretchr/testify/assert"
 )
 

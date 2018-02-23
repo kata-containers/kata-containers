@@ -24,7 +24,7 @@ import (
 	"sync"
 	"testing"
 
-	hyper "github.com/containers/virtcontainers/pkg/hyperstart"
+	hyper "github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart"
 	"github.com/stretchr/testify/assert"
 )
 

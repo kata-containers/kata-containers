@@ -24,11 +24,11 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"github.com/containers/virtcontainers/pkg/uuid"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 
-	vc "github.com/containers/virtcontainers"
+	vc "github.com/kata-containers/runtime/virtcontainers"
 )
 
 var virtcLog = logrus.New()

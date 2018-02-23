@@ -26,7 +26,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/containers/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/stretchr/testify/assert"
 )
 

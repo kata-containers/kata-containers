@@ -24,9 +24,9 @@ import (
 	"strings"
 
 	criContainerdAnnotations "github.com/containerd/cri-containerd/pkg/annotations"
-	vc "github.com/containers/virtcontainers"
-	vcAnnotations "github.com/containers/virtcontainers/pkg/annotations"
-	dockershimAnnotations "github.com/containers/virtcontainers/pkg/annotations/dockershim"
+	vc "github.com/kata-containers/runtime/virtcontainers"
+	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	dockershimAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations/dockershim"
 	crioAnnotations "github.com/kubernetes-incubator/cri-o/pkg/annotations"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"

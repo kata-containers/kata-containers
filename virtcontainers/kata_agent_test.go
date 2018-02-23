@@ -24,7 +24,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/containers/virtcontainers/pkg/mock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	gpb "github.com/gogo/protobuf/types"
 	pb "github.com/kata-containers/agent/protocols/grpc"
 	"github.com/stretchr/testify/assert"
