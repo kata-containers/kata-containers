@@ -15,6 +15,6 @@ endif
 	cp "$(MK_DIR)/config_template.sh" "$(DESTDIR)/config.sh"
 	sed \
 		-e "s|@distro@|$(ROOTFS_BASE_NAME)|g" \
-		Dockerfile.template > $(DESTDIR)/Dockerfile.in
+		"$(MK_DIR)/Dockerfile.template" > $(DESTDIR)/Dockerfile.in
 
 
