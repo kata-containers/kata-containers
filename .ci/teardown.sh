@@ -70,7 +70,7 @@ else
 	echo "Kata Containers Runtime (Runv) Log:"
 	journalctl --no-pager -t kata-runtime-runv
 	echo "Kata Containers Proxy Log:"
-	journalctl --no-pager -u kata-proxy
+	journalctl --no-pager -t kata-proxy
 	echo "Kata Containers Shim Log:"
 	journalctl --no-pager -t kata-shim
 	echo "CRI-O Log:"
