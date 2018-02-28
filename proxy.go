@@ -116,8 +116,9 @@ func unixAddr(uri string) (string, error) {
 
 func logger() *logrus.Entry {
 	return proxyLog.WithFields(logrus.Fields{
-		"name": proxyName,
-		"pid":  os.Getpid(),
+		"name":   proxyName,
+		"pid":    os.Getpid(),
+		"source": "proxy",
 	})
 }
 
@@ -171,10 +172,16 @@ func printAgentLogs(sock string) error {
 		return err
 	}
 
+	// Allow log messages coming from the agent to be distinguished from
+	// messages originating from the proxy itself.
+	agentLogger := logger().WithFields(logrus.Fields{
+		"source": "agent",
+	})
+
 	go func() {
 		scanner := bufio.NewScanner(conn)
 		for scanner.Scan() {
-			logger().Infof("%s\n", scanner.Text())
+			agentLogger.Infof("%s\n", scanner.Text())
 		}
 
 		if err := scanner.Err(); err != nil {
@@ -305,4 +312,6 @@ func main() {
 		logger().Fatal(err)
 		return
 	}
+
+	logger().Debug("shutting down")
 }
