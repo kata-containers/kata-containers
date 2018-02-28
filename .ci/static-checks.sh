@@ -44,7 +44,8 @@ check_go()
 {
 	local go_packages
 
-	go_packages=$(go list ./... 2>/dev/null || true)
+	# Note: the vendor filtering is required for versions of go older than 1.9
+	go_packages=$(go list ./... 2>/dev/null | grep -v "/vendor/" || true)
 
 	# Ignore the runtime repo which uses submodules. The runtimes it
 	# imports are assumed to be tested independently so do not (and should
