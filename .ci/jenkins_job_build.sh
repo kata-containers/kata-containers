@@ -62,8 +62,26 @@ else
 	git fetch origin && git checkout master && git reset --hard origin/master
 fi
 
+# Run the static analysis tools
+.ci/static-checks.sh
+
 # Setup Kata Containers Environment
+#
+# - If the repo is "tests", this will call the script living in that repo
+#   directly.
+# - If the repo is not "tests", call the repo-specific script (which is
+#   expected to call the script of the same name in the "tests" repo).
 .ci/setup.sh
+
+if [ -n "$pr_number" ]
+then
+	# Now that checkcommits has run, move the PR commits into the master
+	# branch before running the tests. Having the commits in "master" is
+	# required to ensure coveralls works.
+	git checkout master
+	git reset --hard "$pr_branch"
+	git branch -D "$pr_branch"
+fi
 
 # Run integration tests
 .ci/run.sh
