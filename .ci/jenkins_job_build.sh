@@ -7,6 +7,9 @@
 
 set -e
 
+# Signify to all scripts that they are running in a CI environment
+[ -z "${KATA_DEV_MODE}" ] && export CI=true
+
 # Need the repo to know which tests to run.
 kata_repo="$1"
 
