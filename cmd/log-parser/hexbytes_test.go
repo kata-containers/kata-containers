@@ -21,6 +21,16 @@ func TestNewHexByteReader(t *testing.T) {
 	file := "/tmp/foo.txt"
 	r := NewHexByteReader(file)
 	assert.Equal(r.file, file)
+	assert.Nil(r.f)
+}
+
+func TestNewHexByteReaderStdin(t *testing.T) {
+	assert := assert.New(t)
+
+	file := "-"
+	r := NewHexByteReader(file)
+	assert.Equal(r.file, file)
+	assert.Equal(r.f, os.Stdin)
 }
 
 func TestHexByteReaderRead(t *testing.T) {

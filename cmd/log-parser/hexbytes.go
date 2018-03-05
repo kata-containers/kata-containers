@@ -30,17 +30,29 @@ type HexByteReader struct {
 // NewHexByteReader returns a new hex byte reader that escapes all
 // hex-encoded characters.
 func NewHexByteReader(file string) *HexByteReader {
-	return &HexByteReader{file: file}
+	var f *os.File
+
+	// treat dash as an alias for standard input
+	if file == stdinFile {
+		f = os.Stdin
+	}
+
+	return &HexByteReader{
+		file: file,
+		f:    f,
+	}
 }
 
 // Read is a Reader that converts "\x" to "\\x"
 func (r *HexByteReader) Read(p []byte) (n int, err error) {
 	size := len(p)
 
-	if r.f == nil {
-		r.f, err = os.Open(r.file)
-		if err != nil {
-			return 0, err
+	if r.data == nil {
+		if r.f == nil {
+			r.f, err = os.Open(r.file)
+			if err != nil {
+				return 0, err
+			}
 		}
 
 		// read the entire file

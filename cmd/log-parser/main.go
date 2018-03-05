@@ -26,6 +26,9 @@ import (
 	"github.com/urfave/cli"
 )
 
+// if specified as a file, read from standard input
+const stdinFile = "-"
+
 var (
 	// set by the build
 	name    = ""
@@ -43,14 +46,16 @@ var (
 	logger *logrus.Entry
 )
 
-var notes = `
+var notes = fmt.Sprintf(`
 
 NOTES:
+
+- If file is specified as %q, read from standard input.
 
 - If run with '--debug', it is necessary to also specify '--output-file='
   to avoid invalidating the output.
 
-`
+`, stdinFile)
 
 func init() {
 	logger = logrus.WithFields(logrus.Fields{
@@ -70,31 +75,36 @@ func init() {
 	logger.Logger.Out = os.Stdout
 }
 
-func getLogFiles(c *cli.Context) ([]string, error) {
-	var files []string
-
+func getLogFiles(c *cli.Context) (files []string, err error) {
 	if c.NArg() == 0 {
 		return []string{}, fmt.Errorf("need files")
 	}
 
 	for _, file := range c.Args() {
-		resolved, err := resolvePath(file)
-		if err != nil {
-			return []string{}, err
-		}
+		var resolved string
 
-		st, err := os.Stat(resolved)
-		if err != nil {
-			panic("BUG: resolvePath() should detect missing files")
-		}
-
-		if st.Size() == 0 {
-			if c.GlobalBool("error-if-file-empty") {
-				return []string{}, fmt.Errorf("file %q empty", file)
+		if file == stdinFile {
+			// magic stdin file is handled by HexByteReader
+			resolved = file
+		} else {
+			resolved, err = resolvePath(file)
+			if err != nil {
+				return []string{}, err
 			}
 
-			logger.Debugf("ignoring empty file %q\n", resolved)
-			continue
+			st, err := os.Stat(resolved)
+			if err != nil {
+				panic("BUG: resolvePath() should detect missing files")
+			}
+
+			if st.Size() == 0 {
+				if c.GlobalBool("error-if-file-empty") {
+					return []string{}, fmt.Errorf("file %q empty", file)
+				}
+
+				logger.Debugf("ignoring empty file %q\n", resolved)
+				continue
+			}
 		}
 
 		files = append(files, resolved)
