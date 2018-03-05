@@ -33,7 +33,7 @@ func NewHexByteReader(file string) *HexByteReader {
 	return &HexByteReader{file: file}
 }
 
-// Reader that converts "\x" to "\\x"
+// Read is a Reader that converts "\x" to "\\x"
 func (r *HexByteReader) Read(p []byte) (n int, err error) {
 	size := len(p)
 
