@@ -838,6 +838,9 @@ type SCSIController struct {
 
 	// Addr is the PCI address offset, this is optional
 	Addr string
+
+	// DisableModern prevents qemu from relying on fast MMIO.
+	DisableModern bool
 }
 
 // Valid returns true if the SCSIController structure is valid and complete.
@@ -860,6 +863,9 @@ func (scsiCon SCSIController) QemuParams(config *Config) []string {
 	}
 	if scsiCon.Addr != "" {
 		devParams = append(devParams, fmt.Sprintf("addr=%s", scsiCon.Addr))
+	}
+	if scsiCon.DisableModern {
+		devParams = append(devParams, fmt.Sprintf("disable-modern=true"))
 	}
 
 	qemuParams = append(qemuParams, "-device")

@@ -346,7 +346,7 @@ func TestVSOCKValid(t *testing.T) {
 }
 
 var deviceSCSIControllerStr = "-device virtio-scsi-pci,id=foo"
-var deviceSCSIControllerBusAddrStr = "-device virtio-scsi-pci,id=foo,bus=pci.0,addr=00:04.0"
+var deviceSCSIControllerBusAddrStr = "-device virtio-scsi-pci,id=foo,bus=pci.0,addr=00:04.0,disable-modern=true"
 
 func TestAppendDeviceSCSIController(t *testing.T) {
 	scsiCon := SCSIController{
@@ -356,6 +356,7 @@ func TestAppendDeviceSCSIController(t *testing.T) {
 
 	scsiCon.Bus = "pci.0"
 	scsiCon.Addr = "00:04.0"
+	scsiCon.DisableModern = true
 	testAppend(scsiCon, deviceSCSIControllerBusAddrStr, t)
 }
 
