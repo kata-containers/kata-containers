@@ -14,6 +14,7 @@ set -e
 kata_repo="$1"
 
 tests_repo="${tests_repo:-github.com/kata-containers/tests}"
+runtime_repo="${runtime_repo:-github.com/kata-containers/runtime}"
 
 # This script is intended to execute under Jenkins
 # If we do not know where the Jenkins defined WORKSPACE area is
@@ -60,6 +61,12 @@ then
 	git fetch origin "pull/${pr_number}/head:${pr_branch}"
 	git checkout "${pr_branch}"
 	git rebase "origin/${ghprbTargetBranch}"
+
+	# As we currently have CC and runv runtimes as git submodules
+	# we need to update the submodules in order to get
+	# the correct changes.
+	# This condition should be removed when we have one runtime.
+	[ -f .gitmodules ] && git submodule update
 else
 	# Othewise we test the master branch
 	git fetch origin && git checkout master && git reset --hard origin/master
