@@ -35,6 +35,9 @@ const (
 // version is the proxy version. This variable is populated at build time.
 var version = "unknown"
 
+// if true, coredump when an internal error occurs or a fatal signal is received
+var crashOnError = false
+
 var proxyLog = logrus.New()
 
 func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) (net.Listener, error) {
@@ -196,6 +199,10 @@ func setupNotifier() chan os.Signal {
 	sigCh := make(chan os.Signal, 8)
 	signal.Notify(sigCh, termSignal)
 
+	for _, sig := range fatalSignals() {
+		signal.Notify(sigCh, sig)
+	}
+
 	return sigCh
 }
 
@@ -207,6 +214,15 @@ func handleSignal(sigCh chan os.Signal, vmConn *net.Conn, proxyListener *net.Lis
 
 	// Blocking here waiting for the signal to be received.
 	sig := <-sigCh
+
+	nativeSignal, ok := sig.(syscall.Signal)
+	if ok {
+		if fatalSignal(nativeSignal) {
+			logger().WithField("signal", sig).Error("received fatal signal")
+			die()
+		}
+	}
+
 	if sig != termSignal {
 		return fmt.Errorf("Signal received should be %q, got %q instead", termSignal.String(), sig.String())
 	}
@@ -231,10 +247,18 @@ func handleSignal(sigCh chan os.Signal, vmConn *net.Conn, proxyListener *net.Lis
 	return nil
 }
 
-func main() {
-	var channel, proxyAddr, agentLogsSocket, logLevel string
-	var showVersion bool
+func handleVersion(showVersion bool) {
+	if showVersion {
+		fmt.Printf("%v version %v\n", proxyName, version)
+		os.Exit(0)
+	}
+}
 
+func realMain() {
+	var channel, proxyAddr, agentLogsSocket, logLevel string
+	var debug, showVersion bool
+
+	flag.BoolVar(&debug, "debug", false, "enable debug mode")
 	flag.BoolVar(&showVersion, "version", false, "display program version and exit")
 	flag.StringVar(&channel, "mux-socket", "", "unix socket to multiplex on")
 	flag.StringVar(&proxyAddr, "listen-socket", "", "unix socket to listen on")
@@ -245,9 +269,10 @@ func main() {
 
 	flag.Parse()
 
-	if showVersion {
-		fmt.Printf("%v version %v\n", proxyName, version)
-		os.Exit(0)
+	handleVersion(showVersion)
+
+	if debug {
+		crashOnError = true
 	}
 
 	if channel == "" || proxyAddr == "" {
@@ -314,4 +339,9 @@ func main() {
 	}
 
 	logger().Debug("shutting down")
+}
+
+func main() {
+	defer handlePanic()
+	realMain()
 }
