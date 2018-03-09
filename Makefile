@@ -24,6 +24,10 @@ else
 	./ginkgo -v -focus "${FOCUS}" ./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 endif
 
+crio:
+	bash .ci/install_bats.sh
+	RUNTIME=${RUNTIME} ./integration/cri-o/cri-o.sh
+
 log-parser:
 	make -C cmd/log-parser
 
