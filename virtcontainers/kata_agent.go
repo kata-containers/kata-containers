@@ -49,6 +49,7 @@ var (
 	type9pFs                    = "9p"
 	devPath                     = "/dev"
 	vsockSocketScheme           = "vsock"
+	kata9pDevType               = "9p"
 	kataBlkDevType              = "blk"
 )
 
@@ -471,6 +472,7 @@ func (k *kataAgent) startPod(pod Pod) error {
 	// (resolv.conf, etc...) and potentially all container
 	// rootfs will reside.
 	sharedVolume := &grpc.Storage{
+		Driver:     kata9pDevType,
 		Source:     mountGuest9pTag,
 		MountPoint: kataGuestSharedDir,
 		Fstype:     type9pFs,
@@ -611,14 +613,7 @@ func (k *kataAgent) createContainer(pod *Pod, c *Container) (*Process, error) {
 		// without trying to match and update it into the OCI spec list
 		// of actual devices. The device corresponding to the rootfs is
 		// a very specific case.
-		rootfsDevice := &grpc.Device{
-			Type:          kataBlkDevType,
-			VmPath:        virtPath,
-			ContainerPath: "",
-		}
-
-		ctrDevices = append(ctrDevices, rootfsDevice)
-
+		rootfs.Driver = kataBlkDevType
 		rootfs.Source = virtPath
 		rootfs.MountPoint = rootPathParent
 		rootfs.Fstype = c.state.Fstype
