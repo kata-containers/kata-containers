@@ -579,6 +579,25 @@ func constraintGRPCSpec(grpcSpec *grpc.Spec) {
 	}
 }
 
+func (k *kataAgent) appendDevices(deviceList []*grpc.Device, devices []Device) []*grpc.Device {
+	for _, device := range devices {
+		d, ok := device.(*BlockDevice)
+		if !ok {
+			continue
+		}
+
+		kataDevice := &grpc.Device{
+			Type:          kataBlkDevType,
+			VmPath:        d.VirtPath,
+			ContainerPath: d.DeviceInfo.ContainerPath,
+		}
+
+		deviceList = append(deviceList, kataDevice)
+	}
+
+	return deviceList
+}
+
 func (k *kataAgent) createContainer(pod *Pod, c *Container) (*Process, error) {
 	ociSpecJSON, ok := c.config.Annotations[vcAnnotations.ConfigJSONKey]
 	if !ok {
@@ -673,22 +692,8 @@ func (k *kataAgent) createContainer(pod *Pod, c *Container) (*Process, error) {
 	// irrelevant information to the agent.
 	constraintGRPCSpec(grpcSpec)
 
-	// Append container mounts for block devices passed with --device.
-	for _, device := range c.devices {
-		d, ok := device.(*BlockDevice)
-
-		if !ok {
-			continue
-		}
-
-		kataDevice := &grpc.Device{
-			Type:          kataBlkDevType,
-			VmPath:        d.VirtPath,
-			ContainerPath: d.DeviceInfo.ContainerPath,
-		}
-
-		ctrDevices = append(ctrDevices, kataDevice)
-	}
+	// Append container devices for block devices passed with --device.
+	ctrDevices = k.appendDevices(ctrDevices, c.devices)
 
 	req := &grpc.CreateContainerRequest{
 		ContainerId: c.id,

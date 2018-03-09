@@ -33,7 +33,11 @@ import (
 	"google.golang.org/grpc"
 )
 
-var testKataProxyURLTempl = "unix://%s/kata-proxy-test.sock"
+var (
+	testKataProxyURLTempl   = "unix://%s/kata-proxy-test.sock"
+	testBlockDeviceVirtPath = "testBlockDeviceVirtPath"
+	testBlockDeviceCtrPath  = "testBlockDeviceCtrPath"
+)
 
 func proxyHandlerDiscard(c net.Conn) {
 	buf := make([]byte, 1024)
@@ -335,4 +339,43 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(resRoutes, expectedRoutes),
 		"Routes returned didn't match: got %+v, expecting %+v", resRoutes, expectedRoutes)
 
+}
+
+func TestAppendDevicesEmptyContainerDeviceList(t *testing.T) {
+	k := kataAgent{}
+
+	devList := []*pb.Device{}
+	expected := []*pb.Device{}
+	ctrDevices := []Device{}
+
+	updatedDevList := k.appendDevices(devList, ctrDevices)
+	assert.True(t, reflect.DeepEqual(updatedDevList, expected),
+		"Device lists didn't match: got %+v, expecting %+v",
+		updatedDevList, expected)
+}
+
+func TestAppendDevices(t *testing.T) {
+	k := kataAgent{}
+
+	devList := []*pb.Device{}
+	expected := []*pb.Device{
+		{
+			Type:          kataBlkDevType,
+			VmPath:        testBlockDeviceVirtPath,
+			ContainerPath: testBlockDeviceCtrPath,
+		},
+	}
+	ctrDevices := []Device{
+		&BlockDevice{
+			VirtPath: testBlockDeviceVirtPath,
+			DeviceInfo: DeviceInfo{
+				ContainerPath: testBlockDeviceCtrPath,
+			},
+		},
+	}
+
+	updatedDevList := k.appendDevices(devList, ctrDevices)
+	assert.True(t, reflect.DeepEqual(updatedDevList, expected),
+		"Device lists didn't match: got %+v, expecting %+v",
+		updatedDevList, expected)
 }
