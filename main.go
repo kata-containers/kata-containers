@@ -27,6 +27,9 @@ const (
 // version is the shim version. This variable is populated at build time.
 var version = "unknown"
 
+// if true, coredump when an internal error occurs or a fatal signal is received
+var crashOnError = false
+
 var shimLog = logrus.New()
 
 func logger() *logrus.Entry {
@@ -60,7 +63,7 @@ func initLogger(logLevel string) error {
 	return nil
 }
 
-func main() {
+func realMain() {
 	var (
 		logLevel      string
 		agentAddr     string
@@ -69,8 +72,10 @@ func main() {
 		terminal      bool
 		proxyExitCode bool
 		showVersion   bool
+		debug         bool
 	)
 
+	flag.BoolVar(&debug, "debug", false, "enable debug mode")
 	flag.BoolVar(&showVersion, "version", false, "display program version and exit")
 	flag.StringVar(&logLevel, "log", "warn", "set shim log level: debug, info, warn, error, fatal or panic")
 	flag.StringVar(&agentAddr, "agent", "", "agent gRPC socket endpoint")
@@ -85,6 +90,10 @@ func main() {
 	if showVersion {
 		fmt.Printf("%v version %v\n", shimName, version)
 		os.Exit(0)
+	}
+
+	if debug {
+		crashOnError = true
 	}
 
 	if agentAddr == "" || container == "" || execID == "" {
@@ -139,4 +148,9 @@ func main() {
 			os.Exit(int(exitcode))
 		}
 	}
+}
+
+func main() {
+	defer handlePanic()
+	realMain()
 }

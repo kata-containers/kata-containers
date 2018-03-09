@@ -25,9 +25,6 @@ var sigIgnored = map[syscall.Signal]bool{
 	syscall.SIGCHLD:  true,
 	syscall.SIGPIPE:  true,
 	syscall.SIGWINCH: true,
-	syscall.SIGBUS:   true,
-	syscall.SIGSEGV:  true,
-	syscall.SIGABRT:  true,
 }
 
 type shim struct {
@@ -103,6 +100,12 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 				logger().WithError(err).WithField("signal", sig.String()).Error("")
 				continue
 			}
+
+			if fatalSignal(sysSig) {
+				logger().WithField("signal", sig).Error("received fatal signal")
+				die()
+			}
+
 			if sigIgnored[sysSig] {
 				//ignore these
 				continue
