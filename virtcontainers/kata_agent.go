@@ -51,6 +51,7 @@ var (
 	vsockSocketScheme           = "vsock"
 	kata9pDevType               = "9p"
 	kataBlkDevType              = "blk"
+	sharedDir9pOptions          = []string{"trans=virtio,version=9p2000.L", "nodev"}
 )
 
 // KataAgentConfig is a structure storing information needed
@@ -476,7 +477,7 @@ func (k *kataAgent) startPod(pod Pod) error {
 		Source:     mountGuest9pTag,
 		MountPoint: kataGuestSharedDir,
 		Fstype:     type9pFs,
-		Options:    []string{"trans=virtio", "nodev"},
+		Options:    sharedDir9pOptions,
 	}
 
 	req := &grpc.CreateSandboxRequest{
