@@ -101,6 +101,7 @@ check_go()
 	linter_args+=" --enable=structcheck"
 	linter_args+=" --enable=unused"
 	linter_args+=" --enable=staticcheck"
+	linter_args+=" --enable=maligned"
 
 	eval gometalinter "${linter_args}" ./...
 }
