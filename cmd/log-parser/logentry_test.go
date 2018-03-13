@@ -150,6 +150,19 @@ func TestLogEntryCheck(t *testing.T) {
 			},
 			true,
 		},
+
+		{
+			LogEntry{
+				Filename: "-",
+				Line:     1,
+				Time:     time.Now().UTC(),
+				Pid:      123,
+				Level:    "debug",
+				Source:   "source",
+				Name:     "name",
+			},
+			true,
+		},
 	}
 
 	for i, d := range data {

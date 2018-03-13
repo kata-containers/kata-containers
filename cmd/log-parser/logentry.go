@@ -97,8 +97,10 @@ func (le LogEntry) Check() error {
 		return fmt.Errorf("missing filename: %+v", le)
 	}
 
-	if !strings.HasPrefix(le.Filename, "/") {
-		return fmt.Errorf("filename not absolute: %+v", le)
+	if le.Filename != stdinFile {
+		if !strings.HasPrefix(le.Filename, "/") {
+			return fmt.Errorf("filename not absolute: %+v", le)
+		}
 	}
 
 	if le.Line == 0 {
