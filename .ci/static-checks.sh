@@ -102,6 +102,8 @@ check_go()
 	linter_args+=" --enable=unused"
 	linter_args+=" --enable=staticcheck"
 	linter_args+=" --enable=maligned"
+	linter_args+=" --enable=varcheck"
+	linter_args+=" --enable=unconvert"
 
 	eval gometalinter "${linter_args}" ./...
 }
