@@ -32,7 +32,7 @@ echo "Install kata-containers image"
 "${cidir}/install_kata_image.sh"
 
 echo "Install CRI-O dependencies for all Ubuntu versions"
-chronic sudo -E apt install -y libglib2.0-dev libseccomp-dev libapparmor-dev libgpgme11-dev
+chronic sudo -E apt install -y libglib2.0-dev libseccomp-dev libapparmor-dev libgpgme11-dev go-md2man
 
 echo "Install bison binary"
 chronic sudo -E apt install -y bison

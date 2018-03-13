@@ -42,6 +42,12 @@ bash -f ${cidir}/install_proxy.sh
 echo "Install runtime"
 bash -f ${cidir}/install_runtime.sh
 
+echo "Install CNI plugins"
+bash -f ${cidir}/install_cni_plugins.sh
+
+echo "Install CRI-O"
+bash -f ${cidir}/install_crio.sh
+
 echo "Drop caches"
 sync
 sudo -E PATH=$PATH bash -c "echo 3 > /proc/sys/vm/drop_caches"
