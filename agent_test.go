@@ -85,12 +85,6 @@ func testTearDown(t *testAgent) {
 	<-t.waitCh
 }
 
-var defaultSpec = &pb.Spec{
-	Process:  &pb.Process{},
-	Root:     &pb.Root{Path: "rootpath", Readonly: true},
-	Hostname: "testGuest",
-}
-
 func newTestSpec() *pb.Spec {
 	return &pb.Spec{
 		Version: "testGrpcVersion",
