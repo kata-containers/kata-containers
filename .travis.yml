@@ -21,5 +21,7 @@ before_script:
 
 install:
   - cd ${TRAVIS_BUILD_DIR}
+  - pushd cli
   - make KATA_RUNTIME=${KATA_RUNTIME}
   - sudo -E PATH=$PATH make KATA_RUNTIME=${KATA_RUNTIME} install
+  - popd
