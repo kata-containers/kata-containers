@@ -2,6 +2,12 @@
 
 
 [[projects]]
+  name = "github.com/BurntSushi/toml"
+  packages = ["."]
+  revision = "b26d9c308763d68093482582cea63d69be07a0f0"
+  version = "v0.3.0"
+
+[[projects]]
   name = "github.com/clearcontainers/proxy"
   packages = [
     "api",
@@ -32,10 +38,22 @@
   revision = "7f98c94613021d8b57acfa1a2f0c8d0f6fd7ae5a"
 
 [[projects]]
+  name = "github.com/containers/virtcontainers"
+  packages = ["pkg/annotations"]
+  revision = "79fc80723a20cc5067ed962fede4c1d6f35f7473"
+  version = "1.0.8"
+
+[[projects]]
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
   revision = "346938d642f2ec3594ed81d874461961cd0faa76"
   version = "v1.1.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/dlespiau/covertool"
+  packages = ["pkg/cover"]
+  revision = "d45792f23e9014540f89404081285a1b4d097234"
 
 [[projects]]
   name = "github.com/go-ini/ini"
@@ -95,7 +113,10 @@
 
 [[projects]]
   name = "github.com/opencontainers/runc"
-  packages = ["libcontainer/configs"]
+  packages = [
+    "libcontainer/configs",
+    "libcontainer/utils"
+  ]
   revision = "0351df1c5a66838d0c392b4ac4cf9450de844e2d"
 
 [[projects]]
@@ -111,7 +132,10 @@
 
 [[projects]]
   name = "github.com/sirupsen/logrus"
-  packages = ["."]
+  packages = [
+    ".",
+    "hooks/syslog"
+  ]
   revision = "89742aefa4b206dcf400792f3bd35b542998eb3b"
 
 [[projects]]
@@ -221,6 +245,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "590b7d31900883c6782b596fa607426a77d71565516cfe8395379308a6285771"
+  inputs-digest = "8331e15417ca6d2fead042dca2d5d9e2d24c53d5f3e2f1896be962e19b0c6981"
   solver-name = "gps-cdcl"
   solver-version = 1
