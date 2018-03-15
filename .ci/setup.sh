@@ -11,6 +11,8 @@ cidir=$(dirname "$0")
 source /etc/os-release
 source "${cidir}/lib.sh"
 
+apply_depends_on
+
 arch=$(arch)
 
 echo "Set up environment"

@@ -56,6 +56,35 @@ else
 fi
 ```
 
+### Breaking Compatibility
+
+In case the patch you submit breaks the CI because it needs to be tested
+together with a patch from another `kata-containers` repository, you have to
+specify which repository and which pull request it depends on.
+
+Using a simple tag `Depends-on:` in your commit message will allow the CI to
+run properly. Notice that this tag is parsed from the latest commit of the
+pull request.
+
+For example:
+
+```
+	Subsystem: Change summary
+
+	Detailed explanation of your changes.
+
+	Fixes: #nnn
+
+	Depends-on:github.com/kata-containers/runtime#999
+
+	Signed-off-by: <contributor@foo.com>
+
+```
+
+In this example, we tell the CI to fetch the pull request 999 from the `runtime`
+repository and use that rather than the `master` branch when testing the changes
+contained in this pull request.
+
 ## Developer Mode
 
 Developers need a way to run as much test content as possible locally, but as
