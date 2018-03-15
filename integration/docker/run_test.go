@@ -231,6 +231,7 @@ var _ = Describe("run", func() {
 
 	DescribeTable("container with CPU period and quota",
 		func(quota, period int, fail bool) {
+			Skip("Issue: https://github.com/kata-containers/agent/issues/174")
 			args = append(args, "--cpu-quota", fmt.Sprintf("%d", quota),
 				"--cpu-period", fmt.Sprintf("%d", period), Image, "nproc")
 			vCPUs = (quota + period - 1) / period
@@ -250,6 +251,7 @@ var _ = Describe("run", func() {
 
 	DescribeTable("container with CPU constraint",
 		func(cpus int, fail bool) {
+			Skip("Issue: https://github.com/kata-containers/agent/issues/174")
 			args = append(args, "--cpus", fmt.Sprintf("%d", cpus), Image, "nproc")
 			stdout, _, exitCode := dockerRun(args...)
 			if fail {
