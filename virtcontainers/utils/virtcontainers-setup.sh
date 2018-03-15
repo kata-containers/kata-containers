@@ -19,10 +19,12 @@ set -e
 
 SCRIPT_PATH=$(dirname $(readlink -f $0))
 
-if [[ -z "$GOPATH" ]]; then
-	echo "This script requires GOPATH to be set. You may need to invoke via 'sudo -E PATH=$PATH ./virtcontainers-setup.sh'"
+if [ ! $(command -v go) ]; then
+	echo "This script requires go to be installed and executable"
 	exit 1
 fi
+
+GOPATH=$(go env "GOPATH")
 
 if [ ! $(command -v docker) ]; then
 	echo "This script requires docker to be installed and executable"
