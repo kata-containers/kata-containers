@@ -1,0 +1,8 @@
+/kata-runtime
+/coverage.html
+/config-generated.go
+/data/kata-collect-data.sh
+/data/kata-collect-data.sh.in
+/data/completions/bash/kata-runtime
+/data/completions/bash/kata-runtime.in
+/config/configuration.toml

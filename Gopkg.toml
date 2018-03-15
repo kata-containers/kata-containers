@@ -1,0 +1,72 @@
+[[constraint]]
+  name = "github.com/clearcontainers/proxy"
+  revision = "1d2a6a3ea132a86abd0731408b7dc34f2fc17d55"
+
+[[constraint]]
+  name = "github.com/containernetworking/cni"
+  revision = "384d8c0b5288c25b9f1da901c66ea5155e6c567d"
+
+[[constraint]]
+  name = "github.com/containernetworking/plugins"
+  revision = "7f98c94613021d8b57acfa1a2f0c8d0f6fd7ae5a"
+
+[[constraint]]
+  name = "github.com/go-ini/ini"
+  revision = "20b96f641a5ea98f2f8619ff4f3e061cff4833bd"
+
+[[constraint]]
+  name = "github.com/kubernetes-incubator/cri-o"
+  revision = "3394b3b2d6af0e41d185bb695c6378be5dd4d61d"
+
+[[constraint]]
+  name = "github.com/mitchellh/mapstructure"
+  revision = "d0303fe809921458f417bcf828397a65db30a7e4"
+
+[[constraint]]
+  name = "github.com/opencontainers/runc"
+  revision = "0351df1c5a66838d0c392b4ac4cf9450de844e2d"
+
+[[constraint]]
+  name = "github.com/opencontainers/runtime-spec"
+  revision = "4e3b9264a330d094b0386c3703c5f379119711e8"
+
+[[constraint]]
+  name = "github.com/stretchr/testify"
+  revision = "890a5c3458b43e6104ff5da8dfa139d013d77544"
+
+[[constraint]]
+  name = "github.com/urfave/cli"
+  revision = "ac249472b7de27a9e8990819566d9be95ab5b816"
+
+[[constraint]]
+  name = "github.com/vishvananda/netlink"
+  revision = "c2a3de3b38bd00f07290c3c5e12b4dbc04ec8666"
+
+[[constraint]]
+  name = "github.com/vishvananda/netns"
+  revision = "86bef332bfc3b59b7624a600bd53009ce91a9829"
+
+[[constraint]]
+  name = "golang.org/x/sys"
+  revision = "1d2aa6dbdea45adaaebb9905d0666e4537563829"
+
+[[constraint]]
+  name = "github.com/sirupsen/logrus"
+  revision = "89742aefa4b206dcf400792f3bd35b542998eb3b"
+
+[[constraint]]
+  name = "github.com/intel/govmm"
+  revision = "e87160f8ea39dfe558bf6761f74717d191d82493"
+
+[[constraint]]
+  name = "github.com/kata-containers/agent"
+  revision = "a93071539feee29bfa22b6184380d3fd7c156ef7"
+
+[[constraint]]
+  name = "github.com/containerd/cri-containerd"
+  revision = "3d382e2f5dabe3bae62ceb9ded56bdee847008ee"
+
+[prune]
+  non-go = true
+  go-tests = true
+  unused-packages = true
