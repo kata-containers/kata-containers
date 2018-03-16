@@ -31,6 +31,8 @@ crio:
 log-parser:
 	make -C cmd/log-parser
 
-check: integration
+test: integration
 
-.PHONY: check checkcommits integration ginkgo log-parser
+check: checkcommits log-parser
+
+.PHONY: check checkcommits integration ginkgo log-parser test

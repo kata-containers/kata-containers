@@ -64,5 +64,6 @@ check_log_files()
 export RUNTIME="kata-runtime"
 
 sudo -E PATH="$PATH" bash -c "make check"
+sudo -E PATH="$PATH" bash -c "make test"
 
 check_log_files
