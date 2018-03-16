@@ -791,6 +791,8 @@ func (c *Container) addResources() error {
 		if err := c.pod.hypervisor.hotplugAddDevice(uint32(vCPUs), cpuDev); err != nil {
 			return err
 		}
+
+		return c.pod.agent.onlineCPUMem()
 	}
 
 	return nil
