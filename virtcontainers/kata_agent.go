@@ -27,11 +27,11 @@ import (
 	"strings"
 	"syscall"
 
+	kataclient "github.com/kata-containers/agent/protocols/client"
+	"github.com/kata-containers/agent/protocols/grpc"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
-	kataclient "github.com/kata-containers/agent/protocols/client"
-	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -378,7 +378,17 @@ func (k *kataAgent) generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*
 			}
 
 			if route.Gw != nil {
-				r.Gateway = route.Gw.String()
+				gateway := route.Gw.String()
+
+				if route.Gw.To4() == nil {
+					// Skip IPv6 because is is not supported
+					k.Logger().WithFields(logrus.Fields{
+						"unsupported-route-type": "ipv6",
+						"gateway":                gateway,
+					}).Warn("unsupported route")
+					continue
+				}
+				r.Gateway = gateway
 			}
 
 			if route.Src != nil {

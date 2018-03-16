@@ -143,6 +143,12 @@ func (h *hyper) processHyperRoute(route netlink.Route, deviceName string) *hyper
 	gateway := route.Gw.String()
 	if gateway == "<nil>" {
 		gateway = ""
+	} else if route.Gw.To4() == nil { // Skip IPv6 as it is not supported by hyperstart agent
+		h.Logger().WithFields(logrus.Fields{
+			"unsupported-route-type": "ipv6",
+			"gateway":                gateway,
+		}).Warn("unsupported route")
+		return nil
 	}
 
 	var destination string
