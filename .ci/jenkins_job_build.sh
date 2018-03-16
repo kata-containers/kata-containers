@@ -11,7 +11,7 @@ set -e
 [ -z "${KATA_DEV_MODE}" ] && export CI=true
 
 # Need the repo to know which tests to run.
-kata_repo="$1"
+export kata_repo="$1"
 
 tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 runtime_repo="${runtime_repo:-github.com/kata-containers/runtime}"
