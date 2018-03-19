@@ -22,7 +22,7 @@ type bridgeType string
 
 const (
 	pciBridge  bridgeType = "pci"
-	pcieBridge            = "pcie"
+	pcieBridge bridgeType = "pcie"
 )
 
 const pciBridgeMaxCapacity = 30
