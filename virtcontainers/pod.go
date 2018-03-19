@@ -466,8 +466,6 @@ type Pod struct {
 
 	networkNS NetworkNamespace
 
-	lockFile *os.File
-
 	annotationsLock *sync.RWMutex
 
 	wg *sync.WaitGroup
