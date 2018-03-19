@@ -68,13 +68,13 @@ const (
 	netDev
 
 	// SerialDev is the serial device type.
-	serialDev
+	serialDev // nolint: varcheck,unused
 
 	// BlockDev is the block device type.
 	blockDev
 
 	// ConsoleDev is the console device type.
-	consoleDev
+	consoleDev // nolint: varcheck,unused
 
 	// SerialPortDev is the serial port device type.
 	serialPortDev
