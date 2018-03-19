@@ -279,6 +279,10 @@ func testGenerateCCProxySockDir() (string, error) {
 }
 
 func TestCreatePodHyperstartAgentSuccessful(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	cleanUp()
 
 	config := newTestPodConfigHyperstartAgent()
@@ -308,6 +312,10 @@ func TestCreatePodHyperstartAgentSuccessful(t *testing.T) {
 }
 
 func TestCreatePodKataAgentSuccessful(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	cleanUp()
 
 	config := newTestPodConfigKataAgent()
@@ -383,6 +391,10 @@ func TestDeletePodNoopAgentSuccessful(t *testing.T) {
 }
 
 func TestDeletePodHyperstartAgentSuccessful(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	cleanUp()
 
 	config := newTestPodConfigHyperstartAgent()
@@ -422,6 +434,10 @@ func TestDeletePodHyperstartAgentSuccessful(t *testing.T) {
 }
 
 func TestDeletePodKataAgentSuccessful(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	cleanUp()
 
 	config := newTestPodConfigKataAgent()
@@ -527,6 +543,10 @@ func TestStartPodHyperstartAgentSuccessful(t *testing.T) {
 }
 
 func TestStartPodKataAgentSuccessful(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	cleanUp()
 
 	config := newTestPodConfigKataAgent()
@@ -685,6 +705,10 @@ func TestStopPodHyperstartAgentSuccessful(t *testing.T) {
 }
 
 func TestStopPodKataAgentSuccessful(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	cleanUp()
 
 	config := newTestPodConfigKataAgent()
@@ -791,6 +815,10 @@ func TestRunPodHyperstartAgentSuccessful(t *testing.T) {
 }
 
 func TestRunPodKataAgentSuccessful(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	cleanUp()
 
 	config := newTestPodConfigKataAgent()

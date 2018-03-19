@@ -309,6 +309,10 @@ func TestCreateVirtualNetworkEndpointInvalidArgs(t *testing.T) {
 }
 
 func TestIsPhysicalIface(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	testNetIface := "testIface0"
 	testMTU := 1500
 	testMACAddr := "00:00:00:00:00:01"
