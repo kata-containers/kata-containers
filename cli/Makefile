@@ -449,7 +449,7 @@ check-go-test: $(GENERATED_FILES)
 	$(QUIET_TEST)$(MAKEFILE_DIR)/../.ci/go-test.sh
 
 check-go-static:
-	$(QUIET_CHECK)$(MAKEFILE_DIR)/../.ci/go-static-checks.sh $(GO_STATIC_CHECKS_ARGS)
+	$(QUIET_CHECK)$(MAKEFILE_DIR)/../.ci/static-checks.sh
 	$(QUIET_CHECK)$(MAKEFILE_DIR)/../.ci/go-no-os-exit.sh
 
 coverage:
