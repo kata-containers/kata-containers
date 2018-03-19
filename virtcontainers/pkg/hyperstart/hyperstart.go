@@ -345,7 +345,7 @@ func (h *Hyperstart) WriteCtlMessage(conn net.Conn, m *DecodedMessage) error {
 		return fmt.Errorf("message too long %d", length)
 	}
 	msg := make([]byte, length)
-	binary.BigEndian.PutUint32(msg[:], uint32(m.Code))
+	binary.BigEndian.PutUint32(msg[:], m.Code)
 	binary.BigEndian.PutUint32(msg[CtlHdrLenOffset:], uint32(length))
 	copy(msg[CtlHdrSize:], m.Message)
 

@@ -429,7 +429,7 @@ func (proto *ccProxyProtocol) handleCommand(ctx *clientCtx, cmd *api.Frame) *api
 
 	// cmd.Header.Opcode is guaranteed to be within the right bounds by
 	// ReadFrame().
-	handler := proto.cmdHandlers[FrameKey{cmd.Header.Type, int(cmd.Header.Opcode)}]
+	handler := proto.cmdHandlers[FrameKey{cmd.Header.Type, cmd.Header.Opcode}]
 
 	handler(cmd.Payload, ctx.userData, &hr)
 	if hr.err != nil {

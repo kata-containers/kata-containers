@@ -637,7 +637,7 @@ func (h *hyper) processListOneContainer(podID, cID string, options ProcessListOp
 func (h *hyper) connectProxyRetry(scheme, address string) (conn net.Conn, err error) {
 	attempt := 1
 
-	timeoutSecs := time.Duration(waitForProxyTimeoutSecs * time.Second)
+	timeoutSecs := waitForProxyTimeoutSecs * time.Second
 
 	startTime := time.Now()
 	lastLogTime := startTime
