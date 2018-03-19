@@ -40,28 +40,51 @@ EOT
 	fi
 }
 
+# Convert a golang package to a full path
+pkg_to_path()
+{
+	local pkg="$1"
+
+	go list -f '{{.Dir}}' "$pkg"
+}
+
 check_go()
 {
 	local go_packages
+	local submodule_packages
+	local all_packages
 
+	# List of all golang packages found in all submodules
+	#
+	# These will be ignored: since they are references to other
+	# repositories, we assume they are tested independently in their
+	# repository so do not need to be re-tested here.
+	submodule_packages=$(mktemp)
+	git submodule -q foreach "go list ./..." > "$submodule_packages" || true
+
+	# all packages
+	all_packages=$(mktemp)
+	go list ./... > "$all_packages" || true
+
+	# List of packages to consider which is defined as:
+	#
+	#   "all packages" - "submodule packages"
+	#
 	# Note: the vendor filtering is required for versions of go older than 1.9
-	go_packages=$(go list ./... 2>/dev/null | grep -v "/vendor/" || true)
+	go_packages=$(comm -3 "$all_packages" "$submodule_packages" | grep -v "/vendor/" || true)
 
-	# Ignore the runtime repo which uses submodules. The runtimes it
-	# imports are assumed to be tested independently so do not (and should
-	# not) need to be re-tested here.
-	local runtime_repo="github.com/kata-containers/runtime"
+	rm -f "$submodule_packages" "$all_packages"
 
-	[ -e ".gitmodules" ] && go_packages=$(echo "$go_packages" |\
-		grep -v "$runtime_repo" || true)
-
+	# No packages to test
 	[ -z "$go_packages" ] && return
+
+	local linter="gometalinter"
 
 	# Run golang checks
 	if [ ! "$(command -v gometalinter)" ]
 	then
 		go get github.com/alecthomas/gometalinter
-		gometalinter --install --vendor
+		eval "$linter" --install --vendor
 	fi
 
 	# Ignore vendor directories
@@ -105,7 +128,34 @@ check_go()
 	linter_args+=" --enable=varcheck"
 	linter_args+=" --enable=unconvert"
 
-	eval gometalinter "${linter_args}" ./...
+	echo -e "INFO: $linter args: '$linter_args'"
+
+	# Non-option arguments other than "./..." are
+	# considered to be directories by $linter, not package names.
+	# Hence, we need to obtain a list of package directories to check,
+	# excluding any that relate to submodules.
+	local dirs
+
+	for pkg in $go_packages
+	do
+		path=$(pkg_to_path "$pkg")
+
+		makefile="${path}/Makefile"
+
+		# perform a basic build since some repos generate code which
+		# is required for the package to be buildable (and thus
+		# checkable).
+		[ -f "$makefile" ] && (cd "$path" && make)
+
+		dirs+=" $path"
+	done
+
+	echo -e "INFO: Running $linter checks on the following packages:\n"
+	echo "$go_packages"
+	echo
+	echo "(package paths:$dirs)"
+
+	eval "$linter" "${linter_args}" "$dirs"
 }
 
 check_commits
