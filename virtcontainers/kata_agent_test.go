@@ -24,9 +24,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	gpb "github.com/gogo/protobuf/types"
 	pb "github.com/kata-containers/agent/protocols/grpc"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/context"
