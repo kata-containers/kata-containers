@@ -485,7 +485,7 @@ func (h *Hyperstart) WaitForPAE(containerID, processID string) (*PAECommand, err
 	msg := <-channel
 
 	var paeData PAECommand
-	err = json.Unmarshal(msg.Message, paeData)
+	err = json.Unmarshal(msg.Message, &paeData)
 	if err != nil {
 		return nil, err
 	}
