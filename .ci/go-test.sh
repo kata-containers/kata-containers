@@ -121,7 +121,9 @@ test_coverage()
 # Run the tests locally
 test_local()
 {
-	eval go test "$go_test_flags" "$test_packages"
+	for pkg in $test_packages; do
+		eval go test "$go_test_flags" "$pkg"
+	done
 }
 
 main()
