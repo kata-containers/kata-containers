@@ -27,7 +27,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const testContainerid = "123456789"
 const testToken = "pF56IaDpuax6hihJ5PneB8JypqmOvjkqY-wKGVYqgIM="
 
 // CCProxyMock is an object mocking clearcontainers Proxy
@@ -71,10 +70,6 @@ func NewCCProxyMock(t *testing.T, path string) *CCProxyMock {
 // to verify its client connection
 func (proxy *CCProxyMock) GetProxyToken() string {
 	return proxy.token
-}
-
-func newSignalList() []ShimSignal {
-	return make([]ShimSignal, 0, 5)
 }
 
 // GetLastStdinStream returns the last received stdin stream
@@ -373,13 +368,6 @@ func (r *handlerResponse) SetData(data []byte) {
 type FrameKey struct {
 	ftype  api.FrameType
 	opcode int
-}
-
-func newFrameKey(frameType api.FrameType, opcode int) FrameKey {
-	return FrameKey{
-		ftype:  frameType,
-		opcode: opcode,
-	}
 }
 
 type ccProxyProtocol struct {

@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 	"text/tabwriter"
 
@@ -858,28 +857,6 @@ var statusContainerCommand = cli.Command{
 	Action: func(context *cli.Context) error {
 		return checkContainerArgs(context, statusContainer)
 	},
-}
-
-func startCCShim(process *vc.Process, shimPath, url string) error {
-	if process.Token == "" {
-		return fmt.Errorf("Token cannot be empty")
-	}
-
-	if url == "" {
-		return fmt.Errorf("URL cannot be empty")
-	}
-
-	if shimPath == "" {
-		return fmt.Errorf("Shim path cannot be empty")
-	}
-
-	cmd := exec.Command(shimPath, "-t", process.Token, "-u", url)
-	cmd.Env = os.Environ()
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	return cmd.Run()
 }
 
 func main() {
