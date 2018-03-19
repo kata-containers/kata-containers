@@ -285,7 +285,7 @@ func (h *Hyperstart) SendIo(seq uint64, data []byte) {
 
 	h.logf("io: <-- writing %d bytes for seq %d\n", len(data), seq)
 
-	binary.BigEndian.PutUint64(header[:], uint64(seq))
+	binary.BigEndian.PutUint64(header[:], seq)
 	binary.BigEndian.PutUint32(header[8:], uint32(length))
 	h.writeIo(header)
 

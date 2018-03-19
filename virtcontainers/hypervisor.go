@@ -131,7 +131,7 @@ func newHypervisor(hType HypervisorType) (hypervisor, error) {
 func makeNameID(namedType string, id string) string {
 	nameID := fmt.Sprintf("%s-%s", namedType, id)
 	if len(nameID) > maxDevIDSize {
-		nameID = string(nameID[:maxDevIDSize])
+		nameID = nameID[:maxDevIDSize]
 	}
 
 	return nameID
