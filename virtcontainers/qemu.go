@@ -24,8 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	govmmQemu "github.com/intel/govmm/qemu"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/sirupsen/logrus"
 )
 
