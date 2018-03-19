@@ -66,6 +66,10 @@
   name = "github.com/containerd/cri-containerd"
   revision = "3d382e2f5dabe3bae62ceb9ded56bdee847008ee"
 
+[[constraint]]
+  name = "github.com/safchain/ethtool"
+  revision = "79559b488d8848b53a8e34c330140c3fc37ee246"
+
 [prune]
   non-go = true
   go-tests = true

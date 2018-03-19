@@ -131,6 +131,11 @@
   version = "v1.0.0"
 
 [[projects]]
+  name = "github.com/safchain/ethtool"
+  packages = ["."]
+  revision = "79559b488d8848b53a8e34c330140c3fc37ee246"
+
+[[projects]]
   name = "github.com/sirupsen/logrus"
   packages = [
     ".",
@@ -245,6 +250,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8dba9fde76331ee3c2baa2a34230f174e3ab122a6b17975c533cdfbf42b49617"
+  inputs-digest = "a50c12d36c3881a8fdc1c46a9a2ef78edc27ae1a1ec0c448799f37c589209108"
   solver-name = "gps-cdcl"
   solver-version = 1
