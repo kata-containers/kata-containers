@@ -20,7 +20,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcMock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 )
@@ -45,11 +45,11 @@ func TestPSCLIAction(t *testing.T) {
 func TestPSFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testContainerID,
 	}
 
-	pod.MockContainers = []*vcMock.Container{
+	pod.MockContainers = []*vcmock.Container{
 		{
 			MockID:  pod.ID(),
 			MockPod: pod,
@@ -89,11 +89,11 @@ func TestPSFailure(t *testing.T) {
 func TestPSSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testContainerID,
 	}
 
-	pod.MockContainers = []*vcMock.Container{
+	pod.MockContainers = []*vcmock.Container{
 		{
 			MockID:  pod.ID(),
 			MockPod: pod,

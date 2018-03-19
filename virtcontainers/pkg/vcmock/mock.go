@@ -22,7 +22,7 @@
 // well-known format. Callers can detect this scenario by calling
 // IsMockError().
 
-package vcMock
+package vcmock
 
 import (
 	"fmt"
@@ -34,7 +34,7 @@ import (
 
 // mockErrorPrefix is a string that all errors returned by the mock
 // implementation itself will contain as a prefix.
-const mockErrorPrefix = "vcMock forced failure"
+const mockErrorPrefix = "vcmock forced failure"
 
 // SetLogger implements the VC function of the same name.
 func (m *VCMock) SetLogger(logger logrus.FieldLogger) {

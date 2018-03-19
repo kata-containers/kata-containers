@@ -34,7 +34,7 @@ import (
 	"github.com/dlespiau/covertool/pkg/cover"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcMock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
@@ -62,7 +62,7 @@ var (
 )
 
 // testingImpl is a concrete mock RVC implementation used for testing
-var testingImpl = &vcMock.VCMock{}
+var testingImpl = &vcmock.VCMock{}
 
 func init() {
 	if version == "" {

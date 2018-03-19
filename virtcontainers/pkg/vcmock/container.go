@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package vcMock
+package vcmock
 
 import (
 	vc "github.com/kata-containers/runtime/virtcontainers"

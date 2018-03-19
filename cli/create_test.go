@@ -26,7 +26,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcMock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
@@ -301,9 +301,9 @@ func TestCreateCLIFunctionCreateFail(t *testing.T) {
 func TestCreateInvalidArgs(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
-		MockContainers: []*vcMock.Container{
+		MockContainers: []*vcmock.Container{
 			{MockID: testContainerID},
 			{MockID: testContainerID},
 			{MockID: testContainerID},
@@ -401,7 +401,7 @@ func TestCreateInvalidConfigJSON(t *testing.T) {
 	for detach := range []bool{true, false} {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
-		assert.False(vcMock.IsMockError(err))
+		assert.False(vcmock.IsMockError(err))
 	}
 }
 
@@ -448,7 +448,7 @@ func TestCreateInvalidContainerType(t *testing.T) {
 	for detach := range []bool{true, false} {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
-		assert.False(vcMock.IsMockError(err))
+		assert.False(vcmock.IsMockError(err))
 	}
 }
 
@@ -496,16 +496,16 @@ func TestCreateContainerInvalid(t *testing.T) {
 	for detach := range []bool{true, false} {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
-		assert.False(vcMock.IsMockError(err))
+		assert.False(vcmock.IsMockError(err))
 	}
 }
 
 func TestCreateProcessCgroupsPathSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
-		MockContainers: []*vcMock.Container{
+		MockContainers: []*vcmock.Container{
 			{MockID: testContainerID},
 		},
 	}
@@ -598,9 +598,9 @@ func TestCreateCreateCgroupsFilesFail(t *testing.T) {
 
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
-		MockContainers: []*vcMock.Container{
+		MockContainers: []*vcmock.Container{
 			{MockID: testContainerID},
 		},
 	}
@@ -671,7 +671,7 @@ func TestCreateCreateCgroupsFilesFail(t *testing.T) {
 	for detach := range []bool{true, false} {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
-		assert.False(vcMock.IsMockError(err))
+		assert.False(vcmock.IsMockError(err))
 	}
 }
 
@@ -683,9 +683,9 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
-		MockContainers: []*vcMock.Container{
+		MockContainers: []*vcmock.Container{
 			{MockID: testContainerID},
 		},
 	}
@@ -747,16 +747,16 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 	for detach := range []bool{true, false} {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
-		assert.False(vcMock.IsMockError(err))
+		assert.False(vcmock.IsMockError(err))
 	}
 }
 
 func TestCreate(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
-		MockContainers: []*vcMock.Container{
+		MockContainers: []*vcmock.Container{
 			{MockID: testContainerID},
 		},
 	}
@@ -873,7 +873,7 @@ func TestCreateInvalidKernelParams(t *testing.T) {
 	for detach := range []bool{true, false} {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
-		assert.False(vcMock.IsMockError(err))
+		assert.False(vcmock.IsMockError(err))
 	}
 }
 
@@ -921,7 +921,7 @@ func TestCreateCreatePodPodConfigFail(t *testing.T) {
 
 	_, err = createPod(spec, runtimeConfig, testContainerID, bundlePath, testConsole, true)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestCreateCreatePodFail(t *testing.T) {
@@ -956,7 +956,7 @@ func TestCreateCreatePodFail(t *testing.T) {
 
 	_, err = createPod(spec, runtimeConfig, testContainerID, bundlePath, testConsole, true)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 }
 
 func TestCreateCreateContainerContainerConfigFail(t *testing.T) {
@@ -998,7 +998,7 @@ func TestCreateCreateContainerContainerConfigFail(t *testing.T) {
 	for _, disableOutput := range []bool{true, false} {
 		_, err = createContainer(spec, testContainerID, bundlePath, testConsole, disableOutput)
 		assert.Error(err)
-		assert.False(vcMock.IsMockError(err))
+		assert.False(vcmock.IsMockError(err))
 		assert.True(strings.Contains(err.Error(), containerType))
 	}
 }
@@ -1042,7 +1042,7 @@ func TestCreateCreateContainerFail(t *testing.T) {
 	for _, disableOutput := range []bool{true, false} {
 		_, err = createContainer(spec, testContainerID, bundlePath, testConsole, disableOutput)
 		assert.Error(err)
-		assert.True(vcMock.IsMockError(err))
+		assert.True(vcmock.IsMockError(err))
 	}
 }
 
@@ -1055,7 +1055,7 @@ func TestCreateCreateContainer(t *testing.T) {
 	}
 
 	testingImpl.CreateContainerFunc = func(podID string, containerConfig vc.ContainerConfig) (vc.VCPod, vc.VCContainer, error) {
-		return &vcMock.Pod{}, &vcMock.Container{}, nil
+		return &vcmock.Pod{}, &vcmock.Container{}, nil
 	}
 
 	defer func() {
