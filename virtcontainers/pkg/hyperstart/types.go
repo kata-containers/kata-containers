@@ -168,28 +168,34 @@ type Capabilities struct {
 
 // Process describes a process running on a container inside a pod.
 type Process struct {
-	User             string   `json:"user,omitempty"`
-	Group            string   `json:"group,omitempty"`
+	// Args specifies the binary and arguments for the application to execute.
+	Args []string `json:"args"`
+
+	// Rlimits specifies rlimit options to apply to the process.
+	Rlimits []Rlimit `json:"rlimits,omitempty"`
+
+	// Envs populates the process environment for the process.
+	Envs []EnvironmentVar `json:"envs,omitempty"`
+
 	AdditionalGroups []string `json:"additionalGroups,omitempty"`
-	// Terminal creates an interactive terminal for the process.
-	Terminal bool `json:"terminal"`
+
+	// Workdir is the current working directory for the process and must be
+	// relative to the container's root.
+	Workdir string `json:"workdir"`
+
+	User  string `json:"user,omitempty"`
+	Group string `json:"group,omitempty"`
 	// Sequeue number for stdin and stdout
 	Stdio uint64 `json:"stdio,omitempty"`
 	// Sequeue number for stderr if it is not shared with stdout
 	Stderr uint64 `json:"stderr,omitempty"`
-	// Args specifies the binary and arguments for the application to execute.
-	Args []string `json:"args"`
-	// Envs populates the process environment for the process.
-	Envs []EnvironmentVar `json:"envs,omitempty"`
-	// Workdir is the current working directory for the process and must be
-	// relative to the container's root.
-	Workdir string `json:"workdir"`
-	// Rlimits specifies rlimit options to apply to the process.
-	Rlimits []Rlimit `json:"rlimits,omitempty"`
 	// NoNewPrivileges indicates that the process should not gain any additional privileges
+	Capabilities Capabilities `json:"capabilities"`
+
 	NoNewPrivileges bool `json:"noNewPrivileges"`
 	// Capabilities specifies the sets of capabilities for the process(es) inside the container.
-	Capabilities Capabilities `json:"capabilities"`
+	// Terminal creates an interactive terminal for the process.
+	Terminal bool `json:"terminal"`
 }
 
 // SystemMountsInfo describes additional information for system mounts that the agent
