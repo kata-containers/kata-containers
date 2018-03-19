@@ -84,7 +84,7 @@ test_coverage()
 		warn "As a result, only a subset of tests will be run"
 		warn "(run this script as a non-privileged to ensure all tests are run)."
 	else
-		if [ -n "$KATA_DEV_MODE" ]; then
+		if [ "$CI" = true ] && [ -n "$KATA_DEV_MODE" ]; then
 			warn "Dangerous to set CI and KATA_DEV_MODE together."
 			warn "NOT running tests as root."
 		else
@@ -128,11 +128,16 @@ test_local()
 
 main()
 {
+	run_coverage=no
+	if [ "$CI" = true ] || [ -n "$KATA_DEV_MODE" ]; then
+		run_coverage=yes
+	fi
+
 	[ -z "$test_packages" ] && echo "INFO: no golang code to test" && exit 0
 
 	if [ "$1" = "html-coverage" ]; then
 		test_html_coverage
-	elif [ "$CI" = "true" ]; then
+	elif [ "$run_coverage" = yes ]; then
 		test_coverage
 	else
 		test_local
