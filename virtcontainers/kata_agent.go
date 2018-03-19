@@ -515,21 +515,6 @@ func (k *kataAgent) stopPod(pod Pod) error {
 	return k.proxy.stop(pod, k.state.ProxyPid)
 }
 
-func appendStorageFromMounts(storage []*grpc.Storage, mounts []*Mount) []*grpc.Storage {
-	for _, m := range mounts {
-		s := &grpc.Storage{
-			Source:     m.Source,
-			MountPoint: m.Destination,
-			Fstype:     m.Type,
-			Options:    m.Options,
-		}
-
-		storage = append(storage, s)
-	}
-
-	return storage
-}
-
 func (k *kataAgent) replaceOCIMountSource(spec *specs.Spec, guestMounts []Mount) error {
 	ociMounts := spec.Mounts
 

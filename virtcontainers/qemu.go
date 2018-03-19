@@ -559,19 +559,6 @@ func (q *qemu) addDeviceToBridge(ID string) (string, string, error) {
 	return "", "", err
 }
 
-func (q *qemu) removeDeviceFromBridge(ID string) error {
-	var err error
-	for _, b := range q.state.Bridges {
-		err = b.removeDevice(ID)
-		if err == nil {
-			// device was removed correctly
-			return nil
-		}
-	}
-
-	return err
-}
-
 func (q *qemu) hotplugBlockDevice(drive Drive, op operation) error {
 	defer func(qemu *qemu) {
 		if q.qmpMonitorCh.qmp != nil {

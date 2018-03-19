@@ -37,7 +37,6 @@ const testContainer = "testContainer"
 var testCCShimPath = "/usr/bin/virtcontainers/bin/test/cc-shim"
 var testProxyURL = "foo:///foo/clear-containers/proxy.sock"
 var testWrongConsolePath = "/foo/wrong-console"
-var testConsolePath = "tty-console"
 
 func getMockCCShimBinPath() string {
 	if DefaultMockCCShimBinPath == "" {

@@ -40,10 +40,6 @@ var defaultSharedDir = "/run/hyper/shared/pods/"
 var mountTag = "hyperShared"
 var maxHostnameLen = 64
 
-const (
-	unixSocket = "unix"
-)
-
 // HyperConfig is a structure storing information needed for
 // hyperstart agent initialization.
 type HyperConfig struct {

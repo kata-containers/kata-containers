@@ -20,8 +20,6 @@ import (
 	"testing"
 )
 
-var testNoProxyVMURL = "vmURL"
-
 func TestNoProxyStart(t *testing.T) {
 	pod := Pod{
 		agent: newAgent(NoopAgentType),

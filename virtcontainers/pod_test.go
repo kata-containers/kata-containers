@@ -1263,11 +1263,6 @@ func TestFindContainerSuccess(t *testing.T) {
 	assert.True(t, c == pod.containers[0], "Container pointers should point to the same address")
 }
 
-func testRemoveContainerFailure(t *testing.T, pod *Pod, cid string) {
-	err := pod.removeContainer(cid)
-	assert.NotNil(t, err, "Should have returned an error")
-}
-
 func TestRemoveContainerPodNilFailure(t *testing.T) {
 	testFindContainerFailure(t, nil, testContainerID)
 }

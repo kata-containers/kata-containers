@@ -231,10 +231,6 @@ func (c *Container) storeProcess() error {
 	return c.pod.storage.storeContainerProcess(c.podID, c.id, c.process)
 }
 
-func (c *Container) fetchProcess() (Process, error) {
-	return c.pod.storage.fetchContainerProcess(c.podID, c.id)
-}
-
 func (c *Container) storeMounts() error {
 	return c.pod.storage.storeContainerMounts(c.podID, c.id, c.mounts)
 }
