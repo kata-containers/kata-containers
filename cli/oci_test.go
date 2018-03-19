@@ -29,7 +29,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcMock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
@@ -83,7 +83,7 @@ func TestGetContainerInfoContainerIDEmptyFailure(t *testing.T) {
 func TestGetContainerInfo(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -118,7 +118,7 @@ func TestGetContainerInfo(t *testing.T) {
 func TestGetContainerInfoMismatch(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -154,7 +154,7 @@ func TestValidCreateParamsContainerIDEmptyFailure(t *testing.T) {
 	_, err := validCreateParams("", "")
 
 	assert.Error(err, "This test should fail because containerID is empty")
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestGetExistingContainerInfoContainerIDEmptyFailure(t *testing.T) {
@@ -170,7 +170,7 @@ func TestValidCreateParamsContainerIDNotUnique(t *testing.T) {
 
 	containerID := testContainerID + testContainerID
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -204,7 +204,7 @@ func TestValidCreateParamsContainerIDNotUnique(t *testing.T) {
 	_, err := validCreateParams(testContainerID, "")
 
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestValidCreateParamsContainerIDNotUnique2(t *testing.T) {
@@ -212,7 +212,7 @@ func TestValidCreateParamsContainerIDNotUnique2(t *testing.T) {
 
 	containerID := testContainerID + testContainerID
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -238,7 +238,7 @@ func TestValidCreateParamsContainerIDNotUnique2(t *testing.T) {
 
 	_, err := validCreateParams(testContainerID, "")
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestValidCreateParamsInvalidBundle(t *testing.T) {
@@ -261,7 +261,7 @@ func TestValidCreateParamsInvalidBundle(t *testing.T) {
 	_, err = validCreateParams(testContainerID, bundlePath)
 	// bundle is ENOENT
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestValidCreateParamsBundleIsAFile(t *testing.T) {
@@ -286,7 +286,7 @@ func TestValidCreateParamsBundleIsAFile(t *testing.T) {
 	_, err = validCreateParams(testContainerID, bundlePath)
 	// bundle exists as a file, not a directory
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func testProcessCgroupsPath(t *testing.T, ociSpec oci.CompatOCISpec, expected []string) {
@@ -565,7 +565,7 @@ func TestProcessCgroupsPathForResource(t *testing.T) {
 	for _, isPod := range []bool{true, false} {
 		_, err := processCgroupsPathForResource(spec, "", isPod)
 		assert.Error(err)
-		assert.False(vcMock.IsMockError(err))
+		assert.False(vcmock.IsMockError(err))
 	}
 }
 

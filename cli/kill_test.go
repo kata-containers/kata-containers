@@ -21,7 +21,7 @@ import (
 	"testing"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcMock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,7 +31,7 @@ var (
 	}
 
 	testStopContainerFuncReturnNil = func(podID, containerID string) (vc.VCContainer, error) {
-		return &vcMock.Container{}, nil
+		return &vcmock.Container{}, nil
 	}
 )
 

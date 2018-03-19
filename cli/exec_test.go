@@ -25,7 +25,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcMock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 )
@@ -43,7 +43,7 @@ func TestExecCLIFunction(t *testing.T) {
 	// no container-id in the Metadata
 	err := fn(ctx)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 
 	// pass container-id
 	flagSet = flag.NewFlagSet("container-id", flag.ContinueOnError)
@@ -52,7 +52,7 @@ func TestExecCLIFunction(t *testing.T) {
 
 	err = fn(ctx)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 }
 
 func TestExecuteErrors(t *testing.T) {
@@ -64,13 +64,13 @@ func TestExecuteErrors(t *testing.T) {
 	// missing container id
 	err := execute(ctx)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 
 	// ListPod error
 	flagSet.Parse([]string{testContainerID})
 	err = execute(ctx)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 
 	// Config path missing in annotations
 	annotations := map[string]string{
@@ -87,7 +87,7 @@ func TestExecuteErrors(t *testing.T) {
 
 	err = execute(ctx)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 
 	// Container not running
 	configPath := testConfigSetup(t)
@@ -109,7 +109,7 @@ func TestExecuteErrors(t *testing.T) {
 
 	err = execute(ctx)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestExecuteErrorReadingProcessJson(t *testing.T) {
@@ -154,7 +154,7 @@ func TestExecuteErrorReadingProcessJson(t *testing.T) {
 
 	err = fn(ctx)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestExecuteErrorOpeningConsole(t *testing.T) {
@@ -198,7 +198,7 @@ func TestExecuteErrorOpeningConsole(t *testing.T) {
 
 	err = fn(ctx)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func testExecParamsSetup(t *testing.T, pidFilePath, consolePath string, detach bool) *flag.FlagSet {
@@ -260,10 +260,10 @@ func TestExecuteWithFlags(t *testing.T) {
 	// EnterContainer error
 	err = fn(ctx)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 
 	testingImpl.EnterContainerFunc = func(podID, containerID string, cmd vc.Cmd) (vc.VCPod, vc.VCContainer, *vc.Process, error) {
-		return &vcMock.Pod{}, &vcMock.Container{}, &vc.Process{}, nil
+		return &vcmock.Pod{}, &vcmock.Container{}, &vc.Process{}, nil
 	}
 
 	defer func() {
@@ -274,7 +274,7 @@ func TestExecuteWithFlags(t *testing.T) {
 	// Process not running error
 	err = fn(ctx)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 
 	os.Remove(pidFilePath)
 
@@ -288,7 +288,7 @@ func TestExecuteWithFlags(t *testing.T) {
 
 		vcProcess := vc.Process{}
 		vcProcess.Pid = command.Process.Pid
-		return &vcMock.Pod{}, &vcMock.Container{}, &vcProcess, nil
+		return &vcmock.Pod{}, &vcmock.Container{}, &vcProcess, nil
 	}
 
 	defer func() {
@@ -347,7 +347,7 @@ func TestExecuteWithFlagsDetached(t *testing.T) {
 
 		vcProcess := vc.Process{}
 		vcProcess.Pid = command.Process.Pid
-		return &vcMock.Pod{}, &vcMock.Container{}, &vcProcess, nil
+		return &vcmock.Pod{}, &vcmock.Container{}, &vcProcess, nil
 	}
 
 	defer func() {
@@ -417,7 +417,7 @@ func TestExecuteWithInvalidProcessJson(t *testing.T) {
 
 	err = fn(ctx)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestExecuteWithValidProcessJson(t *testing.T) {
@@ -499,7 +499,7 @@ func TestExecuteWithValidProcessJson(t *testing.T) {
 		vcProcess := vc.Process{}
 		vcProcess.Pid = command.Process.Pid
 
-		return &vcMock.Pod{}, &vcMock.Container{}, &vcProcess, nil
+		return &vcmock.Pod{}, &vcmock.Container{}, &vcProcess, nil
 	}
 
 	defer func() {
@@ -572,7 +572,7 @@ func TestExecuteWithInvalidEnvironment(t *testing.T) {
 	// vcAnnotations.EnvVars error due to incorrect environment
 	err = fn(ctx)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestGenerateExecParams(t *testing.T) {

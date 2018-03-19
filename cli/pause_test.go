@@ -19,17 +19,17 @@ import (
 	"testing"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcMock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
 	testPausePodFuncReturnNil = func(podID string) (vc.VCPod, error) {
-		return &vcMock.Pod{}, nil
+		return &vcmock.Pod{}, nil
 	}
 
 	testResumePodFuncReturnNil = func(podID string) (vc.VCPod, error) {
-		return &vcMock.Pod{}, nil
+		return &vcmock.Pod{}, nil
 	}
 )
 

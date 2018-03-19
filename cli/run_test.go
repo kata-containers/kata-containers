@@ -26,7 +26,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcMock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 )
@@ -67,9 +67,9 @@ func TestRunCliAction(t *testing.T) {
 func TestRunInvalidArgs(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
-		MockContainers: []*vcMock.Container{
+		MockContainers: []*vcmock.Container{
 			{MockID: testContainerID},
 		},
 	}
@@ -161,7 +161,7 @@ type runContainerData struct {
 	consolePath   string
 	bundlePath    string
 	configJSON    string
-	pod           *vcMock.Pod
+	pod           *vcmock.Pod
 	runtimeConfig oci.RuntimeConfig
 	process       *os.Process
 	tmpDir        string
@@ -196,11 +196,11 @@ func testRunContainerSetup(t *testing.T) runContainerData {
 	configPath := filepath.Join(bundlePath, specConfig)
 
 	// pod id and container id must be the same otherwise delete will not works
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testContainerID,
 	}
 
-	pod.MockContainers = []*vcMock.Container{
+	pod.MockContainers = []*vcmock.Container{
 		{
 			MockID:  testContainerID,
 			MockPid: cmd.Process.Pid,
@@ -599,11 +599,11 @@ func TestRunContainerStartFailNoContainers(t *testing.T) {
 	d := testRunContainerSetup(t)
 	defer os.RemoveAll(d.tmpDir)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
-	pod.MockContainers = []*vcMock.Container{
+	pod.MockContainers = []*vcmock.Container{
 		{
 			MockID:  testContainerID,
 			MockPod: pod,
@@ -651,5 +651,5 @@ func TestRunContainerStartFailNoContainers(t *testing.T) {
 
 	err := run(d.pod.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
