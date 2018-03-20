@@ -68,13 +68,13 @@ const (
 	netDev
 
 	// SerialDev is the serial device type.
-	serialDev
+	serialDev // nolint: varcheck,unused
 
 	// BlockDev is the block device type.
 	blockDev
 
 	// ConsoleDev is the console device type.
-	consoleDev
+	consoleDev // nolint: varcheck,unused
 
 	// SerialPortDev is the serial port device type.
 	serialPortDev
@@ -131,7 +131,7 @@ func newHypervisor(hType HypervisorType) (hypervisor, error) {
 func makeNameID(namedType string, id string) string {
 	nameID := fmt.Sprintf("%s-%s", namedType, id)
 	if len(nameID) > maxDevIDSize {
-		nameID = string(nameID[:maxDevIDSize])
+		nameID = nameID[:maxDevIDSize]
 	}
 
 	return nameID
@@ -145,6 +145,12 @@ type Param struct {
 
 // HypervisorConfig is the hypervisor configuration.
 type HypervisorConfig struct {
+	// KernelParams are additional guest kernel parameters.
+	KernelParams []Param
+
+	// HypervisorParams are additional hypervisor parameters.
+	HypervisorParams []Param
+
 	// KernelPath is the guest kernel host path.
 	KernelPath string
 
@@ -160,26 +166,19 @@ type HypervisorConfig struct {
 	// HypervisorPath is the hypervisor executable host path.
 	HypervisorPath string
 
-	// DisableBlockDeviceUse disallows a block device from being used.
-	DisableBlockDeviceUse bool
-
 	// BlockDeviceDriver specifies the driver to be used for block device
 	// either VirtioSCSI or VirtioBlock with the default driver being defaultBlockDriver
 	BlockDeviceDriver string
-
-	// KernelParams are additional guest kernel parameters.
-	KernelParams []Param
-
-	// HypervisorParams are additional hypervisor parameters.
-	HypervisorParams []Param
 
 	// HypervisorMachineType specifies the type of machine being
 	// emulated.
 	HypervisorMachineType string
 
-	// Debug changes the default hypervisor and kernel parameters to
-	// enable debug output where available.
-	Debug bool
+	// customAssets is a map of assets.
+	// Each value in that map takes precedence over the configured assets.
+	// For example, if there is a value for the "kernel" key in this map,
+	// it will be used for the pod's kernel path instead of KernelPath.
+	customAssets map[assetType]*asset
 
 	// DefaultVCPUs specifies default number of vCPUs for the VM.
 	DefaultVCPUs uint32
@@ -194,6 +193,13 @@ type HypervisorConfig struct {
 	// DefaultBridges specifies default number of bridges for the VM.
 	// Bridges can be used to hot plug devices
 	DefaultBridges uint32
+
+	// DisableBlockDeviceUse disallows a block device from being used.
+	DisableBlockDeviceUse bool
+
+	// Debug changes the default hypervisor and kernel parameters to
+	// enable debug output where available.
+	Debug bool
 
 	// MemPrealloc specifies if the memory should be pre-allocated
 	MemPrealloc bool
@@ -212,12 +218,6 @@ type HypervisorConfig struct {
 	// DisableNestingChecks is used to override customizations performed
 	// when running on top of another VMM.
 	DisableNestingChecks bool
-
-	// customAssets is a map of assets.
-	// Each value in that map takes precedence over the configured assets.
-	// For example, if there is a value for the "kernel" key in this map,
-	// it will be used for the pod's kernel path instead of KernelPath.
-	customAssets map[assetType]*asset
 }
 
 func (conf *HypervisorConfig) valid() (bool, error) {

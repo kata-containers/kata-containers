@@ -22,7 +22,6 @@ import (
 
 // cnm is a network implementation for the CNM plugin.
 type cnm struct {
-	config NetworkConfig
 }
 
 func cnmLogger() *logrus.Entry {

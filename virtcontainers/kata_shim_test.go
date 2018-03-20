@@ -29,9 +29,6 @@ import (
 	. "github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 )
 
-// These tests don't care about the format of the container ID
-const testKataContainer = "testContainer"
-
 var testKataShimPath = "/usr/bin/virtcontainers/bin/test/kata-shim"
 var testKataShimProxyURL = "foo:///foo/kata-containers/proxy.sock"
 

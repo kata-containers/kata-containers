@@ -31,10 +31,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const (
-	testPID    = 12345
-	testNSPath = "/foo/bar/ns"
-)
+const testPID = 12345
 
 func TestGetNSPathFromPID(t *testing.T) {
 	for nsType := range CloneFlagsTable {

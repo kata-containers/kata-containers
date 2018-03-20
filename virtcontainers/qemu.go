@@ -24,8 +24,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	govmmQemu "github.com/intel/govmm/qemu"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -557,19 +557,6 @@ func (q *qemu) addDeviceToBridge(ID string) (string, string, error) {
 	}
 
 	return "", "", err
-}
-
-func (q *qemu) removeDeviceFromBridge(ID string) error {
-	var err error
-	for _, b := range q.state.Bridges {
-		err = b.removeDevice(ID)
-		if err == nil {
-			// device was removed correctly
-			return nil
-		}
-	}
-
-	return err
 }
 
 func (q *qemu) hotplugBlockDevice(drive Drive, op operation) error {

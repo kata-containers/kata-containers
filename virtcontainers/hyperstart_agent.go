@@ -40,10 +40,6 @@ var defaultSharedDir = "/run/hyper/shared/pods/"
 var mountTag = "hyperShared"
 var maxHostnameLen = 64
 
-const (
-	unixSocket = "unix"
-)
-
 // HyperConfig is a structure storing information needed for
 // hyperstart agent initialization.
 type HyperConfig struct {
@@ -637,7 +633,7 @@ func (h *hyper) processListOneContainer(podID, cID string, options ProcessListOp
 func (h *hyper) connectProxyRetry(scheme, address string) (conn net.Conn, err error) {
 	attempt := 1
 
-	timeoutSecs := time.Duration(waitForProxyTimeoutSecs * time.Second)
+	timeoutSecs := waitForProxyTimeoutSecs * time.Second
 
 	startTime := time.Now()
 	lastLogTime := startTime

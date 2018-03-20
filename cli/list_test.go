@@ -28,7 +28,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcMock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 )
@@ -395,7 +395,7 @@ func TestListGetContainersListPodFail(t *testing.T) {
 
 	_, err = getContainers(ctx)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 }
 
 func TestListGetContainers(t *testing.T) {
@@ -433,7 +433,7 @@ func TestListGetContainers(t *testing.T) {
 func TestListGetContainersPodWithoutContainers(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -477,7 +477,7 @@ func TestListGetContainersPodWithContainer(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -550,7 +550,7 @@ func TestListCLIFunctionFormatFail(t *testing.T) {
 		{"invalid", invalidFlags},
 	}
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -621,7 +621,7 @@ func TestListCLIFunctionFormatFail(t *testing.T) {
 
 		// invalid output file
 		assert.Error(err, d)
-		assert.False(vcMock.IsMockError(err), d)
+		assert.False(vcmock.IsMockError(err), d)
 
 		output := filepath.Join(tmpdir, "output")
 		f, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE, testFileMode)
@@ -634,7 +634,7 @@ func TestListCLIFunctionFormatFail(t *testing.T) {
 		err = fn(ctx)
 		if d.format == "invalid" {
 			assert.Error(err)
-			assert.False(vcMock.IsMockError(err), d)
+			assert.False(vcmock.IsMockError(err), d)
 		} else {
 			assert.NoError(err)
 		}
@@ -651,7 +651,7 @@ func TestListCLIFunctionQuiet(t *testing.T) {
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 

@@ -133,7 +133,7 @@ func (u UUID) String() string {
 	clkSeqLow := u[9]
 	buf := make([]byte, 8)
 	copy(buf[2:], u[10:])
-	node := uint64(binary.BigEndian.Uint64(buf))
+	node := binary.BigEndian.Uint64(buf)
 
 	return fmt.Sprintf("%08x-%04x-%04x-%02x%02x-%012x",
 		timeLow, timeMid, timeHi, clkSeqHi, clkSeqLow, node)

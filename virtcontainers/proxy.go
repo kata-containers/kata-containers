@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 
 	"github.com/mitchellh/mapstructure"
-	"github.com/sirupsen/logrus"
 )
 
 // ProxyConfig is a structure storing information needed from any
@@ -59,10 +58,6 @@ const (
 	// request.
 	waitForProxyTimeoutSecs = 5.0
 )
-
-func proxyLogger() *logrus.Entry {
-	return virtLog.WithField("subsystem", "proxy")
-}
 
 // Set sets a proxy type based on the input string.
 func (pType *ProxyType) Set(value string) error {

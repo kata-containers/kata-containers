@@ -52,10 +52,10 @@ type NSType string
 // without multithreading issues.
 const (
 	NSTypeCGroup NSType = "cgroup"
-	NSTypeIPC           = "ipc"
-	NSTypeNet           = "net"
-	NSTypePID           = "pid"
-	NSTypeUTS           = "uts"
+	NSTypeIPC    NSType = "ipc"
+	NSTypeNet    NSType = "net"
+	NSTypePID    NSType = "pid"
+	NSTypeUTS    NSType = "uts"
 )
 
 // CloneFlagsTable is exported so that consumers of this package don't need

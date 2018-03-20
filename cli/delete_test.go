@@ -23,7 +23,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcMock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 )
@@ -61,12 +61,12 @@ func TestDeleteInvalidContainer(t *testing.T) {
 	// Missing container id
 	err := delete("", false)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 
 	// Mock Listpod error
 	err = delete(testContainerID, false)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 
 	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
 		return []vc.PodStatus{}, nil
@@ -79,13 +79,13 @@ func TestDeleteInvalidContainer(t *testing.T) {
 	// Container missing in ListPod
 	err = delete(testContainerID, false)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestDeleteMissingContainerTypeAnnotation(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -109,13 +109,13 @@ func TestDeleteMissingContainerTypeAnnotation(t *testing.T) {
 
 	err := delete(pod.ID(), false)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestDeleteInvalidConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -141,7 +141,7 @@ func TestDeleteInvalidConfig(t *testing.T) {
 
 	err := delete(pod.ID(), false)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func testConfigSetup(t *testing.T) string {
@@ -165,7 +165,7 @@ func testConfigSetup(t *testing.T) string {
 func TestDeletePod(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -199,7 +199,7 @@ func TestDeletePod(t *testing.T) {
 
 	err = delete(pod.ID(), false)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 
 	testingImpl.StopPodFunc = func(podID string) (vc.VCPod, error) {
 		return pod, nil
@@ -211,7 +211,7 @@ func TestDeletePod(t *testing.T) {
 
 	err = delete(pod.ID(), false)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 
 	testingImpl.DeletePodFunc = func(podID string) (vc.VCPod, error) {
 		return pod, nil
@@ -228,7 +228,7 @@ func TestDeletePod(t *testing.T) {
 func TestDeleteInvalidContainerType(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -263,13 +263,13 @@ func TestDeleteInvalidContainerType(t *testing.T) {
 	// Delete an invalid container type
 	err = delete(pod.ID(), false)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestDeletePodRunning(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -304,7 +304,7 @@ func TestDeletePodRunning(t *testing.T) {
 	// Delete on a running pod should fail
 	err = delete(pod.ID(), false)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 
 	testingImpl.StopPodFunc = func(podID string) (vc.VCPod, error) {
 		return pod, nil
@@ -317,7 +317,7 @@ func TestDeletePodRunning(t *testing.T) {
 	// Force delete a running pod
 	err = delete(pod.ID(), true)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 
 	testingImpl.DeletePodFunc = func(podID string) (vc.VCPod, error) {
 		return pod, nil
@@ -334,11 +334,11 @@ func TestDeletePodRunning(t *testing.T) {
 func TestDeleteRunningContainer(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
-	pod.MockContainers = []*vcMock.Container{
+	pod.MockContainers = []*vcmock.Container{
 		{
 			MockID:  testContainerID,
 			MockPod: pod,
@@ -376,12 +376,12 @@ func TestDeleteRunningContainer(t *testing.T) {
 	// Delete on a running container should fail.
 	err = delete(pod.MockContainers[0].ID(), false)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 
 	// force delete
 	err = delete(pod.MockContainers[0].ID(), true)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 
 	testingImpl.StopContainerFunc = testStopContainerFuncReturnNil
 	defer func() {
@@ -390,10 +390,10 @@ func TestDeleteRunningContainer(t *testing.T) {
 
 	err = delete(pod.MockContainers[0].ID(), true)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 
 	testingImpl.DeleteContainerFunc = func(podID, containerID string) (vc.VCContainer, error) {
-		return &vcMock.Container{}, nil
+		return &vcmock.Container{}, nil
 	}
 
 	defer func() {
@@ -407,11 +407,11 @@ func TestDeleteRunningContainer(t *testing.T) {
 func TestDeleteContainer(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
-	pod.MockContainers = []*vcMock.Container{
+	pod.MockContainers = []*vcmock.Container{
 		{
 			MockID:  testContainerID,
 			MockPod: pod,
@@ -448,7 +448,7 @@ func TestDeleteContainer(t *testing.T) {
 
 	err = delete(pod.MockContainers[0].ID(), false)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 
 	testingImpl.StopContainerFunc = testStopContainerFuncReturnNil
 	defer func() {
@@ -457,10 +457,10 @@ func TestDeleteContainer(t *testing.T) {
 
 	err = delete(pod.MockContainers[0].ID(), false)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 
 	testingImpl.DeleteContainerFunc = func(podID, containerID string) (vc.VCContainer, error) {
-		return &vcMock.Container{}, nil
+		return &vcmock.Container{}, nil
 	}
 
 	defer func() {
@@ -485,7 +485,7 @@ func TestDeleteCLIFunction(t *testing.T) {
 	// no container id in the Metadata
 	err := fn(ctx)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 
 	flagSet = flag.NewFlagSet("container-id", flag.ContinueOnError)
 	flagSet.Parse([]string{"xyz"})
@@ -493,17 +493,17 @@ func TestDeleteCLIFunction(t *testing.T) {
 
 	err = fn(ctx)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 }
 
 func TestDeleteCLIFunctionSuccess(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
-	pod.MockContainers = []*vcMock.Container{
+	pod.MockContainers = []*vcmock.Container{
 		{
 			MockID:  testContainerID,
 			MockPod: pod,
@@ -558,7 +558,7 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 
 	err = fn(ctx)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 
 	flagSet = flag.NewFlagSet("container-id", flag.ContinueOnError)
 	flagSet.Parse([]string{pod.ID()})

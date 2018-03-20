@@ -193,6 +193,10 @@ func cleanupFakeRootfsSetup(testRawFile, loopDev, mntDir string) {
 }
 
 func TestContainerAddDriveDir(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	testRawFile, loopDev, fakeRootfs, err := testSetupFakeRootfs(t)
 
 	defer cleanupFakeRootfsSetup(testRawFile, loopDev, fakeRootfs)
