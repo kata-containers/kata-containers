@@ -12,6 +12,9 @@ runtime:
 install:
 	make -C cli install
 
+clean:
+	make -C cli clean
+
 help:
 	@printf "To build a Kata Containers runtime:\n"
 	@printf "\n"
