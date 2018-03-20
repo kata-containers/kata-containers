@@ -20,8 +20,15 @@ timeout_value=${KATA_GO_TEST_TIMEOUT:-10s}
 # KATA_GO_TEST_FLAGS can be set to change the flags passed to "go test".
 go_test_flags=${KATA_GO_TEST_FLAGS:-"-v $race -timeout $timeout_value"}
 
-# Note: the vendor filtering is required for versions of go older than 1.9
-test_packages=$(go list ./... 2>/dev/null | grep -v "/vendor/" || true)
+# Notes:
+#
+# - The vendor filtering is required for versions of go older than 1.9.
+# - The test package filtering is required since those packages need special setup.
+test_packages=$(go list ./... 2>/dev/null |\
+	grep -v "/vendor/" |\
+	grep -v "github.com/kata-containers/tests/functional" |\
+	grep -v "github.com/kata-containers/tests/integration/docker" \
+	|| true)
 
 # The "master" coverage file that contains the coverage results for
 # all packages run under all scenarios.
