@@ -7,12 +7,10 @@
 all: runtime
 
 runtime:
-	cd cli; \
-	make
+	make -C cli
 
 install:
-	cd cli; \
-	make install
+	make -C cli install
 
 help:
 	@printf "To build a Kata Containers runtime:\n"
