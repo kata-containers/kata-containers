@@ -559,6 +559,19 @@ func (q *qemu) addDeviceToBridge(ID string) (string, string, error) {
 	return "", "", err
 }
 
+func (q *qemu) removeDeviceFromBridge(ID string) error {
+	var err error
+	for _, b := range q.state.Bridges {
+		err = b.removeDevice(ID)
+		if err == nil {
+			// device was removed correctly
+			return nil
+		}
+	}
+
+	return err
+}
+
 func (q *qemu) hotplugBlockDevice(drive Drive, op operation) error {
 	defer func(qemu *qemu) {
 		if q.qmpMonitorCh.qmp != nil {
@@ -607,6 +620,12 @@ func (q *qemu) hotplugBlockDevice(drive Drive, op operation) error {
 			}
 		}
 	} else {
+		if q.config.BlockDeviceDriver == VirtioBlock {
+			if err := q.removeDeviceFromBridge(drive.ID); err != nil {
+				return err
+			}
+		}
+
 		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
 			return err
 		}
