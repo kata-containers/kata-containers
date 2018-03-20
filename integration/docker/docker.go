@@ -351,11 +351,6 @@ func dockerBuild(args ...string) (string, string, int) {
 	return runDockerCommand("build", args...)
 }
 
-// dockerNetwork manages networks
-func dockerNetwork(args ...string) (string, string, int) {
-	return runDockerCommand("network", args...)
-}
-
 // dockerExport will export a container’s filesystem as a tar archive
 func dockerExport(args ...string) (string, string, int) {
 	return runDockerCommand("export", args...)
@@ -386,24 +381,9 @@ func dockerRestart(args ...string) (string, string, int) {
 	return runDockerCommand("restart", args...)
 }
 
-// dockerSwarm manages swarm
-func dockerSwarm(args ...string) (string, string, int) {
-	return runDockerCommand("swarm", args...)
-}
-
 // dockerSave saves one or more images
 func dockerSave(args ...string) (string, string, int) {
 	return runDockerCommand("save", args...)
-}
-
-// dockerService manages services
-func dockerService(args ...string) (string, string, int) {
-	return runDockerCommand("service", args...)
-}
-
-// dockerStart starts one or more stopped containers
-func dockerStart(args ...string) (string, string, int) {
-	return runDockerCommand("start", args...)
 }
 
 // dockerPause pauses all processes within one or more containers

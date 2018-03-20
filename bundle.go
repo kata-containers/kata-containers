@@ -116,11 +116,7 @@ func createRootfs(bundlePath string) error {
 
 	// remove container
 	rmCmd := exec.Command("docker", "rm", "-f", containerName)
-	if err := rmCmd.Run(); err != nil {
-		return err
-	}
-
-	return nil
+	return rmCmd.Run()
 }
 
 // Save to disk the Config
