@@ -808,7 +808,7 @@ func (h *hyper) sendCmd(proxyCmd hyperstartProxyCmd) (interface{}, error) {
 	return h.client.HyperWithTokens(proxyCmd.cmd, tokens, proxyCmd.message)
 }
 
-func (h *hyper) onlineCPUMem() error {
+func (h *hyper) onlineCPUMem(cpus uint32) error {
 	// cc-agent uses udev to online CPUs automatically
 	return nil
 }

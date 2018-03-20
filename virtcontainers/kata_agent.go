@@ -877,8 +877,11 @@ func (k *kataAgent) processListContainer(sandbox Sandbox, c Container, options P
 	return nil, nil
 }
 
-func (k *kataAgent) onlineCPUMem() error {
-	req := &grpc.OnlineCPUMemRequest{}
+func (k *kataAgent) onlineCPUMem(cpus uint32) error {
+	req := &grpc.OnlineCPUMemRequest{
+		Wait:   false,
+		NbCpus: cpus,
+	}
 
 	_, err := k.sendReq(req)
 	return err
