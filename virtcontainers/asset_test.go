@@ -112,6 +112,6 @@ func TestAssetNew(t *testing.T) {
 		},
 	}
 
-	a, err = newAsset(p, kernelAsset)
+	_, err = newAsset(p, kernelAsset)
 	assert.NotNil(err)
 }

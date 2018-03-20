@@ -453,7 +453,6 @@ func (n NetworkNamespace) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON is the custom NetworkNamespace unmarshalling routine.
 // This is needed for unmarshalling the Endpoints interfaces array.
 func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
-	type tmp NetworkNamespace
 	var s struct {
 		NetNsPath    string
 		NetNsCreated bool
@@ -1079,15 +1078,6 @@ func createNetNS() (string, error) {
 	}
 
 	return n.Path(), nil
-}
-
-func setNetNS(netNSPath string) error {
-	n, err := ns.GetNS(netNSPath)
-	if err != nil {
-		return err
-	}
-
-	return n.Set()
 }
 
 // doNetNS is free from any call to a go routine, and it calls

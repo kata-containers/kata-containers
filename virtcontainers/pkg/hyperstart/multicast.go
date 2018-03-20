@@ -78,7 +78,7 @@ func (m *multicast) buildEventID(containerID, processID string) string {
 func (m *multicast) sendEvent(msg *DecodedMessage) error {
 	var paeData PAECommand
 
-	err := json.Unmarshal(msg.Message, paeData)
+	err := json.Unmarshal(msg.Message, &paeData)
 	if err != nil {
 		return err
 	}

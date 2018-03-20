@@ -46,13 +46,6 @@ var sysIOMMUPath = "/sys/kernel/iommu_groups"
 
 var sysDevPrefix = "/sys/dev"
 
-var blockPaths = []string{
-	"/dev/sd",   //SCSI block device
-	"/dev/hd",   //IDE block device
-	"/dev/vd",   //Virtual Block device
-	"/dev/ida/", //Compaq Intelligent Drive Array devices
-}
-
 const (
 	vfioPath = "/dev/vfio/"
 )

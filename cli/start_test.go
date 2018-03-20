@@ -20,7 +20,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcMock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 )
@@ -31,12 +31,12 @@ func TestStartInvalidArgs(t *testing.T) {
 	// Missing container id
 	_, err := start("")
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 
 	// Mock Listpod error
 	_, err = start(testContainerID)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 
 	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
 		return []vc.PodStatus{}, nil
@@ -49,13 +49,13 @@ func TestStartInvalidArgs(t *testing.T) {
 	// Container missing in ListPod
 	_, err = start(testContainerID)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestStartPod(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -81,7 +81,7 @@ func TestStartPod(t *testing.T) {
 
 	_, err := start(pod.ID())
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 
 	testingImpl.StartPodFunc = func(podID string) (vc.VCPod, error) {
 		return pod, nil
@@ -98,7 +98,7 @@ func TestStartPod(t *testing.T) {
 func TestStartMissingAnnotation(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
@@ -122,17 +122,17 @@ func TestStartMissingAnnotation(t *testing.T) {
 
 	_, err := start(pod.ID())
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 }
 
 func TestStartContainerSucessFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
-	pod.MockContainers = []*vcMock.Container{
+	pod.MockContainers = []*vcmock.Container{
 		{
 			MockID:  testContainerID,
 			MockPod: pod,
@@ -161,7 +161,7 @@ func TestStartContainerSucessFailure(t *testing.T) {
 
 	_, err := start(testContainerID)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 
 	testingImpl.StartContainerFunc = func(podID, containerID string) (vc.VCContainer, error) {
 		return pod.MockContainers[0], nil
@@ -189,7 +189,7 @@ func TestStartCLIFunction(t *testing.T) {
 	// no container id in the Metadata
 	err := fn(ctx)
 	assert.Error(err)
-	assert.False(vcMock.IsMockError(err))
+	assert.False(vcmock.IsMockError(err))
 
 	flagSet = flag.NewFlagSet("container-id", flag.ContinueOnError)
 	flagSet.Parse([]string{"xyz"})
@@ -197,17 +197,17 @@ func TestStartCLIFunction(t *testing.T) {
 
 	err = fn(ctx)
 	assert.Error(err)
-	assert.True(vcMock.IsMockError(err))
+	assert.True(vcmock.IsMockError(err))
 }
 
 func TestStartCLIFunctionSuccess(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcMock.Pod{
+	pod := &vcmock.Pod{
 		MockID: testPodID,
 	}
 
-	pod.MockContainers = []*vcMock.Container{
+	pod.MockContainers = []*vcmock.Container{
 		{
 			MockID:  testContainerID,
 			MockPod: pod,
