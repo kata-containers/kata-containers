@@ -38,70 +38,11 @@ ALL_ARCHES = $(patsubst $(ARCH_DIR)/%$(ARCH_FILE_SUFFIX),%,$(ARCH_FILES))
 # Load architecture-dependent settings
 include $(ARCH_FILE)
 
-#------------------------------
-# project-specifics
-
-# build type for Kata Containers
-KATA_TYPE = kata
-
-KATA_PROJECT_NAME = Kata Containers
-KATA_PROJECT_TAG = kata-containers
-KATA_PROJECT_URL = https://github.com/kata-containers
-KATA_BUG_URL = $(KATA_PROJECT_URL)/kata-containers/issues/new
-
-#------------------------------
-
-# all supported project types
-PROJECT_TYPES = $(KATA_TYPE)
-
-# If this environment variable is set to any value,
-# enable the Kata Containers system build.
-ifneq (,$(KATA_SYSTEM_BUILD))
-    system_build_type = $(KATA_TYPE)
-endif
-
-ifneq ($(SYSTEM_BUILD_TYPE),)
-    ifeq ($(SYSTEM_BUILD_TYPE),$(KATA_TYPE))
-        system_build_type = $(KATA_TYPE)
-    endif
-endif
-
-# A particular project system build is either triggered by
-# specifying a special target or via an environment variable.
-kata_system_build_requested := $(foreach f,\
-    build-$(KATA_TYPE)-system install-$(KATA_TYPE)-system,\
-    $(findstring $(f),$(MAKECMDGOALS)))
-ifneq (,$(strip $(kata_system_build_requested)))
-    kata_system_build = yes
-else
-    kata_system_build = no
-endif
-
-ifeq ($(kata_system_build),yes)
-    system_build_type = $(KATA_TYPE)
-endif
-
-# If this environment variable is set to a valid build type,
-# use the value as the build type.
-
-ifeq ($(system_build_type),)
-    # Default built is for Kata
-    PROJECT_TYPE = $(KATA_TYPE)
-
-    PROJECT_NAME = $(KATA_PROJECT_NAME)
-    PROJECT_TAG = $(KATA_PROJECT_TAG)
-    PROJECT_URL = $(KATA_PROJECT_URL)
-    PROJECT_BUG_URL = $(KATA_BUG_URL)
-else
-    ifeq ($(system_build_type),$(KATA_TYPE))
-        PROJECT_TYPE = $(KATA_TYPE)
-
-        PROJECT_NAME = $(KATA_PROJECT_NAME)
-        PROJECT_TAG = $(KATA_PROJECT_TAG)
-        PROJECT_URL = $(KATA_PROJECT_URL)
-        PROJECT_BUG_URL = $(KATA_BUG_URL)
-    endif
-endif
+PROJECT_TYPE = kata
+PROJECT_NAME = Kata Containers
+PROJECT_TAG = kata-containers
+PROJECT_URL = https://github.com/kata-containers
+PROJECT_BUG_URL = $(PROJECT_URL)/kata-containers/issues/new
 
 BIN_PREFIX = $(PROJECT_TYPE)
 PROJECT_DIR = $(PROJECT_TAG)
@@ -112,29 +53,19 @@ DESTDIR :=
 
 installing = $(findstring install,$(MAKECMDGOALS))
 
-ifneq ($(system_build_type),)
-    # Configure the build for a standard system that is
-    # using OBS-generated packages.
-    PREFIX        := /usr
-    BINDIR        := $(PREFIX)/bin
-    DESTBINDIR    := /usr/local/bin
-    QEMUBINDIR    := $(BINDIR)
-    SYSCONFDIR    := /etc
-    LOCALSTATEDIR := /var
+# Configure the build for a standard system that is
+# using OBS-generated packages.
+PREFIX        := /usr
+BINDIR        := $(PREFIX)/bin
+DESTBINDIR    := /usr/local/bin
+QEMUBINDIR    := $(BINDIR)
+SYSCONFDIR    := /etc
+LOCALSTATEDIR := /var
 
-    ifeq (,$(installing))
-        # Force a rebuild to ensure version details are correct
-        # (but only for a non-install build phase).
-        EXTRA_DEPS = clean
-    endif
-else
-    # standard build
-    PREFIX        := /usr/local
-    BINDIR        := $(PREFIX)/bin
-    DESTBINDIR    := $(DESTDIR)/$(BINDIR)
-    QEMUBINDIR    := $(BINDIR)
-    SYSCONFDIR    := $(PREFIX)/etc
-    LOCALSTATEDIR := $(PREFIX)/var
+ifeq (,$(installing))
+    # Force a rebuild to ensure version details are correct
+    # (but only for a non-install build phase).
+    EXTRA_DEPS = clean
 endif
 
 LIBEXECDIR := $(PREFIX)/libexec
@@ -213,7 +144,6 @@ USER_VARS += DESTTARGET
 USER_VARS += IMAGENAME
 USER_VARS += IMAGEPATH
 USER_VARS += MACHINETYPE
-USER_VARS += KATA_SYSTEM_BUILD
 USER_VARS += KERNELPATH
 USER_VARS += FIRMWAREPATH
 USER_VARS += MACHINEACCELERATORS
@@ -234,7 +164,6 @@ USER_VARS += QEMUCMD
 USER_VARS += QEMUPATH
 USER_VARS += SHAREDIR
 USER_VARS += SHIMPATH
-USER_VARS += SYSTEM_BUILD_TYPE
 USER_VARS += SYSCONFDIR
 USER_VARS += DEFVCPUS
 USER_VARS += DEFMEMSZ
@@ -285,9 +214,6 @@ default: $(TARGET) $(CONFIG) $(HANDLE_GIT_HOOKS)
 .DEFAULT: default
 
 build: default
-
-build-kata-system: default
-install-kata-system: install
 
 define GENERATED_CODE
 // WARNING: This file is auto-generated - DO NOT EDIT!
@@ -423,7 +349,6 @@ $(GENERATED_FILES): %: %.in Makefile VERSION
 		-e "s|@PROJECT_NAME@|$(PROJECT_NAME)|g" \
 		-e "s|@PROJECT_TAG@|$(PROJECT_TAG)|g" \
 		-e "s|@PROJECT_TYPE@|$(PROJECT_TYPE)|g" \
-		-e "s|@PROJECT_TYPES@|$(PROJECT_TYPES)|g" \
 		-e "s|@QEMUPATH@|$(QEMUPATH)|g" \
 		-e "s|@RUNTIME_NAME@|$(TARGET)|g" \
 		-e "s|@MACHINETYPE@|$(MACHINETYPE)|g" \
@@ -474,27 +399,15 @@ show-usage: show-header
 	@printf "\n"
 	@printf "• Additional targets:\n"
 	@printf "\n"
-	@printf "\tbuild               : standard build [1].\n"
-	@printf "\tbuild-$(KATA_TYPE)-system   : build using standard $(KATA_PROJECT_NAME) system paths.\n"
+	@printf "\tbuild               : standard build.\n"
 	@printf "\tcheck               : run tests.\n"
 	@printf "\tclean               : remove built files.\n"
 	@printf "\tcoverage            : run coverage tests.\n"
 	@printf "\tdefault             : same as 'make build' (or just 'make').\n"
 	@printf "\tgenerate-config     : create configuration file.\n"
-	@printf "\tinstall             : install files [2].\n"
-	@printf "\tinstall-$(KATA_TYPE)-system : install using standard $(KATA_PROJECT_NAME) system paths.\n"
+	@printf "\tinstall             : install files.\n"
 	@printf "\tshow-arches         : show supported architectures (ARCH variable values).\n"
 	@printf "\tshow-summary        : show install locations.\n"
-	@printf "\n"
-	@printf "  Notes:\n"
-	@printf "\n"
-	@printf "  [1] - Equivalent to:\n"
-	@printf "        - 'build-kata-system' if KATA_SYSTEM_BUILD is set.\n"
-	@printf "        - 'build' for the project specified by SYSTEM_BUILD_TYPE.\n"
-	@printf "\n"
-	@printf "  [2] - Equivalent to:\n"
-	@printf "        - 'install-kata-system' if KATA_SYSTEM_BUILD is set.\n"
-	@printf "        - 'install' for the project specified by SYSTEM_BUILD_TYPE.\n"
 	@printf "\n"
 
 handle_help: show-usage show-summary show-variables show-footer
@@ -532,8 +445,6 @@ show-summary: show-header
 	@go version
 	@printf "\n"
 	@printf "• Summary:\n"
-	@printf "\n"
-	@printf "\tProject system build type             : $(system_build_type)\n"
 	@printf "\n"
 	@printf "\tbinary install path (DESTTARGET)      : %s\n" $(DESTTARGET)
 	@printf "\tconfig install path (DESTCONFIG)      : %s\n" $(DESTCONFIG)
