@@ -17,7 +17,7 @@ DESTTARGET := $(abspath $(BINDIR)/$(TARGET))
 default: install
 
 check:
-	go test -v .
+	go test .
 
 $(TARGET): $(SOURCES) check
 	go build -o "$(TARGET)" -ldflags "-X main.name=${TARGET} -X main.commit=${COMMIT} -X main.version=${VERSION}" .

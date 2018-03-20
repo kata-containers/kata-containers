@@ -63,6 +63,11 @@ check_log_files()
 
 export RUNTIME="kata-runtime"
 
+echo "INFO: Running checks"
 sudo -E PATH="$PATH" bash -c "make check"
 
+echo "INFO: Running unit tests"
+sudo -E PATH="$PATH" bash -c "make test"
+
+echo "INFO: Checking log files"
 check_log_files
