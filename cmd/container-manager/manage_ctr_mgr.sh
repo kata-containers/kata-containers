@@ -83,6 +83,8 @@ parse_subcommand_options(){
 
 # This function handles the installation of the required docker version.
 install_docker(){
+	# Get system architecture
+	arch=$(go env GOARCH)
 	# Check if docker is present in the system
 	if [ "$(info_docker)" ] && [ ${force} == false ]; then
 		die "Docker is already installed. Please use -f flag to force new installation"
@@ -100,7 +102,7 @@ install_docker(){
 			sudo -E apt-get -y install apt-transport-https ca-certificates software-properties-common
 			repo_url="https://download.docker.com/linux/ubuntu"
 			curl -fsSL "${repo_url}/gpg" | sudo apt-key add -
-			sudo -E add-apt-repository "deb [arch=amd64] ${repo_url} $(lsb_release -cs) stable"
+			sudo -E add-apt-repository "deb [arch=${arch}] ${repo_url} $(lsb_release -cs) stable"
 			sudo -E apt-get update
 			docker_version_full=$(apt-cache show $pkg_name | grep "^Version: $docker_version" | awk '{print $2}' | head -1)
 			sudo -E apt-get -y install "${pkg_name}=${docker_version_full}"
@@ -122,7 +124,7 @@ install_docker(){
 			repo_url="https://apt.dockerproject.org"
 			sudo -E apt-get -y install apt-transport-https ca-certificates
 			curl -fsSL "${repo_url}/gpg" | sudo apt-key add -
-			sudo -E add-apt-repository "deb ${repo_url}/repo ubuntu-xenial main"
+			sudo -E add-apt-repository "deb [arch=${arch}] ${repo_url}/repo ubuntu-xenial main"
 			sudo -E apt-get update
 			docker_version_full=$(apt-cache show docker-engine | grep "^Version: $docker_swarm_version" | awk '{print $2}' | head -1)
 			sudo -E apt-get -y install --allow-downgrades "${pkg_name}=${docker_version_full}"
