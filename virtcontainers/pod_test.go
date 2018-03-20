@@ -1171,10 +1171,10 @@ func TestPodAttachDevicesVFIO(t *testing.T) {
 
 	containers[0].pod = &pod
 
-	err = pod.attachDevices()
+	err = containers[0].attachDevices()
 	assert.Nil(t, err, "Error while attaching devices %s", err)
 
-	err = pod.detachDevices()
+	err = containers[0].detachDevices()
 	assert.Nil(t, err, "Error while detaching devices %s", err)
 }
 
