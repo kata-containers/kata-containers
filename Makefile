@@ -17,6 +17,13 @@ ginkgo:
 	GOPATH=$(PWD)/vendor go build ./vendor/github.com/onsi/ginkgo/ginkgo
 	unlink vendor/src
 
+functional: ginkgo
+ifeq (${RUNTIME},)
+	$(error RUNTIME is not set)
+else
+	./ginkgo -v functional/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+endif
+
 integration: ginkgo
 ifeq ($(RUNTIME),)
 	$(error RUNTIME is not set)
@@ -31,7 +38,7 @@ crio:
 log-parser:
 	make -C cmd/log-parser
 
-test: integration
+test: functional integration
 
 check: checkcommits log-parser
 
