@@ -4,16 +4,16 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-
 all: runtime
 
 runtime:
-	cd cli; \
-	make
-install :
-	cd cli; \
-	make install
+	make -C cli
 
+install:
+	make -C cli install
+
+clean:
+	make -C cli clean
 
 help:
 	@printf "To build a Kata Containers runtime:\n"
