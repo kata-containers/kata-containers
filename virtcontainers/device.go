@@ -132,7 +132,13 @@ func (device *VFIODevice) attach(h hypervisor, c *Container) error {
 
 		device.BDF = deviceBDF
 
-		if err := h.addDevice(*device, vfioDev); err != nil {
+		randBytes, err := generateRandomBytes(8)
+		if err != nil {
+			return err
+		}
+		device.DeviceInfo.ID = hex.EncodeToString(randBytes)
+
+		if err := h.hotplugAddDevice(*device, vfioDev); err != nil {
 			deviceLogger().WithError(err).Error("Failed to add device")
 			return err
 		}
