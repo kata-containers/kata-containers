@@ -395,12 +395,13 @@ func TestAppendKnobsAllFalse(t *testing.T) {
 	testAppend(knobs, knobsString, t)
 }
 
-var kernelString = "-kernel /opt/vmlinux.container -append root=/dev/pmem0p1 rootflags=dax,data=ordered,errors=remount-ro rw rootfstype=ext4 tsc=reliable"
+var kernelString = "-kernel /opt/vmlinux.container -initrd /opt/initrd.container -append root=/dev/pmem0p1 rootflags=dax,data=ordered,errors=remount-ro rw rootfstype=ext4 tsc=reliable"
 
 func TestAppendKernel(t *testing.T) {
 	kernel := Kernel{
-		Path:   "/opt/vmlinux.container",
-		Params: "root=/dev/pmem0p1 rootflags=dax,data=ordered,errors=remount-ro rw rootfstype=ext4 tsc=reliable",
+		Path:       "/opt/vmlinux.container",
+		InitrdPath: "/opt/initrd.container",
+		Params:     "root=/dev/pmem0p1 rootflags=dax,data=ordered,errors=remount-ro rw rootfstype=ext4 tsc=reliable",
 	}
 
 	testAppend(kernel, kernelString, t)
