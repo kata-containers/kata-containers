@@ -186,7 +186,6 @@ var _ = Describe("run", func() {
 
 	Context("hot plug block devices", func() {
 		It("should be attached", func() {
-			Skip("Issue: https://github.com/kata-containers/kata-containers/issues/5")
 			_, _, exitCode := dockerRun(dockerArgs...)
 			Expect(exitCode).To(BeZero())
 		})
