@@ -651,15 +651,15 @@ func TestDetectCIEnvironment(t *testing.T) {
 		commit, dstBranch, srcBranch := detectCIEnvironment()
 
 		if commit != d.expectedCommit {
-			t.Fatalf("Unexpected commit %v (%+v)", commit, d)
+			t.Fatalf("Unexpected commit %v (%q: %+v)", commit, d.name, d)
 		}
 
 		if dstBranch != d.expectedDstBranch {
-			t.Fatalf("Unexpected destination branch %v (%+v)", dstBranch, d)
+			t.Fatalf("Unexpected destination branch %v (%q: %+v)", dstBranch, d.name, d)
 		}
 
 		if srcBranch != d.expectedSrcBranch {
-			t.Fatalf("Unexpected source branch %v (%+v)", srcBranch, d)
+			t.Fatalf("Unexpected source branch %v (%q: %+v)", srcBranch, d.name, d)
 		}
 
 		// Crudely undo the changes (it'll be fully undone later
