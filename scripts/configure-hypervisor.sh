@@ -133,8 +133,9 @@ check_tags()
 #    options being displayed on a single line.
 show_array()
 {
-	local -n _array="$1"
-	local action="$2"
+	local action="$1"
+	local _array=("$@")
+	_array=("${_array[@]:1}")
 
 	local -i size="${#_array[*]}"
 	local -i i=1
@@ -411,7 +412,7 @@ main()
 	# Where to install data files
 	qemu_options+=(misc:--datadir=/usr/share/${hypervisor})
 
-	show_array qemu_options "$action"
+	show_array  "$action" "${qemu_options[@]}"
 
 	exit 0
 }
