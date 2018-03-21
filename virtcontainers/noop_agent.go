@@ -79,3 +79,8 @@ func (n *noopAgent) killContainer(pod Pod, c Container, signal syscall.Signal, a
 func (n *noopAgent) processListContainer(pod Pod, c Container, options ProcessListOptions) (ProcessList, error) {
 	return nil, nil
 }
+
+// onlineCPUMem is the Noop agent Container online CPU and Memory implementation. It does nothing.
+func (n *noopAgent) onlineCPUMem() error {
+	return nil
+}

@@ -773,6 +773,13 @@ func (k *kataAgent) processListContainer(pod Pod, c Container, options ProcessLi
 	return nil, nil
 }
 
+func (k *kataAgent) onlineCPUMem() error {
+	req := &grpc.OnlineCPUMemRequest{}
+
+	_, err := k.sendReq(req)
+	return err
+}
+
 func (k *kataAgent) connect() error {
 	if k.client != nil {
 		return nil
@@ -836,6 +843,8 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	case *grpc.UpdateInterfaceRequest:
 		ifc, err := k.client.UpdateInterface(context.Background(), req)
 		return ifc, err
+	case *grpc.OnlineCPUMemRequest:
+		return k.client.OnlineCPUMem(context.Background(), req)
 	default:
 		return nil, fmt.Errorf("Unknown gRPC type %T", req)
 	}

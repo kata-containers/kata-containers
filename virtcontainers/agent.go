@@ -172,4 +172,8 @@ type agent interface {
 
 	// processListContainer will list the processes running inside the container
 	processListContainer(pod Pod, c Container, options ProcessListOptions) (ProcessList, error)
+
+	// onlineCPUMem will online CPUs and Memory inside the Pod.
+	// This function should be called after hot adding vCPUs or Memory.
+	onlineCPUMem() error
 }
