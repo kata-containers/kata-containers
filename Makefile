@@ -35,11 +35,16 @@ crio:
 	bash .ci/install_bats.sh
 	RUNTIME=${RUNTIME} ./integration/cri-o/cri-o.sh
 
+docker-compose:
+	bash .ci/install_bats.sh
+	cd integration/docker-compose && \
+	bats docker-compose.bats
+
 log-parser:
 	make -C cmd/log-parser
 
-test: functional integration crio
+test: functional integration crio docker-compose
 
 check: checkcommits log-parser
 
-.PHONY: check checkcommits integration ginkgo log-parser test crio
+.PHONY: check checkcommits integration ginkgo log-parser test crio functional docker-compose
