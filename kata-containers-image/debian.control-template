@@ -1,0 +1,12 @@
+Source: kata-containers-image
+Section: devel
+Priority: optional
+Maintainer: Kata containers team <https://github.com/kata-containers/>
+Standards-Version: 3.9.6
+Homepage: https://katacontainers.io
+Build-Depends: debhelper (>= 9), flex, bison
+
+Package: kata-containers-image
+Architecture: @deb_arch@
+Description: Kata containers image
+

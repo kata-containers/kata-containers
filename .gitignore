@@ -1,0 +1,4 @@
+typescript
+*.img
+*.initrd
+*.tar.gz

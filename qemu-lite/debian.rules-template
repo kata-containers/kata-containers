@@ -1,0 +1,28 @@
+#!/usr/bin/make -f
+include /usr/share/dpkg/default.mk
+export LANG=C
+%:
+	dh $@
+
+override_dh_auto_configure:
+	chmod a+x "../SOURCES/configure-hypervisor.sh"
+	eval "../SOURCES/configure-hypervisor.sh" "qemu-lite" | xargs ./configure --prefix=/usr
+
+override_dh_auto_build:
+	make
+
+override_dh_auto_install:
+	dh_auto_install
+	for file in $(CURDIR)/debian/qemu-lite/usr/bin/* ; do \
+		dir=$$(dirname $$file) ;\
+		bin=$$(basename $$file) ;\
+		new=$$(echo $$bin | sed -e 's/qemu-/qemu-lite-/g' -e 's/ivshmem-/ivshmem-lite-/g' -e 's/virtfs-/virtfs-lite-/g') ;\
+		mv $$file "$$dir"/"$$new" ; \
+	done
+
+override_dh_auto_test:
+	echo "Skip auto test"
+
+override_dh_auto_clean:
+	echo "Skip auto clean"
+

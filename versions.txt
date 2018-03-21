@@ -1,0 +1,30 @@
+kata_runtime_hash=90e3ba602789fe67ed91acb6fbd1b3cc0f6d6d84
+kata_proxy_hash=16414149f38f7099c9afd529ebfbac335a15194a
+kata_shim_hash=2457ccc107ac46d7105254c089b240523b1701c4
+kata_agent_hash=e444fe2bbbc57fdd47dad00f369935009b094817
+ksm_throttler_hash=f47b1ec8a904424fe553426738d0c3054ae1e2e6
+qemu_lite_hash=6ba2bfbee9a80bfd03605c5eb2ca743c8b68389e
+qemu_vanilla_hash=e3050471ff1daa7fefe88388dfa4e1d97ba1f0bc
+
+kata_runtime_version=0.2.0
+kata_proxy_version=0.2.0
+kata_shim_version=0.2.0
+kata_agent_version=0.2.0
+ksm_throttler_version=0.2.0
+kata_osbuilder_version=0.2.0
+qemu_lite_version=2.11.0
+qemu_vanilla_version=2.11
+kernel_version=4.14.22
+
+# Default osbuilder image options
+osbuilder_default_os=clearlinux
+clearlinux_version=20640
+
+# Default osbuilder initrd options
+osbuilder_default_initrd_os=alpine
+alpine_version=3.7
+
+# Golang
+go_version=1.10.2
+# sha256 checksum for the go_version binary distribution ("go${go_version}.linux-amd64.tar.gz")
+go_checksum=4b677d698c65370afa33757b6954ade60347aaca310ea92a63ed717d7cb0c2ff
