@@ -279,11 +279,8 @@ show_package_versions()
 	# assets
 	pattern+="|linux-container"
 
-	# optimised hypervisor
-	pattern+="|qemu-lite"
-
-	# default distro hypervisor
-	pattern+="|qemu-system-x86"
+	# hypervisor name prefix
+	pattern+="|qemu-"
 
 	pattern+=")"
 
