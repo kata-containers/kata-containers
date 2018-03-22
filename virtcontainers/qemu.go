@@ -175,7 +175,7 @@ func (q *qemu) init(pod *Pod) error {
 
 	q.config = pod.config.HypervisorConfig
 	q.pod = pod
-	q.arch = newQemuArch(q.config.HypervisorMachineType)
+	q.arch = newQemuArch(q.config)
 
 	if err = pod.storage.fetchHypervisorState(pod.id, &q.state); err != nil {
 		q.Logger().Debug("Creating bridges")
