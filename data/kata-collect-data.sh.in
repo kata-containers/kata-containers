@@ -273,10 +273,10 @@ show_package_versions()
 		pattern+="|${project}-proxy"
 		pattern+="|${project}-runtime"
 		pattern+="|${project}-shim"
+		pattern+="|${project}-containers-image"
 	done
 
 	# assets
-	pattern+="|clear-containers-image"
 	pattern+="|linux-container"
 
 	# optimised hypervisor
