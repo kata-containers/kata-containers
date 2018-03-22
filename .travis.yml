@@ -9,10 +9,6 @@ dist: trusty
 
 language: go
 
-env:
-  - KATA_RUNTIME=cc
-  - KATA_RUNTIME=runv
-
 go:
   - 1.8
 
@@ -21,7 +17,5 @@ before_script:
 
 install:
   - cd ${TRAVIS_BUILD_DIR}
-  - pushd cli
-  - make KATA_RUNTIME=${KATA_RUNTIME}
-  - sudo -E PATH=$PATH make KATA_RUNTIME=${KATA_RUNTIME} install
-  - popd
+  - make
+  - sudo -E PATH=$PATH make install
