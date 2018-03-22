@@ -30,3 +30,14 @@ groups:
     required: 2
     teams:
       - runtime
+
+  documentation:
+    required: 1
+    teams:
+      - documentation
+    conditions:
+      files:
+        include:
+          - "*.md"
+        exclude:
+          - "vendor/*"
