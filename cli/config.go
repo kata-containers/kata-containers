@@ -76,6 +76,7 @@ type tomlConfig struct {
 type hypervisor struct {
 	Path                  string `toml:"path"`
 	Kernel                string `toml:"kernel"`
+	Initrd                string `toml:"initrd"`
 	Image                 string `toml:"image"`
 	Firmware              string `toml:"firmware"`
 	MachineAccelerators   string `toml:"machine_accelerators"`
@@ -131,11 +132,21 @@ func (h hypervisor) kernel() (string, error) {
 	return resolvePath(p)
 }
 
+func (h hypervisor) initrd() (string, error) {
+	p := h.Initrd
+
+	if p == "" {
+		return "", nil
+	}
+
+	return resolvePath(p)
+}
+
 func (h hypervisor) image() (string, error) {
 	p := h.Image
 
 	if p == "" {
-		p = defaultImagePath
+		return "", nil
 	}
 
 	return resolvePath(p)
@@ -267,6 +278,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	initrd, err := h.initrd()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	image, err := h.image()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
@@ -289,6 +305,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	return vc.HypervisorConfig{
 		HypervisorPath:        hypervisor,
 		KernelPath:            kernel,
+		InitrdPath:            initrd,
 		ImagePath:             image,
 		FirmwarePath:          firmware,
 		MachineAccelerators:   machineAccelerators,
@@ -393,6 +410,7 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		HypervisorPath:        defaultHypervisorPath,
 		KernelPath:            defaultKernelPath,
 		ImagePath:             defaultImagePath,
+		InitrdPath:            defaultInitrdPath,
 		FirmwarePath:          defaultFirmwarePath,
 		MachineAccelerators:   defaultMachineAccelerators,
 		HypervisorMachineType: defaultMachineType,

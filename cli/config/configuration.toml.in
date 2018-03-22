@@ -8,6 +8,7 @@
 [hypervisor.qemu]
 path = "@QEMUPATH@"
 kernel = "@KERNELPATH@"
+initrd = "@INITRDPATH@"
 image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
 
