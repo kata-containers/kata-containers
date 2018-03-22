@@ -72,9 +72,6 @@ else
 	git fetch origin && git checkout master && git reset --hard origin/master
 fi
 
-# Run the static analysis tools
-.ci/static-checks.sh
-
 # Setup Kata Containers Environment
 #
 # - If the repo is "tests", this will call the script living in that repo
@@ -82,6 +79,9 @@ fi
 # - If the repo is not "tests", call the repo-specific script (which is
 #   expected to call the script of the same name in the "tests" repo).
 .ci/setup.sh
+
+# Run the static analysis tools
+.ci/static-checks.sh
 
 if [ -n "$pr_number" ]
 then
