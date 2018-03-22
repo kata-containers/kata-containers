@@ -37,6 +37,7 @@ PROJECT_BUG_URL = $(PROJECT_URL)/kata-containers/issues/new
 BIN_PREFIX = $(PROJECT_TYPE)
 PROJECT_DIR = $(PROJECT_TAG)
 IMAGENAME = $(PROJECT_TAG).img
+INITRDNAME = $(PROJECT_TAG)-initrd.img
 
 TARGET = $(BIN_PREFIX)-runtime
 TARGET_OUTPUT = $(CURDIR)/$(TARGET)
@@ -77,6 +78,7 @@ PKGRUNDIR := $(LOCALSTATEDIR)/run/$(PROJECT_DIR)
 PKGLIBEXECDIR := $(LIBEXECDIR)/$(PROJECT_DIR)
 
 KERNELPATH := $(PKGDATADIR)/vmlinuz.container
+INITRDPATH := $(PKGDATADIR)/$(INITRDNAME)
 IMAGEPATH := $(PKGDATADIR)/$(IMAGENAME)
 FIRMWAREPATH :=
 
@@ -140,6 +142,8 @@ USER_VARS += DESTSYSCONFIG
 USER_VARS += DESTTARGET
 USER_VARS += IMAGENAME
 USER_VARS += IMAGEPATH
+USER_VARS += INITRDNAME
+USER_VARS += INITRDPATH
 USER_VARS += MACHINETYPE
 USER_VARS += KERNELPATH
 USER_VARS += FIRMWAREPATH
@@ -244,6 +248,7 @@ var showConfigPathsOption = fmt.Sprintf("%s-show-default-config-paths", projectP
 var defaultHypervisorPath = "$(QEMUPATH)"
 var defaultImagePath = "$(IMAGEPATH)"
 var defaultKernelPath = "$(KERNELPATH)"
+var defaultInitrdPath = "$(INITRDPATH)"
 var defaultFirmwarePath = "$(FIRMWAREPATH)"
 var defaultMachineAccelerators = "$(MACHINEACCELERATORS)"
 var defaultShimPath = "$(SHIMPATH)"
@@ -319,6 +324,7 @@ $(GENERATED_FILES): %: %.in Makefile VERSION
 		-e "s|@DESTSYSCONFIG@|$(DESTSYSCONFIG)|g" \
 		-e "s|@IMAGEPATH@|$(IMAGEPATH)|g" \
 		-e "s|@KERNELPATH@|$(KERNELPATH)|g" \
+		-e "s|@INITRDPATH@|$(INITRDPATH)|g" \
 		-e "s|@FIRMWAREPATH@|$(FIRMWAREPATH)|g" \
 		-e "s|@MACHINEACCELERATORS@|$(MACHINEACCELERATORS)|g" \
 		-e "s|@KERNELPARAMS@|$(KERNELPARAMS)|g" \

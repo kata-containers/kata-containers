@@ -514,6 +514,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		HypervisorPath:        defaultHypervisorPath,
 		KernelPath:            defaultKernelPath,
 		ImagePath:             defaultImagePath,
+		InitrdPath:            defaultInitrdPath,
 		HypervisorMachineType: defaultMachineType,
 		DefaultVCPUs:          defaultVCPUCount,
 		DefaultMemSz:          defaultMemSize,
@@ -757,6 +758,44 @@ func TestHypervisorDefaultsKernel(t *testing.T) {
 	assert.Equal(h.kernelParams(), kernelParams, "custom hypervisor kernel parameterms wrong")
 }
 
+// The default initrd path is not returned by h.initrd()
+func TestHypervisorDefaultsInitrd(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpdir, err := ioutil.TempDir(testDir, "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
+	testInitrdPath := filepath.Join(tmpdir, "initrd")
+	testInitrdLinkPath := filepath.Join(tmpdir, "initrd-link")
+
+	err = createEmptyFile(testInitrdPath)
+	assert.NoError(err)
+
+	err = syscall.Symlink(testInitrdPath, testInitrdLinkPath)
+	assert.NoError(err)
+
+	savedInitrdPath := defaultInitrdPath
+
+	defer func() {
+		defaultInitrdPath = savedInitrdPath
+	}()
+
+	defaultInitrdPath = testInitrdPath
+	h := hypervisor{}
+	p, err := h.initrd()
+	assert.NoError(err)
+	assert.Equal(p, "", "default Image path wrong")
+
+	// test path resolution
+	defaultInitrdPath = testInitrdLinkPath
+	h = hypervisor{}
+	p, err = h.initrd()
+	assert.NoError(err)
+	assert.Equal(p, "")
+}
+
+// The default image path is not returned by h.image()
 func TestHypervisorDefaultsImage(t *testing.T) {
 	assert := assert.New(t)
 
@@ -783,14 +822,14 @@ func TestHypervisorDefaultsImage(t *testing.T) {
 	h := hypervisor{}
 	p, err := h.image()
 	assert.NoError(err)
-	assert.Equal(p, defaultImagePath, "default Image path wrong")
+	assert.Equal(p, "", "default Image path wrong")
 
 	// test path resolution
 	defaultImagePath = testImageLinkPath
 	h = hypervisor{}
 	p, err = h.image()
 	assert.NoError(err)
-	assert.Equal(p, testImagePath)
+	assert.Equal(p, "")
 }
 
 func TestProxyDefaults(t *testing.T) {
