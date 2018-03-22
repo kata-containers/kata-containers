@@ -136,6 +136,11 @@ const (
 // parameters that will be used in standard (non-debug) mode.
 var kernelParamsNonDebug = []Param{
 	{"quiet", ""},
+}
+
+// kernelParamsSystemdNonDebug is a list of the default systemd related
+// kernel parameters that will be used in standard (non-debug) mode.
+var kernelParamsSystemdNonDebug = []Param{
 	{"systemd.show_status", "false"},
 }
 
@@ -144,6 +149,12 @@ var kernelParamsNonDebug = []Param{
 // possible).
 var kernelParamsDebug = []Param{
 	{"debug", ""},
+}
+
+// kernelParamsSystemdDebug is a list of the default systemd related kernel
+// parameters that will be used in debug mode (as much boot output as
+// possible).
+var kernelParamsSystemdDebug = []Param{
 	{"systemd.show_status", "true"},
 	{"systemd.log_level", "debug"},
 }
