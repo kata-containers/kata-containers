@@ -261,8 +261,11 @@ show_package_versions()
 	local pattern="("
 	local project
 
-	# CC 2.x runtime. This shouldn't be installed but let's check anyway
+	# CC 2.x, 3.0 and runv runtimes. They shouldn't be installed but let's
+	# check anyway.
 	pattern+="cc-oci-runtime"
+	pattern+="cc-runtime"
+	pattern+="runv"
 
 	# core components
 	for project in @PROJECT_TYPE@
