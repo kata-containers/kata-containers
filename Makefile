@@ -64,6 +64,13 @@ LIBEXECDIR := $(PREFIX)/libexec
 SHAREDIR := $(PREFIX)/share
 DEFAULTSDIR := $(SHAREDIR)/defaults
 
+COLLECT_SCRIPT = data/kata-collect-data.sh
+COLLECT_SCRIPT_SRC = $(COLLECT_SCRIPT).in
+
+GENERATED_FILES += $(COLLECT_SCRIPT)
+SCRIPTS += $(COLLECT_SCRIPT)
+SCRIPTS_DIR := $(BINDIR)
+
 PKGDATADIR := $(SHAREDIR)/$(PROJECT_DIR)
 PKGLIBDIR := $(LOCALSTATEDIR)/lib/$(PROJECT_DIR)
 PKGRUNDIR := $(LOCALSTATEDIR)/run/$(PROJECT_DIR)
@@ -123,8 +130,6 @@ DESTCONFIG := $(abspath $(DESTCONFDIR)/$(CONFIG_FILE))
 DESTSYSCONFIG := $(abspath $(DESTSYSCONFDIR)/$(CONFIG_FILE))
 
 DESTSHAREDIR := $(DESTDIR)/$(SHAREDIR)
-
-SCRIPTS_DIR := $(BINDIR)
 
 # list of variables the user may wish to override
 USER_VARS += ARCH
@@ -380,7 +385,7 @@ install-scripts:
 	$(foreach f,$(SCRIPTS),$(call INSTALL_EXEC,$f,$(SCRIPTS_DIR)))
 
 clean:
-	$(QUIET_CLEAN)rm -f $(TARGET) $(CONFIG) $(GENERATED_GO_FILES) $(GENERATED_FILES)
+	$(QUIET_CLEAN)rm -f $(TARGET) $(CONFIG) $(GENERATED_GO_FILES) $(GENERATED_FILES) $(COLLECT_SCRIPT)
 
 show-usage: show-header
 	@printf "• Overview:\n"
