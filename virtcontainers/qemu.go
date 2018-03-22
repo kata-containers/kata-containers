@@ -284,9 +284,15 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 		return err
 	}
 
+	initrdPath, err := q.config.InitrdAssetPath()
+	if err != nil {
+		return err
+	}
+
 	kernel := govmmQemu.Kernel{
-		Path:   kernelPath,
-		Params: q.kernelParameters(),
+		Path:       kernelPath,
+		InitrdPath: initrdPath,
+		Params:     q.kernelParameters(),
 	}
 
 	rtc := govmmQemu.RTC{
@@ -336,14 +342,18 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 	devices = q.arch.append9PVolumes(devices, podConfig.Volumes)
 	devices = q.arch.appendConsole(devices, q.getPodConsole(podConfig.ID))
 
-	imagePath, err := q.config.ImageAssetPath()
-	if err != nil {
-		return err
-	}
+	if initrdPath == "" {
+		imagePath, err := q.config.ImageAssetPath()
+		if err != nil {
+			return err
+		}
 
-	devices, err = q.arch.appendImage(devices, imagePath)
-	if err != nil {
-		return err
+		if imagePath != "" {
+			devices, err = q.arch.appendImage(devices, imagePath)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	if q.config.BlockDeviceDriver == VirtioBlock {
