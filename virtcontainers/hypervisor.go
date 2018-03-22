@@ -157,6 +157,10 @@ type HypervisorConfig struct {
 	// ImagePath is the guest image host path.
 	ImagePath string
 
+	// InitrdPath is the guest initrd image host path.
+	// ImagePath and InitrdPath cannot be set at the same time.
+	InitrdPath string
+
 	// FirmwarePath is the bios host path
 	FirmwarePath string
 
@@ -225,8 +229,8 @@ func (conf *HypervisorConfig) valid() (bool, error) {
 		return false, fmt.Errorf("Missing kernel path")
 	}
 
-	if conf.ImagePath == "" {
-		return false, fmt.Errorf("Missing image path")
+	if conf.ImagePath == "" && conf.InitrdPath == "" {
+		return false, fmt.Errorf("Missing image and initrd path")
 	}
 
 	if conf.DefaultVCPUs == 0 {
@@ -299,6 +303,8 @@ func (conf *HypervisorConfig) assetPath(t assetType) (string, error) {
 		return conf.KernelPath, nil
 	case imageAsset:
 		return conf.ImagePath, nil
+	case initrdAsset:
+		return conf.InitrdPath, nil
 	case hypervisorAsset:
 		return conf.HypervisorPath, nil
 	case firmwareAsset:
@@ -335,6 +341,16 @@ func (conf *HypervisorConfig) ImageAssetPath() (string, error) {
 // CustomImageAsset returns true if the image asset is a custom one, false otherwise.
 func (conf *HypervisorConfig) CustomImageAsset() bool {
 	return conf.isCustomAsset(imageAsset)
+}
+
+// InitrdAssetPath returns the guest initrd path
+func (conf *HypervisorConfig) InitrdAssetPath() (string, error) {
+	return conf.assetPath(initrdAsset)
+}
+
+// CustomInitrdAsset returns true if the initrd asset is a custom one, false otherwise.
+func (conf *HypervisorConfig) CustomInitrdAsset() bool {
+	return conf.isCustomAsset(initrdAsset)
 }
 
 // HypervisorAssetPath returns the VM hypervisor path
