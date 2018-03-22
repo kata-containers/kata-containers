@@ -88,5 +88,5 @@ download_kernel "${cc_kernel_version}"
 
 # Make symbolic link to kata-containers
 # FIXME: see https://github.com/kata-containers/packaging/issues/1
-sudo ln -s /usr/share/clear-containers/vmlinux.container /usr/share/kata-containers/
-sudo ln -s /usr/share/clear-containers/vmlinuz.container /usr/share/kata-containers/
+sudo ln -sf /usr/share/clear-containers/vmlinux.container /usr/share/kata-containers/
+sudo ln -sf /usr/share/clear-containers/vmlinuz.container /usr/share/kata-containers/

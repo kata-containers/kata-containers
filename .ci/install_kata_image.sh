@@ -35,6 +35,6 @@ date=$(date +%Y-%m-%d-%T.%N%z)
 image="kata-containers-${date}-osbuilder-${commit}-agent-${agent_commit}"
 
 sudo install -o root -g root -m 0640 -D ${image_name} "/usr/share/kata-containers/${image}"
-(cd /usr/share/kata-containers && sudo rm -f ${image_name} && sudo ln -s "$image" ${image_name})
+(cd /usr/share/kata-containers && sudo ln -sf "$image" ${image_name})
 
 popd
