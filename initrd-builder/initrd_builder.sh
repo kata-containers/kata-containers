@@ -85,7 +85,7 @@ IMAGE_NAME=$(basename ${INITRD_IMAGE})
 
 # The kata rootfs image expects init to be installed
 init="${ROOTFS}/sbin/init"
-[ -x "${init}" ] || [ -L ${init} ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
+[ -x "${init}" ] || [ -L ${init} ] || die "/sbin/init is not installed in ${ROOTFS}"
 OK "init is installed"
 [ "${AGENT_INIT}" == "yes" ] || [ -x "${ROOTFS}/usr/bin/${AGENT_BIN}" ] || \
 	die "/usr/bin/${AGENT_BIN} is not installed in ${ROOTFS}
