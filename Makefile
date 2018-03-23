@@ -38,8 +38,8 @@ crio:
 log-parser:
 	make -C cmd/log-parser
 
-test: functional integration
+test: functional integration crio
 
 check: checkcommits log-parser
 
-.PHONY: check checkcommits integration ginkgo log-parser test
+.PHONY: check checkcommits integration ginkgo log-parser test crio

@@ -8,8 +8,7 @@
 set -e
 
 cidir=$(dirname "$0")
-source "${cidir}/lib.sh"
-get_cc_versions
+source "${cidir}/../integration/cri-o/versions.txt"
 
 echo "Get CRI-O sources"
 crio_repo="github.com/kubernetes-incubator/cri-o"
@@ -30,8 +29,7 @@ echo "Get CRI Tools"
 critools_repo="github.com/kubernetes-incubator/cri-tools"
 go get "$critools_repo" || true
 pushd "${GOPATH}/src/${critools_repo}"
-crictl_commit=$(grep "ENV CRICTL_COMMIT" "${GOPATH}/src/${crio_repo}/Dockerfile" | cut -d " " -f3)
-git checkout "${crictl_commit}"
+git checkout "${critools_version}"
 go install ./cmd/crictl
 sudo install "${GOPATH}/bin/crictl" /usr/bin
 popd
@@ -62,7 +60,19 @@ echo "Set runc as default runtime in CRI-O for trusted workloads"
 sudo sed -i 's/^runtime =.*/runtime = "\/usr\/local\/bin\/crio-runc"/' "$crio_config_file"
 
 echo "Add docker.io registry to pull images"
-sudo sed -i 's/^registries = \[/registries = \[ "docker.io"/' /etc/crio/crio.conf
+sudo sed -i 's/^registries = \[/registries = \[ "docker.io"/' "$crio_config_file"
+
+echo "Set manage_network_ns_lifecycle to true"
+network_ns_flag="manage_network_ns_lifecycle"
+
+# Check if flag is already defined in the CRI-O config file.
+# If it is already defined, then just change the value to true,
+# else, add the flag with the value.
+if grep "$network_ns_flag" "$crio_config_file"; then
+	sudo sed -i "s/^$network_ns_flag.*/$network_ns_flag = true/" "$crio_config_file"
+else
+	sudo sed -i "/\[crio.runtime\]/a$network_ns_flag = true" "$crio_config_file"
+fi
 
 echo "Set Kata containers as default runtime in CRI-O for untrusted workloads"
 sudo sed -i 's/default_workload_trust = "trusted"/default_workload_trust = "untrusted"/' "$crio_config_file"
