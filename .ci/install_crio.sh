@@ -38,7 +38,6 @@ popd
 
 echo "Installing CRI-O"
 make clean
-make install.tools
 make
 make test-binaries
 sudo -E PATH=$PATH sh -c "make install"
