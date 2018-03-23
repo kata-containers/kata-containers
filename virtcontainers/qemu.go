@@ -244,13 +244,10 @@ func (q *qemu) qmpSocketPath(socketName string) (string, error) {
 	return path, nil
 }
 
-// createPod is the Hypervisor pod creation implementation for govmmQemu.
-func (q *qemu) createPod(podConfig PodConfig) error {
-	var devices []govmmQemu.Device
-
+func (q *qemu) getQemuMachine(podConfig PodConfig) (govmmQemu.Machine, error) {
 	machine, err := q.arch.machine()
 	if err != nil {
-		return err
+		return govmmQemu.Machine{}, err
 	}
 
 	accelerators := podConfig.HypervisorConfig.MachineAccelerators
@@ -259,6 +256,34 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 			accelerators = fmt.Sprintf(",%s", accelerators)
 		}
 		machine.Options += accelerators
+	}
+
+	return machine, nil
+}
+
+func (q *qemu) appendImage(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
+	imagePath, err := q.config.ImageAssetPath()
+	if err != nil {
+		return nil, err
+	}
+
+	if imagePath != "" {
+		devices, err = q.arch.appendImage(devices, imagePath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return devices, nil
+}
+
+// createPod is the Hypervisor pod creation implementation for govmmQemu.
+func (q *qemu) createPod(podConfig PodConfig) error {
+	var devices []govmmQemu.Device
+
+	machine, err := q.getQemuMachine(podConfig)
+	if err != nil {
+		return err
 	}
 
 	smp := q.cpuTopology()
@@ -343,16 +368,9 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 	devices = q.arch.appendConsole(devices, q.getPodConsole(podConfig.ID))
 
 	if initrdPath == "" {
-		imagePath, err := q.config.ImageAssetPath()
+		devices, err = q.appendImage(devices)
 		if err != nil {
 			return err
-		}
-
-		if imagePath != "" {
-			devices, err = q.arch.appendImage(devices, imagePath)
-			if err != nil {
-				return err
-			}
 		}
 	}
 
