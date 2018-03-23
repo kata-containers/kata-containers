@@ -33,8 +33,8 @@ func newTestTerminal(t *testing.T) (*os.File, error) {
 
 func TestSetupTerminalOnNonTerminalFailure(t *testing.T) {
 	file, err := ioutil.TempFile("", "tmp")
-	defer file.Close()
 	assert.Nil(t, err, "Failed to create temporary file")
+	defer file.Close()
 
 	_, err = setupTerminal(int(file.Fd()))
 	assert.NotNil(t, err, "Should fail because the file is not a terminal")
@@ -42,8 +42,8 @@ func TestSetupTerminalOnNonTerminalFailure(t *testing.T) {
 
 func TestSetupTerminalSuccess(t *testing.T) {
 	file, err := newTestTerminal(t)
-	defer file.Close()
 	assert.Nil(t, err, "Failed to create terminal")
+	defer file.Close()
 
 	savedTermios, err := setupTerminal(int(file.Fd()))
 	assert.Nil(t, err, "Should not fail because the file is a terminal")
