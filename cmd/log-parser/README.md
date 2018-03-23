@@ -94,5 +94,5 @@ To merge all logs:
    ```
 1. Run the script:
    ```
-   $ kata-log-parser proxy.log runtime.sh shim.log
+   $ kata-log-parser proxy.log runtime.log shim.log
    ```
