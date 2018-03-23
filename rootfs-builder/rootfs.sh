@@ -93,6 +93,10 @@ generate_dockerfile() {
 	dir="$1"
 
 	case "$(arch)" in
+		"ppc64le")
+			goarch=ppc64le
+			;;
+
 		"aarch64")
 			goarch=arm64
 			;;
