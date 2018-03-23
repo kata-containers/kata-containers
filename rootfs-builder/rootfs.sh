@@ -199,6 +199,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--env AGENT_INIT="${AGENT_INIT}" \
 		--env GOPATH="${GOPATH}" \
 		--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
+		--env EXTRA_PKGS="${EXTRA_PKGS}" \
 		-v "${script_dir}":"/osbuilder" \
 		-v "${ROOTFS_DIR}":"/rootfs" \
 		-v "${kernel_mod_dir}":"${kernel_mod_dir}" \
