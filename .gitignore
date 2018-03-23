@@ -1,3 +1,15 @@
-/build-runv
+*.patch
+*.o
+*.swp
 /kata-runtime
 /data/kata-collect-data.sh
+/cli/coverage.html
+/cli/config-generated.go
+/cli/config/configuration.toml
+/virtcontainers/hack/virtc/virtc
+/virtcontainers/hook/mock/hook
+/virtcontainers/shim/mock/shim
+/virtcontainers/shim/mock/cc-shim/cc-shim
+/virtcontainers/shim/mock/kata-shim/kata-shim
+/virtcontainers/utils/supportfiles
+/virtcontainers/profile.cov
