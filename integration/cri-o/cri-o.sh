@@ -16,7 +16,7 @@ check_crio_repository="$GOPATH/src/${crio_repository}"
 
 if [ -d ${check_crio_repository} ]; then
 	pushd ${check_crio_repository}
-	check_version=$(git log -1 --pretty=format:"%H" | grep "${crio_version}")
+	check_version=$(git log -1 | grep "${crio_version}")
 	if [ $? -ne 0 ]; then
 		git fetch
 		git checkout "${crio_version}"
