@@ -194,22 +194,9 @@ define SHOW_ARCH
   $(shell printf "\\t%s%s\\\n" "$(1)" $(if $(filter $(ARCH),$(1))," (default)",""))
 endef
 
-# Only install git hooks if working in a git clone
-ifneq (,$(call DIR_EXISTS,.git))
-	HANDLE_GIT_HOOKS = install-git-hooks
-endif
-
-# Don't install hooks when running under the CI as they will stop the
-# tests from running.
-#
-# See: https://github.com/clearcontainers/runtime/issues/984
-ifneq (,$(CI))
-	HANDLE_GIT_HOOKS =
-endif
-
 all: runtime
 
-runtime: $(TARGET_OUTPUT) $(CONFIG) $(HANDLE_GIT_HOOKS)
+runtime: $(TARGET_OUTPUT) $(CONFIG)
 .DEFAULT: default
 
 build: default
@@ -314,7 +301,6 @@ $(TARGET_OUTPUT): $(EXTRA_DEPS) $(SOURCES) $(GENERATED_GO_FILES) $(GENERATED_FIL
 	coverage \
 	default \
 	install \
-	install-git-hooks \
 	show-header \
 	show-summary \
 	show-variables
@@ -450,43 +436,3 @@ show-summary: show-header
 	@printf "\tassets path (PKGDATADIR)              : %s\n" $(PKGDATADIR)
 	@printf "\tproxy+shim path (PKGLIBEXECDIR)       : %s\n" $(PKGLIBEXECDIR)
 	@printf "\n"
-
-
-# The following git hooks handle HEAD changes:
-# post-checkout <prev_head> <new_head> <file_or_branch_checkout>
-# post-commit # no parameters
-# post-merge <squash_or_not>
-# post-rewrite <amend_or_rebase>
-#
-define GIT_HOOK_POST_CHECKOUT
-#!/usr/bin/env bash
-prev_head=$$1
-new_head=$$2
-[[ "$$prev_head" == "$$new_head" ]] && exit
-printf "\nexecuting post-checkout git hook\n\n"
-rm -f $(GENERATED_CONFIG)
-endef
-export GIT_HOOK_POST_CHECKOUT
-
-define GIT_HOOK_POST_GENERIC
-#!/usr/bin/env bash
-printf "\n executing $$0 git hook\n\n"
-rm -f $(GENERATED_CONFIG)
-endef
-export GIT_HOOK_POST_GENERIC
-
-# This git-hook is executed after every checkout git operation
-.git/hooks/post-checkout: Makefile
-	@ mkdir -p .git/hooks/
-	$(QUIET_INST)echo "$$GIT_HOOK_POST_CHECKOUT" >$@
-	@ chmod +x $@
-
-# This git-hook is executed after every commit, merge, amend or rebase git
-# operation
-.git/hooks/post-commit .git/hooks/post-merge .git/hooks/post-rewrite: Makefile
-	@ mkdir -p .git/hooks/
-	$(QUIET_INST)echo "$$GIT_HOOK_POST_GENERIC" >$@
-	@ chmod +x $@
-
-install-git-hooks: .git/hooks/post-checkout .git/hooks/post-commit \
-    .git/hooks/post-merge .git/hooks/post-rewrite
