@@ -8,21 +8,6 @@
 # Currently these are the CRI-O tests that are not working
 
 declare -a skipCRIOTests=(
-'test "ctr termination reason Completed"'
-'test "ctr termination reason Error"'
-'test "ctr remove"'
-'test "ctr lifecycle"'
-'test "ctr logging"'
-'test "ctr logging \[tty=true\]"'
-'test "ctr log max"'
-'test "ctr partial line logging"'
-'test "ctrs status for a pod"'
-'test "ctr list filtering"'
-'test "ctr list label filtering"'
-'test "ctr metadata in list & status"'
-'test "ctr execsync conflicting with conmon flags parsing"'
-'test "ctr execsync"'
-'test "ctr device add"'
 'test "ctr hostname env"'
 'test "ctr execsync failure"'
 'test "ctr execsync exit code"'
