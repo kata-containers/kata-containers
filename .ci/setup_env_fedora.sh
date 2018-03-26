@@ -46,3 +46,6 @@ chronic sudo -E dnf -y install btrfs-progs-devel device-mapper-devel      \
 
 echo "Install bison binary"
 chronic sudo -E dnf -y install bison
+
+echo "Install YAML validator"
+sudo -E dnf -y install yamllint
