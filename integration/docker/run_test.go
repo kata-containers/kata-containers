@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"regexp"
 	"strings"
 
 	. "github.com/kata-containers/tests"
@@ -17,9 +18,6 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 )
-
-// some machines support until 32 loop devices
-var losetupMaxTries = 32
 
 // number of loop devices to hotplug
 var loopDevices = 10
@@ -112,16 +110,23 @@ func createLoopDevice() (string, string, error) {
 	}
 
 	// create loop device
-	for i := 0; i < losetupMaxTries; i++ {
-		loopPath := fmt.Sprintf("/dev/loop%d", i)
-		losetupCmd := NewCommand("losetup", "-P", loopPath, f.Name())
-		_, _, exitCode := losetupCmd.Run()
-		if exitCode == 0 {
-			return f.Name(), loopPath, nil
-		}
+	losetupCmd := NewCommand("losetup", "-fP", f.Name())
+	if _, stderr, exitCode := losetupCmd.Run(); exitCode != 0 {
+		return "", "", fmt.Errorf("%s", stderr)
 	}
 
-	return "", "", fmt.Errorf("unable to create loop device for disk %s", f.Name())
+	// get loop device path
+	getLoopPath := NewCommand("losetup", "-j", f.Name())
+	stdout, stderr, exitCode := getLoopPath.Run()
+	if exitCode != 0 {
+		return "", "", fmt.Errorf("exitCode: %d, stdout: %s, stderr: %s ", exitCode, stdout, stderr)
+	}
+	re := regexp.MustCompile("/dev/loop[0-9]+")
+	loopPath := re.FindStringSubmatch(stdout)
+	if len(loopPath) == 0 {
+		return "", "", fmt.Errorf("Unable to get loop device path, stdout: %s, stderr: %s", stdout, stderr)
+	}
+	return f.Name(), loopPath[0], nil
 }
 
 func deleteLoopDevice(loopFile string) error {
@@ -181,7 +186,6 @@ var _ = Describe("run", func() {
 
 	Context("hot plug block devices", func() {
 		It("should be attached", func() {
-			Skip("Issue: https://github.com/kata-containers/kata-containers/issues/5")
 			_, _, exitCode := dockerRun(dockerArgs...)
 			Expect(exitCode).To(BeZero())
 		})
