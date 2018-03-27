@@ -46,14 +46,14 @@ var restoreSet map[string]TestEnvVal
 var travisPREnv = map[string]TestEnvVal{
 	"TRAVIS":                     {"true", true},
 	"TRAVIS_BRANCH":              {"master", true},
-	"TRAVIS_COMMIT":              {"travis-commit", true},
+	"TRAVIS_PULL_REQUEST_SHA":    {"travis-pull-request-sha", true},
 	"TRAVIS_PULL_REQUEST_BRANCH": {"travis-pr", true},
 }
 
 var travisNonPREnv = map[string]TestEnvVal{
 	"TRAVIS":                     {"true", true},
 	"TRAVIS_BRANCH":              {"master", true},
-	"TRAVIS_COMMIT":              {"travis-commit", true},
+	"TRAVIS_PULL_REQUEST_SHA":    {"travis-pull-request-sha", true},
 	"TRAVIS_PULL_REQUEST_BRANCH": {"", true},
 }
 
@@ -77,14 +77,14 @@ var testCIEnvData = []TestCIEnvData{
 	{
 		name:              "TravisCI PR branch",
 		env:               travisPREnv,
-		expectedCommit:    travisPREnv["TRAVIS_COMMIT"].value,
+		expectedCommit:    travisPREnv["TRAVIS_PULL_REQUEST_SHA"].value,
 		expectedSrcBranch: travisPREnv["TRAVIS_PULL_REQUEST_BRANCH"].value,
 		expectedDstBranch: travisPREnv["TRAVIS_BRANCH"].value,
 	},
 	{
 		name:              "TravisCI non-PR branch",
 		env:               travisNonPREnv,
-		expectedCommit:    travisNonPREnv["TRAVIS_COMMIT"].value,
+		expectedCommit:    travisNonPREnv["TRAVIS_PULL_REQUEST_SHA"].value,
 		expectedSrcBranch: travisNonPREnv["TRAVIS_PULL_REQUEST_BRANCH"].value,
 		expectedDstBranch: travisNonPREnv["TRAVIS_BRANCH"].value,
 	},
@@ -182,7 +182,7 @@ func clearCIVariables() {
 	envVars := []string{
 		"TRAVIS",
 		"TRAVIS_BRANCH",
-		"TRAVIS_COMMIT",
+		"TRAVIS_PULL_REQUEST_SHA",
 		"TRAVIS_PULL_REQUEST_BRANCH",
 
 		"SEMAPHORE",

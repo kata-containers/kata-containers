@@ -443,7 +443,7 @@ func detectCIEnvironment() (commit, dstBranch, srcBranch string) {
 	if os.Getenv("TRAVIS") != "" {
 		name = "TravisCI"
 
-		commit = os.Getenv("TRAVIS_COMMIT")
+		commit = os.Getenv("TRAVIS_PULL_REQUEST_SHA")
 
 		srcBranch = os.Getenv("TRAVIS_PULL_REQUEST_BRANCH")
 		dstBranch = os.Getenv("TRAVIS_BRANCH")
