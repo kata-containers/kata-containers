@@ -49,6 +49,7 @@ fi
 
 echo "Enabling all debug options in file ${runtime_config_path}"
 sudo sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${runtime_config_path}"
+sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' "${runtime_config_path}"
 
 echo "Add runtime as a new/default Docker runtime. Docker version \"$(docker --version)\" could change according to updates."
 docker_options="-D --add-runtime kata-runtime=/usr/local/bin/kata-runtime"
