@@ -158,5 +158,19 @@ check_go()
 	eval "$linter" "${linter_args}" "$dirs"
 }
 
+# Check the "versions database".
+#
+# Some repositories use a versions database to maintain version information
+# about non-golang dependencies. If found, check it for validity.
+check_versions()
+{
+	local db="versions.yaml"
+
+	[ ! -e "$db" ] && return
+
+	yamllint "$db"
+}
+
 check_commits
 check_go
+check_versions

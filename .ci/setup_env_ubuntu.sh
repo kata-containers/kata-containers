@@ -56,3 +56,6 @@ if [ "$VERSION_ID" == "16.04" ]; then
 fi
 
 sudo -E apt install -y libostree-dev
+
+echo "Install YAML validator"
+sudo -E apt install -y yamllint
