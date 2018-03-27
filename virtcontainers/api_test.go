@@ -1990,9 +1990,9 @@ func TestProcessListContainer(t *testing.T) {
 
 func createNewPodConfig(hType HypervisorType, aType AgentType, aConfig interface{}, netModel NetworkModel) PodConfig {
 	hypervisorConfig := HypervisorConfig{
-		KernelPath:     "/usr/share/clear-containers/vmlinux.container",
-		ImagePath:      "/usr/share/clear-containers/clear-containers.img",
-		HypervisorPath: "/usr/bin/qemu-lite-system-x86_64",
+		KernelPath:     "/usr/share/kata-containers/vmlinux.container",
+		ImagePath:      "/usr/share/kata-containers/kata-containers.img",
+		HypervisorPath: "/usr/bin/qemu-system-x86_64",
 	}
 
 	netConfig := NetworkConfig{

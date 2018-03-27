@@ -50,9 +50,9 @@ func Example_createAndStartPod() {
 
 	// Sets the hypervisor configuration.
 	hypervisorConfig := vc.HypervisorConfig{
-		KernelPath:     "/usr/share/clear-containers/vmlinux.container",
-		ImagePath:      "/usr/share/clear-containers/clear-containers.img",
-		HypervisorPath: "/usr/bin/qemu-lite-system-x86_64",
+		KernelPath:     "/usr/share/kata-containers/vmlinux.container",
+		ImagePath:      "/usr/share/kata-containers/kata-containers.img",
+		HypervisorPath: "/usr/bin/qemu-system-x86_64",
 	}
 
 	// Use hyperstart default values for the agent.
