@@ -29,18 +29,6 @@ import (
 
 var rootfsDir = "rootfs"
 
-var systemMountPrefixes = []string{"/proc", "/dev", "/sys"}
-
-func isSystemMount(m string) bool {
-	for _, p := range systemMountPrefixes {
-		if m == p || strings.HasPrefix(m, p+"/") {
-			return true
-		}
-	}
-
-	return false
-}
-
 func major(dev uint64) int {
 	return int((dev >> 8) & 0xfff)
 }

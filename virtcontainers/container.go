@@ -300,7 +300,7 @@ func (c *Container) createContainersDirs() error {
 func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) ([]Mount, error) {
 	var sharedDirMounts []Mount
 	for idx, m := range c.mounts {
-		if isSystemMount(m.Destination) || m.Type != "bind" {
+		if m.Type != "bind" {
 			continue
 		}
 
