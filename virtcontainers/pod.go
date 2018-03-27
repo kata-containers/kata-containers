@@ -596,11 +596,6 @@ func createPod(podConfig PodConfig) (*Pod, error) {
 		return nil, err
 	}
 
-	// Passthrough devices
-	if err := p.attachDevices(); err != nil {
-		return nil, err
-	}
-
 	// Set pod state
 	if err := p.setPodState(StateReady); err != nil {
 		return nil, err
@@ -1069,24 +1064,4 @@ func togglePausePod(podID string, pause bool) (*Pod, error) {
 	}
 
 	return p, nil
-}
-
-func (p *Pod) attachDevices() error {
-	for _, container := range p.containers {
-		if err := container.attachDevices(); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (p *Pod) detachDevices() error {
-	for _, container := range p.containers {
-		if err := container.detachDevices(); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
