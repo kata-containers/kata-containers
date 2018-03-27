@@ -28,7 +28,7 @@ import (
 
 const (
 	qemuArchBaseMachineType = "pc"
-	qemuArchBaseQemuPath    = "/usr/bin/qemu-lite-system-x86_64"
+	qemuArchBaseQemuPath    = "/usr/bin/qemu-system-x86_64"
 )
 
 var qemuArchBaseQemuPaths = map[string]string{
