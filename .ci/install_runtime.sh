@@ -50,9 +50,6 @@ fi
 echo "Enabling all debug options in file ${runtime_config_path}"
 sudo sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${runtime_config_path}"
 
-echo "Set virtio-blk as the block device driver"
-sudo sed -i 's/block_device_driver = "virtio-scsi"/block_device_driver = "virtio-blk"/' "${runtime_config_path}"
-
 echo "Add runtime as a new/default Docker runtime. Docker version \"$(docker --version)\" could change according to updates."
 docker_options="-D --add-runtime kata-runtime=/usr/local/bin/kata-runtime"
 
