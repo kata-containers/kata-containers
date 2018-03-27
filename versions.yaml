@@ -1,0 +1,145 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+---
+description: |
+  This file contains version details that are used by various
+  repositories for setting up the correct environment to run
+  tests and package components.
+
+format: |
+  Each entry in this file MUST conform to the following format:
+
+  <group>:
+   description: "<brief-description>"
+   notes: "<notes>"
+
+   <project>:
+     description: "<brief-description>"
+     notes: "<notes>"
+     url: "<project-url>"
+     issue: "<bug-url>"
+     commit: "<commit>"
+     version: "<version>"
+     release: "<version>"
+     meta:
+       <key-1>: "<value-1>"
+       <key-n>: "<value-n>"
+
+  Notes:
+
+  - All sections (except "meta") MUST include a description where
+    applicable. This is expected to be a brief summary.
+
+  - A section MAY specify a "notes" section which may be multi-line.
+    It is expected to be expand on the information specified in
+    "description".
+
+  - All sections (except "meta") MUST include a URL where applicable.
+
+  - A section MAY specify a bug URL using the "issue" field.
+
+  - A section MAY define a "meta" section to store additional
+    information about a project or group.
+
+  - Each entry MUST specify ATLEAST one of "commit", "version" and "release".
+
+  - WARNING: Gotcha alert! Remember to double-quote all strings
+    (except multi-line strings)! This avoids the possibility of a
+    version containing a period being treated as a floating point
+    number (and truncated!)
+
+assets:
+  description: "Additional required system elements"
+
+  hypervisor:
+    description: "Component used to create virtual machines"
+
+    qemu:
+      description: "VMM that uses KVM"
+      url: "https://github.com/kata-containers/qemu"
+      version: "741f430a960b5b67745670e8270db91aeb083c5f-29"
+      release: "19360"
+
+  image:
+    description: |
+      Root filesystem disk image used to boot the guest virtual
+      machine.
+    url: "https://github.com/kata-containers/osbuilder"
+    release: "20640"
+    meta:
+      image-type: "clearlinux"
+
+  kernel:
+    description: "Linux kernel optimised for virtual machines"
+    url: "https://github.com/kata-containers/linux"
+    version: "v4.14.22-86.container"
+    release: "19790"
+
+components:
+  description: "Core system functionality"
+
+  agent:
+    description: |
+      Container management service running in the guest virtual machines
+      root context.
+    url: "https://github.com/kata-containers/agent"
+    commit: "6f6e9ecd8aded0783c31968b304a9d6589114363"
+
+externals:
+  description: "Third-party projects used by the system"
+
+  crio:
+    description: |
+      OCI-based Kubernetes Container Runtime Interface implementation
+    url: "https://github.com/kubernetes-incubator/cri-o"
+    version: "v1.9.10"
+
+  docker:
+    description: "Moby project container manager"
+    notes: "Docker Swarm requires an older version of Docker."
+    url: "https://github.com/moby/moby"
+    version: "v17.12-ce"
+    meta:
+      swarm-version: "1.12.1"
+
+  kubernetes:
+    description: "Kubernetes project container manager"
+    url: "https://github.com/kubernetes/kubernetes"
+    version: "1.9.3-00"
+
+  openshift:
+    description: |
+      Distribution of Kubernetes optimized for continuous application
+      development and multi-tenant deployment.
+    url: "https://github.com/openshift/origin"
+    version: "v3.7.1"
+    commit: "ab0f056"
+
+  runc:
+    description: "OCI CLI reference runtime implementation"
+    url: "https://github.com/opencontainers/runc"
+    version: "v1.0.0-rc5"
+
+languages:
+  description: |
+    Details of programming languages requried to build system
+    components.
+
+  golang:
+    description: "Google's 'go' language"
+    notes: "'version' is the default minimum version used by this project."
+    version: "1.8.3"
+    meta:
+      newest-version: "1.10"
+
+specs:
+  description: "Details of important specifications"
+
+  oci:
+    description: "Open Containers Initiative runtime specification"
+    url: "https://github.com/opencontainers/runtime-spec/releases"
+    version: "v1.0.0-rc5"
