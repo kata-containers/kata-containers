@@ -627,8 +627,10 @@ func (c *Container) enter(cmd Cmd) (*Process, error) {
 		return nil, err
 	}
 
-	if c.state.State != StateRunning {
-		return nil, fmt.Errorf("Container not running, impossible to enter")
+	if c.state.State != StateReady &&
+		c.state.State != StateRunning {
+		return nil, fmt.Errorf("Container not ready or running, " +
+			"impossible to enter")
 	}
 
 	process, err := c.pod.agent.exec(c.pod, *c, cmd)
