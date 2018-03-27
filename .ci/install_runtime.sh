@@ -49,6 +49,7 @@ fi
 
 echo "Enabling all debug options in file ${runtime_config_path}"
 sudo sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${runtime_config_path}"
+sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' "${runtime_config_path}"
 
 echo "Set virtio-blk as the block device driver"
 sudo sed -i 's/block_device_driver = "virtio-scsi"/block_device_driver = "virtio-blk"/' "${runtime_config_path}"
