@@ -169,7 +169,9 @@ check_versions()
 	[ ! -e "$db" ] && return
 
 	cmd="yamllint"
-	[ -n "$(command -v $cmd)" ] && eval "$cmd" "$db"
+	if [ -n "$(command -v $cmd)" ]; then
+		eval "$cmd" "$db"
+	fi
 }
 
 check_commits
