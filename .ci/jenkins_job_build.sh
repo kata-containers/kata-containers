@@ -96,4 +96,7 @@ fi
 # Run integration tests
 .ci/run.sh
 
+# Code coverage
+bash <(curl -s https://codecov.io/bash)
+
 popd
