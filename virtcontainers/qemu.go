@@ -346,12 +346,12 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 		return err
 	}
 
-	if q.config.BlockDeviceDriver == VirtioBlock {
-		devices = q.arch.appendBridges(devices, q.state.Bridges)
-		if err != nil {
-			return err
-		}
-	} else {
+	devices = q.arch.appendBridges(devices, q.state.Bridges)
+	if err != nil {
+		return err
+	}
+
+	if q.config.BlockDeviceDriver == VirtioSCSI {
 		devices = q.arch.appendSCSIController(devices)
 	}
 
@@ -638,6 +638,44 @@ func (q *qemu) hotplugBlockDevice(drive Drive, op operation) error {
 	return nil
 }
 
+func (q *qemu) hotplugVFIODevice(device VFIODevice, op operation) error {
+	defer func(qemu *qemu) {
+		if q.qmpMonitorCh.qmp != nil {
+			q.qmpMonitorCh.qmp.Shutdown()
+		}
+	}(q)
+
+	qmp, err := q.qmpSetup()
+	if err != nil {
+		return err
+	}
+
+	q.qmpMonitorCh.qmp = qmp
+
+	devID := "vfio-" + device.DeviceInfo.ID
+
+	if op == addDevice {
+		addr, bus, err := q.addDeviceToBridge(devID)
+		if err != nil {
+			return err
+		}
+
+		if err := q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bus); err != nil {
+			return err
+		}
+	} else {
+		if err := q.removeDeviceFromBridge(devID); err != nil {
+			return err
+		}
+
+		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (q *qemu) hotplugDevice(devInfo interface{}, devType deviceType, op operation) error {
 	switch devType {
 	case blockDev:
@@ -646,6 +684,9 @@ func (q *qemu) hotplugDevice(devInfo interface{}, devType deviceType, op operati
 	case cpuDev:
 		vcpus := devInfo.(uint32)
 		return q.hotplugCPUs(vcpus, op)
+	case vfioDev:
+		device := devInfo.(VFIODevice)
+		return q.hotplugVFIODevice(device, op)
 	default:
 		return fmt.Errorf("cannot hotplug device: unsupported device type '%v'", devType)
 	}
