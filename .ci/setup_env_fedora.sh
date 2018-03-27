@@ -29,8 +29,9 @@ echo "Install kata containers dependencies"
 chronic sudo -E dnf -y groupinstall "Development tools"
 chronic sudo -E dnf -y install libtool automake autoconf bc pixman numactl-libs
 
-echo "Install qemu-lite binary"
-"${cidir}/install_qemu_lite.sh" "${qemu_lite_clear_release}" "${qemu_lite_sha}" "$ID"
+echo "Install qemu dependencies"
+chronic sudo -E dnf -y install libcap-devel libattr-devel \
+	libcap-ng-devel zlib-devel pixman-devel librbd-dev
 
 echo "Install kata containers image"
 "${cidir}/install_kata_image.sh"

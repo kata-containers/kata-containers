@@ -35,6 +35,9 @@ else
 	die "Unsupported architecture: $arch"
 fi
 
+echo "Install Qemu"
+bash -f ${cidir}/install_qemu.sh
+
 echo "Install shim"
 bash -f ${cidir}/install_shim.sh
 
