@@ -68,7 +68,7 @@ Enable full debug as follows:
 
 ```
 $ sudo sed -i -e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' /usr/share/defaults/kata-containers/configuration.toml
-$ sudo sed -i -e 's/^kernel_params = ""/kernel_params = "agent.log=debug"/g' /usr/share/defaults/kata-containers/configuration.toml
+$ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' /usr/share/defaults/kata-containers/configuration.toml
 ```
 
 # Build and install Kata proxy
