@@ -30,7 +30,7 @@ func TestInitLogger(t *testing.T) {
 	}()
 
 	testOutString := "Foo Bar"
-	initLogger("debug")
+	initLogger("debug", "container-id", "exec-id")
 	logger().Info(testOutString)
 
 	outC := make(chan string)

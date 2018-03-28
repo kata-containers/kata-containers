@@ -30,32 +30,36 @@ var version = "unknown"
 // if true, coredump when an internal error occurs or a fatal signal is received
 var crashOnError = false
 
-var shimLog = logrus.New()
+var shimLog *logrus.Entry
 
 func logger() *logrus.Entry {
-	return shimLog.WithFields(logrus.Fields{
-		"name":   shimName,
-		"pid":    os.Getpid(),
-		"source": "shim",
-	})
+	return shimLog
 }
 
-func initLogger(logLevel string) error {
-	shimLog.Formatter = &logrus.TextFormatter{TimestampFormat: time.RFC3339Nano}
+func initLogger(logLevel, container, execID string) error {
+	shimLog = logrus.WithFields(logrus.Fields{
+		"name":      shimName,
+		"pid":       os.Getpid(),
+		"source":    "shim",
+		"container": container,
+		"exec-id":   execID,
+	})
+
+	shimLog.Logger.Formatter = &logrus.TextFormatter{TimestampFormat: time.RFC3339Nano}
 
 	level, err := logrus.ParseLevel(logLevel)
 	if err != nil {
 		return err
 	}
 
-	shimLog.SetLevel(level)
+	shimLog.Logger.SetLevel(level)
 
 	// Make sure all output going to stdout/stderr is actually discarded.
-	shimLog.Out = ioutil.Discard
+	shimLog.Logger.Out = ioutil.Discard
 
 	hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO|syslog.LOG_USER, shimName)
 	if err == nil {
-		shimLog.AddHook(hook)
+		shimLog.Logger.AddHook(hook)
 	}
 
 	logger().WithField("version", version).Info()
@@ -101,7 +105,7 @@ func realMain() {
 		os.Exit(exitFailure)
 	}
 
-	err := initLogger(logLevel)
+	err := initLogger(logLevel, container, execID)
 	if err != nil {
 		logger().WithError(err).WithField("loglevel", logLevel).Error("invalid log level")
 		os.Exit(exitFailure)
