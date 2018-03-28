@@ -1159,6 +1159,11 @@ type Knobs struct {
 	Realtime bool
 }
 
+// IOThread allows IO to be performed on a separate thread.
+type IOThread struct {
+	ID string
+}
+
 // Config is the qemu configuration structure.
 // It allows for passing custom settings and parameters to the qemu API.
 type Config struct {
@@ -1212,6 +1217,8 @@ type Config struct {
 
 	// fds is a list of open file descriptors to be passed to the spawned qemu process
 	fds []*os.File
+
+	IOThreads []IOThread
 
 	qemuParams []string
 }
@@ -1481,6 +1488,15 @@ func (config *Config) appendBios() {
 	}
 }
 
+func (config *Config) appendIOThreads() {
+	for _, t := range config.IOThreads {
+		if t.ID != "" {
+			config.qemuParams = append(config.qemuParams, "-object")
+			config.qemuParams = append(config.qemuParams, fmt.Sprintf("iothread,id=%s", t.ID))
+		}
+	}
+}
+
 // LaunchQemu can be used to launch a new qemu instance.
 //
 // The Config parameter contains a set of qemu parameters and settings.
@@ -1504,6 +1520,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendKnobs()
 	config.appendKernel()
 	config.appendBios()
+	config.appendIOThreads()
 
 	if err := config.appendCPUs(); err != nil {
 		return "", err

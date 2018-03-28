@@ -67,6 +67,10 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 	case RTC:
 		config.RTC = s
 		config.appendRTC()
+
+	case IOThread:
+		config.IOThreads = []IOThread{s}
+		config.appendIOThreads()
 	}
 
 	result := strings.Join(config.qemuParams, " ")
@@ -524,4 +528,14 @@ func TestAppendRTC(t *testing.T) {
 	}
 
 	testAppend(rtc, rtcString, t)
+}
+
+var ioThreadString = "-object iothread,id=iothread1"
+
+func TestAppendIOThread(t *testing.T) {
+	ioThread := IOThread{
+		ID: "iothread1",
+	}
+
+	testAppend(ioThread, ioThreadString, t)
 }
