@@ -124,9 +124,11 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 }
 
 func (s *shim) resizeTty(fromTty *os.File) error {
-	ws, err := term.GetWinsize(fromTty.Fd())
+	fd := fromTty.Fd()
+
+	ws, err := term.GetWinsize(fd)
 	if err != nil {
-		logger().WithError(err).Info("Error getting window size")
+		logger().WithError(err).WithField("fd", fd).Info("Error getting window size")
 		return nil
 	}
 
