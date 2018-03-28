@@ -2,6 +2,7 @@
 * [Assumptions](#assumptions)
 * [Build and install a Kata Containers runtime](#build-and-install-a-kata-containers-runtime)
     * [Check hardware requirements](#check-hardware-requirements)
+    * [Disable initrd](#disable-initrd)
     * [Enable full debug](#enable-full-debug)
 * [Build and install Kata proxy](#build-and-install-kata-proxy)
 * [Build and install Kata shim](#build-and-install-kata-shim)
@@ -61,6 +62,16 @@ $ sudo kata-runtime kata-check
 ```
 
 If your system is *not* able to run Kata Containers, the previous command will error and explain why.
+
+## Disable initrd
+
+Unless you use an initial ramdisk (`initrd` or `initramfs`):
+
+```
+$ sudo sed -i 's/^\(initrd.*\)/# \1/g' /usr/share/defaults/kata-containers/configuration.toml
+```
+
+If you use an initial ramdisk, see https://github.com/kata-containers/osbuilder.
 
 ## Enable full debug
 
