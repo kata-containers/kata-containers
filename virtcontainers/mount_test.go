@@ -29,30 +29,6 @@ import (
 	"testing"
 )
 
-func TestIsSystemMount(t *testing.T) {
-	tests := []struct {
-		mnt      string
-		expected bool
-	}{
-		{"/sys", true},
-		{"/sys/", true},
-		{"/sys//", true},
-		{"/sys/fs", true},
-		{"/sys/fs/", true},
-		{"/sys/fs/cgroup", true},
-		{"/sysfoo", false},
-		{"/home", false},
-		{"/dev/block/", true},
-	}
-
-	for _, test := range tests {
-		result := isSystemMount(test.mnt)
-		if result != test.expected {
-			t.Fatalf("Expected result for path %s : %v, got %v", test.mnt, test.expected, result)
-		}
-	}
-}
-
 func TestMajorMinorNumber(t *testing.T) {
 	devices := []string{"/dev/zero", "/dev/net/tun"}
 
