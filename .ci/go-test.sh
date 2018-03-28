@@ -74,7 +74,6 @@ test_html_coverage()
 	test_coverage
 
 	go tool cover -html="${test_coverage_file}" -o "${html_report_file}"
-	rm -f "${test_coverage_file}"
 
 	run_as_user "current" chmod "${coverage_file_mode}" "${html_report_file}"
 }
