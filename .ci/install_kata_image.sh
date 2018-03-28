@@ -10,7 +10,8 @@ set -e
 cidir=$(dirname "$0")
 
 OSBUILDER_DISTRO=${OSBUILDER_DISTRO:-clearlinux}
-image_name="kata-containers.img"
+AGENT_INIT=${AGENT_INIT:-no}
+TEST_INITRD=${TEST_INITRD:-no}
 
 # Build Kata agent
 bash -f ${cidir}/install_agent.sh
@@ -21,12 +22,19 @@ osbuilder_repo="github.com/kata-containers/osbuilder"
 go get -d ${osbuilder_repo} || true
 
 pushd "${GOPATH}/src/${osbuilder_repo}/rootfs-builder"
-sudo -E GOPATH=$GOPATH USE_DOCKER=true ./rootfs.sh ${OSBUILDER_DISTRO}
+sudo -E AGENT_INIT=${AGENT_INIT} GOPATH=$GOPATH USE_DOCKER=true ./rootfs.sh ${OSBUILDER_DISTRO}
 popd
 
 # Build the image
-pushd "${GOPATH}/src/${osbuilder_repo}/image-builder"
-sudo -E USE_DOCKER=true ./image_builder.sh ../rootfs-builder/rootfs
+if [ x"${TEST_INITRD}" == x"yes" ]; then
+    pushd "${GOPATH}/src/${osbuilder_repo}/initrd-builder"
+    sudo -E AGENT_INIT=${AGENT_INIT} USE_DOCKER=true ./initrd_builder.sh ../rootfs-builder/rootfs
+    image_name="kata-containers-initrd.img"
+else
+    pushd "${GOPATH}/src/${osbuilder_repo}/image-builder"
+    sudo -E AGENT_INIT=${AGENT_INIT} USE_DOCKER=true ./image_builder.sh ../rootfs-builder/rootfs
+    image_name="kata-containers.img"
+fi
 
 # Install the image
 agent_commit=$("$GOPATH/src/github.com/kata-containers/agent/kata-agent" --version | awk '{print $NF}')
