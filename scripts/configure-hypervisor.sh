@@ -268,8 +268,11 @@ main()
 	# Disable TCG support
 	qemu_options+=(size:--disable-tcg)
 
-	# Don't build a static binary (lowers security)
-	qemu_options+=(security:--disable-static)
+	# SECURITY: Don't build a static binary (lowers security)
+	# needed if qemu version is less than 2.7
+	if [ ${qemu_version_major} -eq 2 ] && [ ${qemu_version_minor} -lt 7 ]; then
+		qemu_options+=(--disable-static)
+	fi
 
 	# Not required as "-uuid ..." is always passed to the qemu binary
 	qemu_options+=(size:--disable-uuid)
@@ -309,7 +312,10 @@ main()
 	qemu_options+=(speed:--enable-vhost-net)
 
 	# Always strip binaries
-	qemu_options+=(size:--enable-strip)
+	# needed if qemu version is less than 2.7
+	if [ ${qemu_version_major} -eq 2 ] && [ ${qemu_version_minor} -lt 7 ]; then
+		qemu_options+=(--enable-strip)
+	fi
 
 	# Support Ceph RADOS Block Device (RBD)
 	qemu_options+=(functionality:--enable-rbd)
