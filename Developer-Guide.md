@@ -1,6 +1,6 @@
 * [Warning](#warning)
 * [Assumptions](#assumptions)
-* [Build and install a Kata Containers runtime](#build-and-install-a-kata-containers-runtime)
+* [Build and install the Kata Containers runtime](#build-and-install-the-kata-containers-runtime)
     * [Check hardware requirements](#check-hardware-requirements)
     * [Enable full debug](#enable-full-debug)
 * [Build and install Kata proxy](#build-and-install-kata-proxy)
