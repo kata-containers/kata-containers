@@ -25,8 +25,8 @@ if ! command -v docker > /dev/null; then
 	"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker install
 fi
 
-echo "Install qemu-lite binary"
-"${cidir}/install_qemu_lite.sh" "${qemu_lite_clear_release}" "${qemu_lite_sha}" "$ID"
+echo "Install qemu dependencies"
+chronic sudo -E apt install -y libcap-dev libattr1-dev libcap-ng-dev librbd-dev
 
 echo "Install kata-containers image"
 "${cidir}/install_kata_image.sh"
