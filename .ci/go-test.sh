@@ -32,11 +32,11 @@ test_packages=$(go list ./... 2>/dev/null |\
 
 # The "master" coverage file that contains the coverage results for
 # all packages run under all scenarios.
-test_coverage_file="profile.cov"
+test_coverage_file="coverage.txt"
 
 # Temporary coverage file created for a single package. The results in this
 # file will be added to the master coverage file.
-tmp_coverage_file="profile-tmp.cov"
+tmp_coverage_file="${test_coverage_file}.tmp"
 
 # Permissions to create coverage files with
 coverage_file_mode=0644
