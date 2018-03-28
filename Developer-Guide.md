@@ -1,6 +1,6 @@
 * [Warning](#warning)
 * [Assumptions](#assumptions)
-* [Build and install a Kata Containers runtime](#build-and-install-a-kata-containers-runtime)
+* [Build and install the Kata Containers runtime](#build-and-install-the-kata-containers-runtime)
     * [Check hardware requirements](#check-hardware-requirements)
     * [Disable initrd](#disable-initrd)
     * [Enable full debug](#enable-full-debug)
