@@ -841,6 +841,9 @@ type SCSIController struct {
 
 	// DisableModern prevents qemu from relying on fast MMIO.
 	DisableModern bool
+
+	// IOThread is the IO thread on which IO will be handled
+	IOThread string
 }
 
 // Valid returns true if the SCSIController structure is valid and complete.
@@ -866,6 +869,9 @@ func (scsiCon SCSIController) QemuParams(config *Config) []string {
 	}
 	if scsiCon.DisableModern {
 		devParams = append(devParams, fmt.Sprintf("disable-modern=true"))
+	}
+	if scsiCon.IOThread != "" {
+		devParams = append(devParams, fmt.Sprintf("iothread=%s", scsiCon.IOThread))
 	}
 
 	qemuParams = append(qemuParams, "-device")
