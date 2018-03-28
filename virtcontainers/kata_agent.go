@@ -570,8 +570,6 @@ func constraintGRPCSpec(grpcSpec *grpc.Spec) {
 			grpcSpec.Mounts[idx].Type = "tmpfs"
 			grpcSpec.Mounts[idx].Source = "shm"
 			grpcSpec.Mounts[idx].Options = []string{"noexec", "nosuid", "nodev", "mode=1777", "size=65536k"}
-
-			break
 		}
 	}
 }
