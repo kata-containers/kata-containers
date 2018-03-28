@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	"github.com/moby/moby/pkg/term"
+	"github.com/sirupsen/logrus"
 	context "golang.org/x/net/context"
 
 	pb "github.com/kata-containers/agent/protocols/grpc"
@@ -138,7 +139,10 @@ func (s *shim) resizeTty(fromTty *os.File) error {
 		Row:         uint32(ws.Height),
 		Column:      uint32(ws.Width)})
 	if err != nil {
-		logger().WithError(err).Error("set window size failed")
+		logger().WithError(err).WithFields(logrus.Fields{
+			"window-height": ws.Height,
+			"window-width":  ws.Width,
+		}).Error("set window size failed")
 	}
 
 	return err
