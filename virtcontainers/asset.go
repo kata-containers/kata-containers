@@ -34,6 +34,8 @@ func (t assetType) annotations() (string, string, error) {
 		return annotations.KernelPath, annotations.KernelHash, nil
 	case imageAsset:
 		return annotations.ImagePath, annotations.ImageHash, nil
+	case initrdAsset:
+		return annotations.InitrdPath, annotations.InitrdHash, nil
 	case hypervisorAsset:
 		return annotations.HypervisorPath, annotations.HypervisorHash, nil
 	case firmwareAsset:
@@ -46,6 +48,7 @@ func (t assetType) annotations() (string, string, error) {
 const (
 	kernelAsset     assetType = "kernel"
 	imageAsset      assetType = "image"
+	initrdAsset     assetType = "initrd"
 	hypervisorAsset assetType = "hypervisor"
 	firmwareAsset   assetType = "firmware"
 )
@@ -65,6 +68,8 @@ func (a *asset) valid() bool {
 	case kernelAsset:
 		return true
 	case imageAsset:
+		return true
+	case initrdAsset:
 		return true
 	case hypervisorAsset:
 		return true

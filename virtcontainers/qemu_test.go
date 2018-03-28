@@ -32,6 +32,7 @@ func newQemuConfig() HypervisorConfig {
 	return HypervisorConfig{
 		KernelPath:        testQemuKernelPath,
 		ImagePath:         testQemuImagePath,
+		InitrdPath:        testQemuInitrdPath,
 		HypervisorPath:    testQemuPath,
 		DefaultVCPUs:      defaultVCPUs,
 		DefaultMemSz:      defaultMemSzMiB,

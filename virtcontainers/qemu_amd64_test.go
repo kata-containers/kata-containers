@@ -26,21 +26,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func newTestQemu(machineType string) qemuArch {
+	config := HypervisorConfig{
+		HypervisorMachineType: machineType,
+	}
+	return newQemuArch(config)
+}
+
 func TestQemuAmd64Capabilities(t *testing.T) {
 	assert := assert.New(t)
 
-	amd64 := newQemuArch(QemuPC)
+	amd64 := newTestQemu(QemuPC)
 	caps := amd64.capabilities()
 	assert.True(caps.isBlockDeviceHotplugSupported())
 
-	amd64 = newQemuArch(QemuQ35)
+	amd64 = newTestQemu(QemuQ35)
 	caps = amd64.capabilities()
 	assert.False(caps.isBlockDeviceHotplugSupported())
 }
 
 func TestQemuAmd64Bridges(t *testing.T) {
 	assert := assert.New(t)
-	amd64 := newQemuArch(QemuPC)
+	amd64 := newTestQemu(QemuPC)
 	len := 5
 
 	bridges := amd64.bridges(uint32(len))
@@ -53,7 +60,7 @@ func TestQemuAmd64Bridges(t *testing.T) {
 		assert.NotNil(b.Address)
 	}
 
-	amd64 = newQemuArch(QemuQ35)
+	amd64 = newTestQemu(QemuQ35)
 	bridges = amd64.bridges(uint32(len))
 	assert.Len(bridges, len)
 
@@ -64,14 +71,14 @@ func TestQemuAmd64Bridges(t *testing.T) {
 		assert.NotNil(b.Address)
 	}
 
-	amd64 = newQemuArch(QemuQ35 + QemuPC)
+	amd64 = newTestQemu(QemuQ35 + QemuPC)
 	bridges = amd64.bridges(uint32(len))
 	assert.Nil(bridges)
 }
 
 func TestQemuAmd64CPUModel(t *testing.T) {
 	assert := assert.New(t)
-	amd64 := newQemuArch(QemuPC)
+	amd64 := newTestQemu(QemuPC)
 
 	expectedOut := defaultCPUModel
 	model := amd64.cpuModel()
@@ -85,7 +92,7 @@ func TestQemuAmd64CPUModel(t *testing.T) {
 
 func TestQemuAmd64MemoryTopology(t *testing.T) {
 	assert := assert.New(t)
-	amd64 := newQemuArch(QemuPC)
+	amd64 := newTestQemu(QemuPC)
 	memoryOffset := 1024
 
 	hostMem := uint64(100)
@@ -103,7 +110,7 @@ func TestQemuAmd64MemoryTopology(t *testing.T) {
 func TestQemuAmd64AppendImage(t *testing.T) {
 	var devices []govmmQemu.Device
 	assert := assert.New(t)
-	amd64 := newQemuArch(QemuPC)
+	amd64 := newTestQemu(QemuPC)
 
 	f, err := ioutil.TempFile("", "img")
 	assert.NoError(err)
@@ -135,7 +142,7 @@ func TestQemuAmd64AppendBridges(t *testing.T) {
 	assert := assert.New(t)
 
 	// check PC
-	amd64 := newQemuArch(QemuPC)
+	amd64 := newTestQemu(QemuPC)
 
 	bridges := amd64.bridges(1)
 	assert.Len(bridges, 1)
@@ -156,7 +163,7 @@ func TestQemuAmd64AppendBridges(t *testing.T) {
 	assert.Equal(expectedOut, devices)
 
 	// Check Q35
-	amd64 = newQemuArch(QemuQ35)
+	amd64 = newTestQemu(QemuQ35)
 
 	bridges = amd64.bridges(1)
 	assert.Len(bridges, 1)

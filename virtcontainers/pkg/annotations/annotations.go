@@ -25,6 +25,9 @@ const (
 	// ImagePath is a pod annotation for passing a per container path pointing at the guest image that will run in the container VM.
 	ImagePath = vcAnnotationsPrefix + "ImagePath"
 
+	// InitrdPath is a pod annotation for passing a per container path pointing at the guest initrd image that will run in the container VM.
+	InitrdPath = vcAnnotationsPrefix + "InitrdPath"
+
 	// HypervisorPath is a pod annotation for passing a per container path pointing at the hypervisor that will run the container VM.
 	HypervisorPath = vcAnnotationsPrefix + "HypervisorPath"
 
@@ -36,6 +39,9 @@ const (
 
 	// ImageHash is an pod annotation for passing a container guest image SHA-512 hash value.
 	ImageHash = vcAnnotationsPrefix + "ImageHash"
+
+	// InitrdHash is an pod annotation for passing a container guest initrd SHA-512 hash value.
+	InitrdHash = vcAnnotationsPrefix + "InitrdHash"
 
 	// HypervisorHash is an pod annotation for passing a container hypervisor binary SHA-512 hash value.
 	HypervisorHash = vcAnnotationsPrefix + "HypervisorHash"

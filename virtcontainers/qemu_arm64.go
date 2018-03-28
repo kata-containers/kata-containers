@@ -38,9 +38,12 @@ var qemuPaths = map[string]string{
 }
 
 var kernelParams = []Param{
-	{"root", "/dev/vda1"},
 	{"console", "ttyAMA0"},
 	{"iommu.passthrough", "0"},
+}
+
+var kernelRootParams = []Param{
+	{"root", "/dev/vda1"},
 }
 
 var supportedQemuMachines = []govmmQemu.Machine{
@@ -55,12 +58,13 @@ func maxQemuVCPUs() uint32 {
 	return uint32(runtime.NumCPU())
 }
 
-func newQemuArch(machineType string) qemuArch {
+func newQemuArch(config HypervisrConfig) qemuArch {
+	machineType := config.HypervisorMachineType
 	if machineType == "" {
 		machineType = defaultQemuMachineType
 	}
 
-	return &qemuArm64{
+	q := &qemuArm64{
 		qemuArchBase{
 			machineType:           machineType,
 			qemuPaths:             qemuPaths,
@@ -70,4 +74,12 @@ func newQemuArch(machineType string) qemuArch {
 			kernelParams:          kernelParams,
 		},
 	}
+
+	if config.ImagePath != "" {
+		q.kernelParams = append(q.kernelParams, kernelRootParams...)
+		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
+		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
+	}
+
+	return q
 }

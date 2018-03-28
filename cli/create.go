@@ -152,35 +152,48 @@ func create(containerID, bundlePath, console, pidFilePath string, detach bool,
 	return createPIDFile(pidFilePath, process.Pid)
 }
 
-func getKernelParams(containerID string) []vc.Param {
-	return []vc.Param{
-		{
-			Key:   "init",
-			Value: "/usr/lib/systemd/systemd",
-		},
-		{
-			Key:   "systemd.unit",
-			Value: systemdUnitName,
-		},
-		{
-			Key:   "systemd.mask",
-			Value: "systemd-networkd.service",
-		},
-		{
-			Key:   "systemd.mask",
-			Value: "systemd-networkd.socket",
-		},
+var systemdKernelParam = []vc.Param{
+	{
+		Key:   "init",
+		Value: "/usr/lib/systemd/systemd",
+	},
+	{
+		Key:   "systemd.unit",
+		Value: systemdUnitName,
+	},
+	{
+		Key:   "systemd.mask",
+		Value: "systemd-networkd.service",
+	},
+	{
+		Key:   "systemd.mask",
+		Value: "systemd-networkd.socket",
+	},
+}
+
+func getKernelParams(containerID string, needSystemd bool) []vc.Param {
+	p := []vc.Param{
 		{
 			Key:   "ip",
 			Value: fmt.Sprintf("::::::%s::off::", containerID),
 		},
 	}
+
+	if needSystemd {
+		p = append(p, systemdKernelParam...)
+	}
+
+	return p
+}
+
+func needSystemd(config vc.HypervisorConfig) bool {
+	return config.ImagePath != ""
 }
 
 // setKernelParams adds the user-specified kernel parameters (from the
 // configuration file) to the defaults so that the former take priority.
 func setKernelParams(containerID string, runtimeConfig *oci.RuntimeConfig) error {
-	defaultKernelParams := getKernelParamsFunc(containerID)
+	defaultKernelParams := getKernelParamsFunc(containerID, needSystemd(runtimeConfig.HypervisorConfig))
 
 	if runtimeConfig.HypervisorConfig.Debug {
 		strParams := vc.SerializeParams(defaultKernelParams, "=")

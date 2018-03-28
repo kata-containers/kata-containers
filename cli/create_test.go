@@ -861,7 +861,7 @@ func TestCreateInvalidKernelParams(t *testing.T) {
 		getKernelParamsFunc = savedFunc
 	}()
 
-	getKernelParamsFunc = func(containerID string) []vc.Param {
+	getKernelParamsFunc = func(containerID string, needSystemd bool) []vc.Param {
 		return []vc.Param{
 			{
 				Key:   "",

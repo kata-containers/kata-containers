@@ -42,10 +42,13 @@ var qemuPaths = map[string]string{
 	QemuQ35:    defaultQemuPath,
 }
 
-var kernelParams = []Param{
+var kernelRootParams = []Param{
 	{"root", "/dev/pmem0p1"},
 	{"rootflags", "dax,data=ordered,errors=remount-ro rw"},
 	{"rootfstype", "ext4"},
+}
+
+var kernelParams = []Param{
 	{"tsc", "reliable"},
 	{"no_timer_check", ""},
 	{"rcupdate.rcu_expedited", "1"},
@@ -83,12 +86,13 @@ func maxQemuVCPUs() uint32 {
 	return uint32(240)
 }
 
-func newQemuArch(machineType string) qemuArch {
+func newQemuArch(config HypervisorConfig) qemuArch {
+	machineType := config.HypervisorMachineType
 	if machineType == "" {
 		machineType = defaultQemuMachineType
 	}
 
-	return &qemuAmd64{
+	q := &qemuAmd64{
 		qemuArchBase{
 			machineType:           machineType,
 			qemuPaths:             qemuPaths,
@@ -98,6 +102,14 @@ func newQemuArch(machineType string) qemuArch {
 			kernelParams:          kernelParams,
 		},
 	}
+
+	if config.ImagePath != "" {
+		q.kernelParams = append(q.kernelParams, kernelRootParams...)
+		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
+		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
+	}
+
+	return q
 }
 
 func (q *qemuAmd64) capabilities() capabilities {
