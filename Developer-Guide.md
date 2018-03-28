@@ -15,7 +15,7 @@
 * [Install guest kernel images](#install-guest-kernel-images)
 * [Update Docker configuration](#update-docker-configuration)
 * [Create a Kata Container](#create-a-kata-container)
-* [Troubleshoot](#troubleshoot)
+* [Troubleshoot Kata Containers](#troubleshoot-kata-containers)
 * [Appendices](#appendices)
     * [Checking Docker default runtime](#checking-docker-default-runtime)
 
@@ -184,7 +184,19 @@ $ sudo systemctl restart docker
 $ sudo docker run -ti --runtime kata-runtime busybox sh
 ```
 
-# Troubleshoot
+# Troubleshoot Kata Containers
+
+If you are unable to create a Kata Container first ensure you have
+[enabled full debug](#enable-full-debug)
+before attempting to create a container. Then run the
+[`kata-collect-data.sh`](https://github.com/kata-containers/runtime/blob/master/data/kata-collect-data.sh.in)
+script and paste its output directly into a
+[github issue](https://github.com/kata-containers/kata-containers/issues/new).
+
+> **Note:**
+>
+> The `kata-collect-data.sh` script is built from the
+> [runtime](https://github.com/kata-containers/runtime) repository.
 
 To perform analysis on Kata logs, use the
 [`kata-log-parser`](https://github.com/kata-containers/tests/tree/master/cmd/log-parser)
