@@ -164,7 +164,6 @@ func StopPod(podID string) (VCPod, error) {
 	// Stop it.
 	err = p.stop()
 	if err != nil {
-		p.delete()
 		return nil, err
 	}
 
@@ -406,7 +405,6 @@ func StartContainer(podID, containerID string) (VCContainer, error) {
 	// Start it.
 	err = c.start()
 	if err != nil {
-		c.delete()
 		return nil, err
 	}
 
@@ -444,7 +442,6 @@ func StopContainer(podID, containerID string) (VCContainer, error) {
 	// Stop it.
 	err = c.stop()
 	if err != nil {
-		c.delete()
 		return nil, err
 	}
 
