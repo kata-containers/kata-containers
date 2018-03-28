@@ -30,7 +30,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.9"
+const formatVersion = "1.0.10"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -42,6 +42,11 @@ type MetaInfo struct {
 type KernelInfo struct {
 	Path       string
 	Parameters string
+}
+
+// InitrdInfo stores initrd image details
+type InitrdInfo struct {
+	Path string
 }
 
 // ImageInfo stores root filesystem image details
@@ -130,6 +135,7 @@ type EnvInfo struct {
 	Hypervisor HypervisorInfo
 	Image      ImageInfo
 	Kernel     KernelInfo
+	Initrd     InitrdInfo
 	Proxy      ProxyInfo
 	Shim       ShimInfo
 	Agent      AgentInfo
@@ -307,12 +313,17 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 		Parameters: strings.Join(vc.SerializeParams(config.HypervisorConfig.KernelParams, "="), " "),
 	}
 
+	initrd := InitrdInfo{
+		Path: config.HypervisorConfig.InitrdPath,
+	}
+
 	env = EnvInfo{
 		Meta:       meta,
 		Runtime:    runtime,
 		Hypervisor: hypervisor,
 		Image:      image,
 		Kernel:     kernel,
+		Initrd:     initrd,
 		Proxy:      proxy,
 		Shim:       shim,
 		Agent:      agent,

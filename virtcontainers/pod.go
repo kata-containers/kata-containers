@@ -551,7 +551,16 @@ func createAssets(podConfig *PodConfig) error {
 		return err
 	}
 
-	for _, a := range []*asset{kernel, image} {
+	initrd, err := newAsset(podConfig, initrdAsset)
+	if err != nil {
+		return err
+	}
+
+	if image != nil && initrd != nil {
+		return fmt.Errorf("%s and %s cannot be both set", imageAsset, initrdAsset)
+	}
+
+	for _, a := range []*asset{kernel, image, initrd} {
 		if err := podConfig.HypervisorConfig.addCustomAsset(a); err != nil {
 			return err
 		}

@@ -175,7 +175,7 @@ func (q *qemu) init(pod *Pod) error {
 
 	q.config = pod.config.HypervisorConfig
 	q.pod = pod
-	q.arch = newQemuArch(q.config.HypervisorMachineType)
+	q.arch = newQemuArch(q.config)
 
 	if err = pod.storage.fetchHypervisorState(pod.id, &q.state); err != nil {
 		q.Logger().Debug("Creating bridges")
@@ -244,13 +244,10 @@ func (q *qemu) qmpSocketPath(socketName string) (string, error) {
 	return path, nil
 }
 
-// createPod is the Hypervisor pod creation implementation for govmmQemu.
-func (q *qemu) createPod(podConfig PodConfig) error {
-	var devices []govmmQemu.Device
-
+func (q *qemu) getQemuMachine(podConfig PodConfig) (govmmQemu.Machine, error) {
 	machine, err := q.arch.machine()
 	if err != nil {
-		return err
+		return govmmQemu.Machine{}, err
 	}
 
 	accelerators := podConfig.HypervisorConfig.MachineAccelerators
@@ -259,6 +256,34 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 			accelerators = fmt.Sprintf(",%s", accelerators)
 		}
 		machine.Options += accelerators
+	}
+
+	return machine, nil
+}
+
+func (q *qemu) appendImage(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
+	imagePath, err := q.config.ImageAssetPath()
+	if err != nil {
+		return nil, err
+	}
+
+	if imagePath != "" {
+		devices, err = q.arch.appendImage(devices, imagePath)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return devices, nil
+}
+
+// createPod is the Hypervisor pod creation implementation for govmmQemu.
+func (q *qemu) createPod(podConfig PodConfig) error {
+	var devices []govmmQemu.Device
+
+	machine, err := q.getQemuMachine(podConfig)
+	if err != nil {
+		return err
 	}
 
 	smp := q.cpuTopology()
@@ -284,9 +309,15 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 		return err
 	}
 
+	initrdPath, err := q.config.InitrdAssetPath()
+	if err != nil {
+		return err
+	}
+
 	kernel := govmmQemu.Kernel{
-		Path:   kernelPath,
-		Params: q.kernelParameters(),
+		Path:       kernelPath,
+		InitrdPath: initrdPath,
+		Params:     q.kernelParameters(),
 	}
 
 	rtc := govmmQemu.RTC{
@@ -336,14 +367,11 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 	devices = q.arch.append9PVolumes(devices, podConfig.Volumes)
 	devices = q.arch.appendConsole(devices, q.getPodConsole(podConfig.ID))
 
-	imagePath, err := q.config.ImageAssetPath()
-	if err != nil {
-		return err
-	}
-
-	devices, err = q.arch.appendImage(devices, imagePath)
-	if err != nil {
-		return err
+	if initrdPath == "" {
+		devices, err = q.appendImage(devices)
+		if err != nil {
+			return err
+		}
 	}
 
 	devices = q.arch.appendBridges(devices, q.state.Bridges)

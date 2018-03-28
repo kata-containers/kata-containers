@@ -447,6 +447,7 @@ func addAssetAnnotations(ocispec CompatOCISpec, config *vc.PodConfig) {
 	assetAnnotations := []string{
 		vcAnnotations.KernelPath,
 		vcAnnotations.ImagePath,
+		vcAnnotations.InitrdPath,
 		vcAnnotations.KernelHash,
 		vcAnnotations.ImageHash,
 		vcAnnotations.AssetHashType,
