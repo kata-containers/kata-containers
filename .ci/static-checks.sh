@@ -153,7 +153,8 @@ check_go()
 	echo -e "INFO: Running $linter checks on the following packages:\n"
 	echo "$go_packages"
 	echo
-	echo "(package paths:$dirs)"
+	echo -e "INFO: Package paths:\n"
+	echo "$dirs" | sed 's/^ *//g' | tr ' ' '\n'
 
 	eval "$linter" "${linter_args}" "$dirs"
 }
