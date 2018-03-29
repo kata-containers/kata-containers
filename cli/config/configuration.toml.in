@@ -70,6 +70,12 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 # virtio-blk.
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER@"
 
+# Enable iothreads (data-plane) to be used. This causes IO to be
+# handled in a separate IO thread. This is currently only implemented
+# for SCSI.
+#
+enable_iothreads = @DEFENABLEIOTHREADS@
+
 # Enable pre allocation of VM RAM, default false
 # Enabling this will result in lower container density
 # as all of the memory will be allocated and locked
