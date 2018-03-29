@@ -60,9 +60,8 @@ assets:
 
     qemu:
       description: "VMM that uses KVM"
-      url: "https://github.com/kata-containers/qemu"
-      version: "741f430a960b5b67745670e8270db91aeb083c5f-29"
-      release: "19360"
+      url: "https://github.com/qemu/qemu"
+      version: "stable-2.11"
 
   image:
     description: |

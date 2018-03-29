@@ -18,10 +18,4 @@ MACHINETYPE := pc
 KERNELPARAMS :=
 MACHINEACCELERATORS :=
 
-# The CentOS/RHEL hypervisor binary is not called qemu-lite
-ifeq (,$(filter-out centos rhel,$(distro)))
-    QEMUCMD := qemu-system-x86_64
-else
-    QEMUCMD := qemu-lite-system-x86_64
-endif
-
+QEMUCMD := qemu-system-x86_64
