@@ -201,6 +201,10 @@ type HypervisorConfig struct {
 	// DisableBlockDeviceUse disallows a block device from being used.
 	DisableBlockDeviceUse bool
 
+	// EnableIOThreads enables IO to be processed in a separate thread.
+	// Supported currently for virtio-scsi driver.
+	EnableIOThreads bool
+
 	// Debug changes the default hypervisor and kernel parameters to
 	// enable debug output where available.
 	Debug bool
