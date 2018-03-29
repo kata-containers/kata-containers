@@ -89,7 +89,7 @@ func TestExecuteErrors(t *testing.T) {
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 
-	// Container not running
+	// Container state undefined
 	configPath := testConfigSetup(t)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
@@ -99,13 +99,34 @@ func TestExecuteErrors(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
+	containerState := vc.State{}
 	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, vc.State{}, vc.State{}, annotations), nil
+		return newSingleContainerPodStatusList(testPodID, testContainerID, vc.State{}, containerState, annotations), nil
 	}
 
-	defer func() {
-		testingImpl.ListPodFunc = nil
-	}()
+	err = execute(ctx)
+	assert.Error(err)
+	assert.False(vcmock.IsMockError(err))
+
+	// Container paused
+	containerState = vc.State{
+		State: vc.StatePaused,
+	}
+	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
+		return newSingleContainerPodStatusList(testPodID, testContainerID, vc.State{}, containerState, annotations), nil
+	}
+
+	err = execute(ctx)
+	assert.Error(err)
+	assert.False(vcmock.IsMockError(err))
+
+	// Container stopped
+	containerState = vc.State{
+		State: vc.StateStopped,
+	}
+	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
+		return newSingleContainerPodStatusList(testPodID, testContainerID, vc.State{}, containerState, annotations), nil
+	}
 
 	err = execute(ctx)
 	assert.Error(err)

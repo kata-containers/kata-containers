@@ -210,9 +210,11 @@ func execute(context *cli.Context) error {
 
 	params.cID = status.ID
 
-	// container MUST be running
-	if status.State.State != vc.StateRunning {
-		return fmt.Errorf("Container %s is not running", params.cID)
+	// container MUST be ready or running.
+	if status.State.State != vc.StateReady &&
+		status.State.State != vc.StateRunning {
+		return fmt.Errorf("Container %s is not ready or running",
+			params.cID)
 	}
 
 	envVars, err := oci.EnvVars(params.ociProcess.Env)

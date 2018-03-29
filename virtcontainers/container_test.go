@@ -336,3 +336,29 @@ func TestContainerRemoveResources(t *testing.T) {
 	err = c.removeResources()
 	assert.Nil(err)
 }
+
+func TestContainerEnterErrorsOnContainerStates(t *testing.T) {
+	assert := assert.New(t)
+	c := &Container{
+		pod: &Pod{
+			state: State{
+				State: StateRunning,
+			},
+		},
+	}
+	cmd := Cmd{}
+
+	// Container state undefined
+	_, err := c.enter(cmd)
+	assert.Error(err)
+
+	// Container paused
+	c.state.State = StatePaused
+	_, err = c.enter(cmd)
+	assert.Error(err)
+
+	// Container stopped
+	c.state.State = StateStopped
+	_, err = c.enter(cmd)
+	assert.Error(err)
+}
