@@ -17,7 +17,7 @@ check_log_files()
 	# XXX: hence specify by name (rather than using $RUNTIME).
 	for component in \
 		kata-proxy \
-		kata-runtime-cc \
+		kata-runtime \
 		kata-shim
 	do
 		file="${component}.log"
