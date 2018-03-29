@@ -67,6 +67,10 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 	case RTC:
 		config.RTC = s
 		config.appendRTC()
+
+	case IOThread:
+		config.IOThreads = []IOThread{s}
+		config.appendIOThreads()
 	}
 
 	result := strings.Join(config.qemuParams, " ")
@@ -346,7 +350,7 @@ func TestVSOCKValid(t *testing.T) {
 }
 
 var deviceSCSIControllerStr = "-device virtio-scsi-pci,id=foo"
-var deviceSCSIControllerBusAddrStr = "-device virtio-scsi-pci,id=foo,bus=pci.0,addr=00:04.0,disable-modern=true"
+var deviceSCSIControllerBusAddrStr = "-device virtio-scsi-pci,id=foo,bus=pci.0,addr=00:04.0,disable-modern=true,iothread=iothread1"
 
 func TestAppendDeviceSCSIController(t *testing.T) {
 	scsiCon := SCSIController{
@@ -357,6 +361,7 @@ func TestAppendDeviceSCSIController(t *testing.T) {
 	scsiCon.Bus = "pci.0"
 	scsiCon.Addr = "00:04.0"
 	scsiCon.DisableModern = true
+	scsiCon.IOThread = "iothread1"
 	testAppend(scsiCon, deviceSCSIControllerBusAddrStr, t)
 }
 
@@ -524,4 +529,14 @@ func TestAppendRTC(t *testing.T) {
 	}
 
 	testAppend(rtc, rtcString, t)
+}
+
+var ioThreadString = "-object iothread,id=iothread1"
+
+func TestAppendIOThread(t *testing.T) {
+	ioThread := IOThread{
+		ID: "iothread1",
+	}
+
+	testAppend(ioThread, ioThreadString, t)
 }
