@@ -416,63 +416,78 @@ func newContainer(pod *Pod, contConfig ContainerConfig) (*Container, error) {
 	return c, nil
 }
 
+// rollbackFailingContainerCreation rolls back important steps that might have
+// been performed before the container creation failed.
+// - Unplug CPU and memory resources from the VM.
+// - Unplug devices from the VM.
+func rollbackFailingContainerCreation(c *Container, err error) {
+	if err != nil && c != nil {
+		if err2 := c.removeResources(); err2 != nil {
+			c.Logger().WithError(err2).Error("rollback failed removeResources()")
+		}
+		if err2 := c.detachDevices(); err2 != nil {
+			c.Logger().WithError(err2).Error("rollback failed detachDevices()")
+		}
+		if err2 := c.removeDrive(); err2 != nil {
+			c.Logger().WithError(err2).Error("rollback failed removeDrive()")
+		}
+	}
+}
+
 // createContainer creates and start a container inside a Pod. It has to be
 // called only when a new container, not known by the pod, has to be created.
-func createContainer(pod *Pod, contConfig ContainerConfig) (*Container, error) {
+func createContainer(pod *Pod, contConfig ContainerConfig) (c *Container, err error) {
 	if pod == nil {
 		return nil, errNeedPod
 	}
 
-	c, err := newContainer(pod, contConfig)
+	c, err = newContainer(pod, contConfig)
 	if err != nil {
-		return nil, err
+		return
 	}
 
-	if err := c.createContainersDirs(); err != nil {
-		return nil, err
+	if err = c.createContainersDirs(); err != nil {
+		return
 	}
 
-	if !c.pod.config.HypervisorConfig.DisableBlockDeviceUse {
-		agentCaps := c.pod.agent.capabilities()
-		hypervisorCaps := c.pod.hypervisor.capabilities()
+	// In case the container creation fails, the following takes care
+	// of rolling back all the actions previously performed.
+	defer rollbackFailingContainerCreation(c, err)
 
-		if agentCaps.isBlockDeviceSupported() && hypervisorCaps.isBlockDeviceHotplugSupported() {
-			if err := c.hotplugDrive(); err != nil {
-				return nil, err
-			}
-		}
+	if err = c.hotplugDrive(); err != nil {
+		return
 	}
 
 	// Attach devices
-	if err := c.attachDevices(); err != nil {
-		return nil, err
+	if err = c.attachDevices(); err != nil {
+		return
 	}
 
-	if err := c.addResources(); err != nil {
-		return nil, err
+	if err = c.addResources(); err != nil {
+		return
 	}
 
 	// Deduce additional system mount info that should be handled by the agent
 	// inside the VM
 	c.getSystemMountInfo()
 
-	if err := c.storeDevices(); err != nil {
-		return nil, err
+	if err = c.storeDevices(); err != nil {
+		return
 	}
 
 	process, err := pod.agent.createContainer(c.pod, c)
 	if err != nil {
-		return nil, err
+		return c, err
 	}
 	c.process = *process
 
 	// Store the container process returned by the agent.
-	if err := c.storeProcess(); err != nil {
-		return nil, err
+	if err = c.storeProcess(); err != nil {
+		return
 	}
 
-	if err := c.setContainerState(StateReady); err != nil {
-		return nil, err
+	if err = c.setContainerState(StateReady); err != nil {
+		return
 	}
 
 	return c, nil
@@ -666,6 +681,15 @@ func (c *Container) processList(options ProcessListOptions) (ProcessList, error)
 }
 
 func (c *Container) hotplugDrive() error {
+	agentCaps := c.pod.agent.capabilities()
+	hypervisorCaps := c.pod.hypervisor.capabilities()
+
+	if c.pod.config.HypervisorConfig.DisableBlockDeviceUse ||
+		!agentCaps.isBlockDeviceSupported() ||
+		!hypervisorCaps.isBlockDeviceHotplugSupported() {
+		return nil
+	}
+
 	dev, err := getDeviceForPath(c.rootFs)
 
 	if err == errMountPointNotFound {
