@@ -413,6 +413,17 @@ func (h *hyper) stopPod(pod Pod) error {
 	return h.proxy.stop(pod, h.state.ProxyPid)
 }
 
+// handleBlockVolumes handles volumes that are block device files, by
+// appending the block device to the list of devices associated with the
+// container.
+func (h *hyper) handleBlockVolumes(c *Container) {
+	for _, m := range c.mounts {
+		if m.BlockDevice != nil {
+			c.devices = append(c.devices, m.BlockDevice)
+		}
+	}
+}
+
 func (h *hyper) startOneContainer(pod Pod, c *Container) error {
 	process, err := h.buildHyperContainerProcess(c.config.Cmd)
 	if err != nil {
@@ -474,6 +485,8 @@ func (h *hyper) startOneContainer(pod Pod, c *Container) error {
 	}
 
 	fsmap := fsMapFromMounts(newMounts)
+
+	h.handleBlockVolumes(c)
 
 	// Append container mounts for block devices passed with --device.
 	for _, device := range c.devices {
