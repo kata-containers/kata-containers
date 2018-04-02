@@ -26,7 +26,7 @@ import (
 	"syscall"
 	"testing"
 
-	vcAnnotations "github.com/containers/virtcontainers/pkg/annotations"
+	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/stretchr/testify/assert"
 )
 
