@@ -42,12 +42,12 @@ $ sudo ln -fs /usr/share/clear-containers/clear-${latest_version}-containers.img
 
 _Download virtcontainers project_
 ```
-$ go get github.com/containers/virtcontainers
+$ go get github.com/kata-containers/runtime/virtcontainers
 ```
 
 _Build and setup your environment_
 ```
-$ cd $GOPATH/src/github.com/containers/virtcontainers
+$ cd $GOPATH/src/github.com/kata-containers/runtime/virtcontainers
 $ go build -o virtc hack/virtc/main.go
 $ sudo -E bash ./utils/virtcontainers-setup.sh
 ```
