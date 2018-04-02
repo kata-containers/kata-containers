@@ -38,12 +38,6 @@
   revision = "7f98c94613021d8b57acfa1a2f0c8d0f6fd7ae5a"
 
 [[projects]]
-  name = "github.com/containers/virtcontainers"
-  packages = ["pkg/annotations"]
-  revision = "79fc80723a20cc5067ed962fede4c1d6f35f7473"
-  version = "1.0.8"
-
-[[projects]]
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
   revision = "346938d642f2ec3594ed81d874461961cd0faa76"
