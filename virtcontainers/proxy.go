@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 
 	"github.com/mitchellh/mapstructure"
+	"github.com/sirupsen/logrus"
 )
 
 // ProxyConfig is a structure storing information needed from any
@@ -34,6 +35,7 @@ type ProxyConfig struct {
 // for the execution of the proxy binary.
 type proxyParams struct {
 	agentURL string
+	logger   *logrus.Entry
 }
 
 // ProxyType describes a proxy type.
@@ -51,12 +53,23 @@ const (
 
 	// KataProxyType is the kataProxy.
 	KataProxyType ProxyType = "kataProxy"
+
+	// KataBuiltInProxyType is the kataBuiltInProxy.
+	KataBuiltInProxyType ProxyType = "kataBuiltInProxy"
 )
 
 const (
 	// Number of seconds to wait for the proxy to respond to a connection
 	// request.
 	waitForProxyTimeoutSecs = 5.0
+)
+
+const (
+	// unix socket type of console
+	consoleProtoUnix = "unix"
+
+	// pty type of console. Used mostly by kvmtools.
+	consoleProtoPty = "pty"
 )
 
 // Set sets a proxy type based on the input string.
@@ -74,6 +87,9 @@ func (pType *ProxyType) Set(value string) error {
 	case "kataProxy":
 		*pType = KataProxyType
 		return nil
+	case "kataBuiltInProxy":
+		*pType = KataBuiltInProxyType
+		return nil
 	default:
 		return fmt.Errorf("Unknown proxy type %s", value)
 	}
@@ -90,6 +106,8 @@ func (pType *ProxyType) String() string {
 		return string(CCProxyType)
 	case KataProxyType:
 		return string(KataProxyType)
+	case KataBuiltInProxyType:
+		return string(KataBuiltInProxyType)
 	default:
 		return ""
 	}
@@ -106,6 +124,8 @@ func newProxy(pType ProxyType) (proxy, error) {
 		return &ccProxy{}, nil
 	case KataProxyType:
 		return &kataProxy{}, nil
+	case KataBuiltInProxyType:
+		return &kataBuiltInProxy{}, nil
 	default:
 		return &noopProxy{}, nil
 	}
@@ -146,6 +166,10 @@ func defaultProxyURL(pod Pod, socketType string) (string, error) {
 	default:
 		return "", fmt.Errorf("Unknown socket type: %s", socketType)
 	}
+}
+
+func isProxyBuiltIn(pType ProxyType) bool {
+	return pType == KataBuiltInProxyType
 }
 
 // proxy is the virtcontainers proxy interface.
