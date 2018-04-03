@@ -603,16 +603,14 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, devices []Device) [
 // been performed before the container creation failed.
 // - Unmount container volumes.
 // - Unmount container rootfs.
-func (k *kataAgent) rollbackFailingContainerCreation(c *Container, err error) {
-	if err != nil {
-		if c != nil {
-			if err2 := c.unmountHostMounts(); err2 != nil {
-				k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
-			}
+func (k *kataAgent) rollbackFailingContainerCreation(c *Container) {
+	if c != nil {
+		if err2 := c.unmountHostMounts(); err2 != nil {
+			k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
+		}
 
-			if err2 := bindUnmountContainerRootfs(kataHostSharedDir, c.pod.id, c.id); err2 != nil {
-				k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
-			}
+		if err2 := bindUnmountContainerRootfs(kataHostSharedDir, c.pod.id, c.id); err2 != nil {
+			k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
 		}
 	}
 }
@@ -639,7 +637,11 @@ func (k *kataAgent) createContainer(pod *Pod, c *Container) (p *Process, err err
 
 	// In case the container creation fails, the following defer statement
 	// takes care of rolling back actions previously performed.
-	defer k.rollbackFailingContainerCreation(c, err)
+	defer func() {
+		if err != nil {
+			k.rollbackFailingContainerCreation(c)
+		}
+	}()
 
 	if c.state.Fstype != "" {
 		// This is a block based device rootfs.
