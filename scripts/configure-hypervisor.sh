@@ -96,6 +96,7 @@ check_tag()
 
 	value="${recognised_tags[$tag]}"
 
+	# each tag MUST have a description
 	[ -n "$value" ] && return
 
 	die "invalid tag '$tag' found for entry '$entry'"
