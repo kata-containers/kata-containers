@@ -31,7 +31,7 @@ chronic sudo -E dnf -y install libtool automake autoconf bc pixman numactl-libs
 
 echo "Install qemu dependencies"
 chronic sudo -E dnf -y install libcap-devel libattr-devel \
-	libcap-ng-devel zlib-devel pixman-devel librbd-dev
+	libcap-ng-devel zlib-devel pixman-devel librbd-devel
 
 echo "Install kata containers image"
 "${cidir}/install_kata_image.sh"
