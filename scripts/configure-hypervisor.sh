@@ -175,6 +175,17 @@ show_array()
 # Entry point
 main()
 {
+	local qemu_version_file="VERSION"
+	[ -f ${qemu_version_file} ] || die "QEMU version file '$qemu_version_file' not found"
+
+	local qemu_version_major=$(cut -d. -f1 "${qemu_version_file}")
+	local qemu_version_minor=$(cut -d. -f2 "${qemu_version_file}")
+
+	[ -n "${qemu_version_major}" ] \
+		|| die "cannot determine qemu major version from file $qemu_version_file"
+	[ -n "${qemu_version_minor}" ] \
+		|| die "cannot determine qemu minor version from file $qemu_version_file"
+
 	arch=$(arch)
 
 	# Array of configure options.
