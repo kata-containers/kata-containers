@@ -27,6 +27,10 @@ docker_log_filename="docker.log"
 docker_log_path="${log_copy_dest}/${docker_log_filename}"
 docker_log_prefix="docker_"
 
+collect_data_filename="kata-collect-data.log"
+collect_data_log_path="${log_copy_dest}/${collect_data_filename}"
+collect_data_log_prefix="kata-collect-data_"
+
 # Copy log files if a destination path is provided, otherwise simply
 # display them.
 if [ "${log_copy_dest}" ]; then
@@ -37,6 +41,8 @@ if [ "${log_copy_dest}" ]; then
 	journalctl --no-pager -u crio > "${crio_log_path}"
 	journalctl --no-pager -u docker > "${docker_log_path}"
 
+	sudo kata-collect-data.sh > "${collect_data_log_path}"
+
 	# Split them in 5 MiB subfiles to avoid too large files.
 	subfile_size=5242880
 	pushd "${log_copy_dest}"
@@ -45,13 +51,15 @@ if [ "${log_copy_dest}" ]; then
 	split -b "${subfile_size}" -d "${shim_log_path}" "${shim_log_prefix}"
 	split -b "${subfile_size}" -d "${crio_log_path}" "${crio_log_prefix}"
 	split -b "${subfile_size}" -d "${docker_log_path}" "${docker_log_prefix}"
+	split -b "${subfile_size}" -d "${collect_data_log_path}" "${collect_data_log_prefix}"
 
 	for prefix in \
 		"${kata_runtime_log_prefix}" \
 		"${proxy_log_prefix}" \
 		"${shim_log_prefix}" \
 		"${crio_log_prefix}" \
-		"${docker_log_prefix}"
+		"${docker_log_prefix}" \
+		"${collect_data_log_prefix}"
 	do
 		gzip -9 "$prefix"*
 	done
@@ -60,12 +68,19 @@ if [ "${log_copy_dest}" ]; then
 else
 	echo "Kata Containers Runtime Log:"
 	journalctl --no-pager -t kata-runtime
+
 	echo "Kata Containers Proxy Log:"
 	journalctl --no-pager -t kata-proxy
+
 	echo "Kata Containers Shim Log:"
 	journalctl --no-pager -t kata-shim
+
 	echo "CRI-O Log:"
 	journalctl --no-pager -u crio
+
 	echo "Docker Log:"
 	journalctl --no-pager -u docker
+
+	echo "Kata Collect Data script output"
+	sudo kata-collect-data.sh
 fi

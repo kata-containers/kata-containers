@@ -71,3 +71,6 @@ sudo -E PATH="$PATH" bash -c "make test"
 
 echo "INFO: Checking log files"
 check_log_files
+
+echo "INFO: Running data collection script"
+sudo -E PATH="$PATH" chronic kata-collect-data.sh
