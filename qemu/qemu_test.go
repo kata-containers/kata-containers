@@ -365,6 +365,22 @@ func TestAppendDeviceSCSIController(t *testing.T) {
 	testAppend(scsiCon, deviceSCSIControllerBusAddrStr, t)
 }
 
+var deviceBridgeString = "-device pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,chassis_nr=5,shpc=on,addr=ff"
+
+func TestAppendBridgeDevice(t *testing.T) {
+
+	bridge := BridgeDevice{
+		Type:    PCIBridge,
+		ID:      "mybridge",
+		Bus:     "/pci-bus/pcie.0",
+		Addr:    "255",
+		Chassis: 5,
+		SHPC:    true,
+	}
+
+	testAppend(bridge, deviceBridgeString, t)
+}
+
 func TestAppendEmptyDevice(t *testing.T) {
 	device := SerialDevice{}
 
