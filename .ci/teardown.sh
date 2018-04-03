@@ -31,6 +31,10 @@ collect_data_filename="kata-collect-data.log"
 collect_data_log_path="${log_copy_dest}/${collect_data_filename}"
 collect_data_log_prefix="kata-collect-data_"
 
+kubelet_log_filename="kubelet.log"
+kubelet_log_path="${log_copy_dest}/${kubelet_log_filename}"
+kubelet_log_prefix="kubelet_"
+
 # Copy log files if a destination path is provided, otherwise simply
 # display them.
 if [ "${log_copy_dest}" ]; then
@@ -40,6 +44,7 @@ if [ "${log_copy_dest}" ]; then
 	journalctl --no-pager -t kata-shim > "${shim_log_path}"
 	journalctl --no-pager -u crio > "${crio_log_path}"
 	journalctl --no-pager -u docker > "${docker_log_path}"
+	journalctl --no-pager -u kubelet > "${kubelet_log_path}"
 
 	sudo kata-collect-data.sh > "${collect_data_log_path}"
 
@@ -51,6 +56,7 @@ if [ "${log_copy_dest}" ]; then
 	split -b "${subfile_size}" -d "${shim_log_path}" "${shim_log_prefix}"
 	split -b "${subfile_size}" -d "${crio_log_path}" "${crio_log_prefix}"
 	split -b "${subfile_size}" -d "${docker_log_path}" "${docker_log_prefix}"
+	split -b "${subfile_size}" -d "${kubelet_log_path}" "${kubelet_log_prefix}"
 	split -b "${subfile_size}" -d "${collect_data_log_path}" "${collect_data_log_prefix}"
 
 	for prefix in \
@@ -59,6 +65,7 @@ if [ "${log_copy_dest}" ]; then
 		"${shim_log_prefix}" \
 		"${crio_log_prefix}" \
 		"${docker_log_prefix}" \
+		"${kubelet_log_prefix}" \
 		"${collect_data_log_prefix}"
 	do
 		gzip -9 "$prefix"*
@@ -80,6 +87,9 @@ else
 
 	echo "Docker Log:"
 	journalctl --no-pager -u docker
+
+	echo "Kubelet Log:"
+	journalctl --no-pager -u kubelet
 
 	echo "Kata Collect Data script output"
 	sudo kata-collect-data.sh

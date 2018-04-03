@@ -40,11 +40,15 @@ docker-compose:
 	cd integration/docker-compose && \
 	bats docker-compose.bats
 
+kubernetes:
+	bash -f .ci/install_bats.sh
+	bash -f integration/kubernetes/run_kubernetes_tests.sh
+
 log-parser:
 	make -C cmd/log-parser
 
-test: functional integration crio docker-compose
+test: functional integration crio docker-compose kubernetes
 
 check: checkcommits log-parser
 
-.PHONY: check checkcommits integration ginkgo log-parser test crio functional docker-compose
+.PHONY: check checkcommits integration ginkgo log-parser test crio functional docker-compose kubernetes

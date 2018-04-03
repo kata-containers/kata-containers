@@ -8,15 +8,16 @@
 set -e
 
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
+source "${SCRIPT_PATH}/../../.ci/lib.sh"
 source "${SCRIPT_PATH}/crio_skip_tests.sh"
-source "${SCRIPT_PATH}/versions.txt"
 
 crio_repository="github.com/kubernetes-incubator/cri-o"
+crio_version=$(get_version "externals.crio.version")
 check_crio_repository="$GOPATH/src/${crio_repository}"
 
 if [ -d ${check_crio_repository} ]; then
 	pushd ${check_crio_repository}
-	check_version=$(git log -1 --pretty=format:"%H" | grep "${crio_version}")
+	check_version=$(git log -1 | grep "${crio_version}")
 	if [ $? -ne 0 ]; then
 		git fetch
 		git checkout "${crio_version}"

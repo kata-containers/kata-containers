@@ -10,7 +10,6 @@ set -e
 cidir=$(dirname "$0")
 source /etc/os-release
 source "${cidir}/lib.sh"
-get_cc_versions
 
 echo "Install chronic"
 sudo -E dnf -y install moreutils

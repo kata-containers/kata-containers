@@ -7,10 +7,6 @@
 
 set -e
 
-_runtime_repo="github.com/kata-containers/runtime"
-# FIXME: Issue https://github.com/kata-containers/packaging/issues/1
-_versions_file="$GOPATH/src/github.com/clearcontainers/runtime/versions.txt"
-
 export KATA_RUNTIME=${KATA_RUNTIME:-cc}
 
 # If we fail for any reason a message will be displayed
@@ -52,12 +48,15 @@ function clone_build_and_install() {
 	popd
 }
 
-function get_cc_versions(){
+function get_version(){
+	dependency="$1"
 	# This is needed in order to retrieve the version for qemu-lite
-	cc_runtime_repo="github.com/clearcontainers/runtime"
-	go get -d -u -v "$cc_runtime_repo" || true
-	[ ! -f "$_versions_file" ] && { echo >&2 "ERROR: cannot find $_versions_file"; exit 1; }
-	source "$_versions_file"
+	go get -v github.com/mikefarah/yq
+	runtime_repo="github.com/kata-containers/runtime"
+	versions_file="$GOPATH/src/github.com/kata-containers/runtime/versions.yaml"
+	go get -d -u -v "$runtime_repo" || true
+	[ ! -f "$versions_file" ] && { echo >&2 "ERROR: cannot find $versions_file"; exit 1; }
+	yq read "$versions_file" "$dependency"
 }
 
 
@@ -97,4 +96,19 @@ function apply_depends_on() {
 	done
 
 	popd
+}
+
+function waitForProcess(){
+        wait_time="$1"
+        sleep_time="$2"
+        cmd="$3"
+        while [ "$wait_time" -gt 0 ]; do
+                if eval "$cmd"; then
+                        return 0
+                else
+                        sleep "$sleep_time"
+                        wait_time=$((wait_time-sleep_time))
+                fi
+        done
+        return 1
 }
