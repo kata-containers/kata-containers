@@ -290,7 +290,7 @@ main()
 
 	# SECURITY: Don't build a static binary (lowers security)
 	# needed if qemu version is less than 2.7
-	if [ ${qemu_version_major} -eq 2 ] && [ ${qemu_version_minor} -lt 7 ]; then
+	if [ "${qemu_version_major}" -eq 2 ] && [ "${qemu_version_minor}" -lt 7 ]; then
 		qemu_options+=(security:--disable-static)
 	fi
 
@@ -333,7 +333,7 @@ main()
 
 	# Always strip binaries
 	# needed if qemu version is less than 2.7
-	if [ ${qemu_version_major} -eq 2 ] && [ ${qemu_version_minor} -lt 7 ]; then
+	if [ "${qemu_version_major}" -eq 2 ] && [ "${qemu_version_minor}" -lt 7 ]; then
 		qemu_options+=(size:--enable-strip)
 	fi
 
