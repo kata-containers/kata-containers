@@ -93,6 +93,7 @@ check_tag()
 	local entry="$2"
 
 	[ -z "$tag" ] && die "no tag for entry '$entry'"
+	[ -z "$entry" ] && die "no entry for tag '$tag'"
 
 	value="${recognised_tags[$tag]}"
 
@@ -108,6 +109,7 @@ check_tags()
 	local entry="$2"
 
 	[ -z "$tags" ] && die "entry '$entry' doesn't have any tags"
+	[ -z "$entry" ] && die "no entry for tags '$tags'"
 
 	tags=$(echo "$tags"|tr ',' '\n')
 
@@ -146,6 +148,8 @@ show_array()
 
 	for entry in "${_array[@]}"
 	do
+		[ -z "$entry" ] && die "found empty entry"
+
 		tags=$(echo "$entry"|cut -s -d: -f1)
 		elem=$(echo "$entry"|cut -s -d: -f2-)
 
