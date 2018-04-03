@@ -92,6 +92,8 @@ check_tag()
 	local tag="$1"
 	local entry="$2"
 
+	[ -z "$tag" ] && die "no tag for entry '$entry'"
+
 	value="${recognised_tags[$tag]}"
 
 	[ -n "$value" ] && return
