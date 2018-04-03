@@ -44,11 +44,16 @@ kubernetes:
 	bash -f .ci/install_bats.sh
 	bash -f integration/kubernetes/run_kubernetes_tests.sh
 
+swarm:
+	bash -f .ci/install_bats.sh
+	cd integration/swarm && \
+	bats swarm.bats
+
 log-parser:
 	make -C cmd/log-parser
 
-test: functional integration crio docker-compose kubernetes
+test: functional integration crio docker-compose kubernetes swarm
 
 check: checkcommits log-parser
 
-.PHONY: check checkcommits integration ginkgo log-parser test crio functional docker-compose kubernetes
+.PHONY: check checkcommits integration ginkgo log-parser test crio functional docker-compose kubernetes swarm
