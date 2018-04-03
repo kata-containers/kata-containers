@@ -60,12 +60,16 @@ if [ "${log_copy_dest}" ]; then
 else
 	echo "Kata Containers Runtime Log:"
 	journalctl --no-pager -t kata-runtime
+
 	echo "Kata Containers Proxy Log:"
 	journalctl --no-pager -t kata-proxy
+
 	echo "Kata Containers Shim Log:"
 	journalctl --no-pager -t kata-shim
+
 	echo "CRI-O Log:"
 	journalctl --no-pager -u crio
+
 	echo "Docker Log:"
 	journalctl --no-pager -u docker
 fi
