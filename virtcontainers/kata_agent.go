@@ -599,7 +599,25 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, devices []Device) [
 	return deviceList
 }
 
-func (k *kataAgent) createContainer(pod *Pod, c *Container) (*Process, error) {
+// rollbackFailingContainerCreation rolls back important steps that might have
+// been performed before the container creation failed.
+// - Unmount container volumes.
+// - Unmount container rootfs.
+func (k *kataAgent) rollbackFailingContainerCreation(c *Container, err error) {
+	if err != nil {
+		if c != nil {
+			if err2 := c.unmountHostMounts(); err2 != nil {
+				k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
+			}
+
+			if err2 := bindUnmountContainerRootfs(kataHostSharedDir, c.pod.id, c.id); err2 != nil {
+				k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
+			}
+		}
+	}
+}
+
+func (k *kataAgent) createContainer(pod *Pod, c *Container) (p *Process, err error) {
 	ociSpecJSON, ok := c.config.Annotations[vcAnnotations.ConfigJSONKey]
 	if !ok {
 		return nil, errorMissingOCISpec
@@ -618,6 +636,10 @@ func (k *kataAgent) createContainer(pod *Pod, c *Container) (*Process, error) {
 	// This is the guest absolute root path for that container.
 	rootPathParent := filepath.Join(kataGuestSharedDir, c.id)
 	rootPath := filepath.Join(rootPathParent, rootfsDir)
+
+	// In case the container creation fails, the following defer statement
+	// takes care of rolling back actions previously performed.
+	defer k.rollbackFailingContainerCreation(c, err)
 
 	if c.state.Fstype != "" {
 		// This is a block based device rootfs.
@@ -667,27 +689,25 @@ func (k *kataAgent) createContainer(pod *Pod, c *Container) (*Process, error) {
 		// (kataGuestSharedDir) is already mounted in the
 		// guest. We only need to mount the rootfs from
 		// the host and it will show up in the guest.
-		if err := bindMountContainerRootfs(kataHostSharedDir, pod.id, c.id, c.rootFs, false); err != nil {
-			bindUnmountAllRootfs(kataHostSharedDir, *pod)
+		if err = bindMountContainerRootfs(kataHostSharedDir, pod.id, c.id, c.rootFs, false); err != nil {
 			return nil, err
 		}
 	}
 
 	ociSpec := &specs.Spec{}
-	if err := json.Unmarshal([]byte(ociSpecJSON), ociSpec); err != nil {
+	if err = json.Unmarshal([]byte(ociSpecJSON), ociSpec); err != nil {
 		return nil, err
 	}
 
 	// Handle container mounts
 	newMounts, err := c.mountSharedDirMounts(kataHostSharedDir, kataGuestSharedDir)
 	if err != nil {
-		bindUnmountAllRootfs(kataHostSharedDir, *pod)
 		return nil, err
 	}
 
 	// We replace all OCI mount sources that match our container mount
 	// with the right source path (The guest one).
-	if err := k.replaceOCIMountSource(ociSpec, newMounts); err != nil {
+	if err = k.replaceOCIMountSource(ociSpec, newMounts); err != nil {
 		return nil, err
 	}
 
@@ -714,7 +734,7 @@ func (k *kataAgent) createContainer(pod *Pod, c *Container) (*Process, error) {
 		OCI:         grpcSpec,
 	}
 
-	if _, err := k.sendReq(req); err != nil {
+	if _, err = k.sendReq(req); err != nil {
 		return nil, err
 	}
 
