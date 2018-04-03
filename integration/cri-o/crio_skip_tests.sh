@@ -8,11 +8,8 @@
 # Currently these are the CRI-O tests that are not working
 
 declare -a skipCRIOTests=(
-'test "ctr hostname env"'
 'test "ctr oom"'
 'test "ctr \/etc\/resolv.conf rw\/ro mode"'
-'test "ctr create with non-existent command"'
-'test "ctr create with non-existent command \[tty\]"'
 'test "ctr update resources"'
 'test "ctr resources"'
 );
