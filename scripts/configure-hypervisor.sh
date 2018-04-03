@@ -153,6 +153,8 @@ show_array()
 		tags=$(echo "$entry"|cut -s -d: -f1)
 		elem=$(echo "$entry"|cut -s -d: -f2-)
 
+		[ -z "$elem" ] && die "no option for entry '$entry'"
+
 		check_tags "$tags" "$entry"
 
 		if [ "$action" = "dump" ]
