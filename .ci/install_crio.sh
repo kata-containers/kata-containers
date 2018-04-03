@@ -8,10 +8,11 @@
 set -e
 
 cidir=$(dirname "$0")
-source "${cidir}/../integration/cri-o/versions.txt"
+source "${cidir}/lib.sh"
 
 echo "Get CRI-O sources"
 crio_repo="github.com/kubernetes-incubator/cri-o"
+crio_version=$(get_version "externals.crio.version")
 go get -d "$crio_repo" || true
 pushd "${GOPATH}/src/${crio_repo}"
 git fetch
@@ -29,6 +30,7 @@ echo "Get CRI Tools"
 critools_repo="github.com/kubernetes-incubator/cri-tools"
 go get "$critools_repo" || true
 pushd "${GOPATH}/src/${critools_repo}"
+critools_version=$(grep "ENV CRICTL_COMMIT" "${GOPATH}/src/${crio_repo}/Dockerfile" | cut -d " " -f3)
 git checkout "${critools_version}"
 go install ./cmd/crictl
 sudo install "${GOPATH}/bin/crictl" /usr/bin

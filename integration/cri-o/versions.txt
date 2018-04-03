@@ -1,6 +1,0 @@
-# These versions should be removed from here and moved to the correct
-# place once https://github.com/kata-containers/runtime/issues/11 gets
-# resolved. See issue: https://github.com/kata-containers/tests/issues/157
-crio_version="v1.9.9"
-critools_version="b42fc3f364dd48f649d55926c34492beeb9b2e99"
-runc_version="v1.0.0-rc5"

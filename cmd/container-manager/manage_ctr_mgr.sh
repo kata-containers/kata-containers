@@ -17,8 +17,6 @@ subcommand=""
 runtime=""
 tag=""
 
-get_cc_versions > /dev/null 2>&1
-
 usage(){
 	cat << EOF
 This script helps you install the correct version of docker
@@ -94,6 +92,7 @@ install_docker(){
 
 	if [ -z "$tag" ] || [ "$tag" == "latest" ] ; then
 		# If no tag is recevied, install latest compatible version
+		docker_version=$(get_version "externals.docker.version")
 		log_message "Installing docker $docker_version"
 		docker_version=${docker_version/v}
 		docker_version=${docker_version/-*}

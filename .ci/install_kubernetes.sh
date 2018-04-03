@@ -7,11 +7,14 @@
 
 set -e
 
+cidir=$(dirname "$0")
+source "${cidir}/lib.sh"
+
 echo "Install Kubernetes components"
 
 cidir=$(dirname "$0")
 source /etc/os-release
-kubernetes_version="1.9.3-00"
+kubernetes_version=$(get_version "externals.kubernetes.version")
 
 if [ "$ID" != "ubuntu" ]; then
         echo "Currently this script only works for Ubuntu. Skipped Kubernetes Setup"
