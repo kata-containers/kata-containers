@@ -14,7 +14,7 @@ if [ -n "$DEBUG" ] ; then
 fi
 
 SCRIPT_NAME="${0##*/}"
-INITRD_IMAGE="${INITRD_IMAGE:-kata-initrd.img}"
+INITRD_IMAGE="${INITRD_IMAGE:-kata-containers-initrd.img}"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 
