@@ -20,6 +20,8 @@ if [ "$ID" == ubuntu ];then
 	bash -f "${cidir}/setup_env_ubuntu.sh"
 elif [ "$ID" == fedora ];then
 	bash -f "${cidir}/setup_env_fedora.sh"
+elif [ "$ID" == centos ];then
+	bash -f "${cidir}/setup_env_centos.sh"
 else
 	die "ERROR: Unrecognised distribution."
 	exit 1
