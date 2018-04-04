@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	"github.com/moby/moby/pkg/term"
+	"github.com/sirupsen/logrus"
 	context "golang.org/x/net/context"
 
 	pb "github.com/kata-containers/agent/protocols/grpc"
@@ -124,9 +125,11 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 }
 
 func (s *shim) resizeTty(fromTty *os.File) error {
-	ws, err := term.GetWinsize(fromTty.Fd())
+	fd := fromTty.Fd()
+
+	ws, err := term.GetWinsize(fd)
 	if err != nil {
-		logger().WithError(err).Info("Error getting size")
+		logger().WithError(err).WithField("fd", fd).Info("Error getting window size")
 		return nil
 	}
 
@@ -136,7 +139,10 @@ func (s *shim) resizeTty(fromTty *os.File) error {
 		Row:         uint32(ws.Height),
 		Column:      uint32(ws.Width)})
 	if err != nil {
-		logger().WithError(err).Error("set winsize failed")
+		logger().WithError(err).WithFields(logrus.Fields{
+			"window-height": ws.Height,
+			"window-width":  ws.Width,
+		}).Error("set window size failed")
 	}
 
 	return err
