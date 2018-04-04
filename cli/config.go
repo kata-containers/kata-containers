@@ -92,6 +92,7 @@ type hypervisor struct {
 	Swap                  bool   `toml:"enable_swap"`
 	Debug                 bool   `toml:"enable_debug"`
 	DisableNestingChecks  bool   `toml:"disable_nesting_checks"`
+	EnableIOThreads       bool   `toml:"enable_iothreads"`
 }
 
 type proxy struct {
@@ -321,6 +322,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		Debug:                 h.Debug,
 		DisableNestingChecks:  h.DisableNestingChecks,
 		BlockDeviceDriver:     blockDriver,
+		EnableIOThreads:       h.EnableIOThreads,
 	}, nil
 }
 
@@ -423,6 +425,7 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		Debug:                 defaultEnableDebug,
 		DisableNestingChecks:  defaultDisableNestingChecks,
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
+		EnableIOThreads:       defaultEnableIOThreads,
 	}
 
 	err = config.InterNetworkModel.SetModel(defaultInterNetworkingModel)
