@@ -17,6 +17,7 @@ TEST_INITRD=${TEST_INITRD:-no}
 bash -f ${cidir}/install_agent.sh
 
 osbuilder_repo="github.com/kata-containers/osbuilder"
+export ROOTFS_DIR="${GOPATH}/src/${osbuilder_repo}/rootfs-builder/rootfs"
 
 # Clone os-builder repository
 go get -d ${osbuilder_repo} || true
@@ -28,11 +29,11 @@ popd
 # Build the image
 if [ x"${TEST_INITRD}" == x"yes" ]; then
     pushd "${GOPATH}/src/${osbuilder_repo}/initrd-builder"
-    sudo -E AGENT_INIT=${AGENT_INIT} USE_DOCKER=true ./initrd_builder.sh ../rootfs-builder/rootfs
+    sudo -E AGENT_INIT=${AGENT_INIT} USE_DOCKER=true ./initrd_builder.sh "$ROOTFS_DIR"
     image_name="kata-containers-initrd.img"
 else
     pushd "${GOPATH}/src/${osbuilder_repo}/image-builder"
-    sudo -E AGENT_INIT=${AGENT_INIT} USE_DOCKER=true ./image_builder.sh ../rootfs-builder/rootfs
+    sudo -E AGENT_INIT=${AGENT_INIT} USE_DOCKER=true ./image_builder.sh "$ROOTFS_DIR"
     image_name="kata-containers.img"
 fi
 
