@@ -93,7 +93,15 @@ then
 	git branch -D "$pr_branch"
 fi
 
+if [ "${kata_repo}" != "${tests_repo}" ]
+then
+	echo "INFO: Running unit tests for repo $kata_repo"
+	make test
+fi
+
 # Run integration tests
+#
+# Note: this will run all classes of tests for ${tests_repo}.
 .ci/run.sh
 
 # Code coverage
