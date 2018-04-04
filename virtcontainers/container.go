@@ -420,17 +420,15 @@ func newContainer(pod *Pod, contConfig ContainerConfig) (*Container, error) {
 // been performed before the container creation failed.
 // - Unplug CPU and memory resources from the VM.
 // - Unplug devices from the VM.
-func rollbackFailingContainerCreation(c *Container, err error) {
-	if err != nil && c != nil {
-		if err2 := c.removeResources(); err2 != nil {
-			c.Logger().WithError(err2).Error("rollback failed removeResources()")
-		}
-		if err2 := c.detachDevices(); err2 != nil {
-			c.Logger().WithError(err2).Error("rollback failed detachDevices()")
-		}
-		if err2 := c.removeDrive(); err2 != nil {
-			c.Logger().WithError(err2).Error("rollback failed removeDrive()")
-		}
+func (c *Container) rollbackFailingContainerCreation() {
+	if err := c.removeResources(); err != nil {
+		c.Logger().WithError(err).Error("rollback failed removeResources()")
+	}
+	if err := c.detachDevices(); err != nil {
+		c.Logger().WithError(err).Error("rollback failed detachDevices()")
+	}
+	if err := c.removeDrive(); err != nil {
+		c.Logger().WithError(err).Error("rollback failed removeDrive()")
 	}
 }
 
@@ -452,7 +450,11 @@ func createContainer(pod *Pod, contConfig ContainerConfig) (c *Container, err er
 
 	// In case the container creation fails, the following takes care
 	// of rolling back all the actions previously performed.
-	defer rollbackFailingContainerCreation(c, err)
+	defer func() {
+		if err != nil {
+			c.rollbackFailingContainerCreation()
+		}
+	}()
 
 	if err = c.hotplugDrive(); err != nil {
 		return
