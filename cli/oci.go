@@ -50,7 +50,6 @@ var cgroupsDirPath string
 var procMountInfo = "/proc/self/mountinfo"
 
 // getContainerInfo returns the container status and its pod ID.
-// It internally expands the container ID from the prefix provided.
 func getContainerInfo(containerID string) (vc.ContainerStatus, string, error) {
 	// container ID MUST be provided.
 	if containerID == "" {
