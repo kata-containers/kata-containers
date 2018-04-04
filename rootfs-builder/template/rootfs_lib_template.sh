@@ -17,6 +17,12 @@
 #
 # rootfs_dir populated with rootfs pkgs
 # It must provide a binary in /sbin/init
+#
+# Note: For some distros, the build_rootfs() function provided in scripts/lib.sh
+#       will suffice. If a new distro is introduced with a special requirement,
+#       then, a rootfs_builder/<distro>/rootfs_lib.sh file should be created
+#       using this template.
+
 build_rootfs() {
 	# Mandatory
 	local ROOTFS_DIR=$1
