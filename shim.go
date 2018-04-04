@@ -74,14 +74,20 @@ func (s *shim) proxyStdio(wg *sync.WaitGroup, terminal bool) {
 
 	go func() {
 		_, err := io.Copy(os.Stdout, outPipe)
-		logger().WithError(err).Info("copy stdout failed")
+		if err != nil {
+			logger().WithError(err).Info("copy stdout failed")
+		}
+
 		wg.Done()
 	}()
 
 	if !terminal {
 		go func() {
 			_, err := io.Copy(os.Stderr, errPipe)
-			logger().WithError(err).Info("copy stderr failed")
+			if err != nil {
+				logger().WithError(err).Info("copy stderr failed")
+			}
+
 			wg.Done()
 		}()
 	}
