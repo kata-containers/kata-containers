@@ -353,6 +353,10 @@ func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
 		},
 	}
 
+	// Add bridges before any other devices. This way we make sure that
+	// bridge gets the first available PCI address i.e bridgePCIStartAddr
+	devices = q.arch.appendBridges(devices, q.state.Bridges)
+
 	devices = q.arch.append9PVolumes(devices, sandboxConfig.Volumes)
 	devices = q.arch.appendConsole(devices, q.getSandboxConsole(sandboxConfig.ID))
 
@@ -361,11 +365,6 @@ func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
 		if err != nil {
 			return err
 		}
-	}
-
-	devices = q.arch.appendBridges(devices, q.state.Bridges)
-	if err != nil {
-		return err
 	}
 
 	var ioThread *govmmQemu.IOThread

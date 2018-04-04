@@ -26,6 +26,9 @@ type Bridge struct {
 
 	//ID is used to identify the bridge in the hypervisor
 	ID string
+
+	// Addr is the PCI/e slot of the bridge
+	Addr int
 }
 
 // addDevice on success adds the device ID to the bridge and return the address
