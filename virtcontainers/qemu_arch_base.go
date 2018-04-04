@@ -66,7 +66,7 @@ type qemuArch interface {
 	appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error)
 
 	// appendSCSIController appens a SCSI controller to devices
-	appendSCSIController(devices []govmmQemu.Device) []govmmQemu.Device
+	appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread)
 
 	// appendBridges appends bridges to devices
 	appendBridges(devices []govmmQemu.Device, bridges []Bridge) []govmmQemu.Device
@@ -300,15 +300,27 @@ func (q *qemuArchBase) appendImage(devices []govmmQemu.Device, path string) ([]g
 	return q.appendBlockDevice(devices, drive), nil
 }
 
-func (q *qemuArchBase) appendSCSIController(devices []govmmQemu.Device) []govmmQemu.Device {
+func (q *qemuArchBase) appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread) {
 	scsiController := govmmQemu.SCSIController{
 		ID:            scsiControllerID,
 		DisableModern: q.nestedRun,
 	}
 
+	var t *govmmQemu.IOThread
+
+	if enableIOThreads {
+		randBytes, _ := generateRandomBytes(8)
+
+		t = &govmmQemu.IOThread{
+			ID: fmt.Sprintf("%s-%s", "iothread", hex.EncodeToString(randBytes)),
+		}
+
+		scsiController.IOThread = t.ID
+	}
+
 	devices = append(devices, scsiController)
 
-	return devices
+	return devices, t
 }
 
 // appendBridges appends to devices the given bridges

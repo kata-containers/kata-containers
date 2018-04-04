@@ -379,8 +379,9 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 		return err
 	}
 
+	var ioThread *govmmQemu.IOThread
 	if q.config.BlockDeviceDriver == VirtioSCSI {
-		devices = q.arch.appendSCSIController(devices)
+		devices, ioThread = q.arch.appendSCSIController(devices, q.config.EnableIOThreads)
 	}
 
 	cpuModel := q.arch.cpuModel()
@@ -412,6 +413,10 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 		VGA:         "none",
 		GlobalParam: "kvm-pit.lost_tick_policy=discard",
 		Bios:        firmwarePath,
+	}
+
+	if ioThread != nil {
+		qemuConfig.IOThreads = []govmmQemu.IOThread{*ioThread}
 	}
 
 	q.qemuConfig = qemuConfig
