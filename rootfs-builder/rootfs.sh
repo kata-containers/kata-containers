@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2017 Intel Corporation
+# Copyright (c) 2018 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -8,17 +8,22 @@ set -e
 
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
-ROOTFS_DIR=${ROOTFS_DIR:-${PWD}/rootfs}
 AGENT_VERSION=${AGENT_VERSION:-master}
 GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 
+# Default architecture
+ARCH=${ARCH:-"x86_64"}
+
 #Load default vesions for golang and other componets
 source "${script_dir}/versions.txt"
 
-# Name of file that will implement build_rootfs
+# config file
+typeset -r CONFIG_SH="config.sh"
+
+# Name of the extra file that could implement build_rootfs
 typeset -r LIB_SH="rootfs_lib.sh"
 
 if [ -n "$DEBUG" ] ; then
@@ -78,7 +83,7 @@ OK()
 
 get_distros() {
 	cdirs=$(find "${script_dir}" -maxdepth 1 -type d)
-	find ${cdirs} -maxdepth 1 -name "${LIB_SH}" -printf '%H\n' | while read dir; do
+	find ${cdirs} -maxdepth 1 -name "${CONFIG_SH}" -printf '%H\n' | while read dir; do
 		basename "${dir}"
 	done
 }
@@ -163,16 +168,31 @@ shift $(($OPTIND - 1))
 [ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
 
 distro="$1"
-init="${ROOTFS_DIR}/sbin/init"
 
 [ -n "${distro}" ] || usage 1
 distro_config_dir="${script_dir}/${distro}"
 
-[ -d "${distro_config_dir}" ] || die "Not found configuration directory ${distro_config_dir}"
-rootfs_lib="${distro_config_dir}/${LIB_SH}"
-source "${rootfs_lib}"
-rootfs_config="${distro_config_dir}/config.sh"
+# Source config.sh from distro
+rootfs_config="${distro_config_dir}/${CONFIG_SH}"
 source "${rootfs_config}"
+
+lib_file="${script_dir}/../scripts/lib.sh"
+info "Source $lib_file"
+[ -e "$lib_file" ] && source "$lib_file" || true
+
+[ -d "${distro_config_dir}" ] || die "Not found configuration directory ${distro_config_dir}"
+
+if [ -z "$ROOTFS_DIR" ]; then
+     ROOTFS_DIR="${script_dir}/rootfs-${OS_NAME}"
+fi
+
+init="${ROOTFS_DIR}/sbin/init"
+
+if [ -e "${distro_config_dir}/${LIB_SH}" ];then
+    rootfs_lib="${distro_config_dir}/${LIB_SH}"
+    info "rootfs_lib.sh file found. Loading content"
+    source "${rootfs_lib}"
+fi
 
 CONFIG_DIR=${distro_config_dir}
 check_function_exist "build_rootfs"
@@ -206,6 +226,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--env EXTRA_PKGS="${EXTRA_PKGS}" \
 		-v "${script_dir}":"/osbuilder" \
 		-v "${ROOTFS_DIR}":"/rootfs" \
+		-v "${script_dir}/../scripts":"/scripts" \
 		-v "${kernel_mod_dir}":"${kernel_mod_dir}" \
 		-v "${GOPATH}":"${GOPATH}" \
 		${image_name} \
@@ -235,5 +256,5 @@ OK "Agent installed"
 [ "${AGENT_INIT}" == "yes" ] && setup_agent_init "${ROOTFS_DIR}/usr/bin/${AGENT_BIN}" "${init}"
 
 info "Check init is installed"
-[ -x "${init}" ] || [ -L ${init} ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
+[ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 OK "init is installed"

@@ -104,14 +104,6 @@ must be met:
 The `rootfs.sh` script will check for immediate sub-directories
 containing the following expected files:
 
-- A `bash(1)` script called `rootfs_lib.sh`
-
-  This file must contain a function called `build_rootfs()`, which must
-  receive the path to where the rootfs is created, as its first argument.
-
-  Path: `rootfs-builder/<distro>/rootfs_lib.sh`.
-
-
 - A `bash(1)` script called `config.sh`
 
   This represents the specific configuration for `<distro>`. It must
@@ -120,6 +112,16 @@ containing the following expected files:
   provide all the needed configuration to the function.
 
   Path: `rootfs-builder/<distro>/config.sh`.
+
+- (OPTIONAL) A `bash(1)` script called `rootfs_lib.sh`
+
+  This file must contain a function called `build_rootfs()`, which must
+  receive the path to where the rootfs is created, as its first argument.
+  Normally, this file is needed if a new distro with a special requirement
+  is needed. This function will override the `build_rootfs()` function in
+  `scripts/lib.sh`.
+
+  Path: `rootfs-builder/<distro>/rootfs_lib.sh`.
 
 ### Create template files
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2017 Intel Corporation
+# Copyright (c) 2018 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -10,37 +10,64 @@ check_program(){
 	type "$1" >/dev/null 2>&1
 }
 
+check_root()
+{
+	if [ "$(id -u)" != "0" ]; then
+		echo "Root is needed"
+		exit 1
+	fi
+}
+
 generate_dnf_config()
 {
+	REPO_NAME=${REPO_NAME:-"base"}
+	CACHE_DIR=${CACHE_DIR:-"/var/cache/dnf-${OS_NAME}"}
 	cat > "${DNF_CONF}" << EOF
 [main]
-cachedir=/var/cache/dnf/kata/
+cachedir=${CACHE_DIR}
+logfile=${LOG_FILE}
 keepcache=0
 debuglevel=2
-logfile=/var/log/dnf.log
 exactarch=1
 obsoletes=1
-gpgcheck=0
 plugins=0
 installonly_limit=3
-#Dont use the default dnf reposdir
-#this will prevent to use host repositories
 reposdir=/root/mash
 retries=5
-
-[kata]
-name=Fedora ${OS_VERSION} - \$basearch
-failovermethod=priority
-metalink=https://mirrors.fedoraproject.org/metalink?repo=fedora-${OS_VERSION}&arch=\$basearch
-enabled=1
-gpgcheck=0
 EOF
+	if [ "$BASE_URL" != "" ]; then
+            cat >> "${DNF_CONF}" << EOF
+
+[base]
+name=${OS_NAME}-${OS_VERSION} ${REPO_NAME}
+failovermethod=priority
+baseurl=${BASE_URL}
+enabled=1
+EOF
+	elif [ "$MIRROR_LIST" != "" ]; then
+	    cat >> "${DNF_CONF}" << EOF
+
+[base]
+name=${OS_NAME}-${OS_VERSION} ${REPO_NAME}
+mirrorlist=${MIRROR_LIST}
+enabled=1
+EOF
+	fi
+
+	if [ "$GPG_KEY_FILE" != "" ]; then
+            cat >> "${DNF_CONF}" << EOF
+gpgcheck=1
+gpgkey=file://${CONFIG_DIR}/${GPG_KEY_FILE}
+
+EOF
+	fi
+
 }
 
 build_rootfs()
 {
 	# Mandatory
-	local ROOTFS_DIR=$1
+	local ROOTFS_DIR="$1"
 
 	# In case of support EXTRA packages, use it to allow
 	# users add more packages to the base rootfs
@@ -53,7 +80,7 @@ build_rootfs()
 
 	check_root
 	if [ ! -f "${DNF_CONF}" ]; then
-		DNF_CONF="./kata-fedora-dnf.conf"
+		DNF_CONF="./kata-${OS_NAME}-dnf.conf"
 		generate_dnf_config
 	fi
 	mkdir -p "${ROOTFS_DIR}"
@@ -70,14 +97,5 @@ build_rootfs()
 	DNF="${PKG_MANAGER} --config=$DNF_CONF -y --installroot=${ROOTFS_DIR} --noplugins"
 	$DNF install ${EXTRA_PKGS} ${PACKAGES}
 
-	[ -n "${ROOTFS_DIR}" ]  && rm -r "${ROOTFS_DIR}/var/cache/dnf"
-}
-
-
-check_root()
-{
-	if [ "$(id -u)" != "0" ]; then
-		echo "Root is needed"
-		exit 1
-	fi
+	[ -n "${ROOTFS_DIR}" ]  && rm -r "${ROOTFS_DIR}${CACHE_DIR}"
 }

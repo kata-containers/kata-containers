@@ -1,15 +1,25 @@
-# This is a configuration file add extra variables to
-# be used by build_rootfs() from rootfs_lib.sh the variables will be
-# loaded just before call the function.
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
 
-# Here there are a couple of variables you may need.
-# Remove them or add more 
+OS_NAME="Centos"
 
-# Centos Version
 OS_VERSION=${OS_VERSION:-7}
 
-#Mandatory Packages that must be installed
-# iptables: Need by Kata agent
+LOG_FILE="/var/log/yum-centos.log"
+
+MIRROR_LIST="http://mirrorlist.centos.org/?release=${OS_VERSION}&arch=${ARCH}&repo=os&container=container"
+
+# Aditional Repos
+CENTOS_UPDATES_URL="http://mirrorlist.centos.org/?release=${OS_VERSION}&arch=${ARCH}&repo=updates&container=container"
+
+CENTOS_EXTRAS_URL="http://mirrorlist.centos.org/?release=${OS_VERSION}&arch=${ARCH}&repo=extras&container=container"
+
+CENTOS_PLUS_URL="http://mirrorlist.centos.org/?release=${OS_VERSION}&arch=${ARCH}&repo=centosplus&container=container"
+
+GPG_KEY_FILE="RPM-GPG-KEY-CentOS-7"
+
 PACKAGES="iptables"
 
 #Optional packages:
