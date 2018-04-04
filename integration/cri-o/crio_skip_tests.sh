@@ -9,7 +9,6 @@
 
 declare -a skipCRIOTests=(
 'test "ctr oom"'
-'test "ctr \/etc\/resolv.conf rw\/ro mode"'
 'test "ctr update resources"'
 'test "ctr resources"'
 );
