@@ -52,6 +52,10 @@ func TestSetNoProxyType(t *testing.T) {
 	testSetProxyType(t, "noProxy", NoProxyType)
 }
 
+func TestSetKataBuiltInProxyType(t *testing.T) {
+	testSetProxyType(t, "kataBuiltInProxy", KataBuiltInProxyType)
+}
+
 func TestSetUnknownProxyType(t *testing.T) {
 	var proxyType ProxyType
 
@@ -97,6 +101,11 @@ func TestStringFromNoopProxyType(t *testing.T) {
 	testStringFromProxyType(t, proxyType, "noopProxy")
 }
 
+func TestStringFromKataBuiltInProxyType(t *testing.T) {
+	proxyType := KataBuiltInProxyType
+	testStringFromProxyType(t, proxyType, "kataBuiltInProxy")
+}
+
 func TestStringFromUnknownProxyType(t *testing.T) {
 	var proxyType ProxyType
 	testStringFromProxyType(t, proxyType, "")
@@ -134,6 +143,12 @@ func TestNewProxyFromNoProxyType(t *testing.T) {
 func TestNewProxyFromNoopProxyType(t *testing.T) {
 	proxyType := NoopProxyType
 	expectedProxy := &noopProxy{}
+	testNewProxyFromProxyType(t, proxyType, expectedProxy)
+}
+
+func TestNewProxyFromKataBuiltInProxyType(t *testing.T) {
+	proxyType := KataBuiltInProxyType
+	expectedProxy := &kataBuiltInProxy{}
 	testNewProxyFromProxyType(t, proxyType, expectedProxy)
 }
 
