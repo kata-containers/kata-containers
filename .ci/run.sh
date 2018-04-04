@@ -66,11 +66,11 @@ export RUNTIME="kata-runtime"
 echo "INFO: Running checks"
 sudo -E PATH="$PATH" bash -c "make check"
 
-echo "INFO: Running unit tests"
+echo "INFO: Running functional and integration tests ($PWD)"
 sudo -E PATH="$PATH" bash -c "make test"
 
 echo "INFO: Checking log files"
 check_log_files
 
-echo "INFO: Running data collection script"
+echo "INFO: Checking data collection script"
 sudo -E PATH="$PATH" chronic kata-collect-data.sh
