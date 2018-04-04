@@ -6,6 +6,7 @@
 /cli/coverage.html
 /cli/config-generated.go
 /cli/config/configuration.toml
+/kata-netmon
 /virtcontainers/hack/virtc/virtc
 /virtcontainers/hook/mock/hook
 /virtcontainers/shim/mock/shim
