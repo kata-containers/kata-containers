@@ -432,6 +432,19 @@ func (c *Container) rollbackFailingContainerCreation() {
 	}
 }
 
+func (c *Container) checkBlockDeviceSupport() bool {
+	if !c.pod.config.HypervisorConfig.DisableBlockDeviceUse {
+		agentCaps := c.pod.agent.capabilities()
+		hypervisorCaps := c.pod.hypervisor.capabilities()
+
+		if agentCaps.isBlockDeviceSupported() && hypervisorCaps.isBlockDeviceHotplugSupported() {
+			return true
+		}
+	}
+
+	return false
+}
+
 // createContainer creates and start a container inside a Pod. It has to be
 // called only when a new container, not known by the pod, has to be created.
 func createContainer(pod *Pod, contConfig ContainerConfig) (c *Container, err error) {
@@ -456,8 +469,10 @@ func createContainer(pod *Pod, contConfig ContainerConfig) (c *Container, err er
 		}
 	}()
 
-	if err = c.hotplugDrive(); err != nil {
-		return
+	if c.checkBlockDeviceSupport() {
+		if err = c.hotplugDrive(); err != nil {
+			return
+		}
 	}
 
 	// Attach devices
@@ -683,15 +698,6 @@ func (c *Container) processList(options ProcessListOptions) (ProcessList, error)
 }
 
 func (c *Container) hotplugDrive() error {
-	agentCaps := c.pod.agent.capabilities()
-	hypervisorCaps := c.pod.hypervisor.capabilities()
-
-	if c.pod.config.HypervisorConfig.DisableBlockDeviceUse ||
-		!agentCaps.isBlockDeviceSupported() ||
-		!hypervisorCaps.isBlockDeviceHotplugSupported() {
-		return nil
-	}
-
 	dev, err := getDeviceForPath(c.rootFs)
 
 	if err == errMountPointNotFound {
