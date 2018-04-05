@@ -210,6 +210,12 @@ modify_docker_service(){
 	elif [ "$(ls -A $docker_service_dir)" ] && [ ${force} == true ]; then
 		rm -rf "${docker_service_dir}/*"
 	fi
+	echo "Stopping the docker service"
+	sudo systemctl stop docker
+	dir="/var/lib/docker"
+	echo "Removing $dir"
+	[ -d "$dir" ] && sudo rm -rf "$dir"
+	echo "Changing docker service configuration"
 	sudo mkdir -p "$docker_service_dir"
 	cat <<EOF | sudo tee "$docker_service_dir/kata-containers.conf"
 [Service]
