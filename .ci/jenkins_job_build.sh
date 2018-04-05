@@ -72,6 +72,11 @@ else
 	git fetch origin && git checkout master && git reset --hard origin/master
 fi
 
+# Make sure runc is default runtime.
+# This is needed in case a new image creation.
+# See https://github.com/clearcontainers/osbuilder/issues/8
+"${GOPATH}/src/${tests_repo}/cmd/container-manager/manage_ctr_mgr.sh" docker configure -r runc -f
+
 # Setup Kata Containers Environment
 #
 # - If the repo is "tests", this will call the script living in that repo
@@ -81,7 +86,10 @@ fi
 .ci/setup.sh
 
 # Run the static analysis tools
-.ci/static-checks.sh
+if [ -z "${METRICS_CI}" ]
+then
+	.ci/static-checks.sh
+fi
 
 if [ -n "$pr_number" ]
 then
@@ -93,18 +101,21 @@ then
 	git branch -D "$pr_branch"
 fi
 
-if [ "${kata_repo}" != "${tests_repo}" ]
+if [ -z "${METRICS_CI}" ]
 then
-	echo "INFO: Running unit tests for repo $kata_repo"
-	make test
+	if [ "${kata_repo}" != "${tests_repo}" ]
+	then
+		echo "INFO: Running unit tests for repo $kata_repo"
+		make test
+	fi
+
+	# Run integration tests
+	#
+	# Note: this will run all classes of tests for ${tests_repo}.
+	.ci/run.sh
+
+	# Code coverage
+	bash <(curl -s https://codecov.io/bash)
 fi
-
-# Run integration tests
-#
-# Note: this will run all classes of tests for ${tests_repo}.
-.ci/run.sh
-
-# Code coverage
-bash <(curl -s https://codecov.io/bash)
 
 popd
