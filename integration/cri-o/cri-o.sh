@@ -10,6 +10,7 @@ set -e
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../../.ci/lib.sh"
 source "${SCRIPT_PATH}/crio_skip_tests.sh"
+source /etc/os-release
 
 crio_repository="github.com/kubernetes-incubator/cri-o"
 crio_version=$(get_version "externals.crio.version")
@@ -44,6 +45,17 @@ done
 
 IFS=$OLD_IFS
 
+# By default run CRI-O tests using devicemapper
+MAJOR=$(echo "$VERSION_ID"|cut -d\. -f1)
 export STORAGE_OPTIONS="--storage-driver devicemapper --storage-opt dm.use_deferred_removal=false"
+
+# But if on ubuntu 17.10 or newer, test using overlay
+# This will allow us to run tests with at least 2 different
+# storage drivers.
+if [ "$ID" == "ubuntu" ] && [ "$MAJOR" -ge 17 ]; then
+	export CRIO_STORAGE_DRIVER_OPTS="--storage-driver overlay"
+fi
+
 ./test_runner.sh ctr.bats
+
 popd
