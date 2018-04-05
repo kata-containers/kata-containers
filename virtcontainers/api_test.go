@@ -1726,7 +1726,7 @@ func TestEnterContainerFailingContNotStarted(t *testing.T) {
 	cmd := newBasicTestCmd()
 
 	_, c, _, err = EnterContainer(p.ID(), contID, cmd)
-	if c != nil || err == nil {
+	if c == nil || err != nil {
 		t.Fatal()
 	}
 }
