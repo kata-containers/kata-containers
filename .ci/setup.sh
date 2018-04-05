@@ -58,6 +58,9 @@ bash -f ${cidir}/install_crio.sh
 echo "Install Kubernetes"
 bash -f ${cidir}/install_kubernetes.sh
 
+echo "Install Openshift"
+bash -f ${cidir}/install_openshift.sh
+
 echo "Drop caches"
 sync
 sudo -E PATH=$PATH bash -c "echo 3 > /proc/sys/vm/drop_caches"
