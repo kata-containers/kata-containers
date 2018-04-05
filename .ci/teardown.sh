@@ -35,6 +35,10 @@ kubelet_log_filename="kubelet.log"
 kubelet_log_path="${log_copy_dest}/${kubelet_log_filename}"
 kubelet_log_prefix="kubelet_"
 
+collect_script="kata-collect-data.sh"
+have_collect_script="no"
+[ -n "$(command -v $collect_script)" ] && have_collect_script="yes"
+
 # Copy log files if a destination path is provided, otherwise simply
 # display them.
 if [ "${log_copy_dest}" ]; then
@@ -46,7 +50,7 @@ if [ "${log_copy_dest}" ]; then
 	journalctl --no-pager -u docker > "${docker_log_path}"
 	journalctl --no-pager -u kubelet > "${kubelet_log_path}"
 
-	sudo kata-collect-data.sh > "${collect_data_log_path}"
+	[ "${have_collect_script}" = "yes" ] && sudo -E PATH="$PATH" $collect_script > "${collect_data_log_path}"
 
 	# Split them in 5 MiB subfiles to avoid too large files.
 	subfile_size=5242880
@@ -59,14 +63,17 @@ if [ "${log_copy_dest}" ]; then
 	split -b "${subfile_size}" -d "${kubelet_log_path}" "${kubelet_log_prefix}"
 	split -b "${subfile_size}" -d "${collect_data_log_path}" "${collect_data_log_prefix}"
 
-	for prefix in \
-		"${kata_runtime_log_prefix}" \
-		"${proxy_log_prefix}" \
-		"${shim_log_prefix}" \
-		"${crio_log_prefix}" \
-		"${docker_log_prefix}" \
-		"${kubelet_log_prefix}" \
-		"${collect_data_log_prefix}"
+	prefixes=""
+	prefixes+=" ${kata_runtime_log_prefix}"
+	prefixes+=" ${proxy_log_prefix}"
+	prefixes+=" ${shim_log_prefix}"
+	prefixes+=" ${crio_log_prefix}"
+	prefixes+=" ${docker_log_prefix}"
+	prefixes+=" ${kubelet_log_prefix}"
+
+	 [ "${have_collect_script}" = "yes" ] && prefixes+=" ${collect_data_log_prefix}"
+
+	for prefix in $prefixes
 	do
 		gzip -9 "$prefix"*
 	done
@@ -91,6 +98,9 @@ else
 	echo "Kubelet Log:"
 	journalctl --no-pager -u kubelet
 
-	echo "Kata Collect Data script output"
-	sudo kata-collect-data.sh
+	if [ "${have_collect_script}" = "yes" ]
+	then
+		echo "Kata Collect Data script output"
+		sudo -E PATH="$PATH" $collect_script
+	fi
 fi

@@ -61,6 +61,23 @@ check_log_files()
 	[ $ret -eq 0 ] && true || false
 }
 
+check_collect_script()
+{
+	local cmd="kata-collect-data.sh"
+	local cmdpath=$(command -v "$cmd" || true)
+
+	local msg="Kata data collection script"
+
+	if [ -z "$cmdpath" ]
+	then
+		echo "INFO: $msg not found"
+		return
+	fi
+
+	echo "INFO: Checking $msg"
+	sudo -E PATH="$PATH" chronic $cmd
+}
+
 export RUNTIME="kata-runtime"
 
 echo "INFO: Running checks"
@@ -72,5 +89,4 @@ sudo -E PATH="$PATH" bash -c "make test"
 echo "INFO: Checking log files"
 check_log_files
 
-echo "INFO: Checking data collection script"
-sudo -E PATH="$PATH" chronic kata-collect-data.sh
+check_collect_script
