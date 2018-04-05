@@ -224,7 +224,7 @@ Environment="$docker_https_proxy"
 ExecStart=
 ExecStart=/usr/bin/dockerd ${docker_options}
 EOF
-	echo "Restart docker service"
+	echo "Reloading unit files and starting docker service"
 	sudo systemctl daemon-reload
 	sudo systemctl restart docker
 }
