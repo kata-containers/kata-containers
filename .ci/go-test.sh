@@ -102,9 +102,14 @@ test_coverage()
 	fi
 
 	echo "INFO: Currently running as user '$(id -un)'"
-
 	for pkg in $test_packages; do
 		for user in $users; do
+			# Run virtcontainers tests only if user is root.
+			if [[ "$user" != "root" ]] && [[ "$pkg" = *"virtcontainers"* ]]; then
+				echo "Skip testing $pkg with user $user"
+				continue
+			fi
+
 			printf "INFO: Running 'go test' as %s user on package '%s' with flags '%s'\n" \
 				"$user" "$pkg" "$go_test_flags"
 
