@@ -112,6 +112,12 @@ install_docker(){
 			sudo -E dnf makecache
 			docker_version_full=$(dnf --showduplicate list "$pkg_name" | grep "$docker_version" | awk '{print $2}' | tail -1)
 			sudo -E dnf -y install "${pkg_name}-${docker_version_full}"
+		elif [ "$ID" == "centos" ]; then
+			sudo -E yum install -y yum-utils
+			repo_url="https://download.docker.com/linux/centos/docker-ce.repo"
+			sudo yum-config-manager --add-repo "$repo_url"
+			sudo -E yum -y install docker-ce
+			sudo -E yum update
 		fi
 	elif [ "$tag" == "swarm" ]; then
 		# If tag is swarm, install docker 1.12.1
@@ -245,7 +251,7 @@ configure_docker(){
 		if [ "$runtime" == "kata-runtime" ]  ; then
 			# Try to find kata-runtime in $PATH, if it is not present
 			# then the default location will be /usr/local/bin/kata-runtime
-			if [ "$ID" == "fedora" ]; then
+			if [ "$ID" == "fedora" ] || [ "$ID" == "centos" ]; then
 				kata_runtime_bin="$(whereis $runtime | cut -f2 -d':' | tr -d "[:space:]")" || \
 					die "$runtime cannot be found in $PATH, please make sure it is installed"
 			else
