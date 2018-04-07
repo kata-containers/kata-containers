@@ -137,6 +137,8 @@ $ go get -d -u github.com/kata-containers/osbuilder
 ## Create a rootfs image
 ### Create a local rootfs
 ```
+$ export ROOTFS_DIR=${GOPATH}/src/github.com/kata-containers/osbuilder/rootfs-builder/rootfs
+$ rm -rf ${ROOTFS_DIR}
 $ cd $GOPATH/src/github.com/kata-containers/osbuilder/rootfs-builder
 $ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true ./rootfs.sh ${distro}'
 ```
@@ -155,16 +157,16 @@ You MUST choose one of `alpine`, `centos`, `clearlinux`, `euleros`, and `fedora`
 > - You only do this step if you test with the latest version of the agent.
 
 ```
-$ sudo install -o root -g root -m 0550 -t rootfs/bin ../../agent/kata-agent
-$ sudo install -o root -g root -m 0440 ../../agent/kata-agent.service rootfs/usr/lib/systemd/system/
-$ sudo install -o root -g root -m 0440 ../../agent/kata-containers.target rootfs/usr/lib/systemd/system/
+$ sudo install -o root -g root -m 0550 -t ${ROOTFS_DIR}/bin ../../agent/kata-agent
+$ sudo install -o root -g root -m 0440 ../../agent/kata-agent.service ${ROOTFS_DIR}/usr/lib/systemd/system/
+$ sudo install -o root -g root -m 0440 ../../agent/kata-containers.target ${ROOTFS_DIR}/usr/lib/systemd/system/
 ```
 
 ### Build a rootfs image
 
 ```
 $ cd $GOPATH/src/github.com/kata-containers/osbuilder/image-builder
-$ script -fec 'sudo -E USE_DOCKER=true ./image_builder.sh ../rootfs-builder/rootfs'
+$ script -fec 'sudo -E USE_DOCKER=true ./image_builder.sh ${ROOTFS_DIR}'
 ```
 
 > **Notes:**
