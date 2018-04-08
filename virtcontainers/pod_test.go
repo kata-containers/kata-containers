@@ -86,6 +86,7 @@ func TestCreateEmtpyPod(t *testing.T) {
 	if err == nil {
 		t.Fatalf("VirtContainers should not allow empty pods")
 	}
+	defer cleanUp()
 }
 
 func TestCreateEmtpyHypervisorPod(t *testing.T) {
@@ -93,6 +94,7 @@ func TestCreateEmtpyHypervisorPod(t *testing.T) {
 	if err == nil {
 		t.Fatalf("VirtContainers should not allow pods with empty hypervisors")
 	}
+	defer cleanUp()
 }
 
 func TestCreateMockPod(t *testing.T) {
@@ -102,6 +104,7 @@ func TestCreateMockPod(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer cleanUp()
 }
 
 func TestCreatePodEmtpyID(t *testing.T) {
@@ -111,6 +114,7 @@ func TestCreatePodEmtpyID(t *testing.T) {
 	if err == nil {
 		t.Fatalf("Expected pod with empty ID to fail, but got pod %v", p)
 	}
+	defer cleanUp()
 }
 
 func testPodStateTransition(t *testing.T, state stateString, newState stateString) error {
@@ -120,6 +124,7 @@ func testPodStateTransition(t *testing.T, state stateString, newState stateStrin
 	if err != nil {
 		return err
 	}
+	defer cleanUp()
 
 	p.state = State{
 		State: state,
@@ -537,6 +542,7 @@ func TestPodSetPodAndContainerState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer cleanUp()
 
 	l := len(p.GetAllContainers())
 	if l != 1 {
@@ -896,6 +902,7 @@ func TestPodGetContainer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer cleanUp()
 
 	contID := "999"
 	contConfig := newTestContainerConfigNoop(contID)
@@ -941,6 +948,7 @@ func TestContainerSetStateBlockIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer cleanUp()
 
 	fs := &filesystem{}
 	pod.storage = fs
@@ -1039,6 +1047,7 @@ func TestContainerStateSetFstype(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer cleanUp()
 
 	fs := &filesystem{}
 	pod.storage = fs
