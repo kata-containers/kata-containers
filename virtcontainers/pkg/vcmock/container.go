@@ -30,6 +30,10 @@ func (c *Container) Pod() vc.VCPod {
 
 // Process implements the VCContainer function of the same name.
 func (c *Container) Process() vc.Process {
+	// always return a mockprocess with a non-zero Pid
+	if c.MockProcess.Pid == 0 {
+		c.MockProcess.Pid = 1000
+	}
 	return c.MockProcess
 }
 
