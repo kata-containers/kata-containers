@@ -210,6 +210,12 @@ func TestContainerAddDriveDir(t *testing.T) {
 		id:         testPodID,
 		storage:    fs,
 		hypervisor: &mockHypervisor{},
+		agent:      &noopAgent{},
+		config: &PodConfig{
+			HypervisorConfig: HypervisorConfig{
+				DisableBlockDeviceUse: false,
+			},
+		},
 	}
 
 	contID := "100"
@@ -258,7 +264,6 @@ func TestContainerAddDriveDir(t *testing.T) {
 	if container.state.Fstype == "" || !container.state.HotpluggedDrive {
 		t.Fatal()
 	}
-
 }
 
 func TestCheckPodRunningEmptyCmdFailure(t *testing.T) {
@@ -307,7 +312,10 @@ func TestContainerAddResources(t *testing.T) {
 		CPUQuota:  5000,
 		CPUPeriod: 1000,
 	}
-	c.pod = &Pod{hypervisor: &mockHypervisor{}}
+	c.pod = &Pod{
+		hypervisor: &mockHypervisor{},
+		agent:      &noopAgent{},
+	}
 	err = c.addResources()
 	assert.Nil(err)
 }
