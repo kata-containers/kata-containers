@@ -15,13 +15,12 @@ source "${cidir}/lib.sh"
 centos_version=$(grep VERSION_ID /etc/os-release | cut -d '"' -f2)
 
 # Check EPEL repository is enabled on CentOS
-yum -v repolist | grep epel
-if [ $? -ne 0 ]; then
+if [ -z $(yum repolist | grep "Extra Packages") ]; then
 	echo >&2 "ERROR: EPEL repository is not enabled on CentOS."
 	# Enable EPEL repository on CentOS
 	sudo -E yum install -y wget rpm
 	wget https://dl.fedoraproject.org/pub/epel/epel-release-latest-${centos_version}.noarch.rpm
-	rpm -ivh epel-release-latest-${centos_version}.noarch.rpm
+	sudo -E rpm -ivh epel-release-latest-${centos_version}.noarch.rpm
 fi
 
 echo "Update repositories"
@@ -31,7 +30,8 @@ echo "Install chronic"
 sudo -E yum install -y moreutils
 
 echo "Install kata containers dependencies"
-chronic sudo -E yum install -y libtool libtool-ltdl-devel libtool-ltdl bzip2 m4 gettext-devel automake alien autoconf bc pixman-devel coreutils
+chronic sudo -E yum install -y libtool libtool-ltdl-devel device-mapper-persistent-data lvm2 device-mapper-devel libtool-ltdl bzip2 m4 \
+	 gettext-devel automake alien autoconf bc pixman-devel coreutils
 
 if ! command -v docker > /dev/null; then
         "${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker install
@@ -44,7 +44,8 @@ echo "Install kata-containers image"
 "${cidir}/install_kata_image.sh"
 
 echo "Install CRI-O dependencies for CentOS"
-chronic sudo -E yum install -y glibc-static libglib2.0-devel libseccomp-devel libassuan-devel libgpg-error-devel go-md2man device-mapper-libs btrfs-progs-devel util-linux gpgme-devel
+chronic sudo -E yum install -y glibc-static libglib2.0-devel libseccomp-devel libassuan-devel libgpg-error-devel go-md2man device-mapper-libs \
+	 btrfs-progs-devel util-linux gpgme-devel
 
 echo "Install bison binary"
 chronic sudo -E yum install -y bison
