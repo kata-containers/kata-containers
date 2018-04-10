@@ -40,6 +40,9 @@ const (
 
 	// KataShimType is the Kata Containers shim type.
 	KataShimType ShimType = "kataShim"
+
+	// KataBuiltInShimType is the Kata Containers builtin shim type.
+	KataBuiltInShimType ShimType = "kataBuiltInShim"
 )
 
 var waitForShimTimeout = 10.0
@@ -71,16 +74,16 @@ func (pType *ShimType) Set(value string) error {
 	switch value {
 	case "noopShim":
 		*pType = NoopShimType
-		return nil
 	case "ccShim":
 		*pType = CCShimType
-		return nil
 	case "kataShim":
 		*pType = KataShimType
-		return nil
+	case "kataBuiltInShim":
+		*pType = KataBuiltInShimType
 	default:
 		return fmt.Errorf("Unknown shim type %s", value)
 	}
+	return nil
 }
 
 // String converts a shim type to a string.
@@ -92,6 +95,8 @@ func (pType *ShimType) String() string {
 		return string(CCShimType)
 	case KataShimType:
 		return string(KataShimType)
+	case KataBuiltInShimType:
+		return string(KataBuiltInShimType)
 	default:
 		return ""
 	}
@@ -106,6 +111,8 @@ func newShim(pType ShimType) (shim, error) {
 		return &ccShim{}, nil
 	case KataShimType:
 		return &kataShim{}, nil
+	case KataBuiltInShimType:
+		return &kataBuiltInShim{}, nil
 	default:
 		return &noopShim{}, nil
 	}
@@ -114,7 +121,7 @@ func newShim(pType ShimType) (shim, error) {
 // newShimConfig returns a shim config from a generic PodConfig interface.
 func newShimConfig(config PodConfig) interface{} {
 	switch config.ShimType {
-	case NoopShimType:
+	case NoopShimType, KataBuiltInShimType:
 		return nil
 	case CCShimType, KataShimType:
 		var shimConfig ShimConfig
@@ -147,6 +154,10 @@ func signalShim(pid int, sig syscall.Signal) error {
 }
 
 func stopShim(pid int) error {
+	if pid <= 0 {
+		return nil
+	}
+
 	if err := signalShim(pid, syscall.SIGKILL); err != nil && err != syscall.ESRCH {
 		return err
 	}
@@ -233,6 +244,10 @@ func startShim(args []string, params ShimParams) (int, error) {
 }
 
 func isShimRunning(pid int) (bool, error) {
+	if pid <= 0 {
+		return false, nil
+	}
+
 	process, err := os.FindProcess(pid)
 	if err != nil {
 		return false, err

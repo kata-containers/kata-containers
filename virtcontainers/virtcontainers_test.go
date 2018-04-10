@@ -55,6 +55,7 @@ var testHyperstartTtySocket = ""
 // cleanUp Removes any stale pod/container state that can affect
 // the next test to run.
 func cleanUp() {
+	globalPodList.removePod(testPodID)
 	for _, dir := range []string{testDir, defaultSharedDir} {
 		os.RemoveAll(dir)
 		os.MkdirAll(dir, dirMode)

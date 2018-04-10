@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/yamux"
 	"github.com/mdlayher/vsock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -25,8 +26,9 @@ import (
 const (
 	unixSocketScheme  = "unix"
 	vsockSocketScheme = "vsock"
-	dialTimeout       = 5 * time.Second
 )
+
+var defaultDialTimeout = 5 * time.Second
 
 // AgentClient is an agent gRPC client connection wrapper for agentgrpc.AgentServiceClient
 type AgentClient struct {
@@ -43,15 +45,15 @@ type dialer func(string, time.Duration) (net.Conn, error)
 //   - unix://<unix socket path>
 //   - vsock://<cid>:<port>
 //   - <unix socket path>
-func NewAgentClient(sock string) (*AgentClient, error) {
+func NewAgentClient(sock string, enableYamux bool) (*AgentClient, error) {
 	grpcAddr, parsedAddr, err := parse(sock)
 	if err != nil {
 		return nil, err
 	}
 	dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
-	dialOpts = append(dialOpts, grpc.WithDialer(agentDialer(parsedAddr)))
+	dialOpts = append(dialOpts, grpc.WithDialer(agentDialer(parsedAddr, enableYamux)))
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
+	ctx, cancel := context.WithTimeout(ctx, defaultDialTimeout)
 	defer cancel()
 	conn, err := grpc.DialContext(ctx, grpcAddr, dialOpts...)
 	if err != nil {
@@ -117,14 +119,46 @@ func parse(sock string) (string, *url.URL, error) {
 	return grpcAddr, addr, nil
 }
 
-func agentDialer(addr *url.URL) dialer {
+func agentDialer(addr *url.URL, enableYamux bool) dialer {
+	var d dialer
 	switch addr.Scheme {
 	case vsockSocketScheme:
-		return vsockDialer
+		d = vsockDialer
 	case unixSocketScheme:
 		fallthrough
 	default:
-		return unixDialer
+		d = unixDialer
+	}
+
+	if !enableYamux {
+		return d
+	}
+
+	// yamux dialer
+	return func(sock string, timeout time.Duration) (net.Conn, error) {
+		conn, err := d(sock, timeout)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			if err != nil {
+				conn.Close()
+			}
+		}()
+
+		var session *yamux.Session
+		session, err = yamux.Client(conn, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		var stream net.Conn
+		stream, err = session.Open()
+		if err != nil {
+			return nil, err
+		}
+
+		return stream, nil
 	}
 }
 

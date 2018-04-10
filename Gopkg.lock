@@ -78,6 +78,11 @@
   version = "v1.0.0"
 
 [[projects]]
+  name = "github.com/hashicorp/yamux"
+  packages = ["."]
+  revision = "f5742cb6b85602e7fa834e9d5d91a7d7fa850824"
+
+[[projects]]
   name = "github.com/intel/govmm"
   packages = ["qemu"]
   revision = "1509acf1862ae5154c5c096f9318bd3eb434d816"
@@ -88,7 +93,7 @@
     "protocols/client",
     "protocols/grpc"
   ]
-  revision = "a93071539feee29bfa22b6184380d3fd7c156ef7"
+  revision = "c8199f60759a1d52932df37a1af710cdeada8c81"
 
 [[projects]]
   name = "github.com/kubernetes-incubator/cri-o"
@@ -244,6 +249,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "f7c3a1b7f5cb5f891a3badcb7323f3b5fc0fa79f69dd6532ec2e2be2baafaf98"
+  inputs-digest = "2df221b473722077f7961415583a1e35c1e221f1ea2e2dbb8e98858cf42417b4"
   solver-name = "gps-cdcl"
   solver-version = 1

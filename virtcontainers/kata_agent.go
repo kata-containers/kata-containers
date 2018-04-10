@@ -73,8 +73,9 @@ func (s *kataVSOCK) String() string {
 // KataAgentState is the structure describing the data stored from this
 // agent implementation.
 type KataAgentState struct {
-	ProxyPid int
-	URL      string
+	ProxyPid     int
+	ProxyBuiltIn bool
+	URL          string
 }
 
 type kataAgent struct {
@@ -417,6 +418,7 @@ func (k *kataAgent) startPod(pod Pod) error {
 
 	proxyParams := proxyParams{
 		agentURL: agentURL,
+		logger:   k.Logger().WithField("pod-id", pod.id),
 	}
 
 	// Start the proxy here
@@ -427,12 +429,17 @@ func (k *kataAgent) startPod(pod Pod) error {
 
 	// Fill agent state with proxy information, and store them.
 	k.state.ProxyPid = pid
+	k.state.ProxyBuiltIn = isProxyBuiltIn(pod.config.ProxyType)
 	k.state.URL = uri
 	if err := pod.storage.storeAgentState(pod.id, k.state); err != nil {
 		return err
 	}
 
-	k.Logger().WithField("proxy-pid", pid).Info("proxy started")
+	k.Logger().WithFields(logrus.Fields{
+		"pod-id":    pod.id,
+		"proxy-pid": pid,
+		"proxy-url": uri,
+	}).Info("proxy started")
 
 	hostname := pod.config.Hostname
 	if len(hostname) > maxHostnameLen {
@@ -805,7 +812,7 @@ func (k *kataAgent) connect() error {
 		return nil
 	}
 
-	client, err := kataclient.NewAgentClient(k.state.URL)
+	client, err := kataclient.NewAgentClient(k.state.URL, k.state.ProxyBuiltIn)
 	if err != nil {
 		return err
 	}

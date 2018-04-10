@@ -60,7 +60,7 @@
 
 [[constraint]]
   name = "github.com/kata-containers/agent"
-  revision = "a93071539feee29bfa22b6184380d3fd7c156ef7"
+  revision = "c8199f60759a1d52932df37a1af710cdeada8c81"
 
 [[constraint]]
   name = "github.com/containerd/cri-containerd"
@@ -74,3 +74,7 @@
   non-go = true
   go-tests = true
   unused-packages = true
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/hashicorp/yamux"

@@ -1029,6 +1029,7 @@ func TestStatusPodFailingFetchPodConfig(t *testing.T) {
 
 	path := filepath.Join(configStoragePath, p.ID())
 	os.RemoveAll(path)
+	globalPodList.removePod(p.ID())
 
 	_, err = StatusPod(p.ID())
 	if err == nil {
@@ -1050,6 +1051,7 @@ func TestStatusPodPodFailingFetchPodState(t *testing.T) {
 	assert.True(t, ok)
 
 	os.RemoveAll(pImpl.configPath)
+	globalPodList.removePod(p.ID())
 
 	_, err = StatusPod(p.ID())
 	if err == nil {
@@ -1932,6 +1934,7 @@ func TestStatusContainerFailing(t *testing.T) {
 	assert.True(t, ok)
 
 	os.RemoveAll(pImpl.configPath)
+	globalPodList.removePod(p.ID())
 
 	_, err = StatusContainer(p.ID(), contID)
 	if err == nil {
