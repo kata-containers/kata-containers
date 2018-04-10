@@ -89,6 +89,11 @@ func TestStringFromNoopShimType(t *testing.T) {
 	testStringFromShimType(t, shimType, "noopShim")
 }
 
+func TestStringFromKataBuiltInShimType(t *testing.T) {
+	shimType := KataBuiltInShimType
+	testStringFromShimType(t, shimType, "kataBuiltInShim")
+}
+
 func TestStringFromUnknownShimType(t *testing.T) {
 	var shimType ShimType
 	testStringFromShimType(t, shimType, "")
@@ -120,6 +125,12 @@ func TestNewShimFromKataShimType(t *testing.T) {
 func TestNewShimFromNoopShimType(t *testing.T) {
 	shimType := NoopShimType
 	expectedShim := &noopShim{}
+	testNewShimFromShimType(t, shimType, expectedShim)
+}
+
+func TestNewShimFromKataBuiltInShimType(t *testing.T) {
+	shimType := KataBuiltInShimType
+	expectedShim := &kataBuiltInShim{}
 	testNewShimFromShimType(t, shimType, expectedShim)
 }
 
@@ -165,6 +176,14 @@ func TestNewShimConfigFromKataShimPodConfig(t *testing.T) {
 func TestNewShimConfigFromNoopShimPodConfig(t *testing.T) {
 	podConfig := PodConfig{
 		ShimType: NoopShimType,
+	}
+
+	testNewShimConfigFromPodConfig(t, podConfig, nil)
+}
+
+func TestNewShimConfigFromKataBuiltInShimPodConfig(t *testing.T) {
+	podConfig := PodConfig{
+		ShimType: KataBuiltInShimType,
 	}
 
 	testNewShimConfigFromPodConfig(t, podConfig, nil)
