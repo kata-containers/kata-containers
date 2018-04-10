@@ -16,6 +16,11 @@ crio_repository="github.com/kubernetes-incubator/cri-o"
 crio_version=$(get_version "externals.crio.version")
 check_crio_repository="$GOPATH/src/${crio_repository}"
 
+if [ "$ID" == "centos" ]; then
+	echo "Skip - CRI-O tests are not supported yet (Issue: https://github.com/kata-containers/tests/issues/227)"
+	exit
+fi
+
 if [ -d ${check_crio_repository} ]; then
 	pushd ${check_crio_repository}
 	check_version=$(git log -1 | grep "${crio_version}")
