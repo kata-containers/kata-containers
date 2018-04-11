@@ -115,8 +115,8 @@ func (a *asset) hash(hashType string) (string, error) {
 	return hash, nil
 }
 
-// newAsset returns a new asset from the pod annotations.
-func newAsset(podConfig *PodConfig, t assetType) (*asset, error) {
+// newAsset returns a new asset from the sandbox annotations.
+func newAsset(sandboxConfig *SandboxConfig, t assetType) (*asset, error) {
 	pathAnnotation, hashAnnotation, err := t.annotations()
 	if err != nil {
 		return nil, err
@@ -126,7 +126,7 @@ func newAsset(podConfig *PodConfig, t assetType) (*asset, error) {
 		return nil, fmt.Errorf("Missing annotation paths for %s", t)
 	}
 
-	path, ok := podConfig.Annotations[pathAnnotation]
+	path, ok := sandboxConfig.Annotations[pathAnnotation]
 	if !ok || path == "" {
 		return nil, nil
 	}
@@ -137,13 +137,13 @@ func newAsset(podConfig *PodConfig, t assetType) (*asset, error) {
 
 	a := &asset{path: path, kind: t}
 
-	hash, ok := podConfig.Annotations[hashAnnotation]
+	hash, ok := sandboxConfig.Annotations[hashAnnotation]
 	if !ok || hash == "" {
 		return a, nil
 	}
 
 	// We have a hash annotation, we need to verify the asset against it.
-	hashType, ok := podConfig.Annotations[annotations.AssetHashType]
+	hashType, ok := sandboxConfig.Annotations[annotations.AssetHashType]
 	if !ok {
 		virtLog.Warningf("Unrecognized hash type: %s, switching to %s", hashType, annotations.SHA512)
 		hashType = annotations.SHA512

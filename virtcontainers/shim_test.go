@@ -143,60 +143,60 @@ func TestNewShimFromUnknownShimType(t *testing.T) {
 	}
 }
 
-func testNewShimConfigFromPodConfig(t *testing.T, podConfig PodConfig, expected interface{}) {
-	result := newShimConfig(podConfig)
+func testNewShimConfigFromSandboxConfig(t *testing.T, sandboxConfig SandboxConfig, expected interface{}) {
+	result := newShimConfig(sandboxConfig)
 
 	if reflect.DeepEqual(result, expected) == false {
 		t.Fatalf("Got %+v\nExpecting %+v", result, expected)
 	}
 }
 
-func TestNewShimConfigFromCCShimPodConfig(t *testing.T) {
+func TestNewShimConfigFromCCShimSandboxConfig(t *testing.T) {
 	shimConfig := ShimConfig{}
 
-	podConfig := PodConfig{
+	sandboxConfig := SandboxConfig{
 		ShimType:   CCShimType,
 		ShimConfig: shimConfig,
 	}
 
-	testNewShimConfigFromPodConfig(t, podConfig, shimConfig)
+	testNewShimConfigFromSandboxConfig(t, sandboxConfig, shimConfig)
 }
 
-func TestNewShimConfigFromKataShimPodConfig(t *testing.T) {
+func TestNewShimConfigFromKataShimSandboxConfig(t *testing.T) {
 	shimConfig := ShimConfig{}
 
-	podConfig := PodConfig{
+	sandboxConfig := SandboxConfig{
 		ShimType:   KataShimType,
 		ShimConfig: shimConfig,
 	}
 
-	testNewShimConfigFromPodConfig(t, podConfig, shimConfig)
+	testNewShimConfigFromSandboxConfig(t, sandboxConfig, shimConfig)
 }
 
-func TestNewShimConfigFromNoopShimPodConfig(t *testing.T) {
-	podConfig := PodConfig{
+func TestNewShimConfigFromNoopShimSandboxConfig(t *testing.T) {
+	sandboxConfig := SandboxConfig{
 		ShimType: NoopShimType,
 	}
 
-	testNewShimConfigFromPodConfig(t, podConfig, nil)
+	testNewShimConfigFromSandboxConfig(t, sandboxConfig, nil)
 }
 
-func TestNewShimConfigFromKataBuiltInShimPodConfig(t *testing.T) {
-	podConfig := PodConfig{
+func TestNewShimConfigFromKataBuiltInShimSandboxConfig(t *testing.T) {
+	sandboxConfig := SandboxConfig{
 		ShimType: KataBuiltInShimType,
 	}
 
-	testNewShimConfigFromPodConfig(t, podConfig, nil)
+	testNewShimConfigFromSandboxConfig(t, sandboxConfig, nil)
 }
 
-func TestNewShimConfigFromUnknownShimPodConfig(t *testing.T) {
+func TestNewShimConfigFromUnknownShimSandboxConfig(t *testing.T) {
 	var shimType ShimType
 
-	podConfig := PodConfig{
+	sandboxConfig := SandboxConfig{
 		ShimType: shimType,
 	}
 
-	testNewShimConfigFromPodConfig(t, podConfig, nil)
+	testNewShimConfigFromSandboxConfig(t, sandboxConfig, nil)
 }
 
 func testRunSleep0AndGetPid(t *testing.T) int {

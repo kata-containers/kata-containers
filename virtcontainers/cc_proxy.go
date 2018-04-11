@@ -24,14 +24,14 @@ type ccProxy struct {
 }
 
 // start is the proxy start implementation for ccProxy.
-func (p *ccProxy) start(pod Pod, params proxyParams) (int, string, error) {
-	config, err := newProxyConfig(pod.config)
+func (p *ccProxy) start(sandbox Sandbox, params proxyParams) (int, string, error) {
+	config, err := newProxyConfig(sandbox.config)
 	if err != nil {
 		return -1, "", err
 	}
 
 	// construct the socket path the proxy instance will use
-	proxyURL, err := defaultProxyURL(pod, SocketTypeUNIX)
+	proxyURL, err := defaultProxyURL(sandbox, SocketTypeUNIX)
 	if err != nil {
 		return -1, "", err
 	}
@@ -49,6 +49,6 @@ func (p *ccProxy) start(pod Pod, params proxyParams) (int, string, error) {
 	return cmd.Process.Pid, proxyURL, nil
 }
 
-func (p *ccProxy) stop(pod Pod, pid int) error {
+func (p *ccProxy) stop(sandbox Sandbox, pid int) error {
 	return nil
 }

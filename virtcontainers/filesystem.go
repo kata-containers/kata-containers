@@ -26,32 +26,32 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// podResource is an int representing a pod resource type.
+// sandboxResource is an int representing a sandbox resource type.
 //
-// Note that some are specific to the pod itself and others can apply to
-// pods and containers.
-type podResource int
+// Note that some are specific to the sandbox itself and others can apply to
+// sandboxes and containers.
+type sandboxResource int
 
 const (
 	// configFileType represents a configuration file type
-	configFileType podResource = iota
+	configFileType sandboxResource = iota
 
 	// stateFileType represents a state file type
 	stateFileType
 
-	// networkFileType represents a network file type (pod only)
+	// networkFileType represents a network file type (sandbox only)
 	networkFileType
 
-	// hypervisorFileType represents a hypervisor file type (pod only)
+	// hypervisorFileType represents a hypervisor file type (sandbox only)
 	hypervisorFileType
 
-	// agentFileType represents an agent file type (pod only)
+	// agentFileType represents an agent file type (sandbox only)
 	agentFileType
 
 	// processFileType represents a process file type
 	processFileType
 
-	// lockFileType represents a lock file type (pod only)
+	// lockFileType represents a lock file type (sandbox only)
 	lockFileType
 
 	// mountsFileType represents a mount file type
@@ -61,13 +61,13 @@ const (
 	devicesFileType
 )
 
-// configFile is the file name used for every JSON pod configuration.
+// configFile is the file name used for every JSON sandbox configuration.
 const configFile = "config.json"
 
-// stateFile is the file name storing a pod state.
+// stateFile is the file name storing a sandbox state.
 const stateFile = "state.json"
 
-// networkFile is the file name storing a pod network.
+// networkFile is the file name storing a sandbox network.
 const networkFile = "network.json"
 
 // hypervisorFile is the file name storing a hypervisor's state.
@@ -79,7 +79,7 @@ const agentFile = "agent.json"
 // processFile is the file name storing a container process.
 const processFile = "process.json"
 
-// lockFile is the file name locking the usage of a pod.
+// lockFile is the file name locking the usage of a sandbox.
 const lockFileName = "lock"
 
 const mountsFile = "mounts.json"
@@ -91,55 +91,55 @@ const devicesFile = "devices.json"
 const dirMode = os.FileMode(0750) | os.ModeDir
 
 // storagePathSuffix is the suffix used for all storage paths
-const storagePathSuffix = "/virtcontainers/pods"
+const storagePathSuffix = "/virtcontainers/sandboxes"
 
-// configStoragePath is the pod configuration directory.
-// It will contain one config.json file for each created pod.
+// configStoragePath is the sandbox configuration directory.
+// It will contain one config.json file for each created sandbox.
 var configStoragePath = filepath.Join("/var/lib", storagePathSuffix)
 
-// runStoragePath is the pod runtime directory.
-// It will contain one state.json and one lock file for each created pod.
+// runStoragePath is the sandbox runtime directory.
+// It will contain one state.json and one lock file for each created sandbox.
 var runStoragePath = filepath.Join("/run", storagePathSuffix)
 
 // resourceStorage is the virtcontainers resources (configuration, state, etc...)
 // storage interface.
 // The default resource storage implementation is filesystem.
 type resourceStorage interface {
-	// Create all resources for a pod
-	createAllResources(pod Pod) error
+	// Create all resources for a sandbox
+	createAllResources(sandbox Sandbox) error
 
 	// Resources URIs functions return both the URI
 	// for the actual resource and the URI base.
-	containerURI(podID, containerID string, resource podResource) (string, string, error)
-	podURI(podID string, resource podResource) (string, string, error)
+	containerURI(sandboxID, containerID string, resource sandboxResource) (string, string, error)
+	sandboxURI(sandboxID string, resource sandboxResource) (string, string, error)
 
-	// Pod resources
-	storePodResource(podID string, resource podResource, data interface{}) error
-	deletePodResources(podID string, resources []podResource) error
-	fetchPodConfig(podID string) (PodConfig, error)
-	fetchPodState(podID string) (State, error)
-	fetchPodNetwork(podID string) (NetworkNamespace, error)
-	storePodNetwork(podID string, networkNS NetworkNamespace) error
+	// Sandbox resources
+	storeSandboxResource(sandboxID string, resource sandboxResource, data interface{}) error
+	deleteSandboxResources(sandboxID string, resources []sandboxResource) error
+	fetchSandboxConfig(sandboxID string) (SandboxConfig, error)
+	fetchSandboxState(sandboxID string) (State, error)
+	fetchSandboxNetwork(sandboxID string) (NetworkNamespace, error)
+	storeSandboxNetwork(sandboxID string, networkNS NetworkNamespace) error
 
 	// Hypervisor resources
-	fetchHypervisorState(podID string, state interface{}) error
-	storeHypervisorState(podID string, state interface{}) error
+	fetchHypervisorState(sandboxID string, state interface{}) error
+	storeHypervisorState(sandboxID string, state interface{}) error
 
 	// Agent resources
-	fetchAgentState(podID string, state interface{}) error
-	storeAgentState(podID string, state interface{}) error
+	fetchAgentState(sandboxID string, state interface{}) error
+	storeAgentState(sandboxID string, state interface{}) error
 
 	// Container resources
-	storeContainerResource(podID, containerID string, resource podResource, data interface{}) error
-	deleteContainerResources(podID, containerID string, resources []podResource) error
-	fetchContainerConfig(podID, containerID string) (ContainerConfig, error)
-	fetchContainerState(podID, containerID string) (State, error)
-	fetchContainerProcess(podID, containerID string) (Process, error)
-	storeContainerProcess(podID, containerID string, process Process) error
-	fetchContainerMounts(podID, containerID string) ([]Mount, error)
-	storeContainerMounts(podID, containerID string, mounts []Mount) error
-	fetchContainerDevices(podID, containerID string) ([]Device, error)
-	storeContainerDevices(podID, containerID string, devices []Device) error
+	storeContainerResource(sandboxID, containerID string, resource sandboxResource, data interface{}) error
+	deleteContainerResources(sandboxID, containerID string, resources []sandboxResource) error
+	fetchContainerConfig(sandboxID, containerID string) (ContainerConfig, error)
+	fetchContainerState(sandboxID, containerID string) (State, error)
+	fetchContainerProcess(sandboxID, containerID string) (Process, error)
+	storeContainerProcess(sandboxID, containerID string, process Process) error
+	fetchContainerMounts(sandboxID, containerID string) ([]Mount, error)
+	storeContainerMounts(sandboxID, containerID string, mounts []Mount) error
+	fetchContainerDevices(sandboxID, containerID string) ([]Device, error)
+	storeContainerDevices(sandboxID, containerID string, devices []Device) error
 }
 
 // filesystem is a resourceStorage interface implementation for a local filesystem.
@@ -151,37 +151,37 @@ func (fs *filesystem) Logger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "filesystem")
 }
 
-func (fs *filesystem) createAllResources(pod Pod) (err error) {
-	for _, resource := range []podResource{stateFileType, configFileType} {
-		_, path, _ := fs.podURI(pod.id, resource)
+func (fs *filesystem) createAllResources(sandbox Sandbox) (err error) {
+	for _, resource := range []sandboxResource{stateFileType, configFileType} {
+		_, path, _ := fs.sandboxURI(sandbox.id, resource)
 		err = os.MkdirAll(path, dirMode)
 		if err != nil {
 			return err
 		}
 	}
 
-	for _, container := range pod.containers {
-		for _, resource := range []podResource{stateFileType, configFileType} {
-			_, path, _ := fs.containerURI(pod.id, container.id, resource)
+	for _, container := range sandbox.containers {
+		for _, resource := range []sandboxResource{stateFileType, configFileType} {
+			_, path, _ := fs.containerURI(sandbox.id, container.id, resource)
 			err = os.MkdirAll(path, dirMode)
 			if err != nil {
-				fs.deletePodResources(pod.id, nil)
+				fs.deleteSandboxResources(sandbox.id, nil)
 				return err
 			}
 		}
 	}
 
-	podlockFile, _, err := fs.podURI(pod.id, lockFileType)
+	sandboxlockFile, _, err := fs.sandboxURI(sandbox.id, lockFileType)
 	if err != nil {
-		fs.deletePodResources(pod.id, nil)
+		fs.deleteSandboxResources(sandbox.id, nil)
 		return err
 	}
 
-	_, err = os.Stat(podlockFile)
+	_, err = os.Stat(sandboxlockFile)
 	if err != nil {
-		lockFile, err := os.Create(podlockFile)
+		lockFile, err := os.Create(sandboxlockFile)
 		if err != nil {
-			fs.deletePodResources(pod.id, nil)
+			fs.deleteSandboxResources(sandbox.id, nil)
 			return err
 		}
 		lockFile.Close()
@@ -262,7 +262,7 @@ func (fs *filesystem) storeDeviceFile(file string, data interface{}) error {
 	return nil
 }
 
-func (fs *filesystem) fetchFile(file string, resource podResource, data interface{}) error {
+func (fs *filesystem) fetchFile(file string, resource sandboxResource, data interface{}) error {
 	if file == "" {
 		return errNeedFile
 	}
@@ -332,27 +332,27 @@ func (fs *filesystem) fetchDeviceFile(fileData []byte, devices *[]Device) error 
 }
 
 // resourceNeedsContainerID determines if the specified
-// podResource needs a containerID. Since some podResources can
-// be used for both pods and containers, it is necessary to specify
-// whether the resource is being used in a pod-specific context using
-// the podSpecific parameter.
-func resourceNeedsContainerID(podSpecific bool, resource podResource) bool {
+// sandboxResource needs a containerID. Since some sandboxResources can
+// be used for both sandboxes and containers, it is necessary to specify
+// whether the resource is being used in a sandbox-specific context using
+// the sandboxSpecific parameter.
+func resourceNeedsContainerID(sandboxSpecific bool, resource sandboxResource) bool {
 
 	switch resource {
 	case lockFileType, networkFileType, hypervisorFileType, agentFileType:
-		// pod-specific resources
+		// sandbox-specific resources
 		return false
 	default:
-		return !podSpecific
+		return !sandboxSpecific
 	}
 }
 
-func resourceDir(podSpecific bool, podID, containerID string, resource podResource) (string, error) {
-	if podID == "" {
-		return "", errNeedPodID
+func resourceDir(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource) (string, error) {
+	if sandboxID == "" {
+		return "", errNeedSandboxID
 	}
 
-	if resourceNeedsContainerID(podSpecific, resource) == true && containerID == "" {
+	if resourceNeedsContainerID(sandboxSpecific, resource) == true && containerID == "" {
 		return "", errNeedContainerID
 	}
 
@@ -369,23 +369,23 @@ func resourceDir(podSpecific bool, podID, containerID string, resource podResour
 		return "", errInvalidResource
 	}
 
-	dirPath := filepath.Join(path, podID, containerID)
+	dirPath := filepath.Join(path, sandboxID, containerID)
 
 	return dirPath, nil
 }
 
-// If podSpecific is true, the resource is being applied for an empty
-// pod (meaning containerID may be blank).
+// If sandboxSpecific is true, the resource is being applied for an empty
+// sandbox (meaning containerID may be blank).
 // Note that this function defers determining if containerID can be
 // blank to resourceDIR()
-func (fs *filesystem) resourceURI(podSpecific bool, podID, containerID string, resource podResource) (string, string, error) {
-	if podID == "" {
-		return "", "", errNeedPodID
+func (fs *filesystem) resourceURI(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource) (string, string, error) {
+	if sandboxID == "" {
+		return "", "", errNeedSandboxID
 	}
 
 	var filename string
 
-	dirPath, err := resourceDir(podSpecific, podID, containerID, resource)
+	dirPath, err := resourceDir(sandboxSpecific, sandboxID, containerID, resource)
 	if err != nil {
 		return "", "", err
 	}
@@ -422,30 +422,30 @@ func (fs *filesystem) resourceURI(podSpecific bool, podID, containerID string, r
 	return filePath, dirPath, nil
 }
 
-func (fs *filesystem) containerURI(podID, containerID string, resource podResource) (string, string, error) {
-	if podID == "" {
-		return "", "", errNeedPodID
+func (fs *filesystem) containerURI(sandboxID, containerID string, resource sandboxResource) (string, string, error) {
+	if sandboxID == "" {
+		return "", "", errNeedSandboxID
 	}
 
 	if containerID == "" {
 		return "", "", errNeedContainerID
 	}
 
-	return fs.resourceURI(false, podID, containerID, resource)
+	return fs.resourceURI(false, sandboxID, containerID, resource)
 }
 
-func (fs *filesystem) podURI(podID string, resource podResource) (string, string, error) {
-	return fs.resourceURI(true, podID, "", resource)
+func (fs *filesystem) sandboxURI(sandboxID string, resource sandboxResource) (string, string, error) {
+	return fs.resourceURI(true, sandboxID, "", resource)
 }
 
 // commonResourceChecks performs basic checks common to both setting and
-// getting a podResource.
-func (fs *filesystem) commonResourceChecks(podSpecific bool, podID, containerID string, resource podResource) error {
-	if podID == "" {
-		return errNeedPodID
+// getting a sandboxResource.
+func (fs *filesystem) commonResourceChecks(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource) error {
+	if sandboxID == "" {
+		return errNeedSandboxID
 	}
 
-	if resourceNeedsContainerID(podSpecific, resource) == true && containerID == "" {
+	if resourceNeedsContainerID(sandboxSpecific, resource) == true && containerID == "" {
 		return errNeedContainerID
 	}
 
@@ -465,12 +465,12 @@ func (fs *filesystem) commonResourceChecks(podSpecific bool, podID, containerID 
 	return nil
 }
 
-func (fs *filesystem) storePodAndContainerConfigResource(podSpecific bool, podID, containerID string, resource podResource, file interface{}) error {
+func (fs *filesystem) storeSandboxAndContainerConfigResource(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource, file interface{}) error {
 	if resource != configFileType {
 		return errInvalidResource
 	}
 
-	configFile, _, err := fs.resourceURI(podSpecific, podID, containerID, configFileType)
+	configFile, _, err := fs.resourceURI(sandboxSpecific, sandboxID, containerID, configFileType)
 	if err != nil {
 		return err
 	}
@@ -478,12 +478,12 @@ func (fs *filesystem) storePodAndContainerConfigResource(podSpecific bool, podID
 	return fs.storeFile(configFile, file)
 }
 
-func (fs *filesystem) storeStateResource(podSpecific bool, podID, containerID string, resource podResource, file interface{}) error {
+func (fs *filesystem) storeStateResource(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource, file interface{}) error {
 	if resource != stateFileType {
 		return errInvalidResource
 	}
 
-	stateFile, _, err := fs.resourceURI(podSpecific, podID, containerID, stateFileType)
+	stateFile, _, err := fs.resourceURI(sandboxSpecific, sandboxID, containerID, stateFileType)
 	if err != nil {
 		return err
 	}
@@ -491,13 +491,13 @@ func (fs *filesystem) storeStateResource(podSpecific bool, podID, containerID st
 	return fs.storeFile(stateFile, file)
 }
 
-func (fs *filesystem) storeNetworkResource(podSpecific bool, podID, containerID string, resource podResource, file interface{}) error {
+func (fs *filesystem) storeNetworkResource(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource, file interface{}) error {
 	if resource != networkFileType {
 		return errInvalidResource
 	}
 
-	// pod only resource
-	networkFile, _, err := fs.resourceURI(true, podID, containerID, networkFileType)
+	// sandbox only resource
+	networkFile, _, err := fs.resourceURI(true, sandboxID, containerID, networkFileType)
 	if err != nil {
 		return err
 	}
@@ -505,12 +505,12 @@ func (fs *filesystem) storeNetworkResource(podSpecific bool, podID, containerID 
 	return fs.storeFile(networkFile, file)
 }
 
-func (fs *filesystem) storeProcessResource(podSpecific bool, podID, containerID string, resource podResource, file interface{}) error {
+func (fs *filesystem) storeProcessResource(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource, file interface{}) error {
 	if resource != processFileType {
 		return errInvalidResource
 	}
 
-	processFile, _, err := fs.resourceURI(podSpecific, podID, containerID, processFileType)
+	processFile, _, err := fs.resourceURI(sandboxSpecific, sandboxID, containerID, processFileType)
 	if err != nil {
 		return err
 	}
@@ -518,12 +518,12 @@ func (fs *filesystem) storeProcessResource(podSpecific bool, podID, containerID 
 	return fs.storeFile(processFile, file)
 }
 
-func (fs *filesystem) storeMountResource(podSpecific bool, podID, containerID string, resource podResource, file interface{}) error {
+func (fs *filesystem) storeMountResource(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource, file interface{}) error {
 	if resource != mountsFileType {
 		return errInvalidResource
 	}
 
-	mountsFile, _, err := fs.resourceURI(podSpecific, podID, containerID, mountsFileType)
+	mountsFile, _, err := fs.resourceURI(sandboxSpecific, sandboxID, containerID, mountsFileType)
 	if err != nil {
 		return err
 	}
@@ -531,12 +531,12 @@ func (fs *filesystem) storeMountResource(podSpecific bool, podID, containerID st
 	return fs.storeFile(mountsFile, file)
 }
 
-func (fs *filesystem) storeDeviceResource(podSpecific bool, podID, containerID string, resource podResource, file interface{}) error {
+func (fs *filesystem) storeDeviceResource(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource, file interface{}) error {
 	if resource != devicesFileType {
 		return errInvalidResource
 	}
 
-	devicesFile, _, err := fs.resourceURI(podSpecific, podID, containerID, devicesFileType)
+	devicesFile, _, err := fs.resourceURI(sandboxSpecific, sandboxID, containerID, devicesFileType)
 	if err != nil {
 		return err
 	}
@@ -544,41 +544,41 @@ func (fs *filesystem) storeDeviceResource(podSpecific bool, podID, containerID s
 	return fs.storeDeviceFile(devicesFile, file)
 }
 
-func (fs *filesystem) storeResource(podSpecific bool, podID, containerID string, resource podResource, data interface{}) error {
-	if err := fs.commonResourceChecks(podSpecific, podID, containerID, resource); err != nil {
+func (fs *filesystem) storeResource(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource, data interface{}) error {
+	if err := fs.commonResourceChecks(sandboxSpecific, sandboxID, containerID, resource); err != nil {
 		return err
 	}
 
 	switch file := data.(type) {
-	case PodConfig, ContainerConfig:
-		return fs.storePodAndContainerConfigResource(podSpecific, podID, containerID, resource, file)
+	case SandboxConfig, ContainerConfig:
+		return fs.storeSandboxAndContainerConfigResource(sandboxSpecific, sandboxID, containerID, resource, file)
 
 	case State:
-		return fs.storeStateResource(podSpecific, podID, containerID, resource, file)
+		return fs.storeStateResource(sandboxSpecific, sandboxID, containerID, resource, file)
 
 	case NetworkNamespace:
-		return fs.storeNetworkResource(podSpecific, podID, containerID, resource, file)
+		return fs.storeNetworkResource(sandboxSpecific, sandboxID, containerID, resource, file)
 
 	case Process:
-		return fs.storeProcessResource(podSpecific, podID, containerID, resource, file)
+		return fs.storeProcessResource(sandboxSpecific, sandboxID, containerID, resource, file)
 
 	case []Mount:
-		return fs.storeMountResource(podSpecific, podID, containerID, resource, file)
+		return fs.storeMountResource(sandboxSpecific, sandboxID, containerID, resource, file)
 
 	case []Device:
-		return fs.storeDeviceResource(podSpecific, podID, containerID, resource, file)
+		return fs.storeDeviceResource(sandboxSpecific, sandboxID, containerID, resource, file)
 
 	default:
 		return fmt.Errorf("Invalid resource data type")
 	}
 }
 
-func (fs *filesystem) fetchResource(podSpecific bool, podID, containerID string, resource podResource, data interface{}) error {
-	if err := fs.commonResourceChecks(podSpecific, podID, containerID, resource); err != nil {
+func (fs *filesystem) fetchResource(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource, data interface{}) error {
+	if err := fs.commonResourceChecks(sandboxSpecific, sandboxID, containerID, resource); err != nil {
 		return err
 	}
 
-	path, _, err := fs.resourceURI(podSpecific, podID, containerID, resource)
+	path, _, err := fs.resourceURI(sandboxSpecific, sandboxID, containerID, resource)
 	if err != nil {
 		return err
 	}
@@ -586,54 +586,54 @@ func (fs *filesystem) fetchResource(podSpecific bool, podID, containerID string,
 	return fs.fetchFile(path, resource, data)
 }
 
-func (fs *filesystem) storePodResource(podID string, resource podResource, data interface{}) error {
-	return fs.storeResource(true, podID, "", resource, data)
+func (fs *filesystem) storeSandboxResource(sandboxID string, resource sandboxResource, data interface{}) error {
+	return fs.storeResource(true, sandboxID, "", resource, data)
 }
 
-func (fs *filesystem) fetchPodConfig(podID string) (PodConfig, error) {
-	var podConfig PodConfig
+func (fs *filesystem) fetchSandboxConfig(sandboxID string) (SandboxConfig, error) {
+	var sandboxConfig SandboxConfig
 
-	if err := fs.fetchResource(true, podID, "", configFileType, &podConfig); err != nil {
-		return PodConfig{}, err
+	if err := fs.fetchResource(true, sandboxID, "", configFileType, &sandboxConfig); err != nil {
+		return SandboxConfig{}, err
 	}
 
-	return podConfig, nil
+	return sandboxConfig, nil
 }
 
-func (fs *filesystem) fetchPodState(podID string) (State, error) {
+func (fs *filesystem) fetchSandboxState(sandboxID string) (State, error) {
 	var state State
 
-	if err := fs.fetchResource(true, podID, "", stateFileType, &state); err != nil {
+	if err := fs.fetchResource(true, sandboxID, "", stateFileType, &state); err != nil {
 		return State{}, err
 	}
 
 	return state, nil
 }
 
-func (fs *filesystem) fetchPodNetwork(podID string) (NetworkNamespace, error) {
+func (fs *filesystem) fetchSandboxNetwork(sandboxID string) (NetworkNamespace, error) {
 	var networkNS NetworkNamespace
 
-	if err := fs.fetchResource(true, podID, "", networkFileType, &networkNS); err != nil {
+	if err := fs.fetchResource(true, sandboxID, "", networkFileType, &networkNS); err != nil {
 		return NetworkNamespace{}, err
 	}
 
 	return networkNS, nil
 }
 
-func (fs *filesystem) fetchHypervisorState(podID string, state interface{}) error {
-	return fs.fetchResource(true, podID, "", hypervisorFileType, state)
+func (fs *filesystem) fetchHypervisorState(sandboxID string, state interface{}) error {
+	return fs.fetchResource(true, sandboxID, "", hypervisorFileType, state)
 }
 
-func (fs *filesystem) fetchAgentState(podID string, state interface{}) error {
-	return fs.fetchResource(true, podID, "", agentFileType, state)
+func (fs *filesystem) fetchAgentState(sandboxID string, state interface{}) error {
+	return fs.fetchResource(true, sandboxID, "", agentFileType, state)
 }
 
-func (fs *filesystem) storePodNetwork(podID string, networkNS NetworkNamespace) error {
-	return fs.storePodResource(podID, networkFileType, networkNS)
+func (fs *filesystem) storeSandboxNetwork(sandboxID string, networkNS NetworkNamespace) error {
+	return fs.storeSandboxResource(sandboxID, networkFileType, networkNS)
 }
 
-func (fs *filesystem) storeHypervisorState(podID string, state interface{}) error {
-	hypervisorFile, _, err := fs.resourceURI(true, podID, "", hypervisorFileType)
+func (fs *filesystem) storeHypervisorState(sandboxID string, state interface{}) error {
+	hypervisorFile, _, err := fs.resourceURI(true, sandboxID, "", hypervisorFileType)
 	if err != nil {
 		return err
 	}
@@ -641,8 +641,8 @@ func (fs *filesystem) storeHypervisorState(podID string, state interface{}) erro
 	return fs.storeFile(hypervisorFile, state)
 }
 
-func (fs *filesystem) storeAgentState(podID string, state interface{}) error {
-	agentFile, _, err := fs.resourceURI(true, podID, "", agentFileType)
+func (fs *filesystem) storeAgentState(sandboxID string, state interface{}) error {
+	agentFile, _, err := fs.resourceURI(true, sandboxID, "", agentFileType)
 	if err != nil {
 		return err
 	}
@@ -650,13 +650,13 @@ func (fs *filesystem) storeAgentState(podID string, state interface{}) error {
 	return fs.storeFile(agentFile, state)
 }
 
-func (fs *filesystem) deletePodResources(podID string, resources []podResource) error {
+func (fs *filesystem) deleteSandboxResources(sandboxID string, resources []sandboxResource) error {
 	if resources == nil {
-		resources = []podResource{configFileType, stateFileType}
+		resources = []sandboxResource{configFileType, stateFileType}
 	}
 
 	for _, resource := range resources {
-		_, dir, err := fs.podURI(podID, resource)
+		_, dir, err := fs.sandboxURI(sandboxID, resource)
 		if err != nil {
 			return err
 		}
@@ -670,87 +670,87 @@ func (fs *filesystem) deletePodResources(podID string, resources []podResource) 
 	return nil
 }
 
-func (fs *filesystem) storeContainerResource(podID, containerID string, resource podResource, data interface{}) error {
-	if podID == "" {
-		return errNeedPodID
+func (fs *filesystem) storeContainerResource(sandboxID, containerID string, resource sandboxResource, data interface{}) error {
+	if sandboxID == "" {
+		return errNeedSandboxID
 	}
 
 	if containerID == "" {
 		return errNeedContainerID
 	}
 
-	return fs.storeResource(false, podID, containerID, resource, data)
+	return fs.storeResource(false, sandboxID, containerID, resource, data)
 }
 
-func (fs *filesystem) fetchContainerConfig(podID, containerID string) (ContainerConfig, error) {
+func (fs *filesystem) fetchContainerConfig(sandboxID, containerID string) (ContainerConfig, error) {
 	var config ContainerConfig
 
-	if err := fs.fetchResource(false, podID, containerID, configFileType, &config); err != nil {
+	if err := fs.fetchResource(false, sandboxID, containerID, configFileType, &config); err != nil {
 		return ContainerConfig{}, err
 	}
 
 	return config, nil
 }
 
-func (fs *filesystem) fetchContainerState(podID, containerID string) (State, error) {
+func (fs *filesystem) fetchContainerState(sandboxID, containerID string) (State, error) {
 	var state State
 
-	if err := fs.fetchResource(false, podID, containerID, stateFileType, &state); err != nil {
+	if err := fs.fetchResource(false, sandboxID, containerID, stateFileType, &state); err != nil {
 		return State{}, err
 	}
 
 	return state, nil
 }
 
-func (fs *filesystem) fetchContainerProcess(podID, containerID string) (Process, error) {
+func (fs *filesystem) fetchContainerProcess(sandboxID, containerID string) (Process, error) {
 	var process Process
 
-	if err := fs.fetchResource(false, podID, containerID, processFileType, &process); err != nil {
+	if err := fs.fetchResource(false, sandboxID, containerID, processFileType, &process); err != nil {
 		return Process{}, err
 	}
 
 	return process, nil
 }
 
-func (fs *filesystem) storeContainerProcess(podID, containerID string, process Process) error {
-	return fs.storeContainerResource(podID, containerID, processFileType, process)
+func (fs *filesystem) storeContainerProcess(sandboxID, containerID string, process Process) error {
+	return fs.storeContainerResource(sandboxID, containerID, processFileType, process)
 }
 
-func (fs *filesystem) fetchContainerMounts(podID, containerID string) ([]Mount, error) {
+func (fs *filesystem) fetchContainerMounts(sandboxID, containerID string) ([]Mount, error) {
 	var mounts []Mount
 
-	if err := fs.fetchResource(false, podID, containerID, mountsFileType, &mounts); err != nil {
+	if err := fs.fetchResource(false, sandboxID, containerID, mountsFileType, &mounts); err != nil {
 		return []Mount{}, err
 	}
 
 	return mounts, nil
 }
 
-func (fs *filesystem) fetchContainerDevices(podID, containerID string) ([]Device, error) {
+func (fs *filesystem) fetchContainerDevices(sandboxID, containerID string) ([]Device, error) {
 	var devices []Device
 
-	if err := fs.fetchResource(false, podID, containerID, devicesFileType, &devices); err != nil {
+	if err := fs.fetchResource(false, sandboxID, containerID, devicesFileType, &devices); err != nil {
 		return []Device{}, err
 	}
 
 	return devices, nil
 }
 
-func (fs *filesystem) storeContainerMounts(podID, containerID string, mounts []Mount) error {
-	return fs.storeContainerResource(podID, containerID, mountsFileType, mounts)
+func (fs *filesystem) storeContainerMounts(sandboxID, containerID string, mounts []Mount) error {
+	return fs.storeContainerResource(sandboxID, containerID, mountsFileType, mounts)
 }
 
-func (fs *filesystem) storeContainerDevices(podID, containerID string, devices []Device) error {
-	return fs.storeContainerResource(podID, containerID, devicesFileType, devices)
+func (fs *filesystem) storeContainerDevices(sandboxID, containerID string, devices []Device) error {
+	return fs.storeContainerResource(sandboxID, containerID, devicesFileType, devices)
 }
 
-func (fs *filesystem) deleteContainerResources(podID, containerID string, resources []podResource) error {
+func (fs *filesystem) deleteContainerResources(sandboxID, containerID string, resources []sandboxResource) error {
 	if resources == nil {
-		resources = []podResource{configFileType, stateFileType}
+		resources = []sandboxResource{configFileType, stateFileType}
 	}
 
 	for _, resource := range resources {
-		_, dir, err := fs.podURI(podID, resource)
+		_, dir, err := fs.sandboxURI(sandboxID, resource)
 		if err != nil {
 			return err
 		}

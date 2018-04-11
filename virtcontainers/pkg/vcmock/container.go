@@ -23,9 +23,9 @@ func (c *Container) ID() string {
 	return c.MockID
 }
 
-// Pod implements the VCContainer function of the same name.
-func (c *Container) Pod() vc.VCPod {
-	return c.MockPod
+// Sandbox implements the VCContainer function of the same name.
+func (c *Container) Sandbox() vc.VCSandbox {
+	return c.MockSandbox
 }
 
 // Process implements the VCContainer function of the same name.

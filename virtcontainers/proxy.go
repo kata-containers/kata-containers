@@ -131,19 +131,19 @@ func newProxy(pType ProxyType) (proxy, error) {
 	}
 }
 
-// newProxyConfig returns a proxy config from a generic PodConfig handler,
+// newProxyConfig returns a proxy config from a generic SandboxConfig handler,
 // after it properly checked the configuration was valid.
-func newProxyConfig(podConfig *PodConfig) (ProxyConfig, error) {
-	if podConfig == nil {
-		return ProxyConfig{}, fmt.Errorf("Pod config cannot be nil")
+func newProxyConfig(sandboxConfig *SandboxConfig) (ProxyConfig, error) {
+	if sandboxConfig == nil {
+		return ProxyConfig{}, fmt.Errorf("Sandbox config cannot be nil")
 	}
 
 	var config ProxyConfig
-	switch podConfig.ProxyType {
+	switch sandboxConfig.ProxyType {
 	case KataProxyType:
 		fallthrough
 	case CCProxyType:
-		if err := mapstructure.Decode(podConfig.ProxyConfig, &config); err != nil {
+		if err := mapstructure.Decode(sandboxConfig.ProxyConfig, &config); err != nil {
 			return ProxyConfig{}, err
 		}
 	}
@@ -155,10 +155,10 @@ func newProxyConfig(podConfig *PodConfig) (ProxyConfig, error) {
 	return config, nil
 }
 
-func defaultProxyURL(pod Pod, socketType string) (string, error) {
+func defaultProxyURL(sandbox Sandbox, socketType string) (string, error) {
 	switch socketType {
 	case SocketTypeUNIX:
-		socketPath := filepath.Join(runStoragePath, pod.id, "proxy.sock")
+		socketPath := filepath.Join(runStoragePath, sandbox.id, "proxy.sock")
 		return fmt.Sprintf("unix://%s", socketPath), nil
 	case SocketTypeVSOCK:
 		// TODO Build the VSOCK default URL
@@ -174,11 +174,11 @@ func isProxyBuiltIn(pType ProxyType) bool {
 
 // proxy is the virtcontainers proxy interface.
 type proxy interface {
-	// start launches a proxy instance for the specified pod, returning
+	// start launches a proxy instance for the specified sandbox, returning
 	// the PID of the process and the URL used to connect to it.
-	start(pod Pod, params proxyParams) (int, string, error)
+	start(sandbox Sandbox, params proxyParams) (int, string, error)
 
 	// stop terminates a proxy instance after all communications with the
 	// agent inside the VM have been properly stopped.
-	stop(pod Pod, pid int) error
+	stop(sandbox Sandbox, pid int) error
 }

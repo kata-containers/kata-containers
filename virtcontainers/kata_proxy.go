@@ -29,8 +29,8 @@ type kataProxy struct {
 }
 
 // start is kataProxy start implementation for proxy interface.
-func (p *kataProxy) start(pod Pod, params proxyParams) (int, string, error) {
-	if pod.agent == nil {
+func (p *kataProxy) start(sandbox Sandbox, params proxyParams) (int, string, error) {
+	if sandbox.agent == nil {
 		return -1, "", fmt.Errorf("No agent")
 	}
 
@@ -38,13 +38,13 @@ func (p *kataProxy) start(pod Pod, params proxyParams) (int, string, error) {
 		return -1, "", fmt.Errorf("AgentURL cannot be empty")
 	}
 
-	config, err := newProxyConfig(pod.config)
+	config, err := newProxyConfig(sandbox.config)
 	if err != nil {
 		return -1, "", err
 	}
 
 	// construct the socket path the proxy instance will use
-	proxyURL, err := defaultProxyURL(pod, SocketTypeUNIX)
+	proxyURL, err := defaultProxyURL(sandbox, SocketTypeUNIX)
 	if err != nil {
 		return -1, "", err
 	}
@@ -52,7 +52,7 @@ func (p *kataProxy) start(pod Pod, params proxyParams) (int, string, error) {
 	args := []string{config.Path, "-listen-socket", proxyURL, "-mux-socket", params.agentURL}
 	if config.Debug {
 		args = append(args, "-log", "debug")
-		args = append(args, "-agent-logs-socket", pod.hypervisor.getPodConsole(pod.id))
+		args = append(args, "-agent-logs-socket", sandbox.hypervisor.getSandboxConsole(sandbox.id))
 	}
 
 	cmd := exec.Command(args[0], args[1:]...)
@@ -64,7 +64,7 @@ func (p *kataProxy) start(pod Pod, params proxyParams) (int, string, error) {
 }
 
 // stop is kataProxy stop implementation for proxy interface.
-func (p *kataProxy) stop(pod Pod, pid int) error {
+func (p *kataProxy) stop(sandbox Sandbox, pid int) error {
 	// Signal the proxy with SIGTERM.
 	return syscall.Kill(pid, syscall.SIGTERM)
 }

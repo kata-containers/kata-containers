@@ -21,40 +21,40 @@ import (
 	"sync"
 )
 
-type podList struct {
-	lock sync.RWMutex
-	pods map[string]*Pod
+type sandboxList struct {
+	lock      sync.RWMutex
+	sandboxes map[string]*Sandbox
 }
 
-// globalPodList tracks pods globally
-var globalPodList = &podList{pods: make(map[string]*Pod)}
+// globalSandboxList tracks sandboxes globally
+var globalSandboxList = &sandboxList{sandboxes: make(map[string]*Sandbox)}
 
-func (p *podList) addPod(pod *Pod) (err error) {
-	if pod == nil {
+func (p *sandboxList) addSandbox(sandbox *Sandbox) (err error) {
+	if sandbox == nil {
 		return nil
 	}
 
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	if p.pods[pod.id] == nil {
-		p.pods[pod.id] = pod
+	if p.sandboxes[sandbox.id] == nil {
+		p.sandboxes[sandbox.id] = sandbox
 	} else {
-		err = fmt.Errorf("pod %s exists", pod.id)
+		err = fmt.Errorf("sandbox %s exists", sandbox.id)
 	}
 	return err
 }
 
-func (p *podList) removePod(id string) {
+func (p *sandboxList) removeSandbox(id string) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
-	delete(p.pods, id)
+	delete(p.sandboxes, id)
 }
 
-func (p *podList) lookupPod(id string) (*Pod, error) {
+func (p *sandboxList) lookupSandbox(id string) (*Sandbox, error) {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
-	if p.pods[id] != nil {
-		return p.pods[id], nil
+	if p.sandboxes[id] != nil {
+		return p.sandboxes[id], nil
 	}
-	return nil, fmt.Errorf("pod %s does not exist", id)
+	return nil, fmt.Errorf("sandbox %s does not exist", id)
 }

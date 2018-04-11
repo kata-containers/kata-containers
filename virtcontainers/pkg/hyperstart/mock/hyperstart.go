@@ -31,15 +31,15 @@ import (
 // Control command string IDs
 const (
 	Version         = "version"
-	StartPod        = "startpod"
-	DestroyPod      = "destroypod"
+	StartSandbox    = "startsandbox"
+	DestroySandbox  = "destroysandbox"
 	ExecCmd         = "execcmd"
 	Ready           = "ready"
 	Ack             = "ack"
 	Error           = "error"
 	WinSize         = "winsize"
 	Ping            = "ping"
-	FinishPod       = "finishpod"
+	FinishSandbox   = "finishsandbox"
 	Next            = "next"
 	WriteFile       = "writefile"
 	ReadFile        = "readfile"
@@ -53,8 +53,8 @@ const (
 
 var codeList = map[int]string{
 	hyper.VersionCode:         Version,
-	hyper.StartPodCode:        StartPod,
-	hyper.DestroyPodCode:      DestroyPod,
+	hyper.StartSandboxCode:    StartSandbox,
+	hyper.DestroySandboxCode:  DestroySandbox,
 	hyper.ExecCmdCode:         ExecCmd,
 	hyper.ReadyCode:           Ready,
 	hyper.AckCode:             Ack,

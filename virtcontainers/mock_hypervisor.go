@@ -19,8 +19,8 @@ package virtcontainers
 type mockHypervisor struct {
 }
 
-func (m *mockHypervisor) init(pod *Pod) error {
-	valid, err := pod.config.HypervisorConfig.valid()
+func (m *mockHypervisor) init(sandbox *Sandbox) error {
+	valid, err := sandbox.config.HypervisorConfig.valid()
 	if valid == false || err != nil {
 		return err
 	}
@@ -32,27 +32,27 @@ func (m *mockHypervisor) capabilities() capabilities {
 	return capabilities{}
 }
 
-func (m *mockHypervisor) createPod(podConfig PodConfig) error {
+func (m *mockHypervisor) createSandbox(sandboxConfig SandboxConfig) error {
 	return nil
 }
 
-func (m *mockHypervisor) startPod() error {
+func (m *mockHypervisor) startSandbox() error {
 	return nil
 }
 
-func (m *mockHypervisor) waitPod(timeout int) error {
+func (m *mockHypervisor) waitSandbox(timeout int) error {
 	return nil
 }
 
-func (m *mockHypervisor) stopPod() error {
+func (m *mockHypervisor) stopSandbox() error {
 	return nil
 }
 
-func (m *mockHypervisor) pausePod() error {
+func (m *mockHypervisor) pauseSandbox() error {
 	return nil
 }
 
-func (m *mockHypervisor) resumePod() error {
+func (m *mockHypervisor) resumeSandbox() error {
 	return nil
 }
 
@@ -68,6 +68,6 @@ func (m *mockHypervisor) hotplugRemoveDevice(devInfo interface{}, devType device
 	return nil
 }
 
-func (m *mockHypervisor) getPodConsole(podID string) string {
+func (m *mockHypervisor) getSandboxConsole(sandboxID string) string {
 	return ""
 }

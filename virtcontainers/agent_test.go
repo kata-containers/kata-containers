@@ -109,7 +109,7 @@ func TestNewAgentFromUnknownAgentType(t *testing.T) {
 	testNewAgentFromAgentType(t, agentType, &noopAgent{})
 }
 
-func testNewAgentConfig(t *testing.T, config PodConfig, expected interface{}) {
+func testNewAgentConfig(t *testing.T, config SandboxConfig, expected interface{}) {
 	agentConfig := newAgentConfig(config)
 	if reflect.DeepEqual(agentConfig, expected) == false {
 		t.Fatal()
@@ -119,38 +119,38 @@ func testNewAgentConfig(t *testing.T, config PodConfig, expected interface{}) {
 func TestNewAgentConfigFromNoopAgentType(t *testing.T) {
 	var agentConfig interface{}
 
-	podConfig := PodConfig{
+	sandboxConfig := SandboxConfig{
 		AgentType:   NoopAgentType,
 		AgentConfig: agentConfig,
 	}
 
-	testNewAgentConfig(t, podConfig, agentConfig)
+	testNewAgentConfig(t, sandboxConfig, agentConfig)
 }
 
 func TestNewAgentConfigFromHyperstartAgentType(t *testing.T) {
 	agentConfig := HyperConfig{}
 
-	podConfig := PodConfig{
+	sandboxConfig := SandboxConfig{
 		AgentType:   HyperstartAgent,
 		AgentConfig: agentConfig,
 	}
 
-	testNewAgentConfig(t, podConfig, agentConfig)
+	testNewAgentConfig(t, sandboxConfig, agentConfig)
 }
 
 func TestNewAgentConfigFromKataAgentType(t *testing.T) {
 	agentConfig := KataAgentConfig{}
 
-	podConfig := PodConfig{
+	sandboxConfig := SandboxConfig{
 		AgentType:   KataContainersAgent,
 		AgentConfig: agentConfig,
 	}
 
-	testNewAgentConfig(t, podConfig, agentConfig)
+	testNewAgentConfig(t, sandboxConfig, agentConfig)
 }
 
 func TestNewAgentConfigFromUnknownAgentType(t *testing.T) {
 	var agentConfig interface{}
 
-	testNewAgentConfig(t, PodConfig{}, agentConfig)
+	testNewAgentConfig(t, SandboxConfig{}, agentConfig)
 }

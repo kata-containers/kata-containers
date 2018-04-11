@@ -27,39 +27,39 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// controlSocket is the pod control socket.
+// controlSocket is the sandbox control socket.
 // It is an hypervisor resource, and for example qemu's control
 // socket is the QMP one.
 const controlSocket = "ctl"
 
-// monitorSocket is the pod monitoring socket.
+// monitorSocket is the sandbox monitoring socket.
 // It is an hypervisor resource, and is a qmp socket in the qemu case.
 // This is a socket that any monitoring entity will listen to in order
 // to understand if the VM is still alive or not.
 const monitorSocket = "mon"
 
-// vmStartTimeout represents the time in seconds a pod can wait before
+// vmStartTimeout represents the time in seconds a sandbox can wait before
 // to consider the VM starting operation failed.
 const vmStartTimeout = 10
 
-// stateString is a string representing a pod state.
+// stateString is a string representing a sandbox state.
 type stateString string
 
 const (
-	// StateReady represents a pod/container that's ready to be run
+	// StateReady represents a sandbox/container that's ready to be run
 	StateReady stateString = "ready"
 
-	// StateRunning represents a pod/container that's currently running.
+	// StateRunning represents a sandbox/container that's currently running.
 	StateRunning stateString = "running"
 
-	// StatePaused represents a pod/container that has been paused.
+	// StatePaused represents a sandbox/container that has been paused.
 	StatePaused stateString = "paused"
 
-	// StateStopped represents a pod/container that has been stopped.
+	// StateStopped represents a sandbox/container that has been stopped.
 	StateStopped stateString = "stopped"
 )
 
-// State is a pod state structure.
+// State is a sandbox state structure.
 type State struct {
 	State stateString `json:"state"`
 
@@ -73,7 +73,7 @@ type State struct {
 	HotpluggedDrive bool `json:"hotpluggedDrive"`
 }
 
-// valid checks that the pod state is valid.
+// valid checks that the sandbox state is valid.
 func (state *State) valid() bool {
 	for _, validState := range []stateString{StateReady, StateRunning, StatePaused, StateStopped} {
 		if state.State == validState {
@@ -317,8 +317,8 @@ type Resources struct {
 	Memory uint
 }
 
-// PodStatus describes a pod status.
-type PodStatus struct {
+// SandboxStatus describes a sandbox status.
+type SandboxStatus struct {
 	ID               string
 	State            State
 	Hypervisor       HypervisorType
@@ -332,8 +332,8 @@ type PodStatus struct {
 	Annotations map[string]string
 }
 
-// PodConfig is a Pod configuration.
-type PodConfig struct {
+// SandboxConfig is a Sandbox configuration.
+type SandboxConfig struct {
 	ID string
 
 	Hostname string
@@ -341,7 +341,7 @@ type PodConfig struct {
 	// Field specific to OCI specs, needed to setup all the hooks
 	Hooks Hooks
 
-	// VMConfig is the VM configuration to set for this pod.
+	// VMConfig is the VM configuration to set for this sandbox.
 	VMConfig Resources
 
 	HypervisorType   HypervisorType
@@ -359,12 +359,12 @@ type PodConfig struct {
 	NetworkModel  NetworkModel
 	NetworkConfig NetworkConfig
 
-	// Volumes is a list of shared volumes between the host and the Pod.
+	// Volumes is a list of shared volumes between the host and the Sandbox.
 	Volumes []Volume
 
-	// Containers describe the list of containers within a Pod.
+	// Containers describe the list of containers within a Sandbox.
 	// This list can be empty and populated by adding containers
-	// to the Pod a posteriori.
+	// to the Sandbox a posteriori.
 	Containers []ContainerConfig
 
 	// Annotations keys must be unique strings and must be name-spaced
@@ -372,14 +372,14 @@ type PodConfig struct {
 	Annotations map[string]string
 }
 
-// valid checks that the pod configuration is valid.
-func (podConfig *PodConfig) valid() bool {
-	if podConfig.ID == "" {
+// valid checks that the sandbox configuration is valid.
+func (sandboxConfig *SandboxConfig) valid() bool {
+	if sandboxConfig.ID == "" {
 		return false
 	}
 
-	if _, err := newHypervisor(podConfig.HypervisorType); err != nil {
-		podConfig.HypervisorType = QemuHypervisor
+	if _, err := newHypervisor(sandboxConfig.HypervisorType); err != nil {
+		sandboxConfig.HypervisorType = QemuHypervisor
 	}
 
 	return true
@@ -393,29 +393,29 @@ const (
 	sharedLock = syscall.LOCK_SH
 )
 
-// rLockPod locks the pod with a shared lock.
-func rLockPod(podID string) (*os.File, error) {
-	return lockPod(podID, sharedLock)
+// rLockSandbox locks the sandbox with a shared lock.
+func rLockSandbox(sandboxID string) (*os.File, error) {
+	return lockSandbox(sandboxID, sharedLock)
 }
 
-// rwLockPod locks the pod with an exclusive lock.
-func rwLockPod(podID string) (*os.File, error) {
-	return lockPod(podID, exclusiveLock)
+// rwLockSandbox locks the sandbox with an exclusive lock.
+func rwLockSandbox(sandboxID string) (*os.File, error) {
+	return lockSandbox(sandboxID, exclusiveLock)
 }
 
-// lock locks any pod to prevent it from being accessed by other processes.
-func lockPod(podID string, lockType int) (*os.File, error) {
-	if podID == "" {
-		return nil, errNeedPodID
+// lock locks any sandbox to prevent it from being accessed by other processes.
+func lockSandbox(sandboxID string, lockType int) (*os.File, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
 	}
 
 	fs := filesystem{}
-	podlockFile, _, err := fs.podURI(podID, lockFileType)
+	sandboxlockFile, _, err := fs.sandboxURI(sandboxID, lockFileType)
 	if err != nil {
 		return nil, err
 	}
 
-	lockFile, err := os.Open(podlockFile)
+	lockFile, err := os.Open(sandboxlockFile)
 	if err != nil {
 		return nil, err
 	}
@@ -427,8 +427,8 @@ func lockPod(podID string, lockType int) (*os.File, error) {
 	return lockFile, nil
 }
 
-// unlock unlocks any pod to allow it being accessed by other processes.
-func unlockPod(lockFile *os.File) error {
+// unlock unlocks any sandbox to allow it being accessed by other processes.
+func unlockSandbox(lockFile *os.File) error {
 	if lockFile == nil {
 		return fmt.Errorf("lockFile cannot be empty")
 	}
@@ -443,9 +443,9 @@ func unlockPod(lockFile *os.File) error {
 	return nil
 }
 
-// Pod is composed of a set of containers and a runtime environment.
-// A Pod can be created, deleted, started, paused, stopped, listed, entered, and restored.
-type Pod struct {
+// Sandbox is composed of a set of containers and a runtime environment.
+// A Sandbox can be created, deleted, started, paused, stopped, listed, entered, and restored.
+type Sandbox struct {
 	id string
 
 	hypervisor hypervisor
@@ -453,7 +453,7 @@ type Pod struct {
 	storage    resourceStorage
 	network    network
 
-	config *PodConfig
+	config *SandboxConfig
 
 	volumes []Volume
 
@@ -471,21 +471,21 @@ type Pod struct {
 	wg *sync.WaitGroup
 }
 
-// ID returns the pod identifier string.
-func (p *Pod) ID() string {
+// ID returns the sandbox identifier string.
+func (p *Sandbox) ID() string {
 	return p.id
 }
 
-// Logger returns a logrus logger appropriate for logging Pod messages
-func (p *Pod) Logger() *logrus.Entry {
+// Logger returns a logrus logger appropriate for logging Sandbox messages
+func (p *Sandbox) Logger() *logrus.Entry {
 	return virtLog.WithFields(logrus.Fields{
-		"subsystem": "pod",
-		"pod-id":    p.id,
+		"subsystem":  "sandbox",
+		"sandbox-id": p.id,
 	})
 }
 
-// Annotations returns any annotation that a user could have stored through the pod.
-func (p *Pod) Annotations(key string) (string, error) {
+// Annotations returns any annotation that a user could have stored through the sandbox.
+func (p *Sandbox) Annotations(key string) (string, error) {
 	value, exist := p.config.Annotations[key]
 	if exist == false {
 		return "", fmt.Errorf("Annotations key %s does not exist", key)
@@ -495,7 +495,7 @@ func (p *Pod) Annotations(key string) (string, error) {
 }
 
 // SetAnnotations sets or adds an annotations
-func (p *Pod) SetAnnotations(annotations map[string]string) error {
+func (p *Sandbox) SetAnnotations(annotations map[string]string) error {
 	p.annotationsLock.Lock()
 	defer p.annotationsLock.Unlock()
 
@@ -503,7 +503,7 @@ func (p *Pod) SetAnnotations(annotations map[string]string) error {
 		p.config.Annotations[k] = v
 	}
 
-	err := p.storage.storePodResource(p.id, configFileType, *(p.config))
+	err := p.storage.storeSandboxResource(p.id, configFileType, *(p.config))
 	if err != nil {
 		return err
 	}
@@ -511,8 +511,8 @@ func (p *Pod) SetAnnotations(annotations map[string]string) error {
 	return nil
 }
 
-// GetAnnotations returns pod's annotations
-func (p *Pod) GetAnnotations() map[string]string {
+// GetAnnotations returns sandbox's annotations
+func (p *Sandbox) GetAnnotations() map[string]string {
 	p.annotationsLock.RLock()
 	defer p.annotationsLock.RUnlock()
 
@@ -520,7 +520,7 @@ func (p *Pod) GetAnnotations() map[string]string {
 }
 
 // GetAllContainers returns all containers.
-func (p *Pod) GetAllContainers() []VCContainer {
+func (p *Sandbox) GetAllContainers() []VCContainer {
 	ifa := make([]VCContainer, len(p.containers))
 
 	for i, v := range p.containers {
@@ -531,7 +531,7 @@ func (p *Pod) GetAllContainers() []VCContainer {
 }
 
 // GetContainer returns the container named by the containerID.
-func (p *Pod) GetContainer(containerID string) VCContainer {
+func (p *Sandbox) GetContainer(containerID string) VCContainer {
 	for _, c := range p.containers {
 		if c.id == containerID {
 			return c
@@ -540,18 +540,18 @@ func (p *Pod) GetContainer(containerID string) VCContainer {
 	return nil
 }
 
-func createAssets(podConfig *PodConfig) error {
-	kernel, err := newAsset(podConfig, kernelAsset)
+func createAssets(sandboxConfig *SandboxConfig) error {
+	kernel, err := newAsset(sandboxConfig, kernelAsset)
 	if err != nil {
 		return err
 	}
 
-	image, err := newAsset(podConfig, imageAsset)
+	image, err := newAsset(sandboxConfig, imageAsset)
 	if err != nil {
 		return err
 	}
 
-	initrd, err := newAsset(podConfig, initrdAsset)
+	initrd, err := newAsset(sandboxConfig, initrdAsset)
 	if err != nil {
 		return err
 	}
@@ -561,7 +561,7 @@ func createAssets(podConfig *PodConfig) error {
 	}
 
 	for _, a := range []*asset{kernel, image, initrd} {
-		if err := podConfig.HypervisorConfig.addCustomAsset(a); err != nil {
+		if err := sandboxConfig.HypervisorConfig.addCustomAsset(a); err != nil {
 			return err
 		}
 	}
@@ -569,87 +569,87 @@ func createAssets(podConfig *PodConfig) error {
 	return nil
 }
 
-// createPod creates a pod from a pod description, the containers list, the hypervisor
+// createSandbox creates a sandbox from a sandbox description, the containers list, the hypervisor
 // and the agent passed through the Config structure.
-// It will create and store the pod structure, and then ask the hypervisor
-// to physically create that pod i.e. starts a VM for that pod to eventually
+// It will create and store the sandbox structure, and then ask the hypervisor
+// to physically create that sandbox i.e. starts a VM for that sandbox to eventually
 // be started.
-func createPod(podConfig PodConfig) (*Pod, error) {
-	if err := createAssets(&podConfig); err != nil {
+func createSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
+	if err := createAssets(&sandboxConfig); err != nil {
 		return nil, err
 	}
 
-	p, err := newPod(podConfig)
+	p, err := newSandbox(sandboxConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	// Fetch pod network to be able to access it from the pod structure.
-	networkNS, err := p.storage.fetchPodNetwork(p.id)
+	// Fetch sandbox network to be able to access it from the sandbox structure.
+	networkNS, err := p.storage.fetchSandboxNetwork(p.id)
 	if err == nil {
 		p.networkNS = networkNS
 	}
 
-	// We first try to fetch the pod state from storage.
+	// We first try to fetch the sandbox state from storage.
 	// If it exists, this means this is a re-creation, i.e.
 	// we don't need to talk to the guest's agent, but only
-	// want to create the pod and its containers in memory.
-	state, err := p.storage.fetchPodState(p.id)
+	// want to create the sandbox and its containers in memory.
+	state, err := p.storage.fetchSandboxState(p.id)
 	if err == nil && state.State != "" {
 		p.state = state
 		return p, nil
 	}
 
 	// Below code path is called only during create, because of earlier check.
-	if err := p.agent.createPod(p); err != nil {
+	if err := p.agent.createSandbox(p); err != nil {
 		return nil, err
 	}
 
-	// Set pod state
-	if err := p.setPodState(StateReady); err != nil {
+	// Set sandbox state
+	if err := p.setSandboxState(StateReady); err != nil {
 		return nil, err
 	}
 
 	return p, nil
 }
 
-func newPod(podConfig PodConfig) (*Pod, error) {
-	if podConfig.valid() == false {
-		return nil, fmt.Errorf("Invalid pod configuration")
+func newSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
+	if sandboxConfig.valid() == false {
+		return nil, fmt.Errorf("Invalid sandbox configuration")
 	}
 
-	agent := newAgent(podConfig.AgentType)
+	agent := newAgent(sandboxConfig.AgentType)
 
-	hypervisor, err := newHypervisor(podConfig.HypervisorType)
+	hypervisor, err := newHypervisor(sandboxConfig.HypervisorType)
 	if err != nil {
 		return nil, err
 	}
 
-	network := newNetwork(podConfig.NetworkModel)
+	network := newNetwork(sandboxConfig.NetworkModel)
 
-	p := &Pod{
-		id:              podConfig.ID,
+	p := &Sandbox{
+		id:              sandboxConfig.ID,
 		hypervisor:      hypervisor,
 		agent:           agent,
 		storage:         &filesystem{},
 		network:         network,
-		config:          &podConfig,
-		volumes:         podConfig.Volumes,
-		runPath:         filepath.Join(runStoragePath, podConfig.ID),
-		configPath:      filepath.Join(configStoragePath, podConfig.ID),
+		config:          &sandboxConfig,
+		volumes:         sandboxConfig.Volumes,
+		runPath:         filepath.Join(runStoragePath, sandboxConfig.ID),
+		configPath:      filepath.Join(configStoragePath, sandboxConfig.ID),
 		state:           State{},
 		annotationsLock: &sync.RWMutex{},
 		wg:              &sync.WaitGroup{},
 	}
 
-	if err = globalPodList.addPod(p); err != nil {
+	if err = globalSandboxList.addSandbox(p); err != nil {
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
-			p.Logger().WithError(err).WithField("podid", p.id).Error("Create new pod failed")
-			globalPodList.removePod(p.id)
+			p.Logger().WithError(err).WithField("sandboxid", p.id).Error("Create new sandbox failed")
+			globalSandboxList.removeSandbox(p.id)
 		}
 	}()
 
@@ -659,7 +659,7 @@ func newPod(podConfig PodConfig) (*Pod, error) {
 
 	defer func() {
 		if err != nil {
-			p.storage.deletePodResources(p.id, nil)
+			p.storage.deleteSandboxResources(p.id, nil)
 		}
 	}()
 
@@ -667,11 +667,11 @@ func newPod(podConfig PodConfig) (*Pod, error) {
 		return nil, err
 	}
 
-	if err = p.hypervisor.createPod(podConfig); err != nil {
+	if err = p.hypervisor.createSandbox(sandboxConfig); err != nil {
 		return nil, err
 	}
 
-	agentConfig := newAgentConfig(podConfig)
+	agentConfig := newAgentConfig(sandboxConfig)
 	if err = p.agent.init(p, agentConfig); err != nil {
 		return nil, err
 	}
@@ -679,9 +679,9 @@ func newPod(podConfig PodConfig) (*Pod, error) {
 	return p, nil
 }
 
-// storePod stores a pod config.
-func (p *Pod) storePod() error {
-	err := p.storage.storePodResource(p.id, configFileType, *(p.config))
+// storeSandbox stores a sandbox config.
+func (p *Sandbox) storeSandbox() error {
+	err := p.storage.storeSandboxResource(p.id, configFileType, *(p.config))
 	if err != nil {
 		return err
 	}
@@ -696,42 +696,42 @@ func (p *Pod) storePod() error {
 	return nil
 }
 
-// fetchPod fetches a pod config from a pod ID and returns a pod.
-func fetchPod(podID string) (pod *Pod, err error) {
-	if podID == "" {
-		return nil, errNeedPodID
+// fetchSandbox fetches a sandbox config from a sandbox ID and returns a sandbox.
+func fetchSandbox(sandboxID string) (sandbox *Sandbox, err error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
 	}
 
-	pod, err = globalPodList.lookupPod(podID)
-	if pod != nil && err == nil {
-		return pod, err
+	sandbox, err = globalSandboxList.lookupSandbox(sandboxID)
+	if sandbox != nil && err == nil {
+		return sandbox, err
 	}
 
 	fs := filesystem{}
-	config, err := fs.fetchPodConfig(podID)
+	config, err := fs.fetchSandboxConfig(sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
-	pod, err = createPod(config)
+	sandbox, err = createSandbox(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create pod with config %+v: %v", config, err)
+		return nil, fmt.Errorf("failed to create sandbox with config %+v: %v", config, err)
 	}
 
-	// This pod already exists, we don't need to recreate the containers in the guest.
+	// This sandbox already exists, we don't need to recreate the containers in the guest.
 	// We only need to fetch the containers from storage and create the container structs.
-	if err := pod.newContainers(); err != nil {
+	if err := sandbox.newContainers(); err != nil {
 		return nil, err
 	}
 
-	return pod, nil
+	return sandbox, nil
 }
 
 // findContainer returns a container from the containers list held by the
-// pod structure, based on a container ID.
-func (p *Pod) findContainer(containerID string) (*Container, error) {
+// sandbox structure, based on a container ID.
+func (p *Sandbox) findContainer(containerID string) (*Container, error) {
 	if p == nil {
-		return nil, errNeedPod
+		return nil, errNeedSandbox
 	}
 
 	if containerID == "" {
@@ -744,15 +744,15 @@ func (p *Pod) findContainer(containerID string) (*Container, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("Could not find the container %q from the pod %q containers list",
+	return nil, fmt.Errorf("Could not find the container %q from the sandbox %q containers list",
 		containerID, p.id)
 }
 
 // removeContainer removes a container from the containers list held by the
-// pod structure, based on a container ID.
-func (p *Pod) removeContainer(containerID string) error {
+// sandbox structure, based on a container ID.
+func (p *Sandbox) removeContainer(containerID string) error {
 	if p == nil {
-		return errNeedPod
+		return errNeedSandbox
 	}
 
 	if containerID == "" {
@@ -766,17 +766,17 @@ func (p *Pod) removeContainer(containerID string) error {
 		}
 	}
 
-	return fmt.Errorf("Could not remove the container %q from the pod %q containers list",
+	return fmt.Errorf("Could not remove the container %q from the sandbox %q containers list",
 		containerID, p.id)
 }
 
-// delete deletes an already created pod.
-// The VM in which the pod is running will be shut down.
-func (p *Pod) delete() error {
+// delete deletes an already created sandbox.
+// The VM in which the sandbox is running will be shut down.
+func (p *Sandbox) delete() error {
 	if p.state.State != StateReady &&
 		p.state.State != StatePaused &&
 		p.state.State != StateStopped {
-		return fmt.Errorf("Pod not ready, paused or stopped, impossible to delete")
+		return fmt.Errorf("Sandbox not ready, paused or stopped, impossible to delete")
 	}
 
 	for _, c := range p.containers {
@@ -785,12 +785,12 @@ func (p *Pod) delete() error {
 		}
 	}
 
-	globalPodList.removePod(p.id)
+	globalSandboxList.removeSandbox(p.id)
 
-	return p.storage.deletePodResources(p.id, nil)
+	return p.storage.deleteSandboxResources(p.id, nil)
 }
 
-func (p *Pod) createNetwork() error {
+func (p *Sandbox) createNetwork() error {
 	// Initialize the network.
 	netNsPath, netNsCreated, err := p.network.init(p.config.NetworkConfig)
 	if err != nil {
@@ -812,10 +812,10 @@ func (p *Pod) createNetwork() error {
 	p.networkNS = networkNS
 
 	// Store the network
-	return p.storage.storePodNetwork(p.id, networkNS)
+	return p.storage.storeSandboxNetwork(p.id, networkNS)
 }
 
-func (p *Pod) removeNetwork() error {
+func (p *Sandbox) removeNetwork() error {
 	if p.networkNS.NetNsCreated {
 		return p.network.remove(*p, p.networkNS)
 	}
@@ -824,38 +824,38 @@ func (p *Pod) removeNetwork() error {
 }
 
 // startVM starts the VM.
-func (p *Pod) startVM() error {
+func (p *Sandbox) startVM() error {
 	p.Logger().Info("Starting VM")
 
 	if err := p.network.run(p.networkNS.NetNsPath, func() error {
-		return p.hypervisor.startPod()
+		return p.hypervisor.startSandbox()
 	}); err != nil {
 		return err
 	}
 
-	if err := p.hypervisor.waitPod(vmStartTimeout); err != nil {
+	if err := p.hypervisor.waitSandbox(vmStartTimeout); err != nil {
 		return err
 	}
 
 	p.Logger().Info("VM started")
 
 	// Once startVM is done, we want to guarantee
-	// that the pod is manageable. For that we need
-	// to start the pod inside the VM.
-	return p.agent.startPod(*p)
+	// that the sandbox is manageable. For that we need
+	// to start the sandbox inside the VM.
+	return p.agent.startSandbox(*p)
 }
 
-func (p *Pod) addContainer(c *Container) error {
+func (p *Sandbox) addContainer(c *Container) error {
 	p.containers = append(p.containers, c)
 
 	return nil
 }
 
 // newContainers creates new containers structure and
-// adds them to the pod. It does not create the containers
+// adds them to the sandbox. It does not create the containers
 // in the guest. This should only be used when fetching a
-// pod that already exists.
-func (p *Pod) newContainers() error {
+// sandbox that already exists.
+func (p *Sandbox) newContainers() error {
 	for _, contConfig := range p.config.Containers {
 		c, err := newContainer(p, contConfig)
 		if err != nil {
@@ -872,7 +872,7 @@ func (p *Pod) newContainers() error {
 
 // createContainers registers all containers to the proxy, create the
 // containers in the guest and starts one shim per container.
-func (p *Pod) createContainers() error {
+func (p *Sandbox) createContainers() error {
 	for _, contConfig := range p.config.Containers {
 		newContainer, err := createContainer(p, contConfig)
 		if err != nil {
@@ -887,14 +887,14 @@ func (p *Pod) createContainers() error {
 	return nil
 }
 
-// start starts a pod. The containers that are making the pod
+// start starts a sandbox. The containers that are making the sandbox
 // will be started.
-func (p *Pod) start() error {
+func (p *Sandbox) start() error {
 	if err := p.state.validTransition(p.state.State, StateRunning); err != nil {
 		return err
 	}
 
-	if err := p.setPodState(StateRunning); err != nil {
+	if err := p.setSandboxState(StateRunning); err != nil {
 		return err
 	}
 
@@ -904,14 +904,14 @@ func (p *Pod) start() error {
 		}
 	}
 
-	p.Logger().Info("Pod is started")
+	p.Logger().Info("Sandbox is started")
 
 	return nil
 }
 
-// stop stops a pod. The containers that are making the pod
+// stop stops a sandbox. The containers that are making the sandbox
 // will be destroyed.
-func (p *Pod) stop() error {
+func (p *Sandbox) stop() error {
 	if err := p.state.validTransition(p.state.State, StateStopped); err != nil {
 		return err
 	}
@@ -922,47 +922,47 @@ func (p *Pod) stop() error {
 		}
 	}
 
-	if err := p.agent.stopPod(*p); err != nil {
+	if err := p.agent.stopSandbox(*p); err != nil {
 		return err
 	}
 
 	p.Logger().Info("Stopping VM")
-	if err := p.hypervisor.stopPod(); err != nil {
+	if err := p.hypervisor.stopSandbox(); err != nil {
 		return err
 	}
 
-	return p.setPodState(StateStopped)
+	return p.setSandboxState(StateStopped)
 }
 
-func (p *Pod) pause() error {
-	if err := p.hypervisor.pausePod(); err != nil {
+func (p *Sandbox) pause() error {
+	if err := p.hypervisor.pauseSandbox(); err != nil {
 		return err
 	}
 
 	return p.pauseSetStates()
 }
 
-func (p *Pod) resume() error {
-	if err := p.hypervisor.resumePod(); err != nil {
+func (p *Sandbox) resume() error {
+	if err := p.hypervisor.resumeSandbox(); err != nil {
 		return err
 	}
 
 	return p.resumeSetStates()
 }
 
-// list lists all pod running on the host.
-func (p *Pod) list() ([]Pod, error) {
+// list lists all sandbox running on the host.
+func (p *Sandbox) list() ([]Sandbox, error) {
 	return nil, nil
 }
 
-// enter runs an executable within a pod.
-func (p *Pod) enter(args []string) error {
+// enter runs an executable within a sandbox.
+func (p *Sandbox) enter(args []string) error {
 	return nil
 }
 
-// setPodState sets both the in-memory and on-disk state of the
-// pod.
-func (p *Pod) setPodState(state stateString) error {
+// setSandboxState sets both the in-memory and on-disk state of the
+// sandbox.
+func (p *Sandbox) setSandboxState(state stateString) error {
 	if state == "" {
 		return errNeedState
 	}
@@ -971,40 +971,40 @@ func (p *Pod) setPodState(state stateString) error {
 	p.state.State = state
 
 	// update on-disk state
-	return p.storage.storePodResource(p.id, stateFileType, p.state)
+	return p.storage.storeSandboxResource(p.id, stateFileType, p.state)
 }
 
-func (p *Pod) pauseSetStates() error {
-	// XXX: When a pod is paused, all its containers are forcibly
+func (p *Sandbox) pauseSetStates() error {
+	// XXX: When a sandbox is paused, all its containers are forcibly
 	// paused too.
 	if err := p.setContainersState(StatePaused); err != nil {
 		return err
 	}
 
-	return p.setPodState(StatePaused)
+	return p.setSandboxState(StatePaused)
 }
 
-func (p *Pod) resumeSetStates() error {
-	// XXX: Resuming a paused pod puts all containers back into the
+func (p *Sandbox) resumeSetStates() error {
+	// XXX: Resuming a paused sandbox puts all containers back into the
 	// running state.
 	if err := p.setContainersState(StateRunning); err != nil {
 		return err
 	}
 
-	return p.setPodState(StateRunning)
+	return p.setSandboxState(StateRunning)
 }
 
-// getAndSetPodBlockIndex retrieves pod block index and increments it for
+// getAndSetSandboxBlockIndex retrieves sandbox block index and increments it for
 // subsequent accesses. This index is used to maintain the index at which a
-// block device is assigned to a container in the pod.
-func (p *Pod) getAndSetPodBlockIndex() (int, error) {
+// block device is assigned to a container in the sandbox.
+func (p *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
 	currentIndex := p.state.BlockIndex
 
 	// Increment so that container gets incremented block index
 	p.state.BlockIndex++
 
 	// update on-disk state
-	err := p.storage.storePodResource(p.id, stateFileType, p.state)
+	err := p.storage.storeSandboxResource(p.id, stateFileType, p.state)
 	if err != nil {
 		return -1, err
 	}
@@ -1012,13 +1012,13 @@ func (p *Pod) getAndSetPodBlockIndex() (int, error) {
 	return currentIndex, nil
 }
 
-// decrementPodBlockIndex decrements the current pod block index.
+// decrementSandboxBlockIndex decrements the current sandbox block index.
 // This is used to recover from failure while adding a block device.
-func (p *Pod) decrementPodBlockIndex() error {
+func (p *Sandbox) decrementSandboxBlockIndex() error {
 	p.state.BlockIndex--
 
 	// update on-disk state
-	err := p.storage.storePodResource(p.id, stateFileType, p.state)
+	err := p.storage.storeSandboxResource(p.id, stateFileType, p.state)
 	if err != nil {
 		return err
 	}
@@ -1026,7 +1026,7 @@ func (p *Pod) decrementPodBlockIndex() error {
 	return nil
 }
 
-func (p *Pod) setContainersState(state stateString) error {
+func (p *Sandbox) setContainersState(state stateString) error {
 	if state == "" {
 		return errNeedState
 	}
@@ -1040,12 +1040,12 @@ func (p *Pod) setContainersState(state stateString) error {
 	return nil
 }
 
-func (p *Pod) deleteContainerState(containerID string) error {
+func (p *Sandbox) deleteContainerState(containerID string) error {
 	if containerID == "" {
 		return errNeedContainerID
 	}
 
-	err := p.storage.deleteContainerResources(p.id, containerID, []podResource{stateFileType})
+	err := p.storage.deleteContainerResources(p.id, containerID, []sandboxResource{stateFileType})
 	if err != nil {
 		return err
 	}
@@ -1053,7 +1053,7 @@ func (p *Pod) deleteContainerState(containerID string) error {
 	return nil
 }
 
-func (p *Pod) deleteContainersState() error {
+func (p *Sandbox) deleteContainersState() error {
 	for _, container := range p.config.Containers {
 		err := p.deleteContainerState(container.ID)
 		if err != nil {
@@ -1064,21 +1064,21 @@ func (p *Pod) deleteContainersState() error {
 	return nil
 }
 
-// togglePausePod pauses a pod if pause is set to true, else it resumes
+// togglePauseSandbox pauses a sandbox if pause is set to true, else it resumes
 // it.
-func togglePausePod(podID string, pause bool) (*Pod, error) {
-	if podID == "" {
-		return nil, errNeedPod
+func togglePauseSandbox(sandboxID string, pause bool) (*Sandbox, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandbox
 	}
 
-	lockFile, err := rwLockPod(podID)
+	lockFile, err := rwLockSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
-	defer unlockPod(lockFile)
+	defer unlockSandbox(lockFile)
 
-	// Fetch the pod from storage and create it.
-	p, err := fetchPod(podID)
+	// Fetch the sandbox from storage and create it.
+	p, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}

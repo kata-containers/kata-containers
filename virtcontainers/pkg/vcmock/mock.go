@@ -16,8 +16,8 @@
 // for testing.
 //
 // This implementation calls the function set in the object that
-// corresponds to the name of the method (for example, when CreatePod()
-// is called, that method will try to call CreatePodFunc). If no
+// corresponds to the name of the method (for example, when CreateSandbox()
+// is called, that method will try to call CreateSandboxFunc). If no
 // function is defined for the method, it will return an error in a
 // well-known format. Callers can detect this scenario by calling
 // IsMockError().
@@ -43,155 +43,155 @@ func (m *VCMock) SetLogger(logger logrus.FieldLogger) {
 	}
 }
 
-// CreatePod implements the VC function of the same name.
-func (m *VCMock) CreatePod(podConfig vc.PodConfig) (vc.VCPod, error) {
-	if m.CreatePodFunc != nil {
-		return m.CreatePodFunc(podConfig)
+// CreateSandbox implements the VC function of the same name.
+func (m *VCMock) CreateSandbox(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	if m.CreateSandboxFunc != nil {
+		return m.CreateSandboxFunc(sandboxConfig)
 	}
 
-	return nil, fmt.Errorf("%s: %s (%+v): podConfig: %v", mockErrorPrefix, getSelf(), m, podConfig)
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxConfig: %v", mockErrorPrefix, getSelf(), m, sandboxConfig)
 }
 
-// DeletePod implements the VC function of the same name.
-func (m *VCMock) DeletePod(podID string) (vc.VCPod, error) {
-	if m.DeletePodFunc != nil {
-		return m.DeletePodFunc(podID)
+// DeleteSandbox implements the VC function of the same name.
+func (m *VCMock) DeleteSandbox(sandboxID string) (vc.VCSandbox, error) {
+	if m.DeleteSandboxFunc != nil {
+		return m.DeleteSandboxFunc(sandboxID)
 	}
 
-	return nil, fmt.Errorf("%s: %s (%+v): podID: %v", mockErrorPrefix, getSelf(), m, podID)
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
 }
 
-// StartPod implements the VC function of the same name.
-func (m *VCMock) StartPod(podID string) (vc.VCPod, error) {
-	if m.StartPodFunc != nil {
-		return m.StartPodFunc(podID)
+// StartSandbox implements the VC function of the same name.
+func (m *VCMock) StartSandbox(sandboxID string) (vc.VCSandbox, error) {
+	if m.StartSandboxFunc != nil {
+		return m.StartSandboxFunc(sandboxID)
 	}
 
-	return nil, fmt.Errorf("%s: %s (%+v): podID: %v", mockErrorPrefix, getSelf(), m, podID)
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
 }
 
-// StopPod implements the VC function of the same name.
-func (m *VCMock) StopPod(podID string) (vc.VCPod, error) {
-	if m.StopPodFunc != nil {
-		return m.StopPodFunc(podID)
+// StopSandbox implements the VC function of the same name.
+func (m *VCMock) StopSandbox(sandboxID string) (vc.VCSandbox, error) {
+	if m.StopSandboxFunc != nil {
+		return m.StopSandboxFunc(sandboxID)
 	}
 
-	return nil, fmt.Errorf("%s: %s (%+v): podID: %v", mockErrorPrefix, getSelf(), m, podID)
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
 }
 
-// RunPod implements the VC function of the same name.
-func (m *VCMock) RunPod(podConfig vc.PodConfig) (vc.VCPod, error) {
-	if m.RunPodFunc != nil {
-		return m.RunPodFunc(podConfig)
+// RunSandbox implements the VC function of the same name.
+func (m *VCMock) RunSandbox(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	if m.RunSandboxFunc != nil {
+		return m.RunSandboxFunc(sandboxConfig)
 	}
 
-	return nil, fmt.Errorf("%s: %s (%+v): podConfig: %v", mockErrorPrefix, getSelf(), m, podConfig)
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxConfig: %v", mockErrorPrefix, getSelf(), m, sandboxConfig)
 }
 
-// ListPod implements the VC function of the same name.
-func (m *VCMock) ListPod() ([]vc.PodStatus, error) {
-	if m.ListPodFunc != nil {
-		return m.ListPodFunc()
+// ListSandbox implements the VC function of the same name.
+func (m *VCMock) ListSandbox() ([]vc.SandboxStatus, error) {
+	if m.ListSandboxFunc != nil {
+		return m.ListSandboxFunc()
 	}
 
 	return nil, fmt.Errorf("%s: %s", mockErrorPrefix, getSelf())
 }
 
-// StatusPod implements the VC function of the same name.
-func (m *VCMock) StatusPod(podID string) (vc.PodStatus, error) {
-	if m.StatusPodFunc != nil {
-		return m.StatusPodFunc(podID)
+// StatusSandbox implements the VC function of the same name.
+func (m *VCMock) StatusSandbox(sandboxID string) (vc.SandboxStatus, error) {
+	if m.StatusSandboxFunc != nil {
+		return m.StatusSandboxFunc(sandboxID)
 	}
 
-	return vc.PodStatus{}, fmt.Errorf("%s: %s (%+v): podID: %v", mockErrorPrefix, getSelf(), m, podID)
+	return vc.SandboxStatus{}, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
 }
 
-// PausePod implements the VC function of the same name.
-func (m *VCMock) PausePod(podID string) (vc.VCPod, error) {
-	if m.PausePodFunc != nil {
-		return m.PausePodFunc(podID)
+// PauseSandbox implements the VC function of the same name.
+func (m *VCMock) PauseSandbox(sandboxID string) (vc.VCSandbox, error) {
+	if m.PauseSandboxFunc != nil {
+		return m.PauseSandboxFunc(sandboxID)
 	}
 
-	return nil, fmt.Errorf("%s: %s (%+v): podID: %v", mockErrorPrefix, getSelf(), m, podID)
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
 }
 
-// ResumePod implements the VC function of the same name.
-func (m *VCMock) ResumePod(podID string) (vc.VCPod, error) {
-	if m.ResumePodFunc != nil {
-		return m.ResumePodFunc(podID)
+// ResumeSandbox implements the VC function of the same name.
+func (m *VCMock) ResumeSandbox(sandboxID string) (vc.VCSandbox, error) {
+	if m.ResumeSandboxFunc != nil {
+		return m.ResumeSandboxFunc(sandboxID)
 	}
 
-	return nil, fmt.Errorf("%s: %s (%+v): podID: %v", mockErrorPrefix, getSelf(), m, podID)
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
 }
 
 // CreateContainer implements the VC function of the same name.
-func (m *VCMock) CreateContainer(podID string, containerConfig vc.ContainerConfig) (vc.VCPod, vc.VCContainer, error) {
+func (m *VCMock) CreateContainer(sandboxID string, containerConfig vc.ContainerConfig) (vc.VCSandbox, vc.VCContainer, error) {
 	if m.CreateContainerFunc != nil {
-		return m.CreateContainerFunc(podID, containerConfig)
+		return m.CreateContainerFunc(sandboxID, containerConfig)
 	}
 
-	return nil, nil, fmt.Errorf("%s: %s (%+v): podID: %v, containerConfig: %v", mockErrorPrefix, getSelf(), m, podID, containerConfig)
+	return nil, nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerConfig: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerConfig)
 }
 
 // DeleteContainer implements the VC function of the same name.
-func (m *VCMock) DeleteContainer(podID, containerID string) (vc.VCContainer, error) {
+func (m *VCMock) DeleteContainer(sandboxID, containerID string) (vc.VCContainer, error) {
 	if m.DeleteContainerFunc != nil {
-		return m.DeleteContainerFunc(podID, containerID)
+		return m.DeleteContainerFunc(sandboxID, containerID)
 	}
 
-	return nil, fmt.Errorf("%s: %s (%+v): podID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, podID, containerID)
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
 }
 
 // StartContainer implements the VC function of the same name.
-func (m *VCMock) StartContainer(podID, containerID string) (vc.VCContainer, error) {
+func (m *VCMock) StartContainer(sandboxID, containerID string) (vc.VCContainer, error) {
 	if m.StartContainerFunc != nil {
-		return m.StartContainerFunc(podID, containerID)
+		return m.StartContainerFunc(sandboxID, containerID)
 	}
 
-	return nil, fmt.Errorf("%s: %s (%+v): podID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, podID, containerID)
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
 }
 
 // StopContainer implements the VC function of the same name.
-func (m *VCMock) StopContainer(podID, containerID string) (vc.VCContainer, error) {
+func (m *VCMock) StopContainer(sandboxID, containerID string) (vc.VCContainer, error) {
 	if m.StopContainerFunc != nil {
-		return m.StopContainerFunc(podID, containerID)
+		return m.StopContainerFunc(sandboxID, containerID)
 	}
 
-	return nil, fmt.Errorf("%s: %s (%+v): podID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, podID, containerID)
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
 }
 
 // EnterContainer implements the VC function of the same name.
-func (m *VCMock) EnterContainer(podID, containerID string, cmd vc.Cmd) (vc.VCPod, vc.VCContainer, *vc.Process, error) {
+func (m *VCMock) EnterContainer(sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
 	if m.EnterContainerFunc != nil {
-		return m.EnterContainerFunc(podID, containerID, cmd)
+		return m.EnterContainerFunc(sandboxID, containerID, cmd)
 	}
 
-	return nil, nil, nil, fmt.Errorf("%s: %s (%+v): podID: %v, containerID: %v, cmd: %v", mockErrorPrefix, getSelf(), m, podID, containerID, cmd)
+	return nil, nil, nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v, cmd: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID, cmd)
 }
 
 // StatusContainer implements the VC function of the same name.
-func (m *VCMock) StatusContainer(podID, containerID string) (vc.ContainerStatus, error) {
+func (m *VCMock) StatusContainer(sandboxID, containerID string) (vc.ContainerStatus, error) {
 	if m.StatusContainerFunc != nil {
-		return m.StatusContainerFunc(podID, containerID)
+		return m.StatusContainerFunc(sandboxID, containerID)
 	}
 
-	return vc.ContainerStatus{}, fmt.Errorf("%s: %s (%+v): podID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, podID, containerID)
+	return vc.ContainerStatus{}, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
 }
 
 // KillContainer implements the VC function of the same name.
-func (m *VCMock) KillContainer(podID, containerID string, signal syscall.Signal, all bool) error {
+func (m *VCMock) KillContainer(sandboxID, containerID string, signal syscall.Signal, all bool) error {
 	if m.KillContainerFunc != nil {
-		return m.KillContainerFunc(podID, containerID, signal, all)
+		return m.KillContainerFunc(sandboxID, containerID, signal, all)
 	}
 
-	return fmt.Errorf("%s: %s (%+v): podID: %v, containerID: %v, signal: %v, all: %v", mockErrorPrefix, getSelf(), m, podID, containerID, signal, all)
+	return fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v, signal: %v, all: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID, signal, all)
 }
 
 // ProcessListContainer implements the VC function of the same name.
-func (m *VCMock) ProcessListContainer(podID, containerID string, options vc.ProcessListOptions) (vc.ProcessList, error) {
+func (m *VCMock) ProcessListContainer(sandboxID, containerID string, options vc.ProcessListOptions) (vc.ProcessList, error) {
 	if m.ProcessListContainerFunc != nil {
-		return m.ProcessListContainerFunc(podID, containerID, options)
+		return m.ProcessListContainerFunc(sandboxID, containerID, options)
 	}
 
-	return nil, fmt.Errorf("%s: %s (%+v): podID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, podID, containerID)
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
 }

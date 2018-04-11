@@ -394,12 +394,12 @@ func TestCodeFromCmdVersion(t *testing.T) {
 	testCodeFromCmd(t, Version, VersionCode)
 }
 
-func TestCodeFromCmdStartPod(t *testing.T) {
-	testCodeFromCmd(t, StartPod, StartPodCode)
+func TestCodeFromCmdStartSandbox(t *testing.T) {
+	testCodeFromCmd(t, StartSandbox, StartSandboxCode)
 }
 
-func TestCodeFromCmdDestroyPod(t *testing.T) {
-	testCodeFromCmd(t, DestroyPod, DestroyPodCode)
+func TestCodeFromCmdDestroySandbox(t *testing.T) {
+	testCodeFromCmd(t, DestroySandbox, DestroySandboxCode)
 }
 
 func TestCodeFromCmdExecCmd(t *testing.T) {
@@ -541,8 +541,8 @@ func TestWaitForReadyError(t *testing.T) {
 
 var cmdList = []string{
 	Version,
-	StartPod,
-	DestroyPod,
+	StartSandbox,
+	DestroySandbox,
 	ExecCmd,
 	Ready,
 	Ack,

@@ -49,22 +49,22 @@ var cgroupsDirPath string
 
 var procMountInfo = "/proc/self/mountinfo"
 
-// getContainerInfo returns the container status and its pod ID.
+// getContainerInfo returns the container status and its sandbox ID.
 func getContainerInfo(containerID string) (vc.ContainerStatus, string, error) {
 	// container ID MUST be provided.
 	if containerID == "" {
 		return vc.ContainerStatus{}, "", fmt.Errorf("Missing container ID")
 	}
 
-	podStatusList, err := vci.ListPod()
+	sandboxStatusList, err := vci.ListSandbox()
 	if err != nil {
 		return vc.ContainerStatus{}, "", err
 	}
 
-	for _, podStatus := range podStatusList {
-		for _, containerStatus := range podStatus.ContainersStatus {
+	for _, sandboxStatus := range sandboxStatusList {
+		for _, containerStatus := range sandboxStatus.ContainersStatus {
 			if containerStatus.ID == containerID {
-				return containerStatus, podStatus.ID, nil
+				return containerStatus, sandboxStatus.ID, nil
 			}
 		}
 	}
@@ -76,7 +76,7 @@ func getContainerInfo(containerID string) (vc.ContainerStatus, string, error) {
 }
 
 func getExistingContainerInfo(containerID string) (vc.ContainerStatus, string, error) {
-	cStatus, podID, err := getContainerInfo(containerID)
+	cStatus, sandboxID, err := getContainerInfo(containerID)
 	if err != nil {
 		return vc.ContainerStatus{}, "", err
 	}
@@ -86,7 +86,7 @@ func getExistingContainerInfo(containerID string) (vc.ContainerStatus, string, e
 		return vc.ContainerStatus{}, "", fmt.Errorf("Container ID (%v) does not exist", containerID)
 	}
 
-	return cStatus, podID, nil
+	return cStatus, sandboxID, nil
 }
 
 func validCreateParams(containerID, bundlePath string) (string, error) {
@@ -130,7 +130,7 @@ func validCreateParams(containerID, bundlePath string) (string, error) {
 // processCgroupsPath process the cgroups path as expected from the
 // OCI runtime specification. It returns a list of complete paths
 // that should be created and used for every specified resource.
-func processCgroupsPath(ociSpec oci.CompatOCISpec, isPod bool) ([]string, error) {
+func processCgroupsPath(ociSpec oci.CompatOCISpec, isSandbox bool) ([]string, error) {
 	var cgroupsPathList []string
 
 	if ociSpec.Linux.CgroupsPath == "" {
@@ -142,7 +142,7 @@ func processCgroupsPath(ociSpec oci.CompatOCISpec, isPod bool) ([]string, error)
 	}
 
 	if ociSpec.Linux.Resources.Memory != nil {
-		memCgroupsPath, err := processCgroupsPathForResource(ociSpec, "memory", isPod)
+		memCgroupsPath, err := processCgroupsPathForResource(ociSpec, "memory", isSandbox)
 		if err != nil {
 			return []string{}, err
 		}
@@ -153,7 +153,7 @@ func processCgroupsPath(ociSpec oci.CompatOCISpec, isPod bool) ([]string, error)
 	}
 
 	if ociSpec.Linux.Resources.CPU != nil {
-		cpuCgroupsPath, err := processCgroupsPathForResource(ociSpec, "cpu", isPod)
+		cpuCgroupsPath, err := processCgroupsPathForResource(ociSpec, "cpu", isSandbox)
 		if err != nil {
 			return []string{}, err
 		}
@@ -164,7 +164,7 @@ func processCgroupsPath(ociSpec oci.CompatOCISpec, isPod bool) ([]string, error)
 	}
 
 	if ociSpec.Linux.Resources.Pids != nil {
-		pidsCgroupsPath, err := processCgroupsPathForResource(ociSpec, "pids", isPod)
+		pidsCgroupsPath, err := processCgroupsPathForResource(ociSpec, "pids", isSandbox)
 		if err != nil {
 			return []string{}, err
 		}
@@ -175,7 +175,7 @@ func processCgroupsPath(ociSpec oci.CompatOCISpec, isPod bool) ([]string, error)
 	}
 
 	if ociSpec.Linux.Resources.BlockIO != nil {
-		blkIOCgroupsPath, err := processCgroupsPathForResource(ociSpec, "blkio", isPod)
+		blkIOCgroupsPath, err := processCgroupsPathForResource(ociSpec, "blkio", isSandbox)
 		if err != nil {
 			return []string{}, err
 		}
@@ -188,7 +188,7 @@ func processCgroupsPath(ociSpec oci.CompatOCISpec, isPod bool) ([]string, error)
 	return cgroupsPathList, nil
 }
 
-func processCgroupsPathForResource(ociSpec oci.CompatOCISpec, resource string, isPod bool) (string, error) {
+func processCgroupsPathForResource(ociSpec oci.CompatOCISpec, resource string, isSandbox bool) (string, error) {
 	if resource == "" {
 		return "", errNeedLinuxResource
 	}

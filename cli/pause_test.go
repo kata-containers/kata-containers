@@ -24,12 +24,12 @@ import (
 )
 
 var (
-	testPausePodFuncReturnNil = func(podID string) (vc.VCPod, error) {
-		return &vcmock.Pod{}, nil
+	testPauseSandboxFuncReturnNil = func(sandboxID string) (vc.VCSandbox, error) {
+		return &vcmock.Sandbox{}, nil
 	}
 
-	testResumePodFuncReturnNil = func(podID string) (vc.VCPod, error) {
-		return &vcmock.Pod{}, nil
+	testResumeSandboxFuncReturnNil = func(sandboxID string) (vc.VCSandbox, error) {
+		return &vcmock.Sandbox{}, nil
 	}
 )
 
@@ -40,13 +40,13 @@ func TestPauseCLIFunctionSuccessful(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.PausePodFunc = testPausePodFuncReturnNil
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, state, state, map[string]string{}), nil
+	testingImpl.PauseSandboxFunc = testPauseSandboxFuncReturnNil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
 	}
 	defer func() {
-		testingImpl.PausePodFunc = nil
-		testingImpl.ListPodFunc = nil
+		testingImpl.PauseSandboxFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -58,13 +58,13 @@ func TestPauseCLIFunctionSuccessful(t *testing.T) {
 func TestPauseCLIFunctionContainerNotExistFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.PausePodFunc = testPausePodFuncReturnNil
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{}, nil
+	testingImpl.PauseSandboxFunc = testPauseSandboxFuncReturnNil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{}, nil
 	}
 	defer func() {
-		testingImpl.PausePodFunc = nil
-		testingImpl.ListPodFunc = nil
+		testingImpl.PauseSandboxFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -73,18 +73,18 @@ func TestPauseCLIFunctionContainerNotExistFailure(t *testing.T) {
 	execCLICommandFunc(assert, pauseCLICommand, set, true)
 }
 
-func TestPauseCLIFunctionPausePodFailure(t *testing.T) {
+func TestPauseCLIFunctionPauseSandboxFailure(t *testing.T) {
 	assert := assert.New(t)
 
 	state := vc.State{
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, state, state, map[string]string{}), nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
 	}
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -100,13 +100,13 @@ func TestResumeCLIFunctionSuccessful(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ResumePodFunc = testResumePodFuncReturnNil
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, state, state, map[string]string{}), nil
+	testingImpl.ResumeSandboxFunc = testResumeSandboxFuncReturnNil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
 	}
 	defer func() {
-		testingImpl.ResumePodFunc = nil
-		testingImpl.ListPodFunc = nil
+		testingImpl.ResumeSandboxFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -118,13 +118,13 @@ func TestResumeCLIFunctionSuccessful(t *testing.T) {
 func TestResumeCLIFunctionContainerNotExistFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ResumePodFunc = testResumePodFuncReturnNil
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{}, nil
+	testingImpl.ResumeSandboxFunc = testResumeSandboxFuncReturnNil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{}, nil
 	}
 	defer func() {
-		testingImpl.ResumePodFunc = nil
-		testingImpl.ListPodFunc = nil
+		testingImpl.ResumeSandboxFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -133,18 +133,18 @@ func TestResumeCLIFunctionContainerNotExistFailure(t *testing.T) {
 	execCLICommandFunc(assert, resumeCLICommand, set, true)
 }
 
-func TestResumeCLIFunctionPausePodFailure(t *testing.T) {
+func TestResumeCLIFunctionPauseSandboxFailure(t *testing.T) {
 	assert := assert.New(t)
 
 	state := vc.State{
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, state, state, map[string]string{}), nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
 	}
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)

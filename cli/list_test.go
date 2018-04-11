@@ -375,7 +375,7 @@ func TestListCLIFunctionNoContainers(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestListGetContainersListPodFail(t *testing.T) {
+func TestListGetContainersListSandboxFail(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpdir, err := ioutil.TempDir(testDir, "")
@@ -401,13 +401,13 @@ func TestListGetContainersListPodFail(t *testing.T) {
 func TestListGetContainers(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir(testDir, "")
@@ -430,24 +430,24 @@ func TestListGetContainers(t *testing.T) {
 	assert.Equal(state, []fullContainerState(nil))
 }
 
-func TestListGetContainersPodWithoutContainers(t *testing.T) {
+func TestListGetContainersSandboxWithoutContainers(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{
 			{
-				ID:               pod.ID(),
+				ID:               sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus(nil),
 			},
 		}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir(testDir, "")
@@ -470,28 +470,28 @@ func TestListGetContainersPodWithoutContainers(t *testing.T) {
 	assert.Equal(state, []fullContainerState(nil))
 }
 
-func TestListGetContainersPodWithContainer(t *testing.T) {
+func TestListGetContainersSandboxWithContainer(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpdir, err := ioutil.TempDir(testDir, "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 	}
 
 	rootfs := filepath.Join(tmpdir, "rootfs")
 	err = os.MkdirAll(rootfs, testDirMode)
 	assert.NoError(err)
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{
 			{
-				ID: pod.ID(),
+				ID: sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{
 					{
-						ID:          pod.ID(),
+						ID:          sandbox.ID(),
 						Annotations: map[string]string{},
 						RootFs:      rootfs,
 					},
@@ -501,7 +501,7 @@ func TestListGetContainersPodWithContainer(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	app := cli.NewApp()
@@ -550,19 +550,19 @@ func TestListCLIFunctionFormatFail(t *testing.T) {
 		{"invalid", invalidFlags},
 	}
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 	}
 
 	rootfs := filepath.Join(tmpdir, "rootfs")
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{
 			{
-				ID: pod.ID(),
+				ID: sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{
 					{
-						ID: pod.ID(),
+						ID: sandbox.ID(),
 						Annotations: map[string]string{
 							vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 						},
@@ -574,7 +574,7 @@ func TestListCLIFunctionFormatFail(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	savedOutputFile := defaultOutputFile
@@ -651,21 +651,21 @@ func TestListCLIFunctionQuiet(t *testing.T) {
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 	}
 
 	rootfs := filepath.Join(tmpdir, "rootfs")
 	err = os.MkdirAll(rootfs, testDirMode)
 	assert.NoError(err)
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{
 			{
-				ID: pod.ID(),
+				ID: sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{
 					{
-						ID: pod.ID(),
+						ID: sandbox.ID(),
 						Annotations: map[string]string{
 							vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 						},
@@ -677,7 +677,7 @@ func TestListCLIFunctionQuiet(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	set := flag.NewFlagSet("test", 0)
@@ -713,7 +713,7 @@ func TestListCLIFunctionQuiet(t *testing.T) {
 	assert.NoError(err)
 
 	trimmed := strings.TrimSpace(text)
-	assert.Equal(testPodID, trimmed)
+	assert.Equal(testSandboxID, trimmed)
 }
 
 func TestListGetDirOwner(t *testing.T) {

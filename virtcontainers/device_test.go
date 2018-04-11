@@ -326,12 +326,12 @@ func TestAttachBlockDevice(t *testing.T) {
 		BlockDeviceDriver: VirtioBlock,
 	}
 
-	config := &PodConfig{
+	config := &SandboxConfig{
 		HypervisorConfig: hConfig,
 	}
 
-	pod := &Pod{
-		id:         testPodID,
+	sandbox := &Sandbox{
+		id:         testSandboxID,
 		storage:    fs,
 		hypervisor: hypervisor,
 		config:     config,
@@ -339,12 +339,12 @@ func TestAttachBlockDevice(t *testing.T) {
 
 	contID := "100"
 	container := Container{
-		pod: pod,
-		id:  contID,
+		sandbox: sandbox,
+		id:      contID,
 	}
 
 	// create state file
-	path := filepath.Join(runStoragePath, testPodID, container.ID())
+	path := filepath.Join(runStoragePath, testSandboxID, container.ID())
 	err := os.MkdirAll(path, dirMode)
 	if err != nil {
 		t.Fatal(err)
@@ -386,7 +386,7 @@ func TestAttachBlockDevice(t *testing.T) {
 	err = device.detach(hypervisor)
 	assert.Nil(t, err)
 
-	container.pod.config.HypervisorConfig.BlockDeviceDriver = VirtioSCSI
+	container.sandbox.config.HypervisorConfig.BlockDeviceDriver = VirtioSCSI
 	err = device.attach(hypervisor, &container)
 	assert.Nil(t, err)
 

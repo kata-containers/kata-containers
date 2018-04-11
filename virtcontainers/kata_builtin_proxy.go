@@ -28,20 +28,20 @@ import (
 // This is a kata builtin proxy implementation of the proxy interface. Kata proxy
 // functionality is implemented inside the virtcontainers library.
 type kataBuiltInProxy struct {
-	podID string
-	conn  net.Conn
+	sandboxID string
+	conn      net.Conn
 }
 
 // start is the proxy start implementation for kata builtin proxy.
 // It starts the console watcher for the guest.
 // It returns agentURL to let agent connect directly.
-func (p *kataBuiltInProxy) start(pod Pod, params proxyParams) (int, string, error) {
+func (p *kataBuiltInProxy) start(sandbox Sandbox, params proxyParams) (int, string, error) {
 	if p.conn != nil {
-		return -1, "", fmt.Errorf("kata builtin proxy running for pod %s", p.podID)
+		return -1, "", fmt.Errorf("kata builtin proxy running for sandbox %s", p.sandboxID)
 	}
 
-	p.podID = pod.id
-	console := pod.hypervisor.getPodConsole(pod.id)
+	p.sandboxID = sandbox.id
+	console := sandbox.hypervisor.getSandboxConsole(sandbox.id)
 	err := p.watchConsole(consoleProtoUnix, console, params.logger)
 	if err != nil {
 		return -1, "", err
@@ -51,11 +51,11 @@ func (p *kataBuiltInProxy) start(pod Pod, params proxyParams) (int, string, erro
 }
 
 // stop is the proxy stop implementation for kata builtin proxy.
-func (p *kataBuiltInProxy) stop(pod Pod, pid int) error {
+func (p *kataBuiltInProxy) stop(sandbox Sandbox, pid int) error {
 	if p.conn != nil {
 		p.conn.Close()
 		p.conn = nil
-		p.podID = ""
+		p.sandboxID = ""
 	}
 	return nil
 }
@@ -84,7 +84,7 @@ func (p *kataBuiltInProxy) watchConsole(proto, console string, logger *logrus.En
 	go func() {
 		scanner = bufio.NewScanner(conn)
 		for scanner.Scan() {
-			fmt.Printf("[POD-%s] vmconsole: %s\n", p.podID, scanner.Text())
+			fmt.Printf("[SB-%s] vmconsole: %s\n", p.sandboxID, scanner.Text())
 		}
 
 		if err := scanner.Err(); err != nil {

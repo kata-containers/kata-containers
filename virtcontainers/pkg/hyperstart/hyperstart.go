@@ -32,15 +32,15 @@ import (
 // Need to be in sync with hyperstart/src/api.h
 const (
 	Version         = "version"
-	StartPod        = "startpod"
-	DestroyPod      = "destroypod"
+	StartSandbox    = "startsandbox"
+	DestroySandbox  = "destroysandbox"
 	ExecCmd         = "execcmd"
 	Ready           = "ready"
 	Ack             = "ack"
 	Error           = "error"
 	WinSize         = "winsize"
 	Ping            = "ping"
-	FinishPod       = "finishpod"
+	FinishSandbox   = "finishsandbox"
 	Next            = "next"
 	WriteFile       = "writefile"
 	ReadFile        = "readfile"
@@ -57,8 +57,8 @@ const (
 // and its corresponding code.
 var CodeList = map[string]uint32{
 	Version:         VersionCode,
-	StartPod:        StartPodCode,
-	DestroyPod:      DestroyPodCode,
+	StartSandbox:    StartSandboxCode,
+	DestroySandbox:  DestroySandboxCode,
 	ExecCmd:         ExecCmdCode,
 	Ready:           ReadyCode,
 	Ack:             AckCode,
