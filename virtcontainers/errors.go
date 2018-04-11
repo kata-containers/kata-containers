@@ -22,10 +22,10 @@ import (
 
 // common error objects used for argument checking
 var (
-	errNeedPod         = errors.New("Pod must be specified")
-	errNeedPodID       = errors.New("Pod ID cannot be empty")
+	errNeedSandbox     = errors.New("Sandbox must be specified")
+	errNeedSandboxID   = errors.New("Sandbox ID cannot be empty")
 	errNeedContainerID = errors.New("Container ID cannot be empty")
 	errNeedFile        = errors.New("File cannot be empty")
 	errNeedState       = errors.New("State cannot be empty")
-	errInvalidResource = errors.New("Invalid pod resource")
+	errInvalidResource = errors.New("Invalid sandbox resource")
 )

@@ -115,7 +115,7 @@ func create(containerID, bundlePath, console, pidFilePath string, detach bool,
 
 	switch containerType {
 	case vc.PodSandbox:
-		process, err = createPod(ociSpec, runtimeConfig, containerID, bundlePath, console, disableOutput)
+		process, err = createSandbox(ociSpec, runtimeConfig, containerID, bundlePath, console, disableOutput)
 		if err != nil {
 			return err
 		}
@@ -131,7 +131,7 @@ func create(containerID, bundlePath, console, pidFilePath string, detach bool,
 	// is shim's in our case. This is mandatory to make sure there is no one
 	// else (like Docker) trying to create those files on our behalf. We want to
 	// know those files location so that we can remove them when delete is called.
-	cgroupsPathList, err := processCgroupsPath(ociSpec, containerType.IsPod())
+	cgroupsPathList, err := processCgroupsPath(ociSpec, containerType.IsSandbox())
 	if err != nil {
 		return err
 	}
@@ -225,7 +225,7 @@ func setKernelParams(containerID string, runtimeConfig *oci.RuntimeConfig) error
 	return nil
 }
 
-func createPod(ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
+func createSandbox(ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
 	containerID, bundlePath, console string, disableOutput bool) (vc.Process, error) {
 
 	err := setKernelParams(containerID, &runtimeConfig)
@@ -233,19 +233,19 @@ func createPod(ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
 		return vc.Process{}, err
 	}
 
-	podConfig, err := oci.PodConfig(ociSpec, runtimeConfig, bundlePath, containerID, console, disableOutput)
+	sandboxConfig, err := oci.SandboxConfig(ociSpec, runtimeConfig, bundlePath, containerID, console, disableOutput)
 	if err != nil {
 		return vc.Process{}, err
 	}
 
-	pod, err := vci.CreatePod(podConfig)
+	sandbox, err := vci.CreateSandbox(sandboxConfig)
 	if err != nil {
 		return vc.Process{}, err
 	}
 
-	containers := pod.GetAllContainers()
+	containers := sandbox.GetAllContainers()
 	if len(containers) != 1 {
-		return vc.Process{}, fmt.Errorf("BUG: Container list from pod is wrong, expecting only one container, found %d containers", len(containers))
+		return vc.Process{}, fmt.Errorf("BUG: Container list from sandbox is wrong, expecting only one container, found %d containers", len(containers))
 	}
 
 	return containers[0].Process(), nil
@@ -259,12 +259,12 @@ func createContainer(ociSpec oci.CompatOCISpec, containerID, bundlePath,
 		return vc.Process{}, err
 	}
 
-	podID, err := ociSpec.PodID()
+	sandboxID, err := ociSpec.SandboxID()
 	if err != nil {
 		return vc.Process{}, err
 	}
 
-	_, c, err := vci.CreateContainer(podID, contConfig)
+	_, c, err := vci.CreateContainer(sandboxID, contConfig)
 	if err != nil {
 		return vc.Process{}, err
 	}

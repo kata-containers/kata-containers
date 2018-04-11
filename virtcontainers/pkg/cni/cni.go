@@ -123,17 +123,17 @@ func getDefNetwork(confDir, binDir string) (*cniNetwork, error) {
 	return getNetwork(confDir, binDir, DefNetName, false)
 }
 
-func buildRuntimeConf(podID, podNetNSPath, ifName string) *libcni.RuntimeConf {
+func buildRuntimeConf(sandboxID, sandboxNetNSPath, ifName string) *libcni.RuntimeConf {
 	return &libcni.RuntimeConf{
-		ContainerID: podID,
-		NetNS:       podNetNSPath,
+		ContainerID: sandboxID,
+		NetNS:       sandboxNetNSPath,
 		IfName:      ifName,
 	}
 }
 
 // AddNetwork calls the CNI plugin to create a network between the host and the network namespace.
-func (plugin *NetworkPlugin) AddNetwork(podID, netNSPath, ifName string) (types.Result, error) {
-	rt := buildRuntimeConf(podID, netNSPath, ifName)
+func (plugin *NetworkPlugin) AddNetwork(sandboxID, netNSPath, ifName string) (types.Result, error) {
+	rt := buildRuntimeConf(sandboxID, netNSPath, ifName)
 
 	_, err := plugin.loNetwork.cniConfig.AddNetwork(plugin.loNetwork.networkConfig, rt)
 	if err != nil {
@@ -150,8 +150,8 @@ func (plugin *NetworkPlugin) AddNetwork(podID, netNSPath, ifName string) (types.
 
 // RemoveNetwork calls the CNI plugin to remove a specific network previously created between
 // the host and the network namespace.
-func (plugin *NetworkPlugin) RemoveNetwork(podID, netNSPath, ifName string) error {
-	rt := buildRuntimeConf(podID, netNSPath, ifName)
+func (plugin *NetworkPlugin) RemoveNetwork(sandboxID, netNSPath, ifName string) error {
+	rt := buildRuntimeConf(sandboxID, netNSPath, ifName)
 
 	err := plugin.defNetwork.cniConfig.DelNetwork(plugin.defNetwork.networkConfig, rt)
 	if err != nil {

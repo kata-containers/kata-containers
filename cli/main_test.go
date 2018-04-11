@@ -50,7 +50,7 @@ const (
 	// small docker image used to create root filesystems from
 	testDockerImage = "busybox"
 
-	testPodID       = "99999999-9999-9999-99999999999999999"
+	testSandboxID   = "99999999-9999-9999-99999999999999999"
 	testContainerID = "1"
 	testBundle      = "bundle"
 )
@@ -449,11 +449,11 @@ func writeOCIConfigFile(spec oci.CompatOCISpec, configPath string) error {
 	return ioutil.WriteFile(configPath, bytes, testFileMode)
 }
 
-func newSingleContainerPodStatusList(podID, containerID string, podState, containerState vc.State, annotations map[string]string) []vc.PodStatus {
-	return []vc.PodStatus{
+func newSingleContainerSandboxStatusList(sandboxID, containerID string, sandboxState, containerState vc.State, annotations map[string]string) []vc.SandboxStatus {
+	return []vc.SandboxStatus{
 		{
-			ID:    podID,
-			State: podState,
+			ID:    sandboxID,
+			State: sandboxState,
 			ContainersStatus: []vc.ContainerStatus{
 				{
 					ID:          containerID,

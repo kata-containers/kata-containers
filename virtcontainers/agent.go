@@ -23,7 +23,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-// AgentType describes the type of guest agent a Pod should run.
+// AgentType describes the type of guest agent a Sandbox should run.
 type AgentType string
 
 // ProcessListOptions contains the options used to list running
@@ -105,8 +105,8 @@ func newAgent(agentType AgentType) agent {
 	}
 }
 
-// newAgentConfig returns an agent config from a generic PodConfig interface.
-func newAgentConfig(config PodConfig) interface{} {
+// newAgentConfig returns an agent config from a generic SandboxConfig interface.
+func newAgentConfig(config SandboxConfig) interface{} {
 	switch config.AgentType {
 	case NoopAgentType:
 		return nil
@@ -138,42 +138,42 @@ type agent interface {
 	// init().
 	// After init() is called, agent implementations should be initialized and ready
 	// to handle all other Agent interface methods.
-	init(pod *Pod, config interface{}) error
+	init(sandbox *Sandbox, config interface{}) error
 
 	// capabilities should return a structure that specifies the capabilities
 	// supported by the agent.
 	capabilities() capabilities
 
-	// createPod will tell the agent to perform necessary setup for a Pod.
-	createPod(pod *Pod) error
+	// createSandbox will tell the agent to perform necessary setup for a Sandbox.
+	createSandbox(sandbox *Sandbox) error
 
 	// exec will tell the agent to run a command in an already running container.
-	exec(pod *Pod, c Container, cmd Cmd) (*Process, error)
+	exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, error)
 
-	// startPod will tell the agent to start all containers related to the Pod.
-	startPod(pod Pod) error
+	// startSandbox will tell the agent to start all containers related to the Sandbox.
+	startSandbox(sandbox Sandbox) error
 
-	// stopPod will tell the agent to stop all containers related to the Pod.
-	stopPod(pod Pod) error
+	// stopSandbox will tell the agent to stop all containers related to the Sandbox.
+	stopSandbox(sandbox Sandbox) error
 
-	// createContainer will tell the agent to create a container related to a Pod.
-	createContainer(pod *Pod, c *Container) (*Process, error)
+	// createContainer will tell the agent to create a container related to a Sandbox.
+	createContainer(sandbox *Sandbox, c *Container) (*Process, error)
 
-	// startContainer will tell the agent to start a container related to a Pod.
-	startContainer(pod Pod, c *Container) error
+	// startContainer will tell the agent to start a container related to a Sandbox.
+	startContainer(sandbox Sandbox, c *Container) error
 
-	// stopContainer will tell the agent to stop a container related to a Pod.
-	stopContainer(pod Pod, c Container) error
+	// stopContainer will tell the agent to stop a container related to a Sandbox.
+	stopContainer(sandbox Sandbox, c Container) error
 
 	// killContainer will tell the agent to send a signal to a
-	// container related to a Pod. If all is true, all processes in
+	// container related to a Sandbox. If all is true, all processes in
 	// the container will be sent the signal.
-	killContainer(pod Pod, c Container, signal syscall.Signal, all bool) error
+	killContainer(sandbox Sandbox, c Container, signal syscall.Signal, all bool) error
 
 	// processListContainer will list the processes running inside the container
-	processListContainer(pod Pod, c Container, options ProcessListOptions) (ProcessList, error)
+	processListContainer(sandbox Sandbox, c Container, options ProcessListOptions) (ProcessList, error)
 
-	// onlineCPUMem will online CPUs and Memory inside the Pod.
+	// onlineCPUMem will online CPUs and Memory inside the Sandbox.
 	// This function should be called after hot adding vCPUs or Memory.
 	onlineCPUMem() error
 }

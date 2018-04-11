@@ -51,7 +51,7 @@ func createConfig(fileName string, fileData string) (string, error) {
 	return configPath, nil
 }
 
-func TestMinimalPodConfig(t *testing.T) {
+func TestMinimalSandboxConfig(t *testing.T) {
 	configPath, err := createConfig("config.json", minimalConfig)
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestMinimalPodConfig(t *testing.T) {
 
 	var minimalOCISpec CompatOCISpec
 
-	//Marshal and unmarshall json to compare  podConfig and expectedPodConfig
+	//Marshal and unmarshall json to compare  sandboxConfig and expectedSandboxConfig
 	if err := json.Unmarshal([]byte(minimalConfig), &minimalOCISpec); err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestMinimalPodConfig(t *testing.T) {
 		NumInterfaces: 1,
 	}
 
-	expectedPodConfig := vc.PodConfig{
+	expectedSandboxConfig := vc.SandboxConfig{
 		ID:       containerID,
 		Hostname: "testHostname",
 
@@ -197,13 +197,13 @@ func TestMinimalPodConfig(t *testing.T) {
 		t.Fatalf("Could not parse config.json: %v", err)
 	}
 
-	podConfig, err := PodConfig(ociSpec, runtimeConfig, tempBundlePath, containerID, consolePath, false)
+	sandboxConfig, err := SandboxConfig(ociSpec, runtimeConfig, tempBundlePath, containerID, consolePath, false)
 	if err != nil {
-		t.Fatalf("Could not create Pod configuration %v", err)
+		t.Fatalf("Could not create Sandbox configuration %v", err)
 	}
 
-	if reflect.DeepEqual(podConfig, expectedPodConfig) == false {
-		t.Fatalf("Got %v\n expecting %v", podConfig, expectedPodConfig)
+	if reflect.DeepEqual(sandboxConfig, expectedSandboxConfig) == false {
+		t.Fatalf("Got %v\n expecting %v", sandboxConfig, expectedSandboxConfig)
 	}
 
 	if err := os.Remove(configPath); err != nil {
@@ -613,34 +613,34 @@ func TestContainerTypeFailure(t *testing.T) {
 	}
 }
 
-func TestPodIDSuccessful(t *testing.T) {
+func TestSandboxIDSuccessful(t *testing.T) {
 	var ociSpec CompatOCISpec
-	testPodID := "testPodID"
+	testSandboxID := "testSandboxID"
 
 	ociSpec.Annotations = map[string]string{
-		annotations.SandboxID: testPodID,
+		annotations.SandboxID: testSandboxID,
 	}
 
-	podID, err := ociSpec.PodID()
+	sandboxID, err := ociSpec.SandboxID()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if podID != testPodID {
-		t.Fatalf("Got %s, Expecting %s", podID, testPodID)
+	if sandboxID != testSandboxID {
+		t.Fatalf("Got %s, Expecting %s", sandboxID, testSandboxID)
 	}
 }
 
-func TestPodIDFailure(t *testing.T) {
+func TestSandboxIDFailure(t *testing.T) {
 	var ociSpec CompatOCISpec
 
-	podID, err := ociSpec.PodID()
+	sandboxID, err := ociSpec.SandboxID()
 	if err == nil {
 		t.Fatalf("This test should fail because annotations is empty")
 	}
 
-	if podID != "" {
-		t.Fatalf("Got %s, Expecting empty pod ID", podID)
+	if sandboxID != "" {
+		t.Fatalf("Got %s, Expecting empty sandbox ID", sandboxID)
 	}
 }
 

@@ -90,7 +90,7 @@ func run(containerID, bundle, console, consoleSocket, pidFile string, detach boo
 		return err
 	}
 
-	pod, err := start(containerID)
+	sandbox, err := start(containerID)
 	if err != nil {
 		return err
 	}
@@ -99,9 +99,9 @@ func run(containerID, bundle, console, consoleSocket, pidFile string, detach boo
 		return nil
 	}
 
-	containers := pod.GetAllContainers()
+	containers := sandbox.GetAllContainers()
 	if len(containers) == 0 {
-		return fmt.Errorf("There are no containers running in the pod: %s", pod.ID())
+		return fmt.Errorf("There are no containers running in the sandbox: %s", sandbox.ID())
 	}
 
 	p, err := os.FindProcess(containers[0].GetPid())
@@ -115,7 +115,7 @@ func run(containerID, bundle, console, consoleSocket, pidFile string, detach boo
 	}
 
 	// delete container's resources
-	if err := delete(pod.ID(), true); err != nil {
+	if err := delete(sandbox.ID(), true); err != nil {
 		return err
 	}
 

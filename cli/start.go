@@ -48,9 +48,9 @@ var startCLICommand = cli.Command{
 	},
 }
 
-func start(containerID string) (vc.VCPod, error) {
+func start(containerID string) (vc.VCSandbox, error) {
 	// Checks the MUST and MUST NOT from OCI runtime specification
-	status, podID, err := getExistingContainerInfo(containerID)
+	status, sandboxID, err := getExistingContainerInfo(containerID)
 	if err != nil {
 		return nil, err
 	}
@@ -62,14 +62,14 @@ func start(containerID string) (vc.VCPod, error) {
 		return nil, err
 	}
 
-	if containerType.IsPod() {
-		return vci.StartPod(podID)
+	if containerType.IsSandbox() {
+		return vci.StartSandbox(sandboxID)
 	}
 
-	c, err := vci.StartContainer(podID, containerID)
+	c, err := vci.StartContainer(sandboxID, containerID)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.Pod(), nil
+	return c.Sandbox(), nil
 }

@@ -192,7 +192,7 @@ func generateExecParams(context *cli.Context, specProcess *oci.CompatOCIProcess)
 
 func execute(context *cli.Context) error {
 	containerID := context.Args().First()
-	status, podID, err := getExistingContainerInfo(containerID)
+	status, sandboxID, err := getExistingContainerInfo(containerID)
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func execute(context *cli.Context) error {
 		Detach:      noNeedForOutput(params.detach, params.ociProcess.Terminal),
 	}
 
-	_, _, process, err := vci.EnterContainer(podID, params.cID, cmd)
+	_, _, process, err := vci.EnterContainer(sandboxID, params.cID, cmd)
 	if err != nil {
 		return err
 	}

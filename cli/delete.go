@@ -62,7 +62,7 @@ EXAMPLE:
 
 func delete(containerID string, force bool) error {
 	// Checks the MUST and MUST NOT from OCI runtime specification
-	status, podID, err := getExistingContainerInfo(containerID)
+	status, sandboxID, err := getExistingContainerInfo(containerID)
 	if err != nil {
 		return err
 	}
@@ -91,11 +91,11 @@ func delete(containerID string, force bool) error {
 
 	switch containerType {
 	case vc.PodSandbox:
-		if err := deletePod(podID); err != nil {
+		if err := deleteSandbox(sandboxID); err != nil {
 			return err
 		}
 	case vc.PodContainer:
-		if err := deleteContainer(podID, containerID, forceStop); err != nil {
+		if err := deleteContainer(sandboxID, containerID, forceStop); err != nil {
 			return err
 		}
 	default:
@@ -105,7 +105,7 @@ func delete(containerID string, force bool) error {
 	// In order to prevent any file descriptor leak related to cgroups files
 	// that have been previously created, we have to remove them before this
 	// function returns.
-	cgroupsPathList, err := processCgroupsPath(ociSpec, containerType.IsPod())
+	cgroupsPathList, err := processCgroupsPath(ociSpec, containerType.IsSandbox())
 	if err != nil {
 		return err
 	}
@@ -113,26 +113,26 @@ func delete(containerID string, force bool) error {
 	return removeCgroupsPath(containerID, cgroupsPathList)
 }
 
-func deletePod(podID string) error {
-	if _, err := vci.StopPod(podID); err != nil {
+func deleteSandbox(sandboxID string) error {
+	if _, err := vci.StopSandbox(sandboxID); err != nil {
 		return err
 	}
 
-	if _, err := vci.DeletePod(podID); err != nil {
+	if _, err := vci.DeleteSandbox(sandboxID); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func deleteContainer(podID, containerID string, forceStop bool) error {
+func deleteContainer(sandboxID, containerID string, forceStop bool) error {
 	if forceStop {
-		if _, err := vci.StopContainer(podID, containerID); err != nil {
+		if _, err := vci.StopContainer(sandboxID, containerID); err != nil {
 			return err
 		}
 	}
 
-	if _, err := vci.DeleteContainer(podID, containerID); err != nil {
+	if _, err := vci.DeleteContainer(sandboxID, containerID); err != nil {
 		return err
 	}
 

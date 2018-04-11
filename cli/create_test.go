@@ -37,7 +37,7 @@ const (
 	testConsole                 = "/dev/pts/999"
 	testContainerTypeAnnotation = "io.kubernetes.cri-o.ContainerType"
 	testSandboxIDAnnotation     = "io.kubernetes.cri-o.SandboxID"
-	testContainerTypePod        = "sandbox"
+	testContainerTypeSandbox    = "sandbox"
 	testContainerTypeContainer  = "container"
 )
 
@@ -301,8 +301,8 @@ func TestCreateCLIFunctionCreateFail(t *testing.T) {
 func TestCreateInvalidArgs(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 		MockContainers: []*vcmock.Container{
 			{MockID: testContainerID},
 			{MockID: testContainerID},
@@ -310,18 +310,18 @@ func TestCreateInvalidArgs(t *testing.T) {
 		},
 	}
 
-	testingImpl.CreatePodFunc = func(podConfig vc.PodConfig) (vc.VCPod, error) {
-		return pod, nil
+	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+		return sandbox, nil
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
 	defer func() {
-		testingImpl.CreatePodFunc = nil
-		testingImpl.ListPodFunc = nil
+		testingImpl.CreateSandboxFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -364,13 +364,13 @@ func TestCreateInvalidArgs(t *testing.T) {
 func TestCreateInvalidConfigJSON(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -408,13 +408,13 @@ func TestCreateInvalidConfigJSON(t *testing.T) {
 func TestCreateInvalidContainerType(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -455,13 +455,13 @@ func TestCreateInvalidContainerType(t *testing.T) {
 func TestCreateContainerInvalid(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -503,25 +503,25 @@ func TestCreateContainerInvalid(t *testing.T) {
 func TestCreateProcessCgroupsPathSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 		MockContainers: []*vcmock.Container{
 			{MockID: testContainerID},
 		},
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
-	testingImpl.CreatePodFunc = func(podConfig vc.PodConfig) (vc.VCPod, error) {
-		return pod, nil
+	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+		return sandbox, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
-		testingImpl.CreatePodFunc = nil
+		testingImpl.ListSandboxFunc = nil
+		testingImpl.CreateSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -544,9 +544,9 @@ func TestCreateProcessCgroupsPathSuccessful(t *testing.T) {
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
 
-	// Force pod-type container
+	// Force sandbox-type container
 	spec.Annotations = make(map[string]string)
-	spec.Annotations[testContainerTypeAnnotation] = testContainerTypePod
+	spec.Annotations[testContainerTypeAnnotation] = testContainerTypeSandbox
 
 	// Set a limit to ensure processCgroupsPath() considers the
 	// cgroup part of the spec
@@ -598,25 +598,25 @@ func TestCreateCreateCgroupsFilesFail(t *testing.T) {
 
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 		MockContainers: []*vcmock.Container{
 			{MockID: testContainerID},
 		},
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
-	testingImpl.CreatePodFunc = func(podConfig vc.PodConfig) (vc.VCPod, error) {
-		return pod, nil
+	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+		return sandbox, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
-		testingImpl.CreatePodFunc = nil
+		testingImpl.ListSandboxFunc = nil
+		testingImpl.CreateSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -639,9 +639,9 @@ func TestCreateCreateCgroupsFilesFail(t *testing.T) {
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
 
-	// Force pod-type container
+	// Force sandbox-type container
 	spec.Annotations = make(map[string]string)
-	spec.Annotations[testContainerTypeAnnotation] = testContainerTypePod
+	spec.Annotations[testContainerTypeAnnotation] = testContainerTypeSandbox
 
 	// Set a limit to ensure processCgroupsPath() considers the
 	// cgroup part of the spec
@@ -683,25 +683,25 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 		MockContainers: []*vcmock.Container{
 			{MockID: testContainerID},
 		},
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
-	testingImpl.CreatePodFunc = func(podConfig vc.PodConfig) (vc.VCPod, error) {
-		return pod, nil
+	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+		return sandbox, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
-		testingImpl.CreatePodFunc = nil
+		testingImpl.ListSandboxFunc = nil
+		testingImpl.CreateSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -725,9 +725,9 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
 
-	// Force pod-type container
+	// Force sandbox-type container
 	spec.Annotations = make(map[string]string)
-	spec.Annotations[testContainerTypeAnnotation] = testContainerTypePod
+	spec.Annotations[testContainerTypeAnnotation] = testContainerTypeSandbox
 
 	// Set a limit to ensure processCgroupsPath() considers the
 	// cgroup part of the spec
@@ -754,25 +754,25 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 func TestCreate(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 		MockContainers: []*vcmock.Container{
 			{MockID: testContainerID},
 		},
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
-	testingImpl.CreatePodFunc = func(podConfig vc.PodConfig) (vc.VCPod, error) {
-		return pod, nil
+	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+		return sandbox, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
-		testingImpl.CreatePodFunc = nil
+		testingImpl.ListSandboxFunc = nil
+		testingImpl.CreateSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -795,9 +795,9 @@ func TestCreate(t *testing.T) {
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
 
-	// Force pod-type container
+	// Force sandbox-type container
 	spec.Annotations = make(map[string]string)
-	spec.Annotations[testContainerTypeAnnotation] = testContainerTypePod
+	spec.Annotations[testContainerTypeAnnotation] = testContainerTypeSandbox
 
 	// Set a limit to ensure processCgroupsPath() considers the
 	// cgroup part of the spec
@@ -819,13 +819,13 @@ func TestCreate(t *testing.T) {
 func TestCreateInvalidKernelParams(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -848,9 +848,9 @@ func TestCreateInvalidKernelParams(t *testing.T) {
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
 
-	// Force createPod() to be called.
+	// Force createSandbox() to be called.
 	spec.Annotations = make(map[string]string)
-	spec.Annotations[testContainerTypeAnnotation] = testContainerTypePod
+	spec.Annotations[testContainerTypeAnnotation] = testContainerTypeSandbox
 
 	// rewrite the file
 	err = writeOCIConfigFile(spec, ociConfigFile)
@@ -877,16 +877,16 @@ func TestCreateInvalidKernelParams(t *testing.T) {
 	}
 }
 
-func TestCreateCreatePodPodConfigFail(t *testing.T) {
+func TestCreateSandboxConfigFail(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -919,21 +919,21 @@ func TestCreateCreatePodPodConfigFail(t *testing.T) {
 		Quota: &quota,
 	}
 
-	_, err = createPod(spec, runtimeConfig, testContainerID, bundlePath, testConsole, true)
+	_, err = createSandbox(spec, runtimeConfig, testContainerID, bundlePath, testConsole, true)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
 
-func TestCreateCreatePodFail(t *testing.T) {
+func TestCreateCreateSandboxFail(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -954,7 +954,7 @@ func TestCreateCreatePodFail(t *testing.T) {
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
 
-	_, err = createPod(spec, runtimeConfig, testContainerID, bundlePath, testConsole, true)
+	_, err = createSandbox(spec, runtimeConfig, testContainerID, bundlePath, testConsole, true)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 }
@@ -962,13 +962,13 @@ func TestCreateCreatePodFail(t *testing.T) {
 func TestCreateCreateContainerContainerConfigFail(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -1006,13 +1006,13 @@ func TestCreateCreateContainerContainerConfigFail(t *testing.T) {
 func TestCreateCreateContainerFail(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -1030,10 +1030,10 @@ func TestCreateCreateContainerFail(t *testing.T) {
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
 
-	// set expected container type and podID
+	// set expected container type and sandboxID
 	spec.Annotations = make(map[string]string)
 	spec.Annotations[testContainerTypeAnnotation] = testContainerTypeContainer
-	spec.Annotations[testSandboxIDAnnotation] = testPodID
+	spec.Annotations[testSandboxIDAnnotation] = testSandboxID
 
 	// rewrite file
 	err = writeOCIConfigFile(spec, ociConfigFile)
@@ -1049,17 +1049,17 @@ func TestCreateCreateContainerFail(t *testing.T) {
 func TestCreateCreateContainer(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// No pre-existing pods
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// No pre-existing sandboxes
+		return []vc.SandboxStatus{}, nil
 	}
 
-	testingImpl.CreateContainerFunc = func(podID string, containerConfig vc.ContainerConfig) (vc.VCPod, vc.VCContainer, error) {
-		return &vcmock.Pod{}, &vcmock.Container{}, nil
+	testingImpl.CreateContainerFunc = func(sandboxID string, containerConfig vc.ContainerConfig) (vc.VCSandbox, vc.VCContainer, error) {
+		return &vcmock.Sandbox{}, &vcmock.Container{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 		testingImpl.CreateContainerFunc = nil
 	}()
 
@@ -1078,10 +1078,10 @@ func TestCreateCreateContainer(t *testing.T) {
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
 
-	// set expected container type and podID
+	// set expected container type and sandboxID
 	spec.Annotations = make(map[string]string)
 	spec.Annotations[testContainerTypeAnnotation] = testContainerTypeContainer
-	spec.Annotations[testSandboxIDAnnotation] = testPodID
+	spec.Annotations[testSandboxIDAnnotation] = testSandboxID
 
 	// rewrite file
 	err = writeOCIConfigFile(spec, ociConfigFile)

@@ -14,13 +14,13 @@ Table of Contents
    * [Out of scope](#out-of-scope)
       * [virtcontainers and Kubernetes CRI](#virtcontainers-and-kubernetes-cri)
    * [Design](#design)
-      * [Pods](#pods)
+      * [Sandboxes](#sandboxes)
       * [Hypervisors](#hypervisors)
       * [Agents](#agents)
       * [Shim](#shim)
       * [Proxy](#proxy)
    * [API](#api)
-      * [Pod API](#pod-api)
+      * [Sandbox API](#sandbox-api)
       * [Container API](#container-api)
    * [Networking](#networking)
       * [CNM](#cnm)
@@ -64,7 +64,7 @@ testing purposes.
 ## virtcontainers and Kubernetes CRI
 
 `virtcontainers`'s API is loosely inspired by the Kubernetes [CRI][cri] because
-we believe it provides the right level of abstractions for containerized pods.
+we believe it provides the right level of abstractions for containerized sandboxes.
 However, despite the API similarities between the two projects, the goal of
 `virtcontainers` is _not_ to build a CRI implementation, but instead to provide a
 generic, runtime-specification agnostic, hardware-virtualized containers
@@ -72,19 +72,19 @@ library that other projects could leverage to implement CRI themselves.
 
 # Design
 
-## Pods
+## Sandboxes
 
-The `virtcontainers` execution unit is a _pod_, i.e. `virtcontainers` users start pods where
+The `virtcontainers` execution unit is a _sandbox_, i.e. `virtcontainers` users start sandboxes where
 containers will be running.
 
-`virtcontainers` creates a pod by starting a virtual machine and setting the pod
-up within that environment. Starting a pod means launching all containers with
-the VM pod runtime environment.
+`virtcontainers` creates a sandbox by starting a virtual machine and setting the sandbox
+up within that environment. Starting a sandbox means launching all containers with
+the VM sandbox runtime environment.
 
 ## Hypervisors
 
 The `virtcontainers` package relies on hypervisors to start and stop virtual machine where
-pods will be running. An hypervisor is defined by an Hypervisor interface implementation,
+sandboxes will be running. An hypervisor is defined by an Hypervisor interface implementation,
 and the default implementation is the QEMU one.
 
 ## Agents
@@ -115,50 +115,50 @@ runtime instances are talking to the same container.
 
 The high level `virtcontainers` API is the following one:
 
-## Pod API
+## Sandbox API
 
-* `CreatePod(podConfig PodConfig)` creates a Pod.
-The virtual machine is started and the Pod is prepared.
+* `CreateSandbox(sandboxConfig SandboxConfig)` creates a Sandbox.
+The virtual machine is started and the Sandbox is prepared.
 
-* `DeletePod(podID string)` deletes a Pod.
-The virtual machine is shut down and all information related to the Pod are removed.
-The function will fail if the Pod is running. In that case `StopPod()` has to be called first.
+* `DeleteSandbox(sandboxID string)` deletes a Sandbox.
+The virtual machine is shut down and all information related to the Sandbox are removed.
+The function will fail if the Sandbox is running. In that case `StopSandbox()` has to be called first.
 
-* `StartPod(podID string)` starts an already created Pod.
-The Pod and all its containers are started.
+* `StartSandbox(sandboxID string)` starts an already created Sandbox.
+The Sandbox and all its containers are started.
 
-* `RunPod(podConfig PodConfig)` creates and starts a Pod.
-This performs `CreatePod()` + `StartPod()`.
+* `RunSandbox(sandboxConfig SandboxConfig)` creates and starts a Sandbox.
+This performs `CreateSandbox()` + `StartSandbox()`.
 
-* `StopPod(podID string)` stops an already running Pod.
-The Pod and all its containers are stopped.
+* `StopSandbox(sandboxID string)` stops an already running Sandbox.
+The Sandbox and all its containers are stopped.
 
-* `PausePod(podID string)` pauses an existing Pod.
+* `PauseSandbox(sandboxID string)` pauses an existing Sandbox.
 
-* `ResumePod(podID string)` resume a paused Pod.
+* `ResumeSandbox(sandboxID string)` resume a paused Sandbox.
 
-* `StatusPod(podID string)` returns a detailed Pod status.
+* `StatusSandbox(sandboxID string)` returns a detailed Sandbox status.
 
-* `ListPod()` lists all Pods on the host.
-It returns a detailed status for every Pod.
+* `ListSandbox()` lists all Sandboxes on the host.
+It returns a detailed status for every Sandbox.
 
 ## Container API
 
-* `CreateContainer(podID string, containerConfig ContainerConfig)` creates a Container on an existing Pod.
+* `CreateContainer(sandboxID string, containerConfig ContainerConfig)` creates a Container on an existing Sandbox.
 
-* `DeleteContainer(podID, containerID string)` deletes a Container from a Pod.
+* `DeleteContainer(sandboxID, containerID string)` deletes a Container from a Sandbox.
 If the Container is running it has to be stopped first.
 
-* `StartContainer(podID, containerID string)` starts an already created Container.
-The Pod has to be running.
+* `StartContainer(sandboxID, containerID string)` starts an already created Container.
+The Sandbox has to be running.
 
-* `StopContainer(podID, containerID string)` stops an already running Container.
+* `StopContainer(sandboxID, containerID string)` stops an already running Container.
 
-* `EnterContainer(podID, containerID string, cmd Cmd)` enters an already running Container and runs a given command.
+* `EnterContainer(sandboxID, containerID string, cmd Cmd)` enters an already running Container and runs a given command.
 
-* `StatusContainer(podID, containerID string)` returns a detailed Container status.
+* `StatusContainer(sandboxID, containerID string)` returns a detailed Container status.
 
-* `KillContainer(podID, containerID string, signal syscall.Signal, all bool)` sends a signal to all or one container inside a Pod.
+* `KillContainer(sandboxID, containerID string, signal syscall.Signal, all bool)` sends a signal to all or one container inside a Sandbox.
 
 An example tool using the `virtcontainers` API is provided in the `hack/virtc` package.
 
@@ -168,7 +168,7 @@ An example tool using the `virtcontainers` API is provided in the `hack/virtc` p
 
 Typically the former is the Docker default networking model while the later is used on Kubernetes deployments.
 
-`virtcontainers` callers can select one or the other, on a per pod basis, by setting their `PodConfig`'s `NetworkModel` field properly.
+`virtcontainers` callers can select one or the other, on a per sandbox basis, by setting their `SandboxConfig`'s `NetworkModel` field properly.
 
 [cnm]: https://github.com/docker/libnetwork/blob/master/docs/design.md
 [cni]: https://github.com/containernetworking/cni/
@@ -224,7 +224,7 @@ __Drawbacks of CNM__
 There are three drawbacks about using CNM instead of CNI:
 * The way we call into it is not very explicit: Have to re-exec dockerd binary so that it can accept parameters and execute the prestart hook related to network setup.
 * Implicit way to designate the network namespace: Instead of explicitely giving the netns to dockerd, we give it the PID of our runtime so that it can find the netns from this PID. This means we have to make sure being in the right netns while calling the hook, otherwise the veth pair will be created with the wrong netns.
-* No results are back from the hook: We have to scan the network interfaces to discover which one has been created inside the netns. This introduces more latency in the code because it forces us to scan the network in the CreatePod path, which is critical for starting the VM as quick as possible.
+* No results are back from the hook: We have to scan the network interfaces to discover which one has been created inside the netns. This introduces more latency in the code because it forces us to scan the network in the CreateSandbox path, which is critical for starting the VM as quick as possible.
 
 
 ## CNI

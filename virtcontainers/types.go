@@ -24,9 +24,9 @@ var (
 	UnknownContainerType ContainerType = "unknown_container_type"
 )
 
-// IsPod determines if the container type can be considered as a pod.
-// We can consider a pod in case we have a PodSandbox or a RegularContainer.
-func (cType ContainerType) IsPod() bool {
+// IsSandbox determines if the container type can be considered as a sandbox.
+// We can consider a sandbox in case we have a PodSandbox or a RegularContainer.
+func (cType ContainerType) IsSandbox() bool {
 	if cType == PodSandbox {
 		return true
 	}

@@ -22,11 +22,11 @@ import (
 
 func TestNoopShimStart(t *testing.T) {
 	s := &noopShim{}
-	pod := Pod{}
+	sandbox := Sandbox{}
 	params := ShimParams{}
 	expected := 1000
 
-	pid, err := s.start(pod, params)
+	pid, err := s.start(sandbox, params)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -43,7 +43,7 @@ var (
 	defaultKataID               = "charch0"
 	errorMissingProxy           = errors.New("Missing proxy pointer")
 	errorMissingOCISpec         = errors.New("Missing OCI specification")
-	kataHostSharedDir           = "/run/kata-containers/shared/pods/"
+	kataHostSharedDir           = "/run/kata-containers/shared/sandboxes/"
 	kataGuestSharedDir          = "/run/kata-containers/shared/containers/"
 	mountGuest9pTag             = "kataShared"
 	type9pFs                    = "9p"
@@ -112,14 +112,14 @@ func parseVSOCKAddr(sock string) (uint32, uint32, error) {
 	return uint32(cid), uint32(port), nil
 }
 
-func (k *kataAgent) generateVMSocket(pod Pod, c KataAgentConfig) error {
+func (k *kataAgent) generateVMSocket(sandbox Sandbox, c KataAgentConfig) error {
 	cid, port, err := parseVSOCKAddr(c.GRPCSocket)
 	if err != nil {
 		// We need to generate a host UNIX socket path for the emulated serial port.
 		k.vmSocket = Socket{
 			DeviceID: defaultKataDeviceID,
 			ID:       defaultKataID,
-			HostPath: fmt.Sprintf(defaultKataSockPathTemplate, runStoragePath, pod.id),
+			HostPath: fmt.Sprintf(defaultKataSockPathTemplate, runStoragePath, sandbox.id),
 			Name:     defaultKataChannel,
 		}
 	} else {
@@ -133,28 +133,28 @@ func (k *kataAgent) generateVMSocket(pod Pod, c KataAgentConfig) error {
 	return nil
 }
 
-func (k *kataAgent) init(pod *Pod, config interface{}) (err error) {
+func (k *kataAgent) init(sandbox *Sandbox, config interface{}) (err error) {
 	switch c := config.(type) {
 	case KataAgentConfig:
-		if err := k.generateVMSocket(*pod, c); err != nil {
+		if err := k.generateVMSocket(*sandbox, c); err != nil {
 			return err
 		}
 	default:
 		return fmt.Errorf("Invalid config type")
 	}
 
-	k.proxy, err = newProxy(pod.config.ProxyType)
+	k.proxy, err = newProxy(sandbox.config.ProxyType)
 	if err != nil {
 		return err
 	}
 
-	k.shim, err = newShim(pod.config.ShimType)
+	k.shim, err = newShim(sandbox.config.ShimType)
 	if err != nil {
 		return err
 	}
 
 	// Fetch agent runtime info.
-	if err := pod.storage.fetchAgentState(pod.id, &k.state); err != nil {
+	if err := sandbox.storage.fetchAgentState(sandbox.id, &k.state); err != nil {
 		k.Logger().Debug("Could not retrieve anything from storage")
 	}
 
@@ -181,10 +181,10 @@ func (k *kataAgent) capabilities() capabilities {
 	return caps
 }
 
-func (k *kataAgent) createPod(pod *Pod) error {
+func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
 	switch s := k.vmSocket.(type) {
 	case Socket:
-		err := pod.hypervisor.addDevice(s, serialPortDev)
+		err := sandbox.hypervisor.addDevice(s, serialPortDev)
 		if err != nil {
 			return err
 		}
@@ -198,14 +198,14 @@ func (k *kataAgent) createPod(pod *Pod) error {
 	// This volume contains all bind mounted container bundles.
 	sharedVolume := Volume{
 		MountTag: mountGuest9pTag,
-		HostPath: filepath.Join(kataHostSharedDir, pod.id),
+		HostPath: filepath.Join(kataHostSharedDir, sandbox.id),
 	}
 
 	if err := os.MkdirAll(sharedVolume.HostPath, dirMode); err != nil {
 		return err
 	}
 
-	return pod.hypervisor.addDevice(sharedVolume, fsDev)
+	return sandbox.hypervisor.addDevice(sharedVolume, fsDev)
 }
 
 func cmdToKataProcess(cmd Cmd) (process *grpc.Process, err error) {
@@ -285,7 +285,7 @@ func cmdEnvsToStringSlice(ev []EnvVar) []string {
 	return env
 }
 
-func (k *kataAgent) exec(pod *Pod, c Container, cmd Cmd) (*Process, error) {
+func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, error) {
 	var kataProcess *grpc.Process
 
 	kataProcess, err := cmdToKataProcess(cmd)
@@ -314,7 +314,7 @@ func (k *kataAgent) exec(pod *Pod, c Container, cmd Cmd) (*Process, error) {
 		},
 	}
 
-	return prepareAndStartShim(pod, k.shim, c.id, req.ExecId,
+	return prepareAndStartShim(sandbox, k.shim, c.id, req.ExecId,
 		k.state.URL, cmd, []ns.NSType{}, enterNSList)
 }
 
@@ -405,7 +405,7 @@ func (k *kataAgent) generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*
 	return ifaces, routes, nil
 }
 
-func (k *kataAgent) startPod(pod Pod) error {
+func (k *kataAgent) startSandbox(sandbox Sandbox) error {
 	if k.proxy == nil {
 		return errorMissingProxy
 	}
@@ -418,30 +418,30 @@ func (k *kataAgent) startPod(pod Pod) error {
 
 	proxyParams := proxyParams{
 		agentURL: agentURL,
-		logger:   k.Logger().WithField("pod-id", pod.id),
+		logger:   k.Logger().WithField("sandbox-id", sandbox.id),
 	}
 
 	// Start the proxy here
-	pid, uri, err := k.proxy.start(pod, proxyParams)
+	pid, uri, err := k.proxy.start(sandbox, proxyParams)
 	if err != nil {
 		return err
 	}
 
 	// Fill agent state with proxy information, and store them.
 	k.state.ProxyPid = pid
-	k.state.ProxyBuiltIn = isProxyBuiltIn(pod.config.ProxyType)
+	k.state.ProxyBuiltIn = isProxyBuiltIn(sandbox.config.ProxyType)
 	k.state.URL = uri
-	if err := pod.storage.storeAgentState(pod.id, k.state); err != nil {
+	if err := sandbox.storage.storeAgentState(sandbox.id, k.state); err != nil {
 		return err
 	}
 
 	k.Logger().WithFields(logrus.Fields{
-		"pod-id":    pod.id,
-		"proxy-pid": pid,
-		"proxy-url": uri,
+		"sandbox-id": sandbox.id,
+		"proxy-pid":  pid,
+		"proxy-url":  uri,
 	}).Info("proxy started")
 
-	hostname := pod.config.Hostname
+	hostname := sandbox.config.Hostname
 	if len(hostname) > maxHostnameLen {
 		hostname = hostname[:maxHostnameLen]
 	}
@@ -449,7 +449,7 @@ func (k *kataAgent) startPod(pod Pod) error {
 	//
 	// Setup network interfaces and routes
 	//
-	interfaces, routes, err := k.generateInterfacesAndRoutes(pod.networkNS)
+	interfaces, routes, err := k.generateInterfacesAndRoutes(sandbox.networkNS)
 	if err != nil {
 		return err
 	}
@@ -508,7 +508,7 @@ func (k *kataAgent) startPod(pod Pod) error {
 	return err
 }
 
-func (k *kataAgent) stopPod(pod Pod) error {
+func (k *kataAgent) stopSandbox(sandbox Sandbox) error {
 	if k.proxy == nil {
 		return errorMissingProxy
 	}
@@ -519,7 +519,7 @@ func (k *kataAgent) stopPod(pod Pod) error {
 		return err
 	}
 
-	return k.proxy.stop(pod, k.state.ProxyPid)
+	return k.proxy.stop(sandbox, k.state.ProxyPid)
 }
 
 func (k *kataAgent) replaceOCIMountSource(spec *specs.Spec, guestMounts []Mount) error {
@@ -645,13 +645,13 @@ func (k *kataAgent) rollbackFailingContainerCreation(c *Container) {
 			k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
 		}
 
-		if err2 := bindUnmountContainerRootfs(kataHostSharedDir, c.pod.id, c.id); err2 != nil {
+		if err2 := bindUnmountContainerRootfs(kataHostSharedDir, c.sandbox.id, c.id); err2 != nil {
 			k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
 		}
 	}
 }
 
-func (k *kataAgent) createContainer(pod *Pod, c *Container) (p *Process, err error) {
+func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process, err error) {
 	ociSpecJSON, ok := c.config.Annotations[vcAnnotations.ConfigJSONKey]
 	if !ok {
 		return nil, errorMissingOCISpec
@@ -685,7 +685,7 @@ func (k *kataAgent) createContainer(pod *Pod, c *Container) (p *Process, err err
 		// Pass a drive name only in case of virtio-blk driver.
 		// If virtio-scsi driver, the agent will be able to find the
 		// device based on the provided address.
-		if pod.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
+		if sandbox.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
 			// driveName is the predicted virtio-block guest name (the vd* in /dev/vd*).
 			driveName, err := getVirtDriveName(c.state.BlockIndex)
 			if err != nil {
@@ -727,7 +727,7 @@ func (k *kataAgent) createContainer(pod *Pod, c *Container) (p *Process, err err
 		// (kataGuestSharedDir) is already mounted in the
 		// guest. We only need to mount the rootfs from
 		// the host and it will show up in the guest.
-		if err = bindMountContainerRootfs(kataHostSharedDir, pod.id, c.id, c.rootFs, false); err != nil {
+		if err = bindMountContainerRootfs(kataHostSharedDir, sandbox.id, c.id, c.rootFs, false); err != nil {
 			return nil, err
 		}
 	}
@@ -791,12 +791,12 @@ func (k *kataAgent) createContainer(pod *Pod, c *Container) (p *Process, err err
 
 	enterNSList := []ns.Namespace{
 		{
-			Path: pod.networkNS.NetNsPath,
+			Path: sandbox.networkNS.NetNsPath,
 			Type: ns.NSTypeNet,
 		},
 	}
 
-	return prepareAndStartShim(pod, k.shim, c.id, req.ExecId,
+	return prepareAndStartShim(sandbox, k.shim, c.id, req.ExecId,
 		k.state.URL, c.config.Cmd, createNSList, enterNSList)
 }
 
@@ -819,7 +819,7 @@ func (k *kataAgent) handleBlockVolumes(c *Container) []*grpc.Storage {
 
 		vol := &grpc.Storage{}
 
-		if c.pod.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
+		if c.sandbox.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
 			vol.Driver = kataBlkDevType
 			vol.Source = b.VirtPath
 		} else {
@@ -837,7 +837,7 @@ func (k *kataAgent) handleBlockVolumes(c *Container) []*grpc.Storage {
 	return volumeStorages
 }
 
-func (k *kataAgent) startContainer(pod Pod, c *Container) error {
+func (k *kataAgent) startContainer(sandbox Sandbox, c *Container) error {
 	req := &grpc.StartContainerRequest{
 		ContainerId: c.id,
 	}
@@ -846,7 +846,7 @@ func (k *kataAgent) startContainer(pod Pod, c *Container) error {
 	return err
 }
 
-func (k *kataAgent) stopContainer(pod Pod, c Container) error {
+func (k *kataAgent) stopContainer(sandbox Sandbox, c Container) error {
 	req := &grpc.RemoveContainerRequest{
 		ContainerId: c.id,
 	}
@@ -859,10 +859,10 @@ func (k *kataAgent) stopContainer(pod Pod, c Container) error {
 		return err
 	}
 
-	return bindUnmountContainerRootfs(kataHostSharedDir, pod.id, c.id)
+	return bindUnmountContainerRootfs(kataHostSharedDir, sandbox.id, c.id)
 }
 
-func (k *kataAgent) killContainer(pod Pod, c Container, signal syscall.Signal, all bool) error {
+func (k *kataAgent) killContainer(sandbox Sandbox, c Container, signal syscall.Signal, all bool) error {
 	req := &grpc.SignalProcessRequest{
 		ContainerId: c.id,
 		ExecId:      c.process.Token,
@@ -873,7 +873,7 @@ func (k *kataAgent) killContainer(pod Pod, c Container, signal syscall.Signal, a
 	return err
 }
 
-func (k *kataAgent) processListContainer(pod Pod, c Container, options ProcessListOptions) (ProcessList, error) {
+func (k *kataAgent) processListContainer(sandbox Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
 	return nil, nil
 }
 

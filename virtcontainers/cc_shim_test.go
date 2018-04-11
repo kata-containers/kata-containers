@@ -46,65 +46,65 @@ func getMockCCShimBinPath() string {
 	return DefaultMockCCShimBinPath
 }
 
-func testCCShimStart(t *testing.T, pod Pod, params ShimParams, expectFail bool) {
+func testCCShimStart(t *testing.T, sandbox Sandbox, params ShimParams, expectFail bool) {
 	s := &ccShim{}
 
-	pid, err := s.start(pod, params)
+	pid, err := s.start(sandbox, params)
 	if expectFail {
 		if err == nil || pid != -1 {
-			t.Fatalf("This test should fail (pod %+v, params %+v, expectFail %t)",
-				pod, params, expectFail)
+			t.Fatalf("This test should fail (sandbox %+v, params %+v, expectFail %t)",
+				sandbox, params, expectFail)
 		}
 	} else {
 		if err != nil {
-			t.Fatalf("This test should pass (pod %+v, params %+v, expectFail %t): %s",
-				pod, params, expectFail, err)
+			t.Fatalf("This test should pass (sandbox %+v, params %+v, expectFail %t): %s",
+				sandbox, params, expectFail, err)
 		}
 
 		if pid == -1 {
-			t.Fatalf("This test should pass (pod %+v, params %+v, expectFail %t)",
-				pod, params, expectFail)
+			t.Fatalf("This test should pass (sandbox %+v, params %+v, expectFail %t)",
+				sandbox, params, expectFail)
 		}
 	}
 }
 
-func TestCCShimStartNilPodConfigFailure(t *testing.T) {
-	testCCShimStart(t, Pod{}, ShimParams{}, true)
+func TestCCShimStartNilSandboxConfigFailure(t *testing.T) {
+	testCCShimStart(t, Sandbox{}, ShimParams{}, true)
 }
 
 func TestCCShimStartNilShimConfigFailure(t *testing.T) {
-	pod := Pod{
-		config: &PodConfig{},
+	sandbox := Sandbox{
+		config: &SandboxConfig{},
 	}
 
-	testCCShimStart(t, pod, ShimParams{}, true)
+	testCCShimStart(t, sandbox, ShimParams{}, true)
 }
 
 func TestCCShimStartShimPathEmptyFailure(t *testing.T) {
-	pod := Pod{
-		config: &PodConfig{
+	sandbox := Sandbox{
+		config: &SandboxConfig{
 			ShimType:   CCShimType,
 			ShimConfig: ShimConfig{},
 		},
 	}
 
-	testCCShimStart(t, pod, ShimParams{}, true)
+	testCCShimStart(t, sandbox, ShimParams{}, true)
 }
 
 func TestCCShimStartShimTypeInvalid(t *testing.T) {
-	pod := Pod{
-		config: &PodConfig{
+	sandbox := Sandbox{
+		config: &SandboxConfig{
 			ShimType:   "foo",
 			ShimConfig: ShimConfig{},
 		},
 	}
 
-	testCCShimStart(t, pod, ShimParams{}, true)
+	testCCShimStart(t, sandbox, ShimParams{}, true)
 }
 
 func TestCCShimStartParamsTokenEmptyFailure(t *testing.T) {
-	pod := Pod{
-		config: &PodConfig{
+	sandbox := Sandbox{
+		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{
 				Path: getMockCCShimBinPath(),
@@ -112,12 +112,12 @@ func TestCCShimStartParamsTokenEmptyFailure(t *testing.T) {
 		},
 	}
 
-	testCCShimStart(t, pod, ShimParams{}, true)
+	testCCShimStart(t, sandbox, ShimParams{}, true)
 }
 
 func TestCCShimStartParamsURLEmptyFailure(t *testing.T) {
-	pod := Pod{
-		config: &PodConfig{
+	sandbox := Sandbox{
+		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{
 				Path: getMockCCShimBinPath(),
@@ -129,12 +129,12 @@ func TestCCShimStartParamsURLEmptyFailure(t *testing.T) {
 		Token: "testToken",
 	}
 
-	testCCShimStart(t, pod, params, true)
+	testCCShimStart(t, sandbox, params, true)
 }
 
 func TestCCShimStartParamsContainerEmptyFailure(t *testing.T) {
-	pod := Pod{
-		config: &PodConfig{
+	sandbox := Sandbox{
+		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{
 				Path: getMockCCShimBinPath(),
@@ -147,7 +147,7 @@ func TestCCShimStartParamsContainerEmptyFailure(t *testing.T) {
 		URL:   "unix://is/awesome",
 	}
 
-	testCCShimStart(t, pod, params, true)
+	testCCShimStart(t, sandbox, params, true)
 }
 
 func TestCCShimStartParamsInvalidCommand(t *testing.T) {
@@ -159,8 +159,8 @@ func TestCCShimStartParamsInvalidCommand(t *testing.T) {
 
 	cmd := filepath.Join(dir, "does-not-exist")
 
-	pod := Pod{
-		config: &PodConfig{
+	sandbox := Sandbox{
+		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{
 				Path: cmd,
@@ -173,20 +173,20 @@ func TestCCShimStartParamsInvalidCommand(t *testing.T) {
 		URL:   "http://foo",
 	}
 
-	testCCShimStart(t, pod, params, true)
+	testCCShimStart(t, sandbox, params, true)
 }
 
-func startCCShimStartWithoutConsoleSuccessful(t *testing.T, detach bool) (*os.File, *os.File, *os.File, Pod, ShimParams, error) {
+func startCCShimStartWithoutConsoleSuccessful(t *testing.T, detach bool) (*os.File, *os.File, *os.File, Sandbox, ShimParams, error) {
 	saveStdout := os.Stdout
 	rStdout, wStdout, err := os.Pipe()
 	if err != nil {
-		return nil, nil, nil, Pod{}, ShimParams{}, err
+		return nil, nil, nil, Sandbox{}, ShimParams{}, err
 	}
 
 	os.Stdout = wStdout
 
-	pod := Pod{
-		config: &PodConfig{
+	sandbox := Sandbox{
+		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{
 				Path: getMockCCShimBinPath(),
@@ -201,11 +201,11 @@ func startCCShimStartWithoutConsoleSuccessful(t *testing.T, detach bool) (*os.Fi
 		Detach:    detach,
 	}
 
-	return rStdout, wStdout, saveStdout, pod, params, nil
+	return rStdout, wStdout, saveStdout, sandbox, params, nil
 }
 
 func TestCCShimStartSuccessful(t *testing.T) {
-	rStdout, wStdout, saveStdout, pod, params, err := startCCShimStartWithoutConsoleSuccessful(t, false)
+	rStdout, wStdout, saveStdout, sandbox, params, err := startCCShimStartWithoutConsoleSuccessful(t, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestCCShimStartSuccessful(t *testing.T) {
 		wStdout.Close()
 	}()
 
-	testCCShimStart(t, pod, params, false)
+	testCCShimStart(t, sandbox, params, false)
 
 	bufStdout := make([]byte, 1024)
 	if _, err := rStdout.Read(bufStdout); err != nil {
@@ -229,7 +229,7 @@ func TestCCShimStartSuccessful(t *testing.T) {
 }
 
 func TestCCShimStartDetachSuccessful(t *testing.T) {
-	rStdout, wStdout, saveStdout, pod, params, err := startCCShimStartWithoutConsoleSuccessful(t, true)
+	rStdout, wStdout, saveStdout, sandbox, params, err := startCCShimStartWithoutConsoleSuccessful(t, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +240,7 @@ func TestCCShimStartDetachSuccessful(t *testing.T) {
 		rStdout.Close()
 	}()
 
-	testCCShimStart(t, pod, params, false)
+	testCCShimStart(t, sandbox, params, false)
 
 	readCh := make(chan error)
 	go func() {
@@ -270,8 +270,8 @@ func TestCCShimStartDetachSuccessful(t *testing.T) {
 }
 
 func TestCCShimStartWithConsoleNonExistingFailure(t *testing.T) {
-	pod := Pod{
-		config: &PodConfig{
+	sandbox := Sandbox{
+		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{
 				Path: getMockCCShimBinPath(),
@@ -285,7 +285,7 @@ func TestCCShimStartWithConsoleNonExistingFailure(t *testing.T) {
 		Console: testWrongConsolePath,
 	}
 
-	testCCShimStart(t, pod, params, true)
+	testCCShimStart(t, sandbox, params, true)
 }
 
 func ioctl(fd uintptr, flag, data uintptr) error {
@@ -346,8 +346,8 @@ func TestCCShimStartWithConsoleSuccessful(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pod := Pod{
-		config: &PodConfig{
+	sandbox := Sandbox{
+		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{
 				Path: getMockCCShimBinPath(),
@@ -362,6 +362,6 @@ func TestCCShimStartWithConsoleSuccessful(t *testing.T) {
 		Console:   console,
 	}
 
-	testCCShimStart(t, pod, params, false)
+	testCCShimStart(t, sandbox, params, false)
 	master.Close()
 }

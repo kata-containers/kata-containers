@@ -40,20 +40,20 @@ func SetLogger(logger logrus.FieldLogger) {
 	virtLog = logger.WithFields(fields)
 }
 
-// CreatePod is the virtcontainers pod creation entry point.
-// CreatePod creates a pod and its containers. It does not start them.
-func CreatePod(podConfig PodConfig) (VCPod, error) {
-	return createPodFromConfig(podConfig)
+// CreateSandbox is the virtcontainers sandbox creation entry point.
+// CreateSandbox creates a sandbox and its containers. It does not start them.
+func CreateSandbox(sandboxConfig SandboxConfig) (VCSandbox, error) {
+	return createSandboxFromConfig(sandboxConfig)
 }
 
-func createPodFromConfig(podConfig PodConfig) (*Pod, error) {
-	// Create the pod.
-	p, err := createPod(podConfig)
+func createSandboxFromConfig(sandboxConfig SandboxConfig) (*Sandbox, error) {
+	// Create the sandbox.
+	p, err := createSandbox(sandboxConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	// Create the pod network
+	// Create the sandbox network
 	if err := p.createNetwork(); err != nil {
 		return nil, err
 	}
@@ -68,29 +68,29 @@ func createPodFromConfig(podConfig PodConfig) (*Pod, error) {
 		return nil, err
 	}
 
-	// The pod is completely created now, we can store it.
-	if err := p.storePod(); err != nil {
+	// The sandbox is completely created now, we can store it.
+	if err := p.storeSandbox(); err != nil {
 		return nil, err
 	}
 
 	return p, nil
 }
 
-// DeletePod is the virtcontainers pod deletion entry point.
-// DeletePod will stop an already running container and then delete it.
-func DeletePod(podID string) (VCPod, error) {
-	if podID == "" {
-		return nil, errNeedPodID
+// DeleteSandbox is the virtcontainers sandbox deletion entry point.
+// DeleteSandbox will stop an already running container and then delete it.
+func DeleteSandbox(sandboxID string) (VCSandbox, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
 	}
 
-	lockFile, err := rwLockPod(podID)
+	lockFile, err := rwLockSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
-	defer unlockPod(lockFile)
+	defer unlockSandbox(lockFile)
 
-	// Fetch the pod from storage and create it.
-	p, err := fetchPod(podID)
+	// Fetch the sandbox from storage and create it.
+	p, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -103,31 +103,31 @@ func DeletePod(podID string) (VCPod, error) {
 	return p, nil
 }
 
-// StartPod is the virtcontainers pod starting entry point.
-// StartPod will talk to the given hypervisor to start an existing
-// pod and all its containers.
-// It returns the pod ID.
-func StartPod(podID string) (VCPod, error) {
-	if podID == "" {
-		return nil, errNeedPodID
+// StartSandbox is the virtcontainers sandbox starting entry point.
+// StartSandbox will talk to the given hypervisor to start an existing
+// sandbox and all its containers.
+// It returns the sandbox ID.
+func StartSandbox(sandboxID string) (VCSandbox, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
 	}
 
-	lockFile, err := rwLockPod(podID)
+	lockFile, err := rwLockSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
-	defer unlockPod(lockFile)
+	defer unlockSandbox(lockFile)
 
-	// Fetch the pod from storage and create it.
-	p, err := fetchPod(podID)
+	// Fetch the sandbox from storage and create it.
+	p, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
-	return startPod(p)
+	return startSandbox(p)
 }
 
-func startPod(p *Pod) (*Pod, error) {
+func startSandbox(p *Sandbox) (*Sandbox, error) {
 	// Start it
 	err := p.start()
 	if err != nil {
@@ -142,21 +142,21 @@ func startPod(p *Pod) (*Pod, error) {
 	return p, nil
 }
 
-// StopPod is the virtcontainers pod stopping entry point.
-// StopPod will talk to the given agent to stop an existing pod and destroy all containers within that pod.
-func StopPod(podID string) (VCPod, error) {
-	if podID == "" {
-		return nil, errNeedPod
+// StopSandbox is the virtcontainers sandbox stopping entry point.
+// StopSandbox will talk to the given agent to stop an existing sandbox and destroy all containers within that sandbox.
+func StopSandbox(sandboxID string) (VCSandbox, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandbox
 	}
 
-	lockFile, err := rwLockPod(podID)
+	lockFile, err := rwLockSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
-	defer unlockPod(lockFile)
+	defer unlockSandbox(lockFile)
 
-	// Fetch the pod from storage and create it.
-	p, err := fetchPod(podID)
+	// Fetch the sandbox from storage and create it.
+	p, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -180,70 +180,70 @@ func StopPod(podID string) (VCPod, error) {
 	return p, nil
 }
 
-// RunPod is the virtcontainers pod running entry point.
-// RunPod creates a pod and its containers and then it starts them.
-func RunPod(podConfig PodConfig) (VCPod, error) {
-	p, err := createPodFromConfig(podConfig)
+// RunSandbox is the virtcontainers sandbox running entry point.
+// RunSandbox creates a sandbox and its containers and then it starts them.
+func RunSandbox(sandboxConfig SandboxConfig) (VCSandbox, error) {
+	p, err := createSandboxFromConfig(sandboxConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	lockFile, err := rwLockPod(p.id)
+	lockFile, err := rwLockSandbox(p.id)
 	if err != nil {
 		return nil, err
 	}
-	defer unlockPod(lockFile)
+	defer unlockSandbox(lockFile)
 
-	return startPod(p)
+	return startSandbox(p)
 }
 
-// ListPod is the virtcontainers pod listing entry point.
-func ListPod() ([]PodStatus, error) {
+// ListSandbox is the virtcontainers sandbox listing entry point.
+func ListSandbox() ([]SandboxStatus, error) {
 	dir, err := os.Open(configStoragePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// No pod directory is not an error
-			return []PodStatus{}, nil
+			// No sandbox directory is not an error
+			return []SandboxStatus{}, nil
 		}
-		return []PodStatus{}, err
+		return []SandboxStatus{}, err
 	}
 
 	defer dir.Close()
 
-	podsID, err := dir.Readdirnames(0)
+	sandboxesID, err := dir.Readdirnames(0)
 	if err != nil {
-		return []PodStatus{}, err
+		return []SandboxStatus{}, err
 	}
 
-	var podStatusList []PodStatus
+	var sandboxStatusList []SandboxStatus
 
-	for _, podID := range podsID {
-		podStatus, err := StatusPod(podID)
+	for _, sandboxID := range sandboxesID {
+		sandboxStatus, err := StatusSandbox(sandboxID)
 		if err != nil {
 			continue
 		}
 
-		podStatusList = append(podStatusList, podStatus)
+		sandboxStatusList = append(sandboxStatusList, sandboxStatus)
 	}
 
-	return podStatusList, nil
+	return sandboxStatusList, nil
 }
 
-// StatusPod is the virtcontainers pod status entry point.
-func StatusPod(podID string) (PodStatus, error) {
-	if podID == "" {
-		return PodStatus{}, errNeedPodID
+// StatusSandbox is the virtcontainers sandbox status entry point.
+func StatusSandbox(sandboxID string) (SandboxStatus, error) {
+	if sandboxID == "" {
+		return SandboxStatus{}, errNeedSandboxID
 	}
 
-	lockFile, err := rLockPod(podID)
+	lockFile, err := rLockSandbox(sandboxID)
 	if err != nil {
-		return PodStatus{}, err
+		return SandboxStatus{}, err
 	}
 
-	pod, err := fetchPod(podID)
+	sandbox, err := fetchSandbox(sandboxID)
 	if err != nil {
-		unlockPod(lockFile)
-		return PodStatus{}, err
+		unlockSandbox(lockFile)
+		return SandboxStatus{}, err
 	}
 
 	// We need to potentially wait for a separate container.stop() routine
@@ -253,46 +253,46 @@ func StatusPod(podID string) (PodStatus, error) {
 	// will need to lock an exclusive lock, meaning that all other locks have
 	// to be released to let this happen. This call ensures this will be the
 	// last operation executed by this function.
-	defer pod.wg.Wait()
-	defer unlockPod(lockFile)
+	defer sandbox.wg.Wait()
+	defer unlockSandbox(lockFile)
 
 	var contStatusList []ContainerStatus
-	for _, container := range pod.containers {
-		contStatus, err := statusContainer(pod, container.id)
+	for _, container := range sandbox.containers {
+		contStatus, err := statusContainer(sandbox, container.id)
 		if err != nil {
-			return PodStatus{}, err
+			return SandboxStatus{}, err
 		}
 
 		contStatusList = append(contStatusList, contStatus)
 	}
 
-	podStatus := PodStatus{
-		ID:               pod.id,
-		State:            pod.state,
-		Hypervisor:       pod.config.HypervisorType,
-		HypervisorConfig: pod.config.HypervisorConfig,
-		Agent:            pod.config.AgentType,
+	sandboxStatus := SandboxStatus{
+		ID:               sandbox.id,
+		State:            sandbox.state,
+		Hypervisor:       sandbox.config.HypervisorType,
+		HypervisorConfig: sandbox.config.HypervisorConfig,
+		Agent:            sandbox.config.AgentType,
 		ContainersStatus: contStatusList,
-		Annotations:      pod.config.Annotations,
+		Annotations:      sandbox.config.Annotations,
 	}
 
-	return podStatus, nil
+	return sandboxStatus, nil
 }
 
 // CreateContainer is the virtcontainers container creation entry point.
-// CreateContainer creates a container on a given pod.
-func CreateContainer(podID string, containerConfig ContainerConfig) (VCPod, VCContainer, error) {
-	if podID == "" {
-		return nil, nil, errNeedPodID
+// CreateContainer creates a container on a given sandbox.
+func CreateContainer(sandboxID string, containerConfig ContainerConfig) (VCSandbox, VCContainer, error) {
+	if sandboxID == "" {
+		return nil, nil, errNeedSandboxID
 	}
 
-	lockFile, err := rwLockPod(podID)
+	lockFile, err := rwLockSandbox(sandboxID)
 	if err != nil {
 		return nil, nil, err
 	}
-	defer unlockPod(lockFile)
+	defer unlockSandbox(lockFile)
 
-	p, err := fetchPod(podID)
+	p, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -303,7 +303,7 @@ func CreateContainer(podID string, containerConfig ContainerConfig) (VCPod, VCCo
 		return nil, nil, err
 	}
 
-	// Add the container to the containers list in the pod.
+	// Add the container to the containers list in the sandbox.
 	if err := p.addContainer(c); err != nil {
 		return nil, nil, err
 	}
@@ -314,9 +314,9 @@ func CreateContainer(podID string, containerConfig ContainerConfig) (VCPod, VCCo
 		return nil, nil, err
 	}
 
-	// Update pod config.
+	// Update sandbox config.
 	p.config.Containers = append(p.config.Containers, containerConfig)
-	err = p.storage.storePodResource(podID, configFileType, *(p.config))
+	err = p.storage.storeSandboxResource(sandboxID, configFileType, *(p.config))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -325,24 +325,24 @@ func CreateContainer(podID string, containerConfig ContainerConfig) (VCPod, VCCo
 }
 
 // DeleteContainer is the virtcontainers container deletion entry point.
-// DeleteContainer deletes a Container from a Pod. If the container is running,
+// DeleteContainer deletes a Container from a Sandbox. If the container is running,
 // it needs to be stopped first.
-func DeleteContainer(podID, containerID string) (VCContainer, error) {
-	if podID == "" {
-		return nil, errNeedPodID
+func DeleteContainer(sandboxID, containerID string) (VCContainer, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
 	}
 
 	if containerID == "" {
 		return nil, errNeedContainerID
 	}
 
-	lockFile, err := rwLockPod(podID)
+	lockFile, err := rwLockSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
-	defer unlockPod(lockFile)
+	defer unlockSandbox(lockFile)
 
-	p, err := fetchPod(podID)
+	p, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -359,14 +359,14 @@ func DeleteContainer(podID, containerID string) (VCContainer, error) {
 		return nil, err
 	}
 
-	// Update pod config
+	// Update sandbox config
 	for idx, contConfig := range p.config.Containers {
 		if contConfig.ID == containerID {
 			p.config.Containers = append(p.config.Containers[:idx], p.config.Containers[idx+1:]...)
 			break
 		}
 	}
-	err = p.storage.storePodResource(podID, configFileType, *(p.config))
+	err = p.storage.storeSandboxResource(sandboxID, configFileType, *(p.config))
 	if err != nil {
 		return nil, err
 	}
@@ -376,22 +376,22 @@ func DeleteContainer(podID, containerID string) (VCContainer, error) {
 
 // StartContainer is the virtcontainers container starting entry point.
 // StartContainer starts an already created container.
-func StartContainer(podID, containerID string) (VCContainer, error) {
-	if podID == "" {
-		return nil, errNeedPodID
+func StartContainer(sandboxID, containerID string) (VCContainer, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
 	}
 
 	if containerID == "" {
 		return nil, errNeedContainerID
 	}
 
-	lockFile, err := rwLockPod(podID)
+	lockFile, err := rwLockSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
-	defer unlockPod(lockFile)
+	defer unlockSandbox(lockFile)
 
-	p, err := fetchPod(podID)
+	p, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -413,22 +413,22 @@ func StartContainer(podID, containerID string) (VCContainer, error) {
 
 // StopContainer is the virtcontainers container stopping entry point.
 // StopContainer stops an already running container.
-func StopContainer(podID, containerID string) (VCContainer, error) {
-	if podID == "" {
-		return nil, errNeedPodID
+func StopContainer(sandboxID, containerID string) (VCContainer, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
 	}
 
 	if containerID == "" {
 		return nil, errNeedContainerID
 	}
 
-	lockFile, err := rwLockPod(podID)
+	lockFile, err := rwLockSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
-	defer unlockPod(lockFile)
+	defer unlockSandbox(lockFile)
 
-	p, err := fetchPod(podID)
+	p, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -450,22 +450,22 @@ func StopContainer(podID, containerID string) (VCContainer, error) {
 
 // EnterContainer is the virtcontainers container command execution entry point.
 // EnterContainer enters an already running container and runs a given command.
-func EnterContainer(podID, containerID string, cmd Cmd) (VCPod, VCContainer, *Process, error) {
-	if podID == "" {
-		return nil, nil, nil, errNeedPodID
+func EnterContainer(sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContainer, *Process, error) {
+	if sandboxID == "" {
+		return nil, nil, nil, errNeedSandboxID
 	}
 
 	if containerID == "" {
 		return nil, nil, nil, errNeedContainerID
 	}
 
-	lockFile, err := rLockPod(podID)
+	lockFile, err := rLockSandbox(sandboxID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	defer unlockPod(lockFile)
+	defer unlockSandbox(lockFile)
 
-	p, err := fetchPod(podID)
+	p, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -487,23 +487,23 @@ func EnterContainer(podID, containerID string, cmd Cmd) (VCPod, VCContainer, *Pr
 
 // StatusContainer is the virtcontainers container status entry point.
 // StatusContainer returns a detailed container status.
-func StatusContainer(podID, containerID string) (ContainerStatus, error) {
-	if podID == "" {
-		return ContainerStatus{}, errNeedPodID
+func StatusContainer(sandboxID, containerID string) (ContainerStatus, error) {
+	if sandboxID == "" {
+		return ContainerStatus{}, errNeedSandboxID
 	}
 
 	if containerID == "" {
 		return ContainerStatus{}, errNeedContainerID
 	}
 
-	lockFile, err := rLockPod(podID)
+	lockFile, err := rLockSandbox(sandboxID)
 	if err != nil {
 		return ContainerStatus{}, err
 	}
 
-	pod, err := fetchPod(podID)
+	sandbox, err := fetchSandbox(sandboxID)
 	if err != nil {
-		unlockPod(lockFile)
+		unlockSandbox(lockFile)
 		return ContainerStatus{}, err
 	}
 
@@ -514,16 +514,16 @@ func StatusContainer(podID, containerID string) (ContainerStatus, error) {
 	// will need to lock an exclusive lock, meaning that all other locks have
 	// to be released to let this happen. This call ensures this will be the
 	// last operation executed by this function.
-	defer pod.wg.Wait()
-	defer unlockPod(lockFile)
+	defer sandbox.wg.Wait()
+	defer unlockSandbox(lockFile)
 
-	return statusContainer(pod, containerID)
+	return statusContainer(sandbox, containerID)
 }
 
 // This function is going to spawn a goroutine and it needs to be waited for
 // by the caller.
-func statusContainer(pod *Pod, containerID string) (ContainerStatus, error) {
-	for _, container := range pod.containers {
+func statusContainer(sandbox *Sandbox, containerID string) (ContainerStatus, error) {
+	for _, container := range sandbox.containers {
 		if container.id == containerID {
 			// We have to check for the process state to make sure
 			// we update the status in case the process is supposed
@@ -539,14 +539,14 @@ func statusContainer(pod *Pod, containerID string) (ContainerStatus, error) {
 				}
 
 				if !running {
-					pod.wg.Add(1)
+					sandbox.wg.Add(1)
 					go func() {
-						defer pod.wg.Done()
-						lockFile, err := rwLockPod(pod.id)
+						defer sandbox.wg.Done()
+						lockFile, err := rwLockSandbox(sandbox.id)
 						if err != nil {
 							return
 						}
-						defer unlockPod(lockFile)
+						defer unlockSandbox(lockFile)
 
 						if err := container.stop(); err != nil {
 							return
@@ -566,29 +566,29 @@ func statusContainer(pod *Pod, containerID string) (ContainerStatus, error) {
 		}
 	}
 
-	// No matching containers in the pod
+	// No matching containers in the sandbox
 	return ContainerStatus{}, nil
 }
 
 // KillContainer is the virtcontainers entry point to send a signal
-// to a container running inside a pod. If all is true, all processes in
+// to a container running inside a sandbox. If all is true, all processes in
 // the container will be sent the signal.
-func KillContainer(podID, containerID string, signal syscall.Signal, all bool) error {
-	if podID == "" {
-		return errNeedPodID
+func KillContainer(sandboxID, containerID string, signal syscall.Signal, all bool) error {
+	if sandboxID == "" {
+		return errNeedSandboxID
 	}
 
 	if containerID == "" {
 		return errNeedContainerID
 	}
 
-	lockFile, err := rwLockPod(podID)
+	lockFile, err := rwLockSandbox(sandboxID)
 	if err != nil {
 		return err
 	}
-	defer unlockPod(lockFile)
+	defer unlockSandbox(lockFile)
 
-	p, err := fetchPod(podID)
+	p, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return err
 	}
@@ -608,36 +608,36 @@ func KillContainer(podID, containerID string, signal syscall.Signal, all bool) e
 	return nil
 }
 
-// PausePod is the virtcontainers pausing entry point which pauses an
-// already running pod.
-func PausePod(podID string) (VCPod, error) {
-	return togglePausePod(podID, true)
+// PauseSandbox is the virtcontainers pausing entry point which pauses an
+// already running sandbox.
+func PauseSandbox(sandboxID string) (VCSandbox, error) {
+	return togglePauseSandbox(sandboxID, true)
 }
 
-// ResumePod is the virtcontainers resuming entry point which resumes
-// (or unpauses) and already paused pod.
-func ResumePod(podID string) (VCPod, error) {
-	return togglePausePod(podID, false)
+// ResumeSandbox is the virtcontainers resuming entry point which resumes
+// (or unpauses) and already paused sandbox.
+func ResumeSandbox(sandboxID string) (VCSandbox, error) {
+	return togglePauseSandbox(sandboxID, false)
 }
 
 // ProcessListContainer is the virtcontainers entry point to list
 // processes running inside a container
-func ProcessListContainer(podID, containerID string, options ProcessListOptions) (ProcessList, error) {
-	if podID == "" {
-		return nil, errNeedPodID
+func ProcessListContainer(sandboxID, containerID string, options ProcessListOptions) (ProcessList, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
 	}
 
 	if containerID == "" {
 		return nil, errNeedContainerID
 	}
 
-	lockFile, err := rLockPod(podID)
+	lockFile, err := rLockSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
-	defer unlockPod(lockFile)
+	defer unlockSandbox(lockFile)
 
-	p, err := fetchPod(podID)
+	p, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}

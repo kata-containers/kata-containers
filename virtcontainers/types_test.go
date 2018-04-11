@@ -18,20 +18,20 @@ import (
 	"testing"
 )
 
-func testIsPod(t *testing.T, cType ContainerType, expected bool) {
-	if result := cType.IsPod(); result != expected {
+func testIsSandbox(t *testing.T, cType ContainerType, expected bool) {
+	if result := cType.IsSandbox(); result != expected {
 		t.Fatalf("Got %t, Expecting %t", result, expected)
 	}
 }
 
-func TestIsPodPodSandboxTrue(t *testing.T) {
-	testIsPod(t, PodSandbox, true)
+func TestIsPodSandboxTrue(t *testing.T) {
+	testIsSandbox(t, PodSandbox, true)
 }
 
-func TestIsPodPodContainerFalse(t *testing.T) {
-	testIsPod(t, PodContainer, false)
+func TestIsPodContainerFalse(t *testing.T) {
+	testIsSandbox(t, PodContainer, false)
 }
 
-func TestIsPodUnknownContainerTypeFalse(t *testing.T) {
-	testIsPod(t, UnknownContainerType, false)
+func TestIsSandboxUnknownContainerTypeFalse(t *testing.T) {
+	testIsSandbox(t, UnknownContainerType, false)
 }

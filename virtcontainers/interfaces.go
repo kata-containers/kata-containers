@@ -24,29 +24,29 @@ import (
 type VC interface {
 	SetLogger(logger logrus.FieldLogger)
 
-	CreatePod(podConfig PodConfig) (VCPod, error)
-	DeletePod(podID string) (VCPod, error)
-	ListPod() ([]PodStatus, error)
-	PausePod(podID string) (VCPod, error)
-	ResumePod(podID string) (VCPod, error)
-	RunPod(podConfig PodConfig) (VCPod, error)
-	StartPod(podID string) (VCPod, error)
-	StatusPod(podID string) (PodStatus, error)
-	StopPod(podID string) (VCPod, error)
+	CreateSandbox(sandboxConfig SandboxConfig) (VCSandbox, error)
+	DeleteSandbox(sandboxID string) (VCSandbox, error)
+	ListSandbox() ([]SandboxStatus, error)
+	PauseSandbox(sandboxID string) (VCSandbox, error)
+	ResumeSandbox(sandboxID string) (VCSandbox, error)
+	RunSandbox(sandboxConfig SandboxConfig) (VCSandbox, error)
+	StartSandbox(sandboxID string) (VCSandbox, error)
+	StatusSandbox(sandboxID string) (SandboxStatus, error)
+	StopSandbox(sandboxID string) (VCSandbox, error)
 
-	CreateContainer(podID string, containerConfig ContainerConfig) (VCPod, VCContainer, error)
-	DeleteContainer(podID, containerID string) (VCContainer, error)
-	EnterContainer(podID, containerID string, cmd Cmd) (VCPod, VCContainer, *Process, error)
-	KillContainer(podID, containerID string, signal syscall.Signal, all bool) error
-	StartContainer(podID, containerID string) (VCContainer, error)
-	StatusContainer(podID, containerID string) (ContainerStatus, error)
-	StopContainer(podID, containerID string) (VCContainer, error)
-	ProcessListContainer(podID, containerID string, options ProcessListOptions) (ProcessList, error)
+	CreateContainer(sandboxID string, containerConfig ContainerConfig) (VCSandbox, VCContainer, error)
+	DeleteContainer(sandboxID, containerID string) (VCContainer, error)
+	EnterContainer(sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContainer, *Process, error)
+	KillContainer(sandboxID, containerID string, signal syscall.Signal, all bool) error
+	StartContainer(sandboxID, containerID string) (VCContainer, error)
+	StatusContainer(sandboxID, containerID string) (ContainerStatus, error)
+	StopContainer(sandboxID, containerID string) (VCContainer, error)
+	ProcessListContainer(sandboxID, containerID string, options ProcessListOptions) (ProcessList, error)
 }
 
-// VCPod is the Pod interface
-// (required since virtcontainers.Pod only contains private fields)
-type VCPod interface {
+// VCSandbox is the Sandbox interface
+// (required since virtcontainers.Sandbox only contains private fields)
+type VCSandbox interface {
 	Annotations(key string) (string, error)
 	GetAllContainers() []VCContainer
 	GetAnnotations() map[string]string
@@ -62,7 +62,7 @@ type VCContainer interface {
 	GetPid() int
 	GetToken() string
 	ID() string
-	Pod() VCPod
+	Sandbox() VCSandbox
 	Process() Process
 	SetPid(pid int) error
 }
