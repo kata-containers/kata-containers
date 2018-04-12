@@ -13,21 +13,18 @@ source "${SCRIPT_PATH}/crio_skip_tests.sh"
 source /etc/os-release
 
 crio_repository="github.com/kubernetes-incubator/cri-o"
-crio_version=$(get_version "externals.crio.version")
-check_crio_repository="$GOPATH/src/${crio_repository}"
+crio_repository_path="$GOPATH/src/${crio_repository}"
 
-if [ -d ${check_crio_repository} ]; then
-	pushd ${check_crio_repository}
-	check_version=$(git log -1 | grep "${crio_version}")
-	if [ $? -ne 0 ]; then
-		git fetch
-		git checkout "${crio_version}"
-	fi
-	popd
-else
-	echo "Obtain CRI-O repository"
+# Clone CRI-O repo if it is not already present.
+if [ ! -d "${crio_repository_path}" ]; then
 	go get -d "${crio_repository}" || true
-	pushd ${check_crio_repository}
+fi
+
+# If the change we are testing does not come from CRI-O repository,
+# then checkout to the version from versions.yaml in the runtime repository.
+if [ "$ghprbGhRepository" != "${crio_repository/github.com\/}" ];then
+	pushd "${crio_repository_path}"
+	crio_version=$(get_version "externals.crio.version")
 	git fetch
 	git checkout "${crio_version}"
 	popd
@@ -37,7 +34,7 @@ OLD_IFS=$IFS
 IFS=''
 
 # Skip CRI-O tests that currently are not working
-pushd $GOPATH/src/${crio_repository}/test/
+pushd "${crio_repository_path}/test/"
 for i in ${skipCRIOTests[@]}
 do
 	sed -i '/'${i}'/a skip \"This is not working (Issue https://github.com/kata-containers/agent/issues/138)\"' "$GOPATH/src/${crio_repository}/test/ctr.bats"

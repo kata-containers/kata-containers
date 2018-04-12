@@ -13,11 +13,15 @@ source /etc/os-release
 
 echo "Get CRI-O sources"
 crio_repo="github.com/kubernetes-incubator/cri-o"
-crio_version=$(get_version "externals.crio.version")
 go get -d "$crio_repo" || true
 pushd "${GOPATH}/src/${crio_repo}"
-git fetch
-git checkout "${crio_version}"
+
+if [ "$ghprbGhRepository" != "${crio_repo/github.com\/}" ]
+then
+	crio_version=$(get_version "externals.crio.version")
+	git fetch
+	git checkout "${crio_version}"
+fi
 
 # Add link of go-md2man to $GOPATH/bin
 GOBIN="$GOPATH/bin"
