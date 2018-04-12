@@ -281,6 +281,11 @@ type Mount struct {
 
 	// ReadOnly specifies if the mount should be read only or not
 	ReadOnly bool
+
+	// BlockDevice represents block device that is attached to the
+	// VM in case this mount is a block device file or a directory
+	// backed by a block device.
+	BlockDevice *BlockDevice
 }
 
 func bindUnmountContainerRootfs(sharedDir, podID, cID string) error {

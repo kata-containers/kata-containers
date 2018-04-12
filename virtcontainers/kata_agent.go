@@ -539,6 +539,35 @@ func (k *kataAgent) replaceOCIMountSource(spec *specs.Spec, guestMounts []Mount)
 	return nil
 }
 
+func (k *kataAgent) replaceOCIMountsForStorages(spec *specs.Spec, volumeStorages []*grpc.Storage) error {
+	ociMounts := spec.Mounts
+	var index int
+	var m specs.Mount
+
+	for i, v := range volumeStorages {
+		for index, m = range ociMounts {
+			if m.Destination != v.MountPoint {
+				continue
+			}
+
+			// Create a temporary location to mount the Storage. Mounting to the correct location
+			// will be handled by the OCI mount structure.
+			filename := fmt.Sprintf("%s-%s", uuid.Generate().String(), filepath.Base(m.Destination))
+			path := filepath.Join(kataGuestSharedDir, filename)
+
+			k.Logger().Debugf("Replacing OCI mount source (%s) with %s", m.Source, path)
+			ociMounts[index].Source = path
+			volumeStorages[i].MountPoint = path
+
+			break
+		}
+		if index == len(ociMounts) {
+			return fmt.Errorf("OCI mount not found for block volume %s", v.MountPoint)
+		}
+	}
+	return nil
+}
+
 func constraintGRPCSpec(grpcSpec *grpc.Spec) {
 	// Disable Hooks since they have been handled on the host and there is
 	// no reason to send them to the agent. It would make no sense to try
@@ -720,6 +749,20 @@ func (k *kataAgent) createContainer(pod *Pod, c *Container) (p *Process, err err
 		return nil, err
 	}
 
+	// Append container devices for block devices passed with --device.
+	ctrDevices = k.appendDevices(ctrDevices, c.devices)
+
+	// Handle all the volumes that are block device files.
+	// Note this call modifies the list of container devices to make sure
+	// all hotplugged devices are unplugged, so this needs be done
+	// after devices passed with --device are handled.
+	volumeStorages := k.handleBlockVolumes(c)
+	if err := k.replaceOCIMountsForStorages(ociSpec, volumeStorages); err != nil {
+		return nil, err
+	}
+
+	ctrStorages = append(ctrStorages, volumeStorages...)
+
 	grpcSpec, err := grpc.OCItoGRPC(ociSpec)
 	if err != nil {
 		return nil, err
@@ -731,9 +774,6 @@ func (k *kataAgent) createContainer(pod *Pod, c *Container) (p *Process, err err
 	// We need to constraint the spec to make sure we're not passing
 	// irrelevant information to the agent.
 	constraintGRPCSpec(grpcSpec)
-
-	// Append container devices for block devices passed with --device.
-	ctrDevices = k.appendDevices(ctrDevices, c.devices)
 
 	req := &grpc.CreateContainerRequest{
 		ContainerId: c.id,
@@ -758,6 +798,43 @@ func (k *kataAgent) createContainer(pod *Pod, c *Container) (p *Process, err err
 
 	return prepareAndStartShim(pod, k.shim, c.id, req.ExecId,
 		k.state.URL, c.config.Cmd, createNSList, enterNSList)
+}
+
+// handleBlockVolumes handles volumes that are block devices files
+// by passing the block devices as Storage to the agent.
+func (k *kataAgent) handleBlockVolumes(c *Container) []*grpc.Storage {
+
+	var volumeStorages []*grpc.Storage
+
+	for _, m := range c.mounts {
+		b := m.BlockDevice
+
+		if b == nil {
+			continue
+		}
+
+		// Add the block device to the list of container devices, to make sure the
+		// device is detached with detachDevices() for a container.
+		c.devices = append(c.devices, b)
+
+		vol := &grpc.Storage{}
+
+		if c.pod.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
+			vol.Driver = kataBlkDevType
+			vol.Source = b.VirtPath
+		} else {
+			vol.Driver = kataSCSIDevType
+			vol.Source = b.SCSIAddr
+		}
+
+		vol.MountPoint = b.DeviceInfo.ContainerPath
+		vol.Fstype = "bind"
+		vol.Options = []string{"bind"}
+
+		volumeStorages = append(volumeStorages, vol)
+	}
+
+	return volumeStorages
 }
 
 func (k *kataAgent) startContainer(pod Pod, c *Container) error {

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 // Process gathers data related to a container process.
@@ -308,6 +309,32 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 		// but it does not make sense to pass this as a 9p mount from the host side.
 		// This needs to be handled purely in the guest, by allocating memory for this inside the VM.
 		if m.Destination == "/dev/shm" {
+			continue
+		}
+
+		var stat unix.Stat_t
+		if err := unix.Stat(m.Source, &stat); err != nil {
+			return nil, err
+		}
+
+		// Check if mount is a block device file. If it is, the block device will be attached to the host
+		// instead of passing this as a shared mount.
+		if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
+			b := &BlockDevice{
+				DeviceType: DeviceBlock,
+				DeviceInfo: DeviceInfo{
+					HostPath:      m.Source,
+					ContainerPath: m.Destination,
+					DevType:       "b",
+				},
+			}
+
+			// Attach this block device, all other devices passed in the config have been attached at this point
+			if err := b.attach(c.pod.hypervisor, c); err != nil {
+				return nil, err
+			}
+
+			c.mounts[idx].BlockDevice = b
 			continue
 		}
 
