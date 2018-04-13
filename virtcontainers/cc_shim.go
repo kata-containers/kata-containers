@@ -25,12 +25,12 @@ type ccShim struct{}
 // start is the ccShim start implementation.
 // It starts the cc-shim binary with URL and token flags provided by
 // the proxy.
-func (s *ccShim) start(pod Pod, params ShimParams) (int, error) {
-	if pod.config == nil {
-		return -1, fmt.Errorf("Pod config cannot be nil")
+func (s *ccShim) start(sandbox Sandbox, params ShimParams) (int, error) {
+	if sandbox.config == nil {
+		return -1, fmt.Errorf("Sandbox config cannot be nil")
 	}
 
-	config, ok := newShimConfig(*(pod.config)).(ShimConfig)
+	config, ok := newShimConfig(*(sandbox.config)).(ShimConfig)
 	if !ok {
 		return -1, fmt.Errorf("Wrong shim config type, should be CCShimConfig type")
 	}

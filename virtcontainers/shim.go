@@ -118,8 +118,8 @@ func newShim(pType ShimType) (shim, error) {
 	}
 }
 
-// newShimConfig returns a shim config from a generic PodConfig interface.
-func newShimConfig(config PodConfig) interface{} {
+// newShimConfig returns a shim config from a generic SandboxConfig interface.
+func newShimConfig(config SandboxConfig) interface{} {
 	switch config.ShimType {
 	case NoopShimType, KataBuiltInShimType:
 		return nil
@@ -165,7 +165,7 @@ func stopShim(pid int) error {
 	return nil
 }
 
-func prepareAndStartShim(pod *Pod, shim shim, cid, token, url string, cmd Cmd,
+func prepareAndStartShim(sandbox *Sandbox, shim shim, cid, token, url string, cmd Cmd,
 	createNSList []ns.NSType, enterNSList []ns.Namespace) (*Process, error) {
 	process := &Process{
 		Token:     token,
@@ -183,7 +183,7 @@ func prepareAndStartShim(pod *Pod, shim shim, cid, token, url string, cmd Cmd,
 		EnterNS:   enterNSList,
 	}
 
-	pid, err := shim.start(*pod, shimParams)
+	pid, err := shim.start(*sandbox, shimParams)
 	if err != nil {
 		return nil, err
 	}
@@ -293,5 +293,5 @@ func waitForShim(pid int) error {
 type shim interface {
 	// start starts the shim relying on its configuration and on
 	// parameters provided.
-	start(pod Pod, params ShimParams) (int, error)
+	start(sandbox Sandbox, params ShimParams) (int, error)
 }

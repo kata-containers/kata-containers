@@ -259,8 +259,8 @@ func bindMount(source, destination string, readonly bool) error {
 
 // bindMountContainerRootfs bind mounts a container rootfs into a 9pfs shared
 // directory between the guest and the host.
-func bindMountContainerRootfs(sharedDir, podID, cID, cRootFs string, readonly bool) error {
-	rootfsDest := filepath.Join(sharedDir, podID, cID, rootfsDir)
+func bindMountContainerRootfs(sharedDir, sandboxID, cID, cRootFs string, readonly bool) error {
+	rootfsDest := filepath.Join(sharedDir, sandboxID, cID, rootfsDir)
 
 	return bindMount(cRootFs, rootfsDest, readonly)
 }
@@ -288,20 +288,20 @@ type Mount struct {
 	BlockDevice *BlockDevice
 }
 
-func bindUnmountContainerRootfs(sharedDir, podID, cID string) error {
-	rootfsDest := filepath.Join(sharedDir, podID, cID, rootfsDir)
+func bindUnmountContainerRootfs(sharedDir, sandboxID, cID string) error {
+	rootfsDest := filepath.Join(sharedDir, sandboxID, cID, rootfsDir)
 	syscall.Unmount(rootfsDest, 0)
 
 	return nil
 }
 
-func bindUnmountAllRootfs(sharedDir string, pod Pod) {
-	for _, c := range pod.containers {
+func bindUnmountAllRootfs(sharedDir string, sandbox Sandbox) {
+	for _, c := range sandbox.containers {
 		c.unmountHostMounts()
 		if c.state.Fstype == "" {
 			// Need to check for error returned by this call.
 			// See: https://github.com/containers/virtcontainers/issues/295
-			bindUnmountContainerRootfs(sharedDir, pod.id, c.id)
+			bindUnmountContainerRootfs(sharedDir, sandbox.id, c.id)
 		}
 	}
 }

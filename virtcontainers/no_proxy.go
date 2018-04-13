@@ -34,7 +34,7 @@ type noProxy struct {
 }
 
 // start is noProxy start implementation for proxy interface.
-func (p *noProxy) start(pod Pod, params proxyParams) (int, string, error) {
+func (p *noProxy) start(sandbox Sandbox, params proxyParams) (int, string, error) {
 	if params.agentURL == "" {
 		return -1, "", fmt.Errorf("AgentURL cannot be empty")
 	}
@@ -43,6 +43,6 @@ func (p *noProxy) start(pod Pod, params proxyParams) (int, string, error) {
 }
 
 // stop is noProxy stop implementation for proxy interface.
-func (p *noProxy) stop(pod Pod, pid int) error {
+func (p *noProxy) stop(sandbox Sandbox, pid int) error {
 	return nil
 }

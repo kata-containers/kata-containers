@@ -267,12 +267,12 @@ func TestNewNetworkPluginFailureWrongNetwork(t *testing.T) {
 
 func TestBuildRuntimeConf(t *testing.T) {
 	expected := libcni.RuntimeConf{
-		ContainerID: "testPodID",
-		NetNS:       "testPodNetNSPath",
+		ContainerID: "testSandboxID",
+		NetNS:       "testSandboxNetNSPath",
 		IfName:      "testIfName",
 	}
 
-	runtimeConf := buildRuntimeConf("testPodID", "testPodNetNSPath", "testIfName")
+	runtimeConf := buildRuntimeConf("testSandboxID", "testSandboxNetNSPath", "testIfName")
 
 	if reflect.DeepEqual(*runtimeConf, expected) == false {
 		t.Fatal("Runtime configuration different from expected one")
@@ -298,7 +298,7 @@ func TestAddNetworkSuccessful(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = netPlugin.AddNetwork("testPodID", testNetNsPath, "testIfName")
+	_, err = netPlugin.AddNetwork("testSandboxID", testNetNsPath, "testIfName")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +323,7 @@ func TestAddNetworkFailureUnknownNetNs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = netPlugin.AddNetwork("testPodID", invalidNetNsPath, "testIfName")
+	_, err = netPlugin.AddNetwork("testSandboxID", invalidNetNsPath, "testIfName")
 	if err == nil {
 		t.Fatalf("Should fail because netns %s does not exist", invalidNetNsPath)
 	}
@@ -348,12 +348,12 @@ func TestRemoveNetworkSuccessful(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = netPlugin.AddNetwork("testPodID", testNetNsPath, "testIfName")
+	_, err = netPlugin.AddNetwork("testSandboxID", testNetNsPath, "testIfName")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = netPlugin.RemoveNetwork("testPodID", testNetNsPath, "testIfName")
+	err = netPlugin.RemoveNetwork("testSandboxID", testNetNsPath, "testIfName")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -378,7 +378,7 @@ func TestRemoveNetworkSuccessfulNetworkDoesNotExist(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = netPlugin.RemoveNetwork("testPodID", testNetNsPath, "testIfName")
+	err = netPlugin.RemoveNetwork("testSandboxID", testNetNsPath, "testIfName")
 	if err != nil {
 		// CNI specification says that no error should be returned
 		// in case we try to tear down a non-existing network.

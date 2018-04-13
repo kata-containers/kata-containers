@@ -5,7 +5,7 @@ This is example software; unlike other projects like runc, runv, or rkt, virtcon
 
 ## Virtc example
 
-Here we explain how to use the pod and container API from `virtc` command line.
+Here we explain how to use the sandbox and container API from `virtc` command line.
 
 ### Prepare your environment
 
@@ -93,81 +93,81 @@ The shim will be installed at the following location: `/usr/libexec/clear-contai
 _Start a new container_
 
 ```
-# ./virtc container start --id=1 --pod-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
+# ./virtc container start --id=1 --sandbox-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
 ```
 _Execute a new process on a running container_
 ```
-# ./virtc container enter --id=1 --pod-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
+# ./virtc container enter --id=1 --sandbox-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
 ```
-_Start a pod with container(s) previously created_
+_Start a sandbox with container(s) previously created_
 ```
-# ./virtc pod start --id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
+# ./virtc sandbox start --id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
 ```
-Notice that in both cases, the `--pod-id` and `--id` options have been defined when previously creating a pod and a container. 
+Notice that in both cases, the `--sandbox-id` and `--id` options have been defined when previously creating a sandbox and a container. 
 
 ### Run virtc
 
-All following commands __MUST__ be run as root. By default, and unless you decide to modify it and rebuild it, `virtc` starts empty pods (no container started).
+All following commands __MUST__ be run as root. By default, and unless you decide to modify it and rebuild it, `virtc` starts empty sandboxes (no container started).
 
-#### Run a new pod (Create + Start)
+#### Run a new sandbox (Create + Start)
 ```
-# ./virtc pod run --agent="hyperstart" --network="CNI" --proxy="ccProxy" --proxy-url="unix:///var/run/clearcontainers/proxy.sock" --shim="ccShim" --shim-path="/usr/libexec/cc-shim"
+# ./virtc sandbox run --agent="hyperstart" --network="CNI" --proxy="ccProxy" --proxy-url="unix:///var/run/clearcontainers/proxy.sock" --shim="ccShim" --shim-path="/usr/libexec/cc-shim"
 ```
-#### Create a new pod
+#### Create a new sandbox
 ```
-# ./virtc pod run --agent="hyperstart" --network="CNI" --proxy="ccProxy" --proxy-url="unix:///var/run/clearcontainers/proxy.sock" --shim="ccShim" --shim-path="/usr/libexec/cc-shim"
+# ./virtc sandbox run --agent="hyperstart" --network="CNI" --proxy="ccProxy" --proxy-url="unix:///var/run/clearcontainers/proxy.sock" --shim="ccShim" --shim-path="/usr/libexec/cc-shim"
 ```
 This will generate output similar to the following:
 ```
-Pod 306ecdcf-0a6f-4a06-a03e-86a7b868ffc8 created
+Sandbox 306ecdcf-0a6f-4a06-a03e-86a7b868ffc8 created
 ```
 
-#### Start an existing pod
+#### Start an existing sandbox
 ```
-# ./virtc pod start --id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
+# ./virtc sandbox start --id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
 ```
 This will generate output similar to the following:
 ```
-Pod 306ecdcf-0a6f-4a06-a03e-86a7b868ffc8 started
+Sandbox 306ecdcf-0a6f-4a06-a03e-86a7b868ffc8 started
 ```
 
-#### Stop an existing pod
+#### Stop an existing sandbox
 ```
-# ./virtc pod stop --id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
+# ./virtc sandbox stop --id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
 ```
 This will generate output similar to the following:
 ```
-Pod 306ecdcf-0a6f-4a06-a03e-86a7b868ffc8 stopped
+Sandbox 306ecdcf-0a6f-4a06-a03e-86a7b868ffc8 stopped
 ```
 
-#### Get the status of an existing pod and its containers
+#### Get the status of an existing sandbox and its containers
 ```
-# ./virtc pod status --id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
+# ./virtc sandbox status --id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
 ```
-This will generate output similar to the following (assuming the pod has been started):
+This will generate output similar to the following (assuming the sandbox has been started):
 ```
-POD ID                                  STATE   HYPERVISOR      AGENT
+SB ID                                  STATE   HYPERVISOR      AGENT
 306ecdcf-0a6f-4a06-a03e-86a7b868ffc8    running qemu            hyperstart
 
 CONTAINER ID    STATE
 ```
 
-#### Delete an existing pod
+#### Delete an existing sandbox
 ```
-# ./virtc pod delete --id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
+# ./virtc sandbox delete --id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
 ```
 This will generate output similar to the following:
 ```
-Pod 306ecdcf-0a6f-4a06-a03e-86a7b868ffc8 deleted
+Sandbox 306ecdcf-0a6f-4a06-a03e-86a7b868ffc8 deleted
 ```
 
-#### List all existing pods
+#### List all existing sandboxes
 ```
-# ./virtc pod list
+# ./virtc sandbox list
 ```
 This should generate that kind of output
 ```
-POD ID                                  STATE   HYPERVISOR      AGENT
+SB ID                                  STATE   HYPERVISOR      AGENT
 306ecdcf-0a6f-4a06-a03e-86a7b868ffc8    running qemu            hyperstart
 92d73f74-4514-4a0d-81df-db1cc4c59100    running qemu            hyperstart
 7088148c-049b-4be7-b1be-89b3ae3c551c    ready   qemu            hyperstart
@@ -176,7 +176,7 @@ POD ID                                  STATE   HYPERVISOR      AGENT
 
 #### Create a new container
 ```
-# ./virtc container create --id=1 --pod-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8 --rootfs="/tmp/bundles/busybox/rootfs" --cmd="/bin/ifconfig" --console="/dev/pts/30"
+# ./virtc container create --id=1 --sandbox-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8 --rootfs="/tmp/bundles/busybox/rootfs" --cmd="/bin/ifconfig" --console="/dev/pts/30"
 ```
 This will generate output similar to the following:
 ```
@@ -190,7 +190,7 @@ That way, you make sure you have a dedicated input/output terminal.
 
 #### Start an existing container
 ```
-# ./virtc container start --id=1 --pod-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
+# ./virtc container start --id=1 --sandbox-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
 ```
 This will generate output similar to the following:
 ```
@@ -199,7 +199,7 @@ Container 1 started
 
 #### Run a new process on an existing container
 ```
-# ./virtc container enter --id=1 --pod-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8 --cmd="/bin/ps" --console="/dev/pts/30"
+# ./virtc container enter --id=1 --sandbox-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8 --cmd="/bin/ps" --console="/dev/pts/30"
 ```
 This will generate output similar to the following:
 ```
@@ -213,7 +213,7 @@ That way, you make sure you have a dedicated input/output terminal.
 
 #### Stop an existing container
 ```
-# ./virtc container stop --id=1 --pod-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
+# ./virtc container stop --id=1 --sandbox-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
 ```
 This will generate output similar to the following:
 ```
@@ -222,7 +222,7 @@ Container 1 stopped
 
 #### Delete an existing container
 ```
-# ./virtc container delete --id=1 --pod-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
+# ./virtc container delete --id=1 --sandbox-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
 ```
 This will generate output similar to the following:
 ```
@@ -231,7 +231,7 @@ Container 1 deleted
 
 #### Get the status of an existing container
 ```
-# ./virtc container status --id=1 --pod-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
+# ./virtc container status --id=1 --sandbox-id=306ecdcf-0a6f-4a06-a03e-86a7b868ffc8
 ```
 This will generate output similar to the following (assuming the container has been started):
 ```

@@ -1,38 +1,38 @@
 # virtcontainers 1.0 API
 
 The virtcontainers 1.0 API operates on two high level objects:
-[Pods](#pod-api) and [containers](#container-api):
+[Sandboxes](#sandbox-api) and [containers](#container-api):
 
-* [Pod API](#pod-api)
+* [Sandbox API](#sandbox-api)
 * [Container API](#container-api)
 * [Examples](#examples)
 
-## Pod API
+## Sandbox API
 
-The virtcontainers 1.0 pod API manages hardware virtualized
-[pod lifecycles](#pod-functions). The virtcontainers pod
+The virtcontainers 1.0 sandbox API manages hardware virtualized
+[sandbox lifecycles](#sandbox-functions). The virtcontainers sandbox
 semantics strictly follow the
-[Kubernetes](https://kubernetes.io/docs/concepts/workloads/pods/pod/) ones.
+[Kubernetes](https://kubernetes.io/docs/concepts/workloads/sandboxes/sandbox/) ones.
 
-The pod API allows callers to [create](#createpod), [delete](#deletepod),
-[start](#startpod), [stop](#stoppod), [run](#runpod), [pause](#pausepod),
-[resume](resumepod) and [list](#listpod) VM (Virtual Machine) based pods.
+The sandbox API allows callers to [create](#createsandbox), [delete](#deletesandbox),
+[start](#startsandbox), [stop](#stopsandbox), [run](#runsandbox), [pause](#pausesandbox),
+[resume](resumesandbox) and [list](#listsandbox) VM (Virtual Machine) based sandboxes.
 
-To initially create a pod, the API caller must prepare a
-[`PodConfig`](#podconfig) and pass it to either [`CreatePod`](#createpod)
-or [`RunPod`](#runpod). Upon successful pod creation, the virtcontainers
-API will return a [`VCPod`](#vcpod) interface back to the caller.
+To initially create a sandbox, the API caller must prepare a
+[`SandboxConfig`](#sandboxconfig) and pass it to either [`CreateSandbox`](#createsandbox)
+or [`RunSandbox`](#runsandbox). Upon successful sandbox creation, the virtcontainers
+API will return a [`VCSandbox`](#vcsandbox) interface back to the caller.
 
-The `VCPod` interface is a pod abstraction hiding the internal and private
-virtcontainers pod structure. It is a handle for API callers to manage the
-pod lifecycle through the rest of the [pod API](#pod-functions).
+The `VCSandbox` interface is a sandbox abstraction hiding the internal and private
+virtcontainers sandbox structure. It is a handle for API callers to manage the
+sandbox lifecycle through the rest of the [sandbox API](#sandbox-functions).
 
-* [Structures](#pod-structures)
-* [Functions](#pod-functions)
+* [Structures](#sandbox-structures)
+* [Functions](#sandbox-functions)
 
-### Pod Structures
+### Sandbox Structures
 
-* [PodConfig](#podconfig)
+* [SandboxConfig](#sandboxconfig)
   * [Resources](#resources)
   * [HypervisorType](#hypervisortype)
   * [HypervisorConfig](#hypervisorconfig)
@@ -48,12 +48,12 @@ pod lifecycle through the rest of the [pod API](#pod-functions).
     * [Cmd](#cmd)
     * [Mount](#mount)
     * [DeviceInfo](#deviceinfo)
-* [VCPod](#vcpod)
+* [VCSandbox](#vcsandbox)
 
-#### `PodConfig`
+#### `SandboxConfig`
 ```Go
-// PodConfig is a Pod configuration.
-type PodConfig struct {
+// SandboxConfig is a Sandbox configuration.
+type SandboxConfig struct {
 	ID string
 
 	Hostname string
@@ -61,7 +61,7 @@ type PodConfig struct {
 	// Field specific to OCI specs, needed to setup all the hooks
 	Hooks Hooks
 
-	// VMConfig is the VM configuration to set for this pod.
+	// VMConfig is the VM configuration to set for this sandbox.
 	VMConfig Resources
 
 	HypervisorType   HypervisorType
@@ -79,12 +79,12 @@ type PodConfig struct {
 	NetworkModel  NetworkModel
 	NetworkConfig NetworkConfig
 
-	// Volumes is a list of shared volumes between the host and the Pod.
+	// Volumes is a list of shared volumes between the host and the Sandbox.
 	Volumes []Volume
 
-	// Containers describe the list of containers within a Pod.
+	// Containers describe the list of containers within a Sandbox.
 	// This list can be empty and populated by adding containers
-	// to the Pod a posteriori.
+	// to the Sandbox a posteriori.
 	Containers []ContainerConfig
 
 	// Annotations keys must be unique strings and must be name-spaced
@@ -155,11 +155,11 @@ type HypervisorConfig struct {
 	Debug bool
 
 	// DefaultVCPUs specifies default number of vCPUs for the VM.
-	// Pod configuration VMConfig.VCPUs overwrites this.
+	// Sandbox configuration VMConfig.VCPUs overwrites this.
 	DefaultVCPUs uint32
 
 	// DefaultMem specifies default memory size in MiB for the VM.
-	// Pod configuration VMConfig.Memory overwrites this.
+	// Sandbox configuration VMConfig.Memory overwrites this.
 	DefaultMemSz uint32
 
 	// DefaultBridges specifies default number of bridges for the VM.
@@ -188,7 +188,7 @@ type HypervisorConfig struct {
 
 ##### `AgentType`
 ```Go
-// AgentType describes the type of guest agent a Pod should run.
+// AgentType describes the type of guest agent a Sandbox should run.
 type AgentType string
 
 const (
@@ -456,11 +456,11 @@ type DeviceInfo struct {
 }
 ```
 
-#### `VCPod`
+#### `VCSandbox`
 ```Go
-// VCPod is the Pod interface
-// (required since virtcontainers.Pod only contains private fields)
-type VCPod interface {
+// VCSandbox is the Sandbox interface
+// (required since virtcontainers.Sandbox only contains private fields)
+type VCSandbox interface {
 	Annotations(key string) (string, error)
 	GetAllContainers() []VCContainer
 	GetAnnotations() map[string]string
@@ -470,84 +470,84 @@ type VCPod interface {
 }
 ```
 
-### Pod Functions
+### Sandbox Functions
 
-* [CreatePod](#createpod)
-* [DeletePod](#deletepod)
-* [StartPod](#startpod)
-* [StopPod](#stoppod)
-* [RunPod](#runpod)
-* [ListPod](#listpod)
-* [StatusPod](#statuspod)
-* [PausePod](#pausepod)
-* [ResumePod](#resumepod)
+* [CreateSandbox](#createsandbox)
+* [DeleteSandbox](#deletesandbox)
+* [StartSandbox](#startsandbox)
+* [StopSandbox](#stopsandbox)
+* [RunSandbox](#runsandbox)
+* [ListSandbox](#listsandbox)
+* [StatusSandbox](#statussandbox)
+* [PauseSandbox](#pausesandbox)
+* [ResumeSandbox](#resumesandbox)
 
-#### `CreatePod`
+#### `CreateSandbox`
 ```Go
-// CreatePod is the virtcontainers pod creation entry point.
-// CreatePod creates a pod and its containers. It does not start them.
-func CreatePod(podConfig PodConfig) (VCPod, error)
+// CreateSandbox is the virtcontainers sandbox creation entry point.
+// CreateSandbox creates a sandbox and its containers. It does not start them.
+func CreateSandbox(sandboxConfig SandboxConfig) (VCSandbox, error)
 ```
 
-#### `DeletePod`
+#### `DeleteSandbox`
 ```Go
-// DeletePod is the virtcontainers pod deletion entry point.
-// DeletePod will stop an already running container and then delete it.
-func DeletePod(podID string) (VCPod, error)
+// DeleteSandbox is the virtcontainers sandbox deletion entry point.
+// DeleteSandbox will stop an already running container and then delete it.
+func DeleteSandbox(sandboxID string) (VCSandbox, error)
 ```
 
-#### `StartPod`
+#### `StartSandbox`
 ```Go
-// StartPod is the virtcontainers pod starting entry point.
-// StartPod will talk to the given hypervisor to start an existing
-// pod and all its containers.
-func StartPod(podID string) (VCPod, error)
+// StartSandbox is the virtcontainers sandbox starting entry point.
+// StartSandbox will talk to the given hypervisor to start an existing
+// sandbox and all its containers.
+func StartSandbox(sandboxID string) (VCSandbox, error)
 ```
 
-#### `StopPod`
+#### `StopSandbox`
 ```Go
-// StopPod is the virtcontainers pod stopping entry point.
-// StopPod will talk to the given agent to stop an existing pod
-// and destroy all containers within that pod.
-func StopPod(podID string) (VCPod, error)
+// StopSandbox is the virtcontainers sandbox stopping entry point.
+// StopSandbox will talk to the given agent to stop an existing sandbox
+// and destroy all containers within that sandbox.
+func StopSandbox(sandboxID string) (VCSandbox, error)
 ```
 
-#### `RunPod`
+#### `RunSandbox`
 ```Go
-// RunPod is the virtcontainers pod running entry point.
-// RunPod creates a pod and its containers and then it starts them.
-func RunPod(podConfig PodConfig) (VCPod, error)
+// RunSandbox is the virtcontainers sandbox running entry point.
+// RunSandbox creates a sandbox and its containers and then it starts them.
+func RunSandbox(sandboxConfig SandboxConfig) (VCSandbox, error)
 ```
 
-#### `ListPod`
+#### `ListSandbox`
 ```Go
-// ListPod is the virtcontainers pod listing entry point.
-func ListPod() ([]PodStatus, error)
+// ListSandbox is the virtcontainers sandbox listing entry point.
+func ListSandbox() ([]SandboxStatus, error)
 ```
 
-#### `StatusPod`
+#### `StatusSandbox`
 ```Go
-// StatusPod is the virtcontainers pod status entry point.
-func StatusPod(podID string) (PodStatus, error)
+// StatusSandbox is the virtcontainers sandbox status entry point.
+func StatusSandbox(sandboxID string) (SandboxStatus, error)
 ```
 
-#### `PausePod`
+#### `PauseSandbox`
 ```Go
-// PausePod is the virtcontainers pausing entry point which pauses an
-// already running pod.
-func PausePod(podID string) (VCPod, error)
+// PauseSandbox is the virtcontainers pausing entry point which pauses an
+// already running sandbox.
+func PauseSandbox(sandboxID string) (VCSandbox, error)
 ```
 
-#### `ResumePod`
+#### `ResumeSandbox`
 ```Go
-// ResumePod is the virtcontainers resuming entry point which resumes
-// (or unpauses) and already paused pod.
-func ResumePod(podID string) (VCPod, error)
+// ResumeSandbox is the virtcontainers resuming entry point which resumes
+// (or unpauses) and already paused sandbox.
+func ResumeSandbox(sandboxID string) (VCSandbox, error)
 ```
 
 ## Container API
 
-The virtcontainers 1.0 container API manages pod
+The virtcontainers 1.0 container API manages sandbox
 [container lifecycles](#container-functions).
 
 A virtcontainers container is process running inside a containerized
@@ -556,8 +556,8 @@ a virtcontainers container is just a regular container running inside a
 virtual machine's guest OS.
 
 A virtcontainers container always belong to one and only one
-virtcontainers pod, again following the
-[Kubernetes](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/)
+virtcontainers sandbox, again following the
+[Kubernetes](https://kubernetes.io/docs/concepts/workloads/sandboxes/sandbox-overview/)
 logic and semantics.
 
 The container API allows callers to [create](#createcontainer),
@@ -566,12 +566,12 @@ The container API allows callers to [create](#createcontainer),
 allows for running [additional processes](#entercontainer) inside a
 specific container.
 
-As a virtcontainers container is always linked to a pod, the entire container
-API always takes a pod ID as its first argument.
+As a virtcontainers container is always linked to a sandbox, the entire container
+API always takes a sandbox ID as its first argument.
 
 To create a container, the API caller must prepare a
 [`ContainerConfig`](#containerconfig) and pass it to
-[`CreateContainer`](#createcontainer) together with a pod ID. Upon successful
+[`CreateContainer`](#createcontainer) together with a sandbox ID. Upon successful
 container creation, the virtcontainers API will return a
 [`VCContainer`](#vccontainer) interface back to the caller.
 
@@ -729,10 +729,10 @@ type DeviceInfo struct {
 // Process gathers data related to a container process.
 type Process struct {
 	// Token is the process execution context ID. It must be
-	// unique per pod.
+	// unique per sandbox.
 	// Token is used to manipulate processes for containers
 	// that have not started yet, and later identify them
-	// uniquely within a pod.
+	// uniquely within a sandbox.
 	Token string
 
 	// Pid is the process ID as seen by the host software
@@ -786,7 +786,7 @@ type VCContainer interface {
 	GetPid() int
 	GetToken() string
 	ID() string
-	Pod() VCPod
+	Sandbox() VCSandbox
 	Process() Process
 	SetPid(pid int) error
 }
@@ -806,70 +806,70 @@ type VCContainer interface {
 #### `CreateContainer`
 ```Go
 // CreateContainer is the virtcontainers container creation entry point.
-// CreateContainer creates a container on a given pod.
-func CreateContainer(podID string, containerConfig ContainerConfig) (VCPod, VCContainer, error)
+// CreateContainer creates a container on a given sandbox.
+func CreateContainer(sandboxID string, containerConfig ContainerConfig) (VCSandbox, VCContainer, error)
 ```
 
 #### `DeleteContainer`
 ```Go
 // DeleteContainer is the virtcontainers container deletion entry point.
-// DeleteContainer deletes a Container from a Pod. If the container is running,
+// DeleteContainer deletes a Container from a Sandbox. If the container is running,
 // it needs to be stopped first.
-func DeleteContainer(podID, containerID string) (VCContainer, error)
+func DeleteContainer(sandboxID, containerID string) (VCContainer, error)
 ```
 
 #### `StartContainer`
 ```Go
 // StartContainer is the virtcontainers container starting entry point.
 // StartContainer starts an already created container.
-func StartContainer(podID, containerID string) (VCContainer, error)
+func StartContainer(sandboxID, containerID string) (VCContainer, error)
 ```
 
 #### `StopContainer`
 ```Go
 // StopContainer is the virtcontainers container stopping entry point.
 // StopContainer stops an already running container.
-func StopContainer(podID, containerID string) (VCContainer, error)
+func StopContainer(sandboxID, containerID string) (VCContainer, error)
 ```
 
 #### `EnterContainer`
 ```Go
 // EnterContainer is the virtcontainers container command execution entry point.
 // EnterContainer enters an already running container and runs a given command.
-func EnterContainer(podID, containerID string, cmd Cmd) (VCPod, VCContainer, *Process, error)
+func EnterContainer(sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContainer, *Process, error)
 ```
 
 #### `StatusContainer`
 ```Go
 // StatusContainer is the virtcontainers container status entry point.
 // StatusContainer returns a detailed container status.
-func StatusContainer(podID, containerID string) (ContainerStatus, error)
+func StatusContainer(sandboxID, containerID string) (ContainerStatus, error)
 ```
 
 #### `KillContainer`
 ```Go
 // KillContainer is the virtcontainers entry point to send a signal
-// to a container running inside a pod. If all is true, all processes in
+// to a container running inside a sandbox. If all is true, all processes in
 // the container will be sent the signal.
-func KillContainer(podID, containerID string, signal syscall.Signal, all bool) error
+func KillContainer(sandboxID, containerID string, signal syscall.Signal, all bool) error
 ```
 
 #### `ProcessListContainer`
 ```Go
 // ProcessListContainer is the virtcontainers entry point to list
 // processes running inside a container
-func ProcessListContainer(podID, containerID string, options ProcessListOptions) (ProcessList, error)
+func ProcessListContainer(sandboxID, containerID string, options ProcessListOptions) (ProcessList, error)
 ```
 
 ## Examples
 
-### Preparing and running a pod
+### Preparing and running a sandbox
 
 ```Go
 
-// This example creates and starts a single container pod,
+// This example creates and starts a single container sandbox,
 // using qemu as the hypervisor and hyperstart as the VM agent.
-func Example_createAndStartPod() {
+func Example_createAndStartSandbox() {
 	envs := []vc.EnvVar{
 		{
 			Var:   "PATH",
@@ -906,11 +906,11 @@ func Example_createAndStartPod() {
 		Memory: 1024,
 	}
 
-	// The pod configuration:
+	// The sandbox configuration:
 	// - One container
 	// - Hypervisor is QEMU
 	// - Agent is hyperstart
-	podConfig := vc.PodConfig{
+	sandboxConfig := vc.SandboxConfig{
 		VMConfig: vmConfig,
 
 		HypervisorType:   vc.QemuHypervisor,
@@ -922,9 +922,9 @@ func Example_createAndStartPod() {
 		Containers: []vc.ContainerConfig{container},
 	}
 
-	_, err := vc.RunPod(podConfig)
+	_, err := vc.RunSandbox(sandboxConfig)
 	if err != nil {
-		fmt.Printf("Could not run pod: %s", err)
+		fmt.Printf("Could not run sandbox: %s", err)
 	}
 
 	return

@@ -33,7 +33,7 @@ firmware = "@FIRMWAREPATH@"
 # For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
 machine_accelerators="@MACHINEACCELERATORS@"
 
-# Default number of vCPUs per POD/VM:
+# Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
 # < 0                             --> will be set to the actual number of physical cores
 # > 0 <= number of physical cores --> will be set to the specified number
@@ -47,13 +47,13 @@ default_vcpus = 1
 # * Until 30 devices per bridge can be hot plugged.
 # * Until 5 PCI bridges can be cold plugged per VM.
 #   This limitation could be a bug in qemu or in the kernel
-# Default number of bridges per POD/VM:
+# Default number of bridges per SB/VM:
 # unspecified or 0   --> will be set to @DEFBRIDGES@
 # > 1 <= 5           --> will be set to the specified number
 # > 5                --> will be set to 5
 default_bridges = @DEFBRIDGES@
 
-# Default memory size in MiB for POD/VM.
+# Default memory size in MiB for SB/VM.
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
 #default_memory = @DEFMEMSZ@
 

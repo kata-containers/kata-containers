@@ -18,28 +18,28 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 )
 
-// ID implements the VCPod function of the same name.
-func (p *Pod) ID() string {
+// ID implements the VCSandbox function of the same name.
+func (p *Sandbox) ID() string {
 	return p.MockID
 }
 
-// Annotations implements the VCPod function of the same name.
-func (p *Pod) Annotations(key string) (string, error) {
+// Annotations implements the VCSandbox function of the same name.
+func (p *Sandbox) Annotations(key string) (string, error) {
 	return p.MockAnnotations[key], nil
 }
 
-// SetAnnotations implements the VCPod function of the same name.
-func (p *Pod) SetAnnotations(annotations map[string]string) error {
+// SetAnnotations implements the VCSandbox function of the same name.
+func (p *Sandbox) SetAnnotations(annotations map[string]string) error {
 	return nil
 }
 
-// GetAnnotations implements the VCPod function of the same name.
-func (p *Pod) GetAnnotations() map[string]string {
+// GetAnnotations implements the VCSandbox function of the same name.
+func (p *Sandbox) GetAnnotations() map[string]string {
 	return p.MockAnnotations
 }
 
-// GetAllContainers implements the VCPod function of the same name.
-func (p *Pod) GetAllContainers() []vc.VCContainer {
+// GetAllContainers implements the VCSandbox function of the same name.
+func (p *Sandbox) GetAllContainers() []vc.VCContainer {
 	var ifa = make([]vc.VCContainer, len(p.MockContainers))
 
 	for i, v := range p.MockContainers {
@@ -49,8 +49,8 @@ func (p *Pod) GetAllContainers() []vc.VCContainer {
 	return ifa
 }
 
-// GetContainer implements the VCPod function of the same name.
-func (p *Pod) GetContainer(containerID string) vc.VCContainer {
+// GetContainer implements the VCSandbox function of the same name.
+func (p *Sandbox) GetContainer(containerID string) vc.VCContainer {
 	for _, c := range p.MockContainers {
 		if c.MockID == containerID {
 			return c

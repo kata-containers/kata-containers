@@ -90,7 +90,7 @@ func TestAssetNew(t *testing.T) {
 	_, err = tmpfile.Write(assetContent)
 	assert.Nil(err)
 
-	p := &PodConfig{
+	p := &SandboxConfig{
 		Annotations: map[string]string{
 			annotations.KernelPath: tmpfile.Name(),
 			annotations.KernelHash: assetContentHash,
@@ -105,7 +105,7 @@ func TestAssetNew(t *testing.T) {
 	assert.Nil(err)
 	assert.Equal(assetContentHash, a.computedHash)
 
-	p = &PodConfig{
+	p = &SandboxConfig{
 		Annotations: map[string]string{
 			annotations.KernelPath: tmpfile.Name(),
 			annotations.KernelHash: assetContentWrongHash,

@@ -79,33 +79,33 @@ func TestContainerSystemMountsInfo(t *testing.T) {
 	assert.False(t, c.systemMountsInfo.BindMountDev)
 }
 
-func TestContainerPod(t *testing.T) {
-	expectedPod := &Pod{}
+func TestContainerSandbox(t *testing.T) {
+	expectedSandbox := &Sandbox{}
 
 	container := Container{
-		pod: expectedPod,
+		sandbox: expectedSandbox,
 	}
 
-	pod := container.Pod()
+	sandbox := container.Sandbox()
 
-	if !reflect.DeepEqual(pod, expectedPod) {
-		t.Fatalf("Expecting %+v\nGot %+v", expectedPod, pod)
+	if !reflect.DeepEqual(sandbox, expectedSandbox) {
+		t.Fatalf("Expecting %+v\nGot %+v", expectedSandbox, sandbox)
 	}
 }
 
 func TestContainerRemoveDrive(t *testing.T) {
-	pod := &Pod{}
+	sandbox := &Sandbox{}
 
 	container := Container{
-		pod: pod,
-		id:  "testContainer",
+		sandbox: sandbox,
+		id:      "testContainer",
 	}
 
 	container.state.Fstype = ""
 	err := container.removeDrive()
 
 	// hotplugRemoveDevice for hypervisor should not be called.
-	// test should pass without a hypervisor created for the container's pod.
+	// test should pass without a hypervisor created for the container's sandbox.
 	if err != nil {
 		t.Fatal("")
 	}
@@ -120,7 +120,7 @@ func TestContainerRemoveDrive(t *testing.T) {
 	}
 
 	container.state.HotpluggedDrive = true
-	pod.hypervisor = &mockHypervisor{}
+	sandbox.hypervisor = &mockHypervisor{}
 	err = container.removeDrive()
 
 	if err != nil {
@@ -206,12 +206,12 @@ func TestContainerAddDriveDir(t *testing.T) {
 	}
 
 	fs := &filesystem{}
-	pod := &Pod{
-		id:         testPodID,
+	sandbox := &Sandbox{
+		id:         testSandboxID,
 		storage:    fs,
 		hypervisor: &mockHypervisor{},
 		agent:      &noopAgent{},
-		config: &PodConfig{
+		config: &SandboxConfig{
 			HypervisorConfig: HypervisorConfig{
 				DisableBlockDeviceUse: false,
 			},
@@ -220,13 +220,13 @@ func TestContainerAddDriveDir(t *testing.T) {
 
 	contID := "100"
 	container := Container{
-		pod:    pod,
-		id:     contID,
-		rootFs: fakeRootfs,
+		sandbox: sandbox,
+		id:      contID,
+		rootFs:  fakeRootfs,
 	}
 
 	// create state file
-	path := filepath.Join(runStoragePath, testPodID, container.ID())
+	path := filepath.Join(runStoragePath, testSandboxID, container.ID())
 	err = os.MkdirAll(path, dirMode)
 	if err != nil {
 		t.Fatal(err)
@@ -266,29 +266,29 @@ func TestContainerAddDriveDir(t *testing.T) {
 	}
 }
 
-func TestCheckPodRunningEmptyCmdFailure(t *testing.T) {
+func TestCheckSandboxRunningEmptyCmdFailure(t *testing.T) {
 	c := &Container{}
-	err := c.checkPodRunning("")
+	err := c.checkSandboxRunning("")
 	assert.NotNil(t, err, "Should fail because provided command is empty")
 }
 
-func TestCheckPodRunningNotRunningFailure(t *testing.T) {
+func TestCheckSandboxRunningNotRunningFailure(t *testing.T) {
 	c := &Container{
-		pod: &Pod{},
+		sandbox: &Sandbox{},
 	}
-	err := c.checkPodRunning("test_cmd")
-	assert.NotNil(t, err, "Should fail because pod state is empty")
+	err := c.checkSandboxRunning("test_cmd")
+	assert.NotNil(t, err, "Should fail because sandbox state is empty")
 }
 
-func TestCheckPodRunningSuccessful(t *testing.T) {
+func TestCheckSandboxRunningSuccessful(t *testing.T) {
 	c := &Container{
-		pod: &Pod{
+		sandbox: &Sandbox{
 			state: State{
 				State: StateRunning,
 			},
 		},
 	}
-	err := c.checkPodRunning("test_cmd")
+	err := c.checkSandboxRunning("test_cmd")
 	assert.Nil(t, err, "%v", err)
 }
 
@@ -312,7 +312,7 @@ func TestContainerAddResources(t *testing.T) {
 		CPUQuota:  5000,
 		CPUPeriod: 1000,
 	}
-	c.pod = &Pod{
+	c.sandbox = &Sandbox{
 		hypervisor: &mockHypervisor{},
 		agent:      &noopAgent{},
 	}
@@ -340,7 +340,7 @@ func TestContainerRemoveResources(t *testing.T) {
 		CPUQuota:  5000,
 		CPUPeriod: 1000,
 	}
-	c.pod = &Pod{hypervisor: &mockHypervisor{}}
+	c.sandbox = &Sandbox{hypervisor: &mockHypervisor{}}
 	err = c.removeResources()
 	assert.Nil(err)
 }
@@ -348,7 +348,7 @@ func TestContainerRemoveResources(t *testing.T) {
 func TestContainerEnterErrorsOnContainerStates(t *testing.T) {
 	assert := assert.New(t)
 	c := &Container{
-		pod: &Pod{
+		sandbox: &Sandbox{
 			state: State{
 				State: StateRunning,
 			},

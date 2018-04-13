@@ -31,10 +31,10 @@ import (
 // Process gathers data related to a container process.
 type Process struct {
 	// Token is the process execution context ID. It must be
-	// unique per pod.
+	// unique per sandbox.
 	// Token is used to manipulate processes for containers
 	// that have not started yet, and later identify them
-	// uniquely within a pod.
+	// uniquely within a sandbox.
 	Token string
 
 	// Pid is the process ID as seen by the host software
@@ -125,14 +125,14 @@ type SystemMountsInfo struct {
 // Container is composed of a set of containers and a runtime environment.
 // A Container can be created, deleted, started, stopped, listed, entered, paused and restored.
 type Container struct {
-	id    string
-	podID string
+	id        string
+	sandboxID string
 
 	rootFs string
 
 	config *ContainerConfig
 
-	pod *Pod
+	sandbox *Sandbox
 
 	runPath       string
 	configPath    string
@@ -159,13 +159,13 @@ func (c *Container) Logger() *logrus.Entry {
 	return virtLog.WithFields(logrus.Fields{
 		"subsystem":    "container",
 		"container-id": c.id,
-		"pod-id":       c.podID,
+		"sandbox-id":   c.sandboxID,
 	})
 }
 
-// Pod returns the pod handler related to this container.
-func (c *Container) Pod() VCPod {
-	return c.pod
+// Sandbox returns the sandbox handler related to this container.
+func (c *Container) Sandbox() VCSandbox {
+	return c.sandbox
 }
 
 // Process returns the container process.
@@ -193,7 +193,7 @@ func (c *Container) SetPid(pid int) error {
 func (c *Container) setStateBlockIndex(index int) error {
 	c.state.BlockIndex = index
 
-	err := c.pod.storage.storeContainerResource(c.pod.id, c.id, stateFileType, c.state)
+	err := c.sandbox.storage.storeContainerResource(c.sandbox.id, c.id, stateFileType, c.state)
 	if err != nil {
 		return err
 	}
@@ -204,7 +204,7 @@ func (c *Container) setStateBlockIndex(index int) error {
 func (c *Container) setStateFstype(fstype string) error {
 	c.state.Fstype = fstype
 
-	err := c.pod.storage.storeContainerResource(c.pod.id, c.id, stateFileType, c.state)
+	err := c.sandbox.storage.storeContainerResource(c.sandbox.id, c.id, stateFileType, c.state)
 	if err != nil {
 		return err
 	}
@@ -215,7 +215,7 @@ func (c *Container) setStateFstype(fstype string) error {
 func (c *Container) setStateHotpluggedDrive(hotplugged bool) error {
 	c.state.HotpluggedDrive = hotplugged
 
-	err := c.pod.storage.storeContainerResource(c.pod.id, c.id, stateFileType, c.state)
+	err := c.sandbox.storage.storeContainerResource(c.sandbox.id, c.id, stateFileType, c.state)
 	if err != nil {
 		return err
 	}
@@ -229,29 +229,29 @@ func (c *Container) GetAnnotations() map[string]string {
 }
 
 func (c *Container) storeProcess() error {
-	return c.pod.storage.storeContainerProcess(c.podID, c.id, c.process)
+	return c.sandbox.storage.storeContainerProcess(c.sandboxID, c.id, c.process)
 }
 
 func (c *Container) storeMounts() error {
-	return c.pod.storage.storeContainerMounts(c.podID, c.id, c.mounts)
+	return c.sandbox.storage.storeContainerMounts(c.sandboxID, c.id, c.mounts)
 }
 
 func (c *Container) fetchMounts() ([]Mount, error) {
-	return c.pod.storage.fetchContainerMounts(c.podID, c.id)
+	return c.sandbox.storage.fetchContainerMounts(c.sandboxID, c.id)
 }
 
 func (c *Container) storeDevices() error {
-	return c.pod.storage.storeContainerDevices(c.podID, c.id, c.devices)
+	return c.sandbox.storage.storeContainerDevices(c.sandboxID, c.id, c.devices)
 }
 
 func (c *Container) fetchDevices() ([]Device, error) {
-	return c.pod.storage.fetchContainerDevices(c.podID, c.id)
+	return c.sandbox.storage.fetchContainerDevices(c.sandboxID, c.id)
 }
 
 // storeContainer stores a container config.
 func (c *Container) storeContainer() error {
 	fs := filesystem{}
-	err := fs.storeContainerResource(c.pod.id, c.id, configFileType, *(c.config))
+	err := fs.storeContainerResource(c.sandbox.id, c.id, configFileType, *(c.config))
 	if err != nil {
 		return err
 	}
@@ -270,7 +270,7 @@ func (c *Container) setContainerState(state stateString) error {
 	c.state.State = state
 
 	// update on-disk state
-	err := c.pod.storage.storeContainerResource(c.pod.id, c.id, stateFileType, c.state)
+	err := c.sandbox.storage.storeContainerResource(c.sandbox.id, c.id, stateFileType, c.state)
 	if err != nil {
 		return err
 	}
@@ -286,7 +286,7 @@ func (c *Container) createContainersDirs() error {
 
 	err = os.MkdirAll(c.configPath, dirMode)
 	if err != nil {
-		c.pod.storage.deleteContainerResources(c.podID, c.id, nil)
+		c.sandbox.storage.deleteContainerResources(c.sandboxID, c.id, nil)
 		return err
 	}
 
@@ -330,7 +330,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 			}
 
 			// Attach this block device, all other devices passed in the config have been attached at this point
-			if err := b.attach(c.pod.hypervisor, c); err != nil {
+			if err := b.attach(c.sandbox.hypervisor, c); err != nil {
 				return nil, err
 			}
 
@@ -345,7 +345,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 
 		// These mounts are created in the shared dir
 		filename := fmt.Sprintf("%s-%s-%s", c.id, hex.EncodeToString(randBytes), filepath.Base(m.Destination))
-		mountDest := filepath.Join(hostSharedDir, c.pod.id, filename)
+		mountDest := filepath.Join(hostSharedDir, c.sandbox.id, filename)
 
 		if err := bindMount(m.Source, mountDest, false); err != nil {
 			return nil, err
@@ -397,32 +397,32 @@ func (c *Container) unmountHostMounts() error {
 	return nil
 }
 
-// newContainer creates a Container structure from a pod and a container configuration.
-func newContainer(pod *Pod, contConfig ContainerConfig) (*Container, error) {
+// newContainer creates a Container structure from a sandbox and a container configuration.
+func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, error) {
 	if contConfig.valid() == false {
 		return &Container{}, fmt.Errorf("Invalid container configuration")
 	}
 
 	c := &Container{
 		id:            contConfig.ID,
-		podID:         pod.id,
+		sandboxID:     sandbox.id,
 		rootFs:        contConfig.RootFs,
 		config:        &contConfig,
-		pod:           pod,
-		runPath:       filepath.Join(runStoragePath, pod.id, contConfig.ID),
-		configPath:    filepath.Join(configStoragePath, pod.id, contConfig.ID),
-		containerPath: filepath.Join(pod.id, contConfig.ID),
+		sandbox:       sandbox,
+		runPath:       filepath.Join(runStoragePath, sandbox.id, contConfig.ID),
+		configPath:    filepath.Join(configStoragePath, sandbox.id, contConfig.ID),
+		containerPath: filepath.Join(sandbox.id, contConfig.ID),
 		state:         State{},
 		process:       Process{},
 		mounts:        contConfig.Mounts,
 	}
 
-	state, err := c.pod.storage.fetchContainerState(c.podID, c.id)
+	state, err := c.sandbox.storage.fetchContainerState(c.sandboxID, c.id)
 	if err == nil {
 		c.state = state
 	}
 
-	process, err := c.pod.storage.fetchContainerProcess(c.podID, c.id)
+	process, err := c.sandbox.storage.fetchContainerProcess(c.sandboxID, c.id)
 	if err == nil {
 		c.process = process
 	}
@@ -467,9 +467,9 @@ func (c *Container) rollbackFailingContainerCreation() {
 }
 
 func (c *Container) checkBlockDeviceSupport() bool {
-	if !c.pod.config.HypervisorConfig.DisableBlockDeviceUse {
-		agentCaps := c.pod.agent.capabilities()
-		hypervisorCaps := c.pod.hypervisor.capabilities()
+	if !c.sandbox.config.HypervisorConfig.DisableBlockDeviceUse {
+		agentCaps := c.sandbox.agent.capabilities()
+		hypervisorCaps := c.sandbox.hypervisor.capabilities()
 
 		if agentCaps.isBlockDeviceSupported() && hypervisorCaps.isBlockDeviceHotplugSupported() {
 			return true
@@ -479,14 +479,14 @@ func (c *Container) checkBlockDeviceSupport() bool {
 	return false
 }
 
-// createContainer creates and start a container inside a Pod. It has to be
-// called only when a new container, not known by the pod, has to be created.
-func createContainer(pod *Pod, contConfig ContainerConfig) (c *Container, err error) {
-	if pod == nil {
-		return nil, errNeedPod
+// createContainer creates and start a container inside a Sandbox. It has to be
+// called only when a new container, not known by the sandbox, has to be created.
+func createContainer(sandbox *Sandbox, contConfig ContainerConfig) (c *Container, err error) {
+	if sandbox == nil {
+		return nil, errNeedSandbox
 	}
 
-	c, err = newContainer(pod, contConfig)
+	c, err = newContainer(sandbox, contConfig)
 	if err != nil {
 		return
 	}
@@ -526,7 +526,7 @@ func createContainer(pod *Pod, contConfig ContainerConfig) (c *Container, err er
 		return
 	}
 
-	process, err := pod.agent.createContainer(c.pod, c)
+	process, err := sandbox.agent.createContainer(c.sandbox, c)
 	if err != nil {
 		return c, err
 	}
@@ -550,26 +550,26 @@ func (c *Container) delete() error {
 		return fmt.Errorf("Container not ready or stopped, impossible to delete")
 	}
 
-	// Remove the container from pod structure
-	if err := c.pod.removeContainer(c.id); err != nil {
+	// Remove the container from sandbox structure
+	if err := c.sandbox.removeContainer(c.id); err != nil {
 		return err
 	}
 
-	return c.pod.storage.deleteContainerResources(c.podID, c.id, nil)
+	return c.sandbox.storage.deleteContainerResources(c.sandboxID, c.id, nil)
 }
 
-// checkPodRunning validates the container state.
+// checkSandboxRunning validates the container state.
 //
 // cmd specifies the operation (or verb) that the retrieval is destined
 // for and is only used to make the returned error as descriptive as
 // possible.
-func (c *Container) checkPodRunning(cmd string) error {
+func (c *Container) checkSandboxRunning(cmd string) error {
 	if cmd == "" {
 		return fmt.Errorf("Cmd cannot be empty")
 	}
 
-	if c.pod.state.State != StateRunning {
-		return fmt.Errorf("Pod not running, impossible to %s the container", cmd)
+	if c.sandbox.state.State != StateRunning {
+		return fmt.Errorf("Sandbox not running, impossible to %s the container", cmd)
 	}
 
 	return nil
@@ -589,7 +589,7 @@ func (c *Container) getSystemMountInfo() {
 }
 
 func (c *Container) start() error {
-	if err := c.checkPodRunning("start"); err != nil {
+	if err := c.checkSandboxRunning("start"); err != nil {
 		return err
 	}
 
@@ -602,7 +602,7 @@ func (c *Container) start() error {
 		return err
 	}
 
-	if err := c.pod.agent.startContainer(*(c.pod), c); err != nil {
+	if err := c.sandbox.agent.startContainer(*(c.sandbox), c); err != nil {
 		c.Logger().WithError(err).Error("Failed to start container")
 
 		if err := c.stop(); err != nil {
@@ -627,8 +627,8 @@ func (c *Container) stop() error {
 		return nil
 	}
 
-	if c.pod.state.State != StateReady && c.pod.state.State != StateRunning {
-		return fmt.Errorf("Pod not ready or running, impossible to stop the container")
+	if c.sandbox.state.State != StateReady && c.sandbox.state.State != StateRunning {
+		return fmt.Errorf("Sandbox not ready or running, impossible to stop the container")
 	}
 
 	if err := c.state.validTransition(c.state.State, StateStopped); err != nil {
@@ -656,7 +656,7 @@ func (c *Container) stop() error {
 	// return an error, but instead try to kill it forcefully.
 	if err := waitForShim(c.process.Pid); err != nil {
 		// Force the container to be killed.
-		if err := c.pod.agent.killContainer(*(c.pod), *c, syscall.SIGKILL, true); err != nil {
+		if err := c.sandbox.agent.killContainer(*(c.sandbox), *c, syscall.SIGKILL, true); err != nil {
 			return err
 		}
 
@@ -669,7 +669,7 @@ func (c *Container) stop() error {
 		}
 	}
 
-	if err := c.pod.agent.stopContainer(*(c.pod), *c); err != nil {
+	if err := c.sandbox.agent.stopContainer(*(c.sandbox), *c); err != nil {
 		return err
 	}
 
@@ -689,7 +689,7 @@ func (c *Container) stop() error {
 }
 
 func (c *Container) enter(cmd Cmd) (*Process, error) {
-	if err := c.checkPodRunning("enter"); err != nil {
+	if err := c.checkSandboxRunning("enter"); err != nil {
 		return nil, err
 	}
 
@@ -699,7 +699,7 @@ func (c *Container) enter(cmd Cmd) (*Process, error) {
 			"impossible to enter")
 	}
 
-	process, err := c.pod.agent.exec(c.pod, *c, cmd)
+	process, err := c.sandbox.agent.exec(c.sandbox, *c, cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -708,19 +708,19 @@ func (c *Container) enter(cmd Cmd) (*Process, error) {
 }
 
 func (c *Container) kill(signal syscall.Signal, all bool) error {
-	if c.pod.state.State != StateReady && c.pod.state.State != StateRunning {
-		return fmt.Errorf("Pod not ready or running, impossible to signal the container")
+	if c.sandbox.state.State != StateReady && c.sandbox.state.State != StateRunning {
+		return fmt.Errorf("Sandbox not ready or running, impossible to signal the container")
 	}
 
 	if c.state.State != StateReady && c.state.State != StateRunning {
 		return fmt.Errorf("Container not ready or running, impossible to signal the container")
 	}
 
-	return c.pod.agent.killContainer(*(c.pod), *c, signal, all)
+	return c.sandbox.agent.killContainer(*(c.sandbox), *c, signal, all)
 }
 
 func (c *Container) processList(options ProcessListOptions) (ProcessList, error) {
-	if err := c.checkPodRunning("ps"); err != nil {
+	if err := c.checkSandboxRunning("ps"); err != nil {
 		return nil, err
 	}
 
@@ -728,7 +728,7 @@ func (c *Container) processList(options ProcessListOptions) (ProcessList, error)
 		return nil, fmt.Errorf("Container not running, impossible to list processes")
 	}
 
-	return c.pod.agent.processListContainer(*(c.pod), *c, options)
+	return c.sandbox.agent.processListContainer(*(c.sandbox), *c, options)
 }
 
 func (c *Container) hotplugDrive() error {
@@ -768,7 +768,7 @@ func (c *Container) hotplugDrive() error {
 		"fs-type":     fsType,
 	}).Info("Block device detected")
 
-	driveIndex, err := c.pod.getAndSetPodBlockIndex()
+	driveIndex, err := c.sandbox.getAndSetSandboxBlockIndex()
 	if err != nil {
 		return err
 	}
@@ -782,7 +782,7 @@ func (c *Container) hotplugDrive() error {
 		Index:  driveIndex,
 	}
 
-	if err := c.pod.hypervisor.hotplugAddDevice(drive, blockDev); err != nil {
+	if err := c.sandbox.hypervisor.hotplugAddDevice(drive, blockDev); err != nil {
 		return err
 	}
 	c.setStateHotpluggedDrive(true)
@@ -814,7 +814,7 @@ func (c *Container) removeDrive() (err error) {
 		l := c.Logger().WithField("device-id", devID)
 		l.Info("Unplugging block device")
 
-		if err := c.pod.hypervisor.hotplugRemoveDevice(drive, blockDev); err != nil {
+		if err := c.sandbox.hypervisor.hotplugRemoveDevice(drive, blockDev); err != nil {
 			l.WithError(err).Info("Failed to unplug block device")
 			return err
 		}
@@ -825,7 +825,7 @@ func (c *Container) removeDrive() (err error) {
 
 func (c *Container) attachDevices() error {
 	for _, device := range c.devices {
-		if err := device.attach(c.pod.hypervisor, c); err != nil {
+		if err := device.attach(c.sandbox.hypervisor, c); err != nil {
 			return err
 		}
 	}
@@ -835,7 +835,7 @@ func (c *Container) attachDevices() error {
 
 func (c *Container) detachDevices() error {
 	for _, device := range c.devices {
-		if err := device.detach(c.pod.hypervisor); err != nil {
+		if err := device.detach(c.sandbox.hypervisor); err != nil {
 			return err
 		}
 	}
@@ -852,11 +852,11 @@ func (c *Container) addResources() error {
 	vCPUs := ConstraintsToVCPUs(c.config.Resources.CPUQuota, c.config.Resources.CPUPeriod)
 	if vCPUs != 0 {
 		virtLog.Debugf("hot adding %d vCPUs", vCPUs)
-		if err := c.pod.hypervisor.hotplugAddDevice(uint32(vCPUs), cpuDev); err != nil {
+		if err := c.sandbox.hypervisor.hotplugAddDevice(uint32(vCPUs), cpuDev); err != nil {
 			return err
 		}
 
-		return c.pod.agent.onlineCPUMem()
+		return c.sandbox.agent.onlineCPUMem()
 	}
 
 	return nil
@@ -871,7 +871,7 @@ func (c *Container) removeResources() error {
 	vCPUs := ConstraintsToVCPUs(c.config.Resources.CPUQuota, c.config.Resources.CPUPeriod)
 	if vCPUs != 0 {
 		virtLog.Debugf("hot removing %d vCPUs", vCPUs)
-		if err := c.pod.hypervisor.hotplugRemoveDevice(uint32(vCPUs), cpuDev); err != nil {
+		if err := c.sandbox.hypervisor.hotplugRemoveDevice(uint32(vCPUs), cpuDev); err != nil {
 			return err
 		}
 	}

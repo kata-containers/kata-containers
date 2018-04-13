@@ -21,14 +21,14 @@ import (
 )
 
 func TestNoProxyStart(t *testing.T) {
-	pod := Pod{
+	sandbox := Sandbox{
 		agent: newAgent(NoopAgentType),
 	}
 
 	p := &noProxy{}
 
 	agentURL := "agentURL"
-	pid, vmURL, err := p.start(pod, proxyParams{agentURL: agentURL})
+	pid, vmURL, err := p.start(sandbox, proxyParams{agentURL: agentURL})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +45,7 @@ func TestNoProxyStart(t *testing.T) {
 func TestNoProxyStop(t *testing.T) {
 	p := &noProxy{}
 
-	if err := p.stop(Pod{}, 0); err != nil {
+	if err := p.stop(Sandbox{}, 0); err != nil {
 		t.Fatal(err)
 	}
 }

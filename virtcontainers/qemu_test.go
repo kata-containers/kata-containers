@@ -82,21 +82,21 @@ func TestQemuInit(t *testing.T) {
 	qemuConfig := newQemuConfig()
 	q := &qemu{}
 
-	pod := &Pod{
-		id:      "testPod",
+	sandbox := &Sandbox{
+		id:      "testSandbox",
 		storage: &filesystem{},
-		config: &PodConfig{
+		config: &SandboxConfig{
 			HypervisorConfig: qemuConfig,
 		},
 	}
 
 	// Create parent dir path for hypervisor.json
-	parentDir := filepath.Join(runStoragePath, pod.id)
+	parentDir := filepath.Join(runStoragePath, sandbox.id)
 	if err := os.MkdirAll(parentDir, dirMode); err != nil {
 		t.Fatalf("Could not create parent directory %s: %v", parentDir, err)
 	}
 
-	if err := q.init(pod); err != nil {
+	if err := q.init(sandbox); err != nil {
 		t.Fatal(err)
 	}
 
@@ -113,21 +113,21 @@ func TestQemuInitMissingParentDirFail(t *testing.T) {
 	qemuConfig := newQemuConfig()
 	q := &qemu{}
 
-	pod := &Pod{
-		id:      "testPod",
+	sandbox := &Sandbox{
+		id:      "testSandbox",
 		storage: &filesystem{},
-		config: &PodConfig{
+		config: &SandboxConfig{
 			HypervisorConfig: qemuConfig,
 		},
 	}
 
 	// Ensure parent dir path for hypervisor.json does not exist.
-	parentDir := filepath.Join(runStoragePath, pod.id)
+	parentDir := filepath.Join(runStoragePath, sandbox.id)
 	if err := os.RemoveAll(parentDir); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := q.init(pod); err == nil {
+	if err := q.init(sandbox); err == nil {
 		t.Fatal("Qemu init() expected to fail because of missing parent directory for storage")
 	}
 }
@@ -180,11 +180,11 @@ func TestQemuMemoryTopology(t *testing.T) {
 		Memory: uint(mem),
 	}
 
-	podConfig := PodConfig{
+	sandboxConfig := SandboxConfig{
 		VMConfig: vmConfig,
 	}
 
-	memory, err := q.memoryTopology(podConfig)
+	memory, err := q.memoryTopology(sandboxConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,12 +259,12 @@ func TestQemuAddDeviceSerialPortDev(t *testing.T) {
 	testQemuAddDevice(t, socket, serialPortDev, expectedOut)
 }
 
-func TestQemuGetPodConsole(t *testing.T) {
+func TestQemuGetSandboxConsole(t *testing.T) {
 	q := &qemu{}
-	podID := "testPodID"
-	expected := filepath.Join(runStoragePath, podID, defaultConsole)
+	sandboxID := "testSandboxID"
+	expected := filepath.Join(runStoragePath, sandboxID, defaultConsole)
 
-	if result := q.getPodConsole(podID); result != expected {
+	if result := q.getSandboxConsole(sandboxID); result != expected {
 		t.Fatalf("Got %s\nExpecting %s", result, expected)
 	}
 }
