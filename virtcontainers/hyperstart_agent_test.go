@@ -37,13 +37,13 @@ func TestHyperstartGenerateSocketsSuccessful(t *testing.T) {
 		SockTtyName: "ttySock",
 	}
 
-	pod := Pod{
-		id: testPodID,
+	sandbox := Sandbox{
+		id: testSandboxID,
 	}
 
 	h := &hyper{}
 
-	h.generateSockets(pod, config)
+	h.generateSockets(sandbox, config)
 
 	expectedSockets := []Socket{
 		{
@@ -68,25 +68,25 @@ func TestHyperstartGenerateSocketsSuccessful(t *testing.T) {
 func TestHyperstartGenerateSocketsSuccessfulNoPathProvided(t *testing.T) {
 	config := HyperConfig{}
 
-	pod := Pod{
-		id: testPodID,
+	sandbox := Sandbox{
+		id: testSandboxID,
 	}
 
 	h := &hyper{}
 
-	h.generateSockets(pod, config)
+	h.generateSockets(sandbox, config)
 
 	expectedSockets := []Socket{
 		{
 			DeviceID: fmt.Sprintf(defaultDeviceIDTemplate, 0),
 			ID:       fmt.Sprintf(defaultIDTemplate, 0),
-			HostPath: fmt.Sprintf(defaultSockPathTemplates[0], runStoragePath, pod.id),
+			HostPath: fmt.Sprintf(defaultSockPathTemplates[0], runStoragePath, sandbox.id),
 			Name:     fmt.Sprintf(defaultChannelTemplate, 0),
 		},
 		{
 			DeviceID: fmt.Sprintf(defaultDeviceIDTemplate, 1),
 			ID:       fmt.Sprintf(defaultIDTemplate, 1),
-			HostPath: fmt.Sprintf(defaultSockPathTemplates[1], runStoragePath, pod.id),
+			HostPath: fmt.Sprintf(defaultSockPathTemplates[1], runStoragePath, sandbox.id),
 			Name:     fmt.Sprintf(defaultChannelTemplate, 1),
 		},
 	}

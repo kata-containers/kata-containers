@@ -25,9 +25,9 @@ import (
 
 const containerRootfs = "/var/lib/container/bundle/"
 
-// This example creates and starts a single container pod,
+// This example creates and starts a single container sandbox,
 // using qemu as the hypervisor and hyperstart as the VM agent.
-func Example_createAndStartPod() {
+func Example_createAndStartSandbox() {
 	envs := []vc.EnvVar{
 		{
 			Var:   "PATH",
@@ -63,11 +63,11 @@ func Example_createAndStartPod() {
 		Memory: 1024,
 	}
 
-	// The pod configuration:
+	// The sandbox configuration:
 	// - One container
 	// - Hypervisor is QEMU
 	// - Agent is hyperstart
-	podConfig := vc.PodConfig{
+	sandboxConfig := vc.SandboxConfig{
 		VMConfig: vmConfig,
 
 		HypervisorType:   vc.QemuHypervisor,
@@ -79,9 +79,9 @@ func Example_createAndStartPod() {
 		Containers: []vc.ContainerConfig{container},
 	}
 
-	_, err := vc.RunPod(podConfig)
+	_, err := vc.RunSandbox(sandboxConfig)
 	if err != nil {
-		fmt.Printf("Could not run pod: %s", err)
+		fmt.Printf("Could not run sandbox: %s", err)
 	}
 
 	return

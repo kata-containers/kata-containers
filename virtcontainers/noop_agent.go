@@ -26,12 +26,12 @@ type noopAgent struct {
 }
 
 // init initializes the Noop agent, i.e. it does nothing.
-func (n *noopAgent) init(pod *Pod, config interface{}) error {
+func (n *noopAgent) init(sandbox *Sandbox, config interface{}) error {
 	return nil
 }
 
-// createPod is the Noop agent pod creation implementation. It does nothing.
-func (n *noopAgent) createPod(pod *Pod) error {
+// createSandbox is the Noop agent sandbox creation implementation. It does nothing.
+func (n *noopAgent) createSandbox(sandbox *Sandbox) error {
 	return nil
 }
 
@@ -41,42 +41,42 @@ func (n *noopAgent) capabilities() capabilities {
 }
 
 // exec is the Noop agent command execution implementation. It does nothing.
-func (n *noopAgent) exec(pod *Pod, c Container, cmd Cmd) (*Process, error) {
+func (n *noopAgent) exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, error) {
 	return nil, nil
 }
 
-// startPod is the Noop agent Pod starting implementation. It does nothing.
-func (n *noopAgent) startPod(pod Pod) error {
+// startSandbox is the Noop agent Sandbox starting implementation. It does nothing.
+func (n *noopAgent) startSandbox(sandbox Sandbox) error {
 	return nil
 }
 
-// stopPod is the Noop agent Pod stopping implementation. It does nothing.
-func (n *noopAgent) stopPod(pod Pod) error {
+// stopSandbox is the Noop agent Sandbox stopping implementation. It does nothing.
+func (n *noopAgent) stopSandbox(sandbox Sandbox) error {
 	return nil
 }
 
 // createContainer is the Noop agent Container creation implementation. It does nothing.
-func (n *noopAgent) createContainer(pod *Pod, c *Container) (*Process, error) {
+func (n *noopAgent) createContainer(sandbox *Sandbox, c *Container) (*Process, error) {
 	return &Process{}, nil
 }
 
 // startContainer is the Noop agent Container starting implementation. It does nothing.
-func (n *noopAgent) startContainer(pod Pod, c *Container) error {
+func (n *noopAgent) startContainer(sandbox Sandbox, c *Container) error {
 	return nil
 }
 
 // stopContainer is the Noop agent Container stopping implementation. It does nothing.
-func (n *noopAgent) stopContainer(pod Pod, c Container) error {
+func (n *noopAgent) stopContainer(sandbox Sandbox, c Container) error {
 	return nil
 }
 
 // killContainer is the Noop agent Container signaling implementation. It does nothing.
-func (n *noopAgent) killContainer(pod Pod, c Container, signal syscall.Signal, all bool) error {
+func (n *noopAgent) killContainer(sandbox Sandbox, c Container, signal syscall.Signal, all bool) error {
 	return nil
 }
 
 // processListContainer is the Noop agent Container ps implementation. It does nothing.
-func (n *noopAgent) processListContainer(pod Pod, c Container, options ProcessListOptions) (ProcessList, error) {
+func (n *noopAgent) processListContainer(sandbox Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
 	return nil, nil
 }
 

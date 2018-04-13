@@ -70,7 +70,7 @@ func convertCNIResult(cniResult cniTypes.Result) (NetworkInfo, error) {
 	}
 }
 
-func (n *cni) invokePluginsAdd(pod Pod, networkNS *NetworkNamespace) (*NetworkInfo, error) {
+func (n *cni) invokePluginsAdd(sandbox Sandbox, networkNS *NetworkNamespace) (*NetworkInfo, error) {
 	netPlugin, err := cniPlugin.NewNetworkPlugin()
 	if err != nil {
 		return nil, err
@@ -79,7 +79,7 @@ func (n *cni) invokePluginsAdd(pod Pod, networkNS *NetworkNamespace) (*NetworkIn
 	// Note: In the case of multus or cni-genie this will return only the results
 	// corresponding to the primary interface. The remaining results need to be
 	// derived
-	result, err := netPlugin.AddNetwork(pod.id, networkNS.NetNsPath, CniPrimaryInterface)
+	result, err := netPlugin.AddNetwork(sandbox.id, networkNS.NetNsPath, CniPrimaryInterface)
 	if err != nil {
 		return nil, err
 	}
@@ -97,13 +97,13 @@ func (n *cni) invokePluginsAdd(pod Pod, networkNS *NetworkNamespace) (*NetworkIn
 	return &netInfo, nil
 }
 
-func (n *cni) invokePluginsDelete(pod Pod, networkNS NetworkNamespace) error {
+func (n *cni) invokePluginsDelete(sandbox Sandbox, networkNS NetworkNamespace) error {
 	netPlugin, err := cniPlugin.NewNetworkPlugin()
 	if err != nil {
 		return err
 	}
 
-	err = netPlugin.RemoveNetwork(pod.id, networkNS.NetNsPath, CniPrimaryInterface)
+	err = netPlugin.RemoveNetwork(sandbox.id, networkNS.NetNsPath, CniPrimaryInterface)
 	if err != nil {
 		return err
 	}
@@ -141,14 +141,14 @@ func (n *cni) run(networkNSPath string, cb func() error) error {
 }
 
 // add adds all needed interfaces inside the network namespace for the CNI network.
-func (n *cni) add(pod Pod, config NetworkConfig, netNsPath string, netNsCreated bool) (NetworkNamespace, error) {
+func (n *cni) add(sandbox Sandbox, config NetworkConfig, netNsPath string, netNsCreated bool) (NetworkNamespace, error) {
 
 	networkNS := NetworkNamespace{
 		NetNsPath:    netNsPath,
 		NetNsCreated: netNsCreated,
 	}
 
-	netInfo, err := n.invokePluginsAdd(pod, &networkNS)
+	netInfo, err := n.invokePluginsAdd(sandbox, &networkNS)
 	if err != nil {
 		return NetworkNamespace{}, err
 	}
@@ -157,7 +157,7 @@ func (n *cni) add(pod Pod, config NetworkConfig, netNsPath string, netNsCreated 
 		return NetworkNamespace{}, err
 	}
 
-	if err := addNetworkCommon(pod, &networkNS); err != nil {
+	if err := addNetworkCommon(sandbox, &networkNS); err != nil {
 		return NetworkNamespace{}, err
 	}
 
@@ -166,12 +166,12 @@ func (n *cni) add(pod Pod, config NetworkConfig, netNsPath string, netNsCreated 
 
 // remove unbridges and deletes TAP interfaces. It also removes virtual network
 // interfaces and deletes the network namespace for the CNI network.
-func (n *cni) remove(pod Pod, networkNS NetworkNamespace) error {
+func (n *cni) remove(sandbox Sandbox, networkNS NetworkNamespace) error {
 	if err := removeNetworkCommon(networkNS); err != nil {
 		return err
 	}
 
-	if err := n.invokePluginsDelete(pod, networkNS); err != nil {
+	if err := n.invokePluginsDelete(sandbox, networkNS); err != nil {
 		return err
 	}
 

@@ -58,7 +58,7 @@ type qemu struct {
 
 	qemuConfig govmmQemu.Config
 
-	pod *Pod
+	sandbox *Sandbox
 
 	state QemuState
 
@@ -167,24 +167,24 @@ func (q *qemu) qemuPath() (string, error) {
 }
 
 // init intializes the Qemu structure.
-func (q *qemu) init(pod *Pod) error {
-	valid, err := pod.config.HypervisorConfig.valid()
+func (q *qemu) init(sandbox *Sandbox) error {
+	valid, err := sandbox.config.HypervisorConfig.valid()
 	if valid == false || err != nil {
 		return err
 	}
 
-	q.config = pod.config.HypervisorConfig
-	q.pod = pod
+	q.config = sandbox.config.HypervisorConfig
+	q.sandbox = sandbox
 	q.arch = newQemuArch(q.config)
 
-	if err = pod.storage.fetchHypervisorState(pod.id, &q.state); err != nil {
+	if err = sandbox.storage.fetchHypervisorState(sandbox.id, &q.state); err != nil {
 		q.Logger().Debug("Creating bridges")
 		q.state.Bridges = q.arch.bridges(q.config.DefaultBridges)
 
 		q.Logger().Debug("Creating UUID")
 		q.state.UUID = uuid.Generate().String()
 
-		if err = pod.storage.storeHypervisorState(pod.id, q.state); err != nil {
+		if err = sandbox.storage.storeHypervisorState(sandbox.id, q.state); err != nil {
 			return err
 		}
 	}
@@ -208,7 +208,7 @@ func (q *qemu) cpuTopology() govmmQemu.SMP {
 	return q.arch.cpuTopology(q.config.DefaultVCPUs)
 }
 
-func (q *qemu) memoryTopology(podConfig PodConfig) (govmmQemu.Memory, error) {
+func (q *qemu) memoryTopology(sandboxConfig SandboxConfig) (govmmQemu.Memory, error) {
 	hostMemKb, err := getHostMemorySizeKb(procMemInfo)
 	if err != nil {
 		return govmmQemu.Memory{}, fmt.Errorf("Unable to read memory info: %s", err)
@@ -220,15 +220,15 @@ func (q *qemu) memoryTopology(podConfig PodConfig) (govmmQemu.Memory, error) {
 	hostMemMb := uint64(float64(hostMemKb / 1024))
 
 	memMb := uint64(q.config.DefaultMemSz)
-	if podConfig.VMConfig.Memory > 0 {
-		memMb = uint64(podConfig.VMConfig.Memory)
+	if sandboxConfig.VMConfig.Memory > 0 {
+		memMb = uint64(sandboxConfig.VMConfig.Memory)
 	}
 
 	return q.arch.memoryTopology(memMb, hostMemMb), nil
 }
 
 func (q *qemu) qmpSocketPath(socketName string) (string, error) {
-	parentDirPath := filepath.Join(runStoragePath, q.pod.id)
+	parentDirPath := filepath.Join(runStoragePath, q.sandbox.id)
 	if len(parentDirPath) > qmpSockPathSizeLimit {
 		return "", fmt.Errorf("Parent directory path %q is too long "+
 			"(%d characters), could not add any path for the QMP socket",
@@ -244,13 +244,13 @@ func (q *qemu) qmpSocketPath(socketName string) (string, error) {
 	return path, nil
 }
 
-func (q *qemu) getQemuMachine(podConfig PodConfig) (govmmQemu.Machine, error) {
+func (q *qemu) getQemuMachine(sandboxConfig SandboxConfig) (govmmQemu.Machine, error) {
 	machine, err := q.arch.machine()
 	if err != nil {
 		return govmmQemu.Machine{}, err
 	}
 
-	accelerators := podConfig.HypervisorConfig.MachineAccelerators
+	accelerators := sandboxConfig.HypervisorConfig.MachineAccelerators
 	if accelerators != "" {
 		if !strings.HasPrefix(accelerators, ",") {
 			accelerators = fmt.Sprintf(",%s", accelerators)
@@ -277,18 +277,18 @@ func (q *qemu) appendImage(devices []govmmQemu.Device) ([]govmmQemu.Device, erro
 	return devices, nil
 }
 
-// createPod is the Hypervisor pod creation implementation for govmmQemu.
-func (q *qemu) createPod(podConfig PodConfig) error {
+// createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.
+func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
 	var devices []govmmQemu.Device
 
-	machine, err := q.getQemuMachine(podConfig)
+	machine, err := q.getQemuMachine(sandboxConfig)
 	if err != nil {
 		return err
 	}
 
 	smp := q.cpuTopology()
 
-	memory, err := q.memoryTopology(podConfig)
+	memory, err := q.memoryTopology(sandboxConfig)
 	if err != nil {
 		return err
 	}
@@ -364,8 +364,8 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 		},
 	}
 
-	devices = q.arch.append9PVolumes(devices, podConfig.Volumes)
-	devices = q.arch.appendConsole(devices, q.getPodConsole(podConfig.ID))
+	devices = q.arch.append9PVolumes(devices, sandboxConfig.Volumes)
+	devices = q.arch.appendConsole(devices, q.getSandboxConsole(sandboxConfig.ID))
 
 	if initrdPath == "" {
 		devices, err = q.appendImage(devices)
@@ -386,7 +386,7 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 
 	cpuModel := q.arch.cpuModel()
 
-	firmwarePath, err := podConfig.HypervisorConfig.FirmwareAssetPath()
+	firmwarePath, err := sandboxConfig.HypervisorConfig.FirmwareAssetPath()
 	if err != nil {
 		return err
 	}
@@ -397,7 +397,7 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 	}
 
 	qemuConfig := govmmQemu.Config{
-		Name:        fmt.Sprintf("pod-%s", podConfig.ID),
+		Name:        fmt.Sprintf("sandbox-%s", sandboxConfig.ID),
 		UUID:        q.state.UUID,
 		Path:        qemuPath,
 		Ctx:         q.qmpMonitorCh.ctx,
@@ -424,8 +424,8 @@ func (q *qemu) createPod(podConfig PodConfig) error {
 	return nil
 }
 
-// startPod will start the Pod's VM.
-func (q *qemu) startPod() error {
+// startSandbox will start the Sandbox's VM.
+func (q *qemu) startSandbox() error {
 	if q.config.Debug {
 		params := q.arch.kernelParameters(q.config.Debug)
 		strParams := SerializeParams(params, "=")
@@ -446,8 +446,8 @@ func (q *qemu) startPod() error {
 	return nil
 }
 
-// waitPod will wait for the Pod's VM to be up and running.
-func (q *qemu) waitPod(timeout int) error {
+// waitSandbox will wait for the Sandbox's VM to be up and running.
+func (q *qemu) waitSandbox(timeout int) error {
 	defer func(qemu *qemu) {
 		if q.qmpMonitorCh.qmp != nil {
 			q.qmpMonitorCh.qmp.Shutdown()
@@ -496,12 +496,12 @@ func (q *qemu) waitPod(timeout int) error {
 	return nil
 }
 
-// stopPod will stop the Pod's VM.
-func (q *qemu) stopPod() error {
+// stopSandbox will stop the Sandbox's VM.
+func (q *qemu) stopSandbox() error {
 	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
 	disconnectCh := make(chan struct{})
 
-	q.Logger().Info("Stopping Pod")
+	q.Logger().Info("Stopping Sandbox")
 	qmp, _, err := govmmQemu.QMPStart(q.qmpControlCh.ctx, q.qmpControlCh.path, cfg, disconnectCh)
 	if err != nil {
 		q.Logger().WithError(err).Error("Failed to connect to QEMU instance")
@@ -517,7 +517,7 @@ func (q *qemu) stopPod() error {
 	return qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
 }
 
-func (q *qemu) togglePausePod(pause bool) error {
+func (q *qemu) togglePauseSandbox(pause bool) error {
 	defer func(qemu *qemu) {
 		if q.qmpMonitorCh.qmp != nil {
 			q.qmpMonitorCh.qmp.Shutdown()
@@ -730,7 +730,7 @@ func (q *qemu) hotplugAddDevice(devInfo interface{}, devType deviceType) error {
 		return err
 	}
 
-	return q.pod.storage.storeHypervisorState(q.pod.id, q.state)
+	return q.sandbox.storage.storeHypervisorState(q.sandbox.id, q.state)
 }
 
 func (q *qemu) hotplugRemoveDevice(devInfo interface{}, devType deviceType) error {
@@ -738,7 +738,7 @@ func (q *qemu) hotplugRemoveDevice(devInfo interface{}, devType deviceType) erro
 		return err
 	}
 
-	return q.pod.storage.storeHypervisorState(q.pod.id, q.state)
+	return q.sandbox.storage.storeHypervisorState(q.sandbox.id, q.state)
 }
 
 func (q *qemu) hotplugCPUs(vcpus uint32, op operation) error {
@@ -772,7 +772,7 @@ func (q *qemu) hotplugAddCPUs(amount uint32) error {
 
 	// Don't exceed the maximum amount of vCPUs
 	if currentVCPUs+amount > q.config.DefaultMaxVCPUs {
-		return fmt.Errorf("Unable to hotplug %d CPUs, currently this POD has %d CPUs and the maximum amount of CPUs is %d",
+		return fmt.Errorf("Unable to hotplug %d CPUs, currently this SB has %d CPUs and the maximum amount of CPUs is %d",
 			amount, currentVCPUs, q.config.DefaultMaxVCPUs)
 	}
 
@@ -805,12 +805,12 @@ func (q *qemu) hotplugAddCPUs(amount uint32) error {
 		hotpluggedVCPUs++
 		if hotpluggedVCPUs == amount {
 			// All vCPUs were hotplugged
-			return q.pod.storage.storeHypervisorState(q.pod.id, q.state)
+			return q.sandbox.storage.storeHypervisorState(q.sandbox.id, q.state)
 		}
 	}
 
 	// All vCPUs were NOT hotplugged
-	if err := q.pod.storage.storeHypervisorState(q.pod.id, q.state); err != nil {
+	if err := q.sandbox.storage.storeHypervisorState(q.sandbox.id, q.state); err != nil {
 		q.Logger().Errorf("failed to save hypervisor state after hotplug %d vCPUs: %v", hotpluggedVCPUs, err)
 	}
 
@@ -836,15 +836,15 @@ func (q *qemu) hotplugRemoveCPUs(amount uint32) error {
 		q.state.HotpluggedVCPUs = q.state.HotpluggedVCPUs[:len(q.state.HotpluggedVCPUs)-1]
 	}
 
-	return q.pod.storage.storeHypervisorState(q.pod.id, q.state)
+	return q.sandbox.storage.storeHypervisorState(q.sandbox.id, q.state)
 }
 
-func (q *qemu) pausePod() error {
-	return q.togglePausePod(true)
+func (q *qemu) pauseSandbox() error {
+	return q.togglePauseSandbox(true)
 }
 
-func (q *qemu) resumePod() error {
-	return q.togglePausePod(false)
+func (q *qemu) resumeSandbox() error {
+	return q.togglePauseSandbox(false)
 }
 
 // addDevice will add extra devices to Qemu command line.
@@ -875,8 +875,8 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 	return nil
 }
 
-// getPodConsole builds the path of the console where we can read
-// logs coming from the pod.
-func (q *qemu) getPodConsole(podID string) string {
-	return filepath.Join(runStoragePath, podID, defaultConsole)
+// getSandboxConsole builds the path of the console where we can read
+// logs coming from the sandbox.
+func (q *qemu) getSandboxConsole(sandboxID string) string {
+	return filepath.Join(runStoragePath, sandboxID, defaultConsole)
 }

@@ -181,7 +181,7 @@ type HypervisorConfig struct {
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.
 	// For example, if there is a value for the "kernel" key in this map,
-	// it will be used for the pod's kernel path instead of KernelPath.
+	// it will be used for the sandbox's kernel path instead of KernelPath.
 	customAssets map[assetType]*asset
 
 	// DefaultVCPUs specifies default number of vCPUs for the VM.
@@ -191,7 +191,7 @@ type HypervisorConfig struct {
 	DefaultMaxVCPUs uint32
 
 	// DefaultMem specifies default memory size in MiB for the VM.
-	// Pod configuration VMConfig.Memory overwrites this.
+	// Sandbox configuration VMConfig.Memory overwrites this.
 	DefaultMemSz uint32
 
 	// DefaultBridges specifies default number of bridges for the VM.
@@ -505,16 +505,16 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
-	init(pod *Pod) error
-	createPod(podConfig PodConfig) error
-	startPod() error
-	waitPod(timeout int) error
-	stopPod() error
-	pausePod() error
-	resumePod() error
+	init(sandbox *Sandbox) error
+	createSandbox(sandboxConfig SandboxConfig) error
+	startSandbox() error
+	waitSandbox(timeout int) error
+	stopSandbox() error
+	pauseSandbox() error
+	resumeSandbox() error
 	addDevice(devInfo interface{}, devType deviceType) error
 	hotplugAddDevice(devInfo interface{}, devType deviceType) error
 	hotplugRemoveDevice(devInfo interface{}, devType deviceType) error
-	getPodConsole(podID string) string
+	getSandboxConsole(sandboxID string) string
 	capabilities() capabilities
 }

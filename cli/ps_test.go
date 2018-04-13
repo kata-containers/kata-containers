@@ -45,25 +45,25 @@ func TestPSCLIAction(t *testing.T) {
 func TestPSFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
+	sandbox := &vcmock.Sandbox{
 		MockID: testContainerID,
 	}
 
-	pod.MockContainers = []*vcmock.Container{
+	sandbox.MockContainers = []*vcmock.Container{
 		{
-			MockID:  pod.ID(),
-			MockPod: pod,
+			MockID:      sandbox.ID(),
+			MockSandbox: sandbox,
 		},
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// return a podStatus with the container status
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// return a sandboxStatus with the container status
+		return []vc.SandboxStatus{
 			{
-				ID: pod.ID(),
+				ID: sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{
 					{
-						ID: pod.ID(),
+						ID: sandbox.ID(),
 						Annotations: map[string]string{
 							vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
 						},
@@ -74,7 +74,7 @@ func TestPSFailure(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	// inexistent container
@@ -82,35 +82,35 @@ func TestPSFailure(t *testing.T) {
 	assert.Error(err)
 
 	// container is not running
-	err = ps(pod.ID(), "json", []string{"-ef"})
+	err = ps(sandbox.ID(), "json", []string{"-ef"})
 	assert.Error(err)
 }
 
 func TestPSSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
+	sandbox := &vcmock.Sandbox{
 		MockID: testContainerID,
 	}
 
-	pod.MockContainers = []*vcmock.Container{
+	sandbox.MockContainers = []*vcmock.Container{
 		{
-			MockID:  pod.ID(),
-			MockPod: pod,
+			MockID:      sandbox.ID(),
+			MockSandbox: sandbox,
 		},
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// return a podStatus with the container status
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// return a sandboxStatus with the container status
+		return []vc.SandboxStatus{
 			{
-				ID: pod.ID(),
+				ID: sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{
 					{
 						State: vc.State{
 							State: vc.StateRunning,
 						},
-						ID: pod.ID(),
+						ID: sandbox.ID(),
 						Annotations: map[string]string{
 							vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
 						},
@@ -120,15 +120,15 @@ func TestPSSuccessful(t *testing.T) {
 		}, nil
 	}
 
-	testingImpl.ProcessListContainerFunc = func(podID, containerID string, options vc.ProcessListOptions) (vc.ProcessList, error) {
+	testingImpl.ProcessListContainerFunc = func(sandboxID, containerID string, options vc.ProcessListOptions) (vc.ProcessList, error) {
 		return []byte("echo,sleep,grep"), nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 		testingImpl.ProcessListContainerFunc = nil
 	}()
 
-	err := ps(pod.ID(), "json", []string{})
+	err := ps(sandbox.ID(), "json", []string{})
 	assert.NoError(err)
 }

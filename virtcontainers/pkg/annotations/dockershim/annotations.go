@@ -25,10 +25,10 @@ const (
 	// ContainerTypeLabelKey is the container type (podsandbox or container) annotation
 	ContainerTypeLabelKey = "io.kubernetes.docker.type"
 
-	// ContainerTypeLabelSandbox represents a pod sandbox container
+	// ContainerTypeLabelSandbox represents a sandbox sandbox container
 	ContainerTypeLabelSandbox = "podsandbox"
 
-	// ContainerTypeLabelContainer represents a container running within a pod
+	// ContainerTypeLabelContainer represents a container running within a sandbox
 	ContainerTypeLabelContainer = "container"
 
 	// SandboxIDLabelKey is the sandbox ID annotation

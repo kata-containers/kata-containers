@@ -66,7 +66,7 @@ func TestExecuteErrors(t *testing.T) {
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 
-	// ListPod error
+	// ListSandbox error
 	flagSet.Parse([]string{testContainerID})
 	err = execute(ctx)
 	assert.Error(err)
@@ -77,12 +77,12 @@ func TestExecuteErrors(t *testing.T) {
 		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, vc.State{}, vc.State{}, annotations), nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, vc.State{}, vc.State{}, annotations), nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	err = execute(ctx)
@@ -100,8 +100,8 @@ func TestExecuteErrors(t *testing.T) {
 	}
 
 	containerState := vc.State{}
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, vc.State{}, containerState, annotations), nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, vc.State{}, containerState, annotations), nil
 	}
 
 	err = execute(ctx)
@@ -112,8 +112,8 @@ func TestExecuteErrors(t *testing.T) {
 	containerState = vc.State{
 		State: vc.StatePaused,
 	}
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, vc.State{}, containerState, annotations), nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, vc.State{}, containerState, annotations), nil
 	}
 
 	err = execute(ctx)
@@ -124,8 +124,8 @@ func TestExecuteErrors(t *testing.T) {
 	containerState = vc.State{
 		State: vc.StateStopped,
 	}
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, vc.State{}, containerState, annotations), nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, vc.State{}, containerState, annotations), nil
 	}
 
 	err = execute(ctx)
@@ -161,12 +161,12 @@ func TestExecuteErrorReadingProcessJson(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, state, state, annotations), nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	// Note: flags can only be tested with the CLI command function
@@ -205,12 +205,12 @@ func TestExecuteErrorOpeningConsole(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, state, state, annotations), nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	// Note: flags can only be tested with the CLI command function
@@ -267,12 +267,12 @@ func TestExecuteWithFlags(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, state, state, annotations), nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	fn, ok := execCLICommand.Action.(func(context *cli.Context) error)
@@ -283,8 +283,8 @@ func TestExecuteWithFlags(t *testing.T) {
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
-	testingImpl.EnterContainerFunc = func(podID, containerID string, cmd vc.Cmd) (vc.VCPod, vc.VCContainer, *vc.Process, error) {
-		return &vcmock.Pod{}, &vcmock.Container{}, &vc.Process{}, nil
+	testingImpl.EnterContainerFunc = func(sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
+		return &vcmock.Sandbox{}, &vcmock.Container{}, &vc.Process{}, nil
 	}
 
 	defer func() {
@@ -300,7 +300,7 @@ func TestExecuteWithFlags(t *testing.T) {
 	os.Remove(pidFilePath)
 
 	// Process ran and exited successfully
-	testingImpl.EnterContainerFunc = func(podID, containerID string, cmd vc.Cmd) (vc.VCPod, vc.VCContainer, *vc.Process, error) {
+	testingImpl.EnterContainerFunc = func(sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
 		// create a fake container process
 		workload := []string{"cat", "/dev/null"}
 		command := exec.Command(workload[0], workload[1:]...)
@@ -309,7 +309,7 @@ func TestExecuteWithFlags(t *testing.T) {
 
 		vcProcess := vc.Process{}
 		vcProcess.Pid = command.Process.Pid
-		return &vcmock.Pod{}, &vcmock.Container{}, &vcProcess, nil
+		return &vcmock.Sandbox{}, &vcmock.Container{}, &vcProcess, nil
 	}
 
 	defer func() {
@@ -351,15 +351,15 @@ func TestExecuteWithFlagsDetached(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, state, state, annotations), nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
-	testingImpl.EnterContainerFunc = func(podID, containerID string, cmd vc.Cmd) (vc.VCPod, vc.VCContainer, *vc.Process, error) {
+	testingImpl.EnterContainerFunc = func(sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
 		// create a fake container process
 		workload := []string{"cat", "/dev/null"}
 		command := exec.Command(workload[0], workload[1:]...)
@@ -368,7 +368,7 @@ func TestExecuteWithFlagsDetached(t *testing.T) {
 
 		vcProcess := vc.Process{}
 		vcProcess.Pid = command.Process.Pid
-		return &vcmock.Pod{}, &vcmock.Container{}, &vcProcess, nil
+		return &vcmock.Sandbox{}, &vcmock.Container{}, &vcProcess, nil
 	}
 
 	defer func() {
@@ -425,12 +425,12 @@ func TestExecuteWithInvalidProcessJson(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, state, state, annotations), nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	fn, ok := execCLICommand.Action.(func(context *cli.Context) error)
@@ -472,12 +472,12 @@ func TestExecuteWithValidProcessJson(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, state, state, annotations), nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	processJSON := `{
@@ -511,7 +511,7 @@ func TestExecuteWithValidProcessJson(t *testing.T) {
 
 	workload := []string{"cat", "/dev/null"}
 
-	testingImpl.EnterContainerFunc = func(podID, containerID string, cmd vc.Cmd) (vc.VCPod, vc.VCContainer, *vc.Process, error) {
+	testingImpl.EnterContainerFunc = func(sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
 		// create a fake container process
 		command := exec.Command(workload[0], workload[1:]...)
 		err := command.Start()
@@ -520,7 +520,7 @@ func TestExecuteWithValidProcessJson(t *testing.T) {
 		vcProcess := vc.Process{}
 		vcProcess.Pid = command.Process.Pid
 
-		return &vcmock.Pod{}, &vcmock.Container{}, &vcProcess, nil
+		return &vcmock.Sandbox{}, &vcmock.Container{}, &vcProcess, nil
 	}
 
 	defer func() {
@@ -564,12 +564,12 @@ func TestExecuteWithInvalidEnvironment(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return newSingleContainerPodStatusList(testPodID, testContainerID, state, state, annotations), nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	processJSON := `{

@@ -309,22 +309,22 @@ func getContainers(context *cli.Context) ([]fullContainerState, error) {
 
 	latestHypervisorDetails := getHypervisorDetails(&runtimeConfig.HypervisorConfig)
 
-	podList, err := vci.ListPod()
+	sandboxList, err := vci.ListSandbox()
 	if err != nil {
 		return nil, err
 	}
 
 	var s []fullContainerState
 
-	for _, pod := range podList {
-		if len(pod.ContainersStatus) == 0 {
-			// ignore empty pods
+	for _, sandbox := range sandboxList {
+		if len(sandbox.ContainersStatus) == 0 {
+			// ignore empty sandboxes
 			continue
 		}
 
-		currentHypervisorDetails := getHypervisorDetails(&pod.HypervisorConfig)
+		currentHypervisorDetails := getHypervisorDetails(&sandbox.HypervisorConfig)
 
-		for _, container := range pod.ContainersStatus {
+		for _, container := range sandbox.ContainersStatus {
 			ociState := oci.StatusToOCIState(container)
 			staleAssets := getStaleAssets(currentHypervisorDetails, latestHypervisorDetails)
 

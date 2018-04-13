@@ -20,7 +20,7 @@ import (
 	"fmt"
 )
 
-// SpawnerType describes the type of guest agent a Pod should run.
+// SpawnerType describes the type of guest agent a Sandbox should run.
 type SpawnerType string
 
 const (

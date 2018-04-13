@@ -33,39 +33,39 @@ func TestStartInvalidArgs(t *testing.T) {
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 
-	// Mock Listpod error
+	// Mock Listsandbox error
 	_, err = start(testContainerID)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
-	// Container missing in ListPod
+	// Container missing in ListSandbox
 	_, err = start(testContainerID)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
 
-func TestStartPod(t *testing.T) {
+func TestStartSandbox(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{
 			{
-				ID: pod.ID(),
+				ID: sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{
 					{
-						ID: pod.ID(),
+						ID: sandbox.ID(),
 						Annotations: map[string]string{
 							vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 						},
@@ -76,39 +76,39 @@ func TestStartPod(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
-	_, err := start(pod.ID())
+	_, err := start(sandbox.ID())
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
-	testingImpl.StartPodFunc = func(podID string) (vc.VCPod, error) {
-		return pod, nil
+	testingImpl.StartSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+		return sandbox, nil
 	}
 
 	defer func() {
-		testingImpl.StartPodFunc = nil
+		testingImpl.StartSandboxFunc = nil
 	}()
 
-	_, err = start(pod.ID())
+	_, err = start(sandbox.ID())
 	assert.Nil(err)
 }
 
 func TestStartMissingAnnotation(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{
 			{
-				ID: pod.ID(),
+				ID: sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{
 					{
-						ID:          pod.ID(),
+						ID:          sandbox.ID(),
 						Annotations: map[string]string{},
 					},
 				},
@@ -117,10 +117,10 @@ func TestStartMissingAnnotation(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
-	_, err := start(pod.ID())
+	_, err := start(sandbox.ID())
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
@@ -128,21 +128,21 @@ func TestStartMissingAnnotation(t *testing.T) {
 func TestStartContainerSucessFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 	}
 
-	pod.MockContainers = []*vcmock.Container{
+	sandbox.MockContainers = []*vcmock.Container{
 		{
-			MockID:  testContainerID,
-			MockPod: pod,
+			MockID:      testContainerID,
+			MockSandbox: sandbox,
 		},
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{
 			{
-				ID: pod.ID(),
+				ID: sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{
 					{
 						ID: testContainerID,
@@ -156,15 +156,15 @@ func TestStartContainerSucessFailure(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	_, err := start(testContainerID)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
-	testingImpl.StartContainerFunc = func(podID, containerID string) (vc.VCContainer, error) {
-		return pod.MockContainers[0], nil
+	testingImpl.StartContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+		return sandbox.MockContainers[0], nil
 	}
 
 	defer func() {
@@ -203,21 +203,21 @@ func TestStartCLIFunction(t *testing.T) {
 func TestStartCLIFunctionSuccess(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 	}
 
-	pod.MockContainers = []*vcmock.Container{
+	sandbox.MockContainers = []*vcmock.Container{
 		{
-			MockID:  testContainerID,
-			MockPod: pod,
+			MockID:      testContainerID,
+			MockSandbox: sandbox,
 		},
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{
 			{
-				ID: pod.ID(),
+				ID: sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{
 					{
 						ID: testContainerID,
@@ -230,12 +230,12 @@ func TestStartCLIFunctionSuccess(t *testing.T) {
 		}, nil
 	}
 
-	testingImpl.StartContainerFunc = func(podID, containerID string) (vc.VCContainer, error) {
-		return pod.MockContainers[0], nil
+	testingImpl.StartContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+		return sandbox.MockContainers[0], nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 		testingImpl.StartContainerFunc = nil
 	}()
 

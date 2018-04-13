@@ -19,34 +19,34 @@ package annotations
 const (
 	vcAnnotationsPrefix = "com.github.containers.virtcontainers."
 
-	// KernelPath is a pod annotation for passing a per container path pointing at the kernel needed to boot the container VM.
+	// KernelPath is a sandbox annotation for passing a per container path pointing at the kernel needed to boot the container VM.
 	KernelPath = vcAnnotationsPrefix + "KernelPath"
 
-	// ImagePath is a pod annotation for passing a per container path pointing at the guest image that will run in the container VM.
+	// ImagePath is a sandbox annotation for passing a per container path pointing at the guest image that will run in the container VM.
 	ImagePath = vcAnnotationsPrefix + "ImagePath"
 
-	// InitrdPath is a pod annotation for passing a per container path pointing at the guest initrd image that will run in the container VM.
+	// InitrdPath is a sandbox annotation for passing a per container path pointing at the guest initrd image that will run in the container VM.
 	InitrdPath = vcAnnotationsPrefix + "InitrdPath"
 
-	// HypervisorPath is a pod annotation for passing a per container path pointing at the hypervisor that will run the container VM.
+	// HypervisorPath is a sandbox annotation for passing a per container path pointing at the hypervisor that will run the container VM.
 	HypervisorPath = vcAnnotationsPrefix + "HypervisorPath"
 
-	// FirmwarePath is a pod annotation for passing a per container path pointing at the guest firmware that will run the container VM.
+	// FirmwarePath is a sandbox annotation for passing a per container path pointing at the guest firmware that will run the container VM.
 	FirmwarePath = vcAnnotationsPrefix + "FirmwarePath"
 
-	// KernelHash is a pod annotation for passing a container kernel image SHA-512 hash value.
+	// KernelHash is a sandbox annotation for passing a container kernel image SHA-512 hash value.
 	KernelHash = vcAnnotationsPrefix + "KernelHash"
 
-	// ImageHash is an pod annotation for passing a container guest image SHA-512 hash value.
+	// ImageHash is an sandbox annotation for passing a container guest image SHA-512 hash value.
 	ImageHash = vcAnnotationsPrefix + "ImageHash"
 
-	// InitrdHash is an pod annotation for passing a container guest initrd SHA-512 hash value.
+	// InitrdHash is an sandbox annotation for passing a container guest initrd SHA-512 hash value.
 	InitrdHash = vcAnnotationsPrefix + "InitrdHash"
 
-	// HypervisorHash is an pod annotation for passing a container hypervisor binary SHA-512 hash value.
+	// HypervisorHash is an sandbox annotation for passing a container hypervisor binary SHA-512 hash value.
 	HypervisorHash = vcAnnotationsPrefix + "HypervisorHash"
 
-	// FirmwareHash is an pod annotation for passing a container guest firmware SHA-512 hash value.
+	// FirmwareHash is an sandbox annotation for passing a container guest firmware SHA-512 hash value.
 	FirmwareHash = vcAnnotationsPrefix + "FirmwareHash"
 
 	// AssetHashType is the hash type used for assets verification

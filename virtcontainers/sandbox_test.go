@@ -41,12 +41,12 @@ func newHypervisorConfig(kernelParams []Param, hParams []Param) HypervisorConfig
 
 }
 
-func testCreatePod(t *testing.T, id string,
+func testCreateSandbox(t *testing.T, id string,
 	htype HypervisorType, hconfig HypervisorConfig, atype AgentType,
 	nmodel NetworkModel, nconfig NetworkConfig, containers []ContainerConfig,
-	volumes []Volume) (*Pod, error) {
+	volumes []Volume) (*Sandbox, error) {
 
-	config := PodConfig{
+	config := SandboxConfig{
 		ID:               id,
 		HypervisorType:   htype,
 		HypervisorConfig: hconfig,
@@ -57,70 +57,70 @@ func testCreatePod(t *testing.T, id string,
 		Containers:       containers,
 	}
 
-	pod, err := createPod(config)
+	sandbox, err := createSandbox(config)
 	if err != nil {
-		return nil, fmt.Errorf("Could not create pod: %s", err)
+		return nil, fmt.Errorf("Could not create sandbox: %s", err)
 	}
 
-	if err := pod.agent.startPod(*pod); err != nil {
+	if err := sandbox.agent.startSandbox(*sandbox); err != nil {
 		return nil, err
 	}
 
-	if err := pod.createContainers(); err != nil {
+	if err := sandbox.createContainers(); err != nil {
 		return nil, err
 	}
 
-	if pod.id == "" {
-		return pod, fmt.Errorf("Invalid empty pod ID")
+	if sandbox.id == "" {
+		return sandbox, fmt.Errorf("Invalid empty sandbox ID")
 	}
 
-	if id != "" && pod.id != id {
-		return pod, fmt.Errorf("Invalid ID %s vs %s", id, pod.id)
+	if id != "" && sandbox.id != id {
+		return sandbox, fmt.Errorf("Invalid ID %s vs %s", id, sandbox.id)
 	}
 
-	return pod, nil
+	return sandbox, nil
 }
 
-func TestCreateEmtpyPod(t *testing.T) {
-	_, err := testCreatePod(t, testPodID, MockHypervisor, HypervisorConfig{}, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+func TestCreateEmtpySandbox(t *testing.T) {
+	_, err := testCreateSandbox(t, testSandboxID, MockHypervisor, HypervisorConfig{}, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
 	if err == nil {
-		t.Fatalf("VirtContainers should not allow empty pods")
+		t.Fatalf("VirtContainers should not allow empty sandboxes")
 	}
 	defer cleanUp()
 }
 
-func TestCreateEmtpyHypervisorPod(t *testing.T) {
-	_, err := testCreatePod(t, testPodID, QemuHypervisor, HypervisorConfig{}, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+func TestCreateEmtpyHypervisorSandbox(t *testing.T) {
+	_, err := testCreateSandbox(t, testSandboxID, QemuHypervisor, HypervisorConfig{}, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
 	if err == nil {
-		t.Fatalf("VirtContainers should not allow pods with empty hypervisors")
+		t.Fatalf("VirtContainers should not allow sandboxes with empty hypervisors")
 	}
 	defer cleanUp()
 }
 
-func TestCreateMockPod(t *testing.T) {
+func TestCreateMockSandbox(t *testing.T) {
 	hConfig := newHypervisorConfig(nil, nil)
 
-	_, err := testCreatePod(t, testPodID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	_, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cleanUp()
 }
 
-func TestCreatePodEmtpyID(t *testing.T) {
+func TestCreateSandboxEmtpyID(t *testing.T) {
 	hConfig := newHypervisorConfig(nil, nil)
 
-	p, err := testCreatePod(t, "", MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	p, err := testCreateSandbox(t, "", MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
 	if err == nil {
-		t.Fatalf("Expected pod with empty ID to fail, but got pod %v", p)
+		t.Fatalf("Expected sandbox with empty ID to fail, but got sandbox %v", p)
 	}
 	defer cleanUp()
 }
 
-func testPodStateTransition(t *testing.T, state stateString, newState stateString) error {
+func testSandboxStateTransition(t *testing.T, state stateString, newState stateString) error {
 	hConfig := newHypervisorConfig(nil, nil)
 
-	p, err := testCreatePod(t, testPodID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	p, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -133,138 +133,138 @@ func testPodStateTransition(t *testing.T, state stateString, newState stateStrin
 	return p.state.validTransition(state, newState)
 }
 
-func TestPodStateReadyRunning(t *testing.T) {
-	err := testPodStateTransition(t, StateReady, StateRunning)
+func TestSandboxStateReadyRunning(t *testing.T) {
+	err := testSandboxStateTransition(t, StateReady, StateRunning)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestPodStateRunningPaused(t *testing.T) {
-	err := testPodStateTransition(t, StateRunning, StatePaused)
+func TestSandboxStateRunningPaused(t *testing.T) {
+	err := testSandboxStateTransition(t, StateRunning, StatePaused)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestPodStatePausedRunning(t *testing.T) {
-	err := testPodStateTransition(t, StatePaused, StateRunning)
+func TestSandboxStatePausedRunning(t *testing.T) {
+	err := testSandboxStateTransition(t, StatePaused, StateRunning)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestPodStatePausedStopped(t *testing.T) {
-	err := testPodStateTransition(t, StatePaused, StateStopped)
+func TestSandboxStatePausedStopped(t *testing.T) {
+	err := testSandboxStateTransition(t, StatePaused, StateStopped)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestPodStateRunningStopped(t *testing.T) {
-	err := testPodStateTransition(t, StateRunning, StateStopped)
+func TestSandboxStateRunningStopped(t *testing.T) {
+	err := testSandboxStateTransition(t, StateRunning, StateStopped)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestPodStateReadyPaused(t *testing.T) {
-	err := testPodStateTransition(t, StateReady, StateStopped)
+func TestSandboxStateReadyPaused(t *testing.T) {
+	err := testSandboxStateTransition(t, StateReady, StateStopped)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestPodStatePausedReady(t *testing.T) {
-	err := testPodStateTransition(t, StateStopped, StateReady)
+func TestSandboxStatePausedReady(t *testing.T) {
+	err := testSandboxStateTransition(t, StateStopped, StateReady)
 	if err == nil {
 		t.Fatal("Invalid transition from Ready to Paused")
 	}
 }
 
-func testPodDir(t *testing.T, resource podResource, expected string) error {
+func testSandboxDir(t *testing.T, resource sandboxResource, expected string) error {
 	fs := filesystem{}
-	_, dir, err := fs.podURI(testPodID, resource)
+	_, dir, err := fs.sandboxURI(testSandboxID, resource)
 	if err != nil {
 		return err
 	}
 
 	if dir != expected {
-		return fmt.Errorf("Unexpected pod directory %s vs %s", dir, expected)
+		return fmt.Errorf("Unexpected sandbox directory %s vs %s", dir, expected)
 	}
 
 	return nil
 }
 
-func testPodFile(t *testing.T, resource podResource, expected string) error {
+func testSandboxFile(t *testing.T, resource sandboxResource, expected string) error {
 	fs := filesystem{}
-	file, _, err := fs.podURI(testPodID, resource)
+	file, _, err := fs.sandboxURI(testSandboxID, resource)
 	if err != nil {
 		return err
 	}
 
 	if file != expected {
-		return fmt.Errorf("Unexpected pod file %s vs %s", file, expected)
+		return fmt.Errorf("Unexpected sandbox file %s vs %s", file, expected)
 	}
 
 	return nil
 }
 
-func TestPodDirConfig(t *testing.T) {
-	err := testPodDir(t, configFileType, podDirConfig)
+func TestSandboxDirConfig(t *testing.T) {
+	err := testSandboxDir(t, configFileType, sandboxDirConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestPodDirState(t *testing.T) {
-	err := testPodDir(t, stateFileType, podDirState)
+func TestSandboxDirState(t *testing.T) {
+	err := testSandboxDir(t, stateFileType, sandboxDirState)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestPodDirLock(t *testing.T) {
-	err := testPodDir(t, lockFileType, podDirLock)
+func TestSandboxDirLock(t *testing.T) {
+	err := testSandboxDir(t, lockFileType, sandboxDirLock)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestPodDirNegative(t *testing.T) {
+func TestSandboxDirNegative(t *testing.T) {
 	fs := filesystem{}
-	_, _, err := fs.podURI("", lockFileType)
+	_, _, err := fs.sandboxURI("", lockFileType)
 	if err == nil {
-		t.Fatal("Empty pod IDs should not be allowed")
+		t.Fatal("Empty sandbox IDs should not be allowed")
 	}
 }
 
-func TestPodFileConfig(t *testing.T) {
-	err := testPodFile(t, configFileType, podFileConfig)
+func TestSandboxFileConfig(t *testing.T) {
+	err := testSandboxFile(t, configFileType, sandboxFileConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestPodFileState(t *testing.T) {
-	err := testPodFile(t, stateFileType, podFileState)
+func TestSandboxFileState(t *testing.T) {
+	err := testSandboxFile(t, stateFileType, sandboxFileState)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestPodFileLock(t *testing.T) {
-	err := testPodFile(t, lockFileType, podFileLock)
+func TestSandboxFileLock(t *testing.T) {
+	err := testSandboxFile(t, lockFileType, sandboxFileLock)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func TestPodFileNegative(t *testing.T) {
+func TestSandboxFileNegative(t *testing.T) {
 	fs := filesystem{}
-	_, _, err := fs.podURI("", lockFileType)
+	_, _, err := fs.sandboxURI("", lockFileType)
 	if err == nil {
-		t.Fatal("Empty pod IDs should not be allowed")
+		t.Fatal("Empty sandbox IDs should not be allowed")
 	}
 }
 
@@ -456,27 +456,27 @@ func TestSocketsStringSuccessful(t *testing.T) {
 	}
 }
 
-func TestPodListSuccessful(t *testing.T) {
-	pod := &Pod{}
+func TestSandboxListSuccessful(t *testing.T) {
+	sandbox := &Sandbox{}
 
-	podList, err := pod.list()
-	if podList != nil || err != nil {
+	sandboxList, err := sandbox.list()
+	if sandboxList != nil || err != nil {
 		t.Fatal()
 	}
 }
 
-func TestPodEnterSuccessful(t *testing.T) {
-	pod := &Pod{}
+func TestSandboxEnterSuccessful(t *testing.T) {
+	sandbox := &Sandbox{}
 
-	err := pod.enter([]string{})
+	err := sandbox.enter([]string{})
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func testCheckInitPodAndContainerStates(p *Pod, initialPodState State, c *Container, initialContainerState State) error {
-	if p.state.State != initialPodState.State {
-		return fmt.Errorf("Expected pod state %v, got %v", initialPodState.State, p.state.State)
+func testCheckInitSandboxAndContainerStates(p *Sandbox, initialSandboxState State, c *Container, initialContainerState State) error {
+	if p.state.State != initialSandboxState.State {
+		return fmt.Errorf("Expected sandbox state %v, got %v", initialSandboxState.State, p.state.State)
 	}
 
 	if c.state.State != initialContainerState.State {
@@ -486,24 +486,24 @@ func testCheckInitPodAndContainerStates(p *Pod, initialPodState State, c *Contai
 	return nil
 }
 
-func testForcePodStateChangeAndCheck(t *testing.T, p *Pod, newPodState State) error {
-	// force pod state change
-	if err := p.setPodState(newPodState.State); err != nil {
-		t.Fatalf("Unexpected error: %v (pod %+v)", err, p)
+func testForceSandboxStateChangeAndCheck(t *testing.T, p *Sandbox, newSandboxState State) error {
+	// force sandbox state change
+	if err := p.setSandboxState(newSandboxState.State); err != nil {
+		t.Fatalf("Unexpected error: %v (sandbox %+v)", err, p)
 	}
 
 	// check the in-memory state is correct
-	if p.state.State != newPodState.State {
-		return fmt.Errorf("Expected state %v, got %v", newPodState.State, p.state.State)
+	if p.state.State != newSandboxState.State {
+		return fmt.Errorf("Expected state %v, got %v", newSandboxState.State, p.state.State)
 	}
 
 	return nil
 }
 
-func testForceContainerStateChangeAndCheck(t *testing.T, p *Pod, c *Container, newContainerState State) error {
+func testForceContainerStateChangeAndCheck(t *testing.T, p *Sandbox, c *Container, newContainerState State) error {
 	// force container state change
 	if err := c.setContainerState(newContainerState.State); err != nil {
-		t.Fatalf("Unexpected error: %v (pod %+v)", err, p)
+		t.Fatalf("Unexpected error: %v (sandbox %+v)", err, p)
 	}
 
 	// check the in-memory state is correct
@@ -514,10 +514,10 @@ func testForceContainerStateChangeAndCheck(t *testing.T, p *Pod, c *Container, n
 	return nil
 }
 
-func testCheckPodOnDiskState(p *Pod, podState State) error {
+func testCheckSandboxOnDiskState(p *Sandbox, sandboxState State) error {
 	// check on-disk state is correct
-	if p.state.State != podState.State {
-		return fmt.Errorf("Expected state %v, got %v", podState.State, p.state.State)
+	if p.state.State != sandboxState.State {
+		return fmt.Errorf("Expected state %v, got %v", sandboxState.State, p.state.State)
 	}
 
 	return nil
@@ -532,13 +532,13 @@ func testCheckContainerOnDiskState(c *Container, containerState State) error {
 	return nil
 }
 
-func TestPodSetPodAndContainerState(t *testing.T) {
+func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	contID := "505"
 	contConfig := newTestContainerConfigNoop(contID)
 	hConfig := newHypervisorConfig(nil, nil)
 
-	// create a pod
-	p, err := testCreatePod(t, testPodID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, []ContainerConfig{contConfig}, nil)
+	// create a sandbox
+	p, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, []ContainerConfig{contConfig}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -549,11 +549,11 @@ func TestPodSetPodAndContainerState(t *testing.T) {
 		t.Fatalf("Expected 1 container found %v", l)
 	}
 
-	initialPodState := State{
+	initialSandboxState := State{
 		State: StateReady,
 	}
 
-	// After a pod creation, a container has a READY state
+	// After a sandbox creation, a container has a READY state
 	initialContainerState := State{
 		State: StateReady,
 	}
@@ -563,22 +563,22 @@ func TestPodSetPodAndContainerState(t *testing.T) {
 		t.Fatalf("Failed to retrieve container %v: %v", contID, err)
 	}
 
-	// check initial pod and container states
-	if err := testCheckInitPodAndContainerStates(p, initialPodState, c, initialContainerState); err != nil {
+	// check initial sandbox and container states
+	if err := testCheckInitSandboxAndContainerStates(p, initialSandboxState, c, initialContainerState); err != nil {
 		t.Error(err)
 	}
 
 	// persist to disk
-	err = p.storePod()
+	err = p.storeSandbox()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	newPodState := State{
+	newSandboxState := State{
 		State: StateRunning,
 	}
 
-	if err := testForcePodStateChangeAndCheck(t, p, newPodState); err != nil {
+	if err := testForceSandboxStateChangeAndCheck(t, p, newSandboxState); err != nil {
 		t.Error(err)
 	}
 
@@ -591,12 +591,12 @@ func TestPodSetPodAndContainerState(t *testing.T) {
 	}
 
 	// force state to be read from disk
-	p2, err := fetchPod(p.ID())
+	p2, err := fetchSandbox(p.ID())
 	if err != nil {
-		t.Fatalf("Failed to fetch pod %v: %v", p.ID(), err)
+		t.Fatalf("Failed to fetch sandbox %v: %v", p.ID(), err)
 	}
 
-	if err := testCheckPodOnDiskState(p2, newPodState); err != nil {
+	if err := testCheckSandboxOnDiskState(p2, newSandboxState); err != nil {
 		t.Error(err)
 	}
 
@@ -609,10 +609,10 @@ func TestPodSetPodAndContainerState(t *testing.T) {
 		t.Error(err)
 	}
 
-	// revert pod state to allow it to be deleted
-	err = p.setPodState(initialPodState.State)
+	// revert sandbox state to allow it to be deleted
+	err = p.setSandboxState(initialSandboxState.State)
 	if err != nil {
-		t.Fatalf("Unexpected error: %v (pod %+v)", err, p)
+		t.Fatalf("Unexpected error: %v (sandbox %+v)", err, p)
 	}
 
 	// clean up
@@ -622,48 +622,48 @@ func TestPodSetPodAndContainerState(t *testing.T) {
 	}
 }
 
-func TestPodSetPodStateFailingStorePodResource(t *testing.T) {
+func TestSandboxSetSandboxStateFailingStoreSandboxResource(t *testing.T) {
 	fs := &filesystem{}
-	pod := &Pod{
+	sandbox := &Sandbox{
 		storage: fs,
 	}
 
-	err := pod.setPodState(StateReady)
+	err := sandbox.setSandboxState(StateReady)
 	if err == nil {
 		t.Fatal()
 	}
 }
 
-func TestPodSetContainersStateFailingEmptyPodID(t *testing.T) {
-	pod := &Pod{
+func TestSandboxSetContainersStateFailingEmptySandboxID(t *testing.T) {
+	sandbox := &Sandbox{
 		storage: &filesystem{},
 	}
 
 	containers := []*Container{
 		{
-			id:  "100",
-			pod: pod,
+			id:      "100",
+			sandbox: sandbox,
 		},
 	}
 
-	pod.containers = containers
+	sandbox.containers = containers
 
-	err := pod.setContainersState(StateReady)
+	err := sandbox.setContainersState(StateReady)
 	if err == nil {
 		t.Fatal()
 	}
 }
 
-func TestPodDeleteContainerStateSuccessful(t *testing.T) {
+func TestSandboxDeleteContainerStateSuccessful(t *testing.T) {
 	contID := "100"
 
 	fs := &filesystem{}
-	pod := &Pod{
-		id:      testPodID,
+	sandbox := &Sandbox{
+		id:      testSandboxID,
 		storage: fs,
 	}
 
-	path := filepath.Join(runStoragePath, testPodID, contID)
+	path := filepath.Join(runStoragePath, testSandboxID, contID)
 	err := os.MkdirAll(path, dirMode)
 	if err != nil {
 		t.Fatal(err)
@@ -683,7 +683,7 @@ func TestPodDeleteContainerStateSuccessful(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = pod.deleteContainerState(contID)
+	err = sandbox.deleteContainerState(contID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -694,21 +694,21 @@ func TestPodDeleteContainerStateSuccessful(t *testing.T) {
 	}
 }
 
-func TestPodDeleteContainerStateFailingEmptyPodID(t *testing.T) {
+func TestSandboxDeleteContainerStateFailingEmptySandboxID(t *testing.T) {
 	contID := "100"
 
 	fs := &filesystem{}
-	pod := &Pod{
+	sandbox := &Sandbox{
 		storage: fs,
 	}
 
-	err := pod.deleteContainerState(contID)
+	err := sandbox.deleteContainerState(contID)
 	if err == nil {
 		t.Fatal()
 	}
 }
 
-func TestPodDeleteContainersStateSuccessful(t *testing.T) {
+func TestSandboxDeleteContainersStateSuccessful(t *testing.T) {
 	var err error
 
 	containers := []ContainerConfig{
@@ -720,19 +720,19 @@ func TestPodDeleteContainersStateSuccessful(t *testing.T) {
 		},
 	}
 
-	podConfig := &PodConfig{
+	sandboxConfig := &SandboxConfig{
 		Containers: containers,
 	}
 
 	fs := &filesystem{}
-	pod := &Pod{
-		id:      testPodID,
-		config:  podConfig,
+	sandbox := &Sandbox{
+		id:      testSandboxID,
+		config:  sandboxConfig,
 		storage: fs,
 	}
 
 	for _, c := range containers {
-		path := filepath.Join(runStoragePath, testPodID, c.ID)
+		path := filepath.Join(runStoragePath, testSandboxID, c.ID)
 		err = os.MkdirAll(path, dirMode)
 		if err != nil {
 			t.Fatal(err)
@@ -753,13 +753,13 @@ func TestPodDeleteContainersStateSuccessful(t *testing.T) {
 		}
 	}
 
-	err = pod.deleteContainersState()
+	err = sandbox.deleteContainersState()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for _, c := range containers {
-		stateFilePath := filepath.Join(runStoragePath, testPodID, c.ID, stateFile)
+		stateFilePath := filepath.Join(runStoragePath, testSandboxID, c.ID, stateFile)
 		_, err = os.Stat(stateFilePath)
 		if err == nil {
 			t.Fatal()
@@ -767,24 +767,24 @@ func TestPodDeleteContainersStateSuccessful(t *testing.T) {
 	}
 }
 
-func TestPodDeleteContainersStateFailingEmptyPodID(t *testing.T) {
+func TestSandboxDeleteContainersStateFailingEmptySandboxID(t *testing.T) {
 	containers := []ContainerConfig{
 		{
 			ID: "100",
 		},
 	}
 
-	podConfig := &PodConfig{
+	sandboxConfig := &SandboxConfig{
 		Containers: containers,
 	}
 
 	fs := &filesystem{}
-	pod := &Pod{
-		config:  podConfig,
+	sandbox := &Sandbox{
+		config:  sandboxConfig,
 		storage: fs,
 	}
 
-	err := pod.deleteContainersState()
+	err := sandbox.deleteContainersState()
 	if err == nil {
 		t.Fatal()
 	}
@@ -799,17 +799,17 @@ func TestGetContainer(t *testing.T) {
 		containers = append(containers, &c)
 	}
 
-	pod := Pod{
+	sandbox := Sandbox{
 		containers: containers,
 	}
 
-	c := pod.GetContainer("noid")
+	c := sandbox.GetContainer("noid")
 	if c != nil {
 		t.Fatal()
 	}
 
 	for _, id := range containerIDs {
-		c = pod.GetContainer(id)
+		c = sandbox.GetContainer(id)
 		if c == nil {
 			t.Fatal()
 		}
@@ -825,11 +825,11 @@ func TestGetAllContainers(t *testing.T) {
 		containers = append(containers, &c)
 	}
 
-	pod := Pod{
+	sandbox := Sandbox{
 		containers: containers,
 	}
 
-	list := pod.GetAllContainers()
+	list := sandbox.GetAllContainers()
 
 	for i, c := range list {
 		if c.ID() != containerIDs[i] {
@@ -839,11 +839,11 @@ func TestGetAllContainers(t *testing.T) {
 }
 
 func TestSetAnnotations(t *testing.T) {
-	pod := Pod{
+	sandbox := Sandbox{
 		id:              "abcxyz123",
 		storage:         &filesystem{},
 		annotationsLock: &sync.RWMutex{},
-		config: &PodConfig{
+		config: &SandboxConfig{
 			Annotations: map[string]string{
 				"annotation1": "abc",
 			},
@@ -857,9 +857,9 @@ func TestSetAnnotations(t *testing.T) {
 	}
 
 	// Add a new annotation
-	pod.SetAnnotations(newAnnotations)
+	sandbox.SetAnnotations(newAnnotations)
 
-	v, err := pod.Annotations(keyAnnotation)
+	v, err := sandbox.Annotations(keyAnnotation)
 	if err != nil {
 		t.Fatal()
 	}
@@ -872,9 +872,9 @@ func TestSetAnnotations(t *testing.T) {
 	valueAnnotation = "123"
 	newAnnotations[keyAnnotation] = valueAnnotation
 
-	pod.SetAnnotations(newAnnotations)
+	sandbox.SetAnnotations(newAnnotations)
 
-	v, err = pod.Annotations(keyAnnotation)
+	v, err = sandbox.Annotations(keyAnnotation)
 	if err != nil {
 		t.Fatal()
 	}
@@ -884,21 +884,21 @@ func TestSetAnnotations(t *testing.T) {
 	}
 }
 
-func TestPodGetContainer(t *testing.T) {
+func TestSandboxGetContainer(t *testing.T) {
 
-	emptyPod := Pod{}
-	_, err := emptyPod.findContainer("")
+	emptySandbox := Sandbox{}
+	_, err := emptySandbox.findContainer("")
 	if err == nil {
-		t.Fatal("Expected error for containerless pod")
+		t.Fatal("Expected error for containerless sandbox")
 	}
 
-	_, err = emptyPod.findContainer("foo")
+	_, err = emptySandbox.findContainer("foo")
 	if err == nil {
-		t.Fatal("Expected error for containerless pod and invalid containerID")
+		t.Fatal("Expected error for containerless sandbox and invalid containerID")
 	}
 
 	hConfig := newHypervisorConfig(nil, nil)
-	p, err := testCreatePod(t, testPodID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	p, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -908,11 +908,11 @@ func TestPodGetContainer(t *testing.T) {
 	contConfig := newTestContainerConfigNoop(contID)
 	newContainer, err := createContainer(p, contConfig)
 	if err != nil {
-		t.Fatalf("Failed to create container %+v in pod %+v: %v", contConfig, p, err)
+		t.Fatalf("Failed to create container %+v in sandbox %+v: %v", contConfig, p, err)
 	}
 
 	if err := p.addContainer(newContainer); err != nil {
-		t.Fatalf("Could not add container to pod %v", err)
+		t.Fatalf("Could not add container to sandbox %v", err)
 	}
 
 	got := false
@@ -944,21 +944,21 @@ func TestContainerSetStateBlockIndex(t *testing.T) {
 	}
 
 	hConfig := newHypervisorConfig(nil, nil)
-	pod, err := testCreatePod(t, testPodID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, containers, nil)
+	sandbox, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, containers, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cleanUp()
 
 	fs := &filesystem{}
-	pod.storage = fs
+	sandbox.storage = fs
 
-	c := pod.GetContainer("100")
+	c := sandbox.GetContainer("100")
 	if c == nil {
 		t.Fatal()
 	}
 
-	path := filepath.Join(runStoragePath, testPodID, c.ID())
+	path := filepath.Join(runStoragePath, testSandboxID, c.ID())
 	err = os.MkdirAll(path, dirMode)
 	if err != nil {
 		t.Fatal(err)
@@ -1043,21 +1043,21 @@ func TestContainerStateSetFstype(t *testing.T) {
 	}
 
 	hConfig := newHypervisorConfig(nil, nil)
-	pod, err := testCreatePod(t, testPodID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, containers, nil)
+	sandbox, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, containers, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cleanUp()
 
 	fs := &filesystem{}
-	pod.storage = fs
+	sandbox.storage = fs
 
-	c := pod.GetContainer("100")
+	c := sandbox.GetContainer("100")
 	if c == nil {
 		t.Fatal()
 	}
 
-	path := filepath.Join(runStoragePath, testPodID, c.ID())
+	path := filepath.Join(runStoragePath, testSandboxID, c.ID())
 	err = os.MkdirAll(path, dirMode)
 	if err != nil {
 		t.Fatal(err)
@@ -1133,7 +1133,7 @@ func TestContainerStateSetFstype(t *testing.T) {
 	}
 }
 
-func TestPodAttachDevicesVFIO(t *testing.T) {
+func TestSandboxAttachDevicesVFIO(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "")
 	assert.Nil(t, err)
 	os.RemoveAll(tmpDir)
@@ -1173,12 +1173,12 @@ func TestPodAttachDevicesVFIO(t *testing.T) {
 
 	containers := []*Container{c}
 
-	pod := Pod{
+	sandbox := Sandbox{
 		containers: containers,
 		hypervisor: &mockHypervisor{},
 	}
 
-	containers[0].pod = &pod
+	containers[0].sandbox = &sandbox
 
 	err = containers[0].attachDevices()
 	assert.Nil(t, err, "Error while attaching devices %s", err)
@@ -1187,7 +1187,7 @@ func TestPodAttachDevicesVFIO(t *testing.T) {
 	assert.Nil(t, err, "Error while detaching devices %s", err)
 }
 
-func TestPodCreateAssets(t *testing.T) {
+func TestSandboxCreateAssets(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpfile, err := ioutil.TempFile("", "virtcontainers-test-")
@@ -1208,7 +1208,7 @@ func TestPodCreateAssets(t *testing.T) {
 		ImagePath:  filepath.Join(testDir, testImage),
 	}
 
-	p := &PodConfig{
+	p := &SandboxConfig{
 		Annotations: map[string]string{
 			annotations.KernelPath: tmpfile.Name(),
 			annotations.KernelHash: assetContentHash,
@@ -1224,7 +1224,7 @@ func TestPodCreateAssets(t *testing.T) {
 	assert.True(ok)
 	assert.Equal(a.path, tmpfile.Name())
 
-	p = &PodConfig{
+	p = &SandboxConfig{
 		Annotations: map[string]string{
 			annotations.KernelPath: tmpfile.Name(),
 			annotations.KernelHash: assetContentWrongHash,
@@ -1237,65 +1237,65 @@ func TestPodCreateAssets(t *testing.T) {
 	assert.NotNil(err)
 }
 
-func testFindContainerFailure(t *testing.T, pod *Pod, cid string) {
-	c, err := pod.findContainer(cid)
+func testFindContainerFailure(t *testing.T, sandbox *Sandbox, cid string) {
+	c, err := sandbox.findContainer(cid)
 	assert.Nil(t, c, "Container pointer should be nil")
 	assert.NotNil(t, err, "Should have returned an error")
 }
 
-func TestFindContainerPodNilFailure(t *testing.T) {
+func TestFindContainerSandboxNilFailure(t *testing.T) {
 	testFindContainerFailure(t, nil, testContainerID)
 }
 
 func TestFindContainerContainerIDEmptyFailure(t *testing.T) {
-	pod := &Pod{}
-	testFindContainerFailure(t, pod, "")
+	sandbox := &Sandbox{}
+	testFindContainerFailure(t, sandbox, "")
 }
 
 func TestFindContainerNoContainerMatchFailure(t *testing.T) {
-	pod := &Pod{}
-	testFindContainerFailure(t, pod, testContainerID)
+	sandbox := &Sandbox{}
+	testFindContainerFailure(t, sandbox, testContainerID)
 }
 
 func TestFindContainerSuccess(t *testing.T) {
-	pod := &Pod{
+	sandbox := &Sandbox{
 		containers: []*Container{
 			{
 				id: testContainerID,
 			},
 		},
 	}
-	c, err := pod.findContainer(testContainerID)
+	c, err := sandbox.findContainer(testContainerID)
 	assert.NotNil(t, c, "Container pointer should not be nil")
 	assert.Nil(t, err, "Should not have returned an error: %v", err)
 
-	assert.True(t, c == pod.containers[0], "Container pointers should point to the same address")
+	assert.True(t, c == sandbox.containers[0], "Container pointers should point to the same address")
 }
 
-func TestRemoveContainerPodNilFailure(t *testing.T) {
+func TestRemoveContainerSandboxNilFailure(t *testing.T) {
 	testFindContainerFailure(t, nil, testContainerID)
 }
 
 func TestRemoveContainerContainerIDEmptyFailure(t *testing.T) {
-	pod := &Pod{}
-	testFindContainerFailure(t, pod, "")
+	sandbox := &Sandbox{}
+	testFindContainerFailure(t, sandbox, "")
 }
 
 func TestRemoveContainerNoContainerMatchFailure(t *testing.T) {
-	pod := &Pod{}
-	testFindContainerFailure(t, pod, testContainerID)
+	sandbox := &Sandbox{}
+	testFindContainerFailure(t, sandbox, testContainerID)
 }
 
 func TestRemoveContainerSuccess(t *testing.T) {
-	pod := &Pod{
+	sandbox := &Sandbox{
 		containers: []*Container{
 			{
 				id: testContainerID,
 			},
 		},
 	}
-	err := pod.removeContainer(testContainerID)
+	err := sandbox.removeContainer(testContainerID)
 	assert.Nil(t, err, "Should not have returned an error: %v", err)
 
-	assert.Equal(t, len(pod.containers), 0, "Containers list from pod structure should be empty")
+	assert.Equal(t, len(sandbox.containers), 0, "Containers list from sandbox structure should be empty")
 }

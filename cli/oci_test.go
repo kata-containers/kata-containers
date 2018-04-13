@@ -83,8 +83,8 @@ func TestGetContainerInfoContainerIDEmptyFailure(t *testing.T) {
 func TestGetContainerInfo(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 	}
 
 	containerID := testContainerID
@@ -96,30 +96,30 @@ func TestGetContainerInfo(t *testing.T) {
 		},
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{
 			{
-				ID:               pod.ID(),
+				ID:               sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{containerStatus},
 			},
 		}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
-	status, podID, err := getContainerInfo(testContainerID)
+	status, sandboxID, err := getContainerInfo(testContainerID)
 	assert.NoError(err)
-	assert.Equal(podID, pod.ID())
+	assert.Equal(sandboxID, sandbox.ID())
 	assert.Equal(status, containerStatus)
 }
 
 func TestGetContainerInfoMismatch(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 	}
 
 	containerID := testContainerID + testContainerID
@@ -131,22 +131,22 @@ func TestGetContainerInfoMismatch(t *testing.T) {
 		},
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{
 			{
-				ID:               pod.ID(),
+				ID:               sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{containerStatus},
 			},
 		}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
-	_, podID, err := getContainerInfo(testContainerID)
+	_, sandboxID, err := getContainerInfo(testContainerID)
 	assert.NoError(err)
-	assert.Equal(podID, "")
+	assert.Equal(sandboxID, "")
 }
 
 func TestValidCreateParamsContainerIDEmptyFailure(t *testing.T) {
@@ -170,14 +170,14 @@ func TestValidCreateParamsContainerIDNotUnique(t *testing.T) {
 
 	containerID := testContainerID + testContainerID
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{
 			{
-				ID: pod.ID(),
+				ID: sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{
 					// 2 containers with same ID
 					{
@@ -198,7 +198,7 @@ func TestValidCreateParamsContainerIDNotUnique(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	_, err := validCreateParams(testContainerID, "")
@@ -212,14 +212,14 @@ func TestValidCreateParamsContainerIDNotUnique2(t *testing.T) {
 
 	containerID := testContainerID + testContainerID
 
-	pod := &vcmock.Pod{
-		MockID: testPodID,
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{
 			{
-				ID: pod.ID(),
+				ID: sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{
 					{
 						ID: containerID,
@@ -233,7 +233,7 @@ func TestValidCreateParamsContainerIDNotUnique2(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	_, err := validCreateParams(testContainerID, "")
@@ -250,12 +250,12 @@ func TestValidCreateParamsInvalidBundle(t *testing.T) {
 
 	bundlePath := filepath.Join(tmpdir, "bundle")
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	_, err = validCreateParams(testContainerID, bundlePath)
@@ -275,12 +275,12 @@ func TestValidCreateParamsBundleIsAFile(t *testing.T) {
 	err = createEmptyFile(bundlePath)
 	assert.NoError(err)
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		return []vc.PodStatus{}, nil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	_, err = validCreateParams(testContainerID, bundlePath)
@@ -376,8 +376,8 @@ func TestProcessCgroupsPathAbsoluteNoCgroupMountDestinationFailure(t *testing.T)
 
 	for _, d := range cgroupTestData {
 		ociSpec.Linux.Resources = d.linuxSpec
-		for _, isPod := range []bool{true, false} {
-			_, err := processCgroupsPath(ociSpec, isPod)
+		for _, isSandbox := range []bool{true, false} {
+			_, err := processCgroupsPath(ociSpec, isSandbox)
 			assert.Error(err, "This test should fail because no cgroup mount destination provided")
 		}
 	}
@@ -562,8 +562,8 @@ func TestProcessCgroupsPathForResource(t *testing.T) {
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
 
-	for _, isPod := range []bool{true, false} {
-		_, err := processCgroupsPathForResource(spec, "", isPod)
+	for _, isSandbox := range []bool{true, false} {
+		_, err := processCgroupsPathForResource(spec, "", isSandbox)
 		assert.Error(err)
 		assert.False(vcmock.IsMockError(err))
 	}

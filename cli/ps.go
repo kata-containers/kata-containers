@@ -57,7 +57,7 @@ func ps(containerID, format string, args []string) error {
 	}
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
-	status, podID, err := getExistingContainerInfo(containerID)
+	status, sandboxID, err := getExistingContainerInfo(containerID)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func ps(containerID, format string, args []string) error {
 
 	options.Format = format
 
-	msg, err := vci.ProcessListContainer(containerID, podID, options)
+	msg, err := vci.ProcessListContainer(containerID, sandboxID, options)
 	if err != nil {
 		return err
 	}

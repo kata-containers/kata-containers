@@ -35,27 +35,27 @@ func TestCCProxyStart(t *testing.T) {
 	proxy := &ccProxy{}
 
 	type testData struct {
-		pod         Pod
+		sandbox     Sandbox
 		expectedURI string
 		expectError bool
 	}
 
 	invalidPath := filepath.Join(tmpdir, "enoent")
-	expectedSocketPath := filepath.Join(runStoragePath, testPodID, "proxy.sock")
+	expectedSocketPath := filepath.Join(runStoragePath, testSandboxID, "proxy.sock")
 	expectedURI := fmt.Sprintf("unix://%s", expectedSocketPath)
 
 	data := []testData{
-		{Pod{}, "", true},
+		{Sandbox{}, "", true},
 		{
-			Pod{
-				config: &PodConfig{
+			Sandbox{
+				config: &SandboxConfig{
 					ProxyType: "invalid",
 				},
 			}, "", true,
 		},
 		{
-			Pod{
-				config: &PodConfig{
+			Sandbox{
+				config: &SandboxConfig{
 					ProxyType:   CCProxyType,
 					ProxyConfig: ProxyConfig{
 					// invalid - no path
@@ -64,8 +64,8 @@ func TestCCProxyStart(t *testing.T) {
 			}, "", true,
 		},
 		{
-			Pod{
-				config: &PodConfig{
+			Sandbox{
+				config: &SandboxConfig{
 					ProxyType: CCProxyType,
 					ProxyConfig: ProxyConfig{
 						Path: invalidPath,
@@ -74,9 +74,9 @@ func TestCCProxyStart(t *testing.T) {
 			}, "", true,
 		},
 		{
-			Pod{
-				id: testPodID,
-				config: &PodConfig{
+			Sandbox{
+				id: testSandboxID,
+				config: &SandboxConfig{
 					ProxyType: CCProxyType,
 					ProxyConfig: ProxyConfig{
 						Path: "echo",
@@ -87,7 +87,7 @@ func TestCCProxyStart(t *testing.T) {
 	}
 
 	for _, d := range data {
-		pid, uri, err := proxy.start(d.pod, proxyParams{})
+		pid, uri, err := proxy.start(d.sandbox, proxyParams{})
 		if d.expectError {
 			assert.Error(err)
 			continue

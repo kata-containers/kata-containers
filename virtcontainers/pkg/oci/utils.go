@@ -46,7 +46,7 @@ var (
 	CRIContainerTypeKeyList = []string{criContainerdAnnotations.ContainerType, crioAnnotations.ContainerType, dockershimAnnotations.ContainerTypeLabelKey}
 
 	// CRISandboxNameKeyList lists all the CRI keys that could define
-	// the sandbox ID (pod ID) from annotations in the config.json.
+	// the sandbox ID (sandbox ID) from annotations in the config.json.
 	CRISandboxNameKeyList = []string{criContainerdAnnotations.SandboxID, crioAnnotations.SandboxID, dockershimAnnotations.SandboxIDLabelKey}
 
 	// CRIContainerTypeList lists all the maps from CRI ContainerTypes annotations
@@ -409,17 +409,17 @@ func (spec *CompatOCISpec) ContainerType() (vc.ContainerType, error) {
 	return vc.PodSandbox, nil
 }
 
-// PodID determines the pod ID related to an OCI configuration. This function
+// SandboxID determines the sandbox ID related to an OCI configuration. This function
 // is expected to be called only when the container type is "PodContainer".
-func (spec *CompatOCISpec) PodID() (string, error) {
+func (spec *CompatOCISpec) SandboxID() (string, error) {
 	for _, key := range CRISandboxNameKeyList {
-		podID, ok := spec.Annotations[key]
+		sandboxID, ok := spec.Annotations[key]
 		if ok {
-			return podID, nil
+			return sandboxID, nil
 		}
 	}
 
-	return "", fmt.Errorf("Could not find pod ID")
+	return "", fmt.Errorf("Could not find sandbox ID")
 }
 
 func vmConfig(ocispec CompatOCISpec, config RuntimeConfig) (vc.Resources, error) {
@@ -443,7 +443,7 @@ func vmConfig(ocispec CompatOCISpec, config RuntimeConfig) (vc.Resources, error)
 	return resources, nil
 }
 
-func addAssetAnnotations(ocispec CompatOCISpec, config *vc.PodConfig) {
+func addAssetAnnotations(ocispec CompatOCISpec, config *vc.SandboxConfig) {
 	assetAnnotations := []string{
 		vcAnnotations.KernelPath,
 		vcAnnotations.ImagePath,
@@ -463,30 +463,30 @@ func addAssetAnnotations(ocispec CompatOCISpec, config *vc.PodConfig) {
 	}
 }
 
-// PodConfig converts an OCI compatible runtime configuration file
-// to a virtcontainers pod configuration structure.
-func PodConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid, console string, detach bool) (vc.PodConfig, error) {
+// SandboxConfig converts an OCI compatible runtime configuration file
+// to a virtcontainers sandbox configuration structure.
+func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid, console string, detach bool) (vc.SandboxConfig, error) {
 	containerConfig, err := ContainerConfig(ocispec, bundlePath, cid, console, detach)
 	if err != nil {
-		return vc.PodConfig{}, err
+		return vc.SandboxConfig{}, err
 	}
 
 	networkConfig, err := networkConfig(ocispec, runtime)
 	if err != nil {
-		return vc.PodConfig{}, err
+		return vc.SandboxConfig{}, err
 	}
 
 	resources, err := vmConfig(ocispec, runtime)
 	if err != nil {
-		return vc.PodConfig{}, err
+		return vc.SandboxConfig{}, err
 	}
 
 	ociSpecJSON, err := json.Marshal(ocispec)
 	if err != nil {
-		return vc.PodConfig{}, err
+		return vc.SandboxConfig{}, err
 	}
 
-	podConfig := vc.PodConfig{
+	sandboxConfig := vc.SandboxConfig{
 		ID: cid,
 
 		Hostname: ocispec.Hostname,
@@ -518,9 +518,9 @@ func PodConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid, co
 		},
 	}
 
-	addAssetAnnotations(ocispec, &podConfig)
+	addAssetAnnotations(ocispec, &sandboxConfig)
 
-	return podConfig, nil
+	return sandboxConfig, nil
 }
 
 // ContainerConfig converts an OCI compatible runtime configuration

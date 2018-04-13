@@ -362,14 +362,14 @@ func (device *BlockDevice) attach(h hypervisor, c *Container) (err error) {
 
 	device.DeviceInfo.ID = hex.EncodeToString(randBytes)
 
-	// Increment the block index for the pod. This is used to determine the name
+	// Increment the block index for the sandbox. This is used to determine the name
 	// for the block device in the case where the block device is used as container
 	// rootfs and the predicted block device name needs to be provided to the agent.
-	index, err := c.pod.getAndSetPodBlockIndex()
+	index, err := c.sandbox.getAndSetSandboxBlockIndex()
 
 	defer func() {
 		if err != nil {
-			c.pod.decrementPodBlockIndex()
+			c.sandbox.decrementSandboxBlockIndex()
 		}
 	}()
 
@@ -397,7 +397,7 @@ func (device *BlockDevice) attach(h hypervisor, c *Container) (err error) {
 
 	device.DeviceInfo.Hotplugged = true
 
-	if c.pod.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
+	if c.sandbox.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
 		device.VirtPath = filepath.Join("/dev", driveName)
 	} else {
 		scsiAddr, err := getSCSIAddress(index)

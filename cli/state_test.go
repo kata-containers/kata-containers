@@ -49,25 +49,25 @@ func TestStateCliAction(t *testing.T) {
 func TestStateSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	pod := &vcmock.Pod{
+	sandbox := &vcmock.Sandbox{
 		MockID: testContainerID,
 	}
 
-	pod.MockContainers = []*vcmock.Container{
+	sandbox.MockContainers = []*vcmock.Container{
 		{
-			MockID:  pod.ID(),
-			MockPod: pod,
+			MockID:      sandbox.ID(),
+			MockSandbox: sandbox,
 		},
 	}
 
-	testingImpl.ListPodFunc = func() ([]vc.PodStatus, error) {
-		// return a podStatus with the container status
-		return []vc.PodStatus{
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		// return a sandboxStatus with the container status
+		return []vc.SandboxStatus{
 			{
-				ID: pod.ID(),
+				ID: sandbox.ID(),
 				ContainersStatus: []vc.ContainerStatus{
 					{
-						ID: pod.ID(),
+						ID: sandbox.ID(),
 						Annotations: map[string]string{
 							vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
 						},
@@ -78,13 +78,13 @@ func TestStateSuccessful(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.ListPodFunc = nil
+		testingImpl.ListSandboxFunc = nil
 	}()
 
 	// trying with an inexistent id
 	err := state("123456789")
 	assert.Error(err)
 
-	err = state(pod.ID())
+	err = state(sandbox.ID())
 	assert.NoError(err)
 }
