@@ -9,6 +9,7 @@ set -e
 
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
+source /etc/os-release
 
 echo "Get CRI-O sources"
 crio_repo="github.com/kubernetes-incubator/cri-o"
@@ -38,7 +39,13 @@ popd
 
 echo "Installing CRI-O"
 make clean
-make
+if [ "$ID" == "centos" ] || [ "$ID" == "fedora" ]; then
+	# This is necessary to avoid crashing `make` with `No package devmapper found`
+	# by disabling the devmapper driver when the library it requires is not installed
+	make BUILDTAGS='exclude_graphdriver_devicemapper libdm_no_deferred_remove'
+else
+	make
+fi
 make test-binaries
 sudo -E PATH=$PATH sh -c "make install"
 sudo -E PATH=$PATH sh -c "make install.config"
