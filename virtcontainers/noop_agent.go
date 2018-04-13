@@ -81,6 +81,6 @@ func (n *noopAgent) processListContainer(sandbox Sandbox, c Container, options P
 }
 
 // onlineCPUMem is the Noop agent Container online CPU and Memory implementation. It does nothing.
-func (n *noopAgent) onlineCPUMem() error {
+func (n *noopAgent) onlineCPUMem(cpus uint32) error {
 	return nil
 }

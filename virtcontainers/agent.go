@@ -175,5 +175,6 @@ type agent interface {
 
 	// onlineCPUMem will online CPUs and Memory inside the Sandbox.
 	// This function should be called after hot adding vCPUs or Memory.
-	onlineCPUMem() error
+	// cpus specifies the number of CPUs that were added and the agent should online
+	onlineCPUMem(cpus uint32) error
 }

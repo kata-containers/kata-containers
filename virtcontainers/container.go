@@ -856,7 +856,7 @@ func (c *Container) addResources() error {
 			return err
 		}
 
-		return c.sandbox.agent.onlineCPUMem()
+		return c.sandbox.agent.onlineCPUMem(uint32(vCPUs))
 	}
 
 	return nil
