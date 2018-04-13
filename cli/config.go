@@ -93,6 +93,7 @@ type hypervisor struct {
 	Debug                 bool   `toml:"enable_debug"`
 	DisableNestingChecks  bool   `toml:"disable_nesting_checks"`
 	EnableIOThreads       bool   `toml:"enable_iothreads"`
+	Msize9p               uint32 `toml:"msize_9p"`
 }
 
 type proxy struct {
@@ -242,6 +243,14 @@ func (h hypervisor) blockDeviceDriver() (string, error) {
 	return h.BlockDeviceDriver, nil
 }
 
+func (h hypervisor) msize9p() uint32 {
+	if h.Msize9p == 0 {
+		return defaultMsize9p
+	}
+
+	return h.Msize9p
+}
+
 func (p proxy) path() string {
 	if p.Path == "" {
 		return defaultProxyPath
@@ -323,6 +332,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableNestingChecks:  h.DisableNestingChecks,
 		BlockDeviceDriver:     blockDriver,
 		EnableIOThreads:       h.EnableIOThreads,
+		Msize9p:               h.msize9p(),
 	}, nil
 }
 
@@ -426,6 +436,7 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		DisableNestingChecks:  defaultDisableNestingChecks,
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
 		EnableIOThreads:       defaultEnableIOThreads,
+		Msize9p:               defaultMsize9p,
 	}
 
 	err = config.InterNetworkModel.SetModel(defaultInterNetworkingModel)

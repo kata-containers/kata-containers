@@ -110,6 +110,10 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # 
 #disable_nesting_checks = true
 
+# This is the msize used for 9p shares. It is the number of bytes 
+# used for 9p packet payload.
+#msize_9p = @DEFMSIZE9P@
+
 [proxy.@PROJECT_TYPE@]
 path = "@PROXYPATH@"
 
