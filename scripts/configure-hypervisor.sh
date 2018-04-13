@@ -92,8 +92,12 @@ check_tag()
 	local tag="$1"
 	local entry="$2"
 
+	[ -z "$tag" ] && die "no tag for entry '$entry'"
+	[ -z "$entry" ] && die "no entry for tag '$tag'"
+
 	value="${recognised_tags[$tag]}"
 
+	# each tag MUST have a description
 	[ -n "$value" ] && return
 
 	die "invalid tag '$tag' found for entry '$entry'"
@@ -105,6 +109,7 @@ check_tags()
 	local entry="$2"
 
 	[ -z "$tags" ] && die "entry '$entry' doesn't have any tags"
+	[ -z "$entry" ] && die "no entry for tags '$tags'"
 
 	tags=$(echo "$tags"|tr ',' '\n')
 
@@ -143,8 +148,12 @@ show_array()
 
 	for entry in "${_array[@]}"
 	do
+		[ -z "$entry" ] && die "found empty entry"
+
 		tags=$(echo "$entry"|cut -s -d: -f1)
 		elem=$(echo "$entry"|cut -s -d: -f2-)
+
+		[ -z "$elem" ] && die "no option for entry '$entry'"
 
 		check_tags "$tags" "$entry"
 
@@ -175,6 +184,17 @@ show_array()
 # Entry point
 main()
 {
+	local qemu_version_file="VERSION"
+	[ -f ${qemu_version_file} ] || die "QEMU version file '$qemu_version_file' not found"
+
+	local qemu_version_major=$(cut -d. -f1 "${qemu_version_file}")
+	local qemu_version_minor=$(cut -d. -f2 "${qemu_version_file}")
+
+	[ -n "${qemu_version_major}" ] \
+		|| die "cannot determine qemu major version from file $qemu_version_file"
+	[ -n "${qemu_version_minor}" ] \
+		|| die "cannot determine qemu minor version from file $qemu_version_file"
+
 	arch=$(arch)
 
 	# Array of configure options.
@@ -270,8 +290,8 @@ main()
 
 	# SECURITY: Don't build a static binary (lowers security)
 	# needed if qemu version is less than 2.7
-	if [ ${qemu_version_major} -eq 2 ] && [ ${qemu_version_minor} -lt 7 ]; then
-		qemu_options+=(--disable-static)
+	if [ "${qemu_version_major}" -eq 2 ] && [ "${qemu_version_minor}" -lt 7 ]; then
+		qemu_options+=(security:--disable-static)
 	fi
 
 	# Not required as "-uuid ..." is always passed to the qemu binary
@@ -313,8 +333,8 @@ main()
 
 	# Always strip binaries
 	# needed if qemu version is less than 2.7
-	if [ ${qemu_version_major} -eq 2 ] && [ ${qemu_version_minor} -lt 7 ]; then
-		qemu_options+=(--enable-strip)
+	if [ "${qemu_version_major}" -eq 2 ] && [ "${qemu_version_minor}" -lt 7 ]; then
+		qemu_options+=(size:--enable-strip)
 	fi
 
 	# Support Ceph RADOS Block Device (RBD)
