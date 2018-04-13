@@ -579,9 +579,15 @@ func constraintGRPCSpec(grpcSpec *grpc.Spec) {
 	// here: https://github.com/kata-containers/agent/issues/104
 	grpcSpec.Linux.Seccomp = nil
 
-	// TODO: Remove this constraint as soon as the agent properly handles
-	// resources provided through the specification.
-	grpcSpec.Linux.Resources = nil
+	// By now only CPU constraints are supported
+	// Issue: https://github.com/kata-containers/runtime/issues/158
+	// Issue: https://github.com/kata-containers/runtime/issues/204
+	grpcSpec.Linux.Resources.Devices = nil
+	grpcSpec.Linux.Resources.Memory = nil
+	grpcSpec.Linux.Resources.Pids = nil
+	grpcSpec.Linux.Resources.BlockIO = nil
+	grpcSpec.Linux.Resources.HugepageLimits = nil
+	grpcSpec.Linux.Resources.Network = nil
 
 	// Disable network namespace since it is already handled on the host by
 	// virtcontainers. The network is a complex part which cannot be simply

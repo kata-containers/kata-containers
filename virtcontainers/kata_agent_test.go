@@ -27,6 +27,7 @@ import (
 	gpb "github.com/gogo/protobuf/types"
 	pb "github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/context"
@@ -378,4 +379,61 @@ func TestAppendDevices(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(updatedDevList, expected),
 		"Device lists didn't match: got %+v, expecting %+v",
 		updatedDevList, expected)
+}
+
+func TestConstraintGRPCSpec(t *testing.T) {
+	assert := assert.New(t)
+
+	g := &pb.Spec{
+		Hooks: &pb.Hooks{},
+		Mounts: []pb.Mount{
+			{Destination: "/dev/shm"},
+		},
+		Linux: &pb.Linux{
+			Seccomp: &pb.LinuxSeccomp{},
+			Namespaces: []pb.LinuxNamespace{
+				{
+					Type: specs.NetworkNamespace,
+					Path: "/abc/123",
+				},
+				{
+					Type: specs.MountNamespace,
+					Path: "/abc/123",
+				},
+			},
+			Resources: &pb.LinuxResources{
+				Devices:        []pb.LinuxDeviceCgroup{},
+				Memory:         &pb.LinuxMemory{},
+				CPU:            &pb.LinuxCPU{},
+				Pids:           &pb.LinuxPids{},
+				BlockIO:        &pb.LinuxBlockIO{},
+				HugepageLimits: []pb.LinuxHugepageLimit{},
+				Network:        &pb.LinuxNetwork{},
+			},
+		},
+	}
+
+	constraintGRPCSpec(g)
+
+	// check nil fields
+	assert.Nil(g.Hooks)
+	assert.Nil(g.Linux.Seccomp)
+	assert.Nil(g.Linux.Resources.Devices)
+	assert.Nil(g.Linux.Resources.Memory)
+	assert.Nil(g.Linux.Resources.Pids)
+	assert.Nil(g.Linux.Resources.BlockIO)
+	assert.Nil(g.Linux.Resources.HugepageLimits)
+	assert.Nil(g.Linux.Resources.Network)
+	assert.NotNil(g.Linux.Resources.CPU)
+
+	// check namespaces
+	assert.Len(g.Linux.Namespaces, 1)
+	assert.Empty(g.Linux.Namespaces[0].Path)
+
+	// check mounts
+	assert.Len(g.Mounts, 1)
+	assert.NotEmpty(g.Mounts[0].Destination)
+	assert.NotEmpty(g.Mounts[0].Type)
+	assert.NotEmpty(g.Mounts[0].Source)
+	assert.NotEmpty(g.Mounts[0].Options)
 }
