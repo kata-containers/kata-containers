@@ -114,3 +114,60 @@ var _ = Describe("Hot plug CPUs", func() {
 		withCPUConstraint(-5, defaultVCPUs, true),
 	)
 })
+
+var _ = Describe("CPU constraints", func() {
+	var (
+		args          []string
+		id            string
+		shares        int
+		quota         int
+		period        int
+		sharesSysPath string
+		quotaSysPath  string
+		periodSysPath string
+	)
+
+	BeforeEach(func() {
+		sharesSysPath = "/sys/fs/cgroup/cpu,cpuacct/cpu.shares"
+		quotaSysPath = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_quota_us"
+		periodSysPath = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_period_us"
+		shares = 300
+		quota = 2000
+		period = 1500
+		id = RandID(30)
+		args = []string{"--rm", "--name", id}
+	})
+
+	AfterEach(func() {
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	Describe("checking container with CPU constraints", func() {
+		Context(fmt.Sprintf("with shares equal to %d", shares), func() {
+			It(fmt.Sprintf("%s should have %d", sharesSysPath, shares), func() {
+				args = append(args, "--cpu-shares", fmt.Sprintf("%d", shares), Image, "cat", sharesSysPath)
+				stdout, _, exitCode := dockerRun(args...)
+				Expect(exitCode).To(BeZero())
+				Expect(fmt.Sprintf("%d", shares)).To(Equal(strings.Trim(stdout, "\n\t ")))
+			})
+		})
+
+		Context(fmt.Sprintf("with period equal to %d", period), func() {
+			It(fmt.Sprintf("%s should have %d", periodSysPath, period), func() {
+				args = append(args, "--cpu-period", fmt.Sprintf("%d", period), Image, "cat", periodSysPath)
+				stdout, _, exitCode := dockerRun(args...)
+				Expect(exitCode).To(BeZero())
+				Expect(fmt.Sprintf("%d", period)).To(Equal(strings.Trim(stdout, "\n\t ")))
+			})
+		})
+
+		Context(fmt.Sprintf("with quota equal to %d", quota), func() {
+			It(fmt.Sprintf("%s should have %d", quotaSysPath, quota), func() {
+				args = append(args, "--cpu-quota", fmt.Sprintf("%d", quota), Image, "cat", quotaSysPath)
+				stdout, _, exitCode := dockerRun(args...)
+				Expect(exitCode).To(BeZero())
+				Expect(fmt.Sprintf("%d", quota)).To(Equal(strings.Trim(stdout, "\n\t ")))
+			})
+		})
+	})
+})
