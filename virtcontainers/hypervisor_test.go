@@ -182,7 +182,9 @@ func TestHypervisorConfigDefaults(t *testing.T) {
 		DefaultBridges:    defaultBridges,
 		BlockDeviceDriver: defaultBlockDriver,
 		DefaultMaxVCPUs:   defaultMaxQemuVCPUs,
+		Msize9p:           defaultMsize9p,
 	}
+
 	if reflect.DeepEqual(hypervisorConfig, hypervisorConfigDefaultsExpected) == false {
 		t.Fatal()
 	}

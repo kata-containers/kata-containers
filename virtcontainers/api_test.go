@@ -913,6 +913,7 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 		DefaultBridges:    defaultBridges,
 		BlockDeviceDriver: defaultBlockDriver,
 		DefaultMaxVCPUs:   defaultMaxQemuVCPUs,
+		Msize9p:           defaultMsize9p,
 	}
 
 	expectedStatus := SandboxStatus{
@@ -969,6 +970,7 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 		DefaultBridges:    defaultBridges,
 		BlockDeviceDriver: defaultBlockDriver,
 		DefaultMaxVCPUs:   defaultMaxQemuVCPUs,
+		Msize9p:           defaultMsize9p,
 	}
 
 	expectedStatus := SandboxStatus{

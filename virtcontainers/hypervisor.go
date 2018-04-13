@@ -226,6 +226,9 @@ type HypervisorConfig struct {
 	// DisableNestingChecks is used to override customizations performed
 	// when running on top of another VMM.
 	DisableNestingChecks bool
+
+	// Msize9p is used as the msize for 9p shares
+	Msize9p uint32
 }
 
 func (conf *HypervisorConfig) valid() (bool, error) {
@@ -255,6 +258,10 @@ func (conf *HypervisorConfig) valid() (bool, error) {
 
 	if conf.DefaultMaxVCPUs == 0 {
 		conf.DefaultMaxVCPUs = defaultMaxQemuVCPUs
+	}
+
+	if conf.Msize9p == 0 {
+		conf.Msize9p = defaultMsize9p
 	}
 
 	return true, nil
