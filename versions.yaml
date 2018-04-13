@@ -95,7 +95,7 @@ externals:
     description: |
       OCI-based Kubernetes Container Runtime Interface implementation
     url: "https://github.com/kubernetes-incubator/cri-o"
-    version: "v1.9.10"
+    version: "v1.9.11"
 
   docker:
     description: "Moby project container manager"
