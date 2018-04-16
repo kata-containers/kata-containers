@@ -24,7 +24,7 @@ func TestNoopShimStart(t *testing.T) {
 	s := &noopShim{}
 	sandbox := Sandbox{}
 	params := ShimParams{}
-	expected := 1000
+	expected := 0
 
 	pid, err := s.start(sandbox, params)
 	if err != nil {

@@ -236,8 +236,9 @@ func TestKataShimStartDetachSuccessful(t *testing.T) {
 
 	testKataShimStart(t, sandbox, params, false)
 
-	readCh := make(chan error)
+	readCh := make(chan error, 1)
 	go func() {
+		defer close(readCh)
 		bufStdout := make([]byte, 1024)
 		n, err := rStdout.Read(bufStdout)
 		if err != nil && err != io.EOF {

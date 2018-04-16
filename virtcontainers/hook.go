@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 	"time"
 
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -82,9 +83,11 @@ func (h *Hook) runHook() error {
 			return fmt.Errorf("%s: stdout: %s, stderr: %s", err, stdout.String(), stderr.String())
 		}
 	} else {
-		done := make(chan error)
-
-		go func() { done <- cmd.Wait() }()
+		done := make(chan error, 1)
+		go func() {
+			done <- cmd.Wait()
+			close(done)
+		}()
 
 		select {
 		case err := <-done:
@@ -92,6 +95,10 @@ func (h *Hook) runHook() error {
 				return fmt.Errorf("%s: stdout: %s, stderr: %s", err, stdout.String(), stderr.String())
 			}
 		case <-time.After(time.Duration(h.Timeout) * time.Second):
+			if err := syscall.Kill(cmd.Process.Pid, syscall.SIGKILL); err != nil {
+				return err
+			}
+
 			return fmt.Errorf("Hook timeout")
 		}
 	}
