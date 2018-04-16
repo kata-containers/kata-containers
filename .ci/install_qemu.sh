@@ -8,23 +8,24 @@
 set -e
 
 QEMU_REPO="github.com/qemu/qemu"
-QEMU_DIR="qemu"
 KATA_QEMU_BRANCH="stable-2.11"
 PACKAGING_REPO="github.com/kata-containers/packaging"
-QEMU_CONFIG_SCRIPT="configure-hypervisor.sh"
+QEMU_CONFIG_SCRIPT="${GOPATH}/src/${PACKAGING_REPO}/scripts/configure-hypervisor.sh"
 
-git clone "https://${QEMU_REPO}"
+go get -d "${QEMU_REPO}" || true
 
 # Get qemu configuration script and copy to
 # the qemu repository
 go get -d "$PACKAGING_REPO" || true
-cp "${GOPATH}/src/${PACKAGING_REPO}/scripts/${QEMU_CONFIG_SCRIPT}" "${QEMU_DIR}"
 
-pushd "$QEMU_DIR"
+pushd "${GOPATH}/src/${QEMU_REPO}"
+git fetch
 git checkout "$KATA_QEMU_BRANCH"
+[ -d "capstone" ] || git clone https://github.com/qemu/capstone.git capstone
+[ -d "ui/keycodemapdb" ] || git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
 echo "Build Qemu"
-eval "./${QEMU_CONFIG_SCRIPT}" "qemu" | xargs ./configure
+eval "${QEMU_CONFIG_SCRIPT}" "qemu" | xargs ./configure
 make -j $(nproc)
 
 echo "Install Qemu"
