@@ -25,7 +25,7 @@ git checkout "$KATA_QEMU_BRANCH"
 [ -d "ui/keycodemapdb" ] || git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
 echo "Build Qemu"
-eval "${QEMU_CONFIG_SCRIPT}" "qemu" | xargs ./configure
+"${QEMU_CONFIG_SCRIPT}" "qemu" | xargs ./configure
 make -j $(nproc)
 
 echo "Install Qemu"
