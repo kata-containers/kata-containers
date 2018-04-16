@@ -40,8 +40,8 @@ This document is written **specifically for developers**.
 
 - You have installed the Clear Containers `linux-container` and `qemu-lite`
   packages containing the guest kernel images and hypervisor. These packages
-  automatically installed when you install Clear Containers, but can be
-  installed separately:
+  are automatically installed when you install Clear Containers, but can be
+  installed separately as well:
 
     https://github.com/clearcontainers/runtime/wiki/Installation
 
@@ -66,27 +66,27 @@ You can check if your system is capable of creating a Kata Container by running 
 $ sudo kata-runtime kata-check
 ```
 
-If your system is *not* able to run Kata Containers, the previous command will error and explain why.
+If your system is *not* able to run Kata Containers, the previous command will error out and explain why.
 
 ## Configure to use initrd or rootfs image
 
 Kata containers can run with either an initrd image or a rootfs image.
 
 If you want to test with `initrd`, make sure you have `initrd = /usr/share/kata-containers/kata-containers-initrd.img`
-in `/usr/share/defaults/kata-containers/configuration.toml` and remove the `image` line with the following:
+in `/usr/share/defaults/kata-containers/configuration.toml` and comment out the `image` line with the following:
 
 ```
 $ sudo sed -i 's/^\(image =.*\)/# \1/g' /usr/share/defaults/kata-containers/configuration.toml
 ```
-You can create the initrd image as shown in the [create an initrd image](#create-an-initrd-image---optional) secion.
+You can create the initrd image as shown in the [create an initrd image](#create-an-initrd-image---optional) section.
 
-If you test with a rootfs `image`, make sure you have `image = /usr/share/kata-containers/kata-containers.img`
-in `/usr/share/defaults/kata-containers/configuration.toml` and remove the `initrd` line with the following:
+If you want to test with a rootfs `image`, make sure you have `image = /usr/share/kata-containers/kata-containers.img`
+in `/usr/share/defaults/kata-containers/configuration.toml` and comment out the `initrd` line with the following:
 
 ```
 $ sudo sed -i 's/^\(initrd =.*\)/# \1/g' /usr/share/defaults/kata-containers/configuration.toml
 ```
-The rootfs image is created as shown in the [create a rootfs image](#create-a-rootfs-image) secion.
+The rootfs image is created as shown in the [create a rootfs image](#create-a-rootfs-image) section.
 
 One of the `initrd` and `image` options in kata runtime config file **MUST** be set but **not both**.
 The main difference between the options is that the size of `initrd`(10MB+) is significantly smaller than
@@ -121,7 +121,7 @@ $ cd $GOPATH/src/github.com/kata-containers/shim && make && sudo make install
 
 > **Note:**
 >
-> - You only do this step if you test with the latest version of the agent.
+> - You should only do this step if you are testing with the latest version of the agent.
 
 ```
 $ go get -d -u github.com/kata-containers/agent
@@ -154,7 +154,7 @@ You MUST choose one of `alpine`, `centos`, `clearlinux`, `euleros`, and `fedora`
 
 > **Note:**
 >
-> - You only do this step if you test with the latest version of the agent.
+> - You should only do this step if you are testing with the latest version of the agent.
 
 ```
 $ sudo install -o root -g root -m 0550 -t ${ROOTFS_DIR}/bin ../../agent/kata-agent
