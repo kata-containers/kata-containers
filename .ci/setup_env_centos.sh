@@ -69,3 +69,6 @@ if [ "$(arch)" == "x86_64" ]; then
 	obs_url="http://download.opensuse.org/repositories/home:/katacontainers:/release/CentOS_${VERSION_ID}/home:katacontainers:release.repo"
 	sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo "$obs_url"
 fi
+
+echo "Install cri-containerd dependencies"
+chronic sudo -E yum install -y libseccomp-devel btrfs-progs-devel libseccomp-static
