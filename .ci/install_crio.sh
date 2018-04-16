@@ -29,7 +29,10 @@ if [ ! -d "$GOBIN" ]
 then
         mkdir -p "$GOBIN"
 fi
-ln -sf $(command -v go-md2man) "$GOBIN"
+
+if [ ! -e "${GOBIN}/go-md2man" ]; then
+	ln -sf $(command -v go-md2man) "$GOBIN"
+fi
 
 echo "Get CRI Tools"
 critools_repo="github.com/kubernetes-incubator/cri-tools"
