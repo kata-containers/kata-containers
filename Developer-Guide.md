@@ -248,7 +248,7 @@ $ dir=/etc/systemd/system/docker.service.d
 $ file="$dir/kata-containers.conf"
 $ sudo mkdir -p "$dir"
 $ sudo test -e "$file" || echo -e "[Service]\nType=simple\nExecStart=\nExecStart=/usr/bin/dockerd -D --default-runtime runc" | sudo tee "$file"
-$ sudo sed -i 's!^\(ExecStart=[^$].*$\)!\1 --add-runtime kata-runtime=/usr/local/bin/kata-runtime!g' "$file"
+$ sudo grep -q "kata-runtime=" $file || sudo sed -i 's!^\(ExecStart=[^$].*$\)!\1 --add-runtime kata-runtime=/usr/local/bin/kata-runtime!g' "$file"
 $ sudo systemctl daemon-reload
 $ sudo systemctl restart docker
 ```
