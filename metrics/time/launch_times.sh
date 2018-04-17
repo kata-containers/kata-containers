@@ -139,7 +139,7 @@ EOF
 	# between each of our 'test' containers. The aim being to see if our launch times
 	# are linear with the number of running containers or not
 	if [ -n "$SCALING" ]; then
-		docker run -d ${IMAGE} sh -c "tail -f /dev/null"
+		docker run --runtime=${RUNTIME} -d ${IMAGE} sh -c "tail -f /dev/null"
 	fi
 }
 
