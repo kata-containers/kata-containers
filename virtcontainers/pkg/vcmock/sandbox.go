@@ -54,3 +54,13 @@ func (p *Sandbox) GetContainer(containerID string) vc.VCContainer {
 func (p *Sandbox) Release() error {
 	return nil
 }
+
+// Pause implements the VCSandbox function of the same name.
+func (p *Sandbox) Pause() error {
+	return nil
+}
+
+// Resume implements the VCSandbox function of the same name.
+func (p *Sandbox) Resume() error {
+	return nil
+}

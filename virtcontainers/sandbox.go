@@ -929,7 +929,8 @@ func (s *Sandbox) stop() error {
 	return s.setSandboxState(StateStopped)
 }
 
-func (s *Sandbox) pause() error {
+// Pause pauses the sandbox
+func (s *Sandbox) Pause() error {
 	if err := s.hypervisor.pauseSandbox(); err != nil {
 		return err
 	}
@@ -937,7 +938,8 @@ func (s *Sandbox) pause() error {
 	return s.pauseSetStates()
 }
 
-func (s *Sandbox) resume() error {
+// Resume resumes the sandbox
+func (s *Sandbox) Resume() error {
 	if err := s.hypervisor.resumeSandbox(); err != nil {
 		return err
 	}
@@ -1079,9 +1081,9 @@ func togglePauseSandbox(sandboxID string, pause bool) (*Sandbox, error) {
 	}
 
 	if pause {
-		err = p.pause()
+		err = p.Pause()
 	} else {
-		err = p.resume()
+		err = p.Resume()
 	}
 
 	if err != nil {
