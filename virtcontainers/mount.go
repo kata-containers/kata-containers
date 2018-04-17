@@ -18,7 +18,7 @@ import (
 
 var rootfsDir = "rootfs"
 
-var systemMountPrefixes = []string{"/proc", "/dev", "/sys"}
+var systemMountPrefixes = []string{"/proc", "/sys"}
 
 func isSystemMount(m string) bool {
 	for _, p := range systemMountPrefixes {
