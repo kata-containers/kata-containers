@@ -175,6 +175,74 @@ check_versions()
 	fi
 }
 
+# Ensure all files (where possible) contain an SPDX license header
+check_license_headers()
+{
+	# See: https://spdx.org/licenses/Apache-2.0.html
+	local -r spdx_tag="SPDX-License-Identifier"
+	local -r spdx_license="Apache-2.0"
+	local -r pattern="${spdx_tag}: ${spdx_license}"
+
+	echo "INFO: Checking for SPDX license headers"
+
+	# List of filters used to restrict the types of file changes.
+	# See git-diff-tree(1) for further info.
+	local filters=""
+
+	# Added file
+	filters+="A"
+
+	# Copied file
+	filters+="C"
+
+	# Modified file
+	filters+="M"
+
+	# Renamed file
+	filters+="R"
+
+	# Unmerged (U) and Unknown (X) files. These particular filters
+	# shouldn't be necessary but just in case...
+	filters+="UX"
+
+	# List of files to check for a license header inside
+	local files=$(git diff-tree \
+		--name-only \
+		--no-commit-id \
+		--diff-filter="${filters}" \
+		-r \
+		origin/master HEAD || true)
+
+	# no files were changed
+	[ -z "$files" ] && echo "INFO: No files found" && return
+
+	local missing=$(egrep \
+		--exclude=".git/*" \
+		--exclude=".gitignore" \
+		--exclude="Gopkg.lock" \
+		--exclude="protocols/grpc/*.pb.go" \
+		--exclude="vendor/*" \
+		--exclude="LICENSE" \
+		--exclude="VERSION" \
+		--exclude="*.json" \
+		--exclude="*.md" \
+		--exclude="*.toml" \
+		--exclude="*.yaml" \
+		-EL "\<${pattern}\>" \
+		$files || true)
+
+	if [ -n "$missing" ]; then
+		cat >&2 <<-EOT
+		ERROR: Required license identifier ('$pattern') missing from following files:
+
+		$missing
+
+EOT
+		exit 1
+	fi
+}
+
 check_commits
+check_license_headers
 check_go
 check_versions
