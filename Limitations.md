@@ -7,7 +7,6 @@
         * [checkpoint and restore](#checkpoint-and-restore)
         * [events command](#events-command)
         * [ps command](#ps-command)
-        * [spec command](#spec-command)
         * [update command](#update-command)
     * [Networking](#networking)
         * [Adding networks dynamically](#adding-networks-dynamically)
@@ -125,12 +124,6 @@ invoked from `docker top`.
 Note that the OCI standard does not specify a `ps` command.
 
 See issue https://github.com/kata-containers/runtime/issues/129 for more information.
-
-### spec command
-
-The runtime does not implement the `spec` command. `runc` provides a command that generates a JSON-format template specification file that the Kata Containers runtime can use. The addition of a `spec` command to the Kata Containers runtime is a duplication that would likely continuously try to keep up with `runc`.
-
-See issue https://github.com/kata-containers/runtime/issues/188 for more information.
 
 ### update command
 
