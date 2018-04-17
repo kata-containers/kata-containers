@@ -30,6 +30,34 @@ func isSystemMount(m string) bool {
 	return false
 }
 
+func isHostDevice(m string) bool {
+	if m == "/dev" {
+		return true
+	}
+
+	if strings.HasPrefix(m, "/dev/") {
+		// Check if regular file
+		s, err := os.Stat(m)
+
+		// This should not happen. In case file does not exist let the
+		// error be handled by the agent, simply return false here.
+		if err != nil {
+			return false
+		}
+
+		if s.Mode().IsRegular() {
+			return false
+		}
+
+		// This is not a regular file in /dev. It is either a
+		// device file, directory or any other special file which is
+		// specific to the host system.
+		return true
+	}
+
+	return false
+}
+
 func major(dev uint64) int {
 	return int((dev >> 8) & 0xfff)
 }

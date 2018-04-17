@@ -327,6 +327,13 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 			continue
 		}
 
+		// Ignore /dev, directories and all other device files. We handle
+		// only regular files in /dev. It does not make sense to pass the host
+		// device nodes to the guest.
+		if isHostDevice(m.Destination) {
+			continue
+		}
+
 		randBytes, err := generateRandomBytes(8)
 		if err != nil {
 			return nil, err

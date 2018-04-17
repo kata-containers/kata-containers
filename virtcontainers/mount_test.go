@@ -43,6 +43,41 @@ func TestIsSystemMount(t *testing.T) {
 	}
 }
 
+func TestIsHostDevice(t *testing.T) {
+	tests := []struct {
+		mnt      string
+		expected bool
+	}{
+		{"/dev", true},
+		{"/dev/zero", true},
+		{"/dev/block", true},
+		{"/mnt/dev/block", false},
+	}
+
+	for _, test := range tests {
+		result := isHostDevice(test.mnt)
+		if result != test.expected {
+			t.Fatalf("Expected result for path %s : %v, got %v", test.mnt, test.expected, result)
+		}
+	}
+
+	// Create regular file in /dev
+	path := "/dev/foobar"
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+
+	if isHostDevice(path) != false {
+		t.Fatalf("Expected result for path %s : %v, got %v", path, false, true)
+	}
+
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestMajorMinorNumber(t *testing.T) {
 	devices := []string{"/dev/zero", "/dev/net/tun"}
 
