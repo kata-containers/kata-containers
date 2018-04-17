@@ -31,7 +31,8 @@ func TestIsSystemMount(t *testing.T) {
 		{"/sys/fs/cgroup", true},
 		{"/sysfoo", false},
 		{"/home", false},
-		{"/dev/block/", true},
+		{"/dev/block/", false},
+		{"/mnt/dev/foo", false},
 	}
 
 	for _, test := range tests {
