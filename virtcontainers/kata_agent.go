@@ -588,6 +588,8 @@ func constraintGRPCSpec(grpcSpec *grpc.Spec) {
 	grpcSpec.Linux.Resources.BlockIO = nil
 	grpcSpec.Linux.Resources.HugepageLimits = nil
 	grpcSpec.Linux.Resources.Network = nil
+	grpcSpec.Linux.Resources.CPU.Cpus = ""
+	grpcSpec.Linux.Resources.CPU.Mems = ""
 
 	// Disable network namespace since it is already handled on the host by
 	// virtcontainers. The network is a complex part which cannot be simply
