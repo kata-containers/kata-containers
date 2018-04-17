@@ -119,6 +119,7 @@ var runtimeCommands = []cli.Command{
 	psCLICommand,
 	resumeCLICommand,
 	runCLICommand,
+	specCLICommand,
 	startCLICommand,
 	stateCLICommand,
 	versionCLICommand,
