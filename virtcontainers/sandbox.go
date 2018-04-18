@@ -765,9 +765,9 @@ func (s *Sandbox) removeContainer(containerID string) error {
 		containerID, s.id)
 }
 
-// delete deletes an already created sandbox.
+// Delete deletes an already created sandbox.
 // The VM in which the sandbox is running will be shut down.
-func (s *Sandbox) delete() error {
+func (s *Sandbox) Delete() error {
 	if s.state.State != StateReady &&
 		s.state.State != StatePaused &&
 		s.state.State != StateStopped {

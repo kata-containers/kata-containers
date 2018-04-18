@@ -49,6 +49,7 @@ type VCSandbox interface {
 	Pause() error
 	Resume() error
 	Release() error
+	Delete() error
 }
 
 // VCContainer is the Container interface

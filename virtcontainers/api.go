@@ -85,7 +85,7 @@ func DeleteSandbox(sandboxID string) (VCSandbox, error) {
 	}
 
 	// Delete it.
-	if err := p.delete(); err != nil {
+	if err := p.Delete(); err != nil {
 		return nil, err
 	}
 
