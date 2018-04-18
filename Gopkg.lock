@@ -93,7 +93,7 @@
     "protocols/client",
     "protocols/grpc"
   ]
-  revision = "a6166b794d3c5747cd8da1f943aec64c70f08afe"
+  revision = "7aa11d8adef4aada89f6c68db025ff15a44eaf83"
 
 [[projects]]
   name = "github.com/kubernetes-incubator/cri-o"
@@ -257,6 +257,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "dd9532d9bae03bb3dc43414908beecb8b498c14bea354e261341ff81dbf01b4d"
+  inputs-digest = "d8a31fdf495bbc93a234bdb9abd5250e2688e50c1c2ac88ae80d4b481cafba0d"
   solver-name = "gps-cdcl"
   solver-version = 1
