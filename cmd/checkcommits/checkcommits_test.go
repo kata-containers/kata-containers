@@ -312,11 +312,11 @@ func TestCheckCommitsDetails(t *testing.T) {
 	for _, d := range data {
 		err := checkCommitsDetails(d.config, d.commits)
 		if d.expectFail {
-			assert.Error(err, "config: %+v, commits: %+v", d.config, d.commits)
+			assert.Errorf(err, "config: %+v, commits: %+v", d.config, d.commits)
 			continue
 		}
 
-		assert.NoError(err, "config: %+v, commits: %+v", d.config, d.commits)
+		assert.NoErrorf(err, "config: %+v, commits: %+v", d.config, d.commits)
 	}
 }
 
