@@ -5,9 +5,22 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-set -e
+set -o errexit
+set -o nounset
+set -o pipefail
 
 cidir=$(dirname "$0")
+
+tmp_dir=$(mktemp -d -t kata-image-install.XXXXXXXXXX)
+readonly ROOTFS_DIR="${tmp_dir}/rootfs"
+export ROOTFS_DIR
+
+finish() {
+  [ -d "${ROOTFS_DIR}" ] && [[ "${ROOTFS_DIR}" = *"rootfs"* ]] && sudo rm -rf "${ROOTFS_DIR}"
+  rm -rf "$tmp_dir"
+}
+
+trap finish EXIT
 
 OSBUILDER_DISTRO=${OSBUILDER_DISTRO:-clearlinux}
 AGENT_INIT=${AGENT_INIT:-no}
@@ -17,7 +30,6 @@ TEST_INITRD=${TEST_INITRD:-no}
 bash -f ${cidir}/install_agent.sh
 
 osbuilder_repo="github.com/kata-containers/osbuilder"
-export ROOTFS_DIR="${GOPATH}/src/${osbuilder_repo}/rootfs-builder/rootfs"
 
 # Clone os-builder repository
 go get -d ${osbuilder_repo} || true
