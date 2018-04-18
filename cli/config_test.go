@@ -47,6 +47,7 @@ func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath
 	default_memory = ` + strconv.FormatUint(uint64(defaultMemSize), 10) + `
 	disable_block_device_use =  ` + strconv.FormatBool(disableBlock) + `
 	enable_iothreads =  ` + strconv.FormatBool(enableIOThreads) + `
+	msize_9p = ` + strconv.FormatUint(uint64(defaultMsize9p), 10) + `
 
 	[proxy.kata]
 	path = "` + proxyPath + `"
@@ -134,6 +135,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		DefaultBridges:        defaultBridgesCount,
 		Mlock:                 !defaultEnableSwap,
 		EnableIOThreads:       enableIOThreads,
+		Msize9p:               defaultMsize9p,
 	}
 
 	agentConfig := vc.KataAgentConfig{}
@@ -516,6 +518,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		DefaultBridges:        defaultBridgesCount,
 		Mlock:                 !defaultEnableSwap,
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
+		Msize9p:               defaultMsize9p,
 	}
 
 	expectedAgentConfig := vc.KataAgentConfig{}

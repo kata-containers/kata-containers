@@ -474,6 +474,8 @@ func (k *kataAgent) startSandbox(sandbox Sandbox) error {
 		}
 	}
 
+	sharedDir9pOptions = append(sharedDir9pOptions, fmt.Sprintf("msize=%d", sandbox.config.HypervisorConfig.Msize9p))
+
 	// We mount the shared directory in a predefined location
 	// in the guest.
 	// This is where at least some of the host config files

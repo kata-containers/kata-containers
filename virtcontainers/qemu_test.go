@@ -28,6 +28,7 @@ func newQemuConfig() HypervisorConfig {
 		DefaultBridges:    defaultBridges,
 		BlockDeviceDriver: defaultBlockDriver,
 		DefaultMaxVCPUs:   defaultMaxQemuVCPUs,
+		Msize9p:           defaultMsize9p,
 	}
 }
 
