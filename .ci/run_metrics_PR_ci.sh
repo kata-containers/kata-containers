@@ -89,6 +89,9 @@ run() {
 	# (so set a token 5s wait)
 	bash density/docker_memory_usage.sh 20 5
 
+	# Run storage tests
+	bash storage/blogbench.sh
+
 	popd
 }
 

@@ -92,6 +92,24 @@ check_images()
 	done
 }
 
+# This function performs a docker build on the image names
+# passed in, to ensure that we have the latest changes from
+# the dockerfiles
+check_dockerfiles_images()
+{
+	local image="$1"
+	local dockerfile_path="$2"
+	if [ -z "$image" ] || [ -z "$dockerfile_path" ]; then
+		die "Missing image or dockerfile path variable"
+		exit 1;
+	fi
+	echo "docker building $image"
+	if ! docker build --label "$image" --tag "${image}:latest" -< "$dockerfile_path"; then
+		die "Failed to docker build image $image"
+		exit 1;
+	fi
+}
+
 # A one time (per uber test cycle) init that tries to get the
 # system to a 'known state' as much as possible
 metrics_onetime_init()
