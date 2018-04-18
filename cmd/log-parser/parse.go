@@ -283,12 +283,19 @@ func createLogEntry(filename string, line uint64, pairs kvPairs) (LogEntry, erro
 	if !disableAgentUnpack && agentLogEntry(l) {
 		agent, err := unpackAgentLogEntry(l)
 		if err != nil {
-			return LogEntry{}, err
-		}
+			// allow the user to see that the unpack failed
+			l.Data[agentUnpackFailTag] = "true"
 
-		// the agent log entry totally replaces the proxy log entry
-		// that encapsulated it.
-		l = agent
+			if strict {
+				return LogEntry{}, err
+			}
+
+			logger.Warnf("failed to unpack agent log entry: %v", l)
+		} else {
+			// the agent log entry totally replaces the proxy log entry
+			// that encapsulated it.
+			l = agent
+		}
 	}
 
 	return l, nil
