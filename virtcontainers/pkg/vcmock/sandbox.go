@@ -74,3 +74,8 @@ func (p *Sandbox) Delete() error {
 func (p *Sandbox) CreateContainer(conf vc.ContainerConfig) (vc.VCContainer, error) {
 	return &Container{}, nil
 }
+
+// DeleteContainer implements the VCSandbox function of the same name.
+func (p *Sandbox) DeleteContainer(contID string) (vc.VCContainer, error) {
+	return &Container{}, nil
+}

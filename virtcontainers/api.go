@@ -330,36 +330,12 @@ func DeleteContainer(sandboxID, containerID string) (VCContainer, error) {
 	}
 	defer unlockSandbox(lockFile)
 
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Fetch the container.
-	c, err := p.findContainer(containerID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Delete it.
-	err = c.delete()
-	if err != nil {
-		return nil, err
-	}
-
-	// Update sandbox config
-	for idx, contConfig := range p.config.Containers {
-		if contConfig.ID == containerID {
-			p.config.Containers = append(p.config.Containers[:idx], p.config.Containers[idx+1:]...)
-			break
-		}
-	}
-	err = p.storage.storeSandboxResource(sandboxID, configFileType, *(p.config))
-	if err != nil {
-		return nil, err
-	}
-
-	return c, nil
+	return s.DeleteContainer(containerID)
 }
 
 // StartContainer is the virtcontainers container starting entry point.

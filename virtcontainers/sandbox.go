@@ -894,6 +894,41 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 	return c, nil
 }
 
+// DeleteContainer deletes a container from the sandbox
+func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
+	if containerID == "" {
+		return nil, errNeedContainerID
+	}
+
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Delete it.
+	err = c.delete()
+	if err != nil {
+		return nil, err
+	}
+
+	// Update sandbox config
+	for idx, contConfig := range s.config.Containers {
+		if contConfig.ID == containerID {
+			s.config.Containers = append(s.config.Containers[:idx], s.config.Containers[idx+1:]...)
+			break
+		}
+	}
+
+	// Store sandbox config
+	err = s.storage.storeSandboxResource(s.id, configFileType, *(s.config))
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
 // createContainers registers all containers to the proxy, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers() error {
