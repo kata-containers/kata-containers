@@ -472,21 +472,21 @@ type Sandbox struct {
 }
 
 // ID returns the sandbox identifier string.
-func (p *Sandbox) ID() string {
-	return p.id
+func (s *Sandbox) ID() string {
+	return s.id
 }
 
 // Logger returns a logrus logger appropriate for logging Sandbox messages
-func (p *Sandbox) Logger() *logrus.Entry {
+func (s *Sandbox) Logger() *logrus.Entry {
 	return virtLog.WithFields(logrus.Fields{
 		"subsystem":  "sandbox",
-		"sandbox-id": p.id,
+		"sandbox-id": s.id,
 	})
 }
 
 // Annotations returns any annotation that a user could have stored through the sandbox.
-func (p *Sandbox) Annotations(key string) (string, error) {
-	value, exist := p.config.Annotations[key]
+func (s *Sandbox) Annotations(key string) (string, error) {
+	value, exist := s.config.Annotations[key]
 	if exist == false {
 		return "", fmt.Errorf("Annotations key %s does not exist", key)
 	}
@@ -495,15 +495,15 @@ func (p *Sandbox) Annotations(key string) (string, error) {
 }
 
 // SetAnnotations sets or adds an annotations
-func (p *Sandbox) SetAnnotations(annotations map[string]string) error {
-	p.annotationsLock.Lock()
-	defer p.annotationsLock.Unlock()
+func (s *Sandbox) SetAnnotations(annotations map[string]string) error {
+	s.annotationsLock.Lock()
+	defer s.annotationsLock.Unlock()
 
 	for k, v := range annotations {
-		p.config.Annotations[k] = v
+		s.config.Annotations[k] = v
 	}
 
-	err := p.storage.storeSandboxResource(p.id, configFileType, *(p.config))
+	err := s.storage.storeSandboxResource(s.id, configFileType, *(s.config))
 	if err != nil {
 		return err
 	}
@@ -512,18 +512,18 @@ func (p *Sandbox) SetAnnotations(annotations map[string]string) error {
 }
 
 // GetAnnotations returns sandbox's annotations
-func (p *Sandbox) GetAnnotations() map[string]string {
-	p.annotationsLock.RLock()
-	defer p.annotationsLock.RUnlock()
+func (s *Sandbox) GetAnnotations() map[string]string {
+	s.annotationsLock.RLock()
+	defer s.annotationsLock.RUnlock()
 
-	return p.config.Annotations
+	return s.config.Annotations
 }
 
 // GetAllContainers returns all containers.
-func (p *Sandbox) GetAllContainers() []VCContainer {
-	ifa := make([]VCContainer, len(p.containers))
+func (s *Sandbox) GetAllContainers() []VCContainer {
+	ifa := make([]VCContainer, len(s.containers))
 
-	for i, v := range p.containers {
+	for i, v := range s.containers {
 		ifa[i] = v
 	}
 
@@ -531,8 +531,8 @@ func (p *Sandbox) GetAllContainers() []VCContainer {
 }
 
 // GetContainer returns the container named by the containerID.
-func (p *Sandbox) GetContainer(containerID string) VCContainer {
-	for _, c := range p.containers {
+func (s *Sandbox) GetContainer(containerID string) VCContainer {
+	for _, c := range s.containers {
 		if c.id == containerID {
 			return c
 		}
@@ -579,38 +579,38 @@ func createSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
 		return nil, err
 	}
 
-	p, err := newSandbox(sandboxConfig)
+	s, err := newSandbox(sandboxConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	// Fetch sandbox network to be able to access it from the sandbox structure.
-	networkNS, err := p.storage.fetchSandboxNetwork(p.id)
+	networkNS, err := s.storage.fetchSandboxNetwork(s.id)
 	if err == nil {
-		p.networkNS = networkNS
+		s.networkNS = networkNS
 	}
 
 	// We first try to fetch the sandbox state from storage.
 	// If it exists, this means this is a re-creation, i.e.
 	// we don't need to talk to the guest's agent, but only
 	// want to create the sandbox and its containers in memory.
-	state, err := p.storage.fetchSandboxState(p.id)
+	state, err := s.storage.fetchSandboxState(s.id)
 	if err == nil && state.State != "" {
-		p.state = state
-		return p, nil
+		s.state = state
+		return s, nil
 	}
 
 	// Below code path is called only during create, because of earlier check.
-	if err := p.agent.createSandbox(p); err != nil {
+	if err := s.agent.createSandbox(s); err != nil {
 		return nil, err
 	}
 
 	// Set sandbox state
-	if err := p.setSandboxState(StateReady); err != nil {
+	if err := s.setSandboxState(StateReady); err != nil {
 		return nil, err
 	}
 
-	return p, nil
+	return s, nil
 }
 
 func newSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
@@ -627,7 +627,7 @@ func newSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
 
 	network := newNetwork(sandboxConfig.NetworkModel)
 
-	p := &Sandbox{
+	s := &Sandbox{
 		id:              sandboxConfig.ID,
 		hypervisor:      hypervisor,
 		agent:           agent,
@@ -642,52 +642,52 @@ func newSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
 		wg:              &sync.WaitGroup{},
 	}
 
-	if err = globalSandboxList.addSandbox(p); err != nil {
+	if err = globalSandboxList.addSandbox(s); err != nil {
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
-			p.Logger().WithError(err).WithField("sandboxid", p.id).Error("Create new sandbox failed")
-			globalSandboxList.removeSandbox(p.id)
+			s.Logger().WithError(err).WithField("sandboxid", s.id).Error("Create new sandbox failed")
+			globalSandboxList.removeSandbox(s.id)
 		}
 	}()
 
-	if err = p.storage.createAllResources(*p); err != nil {
+	if err = s.storage.createAllResources(*s); err != nil {
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
-			p.storage.deleteSandboxResources(p.id, nil)
+			s.storage.deleteSandboxResources(s.id, nil)
 		}
 	}()
 
-	if err = p.hypervisor.init(p); err != nil {
+	if err = s.hypervisor.init(s); err != nil {
 		return nil, err
 	}
 
-	if err = p.hypervisor.createSandbox(sandboxConfig); err != nil {
+	if err = s.hypervisor.createSandbox(sandboxConfig); err != nil {
 		return nil, err
 	}
 
 	agentConfig := newAgentConfig(sandboxConfig)
-	if err = p.agent.init(p, agentConfig); err != nil {
+	if err = s.agent.init(s, agentConfig); err != nil {
 		return nil, err
 	}
 
-	return p, nil
+	return s, nil
 }
 
 // storeSandbox stores a sandbox config.
-func (p *Sandbox) storeSandbox() error {
-	err := p.storage.storeSandboxResource(p.id, configFileType, *(p.config))
+func (s *Sandbox) storeSandbox() error {
+	err := s.storage.storeSandboxResource(s.id, configFileType, *(s.config))
 	if err != nil {
 		return err
 	}
 
-	for _, container := range p.containers {
-		err = p.storage.storeContainerResource(p.id, container.id, configFileType, *(container.config))
+	for _, container := range s.containers {
+		err = s.storage.storeContainerResource(s.id, container.id, configFileType, *(container.config))
 		if err != nil {
 			return err
 		}
@@ -729,8 +729,8 @@ func fetchSandbox(sandboxID string) (sandbox *Sandbox, err error) {
 
 // findContainer returns a container from the containers list held by the
 // sandbox structure, based on a container ID.
-func (p *Sandbox) findContainer(containerID string) (*Container, error) {
-	if p == nil {
+func (s *Sandbox) findContainer(containerID string) (*Container, error) {
+	if s == nil {
 		return nil, errNeedSandbox
 	}
 
@@ -738,20 +738,20 @@ func (p *Sandbox) findContainer(containerID string) (*Container, error) {
 		return nil, errNeedContainerID
 	}
 
-	for _, c := range p.containers {
+	for _, c := range s.containers {
 		if containerID == c.id {
 			return c, nil
 		}
 	}
 
 	return nil, fmt.Errorf("Could not find the container %q from the sandbox %q containers list",
-		containerID, p.id)
+		containerID, s.id)
 }
 
 // removeContainer removes a container from the containers list held by the
 // sandbox structure, based on a container ID.
-func (p *Sandbox) removeContainer(containerID string) error {
-	if p == nil {
+func (s *Sandbox) removeContainer(containerID string) error {
+	if s == nil {
 		return errNeedSandbox
 	}
 
@@ -759,94 +759,94 @@ func (p *Sandbox) removeContainer(containerID string) error {
 		return errNeedContainerID
 	}
 
-	for idx, c := range p.containers {
+	for idx, c := range s.containers {
 		if containerID == c.id {
-			p.containers = append(p.containers[:idx], p.containers[idx+1:]...)
+			s.containers = append(s.containers[:idx], s.containers[idx+1:]...)
 			return nil
 		}
 	}
 
 	return fmt.Errorf("Could not remove the container %q from the sandbox %q containers list",
-		containerID, p.id)
+		containerID, s.id)
 }
 
 // delete deletes an already created sandbox.
 // The VM in which the sandbox is running will be shut down.
-func (p *Sandbox) delete() error {
-	if p.state.State != StateReady &&
-		p.state.State != StatePaused &&
-		p.state.State != StateStopped {
+func (s *Sandbox) delete() error {
+	if s.state.State != StateReady &&
+		s.state.State != StatePaused &&
+		s.state.State != StateStopped {
 		return fmt.Errorf("Sandbox not ready, paused or stopped, impossible to delete")
 	}
 
-	for _, c := range p.containers {
+	for _, c := range s.containers {
 		if err := c.delete(); err != nil {
 			return err
 		}
 	}
 
-	globalSandboxList.removeSandbox(p.id)
+	globalSandboxList.removeSandbox(s.id)
 
-	return p.storage.deleteSandboxResources(p.id, nil)
+	return s.storage.deleteSandboxResources(s.id, nil)
 }
 
-func (p *Sandbox) createNetwork() error {
+func (s *Sandbox) createNetwork() error {
 	// Initialize the network.
-	netNsPath, netNsCreated, err := p.network.init(p.config.NetworkConfig)
+	netNsPath, netNsCreated, err := s.network.init(s.config.NetworkConfig)
 	if err != nil {
 		return err
 	}
 
 	// Execute prestart hooks inside netns
-	if err := p.network.run(netNsPath, func() error {
-		return p.config.Hooks.preStartHooks()
+	if err := s.network.run(netNsPath, func() error {
+		return s.config.Hooks.preStartHooks()
 	}); err != nil {
 		return err
 	}
 
 	// Add the network
-	networkNS, err := p.network.add(*p, p.config.NetworkConfig, netNsPath, netNsCreated)
+	networkNS, err := s.network.add(*s, s.config.NetworkConfig, netNsPath, netNsCreated)
 	if err != nil {
 		return err
 	}
-	p.networkNS = networkNS
+	s.networkNS = networkNS
 
 	// Store the network
-	return p.storage.storeSandboxNetwork(p.id, networkNS)
+	return s.storage.storeSandboxNetwork(s.id, networkNS)
 }
 
-func (p *Sandbox) removeNetwork() error {
-	if p.networkNS.NetNsCreated {
-		return p.network.remove(*p, p.networkNS)
+func (s *Sandbox) removeNetwork() error {
+	if s.networkNS.NetNsCreated {
+		return s.network.remove(*s, s.networkNS)
 	}
 
 	return nil
 }
 
 // startVM starts the VM.
-func (p *Sandbox) startVM() error {
-	p.Logger().Info("Starting VM")
+func (s *Sandbox) startVM() error {
+	s.Logger().Info("Starting VM")
 
-	if err := p.network.run(p.networkNS.NetNsPath, func() error {
-		return p.hypervisor.startSandbox()
+	if err := s.network.run(s.networkNS.NetNsPath, func() error {
+		return s.hypervisor.startSandbox()
 	}); err != nil {
 		return err
 	}
 
-	if err := p.hypervisor.waitSandbox(vmStartTimeout); err != nil {
+	if err := s.hypervisor.waitSandbox(vmStartTimeout); err != nil {
 		return err
 	}
 
-	p.Logger().Info("VM started")
+	s.Logger().Info("VM started")
 
 	// Once startVM is done, we want to guarantee
 	// that the sandbox is manageable. For that we need
 	// to start the sandbox inside the VM.
-	return p.agent.startSandbox(*p)
+	return s.agent.startSandbox(*s)
 }
 
-func (p *Sandbox) addContainer(c *Container) error {
-	p.containers = append(p.containers, c)
+func (s *Sandbox) addContainer(c *Container) error {
+	s.containers = append(s.containers, c)
 
 	return nil
 }
@@ -855,14 +855,14 @@ func (p *Sandbox) addContainer(c *Container) error {
 // adds them to the sandbox. It does not create the containers
 // in the guest. This should only be used when fetching a
 // sandbox that already exists.
-func (p *Sandbox) newContainers() error {
-	for _, contConfig := range p.config.Containers {
-		c, err := newContainer(p, contConfig)
+func (s *Sandbox) newContainers() error {
+	for _, contConfig := range s.config.Containers {
+		c, err := newContainer(s, contConfig)
 		if err != nil {
 			return err
 		}
 
-		if err := p.addContainer(c); err != nil {
+		if err := s.addContainer(c); err != nil {
 			return err
 		}
 	}
@@ -872,14 +872,14 @@ func (p *Sandbox) newContainers() error {
 
 // createContainers registers all containers to the proxy, create the
 // containers in the guest and starts one shim per container.
-func (p *Sandbox) createContainers() error {
-	for _, contConfig := range p.config.Containers {
-		newContainer, err := createContainer(p, contConfig)
+func (s *Sandbox) createContainers() error {
+	for _, contConfig := range s.config.Containers {
+		newContainer, err := createContainer(s, contConfig)
 		if err != nil {
 			return err
 		}
 
-		if err := p.addContainer(newContainer); err != nil {
+		if err := s.addContainer(newContainer); err != nil {
 			return err
 		}
 	}
@@ -889,122 +889,122 @@ func (p *Sandbox) createContainers() error {
 
 // start starts a sandbox. The containers that are making the sandbox
 // will be started.
-func (p *Sandbox) start() error {
-	if err := p.state.validTransition(p.state.State, StateRunning); err != nil {
+func (s *Sandbox) start() error {
+	if err := s.state.validTransition(s.state.State, StateRunning); err != nil {
 		return err
 	}
 
-	if err := p.setSandboxState(StateRunning); err != nil {
+	if err := s.setSandboxState(StateRunning); err != nil {
 		return err
 	}
 
-	for _, c := range p.containers {
+	for _, c := range s.containers {
 		if err := c.start(); err != nil {
 			return err
 		}
 	}
 
-	p.Logger().Info("Sandbox is started")
+	s.Logger().Info("Sandbox is started")
 
 	return nil
 }
 
 // stop stops a sandbox. The containers that are making the sandbox
 // will be destroyed.
-func (p *Sandbox) stop() error {
-	if err := p.state.validTransition(p.state.State, StateStopped); err != nil {
+func (s *Sandbox) stop() error {
+	if err := s.state.validTransition(s.state.State, StateStopped); err != nil {
 		return err
 	}
 
-	for _, c := range p.containers {
+	for _, c := range s.containers {
 		if err := c.stop(); err != nil {
 			return err
 		}
 	}
 
-	if err := p.agent.stopSandbox(*p); err != nil {
+	if err := s.agent.stopSandbox(*s); err != nil {
 		return err
 	}
 
-	p.Logger().Info("Stopping VM")
-	if err := p.hypervisor.stopSandbox(); err != nil {
+	s.Logger().Info("Stopping VM")
+	if err := s.hypervisor.stopSandbox(); err != nil {
 		return err
 	}
 
-	return p.setSandboxState(StateStopped)
+	return s.setSandboxState(StateStopped)
 }
 
-func (p *Sandbox) pause() error {
-	if err := p.hypervisor.pauseSandbox(); err != nil {
+func (s *Sandbox) pause() error {
+	if err := s.hypervisor.pauseSandbox(); err != nil {
 		return err
 	}
 
-	return p.pauseSetStates()
+	return s.pauseSetStates()
 }
 
-func (p *Sandbox) resume() error {
-	if err := p.hypervisor.resumeSandbox(); err != nil {
+func (s *Sandbox) resume() error {
+	if err := s.hypervisor.resumeSandbox(); err != nil {
 		return err
 	}
 
-	return p.resumeSetStates()
+	return s.resumeSetStates()
 }
 
 // list lists all sandbox running on the host.
-func (p *Sandbox) list() ([]Sandbox, error) {
+func (s *Sandbox) list() ([]Sandbox, error) {
 	return nil, nil
 }
 
 // enter runs an executable within a sandbox.
-func (p *Sandbox) enter(args []string) error {
+func (s *Sandbox) enter(args []string) error {
 	return nil
 }
 
 // setSandboxState sets both the in-memory and on-disk state of the
 // sandbox.
-func (p *Sandbox) setSandboxState(state stateString) error {
+func (s *Sandbox) setSandboxState(state stateString) error {
 	if state == "" {
 		return errNeedState
 	}
 
 	// update in-memory state
-	p.state.State = state
+	s.state.State = state
 
 	// update on-disk state
-	return p.storage.storeSandboxResource(p.id, stateFileType, p.state)
+	return s.storage.storeSandboxResource(s.id, stateFileType, s.state)
 }
 
-func (p *Sandbox) pauseSetStates() error {
+func (s *Sandbox) pauseSetStates() error {
 	// XXX: When a sandbox is paused, all its containers are forcibly
 	// paused too.
-	if err := p.setContainersState(StatePaused); err != nil {
+	if err := s.setContainersState(StatePaused); err != nil {
 		return err
 	}
 
-	return p.setSandboxState(StatePaused)
+	return s.setSandboxState(StatePaused)
 }
 
-func (p *Sandbox) resumeSetStates() error {
+func (s *Sandbox) resumeSetStates() error {
 	// XXX: Resuming a paused sandbox puts all containers back into the
 	// running state.
-	if err := p.setContainersState(StateRunning); err != nil {
+	if err := s.setContainersState(StateRunning); err != nil {
 		return err
 	}
 
-	return p.setSandboxState(StateRunning)
+	return s.setSandboxState(StateRunning)
 }
 
 // getAndSetSandboxBlockIndex retrieves sandbox block index and increments it for
 // subsequent accesses. This index is used to maintain the index at which a
 // block device is assigned to a container in the sandbox.
-func (p *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
-	currentIndex := p.state.BlockIndex
+func (s *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
+	currentIndex := s.state.BlockIndex
 
 	// Increment so that container gets incremented block index
-	p.state.BlockIndex++
+	s.state.BlockIndex++
 
 	// update on-disk state
-	err := p.storage.storeSandboxResource(p.id, stateFileType, p.state)
+	err := s.storage.storeSandboxResource(s.id, stateFileType, s.state)
 	if err != nil {
 		return -1, err
 	}
@@ -1014,11 +1014,11 @@ func (p *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
 
 // decrementSandboxBlockIndex decrements the current sandbox block index.
 // This is used to recover from failure while adding a block device.
-func (p *Sandbox) decrementSandboxBlockIndex() error {
-	p.state.BlockIndex--
+func (s *Sandbox) decrementSandboxBlockIndex() error {
+	s.state.BlockIndex--
 
 	// update on-disk state
-	err := p.storage.storeSandboxResource(p.id, stateFileType, p.state)
+	err := s.storage.storeSandboxResource(s.id, stateFileType, s.state)
 	if err != nil {
 		return err
 	}
@@ -1026,12 +1026,12 @@ func (p *Sandbox) decrementSandboxBlockIndex() error {
 	return nil
 }
 
-func (p *Sandbox) setContainersState(state stateString) error {
+func (s *Sandbox) setContainersState(state stateString) error {
 	if state == "" {
 		return errNeedState
 	}
 
-	for _, c := range p.containers {
+	for _, c := range s.containers {
 		if err := c.setContainerState(state); err != nil {
 			return err
 		}
@@ -1040,12 +1040,12 @@ func (p *Sandbox) setContainersState(state stateString) error {
 	return nil
 }
 
-func (p *Sandbox) deleteContainerState(containerID string) error {
+func (s *Sandbox) deleteContainerState(containerID string) error {
 	if containerID == "" {
 		return errNeedContainerID
 	}
 
-	err := p.storage.deleteContainerResources(p.id, containerID, []sandboxResource{stateFileType})
+	err := s.storage.deleteContainerResources(s.id, containerID, []sandboxResource{stateFileType})
 	if err != nil {
 		return err
 	}
@@ -1053,9 +1053,9 @@ func (p *Sandbox) deleteContainerState(containerID string) error {
 	return nil
 }
 
-func (p *Sandbox) deleteContainersState() error {
-	for _, container := range p.config.Containers {
-		err := p.deleteContainerState(container.ID)
+func (s *Sandbox) deleteContainersState() error {
+	for _, container := range s.config.Containers {
+		err := s.deleteContainerState(container.ID)
 		if err != nil {
 			return err
 		}

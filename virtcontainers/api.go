@@ -48,32 +48,32 @@ func CreateSandbox(sandboxConfig SandboxConfig) (VCSandbox, error) {
 
 func createSandboxFromConfig(sandboxConfig SandboxConfig) (*Sandbox, error) {
 	// Create the sandbox.
-	p, err := createSandbox(sandboxConfig)
+	s, err := createSandbox(sandboxConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	// Create the sandbox network
-	if err := p.createNetwork(); err != nil {
+	if err := s.createNetwork(); err != nil {
 		return nil, err
 	}
 
 	// Start the VM
-	if err := p.startVM(); err != nil {
+	if err := s.startVM(); err != nil {
 		return nil, err
 	}
 
 	// Create Containers
-	if err := p.createContainers(); err != nil {
+	if err := s.createContainers(); err != nil {
 		return nil, err
 	}
 
 	// The sandbox is completely created now, we can store it.
-	if err := p.storeSandbox(); err != nil {
+	if err := s.storeSandbox(); err != nil {
 		return nil, err
 	}
 
-	return p, nil
+	return s, nil
 }
 
 // DeleteSandbox is the virtcontainers sandbox deletion entry point.
