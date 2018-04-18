@@ -64,3 +64,8 @@ func (p *Sandbox) Pause() error {
 func (p *Sandbox) Resume() error {
 	return nil
 }
+
+// Delete implements the VCSandbox function of the same name.
+func (p *Sandbox) Delete() error {
+	return nil
+}

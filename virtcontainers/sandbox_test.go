@@ -605,7 +605,7 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	}
 
 	// clean up
-	err = p.delete()
+	err = p.Delete()
 	if err != nil {
 		t.Fatal(err)
 	}
