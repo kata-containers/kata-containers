@@ -865,6 +865,35 @@ func (s *Sandbox) newContainers() error {
 	return nil
 }
 
+// CreateContainer creates a new container in the sandbox
+func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, error) {
+	// Create the container.
+	c, err := createContainer(s, contConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add the container to the containers list in the sandbox.
+	if err := s.addContainer(c); err != nil {
+		return nil, err
+	}
+
+	// Store it.
+	err = c.storeContainer()
+	if err != nil {
+		return nil, err
+	}
+
+	// Update sandbox config.
+	s.config.Containers = append(s.config.Containers, contConfig)
+	err = s.storage.storeSandboxResource(s.id, configFileType, *(s.config))
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
 // createContainers registers all containers to the proxy, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers() error {

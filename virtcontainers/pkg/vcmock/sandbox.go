@@ -69,3 +69,8 @@ func (p *Sandbox) Resume() error {
 func (p *Sandbox) Delete() error {
 	return nil
 }
+
+// CreateContainer implements the VCSandbox function of the same name.
+func (p *Sandbox) CreateContainer(conf vc.ContainerConfig) (vc.VCContainer, error) {
+	return &Container{}, nil
+}

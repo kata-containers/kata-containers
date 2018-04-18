@@ -299,36 +299,17 @@ func CreateContainer(sandboxID string, containerConfig ContainerConfig) (VCSandb
 	}
 	defer unlockSandbox(lockFile)
 
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Create the container.
-	c, err := createContainer(p, containerConfig)
+	c, err := s.CreateContainer(containerConfig)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Add the container to the containers list in the sandbox.
-	if err := p.addContainer(c); err != nil {
-		return nil, nil, err
-	}
-
-	// Store it.
-	err = c.storeContainer()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Update sandbox config.
-	p.config.Containers = append(p.config.Containers, containerConfig)
-	err = p.storage.storeSandboxResource(sandboxID, configFileType, *(p.config))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return p, c, nil
+	return s, c, nil
 }
 
 // DeleteContainer is the virtcontainers container deletion entry point.

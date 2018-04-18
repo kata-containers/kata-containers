@@ -50,6 +50,7 @@ type VCSandbox interface {
 	Resume() error
 	Release() error
 	Delete() error
+	CreateContainer(contConfig ContainerConfig) (VCContainer, error)
 }
 
 // VCContainer is the Container interface
