@@ -97,6 +97,7 @@ const (
 	defaultCPUModel         = "host"
 	defaultBridgeBus        = "pcie.0"
 	maxDevIDSize            = 31
+	defaultMsize9p          = 8192
 )
 
 const (

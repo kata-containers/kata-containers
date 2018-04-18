@@ -107,6 +107,7 @@ DEFENABLEHUGEPAGES := false
 DEFENABLESWAP := false
 DEFENABLEDEBUG := false
 DEFDISABLENESTINGCHECKS := false
+DEFMSIZE9P := 8192
 
 SED = sed
 
@@ -179,6 +180,7 @@ USER_VARS += DEFENABLEHUGEPAGES
 USER_VARS += DEFENABLESWAP
 USER_VARS += DEFENABLEDEBUG
 USER_VARS += DEFDISABLENESTINGCHECKS
+USER_VARS += DEFMSIZE9P
 
 V              = @
 Q              = $(V:1=)
@@ -271,6 +273,7 @@ const defaultEnableHugePages bool = $(DEFENABLEHUGEPAGES)
 const defaultEnableSwap bool = $(DEFENABLESWAP)
 const defaultEnableDebug bool = $(DEFENABLEDEBUG)
 const defaultDisableNestingChecks bool = $(DEFDISABLENESTINGCHECKS)
+const defaultMsize9p uint32 = $(DEFMSIZE9P)
 
 // Default config file used by stateless systems.
 var defaultRuntimeConfiguration = "$(DESTCONFIG)"
@@ -355,6 +358,7 @@ $(GENERATED_FILES): %: %.in Makefile VERSION
 		-e "s|@DEFENABLEMSWAP@|$(DEFENABLESWAP)|g" \
 		-e "s|@DEFENABLEDEBUG@|$(DEFENABLEDEBUG)|g" \
 		-e "s|@DEFDISABLENESTINGCHECKS@|$(DEFDISABLENESTINGCHECKS)|g" \
+		-e "s|@DEFMSIZE9P@|$(DEFMSIZE9P)|g" \
 		$< > $@
 
 generate-config: $(CONFIG)

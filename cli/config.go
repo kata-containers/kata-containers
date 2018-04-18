@@ -76,8 +76,9 @@ type hypervisor struct {
 	DefaultVCPUs          int32  `toml:"default_vcpus"`
 	DefaultMemSz          uint32 `toml:"default_memory"`
 	DefaultBridges        uint32 `toml:"default_bridges"`
-	DisableBlockDeviceUse bool   `toml:"disable_block_device_use"`
+	Msize9p               uint32 `toml:"msize_9p"`
 	BlockDeviceDriver     string `toml:"block_device_driver"`
+	DisableBlockDeviceUse bool   `toml:"disable_block_device_use"`
 	MemPrealloc           bool   `toml:"enable_mem_prealloc"`
 	HugePages             bool   `toml:"enable_hugepages"`
 	Swap                  bool   `toml:"enable_swap"`
@@ -233,6 +234,14 @@ func (h hypervisor) blockDeviceDriver() (string, error) {
 	return h.BlockDeviceDriver, nil
 }
 
+func (h hypervisor) msize9p() uint32 {
+	if h.Msize9p == 0 {
+		return defaultMsize9p
+	}
+
+	return h.Msize9p
+}
+
 func (p proxy) path() string {
 	if p.Path == "" {
 		return defaultProxyPath
@@ -314,6 +323,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableNestingChecks:  h.DisableNestingChecks,
 		BlockDeviceDriver:     blockDriver,
 		EnableIOThreads:       h.EnableIOThreads,
+		Msize9p:               h.msize9p(),
 	}, nil
 }
 
@@ -417,6 +427,7 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		DisableNestingChecks:  defaultDisableNestingChecks,
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
 		EnableIOThreads:       defaultEnableIOThreads,
+		Msize9p:               defaultMsize9p,
 	}
 
 	err = config.InterNetworkModel.SetModel(defaultInterNetworkingModel)
