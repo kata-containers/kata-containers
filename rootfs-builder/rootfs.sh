@@ -119,6 +119,10 @@ setup_agent_init()
 {
 	agent_bin="$1"
 	init_bin="$2"
+
+	[ -z "$agent_bin" ] && die "need agent binary path"
+	[ -z "$init_bin" ] && die "need init bin path"
+
 	info "Install $agent_bin as init process"
 	mv -f "${agent_bin}" ${init_bin}
 	OK "Agent is installed as init process"
@@ -126,10 +130,11 @@ setup_agent_init()
 
 copy_kernel_modules()
 {
-	local module_dir=$1
-	local rootfs_dir=$2
+	local module_dir="$1"
+	local rootfs_dir="$2"
 
-	[ -z "module_dir" -o -z "rootfs_dir" ] && die "module dir and rootfs dir must be specified"
+	[ -z "$module_dir" ] && die "need module directory"
+	[ -z "$rootfs_dir" ] && die "need rootfs directory"
 
 	info "Copy kernel modules from ${KERNEL_MODULES_DIR}"
 	mkdir -p ${rootfs_dir}/lib/modules/
