@@ -568,3 +568,31 @@ func TestVCMockProcessListContainer(t *testing.T) {
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
+
+func TestVCMockFetchSandbox(t *testing.T) {
+	assert := assert.New(t)
+
+	m := &VCMock{}
+	config := &vc.SandboxConfig{}
+	assert.Nil(m.FetchSandboxFunc)
+
+	_, err := m.FetchSandbox(config.ID)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+
+	m.FetchSandboxFunc = func(id string) (vc.VCSandbox, error) {
+		return &Sandbox{}, nil
+	}
+
+	sandbox, err := m.FetchSandbox(config.ID)
+	assert.NoError(err)
+	assert.Equal(sandbox, &Sandbox{})
+
+	// reset
+	m.FetchSandboxFunc = nil
+
+	_, err = m.FetchSandbox(config.ID)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+
+}

@@ -92,6 +92,24 @@ func DeleteSandbox(sandboxID string) (VCSandbox, error) {
 	return p, nil
 }
 
+// FetchSandbox is the virtcontainers sandbox fetching entry point.
+// FetchSandbox will find out and connect to an existing sandbox and
+// return the sandbox structure.
+func FetchSandbox(sandboxID string) (VCSandbox, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
+	}
+
+	lockFile, err := rwLockSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlockSandbox(lockFile)
+
+	// Fetch the sandbox from storage and create it.
+	return fetchSandbox(sandboxID)
+}
+
 // StartSandbox is the virtcontainers sandbox starting entry point.
 // StartSandbox will talk to the given hypervisor to start an existing
 // sandbox and all its containers.
