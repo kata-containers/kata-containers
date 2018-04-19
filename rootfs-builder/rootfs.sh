@@ -22,16 +22,17 @@ source "$lib_file"
 # Default architecture
 ARCH=${ARCH:-"x86_64"}
 
-#Load default vesions for golang and other componets
+# Load default versions for golang and other componets
 source "${script_dir}/versions.txt"
 
-# config file
+# distro-specific config file
 typeset -r CONFIG_SH="config.sh"
 
-# Name of the extra file that could implement build_rootfs
+# Name of an optional distro-specific file which, if it exists, must implement the
+# build_rootfs() function.
 typeset -r LIB_SH="rootfs_lib.sh"
 
-#$1: Error code if want to exit differnt to 0
+#$1: Error code if want to exit different to 0
 usage(){
 	error="${1:-0}"
 	cat <<EOT
