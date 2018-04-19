@@ -873,7 +873,23 @@ func (k *kataAgent) killContainer(sandbox Sandbox, c Container, signal syscall.S
 }
 
 func (k *kataAgent) processListContainer(sandbox Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
-	return nil, nil
+	req := &grpc.ListProcessesRequest{
+		ContainerId: c.id,
+		Format:      options.Format,
+		Args:        options.Args,
+	}
+
+	resp, err := k.sendReq(req)
+	if err != nil {
+		return nil, err
+	}
+
+	processList, ok := resp.(*grpc.ListProcessesResponse)
+	if !ok {
+		return nil, fmt.Errorf("Bad list processes response")
+	}
+
+	return processList.ProcessList, nil
 }
 
 func (k *kataAgent) onlineCPUMem(cpus uint32) error {
@@ -951,6 +967,8 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 		return ifc, err
 	case *grpc.OnlineCPUMemRequest:
 		return k.client.OnlineCPUMem(context.Background(), req)
+	case *grpc.ListProcessesRequest:
+		return k.client.ListProcesses(context.Background(), req)
 	default:
 		return nil, fmt.Errorf("Unknown gRPC type %T", req)
 	}
