@@ -240,10 +240,13 @@ make clean
 make INIT=${AGENT_INIT}
 make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT}
 popd
-[ -x "${ROOTFS_DIR}/usr/bin/${AGENT_BIN}" ] || die "/usr/bin/${AGENT_BIN} is not installed in ${ROOTFS_DIR}"
+
+AGENT_DIR="${ROOTFS_DIR}/usr/bin"
+AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
+[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
 OK "Agent installed"
 
-[ "${AGENT_INIT}" == "yes" ] && setup_agent_init "${ROOTFS_DIR}/usr/bin/${AGENT_BIN}" "${init}"
+[ "${AGENT_INIT}" == "yes" ] && setup_agent_init "${AGENT_DEST}" "${init}"
 
 info "Check init is installed"
 [ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
