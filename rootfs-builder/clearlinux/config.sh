@@ -4,12 +4,16 @@
 # SPDX-License-Identifier: Apache-2.0
 
 OS_NAME="Clear"
+REPO_NAME="clear"
 
 OS_VERSION=${OS_VERSION:-latest}
 
-BASE_URL="https://download.clearlinux.org/current/${ARCH}/os/"
+clr_url="https://download.clearlinux.org"
 
-REPO_NAME="clear"
+# resolve version
+[ "${OS_VERSION}" = "latest" ] && OS_VERSION=$(curl -sL "${clr_url}/latest")
+
+BASE_URL="${clr_url}/releases/${OS_VERSION}/${REPO_NAME}/${ARCH}/os/"
 
 PACKAGES="iptables-bin libudev0-shim"
 
