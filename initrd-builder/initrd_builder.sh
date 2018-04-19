@@ -11,7 +11,6 @@ set -e
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 
-SCRIPT_NAME="${0##*/}"
 INITRD_IMAGE="${INITRD_IMAGE:-kata-containers-initrd.img}"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
@@ -39,7 +38,7 @@ usage()
 {
 	error="${1:-0}"
 	cat <<EOT
-Usage: ${SCRIPT_NAME} [options] <rootfs-dir>
+Usage: ${script_name} [options] <rootfs-dir>
 	This script creates a Kata Containers initrd image file based on the
 	<rootfs-dir> directory.
 
