@@ -136,9 +136,11 @@ copy_kernel_modules()
 	[ -z "$module_dir" ] && die "need module directory"
 	[ -z "$rootfs_dir" ] && die "need rootfs directory"
 
+	local destdir="${rootfs_dir}/lib/modules"
+
 	info "Copy kernel modules from ${KERNEL_MODULES_DIR}"
-	mkdir -p ${rootfs_dir}/lib/modules/
-	cp -a ${KERNEL_MODULES_DIR} ${rootfs_dir}/lib/modules/
+	mkdir -p "${destdir}"
+	cp -a "${KERNEL_MODULES_DIR}" "${dest_dir}/"
 	OK "Kernel modules copied"
 }
 
