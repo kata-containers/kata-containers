@@ -49,3 +49,8 @@ func (p *Sandbox) GetContainer(containerID string) vc.VCContainer {
 	}
 	return &Container{}
 }
+
+// Release implements the VCSandbox function of the same name.
+func (p *Sandbox) Release() error {
+	return nil
+}

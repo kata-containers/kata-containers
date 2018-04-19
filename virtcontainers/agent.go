@@ -133,6 +133,9 @@ type agent interface {
 	// supported by the agent.
 	capabilities() capabilities
 
+	// disconnect will disconnect the connection to the agent
+	disconnect() error
+
 	// createSandbox will tell the agent to perform necessary setup for a Sandbox.
 	createSandbox(sandbox *Sandbox) error
 

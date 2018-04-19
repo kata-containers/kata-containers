@@ -2273,3 +2273,16 @@ func TestFetchNonExistingSandbox(t *testing.T) {
 	_, err := FetchSandbox("some-non-existing-sandbox-name")
 	assert.NotNil(t, err, "fetch non-existing sandbox should fail")
 }
+
+func TestReleaseSandbox(t *testing.T) {
+	cleanUp()
+
+	config := newTestSandboxConfigNoop()
+
+	s, err := CreateSandbox(config)
+	if s == nil || err != nil {
+		t.Fatal(err)
+	}
+	err = s.Release()
+	assert.Nil(t, err, "sandbox release failed: %v", err)
+}
