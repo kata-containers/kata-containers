@@ -126,3 +126,65 @@ build_rootfs()
 
 	[ -n "${ROOTFS_DIR}" ]  && rm -r "${ROOTFS_DIR}${CACHE_DIR}"
 }
+
+# Create a YAML metadata file inside the rootfs.
+#
+# This provides useful information about the rootfs than can be interrogated
+# once the rootfs has been converted into a image/initrd.
+create_summary_file()
+{
+	local -r rootfs_dir="$1"
+
+	[ -z "$rootfs_dir" ] && die "need rootfs"
+
+	local -r file_dir="/var/lib/osbuilder"
+	local -r dir="${rootfs_dir}${file_dir}"
+
+	local -r filename="osbuilder.yaml"
+	local file="${dir}/${filename}"
+
+	local -r now=$(date '+%Y-%m-%dT%T.%N%zZ')
+
+	# sanitise package list
+	PACKAGES=$(echo "$PACKAGES"|tr ' ' '\n'|sort -u|tr '\n' ' ')
+
+	local -r packages=$(for pkg in ${PACKAGES}; do echo "    - \"${pkg}\""; done)
+
+	mkdir -p "$dir"
+
+	# Semantic version of the summary file format.
+	#
+	# XXX: Increment every time the format of the summary file changes!
+	local -r format_version="0.0.1"
+
+	local -r osbuilder_url="https://github.com/kata-containers/osbuilder"
+
+	local agent="${AGENT_DEST}"
+	[ "$AGENT_INIT" = yes ] && agent="${init}"
+
+	local -r agent_version=$("$agent" --version|awk '{print $NF}')
+
+	cat >"$file"<<-EOT
+	---
+	osbuilder:
+	  url: "${osbuilder_url}"
+	  version: "${OSBUILDER_VERSION}"
+	rootfs-creation-time: "${now}"
+	description: "osbuilder rootfs"
+	file-format-version: "${format_version}"
+	architecture: "${ARCH}"
+	base-distro:
+	  name: "${OS_NAME}"
+	  version: "${OS_VERSION}"
+	  packages:
+${packages}
+	agent:
+	  url: "https://${GO_AGENT_PKG}"
+	  name: "${AGENT_BIN}"
+	  version: "${agent_version}"
+	  agent-is-init-daemon: "${AGENT_INIT}"
+EOT
+
+	local rootfs_file="${file_dir}/$(basename "${file}")"
+	info "Created summary file '${rootfs_file}' inside rootfs"
+}

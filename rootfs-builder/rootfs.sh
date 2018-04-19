@@ -49,6 +49,7 @@ $(get_distros)
 Options:
 -a  : agent version DEFAULT: ${AGENT_VERSION} ENV: AGENT_VERSION 
 -h  : Show this help message
+-o  : specify version of osbuilder
 -r  : rootfs directory DEFAULT: ${ROOTFS_DIR} ENV: ROOTFS_DIR
 
 ENV VARIABLES:
@@ -144,11 +145,14 @@ copy_kernel_modules()
 	OK "Kernel modules copied"
 }
 
-while getopts c:hr: opt
+OSBUILDER_VERSION="unknown"
+
+while getopts c:ho:r: opt
 do
 	case $opt in
 		a)	AGENT_VERSION="${OPTARG}" ;;
 		h)	usage ;;
+		o)	OSBUILDER_VERSION="${OPTARG}" ;;
 		r)	ROOTFS_DIR="${OPTARG}" ;;
 	esac
 done
@@ -160,6 +164,8 @@ shift $(($OPTIND - 1))
 [ "$AGENT_INIT" == "yes" -o "$AGENT_INIT" == "no" ] || die "AGENT_INIT($AGENT_INIT) is invalid (must be yes or no)"
 
 [ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
+
+[ -z "${OSBUILDER_VERSION}" ] && die "need osbuilder version"
 
 distro="$1"
 
@@ -214,6 +220,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--env GOPATH="${GOPATH}" \
 		--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 		--env EXTRA_PKGS="${EXTRA_PKGS}" \
+		--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 		-v "${script_dir}":"/osbuilder" \
 		-v "${ROOTFS_DIR}":"/rootfs" \
 		-v "${script_dir}/../scripts":"/scripts" \
@@ -251,3 +258,6 @@ OK "Agent installed"
 info "Check init is installed"
 [ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 OK "init is installed"
+
+info "Creating summary file"
+create_summary_file "${ROOTFS_DIR}"
