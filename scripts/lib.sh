@@ -94,6 +94,8 @@ build_rootfs()
 	# Mandatory
 	local ROOTFS_DIR="$1"
 
+	[ -z "$ROOTFS_DIR" ] && die "need rootfs"
+
 	# In case of support EXTRA packages, use it to allow
 	# users add more packages to the base rootfs
 	local EXTRA_PKGS=${EXTRA_PKGS:-""}
