@@ -11,28 +11,12 @@ set -e
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 
+lib_file="${script_dir}/../scripts/lib.sh"
+source "$lib_file"
+
 INITRD_IMAGE="${INITRD_IMAGE:-kata-containers-initrd.img}"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
-
-die()
-{
-	local msg="$*"
-	echo "ERROR: ${msg}" >&2
-	exit 1
-}
-
-OK()
-{
-	local msg="$*"
-	echo "[OK] ${msg}" >&2
-}
-
-info()
-{
-	local msg="$*"
-	echo "INFO: ${msg}"
-}
 
 usage()
 {

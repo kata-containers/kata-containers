@@ -6,7 +6,33 @@
 
 set -e
 
-check_program(){
+die()
+{
+	local msg="$*"
+	echo "ERROR: ${msg}" >&2
+	exit 1
+}
+
+OK()
+{
+	local msg="$*"
+	echo "[OK] ${msg}" >&2
+}
+
+info()
+{
+	local msg="$*"
+	echo "INFO: ${msg}"
+}
+
+warning()
+{
+	local msg="$*"
+	echo "WARNING: ${msg}"
+}
+
+check_program()
+{
 	type "$1" >/dev/null 2>&1
 }
 
