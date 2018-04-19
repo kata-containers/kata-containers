@@ -33,7 +33,8 @@ typeset -r CONFIG_SH="config.sh"
 typeset -r LIB_SH="rootfs_lib.sh"
 
 #$1: Error code if want to exit different to 0
-usage(){
+usage()
+{
 	error="${1:-0}"
 	cat <<EOT
 USAGE: Build a Guest OS rootfs for Kata Containers image
@@ -71,13 +72,14 @@ get_distros() {
 	done
 }
 
-
-check_function_exist() {
+check_function_exist()
+{
 	function_name="$1"
 	[ "$(type -t ${function_name})" == "function" ] || die "${function_name} function was not defined"
 }
 
-generate_dockerfile() {
+generate_dockerfile()
+{
 	dir="$1"
 
 	case "$(arch)" in
@@ -113,7 +115,8 @@ ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
 	popd
 }
 
-setup_agent_init() {
+setup_agent_init()
+{
 	agent_bin="$1"
 	init_bin="$2"
 	info "Install $agent_bin as init process"
@@ -121,7 +124,8 @@ setup_agent_init() {
 	OK "Agent is installed as init process"
 }
 
-copy_kernel_modules() {
+copy_kernel_modules()
+{
 	local module_dir=$1
 	local rootfs_dir=$2
 
