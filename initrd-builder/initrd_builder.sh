@@ -6,12 +6,10 @@
 
 set -e
 
+[ -n "$DEBUG" ] && set -x
+
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
-
-if [ -n "$DEBUG" ] ; then
-	set -x
-fi
 
 SCRIPT_NAME="${0##*/}"
 INITRD_IMAGE="${INITRD_IMAGE:-kata-containers-initrd.img}"

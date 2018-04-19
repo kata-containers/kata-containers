@@ -6,6 +6,8 @@
 
 set -e
 
+[ -n "$DEBUG" ] && set -x
+
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-master}
@@ -25,10 +27,6 @@ typeset -r CONFIG_SH="config.sh"
 
 # Name of the extra file that could implement build_rootfs
 typeset -r LIB_SH="rootfs_lib.sh"
-
-if [ -n "$DEBUG" ] ; then
-	set -x
-fi
 
 #$1: Error code if want to exit differnt to 0
 usage(){
