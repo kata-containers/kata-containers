@@ -16,6 +16,9 @@ AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 
+lib_file="${script_dir}/../scripts/lib.sh"
+source "$lib_file"
+
 # Default architecture
 ARCH=${ARCH:-"x86_64"}
 
@@ -58,25 +61,6 @@ KERNEL_MODULES_DIR: Optional kernel modules to put into the rootfs.
 		    DEFAULT: ""
 EOT
 exit "${error}"
-}
-
-die()
-{
-	msg="$*"
-	echo "ERROR: ${msg}" >&2
-	exit 1
-}
-
-info()
-{
-	msg="$*"
-	echo "INFO: ${msg}" >&2
-}
-
-OK()
-{
-	msg="$*"
-	echo "INFO: [OK] ${msg}" >&2
 }
 
 get_distros() {
@@ -173,10 +157,6 @@ distro_config_dir="${script_dir}/${distro}"
 # Source config.sh from distro
 rootfs_config="${distro_config_dir}/${CONFIG_SH}"
 source "${rootfs_config}"
-
-lib_file="${script_dir}/../scripts/lib.sh"
-info "Source $lib_file"
-[ -e "$lib_file" ] && source "$lib_file" || true
 
 [ -d "${distro_config_dir}" ] || die "Not found configuration directory ${distro_config_dir}"
 
