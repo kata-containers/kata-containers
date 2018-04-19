@@ -48,15 +48,53 @@ function clone_build_and_install() {
 	popd
 }
 
+function install_yq() {
+	GOPATH=${GOPATH:-${HOME}/go}
+	local yq_path="${GOPATH}/bin/yq"
+	local yq_pkg="github.com/mikefarah/yq"
+	[ -x  "${GOPATH}/bin/yq" ] && return
+
+	case "$(arch)" in
+	"aarch64")
+		goarch=arm64
+		;;
+
+	"x86_64")
+		goarch=amd64
+		;;
+	"*")
+		echo "Arch $(arch) not supported"
+		exit
+		;;
+	esac
+
+	mkdir -p "${GOPATH}/bin"
+
+	# Workaround to get latest release from github (to not use github token).
+	# Get the redirection to latest release on github.
+	yq_latest_url=$(curl -Ls -o /dev/null -w %{url_effective} "https://${yq_pkg}/releases/latest")
+	# The redirected url should include the latest release version
+	# https://github.com/mikefarah/yq/releases/tag/<VERSION-HERE>
+	yq_version=$(basename "${yq_latest_url}")
+
+
+	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_linux_${goarch}"
+	curl -o "${yq_path}" -L ${yq_url}
+	chmod +x ${yq_path}
+}
+
 function get_version(){
 	dependency="$1"
+	GOPATH=${GOPATH:-${HOME}/go}
 	# This is needed in order to retrieve the version for qemu-lite
-	go get -v github.com/mikefarah/yq
+	install_yq
 	runtime_repo="github.com/kata-containers/runtime"
-	versions_file="$GOPATH/src/github.com/kata-containers/runtime/versions.yaml"
-	go get -d -u -v "$runtime_repo" || true
+	runtime_repo_dir="$GOPATH/src/${runtime_repo}"
+	versions_file="${runtime_repo_dir}/versions.yaml"
+	mkdir -p "$(dirname ${runtime_repo_dir})"
+	[ -d "${runtime_repo_dir}" ] ||  git clone https://${runtime_repo}.git "${runtime_repo_dir}"
 	[ ! -f "$versions_file" ] && { echo >&2 "ERROR: cannot find $versions_file"; exit 1; }
-	yq read "$versions_file" "$dependency"
+	"${GOPATH}/bin/yq" read "$versions_file" "$dependency"
 }
 
 
