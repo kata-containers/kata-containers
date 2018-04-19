@@ -62,7 +62,7 @@ reposdir=/root/mash
 retries=5
 EOF
 	if [ "$BASE_URL" != "" ]; then
-            cat >> "${DNF_CONF}" << EOF
+		cat >> "${DNF_CONF}" << EOF
 
 [base]
 name=${OS_NAME}-${OS_VERSION} ${REPO_NAME}
@@ -71,7 +71,7 @@ baseurl=${BASE_URL}
 enabled=1
 EOF
 	elif [ "$MIRROR_LIST" != "" ]; then
-	    cat >> "${DNF_CONF}" << EOF
+		cat >> "${DNF_CONF}" << EOF
 
 [base]
 name=${OS_NAME}-${OS_VERSION} ${REPO_NAME}
@@ -81,13 +81,12 @@ EOF
 	fi
 
 	if [ "$GPG_KEY_FILE" != "" ]; then
-            cat >> "${DNF_CONF}" << EOF
+		cat >> "${DNF_CONF}" << EOF
 gpgcheck=1
 gpgkey=file://${CONFIG_DIR}/${GPG_KEY_FILE}
 
 EOF
 	fi
-
 }
 
 build_rootfs()
