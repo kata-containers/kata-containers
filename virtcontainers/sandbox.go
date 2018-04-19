@@ -529,6 +529,12 @@ func (s *Sandbox) GetContainer(containerID string) VCContainer {
 	return nil
 }
 
+// Release closes the agent connection and removes sandbox from internal list.
+func (s *Sandbox) Release() error {
+	globalSandboxList.removeSandbox(s.id)
+	return s.agent.disconnect()
+}
+
 func createAssets(sandboxConfig *SandboxConfig) error {
 	kernel, err := newAsset(sandboxConfig, kernelAsset)
 	if err != nil {

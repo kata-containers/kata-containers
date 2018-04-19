@@ -715,13 +715,13 @@ func (h *hyper) connect() error {
 	return nil
 }
 
-func (h *hyper) disconnect() {
-	if h.client == nil {
-		return
+func (h *hyper) disconnect() error {
+	if h.client != nil {
+		h.client.Close()
+		h.client = nil
 	}
 
-	h.client.Close()
-	h.client = nil
+	return nil
 }
 
 func (h *hyper) register() error {
