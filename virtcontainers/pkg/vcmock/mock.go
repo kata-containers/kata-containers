@@ -52,6 +52,15 @@ func (m *VCMock) DeleteSandbox(sandboxID string) (vc.VCSandbox, error) {
 	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
 }
 
+// FetchSandbox implements the VC function of the same name.
+func (m *VCMock) FetchSandbox(sandboxID string) (vc.VCSandbox, error) {
+	if m.FetchSandboxFunc != nil {
+		return m.FetchSandboxFunc(sandboxID)
+	}
+
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
+}
+
 // StartSandbox implements the VC function of the same name.
 func (m *VCMock) StartSandbox(sandboxID string) (vc.VCSandbox, error) {
 	if m.StartSandboxFunc != nil {
