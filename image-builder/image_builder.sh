@@ -11,7 +11,6 @@ set -e
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 
-SCRIPT_NAME="${0##*/}"
 IMAGE="${IMAGE:-kata-containers.img}"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
@@ -45,7 +44,7 @@ usage()
 {
 	error="${1:-0}"
 	cat <<EOT
-Usage: ${SCRIPT_NAME} [options] <rootfs-dir>
+Usage: ${script_name} [options] <rootfs-dir>
 	This script will create a Kata Containers image file of
         an adequate size based on the <rootfs-dir> directory.
         The size of the image can be also be specified manually
