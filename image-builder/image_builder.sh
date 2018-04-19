@@ -104,6 +104,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--env AGENT_INIT=${AGENT_INIT} \
 		-v /dev:/dev \
 		-v "${script_dir}":"/osbuilder" \
+		-v "${script_dir}/../scripts":"/scripts" \
 		-v "${ROOTFS}":"/rootfs" \
 		-v "${IMAGE_DIR}":"/image" \
 		${image_name} \

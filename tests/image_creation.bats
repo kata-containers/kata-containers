@@ -27,7 +27,12 @@ teardown(){
 
 function build_rootfs()
 {
+	local file="/var/lib/osbuilder/osbuilder.yaml"
+	local full="${tmp_rootfs}${file}"
+
 	sudo -E ${rootfs_sh} -r "${tmp_rootfs}" "${distro}"
+
+	yamllint "${full}"
 }
 
 function build_image()
