@@ -290,7 +290,7 @@ func (c *Container) createContainersDirs() error {
 func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) ([]Mount, error) {
 	var sharedDirMounts []Mount
 	for idx, m := range c.mounts {
-		if m.Type != "bind" {
+		if isSystemMount(m.Destination) || m.Type != "bind" {
 			continue
 		}
 
@@ -324,6 +324,13 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 			}
 
 			c.mounts[idx].BlockDevice = b
+			continue
+		}
+
+		// Ignore /dev, directories and all other device files. We handle
+		// only regular files in /dev. It does not make sense to pass the host
+		// device nodes to the guest.
+		if isHostDevice(m.Destination) {
 			continue
 		}
 
