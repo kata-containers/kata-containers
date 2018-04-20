@@ -12,13 +12,19 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"regexp"
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
 type TestReaderNoData struct {
+}
+
+func init() {
+	name = "log-parser"
 }
 
 func (r *TestReaderNoData) Read(p []byte) (n int, err error) {
@@ -406,7 +412,34 @@ func TestCreateLogEntry(t *testing.T) {
 		expectError bool
 	}
 
-	data := []testData{
+	kernelMsg := regexp.QuoteMeta(`[    1.122452] sd 0:0:0:0: [sda] 20971520 512-byte logical blocks: (10.7 GB/10.0 GiB)`)
+
+	now := time.Now().UTC()
+	nano := now.Format(time.RFC3339Nano)
+
+	// simulate kernel write to console which will "corrupt" the
+	// agent log output.
+	corruptTestDataPairs := kvPairs{
+		{"time", nano},
+		{"source", "agent"},
+		{"msg", fmt.Sprintf("time=%s%s", nano, kernelMsg)},
+	}
+
+	originalStrict := strict
+	originalLogLevel := logger.Logger.Level
+
+	defer func() {
+		strict = originalStrict
+		logger.Logger.Level = originalLogLevel
+	}()
+
+	// enable rigorous checking
+	strict = true
+
+	// hide warnings
+	logger.Logger.SetLevel(logrus.ErrorLevel)
+
+	strictData := []testData{
 		{"", 0, kvPairs{}, true},
 		{"foo", 0, kvPairs{}, true},
 		{"", 1, kvPairs{}, true},
@@ -418,6 +451,7 @@ func TestCreateLogEntry(t *testing.T) {
 		{"foo", 1, kvPairs{{"\n", "value"}}, true},
 		{"foo", 0, kvPairs{{"key", "value"}}, true},
 		{"", 1, kvPairs{{"key", "value"}}, true},
+		{"/some/where", 1, corruptTestDataPairs, true},
 
 		// valid
 		{"foo", 1, kvPairs{{"key", "value"}}, false},
@@ -431,16 +465,30 @@ func TestCreateLogEntry(t *testing.T) {
 		{"foo", 1, kvPairs{{"key", "foo bar"}}, false},
 	}
 
-	for i, d := range data {
+	for i, d := range strictData {
 		_, err := createLogEntry(d.file, d.line, d.pairs)
 		if d.expectError {
 			assert.Errorf(err, "test[%d]: %+v", i, d)
 		} else {
 			assert.NoErrorf(err, "test[%d]: %+v", i, d)
 		}
-
 	}
 
+	// disable rigorous checking
+	strict = false
+
+	nonStrictData := []testData{
+		{"/some/where", 1, corruptTestDataPairs, false},
+	}
+
+	for i, d := range nonStrictData {
+		_, err := createLogEntry(d.file, d.line, d.pairs)
+		if d.expectError {
+			assert.Errorf(err, "test[%d]: %+v", i, d)
+		} else {
+			assert.NoErrorf(err, "test[%d]: %+v", i, d)
+		}
+	}
 }
 
 func TestCreateLogEntryAgentUnpack(t *testing.T) {

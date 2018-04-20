@@ -39,6 +39,21 @@ var (
 	// entry wrapper.
 	disableAgentUnpack = false
 
+	// If true, error if the agent logs are not parseable.
+	//
+	// The default is to only warn in such circumstances as the kernel can
+	// write to the console at any time. Since the agent also writes its
+	// structured logs to the console this poses a problem: the log parser
+	// will consider the agent log entry to be "corrupt" as it will also
+	// contain unstructured kernel messages.
+	strict = false
+
+	// tag added to the LogEntry if the agent unpack fails when running in
+	// non-strict mode.
+	agentUnpackFailTag = fmt.Sprintf("%s-agent-unpack-failed", name)
+
+	quiet = false
+
 	outputFile = os.Stdout
 
 	fileMode = os.FileMode(0600)
@@ -126,14 +141,21 @@ func getLogFiles(c *cli.Context) (files []string, err error) {
 func handleLogFiles(c *cli.Context) (err error) {
 	outputFilename := c.GlobalString("output-file")
 
+	level := logrus.InfoLevel
+
+	if c.GlobalBool("quiet") {
+		level = logrus.ErrorLevel
+	}
+
 	if c.GlobalBool("debug") {
 		if outputFilename == "" && !c.GlobalBool("check-only") {
 			return fmt.Errorf("must specify '--output-file' with '--debug' to avoid invalidating output")
 		}
 
-		logger.Logger.SetLevel(logrus.DebugLevel)
+		level = logrus.DebugLevel
 	}
 
+	logger.Logger.SetLevel(level)
 	handlers := NewDisplayHandlers()
 
 	availableFormats := handlers.Get()
@@ -294,6 +316,16 @@ func main() {
 			Name:        "no-agent-unpack",
 			Usage:       "do not unpack agent log entries",
 			Destination: &disableAgentUnpack,
+		},
+		cli.BoolFlag{
+			Name:        "quiet",
+			Usage:       "suppress warning messages (ignored in debug mode)",
+			Destination: &quiet,
+		},
+		cli.BoolFlag{
+			Name:        "strict",
+			Usage:       "do not tolerate misformed agent messages (generally caused by kernel writes to the console)",
+			Destination: &strict,
 		},
 		cli.StringFlag{
 			Name:  "output-format",
