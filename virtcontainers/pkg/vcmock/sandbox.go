@@ -99,3 +99,8 @@ func (p *Sandbox) Status() vc.SandboxStatus {
 func (p *Sandbox) EnterContainer(containerID string, cmd vc.Cmd) (vc.VCContainer, *vc.Process, error) {
 	return &Container{}, &vc.Process{}, nil
 }
+
+// Monitor implements the VCSandbox function of the same name.
+func (p *Sandbox) Monitor() (chan error, error) {
+	return nil, nil
+}

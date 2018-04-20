@@ -1388,3 +1388,23 @@ func TestEnterContainer(t *testing.T) {
 	_, _, err = s.EnterContainer(contID, cmd)
 	assert.Nil(t, err, "Enter container failed: %v", err)
 }
+
+func TestMonitor(t *testing.T) {
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, newHypervisorConfig(nil, nil), NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	assert.Nil(t, err, "VirtContainers should not allow empty sandboxes")
+	defer cleanUp()
+
+	_, err = s.Monitor()
+	assert.NotNil(t, err, "Monitoring non-running container should fail")
+
+	err = s.start()
+	assert.Nil(t, err, "Failed to start sandbox: %v", err)
+
+	_, err = s.Monitor()
+	assert.Nil(t, err, "Monitor sandbox failed: %v", err)
+
+	_, err = s.Monitor()
+	assert.Nil(t, err, "Monitor sandbox again failed: %v", err)
+
+	s.monitor.stop()
+}
