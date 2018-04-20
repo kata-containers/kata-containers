@@ -6,42 +6,23 @@
 
 set -e
 
+[ -n "$DEBUG" ] && set -x
+
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 
-if [ -n "$DEBUG" ] ; then
-	set -x
-fi
+lib_file="${script_dir}/../scripts/lib.sh"
+source "$lib_file"
 
-SCRIPT_NAME="${0##*/}"
 INITRD_IMAGE="${INITRD_IMAGE:-kata-containers-initrd.img}"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
-
-die()
-{
-	local msg="$*"
-	echo "ERROR: ${msg}" >&2
-	exit 1
-}
-
-OK()
-{
-	local msg="$*"
-	echo "[OK] ${msg}" >&2
-}
-
-info()
-{
-	local msg="$*"
-	echo "INFO: ${msg}"
-}
 
 usage()
 {
 	error="${1:-0}"
 	cat <<EOT
-Usage: ${SCRIPT_NAME} [options] <rootfs-dir>
+Usage: ${script_name} [options] <rootfs-dir>
 	This script creates a Kata Containers initrd image file based on the
 	<rootfs-dir> directory.
 
@@ -55,9 +36,6 @@ Extra environment variables:
 		    DEFAULT: kata-agent
 	AGENT_INIT: use kata agent as init process
 		    DEFAULT: no
-	USE_DOCKER: If set, the image builds in a Docker Container. Setting
-		    this variable requires Docker.
-	            DEFAULT: not set
 EOT
 exit "${error}"
 }

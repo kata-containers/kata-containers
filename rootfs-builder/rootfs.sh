@@ -6,6 +6,8 @@
 
 set -e
 
+[ -n "$DEBUG" ] && set -x
+
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-master}
@@ -14,24 +16,25 @@ AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 
+lib_file="${script_dir}/../scripts/lib.sh"
+source "$lib_file"
+
 # Default architecture
 ARCH=${ARCH:-"x86_64"}
 
-#Load default vesions for golang and other componets
+# Load default versions for golang and other componets
 source "${script_dir}/versions.txt"
 
-# config file
+# distro-specific config file
 typeset -r CONFIG_SH="config.sh"
 
-# Name of the extra file that could implement build_rootfs
+# Name of an optional distro-specific file which, if it exists, must implement the
+# build_rootfs() function.
 typeset -r LIB_SH="rootfs_lib.sh"
 
-if [ -n "$DEBUG" ] ; then
-	set -x
-fi
-
-#$1: Error code if want to exit differnt to 0
-usage(){
+#$1: Error code if want to exit different to 0
+usage()
+{
 	error="${1:-0}"
 	cat <<EOT
 USAGE: Build a Guest OS rootfs for Kata Containers image
@@ -46,6 +49,7 @@ $(get_distros)
 Options:
 -a  : agent version DEFAULT: ${AGENT_VERSION} ENV: AGENT_VERSION 
 -h  : Show this help message
+-o  : specify version of osbuilder
 -r  : rootfs directory DEFAULT: ${ROOTFS_DIR} ENV: ROOTFS_DIR
 
 ENV VARIABLES:
@@ -62,25 +66,6 @@ EOT
 exit "${error}"
 }
 
-die()
-{
-	msg="$*"
-	echo "ERROR: ${msg}" >&2
-	exit 1
-}
-
-info()
-{
-	msg="$*"
-	echo "INFO: ${msg}" >&2
-}
-
-OK()
-{
-	msg="$*"
-	echo "INFO: [OK] ${msg}" >&2
-}
-
 get_distros() {
 	cdirs=$(find "${script_dir}" -maxdepth 1 -type d)
 	find ${cdirs} -maxdepth 1 -name "${CONFIG_SH}" -printf '%H\n' | while read dir; do
@@ -88,13 +73,14 @@ get_distros() {
 	done
 }
 
-
-check_function_exist() {
+check_function_exist()
+{
 	function_name="$1"
 	[ "$(type -t ${function_name})" == "function" ] || die "${function_name} function was not defined"
 }
 
-generate_dockerfile() {
+generate_dockerfile()
+{
 	dir="$1"
 
 	case "$(arch)" in
@@ -130,31 +116,43 @@ ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
 	popd
 }
 
-setup_agent_init() {
+setup_agent_init()
+{
 	agent_bin="$1"
 	init_bin="$2"
+
+	[ -z "$agent_bin" ] && die "need agent binary path"
+	[ -z "$init_bin" ] && die "need init bin path"
+
 	info "Install $agent_bin as init process"
 	mv -f "${agent_bin}" ${init_bin}
 	OK "Agent is installed as init process"
 }
 
-copy_kernel_modules() {
-	local module_dir=$1
-	local rootfs_dir=$2
+copy_kernel_modules()
+{
+	local module_dir="$1"
+	local rootfs_dir="$2"
 
-	[ -z "module_dir" -o -z "rootfs_dir" ] && die "module dir and rootfs dir must be specified"
+	[ -z "$module_dir" ] && die "need module directory"
+	[ -z "$rootfs_dir" ] && die "need rootfs directory"
+
+	local destdir="${rootfs_dir}/lib/modules"
 
 	info "Copy kernel modules from ${KERNEL_MODULES_DIR}"
-	mkdir -p ${rootfs_dir}/lib/modules/
-	cp -a ${KERNEL_MODULES_DIR} ${rootfs_dir}/lib/modules/
+	mkdir -p "${destdir}"
+	cp -a "${KERNEL_MODULES_DIR}" "${dest_dir}/"
 	OK "Kernel modules copied"
 }
 
-while getopts c:hr: opt
+OSBUILDER_VERSION="unknown"
+
+while getopts c:ho:r: opt
 do
 	case $opt in
 		a)	AGENT_VERSION="${OPTARG}" ;;
 		h)	usage ;;
+		o)	OSBUILDER_VERSION="${OPTARG}" ;;
 		r)	ROOTFS_DIR="${OPTARG}" ;;
 	esac
 done
@@ -167,6 +165,8 @@ shift $(($OPTIND - 1))
 
 [ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
 
+[ -z "${OSBUILDER_VERSION}" ] && die "need osbuilder version"
+
 distro="$1"
 
 [ -n "${distro}" ] || usage 1
@@ -175,10 +175,6 @@ distro_config_dir="${script_dir}/${distro}"
 # Source config.sh from distro
 rootfs_config="${distro_config_dir}/${CONFIG_SH}"
 source "${rootfs_config}"
-
-lib_file="${script_dir}/../scripts/lib.sh"
-info "Source $lib_file"
-[ -e "$lib_file" ] && source "$lib_file" || true
 
 [ -d "${distro_config_dir}" ] || die "Not found configuration directory ${distro_config_dir}"
 
@@ -224,6 +220,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--env GOPATH="${GOPATH}" \
 		--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 		--env EXTRA_PKGS="${EXTRA_PKGS}" \
+		--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 		-v "${script_dir}":"/osbuilder" \
 		-v "${ROOTFS_DIR}":"/rootfs" \
 		-v "${script_dir}/../scripts":"/scripts" \
@@ -250,11 +247,17 @@ make clean
 make INIT=${AGENT_INIT}
 make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT}
 popd
-[ -x "${ROOTFS_DIR}/usr/bin/${AGENT_BIN}" ] || die "/usr/bin/${AGENT_BIN} is not installed in ${ROOTFS_DIR}"
+
+AGENT_DIR="${ROOTFS_DIR}/usr/bin"
+AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
+[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
 OK "Agent installed"
 
-[ "${AGENT_INIT}" == "yes" ] && setup_agent_init "${ROOTFS_DIR}/usr/bin/${AGENT_BIN}" "${init}"
+[ "${AGENT_INIT}" == "yes" ] && setup_agent_init "${AGENT_DEST}" "${init}"
 
 info "Check init is installed"
 [ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 OK "init is installed"
+
+info "Creating summary file"
+create_summary_file "${ROOTFS_DIR}"

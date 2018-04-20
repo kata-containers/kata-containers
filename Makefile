@@ -10,10 +10,16 @@ DISTRO_ROOTFS := "$(PWD)/$(DISTRO)_rootfs"
 IMG_SIZE=500
 AGENT_INIT ?= no
 
+VERSION_FILE := ./VERSION
+VERSION := $(shell grep -v ^\# $(VERSION_FILE))
+COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
+COMMIT := $(if $(shell git status --porcelain --untracked-files=no),${COMMIT_NO}-dirty,${COMMIT_NO})
+VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
+
 all: rootfs image initrd
 rootfs:
 	@echo Creating rootfs based on "$(DISTRO)"
-	"$(MK_DIR)/rootfs-builder/rootfs.sh" -r "$(DISTRO_ROOTFS)" "$(DISTRO)"
+	"$(MK_DIR)/rootfs-builder/rootfs.sh" -o $(VERSION_COMMIT) -r "$(DISTRO_ROOTFS)" "$(DISTRO)"
 
 image: rootfs image-only
 
