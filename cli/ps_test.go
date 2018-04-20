@@ -7,6 +7,7 @@ package main
 
 import (
 	"flag"
+	"os"
 	"testing"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
@@ -47,29 +48,25 @@ func TestPSFailure(t *testing.T) {
 		},
 	}
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// return a sandboxStatus with the container status
-		return []vc.SandboxStatus{
-			{
-				ID: sandbox.ID(),
-				ContainersStatus: []vc.ContainerStatus{
-					{
-						ID: sandbox.ID(),
-						Annotations: map[string]string{
-							vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-						},
-					},
-				},
+	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return vc.ContainerStatus{
+			ID: sandbox.ID(),
+			Annotations: map[string]string{
+				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
 			},
 		}, nil
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	// inexistent container
-	err := ps("xyz123abc", "json", []string{"-ef"})
+	err = ps("xyz123abc", "json", []string{"-ef"})
 	assert.Error(err)
 
 	// container is not running
@@ -91,22 +88,18 @@ func TestPSSuccessful(t *testing.T) {
 		},
 	}
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// return a sandboxStatus with the container status
-		return []vc.SandboxStatus{
-			{
-				ID: sandbox.ID(),
-				ContainersStatus: []vc.ContainerStatus{
-					{
-						State: vc.State{
-							State: vc.StateRunning,
-						},
-						ID: sandbox.ID(),
-						Annotations: map[string]string{
-							vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-						},
-					},
-				},
+	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return vc.ContainerStatus{
+			State: vc.State{
+				State: vc.StateRunning,
+			},
+			ID: sandbox.ID(),
+			Annotations: map[string]string{
+				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
 			},
 		}, nil
 	}
@@ -116,10 +109,10 @@ func TestPSSuccessful(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 		testingImpl.ProcessListContainerFunc = nil
 	}()
 
-	err := ps(sandbox.ID(), "json", []string{})
+	err = ps(sandbox.ID(), "json", []string{})
 	assert.NoError(err)
 }
