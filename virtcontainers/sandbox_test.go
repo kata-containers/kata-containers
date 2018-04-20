@@ -1356,3 +1356,11 @@ func TestStatusContainer(t *testing.T) {
 	_, err = s.DeleteContainer(contID)
 	assert.Nil(t, err, "Failed to delete container %s in sandbox %s: %v", contID, s.ID(), err)
 }
+
+func TestStatusSandbox(t *testing.T) {
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, newHypervisorConfig(nil, nil), NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	assert.Nil(t, err, "VirtContainers should not allow empty sandboxes")
+	defer cleanUp()
+
+	s.Status()
+}

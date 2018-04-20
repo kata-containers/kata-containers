@@ -535,6 +535,32 @@ func (s *Sandbox) Release() error {
 	return s.agent.disconnect()
 }
 
+// Status gets the status of the sandbox
+// TODO: update container status properly, see kata-containers/runtime#253
+func (s *Sandbox) Status() SandboxStatus {
+	var contStatusList []ContainerStatus
+	for _, c := range s.containers {
+		contStatusList = append(contStatusList, ContainerStatus{
+			ID:          c.id,
+			State:       c.state,
+			PID:         c.process.Pid,
+			StartTime:   c.process.StartTime,
+			RootFs:      c.config.RootFs,
+			Annotations: c.config.Annotations,
+		})
+	}
+
+	return SandboxStatus{
+		ID:               s.id,
+		State:            s.state,
+		Hypervisor:       s.config.HypervisorType,
+		HypervisorConfig: s.config.HypervisorConfig,
+		Agent:            s.config.AgentType,
+		ContainersStatus: contStatusList,
+		Annotations:      s.config.Annotations,
+	}
+}
+
 func createAssets(sandboxConfig *SandboxConfig) error {
 	kernel, err := newAsset(sandboxConfig, kernelAsset)
 	if err != nil {

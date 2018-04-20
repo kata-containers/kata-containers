@@ -50,6 +50,7 @@ type VCSandbox interface {
 	Resume() error
 	Release() error
 	Delete() error
+	Status() SandboxStatus
 	CreateContainer(contConfig ContainerConfig) (VCContainer, error)
 	DeleteContainer(contID string) (VCContainer, error)
 	StartContainer(containerID string) (VCContainer, error)
