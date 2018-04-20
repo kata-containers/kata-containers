@@ -946,6 +946,29 @@ func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
 	return c, nil
 }
 
+// StatusContainer gets the status of a container
+// TODO: update container status properly, see kata-containers/runtime#253
+func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
+	if containerID == "" {
+		return ContainerStatus{}, errNeedContainerID
+	}
+
+	for _, c := range s.containers {
+		if c.id == containerID {
+			return ContainerStatus{
+				ID:          c.id,
+				State:       c.state,
+				PID:         c.process.Pid,
+				StartTime:   c.process.StartTime,
+				RootFs:      c.config.RootFs,
+				Annotations: c.config.Annotations,
+			}, nil
+		}
+	}
+
+	return ContainerStatus{}, errNoSuchContainer
+}
+
 // createContainers registers all containers to the proxy, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers() error {

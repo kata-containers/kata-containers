@@ -84,3 +84,8 @@ func (p *Sandbox) DeleteContainer(contID string) (vc.VCContainer, error) {
 func (p *Sandbox) StartContainer(contID string) (vc.VCContainer, error) {
 	return &Container{}, nil
 }
+
+// StatusContainer implements the VCSandbox function of the same name.
+func (p *Sandbox) StatusContainer(contID string) (vc.ContainerStatus, error) {
+	return vc.ContainerStatus{}, nil
+}
