@@ -355,19 +355,12 @@ func StartContainer(sandboxID, containerID string) (VCContainer, error) {
 	}
 	defer unlockSandbox(lockFile)
 
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Fetch the container.
-	c, err := p.findContainer(containerID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Start it.
-	err = c.start()
+	c, err := s.StartContainer(containerID)
 	if err != nil {
 		return nil, err
 	}
