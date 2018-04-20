@@ -13,6 +13,8 @@ typeset -r script_version="@VERSION@ (commit @COMMIT@)"
 
 typeset -r unknown="unknown"
 
+typeset -r osbuilder_file="/var/lib/osbuilder/osbuilder.yaml"
+
 # Maximum number of errors to show for a single system component
 # (such as runtime or proxy).
 PROBLEM_LIMIT=${PROBLEM_LIMIT:-50}
@@ -347,8 +349,8 @@ show_runtime()
 }
 
 # Parameter 1: Path to disk image file.
-# Returns: Agent version string, or "$unknown" on error.
-get_agent_version()
+# Returns: Details of the image, or "$unknown" on error.
+get_image_details()
 {
 	local img="$1"
 
@@ -361,7 +363,7 @@ get_agent_version()
 	local partition
 	local count
 	local mountpoint
-	local version
+	local contents
 	local expected
 
 	loop_device=$(loopmount_image "$img")
@@ -392,16 +394,13 @@ get_agent_version()
 
 	mountpoint=$(mount_partition "$partition_path")
 
-	agent="/bin/@PROJECT_TYPE@-agent"
-
-	version=$(chroot "$mountpoint" "$agent" --version 2>/dev/null)
+	contents=$(read_osbuilder_file "${mountpoint}")
+	[ -z "$contents" ] && contents="$unknown"
 
 	unmount_partition "$mountpoint"
 	release_device "$loop_device"
 
-	[ -z "$version" ] && version="$unknown"
-
-	echo "$version"
+	echo "$contents"
 }
 
 # Returns: Full path to the image file.
@@ -493,21 +492,39 @@ release_device()
 	losetup -d "$device"
 }
 
-show_agent_version()
+# Retrieve details of the image containing
+# the rootfs used to boot the virtual machine.
+show_image_details()
 {
 	local image
-	local version
+	local details
 	
 	image=$(get_image_file)
-	version=$(get_agent_version "$image")
 
-	heading "Agent"
+	heading "Image details"
 
-	msg "version:"
-
-	show_quoted_text "$version"
+	if [ -n "$image" ]
+	then
+		details=$(get_image_details "$image")
+		show_quoted_text "$details"
+	else
+		msg "No image"
+	fi
 
 	separator
+}
+
+read_osbuilder_file()
+{
+	local rootdir="$1"
+
+	[ -n "$rootdir" ] || die "need root directory"
+
+	local file="${rootdir}/${osbuilder_file}"
+
+	[ ! -e "$file" ] && return
+
+	cat "$file"
 }
 
 main()
@@ -552,7 +569,7 @@ main()
 	show_meta
 	show_runtime
 	show_runtime_configs
-	show_agent_version
+	show_image_details
 	show_log_details
 	show_container_mgr_details
 	show_package_versions
