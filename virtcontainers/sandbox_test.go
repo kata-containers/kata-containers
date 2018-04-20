@@ -1364,3 +1364,27 @@ func TestStatusSandbox(t *testing.T) {
 
 	s.Status()
 }
+
+func TestEnterContainer(t *testing.T) {
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, newHypervisorConfig(nil, nil), NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	assert.Nil(t, err, "VirtContainers should not allow empty sandboxes")
+	defer cleanUp()
+
+	contID := "999"
+	cmd := Cmd{}
+	_, _, err = s.EnterContainer(contID, cmd)
+	assert.NotNil(t, err, "Entering non-existing container should fail")
+
+	contConfig := newTestContainerConfigNoop(contID)
+	_, err = s.CreateContainer(contConfig)
+	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
+
+	_, _, err = s.EnterContainer(contID, cmd)
+	assert.NotNil(t, err, "Entering non-running container should fail")
+
+	err = s.start()
+	assert.Nil(t, err, "Failed to start sandbox: %v", err)
+
+	_, _, err = s.EnterContainer(contID, cmd)
+	assert.Nil(t, err, "Enter container failed: %v", err)
+}

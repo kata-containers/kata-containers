@@ -422,24 +422,17 @@ func EnterContainer(sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContai
 	}
 	defer unlockSandbox(lockFile)
 
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// Fetch the container.
-	c, err := p.findContainer(containerID)
+	c, process, err := s.EnterContainer(containerID, cmd)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// Enter it.
-	process, err := c.enter(cmd)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return p, c, process, nil
+	return s, c, process, nil
 }
 
 // StatusContainer is the virtcontainers container status entry point.

@@ -94,3 +94,8 @@ func (p *Sandbox) StatusContainer(contID string) (vc.ContainerStatus, error) {
 func (p *Sandbox) Status() vc.SandboxStatus {
 	return vc.SandboxStatus{}
 }
+
+// EnterContainer implements the VCSandbox function of the same name.
+func (p *Sandbox) EnterContainer(containerID string, cmd vc.Cmd) (vc.VCContainer, *vc.Process, error) {
+	return &Container{}, &vc.Process{}, nil
+}
