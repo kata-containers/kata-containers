@@ -410,7 +410,7 @@ get_image_file()
 	local cmd="@PROJECT_TYPE@-env"
 	local cmdline="$runtime $cmd"
 
-	image=$(eval "$cmdline" 2>/dev/null |\
+	local image=$(eval "$cmdline" 2>/dev/null |\
 		grep -A 1 '^\[Image\]' |\
 		egrep "\<Path\> =" |\
 		awk '{print $3}' |\
