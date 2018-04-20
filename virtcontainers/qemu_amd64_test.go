@@ -146,6 +146,7 @@ func TestQemuAmd64AppendBridges(t *testing.T) {
 			ID:      bridges[0].ID,
 			Chassis: 1,
 			SHPC:    true,
+			Addr:    "2",
 		},
 	}
 
@@ -168,6 +169,7 @@ func TestQemuAmd64AppendBridges(t *testing.T) {
 			ID:      bridges[0].ID,
 			Chassis: 1,
 			SHPC:    true,
+			Addr:    "2",
 		},
 	}
 

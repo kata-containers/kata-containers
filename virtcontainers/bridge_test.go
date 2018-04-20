@@ -16,7 +16,7 @@ func TestAddRemoveDevice(t *testing.T) {
 	assert := assert.New(t)
 
 	// create a bridge
-	bridges := []*Bridge{{make(map[uint32]string), pciBridge, "rgb123"}}
+	bridges := []*Bridge{{make(map[uint32]string), pciBridge, "rgb123", 5}}
 
 	// add device
 	devID := "abc123"
