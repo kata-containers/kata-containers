@@ -239,6 +239,10 @@ func createSandbox(ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
 		return vc.Process{}, fmt.Errorf("BUG: Container list from sandbox is wrong, expecting only one container, found %d containers", len(containers))
 	}
 
+	if err := addContainerIDMapping(containerID, sandbox.ID()); err != nil {
+		return vc.Process{}, err
+	}
+
 	return containers[0].Process(), nil
 }
 
@@ -257,6 +261,10 @@ func createContainer(ociSpec oci.CompatOCISpec, containerID, bundlePath,
 
 	_, c, err := vci.CreateContainer(sandboxID, contConfig)
 	if err != nil {
+		return vc.Process{}, err
+	}
+
+	if err := addContainerIDMapping(containerID, sandboxID); err != nil {
 		return vc.Process{}, err
 	}
 

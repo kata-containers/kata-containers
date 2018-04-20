@@ -7,6 +7,8 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
@@ -32,12 +34,18 @@ func TestPauseCLIFunctionSuccessful(t *testing.T) {
 	}
 
 	testingImpl.PauseSandboxFunc = testPauseSandboxFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
+
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
+
 	defer func() {
 		testingImpl.PauseSandboxFunc = nil
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -50,12 +58,14 @@ func TestPauseCLIFunctionContainerNotExistFailure(t *testing.T) {
 	assert := assert.New(t)
 
 	testingImpl.PauseSandboxFunc = testPauseSandboxFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return []vc.SandboxStatus{}, nil
-	}
+
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
+
 	defer func() {
 		testingImpl.PauseSandboxFunc = nil
-		testingImpl.ListSandboxFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -71,11 +81,16 @@ func TestPauseCLIFunctionPauseSandboxFailure(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
+
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -92,12 +107,18 @@ func TestResumeCLIFunctionSuccessful(t *testing.T) {
 	}
 
 	testingImpl.ResumeSandboxFunc = testResumeSandboxFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
+
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
+
 	defer func() {
 		testingImpl.ResumeSandboxFunc = nil
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -110,12 +131,13 @@ func TestResumeCLIFunctionContainerNotExistFailure(t *testing.T) {
 	assert := assert.New(t)
 
 	testingImpl.ResumeSandboxFunc = testResumeSandboxFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return []vc.SandboxStatus{}, nil
-	}
+
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
 	defer func() {
 		testingImpl.ResumeSandboxFunc = nil
-		testingImpl.ListSandboxFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -131,11 +153,16 @@ func TestResumeCLIFunctionPauseSandboxFailure(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
+
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
