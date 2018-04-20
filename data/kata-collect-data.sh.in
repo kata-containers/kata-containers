@@ -403,6 +403,42 @@ get_image_details()
 	echo "$contents"
 }
 
+# Parameter 1: Path to the initrd file.
+# Returns: Details of the initrd, or "$unknown" on error.
+get_initrd_details()
+{
+	local initrd="$1"
+
+	[ -z "$initrd" ] && { echo "$unknown"; return;}
+	[ -e "$initrd" ] || { echo "$unknown"; return;}
+
+	local file
+	local relative_file=""
+	local tmp
+
+	file="${osbuilder_file}"
+
+	# All files in the cpio archive are relative so remove leading slash
+	relative_file=$(echo "$file"|sed 's!^/!!g')
+
+	local tmpdir=$(mktemp -d)
+
+	# Note: 'cpio --directory' seems to be non-portable, so cd(1) instead.
+	(cd "$tmpdir" && gzip -dc "$initrd" | cpio \
+		--extract \
+		--make-directories \
+		--no-absolute-filenames \
+		$relative_file 2>/dev/null)
+
+	contents=$(read_osbuilder_file "${tmpdir}")
+	[ -z "$contents" ] && contents="$unknown"
+
+	tmp="${tmpdir}/${file}"
+	[ -d "$tmp" ] && rm -rf "$tmp"
+
+	echo "$contents"
+}
+
 # Returns: Full path to the image file.
 get_image_file()
 {
@@ -417,6 +453,21 @@ get_image_file()
 
 	echo "$image"
 }
+
+# Returns: Full path to the initrd file.
+get_initrd_file()
+{
+	local cmd="@PROJECT_TYPE@-env"
+	local cmdline="$runtime $cmd"
+
+	local initrd=$(eval "$cmdline" 2>/dev/null |\
+		grep -A 1 '^\[Initrd\]' |\
+		egrep "\<Path\> =" |\
+		awk '{print $3}' |\
+		tr -d '"')
+
+	echo "$initrd"
+} 
 
 # Parameter 1: Path to disk image file.
 # Returns: Path to loop device.
@@ -514,6 +565,28 @@ show_image_details()
 	separator
 }
 
+# Retrieve details of the initrd containing
+# the rootfs used to boot the virtual machine.
+show_initrd_details()
+{
+	local initrd
+	local details
+	
+	initrd=$(get_initrd_file)
+
+	heading "Initrd details"
+
+	if [ -n "$initrd" ]
+	then
+		details=$(get_initrd_details "$initrd")
+		show_quoted_text "$details"
+	else
+		msg "No initrd"
+	fi
+
+	separator
+}
+
 read_osbuilder_file()
 {
 	local rootdir="$1"
@@ -570,6 +643,7 @@ main()
 	show_runtime
 	show_runtime_configs
 	show_image_details
+	show_initrd_details
 	show_log_details
 	show_container_mgr_details
 	show_package_versions
