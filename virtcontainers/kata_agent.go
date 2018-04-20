@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	kataclient "github.com/kata-containers/agent/protocols/client"
 	"github.com/kata-containers/agent/protocols/grpc"
@@ -934,6 +935,11 @@ func (k *kataAgent) disconnect() error {
 	return nil
 }
 
+func (k *kataAgent) check() error {
+	_, err := k.sendReq(&grpc.CheckRequest{})
+	return err
+}
+
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	if err := k.connect(); err != nil {
 		return nil, err
@@ -943,6 +949,11 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	}
 
 	switch req := request.(type) {
+	case *grpc.CheckRequest:
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_, err := k.client.Check(ctx, req)
+		return nil, err
 	case *grpc.ExecProcessRequest:
 		_, err := k.client.ExecProcess(context.Background(), req)
 		return nil, err

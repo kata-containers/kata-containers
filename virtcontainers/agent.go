@@ -133,6 +133,9 @@ type agent interface {
 	// supported by the agent.
 	capabilities() capabilities
 
+	// check will check the agent liveness
+	check() error
+
 	// disconnect will disconnect the connection to the agent
 	disconnect() error
 
