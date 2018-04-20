@@ -36,9 +36,6 @@ Extra environment variables:
 		    DEFAULT: kata-agent
 	AGENT_INIT: use kata agent as init process
 		    DEFAULT: no
-	USE_DOCKER: If set, the image builds in a Docker Container. Setting
-		    this variable requires Docker.
-	            DEFAULT: not set
 EOT
 exit "${error}"
 }
