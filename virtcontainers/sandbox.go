@@ -995,6 +995,24 @@ func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
 	return ContainerStatus{}, errNoSuchContainer
 }
 
+// EnterContainer is the virtcontainers container command execution entry point.
+// EnterContainer enters an already running container and runs a given command.
+func (s *Sandbox) EnterContainer(containerID string, cmd Cmd) (VCContainer, *Process, error) {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Enter it.
+	process, err := c.enter(cmd)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c, process, nil
+}
+
 // createContainers registers all containers to the proxy, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers() error {
