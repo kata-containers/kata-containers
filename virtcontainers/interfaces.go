@@ -52,6 +52,7 @@ type VCSandbox interface {
 	Delete() error
 	CreateContainer(contConfig ContainerConfig) (VCContainer, error)
 	DeleteContainer(contID string) (VCContainer, error)
+	StartContainer(containerID string) (VCContainer, error)
 }
 
 // VCContainer is the Container interface

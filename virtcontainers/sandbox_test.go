@@ -1316,3 +1316,23 @@ func TestDeleteContainer(t *testing.T) {
 	_, err = s.DeleteContainer(contID)
 	assert.Nil(t, err, "Failed to delete container %s in sandbox %s: %v", contID, s.ID(), err)
 }
+
+func TestStartContainer(t *testing.T) {
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, newHypervisorConfig(nil, nil), NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	assert.Nil(t, err, "VirtContainers should not allow empty sandboxes")
+	defer cleanUp()
+
+	contID := "999"
+	_, err = s.StartContainer(contID)
+	assert.NotNil(t, err, "Starting non-existing container should fail")
+
+	err = s.start()
+	assert.Nil(t, err, "Failed to start sandbox: %v", err)
+
+	contConfig := newTestContainerConfigNoop(contID)
+	_, err = s.CreateContainer(contConfig)
+	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
+
+	_, err = s.StartContainer(contID)
+	assert.Nil(t, err, "Start container failed: %v", err)
+}

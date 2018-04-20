@@ -894,6 +894,23 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 	return c, nil
 }
 
+// StartContainer starts a container in the sandbox
+func (s *Sandbox) StartContainer(containerID string) (VCContainer, error) {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Start it.
+	err = c.start()
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
 // DeleteContainer deletes a container from the sandbox
 func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
 	if containerID == "" {
