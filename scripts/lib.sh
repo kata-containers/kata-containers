@@ -6,7 +6,33 @@
 
 set -e
 
-check_program(){
+die()
+{
+	local msg="$*"
+	echo "ERROR: ${msg}" >&2
+	exit 1
+}
+
+OK()
+{
+	local msg="$*"
+	echo "[OK] ${msg}" >&2
+}
+
+info()
+{
+	local msg="$*"
+	echo "INFO: ${msg}"
+}
+
+warning()
+{
+	local msg="$*"
+	echo "WARNING: ${msg}"
+}
+
+check_program()
+{
 	type "$1" >/dev/null 2>&1
 }
 
@@ -36,7 +62,7 @@ reposdir=/root/mash
 retries=5
 EOF
 	if [ "$BASE_URL" != "" ]; then
-            cat >> "${DNF_CONF}" << EOF
+		cat >> "${DNF_CONF}" << EOF
 
 [base]
 name=${OS_NAME}-${OS_VERSION} ${REPO_NAME}
@@ -45,7 +71,7 @@ baseurl=${BASE_URL}
 enabled=1
 EOF
 	elif [ "$MIRROR_LIST" != "" ]; then
-	    cat >> "${DNF_CONF}" << EOF
+		cat >> "${DNF_CONF}" << EOF
 
 [base]
 name=${OS_NAME}-${OS_VERSION} ${REPO_NAME}
@@ -55,19 +81,20 @@ EOF
 	fi
 
 	if [ "$GPG_KEY_FILE" != "" ]; then
-            cat >> "${DNF_CONF}" << EOF
+		cat >> "${DNF_CONF}" << EOF
 gpgcheck=1
 gpgkey=file://${CONFIG_DIR}/${GPG_KEY_FILE}
 
 EOF
 	fi
-
 }
 
 build_rootfs()
 {
 	# Mandatory
 	local ROOTFS_DIR="$1"
+
+	[ -z "$ROOTFS_DIR" ] && die "need rootfs"
 
 	# In case of support EXTRA packages, use it to allow
 	# users add more packages to the base rootfs
@@ -98,4 +125,66 @@ build_rootfs()
 	$DNF install ${EXTRA_PKGS} ${PACKAGES}
 
 	[ -n "${ROOTFS_DIR}" ]  && rm -r "${ROOTFS_DIR}${CACHE_DIR}"
+}
+
+# Create a YAML metadata file inside the rootfs.
+#
+# This provides useful information about the rootfs than can be interrogated
+# once the rootfs has been converted into a image/initrd.
+create_summary_file()
+{
+	local -r rootfs_dir="$1"
+
+	[ -z "$rootfs_dir" ] && die "need rootfs"
+
+	local -r file_dir="/var/lib/osbuilder"
+	local -r dir="${rootfs_dir}${file_dir}"
+
+	local -r filename="osbuilder.yaml"
+	local file="${dir}/${filename}"
+
+	local -r now=$(date '+%Y-%m-%dT%T.%N%zZ')
+
+	# sanitise package list
+	PACKAGES=$(echo "$PACKAGES"|tr ' ' '\n'|sort -u|tr '\n' ' ')
+
+	local -r packages=$(for pkg in ${PACKAGES}; do echo "    - \"${pkg}\""; done)
+
+	mkdir -p "$dir"
+
+	# Semantic version of the summary file format.
+	#
+	# XXX: Increment every time the format of the summary file changes!
+	local -r format_version="0.0.1"
+
+	local -r osbuilder_url="https://github.com/kata-containers/osbuilder"
+
+	local agent="${AGENT_DEST}"
+	[ "$AGENT_INIT" = yes ] && agent="${init}"
+
+	local -r agent_version=$("$agent" --version|awk '{print $NF}')
+
+	cat >"$file"<<-EOT
+	---
+	osbuilder:
+	  url: "${osbuilder_url}"
+	  version: "${OSBUILDER_VERSION}"
+	rootfs-creation-time: "${now}"
+	description: "osbuilder rootfs"
+	file-format-version: "${format_version}"
+	architecture: "${ARCH}"
+	base-distro:
+	  name: "${OS_NAME}"
+	  version: "${OS_VERSION}"
+	  packages:
+${packages}
+	agent:
+	  url: "https://${GO_AGENT_PKG}"
+	  name: "${AGENT_BIN}"
+	  version: "${agent_version}"
+	  agent-is-init-daemon: "${AGENT_INIT}"
+EOT
+
+	local rootfs_file="${file_dir}/$(basename "${file}")"
+	info "Created summary file '${rootfs_file}' inside rootfs"
 }
