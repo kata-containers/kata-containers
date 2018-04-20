@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strconv"
 
 	govmmQemu "github.com/intel/govmm/qemu"
 )
@@ -99,6 +100,12 @@ const (
 	maxDevIDSize            = 31
 	defaultMsize9p          = 8192
 )
+
+// This is the PCI start address assigned to the first bridge that
+// is added on the qemu command line. In case of x86_64, the first two PCI
+// addresses (0 and 1) are used by the platform while in case of ARM, address
+// 0 is reserved.
+const bridgePCIStartAddr = 2
 
 const (
 	// VirtioBlock means use virtio-blk for hotplugging drives
@@ -321,6 +328,8 @@ func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device, bridges []Bridg
 			t = govmmQemu.PCIEBridge
 		}
 
+		b.Addr = bridgePCIStartAddr + idx
+
 		devices = append(devices,
 			govmmQemu.BridgeDevice{
 				Type: t,
@@ -329,6 +338,7 @@ func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device, bridges []Bridg
 				// Each bridge is required to be assigned a unique chassis id > 0
 				Chassis: (idx + 1),
 				SHPC:    true,
+				Addr:    strconv.FormatInt(int64(b.Addr), 10),
 			},
 		)
 	}

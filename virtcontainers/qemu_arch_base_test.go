@@ -327,6 +327,7 @@ func TestQemuArchBaseAppendBridges(t *testing.T) {
 			ID:      bridges[0].ID,
 			Chassis: 1,
 			SHPC:    true,
+			Addr:    "2",
 		},
 	}
 

@@ -907,6 +907,9 @@ type BridgeDevice struct {
 
 	// SHPC is used to enable or disable the standard hot plug controller
 	SHPC bool
+
+	// PCI Slot
+	Addr string
 }
 
 // Valid returns true if the BridgeDevice structure is valid and complete.
@@ -941,6 +944,13 @@ func (bridgeDev BridgeDevice) QemuParams(config *Config) []string {
 	}
 
 	deviceParam := fmt.Sprintf("%s,bus=%s,id=%s,chassis_nr=%d,shpc=%s", deviceName, bridgeDev.Bus, bridgeDev.ID, bridgeDev.Chassis, shpc)
+	if bridgeDev.Addr != "" {
+		addr, err := strconv.Atoi(bridgeDev.Addr)
+		if err == nil && addr >= 0 {
+			deviceParam += fmt.Sprintf(",addr=%x", addr)
+		}
+	}
+
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, deviceParam)
 
