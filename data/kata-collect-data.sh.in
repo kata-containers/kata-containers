@@ -5,11 +5,11 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-script_name=${0##*/}
-runtime_name="@RUNTIME_NAME@"
-runtime=$(command -v "$runtime_name" 2>/dev/null)
-issue_url="@PROJECT_BUG_URL@"
-script_version="@VERSION@ (commit @COMMIT@)"
+typeset -r script_name=${0##*/}
+typeset -r runtime_name="@RUNTIME_NAME@"
+typeset -r runtime=$(command -v "$runtime_name" 2>/dev/null)
+typeset -r issue_url="@PROJECT_BUG_URL@"
+typeset -r script_version="@VERSION@ (commit @COMMIT@)"
 
 typeset -r unknown="unknown"
 
