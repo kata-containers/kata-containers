@@ -143,27 +143,27 @@ type agent interface {
 	exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, error)
 
 	// startSandbox will tell the agent to start all containers related to the Sandbox.
-	startSandbox(sandbox Sandbox) error
+	startSandbox(sandbox *Sandbox) error
 
 	// stopSandbox will tell the agent to stop all containers related to the Sandbox.
-	stopSandbox(sandbox Sandbox) error
+	stopSandbox(sandbox *Sandbox) error
 
 	// createContainer will tell the agent to create a container related to a Sandbox.
 	createContainer(sandbox *Sandbox, c *Container) (*Process, error)
 
 	// startContainer will tell the agent to start a container related to a Sandbox.
-	startContainer(sandbox Sandbox, c *Container) error
+	startContainer(sandbox *Sandbox, c *Container) error
 
 	// stopContainer will tell the agent to stop a container related to a Sandbox.
-	stopContainer(sandbox Sandbox, c Container) error
+	stopContainer(sandbox *Sandbox, c Container) error
 
 	// killContainer will tell the agent to send a signal to a
 	// container related to a Sandbox. If all is true, all processes in
 	// the container will be sent the signal.
-	killContainer(sandbox Sandbox, c Container, signal syscall.Signal, all bool) error
+	killContainer(sandbox *Sandbox, c Container, signal syscall.Signal, all bool) error
 
 	// processListContainer will list the processes running inside the container
-	processListContainer(sandbox Sandbox, c Container, options ProcessListOptions) (ProcessList, error)
+	processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error)
 
 	// onlineCPUMem will online CPUs and Memory inside the Sandbox.
 	// This function should be called after hot adding vCPUs or Memory.

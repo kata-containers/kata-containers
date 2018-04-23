@@ -40,12 +40,12 @@ func (n *noopAgent) exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, erro
 }
 
 // startSandbox is the Noop agent Sandbox starting implementation. It does nothing.
-func (n *noopAgent) startSandbox(sandbox Sandbox) error {
+func (n *noopAgent) startSandbox(sandbox *Sandbox) error {
 	return nil
 }
 
 // stopSandbox is the Noop agent Sandbox stopping implementation. It does nothing.
-func (n *noopAgent) stopSandbox(sandbox Sandbox) error {
+func (n *noopAgent) stopSandbox(sandbox *Sandbox) error {
 	return nil
 }
 
@@ -55,22 +55,22 @@ func (n *noopAgent) createContainer(sandbox *Sandbox, c *Container) (*Process, e
 }
 
 // startContainer is the Noop agent Container starting implementation. It does nothing.
-func (n *noopAgent) startContainer(sandbox Sandbox, c *Container) error {
+func (n *noopAgent) startContainer(sandbox *Sandbox, c *Container) error {
 	return nil
 }
 
 // stopContainer is the Noop agent Container stopping implementation. It does nothing.
-func (n *noopAgent) stopContainer(sandbox Sandbox, c Container) error {
+func (n *noopAgent) stopContainer(sandbox *Sandbox, c Container) error {
 	return nil
 }
 
 // killContainer is the Noop agent Container signaling implementation. It does nothing.
-func (n *noopAgent) killContainer(sandbox Sandbox, c Container, signal syscall.Signal, all bool) error {
+func (n *noopAgent) killContainer(sandbox *Sandbox, c Container, signal syscall.Signal, all bool) error {
 	return nil
 }
 
 // processListContainer is the Noop agent Container ps implementation. It does nothing.
-func (n *noopAgent) processListContainer(sandbox Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
+func (n *noopAgent) processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
 	return nil, nil
 }
 

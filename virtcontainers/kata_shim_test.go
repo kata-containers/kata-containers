@@ -29,7 +29,7 @@ func getMockKataShimBinPath() string {
 	return DefaultMockKataShimBinPath
 }
 
-func testKataShimStart(t *testing.T, sandbox Sandbox, params ShimParams, expectFail bool) {
+func testKataShimStart(t *testing.T, sandbox *Sandbox, params ShimParams, expectFail bool) {
 	s := &kataShim{}
 
 	pid, err := s.start(sandbox, params)
@@ -52,11 +52,11 @@ func testKataShimStart(t *testing.T, sandbox Sandbox, params ShimParams, expectF
 }
 
 func TestKataShimStartNilSandboxConfigFailure(t *testing.T) {
-	testKataShimStart(t, Sandbox{}, ShimParams{}, true)
+	testKataShimStart(t, &Sandbox{}, ShimParams{}, true)
 }
 
 func TestKataShimStartNilShimConfigFailure(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{},
 	}
 
@@ -64,7 +64,7 @@ func TestKataShimStartNilShimConfigFailure(t *testing.T) {
 }
 
 func TestKataShimStartShimPathEmptyFailure(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType:   KataShimType,
 			ShimConfig: ShimConfig{},
@@ -75,7 +75,7 @@ func TestKataShimStartShimPathEmptyFailure(t *testing.T) {
 }
 
 func TestKataShimStartShimTypeInvalid(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType:   "foo",
 			ShimConfig: ShimConfig{},
@@ -86,7 +86,7 @@ func TestKataShimStartShimTypeInvalid(t *testing.T) {
 }
 
 func TestKataShimStartParamsTokenEmptyFailure(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: KataShimType,
 			ShimConfig: ShimConfig{
@@ -99,7 +99,7 @@ func TestKataShimStartParamsTokenEmptyFailure(t *testing.T) {
 }
 
 func TestKataShimStartParamsURLEmptyFailure(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: KataShimType,
 			ShimConfig: ShimConfig{
@@ -116,7 +116,7 @@ func TestKataShimStartParamsURLEmptyFailure(t *testing.T) {
 }
 
 func TestKataShimStartParamsContainerEmptyFailure(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: KataShimType,
 			ShimConfig: ShimConfig{
@@ -142,7 +142,7 @@ func TestKataShimStartParamsInvalidCommand(t *testing.T) {
 
 	cmd := filepath.Join(dir, "does-not-exist")
 
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: KataShimType,
 			ShimConfig: ShimConfig{
@@ -159,16 +159,16 @@ func TestKataShimStartParamsInvalidCommand(t *testing.T) {
 	testKataShimStart(t, sandbox, params, true)
 }
 
-func startKataShimStartWithoutConsoleSuccessful(t *testing.T, detach bool) (*os.File, *os.File, *os.File, Sandbox, ShimParams, error) {
+func startKataShimStartWithoutConsoleSuccessful(t *testing.T, detach bool) (*os.File, *os.File, *os.File, *Sandbox, ShimParams, error) {
 	saveStdout := os.Stdout
 	rStdout, wStdout, err := os.Pipe()
 	if err != nil {
-		return nil, nil, nil, Sandbox{}, ShimParams{}, err
+		return nil, nil, nil, &Sandbox{}, ShimParams{}, err
 	}
 
 	os.Stdout = wStdout
 
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: KataShimType,
 			ShimConfig: ShimConfig{
@@ -254,7 +254,7 @@ func TestKataShimStartDetachSuccessful(t *testing.T) {
 }
 
 func TestKataShimStartWithConsoleNonExistingFailure(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: KataShimType,
 			ShimConfig: ShimConfig{
@@ -282,7 +282,7 @@ func TestKataShimStartWithConsoleSuccessful(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: KataShimType,
 			ShimConfig: ShimConfig{

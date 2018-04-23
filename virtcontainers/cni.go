@@ -59,7 +59,7 @@ func convertCNIResult(cniResult cniTypes.Result) (NetworkInfo, error) {
 	}
 }
 
-func (n *cni) invokePluginsAdd(sandbox Sandbox, networkNS *NetworkNamespace) (*NetworkInfo, error) {
+func (n *cni) invokePluginsAdd(sandbox *Sandbox, networkNS *NetworkNamespace) (*NetworkInfo, error) {
 	netPlugin, err := cniPlugin.NewNetworkPlugin()
 	if err != nil {
 		return nil, err
@@ -86,7 +86,7 @@ func (n *cni) invokePluginsAdd(sandbox Sandbox, networkNS *NetworkNamespace) (*N
 	return &netInfo, nil
 }
 
-func (n *cni) invokePluginsDelete(sandbox Sandbox, networkNS NetworkNamespace) error {
+func (n *cni) invokePluginsDelete(sandbox *Sandbox, networkNS NetworkNamespace) error {
 	netPlugin, err := cniPlugin.NewNetworkPlugin()
 	if err != nil {
 		return err
@@ -130,7 +130,7 @@ func (n *cni) run(networkNSPath string, cb func() error) error {
 }
 
 // add adds all needed interfaces inside the network namespace for the CNI network.
-func (n *cni) add(sandbox Sandbox, config NetworkConfig, netNsPath string, netNsCreated bool) (NetworkNamespace, error) {
+func (n *cni) add(sandbox *Sandbox, config NetworkConfig, netNsPath string, netNsCreated bool) (NetworkNamespace, error) {
 
 	networkNS := NetworkNamespace{
 		NetNsPath:    netNsPath,
@@ -155,7 +155,7 @@ func (n *cni) add(sandbox Sandbox, config NetworkConfig, netNsPath string, netNs
 
 // remove unbridges and deletes TAP interfaces. It also removes virtual network
 // interfaces and deletes the network namespace for the CNI network.
-func (n *cni) remove(sandbox Sandbox, networkNS NetworkNamespace) error {
+func (n *cni) remove(sandbox *Sandbox, networkNS NetworkNamespace) error {
 	if err := removeNetworkCommon(networkNS); err != nil {
 		return err
 	}

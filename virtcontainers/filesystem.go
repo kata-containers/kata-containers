@@ -95,7 +95,7 @@ var runStoragePath = filepath.Join("/run", storagePathSuffix)
 // The default resource storage implementation is filesystem.
 type resourceStorage interface {
 	// Create all resources for a sandbox
-	createAllResources(sandbox Sandbox) error
+	createAllResources(sandbox *Sandbox) error
 
 	// Resources URIs functions return both the URI
 	// for the actual resource and the URI base.
@@ -140,7 +140,7 @@ func (fs *filesystem) Logger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "filesystem")
 }
 
-func (fs *filesystem) createAllResources(sandbox Sandbox) (err error) {
+func (fs *filesystem) createAllResources(sandbox *Sandbox) (err error) {
 	for _, resource := range []sandboxResource{stateFileType, configFileType} {
 		_, path, _ := fs.sandboxURI(sandbox.id, resource)
 		err = os.MkdirAll(path, dirMode)

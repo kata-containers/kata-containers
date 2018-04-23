@@ -35,7 +35,7 @@ func getMockCCShimBinPath() string {
 	return DefaultMockCCShimBinPath
 }
 
-func testCCShimStart(t *testing.T, sandbox Sandbox, params ShimParams, expectFail bool) {
+func testCCShimStart(t *testing.T, sandbox *Sandbox, params ShimParams, expectFail bool) {
 	s := &ccShim{}
 
 	pid, err := s.start(sandbox, params)
@@ -58,11 +58,11 @@ func testCCShimStart(t *testing.T, sandbox Sandbox, params ShimParams, expectFai
 }
 
 func TestCCShimStartNilSandboxConfigFailure(t *testing.T) {
-	testCCShimStart(t, Sandbox{}, ShimParams{}, true)
+	testCCShimStart(t, &Sandbox{}, ShimParams{}, true)
 }
 
 func TestCCShimStartNilShimConfigFailure(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{},
 	}
 
@@ -70,7 +70,7 @@ func TestCCShimStartNilShimConfigFailure(t *testing.T) {
 }
 
 func TestCCShimStartShimPathEmptyFailure(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType:   CCShimType,
 			ShimConfig: ShimConfig{},
@@ -81,7 +81,7 @@ func TestCCShimStartShimPathEmptyFailure(t *testing.T) {
 }
 
 func TestCCShimStartShimTypeInvalid(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType:   "foo",
 			ShimConfig: ShimConfig{},
@@ -92,7 +92,7 @@ func TestCCShimStartShimTypeInvalid(t *testing.T) {
 }
 
 func TestCCShimStartParamsTokenEmptyFailure(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{
@@ -105,7 +105,7 @@ func TestCCShimStartParamsTokenEmptyFailure(t *testing.T) {
 }
 
 func TestCCShimStartParamsURLEmptyFailure(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{
@@ -122,7 +122,7 @@ func TestCCShimStartParamsURLEmptyFailure(t *testing.T) {
 }
 
 func TestCCShimStartParamsContainerEmptyFailure(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{
@@ -148,7 +148,7 @@ func TestCCShimStartParamsInvalidCommand(t *testing.T) {
 
 	cmd := filepath.Join(dir, "does-not-exist")
 
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{
@@ -165,16 +165,16 @@ func TestCCShimStartParamsInvalidCommand(t *testing.T) {
 	testCCShimStart(t, sandbox, params, true)
 }
 
-func startCCShimStartWithoutConsoleSuccessful(t *testing.T, detach bool) (*os.File, *os.File, *os.File, Sandbox, ShimParams, error) {
+func startCCShimStartWithoutConsoleSuccessful(t *testing.T, detach bool) (*os.File, *os.File, *os.File, *Sandbox, ShimParams, error) {
 	saveStdout := os.Stdout
 	rStdout, wStdout, err := os.Pipe()
 	if err != nil {
-		return nil, nil, nil, Sandbox{}, ShimParams{}, err
+		return nil, nil, nil, &Sandbox{}, ShimParams{}, err
 	}
 
 	os.Stdout = wStdout
 
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{
@@ -260,7 +260,7 @@ func TestCCShimStartDetachSuccessful(t *testing.T) {
 }
 
 func TestCCShimStartWithConsoleNonExistingFailure(t *testing.T) {
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{
@@ -336,7 +336,7 @@ func TestCCShimStartWithConsoleSuccessful(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		config: &SandboxConfig{
 			ShimType: CCShimType,
 			ShimConfig: ShimConfig{

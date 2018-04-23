@@ -144,7 +144,7 @@ func newProxyConfig(sandboxConfig *SandboxConfig) (ProxyConfig, error) {
 	return config, nil
 }
 
-func defaultProxyURL(sandbox Sandbox, socketType string) (string, error) {
+func defaultProxyURL(sandbox *Sandbox, socketType string) (string, error) {
 	switch socketType {
 	case SocketTypeUNIX:
 		socketPath := filepath.Join(runStoragePath, sandbox.id, "proxy.sock")
@@ -165,9 +165,9 @@ func isProxyBuiltIn(pType ProxyType) bool {
 type proxy interface {
 	// start launches a proxy instance for the specified sandbox, returning
 	// the PID of the process and the URL used to connect to it.
-	start(sandbox Sandbox, params proxyParams) (int, string, error)
+	start(sandbox *Sandbox, params proxyParams) (int, string, error)
 
 	// stop terminates a proxy instance after all communications with the
 	// agent inside the VM have been properly stopped.
-	stop(sandbox Sandbox, pid int) error
+	stop(sandbox *Sandbox, pid int) error
 }
