@@ -87,12 +87,12 @@ function get_version(){
 	dependency="$1"
 	GOPATH=${GOPATH:-${HOME}/go}
 	# This is needed in order to retrieve the version for qemu-lite
-	install_yq
+	install_yq >&2
 	runtime_repo="github.com/kata-containers/runtime"
 	runtime_repo_dir="$GOPATH/src/${runtime_repo}"
 	versions_file="${runtime_repo_dir}/versions.yaml"
 	mkdir -p "$(dirname ${runtime_repo_dir})"
-	[ -d "${runtime_repo_dir}" ] ||  git clone https://${runtime_repo}.git "${runtime_repo_dir}"
+	[ -d "${runtime_repo_dir}" ] ||  git clone --quiet https://${runtime_repo}.git "${runtime_repo_dir}"
 	[ ! -f "$versions_file" ] && { echo >&2 "ERROR: cannot find $versions_file"; exit 1; }
 	"${GOPATH}/bin/yq" read "$versions_file" "$dependency"
 }
