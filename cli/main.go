@@ -7,6 +7,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -51,6 +52,8 @@ var kataLog *logrus.Entry
 // current log level back to its original value if debug output is not
 // required.
 var originalLoggerLevel logrus.Level
+
+var debug = false
 
 // if true, coredump when an internal error occurs or a fatal signal is received
 var crashOnError = false
@@ -156,18 +159,27 @@ func init() {
 func setupSignalHandler() {
 	sigCh := make(chan os.Signal, 8)
 
-	for _, sig := range fatalSignals() {
+	for _, sig := range handledSignals() {
 		signal.Notify(sigCh, sig)
 	}
 
 	go func() {
-		sig := <-sigCh
+		for {
+			sig := <-sigCh
 
-		nativeSignal, ok := sig.(syscall.Signal)
-		if ok {
+			nativeSignal, ok := sig.(syscall.Signal)
+			if !ok {
+				err := errors.New("unknown signal")
+				kataLog.WithError(err).WithField("signal", sig.String()).Error()
+				continue
+			}
+
 			if fatalSignal(nativeSignal) {
 				kataLog.WithField("signal", sig).Error("received fatal signal")
 				die()
+			} else if debug && nonFatalSignal(nativeSignal) {
+				kataLog.WithField("signal", sig).Debug("handling signal")
+				backtrace()
 			}
 		}
 	}()
