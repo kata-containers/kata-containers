@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"bytes"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestIsSystemMount(t *testing.T) {
@@ -60,8 +61,14 @@ func TestIsHostDevice(t *testing.T) {
 			t.Fatalf("Expected result for path %s : %v, got %v", test.mnt, test.expected, result)
 		}
 	}
+}
 
+func TestIsHostDeviceCreateFile(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
 	// Create regular file in /dev
+
 	path := "/dev/foobar"
 	f, err := os.Create(path)
 	if err != nil {
