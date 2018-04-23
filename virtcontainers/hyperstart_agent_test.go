@@ -26,7 +26,7 @@ func TestHyperstartGenerateSocketsSuccessful(t *testing.T) {
 		SockTtyName: "ttySock",
 	}
 
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		id: testSandboxID,
 	}
 
@@ -57,7 +57,7 @@ func TestHyperstartGenerateSocketsSuccessful(t *testing.T) {
 func TestHyperstartGenerateSocketsSuccessfulNoPathProvided(t *testing.T) {
 	config := HyperConfig{}
 
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		id: testSandboxID,
 	}
 

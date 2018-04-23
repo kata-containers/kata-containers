@@ -172,7 +172,7 @@ func prepareAndStartShim(sandbox *Sandbox, shim shim, cid, token, url string, cm
 		EnterNS:   enterNSList,
 	}
 
-	pid, err := shim.start(*sandbox, shimParams)
+	pid, err := shim.start(sandbox, shimParams)
 	if err != nil {
 		return nil, err
 	}
@@ -282,5 +282,5 @@ func waitForShim(pid int) error {
 type shim interface {
 	// start starts the shim relying on its configuration and on
 	// parameters provided.
-	start(sandbox Sandbox, params ShimParams) (int, error)
+	start(sandbox *Sandbox, params ShimParams) (int, error)
 }

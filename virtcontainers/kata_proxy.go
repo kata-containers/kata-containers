@@ -18,7 +18,7 @@ type kataProxy struct {
 }
 
 // start is kataProxy start implementation for proxy interface.
-func (p *kataProxy) start(sandbox Sandbox, params proxyParams) (int, string, error) {
+func (p *kataProxy) start(sandbox *Sandbox, params proxyParams) (int, string, error) {
 	if sandbox.agent == nil {
 		return -1, "", fmt.Errorf("No agent")
 	}
@@ -53,7 +53,7 @@ func (p *kataProxy) start(sandbox Sandbox, params proxyParams) (int, string, err
 }
 
 // stop is kataProxy stop implementation for proxy interface.
-func (p *kataProxy) stop(sandbox Sandbox, pid int) error {
+func (p *kataProxy) stop(sandbox *Sandbox, pid int) error {
 	// Signal the proxy with SIGTERM.
 	return syscall.Kill(pid, syscall.SIGTERM)
 }

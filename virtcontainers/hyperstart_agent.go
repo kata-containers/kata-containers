@@ -36,7 +36,7 @@ type HyperConfig struct {
 	SockTtyName string
 }
 
-func (h *hyper) generateSockets(sandbox Sandbox, c HyperConfig) {
+func (h *hyper) generateSockets(sandbox *Sandbox, c HyperConfig) {
 	sandboxSocketPaths := []string{
 		fmt.Sprintf(defaultSockPathTemplates[0], runStoragePath, sandbox.id),
 		fmt.Sprintf(defaultSockPathTemplates[1], runStoragePath, sandbox.id),
@@ -70,7 +70,7 @@ type HyperAgentState struct {
 
 // hyper is the Agent interface implementation for hyperstart.
 type hyper struct {
-	sandbox Sandbox
+	sandbox *Sandbox
 	shim    shim
 	proxy   proxy
 	client  *proxyClient.Client
@@ -162,7 +162,7 @@ func (h *hyper) processHyperRoute(route netlink.Route, deviceName string) *hyper
 	}
 }
 
-func (h *hyper) buildNetworkInterfacesAndRoutes(sandbox Sandbox) ([]hyperstart.NetworkIface, []hyperstart.Route, error) {
+func (h *hyper) buildNetworkInterfacesAndRoutes(sandbox *Sandbox) ([]hyperstart.NetworkIface, []hyperstart.Route, error) {
 	if sandbox.networkNS.NetNsPath == "" {
 		return []hyperstart.NetworkIface{}, []hyperstart.Route{}, nil
 	}
@@ -233,9 +233,9 @@ func (h *hyper) init(sandbox *Sandbox, config interface{}) (err error) {
 	case HyperConfig:
 		// Create agent sockets from paths provided through
 		// configuration, or generate them from scratch.
-		h.generateSockets(*sandbox, c)
+		h.generateSockets(sandbox, c)
 
-		h.sandbox = *sandbox
+		h.sandbox = sandbox
 	default:
 		return fmt.Errorf("Invalid config type")
 	}
@@ -337,7 +337,7 @@ func (h *hyper) exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, error) {
 }
 
 // startSandbox is the agent Sandbox starting implementation for hyperstart.
-func (h *hyper) startSandbox(sandbox Sandbox) error {
+func (h *hyper) startSandbox(sandbox *Sandbox) error {
 	// Start the proxy here
 	pid, uri, err := h.proxy.start(sandbox, proxyParams{})
 	if err != nil {
@@ -385,7 +385,7 @@ func (h *hyper) startSandbox(sandbox Sandbox) error {
 }
 
 // stopSandbox is the agent Sandbox stopping implementation for hyperstart.
-func (h *hyper) stopSandbox(sandbox Sandbox) error {
+func (h *hyper) stopSandbox(sandbox *Sandbox) error {
 	proxyCmd := hyperstartProxyCmd{
 		cmd:     hyperstart.DestroySandbox,
 		message: nil,
@@ -413,7 +413,7 @@ func (h *hyper) handleBlockVolumes(c *Container) {
 	}
 }
 
-func (h *hyper) startOneContainer(sandbox Sandbox, c *Container) error {
+func (h *hyper) startOneContainer(sandbox *Sandbox, c *Container) error {
 	process, err := h.buildHyperContainerProcess(c.config.Cmd)
 	if err != nil {
 		return err
@@ -530,12 +530,12 @@ func (h *hyper) createContainer(sandbox *Sandbox, c *Container) (*Process, error
 }
 
 // startContainer is the agent Container starting implementation for hyperstart.
-func (h *hyper) startContainer(sandbox Sandbox, c *Container) error {
+func (h *hyper) startContainer(sandbox *Sandbox, c *Container) error {
 	return h.startOneContainer(sandbox, c)
 }
 
 // stopContainer is the agent Container stopping implementation for hyperstart.
-func (h *hyper) stopContainer(sandbox Sandbox, c Container) error {
+func (h *hyper) stopContainer(sandbox *Sandbox, c Container) error {
 	// Nothing to be done in case the container has not been started.
 	if c.state.State == StateReady {
 		return nil
@@ -572,7 +572,7 @@ func (h *hyper) stopOneContainer(sandboxID string, c Container) error {
 }
 
 // killContainer is the agent process signal implementation for hyperstart.
-func (h *hyper) killContainer(sandbox Sandbox, c Container, signal syscall.Signal, all bool) error {
+func (h *hyper) killContainer(sandbox *Sandbox, c Container, signal syscall.Signal, all bool) error {
 	// Send the signal to the shim directly in case the container has not
 	// been started yet.
 	if c.state.State == StateReady {
@@ -601,7 +601,7 @@ func (h *hyper) killOneContainer(cID string, signal syscall.Signal, all bool) er
 	return nil
 }
 
-func (h *hyper) processListContainer(sandbox Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
+func (h *hyper) processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
 	return h.processListOneContainer(sandbox.id, c.id, options)
 }
 

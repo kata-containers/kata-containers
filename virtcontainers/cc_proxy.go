@@ -13,7 +13,7 @@ type ccProxy struct {
 }
 
 // start is the proxy start implementation for ccProxy.
-func (p *ccProxy) start(sandbox Sandbox, params proxyParams) (int, string, error) {
+func (p *ccProxy) start(sandbox *Sandbox, params proxyParams) (int, string, error) {
 	config, err := newProxyConfig(sandbox.config)
 	if err != nil {
 		return -1, "", err
@@ -38,6 +38,6 @@ func (p *ccProxy) start(sandbox Sandbox, params proxyParams) (int, string, error
 	return cmd.Process.Pid, proxyURL, nil
 }
 
-func (p *ccProxy) stop(sandbox Sandbox, pid int) error {
+func (p *ccProxy) stop(sandbox *Sandbox, pid int) error {
 	return nil
 }
