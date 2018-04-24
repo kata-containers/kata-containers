@@ -21,8 +21,10 @@ import (
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
+
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+	golangGrpc "google.golang.org/grpc"
 )
 
 var (
@@ -47,7 +49,8 @@ var (
 // KataAgentConfig is a structure storing information needed
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
-	GRPCSocket string
+	GRPCSocket   string
+	LongLiveConn bool
 }
 
 type kataVSOCK struct {
@@ -62,16 +65,17 @@ func (s *kataVSOCK) String() string {
 // KataAgentState is the structure describing the data stored from this
 // agent implementation.
 type KataAgentState struct {
-	ProxyPid     int
-	ProxyBuiltIn bool
-	URL          string
+	ProxyPid int
+	URL      string
 }
 
 type kataAgent struct {
-	shim   shim
-	proxy  proxy
-	client *kataclient.AgentClient
-	state  KataAgentState
+	shim         shim
+	proxy        proxy
+	client       *kataclient.AgentClient
+	state        KataAgentState
+	keepConn     bool
+	proxyBuiltIn bool
 
 	vmSocket interface{}
 }
@@ -128,6 +132,7 @@ func (k *kataAgent) init(sandbox *Sandbox, config interface{}) (err error) {
 		if err := k.generateVMSocket(*sandbox, c); err != nil {
 			return err
 		}
+		k.keepConn = c.LongLiveConn
 	default:
 		return fmt.Errorf("Invalid config type")
 	}
@@ -141,6 +146,8 @@ func (k *kataAgent) init(sandbox *Sandbox, config interface{}) (err error) {
 	if err != nil {
 		return err
 	}
+
+	k.proxyBuiltIn = isProxyBuiltIn(sandbox.config.ProxyType)
 
 	// Fetch agent runtime info.
 	if err := sandbox.storage.fetchAgentState(sandbox.id, &k.state); err != nil {
@@ -418,7 +425,6 @@ func (k *kataAgent) startSandbox(sandbox Sandbox) error {
 
 	// Fill agent state with proxy information, and store them.
 	k.state.ProxyPid = pid
-	k.state.ProxyBuiltIn = isProxyBuiltIn(sandbox.config.ProxyType)
 	k.state.URL = uri
 	if err := sandbox.storage.storeAgentState(sandbox.id, k.state); err != nil {
 		return err
@@ -905,7 +911,7 @@ func (k *kataAgent) connect() error {
 		return nil
 	}
 
-	client, err := kataclient.NewAgentClient(k.state.URL, k.state.ProxyBuiltIn)
+	client, err := kataclient.NewAgentClient(k.state.URL, k.proxyBuiltIn)
 	if err != nil {
 		return err
 	}
@@ -920,10 +926,9 @@ func (k *kataAgent) disconnect() error {
 		return nil
 	}
 
-	if err := k.client.Close(); err != nil {
+	if err := k.client.Close(); err != nil && err != golangGrpc.ErrClientConnClosing {
 		return err
 	}
-
 	k.client = nil
 
 	return nil
@@ -933,7 +938,9 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	if err := k.connect(); err != nil {
 		return nil, err
 	}
-	defer k.disconnect()
+	if !k.keepConn {
+		defer k.disconnect()
+	}
 
 	switch req := request.(type) {
 	case *grpc.ExecProcessRequest:

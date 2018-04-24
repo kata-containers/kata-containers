@@ -54,6 +54,12 @@ func (impl *VCImpl) ListSandbox() ([]SandboxStatus, error) {
 	return ListSandbox()
 }
 
+// FetchSandbox will find out and connect to an existing sandbox and
+// return the sandbox structure.
+func (impl *VCImpl) FetchSandbox(sandboxID string) (VCSandbox, error) {
+	return FetchSandbox(sandboxID)
+}
+
 // StatusSandbox implements the VC function of the same name.
 func (impl *VCImpl) StatusSandbox(sandboxID string) (SandboxStatus, error) {
 	return StatusSandbox(sandboxID)

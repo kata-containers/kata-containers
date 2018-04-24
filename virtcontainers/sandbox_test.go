@@ -605,7 +605,7 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	}
 
 	// clean up
-	err = p.delete()
+	err = p.Delete()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1287,4 +1287,104 @@ func TestRemoveContainerSuccess(t *testing.T) {
 	assert.Nil(t, err, "Should not have returned an error: %v", err)
 
 	assert.Equal(t, len(sandbox.containers), 0, "Containers list from sandbox structure should be empty")
+}
+
+func TestCreateContainer(t *testing.T) {
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, newHypervisorConfig(nil, nil), NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	assert.Nil(t, err, "VirtContainers should not allow empty sandboxes")
+	defer cleanUp()
+
+	contID := "999"
+	contConfig := newTestContainerConfigNoop(contID)
+	_, err = s.CreateContainer(contConfig)
+	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
+}
+
+func TestDeleteContainer(t *testing.T) {
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, newHypervisorConfig(nil, nil), NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	assert.Nil(t, err, "VirtContainers should not allow empty sandboxes")
+	defer cleanUp()
+
+	contID := "999"
+	_, err = s.DeleteContainer(contID)
+	assert.NotNil(t, err, "Deletng non-existing container should fail")
+
+	contConfig := newTestContainerConfigNoop(contID)
+	_, err = s.CreateContainer(contConfig)
+	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
+
+	_, err = s.DeleteContainer(contID)
+	assert.Nil(t, err, "Failed to delete container %s in sandbox %s: %v", contID, s.ID(), err)
+}
+
+func TestStartContainer(t *testing.T) {
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, newHypervisorConfig(nil, nil), NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	assert.Nil(t, err, "VirtContainers should not allow empty sandboxes")
+	defer cleanUp()
+
+	contID := "999"
+	_, err = s.StartContainer(contID)
+	assert.NotNil(t, err, "Starting non-existing container should fail")
+
+	err = s.start()
+	assert.Nil(t, err, "Failed to start sandbox: %v", err)
+
+	contConfig := newTestContainerConfigNoop(contID)
+	_, err = s.CreateContainer(contConfig)
+	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
+
+	_, err = s.StartContainer(contID)
+	assert.Nil(t, err, "Start container failed: %v", err)
+}
+
+func TestStatusContainer(t *testing.T) {
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, newHypervisorConfig(nil, nil), NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	assert.Nil(t, err, "VirtContainers should not allow empty sandboxes")
+	defer cleanUp()
+
+	contID := "999"
+	_, err = s.StatusContainer(contID)
+	assert.NotNil(t, err, "Status non-existing container should fail")
+
+	contConfig := newTestContainerConfigNoop(contID)
+	_, err = s.CreateContainer(contConfig)
+	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
+
+	_, err = s.StatusContainer(contID)
+	assert.Nil(t, err, "Status container failed: %v", err)
+
+	_, err = s.DeleteContainer(contID)
+	assert.Nil(t, err, "Failed to delete container %s in sandbox %s: %v", contID, s.ID(), err)
+}
+
+func TestStatusSandbox(t *testing.T) {
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, newHypervisorConfig(nil, nil), NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	assert.Nil(t, err, "VirtContainers should not allow empty sandboxes")
+	defer cleanUp()
+
+	s.Status()
+}
+
+func TestEnterContainer(t *testing.T) {
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, newHypervisorConfig(nil, nil), NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	assert.Nil(t, err, "VirtContainers should not allow empty sandboxes")
+	defer cleanUp()
+
+	contID := "999"
+	cmd := Cmd{}
+	_, _, err = s.EnterContainer(contID, cmd)
+	assert.NotNil(t, err, "Entering non-existing container should fail")
+
+	contConfig := newTestContainerConfigNoop(contID)
+	_, err = s.CreateContainer(contConfig)
+	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
+
+	_, _, err = s.EnterContainer(contID, cmd)
+	assert.NotNil(t, err, "Entering non-running container should fail")
+
+	err = s.start()
+	assert.Nil(t, err, "Failed to start sandbox: %v", err)
+
+	_, _, err = s.EnterContainer(contID, cmd)
+	assert.Nil(t, err, "Enter container failed: %v", err)
 }

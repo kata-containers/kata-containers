@@ -85,11 +85,29 @@ func DeleteSandbox(sandboxID string) (VCSandbox, error) {
 	}
 
 	// Delete it.
-	if err := p.delete(); err != nil {
+	if err := p.Delete(); err != nil {
 		return nil, err
 	}
 
 	return p, nil
+}
+
+// FetchSandbox is the virtcontainers sandbox fetching entry point.
+// FetchSandbox will find out and connect to an existing sandbox and
+// return the sandbox structure.
+func FetchSandbox(sandboxID string) (VCSandbox, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
+	}
+
+	lockFile, err := rwLockSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlockSandbox(lockFile)
+
+	// Fetch the sandbox from storage and create it.
+	return fetchSandbox(sandboxID)
 }
 
 // StartSandbox is the virtcontainers sandbox starting entry point.
@@ -281,36 +299,17 @@ func CreateContainer(sandboxID string, containerConfig ContainerConfig) (VCSandb
 	}
 	defer unlockSandbox(lockFile)
 
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Create the container.
-	c, err := createContainer(p, containerConfig)
+	c, err := s.CreateContainer(containerConfig)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Add the container to the containers list in the sandbox.
-	if err := p.addContainer(c); err != nil {
-		return nil, nil, err
-	}
-
-	// Store it.
-	err = c.storeContainer()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Update sandbox config.
-	p.config.Containers = append(p.config.Containers, containerConfig)
-	err = p.storage.storeSandboxResource(sandboxID, configFileType, *(p.config))
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return p, c, nil
+	return s, c, nil
 }
 
 // DeleteContainer is the virtcontainers container deletion entry point.
@@ -331,36 +330,12 @@ func DeleteContainer(sandboxID, containerID string) (VCContainer, error) {
 	}
 	defer unlockSandbox(lockFile)
 
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Fetch the container.
-	c, err := p.findContainer(containerID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Delete it.
-	err = c.delete()
-	if err != nil {
-		return nil, err
-	}
-
-	// Update sandbox config
-	for idx, contConfig := range p.config.Containers {
-		if contConfig.ID == containerID {
-			p.config.Containers = append(p.config.Containers[:idx], p.config.Containers[idx+1:]...)
-			break
-		}
-	}
-	err = p.storage.storeSandboxResource(sandboxID, configFileType, *(p.config))
-	if err != nil {
-		return nil, err
-	}
-
-	return c, nil
+	return s.DeleteContainer(containerID)
 }
 
 // StartContainer is the virtcontainers container starting entry point.
@@ -380,19 +355,12 @@ func StartContainer(sandboxID, containerID string) (VCContainer, error) {
 	}
 	defer unlockSandbox(lockFile)
 
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Fetch the container.
-	c, err := p.findContainer(containerID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Start it.
-	err = c.start()
+	c, err := s.StartContainer(containerID)
 	if err != nil {
 		return nil, err
 	}
@@ -454,24 +422,17 @@ func EnterContainer(sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContai
 	}
 	defer unlockSandbox(lockFile)
 
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// Fetch the container.
-	c, err := p.findContainer(containerID)
+	c, process, err := s.EnterContainer(containerID, cmd)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// Enter it.
-	process, err := c.enter(cmd)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	return p, c, process, nil
+	return s, c, process, nil
 }
 
 // StatusContainer is the virtcontainers container status entry point.

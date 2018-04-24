@@ -529,6 +529,38 @@ func (s *Sandbox) GetContainer(containerID string) VCContainer {
 	return nil
 }
 
+// Release closes the agent connection and removes sandbox from internal list.
+func (s *Sandbox) Release() error {
+	globalSandboxList.removeSandbox(s.id)
+	return s.agent.disconnect()
+}
+
+// Status gets the status of the sandbox
+// TODO: update container status properly, see kata-containers/runtime#253
+func (s *Sandbox) Status() SandboxStatus {
+	var contStatusList []ContainerStatus
+	for _, c := range s.containers {
+		contStatusList = append(contStatusList, ContainerStatus{
+			ID:          c.id,
+			State:       c.state,
+			PID:         c.process.Pid,
+			StartTime:   c.process.StartTime,
+			RootFs:      c.config.RootFs,
+			Annotations: c.config.Annotations,
+		})
+	}
+
+	return SandboxStatus{
+		ID:               s.id,
+		State:            s.state,
+		Hypervisor:       s.config.HypervisorType,
+		HypervisorConfig: s.config.HypervisorConfig,
+		Agent:            s.config.AgentType,
+		ContainersStatus: contStatusList,
+		Annotations:      s.config.Annotations,
+	}
+}
+
 func createAssets(sandboxConfig *SandboxConfig) error {
 	kernel, err := newAsset(sandboxConfig, kernelAsset)
 	if err != nil {
@@ -759,9 +791,9 @@ func (s *Sandbox) removeContainer(containerID string) error {
 		containerID, s.id)
 }
 
-// delete deletes an already created sandbox.
+// Delete deletes an already created sandbox.
 // The VM in which the sandbox is running will be shut down.
-func (s *Sandbox) delete() error {
+func (s *Sandbox) Delete() error {
 	if s.state.State != StateReady &&
 		s.state.State != StatePaused &&
 		s.state.State != StateStopped {
@@ -859,6 +891,128 @@ func (s *Sandbox) newContainers() error {
 	return nil
 }
 
+// CreateContainer creates a new container in the sandbox
+func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, error) {
+	// Create the container.
+	c, err := createContainer(s, contConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add the container to the containers list in the sandbox.
+	if err := s.addContainer(c); err != nil {
+		return nil, err
+	}
+
+	// Store it.
+	err = c.storeContainer()
+	if err != nil {
+		return nil, err
+	}
+
+	// Update sandbox config.
+	s.config.Containers = append(s.config.Containers, contConfig)
+	err = s.storage.storeSandboxResource(s.id, configFileType, *(s.config))
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+// StartContainer starts a container in the sandbox
+func (s *Sandbox) StartContainer(containerID string) (VCContainer, error) {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Start it.
+	err = c.start()
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+// DeleteContainer deletes a container from the sandbox
+func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
+	if containerID == "" {
+		return nil, errNeedContainerID
+	}
+
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Delete it.
+	err = c.delete()
+	if err != nil {
+		return nil, err
+	}
+
+	// Update sandbox config
+	for idx, contConfig := range s.config.Containers {
+		if contConfig.ID == containerID {
+			s.config.Containers = append(s.config.Containers[:idx], s.config.Containers[idx+1:]...)
+			break
+		}
+	}
+
+	// Store sandbox config
+	err = s.storage.storeSandboxResource(s.id, configFileType, *(s.config))
+	if err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+// StatusContainer gets the status of a container
+// TODO: update container status properly, see kata-containers/runtime#253
+func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
+	if containerID == "" {
+		return ContainerStatus{}, errNeedContainerID
+	}
+
+	for _, c := range s.containers {
+		if c.id == containerID {
+			return ContainerStatus{
+				ID:          c.id,
+				State:       c.state,
+				PID:         c.process.Pid,
+				StartTime:   c.process.StartTime,
+				RootFs:      c.config.RootFs,
+				Annotations: c.config.Annotations,
+			}, nil
+		}
+	}
+
+	return ContainerStatus{}, errNoSuchContainer
+}
+
+// EnterContainer is the virtcontainers container command execution entry point.
+// EnterContainer enters an already running container and runs a given command.
+func (s *Sandbox) EnterContainer(containerID string, cmd Cmd) (VCContainer, *Process, error) {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Enter it.
+	process, err := c.enter(cmd)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return c, process, nil
+}
+
 // createContainers registers all containers to the proxy, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers() error {
@@ -923,7 +1077,8 @@ func (s *Sandbox) stop() error {
 	return s.setSandboxState(StateStopped)
 }
 
-func (s *Sandbox) pause() error {
+// Pause pauses the sandbox
+func (s *Sandbox) Pause() error {
 	if err := s.hypervisor.pauseSandbox(); err != nil {
 		return err
 	}
@@ -931,7 +1086,8 @@ func (s *Sandbox) pause() error {
 	return s.pauseSetStates()
 }
 
-func (s *Sandbox) resume() error {
+// Resume resumes the sandbox
+func (s *Sandbox) Resume() error {
 	if err := s.hypervisor.resumeSandbox(); err != nil {
 		return err
 	}
@@ -1073,9 +1229,9 @@ func togglePauseSandbox(sandboxID string, pause bool) (*Sandbox, error) {
 	}
 
 	if pause {
-		err = p.pause()
+		err = p.Pause()
 	} else {
-		err = p.resume()
+		err = p.Resume()
 	}
 
 	if err != nil {

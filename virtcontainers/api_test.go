@@ -2251,3 +2251,38 @@ func BenchmarkStartStop10ContainerQemuHypervisorHyperstartAgentNetworkNoop(b *te
 		createStartStopDeleteContainers(b, sandboxConfig, contConfigs)
 	}
 }
+
+func TestFetchSandbox(t *testing.T) {
+	cleanUp()
+
+	config := newTestSandboxConfigNoop()
+
+	s, err := CreateSandbox(config)
+	if s == nil || err != nil {
+		t.Fatal(err)
+	}
+
+	fetched, err := FetchSandbox(s.ID())
+	assert.Nil(t, err, "%v", err)
+	assert.True(t, fetched == s, "fetched sandboxed do not match")
+}
+
+func TestFetchNonExistingSandbox(t *testing.T) {
+	cleanUp()
+
+	_, err := FetchSandbox("some-non-existing-sandbox-name")
+	assert.NotNil(t, err, "fetch non-existing sandbox should fail")
+}
+
+func TestReleaseSandbox(t *testing.T) {
+	cleanUp()
+
+	config := newTestSandboxConfigNoop()
+
+	s, err := CreateSandbox(config)
+	if s == nil || err != nil {
+		t.Fatal(err)
+	}
+	err = s.Release()
+	assert.Nil(t, err, "sandbox release failed: %v", err)
+}

@@ -49,3 +49,53 @@ func (p *Sandbox) GetContainer(containerID string) vc.VCContainer {
 	}
 	return &Container{}
 }
+
+// Release implements the VCSandbox function of the same name.
+func (p *Sandbox) Release() error {
+	return nil
+}
+
+// Pause implements the VCSandbox function of the same name.
+func (p *Sandbox) Pause() error {
+	return nil
+}
+
+// Resume implements the VCSandbox function of the same name.
+func (p *Sandbox) Resume() error {
+	return nil
+}
+
+// Delete implements the VCSandbox function of the same name.
+func (p *Sandbox) Delete() error {
+	return nil
+}
+
+// CreateContainer implements the VCSandbox function of the same name.
+func (p *Sandbox) CreateContainer(conf vc.ContainerConfig) (vc.VCContainer, error) {
+	return &Container{}, nil
+}
+
+// DeleteContainer implements the VCSandbox function of the same name.
+func (p *Sandbox) DeleteContainer(contID string) (vc.VCContainer, error) {
+	return &Container{}, nil
+}
+
+// StartContainer implements the VCSandbox function of the same name.
+func (p *Sandbox) StartContainer(contID string) (vc.VCContainer, error) {
+	return &Container{}, nil
+}
+
+// StatusContainer implements the VCSandbox function of the same name.
+func (p *Sandbox) StatusContainer(contID string) (vc.ContainerStatus, error) {
+	return vc.ContainerStatus{}, nil
+}
+
+// Status implements the VCSandbox function of the same name.
+func (p *Sandbox) Status() vc.SandboxStatus {
+	return vc.SandboxStatus{}
+}
+
+// EnterContainer implements the VCSandbox function of the same name.
+func (p *Sandbox) EnterContainer(containerID string, cmd vc.Cmd) (vc.VCContainer, *vc.Process, error) {
+	return &Container{}, &vc.Process{}, nil
+}
