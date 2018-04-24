@@ -29,6 +29,11 @@ func (n *noopAgent) capabilities() capabilities {
 	return capabilities{}
 }
 
+// disconnect is the Noop agent connection closer. It does nothing.
+func (n *noopAgent) disconnect() error {
+	return nil
+}
+
 // exec is the Noop agent command execution implementation. It does nothing.
 func (n *noopAgent) exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, error) {
 	return nil, nil

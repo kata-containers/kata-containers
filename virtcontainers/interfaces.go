@@ -17,6 +17,7 @@ type VC interface {
 
 	CreateSandbox(sandboxConfig SandboxConfig) (VCSandbox, error)
 	DeleteSandbox(sandboxID string) (VCSandbox, error)
+	FetchSandbox(sandboxID string) (VCSandbox, error)
 	ListSandbox() ([]SandboxStatus, error)
 	PauseSandbox(sandboxID string) (VCSandbox, error)
 	ResumeSandbox(sandboxID string) (VCSandbox, error)
@@ -44,6 +45,17 @@ type VCSandbox interface {
 	GetContainer(containerID string) VCContainer
 	ID() string
 	SetAnnotations(annotations map[string]string) error
+
+	Pause() error
+	Resume() error
+	Release() error
+	Delete() error
+	Status() SandboxStatus
+	CreateContainer(contConfig ContainerConfig) (VCContainer, error)
+	DeleteContainer(contID string) (VCContainer, error)
+	StartContainer(containerID string) (VCContainer, error)
+	StatusContainer(containerID string) (ContainerStatus, error)
+	EnterContainer(containerID string, cmd Cmd) (VCContainer, *Process, error)
 }
 
 // VCContainer is the Container interface
