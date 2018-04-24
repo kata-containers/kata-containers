@@ -60,4 +60,12 @@ var _ = Describe("package manager update test", func() {
 			Expect(RemoveDockerContainer(id)).To(BeTrue())
 		})
 	})
+
+	Context("check yum update", func() {
+		It("should not fail", func() {
+			args = append(args, "--rm", "--name", id, CentosImage, "yum", "-y", "update")
+			_, _, exitCode := dockerRun(args...)
+			Expect(exitCode).To(BeZero())
+		})
+	})
 })
