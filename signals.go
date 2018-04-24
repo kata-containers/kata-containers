@@ -63,7 +63,6 @@ func fatalSignals() []syscall.Signal {
 
 	for sig := range sigFatal {
 		signals = append(signals, sig)
-
 	}
 
 	return signals
