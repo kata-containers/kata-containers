@@ -96,6 +96,10 @@ func realMain() {
 		os.Exit(0)
 	}
 
+	if logLevel == "debug" {
+		debug = true
+	}
+
 	if debug {
 		crashOnError = true
 	}
