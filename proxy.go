@@ -196,18 +196,39 @@ func printAgentLogs(sock string) error {
 }
 
 func setupNotifier() chan os.Signal {
-	sigCh := make(chan os.Signal, 8)
+	sigmax := 8
+	sigCh := make(chan os.Signal, sigmax)
+	ch := make(chan os.Signal, sigmax)
+
 	signal.Notify(sigCh, termSignal)
 
 	for _, sig := range fatalSignals() {
 		signal.Notify(sigCh, sig)
 	}
 
-	return sigCh
+	go func() {
+		for {
+			// Block waiting for a signal
+			sig := <-sigCh
+
+			nativeSignal, ok := sig.(syscall.Signal)
+			if ok {
+				if fatalSignal(nativeSignal) {
+					logger().WithField("signal", sig).Error("received fatal signal")
+					die()
+				} else {
+					// let the caller handle other signals
+					ch <- sig
+				}
+			}
+		}
+	}()
+
+	return ch
 }
 
 // Blocking function waiting for a SIGTERM signal.
-func handleSignal(sigCh chan os.Signal, vmConn *net.Conn, proxyListener *net.Listener) error {
+func handleExitSignal(sigCh chan os.Signal, vmConn *net.Conn, proxyListener *net.Listener) error {
 	if sigCh == nil {
 		return fmt.Errorf("Signal channel cannot be nil, it has to be initialized")
 	}
@@ -215,12 +236,9 @@ func handleSignal(sigCh chan os.Signal, vmConn *net.Conn, proxyListener *net.Lis
 	// Blocking here waiting for the signal to be received.
 	sig := <-sigCh
 
-	nativeSignal, ok := sig.(syscall.Signal)
-	if ok {
-		if fatalSignal(nativeSignal) {
-			logger().WithField("signal", sig).Error("received fatal signal")
-			die()
-		}
+	_, ok := sig.(syscall.Signal)
+	if !ok {
+		proxyLog.WithField("signal", sig).Error("unable to handle signal")
 	}
 
 	if sig != termSignal {
@@ -333,7 +351,7 @@ func realMain() {
 		}
 	}()
 
-	if err := handleSignal(sigCh, &servConn, &l); err != nil {
+	if err := handleExitSignal(sigCh, &servConn, &l); err != nil {
 		logger().Fatal(err)
 		return
 	}

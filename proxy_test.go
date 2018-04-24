@@ -236,7 +236,7 @@ func TestSetupSigtermNotifier(t *testing.T) {
 }
 
 func TestHandleSigtermSignalNilSignalChannelFailure(t *testing.T) {
-	err := handleSignal(nil, nil, nil)
+	err := handleExitSignal(nil, nil, nil)
 	assert.NotNil(t, err, "Should throw an error because signal channel provided was nil")
 }
 
@@ -244,13 +244,13 @@ func TestHandleSigtermSignalWrongSignalFailure(t *testing.T) {
 	sig := syscall.SIGUSR1
 	sigCh := make(chan os.Signal, 1)
 	sigCh <- sig
-	err := handleSignal(sigCh, nil, nil)
+	err := handleExitSignal(sigCh, nil, nil)
 	assert.NotNil(t, err, "Should throw an error because signal sent was %q", sig.String())
 }
 
 func TestHandleSigtermSignalNilConnectionsSuccess(t *testing.T) {
 	sigCh := make(chan os.Signal, 1)
 	sigCh <- termSignal
-	err := handleSignal(sigCh, nil, nil)
+	err := handleExitSignal(sigCh, nil, nil)
 	assert.Nil(t, err, "Should not fail: %v", err)
 }
