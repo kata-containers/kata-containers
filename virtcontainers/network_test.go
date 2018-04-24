@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"reflect"
@@ -400,4 +401,75 @@ func TestNetInterworkingModelSetModel(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVhostUserSocketPath(t *testing.T) {
+
+	// First test case: search for existing:
+	addresses := []netlink.Addr{
+		{
+			IPNet: &net.IPNet{
+				IP:   net.IPv4(192, 168, 0, 2),
+				Mask: net.IPv4Mask(192, 168, 0, 2),
+			},
+		},
+		{
+			IPNet: &net.IPNet{
+				IP:   net.IPv4(192, 168, 0, 1),
+				Mask: net.IPv4Mask(192, 168, 0, 1),
+			},
+		},
+	}
+
+	expectedPath := "/tmp/vhostuser_192.168.0.1"
+	expectedFileName := "vhu.sock"
+	expectedResult := fmt.Sprintf("%s/%s", expectedPath, expectedFileName)
+
+	err := os.Mkdir(expectedPath, 0777)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = os.Create(expectedResult)
+	if err != nil {
+		t.Fatal(err)
+	}
+	netinfo := NetworkInfo{
+		Addrs: addresses,
+	}
+
+	path, _ := vhostUserSocketPath(netinfo)
+
+	if path != expectedResult {
+		t.Fatalf("Got %+v\nExpecting %+v", path, expectedResult)
+	}
+
+	// Second test case: search doesn't include matching vsock:
+	addressesFalse := []netlink.Addr{
+		{
+			IPNet: &net.IPNet{
+				IP:   net.IPv4(192, 168, 0, 4),
+				Mask: net.IPv4Mask(192, 168, 0, 4),
+			},
+		},
+	}
+	netinfoFail := NetworkInfo{
+		Addrs: addressesFalse,
+	}
+
+	path, _ = vhostUserSocketPath(netinfoFail)
+	if path != "" {
+		t.Fatalf("Got %+v\nExpecting %+v", path, "")
+	}
+
+	err = os.Remove(expectedResult)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = os.Remove(expectedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 }

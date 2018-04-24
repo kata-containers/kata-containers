@@ -16,6 +16,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
 // Process gathers data related to a container process.
@@ -83,7 +88,7 @@ type ContainerConfig struct {
 	Mounts []Mount
 
 	// Device configuration for devices that must be available within the container.
-	DeviceInfos []DeviceInfo
+	DeviceInfos []config.DeviceInfo
 
 	// Resources container resources
 	Resources ContainerResources
@@ -134,7 +139,7 @@ type Container struct {
 
 	mounts []Mount
 
-	devices []Device
+	devices []api.Device
 
 	systemMountsInfo SystemMountsInfo
 }
@@ -245,7 +250,7 @@ func (c *Container) storeDevices() error {
 	return c.sandbox.storage.storeContainerDevices(c.sandboxID, c.id, c.devices)
 }
 
-func (c *Container) fetchDevices() ([]Device, error) {
+func (c *Container) fetchDevices() ([]api.Device, error) {
 	return c.sandbox.storage.fetchContainerDevices(c.sandboxID, c.id)
 }
 
@@ -321,9 +326,10 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 		// Check if mount is a block device file. If it is, the block device will be attached to the host
 		// instead of passing this as a shared mount.
 		if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
-			b := &BlockDevice{
-				DeviceType: DeviceBlock,
-				DeviceInfo: DeviceInfo{
+			// TODO: remove dependency of package drivers
+			b := &drivers.BlockDevice{
+				DevType: config.DeviceBlock,
+				DeviceInfo: config.DeviceInfo{
 					HostPath:      m.Source,
 					ContainerPath: m.Destination,
 					DevType:       "b",
@@ -331,7 +337,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 			}
 
 			// Attach this block device, all other devices passed in the config have been attached at this point
-			if err := b.attach(c.sandbox.hypervisor, c); err != nil {
+			if err := b.Attach(c.sandbox); err != nil {
 				return nil, err
 			}
 
@@ -346,7 +352,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 			continue
 		}
 
-		randBytes, err := generateRandomBytes(8)
+		randBytes, err := utils.GenerateRandomBytes(8)
 		if err != nil {
 			return nil, err
 		}
@@ -449,7 +455,7 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		// If devices were not found in storage, create Device implementations
 		// from the configuration. This should happen at create.
 
-		devices, err := newDevices(contConfig.DeviceInfos)
+		devices, err := sandbox.devManager.NewDevices(contConfig.DeviceInfos)
 		if err != nil {
 			return &Container{}, err
 		}
@@ -825,7 +831,7 @@ func (c *Container) hotplugDrive() error {
 
 	// Add drive with id as container id
 	devID := makeNameID("drive", c.id)
-	drive := Drive{
+	drive := drivers.Drive{
 		File:   devicePath,
 		Format: "raw",
 		ID:     devID,
@@ -862,7 +868,7 @@ func (c *Container) removeDrive() (err error) {
 		c.Logger().Info("unplugging block device")
 
 		devID := makeNameID("drive", c.id)
-		drive := &Drive{
+		drive := &drivers.Drive{
 			ID: devID,
 		}
 
@@ -880,7 +886,7 @@ func (c *Container) removeDrive() (err error) {
 
 func (c *Container) attachDevices() error {
 	for _, device := range c.devices {
-		if err := device.attach(c.sandbox.hypervisor, c); err != nil {
+		if err := device.Attach(c.sandbox); err != nil {
 			return err
 		}
 	}
@@ -890,7 +896,7 @@ func (c *Container) attachDevices() error {
 
 func (c *Container) detachDevices() error {
 	for _, device := range c.devices {
-		if err := device.detach(c.sandbox.hypervisor); err != nil {
+		if err := device.Detach(c.sandbox); err != nil {
 			return err
 		}
 	}
@@ -904,7 +910,7 @@ func (c *Container) addResources() error {
 		return nil
 	}
 
-	vCPUs := ConstraintsToVCPUs(c.config.Resources.CPUQuota, c.config.Resources.CPUPeriod)
+	vCPUs := utils.ConstraintsToVCPUs(c.config.Resources.CPUQuota, c.config.Resources.CPUPeriod)
 	if vCPUs != 0 {
 		virtLog.Debugf("hot adding %d vCPUs", vCPUs)
 		if err := c.sandbox.hypervisor.hotplugAddDevice(uint32(vCPUs), cpuDev); err != nil {
@@ -923,7 +929,7 @@ func (c *Container) removeResources() error {
 		return nil
 	}
 
-	vCPUs := ConstraintsToVCPUs(c.config.Resources.CPUQuota, c.config.Resources.CPUPeriod)
+	vCPUs := utils.ConstraintsToVCPUs(c.config.Resources.CPUQuota, c.config.Resources.CPUPeriod)
 	if vCPUs != 0 {
 		virtLog.Debugf("hot removing %d vCPUs", vCPUs)
 		if err := c.sandbox.hypervisor.hotplugRemoveDevice(uint32(vCPUs), cpuDev); err != nil {

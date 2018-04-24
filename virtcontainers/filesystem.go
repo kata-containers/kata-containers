@@ -13,6 +13,10 @@ import (
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 )
 
 // sandboxResource is an int representing a sandbox resource type.
@@ -127,8 +131,8 @@ type resourceStorage interface {
 	storeContainerProcess(sandboxID, containerID string, process Process) error
 	fetchContainerMounts(sandboxID, containerID string) ([]Mount, error)
 	storeContainerMounts(sandboxID, containerID string, mounts []Mount) error
-	fetchContainerDevices(sandboxID, containerID string) ([]Device, error)
-	storeContainerDevices(sandboxID, containerID string, devices []Device) error
+	fetchContainerDevices(sandboxID, containerID string) ([]api.Device, error)
+	storeContainerDevices(sandboxID, containerID string, devices []api.Device) error
 }
 
 // filesystem is a resourceStorage interface implementation for a local filesystem.
@@ -224,7 +228,7 @@ func (fs *filesystem) storeDeviceFile(file string, data interface{}) error {
 	}
 	defer f.Close()
 
-	devices, ok := data.([]Device)
+	devices, ok := data.([]api.Device)
 	if !ok {
 		return fmt.Errorf("Incorrect data type received, Expected []Device")
 	}
@@ -233,7 +237,7 @@ func (fs *filesystem) storeDeviceFile(file string, data interface{}) error {
 	for _, d := range devices {
 		tempJSON, _ := json.Marshal(d)
 		typedDevice := TypedDevice{
-			Type: d.deviceType(),
+			Type: string(d.DeviceType()),
 			Data: tempJSON,
 		}
 		typedDevices = append(typedDevices, typedDevice)
@@ -263,7 +267,7 @@ func (fs *filesystem) fetchFile(file string, resource sandboxResource, data inte
 
 	switch resource {
 	case devicesFileType:
-		devices, ok := data.(*[]Device)
+		devices, ok := data.(*[]api.Device)
 		if !ok {
 			return fmt.Errorf("Could not cast %v into *[]Device type", data)
 		}
@@ -275,36 +279,38 @@ func (fs *filesystem) fetchFile(file string, resource sandboxResource, data inte
 }
 
 // fetchDeviceFile is used for custom unmarshalling of device interface objects.
-func (fs *filesystem) fetchDeviceFile(fileData []byte, devices *[]Device) error {
+func (fs *filesystem) fetchDeviceFile(fileData []byte, devices *[]api.Device) error {
 	var typedDevices []TypedDevice
 	if err := json.Unmarshal(fileData, &typedDevices); err != nil {
 		return err
 	}
 
-	var tempDevices []Device
+	var tempDevices []api.Device
 	for _, d := range typedDevices {
 		l := fs.Logger().WithField("device-type", d.Type)
 		l.Info("Device type found")
 
 		switch d.Type {
-		case DeviceVFIO:
-			var device VFIODevice
+		case string(config.DeviceVFIO):
+			// TODO: remove dependency of drivers package
+			var device drivers.VFIODevice
 			if err := json.Unmarshal(d.Data, &device); err != nil {
 				return err
 			}
 			tempDevices = append(tempDevices, &device)
 			l.Infof("VFIO device unmarshalled [%v]", device)
 
-		case DeviceBlock:
-			var device BlockDevice
+		case string(config.DeviceBlock):
+			// TODO: remove dependency of drivers package
+			var device drivers.BlockDevice
 			if err := json.Unmarshal(d.Data, &device); err != nil {
 				return err
 			}
 			tempDevices = append(tempDevices, &device)
 			l.Infof("Block Device unmarshalled [%v]", device)
-
-		case DeviceGeneric:
-			var device GenericDevice
+		case string(config.DeviceGeneric):
+			// TODO: remove dependency of drivers package
+			var device drivers.GenericDevice
 			if err := json.Unmarshal(d.Data, &device); err != nil {
 				return err
 			}
@@ -554,7 +560,7 @@ func (fs *filesystem) storeResource(sandboxSpecific bool, sandboxID, containerID
 	case []Mount:
 		return fs.storeMountResource(sandboxSpecific, sandboxID, containerID, resource, file)
 
-	case []Device:
+	case []api.Device:
 		return fs.storeDeviceResource(sandboxSpecific, sandboxID, containerID, resource, file)
 
 	default:
@@ -715,11 +721,11 @@ func (fs *filesystem) fetchContainerMounts(sandboxID, containerID string) ([]Mou
 	return mounts, nil
 }
 
-func (fs *filesystem) fetchContainerDevices(sandboxID, containerID string) ([]Device, error) {
-	var devices []Device
+func (fs *filesystem) fetchContainerDevices(sandboxID, containerID string) ([]api.Device, error) {
+	var devices []api.Device
 
 	if err := fs.fetchResource(false, sandboxID, containerID, devicesFileType, &devices); err != nil {
-		return []Device{}, err
+		return []api.Device{}, err
 	}
 
 	return devices, nil
@@ -729,7 +735,7 @@ func (fs *filesystem) storeContainerMounts(sandboxID, containerID string, mounts
 	return fs.storeContainerResource(sandboxID, containerID, mountsFileType, mounts)
 }
 
-func (fs *filesystem) storeContainerDevices(sandboxID, containerID string, devices []Device) error {
+func (fs *filesystem) storeContainerDevices(sandboxID, containerID string, devices []api.Device) error {
 	return fs.storeContainerResource(sandboxID, containerID, devicesFileType, devices)
 }
 

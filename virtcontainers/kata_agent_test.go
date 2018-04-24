@@ -14,13 +14,17 @@ import (
 	"testing"
 
 	gpb "github.com/gogo/protobuf/types"
-	pb "github.com/kata-containers/agent/protocols/grpc"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+
+	pb "github.com/kata-containers/agent/protocols/grpc"
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 )
 
 var (
@@ -352,7 +356,7 @@ func TestAppendDevicesEmptyContainerDeviceList(t *testing.T) {
 
 	devList := []*pb.Device{}
 	expected := []*pb.Device{}
-	ctrDevices := []Device{}
+	ctrDevices := []api.Device{}
 
 	updatedDevList := k.appendDevices(devList, ctrDevices)
 	assert.True(t, reflect.DeepEqual(updatedDevList, expected),
@@ -371,9 +375,9 @@ func TestAppendDevices(t *testing.T) {
 			Id:            testPCIAddr,
 		},
 	}
-	ctrDevices := []Device{
-		&BlockDevice{
-			DeviceInfo: DeviceInfo{
+	ctrDevices := []api.Device{
+		&drivers.BlockDevice{
+			DeviceInfo: config.DeviceInfo{
 				ContainerPath: testBlockDeviceCtrPath,
 			},
 			PCIAddr: testPCIAddr,
