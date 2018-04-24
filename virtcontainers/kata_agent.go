@@ -16,16 +16,19 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	kataclient "github.com/kata-containers/agent/protocols/client"
 	"github.com/kata-containers/agent/protocols/grpc"
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
-	"golang.org/x/net/context"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
 	golangGrpc "google.golang.org/grpc"
 )
 
@@ -615,9 +618,9 @@ func constraintGRPCSpec(grpcSpec *grpc.Spec) {
 	}
 }
 
-func (k *kataAgent) appendDevices(deviceList []*grpc.Device, devices []Device) []*grpc.Device {
+func (k *kataAgent) appendDevices(deviceList []*grpc.Device, devices []api.Device) []*grpc.Device {
 	for _, device := range devices {
-		d, ok := device.(*BlockDevice)
+		d, ok := device.(*drivers.BlockDevice)
 		if !ok {
 			continue
 		}
@@ -694,7 +697,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 			rootfs.Driver = kataBlkDevType
 			rootfs.Source = c.state.RootfsPCIAddr
 		} else {
-			scsiAddr, err := getSCSIAddress(c.state.BlockIndex)
+			scsiAddr, err := utils.GetSCSIAddress(c.state.BlockIndex)
 			if err != nil {
 				return nil, err
 			}

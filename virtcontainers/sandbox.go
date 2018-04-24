@@ -15,6 +15,11 @@ import (
 	"syscall"
 
 	"github.com/sirupsen/logrus"
+
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	deviceManager "github.com/kata-containers/runtime/virtcontainers/device/manager"
 )
 
 // controlSocket is the sandbox control socket.
@@ -226,26 +231,6 @@ func (s *Sockets) String() string {
 	return strings.Join(sockSlice, " ")
 }
 
-// Drive represents a block storage drive which may be used in case the storage
-// driver has an underlying block storage device.
-type Drive struct {
-
-	// Path to the disk-image/device which will be used with this drive
-	File string
-
-	// Format of the drive
-	Format string
-
-	// ID is used to identify this drive in the hypervisor options.
-	ID string
-
-	// Index assigned to the drive. In case of virtio-scsi, this is used as SCSI LUN index
-	Index int
-
-	// PCIAddr is the PCI address used to identify the slot at which the drive is attached.
-	PCIAddr string
-}
-
 // EnvVar is a key/value structure representing a command
 // environment variable.
 type EnvVar struct {
@@ -452,6 +437,8 @@ type Sandbox struct {
 	monitor    *monitor
 
 	config *SandboxConfig
+
+	devManager api.DeviceManager
 
 	volumes []Volume
 
@@ -739,6 +726,7 @@ func newSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
 		storage:         &filesystem{},
 		network:         network,
 		config:          &sandboxConfig,
+		devManager:      deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver),
 		volumes:         sandboxConfig.Volumes,
 		runPath:         filepath.Join(runStoragePath, sandboxConfig.ID),
 		configPath:      filepath.Join(configStoragePath, sandboxConfig.ID),
@@ -1327,4 +1315,58 @@ func togglePauseSandbox(sandboxID string, pause bool) (*Sandbox, error) {
 	}
 
 	return p, nil
+}
+
+// HotplugAddDevice is used for add a device to sandbox
+// Sandbox implement DeviceReceiver interface from device/api/interface.go
+func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType) error {
+	switch devType {
+	case config.DeviceVFIO:
+		return s.hypervisor.hotplugAddDevice(device, vfioDev)
+	case config.DeviceBlock:
+		device := device.(*drivers.BlockDevice)
+		return s.hypervisor.hotplugAddDevice(device.BlockDrive, blockDev)
+	case config.DeviceGeneric:
+		// TODO: what?
+		return nil
+	}
+	return nil
+}
+
+// HotplugRemoveDevice is used for removing a device from sandbox
+// Sandbox implement DeviceReceiver interface from device/api/interface.go
+func (s *Sandbox) HotplugRemoveDevice(device api.Device, devType config.DeviceType) error {
+	switch devType {
+	case config.DeviceVFIO:
+		return s.hypervisor.hotplugRemoveDevice(device, vfioDev)
+	case config.DeviceBlock:
+		device := device.(*drivers.BlockDevice)
+		return s.hypervisor.hotplugRemoveDevice(device.BlockDrive, blockDev)
+	case config.DeviceGeneric:
+		// TODO: what?
+		return nil
+	}
+	return nil
+}
+
+// GetAndSetSandboxBlockIndex is used for getting and setting virtio-block indexes
+// Sandbox implement DeviceReceiver interface from device/api/interface.go
+func (s *Sandbox) GetAndSetSandboxBlockIndex() (int, error) {
+	return s.getAndSetSandboxBlockIndex()
+}
+
+// DecrementSandboxBlockIndex decrease block indexes
+// Sandbox implement DeviceReceiver interface from device/api/interface.go
+func (s *Sandbox) DecrementSandboxBlockIndex() error {
+	return s.decrementSandboxBlockIndex()
+}
+
+// AddVhostUserDevice adds a vhost user device to sandbox
+// Sandbox implement DeviceReceiver interface from device/api/interface.go
+func (s *Sandbox) AddVhostUserDevice(devInfo api.VhostUserDevice, devType config.DeviceType) error {
+	switch devType {
+	case config.VhostUserSCSI, config.VhostUserNet, config.VhostUserBlk:
+		return s.hypervisor.addDevice(devInfo, vhostuserDev)
+	}
+	return fmt.Errorf("unsupported device type")
 }

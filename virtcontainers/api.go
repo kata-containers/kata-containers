@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"syscall"
 
+	deviceApi "github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/sirupsen/logrus"
 )
 
@@ -27,6 +28,7 @@ func SetLogger(logger logrus.FieldLogger) {
 	}
 
 	virtLog = logger.WithFields(fields)
+	deviceApi.SetLogger(virtLog)
 }
 
 // CreateSandbox is the virtcontainers sandbox creation entry point.

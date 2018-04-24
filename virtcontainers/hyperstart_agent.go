@@ -15,8 +15,11 @@ import (
 	"time"
 
 	proxyClient "github.com/clearcontainers/proxy/client"
+	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
+
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
@@ -442,13 +445,13 @@ func (h *hyper) startOneContainer(sandbox *Sandbox, c *Container) error {
 	if c.state.Fstype != "" {
 		// Pass a drive name only in case of block driver
 		if sandbox.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
-			driveName, err := getVirtDriveName(c.state.BlockIndex)
+			driveName, err := utils.GetVirtDriveName(c.state.BlockIndex)
 			if err != nil {
 				return err
 			}
 			container.Image = driveName
 		} else {
-			scsiAddr, err := getSCSIAddress(c.state.BlockIndex)
+			scsiAddr, err := utils.GetSCSIAddress(c.state.BlockIndex)
 			if err != nil {
 				return err
 			}
@@ -479,7 +482,7 @@ func (h *hyper) startOneContainer(sandbox *Sandbox, c *Container) error {
 
 	// Append container mounts for block devices passed with --device.
 	for _, device := range c.devices {
-		d, ok := device.(*BlockDevice)
+		d, ok := device.(*drivers.BlockDevice)
 
 		if ok {
 			fsmapDesc := &hyperstart.FsmapDescriptor{

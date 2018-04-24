@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package virtcontainers
+package utils
 
 import (
 	"io/ioutil"
@@ -40,7 +40,7 @@ func TestFileCopySuccessful(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := fileCopy(srcFile.Name(), dstPath); err != nil {
+	if err := FileCopy(srcFile.Name(), dstPath); err != nil {
 		t.Fatal(err)
 	}
 
@@ -77,13 +77,13 @@ func TestFileCopySuccessful(t *testing.T) {
 }
 
 func TestFileCopySourceEmptyFailure(t *testing.T) {
-	if err := fileCopy("", "testDst"); err == nil {
+	if err := FileCopy("", "testDst"); err == nil {
 		t.Fatal("This test should fail because source path is empty")
 	}
 }
 
 func TestFileCopyDestinationEmptyFailure(t *testing.T) {
-	if err := fileCopy("testSrc", ""); err == nil {
+	if err := FileCopy("testSrc", ""); err == nil {
 		t.Fatal("This test should fail because destination path is empty")
 	}
 }
@@ -104,14 +104,14 @@ func TestFileCopySourceNotExistFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := fileCopy(srcPath, "testDest"); err == nil {
+	if err := FileCopy(srcPath, "testDest"); err == nil {
 		t.Fatal("This test should fail because source file does not exist")
 	}
 }
 
 func TestGenerateRandomBytes(t *testing.T) {
 	bytesNeeded := 8
-	randBytes, err := generateRandomBytes(bytesNeeded)
+	randBytes, err := GenerateRandomBytes(bytesNeeded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestGenerateRandomBytes(t *testing.T) {
 
 func TestRevereString(t *testing.T) {
 	str := "Teststr"
-	reversed := reverseString(str)
+	reversed := ReverseString(str)
 
 	if reversed != "rtstseT" {
 		t.Fatal("Incorrect String Reversal")
@@ -131,7 +131,7 @@ func TestRevereString(t *testing.T) {
 }
 
 func TestWriteToFile(t *testing.T) {
-	err := writeToFile("/file-does-not-exist", []byte("test-data"))
+	err := WriteToFile("/file-does-not-exist", []byte("test-data"))
 	assert.NotNil(t, err)
 
 	tmpFile, err := ioutil.TempFile("", "test_append_file")
@@ -143,7 +143,7 @@ func TestWriteToFile(t *testing.T) {
 	tmpFile.Close()
 
 	testData := []byte("test-data")
-	err = writeToFile(filename, testData)
+	err = WriteToFile(filename, testData)
 	assert.Nil(t, err)
 
 	data, err := ioutil.ReadFile(filename)
@@ -167,4 +167,85 @@ func TestConstraintsToVCPUs(t *testing.T) {
 
 	vcpus = ConstraintsToVCPUs(4000, 1200)
 	assert.Equal(expectedVCPUs, vcpus)
+}
+
+func TestGetVirtDriveNameInvalidIndex(t *testing.T) {
+	_, err := GetVirtDriveName(-1)
+
+	if err == nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGetVirtDriveName(t *testing.T) {
+	tests := []struct {
+		index         int
+		expectedDrive string
+	}{
+		{0, "vda"},
+		{25, "vdz"},
+		{27, "vdab"},
+		{704, "vdaac"},
+		{18277, "vdzzz"},
+	}
+
+	for _, test := range tests {
+		driveName, err := GetVirtDriveName(test.index)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if driveName != test.expectedDrive {
+			t.Fatalf("Incorrect drive Name: Got: %s, Expecting :%s", driveName, test.expectedDrive)
+
+		}
+	}
+}
+
+func TestGetSCSIIdLun(t *testing.T) {
+	tests := []struct {
+		index          int
+		expectedScsiID int
+		expectedLun    int
+	}{
+		{0, 0, 0},
+		{1, 0, 1},
+		{2, 0, 2},
+		{255, 0, 255},
+		{256, 1, 0},
+		{257, 1, 1},
+		{258, 1, 2},
+		{512, 2, 0},
+		{513, 2, 1},
+	}
+
+	for _, test := range tests {
+		scsiID, lun, err := GetSCSIIdLun(test.index)
+		assert.Nil(t, err)
+
+		if scsiID != test.expectedScsiID && lun != test.expectedLun {
+			t.Fatalf("Expecting scsi-id:lun %d:%d,  Got %d:%d", test.expectedScsiID, test.expectedLun, scsiID, lun)
+		}
+	}
+
+	_, _, err := GetSCSIIdLun(maxSCSIDevices + 1)
+	assert.NotNil(t, err)
+}
+
+func TestGetSCSIAddress(t *testing.T) {
+	tests := []struct {
+		index               int
+		expectedSCSIAddress string
+	}{
+		{0, "0:0"},
+		{200, "0:200"},
+		{255, "0:255"},
+		{258, "1:2"},
+		{512, "2:0"},
+	}
+
+	for _, test := range tests {
+		scsiAddr, err := GetSCSIAddress(test.index)
+		assert.Nil(t, err)
+		assert.Equal(t, scsiAddr, test.expectedSCSIAddress)
+	}
 }

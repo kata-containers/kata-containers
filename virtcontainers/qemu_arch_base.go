@@ -12,6 +12,10 @@ import (
 	"strconv"
 
 	govmmQemu "github.com/intel/govmm/qemu"
+
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
 type qemuArch interface {
@@ -71,13 +75,13 @@ type qemuArch interface {
 	appendNetwork(devices []govmmQemu.Device, endpoint Endpoint) []govmmQemu.Device
 
 	// appendBlockDevice appends a block drive to devices
-	appendBlockDevice(devices []govmmQemu.Device, drive Drive) []govmmQemu.Device
+	appendBlockDevice(devices []govmmQemu.Device, drive drivers.Drive) []govmmQemu.Device
 
 	// appendVhostUserDevice appends a vhost user device to devices
-	appendVhostUserDevice(devices []govmmQemu.Device, vhostUserDevice VhostUserDevice) []govmmQemu.Device
+	appendVhostUserDevice(devices []govmmQemu.Device, vhostUserDevice api.VhostUserDevice) []govmmQemu.Device
 
 	// appendVFIODevice appends a VFIO device to devices
-	appendVFIODevice(devices []govmmQemu.Device, vfioDevice VFIODevice) []govmmQemu.Device
+	appendVFIODevice(devices []govmmQemu.Device, vfioDevice drivers.VFIODevice) []govmmQemu.Device
 }
 
 type qemuArchBase struct {
@@ -281,14 +285,14 @@ func (q *qemuArchBase) appendImage(devices []govmmQemu.Device, path string) ([]g
 		return nil, err
 	}
 
-	randBytes, err := generateRandomBytes(8)
+	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
 		return nil, err
 	}
 
 	id := makeNameID("image", hex.EncodeToString(randBytes))
 
-	drive := Drive{
+	drive := drivers.Drive{
 		File:   path,
 		Format: "raw",
 		ID:     id,
@@ -306,7 +310,7 @@ func (q *qemuArchBase) appendSCSIController(devices []govmmQemu.Device, enableIO
 	var t *govmmQemu.IOThread
 
 	if enableIOThreads {
-		randBytes, _ := generateRandomBytes(8)
+		randBytes, _ := utils.GenerateRandomBytes(8)
 
 		t = &govmmQemu.IOThread{
 			ID: fmt.Sprintf("%s-%s", "iothread", hex.EncodeToString(randBytes)),
@@ -432,7 +436,7 @@ func (q *qemuArchBase) appendNetwork(devices []govmmQemu.Device, endpoint Endpoi
 	return devices
 }
 
-func (q *qemuArchBase) appendBlockDevice(devices []govmmQemu.Device, drive Drive) []govmmQemu.Device {
+func (q *qemuArchBase) appendBlockDevice(devices []govmmQemu.Device, drive drivers.Drive) []govmmQemu.Device {
 	if drive.File == "" || drive.ID == "" || drive.Format == "" {
 		return devices
 	}
@@ -456,16 +460,17 @@ func (q *qemuArchBase) appendBlockDevice(devices []govmmQemu.Device, drive Drive
 	return devices
 }
 
-func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, vhostUserDevice VhostUserDevice) []govmmQemu.Device {
+func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, vhostUserDevice api.VhostUserDevice) []govmmQemu.Device {
 	qemuVhostUserDevice := govmmQemu.VhostUserDevice{}
 
+	// TODO: find a way to remove dependency of drivers package
 	switch vhostUserDevice := vhostUserDevice.(type) {
-	case *VhostUserNetDevice:
+	case *drivers.VhostUserNetDevice:
 		qemuVhostUserDevice.TypeDevID = makeNameID("net", vhostUserDevice.ID)
 		qemuVhostUserDevice.Address = vhostUserDevice.MacAddress
-	case *VhostUserSCSIDevice:
+	case *drivers.VhostUserSCSIDevice:
 		qemuVhostUserDevice.TypeDevID = makeNameID("scsi", vhostUserDevice.ID)
-	case *VhostUserBlkDevice:
+	case *drivers.VhostUserBlkDevice:
 	}
 
 	qemuVhostUserDevice.VhostUserType = govmmQemu.VhostUserDeviceType(vhostUserDevice.Type())
@@ -477,7 +482,7 @@ func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, vhostUs
 	return devices
 }
 
-func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDevice VFIODevice) []govmmQemu.Device {
+func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDevice drivers.VFIODevice) []govmmQemu.Device {
 	if vfioDevice.BDF == "" {
 		return devices
 	}

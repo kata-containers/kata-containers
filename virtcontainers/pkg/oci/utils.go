@@ -15,12 +15,14 @@ import (
 	"strings"
 
 	criContainerdAnnotations "github.com/containerd/cri-containerd/pkg/annotations"
-	vc "github.com/kata-containers/runtime/virtcontainers"
-	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
-	dockershimAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations/dockershim"
 	crioAnnotations "github.com/kubernetes-incubator/cri-o/pkg/annotations"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
+
+	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	dockershimAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations/dockershim"
 )
 
 type annotationContainerType struct {
@@ -207,7 +209,7 @@ func contains(s []string, e string) bool {
 	return false
 }
 
-func newLinuxDeviceInfo(d spec.LinuxDevice) (*vc.DeviceInfo, error) {
+func newLinuxDeviceInfo(d spec.LinuxDevice) (*config.DeviceInfo, error) {
 	allowedDeviceTypes := []string{"c", "b", "u", "p"}
 
 	if !contains(allowedDeviceTypes, d.Type) {
@@ -218,7 +220,7 @@ func newLinuxDeviceInfo(d spec.LinuxDevice) (*vc.DeviceInfo, error) {
 		return nil, fmt.Errorf("Path cannot be empty for device")
 	}
 
-	deviceInfo := vc.DeviceInfo{
+	deviceInfo := config.DeviceInfo{
 		ContainerPath: d.Path,
 		DevType:       d.Type,
 		Major:         d.Major,
@@ -239,18 +241,18 @@ func newLinuxDeviceInfo(d spec.LinuxDevice) (*vc.DeviceInfo, error) {
 	return &deviceInfo, nil
 }
 
-func containerDeviceInfos(spec CompatOCISpec) ([]vc.DeviceInfo, error) {
+func containerDeviceInfos(spec CompatOCISpec) ([]config.DeviceInfo, error) {
 	ociLinuxDevices := spec.Spec.Linux.Devices
 
 	if ociLinuxDevices == nil {
-		return []vc.DeviceInfo{}, nil
+		return []config.DeviceInfo{}, nil
 	}
 
-	var devices []vc.DeviceInfo
+	var devices []config.DeviceInfo
 	for _, d := range ociLinuxDevices {
 		linuxDeviceInfo, err := newLinuxDeviceInfo(d)
 		if err != nil {
-			return []vc.DeviceInfo{}, err
+			return []config.DeviceInfo{}, err
 		}
 
 		devices = append(devices, *linuxDeviceInfo)
