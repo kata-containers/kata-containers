@@ -32,6 +32,8 @@ const (
 	termSignal = syscall.SIGTERM
 )
 
+var debug = false
+
 // version is the proxy version. This variable is populated at build time.
 var version = "unknown"
 
@@ -202,7 +204,7 @@ func setupNotifier() chan os.Signal {
 
 	signal.Notify(sigCh, termSignal)
 
-	for _, sig := range fatalSignals() {
+	for _, sig := range handledSignals() {
 		signal.Notify(sigCh, sig)
 	}
 
@@ -212,14 +214,23 @@ func setupNotifier() chan os.Signal {
 			sig := <-sigCh
 
 			nativeSignal, ok := sig.(syscall.Signal)
-			if ok {
-				if fatalSignal(nativeSignal) {
-					logger().WithField("signal", sig).Error("received fatal signal")
-					die()
-				} else {
-					// let the caller handle other signals
-					ch <- sig
+			if !ok {
+				err := errors.New("unknown signal")
+				logger().WithError(err).WithField("signal", sig.String()).Error()
+				continue
+			}
+
+			if fatalSignal(nativeSignal) {
+				logger().WithField("signal", sig).Error("received fatal signal")
+				die()
+			} else if nonFatalSignal(nativeSignal) {
+				if debug {
+					logger().WithField("signal", sig).Debug("handling signal")
+					backtrace()
 				}
+			} else {
+				// let the caller handle other signals
+				ch <- sig
 			}
 		}
 	}()
@@ -274,7 +285,7 @@ func handleVersion(showVersion bool) {
 
 func realMain() {
 	var channel, proxyAddr, agentLogsSocket, logLevel string
-	var debug, showVersion bool
+	var showVersion bool
 
 	flag.BoolVar(&debug, "debug", false, "enable debug mode")
 	flag.BoolVar(&showVersion, "version", false, "display program version and exit")
@@ -289,7 +300,8 @@ func realMain() {
 
 	handleVersion(showVersion)
 
-	if debug {
+	if logLevel == "debug" {
+		debug = true
 		crashOnError = true
 	}
 
