@@ -139,7 +139,7 @@ languages:
     notes: "'version' is the default minimum version used by this project."
     version: "1.8.3"
     meta:
-      newest-version: "1.10"
+      newest-version: "1.9.2"
 
 specs:
   description: "Details of important specifications"
