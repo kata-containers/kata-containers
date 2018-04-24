@@ -46,10 +46,9 @@ func TestCCProxyStart(t *testing.T) {
 		{
 			Sandbox{
 				config: &SandboxConfig{
-					ProxyType:   CCProxyType,
-					ProxyConfig: ProxyConfig{
+					ProxyType: CCProxyType,
 					// invalid - no path
-					},
+					ProxyConfig: ProxyConfig{},
 				},
 			}, "", true,
 		},
