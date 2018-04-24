@@ -97,6 +97,12 @@ externals:
     url: "https://github.com/kubernetes-incubator/cri-o"
     version: "v1.9.11"
 
+  cri-containerd:
+    description: |
+      Containerd Plugin for Kubernetes Container Runtime Interface
+    url: "https://github.com/containerd/cri"
+    version: "v1.0.0-rc.2"
+
   docker:
     description: "Moby project container manager"
     notes: "Docker Swarm requires an older version of Docker."
