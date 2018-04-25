@@ -937,6 +937,18 @@ func (k *kataAgent) check() error {
 	return err
 }
 
+func (k *kataAgent) waitProcess(c *Container, processID string) (int32, error) {
+	resp, err := k.sendReq(&grpc.WaitProcessRequest{
+		ContainerId: c.id,
+		ExecId:      processID,
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return resp.(*grpc.WaitProcessResponse).Status, nil
+}
+
 type reqFunc func(context.Context, interface{}, ...golangGrpc.CallOption) (interface{}, error)
 
 func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
@@ -979,6 +991,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers["grpc.ListProcessesRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.ListProcesses(ctx, req.(*grpc.ListProcessesRequest), opts...)
 	}
+	k.reqHandlers["grpc.WaitProcessRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.WaitProcess(ctx, req.(*grpc.WaitProcessRequest), opts...)
+	}
 }
 
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
@@ -992,7 +1007,7 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	msgName := proto.MessageName(request.(proto.Message))
 	handler := k.reqHandlers[msgName]
 	if msgName == "" || handler == nil {
-		return nil, fmt.Errorf("Invalid request type")
+		return nil, errors.New("Invalid request type")
 	}
 
 	return handler(context.Background(), request)

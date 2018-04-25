@@ -168,6 +168,9 @@ type agent interface {
 	// processListContainer will list the processes running inside the container
 	processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error)
 
+	// waitProcess will wait for the exit code of a process
+	waitProcess(c *Container, processID string) (int32, error)
+
 	// onlineCPUMem will online CPUs and Memory inside the Sandbox.
 	// This function should be called after hot adding vCPUs or Memory.
 	// cpus specifies the number of CPUs that were added and the agent should online

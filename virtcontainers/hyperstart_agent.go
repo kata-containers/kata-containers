@@ -806,3 +806,8 @@ func (h *hyper) check() error {
 	// cc-agent does not support check
 	return nil
 }
+
+func (h *hyper) waitProcess(c *Container, processID string) (int32, error) {
+	// cc-agent does not support wait process
+	return 0, nil
+}

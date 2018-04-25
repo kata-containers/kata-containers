@@ -359,3 +359,29 @@ func TestContainerEnterErrorsOnContainerStates(t *testing.T) {
 	_, err = c.enter(cmd)
 	assert.Error(err)
 }
+
+func TestContainerWaitErrorState(t *testing.T) {
+	assert := assert.New(t)
+	c := &Container{
+		sandbox: &Sandbox{
+			state: State{
+				State: StateRunning,
+			},
+		},
+	}
+	processID := "foobar"
+
+	// Container state undefined
+	_, err := c.wait(processID)
+	assert.Error(err)
+
+	// Container paused
+	c.state.State = StatePaused
+	_, err = c.wait(processID)
+	assert.Error(err)
+
+	// Container stopped
+	c.state.State = StateStopped
+	_, err = c.wait(processID)
+	assert.Error(err)
+}

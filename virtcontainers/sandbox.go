@@ -587,6 +587,20 @@ func (s *Sandbox) Monitor() (chan error, error) {
 	return s.monitor.newWatcher()
 }
 
+// WaitProcess waits on a container process and return its exit code
+func (s *Sandbox) WaitProcess(containerID, processID string) (int32, error) {
+	if s.state.State != StateRunning {
+		return 0, fmt.Errorf("Sandbox not running")
+	}
+
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return 0, err
+	}
+
+	return c.wait(processID)
+}
+
 func createAssets(sandboxConfig *SandboxConfig) error {
 	kernel, err := newAsset(sandboxConfig, kernelAsset)
 	if err != nil {
