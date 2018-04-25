@@ -32,11 +32,11 @@ echo "Install qemu dependencies"
 chronic sudo -E dnf -y install libcap-devel libattr-devel \
 	libcap-ng-devel zlib-devel pixman-devel librbd-devel
 
+echo "Install kernel dependencies"
+chronic sudo -E dnf -y install elfutils-libelf-devel
+
 echo "Install kata containers image"
 "${cidir}/install_kata_image.sh"
-
-echo "Install Kata Containers Kernel"
-"${cidir}/install_kata_kernel.sh" "latest"
 
 echo "Install CRI-O dependencies"
 chronic sudo -E dnf -y install btrfs-progs-devel device-mapper-devel      \

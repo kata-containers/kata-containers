@@ -40,6 +40,9 @@ fi
 echo "Install qemu dependencies"
 chronic sudo -E yum install -y libcap-devel libcap-ng-devel libattr-devel libcap-ng-devel librbd1-devel flex
 
+echo "Install kernel dependencies"
+chronic sudo -E yum -y install elfutils-libelf-devel
+
 echo "Install kata-containers image"
 "${cidir}/install_kata_image.sh"
 
@@ -55,9 +58,6 @@ chronic sudo -E yum install -y libgudev1-devel
 
 echo "Install Build Tools"
 sudo -E yum install -y python pkgconfig zlib-devel
-
-echo "Install Kata Containers Kernel"
-"${cidir}/install_kata_kernel.sh" "latest"
 
 sudo -E yum install -y ostree-devel
 
