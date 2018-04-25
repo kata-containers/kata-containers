@@ -29,6 +29,7 @@ func TestIntegration(t *testing.T) {
 		PostgresImage,
 		DebianImage,
 		FedoraImage,
+		CentosImage,
 	}
 
 	for _, i := range images {

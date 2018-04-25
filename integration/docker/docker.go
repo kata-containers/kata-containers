@@ -32,6 +32,9 @@ const (
 
 	// FedoraImage is the fedora image
 	FedoraImage = "fedora"
+
+	// CentosImage is the centos image
+	CentosImage = "centos"
 )
 
 func runDockerCommandWithTimeout(timeout time.Duration, command string, args ...string) (string, string, int) {
