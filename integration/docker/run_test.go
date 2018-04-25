@@ -7,9 +7,7 @@ package docker
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"regexp"
 
 	. "github.com/kata-containers/tests"
 	. "github.com/onsi/ginkgo"
@@ -83,59 +81,6 @@ var _ = Describe("run", func() {
 		Entry("in background, interactive and with a tty", "-dit", "Up"),
 	)
 })
-
-// creates a new disk file using 'dd' command, returns the path to disk file and
-// its loop device representation
-func createLoopDevice() (string, string, error) {
-	f, err := ioutil.TempFile("", "dd")
-	if err != nil {
-		return "", "", err
-	}
-	defer f.Close()
-
-	// create disk file
-	ddArgs := []string{"if=/dev/zero", fmt.Sprintf("of=%s", f.Name()), "count=1", "bs=5M"}
-	ddCmd := NewCommand("dd", ddArgs...)
-	if _, stderr, exitCode := ddCmd.Run(); exitCode != 0 {
-		return "", "", fmt.Errorf("%s", stderr)
-	}
-
-	// partitioning disk file
-	fdiskArgs := []string{"-c", fmt.Sprintf(`printf "g\nn\n\n\n\nw\n" | fdisk %s`, f.Name())}
-	fdiskCmd := NewCommand("bash", fdiskArgs...)
-	if _, stderr, exitCode := fdiskCmd.Run(); exitCode != 0 {
-		return "", "", fmt.Errorf("%s", stderr)
-	}
-
-	// create loop device
-	losetupCmd := NewCommand("losetup", "-fP", f.Name())
-	if _, stderr, exitCode := losetupCmd.Run(); exitCode != 0 {
-		return "", "", fmt.Errorf("%s", stderr)
-	}
-
-	// get loop device path
-	getLoopPath := NewCommand("losetup", "-j", f.Name())
-	stdout, stderr, exitCode := getLoopPath.Run()
-	if exitCode != 0 {
-		return "", "", fmt.Errorf("exitCode: %d, stdout: %s, stderr: %s ", exitCode, stdout, stderr)
-	}
-	re := regexp.MustCompile("/dev/loop[0-9]+")
-	loopPath := re.FindStringSubmatch(stdout)
-	if len(loopPath) == 0 {
-		return "", "", fmt.Errorf("Unable to get loop device path, stdout: %s, stderr: %s", stdout, stderr)
-	}
-	return f.Name(), loopPath[0], nil
-}
-
-func deleteLoopDevice(loopFile string) error {
-	partxCmd := NewCommand("losetup", "-d", loopFile)
-	_, stderr, exitCode := partxCmd.Run()
-	if exitCode != 0 {
-		return fmt.Errorf("%s", stderr)
-	}
-
-	return nil
-}
 
 var _ = Describe("run", func() {
 	var (
