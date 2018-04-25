@@ -10,6 +10,7 @@ package main
 import (
 	"io/ioutil"
 	"os"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -42,6 +43,16 @@ func TestSetupTerminalOnNonTerminalFailure(t *testing.T) {
 
 func TestSetupTerminalSuccess(t *testing.T) {
 	file, err := newTestTerminal(t)
+
+	if perr, ok := err.(*os.PathError); ok {
+		switch perr.Err.(syscall.Errno) {
+		case syscall.ENXIO:
+			t.Skip("Skipping this test: Failed to open tty, make sure test is running in a tty")
+		default:
+			t.Fatalf("could not open tty %s", err)
+		}
+	}
+
 	assert.Nil(t, err, "Failed to create terminal")
 	defer file.Close()
 
