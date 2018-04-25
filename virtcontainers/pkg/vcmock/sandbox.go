@@ -6,6 +6,8 @@
 package vcmock
 
 import (
+	"syscall"
+
 	vc "github.com/kata-containers/runtime/virtcontainers"
 )
 
@@ -108,4 +110,9 @@ func (p *Sandbox) Monitor() (chan error, error) {
 // WaitProcess implements the VCSandbox function of the same name.
 func (p *Sandbox) WaitProcess(containerID, processID string) (int32, error) {
 	return 0, nil
+}
+
+// SignalProcess implements the VCSandbox function of the same name.
+func (p *Sandbox) SignalProcess(containerID, processID string, signal syscall.Signal, all bool) error {
+	return nil
 }

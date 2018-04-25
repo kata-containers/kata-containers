@@ -601,6 +601,21 @@ func (s *Sandbox) WaitProcess(containerID, processID string) (int32, error) {
 	return c.wait(processID)
 }
 
+// SignalProcess sends a signal to a process of a container when all is false.
+// When all is true, it sends the signal to all processes of a container.
+func (s *Sandbox) SignalProcess(containerID, processID string, signal syscall.Signal, all bool) error {
+	if s.state.State != StateRunning {
+		return fmt.Errorf("Sandbox not running")
+	}
+
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	return c.signalProcess(processID, signal, all)
+}
+
 func createAssets(sandboxConfig *SandboxConfig) error {
 	kernel, err := newAsset(sandboxConfig, kernelAsset)
 	if err != nil {

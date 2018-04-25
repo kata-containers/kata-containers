@@ -385,3 +385,27 @@ func TestContainerWaitErrorState(t *testing.T) {
 	_, err = c.wait(processID)
 	assert.Error(err)
 }
+
+func TestKillContainerErrorState(t *testing.T) {
+	assert := assert.New(t)
+	c := &Container{
+		sandbox: &Sandbox{
+			state: State{
+				State: StateRunning,
+			},
+		},
+	}
+	// Container state undefined
+	err := c.kill(syscall.SIGKILL, true)
+	assert.Error(err)
+
+	// Container paused
+	c.state.State = StatePaused
+	err = c.kill(syscall.SIGKILL, false)
+	assert.Error(err)
+
+	// Container stopped
+	c.state.State = StateStopped
+	err = c.kill(syscall.SIGKILL, true)
+	assert.Error(err)
+}
