@@ -192,6 +192,23 @@ func TestDeleteSandbox(t *testing.T) {
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
+	testingImpl.StatusSandboxFunc = func(sandboxID string) (vc.SandboxStatus, error) {
+		return vc.SandboxStatus{
+			ID: sandbox.ID(),
+			State: vc.State{
+				State: vc.StateReady,
+			},
+		}, nil
+	}
+
+	defer func() {
+		testingImpl.StatusSandboxFunc = nil
+	}()
+
+	err = delete(sandbox.ID(), false)
+	assert.Error(err)
+	assert.True(vcmock.IsMockError(err))
+
 	testingImpl.StopSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
@@ -297,11 +314,21 @@ func TestDeleteSandboxRunning(t *testing.T) {
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 
+	testingImpl.StatusSandboxFunc = func(sandboxID string) (vc.SandboxStatus, error) {
+		return vc.SandboxStatus{
+			ID: sandbox.ID(),
+			State: vc.State{
+				State: vc.StateRunning,
+			},
+		}, nil
+	}
+
 	testingImpl.StopSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
 	defer func() {
+		testingImpl.StatusSandboxFunc = nil
 		testingImpl.StopSandboxFunc = nil
 	}()
 
@@ -521,6 +548,15 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 						},
 					},
 				},
+			},
+		}, nil
+	}
+
+	testingImpl.StatusSandboxFunc = func(sandboxID string) (vc.SandboxStatus, error) {
+		return vc.SandboxStatus{
+			ID: sandbox.ID(),
+			State: vc.State{
+				State: vc.StateReady,
 			},
 		}, nil
 	}
