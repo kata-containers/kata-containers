@@ -105,8 +105,15 @@ func delete(containerID string, force bool) error {
 }
 
 func deleteSandbox(sandboxID string) error {
-	if _, err := vci.StopSandbox(sandboxID); err != nil {
+	status, err := vci.StatusSandbox(sandboxID)
+	if err != nil {
 		return err
+	}
+
+	if oci.StateToOCIState(status.State) != oci.StateStopped {
+		if _, err := vci.StopSandbox(sandboxID); err != nil {
+			return err
+		}
 	}
 
 	if _, err := vci.DeleteSandbox(sandboxID); err != nil {
