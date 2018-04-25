@@ -876,6 +876,18 @@ func (k *kataAgent) signalProcess(c *Container, processID string, signal syscall
 	return err
 }
 
+func (k *kataAgent) winsizeProcess(c *Container, processID string, height, width uint32) error {
+	req := &grpc.TtyWinResizeRequest{
+		ContainerId: c.id,
+		ExecId:      processID,
+		Row:         height,
+		Column:      width,
+	}
+
+	_, err := k.sendReq(req)
+	return err
+}
+
 func (k *kataAgent) processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
 	req := &grpc.ListProcessesRequest{
 		ContainerId: c.id,
@@ -998,6 +1010,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers["grpc.WaitProcessRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.WaitProcess(ctx, req.(*grpc.WaitProcessRequest), opts...)
+	}
+	k.reqHandlers["grpc.TtyWinResizeRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.TtyWinResize(ctx, req.(*grpc.TtyWinResizeRequest), opts...)
 	}
 }
 

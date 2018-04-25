@@ -616,6 +616,20 @@ func (s *Sandbox) SignalProcess(containerID, processID string, signal syscall.Si
 	return c.signalProcess(processID, signal, all)
 }
 
+// WinsizeProcess resizes the tty window of a process
+func (s *Sandbox) WinsizeProcess(containerID, processID string, height, width uint32) error {
+	if s.state.State != StateRunning {
+		return fmt.Errorf("Sandbox not running")
+	}
+
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	return c.winsizeProcess(processID, height, width)
+}
+
 func createAssets(sandboxConfig *SandboxConfig) error {
 	kernel, err := newAsset(sandboxConfig, kernelAsset)
 	if err != nil {

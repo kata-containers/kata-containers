@@ -409,3 +409,29 @@ func TestKillContainerErrorState(t *testing.T) {
 	err = c.kill(syscall.SIGKILL, true)
 	assert.Error(err)
 }
+
+func TestWinsizeProcessErrorState(t *testing.T) {
+	assert := assert.New(t)
+	c := &Container{
+		sandbox: &Sandbox{
+			state: State{
+				State: StateRunning,
+			},
+		},
+	}
+	processID := "foobar"
+
+	// Container state undefined
+	err := c.winsizeProcess(processID, 100, 200)
+	assert.Error(err)
+
+	// Container paused
+	c.state.State = StatePaused
+	err = c.winsizeProcess(processID, 100, 200)
+	assert.Error(err)
+
+	// Container stopped
+	c.state.State = StateStopped
+	err = c.winsizeProcess(processID, 100, 200)
+	assert.Error(err)
+}

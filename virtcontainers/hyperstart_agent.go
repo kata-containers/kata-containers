@@ -811,3 +811,8 @@ func (h *hyper) waitProcess(c *Container, processID string) (int32, error) {
 	// cc-agent does not support wait process
 	return 0, nil
 }
+
+func (h *hyper) winsizeProcess(c *Container, processID string, height, width uint32) error {
+	// cc-agent does not support winsize process
+	return nil
+}

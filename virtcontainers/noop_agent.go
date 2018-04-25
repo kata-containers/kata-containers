@@ -88,3 +88,8 @@ func (n *noopAgent) check() error {
 func (n *noopAgent) waitProcess(c *Container, processID string) (int32, error) {
 	return 0, nil
 }
+
+// winsizeProcess is the Noop agent process tty resizer. It does nothing.
+func (n *noopAgent) winsizeProcess(c *Container, processID string, height, width uint32) error {
+	return nil
+}
