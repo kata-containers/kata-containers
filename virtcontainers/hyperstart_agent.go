@@ -571,8 +571,8 @@ func (h *hyper) stopOneContainer(sandboxID string, c Container) error {
 	return nil
 }
 
-// killContainer is the agent process signal implementation for hyperstart.
-func (h *hyper) killContainer(sandbox *Sandbox, c Container, signal syscall.Signal, all bool) error {
+// signalProcess is the agent process signal implementation for hyperstart.
+func (h *hyper) signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error {
 	// Send the signal to the shim directly in case the container has not
 	// been started yet.
 	if c.state.State == StateReady {

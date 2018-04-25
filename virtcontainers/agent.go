@@ -160,10 +160,10 @@ type agent interface {
 	// stopContainer will tell the agent to stop a container related to a Sandbox.
 	stopContainer(sandbox *Sandbox, c Container) error
 
-	// killContainer will tell the agent to send a signal to a
-	// container related to a Sandbox. If all is true, all processes in
+	// signalProcess will tell the agent to send a signal to a
+	// container or a process related to a Sandbox. If all is true, all processes in
 	// the container will be sent the signal.
-	killContainer(sandbox *Sandbox, c Container, signal syscall.Signal, all bool) error
+	signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error
 
 	// processListContainer will list the processes running inside the container
 	processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error)

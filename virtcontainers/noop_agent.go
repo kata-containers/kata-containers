@@ -64,8 +64,8 @@ func (n *noopAgent) stopContainer(sandbox *Sandbox, c Container) error {
 	return nil
 }
 
-// killContainer is the Noop agent Container signaling implementation. It does nothing.
-func (n *noopAgent) killContainer(sandbox *Sandbox, c Container, signal syscall.Signal, all bool) error {
+// signalProcess is the Noop agent Container signaling implementation. It does nothing.
+func (n *noopAgent) signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error {
 	return nil
 }
 

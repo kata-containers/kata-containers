@@ -663,7 +663,7 @@ func (c *Container) stop() error {
 	// return an error, but instead try to kill it forcefully.
 	if err := waitForShim(c.process.Pid); err != nil {
 		// Force the container to be killed.
-		if err := c.sandbox.agent.killContainer(c.sandbox, *c, syscall.SIGKILL, true); err != nil {
+		if err := c.kill(syscall.SIGKILL, true); err != nil {
 			return err
 		}
 
@@ -684,7 +684,7 @@ func (c *Container) stop() error {
 	// this signal will ensure the container will get killed to match
 	// the state of the shim. This will allow the following call to
 	// stopContainer() to succeed in such particular case.
-	c.sandbox.agent.killContainer(c.sandbox, *c, syscall.SIGKILL, true)
+	c.kill(syscall.SIGKILL, true)
 
 	if err := c.sandbox.agent.stopContainer(c.sandbox, *c); err != nil {
 		return err
@@ -735,6 +735,10 @@ func (c *Container) wait(processID string) (int32, error) {
 }
 
 func (c *Container) kill(signal syscall.Signal, all bool) error {
+	return c.signalProcess(c.process.Token, signal, all)
+}
+
+func (c *Container) signalProcess(processID string, signal syscall.Signal, all bool) error {
 	if c.sandbox.state.State != StateReady && c.sandbox.state.State != StateRunning {
 		return fmt.Errorf("Sandbox not ready or running, impossible to signal the container")
 	}
@@ -743,7 +747,7 @@ func (c *Container) kill(signal syscall.Signal, all bool) error {
 		return fmt.Errorf("Container not ready or running, impossible to signal the container")
 	}
 
-	return c.sandbox.agent.killContainer(c.sandbox, *c, signal, all)
+	return c.sandbox.agent.signalProcess(c, processID, signal, all)
 }
 
 func (c *Container) processList(options ProcessListOptions) (ProcessList, error) {

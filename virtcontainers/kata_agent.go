@@ -860,10 +860,15 @@ func (k *kataAgent) stopContainer(sandbox *Sandbox, c Container) error {
 	return bindUnmountContainerRootfs(kataHostSharedDir, sandbox.id, c.id)
 }
 
-func (k *kataAgent) killContainer(sandbox *Sandbox, c Container, signal syscall.Signal, all bool) error {
+func (k *kataAgent) signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error {
+	execID := processID
+	if all {
+		// kata agent uses empty execId to signal all processes in a container
+		execID = ""
+	}
 	req := &grpc.SignalProcessRequest{
 		ContainerId: c.id,
-		ExecId:      c.process.Token,
+		ExecId:      execID,
 		Signal:      uint32(signal),
 	}
 
