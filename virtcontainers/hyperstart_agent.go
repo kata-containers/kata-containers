@@ -816,3 +816,23 @@ func (h *hyper) winsizeProcess(c *Container, processID string, height, width uin
 	// cc-agent does not support winsize process
 	return nil
 }
+
+func (h *hyper) writeProcessStdin(c *Container, ProcessID string, data []byte) (int, error) {
+	// cc-agent does not support stdin write request
+	return 0, nil
+}
+
+func (h *hyper) closeProcessStdin(c *Container, ProcessID string) error {
+	// cc-agent does not support stdin close request
+	return nil
+}
+
+func (h *hyper) readProcessStdout(c *Container, processID string, data []byte) (int, error) {
+	// cc-agent does not support stdout read request
+	return 0, nil
+}
+
+func (h *hyper) readProcessStderr(c *Container, processID string, data []byte) (int, error) {
+	// cc-agent does not support stderr read request
+	return 0, nil
+}

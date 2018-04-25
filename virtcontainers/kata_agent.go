@@ -6,7 +6,6 @@
 package virtcontainers
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +22,7 @@ import (
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
+	"golang.org/x/net/context"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -966,6 +966,29 @@ func (k *kataAgent) waitProcess(c *Container, processID string) (int32, error) {
 	return resp.(*grpc.WaitProcessResponse).Status, nil
 }
 
+func (k *kataAgent) writeProcessStdin(c *Container, ProcessID string, data []byte) (int, error) {
+	resp, err := k.sendReq(&grpc.WriteStreamRequest{
+		ContainerId: c.id,
+		ExecId:      ProcessID,
+		Data:        data,
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return int(resp.(*grpc.WriteStreamResponse).Len), nil
+}
+
+func (k *kataAgent) closeProcessStdin(c *Container, ProcessID string) error {
+	_, err := k.sendReq(&grpc.CloseStdinRequest{
+		ContainerId: c.id,
+		ExecId:      ProcessID,
+	})
+
+	return err
+}
+
 type reqFunc func(context.Context, interface{}, ...golangGrpc.CallOption) (interface{}, error)
 
 func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
@@ -1014,6 +1037,12 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers["grpc.TtyWinResizeRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.TtyWinResize(ctx, req.(*grpc.TtyWinResizeRequest), opts...)
 	}
+	k.reqHandlers["grpc.WriteStreamRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.WriteStdin(ctx, req.(*grpc.WriteStreamRequest), opts...)
+	}
+	k.reqHandlers["grpc.CloseStdinRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.CloseStdin(ctx, req.(*grpc.CloseStdinRequest), opts...)
+	}
 }
 
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
@@ -1031,4 +1060,43 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	}
 
 	return handler(context.Background(), request)
+}
+
+// readStdout and readStderr are special that we cannot differentiate them with the request types...
+func (k *kataAgent) readProcessStdout(c *Container, processID string, data []byte) (int, error) {
+	if err := k.connect(); err != nil {
+		return 0, err
+	}
+	if !k.keepConn {
+		defer k.disconnect()
+	}
+
+	return k.readProcessStream(c.id, processID, data, k.client.ReadStdout)
+}
+
+// readStdout and readStderr are special that we cannot differentiate them with the request types...
+func (k *kataAgent) readProcessStderr(c *Container, processID string, data []byte) (int, error) {
+	if err := k.connect(); err != nil {
+		return 0, err
+	}
+	if !k.keepConn {
+		defer k.disconnect()
+	}
+
+	return k.readProcessStream(c.id, processID, data, k.client.ReadStderr)
+}
+
+type readFn func(context.Context, *grpc.ReadStreamRequest, ...golangGrpc.CallOption) (*grpc.ReadStreamResponse, error)
+
+func (k *kataAgent) readProcessStream(containerID, processID string, data []byte, read readFn) (int, error) {
+	resp, err := read(context.Background(), &grpc.ReadStreamRequest{
+		ContainerId: containerID,
+		ExecId:      processID,
+		Len:         uint32(len(data))})
+	if err == nil {
+		copy(data, resp.Data)
+		return len(resp.Data), nil
+	}
+
+	return 0, err
 }
