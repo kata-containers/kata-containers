@@ -724,6 +724,16 @@ func (c *Container) enter(cmd Cmd) (*Process, error) {
 	return process, nil
 }
 
+func (c *Container) wait(processID string) (int32, error) {
+	if c.state.State != StateReady &&
+		c.state.State != StateRunning {
+		return 0, fmt.Errorf("Container not ready or running, " +
+			"impossible to wait")
+	}
+
+	return c.sandbox.agent.waitProcess(c, processID)
+}
+
 func (c *Container) kill(signal syscall.Signal, all bool) error {
 	if c.sandbox.state.State != StateReady && c.sandbox.state.State != StateRunning {
 		return fmt.Errorf("Sandbox not ready or running, impossible to signal the container")

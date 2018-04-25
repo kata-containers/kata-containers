@@ -83,3 +83,8 @@ func (n *noopAgent) onlineCPUMem(cpus uint32) error {
 func (n *noopAgent) check() error {
 	return nil
 }
+
+// waitProcess is the Noop agent process waiter. It does nothing.
+func (n *noopAgent) waitProcess(c *Container, processID string) (int32, error) {
+	return 0, nil
+}

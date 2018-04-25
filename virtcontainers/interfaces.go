@@ -57,6 +57,7 @@ type VCSandbox interface {
 	StartContainer(containerID string) (VCContainer, error)
 	StatusContainer(containerID string) (ContainerStatus, error)
 	EnterContainer(containerID string, cmd Cmd) (VCContainer, *Process, error)
+	WaitProcess(containerID, processID string) (int32, error)
 }
 
 // VCContainer is the Container interface

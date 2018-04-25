@@ -104,3 +104,8 @@ func (p *Sandbox) EnterContainer(containerID string, cmd vc.Cmd) (vc.VCContainer
 func (p *Sandbox) Monitor() (chan error, error) {
 	return nil, nil
 }
+
+// WaitProcess implements the VCSandbox function of the same name.
+func (p *Sandbox) WaitProcess(containerID, processID string) (int32, error) {
+	return 0, nil
+}

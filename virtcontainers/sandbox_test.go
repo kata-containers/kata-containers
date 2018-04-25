@@ -1408,3 +1408,33 @@ func TestMonitor(t *testing.T) {
 
 	s.monitor.stop()
 }
+
+func TestWaitProcess(t *testing.T) {
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, newHypervisorConfig(nil, nil), NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
+	assert.Nil(t, err, "VirtContainers should not allow empty sandboxes")
+	defer cleanUp()
+
+	contID := "foo"
+	execID := "bar"
+	_, err = s.WaitProcess(contID, execID)
+	assert.NotNil(t, err, "Wait process in stopped sandbox should fail")
+
+	err = s.start()
+	assert.Nil(t, err, "Failed to start sandbox: %v", err)
+
+	_, err = s.WaitProcess(contID, execID)
+	assert.NotNil(t, err, "Wait process in non-existing container should fail")
+
+	contConfig := newTestContainerConfigNoop(contID)
+	_, err = s.CreateContainer(contConfig)
+	assert.Nil(t, err, "Failed to create container %+v in sandbox %+v: %v", contConfig, s, err)
+
+	_, err = s.WaitProcess(contID, execID)
+	assert.Nil(t, err, "Wait process in ready container failed: %v", err)
+
+	_, err = s.StartContainer(contID)
+	assert.Nil(t, err, "Start container failed: %v", err)
+
+	_, err = s.WaitProcess(contID, execID)
+	assert.Nil(t, err, "Wait process failed: %v", err)
+}
