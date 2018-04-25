@@ -47,6 +47,8 @@ type dummyTestDeps func(pat, str string) (bool, error)
 func (d dummyTestDeps) MatchString(pat, str string) (bool, error)   { return false, nil }
 func (d dummyTestDeps) StartCPUProfile(io.Writer) error             { return nil }
 func (d dummyTestDeps) StopCPUProfile()                             {}
+func (f dummyTestDeps) StartTestLog(w io.Writer)                    {}
+func (f dummyTestDeps) StopTestLog() error                          { return nil }
 func (d dummyTestDeps) WriteHeapProfile(io.Writer) error            { return nil }
 func (d dummyTestDeps) WriteProfileTo(string, io.Writer, int) error { return nil }
 func (f dummyTestDeps) ImportPath() string                          { return "" }
