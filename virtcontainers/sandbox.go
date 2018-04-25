@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -628,6 +629,20 @@ func (s *Sandbox) WinsizeProcess(containerID, processID string, height, width ui
 	}
 
 	return c.winsizeProcess(processID, height, width)
+}
+
+// IOStream returns stdin writer, stdout reader and stderr reader of a process
+func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error) {
+	if s.state.State != StateRunning {
+		return nil, nil, nil, fmt.Errorf("Sandbox not running")
+	}
+
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return c.ioStream(processID)
 }
 
 func createAssets(sandboxConfig *SandboxConfig) error {

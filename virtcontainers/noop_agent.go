@@ -93,3 +93,23 @@ func (n *noopAgent) waitProcess(c *Container, processID string) (int32, error) {
 func (n *noopAgent) winsizeProcess(c *Container, processID string, height, width uint32) error {
 	return nil
 }
+
+// writeProcessStdin is the Noop agent process stdin writer. It does nothing.
+func (n *noopAgent) writeProcessStdin(c *Container, ProcessID string, data []byte) (int, error) {
+	return 0, nil
+}
+
+// closeProcessStdin is the Noop agent process stdin closer. It does nothing.
+func (n *noopAgent) closeProcessStdin(c *Container, ProcessID string) error {
+	return nil
+}
+
+// readProcessStdout is the Noop agent process stdout reader. It does nothing.
+func (n *noopAgent) readProcessStdout(c *Container, processID string, data []byte) (int, error) {
+	return 0, nil
+}
+
+// readProcessStderr is the Noop agent process stderr reader. It does nothing.
+func (n *noopAgent) readProcessStderr(c *Container, processID string, data []byte) (int, error) {
+	return 0, nil
+}

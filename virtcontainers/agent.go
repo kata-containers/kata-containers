@@ -168,6 +168,18 @@ type agent interface {
 	// winsizeProcess will tell the agent to set a process' tty size
 	winsizeProcess(c *Container, processID string, height, width uint32) error
 
+	// writeProcessStdin will tell the agent to write a process stdin
+	writeProcessStdin(c *Container, ProcessID string, data []byte) (int, error)
+
+	// closeProcessStdin will tell the agent to close a process stdin
+	closeProcessStdin(c *Container, ProcessID string) error
+
+	// readProcessStdout will tell the agent to read a process stdout
+	readProcessStdout(c *Container, processID string, data []byte) (int, error)
+
+	// readProcessStderr will tell the agent to read a process stderr
+	readProcessStderr(c *Container, processID string, data []byte) (int, error)
+
 	// processListContainer will list the processes running inside the container
 	processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error)
 

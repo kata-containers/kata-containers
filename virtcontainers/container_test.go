@@ -435,3 +435,29 @@ func TestWinsizeProcessErrorState(t *testing.T) {
 	err = c.winsizeProcess(processID, 100, 200)
 	assert.Error(err)
 }
+
+func TestProcessIOStream(t *testing.T) {
+	assert := assert.New(t)
+	c := &Container{
+		sandbox: &Sandbox{
+			state: State{
+				State: StateRunning,
+			},
+		},
+	}
+	processID := "foobar"
+
+	// Container state undefined
+	_, _, _, err := c.ioStream(processID)
+	assert.Error(err)
+
+	// Container paused
+	c.state.State = StatePaused
+	_, _, _, err = c.ioStream(processID)
+	assert.Error(err)
+
+	// Container stopped
+	c.state.State = StateStopped
+	_, _, _, err = c.ioStream(processID)
+	assert.Error(err)
+}

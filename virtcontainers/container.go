@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -756,6 +757,16 @@ func (c *Container) winsizeProcess(processID string, height, width uint32) error
 	}
 
 	return c.sandbox.agent.winsizeProcess(c, processID, height, width)
+}
+
+func (c *Container) ioStream(processID string) (io.WriteCloser, io.Reader, io.Reader, error) {
+	if c.state.State != StateReady && c.state.State != StateRunning {
+		return nil, nil, nil, fmt.Errorf("Container not ready or running, impossible to signal the container")
+	}
+
+	stream := newIOStream(c.sandbox, c, processID)
+
+	return stream.stdin(), stream.stdout(), stream.stderr(), nil
 }
 
 func (c *Container) processList(options ProcessListOptions) (ProcessList, error) {
