@@ -165,6 +165,9 @@ type agent interface {
 	// the container will be sent the signal.
 	signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error
 
+	// winsizeProcess will tell the agent to set a process' tty size
+	winsizeProcess(c *Container, processID string, height, width uint32) error
+
 	// processListContainer will list the processes running inside the container
 	processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error)
 

@@ -116,3 +116,8 @@ func (p *Sandbox) WaitProcess(containerID, processID string) (int32, error) {
 func (p *Sandbox) SignalProcess(containerID, processID string, signal syscall.Signal, all bool) error {
 	return nil
 }
+
+// WinsizeProcess implements the VCSandbox function of the same name.
+func (p *Sandbox) WinsizeProcess(containerID, processID string, height, width uint32) error {
+	return nil
+}

@@ -750,6 +750,14 @@ func (c *Container) signalProcess(processID string, signal syscall.Signal, all b
 	return c.sandbox.agent.signalProcess(c, processID, signal, all)
 }
 
+func (c *Container) winsizeProcess(processID string, height, width uint32) error {
+	if c.state.State != StateReady && c.state.State != StateRunning {
+		return fmt.Errorf("Container not ready or running, impossible to signal the container")
+	}
+
+	return c.sandbox.agent.winsizeProcess(c, processID, height, width)
+}
+
 func (c *Container) processList(options ProcessListOptions) (ProcessList, error) {
 	if err := c.checkSandboxRunning("ps"); err != nil {
 		return nil, err
