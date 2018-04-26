@@ -81,6 +81,13 @@ if [ -z "$go_version" ];then
 	usage 0
 fi
 
+if command -v go; then
+	[[ "$(go version)" == *"go${go_version}"* ]] && \
+		info "Go ${go_version} already installed" && \
+		exit
+	die "$(go version) is installed, remove it before install go ${go_version}"
+fi
+
 case "$(arch)" in
 	"aarch64")
 		goarch=arm64

@@ -13,6 +13,10 @@ set -e
 # Need the repo to know which tests to run.
 export kata_repo="$1"
 
+echo "Setup env for kata repository: $kata_repo"
+
+[ -z "$kata_repo" ] && echo >&2 "kata repo no provided" && exit 1
+
 tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 runtime_repo="${runtime_repo:-github.com/kata-containers/runtime}"
 
@@ -33,17 +37,18 @@ mkdir -p "${GOPATH}"
 export GOROOT="/usr/local/go"
 export PATH=${GOPATH}/bin:/usr/local/go/bin:/usr/sbin:/sbin:${PATH}
 
-# Get the repository and move to the correct commit
-go get -u -d "${kata_repo}" || true
+kata_repo_dir="${GOPATH}/src/${kata_repo}"
+tests_repo_dir="${GOPATH}/src/${tests_repo}"
 
-# Get the tests repo in case this repo was cloned using
-# `git clone` and it is not in the $GOPATH
-if [ "${kata_repo}" != "${tests_repo}" ]
-then
-	go get -u -d "${tests_repo}" || true
-fi
+# Get the tests repository
+mkdir -p $(dirname "${tests_repo_dir}")
+[ -d "${tests_repo_dir}" ] || git clone "https://${tests_repo}.git" "${tests_repo_dir}"
 
-pushd "${GOPATH}/src/${kata_repo}"
+# Get the repository
+mkdir -p $(dirname "${kata_repo_dir}")
+[ -d "${kata_repo_dir}" ] || git clone "https://${kata_repo}.git" "${kata_repo_dir}"
+
+pushd "${kata_repo_dir}"
 
 pr_number=
 
@@ -71,6 +76,12 @@ else
 	# Othewise we test the master branch
 	git fetch origin && git checkout master && git reset --hard origin/master
 fi
+
+# Install go after repository is cloned and checkout to PR
+# This ensures:
+# - We have latest changes in install_go.sh
+# - We got get changes if versions.yaml changed.
+${GOPATH}/src/${tests_repo}/.ci/install_go.sh -p
 
 # Make sure runc is default runtime.
 # This is needed in case a new image creation.
