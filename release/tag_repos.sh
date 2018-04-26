@@ -84,8 +84,9 @@ tag_repos() {
 
 	info "Creating tag ${kata_version} in all repos"
 	for repo in "${repos[@]}"; do
-		git clone --quiet "git@github.com:${OWNER}/${repo}.git"
+		git clone --quiet "https://github.com/${OWNER}/${repo}.git"
 		pushd "${repo}"
+		git remote set-url --push origin "git@github.com:${OWNER}/${repo}.git"
 		git fetch origin --tags
 		if git rev-parse -q --verify "refs/tags/${kata_version}"; then
 			info "$repo already has tag "
