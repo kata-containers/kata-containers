@@ -119,23 +119,31 @@ var _ = Describe("Hot plug CPUs", func() {
 
 var _ = Describe("CPU constraints", func() {
 	var (
-		args          []string
-		id            string
-		shares        int
-		quota         int
-		period        int
-		sharesSysPath string
-		quotaSysPath  string
-		periodSysPath string
+		args              []string
+		id                string
+		shares            int
+		quota             int
+		period            int
+		cpusetCpus        int
+		cpusetMems        int
+		sharesSysPath     string
+		quotaSysPath      string
+		periodSysPath     string
+		cpusetCpusSysPath string
+		cpusetMemsSysPath string
 	)
 
 	BeforeEach(func() {
 		sharesSysPath = "/sys/fs/cgroup/cpu,cpuacct/cpu.shares"
 		quotaSysPath = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_quota_us"
 		periodSysPath = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_period_us"
+		cpusetCpusSysPath = "/sys/fs/cgroup/cpuset/cpuset.cpus"
+		cpusetMemsSysPath = "/sys/fs/cgroup/cpuset/cpuset.mems"
 		shares = 300
 		quota = 2000
 		period = 1500
+		cpusetCpus = 0
+		cpusetMems = 0
 		id = RandID(30)
 		args = []string{"--rm", "--name", id}
 	})
@@ -169,6 +177,24 @@ var _ = Describe("CPU constraints", func() {
 				stdout, _, exitCode := dockerRun(args...)
 				Expect(exitCode).To(BeZero())
 				Expect(fmt.Sprintf("%d", quota)).To(Equal(strings.Trim(stdout, "\n\t ")))
+			})
+		})
+
+		Context(fmt.Sprintf("with cpuset-cpus to %d", cpusetCpus), func() {
+			It(fmt.Sprintf("%s should have %d", cpusetCpusSysPath, cpusetCpus), func() {
+				args = append(args, "--cpuset-cpus", fmt.Sprintf("%d", cpusetCpus), Image, "cat", cpusetCpusSysPath)
+				stdout, _, exitCode := dockerRun(args...)
+				Expect(exitCode).To(BeZero())
+				Expect(fmt.Sprintf("%d", cpusetCpus)).To(Equal(strings.Trim(stdout, "\n\t ")))
+			})
+		})
+
+		Context(fmt.Sprintf("with cpuset-mems to %d", cpusetMems), func() {
+			It(fmt.Sprintf("%s should have %d", cpusetMemsSysPath, cpusetMems), func() {
+				args = append(args, "--cpuset-mems", fmt.Sprintf("%d", cpusetMems), Image, "cat", cpusetMemsSysPath)
+				stdout, _, exitCode := dockerRun(args...)
+				Expect(exitCode).To(BeZero())
+				Expect(fmt.Sprintf("%d", cpusetMems)).To(Equal(strings.Trim(stdout, "\n\t ")))
 			})
 		})
 	})
