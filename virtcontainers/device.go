@@ -391,6 +391,7 @@ func (device *BlockDevice) attach(h hypervisor, c *Container) (err error) {
 
 	if c.sandbox.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
 		device.VirtPath = filepath.Join("/dev", driveName)
+		device.PCIAddr = drive.PCIAddr
 	} else {
 		scsiAddr, err := getSCSIAddress(index)
 		if err != nil {
