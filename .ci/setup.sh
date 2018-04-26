@@ -37,23 +37,8 @@ else
 	die "Unsupported architecture: $arch"
 fi
 
-echo "Install Kata Containers image"
-bash -f "${cidir}/install_kata_image.sh"
-
-echo "Install Kata Containers Kernel"
-"${cidir}/install_kata_kernel.sh"
-
-echo "Install Qemu"
-bash -f "${cidir}/install_qemu.sh"
-
-echo "Install Kata Containers shim"
-bash -f "${cidir}/install_shim.sh"
-
-echo "Install Kata Containers proxy"
-bash -f "${cidir}/install_proxy.sh"
-
-echo "Install Kata Containers runtime"
-bash -f "${cidir}/install_runtime.sh"
+echo "Install Kata sources"
+bash -f ${cidir}/install_kata.sh
 
 echo "Install CNI plugins"
 bash -f "${cidir}/install_cni_plugins.sh"
