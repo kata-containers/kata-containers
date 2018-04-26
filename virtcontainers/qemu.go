@@ -565,7 +565,7 @@ func (q *qemu) qmpSetup() (*govmmQemu.QMP, error) {
 	return qmp, nil
 }
 
-func (q *qemu) addDeviceToBridge(ID string) (string, string, error) {
+func (q *qemu) addDeviceToBridge(ID string) (string, Bridge, error) {
 	var err error
 	var addr uint32
 
@@ -573,11 +573,11 @@ func (q *qemu) addDeviceToBridge(ID string) (string, string, error) {
 	for _, b := range q.state.Bridges {
 		addr, err = b.addDevice(ID)
 		if err == nil {
-			return fmt.Sprintf("0x%x", addr), b.ID, nil
+			return fmt.Sprintf("%02x", addr), b, nil
 		}
 	}
 
-	return "", "", err
+	return "", Bridge{}, err
 }
 
 func (q *qemu) removeDeviceFromBridge(ID string) error {
@@ -616,12 +616,12 @@ func (q *qemu) hotplugBlockDevice(drive Drive, op operation) error {
 
 		if q.config.BlockDeviceDriver == VirtioBlock {
 			driver := "virtio-blk-pci"
-			addr, bus, err := q.addDeviceToBridge(drive.ID)
+			addr, bridge, err := q.addDeviceToBridge(drive.ID)
 			if err != nil {
 				return err
 			}
 
-			if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bus); err != nil {
+			if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID); err != nil {
 				return err
 			}
 		} else {
@@ -676,12 +676,12 @@ func (q *qemu) hotplugVFIODevice(device VFIODevice, op operation) error {
 	devID := "vfio-" + device.DeviceInfo.ID
 
 	if op == addDevice {
-		addr, bus, err := q.addDeviceToBridge(devID)
+		addr, bridge, err := q.addDeviceToBridge(devID)
 		if err != nil {
 			return err
 		}
 
-		if err := q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bus); err != nil {
+		if err := q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bridge.ID); err != nil {
 			return err
 		}
 	} else {
