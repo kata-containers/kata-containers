@@ -14,6 +14,7 @@ source "${cidir}/lib.sh"
 apply_depends_on
 
 arch=$(arch)
+INSTALL_KATA="${INSTALL_KATA:-yes}"
 
 echo "Set up environment"
 if [ "$ID" == ubuntu ];then
@@ -41,8 +42,10 @@ else
 	die "Unsupported architecture: $arch"
 fi
 
-echo "Install Kata sources"
-bash -f ${cidir}/install_kata.sh
+if [ "${INSTALL_KATA}" == "yes" ];then
+	echo "Install Kata sources"
+	bash -f ${cidir}/install_kata.sh
+fi
 
 echo "Install CNI plugins"
 bash -f "${cidir}/install_cni_plugins.sh"
