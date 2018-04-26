@@ -629,7 +629,7 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, devices []Device) [
 
 		if d.SCSIAddr == "" {
 			kataDevice.Type = kataBlkDevType
-			kataDevice.VmPath = d.VirtPath
+			kataDevice.Id = d.PCIAddr
 		} else {
 			kataDevice.Type = kataSCSIDevType
 			kataDevice.Id = d.SCSIAddr
