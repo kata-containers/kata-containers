@@ -593,7 +593,7 @@ func (q *qemu) removeDeviceFromBridge(ID string) error {
 	return err
 }
 
-func (q *qemu) hotplugBlockDevice(drive Drive, op operation) error {
+func (q *qemu) hotplugBlockDevice(drive *Drive, op operation) error {
 	defer func(qemu *qemu) {
 		if q.qmpMonitorCh.qmp != nil {
 			q.qmpMonitorCh.qmp.Shutdown()
@@ -620,6 +620,9 @@ func (q *qemu) hotplugBlockDevice(drive Drive, op operation) error {
 			if err != nil {
 				return err
 			}
+
+			// PCI address is in the format bridge-addr/device-addr eg. "03/02"
+			drive.PCIAddr = fmt.Sprintf("%02x", bridge.Addr) + "/" + addr
 
 			if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID); err != nil {
 				return err
@@ -700,7 +703,7 @@ func (q *qemu) hotplugVFIODevice(device VFIODevice, op operation) error {
 func (q *qemu) hotplugDevice(devInfo interface{}, devType deviceType, op operation) error {
 	switch devType {
 	case blockDev:
-		drive := devInfo.(Drive)
+		drive := devInfo.(*Drive)
 		return q.hotplugBlockDevice(drive, op)
 	case cpuDev:
 		vcpus := devInfo.(uint32)

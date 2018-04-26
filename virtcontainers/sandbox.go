@@ -237,6 +237,9 @@ type Drive struct {
 
 	// Index assigned to the drive. In case of virtio-scsi, this is used as SCSI LUN index
 	Index int
+
+	// PCIAddr is the PCI address used to identify the slot at which the drive is attached.
+	PCIAddr string
 }
 
 // EnvVar is a key/value structure representing a command

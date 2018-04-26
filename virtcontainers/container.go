@@ -788,7 +788,7 @@ func (c *Container) hotplugDrive() error {
 		Index:  driveIndex,
 	}
 
-	if err := c.sandbox.hypervisor.hotplugAddDevice(drive, blockDev); err != nil {
+	if err := c.sandbox.hypervisor.hotplugAddDevice(&drive, blockDev); err != nil {
 		return err
 	}
 	c.setStateHotpluggedDrive(true)
@@ -813,7 +813,7 @@ func (c *Container) removeDrive() (err error) {
 		c.Logger().Info("unplugging block device")
 
 		devID := makeNameID("drive", c.id)
-		drive := Drive{
+		drive := &Drive{
 			ID: devID,
 		}
 
