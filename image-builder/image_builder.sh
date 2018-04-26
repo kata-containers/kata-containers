@@ -194,9 +194,9 @@ create_rootfs_disk()
     mkfs.ext4 -q -F -b "${BLOCK_SIZE}" "${DEVICE}p1"
     OK "Image formated"
 
-    info "Mounting root paratition"
+    info "Mounting root partition"
     mount "${DEVICE}p1" "${MOUNT_DIR}"
-    OK "root paratition mounted"
+    OK "root partition mounted"
     RESERVED_BLOCKS_PERCENTAGE=3
     info "Set filesystem reserved blocks percentage to ${RESERVED_BLOCKS_PERCENTAGE}%"
     tune2fs -m "${RESERVED_BLOCKS_PERCENTAGE}" "${DEVICE}p1"
