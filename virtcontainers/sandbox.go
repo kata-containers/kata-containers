@@ -60,6 +60,9 @@ type State struct {
 
 	// Bool to indicate if the drive for a container was hotplugged.
 	HotpluggedDrive bool `json:"hotpluggedDrive"`
+
+	// PCI slot at which the block device backing the container rootfs is attached.
+	RootfsPCIAddr string `json:"rootfsPCIAddr"`
 }
 
 // valid checks that the sandbox state is valid.
