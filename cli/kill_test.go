@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
 )
@@ -23,6 +24,10 @@ var (
 
 	testStopContainerFuncReturnNil = func(sandboxID, containerID string) (vc.VCContainer, error) {
 		return &vcmock.Container{}, nil
+	}
+
+	testStopSandboxFuncReturnNil = func(sandboxID string) (vc.VCSandbox, error) {
+		return &vcmock.Sandbox{}, nil
 	}
 )
 
@@ -61,18 +66,38 @@ func testKillCLIFunctionTerminationSignalSuccessful(t *testing.T, sig string) {
 		State: vc.StateRunning,
 	}
 
+	annotations := map[string]string{
+		vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
+	}
+
 	testingImpl.KillContainerFunc = testKillContainerFuncReturnNil
 	testingImpl.StopContainerFunc = testStopContainerFuncReturnNil
 	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
 	}
 	defer func() {
 		testingImpl.KillContainerFunc = nil
+		testingImpl.StopContainerFunc = nil
 		testingImpl.ListSandboxFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
 	set.Parse([]string{testContainerID, sig})
+
+	execCLICommandFunc(assert, killCLICommand, set, false)
+
+	annotations = map[string]string{
+		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
+	}
+
+	testingImpl.StopContainerFunc = nil
+	testingImpl.StopSandboxFunc = testStopSandboxFuncReturnNil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
+	}
+	defer func() {
+		testingImpl.StopSandboxFunc = nil
+	}()
 
 	execCLICommandFunc(assert, killCLICommand, set, false)
 }
@@ -114,17 +139,38 @@ func TestKillCLIFunctionNoSignalSuccessful(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
+	annotations := map[string]string{
+		vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
+	}
+
 	testingImpl.KillContainerFunc = testKillContainerFuncReturnNil
+	testingImpl.StopContainerFunc = testStopContainerFuncReturnNil
 	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
 	}
 	defer func() {
 		testingImpl.KillContainerFunc = nil
+		testingImpl.StopContainerFunc = nil
 		testingImpl.ListSandboxFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
 	set.Parse([]string{testContainerID})
+
+	execCLICommandFunc(assert, killCLICommand, set, false)
+
+	annotations = map[string]string{
+		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
+	}
+
+	testingImpl.StopContainerFunc = nil
+	testingImpl.StopSandboxFunc = testStopSandboxFuncReturnNil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
+	}
+	defer func() {
+		testingImpl.StopSandboxFunc = nil
+	}()
 
 	execCLICommandFunc(assert, killCLICommand, set, false)
 }
@@ -136,6 +182,10 @@ func TestKillCLIFunctionEnableAllSuccessful(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
+	annotations := map[string]string{
+		vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
+	}
+
 	testingImpl.KillContainerFunc = func(sandboxID, containerID string, signal syscall.Signal, all bool) error {
 		if !all {
 			return fmt.Errorf("Expecting -all flag = true, Got false")
@@ -143,17 +193,34 @@ func TestKillCLIFunctionEnableAllSuccessful(t *testing.T) {
 
 		return nil
 	}
+	testingImpl.StopContainerFunc = testStopContainerFuncReturnNil
 	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
 	}
 	defer func() {
 		testingImpl.KillContainerFunc = nil
+		testingImpl.StopContainerFunc = nil
 		testingImpl.ListSandboxFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
 	set.Bool("all", true, "")
 	set.Parse([]string{testContainerID})
+
+	execCLICommandFunc(assert, killCLICommand, set, false)
+
+	annotations = map[string]string{
+		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
+	}
+
+	testingImpl.StopContainerFunc = nil
+	testingImpl.StopSandboxFunc = testStopSandboxFuncReturnNil
+	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
+	}
+	defer func() {
+		testingImpl.StopSandboxFunc = nil
+	}()
 
 	execCLICommandFunc(assert, killCLICommand, set, false)
 }
