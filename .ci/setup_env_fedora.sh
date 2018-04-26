@@ -14,10 +14,6 @@ source "${cidir}/lib.sh"
 echo "Install chronic"
 sudo -E dnf -y install moreutils
 
-if ! command -v docker > /dev/null; then
-	"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker install
-fi
-
 chronic sudo -E dnf -y install dnf-plugins-core
 chronic sudo -E dnf makecache
 

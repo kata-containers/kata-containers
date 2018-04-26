@@ -33,10 +33,6 @@ echo "Install kata containers dependencies"
 chronic sudo -E yum install -y libtool libtool-ltdl-devel device-mapper-persistent-data lvm2 device-mapper-devel libtool-ltdl bzip2 m4 \
 	 gettext-devel automake alien autoconf bc pixman-devel coreutils
 
-if ! command -v docker > /dev/null; then
-        "${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker install
-fi
-
 echo "Install qemu dependencies"
 chronic sudo -E yum install -y libcap-devel libcap-ng-devel libattr-devel libcap-ng-devel librbd1-devel flex libfdt-devel
 

@@ -27,6 +27,10 @@ else
 	exit 1
 fi
 
+if ! command -v docker > /dev/null; then
+        "${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker install
+fi
+
 if [ "$arch" = x86_64 ]; then
 	if grep -q "N" /sys/module/kvm_intel/parameters/nested; then
 		echo "enable Nested Virtualization"
