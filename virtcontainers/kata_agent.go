@@ -40,7 +40,6 @@ var (
 	kataGuestSharedDir          = "/run/kata-containers/shared/containers/"
 	mountGuest9pTag             = "kataShared"
 	type9pFs                    = "9p"
-	devPath                     = "/dev"
 	vsockSocketScheme           = "vsock"
 	kata9pDevType               = "9p"
 	kataBlkDevType              = "blk"
@@ -692,15 +691,8 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 		// If virtio-scsi driver, the agent will be able to find the
 		// device based on the provided address.
 		if sandbox.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
-			// driveName is the predicted virtio-block guest name (the vd* in /dev/vd*).
-			driveName, err := getVirtDriveName(c.state.BlockIndex)
-			if err != nil {
-				return nil, err
-			}
-			virtPath := filepath.Join(devPath, driveName)
-
 			rootfs.Driver = kataBlkDevType
-			rootfs.Source = virtPath
+			rootfs.Source = c.state.RootfsPCIAddr
 		} else {
 			scsiAddr, err := getSCSIAddress(c.state.BlockIndex)
 			if err != nil {
