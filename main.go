@@ -27,6 +27,8 @@ const (
 // version is the shim version. This variable is populated at build time.
 var version = "unknown"
 
+var debug bool
+
 // if true, coredump when an internal error occurs or a fatal signal is received
 var crashOnError = false
 
@@ -76,7 +78,6 @@ func realMain() {
 		terminal      bool
 		proxyExitCode bool
 		showVersion   bool
-		debug         bool
 	)
 
 	flag.BoolVar(&debug, "debug", false, "enable debug mode")

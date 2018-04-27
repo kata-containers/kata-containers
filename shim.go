@@ -112,6 +112,12 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 				//ignore these
 				continue
 			}
+
+			if debug && nonFatalSignal(sysSig) {
+				logger().WithField("signal", sig).Debug("handling signal")
+				backtrace()
+			}
+
 			// forward this signal to container
 			_, err := s.agent.SignalProcess(s.ctx, &pb.SignalProcessRequest{
 				ContainerId: s.containerID,
