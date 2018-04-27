@@ -47,7 +47,7 @@
   branch = "master"
   name = "github.com/dlespiau/covertool"
   packages = ["pkg/cover"]
-  revision = "d45792f23e9014540f89404081285a1b4d097234"
+  revision = "b0c4c6d0583aae4e3b5d12b6ec47767670548cc4"
 
 [[projects]]
   name = "github.com/go-ini/ini"
@@ -257,6 +257,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "1d1c6e1edc48dac73618d0ce04d505e22276ad5a3e299dd0964eca608fe8e2f1"
+  inputs-digest = "cc11dcb278b249e203b53c823a9a27d5e5210b56fcaedab509651f25a5163d03"
   solver-name = "gps-cdcl"
   solver-version = 1
