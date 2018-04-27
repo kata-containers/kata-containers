@@ -108,11 +108,6 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 				continue
 			}
 
-			if fatalSignal(sysSig) {
-				logger().WithField("signal", sig).Error("received fatal signal")
-				die()
-			}
-
 			if sigIgnored[sysSig] {
 				//ignore these
 				continue
@@ -124,6 +119,11 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 				Signal:      uint32(sysSig)})
 			if err != nil {
 				logger().WithError(err).WithField("signal", sig.String()).Error("forward signal failed")
+			}
+
+			if fatalSignal(sysSig) {
+				logger().WithField("signal", sig).Error("received fatal signal")
+				die()
 			}
 		}
 	}()
