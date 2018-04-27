@@ -820,7 +820,7 @@ func (s *Sandbox) createNetwork() error {
 
 	// Execute prestart hooks inside netns
 	if err := s.network.run(netNsPath, func() error {
-		return s.config.Hooks.preStartHooks()
+		return s.config.Hooks.preStartHooks(s)
 	}); err != nil {
 		return err
 	}

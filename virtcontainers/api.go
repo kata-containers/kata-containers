@@ -142,7 +142,7 @@ func startSandbox(p *Sandbox) (*Sandbox, error) {
 	}
 
 	// Execute poststart hooks.
-	if err := p.config.Hooks.postStartHooks(); err != nil {
+	if err := p.config.Hooks.postStartHooks(p); err != nil {
 		return nil, err
 	}
 
@@ -180,7 +180,7 @@ func StopSandbox(sandboxID string) (VCSandbox, error) {
 	}
 
 	// Execute poststop hooks.
-	if err := p.config.Hooks.postStopHooks(); err != nil {
+	if err := p.config.Hooks.postStopHooks(p); err != nil {
 		return nil, err
 	}
 
