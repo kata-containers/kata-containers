@@ -104,7 +104,7 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 			sysSig, ok := sig.(syscall.Signal)
 			if !ok {
 				err := errors.New("unknown signal")
-				logger().WithError(err).WithField("signal", sig.String()).Error("")
+				logger().WithError(err).WithField("signal", sig.String()).Error()
 				continue
 			}
 
