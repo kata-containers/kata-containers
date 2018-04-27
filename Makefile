@@ -52,8 +52,24 @@ swarm:
 log-parser:
 	make -C cmd/log-parser
 
-test: functional integration crio docker-compose kubernetes swarm
+openshift:
+	bash -f .ci/install_bats.sh
+	bash -f integration/openshift/run_openshift_tests.sh
+
+test: functional integration crio docker-compose openshift kubernetes swarm
 
 check: checkcommits log-parser
 
-.PHONY: check checkcommits integration ginkgo log-parser test crio functional docker-compose kubernetes swarm
+.PHONY: \
+	check \
+	checkcommits \
+	crio \
+	docker-compose \
+	functional \
+	ginkgo \
+	integration \
+	kubernetes \
+	log-parser \
+	openshift \
+	swarm \
+	test

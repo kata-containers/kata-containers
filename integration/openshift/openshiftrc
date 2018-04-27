@@ -1,0 +1,11 @@
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# These variables will be used for launching the cluster and
+# for executing the tests.
+openshift_config_path="$(pwd)/openshift.local.config"
+master_config="$openshift_config_path/master/master-config.yaml"
+node_config="$openshift_config_path/node-$(hostname)/node-config.yaml"
+node_crio_config="$openshift_config_path/node-$(hostname)/node-config-crio.yaml"
+export KUBECONFIG="$openshift_config_path/master/admin.kubeconfig"
