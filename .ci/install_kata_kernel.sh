@@ -13,80 +13,75 @@ set -e
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 
-repo_owner="clearcontainers"
-repo_name="linux"
+repo_name="packaging"
+repo_owner="kata-containers"
+kata_kernel_dir="/usr/share/kata-containers"
+kernel_arch="$(arch)"
+get_kernel_url="https://cdn.kernel.org/pub/linux/kernel"
+tmp_dir="$(mktemp -d)"
+hypervisor="kvm"
 
-linux_releases_url="https://github.com/${repo_owner}/${repo_name}/releases"
-#fake repository dir to query kernel version from remote
-fake_repo_dir=$(mktemp -t -d kata-kernel.XXXX)
-
-function cleanup {
-	rm  -rf "${fake_repo_dir}"
-}
-
-trap cleanup EXIT
-
-function usage() {
-	cat << EOT
-Usage: $0 <version>
-Install the containers clear kernel image <version> from "${repo_owner}/${repo_name}".
-
-version: Use 'latest' to pull latest kernel or a version from "${cc_linux_releases_url}"
-EOT
-
-	exit 1
-}
-
-#Get latest version by checking remote tags
-#We dont ask to github api directly because force a user to provide a GITHUB token
-function get_latest_version {
-	pushd "${fake_repo_dir}" >> /dev/null
-	git init -q
-	git remote add origin  https://github.com/"${repo_owner}/${repo_name}".git
-
-	cc_release=$(git ls-remote --tags 2>/dev/null \
-		| grep -oP '\-\d+\.container'  \
-			| grep -oP '\d+' \
-				| sort -n | \
-					tail -1 )
-
-	tag=$(git ls-remote --tags 2>/dev/null \
-		| grep -oP "v\d+\.\d+\.\d+\-${cc_release}.container" \
-			| tail -1)
-
-	popd >> /dev/null
-	echo "${tag}"
-}
-
-function download_kernel() {
-	local version="$1"
-	arch=$(arch)
-	[ -n "${version}" ] || die "version not provided"
-	[ "${version}" == "latest" ] && version=$(get_latest_version)
-	echo "version to install ${version}"
-	local binaries_dir="${version}-binaries"
-	local binaries_tarball="${binaries_dir}.tar.gz"
-	local shasum_file="SHA512SUMS"
-	if [ "$arch" = x86_64 ]; then
-		curl -OL "${linux_releases_url}/download/${version}/${binaries_tarball}"
-		curl -OL "${linux_releases_url}/download/${version}/${shasum_file}"
-		sha512sum -c "${shasum_file}"
-		tar xf "${binaries_tarball}"
-	else
-        	die "Unsupported architecture: $arch"
-	fi
-
-	pushd "${binaries_dir}"
-	sudo make install
+download_repo() {
+	pushd ${tmp_dir}
+	git clone --depth 1 https://github.com/${repo_owner}/${repo_name}
 	popd
 }
 
-cc_kernel_version="$1"
+get_kernel_version() {
+	pushd $tmp_dir/$repo_name > /dev/null
+	kernel_version=$(grep "Linux/[${kernel_arch}]*" kernel/configs/[${kernel_arch}]*_kata_${hypervisor}_* | cut -d' ' -f3 | tail -1)
+	popd > /dev/null
+	if [ -z "$kernel_version" ]; then
+		die "unknown kernel version for architecture $kernel_arch"
+	else
+		echo ${kernel_version}
+	fi
+}
 
-[ -z "${cc_kernel_version}" ] && usage
-download_kernel "${cc_kernel_version}"
+# download the linux kernel, first argument is the kernel version
+download_kernel() {
+	kernel_version=$1
+	pushd $tmp_dir
+	kernel_tar_file="linux-${kernel_version}.tar.xz"
+	kernel_url="${get_kernel_url}/v$(echo $kernel_version | cut -f1 -d.).x/${kernel_tar_file}"
+	curl -LOk ${kernel_url}
+	tar -xf ${kernel_tar_file}
+	popd
+}
 
-# Make symbolic link to kata-containers
-# FIXME: see https://github.com/kata-containers/packaging/issues/1
-sudo ln -sf /usr/share/clear-containers/vmlinux.container /usr/share/kata-containers/
-sudo ln -sf /usr/share/clear-containers/vmlinuz.container /usr/share/kata-containers/
+# build the linux kernel, first argument is the kernel version
+build_and_install_kernel() {
+	kernel_version=$1
+	pushd ${tmp_dir}
+	kernel_config_file=$(realpath ${repo_name}/kernel/configs/[${kernel_arch}]*_kata_${hypervisor}_* | tail -1)
+	kernel_patches=$(realpath ${repo_name}/kernel/patches/*)
+	kernel_src_dir="linux-${kernel_version}"
+	pushd ${kernel_src_dir}
+	cp ${kernel_config_file} .config
+	for p in ${kernel_patches}; do patch -p1 < $p; done
+	make -s ARCH=${kernel_arch} oldconfig > /dev/null
+	if [ $CI == "true" ]; then
+		make ARCH=${kernel_arch} -j$(nproc)
+	else
+		make ARCH=${kernel_arch}
+	fi
+	sudo mkdir -p ${kata_kernel_dir}
+	sudo cp -a "$(realpath arch/${kernel_arch}/boot/bzImage)" "${kata_kernel_dir}/vmlinuz.container"
+	sudo cp -a "$(realpath vmlinux)" "${kata_kernel_dir}/vmlinux.container"
+	popd
+	popd
+}
+
+cleanup() {
+	rm -rf "${tmp_dir}"
+}
+
+main() {
+	download_repo
+	kernel_version=$(get_kernel_version)
+	download_kernel ${kernel_version}
+	build_and_install_kernel ${kernel_version}
+	cleanup
+}
+
+main

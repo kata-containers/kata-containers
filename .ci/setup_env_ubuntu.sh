@@ -30,6 +30,9 @@ chronic sudo -E apt install -y libcap-dev libattr1-dev libcap-ng-dev librbd-dev
 echo "Install kata-containers image"
 "${cidir}/install_kata_image.sh"
 
+echo "Install kernel dependencies"
+chronic sudo -E apt install -y libelf-dev
+
 echo "Install CRI-O dependencies for all Ubuntu versions"
 chronic sudo -E apt install -y libglib2.0-dev libseccomp-dev libapparmor-dev libgpgme11-dev go-md2man
 
@@ -41,9 +44,6 @@ chronic sudo -E apt-get install -y libudev-dev
 
 echo "Install Build Tools"
 sudo -E apt install -y build-essential python pkg-config zlib1g-dev
-
-echo "Install Kata Containers Kernel"
-"${cidir}/install_kata_kernel.sh" "latest"
 
 echo -e "Install CRI-O dependencies available for Ubuntu $VERSION_ID"
 sudo -E apt install -y libdevmapper-dev btrfs-tools util-linux
