@@ -159,7 +159,10 @@ done
 
 shift $(($OPTIND - 1))
 
+# Fetch the first element from GOPATH as working directory
+# as go get only works against the first item in the GOPATH
 [ -z "$GOPATH" ] && die "GOPATH not set"
+GOPATH_LOCAL="${GOPATH%%:*}"
 
 [ "$AGENT_INIT" == "yes" -o "$AGENT_INIT" == "no" ] || die "AGENT_INIT($AGENT_INIT) is invalid (must be yes or no)"
 
@@ -217,7 +220,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--env GO_AGENT_PKG="${GO_AGENT_PKG}" \
 		--env AGENT_BIN="${AGENT_BIN}" \
 		--env AGENT_INIT="${AGENT_INIT}" \
-		--env GOPATH="${GOPATH}" \
+		--env GOPATH="${GOPATH_LOCAL}" \
 		--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 		--env EXTRA_PKGS="${EXTRA_PKGS}" \
 		--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
@@ -225,7 +228,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		-v "${ROOTFS_DIR}":"/rootfs" \
 		-v "${script_dir}/../scripts":"/scripts" \
 		-v "${kernel_mod_dir}":"${kernel_mod_dir}" \
-		-v "${GOPATH}":"${GOPATH}" \
+		-v "${GOPATH_LOCAL}":"${GOPATH_LOCAL}" \
 		${image_name} \
 		bash /osbuilder/rootfs.sh "${distro}"
 
@@ -242,7 +245,7 @@ go get -d "${GO_AGENT_PKG}" || true
 OK "Pull Agent source code"
 
 info "Build agent"
-pushd "${GOPATH}/src/${GO_AGENT_PKG}"
+pushd "${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
 make clean
 make INIT=${AGENT_INIT}
 make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT}
