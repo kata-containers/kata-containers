@@ -665,6 +665,16 @@ func (c *Container) stop() error {
 		}
 	}
 
+	// Force the container to be killed. For most of the cases, this
+	// should not matter and it should return an error that will be
+	// ignored.
+	// But for the specific case where the shim has been SIGKILL'ed,
+	// the container is still running inside the VM. And this is why
+	// this signal will ensure the container will get killed to match
+	// the state of the shim. This will allow the following call to
+	// stopContainer() to succeed in such particular case.
+	c.sandbox.agent.killContainer(*(c.sandbox), *c, syscall.SIGKILL, true)
+
 	if err := c.sandbox.agent.stopContainer(*(c.sandbox), *c); err != nil {
 		return err
 	}
