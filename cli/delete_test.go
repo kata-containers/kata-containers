@@ -54,18 +54,10 @@ func TestDeleteInvalidContainer(t *testing.T) {
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 
-	// Mock Listsandbox error
-	err = delete(testContainerID, false)
-	assert.Error(err)
-	assert.True(vcmock.IsMockError(err))
-
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return []vc.SandboxStatus{}, nil
-	}
-
-	defer func() {
-		testingImpl.ListSandboxFunc = nil
-	}()
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	// Container missing in ListSandbox
 	err = delete(testContainerID, false)
@@ -80,25 +72,22 @@ func TestDeleteMissingContainerTypeAnnotation(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return []vc.SandboxStatus{
-			{
-				ID: sandbox.ID(),
-				ContainersStatus: []vc.ContainerStatus{
-					{
-						ID:          sandbox.ID(),
-						Annotations: map[string]string{},
-					},
-				},
-			},
+	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return vc.ContainerStatus{
+			ID:          sandbox.ID(),
+			Annotations: map[string]string{},
 		}, nil
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
-	err := delete(sandbox.ID(), false)
+	err = delete(sandbox.ID(), false)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
@@ -110,27 +99,24 @@ func TestDeleteInvalidConfig(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return []vc.SandboxStatus{
-			{
-				ID: sandbox.ID(),
-				ContainersStatus: []vc.ContainerStatus{
-					{
-						ID: sandbox.ID(),
-						Annotations: map[string]string{
-							vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-						},
-					},
-				},
+	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return vc.ContainerStatus{
+			ID: sandbox.ID(),
+			Annotations: map[string]string{
+				vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 			},
 		}, nil
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
-	err := delete(sandbox.ID(), false)
+	err = delete(sandbox.ID(), false)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
@@ -164,28 +150,25 @@ func TestDeleteSandbox(t *testing.T) {
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return []vc.SandboxStatus{
-			{
-				ID: sandbox.ID(),
-				ContainersStatus: []vc.ContainerStatus{
-					{
-						ID: sandbox.ID(),
-						Annotations: map[string]string{
-							vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-							vcAnnotations.ConfigJSONKey:    configJSON,
-						},
-						State: vc.State{
-							State: "ready",
-						},
-					},
-				},
+	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return vc.ContainerStatus{
+			ID: sandbox.ID(),
+			Annotations: map[string]string{
+				vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
+				vcAnnotations.ConfigJSONKey:    configJSON,
+			},
+			State: vc.State{
+				State: "ready",
 			},
 		}, nil
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	err = delete(sandbox.ID(), false)
@@ -244,28 +227,25 @@ func TestDeleteInvalidContainerType(t *testing.T) {
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return []vc.SandboxStatus{
-			{
-				ID: sandbox.ID(),
-				ContainersStatus: []vc.ContainerStatus{
-					{
-						ID: sandbox.ID(),
-						Annotations: map[string]string{
-							vcAnnotations.ContainerTypeKey: "InvalidType",
-							vcAnnotations.ConfigJSONKey:    configJSON,
-						},
-						State: vc.State{
-							State: "created",
-						},
-					},
-				},
+	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return vc.ContainerStatus{
+			ID: sandbox.ID(),
+			Annotations: map[string]string{
+				vcAnnotations.ContainerTypeKey: "InvalidType",
+				vcAnnotations.ConfigJSONKey:    configJSON,
+			},
+			State: vc.State{
+				State: "created",
 			},
 		}, nil
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	// Delete an invalid container type
@@ -285,28 +265,25 @@ func TestDeleteSandboxRunning(t *testing.T) {
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return []vc.SandboxStatus{
-			{
-				ID: sandbox.ID(),
-				ContainersStatus: []vc.ContainerStatus{
-					{
-						ID: sandbox.ID(),
-						Annotations: map[string]string{
-							vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-							vcAnnotations.ConfigJSONKey:    configJSON,
-						},
-						State: vc.State{
-							State: "running",
-						},
-					},
-				},
+	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return vc.ContainerStatus{
+			ID: sandbox.ID(),
+			Annotations: map[string]string{
+				vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
+				vcAnnotations.ConfigJSONKey:    configJSON,
+			},
+			State: vc.State{
+				State: "running",
 			},
 		}, nil
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	// Delete on a running sandbox should fail
@@ -367,34 +344,35 @@ func TestDeleteRunningContainer(t *testing.T) {
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return []vc.SandboxStatus{
-			{
-				ID: sandbox.ID(),
-				ContainersStatus: []vc.ContainerStatus{
-					{
-						ID: sandbox.MockContainers[0].ID(),
-						Annotations: map[string]string{
-							vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-							vcAnnotations.ConfigJSONKey:    configJSON,
-						},
-						State: vc.State{
-							State: "running",
-						},
-					},
-				},
+	path, err := createTempContainerIDMapping(sandbox.MockContainers[0].ID(), sandbox.MockContainers[0].ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return vc.ContainerStatus{
+			ID: sandbox.MockContainers[0].ID(),
+			Annotations: map[string]string{
+				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
+				vcAnnotations.ConfigJSONKey:    configJSON,
+			},
+			State: vc.State{
+				State: "running",
 			},
 		}, nil
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	// Delete on a running container should fail.
 	err = delete(sandbox.MockContainers[0].ID(), false)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
+
+	path, err = createTempContainerIDMapping(sandbox.MockContainers[0].ID(), sandbox.MockContainers[0].ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
 
 	// force delete
 	err = delete(sandbox.MockContainers[0].ID(), true)
@@ -405,6 +383,10 @@ func TestDeleteRunningContainer(t *testing.T) {
 	defer func() {
 		testingImpl.StopContainerFunc = nil
 	}()
+
+	path, err = createTempContainerIDMapping(sandbox.MockContainers[0].ID(), sandbox.MockContainers[0].ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
 
 	err = delete(sandbox.MockContainers[0].ID(), true)
 	assert.Error(err)
@@ -417,6 +399,10 @@ func TestDeleteRunningContainer(t *testing.T) {
 	defer func() {
 		testingImpl.DeleteContainerFunc = nil
 	}()
+
+	path, err = createTempContainerIDMapping(sandbox.MockContainers[0].ID(), sandbox.MockContainers[0].ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
 
 	err = delete(sandbox.MockContainers[0].ID(), true)
 	assert.Nil(err)
@@ -440,33 +426,34 @@ func TestDeleteContainer(t *testing.T) {
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return []vc.SandboxStatus{
-			{
-				ID: sandbox.ID(),
-				ContainersStatus: []vc.ContainerStatus{
-					{
-						ID: sandbox.MockContainers[0].ID(),
-						Annotations: map[string]string{
-							vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-							vcAnnotations.ConfigJSONKey:    configJSON,
-						},
-						State: vc.State{
-							State: "ready",
-						},
-					},
-				},
+	path, err := createTempContainerIDMapping(sandbox.MockContainers[0].ID(), sandbox.MockContainers[0].ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return vc.ContainerStatus{
+			ID: sandbox.MockContainers[0].ID(),
+			Annotations: map[string]string{
+				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
+				vcAnnotations.ConfigJSONKey:    configJSON,
+			},
+			State: vc.State{
+				State: "ready",
 			},
 		}, nil
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	err = delete(sandbox.MockContainers[0].ID(), false)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
+
+	path, err = createTempContainerIDMapping(sandbox.MockContainers[0].ID(), sandbox.MockContainers[0].ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
 
 	testingImpl.StopContainerFunc = testStopContainerFuncReturnNil
 	defer func() {
@@ -484,6 +471,10 @@ func TestDeleteContainer(t *testing.T) {
 	defer func() {
 		testingImpl.DeleteContainerFunc = nil
 	}()
+
+	path, err = createTempContainerIDMapping(sandbox.MockContainers[0].ID(), sandbox.MockContainers[0].ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
 
 	err = delete(sandbox.MockContainers[0].ID(), false)
 	assert.Nil(err)
@@ -504,6 +495,10 @@ func TestDeleteCLIFunction(t *testing.T) {
 	err := fn(ctx)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
+
+	path, err := createTempContainerIDMapping("xyz", "xyz")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
 
 	flagSet = flag.NewFlagSet("container-id", flag.ContinueOnError)
 	flagSet.Parse([]string{"xyz"})
@@ -532,22 +527,19 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return []vc.SandboxStatus{
-			{
-				ID: sandbox.ID(),
-				ContainersStatus: []vc.ContainerStatus{
-					{
-						ID: sandbox.ID(),
-						Annotations: map[string]string{
-							vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-							vcAnnotations.ConfigJSONKey:    configJSON,
-						},
-						State: vc.State{
-							State: "ready",
-						},
-					},
-				},
+	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return vc.ContainerStatus{
+			ID: sandbox.ID(),
+			Annotations: map[string]string{
+				vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
+				vcAnnotations.ConfigJSONKey:    configJSON,
+			},
+			State: vc.State{
+				State: "ready",
 			},
 		}, nil
 	}
@@ -570,7 +562,7 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 		testingImpl.StopSandboxFunc = nil
 		testingImpl.DeleteSandboxFunc = nil
 	}()

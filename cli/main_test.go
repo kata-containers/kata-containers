@@ -438,19 +438,11 @@ func writeOCIConfigFile(spec oci.CompatOCISpec, configPath string) error {
 	return ioutil.WriteFile(configPath, bytes, testFileMode)
 }
 
-func newSingleContainerSandboxStatusList(sandboxID, containerID string, sandboxState, containerState vc.State, annotations map[string]string) []vc.SandboxStatus {
-	return []vc.SandboxStatus{
-		{
-			ID:    sandboxID,
-			State: sandboxState,
-			ContainersStatus: []vc.ContainerStatus{
-				{
-					ID:          containerID,
-					State:       containerState,
-					Annotations: annotations,
-				},
-			},
-		},
+func newSingleContainerStatus(containerID string, containerState vc.State, annotations map[string]string) vc.ContainerStatus {
+	return vc.ContainerStatus{
+		ID:          containerID,
+		State:       containerState,
+		Annotations: annotations,
 	}
 }
 
@@ -1101,4 +1093,19 @@ func TestMainResetCLIGlobals(t *testing.T) {
 	assert.Equal(cli.AppHelpTemplate, savedCLIAppHelpTemplate)
 	assert.NotNil(cli.VersionPrinter)
 	assert.NotNil(savedCLIVersionPrinter)
+}
+
+func createTempContainerIDMapping(containerID, sandboxID string) (string, error) {
+	tmpDir, err := ioutil.TempDir("", "containers-mapping")
+	if err != nil {
+		return "", err
+	}
+	ctrsMapTreePath = tmpDir
+
+	path := filepath.Join(ctrsMapTreePath, containerID, sandboxID)
+	if err := os.MkdirAll(path, 0750); err != nil {
+		return "", err
+	}
+
+	return tmpDir, nil
 }
