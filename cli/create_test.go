@@ -305,14 +305,13 @@ func TestCreateInvalidArgs(t *testing.T) {
 		return sandbox, nil
 	}
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	defer func() {
 		testingImpl.CreateSandboxFunc = nil
-		testingImpl.ListSandboxFunc = nil
 	}()
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -355,14 +354,10 @@ func TestCreateInvalidArgs(t *testing.T) {
 func TestCreateInvalidConfigJSON(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
-
-	defer func() {
-		testingImpl.ListSandboxFunc = nil
-	}()
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -393,20 +388,17 @@ func TestCreateInvalidConfigJSON(t *testing.T) {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
 		assert.False(vcmock.IsMockError(err))
+		os.RemoveAll(path)
 	}
 }
 
 func TestCreateInvalidContainerType(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
-
-	defer func() {
-		testingImpl.ListSandboxFunc = nil
-	}()
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -440,20 +432,17 @@ func TestCreateInvalidContainerType(t *testing.T) {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
 		assert.False(vcmock.IsMockError(err))
+		os.RemoveAll(path)
 	}
 }
 
 func TestCreateContainerInvalid(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
-
-	defer func() {
-		testingImpl.ListSandboxFunc = nil
-	}()
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -488,6 +477,7 @@ func TestCreateContainerInvalid(t *testing.T) {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
 		assert.False(vcmock.IsMockError(err))
+		os.RemoveAll(path)
 	}
 }
 
@@ -501,17 +491,16 @@ func TestCreateProcessCgroupsPathSuccessful(t *testing.T) {
 		},
 	}
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
 		testingImpl.CreateSandboxFunc = nil
 	}()
 
@@ -578,6 +567,7 @@ func TestCreateProcessCgroupsPathSuccessful(t *testing.T) {
 	for _, detach := range []bool{true, false} {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, detach, runtimeConfig)
 		assert.NoError(err, "detached: %+v", detach)
+		os.RemoveAll(path)
 	}
 }
 
@@ -596,17 +586,16 @@ func TestCreateCreateCgroupsFilesFail(t *testing.T) {
 		},
 	}
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
 		testingImpl.CreateSandboxFunc = nil
 	}()
 
@@ -663,6 +652,7 @@ func TestCreateCreateCgroupsFilesFail(t *testing.T) {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
 		assert.False(vcmock.IsMockError(err))
+		os.RemoveAll(path)
 	}
 }
 
@@ -681,17 +671,16 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 		},
 	}
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
 		testingImpl.CreateSandboxFunc = nil
 	}()
 
@@ -739,6 +728,7 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
 		assert.False(vcmock.IsMockError(err))
+		os.RemoveAll(path)
 	}
 }
 
@@ -752,17 +742,16 @@ func TestCreate(t *testing.T) {
 		},
 	}
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
 		testingImpl.CreateSandboxFunc = nil
 	}()
 
@@ -804,20 +793,17 @@ func TestCreate(t *testing.T) {
 	for detach := range []bool{true, false} {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.NoError(err, "%+v", detach)
+		os.RemoveAll(path)
 	}
 }
 
 func TestCreateInvalidKernelParams(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
-
-	defer func() {
-		testingImpl.ListSandboxFunc = nil
-	}()
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -865,20 +851,17 @@ func TestCreateInvalidKernelParams(t *testing.T) {
 		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
 		assert.False(vcmock.IsMockError(err))
+		os.RemoveAll(path)
 	}
 }
 
 func TestCreateSandboxConfigFail(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
-
-	defer func() {
-		testingImpl.ListSandboxFunc = nil
-	}()
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -918,14 +901,10 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 func TestCreateCreateSandboxFail(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
-
-	defer func() {
-		testingImpl.ListSandboxFunc = nil
-	}()
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -953,14 +932,10 @@ func TestCreateCreateSandboxFail(t *testing.T) {
 func TestCreateCreateContainerContainerConfigFail(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
-
-	defer func() {
-		testingImpl.ListSandboxFunc = nil
-	}()
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -991,20 +966,17 @@ func TestCreateCreateContainerContainerConfigFail(t *testing.T) {
 		assert.Error(err)
 		assert.False(vcmock.IsMockError(err))
 		assert.True(strings.Contains(err.Error(), containerType))
+		os.RemoveAll(path)
 	}
 }
 
 func TestCreateCreateContainerFail(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
-
-	defer func() {
-		testingImpl.ListSandboxFunc = nil
-	}()
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -1034,23 +1006,23 @@ func TestCreateCreateContainerFail(t *testing.T) {
 		_, err = createContainer(spec, testContainerID, bundlePath, testConsole, disableOutput)
 		assert.Error(err)
 		assert.True(vcmock.IsMockError(err))
+		os.RemoveAll(path)
 	}
 }
 
 func TestCreateCreateContainer(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		// No pre-existing sandboxes
-		return []vc.SandboxStatus{}, nil
-	}
+	path, err := ioutil.TempDir("", "containers-mapping")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+	ctrsMapTreePath = path
 
 	testingImpl.CreateContainerFunc = func(sandboxID string, containerConfig vc.ContainerConfig) (vc.VCSandbox, vc.VCContainer, error) {
 		return &vcmock.Sandbox{}, &vcmock.Container{}, nil
 	}
 
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
 		testingImpl.CreateContainerFunc = nil
 	}()
 
@@ -1081,6 +1053,7 @@ func TestCreateCreateContainer(t *testing.T) {
 	for _, disableOutput := range []bool{true, false} {
 		_, err = createContainer(spec, testContainerID, bundlePath, testConsole, disableOutput)
 		assert.NoError(err)
+		os.RemoveAll(path)
 	}
 }
 

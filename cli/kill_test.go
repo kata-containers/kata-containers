@@ -8,6 +8,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"syscall"
 	"testing"
 
@@ -72,13 +73,19 @@ func testKillCLIFunctionTerminationSignalSuccessful(t *testing.T, sig string) {
 
 	testingImpl.KillContainerFunc = testKillContainerFuncReturnNil
 	testingImpl.StopContainerFunc = testStopContainerFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
+
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, annotations), nil
 	}
+
 	defer func() {
 		testingImpl.KillContainerFunc = nil
 		testingImpl.StopContainerFunc = nil
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -90,11 +97,12 @@ func testKillCLIFunctionTerminationSignalSuccessful(t *testing.T, sig string) {
 		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 	}
 
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, annotations), nil
+	}
+
 	testingImpl.StopContainerFunc = nil
 	testingImpl.StopSandboxFunc = testStopSandboxFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
-	}
 	defer func() {
 		testingImpl.StopSandboxFunc = nil
 	}()
@@ -118,12 +126,18 @@ func TestKillCLIFunctionNotTerminationSignalSuccessful(t *testing.T) {
 	}
 
 	testingImpl.KillContainerFunc = testKillContainerFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
+
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
+
 	defer func() {
 		testingImpl.KillContainerFunc = nil
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -145,13 +159,19 @@ func TestKillCLIFunctionNoSignalSuccessful(t *testing.T) {
 
 	testingImpl.KillContainerFunc = testKillContainerFuncReturnNil
 	testingImpl.StopContainerFunc = testStopContainerFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
+
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, annotations), nil
 	}
+
 	defer func() {
 		testingImpl.KillContainerFunc = nil
 		testingImpl.StopContainerFunc = nil
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -163,11 +183,12 @@ func TestKillCLIFunctionNoSignalSuccessful(t *testing.T) {
 		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 	}
 
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, annotations), nil
+	}
+
 	testingImpl.StopContainerFunc = nil
 	testingImpl.StopSandboxFunc = testStopSandboxFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
-	}
 	defer func() {
 		testingImpl.StopSandboxFunc = nil
 	}()
@@ -194,13 +215,19 @@ func TestKillCLIFunctionEnableAllSuccessful(t *testing.T) {
 		return nil
 	}
 	testingImpl.StopContainerFunc = testStopContainerFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
+
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, annotations), nil
 	}
+
 	defer func() {
 		testingImpl.KillContainerFunc = nil
 		testingImpl.StopContainerFunc = nil
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -213,11 +240,12 @@ func TestKillCLIFunctionEnableAllSuccessful(t *testing.T) {
 		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 	}
 
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, annotations), nil
+	}
+
 	testingImpl.StopContainerFunc = nil
 	testingImpl.StopSandboxFunc = testStopSandboxFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, annotations), nil
-	}
 	defer func() {
 		testingImpl.StopSandboxFunc = nil
 	}()
@@ -237,12 +265,17 @@ func TestKillCLIFunctionContainerNotExistFailure(t *testing.T) {
 	assert := assert.New(t)
 
 	testingImpl.KillContainerFunc = testKillContainerFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return []vc.SandboxStatus{}, nil
+
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return vc.ContainerStatus{}, nil
 	}
+
 	defer func() {
 		testingImpl.KillContainerFunc = nil
-		testingImpl.ListSandboxFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -259,12 +292,18 @@ func TestKillCLIFunctionInvalidSignalFailure(t *testing.T) {
 	}
 
 	testingImpl.KillContainerFunc = testKillContainerFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
+
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
+
 	defer func() {
 		testingImpl.KillContainerFunc = nil
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -281,12 +320,18 @@ func TestKillCLIFunctionInvalidStatePausedFailure(t *testing.T) {
 	}
 
 	testingImpl.KillContainerFunc = testKillContainerFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
+
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
+
 	defer func() {
 		testingImpl.KillContainerFunc = nil
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -303,12 +348,18 @@ func TestKillCLIFunctionInvalidStateStoppedFailure(t *testing.T) {
 	}
 
 	testingImpl.KillContainerFunc = testKillContainerFuncReturnNil
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
+
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
+
 	defer func() {
 		testingImpl.KillContainerFunc = nil
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -324,11 +375,16 @@ func TestKillCLIFunctionKillContainerFailure(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
-		return newSingleContainerSandboxStatusList(testSandboxID, testContainerID, state, state, map[string]string{}), nil
+	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
+
 	defer func() {
-		testingImpl.ListSandboxFunc = nil
+		testingImpl.StatusContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)

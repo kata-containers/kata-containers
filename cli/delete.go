@@ -101,6 +101,10 @@ func delete(containerID string, force bool) error {
 		return err
 	}
 
+	if err := delContainerIDMapping(containerID); err != nil {
+		return err
+	}
+
 	return removeCgroupsPath(containerID, cgroupsPathList)
 }
 
