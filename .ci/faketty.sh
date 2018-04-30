@@ -8,4 +8,10 @@ set -e
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 
-run_go_test
+# function to run unit test always with a tty
+function faketty()
+{
+	script -qfc $@;
+}
+
+faketty $@
