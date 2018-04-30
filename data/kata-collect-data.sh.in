@@ -5,13 +5,15 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-script_name=${0##*/}
-runtime_name="@RUNTIME_NAME@"
-runtime=$(command -v "$runtime_name" 2>/dev/null)
-issue_url="@PROJECT_BUG_URL@"
-script_version="@VERSION@ (commit @COMMIT@)"
+typeset -r script_name=${0##*/}
+typeset -r runtime_name="@RUNTIME_NAME@"
+typeset -r runtime=$(command -v "$runtime_name" 2>/dev/null)
+typeset -r issue_url="@PROJECT_BUG_URL@"
+typeset -r script_version="@VERSION@ (commit @COMMIT@)"
 
 typeset -r unknown="unknown"
+
+typeset -r osbuilder_file="/var/lib/osbuilder/osbuilder.yaml"
 
 # Maximum number of errors to show for a single system component
 # (such as runtime or proxy).
@@ -347,8 +349,8 @@ show_runtime()
 }
 
 # Parameter 1: Path to disk image file.
-# Returns: Agent version string, or "$unknown" on error.
-get_agent_version()
+# Returns: Details of the image, or "$unknown" on error.
+get_image_details()
 {
 	local img="$1"
 
@@ -361,7 +363,7 @@ get_agent_version()
 	local partition
 	local count
 	local mountpoint
-	local version
+	local contents
 	local expected
 
 	loop_device=$(loopmount_image "$img")
@@ -392,16 +394,49 @@ get_agent_version()
 
 	mountpoint=$(mount_partition "$partition_path")
 
-	agent="/bin/@PROJECT_TYPE@-agent"
-
-	version=$(chroot "$mountpoint" "$agent" --version 2>/dev/null)
+	contents=$(read_osbuilder_file "${mountpoint}")
+	[ -z "$contents" ] && contents="$unknown"
 
 	unmount_partition "$mountpoint"
 	release_device "$loop_device"
 
-	[ -z "$version" ] && version="$unknown"
+	echo "$contents"
+}
 
-	echo "$version"
+# Parameter 1: Path to the initrd file.
+# Returns: Details of the initrd, or "$unknown" on error.
+get_initrd_details()
+{
+	local initrd="$1"
+
+	[ -z "$initrd" ] && { echo "$unknown"; return;}
+	[ -e "$initrd" ] || { echo "$unknown"; return;}
+
+	local file
+	local relative_file=""
+	local tmp
+
+	file="${osbuilder_file}"
+
+	# All files in the cpio archive are relative so remove leading slash
+	relative_file=$(echo "$file"|sed 's!^/!!g')
+
+	local tmpdir=$(mktemp -d)
+
+	# Note: 'cpio --directory' seems to be non-portable, so cd(1) instead.
+	(cd "$tmpdir" && gzip -dc "$initrd" | cpio \
+		--extract \
+		--make-directories \
+		--no-absolute-filenames \
+		$relative_file 2>/dev/null)
+
+	contents=$(read_osbuilder_file "${tmpdir}")
+	[ -z "$contents" ] && contents="$unknown"
+
+	tmp="${tmpdir}/${file}"
+	[ -d "$tmp" ] && rm -rf "$tmp"
+
+	echo "$contents"
 }
 
 # Returns: Full path to the image file.
@@ -410,7 +445,7 @@ get_image_file()
 	local cmd="@PROJECT_TYPE@-env"
 	local cmdline="$runtime $cmd"
 
-	image=$(eval "$cmdline" 2>/dev/null |\
+	local image=$(eval "$cmdline" 2>/dev/null |\
 		grep -A 1 '^\[Image\]' |\
 		egrep "\<Path\> =" |\
 		awk '{print $3}' |\
@@ -418,6 +453,21 @@ get_image_file()
 
 	echo "$image"
 }
+
+# Returns: Full path to the initrd file.
+get_initrd_file()
+{
+	local cmd="@PROJECT_TYPE@-env"
+	local cmdline="$runtime $cmd"
+
+	local initrd=$(eval "$cmdline" 2>/dev/null |\
+		grep -A 1 '^\[Initrd\]' |\
+		egrep "\<Path\> =" |\
+		awk '{print $3}' |\
+		tr -d '"')
+
+	echo "$initrd"
+} 
 
 # Parameter 1: Path to disk image file.
 # Returns: Path to loop device.
@@ -493,21 +543,61 @@ release_device()
 	losetup -d "$device"
 }
 
-show_agent_version()
+# Retrieve details of the image containing
+# the rootfs used to boot the virtual machine.
+show_image_details()
 {
 	local image
-	local version
+	local details
 	
 	image=$(get_image_file)
-	version=$(get_agent_version "$image")
 
-	heading "Agent"
+	heading "Image details"
 
-	msg "version:"
-
-	show_quoted_text "$version"
+	if [ -n "$image" ]
+	then
+		details=$(get_image_details "$image")
+		show_quoted_text "$details"
+	else
+		msg "No image"
+	fi
 
 	separator
+}
+
+# Retrieve details of the initrd containing
+# the rootfs used to boot the virtual machine.
+show_initrd_details()
+{
+	local initrd
+	local details
+	
+	initrd=$(get_initrd_file)
+
+	heading "Initrd details"
+
+	if [ -n "$initrd" ]
+	then
+		details=$(get_initrd_details "$initrd")
+		show_quoted_text "$details"
+	else
+		msg "No initrd"
+	fi
+
+	separator
+}
+
+read_osbuilder_file()
+{
+	local rootdir="$1"
+
+	[ -n "$rootdir" ] || die "need root directory"
+
+	local file="${rootdir}/${osbuilder_file}"
+
+	[ ! -e "$file" ] && return
+
+	cat "$file"
 }
 
 main()
@@ -552,7 +642,8 @@ main()
 	show_meta
 	show_runtime
 	show_runtime_configs
-	show_agent_version
+	show_image_details
+	show_initrd_details
 	show_log_details
 	show_container_mgr_details
 	show_package_versions
