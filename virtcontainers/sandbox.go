@@ -437,10 +437,12 @@ func unlockSandbox(lockFile *os.File) error {
 type Sandbox struct {
 	id string
 
+	sync.Mutex
 	hypervisor hypervisor
 	agent      agent
 	storage    resourceStorage
 	network    network
+	monitor    *monitor
 
 	config *SandboxConfig
 
@@ -532,6 +534,9 @@ func (s *Sandbox) GetContainer(containerID string) VCContainer {
 // Release closes the agent connection and removes sandbox from internal list.
 func (s *Sandbox) Release() error {
 	globalSandboxList.removeSandbox(s.id)
+	if s.monitor != nil {
+		s.monitor.stop()
+	}
 	return s.agent.disconnect()
 }
 
@@ -559,6 +564,21 @@ func (s *Sandbox) Status() SandboxStatus {
 		ContainersStatus: contStatusList,
 		Annotations:      s.config.Annotations,
 	}
+}
+
+// Monitor returns a error channel for watcher to watch at
+func (s *Sandbox) Monitor() (chan error, error) {
+	if s.state.State != StateRunning {
+		return nil, fmt.Errorf("Sandbox is not running")
+	}
+
+	s.Lock()
+	if s.monitor == nil {
+		s.monitor = newMonitor(s)
+	}
+	s.Unlock()
+
+	return s.monitor.newWatcher()
 }
 
 func createAssets(sandboxConfig *SandboxConfig) error {
@@ -807,6 +827,10 @@ func (s *Sandbox) Delete() error {
 	}
 
 	globalSandboxList.removeSandbox(s.id)
+
+	if s.monitor != nil {
+		s.monitor.stop()
+	}
 
 	return s.storage.deleteSandboxResources(s.id, nil)
 }
