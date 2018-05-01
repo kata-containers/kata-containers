@@ -20,6 +20,10 @@ $(TARGET): $(SOURCES) $(VERSION_FILE)
 	go build -o $@ -ldflags "-X main.version=$(VERSION_COMMIT)"
 
 test:
+	@echo "Go tests using faketty"
+	bash .ci/faketty.sh .ci/go-test.sh
+	#Run again without fake tty to avoid hide any potential issue.
+	@echo "Go tests without faketty"
 	bash .ci/go-test.sh
 
 clean:
