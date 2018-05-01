@@ -24,7 +24,7 @@ type kataBuiltInProxy struct {
 // start is the proxy start implementation for kata builtin proxy.
 // It starts the console watcher for the guest.
 // It returns agentURL to let agent connect directly.
-func (p *kataBuiltInProxy) start(sandbox Sandbox, params proxyParams) (int, string, error) {
+func (p *kataBuiltInProxy) start(sandbox *Sandbox, params proxyParams) (int, string, error) {
 	if p.conn != nil {
 		return -1, "", fmt.Errorf("kata builtin proxy running for sandbox %s", p.sandboxID)
 	}
@@ -40,7 +40,7 @@ func (p *kataBuiltInProxy) start(sandbox Sandbox, params proxyParams) (int, stri
 }
 
 // stop is the proxy stop implementation for kata builtin proxy.
-func (p *kataBuiltInProxy) stop(sandbox Sandbox, pid int) error {
+func (p *kataBuiltInProxy) stop(sandbox *Sandbox, pid int) error {
 	if p.conn != nil {
 		p.conn.Close()
 		p.conn = nil

@@ -528,7 +528,7 @@ func TestStartSandboxHyperstartAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(defaultSharedDir, *pImpl)
+	bindUnmountAllRootfs(defaultSharedDir, pImpl)
 }
 
 func TestStartSandboxKataAgentSuccessful(t *testing.T) {
@@ -568,7 +568,7 @@ func TestStartSandboxKataAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(defaultSharedDir, *pImpl)
+	bindUnmountAllRootfs(defaultSharedDir, pImpl)
 }
 
 func TestStartSandboxFailing(t *testing.T) {
@@ -800,7 +800,7 @@ func TestRunSandboxHyperstartAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(defaultSharedDir, *pImpl)
+	bindUnmountAllRootfs(defaultSharedDir, pImpl)
 }
 
 func TestRunSandboxKataAgentSuccessful(t *testing.T) {
@@ -846,7 +846,7 @@ func TestRunSandboxKataAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(defaultSharedDir, *pImpl)
+	bindUnmountAllRootfs(defaultSharedDir, pImpl)
 }
 
 func TestRunSandboxFailing(t *testing.T) {
@@ -1392,7 +1392,7 @@ func TestStartStopContainerHyperstartAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(defaultSharedDir, *pImpl)
+	bindUnmountAllRootfs(defaultSharedDir, pImpl)
 }
 
 func TestStartStopSandboxHyperstartAgentSuccessfulWithCNINetwork(t *testing.T) {
@@ -1649,7 +1649,7 @@ func TestEnterContainerHyperstartAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(defaultSharedDir, *pImpl)
+	bindUnmountAllRootfs(defaultSharedDir, pImpl)
 }
 
 func TestEnterContainerFailingNoSandbox(t *testing.T) {

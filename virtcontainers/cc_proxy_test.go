@@ -25,7 +25,7 @@ func TestCCProxyStart(t *testing.T) {
 	proxy := &ccProxy{}
 
 	type testData struct {
-		sandbox     Sandbox
+		sandbox     *Sandbox
 		expectedURI string
 		expectError bool
 	}
@@ -35,16 +35,16 @@ func TestCCProxyStart(t *testing.T) {
 	expectedURI := fmt.Sprintf("unix://%s", expectedSocketPath)
 
 	data := []testData{
-		{Sandbox{}, "", true},
+		{&Sandbox{}, "", true},
 		{
-			Sandbox{
+			&Sandbox{
 				config: &SandboxConfig{
 					ProxyType: "invalid",
 				},
 			}, "", true,
 		},
 		{
-			Sandbox{
+			&Sandbox{
 				config: &SandboxConfig{
 					ProxyType: CCProxyType,
 					// invalid - no path
@@ -53,7 +53,7 @@ func TestCCProxyStart(t *testing.T) {
 			}, "", true,
 		},
 		{
-			Sandbox{
+			&Sandbox{
 				config: &SandboxConfig{
 					ProxyType: CCProxyType,
 					ProxyConfig: ProxyConfig{
@@ -63,7 +63,7 @@ func TestCCProxyStart(t *testing.T) {
 			}, "", true,
 		},
 		{
-			Sandbox{
+			&Sandbox{
 				id: testSandboxID,
 				config: &SandboxConfig{
 					ProxyType: CCProxyType,

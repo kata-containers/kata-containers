@@ -55,7 +55,7 @@ func TestNoopAgentExec(t *testing.T) {
 
 func TestNoopAgentStartSandbox(t *testing.T) {
 	n := &noopAgent{}
-	sandbox := Sandbox{}
+	sandbox := &Sandbox{}
 
 	err := n.startSandbox(sandbox)
 	if err != nil {
@@ -65,7 +65,7 @@ func TestNoopAgentStartSandbox(t *testing.T) {
 
 func TestNoopAgentStopSandbox(t *testing.T) {
 	n := &noopAgent{}
-	sandbox := Sandbox{}
+	sandbox := &Sandbox{}
 
 	err := n.stopSandbox(sandbox)
 	if err != nil {
@@ -81,7 +81,7 @@ func TestNoopAgentCreateContainer(t *testing.T) {
 	}
 	defer cleanUp()
 
-	if err := n.startSandbox(*sandbox); err != nil {
+	if err := n.startSandbox(sandbox); err != nil {
 		t.Fatal(err)
 	}
 
@@ -98,7 +98,7 @@ func TestNoopAgentStartContainer(t *testing.T) {
 	}
 	defer cleanUp()
 
-	err = n.startContainer(*sandbox, container)
+	err = n.startContainer(sandbox, container)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestNoopAgentStopContainer(t *testing.T) {
 	}
 	defer cleanUp()
 
-	err = n.stopContainer(*sandbox, *container)
+	err = n.stopContainer(sandbox, *container)
 	if err != nil {
 		t.Fatal(err)
 	}

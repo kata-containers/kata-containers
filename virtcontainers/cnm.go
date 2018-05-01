@@ -28,7 +28,7 @@ func (n *cnm) run(networkNSPath string, cb func() error) error {
 }
 
 // add adds all needed interfaces inside the network namespace for the CNM network.
-func (n *cnm) add(sandbox Sandbox, config NetworkConfig, netNsPath string, netNsCreated bool) (NetworkNamespace, error) {
+func (n *cnm) add(sandbox *Sandbox, config NetworkConfig, netNsPath string, netNsCreated bool) (NetworkNamespace, error) {
 	endpoints, err := createEndpointsFromScan(netNsPath, config)
 	if err != nil {
 		return NetworkNamespace{}, err
@@ -49,7 +49,7 @@ func (n *cnm) add(sandbox Sandbox, config NetworkConfig, netNsPath string, netNs
 
 // remove unbridges and deletes TAP interfaces. It also removes virtual network
 // interfaces and deletes the network namespace for the CNM network.
-func (n *cnm) remove(sandbox Sandbox, networkNS NetworkNamespace) error {
+func (n *cnm) remove(sandbox *Sandbox, networkNS NetworkNamespace) error {
 	if err := removeNetworkCommon(networkNS); err != nil {
 		return err
 	}
