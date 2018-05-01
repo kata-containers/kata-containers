@@ -801,3 +801,8 @@ func (h *hyper) onlineCPUMem(cpus uint32) error {
 	// cc-agent uses udev to online CPUs automatically
 	return nil
 }
+
+func (h *hyper) check() error {
+	// cc-agent does not support check
+	return nil
+}

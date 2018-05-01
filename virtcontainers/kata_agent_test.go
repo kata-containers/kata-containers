@@ -191,10 +191,20 @@ func (p *gRPCProxy) OnlineCPUMem(ctx context.Context, req *pb.OnlineCPUMemReques
 	return emptyResp, nil
 }
 
+func (p *gRPCProxy) Check(ctx context.Context, req *pb.CheckRequest) (*pb.HealthCheckResponse, error) {
+	return &pb.HealthCheckResponse{}, nil
+}
+
+func (p *gRPCProxy) Version(ctx context.Context, req *pb.CheckRequest) (*pb.VersionCheckResponse, error) {
+	return &pb.VersionCheckResponse{}, nil
+
+}
+
 func gRPCRegister(s *grpc.Server, srv interface{}) {
 	switch g := srv.(type) {
 	case *gRPCProxy:
 		pb.RegisterAgentServiceServer(s, g)
+		pb.RegisterHealthServer(s, g)
 	}
 }
 
@@ -206,6 +216,7 @@ var reqList = []interface{}{
 	&pb.StartContainerRequest{},
 	&pb.RemoveContainerRequest{},
 	&pb.SignalProcessRequest{},
+	&pb.CheckRequest{},
 }
 
 func TestKataAgentSendReq(t *testing.T) {

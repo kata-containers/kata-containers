@@ -78,3 +78,8 @@ func (n *noopAgent) processListContainer(sandbox *Sandbox, c Container, options 
 func (n *noopAgent) onlineCPUMem(cpus uint32) error {
 	return nil
 }
+
+// check is the Noop agent health checker. It does nothing.
+func (n *noopAgent) check() error {
+	return nil
+}

@@ -49,6 +49,7 @@ type VCSandbox interface {
 	Pause() error
 	Resume() error
 	Release() error
+	Monitor() (chan error, error)
 	Delete() error
 	Status() SandboxStatus
 	CreateContainer(contConfig ContainerConfig) (VCContainer, error)
