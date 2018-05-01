@@ -51,7 +51,7 @@ func testCreateSandbox(t *testing.T, id string,
 		return nil, fmt.Errorf("Could not create sandbox: %s", err)
 	}
 
-	if err := sandbox.agent.startSandbox(*sandbox); err != nil {
+	if err := sandbox.agent.startSandbox(sandbox); err != nil {
 		return nil, err
 	}
 

@@ -589,7 +589,7 @@ func runNetworkCommon(networkNSPath string, cb func() error) error {
 	})
 }
 
-func addNetworkCommon(sandbox Sandbox, networkNS *NetworkNamespace) error {
+func addNetworkCommon(sandbox *Sandbox, networkNS *NetworkNamespace) error {
 	err := doNetNS(networkNS.NetNsPath, func(_ ns.NetNS) error {
 		for _, endpoint := range networkNS.Endpoints {
 			if err := endpoint.Attach(sandbox.hypervisor); err != nil {
@@ -1365,9 +1365,9 @@ type network interface {
 	run(networkNSPath string, cb func() error) error
 
 	// add adds all needed interfaces inside the network namespace.
-	add(sandbox Sandbox, config NetworkConfig, netNsPath string, netNsCreated bool) (NetworkNamespace, error)
+	add(sandbox *Sandbox, config NetworkConfig, netNsPath string, netNsCreated bool) (NetworkNamespace, error)
 
 	// remove unbridges and deletes TAP interfaces. It also removes virtual network
 	// interfaces and deletes the network namespace.
-	remove(sandbox Sandbox, networkNS NetworkNamespace) error
+	remove(sandbox *Sandbox, networkNS NetworkNamespace) error
 }

@@ -674,7 +674,7 @@ func newSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
 		}
 	}()
 
-	if err = s.storage.createAllResources(*s); err != nil {
+	if err = s.storage.createAllResources(s); err != nil {
 		return nil, err
 	}
 
@@ -826,7 +826,7 @@ func (s *Sandbox) createNetwork() error {
 	}
 
 	// Add the network
-	networkNS, err := s.network.add(*s, s.config.NetworkConfig, netNsPath, netNsCreated)
+	networkNS, err := s.network.add(s, s.config.NetworkConfig, netNsPath, netNsCreated)
 	if err != nil {
 		return err
 	}
@@ -838,7 +838,7 @@ func (s *Sandbox) createNetwork() error {
 
 func (s *Sandbox) removeNetwork() error {
 	if s.networkNS.NetNsCreated {
-		return s.network.remove(*s, s.networkNS)
+		return s.network.remove(s, s.networkNS)
 	}
 
 	return nil
@@ -863,7 +863,7 @@ func (s *Sandbox) startVM() error {
 	// Once startVM is done, we want to guarantee
 	// that the sandbox is manageable. For that we need
 	// to start the sandbox inside the VM.
-	return s.agent.startSandbox(*s)
+	return s.agent.startSandbox(s)
 }
 
 func (s *Sandbox) addContainer(c *Container) error {
@@ -1065,7 +1065,7 @@ func (s *Sandbox) stop() error {
 		}
 	}
 
-	if err := s.agent.stopSandbox(*s); err != nil {
+	if err := s.agent.stopSandbox(s); err != nil {
 		return err
 	}
 

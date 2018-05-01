@@ -105,7 +105,7 @@ func parseVSOCKAddr(sock string) (uint32, uint32, error) {
 	return uint32(cid), uint32(port), nil
 }
 
-func (k *kataAgent) generateVMSocket(sandbox Sandbox, c KataAgentConfig) error {
+func (k *kataAgent) generateVMSocket(sandbox *Sandbox, c KataAgentConfig) error {
 	cid, port, err := parseVSOCKAddr(c.GRPCSocket)
 	if err != nil {
 		// We need to generate a host UNIX socket path for the emulated serial port.
@@ -129,7 +129,7 @@ func (k *kataAgent) generateVMSocket(sandbox Sandbox, c KataAgentConfig) error {
 func (k *kataAgent) init(sandbox *Sandbox, config interface{}) (err error) {
 	switch c := config.(type) {
 	case KataAgentConfig:
-		if err := k.generateVMSocket(*sandbox, c); err != nil {
+		if err := k.generateVMSocket(sandbox, c); err != nil {
 			return err
 		}
 		k.keepConn = c.LongLiveConn
@@ -401,7 +401,7 @@ func (k *kataAgent) generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*
 	return ifaces, routes, nil
 }
 
-func (k *kataAgent) startSandbox(sandbox Sandbox) error {
+func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	if k.proxy == nil {
 		return errorMissingProxy
 	}
@@ -505,7 +505,7 @@ func (k *kataAgent) startSandbox(sandbox Sandbox) error {
 	return err
 }
 
-func (k *kataAgent) stopSandbox(sandbox Sandbox) error {
+func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 	if k.proxy == nil {
 		return errorMissingProxy
 	}
@@ -840,7 +840,7 @@ func (k *kataAgent) handleBlockVolumes(c *Container) []*grpc.Storage {
 	return volumeStorages
 }
 
-func (k *kataAgent) startContainer(sandbox Sandbox, c *Container) error {
+func (k *kataAgent) startContainer(sandbox *Sandbox, c *Container) error {
 	req := &grpc.StartContainerRequest{
 		ContainerId: c.id,
 	}
@@ -849,7 +849,7 @@ func (k *kataAgent) startContainer(sandbox Sandbox, c *Container) error {
 	return err
 }
 
-func (k *kataAgent) stopContainer(sandbox Sandbox, c Container) error {
+func (k *kataAgent) stopContainer(sandbox *Sandbox, c Container) error {
 	req := &grpc.RemoveContainerRequest{
 		ContainerId: c.id,
 	}
@@ -865,7 +865,7 @@ func (k *kataAgent) stopContainer(sandbox Sandbox, c Container) error {
 	return bindUnmountContainerRootfs(kataHostSharedDir, sandbox.id, c.id)
 }
 
-func (k *kataAgent) killContainer(sandbox Sandbox, c Container, signal syscall.Signal, all bool) error {
+func (k *kataAgent) killContainer(sandbox *Sandbox, c Container, signal syscall.Signal, all bool) error {
 	req := &grpc.SignalProcessRequest{
 		ContainerId: c.id,
 		ExecId:      c.process.Token,
@@ -876,7 +876,7 @@ func (k *kataAgent) killContainer(sandbox Sandbox, c Container, signal syscall.S
 	return err
 }
 
-func (k *kataAgent) processListContainer(sandbox Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
+func (k *kataAgent) processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
 	req := &grpc.ListProcessesRequest{
 		ContainerId: c.id,
 		Format:      options.Format,

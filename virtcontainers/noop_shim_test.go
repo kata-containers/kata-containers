@@ -11,7 +11,7 @@ import (
 
 func TestNoopShimStart(t *testing.T) {
 	s := &noopShim{}
-	sandbox := Sandbox{}
+	sandbox := &Sandbox{}
 	params := ShimParams{}
 	expected := 0
 

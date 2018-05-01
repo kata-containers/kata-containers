@@ -324,7 +324,7 @@ func bindUnmountContainerRootfs(sharedDir, sandboxID, cID string) error {
 	return nil
 }
 
-func bindUnmountAllRootfs(sharedDir string, sandbox Sandbox) {
+func bindUnmountAllRootfs(sharedDir string, sandbox *Sandbox) {
 	for _, c := range sandbox.containers {
 		c.unmountHostMounts()
 		if c.state.Fstype == "" {

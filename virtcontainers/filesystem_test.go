@@ -27,7 +27,7 @@ func TestFilesystemCreateAllResourcesSuccessful(t *testing.T) {
 		Containers: contConfigs,
 	}
 
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		id:      testSandboxID,
 		storage: fs,
 		config:  sandboxConfig,
@@ -96,7 +96,7 @@ func TestFilesystemCreateAllResourcesSuccessful(t *testing.T) {
 func TestFilesystemCreateAllResourcesFailingSandboxIDEmpty(t *testing.T) {
 	fs := &filesystem{}
 
-	sandbox := Sandbox{}
+	sandbox := &Sandbox{}
 
 	err := fs.createAllResources(sandbox)
 	if err == nil {
@@ -111,7 +111,7 @@ func TestFilesystemCreateAllResourcesFailingContainerIDEmpty(t *testing.T) {
 		{id: ""},
 	}
 
-	sandbox := Sandbox{
+	sandbox := &Sandbox{
 		id:         testSandboxID,
 		containers: containers,
 	}

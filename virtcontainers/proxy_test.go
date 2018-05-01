@@ -213,7 +213,7 @@ func testDefaultProxyURL(expectedURL string, socketType string, sandboxID string
 		id: sandboxID,
 	}
 
-	url, err := defaultProxyURL(*sandbox, socketType)
+	url, err := defaultProxyURL(sandbox, socketType)
 	if err != nil {
 		return err
 	}

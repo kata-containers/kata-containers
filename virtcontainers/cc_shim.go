@@ -14,7 +14,7 @@ type ccShim struct{}
 // start is the ccShim start implementation.
 // It starts the cc-shim binary with URL and token flags provided by
 // the proxy.
-func (s *ccShim) start(sandbox Sandbox, params ShimParams) (int, error) {
+func (s *ccShim) start(sandbox *Sandbox, params ShimParams) (int, error) {
 	if sandbox.config == nil {
 		return -1, fmt.Errorf("Sandbox config cannot be nil")
 	}
