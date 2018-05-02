@@ -246,6 +246,7 @@ OK "Pull Agent source code"
 
 info "Build agent"
 pushd "${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
+[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful" || true
 make clean
 make INIT=${AGENT_INIT}
 make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT}
