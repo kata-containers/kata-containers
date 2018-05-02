@@ -147,7 +147,7 @@ copy_kernel_modules()
 
 OSBUILDER_VERSION="unknown"
 
-while getopts c:ho:r: opt
+while getopts a:ho:r: opt
 do
 	case $opt in
 		a)	AGENT_VERSION="${OPTARG}" ;;
