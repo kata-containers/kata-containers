@@ -96,6 +96,8 @@ externals:
       OCI-based Kubernetes Container Runtime Interface implementation
     url: "https://github.com/kubernetes-incubator/cri-o"
     version: "393429d5961ea1f14ff21265b534e98ad2ac40fc"
+    meta:
+      openshift: "v1.9.11"
 
   cri-containerd:
     description: |
