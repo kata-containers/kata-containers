@@ -10,6 +10,13 @@ set -e
 cidir=$(dirname "$0")
 source /etc/os-release
 source "${cidir}/lib.sh"
+
+if [ "$ID" != "fedora" ] && [ "$CI" == true ]; then
+	echo "Skip Openshift Installation on $ID"
+	echo "CI only runs openshift tests on fedora"
+	exit
+fi
+
 openshift_origin_version=$(get_version "externals.openshift.version")
 openshift_origin_commit=$(get_version "externals.openshift.commit")
 

@@ -9,6 +9,7 @@ set -e
 
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/openshiftrc"
+source "${SCRIPT_PATH}/../../.ci/lib.sh"
 
 echo "Start crio service"
 sudo systemctl start crio
@@ -37,5 +38,14 @@ EOF
 echo "Start Master"
 sudo -E openshift start master --config "$master_config" &> master.log &
 
+# Wait for the master to get ready.
+wait_time=10
+sleep_time=1
+cmd="sudo -E oc status"
+waitForProcess "$wait_time" "$sleep_time" "$cmd"
+
 echo "Start Node"
 sudo -E openshift start node --config "$node_crio_config" &> node.log &
+
+sudo -E oc get all
+echo "Openshift started successfully"

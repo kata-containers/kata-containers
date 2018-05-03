@@ -18,7 +18,17 @@ pushd "${GOPATH}/src/${crio_repo}"
 
 if [ "$ghprbGhRepository" != "${crio_repo/github.com\/}" ]
 then
-	crio_version=$(get_version "externals.crio.version")
+	# For Fedora, we use CRI-O version that is compatible with the
+	# Openshift version that we support (usually the latest stable).
+	# For other distros, we use the CRI-O version that is compatible with
+	# the kubernetes version that we support (usually latest stable).
+	# Sometimes these versions differ.
+	if [ "$ID" == "fedora" ]; then
+		crio_version=$(get_version "externals.crio.meta.openshift")
+	else
+		crio_version=$(get_version "externals.crio.version")
+	fi
+
 	git fetch
 	git checkout "${crio_version}"
 fi
@@ -76,7 +86,10 @@ echo "Set runc as default runtime in CRI-O for trusted workloads"
 sudo sed -i 's/^runtime =.*/runtime = "\/usr\/local\/bin\/crio-runc"/' "$crio_config_file"
 
 echo "Add docker.io registry to pull images"
+# Matches cri-o 1.9 file format
 sudo sed -i 's/^registries = \[/registries = \[ "docker.io"/' "$crio_config_file"
+# Matches cri-o 1.10 file format
+sudo sed -i 's/^#registries = \[/registries = \[ "docker.io" \] /' "$crio_config_file"
 
 echo "Set manage_network_ns_lifecycle to true"
 network_ns_flag="manage_network_ns_lifecycle"

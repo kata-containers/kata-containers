@@ -42,4 +42,8 @@ teardown() {
 	sudo -E kubectl delete deployment "$service_name"
 	sudo -E kubectl delete service "$service_name"
 	sudo -E kubectl delete pod "$busybox_pod"
+	# Wait for the pods to be deleted
+	cmd="sudo -E kubectl get pods | grep found."
+	waitForProcess "$wait_time" "$sleep_time" "$cmd"
+	sudo -E kubectl get pods
 }
