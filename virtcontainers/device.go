@@ -334,6 +334,9 @@ type BlockDevice struct {
 
 	// Path at which the device appears inside the VM, outside of the container mount namespace
 	VirtPath string
+
+	// PCI Slot of the block device
+	PCIAddr string
 }
 
 func newBlockDevice(devInfo DeviceInfo) *BlockDevice {
@@ -380,7 +383,7 @@ func (device *BlockDevice) attach(h hypervisor, c *Container) (err error) {
 
 	deviceLogger().WithField("device", device.DeviceInfo.HostPath).Info("Attaching block device")
 
-	if err = h.hotplugAddDevice(drive, blockDev); err != nil {
+	if err = h.hotplugAddDevice(&drive, blockDev); err != nil {
 		return err
 	}
 
@@ -388,6 +391,7 @@ func (device *BlockDevice) attach(h hypervisor, c *Container) (err error) {
 
 	if c.sandbox.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
 		device.VirtPath = filepath.Join("/dev", driveName)
+		device.PCIAddr = drive.PCIAddr
 	} else {
 		scsiAddr, err := getSCSIAddress(index)
 		if err != nil {
@@ -404,7 +408,7 @@ func (device BlockDevice) detach(h hypervisor) error {
 	if device.DeviceInfo.Hotplugged {
 		deviceLogger().WithField("device", device.DeviceInfo.HostPath).Info("Unplugging block device")
 
-		drive := Drive{
+		drive := &Drive{
 			ID: makeNameID("drive", device.DeviceInfo.ID),
 		}
 

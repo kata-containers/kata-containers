@@ -24,9 +24,9 @@ import (
 )
 
 var (
-	testKataProxyURLTempl   = "unix://%s/kata-proxy-test.sock"
-	testBlockDeviceVirtPath = "testBlockDeviceVirtPath"
-	testBlockDeviceCtrPath  = "testBlockDeviceCtrPath"
+	testKataProxyURLTempl  = "unix://%s/kata-proxy-test.sock"
+	testBlockDeviceCtrPath = "testBlockDeviceCtrPath"
+	testPCIAddr            = "04/02"
 )
 
 func proxyHandlerDiscard(c net.Conn) {
@@ -366,16 +366,16 @@ func TestAppendDevices(t *testing.T) {
 	expected := []*pb.Device{
 		{
 			Type:          kataBlkDevType,
-			VmPath:        testBlockDeviceVirtPath,
 			ContainerPath: testBlockDeviceCtrPath,
+			Id:            testPCIAddr,
 		},
 	}
 	ctrDevices := []Device{
 		&BlockDevice{
-			VirtPath: testBlockDeviceVirtPath,
 			DeviceInfo: DeviceInfo{
 				ContainerPath: testBlockDeviceCtrPath,
 			},
+			PCIAddr: testPCIAddr,
 		},
 	}
 
