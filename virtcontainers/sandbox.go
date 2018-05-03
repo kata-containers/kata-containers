@@ -60,6 +60,9 @@ type State struct {
 
 	// Bool to indicate if the drive for a container was hotplugged.
 	HotpluggedDrive bool `json:"hotpluggedDrive"`
+
+	// PCI slot at which the block device backing the container rootfs is attached.
+	RootfsPCIAddr string `json:"rootfsPCIAddr"`
 }
 
 // valid checks that the sandbox state is valid.
@@ -237,6 +240,9 @@ type Drive struct {
 
 	// Index assigned to the drive. In case of virtio-scsi, this is used as SCSI LUN index
 	Index int
+
+	// PCIAddr is the PCI address used to identify the slot at which the drive is attached.
+	PCIAddr string
 }
 
 // EnvVar is a key/value structure representing a command

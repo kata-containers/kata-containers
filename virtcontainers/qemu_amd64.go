@@ -205,7 +205,7 @@ func (q *qemuAmd64) appendBridges(devices []govmmQemu.Device, bridges []Bridge) 
 			t = govmmQemu.PCIEBridge
 		}
 
-		b.Addr = bridgePCIStartAddr + idx
+		bridges[idx].Addr = bridgePCIStartAddr + idx
 
 		devices = append(devices,
 			govmmQemu.BridgeDevice{
@@ -215,7 +215,7 @@ func (q *qemuAmd64) appendBridges(devices []govmmQemu.Device, bridges []Bridge) 
 				// Each bridge is required to be assigned a unique chassis id > 0
 				Chassis: (idx + 1),
 				SHPC:    true,
-				Addr:    strconv.FormatInt(int64(b.Addr), 10),
+				Addr:    strconv.FormatInt(int64(bridges[idx].Addr), 10),
 			},
 		)
 	}

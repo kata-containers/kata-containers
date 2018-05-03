@@ -212,6 +212,17 @@ func (c *Container) setStateHotpluggedDrive(hotplugged bool) error {
 	return nil
 }
 
+func (c *Container) setContainerRootfsPCIAddr(addr string) error {
+	c.state.RootfsPCIAddr = addr
+
+	err := c.sandbox.storage.storeContainerResource(c.sandbox.id, c.id, stateFileType, c.state)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // GetAnnotations returns container's annotations
 func (c *Container) GetAnnotations() map[string]string {
 	return c.config.Annotations
@@ -788,9 +799,14 @@ func (c *Container) hotplugDrive() error {
 		Index:  driveIndex,
 	}
 
-	if err := c.sandbox.hypervisor.hotplugAddDevice(drive, blockDev); err != nil {
+	if err := c.sandbox.hypervisor.hotplugAddDevice(&drive, blockDev); err != nil {
 		return err
 	}
+
+	if drive.PCIAddr != "" {
+		c.setContainerRootfsPCIAddr(drive.PCIAddr)
+	}
+
 	c.setStateHotpluggedDrive(true)
 
 	if err := c.setStateBlockIndex(driveIndex); err != nil {
@@ -813,7 +829,7 @@ func (c *Container) removeDrive() (err error) {
 		c.Logger().Info("unplugging block device")
 
 		devID := makeNameID("drive", c.id)
-		drive := Drive{
+		drive := &Drive{
 			ID: devID,
 		}
 
