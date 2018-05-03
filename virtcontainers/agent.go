@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/mitchellh/mapstructure"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 // AgentType describes the type of guest agent a Sandbox should run.
@@ -182,6 +183,9 @@ type agent interface {
 
 	// processListContainer will list the processes running inside the container
 	processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error)
+
+	// updateContainer will update the resources of a running container
+	updateContainer(sandbox *Sandbox, c Container, resources specs.LinuxResources) error
 
 	// waitProcess will wait for the exit code of a process
 	waitProcess(c *Container, processID string) (int32, error)

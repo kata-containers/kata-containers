@@ -7,6 +7,8 @@ package virtcontainers
 
 import (
 	"syscall"
+
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 // noopAgent a.k.a. NO-OP Agent is an empty Agent implementation, for testing and
@@ -72,6 +74,11 @@ func (n *noopAgent) signalProcess(c *Container, processID string, signal syscall
 // processListContainer is the Noop agent Container ps implementation. It does nothing.
 func (n *noopAgent) processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
 	return nil, nil
+}
+
+// updateContainer is the Noop agent Container update implementation. It does nothing.
+func (n *noopAgent) updateContainer(sandbox *Sandbox, c Container, resources specs.LinuxResources) error {
+	return nil
 }
 
 // onlineCPUMem is the Noop agent Container online CPU and Memory implementation. It does nothing.

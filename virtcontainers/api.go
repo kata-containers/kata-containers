@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	deviceApi "github.com/kata-containers/runtime/virtcontainers/device/api"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -601,4 +602,29 @@ func ProcessListContainer(sandboxID, containerID string, options ProcessListOpti
 	}
 
 	return c.processList(options)
+}
+
+// UpdateContainer is the virtcontainers entry point to update
+// container's resources.
+func UpdateContainer(sandboxID, containerID string, resources specs.LinuxResources) error {
+	if sandboxID == "" {
+		return errNeedSandboxID
+	}
+
+	if containerID == "" {
+		return errNeedContainerID
+	}
+
+	lockFile, err := rLockSandbox(sandboxID)
+	if err != nil {
+		return err
+	}
+	defer unlockSandbox(lockFile)
+
+	s, err := fetchSandbox(sandboxID)
+	if err != nil {
+		return err
+	}
+
+	return s.UpdateContainer(containerID, resources)
 }
