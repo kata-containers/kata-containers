@@ -121,8 +121,8 @@ externals:
       Distribution of Kubernetes optimized for continuous application
       development and multi-tenant deployment.
     url: "https://github.com/openshift/origin"
-    version: "v3.7.1"
-    commit: "ab0f056"
+    version: "v3.9.0"
+    commit: "191fece"
 
   runc:
     description: "OCI CLI reference runtime implementation"
