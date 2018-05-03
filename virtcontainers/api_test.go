@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -2285,4 +2286,49 @@ func TestReleaseSandbox(t *testing.T) {
 	}
 	err = s.Release()
 	assert.Nil(t, err, "sandbox release failed: %v", err)
+}
+
+func TestUpdateContainer(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	cleanUp()
+
+	period := uint64(1000)
+	quota := int64(2000)
+	assert := assert.New(t)
+	resources := specs.LinuxResources{
+		CPU: &specs.LinuxCPU{
+			Period: &period,
+			Quota:  &quota,
+		},
+	}
+	err := UpdateContainer("", "", resources)
+	assert.Error(err)
+
+	err = UpdateContainer("abc", "", resources)
+	assert.Error(err)
+
+	contID := "100"
+	config := newTestSandboxConfigNoop()
+
+	s, sandboxDir, err := createAndStartSandbox(config)
+	assert.NoError(err)
+	assert.NotNil(s)
+
+	contConfig := newTestContainerConfigNoop(contID)
+	_, c, err := CreateContainer(s.ID(), contConfig)
+	assert.NoError(err)
+	assert.NotNil(c)
+
+	contDir := filepath.Join(sandboxDir, contID)
+	_, err = os.Stat(contDir)
+	assert.NoError(err)
+
+	_, err = StartContainer(s.ID(), contID)
+	assert.NoError(err)
+
+	err = UpdateContainer(s.ID(), contID, resources)
+	assert.NoError(err)
 }

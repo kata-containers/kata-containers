@@ -143,6 +143,10 @@ func (p *gRPCProxy) ListProcesses(ctx context.Context, req *pb.ListProcessesRequ
 	return &pb.ListProcessesResponse{}, nil
 }
 
+func (p *gRPCProxy) UpdateContainer(ctx context.Context, req *pb.UpdateContainerRequest) (*gpb.Empty, error) {
+	return emptyResp, nil
+}
+
 func (p *gRPCProxy) RemoveContainer(ctx context.Context, req *pb.RemoveContainerRequest) (*gpb.Empty, error) {
 	return emptyResp, nil
 }

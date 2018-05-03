@@ -20,6 +20,7 @@ import (
 	"syscall"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -194,4 +195,13 @@ func (m *VCMock) ProcessListContainer(sandboxID, containerID string, options vc.
 	}
 
 	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
+}
+
+// UpdateContainer implements the VC function of the same name.
+func (m *VCMock) UpdateContainer(sandboxID, containerID string, resources specs.LinuxResources) error {
+	if m.UpdateContainerFunc != nil {
+		return m.UpdateContainerFunc(sandboxID, containerID, resources)
+	}
+
+	return fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
 }
