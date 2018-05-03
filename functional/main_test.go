@@ -11,7 +11,10 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-const shouldFail = true
+const (
+	shouldFail    = true
+	shouldNotFail = false
+)
 
 func TestFunctional(t *testing.T) {
 	RegisterFailHandler(Fail)
