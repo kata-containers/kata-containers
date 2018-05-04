@@ -25,31 +25,6 @@ const fileMode0640 = os.FileMode(0640)
 // dirMode is the permission bits used for creating a directory
 const dirMode = os.FileMode(0750) | os.ModeDir
 
-func TestCreateDevice(t *testing.T) {
-	dm := &deviceManager{
-		blockDriver: VirtioBlock,
-	}
-	devInfo := config.DeviceInfo{
-		HostPath: "/dev/vfio/8",
-		DevType:  "b",
-	}
-
-	device := dm.CreateDevice(devInfo)
-	_, ok := device.(*drivers.VFIODevice)
-	assert.True(t, ok)
-
-	devInfo.HostPath = "/dev/sda"
-	device = dm.CreateDevice(devInfo)
-	_, ok = device.(*drivers.BlockDevice)
-	assert.True(t, ok)
-
-	devInfo.HostPath = "/dev/tty"
-	devInfo.DevType = "c"
-	device = dm.CreateDevice(devInfo)
-	_, ok = device.(*drivers.GenericDevice)
-	assert.True(t, ok)
-}
-
 func TestNewDevices(t *testing.T) {
 	dm := &deviceManager{
 		blockDriver: VirtioBlock,
@@ -153,7 +128,8 @@ func TestAttachVFIODevice(t *testing.T) {
 		DevType:       "c",
 	}
 
-	device := dm.CreateDevice(deviceInfo)
+	device, err := dm.createDevice(deviceInfo)
+	assert.Nil(t, err)
 	_, ok := device.(*drivers.VFIODevice)
 	assert.True(t, ok)
 
@@ -176,12 +152,13 @@ func TestAttachGenericDevice(t *testing.T) {
 		DevType:       "c",
 	}
 
-	device := dm.CreateDevice(deviceInfo)
+	device, err := dm.createDevice(deviceInfo)
+	assert.Nil(t, err)
 	_, ok := device.(*drivers.GenericDevice)
 	assert.True(t, ok)
 
 	devReceiver := &api.MockDeviceReceiver{}
-	err := device.Attach(devReceiver)
+	err = device.Attach(devReceiver)
 	assert.Nil(t, err)
 
 	err = device.Detach(devReceiver)
@@ -200,11 +177,12 @@ func TestAttachBlockDevice(t *testing.T) {
 	}
 
 	devReceiver := &api.MockDeviceReceiver{}
-	device := dm.CreateDevice(deviceInfo)
+	device, err := dm.createDevice(deviceInfo)
+	assert.Nil(t, err)
 	_, ok := device.(*drivers.BlockDevice)
 	assert.True(t, ok)
 
-	err := device.Attach(devReceiver)
+	err = device.Attach(devReceiver)
 	assert.Nil(t, err)
 
 	err = device.Detach(devReceiver)
@@ -212,7 +190,8 @@ func TestAttachBlockDevice(t *testing.T) {
 
 	// test virtio SCSI driver
 	dm.blockDriver = VirtioSCSI
-	device = dm.CreateDevice(deviceInfo)
+	device, err = dm.createDevice(deviceInfo)
+	assert.Nil(t, err)
 	err = device.Attach(devReceiver)
 	assert.Nil(t, err)
 

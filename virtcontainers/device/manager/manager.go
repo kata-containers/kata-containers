@@ -29,21 +29,25 @@ func deviceLogger() *logrus.Entry {
 	return api.DeviceLogger().WithField("subsystem", "device")
 }
 
-// CreateDevice creates one device based on DeviceInfo
-func (dm *deviceManager) CreateDevice(devInfo config.DeviceInfo) api.Device {
-	path := devInfo.HostPath
+// createDevice creates one device based on DeviceInfo
+func (dm *deviceManager) createDevice(devInfo config.DeviceInfo) (api.Device, error) {
+	path, err := config.GetHostPathFunc(devInfo)
+	if err != nil {
+		return nil, err
+	}
 
+	devInfo.HostPath = path
 	if isVFIO(path) {
-		return drivers.NewVFIODevice(devInfo)
+		return drivers.NewVFIODevice(devInfo), nil
 	} else if isBlock(devInfo) {
 		if devInfo.DriverOptions == nil {
 			devInfo.DriverOptions = make(map[string]string)
 		}
 		devInfo.DriverOptions["block-driver"] = dm.blockDriver
-		return drivers.NewBlockDevice(devInfo)
+		return drivers.NewBlockDevice(devInfo), nil
 	} else {
 		deviceLogger().WithField("device", path).Info("Device has not been passed to the container")
-		return drivers.NewGenericDevice(devInfo)
+		return drivers.NewGenericDevice(devInfo), nil
 	}
 }
 
@@ -52,13 +56,10 @@ func (dm *deviceManager) NewDevices(devInfos []config.DeviceInfo) ([]api.Device,
 	var devices []api.Device
 
 	for _, devInfo := range devInfos {
-		hostPath, err := config.GetHostPathFunc(devInfo)
+		device, err := dm.createDevice(devInfo)
 		if err != nil {
 			return nil, err
 		}
-
-		devInfo.HostPath = hostPath
-		device := dm.CreateDevice(devInfo)
 		devices = append(devices, device)
 	}
 

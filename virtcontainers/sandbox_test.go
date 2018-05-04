@@ -1588,7 +1588,9 @@ func TestAttachBlockDevice(t *testing.T) {
 	}
 
 	dm := manager.NewDeviceManager(VirtioBlock)
-	device := dm.CreateDevice(deviceInfo)
+	devices, err := dm.NewDevices([]config.DeviceInfo{deviceInfo})
+	assert.Nil(t, err)
+	device := devices[0]
 	_, ok := device.(*drivers.BlockDevice)
 	assert.True(t, ok)
 

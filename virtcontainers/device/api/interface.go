@@ -57,6 +57,5 @@ type Device interface {
 // DeviceManager can be used to create a new device, this can be used as single
 // device management object.
 type DeviceManager interface {
-	CreateDevice(devInfo config.DeviceInfo) Device
 	NewDevices(devInfos []config.DeviceInfo) ([]Device, error)
 }
