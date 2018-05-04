@@ -5,10 +5,12 @@
 package docker
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
 
+	"github.com/kata-containers/tests"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -23,6 +25,9 @@ var _ = Describe("docker volume", func() {
 		fileTest      string = "hello"
 		exitCode      int
 		stdout        string
+		loopFile      string
+		err           error
+		diskFile      string
 	)
 
 	Context("create volume", func() {
@@ -88,6 +93,57 @@ var _ = Describe("docker volume", func() {
 			stdout, _, exitCode = dockerVolume("ls")
 			Expect(exitCode).To(Equal(0))
 			Expect(stdout).NotTo(ContainSubstring(testFile))
+		})
+	})
+
+	Context("creating a text file under /dev", func() {
+		It("should be passed the content to the container", func() {
+			if os.Getuid() != 0 {
+				Skip("only root user can create files under /dev")
+			}
+			fileName := "/dev/foo"
+			textContent := "hello"
+			err = ioutil.WriteFile(fileName, []byte(textContent), 0644)
+			Expect(err).ToNot(HaveOccurred())
+			defer os.Remove(fileName)
+
+			args = []string{"--name", id, "-v", fileName + ":" + fileName, Image, "cat", fileName}
+			stdout, _, exitCode = dockerRun(args...)
+			Expect(exitCode).To(Equal(0))
+			Expect(stdout).To(ContainSubstring(textContent))
+
+			Expect(RemoveDockerContainer(id)).To(BeTrue())
+			Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+		})
+	})
+
+	Context("passing a block device", func() {
+		It("should be mounted", func() {
+			if os.Getuid() != 0 {
+				Skip("only root user can create loop devices")
+			}
+
+			diskFile, loopFile, err = createLoopDevice()
+			Expect(err).ToNot(HaveOccurred())
+
+			loopFileP1 := fmt.Sprintf("%sp1", loopFile)
+			mkfsCmd := tests.NewCommand("mkfs.ext4", loopFileP1)
+			_, _, exitCode := mkfsCmd.Run()
+			Expect(exitCode).To(Equal(0))
+			Expect(err).ToNot(HaveOccurred())
+
+			args = []string{"--name", id, "--cap-add=SYS_ADMIN", "-v", loopFileP1 + ":" + loopFileP1, DebianImage, "bash", "-c", fmt.Sprintf("sleep 15; mount %s /mnt", loopFileP1)}
+			_, _, exitCode = dockerRun(args...)
+			Expect(exitCode).To(Equal(0))
+
+			err = deleteLoopDevice(loopFile)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = os.Remove(diskFile)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(RemoveDockerContainer(id)).To(BeTrue())
+			Expect(ExistDockerContainer(id)).NotTo(BeTrue())
 		})
 	})
 })
