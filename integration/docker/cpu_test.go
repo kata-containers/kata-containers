@@ -61,14 +61,22 @@ func withCPUConstraint(cpus float64, defaultVCPUs int, fail bool) TableEntry {
 
 var _ = Describe("Hot plug CPUs", func() {
 	var (
-		args         []string
-		id           string
-		vCPUs        int
-		defaultVCPUs = getDefaultVCPUs()
+		args            []string
+		id              string
+		vCPUs           int
+		defaultVCPUs    = getDefaultVCPUs()
+		cpuSysPath      string
+		waitTime        int
+		maxTries        int
+		checkCpusCmdFmt string
 	)
 
 	BeforeEach(func() {
 		id = RandID(30)
+		cpuSysPath = "/sys/devices/system/cpu"
+		checkCpusCmdFmt = `c=0; while [[ "$(cat %s/cpu%d/online 2> /dev/null)" != "1" ]] && [[ $c < %d ]]; do sleep %d; ((c++)); done; nproc`
+		waitTime = 5
+		maxTries = 5
 		args = []string{"--rm", "--name", id}
 		Expect(defaultVCPUs).To(BeNumerically(">", 0))
 	})
@@ -79,17 +87,17 @@ var _ = Describe("Hot plug CPUs", func() {
 
 	DescribeTable("container with CPU period and quota",
 		func(quota, period int, fail bool) {
-			Skip("Issue: https://github.com/kata-containers/tests/issues/250")
+			vCPUs = ((quota + period - 1) / period) + defaultVCPUs
 			args = append(args, "--cpu-quota", fmt.Sprintf("%d", quota),
-				"--cpu-period", fmt.Sprintf("%d", period), Image, "sh", "-c", "sleep 5; nproc")
-			vCPUs = (quota + period - 1) / period
+				"--cpu-period", fmt.Sprintf("%d", period), Image, "sh", "-c",
+				fmt.Sprintf(checkCpusCmdFmt, cpuSysPath, vCPUs-1, maxTries, waitTime))
 			stdout, _, exitCode := dockerRun(args...)
 			if fail {
 				Expect(exitCode).ToNot(BeZero())
 				return
 			}
 			Expect(exitCode).To(BeZero())
-			Expect(fmt.Sprintf("%d", vCPUs+defaultVCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
+			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
 		},
 		withCPUPeriodAndQuota(30000, 20000, defaultVCPUs, false),
 		withCPUPeriodAndQuota(30000, 10000, defaultVCPUs, false),
@@ -99,8 +107,8 @@ var _ = Describe("Hot plug CPUs", func() {
 
 	DescribeTable("container with CPU constraint",
 		func(cpus int, fail bool) {
-			Skip("Issue: https://github.com/kata-containers/tests/issues/250")
-			args = append(args, "--cpus", fmt.Sprintf("%d", cpus), Image, "sh", "-c", "sleep 5; nproc")
+			args = append(args, "--cpus", fmt.Sprintf("%d", cpus), Image, "sh", "-c",
+				fmt.Sprintf(checkCpusCmdFmt, cpuSysPath, vCPUs-1, maxTries, waitTime))
 			stdout, _, exitCode := dockerRun(args...)
 			if fail {
 				Expect(exitCode).ToNot(BeZero())
