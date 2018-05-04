@@ -66,7 +66,7 @@ func (dm *deviceManager) NewDevices(devInfos []config.DeviceInfo) ([]api.Device,
 	return devices, nil
 }
 
-// NewDeviceManager creates a deviceManager object bahaved as DeviceManager
+// NewDeviceManager creates a deviceManager object behaved as api.DeviceManager
 func NewDeviceManager(blockDriver string) api.DeviceManager {
 	dm := &deviceManager{}
 	if blockDriver == VirtioBlock {
