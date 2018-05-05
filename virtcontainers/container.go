@@ -830,7 +830,7 @@ func (c *Container) hotplugDrive() error {
 	}
 
 	// Add drive with id as container id
-	devID := makeNameID("drive", c.id)
+	devID := utils.MakeNameID("drive", c.id, maxDevIDSize)
 	drive := drivers.Drive{
 		File:   devicePath,
 		Format: "raw",
@@ -867,7 +867,7 @@ func (c *Container) removeDrive() (err error) {
 	if c.isDriveUsed() && c.state.HotpluggedDrive {
 		c.Logger().Info("unplugging block device")
 
-		devID := makeNameID("drive", c.id)
+		devID := utils.MakeNameID("drive", c.id, maxDevIDSize)
 		drive := &drivers.Drive{
 			ID: devID,
 		}

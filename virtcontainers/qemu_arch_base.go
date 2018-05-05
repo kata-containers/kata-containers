@@ -290,7 +290,7 @@ func (q *qemuArchBase) appendImage(devices []govmmQemu.Device, path string) ([]g
 		return nil, err
 	}
 
-	id := makeNameID("image", hex.EncodeToString(randBytes))
+	id := utils.MakeNameID("image", hex.EncodeToString(randBytes), maxDevIDSize)
 
 	drive := drivers.Drive{
 		File:   path,
@@ -466,16 +466,16 @@ func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, vhostUs
 	// TODO: find a way to remove dependency of drivers package
 	switch vhostUserDevice := vhostUserDevice.(type) {
 	case *drivers.VhostUserNetDevice:
-		qemuVhostUserDevice.TypeDevID = makeNameID("net", vhostUserDevice.ID)
+		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("net", vhostUserDevice.ID, maxDevIDSize)
 		qemuVhostUserDevice.Address = vhostUserDevice.MacAddress
 	case *drivers.VhostUserSCSIDevice:
-		qemuVhostUserDevice.TypeDevID = makeNameID("scsi", vhostUserDevice.ID)
+		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("scsi", vhostUserDevice.ID, maxDevIDSize)
 	case *drivers.VhostUserBlkDevice:
 	}
 
 	qemuVhostUserDevice.VhostUserType = govmmQemu.VhostUserDeviceType(vhostUserDevice.Type())
 	qemuVhostUserDevice.SocketPath = vhostUserDevice.Attrs().SocketPath
-	qemuVhostUserDevice.CharDevID = makeNameID("char", vhostUserDevice.Attrs().ID)
+	qemuVhostUserDevice.CharDevID = utils.MakeNameID("char", vhostUserDevice.Attrs().ID, maxDevIDSize)
 
 	devices = append(devices, qemuVhostUserDevice)
 

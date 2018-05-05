@@ -164,3 +164,13 @@ func GetSCSIAddress(index int) (string, error) {
 
 	return fmt.Sprintf("%d:%d", scsiID, lun), nil
 }
+
+// MakeNameID is generic function for creating a named-id for passing on the hypervisor commandline
+func MakeNameID(namedType, id string, maxLen int) string {
+	nameID := fmt.Sprintf("%s-%s", namedType, id)
+	if len(nameID) > maxLen {
+		nameID = nameID[:maxLen]
+	}
+
+	return nameID
+}

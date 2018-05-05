@@ -14,7 +14,7 @@ import (
 
 var devLogger = logrus.FieldLogger(logrus.New())
 
-// SetLogger sets the logger for virtcontainers package.
+// SetLogger sets the logger for device api package.
 func SetLogger(logger logrus.FieldLogger) {
 	devLogger = logger
 }
@@ -30,7 +30,7 @@ type DeviceReceiver interface {
 	HotplugAddDevice(Device, config.DeviceType) error
 	HotplugRemoveDevice(Device, config.DeviceType) error
 
-	// this is only for virtio-blk support
+	// this is only for virtio-blk and virtio-scsi support
 	GetAndSetSandboxBlockIndex() (int, error)
 	DecrementSandboxBlockIndex() error
 
