@@ -15,6 +15,8 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
+const maxDevIDSize = 31
+
 // Drive represents a block storage drive which may be used in case the storage
 // driver has an underlying block storage device.
 type Drive struct {
@@ -89,7 +91,7 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 	drive := Drive{
 		File:   device.DeviceInfo.HostPath,
 		Format: "raw",
-		ID:     makeNameID("drive", device.DeviceInfo.ID),
+		ID:     utils.MakeNameID("drive", device.DeviceInfo.ID, maxDevIDSize),
 		Index:  index,
 	}
 

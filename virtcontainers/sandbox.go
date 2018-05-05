@@ -1322,10 +1322,17 @@ func togglePauseSandbox(sandboxID string, pause bool) (*Sandbox, error) {
 func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType) error {
 	switch devType {
 	case config.DeviceVFIO:
-		return s.hypervisor.hotplugAddDevice(device, vfioDev)
+		vfioDevice, ok := device.(*drivers.VFIODevice)
+		if !ok {
+			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
+		}
+		return s.hypervisor.hotplugAddDevice(*vfioDevice, vfioDev)
 	case config.DeviceBlock:
-		device := device.(*drivers.BlockDevice)
-		return s.hypervisor.hotplugAddDevice(device.BlockDrive, blockDev)
+		blockDevice, ok := device.(*drivers.BlockDevice)
+		if !ok {
+			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
+		}
+		return s.hypervisor.hotplugAddDevice(blockDevice.BlockDrive, blockDev)
 	case config.DeviceGeneric:
 		// TODO: what?
 		return nil
@@ -1338,10 +1345,17 @@ func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType)
 func (s *Sandbox) HotplugRemoveDevice(device api.Device, devType config.DeviceType) error {
 	switch devType {
 	case config.DeviceVFIO:
-		return s.hypervisor.hotplugRemoveDevice(device, vfioDev)
+		vfioDevice, ok := device.(*drivers.VFIODevice)
+		if !ok {
+			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
+		}
+		return s.hypervisor.hotplugRemoveDevice(*vfioDevice, vfioDev)
 	case config.DeviceBlock:
-		device := device.(*drivers.BlockDevice)
-		return s.hypervisor.hotplugRemoveDevice(device.BlockDrive, blockDev)
+		blockDevice, ok := device.(*drivers.BlockDevice)
+		if !ok {
+			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
+		}
+		return s.hypervisor.hotplugRemoveDevice(blockDevice.BlockDrive, blockDev)
 	case config.DeviceGeneric:
 		// TODO: what?
 		return nil

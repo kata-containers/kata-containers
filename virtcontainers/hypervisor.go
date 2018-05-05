@@ -116,16 +116,6 @@ func newHypervisor(hType HypervisorType) (hypervisor, error) {
 	}
 }
 
-//Generic function for creating a named-id for passing on the hypervisor commandline
-func makeNameID(namedType string, id string) string {
-	nameID := fmt.Sprintf("%s-%s", namedType, id)
-	if len(nameID) > maxDevIDSize {
-		nameID = nameID[:maxDevIDSize]
-	}
-
-	return nameID
-}
-
 // Param is a key/value representation for hypervisor and kernel parameters.
 type Param struct {
 	Key   string
