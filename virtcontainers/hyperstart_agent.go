@@ -798,41 +798,41 @@ func (h *hyper) sendCmd(proxyCmd hyperstartProxyCmd) (interface{}, error) {
 }
 
 func (h *hyper) onlineCPUMem(cpus uint32) error {
-	// cc-agent uses udev to online CPUs automatically
+	// hyperstart-agent uses udev to online CPUs automatically
 	return nil
 }
 
 func (h *hyper) check() error {
-	// cc-agent does not support check
+	// hyperstart-agent does not support check
 	return nil
 }
 
 func (h *hyper) waitProcess(c *Container, processID string) (int32, error) {
-	// cc-agent does not support wait process
+	// hyperstart-agent does not support wait process
 	return 0, nil
 }
 
 func (h *hyper) winsizeProcess(c *Container, processID string, height, width uint32) error {
-	// cc-agent does not support winsize process
+	// hyperstart-agent does not support winsize process
 	return nil
 }
 
 func (h *hyper) writeProcessStdin(c *Container, ProcessID string, data []byte) (int, error) {
-	// cc-agent does not support stdin write request
+	// hyperstart-agent does not support stdin write request
 	return 0, nil
 }
 
 func (h *hyper) closeProcessStdin(c *Container, ProcessID string) error {
-	// cc-agent does not support stdin close request
+	// hyperstart-agent does not support stdin close request
 	return nil
 }
 
 func (h *hyper) readProcessStdout(c *Container, processID string, data []byte) (int, error) {
-	// cc-agent does not support stdout read request
+	// hyperstart-agent does not support stdout read request
 	return 0, nil
 }
 
 func (h *hyper) readProcessStderr(c *Container, processID string, data []byte) (int, error) {
-	// cc-agent does not support stderr read request
+	// hyperstart-agent does not support stderr read request
 	return 0, nil
 }
