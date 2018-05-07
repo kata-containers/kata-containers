@@ -640,10 +640,6 @@ func EnvVars(envs []string) ([]vc.EnvVar, error) {
 
 		envSlice[1] = strings.Trim(envSlice[1], "' ")
 
-		if envSlice[1] == "" {
-			return []vc.EnvVar{}, fmt.Errorf("Environment value cannot be empty")
-		}
-
 		envVar := vc.EnvVar{
 			Var:   envSlice[0],
 			Value: envSlice[1],
