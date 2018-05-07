@@ -92,6 +92,9 @@ run() {
 	# Run storage tests
 	bash storage/blogbench.sh
 
+	# Run the density test inside the container
+	bash density/memory_usage_inside_container.sh
+
 	popd
 }
 
