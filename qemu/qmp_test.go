@@ -910,3 +910,20 @@ func TestExecSetMigrationCaps(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+// Checks that migrate arguments can be set
+func TestExecSetMigrateArguments(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("migrate", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecSetMigrateArguments(context.Background(), "exec:foobar")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v\n", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
