@@ -1182,6 +1182,9 @@ type Knobs struct {
 	// Only active when Realtime is set to true
 	Mlock bool
 
+	// Stopped will not start guest CPU at startup
+	Stopped bool
+
 	// Realtime will enable realtime QEMU
 	Realtime bool
 }
@@ -1520,6 +1523,10 @@ func (config *Config) appendKnobs() {
 			config.qemuParams = append(config.qemuParams, "-realtime")
 			config.qemuParams = append(config.qemuParams, "mlock=off")
 		}
+	}
+
+	if config.Knobs.Stopped == true {
+		config.qemuParams = append(config.qemuParams, "-S")
 	}
 }
 
