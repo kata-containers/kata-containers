@@ -217,6 +217,7 @@ var reqList = []interface{}{
 	&pb.RemoveContainerRequest{},
 	&pb.SignalProcessRequest{},
 	&pb.CheckRequest{},
+	&pb.WaitProcessRequest{},
 }
 
 func TestKataAgentSendReq(t *testing.T) {

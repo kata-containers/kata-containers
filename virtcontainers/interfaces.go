@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"io"
 	"syscall"
 
 	"github.com/sirupsen/logrus"
@@ -57,6 +58,10 @@ type VCSandbox interface {
 	StartContainer(containerID string) (VCContainer, error)
 	StatusContainer(containerID string) (ContainerStatus, error)
 	EnterContainer(containerID string, cmd Cmd) (VCContainer, *Process, error)
+	WaitProcess(containerID, processID string) (int32, error)
+	SignalProcess(containerID, processID string, signal syscall.Signal, all bool) error
+	WinsizeProcess(containerID, processID string, height, width uint32) error
+	IOStream(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error)
 }
 
 // VCContainer is the Container interface

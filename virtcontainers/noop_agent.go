@@ -64,8 +64,8 @@ func (n *noopAgent) stopContainer(sandbox *Sandbox, c Container) error {
 	return nil
 }
 
-// killContainer is the Noop agent Container signaling implementation. It does nothing.
-func (n *noopAgent) killContainer(sandbox *Sandbox, c Container, signal syscall.Signal, all bool) error {
+// signalProcess is the Noop agent Container signaling implementation. It does nothing.
+func (n *noopAgent) signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error {
 	return nil
 }
 
@@ -82,4 +82,34 @@ func (n *noopAgent) onlineCPUMem(cpus uint32) error {
 // check is the Noop agent health checker. It does nothing.
 func (n *noopAgent) check() error {
 	return nil
+}
+
+// waitProcess is the Noop agent process waiter. It does nothing.
+func (n *noopAgent) waitProcess(c *Container, processID string) (int32, error) {
+	return 0, nil
+}
+
+// winsizeProcess is the Noop agent process tty resizer. It does nothing.
+func (n *noopAgent) winsizeProcess(c *Container, processID string, height, width uint32) error {
+	return nil
+}
+
+// writeProcessStdin is the Noop agent process stdin writer. It does nothing.
+func (n *noopAgent) writeProcessStdin(c *Container, ProcessID string, data []byte) (int, error) {
+	return 0, nil
+}
+
+// closeProcessStdin is the Noop agent process stdin closer. It does nothing.
+func (n *noopAgent) closeProcessStdin(c *Container, ProcessID string) error {
+	return nil
+}
+
+// readProcessStdout is the Noop agent process stdout reader. It does nothing.
+func (n *noopAgent) readProcessStdout(c *Container, processID string, data []byte) (int, error) {
+	return 0, nil
+}
+
+// readProcessStderr is the Noop agent process stderr reader. It does nothing.
+func (n *noopAgent) readProcessStderr(c *Container, processID string, data []byte) (int, error) {
+	return 0, nil
 }

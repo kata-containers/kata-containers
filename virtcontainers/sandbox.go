@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -585,6 +586,63 @@ func (s *Sandbox) Monitor() (chan error, error) {
 	s.Unlock()
 
 	return s.monitor.newWatcher()
+}
+
+// WaitProcess waits on a container process and return its exit code
+func (s *Sandbox) WaitProcess(containerID, processID string) (int32, error) {
+	if s.state.State != StateRunning {
+		return 0, fmt.Errorf("Sandbox not running")
+	}
+
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return 0, err
+	}
+
+	return c.wait(processID)
+}
+
+// SignalProcess sends a signal to a process of a container when all is false.
+// When all is true, it sends the signal to all processes of a container.
+func (s *Sandbox) SignalProcess(containerID, processID string, signal syscall.Signal, all bool) error {
+	if s.state.State != StateRunning {
+		return fmt.Errorf("Sandbox not running")
+	}
+
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	return c.signalProcess(processID, signal, all)
+}
+
+// WinsizeProcess resizes the tty window of a process
+func (s *Sandbox) WinsizeProcess(containerID, processID string, height, width uint32) error {
+	if s.state.State != StateRunning {
+		return fmt.Errorf("Sandbox not running")
+	}
+
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	return c.winsizeProcess(processID, height, width)
+}
+
+// IOStream returns stdin writer, stdout reader and stderr reader of a process
+func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error) {
+	if s.state.State != StateRunning {
+		return nil, nil, nil, fmt.Errorf("Sandbox not running")
+	}
+
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	return c.ioStream(processID)
 }
 
 func createAssets(sandboxConfig *SandboxConfig) error {
