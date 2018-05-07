@@ -479,12 +479,6 @@ func TestMalformedEnvVars(t *testing.T) {
 		t.Fatalf("EnvVars() succeeded unexpectedly: [%s] variable=%s value=%s", envVars[0], r[0].Var, r[0].Value)
 	}
 
-	envVars = []string{"TERM="}
-	r, err = EnvVars(envVars)
-	if err == nil {
-		t.Fatalf("EnvVars() succeeded unexpectedly: [%s] variable=%s value=%s", envVars[0], r[0].Var, r[0].Value)
-	}
-
 	envVars = []string{"=foo"}
 	r, err = EnvVars(envVars)
 	if err == nil {
