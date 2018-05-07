@@ -571,8 +571,8 @@ func (h *hyper) stopOneContainer(sandboxID string, c Container) error {
 	return nil
 }
 
-// killContainer is the agent process signal implementation for hyperstart.
-func (h *hyper) killContainer(sandbox *Sandbox, c Container, signal syscall.Signal, all bool) error {
+// signalProcess is the agent process signal implementation for hyperstart.
+func (h *hyper) signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error {
 	// Send the signal to the shim directly in case the container has not
 	// been started yet.
 	if c.state.State == StateReady {
@@ -798,11 +798,41 @@ func (h *hyper) sendCmd(proxyCmd hyperstartProxyCmd) (interface{}, error) {
 }
 
 func (h *hyper) onlineCPUMem(cpus uint32) error {
-	// cc-agent uses udev to online CPUs automatically
+	// hyperstart-agent uses udev to online CPUs automatically
 	return nil
 }
 
 func (h *hyper) check() error {
-	// cc-agent does not support check
+	// hyperstart-agent does not support check
 	return nil
+}
+
+func (h *hyper) waitProcess(c *Container, processID string) (int32, error) {
+	// hyperstart-agent does not support wait process
+	return 0, nil
+}
+
+func (h *hyper) winsizeProcess(c *Container, processID string, height, width uint32) error {
+	// hyperstart-agent does not support winsize process
+	return nil
+}
+
+func (h *hyper) writeProcessStdin(c *Container, ProcessID string, data []byte) (int, error) {
+	// hyperstart-agent does not support stdin write request
+	return 0, nil
+}
+
+func (h *hyper) closeProcessStdin(c *Container, ProcessID string) error {
+	// hyperstart-agent does not support stdin close request
+	return nil
+}
+
+func (h *hyper) readProcessStdout(c *Container, processID string, data []byte) (int, error) {
+	// hyperstart-agent does not support stdout read request
+	return 0, nil
+}
+
+func (h *hyper) readProcessStderr(c *Container, processID string, data []byte) (int, error) {
+	// hyperstart-agent does not support stderr read request
+	return 0, nil
 }

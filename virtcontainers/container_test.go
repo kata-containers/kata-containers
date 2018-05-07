@@ -359,3 +359,105 @@ func TestContainerEnterErrorsOnContainerStates(t *testing.T) {
 	_, err = c.enter(cmd)
 	assert.Error(err)
 }
+
+func TestContainerWaitErrorState(t *testing.T) {
+	assert := assert.New(t)
+	c := &Container{
+		sandbox: &Sandbox{
+			state: State{
+				State: StateRunning,
+			},
+		},
+	}
+	processID := "foobar"
+
+	// Container state undefined
+	_, err := c.wait(processID)
+	assert.Error(err)
+
+	// Container paused
+	c.state.State = StatePaused
+	_, err = c.wait(processID)
+	assert.Error(err)
+
+	// Container stopped
+	c.state.State = StateStopped
+	_, err = c.wait(processID)
+	assert.Error(err)
+}
+
+func TestKillContainerErrorState(t *testing.T) {
+	assert := assert.New(t)
+	c := &Container{
+		sandbox: &Sandbox{
+			state: State{
+				State: StateRunning,
+			},
+		},
+	}
+	// Container state undefined
+	err := c.kill(syscall.SIGKILL, true)
+	assert.Error(err)
+
+	// Container paused
+	c.state.State = StatePaused
+	err = c.kill(syscall.SIGKILL, false)
+	assert.Error(err)
+
+	// Container stopped
+	c.state.State = StateStopped
+	err = c.kill(syscall.SIGKILL, true)
+	assert.Error(err)
+}
+
+func TestWinsizeProcessErrorState(t *testing.T) {
+	assert := assert.New(t)
+	c := &Container{
+		sandbox: &Sandbox{
+			state: State{
+				State: StateRunning,
+			},
+		},
+	}
+	processID := "foobar"
+
+	// Container state undefined
+	err := c.winsizeProcess(processID, 100, 200)
+	assert.Error(err)
+
+	// Container paused
+	c.state.State = StatePaused
+	err = c.winsizeProcess(processID, 100, 200)
+	assert.Error(err)
+
+	// Container stopped
+	c.state.State = StateStopped
+	err = c.winsizeProcess(processID, 100, 200)
+	assert.Error(err)
+}
+
+func TestProcessIOStream(t *testing.T) {
+	assert := assert.New(t)
+	c := &Container{
+		sandbox: &Sandbox{
+			state: State{
+				State: StateRunning,
+			},
+		},
+	}
+	processID := "foobar"
+
+	// Container state undefined
+	_, _, _, err := c.ioStream(processID)
+	assert.Error(err)
+
+	// Container paused
+	c.state.State = StatePaused
+	_, _, _, err = c.ioStream(processID)
+	assert.Error(err)
+
+	// Container stopped
+	c.state.State = StateStopped
+	_, _, _, err = c.ioStream(processID)
+	assert.Error(err)
+}
