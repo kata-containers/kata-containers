@@ -828,3 +828,12 @@ func (q *QMP) ExecuteQueryHotpluggableCPUs(ctx context.Context) ([]HotpluggableC
 
 	return cpus, nil
 }
+
+// ExecSetMigrationCaps sets migration capabilities
+func (q *QMP) ExecSetMigrationCaps(ctx context.Context, caps []map[string]interface{}) error {
+	args := map[string]interface{}{
+		"capabilities": caps,
+	}
+
+	return q.executeCommand(ctx, "migrate-set-capabilities", args, nil)
+}
