@@ -837,3 +837,12 @@ func (q *QMP) ExecSetMigrationCaps(ctx context.Context, caps []map[string]interf
 
 	return q.executeCommand(ctx, "migrate-set-capabilities", args, nil)
 }
+
+// ExecSetMigrateArguments sets the command line used for migration
+func (q *QMP) ExecSetMigrateArguments(ctx context.Context, url string) error {
+	args := map[string]interface{}{
+		"uri": url,
+	}
+
+	return q.executeCommand(ctx, "migrate", args, nil)
+}
