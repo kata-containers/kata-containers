@@ -1468,23 +1468,7 @@ func (config *Config) appendKernel() {
 	}
 }
 
-func (config *Config) appendKnobs() {
-	if config.Knobs.NoUserConfig == true {
-		config.qemuParams = append(config.qemuParams, "-no-user-config")
-	}
-
-	if config.Knobs.NoDefaults == true {
-		config.qemuParams = append(config.qemuParams, "-nodefaults")
-	}
-
-	if config.Knobs.NoGraphic == true {
-		config.qemuParams = append(config.qemuParams, "-nographic")
-	}
-
-	if config.Knobs.Daemonize == true {
-		config.qemuParams = append(config.qemuParams, "-daemonize")
-	}
-
+func (config *Config) appendMemoryKnobs() {
 	if config.Knobs.HugePages == true {
 		if config.Memory.Size != "" {
 			dimmName := "dimm1"
@@ -1525,6 +1509,26 @@ func (config *Config) appendKnobs() {
 			config.qemuParams = append(config.qemuParams, numaMemParam)
 		}
 	}
+}
+
+func (config *Config) appendKnobs() {
+	if config.Knobs.NoUserConfig == true {
+		config.qemuParams = append(config.qemuParams, "-no-user-config")
+	}
+
+	if config.Knobs.NoDefaults == true {
+		config.qemuParams = append(config.qemuParams, "-nodefaults")
+	}
+
+	if config.Knobs.NoGraphic == true {
+		config.qemuParams = append(config.qemuParams, "-nographic")
+	}
+
+	if config.Knobs.Daemonize == true {
+		config.qemuParams = append(config.qemuParams, "-daemonize")
+	}
+
+	config.appendMemoryKnobs()
 
 	if config.Knobs.Realtime == true {
 		config.qemuParams = append(config.qemuParams, "-realtime")
