@@ -927,3 +927,21 @@ func TestExecSetMigrateArguments(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+// Checks hotplug memory
+func TestExecHotplugMemory(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("object-add", nil, "return", nil)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecHotplugMemory(context.Background(), "memory-backend-ram", "mem0", "", 128)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v\n", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
