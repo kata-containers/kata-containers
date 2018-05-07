@@ -41,11 +41,11 @@ and therefore works seamlessly with the
 [Docker\* Engine](https://www.docker.com/products/docker-engine) pluggable runtime
 architecture. It also supports the [Kubernetes\* Container Runtime Interface (CRI)](https://github.com/kubernetes/kubernetes/tree/master/pkg/kubelet/apis/cri/v1alpha1/runtime)
 through the [CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and
-[CRI-containerd\*](url here) implementation. In other words, you can transparently
+[CRI-containerd\*](https://github.com/containerd/cri) implementation. In other words, you can transparently
 select between the [default Docker and CRI shim runtime (runc)](https://github.com/opencontainers/runc)
 and `kata-runtime`.
 
-![Docker and Kata Containers](arch-images/docker-cc.png)
+![Docker and Kata Containers](arch-images/docker-kata.png)
 
 `kata-runtime` creates a QEMU\*/KVM virtual machine for each container or pod
 the Docker engine or Kubernetes' `kubelet` creates.
@@ -86,8 +86,6 @@ configured, virtio-scsi will be used. In all other cases a 9pfs virtio mount poi
 will be used. `kata-agent` uses this mount point as the root filesystem for the
 container processes.
 
-![Overall architecture](arch-images/overall-architecture.png)
-
 ## Hypervisor
 
 Kata Containers is designed to support multiple hypervisors.  For the 1.0 release,
@@ -96,70 +94,74 @@ to create virtual machines where containers will run:
 
 ![QEMU/KVM](arch-images/qemu.png)
 
-Although Kata Containers can run with any recent QEMU release, Kata Containers
-boot time and memory footprint are significantly optimized by using a specific QEMU
-version called [`qemu-lite`](https://github.com/kata-containers/qemu/tree/qemu-lite-2.11.0).
-Kata Containers supports various machine types, including `pc`, `pc-lite` and `q35`.
-Kata Containers defaults to using the `pc` machine type. In the past
-`pc-lite` was utilized which provided the following improvements:
-- Removed many of the legacy hardware devices support so that the guest kernel
-  does not waste time initializing devices of no use for containers.
-- Skipped the guest BIOS/firmware and jumped straight to the Clear Containers
-  kernel.
+### QEMU/KVM
 
-### Assets
+Depending of the host architecture, Kata Containers support various machine types,
+for example `pc` and `q35` on x86 systems and `virt` on ARM systems. Kata Containers'
+default machine type is `pc`. The default machine type and its [`Machine accelerators`](#Machine-accelerators) can
+be changed by editing the runtime [`configuration`](#Configuration) file.
 
-## Hypervisor
-
-Kata Containers are designed to support multiple hypervisors. For the 1.0 release, Kata Containers use just [QEMU](http://www.qemu-project.org/)/[KVM](http://www.linux-kvm.org/page/Main_Page) to create virtual machines where containers will run:
-
-![QEMU/KVM](arch-images/qemu.png)
-
-Depending of the host architecture, Kata Containers support various machine types, for example `pc` and `q35` on x86 systems and `virt` on ARM systems. Kata Containers default to use the `pc` machine type on x86 systems and `virt` on ARM systems, the default machine type and its [`Machine accelerators`](#Machine-accelerators) can be changed by editing the runtime [`configuration`](#Configuration) file.
-
-Next QEMU features are used in Kata Containers to manage resource constraints, improve boot time and reduce memory footprint:
+The follow QEMU features are used in Kata Containers to manage resource constraints, improve
+boot time and reduce memory footprint:
 
 - Machine accelerators.
 - Hot plug devices.
 
 Each feature is documented below.
 
-### Machine accelerators
+#### Machine accelerators
 
-Machine accelerators are architecture specific and can used to improve the performance and enable specific features of the machine types. Next machine accelerators are used in Kata Containers:
+Machine accelerators are architecture specific and can used to improve the performance
+and enable specific features of the machine types. The following machine accelerators
+are used in Kata Containers:
 
-- nvdimm: This machine accelerator is x86 specific and only supported by `pc` and `q35` machine types. `nvdimm` is used to provide the root filesystem as persistent memory device to the Virtual Machine.
+- nvdimm: This machine accelerator is x86 specific and only supported by `pc` and
+`q35` machine types. `nvdimm` is used to provide the root filesystem as persistent
+memory device to the Virtual Machine.
 
 Although Kata Containers can run with any recent QEMU release, Kata Containers
-boot time, memory footprint and 9p IO are significantly optimized by using a specific QEMU version called [`qemu-lite`](https://github.com/kata-containers/qemu/tree/qemu-lite-2.11.0) and custom machine accelerators that are not available in the upstream version of QEMU. These custom machine accelerators are described below.
+boot time, memory footprint and 9p IO are significantly optimized by using a specific
+QEMU version called [`qemu-lite`](https://github.com/kata-containers/qemu/tree/qemu-lite-2.11.0) and
+custom machine accelerators that are not available in the upstream version of QEMU.
+These custom machine accelerators are described below.
 
-- nofw: this machine accelerator is x86 specific and only supported by `pc` and `q35` machine types. `nofw` is used to boot an ELF format kernel by skipping the BIOS/firmware in the guest. This custom machine accelerator improves the boot time significantly.
-- static-prt: this machine accelerator is x86 specific and only supported by `pc` and `q35` machine types. `static-prt` is used to reduce the interpretation burden for guest ACPI component.
+- nofw: this machine accelerator is x86 specific and only supported by `pc` and `q35`
+machine types. `nofw` is used to boot an ELF format kernel by skipping the BIOS/firmware
+in the guest. This custom machine accelerator improves boot time significantly.
+- static-prt: this machine accelerator is x86 specific and only supported by `pc`
+and `q35` machine types. `static-prt` is used to reduce the interpretation burden
+for guest ACPI component.
 
-### Hot plug devices
+#### Hot plug devices
 
-In order to improve boot time, reduce memory footprint and since running containers can be updated at any time, Kata Containers start with minimum amount of resources to attach devices when is needed. One example of this behavior is when a CPU constraint is specified, CPUs can be hot added or removed depending of the constraint specified.
-Currently Kata Containers have support for hot adding next devices:
-
+The Kata Containers VM starts with a minimum amount of resources, allowing for faster boot time and a reduction in memory footprint.  As the container launch progresses, devices are hotplugged to the VM. For example, when a CPU constraint is specified which includes additional CPUs, they can be hot added.  Kata Containers has support for hot-adding the following devices:
 - Virtio block
 - Virtio SCSI
 - VFIO
 - CPU
 
+### Assets
+
+The hypervisor will launch a virtual machine which includes a minimal guest kernel
+and a guest image.
+
 #### Guest kernel
 
 The guest kernel is passed to the hypervisor and used to boot the virtual
-machine. It is highly optimized for kernel boot time and minimal memory
-footprint, providing only those services required by a container workload.
+machine. The default kernel provided in Kata Containers is highly optimized for
+kernel boot time and minimal memory footprint, providing only those services
+required by a container workload. This is based on a very current upstream Linux
+kernel.
 
-#### Root filesystem image
+#### Guest image
 
-The root filesystem image, sometimes referred to as the "mini O/S", is a
-highly optimised container bootstrap system based on [Clear Linux](https://clearlinux.org/).
-It provides an extremely minimal environment and has a highly optimised boot
-path.
+Kata Containers supports both an `initrd` and `rootfs` based minimal guest image.
 
-TODO: enter section here about using initrd, and also about the customization..
+##### Root filesystem image
+
+The default root filesystem image, sometimes referred to as the "mini O/S", is a
+highly optimized container bootstrap system based on [Clear Linux](https://clearlinux.org/). It provides an extremely minimal environment and
+has a highly optimized boot path.
 
 The only services running in the context of the mini O/S are the init daemon
 (`systemd`) and the [Agent](#agent). The real workload the user wishes to run
@@ -175,26 +177,29 @@ For example, when `docker run -ti ubuntu date` is run:
   (`date` in this example).
 - The agent will then execute the command (`date` in this example) inside this
   new context, first setting the root filesystem to the expected Ubuntu* root
-  filesystem. <--talk more about how we are like a lightweight/stripped down runc here.
+  filesystem.
+
+##### Initrd image
+
+placeholder
 
 ## Agent
 
-[`kata-agent`](https://github.com/kata-containers/agent) is a daemon running in the
+[`kata-agent`](https://github.com/kata-containers/agent) is a process running in the
 guest as a supervisor for managing containers and processes running within
 those containers.
 
-The `kata-agent` execution unit is the sandbox. A `kata-agent` sandbox is a container sandbox
-defined by a set of namespaces (NS, UTS, IPC and PID). `kata-runtime` can run several
-containers per pod to support container engines that require multiple containers
-running inside a single VM. In the case of docker, `kata-runtime` creates a single
-container per pod.
+The `kata-agent` execution unit is the sandbox. A `kata-agent` sandbox is a container sandbox defined by a set of namespaces (NS, UTS, IPC and PID). `kata-runtime` can
+run several containers per VM to support container engines that require multiple
+containers running inside a pod. In the case of docker, `kata-runtime` creates a
+single container per pod.
 
-`kata-agent` uses a gRPC communication protocol defined at some URL. It also runs
-a [`yamux`](https://github.com/hashicorp/yamux) server on the same URL.
+`kata-agent` communicates with the other Kata components over gRPC.
+It also runs a [`yamux`](https://github.com/hashicorp/yamux) server on the same gRPC
+URL (FIXME).
 
-The `kata-agent` API consists of:
-* list Here
-* more stuff
+placeholder for Kata Agent API description: we should consider moving this to
+its own section and/or document.
 
 The `kata-agent` makes use of [`libcontainer`](https://github.com/opencontainers/runc/tree/master/libcontainer)
 to manage the lifecycle of the container. This way the `kata-agent` reuses most
@@ -229,96 +234,113 @@ some url to documentation on how to enable debug).
 
 ### Significant OCI commands
 
-Here we will describe how `kata-runtime` handles the most important OCI commands.
+Here we describe how `kata-runtime` handles the most important OCI commands.
 
 #### [`create`](https://github.com/kata-containers/runtime/blob/master/cli/create.go)
 
 When handling the OCI `create` command, `kata-runtime` goes through the following steps:
 
 1. Create the network namespace where we will spawn VM and shims processes.
-2. Call into the pre-start hooks. One of them should be responsible for creating the `veth` network pair between the host network namespace and the network namespace freshly created.
-3. Scan the network from the new network namespace, and create the MACVTAP connection between the `veth` interface and a `tap` interface that we create.
-4. Start the VM inside the network namespace by providing the `tap` interface previously created.
-5. Wait for the VM to be ready, otherwise the next step spawning the proxy might fail by not being able to connect the VM.
-6. Start `kata-proxy`, and it will take care of connecting to the VM. This process will take care of proxying all communications with the VM. We rely on an architecture model with one proxy per VM.
-7. Communicate with `kata-agent` (connecting the proxy) to configure the sandbox inside the VM.
-8. Communicate with `kata-agent` (connecting the proxy) to create the container, and relying on the OCI configuration file `config.json` initially provided to `kata-runtime`. This actually spawns the container process inside the VM, leveraging the `libcontainer` package.
-9. Start `kata-shim`, which will connect to the gRPC server socket, the `kata-proxy` socket in this case. It will spawn a few Go routines to parallelize blocking calls `ReadStdout()` , `ReadStderr()` and `WaitProcess()`. Both `ReadStdout()` and `ReadStderr()` are run through infinite loops since `kata-shim` wants the output of those until the container process terminates. `WaitProcess()` is a unique call which returns the exit code of the container process when it terminates inside the VM. Note that `kata-shim` is started inside the network namespace, to allow upper layers to determine which network namespace has been created and by checking the `kata-shim` process. It also creates a new PID namespace by entering into it. This ensures that all `kata-shim` processes belonging to the same container will get killed when the `kata-shim` representing the container process terminates.
+2. Call into the pre-start hooks. One of them should be responsible for creating
+the `veth` network pair between the host network namespace and the network namespace
+freshly created.
+3. Scan the network from the new network namespace, and create a MACVTAP connection
+ between the `veth` interface and a `tap` interface into the VM.
+4. Start the VM inside the network namespace by providing the `tap` interface
+ previously created.
+5. Wait for the VM to be ready.
+6. Start `kata-proxy`, which will connect to the created VM. The `kata-proxy` process
+will take care of proxying all communications with the VM. Kata has a single proxy
+per VM.
+7. Communicate with `kata-agent` (through the proxy) to configure the sandbox
+ inside the VM.
+8. Communicate with `kata-agent` to create the container, relying on the OCI
+configuration file `config.json` initially provided to `kata-runtime`. This
+spawns the container process inside the VM, leveraging the `libcontainer` package.
+9. Start `kata-shim`, which will connect to the gRPC server socket provided by the `kata-proxy`. `kata-shim`  will spawn a few Go routines to parallelize blocking calls `ReadStdout()` , `ReadStderr()` and `WaitProcess()`. Both `ReadStdout()` and `ReadStderr()` are run through infinite loops since `kata-shim` wants the output of those until the container process terminates. `WaitProcess()` is a unique call which returns the exit code of the container process when it terminates inside the VM. Note that `kata-shim` is started inside the network namespace, to allow upper layers to determine which network namespace has been created and by checking the `kata-shim` process. It also creates a new PID namespace by entering into it. This ensures that all `kata-shim` processes belonging to the same container will get killed when the `kata-shim` representing the container process terminates.
 
-At this point, the VM is running and `kata-shim` process represents the container process running inside the VM. It is seen as the container process from an OCI perspective.
+At this point the container process is running inside of the VM, and it is represented
+on the host system by the `kata-shim` process.
 
 #### [`start`](https://github.com/kata-containers/runtime/blob/master/cli/start.go)
 
-With namespaced containers, `start` launches a traditional Linux container process
-in its own set of namespaces. With Kata Containers, the main task of `kata-runtime`
-is to ask [`kata-agent`](#agent) to start the container workload inside the virtual machine.
-In practice, this means `kata-runtime` will run through the following steps:
+With traditional containers, `start` launches a container process in its own set of namespaces. With Kata Containers, the main task of `kata-runtime` is to ask [`kata-agent`](#agent) to start the container workload inside the virtual machine. `kata-runtime` will run through the following steps:
 
-1. Communicate with `kata-agent` (connecting the proxy) to start the container workload inside the VM. For instance, if the command to execute is `top`, pending `kata-shim` call into `ReadStdout()` will start returning some outputs. And `WaitProcess()` will continue to block as long as this process runs.
-2. Call into the post-start hooks. Usually, this is a no-op since nothing is provided.
+1. Communicate with `kata-agent` (through the proxy) to start the container workload
+ inside the VM. If, for example, the command to execute inside of the container is `top`,
+ the `kata-shim`'s `ReadStdOut()` will start returning text output for top, and
+  `WaitProcess()` will continue to block as long as the `top` process runs.
+2. Call into the post-start hooks. Usually, this is a no-op since nothing is provided
+  (this needs clarification)
 
 #### [`exec`](https://github.com/kata-containers/runtime/blob/master/cli/exec.go)
 
 OCI `exec` allows you to run an additional command within an already running
-container through the following steps:
+container.  In Kata Containers, this is handled as follows:
 
-1. Communicate with `kata-agent` (connecting the proxy) to start a new process inside an existing container running inside the VM.
-2. Start a new `kata-shim` inside the same network and PID namespaces as the `kata-shim` representing the container process.
+1. A request is sent to the `kata agent` (through the proxy) to start a new process
+ inside an existing container running within the VM.
+2. A new `kata-shim` is created within the same network and PID namespaces as the
+ original `kata-shim` representing the container process. This new `kata-shim` is
+ used for the new exec process.
 
-Now the `exec`'ed process is running in the VM, sharing `uts`, `pid`, `mnt` and `ipc` namespaces with the container process.
+Now the `exec`'ed process is running within the VM, sharing `uts`, `pid`, `mnt` and `ipc` namespaces with the container process.
 
 #### [`kill`](https://github.com/kata-containers/runtime/blob/master/cli/kill.go)
 
-When sending the OCI `kill` command, container runtime should send a [UNIX signal](https://en.wikipedia.org/wiki/Unix_signal) to the container process. But a `kill` sending a termination signal such as `SIGKILL` or `SIGTERM`, is expected to actually terminate the container process, which means stopping the container from a nameespaced container perspective.
-Applying this to Kata Containers translates into stopping the container and the VM associated with it.
+When sending the OCI `kill` command, the container runtime should send a
+[UNIX signal](https://en.wikipedia.org/wiki/Unix_signal) to the container process.
+A `kill` sending a termination signal such as `SIGKILL` or `SIGTERM` is expected
+to terminate the container process.  In the context of a traditional container,
+this means stopping the container.  For `kata-runtime`, this translates to stopping
+the container and the VM associated with it.
 
-1. Communicate with `kata-agent` (connecting the proxy) to signal the container process inside the VM.
-2. If the signal was not a termination signal (`SIGTERM` or `SIGKILL`), nothing else needs to be done.
-3. Wait for `kata-shim` process to exit.
-4. Force kill the container process if `kata-shim` process didn't return after a timeout. This is done by communicating with `kata-agent` (connecting the proxy), sending `SIGKILL` signal to the container process inside the VM.
-5. Wait for `kata-shim` process to exit, and return an error if we reach the timeout again.
-6. Communicate with `kata-agent` (connecting the proxy) to remove the container configuration from the VM.
-7. Communicate with `kata-agent` (connecting the proxy) to destroy the sandbox configuration from the VM.
-8. Stop the VM. This is not waiting for the end of the VM in order to save some time.
-9. Remove all the network configuration inside the network namespace and delete it.
-10. Execute post-stop hooks. Usually a no-op.
+1. Send a request to kill the container process to the `kata-agent` (through the proxy).
+ else needs to be done.
+2. Wait for `kata-shim` process to exit.
+3. Force kill the container process if `kata-shim` process didn't return after a
+ timeout. This is done by communicating with `kata-agent` (connecting the proxy),
+ sending `SIGKILL` signal to the container process inside the VM.
+4. Wait for `kata-shim` process to exit, and return an error if we reach the
+ timeout again.
+5. Communicate with `kata-agent` (through the proxy) to remove the container
+ configuration from the VM.
+6. Communicate with `kata-agent` (through the proxy) to destroy the sandbox
+ configuration from the VM.
+7. Stop the VM.
+8. Remove all network configurations inside the network namespace and delete the
+ namespace.
+9. Execute post-stop hooks.
 
-If `kill` was invoked with a non-termination signal, this simply signalled the container process.
-Otherwise, everything has been torn down, and the VM has been shut down.
+If `kill` was invoked with a non-termination signal, this simply signals the container process. Otherwise, everything has been torn down, and the VM has been removed.
 
 #### [`delete`](https://github.com/kata-containers/runtime/blob/master/cli/delete.go)
 
-`delete` is about deleting all internal resources related to a container.
-A running container cannot be deleted unless the OCI runtime is explicitly being
-asked to, by using `--force` flag.
+`delete` removes all internal resources related to a container. A running container
+cannot be deleted unless the OCI runtime is explicitly being asked to, by using
+`--force` flag.
 
-If the sandbox is not stopped, which could happen if `kill` was not called, but the process would have returned on his own instead, it would first go through most of the steps `kill` would go for a termination signal.
-
-1. Wait for `kata-shim` process to exit.
-2. Force kill the container process if `kata-shim` process didn't return after a timeout. This is done by communicating with `kata-agent` (connecting the proxy), sending `SIGKILL` signal to the container process inside the VM.
-3. Wait for `kata-shim` process to exit, and return an error if we reach the timeout again.
-4. Communicate with `kata-agent` (connecting the proxy) to remove the container configuration from the VM.
-5. Communicate with `kata-agent` (connecting the proxy) to destroy the sandbox configuration from the VM.
-6. Stop the VM. This is not waiting for the end of the VM in order to save some time.
-7. Remove all the network configuration inside the network namespace and delete it.
-8. Execute post-stop hooks. Usually a no-op.
-9. Remove container resources. Every file kept under `/var/{lib,run}/virtcontainers/sandboxes/<sandboxID>/<containerID>`.
-10. Remove sandbox resources. Every file kept under `/var/{lib,run}/virtcontainers/sandboxes/<sandboxID>`.
-
-If the sandbox was already stopped, then it is very simple:
+If the sandbox is not stopped, but the particular container process returned on
+its own already, the `kata-runtime` will first go through most of the steps a `kill`
+would go through for a termination signal. After this (or simply this if the sandboxIDwas already stopped), then `kata-runtime` will: If the sandbox was already stoppedfollowed by:
 
 1. Remove container resources. Every file kept under `/var/{lib,run}/virtcontainers/sandboxes/<sandboxID>/<containerID>`.
 2. Remove sandbox resources. Every file kept under `/var/{lib,run}/virtcontainers/sandboxes/<sandboxID>`.
 
-At this point, everything related to the container should have been removed from the host system, and no related process should be running anymore.
+At this point, everything related to the container should have been removed from the host system, and no related process should be running.
 
 #### [`state`](https://github.com/kata-containers/runtime/blob/master/cli/state.go)
 
-`state` returns the status of the container. In Kata Containers context, this means being able to detect if the container is still running by looking at the state of `kata-shim` process representing this container process.
+`state` returns the status of the container. For `kata-runtime`, this means being
+able to detect if the container is still running by looking at the state of `kata-shim`
+process representing this container process.
 
-1. Ask the container status by checking information stored on disk.
+1. Ask the container status by checking information stored on disk. (clarification needed)
 2. Check `kata-shim` process representing the container.
-3. In case the container status on disk was supposed to be `ready` or `running`, and the `kata-shim` process is not around, this involves the detection of a stopped container. This means that before returning the container status, the container has to be properly stopped. Here are the steps involved by this detection:
+3. In case the container status on disk was supposed to be `ready` or `running`,
+ and the `kata-shim` process no longer exists, this involves the detection of a
+ stopped container. This means that before returning the container status,
+ the container has to be properly stopped. Here are the steps involved in this detection:
 	1. Wait for `kata-shim` process to exit.
 	2. Force kill the container process if `kata-shim` process didn't return after a timeout. This is done by communicating with `kata-agent` (connecting the proxy), sending `SIGKILL` signal to the container process inside the VM.
 	3. Wait for `kata-shim` process to exit, and return an error if we reach the timeout again.
@@ -330,7 +352,11 @@ At this point, everything related to the container should have been removed from
 
 ## Proxy
 
-make sure we discuss that this is optional, and also describe no proxy operation
+Communication with the VM can be achieved by either `virtio-serial` or, if the host
+kernel is newer than v4.8, a virtual socket, `vsock` can be used. The default is `virtio-serial`.
+
+The VM will likely be running multiple container processes.  In the event `virtio-serial`
+is used, the I/O streams associated with each process needs to be multiplexed and demultiplexed on the host. On systems with `vsock` support, this component becomes optional.
 
 `kata-proxy` is a process offering access to the VM [`kata-agent`](https://github.com/kata-containers/agent)
 to multiple `kata-shim` and `kata-runtime` clients associated with the VM. Its
@@ -338,7 +364,7 @@ main role is to route the I/O streams and signals between each `kata-shim`
 instance and the `kata-agent`.
 `kata-proxy` connects to `kata-agent` on a unix domain socket that `kata-runtime` provides
 while spawning `kata-proxy`.
-`kata-proxy` uses [`yamux`](https://github.com/hashicorp/yamux) to multplex gRPC
+`kata-proxy` uses [`yamux`](https://github.com/hashicorp/yamux) to multiplex gRPC
 requests on its connection to the `kata-agent`.
 
 When proxy type is configured as "proxyBuiltIn", we do not spawn a separate
@@ -384,20 +410,19 @@ which is shared between containers
 
 In order to do so, container engines will usually add one end of a `virtual ethernet
 (veth)` pair into the container networking namespace. The other end of the `veth`
-pair
-is added to the container network.
+pair is added to the container network.
 
-This is a very namespace-centric approach as QEMU cannot handle `veth` interfaces.
-Instead it typically creates `TAP` interfaces for adding connectivity to a virtual
-machine.
+This is a very namespace-centric approach as many hypervisors (in particular QEMU)
+cannot handle `veth` interfaces. Typically, `TAP` interfaces are created for VM
+connectivity.
 
-To overcome that incompatibility between typical container engines expectations
-and virtual machines, `cc-runtime` networking transparently bridges `veth`
-interfaces with `TAP` ones:
+To overcome incompatibility between typical container engines expectations
+and virtual machines, `kata-runtime` networking transparently connects `veth`
+interfaces with `TAP` ones using MACVTAP:
 
-![Clear Containers networking](arch-images/network.png)
+![Kata Containers networking](arch-images/network.png)
 
-Clear Containers supports both
+ Kata Containers supports both
 [CNM](https://github.com/docker/libnetwork/blob/master/docs/design.md#the-container-network-model)
 and [CNI](https://github.com/containernetworking/cni) for networking management.
 
@@ -470,11 +495,11 @@ __Runtime network setup with CNI__
 ## Storage
 Container workloads are shared with the virtualized environment through [9pfs](https://www.kernel.org/doc/Documentation/filesystems/9p.txt).
 The devicemapper storage driver is a special case. The driver uses dedicated block
-devices rather than formatted filesystems, and operates at the block level rather than the file
-level. This knowledge is used to directly use the underlying block device
-instead of the overlay file system for the container root file system. The block
-device maps to the top read-write layer for the overlay. This approach gives much
-better I/O performance compared to using 9pfs to share the container file system.
+devices rather than formatted filesystems, and operates at the block level rather
+than the file level. This knowledge is used to directly use the underlying block
+device instead of the overlay file system for the container root file system. The
+block device maps to the top read-write layer for the overlay. This approach gives
+much better I/O performance compared to using 9pfs to share the container file system.
 
 The approach above does introduce a limitation in terms of dynamic file copy
 in/out of the container using the `docker cp` operations. The copy operation from
@@ -490,7 +515,7 @@ docker cp [OPTIONS] CONTAINER:SRC_PATH HOST:DEST_PATH
 docker cp [OPTIONS] HOST:SRC_PATH CONTAINER:DEST_PATH
 ```
 
-Clear Containers has the ability to hotplug and remove block devices, which makes it
+Kata Containers has the ability to hotplug and remove block devices, which makes it
 possible to use block devices for containers started after the VM has been launched.
 
 Users can check to see if the container uses the devicemapper block device as its
@@ -518,14 +543,12 @@ based [Container Runtime Interface (CRI)](https://github.com/kubernetes/communit
 
 In other words, a kubelet is a CRI client and expects a CRI implementation to
 handle the server side of the interface.
-[CRI-O\*](https://github.com/kubernetes-incubator/cri-o) is a CRI implementation
-that relies on [OCI](https://github.com/opencontainers/runtime-spec) compatible
-runtimes for managing container instances.
+[CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and CRI-containerd\* are CRI implementationn that rely on [OCI](https://github.com/opencontainers/runtime-spec)
+compatible runtimes for managing container instances.
 
-Clear Containers is an officially supported CRI-O runtime. It is OCI compatible and
-therefore aligns with CRI-O architecture and requirements.
+Kata Containers is an officially supported CRI-O and CRI-containerd runtime. It is OCI compatible and therefore aligns with each projects' architecture and requirements.
 However, due to the fact that Kubernetes execution units are sets of containers (also
-known as pods) rather than single containers, the Clear Containers runtime needs to
+known as pods) rather than single containers, the Kata Containers runtime needs to
 get extra information to seamlessly integrate with Kubernetes.
 
 ### Problem statement
@@ -535,22 +558,22 @@ such as namespaces, groups, hardware resources, security contents, *etc* shared 
 the containers within that pod.
 By default the kubelet will send a container creation request to its CRI runtime for
 each pod and container creation. Without additional metadata from the CRI runtime,
-the Clear Containers runtime will thus create one virtual machine for each pod and for
+the Kata Containers runtime will thus create one virtual machine for each pod and for
 each containers within a pod. However the task of providing the Kubernetes pod semantics
 when creating one virtual machine for each container within the same pod is complex given
 the resources of these virtual machines (such as networking or PID) need to be shared.
 
-The challenge with Clear Containers when working as a Kubernetes\* runtime is thus to know
+The challenge with Kata Containers when working as a Kubernetes\* runtime is thus to know
 when to create a full virtual machine (for pods) and when to create a new container inside
 a previously created virtual machine. In both cases it will get called with very similar
 arguments, so it needs the help of the Kubernetes CRI runtime to be able to distinguish a
 pod creation request from a container one.
 
-### OCI annotations
+### CRI-O
 
-#### CRI-O
+####  OCI annotations
 
-In order for the Clear Containers runtime (or any virtual machine  based OCI compatible
+In order for the Kata Containers runtime (or any virtual machine  based OCI compatible
 runtime) to be able to understand if it needs to create a full virtual machine or if it
 has to create a new container inside an existing pod's virtual machine, CRI-O adds
 specific annotations to the OCI configuration file (`config.json`) which is passed to
@@ -559,7 +582,7 @@ the OCI compatible runtime.
 Before calling its runtime, CRI-O will always add a `io.kubernetes.cri-o.ContainerType`
 annotation to the `config.json` configuration file it produces from the kubelet CRI
 request. The `io.kubernetes.cri-o.ContainerType` annotation can either be set to `sandbox`
-or `container`. Clear Containers will then use this annotation to decide if it needs to
+or `container`. Kata Containers will then use this annotation to decide if it needs to
 respectively create a virtual machine or a container inside a virtual machine associated
 with a Kubernetes pod:
 
@@ -584,64 +607,57 @@ with a Kubernetes pod:
 
 ```
 
-#### CRI-containerd
+### Mixing VM based and namespace based runtimes
+
+One interesting evolution of the CRI-O support for `kata-runtime` is the ability
+to run virtual machine based pods alongside namespace ones. With CRI-O and Kata
+Containers, one can introduce the concept of workload trust inside a Kubernetes
+cluster.
+
+A cluster operator can now tag (through Kubernetes annotations) container workloads
+as `trusted` or `untrusted`. The former labels known to be safe workloads while
+the latter describes potentially malicious or misbehaving workloads that need the
+highest degree of isolation. In a software development context, an example of a `trusted` workload would be a containerized continuous integration engine whereas all
+developers applications would be `untrusted` by default. Developers workloads can
+be buggy, unstable or even include malicious code and thus from a security perspective
+it makes sense to tag them as `untrusted`. A CRI-O and Kata Containers based
+Kubernetes cluster handles this use case transparently as long as the deployed
+containers are properly tagged. All `untrusted` containers will be handled by kata Containers and thus run in a hardware virtualized secure sandbox while `runc`, for
+example, could  handle the `trusted` ones.
+
+CRI-O's default behavior is to trust all pods, except when they're annotated with
+`io.kubernetes.cri-o.TrustedSandbox` set to `false`. The default CRI-O trust level
+is set through its `configuration.toml` configuration file. Generally speaking,
+the CRI-O runtime selection between its trusted runtime (typically `runc`) and its untrusted one (`kata-runtime`) is a function of the pod `Privileged` setting, the `io.kubernetes.cri-o.TrustedSandbox` annotation value, and the default CRI-O trust
+level. When a pod is `Privileged`, the runtime will always be `runc`. However, when
+a pod is **not** `Privileged` the runtime selection is done as follows:
+
+|                                        | `io.kubernetes.cri-o.TrustedSandbox` not set   | `io.kubernetes.cri-o.TrustedSandbox` = `true` | `io.kubernetes.cri-o.TrustedSandbox` = `false` |
+| :---                                   |     :---:                                      |     :---:                                     |     :---:                                             |
+| Default CRI-O trust level: `trusted`   | runc                                           | runc                                          | Kata Containers |
+| Default CRI-O trust level: `untrusted` | Kata Containers                               | Kata Containers                              |  Kata Containers |
+
+
+### CRI-containerd
 
 We need to add a comparable section to detail how this is handled in containerd.
 If it is indentical then we should make the annotations section more generic. looking
 for help from Carlos here.
 
-### Generalization
+#### Mixing VM based and namespace based runtimes
 
-The Kata Containers runtime is based on the `virtcontainers` package whose API is
-inspired by the Kubernetes CRI one. `virtcontainers` execution units are sandboxes,
-an equivalent of pods and it does not create or manage any container outside of
-an existing sandbox context, and thus so does the Kata Containers runtime.
-To create a Docker container it will first create a pod which will represent the container
-hardware virtualized context and then start an actual container inside that virtual machine.
-Both the pod and its container have the same identifier and name.
-
-### Mixing VM based and namespace based runtimes
-
-**We will need to update this section in order to generalize how it is handled in
-CRI-O as well as in containerd.**
-
-One interesting evolution of the CRI-O support for the Clear Containers runtime is the ability
-to run virtual machine based pods alongside namespace ones. With CRI-O and Clear Containers,
-one can introduce the concept of workload trust inside a Kubernetes cluster.
-
-A cluster operator can now tag (through Kubernetes annotations) container workloads as `trusted`
-or `untrusted`. The former labels known to be safe workloads while the latter describes
-potentially malicious or misbehaving workloads that need the highest degree of isolation.
-In a software development context, an example of a `trusted` workload would be a containerized
-continuous integration engine whereas all developers applications would be `untrusted` by default.
-Developers workloads can be buggy, unstable or even include malicious code and thus from a
-security perspective it makes sense to tag them as `untrusted`. A CRI-O and Clear Containers
-based Kubernetes cluster handles this use case transparently as long as the deployed containers
-are properly tagged. All `untrusted` containers will be handled by Clear Containers and thus run
-in a hardware virtualized secure sandbox whilst `runc`, for example, could  handle the
-`trusted` ones.
-
-CRI-O's default behaviour is to trust all pods, except when they're annotated with
-`io.kubernetes.cri-o.TrustedSandbox` set to `false`. The default CRI-O trust level is
-set through its `configuration.toml` configuration file. Generally speaking, the CRI-O
-runtime selection between its trusted runtime (typically `runc`) and its untrusted one
-(Clear Containers) is a function of the pod `Privileged` setting, the `io.kubernetes.cri-o.TrustedSandbox`
-annotation value, and the default CRI-O trust level. When a pod is `Privileged`, the
-runtime will always be `runc`. However, when a pod is **not** `Privileged` the runtime
-selection is done as follows:
-
-|                                        | `io.kubernetes.cri-o.TrustedSandbox` not set   | `io.kubernetes.cri-o.TrustedSandbox` = `true` | `io.kubernetes.cri-o.TrustedSandbox` = `false` |
-| :---                                   |     :---:                                      |     :---:                                     |     :---:                                             |
-| Default CRI-O trust level: `trusted`   | runc                                           | runc                                          | Clear Containers |
-| Default CRI-O trust level: `untrusted` | Clear Containers                               | Clear Containers                              | Clear Containers |
+placeholder: we'll want to refactor this section and make a more general 'mixed'
+section describing CRI-O and cri-containerd, assuming that only the actual annotation
+names are changed, and concept is otherwise identical. Should also start to consider
+a description of secure sandbox...
 
 # Appendices
 
 ## DAX
 
-Clear Containers utilises the Linux kernel DAX [(Direct Access filesystem)](https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/dax.txt)
+Kata Containers utilizes the Linux kernel DAX [(Direct Access filesystem)](https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/dax.txt)
 feature to efficiently map some host-side files into the guest VM space.
-In particular, Clear Containers uses the QEMU nvdimm feature to provide a
+In particular, Kata Containers uses the QEMU nvdimm feature to provide a
 memory-mapped virtual device that can be used to DAX map the virtual machine's
 root filesystem into the guest memory address space.
 
@@ -650,15 +666,15 @@ file and device mapping mechanisms:
 
 - Mapping as a direct access devices allows the guest to directly access
   the host memory pages (such as via eXicute In Place (XIP)), bypassing the guest
-  page cache. This provides both time and space optimisations.
+  page cache. This provides both time and space optimizations.
 - Mapping as a direct access device inside the VM allows pages from the
   host to be demand loaded using page faults, rather than having to make requests
-  via a virtualised device (causing expensive VM exits/hypercalls), thus providing
-a speed optimisation.
-- Utilising `MAP_SHARED` shared memory on the host allows the host to efficiently
+  via a virtualized device (causing expensive VM exits/hypercalls), thus providing
+  a speed optimization.
+- Utilizing `MAP_SHARED` shared memory on the host allows the host to efficiently
   share pages.
 
-Clear Containers uses the following steps to set up the DAX mappings:
+Kata Containers uses the following steps to set up the DAX mappings:
 1. QEMU is configured with an nvdimm memory device, with a memory file
   backend to map in the host-side file into the virtual nvdimm space.
 2. The guest kernel command line mounts this nvdimm device with the DAX
