@@ -1194,6 +1194,24 @@ type IOThread struct {
 	ID string
 }
 
+const (
+	// MigrationFD is the migration incoming type based on open file descriptor.
+	// Skip default 0 so that it must be set on purpose.
+	MigrationFD = 1
+	// MigrationExec is the migration incoming type based on commands.
+	MigrationExec = 2
+)
+
+// Incoming controls migration source preparation
+type Incoming struct {
+	// Possible values are MigrationFD, MigrationExec
+	MigrationType int
+	// Only valid if MigrationType == MigrationFD
+	FD *os.File
+	// Only valid if MigrationType == MigrationExec
+	Exec string
+}
+
 // Config is the qemu configuration structure.
 // It allows for passing custom settings and parameters to the qemu API.
 type Config struct {
@@ -1244,6 +1262,9 @@ type Config struct {
 
 	// Bios is the -bios parameter
 	Bios string
+
+	// Incoming controls migration source preparation
+	Incoming Incoming
 
 	// fds is a list of open file descriptors to be passed to the spawned qemu process
 	fds []*os.File
@@ -1546,6 +1567,20 @@ func (config *Config) appendIOThreads() {
 	}
 }
 
+func (config *Config) appendIncoming() {
+	var uri string
+	switch config.Incoming.MigrationType {
+	case MigrationExec:
+		uri = fmt.Sprintf("exec:%s", config.Incoming.Exec)
+	case MigrationFD:
+		chFDs := config.appendFDs([]*os.File{config.Incoming.FD})
+		uri = fmt.Sprintf("fd:%d", chFDs[0])
+	default:
+		return
+	}
+	config.qemuParams = append(config.qemuParams, "-S", "-incoming", uri)
+}
+
 // LaunchQemu can be used to launch a new qemu instance.
 //
 // The Config parameter contains a set of qemu parameters and settings.
@@ -1570,6 +1605,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendKernel()
 	config.appendBios()
 	config.appendIOThreads()
+	config.appendIncoming()
 
 	if err := config.appendCPUs(); err != nil {
 		return "", err
