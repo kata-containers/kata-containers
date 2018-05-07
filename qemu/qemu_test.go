@@ -388,7 +388,7 @@ func TestAppendEmptyDevice(t *testing.T) {
 }
 
 func TestAppendKnobsAllTrue(t *testing.T) {
-	var knobsString = "-no-user-config -nodefaults -nographic -daemonize -realtime mlock=on"
+	var knobsString = "-no-user-config -nodefaults -nographic -daemonize -realtime mlock=on -S"
 	knobs := Knobs{
 		NoUserConfig:        true,
 		NoDefaults:          true,
@@ -399,6 +399,7 @@ func TestAppendKnobsAllTrue(t *testing.T) {
 		FileBackedMemShared: true,
 		Realtime:            true,
 		Mlock:               true,
+		Stopped:             true,
 	}
 
 	testAppend(knobs, knobsString, t)
@@ -415,6 +416,7 @@ func TestAppendKnobsAllFalse(t *testing.T) {
 		FileBackedMemShared: false,
 		Realtime:            false,
 		Mlock:               false,
+		Stopped:             false,
 	}
 
 	testAppend(knobs, knobsString, t)
