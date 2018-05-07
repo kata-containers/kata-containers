@@ -107,6 +107,7 @@ var _ = Describe("Hot plug CPUs", func() {
 
 	DescribeTable("container with CPU constraint",
 		func(cpus int, fail bool) {
+			vCPUs = cpus + defaultVCPUs
 			args = append(args, "--cpus", fmt.Sprintf("%d", cpus), Image, "sh", "-c",
 				fmt.Sprintf(checkCpusCmdFmt, cpuSysPath, vCPUs-1, maxTries, waitTime))
 			stdout, _, exitCode := dockerRun(args...)
@@ -115,7 +116,7 @@ var _ = Describe("Hot plug CPUs", func() {
 				return
 			}
 			Expect(exitCode).To(BeZero())
-			Expect(fmt.Sprintf("%d", cpus+defaultVCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
+			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
 		},
 		withCPUConstraint(1, defaultVCPUs, false),
 		withCPUConstraint(1.5, defaultVCPUs, false),
