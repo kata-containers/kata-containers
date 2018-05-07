@@ -390,13 +390,15 @@ func TestAppendEmptyDevice(t *testing.T) {
 func TestAppendKnobsAllTrue(t *testing.T) {
 	var knobsString = "-no-user-config -nodefaults -nographic -daemonize -realtime mlock=on"
 	knobs := Knobs{
-		NoUserConfig: true,
-		NoDefaults:   true,
-		NoGraphic:    true,
-		Daemonize:    true,
-		MemPrealloc:  true,
-		Realtime:     true,
-		Mlock:        true,
+		NoUserConfig:        true,
+		NoDefaults:          true,
+		NoGraphic:           true,
+		Daemonize:           true,
+		MemPrealloc:         true,
+		FileBackedMem:       true,
+		FileBackedMemShared: true,
+		Realtime:            true,
+		Mlock:               true,
 	}
 
 	testAppend(knobs, knobsString, t)
@@ -405,12 +407,14 @@ func TestAppendKnobsAllTrue(t *testing.T) {
 func TestAppendKnobsAllFalse(t *testing.T) {
 	var knobsString = "-realtime mlock=off"
 	knobs := Knobs{
-		NoUserConfig: false,
-		NoDefaults:   false,
-		NoGraphic:    false,
-		MemPrealloc:  false,
-		Realtime:     false,
-		Mlock:        false,
+		NoUserConfig:        false,
+		NoDefaults:          false,
+		NoGraphic:           false,
+		MemPrealloc:         false,
+		FileBackedMem:       false,
+		FileBackedMemShared: false,
+		Realtime:            false,
+		Mlock:               false,
 	}
 
 	testAppend(knobs, knobsString, t)
@@ -435,6 +439,7 @@ func TestAppendMemory(t *testing.T) {
 		Size:   "2G",
 		Slots:  2,
 		MaxMem: "3G",
+		Path:   "",
 	}
 
 	testAppend(memory, memoryString, t)

@@ -1126,6 +1126,10 @@ type Memory struct {
 	// MaxMem is the maximum amount of memory that can be made available
 	// to the guest through e.g. hot pluggable memory.
 	MaxMem string
+
+	// Path is the file path of the memory device. It points to a local
+	// file path used by FileBackedMem.
+	Path string
 }
 
 // Kernel is the guest kernel configuration structure.
@@ -1166,6 +1170,13 @@ type Knobs struct {
 
 	// MemPrealloc will allocate all the RAM upfront
 	MemPrealloc bool
+
+	// FileBackedMem requires Memory.Size and Memory.Path of the VM to
+	// be set.
+	FileBackedMem bool
+
+	// FileBackedMemShared will set the FileBackedMem device as shared.
+	FileBackedMemShared bool
 
 	// Mlock will control locking of memory
 	// Only active when Realtime is set to true
@@ -1473,6 +1484,21 @@ func (config *Config) appendKnobs() {
 
 			config.qemuParams = append(config.qemuParams, "-device")
 			config.qemuParams = append(config.qemuParams, deviceMemParam)
+		}
+	} else if config.Knobs.FileBackedMem == true {
+		if config.Memory.Size != "" && config.Memory.Path != "" {
+			dimmName := "dimm1"
+			objMemParam := "memory-backend-file,id=" + dimmName + ",size=" + config.Memory.Size + ",mem-path=" + config.Memory.Path
+			if config.Knobs.FileBackedMemShared == true {
+				objMemParam += ",share=on"
+			}
+			numaMemParam := "node,memdev=" + dimmName
+
+			config.qemuParams = append(config.qemuParams, "-object")
+			config.qemuParams = append(config.qemuParams, objMemParam)
+
+			config.qemuParams = append(config.qemuParams, "-numa")
+			config.qemuParams = append(config.qemuParams, numaMemParam)
 		}
 	}
 
