@@ -71,6 +71,9 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 	case IOThread:
 		config.IOThreads = []IOThread{s}
 		config.appendIOThreads()
+	case Incoming:
+		config.Incoming = s
+		config.appendIncoming()
 	}
 
 	result := strings.Join(config.qemuParams, " ")
@@ -562,4 +565,26 @@ func TestAppendIOThread(t *testing.T) {
 	}
 
 	testAppend(ioThread, ioThreadString, t)
+}
+
+var incomingStringFD = "-S -incoming fd:3"
+
+func TestAppendIncomingFD(t *testing.T) {
+	source := Incoming{
+		MigrationType: MigrationFD,
+		FD:            os.Stdout,
+	}
+
+	testAppend(source, incomingStringFD, t)
+}
+
+var incomingStringExec = "-S -incoming exec:test migration cmd"
+
+func TestAppendIncomingExec(t *testing.T) {
+	source := Incoming{
+		MigrationType: MigrationExec,
+		Exec:          "test migration cmd",
+	}
+
+	testAppend(source, incomingStringExec, t)
 }
