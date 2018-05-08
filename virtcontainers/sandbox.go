@@ -14,6 +14,7 @@ import (
 	"sync"
 	"syscall"
 
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
@@ -1087,6 +1088,17 @@ func (s *Sandbox) EnterContainer(containerID string, cmd Cmd) (VCContainer, *Pro
 	}
 
 	return c, process, nil
+}
+
+// UpdateContainer update a running container.
+func (s *Sandbox) UpdateContainer(containerID string, resources specs.LinuxResources) error {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	return c.update(resources)
 }
 
 // createContainers registers all containers to the proxy, create the

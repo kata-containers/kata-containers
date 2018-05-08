@@ -116,6 +116,7 @@ var runtimeCommands = []cli.Command{
 	specCLICommand,
 	startCLICommand,
 	stateCLICommand,
+	updateCLICommand,
 	versionCLICommand,
 
 	// Kata Containers specific extensions

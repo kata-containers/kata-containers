@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 // ID implements the VCSandbox function of the same name.
@@ -106,6 +107,11 @@ func (p *Sandbox) EnterContainer(containerID string, cmd vc.Cmd) (vc.VCContainer
 // Monitor implements the VCSandbox function of the same name.
 func (p *Sandbox) Monitor() (chan error, error) {
 	return nil, nil
+}
+
+// UpdateContainer implements the VCSandbox function of the same name.
+func (p *Sandbox) UpdateContainer(containerID string, resources specs.LinuxResources) error {
+	return nil
 }
 
 // WaitProcess implements the VCSandbox function of the same name.

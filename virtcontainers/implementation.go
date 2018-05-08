@@ -12,6 +12,7 @@ package virtcontainers
 import (
 	"syscall"
 
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -113,4 +114,9 @@ func (impl *VCImpl) KillContainer(sandboxID, containerID string, signal syscall.
 // ProcessListContainer implements the VC function of the same name.
 func (impl *VCImpl) ProcessListContainer(sandboxID, containerID string, options ProcessListOptions) (ProcessList, error) {
 	return ProcessListContainer(sandboxID, containerID, options)
+}
+
+// UpdateContainer implements the VC function of the same name.
+func (impl *VCImpl) UpdateContainer(sandboxID, containerID string, resources specs.LinuxResources) error {
+	return UpdateContainer(sandboxID, containerID, resources)
 }

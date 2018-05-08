@@ -19,6 +19,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -606,6 +607,11 @@ func (h *hyper) killOneContainer(cID string, signal syscall.Signal, all bool) er
 
 func (h *hyper) processListContainer(sandbox *Sandbox, c Container, options ProcessListOptions) (ProcessList, error) {
 	return h.processListOneContainer(sandbox.id, c.id, options)
+}
+
+func (h *hyper) updateContainer(sandbox *Sandbox, c Container, resources specs.LinuxResources) error {
+	// hyperstart-agent does not support update
+	return nil
 }
 
 func (h *hyper) processListOneContainer(sandboxID, cID string, options ProcessListOptions) (ProcessList, error) {

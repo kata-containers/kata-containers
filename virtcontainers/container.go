@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -787,6 +788,33 @@ func (c *Container) processList(options ProcessListOptions) (ProcessList, error)
 	return c.sandbox.agent.processListContainer(c.sandbox, *c, options)
 }
 
+func (c *Container) update(resources specs.LinuxResources) error {
+	if err := c.checkSandboxRunning("update"); err != nil {
+		return err
+	}
+
+	if c.state.State != StateRunning {
+		return fmt.Errorf("Container not running, impossible to update")
+	}
+
+	// fetch current configuration
+	currentConfig, err := c.sandbox.storage.fetchContainerConfig(c.sandbox.id, c.id)
+	if err != nil {
+		return err
+	}
+
+	newResources := ContainerResources{
+		CPUPeriod: *resources.CPU.Period,
+		CPUQuota:  *resources.CPU.Quota,
+	}
+
+	if err := c.updateResources(currentConfig.Resources, newResources); err != nil {
+		return err
+	}
+
+	return c.sandbox.agent.updateContainer(c.sandbox, *c, resources)
+}
+
 func (c *Container) hotplugDrive() error {
 	dev, err := getDeviceForPath(c.rootFs)
 
@@ -938,4 +966,46 @@ func (c *Container) removeResources() error {
 	}
 
 	return nil
+}
+
+func (c *Container) updateResources(oldResources, newResources ContainerResources) error {
+	//TODO add support for memory, Issue: https://github.com/containers/virtcontainers/issues/578
+	var vCPUs uint
+	oldVCPUs := utils.ConstraintsToVCPUs(oldResources.CPUQuota, oldResources.CPUPeriod)
+	newVCPUs := utils.ConstraintsToVCPUs(newResources.CPUQuota, newResources.CPUPeriod)
+
+	// Update vCPUs is not possible if period and/or quota are not set or
+	// oldVCPUs and newVCPUs are equal.
+	// Don't fail, the constraint still can be applied in the cgroup.
+	if newVCPUs == 0 || oldVCPUs == newVCPUs {
+		c.Logger().WithFields(logrus.Fields{
+			"old-vcpus": fmt.Sprintf("%d", oldVCPUs),
+			"new-vcpus": fmt.Sprintf("%d", newVCPUs),
+		}).Debug("the actual number of vCPUs will not be modified")
+		return nil
+	}
+
+	if oldVCPUs < newVCPUs {
+		// hot add vCPUs
+		vCPUs = newVCPUs - oldVCPUs
+		virtLog.Debugf("hot adding %d vCPUs", vCPUs)
+		if err := c.sandbox.hypervisor.hotplugAddDevice(uint32(vCPUs), cpuDev); err != nil {
+			return err
+		}
+	} else {
+		// hot remove vCPUs
+		vCPUs = oldVCPUs - newVCPUs
+		virtLog.Debugf("hot removing %d vCPUs", vCPUs)
+		if err := c.sandbox.hypervisor.hotplugRemoveDevice(uint32(vCPUs), cpuDev); err != nil {
+			return err
+		}
+	}
+
+	// Set and save container's config
+	c.config.Resources = newResources
+	if err := c.storeContainer(); err != nil {
+		return err
+	}
+
+	return c.sandbox.agent.onlineCPUMem(uint32(vCPUs))
 }

@@ -911,6 +911,21 @@ func (k *kataAgent) processListContainer(sandbox *Sandbox, c Container, options 
 	return processList.ProcessList, nil
 }
 
+func (k *kataAgent) updateContainer(sandbox *Sandbox, c Container, resources specs.LinuxResources) error {
+	grpcResources, err := grpc.ResourcesOCItoGRPC(&resources)
+	if err != nil {
+		return err
+	}
+
+	req := &grpc.UpdateContainerRequest{
+		ContainerId: c.id,
+		Resources:   grpcResources,
+	}
+
+	_, err = k.sendReq(req)
+	return err
+}
+
 func (k *kataAgent) onlineCPUMem(cpus uint32) error {
 	req := &grpc.OnlineCPUMemRequest{
 		Wait:   false,
@@ -1033,6 +1048,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers["grpc.ListProcessesRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.ListProcesses(ctx, req.(*grpc.ListProcessesRequest), opts...)
+	}
+	k.reqHandlers["grpc.UpdateContainerRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.UpdateContainer(ctx, req.(*grpc.UpdateContainerRequest), opts...)
 	}
 	k.reqHandlers["grpc.WaitProcessRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.WaitProcess(ctx, req.(*grpc.WaitProcessRequest), opts...)

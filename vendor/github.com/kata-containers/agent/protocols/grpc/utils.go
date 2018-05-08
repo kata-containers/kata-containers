@@ -267,3 +267,23 @@ func ProcessGRPCtoOCI(grpcProcess *Process) (*specs.Process, error) {
 
 	return s, err
 }
+
+// ResourcesOCItoGRPC converts an OCI LinuxResources specification into its gRPC
+// representation
+func ResourcesOCItoGRPC(ociResources *specs.LinuxResources) (*LinuxResources, error) {
+	s := &LinuxResources{}
+
+	err := copyStruct(s, ociResources)
+
+	return s, err
+}
+
+// ResourcesGRPCtoOCI converts an gRPC LinuxResources specification into its OCI
+// representation
+func ResourcesGRPCtoOCI(grpcResources *LinuxResources) (*specs.LinuxResources, error) {
+	s := &specs.LinuxResources{}
+
+	err := copyStruct(s, grpcResources)
+
+	return s, err
+}
