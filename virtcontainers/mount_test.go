@@ -15,8 +15,6 @@ import (
 	"strings"
 	"syscall"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestIsSystemMount(t *testing.T) {
@@ -281,86 +279,5 @@ func TestIsDeviceMapper(t *testing.T) {
 
 	if !isDM {
 		t.Fatal()
-	}
-}
-
-func TestGetVirtDriveNameInvalidIndex(t *testing.T) {
-	_, err := getVirtDriveName(-1)
-
-	if err == nil {
-		t.Fatal(err)
-	}
-}
-
-func TestGetVirtDriveName(t *testing.T) {
-	tests := []struct {
-		index         int
-		expectedDrive string
-	}{
-		{0, "vda"},
-		{25, "vdz"},
-		{27, "vdab"},
-		{704, "vdaac"},
-		{18277, "vdzzz"},
-	}
-
-	for _, test := range tests {
-		driveName, err := getVirtDriveName(test.index)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if driveName != test.expectedDrive {
-			t.Fatalf("Incorrect drive Name: Got: %s, Expecting :%s", driveName, test.expectedDrive)
-
-		}
-	}
-}
-
-func TestGetSCSIIdLun(t *testing.T) {
-	tests := []struct {
-		index          int
-		expectedScsiID int
-		expectedLun    int
-	}{
-		{0, 0, 0},
-		{1, 0, 1},
-		{2, 0, 2},
-		{255, 0, 255},
-		{256, 1, 0},
-		{257, 1, 1},
-		{258, 1, 2},
-		{512, 2, 0},
-		{513, 2, 1},
-	}
-
-	for _, test := range tests {
-		scsiID, lun, err := getSCSIIdLun(test.index)
-		assert.Nil(t, err)
-
-		if scsiID != test.expectedScsiID && lun != test.expectedLun {
-			t.Fatalf("Expecting scsi-id:lun %d:%d,  Got %d:%d", test.expectedScsiID, test.expectedLun, scsiID, lun)
-		}
-	}
-
-	_, _, err := getSCSIIdLun(maxSCSIDevices + 1)
-	assert.NotNil(t, err)
-}
-
-func TestGetSCSIAddress(t *testing.T) {
-	tests := []struct {
-		index               int
-		expectedSCSIAddress string
-	}{
-		{0, "0:0"},
-		{200, "0:200"},
-		{255, "0:255"},
-		{258, "1:2"},
-		{512, "2:0"},
-	}
-
-	for _, test := range tests {
-		scsiAddr, err := getSCSIAddress(test.index)
-		assert.Nil(t, err)
-		assert.Equal(t, scsiAddr, test.expectedSCSIAddress)
 	}
 }
