@@ -9,6 +9,7 @@ import (
 	"io"
 	"syscall"
 
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -35,6 +36,7 @@ type VC interface {
 	StatusContainer(sandboxID, containerID string) (ContainerStatus, error)
 	StopContainer(sandboxID, containerID string) (VCContainer, error)
 	ProcessListContainer(sandboxID, containerID string, options ProcessListOptions) (ProcessList, error)
+	UpdateContainer(sandboxID, containerID string, resources specs.LinuxResources) error
 }
 
 // VCSandbox is the Sandbox interface
@@ -58,6 +60,7 @@ type VCSandbox interface {
 	StartContainer(containerID string) (VCContainer, error)
 	StatusContainer(containerID string) (ContainerStatus, error)
 	EnterContainer(containerID string, cmd Cmd) (VCContainer, *Process, error)
+	UpdateContainer(containerID string, resources specs.LinuxResources) error
 	WaitProcess(containerID, processID string) (int32, error)
 	SignalProcess(containerID, processID string, signal syscall.Signal, all bool) error
 	WinsizeProcess(containerID, processID string, height, width uint32) error

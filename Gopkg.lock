@@ -50,6 +50,12 @@
   revision = "b0c4c6d0583aae4e3b5d12b6ec47767670548cc4"
 
 [[projects]]
+  name = "github.com/docker/go-units"
+  packages = ["."]
+  revision = "47565b4f722fb6ceae66b95f853feed578a4a51c"
+  version = "v0.3.3"
+
+[[projects]]
   name = "github.com/go-ini/ini"
   packages = ["."]
   revision = "20b96f641a5ea98f2f8619ff4f3e061cff4833bd"
@@ -93,7 +99,7 @@
     "protocols/client",
     "protocols/grpc"
   ]
-  revision = "7aa11d8adef4aada89f6c68db025ff15a44eaf83"
+  revision = "04d58dd248a36404c33c9d12c499c60f1828060b"
 
 [[projects]]
   name = "github.com/kubernetes-incubator/cri-o"
@@ -257,6 +263,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "cc11dcb278b249e203b53c823a9a27d5e5210b56fcaedab509651f25a5163d03"
+  inputs-digest = "976f719dc5f3fd1a56eb21237161c89b7f499a14e4b0638bc358698d4e0dbf8f"
   solver-name = "gps-cdcl"
   solver-version = 1

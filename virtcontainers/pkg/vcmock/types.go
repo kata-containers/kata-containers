@@ -9,6 +9,7 @@ import (
 	"syscall"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -55,4 +56,5 @@ type VCMock struct {
 	StatusContainerFunc      func(sandboxID, containerID string) (vc.ContainerStatus, error)
 	StopContainerFunc        func(sandboxID, containerID string) (vc.VCContainer, error)
 	ProcessListContainerFunc func(sandboxID, containerID string, options vc.ProcessListOptions) (vc.ProcessList, error)
+	UpdateContainerFunc      func(sandboxID, containerID string, resources specs.LinuxResources) error
 }
