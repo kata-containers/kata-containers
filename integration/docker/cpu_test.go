@@ -65,7 +65,6 @@ var _ = Describe("Hot plug CPUs", func() {
 		id              string
 		vCPUs           int
 		defaultVCPUs    = getDefaultVCPUs()
-		cpuSysPath      string
 		waitTime        int
 		maxTries        int
 		checkCpusCmdFmt string
@@ -73,8 +72,7 @@ var _ = Describe("Hot plug CPUs", func() {
 
 	BeforeEach(func() {
 		id = RandID(30)
-		cpuSysPath = "/sys/devices/system/cpu"
-		checkCpusCmdFmt = `c=0; while [[ "$(cat %s/cpu%d/online 2> /dev/null)" != "1" ]] && [[ $c < %d ]]; do sleep %d; ((c++)); done; nproc`
+		checkCpusCmdFmt = `c=0; while [[ "$(cat "/sys/fs/cgroup/cpuset/cpuset.cpus")" != "0-%d" ]] && [[ $c < %d ]]; do sleep %d; ((c++)); done; nproc`
 		waitTime = 5
 		maxTries = 5
 		args = []string{"--rm", "--name", id}
@@ -90,7 +88,7 @@ var _ = Describe("Hot plug CPUs", func() {
 			vCPUs = ((quota + period - 1) / period) + defaultVCPUs
 			args = append(args, "--cpu-quota", fmt.Sprintf("%d", quota),
 				"--cpu-period", fmt.Sprintf("%d", period), Image, "sh", "-c",
-				fmt.Sprintf(checkCpusCmdFmt, cpuSysPath, vCPUs-1, maxTries, waitTime))
+				fmt.Sprintf(checkCpusCmdFmt, vCPUs-1, maxTries, waitTime))
 			stdout, _, exitCode := dockerRun(args...)
 			if fail {
 				Expect(exitCode).ToNot(BeZero())
@@ -107,15 +105,16 @@ var _ = Describe("Hot plug CPUs", func() {
 
 	DescribeTable("container with CPU constraint",
 		func(cpus int, fail bool) {
+			vCPUs = cpus + defaultVCPUs
 			args = append(args, "--cpus", fmt.Sprintf("%d", cpus), Image, "sh", "-c",
-				fmt.Sprintf(checkCpusCmdFmt, cpuSysPath, vCPUs-1, maxTries, waitTime))
+				fmt.Sprintf(checkCpusCmdFmt, vCPUs-1, maxTries, waitTime))
 			stdout, _, exitCode := dockerRun(args...)
 			if fail {
 				Expect(exitCode).ToNot(BeZero())
 				return
 			}
 			Expect(exitCode).To(BeZero())
-			Expect(fmt.Sprintf("%d", cpus+defaultVCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
+			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
 		},
 		withCPUConstraint(1, defaultVCPUs, false),
 		withCPUConstraint(1.5, defaultVCPUs, false),
