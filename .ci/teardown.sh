@@ -43,12 +43,12 @@ have_collect_script="no"
 # display them.
 if [ "${log_copy_dest}" ]; then
 	# Create the log files
-	journalctl --no-pager -t kata-runtime > "${kata_runtime_log_path}"
-	journalctl --no-pager -t kata-proxy > "${proxy_log_path}"
-	journalctl --no-pager -t kata-shim > "${shim_log_path}"
-	journalctl --no-pager -u crio > "${crio_log_path}"
-	journalctl --no-pager -u docker > "${docker_log_path}"
-	journalctl --no-pager -u kubelet > "${kubelet_log_path}"
+	sudo journalctl --no-pager -t kata-runtime > "${kata_runtime_log_path}"
+	sudo journalctl --no-pager -t kata-proxy > "${proxy_log_path}"
+	sudo journalctl --no-pager -t kata-shim > "${shim_log_path}"
+	sudo journalctl --no-pager -u crio > "${crio_log_path}"
+	sudo journalctl --no-pager -u docker > "${docker_log_path}"
+	sudo journalctl --no-pager -u kubelet > "${kubelet_log_path}"
 
 	[ "${have_collect_script}" = "yes" ] && sudo -E PATH="$PATH" $collect_script > "${collect_data_log_path}"
 
@@ -81,22 +81,22 @@ if [ "${log_copy_dest}" ]; then
 	popd
 else
 	echo "Kata Containers Runtime Log:"
-	journalctl --no-pager -t kata-runtime
+	sudo journalctl --no-pager -t kata-runtime
 
 	echo "Kata Containers Proxy Log:"
-	journalctl --no-pager -t kata-proxy
+	sudo journalctl --no-pager -t kata-proxy
 
 	echo "Kata Containers Shim Log:"
-	journalctl --no-pager -t kata-shim
+	sudo journalctl --no-pager -t kata-shim
 
 	echo "CRI-O Log:"
-	journalctl --no-pager -u crio
+	sudo journalctl --no-pager -u crio
 
 	echo "Docker Log:"
-	journalctl --no-pager -u docker
+	sudo journalctl --no-pager -u docker
 
 	echo "Kubelet Log:"
-	journalctl --no-pager -u kubelet
+	sudo journalctl --no-pager -u kubelet
 
 	if [ "${have_collect_script}" = "yes" ]
 	then
