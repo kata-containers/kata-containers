@@ -16,8 +16,13 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	"github.com/kata-containers/runtime/virtcontainers/device/manager"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 )
 
 func newHypervisorConfig(kernelParams []Param, hParams []Param) HypervisorConfig {
@@ -36,7 +41,7 @@ func testCreateSandbox(t *testing.T, id string,
 	nmodel NetworkModel, nconfig NetworkConfig, containers []ContainerConfig,
 	volumes []Volume) (*Sandbox, error) {
 
-	config := SandboxConfig{
+	sconfig := SandboxConfig{
 		ID:               id,
 		HypervisorType:   htype,
 		HypervisorConfig: hconfig,
@@ -47,7 +52,7 @@ func testCreateSandbox(t *testing.T, id string,
 		Containers:       containers,
 	}
 
-	sandbox, err := createSandbox(config)
+	sandbox, err := createSandbox(sconfig)
 	if err != nil {
 		return nil, fmt.Errorf("Could not create sandbox: %s", err)
 	}
@@ -1123,6 +1128,8 @@ func TestContainerStateSetFstype(t *testing.T) {
 	}
 }
 
+const vfioPath = "/dev/vfio/"
+
 func TestSandboxAttachDevicesVFIO(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "")
 	assert.Nil(t, err)
@@ -1139,24 +1146,24 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 	_, err = os.Create(deviceFile)
 	assert.Nil(t, err)
 
-	savedIOMMUPath := sysIOMMUPath
-	sysIOMMUPath = tmpDir
+	savedIOMMUPath := config.SysIOMMUPath
+	config.SysIOMMUPath = tmpDir
 
 	defer func() {
-		sysIOMMUPath = savedIOMMUPath
+		config.SysIOMMUPath = savedIOMMUPath
 	}()
 
 	path := filepath.Join(vfioPath, testFDIOGroup)
-	deviceInfo := DeviceInfo{
+	deviceInfo := config.DeviceInfo{
 		HostPath:      path,
 		ContainerPath: path,
 		DevType:       "c",
 	}
-	vfioDevice := newVFIODevice(deviceInfo)
+	vfioDevice := drivers.NewVFIODevice(deviceInfo)
 
 	c := &Container{
 		id: "100",
-		devices: []Device{
+		devices: []api.Device{
 			vfioDevice,
 		},
 	}
@@ -1528,4 +1535,90 @@ func TestContainerProcessIOStream(t *testing.T) {
 
 	_, _, _, err = s.IOStream(contID, execID)
 	assert.Nil(t, err, "Winsize process failed: %v", err)
+}
+
+func TestAttachBlockDevice(t *testing.T) {
+	fs := &filesystem{}
+	hypervisor := &mockHypervisor{}
+
+	hConfig := HypervisorConfig{
+		BlockDeviceDriver: VirtioBlock,
+	}
+
+	sconfig := &SandboxConfig{
+		HypervisorConfig: hConfig,
+	}
+
+	sandbox := &Sandbox{
+		id:         testSandboxID,
+		storage:    fs,
+		hypervisor: hypervisor,
+		config:     sconfig,
+	}
+
+	contID := "100"
+	container := Container{
+		sandbox: sandbox,
+		id:      contID,
+	}
+
+	// create state file
+	path := filepath.Join(runStoragePath, testSandboxID, container.ID())
+	err := os.MkdirAll(path, dirMode)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.RemoveAll(path)
+
+	stateFilePath := filepath.Join(path, stateFile)
+	os.Remove(stateFilePath)
+
+	_, err = os.Create(stateFilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(stateFilePath)
+
+	path = "/dev/hda"
+	deviceInfo := config.DeviceInfo{
+		HostPath:      path,
+		ContainerPath: path,
+		DevType:       "b",
+	}
+
+	dm := manager.NewDeviceManager(VirtioBlock)
+	devices, err := dm.NewDevices([]config.DeviceInfo{deviceInfo})
+	assert.Nil(t, err)
+	device := devices[0]
+	_, ok := device.(*drivers.BlockDevice)
+	assert.True(t, ok)
+
+	container.state.State = ""
+	err = device.Attach(sandbox)
+	assert.Nil(t, err)
+
+	err = device.Detach(sandbox)
+	assert.Nil(t, err)
+
+	container.state.State = StateReady
+	err = device.Attach(sandbox)
+	assert.Nil(t, err)
+
+	err = device.Detach(sandbox)
+	assert.Nil(t, err)
+
+	container.sandbox.config.HypervisorConfig.BlockDeviceDriver = VirtioSCSI
+	err = device.Attach(sandbox)
+	assert.Nil(t, err)
+
+	err = device.Detach(sandbox)
+	assert.Nil(t, err)
+
+	container.state.State = StateReady
+	err = device.Attach(sandbox)
+	assert.Nil(t, err)
+
+	err = device.Detach(sandbox)
+	assert.Nil(t, err)
 }

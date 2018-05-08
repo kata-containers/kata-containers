@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 )
 
 func TestFilesystemCreateAllResourcesSuccessful(t *testing.T) {
@@ -28,9 +30,10 @@ func TestFilesystemCreateAllResourcesSuccessful(t *testing.T) {
 	}
 
 	sandbox := &Sandbox{
-		id:      testSandboxID,
-		storage: fs,
-		config:  sandboxConfig,
+		id:         testSandboxID,
+		storage:    fs,
+		config:     sandboxConfig,
+		devManager: manager.NewDeviceManager(manager.VirtioBlock),
 	}
 
 	if err := sandbox.newContainers(); err != nil {

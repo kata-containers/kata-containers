@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 )
 
 var rootfsDir = "rootfs"
@@ -218,39 +220,6 @@ func isDeviceMapper(major, minor int) (bool, error) {
 	return false, err
 }
 
-// getVirtBlockDriveName returns the disk name format for virtio-blk
-// Reference: https://github.com/torvalds/linux/blob/master/drivers/block/virtio_blk.c @c0aa3e0916d7e531e69b02e426f7162dfb1c6c0
-func getVirtDriveName(index int) (string, error) {
-	if index < 0 {
-		return "", fmt.Errorf("Index cannot be negative for drive")
-	}
-
-	// Prefix used for virtio-block devices
-	const prefix = "vd"
-
-	//Refer to DISK_NAME_LEN: https://github.com/torvalds/linux/blob/08c521a2011ff492490aa9ed6cc574be4235ce2b/include/linux/genhd.h#L61
-	diskNameLen := 32
-	base := 26
-
-	suffLen := diskNameLen - len(prefix)
-	diskLetters := make([]byte, suffLen)
-
-	var i int
-
-	for i = 0; i < suffLen && index >= 0; i++ {
-		letter := byte('a' + (index % base))
-		diskLetters[i] = letter
-		index = index/base - 1
-	}
-
-	if index >= 0 {
-		return "", fmt.Errorf("Index not supported")
-	}
-
-	diskName := prefix + reverseString(string(diskLetters[:i]))
-	return diskName, nil
-}
-
 const mountPerm = os.FileMode(0755)
 
 // bindMount bind mounts a source in to a destination. This will
@@ -314,7 +283,7 @@ type Mount struct {
 	// BlockDevice represents block device that is attached to the
 	// VM in case this mount is a block device file or a directory
 	// backed by a block device.
-	BlockDevice *BlockDevice
+	BlockDevice *drivers.BlockDevice
 }
 
 func bindUnmountContainerRootfs(sharedDir, sandboxID, cID string) error {
@@ -333,31 +302,4 @@ func bindUnmountAllRootfs(sharedDir string, sandbox *Sandbox) {
 			bindUnmountContainerRootfs(sharedDir, sandbox.id, c.id)
 		}
 	}
-}
-
-const maxSCSIDevices = 65535
-
-// getSCSIIdLun gets the SCSI id and lun, based on the index of the drive being inserted.
-// qemu code suggests that scsi-id can take values from 0 to 255 inclusive, while lun can
-// take values from 0 to 16383 inclusive. But lun values over 255 do not seem to follow
-// consistent SCSI addressing. Hence we limit to 255.
-func getSCSIIdLun(index int) (int, int, error) {
-	if index < 0 {
-		return -1, -1, fmt.Errorf("Index cannot be negative")
-	}
-
-	if index > maxSCSIDevices {
-		return -1, -1, fmt.Errorf("Index cannot be greater than %d, maximum of %d devices are supported", maxSCSIDevices, maxSCSIDevices)
-	}
-
-	return index / 256, index % 256, nil
-}
-
-func getSCSIAddress(index int) (string, error) {
-	scsiID, lun, err := getSCSIIdLun(index)
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%d:%d", scsiID, lun), nil
 }

@@ -15,11 +15,13 @@ import (
 	"reflect"
 	"testing"
 
-	vc "github.com/kata-containers/runtime/virtcontainers"
-	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kubernetes-incubator/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
+
+	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 )
 
 const tempBundlePath = "/tmp/virtc/ocibundle/"
@@ -46,15 +48,15 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	savedFunc := vc.GetHostPathFunc
+	savedFunc := config.GetHostPathFunc
 
 	// Simply assign container path to host path for device.
-	vc.GetHostPathFunc = func(devInfo vc.DeviceInfo) (string, error) {
+	config.GetHostPathFunc = func(devInfo config.DeviceInfo) (string, error) {
 		return devInfo.ContainerPath, nil
 	}
 
 	defer func() {
-		vc.GetHostPathFunc = savedFunc
+		config.GetHostPathFunc = savedFunc
 	}()
 
 	runtimeConfig := RuntimeConfig{
@@ -130,7 +132,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	devInfo := vc.DeviceInfo{
+	devInfo := config.DeviceInfo{
 		ContainerPath: "/dev/vfio/17",
 		Major:         242,
 		Minor:         0,
@@ -139,7 +141,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		GID:           0,
 	}
 
-	expectedDeviceInfo := []vc.DeviceInfo{
+	expectedDeviceInfo := []config.DeviceInfo{
 		devInfo,
 	}
 
