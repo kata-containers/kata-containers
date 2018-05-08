@@ -16,6 +16,7 @@ IMAGE_NAME="dockercompose_web"
 INSTALLATION_PATH="/usr/local/bin/docker-compose"
 
 setup () {
+	skip "This is not working (https://github.com/clearcontainers/runtime/issues/1042)"
 	run command -v docker-compose
 	# Check that Docker compose is installed in the system
 	if [ "$status" -ne 0 ]; then
@@ -44,6 +45,7 @@ setup () {
 }
 
 teardown() {
+	skip "This is not working (https://github.com/clearcontainers/runtime/issues/1042)"
 	#Stop containers
 	docker-compose stop
 
