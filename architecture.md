@@ -176,7 +176,7 @@ For example, when `docker run -ti ubuntu date` is run:
 - The agent will create a new confined context to run the specified command in
   (`date` in this example).
 - The agent will then execute the command (`date` in this example) inside this
-  new context, first setting the root filesystem to the expected Ubuntu* root
+  new context, first setting the root filesystem to the expected Ubuntu\* root
   filesystem.
 
 ##### Initrd image
@@ -286,6 +286,8 @@ container.  In Kata Containers, this is handled as follows:
 
 Now the `exec`'ed process is running within the VM, sharing `uts`, `pid`, `mnt` and `ipc` namespaces with the container process.
 
+![the picture](arch-images/docker-exec.svg)
+
 #### [`kill`](https://github.com/kata-containers/runtime/blob/master/cli/kill.go)
 
 When sending the OCI `kill` command, the container runtime should send a
@@ -346,9 +348,6 @@ process representing this container process.
 	3. Wait for `kata-shim` process to exit, and return an error if we reach the timeout again.
 	4. Communicate with `kata-agent` (connecting the proxy) to remove the container configuration from the VM.
 4. Return container status.
-
-![CRIO workflow](arch-images/kata-crio-uml.png)
-
 
 ## Proxy
 
