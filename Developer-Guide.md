@@ -38,9 +38,8 @@ This document is written **specifically for developers**.
   - `make`.
   - `gcc` (required for building the shim and runtime).
 
-- You have installed the Clear Containers `linux-container` and `qemu-lite`
-  packages containing the guest kernel images and hypervisor. These packages
-  are automatically installed when you install Clear Containers, but can be
+- You have installed the `qemu-lite` package containing the hypervisor. This package
+  is automatically installed when you install Clear Containers, but can be
   installed separately as well:
 
     https://github.com/clearcontainers/runtime/wiki/Installation
@@ -227,18 +226,29 @@ $ (cd /usr/share/kata-containers && sudo ln -sf "$image" kata-containers-initrd.
 # Install guest kernel images
 
 ```
-$ sudo ln -s /usr/share/clear-containers/vmlinux.container /usr/share/kata-containers/
-$ sudo ln -s /usr/share/clear-containers/vmlinuz.container /usr/share/kata-containers/
-```
-
-> **Note:**
->
-> - The files in the previous commands are from the Clear Containers
->   `linux-container` package. See [Assumptions](#assumptions).
-
-If you want to use an initrd image, install the [hyperstart](https://github.com/hyperhq/hyperstart/) kernel instead:
-```
-$ sudo wget -O /usr/share/kata-containers/vmlinuz.container https://github.com/hyperhq/hyperstart/raw/master/build/arch/x86_64/kernel
+$ kernel_arch="$(arch)"
+$ tmpdir="$(mktemp -d)"
+$ pushd "$tmpdir"
+$ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/configs/x86_kata_kvm_4.14.x -o .config
+$ kernel_version=$(grep "Linux/[${kernel_arch}]*" .config | cut -d' ' -f3 | tail -1)
+$ kernel_tar_file="linux-${kernel_version}.tar.xz"
+$ kernel_url="https://cdn.kernel.org/pub/linux/kernel/v$(echo $kernel_version | cut -f1 -d.).x/${kernel_tar_file}"
+$ curl -LOk ${kernel_url}
+$ tar -xf ${kernel_tar_file}
+$ mv .config "linux-${kernel_version}"
+$ pushd "linux-${kernel_version}"
+$ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/patches/0001-NO-UPSTREAM-9P-always-use-cached-inode-to-fill-in-v9.patch | patch -p1
+$ make ARCH=${kernel_arch} -j$(nproc)
+$ kata_kernel_dir="/usr/share/kata-containers"
+$ kata_vmlinuz="${kata_kernel_dir}/kata-vmlinuz-${kernel_version}.container"
+$ sudo install -o root -g root -m 0755 -D "$(realpath arch/${kernel_arch}/boot/bzImage)" "${kata_vmlinuz}"
+$ sudo ln -sf "${kata_vmlinuz}" "${kata_kernel_dir}/vmlinuz.container"
+$ kata_vmlinux="${kata_kernel_dir}/kata-vmlinux-${kernel_version}"
+$ sudo install -o root -g root -m 0755 -D "$(realpath vmlinux)" "${kata_vmlinux}"
+$ sudo ln -sf "${kata_vmlinux}" "${kata_kernel_dir}/vmlinux.container"
+$ popd
+$ popd
+$ rm -rf "${tmpdir}"
 ```
 
 # Update Docker configuration
