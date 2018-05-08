@@ -72,7 +72,7 @@ var _ = Describe("Hot plug CPUs", func() {
 
 	BeforeEach(func() {
 		id = RandID(30)
-		checkCpusCmdFmt = `c=0; while [[ "$(cat "/sys/fs/cgroup/cpuset/cpuset.cpus")" != "0-%d" ]] && [[ $c < %d ]]; do sleep %d; ((c++)); done; nproc`
+		checkCpusCmdFmt = `for c in $(seq 1 %d); do [ -d /sys/devices/system/cpu/cpu%d ] && nproc && exit 0; sleep %d; done; exit 1`
 		waitTime = 5
 		maxTries = 5
 		args = []string{"--rm", "--name", id}
@@ -85,11 +85,10 @@ var _ = Describe("Hot plug CPUs", func() {
 
 	DescribeTable("container with CPU period and quota",
 		func(quota, period int, fail bool) {
-			Skip("https://github.com/kata-containers/agent/issues/232")
 			vCPUs = ((quota + period - 1) / period) + defaultVCPUs
 			args = append(args, "--cpu-quota", fmt.Sprintf("%d", quota),
-				"--cpu-period", fmt.Sprintf("%d", period), Image, "sh", "-c",
-				fmt.Sprintf(checkCpusCmdFmt, vCPUs-1, maxTries, waitTime))
+				"--cpu-period", fmt.Sprintf("%d", period), DebianImage, "bash", "-c",
+				fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs-1, waitTime))
 			stdout, _, exitCode := dockerRun(args...)
 			if fail {
 				Expect(exitCode).ToNot(BeZero())
@@ -106,10 +105,9 @@ var _ = Describe("Hot plug CPUs", func() {
 
 	DescribeTable("container with CPU constraint",
 		func(cpus int, fail bool) {
-			Skip("https://github.com/kata-containers/agent/issues/232")
 			vCPUs = cpus + defaultVCPUs
-			args = append(args, "--cpus", fmt.Sprintf("%d", cpus), Image, "sh", "-c",
-				fmt.Sprintf(checkCpusCmdFmt, vCPUs-1, maxTries, waitTime))
+			args = append(args, "--cpus", fmt.Sprintf("%d", cpus), DebianImage, "bash", "-c",
+				fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs-1, waitTime))
 			stdout, _, exitCode := dockerRun(args...)
 			if fail {
 				Expect(exitCode).ToNot(BeZero())
