@@ -254,7 +254,12 @@ func TestQemuGetSandboxConsole(t *testing.T) {
 	sandboxID := "testSandboxID"
 	expected := filepath.Join(runStoragePath, sandboxID, defaultConsole)
 
-	if result := q.getSandboxConsole(sandboxID); result != expected {
+	result, err := q.getSandboxConsole(sandboxID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result != expected {
 		t.Fatalf("Got %s\nExpecting %s", result, expected)
 	}
 }
