@@ -560,16 +560,20 @@ func TestExecuteWithValidProcessJson(t *testing.T) {
 	assert.Equal(exitErr.ExitCode(), 0, "Exit code should have been 0 for fake workload %s", workload)
 }
 
-func TestExecuteWithInvalidEnvironment(t *testing.T) {
+func TestExecuteWithEmptyEnvironmentValue(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
+	pidFilePath := filepath.Join(tmpdir, "pid")
+	consolePath := "/dev/ptmx"
+
+	flagSet := testExecParamsSetup(t, pidFilePath, consolePath, false)
+
 	processPath := filepath.Join(tmpdir, "process.json")
 
-	flagSet := flag.NewFlagSet("", 0)
 	flagSet.String("process", processPath, "")
 	flagSet.Parse([]string{testContainerID})
 	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
@@ -600,9 +604,24 @@ func TestExecuteWithInvalidEnvironment(t *testing.T) {
 	}()
 
 	processJSON := `{
+				"consoleSize": {
+					"height": 15,
+					"width": 15
+				},
+				"terminal": true,
+				"user": {
+					"uid": 0,
+					"gid": 0
+				},
+				"args": [
+					"sh"
+				],
 				"env": [
+					"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
 					"TERM="
-				]
+				],
+				"cwd": "/"
+
 			}`
 
 	f, err := os.OpenFile(processPath, os.O_RDWR|os.O_CREATE, testFileMode)
@@ -614,13 +633,33 @@ func TestExecuteWithInvalidEnvironment(t *testing.T) {
 
 	defer os.Remove(processPath)
 
+	workload := []string{"cat", "/dev/null"}
+
+	testingImpl.EnterContainerFunc = func(sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
+		// create a fake container process
+		command := exec.Command(workload[0], workload[1:]...)
+		err := command.Start()
+		assert.NoError(err, "Unable to start process %v: %s", workload, err)
+
+		vcProcess := vc.Process{}
+		vcProcess.Pid = command.Process.Pid
+
+		return &vcmock.Sandbox{}, &vcmock.Container{}, &vcProcess, nil
+	}
+
+	defer func() {
+		testingImpl.EnterContainerFunc = nil
+		os.Remove(pidFilePath)
+	}()
+
 	fn, ok := execCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
 
 	// vcAnnotations.EnvVars error due to incorrect environment
 	err = fn(ctx)
-	assert.Error(err)
-	assert.False(vcmock.IsMockError(err))
+	exitErr, ok := err.(*cli.ExitError)
+	assert.True(ok, true, "Exit code not received for fake workload process")
+	assert.Equal(exitErr.ExitCode(), 0, "Exit code should have been 0 for empty environment variable value")
 }
 
 func TestGenerateExecParams(t *testing.T) {
