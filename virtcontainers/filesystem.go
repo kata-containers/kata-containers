@@ -84,7 +84,10 @@ const devicesFile = "devices.json"
 const dirMode = os.FileMode(0750) | os.ModeDir
 
 // storagePathSuffix is the suffix used for all storage paths
-const storagePathSuffix = "/virtcontainers/sandboxes"
+//
+// Note: this very brief path represents "virtcontainers sandboxes". It is as
+// terse as possible to minimise path length.
+const storagePathSuffix = "/vc/sbs"
 
 // configStoragePath is the sandbox configuration directory.
 // It will contain one config.json file for each created sandbox.
