@@ -74,6 +74,7 @@ type hypervisor struct {
 	KernelParams          string `toml:"kernel_params"`
 	MachineType           string `toml:"machine_type"`
 	DefaultVCPUs          int32  `toml:"default_vcpus"`
+	DefaultMaxVCPUs       uint32 `toml:"default_maxvcpus"`
 	DefaultMemSz          uint32 `toml:"default_memory"`
 	DefaultBridges        uint32 `toml:"default_bridges"`
 	Msize9p               uint32 `toml:"msize_9p"`
@@ -202,6 +203,25 @@ func (h hypervisor) defaultVCPUs() uint32 {
 	return uint32(h.DefaultVCPUs)
 }
 
+func (h hypervisor) defaultMaxVCPUs() uint32 {
+	numcpus := uint32(goruntime.NumCPU())
+	maxvcpus := vc.MaxQemuVCPUs()
+	reqVCPUs := h.DefaultMaxVCPUs
+
+	//don't exceed the number of physical CPUs. If a default is not provided, use the
+	// numbers of physical CPUs
+	if reqVCPUs >= numcpus || reqVCPUs == 0 {
+		reqVCPUs = numcpus
+	}
+
+	// Don't exceed the maximum number of vCPUs supported by hypervisor
+	if reqVCPUs > maxvcpus {
+		return maxvcpus
+	}
+
+	return reqVCPUs
+}
+
 func (h hypervisor) defaultMemSz() uint32 {
 	if h.DefaultMemSz < 8 {
 		return defaultMemSize // MiB
@@ -313,6 +333,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		KernelParams:          vc.DeserializeParams(strings.Fields(kernelParams)),
 		HypervisorMachineType: machineType,
 		DefaultVCPUs:          h.defaultVCPUs(),
+		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		DefaultMemSz:          h.defaultMemSz(),
 		DefaultBridges:        h.defaultBridges(),
 		DisableBlockDeviceUse: h.DisableBlockDeviceUse,
@@ -418,6 +439,7 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		MachineAccelerators:   defaultMachineAccelerators,
 		HypervisorMachineType: defaultMachineType,
 		DefaultVCPUs:          defaultVCPUCount,
+		DefaultMaxVCPUs:       defaultMaxVCPUCount,
 		DefaultMemSz:          defaultMemSize,
 		DefaultBridges:        defaultBridgesCount,
 		MemPrealloc:           defaultEnableMemPrealloc,

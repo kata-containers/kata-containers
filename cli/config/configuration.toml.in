@@ -45,6 +45,21 @@ machine_accelerators="@MACHINEACCELERATORS@"
 # > number of physical cores      --> will be set to the actual number of physical cores
 default_vcpus = 1
 
+# Default maximum number of vCPUs per SB/VM:
+# unspecified or == 0             --> will be set to the actual number of physical cores or to the maximum number
+#                                     of vCPUs supported by KVM if that number is exceeded
+# > 0 <= number of physical cores --> will be set to the specified number
+# > number of physical cores      --> will be set to the actual number of physical cores or to the maximum number
+#                                     of vCPUs supported by KVM if that number is exceeded
+# WARNING: Depending of the architecture, the maximum number of vCPUs supported by KVM is used when
+# the actual number of physical cores is greater than it.
+# WARNING: Be aware that this value impacts the virtual machine's memory footprint and CPU
+# the hotplug functionality. For example, `default_maxvcpus = 240` specifies that until 240 vCPUs
+# can be added to a SB/VM, but the memory footprint will be big. Another example, with
+# `default_maxvcpus = 8` the memory footprint will be small, but 8 will be the maximum number of
+# vCPUs supported by the SB/VM. In general, we recommend that you do not edit this variable,
+# unless you know what are you doing.
+default_maxvcpus = @DEFMAXVCPUS@
 
 # Bridges can be used to hot plug devices.
 # Limitations:

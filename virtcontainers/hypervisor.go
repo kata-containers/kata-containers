@@ -41,7 +41,7 @@ const (
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
-var defaultMaxQemuVCPUs = maxQemuVCPUs()
+var defaultMaxQemuVCPUs = MaxQemuVCPUs()
 
 // deviceType describes a virtualized device type.
 type deviceType int
