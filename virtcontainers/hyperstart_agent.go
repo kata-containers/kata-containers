@@ -854,3 +854,7 @@ func (h *hyper) resumeContainer(sandbox *Sandbox, c Container) error {
 	// hyperstart-agent does not support resume container
 	return nil
 }
+
+func (h *hyper) cleanupSandbox(sandbox *Sandbox) error {
+	return nil
+}

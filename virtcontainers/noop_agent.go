@@ -51,6 +51,11 @@ func (n *noopAgent) stopSandbox(sandbox *Sandbox) error {
 	return nil
 }
 
+// cleanup is the Noop agent clean up resource implementation. It does nothing.
+func (n *noopAgent) cleanupSandbox(sandbox *Sandbox) error {
+	return nil
+}
+
 // createContainer is the Noop agent Container creation implementation. It does nothing.
 func (n *noopAgent) createContainer(sandbox *Sandbox, c *Container) (*Process, error) {
 	return &Process{}, nil
