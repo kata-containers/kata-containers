@@ -152,6 +152,9 @@ type agent interface {
 	// stopSandbox will tell the agent to stop all containers related to the Sandbox.
 	stopSandbox(sandbox *Sandbox) error
 
+	// cleanup will clean the resources for sandbox
+	cleanupSandbox(sandbox *Sandbox) error
+
 	// createContainer will tell the agent to create a container related to a Sandbox.
 	createContainer(sandbox *Sandbox, c *Container) (*Process, error)
 

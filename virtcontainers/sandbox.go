@@ -1182,6 +1182,13 @@ func (s *Sandbox) stop() error {
 		return err
 	}
 
+	// vm is stopped remove the sandbox shared dir
+	if err := s.agent.cleanupSandbox(s); err != nil {
+		// cleanup resource failed shouldn't block destroy sandbox
+		// just raise a warning
+		s.Logger().WithError(err).Warnf("cleanup sandbox failed")
+	}
+
 	return s.setSandboxState(StateStopped)
 }
 
