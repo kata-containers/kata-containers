@@ -30,7 +30,7 @@
 
 ## Overview
 
-This is an architectural overview of Kata Containers, based on the 1.0 release.
+This is an architectural overview of Kata Containers, based on the 1.0.0 release.
 
 The two primary deliverables of the Kata Containers project are a container runtime
 and a CRI friendly library API.
@@ -50,13 +50,14 @@ and `kata-runtime`.
 `kata-runtime` creates a QEMU\*/KVM virtual machine for each container or pod
 the Docker engine or Kubernetes' `kubelet` creates.
 
-The container process is then spawned by an
-[agent](https://github.com/kata-containers/agent) running as a daemon inside
-the virtual machine. The agent runs a gRPC server in the guest.  This runs on a
-virtio serial interface in the guest, and QEMU exposes them as a serial device on
-the host. `kata-runtime` uses gRPC protocol the control device for sending container management
-commands to the agent while the I/O serial device is used to pass I/O streams (`stdout`, `stderr`,
-`stdin`) between the guest and the Docker Engine.
+The container process is then spawned by
+[agent](https://github.com/kata-containers/agent), an agent process running
+as a daemon inside the virtual machine. kata-agent runs a gRPC server in
+the guest using a virtio serial interface which QEMU exposes as a serial
+device on the host. kata-runtime uses a gRPC protocol to communicate with
+the agent. This protocol allows the runtime to send container management
+commands to the agent. The protocol is also used to pass I/O streams (stdout,
+stderr, stdin) between the guest and the Docker Engine.
 
 For any given container, both the init process and all potentially executed
 commands within that container, together with their related I/O streams, need
@@ -111,12 +112,12 @@ Each feature is documented below.
 
 #### Machine accelerators
 
-Machine accelerators are architecture specific and can used to improve the performance
+Machine accelerators are architecture specific and can be used to improve the performance
 and enable specific features of the machine types. The following machine accelerators
 are used in Kata Containers:
 
 - nvdimm: This machine accelerator is x86 specific and only supported by `pc` and
-`q35` machine types. `nvdimm` is used to provide the root filesystem as persistent
+`q35` machine types. `nvdimm` is used to provide the root filesystem as a persistent
 memory device to the Virtual Machine.
 
 Although Kata Containers can run with any recent QEMU release, Kata Containers
@@ -166,7 +167,7 @@ has a highly optimized boot path.
 The only services running in the context of the mini O/S are the init daemon
 (`systemd`) and the [Agent](#agent). The real workload the user wishes to run
 is created using libcontainer, creating a container in the same manner that is done
-via runc.
+by runc.
 
 For example, when `docker run -ti ubuntu date` is run:
 
