@@ -122,6 +122,9 @@ func (q *qemu) kernelParameters() string {
 	// use default parameters
 	params = append(params, defaultKernelParameters...)
 
+	// set the maximum number of vCPUs
+	params = append(params, Param{"nr_cpus", fmt.Sprintf("%d", q.config.DefaultMaxVCPUs)})
+
 	// add the params specified by the provided config. As the kernel
 	// honours the last parameter value set and since the config-provided
 	// params are added here, they will take priority over the defaults.
@@ -197,7 +200,7 @@ func (q *qemu) init(sandbox *Sandbox) error {
 }
 
 func (q *qemu) cpuTopology() govmmQemu.SMP {
-	return q.arch.cpuTopology(q.config.DefaultVCPUs)
+	return q.arch.cpuTopology(q.config.DefaultVCPUs, q.config.DefaultMaxVCPUs)
 }
 
 func (q *qemu) memoryTopology(sandboxConfig SandboxConfig) (govmmQemu.Memory, error) {

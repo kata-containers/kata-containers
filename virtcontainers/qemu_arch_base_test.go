@@ -169,7 +169,7 @@ func TestQemuArchBaseCPUTopology(t *testing.T) {
 		MaxCPUs: defaultMaxQemuVCPUs,
 	}
 
-	smp := qemuArchBase.cpuTopology(vcpus)
+	smp := qemuArchBase.cpuTopology(vcpus, defaultMaxQemuVCPUs)
 	assert.Equal(expectedSMP, smp)
 }
 

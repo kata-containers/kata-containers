@@ -52,7 +52,7 @@ func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected strin
 }
 
 func TestQemuKernelParameters(t *testing.T) {
-	expectedOut := "panic=1 initcall_debug foo=foo bar=bar"
+	expectedOut := fmt.Sprintf("panic=1 initcall_debug nr_cpus=%d foo=foo bar=bar", MaxQemuVCPUs())
 	params := []Param{
 		{
 			Key:   "foo",
@@ -128,7 +128,8 @@ func TestQemuCPUTopology(t *testing.T) {
 	q := &qemu{
 		arch: &qemuArchBase{},
 		config: HypervisorConfig{
-			DefaultVCPUs: uint32(vcpus),
+			DefaultVCPUs:    uint32(vcpus),
+			DefaultMaxVCPUs: uint32(vcpus),
 		},
 	}
 
@@ -137,7 +138,7 @@ func TestQemuCPUTopology(t *testing.T) {
 		Sockets: uint32(vcpus),
 		Cores:   defaultCores,
 		Threads: defaultThreads,
-		MaxCPUs: defaultMaxQemuVCPUs,
+		MaxCPUs: uint32(vcpus),
 	}
 
 	smp := q.cpuTopology()
