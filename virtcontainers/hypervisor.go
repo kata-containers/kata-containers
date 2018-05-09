@@ -501,6 +501,6 @@ type hypervisor interface {
 	addDevice(devInfo interface{}, devType deviceType) error
 	hotplugAddDevice(devInfo interface{}, devType deviceType) error
 	hotplugRemoveDevice(devInfo interface{}, devType deviceType) error
-	getSandboxConsole(sandboxID string) string
+	getSandboxConsole(sandboxID string) (string, error)
 	capabilities() capabilities
 }

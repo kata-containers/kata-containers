@@ -30,8 +30,12 @@ func (p *kataBuiltInProxy) start(sandbox *Sandbox, params proxyParams) (int, str
 	}
 
 	p.sandboxID = sandbox.id
-	console := sandbox.hypervisor.getSandboxConsole(sandbox.id)
-	err := p.watchConsole(consoleProtoUnix, console, params.logger)
+	console, err := sandbox.hypervisor.getSandboxConsole(sandbox.id)
+	if err != nil {
+		return -1, "", err
+	}
+
+	err = p.watchConsole(consoleProtoUnix, console, params.logger)
 	if err != nil {
 		return -1, "", err
 	}
