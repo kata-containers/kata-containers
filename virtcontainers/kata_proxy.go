@@ -41,7 +41,12 @@ func (p *kataProxy) start(sandbox *Sandbox, params proxyParams) (int, string, er
 	args := []string{config.Path, "-listen-socket", proxyURL, "-mux-socket", params.agentURL}
 	if config.Debug {
 		args = append(args, "-log", "debug")
-		args = append(args, "-agent-logs-socket", sandbox.hypervisor.getSandboxConsole(sandbox.id))
+		console, err := sandbox.hypervisor.getSandboxConsole(sandbox.id)
+		if err != nil {
+			return -1, "", err
+		}
+
+		args = append(args, "-agent-logs-socket", console)
 	}
 
 	cmd := exec.Command(args[0], args[1:]...)

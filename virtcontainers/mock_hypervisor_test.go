@@ -87,7 +87,12 @@ func TestMockHypervisorGetSandboxConsole(t *testing.T) {
 
 	expected := ""
 
-	if result := m.getSandboxConsole("testSandboxID"); result != expected {
+	result, err := m.getSandboxConsole("testSandboxID")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if result != expected {
 		t.Fatalf("Got %s\nExpecting %s", result, expected)
 	}
 }

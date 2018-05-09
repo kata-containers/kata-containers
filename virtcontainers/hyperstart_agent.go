@@ -739,12 +739,17 @@ func (h *hyper) register() error {
 	}
 	defer h.disconnect()
 
+	console, err := h.sandbox.hypervisor.getSandboxConsole(h.sandbox.id)
+	if err != nil {
+		return err
+	}
+
 	registerVMOptions := &proxyClient.RegisterVMOptions{
-		Console:      h.sandbox.hypervisor.getSandboxConsole(h.sandbox.id),
+		Console:      console,
 		NumIOStreams: 0,
 	}
 
-	_, err := h.client.RegisterVM(h.sandbox.id, h.sockets[0].HostPath,
+	_, err = h.client.RegisterVM(h.sandbox.id, h.sockets[0].HostPath,
 		h.sockets[1].HostPath, registerVMOptions)
 	return err
 }

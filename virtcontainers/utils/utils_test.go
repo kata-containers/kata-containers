@@ -8,7 +8,9 @@ package utils
 import (
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -247,5 +249,48 @@ func TestGetSCSIAddress(t *testing.T) {
 		scsiAddr, err := GetSCSIAddress(test.index)
 		assert.Nil(t, err)
 		assert.Equal(t, scsiAddr, test.expectedSCSIAddress)
+
+	}
+}
+
+func TestBuildSocketPath(t *testing.T) {
+	assert := assert.New(t)
+
+	type testData struct {
+		elems    []string
+		valid    bool
+		expected string
+	}
+
+	longPath := strings.Repeat("/a", 106/2)
+	longestPath := longPath + "a"
+	pathTooLong := filepath.Join(longestPath, "x")
+
+	data := []testData{
+		{[]string{""}, false, ""},
+
+		{[]string{"a"}, true, "a"},
+		{[]string{"/a"}, true, "/a"},
+		{[]string{"a", "b", "c"}, true, "a/b/c"},
+		{[]string{"a", "/b", "c"}, true, "a/b/c"},
+		{[]string{"/a", "b", "c"}, true, "/a/b/c"},
+		{[]string{"/a", "/b", "/c"}, true, "/a/b/c"},
+
+		{[]string{longPath}, true, longPath},
+		{[]string{longestPath}, true, longestPath},
+		{[]string{pathTooLong}, false, ""},
+	}
+
+	for i, d := range data {
+		result, err := BuildSocketPath(d.elems...)
+
+		if d.valid {
+			assert.NoErrorf(err, "test %d, data %+v", i, d)
+		} else {
+			assert.Errorf(err, "test %d, data %+v", i, d)
+		}
+
+		assert.NotNil(result)
+		assert.Equal(d.expected, result)
 	}
 }

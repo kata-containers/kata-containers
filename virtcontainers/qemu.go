@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -59,8 +60,6 @@ type qemu struct {
 }
 
 const qmpCapErrMsg = "Failed to negoatiate QMP capabilities"
-
-const qmpSockPathSizeLimit = 107
 
 const defaultConsole = "console.sock"
 
@@ -221,20 +220,49 @@ func (q *qemu) memoryTopology(sandboxConfig SandboxConfig) (govmmQemu.Memory, er
 }
 
 func (q *qemu) qmpSocketPath(socketName string) (string, error) {
+	if socketName == "" {
+		return "", errors.New("need socket name")
+	}
+
 	parentDirPath := filepath.Join(runStoragePath, q.sandbox.id)
-	if len(parentDirPath) > qmpSockPathSizeLimit {
-		return "", fmt.Errorf("Parent directory path %q is too long "+
-			"(%d characters), could not add any path for the QMP socket",
-			parentDirPath, len(parentDirPath))
+
+	dir, err := utils.BuildSocketPath(parentDirPath)
+	if err != nil {
+		return "", err
 	}
 
-	path := fmt.Sprintf("%s/%s-%s", parentDirPath, socketName, q.state.UUID)
+	name := fmt.Sprintf("%s-%s", socketName, q.state.UUID)
 
-	if len(path) > qmpSockPathSizeLimit {
-		return path[:qmpSockPathSizeLimit], nil
+	path, err := utils.BuildSocketPath(dir, name)
+	if err == nil {
+		return path, nil
 	}
 
-	return path, nil
+	// The socket path is too long so truncate up to a minimum length.
+
+	// The minimum path length we're prepared to use (based on current
+	// values)
+	const minNameLen = 12
+
+	dirLen := len(dir)
+
+	// '-1' is for the addition of a path separator
+	availableNameLen := utils.MaxSocketPathLen - dirLen - 1
+
+	if availableNameLen < minNameLen {
+		return "", fmt.Errorf("QMP socket name cannot be shortened: %v", name)
+	}
+
+	new := name[:availableNameLen]
+
+	q.Logger().WithFields(logrus.Fields{
+		"original-name": name,
+		"new-name":      new,
+	}).Warnf("shortening QMP socket name")
+
+	name = new
+
+	return utils.BuildSocketPath(dir, name)
 }
 
 func (q *qemu) getQemuMachine(sandboxConfig SandboxConfig) (govmmQemu.Machine, error) {
@@ -362,7 +390,12 @@ func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
 	devices = q.arch.appendBridges(devices, q.state.Bridges)
 
 	devices = q.arch.append9PVolumes(devices, sandboxConfig.Volumes)
-	devices = q.arch.appendConsole(devices, q.getSandboxConsole(sandboxConfig.ID))
+	console, err := q.getSandboxConsole(sandboxConfig.ID)
+	if err != nil {
+		return err
+	}
+
+	devices = q.arch.appendConsole(devices, console)
 
 	if initrdPath == "" {
 		devices, err = q.appendImage(devices)
@@ -874,6 +907,6 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (q *qemu) getSandboxConsole(sandboxID string) string {
-	return filepath.Join(runStoragePath, sandboxID, defaultConsole)
+func (q *qemu) getSandboxConsole(sandboxID string) (string, error) {
+	return utils.BuildSocketPath(runStoragePath, sandboxID, defaultConsole)
 }

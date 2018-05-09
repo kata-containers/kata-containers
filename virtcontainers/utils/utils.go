@@ -7,14 +7,21 @@ package utils
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 const cpBinaryName = "cp"
 
 const fileMode0755 = os.FileMode(0755)
+
+// MaxSocketPathLen is the effective maximum Unix domain socket length.
+//
+// See unix(7).
+const MaxSocketPathLen = 107
 
 // FileCopy copys files from srcPath to dstPath
 func FileCopy(srcPath, dstPath string) error {
@@ -173,4 +180,23 @@ func MakeNameID(namedType, id string, maxLen int) string {
 	}
 
 	return nameID
+}
+
+// BuildSocketPath concatenates the provided elements into a path and returns
+// it. If the resulting path is longer than the maximum permitted socket path
+// on Linux, it will return an error.
+func BuildSocketPath(elements ...string) (string, error) {
+	result := filepath.Join(elements...)
+
+	if result == "" {
+		return "", errors.New("empty path")
+	}
+
+	l := len(result)
+
+	if l > MaxSocketPathLen {
+		return "", fmt.Errorf("path too long (got %v, max %v): %s", l, MaxSocketPathLen, result)
+	}
+
+	return result, nil
 }

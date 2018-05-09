@@ -75,7 +75,7 @@ func TestMain(m *testing.M) {
 	}
 	SetLogger(logger)
 
-	testDir, err = ioutil.TempDir("", "virtcontainers-tmp-")
+	testDir, err = ioutil.TempDir("", "vc-tmp-")
 	if err != nil {
 		panic(err)
 	}

@@ -33,21 +33,21 @@ import (
 )
 
 var (
-	defaultKataSockPathTemplate = "%s/%s/kata.sock"
-	defaultKataChannel          = "agent.channel.0"
-	defaultKataDeviceID         = "channel0"
-	defaultKataID               = "charch0"
-	errorMissingProxy           = errors.New("Missing proxy pointer")
-	errorMissingOCISpec         = errors.New("Missing OCI specification")
-	kataHostSharedDir           = "/run/kata-containers/shared/sandboxes/"
-	kataGuestSharedDir          = "/run/kata-containers/shared/containers/"
-	mountGuest9pTag             = "kataShared"
-	type9pFs                    = "9p"
-	vsockSocketScheme           = "vsock"
-	kata9pDevType               = "9p"
-	kataBlkDevType              = "blk"
-	kataSCSIDevType             = "scsi"
-	sharedDir9pOptions          = []string{"trans=virtio,version=9p2000.L", "nodev"}
+	defaultKataSocketName = "kata.sock"
+	defaultKataChannel    = "agent.channel.0"
+	defaultKataDeviceID   = "channel0"
+	defaultKataID         = "charch0"
+	errorMissingProxy     = errors.New("Missing proxy pointer")
+	errorMissingOCISpec   = errors.New("Missing OCI specification")
+	kataHostSharedDir     = "/run/kata-containers/shared/sandboxes/"
+	kataGuestSharedDir    = "/run/kata-containers/shared/containers/"
+	mountGuest9pTag       = "kataShared"
+	type9pFs              = "9p"
+	vsockSocketScheme     = "vsock"
+	kata9pDevType         = "9p"
+	kataBlkDevType        = "blk"
+	kataSCSIDevType       = "scsi"
+	sharedDir9pOptions    = []string{"trans=virtio,version=9p2000.L", "nodev"}
 )
 
 // KataAgentConfig is a structure storing information needed
@@ -114,10 +114,15 @@ func (k *kataAgent) generateVMSocket(sandbox *Sandbox, c KataAgentConfig) error 
 	cid, port, err := parseVSOCKAddr(c.GRPCSocket)
 	if err != nil {
 		// We need to generate a host UNIX socket path for the emulated serial port.
+		kataSock, err := utils.BuildSocketPath(runStoragePath, sandbox.id, defaultKataSocketName)
+		if err != nil {
+			return err
+		}
+
 		k.vmSocket = Socket{
 			DeviceID: defaultKataDeviceID,
 			ID:       defaultKataID,
-			HostPath: fmt.Sprintf(defaultKataSockPathTemplate, runStoragePath, sandbox.id),
+			HostPath: kataSock,
 			Name:     defaultKataChannel,
 		}
 	} else {
