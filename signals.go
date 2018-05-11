@@ -15,8 +15,10 @@ import (
 	"syscall"
 )
 
-// List of fatal signals
-var sigFatal = map[syscall.Signal]bool{
+// List of handled signals.
+//
+// The value is true if receiving the signal should be fatal.
+var handledSignalsMap = map[syscall.Signal]bool{
 	syscall.SIGABRT:   true,
 	syscall.SIGBUS:    true,
 	syscall.SIGILL:    true,
@@ -25,6 +27,7 @@ var sigFatal = map[syscall.Signal]bool{
 	syscall.SIGSTKFLT: true,
 	syscall.SIGSYS:    true,
 	syscall.SIGTRAP:   true,
+	syscall.SIGUSR1:   false,
 }
 
 func handlePanic() {
@@ -55,7 +58,31 @@ func backtrace() {
 }
 
 func fatalSignal(sig syscall.Signal) bool {
-	return sigFatal[sig]
+	s, exists := handledSignalsMap[sig]
+	if !exists {
+		return false
+	}
+
+	return s
+}
+
+func nonFatalSignal(sig syscall.Signal) bool {
+	s, exists := handledSignalsMap[sig]
+	if !exists {
+		return false
+	}
+
+	return !s
+}
+
+func handledSignals() []syscall.Signal {
+	var signals []syscall.Signal
+
+	for sig := range handledSignalsMap {
+		signals = append(signals, sig)
+	}
+
+	return signals
 }
 
 func die() {

@@ -104,19 +104,20 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 			sysSig, ok := sig.(syscall.Signal)
 			if !ok {
 				err := errors.New("unknown signal")
-				logger().WithError(err).WithField("signal", sig.String()).Error("")
+				logger().WithError(err).WithField("signal", sig.String()).Error()
 				continue
-			}
-
-			if fatalSignal(sysSig) {
-				logger().WithField("signal", sig).Error("received fatal signal")
-				die()
 			}
 
 			if sigIgnored[sysSig] {
 				//ignore these
 				continue
 			}
+
+			if debug && nonFatalSignal(sysSig) {
+				logger().WithField("signal", sig).Debug("handling signal")
+				backtrace()
+			}
+
 			// forward this signal to container
 			_, err := s.agent.SignalProcess(s.ctx, &pb.SignalProcessRequest{
 				ContainerId: s.containerID,
@@ -124,6 +125,11 @@ func (s *shim) forwardAllSignals() chan os.Signal {
 				Signal:      uint32(sysSig)})
 			if err != nil {
 				logger().WithError(err).WithField("signal", sig.String()).Error("forward signal failed")
+			}
+
+			if fatalSignal(sysSig) {
+				logger().WithField("signal", sig).Error("received fatal signal")
+				die()
 			}
 		}
 	}()
