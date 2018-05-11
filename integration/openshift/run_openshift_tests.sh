@@ -10,11 +10,11 @@ set -e
 source /etc/os-release
 openshift_dir=$(dirname $0)
 
-# Currently, Kubernetes tests only work on Ubuntu.
-# We should delete this condition, when it works for other Distros.
-if [ "$ID" != ubuntu  ]; then
-    echo "Skip - Openshift tests on $ID aren't supported yet"
-    exit
+# Currently, the CI runs Openshift tests on Fedora.
+if [ "$ID" != "fedora" ] && [ "$CI" == true ]; then
+	echo "Skip Openshift tests on $ID"
+	echo "CI only runs openshift tests on fedora"
+	exit
 fi
 
 pushd "$openshift_dir"
