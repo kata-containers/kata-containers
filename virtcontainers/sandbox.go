@@ -70,6 +70,10 @@ type State struct {
 
 	// PCI slot at which the block device backing the container rootfs is attached.
 	RootfsPCIAddr string `json:"rootfsPCIAddr"`
+
+	// Pid is the process id of the sandbox container which is the first
+	// container to be started.
+	Pid int `json:"pid"`
 }
 
 // valid checks that the sandbox state is valid.
@@ -1272,6 +1276,15 @@ func (s *Sandbox) decrementSandboxBlockIndex() error {
 	}
 
 	return nil
+}
+
+// setSandboxPid sets the Pid of the the shim process belonging to the
+// sandbox container as the Pid of the sandbox.
+func (s *Sandbox) setSandboxPid(pid int) error {
+	s.state.Pid = pid
+
+	// update on-disk state
+	return s.storage.storeSandboxResource(s.id, stateFileType, s.state)
 }
 
 func (s *Sandbox) setContainersState(state stateString) error {

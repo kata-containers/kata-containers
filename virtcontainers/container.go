@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -656,6 +657,12 @@ func createContainer(sandbox *Sandbox, contConfig ContainerConfig) (c *Container
 		return c, err
 	}
 	c.process = *process
+
+	// If this is a sandbox container, store the pid for sandbox
+	ann := c.GetAnnotations()
+	if ann[annotations.ContainerTypeKey] == string(PodSandbox) {
+		sandbox.setSandboxPid(c.process.Pid)
+	}
 
 	// Store the container process returned by the agent.
 	if err = c.storeProcess(); err != nil {
