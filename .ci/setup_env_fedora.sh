@@ -49,3 +49,6 @@ chronic sudo -E dnf -y install bison
 
 echo "Install YAML validator"
 sudo -E dnf -y install yamllint
+
+echo "Install tools for metrics tests"
+sudo -E dnf -y install smem jq

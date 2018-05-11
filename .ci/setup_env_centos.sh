@@ -63,3 +63,6 @@ sudo -E yum install -y ostree-devel
 
 echo "Install YAML validator"
 sudo -E yum install -y yamllint
+
+echo "Install tools for metrics tests"
+sudo -E yum install -y smem jq

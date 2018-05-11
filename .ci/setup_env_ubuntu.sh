@@ -58,3 +58,6 @@ sudo -E apt install -y libostree-dev
 
 echo "Install YAML validator"
 sudo -E apt install -y yamllint
+
+echo "Install tools for metrics tests"
+sudo -E apt install -y smem jq
