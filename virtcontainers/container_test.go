@@ -284,7 +284,11 @@ func TestCheckSandboxRunningSuccessful(t *testing.T) {
 func TestContainerAddResources(t *testing.T) {
 	assert := assert.New(t)
 
-	c := &Container{}
+	c := &Container{
+		sandbox: &Sandbox{
+			storage: &filesystem{},
+		},
+	}
 	err := c.addResources()
 	assert.Nil(err)
 
@@ -297,13 +301,16 @@ func TestContainerAddResources(t *testing.T) {
 	err = c.addResources()
 	assert.Nil(err)
 
+	vCPUs := uint32(5)
 	c.config.Resources = ContainerResources{
-		CPUQuota:  5000,
-		CPUPeriod: 1000,
+		VCPUs: vCPUs,
 	}
 	c.sandbox = &Sandbox{
-		hypervisor: &mockHypervisor{},
-		agent:      &noopAgent{},
+		hypervisor: &mockHypervisor{
+			vCPUs: vCPUs,
+		},
+		agent:   &noopAgent{},
+		storage: &filesystem{},
 	}
 	err = c.addResources()
 	assert.Nil(err)
@@ -312,7 +319,12 @@ func TestContainerAddResources(t *testing.T) {
 func TestContainerRemoveResources(t *testing.T) {
 	assert := assert.New(t)
 
-	c := &Container{}
+	c := &Container{
+		sandbox: &Sandbox{
+			storage: &filesystem{},
+		},
+	}
+
 	err := c.addResources()
 	assert.Nil(err)
 
@@ -325,11 +337,18 @@ func TestContainerRemoveResources(t *testing.T) {
 	err = c.removeResources()
 	assert.Nil(err)
 
+	vCPUs := uint32(5)
 	c.config.Resources = ContainerResources{
-		CPUQuota:  5000,
-		CPUPeriod: 1000,
+		VCPUs: vCPUs,
 	}
-	c.sandbox = &Sandbox{hypervisor: &mockHypervisor{}}
+
+	c.sandbox = &Sandbox{
+		hypervisor: &mockHypervisor{
+			vCPUs: vCPUs,
+		},
+		storage: &filesystem{},
+	}
+
 	err = c.removeResources()
 	assert.Nil(err)
 }
