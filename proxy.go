@@ -32,6 +32,8 @@ const (
 	termSignal = syscall.SIGTERM
 )
 
+var debug = false
+
 // version is the proxy version. This variable is populated at build time.
 var version = "unknown"
 
@@ -196,18 +198,48 @@ func printAgentLogs(sock string) error {
 }
 
 func setupNotifier() chan os.Signal {
-	sigCh := make(chan os.Signal, 8)
+	sigmax := 8
+	sigCh := make(chan os.Signal, sigmax)
+	ch := make(chan os.Signal, sigmax)
+
 	signal.Notify(sigCh, termSignal)
 
-	for _, sig := range fatalSignals() {
+	for _, sig := range handledSignals() {
 		signal.Notify(sigCh, sig)
 	}
 
-	return sigCh
+	go func() {
+		for {
+			// Block waiting for a signal
+			sig := <-sigCh
+
+			nativeSignal, ok := sig.(syscall.Signal)
+			if !ok {
+				err := errors.New("unknown signal")
+				logger().WithError(err).WithField("signal", sig.String()).Error()
+				continue
+			}
+
+			if fatalSignal(nativeSignal) {
+				logger().WithField("signal", sig).Error("received fatal signal")
+				die()
+			} else if nonFatalSignal(nativeSignal) {
+				if debug {
+					logger().WithField("signal", sig).Debug("handling signal")
+					backtrace()
+				}
+			} else {
+				// let the caller handle other signals
+				ch <- sig
+			}
+		}
+	}()
+
+	return ch
 }
 
 // Blocking function waiting for a SIGTERM signal.
-func handleSignal(sigCh chan os.Signal, vmConn *net.Conn, proxyListener *net.Listener) error {
+func handleExitSignal(sigCh chan os.Signal, vmConn *net.Conn, proxyListener *net.Listener) error {
 	if sigCh == nil {
 		return fmt.Errorf("Signal channel cannot be nil, it has to be initialized")
 	}
@@ -215,12 +247,9 @@ func handleSignal(sigCh chan os.Signal, vmConn *net.Conn, proxyListener *net.Lis
 	// Blocking here waiting for the signal to be received.
 	sig := <-sigCh
 
-	nativeSignal, ok := sig.(syscall.Signal)
-	if ok {
-		if fatalSignal(nativeSignal) {
-			logger().WithField("signal", sig).Error("received fatal signal")
-			die()
-		}
+	_, ok := sig.(syscall.Signal)
+	if !ok {
+		proxyLog.WithField("signal", sig).Error("unable to handle signal")
 	}
 
 	if sig != termSignal {
@@ -256,7 +285,7 @@ func handleVersion(showVersion bool) {
 
 func realMain() {
 	var channel, proxyAddr, agentLogsSocket, logLevel string
-	var debug, showVersion bool
+	var showVersion bool
 
 	flag.BoolVar(&debug, "debug", false, "enable debug mode")
 	flag.BoolVar(&showVersion, "version", false, "display program version and exit")
@@ -271,7 +300,8 @@ func realMain() {
 
 	handleVersion(showVersion)
 
-	if debug {
+	if logLevel == "debug" {
+		debug = true
 		crashOnError = true
 	}
 
@@ -333,7 +363,7 @@ func realMain() {
 		}
 	}()
 
-	if err := handleSignal(sigCh, &servConn, &l); err != nil {
+	if err := handleExitSignal(sigCh, &servConn, &l); err != nil {
 		logger().Fatal(err)
 		return
 	}
