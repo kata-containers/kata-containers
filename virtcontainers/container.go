@@ -1,5 +1,6 @@
+// +build linux
 // Copyright (c) 2016 Intel Corporation
-//
+// Copyright (c) 2014,2015,2016,2017 Docker, Inc.
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -53,6 +54,119 @@ type ContainerStatus struct {
 	// for example to add additional status values required
 	// to support particular specifications.
 	Annotations map[string]string
+}
+
+// ThrottlingData gather the date related to container cpu throttling.
+type ThrottlingData struct {
+	// Number of periods with throttling active
+	Periods uint64 `json:"periods,omitempty"`
+	// Number of periods when the container hit its throttling limit.
+	ThrottledPeriods uint64 `json:"throttled_periods,omitempty"`
+	// Aggregate time the container was throttled for in nanoseconds.
+	ThrottledTime uint64 `json:"throttled_time,omitempty"`
+}
+
+// CPUUsage denotes the usage of a CPU.
+// All CPU stats are aggregate since container inception.
+type CPUUsage struct {
+	// Total CPU time consumed.
+	// Units: nanoseconds.
+	TotalUsage uint64 `json:"total_usage,omitempty"`
+	// Total CPU time consumed per core.
+	// Units: nanoseconds.
+	PercpuUsage []uint64 `json:"percpu_usage,omitempty"`
+	// Time spent by tasks of the cgroup in kernel mode.
+	// Units: nanoseconds.
+	UsageInKernelmode uint64 `json:"usage_in_kernelmode"`
+	// Time spent by tasks of the cgroup in user mode.
+	// Units: nanoseconds.
+	UsageInUsermode uint64 `json:"usage_in_usermode"`
+}
+
+// CPUStats describes the cpu stats
+type CPUStats struct {
+	CPUUsage       CPUUsage       `json:"cpu_usage,omitempty"`
+	ThrottlingData ThrottlingData `json:"throttling_data,omitempty"`
+}
+
+// MemoryData gather the data related to memory
+type MemoryData struct {
+	Usage    uint64 `json:"usage,omitempty"`
+	MaxUsage uint64 `json:"max_usage,omitempty"`
+	Failcnt  uint64 `json:"failcnt"`
+	Limit    uint64 `json:"limit"`
+}
+
+// MemoryStats describes the memory stats
+type MemoryStats struct {
+	// memory used for cache
+	Cache uint64 `json:"cache,omitempty"`
+	// usage of memory
+	Usage MemoryData `json:"usage,omitempty"`
+	// usage of memory  swap
+	SwapUsage MemoryData `json:"swap_usage,omitempty"`
+	// usage of kernel memory
+	KernelUsage MemoryData `json:"kernel_usage,omitempty"`
+	// usage of kernel TCP memory
+	KernelTCPUsage MemoryData `json:"kernel_tcp_usage,omitempty"`
+	// if true, memory usage is accounted for throughout a hierarchy of cgroups.
+	UseHierarchy bool `json:"use_hierarchy"`
+
+	Stats map[string]uint64 `json:"stats,omitempty"`
+}
+
+// PidsStats describes the pids stats
+type PidsStats struct {
+	// number of pids in the cgroup
+	Current uint64 `json:"current,omitempty"`
+	// active pids hard limit
+	Limit uint64 `json:"limit,omitempty"`
+}
+
+// BlkioStatEntry gather date related to a block device
+type BlkioStatEntry struct {
+	Major uint64 `json:"major,omitempty"`
+	Minor uint64 `json:"minor,omitempty"`
+	Op    string `json:"op,omitempty"`
+	Value uint64 `json:"value,omitempty"`
+}
+
+// BlkioStats describes block io stats
+type BlkioStats struct {
+	// number of bytes tranferred to and from the block device
+	IoServiceBytesRecursive []BlkioStatEntry `json:"io_service_bytes_recursive,omitempty"`
+	IoServicedRecursive     []BlkioStatEntry `json:"io_serviced_recursive,omitempty"`
+	IoQueuedRecursive       []BlkioStatEntry `json:"io_queue_recursive,omitempty"`
+	IoServiceTimeRecursive  []BlkioStatEntry `json:"io_service_time_recursive,omitempty"`
+	IoWaitTimeRecursive     []BlkioStatEntry `json:"io_wait_time_recursive,omitempty"`
+	IoMergedRecursive       []BlkioStatEntry `json:"io_merged_recursive,omitempty"`
+	IoTimeRecursive         []BlkioStatEntry `json:"io_time_recursive,omitempty"`
+	SectorsRecursive        []BlkioStatEntry `json:"sectors_recursive,omitempty"`
+}
+
+// HugetlbStats describes hugetable memory stats
+type HugetlbStats struct {
+	// current res_counter usage for hugetlb
+	Usage uint64 `json:"usage,omitempty"`
+	// maximum usage ever recorded.
+	MaxUsage uint64 `json:"max_usage,omitempty"`
+	// number of times hugetlb usage allocation failure.
+	Failcnt uint64 `json:"failcnt"`
+}
+
+// CgroupStats describes all cgroup subsystem stats
+type CgroupStats struct {
+	CPUStats    CPUStats    `json:"cpu_stats,omitempty"`
+	MemoryStats MemoryStats `json:"memory_stats,omitempty"`
+	PidsStats   PidsStats   `json:"pids_stats,omitempty"`
+	BlkioStats  BlkioStats  `json:"blkio_stats,omitempty"`
+	// the map is in the format "size of hugepage: stats of the hugepage"
+	HugetlbStats map[string]HugetlbStats `json:"hugetlb_stats,omitempty"`
+}
+
+// ContainerStats describes a container stats.
+type ContainerStats struct {
+	CgroupStats *CgroupStats
 }
 
 // ContainerResources describes container resources
@@ -786,6 +900,13 @@ func (c *Container) processList(options ProcessListOptions) (ProcessList, error)
 	}
 
 	return c.sandbox.agent.processListContainer(c.sandbox, *c, options)
+}
+
+func (c *Container) stats() (*ContainerStats, error) {
+	if err := c.checkSandboxRunning("stats"); err != nil {
+		return nil, err
+	}
+	return c.sandbox.agent.statsContainer(c.sandbox, *c)
 }
 
 func (c *Container) update(resources specs.LinuxResources) error {
