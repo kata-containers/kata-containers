@@ -23,6 +23,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	dockershimAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations/dockershim"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
 type annotationContainerType struct {
@@ -562,11 +563,7 @@ func ContainerConfig(ocispec CompatOCISpec, bundlePath, cid, console string, det
 	if ocispec.Linux.Resources.CPU != nil {
 		if ocispec.Linux.Resources.CPU.Quota != nil &&
 			ocispec.Linux.Resources.CPU.Period != nil {
-			resources.CPUQuota = *ocispec.Linux.Resources.CPU.Quota
-			resources.CPUPeriod = *ocispec.Linux.Resources.CPU.Period
-		}
-		if ocispec.Linux.Resources.CPU.Shares != nil {
-			resources.CPUShares = *ocispec.Linux.Resources.CPU.Shares
+			resources.VCPUs = uint32(utils.ConstraintsToVCPUs(*ocispec.Linux.Resources.CPU.Quota, *ocispec.Linux.Resources.CPU.Period))
 		}
 	}
 

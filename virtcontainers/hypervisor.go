@@ -499,8 +499,8 @@ type hypervisor interface {
 	pauseSandbox() error
 	resumeSandbox() error
 	addDevice(devInfo interface{}, devType deviceType) error
-	hotplugAddDevice(devInfo interface{}, devType deviceType) error
-	hotplugRemoveDevice(devInfo interface{}, devType deviceType) error
+	hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error)
+	hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error)
 	getSandboxConsole(sandboxID string) (string, error)
 	capabilities() capabilities
 }
