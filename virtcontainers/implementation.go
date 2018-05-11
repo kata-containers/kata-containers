@@ -106,6 +106,11 @@ func (impl *VCImpl) StatusContainer(sandboxID, containerID string) (ContainerSta
 	return StatusContainer(sandboxID, containerID)
 }
 
+// StatsContainer implements the VC function of the same name.
+func (impl *VCImpl) StatsContainer(sandboxID, containerID string) (ContainerStats, error) {
+	return StatsContainer(sandboxID, containerID)
+}
+
 // KillContainer implements the VC function of the same name.
 func (impl *VCImpl) KillContainer(sandboxID, containerID string, signal syscall.Signal, all bool) error {
 	return KillContainer(sandboxID, containerID, signal, all)

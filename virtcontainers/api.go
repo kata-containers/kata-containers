@@ -628,3 +628,28 @@ func UpdateContainer(sandboxID, containerID string, resources specs.LinuxResourc
 
 	return s.UpdateContainer(containerID, resources)
 }
+
+// StatsContainer is the virtcontainers container stats entry point.
+// StatsContainer returns a detailed container stats.
+func StatsContainer(sandboxID, containerID string) (ContainerStats, error) {
+	if sandboxID == "" {
+		return ContainerStats{}, errNeedSandboxID
+	}
+
+	if containerID == "" {
+		return ContainerStats{}, errNeedContainerID
+	}
+	lockFile, err := rLockSandbox(sandboxID)
+	if err != nil {
+		return ContainerStats{}, err
+	}
+
+	defer unlockSandbox(lockFile)
+
+	s, err := fetchSandbox(sandboxID)
+	if err != nil {
+		return ContainerStats{}, err
+	}
+
+	return s.StatsContainer(containerID)
+}

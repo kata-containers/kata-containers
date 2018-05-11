@@ -34,6 +34,7 @@ type VC interface {
 	KillContainer(sandboxID, containerID string, signal syscall.Signal, all bool) error
 	StartContainer(sandboxID, containerID string) (VCContainer, error)
 	StatusContainer(sandboxID, containerID string) (ContainerStatus, error)
+	StatsContainer(sandboxID, containerID string) (ContainerStats, error)
 	StopContainer(sandboxID, containerID string) (VCContainer, error)
 	ProcessListContainer(sandboxID, containerID string, options ProcessListOptions) (ProcessList, error)
 	UpdateContainer(sandboxID, containerID string, resources specs.LinuxResources) error
@@ -59,6 +60,7 @@ type VCSandbox interface {
 	DeleteContainer(contID string) (VCContainer, error)
 	StartContainer(containerID string) (VCContainer, error)
 	StatusContainer(containerID string) (ContainerStatus, error)
+	StatsContainer(containerID string) (ContainerStats, error)
 	EnterContainer(containerID string, cmd Cmd) (VCContainer, *Process, error)
 	UpdateContainer(containerID string, resources specs.LinuxResources) error
 	WaitProcess(containerID, processID string) (int32, error)

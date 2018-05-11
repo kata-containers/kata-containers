@@ -94,6 +94,11 @@ func (p *Sandbox) StatusContainer(contID string) (vc.ContainerStatus, error) {
 	return vc.ContainerStatus{}, nil
 }
 
+// StatsContainer implements the VCSandbox function of the same name.
+func (p *Sandbox) StatsContainer(contID string) (vc.ContainerStats, error) {
+	return vc.ContainerStats{}, nil
+}
+
 // Status implements the VCSandbox function of the same name.
 func (p *Sandbox) Status() vc.SandboxStatus {
 	return vc.SandboxStatus{}

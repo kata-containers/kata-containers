@@ -609,6 +609,11 @@ func (h *hyper) processListContainer(sandbox *Sandbox, c Container, options Proc
 	return h.processListOneContainer(sandbox.id, c.id, options)
 }
 
+// statsContainer is the hyperstart agent Container stats implementation. It does nothing.
+func (h *hyper) statsContainer(sandbox *Sandbox, c Container) (*ContainerStats, error) {
+	return &ContainerStats{}, nil
+}
+
 func (h *hyper) updateContainer(sandbox *Sandbox, c Container, resources specs.LinuxResources) error {
 	// hyperstart-agent does not support update
 	return nil

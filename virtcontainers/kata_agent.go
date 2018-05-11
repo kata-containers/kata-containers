@@ -941,6 +941,38 @@ func (k *kataAgent) onlineCPUMem(cpus uint32) error {
 	return err
 }
 
+func (k *kataAgent) statsContainer(sandbox *Sandbox, c Container) (*ContainerStats, error) {
+	req := &grpc.StatsContainerRequest{
+		ContainerId: c.id,
+	}
+
+	returnStats, err := k.sendReq(req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	stats, ok := returnStats.(*grpc.StatsContainerResponse)
+	if !ok {
+		return nil, fmt.Errorf("irregular response container stats")
+	}
+
+	data, err := json.Marshal(stats.CgroupStats)
+	if err != nil {
+		return nil, err
+	}
+
+	var cgroupStats CgroupStats
+	err = json.Unmarshal(data, &cgroupStats)
+	if err != nil {
+		return nil, err
+	}
+	containerStats := &ContainerStats{
+		CgroupStats: &cgroupStats,
+	}
+	return containerStats, nil
+}
+
 func (k *kataAgent) connect() error {
 	if k.client != nil {
 		return nil
@@ -1068,6 +1100,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers["grpc.CloseStdinRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.CloseStdin(ctx, req.(*grpc.CloseStdinRequest), opts...)
+	}
+	k.reqHandlers["grpc.StatsContainerRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.StatsContainer(ctx, req.(*grpc.StatsContainerRequest), opts...)
 	}
 }
 

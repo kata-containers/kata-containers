@@ -91,6 +91,11 @@ func (n *noopAgent) check() error {
 	return nil
 }
 
+// statsContainer is the Noop agent Container stats implementation. It does nothing.
+func (n *noopAgent) statsContainer(sandbox *Sandbox, c Container) (*ContainerStats, error) {
+	return &ContainerStats{}, nil
+}
+
 // waitProcess is the Noop agent process waiter. It does nothing.
 func (n *noopAgent) waitProcess(c *Container, processID string) (int32, error) {
 	return 0, nil

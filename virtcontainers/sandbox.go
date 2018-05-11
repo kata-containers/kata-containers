@@ -1101,6 +1101,21 @@ func (s *Sandbox) UpdateContainer(containerID string, resources specs.LinuxResou
 	return c.update(resources)
 }
 
+// StatsContainer return the stats of a running container
+func (s *Sandbox) StatsContainer(containerID string) (ContainerStats, error) {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return ContainerStats{}, err
+	}
+
+	stats, err := c.stats()
+	if err != nil {
+		return ContainerStats{}, err
+	}
+	return *stats, nil
+}
+
 // createContainers registers all containers to the proxy, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers() error {
