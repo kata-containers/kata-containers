@@ -61,4 +61,7 @@ func TestShimOps(t *testing.T) {
 	status, err := shim.wait()
 	assert.Nil(t, err, "%s", err)
 	assert.Equal(t, status, int32(0), "process fail status %d", status)
+
+	// wait for go routines started by proxyStdio() to end
+	wg.Wait()
 }
