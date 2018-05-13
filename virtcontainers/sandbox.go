@@ -23,17 +23,6 @@ import (
 	deviceManager "github.com/kata-containers/runtime/virtcontainers/device/manager"
 )
 
-// controlSocket is the sandbox control socket.
-// It is an hypervisor resource, and for example qemu's control
-// socket is the QMP one.
-const controlSocket = "ctl"
-
-// monitorSocket is the sandbox monitoring socket.
-// It is an hypervisor resource, and is a qmp socket in the qemu case.
-// This is a socket that any monitoring entity will listen to in order
-// to understand if the VM is still alive or not.
-const monitorSocket = "mon"
-
 // vmStartTimeout represents the time in seconds a sandbox can wait before
 // to consider the VM starting operation failed.
 const vmStartTimeout = 10
