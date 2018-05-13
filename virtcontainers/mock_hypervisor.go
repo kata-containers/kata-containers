@@ -10,8 +10,8 @@ type mockHypervisor struct {
 }
 
 func (m *mockHypervisor) init(id string, hypervisorConfig *HypervisorConfig, vmConfig Resources, storage resourceStorage) error {
-	valid, err := hypervisorConfig.valid()
-	if valid == false || err != nil {
+	err := hypervisorConfig.valid()
+	if err != nil {
 		return err
 	}
 

@@ -173,8 +173,8 @@ func (q *qemu) qemuPath() (string, error) {
 
 // init intializes the Qemu structure.
 func (q *qemu) init(id string, hypervisorConfig *HypervisorConfig, vmConfig Resources, storage resourceStorage) error {
-	valid, err := hypervisorConfig.valid()
-	if valid == false || err != nil {
+	err := hypervisorConfig.valid()
+	if err != nil {
 		return err
 	}
 
