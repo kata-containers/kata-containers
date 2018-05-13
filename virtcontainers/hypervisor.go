@@ -218,13 +218,13 @@ type HypervisorConfig struct {
 	Msize9p uint32
 }
 
-func (conf *HypervisorConfig) valid() (bool, error) {
+func (conf *HypervisorConfig) valid() error {
 	if conf.KernelPath == "" {
-		return false, fmt.Errorf("Missing kernel path")
+		return fmt.Errorf("Missing kernel path")
 	}
 
 	if conf.ImagePath == "" && conf.InitrdPath == "" {
-		return false, fmt.Errorf("Missing image and initrd path")
+		return fmt.Errorf("Missing image and initrd path")
 	}
 
 	if conf.DefaultVCPUs == 0 {
@@ -251,7 +251,7 @@ func (conf *HypervisorConfig) valid() (bool, error) {
 		conf.Msize9p = defaultMsize9p
 	}
 
-	return true, nil
+	return nil
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing

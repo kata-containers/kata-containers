@@ -107,9 +107,12 @@ func TestNewHypervisorFromUnknownHypervisorType(t *testing.T) {
 	}
 }
 
-func testHypervisorConfigValid(t *testing.T, hypervisorConfig *HypervisorConfig, expected bool) {
-	ret, _ := hypervisorConfig.valid()
-	if ret != expected {
+func testHypervisorConfigValid(t *testing.T, hypervisorConfig *HypervisorConfig, success bool) {
+	err := hypervisorConfig.valid()
+	if success && err != nil {
+		t.Fatal()
+	}
+	if !success && err == nil {
 		t.Fatal()
 	}
 }
