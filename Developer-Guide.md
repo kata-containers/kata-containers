@@ -275,7 +275,7 @@ script and paste its output directly into a
 
 To perform analysis on Kata logs, use the
 [`kata-log-parser`](https://github.com/kata-containers/tests/tree/master/cmd/log-parser)
-tool.
+tool, which can convert the logs into formats (e.g. JSON, TOML, XML, and YAML).
 
 # Appendices
 
