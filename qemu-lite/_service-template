@@ -1,0 +1,15 @@
+<!--- XML Structure defined here: https://en.opensuse.org/openSUSE:Build_Service_Concept_SourceService -->
+<services>
+ <service name="tar_scm">
+    <param name="scm">git</param>
+    <param name="url">https://github.com/kata-containers/qemu.git</param>
+    <param name="exclude">.git</param>
+    <param name="filename">qemu-lite</param>
+    <param name="versionformat">@VERSION@+git.%h</param>
+    <param name="revision">qemu-lite-@VERSION@</param>
+ </service>
+ <service name="recompress">
+    <param name="file">*.tar*</param>
+    <param name="compression">gz</param>
+  </service>
+</services>

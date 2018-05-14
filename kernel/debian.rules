@@ -1,0 +1,35 @@
+#!/usr/bin/make -f
+include /usr/share/dpkg/default.mk
+KernelDir=debian/kata-linux-container/usr/share/kata-containers
+DebugDir=debian/kata-linux-container-debug/usr/share/kata-containers
+KernelVer=${DEB_VERSION_UPSTREAM_REVISION}.container
+%:
+	dh $@
+
+override_dh_auto_build:
+	sed -i "s/^EXTRAVERSION.*/EXTRAVERSION = -$$(echo $(KernelVer) | cut -d'-' -f2)/" Makefile
+	cp /usr/src/packages/SOURCES/config .config
+	make -s ARCH=x86_64 oldconfig > /dev/null
+	make -s CONFIG_DEBUG_SECTION_MISMATCH=y ARCH=x86_64 -j4 all
+
+override_dh_auto_install:
+
+override_dh_auto_clean:
+
+override_dh_install:
+	dh_install
+	mkdir -p $(DebugDir)
+	mkdir -p $(KernelDir)
+	install -m 644 .config $(DebugDir)/config-$(KernelVer)
+	install -m 644 System.map $(DebugDir)/System.map-$(KernelVer)
+	cp arch/x86/boot/bzImage $(KernelDir)/vmlinuz-$(KernelVer)
+	chmod 755 $(KernelDir)/vmlinuz-$(KernelVer)
+	ln -sf vmlinuz-$(KernelVer) $(KernelDir)/vmlinuz.container
+
+	cp vmlinux $(KernelDir)/vmlinux-$(KernelVer)
+	chmod 755 $(KernelDir)/vmlinux-$(KernelVer)
+	ln -sf vmlinux-$(KernelVer) $(KernelDir)/vmlinux.container
+
+override_dh_strip:
+
+override_dh_shlibdeps:

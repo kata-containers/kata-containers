@@ -1,0 +1,58 @@
+#!/bin/bash
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# -*- mode: shell-script; indent-tabs-mode: nil; sh-basic-offset: 4; -*-
+# ex: ts=8 sw=4 sts=4 et filetype=sh
+
+# Automation script to create specs to build Kata containers kernel
+set -e
+
+source ../versions.txt
+source ../scripts/pkglib.sh
+
+SCRIPT_NAME=$0
+SCRIPT_DIR=$(dirname $0)
+
+PKG_NAME="kata-linux-container"
+VERSION=$kernel_version
+
+KR_SERIES="$(echo $VERSION | cut -d "." -f 1).x"
+KR_LTS=$(echo $VERSION | cut -d "." -f 1,2)
+KR_PATCHES=$(eval find "patches" -type f -name "*.patch")
+
+KR_REL=https://www.kernel.org/releases.json
+KR_SHA=https://cdn.kernel.org/pub/linux/kernel/v"${KR_SERIES}"/sha256sums.asc
+
+GENERATED_FILES=(kata-linux-container.dsc kata-linux-container.spec _service config debian.control debian.series)
+STATIC_FILES=(debian.dirs debian.rules debian.compat debian.copyright)
+#STATIC_FILES+=($KR_PATCHES)
+
+# Parse arguments
+cli "$@"
+
+[ "$VERBOSE" == "true" ] && set -x
+PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/linux-container}
+RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
+((RELEASE++))
+
+kernel_sha256=$(curl -L -s -f ${KR_SHA} | awk '/linux-'${VERSION}'.tar.xz/ {print $1}')
+
+# Generate the kernel config file
+cp "configs/x86_kata_kvm_${KR_LTS}.x" config
+
+replace_list=(
+"VERSION=$VERSION"
+"RELEASE=$RELEASE"
+"KERNEL_SHA256=$kernel_sha256"
+)
+
+verify
+echo "Verify succeed."
+get_git_info
+changelog_update $VERSION
+generate_files "$SCRIPT_DIR" "${replace_list[@]}"
+build_pkg "${PROJECT_REPO}"
