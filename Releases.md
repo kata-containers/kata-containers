@@ -65,7 +65,7 @@ Note that although hypervisor and guest kernel both have versions, these are not
 
 ## Release checklist
 
-The detailed steps to follow to create a new release are specified in the [Release Checklist](#Release-Checklist).
+The detailed steps to follow to create a new release are specified in the [Release Checklist](Release-Checklist.md).
 
 ## Release process
 
