@@ -1,0 +1,18 @@
+Source: kata-linux-container
+Section: devel
+Priority: optional
+Maintainer: Kata containers team <https://github.com/kata-containers/>
+Build-Depends: debhelper (>= 9), cpio, libelf-dev, libnewt-dev, libiberty-dev, rsync, libdw-dev, libpci-dev, pkg-config, flex, bison, libunwind8-dev, openssl, libaudit-dev, bc, python-dev, gawk, autoconf, automake, libtool, libssl-dev
+Standards-Version: 3.9.6
+Homepage: https://katacontainers.io
+
+Package: kata-linux-container
+Architecture: @deb_arch@
+Depends: ${shlibs:Depends}, ${misc:Depends}, ${perl:Depends},
+Description: linux kernel optimised for container-like workloads.
+ Linux kernel optimised for container-like workloads
+
+Package: kata-linux-container-debug
+Architecture: @deb_arch@
+Description: Debug components for the kata-linux-container package.
+ This package includes the kernel config and the kernel map.

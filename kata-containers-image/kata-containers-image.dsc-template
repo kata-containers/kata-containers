@@ -1,0 +1,14 @@
+Format: 3.0 (quilt)
+Source: kata-containers-image
+Version: @VERSION@-@RELEASE@
+Section: devel
+Priority: optional
+Maintainer: Kata containers team <https://github.com/kata-containers/>
+Build-Depends: debhelper (>= 9), flex, bison
+Standards-Version: 3.9.6
+Homepage: https://katacontainers.io
+Debtransform-Tar: kata-containers.tar.gz
+
+Package: kata-containers-image
+Architecture: @deb_arch@
+Description: Kata containers image

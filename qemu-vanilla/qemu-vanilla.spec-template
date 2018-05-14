@@ -1,0 +1,200 @@
+%global qemu_vanilla_hash @QEMU_VANILLA_HASH@
+Name: qemu-vanilla
+Version: @VERSION@+git.%{qemu_vanilla_hash}
+Release: @RELEASE@.<B_CNT>
+Source0: %{name}-%{version}.tar.gz
+Source1: qemu-vanilla-rpmlintrc
+Source2: configure-hypervisor.sh
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}
+
+Summary  : OpenBIOS development utilities
+Group    : Development/Tools
+License  : BSD-2-Clause BSD-3-Clause GPL-2.0 GPL-2.0+ LGPL-2.0+ LGPL-2.1
+
+Requires: qemu-vanilla-bin
+Requires: qemu-vanilla-data
+BuildRequires : automake
+BuildRequires : bison
+BuildRequires : flex
+BuildRequires : gcc-c++
+BuildRequires : glib2-devel
+BuildRequires : libattr-devel
+BuildRequires : libcap-devel
+BuildRequires : libcap-ng-devel
+BuildRequires : libtool
+BuildRequires : libtool-ltdl-devel
+BuildRequires : libtool
+BuildRequires : m4
+BuildRequires : findutils
+
+%if 0%{?rhel_version} || 0%{?centos_version}
+BuildRequires : librbd1-devel
+%else
+BuildRequires : librbd-devel
+%endif
+
+%if 0%{?suse_version}
+BuildRequires : libnuma-devel
+%else
+BuildRequires : numactl-devel
+%endif
+BuildRequires : python-devel
+BuildRequires : zlib-devel
+BuildRequires : pkgconfig(pixman-1)
+
+# Patches
+@RPM_PATCH_LIST@
+
+%description
+===========
+QEMU is a generic and open source machine & userspace emulator and
+virtualizer.
+
+%package bin
+Summary: bin components for the qemu-vanilla package.
+Group: Binaries
+Requires: qemu-vanilla-data
+
+%description bin
+bin components for the qemu-vanilla package.
+
+
+%package data
+Summary: data components for the qemu-vanilla package.
+Group: Data
+
+%description data
+data components for the qemu-vanilla package.
+
+%global debug_package %{nil}
+
+%prep
+chmod +x %{_sourcedir}/configure-hypervisor.sh
+
+%setup -q
+# Patches
+@RPM_APPLY_PATCHES@
+
+%build
+export LANG=C
+
+eval "%{_sourcedir}/configure-hypervisor.sh" "qemu-vanilla" | xargs ./configure --prefix=/usr
+make V=1  %{?_smp_mflags}
+
+%install
+rm -rf %{buildroot}
+#%make_install
+make install DESTDIR=%{buildroot}
+## make_install_append content
+for file in %{buildroot}/usr/bin/*
+do
+  dir=$(dirname "$file")
+  bin=$(basename "$file")
+  new=$(echo "$bin"|sed -e 's/qemu-/qemu-vanilla-/g' -e 's/ivshmem-/ivshmem-vanilla-/g' -e 's/virtfs-/virtfs-vanilla-/g')
+  mv "$file" "$dir/$new"
+done
+## make_install_append end
+
+%files
+%defattr(-,root,root,-)
+
+%files bin
+%defattr(-,root,root,-)
+/usr/bin/qemu-vanilla-ga
+/usr/bin/qemu-vanilla-pr-helper
+/usr/bin/qemu-vanilla-system-x86_64
+/usr/bin/virtfs-vanilla-proxy-helper
+%dir /usr/libexec
+%dir /usr/libexec/qemu-vanilla
+/usr/libexec/qemu-vanilla/qemu-bridge-helper
+
+%files data
+%defattr(-,root,root,-)
+%dir /usr/share/qemu-vanilla
+%dir /usr/share/qemu-vanilla/qemu
+%dir /usr/share/qemu-vanilla/qemu/keymaps
+/usr/share/qemu-vanilla/qemu/QEMU,cgthree.bin
+/usr/share/qemu-vanilla/qemu/QEMU,tcx.bin
+/usr/share/qemu-vanilla/qemu/acpi-dsdt.aml
+/usr/share/qemu-vanilla/qemu/bamboo.dtb
+/usr/share/qemu-vanilla/qemu/bios-256k.bin
+/usr/share/qemu-vanilla/qemu/bios.bin
+/usr/share/qemu-vanilla/qemu/efi-e1000.rom
+/usr/share/qemu-vanilla/qemu/efi-e1000e.rom
+/usr/share/qemu-vanilla/qemu/efi-eepro100.rom
+/usr/share/qemu-vanilla/qemu/efi-ne2k_pci.rom
+/usr/share/qemu-vanilla/qemu/efi-pcnet.rom
+/usr/share/qemu-vanilla/qemu/efi-rtl8139.rom
+/usr/share/qemu-vanilla/qemu/efi-virtio.rom
+/usr/share/qemu-vanilla/qemu/efi-vmxnet3.rom
+/usr/share/qemu-vanilla/qemu/keymaps/ar
+/usr/share/qemu-vanilla/qemu/keymaps/bepo
+/usr/share/qemu-vanilla/qemu/keymaps/common
+/usr/share/qemu-vanilla/qemu/keymaps/cz
+/usr/share/qemu-vanilla/qemu/keymaps/da
+/usr/share/qemu-vanilla/qemu/keymaps/de
+/usr/share/qemu-vanilla/qemu/keymaps/de-ch
+/usr/share/qemu-vanilla/qemu/keymaps/en-gb
+/usr/share/qemu-vanilla/qemu/keymaps/en-us
+/usr/share/qemu-vanilla/qemu/keymaps/es
+/usr/share/qemu-vanilla/qemu/keymaps/et
+/usr/share/qemu-vanilla/qemu/keymaps/fi
+/usr/share/qemu-vanilla/qemu/keymaps/fo
+/usr/share/qemu-vanilla/qemu/keymaps/fr
+/usr/share/qemu-vanilla/qemu/keymaps/fr-be
+/usr/share/qemu-vanilla/qemu/keymaps/fr-ca
+/usr/share/qemu-vanilla/qemu/keymaps/fr-ch
+/usr/share/qemu-vanilla/qemu/keymaps/hr
+/usr/share/qemu-vanilla/qemu/keymaps/hu
+/usr/share/qemu-vanilla/qemu/keymaps/is
+/usr/share/qemu-vanilla/qemu/keymaps/it
+/usr/share/qemu-vanilla/qemu/keymaps/ja
+/usr/share/qemu-vanilla/qemu/keymaps/lt
+/usr/share/qemu-vanilla/qemu/keymaps/lv
+/usr/share/qemu-vanilla/qemu/keymaps/mk
+/usr/share/qemu-vanilla/qemu/keymaps/modifiers
+/usr/share/qemu-vanilla/qemu/keymaps/nl
+/usr/share/qemu-vanilla/qemu/keymaps/nl-be
+/usr/share/qemu-vanilla/qemu/keymaps/no
+/usr/share/qemu-vanilla/qemu/keymaps/pl
+/usr/share/qemu-vanilla/qemu/keymaps/pt
+/usr/share/qemu-vanilla/qemu/keymaps/pt-br
+/usr/share/qemu-vanilla/qemu/keymaps/ru
+/usr/share/qemu-vanilla/qemu/keymaps/sl
+/usr/share/qemu-vanilla/qemu/keymaps/sv
+/usr/share/qemu-vanilla/qemu/keymaps/th
+/usr/share/qemu-vanilla/qemu/keymaps/tr
+/usr/share/qemu-vanilla/qemu/kvmvapic.bin
+/usr/share/qemu-vanilla/qemu/linuxboot.bin
+/usr/share/qemu-vanilla/qemu/linuxboot_dma.bin
+/usr/share/qemu-vanilla/qemu/multiboot.bin
+/usr/share/qemu-vanilla/qemu/openbios-ppc
+/usr/share/qemu-vanilla/qemu/openbios-sparc32
+/usr/share/qemu-vanilla/qemu/openbios-sparc64
+/usr/share/qemu-vanilla/qemu/palcode-clipper
+/usr/share/qemu-vanilla/qemu/petalogix-ml605.dtb
+/usr/share/qemu-vanilla/qemu/petalogix-s3adsp1800.dtb
+/usr/share/qemu-vanilla/qemu/ppc_rom.bin
+/usr/share/qemu-vanilla/qemu/pxe-e1000.rom
+/usr/share/qemu-vanilla/qemu/pxe-eepro100.rom
+/usr/share/qemu-vanilla/qemu/pxe-ne2k_pci.rom
+/usr/share/qemu-vanilla/qemu/pxe-pcnet.rom
+/usr/share/qemu-vanilla/qemu/pxe-rtl8139.rom
+/usr/share/qemu-vanilla/qemu/pxe-virtio.rom
+/usr/share/qemu-vanilla/qemu/qemu-icon.bmp
+/usr/share/qemu-vanilla/qemu/qemu_logo_no_text.svg
+/usr/share/qemu-vanilla/qemu/s390-ccw.img
+/usr/share/qemu-vanilla/qemu/sgabios.bin
+/usr/share/qemu-vanilla/qemu/slof.bin
+/usr/share/qemu-vanilla/qemu/spapr-rtas.bin
+/usr/share/qemu-vanilla/qemu/trace-events-all
+/usr/share/qemu-vanilla/qemu/u-boot.e500
+/usr/share/qemu-vanilla/qemu/vgabios-cirrus.bin
+/usr/share/qemu-vanilla/qemu/vgabios-qxl.bin
+/usr/share/qemu-vanilla/qemu/vgabios-stdvga.bin
+/usr/share/qemu-vanilla/qemu/vgabios-virtio.bin
+/usr/share/qemu-vanilla/qemu/vgabios-vmware.bin
+/usr/share/qemu-vanilla/qemu/vgabios.bin
+/usr/share/qemu-vanilla/qemu/qemu_vga.ndrv
+/usr/share/qemu-vanilla/qemu/s390-netboot.img
+/usr/share/qemu-vanilla/qemu/skiboot.lid
