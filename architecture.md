@@ -196,15 +196,15 @@ containers running inside a pod. In the case of docker, `kata-runtime` creates a
 single container per pod.
 
 `kata-agent` communicates with the other Kata components over gRPC.
-It also runs a [`yamux`](https://github.com/hashicorp/yamux) server on the same gRPC
-URL (FIXME).
-
-placeholder for Kata Agent API description: we should consider moving this to
-its own section and/or document.
+It also runs a [`yamux`](https://github.com/hashicorp/yamux) server on the same gRPC URL.
 
 The `kata-agent` makes use of [`libcontainer`](https://github.com/opencontainers/runc/tree/master/libcontainer)
 to manage the lifecycle of the container. This way the `kata-agent` reuses most
 of the code used by [`runc`](https://github.com/opencontainers/runc).
+
+### Agend gRPC protocol
+
+placeholder
 
 ## Runtime
 
@@ -263,6 +263,10 @@ spawns the container process inside the VM, leveraging the `libcontainer` packag
 At this point the container process is running inside of the VM, and it is represented
 on the host system by the `kata-shim` process.
 
+![kata-oci-create](arch-images/kata-oci-create.svg)
+
+
+
 #### [`start`](https://github.com/kata-containers/runtime/blob/master/cli/start.go)
 
 With traditional containers, `start` launches a container process in its own set of namespaces. With Kata Containers, the main task of `kata-runtime` is to ask [`kata-agent`](#agent) to start the container workload inside the virtual machine. `kata-runtime` will run through the following steps:
@@ -273,6 +277,8 @@ With traditional containers, `start` launches a container process in its own set
   `WaitProcess()` will continue to block as long as the `top` process runs.
 2. Call into the post-start hooks. Usually, this is a no-op since nothing is provided
   (this needs clarification)
+
+![kata-oci-start](arch-images/kata-oci-start.svg)
 
 #### [`exec`](https://github.com/kata-containers/runtime/blob/master/cli/exec.go)
 
@@ -287,7 +293,7 @@ container.  In Kata Containers, this is handled as follows:
 
 Now the `exec`'ed process is running within the VM, sharing `uts`, `pid`, `mnt` and `ipc` namespaces with the container process.
 
-![the picture](arch-images/docker-exec.svg)
+![kata-oci-exec](arch-images/kata-oci-exec.svg)
 
 #### [`kill`](https://github.com/kata-containers/runtime/blob/master/cli/kill.go)
 
@@ -543,7 +549,7 @@ based [Container Runtime Interface (CRI)](https://github.com/kubernetes/communit
 
 In other words, a kubelet is a CRI client and expects a CRI implementation to
 handle the server side of the interface.
-[CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and CRI-containerd\* are CRI implementationn that rely on [OCI](https://github.com/opencontainers/runtime-spec)
+[CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and [CRI-containerd\*](https://github.com/containerd/cri) are CRI implementations that rely on [OCI](https://github.com/opencontainers/runtime-spec)
 compatible runtimes for managing container instances.
 
 Kata Containers is an officially supported CRI-O and CRI-containerd runtime. It is OCI compatible and therefore aligns with each projects' architecture and requirements.
@@ -640,16 +646,11 @@ a pod is **not** `Privileged` the runtime selection is done as follows:
 
 ### CRI-containerd
 
-We need to add a comparable section to detail how this is handled in containerd.
-If it is indentical then we should make the annotations section more generic. looking
-for help from Carlos here.
+placeholder
 
 #### Mixing VM based and namespace based runtimes
 
-placeholder: we'll want to refactor this section and make a more general 'mixed'
-section describing CRI-O and cri-containerd, assuming that only the actual annotation
-names are changed, and concept is otherwise identical. Should also start to consider
-a description of secure sandbox...
+placeholder
 
 # Appendices
 
