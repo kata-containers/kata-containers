@@ -145,17 +145,19 @@ create_summary_file()
 
 	local -r now=$(date '+%Y-%m-%dT%T.%N%zZ')
 
-	# sanitise package list
+	# sanitise package lists
 	PACKAGES=$(echo "$PACKAGES"|tr ' ' '\n'|sort -u|tr '\n' ' ')
+	EXTRA_PKGS=$(echo "$EXTRA_PKGS"|tr ' ' '\n'|sort -u|tr '\n' ' ')
 
-	local -r packages=$(for pkg in ${PACKAGES}; do echo "    - \"${pkg}\""; done)
+	local -r packages=$(for pkg in ${PACKAGES}; do echo "      - \"${pkg}\""; done)
+	local -r extra=$(for pkg in ${EXTRA_PKGS}; do echo "      - \"${pkg}\""; done)
 
 	mkdir -p "$dir"
 
 	# Semantic version of the summary file format.
 	#
 	# XXX: Increment every time the format of the summary file changes!
-	local -r format_version="0.0.1"
+	local -r format_version="0.0.2"
 
 	local -r osbuilder_url="https://github.com/kata-containers/osbuilder"
 
@@ -177,7 +179,10 @@ create_summary_file()
 	  name: "${OS_NAME}"
 	  version: "${OS_VERSION}"
 	  packages:
+	    default:
 ${packages}
+	    extra:
+${extra}
 	agent:
 	  url: "https://${GO_AGENT_PKG}"
 	  name: "${AGENT_BIN}"
