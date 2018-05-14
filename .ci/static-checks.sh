@@ -10,6 +10,9 @@
 
 set -e
 
+cidir=$(dirname "$0")
+source "${cidir}/lib.sh"
+
 check_commits()
 {
 	# Since this script is called from another repositories directory,
@@ -81,9 +84,23 @@ check_go()
 	local linter="gometalinter"
 
 	# Run golang checks
-	if [ ! "$(command -v gometalinter)" ]
+	if [ ! "$(command -v $linter)" ]
 	then
-		go get github.com/alecthomas/gometalinter
+		echo "INFO: Installing ${linter}"
+
+		local linter_url="github.com/alecthomas/gometalinter"
+		go get -d "$linter_url"
+
+		# Pin to known good version.
+		#
+		# This project changes a lot but we don't want newly-added
+		# linter checks to break valid PR code.
+		#
+		local linter_version=$(get_version "externals.gometalinter.version")
+
+		echo "INFO: Forcing ${linter} version ${linter_version}"
+
+		(cd "$GOPATH/src/$linter_url" && git checkout "$linter_version" && go install)
 		eval "$linter" --install --vendor
 	fi
 
