@@ -1,0 +1,31 @@
+Title: Kata Flow
+participant Docker
+participant Kata Runtime
+participant virtcontainers
+participant hypervisor
+participant agent
+participant shim-pod
+participant shim-ctr
+participant proxy
+
+#Docker Create!
+Docker->Kata Runtime: create
+Kata Runtime->virtcontainers: CreateSandbox()
+Note left of virtcontainers: Sandbox\nReady
+virtcontainers->virtcontainers: createNetwork()
+virtcontainers->virtcontainers: Execute PreStart Hooks
+virtcontainers->+hypervisor: Start VM (inside the netns)
+hypervisor-->-virtcontainers: VM started
+virtcontainers->proxy: Start Proxy
+proxy->hypervisor: Connect the VM
+virtcontainers->+agent: CreateSandbox()
+agent-->-virtcontainers: Sandbox Created
+virtcontainers->+agent: CreateContainer()
+agent-->-virtcontainers: Container Created
+virtcontainers->shim-pod: Start Shim
+shim->agent: ReadStdout() (blocking call)
+shim->agent: ReadStderr() (blocking call)
+shim->agent: WaitProcess() (blocking call)
+Note left of virtcontainers: Container\nReady
+virtcontainers-->Kata Runtime: End of CreateSandbox()
+Kata Runtime-->Docker: End of create
