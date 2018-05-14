@@ -1,0 +1,174 @@
+Title: Kata Flow
+participant CRI
+participant CRIO
+participant Kata Runtime
+participant virtcontainers
+participant hypervisor
+participant agent
+participant shim-pod
+participant shim-ctr
+participant proxy
+
+# Run the sandbox
+CRI->CRIO: RunPodSandbox()
+CRIO->Kata Runtime: create
+Kata Runtime->virtcontainers: CreateSandbox()
+Note left of virtcontainers: Sandbox\nReady
+virtcontainers->virtcontainers: createNetwork()
+virtcontainers->virtcontainers: Execute PreStart Hooks
+virtcontainers->+hypervisor: Start VM (inside the netns)
+hypervisor-->-virtcontainers: VM started
+virtcontainers->proxy: Start Proxy
+proxy->hypervisor: Connect the VM
+virtcontainers->+agent: CreateSandbox()
+agent-->-virtcontainers: Sandbox Created
+virtcontainers->+agent: CreateContainer()
+agent-->-virtcontainers: Container Created
+virtcontainers->shim-pod: Start Shim
+shim-pod->agent: ReadStdout() (blocking call)
+shim-pod->agent: ReadStderr() (blocking call)
+shim-pod->agent: WaitProcess() (blocking call)
+Note left of virtcontainers: Container-pod\nReady
+virtcontainers-->Kata Runtime: End of CreateSandbox()
+Kata Runtime-->CRIO: End of create
+CRIO->Kata Runtime: start
+Kata Runtime->virtcontainers: StartSandbox()
+Note left of virtcontainers: Sandbox\nRunning
+virtcontainers->+agent: StartContainer()
+agent-->-virtcontainers: Container Started
+Note left of virtcontainers: Container-pod\nRunning
+virtcontainers->virtcontainers: Execute PostStart Hooks
+virtcontainers-->Kata Runtime: End of StartSandbox()
+Kata Runtime-->CRIO: End of start
+CRIO-->CRI: End of RunPodSandbox()
+
+# Create the container
+CRI->CRIO: CreateContainer()
+CRIO->Kata Runtime: create
+Kata Runtime->virtcontainers: CreateContainer()
+virtcontainers->+agent: CreateContainer()
+agent-->-virtcontainers: Container Created
+virtcontainers->shim-ctr: Start Shim
+shim-ctr->agent: ReadStdout() (blocking call)
+shim-ctr->agent: ReadStderr() (blocking call)
+shim-ctr->agent: WaitProcess() (blocking call)
+Note left of virtcontainers: Container-ctr\nReady
+virtcontainers-->Kata Runtime: End of CreateContainer()
+Kata Runtime-->CRIO: End of create
+CRIO-->CRI: End of CreateContainer()
+
+# Start the container
+CRI->CRIO: StartContainer()
+CRIO->Kata Runtime: start
+Kata Runtime->virtcontainers: StartContainer()
+virtcontainers->+agent: StartContainer()
+agent-->-virtcontainers: Container Started
+Note left of virtcontainers: Container-ctr\nRunning
+virtcontainers-->Kata Runtime: End of StartContainer()
+Kata Runtime-->CRIO: End of start
+CRIO-->CRI: End of StartContainer()
+
+# Stop the container
+CRI->CRIO: StopContainer()
+CRIO->Kata Runtime: kill
+Kata Runtime->virtcontainers: KillContainer()
+virtcontainers->+agent: SignalProcess()
+alt SIGTERM OR SIGKILL
+    agent-->shim-ctr: WaitProcess() returns
+end
+agent-->-virtcontainers: Process Signalled
+virtcontainers-->Kata Runtime: End of KillContainer()
+alt SIGTERM OR SIGKILL
+    Kata Runtime->virtcontainers: StopContainer()
+    virtcontainers->+shim-ctr: waitForShim()
+    alt Timeout exceeded
+        virtcontainers->+agent: SignalProcess(SIGKILL)
+        agent-->shim-ctr: WaitProcess() returns
+        agent-->-virtcontainers: Process Signalled by SIGKILL
+        virtcontainers->shim-ctr: waitForShim()
+    end
+    shim-ctr-->-virtcontainers: Shim terminated
+    virtcontainers->+agent: SignalProcess(SIGKILL)
+    agent-->-virtcontainers: Process Signalled by SIGKILL
+    virtcontainers->+agent: RemoveContainer()
+    agent-->-virtcontainers: Container Removed
+    Note left of virtcontainers: Container-ctr\nStopped
+    virtcontainers-->Kata Runtime: End of StopContainer()
+end
+Kata Runtime-->CRIO: End of kill
+CRIO-->CRI: End of StopContainer()
+
+# Remove the container
+CRI->CRIO: RemoveContainer()
+CRIO->Kata Runtime: delete
+Kata Runtime->virtcontainers: DeleteContainer()
+virtcontainers->virtcontainers: Delete container resources
+virtcontainers-->Kata Runtime: End of DeleteContainer()
+Kata Runtime-->CRIO: End of delete
+CRIO-->CRI: End of RemoveContainer()
+
+# Stop the sandbox
+CRI->CRIO: StopPodSandbox()
+CRIO->Kata Runtime: kill
+Kata Runtime->virtcontainers: KillContainer()
+virtcontainers->+agent: SignalProcess()
+alt SIGTERM OR SIGKILL
+    agent-->shim-pod: WaitProcess() returns
+end
+agent-->-virtcontainers: Process Signalled
+virtcontainers-->Kata Runtime: End of KillContainer()
+alt SIGTERM OR SIGKILL
+    Kata Runtime->virtcontainers: StopSandbox()
+    loop for each container
+        alt Container-ctr
+            virtcontainers->+shim-ctr: waitForShim()
+            alt Timeout exceeded
+                virtcontainers->+agent: SignalProcess(SIGKILL)
+                agent-->shim-ctr: WaitProcess() returns
+                agent-->-virtcontainers: Process Signalled by SIGKILL
+                virtcontainers->shim-ctr: waitForShim()
+            end
+            shim-ctr-->-virtcontainers: Shim terminated
+            virtcontainers->+agent: SignalProcess(SIGKILL)
+            agent-->-virtcontainers: Process Signalled by SIGKILL
+            virtcontainers->+agent: RemoveContainer()
+            agent-->-virtcontainers: Container Removed
+            Note left of virtcontainers: Container-ctr\nStopped
+        else Container-pod
+            virtcontainers->+shim-pod: waitForShim()
+            alt Timeout exceeded
+                virtcontainers->+agent: SignalProcess(SIGKILL)
+                agent-->shim-pod: WaitProcess() returns
+                agent-->-virtcontainers: Process Signalled by SIGKILL
+                virtcontainers->shim-pod: waitForShim()
+            end
+            shim-pod-->-virtcontainers: Shim terminated
+            virtcontainers->+agent: SignalProcess(SIGKILL)
+            agent-->-virtcontainers: Process Signalled by SIGKILL
+            virtcontainers->+agent: RemoveContainer()
+            agent-->-virtcontainers: Container Removed
+            Note left of virtcontainers: Container-pod\nStopped
+        end
+    end
+    virtcontainers->+agent: DestroySandbox()
+    agent-->-virtcontainers: Sandbox Destroyed
+    virtcontainers->hypervisor: Stop VM
+    Note left of virtcontainers: Sandbox\nStopped
+    virtcontainers->virtcontainers: removeNetwork()
+    virtcontainers->virtcontainers: Execute PostStop Hooks
+    virtcontainers-->Kata Runtime: End of StopSandbox()
+end
+Kata Runtime-->CRIO: End of kill
+CRIO-->CRI: End of StopPodSandbox()
+
+# Remove the sandbox
+CRI->CRIO: RemovePodSandbox()
+CRIO->Kata Runtime: delete
+Kata Runtime->virtcontainers: DeleteSandbox()
+loop for each container
+    virtcontainers->virtcontainers: Delete container resources
+end
+virtcontainers->virtcontainers: Delete sandbox resources
+virtcontainers-->Kata Runtime: End of DeleteSandbox()
+Kata Runtime-->CRIO: End of delete
+CRIO-->CRI: End of RemovePodSandbox()
