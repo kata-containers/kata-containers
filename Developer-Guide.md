@@ -277,6 +277,18 @@ To perform analysis on Kata logs, use the
 [`kata-log-parser`](https://github.com/kata-containers/tests/tree/master/cmd/log-parser)
 tool, which can convert the logs into formats (e.g. JSON, TOML, XML, and YAML).
 
+To obtain a full backtrace for the agent, proxy, runtime, or shim send the
+`SIGUSR1` signal to the process ID of the component. The component will send a
+backtrace to the system log on the host system and continue to run without
+interruption.
+
+For example, to obtain a backtrace for `kata-proxy`:
+
+```
+$ sudo kill -USR1 $kata_proxy_pid
+$ sudo journalctl -t kata-proxy
+```
+
 # Appendices
 
 ## Checking Docker default runtime
