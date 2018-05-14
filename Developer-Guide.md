@@ -137,7 +137,7 @@ $ go get -d -u github.com/kata-containers/osbuilder
 ### Create a local rootfs
 ```
 $ export ROOTFS_DIR=${GOPATH}/src/github.com/kata-containers/osbuilder/rootfs-builder/rootfs
-$ rm -rf ${ROOTFS_DIR}
+$ sudo rm -rf ${ROOTFS_DIR}
 $ cd $GOPATH/src/github.com/kata-containers/osbuilder/rootfs-builder
 $ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true ./rootfs.sh ${distro}'
 ```
@@ -192,7 +192,7 @@ $ (cd /usr/share/kata-containers && sudo ln -sf "$image" kata-containers.img)
 ### Create a local rootfs for initrd image
 ```
 $ export ROOTFS_DIR="${GOPATH}/src/github.com/kata-containers/osbuilder/rootfs-builder/rootfs"
-$ rm -rf ${ROOTFS_DIR}
+$ sudo rm -rf ${ROOTFS_DIR}
 $ cd $GOPATH/src/github.com/kata-containers/osbuilder/rootfs-builder
 $ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true ./rootfs.sh ${distro}'
 ```
