@@ -113,6 +113,11 @@ externals:
     meta:
       swarm-version: "1.12.1"
 
+  gometalinter:
+    description: "utility to run various golang linters"
+    url: "https://github.com/alecthomas/gometalinter"
+    version: "v2.0.5"
+
   kubernetes:
     description: "Kubernetes project container manager"
     url: "https://github.com/kubernetes/kubernetes"
