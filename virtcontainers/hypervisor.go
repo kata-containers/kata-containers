@@ -41,7 +41,7 @@ const (
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
-var defaultMaxQemuVCPUs = maxQemuVCPUs()
+var defaultMaxQemuVCPUs = MaxQemuVCPUs()
 
 // deviceType describes a virtualized device type.
 type deviceType int
@@ -499,8 +499,8 @@ type hypervisor interface {
 	pauseSandbox() error
 	resumeSandbox() error
 	addDevice(devInfo interface{}, devType deviceType) error
-	hotplugAddDevice(devInfo interface{}, devType deviceType) error
-	hotplugRemoveDevice(devInfo interface{}, devType deviceType) error
+	hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error)
+	hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error)
 	getSandboxConsole(sandboxID string) (string, error)
 	capabilities() capabilities
 }

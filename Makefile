@@ -92,6 +92,8 @@ PROXYPATH := $(PKGLIBEXECDIR)/$(PROXYCMD)
 
 # Default number of vCPUs
 DEFVCPUS := 1
+# Default maximum number of vCPUs
+DEFMAXVCPUS := 0
 # Default memory size in MiB
 DEFMEMSZ := 2048
 #Default number of bridges
@@ -169,6 +171,7 @@ USER_VARS += SHAREDIR
 USER_VARS += SHIMPATH
 USER_VARS += SYSCONFDIR
 USER_VARS += DEFVCPUS
+USER_VARS += DEFMAXVCPUS
 USER_VARS += DEFMEMSZ
 USER_VARS += DEFBRIDGES
 USER_VARS += DEFNETWORKMODEL
@@ -262,6 +265,7 @@ const defaultMachineType = "$(MACHINETYPE)"
 const defaultRootDirectory = "$(PKGRUNDIR)"
 
 const defaultVCPUCount uint32 = $(DEFVCPUS)
+const defaultMaxVCPUCount uint32 = $(DEFMAXVCPUS)
 const defaultMemSize uint32 = $(DEFMEMSZ) // MiB
 const defaultBridgesCount uint32 = $(DEFBRIDGES)
 const defaultInterNetworkingModel = "$(DEFNETWORKMODEL)"
@@ -347,6 +351,7 @@ $(GENERATED_FILES): %: %.in Makefile VERSION
 		-e "s|@MACHINETYPE@|$(MACHINETYPE)|g" \
 		-e "s|@SHIMPATH@|$(SHIMPATH)|g" \
 		-e "s|@DEFVCPUS@|$(DEFVCPUS)|g" \
+		-e "s|@DEFMAXVCPUS@|$(DEFMAXVCPUS)|g" \
 		-e "s|@DEFMEMSZ@|$(DEFMEMSZ)|g" \
 		-e "s|@DEFBRIDGES@|$(DEFBRIDGES)|g" \
 		-e "s|@DEFNETWORKMODEL@|$(DEFNETWORKMODEL)|g" \

@@ -430,17 +430,6 @@ func (h *hyper) startOneContainer(sandbox *Sandbox, c *Container) error {
 		Process: process,
 	}
 
-	if c.config.Resources.CPUQuota != 0 && c.config.Resources.CPUPeriod != 0 {
-		container.Constraints = hyperstart.Constraints{
-			CPUQuota:  c.config.Resources.CPUQuota,
-			CPUPeriod: c.config.Resources.CPUPeriod,
-		}
-	}
-
-	if c.config.Resources.CPUShares != 0 {
-		container.Constraints.CPUShares = c.config.Resources.CPUShares
-	}
-
 	container.SystemMountsInfo.BindMountDev = c.systemMountsInfo.BindMountDev
 
 	if c.state.Fstype != "" {

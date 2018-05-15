@@ -44,6 +44,7 @@ func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath
 	image = "` + imagePath + `"
 	machine_type = "` + machineType + `"
 	default_vcpus = ` + strconv.FormatUint(uint64(defaultVCPUCount), 10) + `
+	default_maxvcpus = ` + strconv.FormatUint(uint64(defaultMaxVCPUCount), 10) + `
 	default_memory = ` + strconv.FormatUint(uint64(defaultMemSize), 10) + `
 	disable_block_device_use =  ` + strconv.FormatBool(disableBlock) + `
 	enable_iothreads =  ` + strconv.FormatBool(enableIOThreads) + `
@@ -129,6 +130,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		KernelParams:          vc.DeserializeParams(strings.Fields(kernelParams)),
 		HypervisorMachineType: machineType,
 		DefaultVCPUs:          defaultVCPUCount,
+		DefaultMaxVCPUs:       uint32(goruntime.NumCPU()),
 		DefaultMemSz:          defaultMemSize,
 		DisableBlockDeviceUse: disableBlockDevice,
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
@@ -513,6 +515,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		InitrdPath:            defaultInitrdPath,
 		HypervisorMachineType: defaultMachineType,
 		DefaultVCPUs:          defaultVCPUCount,
+		DefaultMaxVCPUs:       defaultMaxVCPUCount,
 		DefaultMemSz:          defaultMemSize,
 		DisableBlockDeviceUse: defaultDisableBlockDeviceUse,
 		DefaultBridges:        defaultBridgesCount,
@@ -658,10 +661,13 @@ func TestNewShimConfig(t *testing.T) {
 func TestHypervisorDefaults(t *testing.T) {
 	assert := assert.New(t)
 
+	numCPUs := goruntime.NumCPU()
+
 	h := hypervisor{}
 
 	assert.Equal(h.machineType(), defaultMachineType, "default hypervisor machine type wrong")
 	assert.Equal(h.defaultVCPUs(), defaultVCPUCount, "default vCPU number is wrong")
+	assert.Equal(h.defaultMaxVCPUs(), uint32(numCPUs), "default max vCPU number is wrong")
 	assert.Equal(h.defaultMemSz(), defaultMemSize, "default memory size is wrong")
 
 	machineType := "foo"
@@ -670,14 +676,23 @@ func TestHypervisorDefaults(t *testing.T) {
 
 	// auto inferring
 	h.DefaultVCPUs = -1
-	assert.Equal(h.defaultVCPUs(), uint32(goruntime.NumCPU()), "default vCPU number is wrong")
+	assert.Equal(h.defaultVCPUs(), uint32(numCPUs), "default vCPU number is wrong")
 
 	h.DefaultVCPUs = 2
 	assert.Equal(h.defaultVCPUs(), uint32(2), "default vCPU number is wrong")
 
-	numCPUs := goruntime.NumCPU()
 	h.DefaultVCPUs = int32(numCPUs) + 1
 	assert.Equal(h.defaultVCPUs(), uint32(numCPUs), "default vCPU number is wrong")
+
+	h.DefaultMaxVCPUs = 2
+	assert.Equal(h.defaultMaxVCPUs(), uint32(h.DefaultMaxVCPUs), "default max vCPU number is wrong")
+
+	h.DefaultMaxVCPUs = uint32(numCPUs) + 1
+	assert.Equal(h.defaultMaxVCPUs(), uint32(numCPUs), "default max vCPU number is wrong")
+
+	maxvcpus := vc.MaxQemuVCPUs()
+	h.DefaultMaxVCPUs = uint32(maxvcpus) + 1
+	assert.Equal(h.defaultMaxVCPUs(), uint32(numCPUs), "default max vCPU number is wrong")
 
 	h.DefaultMemSz = 1024
 	assert.Equal(h.defaultMemSz(), uint32(1024), "default memory size is wrong")
