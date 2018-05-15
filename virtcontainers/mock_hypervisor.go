@@ -6,6 +6,7 @@
 package virtcontainers
 
 type mockHypervisor struct {
+	vCPUs uint32
 }
 
 func (m *mockHypervisor) init(sandbox *Sandbox) error {
@@ -49,12 +50,20 @@ func (m *mockHypervisor) addDevice(devInfo interface{}, devType deviceType) erro
 	return nil
 }
 
-func (m *mockHypervisor) hotplugAddDevice(devInfo interface{}, devType deviceType) error {
-	return nil
+func (m *mockHypervisor) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
+	switch devType {
+	case cpuDev:
+		return m.vCPUs, nil
+	}
+	return nil, nil
 }
 
-func (m *mockHypervisor) hotplugRemoveDevice(devInfo interface{}, devType deviceType) error {
-	return nil
+func (m *mockHypervisor) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
+	switch devType {
+	case cpuDev:
+		return m.vCPUs, nil
+	}
+	return nil, nil
 }
 
 func (m *mockHypervisor) getSandboxConsole(sandboxID string) (string, error) {

@@ -57,15 +57,11 @@ type ContainerStatus struct {
 
 // ContainerResources describes container resources
 type ContainerResources struct {
-	// CPUQuota specifies the total amount of time in microseconds
-	// The number of microseconds per CPUPeriod that the container is guaranteed CPU access
-	CPUQuota int64
+	// VCPUs are the number of vCPUs that are being used by the container
+	VCPUs uint32
 
-	// CPUPeriod specifies the CPU CFS scheduler period of time in microseconds
-	CPUPeriod uint64
-
-	// CPUShares specifies container's weight vs. other containers
-	CPUShares uint64
+	// Mem is the memory that is being used by the container
+	Mem uint32
 }
 
 // ContainerConfig describes one container runtime configuration.
@@ -804,8 +800,7 @@ func (c *Container) update(resources specs.LinuxResources) error {
 	}
 
 	newResources := ContainerResources{
-		CPUPeriod: *resources.CPU.Period,
-		CPUQuota:  *resources.CPU.Quota,
+		VCPUs: uint32(utils.ConstraintsToVCPUs(*resources.CPU.Quota, *resources.CPU.Period)),
 	}
 
 	if err := c.updateResources(currentConfig.Resources, newResources); err != nil {
@@ -866,7 +861,7 @@ func (c *Container) hotplugDrive() error {
 		Index:  driveIndex,
 	}
 
-	if err := c.sandbox.hypervisor.hotplugAddDevice(&drive, blockDev); err != nil {
+	if _, err := c.sandbox.hypervisor.hotplugAddDevice(&drive, blockDev); err != nil {
 		return err
 	}
 
@@ -903,7 +898,7 @@ func (c *Container) removeDrive() (err error) {
 		l := c.Logger().WithField("device-id", devID)
 		l.Info("Unplugging block device")
 
-		if err := c.sandbox.hypervisor.hotplugRemoveDevice(drive, blockDev); err != nil {
+		if _, err := c.sandbox.hypervisor.hotplugRemoveDevice(drive, blockDev); err != nil {
 			l.WithError(err).Info("Failed to unplug block device")
 			return err
 		}
@@ -938,14 +933,31 @@ func (c *Container) addResources() error {
 		return nil
 	}
 
-	vCPUs := utils.ConstraintsToVCPUs(c.config.Resources.CPUQuota, c.config.Resources.CPUPeriod)
+	// Container is being created, try to add the number of vCPUs specified
+	vCPUs := c.config.Resources.VCPUs
 	if vCPUs != 0 {
 		virtLog.Debugf("hot adding %d vCPUs", vCPUs)
-		if err := c.sandbox.hypervisor.hotplugAddDevice(uint32(vCPUs), cpuDev); err != nil {
+		data, err := c.sandbox.hypervisor.hotplugAddDevice(vCPUs, cpuDev)
+		if err != nil {
 			return err
 		}
 
-		return c.sandbox.agent.onlineCPUMem(uint32(vCPUs))
+		vcpusAdded, ok := data.(uint32)
+		if !ok {
+			return fmt.Errorf("Could not get the number of vCPUs added, got %+v", data)
+		}
+
+		// A different number of vCPUs was added, we have to update
+		// the resources in order to don't remove vCPUs used by other containers.
+		if vcpusAdded != vCPUs {
+			// Set and save container's config
+			c.config.Resources.VCPUs = vcpusAdded
+			if err := c.storeContainer(); err != nil {
+				return err
+			}
+		}
+
+		return c.sandbox.agent.onlineCPUMem(vcpusAdded)
 	}
 
 	return nil
@@ -957,10 +969,18 @@ func (c *Container) removeResources() error {
 		return nil
 	}
 
-	vCPUs := utils.ConstraintsToVCPUs(c.config.Resources.CPUQuota, c.config.Resources.CPUPeriod)
+	// In order to don't remove vCPUs used by other containers, we have to remove
+	// only the vCPUs assigned to the container
+	config, err := c.sandbox.storage.fetchContainerConfig(c.sandbox.id, c.id)
+	if err != nil {
+		// don't fail, let's use the default configuration
+		config = *c.config
+	}
+
+	vCPUs := config.Resources.VCPUs
 	if vCPUs != 0 {
 		virtLog.Debugf("hot removing %d vCPUs", vCPUs)
-		if err := c.sandbox.hypervisor.hotplugRemoveDevice(uint32(vCPUs), cpuDev); err != nil {
+		if _, err := c.sandbox.hypervisor.hotplugRemoveDevice(vCPUs, cpuDev); err != nil {
 			return err
 		}
 	}
@@ -970,9 +990,9 @@ func (c *Container) removeResources() error {
 
 func (c *Container) updateResources(oldResources, newResources ContainerResources) error {
 	//TODO add support for memory, Issue: https://github.com/containers/virtcontainers/issues/578
-	var vCPUs uint
-	oldVCPUs := utils.ConstraintsToVCPUs(oldResources.CPUQuota, oldResources.CPUPeriod)
-	newVCPUs := utils.ConstraintsToVCPUs(newResources.CPUQuota, newResources.CPUPeriod)
+	var vCPUs uint32
+	oldVCPUs := oldResources.VCPUs
+	newVCPUs := newResources.VCPUs
 
 	// Update vCPUs is not possible if period and/or quota are not set or
 	// oldVCPUs and newVCPUs are equal.
@@ -989,23 +1009,36 @@ func (c *Container) updateResources(oldResources, newResources ContainerResource
 		// hot add vCPUs
 		vCPUs = newVCPUs - oldVCPUs
 		virtLog.Debugf("hot adding %d vCPUs", vCPUs)
-		if err := c.sandbox.hypervisor.hotplugAddDevice(uint32(vCPUs), cpuDev); err != nil {
+		data, err := c.sandbox.hypervisor.hotplugAddDevice(vCPUs, cpuDev)
+		if err != nil {
+			return err
+		}
+		vcpusAdded, ok := data.(uint32)
+		if !ok {
+			return fmt.Errorf("Could not get the number of vCPUs added, got %+v", data)
+		}
+		// recalculate the actual number of vCPUs if a different number of vCPUs was added
+		newResources.VCPUs = oldVCPUs + vcpusAdded
+		if err := c.sandbox.agent.onlineCPUMem(vcpusAdded); err != nil {
 			return err
 		}
 	} else {
 		// hot remove vCPUs
 		vCPUs = oldVCPUs - newVCPUs
 		virtLog.Debugf("hot removing %d vCPUs", vCPUs)
-		if err := c.sandbox.hypervisor.hotplugRemoveDevice(uint32(vCPUs), cpuDev); err != nil {
+		data, err := c.sandbox.hypervisor.hotplugRemoveDevice(vCPUs, cpuDev)
+		if err != nil {
 			return err
 		}
+		vcpusRemoved, ok := data.(uint32)
+		if !ok {
+			return fmt.Errorf("Could not get the number of vCPUs removed, got %+v", data)
+		}
+		// recalculate the actual number of vCPUs if a different number of vCPUs was removed
+		newResources.VCPUs = oldVCPUs - vcpusRemoved
 	}
 
 	// Set and save container's config
 	c.config.Resources = newResources
-	if err := c.storeContainer(); err != nil {
-		return err
-	}
-
-	return c.sandbox.agent.onlineCPUMem(uint32(vCPUs))
+	return c.storeContainer()
 }

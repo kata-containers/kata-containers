@@ -42,7 +42,7 @@ type qemuArch interface {
 	bridges(number uint32) []Bridge
 
 	// cpuTopology returns the CPU topology for the given amount of vcpus
-	cpuTopology(vcpus uint32) govmmQemu.SMP
+	cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP
 
 	// cpuModel returns the CPU model for the machine type
 	cpuModel() string
@@ -219,13 +219,13 @@ func (q *qemuArchBase) bridges(number uint32) []Bridge {
 	return bridges
 }
 
-func (q *qemuArchBase) cpuTopology(vcpus uint32) govmmQemu.SMP {
+func (q *qemuArchBase) cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP {
 	smp := govmmQemu.SMP{
 		CPUs:    vcpus,
 		Sockets: vcpus,
 		Cores:   defaultCores,
 		Threads: defaultThreads,
-		MaxCPUs: defaultMaxQemuVCPUs,
+		MaxCPUs: maxvcpus,
 	}
 
 	return smp
