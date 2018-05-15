@@ -196,6 +196,14 @@ main()
 	[ -n "${qemu_version_minor}" ] \
 		|| die "cannot determine qemu minor version from file $qemu_version_file"
 
+	local gcc_version_major=$(gcc -dumpversion | cut -f1 -d.)
+	local gcc_version_minor=$(gcc -dumpversion | cut -f2 -d.)
+
+	[ -n "${gcc_version_major}" ] \
+		|| die "cannot determine gcc major version, please ensure it is installed"
+	[ -n "${gcc_version_minor}" ] \
+		|| die "cannot determine gcc minor version, please ensure it is installed"
+
 	arch=$(arch)
 
 	# Array of configure options.
@@ -362,7 +370,10 @@ main()
 
 	# Improve code quality by assuming identical semantics for interposed
 	# synmbols.
-	_qemu_cflags+=" -fno-semantic-interposition"
+	# Only enable if gcc is 5.3 or newer
+	if [ "${gcc_version_major}" -ge 5 ] && [ "${gcc_version_minor}" -ge 3 ]; then
+		_qemu_cflags+=" -fno-semantic-interposition"
+	fi
 
 	# Performance optimisation
 	_qemu_cflags+=" -falign-functions=32"
