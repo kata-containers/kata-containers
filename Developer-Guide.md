@@ -1,5 +1,7 @@
 * [Warning](#warning)
 * [Assumptions](#assumptions)
+* [Initial setup](#initial-setup)
+* [Requirements to build individual components](#requirements-to-build-individual-components)
 * [Build and install the Kata Containers runtime](#build-and-install-the-kata-containers-runtime)
     * [Check hardware requirements](#check-hardware-requirements)
     * [Configure to use initrd or rootfs image](#configure-to-use-initrd-or-rootfs-image)
@@ -32,17 +34,27 @@ This document is written **specifically for developers**: it is not intended for
 # Assumptions
 
 - You are working on a non-critical test or development system.
-- You already have the following installed:
-  - [Docker](https://www.docker.com/).
-  - [golang](https://golang.org/dl) version 1.8.3 or newer.
-  - `make`.
-  - `gcc` (required for building the shim and runtime).
 
-- You have installed the `qemu-lite` package containing the hypervisor. This package
-  is automatically installed when you install Clear Containers, but can be
-  installed separately as well:
+# Initial setup
 
-    https://github.com/clearcontainers/runtime/wiki/Installation
+The recommended way to create a development environment is to first install the
+packaged versions of the Kata Containers components to create a working
+system:
+
+  * [Fedora\*](install/fedora-installation-guide.md)
+  * [Ubuntu\*](install/ubuntu-installation-guide.md)
+
+The installation guide instructions will install all required Kata Containers
+components, plus Docker*, the hypervisor, and the Kata Containers image and
+guest kernel.
+
+# Requirements to build individual components
+
+You need to install the following to build Kata Containers components:
+
+- [golang](https://golang.org/dl) version 1.8.3 or newer.
+- `make`.
+- `gcc` (required for building the shim and runtime).
 
 # Build and install the Kata Containers runtime
 
