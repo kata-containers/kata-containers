@@ -27,7 +27,7 @@
 
 # Warning
 
-This document is written **specifically for developers**.
+This document is written **specifically for developers**: it is not intended for end users.
 
 # Assumptions
 
