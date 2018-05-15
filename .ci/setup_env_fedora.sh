@@ -42,7 +42,7 @@ echo "Install CRI-O dependencies"
 chronic sudo -E dnf -y install btrfs-progs-devel device-mapper-devel      \
 	glib2-devel glibc-devel glibc-static gpgme-devel libassuan-devel  \
 	libgpg-error-devel libseccomp-devel libselinux-devel ostree-devel \
-	pkgconfig go-md2man
+	pkgconfig go-md2man util-linux
 
 echo "Install bison binary"
 chronic sudo -E dnf -y install bison
