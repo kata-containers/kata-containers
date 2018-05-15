@@ -148,8 +148,7 @@ func getExpectedShimDetails(config oci.RuntimeConfig) (ShimInfo, error) {
 
 func getExpectedAgentDetails(config oci.RuntimeConfig) (AgentInfo, error) {
 	return AgentInfo{
-		Type:    string(config.AgentType),
-		Version: unknown,
+		Type: string(config.AgentType),
 	}, nil
 }
 
@@ -697,8 +696,7 @@ func testEnvShowSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
 	}
 
 	agent := AgentInfo{
-		Type:    "agent-type",
-		Version: "agent-version",
+		Type: "agent-type",
 	}
 
 	expectedHostDetails, err := getExpectedHostDetails(tmpdir)

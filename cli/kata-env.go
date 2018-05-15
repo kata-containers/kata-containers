@@ -21,7 +21,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.11"
+const formatVersion = "1.0.12"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -98,8 +98,7 @@ type ShimInfo struct {
 
 // AgentInfo stores agent details
 type AgentInfo struct {
-	Type    string
-	Version string
+	Type string
 }
 
 // DistroInfo stores host operating system distribution details.
@@ -252,8 +251,7 @@ func getShimInfo(config oci.RuntimeConfig) (ShimInfo, error) {
 
 func getAgentInfo(config oci.RuntimeConfig) AgentInfo {
 	agent := AgentInfo{
-		Type:    string(config.AgentType),
-		Version: unknown,
+		Type: string(config.AgentType),
 	}
 
 	return agent
