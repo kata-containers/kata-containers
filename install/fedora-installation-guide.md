@@ -18,10 +18,11 @@ For more information on installing Docker please refer to the
 
 2. Install the Kata Containers components with the following commands:
 
+  **Note:** The repository redirects the download content to use `http`, be aware that this installation channel is not secure.
 ```bash
 $ source /etc/os-release
 $ sudo -E VERSION_ID=$VERSION_ID dnf config-manager --add-repo \
-https://download.opensuse.org/repositories/home:/katacontainers:/release/Fedora\_$VERSION_ID/home:katacontainers:release.repo
+http://download.opensuse.org/repositories/home:/katacontainers:/release/Fedora\_$VERSION_ID/home:katacontainers:release.repo
 $ sudo -E dnf -y install kata-runtime kata-proxy kata-shim
 ```
 
