@@ -349,4 +349,5 @@ function find_patches() {
 		echo "$p" >> debian.series
 		((n++))
 	done
+	GENERATED_FILES+=(debian.series)
 }
