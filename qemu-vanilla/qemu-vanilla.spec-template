@@ -27,10 +27,14 @@ BuildRequires : libtool
 BuildRequires : m4
 BuildRequires : findutils
 
-%if 0%{?rhel_version} || 0%{?centos_version}
+%if 0%{?centos_version}
 BuildRequires : librbd1-devel
 %else
+
+%if ! 0%{?rhel_version}
 BuildRequires : librbd-devel
+%endif
+
 %endif
 
 %if 0%{?suse_version}
@@ -78,7 +82,14 @@ chmod +x %{_sourcedir}/configure-hypervisor.sh
 %build
 export LANG=C
 
-eval "%{_sourcedir}/configure-hypervisor.sh" "qemu-vanilla" | xargs ./configure --prefix=/usr
+# RHEL in OBS does not provide librados.
+# Remove it: See https://github.com/kata-containers/packaging/issues/36
+"%{_sourcedir}/configure-hypervisor.sh" "qemu-vanilla" \
+%if 0%{?rhel_version}
+	| sed -e 's/--enable-rbd//g' \
+%endif
+	| xargs ./configure --prefix=/usr
+
 make V=1  %{?_smp_mflags}
 
 %install
