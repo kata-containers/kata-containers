@@ -77,6 +77,12 @@ BuildKernel() {
     make -s mrproper
     cp config .config
 
+    %if 0%{?fedora}
+    #Fedora uses gcc 8, build is failing due to warnings.
+    export CFLAGS="-Wno-error=restrict"	 
+    export EXTRA_CFLAGS="-Wno-format-truncation -Wno-cast-function-type -Wno-error=restrict -Wno-error"
+    %endif
+
     make -s ARCH=$Arch oldconfig > /dev/null
     make -s CONFIG_DEBUG_SECTION_MISMATCH=y %{?_smp_mflags} ARCH=$Arch %{?sparse_mflags} || exit 1
 }
