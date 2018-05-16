@@ -27,7 +27,7 @@ KR_PATCHES=$(eval find "patches" -type f -name "*.patch")
 KR_REL=https://www.kernel.org/releases.json
 KR_SHA=https://cdn.kernel.org/pub/linux/kernel/v"${KR_SERIES}"/sha256sums.asc
 
-GENERATED_FILES=(kata-linux-container.dsc kata-linux-container.spec _service config debian.control debian.series)
+GENERATED_FILES=(kata-linux-container.dsc kata-linux-container.spec _service config debian.control)
 STATIC_FILES=(debian.dirs debian.rules debian.compat debian.copyright)
 #STATIC_FILES+=($KR_PATCHES)
 

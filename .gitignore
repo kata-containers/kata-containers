@@ -1,4 +1,5 @@
 typescript
+debian.series
 *.img
 *.initrd
 *.tar.gz
