@@ -38,7 +38,7 @@ if ! command -v docker > /dev/null; then
 fi
 
 echo "Install qemu dependencies"
-chronic sudo -E yum install -y libcap-devel libcap-ng-devel libattr-devel libcap-ng-devel librbd1-devel flex
+chronic sudo -E yum install -y libcap-devel libcap-ng-devel libattr-devel libcap-ng-devel librbd1-devel flex libfdt-devel
 
 echo "Install kernel dependencies"
 chronic sudo -E yum -y install elfutils-libelf-devel
