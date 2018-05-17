@@ -19,14 +19,14 @@
     * [Networking](#networking)
     * [Storage](#storage)
     * [Kubernetes Support](#kubernetes-support)
-        * [Problem Statement](#problem-statemem)
-        * [OCI Annotations](#oci-annotations)
-        * [Generalization](#generalization)
-        * [Mixing VM based and namespace based runtimes](#mixing-vm-based-and-namespace-based-runtimes)
+        * [Problem Statement](#problem-statement)
+        * [CRI-O](#cri-o)
+            * [OCI Annotations](#oci-annotations)
+            * [Mixing VM based and namespace based runtimes](#mixing-vm-based-and-namespace-based-runtimes)
+        * [Containerd CRI Plugin (Formerly CRI-containerd)](#containerd-cri-plugin-formerly-cri-containerd)
+            * [Mixing VM based and namespace based runtimes](#mixing-vm-based-and-namespace-based-runtimes-1)
 * [Appendices](#appendices)
     * [DAX](#dax)
-    * [Previous Releases](#previous-releases)
-    * [Resources](#resources)
 
 ## Overview
 
@@ -41,7 +41,7 @@ and therefore works seamlessly with the
 [Docker\* Engine](https://www.docker.com/products/docker-engine) pluggable runtime
 architecture. It also supports the [Kubernetes\* Container Runtime Interface (CRI)](https://github.com/kubernetes/kubernetes/tree/master/pkg/kubelet/apis/cri/v1alpha1/runtime)
 through the [CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and
-[CRI-containerd\*](https://github.com/containerd/cri) implementation. In other words, you can transparently
+[Containerd CRI Plugin\*](https://github.com/containerd/cri) implementation. In other words, you can transparently
 select between the [default Docker and CRI shim runtime (runc)](https://github.com/opencontainers/runc)
 and `kata-runtime`.
 
@@ -167,7 +167,7 @@ has a highly optimized boot path.
 The only services running in the context of the mini O/S are the init daemon
 (`systemd`) and the [Agent](#agent). The real workload the user wishes to run
 is created using libcontainer, creating a container in the same manner that is done
-by runc.
+by `runc`.
 
 For example, when `docker run -ti ubuntu date` is run:
 
@@ -202,7 +202,7 @@ The `kata-agent` makes use of [`libcontainer`](https://github.com/opencontainers
 to manage the lifecycle of the container. This way the `kata-agent` reuses most
 of the code used by [`runc`](https://github.com/opencontainers/runc).
 
-### Agend gRPC protocol
+### Agent gRPC protocol
 
 placeholder
 
@@ -549,10 +549,10 @@ based [Container Runtime Interface (CRI)](https://github.com/kubernetes/communit
 
 In other words, a kubelet is a CRI client and expects a CRI implementation to
 handle the server side of the interface.
-[CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and [CRI-containerd\*](https://github.com/containerd/cri) are CRI implementations that rely on [OCI](https://github.com/opencontainers/runtime-spec)
+[CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and [Containerd CRI Plugin\*](https://github.com/containerd/cri) are CRI implementations that rely on [OCI](https://github.com/opencontainers/runtime-spec)
 compatible runtimes for managing container instances.
 
-Kata Containers is an officially supported CRI-O and CRI-containerd runtime. It is OCI compatible and therefore aligns with each projects' architecture and requirements.
+Kata Containers is an officially supported CRI-O and Containerd CRI Plugin runtime. It is OCI compatible and therefore aligns with each projects' architecture and requirements.
 However, due to the fact that Kubernetes execution units are sets of containers (also
 known as pods) rather than single containers, the Kata Containers runtime needs to
 get extra information to seamlessly integrate with Kubernetes.
@@ -613,7 +613,7 @@ with a Kubernetes pod:
 
 ```
 
-### Mixing VM based and namespace based runtimes
+#### Mixing VM based and namespace based runtimes
 
 One interesting evolution of the CRI-O support for `kata-runtime` is the ability
 to run virtual machine based pods alongside namespace ones. With CRI-O and Kata
@@ -644,13 +644,52 @@ a pod is **not** `Privileged` the runtime selection is done as follows:
 | Default CRI-O trust level: `untrusted` | Kata Containers                               | Kata Containers                              |  Kata Containers |
 
 
-### CRI-containerd
+### Containerd CRI Plugin (Formerly CRI-containerd)
 
-placeholder
+The general guidelines for the Containerd CRI Plugin support is similar to the CRI-O support. You can run trusted workloads with a runtime like `runc` and then run an untrusted workload with Kata Containers. The parameters that you can modify in the containerd config to run Kata Containers along with another 'trusted' runtime are the following:
+
+
+```
+# /etc/containerd/config.toml
+
+[plugins.cri]
+
+  [plugins.cri.containerd]
+  
+    # "plugins.cri.containerd.default_runtime" is the runtime to use in containerd.
+    [plugins.cri.containerd.default_runtime]
+      # runtime_type is the runtime type to use in containerd e.g. io.containerd.runtime.v1.linux
+      runtime_type = "io.containerd.runtime.v1.linux"
+
+      # runtime_engine is the name of the runtime engine used by containerd.
+      runtime_engine = ""
+
+      # runtime_root is the directory used by containerd for runtime state.
+      runtime_root = ""
+
+    # "plugins.cri.containerd.untrusted_workload_runtime" is a runtime to run untrusted workloads on it.
+    [plugins.cri.containerd.untrusted_workload_runtime]
+      # runtime_type is the runtime type to use in containerd e.g. io.containerd.runtime.v1.linux
+      runtime_type = "io.containerd.runtime.v1.linux"
+
+      # runtime_engine is the name of the runtime engine used by containerd.
+      runtime_engine = "/usr/bin/kata-runtime"
+
+      # runtime_root is the directory used by containerd for runtime state.
+      runtime_root = ""
+```
+
+You can find more information on the [Containerd config documentation](https://github.com/containerd/cri/blob/master/docs/config.md)
+
 
 #### Mixing VM based and namespace based runtimes
 
-placeholder
+The CRI Plugin supports the following annotation in a Kubernetes pod to identify as an untrusted workload
+
+```
+annotations:
+   io.kubernetes.cri.untrusted-workload: "true"
+```
 
 # Appendices
 
