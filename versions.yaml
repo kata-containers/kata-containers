@@ -80,11 +80,19 @@ assets:
     meta:
       image-type: "clearlinux"
 
+  initrd:
+    description: |
+      Root filesystem initrd used to boot the guest virtual
+      machine.
+    url: "https://github.com/kata-containers/osbuilder"
+    meta:
+      base-os: "alpine"
+      os-version: "3.7"
+
   kernel:
     description: "Linux kernel optimised for virtual machines"
-    url: "https://github.com/kata-containers/linux"
-    version: "v4.14.22-86.container"
-    release: "19790"
+    url: "https://cdn.kernel.org/pub/linux/kernel/v4.x/"
+    version: "v4.14.22"
 
 components:
   description: "Core system functionality"
@@ -111,7 +119,9 @@ externals:
     description: |
       Containerd Plugin for Kubernetes Container Runtime Interface
     url: "https://github.com/containerd/cri"
-    version: "v1.0.0-rc.2"
+    version: "v1.0.0"
+    meta:
+      containerd-version: "1.1.0"
 
   docker:
     description: "Moby project container manager"
