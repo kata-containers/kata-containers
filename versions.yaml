@@ -25,6 +25,7 @@ format: |
      commit: "<commit>"
      version: "<version>"
      release: "<version>"
+     branch: "<git-branch>"
      meta:
        <key-1>: "<value-1>"
        <key-n>: "<value-n>"
@@ -45,7 +46,8 @@ format: |
   - A section MAY define a "meta" section to store additional
     information about a project or group.
 
-  - Each entry MUST specify ATLEAST one of "commit", "version" and "release".
+  - Each entry MUST specify ATLEAST one of "commit", "version", "release"
+    and "branch".
 
   - WARNING: Gotcha alert! Remember to double-quote all strings
     (except multi-line strings)! This avoids the possibility of a
@@ -57,6 +59,12 @@ assets:
 
   hypervisor:
     description: "Component used to create virtual machines"
+
+    qemu-lite:
+      description: "lightweight VMM that uses KVM"
+      url: "https://github.com/kata-containers/qemu"
+      branch: "qemu-lite-2.11.0"
+      commit: "6ba2bfbee9a80bfd03605c5eb2ca743c8b68389e"
 
     qemu:
       description: "VMM that uses KVM"

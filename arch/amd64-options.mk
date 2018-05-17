@@ -9,4 +9,4 @@ MACHINETYPE := pc
 KERNELPARAMS :=
 MACHINEACCELERATORS :=
 
-QEMUCMD := qemu-system-x86_64
+QEMUCMD := qemu-lite-system-x86_64
