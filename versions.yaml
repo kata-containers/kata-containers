@@ -111,7 +111,9 @@ externals:
     description: |
       Containerd Plugin for Kubernetes Container Runtime Interface
     url: "https://github.com/containerd/cri"
-    version: "v1.0.0-rc.2"
+    version: "v1.0.0"
+    meta:
+      containerd-version: "1.1.0"
 
   docker:
     description: "Moby project container manager"
