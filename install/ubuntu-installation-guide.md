@@ -8,7 +8,7 @@ Currently Kata Containers is currently only build for x86_64.
 This step is only required in case Docker is not installed on the system.
 1. Install the latest version of Docker with the following commands:
 
-```
+```bash
 $ sudo -E apt-get -y install apt-transport-https ca-certificates wget software-properties-common
 $ curl -sL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
 $ arch=$(dpkg --print-architecture)
@@ -22,7 +22,7 @@ For more information on installing Docker please refer to the
 
 2. Install the Kata Containers components with the following commands:
 
-```
+```bash
 $ sudo sh -c "echo 'deb https://download.opensuse.org/repositories/home:/katacontainers:/release/xUbuntu_$(lsb_release -rs)/ /' >> /etc/apt/sources.list.d/kata-containers.list"
 $ curl -sL  https://download.opensuse.org/repositories/home:/katacontainers:/release/xUbuntu_$(lsb_release -rs)/Release.key | sudo apt-key add -
 $ sudo -E apt-get update
@@ -31,7 +31,7 @@ $ sudo -E apt-get -y install kata-runtime kata-proxy kata-shim
 
 3. Configure Docker to use Kata Containers by default with the following commands:
 
-```
+```bash
 $ sudo mkdir -p /etc/systemd/system/docker.service.d/
 $ cat <<EOF | sudo tee /etc/systemd/system/docker.service.d/kata-containers.conf
 [Service]
@@ -42,7 +42,7 @@ EOF
 
 4. Restart the Docker systemd service with the following commands:
 
-```
+```bash
 $ sudo systemctl daemon-reload
 $ sudo systemctl restart docker
 ```
@@ -51,6 +51,6 @@ $ sudo systemctl restart docker
 
 You are now ready to run Kata Containers:
 
-```
+```bash
 $ sudo docker run -ti busybox sh
 ```
