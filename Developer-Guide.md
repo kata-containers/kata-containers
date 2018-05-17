@@ -26,6 +26,15 @@
 * [Troubleshoot Kata Containers](#troubleshoot-kata-containers)
 * [Appendices](#appendices)
     * [Checking Docker default runtime](#checking-docker-default-runtime)
+    * [Set up a debug console](#set-up-a-debug-console)
+        * [Create a custom image containing a shell](#create-a-custom-image-containing-a-shell)
+        * [Create a debug systemd service](#create-a-debug-systemd-service)
+        * [Build the debug image](#build-the-debug-image)
+        * [Configure runtime for custom debug image](#configure-runtime-for-custom-debug-image)
+        * [Ensure debug options are valid](#ensure-debug-options-are-valid)
+        * [Create a container](#create-a-container)
+        * [Connect to the virtual machine using the debug console](#connect-to-the-virtual-machine-using-the-debug-console)
+        * [Obtain details of the image](#obtain-details-of-the-image)
 
 # Warning
 
@@ -153,7 +162,7 @@ $ go get -d -u github.com/kata-containers/osbuilder
 ### Create a local rootfs
 ```
 $ export ROOTFS_DIR=${GOPATH}/src/github.com/kata-containers/osbuilder/rootfs-builder/rootfs
-$ rm -rf ${ROOTFS_DIR}
+$ sudo rm -rf ${ROOTFS_DIR}
 $ cd $GOPATH/src/github.com/kata-containers/osbuilder/rootfs-builder
 $ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true ./rootfs.sh ${distro}'
 ```
@@ -208,7 +217,7 @@ $ (cd /usr/share/kata-containers && sudo ln -sf "$image" kata-containers.img)
 ### Create a local rootfs for initrd image
 ```
 $ export ROOTFS_DIR="${GOPATH}/src/github.com/kata-containers/osbuilder/rootfs-builder/rootfs"
-$ rm -rf ${ROOTFS_DIR}
+$ sudo rm -rf ${ROOTFS_DIR}
 $ cd $GOPATH/src/github.com/kata-containers/osbuilder/rootfs-builder
 $ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true ./rootfs.sh ${distro}'
 ```
@@ -315,10 +324,133 @@ $ sudo kill -USR1 $kata_proxy_pid
 $ sudo journalctl -t kata-proxy
 ```
 
+See [Set up a debug console](#set-up-a-debug-console).
+
 # Appendices
 
 ## Checking Docker default runtime
 
 ```
 $ sudo docker info 2>/dev/null | grep -i "default runtime" | cut -d: -f2- | grep -q runc  && echo "SUCCESS" || echo "ERROR: Incorrect default Docker runtime"
+```
+
+## Set up a debug console
+
+By default you cannot login to a virtual machine since this can be sensitive
+from a security perspective. Also allowing logins would require additional
+packages in the rootfs, which would increase the size of the image used to
+boot the virtual machine.
+
+If you want to login to a virtual machine that hosts your containers, complete
+the following steps, which assume a rootfs image.
+
+### Create a custom image containing a shell
+
+To login to a virtual machine, you must
+[create a custom rootfs](#create-a-rootfs-image)
+containing a shell such as `bash(1)`.
+
+For example using CentOS:
+
+```
+$ cd $GOPATH/src/github.com/kata-containers/osbuilder/rootfs-builder
+$ export ROOTFS_DIR=${GOPATH}/src/github.com/kata-containers/osbuilder/rootfs-builder/rootfs
+$ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true EXTRA_PKGS="bash" ./rootfs.sh centos'
+```
+
+### Create a debug systemd service
+
+Create the service file that starts the shell in the rootfs directory:
+
+```
+$ cat <<EOT | sudo tee ${ROOTFS_DIR}/lib/systemd/system/kata-debug.service
+[Unit]
+Description=Kata Containers debug console
+
+[Service]
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+StandardInput=tty
+StandardOutput=tty
+PrivateDevices=yes
+Type=simple
+ExecStart=/usr/bin/bash
+Restart=always
+EOT
+```
+
+**Note**: You might need to adjust the `ExecStart=` path.
+
+Add a dependency to start the debug console:
+
+```
+$ sudo sed -i '$a Requires=kata-debug.service' ${ROOTFS_DIR}/lib/systemd/system/kata-containers.target
+```
+
+### Build the debug image
+
+Follow the instructions in the [Build a rootfs image](#build-a-rootfs-image)
+section.
+
+### Configure runtime for custom debug image
+
+Install the image:
+
+```
+$ name="kata-containers-centos-with-debug-console.img"
+$ sudo install -o root -g root -m 0640 kata-containers.img "/usr/share/kata-containers/${name}"
+```
+
+Next, modify the `image=` values in the `[hypervisor.qemu]` section of the
+[configuration file](https://github.com/kata-containers/runtime#configuration)
+to specify the full path to the image name specified in the previous code
+section. Alternatively, recreate the symbolic link so it points to
+the new debug image:
+
+```
+$ (cd /usr/share/kata-containers && sudo ln -sf "$name" kata-containers.img)
+```
+
+**Note**: You should take care to undo this change after you finish debugging
+to avoid all subsequently created containers from using the debug image.
+
+### Ensure debug options are valid
+
+For the debug console to work, you **must** ensure that proxy debug is
+**disabled** in the configuration file. If proxy debug is enabled, you will
+not see any output when you connect to the virtual machine:
+
+```
+$ sudo awk '{if (/^\[proxy\.kata\]/) {got=1}; if (got == 1 && /^.*enable_debug/) {print "#enable_debug = true"; got=0; next; } else {print}}' /usr/share/defaults/kata-containers/configuration.toml > /tmp/configuration.toml
+$ sudo install -o root -g root -m 0640 /tmp/configuration.toml /usr/share/defaults/kata-containers/configuration.toml
+```
+
+### Create a container
+
+Create a container as normal. For example using Docker:
+
+```
+$ sudo docker run -ti busybox sh
+```
+
+### Connect to the virtual machine using the debug console
+
+```
+$ id=$(sudo docker ps -q --no-trunc)
+$ console="/var/run/vc/sbs/${id}/console.sock"
+$ sudo socat "stdin,raw,echo=0,escape=0x11" "unix-connect:${console}"
+```
+
+**Note**: You need to press the `RETURN` key to see the shell prompt.
+
+To disconnect from the virtual machine, type `CONTROL+q` (hold down the
+`CONTROL` key and press `q`).
+
+### Obtain details of the image
+
+If the image is created using
+[osbuilder](https://github.com/kata-containers/osbuilder), the following YAML
+file exists and contains details of the image and how it was created:
+
+```
+$ cat /var/lib/osbuilder/osbuilder.yaml
 ```
