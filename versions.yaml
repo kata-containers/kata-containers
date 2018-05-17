@@ -74,9 +74,8 @@ assets:
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
-    url: "https://github.com/kata-containers/linux"
-    version: "v4.14.22-86.container"
-    release: "19790"
+    url: "https://cdn.kernel.org/pub/linux/kernel/v4.x/"
+    version: "v4.14.22"
 
 components:
   description: "Core system functionality"
