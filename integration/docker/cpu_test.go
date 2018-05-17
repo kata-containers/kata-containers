@@ -130,29 +130,19 @@ var _ = Describe("CPU constraints", func() {
 	var (
 		args              []string
 		id                string
-		shares            int
-		quota             int
-		period            int
-		cpusetCpus        int
-		cpusetMems        int
-		sharesSysPath     string
-		quotaSysPath      string
-		periodSysPath     string
-		cpusetCpusSysPath string
-		cpusetMemsSysPath string
+		shares            int    = 300
+		quota             int    = 2000
+		period            int    = 1500
+		cpusetCpus        int    = 0
+		cpusetMems        int    = 0
+		sharesSysPath     string = "/sys/fs/cgroup/cpu,cpuacct/cpu.shares"
+		quotaSysPath      string = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_quota_us"
+		periodSysPath     string = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_period_us"
+		cpusetCpusSysPath string = "/sys/fs/cgroup/cpuset/cpuset.cpus"
+		cpusetMemsSysPath string = "/sys/fs/cgroup/cpuset/cpuset.mems"
 	)
 
 	BeforeEach(func() {
-		sharesSysPath = "/sys/fs/cgroup/cpu,cpuacct/cpu.shares"
-		quotaSysPath = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_quota_us"
-		periodSysPath = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_period_us"
-		cpusetCpusSysPath = "/sys/fs/cgroup/cpuset/cpuset.cpus"
-		cpusetMemsSysPath = "/sys/fs/cgroup/cpuset/cpuset.mems"
-		shares = 300
-		quota = 2000
-		period = 1500
-		cpusetCpus = 0
-		cpusetMems = 0
 		id = RandID(30)
 		args = []string{"--rm", "--name", id}
 	})
