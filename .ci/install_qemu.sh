@@ -7,8 +7,16 @@
 
 set -e
 
-QEMU_REPO="github.com/qemu/qemu"
-KATA_QEMU_BRANCH="stable-2.11"
+cidir=$(dirname "$0")
+source "${cidir}/lib.sh"
+
+QEMU_REPO=$(get_version "assets.hypervisor.qemu-lite.url")
+QEMU_BRANCH=$(get_version "assets.hypervisor.qemu-lite.commit")
+
+# Remove 'https://' from the repo url to be able
+# to clone the repo using go get
+QEMU_REPO=${QEMU_REPO/https:\/\//}
+
 PACKAGING_REPO="github.com/kata-containers/packaging"
 QEMU_CONFIG_SCRIPT="${GOPATH}/src/${PACKAGING_REPO}/scripts/configure-hypervisor.sh"
 
@@ -20,7 +28,7 @@ go get -d "$PACKAGING_REPO" || true
 
 pushd "${GOPATH}/src/${QEMU_REPO}"
 git fetch
-git checkout "$KATA_QEMU_BRANCH"
+git checkout "$QEMU_BRANCH"
 [ -d "capstone" ] || git clone https://github.com/qemu/capstone.git capstone
 [ -d "ui/keycodemapdb" ] || git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
@@ -36,6 +44,6 @@ sudo -E make install
 # qemu under /usr/bin/, create a symlink.
 # this should be solved when we define and have the packages
 # in a repository.
-sudo ln -sf $(command -v qemu-system-$(arch)) /usr/bin/
+sudo ln -sf $(command -v qemu-system-$(arch)) "/usr/bin/qemu-lite-system-$(arch)"
 
 popd
