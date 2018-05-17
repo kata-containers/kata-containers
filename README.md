@@ -65,10 +65,20 @@ $ kata-runtime kata-check
 > $ sudo kata-runtime kata-check
 > ```
 
+## Quick start for users
+
+See the [installation guides](https://github.com/kata-containers/documentation/tree/master/install/README.md)
+available for various operating systems.
+
 ## Quick start for developers
 
 See the
 [developer guide](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md).
+
+## Architecture overview
+
+See the [architecture overview](https://github.com/kata-containers/documentation/blob/master/architecture.md)
+for details on the Kata Containers design.
 
 ## Configuration
 
