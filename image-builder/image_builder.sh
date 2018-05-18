@@ -113,8 +113,9 @@ if [ -n "${USE_DOCKER}" ] ; then
 	exit $?
 fi
 # The kata rootfs image expect init and kata-agent to be installed
-init="${ROOTFS}/sbin/init"
-[ -x "${init}" ] || [ -L ${init} ] || die "/sbin/init is not installed in ${ROOTFS}"
+init_path="/sbin/init"
+init="${ROOTFS}${init_path}"
+[ -x "${init}" ] || [ -L ${init} ] || die "${init_path} is not installed in ${ROOTFS}"
 OK "init is installed"
 [ "${AGENT_INIT}" == "yes" ] || [ -x "${ROOTFS}/usr/bin/${AGENT_BIN}" ] || \
 	die "/usr/bin/${AGENT_BIN} is not installed in ${ROOTFS}
