@@ -5,6 +5,9 @@
 package docker
 
 import (
+	"strings"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -33,6 +36,46 @@ var _ = Describe("pause", func() {
 				stdout, _, exitCode = dockerPs("-a", "--filter", "status=running", "--filter", "name="+id)
 				Expect(exitCode).To(Equal(0))
 				Expect(stdout).To(ContainSubstring("Up"))
+			})
+		})
+	})
+})
+
+// To get more info about this test, see https://github.com/kata-containers/agent/issues/231
+var _ = Describe("check yamux IO timeout", func() {
+	var (
+		id       string
+		msg      string
+		stdout   string
+		exitCode int
+		waitTime time.Duration
+	)
+
+	BeforeEach(func() {
+		id = randomDockerName()
+		msg = "Hi!"
+		// By default in yamux keepalive time is 30s and connection timeout is 10s.
+		// Wait 45s before unpausing and checking the container.
+		waitTime = 45 * time.Second
+	})
+
+	AfterEach(func() {
+		Expect(RemoveDockerContainer(id)).To(BeTrue())
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	Describe("pause, wait and unpause a container", func() {
+		Context("check yamux IO connection", func() {
+			It("should keep alive", func() {
+				_, _, exitCode = dockerRun("-td", "--name", id, Image, "sh")
+				Expect(0).To(Equal(exitCode))
+				_, _, exitCode = dockerPause(id)
+				Expect(0).To(Equal(exitCode))
+				time.Sleep(waitTime)
+				_, _, exitCode = dockerUnpause(id)
+				Expect(0).To(Equal(exitCode))
+				stdout, _, exitCode = dockerExec(id, "echo", msg)
+				Expect(msg).To(Equal(strings.Trim(stdout, "\n\t ")))
 			})
 		})
 	})
