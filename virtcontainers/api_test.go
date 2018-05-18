@@ -1934,6 +1934,74 @@ func TestStatusContainerFailing(t *testing.T) {
 	}
 }
 
+func TestStatsContainerFailing(t *testing.T) {
+	cleanUp()
+
+	contID := "100"
+	config := newTestSandboxConfigNoop()
+
+	p, err := CreateSandbox(config)
+	if p == nil || err != nil {
+		t.Fatal(err)
+	}
+
+	pImpl, ok := p.(*Sandbox)
+	assert.True(t, ok)
+
+	os.RemoveAll(pImpl.configPath)
+	globalSandboxList.removeSandbox(p.ID())
+
+	_, err = StatsContainer(p.ID(), contID)
+	if err == nil {
+		t.Fatal()
+	}
+}
+
+func TestStatsContainer(t *testing.T) {
+	cleanUp()
+
+	assert := assert.New(t)
+	contID := "100"
+
+	_, err := StatsContainer("", "")
+	assert.Error(err)
+
+	_, err = StatsContainer("abc", "")
+	assert.Error(err)
+
+	_, err = StatsContainer("abc", "abc")
+	assert.Error(err)
+
+	config := newTestSandboxConfigNoop()
+	p, err := CreateSandbox(config)
+	assert.NoError(err)
+	assert.NotNil(p)
+
+	p, err = StartSandbox(p.ID())
+	if p == nil || err != nil {
+		t.Fatal(err)
+	}
+
+	pImpl, ok := p.(*Sandbox)
+	assert.True(ok)
+	defer os.RemoveAll(pImpl.configPath)
+
+	contConfig := newTestContainerConfigNoop(contID)
+	_, c, err := CreateContainer(p.ID(), contConfig)
+	assert.NoError(err)
+	assert.NotNil(c)
+
+	_, err = StatsContainer(pImpl.id, "xyz")
+	assert.Error(err)
+
+	_, err = StatsContainer("xyz", contID)
+	assert.Error(err)
+
+	stats, err := StatsContainer(pImpl.id, contID)
+	assert.NoError(err)
+	assert.Equal(stats, ContainerStats{})
+}
+
 func TestProcessListContainer(t *testing.T) {
 	cleanUp()
 

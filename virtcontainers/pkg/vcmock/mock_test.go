@@ -510,6 +510,33 @@ func TestVCMockStatusContainer(t *testing.T) {
 	assert.True(IsMockError(err))
 }
 
+func TestVCMockStatsContainer(t *testing.T) {
+	assert := assert.New(t)
+
+	m := &VCMock{}
+	assert.Nil(m.StatsContainerFunc)
+
+	_, err := m.StatsContainer(testSandboxID, testContainerID)
+
+	assert.Error(err)
+	assert.True(IsMockError(err))
+
+	m.StatsContainerFunc = func(sandboxID, containerID string) (vc.ContainerStats, error) {
+		return vc.ContainerStats{}, nil
+	}
+
+	stats, err := m.StatsContainer(testSandboxID, testContainerID)
+	assert.NoError(err)
+	assert.Equal(stats, vc.ContainerStats{})
+
+	// reset
+	m.StatsContainerFunc = nil
+
+	_, err = m.StatsContainer(testSandboxID, testContainerID)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+}
+
 func TestVCMockStopContainer(t *testing.T) {
 	assert := assert.New(t)
 

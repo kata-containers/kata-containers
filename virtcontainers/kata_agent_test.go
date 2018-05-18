@@ -199,6 +199,10 @@ func (p *gRPCProxy) OnlineCPUMem(ctx context.Context, req *pb.OnlineCPUMemReques
 	return emptyResp, nil
 }
 
+func (p *gRPCProxy) StatsContainer(ctx context.Context, req *pb.StatsContainerRequest) (*pb.StatsContainerResponse, error) {
+	return &pb.StatsContainerResponse{}, nil
+}
+
 func (p *gRPCProxy) Check(ctx context.Context, req *pb.CheckRequest) (*pb.HealthCheckResponse, error) {
 	return &pb.HealthCheckResponse{}, nil
 }
@@ -226,6 +230,7 @@ var reqList = []interface{}{
 	&pb.SignalProcessRequest{},
 	&pb.CheckRequest{},
 	&pb.WaitProcessRequest{},
+	&pb.StatsContainerRequest{},
 }
 
 func TestKataAgentSendReq(t *testing.T) {
