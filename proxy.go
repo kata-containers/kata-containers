@@ -43,7 +43,10 @@ var crashOnError = false
 var proxyLog = logrus.New()
 
 func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) (net.Listener, error) {
-	session, err := yamux.Client(servConn, nil)
+	sessionConfig := yamux.DefaultConfig()
+	// Disable keepAlive since we don't know how much time a container can be paused
+	sessionConfig.EnableKeepAlive = false
+	session, err := yamux.Client(servConn, sessionConfig)
 	if err != nil {
 		return nil, err
 	}
