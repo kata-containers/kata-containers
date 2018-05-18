@@ -117,6 +117,15 @@ init_path="/sbin/init"
 init="${ROOTFS}${init_path}"
 [ -x "${init}" ] || [ -L ${init} ] || die "${init_path} is not installed in ${ROOTFS}"
 OK "init is installed"
+
+if [ "${AGENT_INIT}" == "no" ]
+then
+	systemd_path="/lib/systemd/systemd"
+	systemd="${ROOTFS}${systemd_path}"
+	[ -x "${systemd}" ] || [ -L ${systemd} ] || die "${systemd_path} is not installed in ${ROOTFS}"
+	OK "init is systemd"
+fi
+
 [ "${AGENT_INIT}" == "yes" ] || [ -x "${ROOTFS}/usr/bin/${AGENT_BIN}" ] || \
 	die "/usr/bin/${AGENT_BIN} is not installed in ${ROOTFS}
 	use AGENT_BIN env variable to change the expected agent binary name"

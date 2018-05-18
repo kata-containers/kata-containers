@@ -48,22 +48,26 @@ function build_initrd()
 function build_rootfs_image_initrd()
 {
 	distro="$1"
+	image="$2"
+	initrd="$3"
+
 	[ -n "$distro" ]
 	build_rootfs $distro
-	build_image
-	build_initrd
+
+	[ "$image" = "yes" ] && build_image
+	[ "$initrd" = "yes" ] && build_initrd
 }
 
 @test "Can create fedora image" {
-	build_rootfs_image_initrd fedora
+	build_rootfs_image_initrd fedora yes yes
 }
 
 @test "Can create clearlinux image" {
-	build_rootfs_image_initrd clearlinux
+	build_rootfs_image_initrd clearlinux yes yes
 }
 
 @test "Can create centos image" {
-	build_rootfs_image_initrd centos
+	build_rootfs_image_initrd centos yes yes
 }
 
 @test "Can create euleros image" {
@@ -71,9 +75,9 @@ function build_rootfs_image_initrd()
 	then
 		skip "travis timeout, see: https://github.com/kata-containers/osbuilder/issues/46"
 	fi
-	build_rootfs_image_initrd euleros
+	build_rootfs_image_initrd euleros yes yes
 }
 
 @test "Can create alpine image" {
-	build_rootfs_image_initrd alpine
+	build_rootfs_image_initrd alpine no yes
 }
