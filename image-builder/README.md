@@ -16,6 +16,9 @@ $ sudo ./image_builder.sh path/to/rootfs
 
 Where `path/to/rootfs` is the directory populated by `rootfs.sh`.
 
+> **Note**: If you are building an image from an Alpine rootfs, see
+> the important note [here](rootfs-builder/README.md#rootfs-requirements).
+
 ## Further information
 
 For more information about usage (including how to adjust the size of the
