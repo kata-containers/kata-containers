@@ -18,7 +18,10 @@ For details of the other Kata Containers repositories, see the
 * [Configuration](#configuration)
 * [Logging](#logging)
 * [Debugging](#debugging)
+* [Limitations](#limitations)
 * [Community](#community)
+    * [Contact](#contact)
+* [Further information](#further-information)
 
 ## Introduction
 
@@ -143,6 +146,23 @@ tool.
 See the
 [debugging section of the developer guide](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#enable-full-debug).
 
+## Limitations
+
+See the
+[limitations file](https://github.com/kata-containers/documentation/blob/master/Limitations.md)
+for further details.
+
 ## Community
 
 See [the community repository](https://github.com/kata-containers/community).
+
+### Contact
+
+See [how to reach the community](https://github.com/kata-containers/community/blob/master/CONTRIBUTING.md#contact).
+
+## Further information
+
+See the
+[project table of contents](https://github.com/kata-containers/kata-containers)
+and the
+[documentation repository](https://github.com/kata-containers/documentation).
