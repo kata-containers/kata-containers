@@ -179,6 +179,15 @@ func (m *VCMock) StatusContainer(sandboxID, containerID string) (vc.ContainerSta
 	return vc.ContainerStatus{}, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
 }
 
+// StatsContainer implements the VC function of the same name.
+func (m *VCMock) StatsContainer(sandboxID, containerID string) (vc.ContainerStats, error) {
+	if m.StatsContainerFunc != nil {
+		return m.StatsContainerFunc(sandboxID, containerID)
+	}
+
+	return vc.ContainerStats{}, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
+}
+
 // KillContainer implements the VC function of the same name.
 func (m *VCMock) KillContainer(sandboxID, containerID string, signal syscall.Signal, all bool) error {
 	if m.KillContainerFunc != nil {
