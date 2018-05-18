@@ -625,6 +625,43 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 
 }
 
+func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpdir, err := ioutil.TempDir(testDir, "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
+	imagePath := filepath.Join(tmpdir, "image")
+	initrdPath := filepath.Join(tmpdir, "initrd")
+	hypervisorPath := path.Join(tmpdir, "hypervisor")
+	kernelPath := path.Join(tmpdir, "kernel")
+
+	for _, file := range []string{imagePath, initrdPath, hypervisorPath, kernelPath} {
+		err = createEmptyFile(file)
+		assert.NoError(err)
+	}
+
+	machineType := "machineType"
+	disableBlock := true
+	enableIOThreads := true
+
+	hypervisor := hypervisor{
+		Path:                  hypervisorPath,
+		Kernel:                kernelPath,
+		Image:                 imagePath,
+		Initrd:                initrdPath,
+		MachineType:           machineType,
+		DisableBlockDeviceUse: disableBlock,
+		EnableIOThreads:       enableIOThreads,
+	}
+
+	_, err = newQemuHypervisorConfig(hypervisor)
+
+	// specifying both an image+initrd is invalid
+	assert.Error(err)
+}
+
 func TestNewShimConfig(t *testing.T) {
 	dir, err := ioutil.TempDir(testDir, "shim-config-")
 	if err != nil {
