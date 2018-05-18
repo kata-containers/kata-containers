@@ -80,3 +80,33 @@ var _ = Describe("check yamux IO timeout", func() {
 		})
 	})
 })
+
+var _ = Describe("remove paused container", func() {
+	var (
+		id       string
+		exitCode int
+	)
+
+	BeforeEach(func() {
+		id = randomDockerName()
+	})
+
+	AfterEach(func() {
+		Expect(RemoveDockerContainer(id)).To(BeTrue())
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	Describe("start, pause, remove container", func() {
+		Context("check if a paused container can be removed", func() {
+			It("should be removed", func() {
+				Skip("Issue: https://github.com/kata-containers/runtime/issues/317")
+				_, _, exitCode = dockerRun("-td", "--name", id, Image, "sh")
+				Expect(0).To(Equal(exitCode))
+				_, _, exitCode = dockerPause(id)
+				Expect(0).To(Equal(exitCode))
+				_, _, exitCode = dockerRm("-f", id)
+				Expect(0).To(Equal(exitCode))
+			})
+		})
+	})
+})
