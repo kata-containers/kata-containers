@@ -41,6 +41,9 @@ The rootfs must provide at least the following components:
 
 When the `AGENT_INIT` environment variable is set to `yes`, use Kata agent as `/sbin/init`.
 
+> **Note**: `AGENT_INIT=yes` **must** be used for the Alpine distribution
+> since it does not use `systemd` as its init daemon.
+
 ## Creating a rootfs
 
 To build a rootfs for your chosen distribution, run:
