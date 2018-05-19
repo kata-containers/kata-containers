@@ -82,17 +82,17 @@ func DeleteSandbox(sandboxID string) (VCSandbox, error) {
 	defer unlockSandbox(lockFile)
 
 	// Fetch the sandbox from storage and create it.
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Delete it.
-	if err := p.Delete(); err != nil {
+	if err := s.Delete(); err != nil {
 		return nil, err
 	}
 
-	return p, nil
+	return s, nil
 }
 
 // FetchSandbox is the virtcontainers sandbox fetching entry point.
@@ -129,27 +129,27 @@ func StartSandbox(sandboxID string) (VCSandbox, error) {
 	defer unlockSandbox(lockFile)
 
 	// Fetch the sandbox from storage and create it.
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
-	return startSandbox(p)
+	return startSandbox(s)
 }
 
-func startSandbox(p *Sandbox) (*Sandbox, error) {
+func startSandbox(s *Sandbox) (*Sandbox, error) {
 	// Start it
-	err := p.start()
+	err := s.start()
 	if err != nil {
 		return nil, err
 	}
 
 	// Execute poststart hooks.
-	if err := p.config.Hooks.postStartHooks(p); err != nil {
+	if err := s.config.Hooks.postStartHooks(s); err != nil {
 		return nil, err
 	}
 
-	return p, nil
+	return s, nil
 }
 
 // StopSandbox is the virtcontainers sandbox stopping entry point.
@@ -166,45 +166,45 @@ func StopSandbox(sandboxID string) (VCSandbox, error) {
 	defer unlockSandbox(lockFile)
 
 	// Fetch the sandbox from storage and create it.
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Stop it.
-	err = p.stop()
+	err = s.stop()
 	if err != nil {
 		return nil, err
 	}
 
 	// Remove the network.
-	if err := p.removeNetwork(); err != nil {
+	if err := s.removeNetwork(); err != nil {
 		return nil, err
 	}
 
 	// Execute poststop hooks.
-	if err := p.config.Hooks.postStopHooks(p); err != nil {
+	if err := s.config.Hooks.postStopHooks(s); err != nil {
 		return nil, err
 	}
 
-	return p, nil
+	return s, nil
 }
 
 // RunSandbox is the virtcontainers sandbox running entry point.
 // RunSandbox creates a sandbox and its containers and then it starts them.
 func RunSandbox(sandboxConfig SandboxConfig) (VCSandbox, error) {
-	p, err := createSandboxFromConfig(sandboxConfig)
+	s, err := createSandboxFromConfig(sandboxConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	lockFile, err := rwLockSandbox(p.id)
+	lockFile, err := rwLockSandbox(s.id)
 	if err != nil {
 		return nil, err
 	}
 	defer unlockSandbox(lockFile)
 
-	return startSandbox(p)
+	return startSandbox(s)
 }
 
 // ListSandbox is the virtcontainers sandbox listing entry point.
@@ -250,7 +250,7 @@ func StatusSandbox(sandboxID string) (SandboxStatus, error) {
 		return SandboxStatus{}, err
 	}
 
-	sandbox, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		unlockSandbox(lockFile)
 		return SandboxStatus{}, err
@@ -263,12 +263,12 @@ func StatusSandbox(sandboxID string) (SandboxStatus, error) {
 	// will need to lock an exclusive lock, meaning that all other locks have
 	// to be released to let this happen. This call ensures this will be the
 	// last operation executed by this function.
-	defer sandbox.wg.Wait()
+	defer s.wg.Wait()
 	defer unlockSandbox(lockFile)
 
 	var contStatusList []ContainerStatus
-	for _, container := range sandbox.containers {
-		contStatus, err := statusContainer(sandbox, container.id)
+	for _, container := range s.containers {
+		contStatus, err := statusContainer(s, container.id)
 		if err != nil {
 			return SandboxStatus{}, err
 		}
@@ -277,13 +277,13 @@ func StatusSandbox(sandboxID string) (SandboxStatus, error) {
 	}
 
 	sandboxStatus := SandboxStatus{
-		ID:               sandbox.id,
-		State:            sandbox.state,
-		Hypervisor:       sandbox.config.HypervisorType,
-		HypervisorConfig: sandbox.config.HypervisorConfig,
-		Agent:            sandbox.config.AgentType,
+		ID:               s.id,
+		State:            s.state,
+		Hypervisor:       s.config.HypervisorType,
+		HypervisorConfig: s.config.HypervisorConfig,
+		Agent:            s.config.AgentType,
 		ContainersStatus: contStatusList,
-		Annotations:      sandbox.config.Annotations,
+		Annotations:      s.config.Annotations,
 	}
 
 	return sandboxStatus, nil
@@ -388,13 +388,13 @@ func StopContainer(sandboxID, containerID string) (VCContainer, error) {
 	}
 	defer unlockSandbox(lockFile)
 
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Fetch the container.
-	c, err := p.findContainer(containerID)
+	c, err := s.findContainer(containerID)
 	if err != nil {
 		return nil, err
 	}
@@ -454,7 +454,7 @@ func StatusContainer(sandboxID, containerID string) (ContainerStatus, error) {
 		return ContainerStatus{}, err
 	}
 
-	sandbox, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		unlockSandbox(lockFile)
 		return ContainerStatus{}, err
@@ -467,10 +467,10 @@ func StatusContainer(sandboxID, containerID string) (ContainerStatus, error) {
 	// will need to lock an exclusive lock, meaning that all other locks have
 	// to be released to let this happen. This call ensures this will be the
 	// last operation executed by this function.
-	defer sandbox.wg.Wait()
+	defer s.wg.Wait()
 	defer unlockSandbox(lockFile)
 
-	return statusContainer(sandbox, containerID)
+	return statusContainer(s, containerID)
 }
 
 // This function is going to spawn a goroutine and it needs to be waited for
@@ -541,13 +541,13 @@ func KillContainer(sandboxID, containerID string, signal syscall.Signal, all boo
 	}
 	defer unlockSandbox(lockFile)
 
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return err
 	}
 
 	// Fetch the container.
-	c, err := p.findContainer(containerID)
+	c, err := s.findContainer(containerID)
 	if err != nil {
 		return err
 	}
@@ -590,13 +590,13 @@ func ProcessListContainer(sandboxID, containerID string, options ProcessListOpti
 	}
 	defer unlockSandbox(lockFile)
 
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Fetch the container.
-	c, err := p.findContainer(containerID)
+	c, err := s.findContainer(containerID)
 	if err != nil {
 		return nil, err
 	}
