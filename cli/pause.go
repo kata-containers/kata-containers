@@ -42,15 +42,17 @@ Where "<container-id>" is the container name to be resumed.`,
 
 func toggleContainerPause(containerID string, pause bool) (err error) {
 	// Checks the MUST and MUST NOT from OCI runtime specification
-	_, sandboxID, err := getExistingContainerInfo(containerID)
+	status, sandboxID, err := getExistingContainerInfo(containerID)
 	if err != nil {
 		return err
 	}
 
+	containerID = status.ID
+
 	if pause {
-		_, err = vci.PauseSandbox(sandboxID)
+		err = vci.PauseContainer(sandboxID, containerID)
 	} else {
-		_, err = vci.ResumeSandbox(sandboxID)
+		err = vci.ResumeContainer(sandboxID, containerID)
 	}
 
 	return err
