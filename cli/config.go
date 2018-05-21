@@ -309,6 +309,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	if image != "" && initrd != "" {
+		return vc.HypervisorConfig{},
+			errors.New("cannot specify an image and an initrd in configuration file")
+	}
+
 	firmware, err := h.firmware()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
