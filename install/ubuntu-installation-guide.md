@@ -52,6 +52,6 @@ $ sudo systemctl restart docker
 
 You are now ready to run Kata Containers:
 
-```bash
+```
 $ sudo docker run -ti busybox sh
 ```
