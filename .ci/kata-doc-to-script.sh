@@ -1,8 +1,10 @@
 #!/bin/bash
+license="
 #
 # Copyright (c) 2018 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
+"
 
 set -e
 
@@ -72,6 +74,7 @@ script_header()
 {
 	cat <<-EOT
 	#!/bin/bash
+	${license}
 	#----------------------------------------------
 	# WARNING: Script auto-generated from '$file'.
 	#
