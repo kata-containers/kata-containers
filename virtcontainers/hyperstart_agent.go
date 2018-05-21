@@ -844,3 +844,13 @@ func (h *hyper) readProcessStderr(c *Container, processID string, data []byte) (
 	// hyperstart-agent does not support stderr read request
 	return 0, nil
 }
+
+func (h *hyper) pauseContainer(sandbox *Sandbox, c Container) error {
+	// hyperstart-agent does not support pause container
+	return nil
+}
+
+func (h *hyper) resumeContainer(sandbox *Sandbox, c Container) error {
+	// hyperstart-agent does not support resume container
+	return nil
+}

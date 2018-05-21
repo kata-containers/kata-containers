@@ -214,3 +214,21 @@ func (m *VCMock) UpdateContainer(sandboxID, containerID string, resources specs.
 
 	return fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
 }
+
+// PauseContainer implements the VC function of the same name.
+func (m *VCMock) PauseContainer(sandboxID, containerID string) error {
+	if m.PauseContainerFunc != nil {
+		return m.PauseContainerFunc(sandboxID, containerID)
+	}
+
+	return fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
+}
+
+// ResumeContainer implements the VC function of the same name.
+func (m *VCMock) ResumeContainer(sandboxID, containerID string) error {
+	if m.ResumeContainerFunc != nil {
+		return m.ResumeContainerFunc(sandboxID, containerID)
+	}
+
+	return fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
+}

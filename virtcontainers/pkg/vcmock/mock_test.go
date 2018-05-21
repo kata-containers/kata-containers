@@ -623,3 +623,55 @@ func TestVCMockFetchSandbox(t *testing.T) {
 	assert.True(IsMockError(err))
 
 }
+
+func TestVCMockPauseContainer(t *testing.T) {
+	assert := assert.New(t)
+
+	m := &VCMock{}
+	config := &vc.SandboxConfig{}
+	assert.Nil(m.PauseContainerFunc)
+
+	err := m.PauseContainer(config.ID, config.ID)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+
+	m.PauseContainerFunc = func(sid, cid string) error {
+		return nil
+	}
+
+	err = m.PauseContainer(config.ID, config.ID)
+	assert.NoError(err)
+
+	// reset
+	m.PauseContainerFunc = nil
+
+	err = m.PauseContainer(config.ID, config.ID)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+}
+
+func TestVCMockResumeContainer(t *testing.T) {
+	assert := assert.New(t)
+
+	m := &VCMock{}
+	config := &vc.SandboxConfig{}
+	assert.Nil(m.ResumeContainerFunc)
+
+	err := m.ResumeContainer(config.ID, config.ID)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+
+	m.ResumeContainerFunc = func(sid, cid string) error {
+		return nil
+	}
+
+	err = m.ResumeContainer(config.ID, config.ID)
+	assert.NoError(err)
+
+	// reset
+	m.ResumeContainerFunc = nil
+
+	err = m.ResumeContainer(config.ID, config.ID)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+}
