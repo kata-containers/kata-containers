@@ -1326,22 +1326,22 @@ func togglePauseSandbox(sandboxID string, pause bool) (*Sandbox, error) {
 	defer unlockSandbox(lockFile)
 
 	// Fetch the sandbox from storage and create it.
-	p, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
 	if pause {
-		err = p.Pause()
+		err = s.Pause()
 	} else {
-		err = p.Resume()
+		err = s.Resume()
 	}
 
 	if err != nil {
 		return nil, err
 	}
 
-	return p, nil
+	return s, nil
 }
 
 // HotplugAddDevice is used for add a device to sandbox
