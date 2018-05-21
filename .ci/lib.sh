@@ -94,7 +94,9 @@ function get_version(){
 	mkdir -p "$(dirname ${runtime_repo_dir})"
 	[ -d "${runtime_repo_dir}" ] ||  git clone --quiet https://${runtime_repo}.git "${runtime_repo_dir}"
 	[ ! -f "$versions_file" ] && { echo >&2 "ERROR: cannot find $versions_file"; exit 1; }
-	"${GOPATH}/bin/yq" read "$versions_file" "$dependency"
+	result=$("${GOPATH}/bin/yq" read "$versions_file" "$dependency")
+	[ "$result" = "null" ] && result=""
+	echo "$result"
 }
 
 
