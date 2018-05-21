@@ -23,6 +23,7 @@ Select your preferred distribution or cloud service:
 * [Fedora](fedora-installation-guide.md)
 * [Red Hat](rhel-installation-guide.md)
 * [Ubuntu](ubuntu-installation-guide.md)
+* [SLES](sles-installation-guide.md)
 
 ### Cloud services
 
