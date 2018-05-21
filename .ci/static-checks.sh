@@ -259,7 +259,21 @@ EOT
 	fi
 }
 
+# Perform basic checks on documentation files
+check_docs()
+{
+	echo "INFO: Checking documentation"
+
+	docs=$(find . -name "*.md" |grep -v "vendor/" || true)
+
+	for doc in $docs
+	do
+		bash "${cidir}/kata-doc-to-script.sh" -csv "$doc"
+	done
+}
+
 check_commits
 check_license_headers
 check_go
 check_versions
+check_docs

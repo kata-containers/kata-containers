@@ -48,11 +48,11 @@ system**. See [Developer Mode](#developer-mode).
 The strategy to check if the tests are running under a CI system is to see
 if the `CI` variable is set to the value `true`. For example, in shell syntax:
 
-```bash
+```
 if [ "$CI" = true ]; then
-    # Assumed to be running in a CI environment
+    : # Assumed to be running in a CI environment
 else
-    # Assumed to NOT be running in a CI environment
+    : # Assumed to NOT be running in a CI environment
 fi
 ```
 
