@@ -125,3 +125,13 @@ func (n *noopAgent) readProcessStdout(c *Container, processID string, data []byt
 func (n *noopAgent) readProcessStderr(c *Container, processID string, data []byte) (int, error) {
 	return 0, nil
 }
+
+// pauseContainer is the Noop agent Container pause implementation. It does nothing.
+func (n *noopAgent) pauseContainer(sandbox *Sandbox, c Container) error {
+	return nil
+}
+
+// resumeContainer is the Noop agent Container resume implementation. It does nothing.
+func (n *noopAgent) resumeContainer(sandbox *Sandbox, c Container) error {
+	return nil
+}

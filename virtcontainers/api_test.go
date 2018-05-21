@@ -2400,3 +2400,43 @@ func TestUpdateContainer(t *testing.T) {
 	err = UpdateContainer(s.ID(), contID, resources)
 	assert.NoError(err)
 }
+
+func TestPauseResumeContainer(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	cleanUp()
+
+	assert := assert.New(t)
+	err := PauseContainer("", "")
+	assert.Error(err)
+
+	err = PauseContainer("abc", "")
+	assert.Error(err)
+
+	contID := "100"
+	config := newTestSandboxConfigNoop()
+
+	s, sandboxDir, err := createAndStartSandbox(config)
+	assert.NoError(err)
+	assert.NotNil(s)
+
+	contConfig := newTestContainerConfigNoop(contID)
+	_, c, err := CreateContainer(s.ID(), contConfig)
+	assert.NoError(err)
+	assert.NotNil(c)
+
+	contDir := filepath.Join(sandboxDir, contID)
+	_, err = os.Stat(contDir)
+	assert.NoError(err)
+
+	_, err = StartContainer(s.ID(), contID)
+	assert.NoError(err)
+
+	err = PauseContainer(s.ID(), contID)
+	assert.NoError(err)
+
+	err = ResumeContainer(s.ID(), contID)
+	assert.NoError(err)
+}

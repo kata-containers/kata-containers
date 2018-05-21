@@ -65,6 +65,9 @@ const (
 
 	// StateStopped represents a container that has been stopped.
 	StateStopped = "stopped"
+
+	// StatePaused represents a container that has been paused.
+	StatePaused = "paused"
 )
 
 // CompatOCIProcess is a structure inheriting from spec.Process defined
@@ -612,6 +615,8 @@ func StateToOCIState(state vc.State) string {
 		return StateRunning
 	case vc.StateStopped:
 		return StateStopped
+	case vc.StatePaused:
+		return StatePaused
 	default:
 		return ""
 	}

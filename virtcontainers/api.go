@@ -653,3 +653,46 @@ func StatsContainer(sandboxID, containerID string) (ContainerStats, error) {
 
 	return s.StatsContainer(containerID)
 }
+
+func togglePauseContainer(sandboxID, containerID string, pause bool) error {
+	if sandboxID == "" {
+		return errNeedSandboxID
+	}
+
+	if containerID == "" {
+		return errNeedContainerID
+	}
+
+	lockFile, err := rwLockSandbox(sandboxID)
+	if err != nil {
+		return err
+	}
+	defer unlockSandbox(lockFile)
+
+	s, err := fetchSandbox(sandboxID)
+	if err != nil {
+		return err
+	}
+
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	if pause {
+		return c.pause()
+	}
+
+	return c.resume()
+}
+
+// PauseContainer is the virtcontainers container pause entry point.
+func PauseContainer(sandboxID, containerID string) error {
+	return togglePauseContainer(sandboxID, containerID, true)
+}
+
+// ResumeContainer is the virtcontainers container resume entry point.
+func ResumeContainer(sandboxID, containerID string) error {
+	return togglePauseContainer(sandboxID, containerID, false)
+}
