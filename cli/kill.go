@@ -103,9 +103,9 @@ func kill(containerID, signal string, all bool) error {
 		return err
 	}
 
-	// container MUST be created or running
-	if status.State.State != vc.StateReady && status.State.State != vc.StateRunning {
-		return fmt.Errorf("Container %s not ready or running, cannot send a signal", containerID)
+	// container MUST be created, running or paused
+	if status.State.State != vc.StateReady && status.State.State != vc.StateRunning && status.State.State != vc.StatePaused {
+		return fmt.Errorf("Container %s not ready, running or paused, cannot send a signal", containerID)
 	}
 
 	if err := vci.KillContainer(sandboxID, containerID, signum, all); err != nil {
