@@ -15,8 +15,6 @@
         * [docker run and kernel memory](#docker-run-and-kernel-memory)
         * [docker run and shared memory](#docker-run-and-shared-memory)
         * [docker run and sysctl](#docker-run-and-sysctl)
-    * [Other](#other)
-        * [docker stats](#docker-stats)
 * [Architectural limitations](#architectural-limitations)
     * [Networking limitations](#networking-limitations)
         * [Support for joining an existing VM network](#support-for-joining-an-existing-vm-network)
@@ -104,13 +102,11 @@ See issue https://github.com/kata-containers/runtime/issues/184 for more informa
 
 ### events command
 
-The runtime does not currently implement the `events` command. This means that the `docker stats` command does not display meaningful information for a Kata Container at present.
-
-It might be possible to implement a subset of the `events` command functionality and add some VM-specific extensions.
+The runtime does not fully implement the `events` command. `OOM` notifications and `Intel RDT` stats are not fully supported.
 
 Note that the OCI standard does not specify an `events` command.
 
-See issue https://github.com/kata-containers/runtime/issues/186 for more information.
+See issue https://github.com/kata-containers/runtime/issues/308 and https://github.com/kata-containers/runtime/issues/309 for more information.
 
 ### ps command
 
@@ -195,19 +191,6 @@ level, this equates to the `linux.sysctl` OCI configuration. Docker
 allows configuring the sysctl settings that support namespacing. From a security and isolation point of view, it might make sense to set them in the VM, which isolates sysctl settings. Also, given that each Kata Container has its own kernel, we can support setting of sysctl settings that are not namespaced. In some cases, we might need to support configuring some of the settings on both the host side Kata Container namespace and the Kata Containers kernel.
 
 See issue https://github.com/kata-containers/runtime/issues/185 for more information.
-
-## Other
-
-### docker stats
-
-The `docker stats` command does not return meaningful information for
-Kata Containers at present. This requires the runtime to support the
-[events command](#events-command).
-
-Some thought needs to go into whether we display information purely from
-within the VM, or if the information relates to the resource usage of
-the whole VM container as viewed from the host. The latter is likely
-more useful from a whole system point of view.
 
 # Architectural limitations
 
