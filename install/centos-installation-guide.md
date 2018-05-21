@@ -19,7 +19,7 @@ For more information on installing Docker please refer to the
 ```bash
 $ source /etc/os-release
 $ sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo \
-http://download.opensuse.org/repositories/home:/katacontainers:/release/CentOS_\$VERSION_ID/home:katacontainers:release.repo
+"http://download.opensuse.org/repositories/home:/katacontainers:/release/CentOS_${VERSION_ID}/home:katacontainers:release.repo"
 $ sudo -E yum -y install kata-runtime kata-proxy kata-shim
 ```
 
