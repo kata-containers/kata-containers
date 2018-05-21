@@ -61,7 +61,8 @@ if [ "${log_copy_dest}" ]; then
 	split -b "${subfile_size}" -d "${crio_log_path}" "${crio_log_prefix}"
 	split -b "${subfile_size}" -d "${docker_log_path}" "${docker_log_prefix}"
 	split -b "${subfile_size}" -d "${kubelet_log_path}" "${kubelet_log_prefix}"
-	split -b "${subfile_size}" -d "${collect_data_log_path}" "${collect_data_log_prefix}"
+
+	[ "${have_collect_script}" = "yes" ] &&  split -b "${subfile_size}" -d "${collect_data_log_path}" "${collect_data_log_prefix}"
 
 	prefixes=""
 	prefixes+=" ${kata_runtime_log_prefix}"
