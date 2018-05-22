@@ -46,12 +46,9 @@ This document is written **specifically for developers**: it is not intended for
 
 # Initial setup
 
-The recommended way to create a development environment is to first install the
-packaged versions of the Kata Containers components to create a working
-system:
-
-  * [Fedora\*](install/fedora-installation-guide.md)
-  * [Ubuntu\*](install/ubuntu-installation-guide.md)
+The recommended way to create a development environment is to first
+[install the packaged versions of the Kata Containers components](install/README.md)
+to create a working system.
 
 The installation guide instructions will install all required Kata Containers
 components, plus Docker*, the hypervisor, and the Kata Containers image and
