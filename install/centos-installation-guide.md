@@ -6,7 +6,7 @@ This step is only required in case Docker is not installed on the system.
 1. Install the latest version of Docker with the following commands:
 
 ```bash
-$ sudo yum -y install dnf-plugins-core
+$ sudo yum -y install yum-utils
 $ sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
 $ sudo yum -y install docker-ce
 ```
