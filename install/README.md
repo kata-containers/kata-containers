@@ -9,5 +9,5 @@ Select your preferred distribution:
 For further information, see:
 
 * The [the upgrading document](../Upgrading.md).
-* The [developer guide](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md)
-* The [runtime documentation](https://github.com/kata-containers/runtime/blob/master/README.md)
+* The [developer guide](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md).
+* The [runtime documentation](https://github.com/kata-containers/runtime/blob/master/README.md).
