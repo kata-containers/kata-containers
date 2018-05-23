@@ -1,6 +1,6 @@
 # Installing Kata Containers on CentOS
 
-> **Note:** Kata Containers is available for CentOS version 7.
+> **Note:** Kata Containers packages are available for CentOS version 7 (currently `x86_64` only).
 
 This step is only required in case Docker is not installed on the system.
 1. Install the latest version of Docker with the following commands:
