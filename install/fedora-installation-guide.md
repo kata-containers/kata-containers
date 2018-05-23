@@ -1,6 +1,6 @@
 # Installing Kata Containers on Fedora
 
-> **Note:** Kata Containers is available for Fedora\* versions **26** and **27**.
+> **Note:** Kata Containers packages are available for Fedora\* versions **26** and **27** (currently `x86_64` only).
 
 This step is only required in case Docker is not installed on the system.
 1. Install the latest version of Docker with the following commands:

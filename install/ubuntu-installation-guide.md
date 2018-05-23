@@ -1,9 +1,6 @@
 # Installing Kata Containers on Ubuntu
 
-> **Note:** Kata Containers is available for Ubuntu\* **16.04** and **17.10**.
-
-Currently Kata Containers is currently only build for x86_64.
-
+> **Note:** Kata Containers packages are available for Ubuntu\* **16.04** and **17.10** (currently `x86_64` only).
 
 This step is only required in case Docker is not installed on the system.
 1. Install the latest version of Docker with the following commands:
