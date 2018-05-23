@@ -521,7 +521,8 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		kataLog.WithFields(
 			logrus.Fields{
 				"format": "TOML",
-			}).Debugf("loaded configuration")
+				"file":   resolved,
+			}).Info("loaded configuration")
 	}
 
 	if err := updateRuntimeConfig(resolved, tomlConf, &config); err != nil {
