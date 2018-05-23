@@ -1,7 +1,7 @@
 # Installing Kata Containers on Ubuntu
 
-Note:
-Kata Containers is available for Ubuntu\* **16.04** and **17.10**.
+> **Note:** Kata Containers is available for Ubuntu\* **16.04** and **17.10**.
+
 Currently Kata Containers is currently only build for x86_64.
 
 
@@ -22,7 +22,8 @@ For more information on installing Docker please refer to the
 
 2. Install the Kata Containers components with the following commands:
 
-  **Note:** The repository is downloading content using `http`, be aware that this installation channel is not secure.
+> **Note:** The repository is downloading content using `http`, be aware that this installation channel is not secure.
+
 ```bash
 $ sudo sh -c "echo 'deb http://download.opensuse.org/repositories/home:/katacontainers:/release/xUbuntu_$(lsb_release -rs)/ /' > /etc/apt/sources.list.d/kata-containers.list"
 $ curl -sL  http://download.opensuse.org/repositories/home:/katacontainers:/release/xUbuntu_$(lsb_release -rs)/Release.key | sudo apt-key add -
