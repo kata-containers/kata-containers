@@ -50,7 +50,7 @@ else
 fi
 
 # Install the image
-agent_commit=$(/usr/bin/kata-agent --version |  awk '{print $NF}')
+agent_commit=$(git --work-tree=$GOPATH/src/github.com/kata-containers/agent/ --git-dir=$GOPATH/src/github.com/kata-containers/agent/.git log --format=%h -1 HEAD)
 commit=$(git log --format=%h -1 HEAD)
 date=$(date +%Y-%m-%d-%T.%N%z)
 image="kata-containers-${date}-osbuilder-${commit}-agent-${agent_commit}"
