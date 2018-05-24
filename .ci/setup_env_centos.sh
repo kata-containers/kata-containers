@@ -43,9 +43,6 @@ chronic sudo -E yum install -y libcap-devel libcap-ng-devel libattr-devel libcap
 echo "Install kernel dependencies"
 chronic sudo -E yum -y install elfutils-libelf-devel
 
-echo "Install kata-containers image"
-"${cidir}/install_kata_image.sh"
-
 echo "Install CRI-O dependencies for CentOS"
 chronic sudo -E yum install -y glibc-static libglib2.0-devel libseccomp-devel libassuan-devel libgpg-error-devel go-md2man device-mapper-libs \
 	 btrfs-progs-devel util-linux gpgme-devel

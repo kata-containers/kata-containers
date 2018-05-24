@@ -27,9 +27,6 @@ fi
 echo "Install qemu dependencies"
 chronic sudo -E apt install -y libcap-dev libattr1-dev libcap-ng-dev librbd-dev
 
-echo "Install kata-containers image"
-"${cidir}/install_kata_image.sh"
-
 echo "Install kernel dependencies"
 chronic sudo -E apt install -y libelf-dev
 

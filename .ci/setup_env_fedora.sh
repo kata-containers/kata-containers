@@ -35,9 +35,6 @@ chronic sudo -E dnf -y install libcap-devel libattr-devel \
 echo "Install kernel dependencies"
 chronic sudo -E dnf -y install elfutils-libelf-devel
 
-echo "Install kata containers image"
-"${cidir}/install_kata_image.sh"
-
 echo "Install CRI-O dependencies"
 chronic sudo -E dnf -y install btrfs-progs-devel device-mapper-devel      \
 	glib2-devel glibc-devel glibc-static gpgme-devel libassuan-devel  \
