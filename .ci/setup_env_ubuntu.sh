@@ -61,3 +61,11 @@ sudo -E apt install -y yamllint
 
 echo "Install tools for metrics tests"
 sudo -E apt install -y smem jq
+
+if [ "$(arch)" == "x86_64" ]; then
+	echo "Install Kata Containers OBS repository"
+	obs_url="http://download.opensuse.org/repositories/home:/katacontainers:/release/xUbuntu_$(lsb_release -rs)/"
+	sudo sh -c "echo 'deb $obs_url /' > /etc/apt/sources.list.d/kata-containers.list"
+	curl -sL  "${obs_url}/Release.key" | sudo apt-key add -
+	sudo -E apt-get update
+fi

@@ -52,3 +52,9 @@ sudo -E dnf -y install yamllint
 
 echo "Install tools for metrics tests"
 sudo -E dnf -y install smem jq
+
+if [ "$(arch)" == "x86_64" ]; then
+	echo "Install Kata Containers OBS repository"
+	obs_url="http://download.opensuse.org/repositories/home:/katacontainers:/release/Fedora_$VERSION_ID/home:katacontainers:release.repo"
+	sudo -E VERSION_ID=$VERSION_ID dnf config-manager --add-repo "$obs_url"
+fi

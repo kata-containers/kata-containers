@@ -57,12 +57,18 @@ echo "Install libgudev1-devel"
 chronic sudo -E yum install -y libgudev1-devel
 
 echo "Install Build Tools"
-sudo -E yum install -y python pkgconfig zlib-devel
+chronic sudo -E yum install -y python pkgconfig zlib-devel
 
-sudo -E yum install -y ostree-devel
+chronic sudo -E yum install -y ostree-devel
 
 echo "Install YAML validator"
-sudo -E yum install -y yamllint
+chronic sudo -E yum install -y yamllint
 
 echo "Install tools for metrics tests"
-sudo -E yum install -y smem jq
+chronic sudo -E yum install -y smem jq
+
+if [ "$(arch)" == "x86_64" ]; then
+	echo "Install Kata Containers OBS repository"
+	obs_url="http://download.opensuse.org/repositories/home:/katacontainers:/release/CentOS_${VERSION_ID}/home:katacontainers:release.repo"
+	sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo "$obs_url"
+fi
