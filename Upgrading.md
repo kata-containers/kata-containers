@@ -10,6 +10,7 @@
     * [Disable old container manager configuration](#disable-old-container-manager-configuration)
     * [Install Kata Containers](#install-kata-containers)
     * [Create a Kata Container](#create-a-kata-container)
+* [Upgrade from runV](#upgrade-from-runv)
 * [Upgrade Kata Containers](#upgrade-kata-containers)
 * [Appendices](#appendices)
     * [Assets](#assets)
@@ -20,7 +21,7 @@
 # Introduction
 
 This document explains how to upgrade from
-[Clear Containers](https://github.com/clearcontainers) to
+[Clear Containers](https://github.com/clearcontainers) and [runV](https://github.com/hyperhq/runv) to
 [Kata Containers](https://github.com/kata-containers) and how to upgrade an existing
 Kata Containers system to the latest version.
 
@@ -117,6 +118,15 @@ Follow one of the [installation guides](https://github.com/kata-containers/docum
 ```
 $ sudo docker run -ti busybox sh
 ```
+
+# Upgrade from runV
+
+runV and Kata Containers can run together on the same system without affecting each other, as long as they are
+not configured to use the same container root storage. Currently, runV defaults to `/run/runv` and Kata Containers
+defaults to `/var/run/kata-containers`.
+
+Now, to upgrade from runV you need to fresh install Kata Containers by following one of
+the [installation guides](https://github.com/kata-containers/documentation/tree/master/install).
 
 # Upgrade Kata Containers
 
