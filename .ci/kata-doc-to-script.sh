@@ -102,9 +102,10 @@ doc_to_script()
 	body=$(mktemp)
 
 	cat "$file" |\
-		sed -n "/^${block_open}/,/^${block_close}/ p" |\
-		sed -e "/^${block_close}/ d" \
-		-e "s/^${code_prompt}//g" > "$body"
+		sed -n "/^ *${block_open}/,/^ *${block_close}/ p" |\
+		sed -e "/^ *${block_close}/ d" \
+		-e "s/^ *${code_prompt}//g" \
+		-e 's/^ *//g' > "$body"
 
 	[ "$require_commands" = "yes" ] && [ ! -s "$body" ] && die "no commands found in file '$file'"
 
