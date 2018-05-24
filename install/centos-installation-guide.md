@@ -1,6 +1,11 @@
 # Installing Kata Containers on CentOS
 
-Note: Kata Containers is available for CentOS version 7.
+> **Notes:**
+>
+> - Kata Containers packages are available for CentOS version 7 (currently `x86_64` only).
+>
+> - If you are installing on a system that already has Clear Containers or `runv` installed,
+>   first read [the upgrading document](../Upgrading.md).
 
 This step is only required in case Docker is not installed on the system.
 1. Install the latest version of Docker with the following commands:
@@ -15,7 +20,8 @@ For more information on installing Docker please refer to the
 
 2. Install the Kata Containers components with the following commands:
 
-  **Note:** The repository redirects the download content to use `http`, be aware that this installation channel is not secure.
+> **Note:** The repository redirects the download content to use `http`, be aware that this installation channel is not secure.
+
 ```bash
 $ source /etc/os-release
 $ sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo \
