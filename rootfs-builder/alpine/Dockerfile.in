@@ -1,3 +1,10 @@
+#
+# Copyright (c) 2018 HyperHQ Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+
 From golang:@GO_VERSION@-alpine3.7
 
-RUN apk update && apk add git make bash gcc musl-dev linux-headers apk-tools-static
+# The "coreutils" package on alpine for reasons unknown does not provide arch(1), so simulate it.
+RUN apk update && apk add git make bash gcc musl-dev linux-headers apk-tools-static && \
+    echo -e '#!/bin/sh\nuname -m' > /usr/bin/arch && chmod +x /usr/bin/arch

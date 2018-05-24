@@ -1,5 +1,11 @@
+#
+# Copyright (C) 2018 Huawei Technologies Co., Ltd
+#
+# SPDX-License-Identifier: Apache-2.0
+
 FROM euleros:@OS_VERSION@
 
-RUN yum -y update && yum install -y yum git make gcc
+RUN yum -y update && yum install -y yum git make gcc coreutils
+
 # This will install the proper golang to build Kata components
 @INSTALL_GO@
