@@ -26,6 +26,9 @@ build_rootfs()
 {
 	local full="${tmp_rootfs}${osbuilder_file}"
 
+	# clean up from any previous runs
+	[ -d "${tmp_rootfs}" ] && sudo rm -rf "${tmp_rootfs}"
+
 	sudo -E ${rootfs_sh} -r "${tmp_rootfs}" "${distro}"
 
 	yamllint "${full}"
