@@ -24,24 +24,33 @@ teardown(){
 
 build_rootfs()
 {
-	local full="${tmp_rootfs}${osbuilder_file}"
+	local distro="$1"
+	local rootfs="$2"
+
+	local full="${rootfs}${osbuilder_file}"
 
 	# clean up from any previous runs
-	[ -d "${tmp_rootfs}" ] && sudo rm -rf "${tmp_rootfs}"
+	[ -d "${rootfs}" ] && sudo rm -rf "${rootfs}"
 
-	sudo -E ${rootfs_sh} -r "${tmp_rootfs}" "${distro}"
+	sudo -E ${rootfs_sh} -r "${rootfs}" "${distro}"
 
 	yamllint "${full}"
 }
 
 build_image()
 {
-	sudo -E ${image_builder_sh} -o "${tmp_dir}/image.img" "${tmp_rootfs}"
+	local file="$1"
+	local rootfs="$2"
+
+	sudo -E ${image_builder_sh} -o "${file}" "${rootfs}"
 }
 
 build_initrd()
 {
-	sudo -E ${initrd_builder_sh} -o "${tmp_dir}/initrd-image.img" "${tmp_rootfs}"
+	local file="$1"
+	local rootfs="$2"
+
+	sudo -E ${initrd_builder_sh} -o "${file}" "${rootfs}"
 }
 
 build_rootfs_image_initrd()
@@ -51,10 +60,10 @@ build_rootfs_image_initrd()
 	initrd="$3"
 
 	[ -n "$distro" ]
-	build_rootfs $distro
+	build_rootfs "${distro}" "${tmp_rootfs}"
 
-	[ "$image" = "yes" ] && build_image
-	[ "$initrd" = "yes" ] && build_initrd
+	[ "$image" = "yes" ] && build_image "${tmp_dir}/image.img" "${tmp_rootfs}"
+	[ "$initrd" = "yes" ] && build_initrd "${tmp_dir}/initrd-image.img" "${tmp_rootfs}"
 }
 
 @test "Can create fedora image" {
