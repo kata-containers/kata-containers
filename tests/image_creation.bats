@@ -4,7 +4,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-
 rootfs_sh="$BATS_TEST_DIRNAME/../rootfs-builder/rootfs.sh"
 image_builder_sh="$BATS_TEST_DIRNAME/../image-builder/image_builder.sh"
 initrd_builder_sh="$BATS_TEST_DIRNAME/../initrd-builder/initrd_builder.sh"
@@ -12,7 +11,6 @@ readonly tmp_dir=$(mktemp -t -d osbuilder-test.XXXXXXX)
 tmp_rootfs="${tmp_dir}/rootfs-osbuilder"
 #FIXME: Remove image size after https://github.com/kata-containers/osbuilder/issues/25 is fixed
 readonly image_size=400
-
 
 setup()
 {
@@ -25,7 +23,7 @@ teardown(){
 	rm -rf "${tmp_dir}"
 }
 
-function build_rootfs()
+build_rootfs()
 {
 	local file="/var/lib/osbuilder/osbuilder.yaml"
 	local full="${tmp_rootfs}${file}"
@@ -35,17 +33,17 @@ function build_rootfs()
 	yamllint "${full}"
 }
 
-function build_image()
+build_image()
 {
 	sudo -E ${image_builder_sh} -s ${image_size} -o "${tmp_dir}/image.img" "${tmp_rootfs}"
 }
 
-function build_initrd()
+build_initrd()
 {
 	sudo -E ${initrd_builder_sh} -o "${tmp_dir}/initrd-image.img" "${tmp_rootfs}"
 }
 
-function build_rootfs_image_initrd()
+build_rootfs_image_initrd()
 {
 	distro="$1"
 	image="$2"
