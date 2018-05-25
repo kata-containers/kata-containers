@@ -9,6 +9,7 @@ readonly image_builder_sh="$BATS_TEST_DIRNAME/../image-builder/image_builder.sh"
 readonly initrd_builder_sh="$BATS_TEST_DIRNAME/../initrd-builder/initrd_builder.sh"
 readonly tmp_dir=$(mktemp -t -d osbuilder-test.XXXXXXX)
 readonly tmp_rootfs="${tmp_dir}/rootfs-osbuilder"
+readonly osbuilder_file="/var/lib/osbuilder/osbuilder.yaml"
 
 setup()
 {
@@ -23,8 +24,7 @@ teardown(){
 
 build_rootfs()
 {
-	local file="/var/lib/osbuilder/osbuilder.yaml"
-	local full="${tmp_rootfs}${file}"
+	local full="${tmp_rootfs}${osbuilder_file}"
 
 	sudo -E ${rootfs_sh} -r "${tmp_rootfs}" "${distro}"
 
