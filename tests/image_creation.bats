@@ -9,8 +9,6 @@ image_builder_sh="$BATS_TEST_DIRNAME/../image-builder/image_builder.sh"
 initrd_builder_sh="$BATS_TEST_DIRNAME/../initrd-builder/initrd_builder.sh"
 readonly tmp_dir=$(mktemp -t -d osbuilder-test.XXXXXXX)
 tmp_rootfs="${tmp_dir}/rootfs-osbuilder"
-#FIXME: Remove image size after https://github.com/kata-containers/osbuilder/issues/25 is fixed
-readonly image_size=400
 
 setup()
 {
@@ -35,7 +33,7 @@ build_rootfs()
 
 build_image()
 {
-	sudo -E ${image_builder_sh} -s ${image_size} -o "${tmp_dir}/image.img" "${tmp_rootfs}"
+	sudo -E ${image_builder_sh} -o "${tmp_dir}/image.img" "${tmp_rootfs}"
 }
 
 build_initrd()
