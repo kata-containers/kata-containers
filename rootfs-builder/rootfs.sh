@@ -20,7 +20,7 @@ lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
 
 # Default architecture
-ARCH=${ARCH:-"x86_64"}
+ARCH=$(arch)
 
 # Load default versions for golang and other componets
 source "${script_dir}/versions.txt"
