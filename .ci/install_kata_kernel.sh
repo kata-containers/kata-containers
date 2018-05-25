@@ -12,6 +12,7 @@ set -e
 
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
+source "/etc/os-release"
 
 repo_name="packaging"
 repo_owner="kata-containers"
@@ -20,6 +21,7 @@ kernel_arch="$(arch)"
 get_kernel_url="https://cdn.kernel.org/pub/linux/kernel"
 tmp_dir="$(mktemp -d)"
 hypervisor="kvm"
+packaged_kernel="kata-linux-container"
 
 download_repo() {
 	pushd ${tmp_dir}
@@ -27,15 +29,33 @@ download_repo() {
 	popd
 }
 
-get_kernel_version() {
-	pushd $tmp_dir/$repo_name > /dev/null
-	kernel_version=$(grep "Linux/[${kernel_arch}]*" kernel/configs/[${kernel_arch}]*_kata_${hypervisor}_* | cut -d' ' -f3 | tail -1)
-	popd > /dev/null
-	if [ -z "$kernel_version" ]; then
-		die "unknown kernel version for architecture $kernel_arch"
-	else
-		echo ${kernel_version}
+get_current_kernel_version() {
+	kernel_version=$(get_version "assets.kernel.version")
+	echo "${kernel_version/v/}"
+}
+
+get_kata_config_version() {
+	pushd "${tmp_dir}/${repo_name}" >> /dev/null
+	kata_config_version=$(cat kernel/kata_config_version)
+	popd >> /dev/null
+	echo "${kata_config_version}"
+}
+
+get_packaged_kernel_version() {
+	if [ "$ID" == "ubuntu" ]; then
+		kernel_version=$(sudo apt-cache madison $packaged_kernel | awk '{print $3}' | cut -d'-' -f1)
+	elif [ "$ID" == "fedora" ]; then
+		kernel_version=$(sudo dnf --showduplicate list ${packaged_kernel}.${kernel_arch} | awk '/'$packaged_kernel'/ {print $2}' | cut -d'-' -f1)
+	elif [ "$ID" == "centos" ]; then
+		kernel_version=$(sudo yum --showduplicate list $packaged_kernel | awk '/'$packaged_kernel'/ {print $2}' | cut -d'-' -f1)
 	fi
+
+	if [ -z "$kernel_version" ]; then
+		die "unknown kernel version"
+	else
+		echo "${kernel_version}"
+	fi
+
 }
 
 # download the linux kernel, first argument is the kernel version
@@ -72,16 +92,35 @@ build_and_install_kernel() {
 	popd
 }
 
+install_packaged_kernel(){
+	if [ "$ID"  == "ubuntu" ]; then
+		sudo apt install -y "$packaged_kernel"
+	elif [ "$ID"  == "fedora" ]; then
+		sudo dnf install -y "$packaged_kernel"
+	elif [ "$ID"  == "centos" ]; then
+		sudo yum install -y "$packaged_kernel"
+	else
+		die "Unrecognized distro"
+	fi
+}
+
 cleanup() {
 	rm -rf "${tmp_dir}"
 }
 
 main() {
 	download_repo
-	kernel_version=$(get_kernel_version)
-	download_kernel ${kernel_version}
-	build_and_install_kernel ${kernel_version}
-	cleanup
+	kernel_version="$(get_current_kernel_version)"
+	kata_config_version="$(get_kata_config_version)"
+	current_kernel_version="${kernel_version}.${kata_config_version}"
+	packaged_kernel_version=$(get_packaged_kernel_version)
+	if [ "$packaged_kernel_version" == "$current_kernel_version" ] && [ "$kernel_arch" == "x86_64" ]; then
+		install_packaged_kernel
+	else
+		download_kernel ${kernel_version}
+		build_and_install_kernel ${kernel_version}
+		cleanup
+	fi
 }
 
 main
