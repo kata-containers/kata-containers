@@ -196,3 +196,49 @@ var _ = Describe("CPU constraints", func() {
 		})
 	})
 })
+
+func withParentCgroup(parentCgroup string) TableEntry {
+	return Entry(fmt.Sprintf("should not fail with parent cgroup: %s", parentCgroup), parentCgroup)
+}
+
+var _ = Describe("Hot plug CPUs", func() {
+	var (
+		args          []string
+		id            string
+		cpus          uint
+		quotaSysPath  string
+		periodSysPath string
+	)
+
+	BeforeEach(func() {
+		id = RandID(30)
+		args = []string{"--rm", "--name", id}
+		cpus = 2
+		quotaSysPath = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_quota_us"
+		periodSysPath = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_period_us"
+	})
+
+	AfterEach(func() {
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	DescribeTable("with a parent cgroup",
+		func(parentCgroup string) {
+			args = append(args, "--cgroup-parent", parentCgroup, "--cpus", fmt.Sprintf("%d", cpus), DebianImage, "bash", "-c",
+				fmt.Sprintf("echo $(($(cat %s)/$(cat %s)))", quotaSysPath, periodSysPath))
+			stdout, _, exitCode := dockerRun(args...)
+			Expect(exitCode).To(BeZero())
+			Expect(fmt.Sprintf("%d", cpus)).To(Equal(strings.Trim(stdout, "\n\t ")))
+		},
+		withParentCgroup("0"),
+		withParentCgroup("systemd"),
+		withParentCgroup("/systemd/"),
+		withParentCgroup("///systemd////"),
+		withParentCgroup("systemd////"),
+		withParentCgroup("////systemd"),
+		withParentCgroup("docker"),
+		withParentCgroup("abc/xyz/rgb"),
+		withParentCgroup("/abc/xyz/rgb/"),
+		withParentCgroup("///abc///xyz////rgb///"),
+	)
+})
