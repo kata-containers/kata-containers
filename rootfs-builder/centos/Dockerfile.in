@@ -1,6 +1,11 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
 From centos:@OS_VERSION@
 
-RUN yum -y update && yum install -y git make gcc
+RUN yum -y update && yum install -y git make gcc coreutils
 
 # This will install the proper golang to build Kata components
 @INSTALL_GO@

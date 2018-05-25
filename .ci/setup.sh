@@ -14,12 +14,12 @@ bash "${cidir}/static-checks.sh"
 source /etc/os-release
 
 if [ "$ID" == fedora ];then
-	sudo -E dnf -y install automake bats yamllint
+	sudo -E dnf -y install automake bats yamllint coreutils
 elif [ "$ID" == ubuntu ];then
 	#bats isn't available for Ubuntu trusty, need for travis
 	sudo add-apt-repository -y ppa:duggan/bats
 	sudo apt-get -qq update
-	sudo apt-get install -y -qq automake bats qemu-utils python-pip
+	sudo apt-get install -y -qq automake bats qemu-utils python-pip coreutils
 	sudo pip install yamllint
 else 
 	echo "Linux distribution not supported"

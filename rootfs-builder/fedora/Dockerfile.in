@@ -1,6 +1,11 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
 From fedora:@OS_VERSION@
 
-RUN dnf -y update && dnf install -y git redhat-release systemd pkgconfig gcc
+RUN dnf -y update && dnf install -y git redhat-release systemd pkgconfig gcc coreutils
 
 # This will install the proper golang to build Kata components
 @INSTALL_GO@
