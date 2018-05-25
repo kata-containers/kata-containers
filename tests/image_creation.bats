@@ -53,7 +53,14 @@ build_initrd()
 	sudo -E ${initrd_builder_sh} -o "${file}" "${rootfs}"
 }
 
-build_rootfs_image_initrd()
+# Create an image and/or initrd for the specified distribution.
+#
+# Parameters:
+#
+# 1: distro name.
+# 2: set to "yes" to build an image for the distro.
+# 3: set to "yes" to build an initrd for the distro.
+create_images()
 {
 	distro="$1"
 	image="$2"
@@ -67,15 +74,15 @@ build_rootfs_image_initrd()
 }
 
 @test "Can create fedora image" {
-	build_rootfs_image_initrd fedora yes yes
+	create_images fedora yes yes
 }
 
 @test "Can create clearlinux image" {
-	build_rootfs_image_initrd clearlinux yes yes
+	create_images run clearlinux yes yes
 }
 
 @test "Can create centos image" {
-	build_rootfs_image_initrd centos yes yes
+	create_images centos yes yes
 }
 
 @test "Can create euleros image" {
@@ -83,9 +90,10 @@ build_rootfs_image_initrd()
 	then
 		skip "travis timeout, see: https://github.com/kata-containers/osbuilder/issues/46"
 	fi
-	build_rootfs_image_initrd euleros yes yes
+
+	create_images euleros yes yes
 }
 
 @test "Can create alpine image" {
-	build_rootfs_image_initrd alpine no yes
+	create_images alpine no yes
 }
