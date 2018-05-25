@@ -4,11 +4,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-rootfs_sh="$BATS_TEST_DIRNAME/../rootfs-builder/rootfs.sh"
-image_builder_sh="$BATS_TEST_DIRNAME/../image-builder/image_builder.sh"
-initrd_builder_sh="$BATS_TEST_DIRNAME/../initrd-builder/initrd_builder.sh"
+readonly rootfs_sh="$BATS_TEST_DIRNAME/../rootfs-builder/rootfs.sh"
+readonly image_builder_sh="$BATS_TEST_DIRNAME/../image-builder/image_builder.sh"
+readonly initrd_builder_sh="$BATS_TEST_DIRNAME/../initrd-builder/initrd_builder.sh"
 readonly tmp_dir=$(mktemp -t -d osbuilder-test.XXXXXXX)
-tmp_rootfs="${tmp_dir}/rootfs-osbuilder"
+readonly tmp_rootfs="${tmp_dir}/rootfs-osbuilder"
 
 setup()
 {
