@@ -13,11 +13,21 @@ setup() {
 	clean_env
 }
 
-@test "[volume mkdir] create a directory in an aerospike container" {
-	tmpdir=$(mktemp -d)
-	docker run --rm --runtime=$RUNTIME -d -v $tmpdir:/opt/aerospike/data aerospike/aerospike-server timeout 5 /entrypoint.sh asd
-	[ -n ${tmpdir} ] || false
-	rm -rf $tmpdir
+@test "[insert data] insert data in an aerospike container" {
+	docker run --runtime=$RUNTIME -d --name aerospike aerospike/aerospike-server
+	status=1
+	set +e
+	for i in $(seq 1 5); do
+		docker run --rm --runtime=$RUNTIME -i aerospike/aerospike-tools aql -h $(docker inspect -f '{{.NetworkSettings.IPAddress}}' aerospike) -c "insert into test.foo (PK, foo) values ('123','any'); select * from test.foo"
+		if [ $? == 0 ]; then
+			status=0
+			break
+		fi
+		sleep 1
+	done
+	set -e
+	docker rm -f aerospike
+	return $status
 }
 
 @test "[display text] hello world in an alpine container" {
