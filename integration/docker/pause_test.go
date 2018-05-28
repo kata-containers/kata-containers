@@ -92,7 +92,6 @@ var _ = Describe("remove paused container", func() {
 	})
 
 	AfterEach(func() {
-		Expect(RemoveDockerContainer(id)).To(BeTrue())
 		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
 	})
 
