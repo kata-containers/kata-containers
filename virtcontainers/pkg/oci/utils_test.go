@@ -13,11 +13,13 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/kubernetes-incubator/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sys/unix"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
@@ -837,6 +839,70 @@ func TestCompatOCISpecWithStruct(t *testing.T) {
 	ociSpec := specs.Spec{}
 	err = json.Unmarshal(ociSpecJSON, &ociSpec)
 	assert.Nil(t, err, "This test should not fail")
+}
+
+func TestGetShmSize(t *testing.T) {
+	containerConfig := vc.ContainerConfig{
+		Mounts: []vc.Mount{},
+	}
+
+	shmSize, err := getShmSize(containerConfig)
+	assert.Nil(t, err)
+	assert.Equal(t, shmSize, uint64(0))
+
+	m := vc.Mount{
+		Source:      "/dev/shm",
+		Destination: "/dev/shm",
+		Type:        "tmpfs",
+		Options:     nil,
+	}
+
+	containerConfig.Mounts = append(containerConfig.Mounts, m)
+	shmSize, err = getShmSize(containerConfig)
+	assert.Nil(t, err)
+	assert.Equal(t, shmSize, uint64(vc.DefaultShmSize))
+
+	containerConfig.Mounts[0].Source = "/var/run/shared/shm"
+	containerConfig.Mounts[0].Type = "bind"
+	_, err = getShmSize(containerConfig)
+	assert.NotNil(t, err)
+}
+
+func TestGetShmSizeBindMounted(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("Test disabled as requires root privileges")
+	}
+
+	dir, err := ioutil.TempDir("", "")
+	assert.Nil(t, err)
+	defer os.RemoveAll(dir)
+
+	shmPath := filepath.Join(dir, "shm")
+	err = os.Mkdir(shmPath, 0700)
+	assert.Nil(t, err)
+
+	size := 8192
+
+	shmOptions := "mode=1777,size=" + strconv.Itoa(size)
+	err = unix.Mount("shm", shmPath, "tmpfs", unix.MS_NOEXEC|unix.MS_NOSUID|unix.MS_NODEV, shmOptions)
+	assert.Nil(t, err)
+
+	defer unix.Unmount(shmPath, 0)
+
+	containerConfig := vc.ContainerConfig{
+		Mounts: []vc.Mount{
+			{
+				Source:      shmPath,
+				Destination: "/dev/shm",
+				Type:        "bind",
+				Options:     nil,
+			},
+		},
+	}
+
+	shmSize, err := getShmSize(containerConfig)
+	assert.Nil(t, err)
+	assert.Equal(t, shmSize, uint64(size))
 }
 
 func TestMain(m *testing.M) {
