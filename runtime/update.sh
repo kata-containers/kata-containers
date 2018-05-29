@@ -50,7 +50,8 @@ SHIM_REQUIRED_VERSION=$(pkg_version "${kata_shim_version}" "${SHIM_RELEASE}" "${
 info "shim ${SHIM_REQUIRED_VERSION}"
 
 KERNEL_RELEASE=$(get_obs_pkg_release "home:${OBS_PROJECT}:${OBS_SUBPROJECT}/linux-container")
-KERNEL_REQUIRED_VERSION=$(pkg_version "${kernel_version}" "${KERNEL_RELEASE}")
+KERNEL_CONFIG_VERSION=$(cat "${SCRIPT_DIR}/../kernel/kata_config_version")
+KERNEL_REQUIRED_VERSION=$(pkg_version "${kernel_version}.${KERNEL_CONFIG_VERSION}" "${KERNEL_RELEASE}")
 info "kata-linux-container ${KERNEL_REQUIRED_VERSION}"
 
 KSM_THROTTLER_RELEASE=$(get_obs_pkg_release "home:${OBS_PROJECT}:${OBS_SUBPROJECT}/ksm-throttler")

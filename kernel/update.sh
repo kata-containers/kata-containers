@@ -19,6 +19,7 @@ SCRIPT_DIR=$(dirname $0)
 
 PKG_NAME="kata-linux-container"
 VERSION=$kernel_version
+KATA_CONFIG_VERSION=$(cat "${SCRIPT_DIR}/kata_config_version")
 
 KR_SERIES="$(echo $VERSION | cut -d "." -f 1).x"
 KR_LTS=$(echo $VERSION | cut -d "." -f 1,2)
@@ -45,7 +46,8 @@ kernel_sha256=$(curl -L -s -f ${KR_SHA} | awk '/linux-'${VERSION}'.tar.xz/ {prin
 cp "configs/x86_kata_kvm_${KR_LTS}.x" config
 
 replace_list=(
-"VERSION=$VERSION"
+"VERSION=${VERSION}"
+"CONFIG_VERSION=${KATA_CONFIG_VERSION}"
 "RELEASE=$RELEASE"
 "KERNEL_SHA256=$kernel_sha256"
 )
@@ -53,6 +55,6 @@ replace_list=(
 verify
 echo "Verify succeed."
 get_git_info
-changelog_update $VERSION
+changelog_update "${VERSION}-${KATA_CONFIG_VERSION}"
 generate_files "$SCRIPT_DIR" "${replace_list[@]}"
 build_pkg "${PROJECT_REPO}"
