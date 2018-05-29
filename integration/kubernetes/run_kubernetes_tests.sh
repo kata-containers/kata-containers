@@ -21,5 +21,6 @@ fi
 pushd "$kubernetes_dir"
 ./init.sh
 bats nginx.bats
+bats k8s-uts+ipc-ns.bats
 ./cleanup_env.sh
 popd
