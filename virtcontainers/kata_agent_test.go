@@ -212,6 +212,14 @@ func (p *gRPCProxy) Version(ctx context.Context, req *pb.CheckRequest) (*pb.Vers
 
 }
 
+func (p *gRPCProxy) PauseContainer(ctx context.Context, req *pb.PauseContainerRequest) (*gpb.Empty, error) {
+	return emptyResp, nil
+}
+
+func (p *gRPCProxy) ResumeContainer(ctx context.Context, req *pb.ResumeContainerRequest) (*gpb.Empty, error) {
+	return emptyResp, nil
+}
+
 func gRPCRegister(s *grpc.Server, srv interface{}) {
 	switch g := srv.(type) {
 	case *gRPCProxy:
