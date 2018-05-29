@@ -1,5 +1,6 @@
 * [Introduction](#introduction)
 * [General requirements](#general-requirements)
+* [Notes](#notes)
 * [Code blocks](#code-blocks)
 
 # Introduction
@@ -11,6 +12,26 @@ Containers](https://github.com/kata-containers) project.
 
 - All documents are expected to be written in [GitHub Flavored Markdown](https://github.github.com/gfm) format.
 - All documents should have the `.md` file extension.
+
+# Notes
+
+Important information that is not part of the main document flow should be
+added as a Note in bold with all content contained within block quote:
+
+> **Note:** This is areally important point!
+>
+> This particular note also spans multiple lines. The entire note should be
+> included inside the quoted block.
+
+If there are multiple notes, bullets should be used:
+
+> **Notes:**
+>
+> - I am important point 1.
+>
+> - I am important point 2.
+>
+> - I am important point *n*.
 
 # Code blocks
 
