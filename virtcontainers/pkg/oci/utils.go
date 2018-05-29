@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	criContainerdAnnotations "github.com/containerd/cri-containerd/pkg/annotations"
 	crioAnnotations "github.com/kubernetes-incubator/cri-o/pkg/annotations"
@@ -481,6 +482,11 @@ func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid
 		return vc.SandboxConfig{}, err
 	}
 
+	shmSize, err := getShmSize(containerConfig)
+	if err != nil {
+		return vc.SandboxConfig{}, err
+	}
+
 	networkConfig, err := networkConfig(ocispec, runtime)
 	if err != nil {
 		return vc.SandboxConfig{}, err
@@ -526,6 +532,8 @@ func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid
 			vcAnnotations.ConfigJSONKey: string(ociSpecJSON),
 			vcAnnotations.BundlePathKey: bundlePath,
 		},
+
+		ShmSize: shmSize,
 	}
 
 	addAssetAnnotations(ocispec, &sandboxConfig)
@@ -608,6 +616,32 @@ func ContainerConfig(ocispec CompatOCISpec, bundlePath, cid, console string, det
 	containerConfig.Annotations[vcAnnotations.ContainerTypeKey] = string(cType)
 
 	return containerConfig, nil
+}
+
+func getShmSize(c vc.ContainerConfig) (uint64, error) {
+	var shmSize uint64
+
+	for _, m := range c.Mounts {
+		if m.Destination != "/dev/shm" {
+			continue
+		}
+
+		shmSize = vc.DefaultShmSize
+
+		if m.Type == "bind" && m.Source != "/dev/shm" {
+			var s syscall.Statfs_t
+
+			if err := syscall.Statfs(m.Source, &s); err != nil {
+				return 0, err
+			}
+			shmSize = uint64(s.Bsize) * s.Blocks
+		}
+		break
+	}
+
+	ociLog.Infof("shm-size detected: %d", shmSize)
+
+	return shmSize, nil
 }
 
 // StatusToOCIState translates a virtcontainers container status into an OCI state.

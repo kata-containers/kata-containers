@@ -18,6 +18,10 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 )
 
+// DefaultShmSize is the default shm size to be used in case host
+// IPC is used.
+const DefaultShmSize = 65536 * 1024
+
 var rootfsDir = "rootfs"
 
 var systemMountPrefixes = []string{"/proc", "/sys"}
