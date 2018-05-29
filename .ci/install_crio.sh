@@ -74,6 +74,7 @@ sudo install -m0444 test/policy.json "$containers_config_path"
 popd
 
 echo "Install runc for CRI-O"
+runc_version=$(get_version "externals.runc.version")
 go get -d github.com/opencontainers/runc
 pushd "${GOPATH}/src/github.com/opencontainers/runc"
 git checkout "$runc_version"
