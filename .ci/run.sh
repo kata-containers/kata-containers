@@ -9,6 +9,10 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+cidir=$(dirname "$0")
+source "${cidir}/lib.sh"
+
 # This script will execute packaging tests suite
 # TODO: Add steps needed to build packages
-true
+
+check_kata_kernel_version
