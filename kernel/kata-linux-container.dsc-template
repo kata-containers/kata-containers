@@ -1,6 +1,6 @@
 Format: 3.0 (quilt)
 Source: kata-linux-container
-Version: @VERSION@-@RELEASE@
+Version: @VERSION@.@CONFIG_VERSION@-@RELEASE@
 Section: devel
 Priority: optional
 Maintainer: Kata containers team <https://github.com/kata-containers/>
