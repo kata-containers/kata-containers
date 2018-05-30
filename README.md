@@ -33,9 +33,11 @@ For details of the other Kata Containers repositories, see the
 package to provide a high-performance standards-compliant runtime that creates
 hardware-virtualized containers.
 
-The runtime is both
-[OCI](https://github.com/opencontainers/runtime-spec)-compatible and
-[CRI-O](https://github.com/kubernetes-incubator/cri-o)-compatible, allowing it
+The runtime is
+[OCI](https://github.com/opencontainers/runtime-spec)-compatible,
+[CRI-O](https://github.com/kubernetes-incubator/cri-o)-compatible, and
+[Containerd](https://github.com/containerd/containerd)-compatible,
+ allowing it
 to work seamlessly with both Docker and Kubernetes respectively.
 
 ## License
