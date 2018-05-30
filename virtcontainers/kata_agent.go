@@ -506,9 +506,8 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	}
 
 	req := &grpc.CreateSandboxRequest{
-		Hostname:     hostname,
-		Storages:     []*grpc.Storage{sharedVolume},
-		SandboxPidns: false,
+		Hostname: hostname,
+		Storages: []*grpc.Storage{sharedVolume},
 	}
 
 	_, err = k.sendReq(req)
@@ -777,16 +776,22 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	// We need to give the OCI spec our absolute rootfs path in the guest.
 	grpcSpec.Root.Path = rootPath
 
+	sharedPidNs, err := k.handlePidNamespace(grpcSpec, sandbox)
+	if err != nil {
+		return nil, err
+	}
+
 	// We need to constraint the spec to make sure we're not passing
 	// irrelevant information to the agent.
 	constraintGRPCSpec(grpcSpec)
 
 	req := &grpc.CreateContainerRequest{
-		ContainerId: c.id,
-		ExecId:      c.id,
-		Storages:    ctrStorages,
-		Devices:     ctrDevices,
-		OCI:         grpcSpec,
+		ContainerId:  c.id,
+		ExecId:       c.id,
+		Storages:     ctrStorages,
+		Devices:      ctrDevices,
+		OCI:          grpcSpec,
+		SandboxPidns: sharedPidNs,
 	}
 
 	if _, err = k.sendReq(req); err != nil {
@@ -841,6 +846,52 @@ func (k *kataAgent) handleBlockVolumes(c *Container) []*grpc.Storage {
 	}
 
 	return volumeStorages
+}
+
+// handlePidNamespace checks if Pid namespace for a container needs to be shared with its sandbox
+// pid namespace. This function also modifies the grpc spec to remove the pid namespace
+// from the list of namespaces passed to the agent.
+func (k *kataAgent) handlePidNamespace(grpcSpec *grpc.Spec, sandbox *Sandbox) (bool, error) {
+	sharedPidNs := false
+	pidIndex := -1
+
+	for i, ns := range grpcSpec.Linux.Namespaces {
+		if ns.Type != string(specs.PIDNamespace) {
+			continue
+		}
+
+		pidIndex = i
+
+		if ns.Path == "" || sandbox.state.Pid == 0 {
+			break
+		}
+
+		pidNsPath := fmt.Sprintf("/proc/%d/ns/pid", sandbox.state.Pid)
+
+		//  Check if pid namespace path is the same as the sandbox
+		if ns.Path == pidNsPath {
+			sharedPidNs = true
+		} else {
+			ln, err := filepath.EvalSymlinks(ns.Path)
+			if err != nil {
+				return sharedPidNs, err
+			}
+
+			// We have arbitrary pid namespace path here.
+			if ln != pidNsPath {
+				return sharedPidNs, fmt.Errorf("Pid namespace path %s other than sandbox %s", ln, pidNsPath)
+			}
+			sharedPidNs = true
+		}
+
+		break
+	}
+
+	// Remove pid namespace.
+	if pidIndex >= 0 {
+		grpcSpec.Linux.Namespaces = append(grpcSpec.Linux.Namespaces[:pidIndex], grpcSpec.Linux.Namespaces[pidIndex+1:]...)
+	}
+	return sharedPidNs, nil
 }
 
 func (k *kataAgent) startContainer(sandbox *Sandbox, c *Container) error {
