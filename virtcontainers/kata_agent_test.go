@@ -212,6 +212,14 @@ func (p *gRPCProxy) Version(ctx context.Context, req *pb.CheckRequest) (*pb.Vers
 
 }
 
+func (p *gRPCProxy) PauseContainer(ctx context.Context, req *pb.PauseContainerRequest) (*gpb.Empty, error) {
+	return emptyResp, nil
+}
+
+func (p *gRPCProxy) ResumeContainer(ctx context.Context, req *pb.ResumeContainerRequest) (*gpb.Empty, error) {
+	return emptyResp, nil
+}
+
 func gRPCRegister(s *grpc.Server, srv interface{}) {
 	switch g := srv.(type) {
 	case *gRPCProxy:
@@ -454,4 +462,83 @@ func TestConstraintGRPCSpec(t *testing.T) {
 	assert.NotEmpty(g.Mounts[0].Type)
 	assert.NotEmpty(g.Mounts[0].Source)
 	assert.NotEmpty(g.Mounts[0].Options)
+}
+
+func testIsPidNamespacePresent(grpcSpec *pb.Spec) bool {
+	for _, ns := range grpcSpec.Linux.Namespaces {
+		if ns.Type == string(specs.PIDNamespace) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func TestHandlePidNamespace(t *testing.T) {
+	assert := assert.New(t)
+
+	g := &pb.Spec{
+		Linux: &pb.Linux{
+			Namespaces: []pb.LinuxNamespace{
+				{
+					Type: specs.NetworkNamespace,
+					Path: "/abc/123",
+				},
+				{
+					Type: specs.MountNamespace,
+					Path: "/abc/123",
+				},
+			},
+		},
+	}
+
+	sandbox := &Sandbox{}
+	sandbox.state.Pid = 0
+
+	k := kataAgent{}
+
+	sharedPid, err := k.handlePidNamespace(g, sandbox)
+	assert.Nil(err)
+	assert.False(sharedPid)
+	assert.False(testIsPidNamespacePresent(g))
+
+	pidNs := pb.LinuxNamespace{
+		Type: string(specs.PIDNamespace),
+		Path: "",
+	}
+
+	utsNs := pb.LinuxNamespace{
+		Type: specs.UTSNamespace,
+		Path: "",
+	}
+
+	g.Linux.Namespaces = append(g.Linux.Namespaces, pidNs)
+	g.Linux.Namespaces = append(g.Linux.Namespaces, utsNs)
+
+	sharedPid, err = k.handlePidNamespace(g, sandbox)
+	assert.Nil(err)
+	assert.False(sharedPid)
+	assert.False(testIsPidNamespacePresent(g))
+
+	sandbox.state.Pid = 112
+	pidNs = pb.LinuxNamespace{
+		Type: string(specs.PIDNamespace),
+		Path: "/proc/112/ns/pid",
+	}
+	g.Linux.Namespaces = append(g.Linux.Namespaces, pidNs)
+
+	sharedPid, err = k.handlePidNamespace(g, sandbox)
+	assert.Nil(err)
+	assert.True(sharedPid)
+	assert.False(testIsPidNamespacePresent(g))
+
+	// Arbitrary path
+	pidNs = pb.LinuxNamespace{
+		Type: string(specs.PIDNamespace),
+		Path: "/proc/234/ns/pid",
+	}
+	g.Linux.Namespaces = append(g.Linux.Namespaces, pidNs)
+
+	_, err = k.handlePidNamespace(g, sandbox)
+	assert.NotNil(err)
 }
