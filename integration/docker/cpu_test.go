@@ -15,6 +15,14 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const (
+	sharesSysPath     = "/sys/fs/cgroup/cpu,cpuacct/cpu.shares"
+	quotaSysPath      = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_quota_us"
+	periodSysPath     = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_period_us"
+	cpusetCpusSysPath = "/sys/fs/cgroup/cpuset/cpuset.cpus"
+	cpusetMemsSysPath = "/sys/fs/cgroup/cpuset/cpuset.mems"
+)
+
 func withCPUPeriodAndQuota(quota, period, defaultVCPUs int, fail bool) TableEntry {
 	var msg string
 
@@ -108,18 +116,13 @@ var _ = Describe("Hot plug CPUs", func() {
 
 var _ = Describe("CPU constraints", func() {
 	var (
-		args              []string
-		id                string
-		shares            int    = 300
-		quota             int    = 2000
-		period            int    = 1500
-		cpusetCpus        int    = 0
-		cpusetMems        int    = 0
-		sharesSysPath     string = "/sys/fs/cgroup/cpu,cpuacct/cpu.shares"
-		quotaSysPath      string = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_quota_us"
-		periodSysPath     string = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_period_us"
-		cpusetCpusSysPath string = "/sys/fs/cgroup/cpuset/cpuset.cpus"
-		cpusetMemsSysPath string = "/sys/fs/cgroup/cpuset/cpuset.mems"
+		args       []string
+		id         string
+		shares     int = 300
+		quota      int = 2000
+		period     int = 1500
+		cpusetCpus int = 0
+		cpusetMems int = 0
 	)
 
 	BeforeEach(func() {
@@ -185,19 +188,15 @@ func withParentCgroup(parentCgroup string) TableEntry {
 
 var _ = Describe("Hot plug CPUs", func() {
 	var (
-		args          []string
-		id            string
-		cpus          uint
-		quotaSysPath  string
-		periodSysPath string
+		args []string
+		id   string
+		cpus uint
 	)
 
 	BeforeEach(func() {
 		id = RandID(30)
 		args = []string{"--rm", "--name", id}
 		cpus = 2
-		quotaSysPath = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_quota_us"
-		periodSysPath = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_period_us"
 	})
 
 	AfterEach(func() {
@@ -222,5 +221,181 @@ var _ = Describe("Hot plug CPUs", func() {
 		withParentCgroup("abc/xyz/rgb"),
 		withParentCgroup("/abc/xyz/rgb/"),
 		withParentCgroup("///abc///xyz////rgb///"),
+	)
+})
+
+var _ = Describe("Update number of CPUs", func() {
+	var (
+		runArgs         []string
+		updateArgs      []string
+		execArgs        []string
+		id              string
+		vCPUs           int
+		defaultVCPUs    int
+		waitTime        int
+		maxTries        int
+		checkCpusCmdFmt string
+		stdout          string
+		exitCode        int
+	)
+
+	BeforeEach(func() {
+		id = RandID(30)
+		checkCpusCmdFmt = `for c in $(seq 1 %d); do [ -d /sys/devices/system/cpu/cpu%d ] && nproc && exit 0; sleep %d; done; exit 1`
+		waitTime = 5
+		maxTries = 5
+
+		defaultVCPUs = int(runtimeConfig.Hypervisor[DefaultHypervisor].DefaultVCPUs)
+		Expect(defaultVCPUs).To(BeNumerically(">", 0))
+
+		runArgs = []string{"--rm", "--name", id, "-dt", DebianImage, "bash"}
+		_, _, exitCode := dockerRun(runArgs...)
+		Expect(exitCode).To(BeZero())
+
+		updateArgs = []string{}
+		execArgs = []string{}
+	})
+
+	AfterEach(func() {
+		Expect(RemoveDockerContainer(id)).To(BeTrue())
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	DescribeTable("Update CPU period and quota",
+		func(quota, period int, fail bool) {
+			vCPUs = ((quota + period - 1) / period) + defaultVCPUs
+			updateArgs = append(updateArgs, "--cpu-quota", fmt.Sprintf("%d", quota),
+				"--cpu-period", fmt.Sprintf("%d", period), id)
+			stdout, _, exitCode = dockerUpdate(updateArgs...)
+			if fail {
+				Expect(exitCode).ToNot(BeZero())
+				return
+			}
+			Expect(exitCode).To(BeZero())
+
+			execArgs = append(execArgs, id, "bash", "-c", fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs-1, waitTime))
+			stdout, _, exitCode = dockerExec(execArgs...)
+			Expect(exitCode).To(BeZero())
+			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
+		},
+		withCPUPeriodAndQuota(30000, 20000, defaultVCPUs, false),
+		withCPUPeriodAndQuota(30000, 10000, defaultVCPUs, false),
+		withCPUPeriodAndQuota(10000, 10000, defaultVCPUs, false),
+		withCPUPeriodAndQuota(10000, 100, defaultVCPUs, true),
+	)
+
+	DescribeTable("Update CPU constraint",
+		func(cpus int, fail bool) {
+			vCPUs = cpus + defaultVCPUs
+			updateArgs = append(updateArgs, "--cpus", fmt.Sprintf("%d", cpus), id)
+			stdout, _, exitCode = dockerUpdate(updateArgs...)
+			if fail {
+				Expect(exitCode).ToNot(BeZero())
+				return
+			}
+			Expect(exitCode).To(BeZero())
+
+			execArgs = append(execArgs, id, "bash", "-c", fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs-1, waitTime))
+			stdout, _, exitCode = dockerExec(execArgs...)
+			Expect(exitCode).To(BeZero())
+			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
+		},
+		withCPUConstraint(1, defaultVCPUs, false),
+		withCPUConstraint(1.3, defaultVCPUs, false),
+		withCPUConstraint(2, defaultVCPUs, false),
+		withCPUConstraint(2.5, defaultVCPUs, false),
+		withCPUConstraint(3, defaultVCPUs, false),
+	)
+})
+
+func withCPUConstraintCheckPeriodAndQuota(cpus float64, fail bool) TableEntry {
+	return Entry(fmt.Sprintf("quota/period should be equal to %.1f", cpus), cpus, fail)
+}
+
+func withCPUSetConstraint(cpuset string, fail bool) TableEntry {
+	return Entry(fmt.Sprintf("cpuset should be equal to %s", cpuset), cpuset, fail)
+}
+
+var _ = Describe("Update CPU constraints", func() {
+	var (
+		runArgs    []string
+		updateArgs []string
+		execArgs   []string
+		id         string
+		exitCode   int
+		stdout     string
+	)
+
+	BeforeEach(func() {
+		id = RandID(30)
+
+		updateArgs = []string{}
+		execArgs = []string{}
+		runArgs = []string{}
+	})
+
+	AfterEach(func() {
+		Expect(RemoveDockerContainer(id)).To(BeTrue())
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	DescribeTable("Update number of CPUs to check period and quota",
+		func(cpus float64, fail bool) {
+			runArgs = []string{"--rm", "--name", id, "-dt", DebianImage, "bash"}
+			_, _, exitCode = dockerRun(runArgs...)
+			Expect(exitCode).To(BeZero())
+
+			updateArgs = append(updateArgs, "--cpus", fmt.Sprintf("%f", cpus), id)
+			stdout, _, exitCode = dockerUpdate(updateArgs...)
+			if fail {
+				Expect(exitCode).ToNot(BeZero())
+				return
+			}
+			Expect(exitCode).To(BeZero())
+
+			execArgs = append(execArgs, id, "bash", "-c",
+				fmt.Sprintf(`perl -e "printf ('%%.1f', $(cat %s)/$(cat %s))"`, quotaSysPath, periodSysPath))
+			stdout, _, exitCode = dockerExec(execArgs...)
+			Expect(exitCode).To(BeZero())
+			Expect(fmt.Sprintf("%.1f", cpus)).To(Equal(strings.Trim(stdout, "\n\t ")))
+		},
+		withCPUConstraintCheckPeriodAndQuota(0.5, shouldNotFail),
+		withCPUConstraintCheckPeriodAndQuota(1, shouldNotFail),
+		withCPUConstraintCheckPeriodAndQuota(1.2, shouldNotFail),
+		withCPUConstraintCheckPeriodAndQuota(2, shouldNotFail),
+		withCPUConstraintCheckPeriodAndQuota(2.8, shouldNotFail),
+		withCPUConstraintCheckPeriodAndQuota(3, shouldNotFail),
+		withCPUConstraintCheckPeriodAndQuota(-3, shouldFail),
+		withCPUConstraintCheckPeriodAndQuota(-2.5, shouldFail),
+	)
+
+	DescribeTable("Update CPU set",
+		func(cpuset string, fail bool) {
+			runArgs = []string{"--rm", "--cpus=4", "--name", id, "-dt", DebianImage, "bash"}
+			_, _, exitCode = dockerRun(runArgs...)
+			Expect(exitCode).To(BeZero())
+
+			updateArgs = append(updateArgs, "--cpuset-cpus", cpuset, id)
+			stdout, _, exitCode = dockerUpdate(updateArgs...)
+			if fail {
+				Expect(exitCode).ToNot(BeZero())
+				return
+			}
+			Expect(exitCode).To(BeZero())
+
+			execArgs = append(execArgs, id, "cat", cpusetCpusSysPath)
+			stdout, _, exitCode = dockerExec(execArgs...)
+			Expect(exitCode).To(BeZero())
+			Expect(cpuset).To(Equal(strings.Trim(stdout, "\n\t ")))
+		},
+		withCPUSetConstraint("0", shouldNotFail),
+		withCPUSetConstraint("2", shouldNotFail),
+		withCPUSetConstraint("0-1", shouldNotFail),
+		withCPUSetConstraint("0-2", shouldNotFail),
+		withCPUSetConstraint("0-3", shouldNotFail),
+		withCPUSetConstraint("0,2", shouldNotFail),
+		withCPUSetConstraint("0,3", shouldNotFail),
+		withCPUSetConstraint("0,-2,3", shouldFail),
+		withCPUSetConstraint("-1-3", shouldFail),
 	)
 })

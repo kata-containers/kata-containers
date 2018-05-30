@@ -406,6 +406,11 @@ func dockerTop(args ...string) (string, string, int) {
 	return runDockerCommand("top", args...)
 }
 
+// dockerUpdate updates configuration of one or more containers
+func dockerUpdate(args ...string) (string, string, int) {
+	return runDockerCommand("update", args...)
+}
+
 // createLoopDevice creates a new disk file using 'dd' command, returns the path to disk file and
 // its loop device representation
 func createLoopDevice() (string, string, error) {
