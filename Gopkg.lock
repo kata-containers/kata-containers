@@ -2,6 +2,11 @@
 
 
 [[projects]]
+  name = "github.com/BurntSushi/toml"
+  packages = ["."]
+  revision = "a368813c5e648fee92e5f6c30e3944ff9d5e8895"
+
+[[projects]]
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
   revision = "346938d642f2ec3594ed81d874461961cd0faa76"
@@ -91,6 +96,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ae48206f96c44f95169510ceb62c21ca20643a08bb6411387a6e423a2a3c19b5"
+  inputs-digest = "bb7757ba33c6529f87e8a29631748c7d73459fdf397b8d55bdcd1c0f583b2049"
   solver-name = "gps-cdcl"
   solver-version = 1

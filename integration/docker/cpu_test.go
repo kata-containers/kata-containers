@@ -7,7 +7,6 @@ package docker
 import (
 	"fmt"
 	"math"
-	"strconv"
 	"strings"
 
 	. "github.com/kata-containers/tests"
@@ -15,24 +14,6 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 )
-
-func getDefaultVCPUs() int {
-	args := []string{"--rm", Image, "sh", "-c", "sleep 5; nproc"}
-	stdout, _, exitCode := dockerRun(args...)
-	if stdout == "" || exitCode != 0 {
-		LogIfFail("Failed to get default number of vCPUs")
-		return -1
-	}
-
-	stdout = strings.Trim(stdout, "\n\t ")
-	vcpus, err := strconv.Atoi(stdout)
-	if err != nil {
-		LogIfFail("Failed to convert '%s' to int", stdout)
-		return -1
-	}
-
-	return vcpus
-}
 
 func withCPUPeriodAndQuota(quota, period, defaultVCPUs int, fail bool) TableEntry {
 	var msg string
@@ -64,7 +45,7 @@ var _ = Describe("Hot plug CPUs", func() {
 		args            []string
 		id              string
 		vCPUs           int
-		defaultVCPUs    = getDefaultVCPUs()
+		defaultVCPUs    int
 		waitTime        int
 		maxTries        int
 		checkCpusCmdFmt string
@@ -76,6 +57,7 @@ var _ = Describe("Hot plug CPUs", func() {
 		waitTime = 5
 		maxTries = 5
 		args = []string{"--rm", "--name", id}
+		defaultVCPUs = int(runtimeConfig.Hypervisor[DefaultHypervisor].DefaultVCPUs)
 		Expect(defaultVCPUs).To(BeNumerically(">", 0))
 	})
 
