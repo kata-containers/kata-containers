@@ -615,7 +615,7 @@ func UpdateContainer(sandboxID, containerID string, resources specs.LinuxResourc
 		return errNeedContainerID
 	}
 
-	lockFile, err := rLockSandbox(sandboxID)
+	lockFile, err := rwLockSandbox(sandboxID)
 	if err != nil {
 		return err
 	}
