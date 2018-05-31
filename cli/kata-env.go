@@ -15,6 +15,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
+	runtim "runtime"
 )
 
 // Semantic version for the output of the command.
@@ -173,6 +174,9 @@ func getHostInfo() (HostInfo, error) {
 	}
 
 	hostVMContainerCapable := true
+	if runtim.GOARCH == "ppc64le" {
+		hostVMContainerCapable = false
+	}
 
 	details := vmContainerCapableDetails{
 		cpuInfoFile:           procCPUInfo,
