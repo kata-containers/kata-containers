@@ -197,4 +197,10 @@ type agent interface {
 
 	// statsContainer will tell the agent to get stats from a container related to a Sandbox
 	statsContainer(sandbox *Sandbox, c Container) (*ContainerStats, error)
+
+	// pauseContainer will pause a container
+	pauseContainer(sandbox *Sandbox, c Container) error
+
+	// resumeContainer will resume a paused container
+	resumeContainer(sandbox *Sandbox, c Container) error
 }

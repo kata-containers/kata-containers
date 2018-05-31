@@ -982,6 +982,24 @@ func (k *kataAgent) updateContainer(sandbox *Sandbox, c Container, resources spe
 	return err
 }
 
+func (k *kataAgent) pauseContainer(sandbox *Sandbox, c Container) error {
+	req := &grpc.PauseContainerRequest{
+		ContainerId: c.id,
+	}
+
+	_, err := k.sendReq(req)
+	return err
+}
+
+func (k *kataAgent) resumeContainer(sandbox *Sandbox, c Container) error {
+	req := &grpc.ResumeContainerRequest{
+		ContainerId: c.id,
+	}
+
+	_, err := k.sendReq(req)
+	return err
+}
+
 func (k *kataAgent) onlineCPUMem(cpus uint32) error {
 	req := &grpc.OnlineCPUMemRequest{
 		Wait:   false,
@@ -1154,6 +1172,12 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers["grpc.StatsContainerRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.StatsContainer(ctx, req.(*grpc.StatsContainerRequest), opts...)
+	}
+	k.reqHandlers["grpc.PauseContainerRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.PauseContainer(ctx, req.(*grpc.PauseContainerRequest), opts...)
+	}
+	k.reqHandlers["grpc.ResumeContainerRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.ResumeContainer(ctx, req.(*grpc.ResumeContainerRequest), opts...)
 	}
 }
 

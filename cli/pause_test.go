@@ -12,17 +12,16 @@ import (
 	"testing"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
-	testPauseSandboxFuncReturnNil = func(sandboxID string) (vc.VCSandbox, error) {
-		return &vcmock.Sandbox{}, nil
+	testPauseContainerFuncReturnNil = func(sandboxID, containerID string) error {
+		return nil
 	}
 
-	testResumeSandboxFuncReturnNil = func(sandboxID string) (vc.VCSandbox, error) {
-		return &vcmock.Sandbox{}, nil
+	testResumeContainerFuncReturnNil = func(sandboxID, containerID string) error {
+		return nil
 	}
 )
 
@@ -33,7 +32,7 @@ func TestPauseCLIFunctionSuccessful(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.PauseSandboxFunc = testPauseSandboxFuncReturnNil
+	testingImpl.PauseContainerFunc = testPauseContainerFuncReturnNil
 
 	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
 	assert.NoError(err)
@@ -44,7 +43,7 @@ func TestPauseCLIFunctionSuccessful(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.PauseSandboxFunc = nil
+		testingImpl.PauseContainerFunc = nil
 		testingImpl.StatusContainerFunc = nil
 	}()
 
@@ -57,7 +56,7 @@ func TestPauseCLIFunctionSuccessful(t *testing.T) {
 func TestPauseCLIFunctionContainerNotExistFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.PauseSandboxFunc = testPauseSandboxFuncReturnNil
+	testingImpl.PauseContainerFunc = testPauseContainerFuncReturnNil
 
 	path, err := ioutil.TempDir("", "containers-mapping")
 	assert.NoError(err)
@@ -65,7 +64,7 @@ func TestPauseCLIFunctionContainerNotExistFailure(t *testing.T) {
 	ctrsMapTreePath = path
 
 	defer func() {
-		testingImpl.PauseSandboxFunc = nil
+		testingImpl.PauseContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -74,7 +73,7 @@ func TestPauseCLIFunctionContainerNotExistFailure(t *testing.T) {
 	execCLICommandFunc(assert, pauseCLICommand, set, true)
 }
 
-func TestPauseCLIFunctionPauseSandboxFailure(t *testing.T) {
+func TestPauseCLIFunctionPauseContainerFailure(t *testing.T) {
 	assert := assert.New(t)
 
 	state := vc.State{
@@ -106,7 +105,7 @@ func TestResumeCLIFunctionSuccessful(t *testing.T) {
 		State: vc.StateRunning,
 	}
 
-	testingImpl.ResumeSandboxFunc = testResumeSandboxFuncReturnNil
+	testingImpl.ResumeContainerFunc = testResumeContainerFuncReturnNil
 
 	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
 	assert.NoError(err)
@@ -117,7 +116,7 @@ func TestResumeCLIFunctionSuccessful(t *testing.T) {
 	}
 
 	defer func() {
-		testingImpl.ResumeSandboxFunc = nil
+		testingImpl.ResumeContainerFunc = nil
 		testingImpl.StatusContainerFunc = nil
 	}()
 
@@ -130,14 +129,14 @@ func TestResumeCLIFunctionSuccessful(t *testing.T) {
 func TestResumeCLIFunctionContainerNotExistFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ResumeSandboxFunc = testResumeSandboxFuncReturnNil
+	testingImpl.ResumeContainerFunc = testResumeContainerFuncReturnNil
 
 	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
 	defer func() {
-		testingImpl.ResumeSandboxFunc = nil
+		testingImpl.ResumeContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
@@ -146,7 +145,7 @@ func TestResumeCLIFunctionContainerNotExistFailure(t *testing.T) {
 	execCLICommandFunc(assert, resumeCLICommand, set, true)
 }
 
-func TestResumeCLIFunctionPauseSandboxFailure(t *testing.T) {
+func TestResumeCLIFunctionPauseContainerFailure(t *testing.T) {
 	assert := assert.New(t)
 
 	state := vc.State{

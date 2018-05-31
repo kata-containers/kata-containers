@@ -125,3 +125,13 @@ func (impl *VCImpl) ProcessListContainer(sandboxID, containerID string, options 
 func (impl *VCImpl) UpdateContainer(sandboxID, containerID string, resources specs.LinuxResources) error {
 	return UpdateContainer(sandboxID, containerID, resources)
 }
+
+// PauseContainer implements the VC function of the same name.
+func (impl *VCImpl) PauseContainer(sandboxID, containerID string) error {
+	return PauseContainer(sandboxID, containerID)
+}
+
+// ResumeContainer implements the VC function of the same name.
+func (impl *VCImpl) ResumeContainer(sandboxID, containerID string) error {
+	return ResumeContainer(sandboxID, containerID)
+}

@@ -312,7 +312,7 @@ func TestKillCLIFunctionInvalidSignalFailure(t *testing.T) {
 	execCLICommandFunc(assert, killCLICommand, set, true)
 }
 
-func TestKillCLIFunctionInvalidStatePausedFailure(t *testing.T) {
+func TestKillCLIFunctionStatePausedSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
 	state := vc.State{
@@ -320,24 +320,27 @@ func TestKillCLIFunctionInvalidStatePausedFailure(t *testing.T) {
 	}
 
 	testingImpl.KillContainerFunc = testKillContainerFuncReturnNil
+	testingImpl.StopContainerFunc = testStopContainerFuncReturnNil
 
 	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
 	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
+		return newSingleContainerStatus(testContainerID, state,
+			map[string]string{string(vcAnnotations.ContainerTypeKey): string(vc.PodContainer)}), nil
 	}
 
 	defer func() {
 		testingImpl.KillContainerFunc = nil
 		testingImpl.StatusContainerFunc = nil
+		testingImpl.StopContainerFunc = nil
 	}()
 
 	set := flag.NewFlagSet("", 0)
 	set.Parse([]string{testContainerID})
 
-	execCLICommandFunc(assert, killCLICommand, set, true)
+	execCLICommandFunc(assert, killCLICommand, set, false)
 }
 
 func TestKillCLIFunctionInvalidStateStoppedFailure(t *testing.T) {

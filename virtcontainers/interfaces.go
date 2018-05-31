@@ -38,6 +38,8 @@ type VC interface {
 	StopContainer(sandboxID, containerID string) (VCContainer, error)
 	ProcessListContainer(sandboxID, containerID string, options ProcessListOptions) (ProcessList, error)
 	UpdateContainer(sandboxID, containerID string, resources specs.LinuxResources) error
+	PauseContainer(sandboxID, containerID string) error
+	ResumeContainer(sandboxID, containerID string) error
 }
 
 // VCSandbox is the Sandbox interface

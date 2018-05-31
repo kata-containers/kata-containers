@@ -437,6 +437,11 @@ func TestStateToOCIState(t *testing.T) {
 	if ociState := StateToOCIState(state); ociState != "stopped" {
 		t.Fatalf("Expecting \"created\" state, got \"%s\"", ociState)
 	}
+
+	state.State = vc.StatePaused
+	if ociState := StateToOCIState(state); ociState != "paused" {
+		t.Fatalf("Expecting \"paused\" state, got \"%s\"", ociState)
+	}
 }
 
 func TestEnvVars(t *testing.T) {
