@@ -37,32 +37,35 @@ else
 	die "Unsupported architecture: $arch"
 fi
 
-echo "Install Qemu"
-bash -f ${cidir}/install_qemu.sh
-
-echo "Install shim"
-bash -f ${cidir}/install_shim.sh
-
-echo "Install proxy"
-bash -f ${cidir}/install_proxy.sh
-
-echo "Install runtime"
-bash -f ${cidir}/install_runtime.sh
-
-echo "Install CNI plugins"
-bash -f ${cidir}/install_cni_plugins.sh
-
-echo "Install CRI-O"
-bash -f ${cidir}/install_crio.sh
-
-echo "Install Kubernetes"
-bash -f ${cidir}/install_kubernetes.sh
-
-echo "Install Openshift"
-bash -f ${cidir}/install_openshift.sh
+echo "Install Kata Containers image"
+bash -f "${cidir}/install_kata_image.sh"
 
 echo "Install Kata Containers Kernel"
-${cidir}/install_kata_kernel.sh
+"${cidir}/install_kata_kernel.sh"
+
+echo "Install Qemu"
+bash -f "${cidir}/install_qemu.sh"
+
+echo "Install Kata Containers shim"
+bash -f "${cidir}/install_shim.sh"
+
+echo "Install Kata Containers proxy"
+bash -f "${cidir}/install_proxy.sh"
+
+echo "Install Kata Containers runtime"
+bash -f "${cidir}/install_runtime.sh"
+
+echo "Install CNI plugins"
+bash -f "${cidir}/install_cni_plugins.sh"
+
+echo "Install CRI-O"
+bash -f "${cidir}/install_crio.sh"
+
+echo "Install Kubernetes"
+bash -f "${cidir}/install_kubernetes.sh"
+
+echo "Install Openshift"
+bash -f "${cidir}/install_openshift.sh"
 
 echo "Drop caches"
 sync
