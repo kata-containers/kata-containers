@@ -66,3 +66,6 @@ if [ "$(arch)" == "x86_64" ]; then
 	curl -sL  "${obs_url}/Release.key" | sudo apt-key add -
 	sudo -E apt-get update
 fi
+
+echo -e "Install cri-containerd dependencies"
+sudo -E apt install -y libseccomp-dev libapparmor-dev btrfs-tools  make gcc pkg-config

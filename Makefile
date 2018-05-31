@@ -49,6 +49,10 @@ swarm:
 	cd integration/swarm && \
 	bats swarm.bats
 
+cri-containerd:
+	bash -f .ci/install_cri_containerd.sh
+	bash integration/containerd/cri/integration-tests.sh
+
 log-parser:
 	make -C cmd/log-parser
 
@@ -56,7 +60,7 @@ openshift:
 	bash -f .ci/install_bats.sh
 	bash -f integration/openshift/run_openshift_tests.sh
 
-test: functional integration crio docker-compose openshift kubernetes swarm
+test: functional integration crio docker-compose openshift kubernetes swarm cri-containerd
 
 check: checkcommits log-parser
 

@@ -16,6 +16,10 @@ die(){
 	exit 1
 }
 
+info() {
+	echo "INFO: $*"
+}
+
 function clone_and_build() {
 	github_project="$1"
 	make_target="$2"
