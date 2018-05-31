@@ -971,6 +971,8 @@ func genericBridges(number uint32, machineType string) []Bridge {
 		fallthrough
 	case QemuPC:
 		bt = pciBridge
+	case QemuPseries:
+		bt = pciBridge
 	default:
 		return nil
 	}

@@ -134,6 +134,9 @@ const (
 
 	// QemuVirt is the QEMU virt machine type for aarch64
 	QemuVirt = "virt"
+
+	// QemuPseries is a QEMU virt machine type for for ppc64le
+	QemuPseries = "pseries"
 )
 
 // kernelParamsNonDebug is a list of the default kernel
