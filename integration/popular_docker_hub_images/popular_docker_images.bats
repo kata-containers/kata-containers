@@ -207,7 +207,7 @@ setup() {
 }
 
 @test "[display configuration] start an instance of a mariadb container" {
-	docker run --rm --runtime=$RUNTIME -i -e MYSQL_ROOT_PASSWORD=secretword  mariadb bash -c "cat /etc/mysql/conf.d/mariadb.cnf | grep character"
+	docker run --rm --runtime=$RUNTIME -i -e MYSQL_ROOT_PASSWORD=secretword  mariadb bash -c "cat /etc/mysql/mariadb.cnf | grep character"
 }
 
 @test "[java application] check memory maven container" {
