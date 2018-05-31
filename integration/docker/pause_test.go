@@ -92,14 +92,12 @@ var _ = Describe("remove paused container", func() {
 	})
 
 	AfterEach(func() {
-		Expect(RemoveDockerContainer(id)).To(BeTrue())
 		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
 	})
 
 	Describe("start, pause, remove container", func() {
 		Context("check if a paused container can be removed", func() {
 			It("should be removed", func() {
-				Skip("Issue: https://github.com/kata-containers/runtime/issues/317")
 				_, _, exitCode = dockerRun("-td", "--name", id, Image, "sh")
 				Expect(0).To(Equal(exitCode))
 				_, _, exitCode = dockerPause(id)
