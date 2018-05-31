@@ -11,7 +11,7 @@ source "${cidir}/lib.sh"
 # function to run unit test always with a tty
 function faketty()
 {
-	script -qfc $@;
+	script -qfec $@;
 }
 
 faketty $@
