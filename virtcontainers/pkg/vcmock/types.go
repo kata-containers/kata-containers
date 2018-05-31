@@ -58,4 +58,6 @@ type VCMock struct {
 	StopContainerFunc        func(sandboxID, containerID string) (vc.VCContainer, error)
 	ProcessListContainerFunc func(sandboxID, containerID string, options vc.ProcessListOptions) (vc.ProcessList, error)
 	UpdateContainerFunc      func(sandboxID, containerID string, resources specs.LinuxResources) error
+	PauseContainerFunc       func(sandboxID, containerID string) error
+	ResumeContainerFunc      func(sandboxID, containerID string) error
 }

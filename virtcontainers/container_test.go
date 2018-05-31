@@ -418,11 +418,6 @@ func TestKillContainerErrorState(t *testing.T) {
 	err := c.kill(syscall.SIGKILL, true)
 	assert.Error(err)
 
-	// Container paused
-	c.state.State = StatePaused
-	err = c.kill(syscall.SIGKILL, false)
-	assert.Error(err)
-
 	// Container stopped
 	c.state.State = StateStopped
 	err = c.kill(syscall.SIGKILL, true)

@@ -130,3 +130,29 @@ func TestNoopAgentStatsContainer(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNoopAgentPauseContainer(t *testing.T) {
+	n := &noopAgent{}
+	sandbox, container, err := testCreateNoopContainer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanUp()
+	err = n.pauseContainer(sandbox, *container)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNoopAgentResumeContainer(t *testing.T) {
+	n := &noopAgent{}
+	sandbox, container, err := testCreateNoopContainer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanUp()
+	err = n.resumeContainer(sandbox, *container)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
