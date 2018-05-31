@@ -82,6 +82,9 @@ type qemuArch interface {
 
 	// appendVFIODevice appends a VFIO device to devices
 	appendVFIODevice(devices []govmmQemu.Device, vfioDevice drivers.VFIODevice) []govmmQemu.Device
+
+	// handleImagePath handles the Hypervisor Config image path
+	handleImagePath(config HypervisorConfig)
 }
 
 type qemuArchBase struct {
@@ -494,4 +497,12 @@ func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDevice d
 	)
 
 	return devices
+}
+
+func (q *qemuArchBase) handleImagePath(config HypervisorConfig) {
+	if config.ImagePath != "" {
+		q.kernelParams = append(q.kernelParams, kernelRootParams...)
+		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
+		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
+	}
 }

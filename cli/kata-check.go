@@ -7,6 +7,13 @@
 
 package main
 
+/*
+#include <linux/kvm.h>
+
+const int ioctl_KVM_CREATE_VM = KVM_CREATE_VM;
+*/
+import "C"
+
 import (
 	"fmt"
 	"os"
@@ -14,6 +21,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/sirupsen/logrus"
@@ -49,6 +57,11 @@ var (
 	procCPUInfo  = "/proc/cpuinfo"
 	sysModuleDir = "/sys/module"
 	modInfoCmd   = "modinfo"
+)
+
+// variables rather than consts to allow tests to modify them
+var (
+	kvmDevice = "/dev/kvm"
 )
 
 // getCPUInfo returns details of the first CPU read from the specified cpuinfo file
@@ -222,9 +235,9 @@ func checkKernelModules(modules map[string]kernelModule, handler kernelParamHand
 	return count, nil
 }
 
-// hostIsVMContainerCapable checks to see if the host is theoretically capable
+// genericHostIsVMContainerCapable checks to see if the host is theoretically capable
 // of creating a VM container.
-func hostIsVMContainerCapable(details vmContainerCapableDetails) error {
+func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 	cpuinfo, err := getCPUInfo(details.cpuInfoFile)
 	if err != nil {
 		return err
@@ -292,4 +305,59 @@ var kataCheckCLICommand = cli.Command{
 
 		return nil
 	},
+}
+
+func genericArchKernelParamHandler(onVMM bool, fields logrus.Fields, msg string) bool {
+	param, ok := fields["parameter"].(string)
+	if !ok {
+		return false
+	}
+
+	// This option is not required when
+	// already running under a hypervisor.
+	if param == "unrestricted_guest" && onVMM {
+		kataLog.WithFields(fields).Warn(kernelPropertyCorrect)
+		return true
+	}
+
+	if param == "nested" {
+		kataLog.WithFields(fields).Warn(msg)
+		return true
+	}
+
+	// don't ignore the error
+	return false
+}
+
+// genericKvmIsUsable determines if it will be possible to create a full virtual machine
+// by creating a minimal VM and then deleting it.
+func genericKvmIsUsable() error {
+	flags := syscall.O_RDWR | syscall.O_CLOEXEC
+
+	f, err := syscall.Open(kvmDevice, flags, 0)
+	if err != nil {
+		return err
+	}
+	defer syscall.Close(f)
+
+	fieldLogger := kataLog.WithField("check-type", "full")
+
+	fieldLogger.WithField("device", kvmDevice).Info("device available")
+
+	vm, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(f),
+		uintptr(C.ioctl_KVM_CREATE_VM),
+		0)
+	if errno != 0 {
+		if errno == syscall.EBUSY {
+			fieldLogger.WithField("reason", "another hypervisor running").Error("cannot create VM")
+		}
+
+		return errno
+	}
+	defer syscall.Close(int(vm))
+
+	fieldLogger.WithField("feature", "create-vm").Info("feature available")
+
+	return nil
 }
