@@ -45,11 +45,15 @@ type vmContainerCapableDetails struct {
 
 const (
 	moduleParamDir        = "parameters"
-	cpuFlagsTag           = "flags"
 	successMessageCapable = "System is capable of running " + project
 	successMessageCreate  = "System can currently create " + project
 	failMessage           = "System is not capable of running " + project
 	kernelPropertyCorrect = "Kernel property value correct"
+
+	// these refer to fields in the procCPUINFO file
+	genericCPUFlagsTag    = "flags"
+	genericCPUVendorField = "vendor_id"
+	genericCPUModelField  = "model name"
 )
 
 // variables rather than consts to allow tests to modify them

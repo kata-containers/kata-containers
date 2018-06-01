@@ -205,9 +205,13 @@ VERSION_ID="%s"
 `, expectedDistro.Name, expectedDistro.Version)
 
 	procCPUInfoContents := fmt.Sprintf(`
-vendor_id	: %s
-model name	: %s
-`, expectedCPU.Vendor, expectedCPU.Model)
+%s	: %s
+%s	: %s
+`,
+		archCPUVendorField,
+		expectedCPU.Vendor,
+		archCPUModelField,
+		expectedCPU.Model)
 
 	data := []filesToCreate{
 		{procVersion, procVersionContents},
