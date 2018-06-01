@@ -98,7 +98,7 @@ func init() {
 	fmt.Printf("INFO: ensuring required docker image (%v) is available\n", testDockerImage)
 
 	// Only hit the network if the image doesn't exist locally
-	_, err = runCommand([]string{"docker", "image", "inspect", testDockerImage})
+	_, err = runCommand([]string{"docker", "inspect", "--type=image", testDockerImage})
 	if err == nil {
 		fmt.Printf("INFO: docker image %v already exists locally\n", testDockerImage)
 	} else {
