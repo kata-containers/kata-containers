@@ -287,7 +287,7 @@ parse_args()
 	do
 		case "$opt" in
 			c)
-				config_file="$1"
+				config_file="$OPTARG"
 				;;
 			h)
 				usage
