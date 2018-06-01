@@ -21,8 +21,9 @@
         * [Build an initrd image](#build-an-initrd-image)
         * [Install the initrd image](#install-the-initrd-image)
 * [Install guest kernel images](#install-guest-kernel-images)
-* [Update Docker configuration](#update-docker-configuration)
-* [Create a Kata Container](#create-a-kata-container)
+* [Run Kata Containers with Docker](#run-kata-containers-with-docker)
+    * [Update Docker configuration](#update-docker-configuration)
+    * [Create a container using Kata](#create-a-container-using-kata)
 * [Troubleshoot Kata Containers](#troubleshoot-kata-containers)
 * [Appendices](#appendices)
     * [Checking Docker default runtime](#checking-docker-default-runtime)
@@ -157,6 +158,11 @@ $ go get -d -u github.com/kata-containers/osbuilder
 
 ## Create a rootfs image
 ### Create a local rootfs
+
+As a prerequisite, you need to install Docker. Otherwise, you will not be
+able to run the `rootfs.sh` script with `USE_DOCKER=true` as expected in
+the following example.
+
 ```
 $ export ROOTFS_DIR=${GOPATH}/src/github.com/kata-containers/osbuilder/rootfs-builder/rootfs
 $ sudo rm -rf ${ROOTFS_DIR}
@@ -247,6 +253,9 @@ $ (cd /usr/share/kata-containers && sudo ln -sf "$image" kata-containers-initrd.
 
 # Install guest kernel images
 
+As a prerequisite, you need to install `libelf-dev` and `bc`. Otherwise, you
+will not be able to build the kernel from sources.
+
 ```
 $ kernel_arch="$(arch)"
 $ tmpdir="$(mktemp -d)"
@@ -273,7 +282,9 @@ $ popd
 $ rm -rf "${tmpdir}"
 ```
 
-# Update Docker configuration
+# Run Kata Containers with Docker
+
+## Update Docker configuration
 
 ```
 $ dir=/etc/systemd/system/docker.service.d
@@ -285,7 +296,7 @@ $ sudo systemctl daemon-reload
 $ sudo systemctl restart docker
 ```
 
-# Create a Kata Container
+## Create a container using Kata
 
 ```
 $ sudo docker run -ti --runtime kata-runtime busybox sh
