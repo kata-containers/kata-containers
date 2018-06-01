@@ -6,9 +6,7 @@
 package virtcontainers
 
 import (
-	"fmt"
 	"os"
-	"strconv"
 
 	govmmQemu "github.com/intel/govmm/qemu"
 )
@@ -93,12 +91,7 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 		},
 	}
 
-	if config.ImagePath != "" {
-		q.kernelParams = append(q.kernelParams, kernelRootParams...)
-		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
-		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
-	}
-
+	q.handleImagePath(config)
 	return q
 }
 
@@ -114,29 +107,7 @@ func (q *qemuAmd64) capabilities() capabilities {
 }
 
 func (q *qemuAmd64) bridges(number uint32) []Bridge {
-	var bridges []Bridge
-	var bt bridgeType
-
-	switch q.machineType {
-	case QemuQ35:
-		// currently only pci bridges are supported
-		// qemu-2.10 will introduce pcie bridges
-		fallthrough
-	case QemuPC:
-		bt = pciBridge
-	default:
-		return nil
-	}
-
-	for i := uint32(0); i < number; i++ {
-		bridges = append(bridges, Bridge{
-			Type:    bt,
-			ID:      fmt.Sprintf("%s-bridge-%d", bt, i),
-			Address: make(map[uint32]string),
-		})
-	}
-
-	return bridges
+	return genericBridges(number, q.machineType)
 }
 
 func (q *qemuAmd64) cpuModel() string {
@@ -148,22 +119,7 @@ func (q *qemuAmd64) cpuModel() string {
 }
 
 func (q *qemuAmd64) memoryTopology(memoryMb, hostMemoryMb uint64) govmmQemu.Memory {
-	// NVDIMM device needs memory space 1024MB
-	// See https://github.com/clearcontainers/runtime/issues/380
-	memoryOffset := 1024
-
-	// add 1G memory space for nvdimm device (vm guest image)
-	memMax := fmt.Sprintf("%dM", hostMemoryMb+uint64(memoryOffset))
-
-	mem := fmt.Sprintf("%dM", memoryMb)
-
-	memory := govmmQemu.Memory{
-		Size:   mem,
-		Slots:  defaultMemSlots,
-		MaxMem: memMax,
-	}
-
-	return memory
+	return genericMemoryTopology(memoryMb, hostMemoryMb)
 }
 
 func (q *qemuAmd64) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
@@ -194,31 +150,5 @@ func (q *qemuAmd64) appendImage(devices []govmmQemu.Device, path string) ([]govm
 
 // appendBridges appends to devices the given bridges
 func (q *qemuAmd64) appendBridges(devices []govmmQemu.Device, bridges []Bridge) []govmmQemu.Device {
-	bus := defaultPCBridgeBus
-	if q.machineType == QemuQ35 {
-		bus = defaultBridgeBus
-	}
-
-	for idx, b := range bridges {
-		t := govmmQemu.PCIBridge
-		if b.Type == pcieBridge {
-			t = govmmQemu.PCIEBridge
-		}
-
-		bridges[idx].Addr = bridgePCIStartAddr + idx
-
-		devices = append(devices,
-			govmmQemu.BridgeDevice{
-				Type: t,
-				Bus:  bus,
-				ID:   b.ID,
-				// Each bridge is required to be assigned a unique chassis id > 0
-				Chassis: (idx + 1),
-				SHPC:    true,
-				Addr:    strconv.FormatInt(int64(bridges[idx].Addr), 10),
-			},
-		)
-	}
-
-	return devices
+	return genericAppendBridges(devices, bridges, q.machineType)
 }
