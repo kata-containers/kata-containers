@@ -225,10 +225,10 @@ func TestGetCPUDetails(t *testing.T) {
 	}
 
 	const validVendorName = "a vendor"
-	validVendor := fmt.Sprintf(`vendor_id	: %s`, validVendorName)
+	validVendor := fmt.Sprintf(`%s	: %s`, archCPUVendorField, validVendorName)
 
 	const validModelName = "some CPU model"
-	validModel := fmt.Sprintf(`model name	: %s`, validModelName)
+	validModel := fmt.Sprintf(`%s	: %s`, archCPUModelField, validModelName)
 
 	validContents := fmt.Sprintf(`
 a	: b
@@ -240,7 +240,7 @@ foo	: bar
 	data := []testData{
 		{"", "", "", true},
 		{"invalid", "", "", true},
-		{"vendor_id", "", "", true},
+		{archCPUVendorField, "", "", true},
 		{validVendor, "", "", true},
 		{validModel, "", "", true},
 		{validContents, validVendorName, validModelName, false},

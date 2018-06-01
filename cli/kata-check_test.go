@@ -229,10 +229,23 @@ func TestCheckGetCPUFlags(t *testing.T) {
 		{"foo", ""},
 		{"foo bar", ""},
 		{":", ""},
-		{"flags", ""},
-		{"flags:", ""},
-		{"flags: a b c", "a b c"},
-		{"flags: a b c foo bar d", "a b c foo bar d"},
+
+		{
+			cpuFlagsTag,
+			"",
+		},
+		{
+			cpuFlagsTag + ":",
+			"",
+		},
+		{
+			fmt.Sprintf("%s: a b c", cpuFlagsTag),
+			"a b c",
+		},
+		{
+			fmt.Sprintf("%s: a b c foo bar d", cpuFlagsTag),
+			"a b c foo bar d",
+		},
 	}
 
 	for _, d := range data {

@@ -108,24 +108,35 @@ func getCPUDetails() (vendor, model string, err error) {
 	lines := strings.Split(cpuinfo, "\n")
 
 	for _, line := range lines {
-		if strings.HasPrefix(line, "vendor_id") {
-			fields := strings.Split(line, ":")
-			if len(fields) > 1 {
-				vendor = strings.TrimSpace(fields[1])
+		if archCPUVendorField != "" {
+			if strings.HasPrefix(line, archCPUVendorField) {
+				fields := strings.Split(line, ":")
+				if len(fields) > 1 {
+					vendor = strings.TrimSpace(fields[1])
+				}
 			}
-		} else if strings.HasPrefix(line, "model name") {
-			fields := strings.Split(line, ":")
-			if len(fields) > 1 {
-				model = strings.TrimSpace(fields[1])
+		}
+
+		if archCPUModelField != "" {
+			if strings.HasPrefix(line, archCPUModelField) {
+				fields := strings.Split(line, ":")
+				if len(fields) > 1 {
+					model = strings.TrimSpace(fields[1])
+				}
 			}
 		}
 	}
 
-	if vendor != "" && model != "" {
-		return vendor, model, nil
+	if vendor == "" {
+		return "", "", fmt.Errorf("cannot find vendor field in file %v", procCPUInfo)
 	}
 
-	return "", "", fmt.Errorf("failed to find expected fields in file %v", procCPUInfo)
+	// model name is optional
+	if archCPUModelField != "" && model == "" {
+		return "", "", fmt.Errorf("cannot find model field in file %v", procCPUInfo)
+	}
+
+	return vendor, model, nil
 }
 
 // resolvePath returns the fully resolved and expanded value of the
