@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -925,4 +926,83 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 // logs coming from the sandbox.
 func (q *qemu) getSandboxConsole(sandboxID string) (string, error) {
 	return utils.BuildSocketPath(runStoragePath, sandboxID, defaultConsole)
+}
+
+// genericAppendBridges appends to devices the given bridges
+func genericAppendBridges(devices []govmmQemu.Device, bridges []Bridge, machineType string) []govmmQemu.Device {
+	bus := defaultPCBridgeBus
+	if machineType == QemuQ35 {
+		bus = defaultBridgeBus
+	}
+
+	for idx, b := range bridges {
+		t := govmmQemu.PCIBridge
+		if b.Type == pcieBridge {
+			t = govmmQemu.PCIEBridge
+		}
+
+		bridges[idx].Addr = bridgePCIStartAddr + idx
+
+		devices = append(devices,
+			govmmQemu.BridgeDevice{
+				Type: t,
+				Bus:  bus,
+				ID:   b.ID,
+				// Each bridge is required to be assigned a unique chassis id > 0
+				Chassis: (idx + 1),
+				SHPC:    true,
+				Addr:    strconv.FormatInt(int64(bridges[idx].Addr), 10),
+			},
+		)
+	}
+
+	return devices
+}
+
+func genericBridges(number uint32, machineType string) []Bridge {
+	var bridges []Bridge
+	var bt bridgeType
+
+	switch machineType {
+
+	case QemuQ35:
+		// currently only pci bridges are supported
+		// qemu-2.10 will introduce pcie bridges
+		fallthrough
+	case QemuPC:
+		bt = pciBridge
+	case QemuPseries:
+		bt = pciBridge
+	default:
+		return nil
+	}
+
+	for i := uint32(0); i < number; i++ {
+		bridges = append(bridges, Bridge{
+			Type:    bt,
+			ID:      fmt.Sprintf("%s-bridge-%d", bt, i),
+			Address: make(map[uint32]string),
+		})
+	}
+
+	return bridges
+}
+
+func genericMemoryTopology(memoryMb, hostMemoryMb uint64) govmmQemu.Memory {
+	// NVDIMM device needs memory space 1024MB
+	// See https://github.com/clearcontainers/runtime/issues/380
+	memoryOffset := 1024
+
+	// add 1G memory space for nvdimm device (vm guest image)
+	memMax := fmt.Sprintf("%dM", hostMemoryMb+uint64(memoryOffset))
+
+	mem := fmt.Sprintf("%dM", memoryMb)
+
+	memory := govmmQemu.Memory{
+		Size:   mem,
+		Slots:  defaultMemSlots,
+		MaxMem: memMax,
+	}
+
+	return memory
 }
