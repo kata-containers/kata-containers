@@ -24,11 +24,54 @@ import (
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 )
 
-const tempBundlePath = "/tmp/virtc/ocibundle/"
-const containerID = "virtc-oci-test"
-const consolePath = "/tmp/virtc/console"
-const fileMode = os.FileMode(0640)
-const dirMode = os.FileMode(0750)
+const (
+	tempBundlePath = "/tmp/virtc/ocibundle/"
+	containerID    = "virtc-oci-test"
+	consolePath    = "/tmp/virtc/console"
+	fileMode       = os.FileMode(0640)
+	dirMode        = os.FileMode(0750)
+
+	capabilitiesSpecArray = `
+		{
+		    "ociVersion": "1.0.0-rc2-dev",
+		    "process": {
+		        "capabilities": [
+		            "CAP_CHOWN",
+		            "CAP_DAC_OVERRIDE",
+		            "CAP_FSETID"
+		        ]
+		    }
+		}`
+
+	capabilitiesSpecStruct = `
+		{
+		    "ociVersion": "1.0.0-rc5",
+		    "process": {
+		        "capabilities": {
+		            "bounding": [
+		                "CAP_CHOWN",
+		                "CAP_DAC_OVERRIDE",
+		                "CAP_FSETID"
+		            ],
+		            "effective": [
+		                "CAP_CHOWN",
+		                "CAP_DAC_OVERRIDE",
+		                "CAP_FSETID"
+		            ],
+		            "inheritable": [
+		                "CAP_CHOWN",
+		                "CAP_DAC_OVERRIDE",
+		                "CAP_FSETID"
+		            ],
+		            "permitted": [
+		                "CAP_CHOWN",
+		                "CAP_DAC_OVERRIDE",
+		                "CAP_FSETID"
+		            ]
+		        }
+		    }
+		}`
+)
 
 func createConfig(fileName string, fileData string) (string, error) {
 	configPath := path.Join(tempBundlePath, fileName)
@@ -126,6 +169,13 @@ func TestMinimalSandboxConfig(t *testing.T) {
 	//Marshal and unmarshall json to compare  sandboxConfig and expectedSandboxConfig
 	if err := json.Unmarshal([]byte(minimalConfig), &minimalOCISpec); err != nil {
 		t.Fatal(err)
+	}
+	if minimalOCISpec.Process != nil {
+		caps, err := ContainerCapabilities(minimalOCISpec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		minimalOCISpec.Process.Capabilities = caps
 	}
 	ociSpecJSON, err := json.Marshal(minimalOCISpec)
 	if err != nil {
@@ -714,7 +764,7 @@ func TestContainerCapabilities(t *testing.T) {
 		"ambient":     []interface{}{""},
 	}
 
-	c, err := containerCapabilities(ociSpec)
+	c, err := ContainerCapabilities(ociSpec)
 	assert.Nil(t, err)
 	assert.Equal(t, c.Bounding, []string{"CAP_KILL"})
 	assert.Equal(t, c.Effective, []string{"CAP_KILL", "CAP_LEASE"})
@@ -724,7 +774,7 @@ func TestContainerCapabilities(t *testing.T) {
 
 	ociSpec.Process.Capabilities = []interface{}{"CAP_LEASE", "CAP_SETUID"}
 
-	c, err = containerCapabilities(ociSpec)
+	c, err = ContainerCapabilities(ociSpec)
 	assert.Nil(t, err)
 	assert.Equal(t, c.Bounding, []string{"CAP_LEASE", "CAP_SETUID"})
 	assert.Equal(t, c.Effective, []string{"CAP_LEASE", "CAP_SETUID"})
@@ -734,13 +784,54 @@ func TestContainerCapabilities(t *testing.T) {
 
 	ociSpec.Process.Capabilities = nil
 
-	c, err = containerCapabilities(ociSpec)
+	c, err = ContainerCapabilities(ociSpec)
 	assert.Nil(t, err)
 	assert.Equal(t, c.Bounding, []string(nil))
 	assert.Equal(t, c.Effective, []string(nil))
 	assert.Equal(t, c.Permitted, []string(nil))
 	assert.Equal(t, c.Inheritable, []string(nil))
 	assert.Equal(t, c.Ambient, []string(nil))
+}
+
+// use specs.Spec to decode the spec, the content of capabilities is [] string
+func TestCompatOCISpecWithArray(t *testing.T) {
+	compatOCISpec := CompatOCISpec{}
+	err := json.Unmarshal([]byte(capabilitiesSpecArray), &compatOCISpec)
+	assert.Nil(t, err, "use CompatOCISpec to decode capabilitiesSpecArray failed")
+
+	ociSpecJSON, err := json.Marshal(compatOCISpec)
+	assert.Nil(t, err, "encode compatOCISpec failed")
+
+	// use specs.Spec to decode the spec, specs.Spec' capabilities is struct,
+	// but the content of spec' capabilities is [] string
+	ociSpec := specs.Spec{}
+	err = json.Unmarshal(ociSpecJSON, &ociSpec)
+	assert.NotNil(t, err, "This test should fail")
+
+	caps, err := ContainerCapabilities(compatOCISpec)
+	assert.Nil(t, err, "decode capabilities failed")
+	compatOCISpec.Process.Capabilities = caps
+
+	ociSpecJSON, err = json.Marshal(compatOCISpec)
+	assert.Nil(t, err, "encode compatOCISpec failed")
+
+	// capabilities has been chaged to struct
+	err = json.Unmarshal(ociSpecJSON, &ociSpec)
+	assert.Nil(t, err, "This test should fail")
+}
+
+// use specs.Spec to decode the spec, the content of capabilities is struct
+func TestCompatOCISpecWithStruct(t *testing.T) {
+	compatOCISpec := CompatOCISpec{}
+	err := json.Unmarshal([]byte(capabilitiesSpecStruct), &compatOCISpec)
+	assert.Nil(t, err, "use CompatOCISpec to decode capabilitiesSpecStruct failed")
+
+	ociSpecJSON, err := json.Marshal(compatOCISpec)
+	assert.Nil(t, err, "encode compatOCISpec failed")
+
+	ociSpec := specs.Spec{}
+	err = json.Unmarshal(ociSpecJSON, &ociSpec)
+	assert.Nil(t, err, "This test should not fail")
 }
 
 func TestMain(m *testing.M) {
