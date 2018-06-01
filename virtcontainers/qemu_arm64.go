@@ -22,6 +22,9 @@ const defaultQemuMachineType = QemuVirt
 
 const defaultQemuMachineOptions = "gic-version=host,usb=off,accel=kvm"
 
+// Not used
+const defaultPCBridgeBus = ""
+
 var qemuPaths = map[string]string{
 	QemuVirt: defaultQemuPath,
 }
@@ -47,7 +50,7 @@ func MaxQemuVCPUs() uint32 {
 	return uint32(runtime.NumCPU())
 }
 
-func newQemuArch(config HypervisrConfig) qemuArch {
+func newQemuArch(config HypervisorConfig) qemuArch {
 	machineType := config.HypervisorMachineType
 	if machineType == "" {
 		machineType = defaultQemuMachineType
