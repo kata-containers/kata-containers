@@ -41,10 +41,8 @@ var kernelParams = []Param{
 	{"reboot", "k"},
 	{"console", "hvc0"},
 	{"console", "hvc1"},
-	{"iommu", "off"},
 	{"cryptomgr.notests", ""},
 	{"net.ifnames", "0"},
-	{"pci", "lastbus=0"},
 }
 
 var supportedQemuMachines = []govmmQemu.Machine{
