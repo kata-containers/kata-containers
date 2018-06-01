@@ -51,6 +51,7 @@ var (
 	sharedDir9pOptions    = []string{"trans=virtio,version=9p2000.L", "nodev"}
 	shmDir                = "shm"
 	kataEphemeralDevType  = "ephemeral"
+	ephemeralPath         = filepath.Join(kataGuestSandboxDir, kataEphemeralDevType)
 )
 
 // KataAgentConfig is a structure storing information needed
@@ -781,6 +782,9 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 		return nil, err
 	}
 
+	epheStorages := k.handleEphemeralStorage(ociSpec.Mounts)
+	ctrStorages = append(ctrStorages, epheStorages...)
+
 	// We replace all OCI mount sources that match our container mount
 	// with the right source path (The guest one).
 	if err = k.replaceOCIMountSource(ociSpec, newMounts); err != nil {
@@ -844,6 +848,29 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 
 	return prepareAndStartShim(sandbox, k.shim, c.id, req.ExecId,
 		k.state.URL, c.config.Cmd, createNSList, enterNSList)
+}
+
+// handleEphemeralStorage handles ephemeral storages by
+// creating a Storage from corresponding source of the mount point
+func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) []*grpc.Storage {
+	var epheStorages []*grpc.Storage
+	for idx, mnt := range mounts {
+		if mnt.Type == kataEphemeralDevType {
+			// Set the mount source path to a path that resides inside the VM
+			mounts[idx].Source = filepath.Join(ephemeralPath, filepath.Base(mnt.Source))
+
+			// Create a storage struct so that kata agent is able to create
+			// tmpfs backed volume inside the VM
+			epheStorage := &grpc.Storage{
+				Driver:     kataEphemeralDevType,
+				Source:     "tmpfs",
+				Fstype:     "tmpfs",
+				MountPoint: mounts[idx].Source,
+			}
+			epheStorages = append(epheStorages, epheStorage)
+		}
+	}
+	return epheStorages
 }
 
 // handleBlockVolumes handles volumes that are block devices files

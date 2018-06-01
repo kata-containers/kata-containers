@@ -103,7 +103,6 @@ func create(containerID, bundlePath, console, pidFilePath string, detach bool,
 	disableOutput := noNeedForOutput(detach, ociSpec.Process.Terminal)
 
 	var process vc.Process
-
 	switch containerType {
 	case vc.PodSandbox:
 		process, err = createSandbox(ociSpec, runtimeConfig, containerID, bundlePath, console, disableOutput)
@@ -246,8 +245,24 @@ func createSandbox(ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
 	return containers[0].Process(), nil
 }
 
+// setEphemeralStorageType sets the mount type to 'ephemeral'
+// if the mount source path is provisioned by k8s for ephemeral storage.
+// For the given pod ephemeral volume is created only once
+// backed by tmpfs inside the VM. For successive containers
+// of the same pod the already existing volume is reused.
+func setEphemeralStorageType(ociSpec oci.CompatOCISpec) oci.CompatOCISpec {
+	for idx, mnt := range ociSpec.Mounts {
+		if IsEphemeralStorage(mnt.Source) {
+			ociSpec.Mounts[idx].Type = "ephemeral"
+		}
+	}
+	return ociSpec
+}
+
 func createContainer(ociSpec oci.CompatOCISpec, containerID, bundlePath,
 	console string, disableOutput bool) (vc.Process, error) {
+
+	ociSpec = setEphemeralStorageType(ociSpec)
 
 	contConfig, err := oci.ContainerConfig(ociSpec, bundlePath, containerID, console, disableOutput)
 	if err != nil {
