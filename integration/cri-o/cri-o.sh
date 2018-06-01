@@ -56,7 +56,27 @@ fi
 # This will allow us to run tests with at least 2 different
 # storage drivers.
 if [ "$ID" == "ubuntu" ] && [ "$MAJOR" -ge 17 ]; then
-	export CRIO_STORAGE_DRIVER_OPTS="--storage-driver overlay"
+	export STORAGE_OPTIONS="--storage-driver overlay"
+fi
+
+
+# If we are testing a CRI-O PR in a CI environment,
+# use devicemapper driver using a block device.
+# This is needed since support for loopback devices
+# is being deprecated.
+# More info: https://github.com/kubernetes-incubator/cri-o/pull/1574
+#            https://github.com/containers/storage/pull/80/commits/da1e7e5d28da7d0a1e6ac0d4a9e647bee72282e2
+if [ "$ghprbGhRepository" == "${crio_repository/github.com\/}" ] && [ "$CI" == true ] && [ -z "${KATA_DEV_MODE}" ] ;then
+	# block device attached to the Azure VM where we run the CI
+	# if the block device has a partition, cri-o will not be able to use it.
+	block_device=/dev/sdb
+	if sudo fdisk -l "$block_device" | grep "${block_device}[1-9]"; then
+		die "detected partitions on block device: ${block_device}. Will not continue"
+	fi
+	export STORAGE_OPTIONS="--storage-driver devicemapper --storage-opt dm.directlvm_device=${block_device}
+				--storage-opt dm.directlvm_device_force=true --storage-opt dm.thinp_percent=95
+				--storage-opt dm.thinp_metapercent=1 --storage-opt dm.thinp_autoextend_threshold=80
+				--storage-opt dm.thinp_autoextend_percent=20"
 fi
 
 ./test_runner.sh ctr.bats
