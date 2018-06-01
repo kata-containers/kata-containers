@@ -143,7 +143,7 @@ enable_initrd()
 
 	config_checks
 
-	sudo sed -i "s!^#*.*initrd *=.*\$!initrd =\"$file\"!g" "$config_file"
+	sudo sed -i "s!^#*.*initrd *=.*\$!initrd = \"$file\"!g" "$config_file"
 }
 
 cmd_enable_full_debug()
