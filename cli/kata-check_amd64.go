@@ -9,6 +9,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+const (
+	cpuFlagsTag        = genericCPUFlagsTag
+	archCPUVendorField = genericCPUVendorField
+	archCPUModelField  = genericCPUModelField
+)
+
 // archRequiredCPUFlags maps a CPU flag value to search for and a
 // human-readable description of that value.
 var archRequiredCPUFlags = map[string]string{
