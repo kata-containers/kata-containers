@@ -128,6 +128,16 @@ disable_initrd()
 	sudo sed -i 's/^\(initrd *=.*\)/# \1/g' "$config_file"
 }
 
+add_hypervisor_config()
+{
+	local name="$1"
+	local value="$2"
+
+	local -r hypervisor="qemu"
+
+	sudo sed -i "/\[hypervisor\.${hypervisor}\]/a ${name} = $value" "$config_file"
+}
+
 enable_image()
 {
 	local file="$1"
@@ -135,6 +145,11 @@ enable_image()
 	config_checks
 
 	sudo sed -i "s!^#*.*image *=.*\$!image = \"$file\"!g" "$config_file"
+
+	egrep -q "\<image\> *=" "$config_file" && return
+
+	# Add missing entry
+	add_hypervisor_config "image" "\"$file\""
 }
 
 enable_initrd()
@@ -144,6 +159,11 @@ enable_initrd()
 	config_checks
 
 	sudo sed -i "s!^#*.*initrd *=.*\$!initrd = \"$file\"!g" "$config_file"
+
+	egrep -q "\<initrd\> *=" "$config_file" && return
+
+	# Add missing entry
+	add_hypervisor_config "initrd" "\"$file\""
 }
 
 cmd_enable_full_debug()
