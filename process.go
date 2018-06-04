@@ -50,8 +50,8 @@ func processRunning(regexps []string) bool {
 	return err == errFound
 }
 
-// IsVMRunning returns true if the VM is still running, otherwise false
-func IsVMRunning(containerID string) bool {
+// HypervisorRunning returns true if the hypervisor is still running, otherwise false
+func HypervisorRunning(containerID string) bool {
 	hypervisorRegexps := []string{".*/qemu.*-name.*" + containerID + ".*-qmp.*unix:.*/" + containerID + "/.*"}
 	return processRunning(hypervisorRegexps)
 }

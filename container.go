@@ -267,7 +267,7 @@ func (c *Container) Teardown() error {
 // - the VM is running (qemu)
 // else false is returned
 func (c *Container) Exist() bool {
-	return c.isListed() || c.isWorkloadRunning() || IsVMRunning(*c.ID)
+	return c.isListed() || c.isWorkloadRunning() || HypervisorRunning(*c.ID)
 }
 
 func (c *Container) isListed() bool {

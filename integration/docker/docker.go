@@ -208,7 +208,7 @@ func ExistDockerContainer(name string) bool {
 		return true
 	}
 
-	return tests.IsVMRunning(name)
+	return tests.HypervisorRunning(name)
 }
 
 // RemoveDockerContainer removes a container using docker rm -f
