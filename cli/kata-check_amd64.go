@@ -74,3 +74,7 @@ func hostIsVMContainerCapable(details vmContainerCapableDetails) error {
 func archKernelParamHandler(onVMM bool, fields logrus.Fields, msg string) bool {
 	return genericArchKernelParamHandler(onVMM, fields, msg)
 }
+
+func getCPUDetails() (vendor, model string, err error) {
+	return genericGetCPUDetails()
+}
