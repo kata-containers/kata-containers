@@ -5,12 +5,16 @@
 
 package main
 
-import "github.com/sirupsen/logrus"
+import (
+	"fmt"
+
+	"github.com/sirupsen/logrus"
+)
 
 const (
 	cpuFlagsTag        = "Features"
 	archCPUVendorField = "CPU implementer"
-	archCPUModelField  = "CPU variant"
+	archCPUModelField  = "CPU architecture"
 )
 
 // archRequiredCPUFlags maps a CPU flag value to search for and a
@@ -49,9 +53,70 @@ func archHostCanCreateVMContainer() error {
 // hostIsVMContainerCapable checks to see if the host is theoretically capable
 // of creating a VM container.
 func hostIsVMContainerCapable(details vmContainerCapableDetails) error {
-	return genericHostIsVMContainerCapable(details)
+	count, err := checkKernelModules(details.requiredKernelModules, archKernelParamHandler)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		return nil
+	}
+
+	return fmt.Errorf("ERROR: %s", failMessage)
+
 }
 
 func archKernelParamHandler(onVMM bool, fields logrus.Fields, msg string) bool {
 	return genericArchKernelParamHandler(onVMM, fields, msg)
+}
+
+// The CPU Vendor here for Arm means the CPU core
+// IP Implementer.
+// normalizeArmVendor maps 'CPU implementer' in /proc/cpuinfo
+// to human-readable description of that value.
+func normalizeArmVendor(vendor string) string {
+
+	switch vendor {
+	case "0x41":
+		vendor = "ARM Limited"
+	default:
+		vendor = "3rd Party Limited"
+	}
+
+	return vendor
+}
+
+// The CPU Model here for Arm means the Instruction set, that is
+// the variant number of Arm processor.
+// normalizeArmModel maps 'CPU architecture' in /proc/cpuinfo
+// to human-readable description of that value.
+func normalizeArmModel(model string) string {
+	switch model {
+	case "8":
+		model = "v8"
+	case "7", "7M", "?(12)", "?(13)", "?(14)", "?(15)", "?(16)", "?(17)":
+		model = "v7"
+	case "6", "6TEJ":
+		model = "v6"
+	case "5", "5T", "5TE", "5TEJ":
+		model = "v5"
+	case "4", "4T":
+		model = "v4"
+	case "3":
+		model = "v3"
+	default:
+		model = "unknown"
+	}
+
+	return model
+}
+
+func getCPUDetails() (vendor, model string, err error) {
+	if vendor, model, err := genericGetCPUDetails(); err == nil {
+		vendor = normalizeArmVendor(vendor)
+		model = normalizeArmModel(model)
+		return vendor, model, err
+	} else {
+		return vendor, model, err
+	}
 }
