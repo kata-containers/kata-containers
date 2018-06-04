@@ -53,6 +53,7 @@ technologies:
 
 - [Intel](https://www.intel.com)'s VT-x technology.
 - [ARM](https://www.arm.com)'s Hyp mode (virtualization extension).
+- [IBM](https://www.ibm.com)'s Power Systems.
 
 ### Hardware requirements
 
