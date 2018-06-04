@@ -27,6 +27,8 @@ const defaultQemuMachineOptions = "accel=kvm,usb=off"
 
 const defaultPCBridgeBus = "pci.0"
 
+const defaultMemMaxPPC64le = 32256 // Restrict MemMax to 32Gb on PPC64le
+
 var qemuPaths = map[string]string{
 	QemuPseries: defaultQemuPath,
 }
@@ -103,8 +105,12 @@ func (q *qemuPPC64le) cpuModel() string {
 
 func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64) govmmQemu.Memory {
 
-	// align hostMemoryMb to 256 MB multiples
-	hostMemoryMb -= (hostMemoryMb % 256)
+	if hostMemoryMb > defaultMemMaxPPC64le {
+		hostMemoryMb = defaultMemMaxPPC64le
+	} else {
+		// align hostMemoryMb to 256MB multiples
+		hostMemoryMb -= (hostMemoryMb % 256)
+	}
 	return genericMemoryTopology(memoryMb, hostMemoryMb)
 }
 
