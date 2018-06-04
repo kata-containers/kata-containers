@@ -16,9 +16,8 @@ const procPath = "/proc"
 
 var errFound = errors.New("found")
 
-// IsVMRunning looks in /proc for a hypervisor process that contains
-// the containerID in its command line
-func IsVMRunning(containerID string) bool {
+// processRunning looks for a process in /proc that matches with the regexps
+func processRunning(regexps []string) bool {
 	err := filepath.Walk(procPath, func(path string, _ os.FileInfo, _ error) error {
 		if path == "" {
 			return filepath.SkipDir
@@ -38,10 +37,8 @@ func IsVMRunning(containerID string) bool {
 			return filepath.SkipDir
 		}
 
-		hypervisorRegexs := []string{".*/qemu.*-name.*" + containerID + ".*-qmp.*unix:.*/" + containerID + "/.*"}
-
-		for _, regex := range hypervisorRegexs {
-			matcher := regexp.MustCompile(regex)
+		for _, r := range regexps {
+			matcher := regexp.MustCompile(r)
 			if matcher.MatchString(string(content)) {
 				return errFound
 			}
@@ -51,4 +48,10 @@ func IsVMRunning(containerID string) bool {
 	})
 
 	return err == errFound
+}
+
+// IsVMRunning returns true if the VM is still running, otherwise false
+func IsVMRunning(containerID string) bool {
+	hypervisorRegexps := []string{".*/qemu.*-name.*" + containerID + ".*-qmp.*unix:.*/" + containerID + "/.*"}
+	return processRunning(hypervisorRegexps)
 }
