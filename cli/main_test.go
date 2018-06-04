@@ -421,7 +421,11 @@ func readOCIConfigFile(configPath string) (oci.CompatOCISpec, error) {
 	if err := json.Unmarshal(data, &ociSpec); err != nil {
 		return oci.CompatOCISpec{}, err
 	}
-
+	caps, err := oci.ContainerCapabilities(ociSpec)
+	if err != nil {
+		return oci.CompatOCISpec{}, err
+	}
+	ociSpec.Process.Capabilities = caps
 	return ociSpec, nil
 }
 
