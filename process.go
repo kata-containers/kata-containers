@@ -7,6 +7,7 @@ package tests
 import (
 	"errors"
 	"io/ioutil"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -52,6 +53,11 @@ func processRunning(regexps []string) bool {
 
 // HypervisorRunning returns true if the hypervisor is still running, otherwise false
 func HypervisorRunning(containerID string) bool {
-	hypervisorRegexps := []string{".*/qemu.*-name.*" + containerID + ".*-qmp.*unix:.*/" + containerID + "/.*"}
+	hypervisorPath := KataConfig.Hypervisor[DefaultHypervisor].Path
+	if hypervisorPath == "" {
+		log.Fatal("Could not determine if hypervisor is running: hypervisor path is empty")
+		return false
+	}
+	hypervisorRegexps := []string{hypervisorPath + ".*-name.*" + containerID + ".*-qmp.*unix:.*/" + containerID + "/.*"}
 	return processRunning(hypervisorRegexps)
 }
