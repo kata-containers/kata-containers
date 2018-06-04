@@ -266,10 +266,12 @@ func (c *Container) Teardown() error {
 // - the process id specified in the pid file is running (cc-shim)
 // - the VM is running (qemu)
 // - the proxy is running
+// - the shim is running
 // else false is returned
 func (c *Container) Exist() bool {
 	return c.isListed() || c.isWorkloadRunning() ||
-		HypervisorRunning(*c.ID) || ProxyRunning(*c.ID)
+		HypervisorRunning(*c.ID) || ProxyRunning(*c.ID) ||
+		ShimRunning(*c.ID)
 }
 
 func (c *Container) isListed() bool {

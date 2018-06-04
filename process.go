@@ -72,3 +72,14 @@ func ProxyRunning(containerID string) bool {
 	proxyRegexps := []string{proxyPath + ".*-listen-socket.*unix:.*/" + containerID + "/.*"}
 	return processRunning(proxyRegexps)
 }
+
+// ShimRunning returns true if the shim is still running, otherwise false
+func ShimRunning(containerID string) bool {
+	shimPath := KataConfig.Shim[DefaultShim].Path
+	if shimPath == "" {
+		log.Fatal("Could not determine if shim is running: shim path is empty")
+		return false
+	}
+	shimRegexps := []string{shimPath + ".*-agent.*unix:.*/" + containerID + "/.*-container.*" + containerID + ".*"}
+	return processRunning(shimRegexps)
+}
