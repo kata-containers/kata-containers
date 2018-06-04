@@ -96,10 +96,10 @@ func getDistroDetails() (name, version string, err error) {
 	return "", "", fmt.Errorf("failed to find expected fields in one of %v", files)
 }
 
-// getCPUDetails returns the vendor and model of the CPU.
+// genericGetCPUDetails returns the vendor and model of the CPU.
 // If it is not possible to determine both values an error is
 // returned.
-func getCPUDetails() (vendor, model string, err error) {
+func genericGetCPUDetails() (vendor, model string, err error) {
 	cpuinfo, err := getCPUInfo(procCPUInfo)
 	if err != nil {
 		return "", "", err
