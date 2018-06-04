@@ -323,6 +323,14 @@ func containerCapabilities(s CompatOCISpec) (vc.LinuxCapabilities, error) {
 	return c, nil
 }
 
+// ContainerCapabilities return a LinuxCapabilities for virtcontainer
+func ContainerCapabilities(s CompatOCISpec) (vc.LinuxCapabilities, error) {
+	if s.Process == nil {
+		return vc.LinuxCapabilities{}, fmt.Errorf("ContainerCapabilities, Process is nil")
+	}
+	return containerCapabilities(s)
+}
+
 func networkConfig(ocispec CompatOCISpec, config RuntimeConfig) (vc.NetworkConfig, error) {
 	linux := ocispec.Linux
 	if linux == nil {
@@ -368,6 +376,11 @@ func ParseConfigJSON(bundlePath string) (CompatOCISpec, error) {
 	if err := json.Unmarshal(configByte, &ocispec); err != nil {
 		return CompatOCISpec{}, err
 	}
+	caps, err := ContainerCapabilities(ocispec)
+	if err != nil {
+		return CompatOCISpec{}, err
+	}
+	ocispec.Process.Capabilities = caps
 
 	return ocispec, nil
 }
@@ -557,9 +570,12 @@ func ContainerConfig(ocispec CompatOCISpec, bundlePath, cid, console string, det
 		return vc.ContainerConfig{}, err
 	}
 
-	cmd.Capabilities, err = containerCapabilities(ocispec)
-	if err != nil {
-		return vc.ContainerConfig{}, err
+	if ocispec.Process != nil {
+		caps, ok := ocispec.Process.Capabilities.(vc.LinuxCapabilities)
+		if !ok {
+			return vc.ContainerConfig{}, fmt.Errorf("Unexpected format for capabilities: %v", ocispec.Process.Capabilities)
+		}
+		cmd.Capabilities = caps
 	}
 
 	var resources vc.ContainerResources
