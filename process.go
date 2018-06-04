@@ -61,3 +61,14 @@ func HypervisorRunning(containerID string) bool {
 	hypervisorRegexps := []string{hypervisorPath + ".*-name.*" + containerID + ".*-qmp.*unix:.*/" + containerID + "/.*"}
 	return processRunning(hypervisorRegexps)
 }
+
+// ProxyRunning returns true if the proxy is still running, otherwise false
+func ProxyRunning(containerID string) bool {
+	proxyPath := KataConfig.Proxy[DefaultProxy].Path
+	if proxyPath == "" {
+		log.Fatal("Could not determine if proxy is running: proxy path is empty")
+		return false
+	}
+	proxyRegexps := []string{proxyPath + ".*-listen-socket.*unix:.*/" + containerID + "/.*"}
+	return processRunning(proxyRegexps)
+}
