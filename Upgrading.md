@@ -89,14 +89,14 @@ Kata Containers configuration.
 ### Fedora
 
 ```
-$ sudo -E dnf remove cc-runtime\* cc-proxy\* cc-shim\* linux-container clear-containers-image qemu-lite
+$ sudo -E dnf remove cc-runtime\* cc-proxy\* cc-shim\* linux-container clear-containers-image qemu-lite cc-ksm-throttler
 $ sudo rm /etc/yum.repos.d/home:clearcontainers:clear-containers-3.repo
 ```
 
 ### Ubuntu
 
 ```
-$ sudo apt-get purge cc-runtime\* cc-proxy\* cc-shim\* linux-container clear-containers-image qemu-lite
+$ sudo apt-get purge cc-runtime\* cc-proxy\* cc-shim\* linux-container clear-containers-image qemu-lite cc-ksm-throttler
 $ sudo rm /etc/apt/sources.list.d/clear-containers.list
 ```
 
