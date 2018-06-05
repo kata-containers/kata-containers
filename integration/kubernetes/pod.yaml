@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox
+spec:
+  shareProcessNamespace: true
+  containers:
+  - name: first-test-container
+    image: busybox
+    command:
+        - sleep
+        - "30"
+  - name: second-test-container
+    image: busybox
+    command:
+        - sleep
+        - "30"
+    stdin: true
+    tty: true
