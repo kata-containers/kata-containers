@@ -28,6 +28,7 @@ TEST_INITRD=${TEST_INITRD:-no}
 
 # Build Kata agent
 bash -f ${cidir}/install_agent.sh
+agent_commit=$(git --work-tree=$GOPATH/src/github.com/kata-containers/agent/ --git-dir=$GOPATH/src/github.com/kata-containers/agent/.git log --format=%h -1 HEAD)
 
 osbuilder_repo="github.com/kata-containers/osbuilder"
 
@@ -35,7 +36,7 @@ osbuilder_repo="github.com/kata-containers/osbuilder"
 go get -d ${osbuilder_repo} || true
 
 pushd "${GOPATH}/src/${osbuilder_repo}/rootfs-builder"
-sudo -E AGENT_INIT=${AGENT_INIT} GOPATH=$GOPATH USE_DOCKER=true ./rootfs.sh ${OSBUILDER_DISTRO}
+sudo -E AGENT_INIT=${AGENT_INIT} AGENT_VERSION=${agent_commit} GOPATH=$GOPATH USE_DOCKER=true ./rootfs.sh ${OSBUILDER_DISTRO}
 popd
 
 # Build the image
@@ -50,7 +51,6 @@ else
 fi
 
 # Install the image
-agent_commit=$(git --work-tree=$GOPATH/src/github.com/kata-containers/agent/ --git-dir=$GOPATH/src/github.com/kata-containers/agent/.git log --format=%h -1 HEAD)
 commit=$(git log --format=%h -1 HEAD)
 date=$(date +%Y-%m-%d-%T.%N%z)
 image="kata-containers-${date}-osbuilder-${commit}-agent-${agent_commit}"
