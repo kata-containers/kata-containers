@@ -399,3 +399,54 @@ var _ = Describe("Update CPU constraints", func() {
 		withCPUSetConstraint("-1-3", shouldFail),
 	)
 })
+
+var _ = Describe("CPUs and CPU set", func() {
+	type cpuTest struct {
+		cpus         string
+		cpusetcpus   string
+		expectedCpus string
+	}
+
+	var (
+		args          []string
+		id            string
+		cpuTests      []cpuTest
+		exitCode      int
+		stdout        string
+		updateCheckFn func(cpus, cpusetCpus, expectedCpus string)
+	)
+
+	BeforeEach(func() {
+		id = RandID(30)
+		args = []string{"--rm", "-dt", "--name", id, Image, "sh"}
+		cpuTests = []cpuTest{
+			{"1", "0-1", "2"},
+			{"3", "1,2", "2"},
+			{"2", "1", "1"},
+		}
+		_, _, exitCode = dockerRun(args...)
+		Expect(exitCode).To(BeZero())
+		updateCheckFn = func(cpus, cpusetCpus, expectedCpus string) {
+			args = []string{"--cpus", cpus, "--cpuset-cpus", cpusetCpus, id}
+			_, _, exitCode = dockerUpdate(args...)
+			Expect(exitCode).To(BeZero())
+			stdout, _, exitCode = dockerExec(id, "nproc")
+			Expect(expectedCpus).To(Equal(strings.Trim(stdout, "\n\t ")))
+		}
+	})
+
+	AfterEach(func() {
+		Expect(RemoveDockerContainer(id)).To(BeTrue())
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	Describe("updating", func() {
+		Context("cpus and cpuset of a running container", func() {
+			It("should have the right number of vCPUs", func() {
+				for _, c := range cpuTests {
+					updateCheckFn(c.cpus, c.cpusetcpus, c.expectedCpus)
+				}
+			})
+		})
+	})
+})
