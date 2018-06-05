@@ -181,3 +181,28 @@ var _ = Describe("run", func() {
 		})
 	})
 })
+
+var _ = Describe("run nonexistent command", func() {
+	var (
+		args     []string
+		id       string
+		exitCode int
+	)
+
+	BeforeEach(func() {
+		id = randomDockerName()
+	})
+
+	AfterEach(func() {
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	Context("Running nonexistent command", func() {
+		It("container and its components should not exist", func() {
+			Skip("Issue: https://github.com/kata-containers/runtime/issues/366")
+			args = []string{"--rm", "--name", id, Image, "does-not-exist"}
+			_, _, exitCode = dockerRun(args...)
+			Expect(exitCode).NotTo(Equal(0))
+		})
+	})
+})

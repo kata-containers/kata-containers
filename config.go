@@ -7,12 +7,15 @@ package tests
 
 import (
 	"io/ioutil"
+	"log"
+	"os"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
 
-// RuntimeConfig is the runtime configuration
-type RuntimeConfig struct {
+// KataConfiguration is the runtime configuration
+type KataConfiguration struct {
 	Hypervisor map[string]hypervisor
 	Proxy      map[string]proxy
 	Shim       map[string]shim
@@ -75,13 +78,38 @@ const (
 	// DefaultShim default shim
 	DefaultShim = "kata"
 
-	// DefaultRuntimeConfigPath is the default path to the runtime configuration file
-	DefaultRuntimeConfigPath = "/usr/share/defaults/kata-containers/configuration.toml"
+	// DefaultKataConfigPath is the default path to the kata configuration file
+	DefaultKataConfigPath = "/usr/share/defaults/kata-containers/configuration.toml"
 )
 
-// LoadRuntimeConfiguration loads runtime configuration
-func LoadRuntimeConfiguration(configPath string) (RuntimeConfig, error) {
-	var config RuntimeConfig
+// KataConfig is the runtime configuration
+var KataConfig KataConfiguration
+
+func init() {
+	var err error
+	kataConfigPath := DefaultKataConfigPath
+
+	args := []string{"--kata-show-default-config-paths"}
+	cmd := NewCommand(Runtime, args...)
+	stdout, _, exitCode := cmd.Run()
+	if exitCode == 0 && stdout != "" {
+		for _, c := range strings.Split(stdout, "\n") {
+			if _, err = os.Stat(c); err == nil {
+				kataConfigPath = c
+				break
+			}
+		}
+	}
+
+	KataConfig, err = loadKataConfiguration(kataConfigPath)
+	if err != nil {
+		log.Fatalf("failed to load kata configuration: %v\n", err)
+	}
+}
+
+// loadKataConfiguration loads kata configuration
+func loadKataConfiguration(configPath string) (KataConfiguration, error) {
+	var config KataConfiguration
 	configData, err := ioutil.ReadFile(configPath)
 	if err != nil {
 		return config, err

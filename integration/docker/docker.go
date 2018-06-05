@@ -201,6 +201,8 @@ func IsRunningDockerContainer(name string) bool {
 // ExistDockerContainer returns true if any of next cases is true:
 // - 'docker ps -a' command shows the container
 // - the VM is running (qemu)
+// - the proxy is running
+// - the shim is running
 // else false is returned
 func ExistDockerContainer(name string) bool {
 	state := StatusDockerContainer(name)
@@ -208,7 +210,9 @@ func ExistDockerContainer(name string) bool {
 		return true
 	}
 
-	return tests.IsVMRunning(name)
+	return tests.HypervisorRunning(name) ||
+		tests.ProxyRunning(name) ||
+		tests.ShimRunning(name)
 }
 
 // RemoveDockerContainer removes a container using docker rm -f
