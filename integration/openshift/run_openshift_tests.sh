@@ -17,6 +17,13 @@ if [ "$ID" != "fedora" ] && [ "$CI" == true ]; then
 	exit
 fi
 
+# Currently, Openshift tests are not working with initrd.
+if [ "$TEST_INITRD" = yes ] && [ "$AGENT_INIT" = yes ]; then
+	echo "Skip Openshift tests on INITRD"
+	echo "Issue github.com/kata-containers/tests/issues/335"
+	exit
+fi
+
 pushd "$openshift_dir"
 ./init.sh
 bats hello_world.bats
