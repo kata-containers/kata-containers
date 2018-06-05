@@ -206,3 +206,28 @@ var _ = Describe("run nonexistent command", func() {
 		})
 	})
 })
+
+var _ = Describe("Check read-only cgroup filesystem", func() {
+	var (
+		args     []string
+		id       string
+		exitCode int
+	)
+
+	BeforeEach(func() {
+		id = randomDockerName()
+	})
+
+	AfterEach(func() {
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	Context("write anything in the cgroup files", func() {
+		It("should fail because of cgroup filesystem MUST BE read-only", func() {
+			args = []string{"--rm", "--name", id, DebianImage, "bash", "-c",
+				"for f in /sys/fs/cgroup/*/*; do echo 100 > $f && exit 1; done; exit 0"}
+			_, _, exitCode = dockerRun(args...)
+			Expect(exitCode).To(Equal(0))
+		})
+	})
+})
