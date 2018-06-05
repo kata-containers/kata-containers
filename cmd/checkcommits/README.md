@@ -75,6 +75,10 @@ $ go get -d "$repo"
 $ (cd "$GOPATH/src/$repo" && make)
 ```
 
+This will install `checkcommits` into your
+[workspace](https://golang.org/doc/code.html#GOPATH)’s `bin` directory,
+so ensure `$GOPATH/bin` is in your `$PATH`.
+
 ### Basic use
 
 ```
