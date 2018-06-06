@@ -6,6 +6,9 @@
 >
 > - If you are installing on a system that already has Clear Containers or `runv` installed,
 >   first read [the upgrading document](../Upgrading.md).
+>
+> - This install guide is specific to integration with Docker.  If you want to use Kata
+>   Containers through Kubernetes, see the "Developer Guide" [here](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#if-you-want-to-run-kata-containers-with-kubernetes).
 
 This step is only required in case Docker is not installed on the system.
 1. Install the latest version of Docker with the following commands:
