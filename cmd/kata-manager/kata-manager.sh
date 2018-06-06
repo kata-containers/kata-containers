@@ -14,7 +14,9 @@ typeset -r doc_repo="github.com/kata-containers/documentation"
 typeset -r test_repo="github.com/kata-containers/tests"
 
 typeset -r config_file_name="configuration.toml"
-typeset -r default_image_file="/usr/share/kata-containers/kata-containers.img"
+typeset -r default_image_dir="/usr/share/kata-containers"
+typeset -r default_image_file="${default_image_dir}/kata-containers.img"
+typeset -r default_initrd_file="${default_image_dir}/kata-containers-initrd.img"
 typeset -r default_config_file="/usr/share/defaults/kata-containers/${config_file_name}"
 typeset -r local_config_file="/etc/kata-containers/${config_file_name}"
 
@@ -142,6 +144,8 @@ enable_image()
 {
 	local file="$1"
 
+	check_file "$file"
+
 	config_checks
 
 	sudo sed -i "s!^#*.*image *=.*\$!image = \"$file\"!g" "$config_file"
@@ -155,6 +159,8 @@ enable_image()
 enable_initrd()
 {
 	local file="$1"
+
+	check_file "$file"
 
 	config_checks
 
@@ -190,7 +196,7 @@ cmd_configure_image()
 {
 	local file="$1"
 
-	check_file "$file"
+	[ -z "$file" ] && file="${default_image_file}"
 
 	info "installing '$file' as image"
 
@@ -202,7 +208,7 @@ cmd_configure_initrd()
 {
 	local file="$1"
 
-	check_file "$file"
+	[ -z "$file" ] && file="${default_initrd_file}"
 
 	info "installing '$file' as initrd"
 
