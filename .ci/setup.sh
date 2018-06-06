@@ -20,6 +20,7 @@ install_bats
 if [ "$ID" == fedora ];then
 	sudo -E dnf -y install automake yamllint coreutils moreutils
 elif [ "$ID" == centos ];then
+	sudo -E yum -y install epel-release
 	sudo -E yum -y install automake yamllint coreutils moreutils
 elif [ "$ID" == ubuntu ];then
 	sudo apt-get -qq update
