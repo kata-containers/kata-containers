@@ -8,5 +8,8 @@ dist: trusty
 
 language: bash
 
+before_script:
+  - ".ci/setup.sh"
+
 script:
   - ".ci/run.sh"
