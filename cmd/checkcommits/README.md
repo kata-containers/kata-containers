@@ -32,7 +32,7 @@ crash dump or log file extract may easily result in a block of text with
 very long lines.
 
 To cater for this scenario, this tool employs a very simply heuristic:
-line legth limits only apply if the line begins with an alphabetic
+line length limits only apply if the line begins with an alphabetic
 character. This has the following attractive properties:
 
 - Log files tend to start with numerics so sometimes get handled
@@ -54,7 +54,7 @@ unreasonable to penalise people with long names).
 
 By default, no output will be generated unless an error is found.
 However, enabling verbose mode will show the commits as they are
-checked. To enanble verbose mode either specify `--verbose` or set
+checked. To enable verbose mode either specify `--verbose` or set
 `CHECKCOMMITS_VERBOSE=1`.
 
 ### For full details
