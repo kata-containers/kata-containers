@@ -18,6 +18,13 @@ if [ "$ID" != ubuntu  ]; then
 	exit
 fi
 
+# Currently, Kubernetes tests are not working with initrd.
+if [ "$TEST_INITRD" = yes ] && [ "$AGENT_INIT" = yes ]; then
+	echo "Skip Kubernetes tests on INITRD"
+	echo "Issue github.com/kata-containers/tests/issues/335"
+	exit
+fi
+
 pushd "$kubernetes_dir"
 ./init.sh
 bats nginx.bats
