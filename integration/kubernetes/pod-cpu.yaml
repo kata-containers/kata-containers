@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: constraints-cpu-test
+spec:
+  containers:
+  - name: first-cpu-container
+    image: busybox
+    command:
+        - sleep
+        - "30"
+    resources:
+      limits:
+        cpu: "1"
+      requests:
+        cpu: "500m"
