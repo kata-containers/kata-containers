@@ -106,4 +106,4 @@ $ sudo -E PATH=$PATH make AGENT_INIT=yes initrd-only
 ```
 
 For further details,
-see[the initrd builder documentation](initrd-builder/README.md).
+see [the initrd builder documentation](initrd-builder/README.md).
