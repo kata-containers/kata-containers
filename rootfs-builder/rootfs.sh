@@ -58,7 +58,7 @@ GO_AGENT_PKG: Change the golang package url to get the agent source code
 AGENT_BIN   : Name of the agent binary (needed to check if agent is installed)
 USE_DOCKER: If set will build rootfs in a Docker Container (requries docker)
             DEFAULT: not set
-AGENT_INIT  : Use $(AGENT_BIN) as init process.
+AGENT_INIT  : Use ${AGENT_BIN} as init process.
             DEFAULT: no
 KERNEL_MODULES_DIR: Optional kernel modules to put into the rootfs.
 		    DEFAULT: ""
