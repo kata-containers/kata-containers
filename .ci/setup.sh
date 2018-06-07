@@ -8,4 +8,4 @@
 set -e
 
 cidir=$(dirname "$0")
-bash "${cidir}/test-install-docs.sh"
+bash "${cidir}/static-checks.sh"
