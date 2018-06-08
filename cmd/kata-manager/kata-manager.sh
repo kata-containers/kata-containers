@@ -225,9 +225,7 @@ check_golang()
 	[ -z "${GOPATH}" ] && die "need GOPATH" || true
 }
 
-# Install the packaged version of Kata by executing the commands
-# specified in the installation guide document.
-cmd_install_packages()
+get_docs_repo()
 {
 	check_golang
 
@@ -235,7 +233,35 @@ cmd_install_packages()
 
 	local repo_dir="${GOPATH}/src/${doc_repo}"
 
-	[ ! -d "${repo_dir}" ] && (cd "$(dirname ${repo_dir})" && git clone "$doc_repo_url")
+	[ ! -d "${repo_dir}" ] && (cd "$(dirname ${repo_dir})" && git clone "$doc_repo_url") || true
+}
+
+exec_document()
+{
+	local -r file="$1"
+
+	local -r doc_script="kata-doc-to-script.sh"
+	local -r tool="${GOPATH}/src/${test_repo}/.ci/${doc_script}"
+
+	[ ! -e "${tool}" ] && die "cannot find script ${doc_script}"
+
+	local -r install_script=$(mktemp)
+
+	# create the script
+	"${tool}" "${file}" "${install_script}"
+
+	# run the installation
+	bash "${install_script}"
+
+	# clean up
+	rm -f "${install_script}"
+}
+
+# Install the packaged version of Kata by executing the commands
+# specified in the installation guide document.
+cmd_install_packages()
+{
+	get_docs_repo
 
 	local file="${distro}-installation-guide.md"
 
@@ -244,21 +270,7 @@ cmd_install_packages()
 
 	info "installing packages for distro $distro"
 
-	local -r doc_script="kata-doc-to-script.sh"
-
-	local tool="${GOPATH}/src/${test_repo}/.ci/${doc_script}"
-	[ ! -e "${tool}" ] && die "cannot find script $doc_script"
-
-	local install_script=$(mktemp)
-
-	# create the script
-	"${tool}" "${doc}" "${install_script}"
-
-	# run the installation
-	bash "${install_script}"
-
-	# clean up
-	rm -f "${install_script}"
+	exec_document "${doc}"
 }
 
 cmd_remove_packages()
