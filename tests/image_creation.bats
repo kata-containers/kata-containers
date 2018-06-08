@@ -51,7 +51,7 @@ setup()
 
 	[ ! -d "${tests_repo_dir}" ] && git clone "https://${tests_repo}" "${tests_repo_dir}"
 
-	chronic $mgr install-packages
+	chronic $mgr install-docker-system
 	chronic $mgr enable-debug
 
 	# Ensure "docker build" works
