@@ -229,14 +229,14 @@ cmd_install_packages()
 
 	local repo_dir="${GOPATH}/src/${doc_repo}"
 
-	info "installing packages"
-
 	[ ! -d "${repo_dir}" ] && (cd "$(dirname ${repo_dir})" && git clone "$doc_repo_url")
 
 	local file="${distro}-installation-guide.md"
 
 	local doc="${GOPATH}/src/${doc_repo}/install/${file}"
 	[ ! -e "$doc" ] && die "no install document for distro $distro"
+
+	info "installing packages for distro $distro"
 
 	local -r doc_script="kata-doc-to-script.sh"
 
