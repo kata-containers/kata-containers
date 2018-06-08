@@ -136,6 +136,25 @@ type Param struct {
 
 // HypervisorConfig is the hypervisor configuration.
 type HypervisorConfig struct {
+	// NumVCPUs specifies default number of vCPUs for the VM.
+	NumVCPUs uint32
+
+	//DefaultMaxVCPUs specifies the maximum number of vCPUs for the VM.
+	DefaultMaxVCPUs uint32
+
+	// DefaultMem specifies default memory size in MiB for the VM.
+	MemorySize uint32
+
+	// DefaultBridges specifies default number of bridges for the VM.
+	// Bridges can be used to hot plug devices
+	DefaultBridges uint32
+
+	// Msize9p is used as the msize for 9p shares
+	Msize9p uint32
+
+	// MemSlots specifies default memory slots the VM.
+	MemSlots uint32
+
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 
@@ -169,24 +188,19 @@ type HypervisorConfig struct {
 	// emulated.
 	HypervisorMachineType string
 
+	// MemoryPath is the memory file path of VM memory. Used when either BootToBeTemplate or
+	// BootFromTemplate is true.
+	MemoryPath string
+
+	// DevicesStatePath is the VM device state file path. Used when either BootToBeTemplate or
+	// BootFromTemplate is true.
+	DevicesStatePath string
+
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.
 	// For example, if there is a value for the "kernel" key in this map,
 	// it will be used for the sandbox's kernel path instead of KernelPath.
 	customAssets map[assetType]*asset
-
-	// NumVCPUs specifies default number of vCPUs for the VM.
-	NumVCPUs uint32
-
-	//DefaultMaxVCPUs specifies the maximum number of vCPUs for the VM.
-	DefaultMaxVCPUs uint32
-
-	// DefaultMem specifies default memory size in MiB for the VM.
-	MemorySize uint32
-
-	// DefaultBridges specifies default number of bridges for the VM.
-	// Bridges can be used to hot plug devices
-	DefaultBridges uint32
 
 	// DisableBlockDeviceUse disallows a block device from being used.
 	DisableBlockDeviceUse bool
@@ -217,9 +231,6 @@ type HypervisorConfig struct {
 	// when running on top of another VMM.
 	DisableNestingChecks bool
 
-	// Msize9p is used as the msize for 9p shares
-	Msize9p uint32
-
 	// UseVSock use a vsock for agent communication
 	UseVSock bool
 
@@ -232,14 +243,6 @@ type HypervisorConfig struct {
 
 	// BootFromTemplate used to indicate if the VM should be created from a template VM
 	BootFromTemplate bool
-
-	// MemoryPath is the memory file path of VM memory. Used when either BootToBeTemplate or
-	// BootFromTemplate is true.
-	MemoryPath string
-
-	// DevicesStatePath is the VM device state file path. Used when either BootToBeTemplate or
-	// BootFromTemplate is true.
-	DevicesStatePath string
 
 	// DisableVhostNet is used to indicate if host supports vhost_net
 	DisableVhostNet bool

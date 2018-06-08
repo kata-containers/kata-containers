@@ -151,11 +151,13 @@ func TestQemuCPUTopology(t *testing.T) {
 
 func TestQemuMemoryTopology(t *testing.T) {
 	mem := uint32(1000)
+	slots := uint32(8)
 
 	q := &qemu{
 		arch: &qemuArchBase{},
 		config: HypervisorConfig{
 			MemorySize: mem,
+			MemSlots:   slots,
 		},
 	}
 
@@ -167,7 +169,7 @@ func TestQemuMemoryTopology(t *testing.T) {
 
 	expectedOut := govmmQemu.Memory{
 		Size:   fmt.Sprintf("%dM", mem),
-		Slots:  defaultMemSlots,
+		Slots:  uint8(slots),
 		MaxMem: memMax,
 	}
 

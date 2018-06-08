@@ -76,6 +76,11 @@ default_bridges = @DEFBRIDGES@
 # Default memory size in MiB for SB/VM.
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
 #default_memory = @DEFMEMSZ@
+#
+# Default memory slots per SB/VM.
+# If unspecified then it will be set @DEFMEMSLOTS@.
+# This is will determine the times that memory will be hotadded to sandbox/VM.
+#memory_slots = @DEFMEMSLOTS@
 
 # Disable block device from being used for a container's rootfs.
 # In case of a storage driver like devicemapper where a container's 
