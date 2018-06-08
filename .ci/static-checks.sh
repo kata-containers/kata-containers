@@ -245,6 +245,8 @@ check_license_headers()
 		--exclude="*.md" \
 		--exclude="*.toml" \
 		--exclude="*.yaml" \
+		--exclude="*.png" \
+		--exclude="*.jpg" \
 		-EL "\<${pattern}\>" \
 		$files || true)
 
