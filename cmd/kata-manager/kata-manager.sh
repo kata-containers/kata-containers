@@ -216,14 +216,20 @@ cmd_configure_initrd()
 	disable_image
 }
 
+check_golang()
+{
+	command -v go >/dev/null || die "need golang"
+
+	GOPATH=$(go env GOPATH || true)
+
+	[ -z "${GOPATH}" ] && die "need GOPATH" || true
+}
+
 # Install the packaged version of Kata by executing the commands
 # specified in the installation guide document.
 cmd_install_packages()
 {
-	command -v go >/dev/null || die "need golang"
-
-	GOPATH=$(go env GOPATH)
-	[ -z "${GOPATH}" ] && die "need GOPATH"
+	check_golang
 
 	local doc_repo_url="https://${doc_repo}"
 
