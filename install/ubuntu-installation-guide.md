@@ -2,7 +2,8 @@
 
 > **Notes:**
 >
-> - Kata Containers packages are available for Ubuntu\* **16.04** and **17.10** (currently `x86_64` only).
+> - Kata Containers packages are available for [Ubuntu\*](https://www.ubuntu.com)
+>   versions **16.04** and **17.10** (currently `x86_64` only).
 >
 > - If you are installing on a system that already has Clear Containers or `runv` installed,
 >   first read [the upgrading document](../Upgrading.md).
