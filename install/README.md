@@ -1,5 +1,8 @@
 # Kata Containers installation user guides
 
+Kata Containers requires nested virtualization or bare metal. 
+See the [hardware requirements](https://github.com/kata-containers/runtime/blob/master/README.md#hardware-requirements) to see if your system is capable of running Kata Containers.
+
 Select your preferred distribution:
 
 * [CentOS](https://github.com/kata-containers/documentation/blob/master/install/centos-installation-guide.md)
