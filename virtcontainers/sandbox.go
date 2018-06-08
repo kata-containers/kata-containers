@@ -293,7 +293,8 @@ type Cmd struct {
 // Resources describes VM resources configuration.
 type Resources struct {
 	// Memory is the amount of available memory in MiB.
-	Memory uint
+	Memory      uint
+	MemorySlots uint8
 }
 
 // SandboxStatus describes a sandbox status.

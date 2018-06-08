@@ -84,6 +84,7 @@ type hypervisor struct {
 	NumVCPUs              int32  `toml:"default_vcpus"`
 	DefaultMaxVCPUs       uint32 `toml:"default_maxvcpus"`
 	MemorySize            uint32 `toml:"default_memory"`
+	MemSlots              uint32 `toml:"memory_slots"`
 	DefaultBridges        uint32 `toml:"default_bridges"`
 	Msize9p               uint32 `toml:"msize_9p"`
 	DisableBlockDeviceUse bool   `toml:"disable_block_device_use"`
@@ -247,6 +248,15 @@ func (h hypervisor) defaultMemSz() uint32 {
 	return h.MemorySize
 }
 
+func (h hypervisor) defaultMemSlots() uint32 {
+	slots := h.MemSlots
+	if slots == 0 {
+		slots = defaultMemSlots
+	}
+
+	return slots
+}
+
 func (h hypervisor) defaultBridges() uint32 {
 	if h.DefaultBridges == 0 {
 		return defaultBridgesCount
@@ -392,6 +402,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		NumVCPUs:              h.defaultVCPUs(),
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		MemorySize:            h.defaultMemSz(),
+		MemSlots:              h.defaultMemSlots(),
 		DefaultBridges:        h.defaultBridges(),
 		DisableBlockDeviceUse: h.DisableBlockDeviceUse,
 		MemPrealloc:           h.MemPrealloc,

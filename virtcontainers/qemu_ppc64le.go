@@ -109,7 +109,7 @@ func (q *qemuPPC64le) cpuModel() string {
 	return cpuModel
 }
 
-func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64) govmmQemu.Memory {
+func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
 
 	if qemuMajorVersion >= 2 && qemuMinorVersion >= 10 {
 		q.Logger().Debug("Aligning maxmem to multiples of 256MB. Assumption: Kernel Version >= 4.11")
@@ -119,7 +119,7 @@ func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64) govmmQemu.Me
 		hostMemoryMb = defaultMemMaxPPC64le
 	}
 
-	return genericMemoryTopology(memoryMb, hostMemoryMb)
+	return genericMemoryTopology(memoryMb, hostMemoryMb, slots)
 }
 
 func (q *qemuPPC64le) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
