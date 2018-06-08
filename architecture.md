@@ -39,7 +39,7 @@ The [Kata Containers runtime (kata-runtime)](https://github.com/kata-containers/
 is compatible with the [OCI](https://github.com/opencontainers) [runtime specification](https://github.com/opencontainers/runtime-spec)
 and therefore works seamlessly with the
 [Docker\* Engine](https://www.docker.com/products/docker-engine) pluggable runtime
-architecture. It also supports the [Kubernetes\* Container Runtime Interface (CRI)](https://github.com/kubernetes/kubernetes/tree/master/pkg/kubelet/apis/cri/v1alpha1/runtime)
+architecture. It also supports the [Kubernetes\* Container Runtime Interface (CRI)](https://github.com/kubernetes/community/blob/master/contributors/devel/container-runtime-interface.md)
 through the [CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and
 [Containerd CRI Plugin\*](https://github.com/containerd/cri) implementation. In other words, you can transparently
 select between the [default Docker and CRI shim runtime (runc)](https://github.com/opencontainers/runc)
@@ -544,7 +544,7 @@ dedicated master node) calls into a compute kubelet. This kubelet instance is
 responsible for managing the lifecycle of pods within the nodes and eventually relies
 on a container runtime to handle execution. The kubelet architecture decouples
 lifecycle management from container execution through the dedicated
-[`gRPC`](https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/apis/cri/v1alpha1/runtime/api.proto)
+[`gRPC`](https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/apis/cri/runtime/v1alpha2/api.proto)
 based [Container Runtime Interface (CRI)](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/node/container-runtime-interface-v1.md).
 
 In other words, a kubelet is a CRI client and expects a CRI implementation to
