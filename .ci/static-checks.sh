@@ -262,14 +262,80 @@ EOT
 # Perform basic checks on documentation files
 check_docs()
 {
+	local cmd="xurls"
+
+	if [ ! "$(command -v $cmd)" ]
+	then
+		echo "Install $cmd utility"
+		go get -u "mvdan.cc/xurls/cmd/$cmd"
+	fi
+
 	echo "INFO: Checking documentation"
 
-	docs=$(find . -name "*.md" |grep -v "vendor/" || true)
+	local docs=$(find . -name "*.md" |grep -v "vendor/" || true)
+
+	local url
+	local urls
+	local url_map=$(mktemp)
+	local invalid_urls=$(mktemp)
+	local doc
 
 	for doc in $docs
 	do
 		bash "${cidir}/kata-doc-to-script.sh" -csv "$doc"
+
+		# Look for URLs in the document
+		urls=$($cmd "$doc")
+
+		for url in $urls
+		do
+			printf "%s\t%s\n" "${url}" "${doc}" >> "$url_map"
+		done
 	done
+
+	# Get unique list of URLs
+	urls=$(awk '{print $1}' "$url_map"|sort -u)
+
+	echo "INFO: Checking all document URLs"
+
+	for url in $urls
+	do
+		# Ignore the install guide urls that contain a shell variable
+		echo "$url"|grep -q "\\$" && continue
+
+		# This prefix requires the client to be logged in to github, so ignore
+		echo "$url"|grep -q 'https://github.com/pulls' && continue
+
+		# Sigh.
+		echo "$url"|grep -q 'https://example.com' && continue
+
+		# Check the URL, saving it if invalid
+		( curl -sLf -o /dev/null "$url" ||\
+				echo "$url" >> "$invalid_urls") &
+	done
+
+	# Synchronisation point
+	wait
+
+	if [ -s "$invalid_urls" ]
+	then
+		local files
+
+		cat "$invalid_urls" | while read url
+		do
+			files=$(grep "^${url}" "$url_map"|awk '{print $2}')
+			echo >&2 -e "ERROR: URL '$url' in the following files is invalid:\n"
+
+			for file in $files
+			do
+				echo >&2 "$file"
+			done
+		done
+
+		exit 1
+	fi
+
+	rm -f "$url_map" "$invalid_urls"
 }
 
 check_commits
