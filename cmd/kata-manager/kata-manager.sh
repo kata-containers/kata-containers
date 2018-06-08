@@ -225,8 +225,6 @@ cmd_install_packages()
 	GOPATH=$(go env GOPATH)
 	[ -z "${GOPATH}" ] && die "need GOPATH"
 
-	source /etc/os-release
-
 	local doc_repo_url="https://${doc_repo}"
 
 	local repo_dir="${GOPATH}/src/${doc_repo}"
@@ -235,7 +233,7 @@ cmd_install_packages()
 
 	[ ! -d "${repo_dir}" ] && (cd "$(dirname ${repo_dir})" && git clone "$doc_repo_url")
 
-	local file="${ID}-installation-guide.md"
+	local file="${distro}-installation-guide.md"
 
 	local doc="${GOPATH}/src/${doc_repo}/install/${file}"
 	[ ! -e "$doc" ] && die "no install document for distro $distro"
