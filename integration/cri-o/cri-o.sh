@@ -69,11 +69,11 @@ fi
 if [ "$ghprbGhRepository" == "${crio_repository/github.com\/}" ] && [ "$CI" == true ] && [ -z "${KATA_DEV_MODE}" ] ;then
 	# block device attached to the Azure VM where we run the CI
 	# if the block device has a partition, cri-o will not be able to use it.
-	block_device=/dev/sdb
-	if sudo fdisk -l "$block_device" | grep "${block_device}[1-9]"; then
-		die "detected partitions on block device: ${block_device}. Will not continue"
+	export LVM_DEVICE=/dev/sdb
+	if sudo fdisk -l "$LVM_DEVICE" | grep "${LVM_DEVICE}[1-9]"; then
+		die "detected partitions on block device: ${LVM_DEVICE}. Will not continue"
 	fi
-	export STORAGE_OPTIONS="--storage-driver devicemapper --storage-opt dm.directlvm_device=${block_device}
+	export STORAGE_OPTIONS="--storage-driver devicemapper --storage-opt dm.directlvm_device=${LVM_DEVICE}
 				--storage-opt dm.directlvm_device_force=true --storage-opt dm.thinp_percent=95
 				--storage-opt dm.thinp_metapercent=1 --storage-opt dm.thinp_autoextend_threshold=80
 				--storage-opt dm.thinp_autoextend_percent=20"
