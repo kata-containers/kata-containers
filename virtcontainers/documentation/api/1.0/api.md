@@ -12,7 +12,7 @@ The virtcontainers 1.0 API operates on two high level objects:
 The virtcontainers 1.0 sandbox API manages hardware virtualized
 [sandbox lifecycles](#sandbox-functions). The virtcontainers sandbox
 semantics strictly follow the
-[Kubernetes](https://kubernetes.io/docs/concepts/workloads/sandboxes/sandbox/) ones.
+[Kubernetes](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/) ones.
 
 The sandbox API allows callers to [create](#createsandbox), [delete](#deletesandbox),
 [start](#startsandbox), [stop](#stopsandbox), [run](#runsandbox), [pause](#pausesandbox),
@@ -557,7 +557,7 @@ virtual machine's guest OS.
 
 A virtcontainers container always belong to one and only one
 virtcontainers sandbox, again following the
-[Kubernetes](https://kubernetes.io/docs/concepts/workloads/sandboxes/sandbox-overview/)
+[Kubernetes](https://kubernetes.io/docs/concepts/workloads/pods/pod-overview).
 logic and semantics.
 
 The container API allows callers to [create](#createcontainer),

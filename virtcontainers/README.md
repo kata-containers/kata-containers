@@ -1,11 +1,3 @@
-[![Build Status](https://travis-ci.org/containers/virtcontainers.svg?branch=master)](https://travis-ci.org/containers/virtcontainers)
-[![Build Status](http://cc-jenkins-ci.westus2.cloudapp.azure.com/job/virtcontainers-ubuntu-16-04-master/badge/icon)](http://cc-jenkins-ci.westus2.cloudapp.azure.com/job/virtcontainers-ubuntu-16-04-master)
-[![Build Status](http://cc-jenkins-ci.westus2.cloudapp.azure.com/job/virtcontainers-ubuntu-17-04-master/badge/icon)](http://cc-jenkins-ci.westus2.cloudapp.azure.com/job/virtcontainers-ubuntu-17-04-master)
-[![Build Status](http://cc-jenkins-ci.westus2.cloudapp.azure.com/job/virtcontainers-fedora-26-master/badge/icon)](http://cc-jenkins-ci.westus2.cloudapp.azure.com/job/virtcontainers-fedora-26-master)
-[![Go Report Card](https://goreportcard.com/badge/github.com/containers/virtcontainers)](https://goreportcard.com/report/github.com/containers/virtcontainers)
-[![Coverage Status](https://coveralls.io/repos/github/containers/virtcontainers/badge.svg?branch=master)](https://coveralls.io/github/containers/virtcontainers?branch=master)
-[![GoDoc](https://godoc.org/github.com/containers/virtcontainers?status.svg)](https://godoc.org/github.com/containers/virtcontainers)
-
 Table of Contents
 =================
 
@@ -51,7 +43,7 @@ or the [Kubernetes CRI][cri]) to the `virtcontainers` API.
 [runtime][cc-runtime] implementation
 
 [oci]: https://github.com/opencontainers/runtime-spec
-[cri]: https://github.com/kubernetes/kubernetes/blob/master/docs/proposals/container-runtime-interface-v1.md
+[cri]: https://github.com/kubernetes/community/blob/master/contributors/devel/container-runtime-interface.md
 [cc]: https://github.com/clearcontainers/
 [cc-runtime]: https://github.com/clearcontainers/runtime/
 
