@@ -8,53 +8,26 @@
 > - If you are installing on a system that already has Clear Containers or `runv` installed,
 >   first read [the upgrading document](../Upgrading.md).
 >
-> - This install guide is specific to integration with Docker.  If you want to use Kata
->   Containers through Kubernetes, see the "Developer Guide" [here](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#if-you-want-to-run-kata-containers-with-kubernetes).
+> - If you do not want to copy or type all these instructions by hand, you can use the
+>   [`kata-manager`](https://github.com/kata-containers/tests/blob/master/cmd/kata-manager/kata-manager.sh)
+>   script to install the packaged system including your chosen container
+>   manager. Alternatively, you can generate a runnable shell script from
+>   individual documents using the
+>   [`kata-doc-to-script`](https://github.com/kata-containers/tests/blob/master/.ci/kata-doc-to-script.sh) script.
 
-This step is only required in case Docker is not installed on the system.
-1. Install the latest version of Docker with the following commands:
+1. Install the Kata Containers components with the following commands:
 
-```bash
-$ sudo yum -y install yum-utils
-$ sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-$ sudo yum -y install docker-ce
-```
-For more information on installing Docker please refer to the
-[Docker Guide](https://docs.docker.com/engine/installation/linux/centos)
+   > **Note:** This installation channel is not secure since the repository currently
+   > redirects download URLs to `http`.
 
-2. Install the Kata Containers components with the following commands:
+   ```bash
+   $ source /etc/os-release
+   $ sudo yum -y install yum-utils
+   $ sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo "http://download.opensuse.org/repositories/home:/katacontainers:/release/CentOS_${VERSION_ID}/home:katacontainers:release.repo"
+   $ sudo -E yum -y install kata-runtime kata-proxy kata-shim
+   ```
 
-> **Note:** The repository redirects the download content to use `http`, be aware that this installation channel is not secure.
+2. Decide which container manager you will use and select the corresponding link that follows:
 
-```bash
-$ source /etc/os-release
-$ sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo \
-"http://download.opensuse.org/repositories/home:/katacontainers:/release/CentOS_${VERSION_ID}/home:katacontainers:release.repo"
-$ sudo -E yum -y install kata-runtime kata-proxy kata-shim
-```
-
-3. Configure Docker to use Kata Containers by default with the following commands:
-
-```bash
-$ sudo mkdir -p /etc/systemd/system/docker.service.d/
-$ cat <<EOF | sudo tee /etc/systemd/system/docker.service.d/kata-containers.conf
-[Service]
-ExecStart=
-ExecStart=/usr/bin/dockerd -D --add-runtime kata-runtime=/usr/bin/kata-runtime --default-runtime=kata-runtime
-EOF
-```
-
-4. Restart the Docker systemd service with the following commands:
-
-```bash
-$ sudo systemctl daemon-reload
-$ sudo systemctl restart docker
-```
-
-5. Run Kata Containers
-
-You are now ready to run Kata Containers:
-
-```
-$ sudo docker run -ti busybox sh
-```
+   - [Docker](docker/centos-docker-install.md)
+   - [Kubernetes](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#if-you-want-to-run-kata-containers-with-kubernetes)

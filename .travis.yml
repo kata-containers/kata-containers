@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+sudo: required
 dist: trusty
 
 language: bash

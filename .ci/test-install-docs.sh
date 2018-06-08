@@ -17,6 +17,8 @@ info()
 # commands it specified result in a working system.
 check_install_guides()
 {
+	[ -n "$TRAVIS" ] && info "Not testing install guide as Travis lacks modern distro support and VT-x" && return 
+
 	local -r install_guide_suffix="-installation-guide.md"
 
 	# List of filters used to restrict the types of file changes.
@@ -70,9 +72,7 @@ check_install_guides()
 
 	info "Installing system from the $ID install guide"
 
-	$mgr install-packages
-
-	[ -n "$TRAVIS" ] && info "Not creating container as Travis lacks VT-x" && return 
+	$mgr install-docker-system
 
 	$mgr configure-image
 	$mgr enable-debug
