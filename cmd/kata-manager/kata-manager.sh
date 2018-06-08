@@ -24,6 +24,7 @@ typeset -r local_config_file="/etc/kata-containers/${config_file_name}"
 typeset -r agent_debug="agent.log=debug"
 
 verbose="no"
+execute="yes"
 
 # full path to the runtime configuration file to operate on
 config_file=
@@ -43,6 +44,8 @@ Options:
   -c <file> : Specify full path to configuration file
               (default: '$local_config_file').
   -h        : Display this help.
+  -n        : No execute mode - for -install-*' commands, create a script but
+	      do not run it (to allow the user to review and run if they choose).
   -v        : Verbose output.
 
 Commands:
@@ -240,6 +243,7 @@ get_docs_repo()
 exec_document()
 {
 	local -r file="$1"
+	local -r msg="$2"
 
 	local -r doc_script="kata-doc-to-script.sh"
 	local -r tool="${GOPATH}/src/${test_repo}/.ci/${doc_script}"
@@ -249,7 +253,18 @@ exec_document()
 	local -r install_script=$(mktemp)
 
 	# create the script
-	"${tool}" "${file}" "${install_script}"
+	"${tool}" "${file}" "${install_script}" "${msg}"
+
+	if [ "$execute" = "no" ]
+	then
+		info "Not running script ${install_script} to $msg (created from document ${file})"
+
+		# Note that we cannot exit since some commands run this
+		# function multiple times.
+		return
+	fi
+
+	info "$msg"
 
 	# run the installation
 	bash "${install_script}"
@@ -269,9 +284,7 @@ cmd_install_packages()
 	local doc="${GOPATH}/src/${doc_repo}/install/${file}"
 	[ ! -e "$doc" ] && die "no install document for distro $distro"
 
-	info "installing packages for distro $distro"
-
-	exec_document "${doc}"
+	exec_document "${doc}" "install packages for distro ${distro}"
 }
 
 install_container_manager()
@@ -285,9 +298,7 @@ install_container_manager()
 	local doc="${GOPATH}/src/${doc_repo}/${file}"
 	[ ! -e "$doc" ] && die "no ${mgr} install document for distro ${distro}"
 
-	info "installing ${mgr}"
-
-	exec_document "${doc}"
+	exec_document "${doc}" "install ${mgr} for distro ${distro}"
 }
 
 cmd_install_docker_system()
@@ -348,15 +359,21 @@ parse_args()
 {
 	config_file="${local_config_file}"
 
-	while getopts "c:hv" opt
+	while getopts "c:hnv" opt
 	do
 		case "$opt" in
 			c)
 				config_file="$OPTARG"
 				;;
+
 			h)
 				usage
 				exit 0
+				;;
+
+			n)
+				execute="no"
+				verbose="yes"
 				;;
 
 			v)

@@ -35,11 +35,10 @@ verbose="no"
 usage()
 {
 	cat <<EOT
-Usage: ${script_name} [options] <markdown-file> [<script-file>]
+Usage: ${script_name} [options] <markdown-file> [<script-file> [<description>]]
 
 This script will convert a github-flavoured markdown document file into a
 bash(1) script to stdout by extracting the bash code blocks.
-
 
 Options:
 
@@ -54,6 +53,11 @@ ${warning}
 Example usage:
 
   $ ${script_name} foo.md foo.md.sh
+
+Notes:
+
+- If a description is specified, it will be added to the script as a
+  comment.
 
 ${warning}
 
@@ -72,6 +76,8 @@ die()
 
 script_header()
 {
+	local -r description="$1"
+
 	cat <<-EOT
 	#!/bin/bash
 	${license}
@@ -79,6 +85,10 @@ script_header()
 	# WARNING: Script auto-generated from '$file'.
 	#
 	# ${warning}
+	#----------------------------------------------
+
+	#----------------------------------------------
+	# Description: $description
 	#----------------------------------------------
 
 	# fail the entire script if any simple command fails
@@ -93,6 +103,7 @@ doc_to_script()
 {
 	file="$1"
 	outfile="$2"
+	description="$3"
 
 	[ -n "$file" ] || die "need file"
 
@@ -109,7 +120,7 @@ doc_to_script()
 
 	[ "$require_commands" = "yes" ] && [ ! -s "$body" ] && die "no commands found in file '$file'"
 
-	script_header > "$all"
+	script_header "$description" > "$all"
 	cat "$body" >> "$all"
 
 	# sanity check
@@ -141,6 +152,7 @@ main()
 
 	file="$1"
 	outfile="$2"
+	description="$3"
 
 	[ -n "$file" ] || die "need file"
 
@@ -152,7 +164,7 @@ main()
 			die "file '$file' doesn't match pattern '$extension_regex'"
 	fi
 
-	doc_to_script "$file" "$outfile"
+	doc_to_script "$file" "$outfile" "$description"
 }
 
 main "$@"
