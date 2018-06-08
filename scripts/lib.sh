@@ -80,13 +80,25 @@ enabled=1
 EOF
 	fi
 
-	if [ "$GPG_KEY_FILE" != "" ]; then
+	if [ -n "$GPG_KEY_URL" ]; then
+		if [ ! -f "${CONFIG_DIR}/${GPG_KEY_FILE}" ]; then
+			curl -L ${GPG_KEY_URL} -o ${CONFIG_DIR}/${GPG_KEY_FILE}
+		fi
 		cat >> "${DNF_CONF}" << EOF
 gpgcheck=1
 gpgkey=file://${CONFIG_DIR}/${GPG_KEY_FILE}
-
 EOF
 	fi
+
+	if [ -n "$GPG_KEY_ARCH_URL" ]; then
+		if [ ! -f "${CONFIG_DIR}/${GPG_KEY_ARCH_FILE}" ]; then
+			 curl -L ${GPG_KEY_ARCH_URL} -o ${CONFIG_DIR}/${GPG_KEY_ARCH_FILE}
+		fi
+		cat >> "${DNF_CONF}" << EOF
+       file://${CONFIG_DIR}/${GPG_KEY_ARCH_FILE}
+EOF
+	fi
+
 }
 
 build_rootfs()
