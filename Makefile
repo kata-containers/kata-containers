@@ -78,6 +78,9 @@ GENERATED_FILES += $(COLLECT_SCRIPT)
 SCRIPTS += $(COLLECT_SCRIPT)
 SCRIPTS_DIR := $(BINDIR)
 
+BASH_COMPLETIONS := data/completions/bash/kata-runtime
+BASH_COMPLETIONSDIR := $(SHAREDIR)/bash-completion/completions
+
 PKGDATADIR := $(SHAREDIR)/$(PROJECT_DIR)
 PKGLIBDIR := $(LOCALSTATEDIR)/lib/$(PROJECT_DIR)
 PKGRUNDIR := $(LOCALSTATEDIR)/run/$(PROJECT_DIR)
@@ -389,12 +392,15 @@ check-go-static:
 coverage:
 	$(QUIET_TEST).ci/go-test.sh html-coverage
 
-install: default runtime install-scripts
+install: default runtime install-scripts install-completions
 	$(QUIET_INST)install -D $(TARGET) $(DESTTARGET)
 	$(QUIET_INST)install -D $(CONFIG) $(DESTCONFIG)
 
 install-scripts: $(SCRIPTS)
 	$(foreach f,$(SCRIPTS),$(call INSTALL_EXEC,$f,$(SCRIPTS_DIR)))
+
+install-completions:
+	$(QUIET_INST)install --mode 0644 -D $(BASH_COMPLETIONS) $(BASH_COMPLETIONSDIR)
 
 clean:
 	$(QUIET_CLEAN)rm -f $(TARGET) $(CONFIG) $(GENERATED_GO_FILES) $(GENERATED_FILES) $(COLLECT_SCRIPT)
