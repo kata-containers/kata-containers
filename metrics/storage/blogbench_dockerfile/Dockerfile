@@ -13,6 +13,7 @@ ENV BLOGBENCH_VERSION 1.1
 
 RUN apt-get update && \
 	apt-get install -y build-essential curl && \
+	apt-get remove -y unattended-upgrades && \
 	curl -OkL ${BLOGBENCH_URL}/blogbench-${BLOGBENCH_VERSION}.tar.gz && \
 	tar xzf blogbench-${BLOGBENCH_VERSION}.tar.gz && \
 	cd blogbench-${BLOGBENCH_VERSION} && \
