@@ -47,13 +47,14 @@ Options:
 
 Commands:
 
-  configure-image  : Configure the runtime to use the specified image.
-  configure-initrd : Configure the runtime to use the specified initial ramdisk.
-  disable-debug    : Turn off all debug options.
-  enable-debug     : Turn on all debug options for all system components.
-  install-packages : Install the packaged version of Kata Containers.
-  remove-packages  : Uninstall the packaged version of Kata Containers.
-  reset-config     : Undo changes to the runtime configuration [1].
+  configure-image       : Configure the runtime to use the specified image.
+  configure-initrd      : Configure the runtime to use the specified initial ramdisk.
+  disable-debug         : Turn off all debug options.
+  enable-debug          : Turn on all debug options for all system components.
+  install-docker-system : Install and configure Docker (implies 'install-packages').
+  install-packages      : Install the packaged version of Kata Containers only.
+  remove-packages       : Uninstall the packaged version of Kata Containers.
+  reset-config          : Undo changes to the runtime configuration [1].
 
 Notes:
 
@@ -273,6 +274,28 @@ cmd_install_packages()
 	exec_document "${doc}"
 }
 
+install_container_manager()
+{
+	local mgr="$1"
+
+	get_docs_repo
+
+	local file="install/${mgr}/${distro}-${mgr}-install.md"
+
+	local doc="${GOPATH}/src/${doc_repo}/${file}"
+	[ ! -e "$doc" ] && die "no ${mgr} install document for distro ${distro}"
+
+	info "installing ${mgr}"
+
+	exec_document "${doc}"
+}
+
+cmd_install_docker_system()
+{
+	cmd_install_packages
+	install_container_manager "docker"
+}
+
 cmd_remove_packages()
 {
 	local packages_regex="^(kata|qemu-lite)-"
@@ -354,6 +377,7 @@ parse_args()
 		configure-initrd) cmd_configure_initrd "$1" ;;
 		disable-debug) cmd_disable_all_debug ;;
 		enable-debug) cmd_enable_full_debug ;;
+		install-docker-system) cmd_install_docker_system ;;
 		install-packages) cmd_install_packages ;;
 		remove-packages) cmd_remove_packages ;;
 		reset-config) cmd_reset_config ;;
