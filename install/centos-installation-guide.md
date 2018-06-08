@@ -2,7 +2,8 @@
 
 > **Notes:**
 >
-> - Kata Containers packages are available for CentOS version 7 (currently `x86_64` only).
+> - Kata Containers packages are available for [CentOS\*](https://www.centos.org)
+>   version 7 (currently `x86_64` only).
 >
 > - If you are installing on a system that already has Clear Containers or `runv` installed,
 >   first read [the upgrading document](../Upgrading.md).
