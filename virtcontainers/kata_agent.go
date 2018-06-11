@@ -42,12 +42,15 @@ var (
 	kataHostSharedDir     = "/run/kata-containers/shared/sandboxes/"
 	kataGuestSharedDir    = "/run/kata-containers/shared/containers/"
 	mountGuest9pTag       = "kataShared"
+	kataGuestSandboxDir   = "/run/kata-containers/sandbox/"
 	type9pFs              = "9p"
 	vsockSocketScheme     = "vsock"
 	kata9pDevType         = "9p"
 	kataBlkDevType        = "blk"
 	kataSCSIDevType       = "scsi"
 	sharedDir9pOptions    = []string{"trans=virtio,version=9p2000.L", "nodev"}
+	shmDir                = "shm"
+	kataEphemeralDevType  = "ephemeral"
 )
 
 // KataAgentConfig is a structure storing information needed
@@ -505,9 +508,27 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 		Options:    sharedDir9pOptions,
 	}
 
+	storages := []*grpc.Storage{sharedVolume}
+
+	if sandbox.shmSize > 0 {
+		path := filepath.Join(kataGuestSandboxDir, shmDir)
+		shmSizeOption := fmt.Sprintf("size=%d", sandbox.shmSize)
+
+		shmStorage := &grpc.Storage{
+			Driver:     kataEphemeralDevType,
+			MountPoint: path,
+			Source:     "shm",
+			Fstype:     "tmpfs",
+			Options:    []string{"noexec", "nosuid", "nodev", "mode=1777", shmSizeOption},
+		}
+
+		storages = append(storages, shmStorage)
+	}
+
 	req := &grpc.CreateSandboxRequest{
-		Hostname: hostname,
-		Storages: []*grpc.Storage{sharedVolume},
+		Hostname:     hostname,
+		Storages:     storages,
+		SandboxPidns: false,
 	}
 
 	_, err = k.sendReq(req)
@@ -611,13 +632,25 @@ func constraintGRPCSpec(grpcSpec *grpc.Spec) {
 		}
 	}
 	grpcSpec.Linux.Namespaces = tmpNamespaces
+}
 
-	// Handle /dev/shm mount
+func (k *kataAgent) handleShm(grpcSpec *grpc.Spec, sandbox *Sandbox) {
 	for idx, mnt := range grpcSpec.Mounts {
-		if mnt.Destination == "/dev/shm" {
+		if mnt.Destination != "/dev/shm" {
+			continue
+		}
+
+		if sandbox.shmSize > 0 {
+			grpcSpec.Mounts[idx].Type = "bind"
+			grpcSpec.Mounts[idx].Options = []string{"rbind"}
+			grpcSpec.Mounts[idx].Source = filepath.Join(kataGuestSandboxDir, shmDir)
+			k.Logger().WithField("shm-size", sandbox.shmSize).Info("Using sandbox shm")
+		} else {
+			sizeOption := fmt.Sprintf("size=%d", DefaultShmSize)
 			grpcSpec.Mounts[idx].Type = "tmpfs"
 			grpcSpec.Mounts[idx].Source = "shm"
-			grpcSpec.Mounts[idx].Options = []string{"noexec", "nosuid", "nodev", "mode=1777", "size=65536k"}
+			grpcSpec.Mounts[idx].Options = []string{"noexec", "nosuid", "nodev", "mode=1777", sizeOption}
+			k.Logger().WithField("shm-size", sizeOption).Info("Setting up a separate shm for container")
 		}
 	}
 }
@@ -784,6 +817,8 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	// We need to constraint the spec to make sure we're not passing
 	// irrelevant information to the agent.
 	constraintGRPCSpec(grpcSpec)
+
+	k.handleShm(grpcSpec, sandbox)
 
 	req := &grpc.CreateContainerRequest{
 		ContainerId:  c.id,
