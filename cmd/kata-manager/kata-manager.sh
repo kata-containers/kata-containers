@@ -24,6 +24,7 @@ typeset -r local_config_file="/etc/kata-containers/${config_file_name}"
 typeset -r agent_debug="agent.log=debug"
 
 verbose="no"
+execute="yes"
 
 # full path to the runtime configuration file to operate on
 config_file=
@@ -43,17 +44,20 @@ Options:
   -c <file> : Specify full path to configuration file
               (default: '$local_config_file').
   -h        : Display this help.
+  -n        : No execute mode - for -install-*' commands, create a script but
+	      do not run it (to allow the user to review and run if they choose).
   -v        : Verbose output.
 
 Commands:
 
-  configure-image  : Configure the runtime to use the specified image.
-  configure-initrd : Configure the runtime to use the specified initial ramdisk.
-  disable-debug    : Turn off all debug options.
-  enable-debug     : Turn on all debug options for all system components.
-  install-packages : Install the packaged version of Kata Containers.
-  remove-packages  : Uninstall the packaged version of Kata Containers.
-  reset-config     : Undo changes to the runtime configuration [1].
+  configure-image       : Configure the runtime to use the specified image.
+  configure-initrd      : Configure the runtime to use the specified initial ramdisk.
+  disable-debug         : Turn off all debug options.
+  enable-debug          : Turn on all debug options for all system components.
+  install-docker-system : Install and configure Docker (implies 'install-packages').
+  install-packages      : Install the packaged version of Kata Containers only.
+  remove-packages       : Uninstall the packaged version of Kata Containers.
+  reset-config          : Undo changes to the runtime configuration [1].
 
 Notes:
 
@@ -216,45 +220,91 @@ cmd_configure_initrd()
 	disable_image
 }
 
-# Install the packaged version of Kata by executing the commands
-# specified in the installation guide document.
-cmd_install_packages()
+check_golang()
 {
 	command -v go >/dev/null || die "need golang"
 
-	GOPATH=$(go env GOPATH)
-	[ -z "${GOPATH}" ] && die "need GOPATH"
+	GOPATH=$(go env GOPATH || true)
 
-	source /etc/os-release
+	[ -z "${GOPATH}" ] && die "need GOPATH" || true
+}
+
+get_docs_repo()
+{
+	check_golang
 
 	local doc_repo_url="https://${doc_repo}"
 
 	local repo_dir="${GOPATH}/src/${doc_repo}"
 
-	info "installing packages"
+	[ ! -d "${repo_dir}" ] && (cd "$(dirname ${repo_dir})" && git clone "$doc_repo_url") || true
+}
 
-	[ ! -d "${repo_dir}" ] && (cd "$(dirname ${repo_dir})" && git clone "$doc_repo_url")
-
-	local file="${ID}-installation-guide.md"
-
-	local doc="${GOPATH}/src/${doc_repo}/install/${file}"
-	[ ! -e "$doc" ] && die "no install document for distro $distro"
+exec_document()
+{
+	local -r file="$1"
+	local -r msg="$2"
 
 	local -r doc_script="kata-doc-to-script.sh"
+	local -r tool="${GOPATH}/src/${test_repo}/.ci/${doc_script}"
 
-	local tool="${GOPATH}/src/${test_repo}/.ci/${doc_script}"
-	[ ! -e "${tool}" ] && die "cannot find script $doc_script"
+	[ ! -e "${tool}" ] && die "cannot find script ${doc_script}"
 
-	local install_script=$(mktemp)
+	local -r install_script=$(mktemp)
 
 	# create the script
-	"${tool}" "${doc}" "${install_script}"
+	"${tool}" "${file}" "${install_script}" "${msg}"
+
+	if [ "$execute" = "no" ]
+	then
+		info "Not running script ${install_script} to $msg (created from document ${file})"
+
+		# Note that we cannot exit since some commands run this
+		# function multiple times.
+		return
+	fi
+
+	info "$msg"
 
 	# run the installation
 	bash "${install_script}"
 
 	# clean up
 	rm -f "${install_script}"
+}
+
+# Install the packaged version of Kata by executing the commands
+# specified in the installation guide document.
+cmd_install_packages()
+{
+	get_docs_repo
+
+	local file="${distro}-installation-guide.md"
+
+	local doc="${GOPATH}/src/${doc_repo}/install/${file}"
+	[ ! -e "$doc" ] && die "no install document for distro $distro"
+
+	exec_document "${doc}" "install packages for distro ${distro}"
+}
+
+install_container_manager()
+{
+	local mgr="$1"
+
+	get_docs_repo
+
+	local file="install/${mgr}/${distro}-${mgr}-install.md"
+
+	local doc="${GOPATH}/src/${doc_repo}/${file}"
+	[ ! -e "$doc" ] && die "no ${mgr} install document for distro ${distro}"
+
+	exec_document "${doc}" "install ${mgr} for distro ${distro}"
+}
+
+cmd_install_docker_system()
+{
+	cmd_install_packages
+	install_container_manager "docker"
 }
 
 cmd_remove_packages()
@@ -309,15 +359,21 @@ parse_args()
 {
 	config_file="${local_config_file}"
 
-	while getopts "c:hv" opt
+	while getopts "c:hnv" opt
 	do
 		case "$opt" in
 			c)
 				config_file="$OPTARG"
 				;;
+
 			h)
 				usage
 				exit 0
+				;;
+
+			n)
+				execute="no"
+				verbose="yes"
 				;;
 
 			v)
@@ -338,6 +394,7 @@ parse_args()
 		configure-initrd) cmd_configure_initrd "$1" ;;
 		disable-debug) cmd_disable_all_debug ;;
 		enable-debug) cmd_enable_full_debug ;;
+		install-docker-system) cmd_install_docker_system ;;
 		install-packages) cmd_install_packages ;;
 		remove-packages) cmd_remove_packages ;;
 		reset-config) cmd_reset_config ;;
