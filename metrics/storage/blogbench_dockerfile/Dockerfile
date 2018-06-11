@@ -7,6 +7,9 @@
 # Usage: FROM [image name]
 FROM ubuntu
 
+# Version of the Dockerfile
+LABEL DOCKERFILE_VERSION="1.0"
+
 # URL for blogbench test and blogbench version
 ENV BLOGBENCH_URL "https://download.pureftpd.org/pub/blogbench"
 ENV BLOGBENCH_VERSION 1.1
