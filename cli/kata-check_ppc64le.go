@@ -44,6 +44,12 @@ func archHostCanCreateVMContainer() error {
 // hostIsVMContainerCapable checks to see if the host is theoretically capable
 // of creating a VM container.
 func hostIsVMContainerCapable(details vmContainerCapableDetails) error {
+
+	_, err := getCPUInfo(details.cpuInfoFile)
+	if err != nil {
+		return err
+	}
+
 	count, err := checkKernelModules(details.requiredKernelModules, archKernelParamHandler)
 	if err != nil {
 		return err

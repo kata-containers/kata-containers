@@ -54,7 +54,7 @@ var supportedQemuMachines = []govmmQemu.Machine{
 	},
 }
 
-// returns the maximum number of vCPUs supported
+// MaxQemuVCPUs returns the maximum number of vCPUs supported
 func MaxQemuVCPUs() uint32 {
 	return uint32(128)
 }
