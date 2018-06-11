@@ -52,7 +52,7 @@ The primary logfiles the tool reads are:
 - The [proxy](https://github.com/kata-containers/proxy) log.
 
   This log also includes embedded log entries from the
-  [agent](https://github.com/katacontainers/agent). `kata-log-parser`
+  [agent](https://github.com/kata-containers/agent). `kata-log-parser`
   automatically unpacks and displays the entries. During this process, the
   encapsulating proxy log messages are discarded.
 
