@@ -32,6 +32,6 @@ func (n *noopNetwork) add(sandbox *Sandbox, config NetworkConfig, netNsPath stri
 // remove unbridges and deletes TAP interfaces. It also removes virtual network
 // interfaces and deletes the network namespace for the Noop network.
 // It does nothing.
-func (n *noopNetwork) remove(sandbox *Sandbox, networkNS NetworkNamespace) error {
+func (n *noopNetwork) remove(sandbox *Sandbox, networkNS NetworkNamespace, netNsCreated bool) error {
 	return nil
 }
