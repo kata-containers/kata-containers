@@ -47,6 +47,17 @@ check_log_files()
 				echo >&2 -e "ERROR: detected ${pattern} in '${log}'\n${results}" || true
 			fi
 		done
+
+		for pattern in "segfault at [0-9]"
+		do
+			results=$(sed -ne "/\<${pattern}\>/,\$ p" "$log" || true)
+
+			if [ -n "$results" ]
+			then
+				errors=1
+				echo >&2 -e "ERROR: detected ${pattern} in '${log}'\n${results}" || true
+			fi
+		done
 	done
 
 	[ "$errors" -ne 0 ] && exit 1
