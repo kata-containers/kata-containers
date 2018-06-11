@@ -356,6 +356,8 @@ type SandboxConfig struct {
 	// Annotations keys must be unique strings and must be name-spaced
 	// with e.g. reverse domain notation (org.clearlinux.key).
 	Annotations map[string]string
+
+	ShmSize uint64
 }
 
 // valid checks that the sandbox configuration is valid.
@@ -459,6 +461,8 @@ type Sandbox struct {
 	annotationsLock *sync.RWMutex
 
 	wg *sync.WaitGroup
+
+	shmSize uint64
 }
 
 // ID returns the sandbox identifier string.
@@ -738,6 +742,7 @@ func newSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
 		state:           State{},
 		annotationsLock: &sync.RWMutex{},
 		wg:              &sync.WaitGroup{},
+		shmSize:         sandboxConfig.ShmSize,
 	}
 
 	if err = globalSandboxList.addSandbox(s); err != nil {

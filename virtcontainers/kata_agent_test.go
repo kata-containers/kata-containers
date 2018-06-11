@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -458,10 +459,42 @@ func TestConstraintGRPCSpec(t *testing.T) {
 
 	// check mounts
 	assert.Len(g.Mounts, 1)
+}
+
+func TestHandleShm(t *testing.T) {
+	assert := assert.New(t)
+	k := kataAgent{}
+	sandbox := &Sandbox{
+		shmSize: 8192,
+	}
+
+	g := &pb.Spec{
+		Hooks: &pb.Hooks{},
+		Mounts: []pb.Mount{
+			{Destination: "/dev/shm"},
+		},
+	}
+
+	k.handleShm(g, sandbox)
+
+	assert.Len(g.Mounts, 1)
 	assert.NotEmpty(g.Mounts[0].Destination)
-	assert.NotEmpty(g.Mounts[0].Type)
-	assert.NotEmpty(g.Mounts[0].Source)
-	assert.NotEmpty(g.Mounts[0].Options)
+	assert.Equal(g.Mounts[0].Destination, "/dev/shm")
+	assert.Equal(g.Mounts[0].Type, "bind")
+	assert.NotEmpty(g.Mounts[0].Source, filepath.Join(kataGuestSharedDir, shmDir))
+	assert.Equal(g.Mounts[0].Options, []string{"rbind"})
+
+	sandbox.shmSize = 0
+	k.handleShm(g, sandbox)
+
+	assert.Len(g.Mounts, 1)
+	assert.NotEmpty(g.Mounts[0].Destination)
+	assert.Equal(g.Mounts[0].Destination, "/dev/shm")
+	assert.Equal(g.Mounts[0].Type, "tmpfs")
+	assert.Equal(g.Mounts[0].Source, "shm")
+
+	sizeOption := fmt.Sprintf("size=%d", DefaultShmSize)
+	assert.Equal(g.Mounts[0].Options, []string{"noexec", "nosuid", "nodev", "mode=1777", sizeOption})
 }
 
 func testIsPidNamespacePresent(grpcSpec *pb.Spec) bool {
