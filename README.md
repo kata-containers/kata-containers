@@ -20,3 +20,4 @@ For details of the other Kata Containers repositories, see the
 * [Release strategy](Releases.md)
 * [Release Checklist](Release-Checklist.md)
 * [Upgrading](Upgrading.md)
+* [OpenStack Zun with Kata Containers](zun/zun_kata.md)

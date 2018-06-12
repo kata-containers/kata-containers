@@ -167,7 +167,7 @@ these commands is potentially challenging.
 See issue https://github.com/clearcontainers/runtime/issues/341 and [the constraints challenge](#the-constraints-challenge) for more information.
 
 For CPUs resource management see
-[cpu-constraints](https://github.com/kata-containers/runtime/blob/master/docs/cpu-constraints.md).
+[cpu-constraints](constraints/cpu.md).
 
 ### docker run and kernel memory
 
