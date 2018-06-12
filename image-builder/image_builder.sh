@@ -98,6 +98,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 	# In case Clear Containers Runtime is installed we dont want to hit issue:
 	#https://github.com/clearcontainers/runtime/issues/828
 	docker run  \
+		--rm \
 		--runtime runc  \
 		--privileged \
 		--env IMG_SIZE="${IMG_SIZE}" \
