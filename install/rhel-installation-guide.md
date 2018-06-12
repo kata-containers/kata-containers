@@ -1,9 +1,9 @@
-# Install Kata Containers on Fedora
+# Install Kata Containers on RHEL
 
 > **Notes:**
 >
-> - Kata Containers packages are available for [Fedora\*](https://fedoraproject.org)
->   versions **26** and **27** (currently `x86_64` only).
+> - Kata Containers packages are available for [RHEL\*](https://www.redhat.com)
+>   version 7 (currently `x86_64` only).
 >
 > - If you are installing on a system that already has Clear Containers or `runv` installed,
 >   first read [the upgrading document](../Upgrading.md).
@@ -22,12 +22,11 @@
 
    ```bash
    $ source /etc/os-release
-   $ sudo dnf -y install dnf-plugins-core
-   $ sudo -E VERSION_ID=$VERSION_ID dnf config-manager --add-repo http://download.opensuse.org/repositories/home:/katacontainers:/release/Fedora\_$VERSION_ID/home:katacontainers:release.repo
-   $ sudo -E dnf -y install kata-runtime kata-proxy kata-shim
+   $ sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo "http://download.opensuse.org/repositories/home:/katacontainers:/release/RHEL_${VERSION_ID}/home:katacontainers:release.repo"
+   $ sudo -E yum -y install kata-runtime kata-proxy kata-shim
    ```
 
 2. Decide which container manager to use and select the corresponding link that follows:
 
-   - [Docker](docker/fedora-docker-install.md)
+   - [Docker](docker/rhel-docker-install.md)
    - [Kubernetes](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#if-you-want-to-run-kata-containers-with-kubernetes)
