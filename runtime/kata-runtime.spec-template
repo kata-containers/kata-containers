@@ -89,6 +89,7 @@ make \
     DESTTARGET=%{buildroot}/usr/bin/kata-runtime \
     DESTCONFIG=%{buildroot}/usr/share/defaults/kata-containers/configuration.toml \
     SCRIPTS_DIR=%{buildroot}/usr/bin \
+    BASH_COMPLETIONSDIR=%{buildroot}/usr/share/bash-completion/completions/kata-runtime \
     QEMUPATH=/usr/bin/%{DEFAULT_QEMU} \
     install
 sed -i -e '/^initrd =/d' %{buildroot}/usr/share/defaults/kata-containers/configuration.toml
@@ -100,3 +101,6 @@ sed -i -e '/^initrd =/d' %{buildroot}/usr/share/defaults/kata-containers/configu
 /usr/share/defaults/
 /usr/share/defaults/kata-containers/
 /usr/share/defaults/kata-containers/configuration.toml
+/usr/share/bash-completion
+/usr/share/bash-completion/completions
+/usr/share/bash-completion/completions/kata-runtime
