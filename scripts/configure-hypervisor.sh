@@ -185,24 +185,6 @@ show_array()
 # Entry point
 main()
 {
-	local qemu_version_file="VERSION"
-	[ -f ${qemu_version_file} ] || die "QEMU version file '$qemu_version_file' not found"
-
-	local qemu_version_major=$(cut -d. -f1 "${qemu_version_file}")
-	local qemu_version_minor=$(cut -d. -f2 "${qemu_version_file}")
-
-	[ -n "${qemu_version_major}" ] \
-		|| die "cannot determine qemu major version from file $qemu_version_file"
-	[ -n "${qemu_version_minor}" ] \
-		|| die "cannot determine qemu minor version from file $qemu_version_file"
-
-	local gcc_version_major=$(gcc -dumpversion | cut -f1 -d.)
-	local gcc_version_minor=$(gcc -dumpversion | cut -f2 -d.)
-
-	[ -n "${gcc_version_major}" ] \
-		|| die "cannot determine gcc major version, please ensure it is installed"
-	[ -n "${gcc_version_minor}" ] \
-		|| die "cannot determine gcc minor version, please ensure it is installed"
 
 	arch=$(arch)
 
@@ -244,6 +226,25 @@ main()
 
 	[ -z "$1" ] && die "need hypervisor name"
 	hypervisor="$1"
+
+	local qemu_version_file="VERSION"
+	[ -f ${qemu_version_file} ] || die "QEMU version file '$qemu_version_file' not found"
+
+	local qemu_version_major=$(cut -d. -f1 "${qemu_version_file}")
+	local qemu_version_minor=$(cut -d. -f2 "${qemu_version_file}")
+
+	[ -n "${qemu_version_major}" ] \
+		|| die "cannot determine qemu major version from file $qemu_version_file"
+	[ -n "${qemu_version_minor}" ] \
+		|| die "cannot determine qemu minor version from file $qemu_version_file"
+
+	local gcc_version_major=$(gcc -dumpversion | cut -f1 -d.)
+	local gcc_version_minor=$(gcc -dumpversion | cut -f2 -d.)
+
+	[ -n "${gcc_version_major}" ] \
+		|| die "cannot determine gcc major version, please ensure it is installed"
+	[ -n "${gcc_version_minor}" ] \
+		|| die "cannot determine gcc minor version, please ensure it is installed"
 
 	#---------------------------------------------------------------------
 	# Disabled options
