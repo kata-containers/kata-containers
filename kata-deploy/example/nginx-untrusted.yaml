@@ -1,0 +1,14 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    io.kubernetes.cri-o.TrustedSandbox: "false"
+    io.kubernetes.cri.untrusted-workload: "true"
+  name: nginx-untrusted
+spec:
+  containers:
+  - name: nginx
+    image: nginx
+  nodeSelector:
+    kata-runtime: "true"

@@ -1,0 +1,181 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kubelet-runtime-labeler
+  namespace: kube-system
+spec:
+  selector:
+      matchLabels:
+        name: kubelet-runtime-labeler
+  template:
+    metadata:
+        labels:
+          name: kubelet-runtime-labeler
+    spec:
+      serviceAccountName: kata-label-node
+      containers:
+      - name: kubelet-runtime-labeler-pod
+        image: egernst/kata-deploy
+        imagePullPolicy: Always
+        command: [ "sh", "-c" ]
+        args:
+        - printenv NODE_NAME;
+          kubectl get node $NODE_NAME --show-labels;
+          kubectl label node $NODE_NAME kata-containers.io/container-runtime=$(kubectl describe node $NODE_NAME | awk -F'[:]' '/Container Runtime Version/ {print $2}' |  tr -d ' ');
+          kubectl get node $NODE_NAME --show-labels;
+          tail -f /dev/null;          
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          privileged: false
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kubelet-cri-o-kata
+  namespace: kube-system
+spec:
+  selector:
+      matchLabels:
+        name: kubelet-cri-o-kata
+  template:
+    metadata:
+        labels:
+          name: kubelet-cri-o-kata
+    spec:
+      serviceAccountName: kata-label-node
+      nodeSelector:
+          kata-containers.io/container-runtime: cri-o
+      containers:
+      - name: kube-kata
+        image: egernst/kata-deploy
+        imagePullPolicy: Always
+        lifecycle:
+          preStop:
+            exec:
+              command: ["sh", "-c", "/tmp/kata/scripts/remove-kata-crio.sh && kubectl label node $NODE_NAME --overwrite kata-containers.io/kata-runtime=cleanup"]
+        command: [ "sh", "-c" ]
+        args:
+        - /tmp/kata/scripts/install-kata-crio.sh && kubectl label node $NODE_NAME kata-containers.io/kata-runtime=true;
+          kubectl get node $NODE_NAME --show-labels;
+          tail -f /dev/null;
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          privileged: false
+        volumeMounts:
+        - name: crio-conf
+          mountPath: /etc/crio/
+        - name: kata-conf
+          mountPath: /usr/share/defaults/kata-containers/
+        - name: kata-artifacts
+          mountPath: /opt/kata/
+        - name: dbus
+          mountPath: /var/run/dbus
+        - name: systemd
+          mountPath: /run/systemd
+      volumes:
+        - name: crio-conf
+          hostPath:
+            path: /etc/crio/
+        - name: kata-conf
+          hostPath:
+            path: /usr/share/defaults/kata-containers/
+            type: DirectoryOrCreate
+        - name: kata-artifacts
+          hostPath:
+            path: /opt/kata/
+            type: DirectoryOrCreate
+        - name: dbus
+          hostPath:
+            path: /var/run/dbus
+        - name: systemd
+          hostPath:
+            path: /run/systemd
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kubelet-cri-containerd-kata
+  namespace: kube-system
+spec:
+  selector:
+      matchLabels:
+        name: kubelet-cri-containerd-kata
+  template:
+    metadata:
+        labels:
+          name: kubelet-cri-containerd-kata
+    spec:
+      serviceAccountName: kata-label-node
+      nodeSelector:
+          kata-containers.io/container-runtime: containerd
+      containers:
+      - name: kube-kata
+        image: egernst/kata-deploy
+        imagePullPolicy: Always
+        lifecycle:
+          preStop:
+            exec:
+              command: ["sh", "-c", "/tmp/kata/scripts/remove-kata-containerd.sh && kubectl label node $NODE_NAME --overwrite kata-containers.io/kata-runtime=cleanup"]
+        command: [ "sh", "-c" ]
+        args:
+        - /tmp/kata/scripts/install-kata-containerd.sh && kubectl label node $NODE_NAME kata-containers.io/kata-runtime=true;
+          kubectl get node $NODE_NAME --show-labels;
+          tail -f /dev/null;
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        securityContext:
+          privileged: false
+        volumeMounts:
+        - name: containerd-conf
+          mountPath: /etc/containerd/
+        - name: kata-conf
+          mountPath: /usr/share/defaults/kata-containers/
+        - name: kata-artifacts
+          mountPath: /opt/kata/
+        - name: dbus
+          mountPath: /var/run/dbus
+        - name: systemd
+          mountPath: /run/systemd
+      volumes:
+        - name: containerd-conf
+          hostPath:
+            path: /etc/containerd/
+            type: DirectoryOrCreate
+        - name: kata-conf
+          hostPath:
+            path: /usr/share/defaults/kata-containers/
+            type: DirectoryOrCreate
+        - name: kata-artifacts
+          hostPath:
+            path: /opt/kata/
+            type: DirectoryOrCreate
+        - name: dbus
+          hostPath:
+            path: /var/run/dbus
+        - name: systemd
+          hostPath:
+            path: /run/systemd
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate 
