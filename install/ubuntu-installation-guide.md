@@ -2,62 +2,32 @@
 
 > **Notes:**
 >
-> - Kata Containers packages are available for Ubuntu\* **16.04** and **17.10** (currently `x86_64` only).
+> - Kata Containers packages are available for [Ubuntu\*](https://www.ubuntu.com)
+>   versions **16.04** and **17.10** (currently `x86_64` only).
 >
 > - If you are installing on a system that already has Clear Containers or `runv` installed,
 >   first read [the upgrading document](../Upgrading.md).
 >
-> - This install guide is specific to integration with Docker.  If you want to use Kata
->   Containers through Kubernetes, see the "Developer Guide" [here](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#if-you-want-to-run-kata-containers-with-kubernetes).
+> - If you do not want to copy or type all these instructions by hand, you can use the
+>   [`kata-manager`](https://github.com/kata-containers/tests/blob/master/cmd/kata-manager/kata-manager.sh)
+>   script to install the packaged system including your chosen container
+>   manager. Alternatively, you can generate a runnable shell script from
+>   individual documents using the
+>   [`kata-doc-to-script`](https://github.com/kata-containers/tests/blob/master/.ci/kata-doc-to-script.sh) script.
 
-This step is only required in case Docker is not installed on the system.
-1. Install the latest version of Docker with the following commands:
+1. Install the Kata Containers components with the following commands:
 
-```bash
-$ sudo -E apt-get -y install apt-transport-https ca-certificates wget software-properties-common
-$ curl -sL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-$ arch=$(dpkg --print-architecture)
-$ sudo -E add-apt-repository "deb [arch=${arch}] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-$ sudo -E apt-get update
-$ sudo -E apt-get -y install docker-ce
-```
+   > **Note:** This installation channel is not secure since the repository currently
+   > redirects download URLs to `http`.
 
-For more information on installing Docker please refer to the
-[Docker Guide](https://docs.docker.com/engine/installation/linux/ubuntu)
+   ```bash
+   $ sudo sh -c "echo 'deb http://download.opensuse.org/repositories/home:/katacontainers:/release/xUbuntu_$(lsb_release -rs)/ /' > /etc/apt/sources.list.d/kata-containers.list"
+   $ curl -sL  http://download.opensuse.org/repositories/home:/katacontainers:/release/xUbuntu_$(lsb_release -rs)/Release.key | sudo apt-key add -
+   $ sudo -E apt-get update
+   $ sudo -E apt-get -y install kata-runtime kata-proxy kata-shim
+   ```
 
-2. Install the Kata Containers components with the following commands:
+2. Decide which container manager you will use and select the corresponding link that follows:
 
-> **Note:** The repository is downloading content using `http`, be aware that this installation channel is not secure.
-
-```bash
-$ sudo sh -c "echo 'deb http://download.opensuse.org/repositories/home:/katacontainers:/release/xUbuntu_$(lsb_release -rs)/ /' > /etc/apt/sources.list.d/kata-containers.list"
-$ curl -sL  http://download.opensuse.org/repositories/home:/katacontainers:/release/xUbuntu_$(lsb_release -rs)/Release.key | sudo apt-key add -
-$ sudo -E apt-get update
-$ sudo -E apt-get -y install kata-runtime kata-proxy kata-shim
-```
-
-3. Configure Docker to use Kata Containers by default with the following commands:
-
-```bash
-$ sudo mkdir -p /etc/systemd/system/docker.service.d/
-$ cat <<EOF | sudo tee /etc/systemd/system/docker.service.d/kata-containers.conf
-[Service]
-ExecStart=
-ExecStart=/usr/bin/dockerd -D --add-runtime kata-runtime=/usr/bin/kata-runtime --default-runtime=kata-runtime
-EOF
-```
-
-4. Restart the Docker systemd service with the following commands:
-
-```bash
-$ sudo systemctl daemon-reload
-$ sudo systemctl restart docker
-```
-
-5. Run Kata Containers
-
-You are now ready to run Kata Containers:
-
-```
-$ sudo docker run -ti busybox sh
-```
+   - [Docker](docker/ubuntu-docker-install.md)
+   - [Kubernetes](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#if-you-want-to-run-kata-containers-with-kubernetes)
