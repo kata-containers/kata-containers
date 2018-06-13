@@ -12,11 +12,13 @@ LOG_FILE="/var/log/yum-centos.log"
 MIRROR_LIST="http://mirrorlist.centos.org/?release=${OS_VERSION}&arch=${ARCH}&repo=os&container=container"
 
 # Aditional Repos
-CENTOS_UPDATES_URL="http://mirrorlist.centos.org/?release=${OS_VERSION}&arch=${ARCH}&repo=updates&container=container"
+CENTOS_UPDATES_MIRROR_LIST="http://mirrorlist.centos.org/?release=${OS_VERSION}&arch=${ARCH}&repo=updates&container=container"
 
-CENTOS_EXTRAS_URL="http://mirrorlist.centos.org/?release=${OS_VERSION}&arch=${ARCH}&repo=extras&container=container"
+CENTOS_EXTRAS_MIRROR_LIST="http://mirrorlist.centos.org/?release=${OS_VERSION}&arch=${ARCH}&repo=extras&container=container"
 
-CENTOS_PLUS_URL="http://mirrorlist.centos.org/?release=${OS_VERSION}&arch=${ARCH}&repo=centosplus&container=container"
+CENTOS_PLUS_MIRROR_LIST="http://mirrorlist.centos.org/?release=${OS_VERSION}&arch=${ARCH}&repo=centosplus&container=container"
+
+GPG_KEY_URL="https://www.centos.org/keys/RPM-GPG-KEY-CentOS-7"
 
 GPG_KEY_FILE="RPM-GPG-KEY-CentOS-7"
 
