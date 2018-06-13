@@ -1,22 +1,18 @@
-function install_yq() {
+readonly kata_arch_sh="${GOPATH}/src/github.com/kata-containers/tests/.ci/kata-arch.sh"
+
+get_kata_arch(){
+	go get -u github.com/kata-containers/tests || true
+	[ -f "${kata_arch_sh}" ] || die "Not found $kata_arch_sh"
+}
+
+install_yq() {
 	GOPATH=${GOPATH:-${HOME}/go}
 	local yq_path="${GOPATH}/bin/yq"
 	local yq_pkg="github.com/mikefarah/yq"
 	[ -x  "${GOPATH}/bin/yq" ] && return
 
-	case "$(arch)" in
-	"aarch64")
-		goarch=arm64
-		;;
-
-	"x86_64")
-		goarch=amd64
-		;;
-	"*")
-		echo "Arch $(arch) not supported"
-		exit
-		;;
-	esac
+	get_kata_arch
+	goarch=$("${kata_arch_sh}" -g)
 
 	mkdir -p "${GOPATH}/bin"
 
@@ -29,11 +25,11 @@ function install_yq() {
 
 
 	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_linux_${goarch}"
-	curl -o "${yq_path}" -L ${yq_url}
-	chmod +x ${yq_path}
+	curl -o "${yq_path}" -L "${yq_url}"
+	chmod +x "${yq_path}"
 }
 
-function get_from_kata_deps(){
+get_from_kata_deps(){
 	dependency="$1"
 	GOPATH=${GOPATH:-${HOME}/go}
 	# This is needed in order to retrieve the version for qemu-lite
@@ -41,7 +37,7 @@ function get_from_kata_deps(){
 	runtime_repo="github.com/kata-containers/runtime"
 	runtime_repo_dir="$GOPATH/src/${runtime_repo}"
 	versions_file="${runtime_repo_dir}/versions.yaml"
-	mkdir -p "$(dirname ${runtime_repo_dir})"
+	mkdir -p $(dirname "${runtime_repo_dir}")
 	[ -d "${runtime_repo_dir}" ] ||  git clone --quiet https://${runtime_repo}.git "${runtime_repo_dir}"
 	[ ! -f "$versions_file" ] && { echo >&2 "ERROR: cannot find $versions_file"; exit 1; }
 	result=$("${GOPATH}/bin/yq" read "$versions_file" "$dependency")
