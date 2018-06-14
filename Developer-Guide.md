@@ -267,7 +267,7 @@ will not be able to build the kernel from sources.
 ```
 $ go get github.com/kata-containers/tests
 $ cd $GOPATH/src/github.com/kata-containers/tests/.ci
-$ kernel_arch="$(./kata-arch.sh --golang)"
+$ kernel_arch="$(./kata-arch.sh)"
 $ kernel_dir="$(./kata-arch.sh --kernel)"
 $ tmpdir="$(mktemp -d)"
 $ pushd "$tmpdir"
