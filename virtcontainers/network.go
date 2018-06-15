@@ -1112,7 +1112,7 @@ func doNetNS(netNSPath string, cb func(ns.NetNS) error) error {
 	return cb(targetNS)
 }
 
-func deleteNetNS(netNSPath string, mounted bool) error {
+func deleteNetNS(netNSPath string) error {
 	n, err := ns.GetNS(netNSPath)
 	if err != nil {
 		return err
@@ -1123,15 +1123,11 @@ func deleteNetNS(netNSPath string, mounted bool) error {
 		return err
 	}
 
-	// This unmount part is supposed to be done in the cni/ns package, but the "mounted"
-	// flag is not updated when retrieving NetNs handler from GetNS().
-	if mounted {
-		if err = unix.Unmount(netNSPath, unix.MNT_DETACH); err != nil {
-			return fmt.Errorf("Failed to unmount namespace %s: %v", netNSPath, err)
-		}
-		if err := os.RemoveAll(netNSPath); err != nil {
-			return fmt.Errorf("Failed to clean up namespace %s: %v", netNSPath, err)
-		}
+	if err = unix.Unmount(netNSPath, unix.MNT_DETACH); err != nil {
+		return fmt.Errorf("Failed to unmount namespace %s: %v", netNSPath, err)
+	}
+	if err := os.RemoveAll(netNSPath); err != nil {
+		return fmt.Errorf("Failed to clean up namespace %s: %v", netNSPath, err)
 	}
 
 	return nil
