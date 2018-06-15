@@ -284,6 +284,8 @@ check_docs()
 	local invalid_urls=$(mktemp)
 	local doc
 
+	info "Checking document code blocks"
+
 	for doc in $docs
 	do
 		bash "${cidir}/kata-doc-to-script.sh" -csv "$doc"
@@ -291,6 +293,7 @@ check_docs()
 		# Look for URLs in the document
 		urls=$($cmd "$doc")
 
+		# Gather URLs
 		for url in $urls
 		do
 			printf "%s\t%s\n" "${url}" "${doc}" >> "$url_map"
