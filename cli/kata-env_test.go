@@ -152,7 +152,7 @@ func getExpectedAgentDetails(config oci.RuntimeConfig) (AgentInfo, error) {
 	}, nil
 }
 
-func getExpectedHostDetails(tmpdir string) (HostInfo, error) {
+func genericGetExpectedHostDetails(tmpdir string) (HostInfo, error) {
 	type filesToCreate struct {
 		file     string
 		contents string
