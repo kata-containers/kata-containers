@@ -19,7 +19,7 @@ PKG_NAME="qemu-lite"
 VERSION=$qemu_lite_version
 
 GENERATED_FILES=(qemu-lite.dsc qemu-lite.spec debian.rules _service debian.control)
-STATIC_FILES=(debian.compat ../scripts/configure-hypervisor.sh qemu-lite-rpmlintrc)
+STATIC_FILES=(debian.compat "${SCRIPT_DIR}/../../scripts/configure-hypervisor.sh" qemu-lite-rpmlintrc)
 
 # Parse arguments
 cli "$@"
