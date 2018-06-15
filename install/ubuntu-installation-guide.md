@@ -1,4 +1,4 @@
-# Installing Kata Containers on Ubuntu
+# Install Kata Containers on Ubuntu
 
 > **Notes:**
 >
@@ -27,7 +27,7 @@
    $ sudo -E apt-get -y install kata-runtime kata-proxy kata-shim
    ```
 
-2. Decide which container manager you will use and select the corresponding link that follows:
+2. Decide which container manager to use and select the corresponding link that follows:
 
    - [Docker](docker/ubuntu-docker-install.md)
    - [Kubernetes](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#if-you-want-to-run-kata-containers-with-kubernetes)
