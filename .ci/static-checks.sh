@@ -23,6 +23,37 @@ pkg_to_path()
 	go list -f '{{.Dir}}' "$pkg"
 }
 
+# Obtain a list of the files the PR changed, ignoring vendor files.
+# Returns the information in format "${filter}\t${file}".
+get_pr_changed_file_details()
+{
+	# List of filters used to restrict the types of file changes.
+	# See git-diff-tree(1) for further info.
+	local filters=""
+
+	# Added file
+	filters+="A"
+
+	# Copied file
+	filters+="C"
+
+	# Modified file
+	filters+="M"
+
+	# Renamed file
+	filters+="R"
+
+	# Unmerged (U) and Unknown (X) files. These particular filters
+	# shouldn't be necessary but just in case...
+	filters+="UX"
+
+	git diff-tree \
+		-r \
+		--name-status \
+		--diff-filter="${filters}" \
+		origin/master HEAD | grep -v "vendor/"
+}
+
 check_commits()
 {
 	# Since this script is called from another repositories directory,
@@ -204,33 +235,10 @@ check_license_headers()
 
 	info "Checking for SPDX license headers"
 
-	# List of filters used to restrict the types of file changes.
-	# See git-diff-tree(1) for further info.
-	local filters=""
+	files=$(get_pr_changed_file_details || true)
 
-	# Added file
-	filters+="A"
-
-	# Copied file
-	filters+="C"
-
-	# Modified file
-	filters+="M"
-
-	# Renamed file
-	filters+="R"
-
-	# Unmerged (U) and Unknown (X) files. These particular filters
-	# shouldn't be necessary but just in case...
-	filters+="UX"
-
-	# List of files to check for a license header inside
-	local files=$(git diff-tree \
-		--name-only \
-		--no-commit-id \
-		--diff-filter="${filters}" \
-		-r \
-		origin/master HEAD || true)
+	# Strip off status
+	files=$(echo "$files"|awk '{print $NF}')
 
 	# no files were changed
 	[ -z "$files" ] && info "No files found" && return
