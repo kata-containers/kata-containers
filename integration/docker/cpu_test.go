@@ -16,9 +16,9 @@ import (
 )
 
 const (
-	sharesSysPath     = "/sys/fs/cgroup/cpu,cpuacct/cpu.shares"
-	quotaSysPath      = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_quota_us"
-	periodSysPath     = "/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_period_us"
+	sharesSysPath     = "/sys/fs/cgroup/cpu/cpu.shares"
+	quotaSysPath      = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
+	periodSysPath     = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
 	cpusetCpusSysPath = "/sys/fs/cgroup/cpuset/cpuset.cpus"
 	cpusetMemsSysPath = "/sys/fs/cgroup/cpuset/cpuset.mems"
 )
