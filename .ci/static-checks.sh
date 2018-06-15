@@ -15,6 +15,33 @@ set -e
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 
+script_name=${0##*/}
+
+repo=""
+master_branch="false"
+
+usage()
+{
+	cat <<EOT
+
+Usage: $script_name help
+       $script_name repo-name [true]
+
+Parameters:
+
+  help      : Show usage.
+  repo-name : GitHub URL of repo to check in form "github.com/user/repo".
+  true      : Specify as "true" if testing the 'master' branch, else assume a
+              PR branch.
+
+Example:
+
+$ $script_name github.com/kata-containers/runtime true
+
+
+EOT
+}
+
 # Convert a golang package to a full path
 pkg_to_path()
 {
@@ -228,6 +255,9 @@ check_versions()
 # Ensure all files (where possible) contain an SPDX license header
 check_license_headers()
 {
+	# The master branch is the baseline - ignore it.
+	[ "$master_branch" = "true" ] && return
+
 	# See: https://spdx.org/licenses/Apache-2.0.html
 	local -r spdx_tag="SPDX-License-Identifier"
 	local -r spdx_license="Apache-2.0"
@@ -284,13 +314,49 @@ check_docs()
 
 	info "Checking documentation"
 
-	local docs=$(find . -name "*.md" |grep -v "vendor/" || true)
-
+	local doc
+	local docs
+	local docs_status
+	local new_docs
+	local new_urls
 	local url
+
+	if [ "$master_branch" = "true" ]
+	then
+		# Check all documents
+		docs=$(find . -name "*.md" | grep -v "vendor/" || true)
+	else
+		# Check changed documents only
+		docs_status=$(get_pr_changed_file_details || true)
+		docs_status=$(echo "$docs_status" | grep "\.md$" || true)
+
+		docs=$(echo "$docs_status" | awk '{print $NF}')
+
+		# Newly-added docs
+		new_docs=$(echo "$docs_status" | awk '/^A/ {print $NF}')
+
+		for doc in $new_docs
+		do
+			# A new document file has been added. If that new doc
+			# file is referenced by any files on this PR, checking
+			# its URL will fail since the PR hasn't been merged
+			# yet. We could construct the URL based on the users
+			# original PR branch and validate that. But it's
+			# simpler to just construct the URL that the "pending
+			# document" *will* result in when the PR has landed
+			# and then check docs for that new URL and exclude
+			# them from the real URL check.
+			url="https://${repo}/blob/master/${doc}"
+
+			new_urls+=" ${url}"
+		done
+	fi
+
+	[ -z "$docs" ] && info "No documentation to check" && return
+
 	local urls
 	local url_map=$(mktemp)
 	local invalid_urls=$(mktemp)
-	local doc
 
 	info "Checking document code blocks"
 
@@ -309,17 +375,24 @@ check_docs()
 	done
 
 	# Get unique list of URLs
-	urls=$(awk '{print $1}' "$url_map"|sort -u)
+	urls=$(awk '{print $1}' "$url_map" | sort -u)
 
 	info "Checking all document URLs"
 
 	for url in $urls
 	do
-		# Ignore the install guide urls that contain a shell variable
-		echo "$url"|grep -q "\\$" && continue
+		if [ "$master_branch" != "true" ]
+		then
+			# If the URL is new on this PR, it cannot be checked.
+			echo "$new_urls" | grep -q "\<${url}\>" && \
+				info "ignoring new (but correct) URL: $url" && continue
+		fi
+
+		# Ignore the install guide URLs that contain a shell variable
+		echo "$url" | grep -q "\\$" && continue
 
 		# This prefix requires the client to be logged in to github, so ignore
-		echo "$url"|grep -q 'https://github.com/pulls' && continue
+		echo "$url" | grep -q 'https://github.com/pulls' && continue
 
 		# Sigh.
 		echo "$url"|grep -q 'https://example.com' && continue
@@ -341,7 +414,7 @@ check_docs()
 
 		cat "$invalid_urls" | while read url
 		do
-			files=$(grep "^${url}" "$url_map"|awk '{print $2}'|sort -u)
+			files=$(grep "^${url}" "$url_map" | awk '{print $2}' | sort -u)
 			echo >&2 -e "ERROR: Invalid URL '$url' found in the following files:\n"
 
 			for file in $files
@@ -356,8 +429,32 @@ check_docs()
 	rm -f "$url_map" "$invalid_urls"
 }
 
-check_commits
-check_license_headers
-check_go
-check_versions
-check_docs
+main()
+{
+	[ "$1" = "help" ] && usage && exit 0
+
+	repo="$1"
+	if [ -z "$repo" ]
+	then
+		if [ -n "$KATA_DEV_MODE" ]
+		then
+			# No repo param provided so assume it's the current
+			# one to avoid developers having to specify one now
+			# (backwards compatability).
+			repo=$(git config --get remote.origin.url |\
+				sed 's!https://!!g' || true)
+		else
+			usage && exit 1
+		fi
+	fi
+
+	master_branch="$2"
+
+	check_commits
+	check_license_headers
+	check_go
+	check_versions
+	check_docs
+}
+
+main "$@"

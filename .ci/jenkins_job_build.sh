@@ -99,7 +99,9 @@ ${GOPATH}/src/${tests_repo}/.ci/install_go.sh -p
 # Run the static analysis tools
 if [ -z "${METRICS_CI}" ]
 then
-	.ci/static-checks.sh
+	master_branch=""
+	[ -z "$pr_number" ] && master_branch="true"
+	.ci/static-checks.sh "$kata_repo" "$master_branch"
 fi
 
 if [ -n "$pr_number" ]
