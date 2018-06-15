@@ -43,7 +43,8 @@ RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 kernel_sha256=$(curl -L -s -f ${KR_SHA} | awk '/linux-'${VERSION}'.tar.xz/ {print $1}')
 
 # Generate the kernel config file
-cp "configs/x86_kata_kvm_${KR_LTS}.x" config
+KERNEL_ARCH=$(go get github.com/kata-containers/tests && $GOPATH/src/github.com/kata-containers/tests/.ci/kata-arch.sh --kernel)
+cp "configs/${KERNEL_ARCH}_kata_kvm_${KR_LTS}.x" config
 
 replace_list=(
 "VERSION=${VERSION}"
