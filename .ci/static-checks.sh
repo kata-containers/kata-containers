@@ -15,6 +15,14 @@ set -e
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 
+# Convert a golang package to a full path
+pkg_to_path()
+{
+	local pkg="$1"
+
+	go list -f '{{.Dir}}' "$pkg"
+}
+
 check_commits()
 {
 	# Since this script is called from another repositories directory,
@@ -43,14 +51,6 @@ check_commits()
 EOT
 		exit 1
 	fi
-}
-
-# Convert a golang package to a full path
-pkg_to_path()
-{
-	local pkg="$1"
-
-	go list -f '{{.Dir}}' "$pkg"
 }
 
 check_go()
