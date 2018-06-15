@@ -17,7 +17,7 @@ die(){
 }
 
 info() {
-	echo "INFO: $*"
+	echo -e "INFO: $*"
 }
 
 function clone_and_build() {

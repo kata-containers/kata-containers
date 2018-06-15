@@ -88,7 +88,7 @@ check_go()
 	# Run golang checks
 	if [ ! "$(command -v $linter)" ]
 	then
-		echo "INFO: Installing ${linter}"
+		info "Installing ${linter}"
 
 		local linter_url="github.com/alecthomas/gometalinter"
 		go get -d "$linter_url"
@@ -100,7 +100,7 @@ check_go()
 		#
 		local linter_version=$(get_version "externals.gometalinter.version")
 
-		echo "INFO: Forcing ${linter} version ${linter_version}"
+		info "Forcing ${linter} version ${linter_version}"
 
 		(cd "$GOPATH/src/$linter_url" && git checkout "$linter_version" && go install)
 		eval "$linter" --install --vendor
@@ -147,7 +147,7 @@ check_go()
 	linter_args+=" --enable=varcheck"
 	linter_args+=" --enable=unconvert"
 
-	echo -e "INFO: $linter args: '$linter_args'"
+	info "$linter args: '$linter_args'"
 
 	# Non-option arguments other than "./..." are
 	# considered to be directories by $linter, not package names.
@@ -169,10 +169,10 @@ check_go()
 		dirs+=" $path"
 	done
 
-	echo -e "INFO: Running $linter checks on the following packages:\n"
+	info "Running $linter checks on the following packages:\n"
 	echo "$go_packages"
 	echo
-	echo -e "INFO: Package paths:\n"
+	info "Package paths:\n"
 	echo "$dirs" | sed 's/^ *//g' | tr ' ' '\n'
 
 	eval "$linter" "${linter_args}" "$dirs"
@@ -202,7 +202,7 @@ check_license_headers()
 	local -r spdx_license="Apache-2.0"
 	local -r pattern="${spdx_tag}: ${spdx_license}"
 
-	echo "INFO: Checking for SPDX license headers"
+	info "Checking for SPDX license headers"
 
 	# List of filters used to restrict the types of file changes.
 	# See git-diff-tree(1) for further info.
@@ -233,7 +233,7 @@ check_license_headers()
 		origin/master HEAD || true)
 
 	# no files were changed
-	[ -z "$files" ] && echo "INFO: No files found" && return
+	[ -z "$files" ] && info "No files found" && return
 
 	local missing=$(egrep \
 		--exclude=".git/*" \
@@ -270,11 +270,11 @@ check_docs()
 
 	if [ ! "$(command -v $cmd)" ]
 	then
-		echo "Install $cmd utility"
+		info "Installing $cmd utility"
 		go get -u "mvdan.cc/xurls/cmd/$cmd"
 	fi
 
-	echo "INFO: Checking documentation"
+	info "Checking documentation"
 
 	local docs=$(find . -name "*.md" |grep -v "vendor/" || true)
 
@@ -300,7 +300,7 @@ check_docs()
 	# Get unique list of URLs
 	urls=$(awk '{print $1}' "$url_map"|sort -u)
 
-	echo "INFO: Checking all document URLs"
+	info "Checking all document URLs"
 
 	for url in $urls
 	do
