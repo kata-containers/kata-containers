@@ -329,8 +329,8 @@ check_docs()
 
 		cat "$invalid_urls" | while read url
 		do
-			files=$(grep "^${url}" "$url_map"|awk '{print $2}')
-			echo >&2 -e "ERROR: URL '$url' in the following files is invalid:\n"
+			files=$(grep "^${url}" "$url_map"|awk '{print $2}'|sort -u)
+			echo >&2 -e "ERROR: Invalid URL '$url' found in the following files:\n"
 
 			for file in $files
 			do
