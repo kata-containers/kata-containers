@@ -313,10 +313,6 @@ check_docs()
 		# This prefix requires the client to be logged in to github, so ignore
 		echo "$url"|grep -q 'https://github.com/pulls' && continue
 
-		# This prefix require the client to be logged into Jenkins, so
-		# ignore
-		echo "$url"|grep -q 'http://199.204.45.34' && continue
-
 		# Sigh.
 		echo "$url"|grep -q 'https://example.com' && continue
 		
