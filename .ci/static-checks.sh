@@ -10,6 +10,8 @@
 
 set -e
 
+[ -n "$DEBUG" ] && set -x
+
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 
