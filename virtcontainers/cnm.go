@@ -55,7 +55,7 @@ func (n *cnm) remove(sandbox *Sandbox, networkNS NetworkNamespace, netNsCreated 
 	}
 
 	if netNsCreated {
-		return deleteNetNS(networkNS.NetNsPath, true)
+		return deleteNetNS(networkNS.NetNsPath)
 	}
 
 	return nil
