@@ -60,12 +60,13 @@ echo -e "Move to ${tmpdir}/${virtcontainers_build_dir}"
 pushd ${tmpdir}/${virtcontainers_build_dir}
 echo "Clone cni"
 git clone https://github.com/containernetworking/plugins.git
+pushd plugins
+git checkout 7f98c94613021d8b57acfa1a2f0c8d0f6fd7ae5a
 
 echo "Copy CNI config files"
 cp $GOPATH/src/github.com/kata-containers/runtime/virtcontainers/test/cni/10-mynet.conf ${ETCDIR}/cni/net.d/
 cp $GOPATH/src/github.com/kata-containers/runtime/virtcontainers/test/cni/99-loopback.conf ${ETCDIR}/cni/net.d/
 
-pushd plugins
 ./build.sh
 cp ./bin/bridge ${TMPDIR}/cni/bin/cni-bridge
 cp ./bin/loopback ${TMPDIR}/cni/bin/loopback
