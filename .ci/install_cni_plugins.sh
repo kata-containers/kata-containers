@@ -7,9 +7,14 @@
 
 set -e
 
+cidir=$(dirname "$0")
+source "${cidir}/lib.sh"
+
+plugins_version=$(get_version "externals.cni-plugins.commit")
 echo "Retrieve CNI plugins repository"
 go get -d github.com/containernetworking/plugins || true
 pushd $GOPATH/src/github.com/containernetworking/plugins
+git checkout "$plugins_version"
 
 echo "Build CNI plugins"
 ./build.sh
