@@ -123,7 +123,7 @@ func TestCreateDeleteNetNS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = deleteNetNS(netNSPath, true)
+	err = deleteNetNS(netNSPath)
 	if err != nil {
 		t.Fatal(err)
 	}

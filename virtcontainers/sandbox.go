@@ -923,11 +923,7 @@ func (s *Sandbox) createNetwork() error {
 }
 
 func (s *Sandbox) removeNetwork() error {
-	if s.networkNS.NetNsCreated {
-		return s.network.remove(s, s.networkNS)
-	}
-
-	return nil
+	return s.network.remove(s, s.networkNS, s.networkNS.NetNsCreated)
 }
 
 // startVM starts the VM.
