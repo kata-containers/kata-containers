@@ -153,7 +153,7 @@ type Endpoint interface {
 
 	SetProperties(NetworkInfo)
 	Attach(hypervisor) error
-	Detach() error
+	Detach(netNsCreated bool, netNsPath string) error
 }
 
 // VirtualEndpoint gathers a network pair and its properties.
@@ -230,9 +230,18 @@ func (endpoint *VirtualEndpoint) Attach(h hypervisor) error {
 
 // Detach for the virtual endpoint tears down the tap and bridge
 // created for the veth interface.
-func (endpoint *VirtualEndpoint) Detach() error {
+func (endpoint *VirtualEndpoint) Detach(netNsCreated bool, netNsPath string) error {
+	// The network namespace would have been deleted at this point
+	// if it has not been created by virtcontainers.
+	if !netNsCreated {
+		return nil
+	}
+
 	networkLogger().Info("Detaching virtual endpoint")
-	return xconnectVMNetwork(&(endpoint.NetPair), false)
+
+	return doNetNS(netNsPath, func(_ ns.NetNS) error {
+		return xconnectVMNetwork(&(endpoint.NetPair), false)
+	})
 }
 
 // Properties returns the properties of the interface.
@@ -281,7 +290,7 @@ func (endpoint *VhostUserEndpoint) Attach(h hypervisor) error {
 }
 
 // Detach for vhostuser endpoint
-func (endpoint *VhostUserEndpoint) Detach() error {
+func (endpoint *VhostUserEndpoint) Detach(netNsCreated bool, netNsPath string) error {
 	networkLogger().Info("Detaching vhostuser based endpoint")
 	return nil
 }
@@ -343,9 +352,14 @@ func (endpoint *PhysicalEndpoint) Attach(h hypervisor) error {
 
 // Detach for physical endpoint unbinds the physical network interface from vfio-pci
 // and binds it back to the saved host driver.
-func (endpoint *PhysicalEndpoint) Detach() error {
+func (endpoint *PhysicalEndpoint) Detach(netNsCreated bool, netNsPath string) error {
 	// Bind back the physical network interface to host.
+	// We need to do this even if a new network namespace has not
+	// been created by virtcontainers.
 	networkLogger().Info("Detaching physical endpoint")
+
+	// We do not need to enter the network namespace to bind back the
+	// physical interface to host driver.
 	return bindNICToHost(endpoint)
 }
 
@@ -606,16 +620,16 @@ func addNetworkCommon(sandbox *Sandbox, networkNS *NetworkNamespace) error {
 	return err
 }
 
-func removeNetworkCommon(networkNS NetworkNamespace) error {
-	return doNetNS(networkNS.NetNsPath, func(_ ns.NetNS) error {
-		for _, endpoint := range networkNS.Endpoints {
-			if err := endpoint.Detach(); err != nil {
-				return err
-			}
+func removeNetworkCommon(networkNS NetworkNamespace, netNsCreated bool) error {
+	for _, endpoint := range networkNS.Endpoints {
+		// Detach for an endpoint should enter the network namespace
+		// if required.
+		if err := endpoint.Detach(netNsCreated, networkNS.NetNsPath); err != nil {
+			return err
 		}
+	}
 
-		return nil
-	})
+	return nil
 }
 
 func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link) (netlink.Link, []*os.File, error) {
@@ -1098,7 +1112,7 @@ func doNetNS(netNSPath string, cb func(ns.NetNS) error) error {
 	return cb(targetNS)
 }
 
-func deleteNetNS(netNSPath string, mounted bool) error {
+func deleteNetNS(netNSPath string) error {
 	n, err := ns.GetNS(netNSPath)
 	if err != nil {
 		return err
@@ -1109,15 +1123,11 @@ func deleteNetNS(netNSPath string, mounted bool) error {
 		return err
 	}
 
-	// This unmount part is supposed to be done in the cni/ns package, but the "mounted"
-	// flag is not updated when retrieving NetNs handler from GetNS().
-	if mounted {
-		if err = unix.Unmount(netNSPath, unix.MNT_DETACH); err != nil {
-			return fmt.Errorf("Failed to unmount namespace %s: %v", netNSPath, err)
-		}
-		if err := os.RemoveAll(netNSPath); err != nil {
-			return fmt.Errorf("Failed to clean up namespace %s: %v", netNSPath, err)
-		}
+	if err = unix.Unmount(netNSPath, unix.MNT_DETACH); err != nil {
+		return fmt.Errorf("Failed to unmount namespace %s: %v", netNSPath, err)
+	}
+	if err := os.RemoveAll(netNSPath); err != nil {
+		return fmt.Errorf("Failed to clean up namespace %s: %v", netNSPath, err)
 	}
 
 	return nil
@@ -1410,5 +1420,5 @@ type network interface {
 
 	// remove unbridges and deletes TAP interfaces. It also removes virtual network
 	// interfaces and deletes the network namespace.
-	remove(sandbox *Sandbox, networkNS NetworkNamespace) error
+	remove(sandbox *Sandbox, networkNS NetworkNamespace, netNsCreated bool) error
 }
