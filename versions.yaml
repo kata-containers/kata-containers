@@ -107,6 +107,11 @@ components:
 externals:
   description: "Third-party projects used by the system"
 
+  cni-plugins:
+    description: "CNI network plugins"
+    url: "https://github.com/containernetworking/plugins"
+    commit: "7f98c94613021d8b57acfa1a2f0c8d0f6fd7ae5a"
+
   crio:
     description: |
       OCI-based Kubernetes Container Runtime Interface implementation
