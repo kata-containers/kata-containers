@@ -44,6 +44,6 @@ docker build \
 	-t qemu-static
 
 docker run \
-	-ti \
+	-i \
 	-v "${PWD}":/share qemu-static \
 	mv /tmp/qemu-static/kata-qemu-static.tar.gz /share/
