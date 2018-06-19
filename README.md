@@ -150,7 +150,7 @@ tool.
 ## Debugging
 
 See the
-[debugging section of the developer guide](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#enable-full-debug).
+[debugging section of the developer guide](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#troubleshoot-kata-containers).
 
 ## Limitations
 
