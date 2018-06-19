@@ -549,6 +549,10 @@ func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 	return k.proxy.stop(sandbox, k.state.ProxyPid)
 }
 
+func (k *kataAgent) cleanupSandbox(sandbox *Sandbox) error {
+	return os.RemoveAll(filepath.Join(kataHostSharedDir, sandbox.id))
+}
+
 func (k *kataAgent) replaceOCIMountSource(spec *specs.Spec, guestMounts []Mount) error {
 	ociMounts := spec.Mounts
 
@@ -951,7 +955,14 @@ func (k *kataAgent) stopContainer(sandbox *Sandbox, c Container) error {
 		return err
 	}
 
-	return bindUnmountContainerRootfs(kataHostSharedDir, sandbox.id, c.id)
+	if err := bindUnmountContainerRootfs(kataHostSharedDir, sandbox.id, c.id); err != nil {
+		return err
+	}
+
+	// since rootfs is umounted it's safe to remove the dir now
+	rootPathParent := filepath.Join(kataHostSharedDir, sandbox.id, c.id)
+
+	return os.RemoveAll(rootPathParent)
 }
 
 func (k *kataAgent) signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error {

@@ -510,11 +510,19 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 func (c *Container) unmountHostMounts() error {
 	for _, m := range c.mounts {
 		if m.HostPath != "" {
+			logger := c.Logger().WithField("host-path", m.HostPath)
 			if err := syscall.Unmount(m.HostPath, 0); err != nil {
-				c.Logger().WithFields(logrus.Fields{
-					"host-path": m.HostPath,
-					"error":     err,
-				}).Warn("Could not umount")
+				// Unable to unmount paths could be a really big problem here
+				// we need to make sure cause 'less damage' if things are
+				// really broken. For further, we need to give admins more of
+				// a chance to diagnose the problem. As the rules of `fail fast`,
+				// here we return an error as soon as we get it.
+				logger.WithError(err).Warn("Could not umount")
+				return err
+			} else if err := os.RemoveAll(m.HostPath); err != nil {
+				// since the mounts related to the shared dir is umounted
+				// we need to remove the host path to avoid resource remaining
+				logger.WithError(err).Warn("Could not be removed")
 				return err
 			}
 		}
