@@ -512,6 +512,11 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 		hostname = hostname[:maxHostnameLen]
 	}
 
+	// check grpc server is serving
+	if err = k.check(); err != nil {
+		return err
+	}
+
 	//
 	// Setup network interfaces and routes
 	//
