@@ -37,21 +37,18 @@ var _ = Describe("capabilities", func() {
 
 	DescribeTable("drop and add capabilities",
 		func(selectOption string) {
-			Skip("Issue https://github.com/kata-containers/agent/issues/190")
-			args = []string{"--name", id, "--rm", "--cap-drop", selectOption, FedoraImage, "capsh --print"}
+			args = []string{"--name", id, "--rm", "--cap-drop", selectOption, CentosImage, "sh", "-c", "capsh --print"}
 			stdout, _, exitCode = dockerRun(args...)
 			Expect(exitCode).To(Equal(0))
 			Expect(stdout).NotTo(ContainSubstring("cap_" + selectOption))
 
-			args = []string{"--name", anotherID, "--rm", "--cap-add", selectOption, FedoraImage, "capsh --print"}
+			args = []string{"--name", anotherID, "--rm", "--cap-add", selectOption, CentosImage, "sh", "-c", "capsh --print"}
 			stdout, _, exitCode = dockerRun(args...)
 			Expect(exitCode).To(Equal(0))
 			Expect(stdout).To(ContainSubstring("cap_" + selectOption))
 		},
 		selectCaps("audit_control"),
-		selectCaps("audit_read"),
 		selectCaps("audit_write"),
-		selectCaps("block_suspend"),
 		selectCaps("chown"),
 		selectCaps("dac_override"),
 		selectCaps("dac_read_search"),
@@ -82,6 +79,5 @@ var _ = Describe("capabilities", func() {
 		selectCaps("sys_resource"),
 		selectCaps("sys_time"),
 		selectCaps("syslog"),
-		selectCaps("wake_alarm"),
 	)
 })
