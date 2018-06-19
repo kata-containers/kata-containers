@@ -971,10 +971,12 @@ func (s *Sandbox) startVM() error {
 
 	s.Logger().Info("VM started")
 
-	// Once startVM is done, we want to guarantee
-	// that the sandbox is manageable. For that we need
-	// to start the sandbox inside the VM.
-	return s.agent.startSandbox(s)
+	return nil
+}
+
+// stopVM: stop the sandbox's VM
+func (s *Sandbox) stopVM() error {
+	return s.hypervisor.stopSandbox()
 }
 
 func (s *Sandbox) addContainer(c *Container) error {

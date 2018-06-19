@@ -64,6 +64,27 @@ func createSandboxFromConfig(sandboxConfig SandboxConfig, factory Factory) (*San
 		return nil, err
 	}
 
+	// rollback to stop VM if error occurs
+	defer func() {
+		if err != nil {
+			s.stopVM()
+		}
+	}()
+
+	// Once startVM is done, we want to guarantee
+	// that the sandbox is manageable. For that we need
+	// to start the sandbox inside the VM.
+	if err = s.agent.startSandbox(s); err != nil {
+		return nil, err
+	}
+
+	// rollback to stop sandbox in VM
+	defer func() {
+		if err != nil {
+			s.agent.stopSandbox(s)
+		}
+	}()
+
 	// Create Containers
 	if err = s.createContainers(); err != nil {
 		return nil, err
