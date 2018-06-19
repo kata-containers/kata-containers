@@ -314,6 +314,9 @@ check_docs()
 
 		# Sigh.
 		echo "$url"|grep -q 'https://example.com' && continue
+		
+		# Google APIs typically require an auth token.
+		echo "$url"|grep -q 'https://www.googleapis.com' && continue
 
 		# Check the URL, saving it if invalid
 		( curl -sLf -o /dev/null "$url" ||\
