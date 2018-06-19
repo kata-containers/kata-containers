@@ -64,6 +64,9 @@ const qmpCapErrMsg = "Failed to negoatiate QMP capabilities"
 
 const defaultConsole = "console.sock"
 
+var qemuMajorVersion int
+var qemuMinorVersion int
+
 // agnostic list of kernel parameters
 var defaultKernelParameters = []Param{
 	{"panic", "1"},
@@ -509,6 +512,8 @@ func (q *qemu) waitSandbox(timeout int) error {
 	}
 
 	q.qmpMonitorCh.qmp = qmp
+	qemuMajorVersion = ver.Major
+	qemuMinorVersion = ver.Minor
 
 	q.Logger().WithFields(logrus.Fields{
 		"qmp-major-version": ver.Major,
