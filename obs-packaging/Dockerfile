@@ -22,3 +22,7 @@ RUN tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
 
 # Local build dependencies
 RUN zypper -n install make gcc yum xz
+
+# Add go compiler to the PATH
+ENV PATH /usr/local/go/bin:$PATH
+ENV GOPATH /root/go

@@ -8,9 +8,10 @@
 set -x
 set -e
 
+script_dir=$( cd $( dirname "${BASH_SOURCE[0]}" ) && pwd )
 cache_dir=${PWD}/obs-cache
 #where packaing repo lives
-packaging_repo_dir="${PWD}"
+packaging_repo_dir=$(cd "${script_dir}/.." && pwd )
 #where results will be stored
 host_datadir="${PWD}/pkgs"
 obs_image="obs-kata"
@@ -49,4 +50,4 @@ faketty sudo docker run \
 	-v "$packaging_repo_dir":${packaging_repo_dir} \
 	-v "$host_datadir":/var/packaging \
 	-v "$HOME/.oscrc":/root/.oscrc \
-	-ti "$obs_image" bash -c "${packaging_repo_dir}/build_all.sh"
+	-ti "$obs_image" bash -c "${packaging_repo_dir}/obs-packaging/build_all.sh"

@@ -19,11 +19,11 @@ SCRIPT_DIR=$(dirname $0)
 
 PKG_NAME="kata-linux-container"
 VERSION=$kernel_version
-KATA_CONFIG_VERSION=$(cat "${SCRIPT_DIR}/kata_config_version")
+KATA_CONFIG_VERSION=$(cat "${SCRIPT_DIR}/../../kernel/kata_config_version")
 
 KR_SERIES="$(echo $VERSION | cut -d "." -f 1).x"
 KR_LTS=$(echo $VERSION | cut -d "." -f 1,2)
-KR_PATCHES=$(eval find "patches" -type f -name "*.patch")
+KR_PATCHES=$(eval find "${SCRIPT_DIR}/../../kernel/patches" -type f -name "*.patch")
 
 KR_REL=https://www.kernel.org/releases.json
 KR_SHA=https://cdn.kernel.org/pub/linux/kernel/v"${KR_SERIES}"/sha256sums.asc
@@ -44,7 +44,7 @@ kernel_sha256=$(curl -L -s -f ${KR_SHA} | awk '/linux-'${VERSION}'.tar.xz/ {prin
 
 # Generate the kernel config file
 KERNEL_ARCH=$(go get github.com/kata-containers/tests && $GOPATH/src/github.com/kata-containers/tests/.ci/kata-arch.sh --kernel)
-cp "configs/${KERNEL_ARCH}_kata_kvm_${KR_LTS}.x" config
+cp "${SCRIPT_DIR}/../../kernel/configs/${KERNEL_ARCH}_kata_kvm_${KR_LTS}.x" config
 
 replace_list=(
 "VERSION=${VERSION}"
