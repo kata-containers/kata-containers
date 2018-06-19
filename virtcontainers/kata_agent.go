@@ -450,6 +450,8 @@ func (k *kataAgent) generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*
 }
 
 func (k *kataAgent) startProxy(sandbox *Sandbox) error {
+	var err error
+
 	if k.proxy == nil {
 		return errorMissingProxy
 	}
@@ -475,10 +477,18 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 		return err
 	}
 
+	// If error occurs after kata-proxy process start,
+	// then rollback to kill kata-proxy process
+	defer func() {
+		if err != nil && pid > 0 {
+			k.proxy.stop(sandbox, pid)
+		}
+	}()
+
 	// Fill agent state with proxy information, and store them.
 	k.state.ProxyPid = pid
 	k.state.URL = uri
-	if err := sandbox.storage.storeAgentState(sandbox.id, k.state); err != nil {
+	if err = sandbox.storage.storeAgentState(sandbox.id, k.state); err != nil {
 		return err
 	}
 
