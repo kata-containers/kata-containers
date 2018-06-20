@@ -9,7 +9,7 @@ package virtcontainers
 type ContainerType string
 
 // List different types of containers
-var (
+const (
 	PodContainer         ContainerType = "pod_container"
 	PodSandbox           ContainerType = "pod_sandbox"
 	UnknownContainerType ContainerType = "unknown_container_type"
