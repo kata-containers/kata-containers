@@ -56,6 +56,10 @@ var createCLICommand = cli.Command{
 			Value: "",
 			Usage: "specify the file to write the process id to",
 		},
+		cli.BoolFlag{
+			Name:  "no-pivot",
+			Usage: "warning: this flag is meaningless to kata-runtime, just defined in order to be compatible with docker in ramdisk",
+		},
 	},
 	Action: func(context *cli.Context) error {
 		runtimeConfig, ok := context.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
