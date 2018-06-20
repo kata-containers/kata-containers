@@ -358,6 +358,9 @@ type SandboxConfig struct {
 	Annotations map[string]string
 
 	ShmSize uint64
+
+	// SharePidNs sets all containers to share the same sandbox level pid namespace.
+	SharePidNs bool
 }
 
 // valid checks that the sandbox configuration is valid.
@@ -462,7 +465,8 @@ type Sandbox struct {
 
 	wg *sync.WaitGroup
 
-	shmSize uint64
+	shmSize    uint64
+	sharePidNs bool
 }
 
 // ID returns the sandbox identifier string.
@@ -743,6 +747,7 @@ func newSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
 		annotationsLock: &sync.RWMutex{},
 		wg:              &sync.WaitGroup{},
 		shmSize:         sandboxConfig.ShmSize,
+		sharePidNs:      sandboxConfig.SharePidNs,
 	}
 
 	if err = globalSandboxList.addSandbox(s); err != nil {
