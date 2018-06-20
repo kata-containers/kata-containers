@@ -126,7 +126,8 @@ doc_to_script()
 	# sanity check
 	[ "$check_only" = "yes" ] && redirect="1>/dev/null 2>/dev/null"
 
-	eval bash -n "$all" $redirect
+	{ local ret; eval bash -n "$all" $redirect; ret=$?; } || true
+	[ "$ret" -ne 0 ] && die "shell code in file '$file' is not valid"
 
 	# create output file
 	[ "$check_only" = "no" ] && cp "$all" "$outfile"
