@@ -11,9 +11,9 @@ setup() {
 	export KUBECONFIG=/etc/kubernetes/admin.conf
 	pod_name="constraints-cpu-test"
 	container_name="first-cpu-container"
-	sharessyspath="/sys/fs/cgroup/cpu,cpuacct/cpu.shares"
-	quotasyspath="/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_quota_us"
-	periodsyspath="/sys/fs/cgroup/cpu,cpuacct/cpu.cfs_period_us"
+	sharessyspath="/sys/fs/cgroup/cpu/cpu.shares"
+	quotasyspath="/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
+	periodsyspath="/sys/fs/cgroup/cpu/cpu.cfs_period_us"
 	total_cpus=2
 	total_requests=512
 	total_cpu_container=1
