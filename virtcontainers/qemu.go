@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -49,7 +48,6 @@ type qemu struct {
 	config HypervisorConfig
 
 	qmpMonitorCh qmpChannel
-	qmpControlCh qmpChannel
 
 	qemuConfig govmmQemu.Config
 
@@ -61,6 +59,8 @@ type qemu struct {
 }
 
 const qmpCapErrMsg = "Failed to negoatiate QMP capabilities"
+
+const qmpSocket = "qmp.sock"
 
 const defaultConsole = "console.sock"
 
@@ -223,50 +223,8 @@ func (q *qemu) memoryTopology(sandboxConfig SandboxConfig) (govmmQemu.Memory, er
 	return q.arch.memoryTopology(memMb, hostMemMb), nil
 }
 
-func (q *qemu) qmpSocketPath(socketName string) (string, error) {
-	if socketName == "" {
-		return "", errors.New("need socket name")
-	}
-
-	parentDirPath := filepath.Join(runStoragePath, q.sandbox.id)
-
-	dir, err := utils.BuildSocketPath(parentDirPath)
-	if err != nil {
-		return "", err
-	}
-
-	name := fmt.Sprintf("%s-%s", socketName, q.state.UUID)
-
-	path, err := utils.BuildSocketPath(dir, name)
-	if err == nil {
-		return path, nil
-	}
-
-	// The socket path is too long so truncate up to a minimum length.
-
-	// The minimum path length we're prepared to use (based on current
-	// values)
-	const minNameLen = 12
-
-	dirLen := len(dir)
-
-	// '-1' is for the addition of a path separator
-	availableNameLen := utils.MaxSocketPathLen - dirLen - 1
-
-	if availableNameLen < minNameLen {
-		return "", fmt.Errorf("QMP socket name cannot be shortened: %v", name)
-	}
-
-	new := name[:availableNameLen]
-
-	q.Logger().WithFields(logrus.Fields{
-		"original-name": name,
-		"new-name":      new,
-	}).Warnf("shortening QMP socket name")
-
-	name = new
-
-	return utils.BuildSocketPath(dir, name)
+func (q *qemu) qmpSocketPath(sandboxID string) (string, error) {
+	return utils.BuildSocketPath(runStoragePath, sandboxID, qmpSocket)
 }
 
 func (q *qemu) getQemuMachine(sandboxConfig SandboxConfig) (govmmQemu.Machine, error) {
@@ -354,7 +312,7 @@ func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
 		return fmt.Errorf("UUID should not be empty")
 	}
 
-	monitorSockPath, err := q.qmpSocketPath(monitorSocket)
+	monitorSockPath, err := q.qmpSocketPath(sandboxConfig.ID)
 	if err != nil {
 		return err
 	}
@@ -364,26 +322,15 @@ func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
 		path: monitorSockPath,
 	}
 
-	controlSockPath, err := q.qmpSocketPath(controlSocket)
+	err = os.MkdirAll(filepath.Dir(monitorSockPath), dirMode)
 	if err != nil {
 		return err
-	}
-
-	q.qmpControlCh = qmpChannel{
-		ctx:  context.Background(),
-		path: controlSockPath,
 	}
 
 	qmpSockets := []govmmQemu.QMPSocket{
 		{
 			Type:   "unix",
 			Name:   q.qmpMonitorCh.path,
-			Server: true,
-			NoWait: true,
-		},
-		{
-			Type:   "unix",
-			Name:   q.qmpControlCh.path,
 			Server: true,
 			NoWait: true,
 		},
@@ -531,7 +478,7 @@ func (q *qemu) stopSandbox() error {
 	disconnectCh := make(chan struct{})
 
 	q.Logger().Info("Stopping Sandbox")
-	qmp, _, err := govmmQemu.QMPStart(q.qmpControlCh.ctx, q.qmpControlCh.path, cfg, disconnectCh)
+	qmp, _, err := govmmQemu.QMPStart(q.qmpMonitorCh.ctx, q.qmpMonitorCh.path, cfg, disconnectCh)
 	if err != nil {
 		q.Logger().WithError(err).Error("Failed to connect to QEMU instance")
 		return err
@@ -558,7 +505,7 @@ func (q *qemu) togglePauseSandbox(pause bool) error {
 	// Auto-closed by QMPStart().
 	disconnectCh := make(chan struct{})
 
-	qmp, _, err := govmmQemu.QMPStart(q.qmpControlCh.ctx, q.qmpControlCh.path, cfg, disconnectCh)
+	qmp, _, err := govmmQemu.QMPStart(q.qmpMonitorCh.ctx, q.qmpMonitorCh.path, cfg, disconnectCh)
 	if err != nil {
 		q.Logger().WithError(err).Error("Failed to connect to QEMU instance")
 		return err
@@ -591,7 +538,7 @@ func (q *qemu) qmpSetup() (*govmmQemu.QMP, error) {
 	// Auto-closed by QMPStart().
 	disconnectCh := make(chan struct{})
 
-	qmp, _, err := govmmQemu.QMPStart(q.qmpControlCh.ctx, q.qmpControlCh.path, cfg, disconnectCh)
+	qmp, _, err := govmmQemu.QMPStart(q.qmpMonitorCh.ctx, q.qmpMonitorCh.path, cfg, disconnectCh)
 	if err != nil {
 		q.Logger().WithError(err).Error("Failed to connect to QEMU instance")
 		return nil, err
