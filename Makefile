@@ -8,15 +8,14 @@
 MK_DIR :=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 .PHONY: test test-release-tools
 
-test: test-release-tools test-packaging-tools
+test:
+	@$(MK_DIR)/.ci/test.sh
 
 test-release-tools:
 	@$(MK_DIR)/release/tag_repos_test.sh
 
+test-static-build:
+	@make -f $(MK_DIR)/static-build/qemu/Makefile
+
 test-packaging-tools:
-ifndef CI
 	@$(MK_DIR)/build_from_docker.sh
-else
-	@echo "Skip test-packaging-tools"
-	@echo "See: https://github.com/kata-containers/packaging/issues/68"
-endif
