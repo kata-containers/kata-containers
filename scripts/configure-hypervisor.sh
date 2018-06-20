@@ -55,6 +55,7 @@ Options:
 	     is specified.
 	-h : Display this help.
 	-m : Display options one per line (includes continuation characters).
+	-s : Generate options to build static
 
 Example:
 
@@ -185,24 +186,6 @@ show_array()
 # Entry point
 main()
 {
-	local qemu_version_file="VERSION"
-	[ -f ${qemu_version_file} ] || die "QEMU version file '$qemu_version_file' not found"
-
-	local qemu_version_major=$(cut -d. -f1 "${qemu_version_file}")
-	local qemu_version_minor=$(cut -d. -f2 "${qemu_version_file}")
-
-	[ -n "${qemu_version_major}" ] \
-		|| die "cannot determine qemu major version from file $qemu_version_file"
-	[ -n "${qemu_version_minor}" ] \
-		|| die "cannot determine qemu minor version from file $qemu_version_file"
-
-	local gcc_version_major=$(gcc -dumpversion | cut -f1 -d.)
-	local gcc_version_minor=$(gcc -dumpversion | cut -f2 -d.)
-
-	[ -n "${gcc_version_major}" ] \
-		|| die "cannot determine gcc major version, please ensure it is installed"
-	[ -n "${gcc_version_minor}" ] \
-		|| die "cannot determine gcc minor version, please ensure it is installed"
 
 	arch=$(arch)
 
@@ -222,7 +205,7 @@ main()
 
 	action=""
 
-	while getopts "dhm" opt
+	while getopts "dhms" opt
 	do
 		case "$opt" in
 			d)
@@ -237,6 +220,9 @@ main()
 			m)
 				action="multi"
 				;;
+			s)
+				static="true"
+				;;
 		esac
 	done
 
@@ -244,6 +230,25 @@ main()
 
 	[ -z "$1" ] && die "need hypervisor name"
 	hypervisor="$1"
+
+	local qemu_version_file="VERSION"
+	[ -f ${qemu_version_file} ] || die "QEMU version file '$qemu_version_file' not found"
+
+	local qemu_version_major=$(cut -d. -f1 "${qemu_version_file}")
+	local qemu_version_minor=$(cut -d. -f2 "${qemu_version_file}")
+
+	[ -n "${qemu_version_major}" ] \
+		|| die "cannot determine qemu major version from file $qemu_version_file"
+	[ -n "${qemu_version_minor}" ] \
+		|| die "cannot determine qemu minor version from file $qemu_version_file"
+
+	local gcc_version_major=$(gcc -dumpversion | cut -f1 -d.)
+	local gcc_version_minor=$(gcc -dumpversion | cut -f2 -d.)
+
+	[ -n "${gcc_version_major}" ] \
+		|| die "cannot determine gcc major version, please ensure it is installed"
+	[ -n "${gcc_version_minor}" ] \
+		|| die "cannot determine gcc minor version, please ensure it is installed"
 
 	#---------------------------------------------------------------------
 	# Disabled options
@@ -303,6 +308,10 @@ main()
 		qemu_options+=(security:--disable-static)
 	fi
 
+	if [ -n ${static} ]; then
+		qemu_options+=(misc:--static)
+	fi
+
 	# Not required as "-uuid ..." is always passed to the qemu binary
 	qemu_options+=(size:--disable-uuid)
 
@@ -347,7 +356,7 @@ main()
 	fi
 
 	# Support Ceph RADOS Block Device (RBD)
-	qemu_options+=(functionality:--enable-rbd)
+	[ -z "${static}" ] && qemu_options+=(functionality:--enable-rbd)
 
 	# In "passthrough" security mode
 	# (-fsdev "...,security_model=passthrough,..."), qemu uses a helper
@@ -397,7 +406,7 @@ main()
 	# SECURITY: Link binary as a Position Independant Executable,
 	# and take advantage of ASLR, making ROP attacks much harder to perform.
 	# (https://wiki.debian.org/Hardening)
-	_qemu_ldflags+=" -pie"
+	[ -z "${static}" ] && _qemu_ldflags+=" -pie"
 
 	# SECURITY: Disallow executing code on the stack.
 	_qemu_ldflags+=" -z noexecstack"
