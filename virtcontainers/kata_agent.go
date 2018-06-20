@@ -528,7 +528,7 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	req := &grpc.CreateSandboxRequest{
 		Hostname:     hostname,
 		Storages:     storages,
-		SandboxPidns: false,
+		SandboxPidns: sandbox.sharePidNs,
 	}
 
 	_, err = k.sendReq(req)
