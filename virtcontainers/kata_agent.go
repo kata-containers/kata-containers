@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -77,9 +78,13 @@ type KataAgentState struct {
 }
 
 type kataAgent struct {
-	shim         shim
-	proxy        proxy
-	client       *kataclient.AgentClient
+	shim  shim
+	proxy proxy
+
+	// lock protects the client pointer
+	sync.Mutex
+	client *kataclient.AgentClient
+
 	reqHandlers  map[string]reqFunc
 	state        KataAgentState
 	keepConn     bool
@@ -1089,6 +1094,14 @@ func (k *kataAgent) statsContainer(sandbox *Sandbox, c Container) (*ContainerSta
 }
 
 func (k *kataAgent) connect() error {
+	// lockless quick pass
+	if k.client != nil {
+		return nil
+	}
+
+	// This is for the first connection only, to prevent race
+	k.Lock()
+	defer k.Unlock()
 	if k.client != nil {
 		return nil
 	}
@@ -1105,6 +1118,9 @@ func (k *kataAgent) connect() error {
 }
 
 func (k *kataAgent) disconnect() error {
+	k.Lock()
+	defer k.Unlock()
+
 	if k.client == nil {
 		return nil
 	}
