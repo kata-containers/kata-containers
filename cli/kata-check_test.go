@@ -137,6 +137,75 @@ func makeCPUInfoFile(path, vendorID, flags string) error {
 	return ioutil.WriteFile(path, contents.Bytes(), testFileMode)
 }
 
+func genericTestGetCPUDetails(t *testing.T) {
+	type testData struct {
+		contents       string
+		expectedVendor string
+		expectedModel  string
+		expectError    bool
+	}
+
+	const validVendorName = "a vendor"
+	validVendor := fmt.Sprintf(`%s  : %s`, archCPUVendorField, validVendorName)
+
+	const validModelName = "some CPU model"
+	validModel := fmt.Sprintf(`%s   : %s`, archCPUModelField, validModelName)
+
+	validContents := fmt.Sprintf(`
+a       : b
+%s
+foo     : bar
+%s
+`, validVendor, validModel)
+
+	data := []testData{
+		{"", "", "", true},
+		{"invalid", "", "", true},
+		{archCPUVendorField, "", "", true},
+		{validVendor, "", "", true},
+		{validModel, "", "", true},
+		{validContents, validVendorName, validModelName, false},
+	}
+
+	tmpdir, err := ioutil.TempDir("", "")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(tmpdir)
+
+	savedProcCPUInfo := procCPUInfo
+
+	testProcCPUInfo := filepath.Join(tmpdir, "cpuinfo")
+
+	// override
+	procCPUInfo = testProcCPUInfo
+
+	defer func() {
+		procCPUInfo = savedProcCPUInfo
+	}()
+
+	_, _, err = getCPUDetails()
+	// ENOENT
+	assert.Error(t, err)
+	assert.True(t, os.IsNotExist(err))
+
+	for _, d := range data {
+		err := createFile(procCPUInfo, d.contents)
+		assert.NoError(t, err)
+
+		vendor, model, err := getCPUDetails()
+
+		if d.expectError {
+			assert.Error(t, err, fmt.Sprintf("%+v", d))
+			continue
+		} else {
+			assert.NoError(t, err, fmt.Sprintf("%+v", d))
+			assert.Equal(t, d.expectedVendor, vendor)
+			assert.Equal(t, d.expectedModel, model)
+		}
+	}
+}
+
 func TestCheckGetCPUInfo(t *testing.T) {
 	assert := assert.New(t)
 
