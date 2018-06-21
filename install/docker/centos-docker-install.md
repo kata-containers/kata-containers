@@ -47,7 +47,7 @@
    You are now ready to run Kata Containers:
 
    ```bash
-   $ sudo docker run -ti busybox uname -a
+   $ sudo docker run busybox uname -a
    ```
 
    The previous command shows details of the kernel version running inside the

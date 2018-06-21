@@ -12,14 +12,12 @@ info()
 	echo "INFO: $msg"
 }
 
-# Detect if any installation guides changed. If so, run the
+# Detect if any installation documents changed. If so, run the
 # kata manager to "execute" the install guide to ensure the
 # commands it specified result in a working system.
 check_install_guides()
 {
 	[ -n "$TRAVIS" ] && info "Not testing install guide as Travis lacks modern distro support and VT-x" && return 
-
-	local -r install_guide_suffix="-installation-guide.md"
 
 	# List of filters used to restrict the types of file changes.
 	# See git-diff-tree(1) for further info.
@@ -52,7 +50,7 @@ check_install_guides()
 	# No files were changed
 	[ -z "$files" ] && return
 
-	changed=$(echo "$files" | grep "install/.*${install_guide_suffix}$" || true)
+	changed=$(echo "$files" | grep "^install/.*\.md$" || true)
 
 	[ -z "$changed" ] && info "No install guides modified" && return
 
