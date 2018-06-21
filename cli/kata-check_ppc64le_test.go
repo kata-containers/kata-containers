@@ -207,3 +207,7 @@ func TestKvmIsUsable(t *testing.T) {
 	err = kvmIsUsable()
 	assert.Error(err)
 }
+
+func TestGetCPUDetails(t *testing.T) {
+	genericTestGetCPUDetails(t)
+}
