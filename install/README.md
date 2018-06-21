@@ -30,6 +30,6 @@ Select your preferred distribution or cloud service:
 
 ## Further information
 
-* The [the upgrading document](../Upgrading.md).
+* The [upgrading document](../Upgrading.md).
 * The [developer guide](../Developer-Guide.md).
 * The [runtime documentation](https://github.com/kata-containers/runtime/blob/master/README.md).
