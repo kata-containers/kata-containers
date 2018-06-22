@@ -10,8 +10,76 @@
 
 set -e
 
+[ -n "$DEBUG" ] && set -x
+
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
+
+script_name=${0##*/}
+
+repo=""
+master_branch="false"
+
+usage()
+{
+	cat <<EOT
+
+Usage: $script_name help
+       $script_name repo-name [true]
+
+Parameters:
+
+  help      : Show usage.
+  repo-name : GitHub URL of repo to check in form "github.com/user/repo".
+  true      : Specify as "true" if testing the 'master' branch, else assume a
+              PR branch.
+
+Example:
+
+$ $script_name github.com/kata-containers/runtime true
+
+
+EOT
+}
+
+# Convert a golang package to a full path
+pkg_to_path()
+{
+	local pkg="$1"
+
+	go list -f '{{.Dir}}' "$pkg"
+}
+
+# Obtain a list of the files the PR changed, ignoring vendor files.
+# Returns the information in format "${filter}\t${file}".
+get_pr_changed_file_details()
+{
+	# List of filters used to restrict the types of file changes.
+	# See git-diff-tree(1) for further info.
+	local filters=""
+
+	# Added file
+	filters+="A"
+
+	# Copied file
+	filters+="C"
+
+	# Modified file
+	filters+="M"
+
+	# Renamed file
+	filters+="R"
+
+	# Unmerged (U) and Unknown (X) files. These particular filters
+	# shouldn't be necessary but just in case...
+	filters+="UX"
+
+	git diff-tree \
+		-r \
+		--name-status \
+		--diff-filter="${filters}" \
+		origin/master HEAD | grep -v "vendor/"
+}
 
 check_commits()
 {
@@ -41,14 +109,6 @@ check_commits()
 EOT
 		exit 1
 	fi
-}
-
-# Convert a golang package to a full path
-pkg_to_path()
-{
-	local pkg="$1"
-
-	go list -f '{{.Dir}}' "$pkg"
 }
 
 check_go()
@@ -86,7 +146,7 @@ check_go()
 	# Run golang checks
 	if [ ! "$(command -v $linter)" ]
 	then
-		echo "INFO: Installing ${linter}"
+		info "Installing ${linter}"
 
 		local linter_url="github.com/alecthomas/gometalinter"
 		go get -d "$linter_url"
@@ -98,7 +158,7 @@ check_go()
 		#
 		local linter_version=$(get_version "externals.gometalinter.version")
 
-		echo "INFO: Forcing ${linter} version ${linter_version}"
+		info "Forcing ${linter} version ${linter_version}"
 
 		(cd "$GOPATH/src/$linter_url" && git checkout "$linter_version" && go install)
 		eval "$linter" --install --vendor
@@ -145,7 +205,7 @@ check_go()
 	linter_args+=" --enable=varcheck"
 	linter_args+=" --enable=unconvert"
 
-	echo -e "INFO: $linter args: '$linter_args'"
+	info "$linter args: '$linter_args'"
 
 	# Non-option arguments other than "./..." are
 	# considered to be directories by $linter, not package names.
@@ -167,10 +227,10 @@ check_go()
 		dirs+=" $path"
 	done
 
-	echo -e "INFO: Running $linter checks on the following packages:\n"
+	info "Running $linter checks on the following packages:\n"
 	echo "$go_packages"
 	echo
-	echo -e "INFO: Package paths:\n"
+	info "Package paths:\n"
 	echo "$dirs" | sed 's/^ *//g' | tr ' ' '\n'
 
 	eval "$linter" "${linter_args}" "$dirs"
@@ -195,43 +255,23 @@ check_versions()
 # Ensure all files (where possible) contain an SPDX license header
 check_license_headers()
 {
+	# The master branch is the baseline - ignore it.
+	[ "$master_branch" = "true" ] && return
+
 	# See: https://spdx.org/licenses/Apache-2.0.html
 	local -r spdx_tag="SPDX-License-Identifier"
 	local -r spdx_license="Apache-2.0"
 	local -r pattern="${spdx_tag}: ${spdx_license}"
 
-	echo "INFO: Checking for SPDX license headers"
+	info "Checking for SPDX license headers"
 
-	# List of filters used to restrict the types of file changes.
-	# See git-diff-tree(1) for further info.
-	local filters=""
+	files=$(get_pr_changed_file_details || true)
 
-	# Added file
-	filters+="A"
-
-	# Copied file
-	filters+="C"
-
-	# Modified file
-	filters+="M"
-
-	# Renamed file
-	filters+="R"
-
-	# Unmerged (U) and Unknown (X) files. These particular filters
-	# shouldn't be necessary but just in case...
-	filters+="UX"
-
-	# List of files to check for a license header inside
-	local files=$(git diff-tree \
-		--name-only \
-		--no-commit-id \
-		--diff-filter="${filters}" \
-		-r \
-		origin/master HEAD || true)
+	# Strip off status
+	files=$(echo "$files"|awk '{print $NF}')
 
 	# no files were changed
-	[ -z "$files" ] && echo "INFO: No files found" && return
+	[ -z "$files" ] && info "No files found" && return
 
 	local missing=$(egrep \
 		--exclude=".git/*" \
@@ -268,19 +308,57 @@ check_docs()
 
 	if [ ! "$(command -v $cmd)" ]
 	then
-		echo "Install $cmd utility"
+		info "Installing $cmd utility"
 		go get -u "mvdan.cc/xurls/cmd/$cmd"
 	fi
 
-	echo "INFO: Checking documentation"
+	info "Checking documentation"
 
-	local docs=$(find . -name "*.md" |grep -v "vendor/" || true)
-
+	local doc
+	local docs
+	local docs_status
+	local new_docs
+	local new_urls
 	local url
+
+	if [ "$master_branch" = "true" ]
+	then
+		# Check all documents
+		docs=$(find . -name "*.md" | grep -v "vendor/" || true)
+	else
+		# Check changed documents only
+		docs_status=$(get_pr_changed_file_details || true)
+		docs_status=$(echo "$docs_status" | grep "\.md$" || true)
+
+		docs=$(echo "$docs_status" | awk '{print $NF}')
+
+		# Newly-added docs
+		new_docs=$(echo "$docs_status" | awk '/^A/ {print $NF}')
+
+		for doc in $new_docs
+		do
+			# A new document file has been added. If that new doc
+			# file is referenced by any files on this PR, checking
+			# its URL will fail since the PR hasn't been merged
+			# yet. We could construct the URL based on the users
+			# original PR branch and validate that. But it's
+			# simpler to just construct the URL that the "pending
+			# document" *will* result in when the PR has landed
+			# and then check docs for that new URL and exclude
+			# them from the real URL check.
+			url="https://${repo}/blob/master/${doc}"
+
+			new_urls+=" ${url}"
+		done
+	fi
+
+	[ -z "$docs" ] && info "No documentation to check" && return
+
 	local urls
 	local url_map=$(mktemp)
 	local invalid_urls=$(mktemp)
-	local doc
+
+	info "Checking document code blocks"
 
 	for doc in $docs
 	do
@@ -289,6 +367,7 @@ check_docs()
 		# Look for URLs in the document
 		urls=$($cmd "$doc")
 
+		# Gather URLs
 		for url in $urls
 		do
 			printf "%s\t%s\n" "${url}" "${doc}" >> "$url_map"
@@ -296,21 +375,24 @@ check_docs()
 	done
 
 	# Get unique list of URLs
-	urls=$(awk '{print $1}' "$url_map"|sort -u)
+	urls=$(awk '{print $1}' "$url_map" | sort -u)
 
-	echo "INFO: Checking all document URLs"
+	info "Checking all document URLs"
 
 	for url in $urls
 	do
-		# Ignore the install guide urls that contain a shell variable
-		echo "$url"|grep -q "\\$" && continue
+		if [ "$master_branch" != "true" ]
+		then
+			# If the URL is new on this PR, it cannot be checked.
+			echo "$new_urls" | grep -q "\<${url}\>" && \
+				info "ignoring new (but correct) URL: $url" && continue
+		fi
+
+		# Ignore the install guide URLs that contain a shell variable
+		echo "$url" | grep -q "\\$" && continue
 
 		# This prefix requires the client to be logged in to github, so ignore
-		echo "$url"|grep -q 'https://github.com/pulls' && continue
-
-		# This prefix require the client to be logged into Jenkins, so
-		# ignore
-		echo "$url"|grep -q 'http://199.204.45.34' && continue
+		echo "$url" | grep -q 'https://github.com/pulls' && continue
 
 		# Sigh.
 		echo "$url"|grep -q 'https://example.com' && continue
@@ -332,7 +414,7 @@ check_docs()
 
 		cat "$invalid_urls" | while read url
 		do
-			files=$(grep "^${url}" "$url_map"|awk '{print $2}'|sort -u)
+			files=$(grep "^${url}" "$url_map" | awk '{print $2}' | sort -u)
 			echo >&2 -e "ERROR: Invalid URL '$url' found in the following files:\n"
 
 			for file in $files
@@ -347,8 +429,32 @@ check_docs()
 	rm -f "$url_map" "$invalid_urls"
 }
 
-check_commits
-check_license_headers
-check_go
-check_versions
-check_docs
+main()
+{
+	[ "$1" = "help" ] && usage && exit 0
+
+	repo="$1"
+	if [ -z "$repo" ]
+	then
+		if [ -n "$KATA_DEV_MODE" ]
+		then
+			# No repo param provided so assume it's the current
+			# one to avoid developers having to specify one now
+			# (backwards compatability).
+			repo=$(git config --get remote.origin.url |\
+				sed 's!https://!!g' || true)
+		else
+			usage && exit 1
+		fi
+	fi
+
+	master_branch="$2"
+
+	check_commits
+	check_license_headers
+	check_go
+	check_versions
+	check_docs
+}
+
+main "$@"

@@ -13,4 +13,4 @@ go:
   - stable
 
 before_script:
-  - ".ci/static-checks.sh"
+  - ".ci/static-checks.sh github.com/kata-containers/tests"
