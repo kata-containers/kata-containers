@@ -27,10 +27,11 @@ make_target() {
 		return
 	fi
 	popd >> /dev/null
-	echo "Changes found in $dir"
+	echo "Changes found in ${dir}"
 	make -f "${toplevel_mk}" "${target}"
 }
 
 make_target test-release-tools "release/"
 make_target test-packaging-tools "obs-packaging/"
 make_target test-static-build "static-build/"
+make_target test-build-kernel "kernel/"
