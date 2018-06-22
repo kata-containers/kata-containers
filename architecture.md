@@ -47,8 +47,8 @@ and `kata-runtime`.
 
 ![Docker and Kata Containers](arch-images/docker-kata.png)
 
-`kata-runtime` creates a QEMU\*/KVM virtual machine for each container or pod
-the Docker engine or Kubernetes' `kubelet` creates.
+`kata-runtime` creates a QEMU\*/KVM virtual machine for each container or pod,
+the Docker engine or Kubernetes' `kubelet` creates respectively.
 
 The container process is then spawned by
 [agent](https://github.com/kata-containers/agent), an agent process running
@@ -102,7 +102,7 @@ for example `pc` and `q35` on x86 systems and `virt` on ARM systems. Kata Contai
 default machine type is `pc`. The default machine type and its [`Machine accelerators`](#Machine-accelerators) can
 be changed by editing the runtime [`configuration`](#Configuration) file.
 
-The follow QEMU features are used in Kata Containers to manage resource constraints, improve
+The following QEMU features are used in Kata Containers to manage resource constraints, improve
 boot time and reduce memory footprint:
 
 - Machine accelerators.
@@ -160,7 +160,7 @@ Kata Containers supports both an `initrd` and `rootfs` based minimal guest image
 
 ##### Root filesystem image
 
-The default root filesystem image, sometimes referred to as the "mini O/S", is a
+The default packaged root filesystem image, sometimes referred to as the "mini O/S", is a
 highly optimized container bootstrap system based on [Clear Linux](https://clearlinux.org/). It provides an extremely minimal environment and
 has a highly optimized boot path.
 
@@ -230,8 +230,7 @@ Most users will not need to modify the configuration file.
 The file is well commented and provides a few "knobs" that can be used to modify
 the behavior of the runtime.
 
-The configuration file is also used to enable runtime debug output (see
-some url to documentation on how to enable debug).
+The configuration file is also used to enable runtime [debug output](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#enable-full-debug).
 
 ### Significant OCI commands
 
@@ -305,7 +304,6 @@ this means stopping the container.  For `kata-runtime`, this translates to stopp
 the container and the VM associated with it.
 
 1. Send a request to kill the container process to the `kata-agent` (through the proxy).
- else needs to be done.
 2. Wait for `kata-shim` process to exit.
 3. Force kill the container process if `kata-shim` process didn't return after a
  timeout. This is done by communicating with `kata-agent` (connecting the proxy),
@@ -331,7 +329,7 @@ cannot be deleted unless the OCI runtime is explicitly being asked to, by using
 
 If the sandbox is not stopped, but the particular container process returned on
 its own already, the `kata-runtime` will first go through most of the steps a `kill`
-would go through for a termination signal. After this (or simply this if the sandboxIDwas already stopped), then `kata-runtime` will: If the sandbox was already stoppedfollowed by:
+would go through for a termination signal. After this process, or if the sandboxID was already stopped to begin with, then `kata-runtime` will:
 
 1. Remove container resources. Every file kept under `/var/{lib,run}/virtcontainers/sandboxes/<sandboxID>/<containerID>`.
 2. Remove sandbox resources. Every file kept under `/var/{lib,run}/virtcontainers/sandboxes/<sandboxID>`.
@@ -400,7 +398,7 @@ reaper and the `kata-agent`. `kata-shim`:
   the true container process that the shim process will be shadowing or representing.
 - Forwards the standard input stream from the container process reaper into
  `kata-proxy` using grpc `WriteStdin` gRPC API.
-- Reads the standard output/error from the container process to the
+- Reads the standard output/error from the container process.
 - Forwards signals it receives from the container process reaper to `kata-proxy`
   using `SignalProcessRequest` API.
 - Monitors terminal changes and forwards them to `kata-proxy` using grpc `TtyWinResize`
@@ -525,7 +523,7 @@ Kata Containers has the ability to hotplug and remove block devices, which makes
 possible to use block devices for containers started after the VM has been launched.
 
 Users can check to see if the container uses the devicemapper block device as its
-rootfs by calling `mount(8)` within the counter.  If the devicemapper block device
+rootfs by calling `mount(8)` within the container.  If the devicemapper block device
 is used, `/` will be mounted on `/dev/vda`.  Users can disable direct mounting
 of the underlying block device through the runtime configuration.
 
