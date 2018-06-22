@@ -110,7 +110,21 @@ func FetchSandbox(sandboxID string) (VCSandbox, error) {
 	defer unlockSandbox(lockFile)
 
 	// Fetch the sandbox from storage and create it.
-	return fetchSandbox(sandboxID)
+	sandbox, err := fetchSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+
+	// If the proxy is KataBuiltInProxyType type, it needs to restart the proxy to watch the
+	// guest console if it hadn't been watched.
+	if isProxyBuiltIn(sandbox.config.ProxyType) {
+		err = sandbox.startProxy()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return sandbox, nil
 }
 
 // StartSandbox is the virtcontainers sandbox starting entry point.

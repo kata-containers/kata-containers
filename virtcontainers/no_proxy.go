@@ -35,3 +35,8 @@ func (p *noProxy) start(sandbox *Sandbox, params proxyParams) (int, string, erro
 func (p *noProxy) stop(sandbox *Sandbox, pid int) error {
 	return nil
 }
+
+// The noproxy doesn't need to watch the vm console, thus return false always.
+func (p *noProxy) consoleWatched() bool {
+	return false
+}

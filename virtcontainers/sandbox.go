@@ -352,6 +352,17 @@ type SandboxConfig struct {
 	SharePidNs bool
 }
 
+func (s *Sandbox) startProxy() error {
+
+	// If the proxy is KataBuiltInProxyType type, it needs to restart the proxy
+	// to watch the guest console if it hadn't been watched.
+	if s.agent == nil {
+		return fmt.Errorf("sandbox %s missed agent pointer", s.ID())
+	}
+
+	return s.agent.startProxy(s)
+}
+
 // valid checks that the sandbox configuration is valid.
 func (sandboxConfig *SandboxConfig) valid() bool {
 	if sandboxConfig.ID == "" {
