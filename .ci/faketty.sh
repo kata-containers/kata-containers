@@ -11,7 +11,8 @@ source "${cidir}/lib.sh"
 # function to run unit test always with a tty
 function faketty()
 {
-	script -qfec $@;
+	if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then script -qfec $@; fi
+	if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then $@; fi
 }
 
 faketty $@
