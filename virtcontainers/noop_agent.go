@@ -16,6 +16,11 @@ import (
 type noopAgent struct {
 }
 
+//start the proxy to watch the vm console. It does nothing.
+func (n *noopAgent) startProxy(sandbox *Sandbox) error {
+	return nil
+}
+
 // init initializes the Noop agent, i.e. it does nothing.
 func (n *noopAgent) init(sandbox *Sandbox, config interface{}) error {
 	return nil
