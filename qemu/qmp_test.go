@@ -887,3 +887,61 @@ func TestQMPExecuteQueryHotpluggableCPUs(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+// Checks that migrate capabilities can be set
+func TestExecSetMigrationCaps(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("migrate-set-capabilities", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	caps := []map[string]interface{}{
+		{
+			"capability": "bypass-shared-memory",
+			"state":      true,
+		},
+	}
+	err := q.ExecSetMigrationCaps(context.Background(), caps)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v\n", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
+// Checks that migrate arguments can be set
+func TestExecSetMigrateArguments(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("migrate", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecSetMigrateArguments(context.Background(), "exec:foobar")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v\n", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
+// Checks hotplug memory
+func TestExecHotplugMemory(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("object-add", nil, "return", nil)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecHotplugMemory(context.Background(), "memory-backend-ram", "mem0", "", 128)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v\n", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
