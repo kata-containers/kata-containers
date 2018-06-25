@@ -353,8 +353,11 @@ main()
 	test_fedora
 	test_clearlinux
 	test_centos
-	test_euleros
 	test_alpine
+
+	# Run last as EulerOS servers can be slow and we don't want to fail the
+	# previous tests.
+	test_euleros
 }
 
 main "$@"
