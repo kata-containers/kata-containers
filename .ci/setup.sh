@@ -15,8 +15,6 @@ bash "${cidir}/static-checks.sh"
 #Note: If add clearlinux as supported CI use a stateless os-release file
 source /etc/os-release
 
-install_bats
-
 if [ "$ID" == fedora ];then
 	sudo -E dnf -y install automake yamllint coreutils moreutils
 elif [ "$ID" == centos ];then

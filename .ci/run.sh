@@ -12,4 +12,4 @@ export GOPATH="${GOPATH:-/tmp/go}"
 
 script_dir="$(dirname $(readlink -f $0))"
 
-sudo -E PATH="$PATH" bats "${script_dir}/../tests/image_creation.bats"
+sudo -E PATH="$PATH" bash "${script_dir}/../tests/image_creation.sh"
