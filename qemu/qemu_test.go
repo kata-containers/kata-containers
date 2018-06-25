@@ -28,7 +28,12 @@ const volumeUUID = "67d86208-b46c-4465-9018-e14187d4010"
 
 func testAppend(structure interface{}, expected string, t *testing.T) {
 	var config Config
+	testConfigAppend(&config, structure, expected, t)
 
+	return
+}
+
+func testConfigAppend(config *Config, structure interface{}, expected string, t *testing.T) {
 	switch s := structure.(type) {
 	case Machine:
 		config.Machine = s
@@ -71,6 +76,9 @@ func testAppend(structure interface{}, expected string, t *testing.T) {
 	case IOThread:
 		config.IOThreads = []IOThread{s}
 		config.appendIOThreads()
+	case Incoming:
+		config.Incoming = s
+		config.appendIncoming()
 	}
 
 	result := strings.Join(config.qemuParams, " ")
@@ -388,15 +396,18 @@ func TestAppendEmptyDevice(t *testing.T) {
 }
 
 func TestAppendKnobsAllTrue(t *testing.T) {
-	var knobsString = "-no-user-config -nodefaults -nographic -daemonize -realtime mlock=on"
+	var knobsString = "-no-user-config -nodefaults -nographic -daemonize -realtime mlock=on -S"
 	knobs := Knobs{
-		NoUserConfig: true,
-		NoDefaults:   true,
-		NoGraphic:    true,
-		Daemonize:    true,
-		MemPrealloc:  true,
-		Realtime:     true,
-		Mlock:        true,
+		NoUserConfig:        true,
+		NoDefaults:          true,
+		NoGraphic:           true,
+		Daemonize:           true,
+		MemPrealloc:         true,
+		FileBackedMem:       true,
+		FileBackedMemShared: true,
+		Realtime:            true,
+		Mlock:               true,
+		Stopped:             true,
 	}
 
 	testAppend(knobs, knobsString, t)
@@ -405,15 +416,109 @@ func TestAppendKnobsAllTrue(t *testing.T) {
 func TestAppendKnobsAllFalse(t *testing.T) {
 	var knobsString = "-realtime mlock=off"
 	knobs := Knobs{
-		NoUserConfig: false,
-		NoDefaults:   false,
-		NoGraphic:    false,
-		MemPrealloc:  false,
-		Realtime:     false,
-		Mlock:        false,
+		NoUserConfig:        false,
+		NoDefaults:          false,
+		NoGraphic:           false,
+		MemPrealloc:         false,
+		FileBackedMem:       false,
+		FileBackedMemShared: false,
+		Realtime:            false,
+		Mlock:               false,
+		Stopped:             false,
 	}
 
 	testAppend(knobs, knobsString, t)
+}
+
+func TestAppendMemoryHugePages(t *testing.T) {
+	conf := &Config{
+		Memory: Memory{
+			Size:   "1G",
+			Slots:  8,
+			MaxMem: "3G",
+			Path:   "foobar",
+		},
+	}
+	memString := "-m 1G,slots=8,maxmem=3G"
+	testConfigAppend(conf, conf.Memory, memString, t)
+
+	knobs := Knobs{
+		HugePages:           true,
+		MemPrealloc:         true,
+		FileBackedMem:       true,
+		FileBackedMemShared: true,
+	}
+	knobsString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=/dev/hugepages,share=on,prealloc=on -numa node,memdev=dimm1"
+	mlockFalseString := "-realtime mlock=off"
+
+	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
+}
+
+func TestAppendMemoryMemPrealloc(t *testing.T) {
+	conf := &Config{
+		Memory: Memory{
+			Size:   "1G",
+			Slots:  8,
+			MaxMem: "3G",
+			Path:   "foobar",
+		},
+	}
+	memString := "-m 1G,slots=8,maxmem=3G"
+	testConfigAppend(conf, conf.Memory, memString, t)
+
+	knobs := Knobs{
+		MemPrealloc:         true,
+		FileBackedMem:       true,
+		FileBackedMemShared: true,
+	}
+	knobsString := "-object memory-backend-ram,id=dimm1,size=1G,prealloc=on -device pc-dimm,id=dimm1,memdev=dimm1"
+	mlockFalseString := "-realtime mlock=off"
+
+	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
+}
+
+func TestAppendMemoryFileBackedMemShared(t *testing.T) {
+	conf := &Config{
+		Memory: Memory{
+			Size:   "1G",
+			Slots:  8,
+			MaxMem: "3G",
+			Path:   "foobar",
+		},
+	}
+	memString := "-m 1G,slots=8,maxmem=3G"
+	testConfigAppend(conf, conf.Memory, memString, t)
+
+	knobs := Knobs{
+		FileBackedMem:       true,
+		FileBackedMemShared: true,
+	}
+	knobsString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,share=on -numa node,memdev=dimm1"
+	mlockFalseString := "-realtime mlock=off"
+
+	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
+}
+
+func TestAppendMemoryFileBackedMem(t *testing.T) {
+	conf := &Config{
+		Memory: Memory{
+			Size:   "1G",
+			Slots:  8,
+			MaxMem: "3G",
+			Path:   "foobar",
+		},
+	}
+	memString := "-m 1G,slots=8,maxmem=3G"
+	testConfigAppend(conf, conf.Memory, memString, t)
+
+	knobs := Knobs{
+		FileBackedMem:       true,
+		FileBackedMemShared: false,
+	}
+	knobsString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar -numa node,memdev=dimm1"
+	mlockFalseString := "-realtime mlock=off"
+
+	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
 }
 
 var kernelString = "-kernel /opt/vmlinux.container -initrd /opt/initrd.container -append root=/dev/pmem0p1 rootflags=dax,data=ordered,errors=remount-ro rw rootfstype=ext4 tsc=reliable"
@@ -435,6 +540,7 @@ func TestAppendMemory(t *testing.T) {
 		Size:   "2G",
 		Slots:  2,
 		MaxMem: "3G",
+		Path:   "",
 	}
 
 	testAppend(memory, memoryString, t)
@@ -555,4 +661,26 @@ func TestAppendIOThread(t *testing.T) {
 	}
 
 	testAppend(ioThread, ioThreadString, t)
+}
+
+var incomingStringFD = "-S -incoming fd:3"
+
+func TestAppendIncomingFD(t *testing.T) {
+	source := Incoming{
+		MigrationType: MigrationFD,
+		FD:            os.Stdout,
+	}
+
+	testAppend(source, incomingStringFD, t)
+}
+
+var incomingStringExec = "-S -incoming exec:test migration cmd"
+
+func TestAppendIncomingExec(t *testing.T) {
+	source := Incoming{
+		MigrationType: MigrationExec,
+		Exec:          "test migration cmd",
+	}
+
+	testAppend(source, incomingStringExec, t)
 }
