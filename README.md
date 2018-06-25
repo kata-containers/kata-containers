@@ -37,11 +37,11 @@ The advantages of this approach are:
 
 ### CI setup
 
-WARNING:
-
-The CI scripts perform a lot of setup before running content under a
-CI. Some of this setup runs as the `root` user and **could break a developer's
-system**. See [Developer Mode](#developer-mode).
+> **WARNING:**
+>
+> The CI scripts perform a lot of setup before running content under a
+> CI. Some of this setup runs as the `root` user and **could break your developer's
+> system**. See [Developer Mode](#developer-mode).
 
 ### Detecting a CI system
 
