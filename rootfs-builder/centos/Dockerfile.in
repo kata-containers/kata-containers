@@ -5,6 +5,8 @@
 
 From centos:@OS_VERSION@
 
+@SET_PROXY@
+
 RUN yum -y update && yum install -y git make gcc coreutils
 
 # This will install the proper golang to build Kata components
