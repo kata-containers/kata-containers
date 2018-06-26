@@ -8,6 +8,7 @@
 os:
   - linux
   - osx
+  - linux-ppc64le
 
 matrix:
   include:
