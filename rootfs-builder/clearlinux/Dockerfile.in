@@ -5,6 +5,8 @@
 
 From fedora:27
 
+@SET_PROXY@
+
 RUN dnf -y update && dnf install -y git systemd pkgconfig gcc coreutils
 
 # This will install the proper golang to build Kata components

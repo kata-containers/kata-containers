@@ -100,6 +100,8 @@ generate_dockerfile()
 			;;
 	esac
 
+	[ -n "$http_proxy" ] && readonly set_proxy="RUN sed -i '$ a proxy="$http_proxy"' /etc/dnf/dnf.conf /etc/yum.conf; true"
+
 	readonly install_go="
 ADD https://storage.googleapis.com/golang/go${GO_VERSION}.linux-${goarch}.tar.gz /tmp
 RUN tar -C /usr/ -xzf /tmp/go${GO_VERSION}.linux-${goarch}.tar.gz
@@ -115,6 +117,7 @@ ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
 		-e "s|@GO_VERSION@|${GO_VERSION}|g" \
 		-e "s|@OS_VERSION@|${OS_VERSION}|g" \
 		-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
+		-e "s|@SET_PROXY@|${set_proxy}|g" \
 		${dockerfile_template} > Dockerfile
 	popd
 }
