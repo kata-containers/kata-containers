@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-var (
+const (
 	testRunningProcess = "sleep"
 )
 

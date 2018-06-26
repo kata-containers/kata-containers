@@ -21,7 +21,7 @@ import (
 )
 
 // bind/unbind paths to aid in SRIOV VF bring-up/restore
-var (
+const (
 	pciDriverUnbindPath = "/sys/bus/pci/devices/%s/driver/unbind"
 	pciDriverBindPath   = "/sys/bus/pci/drivers/%s/bind"
 	vfioNewIDPath       = "/sys/bus/pci/drivers/vfio-pci/new_id"

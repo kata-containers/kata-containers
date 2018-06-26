@@ -28,7 +28,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 )
 
-var (
+const (
 	testKataProxyURLTempl  = "unix://%s/kata-proxy-test.sock"
 	testBlockDeviceCtrPath = "testBlockDeviceCtrPath"
 	testPCIAddr            = "04/02"
