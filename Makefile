@@ -34,6 +34,12 @@ PROJECT_TAG = kata-containers
 PROJECT_URL = https://github.com/kata-containers
 PROJECT_BUG_URL = $(PROJECT_URL)/kata-containers/issues/new
 
+# list of scripts to install
+SCRIPTS :=
+
+# list of binaries to install
+BINLIST :=
+
 BIN_PREFIX = $(PROJECT_TYPE)
 PROJECT_DIR = $(PROJECT_TAG)
 IMAGENAME = $(PROJECT_TAG).img
@@ -41,17 +47,22 @@ INITRDNAME = $(PROJECT_TAG)-initrd.img
 
 TARGET = $(BIN_PREFIX)-runtime
 TARGET_OUTPUT = $(CURDIR)/$(TARGET)
+BINLIST += $(TARGET)
 
-DESTDIR :=
+DESTDIR := /
 
 installing = $(findstring install,$(MAKECMDGOALS))
 
-# Configure the build for a standard system that is
-# using OBS-generated packages.
-PREFIX        := /usr
-BINDIR        := $(PREFIX)/bin
-DESTBINDIR    := /usr/local/bin
-QEMUBINDIR    := $(BINDIR)
+ifeq ($(PREFIX),)
+PREFIX        := /usr/
+EXEC_PREFIX   := $(PREFIX)/local
+else
+EXEC_PREFIX   := $(PREFIX)
+endif
+# Prefix where depedencies are installed
+PREFIXDEPS    := $(PREFIX)
+BINDIR        := $(EXEC_PREFIX)/bin
+QEMUBINDIR    := $(PREFIXDEPS)/bin
 SYSCONFDIR    := /etc
 LOCALSTATEDIR := /var
 
@@ -67,7 +78,7 @@ else
     KERNEL_NAME = vmlinuz.container
 endif
 
-LIBEXECDIR := $(PREFIX)/libexec
+LIBEXECDIR := $(PREFIXDEPS)/libexec
 SHAREDIR := $(PREFIX)/share
 DEFAULTSDIR := $(SHAREDIR)/defaults
 
@@ -81,7 +92,7 @@ SCRIPTS_DIR := $(BINDIR)
 BASH_COMPLETIONS := data/completions/bash/kata-runtime
 BASH_COMPLETIONSDIR := $(SHAREDIR)/bash-completion/completions
 
-PKGDATADIR := $(SHAREDIR)/$(PROJECT_DIR)
+PKGDATADIR := $(PREFIXDEPS)/share/$(PROJECT_DIR)
 PKGLIBDIR := $(LOCALSTATEDIR)/lib/$(PROJECT_DIR)
 PKGRUNDIR := $(LOCALSTATEDIR)/run/$(PROJECT_DIR)
 PKGLIBEXECDIR := $(LIBEXECDIR)/$(PROJECT_DIR)
@@ -132,27 +143,24 @@ CONFIG_FILE = configuration.toml
 CONFIG = $(CLI_DIR)/config/$(CONFIG_FILE)
 CONFIG_IN = $(CONFIG).in
 
-DESTTARGET := $(abspath $(DESTBINDIR)/$(TARGET))
-
-DESTCONFDIR := $(DESTDIR)/$(DEFAULTSDIR)/$(PROJECT_DIR)
-DESTSYSCONFDIR := $(DESTDIR)/$(SYSCONFDIR)/$(PROJECT_DIR)
+CONFDIR := $(DEFAULTSDIR)/$(PROJECT_DIR)
+SYSCONFDIR := $(SYSCONFDIR)/$(PROJECT_DIR)
 
 # Main configuration file location for stateless systems
-DESTCONFIG := $(abspath $(DESTCONFDIR)/$(CONFIG_FILE))
+CONFIG_PATH := $(abspath $(CONFDIR)/$(CONFIG_FILE))
 
 # Secondary configuration file location. Note that this takes precedence
-# over DESTCONFIG.
-DESTSYSCONFIG := $(abspath $(DESTSYSCONFDIR)/$(CONFIG_FILE))
+# over CONFIG_PATH.
+SYSCONFIG := $(abspath $(SYSCONFDIR)/$(CONFIG_FILE))
 
-DESTSHAREDIR := $(DESTDIR)/$(SHAREDIR)
+SHAREDIR := $(SHAREDIR)
 
 # list of variables the user may wish to override
 USER_VARS += ARCH
 USER_VARS += BINDIR
-USER_VARS += DESTCONFIG
+USER_VARS += CONFIG_PATH
 USER_VARS += DESTDIR
-USER_VARS += DESTSYSCONFIG
-USER_VARS += DESTTARGET
+USER_VARS += SYSCONFIG
 USER_VARS += IMAGENAME
 USER_VARS += IMAGEPATH
 USER_VARS += INITRDNAME
@@ -290,11 +298,11 @@ const defaultDisableNestingChecks bool = $(DEFDISABLENESTINGCHECKS)
 const defaultMsize9p uint32 = $(DEFMSIZE9P)
 
 // Default config file used by stateless systems.
-var defaultRuntimeConfiguration = "$(DESTCONFIG)"
+var defaultRuntimeConfiguration = "$(CONFIG_PATH)"
 
 // Alternate config file that takes precedence over
 // defaultRuntimeConfiguration.
-var defaultSysConfRuntimeConfiguration = "$(DESTSYSCONFIG)"
+var defaultSysConfRuntimeConfiguration = "$(SYSCONFIG)"
 
 var defaultProxyPath = "$(PROXYPATH)"
 endef
@@ -340,8 +348,8 @@ $(GENERATED_FILES): %: %.in Makefile VERSION
 		-e "s|@COMMIT@|$(COMMIT)|g" \
 		-e "s|@VERSION@|$(VERSION)|g" \
 		-e "s|@CONFIG_IN@|$(CONFIG_IN)|g" \
-		-e "s|@DESTCONFIG@|$(DESTCONFIG)|g" \
-		-e "s|@DESTSYSCONFIG@|$(DESTSYSCONFIG)|g" \
+		-e "s|@CONFIG_PATH@|$(CONFIG_PATH)|g" \
+		-e "s|@SYSCONFIG@|$(SYSCONFIG)|g" \
 		-e "s|@IMAGEPATH@|$(IMAGEPATH)|g" \
 		-e "s|@KERNELPATH@|$(KERNELPATH)|g" \
 		-e "s|@INITRDPATH@|$(INITRDPATH)|g" \
@@ -392,15 +400,19 @@ check-go-static:
 coverage:
 	$(QUIET_TEST).ci/go-test.sh html-coverage
 
-install: default runtime install-scripts install-completions
-	$(QUIET_INST)install -D $(TARGET) $(DESTTARGET)
-	$(QUIET_INST)install -D $(CONFIG) $(DESTCONFIG)
+install: default runtime install-scripts install-completions install-config install-bin
+
+install-bin: $(BINLIST)
+	$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
+
+install-config: $(CONFIG)
+	$(QUIET_INST)install --mode 0644 -D $(CONFIG) $(DESTDIR)/$(CONFIG_PATH)
 
 install-scripts: $(SCRIPTS)
 	$(foreach f,$(SCRIPTS),$(call INSTALL_EXEC,$f,$(SCRIPTS_DIR)))
 
 install-completions:
-	$(QUIET_INST)install --mode 0644 -D $(BASH_COMPLETIONS) $(BASH_COMPLETIONSDIR)
+	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
 
 clean:
 	$(QUIET_CLEAN)rm -f $(TARGET) $(CONFIG) $(GENERATED_GO_FILES) $(GENERATED_FILES) $(COLLECT_SCRIPT)
@@ -461,10 +473,17 @@ show-summary: show-header
 	@printf "\n"
 	@printf "• Summary:\n"
 	@printf "\n"
-	@printf "\tbinary install path (DESTTARGET)      : %s\n" $(DESTTARGET)
-	@printf "\tconfig install path (DESTCONFIG)      : %s\n" $(DESTCONFIG)
-	@printf "\talternate config path (DESTSYSCONFIG) : %s\n" $(DESTSYSCONFIG)
-	@printf "\thypervisor path (QEMUPATH)            : %s\n" $(QEMUPATH)
-	@printf "\tassets path (PKGDATADIR)              : %s\n" $(PKGDATADIR)
-	@printf "\tproxy+shim path (PKGLIBEXECDIR)       : %s\n" $(PKGLIBEXECDIR)
+	@printf "\tdestination install path (DESTDIR)    : %s\n" $(abspath $(DESTDIR))
+	@printf "\tbinary installation path (BINDIR)     : %s\n" $(abspath $(BINDIR))
+	@printf "\tbinaries to install                   :\n"
+	@printf \
+          "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+	@printf \
+          "$(foreach s,$(sort $(SCRIPTS)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(s))\\\n"))"
+	@printf "\tconfig to install (CONFIG)            : %s\n" $(CONFIG)
+	@printf "\tinstall path (CONFIG_PATH)            : %s\n" $(abspath $(CONFIG_PATH))
+	@printf "\talternate config path (SYSCONFIG)     : %s\n" $(abspath $(SYSCONFIG))
+	@printf "\thypervisor path (QEMUPATH)            : %s\n" $(abspath $(QEMUPATH))
+	@printf "\tassets path (PKGDATADIR)              : %s\n" $(abspath $(PKGDATADIR))
+	@printf "\tproxy+shim path (PKGLIBEXECDIR)       : %s\n" $(abspath $(PKGLIBEXECDIR))
 	@printf "\n"
