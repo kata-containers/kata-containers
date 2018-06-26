@@ -7,6 +7,8 @@ package main
 
 import (
 	"fmt"
+	"os/exec"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -15,6 +17,11 @@ const (
 	cpuFlagsTag        = genericCPUFlagsTag
 	archCPUVendorField = genericCPUVendorField
 	archCPUModelField  = genericCPUModelField
+)
+
+var (
+	ppc64CpuCmd     = "ppc64_cpu"
+	smtStatusOption = "--smt"
 )
 
 // archRequiredCPUFlags maps a CPU flag value to search for and a
@@ -50,6 +57,17 @@ func hostIsVMContainerCapable(details vmContainerCapableDetails) error {
 		return err
 	}
 
+	text, err := getFileContents(details.cpuInfoFile)
+	if err != nil {
+		return err
+	}
+
+	if strings.Contains(text, "POWER8") {
+		if !isSMTOff() {
+			return fmt.Errorf("SMT is not Off. %s", failMessage)
+		}
+	}
+
 	count, err := checkKernelModules(details.requiredKernelModules, archKernelParamHandler)
 	if err != nil {
 		return err
@@ -74,4 +92,23 @@ func archKernelParamHandler(onVMM bool, fields logrus.Fields, msg string) bool {
 
 func getCPUDetails() (vendor, model string, err error) {
 	return genericGetCPUDetails()
+}
+
+func isSMTOff() bool {
+
+	// Check if the SMT is available and off
+
+	cmd := exec.Command(ppc64CpuCmd, smtStatusOption)
+	additionalEnv := "LANG=C"
+	cmd.Env = append(cmd.Env, additionalEnv)
+	out, err := cmd.Output()
+
+	if err == nil && strings.TrimRight(string(out), "\n") == "SMT is off" {
+		return true
+	} else if err != nil {
+		kataLog.Warn("ppc64_cpu isn't installed, can't detect SMT")
+		return true
+	}
+
+	return false
 }
