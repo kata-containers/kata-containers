@@ -27,6 +27,7 @@ func DeviceLogger() *logrus.Entry {
 // DeviceReceiver is an interface used for accepting devices
 // a device should be attached/added/plugged to a DeviceReceiver
 type DeviceReceiver interface {
+	// these are for hotplug/hot-unplug devices to/from hypervisor
 	HotplugAddDevice(Device, config.DeviceType) error
 	HotplugRemoveDevice(Device, config.DeviceType) error
 
@@ -51,11 +52,29 @@ type VhostUserDevice interface {
 type Device interface {
 	Attach(DeviceReceiver) error
 	Detach(DeviceReceiver) error
+	// ID returns device identifier
+	DeviceID() string
+	// DeviceType indicates which kind of device it is
+	// e.g. block, vfio or vhost user
 	DeviceType() config.DeviceType
+	// GetDeviceInfo returns device information that the device is created based on
+	GetDeviceInfo() *config.DeviceInfo
+	// GetDeviceDrive returns device specific data used for hotplugging by hypervisor
+	// Caller could cast the return value to device specific struct
+	// e.g. Block device returns *config.BlockDrive and
+	// vfio device returns *config.VFIODrive
+	GetDeviceDrive() interface{}
+	// IsAttached checks if the device is attached
+	IsAttached() bool
 }
 
 // DeviceManager can be used to create a new device, this can be used as single
 // device management object.
 type DeviceManager interface {
-	NewDevices(devInfos []config.DeviceInfo) ([]Device, error)
+	NewDevice(config.DeviceInfo) (Device, error)
+	AttachDevice(string, DeviceReceiver) error
+	DetachDevice(string, DeviceReceiver) error
+	IsDeviceAttached(string) bool
+	GetDeviceByID(string) Device
+	GetAllDevices() []Device
 }

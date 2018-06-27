@@ -25,6 +25,7 @@ import (
 	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
 
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -343,7 +344,8 @@ func (endpoint *PhysicalEndpoint) Attach(h hypervisor) error {
 		return err
 	}
 
-	d := drivers.VFIODevice{
+	// TODO: use device manager as general device management entrance
+	d := config.VFIODrive{
 		BDF: endpoint.BDF,
 	}
 
