@@ -7,7 +7,6 @@
 package drivers
 
 import (
-	"encoding/hex"
 	"path/filepath"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
@@ -17,48 +16,17 @@ import (
 
 const maxDevIDSize = 31
 
-// Drive represents a block storage drive which may be used in case the storage
-// driver has an underlying block storage device.
-type Drive struct {
-
-	// Path to the disk-image/device which will be used with this drive
-	File string
-
-	// Format of the drive
-	Format string
-
-	// ID is used to identify this drive in the hypervisor options.
-	ID string
-
-	// Index assigned to the drive. In case of virtio-scsi, this is used as SCSI LUN index
-	Index int
-
-	// PCIAddr is the PCI address used to identify the slot at which the drive is attached.
-	PCIAddr string
-}
-
 // BlockDevice refers to a block storage device implementation.
 type BlockDevice struct {
-	DevType    config.DeviceType
-	DeviceInfo config.DeviceInfo
-
-	// SCSI Address of the block device, in case the device is attached using SCSI driver
-	// SCSI address is in the format SCSI-Id:LUN
-	SCSIAddr string
-
-	// Path at which the device appears inside the VM, outside of the container mount namespace
-	VirtPath string
-
-	// PCI Slot of the block device
-	PCIAddr string
-
-	BlockDrive *Drive
+	ID         string
+	DeviceInfo *config.DeviceInfo
+	BlockDrive *config.BlockDrive
 }
 
 // NewBlockDevice creates a new block device based on DeviceInfo
-func NewBlockDevice(devInfo config.DeviceInfo) *BlockDevice {
+func NewBlockDevice(devInfo *config.DeviceInfo) *BlockDevice {
 	return &BlockDevice{
-		DevType:    config.DeviceBlock,
+		ID:         devInfo.ID,
 		DeviceInfo: devInfo,
 	}
 }
@@ -66,13 +34,6 @@ func NewBlockDevice(devInfo config.DeviceInfo) *BlockDevice {
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
 func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
-	randBytes, err := utils.GenerateRandomBytes(8)
-	if err != nil {
-		return err
-	}
-
-	device.DeviceInfo.ID = hex.EncodeToString(randBytes)
-
 	// Increment the block index for the sandbox. This is used to determine the name
 	// for the block device in the case where the block device is used as container
 	// rootfs and the predicted block device name needs to be provided to the agent.
@@ -88,20 +49,12 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 		return err
 	}
 
-	drive := Drive{
+	drive := &config.BlockDrive{
 		File:   device.DeviceInfo.HostPath,
 		Format: "raw",
 		ID:     utils.MakeNameID("drive", device.DeviceInfo.ID, maxDevIDSize),
 		Index:  index,
 	}
-
-	deviceLogger().WithField("device", device.DeviceInfo.HostPath).Info("Attaching block device")
-	device.BlockDrive = &drive
-	if err = devReceiver.HotplugAddDevice(device, config.DeviceBlock); err != nil {
-		return err
-	}
-
-	device.DeviceInfo.Hotplugged = true
 
 	driveName, err := utils.GetVirtDriveName(index)
 	if err != nil {
@@ -110,16 +63,23 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 
 	customOptions := device.DeviceInfo.DriverOptions
 	if customOptions != nil && customOptions["block-driver"] == "virtio-blk" {
-		device.VirtPath = filepath.Join("/dev", driveName)
-		device.PCIAddr = drive.PCIAddr
+		drive.VirtPath = filepath.Join("/dev", driveName)
 	} else {
 		scsiAddr, err := utils.GetSCSIAddress(index)
 		if err != nil {
 			return err
 		}
 
-		device.SCSIAddr = scsiAddr
+		drive.SCSIAddr = scsiAddr
 	}
+
+	deviceLogger().WithField("device", device.DeviceInfo.HostPath).Info("Attaching block device")
+	device.BlockDrive = drive
+	if err = devReceiver.HotplugAddDevice(device, config.DeviceBlock); err != nil {
+		return err
+	}
+
+	device.DeviceInfo.Hotplugged = true
 
 	return nil
 }
@@ -127,19 +87,37 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
 func (device *BlockDevice) Detach(devReceiver api.DeviceReceiver) error {
-	if device.DeviceInfo.Hotplugged {
-		deviceLogger().WithField("device", device.DeviceInfo.HostPath).Info("Unplugging block device")
+	deviceLogger().WithField("device", device.DeviceInfo.HostPath).Info("Unplugging block device")
 
-		if err := devReceiver.HotplugRemoveDevice(device, config.DeviceBlock); err != nil {
-			deviceLogger().WithError(err).Error("Failed to unplug block device")
-			return err
-		}
-
+	if err := devReceiver.HotplugRemoveDevice(device, config.DeviceBlock); err != nil {
+		deviceLogger().WithError(err).Error("Failed to unplug block device")
+		return err
 	}
+	device.DeviceInfo.Hotplugged = false
 	return nil
+}
+
+// IsAttached checks if the device is attached
+func (device *BlockDevice) IsAttached() bool {
+	return device.DeviceInfo.Hotplugged
 }
 
 // DeviceType is standard interface of api.Device, it returns device type
 func (device *BlockDevice) DeviceType() config.DeviceType {
-	return device.DevType
+	return config.DeviceBlock
+}
+
+// DeviceID returns device ID
+func (device *BlockDevice) DeviceID() string {
+	return device.ID
+}
+
+// GetDeviceInfo returns device information that the device is created based on
+func (device *BlockDevice) GetDeviceInfo() *config.DeviceInfo {
+	return device.DeviceInfo
+}
+
+// GetDeviceDrive returns device information used for creating
+func (device *BlockDevice) GetDeviceDrive() interface{} {
+	return device.BlockDrive
 }

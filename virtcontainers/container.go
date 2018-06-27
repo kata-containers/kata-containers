@@ -440,8 +440,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 		if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
 			// TODO: remove dependency of package drivers
 			b := &drivers.BlockDevice{
-				DevType: config.DeviceBlock,
-				DeviceInfo: config.DeviceInfo{
+				DeviceInfo: &config.DeviceInfo{
 					HostPath:      m.Source,
 					ContainerPath: m.Destination,
 					DevType:       "b",
@@ -574,12 +573,13 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 	} else {
 		// If devices were not found in storage, create Device implementations
 		// from the configuration. This should happen at create.
-
-		devices, err := sandbox.devManager.NewDevices(contConfig.DeviceInfos)
-		if err != nil {
-			return &Container{}, err
+		for _, info := range contConfig.DeviceInfos {
+			dev, err := sandbox.devManager.NewDevice(info)
+			if err != nil {
+				return &Container{}, err
+			}
+			c.devices = append(c.devices, dev)
 		}
-		c.devices = devices
 	}
 	return c, nil
 }
@@ -1022,7 +1022,7 @@ func (c *Container) hotplugDrive() error {
 
 	// Add drive with id as container id
 	devID := utils.MakeNameID("drive", c.id, maxDevIDSize)
-	drive := drivers.Drive{
+	drive := config.BlockDrive{
 		File:   devicePath,
 		Format: "raw",
 		ID:     devID,
@@ -1059,7 +1059,7 @@ func (c *Container) removeDrive() (err error) {
 		c.Logger().Info("unplugging block device")
 
 		devID := utils.MakeNameID("drive", c.id, maxDevIDSize)
-		drive := &drivers.Drive{
+		drive := &config.BlockDrive{
 			ID: devID,
 		}
 

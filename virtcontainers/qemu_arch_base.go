@@ -14,6 +14,7 @@ import (
 	govmmQemu "github.com/intel/govmm/qemu"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
@@ -72,13 +73,13 @@ type qemuArch interface {
 	appendNetwork(devices []govmmQemu.Device, endpoint Endpoint) []govmmQemu.Device
 
 	// appendBlockDevice appends a block drive to devices
-	appendBlockDevice(devices []govmmQemu.Device, drive drivers.Drive) []govmmQemu.Device
+	appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) []govmmQemu.Device
 
 	// appendVhostUserDevice appends a vhost user device to devices
 	appendVhostUserDevice(devices []govmmQemu.Device, vhostUserDevice api.VhostUserDevice) []govmmQemu.Device
 
 	// appendVFIODevice appends a VFIO device to devices
-	appendVFIODevice(devices []govmmQemu.Device, vfioDevice drivers.VFIODevice) []govmmQemu.Device
+	appendVFIODevice(devices []govmmQemu.Device, vfioDevice config.VFIODrive) []govmmQemu.Device
 
 	// handleImagePath handles the Hypervisor Config image path
 	handleImagePath(config HypervisorConfig)
@@ -286,7 +287,7 @@ func (q *qemuArchBase) appendImage(devices []govmmQemu.Device, path string) ([]g
 
 	id := utils.MakeNameID("image", hex.EncodeToString(randBytes), maxDevIDSize)
 
-	drive := drivers.Drive{
+	drive := config.BlockDrive{
 		File:   path,
 		Format: "raw",
 		ID:     id,
@@ -430,7 +431,7 @@ func (q *qemuArchBase) appendNetwork(devices []govmmQemu.Device, endpoint Endpoi
 	return devices
 }
 
-func (q *qemuArchBase) appendBlockDevice(devices []govmmQemu.Device, drive drivers.Drive) []govmmQemu.Device {
+func (q *qemuArchBase) appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) []govmmQemu.Device {
 	if drive.File == "" || drive.ID == "" || drive.Format == "" {
 		return devices
 	}
@@ -476,14 +477,14 @@ func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, vhostUs
 	return devices
 }
 
-func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDevice drivers.VFIODevice) []govmmQemu.Device {
-	if vfioDevice.BDF == "" {
+func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDrive config.VFIODrive) []govmmQemu.Device {
+	if vfioDrive.BDF == "" {
 		return devices
 	}
 
 	devices = append(devices,
 		govmmQemu.VFIODevice{
-			BDF: vfioDevice.BDF,
+			BDF: vfioDrive.BDF,
 		},
 	)
 
