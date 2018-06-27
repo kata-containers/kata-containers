@@ -21,6 +21,7 @@ This directory contains scripts used by the [Kata Containers](https://github.com
 | `jenkins_job_build.sh` | Called by the [Jenkins CI](https://github.com/kata-containers/ci) to trigger a CI run. |
 | `kata-arch.sh` | Displays architecture name in various formats. |
 | `kata-doc-to-script.sh` | Convert a [Github-Flavoured Markdown](https://github.github.com/gfm/) document to a shell script. |
+| `kata-simplify-log.sh` | Simplify a logfile to make it easer to `diff(1)`. |
 | `lib.sh` | Library of shell utilities used by other scripts. |
 | `run_metrics_PR_ci.sh` | Run various performance metrics on a PR. |
 | `run.sh` | Run the tests in a CI environment. |
