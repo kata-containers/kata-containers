@@ -758,7 +758,7 @@ func newSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) 
 		storage:         &filesystem{},
 		network:         network,
 		config:          &sandboxConfig,
-		devManager:      deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver),
+		devManager:      deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, nil),
 		volumes:         sandboxConfig.Volumes,
 		containers:      map[string]*Container{},
 		runPath:         filepath.Join(runStoragePath, sandboxConfig.ID),
