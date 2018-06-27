@@ -61,11 +61,12 @@ info() {
 }
 
 repos=(
-	"runtime"
-	"proxy"
-	"shim"
 	"agent"
 	"ksm-throttler"
+	"osbuilder"
+	"proxy"
+	"runtime"
+	"shim"
 )
 
 check_versions() {
@@ -127,10 +128,9 @@ status)
 	;;
 tag)
 	check_versions
-	# Tag versions that does not have VESIONS file
-	# But we want to know the version compatrible with a kata release.
+	# Tag versions that does not have VERSIONS file
+	# But we want to know the version compatible with a kata release.
 	repos+=("tests")
-	repos+=("osbuilder")
 	tag_repos
 	if [ "${PUSH}" == "true" ]; then
 		push_tags
