@@ -92,7 +92,7 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v4.x/"
-    version: "v4.14.22"
+    version: "v4.14.51"
 
 components:
   description: "Core system functionality"
