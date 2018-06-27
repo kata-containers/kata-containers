@@ -113,9 +113,95 @@ collect_logs()
 	fi
 }
 
-main()
+check_log_files()
 {
-	collect_logs "$1"
+	echo "INFO: Checking log files"
+
+	make log-parser
+
+	for component in \
+		kata-ksm-throttler \
+		kata-proxy \
+		kata-runtime \
+		kata-shim
+	do
+		file="${component}.log"
+		args="--no-pager -q -o cat -a -t \"${component}\""
+
+		cmd="sudo journalctl ${args} > ${file}"
+		eval "$cmd" || true
+	done
+
+	logs=$(ls "$(pwd)"/*.log || true)
+	{ kata-log-parser --debug --check-only --error-if-no-records $logs; ret=$?; } || true
+
+	errors=0
+
+	for log in $logs
+	do
+		# Display *all* errors caused by runtime exceptions and fatal
+		# signals.
+		for pattern in "fatal error" "fatal signal"
+		do
+			# Search for pattern and print all subsequent lines with specified log
+			# level.
+			results=$(sed -ne "/\<${pattern}\>/,\$ p" "$log" || true | grep "level=\"*error\"*")
+			if [ -n "$results" ]
+			then
+				errors=1
+				echo >&2 -e "ERROR: detected ${pattern} in '${log}'\n${results}"
+			fi
+		done
+
+		for pattern in "segfault at [0-9]"
+		do
+			results=$(sed -ne "/\<${pattern}\>/,\$ p" "$log" || true)
+
+			if [ -n "$results" ]
+			then
+				errors=1
+				echo >&2 -e "ERROR: detected ${pattern} in '${log}'\n${results}"
+			fi
+		done
+	done
+
+	# Always remove logs since:
+	#
+	# - We don't want to waste disk-space.
+	# - collect_logs() will save the full logs anyway.
+	# - the log parser tool shows full details of what went wrong.
+	rm -f $logs
+
+	[ "$errors" -ne 0 ] && exit 1
+
+	[ $ret -eq 0 ] && true || false
 }
 
-main "@$"
+check_collect_script()
+{
+	local -r cmd="kata-collect-data.sh"
+	local -r cmdpath=$(command -v "$cmd" || true)
+
+	local msg="Kata data collection script"
+
+	[ -z "$cmdpath" ] && echo "INFO: $msg not found" && return
+
+	echo "INFO: Checking $msg"
+	sudo -E PATH="$PATH" chronic $cmd
+}
+
+main()
+{
+	# We always want to try to collect the logs at the end of a test run,
+	# so don't run with "set -e".
+	collect_logs "$@"
+
+	# The following tests can fail and should fail the teardown phase
+	# (but only after we've collected the logs).
+	set -e
+
+	check_log_files
+	check_collect_script
+}
+
+main "$@"
