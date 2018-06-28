@@ -89,6 +89,8 @@ func create(containerID, bundlePath, console, pidFilePath string, detach bool,
 	runtimeConfig oci.RuntimeConfig) error {
 	var err error
 
+	kataLog = kataLog.WithField("container", containerID)
+
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	if bundlePath, err = validCreateParams(containerID, bundlePath); err != nil {
 		return err
@@ -238,6 +240,8 @@ func createSandbox(ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
 		return vc.Process{}, err
 	}
 
+	kataLog = kataLog.WithField("sandbox", sandbox.ID())
+
 	containers := sandbox.GetAllContainers()
 	if len(containers) != 1 {
 		return vc.Process{}, fmt.Errorf("BUG: Container list from sandbox is wrong, expecting only one container, found %d containers", len(containers))
@@ -262,6 +266,8 @@ func createContainer(ociSpec oci.CompatOCISpec, containerID, bundlePath,
 	if err != nil {
 		return vc.Process{}, err
 	}
+
+	kataLog = kataLog.WithField("sandbox", sandboxID)
 
 	_, c, err := vci.CreateContainer(sandboxID, contConfig)
 	if err != nil {
