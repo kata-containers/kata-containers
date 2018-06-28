@@ -151,6 +151,11 @@ information is displayed once every 5 seconds.`,
 			return err
 		}
 
+		kataLog = kataLog.WithFields(logrus.Fields{
+			"container": containerID,
+			"sandbox":   sandboxID,
+		})
+
 		if status.State.State == vc.StateStopped {
 			return fmt.Errorf("container with id %s is not running", status.ID)
 		}

@@ -16,6 +16,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
@@ -187,6 +188,11 @@ func execute(context *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
+	kataLog = kataLog.WithFields(logrus.Fields{
+		"container": containerID,
+		"sandbox":   sandboxID,
+	})
 
 	// Retrieve OCI spec configuration.
 	ociSpec, err := oci.GetOCIConfig(status)
