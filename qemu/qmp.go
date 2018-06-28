@@ -415,7 +415,7 @@ func (q *QMP) mainLoop() {
 		close(q.disconnectedCh)
 	}()
 
-	version := []byte{}
+	var version []byte
 	var cmdDoneCh <-chan struct{}
 
 DONE:
