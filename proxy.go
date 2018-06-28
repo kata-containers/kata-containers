@@ -317,28 +317,30 @@ func realMain() {
 
 	if err := setupLogger(logLevel); err != nil {
 		logger().WithError(err).Fatal("unable to setup logger")
+		os.Exit(1)
 	}
 
 	if err := printAgentLogs(agentLogsSocket); err != nil {
 		logger().WithError(err).Fatal("failed to print agent logs")
-		return
+		os.Exit(1)
 	}
 
 	muxAddr, err := unixAddr(channel)
 	if err != nil {
 		logger().WithError(err).Fatal("invalid mux socket address")
+		os.Exit(1)
 	}
 	listenAddr, err := unixAddr(proxyAddr)
 	if err != nil {
 		logger().WithError(err).Fatal("invalid listen socket address")
-		return
+		os.Exit(1)
 	}
 
 	// yamux connection
 	servConn, err := net.Dial("unix", muxAddr)
 	if err != nil {
 		logger().WithError(err).WithField("channel", muxAddr).Fatal("failed to dial channel")
-		return
+		os.Exit(1)
 	}
 	defer func() {
 		if servConn != nil {
@@ -350,7 +352,7 @@ func realMain() {
 	l, err := serve(servConn, "unix", listenAddr, results)
 	if err != nil {
 		logger().WithError(err).Fatal("failed to serve")
-		return
+		os.Exit(1)
 	}
 	defer func() {
 		if l != nil {
@@ -368,6 +370,7 @@ func realMain() {
 
 	if err := handleExitSignal(sigCh, &servConn, &l); err != nil {
 		logger().WithError(err).Fatal("failed to handle exit signal")
+		os.Exit(1)
 	}
 
 	logger().Debug("shutting down")
