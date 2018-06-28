@@ -1652,6 +1652,7 @@ func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*
 		path = "qemu-system-x86_64"
 	}
 
+	/* #nosec */
 	cmd := exec.Command(path, params...)
 	if len(fds) > 0 {
 		logger.Infof("Adding extra file %v", fds)
