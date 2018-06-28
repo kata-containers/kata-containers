@@ -36,11 +36,15 @@ agent_commit=$(git --work-tree="${agent_path}" --git-dir="${agent_path}/.git" lo
 cleanup() {
 	[ -d "${ROOTFS_DIR}" ] && [[ "${ROOTFS_DIR}" = *"rootfs"* ]] && sudo rm -rf "${ROOTFS_DIR}"
 	[ -d "${TMP_DIR}" ] && rm -rf "${TMP_DIR}"
-	if mount | grep -q "${IMG_MOUNT_DIR}"; then
+	if [ -n "${IMG_MOUNT_DIR}" ] && mount | grep -q "${IMG_MOUNT_DIR}"; then
 		sudo umount "${IMG_MOUNT_DIR}"
 	fi
-	[ -d "${IMG_MOUNT_DIR}" ] && rm -rf "${IMG_MOUNT_DIR}"
-	[ -n "${LOOP_DEVICE}" ] && sudo losetup -d "${LOOP_DEVICE}"
+	if [ -d "${IMG_MOUNT_DIR}" ]; then
+		rm -rf "${IMG_MOUNT_DIR}"
+	fi
+	if [ -n "${LOOP_DEVICE}" ]; then
+		sudo losetup -d "${LOOP_DEVICE}"
+	fi
 }
 
 trap cleanup EXIT
