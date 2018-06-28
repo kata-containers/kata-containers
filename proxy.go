@@ -159,7 +159,7 @@ func printAgentLogs(sock string) error {
 
 	agentLogsAddr, err := unixAddr(sock)
 	if err != nil {
-		logger().WithField("socket-address", sock).Fatal("invalid agent logs socket address")
+		logger().WithField("socket-address", sock).WithError(err).Fatal("invalid agent logs socket address")
 		return err
 	}
 
@@ -193,7 +193,7 @@ func printAgentLogs(sock string) error {
 		}
 
 		if err := scanner.Err(); err != nil {
-			logger().Errorf("Failed reading agent logs from socket: %v", err)
+			logger().WithError(err).Error("Failed reading agent logs from socket")
 		}
 	}()
 
@@ -316,11 +316,11 @@ func realMain() {
 	sigCh := setupNotifier()
 
 	if err := setupLogger(logLevel); err != nil {
-		logger().Fatal(err)
+		logger().WithError(err).Fatal("unable to setup logger")
 	}
 
 	if err := printAgentLogs(agentLogsSocket); err != nil {
-		logger().Fatal(err)
+		logger().WithError(err).Fatal("failed to print agent logs")
 		return
 	}
 
@@ -330,14 +330,14 @@ func realMain() {
 	}
 	listenAddr, err := unixAddr(proxyAddr)
 	if err != nil {
-		logger().Fatal("invalid listen socket address")
+		logger().WithError(err).Fatal("invalid listen socket address")
 		return
 	}
 
 	// yamux connection
 	servConn, err := net.Dial("unix", muxAddr)
 	if err != nil {
-		logger().Fatalf("failed to dial channel(%q): %s", muxAddr, err)
+		logger().WithError(err).WithField("channel", muxAddr).Fatal("failed to dial channel")
 		return
 	}
 	defer func() {
@@ -349,7 +349,7 @@ func realMain() {
 	results := make(chan error)
 	l, err := serve(servConn, "unix", listenAddr, results)
 	if err != nil {
-		logger().Fatal(err)
+		logger().WithError(err).Fatal("failed to serve")
 		return
 	}
 	defer func() {
@@ -361,14 +361,13 @@ func realMain() {
 	go func() {
 		for err := range results {
 			if err != nil {
-				logger().Fatal(err)
+				logger().WithError(err).Fatal("channel error")
 			}
 		}
 	}()
 
 	if err := handleExitSignal(sigCh, &servConn, &l); err != nil {
-		logger().Fatal(err)
-		return
+		logger().WithError(err).Fatal("failed to handle exit signal")
 	}
 
 	logger().Debug("shutting down")
