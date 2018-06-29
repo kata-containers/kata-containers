@@ -429,6 +429,75 @@ check_docs()
 	rm -f "$url_map" "$invalid_urls"
 }
 
+# Tests to apply to all files.
+#
+# Currently just looks for TODO/FIXME comments that should be converted to
+# (or annotated with) an Issue URL.
+check_files()
+{
+	local file
+	local files
+
+	info "Checking files"
+
+	if [ "$master_branch" = "true" ]
+	then
+		files=$(find . -type f | egrep -v "(.git|vendor)/" || true)
+	else
+		files=$(get_pr_changed_file_details || true)
+
+		# Strip off status
+		files=$(echo "$files"|awk '{print $NF}')
+	fi
+
+	[ -z "$files" ] && info "No files changed" && return
+
+	local matches=""
+
+	for file in $files
+	do
+		local match
+		#match=$(egrep -l "\<FIXME\>|\<TODO\>" "$file" || true)
+
+		# Look for files containing the specified comment tags but
+		# which do not include a github URL.
+		match=$(egrep -H "\<FIXME\>|\<TODO\>" "$file" |\
+			grep -v "https://github.com/.*/issues/[0-9]" |\
+			cut -d: -f1 |\
+			sort -u || true)
+
+		[ -z "$match" ] && continue
+
+		# Don't fail if this script contains the patterns
+		# (as it is guaranteed to ;)
+		echo "$file" | grep -q "${script_name}$" && info "Ignoring special file $file" && continue
+
+		# We really only care about comments in code. But to avoid
+		# having to hard-code the list of file extensions to search,
+		# invert the problem by simply ignoring document files and
+		# considering all other file types.
+		echo "$file" | grep -q ".md$" && info "Ignoring comment tag in document $file" && continue
+
+		matches+=" $match"
+	done
+
+	[ -z "$matches" ] && return
+
+	echo >&2 -n \
+		"ERROR: The following files contain TODO/FIXME's that need "
+	echo >&2 -e "converting to issues:\n"
+
+	for file in $matches
+	do
+		echo >&2 "$file"
+	done
+
+	# spacer
+	echo >&2
+
+	exit 1
+}
+
 main()
 {
 	[ "$1" = "help" ] && usage && exit 0
@@ -455,6 +524,7 @@ main()
 	check_go
 	check_versions
 	check_docs
+	check_files
 }
 
 main "$@"
