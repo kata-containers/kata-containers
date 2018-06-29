@@ -14,6 +14,8 @@ script_dir="$(dirname $(readlink -f $0))"
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
 
+[ "$(id -u)" -eq 0 ] || die "$0: must be run as root"
+
 IMAGE="${IMAGE:-kata-containers.img}"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
@@ -131,7 +133,6 @@ fi
 	die "/usr/bin/${AGENT_BIN} is not installed in ${ROOTFS}
 	use AGENT_BIN env variable to change the expected agent binary name"
 OK "Agent installed"
-[ "$(id -u)" -eq 0 ] || die "$0: must be run as root"
 
 ROOTFS_SIZE=$(du -B 1MB -s "${ROOTFS}" | awk '{print $1}')
 BLOCK_SIZE=${BLOCK_SIZE:-4096}
