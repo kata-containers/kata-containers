@@ -64,7 +64,7 @@ func initLogger(logLevel, container, execID string) error {
 		shimLog.Logger.AddHook(hook)
 	}
 
-	logger().WithField("version", version).Info()
+	logger().WithField("version", version).Info("announce")
 
 	return nil
 }
