@@ -141,9 +141,11 @@ func setupLogger(logLevel string) error {
 	proxyLog.Formatter = &logrus.TextFormatter{TimestampFormat: time.RFC3339Nano}
 
 	hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO|syslog.LOG_USER, proxyName)
-	if err == nil {
-		proxyLog.AddHook(hook)
+	if err != nil {
+		return err
 	}
+
+	proxyLog.AddHook(hook)
 
 	logger().WithField("version", version).Info()
 
