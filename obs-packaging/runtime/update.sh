@@ -84,7 +84,6 @@ replace_list=(
 "GO_ARCH=$GO_ARCH"
 "HASH=$short_hashtag"
 "RELEASE=$RELEASE"
-"REVISION=$VERSION"
 "VERSION=$VERSION"
 "kata_osbuilder_version=${KATA_IMAGE_REQUIRED_VERSION}"
 "kata_proxy_version=${PROXY_REQUIRED_VERESION}"
@@ -94,7 +93,6 @@ replace_list=(
 "qemu_lite_version=${KATA_QEMU_LITE_REQUIRED_VERSION}"
 "qemu_vanilla_version=${KATA_QEMU_VANILLA_REQUIRED_VERSION}"
 )
-
 
 verify
 echo "Verify succeed."
