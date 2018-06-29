@@ -95,6 +95,9 @@ run() {
 	# Run the density test inside the container
 	bash density/memory_usage_inside_container.sh
 
+	# Run the cpu statistics test
+	bash network/cpu_statistics_iperf.sh
+
 	popd
 }
 
