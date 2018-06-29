@@ -34,16 +34,14 @@ RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 ((RELEASE++))
 [ -n "$APIURL" ] && APIURL="-A ${APIURL}"
 
-
 set_versions "$ksm_throttler_hash"
 
 replace_list=(
 "GO_CHECKSUM=$go_checksum"
 "GO_VERSION=$go_version"
 "GO_ARCH=$GO_ARCH"
-"HASH=${HASH:0:7}"
+"HASH=${short_hashtag}"
 "RELEASE=$RELEASE"
-"REVISION=$HASH"
 "VERSION=$VERSION"
 )
 
