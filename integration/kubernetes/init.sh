@@ -31,7 +31,7 @@ sudo -E kubectl create --namespace kube-system -f "${SCRIPT_PATH}/data/kube-flan
 # The kube-dns pod usually takes around 30 seconds to get ready
 # This instruction will wait until it is up and running, so we can
 # start creating our containers.
-dns_wait_time=180
+dns_wait_time=300
 sleep_time=5
-cmd="sudo -E kubectl get pods --all-namespaces | grep dns | grep Running"
+cmd="sudo -E kubectl get pods --all-namespaces | grep 'dns.*3/3.*Running'"
 waitForProcess "$dns_wait_time" "$sleep_time" "$cmd"
