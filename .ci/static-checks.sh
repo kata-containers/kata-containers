@@ -524,7 +524,6 @@ main()
 	check_go
 	check_versions
 	check_docs
-	check_files
 }
 
 main "$@"
