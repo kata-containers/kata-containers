@@ -12,6 +12,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
@@ -57,6 +58,11 @@ func delete(containerID string, force bool) error {
 	if err != nil {
 		return err
 	}
+
+	kataLog = kataLog.WithFields(logrus.Fields{
+		"container": containerID,
+		"sandbox":   sandboxID,
+	})
 
 	containerID = status.ID
 

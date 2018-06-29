@@ -15,6 +15,7 @@ import (
 	"github.com/docker/go-units"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
@@ -137,6 +138,12 @@ other options are ignored.
 		}
 
 		containerID = status.ID
+
+		kataLog = kataLog.WithFields(logrus.Fields{
+			"container": containerID,
+			"sandbox":   sandboxID,
+		})
+
 		// container MUST be running
 		if status.State.State != vc.StateRunning {
 			return fmt.Errorf("Container %s is not running", containerID)
