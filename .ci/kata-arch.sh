@@ -35,7 +35,8 @@ arch_to_golang()
 	local -r arch="$1"
 
 	case "$arch" in
-		arm64|ppc64le) echo "$arch";;
+		aarch64) echo "arm64";;
+		ppc64le) echo "$arch";;
 		x86_64) echo "amd64";;
 		*) die "unsupported architecture: $arch";;
 	esac
@@ -47,8 +48,9 @@ arch_to_kernel()
 	local -r arch="$1"
 
 	case "$arch" in
-		arm64|x86_64) echo "$arch";;
+		aarch64) echo "arm64";;
 		ppc64le) echo "powerpc";;
+		x86_64) echo "$arch";;
 		*) die "unsupported architecture: $arch";;
 	esac
 }
