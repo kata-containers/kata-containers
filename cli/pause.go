@@ -7,6 +7,7 @@
 package main
 
 import (
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
@@ -48,6 +49,11 @@ func toggleContainerPause(containerID string, pause bool) (err error) {
 	}
 
 	containerID = status.ID
+
+	kataLog = kataLog.WithFields(logrus.Fields{
+		"container": containerID,
+		"sandbox":   sandboxID,
+	})
 
 	if pause {
 		err = vci.PauseContainer(sandboxID, containerID)

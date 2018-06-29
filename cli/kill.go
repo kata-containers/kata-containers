@@ -13,6 +13,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
@@ -97,6 +98,11 @@ func kill(containerID, signal string, all bool) error {
 	}
 
 	containerID = status.ID
+
+	kataLog = kataLog.WithFields(logrus.Fields{
+		"container": containerID,
+		"sandbox":   sandboxID,
+	})
 
 	signum, err := processSignal(signal)
 	if err != nil {

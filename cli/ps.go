@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
@@ -54,6 +55,11 @@ func ps(containerID, format string, args []string) error {
 	}
 
 	containerID = status.ID
+
+	kataLog = kataLog.WithFields(logrus.Fields{
+		"container": containerID,
+		"sandbox":   sandboxID,
+	})
 
 	// container MUST be running
 	if status.State.State != vc.StateRunning {

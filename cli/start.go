@@ -11,6 +11,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
@@ -45,6 +46,11 @@ func start(containerID string) (vc.VCSandbox, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	kataLog = kataLog.WithFields(logrus.Fields{
+		"container": containerID,
+		"sandbox":   sandboxID,
+	})
 
 	containerID = status.ID
 
