@@ -73,7 +73,7 @@ OK "Agent is installed"
 [ "$(id -u)" -eq 0 ] || die "$0: must be run as root"
 
 # initramfs expects /init
-mv -f ${init} "${ROOTFS}/init"
+ln -sf /sbin/init "${ROOTFS}/init"
 
 info "Creating ${IMAGE_DIR}/${IMAGE_NAME} based on rootfs at ${ROOTFS}"
 ( cd "${ROOTFS}" && find . | cpio -H newc -o | gzip -9 ) > "${IMAGE_DIR}"/"${IMAGE_NAME}"
