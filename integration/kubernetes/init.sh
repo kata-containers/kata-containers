@@ -20,7 +20,7 @@ sudo iptables -P FORWARD ACCEPT
 echo "Start crio service"
 sudo systemctl start crio
 
-sudo -E kubeadm init --pod-network-cidr 10.244.0.0/16 --cri-socket=/var/run/crio/crio.sock
+sudo -E kubeadm init --pod-network-cidr 10.244.0.0/16 --cri-socket=unix:///var/run/crio/crio.sock
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
 sudo -E kubectl get nodes
