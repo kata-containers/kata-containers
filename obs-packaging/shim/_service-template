@@ -4,8 +4,8 @@
     <param name="scm">git</param>
     <param name="url">https://github.com/kata-containers/shim.git</param>
     <param name="filename">kata-shim</param>
-    <param name="versionformat">@VERSION@+git.%h</param>
-    <param name="revision">@REVISION@</param>
+    <param name="versionformat">@VERSION@+git.@HASH@</param>
+    <param name="revision">@HASH@</param>
  </service>
  <service name="recompress">
     <param name="file">*.tar*</param>
