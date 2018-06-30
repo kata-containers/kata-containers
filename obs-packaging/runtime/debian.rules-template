@@ -27,7 +27,7 @@ override_dh_auto_build:
 	tar xzf /usr/src/packages/SOURCES/go$(GO_VERSION).linux-@GO_ARCH@.tar.gz -C /usr/src/packages/BUILD/local
 	ln -s /usr/src/packages/BUILD /usr/src/packages/BUILD/go/src/$(IMPORTNAME)
 	cd $(GOPATH)/src/$(IMPORTNAME)/; \
-	make QEMUPATH=/usr/bin/$(DEFAULT_QEMU)
+	make QEMUPATH=/usr/bin/$(DEFAULT_QEMU) COMMIT=@HASH@
 
 override_dh_auto_install:
 	mkdir -p debian/$(PKG_NAME)
@@ -36,6 +36,7 @@ override_dh_auto_install:
 	make install \
 		DESTDIR=$(shell pwd)/debian/$(PKG_NAME)/ \
 		PREFIX=/usr \
+		COMMIT=@HASH@ \
 		QEMUPATH=/usr/bin/$(DEFAULT_QEMU)
 
 	sed -i -e '/^initrd =/d' $(shell pwd)/debian/$(PKG_NAME)/usr/share/defaults/kata-containers/configuration.toml
