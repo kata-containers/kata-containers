@@ -22,7 +22,7 @@ setup() {
 }
 
 @test "Verify nginx connectivity between pods" {
-	wait_time=30
+	wait_time=120
 	sleep_time=5
 	cmd="sudo -E kubectl get pods | grep $service_name | grep Running"
 	sudo -E kubectl run "$service_name" --image="$nginx_image" --replicas=2
