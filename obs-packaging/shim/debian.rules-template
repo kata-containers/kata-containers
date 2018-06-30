@@ -14,8 +14,8 @@ override_dh_auto_build:
 	mkdir -p /usr/src/packages/BUILD/go/src/github.com/kata-containers/
 	tar xzf /usr/src/packages/SOURCES/go$(GO_VERSION).linux-@GO_ARCH@.tar.gz -C /usr/src/packages/BUILD/local/
 	ln -s /usr/src/packages/BUILD/ /usr/src/packages/BUILD/go/src/github.com/kata-containers/shim
-	cd $(GOPATH)/src/github.com/kata-containers/shim && make
+	cd $(GOPATH)/src/github.com/kata-containers/shim && make COMMIT=@HASH@
 
 override_dh_auto_install:
 	mkdir -p debian/kata-shim
-	make install LIBEXECDIR=$(shell pwd)/debian/kata-shim/usr/libexec
+	make install LIBEXECDIR=$(shell pwd)/debian/kata-shim/usr/libexec COMMIT=@HASH@

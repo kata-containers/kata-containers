@@ -58,7 +58,7 @@ export GOPATH=$HOME/rpmbuild/BUILD/go/
 mkdir -p $HOME/rpmbuild/BUILD/go/src/%{DOMAIN}/%{ORG}
 ln -s %{_builddir}/%{name}-%{version} $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
 cd $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
-make
+make COMMIT=@HASH@
 
 %check
 export http_proxy=http://127.0.0.1:9/
@@ -70,7 +70,7 @@ export GOROOT=$HOME/rpmbuild/BUILD/local/go
 export PATH=$PATH:$HOME/rpmbuild/BUILD/local/go/bin
 export GOPATH=$HOME/rpmbuild/BUILD/go/
 
-make install LIBEXECDIR=%{buildroot}%{LIBEXECDIR}
+make install LIBEXECDIR=%{buildroot}%{LIBEXECDIR} COMMIT=@HASH@
 
 %files
 %defattr(-,root,root,-)
