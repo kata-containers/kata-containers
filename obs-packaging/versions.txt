@@ -1,8 +1,8 @@
-kata_runtime_hash=086d197f2c60e733a1aa4b033841ec922273ecd5
-kata_proxy_hash=a69326b63802952b14203ea9c1533d4edb8c1d64
-kata_shim_hash=74cbc1ee7645916a994b767790da4c6116d28270
-kata_agent_hash=a099747be287d30d7f1efcd6ba2bda88fc4a0f15
-ksm_throttler_hash=422c7f7ea05400ecdb06e892235fa75854ba2b11
+kata_runtime_hash=b7e3997bc1deed9eb40347d31557bce8dba6ae6b
+kata_proxy_hash=15459f4b4ac6f6a242445ff284fec14135bc0045
+kata_shim_hash=5296edac3823b31eecebd90ad0b3e7ad81d6e88a
+kata_agent_hash=994ac9c5e439571ee399cc10d5f18636170f7779
+ksm_throttler_hash=67307e510b7295f9fe1503ee0ebc4f71eacc1561
 qemu_lite_hash=6ba2bfbee9a80bfd03605c5eb2ca743c8b68389e
 qemu_vanilla_hash=e3050471ff1daa7fefe88388dfa4e1d97ba1f0bc
 
@@ -14,7 +14,7 @@ ksm_throttler_version=1.0.0
 kata_osbuilder_version=1.0.0
 qemu_lite_version=2.11.0
 qemu_vanilla_version=2.11
-kernel_version=4.14.22
+kernel_version=4.14.51
 
 # Default osbuilder image options
 osbuilder_default_os=clearlinux
