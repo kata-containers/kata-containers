@@ -13,9 +13,7 @@ import (
 
 	govmmQemu "github.com/intel/govmm/qemu"
 
-	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
@@ -76,7 +74,7 @@ type qemuArch interface {
 	appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) []govmmQemu.Device
 
 	// appendVhostUserDevice appends a vhost user device to devices
-	appendVhostUserDevice(devices []govmmQemu.Device, vhostUserDevice api.VhostUserDevice) []govmmQemu.Device
+	appendVhostUserDevice(devices []govmmQemu.Device, drive config.VhostUserDeviceAttrs) []govmmQemu.Device
 
 	// appendVFIODevice appends a VFIO device to devices
 	appendVFIODevice(devices []govmmQemu.Device, vfioDevice config.VFIODrive) []govmmQemu.Device
@@ -455,22 +453,22 @@ func (q *qemuArchBase) appendBlockDevice(devices []govmmQemu.Device, drive confi
 	return devices
 }
 
-func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, vhostUserDevice api.VhostUserDevice) []govmmQemu.Device {
+func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, attr config.VhostUserDeviceAttrs) []govmmQemu.Device {
 	qemuVhostUserDevice := govmmQemu.VhostUserDevice{}
 
 	// TODO: find a way to remove dependency of drivers package
-	switch vhostUserDevice := vhostUserDevice.(type) {
-	case *drivers.VhostUserNetDevice:
-		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("net", vhostUserDevice.ID, maxDevIDSize)
-		qemuVhostUserDevice.Address = vhostUserDevice.MacAddress
-	case *drivers.VhostUserSCSIDevice:
-		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("scsi", vhostUserDevice.ID, maxDevIDSize)
-	case *drivers.VhostUserBlkDevice:
+	switch attr.Type {
+	case config.VhostUserNet:
+		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("net", attr.ID, maxDevIDSize)
+		qemuVhostUserDevice.Address = attr.MacAddress
+	case config.VhostUserSCSI:
+		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("scsi", attr.ID, maxDevIDSize)
+	case config.VhostUserBlk:
 	}
 
-	qemuVhostUserDevice.VhostUserType = govmmQemu.VhostUserDeviceType(vhostUserDevice.Type())
-	qemuVhostUserDevice.SocketPath = vhostUserDevice.Attrs().SocketPath
-	qemuVhostUserDevice.CharDevID = utils.MakeNameID("char", vhostUserDevice.Attrs().ID, maxDevIDSize)
+	qemuVhostUserDevice.VhostUserType = govmmQemu.VhostUserDeviceType(attr.Type)
+	qemuVhostUserDevice.SocketPath = attr.SocketPath
+	qemuVhostUserDevice.CharDevID = utils.MakeNameID("char", attr.ID, maxDevIDSize)
 
 	devices = append(devices, qemuVhostUserDevice)
 
