@@ -52,6 +52,9 @@ const (
 
 	// devicesFileType represents a device file type
 	devicesFileType
+
+	// devicesIDFileType saves reference IDs to file, e.g. device IDs
+	devicesIDFileType
 )
 
 // configFile is the file name used for every JSON sandbox configuration.
@@ -126,6 +129,8 @@ type resourceStorage interface {
 	fetchSandboxState(sandboxID string) (State, error)
 	fetchSandboxNetwork(sandboxID string) (NetworkNamespace, error)
 	storeSandboxNetwork(sandboxID string, networkNS NetworkNamespace) error
+	fetchSandboxDevices(sandboxID string) ([]api.Device, error)
+	storeSandboxDevices(sandboxID string, devices []api.Device) error
 
 	// Hypervisor resources
 	fetchHypervisorState(sandboxID string, state interface{}) error
@@ -144,8 +149,8 @@ type resourceStorage interface {
 	storeContainerProcess(sandboxID, containerID string, process Process) error
 	fetchContainerMounts(sandboxID, containerID string) ([]Mount, error)
 	storeContainerMounts(sandboxID, containerID string, mounts []Mount) error
-	fetchContainerDevices(sandboxID, containerID string) ([]api.Device, error)
-	storeContainerDevices(sandboxID, containerID string, devices []api.Device) error
+	fetchContainerDevices(sandboxID, containerID string) ([]ContainerDevice, error)
+	storeContainerDevices(sandboxID, containerID string, devices []ContainerDevice) error
 }
 
 // filesystem is a resourceStorage interface implementation for a local filesystem.
@@ -225,6 +230,35 @@ type TypedDevice struct {
 	// This being declared as RawMessage prevents it from being  marshalled/unmarshalled.
 	// We do that explicitly depending on Type.
 	Data json.RawMessage
+}
+
+// storeDeviceIDFile is used to marshal and store device IDs to disk.
+func (fs *filesystem) storeDeviceIDFile(file string, data interface{}) error {
+	if file == "" {
+		return errNeedFile
+	}
+
+	f, err := os.Create(file)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	devices, ok := data.([]ContainerDevice)
+	if !ok {
+		return fmt.Errorf("Incorrect data type received, Expected []string")
+	}
+
+	jsonOut, err := json.Marshal(devices)
+	if err != nil {
+		return fmt.Errorf("Could not marshal devices: %s", err)
+	}
+
+	if _, err := f.Write(jsonOut); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // storeDeviceFile is used to provide custom marshalling for Device objects.
@@ -347,7 +381,7 @@ func (fs *filesystem) fetchDeviceFile(fileData []byte, devices *[]api.Device) er
 func resourceNeedsContainerID(sandboxSpecific bool, resource sandboxResource) bool {
 
 	switch resource {
-	case lockFileType, networkFileType, hypervisorFileType, agentFileType:
+	case lockFileType, networkFileType, hypervisorFileType, agentFileType, devicesFileType:
 		// sandbox-specific resources
 		return false
 	default:
@@ -370,7 +404,7 @@ func resourceDir(sandboxSpecific bool, sandboxID, containerID string, resource s
 	case configFileType:
 		path = configStoragePath
 		break
-	case stateFileType, networkFileType, processFileType, lockFileType, mountsFileType, devicesFileType, hypervisorFileType, agentFileType:
+	case stateFileType, networkFileType, processFileType, lockFileType, mountsFileType, devicesFileType, devicesIDFileType, hypervisorFileType, agentFileType:
 		path = runStoragePath
 		break
 	default:
@@ -421,6 +455,9 @@ func (fs *filesystem) resourceURI(sandboxSpecific bool, sandboxID, containerID s
 	case devicesFileType:
 		filename = devicesFile
 		break
+	case devicesIDFileType:
+		filename = devicesFile
+		break
 	default:
 		return "", "", errInvalidResource
 	}
@@ -466,6 +503,7 @@ func (fs *filesystem) commonResourceChecks(sandboxSpecific bool, sandboxID, cont
 	case processFileType:
 	case mountsFileType:
 	case devicesFileType:
+	case devicesIDFileType:
 	default:
 		return errInvalidResource
 	}
@@ -552,6 +590,19 @@ func (fs *filesystem) storeDeviceResource(sandboxSpecific bool, sandboxID, conta
 	return fs.storeDeviceFile(devicesFile, file)
 }
 
+func (fs *filesystem) storeDevicesIDResource(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource, file interface{}) error {
+	if resource != devicesIDFileType {
+		return errInvalidResource
+	}
+
+	devicesFile, _, err := fs.resourceURI(sandboxSpecific, sandboxID, containerID, resource)
+	if err != nil {
+		return err
+	}
+
+	return fs.storeDeviceIDFile(devicesFile, file)
+}
+
 func (fs *filesystem) storeResource(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource, data interface{}) error {
 	if err := fs.commonResourceChecks(sandboxSpecific, sandboxID, containerID, resource); err != nil {
 		return err
@@ -575,6 +626,8 @@ func (fs *filesystem) storeResource(sandboxSpecific bool, sandboxID, containerID
 
 	case []api.Device:
 		return fs.storeDeviceResource(sandboxSpecific, sandboxID, containerID, resource, file)
+	case []ContainerDevice:
+		return fs.storeDevicesIDResource(sandboxSpecific, sandboxID, containerID, resource, file)
 
 	default:
 		return fmt.Errorf("Invalid resource data type")
@@ -626,6 +679,18 @@ func (fs *filesystem) fetchSandboxNetwork(sandboxID string) (NetworkNamespace, e
 	}
 
 	return networkNS, nil
+}
+
+func (fs *filesystem) fetchSandboxDevices(sandboxID string) ([]api.Device, error) {
+	var devices []api.Device
+	if err := fs.fetchResource(true, sandboxID, "", devicesFileType, &devices); err != nil {
+		return []api.Device{}, err
+	}
+	return devices, nil
+}
+
+func (fs *filesystem) storeSandboxDevices(sandboxID string, devices []api.Device) error {
+	return fs.storeSandboxResource(sandboxID, devicesFileType, devices)
 }
 
 func (fs *filesystem) fetchHypervisorState(sandboxID string, state interface{}) error {
@@ -734,11 +799,11 @@ func (fs *filesystem) fetchContainerMounts(sandboxID, containerID string) ([]Mou
 	return mounts, nil
 }
 
-func (fs *filesystem) fetchContainerDevices(sandboxID, containerID string) ([]api.Device, error) {
-	var devices []api.Device
+func (fs *filesystem) fetchContainerDevices(sandboxID, containerID string) ([]ContainerDevice, error) {
+	var devices []ContainerDevice
 
-	if err := fs.fetchResource(false, sandboxID, containerID, devicesFileType, &devices); err != nil {
-		return []api.Device{}, err
+	if err := fs.fetchResource(false, sandboxID, containerID, devicesIDFileType, &devices); err != nil {
+		return nil, err
 	}
 
 	return devices, nil
@@ -748,8 +813,8 @@ func (fs *filesystem) storeContainerMounts(sandboxID, containerID string, mounts
 	return fs.storeContainerResource(sandboxID, containerID, mountsFileType, mounts)
 }
 
-func (fs *filesystem) storeContainerDevices(sandboxID, containerID string, devices []api.Device) error {
-	return fs.storeContainerResource(sandboxID, containerID, devicesFileType, devices)
+func (fs *filesystem) storeContainerDevices(sandboxID, containerID string, devices []ContainerDevice) error {
+	return fs.storeContainerResource(sandboxID, containerID, devicesIDFileType, devices)
 }
 
 func (fs *filesystem) deleteContainerResources(sandboxID, containerID string, resources []sandboxResource) error {

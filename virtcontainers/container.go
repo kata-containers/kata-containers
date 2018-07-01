@@ -20,9 +20,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
-	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
@@ -229,6 +228,14 @@ type SystemMountsInfo struct {
 	DevShmSize uint
 }
 
+// ContainerDevice describes a device associated with container
+type ContainerDevice struct {
+	// ID is device id referencing the device from sandbox's device manager
+	ID string
+	// ContainerPath is device path displayed in container
+	ContainerPath string
+}
+
 // Container is composed of a set of containers and a runtime environment.
 // A Container can be created, deleted, started, stopped, listed, entered, paused and restored.
 type Container struct {
@@ -251,7 +258,7 @@ type Container struct {
 
 	mounts []Mount
 
-	devices []api.Device
+	devices []ContainerDevice
 
 	systemMountsInfo SystemMountsInfo
 }
@@ -362,7 +369,7 @@ func (c *Container) storeDevices() error {
 	return c.sandbox.storage.storeContainerDevices(c.sandboxID, c.id, c.devices)
 }
 
-func (c *Container) fetchDevices() ([]api.Device, error) {
+func (c *Container) fetchDevices() ([]ContainerDevice, error) {
 	return c.sandbox.storage.fetchContainerDevices(c.sandboxID, c.id)
 }
 
@@ -430,29 +437,19 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 			continue
 		}
 
-		var stat unix.Stat_t
-		if err := unix.Stat(m.Source, &stat); err != nil {
-			return nil, err
-		}
-
 		// Check if mount is a block device file. If it is, the block device will be attached to the host
 		// instead of passing this as a shared mount.
-		if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
-			// TODO: remove dependency of package drivers
-			b := &drivers.BlockDevice{
-				DeviceInfo: &config.DeviceInfo{
-					HostPath:      m.Source,
-					ContainerPath: m.Destination,
-					DevType:       "b",
-				},
-			}
-
+		if len(m.BlockDeviceID) > 0 {
 			// Attach this block device, all other devices passed in the config have been attached at this point
-			if err := b.Attach(c.sandbox); err != nil {
+			if err := c.sandbox.devManager.AttachDevice(m.BlockDeviceID, c.sandbox); err != nil &&
+				err != manager.ErrDeviceAttached {
 				return nil, err
 			}
 
-			c.mounts[idx].BlockDevice = b
+			if err := c.sandbox.storeSandboxDevices(); err != nil {
+				//TODO: roll back?
+				return nil, err
+			}
 			continue
 		}
 
@@ -562,7 +559,41 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 
 	mounts, err := c.fetchMounts()
 	if err == nil {
+		// restore mounts from disk
 		c.mounts = mounts
+	} else {
+		// for newly created container:
+		// iterate all mounts and create block device if it's block based.
+		for i, m := range c.mounts {
+			if len(m.BlockDeviceID) > 0 || m.Type != "bind" {
+				// Non-empty m.BlockDeviceID indicates there's already one device
+				// associated with the mount,so no need to create a new device for it
+				// and we only create block device for bind mount
+				continue
+			}
+
+			var stat unix.Stat_t
+			if err := unix.Stat(m.Source, &stat); err != nil {
+				return nil, fmt.Errorf("stat %q failed: %v", m.Source, err)
+			}
+
+			// Check if mount is a block device file. If it is, the block device will be attached to the host
+			// instead of passing this as a shared mount.
+			if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
+				b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
+					HostPath:      m.Source,
+					ContainerPath: m.Destination,
+					DevType:       "b",
+					Major:         int64(unix.Major(stat.Rdev)),
+					Minor:         int64(unix.Minor(stat.Rdev)),
+				})
+				if err != nil {
+					return nil, fmt.Errorf("device manager failed to create new device for %q: %v", m.Source, err)
+				}
+
+				c.mounts[i].BlockDeviceID = b.DeviceID()
+			}
+		}
 	}
 
 	// Devices will be found in storage after create stage has completed.
@@ -578,9 +609,14 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 			if err != nil {
 				return &Container{}, err
 			}
-			c.devices = append(c.devices, dev)
+
+			c.devices = append(c.devices, ContainerDevice{
+				ID:            dev.DeviceID(),
+				ContainerPath: info.ContainerPath,
+			})
 		}
 	}
+
 	return c, nil
 }
 
@@ -1020,6 +1056,7 @@ func (c *Container) hotplugDrive() error {
 		return err
 	}
 
+	// TODO: use general device manager instead of BlockDrive directly
 	// Add drive with id as container id
 	devID := utils.MakeNameID("drive", c.id, maxDevIDSize)
 	drive := config.BlockDrive{
@@ -1076,18 +1113,30 @@ func (c *Container) removeDrive() (err error) {
 }
 
 func (c *Container) attachDevices() error {
-	for _, device := range c.devices {
-		if err := device.Attach(c.sandbox); err != nil {
+	for _, dev := range c.devices {
+		if err := c.sandbox.devManager.AttachDevice(dev.ID, c.sandbox); err != nil {
+			if err == manager.ErrDeviceAttached {
+				// skip if device is already attached before
+				continue
+			}
 			return err
 		}
 	}
 
+	if err := c.sandbox.storeSandboxDevices(); err != nil {
+		//TODO: roll back?
+		return err
+	}
 	return nil
 }
 
 func (c *Container) detachDevices() error {
-	for _, device := range c.devices {
-		if err := device.Detach(c.sandbox); err != nil {
+	for _, dev := range c.devices {
+		if err := c.sandbox.devManager.DetachDevice(dev.ID, c.sandbox); err != nil {
+			if err == manager.ErrDeviceNotAttached {
+				// skip if device is already attached before
+				continue
+			}
 			return err
 		}
 	}
