@@ -25,17 +25,15 @@ import (
 	"google.golang.org/grpc"
 
 	pb "github.com/kata-containers/agent/protocols/grpc"
-	"github.com/kata-containers/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 )
 
-const (
-	testKataProxyURLTempl  = "unix://%s/kata-proxy-test.sock"
-	testBlockDeviceCtrPath = "testBlockDeviceCtrPath"
-	testPCIAddr            = "04/02"
+var (
+	testKataProxyURLTempl = "unix://%s/kata-proxy-test.sock"
+	//testBlockDeviceCtrPath = "testBlockDeviceCtrPath"
+	//testPCIAddr = "04/02"
 )
 
 func proxyHandlerDiscard(c net.Conn) {
@@ -444,15 +442,21 @@ func TestAppendDevicesEmptyContainerDeviceList(t *testing.T) {
 
 	devList := []*pb.Device{}
 	expected := []*pb.Device{}
-	ctrDevices := []api.Device{}
+	ctrDevices := []ContainerDevice{}
 
-	updatedDevList := k.appendDevices(devList, ctrDevices)
+	c := &Container{
+		sandbox: &Sandbox{
+			devManager: manager.NewDeviceManager("virtio-scsi", nil),
+		},
+		devices: ctrDevices,
+	}
+	updatedDevList := k.appendDevices(devList, c)
 	assert.True(t, reflect.DeepEqual(updatedDevList, expected),
 		"Device lists didn't match: got %+v, expecting %+v",
 		updatedDevList, expected)
 }
 
-func TestAppendDevices(t *testing.T) {
+/*func TestAppendDevices(t *testing.T) {
 	k := kataAgent{}
 
 	devList := []*pb.Device{}
@@ -465,10 +469,13 @@ func TestAppendDevices(t *testing.T) {
 	}
 	ctrDevices := []api.Device{
 		&drivers.BlockDevice{
-			DeviceInfo: config.DeviceInfo{
-				ContainerPath: testBlockDeviceCtrPath,
+			DeviceInfo: &config.DeviceInfo{
+				HostPath: testBlockDeviceCtrPath,
 			},
-			PCIAddr: testPCIAddr,
+			BlockDrive: &config.BlockDrive{
+				File:    testBlockDeviceCtrPath,
+				PCIAddr: testPCIAddr,
+			},
 		},
 	}
 
@@ -476,7 +483,7 @@ func TestAppendDevices(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(updatedDevList, expected),
 		"Device lists didn't match: got %+v, expecting %+v",
 		updatedDevList, expected)
-}
+}*/
 
 func TestConstraintGRPCSpec(t *testing.T) {
 	assert := assert.New(t)
