@@ -281,11 +281,11 @@ func (endpoint *VhostUserEndpoint) Attach(h hypervisor) error {
 	}
 	id := hex.EncodeToString(randBytes)
 
-	d := &drivers.VhostUserNetDevice{
+	d := config.VhostUserDeviceAttrs{
+		ID:         id,
+		SocketPath: endpoint.SocketPath,
 		MacAddress: endpoint.HardAddr,
 	}
-	d.SocketPath = endpoint.SocketPath
-	d.ID = id
 
 	return h.addDevice(d, vhostuserDev)
 }
