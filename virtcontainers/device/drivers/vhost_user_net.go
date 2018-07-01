@@ -7,24 +7,17 @@
 package drivers
 
 import (
+	"encoding/hex"
+
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
 // VhostUserNetDevice is a network vhost-user based device
 type VhostUserNetDevice struct {
 	config.VhostUserDeviceAttrs
-	MacAddress string
-}
-
-// Attrs returns the VhostUserDeviceAttrs associated with the vhost-user device
-func (vhostUserNetDevice *VhostUserNetDevice) Attrs() *config.VhostUserDeviceAttrs {
-	return &vhostUserNetDevice.VhostUserDeviceAttrs
-}
-
-// Type returns the type associated with the vhost-user device
-func (vhostUserNetDevice *VhostUserNetDevice) Type() config.DeviceType {
-	return config.VhostUserNet
+	DeviceInfo *config.DeviceInfo
 }
 
 //
@@ -33,17 +26,54 @@ func (vhostUserNetDevice *VhostUserNetDevice) Type() config.DeviceType {
 
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
-func (vhostUserNetDevice *VhostUserNetDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
-	return vhostUserAttach(vhostUserNetDevice, devReceiver)
+func (device *VhostUserNetDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
+	// generate a unique ID to be used for hypervisor commandline fields
+	randBytes, err := utils.GenerateRandomBytes(8)
+	if err != nil {
+		return err
+	}
+	id := hex.EncodeToString(randBytes)
+
+	device.ID = id
+	device.Type = device.DeviceType()
+
+	defer func() {
+		if err == nil {
+			device.DeviceInfo.Hotplugged = true
+		}
+	}()
+	return devReceiver.AppendDevice(device)
 }
 
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
-func (vhostUserNetDevice *VhostUserNetDevice) Detach(devReceiver api.DeviceReceiver) error {
+func (device *VhostUserNetDevice) Detach(devReceiver api.DeviceReceiver) error {
+	device.DeviceInfo.Hotplugged = false
 	return nil
 }
 
+// IsAttached checks if the device is attached
+func (device *VhostUserNetDevice) IsAttached() bool {
+	return device.DeviceInfo.Hotplugged
+}
+
+// DeviceID returns device ID
+func (device *VhostUserNetDevice) DeviceID() string {
+	return device.ID
+}
+
 // DeviceType is standard interface of api.Device, it returns device type
-func (vhostUserNetDevice *VhostUserNetDevice) DeviceType() config.DeviceType {
-	return vhostUserNetDevice.DevType
+func (device *VhostUserNetDevice) DeviceType() config.DeviceType {
+	return config.VhostUserNet
+}
+
+// GetDeviceInfo returns device information that the device is created based on
+func (device *VhostUserNetDevice) GetDeviceInfo() *config.DeviceInfo {
+	return device.DeviceInfo
+}
+
+// GetDeviceDrive returns device information used for creating
+func (device *VhostUserNetDevice) GetDeviceDrive() interface{} {
+	device.Type = device.DeviceType()
+	return &device.VhostUserDeviceAttrs
 }
