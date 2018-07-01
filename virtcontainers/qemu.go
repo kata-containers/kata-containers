@@ -19,7 +19,6 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/sirupsen/logrus"
 
-	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
@@ -942,13 +941,6 @@ func (q *qemu) resumeSandbox() error {
 
 // addDevice will add extra devices to Qemu command line.
 func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
-	switch devType {
-	case vhostuserDev:
-		vhostDev := devInfo.(api.VhostUserDevice)
-		q.qemuConfig.Devices = q.arch.appendVhostUserDevice(q.qemuConfig.Devices, vhostDev)
-		return nil
-	}
-
 	switch v := devInfo.(type) {
 	case Volume:
 		q.qemuConfig.Devices = q.arch.append9PVolume(q.qemuConfig.Devices, v)
@@ -958,7 +950,8 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 		q.qemuConfig.Devices = q.arch.appendNetwork(q.qemuConfig.Devices, v)
 	case config.BlockDrive:
 		q.qemuConfig.Devices = q.arch.appendBlockDevice(q.qemuConfig.Devices, v)
-
+	case config.VhostUserDeviceAttrs:
+		q.qemuConfig.Devices = q.arch.appendVhostUserDevice(q.qemuConfig.Devices, v)
 	case config.VFIODrive:
 		q.qemuConfig.Devices = q.arch.appendVFIODevice(q.qemuConfig.Devices, v)
 	default:

@@ -123,10 +123,12 @@ type VFIODrive struct {
 
 // VhostUserDeviceAttrs represents data shared by most vhost-user devices
 type VhostUserDeviceAttrs struct {
-	DevType    DeviceType
-	DeviceInfo DeviceInfo
-	SocketPath string
 	ID         string
+	SocketPath string
+	Type       DeviceType
+
+	// MacAddress is only meaningful for vhost user net device
+	MacAddress string
 }
 
 // GetHostPathFunc is function pointer used to mock GetHostPath in tests.

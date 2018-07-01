@@ -35,17 +35,8 @@ type DeviceReceiver interface {
 	GetAndSetSandboxBlockIndex() (int, error)
 	DecrementSandboxBlockIndex() error
 
-	// this is for vhost_user devices
-	AddVhostUserDevice(VhostUserDevice, config.DeviceType) error
-}
-
-// VhostUserDevice represents a vhost-user device. Shared
-// attributes of a vhost-user device can be retrieved using
-// the Attrs() method. Unique data can be obtained by casting
-// the object to the proper type.
-type VhostUserDevice interface {
-	Attrs() *config.VhostUserDeviceAttrs
-	Type() config.DeviceType
+	// this is for appending device to hypervisor boot params
+	AppendDevice(Device) error
 }
 
 // Device is the virtcontainers device interface.

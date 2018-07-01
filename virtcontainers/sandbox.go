@@ -1503,12 +1503,13 @@ func (s *Sandbox) DecrementSandboxBlockIndex() error {
 	return s.decrementSandboxBlockIndex()
 }
 
-// AddVhostUserDevice adds a vhost user device to sandbox
+// AppendDevice can only handle vhost user device currently, it adds a
+// vhost user device to sandbox
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
-func (s *Sandbox) AddVhostUserDevice(devInfo api.VhostUserDevice, devType config.DeviceType) error {
-	switch devType {
+func (s *Sandbox) AppendDevice(device api.Device) error {
+	switch device.DeviceType() {
 	case config.VhostUserSCSI, config.VhostUserNet, config.VhostUserBlk:
-		return s.hypervisor.addDevice(devInfo, vhostuserDev)
+		return s.hypervisor.addDevice(device.GetDeviceDrive().(*config.VhostUserDeviceAttrs), vhostuserDev)
 	}
 	return fmt.Errorf("unsupported device type")
 }
