@@ -19,7 +19,6 @@ import (
 
 	proxyClient "github.com/clearcontainers/proxy/client"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -235,20 +234,19 @@ func fsMapFromMounts(mounts []Mount) []*hyperstart.FsmapDescriptor {
 func fsMapFromDevices(c *Container) ([]*hyperstart.FsmapDescriptor, error) {
 	var fsmap []*hyperstart.FsmapDescriptor
 	for _, dev := range c.devices {
-		device := c.sandbox.devManager.GetDeviceByID(dev.DeviceID())
+		device := c.sandbox.devManager.GetDeviceByID(dev.ID)
 		if device == nil {
 			return nil, fmt.Errorf("can't find device: %#v", dev)
 		}
-		blockDev := device.(*drivers.BlockDevice)
 
-		d, ok := blockDev.GetDeviceDrive().(*config.BlockDrive)
+		d, ok := device.GetDeviceDrive().(*config.BlockDrive)
 		if !ok || d == nil {
 			return nil, fmt.Errorf("can't retrieve block device information")
 		}
 
 		fsmapDesc := &hyperstart.FsmapDescriptor{
 			Source:       d.VirtPath,
-			Path:         blockDev.DeviceInfo.ContainerPath,
+			Path:         dev.ContainerPath,
 			AbsolutePath: true,
 			DockerVolume: false,
 			SCSIAddr:     d.SCSIAddr,
@@ -464,8 +462,8 @@ func (h *hyper) stopSandbox(sandbox *Sandbox) error {
 // container.
 func (h *hyper) handleBlockVolumes(c *Container) {
 	for _, m := range c.mounts {
-		if m.BlockDevice != nil {
-			c.devices = append(c.devices, m.BlockDevice)
+		if len(m.BlockDeviceID) > 0 {
+			c.devices = append(c.devices, ContainerDevice{ID: m.BlockDeviceID})
 		}
 	}
 }
