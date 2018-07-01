@@ -713,6 +713,12 @@ func createSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, erro
 		s.networkNS = networkNS
 	}
 
+	devices, err := s.storage.fetchSandboxDevices(s.id)
+	if err != nil {
+		s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("fetch sandbox device failed")
+	}
+	s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
+
 	// We first try to fetch the sandbox state from storage.
 	// If it exists, this means this is a re-creation, i.e.
 	// we don't need to talk to the guest's agent, but only
@@ -758,7 +764,6 @@ func newSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) 
 		storage:         &filesystem{},
 		network:         network,
 		config:          &sandboxConfig,
-		devManager:      deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, nil),
 		volumes:         sandboxConfig.Volumes,
 		containers:      map[string]*Container{},
 		runPath:         filepath.Join(runStoragePath, sandboxConfig.ID),
@@ -806,6 +811,10 @@ func newSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) 
 	}
 
 	return s, nil
+}
+
+func (s *Sandbox) storeSandboxDevices() error {
+	return s.storage.storeSandboxDevices(s.id, s.devManager.GetAllDevices())
 }
 
 // storeSandbox stores a sandbox config.
