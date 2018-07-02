@@ -473,3 +473,18 @@ func TestVhostUserSocketPath(t *testing.T) {
 	}
 
 }
+
+func TestVhostUserEndpointAttach(t *testing.T) {
+	v := &VhostUserEndpoint{
+		SocketPath:   "/tmp/sock",
+		HardAddr:     "mac-addr",
+		EndpointType: VhostUserEndpointType,
+	}
+
+	h := &mockHypervisor{}
+
+	err := v.Attach(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
