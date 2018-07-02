@@ -19,8 +19,8 @@ source ../scripts/pkglib.sh
 SCRIPT_NAME=$0
 SCRIPT_DIR=$(dirname $0)
 PKG_NAME="kata-ksm-throttler"
-VERSION=$ksm_throttler_version
-HASH=$ksm_throttler_hash
+VERSION="${kata_ksm_throttler_version}"
+HASH="${kata_ksm_throttler_hash}"
 
 GENERATED_FILES=(_service kata-ksm-throttler.spec kata-ksm-throttler.dsc debian.control debian.rules)
 STATIC_FILES=(debian.compat)
@@ -34,7 +34,7 @@ RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 ((RELEASE++))
 [ -n "$APIURL" ] && APIURL="-A ${APIURL}"
 
-set_versions "$ksm_throttler_hash"
+set_versions "$kata_ksm_throttler_hash"
 
 replace_list=(
 "GO_CHECKSUM=$go_checksum"
