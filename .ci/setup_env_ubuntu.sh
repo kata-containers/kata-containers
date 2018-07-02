@@ -70,3 +70,6 @@ fi
 
 echo -e "Install cri-containerd dependencies"
 sudo -E apt install -y libseccomp-dev libapparmor-dev btrfs-tools  make gcc pkg-config
+
+echo "Install crudini"
+sudo -E apt install -y crudini

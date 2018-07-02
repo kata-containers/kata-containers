@@ -72,3 +72,6 @@ fi
 
 echo "Install cri-containerd dependencies"
 chronic sudo -E yum install -y libseccomp-devel btrfs-progs-devel libseccomp-static
+
+echo "Install crudini"
+chronic sudo -E yum install -y crudini
