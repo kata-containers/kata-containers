@@ -84,7 +84,6 @@ func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) 
 }
 
 func proxyConn(conn1 net.Conn, conn2 net.Conn) {
-	wg := &sync.WaitGroup{}
 	once := &sync.Once{}
 	cleanup := func() {
 		conn1.Close()
@@ -93,18 +92,14 @@ func proxyConn(conn1 net.Conn, conn2 net.Conn) {
 	copyStream := func(dst io.Writer, src io.Reader) {
 		_, err := io.Copy(dst, src)
 		if err != nil {
-			once.Do(cleanup)
+			logger().Debug("Copy stream error: %v", err)
 		}
-		wg.Done()
+
+		once.Do(cleanup)
 	}
 
-	wg.Add(2)
 	go copyStream(conn1, conn2)
 	go copyStream(conn2, conn1)
-	go func() {
-		wg.Wait()
-		once.Do(cleanup)
-	}()
 }
 
 func unixAddr(uri string) (string, error) {
