@@ -6,6 +6,9 @@
     * [Check hardware requirements](#check-hardware-requirements)
     * [Configure to use initrd or rootfs image](#configure-to-use-initrd-or-rootfs-image)
     * [Enable full debug](#enable-full-debug)
+        * [journald rate limiting](#journald-rate-limiting)
+            * [systemd-journald suppressing messages](#systemd-journald-suppressing-messages)
+            * [Disabling systemd-journald rate limiting](#disabling-systemd-journald-rate-limiting)
 * [Build and install Kata proxy](#build-and-install-kata-proxy)
 * [Build and install Kata shim](#build-and-install-kata-shim)
 * [Create and install rootfs and initrd image](#create-and-install-rootfs-and-initrd-image)
@@ -129,6 +132,53 @@ Enable full debug as follows:
 ```
 $ sudo sed -i -e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' /usr/share/defaults/kata-containers/configuration.toml
 $ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' /usr/share/defaults/kata-containers/configuration.toml
+```
+
+### journald rate limiting
+
+Enabling [full debug](#enable-full-debug) results in the Kata components generating
+large amounts of logging, which by default is stored in the system log. Depending on
+your system configuration, it is possible that some events might be discarded by the
+system logging daemon. The following shows how to determine this for `systemd-journald`,
+and offers possible workarounds and fixes.
+
+> **Note** The method of implementation can vary between Operating System installations.
+> Amend these instructions as necessary to your system implementation,
+> and consult with your system administrator for the appropriate configuration.
+
+#### `systemd-journald` suppressing messages
+
+`systemd-journald` can be configured to rate limit the number of journal entries
+it stores. When messages are suppressed, it is noted in the logs. This can be checked
+for by looking for those notifications, such as:
+
+```sh
+$ sudo journalctl --since today | fgrep Suppressed
+Jun 29 14:51:17 mymachine systemd-journald[346]: Suppressed 4150 messages from /system.slice/docker.service
+```
+
+This message indicates that a number of log messages from the `docker.service` slice were
+suppressed. In such a case, you can expect to have incomplete logging information
+stored from the Kata Containers components.
+
+#### Disabling `systemd-journald` rate limiting
+
+In order to capture complete logs from the Kata Containers components, you
+need to reduce or disable the `systemd-journald` rate limit. Configure
+this at the global `systemd-journald` level, and it will apply to all system slices.
+
+To disable `systemd-journald` rate limiting at the global level, edit the file
+`/etc/systemd/journald.conf`, and add/uncomment the following lines:
+
+```
+RateLimitInterval=0s
+RateLimitBurst=0
+```
+
+Restart `systemd-journald` for the changes to take effect:
+
+```sh
+$ sudo systemctl restart systemd-journald
 ```
 
 # Build and install Kata proxy
