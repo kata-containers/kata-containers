@@ -86,25 +86,30 @@ tag_repos() {
 	info "Creating tag ${kata_version} in all repos"
 	for repo in "${repos[@]}"; do
 		git clone --quiet "https://github.com/${OWNER}/${repo}.git"
-		pushd "${repo}"
+		pushd "${repo}" >> /dev/null
 		git remote set-url --push origin "git@github.com:${OWNER}/${repo}.git"
 		git fetch origin --tags
-		if git rev-parse -q --verify "refs/tags/${kata_version}"; then
+		tag="$kata_version"
+		[[ "packaging" == "${repo}" ]] && tag="${tag}-kernel-config"
+		if git rev-parse -q --verify "refs/tags/${tag}"; then
 			info "$repo already has tag "
 		else
-			info "Creating tag ${kata_version} for ${repo}"
-			git tag -a "${kata_version}" -s -m "${PROJECT} release ${kata_version}"
+			info "Creating tag ${tag} for ${repo}"
+			git tag -a "${tag}" -s -m "${PROJECT} release ${tag}"
 		fi
-		popd
+		popd >> /dev/null
 	done
 }
 
 push_tags() {
 	info "Pushing tags to repos"
 	for repo in "${repos[@]}"; do
-		pushd "${repo}"
-		git push origin "${kata_version}"
-		popd
+		pushd "${repo}" >> /dev/null
+		tag="$kata_version"
+		[[ "packaging" == "${repo}" ]] && tag="${tag}-kernel-config"
+		info "Creating tag ${tag} for ${repo}"
+		git push origin "${tag}"
+		popd >> /dev/null
 	done
 }
 
@@ -120,7 +125,7 @@ subcmd=${1:-""}
 
 [ -z "${subcmd}" ] && usage && exit 0
 
-pushd "${tmp_dir}"
+pushd "${tmp_dir}" >> /dev/null
 
 case "${subcmd}" in
 status)
@@ -131,6 +136,7 @@ tag)
 	# Tag versions that does not have VERSIONS file
 	# But we want to know the version compatible with a kata release.
 	repos+=("tests")
+	repos+=("packaging")
 	tag_repos
 	if [ "${PUSH}" == "true" ]; then
 		push_tags
@@ -144,4 +150,4 @@ tag)
 
 esac
 
-popd
+popd >> /dev/null
