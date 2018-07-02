@@ -1,0 +1,99 @@
+# Kata Containers snap image
+
+* [Kata Containers snap image](#kata-containers-snap-image)
+* [Initial setup](#initial-setup)
+* [Build snap image](#build-snap-image)
+* [Install snap (developer)](#install-snap-developer)
+* [Integration with docker](#integration-with-docker)
+* [Limitations](#limitations)
+
+This directory contains the resources needed to build the Kata Containers
+[snap][1] image.
+
+## Initial setup
+
+*Ubuntu 18.04*
+
+```sh
+$ sudo apt-get install -y snapd snapcraft
+```
+
+## Build snap image
+
+Run next command at the root directory of the packaging repository.
+
+```sh
+$ make snap
+```
+
+## Install snap (developer)
+
+To install the resulting snap image, snap must be put in [classic mode][3] and the
+security confinement must be disabled (*--classic*). Also since the resulting snap
+has not been signed the verification of signature must be omitted (*--dangerous*).
+
+```sh
+$ sudo snap install --classic --dangerous kata-containers_[VERSION]_[ARCH].snap
+```
+
+Replace `VERSION` with the current version of Kata Containers and `ARCH` with
+the system architecture.
+
+## Configuring Kata Containers ##
+
+By default Kata Containers snap image is mounted at `/snap/kata-containers` as a
+read-only file system, therefore default configuration file can not be edited.
+Fortunately [kata-runtime][4] supports loading a configuration file from another
+path than the default.
+
+```sh
+$ sudo mkdir -p /etc/kata-containers
+$ sudo cp /snap/kata-containers/current/usr/share/defaults/kata-containers/configuration.toml /etc/kata-containers/
+$ $EDITOR /etc/kata-containers/configuration.toml
+```
+
+## Integration with docker ##
+
+the path to the runtime provided by the Kata Containers snap image is
+`/snap/kata-containers/current/usr/bin/kata-runtime`, this runtime must be added to
+[dockerd][5] via `systemd` or `dockerd` configuration file.
+
+`/etc/systemd/system/docker.service.d/runtime.conf`
+
+```ini
+[Service]
+ExecStart=/usr/bin/dockerd -D --add-runtime kata-runtime=/snap/kata-containers/current/usr/bin/kata-runtime --default-runtime=kata-runtime
+```
+
+or
+
+`/etc/docker/daemon.json`
+
+```json
+{
+	"default-runtime": "kata-runtime",
+	"runtimes": {
+		"kata-runtime": {
+			"path": "/snap/kata-containers/current/usr/bin/kata-runtime"
+		}
+	}
+}
+```
+
+after having added the new runtime, the service must be reloaded and restarted
+
+```
+$ sudo systemctl daemon-reload
+$ sudo systemctl restart docker
+```
+
+## Limitations
+
+The [miniOS image][2] is not included in the snap image as it is not possible for
+QEMU to open a guest RAM backing store on a read-only filesystem.
+
+[1]: https://docs.snapcraft.io/snaps/intro
+[2]: https://github.com/kata-containers/documentation/blob/master/architecture.md#root-filesystem-image
+[3]: https://docs.snapcraft.io/reference/confinement#classic
+[4]: https://github.com/kata-containers/runtime
+[5]: https://docs.docker.com/engine/reference/commandline/dockerd

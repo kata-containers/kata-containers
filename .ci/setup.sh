@@ -9,4 +9,10 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+source /etc/os-release
+
 echo  "Setup script for packaging"
+
+if [ "$ID" == ubuntu ];then
+	sudo apt-get install -y snapd snapcraft
+fi
