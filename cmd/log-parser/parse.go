@@ -261,11 +261,11 @@ func createLogEntry(filename string, line uint64, pairs kvPairs) (LogEntry, erro
 	}
 
 	if line == 0 {
-		return LogEntry{}, fmt.Errorf("need line number")
+		return LogEntry{}, fmt.Errorf("need line number for file %v", filename)
 	}
 
 	if pairs == nil || len(pairs) == 0 {
-		return LogEntry{}, fmt.Errorf("need key/value pairs")
+		return LogEntry{}, fmt.Errorf("need key/value pairs for line %v:%d", filename, line)
 	}
 
 	l := LogEntry{}
@@ -290,7 +290,7 @@ func createLogEntry(filename string, line uint64, pairs kvPairs) (LogEntry, erro
 				return LogEntry{}, err
 			}
 
-			logger.Warnf("failed to unpack agent log entry: %v", l)
+			logger.Warnf("failed to unpack agent log entry %v: %v", l, err)
 		} else {
 			// the agent log entry totally replaces the proxy log entry
 			// that encapsulated it.
