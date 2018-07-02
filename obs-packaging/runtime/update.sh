@@ -55,7 +55,7 @@ KERNEL_REQUIRED_VERSION=$(pkg_version "${kernel_version}.${KERNEL_CONFIG_VERSION
 info "kata-linux-container ${KERNEL_REQUIRED_VERSION}"
 
 KSM_THROTTLER_RELEASE=$(get_obs_pkg_release "home:${OBS_PROJECT}:${OBS_SUBPROJECT}/ksm-throttler")
-KSM_THROTTLER_REQUIRED_VERSION=$(pkg_version "${ksm_throttler_version}" "${KSM_THROTTLER_RELEASE}" "${ksm_throttler_hash}")
+KSM_THROTTLER_REQUIRED_VERSION=$(pkg_version "${kata_ksm_throttler_version}" "${KSM_THROTTLER_RELEASE}" "${kata_ksm_throttler_hash}")
 info "ksm-throttler ${KSM_THROTTLER_REQUIRED_VERSION}"
 
 KATA_CONTAINERS_IMAGE_RELEASE=$(get_obs_pkg_release "home:${OBS_PROJECT}:${OBS_SUBPROJECT}/kata-containers-image")
