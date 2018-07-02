@@ -30,12 +30,14 @@ setup() {
 	sudo -E kubectl get svc,pod
 	# Wait for nginx service to come up
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
+	sudo -E kubectl describe service "$service_name"
 	busybox_pod="test-nginx"
 	sudo -E kubectl run $busybox_pod --restart=Never --image="$busybox_image" \
 		-- wget --timeout=5 "$service_name"
 	cmd="sudo -E kubectl get pods -a | grep $busybox_pod | grep Completed"
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 	sudo -E kubectl logs "$busybox_pod" | grep "index.html"
+	sudo -E kubectl describe pod "$busybox_pod"
 }
 
 teardown() {

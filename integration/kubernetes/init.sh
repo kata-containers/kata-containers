@@ -17,6 +17,13 @@ source "${SCRIPT_PATH}/../../.ci/lib.sh"
 # FIXME: Issue: https://github.com/clearcontainers/tests/issues/934
 sudo iptables -P FORWARD ACCEPT
 
+# Remove existing CNI configurations:
+cni_interface="cni0"
+sudo rm -rf /var/lib/cni/networks/*
+sudo rm -rf /etc/cni/net.d/*
+sudo ip link set dev "$cni_interface" down
+sudo ip link del "$cni_interface"
+
 echo "Start crio service"
 sudo systemctl start crio
 
