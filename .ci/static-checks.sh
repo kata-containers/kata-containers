@@ -457,7 +457,6 @@ check_files()
 	for file in $files
 	do
 		local match
-		#match=$(egrep -l "\<FIXME\>|\<TODO\>" "$file" || true)
 
 		# Look for files containing the specified comment tags but
 		# which do not include a github URL.
