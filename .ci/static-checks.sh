@@ -20,19 +20,60 @@ script_name=${0##*/}
 repo=""
 master_branch="false"
 
+typeset -A long_options
+
+long_options=(
+	[commits]="Check commits"
+	[docs]="Check document files"
+	[files]="Check files"
+	[golang]="Check '.go' files"
+	[help]="Display usage statement"
+	[licenses]="Check licenses"
+	[master]="Force checking of master branch"
+	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
+	[versions]="Check versions files"
+)
+
 usage()
 {
 	cat <<EOT
 
 Usage: $script_name help
-       $script_name repo-name [true]
+       $script_name [options] repo-name [true]
+
+Options:
+
+EOT
+
+	local option
+	local description
+
+	local long_option_names="${!long_options[@]}"
+
+	# Sort space-separated list by converting to newline separated list
+	# and back again.
+	long_option_names=$(echo "$long_option_names"|tr ' ' '\n'|sort|tr '\n' ' ')
+
+	# Display long options
+	for option in ${long_option_names}
+	do
+		description=${long_options[$option]}
+
+		# Remove any trailing colon which is for getopt(1) alone.
+		option=$(echo "$option"|sed 's/:$//g')
+
+		printf "    --%-10.10s # %s\n" "$option" "$description"
+	done
+
+	cat <<EOT
 
 Parameters:
 
   help      : Show usage.
-  repo-name : GitHub URL of repo to check in form "github.com/user/repo".
+  repo-name : GitHub URL of repo to check in form "github.com/user/repo"
+              (equivalent to "--repo $URL").
   true      : Specify as "true" if testing the 'master' branch, else assume a
-              PR branch.
+              PR branch (equivalent to "--master").
 
 Example:
 
@@ -508,9 +549,48 @@ check_files()
 
 main()
 {
+	local long_option_names="${!long_options[@]}"
+
+	local args=$(getopt \
+		-n "$script_name" \
+		-a \
+		--options="h" \
+		--longoptions="$long_option_names" \
+		-- "$@")
+
+	eval set -- "$args"
+	[ $? -ne 0 ] && { usage >&2; exit 1; }
+
+	local func=
+
+	while [ $# -gt 1 ]
+	do
+		case "$1" in
+			--commits) func=check_commits ;;
+			--docs) func=check_docs ;;
+			--files) func=check_files ;;
+			--golang) func=check_go ;;
+			-h|--help) usage; exit 0 ;;
+			--licenses) func=check_license_headers ;;
+			--master) master_branch="true" ;;
+			--repo) repo="$2"; shift ;;
+			--versions) func=check_versions ;;
+			--) shift; break ;;
+		esac
+
+		shift
+	done
+
+	# Consume getopt cruft
+	[ "$1" = "--" ] && shift
+
 	[ "$1" = "help" ] && usage && exit 0
 
-	repo="$1"
+	# Set if not already set by options
+	[ -z "$repo" ] && repo="$1"
+	[ "$master_branch" = "false" ] && master_branch="$2"
+
+
 	if [ -z "$repo" ]
 	then
 		if [ -n "$KATA_DEV_MODE" ]
@@ -527,7 +607,8 @@ main()
 		fi
 	fi
 
-	master_branch="$2"
+	# Run user-specified check and quit
+	[ -n "$func" ] && info "running $func function" && eval "$func" && exit 0
 
 	# Run all checks
 	check_commits
