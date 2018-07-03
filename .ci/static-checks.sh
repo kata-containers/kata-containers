@@ -523,7 +523,7 @@ main()
 
 			info "Auto-detected repo as $repo"
 		else
-			usage && exit 1
+			echo >&2 "ERROR: need repo" && usage && exit 1
 		fi
 	fi
 
