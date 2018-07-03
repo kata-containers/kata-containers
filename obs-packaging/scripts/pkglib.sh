@@ -185,9 +185,10 @@ function checkout_repo()
         OBS_WORKDIR=$(mktemp -d -u -t ${temp}.XXXXXXXXXXX) || exit 1
         osc $APIURL co $REPO -o $OBS_WORKDIR
     fi
+    find ${OBS_WORKDIR} -maxdepth 1 -mindepth 1 ! -name '.osc' -prune  -exec echo remove {} \; -exec  rm -rf {} \;
 
-    mv ${GENERATED_FILES[@]} $OBS_WORKDIR
-    cp ${STATIC_FILES[@]} $OBS_WORKDIR
+    mv ${GENERATED_FILES[@]} "$OBS_WORKDIR"
+    cp ${STATIC_FILES[@]} "$OBS_WORKDIR"
 }
 
 function obs_push()
