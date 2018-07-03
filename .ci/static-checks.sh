@@ -520,6 +520,8 @@ main()
 			# (backwards compatability).
 			repo=$(git config --get remote.origin.url |\
 				sed 's!https://!!g' || true)
+
+			info "Auto-detected repo as $repo"
 		else
 			usage && exit 1
 		fi
