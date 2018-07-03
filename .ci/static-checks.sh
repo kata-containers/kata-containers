@@ -440,6 +440,9 @@ check_files()
 	local file
 	local files
 
+	info "Skipping check_files: see https://github.com/kata-containers/tests/issues/469"
+	return
+
 	info "Checking files"
 
 	if [ "$master_branch" = "true" ]
@@ -524,11 +527,13 @@ main()
 
 	master_branch="$2"
 
+	# Run all checks
 	check_commits
 	check_license_headers
 	check_go
 	check_versions
 	check_docs
+	check_files
 }
 
 main "$@"
