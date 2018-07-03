@@ -337,7 +337,7 @@ function find_patches() {
 	export RPM_APPLY_PATCHES="#Apply patches"$'\n'
 	[ ! -d patches ] && info "No patches found" && return
 	local patches
-	patches=$(find patches -type f -name '*.patch' -exec basename {} \;)
+	patches=$(find patches/ -type f -name '*.patch' -exec basename {} \;)
 	n="1"
 	rm -f debian.series
 	for p in ${patches} ; do

@@ -57,5 +57,6 @@ verify
 echo "Verify succeed."
 get_git_info
 changelog_update "${VERSION}-${KATA_CONFIG_VERSION}"
+ln -sfT "${SCRIPT_DIR}/../../kernel/patches" "${SCRIPT_DIR}/patches"
 generate_files "$SCRIPT_DIR" "${replace_list[@]}"
 build_pkg "${PROJECT_REPO}"
