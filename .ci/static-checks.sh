@@ -323,10 +323,12 @@ check_docs()
 
 	if [ "$master_branch" = "true" ]
 	then
-		# Check all documents
+		info "Checking all documents in master branch"
+
 		docs=$(find . -name "*.md" | grep -v "vendor/" || true)
 	else
-		# Check changed documents only
+		info "Checking local branch for changed documents only"
+
 		docs_status=$(get_pr_changed_file_details || true)
 		docs_status=$(echo "$docs_status" | grep "\.md$" || true)
 
@@ -442,8 +444,12 @@ check_files()
 
 	if [ "$master_branch" = "true" ]
 	then
+		info "Checking all files in master branch"
+
 		files=$(find . -type f | egrep -v "(.git|vendor)/" || true)
 	else
+		info "Checking local branch for changed files only"
+
 		files=$(get_pr_changed_file_details || true)
 
 		# Strip off status
