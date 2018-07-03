@@ -77,6 +77,10 @@ Parameters:
   true      : Specify as "true" if testing the 'master' branch, else assume a
               PR branch (equivalent to "--master").
 
+Notes:
+
+- If no options are specified, all non-skipped tests will be run.
+
 Examples:
 
 - Run all tests on master branch of runtime repository:
