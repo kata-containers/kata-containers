@@ -19,6 +19,7 @@ script_name=${0##*/}
 
 repo=""
 master_branch="false"
+force="false"
 
 typeset -A long_options
 
@@ -26,6 +27,7 @@ long_options=(
 	[commits]="Check commits"
 	[docs]="Check document files"
 	[files]="Check files"
+	[force]="Force a skipped test to run"
 	[golang]="Check '.go' files"
 	[help]="Display usage statement"
 	[licenses]="Check licenses"
@@ -492,8 +494,13 @@ check_files()
 	local file
 	local files
 
-	info "Skipping check_files: see https://github.com/kata-containers/tests/issues/469"
-	return
+	if [ "$force" = "false" ]
+	then
+		info "Skipping check_files: see https://github.com/kata-containers/tests/issues/469"
+		return
+	else
+		info "Force override of check_files skip"
+	fi
 
 	info "Checking files"
 
@@ -580,6 +587,7 @@ main()
 			--commits) func=check_commits ;;
 			--docs) func=check_docs ;;
 			--files) func=check_files ;;
+			--force) force="true" ;;
 			--golang) func=check_go ;;
 			-h|--help) usage; exit 0 ;;
 			--licenses) func=check_license_headers ;;
