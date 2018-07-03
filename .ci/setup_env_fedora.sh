@@ -58,3 +58,6 @@ fi
 
 echo "Install cri-containerd dependencies"
 chronic sudo -E dnf -y install libseccomp-devel btrfs-progs-devel libseccomp-static
+
+echo "Install crudini"
+chronic sudo -E dnf -y install crudini

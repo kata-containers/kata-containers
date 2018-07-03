@@ -67,6 +67,11 @@ bash -f "${cidir}/install_kubernetes.sh"
 echo "Install Openshift"
 bash -f "${cidir}/install_openshift.sh"
 
+echo "Disable systemd-journald rate limit"
+sudo crudini --set /etc/systemd/journald.conf Journal RateLimitInterval 0s
+sudo crudini --set /etc/systemd/journald.conf Journal RateLimitBurst 0
+sudo systemctl restart systemd-journald
+
 echo "Drop caches"
 sync
 sudo -E PATH=$PATH bash -c "echo 3 > /proc/sys/vm/drop_caches"
