@@ -75,9 +75,20 @@ Parameters:
   true      : Specify as "true" if testing the 'master' branch, else assume a
               PR branch (equivalent to "--master").
 
-Example:
+Examples:
 
-$ $script_name github.com/kata-containers/runtime true
+- Run all tests on master branch of runtime repository:
+
+  $ $script_name github.com/kata-containers/runtime true
+
+- Auto-detect repository and run golang tests for current repository:
+
+  $ KATA_DEV_MODE=true $script_name --golang
+
+- Run all tests on the agent repository, forcing the tests to consider all
+  files, not just those changed by a PR branch:
+
+  $ $script_name github.com/kata-containers/agent --master
 
 
 EOT
