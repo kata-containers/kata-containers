@@ -76,18 +76,34 @@ assets:
       Root filesystem disk image used to boot the guest virtual
       machine.
     url: "https://github.com/kata-containers/osbuilder"
-    release: "20640"
+    architecture:
+      aarch64:
+        name: "fedora"
+        version: "latest"
+      ppc64le:
+        name: "centos"
+        version: "latest"
+      x86_64:
+        name: &default-image-name "clearlinux"
+        version: "20640"
     meta:
-      image-type: "clearlinux"
+      image-type: *default-image-name
 
   initrd:
     description: |
       Root filesystem initrd used to boot the guest virtual
       machine.
     url: "https://github.com/kata-containers/osbuilder"
-    meta:
-      base-os: "alpine"
-      os-version: "3.7"
+    architecture:
+      aarch64:
+        name: &default-initrd-name "alpine"
+        version: &default-initrd-version "3.7"
+      ppc64le:
+        name: *default-initrd-name
+        version: *default-initrd-version
+      x86_64:
+        name: *default-initrd-name
+        version: *default-initrd-version
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
