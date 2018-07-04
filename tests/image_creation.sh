@@ -21,6 +21,7 @@ readonly tests_repo="github.com/kata-containers/tests"
 readonly tests_repo_dir="${script_dir}/../../tests"
 readonly mgr="${tests_repo_dir}/cmd/kata-manager/kata-manager.sh"
 readonly RUNTIME=${RUNTIME:-kata-runtime}
+readonly MACHINE_TYPE=`uname -m`
 
 # "docker build" does not work with a VM-based runtime
 readonly docker_build_runtime="runc"
@@ -349,15 +350,16 @@ test_alpine()
 main()
 {
 	setup
-
 	test_fedora
-	test_clearlinux
 	test_centos
 	test_alpine
 
-	# Run last as EulerOS servers can be slow and we don't want to fail the
-	# previous tests.
-	test_euleros
+	if [ $MACHINE_TYPE != "ppc64le" ]; then
+	   test_clearlinux
+	   # Run last as EulerOS servers can be slow and we don't want to fail the
+	   # previous tests.
+	   test_euleros
+	fi
 }
 
 main "$@"
