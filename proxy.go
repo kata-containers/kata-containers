@@ -40,6 +40,11 @@ var version = "unknown"
 // if true, coredump when an internal error occurs or a fatal signal is received
 var crashOnError = false
 
+// Name of sandbox this proxy instance is communicating with. This is not
+// required by the proxy itself - it is added to all log entries to make log
+// analysis easier.
+var sandboxID string
+
 var proxyLog = logrus.New()
 
 func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) (net.Listener, error) {
@@ -118,11 +123,17 @@ func unixAddr(uri string) (string, error) {
 }
 
 func logger() *logrus.Entry {
-	return proxyLog.WithFields(logrus.Fields{
+	fields := logrus.Fields{
 		"name":   proxyName,
 		"pid":    os.Getpid(),
 		"source": "proxy",
-	})
+	}
+
+	if sandboxID != "" {
+		fields["sandbox"] = sandboxID
+	}
+
+	return proxyLog.WithFields(fields)
 }
 
 func setupLogger(logLevel string, announceFields logrus.Fields) error {
@@ -292,6 +303,7 @@ func realMain() {
 	flag.StringVar(&channel, "mux-socket", "", "unix socket to multiplex on")
 	flag.StringVar(&proxyAddr, "listen-socket", "", "unix socket to listen on")
 	flag.StringVar(&agentLogsSocket, "agent-logs-socket", "", "socket to listen on to retrieve agent logs")
+	flag.StringVar(&sandboxID, "sandbox", "", "sandbox ID the proxy is connecting to (used for logging only)")
 
 	flag.StringVar(&logLevel, "log", "warn",
 		"log messages above specified level: debug, warn, error, fatal or panic")

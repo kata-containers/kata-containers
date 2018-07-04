@@ -8,6 +8,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
 	"fmt"
 	"io"
@@ -15,6 +16,8 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"regexp"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -253,4 +256,71 @@ func TestHandleSigtermSignalNilConnectionsSuccess(t *testing.T) {
 	sigCh <- termSignal
 	err := handleExitSignal(sigCh, nil, nil)
 	assert.Nil(t, err, "Should not fail: %v", err)
+}
+
+func TestLogger(t *testing.T) {
+	assert := assert.New(t)
+
+	buf := &bytes.Buffer{}
+
+	log := logger()
+
+	savedLogOut := log.Logger.Out
+
+	defer func() {
+		log.Logger.Out = savedLogOut
+	}()
+
+	// save all output to a buffer
+	log.Logger.Out = buf
+
+	msg := "oh dear!"
+	log.Error(msg)
+
+	line := buf.String()
+
+	assert.True(strings.Contains(line, fmt.Sprintf(`msg=%q`, msg)))
+	assert.True(strings.Contains(line, "name="+proxyName))
+	assert.True(strings.Contains(line, "source=proxy"))
+
+	pidPattern := regexp.MustCompile(`pid=\d+`)
+	matches := pidPattern.FindAllString(line, -1)
+	assert.NotNil(matches)
+
+	assert.False(strings.Contains(line, "sandbox="))
+}
+
+func TestLoggerWithSandbox(t *testing.T) {
+	assert := assert.New(t)
+
+	buf := &bytes.Buffer{}
+
+	savedSandbox := sandboxID
+	sandboxID = "a-sandbox-id"
+
+	log := logger()
+	savedLogOut := log.Logger.Out
+
+	defer func() {
+		log.Logger.Out = savedLogOut
+		sandboxID = savedSandbox
+	}()
+
+	// save all output to a buffer
+	log.Logger.Out = buf
+
+	msg := "I've got a bad feeling about this!"
+	log.Error(msg)
+
+	line := buf.String()
+
+	assert.True(strings.Contains(line, fmt.Sprintf(`msg=%q`, msg)))
+	assert.True(strings.Contains(line, "name="+proxyName))
+	assert.True(strings.Contains(line, "source=proxy"))
+
+	pidPattern := regexp.MustCompile(`pid=\d+`)
+	matches := pidPattern.FindAllString(line, -1)
+	assert.NotNil(matches)
+
+	assert.True(strings.Contains(line, "sandbox="+sandboxID))
 }
