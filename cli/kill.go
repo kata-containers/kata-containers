@@ -104,6 +104,8 @@ func kill(containerID, signal string, all bool) error {
 		"sandbox":   sandboxID,
 	})
 
+	setExternalLoggers(kataLog)
+
 	signum, err := processSignal(signal)
 	if err != nil {
 		return err

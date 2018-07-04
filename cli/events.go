@@ -156,6 +156,8 @@ information is displayed once every 5 seconds.`,
 			"sandbox":   sandboxID,
 		})
 
+		setExternalLoggers(kataLog)
+
 		if status.State.State == vc.StateStopped {
 			return fmt.Errorf("container with id %s is not running", status.ID)
 		}

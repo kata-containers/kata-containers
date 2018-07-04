@@ -61,6 +61,8 @@ func ps(containerID, format string, args []string) error {
 		"sandbox":   sandboxID,
 	})
 
+	setExternalLoggers(kataLog)
+
 	// container MUST be running
 	if status.State.State != vc.StateRunning {
 		return fmt.Errorf("Container %s is not running", containerID)
