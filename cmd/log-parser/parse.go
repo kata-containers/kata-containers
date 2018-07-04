@@ -51,6 +51,8 @@ const (
 		`\d{1,9}` +
 		// timezone
 		timezonePattern
+
+	agentContainerIDPattern = `container_id:"([^"]*)"`
 )
 
 type kvPair struct {
@@ -60,10 +62,14 @@ type kvPair struct {
 
 type kvPairs []kvPair
 
-var dateFormatRE *regexp.Regexp
+var (
+	dateFormatRE       *regexp.Regexp
+	agentContainerIDRE *regexp.Regexp
+)
 
 func init() {
 	dateFormatRE = regexp.MustCompile(dateFormatPattern)
+	agentContainerIDRE = regexp.MustCompile(agentContainerIDPattern)
 }
 
 // parseLogFmtData reads logfmt records using the provided reader and returns
@@ -87,6 +93,30 @@ func parseLogFmtData(reader io.Reader, file string) (LogEntries, error) {
 		for d.ScanKeyval() {
 			key := string(d.Key())
 			value := string(d.Value())
+
+			// If agent debug is enabled, every gRPC request ("req")
+			// is logged. Since most such requests contain the
+			// container ID as a `container_id` field, extract and
+			// save it when present.
+			//
+			// See: https://github.com/kata-containers/agent/blob/master/protocols/grpc/agent.proto
+			//
+			// Note that we save the container ID in addition to
+			// the original value.
+			if key == "req" {
+				matches := agentContainerIDRE.FindSubmatch([]byte(value))
+				if matches != nil {
+					containerID := string(matches[1])
+
+					pair := kvPair{
+						key:   "container",
+						value: containerID,
+					}
+
+					// save key/value pair
+					keyvals = append(keyvals, pair)
+				}
+			}
 
 			pair := kvPair{
 				key:   key,
@@ -214,6 +244,9 @@ func handleLogEntry(l *LogEntry, key, value string) (err error) {
 	}
 
 	switch key {
+	case "container":
+		l.Container = value
+
 	case "level":
 		l.Level = value
 
@@ -230,6 +263,9 @@ func handleLogEntry(l *LogEntry, key, value string) (err error) {
 		}
 
 		l.Pid = pid
+
+	case "sandbox":
+		l.Sandbox = value
 
 	case "source":
 		l.Source = value
@@ -261,11 +297,11 @@ func createLogEntry(filename string, line uint64, pairs kvPairs) (LogEntry, erro
 	}
 
 	if line == 0 {
-		return LogEntry{}, fmt.Errorf("need line number")
+		return LogEntry{}, fmt.Errorf("need line number for file %v", filename)
 	}
 
 	if pairs == nil || len(pairs) == 0 {
-		return LogEntry{}, fmt.Errorf("need key/value pairs")
+		return LogEntry{}, fmt.Errorf("need key/value pairs for line %v:%d", filename, line)
 	}
 
 	l := LogEntry{}
@@ -290,7 +326,7 @@ func createLogEntry(filename string, line uint64, pairs kvPairs) (LogEntry, erro
 				return LogEntry{}, err
 			}
 
-			logger.Warnf("failed to unpack agent log entry: %v", l)
+			logger.Warnf("failed to unpack agent log entry %v: %v", l, err)
 		} else {
 			// the agent log entry totally replaces the proxy log entry
 			// that encapsulated it.

@@ -37,7 +37,7 @@ type MapSS map[string]string
 
 // Version of LogEntry contents (in semver.org format).
 // XXX: Update whenever LogEntry changes!
-const logEntryFormatVersion = "0.0.1"
+const logEntryFormatVersion = "0.0.2"
 
 // LogEntry is the main type used by the tool. It encapsulates a number of
 // fields that all system components are expected to set, but also includes
@@ -72,6 +72,27 @@ type LogEntry struct {
 	// System component type and name that generated the log entry
 	Source string
 	Name   string
+
+	// Container ID. This is set for most, but not all log records.
+	//
+	// Excluded log records include:
+	//
+	// - runtime log entries where the specified CLI command does not
+	//   operate on a container (or a single container).
+	//
+	// - proxy log entries which contain kernel boot output from the
+	//   guest.
+	//
+	// - early startup agent log entries.
+	Container string
+
+	// Sandbox ID. This is set for most, but not all log records.
+	//
+	// Excluded log records include:
+	//
+	// - runtime log entries where the specified CLI command does not
+	//   operate on a container (or a single container).
+	Sandbox string
 
 	// Used to store additional (non-standard) fields
 	Data MapSS
@@ -130,6 +151,9 @@ func (le LogEntry) Check() error {
 	if le.Name == "" {
 		return fmt.Errorf("missing component name: %+v", le)
 	}
+
+	// Note: le.Container and le.Sandbox cannot be checked since they are not
+	// present in all entries.
 
 	m := map[string]string{
 		"Level":  le.Level,
