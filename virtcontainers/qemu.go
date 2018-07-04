@@ -297,10 +297,14 @@ func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
 		return err
 	}
 
+	// Pass the sandbox name to the agent via the kernel command-line to
+	// allow the agent to use it in log messages.
+	params := q.kernelParameters() + " " + "agent.sandbox=" + sandboxConfig.ID
+
 	kernel := govmmQemu.Kernel{
 		Path:       kernelPath,
 		InitrdPath: initrdPath,
-		Params:     q.kernelParameters(),
+		Params:     params,
 	}
 
 	rtc := govmmQemu.RTC{
