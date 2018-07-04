@@ -14,6 +14,16 @@ source ${LIB_DIR}/json.bash
 DOCKER_EXE="${DOCKER_EXE:-docker}"
 RUNTIME="${RUNTIME:-kata-runtime}"
 
+KSM_BASE="/sys/kernel/mm/ksm"
+KSM_ENABLE_FILE="${KSM_BASE}/run"
+KSM_PAGES_FILE="${KSM_BASE}/pages_to_scan"
+KSM_SLEEP_FILE="${KSM_BASE}/sleep_millisecs"
+
+# The settings we use for an 'aggresive' KSM setup
+# Scan 1000 pages every 50ms - 20,000 pages/s
+KSM_AGGRESIVE_PAGES=1000
+KSM_AGGRESIVE_SLEEP=50
+
 extract_kata_env(){
 	local toml
 
@@ -263,6 +273,39 @@ common_init(){
 			warning "Unrecognised runtime ${RUNTIME}"
 			;;
 	esac
+}
+
+
+# Save the current KSM settings so we can restore them later
+save_ksm_settings(){
+	echo "saving KSM settings"
+	ksm_stored_run=$(cat ${KSM_ENABLE_FILE})
+	ksm_stored_pages=$(cat ${KSM_ENABLE_FILE})
+	ksm_stored_sleep=$(cat ${KSM_ENABLE_FILE})
+}
+
+set_ksm_aggressive(){
+	echo "setting KSM to aggressive mode"
+	# Flip the run off/on to ensure a restart/rescan
+	sudo bash -c "echo 0 > ${KSM_ENABLE_FILE}"
+	sudo bash -c "echo ${KSM_AGGRESIVE_PAGES} > ${KSM_PAGES_FILE}"
+	sudo bash -c "echo ${KSM_AGGRESIVE_SLEEP} > ${KSM_SLEEP_FILE}"
+	sudo bash -c "echo 1 > ${KSM_ENABLE_FILE}"
+}
+
+restore_ksm_settings(){
+	echo "restoring KSM settings"
+	# First turn off the run to ensure if we are then re-enabling
+	# that any changes take effect
+	sudo bash -c "echo 0 > ${KSM_ENABLE_FILE}"
+	sudo bash -c "echo ${ksm_stored_pages} > ${KSM_PAGES_FILE}"
+	sudo bash -c "echo ${ksm_stored_sleep} > ${KSM_SLEEP_FILE}"
+	sudo bash -c "echo ${ksm_stored_run} > ${KSM_ENABLE_FILE}"
+}
+
+disable_ksm(){
+	echo "disabling KSM"
+	sudo bash -c "echo 0 > ${KSM_ENABLE_FILE}"
 }
 
 common_init
