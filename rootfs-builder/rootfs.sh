@@ -49,6 +49,8 @@ Supported Linux distributions:
 
 $(get_distros)
 
+Refer the Platform-OS Compatibility Matrix: https://github.com/kata-containers/osbuilder#platform-distro-compatibility-matrix
+
 Options:
 -a  : agent version DEFAULT: ${AGENT_VERSION} ENV: AGENT_VERSION 
 -h  : Show this help message
