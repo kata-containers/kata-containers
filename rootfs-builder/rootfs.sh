@@ -103,7 +103,7 @@ generate_dockerfile()
 	[ -n "$http_proxy" ] && readonly set_proxy="RUN sed -i '$ a proxy="$http_proxy"' /etc/dnf/dnf.conf /etc/yum.conf; true"
 
 	readonly install_go="
-ADD https://storage.googleapis.com/golang/go${GO_VERSION}.linux-${goarch}.tar.gz /tmp
+RUN cd /tmp ; curl -OL https://storage.googleapis.com/golang/go${GO_VERSION}.linux-${goarch}.tar.gz
 RUN tar -C /usr/ -xzf /tmp/go${GO_VERSION}.linux-${goarch}.tar.gz
 ENV GOROOT=/usr/go
 ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
