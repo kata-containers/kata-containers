@@ -165,3 +165,41 @@ func TestUnpackAgentLogEntry(t *testing.T) {
 		}
 	}
 }
+
+func TestUnpackAgentLogEntryWithContainerID(t *testing.T) {
+	assert := assert.New(t)
+
+	now := time.Now().UTC()
+	nano := now.Format(time.RFC3339Nano)
+
+	source := "agent"
+
+	containerID := "51f062b90853e22c0817392395bc0c43cd6a0bb9e456b1bd0e28433f805475d6"
+	execID := "51f062b90853e22c0817392395bc0c43cd6a0bb9e456b1bd0e28433f805475d6"
+
+	// agent log fields added when agent debug is enabled
+	msg := fmt.Sprintf(`"new request"`)
+
+	grpcTrace := fmt.Sprintf(`container_id:"%s" exec_id:"%s"`, containerID, execID)
+	grpcRequest := "/grpc.AgentService/CreateContainer"
+
+	agentMsg := fmt.Sprintf("time=%q source=%s level=%s pid=%d name=%s msg=%q request=%q req=%q",
+		nano, source, testLevel, testPid, testName, msg, grpcRequest, grpcTrace)
+
+	le := LogEntry{
+		Count:    123,
+		Source:   "agent",
+		Filename: "/foo/bar.txt",
+		Line:     101,
+		Msg:      agentMsg,
+	}
+
+	agent, err := unpackAgentLogEntry(le)
+	assert.NoError(err)
+
+	// Ensure the newly unpacked LogEntry is valid
+	err = agent.Check()
+	assert.NoError(err)
+
+	assert.Equal(containerID, agent.Container)
+}
