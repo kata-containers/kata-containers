@@ -14,6 +14,8 @@ cidir=$(dirname "$0")
 source /etc/os-release
 source "${cidir}/lib.sh"
 
+ARCH="$(${cidir}/kata-arch.sh -d)"
+
 AGENT_INIT=${AGENT_INIT:-no}
 TEST_INITRD=${TEST_INITRD:-no}
 
@@ -23,6 +25,7 @@ ROOTFS_DIR=
 PACKAGED_IMAGE="kata-containers-image"
 IMG_PATH="/usr/share/kata-containers"
 IMG_NAME="kata-containers.img"
+IMAGE_TYPE="assets.image.meta.image-type"
 
 agent_path="${GOPATH}/src/github.com/kata-containers/agent"
 
@@ -95,9 +98,8 @@ build_image() {
 	readonly ROOTFS_DIR="${TMP_DIR}/rootfs"
 	export ROOTFS_DIR
 
-	image_type=$(get_version "assets.image.meta.image-type")
+	image_type=$(get_version "${IMAGE_TYPE}")
 	OSBUILDER_DISTRO=${OSBUILDER_DISTRO:-$image_type}
-
 	osbuilder_repo="github.com/kata-containers/osbuilder"
 
 	# Clone os-builder repository
@@ -129,15 +131,24 @@ build_image() {
 	popd
 }
 
+#Load specific configure file
+if [ -f "lib_kata_image_${ARCH}.sh" ]; then
+	source "lib_kata_image_${ARCH}.sh"
+fi
+
 main() {
 	if [ x"${TEST_INITRD}" == x"yes" ]; then
 		build_image
 	else
 		install_packaged_image
 		packaged_version=$(get_packaged_agent_version)
-		current_version=${agent_commit}
-		if [ "$packaged_version" != "$current_version" ]; then
-				update_agent || build_image
+		if [ -z "$packaged_version" ]; then
+			build_image
+		else
+			current_version=${agent_commit}
+			if [ "$packaged_version" != "$current_version" ]; then
+					update_agent || build_image
+			fi
 		fi
 	fi
 }
