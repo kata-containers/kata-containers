@@ -16,7 +16,6 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
@@ -283,11 +282,7 @@ func createContainer(ociSpec oci.CompatOCISpec, containerID, bundlePath,
 
 func createCgroupsFiles(containerID string, cgroupsDirPath string, cgroupsPathList []string, pid int) error {
 	if len(cgroupsPathList) == 0 {
-		fields := logrus.Fields{
-			"container": containerID,
-			"pid":       pid,
-		}
-		kataLog.WithFields(fields).Info("Cgroups files not created because cgroupsPath was empty")
+		kataLog.WithField("pid", pid).Info("Cgroups files not created because cgroupsPath was empty")
 		return nil
 	}
 
