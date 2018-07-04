@@ -71,7 +71,7 @@ export GOPATH=$HOME/rpmbuild/BUILD/go/
 mkdir -p $HOME/rpmbuild/BUILD/go/src/%{DOMAIN}/%{ORG}
 ln -s $HOME/rpmbuild/BUILD/kata-runtime-%{version} $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
 cd $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
-make QEMUPATH=/usr/bin/%{DEFAULT_QEMU}
+make QEMUPATH=/usr/bin/%{DEFAULT_QEMU} COMMIT=@HASH@
 
 %check
 export http_proxy=http://127.0.0.1:9/
@@ -86,11 +86,10 @@ export GOPATH=$HOME/rpmbuild/BUILD/go/
 
 cd $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
 make \
-    DESTTARGET=%{buildroot}/usr/bin/kata-runtime \
-    DESTCONFIG=%{buildroot}/usr/share/defaults/kata-containers/configuration.toml \
-    SCRIPTS_DIR=%{buildroot}/usr/bin \
-    BASH_COMPLETIONSDIR=%{buildroot}/usr/share/bash-completion/completions/kata-runtime \
+    DESTDIR=%{buildroot} \
+    PREFIX=/usr \
     QEMUPATH=/usr/bin/%{DEFAULT_QEMU} \
+    COMMIT=@HASH@ \
     install
 sed -i -e '/^initrd =/d' %{buildroot}/usr/share/defaults/kata-containers/configuration.toml
 

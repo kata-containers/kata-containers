@@ -58,6 +58,7 @@ mkdir -p $HOME/rpmbuild/BUILD/go/src/%{DOMAIN}/%{ORG}
 ln -s $HOME/rpmbuild/BUILD/kata-ksm-throttler-%{version} $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
 cd $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
 make \
+    COMMIT=@HASH@ \
     TARGET=kata-ksm-throttler \
     LIBEXECDIR=%{LIBEXECDIR}
 
@@ -68,6 +69,7 @@ export GOPATH=$HOME/rpmbuild/BUILD/go/
 
 cd $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
 make install \
+    COMMIT=@HASH@ \
     TARGET=kata-ksm-throttler \
     DESTDIR=%{buildroot} \
     LIBEXECDIR=%{LIBEXECDIR}

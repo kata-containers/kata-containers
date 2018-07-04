@@ -17,6 +17,10 @@ make_target() {
 	target=$1
 	dir=$2
 
+	if [ -n "${CI}" ] && [ "${target}" == "test-packaging-tools" ];then
+		echo "skip $target see https://github.com/kata-containers/packaging/issues/72"
+		return
+	fi
 	pushd "${script_dir}/.." >> /dev/null
 	if [ -n "${CI}" ] &&  ! git whatchanged  origin/master..HEAD  "${dir}" | grep "${dir}" >> /dev/null; then
 		echo "Not changes in ${dir}"
@@ -24,7 +28,7 @@ make_target() {
 	fi
 	popd >> /dev/null
 	echo "Changes found in $dir"
-	make -f "${toplevel_mk}" ${target}
+	make -f "${toplevel_mk}" "${target}"
 }
 
 make_target test-release-tools "release/"

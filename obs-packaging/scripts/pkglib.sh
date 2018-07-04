@@ -9,7 +9,7 @@ LOG_DIR=${PACKAGING_DIR}/build_logs
 
 # OBS Project info
 OBS_PROJECT="${OBS_PROJECT:-katacontainers}"
-OBS_SUBPROJECT="${OBS_SUBPROJECT:-release}"
+OBS_SUBPROJECT="${OBS_SUBPROJECT:-alpha}"
 
 # BUILD OPTIONS
 BUILD_DISTROS=${BUILD_DISTROS:-Fedora_27 xUbuntu_16.04 CentOS_7}
@@ -35,10 +35,10 @@ fi
 
 function display_help()
 {
-	cat <<-EOL 
+	cat <<-EOL
 	$SCRIPT_NAME
 
-	This script is intended to create Kata Containers 3.X packages for the OBS 
+	This script is intended to create Kata Containers packages for the OBS
 	(Open Build Service) platform.
 
     Usage:
@@ -89,7 +89,7 @@ function verify()
 
     # Make sure this script is called from ./
     [ "$SCRIPT_DIR" != "." ] && die "The script must be called from its base dir."
-    
+
     # Verify if osc is installed, exit otherwise.
     [ ! -x "$(command -v osc)" ] && die "osc is not installed."
 
@@ -131,7 +131,7 @@ function set_versions()
     else
         hash_tag=$commit_hash
     fi
-    short_hashtag="${hash_tag:0:7}"	
+    short_hashtag="${hash_tag:0:7}"
 }
 
 function changelog_update {
@@ -185,11 +185,11 @@ function checkout_repo()
         OBS_WORKDIR=$(mktemp -d -u -t ${temp}.XXXXXXXXXXX) || exit 1
         osc $APIURL co $REPO -o $OBS_WORKDIR
     fi
+    find ${OBS_WORKDIR} -maxdepth 1 -mindepth 1 ! -name '.osc' -prune  -exec echo remove {} \; -exec  rm -rf {} \;
 
-    mv ${GENERATED_FILES[@]} $OBS_WORKDIR
-    cp ${STATIC_FILES[@]} $OBS_WORKDIR
+    mv ${GENERATED_FILES[@]} "$OBS_WORKDIR"
+    cp ${STATIC_FILES[@]} "$OBS_WORKDIR"
 }
-
 
 function obs_push()
 {
@@ -258,7 +258,7 @@ function generate_files () {
 	replace_list+=("RPM_PATCH_LIST=$RPM_PATCH_LIST")
 	replace_list+=("RPM_APPLY_PATCHES=$RPM_APPLY_PATCHES")
 
-	# check replace list 
+	# check replace list
 	# key=val
 	for replace in "${replace_list[@]}" ; do
 		[[ "$replace" = *"="* ]] || die "invalid replace $replace"
@@ -322,7 +322,6 @@ function get_obs_pkg_release() {
 		release=$(grep -oP  '%define\s+release\s+[0-9]+' "${spec_file}"  | grep -oP '[0-9]+')
 	fi
 
-
 	rm -r "${repo_dir}"
 	echo "${release}"
 }
@@ -339,7 +338,7 @@ function find_patches() {
 	export RPM_APPLY_PATCHES="#Apply patches"$'\n'
 	[ ! -d patches ] && info "No patches found" && return
 	local patches
-	patches=$(find patches -type f -name '*.patch' -exec basename {} \;)
+	patches=$(find patches/ -type f -name '*.patch' -exec basename {} \;)
 	n="1"
 	rm -f debian.series
 	for p in ${patches} ; do

@@ -66,14 +66,14 @@ export GOPATH=$HOME/rpmbuild/BUILD/go/
 mkdir -p $HOME/rpmbuild/BUILD/go/src/%{DOMAIN}/%{ORG}
 ln -s %{_builddir}/%{name}-%{version} $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
 cd $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
-make
+make COMMIT=@HASH@
 
 %clean
 echo "Clean build root"
 rm -rf %{buildroot}
 
 %install
-make install LIBEXECDIR=%{buildroot}%{LIBEXECDIR}
+make install LIBEXECDIR=%{buildroot}%{LIBEXECDIR} COMMIT=@HASH@
 
 %files
 %defattr(-,root,root,-)
