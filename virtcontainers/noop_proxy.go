@@ -22,3 +22,8 @@ func (p *noopProxy) start(sandbox *Sandbox, params proxyParams) (int, string, er
 func (p *noopProxy) stop(sandbox *Sandbox, pid int) error {
 	return nil
 }
+
+// The noopproxy doesn't need to watch the vm console, thus return false always.
+func (p *noopProxy) consoleWatched() bool {
+	return false
+}

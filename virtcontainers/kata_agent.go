@@ -419,9 +419,13 @@ func (k *kataAgent) generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*
 	return ifaces, routes, nil
 }
 
-func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
+func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 	if k.proxy == nil {
 		return errorMissingProxy
+	}
+
+	if k.proxy.consoleWatched() {
+		return nil
 	}
 
 	// Get agent socket path to provide it to the proxy.
@@ -453,6 +457,15 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 		"proxy-pid":  pid,
 		"proxy-url":  uri,
 	}).Info("proxy started")
+
+	return nil
+}
+
+func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
+	err := k.startProxy(sandbox)
+	if err != nil {
+		return err
+	}
 
 	hostname := sandbox.config.Hostname
 	if len(hostname) > maxHostnameLen {

@@ -21,11 +21,16 @@ type kataBuiltInProxy struct {
 	conn      net.Conn
 }
 
+// check if the proxy has watched the vm console.
+func (p *kataBuiltInProxy) consoleWatched() bool {
+	return p.conn != nil
+}
+
 // start is the proxy start implementation for kata builtin proxy.
 // It starts the console watcher for the guest.
 // It returns agentURL to let agent connect directly.
 func (p *kataBuiltInProxy) start(sandbox *Sandbox, params proxyParams) (int, string, error) {
-	if p.conn != nil {
+	if p.consoleWatched() {
 		return -1, "", fmt.Errorf("kata builtin proxy running for sandbox %s", p.sandboxID)
 	}
 
