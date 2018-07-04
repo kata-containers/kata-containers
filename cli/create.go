@@ -89,6 +89,7 @@ func create(containerID, bundlePath, console, pidFilePath string, detach bool,
 	var err error
 
 	kataLog = kataLog.WithField("container", containerID)
+	setExternalLoggers(kataLog)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	if bundlePath, err = validCreateParams(containerID, bundlePath); err != nil {
@@ -240,6 +241,7 @@ func createSandbox(ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
 	}
 
 	kataLog = kataLog.WithField("sandbox", sandbox.ID())
+	setExternalLoggers(kataLog)
 
 	containers := sandbox.GetAllContainers()
 	if len(containers) != 1 {
@@ -267,6 +269,7 @@ func createContainer(ociSpec oci.CompatOCISpec, containerID, bundlePath,
 	}
 
 	kataLog = kataLog.WithField("sandbox", sandboxID)
+	setExternalLoggers(kataLog)
 
 	_, c, err := vci.CreateContainer(sandboxID, contConfig)
 	if err != nil {

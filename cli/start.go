@@ -52,6 +52,8 @@ func start(containerID string) (vc.VCSandbox, error) {
 		"sandbox":   sandboxID,
 	})
 
+	setExternalLoggers(kataLog)
+
 	containerID = status.ID
 
 	containerType, err := oci.GetContainerType(status.Annotations)
