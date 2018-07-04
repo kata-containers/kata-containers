@@ -86,6 +86,14 @@ type LogEntry struct {
 	// - early startup agent log entries.
 	Container string
 
+	// Sandbox ID. This is set for most, but not all log records.
+	//
+	// Excluded log records include:
+	//
+	// - runtime log entries where the specified CLI command does not
+	//   operate on a container (or a single container).
+	Sandbox string
+
 	// Used to store additional (non-standard) fields
 	Data MapSS
 }
@@ -144,8 +152,8 @@ func (le LogEntry) Check() error {
 		return fmt.Errorf("missing component name: %+v", le)
 	}
 
-	// Note: le.Container cannot be checked since it is not present in all
-	// entries.
+	// Note: le.Container and le.Sandbox cannot be checked since they are not
+	// present in all entries.
 
 	m := map[string]string{
 		"Level":  le.Level,

@@ -264,6 +264,9 @@ func handleLogEntry(l *LogEntry, key, value string) (err error) {
 
 		l.Pid = pid
 
+	case "sandbox":
+		l.Sandbox = value
+
 	case "source":
 		l.Source = value
 
