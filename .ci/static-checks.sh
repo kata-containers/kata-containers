@@ -19,24 +19,82 @@ script_name=${0##*/}
 
 repo=""
 master_branch="false"
+force="false"
+
+typeset -A long_options
+
+long_options=(
+	[commits]="Check commits"
+	[docs]="Check document files"
+	[files]="Check files"
+	[force]="Force a skipped test to run"
+	[golang]="Check '.go' files"
+	[help]="Display usage statement"
+	[licenses]="Check licenses"
+	[master]="Force checking of master branch"
+	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
+	[versions]="Check versions files"
+)
 
 usage()
 {
 	cat <<EOT
 
 Usage: $script_name help
-       $script_name repo-name [true]
+       $script_name [options] repo-name [true]
+
+Options:
+
+EOT
+
+	local option
+	local description
+
+	local long_option_names="${!long_options[@]}"
+
+	# Sort space-separated list by converting to newline separated list
+	# and back again.
+	long_option_names=$(echo "$long_option_names"|tr ' ' '\n'|sort|tr '\n' ' ')
+
+	# Display long options
+	for option in ${long_option_names}
+	do
+		description=${long_options[$option]}
+
+		# Remove any trailing colon which is for getopt(1) alone.
+		option=$(echo "$option"|sed 's/:$//g')
+
+		printf "    --%-10.10s # %s\n" "$option" "$description"
+	done
+
+	cat <<EOT
 
 Parameters:
 
   help      : Show usage.
-  repo-name : GitHub URL of repo to check in form "github.com/user/repo".
+  repo-name : GitHub URL of repo to check in form "github.com/user/repo"
+              (equivalent to "--repo $URL").
   true      : Specify as "true" if testing the 'master' branch, else assume a
-              PR branch.
+              PR branch (equivalent to "--master").
 
-Example:
+Notes:
 
-$ $script_name github.com/kata-containers/runtime true
+- If no options are specified, all non-skipped tests will be run.
+
+Examples:
+
+- Run all tests on master branch of runtime repository:
+
+  $ $script_name github.com/kata-containers/runtime true
+
+- Auto-detect repository and run golang tests for current repository:
+
+  $ KATA_DEV_MODE=true $script_name --golang
+
+- Run all tests on the agent repository, forcing the tests to consider all
+  files, not just those changed by a PR branch:
+
+  $ $script_name github.com/kata-containers/agent --master
 
 
 EOT
@@ -323,10 +381,12 @@ check_docs()
 
 	if [ "$master_branch" = "true" ]
 	then
-		# Check all documents
+		info "Checking all documents in master branch"
+
 		docs=$(find . -name "*.md" | grep -v "vendor/" || true)
 	else
-		# Check changed documents only
+		info "Checking local branch for changed documents only"
+
 		docs_status=$(get_pr_changed_file_details || true)
 		docs_status=$(echo "$docs_status" | grep "\.md$" || true)
 
@@ -438,12 +498,24 @@ check_files()
 	local file
 	local files
 
+	if [ "$force" = "false" ]
+	then
+		info "Skipping check_files: see https://github.com/kata-containers/tests/issues/469"
+		return
+	else
+		info "Force override of check_files skip"
+	fi
+
 	info "Checking files"
 
 	if [ "$master_branch" = "true" ]
 	then
+		info "Checking all files in master branch"
+
 		files=$(find . -type f | egrep -v "(.git|vendor)/" || true)
 	else
+		info "Checking local branch for changed files only"
+
 		files=$(get_pr_changed_file_details || true)
 
 		# Strip off status
@@ -457,7 +529,6 @@ check_files()
 	for file in $files
 	do
 		local match
-		#match=$(egrep -l "\<FIXME\>|\<TODO\>" "$file" || true)
 
 		# Look for files containing the specified comment tags but
 		# which do not include a github URL.
@@ -500,9 +571,49 @@ check_files()
 
 main()
 {
+	local long_option_names="${!long_options[@]}"
+
+	local args=$(getopt \
+		-n "$script_name" \
+		-a \
+		--options="h" \
+		--longoptions="$long_option_names" \
+		-- "$@")
+
+	eval set -- "$args"
+	[ $? -ne 0 ] && { usage >&2; exit 1; }
+
+	local func=
+
+	while [ $# -gt 1 ]
+	do
+		case "$1" in
+			--commits) func=check_commits ;;
+			--docs) func=check_docs ;;
+			--files) func=check_files ;;
+			--force) force="true" ;;
+			--golang) func=check_go ;;
+			-h|--help) usage; exit 0 ;;
+			--licenses) func=check_license_headers ;;
+			--master) master_branch="true" ;;
+			--repo) repo="$2"; shift ;;
+			--versions) func=check_versions ;;
+			--) shift; break ;;
+		esac
+
+		shift
+	done
+
+	# Consume getopt cruft
+	[ "$1" = "--" ] && shift
+
 	[ "$1" = "help" ] && usage && exit 0
 
-	repo="$1"
+	# Set if not already set by options
+	[ -z "$repo" ] && repo="$1"
+	[ "$master_branch" = "false" ] && master_branch="$2"
+
+
 	if [ -z "$repo" ]
 	then
 		if [ -n "$KATA_DEV_MODE" ]
@@ -512,18 +623,23 @@ main()
 			# (backwards compatability).
 			repo=$(git config --get remote.origin.url |\
 				sed 's!https://!!g' || true)
+
+			info "Auto-detected repo as $repo"
 		else
-			usage && exit 1
+			echo >&2 "ERROR: need repo" && usage && exit 1
 		fi
 	fi
 
-	master_branch="$2"
+	# Run user-specified check and quit
+	[ -n "$func" ] && info "running $func function" && eval "$func" && exit 0
 
+	# Run all checks
 	check_commits
 	check_license_headers
 	check_go
 	check_versions
 	check_docs
+	check_files
 }
 
 main "$@"
