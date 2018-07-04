@@ -38,7 +38,6 @@ replace_list=(
 "GO_ARCH=$GO_ARCH"
 "HASH=$short_hashtag"
 "RELEASE=$RELEASE"
-"REVISION=$VERSION"
 "VERSION=$VERSION"
 )
 

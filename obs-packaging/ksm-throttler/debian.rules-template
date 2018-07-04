@@ -23,13 +23,15 @@ override_dh_auto_build:
 	tar xzf /usr/src/packages/SOURCES/go$(GO_VERSION).linux-@GO_ARCH@.tar.gz -C /tmp/local
 	ln -s /usr/src/packages/BUILD /usr/src/packages/BUILD/go/src/$(IMPORTNAME)
 	cd $(GOPATH)/src/$(IMPORTNAME); \
-	make TARGET=kata-ksm-throttler
-
+	make \
+		COMMIT=@HASH@ \
+		TARGET=kata-ksm-throttler
 
 override_dh_auto_install:
 	mkdir -p debian/$(PROJECT)
 	cd $(GOPATH)/src/$(IMPORTNAME); \
 	make install \
+		COMMIT=@HASH@ \
 		DESTDIR=$(shell pwd)/debian/kata-ksm-throttler \
 		TARGET=kata-ksm-throttler
 

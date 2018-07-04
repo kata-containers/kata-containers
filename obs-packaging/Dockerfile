@@ -5,7 +5,7 @@ ARG SUSE_VERSION=${SUSE_VERSION:-42.3}
 ARG GO_ARCH=${GO_ARCH:-amd64}
 
 # Get OBS client, plugins and dependencies
-RUN zypper -n install osc-plugin-install vim curl bsdtar git sudo pcre-tools
+RUN zypper -v -n install osc-plugin-install vim curl bsdtar git sudo pcre-tools
 RUN curl -OkL https://download.opensuse.org/repositories/openSUSE:Tools/openSUSE_${SUSE_VERSION}/openSUSE:Tools.repo
 RUN zypper -n addrepo openSUSE:Tools.repo
 RUN zypper --gpg-auto-import-keys refresh

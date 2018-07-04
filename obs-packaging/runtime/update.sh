@@ -55,7 +55,7 @@ KERNEL_REQUIRED_VERSION=$(pkg_version "${kernel_version}.${KERNEL_CONFIG_VERSION
 info "kata-linux-container ${KERNEL_REQUIRED_VERSION}"
 
 KSM_THROTTLER_RELEASE=$(get_obs_pkg_release "home:${OBS_PROJECT}:${OBS_SUBPROJECT}/ksm-throttler")
-KSM_THROTTLER_REQUIRED_VERSION=$(pkg_version "${ksm_throttler_version}" "${KSM_THROTTLER_RELEASE}" "${ksm_throttler_hash}")
+KSM_THROTTLER_REQUIRED_VERSION=$(pkg_version "${kata_ksm_throttler_version}" "${KSM_THROTTLER_RELEASE}" "${kata_ksm_throttler_hash}")
 info "ksm-throttler ${KSM_THROTTLER_REQUIRED_VERSION}"
 
 KATA_CONTAINERS_IMAGE_RELEASE=$(get_obs_pkg_release "home:${OBS_PROJECT}:${OBS_SUBPROJECT}/kata-containers-image")
@@ -84,7 +84,6 @@ replace_list=(
 "GO_ARCH=$GO_ARCH"
 "HASH=$short_hashtag"
 "RELEASE=$RELEASE"
-"REVISION=$VERSION"
 "VERSION=$VERSION"
 "kata_osbuilder_version=${KATA_IMAGE_REQUIRED_VERSION}"
 "kata_proxy_version=${PROXY_REQUIRED_VERESION}"
@@ -94,7 +93,6 @@ replace_list=(
 "qemu_lite_version=${KATA_QEMU_LITE_REQUIRED_VERSION}"
 "qemu_vanilla_version=${KATA_QEMU_VANILLA_REQUIRED_VERSION}"
 )
-
 
 verify
 echo "Verify succeed."

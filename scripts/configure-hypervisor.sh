@@ -308,7 +308,7 @@ main()
 		qemu_options+=(security:--disable-static)
 	fi
 
-	if [ -n ${static} ]; then
+	if [ "${static}" == "true" ]; then
 		qemu_options+=(misc:--static)
 	fi
 
