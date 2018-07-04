@@ -12,6 +12,7 @@
         * [Image with systemd as init](#image-with-systemd-as-init)
         * [Image with the agent as init](#image-with-the-agent-as-init)
     * [Initrd creation](#initrd-creation)
+* [Platform-Distro Compatibility Matrix](#platform-distro-compatibility-matrix)
 
 ## Introduction
 
@@ -107,3 +108,11 @@ $ sudo -E PATH=$PATH make AGENT_INIT=yes initrd-only
 
 For further details,
 see [the initrd builder documentation](initrd-builder/README.md).
+
+## Platform-Distro Compatibility Matrix
+
+| | Alpine | CentOS | ClearLinux | EulerOS | Fedora | 
+  |--|--|--|--|--|--|
+  | **ARM64** | :heavy_check_mark: | :heavy_check_mark: |  | :heavy_check_mark: | :heavy_check_mark: | 
+  | **PPC64le** | :heavy_check_mark: | :heavy_check_mark: |  |  | :heavy_check_mark: | 
+  | **x86_64** | :heavy_check_mark: |:heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
