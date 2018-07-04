@@ -28,9 +28,9 @@ export GO_ARCH=$(go env GOARCH)
 sudo docker build \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
-	-t $obs_image .
+	-t $obs_image ${script_dir}
 
-pushd kata-containers-image/ >> /dev/null
+pushd "${script_dir}/kata-containers-image/" >> /dev/null
 	./build_image.sh
 popd >> /dev/null
 

@@ -18,4 +18,4 @@ test-static-build:
 	@make -f $(MK_DIR)/static-build/qemu/Makefile
 
 test-packaging-tools:
-	@$(MK_DIR)/build_from_docker.sh
+	@$(MK_DIR)/obs-packaging/build_from_docker.sh
