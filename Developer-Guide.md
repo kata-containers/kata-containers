@@ -181,6 +181,7 @@ You MUST choose one of `alpine`, `centos`, `clearlinux`, `euleros`, and `fedora`
 
 > **Note:**
 >
+> - Check the [compatibility matrix](https://github.com/kata-containers/osbuilder#platform-distro-compatibility-matrix) before creating rootfs.
 > - You must ensure that the *default Docker runtime* is `runc` to make use of
 >   the `USE_DOCKER` variable. If that is not the case, remove the variable
 >   from the previous command. See [Checking Docker default runtime](#checking-docker-default-runtime).
@@ -236,6 +237,10 @@ $ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true ./rootfs.sh
 always set `AGENT_INIT` to `yes`.
 
 You MUST choose one of `alpine`, `centos`, `clearlinux`, `euleros`, and `fedora` for `${distro}`.
+
+> **Note:**
+>
+> - Check the [compatibility matrix](https://github.com/kata-containers/osbuilder#platform-distro-compatibility-matrix) before creating rootfs.
 
 Optionally, add your custom agent binary to the rootfs with the following:
 ```
