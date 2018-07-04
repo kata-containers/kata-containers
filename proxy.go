@@ -125,7 +125,7 @@ func logger() *logrus.Entry {
 	})
 }
 
-func setupLogger(logLevel string) error {
+func setupLogger(logLevel string, announceFields logrus.Fields) error {
 	level, err := logrus.ParseLevel(logLevel)
 	if err != nil {
 		return err
@@ -142,7 +142,7 @@ func setupLogger(logLevel string) error {
 
 	proxyLog.AddHook(hook)
 
-	logger().WithField("version", version).Info()
+	logger().WithFields(announceFields).WithField("log-level", logLevel).Info("announce")
 
 	return nil
 }
@@ -312,7 +312,15 @@ func realMain() {
 
 	sigCh := setupNotifier()
 
-	if err := setupLogger(logLevel); err != nil {
+	announceFields := logrus.Fields{
+		"agent-logs-socket":   agentLogsSocket,
+		"channel-mux-socket":  channel,
+		"debug":               debug,
+		"proxy-listen-socket": proxyAddr,
+		"version":             version,
+	}
+
+	if err := setupLogger(logLevel, announceFields); err != nil {
 		logger().WithError(err).Fatal("unable to setup logger")
 		os.Exit(1)
 	}
