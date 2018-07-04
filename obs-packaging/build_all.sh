@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-set -e 
+set -e
 
 script_dir=$(dirname "$0")
 #Note:Lets update qemu and the kernel first, they take longer to build.
@@ -47,7 +47,7 @@ fi
 if [ -n "${PUSH}" ]; then
 	# push to obs
 	PUSH_TO_OBS="-p"
-else
+elif [ -n "${LOCAL}" ]; then
 	# local build
 	PUSH_TO_OBS="-l"
 fi
