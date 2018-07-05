@@ -239,7 +239,7 @@ func fsMapFromDevices(c *Container) ([]*hyperstart.FsmapDescriptor, error) {
 			return nil, fmt.Errorf("can't find device: %#v", dev)
 		}
 
-		d, ok := device.GetDeviceDrive().(*config.BlockDrive)
+		d, ok := device.GetDeviceInfo().(*config.BlockDrive)
 		if !ok || d == nil {
 			return nil, fmt.Errorf("can't retrieve block device information")
 		}

@@ -67,8 +67,8 @@ func (device *VhostUserSCSIDevice) DeviceType() config.DeviceType {
 	return config.VhostUserSCSI
 }
 
-// GetDeviceDrive returns device information used for creating
-func (device *VhostUserSCSIDevice) GetDeviceDrive() interface{} {
+// GetDeviceInfo returns device information used for creating
+func (device *VhostUserSCSIDevice) GetDeviceInfo() interface{} {
 	device.Type = device.DeviceType()
 	return &device.VhostUserDeviceAttrs
 }

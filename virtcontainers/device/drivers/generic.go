@@ -50,7 +50,7 @@ func (device *GenericDevice) DeviceType() config.DeviceType {
 	return config.DeviceGeneric
 }
 
-// GetDeviceDrive returns device information used for creating
-func (device *GenericDevice) GetDeviceDrive() interface{} {
+// GetDeviceInfo returns device information used for creating
+func (device *GenericDevice) GetDeviceInfo() interface{} {
 	return device.DeviceInfo
 }

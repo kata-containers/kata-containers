@@ -113,8 +113,8 @@ type BlockDrive struct {
 	VirtPath string
 }
 
-// VFIODrive represents a VFIO drive used for hotplugging
-type VFIODrive struct {
+// VFIODev represents a VFIO drive used for hotplugging
+type VFIODev struct {
 	// ID is used to identify this drive in the hypervisor options.
 	ID string
 	// BDF (Bus:Device.Function) of the PCI address

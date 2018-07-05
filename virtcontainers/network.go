@@ -345,7 +345,7 @@ func (endpoint *PhysicalEndpoint) Attach(h hypervisor) error {
 	}
 
 	// TODO: use device manager as general device management entrance
-	d := config.VFIODrive{
+	d := config.VFIODev{
 		BDF: endpoint.BDF,
 	}
 
