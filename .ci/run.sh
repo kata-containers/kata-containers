@@ -11,8 +11,14 @@ set -o pipefail
 
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
+source /etc/os-release
 
 # This script will execute packaging tests suite
 # TODO: Add steps needed to build packages
 
 check_kata_kernel_version
+
+if [ "$ID" == ubuntu ];then
+	echo  "Building snap image"
+	make snap
+fi

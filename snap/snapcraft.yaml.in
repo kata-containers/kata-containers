@@ -1,0 +1,263 @@
+name: kata-containers
+version: @KATA_RUNTIME_VERSION@
+summary: Build lightweight VMs that seamlessly plug into the containers ecosystem
+description: |
+  Kata Containers is an open source project and community working to build a
+  standard implementation of lightweight Virtual Machines (VMs) that feel and
+  perform like containers, but provide the workload isolation and security
+  advantages of VMs
+grade: stable
+confinement: classic
+
+parts:
+  go:
+    source-tag: go@GO_VERSION@
+  runtime:
+    source: http://github.com/kata-containers/runtime
+    source-type: git
+    source-tag: @KATA_RUNTIME_VERSION@
+    after: [go]
+    plugin: go
+    go-importpath: github.com/kata-containers/runtime
+    build-attributes: [no-patchelf]
+    override-build: |
+      # Don't use installed GOROOT
+      unset GOROOT
+      export GOPATH=$(realpath ../go)
+      cd ${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/runtime
+      make \
+        QEMUPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/bin/qemu-system-x86_64 \
+        PROXYPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/${SNAPCRAFT_PROJECT_NAME}/kata-proxy \
+        SHIMPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/${SNAPCRAFT_PROJECT_NAME}/kata-shim \
+        KERNELPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/${SNAPCRAFT_PROJECT_NAME}/vmlinuz.container \
+        INITRDPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/${SNAPCRAFT_PROJECT_NAME}/kata-containers-initrd.img \
+        CONFIG_PATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
+      make install \
+        PREFIX=/usr \
+        DESTDIR=${SNAPCRAFT_PART_INSTALL} \
+        QEMUPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/bin/qemu-system-x86_64 \
+        PROXYPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/${SNAPCRAFT_PROJECT_NAME}/kata-proxy \
+        SHIMPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/${SNAPCRAFT_PROJECT_NAME}/kata-shim \
+        KERNELPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/${SNAPCRAFT_PROJECT_NAME}/vmlinuz.container \
+        INITRDPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/${SNAPCRAFT_PROJECT_NAME}/kata-containers-initrd.img
+      sed -i -e '/^image =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
+
+  proxy:
+    source: http://github.com/kata-containers/proxy
+    source-type: git
+    source-tag: @KATA_PROXY_VERSION@
+    after: [go]
+    plugin: go
+    go-importpath: github.com/kata-containers/proxy
+    build-attributes: [no-patchelf]
+    override-build: |
+      # Don't use installed GOROOT
+      unset GOROOT
+      export GOPATH=$(realpath ../go)
+      cd ${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/proxy
+      make
+      make install LIBEXECDIR=${SNAPCRAFT_PART_INSTALL}/usr/libexec
+
+  shim:
+    source: http://github.com/kata-containers/shim
+    source-type: git
+    source-tag: @KATA_SHIM_VERSION@
+    after: [go]
+    plugin: go
+    go-importpath: github.com/kata-containers/shim
+    build-attributes: [no-patchelf]
+    build-packages:
+      - libelf-dev
+    override-build: |
+      # Don't use installed GOROOT
+      unset GOROOT
+      export GOPATH=$(realpath ../go)
+      cd ${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/shim
+      make
+      make install LIBEXECDIR=${SNAPCRAFT_PART_INSTALL}/usr/libexec
+
+  image:
+    source: http://github.com/kata-containers/osbuilder
+    source-type: git
+    after: [go]
+    plugin: make
+    build-packages:
+      - docker.io
+    override-build: |
+      # Don't use installed GOROOT
+      unset GOROOT
+      if [ -n "$http_proxy" ]; then
+        echo "Setting proxy $http_proxy"
+        systemctl set-environment http_proxy=$http_proxy || true
+        systemctl set-environment https_proxy=$https_proxy || true
+      fi
+
+      echo "Starting docker"
+      systemctl start docker || true
+
+      export GOPATH=$(realpath ../go)
+      mkdir -p $GOPATH
+
+      sed -i 's|^GO_VERSION=.*|GO_VERSION='$(go version | cut -d' ' -f3 | tr -d go)'|g' rootfs-builder/versions.txt
+
+      sudo -E PATH=$PATH make DISTRO=alpine USE_DOCKER=true AGENT_VERSION=${SNAPCRAFT_PROJECT_VERSION} AGENT_INIT=yes rootfs
+      sudo -E PATH=$PATH make DISTRO=alpine AGENT_INIT=yes initrd-only
+
+      kata_image_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
+      mkdir -p ${kata_image_dir}
+      cp kata-containers-initrd.img ${kata_image_dir}
+
+  ksm-throttler:
+    source: http://github.com/kata-containers/ksm-throttler
+    source-type: git
+    source-tag: @KSM_THROTTLER_VERSION@
+    after: [go]
+    plugin: go
+    go-importpath: github.com/kata-containers/ksm-throttler
+    build-attributes: [no-patchelf]
+    override-build: |
+      # Don't use installed GOROOT
+      unset GOROOT
+      export GOPATH=$(realpath ../go)
+      cd ${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/ksm-throttler
+      make TARGET=kata-ksm-throttler
+      make install \
+        DESTDIR=${SNAPCRAFT_PART_INSTALL} \
+        TARGET=kata-ksm-throttler
+
+  kernel:
+    source: @KERNEL_URL@/linux-@KERNEL_VERSION@.tar.xz
+    source-type: tar
+    after: [kernel-dump]
+    plugin: kernel
+    override-build: |
+      case "$(arch)" in
+        "x86_64")
+          config=x86_64_kata_kvm_4.14.x
+        ;;
+
+        "ppc64le")
+          config=ppc64le_kata_kvm_4.14.x
+        ;;
+
+        "aarch64")
+          config=arm64_kata_kvm_4.14.x
+        ;;
+
+        *)
+          echo "ERROR: Unsupported architecture $(arch)"
+          exit 1
+        ;;
+      esac
+
+      make mrproper
+
+      # Apply patches
+      for patch in ${SNAPCRAFT_STAGE}/kernel/patches/*.patch; do
+        echo "Applying $(basename "$patch") ..."
+        patch \
+          --batch \
+          --forward \
+          --strip 1 \
+          --input "$patch"
+        echo
+      done
+
+      # Copy config file
+      cp ${SNAPCRAFT_STAGE}/kernel/configs/${config} .config
+      make -s oldconfig EXTRAVERSION=".container" > /dev/null
+      make -j $(nproc) EXTRAVERSION=".container"
+
+      kernel_suffix=@KERNEL_VERSION@.container
+      kata_kernel_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
+      mkdir -p ${kata_kernel_dir}
+
+      # Install bz kernel
+      make install INSTALL_PATH=${kata_kernel_dir} EXTRAVERSION=".container" || true
+      vmlinuz_name=vmlinuz-${kernel_suffix}
+      ln -sf ${vmlinuz_name} ${kata_kernel_dir}/vmlinuz.container
+
+      # Install raw kernel
+      vmlinux_name=vmlinux-${kernel_suffix}
+      cp vmlinux ${kata_kernel_dir}/${vmlinux_name}
+      ln -sf ${vmlinux_name} ${kata_kernel_dir}/vmlinux.container
+
+  kernel-dump:
+    source: kernel
+    plugin: dump
+    organize:
+      '*' : kernel/
+    prime:
+      - -*
+
+  qemu:
+    source: https://github.com/kata-containers/qemu/archive/@QEMU_LITE_BRANCH@.tar.gz
+    source-type: tar
+    plugin: make
+    after: [qemu-scripts-dump, qemu-patches-dump]
+    build-packages:
+      - gcc
+      - python
+      - zlib1g-dev
+      - libcap-ng-dev
+      - libglib2.0-dev
+      - libpixman-1-dev
+      - libnuma-dev
+      - libltdl-dev
+      - libcap-dev
+      - libattr1-dev
+    override-build: |
+      chmod +x ${SNAPCRAFT_STAGE}/qemu/scripts/configure-hypervisor.sh
+      # static build
+      echo "$(${SNAPCRAFT_STAGE}/qemu/scripts/configure-hypervisor.sh -s qemu) \
+        --disable-rbd
+        --prefix=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
+        --datadir=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share \
+        --libexecdir=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/qemu" \
+        | xargs ./configure
+
+      git clone https://github.com/qemu/keycodemapdb ui/keycodemapdb/
+      cd ui/keycodemapdb; git checkout 10739aa; cd ../..
+
+      git clone https://github.com/qemu/capstone capstone
+      cd capstone; git checkout 22ead3e; cd ..
+
+      # Apply patches
+      for patch in ${SNAPCRAFT_STAGE}/qemu/patches/*.patch; do
+        echo "Applying $(basename "$patch") ..."
+        patch \
+          --batch \
+          --forward \
+          --strip 1 \
+          --input "$patch"
+        echo
+      done
+      make -j $(nproc)
+      make install DESTDIR=${SNAPCRAFT_PART_INSTALL}
+    prime:
+      - -snap/*
+      - -usr/var/*
+      - usr/*
+      - lib/*
+    organize:
+      # Hack: move qemu to /
+      "snap/kata-containers/current/": "./"
+
+  qemu-scripts-dump:
+    source: scripts
+    plugin: dump
+    organize:
+      '*' : qemu/scripts/
+    prime:
+      - -*
+  qemu-patches-dump:
+    source: obs-packaging/qemu-lite/patches/
+    plugin: dump
+    organize:
+      '*' : qemu/patches/
+    prime:
+      - -*
+
+apps:
+  runtime:
+    command: usr/bin/kata-runtime

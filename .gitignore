@@ -3,3 +3,9 @@ debian.series
 *.img
 *.initrd
 *.tar.gz
+*.snap
+parts/
+prime/
+stage/
+snap/.snapcraft/
+snap/snapcraft.yaml
