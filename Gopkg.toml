@@ -70,11 +70,11 @@
   name = "github.com/safchain/ethtool"
   revision = "79559b488d8848b53a8e34c330140c3fc37ee246"
 
+[[override]]
+  branch = "master"
+  name = "github.com/hashicorp/yamux"
+
 [prune]
   non-go = true
   go-tests = true
   unused-packages = true
-
-[[constraint]]
-  branch = "master"
-  name = "github.com/hashicorp/yamux"
