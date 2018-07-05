@@ -194,6 +194,8 @@ func execute(context *cli.Context) error {
 		"sandbox":   sandboxID,
 	})
 
+	setExternalLoggers(kataLog)
+
 	// Retrieve OCI spec configuration.
 	ociSpec, err := oci.GetOCIConfig(status)
 	if err != nil {

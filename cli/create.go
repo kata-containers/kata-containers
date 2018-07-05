@@ -16,7 +16,6 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
@@ -90,6 +89,7 @@ func create(containerID, bundlePath, console, pidFilePath string, detach bool,
 	var err error
 
 	kataLog = kataLog.WithField("container", containerID)
+	setExternalLoggers(kataLog)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	if bundlePath, err = validCreateParams(containerID, bundlePath); err != nil {
@@ -241,6 +241,7 @@ func createSandbox(ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
 	}
 
 	kataLog = kataLog.WithField("sandbox", sandbox.ID())
+	setExternalLoggers(kataLog)
 
 	containers := sandbox.GetAllContainers()
 	if len(containers) != 1 {
@@ -268,6 +269,7 @@ func createContainer(ociSpec oci.CompatOCISpec, containerID, bundlePath,
 	}
 
 	kataLog = kataLog.WithField("sandbox", sandboxID)
+	setExternalLoggers(kataLog)
 
 	_, c, err := vci.CreateContainer(sandboxID, contConfig)
 	if err != nil {
@@ -283,11 +285,7 @@ func createContainer(ociSpec oci.CompatOCISpec, containerID, bundlePath,
 
 func createCgroupsFiles(containerID string, cgroupsDirPath string, cgroupsPathList []string, pid int) error {
 	if len(cgroupsPathList) == 0 {
-		fields := logrus.Fields{
-			"container": containerID,
-			"pid":       pid,
-		}
-		kataLog.WithFields(fields).Info("Cgroups files not created because cgroupsPath was empty")
+		kataLog.WithField("pid", pid).Info("Cgroups files not created because cgroupsPath was empty")
 		return nil
 	}
 
