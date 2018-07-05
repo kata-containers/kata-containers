@@ -67,11 +67,6 @@ func (device *VhostUserNetDevice) DeviceType() config.DeviceType {
 	return config.VhostUserNet
 }
 
-// GetDeviceInfo returns device information that the device is created based on
-func (device *VhostUserNetDevice) GetDeviceInfo() *config.DeviceInfo {
-	return device.DeviceInfo
-}
-
 // GetDeviceDrive returns device information used for creating
 func (device *VhostUserNetDevice) GetDeviceDrive() interface{} {
 	device.Type = device.DeviceType()
