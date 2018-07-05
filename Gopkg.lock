@@ -84,9 +84,10 @@
   version = "v1.0.0"
 
 [[projects]]
+  branch = "master"
   name = "github.com/hashicorp/yamux"
   packages = ["."]
-  revision = "f5742cb6b85602e7fa834e9d5d91a7d7fa850824"
+  revision = "3520598351bb3500a49ae9563f5539666ae0a27c"
 
 [[projects]]
   name = "github.com/intel/govmm"
@@ -263,6 +264,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "4d57a771261fe6b0e1f86bf2de82f8c39cc0047170f4277754972e2feab4796f"
+  inputs-digest = "ea3d6532c4375832a1c79d70af45e6722e526bde97f6caf23d90b91267a3cf0b"
   solver-name = "gps-cdcl"
   solver-version = 1
