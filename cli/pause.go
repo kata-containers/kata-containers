@@ -55,6 +55,8 @@ func toggleContainerPause(containerID string, pause bool) (err error) {
 		"sandbox":   sandboxID,
 	})
 
+	setExternalLoggers(kataLog)
+
 	if pause {
 		err = vci.PauseContainer(sandboxID, containerID)
 	} else {

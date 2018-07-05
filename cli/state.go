@@ -36,6 +36,8 @@ instance of a container.`,
 func state(containerID string) error {
 	kataLog = kataLog.WithField("container", containerID)
 
+	setExternalLoggers(kataLog)
+
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	status, _, err := getExistingContainerInfo(containerID)
 	if err != nil {

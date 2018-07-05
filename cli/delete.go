@@ -64,6 +64,8 @@ func delete(containerID string, force bool) error {
 		"sandbox":   sandboxID,
 	})
 
+	setExternalLoggers(kataLog)
+
 	containerID = status.ID
 
 	containerType, err := oci.GetContainerType(status.Annotations)
