@@ -77,7 +77,7 @@ type qemuArch interface {
 	appendVhostUserDevice(devices []govmmQemu.Device, drive config.VhostUserDeviceAttrs) []govmmQemu.Device
 
 	// appendVFIODevice appends a VFIO device to devices
-	appendVFIODevice(devices []govmmQemu.Device, vfioDevice config.VFIODrive) []govmmQemu.Device
+	appendVFIODevice(devices []govmmQemu.Device, vfioDevice config.VFIODev) []govmmQemu.Device
 
 	// handleImagePath handles the Hypervisor Config image path
 	handleImagePath(config HypervisorConfig)
@@ -475,14 +475,14 @@ func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, attr co
 	return devices
 }
 
-func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDrive config.VFIODrive) []govmmQemu.Device {
-	if vfioDrive.BDF == "" {
+func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev config.VFIODev) []govmmQemu.Device {
+	if vfioDev.BDF == "" {
 		return devices
 	}
 
 	devices = append(devices,
 		govmmQemu.VFIODevice{
-			BDF: vfioDrive.BDF,
+			BDF: vfioDev.BDF,
 		},
 	)
 

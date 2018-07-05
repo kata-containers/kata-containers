@@ -32,7 +32,7 @@ const (
 type VFIODevice struct {
 	ID         string
 	DeviceInfo *config.DeviceInfo
-	vfioDrives []*config.VFIODrive
+	vfioDevs   []*config.VFIODev
 }
 
 // NewVFIODevice create a new VFIO device
@@ -61,11 +61,11 @@ func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) error {
 		if err != nil {
 			return err
 		}
-		vfio := &config.VFIODrive{
+		vfio := &config.VFIODev{
 			ID:  utils.MakeNameID("vfio", device.DeviceInfo.ID, maxDevIDSize),
 			BDF: deviceBDF,
 		}
-		device.vfioDrives = append(device.vfioDrives, vfio)
+		device.vfioDevs = append(device.vfioDevs, vfio)
 	}
 
 	// hotplug a VFIO device is actually hotplugging a group of iommu devices
@@ -104,9 +104,9 @@ func (device *VFIODevice) DeviceID() string {
 	return device.ID
 }
 
-// GetDeviceDrive returns device information used for creating
-func (device *VFIODevice) GetDeviceDrive() interface{} {
-	return device.vfioDrives
+// GetDeviceInfo returns device information used for creating
+func (device *VFIODevice) GetDeviceInfo() interface{} {
+	return device.vfioDevs
 }
 
 // getBDF returns the BDF of pci device

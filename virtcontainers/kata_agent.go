@@ -734,7 +734,7 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 			continue
 		}
 
-		d, ok := device.GetDeviceDrive().(*config.BlockDrive)
+		d, ok := device.GetDeviceInfo().(*config.BlockDrive)
 		if !ok || d == nil {
 			k.Logger().WithField("device", device).Error("malformed block drive")
 			continue
@@ -988,7 +988,7 @@ func (k *kataAgent) handleBlockVolumes(c *Container) []*grpc.Storage {
 			k.Logger().WithField("device", id).Error("failed to find device by id")
 			return nil
 		}
-		blockDrive, ok := device.GetDeviceDrive().(*config.BlockDrive)
+		blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
 		if !ok || blockDrive == nil {
 			k.Logger().Error("malformed block drive")
 			continue
