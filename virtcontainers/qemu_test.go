@@ -167,15 +167,11 @@ func TestQemuMemoryTopology(t *testing.T) {
 		MaxMem: memMax,
 	}
 
-	vmConfig := Resources{
+	q.vmConfig = Resources{
 		Memory: uint(mem),
 	}
 
-	sandboxConfig := SandboxConfig{
-		VMConfig: vmConfig,
-	}
-
-	memory, err := q.memoryTopology(sandboxConfig)
+	memory, err := q.memoryTopology()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,4 +318,30 @@ func TestQemuQemuPath(t *testing.T) {
 	path, err = q.qemuPath()
 	assert.Error(err)
 	assert.Equal(path, "")
+}
+
+func TestHotplugRemoveMemory(t *testing.T) {
+	assert := assert.New(t)
+
+	qemuConfig := newQemuConfig()
+	q := &qemu{
+		config: qemuConfig,
+	}
+
+	_, err := q.hotplugRemoveDevice(&memoryDevice{0, 128}, memoryDev)
+	assert.Error(err)
+}
+
+func TestHotplugUnsupportedDeviceType(t *testing.T) {
+	assert := assert.New(t)
+
+	qemuConfig := newQemuConfig()
+	q := &qemu{
+		config: qemuConfig,
+	}
+
+	_, err := q.hotplugAddDevice(&memoryDevice{0, 128}, fsDev)
+	assert.Error(err)
+	_, err = q.hotplugRemoveDevice(&memoryDevice{0, 128}, fsDev)
+	assert.Error(err)
 }
