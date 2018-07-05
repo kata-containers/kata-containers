@@ -97,6 +97,11 @@ default_memory = @DEFMEMSZ@
 # 9pfs is used instead to pass the rootfs.
 disable_block_device_use = @DEFDISABLEBLOCK@
 
+# Shared file system type:
+#   - virtio-9p (default)
+#   - virtio-fs
+shared_fs = "@DEFSHAREDFS@"
+
 # Block storage driver to be used for the hypervisor in case the container
 # rootfs is backed by a block device. This is virtio-scsi, virtio-blk
 # or nvdimm.

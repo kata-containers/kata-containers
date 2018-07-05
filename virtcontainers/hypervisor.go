@@ -215,6 +215,11 @@ type HypervisorConfig struct {
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
 	EntropySource string
 
+	// Shared file system type:
+	//   - virtio-9p (default)
+	//   - virtio-fs
+	SharedFS string
+
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.
 	// For example, if there is a value for the "kernel" key in this map,
