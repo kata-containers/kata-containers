@@ -1126,6 +1126,10 @@ type Memory struct {
 	// MaxMem is the maximum amount of memory that can be made available
 	// to the guest through e.g. hot pluggable memory.
 	MaxMem string
+
+	// Path is the file path of the memory device. It points to a local
+	// file path used by FileBackedMem.
+	Path string
 }
 
 // Kernel is the guest kernel configuration structure.
@@ -1167,9 +1171,19 @@ type Knobs struct {
 	// MemPrealloc will allocate all the RAM upfront
 	MemPrealloc bool
 
+	// FileBackedMem requires Memory.Size and Memory.Path of the VM to
+	// be set.
+	FileBackedMem bool
+
+	// FileBackedMemShared will set the FileBackedMem device as shared.
+	FileBackedMemShared bool
+
 	// Mlock will control locking of memory
 	// Only active when Realtime is set to true
 	Mlock bool
+
+	// Stopped will not start guest CPU at startup
+	Stopped bool
 
 	// Realtime will enable realtime QEMU
 	Realtime bool
@@ -1178,6 +1192,24 @@ type Knobs struct {
 // IOThread allows IO to be performed on a separate thread.
 type IOThread struct {
 	ID string
+}
+
+const (
+	// MigrationFD is the migration incoming type based on open file descriptor.
+	// Skip default 0 so that it must be set on purpose.
+	MigrationFD = 1
+	// MigrationExec is the migration incoming type based on commands.
+	MigrationExec = 2
+)
+
+// Incoming controls migration source preparation
+type Incoming struct {
+	// Possible values are MigrationFD, MigrationExec
+	MigrationType int
+	// Only valid if MigrationType == MigrationFD
+	FD *os.File
+	// Only valid if MigrationType == MigrationExec
+	Exec string
 }
 
 // Config is the qemu configuration structure.
@@ -1230,6 +1262,9 @@ type Config struct {
 
 	// Bios is the -bios parameter
 	Bios string
+
+	// Incoming controls migration source preparation
+	Incoming Incoming
 
 	// fds is a list of open file descriptors to be passed to the spawned qemu process
 	fds []*os.File
@@ -1433,23 +1468,7 @@ func (config *Config) appendKernel() {
 	}
 }
 
-func (config *Config) appendKnobs() {
-	if config.Knobs.NoUserConfig == true {
-		config.qemuParams = append(config.qemuParams, "-no-user-config")
-	}
-
-	if config.Knobs.NoDefaults == true {
-		config.qemuParams = append(config.qemuParams, "-nodefaults")
-	}
-
-	if config.Knobs.NoGraphic == true {
-		config.qemuParams = append(config.qemuParams, "-nographic")
-	}
-
-	if config.Knobs.Daemonize == true {
-		config.qemuParams = append(config.qemuParams, "-daemonize")
-	}
-
+func (config *Config) appendMemoryKnobs() {
 	if config.Knobs.HugePages == true {
 		if config.Memory.Size != "" {
 			dimmName := "dimm1"
@@ -1474,7 +1493,42 @@ func (config *Config) appendKnobs() {
 			config.qemuParams = append(config.qemuParams, "-device")
 			config.qemuParams = append(config.qemuParams, deviceMemParam)
 		}
+	} else if config.Knobs.FileBackedMem == true {
+		if config.Memory.Size != "" && config.Memory.Path != "" {
+			dimmName := "dimm1"
+			objMemParam := "memory-backend-file,id=" + dimmName + ",size=" + config.Memory.Size + ",mem-path=" + config.Memory.Path
+			if config.Knobs.FileBackedMemShared == true {
+				objMemParam += ",share=on"
+			}
+			numaMemParam := "node,memdev=" + dimmName
+
+			config.qemuParams = append(config.qemuParams, "-object")
+			config.qemuParams = append(config.qemuParams, objMemParam)
+
+			config.qemuParams = append(config.qemuParams, "-numa")
+			config.qemuParams = append(config.qemuParams, numaMemParam)
+		}
 	}
+}
+
+func (config *Config) appendKnobs() {
+	if config.Knobs.NoUserConfig == true {
+		config.qemuParams = append(config.qemuParams, "-no-user-config")
+	}
+
+	if config.Knobs.NoDefaults == true {
+		config.qemuParams = append(config.qemuParams, "-nodefaults")
+	}
+
+	if config.Knobs.NoGraphic == true {
+		config.qemuParams = append(config.qemuParams, "-nographic")
+	}
+
+	if config.Knobs.Daemonize == true {
+		config.qemuParams = append(config.qemuParams, "-daemonize")
+	}
+
+	config.appendMemoryKnobs()
 
 	if config.Knobs.Realtime == true {
 		config.qemuParams = append(config.qemuParams, "-realtime")
@@ -1495,6 +1549,10 @@ func (config *Config) appendKnobs() {
 			config.qemuParams = append(config.qemuParams, "mlock=off")
 		}
 	}
+
+	if config.Knobs.Stopped == true {
+		config.qemuParams = append(config.qemuParams, "-S")
+	}
 }
 
 func (config *Config) appendBios() {
@@ -1511,6 +1569,20 @@ func (config *Config) appendIOThreads() {
 			config.qemuParams = append(config.qemuParams, fmt.Sprintf("iothread,id=%s", t.ID))
 		}
 	}
+}
+
+func (config *Config) appendIncoming() {
+	var uri string
+	switch config.Incoming.MigrationType {
+	case MigrationExec:
+		uri = fmt.Sprintf("exec:%s", config.Incoming.Exec)
+	case MigrationFD:
+		chFDs := config.appendFDs([]*os.File{config.Incoming.FD})
+		uri = fmt.Sprintf("fd:%d", chFDs[0])
+	default:
+		return
+	}
+	config.qemuParams = append(config.qemuParams, "-S", "-incoming", uri)
 }
 
 // LaunchQemu can be used to launch a new qemu instance.
@@ -1537,6 +1609,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendKernel()
 	config.appendBios()
 	config.appendIOThreads()
+	config.appendIncoming()
 
 	if err := config.appendCPUs(); err != nil {
 		return "", err

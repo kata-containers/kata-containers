@@ -828,3 +828,56 @@ func (q *QMP) ExecuteQueryHotpluggableCPUs(ctx context.Context) ([]HotpluggableC
 
 	return cpus, nil
 }
+
+// ExecSetMigrationCaps sets migration capabilities
+func (q *QMP) ExecSetMigrationCaps(ctx context.Context, caps []map[string]interface{}) error {
+	args := map[string]interface{}{
+		"capabilities": caps,
+	}
+
+	return q.executeCommand(ctx, "migrate-set-capabilities", args, nil)
+}
+
+// ExecSetMigrateArguments sets the command line used for migration
+func (q *QMP) ExecSetMigrateArguments(ctx context.Context, url string) error {
+	args := map[string]interface{}{
+		"uri": url,
+	}
+
+	return q.executeCommand(ctx, "migrate", args, nil)
+}
+
+// ExecHotplugMemory adds size of MiB memory to the guest
+func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string, size int) error {
+	args := map[string]interface{}{
+		"qom-type": qomtype,
+		"id":       id,
+		"props":    map[string]interface{}{"size": uint64(size) << 20},
+	}
+	if mempath != "" {
+		args["mem-path"] = mempath
+	}
+	err := q.executeCommand(ctx, "object-add", args, nil)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if err != nil {
+			q.cfg.Logger.Errorf("Unable to hotplug memory device: %v", err)
+			err = q.executeCommand(ctx, "object-del", map[string]interface{}{"id": id}, nil)
+			if err != nil {
+				q.cfg.Logger.Warningf("Unable to clean up memory object: %v", err)
+			}
+		}
+	}()
+
+	args = map[string]interface{}{
+		"driver": "pc-dimm",
+		"id":     "dimm" + id,
+		"memdev": id,
+	}
+	err = q.executeCommand(ctx, "device_add", args, nil)
+
+	return err
+}
