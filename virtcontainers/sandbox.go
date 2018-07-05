@@ -1455,11 +1455,11 @@ func togglePauseSandbox(sandboxID string, pause bool) (*Sandbox, error) {
 func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType) error {
 	switch devType {
 	case config.DeviceVFIO:
-		vfioDevices, ok := device.GetDeviceDrive().([]*config.VFIODrive)
+		vfioDevices, ok := device.GetDeviceInfo().([]*config.VFIODev)
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
-		addedDev := []*config.VFIODrive{}
+		addedDev := []*config.VFIODev{}
 		var err error
 		defer func() {
 			// if err happens,roll back and remove added device!
@@ -1511,11 +1511,11 @@ func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType)
 func (s *Sandbox) HotplugRemoveDevice(device api.Device, devType config.DeviceType) error {
 	switch devType {
 	case config.DeviceVFIO:
-		vfioDevices, ok := device.GetDeviceDrive().([]*config.VFIODrive)
+		vfioDevices, ok := device.GetDeviceInfo().([]*config.VFIODev)
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
-		removedDev := []*config.VFIODrive{}
+		removedDev := []*config.VFIODev{}
 		var err error
 		defer func() {
 			// if err happens,roll back and add the removed devices back!
@@ -1549,7 +1549,7 @@ func (s *Sandbox) HotplugRemoveDevice(device api.Device, devType config.DeviceTy
 		}
 		return nil
 	case config.DeviceBlock:
-		blockDrive, ok := device.GetDeviceDrive().(*config.BlockDrive)
+		blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
@@ -1580,7 +1580,7 @@ func (s *Sandbox) DecrementSandboxBlockIndex() error {
 func (s *Sandbox) AppendDevice(device api.Device) error {
 	switch device.DeviceType() {
 	case config.VhostUserSCSI, config.VhostUserNet, config.VhostUserBlk:
-		return s.hypervisor.addDevice(device.GetDeviceDrive().(*config.VhostUserDeviceAttrs), vhostuserDev)
+		return s.hypervisor.addDevice(device.GetDeviceInfo().(*config.VhostUserDeviceAttrs), vhostuserDev)
 	}
 	return fmt.Errorf("unsupported device type")
 }

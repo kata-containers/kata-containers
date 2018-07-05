@@ -716,7 +716,7 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 	return nil
 }
 
-func (q *qemu) hotplugVFIODevice(device *config.VFIODrive, op operation) error {
+func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) error {
 	err := q.qmpSetup()
 	if err != nil {
 		return err
@@ -755,7 +755,7 @@ func (q *qemu) hotplugDevice(devInfo interface{}, devType deviceType, op operati
 		vcpus := devInfo.(uint32)
 		return q.hotplugCPUs(vcpus, op)
 	case vfioDev:
-		device := devInfo.(*config.VFIODrive)
+		device := devInfo.(*config.VFIODev)
 		return nil, q.hotplugVFIODevice(device, op)
 	case memoryDev:
 		memdev := devInfo.(*memoryDevice)
@@ -952,7 +952,7 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 		q.qemuConfig.Devices = q.arch.appendBlockDevice(q.qemuConfig.Devices, v)
 	case config.VhostUserDeviceAttrs:
 		q.qemuConfig.Devices = q.arch.appendVhostUserDevice(q.qemuConfig.Devices, v)
-	case config.VFIODrive:
+	case config.VFIODev:
 		q.qemuConfig.Devices = q.arch.appendVFIODevice(q.qemuConfig.Devices, v)
 	default:
 		break

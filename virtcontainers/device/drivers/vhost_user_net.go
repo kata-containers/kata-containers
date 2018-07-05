@@ -67,8 +67,8 @@ func (device *VhostUserNetDevice) DeviceType() config.DeviceType {
 	return config.VhostUserNet
 }
 
-// GetDeviceDrive returns device information used for creating
-func (device *VhostUserNetDevice) GetDeviceDrive() interface{} {
+// GetDeviceInfo returns device information used for creating
+func (device *VhostUserNetDevice) GetDeviceInfo() interface{} {
 	device.Type = device.DeviceType()
 	return &device.VhostUserDeviceAttrs
 }

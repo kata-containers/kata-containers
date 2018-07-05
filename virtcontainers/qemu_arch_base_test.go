@@ -207,7 +207,7 @@ func testQemuArchBaseAppend(t *testing.T, structure interface{}, expected []govm
 		devices = qemuArchBase.appendSocket(devices, s)
 	case config.BlockDrive:
 		devices = qemuArchBase.appendBlockDevice(devices, s)
-	case config.VFIODrive:
+	case config.VFIODev:
 		devices = qemuArchBase.appendVFIODevice(devices, s)
 	case config.VhostUserDeviceAttrs:
 		devices = qemuArchBase.appendVhostUserDevice(devices, s)
@@ -406,7 +406,7 @@ func TestQemuArchBaseAppendVFIODevice(t *testing.T) {
 		},
 	}
 
-	vfDevice := config.VFIODrive{
+	vfDevice := config.VFIODev{
 		BDF: bdf,
 	}
 
