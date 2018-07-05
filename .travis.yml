@@ -27,6 +27,7 @@ before_script:
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get update -qq              ; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get install -y -qq automake ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install bash; fi
 
 install:
   - cd ${TRAVIS_BUILD_DIR} && make
