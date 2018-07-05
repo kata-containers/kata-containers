@@ -8,6 +8,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log/syslog"
 	"os"
@@ -38,7 +39,7 @@ func logger() *logrus.Entry {
 	return shimLog
 }
 
-func initLogger(logLevel, container, execID string) error {
+func initLogger(logLevel, container, execID string, announceFields logrus.Fields, loggerOutput io.Writer) error {
 	shimLog = logrus.WithFields(logrus.Fields{
 		"name":      shimName,
 		"pid":       os.Getpid(),
@@ -56,15 +57,14 @@ func initLogger(logLevel, container, execID string) error {
 
 	shimLog.Logger.SetLevel(level)
 
-	// Make sure all output going to stdout/stderr is actually discarded.
-	shimLog.Logger.Out = ioutil.Discard
+	shimLog.Logger.Out = loggerOutput
 
 	hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO|syslog.LOG_USER, shimName)
 	if err == nil {
 		shimLog.Logger.AddHook(hook)
 	}
 
-	logger().WithField("version", version).Info()
+	logger().WithFields(announceFields).Info("announce")
 
 	return nil
 }
@@ -110,7 +110,17 @@ func realMain() {
 		os.Exit(exitFailure)
 	}
 
-	err := initLogger(logLevel, container, execID)
+	announceFields := logrus.Fields{
+		"version":         version,
+		"debug":           debug,
+		"log-level":       logLevel,
+		"agent-socket":    agentAddr,
+		"terminal":        terminal,
+		"proxy-exit-code": proxyExitCode,
+	}
+
+	// The final parameter makes sure all output going to stdout/stderr is discarded.
+	err := initLogger(logLevel, container, execID, announceFields, ioutil.Discard)
 	if err != nil {
 		logger().WithError(err).WithField("loglevel", logLevel).Error("invalid log level")
 		os.Exit(exitFailure)
