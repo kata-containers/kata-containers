@@ -47,6 +47,23 @@ var sandboxID string
 
 var proxyLog = logrus.New()
 
+// yamuxWriter is a type responsible for logging yamux messages to the proxy
+// log.
+type yamuxWriter struct {
+}
+
+// Write implements the Writer interface for the yamuxWriter.
+func (yw yamuxWriter) Write(bytes []byte) (int, error) {
+	message := string(bytes)
+
+	l := len(message)
+
+	// yamux messages are all warnings and errors
+	logger().WithField("component", "yamux").Warn(message)
+
+	return l, nil
+}
+
 // This function is meant to run in a go routine since it will send ping
 // commands every second. It behaves as a heartbeat to maintain a proper
 // communication state with the Yamux server in the agent.
@@ -71,6 +88,9 @@ func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) 
 	sessionConfig := yamux.DefaultConfig()
 	// Disable keepAlive since we don't know how much time a container can be paused
 	sessionConfig.EnableKeepAlive = false
+
+	sessionConfig.LogOutput = yamuxWriter{}
+
 	sessionConfig.ConnectionWriteTimeout = time.Second
 	session, err := yamux.Client(servConn, sessionConfig)
 	if err != nil {
