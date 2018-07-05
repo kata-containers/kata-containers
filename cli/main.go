@@ -235,16 +235,16 @@ func beforeSubcommands(context *cli.Context) error {
 		return fmt.Errorf("unknown log-format %q", context.GlobalString("log-format"))
 	}
 
-	setExternalLoggers(kataLog)
-
-	ignoreLogging := false
-
 	// Add the name of the sub-command to each log entry for easier
 	// debugging.
 	cmdName := context.Args().First()
 	if context.App.Command(cmdName) != nil {
 		kataLog = kataLog.WithField("command", cmdName)
 	}
+
+	setExternalLoggers(kataLog)
+
+	ignoreLogging := false
 
 	if context.NArg() == 1 && context.Args()[0] == envCmd {
 		// simply report the logging setup
