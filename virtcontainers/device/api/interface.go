@@ -48,8 +48,6 @@ type Device interface {
 	// DeviceType indicates which kind of device it is
 	// e.g. block, vfio or vhost user
 	DeviceType() config.DeviceType
-	// GetDeviceInfo returns device information that the device is created based on
-	GetDeviceInfo() *config.DeviceInfo
 	// GetDeviceDrive returns device specific data used for hotplugging by hypervisor
 	// Caller could cast the return value to device specific struct
 	// e.g. Block device returns *config.BlockDrive and

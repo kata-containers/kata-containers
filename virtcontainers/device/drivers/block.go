@@ -112,11 +112,6 @@ func (device *BlockDevice) DeviceID() string {
 	return device.ID
 }
 
-// GetDeviceInfo returns device information that the device is created based on
-func (device *BlockDevice) GetDeviceInfo() *config.DeviceInfo {
-	return device.DeviceInfo
-}
-
 // GetDeviceDrive returns device information used for creating
 func (device *BlockDevice) GetDeviceDrive() interface{} {
 	return device.BlockDrive
