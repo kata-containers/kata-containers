@@ -138,6 +138,11 @@ type HypervisorConfig struct {
 	// DisableBlockDeviceUse disallows a block device from being used.
 	DisableBlockDeviceUse bool
 
+	// Shared file system type:
+	//   - virtio-9p (default)
+	//   - virtio-fs
+	SharedFS string
+
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 

@@ -52,6 +52,14 @@ const (
 	Nvdimm = "nvdimm"
 )
 
+const (
+	// Virtio9P means use virtio-9p for the shared file system
+	Virtio9P = "virtio-9p"
+
+	// VirtioFS means use virtio-fs for the shared file system
+	VirtioFS = "virtio-fs"
+)
+
 // Defining these as a variable instead of a const, to allow
 // overriding this in the tests.
 
