@@ -112,7 +112,7 @@ func (device *BlockDevice) DeviceID() string {
 	return device.ID
 }
 
-// GetDeviceDrive returns device information used for creating
-func (device *BlockDevice) GetDeviceDrive() interface{} {
+// GetDeviceInfo returns device information used for creating
+func (device *BlockDevice) GetDeviceInfo() interface{} {
 	return device.BlockDrive
 }
