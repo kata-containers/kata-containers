@@ -6,6 +6,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -328,7 +329,34 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 	return env, nil
 }
 
-func showSettings(env EnvInfo, file *os.File) error {
+func handleSettings(file *os.File, c *cli.Context) error {
+	if file == nil {
+		return errors.New("Invalid output file specified")
+	}
+
+	configFile, ok := c.App.Metadata["configFile"].(string)
+	if !ok {
+		return errors.New("cannot determine config file")
+	}
+
+	runtimeConfig, ok := c.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
+	if !ok {
+		return errors.New("cannot determine runtime config")
+	}
+
+	env, err := getEnvInfo(configFile, runtimeConfig)
+	if err != nil {
+		return err
+	}
+
+	if c.Bool("json") {
+		return writeJSONSettings(env, file)
+	}
+
+	return writeTOMLSettings(env, file)
+}
+
+func writeTOMLSettings(env EnvInfo, file *os.File) error {
 	encoder := toml.NewEncoder(file)
 
 	err := encoder.Encode(env)
@@ -339,33 +367,30 @@ func showSettings(env EnvInfo, file *os.File) error {
 	return nil
 }
 
-func handleSettings(file *os.File, metadata map[string]interface{}) error {
-	if file == nil {
-		return errors.New("Invalid output file specified")
-	}
+func writeJSONSettings(env EnvInfo, file *os.File) error {
+	encoder := json.NewEncoder(file)
 
-	configFile, ok := metadata["configFile"].(string)
-	if !ok {
-		return errors.New("cannot determine config file")
-	}
+	// Make it more human readable
+	encoder.SetIndent("", "  ")
 
-	runtimeConfig, ok := metadata["runtimeConfig"].(oci.RuntimeConfig)
-	if !ok {
-		return errors.New("cannot determine runtime config")
-	}
-
-	env, err := getEnvInfo(configFile, runtimeConfig)
+	err := encoder.Encode(env)
 	if err != nil {
 		return err
 	}
 
-	return showSettings(env, file)
+	return nil
 }
 
 var kataEnvCLICommand = cli.Command{
 	Name:  envCmd,
-	Usage: "display settings",
+	Usage: "display settings. Default to TOML",
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:  "json",
+			Usage: "Format output as JSON",
+		},
+	},
 	Action: func(context *cli.Context) error {
-		return handleSettings(defaultOutputFile, context.App.Metadata)
+		return handleSettings(defaultOutputFile, context)
 	},
 }
