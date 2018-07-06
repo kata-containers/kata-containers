@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -717,7 +718,7 @@ func testEnvShowSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
 		Host:       expectedHostDetails,
 	}
 
-	err = showSettings(env, tmpfile)
+	err = writeTOMLSettings(env, tmpfile)
 	if err != nil {
 		return err
 	}
@@ -903,6 +904,13 @@ func TestEnvCLIFunction(t *testing.T) {
 	defer func() {
 		defaultOutputFile = savedOutputFile
 	}()
+
+	err = fn(ctx)
+	assert.NoError(t, err)
+
+	set := flag.NewFlagSet("", 0)
+	set.Bool("json", true, "")
+	ctx = cli.NewContext(app, set, nil)
 
 	err = fn(ctx)
 	assert.NoError(t, err)
