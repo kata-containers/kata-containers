@@ -13,7 +13,7 @@ source /etc/os-release
 
 CURRENT_QEMU_COMMIT=$(get_version "assets.hypervisor.qemu-lite.commit")
 PACKAGED_QEMU="qemu-lite"
-QEMU_ARCH=$(arch)
+QEMU_ARCH=$(${cidir}/kata-arch.sh -d)
 
 get_packaged_qemu_commit() {
 	if [ "$ID" == "ubuntu" ]; then
@@ -74,13 +74,28 @@ build_and_install_qemu() {
 	popd
 }
 
+#Load specific configure file
+if [ -f "lib_install_qemu_${QEMU_ARCH}.sh" ]; then
+	source "lib_install_qemu_${QEMU_ARCH}.sh"
+fi
+
 main() {
-	packaged_qemu_commit=$(get_packaged_qemu_commit)
-	short_current_qemu_commit=${CURRENT_QEMU_COMMIT:0:10}
-	if [ "$packaged_qemu_commit" == "$short_current_qemu_commit" ] &&  [ "$QEMU_ARCH" == "x86_64" ]; then
-		install_packaged_qemu
-	else
-		build_and_install_qemu
+	if [ "$QEMU_ARCH" == "x86_64" ]; then
+		packaged_qemu_commit=$(get_packaged_qemu_commit)
+		short_current_qemu_commit=${CURRENT_QEMU_COMMIT:0:10}
+		if [ "$packaged_qemu_commit" == "$short_current_qemu_commit" ]; then
+			install_packaged_qemu
+		else
+			build_and_install_qemu
+		fi
+	elif [ "$QEMU_ARCH" == "aarch64" ]; then
+		packaged_qemu_version=$(get_packaged_qemu_version)
+		short_current_qemu_version=${CURRENT_QEMU_VERSION#*-}
+		if [ "$packaged_qemu_version" == "$short_current_qemu_version" ]; then
+			install_packaged_qemu
+		else
+			build_and_install_qemu
+		fi
 	fi
 }
 
