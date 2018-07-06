@@ -114,6 +114,11 @@ then
 	git branch -D "$pr_branch"
 fi
 
+# Now we have all the components installed, log that info before we
+# run the tests.
+echo "Logging kata-env information:"
+kata-runtime kata-env
+
 if [ -z "${METRICS_CI}" ]
 then
 	if [ "${kata_repo}" != "${tests_repo}" ]
