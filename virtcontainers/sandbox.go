@@ -1737,7 +1737,7 @@ func (s *Sandbox) DecrementSandboxBlockIndex() error {
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
 func (s *Sandbox) AppendDevice(device api.Device) error {
 	switch device.DeviceType() {
-	case config.VhostUserSCSI, config.VhostUserNet, config.VhostUserBlk:
+	case config.VhostUserSCSI, config.VhostUserNet, config.VhostUserBlk, config.VhostUserFS:
 		return s.hypervisor.addDevice(device.GetDeviceInfo().(*config.VhostUserDeviceAttrs), vhostuserDev)
 	}
 	return fmt.Errorf("unsupported device type")

@@ -6,13 +6,16 @@
 package virtcontainers
 
 import (
+	"bufio"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -88,6 +91,7 @@ type qemu struct {
 const (
 	consoleSocket = "console.sock"
 	qmpSocket     = "qmp.sock"
+	vhostFSSocket = "vhost-fs.sock"
 
 	qmpCapErrMsg  = "Failed to negoatiate QMP capabilities"
 	qmpExecCatCmd = "exec:cat"
@@ -541,6 +545,10 @@ func (q *qemu) createSandbox(ctx context.Context, id string, hypervisorConfig *H
 	return nil
 }
 
+func (q *qemu) vhostFSSocketPath(id string) (string, error) {
+	return utils.BuildSocketPath(store.RunVMStoragePath, id, vhostFSSocket)
+}
+
 // startSandbox will start the Sandbox's VM.
 func (q *qemu) startSandbox(timeout int) error {
 	span, _ := q.trace("startSandbox")
@@ -580,13 +588,76 @@ func (q *qemu) startSandbox(timeout int) error {
 		}
 	}()
 
+	if q.config.SharedFS == config.VirtioFS {
+		sockPath, err := q.vhostFSSocketPath(q.id)
+		if err != nil {
+			return err
+		}
+
+		// The daemon will terminate when the vhost-user socket
+		// connection with QEMU closes.  Therefore we do not keep track
+		// of this child process after returning from this function.
+		sourcePath := filepath.Join(kataHostSharedDir, q.id)
+		cmd := exec.Command(q.config.VirtioFSDaemon,
+			"-o", "vhost_user_socket="+sockPath,
+			"-o", "source="+sourcePath)
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			return err
+		}
+
+		if err = cmd.Start(); err != nil {
+			return err
+		}
+		defer func() {
+			if err != nil {
+				cmd.Process.Kill()
+			}
+		}()
+
+		// Wait for socket to become available
+		sockReady := make(chan error, 1)
+		timeStart := time.Now()
+		go func() {
+			scanner := bufio.NewScanner(stderr)
+			for scanner.Scan() {
+				if strings.Contains(scanner.Text(), "Waiting for vhost-user socket connection...") {
+					sockReady <- nil
+					return
+				}
+			}
+			if err := scanner.Err(); err != nil {
+				sockReady <- err
+			}
+			sockReady <- fmt.Errorf("virtiofsd did not announce socket connection")
+		}()
+		timeoutDuration := time.Duration(timeout) * time.Second
+		select {
+		case err = <-sockReady:
+		case <-time.After(timeoutDuration):
+			err = fmt.Errorf("timed out waiting for virtiofsd (pid=%d) socket %s", cmd.Process.Pid, sockPath)
+		}
+		if err != nil {
+			return err
+		}
+
+		// Now reduce timeout by the elapsed time
+		elapsed := time.Since(timeStart)
+		if elapsed < timeoutDuration {
+			timeout = timeout - int(elapsed.Seconds())
+		} else {
+			timeout = 0
+		}
+	}
+
 	var strErr string
 	strErr, err = govmmQemu.LaunchQemu(q.qemuConfig, newQMPLogger())
 	if err != nil {
 		return fmt.Errorf("%s", strErr)
 	}
 
-	return q.waitSandbox(timeout)
+	err = q.waitSandbox(timeout) // the virtiofsd deferred checks err's value
+	return err
 }
 
 // waitSandbox will wait for the Sandbox's VM to be up and running.
@@ -1288,7 +1359,34 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 
 	switch v := devInfo.(type) {
 	case types.Volume:
-		q.qemuConfig.Devices = q.arch.append9PVolume(q.qemuConfig.Devices, v)
+		if q.config.SharedFS == config.VirtioFS {
+			q.Logger().WithField("volume-type", "virtio-fs").Info("adding volume")
+
+			var randBytes []byte
+			randBytes, err = utils.GenerateRandomBytes(8)
+			if err != nil {
+				return err
+			}
+			id := hex.EncodeToString(randBytes)
+
+			var sockPath string
+			sockPath, err = q.vhostFSSocketPath(q.id)
+			if err != nil {
+				return err
+			}
+
+			vhostDev := config.VhostUserDeviceAttrs{
+				Tag:  v.MountTag,
+				Type: config.VhostUserFS,
+			}
+			vhostDev.SocketPath = sockPath
+			vhostDev.DevID = id
+
+			q.qemuConfig.Devices, err = q.arch.appendVhostUserDevice(q.qemuConfig.Devices, vhostDev)
+		} else {
+			q.Logger().WithField("volume-type", "virtio-9p").Info("adding volume")
+			q.qemuConfig.Devices = q.arch.append9PVolume(q.qemuConfig.Devices, v)
+		}
 	case types.Socket:
 		q.qemuConfig.Devices = q.arch.appendSocket(q.qemuConfig.Devices, v)
 	case kataVSOCK:

@@ -36,6 +36,9 @@ const (
 
 	//VhostUserBlk represents a block vhostuser device type
 	VhostUserBlk = "vhost-user-blk-pci"
+
+	//VhostUserFS represents a virtio-fs vhostuser device type
+	VhostUserFS = "vhost-user-fs-pci"
 )
 
 const (
@@ -182,6 +185,9 @@ type VhostUserDeviceAttrs struct {
 
 	// MacAddress is only meaningful for vhost user net device
 	MacAddress string
+
+	// These are only meaningful for vhost user fs devices
+	Tag string
 }
 
 // GetHostPathFunc is function pointer used to mock GetHostPath in tests.
