@@ -15,7 +15,7 @@ SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../lib/common.bash"
 
 TEST_NAME="memory footprint inside container"
-IMAGE="alpine"
+IMAGE="alpine:3.7"
 CMD="cat /proc/meminfo"
 TMP_FILE=$(mktemp meminfo.XXXXXXXXXX || true)
 

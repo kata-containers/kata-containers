@@ -24,7 +24,7 @@ const (
 	Image = "busybox"
 
 	// AlpineImage is the alpine image
-	AlpineImage = "alpine"
+	AlpineImage = "alpine:3.7"
 
 	// PostgresImage is the postgres image
 	PostgresImage = "postgres"
