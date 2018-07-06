@@ -23,7 +23,6 @@ install_yq() {
 	# https://github.com/mikefarah/yq/releases/tag/<VERSION-HERE>
 	yq_version=$(basename "${yq_latest_url}")
 
-
 	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_linux_${goarch}"
 	curl -o "${yq_path}" -L "${yq_url}"
 	chmod +x "${yq_path}"
@@ -53,3 +52,12 @@ die() {
 info() {
 		echo >&2 "INFO: $*"
 }
+
+get_repo_hash(){
+	local repo_dir=${1:-}
+	[ -d "${repo_dir}" ] || die "${repo_dir} is not a directory"
+	pushd "${repo_dir}" >> /dev/null
+	git rev-parse --verify HEAD
+	popd >> /dev/null
+}
+

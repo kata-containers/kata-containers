@@ -4,61 +4,116 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-set -x
 
 set -o errexit
 set -o nounset
 set -o pipefail
 
-tmp_dir=$(mktemp -d -t build-image-tmp.XXXXXXXXXX)
+[ -z  "${DEBUG:-}"  ] ||  set -x
 
-script_dir=$(dirname "$0")
-source ${script_dir}/../versions.txt
-
-
-readonly OSBUILDER_URL=https://github.com/kata-containers/osbuilder.git
-AGENT_SHA="$kata_agent_hash"
-
-#Image information
-IMG_DISTRO="${osbuilder_default_os:-clearlinux}"
-IMG_OS_VERSION="$clearlinux_version"
-CLR_BASE_URL="https://download.clearlinux.org/releases/${clearlinux_version}/clear/x86_64/os/"
-
-#Initrd information
-INITRD_DISTRO="${osbuilder_default_initrd_os:-alpine}"
-INITRD_OS_VERSION="$alpine_version"
-
-readonly IMAGE_NAME="kata-containers-image_${IMG_DISTRO}_agent_${AGENT_SHA:0:7}.img"
-readonly INITRD_NAME="kata-containers-initrd_${INITRD_DISTRO}_agent_${AGENT_SHA:0:7}.initrd"
-
-rm -f "${IMAGE_NAME}"
-rm -f "${INITRD_NAME}"
+readonly script_name="$(basename "${BASH_SOURCE[0]}")"
+readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly project="kata-containers"
+readonly tmp_dir=$(mktemp -d -t build-image-tmp.XXXXXXXXXX)
+readonly osbuilder_url=https://github.com/${project}/osbuilder.git
 
 
-pushd ${tmp_dir}
-git clone $OSBUILDER_URL osbuilder
-pushd osbuilder
-git checkout $kata_osbuilder_version
+export GOPATH=${GOPATH:-${HOME}/go}
+source "${script_dir}/../../scripts/lib.sh"
 
-sudo -E PATH=$PATH make initrd\
-     DISTRO=$INITRD_DISTRO \
-     AGENT_VERSION=$AGENT_SHA \
-     OS_VERSION=$INITRD_OS_VERSION \
-     DISTRO_ROOTFS="${PWD}/initrd-image" \
-     USE_DOCKER=1 \
-     AGENT_INIT="yes"
 
-sudo -E PATH=$PATH make image \
-     DISTRO=$IMG_DISTRO \
-     AGENT_VERSION=$AGENT_SHA \
-     IMG_OS_VERSION=$IMG_OS_VERSION \
-     DISTRO_ROOTFS="${PWD}/rootfs-image" \
-     BASE_URL=$CLR_BASE_URL
+arch_target="$(uname -m)"
+#image information
+img_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name")
+img_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version")
 
-popd
+#initrd information
+initrd_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name")
+initrd_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version")
 
-popd
-mv "${tmp_dir}/osbuilder/kata-containers.img" "${IMAGE_NAME}"
-mv "${tmp_dir}/osbuilder/kata-containers-initrd.img" "${INITRD_NAME}"
-sudo tar cfz "kata-containers.tar.gz" "${INITRD_NAME}" "${IMAGE_NAME}"
+kata_version="master"
 
+# osbuilder info
+kata_osbuilder_version="${KATA_OSBUILDER_VERSION:-}"
+# Agent version
+agent_version="${AGENT_VERSION:-}"
+
+
+readonly destdir="${script_dir}"
+
+build_initrd(){
+	sudo -E PATH="$PATH" make initrd\
+	     DISTRO="$initrd_distro" \
+	     AGENT_VERSION="${agent_version}" \
+	     OS_VERSION="${initrd_os_version}" \
+	     DISTRO_ROOTFS="${tmp_dir}/initrd-image" \
+	     USE_DOCKER=1 \
+	     AGENT_INIT="yes"
+
+}
+
+build_image(){
+	sudo -E PATH="${PATH}" make image \
+	     DISTRO="${img_distro}" \
+	     AGENT_VERSION="${agent_version}" \
+	     IMG_OS_VERSION="${img_os_version}" \
+	     DISTRO_ROOTFS="${tmp_dir}/rootfs-image"
+}
+
+create_tarball(){
+	agent_sha=$(get_repo_hash "${GOPATH}/src/github.com/kata-containers/agent")
+	#reduce sha size for short names
+	agent_sha=${agent_sha:0:11}
+	tarball_name="kata-containers-${kata_osbuilder_version}-${agent_sha}-${arch_target}.tar.gz"
+	image_name="kata-containers-image_${img_distro}_${kata_osbuilder_version}_agent_${agent_sha}.img"
+	initrd_name="kata-containers-initrd_${initrd_distro}_${kata_osbuilder_version}_agent_${agent_sha}.initrd"
+
+	mv "${tmp_dir}/osbuilder/kata-containers.img" "${image_name}"
+	mv "${tmp_dir}/osbuilder/kata-containers-initrd.img" "${initrd_name}"
+	sudo tar cfzv "${tarball_name}" "${initrd_name}" "${image_name}"
+}
+
+usage(){
+	return_code=${1:-0}
+cat << EOT
+Create image and initrd in a tarball for kata containers.
+Use it to build an image to distribute kata.
+
+Usage:
+${script_name} [options]
+
+Options:
+ -v <version> : Kata version to build images. Use kata release for
+                 for agent and osbuilder.
+
+EOT
+
+exit "${return_code}"
+}
+
+main(){
+	while getopts "v:h" opt
+	do
+		case "$opt" in
+			h)	usage 0 ;;
+			v)	kata_version="${OPTARG}" ;;
+			*) 	echo "Invalid option $opt"; usage 1;;
+		esac
+	done
+	# osbuilder info
+	[ -n "${kata_osbuilder_version}" ] || kata_osbuilder_version="${kata_version}"
+	# Agent version
+	[ -n "${agent_version}" ] || agent_version="${kata_version}"
+
+	shift $(( "$OPTIND" - 1 ))
+	git clone "$osbuilder_url" "${tmp_dir}/osbuilder"
+	pushd "${tmp_dir}/osbuilder"
+	git checkout "${kata_osbuilder_version}"
+	build_initrd
+	build_image
+	create_tarball
+	cp "${tarball_name}" "${destdir}"
+	popd
+}
+
+main $*
