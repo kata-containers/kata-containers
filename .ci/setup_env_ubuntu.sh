@@ -41,24 +41,24 @@ echo "Install libudev-dev"
 chronic sudo -E apt-get install -y libudev-dev
 
 echo "Install Build Tools"
-sudo -E apt install -y build-essential python pkg-config zlib1g-dev
+chronic sudo -E apt install -y build-essential python pkg-config zlib1g-dev
 
 echo -e "Install CRI-O dependencies available for Ubuntu $VERSION_ID"
-sudo -E apt install -y libdevmapper-dev btrfs-tools util-linux
+chronic sudo -E apt install -y libdevmapper-dev btrfs-tools util-linux
 
 if [ "$VERSION_ID" == "16.04" ]; then
 	echo "Install os-tree"
 	sudo -E add-apt-repository ppa:alexlarsson/flatpak -y
-	sudo -E apt update
+	chronic sudo -E apt update
 fi
 
-sudo -E apt install -y libostree-dev
+chronic sudo -E apt install -y libostree-dev
 
 echo "Install YAML validator"
-sudo -E apt install -y yamllint
+chronic sudo -E apt install -y yamllint
 
 echo "Install tools for metrics tests"
-sudo -E apt install -y smem jq
+chronic sudo -E apt install -y smem jq
 
 if [ "$(arch)" == "x86_64" ]; then
 	echo "Install Kata Containers OBS repository"
@@ -69,7 +69,7 @@ if [ "$(arch)" == "x86_64" ]; then
 fi
 
 echo -e "Install cri-containerd dependencies"
-sudo -E apt install -y libseccomp-dev libapparmor-dev btrfs-tools  make gcc pkg-config
+chronic sudo -E apt install -y libseccomp-dev libapparmor-dev btrfs-tools  make gcc pkg-config
 
 echo "Install crudini"
-sudo -E apt install -y crudini
+chronic sudo -E apt install -y crudini
