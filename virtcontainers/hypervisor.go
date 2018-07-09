@@ -76,7 +76,15 @@ const (
 
 	// CPUDevice is CPU device type
 	cpuDev
+
+	// memoryDevice is memory device type
+	memoryDev
 )
+
+type memoryDevice struct {
+	slot   int
+	sizeMB int
+}
 
 // Set sets an hypervisor type based on the input string.
 func (hType *HypervisorType) Set(value string) error {
