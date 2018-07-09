@@ -25,8 +25,9 @@ parts:
       unset GOROOT
       export GOPATH=$(realpath ../go)
       cd ${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/runtime
+      QEMU_ARCH=$(arch)
       make \
-        QEMUPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/bin/qemu-system-x86_64 \
+        QEMUPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/bin/qemu-system-${QEMU_ARCH} \
         PROXYPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/${SNAPCRAFT_PROJECT_NAME}/kata-proxy \
         SHIMPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/${SNAPCRAFT_PROJECT_NAME}/kata-shim \
         KERNELPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/${SNAPCRAFT_PROJECT_NAME}/vmlinuz.container \
@@ -35,7 +36,7 @@ parts:
       make install \
         PREFIX=/usr \
         DESTDIR=${SNAPCRAFT_PART_INSTALL} \
-        QEMUPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/bin/qemu-system-x86_64 \
+        QEMUPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/bin/qemu-system-${QEMU_ARCH} \
         PROXYPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/${SNAPCRAFT_PROJECT_NAME}/kata-proxy \
         SHIMPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/${SNAPCRAFT_PROJECT_NAME}/kata-shim \
         KERNELPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/${SNAPCRAFT_PROJECT_NAME}/vmlinuz.container \
