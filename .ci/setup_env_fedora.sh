@@ -45,10 +45,10 @@ echo "Install bison binary"
 chronic sudo -E dnf -y install bison
 
 echo "Install YAML validator"
-sudo -E dnf -y install yamllint
+chronic sudo -E dnf -y install yamllint
 
 echo "Install tools for metrics tests"
-sudo -E dnf -y install smem jq
+chronic sudo -E dnf -y install smem jq
 
 if [ "$(arch)" == "x86_64" ]; then
 	echo "Install Kata Containers OBS repository"
