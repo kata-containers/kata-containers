@@ -7,9 +7,13 @@ package virtcontainers
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func testSetProxyType(t *testing.T, value string, expected ProxyType) {
@@ -246,5 +250,91 @@ func TestDefaultProxyURLUnknown(t *testing.T) {
 
 	if err := testDefaultProxyURL(socketPath, "foobar", sandboxID); err == nil {
 		t.Fatal()
+	}
+}
+
+func testProxyStart(t *testing.T, agent agent, proxy proxy, proxyType ProxyType) {
+	assert := assert.New(t)
+
+	assert.NotNil(proxy)
+
+	tmpdir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
+	type testData struct {
+		sandbox     *Sandbox
+		params      proxyParams
+		expectedURI string
+		expectError bool
+	}
+
+	invalidPath := filepath.Join(tmpdir, "enoent")
+	expectedSocketPath := filepath.Join(runStoragePath, testSandboxID, "proxy.sock")
+	expectedURI := fmt.Sprintf("unix://%s", expectedSocketPath)
+
+	data := []testData{
+		{&Sandbox{}, proxyParams{}, "", true},
+		{
+			&Sandbox{
+				config: &SandboxConfig{
+					ProxyType: "invalid",
+				},
+			},
+			proxyParams{},
+			"", true,
+		},
+		{
+			&Sandbox{
+				config: &SandboxConfig{
+					ProxyType: proxyType,
+					// invalid - no path
+					ProxyConfig: ProxyConfig{},
+				},
+			},
+			proxyParams{},
+			"", true,
+		},
+		{
+			&Sandbox{
+				config: &SandboxConfig{
+					ProxyType: proxyType,
+					ProxyConfig: ProxyConfig{
+						Path: invalidPath,
+					},
+				},
+			},
+			proxyParams{},
+			"", true,
+		},
+
+		{
+			&Sandbox{
+				id:    testSandboxID,
+				agent: agent,
+				config: &SandboxConfig{
+					ProxyType: proxyType,
+					ProxyConfig: ProxyConfig{
+						Path: "echo",
+					},
+				},
+			},
+			proxyParams{
+				agentURL: "agentURL",
+			},
+			expectedURI, false,
+		},
+	}
+
+	for _, d := range data {
+		pid, uri, err := proxy.start(d.sandbox, d.params)
+		if d.expectError {
+			assert.Error(err)
+			continue
+		}
+
+		assert.NoError(err)
+		assert.True(pid > 0)
+		assert.Equal(d.expectedURI, uri)
 	}
 }
