@@ -220,6 +220,9 @@ type HypervisorConfig struct {
 	//   - virtio-fs
 	SharedFS string
 
+	// VirtioFSDaemon is the virtio-fs vhost-user daemon path
+	VirtioFSDaemon string
+
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.
 	// For example, if there is a value for the "kernel" key in this map,

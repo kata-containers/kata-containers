@@ -143,6 +143,9 @@ type HypervisorConfig struct {
 	//   - virtio-fs
 	SharedFS string
 
+	// VirtioFSDaemon is the virtio-fs vhost-user daemon path
+	VirtioFSDaemon string
+
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 
