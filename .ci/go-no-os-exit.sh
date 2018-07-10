@@ -22,6 +22,8 @@ for f in $candidates; do
 	files="$f $files"
 done
 
+[ -z "$files" ] && echo "No files to check, skipping" && exit 0
+
 if egrep -n '\<os\.Exit\>' $files; then
 	echo "Direct calls to os.Exit() are forbidden, please use exit() so atexit() works"
 	exit 1
