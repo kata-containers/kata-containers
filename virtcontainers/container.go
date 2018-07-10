@@ -1111,6 +1111,9 @@ func (c *Container) removeDrive() (err error) {
 }
 
 func (c *Container) attachDevices() error {
+	// there's no need to do rollback when error happens,
+	// because if attachDevices fails, container creation will fail too,
+	// and rollbackFailingContainerCreation could do all the rollbacks
 	for _, dev := range c.devices {
 		if err := c.sandbox.devManager.AttachDevice(dev.ID, c.sandbox); err != nil {
 			if err == manager.ErrDeviceAttached {
@@ -1122,7 +1125,6 @@ func (c *Container) attachDevices() error {
 	}
 
 	if err := c.sandbox.storeSandboxDevices(); err != nil {
-		//TODO: roll back?
 		return err
 	}
 	return nil
@@ -1132,13 +1134,16 @@ func (c *Container) detachDevices() error {
 	for _, dev := range c.devices {
 		if err := c.sandbox.devManager.DetachDevice(dev.ID, c.sandbox); err != nil {
 			if err == manager.ErrDeviceNotAttached {
-				// skip if device is already attached before
+				// skip if device isn't attached
 				continue
 			}
 			return err
 		}
 	}
 
+	if err := c.sandbox.storeSandboxDevices(); err != nil {
+		return err
+	}
 	return nil
 }
 
