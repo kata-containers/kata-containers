@@ -23,6 +23,7 @@ test:
 
 test-release-tools:
 	@$(MK_DIR)/release/tag_repos_test.sh
+	@$(MK_DIR)/release/update-repository-version_test.sh
 
 test-static-build:
 	@make -f $(MK_DIR)/static-build/qemu/Makefile
