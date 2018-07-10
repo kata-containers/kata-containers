@@ -23,8 +23,11 @@ spec:
         command: [ "sh", "-c" ]
         args:
         - kubectl label node $NODE_NAME kata-containers.io/container-runtime- kata-containers.io/kata-runtime-;
-          systemctl daemon-reload && systemctl restart containerd && systemctl restart crio && systemctl restart kubelet;
-          tail -f /dev/null;
+          systemctl daemon-reload;
+          systemctl restart containerd;
+          systemctl restart crio;
+          systemctl restart kubelet;
+          sleep infinity;
         env:
         - name: NODE_NAME
           valueFrom:
