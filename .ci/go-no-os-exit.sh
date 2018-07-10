@@ -2,8 +2,13 @@
 # Copyright (c) 2018 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
+#
+# Check there are no os.Exit() calls creeping into the code
+# We don't use that exit path in the Kata codebase.
 
 go_packages=.
+
+echo "Checking for no os.Exit() calls for package [${go_packages}]"
 
 candidates=`go list -f '{{.Dir}}/*.go' $go_packages`
 for f in $candidates; do
