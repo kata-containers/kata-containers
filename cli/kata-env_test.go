@@ -783,7 +783,11 @@ func TestEnvHandleSettings(t *testing.T) {
 	_, err = getExpectedSettings(config, tmpdir, configFile)
 	assert.NoError(t, err)
 
-	m := map[string]interface{}{
+	app := cli.NewApp()
+	set := flag.NewFlagSet("test", flag.ContinueOnError)
+	ctx := cli.NewContext(app, set, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{
 		"configFile":    configFile,
 		"runtimeConfig": config,
 	}
@@ -792,7 +796,7 @@ func TestEnvHandleSettings(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
 
-	err = handleSettings(tmpfile, m)
+	err = handleSettings(tmpfile, ctx)
 	assert.NoError(t, err)
 
 	var env EnvInfo
@@ -816,7 +820,10 @@ func TestEnvHandleSettingsInvalidShimConfig(t *testing.T) {
 
 	config.ShimConfig = "invalid shim config"
 
-	m := map[string]interface{}{
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, nil, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{
 		"configFile":    configFile,
 		"runtimeConfig": config,
 	}
@@ -825,47 +832,75 @@ func TestEnvHandleSettingsInvalidShimConfig(t *testing.T) {
 	assert.NoError(err)
 	defer os.Remove(tmpfile.Name())
 
-	err = handleSettings(tmpfile, m)
+	err = handleSettings(tmpfile, ctx)
 	assert.Error(err)
 }
 
 func TestEnvHandleSettingsInvalidParams(t *testing.T) {
-	err := handleSettings(nil, map[string]interface{}{})
-	assert.Error(t, err)
+	assert := assert.New(t)
+
+	tmpdir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
+	configFile, _, err := makeRuntimeConfig(tmpdir)
+	assert.NoError(err)
+
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, nil, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{
+		"configFile": configFile,
+	}
+	err = handleSettings(nil, ctx)
+	assert.Error(err)
 }
 
 func TestEnvHandleSettingsEmptyMap(t *testing.T) {
-	err := handleSettings(os.Stdout, map[string]interface{}{})
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, nil, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{}
+	err := handleSettings(os.Stdout, ctx)
 	assert.Error(t, err)
 }
 
 func TestEnvHandleSettingsInvalidFile(t *testing.T) {
-	m := map[string]interface{}{
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, nil, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{
 		"configFile":    "foo",
 		"runtimeConfig": oci.RuntimeConfig{},
 	}
 
-	err := handleSettings(nil, m)
+	err := handleSettings(nil, ctx)
 	assert.Error(t, err)
 }
 
 func TestEnvHandleSettingsInvalidConfigFileType(t *testing.T) {
-	m := map[string]interface{}{
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, nil, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{
 		"configFile":    123,
 		"runtimeConfig": oci.RuntimeConfig{},
 	}
 
-	err := handleSettings(os.Stderr, m)
+	err := handleSettings(os.Stderr, ctx)
 	assert.Error(t, err)
 }
 
 func TestEnvHandleSettingsInvalidRuntimeConfigType(t *testing.T) {
-	m := map[string]interface{}{
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, nil, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{
 		"configFile":    "/some/where",
 		"runtimeConfig": true,
 	}
 
-	err := handleSettings(os.Stderr, m)
+	err := handleSettings(os.Stderr, ctx)
 	assert.Error(t, err)
 }
 
@@ -883,7 +918,8 @@ func TestEnvCLIFunction(t *testing.T) {
 	assert.NoError(t, err)
 
 	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
+	set := flag.NewFlagSet("test", flag.ContinueOnError)
+	ctx := cli.NewContext(app, set, nil)
 	app.Name = "foo"
 
 	ctx.App.Metadata = map[string]interface{}{
@@ -908,7 +944,6 @@ func TestEnvCLIFunction(t *testing.T) {
 	err = fn(ctx)
 	assert.NoError(t, err)
 
-	set := flag.NewFlagSet("", 0)
 	set.Bool("json", true, "")
 	ctx = cli.NewContext(app, set, nil)
 
