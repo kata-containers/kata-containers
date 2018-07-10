@@ -6,7 +6,9 @@
 # Check there are no os.Exit() calls creeping into the code
 # We don't use that exit path in the Kata codebase.
 
-go_packages=.
+# Allow the path to check to be over-ridden.
+# Default to the current directory.
+go_packages=${1:-.}
 
 echo "Checking for no os.Exit() calls for package [${go_packages}]"
 
