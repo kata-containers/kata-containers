@@ -27,11 +27,19 @@ func NewGenericDevice(devInfo *config.DeviceInfo) *GenericDevice {
 
 // Attach is standard interface of api.Device
 func (device *GenericDevice) Attach(devReceiver api.DeviceReceiver) error {
+	if device.DeviceInfo.Hotplugged {
+		return nil
+	}
+
 	return nil
 }
 
 // Detach is standard interface of api.Device
 func (device *GenericDevice) Detach(devReceiver api.DeviceReceiver) error {
+	if !device.DeviceInfo.Hotplugged {
+		return nil
+	}
+
 	return nil
 }
 

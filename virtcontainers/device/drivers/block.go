@@ -34,6 +34,10 @@ func NewBlockDevice(devInfo *config.DeviceInfo) *BlockDevice {
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
 func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
+	if device.DeviceInfo.Hotplugged {
+		return nil
+	}
+
 	// Increment the block index for the sandbox. This is used to determine the name
 	// for the block device in the case where the block device is used as container
 	// rootfs and the predicted block device name needs to be provided to the agent.
@@ -87,6 +91,10 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
 func (device *BlockDevice) Detach(devReceiver api.DeviceReceiver) error {
+	if !device.DeviceInfo.Hotplugged {
+		return nil
+	}
+
 	deviceLogger().WithField("device", device.DeviceInfo.HostPath).Info("Unplugging block device")
 
 	if err := devReceiver.HotplugRemoveDevice(device, config.DeviceBlock); err != nil {

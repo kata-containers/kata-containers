@@ -46,6 +46,10 @@ func NewVFIODevice(devInfo *config.DeviceInfo) *VFIODevice {
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
 func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) error {
+	if device.DeviceInfo.Hotplugged {
+		return nil
+	}
+
 	vfioGroup := filepath.Base(device.DeviceInfo.HostPath)
 	iommuDevicesPath := filepath.Join(config.SysIOMMUPath, vfioGroup, "devices")
 
@@ -85,6 +89,20 @@ func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) error {
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
 func (device *VFIODevice) Detach(devReceiver api.DeviceReceiver) error {
+	if !device.DeviceInfo.Hotplugged {
+		return nil
+	}
+
+	// hotplug a VFIO device is actually hotplugging a group of iommu devices
+	if err := devReceiver.HotplugRemoveDevice(device, config.DeviceVFIO); err != nil {
+		deviceLogger().WithError(err).Error("Failed to remove device")
+		return err
+	}
+
+	deviceLogger().WithFields(logrus.Fields{
+		"device-group": device.DeviceInfo.HostPath,
+		"device-type":  "vfio-passthrough",
+	}).Info("Device group attached")
 	device.DeviceInfo.Hotplugged = false
 	return nil
 }
