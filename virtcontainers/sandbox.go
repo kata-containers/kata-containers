@@ -1203,6 +1203,14 @@ func (s *Sandbox) Pause() error {
 		return err
 	}
 
+	//After the sandbox is paused, it's needed to stop its monitor,
+	//Otherwise, its monitors will receive timeout errors if it is
+	//paused for a long time, thus its monitor will not tell it's a
+	//crash caused timeout or just a paused timeout.
+	if s.monitor != nil {
+		s.monitor.stop()
+	}
+
 	return s.pauseSetStates()
 }
 
