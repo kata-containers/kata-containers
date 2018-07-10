@@ -14,8 +14,9 @@
     + [Kata cleanup](#kata-cleanup-)
 
 
-[kata-deploy](kata-deploy) provides a Dockerfile which contains all of the binaries
-and artifacts required to run Kata Containers, as well as reference daemonsets which can be utilized to install Kata Containers on a running Kubernetes cluster.
+[kata-deploy](kata-deploy) provides a Dockerfile, which contains all of the binaries
+and artifacts required to run Kata Containers, as well as reference daemonsets, which can
+be utilized to install Kata Containers on a running Kubernetes cluster.
 
 Note, installation through daemonsets only succesfully installs `kata-containers.io/kata-runtime` on
 a node if it uses either containerd or CRI-O CRI-shims.
@@ -118,7 +119,7 @@ the cluster identifying the CRI shim in use. For example,
 
 Depending the value of `kata-containers.io/container-runtime` label on the node, either the CRI-O or
 containerd kata installation daemonset executes. These daemonsets install
-the necessary kata binaries, configuration files and virtual machine artifacts on
+the necessary kata binaries, configuration files, and virtual machine artifacts on
 the node. Once installed, the daemonset adds a node label `kata-containers.io/kata-runtime=true` and reconfigures
 either CRI-O or containerd to make use of Kata for untrusted workloads. As a final step the daemonset
 restarts either CRI-O or containerd and kubelet. Upon deletion, the daemonset removes the kata binaries
