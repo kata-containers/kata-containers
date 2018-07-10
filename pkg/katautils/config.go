@@ -93,6 +93,7 @@ type hypervisor struct {
 	BlockDeviceDriver       string `toml:"block_device_driver"`
 	EntropySource           string `toml:"entropy_source"`
 	SharedFS                string `toml:"shared_fs"`
+	VirtioFSDaemon          string `toml:"virtio_fs_daemon"`
 	BlockDeviceCacheSet     bool   `toml:"block_device_cache_set"`
 	BlockDeviceCacheDirect  bool   `toml:"block_device_cache_direct"`
 	BlockDeviceCacheNoflush bool   `toml:"block_device_cache_noflush"`
@@ -543,6 +544,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	if sharedFS == config.VirtioFS && h.VirtioFSDaemon == "" {
+		return vc.HypervisorConfig{},
+			errors.New("cannot enable virtio-fs without daemon path in configuration file")
+	}
+
 	useVSock := false
 	if h.useVSock() {
 		if utils.SupportsVsocks() {
@@ -571,6 +577,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DefaultBridges:          h.defaultBridges(),
 		DisableBlockDeviceUse:   h.DisableBlockDeviceUse,
 		SharedFS:                sharedFS,
+		VirtioFSDaemon:          h.VirtioFSDaemon,
 		MemPrealloc:             h.MemPrealloc,
 		HugePages:               h.HugePages,
 		Mlock:                   !h.Swap,
