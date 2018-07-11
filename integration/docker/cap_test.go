@@ -75,9 +75,12 @@ var _ = Describe("capabilities", func() {
 		selectCaps("sys_chroot"),
 		selectCaps("sys_nice"),
 		selectCaps("sys_pacct"),
+		selectCaps("sys_ptrace"),
 		selectCaps("sys_rawio"),
 		selectCaps("sys_resource"),
+		selectCaps("sys_module"),
 		selectCaps("sys_time"),
+		selectCaps("sys_tty_config"),
 		selectCaps("syslog"),
 	)
 })
