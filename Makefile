@@ -395,7 +395,8 @@ go-test: $(GENERATED_FILES)
 
 check-go-static:
 	$(QUIET_CHECK).ci/static-checks.sh
-	$(QUIET_CHECK).ci/go-no-os-exit.sh
+	$(QUIET_CHECK).ci/go-no-os-exit.sh ./cli
+	$(QUIET_CHECK).ci/go-no-os-exit.sh ./virtcontainers
 
 coverage:
 	$(QUIET_TEST).ci/go-test.sh html-coverage
