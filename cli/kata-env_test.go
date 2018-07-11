@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -669,7 +670,7 @@ func TestEnvGetAgentInfo(t *testing.T) {
 	assert.Equal(t, expectedAgent, agent)
 }
 
-func testEnvShowSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
+func testEnvShowTOMLSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
 
 	runtime := RuntimeInfo{}
 
@@ -738,6 +739,77 @@ func testEnvShowSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
 	return nil
 }
 
+func testEnvShowJSONSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
+
+	runtime := RuntimeInfo{}
+
+	hypervisor := HypervisorInfo{
+		Path:        "/resolved/hypervisor/path",
+		MachineType: "hypervisor-machine-type",
+	}
+
+	image := ImageInfo{
+		Path: "/resolved/image/path",
+	}
+
+	kernel := KernelInfo{
+		Path:       "/kernel/path",
+		Parameters: "foo=bar xyz",
+	}
+
+	proxy := ProxyInfo{
+		Type:    "proxy-type",
+		Version: "proxy-version",
+		Path:    "file:///proxy-url",
+		Debug:   false,
+	}
+
+	shim := ShimInfo{
+		Type:    "shim-type",
+		Version: "shim-version",
+		Path:    "/resolved/shim/path",
+	}
+
+	agent := AgentInfo{
+		Type: "agent-type",
+	}
+
+	expectedHostDetails, err := getExpectedHostDetails(tmpdir)
+	assert.NoError(t, err)
+
+	env := EnvInfo{
+		Runtime:    runtime,
+		Hypervisor: hypervisor,
+		Image:      image,
+		Kernel:     kernel,
+		Proxy:      proxy,
+		Shim:       shim,
+		Agent:      agent,
+		Host:       expectedHostDetails,
+	}
+
+	err = writeJSONSettings(env, tmpfile)
+	if err != nil {
+		return err
+	}
+
+	contents, err := getFileContents(tmpfile.Name())
+	assert.NoError(t, err)
+
+	buf := new(bytes.Buffer)
+	encoder := json.NewEncoder(buf)
+	// Ensure we have the same human readable layout
+	encoder.SetIndent("", "  ")
+	err = encoder.Encode(env)
+	assert.NoError(t, err)
+
+	expectedContents := buf.String()
+
+	assert.Equal(t, expectedContents, contents)
+
+	return nil
+}
+
 func TestEnvShowSettings(t *testing.T) {
 	tmpdir, err := ioutil.TempDir("", "")
 	if err != nil {
@@ -749,7 +821,13 @@ func TestEnvShowSettings(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
 
-	err = testEnvShowSettings(t, tmpdir, tmpfile)
+	err = testEnvShowTOMLSettings(t, tmpdir, tmpfile)
+	assert.NoError(t, err)
+
+	// Reset the file to empty for next test
+	tmpfile.Truncate(0)
+	tmpfile.Seek(0, 0)
+	err = testEnvShowJSONSettings(t, tmpdir, tmpfile)
 	assert.NoError(t, err)
 }
 
@@ -767,7 +845,13 @@ func TestEnvShowSettingsInvalidFile(t *testing.T) {
 	// close the file
 	tmpfile.Close()
 
-	err = testEnvShowSettings(t, tmpdir, tmpfile)
+	err = testEnvShowTOMLSettings(t, tmpdir, tmpfile)
+	assert.Error(t, err)
+
+	// Reset the file to empty for next test
+	tmpfile.Truncate(0)
+	tmpfile.Seek(0, 0)
+	err = testEnvShowJSONSettings(t, tmpdir, tmpfile)
 	assert.Error(t, err)
 }
 
