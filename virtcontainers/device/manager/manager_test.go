@@ -201,3 +201,41 @@ func TestAttachBlockDevice(t *testing.T) {
 	err = device.Detach(devReceiver)
 	assert.Nil(t, err)
 }
+
+func TestAttachDetachDevice(t *testing.T) {
+	dm := NewDeviceManager(VirtioSCSI, nil)
+
+	path := "/dev/hda"
+	deviceInfo := config.DeviceInfo{
+		HostPath:      path,
+		ContainerPath: path,
+		DevType:       "b",
+	}
+
+	devReceiver := &api.MockDeviceReceiver{}
+	device, err := dm.NewDevice(deviceInfo)
+	assert.Nil(t, err)
+
+	// attach device
+	err = dm.AttachDevice(device.DeviceID(), devReceiver)
+	assert.Nil(t, err)
+	// attach device again(twice)
+	err = dm.AttachDevice(device.DeviceID(), devReceiver)
+	assert.NotNil(t, err)
+	assert.Equal(t, err, ErrDeviceAttached, "attach device twice should report error %q", ErrDeviceAttached)
+
+	attached := dm.IsDeviceAttached(device.DeviceID())
+	assert.True(t, attached)
+
+	// detach device
+	err = dm.DetachDevice(device.DeviceID(), devReceiver)
+	assert.Nil(t, err)
+	// detach device again(twice)
+	err = dm.DetachDevice(device.DeviceID(), devReceiver)
+	assert.NotNil(t, err)
+	assert.Equal(t, err, ErrDeviceNotAttached, "attach device twice should report error %q", ErrDeviceNotAttached)
+
+	attached = dm.IsDeviceAttached(device.DeviceID())
+	assert.False(t, attached)
+
+}
