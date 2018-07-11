@@ -762,6 +762,7 @@ func TestEnvShowSettingsInvalidFile(t *testing.T) {
 
 	tmpfile, err := ioutil.TempFile("", "envShowSettings-")
 	assert.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
 
 	// close the file
 	tmpfile.Close()
