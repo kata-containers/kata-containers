@@ -14,6 +14,7 @@ source "${cidir}/lib.sh"
 apply_depends_on
 
 arch=$(arch)
+INSTALL_KATA="${INSTALL_KATA:-yes}"
 
 echo "Set up environment"
 if [ "$ID" == ubuntu ];then
@@ -27,6 +28,10 @@ else
 	exit 1
 fi
 
+if ! command -v docker > /dev/null; then
+        "${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker install
+fi
+
 if [ "$arch" = x86_64 ]; then
 	if grep -q "N" /sys/module/kvm_intel/parameters/nested; then
 		echo "enable Nested Virtualization"
@@ -37,23 +42,10 @@ else
 	die "Unsupported architecture: $arch"
 fi
 
-echo "Install Kata Containers image"
-bash -f "${cidir}/install_kata_image.sh"
-
-echo "Install Kata Containers Kernel"
-"${cidir}/install_kata_kernel.sh"
-
-echo "Install Qemu"
-bash -f "${cidir}/install_qemu.sh"
-
-echo "Install Kata Containers shim"
-bash -f "${cidir}/install_shim.sh"
-
-echo "Install Kata Containers proxy"
-bash -f "${cidir}/install_proxy.sh"
-
-echo "Install Kata Containers runtime"
-bash -f "${cidir}/install_runtime.sh"
+if [ "${INSTALL_KATA}" == "yes" ];then
+	echo "Install Kata sources"
+	bash -f ${cidir}/install_kata.sh
+fi
 
 echo "Install CNI plugins"
 bash -f "${cidir}/install_cni_plugins.sh"

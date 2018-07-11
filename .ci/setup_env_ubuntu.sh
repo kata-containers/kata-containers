@@ -20,10 +20,6 @@ sudo -E apt install -y moreutils
 echo "Install kata containers dependencies"
 chronic sudo -E apt install -y libtool automake autotools-dev autoconf bc alien libpixman-1-dev coreutils
 
-if ! command -v docker > /dev/null; then
-	"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker install
-fi
-
 echo "Install qemu dependencies"
 chronic sudo -E apt install -y libcap-dev libattr1-dev libcap-ng-dev librbd-dev
 
