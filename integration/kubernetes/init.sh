@@ -18,11 +18,13 @@ source "${SCRIPT_PATH}/../../.ci/lib.sh"
 sudo iptables -P FORWARD ACCEPT
 
 # Remove existing CNI configurations:
-cni_interface="cni0"
 sudo rm -rf /var/lib/cni/networks/*
 sudo rm -rf /etc/cni/net.d/*
-sudo ip link set dev "$cni_interface" down
-sudo ip link del "$cni_interface"
+cni_interface="cni0"
+if ip a show "$cni_interface"; then
+	sudo ip link set dev "$cni_interface" down
+	sudo ip link del "$cni_interface"
+fi
 
 echo "Start crio service"
 sudo systemctl start crio
