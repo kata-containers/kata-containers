@@ -6,7 +6,7 @@
 
 set -e
 
-IMAGE_TYPE="assets.image.meta.image-type-aarch64"
+IMAGE_TYPE="assets.image.architecture.aarch64.name"
 
 #packaged kata agent haven't been supported in any mainstream distribution
 get_packaged_agent_version() {
