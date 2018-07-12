@@ -71,7 +71,25 @@ build_kernel() {
 	OK
 }
 
-pushd ${tmp_dir}
+test_kata() {
+	local cidir="${script_dir}/../.ci/"
+	echo "test kata with new kernel config"
+	[ -z "${CI:-}" ] && echo "skip: Not in CI" && return
+	echo "Setup kernel source"
+	${build_kernel_sh} setup
+	echo "Build kernel"
+	${build_kernel_sh} build
+	echo "Install kernel"
+	sudo -E PATH="$PATH" "${build_kernel_sh}" install
+
+	source "${cidir}/lib.sh"
+	pushd "${tests_repo_dir:-no-defined}"
+	.ci/run.sh
+	popd
+}
+
+pushd "${tmp_dir}"
 check_help
 build_kernel
+test_kata
 popd
