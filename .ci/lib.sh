@@ -11,6 +11,21 @@ die(){
 	exit 1
 }
 
+export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
+export tests_repo_dir="$GOPATH/src/$tests_repo"
+
+clone_tests_repo()
+{
+	# KATA_CI_NO_NETWORK is (has to be) ignored if there is
+	# no existing clone.
+	if [ -d "${tests_repo_dir}" ]  && [ -n "${KATA_CI_NO_NETWORK:-}" ]
+	then
+		return
+	fi
+
+	go get -d -u "$tests_repo" || true
+}
+
 install_yq() {
 	GOPATH=${GOPATH:-${HOME}/go}
 	local yq_path="${GOPATH}/bin/yq"

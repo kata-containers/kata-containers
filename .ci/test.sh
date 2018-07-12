@@ -31,6 +31,11 @@ make_target() {
 
 	test-build-kernel)
 		[ -n "${CI}" ] && check_kata_kernel_version
+		# Setup testing script to test Kata with new kernel changes.
+		[ -n "${CI}" ] && clone_tests_repo &&
+			pushd "${tests_repo_dir}" &&
+			.ci/setup.sh &&
+			popd
 		;;
 	esac
 
