@@ -26,10 +26,10 @@ check_kata_kernel_version(){
 }
 
 install_yq() {
-	GOPATH=${GOPATH:-${HOME}/go}
-	local yq_path="${GOPATH}/bin/yq"
+	path=$1
+	local yq_path=${path}/yq
 	local yq_pkg="github.com/mikefarah/yq"
-	[ -x  "${GOPATH}/bin/yq" ] && return
+	[ -x  "${yq_path}" ] && return
 
 	case "$(arch)" in
 	"aarch64")
@@ -45,7 +45,7 @@ install_yq() {
 		;;
 	esac
 
-	mkdir -p "${GOPATH}/bin"
+	mkdir -p "${path}"
 
 	# Workaround to get latest release from github (to not use github token).
 	# Get the redirection to latest release on github.

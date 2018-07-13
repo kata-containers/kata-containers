@@ -7,13 +7,14 @@
 
 MK_DIR :=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 SED := sed
-YQ := $(shell go env GOPATH)/bin/yq
+YQ := $(MK_DIR)/yq
 SNAPCRAFT_FILE := snap/snapcraft.yaml
 VERSIONS_YAML_FILE := versions.yaml
 VERSIONS_YAML_FILE_URL := https://raw.githubusercontent.com/kata-containers/runtime/master/versions.yaml
 VERSION_FILE := VERSION
 VERSION_FILE_URL := https://raw.githubusercontent.com/kata-containers/runtime/master/VERSION
 
+export MK_DIR
 export YQ
 export VERSION_FILE
 export VERSIONS_YAML_FILE
@@ -32,7 +33,7 @@ test-packaging-tools:
 	@$(MK_DIR)/obs-packaging/build_from_docker.sh
 
 $(YQ):
-	@bash -c "source .ci/lib.sh; install_yq"
+	@bash -c "source .ci/lib.sh; install_yq $${MK_DIR}"
 
 $(VERSION_FILE):
 	@curl -sO $(VERSION_FILE_URL)
