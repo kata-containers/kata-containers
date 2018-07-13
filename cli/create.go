@@ -187,13 +187,8 @@ var systemdKernelParam = []vc.Param{
 	},
 }
 
-func getKernelParams(containerID string, needSystemd bool) []vc.Param {
-	p := []vc.Param{
-		{
-			Key:   "ip",
-			Value: fmt.Sprintf("::::::%s::off::", containerID),
-		},
-	}
+func getKernelParams(needSystemd bool) []vc.Param {
+	p := []vc.Param{}
 
 	if needSystemd {
 		p = append(p, systemdKernelParam...)
@@ -209,7 +204,7 @@ func needSystemd(config vc.HypervisorConfig) bool {
 // setKernelParams adds the user-specified kernel parameters (from the
 // configuration file) to the defaults so that the former take priority.
 func setKernelParams(containerID string, runtimeConfig *oci.RuntimeConfig) error {
-	defaultKernelParams := getKernelParamsFunc(containerID, needSystemd(runtimeConfig.HypervisorConfig))
+	defaultKernelParams := getKernelParamsFunc(needSystemd(runtimeConfig.HypervisorConfig))
 
 	if runtimeConfig.HypervisorConfig.Debug {
 		strParams := vc.SerializeParams(defaultKernelParams, "=")
