@@ -15,16 +15,18 @@ func TestMockHypervisorInit(t *testing.T) {
 
 	sandbox := &Sandbox{
 		config: &SandboxConfig{
+			ID: "mock_sandbox",
 			HypervisorConfig: HypervisorConfig{
 				KernelPath:     "",
 				ImagePath:      "",
 				HypervisorPath: "",
 			},
 		},
+		storage: &filesystem{},
 	}
 
 	// wrong config
-	if err := m.init(sandbox); err == nil {
+	if err := m.init(sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.config.VMConfig, sandbox.storage); err == nil {
 		t.Fatal()
 	}
 
@@ -35,7 +37,7 @@ func TestMockHypervisorInit(t *testing.T) {
 	}
 
 	// right config
-	if err := m.init(sandbox); err != nil {
+	if err := m.init(sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.config.VMConfig, sandbox.storage); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -43,9 +45,7 @@ func TestMockHypervisorInit(t *testing.T) {
 func TestMockHypervisorCreateSandbox(t *testing.T) {
 	var m *mockHypervisor
 
-	config := SandboxConfig{}
-
-	if err := m.createSandbox(config); err != nil {
+	if err := m.createSandbox(); err != nil {
 		t.Fatal(err)
 	}
 }

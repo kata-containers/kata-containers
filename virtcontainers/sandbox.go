@@ -771,11 +771,11 @@ func newSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
 		}
 	}()
 
-	if err = s.hypervisor.init(s); err != nil {
+	if err = s.hypervisor.init(s.id, &sandboxConfig.HypervisorConfig, sandboxConfig.VMConfig, s.storage); err != nil {
 		return nil, err
 	}
 
-	if err = s.hypervisor.createSandbox(sandboxConfig); err != nil {
+	if err = s.hypervisor.createSandbox(); err != nil {
 		return nil, err
 	}
 
