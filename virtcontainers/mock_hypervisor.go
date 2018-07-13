@@ -46,6 +46,10 @@ func (m *mockHypervisor) resumeSandbox() error {
 	return nil
 }
 
+func (m *mockHypervisor) saveSandbox() error {
+	return nil
+}
+
 func (m *mockHypervisor) addDevice(devInfo interface{}, devType deviceType) error {
 	return nil
 }

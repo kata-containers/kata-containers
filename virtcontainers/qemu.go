@@ -64,11 +64,16 @@ type qemu struct {
 	arch qemuArch
 }
 
-const qmpCapErrMsg = "Failed to negoatiate QMP capabilities"
+const (
+	consoleSocket = "console.sock"
+	qmpSocket     = "qmp.sock"
 
-const qmpSocket = "qmp.sock"
+	qmpCapErrMsg                      = "Failed to negoatiate QMP capabilities"
+	qmpCapMigrationBypassSharedMemory = "bypass-shared-memory"
+	qmpExecCatCmd                     = "exec:cat"
 
-const consoleSocket = "console.sock"
+	scsiControllerID = "scsi0"
+)
 
 var qemuMajorVersion int
 var qemuMinorVersion int
@@ -84,10 +89,6 @@ type operation int
 const (
 	addDevice operation = iota
 	removeDevice
-)
-
-const (
-	scsiControllerID = "scsi0"
 )
 
 type qmpLogger struct {
@@ -191,6 +192,12 @@ func (q *qemu) init(id string, hypervisorConfig *HypervisorConfig, vmConfig Reso
 		q.Logger().Debug("Creating UUID")
 		q.state.UUID = uuid.Generate().String()
 
+		// The path might already exist, but in case of VM templating,
+		// we have to create it since the sandbox has not created it yet.
+		if err = os.MkdirAll(filepath.Join(runStoragePath, id), dirMode); err != nil {
+			return err
+		}
+
 		if err = q.storage.storeHypervisorState(q.id, q.state); err != nil {
 			return err
 		}
@@ -242,7 +249,7 @@ func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 }
 
 func (q *qemu) qmpSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(runStoragePath, id, qmpSocket)
+	return utils.BuildSocketPath(RunVMStoragePath, id, qmpSocket)
 }
 
 func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
@@ -334,6 +341,26 @@ func (q *qemu) buildDevices(initrdPath string) ([]govmmQemu.Device, *govmmQemu.I
 
 }
 
+func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) govmmQemu.Incoming {
+	incoming := govmmQemu.Incoming{}
+
+	if q.config.BootToBeTemplate || q.config.BootFromTemplate {
+		knobs.FileBackedMem = true
+		memory.Path = q.config.MemoryPath
+
+		if q.config.BootToBeTemplate {
+			knobs.FileBackedMemShared = true
+		}
+
+		if q.config.BootFromTemplate {
+			incoming.MigrationType = govmmQemu.MigrationExec
+			incoming.Exec = "cat " + q.config.DevicesStatePath
+		}
+	}
+
+	return incoming
+}
+
 // createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.
 func (q *qemu) createSandbox() error {
 	machine, err := q.getQemuMachine()
@@ -378,6 +405,8 @@ func (q *qemu) createSandbox() error {
 		InitrdPath: initrdPath,
 		Params:     params,
 	}
+
+	incoming := q.setupTemplate(&knobs, &memory)
 
 	rtc := govmmQemu.RTC{
 		Base:     "utc",
@@ -439,6 +468,7 @@ func (q *qemu) createSandbox() error {
 		RTC:         rtc,
 		QMPSockets:  qmpSockets,
 		Knobs:       knobs,
+		Incoming:    incoming,
 		VGA:         "none",
 		GlobalParam: "kvm-pit.lost_tick_policy=discard",
 		Bios:        firmwarePath,
@@ -545,7 +575,18 @@ func (q *qemu) stopSandbox() error {
 		return err
 	}
 
-	return qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
+	err = qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
+	if err != nil {
+		q.Logger().WithError(err).Error("Fail to execute qmp QUIT")
+		return err
+	}
+
+	err = os.RemoveAll(RunVMStoragePath + q.id)
+	if err != nil {
+		q.Logger().WithError(err).Error("Fail to clean up vm directory")
+	}
+
+	return nil
 }
 
 func (q *qemu) togglePauseSandbox(pause bool) error {
@@ -987,7 +1028,59 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
 func (q *qemu) getSandboxConsole(id string) (string, error) {
-	return utils.BuildSocketPath(runStoragePath, id, consoleSocket)
+	return utils.BuildSocketPath(RunVMStoragePath, id, consoleSocket)
+}
+
+func (q *qemu) saveSandbox() error {
+	defer func(qemu *qemu) {
+		if q.qmpMonitorCh.qmp != nil {
+			q.qmpMonitorCh.qmp.Shutdown()
+		}
+	}(q)
+
+	q.Logger().Info("save sandbox")
+
+	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
+
+	// Auto-closed by QMPStart().
+	disconnectCh := make(chan struct{})
+
+	qmp, _, err := govmmQemu.QMPStart(q.qmpMonitorCh.ctx, q.qmpMonitorCh.path, cfg, disconnectCh)
+	if err != nil {
+		q.Logger().WithError(err).Error("Failed to connect to QEMU instance")
+		return err
+	}
+
+	q.qmpMonitorCh.qmp = qmp
+
+	err = qmp.ExecuteQMPCapabilities(q.qmpMonitorCh.ctx)
+	if err != nil {
+		q.Logger().WithError(err).Error(qmpCapErrMsg)
+		return err
+	}
+
+	// BootToBeTemplate sets the VM to be a template that other VMs can clone from. We would want to
+	// bypass shared memory when saving the VM to a local file through migration exec.
+	if q.config.BootToBeTemplate {
+		err = q.qmpMonitorCh.qmp.ExecSetMigrationCaps(q.qmpMonitorCh.ctx, []map[string]interface{}{
+			{
+				"capability": qmpCapMigrationBypassSharedMemory,
+				"state":      true,
+			},
+		})
+		if err != nil {
+			q.Logger().WithError(err).Error("set migration bypass shared memory")
+			return err
+		}
+	}
+
+	err = q.qmpMonitorCh.qmp.ExecSetMigrateArguments(q.qmpMonitorCh.ctx, fmt.Sprintf("%s>%s", qmpExecCatCmd, q.config.DevicesStatePath))
+	if err != nil {
+		q.Logger().WithError(err).Error("exec migration")
+		return err
+	}
+
+	return nil
 }
 
 // genericAppendBridges appends to devices the given bridges
