@@ -35,7 +35,8 @@ type Container struct {
 // VCMock is a type that provides an implementation of the VC interface.
 // It is used for testing.
 type VCMock struct {
-	SetLoggerFunc func(logger logrus.FieldLogger)
+	SetLoggerFunc  func(logger logrus.FieldLogger)
+	SetFactoryFunc func(factory vc.Factory)
 
 	CreateSandboxFunc  func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error)
 	DeleteSandboxFunc  func(sandboxID string) (vc.VCSandbox, error)

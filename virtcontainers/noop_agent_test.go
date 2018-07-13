@@ -14,7 +14,7 @@ func testCreateNoopContainer() (*Sandbox, *Container, error) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -244,7 +244,7 @@ func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestCreateSandboxHyperstartAgentSuccessful(t *testing.T) {
 	proxy.Start()
 	defer proxy.Stop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +330,7 @@ func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
 	}
 	defer kataProxyMock.Stop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +347,7 @@ func TestCreateSandboxFailing(t *testing.T) {
 
 	config := SandboxConfig{}
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p.(*Sandbox) != nil || err == nil {
 		t.Fatal()
 	}
@@ -358,7 +358,7 @@ func TestDeleteSandboxNoopAgentSuccessful(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +401,7 @@ func TestDeleteSandboxHyperstartAgentSuccessful(t *testing.T) {
 	proxy.Start()
 	defer proxy.Stop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -452,7 +452,7 @@ func TestDeleteSandboxKataAgentSuccessful(t *testing.T) {
 	}
 	defer kataProxyMock.Stop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -751,7 +751,7 @@ func TestRunSandboxNoopAgentSuccessful(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	p, err := RunSandbox(config)
+	p, err := RunSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -787,7 +787,7 @@ func TestRunSandboxHyperstartAgentSuccessful(t *testing.T) {
 	hyperConfig := config.AgentConfig.(HyperConfig)
 	config.AgentConfig = hyperConfig
 
-	p, err := RunSandbox(config)
+	p, err := RunSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -833,7 +833,7 @@ func TestRunSandboxKataAgentSuccessful(t *testing.T) {
 	}
 	defer kataProxyMock.Stop()
 
-	p, err := RunSandbox(config)
+	p, err := RunSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -855,7 +855,7 @@ func TestRunSandboxFailing(t *testing.T) {
 
 	config := SandboxConfig{}
 
-	p, err := RunSandbox(config)
+	p, err := RunSandbox(config, nil)
 	if p != nil || err == nil {
 		t.Fatal()
 	}
@@ -868,7 +868,7 @@ func TestListSandboxSuccessful(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -928,7 +928,7 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 		},
 	}
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -985,7 +985,7 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 		},
 	}
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1014,7 +1014,7 @@ func TestStatusSandboxFailingFetchSandboxConfig(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1034,7 +1034,7 @@ func TestStatusPodSandboxFailingFetchSandboxState(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1069,7 +1069,7 @@ func TestCreateContainerSuccessful(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1100,7 +1100,7 @@ func TestCreateContainerFailingNoSandbox(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1130,7 +1130,7 @@ func TestDeleteContainerSuccessful(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1184,7 +1184,7 @@ func TestDeleteContainerFailingNoContainer(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1249,7 +1249,7 @@ func TestStartContainerFailingNoContainer(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1272,7 +1272,7 @@ func TestStartContainerFailingSandboxNotStarted(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1493,7 +1493,7 @@ func TestStopContainerFailingNoContainer(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1674,7 +1674,7 @@ func TestEnterContainerFailingNoContainer(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1731,7 +1731,7 @@ func TestStatusContainerSuccessful(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1782,7 +1782,7 @@ func TestStatusContainerStateReady(t *testing.T) {
 	contID := "101"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1845,7 +1845,7 @@ func TestStatusContainerStateRunning(t *testing.T) {
 	contID := "101"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1917,7 +1917,7 @@ func TestStatusContainerFailing(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1940,7 +1940,7 @@ func TestStatsContainerFailing(t *testing.T) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if p == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -1973,7 +1973,7 @@ func TestStatsContainer(t *testing.T) {
 	assert.Error(err)
 
 	config := newTestSandboxConfigNoop()
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
 
@@ -2023,7 +2023,7 @@ func TestProcessListContainer(t *testing.T) {
 	assert.Error(err)
 
 	config := newTestSandboxConfigNoop()
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	assert.NoError(err)
 	assert.NotNil(p)
 
@@ -2117,7 +2117,7 @@ func createAndStartSandbox(config SandboxConfig) (sandbox VCSandbox, sandboxDir 
 	err error) {
 
 	// Create sandbox
-	sandbox, err = CreateSandbox(config)
+	sandbox, err = CreateSandbox(config, nil)
 	if sandbox == nil || err != nil {
 		return nil, "", err
 	}
@@ -2158,7 +2158,7 @@ func createStartStopDeleteSandbox(b *testing.B, sandboxConfig SandboxConfig) {
 
 func createStartStopDeleteContainers(b *testing.B, sandboxConfig SandboxConfig, contConfigs []ContainerConfig) {
 	// Create sandbox
-	p, err := CreateSandbox(sandboxConfig)
+	p, err := CreateSandbox(sandboxConfig, nil)
 	if err != nil {
 		b.Fatalf("Could not create sandbox: %s", err)
 	}
@@ -2326,7 +2326,7 @@ func TestFetchSandbox(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	s, err := CreateSandbox(config)
+	s, err := CreateSandbox(config, nil)
 	if s == nil || err != nil {
 		t.Fatal(err)
 	}
@@ -2348,7 +2348,7 @@ func TestReleaseSandbox(t *testing.T) {
 
 	config := newTestSandboxConfigNoop()
 
-	s, err := CreateSandbox(config)
+	s, err := CreateSandbox(config, nil)
 	if s == nil || err != nil {
 		t.Fatal(err)
 	}

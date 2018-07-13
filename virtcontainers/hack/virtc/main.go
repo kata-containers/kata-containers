@@ -324,7 +324,7 @@ func runSandbox(context *cli.Context) error {
 		return fmt.Errorf("Could not build sandbox config: %s", err)
 	}
 
-	_, err = vc.RunSandbox(sandboxConfig)
+	_, err = vc.RunSandbox(sandboxConfig, nil)
 	if err != nil {
 		return fmt.Errorf("Could not run sandbox: %s", err)
 	}
@@ -338,7 +338,7 @@ func createSandbox(context *cli.Context) error {
 		return fmt.Errorf("Could not build sandbox config: %s", err)
 	}
 
-	p, err := vc.CreateSandbox(sandboxConfig)
+	p, err := vc.CreateSandbox(sandboxConfig, nil)
 	if err != nil {
 		return fmt.Errorf("Could not create sandbox: %s", err)
 	}
