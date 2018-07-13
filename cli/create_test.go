@@ -838,7 +838,7 @@ func TestCreateInvalidKernelParams(t *testing.T) {
 		getKernelParamsFunc = savedFunc
 	}()
 
-	getKernelParamsFunc = func(containerID string, needSystemd bool) []vc.Param {
+	getKernelParamsFunc = func(needSystemd bool) []vc.Param {
 		return []vc.Param{
 			{
 				Key:   "",
@@ -1135,7 +1135,9 @@ func TestSetKernelParams(t *testing.T) {
 	err := setKernelParams(testContainerID, &config)
 	assert.NoError(err)
 
-	assert.NotEmpty(config.HypervisorConfig.KernelParams)
+	if needSystemd(config.HypervisorConfig) {
+		assert.NotEmpty(config.HypervisorConfig.KernelParams)
+	}
 }
 
 func TestSetKernelParamsUserOptionTakesPriority(t *testing.T) {
