@@ -96,3 +96,11 @@ func TestMockHypervisorGetSandboxConsole(t *testing.T) {
 		t.Fatalf("Got %s\nExpecting %s", result, expected)
 	}
 }
+
+func TestMockHypervisorSaveSandbox(t *testing.T) {
+	var m *mockHypervisor
+
+	if err := m.saveSandbox(); err != nil {
+		t.Fatal(err)
+	}
+}
