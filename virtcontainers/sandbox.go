@@ -779,7 +779,7 @@ func newSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
 		return nil, err
 	}
 
-	agentConfig := newAgentConfig(sandboxConfig)
+	agentConfig := newAgentConfig(sandboxConfig.AgentType, sandboxConfig.AgentConfig)
 	if err = s.agent.init(s, agentConfig); err != nil {
 		return nil, err
 	}

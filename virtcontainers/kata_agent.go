@@ -119,11 +119,19 @@ func parseVSOCKAddr(sock string) (uint32, uint32, error) {
 	return uint32(cid), uint32(port), nil
 }
 
-func (k *kataAgent) generateVMSocket(sandbox *Sandbox, c KataAgentConfig) error {
+func (k *kataAgent) getVMPath(id string) string {
+	return filepath.Join(RunVMStoragePath, id)
+}
+
+func (k *kataAgent) getSharePath(id string) string {
+	return filepath.Join(kataHostSharedDir, id)
+}
+
+func (k *kataAgent) generateVMSocket(id string, c KataAgentConfig) error {
 	cid, port, err := parseVSOCKAddr(c.GRPCSocket)
 	if err != nil {
 		// We need to generate a host UNIX socket path for the emulated serial port.
-		kataSock, err := utils.BuildSocketPath(runStoragePath, sandbox.id, defaultKataSocketName)
+		kataSock, err := utils.BuildSocketPath(k.getVMPath(id), defaultKataSocketName)
 		if err != nil {
 			return err
 		}
@@ -148,7 +156,7 @@ func (k *kataAgent) generateVMSocket(sandbox *Sandbox, c KataAgentConfig) error 
 func (k *kataAgent) init(sandbox *Sandbox, config interface{}) (err error) {
 	switch c := config.(type) {
 	case KataAgentConfig:
-		if err := k.generateVMSocket(sandbox, c); err != nil {
+		if err := k.generateVMSocket(sandbox.id, c); err != nil {
 			return err
 		}
 		k.keepConn = c.LongLiveConn
@@ -196,10 +204,22 @@ func (k *kataAgent) capabilities() capabilities {
 	return caps
 }
 
-func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
+func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error {
+	if config != nil {
+		switch c := config.(type) {
+		case KataAgentConfig:
+			if err := k.generateVMSocket(id, c); err != nil {
+				return err
+			}
+			k.keepConn = c.LongLiveConn
+		default:
+			return fmt.Errorf("Invalid config type")
+		}
+	}
+
 	switch s := k.vmSocket.(type) {
 	case Socket:
-		err := sandbox.hypervisor.addDevice(s, serialPortDev)
+		err := h.addDevice(s, serialPortDev)
 		if err != nil {
 			return err
 		}
@@ -209,18 +229,27 @@ func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
 		return fmt.Errorf("Invalid config type")
 	}
 
+	if builtin {
+		k.proxyBuiltIn = true
+		k.state.URL, _ = k.agentURL()
+	}
+
 	// Adding the shared volume.
 	// This volume contains all bind mounted container bundles.
 	sharedVolume := Volume{
 		MountTag: mountGuest9pTag,
-		HostPath: filepath.Join(kataHostSharedDir, sandbox.id),
+		HostPath: sharePath,
 	}
 
 	if err := os.MkdirAll(sharedVolume.HostPath, dirMode); err != nil {
 		return err
 	}
 
-	return sandbox.hypervisor.addDevice(sharedVolume, fsDev)
+	return h.addDevice(sharedVolume, fsDev)
+}
+
+func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
+	return k.configure(sandbox.hypervisor, sandbox.id, k.getSharePath(sandbox.id), k.proxyBuiltIn, nil)
 }
 
 func cmdToKataProcess(cmd Cmd) (process *grpc.Process, err error) {
@@ -719,35 +748,15 @@ func (k *kataAgent) rollbackFailingContainerCreation(c *Container) {
 	}
 }
 
-func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process, err error) {
-	ociSpecJSON, ok := c.config.Annotations[vcAnnotations.ConfigJSONKey]
-	if !ok {
-		return nil, errorMissingOCISpec
-	}
-
-	var ctrStorages []*grpc.Storage
-	var ctrDevices []*grpc.Device
-
-	// The rootfs storage volume represents the container rootfs
-	// mount point inside the guest.
-	// It can be a block based device (when using block based container
-	// overlay on the host) mount or a 9pfs one (for all other overlay
-	// implementations).
-	rootfs := &grpc.Storage{}
-
-	// This is the guest absolute root path for that container.
-	rootPathParent := filepath.Join(kataGuestSharedDir, c.id)
-	rootPath := filepath.Join(rootPathParent, rootfsDir)
-
-	// In case the container creation fails, the following defer statement
-	// takes care of rolling back actions previously performed.
-	defer func() {
-		if err != nil {
-			k.rollbackFailingContainerCreation(c)
-		}
-	}()
-
+func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
 	if c.state.Fstype != "" {
+		// The rootfs storage volume represents the container rootfs
+		// mount point inside the guest.
+		// It can be a block based device (when using block based container
+		// overlay on the host) mount or a 9pfs one (for all other overlay
+		// implementations).
+		rootfs := &grpc.Storage{}
+
 		// This is a block based device rootfs.
 
 		// Pass a drive name only in case of virtio-blk driver.
@@ -773,24 +782,53 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 			rootfs.Options = []string{"nouuid"}
 		}
 
+		return rootfs, nil
+	}
+	// This is not a block based device rootfs.
+	// We are going to bind mount it into the 9pfs
+	// shared drive between the host and the guest.
+	// With 9pfs we don't need to ask the agent to
+	// mount the rootfs as the shared directory
+	// (kataGuestSharedDir) is already mounted in the
+	// guest. We only need to mount the rootfs from
+	// the host and it will show up in the guest.
+	if err := bindMountContainerRootfs(kataHostSharedDir, sandbox.id, c.id, c.rootFs, false); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process, err error) {
+	ociSpecJSON, ok := c.config.Annotations[vcAnnotations.ConfigJSONKey]
+	if !ok {
+		return nil, errorMissingOCISpec
+	}
+
+	var ctrStorages []*grpc.Storage
+	var ctrDevices []*grpc.Device
+	var rootfs *grpc.Storage
+
+	// This is the guest absolute root path for that container.
+	rootPathParent := filepath.Join(kataGuestSharedDir, c.id)
+	rootPath := filepath.Join(rootPathParent, rootfsDir)
+
+	// In case the container creation fails, the following defer statement
+	// takes care of rolling back actions previously performed.
+	defer func() {
+		if err != nil {
+			k.rollbackFailingContainerCreation(c)
+		}
+	}()
+
+	if rootfs, err = k.buildContainerRootfs(sandbox, c, rootPathParent); err != nil {
+		return nil, err
+	} else if rootfs != nil {
 		// Add rootfs to the list of container storage.
 		// We only need to do this for block based rootfs, as we
 		// want the agent to mount it into the right location
 		// (kataGuestSharedDir/ctrID/
 		ctrStorages = append(ctrStorages, rootfs)
-
-	} else {
-		// This is not a block based device rootfs.
-		// We are going to bind mount it into the 9pfs
-		// shared drive between the host and the guest.
-		// With 9pfs we don't need to ask the agent to
-		// mount the rootfs as the shared directory
-		// (kataGuestSharedDir) is already mounted in the
-		// guest. We only need to mount the rootfs from
-		// the host and it will show up in the guest.
-		if err = bindMountContainerRootfs(kataHostSharedDir, sandbox.id, c.id, c.rootFs, false); err != nil {
-			return nil, err
-		}
 	}
 
 	ociSpec := &specs.Spec{}
@@ -861,11 +899,12 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 
 	createNSList := []ns.NSType{ns.NSTypePID}
 
-	enterNSList := []ns.Namespace{
-		{
+	enterNSList := []ns.Namespace{}
+	if sandbox.networkNS.NetNsPath != "" {
+		enterNSList = append(enterNSList, ns.Namespace{
 			Path: sandbox.networkNS.NetNsPath,
 			Type: ns.NSTypeNet,
-		},
+		})
 	}
 
 	return prepareAndStartShim(sandbox, k.shim, c.id, req.ExecId,

@@ -7,11 +7,13 @@ package virtcontainers
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"reflect"
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart"
+	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 )
 
@@ -155,4 +157,44 @@ func TestProcessHyperRouteDestIPv6Failure(t *testing.T) {
 	}
 
 	testProcessHyperRoute(t, route, testRouteDeviceName, nil)
+}
+
+func TestHyperPathAPI(t *testing.T) {
+	assert := assert.New(t)
+
+	h1 := &hyper{}
+	h2 := &hyper{}
+	id := "foobar"
+
+	// getVMPath
+	path1 := h1.getVMPath(id)
+	path2 := h2.getVMPath(id)
+	assert.Equal(path1, path2)
+
+	// getSharePath
+	path1 = h1.getSharePath(id)
+	path2 = h2.getSharePath(id)
+	assert.Equal(path1, path2)
+}
+
+func TestHyperConfigure(t *testing.T) {
+	assert := assert.New(t)
+
+	dir, err := ioutil.TempDir("", "hyperstart-test")
+	assert.Nil(err)
+
+	h := &hyper{}
+	m := &mockHypervisor{}
+	c := HyperConfig{}
+	id := "foobar"
+
+	invalidAgent := KataAgentConfig{}
+	err = h.configure(m, id, dir, true, invalidAgent)
+	assert.Nil(err)
+
+	err = h.configure(m, id, dir, true, c)
+	assert.Nil(err)
+
+	err = h.configure(m, id, dir, false, c)
+	assert.Nil(err)
 }
