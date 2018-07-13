@@ -9,3 +9,8 @@ prime/
 stage/
 snap/.snapcraft/
 snap/snapcraft.yaml
+snap-build/*.log
+snap-build/*.img
+snap-build/*.fd
+snap-build/id_rsa*
+snap-build/seed/user-data
