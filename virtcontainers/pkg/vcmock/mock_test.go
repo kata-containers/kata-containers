@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/factory"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -20,7 +21,10 @@ const (
 	testContainerID = "testContainerID"
 )
 
-var loggerTriggered = 0
+var (
+	loggerTriggered  = 0
+	factoryTriggered = 0
+)
 
 func TestVCImplementations(t *testing.T) {
 	// official implementation
@@ -674,4 +678,35 @@ func TestVCMockResumeContainer(t *testing.T) {
 	err = m.ResumeContainer(config.ID, config.ID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
+}
+
+func TestVCMockSetVMFactory(t *testing.T) {
+	assert := assert.New(t)
+
+	m := &VCMock{}
+	assert.Nil(m.SetFactoryFunc)
+
+	hyperConfig := vc.HypervisorConfig{
+		KernelPath: "foobar",
+		ImagePath:  "foobar",
+	}
+	vmConfig := vc.VMConfig{
+		HypervisorType:   vc.MockHypervisor,
+		AgentType:        vc.NoopAgentType,
+		HypervisorConfig: hyperConfig,
+	}
+
+	f, err := factory.NewFactory(factory.Config{VMConfig: vmConfig}, false)
+	assert.Nil(err)
+
+	assert.Equal(factoryTriggered, 0)
+	m.SetFactory(f)
+	assert.Equal(factoryTriggered, 0)
+
+	m.SetFactoryFunc = func(factory vc.Factory) {
+		factoryTriggered = 1
+	}
+
+	m.SetFactory(f)
+	assert.Equal(factoryTriggered, 1)
 }

@@ -16,6 +16,7 @@ import (
 // VC is the Virtcontainers interface
 type VC interface {
 	SetLogger(logger logrus.FieldLogger)
+	SetFactory(Factory)
 
 	CreateSandbox(sandboxConfig SandboxConfig) (VCSandbox, error)
 	DeleteSandbox(sandboxID string) (VCSandbox, error)

@@ -440,6 +440,7 @@ type Sandbox struct {
 	id string
 
 	sync.Mutex
+	factory    Factory
 	hypervisor hypervisor
 	agent      agent
 	storage    resourceStorage
@@ -679,12 +680,12 @@ func createAssets(sandboxConfig *SandboxConfig) error {
 // It will create and store the sandbox structure, and then ask the hypervisor
 // to physically create that sandbox i.e. starts a VM for that sandbox to eventually
 // be started.
-func createSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
+func createSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
 	if err := createAssets(&sandboxConfig); err != nil {
 		return nil, err
 	}
 
-	s, err := newSandbox(sandboxConfig)
+	s, err := newSandbox(sandboxConfig, factory)
 	if err != nil {
 		return nil, err
 	}
@@ -718,7 +719,7 @@ func createSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
 	return s, nil
 }
 
-func newSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
+func newSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
 	if sandboxConfig.valid() == false {
 		return nil, fmt.Errorf("Invalid sandbox configuration")
 	}
@@ -734,6 +735,7 @@ func newSandbox(sandboxConfig SandboxConfig) (*Sandbox, error) {
 
 	s := &Sandbox{
 		id:              sandboxConfig.ID,
+		factory:         factory,
 		hypervisor:      hypervisor,
 		agent:           agent,
 		storage:         &filesystem{},
@@ -821,7 +823,8 @@ func fetchSandbox(sandboxID string) (sandbox *Sandbox, err error) {
 		return nil, err
 	}
 
-	sandbox, err = createSandbox(config)
+	// fetchSandbox is not suppose to create new sandbox VM.
+	sandbox, err = createSandbox(config, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sandbox with config %+v: %v", config, err)
 	}
@@ -935,7 +938,28 @@ func (s *Sandbox) removeNetwork() error {
 func (s *Sandbox) startVM() error {
 	s.Logger().Info("Starting VM")
 
+	// FIXME: This would break cached VMs. We need network hotplug and move
+	// oci hooks and netns handling to cli. See #273.
 	if err := s.network.run(s.networkNS.NetNsPath, func() error {
+		if s.factory != nil {
+			vm, err := s.factory.GetVM(VMConfig{
+				HypervisorType:   s.config.HypervisorType,
+				HypervisorConfig: s.config.HypervisorConfig,
+				AgentType:        s.config.AgentType,
+				AgentConfig:      s.config.AgentConfig,
+			})
+			if err != nil {
+				return err
+			}
+			err = vm.assignSandbox(s)
+			if err != nil {
+				return err
+			}
+			// FIXME: factory vm needs network hotplug to add Nics.
+			s.networkNS.NetNsPath = ""
+			return nil
+		}
+
 		return s.hypervisor.startSandbox()
 	}); err != nil {
 		return err
