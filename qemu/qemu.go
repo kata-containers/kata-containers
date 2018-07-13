@@ -82,6 +82,9 @@ const (
 
 	// VirtioSerialPort is the serial port device driver.
 	VirtioSerialPort = "virtserialport"
+
+	// VHostVSockPCI is the vhost vsock pci driver.
+	VHostVSockPCI = "vhost-vsock-pci"
 )
 
 // ObjectType is a string representing a qemu object type.
