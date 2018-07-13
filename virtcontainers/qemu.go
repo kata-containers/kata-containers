@@ -359,7 +359,6 @@ func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
 	// bridge gets the first available PCI address i.e bridgePCIStartAddr
 	devices = q.arch.appendBridges(devices, q.state.Bridges)
 
-	devices = q.arch.append9PVolumes(devices, sandboxConfig.Volumes)
 	console, err := q.getSandboxConsole(sandboxConfig.ID)
 	if err != nil {
 		return err

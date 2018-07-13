@@ -50,9 +50,6 @@ type qemuArch interface {
 	// memoryTopology returns the memory topology using the given amount of memoryMb and hostMemoryMb
 	memoryTopology(memoryMb, hostMemoryMb uint64) govmmQemu.Memory
 
-	// append9PVolumes appends volumes to devices
-	append9PVolumes(devices []govmmQemu.Device, volumes []Volume) []govmmQemu.Device
-
 	// appendConsole appends a console to devices
 	appendConsole(devices []govmmQemu.Device, path string) []govmmQemu.Device
 
@@ -251,15 +248,6 @@ func (q *qemuArchBase) memoryTopology(memoryMb, hostMemoryMb uint64) govmmQemu.M
 	}
 
 	return memory
-}
-
-func (q *qemuArchBase) append9PVolumes(devices []govmmQemu.Device, volumes []Volume) []govmmQemu.Device {
-	// Add the shared volumes
-	for _, v := range volumes {
-		devices = q.append9PVolume(devices, v)
-	}
-
-	return devices
 }
 
 func (q *qemuArchBase) appendConsole(devices []govmmQemu.Device, path string) []govmmQemu.Device {
