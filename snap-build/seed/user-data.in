@@ -1,0 +1,21 @@
+#cloud-config
+@APT_PROXY@
+package_upgrade: false
+users:
+- lock-passwd: true
+  name: @USER@
+  shell: /bin/bash
+  ssh-authorized-keys:
+  - @SSH_KEY@
+  sudo: ALL=(ALL) NOPASSWD:ALL
+write_files:
+- content: |
+    [Service]
+    Environment=@DOCKER_ENV@
+  path: /etc/systemd/system/docker.service.d/http-proxy.conf
+- content: |
+    @ENV@
+  path: /etc/environment
+- content: |
+    {"dns": [@DOCKER_DNS@]}
+  path: /etc/docker/daemon.json
