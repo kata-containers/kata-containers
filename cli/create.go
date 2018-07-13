@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	vf "github.com/kata-containers/runtime/virtcontainers/factory"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/urfave/cli"
 )
@@ -104,6 +105,25 @@ func create(containerID, bundlePath, console, pidFilePath string, detach bool,
 	containerType, err := ociSpec.ContainerType()
 	if err != nil {
 		return err
+	}
+
+	if runtimeConfig.FactoryConfig.Template {
+		factoryConfig := vf.Config{
+			Template: true,
+			VMConfig: vc.VMConfig{
+				HypervisorType:   runtimeConfig.HypervisorType,
+				HypervisorConfig: runtimeConfig.HypervisorConfig,
+				AgentType:        runtimeConfig.AgentType,
+				AgentConfig:      runtimeConfig.AgentConfig,
+			},
+		}
+		kataLog.WithField("factory", factoryConfig).Info("load vm factory")
+		f, err := vf.NewFactory(factoryConfig, true)
+		if err != nil {
+			kataLog.WithError(err).Info("load vm factory failed")
+		} else {
+			vci.SetFactory(f)
+		}
 	}
 
 	disableOutput := noNeedForOutput(detach, ociSpec.Process.Terminal)
