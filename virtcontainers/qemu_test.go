@@ -86,7 +86,7 @@ func TestQemuInit(t *testing.T) {
 		t.Fatalf("Could not create parent directory %s: %v", parentDir, err)
 	}
 
-	if err := q.init(sandbox); err != nil {
+	if err := q.init(sandbox.id, &sandbox.config.HypervisorConfig, sandbox.config.VMConfig, sandbox.storage); err != nil {
 		t.Fatal(err)
 	}
 
@@ -117,7 +117,7 @@ func TestQemuInitMissingParentDirFail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := q.init(sandbox); err == nil {
+	if err := q.init(sandbox.id, &sandbox.config.HypervisorConfig, sandbox.config.VMConfig, sandbox.storage); err == nil {
 		t.Fatal("Qemu init() expected to fail because of missing parent directory for storage")
 	}
 }
@@ -249,7 +249,7 @@ func TestQemuAddDeviceSerialPortDev(t *testing.T) {
 func TestQemuGetSandboxConsole(t *testing.T) {
 	q := &qemu{}
 	sandboxID := "testSandboxID"
-	expected := filepath.Join(runStoragePath, sandboxID, defaultConsole)
+	expected := filepath.Join(runStoragePath, sandboxID, consoleSocket)
 
 	result, err := q.getSandboxConsole(sandboxID)
 	if err != nil {
