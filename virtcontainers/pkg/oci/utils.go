@@ -91,12 +91,20 @@ type CompatOCISpec struct {
 	Process *CompatOCIProcess `json:"process,omitempty"`
 }
 
+// FactoryConfig is a structure to set the VM factory configuration.
+type FactoryConfig struct {
+	// Template enables VM templating support in VM factory.
+	Template bool
+}
+
 // RuntimeConfig aggregates all runtime specific settings
 type RuntimeConfig struct {
 	VMConfig vc.Resources
 
 	HypervisorType   vc.HypervisorType
 	HypervisorConfig vc.HypervisorConfig
+
+	FactoryConfig FactoryConfig
 
 	AgentType   vc.AgentType
 	AgentConfig interface{}
