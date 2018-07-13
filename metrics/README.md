@@ -131,9 +131,10 @@ we provide a bash API to aid storing results in a uniform manner.
 
 The preferred API to store results is through the provided JSON API.
 
-The API provides two groups of functions:
+The API provides the following groups of functions:
 - A set of functions to init/save the data and add 'top level' JSON fragments
 - A set of functions to construct arrays of JSON fragments, which are then added as a top level fragment when complete
+- A set of functions to construct elements of an array from sub-fragments, and then finalize that element when all fragments are added.
 
 Construction of JSON data under bash could be relatively complex. This API does not pretend
 to support all possible data constructs or features, and individual tests may find they need
@@ -191,6 +192,20 @@ Add a fully formed JSON fragment to the JSON array store.
 | Arg  | Description |
 | ---- | ----------- |
 | json | A fully formed JSON fragment |
+
+#### metrics_json_add_array_fragment(json)
+
+Add a fully formed JSON fragment to the current array element.
+
+| Arg  | Description |
+| ---- | ----------- |
+| json | A fully formed JSON fragment |
+
+#### metrics_json_close_array_element()
+
+Finalize (close) the current array element. This encorporates
+any array_fragment parts into the current array element, closes that
+array element, and reset the in-flight array_fragment store.
 
 #### metrics_json_end_array(name)
 
