@@ -7,6 +7,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -668,7 +670,7 @@ func TestEnvGetAgentInfo(t *testing.T) {
 	assert.Equal(t, expectedAgent, agent)
 }
 
-func testEnvShowSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
+func testEnvShowTOMLSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
 
 	runtime := RuntimeInfo{}
 
@@ -717,7 +719,7 @@ func testEnvShowSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
 		Host:       expectedHostDetails,
 	}
 
-	err = showSettings(env, tmpfile)
+	err = writeTOMLSettings(env, tmpfile)
 	if err != nil {
 		return err
 	}
@@ -727,6 +729,77 @@ func testEnvShowSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
 
 	buf := new(bytes.Buffer)
 	encoder := toml.NewEncoder(buf)
+	err = encoder.Encode(env)
+	assert.NoError(t, err)
+
+	expectedContents := buf.String()
+
+	assert.Equal(t, expectedContents, contents)
+
+	return nil
+}
+
+func testEnvShowJSONSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
+
+	runtime := RuntimeInfo{}
+
+	hypervisor := HypervisorInfo{
+		Path:        "/resolved/hypervisor/path",
+		MachineType: "hypervisor-machine-type",
+	}
+
+	image := ImageInfo{
+		Path: "/resolved/image/path",
+	}
+
+	kernel := KernelInfo{
+		Path:       "/kernel/path",
+		Parameters: "foo=bar xyz",
+	}
+
+	proxy := ProxyInfo{
+		Type:    "proxy-type",
+		Version: "proxy-version",
+		Path:    "file:///proxy-url",
+		Debug:   false,
+	}
+
+	shim := ShimInfo{
+		Type:    "shim-type",
+		Version: "shim-version",
+		Path:    "/resolved/shim/path",
+	}
+
+	agent := AgentInfo{
+		Type: "agent-type",
+	}
+
+	expectedHostDetails, err := getExpectedHostDetails(tmpdir)
+	assert.NoError(t, err)
+
+	env := EnvInfo{
+		Runtime:    runtime,
+		Hypervisor: hypervisor,
+		Image:      image,
+		Kernel:     kernel,
+		Proxy:      proxy,
+		Shim:       shim,
+		Agent:      agent,
+		Host:       expectedHostDetails,
+	}
+
+	err = writeJSONSettings(env, tmpfile)
+	if err != nil {
+		return err
+	}
+
+	contents, err := getFileContents(tmpfile.Name())
+	assert.NoError(t, err)
+
+	buf := new(bytes.Buffer)
+	encoder := json.NewEncoder(buf)
+	// Ensure we have the same human readable layout
+	encoder.SetIndent("", "  ")
 	err = encoder.Encode(env)
 	assert.NoError(t, err)
 
@@ -748,7 +821,13 @@ func TestEnvShowSettings(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
 
-	err = testEnvShowSettings(t, tmpdir, tmpfile)
+	err = testEnvShowTOMLSettings(t, tmpdir, tmpfile)
+	assert.NoError(t, err)
+
+	// Reset the file to empty for next test
+	tmpfile.Truncate(0)
+	tmpfile.Seek(0, 0)
+	err = testEnvShowJSONSettings(t, tmpdir, tmpfile)
 	assert.NoError(t, err)
 }
 
@@ -761,11 +840,18 @@ func TestEnvShowSettingsInvalidFile(t *testing.T) {
 
 	tmpfile, err := ioutil.TempFile("", "envShowSettings-")
 	assert.NoError(t, err)
+	defer os.Remove(tmpfile.Name())
 
 	// close the file
 	tmpfile.Close()
 
-	err = testEnvShowSettings(t, tmpdir, tmpfile)
+	err = testEnvShowTOMLSettings(t, tmpdir, tmpfile)
+	assert.Error(t, err)
+
+	// Reset the file to empty for next test
+	tmpfile.Truncate(0)
+	tmpfile.Seek(0, 0)
+	err = testEnvShowJSONSettings(t, tmpdir, tmpfile)
 	assert.Error(t, err)
 }
 
@@ -782,7 +868,11 @@ func TestEnvHandleSettings(t *testing.T) {
 	_, err = getExpectedSettings(config, tmpdir, configFile)
 	assert.NoError(t, err)
 
-	m := map[string]interface{}{
+	app := cli.NewApp()
+	set := flag.NewFlagSet("test", flag.ContinueOnError)
+	ctx := cli.NewContext(app, set, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{
 		"configFile":    configFile,
 		"runtimeConfig": config,
 	}
@@ -791,7 +881,7 @@ func TestEnvHandleSettings(t *testing.T) {
 	assert.NoError(t, err)
 	defer os.Remove(tmpfile.Name())
 
-	err = handleSettings(tmpfile, m)
+	err = handleSettings(tmpfile, ctx)
 	assert.NoError(t, err)
 
 	var env EnvInfo
@@ -815,7 +905,10 @@ func TestEnvHandleSettingsInvalidShimConfig(t *testing.T) {
 
 	config.ShimConfig = "invalid shim config"
 
-	m := map[string]interface{}{
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, nil, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{
 		"configFile":    configFile,
 		"runtimeConfig": config,
 	}
@@ -824,47 +917,75 @@ func TestEnvHandleSettingsInvalidShimConfig(t *testing.T) {
 	assert.NoError(err)
 	defer os.Remove(tmpfile.Name())
 
-	err = handleSettings(tmpfile, m)
+	err = handleSettings(tmpfile, ctx)
 	assert.Error(err)
 }
 
 func TestEnvHandleSettingsInvalidParams(t *testing.T) {
-	err := handleSettings(nil, map[string]interface{}{})
-	assert.Error(t, err)
+	assert := assert.New(t)
+
+	tmpdir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
+	configFile, _, err := makeRuntimeConfig(tmpdir)
+	assert.NoError(err)
+
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, nil, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{
+		"configFile": configFile,
+	}
+	err = handleSettings(nil, ctx)
+	assert.Error(err)
 }
 
 func TestEnvHandleSettingsEmptyMap(t *testing.T) {
-	err := handleSettings(os.Stdout, map[string]interface{}{})
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, nil, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{}
+	err := handleSettings(os.Stdout, ctx)
 	assert.Error(t, err)
 }
 
 func TestEnvHandleSettingsInvalidFile(t *testing.T) {
-	m := map[string]interface{}{
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, nil, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{
 		"configFile":    "foo",
 		"runtimeConfig": oci.RuntimeConfig{},
 	}
 
-	err := handleSettings(nil, m)
+	err := handleSettings(nil, ctx)
 	assert.Error(t, err)
 }
 
 func TestEnvHandleSettingsInvalidConfigFileType(t *testing.T) {
-	m := map[string]interface{}{
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, nil, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{
 		"configFile":    123,
 		"runtimeConfig": oci.RuntimeConfig{},
 	}
 
-	err := handleSettings(os.Stderr, m)
+	err := handleSettings(os.Stderr, ctx)
 	assert.Error(t, err)
 }
 
 func TestEnvHandleSettingsInvalidRuntimeConfigType(t *testing.T) {
-	m := map[string]interface{}{
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, nil, nil)
+	app.Name = "foo"
+	ctx.App.Metadata = map[string]interface{}{
 		"configFile":    "/some/where",
 		"runtimeConfig": true,
 	}
 
-	err := handleSettings(os.Stderr, m)
+	err := handleSettings(os.Stderr, ctx)
 	assert.Error(t, err)
 }
 
@@ -882,7 +1003,8 @@ func TestEnvCLIFunction(t *testing.T) {
 	assert.NoError(t, err)
 
 	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
+	set := flag.NewFlagSet("test", flag.ContinueOnError)
+	ctx := cli.NewContext(app, set, nil)
 	app.Name = "foo"
 
 	ctx.App.Metadata = map[string]interface{}{
@@ -903,6 +1025,12 @@ func TestEnvCLIFunction(t *testing.T) {
 	defer func() {
 		defaultOutputFile = savedOutputFile
 	}()
+
+	err = fn(ctx)
+	assert.NoError(t, err)
+
+	set.Bool("json", true, "")
+	ctx = cli.NewContext(app, set, nil)
 
 	err = fn(ctx)
 	assert.NoError(t, err)
