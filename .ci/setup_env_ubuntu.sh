@@ -48,7 +48,7 @@ chronic sudo -E apt install -y libdevmapper-dev btrfs-tools util-linux
 
 if [ "$VERSION_ID" == "16.04" ]; then
 	echo "Install os-tree"
-	sudo -E add-apt-repository ppa:alexlarsson/flatpak -y
+	chronic sudo -E add-apt-repository ppa:alexlarsson/flatpak -y
 	chronic sudo -E apt update
 fi
 
@@ -65,7 +65,7 @@ if [ "$(arch)" == "x86_64" ]; then
 	obs_url="http://download.opensuse.org/repositories/home:/katacontainers:/release/xUbuntu_$(lsb_release -rs)/"
 	sudo sh -c "echo 'deb $obs_url /' > /etc/apt/sources.list.d/kata-containers.list"
 	curl -sL  "${obs_url}/Release.key" | sudo apt-key add -
-	sudo -E apt-get update
+	chronic sudo -E apt-get update
 fi
 
 echo -e "Install cri-containerd dependencies"

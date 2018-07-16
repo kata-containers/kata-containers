@@ -25,8 +25,8 @@ sudo bash -c "cat <<EOF > /etc/apt/sources.list.d/kubernetes.list
 deb http://apt.kubernetes.io/ kubernetes-xenial-unstable main
 EOF"
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
-sudo -E apt update
-sudo -E apt install -y kubelet="$kubernetes_version" kubeadm="$kubernetes_version" kubectl="$kubernetes_version"
+chronic sudo -E apt update
+chronic sudo -E apt install -y kubelet="$kubernetes_version" kubeadm="$kubernetes_version" kubectl="$kubernetes_version"
 
 echo "Modify kubelet systemd configuration to use CRI-O"
 k8s_systemd_file="/etc/systemd/system/kubelet.service.d/10-kubeadm.conf"

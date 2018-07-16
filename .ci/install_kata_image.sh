@@ -62,11 +62,11 @@ get_packaged_agent_version() {
 
 install_packaged_image() {
 	if [ "$ID"  == "ubuntu" ]; then
-		sudo -E apt install -y "$PACKAGED_IMAGE"
+		chronic sudo -E apt install -y "$PACKAGED_IMAGE"
 	elif [ "$ID"  == "fedora" ]; then
-		sudo -E dnf install -y "$PACKAGED_IMAGE"
+		chronic sudo -E dnf install -y "$PACKAGED_IMAGE"
 	elif [ "$ID"  == "centos" ]; then
-		sudo -E yum install -y "$PACKAGED_IMAGE"
+		chronic sudo -E yum install -y "$PACKAGED_IMAGE"
 	else
 		die "Linux distribution not supported"
 	fi
