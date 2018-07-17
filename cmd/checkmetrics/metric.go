@@ -56,7 +56,9 @@ type metrics struct {
 // Although the calculations can fail, we don't fail the function
 func (m *metrics) calculate() {
 
-	m.Gap = ((m.MaxVal / m.MinVal) * 100.0) - 100
+	midpoint := (m.MinVal + m.MaxVal) / 2
+	// the gap is the % swing around the midpoint.
+	m.Gap = (((m.MaxVal / midpoint) - 1) * 2) * 100
 	m.stats.Iterations = len(m.stats.Results)
 	m.stats.Mean, _ = stats.Mean(m.stats.Results)
 	m.stats.Min, _ = stats.Min(m.stats.Results)

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -106,7 +107,11 @@ func TestCheckStats(t *testing.T) {
 	m.calculate()
 
 	// Constants here calculated from info coded in struct above
-	assert.Equal(244.44444444444446, m.Gap, "Should be equal")
+
+	// Funky rounding of Gap, as float imprecision actually gives us
+	// 110.00000000000001 - check to within 0.1% then...
+	roundedGap := math.Round(m.Gap/0.001) * 0.001
+	assert.Equal(110.0, roundedGap, "Should be equal")
 	assert.Equal(2.0, m.stats.Mean, "Should be equal")
 	assert.Equal(1.0, m.stats.Min, "Should be equal")
 	assert.Equal(3.0, m.stats.Max, "Should be equal")
@@ -125,7 +130,7 @@ func TestCheckStats(t *testing.T) {
 	assert.Equal("0.90", s[2], "Should be equal")       // Floor
 	assert.Equal("2.00", s[3], "Should be equal")       // Mean
 	assert.Equal("3.10", s[4], "Should be equal")       // Ceiling
-	assert.Equal("244.4%", s[5], "Should be equal")     // Gap
+	assert.Equal("110.0%", s[5], "Should be equal")     // Gap
 	assert.Equal("1.00", s[6], "Should be equal")       // Min
 	assert.Equal("3.00", s[7], "Should be equal")       // Max
 	assert.Equal("200.0%", s[8], "Should be equal")     // Range %
