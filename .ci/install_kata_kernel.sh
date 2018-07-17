@@ -50,12 +50,7 @@ get_packaged_kernel_version() {
 		kernel_version=$(sudo yum --showduplicate list $packaged_kernel | awk '/'$packaged_kernel'/ {print $2}' | cut -d'-' -f1)
 	fi
 
-	if [ -z "$kernel_version" ]; then
-		die "unknown kernel version"
-	else
-		echo "${kernel_version}"
-	fi
-
+	echo "${kernel_version}"
 }
 
 # download the linux kernel, first argument is the kernel version
@@ -72,6 +67,7 @@ download_kernel() {
 # build the linux kernel, first argument is the kernel version
 build_and_install_kernel() {
 	kernel_version=$1
+	download_kernel ${kernel_version}
 	pushd ${tmp_dir}
 	kernel_config_file=$(realpath ${repo_name}/kernel/configs/[${kernel_arch}]*_kata_${hypervisor}_* | tail -1)
 	kernel_patches=$(realpath ${repo_name}/kernel/patches/*)
@@ -90,18 +86,23 @@ build_and_install_kernel() {
 	sudo cp -a "$(realpath vmlinux)" "${kata_kernel_dir}/vmlinux.container"
 	popd
 	popd
+
+	cleanup
 }
 
 install_packaged_kernel(){
+	rc=0
 	if [ "$ID"  == "ubuntu" ]; then
-		chronic sudo apt install -y "$packaged_kernel"
+		chronic sudo apt install -y "$packaged_kernel" || rc=1
 	elif [ "$ID"  == "fedora" ]; then
-		chronic sudo dnf install -y "$packaged_kernel"
+		chronic sudo dnf install -y "$packaged_kernel" || rc=1
 	elif [ "$ID"  == "centos" ]; then
-		chronic sudo yum install -y "$packaged_kernel"
+		chronic sudo yum install -y "$packaged_kernel" || rc=1
 	else
 		die "Unrecognized distro"
 	fi
+
+	return "$rc"
 }
 
 cleanup() {
@@ -115,11 +116,13 @@ main() {
 	current_kernel_version="${kernel_version}.${kata_config_version}"
 	packaged_kernel_version=$(get_packaged_kernel_version)
 	if [ "$packaged_kernel_version" == "$current_kernel_version" ] && [ "$kernel_arch" == "x86_64" ]; then
-		install_packaged_kernel
+		# If installing packaged kernel from OBS fails,
+		# then build and install it from sources.
+		install_packaged_kernel || \
+			build_and_install_kernel ${kernel_version}
+
 	else
-		download_kernel ${kernel_version}
 		build_and_install_kernel ${kernel_version}
-		cleanup
 	fi
 }
 

@@ -27,23 +27,24 @@ get_packaged_qemu_commit() {
 			| awk '/'$PACKAGED_QEMU'/ {print $2}' | cut -d'-' -f1 | cut -d'.' -f4)
 	fi
 
-	if [ -z "$qemu_commit" ]; then
-		die "unknown qemu commit"
-	else
-		echo "${qemu_commit}"
-	fi
+	echo "${qemu_commit}"
 }
 
 install_packaged_qemu() {
+	rc=0
+	# Timeout to download packages from OBS
+	limit=180
 	if [ "$ID"  == "ubuntu" ]; then
-		chronic sudo apt install -y "$PACKAGED_QEMU"
+		chronic sudo apt install -y "$PACKAGED_QEMU" || rc=1
 	elif [ "$ID"  == "fedora" ]; then
-		chronic sudo dnf install -y "$PACKAGED_QEMU"
+		chronic sudo dnf install -y "$PACKAGED_QEMU" || rc=1
 	elif [ "$ID"  == "centos" ]; then
-		chronic sudo yum install -y "$PACKAGED_QEMU"
+		chronic sudo yum install -y "$PACKAGED_QEMU" || rc=1
 	else
 		die "Unrecognized distro"
 	fi
+
+	return "$rc"
 }
 
 build_and_install_qemu() {
@@ -84,7 +85,9 @@ main() {
 		packaged_qemu_commit=$(get_packaged_qemu_commit)
 		short_current_qemu_commit=${CURRENT_QEMU_COMMIT:0:10}
 		if [ "$packaged_qemu_commit" == "$short_current_qemu_commit" ]; then
-			install_packaged_qemu
+			# If installing packaged qemu from OBS fails,
+			# then build and install it from sources.
+			install_packaged_qemu || build_and_install_qemu
 		else
 			build_and_install_qemu
 		fi
@@ -92,7 +95,7 @@ main() {
 		packaged_qemu_version=$(get_packaged_qemu_version)
 		short_current_qemu_version=${CURRENT_QEMU_VERSION#*-}
 		if [ "$packaged_qemu_version" == "$short_current_qemu_version" ]; then
-			install_packaged_qemu
+			install_packaged_qemu || build_and_install_qemu
 		else
 			build_and_install_qemu
 		fi

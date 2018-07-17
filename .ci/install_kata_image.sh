@@ -54,22 +54,22 @@ trap cleanup EXIT
 
 get_packaged_agent_version() {
 	version=$(ls "$IMG_PATH" | grep "$PACKAGED_IMAGE" | cut -d'_' -f4 | cut -d'.' -f1)
-	if [ -z "$version" ]; then
-		die "unknown agent version"
-	fi
 	echo "$version"
 }
 
 install_packaged_image() {
+	rc=0
 	if [ "$ID"  == "ubuntu" ]; then
-		chronic sudo -E apt install -y "$PACKAGED_IMAGE"
+		chronic sudo -E apt install -y "$PACKAGED_IMAGE" || rc=1
 	elif [ "$ID"  == "fedora" ]; then
-		chronic sudo -E dnf install -y "$PACKAGED_IMAGE"
+		chronic sudo -E dnf install -y "$PACKAGED_IMAGE" || rc=1
 	elif [ "$ID"  == "centos" ]; then
-		chronic sudo -E yum install -y "$PACKAGED_IMAGE"
+		chronic sudo -E yum install -y "$PACKAGED_IMAGE" || rc=1
 	else
 		die "Linux distribution not supported"
 	fi
+
+	return "$rc"
 }
 
 update_agent() {
@@ -140,7 +140,13 @@ main() {
 	if [ x"${TEST_INITRD}" == x"yes" ]; then
 		build_image
 	else
-		install_packaged_image
+		# If installing packaged image from OBS fails,
+		# then build and install it from sources.
+		rc=0
+		install_packaged_image || rc=1
+		if [ "$rc" == "1" ]; then
+			build_image && exit 
+		fi
 		packaged_version=$(get_packaged_agent_version)
 		if [ -z "$packaged_version" ]; then
 			build_image
