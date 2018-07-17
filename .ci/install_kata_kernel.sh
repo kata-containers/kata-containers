@@ -94,11 +94,11 @@ build_and_install_kernel() {
 
 install_packaged_kernel(){
 	if [ "$ID"  == "ubuntu" ]; then
-		sudo apt install -y "$packaged_kernel"
+		chronic sudo apt install -y "$packaged_kernel"
 	elif [ "$ID"  == "fedora" ]; then
-		sudo dnf install -y "$packaged_kernel"
+		chronic sudo dnf install -y "$packaged_kernel"
 	elif [ "$ID"  == "centos" ]; then
-		sudo yum install -y "$packaged_kernel"
+		chronic sudo yum install -y "$packaged_kernel"
 	else
 		die "Unrecognized distro"
 	fi

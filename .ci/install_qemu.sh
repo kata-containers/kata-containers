@@ -36,11 +36,11 @@ get_packaged_qemu_commit() {
 
 install_packaged_qemu() {
 	if [ "$ID"  == "ubuntu" ]; then
-		sudo apt install -y "$PACKAGED_QEMU"
+		chronic sudo apt install -y "$PACKAGED_QEMU"
 	elif [ "$ID"  == "fedora" ]; then
-		sudo dnf install -y "$PACKAGED_QEMU"
+		chronic sudo dnf install -y "$PACKAGED_QEMU"
 	elif [ "$ID"  == "centos" ]; then
-		sudo yum install -y "$PACKAGED_QEMU"
+		chronic sudo yum install -y "$PACKAGED_QEMU"
 	else
 		die "Unrecognized distro"
 	fi
