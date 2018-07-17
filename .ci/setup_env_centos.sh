@@ -64,6 +64,9 @@ if [ "$(arch)" == "x86_64" ]; then
 	echo "Install Kata Containers OBS repository"
 	obs_url="http://download.opensuse.org/repositories/home:/katacontainers:/release/CentOS_${VERSION_ID}/home:katacontainers:release.repo"
 	sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo "$obs_url"
+	repo_file="/etc/yum.repos.d/home\:katacontainers\:release.repo"
+	sudo bash -c "echo timeout=10 >> $repo_file"
+	sudo bash -c "echo retries=2 >> $repo_file"
 fi
 
 echo "Install cri-containerd dependencies"
