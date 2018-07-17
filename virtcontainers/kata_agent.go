@@ -1269,6 +1269,8 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	if msgName == "" || handler == nil {
 		return nil, errors.New("Invalid request type")
 	}
+	message := request.(proto.Message)
+	k.Logger().WithField("name", msgName).WithField("req", message.String()).Debug("sending request")
 
 	return handler(context.Background(), request)
 }
