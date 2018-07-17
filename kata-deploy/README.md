@@ -18,8 +18,8 @@
 and artifacts required to run Kata Containers, as well as reference daemonsets, which can
 be utilized to install Kata Containers on a running Kubernetes cluster.
 
-Note, installation through daemonsets only succesfully installs `kata-containers.io/kata-runtime` on
-a node if it uses either containerd or CRI-O CRI-shims.
+Note, installation through daemonsets successfully installs `kata-containers.io/kata-runtime` on
+a node only if it uses either containerd or CRI-O CRI-shims.
 
 ## Quick start:
 
@@ -107,7 +107,7 @@ Virtual Machine artifacts:
 ### Daemonsets and RBAC:
 
 A few daemonsets are introduced for kata-deploy, as well as an RBAC to facilitate
-appyling labels to the nodes.
+applying labels to the nodes.
 
 #### runtime-labeler:
 
@@ -117,7 +117,7 @@ the cluster identifying the CRI shim in use. For example,
 
 #### CRI-O and containerd kata installer
 
-Depending the value of `kata-containers.io/container-runtime` label on the node, either the CRI-O or
+Depending on the value of `kata-containers.io/container-runtime` label on the node, either the CRI-O or
 containerd kata installation daemonset executes. These daemonsets install
 the necessary kata binaries, configuration files, and virtual machine artifacts on
 the node. Once installed, the daemonset adds a node label `kata-containers.io/kata-runtime=true` and reconfigures
@@ -126,7 +126,7 @@ restarts either CRI-O or containerd and kubelet. Upon deletion, the daemonset re
 and VM artifacts and updates the node label to `kata-containers.io/kata-runtime=cleanup.`
 
 ### Kata cleanup:
-This daemonset runs of the node has the label `kata-containers.io/kata-runtime=cleanup.` This daemonsets removes
+This daemonset runs of the node has the label `kata-containers.io/kata-runtime=cleanup.` These daemonsets removes
 the `kata-containers.io/container-runtime` and `kata-containers.io/kata-runtime` labels as well as restarts either CRI-O or containerd systemctl
-daemon and kubelet. You cannot execute these restets during the preStopHook of the Kata installer daemonset,
+daemon and kubelet. You cannot execute these resets during the preStopHook of the Kata installer daemonset,
 which necessitated this final cleanup daemonset.
