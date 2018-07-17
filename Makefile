@@ -54,7 +54,7 @@ DESTDIR := /
 installing = $(findstring install,$(MAKECMDGOALS))
 
 ifeq ($(PREFIX),)
-PREFIX        := /usr/
+PREFIX        := /usr
 EXEC_PREFIX   := $(PREFIX)/local
 else
 EXEC_PREFIX   := $(PREFIX)
