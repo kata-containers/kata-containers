@@ -945,3 +945,20 @@ func TestExecHotplugMemory(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+// Checks vsock-pci hotplug
+func TestExecutePCIVSockAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecutePCIVSockAdd(context.Background(), "vsock-pci0", "3")
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
