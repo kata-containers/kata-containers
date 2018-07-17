@@ -31,8 +31,17 @@ const name = "checkmetrics"
 // usage is the usage of the program.
 const usage = name + ` checks JSON metrics results against a TOML baseline`
 
-// The TOML basefile
-var ciBasefile *baseFile
+var (
+	// The TOML basefile
+	ciBasefile *baseFile
+
+	// If set then we show results as a relative percentage (to the baseline)
+	showPercentage = false
+
+	// System default path for baseline file
+	// the value will be set by Makefile
+	sysBaseFile string
+)
 
 // processMetricsBaseline locates the files matching each entry in the TOML
 // baseline, loads and processes it, and checks if the metrics were in range.
@@ -133,10 +142,6 @@ func processMetricsBaseline(context *cli.Context) (err error) {
 	return
 }
 
-// System default path for baseline file
-// the value will be set by Makefile
-var sysBaseFile string
-
 // checkmetrics main entry point.
 // Do the command line processing, load the TOML file, and do the processing
 // against the data files
@@ -161,6 +166,11 @@ func main() {
 		cli.StringFlag{
 			Name:  "metricsdir",
 			Usage: "directory containing metrics results files",
+		},
+		cli.BoolFlag{
+			Name:        "percentage",
+			Usage:       "present results as percentage differences",
+			Destination: &showPercentage,
 		},
 	}
 

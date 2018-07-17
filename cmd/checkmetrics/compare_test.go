@@ -120,9 +120,7 @@ func TestCheckStats(t *testing.T) {
 	assert.Equal(0.816496580927726, m.stats.SD, "Should be equal")
 	assert.Equal(40.8248290463863, m.stats.CoV, "Should be equal")
 
-	//Check before we have done the calculations - should fail
 	s, err := (&metricsCheck{}).checkstats(m)
-
 	assert.NoError(err)
 
 	assert.Equal("P", s[0], "Should be equal")          // Pass
@@ -136,6 +134,26 @@ func TestCheckStats(t *testing.T) {
 	assert.Equal("200.0%", s[8], "Should be equal")     // Range %
 	assert.Equal("40.8%", s[9], "Should be equal")      // CoV
 	assert.Equal("3", s[10], "Should be equal")         // Iterations
+
+	// And check in percentage presentation mode
+	showPercentage = true
+	s, err = (&metricsCheck{}).checkstats(m)
+	assert.NoError(err)
+
+	assert.Equal("P", s[0], "Should be equal")          // Pass
+	assert.Equal("CheckStats", s[1], "Should be equal") // test name
+	assert.Equal("45.0%", s[2], "Should be equal")      // Floor
+	assert.Equal("100.0%", s[3], "Should be equal")     // Mean
+	assert.Equal("155.0%", s[4], "Should be equal")     // Ceiling
+	assert.Equal("110.0%", s[5], "Should be equal")     // Gap
+	assert.Equal("50.0%", s[6], "Should be equal")      // Min
+	assert.Equal("150.0%", s[7], "Should be equal")     // Max
+	assert.Equal("200.0%", s[8], "Should be equal")     // Range %
+	assert.Equal("40.8%", s[9], "Should be equal")      // CoV
+	assert.Equal("3", s[10], "Should be equal")         // Iterations
+
+	// And put the default back
+	showPercentage = false
 
 	// Funcs called with a Min that fails and a Max that fails
 	// Presumption is that unmodified metrics should pass

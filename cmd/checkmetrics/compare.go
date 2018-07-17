@@ -151,20 +151,52 @@ func (mc *metricsCheck) checkstats(m metrics) (summary []string, err error) {
 	// precision to 'probably big enough', and later we may want to
 	// add an annotation to the TOML baselines to give an indication of
 	// expected values - or, maybe we can derive it from the min/max values
-	summary = append(summary, mc.genSummaryLine(
-		pass,
-		m.Name,
-		// Note this is the check boundary, not the smallest Result seen
-		strconv.FormatFloat(m.MinVal, 'f', 2, 64),
-		strconv.FormatFloat(m.stats.Mean, 'f', 2, 64),
-		// Note this is the check boundary, not the largest Result seen
-		strconv.FormatFloat(m.MaxVal, 'f', 2, 64),
-		strconv.FormatFloat(m.Gap, 'f', 1, 64)+"%",
-		strconv.FormatFloat(m.stats.Min, 'f', 2, 64),
-		strconv.FormatFloat(m.stats.Max, 'f', 2, 64),
-		strconv.FormatFloat(m.stats.RangeSpread, 'f', 1, 64)+"%",
-		strconv.FormatFloat(m.stats.CoV, 'f', 1, 64)+"%",
-		strconv.Itoa(m.stats.Iterations))...)
+
+	// Are we presenting as a percentage based difference
+	if showPercentage {
+		// Work out what our midpoint baseline 'goal' is.
+		midpoint := (m.MinVal + m.MaxVal) / 2
+
+		// Calculate our values as a % based off the mid-point
+		// of the acceptable range.
+		floorpc := (m.MinVal / midpoint) * 100.0
+		ceilpc := (m.MaxVal / midpoint) * 100.0
+		meanpc := (m.stats.Mean / midpoint) * 100.0
+		minpc := (m.stats.Min / midpoint) * 100.0
+		maxpc := (m.stats.Max / midpoint) * 100.0
+
+		// Or present as physical values
+		summary = append(summary, mc.genSummaryLine(
+			pass,
+			m.Name,
+			// Note this is the check boundary, not the smallest Result seen
+			strconv.FormatFloat(floorpc, 'f', 1, 64)+"%",
+			strconv.FormatFloat(meanpc, 'f', 1, 64)+"%",
+			// Note this is the check boundary, not the largest Result seen
+			strconv.FormatFloat(ceilpc, 'f', 1, 64)+"%",
+			strconv.FormatFloat(m.Gap, 'f', 1, 64)+"%",
+			strconv.FormatFloat(minpc, 'f', 1, 64)+"%",
+			strconv.FormatFloat(maxpc, 'f', 1, 64)+"%",
+			strconv.FormatFloat(m.stats.RangeSpread, 'f', 1, 64)+"%",
+			strconv.FormatFloat(m.stats.CoV, 'f', 1, 64)+"%",
+			strconv.Itoa(m.stats.Iterations))...)
+	} else {
+		// Or present as physical values
+		summary = append(summary, mc.genSummaryLine(
+			pass,
+			m.Name,
+			// Note this is the check boundary, not the smallest Result seen
+			strconv.FormatFloat(m.MinVal, 'f', 2, 64),
+			strconv.FormatFloat(m.stats.Mean, 'f', 2, 64),
+			// Note this is the check boundary, not the largest Result seen
+			strconv.FormatFloat(m.MaxVal, 'f', 2, 64),
+			strconv.FormatFloat(m.Gap, 'f', 1, 64)+"%",
+			strconv.FormatFloat(m.stats.Min, 'f', 2, 64),
+			strconv.FormatFloat(m.stats.Max, 'f', 2, 64),
+			strconv.FormatFloat(m.stats.RangeSpread, 'f', 1, 64)+"%",
+			strconv.FormatFloat(m.stats.CoV, 'f', 1, 64)+"%",
+			strconv.Itoa(m.stats.Iterations))...)
+	}
 
 	return
 }
