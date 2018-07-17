@@ -38,6 +38,9 @@ optional:
 | checktype   | string | Property to check ("mean", "max" etc.)             |
 | minval      | float  | Minimum value the checked property should be       |
 | maxval      | float  | Maximum value the checked property should be       |
+| midval      | float  | Middle value used for percentage range check       |
+| minpercent  | float  | Minimum percentage from midval check boundary      |
+| maxpercent  | float  | Maximum percentage from midval check boundary      |
 
 ### Supported file types
 
@@ -82,6 +85,17 @@ the bounds set by the minval and maxval. That is:
 --metricsdir value  directory containing results files
 ```
 
+### Percentage presentation mode
+```
+--percentage        present results as percentage differences
+```
+
+> **Note:** Due to the way the internal comparisons are performed, if `minpercent` and
+> `maxpercent` are not equal, then the percentage range and midpoint value shown in the
+> results table represents the *calculated* midpoint between the min and max, and
+> not the supplied `midval`. This makes the results appear skewed, but the
+> calculations are correct.
+
 ### Help
 ```
 --help, -h          show help
@@ -108,6 +122,21 @@ Report Summary:
 | P   | memory-footprint-ksm | 100000.00 | 101770.22 | 110000.00 | 10.0% | 101770.22 | 101770.22 | 0.0% | 0.0% |   1 |
 +-----+----------------------+-----------+-----------+-----------+-------+-----------+-----------+------+------+-----+
 Fails: 2, Passes 1
+```
+
+Example percentage mode output:
+
+```
+Report Summary:
++-----+----------------------+-------+--------+--------+-------+--------+--------+------+------+-----+
+| P/F |         NAME         |  FLR  |  MEAN  |  CEIL  |  GAP  |  MIN   |  MAX   | RNG  | COV  | ITS |
++-----+----------------------+-------+--------+--------+-------+--------+--------+------+------+-----+
+| *F* | boot-times           | 83.3% | 226.8% | 116.7% | 33.3% | 223.8% | 229.8% | 2.7% | 1.3% |   2 |
+| *F* | memory-footprint     | 95.2% | 271.0% | 104.8% | 9.5%  | 271.0% | 271.0% | 0.0% | 0.0% |   1 |
+| P   | memory-footprint-ksm | 92.7% | 99.3%  | 107.3% | 14.6% | 99.3%  | 99.3%  | 0.0% | 0.0% |   1 |
++-----+----------------------+-------+--------+--------+-------+--------+--------+------+------+-----+
+Fails: 2, Passes 1
+
 ```
 
 ### Output Columns
