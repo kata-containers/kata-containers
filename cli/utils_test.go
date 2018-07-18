@@ -38,6 +38,20 @@ func TestFileExists(t *testing.T) {
 		fmt.Sprintf("File %q should exist", file))
 }
 
+func TestIsEphemeralStorage(t *testing.T) {
+	sampleEphePath := "/var/lib/kubelet/pods/366c3a75-4869-11e8-b479-507b9ddd5ce4/volumes/kubernetes.io~empty-dir/cache-volume"
+	isEphe := IsEphemeralStorage(sampleEphePath)
+	if !isEphe {
+		t.Fatalf("Unable to correctly determine volume type")
+	}
+
+	sampleEphePath = "/var/lib/kubelet/pods/366c3a75-4869-11e8-b479-507b9ddd5ce4/volumes/cache-volume"
+	isEphe = IsEphemeralStorage(sampleEphePath)
+	if isEphe {
+		t.Fatalf("Unable to correctly determine volume type")
+	}
+}
+
 func TestGetFileContents(t *testing.T) {
 	type testData struct {
 		contents string
