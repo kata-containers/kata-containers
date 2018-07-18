@@ -5,7 +5,22 @@
 #
 
 # The time limit in seconds for each test
-TIMEOUT ?= 60
+TIMEOUT := 60
+
+# union for 'make test'
+UNION := functional docker crio docker-compose openshift kubernetes swarm cri-containerd
+
+# get arch
+ARCH := $(shell bash -c '.ci/kata-arch.sh -d')
+
+ARCH_DIR = arch
+ARCH_FILE_SUFFIX = -options.mk
+ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
+
+# Load architecture-dependent settings
+ifneq ($(wildcard $(ARCH_FILE)),)
+include $(ARCH_FILE)
+endif
 
 default: checkcommits
 
@@ -24,7 +39,7 @@ else
 	./ginkgo -v functional/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 endif
 
-integration: ginkgo
+docker: ginkgo
 ifeq ($(RUNTIME),)
 	$(error RUNTIME is not set)
 else
@@ -61,7 +76,7 @@ openshift:
 	bash -f .ci/install_bats.sh
 	bash -f integration/openshift/run_openshift_tests.sh
 
-test: functional integration crio docker-compose openshift kubernetes swarm cri-containerd
+test: ${UNION}
 
 check: checkcommits log-parser
 
