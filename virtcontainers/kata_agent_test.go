@@ -369,6 +369,25 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 
 }
 
+func TestHandleEphemeralStorage(t *testing.T) {
+	k := kataAgent{}
+	var ociMounts []specs.Mount
+	mountSource := "/tmp/mountPoint"
+
+	mount := specs.Mount{
+		Type:   kataEphemeralDevType,
+		Source: mountSource,
+	}
+
+	ociMounts = append(ociMounts, mount)
+	epheStorages := k.handleEphemeralStorage(ociMounts)
+
+	epheMountPoint := epheStorages[0].GetMountPoint()
+	expected := filepath.Join(ephemeralPath, filepath.Base(mountSource))
+	assert.Equal(t, epheMountPoint, expected,
+		"Ephemeral mount point didn't match: got %s, expecting %s", epheMountPoint, expected)
+}
+
 func TestAppendDevicesEmptyContainerDeviceList(t *testing.T) {
 	k := kataAgent{}
 

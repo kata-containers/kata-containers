@@ -1010,6 +1010,24 @@ func TestCreateCreateContainerFail(t *testing.T) {
 	}
 }
 
+func TestSetEphemeralStorageType(t *testing.T) {
+	assert := assert.New(t)
+
+	ociSpec := oci.CompatOCISpec{}
+	var ociMounts []specs.Mount
+	mount := specs.Mount{
+		Source: "/var/lib/kubelet/pods/366c3a77-4869-11e8-b479-507b9ddd5ce4/volumes/kubernetes.io~empty-dir/cache-volume",
+	}
+
+	ociMounts = append(ociMounts, mount)
+	ociSpec.Mounts = ociMounts
+	ociSpec = setEphemeralStorageType(ociSpec)
+
+	mountType := ociSpec.Mounts[0].Type
+	assert.Equal(mountType, "ephemeral",
+		"Unexpected mount type, got %s expected ephemeral", mountType)
+}
+
 func TestCreateCreateContainer(t *testing.T) {
 	assert := assert.New(t)
 
