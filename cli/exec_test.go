@@ -89,7 +89,8 @@ func TestExecuteErrors(t *testing.T) {
 	assert.False(vcmock.IsMockError(err))
 
 	// Container state undefined
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
@@ -147,7 +148,8 @@ func TestExecuteErrorReadingProcessJson(t *testing.T) {
 	flagSet.Parse([]string{testContainerID})
 	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
 
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
@@ -195,7 +197,8 @@ func TestExecuteErrorOpeningConsole(t *testing.T) {
 	flagSet.Parse([]string{testContainerID})
 	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
 
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
@@ -261,7 +264,8 @@ func TestExecuteWithFlags(t *testing.T) {
 	flagSet.Parse([]string{testContainerID, "/tmp/foo"})
 	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
 
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
@@ -349,7 +353,8 @@ func TestExecuteWithFlagsDetached(t *testing.T) {
 	flagSet.Parse([]string{testContainerID, "/tmp/foo"})
 	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
 
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
@@ -427,7 +432,8 @@ func TestExecuteWithInvalidProcessJson(t *testing.T) {
 	flagSet.Parse([]string{testContainerID})
 	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
 
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
@@ -478,7 +484,8 @@ func TestExecuteWithValidProcessJson(t *testing.T) {
 	flagSet.Parse([]string{testContainerID, "/tmp/foo"})
 	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
 
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
@@ -578,7 +585,8 @@ func TestExecuteWithEmptyEnvironmentValue(t *testing.T) {
 	flagSet.Parse([]string{testContainerID})
 	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
 
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
