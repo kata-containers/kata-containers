@@ -16,7 +16,7 @@ crio_repository="github.com/kubernetes-incubator/cri-o"
 crio_repository_path="$GOPATH/src/${crio_repository}"
 
 # devicemapper device and options
-export LVM_DEVICE=${LVM_DEVICE:-/dev/vdb}
+LVM_DEVICE=${LVM_DEVICE:-/dev/vdb}
 DM_STORAGE_OPTIONS="--storage-driver devicemapper --storage-opt dm.directlvm_device=${LVM_DEVICE}
 	--storage-opt dm.directlvm_device_force=true --storage-opt dm.thinp_percent=95
 	--storage-opt dm.thinp_metapercent=1 --storage-opt dm.thinp_autoextend_threshold=80
@@ -61,6 +61,7 @@ MAJOR=$(echo "$VERSION_ID"|cut -d\. -f1)
 if [ "$ID" == "ubuntu" ] && [ "$MAJOR" -eq 16 ]; then
 	# Block device attached to the VM where we run the CI
 	# If the block device has a partition, cri-o will not be able to use it.
+	export LVM_DEVICE
 	if sudo fdisk -l "$LVM_DEVICE" | grep "${LVM_DEVICE}[1-9]"; then
 		die "detected partitions on block device: ${LVM_DEVICE}. Will not continue"
 	fi
