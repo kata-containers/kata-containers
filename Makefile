@@ -45,6 +45,7 @@ kubernetes:
 	bash -f integration/kubernetes/run_kubernetes_tests.sh
 
 swarm:
+	systemctl is-active --quiet docker || sudo systemctl start docker
 	bash -f .ci/install_bats.sh
 	cd integration/swarm && \
 	bats swarm.bats
