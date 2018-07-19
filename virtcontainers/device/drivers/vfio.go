@@ -102,7 +102,7 @@ func (device *VFIODevice) Detach(devReceiver api.DeviceReceiver) error {
 	deviceLogger().WithFields(logrus.Fields{
 		"device-group": device.DeviceInfo.HostPath,
 		"device-type":  "vfio-passthrough",
-	}).Info("Device group attached")
+	}).Info("Device group detached")
 	device.DeviceInfo.Hotplugged = false
 	return nil
 }
