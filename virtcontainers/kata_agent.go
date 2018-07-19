@@ -59,7 +59,6 @@ var (
 // KataAgentConfig is a structure storing information needed
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
-	GRPCSocket   string
 	LongLiveConn bool
 }
 
