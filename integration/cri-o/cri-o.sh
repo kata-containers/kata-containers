@@ -79,6 +79,15 @@ if [ "$ID" == "fedora" ] || [ "$ID" == "centos" ]; then
 	export STORAGE_OPTIONS="$OVERLAY_STORAGE_OPTIONS"
 fi
 
+echo "Ensure crio service is stopped before running the tests"
+if systemctl is-active --quiet crio; then
+	sudo systemctl stop crio
+fi
+
+echo "Ensure docker service is stopped before running the tests"
+if systemctl is-active --quiet docker; then
+	sudo systemctl stop docker
+fi
 
 ./test_runner.sh ctr.bats
 
