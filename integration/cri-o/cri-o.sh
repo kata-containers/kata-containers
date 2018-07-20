@@ -16,7 +16,7 @@ crio_repository="github.com/kubernetes-incubator/cri-o"
 crio_repository_path="$GOPATH/src/${crio_repository}"
 
 # devicemapper device and options
-export LVM_DEVICE=${LVM_DEVICE:-/dev/vdb}
+LVM_DEVICE=${LVM_DEVICE:-/dev/vdb}
 DM_STORAGE_OPTIONS="--storage-driver devicemapper --storage-opt dm.directlvm_device=${LVM_DEVICE}
 	--storage-opt dm.directlvm_device_force=true --storage-opt dm.thinp_percent=95
 	--storage-opt dm.thinp_metapercent=1 --storage-opt dm.thinp_autoextend_threshold=80
@@ -61,6 +61,7 @@ MAJOR=$(echo "$VERSION_ID"|cut -d\. -f1)
 if [ "$ID" == "ubuntu" ] && [ "$MAJOR" -eq 16 ]; then
 	# Block device attached to the VM where we run the CI
 	# If the block device has a partition, cri-o will not be able to use it.
+	export LVM_DEVICE
 	if sudo fdisk -l "$LVM_DEVICE" | grep "${LVM_DEVICE}[1-9]"; then
 		die "detected partitions on block device: ${LVM_DEVICE}. Will not continue"
 	fi
@@ -78,6 +79,15 @@ if [ "$ID" == "fedora" ] || [ "$ID" == "centos" ]; then
 	export STORAGE_OPTIONS="$OVERLAY_STORAGE_OPTIONS"
 fi
 
+echo "Ensure crio service is stopped before running the tests"
+if systemctl is-active --quiet crio; then
+	sudo systemctl stop crio
+fi
+
+echo "Ensure docker service is stopped before running the tests"
+if systemctl is-active --quiet docker; then
+	sudo systemctl stop docker
+fi
 
 ./test_runner.sh ctr.bats
 

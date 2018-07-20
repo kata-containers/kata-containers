@@ -45,6 +45,7 @@ kubernetes:
 	bash -f integration/kubernetes/run_kubernetes_tests.sh
 
 swarm:
+	systemctl is-active --quiet docker || sudo systemctl start docker
 	bash -f .ci/install_bats.sh
 	cd integration/swarm && \
 	bats swarm.bats
@@ -60,7 +61,7 @@ openshift:
 	bash -f .ci/install_bats.sh
 	bash -f integration/openshift/run_openshift_tests.sh
 
-test: functional integration crio docker-compose openshift kubernetes swarm cri-containerd
+test: functional integration crio docker-compose openshift kubernetes swarm
 
 check: checkcommits log-parser
 

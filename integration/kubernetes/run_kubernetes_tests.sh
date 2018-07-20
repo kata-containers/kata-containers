@@ -25,6 +25,10 @@ if [ "$TEST_INITRD" = yes ] && [ "$AGENT_INIT" = yes ]; then
 	exit
 fi
 
+# Docker is required to initialize kubeadm, even if we are
+# using cri-o as the runtime.
+systemctl is-active --quiet docker || sudo systemctl start docker
+
 pushd "$kubernetes_dir"
 ./init.sh
 bats nginx.bats
