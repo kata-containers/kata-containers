@@ -883,11 +883,17 @@ func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string
 }
 
 // ExecutePCIVSockAdd adds a vhost-vsock-pci bus
-func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID string) error {
+func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID, vhostfd string, disableModern bool) error {
 	args := map[string]interface{}{
 		"driver":    VHostVSockPCI,
 		"id":        id,
 		"guest-cid": guestCID,
+		"vhostfd":   vhostfd,
 	}
+
+	if disableModern {
+		args["disable-modern"] = disableModern
+	}
+
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
