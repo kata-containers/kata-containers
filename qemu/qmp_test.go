@@ -955,7 +955,7 @@ func TestExecutePCIVSockAdd(t *testing.T) {
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
-	err := q.ExecutePCIVSockAdd(context.Background(), "vsock-pci0", "3")
+	err := q.ExecutePCIVSockAdd(context.Background(), "vsock-pci0", "3", "1", true)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
