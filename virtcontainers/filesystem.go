@@ -85,17 +85,27 @@ const dirMode = os.FileMode(0750) | os.ModeDir
 
 // storagePathSuffix is the suffix used for all storage paths
 //
-// Note: this very brief path represents "virtcontainers sandboxes". It is as
+// Note: this very brief path represents "virtcontainers". It is as
 // terse as possible to minimise path length.
-const storagePathSuffix = "/vc/sbs"
+const storagePathSuffix = "vc"
+
+// sandboxPathSuffix is the suffix used for sandbox storage
+const sandboxPathSuffix = "sbs"
+
+// vmPathSuffix is the suffix used for guest VMs.
+const vmPathSuffix = "vm"
 
 // configStoragePath is the sandbox configuration directory.
 // It will contain one config.json file for each created sandbox.
-var configStoragePath = filepath.Join("/var/lib", storagePathSuffix)
+var configStoragePath = filepath.Join("/var/lib", storagePathSuffix, sandboxPathSuffix)
 
 // runStoragePath is the sandbox runtime directory.
 // It will contain one state.json and one lock file for each created sandbox.
-var runStoragePath = filepath.Join("/run", storagePathSuffix)
+var runStoragePath = filepath.Join("/run", storagePathSuffix, sandboxPathSuffix)
+
+// RunVMStoragePath is the vm directory.
+// It will contain all guest vm sockets and shared mountpoints.
+var RunVMStoragePath = filepath.Join("/run", storagePathSuffix, vmPathSuffix)
 
 // resourceStorage is the virtcontainers resources (configuration, state, etc...)
 // storage interface.

@@ -52,7 +52,7 @@ func testCreateSandbox(t *testing.T, id string,
 		Containers:       containers,
 	}
 
-	sandbox, err := createSandbox(sconfig)
+	sandbox, err := createSandbox(sconfig, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Could not create sandbox: %s", err)
 	}

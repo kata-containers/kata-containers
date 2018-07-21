@@ -1146,3 +1146,19 @@ func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 
 	assert.Equal(expectedVMConfig, config.VMConfig)
 }
+
+func TestUpdateRuntimeConfigurationFactoryConfig(t *testing.T) {
+	assert := assert.New(t)
+
+	config := oci.RuntimeConfig{}
+	expectedFactoryConfig := oci.FactoryConfig{
+		Template: true,
+	}
+
+	tomlConf := tomlConfig{Factory: factory{Template: true}}
+
+	err := updateRuntimeConfig("", tomlConf, &config)
+	assert.NoError(err)
+
+	assert.Equal(expectedFactoryConfig, config.FactoryConfig)
+}

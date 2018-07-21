@@ -14,7 +14,7 @@ func testCreateNoopContainer() (*Sandbox, *Container, error) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config)
+	p, err := CreateSandbox(config, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -152,6 +152,59 @@ func TestNoopAgentResumeContainer(t *testing.T) {
 	}
 	defer cleanUp()
 	err = n.resumeContainer(sandbox, *container)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNoopAgentConfigure(t *testing.T) {
+	n := &noopAgent{}
+	h := &mockHypervisor{}
+	id := "foobar"
+	sharePath := "foobarDir"
+	err := n.configure(h, id, sharePath, true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNoopAgentGetVMPath(t *testing.T) {
+	n := &noopAgent{}
+	path := n.getVMPath("")
+	if path != "" {
+		t.Fatal("getSharePath returns non empty path")
+	}
+}
+
+func TestNoopAgentGetSharePath(t *testing.T) {
+	n := &noopAgent{}
+	path := n.getSharePath("")
+	if path != "" {
+		t.Fatal("getSharePath returns non empty path")
+	}
+}
+
+func TestNoopAgentStartProxy(t *testing.T) {
+	n := &noopAgent{}
+	sandbox, _, err := testCreateNoopContainer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanUp()
+	err = n.startProxy(sandbox)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNoopAgentProcessListContainer(t *testing.T) {
+	n := &noopAgent{}
+	sandbox, container, err := testCreateNoopContainer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanUp()
+	_, err = n.processListContainer(sandbox, *container, ProcessListOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -96,20 +96,20 @@ func newAgent(agentType AgentType) agent {
 }
 
 // newAgentConfig returns an agent config from a generic SandboxConfig interface.
-func newAgentConfig(config SandboxConfig) interface{} {
-	switch config.AgentType {
+func newAgentConfig(agentType AgentType, agentConfig interface{}) interface{} {
+	switch agentType {
 	case NoopAgentType:
 		return nil
 	case HyperstartAgent:
 		var hyperConfig HyperConfig
-		err := mapstructure.Decode(config.AgentConfig, &hyperConfig)
+		err := mapstructure.Decode(agentConfig, &hyperConfig)
 		if err != nil {
 			return err
 		}
 		return hyperConfig
 	case KataContainersAgent:
 		var kataAgentConfig KataAgentConfig
-		err := mapstructure.Decode(config.AgentConfig, &kataAgentConfig)
+		err := mapstructure.Decode(agentConfig, &kataAgentConfig)
 		if err != nil {
 			return err
 		}
@@ -209,4 +209,13 @@ type agent interface {
 
 	// resumeContainer will resume a paused container
 	resumeContainer(sandbox *Sandbox, c Container) error
+
+	// configure will update agent settings based on provided arguments
+	configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error
+
+	// getVMPath will return the agent vm socket's directory path
+	getVMPath(id string) string
+
+	// getSharePath will return the agent 9pfs share mount path
+	getSharePath(id string) string
 }

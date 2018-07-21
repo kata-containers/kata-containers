@@ -107,9 +107,12 @@ func TestNewHypervisorFromUnknownHypervisorType(t *testing.T) {
 	}
 }
 
-func testHypervisorConfigValid(t *testing.T, hypervisorConfig *HypervisorConfig, expected bool) {
-	ret, _ := hypervisorConfig.valid()
-	if ret != expected {
+func testHypervisorConfigValid(t *testing.T, hypervisorConfig *HypervisorConfig, success bool) {
+	err := hypervisorConfig.valid()
+	if success && err != nil {
+		t.Fatal()
+	}
+	if !success && err == nil {
 		t.Fatal()
 	}
 }
@@ -152,6 +155,30 @@ func TestHypervisorConfigIsValid(t *testing.T) {
 	}
 
 	testHypervisorConfigValid(t, hypervisorConfig, true)
+}
+
+func TestHypervisorConfigValidTemplateConfig(t *testing.T) {
+	hypervisorConfig := &HypervisorConfig{
+		KernelPath:       fmt.Sprintf("%s/%s", testDir, testKernel),
+		ImagePath:        fmt.Sprintf("%s/%s", testDir, testImage),
+		HypervisorPath:   fmt.Sprintf("%s/%s", testDir, testHypervisor),
+		BootToBeTemplate: true,
+		BootFromTemplate: true,
+	}
+	testHypervisorConfigValid(t, hypervisorConfig, false)
+
+	hypervisorConfig.BootToBeTemplate = false
+	testHypervisorConfigValid(t, hypervisorConfig, false)
+	hypervisorConfig.MemoryPath = "foobar"
+	testHypervisorConfigValid(t, hypervisorConfig, false)
+	hypervisorConfig.DevicesStatePath = "foobar"
+	testHypervisorConfigValid(t, hypervisorConfig, true)
+
+	hypervisorConfig.BootFromTemplate = false
+	hypervisorConfig.BootToBeTemplate = true
+	testHypervisorConfigValid(t, hypervisorConfig, true)
+	hypervisorConfig.MemoryPath = ""
+	testHypervisorConfigValid(t, hypervisorConfig, false)
 }
 
 func TestHypervisorConfigDefaults(t *testing.T) {

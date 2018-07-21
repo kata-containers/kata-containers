@@ -35,6 +35,13 @@ func (m *VCMock) SetLogger(logger logrus.FieldLogger) {
 	}
 }
 
+// SetFactory implements the VC function of the same name.
+func (m *VCMock) SetFactory(factory vc.Factory) {
+	if m.SetFactoryFunc != nil {
+		m.SetFactoryFunc(factory)
+	}
+}
+
 // CreateSandbox implements the VC function of the same name.
 func (m *VCMock) CreateSandbox(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 	if m.CreateSandboxFunc != nil {

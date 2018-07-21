@@ -62,6 +62,11 @@ type tomlConfig struct {
 	Shim       map[string]shim
 	Agent      map[string]agent
 	Runtime    runtime
+	Factory    factory
+}
+
+type factory struct {
+	Template bool `toml:"enable_template"`
 }
 
 type hypervisor struct {
@@ -353,6 +358,10 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}, nil
 }
 
+func newFactoryConfig(f factory) (oci.FactoryConfig, error) {
+	return oci.FactoryConfig{Template: f.Template}, nil
+}
+
 func newShimConfig(s shim) (vc.ShimConfig, error) {
 	path, err := s.path()
 	if err != nil {
@@ -422,6 +431,12 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 
 		config.ShimConfig = shConfig
 	}
+
+	fConfig, err := newFactoryConfig(tomlConf.Factory)
+	if err != nil {
+		return fmt.Errorf("%v: %v", configPath, err)
+	}
+	config.FactoryConfig = fConfig
 
 	return nil
 }

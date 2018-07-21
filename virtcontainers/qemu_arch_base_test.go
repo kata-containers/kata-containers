@@ -206,8 +206,6 @@ func testQemuArchBaseAppend(t *testing.T, structure interface{}, expected []govm
 		devices = qemuArchBase.append9PVolume(devices, s)
 	case Socket:
 		devices = qemuArchBase.appendSocket(devices, s)
-	case []Volume:
-		devices = qemuArchBase.append9PVolumes(devices, s)
 	case drivers.Drive:
 		devices = qemuArchBase.appendBlockDevice(devices, s)
 	case drivers.VFIODevice:
@@ -219,49 +217,12 @@ func testQemuArchBaseAppend(t *testing.T, structure interface{}, expected []govm
 	assert.Equal(devices, expected)
 }
 
-func TestQemuArchBaseAppend9PVolumes(t *testing.T) {
-	volMountTag := "testVolMountTag"
-	volHostPath := "testVolHostPath"
-
-	expectedOut := []govmmQemu.Device{
-		govmmQemu.FSDevice{
-			Driver:        govmmQemu.Virtio9P,
-			FSDriver:      govmmQemu.Local,
-			ID:            fmt.Sprintf("extra-9p-%s", fmt.Sprintf("%s.1", volMountTag)),
-			Path:          fmt.Sprintf("%s.1", volHostPath),
-			MountTag:      fmt.Sprintf("%s.1", volMountTag),
-			SecurityModel: govmmQemu.None,
-		},
-		govmmQemu.FSDevice{
-			Driver:        govmmQemu.Virtio9P,
-			FSDriver:      govmmQemu.Local,
-			ID:            fmt.Sprintf("extra-9p-%s", fmt.Sprintf("%s.2", volMountTag)),
-			Path:          fmt.Sprintf("%s.2", volHostPath),
-			MountTag:      fmt.Sprintf("%s.2", volMountTag),
-			SecurityModel: govmmQemu.None,
-		},
-	}
-
-	volumes := []Volume{
-		{
-			MountTag: fmt.Sprintf("%s.1", volMountTag),
-			HostPath: fmt.Sprintf("%s.1", volHostPath),
-		},
-		{
-			MountTag: fmt.Sprintf("%s.2", volMountTag),
-			HostPath: fmt.Sprintf("%s.2", volHostPath),
-		},
-	}
-
-	testQemuArchBaseAppend(t, volumes, expectedOut)
-}
-
 func TestQemuArchBaseAppendConsoles(t *testing.T) {
 	var devices []govmmQemu.Device
 	assert := assert.New(t)
 	qemuArchBase := newQemuArchBase()
 
-	path := filepath.Join(runStoragePath, sandboxID, defaultConsole)
+	path := filepath.Join(runStoragePath, sandboxID, consoleSocket)
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.SerialDevice{

@@ -9,9 +9,9 @@ type mockHypervisor struct {
 	vCPUs uint32
 }
 
-func (m *mockHypervisor) init(sandbox *Sandbox) error {
-	valid, err := sandbox.config.HypervisorConfig.valid()
-	if valid == false || err != nil {
+func (m *mockHypervisor) init(id string, hypervisorConfig *HypervisorConfig, vmConfig Resources, storage resourceStorage) error {
+	err := hypervisorConfig.valid()
+	if err != nil {
 		return err
 	}
 
@@ -22,7 +22,7 @@ func (m *mockHypervisor) capabilities() capabilities {
 	return capabilities{}
 }
 
-func (m *mockHypervisor) createSandbox(sandboxConfig SandboxConfig) error {
+func (m *mockHypervisor) createSandbox() error {
 	return nil
 }
 
@@ -43,6 +43,10 @@ func (m *mockHypervisor) pauseSandbox() error {
 }
 
 func (m *mockHypervisor) resumeSandbox() error {
+	return nil
+}
+
+func (m *mockHypervisor) saveSandbox() error {
 	return nil
 }
 
