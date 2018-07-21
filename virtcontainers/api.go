@@ -34,13 +34,13 @@ func SetLogger(logger logrus.FieldLogger) {
 
 // CreateSandbox is the virtcontainers sandbox creation entry point.
 // CreateSandbox creates a sandbox and its containers. It does not start them.
-func CreateSandbox(sandboxConfig SandboxConfig) (VCSandbox, error) {
-	return createSandboxFromConfig(sandboxConfig)
+func CreateSandbox(sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
+	return createSandboxFromConfig(sandboxConfig, factory)
 }
 
-func createSandboxFromConfig(sandboxConfig SandboxConfig) (*Sandbox, error) {
+func createSandboxFromConfig(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
 	// Create the sandbox.
-	s, err := createSandbox(sandboxConfig)
+	s, err := createSandbox(sandboxConfig, factory)
 	if err != nil {
 		return nil, err
 	}
@@ -206,8 +206,8 @@ func StopSandbox(sandboxID string) (VCSandbox, error) {
 
 // RunSandbox is the virtcontainers sandbox running entry point.
 // RunSandbox creates a sandbox and its containers and then it starts them.
-func RunSandbox(sandboxConfig SandboxConfig) (VCSandbox, error) {
-	s, err := createSandboxFromConfig(sandboxConfig)
+func RunSandbox(sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
+	s, err := createSandboxFromConfig(sandboxConfig, factory)
 	if err != nil {
 		return nil, err
 	}

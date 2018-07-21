@@ -18,6 +18,7 @@ import (
 
 // VCImpl is the official virtcontainers function of the same name.
 type VCImpl struct {
+	factory Factory
 }
 
 // SetLogger implements the VC function of the same name.
@@ -25,9 +26,14 @@ func (impl *VCImpl) SetLogger(logger logrus.FieldLogger) {
 	SetLogger(logger)
 }
 
+// SetFactory implements the VC function of the same name.
+func (impl *VCImpl) SetFactory(factory Factory) {
+	impl.factory = factory
+}
+
 // CreateSandbox implements the VC function of the same name.
 func (impl *VCImpl) CreateSandbox(sandboxConfig SandboxConfig) (VCSandbox, error) {
-	return CreateSandbox(sandboxConfig)
+	return CreateSandbox(sandboxConfig, impl.factory)
 }
 
 // DeleteSandbox implements the VC function of the same name.
@@ -47,7 +53,7 @@ func (impl *VCImpl) StopSandbox(sandboxID string) (VCSandbox, error) {
 
 // RunSandbox implements the VC function of the same name.
 func (impl *VCImpl) RunSandbox(sandboxConfig SandboxConfig) (VCSandbox, error) {
-	return RunSandbox(sandboxConfig)
+	return RunSandbox(sandboxConfig, impl.factory)
 }
 
 // ListSandbox implements the VC function of the same name.

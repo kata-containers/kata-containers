@@ -262,9 +262,17 @@ func (h *hyper) init(sandbox *Sandbox, config interface{}) (err error) {
 	return nil
 }
 
-func (h *hyper) createSandbox(sandbox *Sandbox) (err error) {
+func (h *hyper) getVMPath(id string) string {
+	return filepath.Join(runStoragePath, id)
+}
+
+func (h *hyper) getSharePath(id string) string {
+	return filepath.Join(defaultSharedDir, id)
+}
+
+func (h *hyper) configure(hv hypervisor, id, sharePath string, builtin bool, config interface{}) error {
 	for _, socket := range h.sockets {
-		err := sandbox.hypervisor.addDevice(socket, serialPortDev)
+		err := hv.addDevice(socket, serialPortDev)
 		if err != nil {
 			return err
 		}
@@ -274,14 +282,18 @@ func (h *hyper) createSandbox(sandbox *Sandbox) (err error) {
 	// This volume contains all bind mounted container bundles.
 	sharedVolume := Volume{
 		MountTag: mountTag,
-		HostPath: filepath.Join(defaultSharedDir, sandbox.id),
+		HostPath: sharePath,
 	}
 
 	if err := os.MkdirAll(sharedVolume.HostPath, dirMode); err != nil {
 		return err
 	}
 
-	return sandbox.hypervisor.addDevice(sharedVolume, fsDev)
+	return hv.addDevice(sharedVolume, fsDev)
+}
+
+func (h *hyper) createSandbox(sandbox *Sandbox) (err error) {
+	return h.configure(sandbox.hypervisor, "", h.getSharePath(sandbox.id), false, nil)
 }
 
 func (h *hyper) capabilities() capabilities {

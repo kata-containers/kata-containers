@@ -47,7 +47,11 @@ type QemuState struct {
 
 // qemu is an Hypervisor interface implementation for the Linux qemu hypervisor.
 type qemu struct {
+	id string
+
 	vmConfig Resources
+
+	storage resourceStorage
 
 	config HypervisorConfig
 
@@ -55,18 +59,21 @@ type qemu struct {
 
 	qemuConfig govmmQemu.Config
 
-	sandbox *Sandbox
-
 	state QemuState
 
 	arch qemuArch
 }
 
-const qmpCapErrMsg = "Failed to negoatiate QMP capabilities"
+const (
+	consoleSocket = "console.sock"
+	qmpSocket     = "qmp.sock"
 
-const qmpSocket = "qmp.sock"
+	qmpCapErrMsg                      = "Failed to negoatiate QMP capabilities"
+	qmpCapMigrationBypassSharedMemory = "bypass-shared-memory"
+	qmpExecCatCmd                     = "exec:cat"
 
-const defaultConsole = "console.sock"
+	scsiControllerID = "scsi0"
+)
 
 var qemuMajorVersion int
 var qemuMinorVersion int
@@ -82,10 +89,6 @@ type operation int
 const (
 	addDevice operation = iota
 	removeDevice
-)
-
-const (
-	scsiControllerID = "scsi0"
 )
 
 type qmpLogger struct {
@@ -170,25 +173,32 @@ func (q *qemu) qemuPath() (string, error) {
 }
 
 // init intializes the Qemu structure.
-func (q *qemu) init(sandbox *Sandbox) error {
-	valid, err := sandbox.config.HypervisorConfig.valid()
-	if valid == false || err != nil {
+func (q *qemu) init(id string, hypervisorConfig *HypervisorConfig, vmConfig Resources, storage resourceStorage) error {
+	err := hypervisorConfig.valid()
+	if err != nil {
 		return err
 	}
 
-	q.vmConfig = sandbox.config.VMConfig
-	q.config = sandbox.config.HypervisorConfig
-	q.sandbox = sandbox
+	q.id = id
+	q.storage = storage
+	q.vmConfig = vmConfig
+	q.config = *hypervisorConfig
 	q.arch = newQemuArch(q.config)
 
-	if err = sandbox.storage.fetchHypervisorState(sandbox.id, &q.state); err != nil {
+	if err = q.storage.fetchHypervisorState(q.id, &q.state); err != nil {
 		q.Logger().Debug("Creating bridges")
 		q.state.Bridges = q.arch.bridges(q.config.DefaultBridges)
 
 		q.Logger().Debug("Creating UUID")
 		q.state.UUID = uuid.Generate().String()
 
-		if err = sandbox.storage.storeHypervisorState(sandbox.id, q.state); err != nil {
+		// The path might already exist, but in case of VM templating,
+		// we have to create it since the sandbox has not created it yet.
+		if err = os.MkdirAll(filepath.Join(runStoragePath, id), dirMode); err != nil {
+			return err
+		}
+
+		if err = q.storage.storeHypervisorState(q.id, q.state); err != nil {
 			return err
 		}
 	}
@@ -238,17 +248,17 @@ func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 	return q.arch.memoryTopology(memMb, hostMemMb), nil
 }
 
-func (q *qemu) qmpSocketPath(sandboxID string) (string, error) {
-	return utils.BuildSocketPath(runStoragePath, sandboxID, qmpSocket)
+func (q *qemu) qmpSocketPath(id string) (string, error) {
+	return utils.BuildSocketPath(RunVMStoragePath, id, qmpSocket)
 }
 
-func (q *qemu) getQemuMachine(sandboxConfig SandboxConfig) (govmmQemu.Machine, error) {
+func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
 	machine, err := q.arch.machine()
 	if err != nil {
 		return govmmQemu.Machine{}, err
 	}
 
-	accelerators := sandboxConfig.HypervisorConfig.MachineAccelerators
+	accelerators := q.config.MachineAccelerators
 	if accelerators != "" {
 		if !strings.HasPrefix(accelerators, ",") {
 			accelerators = fmt.Sprintf(",%s", accelerators)
@@ -275,11 +285,85 @@ func (q *qemu) appendImage(devices []govmmQemu.Device) ([]govmmQemu.Device, erro
 	return devices, nil
 }
 
-// createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.
-func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
+func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
+	monitorSockPath, err := q.qmpSocketPath(q.id)
+	if err != nil {
+		return nil, err
+	}
+
+	q.qmpMonitorCh = qmpChannel{
+		ctx:  context.Background(),
+		path: monitorSockPath,
+	}
+
+	err = os.MkdirAll(filepath.Dir(monitorSockPath), dirMode)
+	if err != nil {
+		return nil, err
+	}
+
+	return []govmmQemu.QMPSocket{
+		{
+			Type:   "unix",
+			Name:   q.qmpMonitorCh.path,
+			Server: true,
+			NoWait: true,
+		},
+	}, nil
+}
+
+func (q *qemu) buildDevices(initrdPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
 	var devices []govmmQemu.Device
 
-	machine, err := q.getQemuMachine(sandboxConfig)
+	console, err := q.getSandboxConsole(q.id)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Add bridges before any other devices. This way we make sure that
+	// bridge gets the first available PCI address i.e bridgePCIStartAddr
+	devices = q.arch.appendBridges(devices, q.state.Bridges)
+
+	devices = q.arch.appendConsole(devices, console)
+
+	if initrdPath == "" {
+		devices, err = q.appendImage(devices)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	var ioThread *govmmQemu.IOThread
+	if q.config.BlockDeviceDriver == VirtioSCSI {
+		devices, ioThread = q.arch.appendSCSIController(devices, q.config.EnableIOThreads)
+	}
+
+	return devices, ioThread, nil
+
+}
+
+func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) govmmQemu.Incoming {
+	incoming := govmmQemu.Incoming{}
+
+	if q.config.BootToBeTemplate || q.config.BootFromTemplate {
+		knobs.FileBackedMem = true
+		memory.Path = q.config.MemoryPath
+
+		if q.config.BootToBeTemplate {
+			knobs.FileBackedMemShared = true
+		}
+
+		if q.config.BootFromTemplate {
+			incoming.MigrationType = govmmQemu.MigrationExec
+			incoming.Exec = "cat " + q.config.DevicesStatePath
+		}
+	}
+
+	return incoming
+}
+
+// createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.
+func (q *qemu) createSandbox() error {
+	machine, err := q.getQemuMachine()
 	if err != nil {
 		return err
 	}
@@ -314,13 +398,15 @@ func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
 
 	// Pass the sandbox name to the agent via the kernel command-line to
 	// allow the agent to use it in log messages.
-	params := q.kernelParameters() + " " + "agent.sandbox=" + sandboxConfig.ID
+	params := q.kernelParameters() + " " + "agent.sandbox=" + q.id
 
 	kernel := govmmQemu.Kernel{
 		Path:       kernelPath,
 		InitrdPath: initrdPath,
 		Params:     params,
 	}
+
+	incoming := q.setupTemplate(&knobs, &memory)
 
 	rtc := govmmQemu.RTC{
 		Base:     "utc",
@@ -331,7 +417,7 @@ func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
 		return fmt.Errorf("UUID should not be empty")
 	}
 
-	monitorSockPath, err := q.qmpSocketPath(sandboxConfig.ID)
+	monitorSockPath, err := q.qmpSocketPath(q.id)
 	if err != nil {
 		return err
 	}
@@ -346,42 +432,19 @@ func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
 		return err
 	}
 
-	qmpSockets := []govmmQemu.QMPSocket{
-		{
-			Type:   "unix",
-			Name:   q.qmpMonitorCh.path,
-			Server: true,
-			NoWait: true,
-		},
-	}
-
-	// Add bridges before any other devices. This way we make sure that
-	// bridge gets the first available PCI address i.e bridgePCIStartAddr
-	devices = q.arch.appendBridges(devices, q.state.Bridges)
-
-	devices = q.arch.append9PVolumes(devices, sandboxConfig.Volumes)
-	console, err := q.getSandboxConsole(sandboxConfig.ID)
+	qmpSockets, err := q.createQmpSocket()
 	if err != nil {
 		return err
 	}
 
-	devices = q.arch.appendConsole(devices, console)
-
-	if initrdPath == "" {
-		devices, err = q.appendImage(devices)
-		if err != nil {
-			return err
-		}
-	}
-
-	var ioThread *govmmQemu.IOThread
-	if q.config.BlockDeviceDriver == VirtioSCSI {
-		devices, ioThread = q.arch.appendSCSIController(devices, q.config.EnableIOThreads)
+	devices, ioThread, err := q.buildDevices(initrdPath)
+	if err != nil {
+		return err
 	}
 
 	cpuModel := q.arch.cpuModel()
 
-	firmwarePath, err := sandboxConfig.HypervisorConfig.FirmwareAssetPath()
+	firmwarePath, err := q.config.FirmwareAssetPath()
 	if err != nil {
 		return err
 	}
@@ -392,7 +455,7 @@ func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
 	}
 
 	qemuConfig := govmmQemu.Config{
-		Name:        fmt.Sprintf("sandbox-%s", sandboxConfig.ID),
+		Name:        fmt.Sprintf("sandbox-%s", q.id),
 		UUID:        q.state.UUID,
 		Path:        qemuPath,
 		Ctx:         q.qmpMonitorCh.ctx,
@@ -405,6 +468,7 @@ func (q *qemu) createSandbox(sandboxConfig SandboxConfig) error {
 		RTC:         rtc,
 		QMPSockets:  qmpSockets,
 		Knobs:       knobs,
+		Incoming:    incoming,
 		VGA:         "none",
 		GlobalParam: "kvm-pit.lost_tick_policy=discard",
 		Bios:        firmwarePath,
@@ -511,7 +575,18 @@ func (q *qemu) stopSandbox() error {
 		return err
 	}
 
-	return qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
+	err = qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
+	if err != nil {
+		q.Logger().WithError(err).Error("Fail to execute qmp QUIT")
+		return err
+	}
+
+	err = os.RemoveAll(RunVMStoragePath + q.id)
+	if err != nil {
+		q.Logger().WithError(err).Error("Fail to clean up vm directory")
+	}
+
+	return nil
 }
 
 func (q *qemu) togglePauseSandbox(pause bool) error {
@@ -736,7 +811,7 @@ func (q *qemu) hotplugAddDevice(devInfo interface{}, devType deviceType) (interf
 		return data, err
 	}
 
-	return data, q.sandbox.storage.storeHypervisorState(q.sandbox.id, q.state)
+	return data, q.storage.storeHypervisorState(q.id, q.state)
 }
 
 func (q *qemu) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
@@ -745,7 +820,7 @@ func (q *qemu) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (int
 		return data, err
 	}
 
-	return data, q.sandbox.storage.storeHypervisorState(q.sandbox.id, q.state)
+	return data, q.storage.storeHypervisorState(q.id, q.state)
 }
 
 func (q *qemu) hotplugCPUs(vcpus uint32, op operation) (uint32, error) {
@@ -821,12 +896,12 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		hotpluggedVCPUs++
 		if hotpluggedVCPUs == amount {
 			// All vCPUs were hotplugged
-			return amount, q.sandbox.storage.storeHypervisorState(q.sandbox.id, q.state)
+			return amount, q.storage.storeHypervisorState(q.id, q.state)
 		}
 	}
 
 	// All vCPUs were NOT hotplugged
-	if err := q.sandbox.storage.storeHypervisorState(q.sandbox.id, q.state); err != nil {
+	if err := q.storage.storeHypervisorState(q.id, q.state); err != nil {
 		q.Logger().Errorf("failed to save hypervisor state after hotplug %d vCPUs: %v", hotpluggedVCPUs, err)
 	}
 
@@ -846,7 +921,7 @@ func (q *qemu) hotplugRemoveCPUs(amount uint32) (uint32, error) {
 		// get the last vCPUs and try to remove it
 		cpu := q.state.HotpluggedVCPUs[len(q.state.HotpluggedVCPUs)-1]
 		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, cpu.ID); err != nil {
-			_ = q.sandbox.storage.storeHypervisorState(q.sandbox.id, q.state)
+			_ = q.storage.storeHypervisorState(q.id, q.state)
 			return i, fmt.Errorf("failed to hotunplug CPUs, only %d CPUs were hotunplugged: %v", i, err)
 		}
 
@@ -854,7 +929,7 @@ func (q *qemu) hotplugRemoveCPUs(amount uint32) (uint32, error) {
 		q.state.HotpluggedVCPUs = q.state.HotpluggedVCPUs[:len(q.state.HotpluggedVCPUs)-1]
 	}
 
-	return amount, q.sandbox.storage.storeHypervisorState(q.sandbox.id, q.state)
+	return amount, q.storage.storeHypervisorState(q.id, q.state)
 }
 
 func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) error {
@@ -911,7 +986,7 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) error {
 	}
 
 	q.state.HotpluggedMemory += memDev.sizeMB
-	return q.sandbox.storage.storeHypervisorState(q.sandbox.id, q.state)
+	return q.storage.storeHypervisorState(q.id, q.state)
 }
 
 func (q *qemu) pauseSandbox() error {
@@ -952,8 +1027,60 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (q *qemu) getSandboxConsole(sandboxID string) (string, error) {
-	return utils.BuildSocketPath(runStoragePath, sandboxID, defaultConsole)
+func (q *qemu) getSandboxConsole(id string) (string, error) {
+	return utils.BuildSocketPath(RunVMStoragePath, id, consoleSocket)
+}
+
+func (q *qemu) saveSandbox() error {
+	defer func(qemu *qemu) {
+		if q.qmpMonitorCh.qmp != nil {
+			q.qmpMonitorCh.qmp.Shutdown()
+		}
+	}(q)
+
+	q.Logger().Info("save sandbox")
+
+	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
+
+	// Auto-closed by QMPStart().
+	disconnectCh := make(chan struct{})
+
+	qmp, _, err := govmmQemu.QMPStart(q.qmpMonitorCh.ctx, q.qmpMonitorCh.path, cfg, disconnectCh)
+	if err != nil {
+		q.Logger().WithError(err).Error("Failed to connect to QEMU instance")
+		return err
+	}
+
+	q.qmpMonitorCh.qmp = qmp
+
+	err = qmp.ExecuteQMPCapabilities(q.qmpMonitorCh.ctx)
+	if err != nil {
+		q.Logger().WithError(err).Error(qmpCapErrMsg)
+		return err
+	}
+
+	// BootToBeTemplate sets the VM to be a template that other VMs can clone from. We would want to
+	// bypass shared memory when saving the VM to a local file through migration exec.
+	if q.config.BootToBeTemplate {
+		err = q.qmpMonitorCh.qmp.ExecSetMigrationCaps(q.qmpMonitorCh.ctx, []map[string]interface{}{
+			{
+				"capability": qmpCapMigrationBypassSharedMemory,
+				"state":      true,
+			},
+		})
+		if err != nil {
+			q.Logger().WithError(err).Error("set migration bypass shared memory")
+			return err
+		}
+	}
+
+	err = q.qmpMonitorCh.qmp.ExecSetMigrateArguments(q.qmpMonitorCh.ctx, fmt.Sprintf("%s>%s", qmpExecCatCmd, q.config.DevicesStatePath))
+	if err != nil {
+		q.Logger().WithError(err).Error("exec migration")
+		return err
+	}
+
+	return nil
 }
 
 // genericAppendBridges appends to devices the given bridges

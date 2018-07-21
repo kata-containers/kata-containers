@@ -6,12 +6,15 @@
 package virtcontainers
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
+	"syscall"
 	"testing"
 
 	gpb "github.com/gogo/protobuf/types"
@@ -25,6 +28,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 )
 
@@ -243,6 +247,8 @@ var reqList = []interface{}{
 }
 
 func TestKataAgentSendReq(t *testing.T) {
+	assert := assert.New(t)
+
 	impl := &gRPCProxy{}
 
 	proxy := mock.ProxyGRPCMock{
@@ -251,15 +257,12 @@ func TestKataAgentSendReq(t *testing.T) {
 	}
 
 	sockDir, err := testGenerateKataProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(err)
 	defer os.RemoveAll(sockDir)
 
 	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
-	if err := proxy.Start(testKataProxyURL); err != nil {
-		t.Fatal(err)
-	}
+	err = proxy.Start(testKataProxyURL)
+	assert.Nil(err)
 	defer proxy.Stop()
 
 	k := &kataAgent{
@@ -269,10 +272,58 @@ func TestKataAgentSendReq(t *testing.T) {
 	}
 
 	for _, req := range reqList {
-		if _, err := k.sendReq(req); err != nil {
-			t.Fatal(err)
-		}
+		_, err = k.sendReq(req)
+		assert.Nil(err)
 	}
+
+	sandbox := &Sandbox{}
+	container := &Container{}
+	execid := "processFooBar"
+
+	err = k.startContainer(sandbox, container)
+	assert.Nil(err)
+
+	err = k.signalProcess(container, execid, syscall.SIGKILL, true)
+	assert.Nil(err)
+
+	err = k.winsizeProcess(container, execid, 100, 200)
+	assert.Nil(err)
+
+	_, err = k.processListContainer(sandbox, Container{}, ProcessListOptions{})
+	assert.Nil(err)
+
+	err = k.updateContainer(sandbox, Container{}, specs.LinuxResources{})
+	assert.Nil(err)
+
+	err = k.pauseContainer(sandbox, Container{})
+	assert.Nil(err)
+
+	err = k.resumeContainer(sandbox, Container{})
+	assert.Nil(err)
+
+	err = k.onlineCPUMem(1)
+	assert.Nil(err)
+
+	_, err = k.statsContainer(sandbox, Container{})
+	assert.Nil(err)
+
+	err = k.check()
+	assert.Nil(err)
+
+	_, err = k.waitProcess(container, execid)
+	assert.Nil(err)
+
+	_, err = k.writeProcessStdin(container, execid, []byte{'c'})
+	assert.Nil(err)
+
+	err = k.closeProcessStdin(container, execid)
+	assert.Nil(err)
+
+	_, err = k.readProcessStdout(container, execid, []byte{})
+	assert.Nil(err)
+
+	_, err = k.readProcessStderr(container, execid, []byte{})
+	assert.Nil(err)
 }
 
 func TestGenerateInterfacesAndRoutes(t *testing.T) {
@@ -593,4 +644,208 @@ func TestHandlePidNamespace(t *testing.T) {
 
 	_, err = k.handlePidNamespace(g, sandbox)
 	assert.NotNil(err)
+}
+
+func TestAgentPathAPI(t *testing.T) {
+	assert := assert.New(t)
+
+	k1 := &kataAgent{}
+	k2 := &kataAgent{}
+	id := "foobar"
+
+	// getVMPath
+	path1 := k1.getVMPath(id)
+	path2 := k2.getVMPath(id)
+	assert.Equal(path1, path2)
+
+	// getSharePath
+	path1 = k1.getSharePath(id)
+	path2 = k2.getSharePath(id)
+	assert.Equal(path1, path2)
+
+	// generateVMSocket
+	c := KataAgentConfig{}
+	err := k1.generateVMSocket(id, c)
+	assert.Nil(err)
+	err = k2.generateVMSocket(id, c)
+	assert.Nil(err)
+	assert.Equal(k1, k2)
+
+	c.GRPCSocket = "unixsocket"
+	err = k1.generateVMSocket(id, c)
+	assert.Nil(err)
+	_, ok := k1.vmSocket.(Socket)
+	assert.True(ok)
+
+	c.GRPCSocket = "vsock:100:200"
+	err = k2.generateVMSocket(id, c)
+	assert.Nil(err)
+	_, ok = k2.vmSocket.(kataVSOCK)
+	assert.True(ok)
+}
+
+func TestAgentConfigure(t *testing.T) {
+	assert := assert.New(t)
+
+	dir, err := ioutil.TempDir("", "kata-agent-test")
+	assert.Nil(err)
+
+	k := &kataAgent{}
+	h := &mockHypervisor{}
+	c := KataAgentConfig{GRPCSocket: "vsock:100:200"}
+	id := "foobar"
+
+	invalidAgent := HyperConfig{}
+	err = k.configure(h, id, dir, true, invalidAgent)
+	assert.Error(err)
+
+	err = k.configure(h, id, dir, true, c)
+	assert.Nil(err)
+
+	c.GRPCSocket = "foobarfoobar"
+	err = k.configure(h, id, dir, true, c)
+	assert.Nil(err)
+
+	err = k.configure(h, id, dir, false, c)
+	assert.Nil(err)
+}
+
+func TestParseVSOCKAddr(t *testing.T) {
+	assert := assert.New(t)
+
+	sock := "randomfoobar"
+	_, _, err := parseVSOCKAddr(sock)
+	assert.Error(err)
+
+	sock = "vsock://1:2"
+	_, _, err = parseVSOCKAddr(sock)
+	assert.Error(err)
+
+	sock = "unix:1:2"
+	_, _, err = parseVSOCKAddr(sock)
+	assert.Error(err)
+
+	sock = "vsock:foo:2"
+	_, _, err = parseVSOCKAddr(sock)
+	assert.Error(err)
+
+	sock = "vsock:1:bar"
+	_, _, err = parseVSOCKAddr(sock)
+	assert.Error(err)
+
+	sock = "vsock:1:2"
+	cid, port, err := parseVSOCKAddr(sock)
+	assert.Nil(err)
+	assert.Equal(cid, uint32(1))
+	assert.Equal(port, uint32(2))
+}
+
+func TestCmdToKataProcess(t *testing.T) {
+	assert := assert.New(t)
+
+	cmd := Cmd{
+		Args:         strings.Split("foo", " "),
+		Envs:         []EnvVar{},
+		WorkDir:      "/",
+		User:         "1000",
+		PrimaryGroup: "1000",
+	}
+	_, err := cmdToKataProcess(cmd)
+	assert.Nil(err)
+
+	cmd1 := cmd
+	cmd1.User = "foobar"
+	_, err = cmdToKataProcess(cmd1)
+	assert.Error(err)
+
+	cmd1 = cmd
+	cmd1.PrimaryGroup = "foobar"
+	_, err = cmdToKataProcess(cmd1)
+	assert.Error(err)
+
+	cmd1 = cmd
+	cmd1.User = "foobar:1000"
+	_, err = cmdToKataProcess(cmd1)
+	assert.Error(err)
+
+	cmd1 = cmd
+	cmd1.User = "1000:2000"
+	_, err = cmdToKataProcess(cmd1)
+	assert.Nil(err)
+
+	cmd1 = cmd
+	cmd1.SupplementaryGroups = []string{"foo"}
+	_, err = cmdToKataProcess(cmd1)
+	assert.Error(err)
+
+	cmd1 = cmd
+	cmd1.SupplementaryGroups = []string{"4000"}
+	_, err = cmdToKataProcess(cmd1)
+	assert.Nil(err)
+}
+
+func TestAgentCreateContainer(t *testing.T) {
+	assert := assert.New(t)
+
+	sandbox := &Sandbox{
+		id: "foobar",
+		config: &SandboxConfig{
+			ID:             "foobar",
+			HypervisorType: MockHypervisor,
+			HypervisorConfig: HypervisorConfig{
+				KernelPath: "foo",
+				ImagePath:  "bar",
+			},
+		},
+		hypervisor: &mockHypervisor{},
+		storage:    &filesystem{},
+	}
+
+	container := &Container{
+		id:        "barfoo",
+		sandboxID: "foobar",
+		sandbox:   sandbox,
+		state: State{
+			Fstype: "xfs",
+		},
+		config: &ContainerConfig{
+			Annotations: map[string]string{},
+		},
+	}
+
+	ociSpec, err := json.Marshal(&specs.Spec{})
+	assert.Nil(err)
+	container.config.Annotations[vcAnnotations.ConfigJSONKey] = string(ociSpec[:])
+
+	impl := &gRPCProxy{}
+
+	proxy := mock.ProxyGRPCMock{
+		GRPCImplementer: impl,
+		GRPCRegister:    gRPCRegister,
+	}
+
+	sockDir, err := testGenerateKataProxySockDir()
+	assert.Nil(err)
+	defer os.RemoveAll(sockDir)
+
+	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
+	err = proxy.Start(testKataProxyURL)
+	assert.Nil(err)
+	defer proxy.Stop()
+
+	k := &kataAgent{
+		state: KataAgentState{
+			URL: testKataProxyURL,
+		},
+	}
+
+	dir, err := ioutil.TempDir("", "kata-agent-test")
+	assert.Nil(err)
+
+	err = k.configure(&mockHypervisor{}, sandbox.id, dir, true, KataAgentConfig{})
+	assert.Nil(err)
+
+	// We'll fail on container metadata file creation, but it helps increasing coverage...
+	_, err = k.createContainer(sandbox, container)
+	assert.Error(err)
 }

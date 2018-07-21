@@ -145,3 +145,18 @@ func (n *noopAgent) pauseContainer(sandbox *Sandbox, c Container) error {
 func (n *noopAgent) resumeContainer(sandbox *Sandbox, c Container) error {
 	return nil
 }
+
+// configHypervisor is the Noop agent hypervisor configuration implementation. It does nothing.
+func (n *noopAgent) configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error {
+	return nil
+}
+
+// getVMPath is the Noop agent vm path getter. It does nothing.
+func (n *noopAgent) getVMPath(id string) string {
+	return ""
+}
+
+// getVMPath is the Noop agent share path getter. It does nothing.
+func (n *noopAgent) getSharePath(id string) string {
+	return ""
+}

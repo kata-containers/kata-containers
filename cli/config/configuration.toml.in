@@ -134,6 +134,18 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # used for 9p packet payload.
 #msize_9p = @DEFMSIZE9P@
 
+[factory]
+# VM templating support. Once enabled, new VMs are created from template
+# using vm cloning. They will share the same initial kernel, initramfs and
+# agent memory by mapping it readonly. It helps speeding up new container
+# creation and saves a lot of memory if there are many kata containers running
+# on the same host.
+#
+# When disabled, new VMs are created from scratch.
+#
+# Default false
+#enable_template = true
+
 [proxy.@PROJECT_TYPE@]
 path = "@PROXYPATH@"
 

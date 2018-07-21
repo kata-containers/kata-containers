@@ -216,15 +216,51 @@ type HypervisorConfig struct {
 
 	// Msize9p is used as the msize for 9p shares
 	Msize9p uint32
+
+	// BootToBeTemplate used to indicate if the VM is created to be a template VM
+	BootToBeTemplate bool
+
+	// BootFromTemplate used to indicate if the VM should be created from a template VM
+	BootFromTemplate bool
+
+	// MemoryPath is the memory file path of VM memory. Used when either BootToBeTemplate or
+	// BootFromTemplate is true.
+	MemoryPath string
+
+	// DevicesStatePath is the VM device state file path. Used when either BootToBeTemplate or
+	// BootFromTemplate is true.
+	DevicesStatePath string
 }
 
-func (conf *HypervisorConfig) valid() (bool, error) {
+func (conf *HypervisorConfig) checkTemplateConfig() error {
+	if conf.BootToBeTemplate && conf.BootFromTemplate {
+		return fmt.Errorf("Cannot set both 'to be' and 'from' vm tempate")
+	}
+
+	if conf.BootToBeTemplate || conf.BootFromTemplate {
+		if conf.MemoryPath == "" {
+			return fmt.Errorf("Missing MemoryPath for vm template")
+		}
+
+		if conf.BootFromTemplate && conf.DevicesStatePath == "" {
+			return fmt.Errorf("Missing DevicesStatePath to load from vm template")
+		}
+	}
+
+	return nil
+}
+
+func (conf *HypervisorConfig) valid() error {
 	if conf.KernelPath == "" {
-		return false, fmt.Errorf("Missing kernel path")
+		return fmt.Errorf("Missing kernel path")
 	}
 
 	if conf.ImagePath == "" && conf.InitrdPath == "" {
-		return false, fmt.Errorf("Missing image and initrd path")
+		return fmt.Errorf("Missing image and initrd path")
+	}
+
+	if err := conf.checkTemplateConfig(); err != nil {
+		return err
 	}
 
 	if conf.DefaultVCPUs == 0 {
@@ -251,7 +287,7 @@ func (conf *HypervisorConfig) valid() (bool, error) {
 		conf.Msize9p = defaultMsize9p
 	}
 
-	return true, nil
+	return nil
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
@@ -499,12 +535,13 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
-	init(sandbox *Sandbox) error
-	createSandbox(sandboxConfig SandboxConfig) error
+	init(id string, hypervisorConfig *HypervisorConfig, vmConfig Resources, storage resourceStorage) error
+	createSandbox() error
 	startSandbox() error
 	waitSandbox(timeout int) error
 	stopSandbox() error
 	pauseSandbox() error
+	saveSandbox() error
 	resumeSandbox() error
 	addDevice(devInfo interface{}, devType deviceType) error
 	hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error)
