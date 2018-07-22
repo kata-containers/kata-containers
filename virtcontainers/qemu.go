@@ -560,7 +560,6 @@ func (q *qemu) stopSandbox() error {
 	if err != nil {
 		return err
 	}
-	defer q.qmpShutdown()
 
 	err = q.qmpMonitorCh.qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
 	if err != nil {
@@ -581,7 +580,6 @@ func (q *qemu) togglePauseSandbox(pause bool) error {
 	if err != nil {
 		return err
 	}
-	defer q.qmpShutdown()
 
 	if pause {
 		err = q.qmpMonitorCh.qmp.ExecuteStop(q.qmpMonitorCh.ctx)
@@ -663,7 +661,6 @@ func (q *qemu) hotplugBlockDevice(drive *deviceDrivers.Drive, op operation) erro
 	if err != nil {
 		return err
 	}
-	defer q.qmpShutdown()
 
 	devID := "virtio-" + drive.ID
 
@@ -725,7 +722,6 @@ func (q *qemu) hotplugVFIODevice(device deviceDrivers.VFIODevice, op operation) 
 	if err != nil {
 		return err
 	}
-	defer q.qmpShutdown()
 
 	devID := "vfio-" + device.DeviceInfo.ID
 
@@ -800,7 +796,6 @@ func (q *qemu) hotplugCPUs(vcpus uint32, op operation) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer q.qmpShutdown()
 
 	if op == addDevice {
 		return q.hotplugAddCPUs(vcpus)
@@ -928,7 +923,6 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) error {
 	if err != nil {
 		return err
 	}
-	defer q.qmpShutdown()
 
 	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, "memory-backend-ram", "mem"+strconv.Itoa(memDev.slot), "", memDev.sizeMB)
 	if err != nil {
@@ -989,7 +983,6 @@ func (q *qemu) saveSandbox() error {
 	if err != nil {
 		return err
 	}
-	defer q.qmpShutdown()
 
 	// BootToBeTemplate sets the VM to be a template that other VMs can clone from. We would want to
 	// bypass shared memory when saving the VM to a local file through migration exec.
@@ -1013,6 +1006,10 @@ func (q *qemu) saveSandbox() error {
 	}
 
 	return nil
+}
+
+func (q *qemu) disconnect() {
+	q.qmpShutdown()
 }
 
 // genericAppendBridges appends to devices the given bridges

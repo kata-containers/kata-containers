@@ -541,10 +541,12 @@ func (s *Sandbox) GetContainer(containerID string) VCContainer {
 
 // Release closes the agent connection and removes sandbox from internal list.
 func (s *Sandbox) Release() error {
+	s.Logger().Info("release sandbox")
 	globalSandboxList.removeSandbox(s.id)
 	if s.monitor != nil {
 		s.monitor.stop()
 	}
+	s.hypervisor.disconnect()
 	return s.agent.disconnect()
 }
 
@@ -808,6 +810,7 @@ func (s *Sandbox) storeSandbox() error {
 
 // fetchSandbox fetches a sandbox config from a sandbox ID and returns a sandbox.
 func fetchSandbox(sandboxID string) (sandbox *Sandbox, err error) {
+	virtLog.WithField("sandbox-id", sandboxID).Info("fetch sandbox")
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -1388,6 +1391,7 @@ func togglePauseSandbox(sandboxID string, pause bool) (*Sandbox, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer s.Release()
 
 	if pause {
 		err = s.Pause()
