@@ -35,7 +35,12 @@ func SetLogger(logger logrus.FieldLogger) {
 // CreateSandbox is the virtcontainers sandbox creation entry point.
 // CreateSandbox creates a sandbox and its containers. It does not start them.
 func CreateSandbox(sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
-	return createSandboxFromConfig(sandboxConfig, factory)
+	s, err := createSandboxFromConfig(sandboxConfig, factory)
+	if err == nil {
+		s.Release()
+	}
+
+	return s, err
 }
 
 func createSandboxFromConfig(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
@@ -86,6 +91,7 @@ func DeleteSandbox(sandboxID string) (VCSandbox, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer s.Release()
 
 	// Delete it.
 	if err := s.Delete(); err != nil {
@@ -97,7 +103,8 @@ func DeleteSandbox(sandboxID string) (VCSandbox, error) {
 
 // FetchSandbox is the virtcontainers sandbox fetching entry point.
 // FetchSandbox will find out and connect to an existing sandbox and
-// return the sandbox structure.
+// return the sandbox structure. The caller is responsible of calling
+// VCSandbox.Release() after done with it.
 func FetchSandbox(sandboxID string) (VCSandbox, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
@@ -110,21 +117,22 @@ func FetchSandbox(sandboxID string) (VCSandbox, error) {
 	defer unlockSandbox(lockFile)
 
 	// Fetch the sandbox from storage and create it.
-	sandbox, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(sandboxID)
 	if err != nil {
 		return nil, err
 	}
 
 	// If the proxy is KataBuiltInProxyType type, it needs to restart the proxy to watch the
 	// guest console if it hadn't been watched.
-	if isProxyBuiltIn(sandbox.config.ProxyType) {
-		err = sandbox.startProxy()
+	if isProxyBuiltIn(s.config.ProxyType) {
+		err = s.startProxy()
 		if err != nil {
+			s.Release()
 			return nil, err
 		}
 	}
 
-	return sandbox, nil
+	return s, nil
 }
 
 // StartSandbox is the virtcontainers sandbox starting entry point.
@@ -147,6 +155,7 @@ func StartSandbox(sandboxID string) (VCSandbox, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer s.Release()
 
 	return startSandbox(s)
 }
@@ -184,6 +193,7 @@ func StopSandbox(sandboxID string) (VCSandbox, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer s.Release()
 
 	// Stop it.
 	err = s.stop()
@@ -211,6 +221,7 @@ func RunSandbox(sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error)
 	if err != nil {
 		return nil, err
 	}
+	defer s.Release()
 
 	lockFile, err := rwLockSandbox(s.id)
 	if err != nil {
@@ -269,6 +280,7 @@ func StatusSandbox(sandboxID string) (SandboxStatus, error) {
 		unlockSandbox(lockFile)
 		return SandboxStatus{}, err
 	}
+	defer s.Release()
 
 	// We need to potentially wait for a separate container.stop() routine
 	// that needs to be terminated before we return from this function.
@@ -320,6 +332,7 @@ func CreateContainer(sandboxID string, containerConfig ContainerConfig) (VCSandb
 	if err != nil {
 		return nil, nil, err
 	}
+	defer s.Release()
 
 	c, err := s.CreateContainer(containerConfig)
 	if err != nil {
@@ -351,6 +364,7 @@ func DeleteContainer(sandboxID, containerID string) (VCContainer, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer s.Release()
 
 	return s.DeleteContainer(containerID)
 }
@@ -376,6 +390,7 @@ func StartContainer(sandboxID, containerID string) (VCContainer, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer s.Release()
 
 	c, err := s.StartContainer(containerID)
 	if err != nil {
@@ -406,6 +421,7 @@ func StopContainer(sandboxID, containerID string) (VCContainer, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer s.Release()
 
 	// Fetch the container.
 	c, err := s.findContainer(containerID)
@@ -443,6 +459,7 @@ func EnterContainer(sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContai
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	defer s.Release()
 
 	c, process, err := s.EnterContainer(containerID, cmd)
 	if err != nil {
@@ -473,6 +490,7 @@ func StatusContainer(sandboxID, containerID string) (ContainerStatus, error) {
 		unlockSandbox(lockFile)
 		return ContainerStatus{}, err
 	}
+	defer s.Release()
 
 	// We need to potentially wait for a separate container.stop() routine
 	// that needs to be terminated before we return from this function.
@@ -559,6 +577,7 @@ func KillContainer(sandboxID, containerID string, signal syscall.Signal, all boo
 	if err != nil {
 		return err
 	}
+	defer s.Release()
 
 	// Fetch the container.
 	c, err := s.findContainer(containerID)
@@ -608,6 +627,7 @@ func ProcessListContainer(sandboxID, containerID string, options ProcessListOpti
 	if err != nil {
 		return nil, err
 	}
+	defer s.Release()
 
 	// Fetch the container.
 	c, err := s.findContainer(containerID)
@@ -639,6 +659,7 @@ func UpdateContainer(sandboxID, containerID string, resources specs.LinuxResourc
 	if err != nil {
 		return err
 	}
+	defer s.Release()
 
 	return s.UpdateContainer(containerID, resources)
 }
@@ -664,6 +685,7 @@ func StatsContainer(sandboxID, containerID string) (ContainerStats, error) {
 	if err != nil {
 		return ContainerStats{}, err
 	}
+	defer s.Release()
 
 	return s.StatsContainer(containerID)
 }
@@ -687,6 +709,7 @@ func togglePauseContainer(sandboxID, containerID string, pause bool) error {
 	if err != nil {
 		return err
 	}
+	defer s.Release()
 
 	// Fetch the container.
 	c, err := s.findContainer(containerID)

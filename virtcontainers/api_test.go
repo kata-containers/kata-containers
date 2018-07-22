@@ -1811,6 +1811,7 @@ func TestStatusContainerStateReady(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer p2.Release()
 
 	expectedStatus := ContainerStatus{
 		ID: contID,
@@ -1884,6 +1885,7 @@ func TestStatusContainerStateRunning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer p2.Release()
 
 	expectedStatus := ContainerStatus{
 		ID: contID,
