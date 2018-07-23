@@ -134,6 +134,12 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # used for 9p packet payload.
 #msize_9p = @DEFMSIZE9P@
 
+# If true and vsocks are supported, use vsocks to communicate directly
+# with the agent and no proxy is started, otherwise use unix
+# sockets and start a proxy to communicate with the agent.
+# Default false
+#use_vsock = true
+
 [factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and

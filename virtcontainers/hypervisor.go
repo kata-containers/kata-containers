@@ -217,6 +217,9 @@ type HypervisorConfig struct {
 	// Msize9p is used as the msize for 9p shares
 	Msize9p uint32
 
+	// UseVSock use a vsock for agent communication
+	UseVSock bool
+
 	// BootToBeTemplate used to indicate if the VM is created to be a template VM
 	BootToBeTemplate bool
 
