@@ -1200,6 +1200,7 @@ func (k *kataAgent) connect() error {
 		return nil
 	}
 
+	k.Logger().WithField("url", k.state.URL).Info("New client")
 	client, err := kataclient.NewAgentClient(k.state.URL, k.proxyBuiltIn)
 	if err != nil {
 		return err
