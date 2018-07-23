@@ -37,6 +37,9 @@ const (
 
 	// CentosImage is the centos image
 	CentosImage = "centos"
+
+	// StressImage is the vish/stress image
+	StressImage = "vish/stress"
 )
 
 func runDockerCommandWithTimeout(timeout time.Duration, command string, args ...string) (string, string, int) {
