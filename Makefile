@@ -61,7 +61,7 @@ openshift:
 	bash -f .ci/install_bats.sh
 	bash -f integration/openshift/run_openshift_tests.sh
 
-test: functional integration crio docker-compose openshift kubernetes swarm
+test: functional integration crio docker-compose openshift kubernetes swarm cri-containerd
 
 check: checkcommits log-parser
 
