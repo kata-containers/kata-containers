@@ -24,6 +24,7 @@ type noProxy struct {
 
 // start is noProxy start implementation for proxy interface.
 func (p *noProxy) start(sandbox *Sandbox, params proxyParams) (int, string, error) {
+	sandbox.Logger().Info("No proxy started because of no-proxy implementation")
 	if params.agentURL == "" {
 		return -1, "", fmt.Errorf("AgentURL cannot be empty")
 	}
