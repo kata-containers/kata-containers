@@ -15,6 +15,7 @@ import (
 	"github.com/BurntSushi/toml"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -91,6 +92,7 @@ type hypervisor struct {
 	Debug                 bool   `toml:"enable_debug"`
 	DisableNestingChecks  bool   `toml:"disable_nesting_checks"`
 	EnableIOThreads       bool   `toml:"enable_iothreads"`
+	UseVSock              bool   `toml:"use_vsock"`
 }
 
 type proxy struct {
@@ -267,6 +269,10 @@ func (h hypervisor) msize9p() uint32 {
 	return h.Msize9p
 }
 
+func (h hypervisor) useVSock() bool {
+	return h.UseVSock
+}
+
 func (p proxy) path() string {
 	if p.Path == "" {
 		return defaultProxyPath
@@ -333,6 +339,16 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	useVSock := false
+	if h.useVSock() {
+		if utils.SupportsVsocks() {
+			kataLog.Info("vsock supported")
+			useVSock = true
+		} else {
+			kataLog.Warn("No vsock support, falling back to legacy serial port")
+		}
+	}
+
 	return vc.HypervisorConfig{
 		HypervisorPath:        hypervisor,
 		KernelPath:            kernel,
@@ -355,6 +371,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceDriver:     blockDriver,
 		EnableIOThreads:       h.EnableIOThreads,
 		Msize9p:               h.msize9p(),
+		UseVSock:              useVSock,
 	}, nil
 }
 
@@ -542,6 +559,13 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 
 	if err := updateRuntimeConfig(resolved, tomlConf, &config); err != nil {
 		return "", config, err
+	}
+
+	// use no proxy if HypervisorConfig.UseVSock is true
+	if config.HypervisorConfig.UseVSock {
+		kataLog.Info("VSOCK supported, configure to not use proxy")
+		config.ProxyType = vc.NoProxyType
+		config.ProxyConfig = vc.ProxyConfig{}
 	}
 
 	return resolved, config, nil

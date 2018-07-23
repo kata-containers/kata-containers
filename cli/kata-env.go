@@ -11,19 +11,20 @@ import (
 	"os"
 	"strings"
 
+	runtim "runtime"
+
 	"github.com/BurntSushi/toml"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
-	runtim "runtime"
 )
 
 // Semantic version for the output of the command.
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.12"
+const formatVersion = "1.0.13"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -80,6 +81,7 @@ type HypervisorInfo struct {
 	BlockDeviceDriver string
 	Msize9p           uint32
 	Debug             bool
+	UseVSock          bool
 }
 
 // ProxyInfo stores proxy details
@@ -276,6 +278,7 @@ func getHypervisorInfo(config oci.RuntimeConfig) HypervisorInfo {
 		Path:              hypervisorPath,
 		BlockDeviceDriver: config.HypervisorConfig.BlockDeviceDriver,
 		Msize9p:           config.HypervisorConfig.Msize9p,
+		UseVSock:          config.HypervisorConfig.UseVSock,
 	}
 }
 
