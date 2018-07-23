@@ -151,6 +151,12 @@ func (f *factory) GetVM(config vc.VMConfig) (*vc.VM, error) {
 		return nil, err
 	}
 
+	// reseed RNG so that shared memory VMs do not generate same random numbers.
+	err = vm.ReseedRNG()
+	if err != nil {
+		return nil, err
+	}
+
 	online := false
 	baseConfig := f.base.Config().HypervisorConfig
 	if baseConfig.DefaultVCPUs < hypervisorConfig.DefaultVCPUs {

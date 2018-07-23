@@ -50,6 +50,8 @@ func TestNewVM(t *testing.T) {
 	assert.Nil(err)
 	err = vm.OnlineCPUMemory()
 	assert.Nil(err)
+	err = vm.ReseedRNG()
+	assert.Nil(err)
 
 	// template VM
 	config.HypervisorConfig.BootFromTemplate = true

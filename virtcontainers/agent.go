@@ -218,4 +218,7 @@ type agent interface {
 
 	// getSharePath will return the agent 9pfs share mount path
 	getSharePath(id string) string
+
+	// reseedRNG will reseed the guest random number generator
+	reseedRNG(data []byte) error
 }
