@@ -37,7 +37,7 @@ func SetLogger(logger logrus.FieldLogger) {
 func CreateSandbox(sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
 	s, err := createSandboxFromConfig(sandboxConfig, factory)
 	if err == nil {
-		s.Release()
+		s.releaseStatelessSandbox()
 	}
 
 	return s, err
@@ -91,7 +91,7 @@ func DeleteSandbox(sandboxID string) (VCSandbox, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	// Delete it.
 	if err := s.Delete(); err != nil {
@@ -155,7 +155,7 @@ func StartSandbox(sandboxID string) (VCSandbox, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	return startSandbox(s)
 }
@@ -193,7 +193,7 @@ func StopSandbox(sandboxID string) (VCSandbox, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	// Stop it.
 	err = s.stop()
@@ -221,7 +221,7 @@ func RunSandbox(sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error)
 	if err != nil {
 		return nil, err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	lockFile, err := rwLockSandbox(s.id)
 	if err != nil {
@@ -280,7 +280,7 @@ func StatusSandbox(sandboxID string) (SandboxStatus, error) {
 		unlockSandbox(lockFile)
 		return SandboxStatus{}, err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	// We need to potentially wait for a separate container.stop() routine
 	// that needs to be terminated before we return from this function.
@@ -332,7 +332,7 @@ func CreateContainer(sandboxID string, containerConfig ContainerConfig) (VCSandb
 	if err != nil {
 		return nil, nil, err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	c, err := s.CreateContainer(containerConfig)
 	if err != nil {
@@ -364,7 +364,7 @@ func DeleteContainer(sandboxID, containerID string) (VCContainer, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	return s.DeleteContainer(containerID)
 }
@@ -390,7 +390,7 @@ func StartContainer(sandboxID, containerID string) (VCContainer, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	c, err := s.StartContainer(containerID)
 	if err != nil {
@@ -421,7 +421,7 @@ func StopContainer(sandboxID, containerID string) (VCContainer, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	// Fetch the container.
 	c, err := s.findContainer(containerID)
@@ -459,7 +459,7 @@ func EnterContainer(sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContai
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	c, process, err := s.EnterContainer(containerID, cmd)
 	if err != nil {
@@ -490,7 +490,7 @@ func StatusContainer(sandboxID, containerID string) (ContainerStatus, error) {
 		unlockSandbox(lockFile)
 		return ContainerStatus{}, err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	// We need to potentially wait for a separate container.stop() routine
 	// that needs to be terminated before we return from this function.
@@ -577,7 +577,7 @@ func KillContainer(sandboxID, containerID string, signal syscall.Signal, all boo
 	if err != nil {
 		return err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	// Fetch the container.
 	c, err := s.findContainer(containerID)
@@ -627,7 +627,7 @@ func ProcessListContainer(sandboxID, containerID string, options ProcessListOpti
 	if err != nil {
 		return nil, err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	// Fetch the container.
 	c, err := s.findContainer(containerID)
@@ -659,7 +659,7 @@ func UpdateContainer(sandboxID, containerID string, resources specs.LinuxResourc
 	if err != nil {
 		return err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	return s.UpdateContainer(containerID, resources)
 }
@@ -685,7 +685,7 @@ func StatsContainer(sandboxID, containerID string) (ContainerStats, error) {
 	if err != nil {
 		return ContainerStats{}, err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	return s.StatsContainer(containerID)
 }
@@ -709,7 +709,7 @@ func togglePauseContainer(sandboxID, containerID string, pause bool) error {
 	if err != nil {
 		return err
 	}
-	defer s.Release()
+	defer s.releaseStatelessSandbox()
 
 	// Fetch the container.
 	c, err := s.findContainer(containerID)
