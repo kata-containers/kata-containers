@@ -441,20 +441,21 @@ func networkModelToQemuType(model NetInterworkingModel) govmmQemu.NetDeviceType 
 
 func (q *qemuArchBase) appendNetwork(devices []govmmQemu.Device, endpoint Endpoint) []govmmQemu.Device {
 	switch ep := endpoint.(type) {
-	case *VirtualEndpoint:
+	case *VirtualEndpoint, *BridgedMacvlanEndpoint:
+		netPair := ep.NetworkPair()
 		devices = append(devices,
 			govmmQemu.NetDevice{
-				Type:          networkModelToQemuType(ep.NetPair.NetInterworkingModel),
+				Type:          networkModelToQemuType(netPair.NetInterworkingModel),
 				Driver:        govmmQemu.VirtioNetPCI,
 				ID:            fmt.Sprintf("network-%d", q.networkIndex),
-				IFName:        ep.NetPair.TAPIface.Name,
-				MACAddress:    ep.NetPair.TAPIface.HardAddr,
+				IFName:        netPair.TAPIface.Name,
+				MACAddress:    netPair.TAPIface.HardAddr,
 				DownScript:    "no",
 				Script:        "no",
 				VHost:         q.vhost,
 				DisableModern: q.nestedRun,
-				FDs:           ep.NetPair.VMFds,
-				VhostFDs:      ep.NetPair.VhostFds,
+				FDs:           netPair.VMFds,
+				VhostFDs:      netPair.VhostFds,
 			},
 		)
 		q.networkIndex++
