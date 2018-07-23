@@ -153,6 +153,7 @@ type Endpoint interface {
 	HardwareAddr() string
 	Type() EndpointType
 	PciAddr() string
+	NetworkPair() *NetworkInterfacePair
 
 	SetProperties(NetworkInfo)
 	Attach(hypervisor) error
@@ -194,6 +195,14 @@ type VhostUserEndpoint struct {
 	PCIAddr            string
 }
 
+// BridgedMacvlanEndpoint represents a macvlan endpoint that is bridged to the VM
+type BridgedMacvlanEndpoint struct {
+	NetPair            NetworkInterfacePair
+	EndpointProperties NetworkInfo
+	EndpointType       EndpointType
+	PCIAddr            string
+}
+
 // Properties returns properties for the veth interface in the network pair.
 func (endpoint *VirtualEndpoint) Properties() NetworkInfo {
 	return endpoint.EndpointProperties
@@ -220,6 +229,11 @@ func (endpoint *VirtualEndpoint) PciAddr() string {
 	return endpoint.PCIAddr
 }
 
+// NetworkPair returns the network pair of the endpoint.
+func (endpoint *VirtualEndpoint) NetworkPair() *NetworkInterfacePair {
+	return &endpoint.NetPair
+}
+
 // SetProperties sets the properties for the endpoint.
 func (endpoint *VirtualEndpoint) SetProperties(properties NetworkInfo) {
 	endpoint.EndpointProperties = properties
@@ -234,7 +248,7 @@ func networkLogger() *logrus.Entry {
 func (endpoint *VirtualEndpoint) Attach(h hypervisor) error {
 	networkLogger().WithField("endpoint-type", "virtual").Info("Attaching endpoint")
 
-	if err := xconnectVMNetwork(&(endpoint.NetPair), true, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
+	if err := xconnectVMNetwork(endpoint, true, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual endpoint")
 		return err
 	}
@@ -254,14 +268,14 @@ func (endpoint *VirtualEndpoint) Detach(netNsCreated bool, netNsPath string) err
 	networkLogger().WithField("endpoint-type", "virtual").Info("Detaching endpoint")
 
 	return doNetNS(netNsPath, func(_ ns.NetNS) error {
-		return xconnectVMNetwork(&(endpoint.NetPair), false, 0, false)
+		return xconnectVMNetwork(endpoint, false, 0, false)
 	})
 }
 
 // HotAttach for the virtual endpoint uses hot plug device
 func (endpoint *VirtualEndpoint) HotAttach(h hypervisor) error {
 	networkLogger().Info("Hot attaching virtual endpoint")
-	if err := xconnectVMNetwork(&(endpoint.NetPair), true, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
+	if err := xconnectVMNetwork(endpoint, true, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual ep")
 		return err
 	}
@@ -280,7 +294,7 @@ func (endpoint *VirtualEndpoint) HotDetach(h hypervisor, netNsCreated bool, netN
 	}
 	networkLogger().Info("Hot detaching virtual endpoint")
 	if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
-		return xconnectVMNetwork(&(endpoint.NetPair), false, 0, h.hypervisorConfig().DisableVhostNet)
+		return xconnectVMNetwork(endpoint, false, 0, h.hypervisorConfig().DisableVhostNet)
 	}); err != nil {
 		networkLogger().WithError(err).Warn("Error un-bridging virtual ep")
 	}
@@ -320,6 +334,11 @@ func (endpoint *VhostUserEndpoint) SetProperties(properties NetworkInfo) {
 // PciAddr returns the PCI address of the endpoint.
 func (endpoint *VhostUserEndpoint) PciAddr() string {
 	return endpoint.PCIAddr
+}
+
+// NetworkPair returns the network pair of the endpoint.
+func (endpoint *VhostUserEndpoint) NetworkPair() *NetworkInterfacePair {
+	return nil
 }
 
 // Attach for vhostuser endpoint
@@ -401,6 +420,11 @@ func (endpoint *PhysicalEndpoint) SetProperties(properties NetworkInfo) {
 	endpoint.EndpointProperties = properties
 }
 
+// NetworkPair returns the network pair of the endpoint.
+func (endpoint *PhysicalEndpoint) NetworkPair() *NetworkInterfacePair {
+	return nil
+}
+
 // Attach for physical endpoint binds the physical network interface to
 // vfio-pci and adds device to the hypervisor with vfio-passthrough.
 func (endpoint *PhysicalEndpoint) Attach(h hypervisor) error {
@@ -443,6 +467,83 @@ func (endpoint *PhysicalEndpoint) HotDetach(h hypervisor, netNsCreated bool, net
 	return fmt.Errorf("PhysicalEndpoint does not support Hot detach")
 }
 
+// Macvlan
+
+// Properties returns properties of the interface.
+func (endpoint *BridgedMacvlanEndpoint) Properties() NetworkInfo {
+	return endpoint.EndpointProperties
+}
+
+// Name returns name of the veth interface in the network pair.
+func (endpoint *BridgedMacvlanEndpoint) Name() string {
+	return endpoint.NetPair.VirtIface.Name
+}
+
+// HardwareAddr returns the mac address that is assigned to the tap interface
+// in th network pair.
+func (endpoint *BridgedMacvlanEndpoint) HardwareAddr() string {
+	return endpoint.NetPair.TAPIface.HardAddr
+}
+
+// Type identifies the endpoint as a virtual endpoint.
+func (endpoint *BridgedMacvlanEndpoint) Type() EndpointType {
+	return endpoint.EndpointType
+}
+
+// SetProperties sets the properties for the endpoint.
+func (endpoint *BridgedMacvlanEndpoint) SetProperties(properties NetworkInfo) {
+	endpoint.EndpointProperties = properties
+}
+
+// PciAddr returns the PCI address of the endpoint.
+func (endpoint *BridgedMacvlanEndpoint) PciAddr() string {
+	return endpoint.PCIAddr
+}
+
+// NetworkPair returns the network pair of the endpoint.
+func (endpoint *BridgedMacvlanEndpoint) NetworkPair() *NetworkInterfacePair {
+	return &endpoint.NetPair
+}
+
+// Attach for virtual endpoint bridges the network pair and adds the
+// tap interface of the network pair to the hypervisor.
+func (endpoint *BridgedMacvlanEndpoint) Attach(h hypervisor) error {
+	networkLogger().Info("Attaching macvlan endpoint")
+	if err := xconnectVMNetwork(endpoint, true, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
+		networkLogger().WithError(err).Error("Error bridging virtual ep")
+		return err
+	}
+
+	return h.addDevice(endpoint, netDev)
+}
+
+// Detach for the virtual endpoint tears down the tap and bridge
+// created for the veth interface.
+func (endpoint *BridgedMacvlanEndpoint) Detach(netNsCreated bool, netNsPath string) error {
+	// The network namespace would have been deleted at this point
+	// if it has not been created by virtcontainers.
+	if !netNsCreated {
+		return nil
+	}
+
+	networkLogger().Info("Detaching virtual endpoint")
+
+	return doNetNS(netNsPath, func(_ ns.NetNS) error {
+		//return xconnectVMNetwork(&(endpoint.NetPair), false, 0, false, endpoint.EndpointType)
+		return xconnectVMNetwork(endpoint, false, 0, false)
+	})
+}
+
+// HotAttach for physical endpoint not supported yet
+func (endpoint *BridgedMacvlanEndpoint) HotAttach(h hypervisor) error {
+	return fmt.Errorf("BridgedMacvlanEndpoint does not support Hot attach")
+}
+
+// HotDetach for physical endpoint not supported yet
+func (endpoint *BridgedMacvlanEndpoint) HotDetach(h hypervisor, netNsCreated bool, netNsPath string) error {
+	return fmt.Errorf("BridgedMacvlanEndpoint does not support Hot detach")
+}
+
 // EndpointType identifies the type of the network endpoint.
 type EndpointType string
 
@@ -455,6 +556,9 @@ const (
 
 	// VhostUserEndpointType is the vhostuser network interface.
 	VhostUserEndpointType EndpointType = "vhost-user"
+
+	// BridgedMacvlanEndpointType is macvlan network interface.
+	BridgedMacvlanEndpointType EndpointType = "macvlan"
 )
 
 // Set sets an endpoint type based on the input string.
@@ -468,6 +572,9 @@ func (endpointType *EndpointType) Set(value string) error {
 		return nil
 	case "vhost-user":
 		*endpointType = VhostUserEndpointType
+		return nil
+	case "macvlan":
+		*endpointType = BridgedMacvlanEndpointType
 		return nil
 	default:
 		return fmt.Errorf("Unknown endpoint type %s", value)
@@ -483,6 +590,8 @@ func (endpointType *EndpointType) String() string {
 		return string(VirtualEndpointType)
 	case VhostUserEndpointType:
 		return string(VhostUserEndpointType)
+	case BridgedMacvlanEndpointType:
+		return string(BridgedMacvlanEndpointType)
 	default:
 		return ""
 	}
@@ -599,6 +708,18 @@ func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 			networkLogger().WithFields(logrus.Fields{
 				"endpoint":      endpoint,
 				"endpoint-type": "vhostuser",
+			}).Info("endpoint unmarshalled")
+
+		case BridgedMacvlanEndpointType:
+			var endpoint BridgedMacvlanEndpoint
+			err := json.Unmarshal(e.Data, &endpoint)
+			if err != nil {
+				return err
+			}
+
+			networkLogger().WithFields(logrus.Fields{
+				"endpoint":      endpoint,
+				"endpoint-type": "macvlan",
 			}).Info("endpoint unmarshalled")
 
 		default:
@@ -732,6 +853,10 @@ func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.
 		if l, ok := link.(*netlink.Macvtap); ok {
 			return l, nil
 		}
+	case (&netlink.Macvlan{}).Type():
+		if l, ok := link.(*netlink.Macvlan); ok {
+			return l, nil
+		}
 	default:
 		return nil, fmt.Errorf("Unsupported link type %s", expectedLink.Type())
 	}
@@ -740,7 +865,9 @@ func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.
 }
 
 // The endpoint type should dictate how the connection needs to be made
-func xconnectVMNetwork(netPair *NetworkInterfacePair, connect bool, numCPUs uint32, disableVhostNet bool) error {
+func xconnectVMNetwork(endpoint Endpoint, connect bool, numCPUs uint32, disableVhostNet bool) error {
+	netPair := endpoint.NetworkPair()
+
 	if netPair.NetInterworkingModel == NetXConnectDefaultModel {
 		netPair.NetInterworkingModel = DefaultNetInterworkingModel
 	}
@@ -748,15 +875,15 @@ func xconnectVMNetwork(netPair *NetworkInterfacePair, connect bool, numCPUs uint
 	case NetXConnectBridgedModel:
 		netPair.NetInterworkingModel = NetXConnectBridgedModel
 		if connect {
-			return bridgeNetworkPair(netPair, numCPUs, disableVhostNet)
+			return bridgeNetworkPair(endpoint, numCPUs, disableVhostNet)
 		}
-		return unBridgeNetworkPair(*netPair)
+		return unBridgeNetworkPair(endpoint)
 	case NetXConnectMacVtapModel:
 		netPair.NetInterworkingModel = NetXConnectMacVtapModel
 		if connect {
-			return tapNetworkPair(netPair, numCPUs, disableVhostNet)
+			return tapNetworkPair(endpoint, numCPUs, disableVhostNet)
 		}
-		return untapNetworkPair(*netPair)
+		return untapNetworkPair(endpoint)
 	case NetXConnectEnlightenedModel:
 		return fmt.Errorf("Unsupported networking model")
 	default:
@@ -843,18 +970,33 @@ func setIPs(link netlink.Link, addrs []netlink.Addr) error {
 	return nil
 }
 
-func tapNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32, disableVhostNet bool) error {
+func tapNetworkPair(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) error {
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
 	}
 	defer netHandle.Delete()
 
-	vethLink, err := getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
-	if err != nil {
-		return fmt.Errorf("Could not get veth interface: %s: %s", netPair.VirtIface.Name, err)
+	var link netlink.Link
+	netPair := endpoint.NetworkPair()
+
+	switch ep := endpoint.(type) {
+	case *VirtualEndpoint:
+		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
+		if err != nil {
+			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
+		}
+	case *BridgedMacvlanEndpoint:
+		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Macvlan{})
+		if err != nil {
+			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
+		}
+
+	default:
+		return fmt.Errorf("Unexpected endpointType  %s", ep.Type())
 	}
-	vethLinkAttrs := vethLink.Attrs()
+
+	attrs := link.Attrs()
 
 	// Attach the macvtap interface to the underlying container
 	// interface. Also picks relevant attributes from the parent
@@ -862,8 +1004,8 @@ func tapNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32, disableVhostN
 		&netlink.Macvtap{
 			Macvlan: netlink.Macvlan{
 				LinkAttrs: netlink.LinkAttrs{
-					TxQLen:      vethLinkAttrs.TxQLen,
-					ParentIndex: vethLinkAttrs.Index,
+					TxQLen:      attrs.TxQLen,
+					ParentIndex: attrs.Index,
 				},
 			},
 		}, int(numCPUs))
@@ -877,18 +1019,18 @@ func tapNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32, disableVhostN
 	// the one inside the VM in order to avoid any firewall issues. The
 	// bridge created by the network plugin on the host actually expects
 	// to see traffic from this MAC address and not another one.
-	tapHardAddr := vethLinkAttrs.HardwareAddr
-	netPair.TAPIface.HardAddr = vethLinkAttrs.HardwareAddr.String()
+	tapHardAddr := attrs.HardwareAddr
+	netPair.TAPIface.HardAddr = attrs.HardwareAddr.String()
 
-	if err := netHandle.LinkSetMTU(tapLink, vethLinkAttrs.MTU); err != nil {
-		return fmt.Errorf("Could not set TAP MTU %d: %s", vethLinkAttrs.MTU, err)
+	if err := netHandle.LinkSetMTU(tapLink, attrs.MTU); err != nil {
+		return fmt.Errorf("Could not set TAP MTU %d: %s", attrs.MTU, err)
 	}
 
 	hardAddr, err := net.ParseMAC(netPair.VirtIface.HardAddr)
 	if err != nil {
 		return err
 	}
-	if err := netHandle.LinkSetHardwareAddr(vethLink, hardAddr); err != nil {
+	if err := netHandle.LinkSetHardwareAddr(link, hardAddr); err != nil {
 		return fmt.Errorf("Could not set MAC address %s for veth interface %s: %s",
 			netPair.VirtIface.HardAddr, netPair.VirtIface.Name, err)
 	}
@@ -903,16 +1045,16 @@ func tapNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32, disableVhostN
 	}
 
 	// Clear the IP addresses from the veth interface to prevent ARP conflict
-	netPair.VirtIface.Addrs, err = netlink.AddrList(vethLink, netlink.FAMILY_V4)
+	netPair.VirtIface.Addrs, err = netlink.AddrList(link, netlink.FAMILY_V4)
 	if err != nil {
 		return fmt.Errorf("Unable to obtain veth IP addresses: %s", err)
 	}
 
-	if err := clearIPs(vethLink, netPair.VirtIface.Addrs); err != nil {
+	if err := clearIPs(link, netPair.VirtIface.Addrs); err != nil {
 		return fmt.Errorf("Unable to clear veth IP addresses: %s", err)
 	}
 
-	if err := netHandle.LinkSetUp(vethLink); err != nil {
+	if err := netHandle.LinkSetUp(link); err != nil {
 		return fmt.Errorf("Could not enable veth %s: %s", netPair.VirtIface.Name, err)
 	}
 
@@ -934,12 +1076,14 @@ func tapNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32, disableVhostN
 	return nil
 }
 
-func bridgeNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32, disableVhostNet bool) error {
+func bridgeNetworkPair(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) error {
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
 	}
 	defer netHandle.Delete()
+
+	netPair := endpoint.NetworkPair()
 
 	tapLink, fds, err := createLink(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{}, int(numCPUs))
 	if err != nil {
@@ -955,29 +1099,43 @@ func bridgeNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32, disableVho
 		netPair.VhostFds = vhostFds
 	}
 
-	vethLink, err := getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
-	if err != nil {
-		return fmt.Errorf("Could not get veth interface %s : %s", netPair.VirtIface.Name, err)
+	var attrs *netlink.LinkAttrs
+	var link netlink.Link
+
+	switch ep := endpoint.(type) {
+	case *VirtualEndpoint:
+		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
+		if err != nil {
+			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
+		}
+	case *BridgedMacvlanEndpoint:
+		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Macvlan{})
+		if err != nil {
+			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
+		}
+
+	default:
+		return fmt.Errorf("Unexpected endpointType  %s", ep.Type())
 	}
 
-	vethLinkAttrs := vethLink.Attrs()
+	attrs = link.Attrs()
 
 	// Save the veth MAC address to the TAP so that it can later be used
 	// to build the hypervisor command line. This MAC address has to be
 	// the one inside the VM in order to avoid any firewall issues. The
 	// bridge created by the network plugin on the host actually expects
 	// to see traffic from this MAC address and not another one.
-	netPair.TAPIface.HardAddr = vethLinkAttrs.HardwareAddr.String()
+	netPair.TAPIface.HardAddr = attrs.HardwareAddr.String()
 
-	if err := netHandle.LinkSetMTU(tapLink, vethLinkAttrs.MTU); err != nil {
-		return fmt.Errorf("Could not set TAP MTU %d: %s", vethLinkAttrs.MTU, err)
+	if err := netHandle.LinkSetMTU(tapLink, attrs.MTU); err != nil {
+		return fmt.Errorf("Could not set TAP MTU %d: %s", attrs.MTU, err)
 	}
 
 	hardAddr, err := net.ParseMAC(netPair.VirtIface.HardAddr)
 	if err != nil {
 		return err
 	}
-	if err := netHandle.LinkSetHardwareAddr(vethLink, hardAddr); err != nil {
+	if err := netHandle.LinkSetHardwareAddr(link, hardAddr); err != nil {
 		return fmt.Errorf("Could not set MAC address %s for veth interface %s: %s",
 			netPair.VirtIface.HardAddr, netPair.VirtIface.Name, err)
 	}
@@ -997,12 +1155,12 @@ func bridgeNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32, disableVho
 		return fmt.Errorf("Could not enable TAP %s: %s", netPair.TAPIface.Name, err)
 	}
 
-	if err := netHandle.LinkSetMaster(vethLink, bridgeLink.(*netlink.Bridge)); err != nil {
+	if err := netHandle.LinkSetMaster(link, bridgeLink.(*netlink.Bridge)); err != nil {
 		return fmt.Errorf("Could not attach veth %s to the bridge %s: %s",
 			netPair.VirtIface.Name, netPair.Name, err)
 	}
 
-	if err := netHandle.LinkSetUp(vethLink); err != nil {
+	if err := netHandle.LinkSetUp(link); err != nil {
 		return fmt.Errorf("Could not enable veth %s: %s", netPair.VirtIface.Name, err)
 	}
 
@@ -1013,12 +1171,14 @@ func bridgeNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32, disableVho
 	return nil
 }
 
-func untapNetworkPair(netPair NetworkInterfacePair) error {
+func untapNetworkPair(endpoint Endpoint) error {
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
 	}
 	defer netHandle.Delete()
+
+	netPair := endpoint.NetworkPair()
 
 	tapLink, err := getLinkByName(netHandle, netPair.TAPIface.Name, &netlink.Macvtap{})
 	if err != nil {
@@ -1029,27 +1189,41 @@ func untapNetworkPair(netPair NetworkInterfacePair) error {
 		return fmt.Errorf("Could not remove TAP %s: %s", netPair.TAPIface.Name, err)
 	}
 
-	vethLink, err := getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
-	if err != nil {
-		// The veth pair is not totally managed by virtcontainers
-		networkLogger().WithError(err).WithField("veth-name", netPair.VirtIface.Name).Warn("Could not get veth interface")
-	} else {
-		if err := netHandle.LinkSetDown(vethLink); err != nil {
-			return fmt.Errorf("Could not disable veth %s: %s", netPair.VirtIface.Name, err)
+	var link netlink.Link
+
+	switch ep := endpoint.(type) {
+	case *VirtualEndpoint:
+		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
+		if err != nil {
+			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
 		}
+	case *BridgedMacvlanEndpoint:
+		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Macvlan{})
+		if err != nil {
+			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
+		}
+
+	default:
+		return fmt.Errorf("Unexpected endpointType  %s", ep.Type())
+	}
+
+	if err := netHandle.LinkSetDown(link); err != nil {
+		return fmt.Errorf("Could not disable veth %s: %s", netPair.VirtIface.Name, err)
 	}
 
 	// Restore the IPs that were cleared
-	err = setIPs(vethLink, netPair.VirtIface.Addrs)
+	err = setIPs(link, netPair.VirtIface.Addrs)
 	return err
 }
 
-func unBridgeNetworkPair(netPair NetworkInterfacePair) error {
+func unBridgeNetworkPair(endpoint Endpoint) error {
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
 	}
 	defer netHandle.Delete()
+
+	netPair := endpoint.NetworkPair()
 
 	tapLink, err := getLinkByName(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{})
 	if err != nil {
@@ -1081,19 +1255,30 @@ func unBridgeNetworkPair(netPair NetworkInterfacePair) error {
 		return fmt.Errorf("Could not remove TAP %s: %s", netPair.TAPIface.Name, err)
 	}
 
-	vethLink, err := getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
-	if err != nil {
-		// The veth pair is not totally managed by virtcontainers
-		networkLogger().WithError(err).Warn("Could not get veth interface")
-	} else {
-		if err := netHandle.LinkSetDown(vethLink); err != nil {
-			return fmt.Errorf("Could not disable veth %s: %s", netPair.VirtIface.Name, err)
+	var link netlink.Link
+
+	switch ep := endpoint.(type) {
+	case *VirtualEndpoint:
+		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
+		if err != nil {
+			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
+		}
+	case *BridgedMacvlanEndpoint:
+		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Macvlan{})
+		if err != nil {
+			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
 		}
 
-		if err := netHandle.LinkSetNoMaster(vethLink); err != nil {
-			return fmt.Errorf("Could not detach veth %s: %s", netPair.VirtIface.Name, err)
-		}
+	default:
+		return fmt.Errorf("Unexpected endpointType  %s", ep.Type())
+	}
 
+	if err := netHandle.LinkSetDown(link); err != nil {
+		return fmt.Errorf("Could not disable veth %s: %s", netPair.VirtIface.Name, err)
+	}
+
+	if err := netHandle.LinkSetNoMaster(link); err != nil {
+		return fmt.Errorf("Could not detach veth %s: %s", netPair.VirtIface.Name, err)
 	}
 
 	return nil
@@ -1160,29 +1345,33 @@ func createVirtualNetworkEndpoint(idx int, ifName string, interworkingModel NetI
 		return &VirtualEndpoint{}, fmt.Errorf("invalid network endpoint index: %d", idx)
 	}
 
-	uniqueID := uuid.Generate().String()
-
-	hardAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, byte(idx >> 8), byte(idx)}
+	netPair := createNetworkInterfacePair(idx, ifName, interworkingModel)
 
 	endpoint := &VirtualEndpoint{
 		// TODO This is too specific. We may need to create multiple
 		// end point types here and then decide how to connect them
 		// at the time of hypervisor attach and not here
-		NetPair: NetworkInterfacePair{
-			ID:   uniqueID,
-			Name: fmt.Sprintf("br%d_kata", idx),
-			VirtIface: NetworkInterface{
-				Name:     fmt.Sprintf("eth%d", idx),
-				HardAddr: hardAddr.String(),
-			},
-			TAPIface: NetworkInterface{
-				Name: fmt.Sprintf("tap%d_kata", idx),
-			},
-			NetInterworkingModel: interworkingModel,
-		},
+		NetPair:      netPair,
 		EndpointType: VirtualEndpointType,
 	}
+	if ifName != "" {
+		endpoint.NetPair.VirtIface.Name = ifName
+	}
 
+	return endpoint, nil
+}
+
+func createBridgedMacvlanNetworkEndpoint(idx int, ifName string, interworkingModel NetInterworkingModel) (*BridgedMacvlanEndpoint, error) {
+	if idx < 0 {
+		return &BridgedMacvlanEndpoint{}, fmt.Errorf("invalid network endpoint index: %d", idx)
+	}
+
+	netPair := createNetworkInterfacePair(idx, ifName, interworkingModel)
+
+	endpoint := &BridgedMacvlanEndpoint{
+		NetPair:      netPair,
+		EndpointType: BridgedMacvlanEndpointType,
+	}
 	if ifName != "" {
 		endpoint.NetPair.VirtIface.Name = ifName
 	}
@@ -1275,6 +1464,28 @@ func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*grpc.Interface,
 		}
 	}
 	return ifaces, routes, nil
+}
+
+func createNetworkInterfacePair(idx int, ifName string, interworkingModel NetInterworkingModel) NetworkInterfacePair {
+	uniqueID := uuid.Generate().String()
+
+	hardAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, byte(idx >> 8), byte(idx)}
+
+	netPair := NetworkInterfacePair{
+		ID:   uniqueID,
+		Name: fmt.Sprintf("br%d_kata", idx),
+		VirtIface: NetworkInterface{
+			Name:     fmt.Sprintf("eth%d", idx),
+			HardAddr: hardAddr.String(),
+		},
+		TAPIface: NetworkInterface{
+			Name: fmt.Sprintf("tap%d_kata", idx),
+		},
+		NetInterworkingModel: interworkingModel,
+	}
+
+	return netPair
+
 }
 
 func networkInfoFromLink(handle *netlink.Handle, link netlink.Link) (NetworkInfo, error) {
@@ -1388,6 +1599,9 @@ func createEndpoint(netInfo NetworkInfo, idx int, model NetInterworkingModel) (E
 		if socketPath != "" {
 			networkLogger().WithField("interface", netInfo.Iface.Name).Info("VhostUser network interface found")
 			endpoint, err = createVhostUserEndpoint(netInfo, socketPath)
+		} else if netInfo.Iface.Type == "macvlan" {
+			networkLogger().Infof("macvlan interface found")
+			endpoint, err = createBridgedMacvlanNetworkEndpoint(idx, netInfo.Iface.Name, model)
 		} else {
 			endpoint, err = createVirtualNetworkEndpoint(idx, netInfo.Iface.Name, model)
 		}
