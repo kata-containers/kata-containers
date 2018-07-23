@@ -5,7 +5,6 @@
 package main
 
 import (
-	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -110,7 +109,7 @@ func TestCheckStats(t *testing.T) {
 
 	// Funky rounding of Gap, as float imprecision actually gives us
 	// 110.00000000000001 - check to within 0.1% then...
-	roundedGap := math.Round(m.Gap/0.001) * 0.001
+	roundedGap := Round(m.Gap/0.001) * 0.001
 	assert.Equal(110.0, roundedGap, "Should be equal")
 	assert.Equal(2.0, m.stats.Mean, "Should be equal")
 	assert.Equal(1.0, m.stats.Min, "Should be equal")

@@ -5,7 +5,6 @@
 package main
 
 import (
-	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -40,7 +39,7 @@ func TestCalculate(t *testing.T) {
 
 	// We do a little funky math on Gap to round it to within 0.1% - as the actual
 	// gap math gave us 10.000000000000009 ...
-	roundedGap := math.Round(m.Gap/0.001) * 0.001
+	roundedGap := Round(m.Gap/0.001) * 0.001
 	assert.Equal(10.0, roundedGap, "Should be equal")
 	assert.Equal(2.0, m.stats.Mean, "Should be equal")
 	assert.Equal(1.0, m.stats.Min, "Should be equal")
@@ -84,7 +83,7 @@ func TestCalculate2(t *testing.T) {
 
 	// We do a little funky math on Gap to round it to within 0.1% - as the actual
 	// gap math gave us 10.000000000000009 ...
-	roundedGap := math.Round(m.Gap/0.001) * 0.001
+	roundedGap := Round(m.Gap/0.001) * 0.001
 	// This is not a nice (20+25), as the 'midval' will skew it.
 	assert.Equal(43.902, roundedGap, "Should be equal")
 	assert.Equal(2.0, m.stats.Mean, "Should be equal")
