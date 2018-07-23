@@ -1,6 +1,7 @@
 * [Introduction](#introduction)
 * [General requirements](#general-requirements)
 * [Notes](#notes)
+* [Files and command names](#files-and-command-names)
 * [Code blocks](#code-blocks)
 * [Images](#images)
 
@@ -33,6 +34,24 @@ If there are multiple notes, bullets should be used:
 > - I am important point 2.
 >
 > - I am important point *n*.
+
+# Files and command names
+
+All filenames and command names should be rendered in a fixed-format font
+using backticks:
+
+> Run the `foo` command to make it work.
+
+> Modify the `bar` option in file `/etc/baz/baz.conf`.
+
+Render any options that need to be specified to the command in the same manner:
+
+> Run `bar -axz --apply foo.yaml` to make the changes.
+
+For standard system commands, it is also acceptable to specify the name along
+with the manual page section that documents the command in brackets:
+
+> The command to list files in a directory is called `ls(1)`.
 
 # Code blocks
 
