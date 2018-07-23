@@ -1267,6 +1267,14 @@ func (k *kataAgent) closeProcessStdin(c *Container, ProcessID string) error {
 	return err
 }
 
+func (k *kataAgent) reseedRNG(data []byte) error {
+	_, err := k.sendReq(&grpc.ReseedRandomDevRequest{
+		Data: data,
+	})
+
+	return err
+}
+
 type reqFunc func(context.Context, interface{}, ...golangGrpc.CallOption) (interface{}, error)
 
 func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
@@ -1332,6 +1340,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers["grpc.ResumeContainerRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.ResumeContainer(ctx, req.(*grpc.ResumeContainerRequest), opts...)
+	}
+	k.reqHandlers["grpc.ReseedRandomDevRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.ReseedRandomDev(ctx, req.(*grpc.ReseedRandomDevRequest), opts...)
 	}
 }
 
