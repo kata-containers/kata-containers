@@ -116,8 +116,9 @@ install_docker(){
 			sudo -E yum install -y yum-utils
 			repo_url="https://download.docker.com/linux/centos/docker-ce.repo"
 			sudo yum-config-manager --add-repo "$repo_url"
-			sudo -E yum -y install docker-ce
-			sudo -E yum update
+			sudo yum makecache
+			docker_version_full=$(yum --showduplicate list "$pkg_name" | grep "$docker_version" | awk '{print $2}' | tail -1)
+			sudo -E yum -y install "${pkg_name}-${docker_version_full}"
 		fi
 	elif [ "$tag" == "swarm" ]; then
 		# If tag is swarm, install docker 1.12.1
@@ -144,9 +145,21 @@ install_docker(){
 			curl -O "${repo_url}/${gpg_key}"
 			sudo rpm --import "./${gpg_key}"
 			rm "./${gpg_key}"
-                        sudo -E dnf makecache
+			sudo -E dnf makecache
 			docker_version_full=$(dnf --showduplicate list "$pkg_name" | grep "$docker_swarm_version" | awk '{print $2}' | tail -1)
 			sudo -E dnf -y install "${pkg_name}-${docker_version_full}"
+		elif [ "$ID" == "centos" ]; then
+			repo_url="https://yum.dockerproject.org"
+			centos7_repo="${repo_url}/repo/main/centos/7"
+			gpg_key="gpg"
+			sudo -E yum -y install yum-utils
+			sudo -E yum config-manager --add-repo  "${centos7_repo}"
+			curl -O "${repo_url}/${gpg_key}"
+			sudo rpm --import "./${gpg_key}"
+			rm "./${gpg_key}"
+			sudo -E yum makecache
+			docker_version_full=$(yum --showduplicate list "$pkg_name" | grep "$docker_swarm_version" | awk '{print $2}' | tail -1)
+			sudo -E yum -y install "${pkg_name}-${docker_version_full}"
 		fi
 	else
 		# If tag received is invalid, then return an error message
@@ -169,6 +182,8 @@ remove_docker(){
 			sudo apt -y purge "$pkg_name"
 		elif [ "$ID" == "fedora" ]; then
 			sudo dnf -y remove "$pkg_name"
+		elif [ "$ID" == "centos" ]; then
+			sudo yum -y remove "$pkg_name"
 		else
 			die "This script doesn't support your Linux distribution"
 		fi
@@ -186,7 +201,7 @@ get_docker_version(){
 get_docker_package_name(){
 	if [ "$ID" == "ubuntu" ]; then
 		dpkg --get-selections | awk '/docker/ {print $1}'
-	elif [ "$ID" == "fedora" ]; then
+	elif [ "$ID" == "fedora" ] || [ "$ID" == "centos" ]; then
 		rpm -qa | grep docker | grep -v selinux
 	else
 		die "This script doesn't support your Linux distribution"

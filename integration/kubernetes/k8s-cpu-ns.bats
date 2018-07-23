@@ -20,7 +20,6 @@ setup() {
 }
 
 @test "Check CPU constraints" {
-	skip "Issue: https://github.com/kata-containers/tests/issues/520"
 	wait_time=30
 	sleep_time=5
 
