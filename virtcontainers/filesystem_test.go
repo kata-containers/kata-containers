@@ -34,6 +34,7 @@ func TestFilesystemCreateAllResourcesSuccessful(t *testing.T) {
 		storage:    fs,
 		config:     sandboxConfig,
 		devManager: manager.NewDeviceManager(manager.VirtioBlock),
+		containers: map[string]*Container{},
 	}
 
 	if err := sandbox.newContainers(); err != nil {
@@ -110,8 +111,8 @@ func TestFilesystemCreateAllResourcesFailingSandboxIDEmpty(t *testing.T) {
 func TestFilesystemCreateAllResourcesFailingContainerIDEmpty(t *testing.T) {
 	fs := &filesystem{}
 
-	containers := []*Container{
-		{id: ""},
+	containers := map[string]*Container{
+		testContainerID: {},
 	}
 
 	sandbox := &Sandbox{

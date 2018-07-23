@@ -634,8 +634,8 @@ func TestSandboxSetContainersStateFailingEmptySandboxID(t *testing.T) {
 		storage: &filesystem{},
 	}
 
-	containers := []*Container{
-		{
+	containers := map[string]*Container{
+		"100": {
 			id:      "100",
 			sandbox: sandbox,
 		},
@@ -787,11 +787,11 @@ func TestSandboxDeleteContainersStateFailingEmptySandboxID(t *testing.T) {
 
 func TestGetContainer(t *testing.T) {
 	containerIDs := []string{"abc", "123", "xyz", "rgb"}
-	containers := []*Container{}
+	containers := map[string]*Container{}
 
 	for _, id := range containerIDs {
 		c := Container{id: id}
-		containers = append(containers, &c)
+		containers[id] = &c
 	}
 
 	sandbox := Sandbox{
@@ -813,11 +813,11 @@ func TestGetContainer(t *testing.T) {
 
 func TestGetAllContainers(t *testing.T) {
 	containerIDs := []string{"abc", "123", "xyz", "rgb"}
-	containers := []*Container{}
+	containers := map[string]*Container{}
 
 	for _, id := range containerIDs {
-		c := Container{id: id}
-		containers = append(containers, &c)
+		c := &Container{id: id}
+		containers[id] = c
 	}
 
 	sandbox := Sandbox{
@@ -826,8 +826,8 @@ func TestGetAllContainers(t *testing.T) {
 
 	list := sandbox.GetAllContainers()
 
-	for i, c := range list {
-		if c.ID() != containerIDs[i] {
+	for _, c := range list {
+		if containers[c.ID()] == nil {
 			t.Fatal()
 		}
 	}
@@ -1168,19 +1168,20 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 		},
 	}
 
-	containers := []*Container{c}
+	containers := map[string]*Container{}
+	containers[c.id] = c
 
 	sandbox := Sandbox{
 		containers: containers,
 		hypervisor: &mockHypervisor{},
 	}
 
-	containers[0].sandbox = &sandbox
+	containers[c.id].sandbox = &sandbox
 
-	err = containers[0].attachDevices()
+	err = containers[c.id].attachDevices()
 	assert.Nil(t, err, "Error while attaching devices %s", err)
 
-	err = containers[0].detachDevices()
+	err = containers[c.id].detachDevices()
 	assert.Nil(t, err, "Error while detaching devices %s", err)
 }
 
@@ -1256,17 +1257,15 @@ func TestFindContainerNoContainerMatchFailure(t *testing.T) {
 
 func TestFindContainerSuccess(t *testing.T) {
 	sandbox := &Sandbox{
-		containers: []*Container{
-			{
-				id: testContainerID,
-			},
+		containers: map[string]*Container{
+			testContainerID: {id: testContainerID},
 		},
 	}
 	c, err := sandbox.findContainer(testContainerID)
 	assert.NotNil(t, c, "Container pointer should not be nil")
 	assert.Nil(t, err, "Should not have returned an error: %v", err)
 
-	assert.True(t, c == sandbox.containers[0], "Container pointers should point to the same address")
+	assert.True(t, c == sandbox.containers[testContainerID], "Container pointers should point to the same address")
 }
 
 func TestRemoveContainerSandboxNilFailure(t *testing.T) {
@@ -1285,10 +1284,8 @@ func TestRemoveContainerNoContainerMatchFailure(t *testing.T) {
 
 func TestRemoveContainerSuccess(t *testing.T) {
 	sandbox := &Sandbox{
-		containers: []*Container{
-			{
-				id: testContainerID,
-			},
+		containers: map[string]*Container{
+			testContainerID: {id: testContainerID},
 		},
 	}
 	err := sandbox.removeContainer(testContainerID)
