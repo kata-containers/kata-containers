@@ -2,6 +2,7 @@
 * [General requirements](#general-requirements)
 * [Notes](#notes)
 * [Code blocks](#code-blocks)
+* [Images](#images)
 
 # Introduction
 
@@ -79,3 +80,21 @@ utility.
       ```
 
   ```
+
+# Images
+
+All binary image files must be in a standard and well-supported format such as
+PNG. This format is preferred for vector graphics such as diagrams because the
+information is stored more efficiently, leading to smaller file sizes. JPEG
+images are acceptable, but this format is more appropriate to store
+photographic images.
+
+When possible, generate images using freely available software.
+
+Every binary image file **MUST** be accompanied by the "source" file used to
+generate it. This guarantees that the image can be modified by updating the
+source file and re-generating the binary format image file.
+
+Ideally, the format of all image source files is an open standard, non-binary
+one such as SVG. Text formats are highly preferable because you can manipulate
+and compare them with standard tools (e.g. `diff(1)`).
