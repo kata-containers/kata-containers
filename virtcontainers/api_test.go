@@ -1811,7 +1811,7 @@ func TestStatusContainerStateReady(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer p2.Release()
+	defer p2.releaseStatelessSandbox()
 
 	expectedStatus := ContainerStatus{
 		ID: contID,
@@ -1885,7 +1885,7 @@ func TestStatusContainerStateRunning(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer p2.Release()
+	defer p2.releaseStatelessSandbox()
 
 	expectedStatus := ContainerStatus{
 		ID: contID,
@@ -2335,7 +2335,23 @@ func TestFetchSandbox(t *testing.T) {
 
 	fetched, err := FetchSandbox(s.ID())
 	assert.Nil(t, err, "%v", err)
-	assert.True(t, fetched == s, "fetched sandboxed do not match")
+	assert.True(t, fetched != s, "fetched stateless sandboxes should not match")
+}
+
+func TestFetchStatefulSandbox(t *testing.T) {
+	cleanUp()
+
+	config := newTestSandboxConfigNoop()
+
+	config.Stateful = true
+	s, err := CreateSandbox(config, nil)
+	if s == nil || err != nil {
+		t.Fatal(err)
+	}
+
+	fetched, err := FetchSandbox(s.ID())
+	assert.Nil(t, err, "%v", err)
+	assert.Equal(t, fetched, s, "fetched stateful sandboxed should match")
 }
 
 func TestFetchNonExistingSandbox(t *testing.T) {
