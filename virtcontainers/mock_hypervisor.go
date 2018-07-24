@@ -73,3 +73,6 @@ func (m *mockHypervisor) hotplugRemoveDevice(devInfo interface{}, devType device
 func (m *mockHypervisor) getSandboxConsole(sandboxID string) (string, error) {
 	return "", nil
 }
+
+func (m *mockHypervisor) disconnect() {
+}

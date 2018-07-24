@@ -350,6 +350,10 @@ type SandboxConfig struct {
 
 	// SharePidNs sets all containers to share the same sandbox level pid namespace.
 	SharePidNs bool
+
+	// Stateful keeps sandbox resources in memory across APIs. Users will be responsible
+	// for calling Release() to release the memory resources.
+	Stateful bool
 }
 
 func (s *Sandbox) startProxy() error {
@@ -468,6 +472,7 @@ type Sandbox struct {
 
 	shmSize    uint64
 	sharePidNs bool
+	stateful   bool
 }
 
 // ID returns the sandbox identifier string.
@@ -541,11 +546,21 @@ func (s *Sandbox) GetContainer(containerID string) VCContainer {
 
 // Release closes the agent connection and removes sandbox from internal list.
 func (s *Sandbox) Release() error {
+	s.Logger().Info("release sandbox")
 	globalSandboxList.removeSandbox(s.id)
 	if s.monitor != nil {
 		s.monitor.stop()
 	}
+	s.hypervisor.disconnect()
 	return s.agent.disconnect()
+}
+
+func (s *Sandbox) releaseStatelessSandbox() error {
+	if s.stateful {
+		return nil
+	}
+
+	return s.Release()
 }
 
 // Status gets the status of the sandbox
@@ -750,6 +765,7 @@ func newSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) 
 		wg:              &sync.WaitGroup{},
 		shmSize:         sandboxConfig.ShmSize,
 		sharePidNs:      sandboxConfig.SharePidNs,
+		stateful:        sandboxConfig.Stateful,
 	}
 
 	if err = globalSandboxList.addSandbox(s); err != nil {
@@ -808,6 +824,7 @@ func (s *Sandbox) storeSandbox() error {
 
 // fetchSandbox fetches a sandbox config from a sandbox ID and returns a sandbox.
 func fetchSandbox(sandboxID string) (sandbox *Sandbox, err error) {
+	virtLog.WithField("sandbox-id", sandboxID).Info("fetch sandbox")
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -1388,6 +1405,7 @@ func togglePauseSandbox(sandboxID string, pause bool) (*Sandbox, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer s.releaseStatelessSandbox()
 
 	if pause {
 		err = s.Pause()

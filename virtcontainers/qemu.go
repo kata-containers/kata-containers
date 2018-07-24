@@ -507,12 +507,6 @@ func (q *qemu) startSandbox() error {
 
 // waitSandbox will wait for the Sandbox's VM to be up and running.
 func (q *qemu) waitSandbox(timeout int) error {
-	defer func(qemu *qemu) {
-		if q.qmpMonitorCh.qmp != nil {
-			q.qmpMonitorCh.qmp.Shutdown()
-		}
-	}(q)
-
 	if timeout < 0 {
 		return fmt.Errorf("Invalid timeout %ds", timeout)
 	}
@@ -537,8 +531,9 @@ func (q *qemu) waitSandbox(timeout int) error {
 
 		time.Sleep(time.Duration(50) * time.Millisecond)
 	}
-
 	q.qmpMonitorCh.qmp = qmp
+	defer q.qmpShutdown()
+
 	qemuMajorVersion = ver.Major
 	qemuMinorVersion = ver.Minor
 
@@ -559,23 +554,14 @@ func (q *qemu) waitSandbox(timeout int) error {
 
 // stopSandbox will stop the Sandbox's VM.
 func (q *qemu) stopSandbox() error {
-	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
-	disconnectCh := make(chan struct{})
-
 	q.Logger().Info("Stopping Sandbox")
-	qmp, _, err := govmmQemu.QMPStart(q.qmpMonitorCh.ctx, q.qmpMonitorCh.path, cfg, disconnectCh)
+
+	err := q.qmpSetup()
 	if err != nil {
-		q.Logger().WithError(err).Error("Failed to connect to QEMU instance")
 		return err
 	}
 
-	err = qmp.ExecuteQMPCapabilities(q.qmpMonitorCh.ctx)
-	if err != nil {
-		q.Logger().WithError(err).Error(qmpCapErrMsg)
-		return err
-	}
-
-	err = qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
+	err = q.qmpMonitorCh.qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
 	if err != nil {
 		q.Logger().WithError(err).Error("Fail to execute qmp QUIT")
 		return err
@@ -590,28 +576,8 @@ func (q *qemu) stopSandbox() error {
 }
 
 func (q *qemu) togglePauseSandbox(pause bool) error {
-	defer func(qemu *qemu) {
-		if q.qmpMonitorCh.qmp != nil {
-			q.qmpMonitorCh.qmp.Shutdown()
-		}
-	}(q)
-
-	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
-
-	// Auto-closed by QMPStart().
-	disconnectCh := make(chan struct{})
-
-	qmp, _, err := govmmQemu.QMPStart(q.qmpMonitorCh.ctx, q.qmpMonitorCh.path, cfg, disconnectCh)
+	err := q.qmpSetup()
 	if err != nil {
-		q.Logger().WithError(err).Error("Failed to connect to QEMU instance")
-		return err
-	}
-
-	q.qmpMonitorCh.qmp = qmp
-
-	err = qmp.ExecuteQMPCapabilities(q.qmpMonitorCh.ctx)
-	if err != nil {
-		q.Logger().WithError(err).Error(qmpCapErrMsg)
 		return err
 	}
 
@@ -628,7 +594,11 @@ func (q *qemu) togglePauseSandbox(pause bool) error {
 	return nil
 }
 
-func (q *qemu) qmpSetup() (*govmmQemu.QMP, error) {
+func (q *qemu) qmpSetup() error {
+	if q.qmpMonitorCh.qmp != nil {
+		return nil
+	}
+
 	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
 
 	// Auto-closed by QMPStart().
@@ -637,16 +607,25 @@ func (q *qemu) qmpSetup() (*govmmQemu.QMP, error) {
 	qmp, _, err := govmmQemu.QMPStart(q.qmpMonitorCh.ctx, q.qmpMonitorCh.path, cfg, disconnectCh)
 	if err != nil {
 		q.Logger().WithError(err).Error("Failed to connect to QEMU instance")
-		return nil, err
+		return err
 	}
 
 	err = qmp.ExecuteQMPCapabilities(q.qmpMonitorCh.ctx)
 	if err != nil {
+		qmp.Shutdown()
 		q.Logger().WithError(err).Error(qmpCapErrMsg)
-		return nil, err
+		return err
 	}
+	q.qmpMonitorCh.qmp = qmp
 
-	return qmp, nil
+	return nil
+}
+
+func (q *qemu) qmpShutdown() {
+	if q.qmpMonitorCh.qmp != nil {
+		q.qmpMonitorCh.qmp.Shutdown()
+		q.qmpMonitorCh.qmp = nil
+	}
 }
 
 func (q *qemu) addDeviceToBridge(ID string) (string, Bridge, error) {
@@ -678,18 +657,10 @@ func (q *qemu) removeDeviceFromBridge(ID string) error {
 }
 
 func (q *qemu) hotplugBlockDevice(drive *deviceDrivers.Drive, op operation) error {
-	defer func(qemu *qemu) {
-		if q.qmpMonitorCh.qmp != nil {
-			q.qmpMonitorCh.qmp.Shutdown()
-		}
-	}(q)
-
-	qmp, err := q.qmpSetup()
+	err := q.qmpSetup()
 	if err != nil {
 		return err
 	}
-
-	q.qmpMonitorCh.qmp = qmp
 
 	devID := "virtio-" + drive.ID
 
@@ -747,18 +718,10 @@ func (q *qemu) hotplugBlockDevice(drive *deviceDrivers.Drive, op operation) erro
 }
 
 func (q *qemu) hotplugVFIODevice(device deviceDrivers.VFIODevice, op operation) error {
-	defer func(qemu *qemu) {
-		if q.qmpMonitorCh.qmp != nil {
-			q.qmpMonitorCh.qmp.Shutdown()
-		}
-	}(q)
-
-	qmp, err := q.qmpSetup()
+	err := q.qmpSetup()
 	if err != nil {
 		return err
 	}
-
-	q.qmpMonitorCh.qmp = qmp
 
 	devID := "vfio-" + device.DeviceInfo.ID
 
@@ -829,18 +792,10 @@ func (q *qemu) hotplugCPUs(vcpus uint32, op operation) (uint32, error) {
 		return 0, nil
 	}
 
-	defer func(qemu *qemu) {
-		if q.qmpMonitorCh.qmp != nil {
-			q.qmpMonitorCh.qmp.Shutdown()
-		}
-	}(q)
-
-	qmp, err := q.qmpSetup()
+	err := q.qmpSetup()
 	if err != nil {
 		return 0, err
 	}
-
-	q.qmpMonitorCh.qmp = qmp
 
 	if op == addDevice {
 		return q.hotplugAddCPUs(vcpus)
@@ -964,22 +919,12 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) error {
 }
 
 func (q *qemu) hotplugAddMemory(memDev *memoryDevice) error {
-	// setup qmp channel if necessary
-	if q.qmpMonitorCh.qmp == nil {
-		qmp, err := q.qmpSetup()
-		if err != nil {
-			return err
-		}
-
-		q.qmpMonitorCh.qmp = qmp
-
-		defer func() {
-			qmp.Shutdown()
-			q.qmpMonitorCh.qmp = nil
-		}()
+	err := q.qmpSetup()
+	if err != nil {
+		return err
 	}
 
-	err := q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, "memory-backend-ram", "mem"+strconv.Itoa(memDev.slot), "", memDev.sizeMB)
+	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, "memory-backend-ram", "mem"+strconv.Itoa(memDev.slot), "", memDev.sizeMB)
 	if err != nil {
 		q.Logger().WithError(err).Error("hotplug memory")
 		return err
@@ -1032,30 +977,10 @@ func (q *qemu) getSandboxConsole(id string) (string, error) {
 }
 
 func (q *qemu) saveSandbox() error {
-	defer func(qemu *qemu) {
-		if q.qmpMonitorCh.qmp != nil {
-			q.qmpMonitorCh.qmp.Shutdown()
-		}
-	}(q)
-
 	q.Logger().Info("save sandbox")
 
-	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
-
-	// Auto-closed by QMPStart().
-	disconnectCh := make(chan struct{})
-
-	qmp, _, err := govmmQemu.QMPStart(q.qmpMonitorCh.ctx, q.qmpMonitorCh.path, cfg, disconnectCh)
+	err := q.qmpSetup()
 	if err != nil {
-		q.Logger().WithError(err).Error("Failed to connect to QEMU instance")
-		return err
-	}
-
-	q.qmpMonitorCh.qmp = qmp
-
-	err = qmp.ExecuteQMPCapabilities(q.qmpMonitorCh.ctx)
-	if err != nil {
-		q.Logger().WithError(err).Error(qmpCapErrMsg)
 		return err
 	}
 
@@ -1081,6 +1006,10 @@ func (q *qemu) saveSandbox() error {
 	}
 
 	return nil
+}
+
+func (q *qemu) disconnect() {
+	q.qmpShutdown()
 }
 
 // genericAppendBridges appends to devices the given bridges
