@@ -727,6 +727,51 @@ func (q *QMP) ExecuteBlockdevDel(ctx context.Context, blockdevID string) error {
 	return q.executeCommand(ctx, "x-blockdev-del", args, nil)
 }
 
+// ExecuteNetdevAdd adds a Net device to a QEMU instance
+// using the netdev_add command. netdevID is the id of the device to add.
+// Must be valid QMP identifier.
+func (q *QMP) ExecuteNetdevAdd(ctx context.Context, netdevType, netdevID, ifname, downscript, script string, queues int) error {
+	args := map[string]interface{}{
+		"type":       netdevType,
+		"id":         netdevID,
+		"ifname":     ifname,
+		"downscript": downscript,
+		"script":     script,
+	}
+	if queues > 1 {
+		args["queues"] = queues
+	}
+
+	return q.executeCommand(ctx, "netdev_add", args, nil)
+}
+
+// ExecuteNetdevDel deletes a Net device from a QEMU instance
+// using the netdev_del command. netdevID is the id of the device to delete.
+func (q *QMP) ExecuteNetdevDel(ctx context.Context, netdevID string) error {
+	args := map[string]interface{}{
+		"id": netdevID,
+	}
+	return q.executeCommand(ctx, "netdev_del", args, nil)
+}
+
+// ExecuteNetPCIDeviceAdd adds a Net PCI device to a QEMU instance
+// using the device_add command. devID is the id of the device to add.
+// Must be valid QMP identifier. netdevID is the id of nic added by previous netdev_add.
+func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAddr, addr, bus string) error {
+	args := map[string]interface{}{
+		"id":     devID,
+		"driver": VirtioNetPCI,
+		"netdev": netdevID,
+		"mac":    macAddr,
+		"addr":   addr,
+	}
+
+	if bus != "" {
+		args["bus"] = bus
+	}
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
 // ExecuteDeviceDel deletes guest portion of a QEMU device by sending a
 // device_del command.   devId is the identifier of the device to delete.
 // Typically it would match the devID parameter passed to an earlier call
