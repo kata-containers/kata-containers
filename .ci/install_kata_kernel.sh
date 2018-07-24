@@ -24,8 +24,14 @@ kernel_repo="github.com/${kernel_repo_owner}/${kernel_repo_name}"
 export GOPATH=${GOPATH:-${HOME}/go}
 kernel_repo_dir="${GOPATH}/src/${kernel_repo}"
 kernel_arch="$(arch)"
-tmp_dir="$(mktemp -d)"
+tmp_dir="$(mktemp -d -t install-kata-XXXXXXXXXXX)"
 packaged_kernel="kata-linux-container"
+
+exit_handler () {
+	rm -rf "$tmp_dir"
+}
+
+trap exit_handler EXIT
 
 download_repo() {
 	pushd ${tmp_dir}
