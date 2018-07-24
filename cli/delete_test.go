@@ -121,7 +121,7 @@ func TestDeleteInvalidConfig(t *testing.T) {
 	assert.False(vcmock.IsMockError(err))
 }
 
-func testConfigSetup(t *testing.T) string {
+func testConfigSetup(t *testing.T) (rootPath string, configPath string) {
 	assert := assert.New(t)
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -135,8 +135,8 @@ func testConfigSetup(t *testing.T) string {
 	assert.NoError(err)
 
 	// config json path
-	configPath := filepath.Join(bundlePath, "config.json")
-	return configPath
+	configPath = filepath.Join(bundlePath, "config.json")
+	return tmpdir, configPath
 }
 
 func TestDeleteSandbox(t *testing.T) {
@@ -146,7 +146,8 @@ func TestDeleteSandbox(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
@@ -223,7 +224,8 @@ func TestDeleteInvalidContainerType(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
@@ -261,7 +263,8 @@ func TestDeleteSandboxRunning(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
@@ -340,7 +343,8 @@ func TestDeleteRunningContainer(t *testing.T) {
 		},
 	}
 
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
@@ -422,7 +426,8 @@ func TestDeleteContainer(t *testing.T) {
 		},
 	}
 
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
@@ -523,7 +528,8 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 		},
 	}
 
-	configPath := testConfigSetup(t)
+	rootPath, configPath := testConfigSetup(t)
+	defer os.RemoveAll(rootPath)
 	configJSON, err := readOCIConfigJSON(configPath)
 	assert.NoError(err)
 
