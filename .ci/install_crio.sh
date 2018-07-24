@@ -95,6 +95,9 @@ crio_config_file="/etc/crio/crio.conf"
 echo "Set runc as default runtime in CRI-O for trusted workloads"
 sudo sed -i 's/^runtime =.*/runtime = "\/usr\/local\/bin\/crio-runc"/' "$crio_config_file"
 
+echo "Change stream_port where cri-o will listen"
+sudo sed -i 's/^stream_port.*/stream_port = "10020"/' "$crio_config_file"
+
 echo "Add docker.io registry to pull images"
 # Matches cri-o 1.9 file format
 sudo sed -i 's/^registries = \[/registries = \[ "docker.io"/' "$crio_config_file"
