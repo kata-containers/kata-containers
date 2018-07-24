@@ -104,3 +104,9 @@ func TestMockHypervisorSaveSandbox(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestMockHypervisorDisconnect(t *testing.T) {
+	var m *mockHypervisor
+
+	m.disconnect()
+}

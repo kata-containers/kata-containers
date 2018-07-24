@@ -547,5 +547,6 @@ type hypervisor interface {
 	hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error)
 	hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error)
 	getSandboxConsole(sandboxID string) (string, error)
+	disconnect()
 	capabilities() capabilities
 }
