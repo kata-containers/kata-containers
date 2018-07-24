@@ -32,6 +32,9 @@ test-static-build:
 test-packaging-tools:
 	@$(MK_DIR)/obs-packaging/build_from_docker.sh
 
+test-build-kernel:
+	@$(MK_DIR)/kernel/build-kernel_test.sh
+
 $(YQ):
 	@bash -c "source .ci/lib.sh; install_yq $${MK_DIR}"
 
