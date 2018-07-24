@@ -110,7 +110,7 @@ check() {
 		sudo make install
 		popd
 
-		checkmetrics --basefile /etc/checkmetrics/checkmetrics-json-$(uname -n).toml --metricsdir ${RESULTS_DIR}
+		checkmetrics --percentage --basefile /etc/checkmetrics/checkmetrics-json-$(uname -n).toml --metricsdir ${RESULTS_DIR}
 		cm_result=$?
 		if [ ${cm_result} != 0 ]; then
 			echo "checkmetrics FAILED (${cm_result})"
