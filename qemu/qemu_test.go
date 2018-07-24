@@ -329,12 +329,14 @@ func TestAppendDeviceVFIO(t *testing.T) {
 	testAppend(vfioDevice, deviceVFIOString, t)
 }
 
-var deviceVSOCKString = "-device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=4"
+var deviceVSOCKString = "-device vhost-vsock-pci,disable-modern=true,id=vhost-vsock-pci0,guest-cid=4"
 
 func TestAppendVSOCK(t *testing.T) {
 	vsockDevice := VSOCKDevice{
-		ID:        "vhost-vsock-pci0",
-		ContextID: 4,
+		ID:            "vhost-vsock-pci0",
+		ContextID:     4,
+		VHostFD:       nil,
+		DisableModern: true,
 	}
 
 	testAppend(vsockDevice, deviceVSOCKString, t)
@@ -342,8 +344,10 @@ func TestAppendVSOCK(t *testing.T) {
 
 func TestVSOCKValid(t *testing.T) {
 	vsockDevice := VSOCKDevice{
-		ID:        "vhost-vsock-pci0",
-		ContextID: MinimalGuestCID - 1,
+		ID:            "vhost-vsock-pci0",
+		ContextID:     MinimalGuestCID - 1,
+		VHostFD:       nil,
+		DisableModern: true,
 	}
 
 	if vsockDevice.Valid() {
