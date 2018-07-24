@@ -39,7 +39,9 @@ description = "measure container average footprint with KSM"
 # within (inclusive)
 checkvar = ".Results | .[] | .average.Result"
 checktype = "mean"
-minval = 100000.0
-maxval = 110000.0
+midval = 100000.0
+minpercent = 5.0
+maxpercent = 10.0
+
 
 # ... repeat this for each metric check ...

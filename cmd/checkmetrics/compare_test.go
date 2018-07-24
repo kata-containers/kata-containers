@@ -106,7 +106,11 @@ func TestCheckStats(t *testing.T) {
 	m.calculate()
 
 	// Constants here calculated from info coded in struct above
-	assert.Equal(244.44444444444446, m.Gap, "Should be equal")
+
+	// Funky rounding of Gap, as float imprecision actually gives us
+	// 110.00000000000001 - check to within 0.1% then...
+	roundedGap := Round(m.Gap/0.001) * 0.001
+	assert.Equal(110.0, roundedGap, "Should be equal")
 	assert.Equal(2.0, m.stats.Mean, "Should be equal")
 	assert.Equal(1.0, m.stats.Min, "Should be equal")
 	assert.Equal(3.0, m.stats.Max, "Should be equal")
@@ -115,9 +119,7 @@ func TestCheckStats(t *testing.T) {
 	assert.Equal(0.816496580927726, m.stats.SD, "Should be equal")
 	assert.Equal(40.8248290463863, m.stats.CoV, "Should be equal")
 
-	//Check before we have done the calculations - should fail
 	s, err := (&metricsCheck{}).checkstats(m)
-
 	assert.NoError(err)
 
 	assert.Equal("P", s[0], "Should be equal")          // Pass
@@ -125,12 +127,32 @@ func TestCheckStats(t *testing.T) {
 	assert.Equal("0.90", s[2], "Should be equal")       // Floor
 	assert.Equal("2.00", s[3], "Should be equal")       // Mean
 	assert.Equal("3.10", s[4], "Should be equal")       // Ceiling
-	assert.Equal("244.4%", s[5], "Should be equal")     // Gap
+	assert.Equal("110.0%", s[5], "Should be equal")     // Gap
 	assert.Equal("1.00", s[6], "Should be equal")       // Min
 	assert.Equal("3.00", s[7], "Should be equal")       // Max
 	assert.Equal("200.0%", s[8], "Should be equal")     // Range %
 	assert.Equal("40.8%", s[9], "Should be equal")      // CoV
 	assert.Equal("3", s[10], "Should be equal")         // Iterations
+
+	// And check in percentage presentation mode
+	showPercentage = true
+	s, err = (&metricsCheck{}).checkstats(m)
+	assert.NoError(err)
+
+	assert.Equal("P", s[0], "Should be equal")          // Pass
+	assert.Equal("CheckStats", s[1], "Should be equal") // test name
+	assert.Equal("45.0%", s[2], "Should be equal")      // Floor
+	assert.Equal("100.0%", s[3], "Should be equal")     // Mean
+	assert.Equal("155.0%", s[4], "Should be equal")     // Ceiling
+	assert.Equal("110.0%", s[5], "Should be equal")     // Gap
+	assert.Equal("50.0%", s[6], "Should be equal")      // Min
+	assert.Equal("150.0%", s[7], "Should be equal")     // Max
+	assert.Equal("200.0%", s[8], "Should be equal")     // Range %
+	assert.Equal("40.8%", s[9], "Should be equal")      // CoV
+	assert.Equal("3", s[10], "Should be equal")         // Iterations
+
+	// And put the default back
+	showPercentage = false
 
 	// Funcs called with a Min that fails and a Max that fails
 	// Presumption is that unmodified metrics should pass
