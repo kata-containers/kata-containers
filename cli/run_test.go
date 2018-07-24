@@ -168,6 +168,7 @@ func testRunContainerSetup(t *testing.T) runContainerData {
 	assert.NoError(err, "unable to start fake container workload %+v: %s", workload, err)
 
 	// temporal dir to place container files
+	// Note - it is returned to the caller, who does the defer remove to clean up.
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
 

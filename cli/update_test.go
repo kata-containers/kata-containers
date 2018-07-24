@@ -111,6 +111,7 @@ func TestUpdateCLIFailure(t *testing.T) {
 
 	// json decode error
 	f, err := ioutil.TempFile("", "resources")
+	defer os.Remove(f.Name())
 	assert.NoError(err)
 	assert.NotNil(f)
 	f.WriteString("no json")
