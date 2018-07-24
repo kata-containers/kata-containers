@@ -457,7 +457,7 @@ type Sandbox struct {
 
 	volumes []Volume
 
-	containers []*Container
+	containers map[string]*Container
 
 	runPath    string
 	configPath string
@@ -527,8 +527,10 @@ func (s *Sandbox) GetAnnotations() map[string]string {
 func (s *Sandbox) GetAllContainers() []VCContainer {
 	ifa := make([]VCContainer, len(s.containers))
 
-	for i, v := range s.containers {
+	i := 0
+	for _, v := range s.containers {
 		ifa[i] = v
+		i++
 	}
 
 	return ifa
@@ -536,8 +538,8 @@ func (s *Sandbox) GetAllContainers() []VCContainer {
 
 // GetContainer returns the container named by the containerID.
 func (s *Sandbox) GetContainer(containerID string) VCContainer {
-	for _, c := range s.containers {
-		if c.id == containerID {
+	for id, c := range s.containers {
+		if id == containerID {
 			return c
 		}
 	}
@@ -758,6 +760,7 @@ func newSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) 
 		config:          &sandboxConfig,
 		devManager:      deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver),
 		volumes:         sandboxConfig.Volumes,
+		containers:      map[string]*Container{},
 		runPath:         filepath.Join(runStoragePath, sandboxConfig.ID),
 		configPath:      filepath.Join(configStoragePath, sandboxConfig.ID),
 		state:           State{},
@@ -812,8 +815,8 @@ func (s *Sandbox) storeSandbox() error {
 		return err
 	}
 
-	for _, container := range s.containers {
-		err = s.storage.storeContainerResource(s.id, container.id, configFileType, *(container.config))
+	for id, container := range s.containers {
+		err = s.storage.storeContainerResource(s.id, id, configFileType, *(container.config))
 		if err != nil {
 			return err
 		}
@@ -866,8 +869,8 @@ func (s *Sandbox) findContainer(containerID string) (*Container, error) {
 		return nil, errNeedContainerID
 	}
 
-	for _, c := range s.containers {
-		if containerID == c.id {
+	for id, c := range s.containers {
+		if containerID == id {
 			return c, nil
 		}
 	}
@@ -887,15 +890,14 @@ func (s *Sandbox) removeContainer(containerID string) error {
 		return errNeedContainerID
 	}
 
-	for idx, c := range s.containers {
-		if containerID == c.id {
-			s.containers = append(s.containers[:idx], s.containers[idx+1:]...)
-			return nil
-		}
+	if _, ok := s.containers[containerID]; !ok {
+		return fmt.Errorf("Could not remove the container %q from the sandbox %q containers list",
+			containerID, s.id)
 	}
 
-	return fmt.Errorf("Could not remove the container %q from the sandbox %q containers list",
-		containerID, s.id)
+	delete(s.containers, containerID)
+
+	return nil
 }
 
 // Delete deletes an already created sandbox.
@@ -997,7 +999,10 @@ func (s *Sandbox) stopVM() error {
 }
 
 func (s *Sandbox) addContainer(c *Container) error {
-	s.containers = append(s.containers, c)
+	if _, ok := s.containers[c.id]; ok {
+		return fmt.Errorf("Duplicated container: %s", c.id)
+	}
+	s.containers[c.id] = c
 
 	return nil
 }
@@ -1109,8 +1114,8 @@ func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
 		return ContainerStatus{}, errNeedContainerID
 	}
 
-	for _, c := range s.containers {
-		if c.id == containerID {
+	for id, c := range s.containers {
+		if id == containerID {
 			return ContainerStatus{
 				ID:          c.id,
 				State:       c.state,
