@@ -11,18 +11,19 @@ die(){
 	exit 1
 }
 
-# Check that kata_confing_version file is updated
-# when there is any change in the kernel directory.
-# If there is a change in the directory, but the config
-# version is not updated, return error.
-check_kata_kernel_version(){
-	kernel_version_file="kernel/kata_config_version"
-	modified_files=$(git diff --name-only master..)
-	if echo "$modified_files" | grep "kernel/"; then
-		echo "$modified_files" | grep "$kernel_version_file" || \
-		die "Please bump version in $kernel_version_file"
+export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
+export tests_repo_dir="$GOPATH/src/$tests_repo"
+
+clone_tests_repo()
+{
+	# KATA_CI_NO_NETWORK is (has to be) ignored if there is
+	# no existing clone.
+	if [ -d "${tests_repo_dir}" ]  && [ -n "${KATA_CI_NO_NETWORK:-}" ]
+	then
+		return
 	fi
 
+	go get -d -u "$tests_repo" || true
 }
 
 install_yq() {
