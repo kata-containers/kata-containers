@@ -925,8 +925,20 @@ func (s *Sandbox) Delete() error {
 }
 
 func (s *Sandbox) createNetwork() error {
+	var netNsPath string
+	var netNsCreated bool
+	var networkNS NetworkNamespace
+	var err error
+
+	//rollback the NetNs when createNetwork failed
+	defer func() {
+		if err != nil && netNsPath != "" && netNsCreated {
+			deleteNetNS(netNsPath)
+		}
+	}()
+
 	// Initialize the network.
-	netNsPath, netNsCreated, err := s.network.init(s.config.NetworkConfig)
+	netNsPath, netNsCreated, err = s.network.init(s.config.NetworkConfig)
 	if err != nil {
 		return err
 	}
@@ -939,14 +951,16 @@ func (s *Sandbox) createNetwork() error {
 	}
 
 	// Add the network
-	networkNS, err := s.network.add(s, s.config.NetworkConfig, netNsPath, netNsCreated)
+	networkNS, err = s.network.add(s, s.config.NetworkConfig, netNsPath, netNsCreated)
 	if err != nil {
 		return err
 	}
 	s.networkNS = networkNS
 
 	// Store the network
-	return s.storage.storeSandboxNetwork(s.id, networkNS)
+	err = s.storage.storeSandboxNetwork(s.id, networkNS)
+
+	return err
 }
 
 func (s *Sandbox) removeNetwork() error {
