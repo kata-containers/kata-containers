@@ -313,26 +313,26 @@ run_test()
 	create_and_run "${distro}" "${image_options}" "${initrd_options}"
 }
 
-test_fedora()
+test_distro_fedora()
 {
 	local -r name="Can create and run fedora image"
 	run_test "${name}" "" "fedora" "service" "no"
 }
 
-test_clearlinux()
+test_distro_clearlinux()
 {
 	local -r name="Can create and run clearlinux image"
 
 	run_test "${name}" "" "clearlinux" "service" "no"
 }
 
-test_centos()
+test_distro_centos()
 {
 	local -r name="Can create and run centos image"
 	run_test "${name}" "" "centos" "service" "no"
 }
 
-test_euleros()
+test_distro_euleros()
 {
 	local -r name="Can create and run euleros image"
 
@@ -341,7 +341,7 @@ test_euleros()
 	run_test "${name}" "$skip" "euleros" "service" "no"
 }
 
-test_alpine()
+test_distro_alpine()
 {
 	local -r name="Can create and run alpine image"
 	run_test "${name}" "" "alpine" "no" "init"
@@ -350,15 +350,17 @@ test_alpine()
 main()
 {
 	setup
-	test_fedora
-	test_centos
-	test_alpine
+
+	test_distro_fedora
+	test_distro_centos
+	test_distro_alpine
 
 	if [ $MACHINE_TYPE != "ppc64le" ]; then
-	   test_clearlinux
+	   test_distro_clearlinux
+
 	   # Run last as EulerOS servers can be slow and we don't want to fail the
 	   # previous tests.
-	   test_euleros
+	   test_distro_euleros
 	fi
 }
 
