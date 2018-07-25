@@ -48,7 +48,7 @@ $ gcloud compute images create \
     $IMAGE_NAME
 ```
 
-If successful, `gcloud` reports that the image was created. Verify that the image has the nested virtualization license with `gcloud compute images show $IMAGE_NAME`. This produces output like the following (some fields have been removed for clarity and to redact personal info):
+If successful, `gcloud` reports that the image was created. Verify that the image has the nested virtualization license with `gcloud compute images describe $IMAGE_NAME`. This produces output like the following (some fields have been removed for clarity and to redact personal info):
 
     diskSizeGb: '10'
     kind: compute#image
