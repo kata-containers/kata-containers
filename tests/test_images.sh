@@ -64,6 +64,8 @@ exit_handler()
 {
 	if [ "$?" -eq 0 ]
 	then
+		info "tests passed successfully - cleaning up"
+
 		# Rootfs and images are owned by root
 		sudo -E rm -rf "${tmp_rootfs}"
 		sudo -E rm -rf "${images_dir}"
@@ -73,8 +75,9 @@ exit_handler()
 		return
 	fi
 
-	# The test failed so dump what we can
+	info "ERROR: test failed"
 
+	# The test failed so dump what we can
 	info "AGENT_INIT: '${AGENT_INIT}'"
 
 	info "images:"
@@ -428,12 +431,16 @@ test_single_distro()
 		die "no test for distro '$distro' (try one of $distros)"
 	fi
 
+	info "only running tests for distro $distro"
+
 	# run the test
 	$defined_func
 }
 
 test_all_distros()
 {
+	info "running tests for all distros"
+
 	test_distro_fedora
 	test_distro_centos
 	test_distro_alpine
@@ -502,6 +509,10 @@ main()
 	else
 		test_all_distros
 	fi
+
+	# We shouldn't really need a message like this but the CI can fail in
+	# mysterious ways so make it clear!
+	info "all tests finished successfully"
 }
 
 main "$@"
