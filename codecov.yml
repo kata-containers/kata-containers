@@ -1,0 +1,11 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+coverage:
+  status:
+    patch:
+      default:
+        enabled: no
