@@ -32,3 +32,12 @@ initrd: rootfs initrd-only
 initrd-only:
 	@echo Creating initrd image based on "$(DISTRO_ROOTFS)"
 	"$(MK_DIR)/initrd-builder/initrd_builder.sh" "$(DISTRO_ROOTFS)"
+
+test:
+	"$(MK_DIR)/tests/test_images.sh" "$(DISTRO)"
+
+test-image-only:
+	"$(MK_DIR)/tests/test_images.sh" --test-images-only "$(DISTRO)"
+
+test-initrd-only:
+	"$(MK_DIR)/tests/test_images.sh" --test-initrds-only "$(DISTRO)"
