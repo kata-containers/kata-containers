@@ -214,6 +214,10 @@ func getHostInfo() (HostInfo, error) {
 }
 
 func getProxyInfo(config oci.RuntimeConfig) (ProxyInfo, error) {
+	if config.ProxyType == vc.NoProxyType {
+		return ProxyInfo{Type: string(config.ProxyType)}, nil
+	}
+
 	version, err := getCommandVersion(defaultProxyPath)
 	if err != nil {
 		version = unknown

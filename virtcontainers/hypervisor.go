@@ -68,6 +68,9 @@ const (
 	// SerialPortDev is the serial port device type.
 	serialPortDev
 
+	// vSockPCIDev is the vhost vsock PCI device type.
+	vSockPCIDev
+
 	// VFIODevice is VFIO device type
 	vfioDev
 

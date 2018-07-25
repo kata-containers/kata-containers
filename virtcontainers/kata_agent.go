@@ -47,13 +47,16 @@ var (
 	kataGuestSandboxDir   = "/run/kata-containers/sandbox/"
 	type9pFs              = "9p"
 	vsockSocketScheme     = "vsock"
-	kata9pDevType         = "9p"
-	kataBlkDevType        = "blk"
-	kataSCSIDevType       = "scsi"
-	sharedDir9pOptions    = []string{"trans=virtio,version=9p2000.L", "nodev"}
-	shmDir                = "shm"
-	kataEphemeralDevType  = "ephemeral"
-	ephemeralPath         = filepath.Join(kataGuestSandboxDir, kataEphemeralDevType)
+	// port numbers below 1024 are called privileged ports. Only a process with
+	// CAP_NET_BIND_SERVICE capability may bind to these port numbers.
+	vSockPort            = 1024
+	kata9pDevType        = "9p"
+	kataBlkDevType       = "blk"
+	kataSCSIDevType      = "scsi"
+	sharedDir9pOptions   = []string{"trans=virtio,version=9p2000.L", "nodev"}
+	shmDir               = "shm"
+	kataEphemeralDevType = "ephemeral"
+	ephemeralPath        = filepath.Join(kataGuestSandboxDir, kataEphemeralDevType)
 )
 
 // KataAgentConfig is a structure storing information needed
@@ -66,6 +69,7 @@ type KataAgentConfig struct {
 type kataVSOCK struct {
 	contextID uint32
 	port      uint32
+	vhostFd   *os.File
 }
 
 func (s *kataVSOCK) String() string {
@@ -203,7 +207,16 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 			return err
 		}
 	case kataVSOCK:
-		// TODO Add an hypervisor vsock
+		var err error
+		s.vhostFd, s.contextID, err = utils.FindContextID()
+		if err != nil {
+			return err
+		}
+		s.port = uint32(vSockPort)
+		if err := h.addDevice(s, vSockPCIDev); err != nil {
+			return err
+		}
+		k.vmSocket = s
 	default:
 		return fmt.Errorf("Invalid config type")
 	}
