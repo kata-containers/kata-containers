@@ -708,36 +708,6 @@ func TestAgentConfigure(t *testing.T) {
 	assert.Nil(err)
 }
 
-func TestParseVSOCKAddr(t *testing.T) {
-	assert := assert.New(t)
-
-	sock := "randomfoobar"
-	_, _, err := parseVSOCKAddr(sock)
-	assert.Error(err)
-
-	sock = "vsock://1:2"
-	_, _, err = parseVSOCKAddr(sock)
-	assert.Error(err)
-
-	sock = "unix:1:2"
-	_, _, err = parseVSOCKAddr(sock)
-	assert.Error(err)
-
-	sock = "vsock:foo:2"
-	_, _, err = parseVSOCKAddr(sock)
-	assert.Error(err)
-
-	sock = "vsock:1:bar"
-	_, _, err = parseVSOCKAddr(sock)
-	assert.Error(err)
-
-	sock = "vsock:1:2"
-	cid, port, err := parseVSOCKAddr(sock)
-	assert.Nil(err)
-	assert.Equal(cid, uint32(1))
-	assert.Equal(port, uint32(2))
-}
-
 func TestCmdToKataProcess(t *testing.T) {
 	assert := assert.New(t)
 
