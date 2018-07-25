@@ -7,6 +7,8 @@
 
 set -e
 
+source "/etc/os-release"
+
 # Signify to all scripts that they are running in a CI environment
 [ -z "${KATA_DEV_MODE}" ] && export CI=true
 
@@ -127,8 +129,14 @@ if [ -z "${METRICS_CI}" ]
 then
 	if [ "${kata_repo}" != "${tests_repo}" ]
 	then
-		echo "INFO: Running unit tests for repo $kata_repo"
-		make test
+		if [ "${ID}" == "centos" ] && [ "${kata_repo}" == "${runtime_repo}" ]
+		then
+			echo "INFO: unit tests skipped for $kata_repo in $ID"
+			echo "INFO: issue https://github.com/kata-containers/runtime/issues/228"
+		else
+			echo "INFO: Running unit tests for repo $kata_repo"
+			make test
+		fi
 	fi
 
 	# Run integration tests
