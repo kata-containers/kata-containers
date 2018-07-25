@@ -347,10 +347,8 @@ test_distro_alpine()
 	run_test "${name}" "" "alpine" "no" "init"
 }
 
-main()
+test_all_distros()
 {
-	setup
-
 	test_distro_fedora
 	test_distro_centos
 	test_distro_alpine
@@ -362,6 +360,13 @@ main()
 	   # previous tests.
 	   test_distro_euleros
 	fi
+}
+
+main()
+{
+	setup
+
+	test_all_distros
 }
 
 main "$@"
