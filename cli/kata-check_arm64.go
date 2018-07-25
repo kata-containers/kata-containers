@@ -40,6 +40,9 @@ var archRequiredKernelModules = map[string]kernelModule{
 	},
 }
 
+func setCPUtype() {
+}
+
 // kvmIsUsable determines if it will be possible to create a full virtual machine
 // by creating a minimal VM and then deleting it.
 func kvmIsUsable() error {
