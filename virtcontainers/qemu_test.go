@@ -246,6 +246,28 @@ func TestQemuAddDeviceSerialPortDev(t *testing.T) {
 	testQemuAddDevice(t, socket, serialPortDev, expectedOut)
 }
 
+func TestQemuAddDeviceKataVSOCK(t *testing.T) {
+	contextID := uint32(3)
+	port := uint32(1024)
+	vHostFD := os.NewFile(1, "vsock")
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.VSOCKDevice{
+			ID:        fmt.Sprintf("vsock-%d", contextID),
+			ContextID: contextID,
+			VHostFD:   vHostFD,
+		},
+	}
+
+	vsock := kataVSOCK{
+		contextID: contextID,
+		port:      port,
+		vhostFd:   vHostFD,
+	}
+
+	testQemuAddDevice(t, vsock, vSockPCIDev, expectedOut)
+}
+
 func TestQemuGetSandboxConsole(t *testing.T) {
 	q := &qemu{}
 	sandboxID := "testSandboxID"

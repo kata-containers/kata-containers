@@ -62,6 +62,10 @@ type qemu struct {
 	state QemuState
 
 	arch qemuArch
+
+	// fds is a list of file descriptors inherited by QEMU process
+	// they'll be closed once QEMU process is running
+	fds []*os.File
 }
 
 const (
@@ -496,6 +500,14 @@ func (q *qemu) startSandbox() error {
 		// by the user.
 		q.Logger().WithField("default-kernel-parameters", formatted).Debug()
 	}
+
+	defer func() {
+		for _, fd := range q.fds {
+			if err := fd.Close(); err != nil {
+				q.Logger().WithError(err).Error("After launching Qemu")
+			}
+		}
+	}()
 
 	strErr, err := govmmQemu.LaunchQemu(q.qemuConfig, newQMPLogger())
 	if err != nil {
@@ -956,6 +968,9 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 		q.qemuConfig.Devices = q.arch.append9PVolume(q.qemuConfig.Devices, v)
 	case Socket:
 		q.qemuConfig.Devices = q.arch.appendSocket(q.qemuConfig.Devices, v)
+	case kataVSOCK:
+		q.fds = append(q.fds, v.vhostFd)
+		q.qemuConfig.Devices = q.arch.appendVSockPCI(q.qemuConfig.Devices, v)
 	case Endpoint:
 		q.qemuConfig.Devices = q.arch.appendNetwork(q.qemuConfig.Devices, v)
 	case deviceDrivers.Drive:
