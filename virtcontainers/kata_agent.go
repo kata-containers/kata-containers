@@ -99,27 +99,6 @@ func (k *kataAgent) Logger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "kata_agent")
 }
 
-func parseVSOCKAddr(sock string) (uint32, uint32, error) {
-	sp := strings.Split(sock, ":")
-	if len(sp) != 3 {
-		return 0, 0, fmt.Errorf("Invalid vsock address: %s", sock)
-	}
-	if sp[0] != vsockSocketScheme {
-		return 0, 0, fmt.Errorf("Invalid vsock URL scheme: %s", sp[0])
-	}
-
-	cid, err := strconv.ParseUint(sp[1], 10, 32)
-	if err != nil {
-		return 0, 0, fmt.Errorf("Invalid vsock cid: %s", sp[1])
-	}
-	port, err := strconv.ParseUint(sp[2], 10, 32)
-	if err != nil {
-		return 0, 0, fmt.Errorf("Invalid vsock port: %s", sp[2])
-	}
-
-	return uint32(cid), uint32(port), nil
-}
-
 func (k *kataAgent) getVMPath(id string) string {
 	return filepath.Join(RunVMStoragePath, id)
 }
