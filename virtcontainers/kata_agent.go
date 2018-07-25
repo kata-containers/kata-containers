@@ -60,6 +60,7 @@ var (
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
 	LongLiveConn bool
+	UseVSock     bool
 }
 
 type kataVSOCK struct {
@@ -128,8 +129,13 @@ func (k *kataAgent) getSharePath(id string) string {
 }
 
 func (k *kataAgent) generateVMSocket(id string, c KataAgentConfig) error {
-	cid, port, err := parseVSOCKAddr(c.GRPCSocket)
-	if err != nil {
+	if c.UseVSock {
+		// We want to go through VSOCK. The VM VSOCK endpoint will be our gRPC.
+		k.Logger().Debug("agent: Using vsock VM socket endpoint")
+		// We dont know yet the context ID - set empty vsock configuration
+		k.vmSocket = kataVSOCK{}
+	} else {
+		k.Logger().Debug("agent: Using unix socket form VM socket endpoint")
 		// We need to generate a host UNIX socket path for the emulated serial port.
 		kataSock, err := utils.BuildSocketPath(k.getVMPath(id), defaultKataSocketName)
 		if err != nil {
@@ -141,12 +147,6 @@ func (k *kataAgent) generateVMSocket(id string, c KataAgentConfig) error {
 			ID:       defaultKataID,
 			HostPath: kataSock,
 			Name:     defaultKataChannel,
-		}
-	} else {
-		// We want to go through VSOCK. The VM VSOCK endpoint will be our gRPC.
-		k.vmSocket = kataVSOCK{
-			contextID: cid,
-			port:      port,
 		}
 	}
 

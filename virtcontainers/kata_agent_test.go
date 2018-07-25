@@ -676,6 +676,7 @@ func TestAgentPathAPI(t *testing.T) {
 	_, ok := k1.vmSocket.(Socket)
 	assert.True(ok)
 
+	c.UseVSock = true
 	err = k2.generateVMSocket(id, c)
 	assert.Nil(err)
 	_, ok = k2.vmSocket.(kataVSOCK)
