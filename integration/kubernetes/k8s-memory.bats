@@ -16,8 +16,10 @@ setup() {
 	memory_limit_size="50Mi"
 	allocated_size="250M"
 	# Create test .yaml
-	cat pod-memory-limit.yaml | sed -e "s/\${memory_size}/${memory_limit_size}/" | \
-		sed -e "s/\${memory_allocated}/${allocated_size}/" > test_exceed_memory.yaml
+        sed \
+            -e "s/\${memory_size}/${memory_limit_size}/" \
+            -e "s/\${memory_allocated}/${allocated_size}/" \
+            pod-memory-limit.yaml > test_exceed_memory.yaml
 
 	# Create the pod exceeding memory constraints
 	run sudo -E kubectl create -f test_exceed_memory.yaml
@@ -32,8 +34,10 @@ setup() {
 	wait_time=120
 	sleep_time=5
 	# Create test .yaml
-	cat pod-memory-limit.yaml | sed -e "s/\${memory_size}/${memory_limit_size}/" | \
-		sed -e "s/\${memory_allocated}/${allocated_size}/"> test_within_memory.yaml
+        sed \
+            -e "s/\${memory_size}/${memory_limit_size}/" \
+            -e "s/\${memory_allocated}/${allocated_size}/" \
+            pod-memory-limit.yaml > test_within_memory.yaml
 
 	# Create the pod within memory constraints
 	sudo -E kubectl create -f test_within_memory.yaml
