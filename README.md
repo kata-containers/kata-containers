@@ -12,6 +12,7 @@
         * [Image with systemd as init](#image-with-systemd-as-init)
         * [Image with the agent as init](#image-with-the-agent-as-init)
     * [Initrd creation](#initrd-creation)
+    * [Tests](#tests)
 * [Platform-Distro Compatibility Matrix](#platform-distro-compatibility-matrix)
 
 ## Introduction
@@ -108,6 +109,14 @@ $ sudo -E PATH=$PATH make AGENT_INIT=yes initrd-only
 
 For further details,
 see [the initrd builder documentation](initrd-builder/README.md).
+
+### Tests
+
+```
+$ make test
+```
+
+For further details, see [the tests documentation](tests/README.md).
 
 ## Platform-Distro Compatibility Matrix
 
