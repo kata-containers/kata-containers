@@ -881,3 +881,13 @@ func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string
 
 	return err
 }
+
+// ExecutePCIVSockAdd adds a vhost-vsock-pci bus
+func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID string) error {
+	args := map[string]interface{}{
+		"driver":    VHostVSockPCI,
+		"id":        id,
+		"guest-cid": guestCID,
+	}
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
