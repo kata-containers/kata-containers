@@ -1229,8 +1229,12 @@ func (k *kataAgent) disconnect() error {
 	return nil
 }
 
+// check grpc server is serving
 func (k *kataAgent) check() error {
 	_, err := k.sendReq(&grpc.CheckRequest{})
+	if err != nil {
+		err = fmt.Errorf("Failed to check if grpc server is working: %s", err)
+	}
 	return err
 }
 
