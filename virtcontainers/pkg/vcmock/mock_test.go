@@ -98,7 +98,7 @@ func TestVCMockSetLogger(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.SetLoggerFunc)
 
-	logger := logrus.New()
+	logger := logrus.NewEntry(logrus.New())
 
 	assert.Equal(loggerTriggered, 0)
 	m.SetLogger(logger)

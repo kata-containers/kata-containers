@@ -131,7 +131,7 @@ func (config *RuntimeConfig) AddKernelParam(p vc.Param) error {
 var ociLog = logrus.FieldLogger(logrus.New())
 
 // SetLogger sets the logger for oci package.
-func SetLogger(logger logrus.FieldLogger) {
+func SetLogger(logger *logrus.Entry) {
 	ociLog = logger.WithFields(logrus.Fields{
 		"source":    "virtcontainers",
 		"subsystem": "oci",

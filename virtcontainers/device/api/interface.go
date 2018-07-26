@@ -12,10 +12,10 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 )
 
-var devLogger = logrus.FieldLogger(logrus.New())
+var devLogger *logrus.Entry
 
 // SetLogger sets the logger for device api package.
-func SetLogger(logger logrus.FieldLogger) {
+func SetLogger(logger *logrus.Entry) {
 	devLogger = logger
 }
 

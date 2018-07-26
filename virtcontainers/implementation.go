@@ -22,7 +22,7 @@ type VCImpl struct {
 }
 
 // SetLogger implements the VC function of the same name.
-func (impl *VCImpl) SetLogger(logger logrus.FieldLogger) {
+func (impl *VCImpl) SetLogger(logger *logrus.Entry) {
 	SetLogger(logger)
 }
 
