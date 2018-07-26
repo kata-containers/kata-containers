@@ -132,7 +132,10 @@ var ociLog = logrus.FieldLogger(logrus.New())
 
 // SetLogger sets the logger for oci package.
 func SetLogger(logger logrus.FieldLogger) {
-	ociLog = logger.WithField("source", "virtcontainers/oci")
+	ociLog = logger.WithFields(logrus.Fields{
+		"source":    "virtcontainers",
+		"subsystem": "oci",
+	})
 }
 
 func cmdEnvs(spec CompatOCISpec, envs []vc.EnvVar) []vc.EnvVar {

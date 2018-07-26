@@ -124,7 +124,10 @@ var hyperLog = logrus.FieldLogger(logrus.New())
 
 // SetLogger sets the logger for hyperstart package.
 func SetLogger(logger logrus.FieldLogger) {
-	hyperLog = logger.WithField("source", "virtcontainers/hyperstart")
+	hyperLog = logger.WithFields(logrus.Fields{
+		"source":    "virtcontainers",
+		"subsystem": "hyperstart",
+	})
 }
 
 // NewHyperstart returns a new hyperstart structure.
