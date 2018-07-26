@@ -128,14 +128,15 @@ func (config *RuntimeConfig) AddKernelParam(p vc.Param) error {
 	return config.HypervisorConfig.AddKernelParam(p)
 }
 
-var ociLog = logrus.FieldLogger(logrus.New())
+var ociLog = logrus.WithFields(logrus.Fields{
+	"source":    "virtcontainers",
+	"subsystem": "oci",
+})
 
 // SetLogger sets the logger for oci package.
 func SetLogger(logger *logrus.Entry) {
-	ociLog = logger.WithFields(logrus.Fields{
-		"source":    "virtcontainers",
-		"subsystem": "oci",
-	})
+	fields := ociLog.Data
+	ociLog = logger.WithFields(fields)
 }
 
 func cmdEnvs(spec CompatOCISpec, envs []vc.EnvVar) []vc.EnvVar {
