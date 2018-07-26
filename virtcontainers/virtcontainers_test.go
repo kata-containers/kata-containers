@@ -66,11 +66,11 @@ func TestMain(m *testing.M) {
 
 	flag.Parse()
 
-	logger := logrus.New()
-	logger.Level = logrus.ErrorLevel
+	logger := logrus.NewEntry(logrus.New())
+	logger.Logger.Level = logrus.ErrorLevel
 	for _, arg := range flag.Args() {
 		if arg == "debug-logs" {
-			logger.Level = logrus.DebugLevel
+			logger.Logger.Level = logrus.DebugLevel
 		}
 	}
 	SetLogger(logger)
