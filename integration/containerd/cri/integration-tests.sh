@@ -64,11 +64,13 @@ ci_cleanup() {
 
 create_continerd_config() {
 	local runtime_config=$1
+	local stream_server_port="10030"
 	[ -n "${runtime_config}" ] || die "need runtime to create config"
 
 	cat > "${CONTAINERD_CONFIG_FILE}" << EOT
 [plugins]
   [plugins.cri]
+    stream_server_port = "${stream_server_port}"
     [plugins.cri.containerd]
       [plugins.cri.containerd.default_runtime]
 	runtime_engine = "${runtime_config}"
