@@ -44,6 +44,9 @@ var archRequiredKernelModules = map[string]kernelModule{
 	},
 }
 
+func setCPUtype() {
+}
+
 func archHostCanCreateVMContainer() error {
 	return kvmIsUsable()
 }
