@@ -489,7 +489,7 @@ func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 			}
 
 			endpoints = append(endpoints, &endpoint)
-			virtLog.Infof("Physical endpoint unmarshalled [%v]", endpoint)
+			networkLogger().Infof("Physical endpoint unmarshalled [%v]", endpoint)
 
 		case VirtualEndpointType:
 			var endpoint VirtualEndpoint
@@ -499,7 +499,7 @@ func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 			}
 
 			endpoints = append(endpoints, &endpoint)
-			virtLog.Infof("Virtual endpoint unmarshalled [%v]", endpoint)
+			networkLogger().Infof("Virtual endpoint unmarshalled [%v]", endpoint)
 
 		case VhostUserEndpointType:
 			var endpoint VhostUserEndpoint
@@ -509,10 +509,10 @@ func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 			}
 
 			endpoints = append(endpoints, &endpoint)
-			virtLog.Infof("VhostUser endpoint unmarshalled [%v]", endpoint)
+			networkLogger().Infof("VhostUser endpoint unmarshalled [%v]", endpoint)
 
 		default:
-			virtLog.Errorf("Unknown endpoint type received %s\n", e.Type)
+			networkLogger().Errorf("Unknown endpoint type received %s\n", e.Type)
 		}
 	}
 
@@ -1010,7 +1010,7 @@ func untapNetworkPair(netPair NetworkInterfacePair) error {
 	vethLink, err := getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
 	if err != nil {
 		// The veth pair is not totally managed by virtcontainers
-		virtLog.Warnf("Could not get veth interface %s: %s", netPair.VirtIface.Name, err)
+		networkLogger().Warnf("Could not get veth interface %s: %s", netPair.VirtIface.Name, err)
 	} else {
 		if err := netHandle.LinkSetDown(vethLink); err != nil {
 			return fmt.Errorf("Could not disable veth %s: %s", netPair.VirtIface.Name, err)
@@ -1062,7 +1062,7 @@ func unBridgeNetworkPair(netPair NetworkInterfacePair) error {
 	vethLink, err := getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
 	if err != nil {
 		// The veth pair is not totally managed by virtcontainers
-		virtLog.WithError(err).Warn("Could not get veth interface")
+		networkLogger().WithError(err).Warn("Could not get veth interface")
 	} else {
 		if err := netHandle.LinkSetDown(vethLink); err != nil {
 			return fmt.Errorf("Could not disable veth %s: %s", netPair.VirtIface.Name, err)
