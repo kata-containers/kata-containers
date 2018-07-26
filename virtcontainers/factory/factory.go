@@ -67,6 +67,15 @@ func NewFactory(config Config, fetchOnly bool) (vc.Factory, error) {
 	return &factory{b}, nil
 }
 
+// SetLogger sets the logger for the factory.
+func SetLogger(logger logrus.FieldLogger) {
+	fields := logrus.Fields{
+		"source": "virtcontainers",
+	}
+
+	factoryLogger = logger.WithFields(fields)
+}
+
 func (f *factory) log() *logrus.Entry {
 	return factoryLogger.WithField("subsystem", "factory")
 }
