@@ -219,9 +219,10 @@ func networkLogger() *logrus.Entry {
 // Attach for virtual endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
 func (endpoint *VirtualEndpoint) Attach(h hypervisor) error {
-	networkLogger().Info("Attaching virtual endpoint")
+	networkLogger().WithField("endpoint-type", "virtual").Info("Attaching endpoint")
+
 	if err := xconnectVMNetwork(&(endpoint.NetPair), true); err != nil {
-		networkLogger().WithError(err).Error("Error bridging virtual ep")
+		networkLogger().WithError(err).Error("Error bridging virtual endpoint")
 		return err
 	}
 
@@ -237,7 +238,7 @@ func (endpoint *VirtualEndpoint) Detach(netNsCreated bool, netNsPath string) err
 		return nil
 	}
 
-	networkLogger().Info("Detaching virtual endpoint")
+	networkLogger().WithField("endpoint-type", "virtual").Info("Detaching endpoint")
 
 	return doNetNS(netNsPath, func(_ ns.NetNS) error {
 		return xconnectVMNetwork(&(endpoint.NetPair), false)
@@ -271,7 +272,7 @@ func (endpoint *VhostUserEndpoint) SetProperties(properties NetworkInfo) {
 
 // Attach for vhostuser endpoint
 func (endpoint *VhostUserEndpoint) Attach(h hypervisor) error {
-	networkLogger().Info("Attaching vhostuser based endpoint")
+	networkLogger().WithField("endpoint-type", "vhostuser").Info("Attaching endpoint")
 
 	// Generate a unique ID to be used for hypervisor commandline fields
 	randBytes, err := utils.GenerateRandomBytes(8)
@@ -291,7 +292,7 @@ func (endpoint *VhostUserEndpoint) Attach(h hypervisor) error {
 
 // Detach for vhostuser endpoint
 func (endpoint *VhostUserEndpoint) Detach(netNsCreated bool, netNsPath string) error {
-	networkLogger().Info("Detaching vhostuser based endpoint")
+	networkLogger().WithField("endpoint-type", "vhostuser").Info("Detaching endpoint")
 	return nil
 }
 
@@ -335,7 +336,7 @@ func (endpoint *PhysicalEndpoint) SetProperties(properties NetworkInfo) {
 // Attach for physical endpoint binds the physical network interface to
 // vfio-pci and adds device to the hypervisor with vfio-passthrough.
 func (endpoint *PhysicalEndpoint) Attach(h hypervisor) error {
-	networkLogger().Info("Attaching physical endpoint")
+	networkLogger().WithField("endpoint-type", "physical").Info("Attaching endpoint")
 
 	// Unbind physical interface from host driver and bind to vfio
 	// so that it can be passed to qemu.
@@ -356,7 +357,7 @@ func (endpoint *PhysicalEndpoint) Detach(netNsCreated bool, netNsPath string) er
 	// Bind back the physical network interface to host.
 	// We need to do this even if a new network namespace has not
 	// been created by virtcontainers.
-	networkLogger().Info("Detaching physical endpoint")
+	networkLogger().WithField("endpoint-type", "physical").Info("Detaching endpoint")
 
 	// We do not need to enter the network namespace to bind back the
 	// physical interface to host driver.
@@ -489,7 +490,10 @@ func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 			}
 
 			endpoints = append(endpoints, &endpoint)
-			networkLogger().Infof("Physical endpoint unmarshalled [%v]", endpoint)
+			networkLogger().WithFields(logrus.Fields{
+				"endpoint":      endpoint,
+				"endpoint-type": "physical",
+			}).Info("endpoint unmarshalled")
 
 		case VirtualEndpointType:
 			var endpoint VirtualEndpoint
@@ -499,7 +503,10 @@ func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 			}
 
 			endpoints = append(endpoints, &endpoint)
-			networkLogger().Infof("Virtual endpoint unmarshalled [%v]", endpoint)
+			networkLogger().WithFields(logrus.Fields{
+				"endpoint":      endpoint,
+				"endpoint-type": "virtual",
+			}).Info("endpoint unmarshalled")
 
 		case VhostUserEndpointType:
 			var endpoint VhostUserEndpoint
@@ -509,10 +516,13 @@ func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 			}
 
 			endpoints = append(endpoints, &endpoint)
-			networkLogger().Infof("VhostUser endpoint unmarshalled [%v]", endpoint)
+			networkLogger().WithFields(logrus.Fields{
+				"endpoint":      endpoint,
+				"endpoint-type": "vhostuser",
+			}).Info("endpoint unmarshalled")
 
 		default:
-			networkLogger().Errorf("Unknown endpoint type received %s\n", e.Type)
+			networkLogger().WithField("endpoint-type", e.Type).Error("Ignoring unknown endpoint type")
 		}
 	}
 
@@ -1010,7 +1020,7 @@ func untapNetworkPair(netPair NetworkInterfacePair) error {
 	vethLink, err := getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
 	if err != nil {
 		// The veth pair is not totally managed by virtcontainers
-		networkLogger().Warnf("Could not get veth interface %s: %s", netPair.VirtIface.Name, err)
+		networkLogger().WithError(err).WithField("veth-name", netPair.VirtIface.Name).Warn("Could not get veth interface")
 	} else {
 		if err := netHandle.LinkSetDown(vethLink); err != nil {
 			return fmt.Errorf("Could not disable veth %s: %s", netPair.VirtIface.Name, err)
