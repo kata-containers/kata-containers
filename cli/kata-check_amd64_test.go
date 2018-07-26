@@ -73,13 +73,26 @@ func TestCCCheckCLIFunction(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cpuData := []testCPUData{
-		{"GenuineIntel", "lm vmx sse4_1", false},
-	}
+	var cpuData []testCPUData
+	var moduleData []testModuleData
 
-	moduleData := []testModuleData{
-		{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), false, "Y"},
-		{filepath.Join(sysModuleDir, "kvm_intel/parameters/nested"), false, "Y"},
+	if cpuType == cpuTypeIntel {
+		cpuData = []testCPUData{
+			{archGenuineIntel, "lm vmx sse4_1", false},
+		}
+
+		moduleData = []testModuleData{
+			{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), false, "Y"},
+			{filepath.Join(sysModuleDir, "kvm_intel/parameters/nested"), false, "Y"},
+		}
+	} else if cpuType == cpuTypeAMD {
+		cpuData = []testCPUData{
+			{archAuthenticAMD, "lm svm sse4_1", false},
+		}
+
+		moduleData = []testModuleData{
+			{filepath.Join(sysModuleDir, "kvm_amd/parameters/nested"), false, "1"},
+		}
 	}
 
 	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0666)
@@ -175,7 +188,7 @@ func TestCheckCheckKernelModulesNoNesting(t *testing.T) {
 		{filepath.Join(sysModuleDir, "kvm_intel/parameters/nested"), false, "N"},
 	}
 
-	vendor := "GenuineIntel"
+	vendor := archGenuineIntel
 	flags := "vmx lm sse4_1 hypervisor"
 
 	_, err = checkKernelModules(requiredModules, archKernelParamHandler)
@@ -259,7 +272,7 @@ func TestCheckCheckKernelModulesNoUnrestrictedGuest(t *testing.T) {
 		{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), false, "N"},
 	}
 
-	vendor := "GenuineIntel"
+	vendor := archGenuineIntel
 	flags := "vmx lm sse4_1"
 
 	_, err = checkKernelModules(requiredModules, archKernelParamHandler)
@@ -334,20 +347,40 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cpuData := []testCPUData{
-		{"", "", true},
-		{"Intel", "", true},
-		{"GenuineIntel", "", true},
-		{"GenuineIntel", "lm", true},
-		{"GenuineIntel", "lm vmx", true},
-		{"GenuineIntel", "lm vmx sse4_1", false},
-	}
+	var cpuData []testCPUData
+	var moduleData []testModuleData
 
-	moduleData := []testModuleData{
-		{filepath.Join(sysModuleDir, "kvm"), true, ""},
-		{filepath.Join(sysModuleDir, "kvm_intel"), true, ""},
-		{filepath.Join(sysModuleDir, "kvm_intel/parameters/nested"), false, "Y"},
-		{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), false, "Y"},
+	if cpuType == cpuTypeIntel {
+		cpuData = []testCPUData{
+			{"", "", true},
+			{"Intel", "", true},
+			{archGenuineIntel, "", true},
+			{archGenuineIntel, "lm", true},
+			{archGenuineIntel, "lm vmx", true},
+			{archGenuineIntel, "lm vmx sse4_1", false},
+		}
+
+		moduleData = []testModuleData{
+			{filepath.Join(sysModuleDir, "kvm"), true, ""},
+			{filepath.Join(sysModuleDir, "kvm_intel"), true, ""},
+			{filepath.Join(sysModuleDir, "kvm_intel/parameters/nested"), false, "Y"},
+			{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), false, "Y"},
+		}
+	} else if cpuType == cpuTypeAMD {
+		cpuData = []testCPUData{
+			{"", "", true},
+			{"AMD", "", true},
+			{archAuthenticAMD, "", true},
+			{archAuthenticAMD, "lm", true},
+			{archAuthenticAMD, "lm svm", true},
+			{archAuthenticAMD, "lm svm sse4_1", false},
+		}
+
+		moduleData = []testModuleData{
+			{filepath.Join(sysModuleDir, "kvm"), true, ""},
+			{filepath.Join(sysModuleDir, "kvm_amd"), true, ""},
+			{filepath.Join(sysModuleDir, "kvm_amd/parameters/nested"), false, "1"},
+		}
 	}
 
 	setupCheckHostIsVMContainerCapable(assert, cpuInfoFile, cpuData, moduleData)

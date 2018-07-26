@@ -283,6 +283,8 @@ var kataCheckCLICommand = cli.Command{
 	Usage: "tests if system can run " + project,
 	Action: func(context *cli.Context) error {
 
+		setCPUtype()
+
 		details := vmContainerCapableDetails{
 			cpuInfoFile:           procCPUInfo,
 			requiredCPUFlags:      archRequiredCPUFlags,
