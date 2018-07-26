@@ -234,6 +234,9 @@ kill_processes_before_start() {
 # a warning
 check_processes() {
 	process=$1
+
+	[[ -z "${process}" ]] && return 0
+
 	pgrep -f "$process"
 	if [ $? -eq 0 ]; then
 		warning "Found unexpected ${process} present"

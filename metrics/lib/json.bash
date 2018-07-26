@@ -29,6 +29,7 @@ timestamp_ms() {
 	echo $(($(date +%s%N)/1000000))
 }
 
+# Intialise the json subsystem
 metrics_json_init() {
 
 	# Clear out any previous results
@@ -79,6 +80,7 @@ EOF
 	metrics_json_add_fragment "$json"
 }
 
+# Save out the final JSON file
 metrics_json_save() {
 	if [ ! -d ${RESULT_DIR} ];then
 		mkdir -p ${RESULT_DIR}
@@ -107,6 +109,7 @@ EOF
 	fi
 }
 
+# Add a top level (complete) JSON fragment to the data
 metrics_json_add_fragment() {
 	local data=$1
 
@@ -114,10 +117,12 @@ metrics_json_add_fragment() {
 	json_result_array[${#json_result_array[@]}]="$data"
 }
 
+# Prepare to collect up array elements
 metrics_json_start_array() {
 	json_array_array=()
 }
 
+# Add a (complete) element to the current array
 metrics_json_add_array_element() {
 	local data=$1
 
@@ -125,6 +130,39 @@ metrics_json_add_array_element() {
 	json_array_array[${#json_array_array[@]}]="$data"
 }
 
+# Add a fragment to the current array element
+metrics_json_add_array_fragment() {
+	local data=$1
+
+	# Place on end of array
+	json_array_fragments[${#json_array_fragments[@]}]="$data"
+}
+
+# Turn the currently registered array fragments into an array element
+metrics_json_close_array_element() {
+
+	local maxelem=$(( ${#json_array_fragments[@]} - 1 ))
+	local json="$(cat << EOF
+	{
+		$(for index in $(seq 0 $maxelem); do
+			if (( index != maxelem )); then
+				echo "${json_array_fragments[$index]},"
+			else
+				echo "${json_array_fragments[$index]}"
+			fi
+		done)
+	}
+EOF
+)"
+
+	# And save that to the top level
+	metrics_json_add_array_element "$json"
+
+	# Reset the array fragment array ready for a new one
+	json_array_fragments=()
+}
+
+# Close the current array
 metrics_json_end_array() {
 	local name=$1
 
