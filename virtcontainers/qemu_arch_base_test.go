@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 )
 
 const (
@@ -205,12 +206,12 @@ func testQemuArchBaseAppend(t *testing.T, structure interface{}, expected []govm
 		devices = qemuArchBase.append9PVolume(devices, s)
 	case Socket:
 		devices = qemuArchBase.appendSocket(devices, s)
-	case config.BlockDrive:
+	case drivers.Drive:
 		devices = qemuArchBase.appendBlockDevice(devices, s)
-	case config.VFIODev:
+	case drivers.VFIODevice:
 		devices = qemuArchBase.appendVFIODevice(devices, s)
-	case config.VhostUserDeviceAttrs:
-		devices = qemuArchBase.appendVhostUserDevice(devices, s)
+	case drivers.VhostUserNetDevice:
+		devices = qemuArchBase.appendVhostUserDevice(devices, &s)
 	}
 
 	assert.Equal(devices, expected)
@@ -363,7 +364,7 @@ func TestQemuArchBaseAppendBlockDevice(t *testing.T) {
 		},
 	}
 
-	drive := config.BlockDrive{
+	drive := drivers.Drive{
 		File:   file,
 		Format: format,
 		ID:     id,
@@ -387,8 +388,7 @@ func TestQemuArchBaseAppendVhostUserDevice(t *testing.T) {
 		},
 	}
 
-	vhostUserDevice := config.VhostUserDeviceAttrs{
-		Type:       config.VhostUserNet,
+	vhostUserDevice := drivers.VhostUserNetDevice{
 		MacAddress: macAddress,
 	}
 	vhostUserDevice.ID = id
@@ -406,7 +406,7 @@ func TestQemuArchBaseAppendVFIODevice(t *testing.T) {
 		},
 	}
 
-	vfDevice := config.VFIODev{
+	vfDevice := drivers.VFIODevice{
 		BDF: bdf,
 	}
 

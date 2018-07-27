@@ -19,7 +19,8 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/sirupsen/logrus"
 
-	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	deviceDrivers "github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
@@ -655,7 +656,7 @@ func (q *qemu) removeDeviceFromBridge(ID string) error {
 	return err
 }
 
-func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error {
+func (q *qemu) hotplugBlockDevice(drive *deviceDrivers.Drive, op operation) error {
 	err := q.qmpSetup()
 	if err != nil {
 		return err
@@ -716,13 +717,13 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 	return nil
 }
 
-func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) error {
+func (q *qemu) hotplugVFIODevice(device deviceDrivers.VFIODevice, op operation) error {
 	err := q.qmpSetup()
 	if err != nil {
 		return err
 	}
 
-	devID := device.ID
+	devID := "vfio-" + device.DeviceInfo.ID
 
 	if op == addDevice {
 		addr, bridge, err := q.addDeviceToBridge(devID)
@@ -749,13 +750,15 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) error {
 func (q *qemu) hotplugDevice(devInfo interface{}, devType deviceType, op operation) (interface{}, error) {
 	switch devType {
 	case blockDev:
-		drive := devInfo.(*config.BlockDrive)
+		// TODO: find a way to remove dependency of deviceDrivers lib @weizhang555
+		drive := devInfo.(*deviceDrivers.Drive)
 		return nil, q.hotplugBlockDevice(drive, op)
 	case cpuDev:
 		vcpus := devInfo.(uint32)
 		return q.hotplugCPUs(vcpus, op)
 	case vfioDev:
-		device := devInfo.(*config.VFIODev)
+		// TODO: find a way to remove dependency of deviceDrivers lib @weizhang555
+		device := devInfo.(deviceDrivers.VFIODevice)
 		return nil, q.hotplugVFIODevice(device, op)
 	case memoryDev:
 		memdev := devInfo.(*memoryDevice)
@@ -941,6 +944,13 @@ func (q *qemu) resumeSandbox() error {
 
 // addDevice will add extra devices to Qemu command line.
 func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
+	switch devType {
+	case vhostuserDev:
+		vhostDev := devInfo.(api.VhostUserDevice)
+		q.qemuConfig.Devices = q.arch.appendVhostUserDevice(q.qemuConfig.Devices, vhostDev)
+		return nil
+	}
+
 	switch v := devInfo.(type) {
 	case Volume:
 		q.qemuConfig.Devices = q.arch.append9PVolume(q.qemuConfig.Devices, v)
@@ -948,11 +958,10 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 		q.qemuConfig.Devices = q.arch.appendSocket(q.qemuConfig.Devices, v)
 	case Endpoint:
 		q.qemuConfig.Devices = q.arch.appendNetwork(q.qemuConfig.Devices, v)
-	case config.BlockDrive:
+	case deviceDrivers.Drive:
 		q.qemuConfig.Devices = q.arch.appendBlockDevice(q.qemuConfig.Devices, v)
-	case config.VhostUserDeviceAttrs:
-		q.qemuConfig.Devices = q.arch.appendVhostUserDevice(q.qemuConfig.Devices, v)
-	case config.VFIODev:
+
+	case deviceDrivers.VFIODevice:
 		q.qemuConfig.Devices = q.arch.appendVFIODevice(q.qemuConfig.Devices, v)
 	default:
 		break
