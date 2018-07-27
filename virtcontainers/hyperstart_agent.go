@@ -14,15 +14,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
-
 	proxyClient "github.com/clearcontainers/proxy/client"
-	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+
+	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 )
 
 var defaultSockPathTemplates = []string{"%s/%s/hyper.sock", "%s/%s/tty.sock"}
@@ -231,31 +231,6 @@ func fsMapFromMounts(mounts []Mount) []*hyperstart.FsmapDescriptor {
 	return fsmap
 }
 
-func fsMapFromDevices(c *Container) ([]*hyperstart.FsmapDescriptor, error) {
-	var fsmap []*hyperstart.FsmapDescriptor
-	for _, dev := range c.devices {
-		device := c.sandbox.devManager.GetDeviceByID(dev.ID)
-		if device == nil {
-			return nil, fmt.Errorf("can't find device: %#v", dev)
-		}
-
-		d, ok := device.GetDeviceInfo().(*config.BlockDrive)
-		if !ok || d == nil {
-			return nil, fmt.Errorf("can't retrieve block device information")
-		}
-
-		fsmapDesc := &hyperstart.FsmapDescriptor{
-			Source:       d.VirtPath,
-			Path:         dev.ContainerPath,
-			AbsolutePath: true,
-			DockerVolume: false,
-			SCSIAddr:     d.SCSIAddr,
-		}
-		fsmap = append(fsmap, fsmapDesc)
-	}
-	return fsmap, nil
-}
-
 // init is the agent initialization implementation for hyperstart.
 func (h *hyper) init(sandbox *Sandbox, config interface{}) (err error) {
 	switch c := config.(type) {
@@ -462,8 +437,8 @@ func (h *hyper) stopSandbox(sandbox *Sandbox) error {
 // container.
 func (h *hyper) handleBlockVolumes(c *Container) {
 	for _, m := range c.mounts {
-		if len(m.BlockDeviceID) > 0 {
-			c.devices = append(c.devices, ContainerDevice{ID: m.BlockDeviceID})
+		if m.BlockDevice != nil {
+			c.devices = append(c.devices, m.BlockDevice)
 		}
 	}
 }
@@ -522,11 +497,20 @@ func (h *hyper) startOneContainer(sandbox *Sandbox, c *Container) error {
 	h.handleBlockVolumes(c)
 
 	// Append container mounts for block devices passed with --device.
-	fsmapDev, err := fsMapFromDevices(c)
-	if err != nil {
-		return err
+	for _, device := range c.devices {
+		d, ok := device.(*drivers.BlockDevice)
+
+		if ok {
+			fsmapDesc := &hyperstart.FsmapDescriptor{
+				Source:       d.VirtPath,
+				Path:         d.DeviceInfo.ContainerPath,
+				AbsolutePath: true,
+				DockerVolume: false,
+				SCSIAddr:     d.SCSIAddr,
+			}
+			fsmap = append(fsmap, fsmapDesc)
+		}
 	}
-	fsmap = append(fsmap, fsmapDev...)
 
 	// Assign fsmap for hyperstart to mount these at the correct location within the container
 	container.Fsmap = fsmap
