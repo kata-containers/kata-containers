@@ -17,6 +17,7 @@ import (
 	"syscall"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	vf "github.com/kata-containers/runtime/virtcontainers/factory"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -146,6 +147,7 @@ func init() {
 	kataLog = logrus.WithFields(logrus.Fields{
 		"name":   name,
 		"source": "runtime",
+		"arch":   arch,
 		"pid":    os.Getpid(),
 	})
 
@@ -193,6 +195,9 @@ func setupSignalHandler() {
 func setExternalLoggers(logger *logrus.Entry) {
 	// Set virtcontainers logger.
 	vci.SetLogger(logger)
+
+	// Set vm factory logger.
+	vf.SetLogger(logger)
 
 	// Set the OCI package logger.
 	oci.SetLogger(logger)

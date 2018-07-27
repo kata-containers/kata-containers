@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
@@ -64,6 +65,27 @@ func TestNewFactory(t *testing.T) {
 	assert.Nil(err)
 	_, err = NewFactory(config, true)
 	assert.Error(err)
+}
+
+func TestFactorySetLogger(t *testing.T) {
+	assert := assert.New(t)
+
+	testLog := logrus.WithFields(logrus.Fields{"testfield": "foobar"})
+	testLog.Level = logrus.DebugLevel
+	SetLogger(testLog)
+
+	var config Config
+	config.VMConfig.HypervisorConfig = vc.HypervisorConfig{
+		KernelPath: "foo",
+		ImagePath:  "bar",
+	}
+	vf, err := NewFactory(config, false)
+	assert.Nil(err)
+
+	f, ok := vf.(*factory)
+	assert.True(ok)
+
+	assert.Equal(f.log().Logger.Level, testLog.Logger.Level)
 }
 
 func TestVMConfigValid(t *testing.T) {
