@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 )
 
 // DefaultShmSize is the default shm size to be used in case host
@@ -282,10 +284,10 @@ type Mount struct {
 	// ReadOnly specifies if the mount should be read only or not
 	ReadOnly bool
 
-	// BlockDeviceID represents block device that is attached to the
+	// BlockDevice represents block device that is attached to the
 	// VM in case this mount is a block device file or a directory
 	// backed by a block device.
-	BlockDeviceID string
+	BlockDevice *drivers.BlockDevice
 }
 
 func bindUnmountContainerRootfs(sharedDir, sandboxID, cID string) error {

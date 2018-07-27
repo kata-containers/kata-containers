@@ -7,6 +7,7 @@
 package drivers
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
@@ -30,15 +31,15 @@ const (
 // VFIODevice is a vfio device meant to be passed to the hypervisor
 // to be used by the Virtual Machine.
 type VFIODevice struct {
-	ID         string
-	DeviceInfo *config.DeviceInfo
-	vfioDevs   []*config.VFIODev
+	DevType    config.DeviceType
+	DeviceInfo config.DeviceInfo
+	BDF        string
 }
 
 // NewVFIODevice create a new VFIO device
-func NewVFIODevice(devInfo *config.DeviceInfo) *VFIODevice {
+func NewVFIODevice(devInfo config.DeviceInfo) *VFIODevice {
 	return &VFIODevice{
-		ID:         devInfo.ID,
+		DevType:    config.DeviceVFIO,
 		DeviceInfo: devInfo,
 	}
 }
@@ -46,10 +47,6 @@ func NewVFIODevice(devInfo *config.DeviceInfo) *VFIODevice {
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
 func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) error {
-	if device.DeviceInfo.Hotplugged {
-		return nil
-	}
-
 	vfioGroup := filepath.Base(device.DeviceInfo.HostPath)
 	iommuDevicesPath := filepath.Join(config.SysIOMMUPath, vfioGroup, "devices")
 
@@ -60,71 +57,44 @@ func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) error {
 
 	// Pass all devices in iommu group
 	for _, deviceFile := range deviceFiles {
+
 		//Get bdf of device eg 0000:00:1c.0
 		deviceBDF, err := getBDF(deviceFile.Name())
 		if err != nil {
 			return err
 		}
-		vfio := &config.VFIODev{
-			ID:  utils.MakeNameID("vfio", device.DeviceInfo.ID, maxDevIDSize),
-			BDF: deviceBDF,
+
+		device.BDF = deviceBDF
+
+		randBytes, err := utils.GenerateRandomBytes(8)
+		if err != nil {
+			return err
 		}
-		device.vfioDevs = append(device.vfioDevs, vfio)
+		device.DeviceInfo.ID = hex.EncodeToString(randBytes)
+
+		if err := devReceiver.HotplugAddDevice(device, config.DeviceVFIO); err != nil {
+			deviceLogger().WithError(err).Error("Failed to add device")
+			return err
+		}
+
+		deviceLogger().WithFields(logrus.Fields{
+			"device-group": device.DeviceInfo.HostPath,
+			"device-type":  "vfio-passthrough",
+		}).Info("Device group attached")
 	}
 
-	// hotplug a VFIO device is actually hotplugging a group of iommu devices
-	if err := devReceiver.HotplugAddDevice(device, config.DeviceVFIO); err != nil {
-		deviceLogger().WithError(err).Error("Failed to add device")
-		return err
-	}
-
-	deviceLogger().WithFields(logrus.Fields{
-		"device-group": device.DeviceInfo.HostPath,
-		"device-type":  "vfio-passthrough",
-	}).Info("Device group attached")
-	device.DeviceInfo.Hotplugged = true
 	return nil
 }
 
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
 func (device *VFIODevice) Detach(devReceiver api.DeviceReceiver) error {
-	if !device.DeviceInfo.Hotplugged {
-		return nil
-	}
-
-	// hotplug a VFIO device is actually hotplugging a group of iommu devices
-	if err := devReceiver.HotplugRemoveDevice(device, config.DeviceVFIO); err != nil {
-		deviceLogger().WithError(err).Error("Failed to remove device")
-		return err
-	}
-
-	deviceLogger().WithFields(logrus.Fields{
-		"device-group": device.DeviceInfo.HostPath,
-		"device-type":  "vfio-passthrough",
-	}).Info("Device group detached")
-	device.DeviceInfo.Hotplugged = false
 	return nil
-}
-
-// IsAttached checks if the device is attached
-func (device *VFIODevice) IsAttached() bool {
-	return device.DeviceInfo.Hotplugged
 }
 
 // DeviceType is standard interface of api.Device, it returns device type
 func (device *VFIODevice) DeviceType() config.DeviceType {
-	return config.DeviceVFIO
-}
-
-// DeviceID returns device ID
-func (device *VFIODevice) DeviceID() string {
-	return device.ID
-}
-
-// GetDeviceInfo returns device information used for creating
-func (device *VFIODevice) GetDeviceInfo() interface{} {
-	return device.vfioDevs
+	return device.DevType
 }
 
 // getBDF returns the BDF of pci device

@@ -33,7 +33,7 @@ func TestFilesystemCreateAllResourcesSuccessful(t *testing.T) {
 		id:         testSandboxID,
 		storage:    fs,
 		config:     sandboxConfig,
-		devManager: manager.NewDeviceManager(manager.VirtioBlock, nil),
+		devManager: manager.NewDeviceManager(manager.VirtioBlock),
 		containers: map[string]*Container{},
 	}
 
