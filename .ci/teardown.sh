@@ -5,6 +5,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+cidir=$(dirname "$0")
+source "${cidir}/lib.sh"
+
 collect_logs()
 {
 	local -r log_copy_dest="$1"
@@ -115,7 +118,7 @@ collect_logs()
 
 check_log_files()
 {
-	echo "INFO: Checking log files"
+	info "Checking log files"
 
 	make log-parser
 
@@ -184,9 +187,9 @@ check_collect_script()
 
 	local msg="Kata data collection script"
 
-	[ -z "$cmdpath" ] && echo "INFO: $msg not found" && return
+	[ -z "$cmdpath" ] && info "$msg not found" && return
 
-	echo "INFO: Checking $msg"
+	info "Checking $msg"
 	sudo -E PATH="$PATH" chronic $cmd
 }
 
