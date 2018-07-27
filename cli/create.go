@@ -126,7 +126,7 @@ func create(containerID, bundlePath, console, pidFilePath string, detach bool,
 				kataLog.WithError(err).Warn("create vm factory failed")
 			}
 		}
-		if err != nil {
+		if err == nil {
 			vci.SetFactory(f)
 		}
 	}
