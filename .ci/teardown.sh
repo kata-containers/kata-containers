@@ -146,6 +146,23 @@ check_log_files()
 	cmd="kata-log-parser"
 	args="--debug --check-only --error-if-no-records"
 
+	local -r runtime="kata-runtime"
+	local -r have_runtime=$(command -v "$runtime" || true)
+
+	if [ -n "$have_runtime" ]
+	then
+		local -r image=$($runtime kata-env --json | jq -S '.Image.Path' | tr -d '"')
+
+		if [ -n "$image" ]
+		then
+			info "runtime configured for image so enabling $cmd strict log checking"
+			args+=" --strict"
+		else
+			info "runtime configured for initrd so cannot enable $cmd strict log checking"
+			info "(see https://github.com/kata-containers/agent/issues/255)"
+		fi
+	fi
+
 	{ $cmd $args $logs; ret=$?; } || true
 
 	local errors=0
