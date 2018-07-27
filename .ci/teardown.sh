@@ -143,7 +143,10 @@ check_log_files()
 	local -r logs=$(ls "$(pwd)"/*.log || true)
 	local ret
 
-	{ kata-log-parser --debug --check-only --error-if-no-records $logs; ret=$?; } || true
+	cmd="kata-log-parser"
+	args="--debug --check-only --error-if-no-records"
+
+	{ $cmd $args $logs; ret=$?; } || true
 
 	local errors=0
 	local log
