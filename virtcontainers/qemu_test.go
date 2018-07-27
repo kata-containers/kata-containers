@@ -52,7 +52,7 @@ func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected strin
 }
 
 func TestQemuKernelParameters(t *testing.T) {
-	expectedOut := fmt.Sprintf("panic=1 initcall_debug nr_cpus=%d foo=foo bar=bar", MaxQemuVCPUs())
+	expectedOut := fmt.Sprintf("panic=1 nr_cpus=%d foo=foo bar=bar", MaxQemuVCPUs())
 	params := []Param{
 		{
 			Key:   "foo",
