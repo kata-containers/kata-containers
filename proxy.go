@@ -47,14 +47,38 @@ var sandboxID string
 
 var proxyLog = logrus.New()
 
+// This function is meant to run in a go routine since it will send ping
+// commands every second. It behaves as a heartbeat to maintain a proper
+// communication state with the Yamux server in the agent.
+func heartBeat(session *yamux.Session) {
+	if session == nil {
+		return
+	}
+
+	for {
+		if session.IsClosed() {
+			break
+		}
+
+		session.Ping()
+
+		// 1 Hz heartbeat
+		time.Sleep(time.Second)
+	}
+}
+
 func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) (net.Listener, error) {
 	sessionConfig := yamux.DefaultConfig()
 	// Disable keepAlive since we don't know how much time a container can be paused
 	sessionConfig.EnableKeepAlive = false
+	sessionConfig.ConnectionWriteTimeout = time.Second
 	session, err := yamux.Client(servConn, sessionConfig)
 	if err != nil {
 		return nil, err
 	}
+
+	// Start the heartbeat in a separate go routine
+	go heartBeat(session)
 
 	// serving connection
 	l, err := net.Listen(proto, addr)
