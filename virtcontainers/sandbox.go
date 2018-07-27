@@ -483,8 +483,8 @@ func (s *Sandbox) ID() string {
 // Logger returns a logrus logger appropriate for logging Sandbox messages
 func (s *Sandbox) Logger() *logrus.Entry {
 	return virtLog.WithFields(logrus.Fields{
-		"subsystem":  "sandbox",
-		"sandbox-id": s.id,
+		"subsystem": "sandbox",
+		"sandbox":   s.id,
 	})
 }
 
@@ -827,7 +827,7 @@ func (s *Sandbox) storeSandbox() error {
 
 // fetchSandbox fetches a sandbox config from a sandbox ID and returns a sandbox.
 func fetchSandbox(sandboxID string) (sandbox *Sandbox, err error) {
-	virtLog.WithField("sandbox-id", sandboxID).Info("fetch sandbox")
+	virtLog.Info("fetch sandbox")
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}

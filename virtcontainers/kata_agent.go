@@ -469,7 +469,7 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 
 	proxyParams := proxyParams{
 		agentURL: agentURL,
-		logger:   k.Logger().WithField("sandbox-id", sandbox.id),
+		logger:   k.Logger().WithField("sandbox", sandbox.id),
 	}
 
 	// Start the proxy here
@@ -494,9 +494,9 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 	}
 
 	k.Logger().WithFields(logrus.Fields{
-		"sandbox-id": sandbox.id,
-		"proxy-pid":  pid,
-		"proxy-url":  uri,
+		"sandbox":   sandbox.id,
+		"proxy-pid": pid,
+		"proxy-url": uri,
 	}).Info("proxy started")
 
 	return nil

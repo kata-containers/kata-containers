@@ -264,9 +264,8 @@ func (c *Container) ID() string {
 // Logger returns a logrus logger appropriate for logging Container messages
 func (c *Container) Logger() *logrus.Entry {
 	return virtLog.WithFields(logrus.Fields{
-		"subsystem":    "container",
-		"container-id": c.id,
-		"sandbox-id":   c.sandboxID,
+		"subsystem": "container",
+		"sandbox":   c.sandboxID,
 	})
 }
 
