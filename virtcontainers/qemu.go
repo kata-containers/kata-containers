@@ -85,7 +85,6 @@ var qemuMinorVersion int
 // agnostic list of kernel parameters
 var defaultKernelParameters = []Param{
 	{"panic", "1"},
-	{"initcall_debug", ""},
 }
 
 type operation int
