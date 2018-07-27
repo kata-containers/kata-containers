@@ -49,10 +49,10 @@ var SysIOMMUPath = "/sys/kernel/iommu_groups"
 
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
 type DeviceInfo struct {
-	// Device path on host
+	// Hostpath is device path on host
 	HostPath string
 
-	// Device path inside the container
+	// ContainerPath is device path inside container
 	ContainerPath string
 
 	// Type of device: c, b, u or p
@@ -87,12 +87,48 @@ type DeviceInfo struct {
 	DriverOptions map[string]string
 }
 
+// BlockDrive represents a block storage drive which may be used in case the storage
+// driver has an underlying block storage device.
+type BlockDrive struct {
+	// File is the path to the disk-image/device which will be used with this drive
+	File string
+
+	// Format of the drive
+	Format string
+
+	// ID is used to identify this drive in the hypervisor options.
+	ID string
+
+	// Index assigned to the drive. In case of virtio-scsi, this is used as SCSI LUN index
+	Index int
+
+	// PCIAddr is the PCI address used to identify the slot at which the drive is attached.
+	PCIAddr string
+
+	// SCSI Address of the block device, in case the device is attached using SCSI driver
+	// SCSI address is in the format SCSI-Id:LUN
+	SCSIAddr string
+
+	// VirtPath at which the device appears inside the VM, outside of the container mount namespace
+	VirtPath string
+}
+
+// VFIODev represents a VFIO drive used for hotplugging
+type VFIODev struct {
+	// ID is used to identify this drive in the hypervisor options.
+	ID string
+	// BDF (Bus:Device.Function) of the PCI address
+	BDF string
+}
+
 // VhostUserDeviceAttrs represents data shared by most vhost-user devices
 type VhostUserDeviceAttrs struct {
-	DevType    DeviceType
-	DeviceInfo DeviceInfo
-	SocketPath string
 	ID         string
+	SocketPath string
+	Type       DeviceType
+
+	// MacAddress is only meaningful for vhost user net device
+	MacAddress string
 }
 
 // GetHostPathFunc is function pointer used to mock GetHostPath in tests.
