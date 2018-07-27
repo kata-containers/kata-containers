@@ -53,11 +53,16 @@ EXAMPLE:
 }
 
 func delete(containerID string, force bool) error {
+	kataLog = kataLog.WithField("container", containerID)
+	setExternalLoggers(kataLog)
+
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	status, sandboxID, err := getExistingContainerInfo(containerID)
 	if err != nil {
 		return err
 	}
+
+	containerID = status.ID
 
 	kataLog = kataLog.WithFields(logrus.Fields{
 		"container": containerID,
@@ -65,8 +70,6 @@ func delete(containerID string, force bool) error {
 	})
 
 	setExternalLoggers(kataLog)
-
-	containerID = status.ID
 
 	containerType, err := oci.GetContainerType(status.Annotations)
 	if err != nil {
