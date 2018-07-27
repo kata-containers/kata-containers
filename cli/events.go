@@ -141,6 +141,9 @@ information is displayed once every 5 seconds.`,
 			return fmt.Errorf("container id cannot be empty")
 		}
 
+		kataLog = kataLog.WithField("container", containerID)
+		setExternalLoggers(kataLog)
+
 		duration := context.Duration("interval")
 		if duration <= 0 {
 			return fmt.Errorf("duration interval must be greater than 0")
@@ -150,6 +153,8 @@ information is displayed once every 5 seconds.`,
 		if err != nil {
 			return err
 		}
+
+		containerID = status.ID
 
 		kataLog = kataLog.WithFields(logrus.Fields{
 			"container": containerID,

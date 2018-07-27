@@ -42,6 +42,9 @@ Where "<container-id>" is the container name to be resumed.`,
 }
 
 func toggleContainerPause(containerID string, pause bool) (err error) {
+	kataLog = kataLog.WithField("container", containerID)
+	setExternalLoggers(kataLog)
+
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	status, sandboxID, err := getExistingContainerInfo(containerID)
 	if err != nil {
