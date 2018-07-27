@@ -122,6 +122,11 @@ check_log_files()
 
 	make log-parser
 
+	local component
+	local file
+	local args
+	local cmd
+
 	for component in \
 		kata-ksm-throttler \
 		kata-proxy \
@@ -135,13 +140,19 @@ check_log_files()
 		eval "$cmd" || true
 	done
 
-	logs=$(ls "$(pwd)"/*.log || true)
+	local -r logs=$(ls "$(pwd)"/*.log || true)
+	local ret
+
 	{ kata-log-parser --debug --check-only --error-if-no-records $logs; ret=$?; } || true
 
-	errors=0
+	local errors=0
+	local log
 
 	for log in $logs
 	do
+		local pattern
+		local results
+
 		# Display *all* errors caused by runtime exceptions and fatal
 		# signals.
 		for pattern in "fatal error" "fatal signal"
