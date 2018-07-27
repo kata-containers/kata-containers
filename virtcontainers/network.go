@@ -25,7 +25,6 @@ import (
 	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
 
-	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -281,11 +280,11 @@ func (endpoint *VhostUserEndpoint) Attach(h hypervisor) error {
 	}
 	id := hex.EncodeToString(randBytes)
 
-	d := config.VhostUserDeviceAttrs{
-		ID:         id,
-		SocketPath: endpoint.SocketPath,
+	d := &drivers.VhostUserNetDevice{
 		MacAddress: endpoint.HardAddr,
 	}
+	d.SocketPath = endpoint.SocketPath
+	d.ID = id
 
 	return h.addDevice(d, vhostuserDev)
 }
@@ -344,8 +343,7 @@ func (endpoint *PhysicalEndpoint) Attach(h hypervisor) error {
 		return err
 	}
 
-	// TODO: use device manager as general device management entrance
-	d := config.VFIODev{
+	d := drivers.VFIODevice{
 		BDF: endpoint.BDF,
 	}
 

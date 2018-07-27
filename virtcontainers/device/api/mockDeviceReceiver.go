@@ -32,7 +32,7 @@ func (mockDC *MockDeviceReceiver) DecrementSandboxBlockIndex() error {
 	return nil
 }
 
-// AppendDevice adds new vhost user device
-func (mockDC *MockDeviceReceiver) AppendDevice(Device) error {
+// AddVhostUserDevice adds new vhost user device
+func (mockDC *MockDeviceReceiver) AddVhostUserDevice(VhostUserDevice, config.DeviceType) error {
 	return nil
 }

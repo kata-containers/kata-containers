@@ -25,10 +25,9 @@ const fileMode0640 = os.FileMode(0640)
 // dirMode is the permission bits used for creating a directory
 const dirMode = os.FileMode(0750) | os.ModeDir
 
-func TestNewDevice(t *testing.T) {
+func TestNewDevices(t *testing.T) {
 	dm := &deviceManager{
 		blockDriver: VirtioBlock,
-		devices:     make(map[string]api.Device),
 	}
 	savedSysDevPrefix := config.SysDevPrefix
 
@@ -54,7 +53,7 @@ func TestNewDevice(t *testing.T) {
 		DevType:       "c",
 	}
 
-	_, err = dm.NewDevice(deviceInfo)
+	_, err = dm.NewDevices([]config.DeviceInfo{deviceInfo})
 	assert.NotNil(t, err)
 
 	format := strconv.FormatInt(major, 10) + ":" + strconv.FormatInt(minor, 10)
@@ -63,7 +62,7 @@ func TestNewDevice(t *testing.T) {
 
 	// Return true for non-existent /sys/dev path.
 	deviceInfo.ContainerPath = path
-	_, err = dm.NewDevice(deviceInfo)
+	_, err = dm.NewDevices([]config.DeviceInfo{deviceInfo})
 	assert.Nil(t, err)
 
 	err = os.MkdirAll(ueventPathPrefix, dirMode)
@@ -74,17 +73,18 @@ func TestNewDevice(t *testing.T) {
 	err = ioutil.WriteFile(ueventPath, content, fileMode0640)
 	assert.Nil(t, err)
 
-	_, err = dm.NewDevice(deviceInfo)
+	_, err = dm.NewDevices([]config.DeviceInfo{deviceInfo})
 	assert.NotNil(t, err)
 
 	content = []byte("MAJOR=252\nMINOR=3\nDEVNAME=vfio/2")
 	err = ioutil.WriteFile(ueventPath, content, fileMode0640)
 	assert.Nil(t, err)
 
-	device, err := dm.NewDevice(deviceInfo)
+	devices, err := dm.NewDevices([]config.DeviceInfo{deviceInfo})
 	assert.Nil(t, err)
 
-	vfioDev, ok := device.(*drivers.VFIODevice)
+	assert.Equal(t, len(devices), 1)
+	vfioDev, ok := devices[0].(*drivers.VFIODevice)
 	assert.True(t, ok)
 	assert.Equal(t, vfioDev.DeviceInfo.HostPath, path)
 	assert.Equal(t, vfioDev.DeviceInfo.ContainerPath, path)
@@ -98,7 +98,6 @@ func TestNewDevice(t *testing.T) {
 func TestAttachVFIODevice(t *testing.T) {
 	dm := &deviceManager{
 		blockDriver: VirtioBlock,
-		devices:     make(map[string]api.Device),
 	}
 	tmpDir, err := ioutil.TempDir("", "")
 	assert.Nil(t, err)
@@ -129,7 +128,7 @@ func TestAttachVFIODevice(t *testing.T) {
 		DevType:       "c",
 	}
 
-	device, err := dm.NewDevice(deviceInfo)
+	device, err := dm.createDevice(deviceInfo)
 	assert.Nil(t, err)
 	_, ok := device.(*drivers.VFIODevice)
 	assert.True(t, ok)
@@ -145,7 +144,6 @@ func TestAttachVFIODevice(t *testing.T) {
 func TestAttachGenericDevice(t *testing.T) {
 	dm := &deviceManager{
 		blockDriver: VirtioBlock,
-		devices:     make(map[string]api.Device),
 	}
 	path := "/dev/tty2"
 	deviceInfo := config.DeviceInfo{
@@ -154,7 +152,7 @@ func TestAttachGenericDevice(t *testing.T) {
 		DevType:       "c",
 	}
 
-	device, err := dm.NewDevice(deviceInfo)
+	device, err := dm.createDevice(deviceInfo)
 	assert.Nil(t, err)
 	_, ok := device.(*drivers.GenericDevice)
 	assert.True(t, ok)
@@ -170,7 +168,6 @@ func TestAttachGenericDevice(t *testing.T) {
 func TestAttachBlockDevice(t *testing.T) {
 	dm := &deviceManager{
 		blockDriver: VirtioBlock,
-		devices:     make(map[string]api.Device),
 	}
 	path := "/dev/hda"
 	deviceInfo := config.DeviceInfo{
@@ -180,7 +177,7 @@ func TestAttachBlockDevice(t *testing.T) {
 	}
 
 	devReceiver := &api.MockDeviceReceiver{}
-	device, err := dm.NewDevice(deviceInfo)
+	device, err := dm.createDevice(deviceInfo)
 	assert.Nil(t, err)
 	_, ok := device.(*drivers.BlockDevice)
 	assert.True(t, ok)
@@ -193,49 +190,11 @@ func TestAttachBlockDevice(t *testing.T) {
 
 	// test virtio SCSI driver
 	dm.blockDriver = VirtioSCSI
-	device, err = dm.NewDevice(deviceInfo)
+	device, err = dm.createDevice(deviceInfo)
 	assert.Nil(t, err)
 	err = device.Attach(devReceiver)
 	assert.Nil(t, err)
 
 	err = device.Detach(devReceiver)
 	assert.Nil(t, err)
-}
-
-func TestAttachDetachDevice(t *testing.T) {
-	dm := NewDeviceManager(VirtioSCSI, nil)
-
-	path := "/dev/hda"
-	deviceInfo := config.DeviceInfo{
-		HostPath:      path,
-		ContainerPath: path,
-		DevType:       "b",
-	}
-
-	devReceiver := &api.MockDeviceReceiver{}
-	device, err := dm.NewDevice(deviceInfo)
-	assert.Nil(t, err)
-
-	// attach device
-	err = dm.AttachDevice(device.DeviceID(), devReceiver)
-	assert.Nil(t, err)
-	// attach device again(twice)
-	err = dm.AttachDevice(device.DeviceID(), devReceiver)
-	assert.NotNil(t, err)
-	assert.Equal(t, err, ErrDeviceAttached, "attach device twice should report error %q", ErrDeviceAttached)
-
-	attached := dm.IsDeviceAttached(device.DeviceID())
-	assert.True(t, attached)
-
-	// detach device
-	err = dm.DetachDevice(device.DeviceID(), devReceiver)
-	assert.Nil(t, err)
-	// detach device again(twice)
-	err = dm.DetachDevice(device.DeviceID(), devReceiver)
-	assert.NotNil(t, err)
-	assert.Equal(t, err, ErrDeviceNotAttached, "attach device twice should report error %q", ErrDeviceNotAttached)
-
-	attached = dm.IsDeviceAttached(device.DeviceID())
-	assert.False(t, attached)
-
 }
