@@ -132,6 +132,10 @@ other options are ignored.
 		}
 
 		containerID := context.Args().First()
+
+		kataLog = kataLog.WithField("container", containerID)
+		setExternalLoggers(kataLog)
+
 		status, sandboxID, err := getExistingContainerInfo(containerID)
 		if err != nil {
 			return err
@@ -143,6 +147,8 @@ other options are ignored.
 			"container": containerID,
 			"sandbox":   sandboxID,
 		})
+
+		setExternalLoggers(kataLog)
 
 		// container MUST be running
 		if status.State.State != vc.StateRunning {
