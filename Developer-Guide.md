@@ -670,7 +670,7 @@ $ sudo docker run -ti busybox sh
 
 ```
 $ id=$(sudo docker ps -q --no-trunc)
-$ console="/var/run/vc/sbs/${id}/console.sock"
+$ console="/var/run/vc/vm/${id}/console.sock"
 $ sudo socat "stdin,raw,echo=0,escape=0x11" "unix-connect:${console}"
 ```
 
