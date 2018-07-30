@@ -18,6 +18,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	proxyClient "github.com/clearcontainers/proxy/client"
+	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
@@ -850,6 +851,26 @@ func (h *hyper) sendCmd(proxyCmd hyperstartProxyCmd) (interface{}, error) {
 func (h *hyper) onlineCPUMem(cpus uint32) error {
 	// hyperstart-agent uses udev to online CPUs automatically
 	return nil
+}
+
+func (h *hyper) updateInterface(inf *grpc.Interface) (*grpc.Interface, error) {
+	// hyperstart-agent does not support update interface
+	return nil, nil
+}
+
+func (h *hyper) listInterfaces() ([]*grpc.Interface, error) {
+	// hyperstart-agent does not support list interfaces
+	return nil, nil
+}
+
+func (h *hyper) updateRoutes(routes []*grpc.Route) ([]*grpc.Route, error) {
+	// hyperstart-agent does not support update routes
+	return nil, nil
+}
+
+func (h *hyper) listRoutes() ([]*grpc.Route, error) {
+	// hyperstart-agent does not support list routes
+	return nil, nil
 }
 
 func (h *hyper) check() error {

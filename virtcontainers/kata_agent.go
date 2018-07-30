@@ -440,6 +440,82 @@ func (k *kataAgent) generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*
 	return ifaces, routes, nil
 }
 
+func (k *kataAgent) updateInterface(ifc *grpc.Interface) (*grpc.Interface, error) {
+	// send update interface request
+	ifcReq := &grpc.UpdateInterfaceRequest{
+		Interface: ifc,
+	}
+	resultingInterface, err := k.sendReq(ifcReq)
+	if err != nil {
+		k.Logger().WithFields(logrus.Fields{
+			"interface-requested": fmt.Sprintf("%+v", ifc),
+			"resulting-interface": fmt.Sprintf("%+v", resultingInterface),
+		}).WithError(err).Error("update interface request failed")
+	}
+	if resultInterface, ok := resultingInterface.(*grpc.Interface); ok {
+		return resultInterface, err
+	}
+	return nil, err
+}
+
+func (k *kataAgent) updateInterfaces(interfaces []*grpc.Interface) error {
+	for _, ifc := range interfaces {
+		if _, err := k.updateInterface(ifc); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (k *kataAgent) updateRoutes(routes []*grpc.Route) ([]*grpc.Route, error) {
+	if routes != nil {
+		routesReq := &grpc.UpdateRoutesRequest{
+			Routes: &grpc.Routes{
+				Routes: routes,
+			},
+		}
+		resultingRoutes, err := k.sendReq(routesReq)
+		if err != nil {
+			k.Logger().WithFields(logrus.Fields{
+				"routes-requested": fmt.Sprintf("%+v", routes),
+				"resulting-routes": fmt.Sprintf("%+v", resultingRoutes),
+			}).WithError(err).Error("update routes request failed")
+		}
+		resultRoutes, ok := resultingRoutes.(*grpc.Routes)
+		if ok && resultRoutes != nil {
+			return resultRoutes.Routes, err
+		}
+		return nil, err
+	}
+	return nil, nil
+}
+
+func (k *kataAgent) listInterfaces() ([]*grpc.Interface, error) {
+	req := &grpc.ListInterfacesRequest{}
+	resultingInterfaces, err := k.sendReq(req)
+	if err != nil {
+		return nil, err
+	}
+	resultInterfaces, ok := resultingInterfaces.(*grpc.Interfaces)
+	if ok {
+		return resultInterfaces.Interfaces, err
+	}
+	return nil, err
+}
+
+func (k *kataAgent) listRoutes() ([]*grpc.Route, error) {
+	req := &grpc.ListRoutesRequest{}
+	resultingRoutes, err := k.sendReq(req)
+	if err != nil {
+		return nil, err
+	}
+	resultRoutes, ok := resultingRoutes.(*grpc.Routes)
+	if ok {
+		return resultRoutes.Routes, err
+	}
+	return nil, err
+}
+
 func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 	var err error
 
@@ -515,36 +591,11 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	if err != nil {
 		return err
 	}
-	for _, ifc := range interfaces {
-		// send update interface request
-		ifcReq := &grpc.UpdateInterfaceRequest{
-			Interface: ifc,
-		}
-		resultingInterface, err := k.sendReq(ifcReq)
-		if err != nil {
-			k.Logger().WithFields(logrus.Fields{
-				"interface-requested": fmt.Sprintf("%+v", ifc),
-				"resulting-interface": fmt.Sprintf("%+v", resultingInterface),
-			}).WithError(err).Error("update interface request failed")
-			return err
-		}
+	if err := k.updateInterfaces(interfaces); err != nil {
+		return err
 	}
-
-	if routes != nil {
-		routesReq := &grpc.UpdateRoutesRequest{
-			Routes: &grpc.Routes{
-				Routes: routes,
-			},
-		}
-
-		resultingRoutes, err := k.sendReq(routesReq)
-		if err != nil {
-			k.Logger().WithFields(logrus.Fields{
-				"routes-requested": fmt.Sprintf("%+v", routes),
-				"resulting-routes": fmt.Sprintf("%+v", resultingRoutes),
-			}).WithError(err).Error("update routes request failed")
-			return err
-		}
+	if _, err := k.updateRoutes(routes); err != nil {
+		return err
 	}
 
 	sharedDir9pOptions = append(sharedDir9pOptions, fmt.Sprintf("msize=%d", sandbox.config.HypervisorConfig.Msize9p))
@@ -1334,6 +1385,12 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers["grpc.UpdateInterfaceRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.UpdateInterface(ctx, req.(*grpc.UpdateInterfaceRequest), opts...)
+	}
+	k.reqHandlers["grpc.ListInterfacesRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.ListInterfaces(ctx, req.(*grpc.ListInterfacesRequest), opts...)
+	}
+	k.reqHandlers["grpc.ListRoutesRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.ListRoutes(ctx, req.(*grpc.ListRoutesRequest), opts...)
 	}
 	k.reqHandlers["grpc.OnlineCPUMemRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.OnlineCPUMem(ctx, req.(*grpc.OnlineCPUMemRequest), opts...)
