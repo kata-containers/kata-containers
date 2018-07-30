@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"syscall"
 	"time"
 
 	"context"
@@ -118,6 +120,7 @@ type qmpCommand struct {
 	args           map[string]interface{}
 	filter         *qmpEventFilter
 	resultReceived bool
+	oob            []byte
 }
 
 // QMP is a structure that contains the internal state used by startQMPLoop and
@@ -302,7 +305,12 @@ func (q *QMP) writeNextQMPCommand(cmdQueue *list.List) {
 	}
 	q.cfg.Logger.Infof("%s", string(encodedCmd))
 	encodedCmd = append(encodedCmd, '\n')
-	_, err = q.conn.Write(encodedCmd)
+	if unixConn, ok := q.conn.(*net.UnixConn); ok && len(cmd.oob) > 0 {
+		_, _, err = unixConn.WriteMsgUnix(encodedCmd, cmd.oob, nil)
+	} else {
+		_, err = q.conn.Write(encodedCmd)
+	}
+
 	if err != nil {
 		cmd.res <- qmpResult{
 			err: fmt.Errorf("Unable to write command to qmp socket %v", err),
@@ -485,7 +493,7 @@ func startQMPLoop(conn io.ReadWriteCloser, cfg QMPConfig,
 }
 
 func (q *QMP) executeCommandWithResponse(ctx context.Context, name string, args map[string]interface{},
-	filter *qmpEventFilter) (interface{}, error) {
+	oob []byte, filter *qmpEventFilter) (interface{}, error) {
 	var err error
 	var response interface{}
 	resCh := make(chan qmpResult)
@@ -498,6 +506,7 @@ func (q *QMP) executeCommandWithResponse(ctx context.Context, name string, args 
 		name:   name,
 		args:   args,
 		filter: filter,
+		oob:    oob,
 	}:
 	}
 
@@ -519,7 +528,7 @@ func (q *QMP) executeCommandWithResponse(ctx context.Context, name string, args 
 func (q *QMP) executeCommand(ctx context.Context, name string, args map[string]interface{},
 	filter *qmpEventFilter) error {
 
-	_, err := q.executeCommandWithResponse(ctx, name, args, filter)
+	_, err := q.executeCommandWithResponse(ctx, name, args, nil, filter)
 	return err
 }
 
@@ -809,7 +818,7 @@ func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, 
 
 // ExecuteQueryHotpluggableCPUs returns a slice with the list of hotpluggable CPUs
 func (q *QMP) ExecuteQueryHotpluggableCPUs(ctx context.Context) ([]HotpluggableCPU, error) {
-	response, err := q.executeCommandWithResponse(ctx, "query-hotpluggable-cpus", nil, nil)
+	response, err := q.executeCommandWithResponse(ctx, "query-hotpluggable-cpus", nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -896,4 +905,15 @@ func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID, vhostfd stri
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
+// ExecuteGetFD sends a file descriptor via SCM rights and assigns it a name
+func (q *QMP) ExecuteGetFD(ctx context.Context, fdname string, fd *os.File) error {
+	oob := syscall.UnixRights(int(fd.Fd()))
+	args := map[string]interface{}{
+		"fdname": fdname,
+	}
+
+	_, err := q.executeCommandWithResponse(ctx, "getfd", args, oob, nil)
+	return err
 }
