@@ -9,6 +9,7 @@ import (
 	"io"
 	"syscall"
 
+	"github.com/kata-containers/agent/protocols/grpc"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
@@ -143,5 +144,30 @@ func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Re
 
 // AddDevice adds a device to sandbox
 func (s *Sandbox) AddDevice(info config.DeviceInfo) (api.Device, error) {
+	return nil, nil
+}
+
+// AddInterface implements the VCSandbox function of the same name.
+func (s *Sandbox) AddInterface(inf *grpc.Interface) (*grpc.Interface, error) {
+	return nil, nil
+}
+
+// RemoveInterface implements the VCSandbox function of the same name.
+func (s *Sandbox) RemoveInterface(inf *grpc.Interface) (*grpc.Interface, error) {
+	return nil, nil
+}
+
+// ListInterfaces implements the VCSandbox function of the same name.
+func (s *Sandbox) ListInterfaces() ([]*grpc.Interface, error) {
+	return nil, nil
+}
+
+// UpdateRoutes implements the VCSandbox function of the same name.
+func (s *Sandbox) UpdateRoutes(routes []*grpc.Route) ([]*grpc.Route, error) {
+	return nil, nil
+}
+
+// ListRoutes implements the VCSandbox function of the same name.
+func (s *Sandbox) ListRoutes() ([]*grpc.Route, error) {
 	return nil, nil
 }

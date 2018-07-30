@@ -9,6 +9,7 @@ import (
 	"io"
 	"syscall"
 
+	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -45,6 +46,12 @@ type VC interface {
 	ResumeContainer(sandboxID, containerID string) error
 
 	AddDevice(sandboxID string, info config.DeviceInfo) (api.Device, error)
+
+	AddInterface(sandboxID string, inf *grpc.Interface) (*grpc.Interface, error)
+	RemoveInterface(sandboxID string, inf *grpc.Interface) (*grpc.Interface, error)
+	ListInterfaces(sandboxID string) ([]*grpc.Interface, error)
+	UpdateRoutes(sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error)
+	ListRoutes(sandboxID string) ([]*grpc.Route, error)
 }
 
 // VCSandbox is the Sandbox interface
@@ -76,6 +83,12 @@ type VCSandbox interface {
 	IOStream(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error)
 
 	AddDevice(info config.DeviceInfo) (api.Device, error)
+
+	AddInterface(inf *grpc.Interface) (*grpc.Interface, error)
+	RemoveInterface(inf *grpc.Interface) (*grpc.Interface, error)
+	ListInterfaces() ([]*grpc.Interface, error)
+	UpdateRoutes(routes []*grpc.Route) ([]*grpc.Route, error)
+	ListRoutes() ([]*grpc.Route, error)
 }
 
 // VCContainer is the Container interface

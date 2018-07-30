@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"syscall"
 
+	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/mitchellh/mapstructure"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -221,4 +222,16 @@ type agent interface {
 
 	// reseedRNG will reseed the guest random number generator
 	reseedRNG(data []byte) error
+
+	// updateInterface will tell the agent to update a nic for an existed Sandbox.
+	updateInterface(inf *grpc.Interface) (*grpc.Interface, error)
+
+	// listInterfaces will tell the agent to list interfaces of an existed Sandbox
+	listInterfaces() ([]*grpc.Interface, error)
+
+	// updateRoutes will tell the agent to update route table for an existed Sandbox.
+	updateRoutes(routes []*grpc.Route) ([]*grpc.Route, error)
+
+	// listRoutes will tell the agent to list routes of an existed Sandbox
+	listRoutes() ([]*grpc.Route, error)
 }
