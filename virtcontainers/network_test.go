@@ -480,6 +480,60 @@ func TestVhostUserEndpointAttach(t *testing.T) {
 	}
 }
 
+func TestVhostUserEndpoint_HotAttach(t *testing.T) {
+	assert := assert.New(t)
+	v := &VhostUserEndpoint{
+		SocketPath:   "/tmp/sock",
+		HardAddr:     "mac-addr",
+		EndpointType: VhostUserEndpointType,
+	}
+
+	h := &mockHypervisor{}
+
+	err := v.HotAttach(h)
+	assert.Error(err)
+}
+
+func TestVhostUserEndpoint_HotDetach(t *testing.T) {
+	assert := assert.New(t)
+	v := &VhostUserEndpoint{
+		SocketPath:   "/tmp/sock",
+		HardAddr:     "mac-addr",
+		EndpointType: VhostUserEndpointType,
+	}
+
+	h := &mockHypervisor{}
+
+	err := v.HotDetach(h, true, "")
+	assert.Error(err)
+}
+
+func TestPhysicalEndpoint_HotAttach(t *testing.T) {
+	assert := assert.New(t)
+	v := &PhysicalEndpoint{
+		IfaceName: "eth0",
+		HardAddr:  net.HardwareAddr{0x02, 0x00, 0xca, 0xfe, 0x00, 0x04}.String(),
+	}
+
+	h := &mockHypervisor{}
+
+	err := v.HotAttach(h)
+	assert.Error(err)
+}
+
+func TestPhysicalEndpoint_HotDetach(t *testing.T) {
+	assert := assert.New(t)
+	v := &PhysicalEndpoint{
+		IfaceName: "eth0",
+		HardAddr:  net.HardwareAddr{0x02, 0x00, 0xca, 0xfe, 0x00, 0x04}.String(),
+	}
+
+	h := &mockHypervisor{}
+
+	err := v.HotDetach(h, true, "")
+	assert.Error(err)
+}
+
 func TestGetNetNsFromBindMount(t *testing.T) {
 	assert := assert.New(t)
 

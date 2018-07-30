@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
@@ -2347,5 +2348,61 @@ func TestPauseResumeContainer(t *testing.T) {
 	assert.NoError(err)
 
 	err = ResumeContainer(s.ID(), contID)
+	assert.NoError(err)
+}
+
+func TestNetworkOperation(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	cleanUp()
+
+	assert := assert.New(t)
+	inf := &grpc.Interface{
+		Name:   "eno1",
+		Mtu:    1500,
+		HwAddr: "02:00:ca:fe:00:48",
+	}
+	ip := grpc.IPAddress{
+		Family:  0,
+		Address: "192.168.0.101",
+		Mask:    "24",
+	}
+	inf.IPAddresses = append(inf.IPAddresses, &ip)
+
+	_, err := AddInterface("", inf)
+	assert.Error(err)
+
+	_, err = AddInterface("abc", inf)
+	assert.Error(err)
+
+	netNSPath, err := createNetNS()
+	assert.NoError(err)
+	defer deleteNetNS(netNSPath)
+
+	config := newTestSandboxConfigNoop()
+	config.NetworkModel = CNMNetworkModel
+	config.NetworkConfig = NetworkConfig{
+		NetNSPath: netNSPath,
+	}
+
+	s, _, err := createAndStartSandbox(config)
+	assert.NoError(err)
+	assert.NotNil(s)
+
+	_, err = AddInterface(s.ID(), inf)
+	assert.Error(err)
+
+	_, err = RemoveInterface(s.ID(), inf)
+	assert.NoError(err)
+
+	_, err = ListInterfaces(s.ID())
+	assert.NoError(err)
+
+	_, err = UpdateRoutes(s.ID(), nil)
+	assert.NoError(err)
+
+	_, err = ListRoutes(s.ID())
 	assert.NoError(err)
 }
