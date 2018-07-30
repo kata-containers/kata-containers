@@ -105,7 +105,7 @@ main(){
 	# Agent version
 	[ -n "${agent_version}" ] || agent_version="${kata_version}"
 
-	shift $(( "$OPTIND" - 1 ))
+	shift "$(( $OPTIND - 1 ))"
 	git clone "$osbuilder_url" "${tmp_dir}/osbuilder"
 	pushd "${tmp_dir}/osbuilder"
 	git checkout "${kata_osbuilder_version}"
