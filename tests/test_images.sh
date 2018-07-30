@@ -360,6 +360,13 @@ run_test()
 	create_and_run "${distro}" "${image_options}" "${initrd_options}"
 }
 
+test_distro_ubuntu()
+{
+       local -r name="Can create and run ubuntu image"
+       run_test "${name}" "" "ubuntu" "service" "no"
+}
+
+
 test_distro_fedora()
 {
 	local -r name="Can create and run fedora image"
@@ -444,7 +451,7 @@ test_all_distros()
 	test_distro_fedora
 	test_distro_centos
 	test_distro_alpine
-
+	test_distro_ubuntu
 	if [ $MACHINE_TYPE != "ppc64le" ]; then
 	   test_distro_clearlinux
 
