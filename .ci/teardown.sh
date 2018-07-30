@@ -5,6 +5,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+cidir=$(dirname "$0")
+source "${cidir}/lib.sh"
+
 collect_logs()
 {
 	local -r log_copy_dest="$1"
@@ -115,9 +118,14 @@ collect_logs()
 
 check_log_files()
 {
-	echo "INFO: Checking log files"
+	info "Checking log files"
 
 	make log-parser
+
+	local component
+	local file
+	local args
+	local cmd
 
 	for component in \
 		kata-ksm-throttler \
@@ -132,13 +140,39 @@ check_log_files()
 		eval "$cmd" || true
 	done
 
-	logs=$(ls "$(pwd)"/*.log || true)
-	{ kata-log-parser --debug --check-only --error-if-no-records $logs; ret=$?; } || true
+	local -r logs=$(ls "$(pwd)"/*.log || true)
+	local ret
 
-	errors=0
+	cmd="kata-log-parser"
+	args="--debug --check-only --error-if-no-records"
+
+	local -r runtime="kata-runtime"
+	local -r have_runtime=$(command -v "$runtime" || true)
+
+	if [ -n "$have_runtime" ]
+	then
+		local -r image=$($runtime kata-env --json | jq -S '.Image.Path' | tr -d '"')
+
+		if [ -n "$image" ]
+		then
+			info "runtime configured for image so enabling $cmd strict log checking"
+			args+=" --strict"
+		else
+			info "runtime configured for initrd so cannot enable $cmd strict log checking"
+			info "(see https://github.com/kata-containers/agent/issues/255)"
+		fi
+	fi
+
+	{ $cmd $args $logs; ret=$?; } || true
+
+	local errors=0
+	local log
 
 	for log in $logs
 	do
+		local pattern
+		local results
+
 		# Display *all* errors caused by runtime exceptions and fatal
 		# signals.
 		for pattern in "fatal error" "fatal signal"
@@ -184,9 +218,9 @@ check_collect_script()
 
 	local msg="Kata data collection script"
 
-	[ -z "$cmdpath" ] && echo "INFO: $msg not found" && return
+	[ -z "$cmdpath" ] && info "$msg not found" && return
 
-	echo "INFO: Checking $msg"
+	info "Checking $msg"
 	sudo -E PATH="$PATH" chronic $cmd
 }
 
