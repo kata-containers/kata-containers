@@ -47,6 +47,9 @@
         * [Create a container](#create-a-container)
         * [Connect to the virtual machine using the debug console](#connect-to-the-virtual-machine-using-the-debug-console)
         * [Obtain details of the image](#obtain-details-of-the-image)
+    * [Running standalone](#running-standalone)
+        * [Create an OCI bundle](#create-an-oci-bundle)
+        * [Launch the runtime to create a container](#launch-the-runtime-to-create-a-container)
 
 # Warning
 
@@ -687,4 +690,31 @@ file exists and contains details of the image and how it was created:
 
 ```
 $ cat /var/lib/osbuilder/osbuilder.yaml
+```
+
+## Running standalone
+
+It is possible to start the runtime without a container manager. This is
+mostly useful for testing and debugging purposes.
+
+### Create an OCI bundle
+
+To build an
+[OCI bundle](https://github.com/opencontainers/runtime-spec/blob/master/bundle.md),
+required by the runtime:
+
+```
+$ bundle="/tmp/bundle"
+$ rootfs="$bundle/rootfs"
+$ mkdir -p "$rootfs" && (cd "$bundle" && kata-runtime spec)
+$ sudo docker export $(sudo docker create busybox) | tar -C "$rootfs" -xvf -
+```
+
+### Launch the runtime to create a container
+
+Run the runtime standalone by providing it with the path to the
+previously-created [OCI bundle](#create-an-oci-bundle):
+
+```
+$ sudo kata-runtime --log=/dev/stdout run --bundle "$bundle" foo
 ```
