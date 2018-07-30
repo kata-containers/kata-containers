@@ -217,3 +217,35 @@ func TestNoopAgentReseedRNG(t *testing.T) {
 		t.Fatal("reseedRNG failed")
 	}
 }
+
+func TestNoopAgentUpdateInterface(t *testing.T) {
+	n := &noopAgent{}
+	_, err := n.updateInterface(nil)
+	if err != nil {
+		t.Fatal("updateInterface failed")
+	}
+}
+
+func TestNoopAgentListInterfaces(t *testing.T) {
+	n := &noopAgent{}
+	_, err := n.listInterfaces()
+	if err != nil {
+		t.Fatal("listInterfaces failed")
+	}
+}
+
+func TestNoopAgentUpdateRoutes(t *testing.T) {
+	n := &noopAgent{}
+	_, err := n.updateRoutes(nil)
+	if err != nil {
+		t.Fatal("updateRoutes failed")
+	}
+}
+
+func TestNoopAgentListRoutes(t *testing.T) {
+	n := &noopAgent{}
+	_, err := n.listRoutes()
+	if err != nil {
+		t.Fatal("listRoutes failed")
+	}
+}
