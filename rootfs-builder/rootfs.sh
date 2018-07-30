@@ -84,6 +84,19 @@ check_function_exist()
 	[ "$(type -t ${function_name})" == "function" ] || die "${function_name} function was not defined"
 }
 
+distro_needs_admin_caps()
+{
+		if [ "$1" = "ubuntu" ]
+		then
+			echo "true"
+		elif [ "$1" = "debian" ]
+		then 
+			echo "true"
+		else
+			echo "false"
+		fi
+}
+
 generate_dockerfile()
 {
 	dir="$1"
@@ -222,12 +235,26 @@ if [ -n "${USE_DOCKER}" ] ; then
 	# fake mapping if KERNEL_MODULES_DIR is unset
 	kernel_mod_dir=${KERNEL_MODULES_DIR:-${ROOTFS_DIR}}
 
+	docker_run_args=""
+	docker_run_args+=" --rm"
+	docker_run_args+=" --runtime runc"
+
+	admin_caps=$(distro_needs_admin_caps "$distro")
+	if [ "$admin_caps" = "true" ]; then
+		# Required by debootstrap to mount inside a container
+		docker_run_args+=" --cap-add SYS_ADMIN"
+		# Requred to chroot
+		docker_run_args+=" --cap-add SYS_CHROOT"
+		# debootstrap needs to create device nodes to properly function
+		docker_run_args+=" --cap-add MKNOD"
+		# See https://github.com/moby/moby/issues/16429
+		docker_run_args+=" --security-opt apparmor:unconfined"
+	fi
+
 	#Make sure we use a compatible runtime to build rootfs
 	# In case Clear Containers Runtime is installed we dont want to hit issue:
 	#https://github.com/clearcontainers/runtime/issues/828
 	docker run  \
-		--rm \
-		--runtime runc  \
 		--env https_proxy="${https_proxy}" \
 		--env http_proxy="${http_proxy}" \
 		--env AGENT_VERSION="${AGENT_VERSION}" \
@@ -244,6 +271,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		-v "${script_dir}/../scripts":"/scripts" \
 		-v "${kernel_mod_dir}":"${kernel_mod_dir}" \
 		-v "${GOPATH_LOCAL}":"${GOPATH_LOCAL}" \
+		$docker_run_args \
 		${image_name} \
 		bash /osbuilder/rootfs.sh "${distro}"
 
