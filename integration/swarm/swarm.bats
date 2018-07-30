@@ -8,6 +8,8 @@
 # Swarm testing : This will start swarm as well as it will create and
 # run swarm replicas using Nginx
 
+load "${BATS_TEST_DIRNAME}/../../metrics/lib/common.bash"
+
 # Image for swarm testing
 nginx_image="gabyct/nginx"
 # Name of service to test swarm
@@ -18,25 +20,18 @@ number_of_replicas=1
 timeout=10
 # Retry number for the curl
 number_of_retries=5
-# SHIM PATH
-SHIM_PATH="${SHIM_PATH:-/usr/libexec/kata-containers/kata-shim}"
-# PROXY PATH
-PROXY_PATH="${PROXY_PATH:-/usr/libexec/kata-containers/kata-proxy}"
-
-# This function checks if active processes were
-# left behind by kata-runtime.
-
-check_processes() {
-	process=$1
-	pgrep -f "$process"
-	if [ $? -eq 0 ]; then
-		echo "Found unexpected ${process} present"
-		ps -ef | grep $process
-		return 1
-	fi
-}
 
 setup() {
+	# Check that processes are not running
+	run check_processes ${PROXY_PATH}
+	[ "$status" -eq 0 ]
+
+	run check_processes ${SHIM_PATH}
+	[ "$status" -eq 0 ]
+
+	run check_processes ${HYPERVISOR_PATH}
+	[ "$status" -eq 0 ]
+
 	interfaces=$(basename -a /sys/class/net/*)
 	swarm_interface_arg=""
 	for i in ${interfaces[@]}; do
@@ -73,6 +68,14 @@ setup() {
 teardown() {
 	docker service remove "${SERVICE_NAME}"
 	docker swarm leave --force
-	check_processes ${PROXY_PATH}
-	check_processes ${SHIM_PATH}
+
+	# Check that processes are not left by Swarm
+	run check_processes ${PROXY_PATH}
+	[ "$status" -eq 0 ]
+
+	run check_processes ${SHIM_PATH}
+	[ "$status" -eq 0 ]
+
+	run check_processes ${HYPERVISOR_PATH}
+	[ "$status" -eq 0 ]
 }
