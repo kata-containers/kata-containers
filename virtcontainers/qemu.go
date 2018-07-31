@@ -517,6 +517,8 @@ func (q *qemu) waitSandbox(timeout int) error {
 	var ver *govmmQemu.QMPVersion
 	var err error
 
+	// clear any possible old state before trying to connect again.
+	q.qmpShutdown()
 	timeStart := time.Now()
 	for {
 		disconnectCh := make(chan struct{})
