@@ -13,7 +13,7 @@ source "${cidir}/lib.sh"
 
 apply_depends_on
 
-arch=$(arch)
+arch=$("${cidir}"/kata-arch.sh -d)
 INSTALL_KATA="${INSTALL_KATA:-yes}"
 
 echo "Set up environment"
@@ -40,15 +40,21 @@ if ! sudo docker version | grep -q "$docker_version" && [ "$CI" == true ]; then
 	"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker install -f
 fi
 
-if [ "$arch" = x86_64 ]; then
+case "$arch" in
+	x86_64)
 	if grep -q "N" /sys/module/kvm_intel/parameters/nested; then
 		echo "enable Nested Virtualization"
 		sudo modprobe -r kvm_intel
 		sudo modprobe kvm_intel nested=1
 	fi
-else
+	;;
+	aarch64)
+	info "CI running in bare machine"
+	;;
+	*)
 	die "Unsupported architecture: $arch"
-fi
+	;;
+esac
 
 if [ "${INSTALL_KATA}" == "yes" ];then
 	echo "Install Kata sources"
@@ -58,14 +64,21 @@ fi
 echo "Install CNI plugins"
 bash -f "${cidir}/install_cni_plugins.sh"
 
-echo "Install CRI-O"
-bash -f "${cidir}/install_crio.sh"
+# values indicating whether related intergration tests have been supported
+CRIO="true"
+KUBERNETES="true"
+OPENSHIFT="true"
 
-echo "Install Kubernetes"
-bash -f "${cidir}/install_kubernetes.sh"
+# load arch-specific lib file
+if [ -f "${cidir}/lib_setup_${arch}.sh" ]; then
+        source "${cidir}/lib_setup_${arch}.sh"
+fi
 
-echo "Install Openshift"
-bash -f "${cidir}/install_openshift.sh"
+[ "${CRIO}" = "true" ] && echo "Install CRI-O" && bash -f "${cidir}/install_crio.sh"
+
+[ "${KUBERNETES}" = "true" ] && echo "Install Kubernetes" && bash -f "${cidir}/install_kubernetes.sh"
+
+[ "${OPENSHIFT}" = "true" ] && echo "Install Openshift" && bash -f "${cidir}/install_openshift.sh"
 
 echo "Disable systemd-journald rate limit"
 sudo crudini --set /etc/systemd/journald.conf Journal RateLimitInterval 0s
