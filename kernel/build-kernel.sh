@@ -34,7 +34,7 @@ readonly patches_repo_dir="${GOPATH}/src/${patches_repo}"
 # Default path to search patches to apply to kernel
 readonly default_patches_dir="${patches_repo_dir}/kernel/patches/"
 # Default path to search config for kata
-readonly default_kernel_config_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs/"
+readonly default_kernel_config_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs"
 #Path to kernel directory
 kernel_path=""
 #
@@ -188,6 +188,7 @@ setup_kernel() {
 
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
+	arch_target=$(arch_to_kernel "${arch_target}")
 	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}")
 
 	cp "${kernel_config_path}" ./.config
