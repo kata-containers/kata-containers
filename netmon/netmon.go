@@ -69,21 +69,23 @@ const (
 
 	kataSuffix = "kata"
 
-	// For simplicity the code will only focus on IPv4 addresses for now.
-	netlinkFamily = netlink.FAMILY_V4
-
-	storageParentPath = "/var/run/kata-containers/netmon/sbs"
-	storageDirPerm    = os.FileMode(0750)
-
 	// sharedFile is the name of the file that will be used to share
 	// the data between this process and the kata-runtime process
 	// responsible for updating the network.
 	sharedFile      = "shared.json"
 	storageFilePerm = os.FileMode(0640)
+	storageDirPerm  = os.FileMode(0750)
 )
 
-// version is the netmon version. This variable is populated at build time.
-var version = "unknown"
+var (
+	// version is the netmon version. This variable is populated at build time.
+	version = "unknown"
+
+	// For simplicity the code will only focus on IPv4 addresses for now.
+	netlinkFamily = netlink.FAMILY_V4
+
+	storageParentPath = "/var/run/kata-containers/netmon/sbs"
+)
 
 type netmonParams struct {
 	sandboxID   string
