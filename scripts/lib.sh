@@ -1,4 +1,6 @@
+export GOPATH=${GOPATH:-${HOME}/go}
 readonly kata_arch_sh="${GOPATH}/src/github.com/kata-containers/tests/.ci/kata-arch.sh"
+hub_bin="${tmp_dir}/hub-bin"
 
 get_kata_arch(){
 	go get -u github.com/kata-containers/tests || true
@@ -58,6 +60,24 @@ get_repo_hash(){
 	[ -d "${repo_dir}" ] || die "${repo_dir} is not a directory"
 	pushd "${repo_dir}" >> /dev/null
 	git rev-parse --verify HEAD
+	popd >> /dev/null
+}
+
+build_hub() {
+	info "Get hub"
+
+	if cmd=$(command -v hub); then
+		hub_bin="${cmd}"
+		return 
+	fi
+
+	local hub_repo="github.com/github/hub"
+	local hub_repo_dir="${GOPATH}/src/${hub_repo}"
+	[ -d "${hub_repo_dir}" ]||  git clone --quiet --depth 1 "https://${hub_repo}.git" "${hub_repo_dir}"
+	pushd "${hub_repo_dir}" >> /dev/null
+	git checkout master
+	git pull
+	./script/build -o "${hub_bin}"
 	popd >> /dev/null
 }
 

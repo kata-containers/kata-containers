@@ -13,41 +13,17 @@ readonly script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 
 readonly tmp_dir=$(mktemp -t -d pr-bump.XXXX)
-readonly hub_bin="${tmp_dir}/hub-bin"
 readonly organization="kata-containers"
 PUSH="false"
 GOPATH=${GOPATH:-${HOME}/go}
+
+source "${script_dir}/../scripts/lib.sh"
 
 cleanup (){
 	[ -d "${tmp_dir}" ] && rm -rf "${tmp_dir}"
 }
 
 trap cleanup EXIT
-
-die()
-{
-	msg="$*"
-	echo "ERROR: ${msg}" >&2
-	exit 1
-}
-
-info()
-{
-	msg="$*"
-	echo "INFO: ${msg}" >&2
-}
-
-build_hub() {
-	info "Get hub"
-	local hub_repo="github.com/github/hub"
-	local hub_repo_dir="${GOPATH}/src/${hub_repo}"
-	[ -d "${hub_repo_dir}" ]||  git clone --quiet --depth 1 "https://${hub_repo}.git" "${hub_repo_dir}"
-	pushd "${hub_repo_dir}" >> /dev/null
-	git checkout master
-	git pull
-	./script/build -o "${hub_bin}"
-	popd >> /dev/null
-}
 
 get_changes() {
 	local current_version=$1
