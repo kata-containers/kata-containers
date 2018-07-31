@@ -16,10 +16,44 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
+
+// The following types and structures have to be kept in sync with the
+// description of the agent protocol. Those definitions need to be in their
+// own separate package so that they can be imported directly from this code.
+// The reason for not importing them now, is because importing the whole agent
+// protocol adds up too much overhead because of the grpc protocol involved.
+
+// IPFamily define the IP address family type.
+type IPFamily int32
+
+// IPAddress describes the IP address format expected by Kata API.
+type IPAddress struct {
+	Family  IPFamily `json:"family,omitempty"`
+	Address string   `json:"address,omitempty"`
+	Mask    string   `json:"mask,omitempty"`
+}
+
+// Interface describes the network interface format expected by Kata API.
+type Interface struct {
+	Device      string       `json:"device,omitempty"`
+	Name        string       `json:"name,omitempty"`
+	IPAddresses []*IPAddress `json:"IPAddresses,omitempty"`
+	Mtu         uint64       `json:"mtu,omitempty"`
+	HwAddr      string       `json:"hwAddr,omitempty"`
+	PciAddr     string       `json:"pciAddr,omitempty"`
+}
+
+// Route describes the network route format expected by Kata API.
+type Route struct {
+	Dest    string `json:"dest,omitempty"`
+	Gateway string `json:"gateway,omitempty"`
+	Device  string `json:"device,omitempty"`
+	Source  string `json:"source,omitempty"`
+	Scope   uint32 `json:"scope,omitempty"`
+}
 
 const (
 	netmonName    = "kata-netmon"
@@ -57,7 +91,7 @@ type netmon struct {
 	storagePath string
 	sharedFile  string
 
-	netIfaces map[int]grpc.Interface
+	netIfaces map[int]Interface
 
 	linkUpdateCh chan netlink.LinkUpdate
 	linkDoneCh   chan struct{}
@@ -134,7 +168,7 @@ func newNetmon(params netmonParams) (*netmon, error) {
 		netmonParams: params,
 		storagePath:  filepath.Join(storageParentPath, params.sandboxID),
 		sharedFile:   filepath.Join(storageParentPath, params.sandboxID, sharedFile),
-		netIfaces:    make(map[int]grpc.Interface),
+		netIfaces:    make(map[int]Interface),
 		linkUpdateCh: make(chan netlink.LinkUpdate),
 		linkDoneCh:   make(chan struct{}),
 		rtUpdateCh:   make(chan netlink.RouteUpdate),
@@ -171,13 +205,13 @@ func (n *netmon) listenNetlinkEvents() error {
 // convertInterface converts a link and its IP addresses as defined by netlink
 // package, into the Interface structure format expected by kata-runtime to
 // describe an interface and its associated IP addresses.
-func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) grpc.Interface {
+func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) Interface {
 	if linkAttrs == nil {
 		fmt.Printf("Link attributes are nil")
-		return grpc.Interface{}
+		return Interface{}
 	}
 
-	var ipAddrs []*grpc.IPAddress
+	var ipAddrs []*IPAddress
 
 	for _, addr := range addrs {
 		if addr.IPNet == nil {
@@ -186,8 +220,8 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) grpc.I
 
 		netMask, _ := addr.Mask.Size()
 
-		ipAddr := &grpc.IPAddress{
-			Family:  grpc.IPFamily(netlinkFamily),
+		ipAddr := &IPAddress{
+			Family:  IPFamily(netlinkFamily),
 			Address: addr.IP.String(),
 			Mask:    fmt.Sprintf("%d", netMask),
 		}
@@ -195,7 +229,7 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) grpc.I
 		ipAddrs = append(ipAddrs, ipAddr)
 	}
 
-	return grpc.Interface{
+	return Interface{
 		Device:      linkAttrs.Name,
 		Name:        linkAttrs.Name,
 		IPAddresses: ipAddrs,
@@ -207,8 +241,8 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) grpc.I
 // convertRoutes converts a list of routes as defined by netlink package,
 // into a list of Route structure format expected by kata-runtime to
 // describe a set of routes.
-func convertRoutes(netRoutes []netlink.Route) []grpc.Route {
-	var routes []grpc.Route
+func convertRoutes(netRoutes []netlink.Route) []Route {
+	var routes []Route
 
 	// Ignore routes with IPv6 addresses as this is not supported
 	// by Kata yet.
@@ -234,7 +268,7 @@ func convertRoutes(netRoutes []netlink.Route) []grpc.Route {
 			dev = iface.Name
 		}
 
-		route := grpc.Route{
+		route := Route{
 			Dest:    dst,
 			Gateway: gw,
 			Device:  dev,
@@ -303,7 +337,7 @@ func (n *netmon) execKataCmd(subCmd string) error {
 	return os.Remove(n.sharedFile)
 }
 
-func (n *netmon) addInterfaceCLI(iface grpc.Interface) error {
+func (n *netmon) addInterfaceCLI(iface Interface) error {
 	fmt.Printf("%s %s %+v\n", n.runtimePath, kataCLIAddIfaceCmd, iface)
 
 	if err := n.storeDataToSend(iface); err != nil {
@@ -313,7 +347,7 @@ func (n *netmon) addInterfaceCLI(iface grpc.Interface) error {
 	return n.execKataCmd(kataCLIAddIfaceCmd)
 }
 
-func (n *netmon) delInterfaceCLI(iface grpc.Interface) error {
+func (n *netmon) delInterfaceCLI(iface Interface) error {
 	fmt.Printf("%s %s %+v\n", n.runtimePath, kataCLIDelIfaceCmd, iface)
 
 	if err := n.storeDataToSend(iface); err != nil {
@@ -323,7 +357,7 @@ func (n *netmon) delInterfaceCLI(iface grpc.Interface) error {
 	return n.execKataCmd(kataCLIDelIfaceCmd)
 }
 
-func (n *netmon) updateRoutesCLI(routes []grpc.Route) error {
+func (n *netmon) updateRoutesCLI(routes []Route) error {
 	fmt.Printf("%s %s %+v\n", n.runtimePath, kataCLIUpdtRoutesCmd, routes)
 
 	if err := n.storeDataToSend(routes); err != nil {
@@ -340,7 +374,7 @@ func (n *netmon) updateRoutes() error {
 		return err
 	}
 
-	// Translate them into grpc.Route structures.
+	// Translate them into Route structures.
 	routes := convertRoutes(netlinkRoutes)
 
 	// Update the routes through the Kata CLI.
