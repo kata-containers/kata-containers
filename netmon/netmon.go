@@ -60,8 +60,7 @@ type Route struct {
 }
 
 const (
-	netmonName    = "kata-netmon"
-	netmonVersion = "0.0.1"
+	netmonName = "kata-netmon"
 
 	kataCmd              = "kata-network"
 	kataCLIAddIfaceCmd   = "add-iface"
@@ -82,6 +81,9 @@ const (
 	sharedFile      = "shared.json"
 	storageFilePerm = os.FileMode(0640)
 )
+
+// version is the netmon version. This variable is populated at build time.
+var version = "unknown"
 
 type netmonParams struct {
 	sandboxID   string
@@ -110,7 +112,7 @@ type netmon struct {
 var netmonLog = logrus.New()
 
 func printVersion() {
-	fmt.Printf("%s version %s\n", netmonName, netmonVersion)
+	fmt.Printf("%s version %s\n", netmonName, version)
 }
 
 const componentDescription = `is a network monitoring process that is intended to be started in the
