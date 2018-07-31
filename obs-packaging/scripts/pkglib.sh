@@ -316,10 +316,22 @@ function get_obs_pkg_release() {
 	out=$(osc ${APIURL} -q co "${obs_pkg_name}" -o "${repo_dir}") || die "failed to checkout:$out"
 
 	spec_file=$(find "${repo_dir}" -maxdepth 1 -type f -name '*.spec' | head -1)
+	# Find in specfile in Release: XX field.
 	release=$(grep -oP  'Release:\s+[0-9]+' "${spec_file}"  | grep -oP '[0-9]+')
 
 	if [ -z "${release}" ]; then
+		# Not release number found find in "%define release XX"
 		release=$(grep -oP  '%define\s+release\s+[0-9]+' "${spec_file}"  | grep -oP '[0-9]+')
+	fi
+
+	release_file=$(find "${repo_dir}" -maxdepth 1 -type f -name 'pkg-release')
+	if [ -z "${release}" ] && [ -f "${release_file}" ]; then
+		# Release still not found check pkg-release file
+		release=$(grep -oP '[0-9]+' ${release_file})
+	fi
+	if [ -z "${release}" ]; then
+		# Not release number found, this is a new repository.
+		release=1
 	fi
 
 	rm -r "${repo_dir}"
