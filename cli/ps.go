@@ -48,6 +48,9 @@ func ps(containerID, format string, args []string) error {
 		return fmt.Errorf("Missing container ID")
 	}
 
+	kataLog = kataLog.WithField("container", containerID)
+	setExternalLoggers(kataLog)
+
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	status, sandboxID, err := getExistingContainerInfo(containerID)
 	if err != nil {
