@@ -9,7 +9,7 @@ FROM ubuntu
 LABEL DOCKERFILE_VERSION="1.0"
 
 # Version of nuttcp
-ARG NUTTCP_VERSION="7.3.2.c"
+ARG NUTTCP_VERSION="7.3.2"
 
 # Install iperf
 RUN apt-get update && \
@@ -20,7 +20,7 @@ RUN apt-get update && \
 
 # Install nuttcp (Network performance measurement tool)
 RUN cd $HOME && \
-    curl -OkL "http://nuttcp.net/nuttcp/beta/nuttcp-${NUTTCP_VERSION}" && \
-    gcc nuttcp-${NUTTCP_VERSION} -o nuttcp
+    curl -OkL "http://nuttcp.net/nuttcp/beta/nuttcp-${NUTTCP_VERSION}.c" && \
+    gcc nuttcp-${NUTTCP_VERSION}.c -o nuttcp
 
 CMD ["/bin/bash"]

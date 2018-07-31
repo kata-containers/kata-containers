@@ -84,7 +84,6 @@ function save_results {
 	local -a results
 	read -a results <<< ${result_line%$'\r'}
 
-	# 6, 7, 16, "%"
 	local total_bandwidth=${results[6]}
 	local total_bandwidth_units=${results[7]}
 	local total_loss=${results[16]}
