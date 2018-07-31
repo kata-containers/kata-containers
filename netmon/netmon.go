@@ -10,12 +10,16 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log/syslog"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/sirupsen/logrus"
+	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
@@ -83,6 +87,7 @@ type netmonParams struct {
 	sandboxID   string
 	runtimePath string
 	debug       bool
+	logLevel    string
 }
 
 type netmon struct {
@@ -101,6 +106,8 @@ type netmon struct {
 
 	netHandler *netlink.Handle
 }
+
+var netmonLog = logrus.New()
 
 func printVersion() {
 	fmt.Printf("%s version %s\n", netmonName, netmonVersion)
@@ -129,6 +136,8 @@ func parseOptions() netmonParams {
 	flag.BoolVar(&version, "version", false, "")
 	flag.StringVar(&params.sandboxID, "s", "", "sandbox id (required)")
 	flag.StringVar(&params.runtimePath, "r", "", "runtime path (required)")
+	flag.StringVar(&params.logLevel, "log", "warn",
+		"log messages above specified level: debug, warn, error, fatal or panic")
 
 	flag.Parse()
 
@@ -190,7 +199,45 @@ func (n *netmon) cleanup() {
 	close(n.rtDoneCh)
 }
 
-func initLogs() error {
+func (n *netmon) logger() *logrus.Entry {
+	fields := logrus.Fields{
+		"name":   netmonName,
+		"pid":    os.Getpid(),
+		"source": "netmon",
+	}
+
+	if n.sandboxID != "" {
+		fields["sandbox"] = n.sandboxID
+	}
+
+	return netmonLog.WithFields(fields)
+}
+
+func (n *netmon) setupLogger() error {
+	level, err := logrus.ParseLevel(n.logLevel)
+	if err != nil {
+		return err
+	}
+
+	netmonLog.SetLevel(level)
+
+	netmonLog.Formatter = &logrus.TextFormatter{TimestampFormat: time.RFC3339Nano}
+
+	hook, err := lSyslog.NewSyslogHook("", "", syslog.LOG_INFO|syslog.LOG_USER, netmonName)
+	if err != nil {
+		return err
+	}
+
+	netmonLog.AddHook(hook)
+
+	announceFields := logrus.Fields{
+		"runtime-path": n.runtimePath,
+		"debug":        n.debug,
+		"log-level":    n.logLevel,
+	}
+
+	n.logger().WithFields(announceFields).Info("announce")
+
 	return nil
 }
 
@@ -207,7 +254,7 @@ func (n *netmon) listenNetlinkEvents() error {
 // describe an interface and its associated IP addresses.
 func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) Interface {
 	if linkAttrs == nil {
-		fmt.Printf("Link attributes are nil")
+		netmonLog.Warn("Link attributes are nil")
 		return Interface{}
 	}
 
@@ -229,13 +276,17 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) Interf
 		ipAddrs = append(ipAddrs, ipAddr)
 	}
 
-	return Interface{
+	iface := Interface{
 		Device:      linkAttrs.Name,
 		Name:        linkAttrs.Name,
 		IPAddresses: ipAddrs,
 		Mtu:         uint64(linkAttrs.MTU),
 		HwAddr:      linkAttrs.HardwareAddr.String(),
 	}
+
+	netmonLog.WithField("interface", iface).Debug("Interface converted")
+
+	return iface
 }
 
 // convertRoutes converts a list of routes as defined by netlink package,
@@ -248,18 +299,26 @@ func convertRoutes(netRoutes []netlink.Route) []Route {
 	// by Kata yet.
 	for _, netRoute := range netRoutes {
 		dst := ""
-		if netRoute.Dst != nil && netRoute.Dst.IP.To4() != nil {
-			dst = netRoute.Dst.IP.String()
+		if netRoute.Dst != nil {
+			if netRoute.Dst.IP.To4() != nil {
+				dst = netRoute.Dst.IP.String()
+			} else {
+				netmonLog.WithField("destination", netRoute.Dst.IP.String()).Warn("Not IPv4 format")
+			}
 		}
 
 		src := ""
 		if netRoute.Src.To4() != nil {
 			src = netRoute.Src.String()
+		} else {
+			netmonLog.WithField("source", netRoute.Src.String()).Warn("Not IPv4 format")
 		}
 
 		gw := ""
 		if netRoute.Gw.To4() != nil {
 			gw = netRoute.Gw.String()
+		} else {
+			netmonLog.WithField("gateway", netRoute.Gw.String()).Warn("Not IPv4 format")
 		}
 
 		dev := ""
@@ -278,6 +337,8 @@ func convertRoutes(netRoutes []netlink.Route) []Route {
 
 		routes = append(routes, route)
 	}
+
+	netmonLog.WithField("routes", routes).Debug("Routes converted")
 
 	return routes
 }
@@ -305,6 +366,8 @@ func (n *netmon) scanNetwork() error {
 		n.netIfaces[linkAttrs.Index] = iface
 	}
 
+	n.logger().Debug("Network scanned")
+
 	return nil
 }
 
@@ -322,14 +385,13 @@ func (n *netmon) storeDataToSend(data interface{}) error {
 func (n *netmon) execKataCmd(subCmd string) error {
 	execCmd := exec.Command(n.runtimePath, kataCmd, subCmd, n.sandboxID, n.sharedFile)
 
+	n.logger().WithField("command", execCmd).Debug("Running runtime command")
+
 	// Make use of Run() to ensure the kata-runtime process has correctly
 	// terminated before to go further.
-	out, err := execCmd.Output()
-	if err != nil {
+	if err := execCmd.Run(); err != nil {
 		return err
 	}
-
-	fmt.Printf("COMMAND OUTPUT: %q\n", string(out))
 
 	// Remove the shared file after the command returned. At this point
 	// we know the content of the file is not going to be used anymore,
@@ -338,8 +400,6 @@ func (n *netmon) execKataCmd(subCmd string) error {
 }
 
 func (n *netmon) addInterfaceCLI(iface Interface) error {
-	fmt.Printf("%s %s %+v\n", n.runtimePath, kataCLIAddIfaceCmd, iface)
-
 	if err := n.storeDataToSend(iface); err != nil {
 		return err
 	}
@@ -348,8 +408,6 @@ func (n *netmon) addInterfaceCLI(iface Interface) error {
 }
 
 func (n *netmon) delInterfaceCLI(iface Interface) error {
-	fmt.Printf("%s %s %+v\n", n.runtimePath, kataCLIDelIfaceCmd, iface)
-
 	if err := n.storeDataToSend(iface); err != nil {
 		return err
 	}
@@ -358,8 +416,6 @@ func (n *netmon) delInterfaceCLI(iface Interface) error {
 }
 
 func (n *netmon) updateRoutesCLI(routes []Route) error {
-	fmt.Printf("%s %s %+v\n", n.runtimePath, kataCLIUpdtRoutesCmd, routes)
-
 	if err := n.storeDataToSend(routes); err != nil {
 		return err
 	}
@@ -382,12 +438,12 @@ func (n *netmon) updateRoutes() error {
 }
 
 func (n *netmon) handleRTMNewAddr(ev netlink.LinkUpdate) error {
-	fmt.Printf("handleRTMNewAddr: Interface update not supported\n")
+	n.logger().Debug("Interface update not supported")
 	return nil
 }
 
 func (n *netmon) handleRTMDelAddr(ev netlink.LinkUpdate) error {
-	fmt.Printf("handleRTMDelAddr: Interface update not supported\n")
+	n.logger().Debug("Interface update not supported")
 	return nil
 }
 
@@ -400,21 +456,21 @@ func (n *netmon) handleRTMNewLink(ev netlink.LinkUpdate) error {
 
 	linkAttrs := ev.Link.Attrs()
 	if linkAttrs == nil {
-		fmt.Printf("The link attributes are nil\n")
+		n.logger().Warn("The link attributes are nil")
 		return nil
 	}
 
 	// First, ignore if the interface name contains "kata". This way we
 	// are preventing from adding interfaces created by Kata Containers.
 	if strings.HasSuffix(linkAttrs.Name, kataSuffix) {
-		fmt.Printf("Ignore the interface %s because found %q\n",
+		n.logger().Debugf("Ignore the interface %s because found %q",
 			linkAttrs.Name, kataSuffix)
 		return nil
 	}
 
 	// Check if the interface exist in the internal list.
 	if _, exist := n.netIfaces[int(ev.Index)]; exist {
-		fmt.Printf("Ignoring interface %s because already exist\n",
+		n.logger().Debugf("Ignoring interface %s because already exist",
 			linkAttrs.Name)
 		return nil
 	}
@@ -422,7 +478,7 @@ func (n *netmon) handleRTMNewLink(ev netlink.LinkUpdate) error {
 	// Now, check if the interface has been enabled to UP and RUNNING.
 	if (ev.Flags&unix.IFF_UP) != unix.IFF_UP ||
 		(ev.Flags&unix.IFF_RUNNING) != unix.IFF_RUNNING {
-		fmt.Printf("Ignore the interface %s because not UP and RUNNING\n",
+		n.logger().Debugf("Ignore the interface %s because not UP and RUNNING",
 			linkAttrs.Name)
 		return nil
 	}
@@ -453,14 +509,14 @@ func (n *netmon) handleRTMDelLink(ev netlink.LinkUpdate) error {
 	// list of interfaces. Otherwise, the deletion will be ignored.
 	linkAttrs := ev.Link.Attrs()
 	if linkAttrs == nil {
-		fmt.Printf("Link attributes are nil\n")
+		n.logger().Warn("Link attributes are nil")
 		return nil
 	}
 
 	// First, ignore if the interface name contains "kata". This way we
 	// are preventing from deleting interfaces created by Kata Containers.
 	if strings.Contains(linkAttrs.Name, kataSuffix) {
-		fmt.Printf("Ignore the interface %s because found %q\n",
+		n.logger().Debugf("Ignore the interface %s because found %q",
 			linkAttrs.Name, kataSuffix)
 		return nil
 	}
@@ -468,7 +524,7 @@ func (n *netmon) handleRTMDelLink(ev netlink.LinkUpdate) error {
 	// Check if the interface exist in the internal list.
 	iface, exist := n.netIfaces[int(ev.Index)]
 	if !exist {
-		fmt.Printf("Ignoring interface %s because not found\n",
+		n.logger().Debugf("Ignoring interface %s because not found",
 			linkAttrs.Name)
 		return nil
 	}
@@ -488,7 +544,7 @@ func (n *netmon) handleRTMNewRoute(ev netlink.RouteUpdate) error {
 	// Add the route through updateRoutes(), only if the route refer to an
 	// interface that already exists in the internal list of interfaces.
 	if _, exist := n.netIfaces[ev.Route.LinkIndex]; !exist {
-		fmt.Printf("Ignoring route %+v since interface %d not found\n",
+		n.logger().Debugf("Ignoring route %+v since interface %d not found",
 			ev.Route, ev.Route.LinkIndex)
 		return nil
 	}
@@ -503,42 +559,46 @@ func (n *netmon) handleRTMDelRoute(ev netlink.RouteUpdate) error {
 }
 
 func (n *netmon) handleLinkEvent(ev netlink.LinkUpdate) error {
+	n.logger().Debug("handleLinkEvent: netlink event received")
+
 	switch ev.Header.Type {
 	case unix.NLMSG_DONE:
-		fmt.Printf("netlink msg type: NLMSG_DONE\n")
+		n.logger().Debug("NLMSG_DONE")
 		return nil
 	case unix.NLMSG_ERROR:
-		fmt.Printf("netlink msg type: NLMSG_ERROR\n")
+		n.logger().Error("NLMSG_ERROR")
 		return fmt.Errorf("Error while listening on netlink socket")
 	case unix.RTM_NEWADDR:
-		fmt.Printf("netlink msg type: RTM_NEWADDR\n")
+		n.logger().Debug("RTM_NEWADDR")
 		return n.handleRTMNewAddr(ev)
 	case unix.RTM_DELADDR:
-		fmt.Printf("handle_netlink_message: RTM_DELADDR\n")
+		n.logger().Debug("RTM_DELADDR")
 		return n.handleRTMDelAddr(ev)
 	case unix.RTM_NEWLINK:
-		fmt.Printf("handle_netlink_message: RTM_NEWLINK\n")
+		n.logger().Debug("RTM_NEWLINK")
 		return n.handleRTMNewLink(ev)
 	case unix.RTM_DELLINK:
-		fmt.Printf("handle_netlink_message: RTM_DELLINK\n")
+		n.logger().Debug("RTM_DELLINK")
 		return n.handleRTMDelLink(ev)
 	default:
-		fmt.Printf("Unknown msg type %v\n", ev.Header.Type)
+		n.logger().Warnf("Unknown msg type %v", ev.Header.Type)
 	}
 
 	return nil
 }
 
 func (n *netmon) handleRouteEvent(ev netlink.RouteUpdate) error {
+	n.logger().Debug("handleRouteEvent: netlink event received")
+
 	switch ev.Type {
 	case unix.RTM_NEWROUTE:
-		fmt.Printf("handle_netlink_message: RTM_NEWROUTE\n")
+		n.logger().Debug("RTM_NEWROUTE")
 		return n.handleRTMNewRoute(ev)
 	case unix.RTM_DELROUTE:
-		fmt.Printf("handle_netlink_message: RTM_DELROUTE\n")
+		n.logger().Debug("RTM_DELROUTE")
 		return n.handleRTMDelRoute(ev)
 	default:
-		fmt.Printf("Unknown msg type %v\n", ev.Type)
+		n.logger().Warnf("Unknown msg type %v", ev.Type)
 	}
 
 	return nil
@@ -549,12 +609,10 @@ func (n *netmon) handleEvents() (err error) {
 		select {
 		case ev := <-n.linkUpdateCh:
 			if err = n.handleLinkEvent(ev); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: handleLinkEvent() %v", err)
 				return err
 			}
 		case ev := <-n.rtUpdateCh:
 			if err = n.handleRouteEvent(ev); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: handleRouteEvent() %v", err)
 				return err
 			}
 		}
@@ -568,32 +626,32 @@ func main() {
 	// Create netmon handler.
 	n, err := newNetmon(params)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: newNetmon() %v", err)
+		netmonLog.WithError(err).Fatal("newNetmon()")
 		os.Exit(1)
 	}
 	defer n.cleanup()
 
-	// Init logging.
-	if err := initLogs(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: initLogs() %v", err)
+	// Init logger.
+	if err := n.setupLogger(); err != nil {
+		netmonLog.WithError(err).Fatal("setupLogger()")
 		os.Exit(1)
 	}
 
 	// Scan the current interfaces.
 	if err := n.scanNetwork(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: scanNetwork() %v", err)
+		n.logger().WithError(err).Fatal("scanNetwork()")
 		os.Exit(1)
 	}
 
 	// Subscribe to the link listener.
 	if err := n.listenNetlinkEvents(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: listenNetlinkEvents() %v", err)
+		n.logger().WithError(err).Fatal("listenNetlinkEvents()")
 		os.Exit(1)
 	}
 
 	// Go into the main loop.
 	if err := n.handleEvents(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: handleEvents() %v", err)
+		n.logger().WithError(err).Fatal("handleEvents()")
 		os.Exit(1)
 	}
 }
