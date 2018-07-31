@@ -1,6 +1,6 @@
 export GOPATH=${GOPATH:-${HOME}/go}
 readonly kata_arch_sh="${GOPATH}/src/github.com/kata-containers/tests/.ci/kata-arch.sh"
-hub_bin="${tmp_dir}/hub-bin"
+hub_bin="hub-bin"
 
 get_kata_arch(){
 	go get -u github.com/kata-containers/tests || true
@@ -69,6 +69,8 @@ build_hub() {
 	if cmd=$(command -v hub); then
 		hub_bin="${cmd}"
 		return 
+	else
+		hub_bin="${tmp_dir:-/tmp}/hub-bin"
 	fi
 
 	local hub_repo="github.com/github/hub"
