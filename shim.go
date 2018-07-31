@@ -93,7 +93,8 @@ func (s *shim) proxyStdio(wg *sync.WaitGroup, terminal bool) {
 	}
 }
 
-func (s *shim) forwardAllSignals() chan os.Signal {
+// handleSignals performs all signal handling.
+func (s *shim) handleSignals() chan os.Signal {
 	sigc := make(chan os.Signal, sigChanSize)
 	// handle all signals for the process.
 	signal.Notify(sigc)

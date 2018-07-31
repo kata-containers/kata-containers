@@ -144,7 +144,7 @@ func realMain() {
 	shim.monitorTtySize(os.Stdin)
 
 	// signals
-	sigc := shim.forwardAllSignals()
+	sigc := shim.handleSignals()
 	defer signal.Stop(sigc)
 
 	// This wait call cannot be deferred and has to wait for every
