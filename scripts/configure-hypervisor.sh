@@ -254,7 +254,7 @@ generate_qemu_options()
 	case "$arch" in
 		aarch64) ;;
 		x86_64)  qemu_options+=(size:--disable-tcg);;
-		ppc64le) qemu_options+=(size:--disable-tcg);;
+		ppc64le) ;;
         esac
 
 	# SECURITY: Don't build a static binary (lowers security)
@@ -267,13 +267,12 @@ generate_qemu_options()
 		qemu_options+=(misc:--static)
 	fi
 
-	# Not required as "-uuid ..." is always passed to the qemu binary
-	qemu_options+=(size:--disable-uuid)
-
-	# Disable debug
+	# Disable debug and "-uuid ..." is always passed to the qemu binary so not required.
 	case "$arch" in
-		aarch64) ;;
+		aarch64) qemu_options+=(size:--disable-uuid)
+			;;
 		x86_64)
+			qemu_options+=(size:--disable-uuid)
 			qemu_options+=(size:--disable-debug-tcg)
 			qemu_options+=(size:--disable-tcg-interpreter)
 			;;
@@ -338,7 +337,11 @@ generate_qemu_options()
 	# Other options
 
 	# 64-bit only
-	qemu_options+=(arch:"--target-list=${arch}-softmmu")
+	if [ "${arch}" = "ppc64le" ]; then
+		qemu_options+=(arch:"--target-list=ppc64-softmmu")
+	else
+		qemu_options+=(arch:"--target-list=${arch}-softmmu")
+	fi
 
 	_qemu_cflags=""
 
