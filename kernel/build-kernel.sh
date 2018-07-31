@@ -203,7 +203,7 @@ build_kernel() {
 	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
 	make -j $(nproc) ARCH="${arch_target}"
-	[ -e "arch/${arch_target}/boot/bzImage" ] || [ -e "arch/${arch_target}/boot/Image.gz" ]
+	[ "$arch_target" != "powerpc" ] && ([ -e "arch/${arch_target}/boot/bzImage" ] || [ -e "arch/${arch_target}/boot/Image.gz" ])
 	[ -e "vmlinux" ]
 	popd >>/dev/null
 }
@@ -223,11 +223,16 @@ install_kata() {
 		bzImage="arch/${arch_target}/boot/bzImage"
 	elif [ -e "arch/${arch_target}/boot/Image.gz" ]; then
 		bzImage="arch/${arch_target}/boot/Image.gz"
-	else
-		die "failed to find bzImage"
+	elif [ "${arch_target}" != "powerpc" ]; then
+		die "failed to find image"
 	fi
 
-	install --mode 0644 -D "${bzImage}" "${install_path}/${vmlinuz}"
+	if [ "${arch_target}" = "powerpc" ]; then
+		install --mode 0644 -D "vmlinux" "${install_path}/${vmlinuz}"
+	else
+		install --mode 0644 -D "${bzImage}" "${install_path}/${vmlinuz}"
+	fi
+
 	install --mode 0644 -D "vmlinux" "${install_path}/${vmlinux}"
 	install --mode 0644 -D ./.config "${install_path}/config-${kernel_version}"
 	ln -sf "${vmlinuz}" "${install_path}/vmlinuz.container"

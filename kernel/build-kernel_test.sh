@@ -58,7 +58,7 @@ build_kernel() {
 
 	echo "Build default kernel"
 	out=$(${build_kernel_sh} build 2>&1)
-	[ -e "${kernel_dir}/arch/$(uname -m)/boot/bzImage" ] || FAIL "bzImage not found"
+	[ $("${kata_arch_sh}" -d) != "ppc64le" ] && ([ -e "${kernel_dir}/arch/$(uname -m)/boot/bzImage" ] || FAIL "bzImage not found")
 	[ -e "${kernel_dir}/vmlinux" ] || FAIL "vmlinux not found"
 	OK
 
