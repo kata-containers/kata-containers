@@ -20,7 +20,7 @@ setup() {
 }
 
 @test "Check UTS and IPC namespaces" {
-	wait_time=30
+	wait_time=120
 	sleep_time=5
 
 	# Run the first pod

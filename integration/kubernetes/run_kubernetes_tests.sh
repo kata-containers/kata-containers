@@ -35,5 +35,6 @@ bats nginx.bats
 bats k8s-uts+ipc-ns.bats
 bats k8s-pid-ns.bats
 bats k8s-cpu-ns.bats
+bats k8s-memory.bats
 ./cleanup_env.sh
 popd

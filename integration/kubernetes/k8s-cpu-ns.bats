@@ -20,7 +20,7 @@ setup() {
 }
 
 @test "Check CPU constraints" {
-	wait_time=30
+	wait_time=120
 	sleep_time=5
 
 	# Create the pod
