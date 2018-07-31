@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/powerpc 4.14.48 Kernel Configuration
+# Linux/powerpc 4.14.49 Kernel Configuration
 #
 CONFIG_PPC64=y
 
@@ -2779,7 +2779,7 @@ CONFIG_FRAME_WARN=2048
 # CONFIG_PAGE_OWNER is not set
 CONFIG_DEBUG_FS=y
 # CONFIG_HEADERS_CHECK is not set
-# CONFIG_DEBUG_SECTION_MISMATCH is not set
+CONFIG_DEBUG_SECTION_MISMATCH=y
 CONFIG_SECTION_MISMATCH_WARN_ONLY=y
 # CONFIG_DEBUG_FORCE_WEAK_PER_CPU is not set
 CONFIG_MAGIC_SYSRQ=y
