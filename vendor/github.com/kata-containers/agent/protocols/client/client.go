@@ -37,6 +37,15 @@ type AgentClient struct {
 	conn *grpc.ClientConn
 }
 
+type yamuxSessionStream struct {
+	net.Conn
+	session *yamux.Session
+}
+
+func (y *yamuxSessionStream) Close() error {
+	return y.session.Close()
+}
+
 type dialer func(string, time.Duration) (net.Conn, error)
 
 // NewAgentClient creates a new agent gRPC client and handles both unix and vsock addresses.
@@ -147,7 +156,10 @@ func agentDialer(addr *url.URL, enableYamux bool) dialer {
 		}()
 
 		var session *yamux.Session
-		session, err = yamux.Client(conn, nil)
+		sessionConfig := yamux.DefaultConfig()
+		// Disable keepAlive since we don't know how much time a container can be paused
+		sessionConfig.EnableKeepAlive = false
+		session, err = yamux.Client(conn, sessionConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -158,7 +170,12 @@ func agentDialer(addr *url.URL, enableYamux bool) dialer {
 			return nil, err
 		}
 
-		return stream, nil
+		y := &yamuxSessionStream{
+			Conn:    stream.(net.Conn),
+			session: session,
+		}
+
+		return y, nil
 	}
 }
 
