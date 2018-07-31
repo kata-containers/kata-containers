@@ -20,6 +20,8 @@ readonly URL_RAW_FILE="https://raw.githubusercontent.com/${OWNER}"
 #The runtime version is used as reference of latest release
 readonly kata_version=$(curl -Ls "${URL_RAW_FILE}/runtime/${commit}/VERSION" | grep -v -P "^#")
 
+source "${script_dir}/../scripts/lib.sh"
+
 function usage() {
 
 	cat <<EOT
@@ -103,14 +105,29 @@ tag_repos() {
 
 push_tags() {
 	info "Pushing tags to repos"
+	build_hub
 	for repo in "${repos[@]}"; do
 		pushd "${repo}" >> /dev/null
 		tag="$kata_version"
 		[[ "packaging" == "${repo}" ]] && tag="${tag}-kernel-config"
-		info "Creating tag ${tag} for ${repo}"
+		info "Push tag ${tag} for ${repo}"
 		git push origin "${tag}"
+		create_github_release "${PWD}" "${tag}"
 		popd >> /dev/null
 	done
+}
+
+create_github_release(){
+	repo_dir=${1:-}
+	tag=${2:-}
+	[  -d "${repo_dir}" ] || die "No repository directory"
+	[  -n "${tag}" ] || die "No repository directory"
+	if ! "${hub_bin}" release | grep "${tag}"; then
+		info "Creating Github release"
+		"${hub_bin }" -C "${repo_dir}" release create -m "${PROJECT} ${tag}" "${tag}"
+	else
+		info "Github release already created"
+	fi
 }
 
 while getopts "hp" opt; do
