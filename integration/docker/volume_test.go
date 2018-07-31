@@ -146,4 +146,37 @@ var _ = Describe("docker volume", func() {
 			Expect(ExistDockerContainer(id)).NotTo(BeTrue())
 		})
 	})
+
+	Context("remove bind-mount source before container exits", func() {
+		It("should exit cleanly without leaking process", func() {
+			file, err := ioutil.TempFile(os.TempDir(), fileTest)
+			Expect(err).ToNot(HaveOccurred())
+			err = file.Close()
+			Expect(err).ToNot(HaveOccurred())
+
+			testFile := file.Name()
+			Expect(testFile).To(BeAnExistingFile())
+
+			args = []string{"--name", id, "-d", "-v", testFile + ":/volume_file", Image, "top"}
+			stdout, _, exitCode = dockerRun(args...)
+			Expect(exitCode).To(Equal(0))
+
+			// remove the test temp file before stop the container
+			os.Remove(testFile)
+			Expect(testFile).NotTo(BeAnExistingFile())
+
+			// remove container
+			Expect(RemoveDockerContainer(id)).To(BeTrue())
+			Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+
+			// check not kata-proxy or kata-shim left
+			psArgs := []string{"-ef"}
+			psCmd := tests.NewCommand("ps", psArgs...)
+			stdout, _, exitCode := psCmd.Run()
+			Expect(exitCode).To(Equal(0))
+			Expect(stdout).NotTo(ContainSubstring("kata-proxy"))
+			Expect(stdout).NotTo(ContainSubstring("kata-shim"))
+			Expect(stdout).NotTo(ContainSubstring("qemu"))
+		})
+	})
 })
