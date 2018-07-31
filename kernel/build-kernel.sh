@@ -34,7 +34,7 @@ readonly patches_repo_dir="${GOPATH}/src/${patches_repo}"
 # Default path to search patches to apply to kernel
 readonly default_patches_dir="${patches_repo_dir}/kernel/patches/"
 # Default path to search config for kata
-readonly default_kernel_config_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs/"
+readonly default_kernel_config_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs"
 #Path to kernel directory
 kernel_path=""
 #
