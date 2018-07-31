@@ -10,6 +10,9 @@ TIMEOUT := 60
 # union for 'make test'
 UNION := functional docker crio docker-compose openshift kubernetes swarm cri-containerd
 
+# skipped test suites for docker integration tests
+SKIP :=
+
 # get arch
 ARCH := $(shell bash -c '.ci/kata-arch.sh -d')
 
@@ -43,7 +46,7 @@ docker: ginkgo
 ifeq ($(RUNTIME),)
 	$(error RUNTIME is not set)
 else
-	./ginkgo -v -focus "${FOCUS}" ./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+	./ginkgo -v -focus "${FOCUS}" -skip "${SKIP}" ./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 endif
 
 crio:
@@ -87,7 +90,7 @@ check: checkcommits log-parser
 	docker-compose \
 	functional \
 	ginkgo \
-	integration \
+	docker \
 	kubernetes \
 	log-parser \
 	openshift \
