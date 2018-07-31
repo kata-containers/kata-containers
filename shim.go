@@ -23,9 +23,8 @@ import (
 const sigChanSize = 2048
 
 var sigIgnored = map[syscall.Signal]bool{
-	syscall.SIGCHLD:  true,
-	syscall.SIGPIPE:  true,
-	syscall.SIGWINCH: true,
+	syscall.SIGCHLD: true,
+	syscall.SIGPIPE: true,
 }
 
 type shim struct {
@@ -94,7 +93,9 @@ func (s *shim) proxyStdio(wg *sync.WaitGroup, terminal bool) {
 }
 
 // handleSignals performs all signal handling.
-func (s *shim) handleSignals() chan os.Signal {
+//
+// The tty parameter is specific to SIGWINCH handling.
+func (s *shim) handleSignals(tty *os.File) chan os.Signal {
 	sigc := make(chan os.Signal, sigChanSize)
 	// handle all signals for the process.
 	signal.Notify(sigc)
@@ -114,7 +115,15 @@ func (s *shim) handleSignals() chan os.Signal {
 				continue
 			}
 
-			if debug && nonFatalSignal(sysSig) {
+			if sysSig == syscall.SIGWINCH {
+				s.resizeTty(tty)
+
+				// Don't actually send the signal to the agent
+				// in the container since the resize call will
+				// request (via the agent) that the kernel send
+				// the signal to the real workload.
+				continue
+			} else if debug && nonFatalSignal(sysSig) {
 				logger().WithField("signal", sig).Debug("handling signal")
 				backtrace()
 			}
@@ -159,17 +168,6 @@ func (s *shim) resizeTty(fromTty *os.File) error {
 	}
 
 	return err
-}
-
-func (s *shim) monitorTtySize(tty *os.File) {
-	s.resizeTty(tty)
-	sigchan := make(chan os.Signal, 1)
-	signal.Notify(sigchan, syscall.SIGWINCH)
-	go func() {
-		for range sigchan {
-			s.resizeTty(tty)
-		}
-	}()
 }
 
 func (s *shim) wait() (int32, error) {

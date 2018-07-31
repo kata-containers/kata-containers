@@ -141,10 +141,9 @@ func realMain() {
 		}
 		defer restoreTerminal(int(os.Stdin.Fd()), termios)
 	}
-	shim.monitorTtySize(os.Stdin)
 
 	// signals
-	sigc := shim.handleSignals()
+	sigc := shim.handleSignals(os.Stdin)
 	defer signal.Stop(sigc)
 
 	// This wait call cannot be deferred and has to wait for every
