@@ -12,16 +12,17 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 )
 
-var devLogger = logrus.FieldLogger(logrus.New())
+var devLogger = logrus.WithField("subsystem", "device")
 
 // SetLogger sets the logger for device api package.
-func SetLogger(logger logrus.FieldLogger) {
-	devLogger = logger
+func SetLogger(logger *logrus.Entry) {
+	fields := devLogger.Data
+	devLogger = logger.WithFields(fields)
 }
 
 // DeviceLogger returns logger for device management
 func DeviceLogger() *logrus.Entry {
-	return devLogger.WithField("subsystem", "device")
+	return devLogger
 }
 
 // DeviceReceiver is an interface used for accepting devices

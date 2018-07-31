@@ -91,8 +91,12 @@ var signals = map[string]syscall.Signal{
 }
 
 func kill(containerID, signal string, all bool) error {
+	kataLog = kataLog.WithField("container", containerID)
+	setExternalLoggers(kataLog)
+
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	status, sandboxID, err := getExistingContainerInfo(containerID)
+
 	if err != nil {
 		return err
 	}

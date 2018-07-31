@@ -19,16 +19,13 @@ func init() {
 	runtime.LockOSThread()
 }
 
-var virtLog = logrus.FieldLogger(logrus.New())
+var virtLog = logrus.WithField("source", "virtcontainers")
 
 // SetLogger sets the logger for virtcontainers package.
-func SetLogger(logger logrus.FieldLogger) {
-	fields := logrus.Fields{
-		"source": "virtcontainers",
-		"arch":   runtime.GOARCH,
-	}
-
+func SetLogger(logger *logrus.Entry) {
+	fields := virtLog.Data
 	virtLog = logger.WithFields(fields)
+
 	deviceApi.SetLogger(virtLog)
 }
 

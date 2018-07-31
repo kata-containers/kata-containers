@@ -41,11 +41,16 @@ var startCLICommand = cli.Command{
 }
 
 func start(containerID string) (vc.VCSandbox, error) {
+	kataLog = kataLog.WithField("container", containerID)
+	setExternalLoggers(kataLog)
+
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	status, sandboxID, err := getExistingContainerInfo(containerID)
 	if err != nil {
 		return nil, err
 	}
+
+	containerID = status.ID
 
 	kataLog = kataLog.WithFields(logrus.Fields{
 		"container": containerID,
@@ -53,8 +58,6 @@ func start(containerID string) (vc.VCSandbox, error) {
 	})
 
 	setExternalLoggers(kataLog)
-
-	containerID = status.ID
 
 	containerType, err := oci.GetContainerType(status.Annotations)
 	if err != nil {

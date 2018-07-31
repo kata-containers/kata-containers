@@ -29,7 +29,7 @@ import (
 const mockErrorPrefix = "vcmock forced failure"
 
 // SetLogger implements the VC function of the same name.
-func (m *VCMock) SetLogger(logger logrus.FieldLogger) {
+func (m *VCMock) SetLogger(logger *logrus.Entry) {
 	if m.SetLoggerFunc != nil {
 		m.SetLoggerFunc(logger)
 	}

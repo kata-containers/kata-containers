@@ -16,7 +16,6 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 
@@ -184,16 +183,16 @@ func generateExecParams(context *cli.Context, specProcess *oci.CompatOCIProcess)
 
 func execute(context *cli.Context) error {
 	containerID := context.Args().First()
+
+	kataLog = kataLog.WithField("container", containerID)
+	setExternalLoggers(kataLog)
+
 	status, sandboxID, err := getExistingContainerInfo(containerID)
 	if err != nil {
 		return err
 	}
 
-	kataLog = kataLog.WithFields(logrus.Fields{
-		"container": containerID,
-		"sandbox":   sandboxID,
-	})
-
+	kataLog = kataLog.WithField("sandbox", sandboxID)
 	setExternalLoggers(kataLog)
 
 	// Retrieve OCI spec configuration.
@@ -208,6 +207,10 @@ func execute(context *cli.Context) error {
 	}
 
 	params.cID = status.ID
+	containerID = params.cID
+
+	kataLog = kataLog.WithField("container", containerID)
+	setExternalLoggers(kataLog)
 
 	// container MUST be ready or running.
 	if status.State.State != vc.StateReady &&

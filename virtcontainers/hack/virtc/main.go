@@ -19,7 +19,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 )
 
-var virtcLog = logrus.New()
+var virtcLog *logrus.Entry
 
 var listFormat = "%s\t%s\t%s\t%s\n"
 var statusFormat = "%s\t%s\n"
@@ -915,14 +915,14 @@ func main() {
 			if err != nil {
 				return err
 			}
-			virtcLog.Out = f
+			virtcLog.Logger.Out = f
 		}
 
 		switch context.GlobalString("log-format") {
 		case "text":
 			// retain logrus's default.
 		case "json":
-			virtcLog.Formatter = new(logrus.JSONFormatter)
+			virtcLog.Logger.Formatter = new(logrus.JSONFormatter)
 		default:
 			return fmt.Errorf("unknown log-format %q", context.GlobalString("log-format"))
 		}
