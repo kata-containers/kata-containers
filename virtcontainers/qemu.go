@@ -25,9 +25,10 @@ import (
 )
 
 type qmpChannel struct {
-	ctx  context.Context
-	path string
-	qmp  *govmmQemu.QMP
+	ctx     context.Context
+	path    string
+	qmp     *govmmQemu.QMP
+	disconn chan struct{}
 }
 
 // CPUDevice represents a CPU device which was hot-added in a running VM
@@ -514,6 +515,7 @@ func (q *qemu) waitSandbox(timeout int) error {
 	cfg := govmmQemu.QMPConfig{Logger: newQMPLogger()}
 
 	var qmp *govmmQemu.QMP
+	var disconnectCh chan struct{}
 	var ver *govmmQemu.QMPVersion
 	var err error
 
@@ -521,7 +523,7 @@ func (q *qemu) waitSandbox(timeout int) error {
 	q.qmpShutdown()
 	timeStart := time.Now()
 	for {
-		disconnectCh := make(chan struct{})
+		disconnectCh = make(chan struct{})
 		qmp, ver, err = govmmQemu.QMPStart(q.qmpMonitorCh.ctx, q.qmpMonitorCh.path, cfg, disconnectCh)
 		if err == nil {
 			break
@@ -534,6 +536,7 @@ func (q *qemu) waitSandbox(timeout int) error {
 		time.Sleep(time.Duration(50) * time.Millisecond)
 	}
 	q.qmpMonitorCh.qmp = qmp
+	q.qmpMonitorCh.disconn = disconnectCh
 	defer q.qmpShutdown()
 
 	qemuMajorVersion = ver.Major
@@ -619,6 +622,7 @@ func (q *qemu) qmpSetup() error {
 		return err
 	}
 	q.qmpMonitorCh.qmp = qmp
+	q.qmpMonitorCh.disconn = disconnectCh
 
 	return nil
 }
@@ -626,7 +630,11 @@ func (q *qemu) qmpSetup() error {
 func (q *qemu) qmpShutdown() {
 	if q.qmpMonitorCh.qmp != nil {
 		q.qmpMonitorCh.qmp.Shutdown()
+		// wait on disconnected channel to be sure that the qmp channel has
+		// been closed cleanly.
+		<-q.qmpMonitorCh.disconn
 		q.qmpMonitorCh.qmp = nil
+		q.qmpMonitorCh.disconn = nil
 	}
 }
 
