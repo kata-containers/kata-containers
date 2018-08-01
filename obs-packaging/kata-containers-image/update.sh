@@ -11,7 +11,12 @@
 # Automation script to create specs to build kata-containers-image
 # Default image to build is the one specified in file versions.txt
 # located at the root of the repository.
-set -e
+
+[ -z "${DEBUG}" ] || set -o xtrace
+
+set -o errexit
+set -o nounset
+set -o pipefail
 
 source ../versions.txt
 source ../scripts/pkglib.sh
