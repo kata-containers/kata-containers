@@ -4,7 +4,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-set -e
+[ -z "${DEBUG}" ] || set -o xtrace
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
 
 script_dir=$(dirname "$0")
 #Note:Lets update qemu and the kernel first, they take longer to build.

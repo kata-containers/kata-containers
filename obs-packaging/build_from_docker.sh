@@ -4,9 +4,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
+[ -z "${DEBUG}" ] || set -o xtrace
 
-set -x
-set -e
+set -o errexit
+set -o nounset
+set -o pipefail
+
 
 script_dir=$( cd $( dirname "${BASH_SOURCE[0]}" ) && pwd )
 cache_dir=${PWD}/obs-cache

@@ -8,7 +8,11 @@
 # ex: ts=8 sw=4 sts=4 et filetype=sh
 #
 # Automation script to create specs to build kata-proxy
-set -e
+[ -z "${DEBUG}" ] || set -o xtrace
+
+set -o errexit
+set -o nounset
+set -o pipefail
 
 source ../versions.txt
 source ../scripts/pkglib.sh
