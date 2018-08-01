@@ -128,7 +128,7 @@ func TestNewAgentConfigFromHyperstartAgentType(t *testing.T) {
 }
 
 func TestNewAgentConfigFromKataAgentType(t *testing.T) {
-	agentConfig := KataAgentConfig{}
+	agentConfig := KataAgentConfig{UseVSock: true}
 
 	sandboxConfig := SandboxConfig{
 		AgentType:   KataContainersAgent,

@@ -68,6 +68,9 @@ const (
 	// SerialPortDev is the serial port device type.
 	serialPortDev
 
+	// vSockPCIDev is the vhost vsock PCI device type.
+	vSockPCIDev
+
 	// VFIODevice is VFIO device type
 	vfioDev
 
@@ -216,6 +219,9 @@ type HypervisorConfig struct {
 
 	// Msize9p is used as the msize for 9p shares
 	Msize9p uint32
+
+	// UseVSock use a vsock for agent communication
+	UseVSock bool
 
 	// BootToBeTemplate used to indicate if the VM is created to be a template VM
 	BootToBeTemplate bool
