@@ -78,8 +78,6 @@ PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/runtime}
 RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 ((RELEASE++))
 
-[ -n "$APIURL" ] && APIURL="-A ${APIURL}"
-
 set_versions "$kata_runtime_hash"
 
 replace_list=(
