@@ -99,9 +99,10 @@ build_dockerfile_image()
 {
 	local image="$1"
 	local dockerfile_path="$2"
+	local dockerfile_dir=${2%/*}
 
 	echo "docker building $image"
-	if ! docker build --label "$image" --tag "${image}" -< "$dockerfile_path"; then
+	if ! docker build --label "$image" --tag "${image}" -f "$dockerfile_path" "$dockerfile_dir"; then
 		die "Failed to docker build image $image"
 	fi
 }
