@@ -584,6 +584,7 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 		Hostname:     hostname,
 		Storages:     storages,
 		SandboxPidns: sandbox.sharePidNs,
+		SandboxId:    sandbox.id,
 	}
 
 	_, err = k.sendReq(req)
