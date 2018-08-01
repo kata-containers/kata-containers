@@ -24,6 +24,7 @@ func (p *kataProxy) consoleWatched() bool {
 
 // start is kataProxy start implementation for proxy interface.
 func (p *kataProxy) start(sandbox *Sandbox, params proxyParams) (int, string, error) {
+	sandbox.Logger().Info("Starting regular Kata proxy rather than built-in")
 	if sandbox.agent == nil {
 		return -1, "", fmt.Errorf("No agent")
 	}

@@ -20,6 +20,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -552,6 +553,52 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		t.Fatalf("Got %+v\n expecting %+v", config, expectedConfig)
 	}
 
+	// minimal config with vsock enabled
+	runtimeMinimalConfig = `
+	# Runtime configuration file
+	[hypervisor.qemu]
+	use_vsock = true
+
+	[proxy.kata]
+	path = "` + proxyPath + `"
+
+	[shim.kata]
+	path = "` + shimPath + `"
+
+	[agent.kata]
+`
+	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
+	orgVSockDevicePath := utils.VSockDevicePath
+	defer func() {
+		utils.VHostVSockDevicePath = orgVHostVSockDevicePath
+		utils.VSockDevicePath = orgVSockDevicePath
+	}()
+	utils.VHostVSockDevicePath = "/dev/null"
+	utils.VSockDevicePath = "/dev/null"
+
+	configPath = path.Join(dir, "runtime.toml")
+	err = createConfig(configPath, runtimeMinimalConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, config, err = loadConfiguration(configPath, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if config.ProxyType != vc.NoProxyType {
+		t.Fatalf("Proxy type must be NoProxy, got %+v", config.ProxyType)
+	}
+
+	if !reflect.DeepEqual(config.ProxyConfig, vc.ProxyConfig{}) {
+		t.Fatalf("Got %+v\n expecting %+v", config.ProxyConfig, vc.ProxyConfig{})
+	}
+
+	if config.HypervisorConfig.UseVSock != true {
+		t.Fatalf("use_vsock must be true, got %v", config.HypervisorConfig.UseVSock)
+	}
+
 	if err := os.Remove(configPath); err != nil {
 		t.Fatal(err)
 	}
@@ -570,6 +617,14 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	machineType := "machineType"
 	disableBlock := true
 	enableIOThreads := true
+	orgVSockDevicePath := utils.VSockDevicePath
+	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
+	defer func() {
+		utils.VSockDevicePath = orgVSockDevicePath
+		utils.VHostVSockDevicePath = orgVHostVSockDevicePath
+	}()
+	utils.VSockDevicePath = "/dev/abc/xyz"
+	utils.VHostVSockDevicePath = "/dev/abc/xyz"
 
 	hypervisor := hypervisor{
 		Path:                  hypervisorPath,
@@ -578,6 +633,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		MachineType:           machineType,
 		DisableBlockDeviceUse: disableBlock,
 		EnableIOThreads:       enableIOThreads,
+		UseVSock:              true,
 	}
 
 	files := []string{hypervisorPath, kernelPath, imagePath}
@@ -597,8 +653,17 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		}
 	}
 
-	// all paths exist now
+	// falling back to legacy serial port
 	config, err := newQemuHypervisorConfig(hypervisor)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	utils.VSockDevicePath = "/dev/null"
+	utils.VHostVSockDevicePath = "/dev/null"
+
+	// all paths exist now
+	config, err = newQemuHypervisorConfig(hypervisor)
 	if err != nil {
 		t.Fatal(err)
 	}

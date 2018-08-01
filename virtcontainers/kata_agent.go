@@ -47,25 +47,29 @@ var (
 	kataGuestSandboxDir   = "/run/kata-containers/sandbox/"
 	type9pFs              = "9p"
 	vsockSocketScheme     = "vsock"
-	kata9pDevType         = "9p"
-	kataBlkDevType        = "blk"
-	kataSCSIDevType       = "scsi"
-	sharedDir9pOptions    = []string{"trans=virtio,version=9p2000.L", "nodev"}
-	shmDir                = "shm"
-	kataEphemeralDevType  = "ephemeral"
-	ephemeralPath         = filepath.Join(kataGuestSandboxDir, kataEphemeralDevType)
+	// port numbers below 1024 are called privileged ports. Only a process with
+	// CAP_NET_BIND_SERVICE capability may bind to these port numbers.
+	vSockPort            = 1024
+	kata9pDevType        = "9p"
+	kataBlkDevType       = "blk"
+	kataSCSIDevType      = "scsi"
+	sharedDir9pOptions   = []string{"trans=virtio,version=9p2000.L", "nodev"}
+	shmDir               = "shm"
+	kataEphemeralDevType = "ephemeral"
+	ephemeralPath        = filepath.Join(kataGuestSandboxDir, kataEphemeralDevType)
 )
 
 // KataAgentConfig is a structure storing information needed
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
-	GRPCSocket   string
 	LongLiveConn bool
+	UseVSock     bool
 }
 
 type kataVSOCK struct {
 	contextID uint32
 	port      uint32
+	vhostFd   *os.File
 }
 
 func (s *kataVSOCK) String() string {
@@ -99,27 +103,6 @@ func (k *kataAgent) Logger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "kata_agent")
 }
 
-func parseVSOCKAddr(sock string) (uint32, uint32, error) {
-	sp := strings.Split(sock, ":")
-	if len(sp) != 3 {
-		return 0, 0, fmt.Errorf("Invalid vsock address: %s", sock)
-	}
-	if sp[0] != vsockSocketScheme {
-		return 0, 0, fmt.Errorf("Invalid vsock URL scheme: %s", sp[0])
-	}
-
-	cid, err := strconv.ParseUint(sp[1], 10, 32)
-	if err != nil {
-		return 0, 0, fmt.Errorf("Invalid vsock cid: %s", sp[1])
-	}
-	port, err := strconv.ParseUint(sp[2], 10, 32)
-	if err != nil {
-		return 0, 0, fmt.Errorf("Invalid vsock port: %s", sp[2])
-	}
-
-	return uint32(cid), uint32(port), nil
-}
-
 func (k *kataAgent) getVMPath(id string) string {
 	return filepath.Join(RunVMStoragePath, id)
 }
@@ -129,8 +112,13 @@ func (k *kataAgent) getSharePath(id string) string {
 }
 
 func (k *kataAgent) generateVMSocket(id string, c KataAgentConfig) error {
-	cid, port, err := parseVSOCKAddr(c.GRPCSocket)
-	if err != nil {
+	if c.UseVSock {
+		// We want to go through VSOCK. The VM VSOCK endpoint will be our gRPC.
+		k.Logger().Debug("agent: Using vsock VM socket endpoint")
+		// We dont know yet the context ID - set empty vsock configuration
+		k.vmSocket = kataVSOCK{}
+	} else {
+		k.Logger().Debug("agent: Using unix socket form VM socket endpoint")
 		// We need to generate a host UNIX socket path for the emulated serial port.
 		kataSock, err := utils.BuildSocketPath(k.getVMPath(id), defaultKataSocketName)
 		if err != nil {
@@ -142,12 +130,6 @@ func (k *kataAgent) generateVMSocket(id string, c KataAgentConfig) error {
 			ID:       defaultKataID,
 			HostPath: kataSock,
 			Name:     defaultKataChannel,
-		}
-	} else {
-		// We want to go through VSOCK. The VM VSOCK endpoint will be our gRPC.
-		k.vmSocket = kataVSOCK{
-			contextID: cid,
-			port:      port,
 		}
 	}
 
@@ -225,7 +207,16 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 			return err
 		}
 	case kataVSOCK:
-		// TODO Add an hypervisor vsock
+		var err error
+		s.vhostFd, s.contextID, err = utils.FindContextID()
+		if err != nil {
+			return err
+		}
+		s.port = uint32(vSockPort)
+		if err := h.addDevice(s, vSockPCIDev); err != nil {
+			return err
+		}
+		k.vmSocket = s
 	default:
 		return fmt.Errorf("Invalid config type")
 	}
@@ -1201,6 +1192,7 @@ func (k *kataAgent) connect() error {
 		return nil
 	}
 
+	k.Logger().WithField("url", k.state.URL).Info("New client")
 	client, err := kataclient.NewAgentClient(k.state.URL, k.proxyBuiltIn)
 	if err != nil {
 		return err

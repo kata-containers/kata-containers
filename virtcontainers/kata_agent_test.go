@@ -671,13 +671,12 @@ func TestAgentPathAPI(t *testing.T) {
 	assert.Nil(err)
 	assert.Equal(k1, k2)
 
-	c.GRPCSocket = "unixsocket"
 	err = k1.generateVMSocket(id, c)
 	assert.Nil(err)
 	_, ok := k1.vmSocket.(Socket)
 	assert.True(ok)
 
-	c.GRPCSocket = "vsock:100:200"
+	c.UseVSock = true
 	err = k2.generateVMSocket(id, c)
 	assert.Nil(err)
 	_, ok = k2.vmSocket.(kataVSOCK)
@@ -692,7 +691,7 @@ func TestAgentConfigure(t *testing.T) {
 
 	k := &kataAgent{}
 	h := &mockHypervisor{}
-	c := KataAgentConfig{GRPCSocket: "vsock:100:200"}
+	c := KataAgentConfig{}
 	id := "foobar"
 
 	invalidAgent := HyperConfig{}
@@ -702,42 +701,11 @@ func TestAgentConfigure(t *testing.T) {
 	err = k.configure(h, id, dir, true, c)
 	assert.Nil(err)
 
-	c.GRPCSocket = "foobarfoobar"
 	err = k.configure(h, id, dir, true, c)
 	assert.Nil(err)
 
 	err = k.configure(h, id, dir, false, c)
 	assert.Nil(err)
-}
-
-func TestParseVSOCKAddr(t *testing.T) {
-	assert := assert.New(t)
-
-	sock := "randomfoobar"
-	_, _, err := parseVSOCKAddr(sock)
-	assert.Error(err)
-
-	sock = "vsock://1:2"
-	_, _, err = parseVSOCKAddr(sock)
-	assert.Error(err)
-
-	sock = "unix:1:2"
-	_, _, err = parseVSOCKAddr(sock)
-	assert.Error(err)
-
-	sock = "vsock:foo:2"
-	_, _, err = parseVSOCKAddr(sock)
-	assert.Error(err)
-
-	sock = "vsock:1:bar"
-	_, _, err = parseVSOCKAddr(sock)
-	assert.Error(err)
-
-	sock = "vsock:1:2"
-	cid, port, err := parseVSOCKAddr(sock)
-	assert.Nil(err)
-	assert.Equal(cid, uint32(1))
-	assert.Equal(port, uint32(2))
 }
 
 func TestCmdToKataProcess(t *testing.T) {
