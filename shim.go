@@ -115,6 +115,8 @@ func (s *shim) handleSignals(tty *os.File) chan os.Signal {
 				continue
 			}
 
+			logger().WithField("signal", sig).Debug("handling signal")
+
 			if sysSig == syscall.SIGWINCH {
 				s.resizeTty(tty)
 
@@ -124,7 +126,8 @@ func (s *shim) handleSignals(tty *os.File) chan os.Signal {
 				// the signal to the real workload.
 				continue
 			} else if debug && nonFatalSignal(sysSig) {
-				logger().WithField("signal", sig).Debug("handling signal")
+				// only backtrace in debug mode for security
+				// reasons.
 				backtrace()
 			}
 
