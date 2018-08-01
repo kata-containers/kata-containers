@@ -367,3 +367,18 @@ func TestHotplugUnsupportedDeviceType(t *testing.T) {
 	_, err = q.hotplugRemoveDevice(&memoryDevice{0, 128}, fsDev)
 	assert.Error(err)
 }
+
+func TestQMPSetupShutdown(t *testing.T) {
+	assert := assert.New(t)
+
+	qemuConfig := newQemuConfig()
+	q := &qemu{
+		config: qemuConfig,
+	}
+
+	q.qmpShutdown()
+
+	q.qmpMonitorCh.qmp = &govmmQemu.QMP{}
+	err := q.qmpSetup()
+	assert.Nil(err)
+}
