@@ -36,7 +36,6 @@ cli "$@"
 PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/kata-containers-image}
 RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 ((RELEASE++))
-[ -n "$APIURL" ] && APIURL="-A ${APIURL}"
 
 function check_image() {
     [ ! -f "${SCRIPT_DIR}/kata-containers.tar.gz" ] && die "No kata-containers.tar.gz found!\nUse the build_image.sh script" || echo "Image: OK"

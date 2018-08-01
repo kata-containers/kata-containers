@@ -27,6 +27,8 @@ runtime
 
 OSCRC="${HOME}/.oscrc"
 PUSH=${PUSH:-""}
+LOCAL=${LOCAL:-""}
+PUSH_TO_OBS=""
 
 export BUILD_DISTROS=${BUILD_DISTROS:-xUbuntu_16.04}
 # Packaging use this variable instead of use git user value
@@ -38,7 +40,7 @@ cd "$script_dir"
 
 OBS_API="https://api.opensuse.org"
 
-if [ -n "${OBS_USER}" ] && [ -n "${OBS_PASS}" ] && [ ! -e "${OSCRC}" ]; then
+if [ -n "${OBS_USER:-}" ] && [ -n "${OBS_PASS:-}" ] && [ ! -e "${OSCRC:-}" ]; then
 	echo "Creating  ${OSCRC} with user $OBS_USER"
 	cat << eom > "${OSCRC}"
 [general]

@@ -32,7 +32,6 @@ cli "$@"
 PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/proxy}
 RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 ((RELEASE++))
-[ -n "$APIURL" ] && APIURL="-A ${APIURL}"
 
 set_versions $kata_proxy_hash
 

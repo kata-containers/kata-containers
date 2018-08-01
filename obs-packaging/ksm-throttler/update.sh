@@ -36,7 +36,6 @@ cli "$@"
 PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/ksm-throttler}
 RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 ((RELEASE++))
-[ -n "$APIURL" ] && APIURL="-A ${APIURL}"
 
 set_versions "$kata_ksm_throttler_hash"
 

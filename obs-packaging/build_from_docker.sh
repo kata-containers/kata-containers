@@ -19,27 +19,25 @@ packaging_repo_dir=$(cd "${script_dir}/.." && pwd )
 host_datadir="${PWD}/pkgs"
 obs_image="obs-kata"
 export USE_DOCKER=1
+http_proxy=${http_proxy:-}
+https_proxy=${https_proxy:-}
+no_proxy=${no_proxy:-}
+PUSH=${PUSH:-}
 
-if command -v go; then
-	export GO_ARCH=$(go env GOARCH)
-else
-	export GO_ARCH=amd64
-	echo "Go not installed using $GO_ARCH to install go in dockerfile"
-fi
 
-export GO_ARCH=$(go env GOARCH)
+GO_ARCH=$(go env GOARCH)
+export GO_ARCH
 sudo docker build \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
-	-t $obs_image ${script_dir}
+	-t $obs_image "${script_dir}"
 
 pushd "${script_dir}/kata-containers-image/" >> /dev/null
+	echo "Building image"
 	./build_image.sh
 popd >> /dev/null
 
-function faketty { script -qfc "$(printf "%q " "$@")"; }
-
-faketty sudo docker run \
+sudo docker run \
 	--rm \
 	-v "${HOME}/.ssh":/root/.ssh \
 	-v "${HOME}/.gitconfig":/root/.gitconfig \
