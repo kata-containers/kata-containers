@@ -78,6 +78,15 @@ EOF
 EOF
 )"
 	metrics_json_add_fragment "$json"
+
+	if [ "$RUNTIME" == "kata-runtime" ] ; then
+		local json="$(cat << EOF
+		"kata-env" :
+		$(kata-runtime kata-env --json)
+EOF
+)"
+		metrics_json_add_fragment "$json"
+	fi
 }
 
 # Save out the final JSON file
