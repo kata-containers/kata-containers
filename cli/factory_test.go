@@ -115,3 +115,39 @@ func TestFactoryCLIFunctionDestroy(t *testing.T) {
 	err = fn(ctx)
 	assert.Nil(err)
 }
+
+func TestFactoryCLIFunctionStatus(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpdir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	assert.NoError(err)
+
+	set := flag.NewFlagSet("", 0)
+
+	set.String("console-socket", "", "")
+
+	app := cli.NewApp()
+	ctx := cli.NewContext(app, set, nil)
+	app.Name = "foo"
+
+	// No template
+	ctx.App.Metadata = map[string]interface{}{
+		"runtimeConfig": runtimeConfig,
+	}
+	fn, ok := statusFactoryCommand.Action.(func(context *cli.Context) error)
+	assert.True(ok)
+	err = fn(ctx)
+	assert.Nil(err)
+
+	// With template
+	runtimeConfig.FactoryConfig.Template = true
+	runtimeConfig.HypervisorType = vc.MockHypervisor
+	runtimeConfig.AgentType = vc.NoopAgentType
+	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
+	err = fn(ctx)
+	assert.Nil(err)
+}
