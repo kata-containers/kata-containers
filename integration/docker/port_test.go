@@ -17,7 +17,7 @@ var _ = Describe("port", func() {
 
 	BeforeEach(func() {
 		id = randomDockerName()
-		_, _, exitCode := dockerRun("-td", "-p", "8080:8080", "--name", id, Image)
+		_, _, exitCode := dockerRun("-td", "-p", "50000:50000", "--name", id, Image)
 		Expect(exitCode).To(Equal(0))
 	})
 
@@ -29,9 +29,9 @@ var _ = Describe("port", func() {
 	Describe("port with docker", func() {
 		Context("specify a port in a container", func() {
 			It("should return assigned port", func() {
-				args = []string{id, "8080/tcp"}
+				args = []string{id, "50000/tcp"}
 				stdout, _, _ := dockerPort(args...)
-				Expect(stdout).To(ContainSubstring("8080"))
+				Expect(stdout).To(ContainSubstring("50000"))
 			})
 		})
 	})
