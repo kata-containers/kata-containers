@@ -69,3 +69,6 @@ chronic sudo -E apt install -y libseccomp-dev libapparmor-dev btrfs-tools  make 
 
 echo "Install crudini"
 chronic sudo -E apt install -y crudini
+
+echo "Install procenv"
+chronic sudo -E apt install -y procenv

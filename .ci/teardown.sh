@@ -42,8 +42,18 @@ collect_logs()
 
 	local -r collect_script="kata-collect-data.sh"
 
+	# If available, procenv will be run twice - once as the current user
+	# and once as the superuser.
+	local -r procenv_user_log_filename="procenv-${USER}.log"
+	local -r procenv_user_log_path="${log_copy_dest}/${procenv_user_log_filename}"
+	local -r procenv_root_log_filename="procenv-root.log"
+	local -r procenv_root_log_path="${log_copy_dest}/${procenv_root_log_filename}"
+
 	have_collect_script="no"
 	[ -n "$(command -v $collect_script)" ] && have_collect_script="yes"
+
+	have_procenv="no"
+	[ -n "$(command -v procenv)" ] && have_procenv="yes"
 
 	# Copy log files if a destination path is provided, otherwise simply
 	# display them.
@@ -81,12 +91,22 @@ collect_logs()
 
 		[ "${have_collect_script}" = "yes" ] && prefixes+=" ${collect_data_log_prefix}"
 
+		if [ "${have_procenv}" = "yes" ]
+		then
+			procenv --file "${procenv_user_log_path}"
+			sudo -E procenv --file "${procenv_root_log_path}" && \
+				sudo chown ${USER}: "${procenv_root_log_path}"
+		fi
+
 		local prefix
 
 		for prefix in $prefixes
 		do
 			gzip -9 "$prefix"*
 		done
+
+		# The procenv logs are tiny so don't require chunking
+		gzip -9 "${procenv_user_log_path}" "${procenv_root_log_path}"
 
 		popd
 	else
@@ -112,6 +132,15 @@ collect_logs()
 		then
 			echo "Kata Collect Data script output"
 			sudo -E PATH="$PATH" $collect_script
+		fi
+
+		if [ "${have_procenv}" = "yes" ]
+		then
+			echo "Procenv output (user $USER):"
+			procenv
+
+			echo "Procenv output (superuser):"
+			sudo -E procenv
 		fi
 	fi
 }

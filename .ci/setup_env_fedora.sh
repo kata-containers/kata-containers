@@ -57,3 +57,6 @@ chronic sudo -E dnf -y install libseccomp-devel btrfs-progs-devel libseccomp-sta
 
 echo "Install crudini"
 chronic sudo -E dnf -y install crudini
+
+echo "Install procenv"
+chronic sudo -E dnf -y install procenv
