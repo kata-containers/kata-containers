@@ -82,6 +82,9 @@ const (
 
 	// VirtioSerialPort is the serial port device driver.
 	VirtioSerialPort DeviceDriver = "virtserialport"
+
+	// VHostVSockPCI is the vhost vsock pci driver.
+	VHostVSockPCI DeviceDriver = "vhost-vsock-pci"
 )
 
 // ObjectType is a string representing a qemu object type.
@@ -962,6 +965,12 @@ type VSOCKDevice struct {
 	ID string
 
 	ContextID uint32
+
+	// VHostFD vhost file descriptor that holds the ContextID
+	VHostFD *os.File
+
+	// DisableModern prevents qemu from relying on fast MMIO.
+	DisableModern bool
 }
 
 const (
@@ -988,12 +997,22 @@ func (vsock VSOCKDevice) Valid() bool {
 
 // QemuParams returns the qemu parameters built out of the VSOCK device.
 func (vsock VSOCKDevice) QemuParams(config *Config) []string {
+	var deviceParams []string
 	var qemuParams []string
 
-	deviceParam := fmt.Sprintf("%s,id=%s,%s=%d", VhostVSOCKPCI, vsock.ID, VSOCKGuestCID, vsock.ContextID)
+	deviceParams = append(deviceParams, fmt.Sprintf("%s", VhostVSOCKPCI))
+	if vsock.DisableModern {
+		deviceParams = append(deviceParams, ",disable-modern=true")
+	}
+	if vsock.VHostFD != nil {
+		qemuFDs := config.appendFDs([]*os.File{vsock.VHostFD})
+		deviceParams = append(deviceParams, fmt.Sprintf(",vhostfd=%d", qemuFDs[0]))
+	}
+	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", vsock.ID))
+	deviceParams = append(deviceParams, fmt.Sprintf(",%s=%d", VSOCKGuestCID, vsock.ContextID))
 
 	qemuParams = append(qemuParams, "-device")
-	qemuParams = append(qemuParams, deviceParam)
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
 
 	return qemuParams
 }
