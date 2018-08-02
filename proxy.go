@@ -67,14 +67,14 @@ func heartBeat(session *yamux.Session) {
 	}
 }
 
-func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) (net.Listener, error) {
+func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) (net.Listener, *yamux.Session, error) {
 	sessionConfig := yamux.DefaultConfig()
 	// Disable keepAlive since we don't know how much time a container can be paused
 	sessionConfig.EnableKeepAlive = false
 	sessionConfig.ConnectionWriteTimeout = time.Second
 	session, err := yamux.Client(servConn, sessionConfig)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Start the heartbeat in a separate go routine
@@ -83,13 +83,15 @@ func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) 
 	// serving connection
 	l, err := net.Listen(proto, addr)
 	if err != nil {
-		return nil, err
+		session.Close()
+		return nil, nil, err
 	}
 
 	go func() {
 		var err error
 		defer func() {
 			l.Close()
+			session.Close()
 			results <- err
 		}()
 
@@ -109,7 +111,7 @@ func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) 
 		}
 	}()
 
-	return l, nil
+	return l, session, nil
 }
 
 func proxyConn(conn1 net.Conn, conn2 net.Conn) {
@@ -390,12 +392,13 @@ func realMain() {
 	}()
 
 	results := make(chan error)
-	l, err := serve(servConn, "unix", listenAddr, results)
+	l, s, err := serve(servConn, "unix", listenAddr, results)
 	if err != nil {
 		logger().WithError(err).Fatal("failed to serve")
 		os.Exit(1)
 	}
 	defer func() {
+		s.Close()
 		if l != nil {
 			l.Close()
 		}
