@@ -579,7 +579,7 @@ func (q *qemu) stopSandbox() error {
 		return err
 	}
 
-	err = os.RemoveAll(RunVMStoragePath + q.id)
+	err = os.RemoveAll(filepath.Join(RunVMStoragePath, q.id))
 	if err != nil {
 		q.Logger().WithError(err).Error("Fail to clean up vm directory")
 	}
