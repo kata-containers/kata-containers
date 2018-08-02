@@ -55,10 +55,10 @@ var initFactoryCommand = cli.Command{
 				kataLog.WithError(err).Error("create vm factory failed")
 				return err
 			}
-			fmt.Println("vm factory initialized")
+			fmt.Fprintln(defaultOutputFile, "vm factory initialized")
 		} else {
 			kataLog.Error("vm factory is not enabled")
-			fmt.Println("vm factory is not enabled")
+			fmt.Fprintln(defaultOutputFile, "vm factory is not enabled")
 		}
 
 		return nil
@@ -93,7 +93,7 @@ var destroyFactoryCommand = cli.Command{
 				f.CloseFactory()
 			}
 		}
-		fmt.Println("vm factory destroyed")
+		fmt.Fprintln(defaultOutputFile, "vm factory destroyed")
 		return nil
 	},
 }
@@ -120,13 +120,13 @@ var statusFactoryCommand = cli.Command{
 			kataLog.WithField("factory", factoryConfig).Info("load vm factory")
 			f, err := vf.NewFactory(factoryConfig, true)
 			if err != nil {
-				fmt.Println("vm factory is off")
+				fmt.Fprintln(defaultOutputFile, "vm factory is off")
 			} else {
 				f.CloseFactory()
-				fmt.Println("vm factory is on")
+				fmt.Fprintln(defaultOutputFile, "vm factory is on")
 			}
 		} else {
-			fmt.Println("vm factory not enabled")
+			fmt.Fprintln(defaultOutputFile, "vm factory not enabled")
 		}
 		return nil
 	},
