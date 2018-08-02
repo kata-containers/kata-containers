@@ -19,8 +19,7 @@ import (
 
 	kataclient "github.com/kata-containers/agent/protocols/client"
 	"github.com/kata-containers/agent/protocols/grpc"
-	"github.com/kata-containers/runtime/virtcontainers/device/api"
-	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
@@ -715,15 +714,26 @@ func (k *kataAgent) handleShm(grpcSpec *grpc.Spec, sandbox *Sandbox) {
 	}
 }
 
-func (k *kataAgent) appendDevices(deviceList []*grpc.Device, devices []api.Device) []*grpc.Device {
-	for _, device := range devices {
-		d, ok := device.(*drivers.BlockDevice)
-		if !ok {
+func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*grpc.Device {
+	for _, dev := range c.devices {
+		device := c.sandbox.devManager.GetDeviceByID(dev.ID)
+		if device == nil {
+			k.Logger().WithField("device", dev.ID).Error("failed to find device by id")
+			return nil
+		}
+
+		if device.DeviceType() != config.DeviceBlock {
+			continue
+		}
+
+		d, ok := device.GetDeviceInfo().(*config.BlockDrive)
+		if !ok || d == nil {
+			k.Logger().WithField("device", device).Error("malformed block drive")
 			continue
 		}
 
 		kataDevice := &grpc.Device{
-			ContainerPath: d.DeviceInfo.ContainerPath,
+			ContainerPath: dev.ContainerPath,
 		}
 
 		if d.SCSIAddr == "" {
@@ -860,7 +870,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	}
 
 	// Append container devices for block devices passed with --device.
-	ctrDevices = k.appendDevices(ctrDevices, c.devices)
+	ctrDevices = k.appendDevices(ctrDevices, c)
 
 	// Handle all the volumes that are block device files.
 	// Note this call modifies the list of container devices to make sure
@@ -949,27 +959,41 @@ func (k *kataAgent) handleBlockVolumes(c *Container) []*grpc.Storage {
 	var volumeStorages []*grpc.Storage
 
 	for _, m := range c.mounts {
-		b := m.BlockDevice
+		id := m.BlockDeviceID
 
-		if b == nil {
+		if len(id) == 0 {
 			continue
 		}
 
 		// Add the block device to the list of container devices, to make sure the
 		// device is detached with detachDevices() for a container.
-		c.devices = append(c.devices, b)
+		c.devices = append(c.devices, ContainerDevice{ID: id})
+		if err := c.storeDevices(); err != nil {
+			k.Logger().WithField("device", id).WithError(err).Error("store device failed")
+			return nil
+		}
 
 		vol := &grpc.Storage{}
 
+		device := c.sandbox.devManager.GetDeviceByID(id)
+		if device == nil {
+			k.Logger().WithField("device", id).Error("failed to find device by id")
+			return nil
+		}
+		blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
+		if !ok || blockDrive == nil {
+			k.Logger().Error("malformed block drive")
+			continue
+		}
 		if c.sandbox.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
 			vol.Driver = kataBlkDevType
-			vol.Source = b.VirtPath
+			vol.Source = blockDrive.VirtPath
 		} else {
 			vol.Driver = kataSCSIDevType
-			vol.Source = b.SCSIAddr
+			vol.Source = blockDrive.SCSIAddr
 		}
 
-		vol.MountPoint = b.DeviceInfo.ContainerPath
+		vol.MountPoint = m.Destination
 		vol.Fstype = "bind"
 		vol.Options = []string{"bind"}
 

@@ -713,6 +713,12 @@ func createSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, erro
 		s.networkNS = networkNS
 	}
 
+	devices, err := s.storage.fetchSandboxDevices(s.id)
+	if err != nil {
+		s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("fetch sandbox device failed")
+	}
+	s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
+
 	// We first try to fetch the sandbox state from storage.
 	// If it exists, this means this is a re-creation, i.e.
 	// we don't need to talk to the guest's agent, but only
@@ -758,7 +764,6 @@ func newSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) 
 		storage:         &filesystem{},
 		network:         network,
 		config:          &sandboxConfig,
-		devManager:      deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver),
 		volumes:         sandboxConfig.Volumes,
 		containers:      map[string]*Container{},
 		runPath:         filepath.Join(runStoragePath, sandboxConfig.ID),
@@ -806,6 +811,10 @@ func newSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) 
 	}
 
 	return s, nil
+}
+
+func (s *Sandbox) storeSandboxDevices() error {
+	return s.storage.storeSandboxDevices(s.id, s.devManager.GetAllDevices())
 }
 
 // storeSandbox stores a sandbox config.
@@ -1446,12 +1455,24 @@ func togglePauseSandbox(sandboxID string, pause bool) (*Sandbox, error) {
 func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType) error {
 	switch devType {
 	case config.DeviceVFIO:
-		vfioDevice, ok := device.(*drivers.VFIODevice)
+		vfioDevices, ok := device.GetDeviceInfo().([]*config.VFIODev)
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
-		_, err := s.hypervisor.hotplugAddDevice(*vfioDevice, vfioDev)
-		return err
+
+		// adding a group of VFIO devices
+		for _, dev := range vfioDevices {
+			if _, err := s.hypervisor.hotplugAddDevice(dev, vfioDev); err != nil {
+				s.Logger().
+					WithFields(logrus.Fields{
+						"sandboxid":       s.id,
+						"vfio device ID":  dev.ID,
+						"vfio device BDF": dev.BDF,
+					}).WithError(err).Error("failed to hotplug VFIO device")
+				return err
+			}
+		}
+		return nil
 	case config.DeviceBlock:
 		blockDevice, ok := device.(*drivers.BlockDevice)
 		if !ok {
@@ -1471,18 +1492,30 @@ func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType)
 func (s *Sandbox) HotplugRemoveDevice(device api.Device, devType config.DeviceType) error {
 	switch devType {
 	case config.DeviceVFIO:
-		vfioDevice, ok := device.(*drivers.VFIODevice)
+		vfioDevices, ok := device.GetDeviceInfo().([]*config.VFIODev)
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
-		_, err := s.hypervisor.hotplugRemoveDevice(*vfioDevice, vfioDev)
-		return err
+
+		// remove a group of VFIO devices
+		for _, dev := range vfioDevices {
+			if _, err := s.hypervisor.hotplugRemoveDevice(dev, vfioDev); err != nil {
+				s.Logger().WithError(err).
+					WithFields(logrus.Fields{
+						"sandboxid":       s.id,
+						"vfio device ID":  dev.ID,
+						"vfio device BDF": dev.BDF,
+					}).Error("failed to hot unplug VFIO device")
+				return err
+			}
+		}
+		return nil
 	case config.DeviceBlock:
-		blockDevice, ok := device.(*drivers.BlockDevice)
+		blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
-		_, err := s.hypervisor.hotplugRemoveDevice(blockDevice.BlockDrive, blockDev)
+		_, err := s.hypervisor.hotplugRemoveDevice(blockDrive, blockDev)
 		return err
 	case config.DeviceGeneric:
 		// TODO: what?
@@ -1503,12 +1536,13 @@ func (s *Sandbox) DecrementSandboxBlockIndex() error {
 	return s.decrementSandboxBlockIndex()
 }
 
-// AddVhostUserDevice adds a vhost user device to sandbox
+// AppendDevice can only handle vhost user device currently, it adds a
+// vhost user device to sandbox
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
-func (s *Sandbox) AddVhostUserDevice(devInfo api.VhostUserDevice, devType config.DeviceType) error {
-	switch devType {
+func (s *Sandbox) AppendDevice(device api.Device) error {
+	switch device.DeviceType() {
 	case config.VhostUserSCSI, config.VhostUserNet, config.VhostUserBlk:
-		return s.hypervisor.addDevice(devInfo, vhostuserDev)
+		return s.hypervisor.addDevice(device.GetDeviceInfo().(*config.VhostUserDeviceAttrs), vhostuserDev)
 	}
 	return fmt.Errorf("unsupported device type")
 }
