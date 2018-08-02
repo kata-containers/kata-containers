@@ -74,3 +74,6 @@ chronic sudo -E yum install -y libseccomp-devel btrfs-progs-devel libseccomp-sta
 
 echo "Install crudini"
 chronic sudo -E yum install -y crudini
+
+echo "Install procenv"
+chronic sudo -E yum install -y procenv
