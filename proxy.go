@@ -89,9 +89,14 @@ func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) 
 
 	go func() {
 		var err error
+
+		wg := &sync.WaitGroup{}
 		defer func() {
-			l.Close()
+			// close session before waiting to make sure all streams are closed,
+			// so that the copy goroutines can quit.
 			session.Close()
+			wg.Wait()
+			l.Close()
 			results <- err
 		}()
 
@@ -107,14 +112,16 @@ func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) 
 				return
 			}
 
-			go proxyConn(conn, stream)
+			// add 2 for the two copy goroutines
+			wg.Add(2)
+			go proxyConn(conn, stream, wg)
 		}
 	}()
 
 	return l, session, nil
 }
 
-func proxyConn(conn1 net.Conn, conn2 net.Conn) {
+func proxyConn(conn1 net.Conn, conn2 net.Conn, wg *sync.WaitGroup) {
 	once := &sync.Once{}
 	cleanup := func() {
 		conn1.Close()
@@ -127,6 +134,7 @@ func proxyConn(conn1 net.Conn, conn2 net.Conn) {
 		}
 
 		once.Do(cleanup)
+		wg.Done()
 	}
 
 	go copyStream(conn1, conn2)
