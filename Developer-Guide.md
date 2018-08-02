@@ -573,13 +573,13 @@ $ sudo docker info 2>/dev/null | grep -i "default runtime" | cut -d: -f2- | grep
 
 ## Set up a debug console
 
-By default you cannot login to a virtual machine since this can be sensitive
-from a security perspective. Also allowing logins would require additional
+By default you cannot login to a virtual machine, since this can be sensitive
+from a security perspective. Also, allowing logins would require additional
 packages in the rootfs, which would increase the size of the image used to
 boot the virtual machine.
 
 If you want to login to a virtual machine that hosts your containers, complete
-the following steps, which assume a rootfs image.
+the following steps, which assume the use of a rootfs image.
 
 ### Create a custom image containing a shell
 
@@ -673,7 +673,7 @@ $ sudo docker run -ti busybox sh
 
 ```
 $ id=$(sudo docker ps -q --no-trunc)
-$ console="/var/run/vc/sbs/${id}/console.sock"
+$ console="/var/run/vc/vm/${id}/console.sock"
 $ sudo socat "stdin,raw,echo=0,escape=0x11" "unix-connect:${console}"
 ```
 
