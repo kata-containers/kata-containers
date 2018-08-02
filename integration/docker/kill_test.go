@@ -67,8 +67,6 @@ var _ = Describe("docker kill", func() {
 				Skip("This is not forwarded by kata-shim " +
 					"https://github.com/kata-containers/shim/issues/4")
 			case syscall.SIGWINCH:
-				Skip("Signal is not being forwared,  see " +
-					"https://github.com/kata-containers/shim/issues/74")
 			}
 
 			trapTag := "TRAP_RUNNING"
