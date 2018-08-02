@@ -198,3 +198,11 @@ func TestHyperConfigure(t *testing.T) {
 	err = h.configure(m, id, dir, false, c)
 	assert.Nil(err)
 }
+
+func TestHyperReseedAPI(t *testing.T) {
+	assert := assert.New(t)
+
+	h := &hyper{}
+	err := h.reseedRNG([]byte{})
+	assert.Nil(err)
+}

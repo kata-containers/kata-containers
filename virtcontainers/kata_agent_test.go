@@ -225,6 +225,10 @@ func (p *gRPCProxy) ResumeContainer(ctx context.Context, req *pb.ResumeContainer
 	return emptyResp, nil
 }
 
+func (p *gRPCProxy) ReseedRandomDev(ctx context.Context, req *pb.ReseedRandomDevRequest) (*gpb.Empty, error) {
+	return emptyResp, nil
+}
+
 func gRPCRegister(s *grpc.Server, srv interface{}) {
 	switch g := srv.(type) {
 	case *gRPCProxy:

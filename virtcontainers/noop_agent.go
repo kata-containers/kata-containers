@@ -160,3 +160,8 @@ func (n *noopAgent) getVMPath(id string) string {
 func (n *noopAgent) getSharePath(id string) string {
 	return ""
 }
+
+// reseedRNG is the Noop agent RND reseeder. It does nothing.
+func (n *noopAgent) reseedRNG(data []byte) error {
+	return nil
+}

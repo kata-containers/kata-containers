@@ -209,3 +209,11 @@ func TestNoopAgentProcessListContainer(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestNoopAgentReseedRNG(t *testing.T) {
+	n := &noopAgent{}
+	err := n.reseedRNG([]byte{})
+	if err != nil {
+		t.Fatal("reseedRNG failed")
+	}
+}

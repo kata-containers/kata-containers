@@ -191,6 +191,26 @@ func (v *VM) OnlineCPUMemory() error {
 	return err
 }
 
+// ReseedRNG adds random entropy to guest random number generator
+// and reseeds it.
+func (v *VM) ReseedRNG() error {
+	v.logger().Infof("reseed guest random number generator")
+	urandomDev := "/dev/urandom"
+	data := make([]byte, 512)
+	f, err := os.OpenFile(urandomDev, os.O_RDONLY, 0)
+	if err != nil {
+		v.logger().WithError(err).Warn("fail to open %s", urandomDev)
+		return err
+	}
+	defer f.Close()
+	if _, err = f.Read(data); err != nil {
+		v.logger().WithError(err).Warn("fail to read %s", urandomDev)
+		return err
+	}
+
+	return v.agent.reseedRNG(data)
+}
+
 func (v *VM) assignSandbox(s *Sandbox) error {
 	// add vm symlinks
 	// - link vm socket from sandbox dir (/run/vc/vm/sbid/<kata.sock>) to vm dir (/run/vc/vm/vmid/<kata.sock>)
