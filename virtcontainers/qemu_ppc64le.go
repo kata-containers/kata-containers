@@ -10,7 +10,7 @@ import (
 	"os"
 
 	govmmQemu "github.com/intel/govmm/qemu"
-	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	deviceConfig "github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -134,7 +134,7 @@ func (q *qemuPPC64le) appendImage(devices []govmmQemu.Device, path string) ([]go
 
 	id := utils.MakeNameID("image", hex.EncodeToString(randBytes), maxDevIDSize)
 
-	drive := drivers.Drive{
+	drive := deviceConfig.BlockDrive{
 		File:   path,
 		Format: "raw",
 		ID:     id,

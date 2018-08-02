@@ -7,23 +7,17 @@
 package drivers
 
 import (
+	"encoding/hex"
+
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
 // VhostUserSCSIDevice is a SCSI vhost-user based device
 type VhostUserSCSIDevice struct {
 	config.VhostUserDeviceAttrs
-}
-
-// Attrs returns the VhostUserDeviceAttrs associated with the vhost-user device
-func (vhostUserSCSIDevice *VhostUserSCSIDevice) Attrs() *config.VhostUserDeviceAttrs {
-	return &vhostUserSCSIDevice.VhostUserDeviceAttrs
-}
-
-// Type returns the type associated with the vhost-user device
-func (vhostUserSCSIDevice *VhostUserSCSIDevice) Type() config.DeviceType {
-	return config.VhostUserSCSI
+	DeviceInfo *config.DeviceInfo
 }
 
 //
@@ -32,17 +26,57 @@ func (vhostUserSCSIDevice *VhostUserSCSIDevice) Type() config.DeviceType {
 
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
-func (vhostUserSCSIDevice *VhostUserSCSIDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
-	return vhostUserAttach(vhostUserSCSIDevice, devReceiver)
+func (device *VhostUserSCSIDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
+	if device.DeviceInfo.Hotplugged {
+		return nil
+	}
+
+	// generate a unique ID to be used for hypervisor commandline fields
+	randBytes, err := utils.GenerateRandomBytes(8)
+	if err != nil {
+		return err
+	}
+	id := hex.EncodeToString(randBytes)
+
+	device.ID = id
+	device.Type = device.DeviceType()
+
+	defer func() {
+		if err == nil {
+			device.DeviceInfo.Hotplugged = true
+		}
+	}()
+	return devReceiver.AppendDevice(device)
 }
 
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
-func (vhostUserSCSIDevice *VhostUserSCSIDevice) Detach(devReceiver api.DeviceReceiver) error {
+func (device *VhostUserSCSIDevice) Detach(devReceiver api.DeviceReceiver) error {
+	if !device.DeviceInfo.Hotplugged {
+		return nil
+	}
+
+	device.DeviceInfo.Hotplugged = false
 	return nil
 }
 
+// IsAttached checks if the device is attached
+func (device *VhostUserSCSIDevice) IsAttached() bool {
+	return device.DeviceInfo.Hotplugged
+}
+
+// DeviceID returns device ID
+func (device *VhostUserSCSIDevice) DeviceID() string {
+	return device.ID
+}
+
 // DeviceType is standard interface of api.Device, it returns device type
-func (vhostUserSCSIDevice *VhostUserSCSIDevice) DeviceType() config.DeviceType {
-	return vhostUserSCSIDevice.DevType
+func (device *VhostUserSCSIDevice) DeviceType() config.DeviceType {
+	return config.VhostUserSCSI
+}
+
+// GetDeviceInfo returns device information used for creating
+func (device *VhostUserSCSIDevice) GetDeviceInfo() interface{} {
+	device.Type = device.DeviceType()
+	return &device.VhostUserDeviceAttrs
 }

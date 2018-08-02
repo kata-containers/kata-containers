@@ -18,7 +18,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
@@ -1153,18 +1152,23 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 		config.SysIOMMUPath = savedIOMMUPath
 	}()
 
+	dm := manager.NewDeviceManager(manager.VirtioSCSI, nil)
 	path := filepath.Join(vfioPath, testFDIOGroup)
 	deviceInfo := config.DeviceInfo{
 		HostPath:      path,
 		ContainerPath: path,
 		DevType:       "c",
 	}
-	vfioDevice := drivers.NewVFIODevice(deviceInfo)
+	dev, err := dm.NewDevice(deviceInfo)
+	assert.Nil(t, err, "deviceManager.NewDevice return error: %v", err)
 
 	c := &Container{
 		id: "100",
-		devices: []api.Device{
-			vfioDevice,
+		devices: []ContainerDevice{
+			{
+				ID:            dev.DeviceID(),
+				ContainerPath: path,
+			},
 		},
 	}
 
@@ -1172,12 +1176,19 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 	containers[c.id] = c
 
 	sandbox := Sandbox{
+		id:         "100",
 		containers: containers,
+		storage:    &filesystem{},
 		hypervisor: &mockHypervisor{},
+		devManager: dm,
 	}
 
 	containers[c.id].sandbox = &sandbox
+	err = sandbox.storage.createAllResources(&sandbox)
+	assert.Nil(t, err, "Error while create all resources for sandbox")
 
+	err = sandbox.storeSandboxDevices()
+	assert.Nil(t, err, "Error while store sandbox devices %s", err)
 	err = containers[c.id].attachDevices()
 	assert.Nil(t, err, "Error while attaching devices %s", err)
 
@@ -1584,10 +1595,9 @@ func TestAttachBlockDevice(t *testing.T) {
 		DevType:       "b",
 	}
 
-	dm := manager.NewDeviceManager(VirtioBlock)
-	devices, err := dm.NewDevices([]config.DeviceInfo{deviceInfo})
+	dm := manager.NewDeviceManager(VirtioBlock, nil)
+	device, err := dm.NewDevice(deviceInfo)
 	assert.Nil(t, err)
-	device := devices[0]
 	_, ok := device.(*drivers.BlockDevice)
 	assert.True(t, ok)
 
