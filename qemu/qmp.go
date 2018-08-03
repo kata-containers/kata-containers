@@ -409,13 +409,14 @@ func (q *QMP) mainLoop() {
 		if q.cfg.EventCh != nil {
 			close(q.cfg.EventCh)
 		}
+		/* #nosec */
 		_ = q.conn.Close()
 		_ = <-fromVMCh
 		failOutstandingCommands(cmdQueue)
 		close(q.disconnectedCh)
 	}()
 
-	version := []byte{}
+	var version []byte
 	var cmdDoneCh <-chan struct{}
 
 DONE:
