@@ -1040,3 +1040,20 @@ func TestExecuteGetFdD(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+// Checks chardev-add unix socket
+func TestExecuteCharDevUnixSocketAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("chardev-add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecuteCharDevUnixSocketAdd(context.Background(), "foo", "foo.sock", false, true)
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
