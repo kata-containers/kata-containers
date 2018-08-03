@@ -1,0 +1,27 @@
+#
+# Copyright (c) 2018 ARM Limited
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# for now, not all integration test suites are fully passed in aarch64.
+# some need to be tested, and some need to be refined.
+# sequence of 'test' holds supported integration tests components.
+test:
+  - functional
+  - docker
+
+# for now, not all test suites under docker integration are fully passed in aarch64.
+# some need to be tested, and some need to be refined.
+# ginkgo offers '-skip=REGEXP' flag to skip specific ones.
+# you can use infos from docker.Describe, docker.Context or docker.It to point to
+# specific test specs or whole container of specs.
+docker:
+  Describe:
+    - CPUs and CPU set
+    - Update number of CPUs
+    - Hot plug CPUs
+    - Update CPU constraints
+  Context:
+    - remove bind-mount source before container exits
+    - run container exceeding memory constraints
+  It:
