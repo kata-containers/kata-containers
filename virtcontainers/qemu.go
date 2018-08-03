@@ -416,21 +416,6 @@ func (q *qemu) createSandbox() error {
 		return fmt.Errorf("UUID should not be empty")
 	}
 
-	monitorSockPath, err := q.qmpSocketPath(q.id)
-	if err != nil {
-		return err
-	}
-
-	q.qmpMonitorCh = qmpChannel{
-		ctx:  context.Background(),
-		path: monitorSockPath,
-	}
-
-	err = os.MkdirAll(filepath.Dir(monitorSockPath), dirMode)
-	if err != nil {
-		return err
-	}
-
 	qmpSockets, err := q.createQmpSocket()
 	if err != nil {
 		return err
