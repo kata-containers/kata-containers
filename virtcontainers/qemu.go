@@ -299,11 +299,6 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 		path: monitorSockPath,
 	}
 
-	err = os.MkdirAll(filepath.Dir(monitorSockPath), dirMode)
-	if err != nil {
-		return nil, err
-	}
-
 	return []govmmQemu.QMPSocket{
 		{
 			Type:   "unix",
@@ -416,21 +411,6 @@ func (q *qemu) createSandbox() error {
 		return fmt.Errorf("UUID should not be empty")
 	}
 
-	monitorSockPath, err := q.qmpSocketPath(q.id)
-	if err != nil {
-		return err
-	}
-
-	q.qmpMonitorCh = qmpChannel{
-		ctx:  context.Background(),
-		path: monitorSockPath,
-	}
-
-	err = os.MkdirAll(filepath.Dir(monitorSockPath), dirMode)
-	if err != nil {
-		return err
-	}
-
 	qmpSockets, err := q.createQmpSocket()
 	if err != nil {
 		return err
@@ -504,7 +484,21 @@ func (q *qemu) startSandbox() error {
 		}
 	}()
 
-	strErr, err := govmmQemu.LaunchQemu(q.qemuConfig, newQMPLogger())
+	vmPath := filepath.Join(RunVMStoragePath, q.id)
+	err := os.MkdirAll(vmPath, dirMode)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			if err := os.RemoveAll(vmPath); err != nil {
+				q.Logger().WithError(err).Error("Fail to clean up vm directory")
+			}
+		}
+	}()
+
+	var strErr string
+	strErr, err = govmmQemu.LaunchQemu(q.qemuConfig, newQMPLogger())
 	if err != nil {
 		return fmt.Errorf("%s", strErr)
 	}
