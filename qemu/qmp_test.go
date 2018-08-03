@@ -1057,3 +1057,20 @@ func TestExecuteCharDevUnixSocketAdd(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+// Checks virtio serial port hotplug
+func TestExecuteVirtSerialPortAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecuteVirtSerialPortAdd(context.Background(), "foo", "foo.channel", "foo")
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
