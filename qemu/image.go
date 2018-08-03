@@ -45,9 +45,11 @@ func CreateCloudInitISO(ctx context.Context, scratchDir, isoPath string,
 	userDataPath := path.Join(dataDirPath, "user_data")
 
 	defer func() {
+		/* #nosec */
 		_ = os.RemoveAll(configDrivePath)
 	}()
 
+	/* #nosec */
 	err := os.MkdirAll(dataDirPath, 0755)
 	if err != nil {
 		return fmt.Errorf("Unable to create config drive directory %s : %v",

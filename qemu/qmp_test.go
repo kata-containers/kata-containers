@@ -53,11 +53,11 @@ func (l qmpTestLogger) Infof(format string, v ...interface{}) {
 }
 
 func (l qmpTestLogger) Warningf(format string, v ...interface{}) {
-	l.Infof(format, v)
+	l.Infof(format, v...)
 }
 
 func (l qmpTestLogger) Errorf(format string, v ...interface{}) {
-	l.Infof(format, v)
+	l.Infof(format, v...)
 }
 
 type qmpTestCommand struct {
