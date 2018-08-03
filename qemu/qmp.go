@@ -986,3 +986,17 @@ func (q *QMP) ExecuteCharDevUnixSocketAdd(ctx context.Context, id, path string, 
 	}
 	return q.executeCommand(ctx, "chardev-add", args, nil)
 }
+
+// ExecuteVirtSerialPortAdd adds a virtserialport.
+// id is an identifier for the virtserialport, name is a name for the virtserialport and
+// it will be visible in the VM, chardev is the character device id previously added.
+func (q *QMP) ExecuteVirtSerialPortAdd(ctx context.Context, id, name, chardev string) error {
+	args := map[string]interface{}{
+		"driver":  VirtioSerialPort,
+		"id":      id,
+		"name":    name,
+		"chardev": chardev,
+	}
+
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
