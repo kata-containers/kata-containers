@@ -103,7 +103,7 @@ func client(proxyAddr, file string) error {
 	return <-copyCh
 }
 
-func server(listener net.Listener) error {
+func server(listener net.Listener, closeCh chan bool) error {
 	// Accept once
 	conn, err := listener.Accept()
 	if err != nil {
@@ -115,7 +115,11 @@ func server(listener net.Listener) error {
 	if err != nil {
 		return err
 	}
-	defer session.Close()
+
+	go func() {
+		<-closeCh
+		session.Close()
+	}()
 
 	for {
 		stream, err := session.Accept()
@@ -182,8 +186,9 @@ func TestProxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	closeCh := make(chan bool)
 	go func() {
-		server(l)
+		server(l, closeCh)
 		l.Close()
 	}()
 
@@ -196,39 +201,50 @@ func TestProxy(t *testing.T) {
 	defer servConn.Close()
 
 	results := make(chan error)
-	_, err = serve(servConn, "unix", listenSock, results)
+	lp, s, err := serve(servConn, "unix", listenSock, results)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() {
+		close(closeCh)
+		s.Close()
+	}()
 
 	// run client tests
 	files, err := ioutil.ReadDir(testDir)
 	if err != nil {
+		lp.Close()
 		t.Fatal(err)
 	}
 
 	wg := &sync.WaitGroup{}
+	cliRes := make(chan error)
 	for _, file := range files {
 		if file.IsDir() {
 			continue
 		}
 		wg.Add(1)
 		go func(filename string) {
-			results <- client(listenSock, filename)
+			cliRes <- client(listenSock, filename)
 			wg.Done()
 		}(file.Name())
 	}
 
 	go func() {
 		wg.Wait()
-		close(results)
+		close(cliRes)
 	}()
 
-	for err = range results {
+	for err = range cliRes {
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
+
+	// closing the listener should result in an error in results channel
+	lp.Close()
+	err = <-results
+	assert.NotNil(t, err, "closing listener should result in an error")
 }
 
 func TestSetupSigtermNotifier(t *testing.T) {
