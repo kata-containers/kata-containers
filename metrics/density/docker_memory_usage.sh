@@ -282,7 +282,9 @@ EOF
 	# Or, in fact we can leave the '--rm' on the docker run, and just change this
 	# to a 'docker stop *'.
 	for c in ${containers[@]}; do
-		docker stop $c
+		# Use a kill, as the containers are benign, and most of the time
+		# a stop request ends up being a kill anyway.
+		docker kill $c
 		sleep 3
 	done
 }

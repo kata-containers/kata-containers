@@ -154,7 +154,9 @@ function cleanup() {
 	# Or, in fact we can leave the '--rm' on the docker run, and just change this
 	# to a 'docker stop *'.
 	for c in $(docker ps -qa); do
-		docker stop $c
+		# Use a kill, as the containers are benign, and most of the time the stop
+		# request ends up doing a kill anyhow
+		docker kill $c
 		sleep 3
 	done
 #	kill_processes_before_start
