@@ -191,7 +191,9 @@ clean_env()
 
 	if [ ! -z "$containers_running" ]; then
 		# First stop all containers that are running
-		sudo $DOCKER_EXE stop $containers_running
+		# Use kill, as the containers are generally benign, and most
+		# of the time our 'stop' request ends up doing a `kill` anyway
+		sudo $DOCKER_EXE kill $containers_running
 
 		# Remove all containers
 		sudo $DOCKER_EXE rm -f $(docker ps -qa)
