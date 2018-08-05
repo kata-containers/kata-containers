@@ -1546,3 +1546,25 @@ func (s *Sandbox) AppendDevice(device api.Device) error {
 	}
 	return fmt.Errorf("unsupported device type")
 }
+
+// AddDevice will add a device to sandbox
+func (s *Sandbox) AddDevice(info config.DeviceInfo) (api.Device, error) {
+	if s.devManager == nil {
+		return nil, fmt.Errorf("device manager isn't initialized")
+	}
+
+	b, err := s.devManager.NewDevice(info)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.devManager.AttachDevice(b.DeviceID(), s); err != nil {
+		return nil, err
+	}
+
+	if err := s.storeSandboxDevices(); err != nil {
+		return nil, err
+	}
+
+	return b, nil
+}

@@ -10,6 +10,8 @@ import (
 	"syscall"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -137,4 +139,9 @@ func (s *Sandbox) WinsizeProcess(containerID, processID string, height, width ui
 // IOStream implements the VCSandbox function of the same name.
 func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error) {
 	return nil, nil, nil, nil
+}
+
+// AddDevice adds a device to sandbox
+func (s *Sandbox) AddDevice(info config.DeviceInfo) (api.Device, error) {
+	return nil, nil
 }

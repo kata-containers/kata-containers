@@ -20,6 +20,8 @@ import (
 	"syscall"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -238,4 +240,13 @@ func (m *VCMock) ResumeContainer(sandboxID, containerID string) error {
 	}
 
 	return fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
+}
+
+// AddDevice implements the VC function of the same name.
+func (m *VCMock) AddDevice(sandboxID string, info config.DeviceInfo) (api.Device, error) {
+	if m.AddDeviceFunc != nil {
+		return m.AddDeviceFunc(sandboxID, info)
+	}
+
+	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
 }
