@@ -93,7 +93,7 @@ func (dm *deviceManager) createDevice(devInfo config.DeviceInfo) (api.Device, er
 	}
 }
 
-// NewDevice creates bundles of devices based on array of DeviceInfo
+// NewDevice creates a device based on specified DeviceInfo
 func (dm *deviceManager) NewDevice(devInfo config.DeviceInfo) (api.Device, error) {
 	dm.Lock()
 	defer dm.Unlock()
@@ -102,6 +102,17 @@ func (dm *deviceManager) NewDevice(devInfo config.DeviceInfo) (api.Device, error
 		dm.devices[dev.DeviceID()] = dev
 	}
 	return dev, err
+}
+
+// RemoveDevice deletes the device from list based on specified device id
+func (dm *deviceManager) RemoveDevice(id string) error {
+	dm.Lock()
+	defer dm.Unlock()
+	if _, ok := dm.devices[id]; !ok {
+		return ErrDeviceNotExist
+	}
+	delete(dm.devices, id)
+	return nil
 }
 
 func (dm *deviceManager) newDeviceID() (string, error) {

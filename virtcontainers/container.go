@@ -1133,12 +1133,21 @@ func (c *Container) attachDevices() error {
 
 func (c *Container) detachDevices() error {
 	for _, dev := range c.devices {
-		if err := c.sandbox.devManager.DetachDevice(dev.ID, c.sandbox); err != nil {
-			if err == manager.ErrDeviceNotAttached {
-				// skip if device isn't attached
-				continue
-			}
+		err := c.sandbox.devManager.DetachDevice(dev.ID, c.sandbox)
+		if err != nil && err != manager.ErrDeviceNotAttached {
 			return err
+		}
+
+		if err = c.sandbox.devManager.RemoveDevice(dev.ID); err != nil {
+			c.Logger().WithFields(logrus.Fields{
+				"container": c.id,
+				"device-id": dev.ID,
+			}).WithError(err).Error("remove device failed")
+
+			// ignore the device not exist error
+			if err != manager.ErrDeviceNotExist {
+				return err
+			}
 		}
 	}
 

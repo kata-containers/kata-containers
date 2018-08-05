@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	deviceApi "github.com/kata-containers/runtime/virtcontainers/device/api"
+	deviceConfig "github.com/kata-containers/runtime/virtcontainers/device/config"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -759,4 +760,25 @@ func PauseContainer(sandboxID, containerID string) error {
 // ResumeContainer is the virtcontainers container resume entry point.
 func ResumeContainer(sandboxID, containerID string) error {
 	return togglePauseContainer(sandboxID, containerID, false)
+}
+
+// AddDevice will add a device to sandbox
+func AddDevice(sandboxID string, info deviceConfig.DeviceInfo) (deviceApi.Device, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
+	}
+
+	lockFile, err := rwLockSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlockSandbox(lockFile)
+
+	s, err := fetchSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	defer s.releaseStatelessSandbox()
+
+	return s.AddDevice(info)
 }

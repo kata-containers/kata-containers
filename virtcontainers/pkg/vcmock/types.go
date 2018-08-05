@@ -9,6 +9,8 @@ import (
 	"syscall"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -61,4 +63,6 @@ type VCMock struct {
 	UpdateContainerFunc      func(sandboxID, containerID string, resources specs.LinuxResources) error
 	PauseContainerFunc       func(sandboxID, containerID string) error
 	ResumeContainerFunc      func(sandboxID, containerID string) error
+
+	AddDeviceFunc func(sandboxID string, info config.DeviceInfo) (api.Device, error)
 }

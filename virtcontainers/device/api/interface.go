@@ -62,6 +62,7 @@ type Device interface {
 // device management object.
 type DeviceManager interface {
 	NewDevice(config.DeviceInfo) (Device, error)
+	RemoveDevice(string) error
 	AttachDevice(string, DeviceReceiver) error
 	DetachDevice(string, DeviceReceiver) error
 	IsDeviceAttached(string) bool
