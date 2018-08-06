@@ -83,8 +83,8 @@ build_and_install_qemu() {
 }
 
 #Load specific configure file
-if [ -f "lib_install_qemu_${QEMU_ARCH}.sh" ]; then
-	source "lib_install_qemu_${QEMU_ARCH}.sh"
+if [ -f "${cidir}/${QEMU_ARCH}/lib_install_qemu_${QEMU_ARCH}.sh" ]; then
+	source "${cidir}/${QEMU_ARCH}/lib_install_qemu_${QEMU_ARCH}.sh"
 fi
 
 main() {

@@ -10,7 +10,7 @@ GOPATH_LOCAL="${GOPATH%%:*}"
 kata_dir="${GOPATH_LOCAL}/src/github.com/kata-containers"
 test_dir="${kata_dir}/tests"
 ci_dir="${test_dir}/.ci"
-test_config_file="${ci_dir}/configuration_aarch64.yaml"
+test_config_file="${ci_dir}/aarch64/configuration_aarch64.yaml"
 
 test_filter_flag="test"
 
