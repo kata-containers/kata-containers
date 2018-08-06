@@ -48,8 +48,6 @@ Options:
   -s : strict mode - perform extra checks.
   -v : verbose mode.
 
-${warning}
-
 Example usage:
 
   $ ${script_name} foo.md foo.md.sh
