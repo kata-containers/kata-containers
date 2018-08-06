@@ -150,7 +150,7 @@ func proxyConn(conn1 net.Conn, conn2 net.Conn, wg *sync.WaitGroup) {
 	copyStream := func(dst io.Writer, src io.Reader) {
 		_, err := io.Copy(dst, src)
 		if err != nil {
-			logger().Debug("Copy stream error: %v", err)
+			logger().WithError(err).Debug("Copy stream error")
 		}
 
 		once.Do(cleanup)
