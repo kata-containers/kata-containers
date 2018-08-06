@@ -83,6 +83,9 @@ assets:
       ppc64le:
         name: "centos"
         version: "latest"
+      s390x:
+        name: "ubuntu"
+        version: "latest"
       x86_64:
         name: &default-image-name "clearlinux"
         version: "20640"
@@ -99,6 +102,9 @@ assets:
         name: &default-initrd-name "alpine"
         version: &default-initrd-version "3.7"
       ppc64le:
+        name: *default-initrd-name
+        version: *default-initrd-version
+      s390x:
         name: *default-initrd-name
         version: *default-initrd-version
       x86_64:

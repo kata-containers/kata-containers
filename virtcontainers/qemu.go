@@ -867,18 +867,20 @@ func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) error {
 		return err
 	}
 	var tap TapInterface
+	devID := "virtio-" + tap.ID
+
+	switch endpoint.Type() {
+	case VethEndpointType:
+		drive := endpoint.(*VethEndpoint)
+		tap = drive.NetPair.TapInterface
+	case TapEndpointType:
+		drive := endpoint.(*TapEndpoint)
+		tap = drive.TapInterface
+	default:
+		return fmt.Errorf("this endpoint is not supported")
+	}
 
 	if op == addDevice {
-		switch endpoint.Type() {
-		case VethEndpointType:
-			drive := endpoint.(*VethEndpoint)
-			tap = drive.NetPair.TapInterface
-		case TapEndpointType:
-			drive := endpoint.(*TapEndpoint)
-			tap = drive.TapInterface
-		default:
-			return fmt.Errorf("this endpoint is not supported")
-		}
 
 		if err = q.hotAddNetDevice(tap.Name, endpoint.HardwareAddr(), tap.VMFds, tap.VhostFds); err != nil {
 			return err
@@ -891,34 +893,28 @@ func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) error {
 		pciAddr := fmt.Sprintf("%02x/%s", bridge.Addr, addr)
 		endpoint.SetPciAddr(pciAddr)
 
-		devID := "virtio-" + tap.ID
-		if err = q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs), q.arch.runNested()); err != nil {
+		var machine govmmQemu.Machine
+		machine, err = q.getQemuMachine()
+		if err != nil {
 			return err
 		}
-	} else {
-		switch endpoint.Type() {
-		case VethEndpointType:
-			drive := endpoint.(*VethEndpoint)
-			tap = drive.NetPair.TapInterface
-		case TapEndpointType:
-			drive := endpoint.(*TapEndpoint)
-			tap = drive.TapInterface
-		default:
-			return fmt.Errorf("this endpoint is not supported")
+		if machine.Type == QemuCCWVirtio {
+			return q.qmpMonitorCh.qmp.ExecuteNetCCWDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, int(q.config.NumVCPUs))
 		}
-
-		if err := q.removeDeviceFromBridge(tap.ID); err != nil {
-			return err
-		}
-
-		devID := "virtio-" + tap.ID
-		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
-			return err
-		}
-		if err := q.qmpMonitorCh.qmp.ExecuteNetdevDel(q.qmpMonitorCh.ctx, tap.Name); err != nil {
-			return err
-		}
+		return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs), q.arch.runNested())
 	}
+
+	if err := q.removeDeviceFromBridge(tap.ID); err != nil {
+		return err
+	}
+
+	if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
+		return err
+	}
+	if err := q.qmpMonitorCh.qmp.ExecuteNetdevDel(q.qmpMonitorCh.ctx, tap.Name); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -1144,6 +1140,7 @@ func (q *qemu) resumeSandbox() error {
 
 // addDevice will add extra devices to Qemu command line.
 func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
+	var err error
 	span, _ := q.trace("addDevice")
 	defer span.Finish()
 
@@ -1160,14 +1157,14 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 	case config.BlockDrive:
 		q.qemuConfig.Devices = q.arch.appendBlockDevice(q.qemuConfig.Devices, v)
 	case config.VhostUserDeviceAttrs:
-		q.qemuConfig.Devices = q.arch.appendVhostUserDevice(q.qemuConfig.Devices, v)
+		q.qemuConfig.Devices, err = q.arch.appendVhostUserDevice(q.qemuConfig.Devices, v)
 	case config.VFIODev:
 		q.qemuConfig.Devices = q.arch.appendVFIODevice(q.qemuConfig.Devices, v)
 	default:
 		break
 	}
 
-	return nil
+	return err
 }
 
 // getSandboxConsole builds the path of the console where we can read
@@ -1287,6 +1284,8 @@ func genericBridges(number uint32, machineType string) []Bridge {
 	case QemuVirt:
 		bt = pcieBridge
 	case QemuPseries:
+		bt = pciBridge
+	case QemuCCWVirtio:
 		bt = pciBridge
 	default:
 		return nil

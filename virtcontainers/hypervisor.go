@@ -514,7 +514,7 @@ func getHostMemorySizeKb(memInfoPath string) (uint64, error) {
 
 // RunningOnVMM checks if the system is running inside a VM.
 func RunningOnVMM(cpuInfoPath string) (bool, error) {
-	if runtime.GOARCH == "arm64" || runtime.GOARCH == "ppc64le" {
+	if runtime.GOARCH == "arm64" || runtime.GOARCH == "ppc64le" || runtime.GOARCH == "s390x" {
 		virtLog.Info("Unable to know if the system is running inside a VM")
 		return false, nil
 	}
