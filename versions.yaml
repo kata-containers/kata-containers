@@ -134,7 +134,7 @@ externals:
     url: "https://github.com/kubernetes-incubator/cri-o"
     version: "6273bea4c9ed788aeb3d051ebf2d030060c05b6c"
     meta:
-      openshift: "7fcfaf1ec696d14615069707fbe8b36f19cbb8d7"
+      openshift: "6273bea4c9ed788aeb3d051ebf2d030060c05b6c"
 
   cri-containerd:
     description: |
@@ -167,8 +167,8 @@ externals:
       Distribution of Kubernetes optimized for continuous application
       development and multi-tenant deployment.
     url: "https://github.com/openshift/origin"
-    version: "v3.9.0"
-    commit: "191fece"
+    version: "v3.10.0"
+    commit: "dd10d17"
 
   runc:
     description: "OCI CLI reference runtime implementation"
