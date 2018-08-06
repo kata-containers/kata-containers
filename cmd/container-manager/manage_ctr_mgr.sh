@@ -195,7 +195,7 @@ get_docker_default_runtime(){
 }
 
 get_docker_version(){
-	sudo docker version | awk '/Server/{getline; print $2 }'
+	sudo docker version | awk '/Engine/{getline; print $2 }'
 }
 
 get_docker_package_name(){
