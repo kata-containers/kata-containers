@@ -963,3 +963,40 @@ func (q *QMP) ExecuteGetFD(ctx context.Context, fdname string, fd *os.File) erro
 	_, err := q.executeCommandWithResponse(ctx, "getfd", args, oob, nil)
 	return err
 }
+
+// ExecuteCharDevUnixSocketAdd adds a character device using as backend a unix socket,
+// id is an identifier for the device, path specifies the local path of the unix socket,
+// wait is to block waiting for a client to connect, server specifies that the socket is a listening socket.
+func (q *QMP) ExecuteCharDevUnixSocketAdd(ctx context.Context, id, path string, wait, server bool) error {
+	args := map[string]interface{}{
+		"id": id,
+		"backend": map[string]interface{}{
+			"type": "socket",
+			"data": map[string]interface{}{
+				"wait":   wait,
+				"server": server,
+				"addr": map[string]interface{}{
+					"type": "unix",
+					"data": map[string]interface{}{
+						"path": path,
+					},
+				},
+			},
+		},
+	}
+	return q.executeCommand(ctx, "chardev-add", args, nil)
+}
+
+// ExecuteVirtSerialPortAdd adds a virtserialport.
+// id is an identifier for the virtserialport, name is a name for the virtserialport and
+// it will be visible in the VM, chardev is the character device id previously added.
+func (q *QMP) ExecuteVirtSerialPortAdd(ctx context.Context, id, name, chardev string) error {
+	args := map[string]interface{}{
+		"driver":  VirtioSerialPort,
+		"id":      id,
+		"name":    name,
+		"chardev": chardev,
+	}
+
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
