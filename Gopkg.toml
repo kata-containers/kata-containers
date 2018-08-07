@@ -66,6 +66,10 @@
   name = "github.com/safchain/ethtool"
   revision = "79559b488d8848b53a8e34c330140c3fc37ee246"
 
+[[constraint]]
+ name = "github.com/containerd/containerd"
+ revision = "29eab28b8e4e18231b6b2f077ab653c719d25dd5"
+
 [[override]]
   branch = "master"
   name = "github.com/hashicorp/yamux"
