@@ -7,6 +7,7 @@
 set -e
 
 readonly script_dir="$(dirname $(readlink -f $0))"
+readonly script_name=${0##*/}
 
 readonly rootfs_sh="${script_dir}/../rootfs-builder/rootfs.sh"
 readonly image_builder_sh="${script_dir}/../image-builder/image_builder.sh"
@@ -23,13 +24,48 @@ readonly mgr="${tests_repo_dir}/cmd/kata-manager/kata-manager.sh"
 readonly RUNTIME=${RUNTIME:-kata-runtime}
 readonly MACHINE_TYPE=`uname -m`
 
+# all distro tests must have this prefix
+readonly test_func_prefix="test_distro_"
+
 # "docker build" does not work with a VM-based runtime
 readonly docker_build_runtime="runc"
+
+test_images_only="false"
+test_initrds_only="false"
+
+usage()
+{
+	cat <<EOT
+Usage: $script_name [help|<distro>]
+       $script_name [options]
+
+Options:
+
+  -h | --help          # Show usage.
+  --distro <distro>    # Only run tests for specified distro.
+  --list               # List all distros that can be tested.
+  --test-images-only   # Only run images tests for the list of distros under test.
+  --test-initrds-only  # Only run initrds tests for the list of distros under test.
+
+Parameters:
+
+
+help     : Show usage.
+<distro> : Only run tests for specified distro.
+
+Notes:
+
+- If no options or parameters are specified, all tests will be run.
+
+EOT
+}
 
 exit_handler()
 {
 	if [ "$?" -eq 0 ]
 	then
+		info "tests passed successfully - cleaning up"
+
 		# Rootfs and images are owned by root
 		sudo -E rm -rf "${tmp_rootfs}"
 		sudo -E rm -rf "${images_dir}"
@@ -39,8 +75,9 @@ exit_handler()
 		return
 	fi
 
-	# The test failed so dump what we can
+	info "ERROR: test failed"
 
+	# The test failed so dump what we can
 	info "AGENT_INIT: '${AGENT_INIT}'"
 
 	info "images:"
@@ -284,12 +321,22 @@ create_and_run()
 
 	if [ "$image_options" != "no" ]
 	then
-		handle_options "$distro" "image" "$image_options"
+		if [ "${test_initrds_only}" = "true" ]
+		then
+			info "only testing initrds: skipping image test for distro $distro"
+		else
+			handle_options "$distro" "image" "$image_options"
+		fi
 	fi
 
 	if [ "$initrd_options" != "no" ]
 	then
-		handle_options "$distro" "initrd" "$initrd_options"
+		if [ "${test_images_only}" = "true" ]
+		then
+			info "only testing images: skipping initrd test for distro $distro"
+		else
+			handle_options "$distro" "initrd" "$initrd_options"
+		fi
 	fi
 }
 
@@ -313,26 +360,26 @@ run_test()
 	create_and_run "${distro}" "${image_options}" "${initrd_options}"
 }
 
-test_fedora()
+test_distro_fedora()
 {
 	local -r name="Can create and run fedora image"
 	run_test "${name}" "" "fedora" "service" "no"
 }
 
-test_clearlinux()
+test_distro_clearlinux()
 {
 	local -r name="Can create and run clearlinux image"
 
 	run_test "${name}" "" "clearlinux" "service" "no"
 }
 
-test_centos()
+test_distro_centos()
 {
 	local -r name="Can create and run centos image"
 	run_test "${name}" "" "centos" "service" "no"
 }
 
-test_euleros()
+test_distro_euleros()
 {
 	local -r name="Can create and run euleros image"
 
@@ -341,25 +388,131 @@ test_euleros()
 	run_test "${name}" "$skip" "euleros" "service" "no"
 }
 
-test_alpine()
+test_distro_alpine()
 {
 	local -r name="Can create and run alpine image"
 	run_test "${name}" "" "alpine" "no" "init"
 }
 
-main()
+# Displays a list of all distro test functions
+get_distro_test_names()
 {
-	setup
-	test_fedora
-	test_centos
-	test_alpine
+	typeset -F | awk '{print $3}' |\
+		grep "^${test_func_prefix}" | sort
+}
+
+# Displays a list of distros which can be tested
+list_distros()
+{
+	get_distro_test_names | sed "s/${test_func_prefix}//g"
+}
+
+test_single_distro()
+{
+	local -r distro="$1"
+
+	[ -z "$distro" ] && die "distro cannot be blank"
+
+	local -r expected_func="${test_func_prefix}${distro}"
+
+	local test_funcs
+	test_funcs=$(get_distro_test_names)
+
+	local defined_func
+	defined_func=$(echo "$test_funcs" | grep "^${expected_func}$" || true)
+
+	if [ -z "$defined_func" ]
+	then
+		local distros
+
+		# make a comma-separated list
+		distros=$(list_distros | tr '\n' ',' | sed 's/,$//g')
+
+		die "no test for distro '$distro' (try one of $distros)"
+	fi
+
+	info "only running tests for distro $distro"
+
+	# run the test
+	$defined_func
+}
+
+test_all_distros()
+{
+	info "running tests for all distros"
+
+	test_distro_fedora
+	test_distro_centos
+	test_distro_alpine
 
 	if [ $MACHINE_TYPE != "ppc64le" ]; then
-	   test_clearlinux
+	   test_distro_clearlinux
+
 	   # Run last as EulerOS servers can be slow and we don't want to fail the
 	   # previous tests.
-	   test_euleros
+	   test_distro_euleros
 	fi
+}
+
+main()
+{
+	local args=$(getopt \
+		-n "$script_name" \
+		-a \
+		--options="h" \
+		--longoptions="help distro: list test-images-only test-initrds-only" \
+		-- "$@")
+
+	eval set -- "$args"
+	[ $? -ne 0 ] && { usage >&2; exit 1; }
+
+	local distro=
+
+	while [ $# -gt 1 ]
+	do
+		case "$1" in
+			--distro) distro="$2";;
+
+			-h|--help) usage; exit 0 ;;
+
+			--list) list_distros; exit 0;;
+
+			--test-images-only)
+				test_images_only="true"
+				test_initrds_only="false"
+				;;
+
+			--test-initrds-only)
+				test_initrds_only="true"
+				test_images_only="false"
+				;;
+
+			--) shift; break ;;
+		esac
+
+		shift
+	done
+
+	# Consume getopt cruft
+	[ "$1" = "--" ] && shift
+
+	case "$1" in
+		help) usage && exit 0;;
+		*) distro="$1";;
+	esac
+
+	setup
+
+	if [ -n "$distro" ]
+	then
+		test_single_distro "$distro"
+	else
+		test_all_distros
+	fi
+
+	# We shouldn't really need a message like this but the CI can fail in
+	# mysterious ways so make it clear!
+	info "all tests finished successfully"
 }
 
 main "$@"
