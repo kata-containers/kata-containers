@@ -8,7 +8,7 @@
 TIMEOUT := 60
 
 # union for 'make test'
-UNION := functional docker crio docker-compose openshift kubernetes swarm cri-containerd
+UNION := functional docker crio docker-compose docker-stability openshift kubernetes swarm cri-containerd
 
 # skipped test suites for docker integration tests
 SKIP :=
@@ -58,6 +58,11 @@ docker-compose:
 	cd integration/docker-compose && \
 	bats docker-compose.bats
 
+docker-stability:
+	systemctl is-active --quiet docker || sudo systemctl start docker
+	cd integration/stability && \
+	export ITERATIONS=2 && export MAX_CONTAINERS=20 && chronic ./soak_parallel_rm.sh
+
 kubernetes:
 	bash -f .ci/install_bats.sh
 	bash -f integration/kubernetes/run_kubernetes_tests.sh
@@ -88,6 +93,7 @@ check: checkcommits log-parser
 	checkcommits \
 	crio \
 	docker-compose \
+	docker-stability \
 	functional \
 	ginkgo \
 	docker \
