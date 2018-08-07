@@ -438,11 +438,11 @@ func TestQMPDeviceAdd(t *testing.T) {
 	buf.AddCommand("device_add", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
-	checkVersion(t, connectedCh)
+	q.version = checkVersion(t, connectedCh)
 	blockdevID := fmt.Sprintf("drive_%s", volumeUUID)
 	devID := fmt.Sprintf("device_%s", volumeUUID)
 	err := q.ExecuteDeviceAdd(context.Background(), blockdevID, devID,
-		"virtio-blk-pci", "")
+		"virtio-blk-pci", "", true)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -463,11 +463,11 @@ func TestQMPSCSIDeviceAdd(t *testing.T) {
 	buf.AddCommand("device_add", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
-	checkVersion(t, connectedCh)
+	q.version = checkVersion(t, connectedCh)
 	blockdevID := fmt.Sprintf("drive_%s", volumeUUID)
 	devID := fmt.Sprintf("device_%s", volumeUUID)
 	err := q.ExecuteSCSIDeviceAdd(context.Background(), blockdevID, devID,
-		"scsi-hd", "scsi0.0", 1, 2)
+		"scsi-hd", "scsi0.0", 1, 2, true)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -881,11 +881,11 @@ func TestQMPPCIDeviceAdd(t *testing.T) {
 	buf.AddCommand("device_add", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
-	checkVersion(t, connectedCh)
+	q.version = checkVersion(t, connectedCh)
 	blockdevID := fmt.Sprintf("drive_%s", volumeUUID)
 	devID := fmt.Sprintf("device_%s", volumeUUID)
 	err := q.ExecutePCIDeviceAdd(context.Background(), blockdevID, devID,
-		"virtio-blk-pci", "0x1", "")
+		"virtio-blk-pci", "0x1", "", true)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
