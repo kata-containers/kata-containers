@@ -63,6 +63,13 @@ build_and_install_qemu() {
 	[ -d "capstone" ] || git clone https://github.com/qemu/capstone.git capstone
 	[ -d "ui/keycodemapdb" ] || git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
+	# Apply required patches
+	QEMU_PATCHES_PATH="${GOPATH}/src/${PACKAGING_REPO}/obs-packaging/qemu-lite/patches"
+	for patch in ${QEMU_PATCHES_PATH}/*.patch; do
+		echo "Applying patch: $patch"
+		git am -3 "$patch"
+	done
+
 	echo "Build Qemu"
 	"${QEMU_CONFIG_SCRIPT}" "qemu" | xargs ./configure
 	make -j $(nproc)
