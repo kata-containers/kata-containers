@@ -276,7 +276,7 @@ $ kernel_arch="$(./kata-arch.sh)"
 $ kernel_dir="$(./kata-arch.sh --kernel)"
 $ tmpdir="$(mktemp -d)"
 $ pushd "$tmpdir"
-$ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/configs/${kernel_arch}_kata_kvm_4.14.x -o .config
+$ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/configs/${kernel_dir}_kata_kvm_4.14.x -o .config
 $ kernel_version=$(grep "Linux/[${kernel_arch}]*" .config | cut -d' ' -f3 | tail -1)
 $ kernel_tar_file="linux-${kernel_version}.tar.xz"
 $ kernel_url="https://cdn.kernel.org/pub/linux/kernel/v$(echo $kernel_version | cut -f1 -d.).x/${kernel_tar_file}"
