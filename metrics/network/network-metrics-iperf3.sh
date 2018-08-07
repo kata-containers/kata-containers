@@ -140,58 +140,6 @@ EOF
 	clean_env
 }
 
-# Run bi-directional TCP test, and extract results for both directions
-function iperf3_bidirectional_bandwidth_client_server() {
-	local TEST_NAME="network iperf3 bidirectional bandwidth"
-
-	# Start server
-	local server_address=$(start_server "$image" "$server_command" "$server_extra_args")
-
-	# Verify server IP address
-	if [ -z "$server_address" ];then
-		clean_env
-		die "server: ip address no found"
-	fi
-
-	metrics_json_init
-	save_config
-
-	# Start client
-	local client_command="$init_cmds && iperf3 -c ${server_address} -d -t ${transmit_timeout}"
-	result=$(start_client "$image" "$client_command" "$client_extra_args")
-
-	metrics_json_start_array
-
-	local client_result=$(echo "$result" | grep -m1 -E '\breceiver\b')
-	local server_result=$(echo "$result" | grep -m1 -E '\bsender\b')
-	local -a client_results
-	read -a client_results <<< ${client_result}
-	read -a server_results <<< ${server_result}
-	local total_bidirectional_client_bandwidth=${client_results[6]}
-	local total_bidirectional_client_bandwidth_units=${client_results[7]}
-	local total_bidirectional_server_bandwidth=${server_results[6]}
-	local total_bidirectional_server_bandwidth_units=${server_results[7]}
-
-	local json="$(cat << EOF
-	{
-		"client to server": {
-			"Result" : $total_bidirectional_client_bandwidth,
-			"Units"  : "$total_bidirectional_client_bandwidth_units"
-		},
-		"server to client": {
- 			"Result" : $total_bidirectional_server_bandwidth,
-			"Units"  : "$total_bidirectional_server_bandwidth_units"
-		}
-	}
-EOF
-)"
-
-	metrics_json_add_array_element "$json"
-	metrics_json_end_array "Results"
-	metrics_json_save
-	clean_env
-}
-
 # This function checks/verify if the iperf3 server
 # is ready/up for requests.
 function check_iperf3_server() {
@@ -563,7 +511,6 @@ function main {
 		iperf3_host_cnt_bwd
  		iperf3_host_cnt_bwd_rev
 		iperf3_multiqueue
-		iperf3_bidirectional_bandwidth_client_server
 	fi
 
 	if [ "$test_jitter" == "1" ]; then
