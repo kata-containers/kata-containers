@@ -11,8 +11,6 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-[ -z  "${DEBUG:-}"  ] ||  set -x
-
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly project="kata-containers"
@@ -46,6 +44,7 @@ readonly destdir="${script_dir}"
 build_initrd(){
 	sudo -E PATH="$PATH" make initrd\
 	     DISTRO="$initrd_distro" \
+	     DEBUG="${DEBUG:-}" \
 	     AGENT_VERSION="${agent_version}" \
 	     OS_VERSION="${initrd_os_version}" \
 	     DISTRO_ROOTFS="${tmp_dir}/initrd-image" \
@@ -57,6 +56,7 @@ build_initrd(){
 build_image(){
 	sudo -E PATH="${PATH}" make image \
 	     DISTRO="${img_distro}" \
+	     DEBUG="${DEBUG:-}" \
 	     AGENT_VERSION="${agent_version}" \
 	     IMG_OS_VERSION="${img_os_version}" \
 	     DISTRO_ROOTFS="${tmp_dir}/rootfs-image"
