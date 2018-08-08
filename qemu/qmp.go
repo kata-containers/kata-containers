@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"context"
+	"strings"
 )
 
 // QMPLog is a logging interface used by the qemu package to log various
@@ -750,6 +751,23 @@ func (q *QMP) ExecuteNetdevAdd(ctx context.Context, netdevType, netdevID, ifname
 	}
 	if queues > 1 {
 		args["queues"] = queues
+	}
+
+	return q.executeCommand(ctx, "netdev_add", args, nil)
+}
+
+// ExecuteNetdevAddByFds adds a Net device to a QEMU instance
+// using the netdev_add command by fds and vhostfds. netdevID is the id of the device to add.
+// Must be valid QMP identifier.
+func (q *QMP) ExecuteNetdevAddByFds(ctx context.Context, netdevType, netdevID string, fdNames, vhostFdNames []string) error {
+	fdNameStr := strings.Join(fdNames, ":")
+	vhostFdNameStr := strings.Join(vhostFdNames, ":")
+	args := map[string]interface{}{
+		"type":     netdevType,
+		"id":       netdevID,
+		"fds":      fdNameStr,
+		"vhost":    "on",
+		"vhostfds": vhostFdNameStr,
 	}
 
 	return q.executeCommand(ctx, "netdev_add", args, nil)
