@@ -29,10 +29,9 @@ source "${SCRIPT_PATH}/../lib/common.bash"
 port="${port:-5201}"
 fwd_port="${fwd_port:-$port:$port}"
 # Image name
-# Note: This image will be replaced with a
-# dockerfile once this issue esnet/iperf#153
-# is solved
-image="${image:-gabyct/network}"
+image="${image:-local-iperf3}"
+# Dockerfile
+dockerfile="${SCRIPT_PATH}/iperf3_dockerfile/Dockerfile"
 # Measurement time (seconds)
 transmit_timeout="${transmit_timeout:-30}"
 
@@ -565,7 +564,7 @@ function main {
 	# Check tools/commands dependencies
 	cmds=("docker" "perf")
 	check_cmds "${cmds[@]}"
-	check_images "$image"
+	check_dockerfiles_images "$image" "$dockerfile"
 
 	init_env
 
