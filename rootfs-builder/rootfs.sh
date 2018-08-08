@@ -10,7 +10,7 @@ set -e
 
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
-AGENT_VERSION=${AGENT_VERSION:-master}
+AGENT_VERSION=${AGENT_VERSION:-}
 GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
@@ -261,7 +261,7 @@ OK "Pull Agent source code"
 
 info "Build agent"
 pushd "${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
-[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful" || true
+[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful"
 make clean
 make INIT=${AGENT_INIT}
 make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT}
