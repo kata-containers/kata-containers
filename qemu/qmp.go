@@ -956,12 +956,17 @@ func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string
 }
 
 // ExecutePCIVSockAdd adds a vhost-vsock-pci bus
-func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID, vhostfd string, disableModern bool) error {
+func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID, vhostfd, addr, bus string, disableModern bool) error {
 	args := map[string]interface{}{
 		"driver":    VHostVSockPCI,
 		"id":        id,
 		"guest-cid": guestCID,
 		"vhostfd":   vhostfd,
+		"addr":      addr,
+	}
+
+	if bus != "" {
+		args["bus"] = bus
 	}
 
 	if disableModern {
