@@ -132,8 +132,8 @@ build_image() {
 }
 
 #Load specific configure file
-if [ -f "lib_kata_image_${ARCH}.sh" ]; then
-	source "lib_kata_image_${ARCH}.sh"
+if [ -f "${cidir}/${ARCH}/lib_kata_image_${ARCH}.sh" ]; then
+	source "${cidir}/${ARCH}/lib_kata_image_${ARCH}.sh"
 fi
 
 main() {

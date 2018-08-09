@@ -72,8 +72,8 @@ KUBERNETES="true"
 OPENSHIFT="true"
 
 # load arch-specific lib file
-if [ -f "${cidir}/lib_setup_${arch}.sh" ]; then
-        source "${cidir}/lib_setup_${arch}.sh"
+if [ -f "${cidir}/${arch}/lib_setup_${arch}.sh" ]; then
+        source "${cidir}/${arch}/lib_setup_${arch}.sh"
 fi
 
 [ "${CRIO}" = "true" ] && echo "Install CRI-O" && bash -f "${cidir}/install_crio.sh"

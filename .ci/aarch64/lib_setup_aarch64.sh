@@ -6,7 +6,7 @@
 
 set -e
 
-filter_test_script="${cidir}/filter_test_aarch64.sh"
+filter_test_script="${cidir}/${arch}/filter_test_aarch64.sh"
 
 check_test_union()
 {
