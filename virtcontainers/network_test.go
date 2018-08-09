@@ -7,12 +7,16 @@ package virtcontainers
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"reflect"
+	"syscall"
 	"testing"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 )
@@ -487,4 +491,85 @@ func TestVhostUserEndpointAttach(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestGetNetNsFromBindMount(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpdir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
+	mountFile := filepath.Join(tmpdir, "mountInfo")
+	nsPath := filepath.Join(tmpdir, "ns123")
+
+	// Non-existent namespace path
+	_, err = getNetNsFromBindMount(nsPath, mountFile)
+	assert.NotNil(err)
+
+	tmpNSPath := filepath.Join(tmpdir, "testNetNs")
+	f, err := os.Create(tmpNSPath)
+	assert.NoError(err)
+	defer f.Close()
+
+	type testData struct {
+		contents       string
+		expectedResult string
+	}
+
+	data := []testData{
+		{fmt.Sprintf("711 26 0:3 net:[4026532008] %s rw shared:535 - nsfs nsfs rw", tmpNSPath), "net:[4026532008]"},
+		{"711 26 0:3 net:[4026532008] /run/netns/ns123 rw shared:535 - tmpfs tmpfs rw", ""},
+		{"a a a a a a a - b c d", ""},
+		{"", ""},
+	}
+
+	for i, d := range data {
+		err := ioutil.WriteFile(mountFile, []byte(d.contents), 0640)
+		assert.NoError(err)
+
+		path, err := getNetNsFromBindMount(tmpNSPath, mountFile)
+		assert.NoError(err, fmt.Sprintf("got %q, test data: %+v", path, d))
+
+		assert.Equal(d.expectedResult, path, "Test %d, expected %s, got %s", i, d.expectedResult, path)
+	}
+}
+
+func TestHostNetworkingRequested(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	assert := assert.New(t)
+
+	// Network namespace same as the host
+	selfNsPath := "/proc/self/ns/net"
+	isHostNs, err := hostNetworkingRequested(selfNsPath)
+	assert.NoError(err)
+	assert.True(isHostNs)
+
+	// Non-existent netns path
+	nsPath := "/proc/123/ns/net"
+	_, err = hostNetworkingRequested(nsPath)
+	assert.Error(err)
+
+	// Bind-mounted Netns
+	tmpdir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
+	// Create a bind mount to the current network namespace.
+	tmpFile := filepath.Join(tmpdir, "testNetNs")
+	f, err := os.Create(tmpFile)
+	assert.NoError(err)
+	defer f.Close()
+
+	err = syscall.Mount(selfNsPath, tmpFile, "bind", syscall.MS_BIND, "")
+	assert.Nil(err)
+
+	isHostNs, err = hostNetworkingRequested(tmpFile)
+	assert.NoError(err)
+	assert.True(isHostNs)
+
+	syscall.Unmount(tmpFile, 0)
 }
