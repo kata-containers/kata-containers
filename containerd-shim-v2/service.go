@@ -423,7 +423,32 @@ func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (*pty
 
 // ResizePty of a process
 func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (*ptypes.Empty, error) {
-	return nil, errdefs.ErrNotImplemented
+	s.Lock()
+	defer s.Unlock()
+
+	c, err := s.getContainer(r.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	processID := c.id
+	if r.ExecID != "" {
+		execs, err := c.getExec(r.ExecID)
+		if err != nil {
+			return nil, err
+		}
+		execs.tty.height = r.Height
+		execs.tty.width = r.Width
+
+		processID = execs.id
+
+	}
+	err = s.sandbox.WinsizeProcess(c.id, processID, r.Height, r.Width)
+	if err != nil {
+		return nil, err
+	}
+
+	return empty, err
 }
 
 // State returns runtime state information for a process
