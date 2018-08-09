@@ -28,7 +28,7 @@ func TestEventsCliAction(t *testing.T) {
 	flagSet := flag.NewFlagSet("events", flag.ContinueOnError)
 
 	// create a new fake context
-	ctx := cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	err := actionFunc(ctx)
 	assert.Error(err, "Missing container ID")
@@ -38,7 +38,7 @@ func TestEventsCLIFailure(t *testing.T) {
 	assert := assert.New(t)
 
 	flagSet := flag.NewFlagSet("events", flag.ContinueOnError)
-	ctx := cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	actionFunc, ok := eventsCLICommand.Action.(func(ctx *cli.Context) error)
 	assert.True(ok)
@@ -50,7 +50,7 @@ func TestEventsCLIFailure(t *testing.T) {
 	// interval is negative
 	flagSet.Parse([]string{testContainerID})
 	flagSet.Duration("interval", (-1)*time.Second, "")
-	ctx = cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx = createCLIContext(flagSet)
 	err = actionFunc(ctx)
 	assert.Error(err)
 
@@ -58,7 +58,7 @@ func TestEventsCLIFailure(t *testing.T) {
 	flagSet = flag.NewFlagSet("events", flag.ContinueOnError)
 	flagSet.Parse([]string{testContainerID})
 	flagSet.Duration("interval", 0*time.Second, "")
-	ctx = cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx = createCLIContext(flagSet)
 	err = actionFunc(ctx)
 	assert.Error(err)
 
@@ -136,7 +136,7 @@ func TestEventsCLISuccessful(t *testing.T) {
 	flagSet.Parse([]string{testContainerID})
 	flagSet.Duration("interval", 5*time.Second, "")
 	flagSet.Bool("stats", true, "")
-	ctx := cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 	err = actionFunc(ctx)
 	assert.NoError(err)
 }

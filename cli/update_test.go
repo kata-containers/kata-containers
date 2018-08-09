@@ -26,7 +26,7 @@ func TestUpdateCLIAction(t *testing.T) {
 	flagSet.Parse([]string{"resources"})
 
 	// create a new fake context
-	ctx := cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	// get Action function
 	actionFunc, ok := updateCLICommand.Action.(func(ctx *cli.Context) error)
@@ -40,7 +40,7 @@ func TestUpdateCLIFailure(t *testing.T) {
 	assert := assert.New(t)
 
 	flagSet := flag.NewFlagSet("update", flag.ContinueOnError)
-	ctx := cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	actionFunc, ok := updateCLICommand.Action.(func(ctx *cli.Context) error)
 	assert.True(ok)
@@ -51,7 +51,7 @@ func TestUpdateCLIFailure(t *testing.T) {
 
 	// container info
 	flagSet.Parse([]string{testContainerID})
-	ctx = cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx = createCLIContext(flagSet)
 	err = actionFunc(ctx)
 	assert.Error(err)
 
@@ -105,7 +105,7 @@ func TestUpdateCLIFailure(t *testing.T) {
 		testingImpl.UpdateContainerFunc = nil
 	}()
 	flagSet.String("resources", "/abc/123/xyz/rgb", "")
-	ctx = cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx = createCLIContext(flagSet)
 	err = actionFunc(ctx)
 	assert.Error(err)
 
@@ -117,7 +117,7 @@ func TestUpdateCLIFailure(t *testing.T) {
 	f.WriteString("no json")
 	f.Close()
 	flagSet.Set("resources", f.Name())
-	ctx = cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx = createCLIContext(flagSet)
 	err = actionFunc(ctx)
 	assert.Error(err)
 
@@ -125,7 +125,7 @@ func TestUpdateCLIFailure(t *testing.T) {
 	flagSet = flag.NewFlagSet("update", flag.ContinueOnError)
 	flagSet.Parse([]string{testContainerID})
 	flagSet.String("cpu-period", "abcxyz", "")
-	ctx = cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx = createCLIContext(flagSet)
 	err = actionFunc(ctx)
 	assert.Error(err)
 
@@ -133,7 +133,7 @@ func TestUpdateCLIFailure(t *testing.T) {
 	flagSet = flag.NewFlagSet("update", flag.ContinueOnError)
 	flagSet.Parse([]string{testContainerID})
 	flagSet.String("cpu-quota", "abcxyz", "")
-	ctx = cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx = createCLIContext(flagSet)
 	err = actionFunc(ctx)
 	assert.Error(err)
 
@@ -141,7 +141,7 @@ func TestUpdateCLIFailure(t *testing.T) {
 	flagSet = flag.NewFlagSet("update", flag.ContinueOnError)
 	flagSet.Parse([]string{testContainerID})
 	flagSet.String("memory", "abcxyz", "")
-	ctx = cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx = createCLIContext(flagSet)
 	err = actionFunc(ctx)
 	assert.Error(err)
 }
@@ -200,7 +200,7 @@ func TestUpdateCLISuccessful(t *testing.T) {
 	flagSet.String("kernel-memory", "100M", "")
 	flagSet.String("kernel-memory-tcp", "100M", "")
 	flagSet.String("memory-reservation", "100M", "")
-	ctx := cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 	err = actionFunc(ctx)
 	assert.NoError(err)
 }

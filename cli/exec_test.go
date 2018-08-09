@@ -25,8 +25,7 @@ func TestExecCLIFunction(t *testing.T) {
 	assert := assert.New(t)
 
 	flagSet := &flag.FlagSet{}
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	fn, ok := startCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
@@ -43,7 +42,7 @@ func TestExecCLIFunction(t *testing.T) {
 	// pass container-id
 	flagSet = flag.NewFlagSet("container-id", flag.ContinueOnError)
 	flagSet.Parse([]string{"xyz"})
-	ctx = cli.NewContext(app, flagSet, nil)
+	ctx = createCLIContext(flagSet)
 
 	err = fn(ctx)
 	assert.Error(err)
@@ -54,7 +53,7 @@ func TestExecuteErrors(t *testing.T) {
 	assert := assert.New(t)
 
 	flagSet := flag.NewFlagSet("", 0)
-	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	// missing container id
 	err := execute(ctx)
@@ -146,7 +145,7 @@ func TestExecuteErrorReadingProcessJson(t *testing.T) {
 	flagSet := flag.NewFlagSet("", 0)
 	flagSet.String("process", processPath, "")
 	flagSet.Parse([]string{testContainerID})
-	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	rootPath, configPath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
@@ -195,7 +194,7 @@ func TestExecuteErrorOpeningConsole(t *testing.T) {
 	flagSet := flag.NewFlagSet("", 0)
 	flagSet.String("console-socket", consoleSock, "")
 	flagSet.Parse([]string{testContainerID})
-	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	rootPath, configPath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
@@ -262,7 +261,7 @@ func TestExecuteWithFlags(t *testing.T) {
 	flagSet.Bool("no-new-privs", false, "")
 
 	flagSet.Parse([]string{testContainerID, "/tmp/foo"})
-	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	rootPath, configPath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
@@ -351,7 +350,7 @@ func TestExecuteWithFlagsDetached(t *testing.T) {
 
 	flagSet := testExecParamsSetup(t, pidFilePath, consolePath, detach)
 	flagSet.Parse([]string{testContainerID, "/tmp/foo"})
-	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	rootPath, configPath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
@@ -430,7 +429,7 @@ func TestExecuteWithInvalidProcessJson(t *testing.T) {
 	defer os.Remove(processPath)
 
 	flagSet.Parse([]string{testContainerID})
-	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	rootPath, configPath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
@@ -482,7 +481,7 @@ func TestExecuteWithValidProcessJson(t *testing.T) {
 	flagSet.String("process", processPath, "")
 
 	flagSet.Parse([]string{testContainerID, "/tmp/foo"})
-	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	rootPath, configPath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
@@ -583,7 +582,7 @@ func TestExecuteWithEmptyEnvironmentValue(t *testing.T) {
 
 	flagSet.String("process", processPath, "")
 	flagSet.Parse([]string{testContainerID})
-	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	rootPath, configPath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
@@ -695,7 +694,7 @@ func TestGenerateExecParams(t *testing.T) {
 	flagSet.String("cwd", cwd, "")
 	flagSet.String("apparmor", apparmor, "")
 
-	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
+	ctx := createCLIContext(flagSet)
 	process := &oci.CompatOCIProcess{}
 	params, err := generateExecParams(ctx, process)
 	assert.NoError(err)
@@ -738,7 +737,7 @@ func TestGenerateExecParamsWithProcessJsonFile(t *testing.T) {
 	flagSet.String("process", processPath, "")
 
 	flagSet.Parse([]string{testContainerID})
-	ctx := cli.NewContext(cli.NewApp(), flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	processJSON := `{
 				"consoleSize": {
