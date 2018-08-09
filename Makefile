@@ -59,6 +59,9 @@ $(SNAPCRAFT_FILE): %: %.in Makefile $(YQ) $(VERSIONS_YAML_FILE) $(VERSION_FILE)
 snap: $(SNAPCRAFT_FILE)
 	snapcraft -d
 
+snap-xbuild:
+	cd $(MK_DIR)/snap-build; ./xbuild.sh -a all
+
 clean:
 	rm $(SNAPCRAFT_FILE)
 
