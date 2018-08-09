@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -59,7 +60,7 @@ func TestStateSuccessful(t *testing.T) {
 	ctrsMapTreePath = path
 
 	// trying with an inexistent id
-	err = state("123456789")
+	err = state(context.Background(), "123456789")
 	assert.Error(err)
 
 	path, err = createTempContainerIDMapping(testContainerID, sandbox.ID())
@@ -79,6 +80,6 @@ func TestStateSuccessful(t *testing.T) {
 		testingImpl.StatusContainerFunc = nil
 	}()
 
-	err = state(testContainerID)
+	err = state(context.Background(), testContainerID)
 	assert.NoError(err)
 }

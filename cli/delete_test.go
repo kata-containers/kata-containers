@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -20,7 +21,7 @@ import (
 )
 
 func testRemoveCgroupsPathSuccessful(t *testing.T, cgroupsPathList []string) {
-	if err := removeCgroupsPath("foo", cgroupsPathList); err != nil {
+	if err := removeCgroupsPath(context.Background(), "foo", cgroupsPathList); err != nil {
 		t.Fatalf("This test should succeed (cgroupsPathList = %v): %s", cgroupsPathList, err)
 	}
 }
@@ -50,7 +51,7 @@ func TestDeleteInvalidContainer(t *testing.T) {
 	assert := assert.New(t)
 
 	// Missing container id
-	err := delete("", false)
+	err := delete(context.Background(), "", false)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 
@@ -60,7 +61,7 @@ func TestDeleteInvalidContainer(t *testing.T) {
 	ctrsMapTreePath = path
 
 	// Container missing in ListSandbox
-	err = delete(testContainerID, false)
+	err = delete(context.Background(), testContainerID, false)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
@@ -87,7 +88,7 @@ func TestDeleteMissingContainerTypeAnnotation(t *testing.T) {
 		testingImpl.StatusContainerFunc = nil
 	}()
 
-	err = delete(sandbox.ID(), false)
+	err = delete(context.Background(), sandbox.ID(), false)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
@@ -116,7 +117,7 @@ func TestDeleteInvalidConfig(t *testing.T) {
 		testingImpl.StatusContainerFunc = nil
 	}()
 
-	err = delete(sandbox.ID(), false)
+	err = delete(context.Background(), sandbox.ID(), false)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
@@ -172,7 +173,7 @@ func TestDeleteSandbox(t *testing.T) {
 		testingImpl.StatusContainerFunc = nil
 	}()
 
-	err = delete(sandbox.ID(), false)
+	err = delete(context.Background(), sandbox.ID(), false)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
@@ -189,7 +190,7 @@ func TestDeleteSandbox(t *testing.T) {
 		testingImpl.StatusSandboxFunc = nil
 	}()
 
-	err = delete(sandbox.ID(), false)
+	err = delete(context.Background(), sandbox.ID(), false)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
@@ -201,7 +202,7 @@ func TestDeleteSandbox(t *testing.T) {
 		testingImpl.StopSandboxFunc = nil
 	}()
 
-	err = delete(sandbox.ID(), false)
+	err = delete(context.Background(), sandbox.ID(), false)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
@@ -213,7 +214,7 @@ func TestDeleteSandbox(t *testing.T) {
 		testingImpl.DeleteSandboxFunc = nil
 	}()
 
-	err = delete(sandbox.ID(), false)
+	err = delete(context.Background(), sandbox.ID(), false)
 	assert.Nil(err)
 }
 
@@ -251,7 +252,7 @@ func TestDeleteInvalidContainerType(t *testing.T) {
 	}()
 
 	// Delete an invalid container type
-	err = delete(sandbox.ID(), false)
+	err = delete(context.Background(), sandbox.ID(), false)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
@@ -290,7 +291,7 @@ func TestDeleteSandboxRunning(t *testing.T) {
 	}()
 
 	// Delete on a running sandbox should fail
-	err = delete(sandbox.ID(), false)
+	err = delete(context.Background(), sandbox.ID(), false)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 
@@ -313,7 +314,7 @@ func TestDeleteSandboxRunning(t *testing.T) {
 	}()
 
 	// Force delete a running sandbox
-	err = delete(sandbox.ID(), true)
+	err = delete(context.Background(), sandbox.ID(), true)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
@@ -325,7 +326,7 @@ func TestDeleteSandboxRunning(t *testing.T) {
 		testingImpl.DeleteSandboxFunc = nil
 	}()
 
-	err = delete(sandbox.ID(), true)
+	err = delete(context.Background(), sandbox.ID(), true)
 	assert.Nil(err)
 }
 
@@ -370,7 +371,7 @@ func TestDeleteRunningContainer(t *testing.T) {
 	}()
 
 	// Delete on a running container should fail.
-	err = delete(sandbox.MockContainers[0].ID(), false)
+	err = delete(context.Background(), sandbox.MockContainers[0].ID(), false)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 
@@ -379,7 +380,7 @@ func TestDeleteRunningContainer(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	// force delete
-	err = delete(sandbox.MockContainers[0].ID(), true)
+	err = delete(context.Background(), sandbox.MockContainers[0].ID(), true)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
@@ -392,7 +393,7 @@ func TestDeleteRunningContainer(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	err = delete(sandbox.MockContainers[0].ID(), true)
+	err = delete(context.Background(), sandbox.MockContainers[0].ID(), true)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
@@ -408,7 +409,7 @@ func TestDeleteRunningContainer(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	err = delete(sandbox.MockContainers[0].ID(), true)
+	err = delete(context.Background(), sandbox.MockContainers[0].ID(), true)
 	assert.Nil(err)
 }
 
@@ -452,7 +453,7 @@ func TestDeleteContainer(t *testing.T) {
 		testingImpl.StatusContainerFunc = nil
 	}()
 
-	err = delete(sandbox.MockContainers[0].ID(), false)
+	err = delete(context.Background(), sandbox.MockContainers[0].ID(), false)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
@@ -465,7 +466,7 @@ func TestDeleteContainer(t *testing.T) {
 		testingImpl.StopContainerFunc = nil
 	}()
 
-	err = delete(sandbox.MockContainers[0].ID(), false)
+	err = delete(context.Background(), sandbox.MockContainers[0].ID(), false)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
@@ -481,7 +482,7 @@ func TestDeleteContainer(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	err = delete(sandbox.MockContainers[0].ID(), false)
+	err = delete(context.Background(), sandbox.MockContainers[0].ID(), false)
 	assert.Nil(err)
 }
 
@@ -613,6 +614,6 @@ func TestRemoveCGroupsPath(t *testing.T) {
 		_ = os.Chmod(tmpdir, 0755)
 	}()
 
-	err = removeCgroupsPath("foo", []string{dir})
+	err = removeCgroupsPath(context.Background(), "foo", []string{dir})
 	assert.Error(err)
 }

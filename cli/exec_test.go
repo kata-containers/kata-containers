@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -56,7 +57,7 @@ func TestExecuteErrors(t *testing.T) {
 	ctx := createCLIContext(flagSet)
 
 	// missing container id
-	err := execute(ctx)
+	err := execute(context.Background(), ctx)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 
@@ -66,7 +67,7 @@ func TestExecuteErrors(t *testing.T) {
 
 	// StatusSandbox error
 	flagSet.Parse([]string{testContainerID})
-	err = execute(ctx)
+	err = execute(context.Background(), ctx)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
@@ -83,7 +84,7 @@ func TestExecuteErrors(t *testing.T) {
 		testingImpl.StatusContainerFunc = nil
 	}()
 
-	err = execute(ctx)
+	err = execute(context.Background(), ctx)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 
@@ -103,7 +104,7 @@ func TestExecuteErrors(t *testing.T) {
 		return newSingleContainerStatus(testContainerID, containerState, annotations), nil
 	}
 
-	err = execute(ctx)
+	err = execute(context.Background(), ctx)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 
@@ -115,7 +116,7 @@ func TestExecuteErrors(t *testing.T) {
 		return newSingleContainerStatus(testContainerID, containerState, annotations), nil
 	}
 
-	err = execute(ctx)
+	err = execute(context.Background(), ctx)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 
@@ -127,7 +128,7 @@ func TestExecuteErrors(t *testing.T) {
 		return newSingleContainerStatus(testContainerID, containerState, annotations), nil
 	}
 
-	err = execute(ctx)
+	err = execute(context.Background(), ctx)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
@@ -295,6 +296,7 @@ func TestExecuteWithFlags(t *testing.T) {
 	// EnterContainer error
 	err = fn(ctx)
 	assert.Error(err)
+
 	assert.True(vcmock.IsMockError(err))
 
 	testingImpl.EnterContainerFunc = func(sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {

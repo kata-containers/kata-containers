@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -16,6 +17,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 )
 
@@ -107,7 +109,12 @@ EXAMPLE:
 		},
 	},
 	Action: func(context *cli.Context) error {
-		return execute(context)
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
+		return execute(ctx, context)
 	},
 }
 
@@ -181,11 +188,15 @@ func generateExecParams(context *cli.Context, specProcess *oci.CompatOCIProcess)
 	return params, nil
 }
 
-func execute(context *cli.Context) error {
+func execute(ctx context.Context, context *cli.Context) error {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "execute")
+	defer span.Finish()
+
 	containerID := context.Args().First()
 
 	kataLog = kataLog.WithField("container", containerID)
 	setExternalLoggers(kataLog)
+	span.SetTag("container", containerID)
 
 	status, sandboxID, err := getExistingContainerInfo(containerID)
 	if err != nil {
@@ -194,6 +205,7 @@ func execute(context *cli.Context) error {
 
 	kataLog = kataLog.WithField("sandbox", sandboxID)
 	setExternalLoggers(kataLog)
+	span.SetTag("sandbox", sandboxID)
 
 	// Retrieve OCI spec configuration.
 	ociSpec, err := oci.GetOCIConfig(status)
@@ -211,6 +223,7 @@ func execute(context *cli.Context) error {
 
 	kataLog = kataLog.WithField("container", containerID)
 	setExternalLoggers(kataLog)
+	span.SetTag("container", containerID)
 
 	// container MUST be ready or running.
 	if status.State.State != vc.StateReady &&
@@ -253,7 +266,7 @@ func execute(context *cli.Context) error {
 	// Creation of PID file has to be the last thing done in the exec
 	// because containerd considers the exec to have finished starting
 	// after this file is created.
-	if err := createPIDFile(params.pidFile, process.Pid); err != nil {
+	if err := createPIDFile(ctx, params.pidFile, process.Pid); err != nil {
 		return err
 	}
 

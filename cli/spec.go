@@ -13,6 +13,7 @@ import (
 	"os"
 
 	"github.com/opencontainers/runc/libcontainer/specconv"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 )
 
@@ -72,6 +73,14 @@ generate a proper rootless spec file.`,
 		},
 	},
 	Action: func(context *cli.Context) error {
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
+		span, _ := opentracing.StartSpanFromContext(ctx, "spec")
+		defer span.Finish()
+
 		spec := specconv.Example()
 
 		checkNoFile := func(name string) error {

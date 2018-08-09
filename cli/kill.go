@@ -7,12 +7,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"syscall"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -37,6 +39,11 @@ EXAMPLE:
 		},
 	},
 	Action: func(context *cli.Context) error {
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
 		args := context.Args()
 		if args.Present() == false {
 			return fmt.Errorf("Missing container ID")
@@ -48,7 +55,7 @@ EXAMPLE:
 			signal = "SIGTERM"
 		}
 
-		return kill(args.First(), signal, context.Bool("all"))
+		return kill(ctx, args.First(), signal, context.Bool("all"))
 	},
 }
 
@@ -90,9 +97,13 @@ var signals = map[string]syscall.Signal{
 	"SIGXFSZ":   syscall.SIGXFSZ,
 }
 
-func kill(containerID, signal string, all bool) error {
+func kill(ctx context.Context, containerID, signal string, all bool) error {
+	span, _ := opentracing.StartSpanFromContext(ctx, "kill")
+	defer span.Finish()
+
 	kataLog = kataLog.WithField("container", containerID)
 	setExternalLoggers(kataLog)
+	span.SetTag("container", containerID)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	status, sandboxID, err := getExistingContainerInfo(containerID)
@@ -107,6 +118,9 @@ func kill(containerID, signal string, all bool) error {
 		"container": containerID,
 		"sandbox":   sandboxID,
 	})
+
+	span.SetTag("container", containerID)
+	span.SetTag("sandbox", sandboxID)
 
 	setExternalLoggers(kataLog)
 

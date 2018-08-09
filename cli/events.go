@@ -14,6 +14,7 @@ import (
 	"time"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	opentracing "github.com/opentracing/opentracing-go"
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -136,6 +137,14 @@ information is displayed once every 5 seconds.`,
 		},
 	},
 	Action: func(context *cli.Context) error {
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
+		span, _ := opentracing.StartSpanFromContext(ctx, "events")
+		defer span.Finish()
+
 		containerID := context.Args().First()
 		if containerID == "" {
 			return fmt.Errorf("container id cannot be empty")
@@ -143,6 +152,7 @@ information is displayed once every 5 seconds.`,
 
 		kataLog = kataLog.WithField("container", containerID)
 		setExternalLoggers(kataLog)
+		span.SetTag("container", containerID)
 
 		duration := context.Duration("interval")
 		if duration <= 0 {
@@ -162,6 +172,8 @@ information is displayed once every 5 seconds.`,
 		})
 
 		setExternalLoggers(kataLog)
+		span.SetTag("container", containerID)
+		span.SetTag("sandbox", sandboxID)
 
 		if status.State.State == vc.StateStopped {
 			return fmt.Errorf("container with id %s is not running", status.ID)

@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -26,6 +27,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
+	jaeger "github.com/uber/jaeger-client-go"
 	"github.com/urfave/cli"
 )
 
@@ -474,6 +476,10 @@ func createCLIContextWithApp(flagSet *flag.FlagSet, app *cli.App) *cli.Context {
 		ctx.App.Metadata = map[string]interface{}{}
 	}
 
+	// add standard entries
+	ctx.App.Metadata["context"] = context.Background()
+	ctx.App.Metadata["tracer"] = &jaeger.Tracer{}
+
 	return ctx
 }
 
@@ -918,7 +924,7 @@ func TestMainCreateRuntimeApp(t *testing.T) {
 
 	args := []string{name}
 
-	err = createRuntimeApp(args)
+	err = createRuntimeApp(context.Background(), args)
 	assert.NoError(err, "%v", args)
 }
 
@@ -941,7 +947,7 @@ func TestMainCreateRuntimeAppInvalidSubCommand(t *testing.T) {
 	}()
 
 	// calls fatal() so no return
-	_ = createRuntimeApp([]string{name, "i-am-an-invalid-sub-command"})
+	_ = createRuntimeApp(context.Background(), []string{name, "i-am-an-invalid-sub-command"})
 
 	assert.NotEqual(exitStatus, 0)
 }
@@ -985,7 +991,7 @@ func TestMainCreateRuntime(t *testing.T) {
 	}()
 
 	assert.Equal(exitStatus, 0)
-	createRuntime()
+	createRuntime(context.Background())
 	assert.NotEqual(exitStatus, 0)
 }
 
@@ -1012,7 +1018,7 @@ func TestMainVersionPrinter(t *testing.T) {
 
 	setCLIGlobals()
 
-	err = createRuntimeApp([]string{name, "--version"})
+	err = createRuntimeApp(context.Background(), []string{name, "--version"})
 	assert.NoError(err)
 
 	err = grep(fmt.Sprintf(`%s\s*:\s*%s`, name, version), output)
@@ -1060,7 +1066,7 @@ func TestMainFatalWriter(t *testing.T) {
 
 	setCLIGlobals()
 
-	err := createRuntimeApp([]string{name, cmd})
+	err := createRuntimeApp(context.Background(), []string{name, cmd})
 	assert.Error(err)
 
 	re := regexp.MustCompile(

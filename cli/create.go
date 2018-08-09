@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -17,6 +18,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vf "github.com/kata-containers/runtime/virtcontainers/factory"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 )
 
@@ -62,6 +64,11 @@ var createCLICommand = cli.Command{
 		},
 	},
 	Action: func(context *cli.Context) error {
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
 		runtimeConfig, ok := context.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
 		if !ok {
 			return errors.New("invalid runtime config")
@@ -72,7 +79,7 @@ var createCLICommand = cli.Command{
 			return err
 		}
 
-		return create(context.Args().First(),
+		return create(ctx, context.Args().First(),
 			context.String("bundle"),
 			console,
 			context.String("pid-file"),
@@ -85,12 +92,16 @@ var createCLICommand = cli.Command{
 // Use a variable to allow tests to modify its value
 var getKernelParamsFunc = getKernelParams
 
-func create(containerID, bundlePath, console, pidFilePath string, detach bool,
+func create(ctx context.Context, containerID, bundlePath, console, pidFilePath string, detach bool,
 	runtimeConfig oci.RuntimeConfig) error {
 	var err error
 
+	span, ctx := opentracing.StartSpanFromContext(ctx, "create")
+	defer span.Finish()
+
 	kataLog = kataLog.WithField("container", containerID)
 	setExternalLoggers(kataLog)
+	span.SetTag("container", containerID)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	if bundlePath, err = validCreateParams(containerID, bundlePath); err != nil {
@@ -136,12 +147,12 @@ func create(containerID, bundlePath, console, pidFilePath string, detach bool,
 	var process vc.Process
 	switch containerType {
 	case vc.PodSandbox:
-		process, err = createSandbox(ociSpec, runtimeConfig, containerID, bundlePath, console, disableOutput)
+		process, err = createSandbox(ctx, ociSpec, runtimeConfig, containerID, bundlePath, console, disableOutput)
 		if err != nil {
 			return err
 		}
 	case vc.PodContainer:
-		process, err = createContainer(ociSpec, containerID, bundlePath, console, disableOutput)
+		process, err = createContainer(ctx, ociSpec, containerID, bundlePath, console, disableOutput)
 		if err != nil {
 			return err
 		}
@@ -152,7 +163,7 @@ func create(containerID, bundlePath, console, pidFilePath string, detach bool,
 	// is shim's in our case. This is mandatory to make sure there is no one
 	// else (like Docker) trying to create those files on our behalf. We want to
 	// know those files location so that we can remove them when delete is called.
-	cgroupsPathList, err := processCgroupsPath(ociSpec, containerType.IsSandbox())
+	cgroupsPathList, err := processCgroupsPath(ctx, ociSpec, containerType.IsSandbox())
 	if err != nil {
 		return err
 	}
@@ -163,14 +174,14 @@ func create(containerID, bundlePath, console, pidFilePath string, detach bool,
 		cgroupsDirPath = ociSpec.Linux.CgroupsPath
 	}
 
-	if err := createCgroupsFiles(containerID, cgroupsDirPath, cgroupsPathList, process.Pid); err != nil {
+	if err := createCgroupsFiles(ctx, containerID, cgroupsDirPath, cgroupsPathList, process.Pid); err != nil {
 		return err
 	}
 
 	// Creation of PID file has to be the last thing done in the create
 	// because containerd considers the create complete after this file
 	// is created.
-	return createPIDFile(pidFilePath, process.Pid)
+	return createPIDFile(ctx, pidFilePath, process.Pid)
 }
 
 var systemdKernelParam = []vc.Param{
@@ -241,8 +252,10 @@ func setKernelParams(containerID string, runtimeConfig *oci.RuntimeConfig) error
 	return nil
 }
 
-func createSandbox(ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
+func createSandbox(ctx context.Context, ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
 	containerID, bundlePath, console string, disableOutput bool) (vc.Process, error) {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "createSandbox")
+	defer span.Finish()
 
 	err := setKernelParams(containerID, &runtimeConfig)
 	if err != nil {
@@ -259,15 +272,17 @@ func createSandbox(ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
 		return vc.Process{}, err
 	}
 
-	kataLog = kataLog.WithField("sandbox", sandbox.ID())
+	sid := sandbox.ID()
+	kataLog = kataLog.WithField("sandbox", sid)
 	setExternalLoggers(kataLog)
+	span.SetTag("sandbox", sid)
 
 	containers := sandbox.GetAllContainers()
 	if len(containers) != 1 {
 		return vc.Process{}, fmt.Errorf("BUG: Container list from sandbox is wrong, expecting only one container, found %d containers", len(containers))
 	}
 
-	if err := addContainerIDMapping(containerID, sandbox.ID()); err != nil {
+	if err := addContainerIDMapping(ctx, containerID, sandbox.ID()); err != nil {
 		return vc.Process{}, err
 	}
 
@@ -288,8 +303,11 @@ func setEphemeralStorageType(ociSpec oci.CompatOCISpec) oci.CompatOCISpec {
 	return ociSpec
 }
 
-func createContainer(ociSpec oci.CompatOCISpec, containerID, bundlePath,
+func createContainer(ctx context.Context, ociSpec oci.CompatOCISpec, containerID, bundlePath,
 	console string, disableOutput bool) (vc.Process, error) {
+
+	span, ctx := opentracing.StartSpanFromContext(ctx, "createContainer")
+	defer span.Finish()
 
 	ociSpec = setEphemeralStorageType(ociSpec)
 
@@ -305,20 +323,24 @@ func createContainer(ociSpec oci.CompatOCISpec, containerID, bundlePath,
 
 	kataLog = kataLog.WithField("sandbox", sandboxID)
 	setExternalLoggers(kataLog)
+	span.SetTag("sandbox", sandboxID)
 
 	_, c, err := vci.CreateContainer(sandboxID, contConfig)
 	if err != nil {
 		return vc.Process{}, err
 	}
 
-	if err := addContainerIDMapping(containerID, sandboxID); err != nil {
+	if err := addContainerIDMapping(ctx, containerID, sandboxID); err != nil {
 		return vc.Process{}, err
 	}
 
 	return c.Process(), nil
 }
 
-func createCgroupsFiles(containerID string, cgroupsDirPath string, cgroupsPathList []string, pid int) error {
+func createCgroupsFiles(ctx context.Context, containerID string, cgroupsDirPath string, cgroupsPathList []string, pid int) error {
+	span, _ := opentracing.StartSpanFromContext(ctx, "createCgroupsFiles")
+	defer span.Finish()
+
 	if len(cgroupsPathList) == 0 {
 		kataLog.WithField("pid", pid).Info("Cgroups files not created because cgroupsPath was empty")
 		return nil
@@ -361,7 +383,10 @@ func createCgroupsFiles(containerID string, cgroupsDirPath string, cgroupsPathLi
 	return nil
 }
 
-func createPIDFile(pidFilePath string, pid int) error {
+func createPIDFile(ctx context.Context, pidFilePath string, pid int) error {
+	span, _ := opentracing.StartSpanFromContext(ctx, "createPIDFile")
+	defer span.Finish()
+
 	if pidFilePath == "" {
 		// runtime should not fail since pid file is optional
 		return nil

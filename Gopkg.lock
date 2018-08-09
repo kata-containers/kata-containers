@@ -20,6 +20,14 @@
   revision = "1d2a6a3ea132a86abd0731408b7dc34f2fc17d55"
 
 [[projects]]
+  branch = "master"
+  digest = "1:8ecb89af7dfe3ac401bdb0c9390b134ef96a97e85f732d2b0604fb7b3977839f"
+  name = "github.com/codahale/hdrhistogram"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "3a0bb77429bd3a61596f5e8a3172445844342120"
+
+[[projects]]
   digest = "1:3d1a50e9f27c661df8c5552e7f2f6b9d2a8b641c65aeac7373f8a5c60d9f6856"
   name = "github.com/containerd/cri-containerd"
   packages = ["pkg/annotations"]
@@ -171,6 +179,26 @@
   revision = "4e3b9264a330d094b0386c3703c5f379119711e8"
 
 [[projects]]
+  digest = "1:7da29c22bcc5c2ffb308324377dc00b5084650348c2799e573ed226d8cc9faf0"
+  name = "github.com/opentracing/opentracing-go"
+  packages = [
+    ".",
+    "ext",
+    "log",
+  ]
+  pruneopts = "NUT"
+  revision = "1949ddbfd147afd4d964a9f00b24eb291e0e7c38"
+  version = "v1.0.2"
+
+[[projects]]
+  digest = "1:5cf3f025cbee5951a4ee961de067c8a89fc95a5adabead774f82822efabab121"
+  name = "github.com/pkg/errors"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "645ef00459ed84a119197bfb8d8205042c6df63d"
+  version = "v0.8.0"
+
+[[projects]]
   digest = "1:0028cb19b2e4c3112225cd871870f2d9cf49b9b4276531f03438a88e94be86fe"
   name = "github.com/pmezard/go-difflib"
   packages = ["difflib"]
@@ -209,6 +237,39 @@
   packages = ["assert"]
   pruneopts = "NUT"
   revision = "890a5c3458b43e6104ff5da8dfa139d013d77544"
+
+[[projects]]
+  digest = "1:3d48c38e0eca8c66df62379c5ae7a83fb5cd839b94f241354c07ba077da7bc45"
+  name = "github.com/uber/jaeger-client-go"
+  packages = [
+    ".",
+    "config",
+    "internal/baggage",
+    "internal/baggage/remote",
+    "internal/spanlog",
+    "internal/throttler",
+    "internal/throttler/remote",
+    "log",
+    "rpcmetrics",
+    "thrift",
+    "thrift-gen/agent",
+    "thrift-gen/baggage",
+    "thrift-gen/jaeger",
+    "thrift-gen/sampling",
+    "thrift-gen/zipkincore",
+    "utils",
+  ]
+  pruneopts = "NUT"
+  revision = "b043381d944715b469fd6b37addfd30145ca1758"
+  version = "v2.14.0"
+
+[[projects]]
+  digest = "1:0f09db8429e19d57c8346ad76fbbc679341fa86073d3b8fb5ac919f0357d8f4c"
+  name = "github.com/uber/jaeger-lib"
+  packages = ["metrics"]
+  pruneopts = "NUT"
+  revision = "ed3a127ec5fef7ae9ea95b01b542c47fbd999ce5"
+  version = "v1.5.0"
 
 [[projects]]
   digest = "1:137331c8068398ffaf600c283e721389a6981d3b27ee84a8510e8c77505a464e"
@@ -354,10 +415,12 @@
     "github.com/opencontainers/runc/libcontainer/specconv",
     "github.com/opencontainers/runc/libcontainer/utils",
     "github.com/opencontainers/runtime-spec/specs-go",
+    "github.com/opentracing/opentracing-go",
     "github.com/safchain/ethtool",
     "github.com/sirupsen/logrus",
     "github.com/sirupsen/logrus/hooks/syslog",
     "github.com/stretchr/testify/assert",
+    "github.com/uber/jaeger-client-go/config",
     "github.com/urfave/cli",
     "github.com/vishvananda/netlink",
     "github.com/vishvananda/netns",
