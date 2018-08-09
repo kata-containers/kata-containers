@@ -23,13 +23,6 @@ source "${script_dir}/../../scripts/lib.sh"
 
 
 arch_target="$(uname -m)"
-#image information
-img_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name")
-img_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version")
-
-#initrd information
-initrd_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name")
-initrd_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version")
 
 kata_version="master"
 
@@ -39,7 +32,7 @@ kata_osbuilder_version="${KATA_OSBUILDER_VERSION:-}"
 agent_version="${AGENT_VERSION:-}"
 
 
-readonly destdir="${script_dir}"
+readonly destdir="${PWD}"
 
 build_initrd(){
 	sudo -E PATH="$PATH" make initrd\
@@ -106,6 +99,14 @@ main(){
 	[ -n "${kata_osbuilder_version}" ] || kata_osbuilder_version="${kata_version}"
 	# Agent version
 	[ -n "${agent_version}" ] || agent_version="${kata_version}"
+
+	#image information
+	img_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name" "${kata_version}")
+	img_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version" "${kata_version}")
+
+	#initrd information
+	initrd_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name" "${kata_version}")
+	initrd_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version" "${kata_version}")
 
 	shift "$(( $OPTIND - 1 ))"
 	git clone "$osbuilder_url" "${tmp_dir}/osbuilder"
