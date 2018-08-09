@@ -131,10 +131,10 @@ const (
 	// QemuQ35 is the QEMU Q35 machine type for amd64
 	QemuQ35 = "q35"
 
-	// QemuVirt is the QEMU virt machine type for aarch64
+	// QemuVirt is the QEMU virt machine type for aarch64 or amd64
 	QemuVirt = "virt"
 
-	// QemuPseries is a QEMU virt machine type for for ppc64le
+	// QemuPseries is a QEMU virt machine type for ppc64le
 	QemuPseries = "pseries"
 )
 

@@ -67,6 +67,10 @@ var supportedQemuMachines = []govmmQemu.Machine{
 		Type:    QemuQ35,
 		Options: defaultQemuMachineOptions,
 	},
+	{
+		Type:    QemuVirt,
+		Options: defaultQemuMachineOptions,
+	},
 }
 
 // MaxQemuVCPUs returns the maximum number of vCPUs supported
