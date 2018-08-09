@@ -547,7 +547,38 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (*ptypes
 
 // Kill a process with the provided signal
 func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (*ptypes.Empty, error) {
-	return nil, errdefs.ErrNotImplemented
+	s.Lock()
+	defer s.Unlock()
+
+	signum := syscall.Signal(r.Signal)
+
+	c, err := s.getContainer(r.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	processID := c.id
+	if r.ExecID != "" {
+		execs, err := c.getExec(r.ExecID)
+		if err != nil {
+			return nil, err
+		}
+		processID = execs.id
+	}
+
+	err = s.sandbox.SignalProcess(c.id, processID, signum, r.All)
+	if err != nil {
+		return nil, err
+	}
+
+	// Since the k8s will use the SIGTERM signal to stop a container by default, but
+	// some container processes would ignore this signal such as shell, thus it's better
+	// to resend another SIGKILL signal to make sure the container process terminated successfully.
+	if signum == syscall.SIGTERM {
+		err = s.sandbox.SignalProcess(c.id, processID, syscall.SIGKILL, r.All)
+	}
+
+	return empty, err
 }
 
 // Pids returns all pids inside the container
