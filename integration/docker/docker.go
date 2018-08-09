@@ -8,6 +8,9 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -42,12 +45,38 @@ const (
 	StressImage = "vish/stress"
 )
 
+// cidDirectory is the directory where container ID files are created.
+var cidDirectory string
+
+func init() {
+	var err error
+	cidDirectory, err = ioutil.TempDir("", "cid")
+	if err != nil {
+		log.Fatalf("Could not create cid directory: %v\n", err)
+	}
+}
+
+func cidFilePath(containerName string) string {
+	return filepath.Join(cidDirectory, containerName)
+}
+
 func runDockerCommandWithTimeout(timeout time.Duration, command string, args ...string) (string, string, int) {
 	return runDockerCommandWithTimeoutAndPipe(nil, timeout, command, args...)
 }
 
 func runDockerCommandWithTimeoutAndPipe(stdin *bytes.Buffer, timeout time.Duration, command string, args ...string) (string, string, int) {
 	a := []string{command}
+
+	// --cidfile must be specified when the container is created (run/create)
+	if command == "run" || command == "create" {
+		for i := 0; i < len(args); i++ {
+			// looks for container name
+			if args[i] == "--name" && i+1 < len(args) {
+				a = append(a, "--cidfile", cidFilePath(args[i+1]))
+			}
+		}
+	}
+
 	a = append(a, args...)
 
 	cmd := tests.NewCommand(Docker, a...)
@@ -213,9 +242,20 @@ func ExistDockerContainer(name string) bool {
 		return true
 	}
 
-	return tests.HypervisorRunning(name) ||
-		tests.ProxyRunning(name) ||
-		tests.ShimRunning(name)
+	// Read container ID from file created by run/create
+	path := cidFilePath(name)
+	defer os.Remove(path)
+	content, err := ioutil.ReadFile(path)
+	if err != nil {
+		tests.LogIfFail("Could not read container ID file: %v\n", err)
+		return false
+	}
+
+	// Use container ID to check if kata components are still running.
+	cid := string(content)
+	return tests.HypervisorRunning(cid) ||
+		tests.ProxyRunning(cid) ||
+		tests.ShimRunning(cid)
 }
 
 // RemoveDockerContainer removes a container using docker rm -f
