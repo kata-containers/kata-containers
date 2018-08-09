@@ -23,11 +23,12 @@ func TestEventsCliAction(t *testing.T) {
 
 	// get Action function
 	actionFunc, ok := eventsCLICommand.Action.(func(ctx *cli.Context) error)
+	assert.True(ok)
+
 	flagSet := flag.NewFlagSet("events", flag.ContinueOnError)
 
 	// create a new fake context
 	ctx := cli.NewContext(&cli.App{}, flagSet, nil)
-	assert.True(ok)
 
 	err := actionFunc(ctx)
 	assert.Error(err, "Missing container ID")
