@@ -523,7 +523,26 @@ func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (*ptypes.E
 
 // Resume the container
 func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (*ptypes.Empty, error) {
-	return nil, errdefs.ErrNotImplemented
+	s.Lock()
+	defer s.Unlock()
+
+	c, err := s.getContainer(r.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	err = s.sandbox.ResumeContainer(c.id)
+	if err == nil {
+		c.status = task.StatusRunning
+		return empty, nil
+	}
+
+	c.status, err = s.getContainerStatus(c.id)
+	if err != nil {
+		c.status = task.StatusUnknown
+	}
+
+	return empty, err
 }
 
 // Kill a process with the provided signal
