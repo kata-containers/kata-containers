@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/signal"
 	"runtime/pprof"
@@ -29,14 +30,14 @@ var handledSignalsMap = map[syscall.Signal]bool{
 	syscall.SIGUSR1:   false,
 }
 
-func handlePanic() {
+func handlePanic(ctx context.Context) {
 	r := recover()
 
 	if r != nil {
 		msg := fmt.Sprintf("%s", r)
 		kataLog.WithField("panic", msg).Error("fatal error")
 
-		die()
+		die(ctx)
 	}
 }
 
@@ -84,7 +85,9 @@ func handledSignals() []syscall.Signal {
 	return signals
 }
 
-func die() {
+func die(ctx context.Context) {
+	stopTracing(ctx)
+
 	backtrace()
 
 	if crashOnError {

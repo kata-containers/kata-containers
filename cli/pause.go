@@ -7,6 +7,9 @@
 package main
 
 import (
+	"context"
+
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -22,9 +25,7 @@ Where "<container-id>" is the container name to be paused.`,
 	Description: `The pause command suspends all processes in a container.
 
 	` + noteText,
-	Action: func(context *cli.Context) error {
-		return toggleContainerPause(context.Args().First(), true)
-	},
+	Action: pause,
 }
 
 var resumeCLICommand = cli.Command{
@@ -36,14 +37,34 @@ Where "<container-id>" is the container name to be resumed.`,
 	Description: `The resume command unpauses all processes in a container.
 
 	` + noteText,
-	Action: func(context *cli.Context) error {
-		return toggleContainerPause(context.Args().First(), false)
-	},
+	Action: resume,
 }
 
-func toggleContainerPause(containerID string, pause bool) (err error) {
+func pause(c *cli.Context) error {
+	return toggle(c, true)
+}
+
+func resume(c *cli.Context) error {
+	return toggle(c, false)
+}
+
+func toggle(c *cli.Context, pause bool) error {
+	ctx, err := cliContextToContext(c)
+	if err != nil {
+		return err
+	}
+
+	return toggleContainerPause(ctx, c.Args().First(), pause)
+}
+
+func toggleContainerPause(ctx context.Context, containerID string, pause bool) (err error) {
+	span, _ := opentracing.StartSpanFromContext(ctx, "pause")
+	defer span.Finish()
+	span.SetTag("pause", pause)
+
 	kataLog = kataLog.WithField("container", containerID)
 	setExternalLoggers(kataLog)
+	span.SetTag("container", containerID)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	status, sandboxID, err := getExistingContainerInfo(containerID)
@@ -59,6 +80,8 @@ func toggleContainerPause(containerID string, pause bool) (err error) {
 	})
 
 	setExternalLoggers(kataLog)
+	span.SetTag("container", containerID)
+	span.SetTag("sandbox", sandboxID)
 
 	if pause {
 		err = vci.PauseContainer(sandboxID, containerID)

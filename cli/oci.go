@@ -7,6 +7,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -20,6 +21,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -125,7 +127,10 @@ func validCreateParams(containerID, bundlePath string) (string, error) {
 // processCgroupsPath process the cgroups path as expected from the
 // OCI runtime specification. It returns a list of complete paths
 // that should be created and used for every specified resource.
-func processCgroupsPath(ociSpec oci.CompatOCISpec, isSandbox bool) ([]string, error) {
+func processCgroupsPath(ctx context.Context, ociSpec oci.CompatOCISpec, isSandbox bool) ([]string, error) {
+	span, _ := opentracing.StartSpanFromContext(ctx, "processCgroupsPath")
+	defer span.Finish()
+
 	var cgroupsPathList []string
 
 	if ociSpec.Linux.CgroupsPath == "" {
@@ -371,7 +376,10 @@ func fetchContainerIDMapping(containerID string) (string, error) {
 	return files[0].Name(), nil
 }
 
-func addContainerIDMapping(containerID, sandboxID string) error {
+func addContainerIDMapping(ctx context.Context, containerID, sandboxID string) error {
+	span, _ := opentracing.StartSpanFromContext(ctx, "addContainerIDMapping")
+	defer span.Finish()
+
 	if containerID == "" {
 		return fmt.Errorf("Missing container ID")
 	}
@@ -395,7 +403,10 @@ func addContainerIDMapping(containerID, sandboxID string) error {
 	return nil
 }
 
-func delContainerIDMapping(containerID string) error {
+func delContainerIDMapping(ctx context.Context, containerID string) error {
+	span, _ := opentracing.StartSpanFromContext(ctx, "delContainerIDMapping")
+	defer span.Finish()
+
 	if containerID == "" {
 		return fmt.Errorf("Missing container ID")
 	}

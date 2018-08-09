@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -22,7 +23,7 @@ func TestStartInvalidArgs(t *testing.T) {
 	assert := assert.New(t)
 
 	// Missing container id
-	_, err := start("")
+	_, err := start(context.Background(), "")
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 
@@ -31,7 +32,7 @@ func TestStartInvalidArgs(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	// Mock StatusContainer error
-	_, err = start(testContainerID)
+	_, err = start(context.Background(), testContainerID)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
@@ -41,7 +42,7 @@ func TestStartInvalidArgs(t *testing.T) {
 	ctrsMapTreePath = path
 
 	// Container missing in container mapping
-	_, err = start(testContainerID)
+	_, err = start(context.Background(), testContainerID)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
@@ -70,7 +71,7 @@ func TestStartSandbox(t *testing.T) {
 		testingImpl.StatusContainerFunc = nil
 	}()
 
-	_, err = start(sandbox.ID())
+	_, err = start(context.Background(), sandbox.ID())
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
@@ -82,7 +83,7 @@ func TestStartSandbox(t *testing.T) {
 		testingImpl.StartSandboxFunc = nil
 	}()
 
-	_, err = start(sandbox.ID())
+	_, err = start(context.Background(), sandbox.ID())
 	assert.Nil(err)
 }
 
@@ -108,7 +109,7 @@ func TestStartMissingAnnotation(t *testing.T) {
 		testingImpl.StatusContainerFunc = nil
 	}()
 
-	_, err = start(sandbox.ID())
+	_, err = start(context.Background(), sandbox.ID())
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
@@ -144,7 +145,7 @@ func TestStartContainerSucessFailure(t *testing.T) {
 		testingImpl.StatusContainerFunc = nil
 	}()
 
-	_, err = start(testContainerID)
+	_, err = start(context.Background(), testContainerID)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
@@ -156,7 +157,7 @@ func TestStartContainerSucessFailure(t *testing.T) {
 		testingImpl.StartContainerFunc = nil
 	}()
 
-	_, err = start(testContainerID)
+	_, err = start(context.Background(), testContainerID)
 	assert.Nil(err)
 }
 

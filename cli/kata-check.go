@@ -24,6 +24,7 @@ import (
 	"syscall"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -282,6 +283,13 @@ var kataCheckCLICommand = cli.Command{
 	Name:  checkCmd,
 	Usage: "tests if system can run " + project,
 	Action: func(context *cli.Context) error {
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
+		span, _ := opentracing.StartSpanFromContext(ctx, "kata-check")
+		defer span.Finish()
 
 		setCPUtype()
 
@@ -292,7 +300,7 @@ var kataCheckCLICommand = cli.Command{
 			requiredKernelModules: archRequiredKernelModules,
 		}
 
-		err := hostIsVMContainerCapable(details)
+		err = hostIsVMContainerCapable(details)
 
 		if err != nil {
 			return err
