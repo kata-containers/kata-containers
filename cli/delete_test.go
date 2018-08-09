@@ -489,9 +489,7 @@ func TestDeleteCLIFunction(t *testing.T) {
 	assert := assert.New(t)
 
 	flagSet := &flag.FlagSet{}
-	app := cli.NewApp()
-
-	ctx := cli.NewContext(app, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	fn, ok := deleteCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
@@ -507,7 +505,7 @@ func TestDeleteCLIFunction(t *testing.T) {
 
 	flagSet = flag.NewFlagSet("container-id", flag.ContinueOnError)
 	flagSet.Parse([]string{"xyz"})
-	ctx = cli.NewContext(app, flagSet, nil)
+	ctx = createCLIContext(flagSet)
 
 	err = fn(ctx)
 	assert.Error(err)
@@ -574,9 +572,7 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 	}()
 
 	flagSet := &flag.FlagSet{}
-	app := cli.NewApp()
-
-	ctx := cli.NewContext(app, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	fn, ok := deleteCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
@@ -587,7 +583,7 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 
 	flagSet = flag.NewFlagSet("container-id", flag.ContinueOnError)
 	flagSet.Parse([]string{sandbox.ID()})
-	ctx = cli.NewContext(app, flagSet, nil)
+	ctx = createCLIContext(flagSet)
 	assert.NotNil(ctx)
 
 	err = fn(ctx)

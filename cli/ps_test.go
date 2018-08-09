@@ -24,7 +24,7 @@ func TestPSCLIAction(t *testing.T) {
 	flagSet.Parse([]string{"runtime"})
 
 	// create a new fake context
-	ctx := cli.NewContext(&cli.App{Metadata: map[string]interface{}{}}, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	// get Action function
 	actionFunc, ok := psCLICommand.Action.(func(ctx *cli.Context) error)

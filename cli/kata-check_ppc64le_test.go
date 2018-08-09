@@ -95,9 +95,8 @@ func TestCCCheckCLIFunction(t *testing.T) {
 
 	setupCheckHostIsVMContainerCapable(assert, cpuInfoFile, cpuData, moduleData)
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
 
 	// create buffer to save logger output
 	buf := &bytes.Buffer{}

@@ -164,9 +164,7 @@ func TestStartCLIFunction(t *testing.T) {
 	assert := assert.New(t)
 
 	flagSet := &flag.FlagSet{}
-	app := cli.NewApp()
-
-	ctx := cli.NewContext(app, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	fn, ok := startCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
@@ -182,7 +180,7 @@ func TestStartCLIFunction(t *testing.T) {
 
 	flagSet = flag.NewFlagSet("container-id", flag.ContinueOnError)
 	flagSet.Parse([]string{"xyz"})
-	ctx = cli.NewContext(app, flagSet, nil)
+	ctx = createCLIContext(flagSet)
 
 	err = fn(ctx)
 	assert.Error(err)
@@ -225,14 +223,12 @@ func TestStartCLIFunctionSuccess(t *testing.T) {
 		testingImpl.StartContainerFunc = nil
 	}()
 
-	app := cli.NewApp()
-
 	fn, ok := startCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
 
 	flagSet := flag.NewFlagSet("test", 0)
 	flagSet.Parse([]string{testContainerID})
-	ctx := cli.NewContext(app, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 	assert.NotNil(ctx)
 
 	err = fn(ctx)
