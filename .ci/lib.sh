@@ -40,6 +40,11 @@ install_yq() {
 	"x86_64")
 		goarch=amd64
 		;;
+
+	"ppc64le")
+		goarch=ppc64le
+		;;
+
 	"*")
 		echo "Arch $(arch) not supported"
 		exit
