@@ -44,10 +44,13 @@ fi
 
 case "$arch" in
 	x86_64)
-	if grep -q "N" /sys/module/kvm_intel/parameters/nested; then
+	if [ "$CI" == true ] && grep -q "N" /sys/module/kvm_intel/parameters/nested 2> /dev/null; then
 		echo "enable Nested Virtualization"
 		sudo modprobe -r kvm_intel
 		sudo modprobe kvm_intel nested=1
+		if grep -q "N" /sys/module/kvm_intel/parameters/nested 2> /dev/null; then
+			die "Failed to find or enable Nested virtualization"
+		fi
 	fi
 	;;
 	aarch64)
