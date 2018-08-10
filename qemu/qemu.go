@@ -1064,16 +1064,12 @@ type RTC struct {
 
 // Valid returns true if the RTC structure is valid and complete.
 func (rtc RTC) Valid() bool {
-	if rtc.Clock != "" {
-		if rtc.Clock != Host && rtc.Clock != VM {
-			return false
-		}
+	if rtc.Clock != Host && rtc.Clock != VM {
+		return false
 	}
 
-	if rtc.DriftFix != "" {
-		if rtc.DriftFix != Slew && rtc.DriftFix != NoDriftFix {
-			return false
-		}
+	if rtc.DriftFix != Slew && rtc.DriftFix != NoDriftFix {
+		return false
 	}
 
 	return true
