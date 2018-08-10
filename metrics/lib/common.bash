@@ -253,6 +253,24 @@ random_name() {
 	mktemp -u kata-XXXXXX
 }
 
+# Dump diagnostics about our current system state.
+# Very useful for diagnosing if we have failed a sanity check
+show_system_state() {
+	echo "Showing system state:"
+	echo " --Docker ps--"
+	${DOCKER_EXE} ps -a
+	echo " --${RUNTIME} list--"
+	local RPATH=$(command -v ${RUNTIME})
+	sudo ${RPATH} list
+
+	local processes="kata-proxy kata-shim kata-runtime qemu ksm-throttler"
+
+	for p in ${processes}; do
+		echo " --pgrep ${p}--"
+		pgrep -a ${p}
+	done
+}
+
 common_init(){
 	case "$RUNTIME" in
 		kata-runtime)
