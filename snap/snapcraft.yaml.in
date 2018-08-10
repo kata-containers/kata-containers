@@ -138,7 +138,7 @@ parts:
         ;;
 
         "ppc64le")
-          config=ppc64le_kata_kvm_4.14.x
+          config=powerpc_kata_kvm_4.14.x
         ;;
 
         "aarch64")
