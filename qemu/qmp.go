@@ -837,6 +837,24 @@ func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
+// ExecutePCIVFIOMediatedDeviceAdd adds a VFIO mediated device to a QEMU instance using the device_add command.
+// This function can be used to hot plug VFIO mediated devices on PCI(E) bridges, unlike
+// ExecuteVFIODeviceAdd this function receives the bus and the device address on its parent bus.
+// bus is optional. devID is the id of the device to add. Must be valid QMP identifier. sysfsdev is the VFIO
+// mediated device.
+func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsdev, addr, bus string) error {
+	args := map[string]interface{}{
+		"id":       devID,
+		"driver":   "vfio-pci",
+		"sysfsdev": sysfsdev,
+		"addr":     addr,
+	}
+	if bus != "" {
+		args["bus"] = bus
+	}
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
 // ExecuteCPUDeviceAdd adds a CPU to a QEMU instance using the device_add command.
 // driver is the CPU model, cpuID must be a unique ID to identify the CPU, socketID is the socket number within
 // node/board the CPU belongs to, coreID is the core number within socket the CPU belongs to, threadID is the
