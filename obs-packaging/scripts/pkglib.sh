@@ -167,7 +167,7 @@ function checkout_repo()
     if [ -z "${OBS_WORKDIR:-}" ]
     then
         OBS_WORKDIR=$(mktemp -d -u -t obs-repo.XXXXXXXXXXX) || exit 1
-        osc "${APIURL:-}" co "${REPO}" -o "${OBS_WORKDIR}"
+        osc co "${REPO}" -o "${OBS_WORKDIR}"
     fi
     find "${OBS_WORKDIR}" -maxdepth 1 -mindepth 1 ! -name '.osc' -prune  -exec echo remove {} \; -exec  rm -rf {} \;
 
@@ -178,8 +178,8 @@ function checkout_repo()
 function obs_push()
 {
     pushd $OBS_WORKDIR
-    osc $APIURL addremove
-    osc $APIURL commit -m "Update ${PKG_NAME} $VERSION: ${hash_tag:0:7}"
+    osc addremove
+    osc commit -m "Update ${PKG_NAME} $VERSION: ${hash_tag:0:7}"
     popd
 }
 
@@ -188,7 +188,6 @@ function cli()
 	OPTS=$(getopt -o abclprwvCVh: --long api-url,branch,commit-id,local-build,push,obs-repository,workdir,verbose,clean,verify,help -- "$@")
 	while true; do
 		case "${1}" in
-			-a | --api-url )        APIURL="$2"; shift 2;;
 			-b | --branch )         BRANCH="true"; OBS_REVISION="$2"; shift 2;;
 			-l | --local-build )    LOCAL_BUILD="true"; shift;;
 			-p | --push )           OBS_PUSH="true"; shift;;
@@ -296,7 +295,7 @@ function get_obs_pkg_release() {
 	pkg=$(basename "${obs_pkg_name}")
 	repo_dir=$(mktemp -d -u -t "${pkg}.XXXXXXXXXXX")
 
-	out=$(osc ${APIURL:-} -q co "${obs_pkg_name}" -o "${repo_dir}") || die "failed to checkout:$out"
+	out=$(osc -q co "${obs_pkg_name}" -o "${repo_dir}") || die "failed to checkout:$out"
 
 	spec_file=$(find "${repo_dir}" -maxdepth 1 -type f -name '*.spec' | head -1)
 	# Find in specfile in Release: XX field.
