@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/mitchellh/mapstructure"
 	"github.com/sirupsen/logrus"
 )
 
@@ -132,9 +131,9 @@ func newProxyConfig(sandboxConfig *SandboxConfig) (ProxyConfig, error) {
 	case KataProxyType:
 		fallthrough
 	case CCProxyType:
-		if err := mapstructure.Decode(sandboxConfig.ProxyConfig, &config); err != nil {
-			return ProxyConfig{}, err
-		}
+		config = sandboxConfig.ProxyConfig
+	default:
+		return ProxyConfig{}, fmt.Errorf("unknown proxy type %v", sandboxConfig.ProxyType)
 	}
 
 	if config.Path == "" {
