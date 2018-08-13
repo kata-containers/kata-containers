@@ -49,9 +49,16 @@ replace_list=(
 )
 
 verify
+rm -rf kata-containers.tar.gz
+image_tarball=$(find . -name 'kata-containers-'"${VERSION}"'-*.tar.gz')
+[ -f "${image_tarball}" ] || die "image not found"
+cp "${image_tarball}" kata-containers.tar.gz
+
 check_image
 echo "Verify succeed."
 get_git_info
+#TODO delete me: used by changelog_update
+hash_tag="nocommit"
 changelog_update $VERSION
 generate_files "$SCRIPT_DIR" "${replace_list[@]}"
 build_pkg "${PROJECT_REPO}"
