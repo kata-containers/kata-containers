@@ -167,7 +167,7 @@ function checkout_repo()
     if [ -z "${OBS_WORKDIR:-}" ]
     then
         OBS_WORKDIR=$(mktemp -d -u -t obs-repo.XXXXXXXXXXX) || exit 1
-        osc "${APIURL}" co "${REPO}" -o "${OBS_WORKDIR}"
+        osc "${APIURL:-}" co "${REPO}" -o "${OBS_WORKDIR}"
     fi
     find "${OBS_WORKDIR}" -maxdepth 1 -mindepth 1 ! -name '.osc' -prune  -exec echo remove {} \; -exec  rm -rf {} \;
 
