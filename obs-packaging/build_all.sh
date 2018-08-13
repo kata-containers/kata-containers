@@ -10,7 +10,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-script_dir=$(dirname "$0")
+readonly script_name="$(basename "${BASH_SOURCE[0]}")"
+readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #Note:Lets update qemu and the kernel first, they take longer to build.
 #Note: runtime is build at the end to get the version from all its dependencies.
 projects=(
@@ -62,6 +63,7 @@ pass = ${OBS_PASS}
 eom
 	fi
 
+	pushd "${script_dir}"
 	for p in "${projects[@]}"; do
 		pushd "$p" >>/dev/null
 		update_cmd="./update.sh"
@@ -77,6 +79,7 @@ eom
 		bash -c "${update_cmd} ${branch}"
 		popd >>/dev/null
 	done
+	popd
 }
 
 main $@
