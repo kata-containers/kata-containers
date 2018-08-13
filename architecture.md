@@ -30,7 +30,7 @@
 
 ## Overview
 
-This is an architectural overview of Kata Containers, based on the 1.0.0 release.
+This is an architectural overview of Kata Containers, based on the 1.2.0 release.
 
 The two primary deliverables of the Kata Containers project are a container runtime
 and a CRI friendly library API.
@@ -97,8 +97,8 @@ to create virtual machines where containers will run:
 
 ### QEMU/KVM
 
-Depending of the host architecture, Kata Containers support various machine types,
-for example `pc` and `q35` on x86 systems and `virt` on ARM systems. Kata Containers'
+Depending on the host architecture, Kata Containers supports various machine types,
+for example `pc` and `q35` on x86 systems, `virt` on ARM systems and `pseries` on IBM Power systems. Kata Containers'
 default machine type is `pc`. The default machine type and its [`Machine accelerators`](#Machine-accelerators) can
 be changed by editing the runtime [`configuration`](#Configuration) file.
 
