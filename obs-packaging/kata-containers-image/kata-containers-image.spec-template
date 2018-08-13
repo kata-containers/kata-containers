@@ -1,7 +1,5 @@
 %define version @VERSION@
 %define release @RELEASE@
-%define agent_sha @AGENT_SHA@
-%define rootfs_os @ROOTFS_OS@
 
 Name:           kata-containers-image
 Version:        %{version}

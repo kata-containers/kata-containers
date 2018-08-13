@@ -44,8 +44,6 @@ function check_image() {
 replace_list=(
 "VERSION=$VERSION"
 "RELEASE=$RELEASE"
-"AGENT_SHA=${kata_agent_hash:0:7}"
-"ROOTFS_OS=$osbuilder_default_os"
 )
 
 verify
