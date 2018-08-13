@@ -255,6 +255,8 @@ func getExpectedKernel(config oci.RuntimeConfig) KernelInfo {
 }
 
 func getExpectedRuntimeDetails(configFile string) RuntimeInfo {
+	runtimePath, _ := os.Executable()
+
 	return RuntimeInfo{
 		Version: RuntimeVersionInfo{
 			Semver: version,
@@ -264,6 +266,7 @@ func getExpectedRuntimeDetails(configFile string) RuntimeInfo {
 		Config: RuntimeConfigInfo{
 			Path: configFile,
 		},
+		Path: runtimePath,
 	}
 }
 
