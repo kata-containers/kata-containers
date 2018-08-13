@@ -60,6 +60,8 @@ replace_list=(
 verify
 echo "Verify succeed."
 get_git_info
+#TODO delete me: used by changelog_update
+hash_tag="nocommit"
 changelog_update "${VERSION}-${KATA_CONFIG_VERSION}"
 ln -sfT "${SCRIPT_DIR}/../../kernel/patches" "${SCRIPT_DIR}/patches"
 generate_files "$SCRIPT_DIR" "${replace_list[@]}"
