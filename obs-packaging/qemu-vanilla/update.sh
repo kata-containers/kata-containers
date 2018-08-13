@@ -34,6 +34,8 @@ PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/qemu-vanilla}
 RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 ((RELEASE++))
 
+set_versions "${qemu_vanilla_hash}"
+
 replace_list=(
 "VERSION=$VERSION"
 "RELEASE=$RELEASE"

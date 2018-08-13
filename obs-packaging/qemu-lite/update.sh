@@ -33,6 +33,7 @@ PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/qemu-lite}
 RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 ((RELEASE++))
 
+set_versions "${qemu_lite_hash}"
 
 replace_list=(
 "VERSION=$VERSION"
