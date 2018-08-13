@@ -5,7 +5,7 @@ kata_runtime_hash=bf1cf684f5d48d3142665f98daf719faf94039e2
 kata_shim_hash=de2d2a67659cab7928b81f836a8f64450c998453
 
 # Dependencies
-qemu_lite_hash=6ba2bfbee9a80bfd03605c5eb2ca743c8b68389e
+qemu_lite_hash=a39e0b3e828ff6fb4457865ef7a021f1e7320c27
 qemu_vanilla_hash=e3050471ff1daa7fefe88388dfa4e1d97ba1f0bc
 
 kata_runtime_version=1.1.0
@@ -17,14 +17,6 @@ kata_osbuilder_version=1.1.0
 qemu_lite_version=2.11.0
 qemu_vanilla_version=2.11
 kernel_version=4.14.51
-
-# Default osbuilder image options
-osbuilder_default_os=clearlinux
-clearlinux_version=20640
-
-# Default osbuilder initrd options
-osbuilder_default_initrd_os=alpine
-alpine_version=3.7
 
 # Golang
 go_version=1.10.2
