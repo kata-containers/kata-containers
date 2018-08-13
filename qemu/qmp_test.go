@@ -915,6 +915,30 @@ func TestQMPPCIDeviceAdd(t *testing.T) {
 	<-disconnectedCh
 }
 
+// Checks that PCI VFIO mediated devices are correctly added using device_add.
+//
+// We start a QMPLoop, send the device_add command and stop the loop.
+//
+// The device_add command should be correctly sent and the QMP loop should
+// exit gracefully.
+func TestQMPPCIVFIOMediatedDeviceAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	sysfsDev := "/sys/bus/pci/devices/0000:00:02.0/a297db4a-f4c2-11e6-90f6-d3b88d6c9525"
+	devID := fmt.Sprintf("device_%s", volumeUUID)
+	err := q.ExecutePCIVFIOMediatedDeviceAdd(context.Background(), devID, sysfsDev, "0x1", "")
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks that CPU are correctly added using device_add
 func TestQMPCPUDeviceAdd(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
