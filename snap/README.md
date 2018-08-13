@@ -4,7 +4,7 @@
 * [Install snap](#install-snap)
 * [Build and install snap image](#build-and-install-snap-image)
 * [Configure Kata Containers](#configure-kata-containers)
-* [Integration with docker](#integration-with-docker)
+* [Integration with docker and kubernetes](#integration-with-docker-and-kubernetes)
 * [Limitations](#limitations)
 
 This directory contains the resources needed to build the Kata Containers
