@@ -38,6 +38,7 @@ docker_run(){
 		--env https_proxy="${https_proxy}" \
 		--env no_proxy="${no_proxy}" \
 		--env PUSH="${PUSH}" \
+		--env DEBUG="${DEBUG}" \
 		-v "${HOME}/.bashrc":/root/.bashrc \
 		-v "$cache_dir":/var/tmp/osbuild-packagecache/ \
 		-v "$packaging_repo_dir":${packaging_repo_dir} \
@@ -61,7 +62,10 @@ main(){
 	[ -n "${branch}" ] || usage "missing branch" "1"
 	pushd "${script_dir}/kata-containers-image/" >> /dev/null
 	echo "Building image"
-	./build_image.sh
+	image_tarball=$(find . -name 'kata-containers-'"${branch}"'-*.tar.gz')
+	[ -f "${image_tarball}" ] || "${script_dir}/../obs-packaging/kata-containers-image/build_image.sh" -v "${branch}"
+	image_tarball=$(find . -name 'kata-containers-'"${branch}"'-*.tar.gz')
+	[ -f "${image_tarball}" ] || die "image not found"
 	popd >> /dev/null
 	sudo docker build \
 		--build-arg http_proxy="${http_proxy}" \
@@ -69,7 +73,7 @@ main(){
 		-t $obs_image "${script_dir}"
 
 	#Create/update OBS repository for branch
-	docker_run "${packaging_repo_dir}/obs-packaging/create-pkg-branch.sh ${branch}"
+	#docker_run "${packaging_repo_dir}/obs-packaging/create-pkg-branch.sh ${branch}"
 	#Build all kata packages
 	docker_run "${packaging_repo_dir}/obs-packaging/build_all.sh ${branch}"
 }
