@@ -105,6 +105,9 @@ run_workload() {
 
 		# And we can then work out how much time it took to get to the kernel
 		to_kernel_period=$(bc <<<"scale=3; $(ns_to_s $workload_period) - $kernel_period")
+	else
+		kernel_period="0.0"
+		to_kernel_period="0.0"
 	fi
 
 	# And store the results...
