@@ -4,8 +4,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-PREFIX := /usr
-LIBEXECDIR := $(PREFIX)/libexec
+DESTDIR :=
+PREFIX := usr
+LIBEXECDIR := libexec
+PROJECT := kata-containers
+# Override will ignore PREFIX, LIBEXECDIR and PROJECT
+INSTALLDIR := /$(PREFIX)/$(LIBEXECDIR)/$(PROJECT)
 
 TARGET = kata-proxy
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.go$$')
@@ -26,7 +30,7 @@ clean:
 	rm -f $(TARGET)
 
 install:
-	install -D $(TARGET) $(LIBEXECDIR)/kata-containers/$(TARGET)
+	install -D $(TARGET) $(DESTDIR)/$(INSTALLDIR)/$(TARGET)
 
 check: check-go-static
 
