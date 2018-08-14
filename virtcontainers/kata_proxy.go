@@ -25,6 +25,10 @@ func (p *kataProxy) consoleWatched() bool {
 // start is kataProxy start implementation for proxy interface.
 func (p *kataProxy) start(sandbox *Sandbox, params proxyParams) (int, string, error) {
 	sandbox.Logger().Info("Starting regular Kata proxy rather than built-in")
+	if sandbox.config == nil {
+		return -1, "", fmt.Errorf("Sandbox config cannot be nil")
+	}
+
 	if sandbox.agent == nil {
 		return -1, "", fmt.Errorf("No agent")
 	}
@@ -33,8 +37,8 @@ func (p *kataProxy) start(sandbox *Sandbox, params proxyParams) (int, string, er
 		return -1, "", fmt.Errorf("AgentURL cannot be empty")
 	}
 
-	config, err := newProxyConfig(sandbox.config)
-	if err != nil {
+	config := sandbox.config.ProxyConfig
+	if err := validateProxyConfig(config); err != nil {
 		return -1, "", err
 	}
 

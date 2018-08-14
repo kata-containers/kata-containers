@@ -119,28 +119,12 @@ func newProxy(pType ProxyType) (proxy, error) {
 	}
 }
 
-// newProxyConfig returns a proxy config from a generic SandboxConfig handler,
-// after it properly checked the configuration was valid.
-func newProxyConfig(sandboxConfig *SandboxConfig) (ProxyConfig, error) {
-	if sandboxConfig == nil {
-		return ProxyConfig{}, fmt.Errorf("Sandbox config cannot be nil")
+func validateProxyConfig(proxyConfig ProxyConfig) error {
+	if len(proxyConfig.Path) == 0 {
+		return fmt.Errorf("Proxy path cannot be empty")
 	}
 
-	var config ProxyConfig
-	switch sandboxConfig.ProxyType {
-	case KataProxyType:
-		fallthrough
-	case CCProxyType:
-		config = sandboxConfig.ProxyConfig
-	default:
-		return ProxyConfig{}, fmt.Errorf("unknown proxy type %v", sandboxConfig.ProxyType)
-	}
-
-	if config.Path == "" {
-		return ProxyConfig{}, fmt.Errorf("Proxy path cannot be empty")
-	}
-
-	return config, nil
+	return nil
 }
 
 func defaultProxyURL(sandbox *Sandbox, socketType string) (string, error) {

@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"fmt"
 	"os/exec"
 )
 
@@ -14,8 +15,12 @@ type ccProxy struct {
 
 // start is the proxy start implementation for ccProxy.
 func (p *ccProxy) start(sandbox *Sandbox, params proxyParams) (int, string, error) {
-	config, err := newProxyConfig(sandbox.config)
-	if err != nil {
+	if sandbox.config == nil {
+		return -1, "", fmt.Errorf("Sandbox config cannot be nil")
+	}
+
+	config := sandbox.config.ProxyConfig
+	if err := validateProxyConfig(config); err != nil {
 		return -1, "", err
 	}
 
