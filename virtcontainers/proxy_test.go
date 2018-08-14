@@ -154,15 +154,15 @@ func TestNewProxyFromUnknownProxyType(t *testing.T) {
 	}
 }
 
-func testNewProxyConfigFromSandboxConfig(t *testing.T, sandboxConfig SandboxConfig, expected ProxyConfig) {
-	result, err := newProxyConfig(&sandboxConfig)
-	if err != nil {
+func testNewProxyFromSandboxConfig(t *testing.T, sandboxConfig SandboxConfig) {
+	if _, err := newProxy(sandboxConfig.ProxyType); err != nil {
 		t.Fatal(err)
 	}
 
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("Got %+v\nExpecting %+v", result, expected)
+	if err := validateProxyConfig(sandboxConfig.ProxyConfig); err != nil {
+		t.Fatal(err)
 	}
+
 }
 
 var testProxyPath = "proxy-path"
@@ -177,7 +177,7 @@ func TestNewProxyConfigFromCCProxySandboxConfig(t *testing.T) {
 		ProxyConfig: proxyConfig,
 	}
 
-	testNewProxyConfigFromSandboxConfig(t, sandboxConfig, proxyConfig)
+	testNewProxyFromSandboxConfig(t, sandboxConfig)
 }
 
 func TestNewProxyConfigFromKataProxySandboxConfig(t *testing.T) {
@@ -190,22 +190,11 @@ func TestNewProxyConfigFromKataProxySandboxConfig(t *testing.T) {
 		ProxyConfig: proxyConfig,
 	}
 
-	testNewProxyConfigFromSandboxConfig(t, sandboxConfig, proxyConfig)
-}
-
-func TestNewProxyConfigNilSandboxConfigFailure(t *testing.T) {
-	if _, err := newProxyConfig(nil); err == nil {
-		t.Fatal("Should fail because SandboxConfig provided is nil")
-	}
+	testNewProxyFromSandboxConfig(t, sandboxConfig)
 }
 
 func TestNewProxyConfigNoPathFailure(t *testing.T) {
-	sandboxConfig := &SandboxConfig{
-		ProxyType:   CCProxyType,
-		ProxyConfig: ProxyConfig{},
-	}
-
-	if _, err := newProxyConfig(sandboxConfig); err == nil {
+	if err := validateProxyConfig(ProxyConfig{}); err == nil {
 		t.Fatal("Should fail because ProxyConfig has no Path")
 	}
 }
