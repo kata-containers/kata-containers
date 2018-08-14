@@ -38,7 +38,8 @@ docker_run(){
 		--env https_proxy="${https_proxy}" \
 		--env no_proxy="${no_proxy}" \
 		--env PUSH="${PUSH}" \
-		--env DEBUG="${DEBUG}" \
+		--env DEBUG="${DEBUG:-}" \
+		--env OBS_SUBPROJECT="${OBS_SUBPROJECT:-}"\
 		-v "${HOME}/.bashrc":/root/.bashrc \
 		-v "$cache_dir":/var/tmp/osbuild-packagecache/ \
 		-v "$packaging_repo_dir":${packaging_repo_dir} \
