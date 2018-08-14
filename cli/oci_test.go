@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -182,7 +183,7 @@ func TestValidCreateParamsBundleIsAFile(t *testing.T) {
 
 func testProcessCgroupsPath(t *testing.T, ociSpec oci.CompatOCISpec, expected []string) {
 	assert := assert.New(t)
-	result, err := processCgroupsPath(ociSpec, true)
+	result, err := processCgroupsPath(context.Background(), ociSpec, true)
 
 	assert.NoError(err)
 
@@ -268,7 +269,7 @@ func TestProcessCgroupsPathAbsoluteNoCgroupMountDestinationFailure(t *testing.T)
 	for _, d := range cgroupTestData {
 		ociSpec.Linux.Resources = d.linuxSpec
 		for _, isSandbox := range []bool{true, false} {
-			_, err := processCgroupsPath(ociSpec, isSandbox)
+			_, err := processCgroupsPath(context.Background(), ociSpec, isSandbox)
 			assert.Error(err, "This test should fail because no cgroup mount destination provided")
 		}
 	}
@@ -563,14 +564,14 @@ func TestFetchContainerIDMappingSuccess(t *testing.T) {
 func TestAddContainerIDMappingContainerIDEmptyFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	err := addContainerIDMapping("", testSandboxID)
+	err := addContainerIDMapping(context.Background(), "", testSandboxID)
 	assert.Error(err)
 }
 
 func TestAddContainerIDMappingSandboxIDEmptyFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	err := addContainerIDMapping(testContainerID, "")
+	err := addContainerIDMapping(context.Background(), testContainerID, "")
 	assert.Error(err)
 }
 
@@ -585,7 +586,7 @@ func TestAddContainerIDMappingSuccess(t *testing.T) {
 	_, err = os.Stat(filepath.Join(ctrsMapTreePath, testContainerID, testSandboxID))
 	assert.True(os.IsNotExist(err))
 
-	err = addContainerIDMapping(testContainerID, testSandboxID)
+	err = addContainerIDMapping(context.Background(), testContainerID, testSandboxID)
 	assert.NoError(err)
 
 	_, err = os.Stat(filepath.Join(ctrsMapTreePath, testContainerID, testSandboxID))
@@ -595,7 +596,7 @@ func TestAddContainerIDMappingSuccess(t *testing.T) {
 func TestDelContainerIDMappingContainerIDEmptyFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	err := delContainerIDMapping("")
+	err := delContainerIDMapping(context.Background(), "")
 	assert.Error(err)
 }
 
@@ -609,7 +610,7 @@ func TestDelContainerIDMappingSuccess(t *testing.T) {
 	_, err = os.Stat(filepath.Join(ctrsMapTreePath, testContainerID, testSandboxID))
 	assert.NoError(err)
 
-	err = delContainerIDMapping(testContainerID)
+	err = delContainerIDMapping(context.Background(), testContainerID)
 	assert.NoError(err)
 
 	_, err = os.Stat(filepath.Join(ctrsMapTreePath, testContainerID, testSandboxID))

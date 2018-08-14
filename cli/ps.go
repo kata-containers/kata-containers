@@ -7,9 +7,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -26,6 +28,11 @@ var psCLICommand = cli.Command{
 		},
 	},
 	Action: func(context *cli.Context) error {
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
 		if context.Args().Present() == false {
 			return fmt.Errorf("Missing container ID, should at least provide one")
 		}
@@ -38,18 +45,22 @@ var psCLICommand = cli.Command{
 			args = context.Args()[1:]
 		}
 
-		return ps(context.Args().First(), context.String("format"), args)
+		return ps(ctx, context.Args().First(), context.String("format"), args)
 	},
 	SkipArgReorder: true,
 }
 
-func ps(containerID, format string, args []string) error {
+func ps(ctx context.Context, containerID, format string, args []string) error {
+	span, _ := opentracing.StartSpanFromContext(ctx, "ps")
+	defer span.Finish()
+
 	if containerID == "" {
 		return fmt.Errorf("Missing container ID")
 	}
 
 	kataLog = kataLog.WithField("container", containerID)
 	setExternalLoggers(kataLog)
+	span.SetTag("container", containerID)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	status, sandboxID, err := getExistingContainerInfo(containerID)
@@ -65,6 +76,8 @@ func ps(containerID, format string, args []string) error {
 	})
 
 	setExternalLoggers(kataLog)
+	span.SetTag("container", containerID)
+	span.SetTag("sandbox", sandboxID)
 
 	// container MUST be running
 	if status.State.State != vc.StateRunning {

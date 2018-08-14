@@ -20,12 +20,9 @@ import (
 func TestFactoryCLIFunctionNoRuntimeConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
-	ctx.App.Metadata = map[string]interface{}{
-		"foo": "bar",
-	}
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
+	ctx.App.Metadata["foo"] = "bar"
 
 	fn, ok := initFactoryCommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
@@ -54,14 +51,12 @@ func TestFactoryCLIFunctionInit(t *testing.T) {
 
 	set.String("console-socket", "", "")
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, set, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(set)
+	ctx.App.Name = "foo"
 
 	// No template
-	ctx.App.Metadata = map[string]interface{}{
-		"runtimeConfig": runtimeConfig,
-	}
+	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
+
 	fn, ok := initFactoryCommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
 	err = fn(ctx)
@@ -92,14 +87,11 @@ func TestFactoryCLIFunctionDestroy(t *testing.T) {
 
 	set.String("console-socket", "", "")
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, set, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(set)
+	ctx.App.Name = "foo"
 
 	// No template
-	ctx.App.Metadata = map[string]interface{}{
-		"runtimeConfig": runtimeConfig,
-	}
+	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 	fn, ok := destroyFactoryCommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
 	err = fn(ctx)
@@ -130,14 +122,12 @@ func TestFactoryCLIFunctionStatus(t *testing.T) {
 
 	set.String("console-socket", "", "")
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, set, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(set)
+	ctx.App.Name = "foo"
 
 	// No template
-	ctx.App.Metadata = map[string]interface{}{
-		"runtimeConfig": runtimeConfig,
-	}
+	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
+
 	fn, ok := statusFactoryCommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
 	err = fn(ctx)

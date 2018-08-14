@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -26,6 +27,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
+	jaeger "github.com/uber/jaeger-client-go"
 	"github.com/urfave/cli"
 )
 
@@ -451,9 +453,8 @@ func newSingleContainerStatus(containerID string, containerState vc.State, annot
 }
 
 func execCLICommandFunc(assertHandler *assert.Assertions, cliCommand cli.Command, set *flag.FlagSet, expectedErr bool) {
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, set, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(set)
+	ctx.App.Name = "foo"
 
 	fn, ok := cliCommand.Action.(func(context *cli.Context) error)
 	assertHandler.True(ok)
@@ -465,6 +466,25 @@ func execCLICommandFunc(assertHandler *assert.Assertions, cliCommand cli.Command
 	} else {
 		assertHandler.Nil(err)
 	}
+}
+
+func createCLIContextWithApp(flagSet *flag.FlagSet, app *cli.App) *cli.Context {
+	ctx := cli.NewContext(app, flagSet, nil)
+
+	// create the map if required
+	if ctx.App.Metadata == nil {
+		ctx.App.Metadata = map[string]interface{}{}
+	}
+
+	// add standard entries
+	ctx.App.Metadata["context"] = context.Background()
+	ctx.App.Metadata["tracer"] = &jaeger.Tracer{}
+
+	return ctx
+}
+
+func createCLIContext(flagset *flag.FlagSet) *cli.Context {
+	return createCLIContextWithApp(flagset, cli.NewApp())
 }
 
 func TestMakeOCIBundle(t *testing.T) {
@@ -532,7 +552,6 @@ func TestCreateRootfs(t *testing.T) {
 
 func TestMainUserWantsUsage(t *testing.T) {
 	assert := assert.New(t)
-	app := cli.NewApp()
 
 	type testData struct {
 		arguments  []string
@@ -558,7 +577,7 @@ func TestMainUserWantsUsage(t *testing.T) {
 		set := flag.NewFlagSet("", 0)
 		set.Parse(d.arguments)
 
-		ctx := cli.NewContext(app, set, nil)
+		ctx := createCLIContext(set)
 		result := userWantsUsage(ctx)
 
 		if d.expectTrue {
@@ -571,7 +590,6 @@ func TestMainUserWantsUsage(t *testing.T) {
 
 func TestMainBeforeSubCommands(t *testing.T) {
 	assert := assert.New(t)
-	app := cli.NewApp()
 
 	type testData struct {
 		arguments   []string
@@ -591,7 +609,7 @@ func TestMainBeforeSubCommands(t *testing.T) {
 		set := flag.NewFlagSet("", 0)
 		set.Parse(d.arguments)
 
-		ctx := cli.NewContext(app, set, nil)
+		ctx := createCLIContext(set)
 		err := beforeSubcommands(ctx)
 
 		if d.expectError {
@@ -615,13 +633,11 @@ func TestMainBeforeSubCommandsInvalidLogFile(t *testing.T) {
 	err = os.MkdirAll(logFile, testDirMode)
 	assert.NoError(err)
 
-	app := cli.NewApp()
-
 	set := flag.NewFlagSet("", 0)
 	set.String("log", logFile, "")
 	set.Parse([]string{"create"})
 
-	ctx := cli.NewContext(app, set, nil)
+	ctx := createCLIContext(set)
 
 	err = beforeSubcommands(ctx)
 	assert.Error(err)
@@ -636,8 +652,6 @@ func TestMainBeforeSubCommandsInvalidLogFormat(t *testing.T) {
 
 	logFile := filepath.Join(tmpdir, "log")
 
-	app := cli.NewApp()
-
 	set := flag.NewFlagSet("", 0)
 	set.Bool("debug", true, "")
 	set.String("log", logFile, "")
@@ -651,7 +665,7 @@ func TestMainBeforeSubCommandsInvalidLogFormat(t *testing.T) {
 		kataLog.Logger.Out = logOut
 	}()
 
-	ctx := cli.NewContext(app, set, nil)
+	ctx := createCLIContext(set)
 
 	err = beforeSubcommands(ctx)
 	assert.Error(err)
@@ -668,8 +682,6 @@ func TestMainBeforeSubCommandsLoadConfigurationFail(t *testing.T) {
 	logFile := filepath.Join(tmpdir, "log")
 	configFile := filepath.Join(tmpdir, "config")
 
-	app := cli.NewApp()
-
 	for _, logFormat := range []string{"json", "text"} {
 		set := flag.NewFlagSet("", 0)
 		set.Bool("debug", true, "")
@@ -678,7 +690,7 @@ func TestMainBeforeSubCommandsLoadConfigurationFail(t *testing.T) {
 		set.String("kata-config", configFile, "")
 		set.Parse([]string{"kata-env"})
 
-		ctx := cli.NewContext(app, set, nil)
+		ctx := createCLIContext(set)
 
 		savedExitFunc := exitFunc
 
@@ -702,12 +714,10 @@ func TestMainBeforeSubCommandsShowCCConfigPaths(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
-	app := cli.NewApp()
-
 	set := flag.NewFlagSet("", 0)
 	set.Bool("kata-show-default-config-paths", true, "")
 
-	ctx := cli.NewContext(app, set, nil)
+	ctx := createCLIContext(set)
 
 	savedExitFunc := exitFunc
 
@@ -914,7 +924,7 @@ func TestMainCreateRuntimeApp(t *testing.T) {
 
 	args := []string{name}
 
-	err = createRuntimeApp(args)
+	err = createRuntimeApp(context.Background(), args)
 	assert.NoError(err, "%v", args)
 }
 
@@ -937,7 +947,7 @@ func TestMainCreateRuntimeAppInvalidSubCommand(t *testing.T) {
 	}()
 
 	// calls fatal() so no return
-	_ = createRuntimeApp([]string{name, "i-am-an-invalid-sub-command"})
+	_ = createRuntimeApp(context.Background(), []string{name, "i-am-an-invalid-sub-command"})
 
 	assert.NotEqual(exitStatus, 0)
 }
@@ -981,7 +991,7 @@ func TestMainCreateRuntime(t *testing.T) {
 	}()
 
 	assert.Equal(exitStatus, 0)
-	createRuntime()
+	createRuntime(context.Background())
 	assert.NotEqual(exitStatus, 0)
 }
 
@@ -1008,7 +1018,7 @@ func TestMainVersionPrinter(t *testing.T) {
 
 	setCLIGlobals()
 
-	err = createRuntimeApp([]string{name, "--version"})
+	err = createRuntimeApp(context.Background(), []string{name, "--version"})
 	assert.NoError(err)
 
 	err = grep(fmt.Sprintf(`%s\s*:\s*%s`, name, version), output)
@@ -1056,7 +1066,7 @@ func TestMainFatalWriter(t *testing.T) {
 
 	setCLIGlobals()
 
-	err := createRuntimeApp([]string{name, cmd})
+	err := createRuntimeApp(context.Background(), []string{name, cmd})
 	assert.Error(err)
 
 	re := regexp.MustCompile(

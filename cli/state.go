@@ -7,11 +7,13 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 )
 
@@ -24,17 +26,26 @@ var stateCLICommand = cli.Command{
 	Description: `The state command outputs current state information for the
 instance of a container.`,
 	Action: func(context *cli.Context) error {
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
 		args := context.Args()
 		if len(args) != 1 {
 			return fmt.Errorf("Expecting only one container ID, got %d: %v", len(args), []string(args))
 		}
 
-		return state(args.First())
+		return state(ctx, args.First())
 	},
 }
 
-func state(containerID string) error {
+func state(ctx context.Context, containerID string) error {
+	span, _ := opentracing.StartSpanFromContext(ctx, "state")
+	defer span.Finish()
+
 	kataLog = kataLog.WithField("container", containerID)
+	span.SetTag("container", containerID)
 
 	setExternalLoggers(kataLog)
 

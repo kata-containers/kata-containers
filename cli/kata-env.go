@@ -17,6 +17,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 )
 
@@ -398,6 +399,14 @@ var kataEnvCLICommand = cli.Command{
 		},
 	},
 	Action: func(context *cli.Context) error {
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
+		span, _ := opentracing.StartSpanFromContext(ctx, "kata-env")
+		defer span.Finish()
+
 		return handleSettings(defaultOutputFile, context)
 	},
 }

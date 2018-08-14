@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -29,7 +30,7 @@ func TestRunCliAction(t *testing.T) {
 	flagSet.Parse([]string{"runtime"})
 
 	// create a new fake context
-	ctx := cli.NewContext(&cli.App{Metadata: map[string]interface{}{}}, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	// get Action function
 	actionFunc, ok := runCLICommand.Action.(func(ctx *cli.Context) error)
@@ -142,7 +143,7 @@ func TestRunInvalidArgs(t *testing.T) {
 	}
 
 	for i, a := range args {
-		err := run(a.containerID, a.bundle, a.console, a.consoleSocket, a.pidFile, a.detach, a.runtimeConfig)
+		err := run(context.Background(), a.containerID, a.bundle, a.console, a.consoleSocket, a.pidFile, a.detach, a.runtimeConfig)
 		assert.Errorf(err, "test %d (%+v)", i, a)
 	}
 }
@@ -284,7 +285,7 @@ func TestRunContainerSuccessful(t *testing.T) {
 		testingImpl.DeleteContainerFunc = nil
 	}()
 
-	err = run(d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
+	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
 
 	// should return ExitError with the message and exit code
 	e, ok := err.(*cli.ExitError)
@@ -358,7 +359,7 @@ func TestRunContainerDetachSuccessful(t *testing.T) {
 		testingImpl.DeleteContainerFunc = nil
 	}()
 
-	err = run(d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, true, d.runtimeConfig)
+	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, true, d.runtimeConfig)
 
 	// should not return ExitError
 	assert.NoError(err)
@@ -431,7 +432,7 @@ func TestRunContainerDeleteFail(t *testing.T) {
 		testingImpl.DeleteContainerFunc = nil
 	}()
 
-	err = run(d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
+	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
 
 	// should not return ExitError
 	err, ok := err.(*cli.ExitError)
@@ -508,7 +509,7 @@ func TestRunContainerWaitFail(t *testing.T) {
 		testingImpl.DeleteContainerFunc = nil
 	}()
 
-	err = run(d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
+	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
 
 	// should not return ExitError
 	err, ok := err.(*cli.ExitError)
@@ -566,7 +567,7 @@ func TestRunContainerStartFail(t *testing.T) {
 		testingImpl.StatusContainerFunc = nil
 	}()
 
-	err = run(d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
+	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
 
 	// should not return ExitError
 	err, ok := err.(*cli.ExitError)
@@ -621,7 +622,7 @@ func TestRunContainerStartFailExistingContainer(t *testing.T) {
 		testingImpl.StartSandboxFunc = nil
 	}()
 
-	err = run(d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
+	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }

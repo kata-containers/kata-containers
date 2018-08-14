@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"testing"
@@ -24,7 +25,7 @@ func TestPSCLIAction(t *testing.T) {
 	flagSet.Parse([]string{"runtime"})
 
 	// create a new fake context
-	ctx := cli.NewContext(&cli.App{Metadata: map[string]interface{}{}}, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 
 	// get Action function
 	actionFunc, ok := psCLICommand.Action.(func(ctx *cli.Context) error)
@@ -66,11 +67,11 @@ func TestPSFailure(t *testing.T) {
 	}()
 
 	// inexistent container
-	err = ps("xyz123abc", "json", []string{"-ef"})
+	err = ps(context.Background(), "xyz123abc", "json", []string{"-ef"})
 	assert.Error(err)
 
 	// container is not running
-	err = ps(sandbox.ID(), "json", []string{"-ef"})
+	err = ps(context.Background(), sandbox.ID(), "json", []string{"-ef"})
 	assert.Error(err)
 }
 
@@ -113,6 +114,6 @@ func TestPSSuccessful(t *testing.T) {
 		testingImpl.ProcessListContainerFunc = nil
 	}()
 
-	err = ps(sandbox.ID(), "json", []string{})
+	err = ps(context.Background(), sandbox.ID(), "json", []string{})
 	assert.NoError(err)
 }

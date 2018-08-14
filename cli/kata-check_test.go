@@ -681,9 +681,8 @@ func TestCheckCLIFunctionFail(t *testing.T) {
 		procCPUInfo = oldProcCPUInfo
 	}()
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
 
 	fn, ok := kataCheckCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)

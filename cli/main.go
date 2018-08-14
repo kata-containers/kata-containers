@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ import (
 	vf "github.com/kata-containers/runtime/virtcontainers/factory"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -55,6 +57,9 @@ var kataLog *logrus.Entry
 var originalLoggerLevel logrus.Level
 
 var debug = false
+
+// if true, enable opentracing support.
+var tracing = false
 
 // if true, coredump when an internal error occurs or a fatal signal is received
 var crashOnError = false
@@ -131,6 +136,10 @@ var runtimeCommands = []cli.Command{
 // parsing occurs.
 var runtimeBeforeSubcommands = beforeSubcommands
 
+// runtimeAfterSubcommands is the function to run after the command-line
+// has been parsed.
+var runtimeAfterSubcommands = afterSubcommands
+
 // runtimeCommandNotFound is the function to handle an invalid sub-command.
 var runtimeCommandNotFound = commandNotFound
 
@@ -161,7 +170,13 @@ func init() {
 	kataLog.Logger.Level = logrus.DebugLevel
 }
 
-func setupSignalHandler() {
+// setupSignalHandler sets up signal handling, starting a go routine to deal
+// with signals as they arrive.
+//
+// Note that the specified context is NOT used to create a trace span (since the
+// first (root) span must be created in beforeSubcommands()): it is simply
+// used to pass to the crash handling functions to finalise tracing.
+func setupSignalHandler(ctx context.Context) {
 	sigCh := make(chan os.Signal, 8)
 
 	for _, sig := range handledSignals() {
@@ -181,7 +196,7 @@ func setupSignalHandler() {
 
 			if fatalSignal(nativeSignal) {
 				kataLog.WithField("signal", sig).Error("received fatal signal")
-				die()
+				die(ctx)
 			} else if debug && nonFatalSignal(nativeSignal) {
 				kataLog.WithField("signal", sig).Debug("handling signal")
 				backtrace()
@@ -206,15 +221,7 @@ func setExternalLoggers(logger *logrus.Entry) {
 // beforeSubcommands is the function to perform preliminary checks
 // before command-line parsing occurs.
 func beforeSubcommands(context *cli.Context) error {
-	if context.GlobalBool(showConfigPathsOption) {
-		files := getDefaultConfigFilePaths()
-
-		for _, file := range files {
-			fmt.Fprintf(defaultOutputFile, "%s\n", file)
-		}
-
-		exit(0)
-	}
+	handleShowConfig(context)
 
 	if userWantsUsage(context) || (context.NArg() == 1 && (context.Args()[0] == checkCmd)) {
 		// No setup required if the user just
@@ -241,11 +248,17 @@ func beforeSubcommands(context *cli.Context) error {
 		return fmt.Errorf("unknown log-format %q", context.GlobalString("log-format"))
 	}
 
+	var traceRootSpan string
+
 	// Add the name of the sub-command to each log entry for easier
 	// debugging.
 	cmdName := context.Args().First()
 	if context.App.Command(cmdName) != nil {
 		kataLog = kataLog.WithField("command", cmdName)
+
+		// Name for the root span (used for tracing) now the
+		// sub-command name is known.
+		traceRootSpan = name + " " + cmdName
 	}
 
 	setExternalLoggers(kataLog)
@@ -262,6 +275,19 @@ func beforeSubcommands(context *cli.Context) error {
 		fatal(err)
 	}
 
+	if traceRootSpan != "" {
+		// Create the tracer.
+		//
+		// Note: no spans are created until the command-line has been parsed.
+		// This delays collection of trace data slightly but benefits the user by
+		// ensuring the first span is the name of the sub-command being
+		// invoked from the command-line.
+		err = setupTracing(context, traceRootSpan)
+		if err != nil {
+			return err
+		}
+	}
+
 	args := strings.Join(context.Args(), " ")
 
 	fields := logrus.Fields{
@@ -273,10 +299,63 @@ func beforeSubcommands(context *cli.Context) error {
 	kataLog.WithFields(fields).Info()
 
 	// make the data accessible to the sub-commands.
-	context.App.Metadata = map[string]interface{}{
-		"runtimeConfig": runtimeConfig,
-		"configFile":    configFile,
+	context.App.Metadata["runtimeConfig"] = runtimeConfig
+	context.App.Metadata["configFile"] = configFile
+
+	return nil
+}
+
+// handleShowConfig determines if the user wishes to see the configuration
+// paths. If so, it will display them and then exit.
+func handleShowConfig(context *cli.Context) {
+	if context.GlobalBool(showConfigPathsOption) {
+		files := getDefaultConfigFilePaths()
+
+		for _, file := range files {
+			fmt.Fprintf(defaultOutputFile, "%s\n", file)
+		}
+
+		exit(0)
 	}
+}
+
+func setupTracing(context *cli.Context, rootSpanName string) error {
+	tracer, err := createTracer(name)
+	if err != nil {
+		fatal(err)
+	}
+
+	// Create the root span now that the sub-command name is
+	// known.
+	//
+	// Note that this "Before" function is called (and returns)
+	// before the subcommand handler is called. As such, we cannot
+	// "Finish()" the span here - that is handled in the .After
+	// function.
+	span := tracer.StartSpan(rootSpanName)
+
+	ctx, err := cliContextToContext(context)
+	if err != nil {
+		return err
+	}
+
+	// Associate the root span with the context
+	ctx = opentracing.ContextWithSpan(ctx, span)
+
+	// Add tracer to metadata and update the context
+	context.App.Metadata["tracer"] = tracer
+	context.App.Metadata["context"] = ctx
+
+	return nil
+}
+
+func afterSubcommands(c *cli.Context) error {
+	ctx, err := cliContextToContext(c)
+	if err != nil {
+		return err
+	}
+
+	stopTracing(ctx)
 
 	return nil
 }
@@ -336,7 +415,7 @@ func setCLIGlobals() {
 
 // createRuntimeApp creates an application to process the command-line
 // arguments and invoke the requested runtime command.
-func createRuntimeApp(args []string) error {
+func createRuntimeApp(ctx context.Context, args []string) error {
 	app := cli.NewApp()
 
 	app.Name = name
@@ -347,7 +426,13 @@ func createRuntimeApp(args []string) error {
 	app.Flags = runtimeFlags
 	app.Commands = runtimeCommands
 	app.Before = runtimeBeforeSubcommands
+	app.After = runtimeAfterSubcommands
 	app.EnableBashCompletion = true
+
+	// allow sub-commands to access context
+	app.Metadata = map[string]interface{}{
+		"context": ctx,
+	}
 
 	return app.Run(args)
 }
@@ -387,18 +472,38 @@ func (f *fatalWriter) Write(p []byte) (n int, err error) {
 	return f.cliErrWriter.Write(p)
 }
 
-func createRuntime() {
-	setupSignalHandler()
+func createRuntime(ctx context.Context) {
+	setupSignalHandler(ctx)
 
 	setCLIGlobals()
 
-	err := createRuntimeApp(os.Args)
+	err := createRuntimeApp(ctx, os.Args)
 	if err != nil {
 		fatal(err)
 	}
 }
 
+// cliContextToContext extracts the generic context from the specified
+// cli context.
+func cliContextToContext(c *cli.Context) (context.Context, error) {
+	if c == nil {
+		return nil, errors.New("need cli.Context")
+	}
+
+	// extract the main context
+	ctx, ok := c.App.Metadata["context"].(context.Context)
+	if !ok {
+		return nil, errors.New("invalid or missing context in metadata")
+	}
+
+	return ctx, nil
+}
+
 func main() {
-	defer handlePanic()
-	createRuntime()
+	// create a new empty context
+	ctx := context.Background()
+
+	defer handlePanic(ctx)
+
+	createRuntime(ctx)
 }
