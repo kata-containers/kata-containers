@@ -16,7 +16,7 @@ spec:
       serviceAccountName: kata-label-node
       containers:
       - name: kubelet-runtime-labeler-pod
-        image: katadocker/kata-deploy
+        image: katadocker/kata-deploy:1.1.0
         imagePullPolicy: Always
         command: [ "sh", "-c" ]
         args:
@@ -56,7 +56,7 @@ spec:
           kata-containers.io/container-runtime: cri-o
       containers:
       - name: kube-kata
-        image: katadocker/kata-deploy
+        image: katadocker/kata-deploy:1.1.0
         imagePullPolicy: Always
         lifecycle:
           preStop:
@@ -127,7 +127,7 @@ spec:
           kata-containers.io/container-runtime: containerd
       containers:
       - name: kube-kata
-        image: katadocker/kata-deploy
+        image: katadocker/kata-deploy:1.1.0
         imagePullPolicy: Always
         lifecycle:
           preStop:
