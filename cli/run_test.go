@@ -67,11 +67,11 @@ func TestRunInvalidArgs(t *testing.T) {
 	}
 
 	// fake functions used to run containers
-	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
-	testingImpl.StartSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.StartSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
@@ -230,12 +230,12 @@ func TestRunContainerSuccessful(t *testing.T) {
 	flagCreate := false
 
 	// fake functions used to run containers
-	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		flagCreate = true
 		return d.sandbox, nil
 	}
 
-	testingImpl.StartSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.StartSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return d.sandbox, nil
 	}
 
@@ -244,7 +244,7 @@ func TestRunContainerSuccessful(t *testing.T) {
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		// return an empty list on create
 		if !flagCreate {
 			return vc.ContainerStatus{}, nil
@@ -260,7 +260,7 @@ func TestRunContainerSuccessful(t *testing.T) {
 		}, nil
 	}
 
-	testingImpl.StartContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	testingImpl.StartContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		// now we can kill the fake container workload
 		err := d.process.Kill()
 		assert.NoError(err)
@@ -268,11 +268,11 @@ func TestRunContainerSuccessful(t *testing.T) {
 		return d.sandbox.MockContainers[0], nil
 	}
 
-	testingImpl.DeleteSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.DeleteSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return d.sandbox, nil
 	}
 
-	testingImpl.DeleteContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	testingImpl.DeleteContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		return d.sandbox.MockContainers[0], nil
 	}
 
@@ -304,12 +304,12 @@ func TestRunContainerDetachSuccessful(t *testing.T) {
 	flagCreate := false
 
 	// fake functions used to run containers
-	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		flagCreate = true
 		return d.sandbox, nil
 	}
 
-	testingImpl.StartSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.StartSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return d.sandbox, nil
 	}
 
@@ -318,7 +318,7 @@ func TestRunContainerDetachSuccessful(t *testing.T) {
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		// return an empty list on create
 		if !flagCreate {
 			return vc.ContainerStatus{}, nil
@@ -334,7 +334,7 @@ func TestRunContainerDetachSuccessful(t *testing.T) {
 		}, nil
 	}
 
-	testingImpl.StartContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	testingImpl.StartContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		// now we can kill the fake container workload
 		err := d.process.Kill()
 		assert.NoError(err)
@@ -342,11 +342,11 @@ func TestRunContainerDetachSuccessful(t *testing.T) {
 		return d.sandbox.MockContainers[0], nil
 	}
 
-	testingImpl.DeleteSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.DeleteSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return d.sandbox, nil
 	}
 
-	testingImpl.DeleteContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	testingImpl.DeleteContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		return d.sandbox.MockContainers[0], nil
 	}
 
@@ -375,12 +375,12 @@ func TestRunContainerDeleteFail(t *testing.T) {
 	flagCreate := false
 
 	// fake functions used to run containers
-	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		flagCreate = true
 		return d.sandbox, nil
 	}
 
-	testingImpl.StartSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.StartSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return d.sandbox, nil
 	}
 
@@ -389,7 +389,7 @@ func TestRunContainerDeleteFail(t *testing.T) {
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		// return an empty list on create
 		if !flagCreate {
 			return vc.ContainerStatus{}, nil
@@ -405,7 +405,7 @@ func TestRunContainerDeleteFail(t *testing.T) {
 		}, nil
 	}
 
-	testingImpl.StartContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	testingImpl.StartContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		// now we can kill the fake container workload
 		err := d.process.Kill()
 		assert.NoError(err)
@@ -413,12 +413,12 @@ func TestRunContainerDeleteFail(t *testing.T) {
 		return d.sandbox.MockContainers[0], nil
 	}
 
-	testingImpl.DeleteSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.DeleteSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		// return an error to provoke a failure in delete
 		return nil, fmt.Errorf("DeleteSandboxFunc")
 	}
 
-	testingImpl.DeleteContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	testingImpl.DeleteContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		// return an error to provoke a failure in delete
 		return d.sandbox.MockContainers[0], fmt.Errorf("DeleteContainerFunc")
 	}
@@ -449,12 +449,12 @@ func TestRunContainerWaitFail(t *testing.T) {
 	flagCreate := false
 
 	// fake functions used to run containers
-	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		flagCreate = true
 		return d.sandbox, nil
 	}
 
-	testingImpl.StartSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.StartSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return d.sandbox, nil
 	}
 
@@ -463,7 +463,7 @@ func TestRunContainerWaitFail(t *testing.T) {
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		// return an empty list on create
 		if !flagCreate {
 			return vc.ContainerStatus{}, nil
@@ -479,7 +479,7 @@ func TestRunContainerWaitFail(t *testing.T) {
 		}, nil
 	}
 
-	testingImpl.StartContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	testingImpl.StartContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		// now we can kill the fake container workload
 		err := d.process.Kill()
 		assert.NoError(err)
@@ -490,12 +490,12 @@ func TestRunContainerWaitFail(t *testing.T) {
 		return d.sandbox.MockContainers[0], nil
 	}
 
-	testingImpl.DeleteSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.DeleteSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		// return an error to provoke a failure in delete
 		return nil, fmt.Errorf("DeleteSandboxFunc")
 	}
 
-	testingImpl.DeleteContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	testingImpl.DeleteContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		// return an error to provoke a failure in delete
 		return d.sandbox.MockContainers[0], fmt.Errorf("DeleteContainerFunc")
 	}
@@ -530,12 +530,12 @@ func TestRunContainerStartFail(t *testing.T) {
 	flagCreate := false
 
 	// fake functions used to run containers
-	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		flagCreate = true
 		return d.sandbox, nil
 	}
 
-	testingImpl.StartSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.StartSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		// start fails
 		return nil, fmt.Errorf("StartSandbox")
 	}
@@ -545,7 +545,7 @@ func TestRunContainerStartFail(t *testing.T) {
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		// return an empty list on create
 		if !flagCreate {
 			return vc.ContainerStatus{}, nil
@@ -595,7 +595,7 @@ func TestRunContainerStartFailExistingContainer(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		// return the container status
 		return vc.ContainerStatus{
 			ID: testContainerID,
@@ -605,11 +605,11 @@ func TestRunContainerStartFailExistingContainer(t *testing.T) {
 		}, nil
 	}
 
-	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
-	testingImpl.StartSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.StartSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		// force no containers
 		sandbox.MockContainers = nil
 

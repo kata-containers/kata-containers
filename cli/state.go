@@ -46,10 +46,10 @@ func state(ctx context.Context, containerID string) error {
 	kataLog = kataLog.WithField("container", containerID)
 	span.SetTag("container", containerID)
 
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
-	status, _, err := getExistingContainerInfo(containerID)
+	status, _, err := getExistingContainerInfo(ctx, containerID)
 	if err != nil {
 		return err
 	}

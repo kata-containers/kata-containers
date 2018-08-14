@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -113,10 +114,10 @@ To list containers created using a non-default value for "--root":
 			return err
 		}
 
-		span, _ := trace(ctx, "list")
+		span, ctx := trace(ctx, "list")
 		defer span.Finish()
 
-		s, err := getContainers(context)
+		s, err := getContainers(ctx, context)
 		if err != nil {
 			return err
 		}
@@ -300,7 +301,7 @@ func getDirOwner(dir string) (uint32, error) {
 	return statType.Uid, nil
 }
 
-func getContainers(context *cli.Context) ([]fullContainerState, error) {
+func getContainers(ctx context.Context, context *cli.Context) ([]fullContainerState, error) {
 	runtimeConfig, ok := context.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
 	if !ok {
 		return nil, errors.New("invalid runtime config")
@@ -308,7 +309,7 @@ func getContainers(context *cli.Context) ([]fullContainerState, error) {
 
 	latestHypervisorDetails := getHypervisorDetails(&runtimeConfig.HypervisorConfig)
 
-	sandboxList, err := vci.ListSandbox()
+	sandboxList, err := vci.ListSandbox(ctx)
 	if err != nil {
 		return nil, err
 	}

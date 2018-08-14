@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -19,15 +20,15 @@ import (
 )
 
 var (
-	testKillContainerFuncReturnNil = func(sandboxID, containerID string, signal syscall.Signal, all bool) error {
+	testKillContainerFuncReturnNil = func(ctx context.Context, sandboxID, containerID string, signal syscall.Signal, all bool) error {
 		return nil
 	}
 
-	testStopContainerFuncReturnNil = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	testStopContainerFuncReturnNil = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		return &vcmock.Container{}, nil
 	}
 
-	testStopSandboxFuncReturnNil = func(sandboxID string) (vc.VCSandbox, error) {
+	testStopSandboxFuncReturnNil = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return &vcmock.Sandbox{}, nil
 	}
 )
@@ -78,7 +79,7 @@ func testKillCLIFunctionTerminationSignalSuccessful(t *testing.T, sig string) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, annotations), nil
 	}
 
@@ -97,7 +98,7 @@ func testKillCLIFunctionTerminationSignalSuccessful(t *testing.T, sig string) {
 		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 	}
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, annotations), nil
 	}
 
@@ -131,7 +132,7 @@ func TestKillCLIFunctionNotTerminationSignalSuccessful(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
 
@@ -164,7 +165,7 @@ func TestKillCLIFunctionNoSignalSuccessful(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, annotations), nil
 	}
 
@@ -183,7 +184,7 @@ func TestKillCLIFunctionNoSignalSuccessful(t *testing.T) {
 		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 	}
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, annotations), nil
 	}
 
@@ -207,7 +208,7 @@ func TestKillCLIFunctionEnableAllSuccessful(t *testing.T) {
 		vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
 	}
 
-	testingImpl.KillContainerFunc = func(sandboxID, containerID string, signal syscall.Signal, all bool) error {
+	testingImpl.KillContainerFunc = func(ctx context.Context, sandboxID, containerID string, signal syscall.Signal, all bool) error {
 		if !all {
 			return fmt.Errorf("Expecting -all flag = true, Got false")
 		}
@@ -220,7 +221,7 @@ func TestKillCLIFunctionEnableAllSuccessful(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, annotations), nil
 	}
 
@@ -240,7 +241,7 @@ func TestKillCLIFunctionEnableAllSuccessful(t *testing.T) {
 		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 	}
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, annotations), nil
 	}
 
@@ -270,7 +271,7 @@ func TestKillCLIFunctionContainerNotExistFailure(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{}, nil
 	}
 
@@ -297,7 +298,7 @@ func TestKillCLIFunctionInvalidSignalFailure(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
 
@@ -326,7 +327,7 @@ func TestKillCLIFunctionStatePausedSuccessful(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state,
 			map[string]string{string(vcAnnotations.ContainerTypeKey): string(vc.PodContainer)}), nil
 	}
@@ -356,7 +357,7 @@ func TestKillCLIFunctionInvalidStateStoppedFailure(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
 
@@ -382,7 +383,7 @@ func TestKillCLIFunctionKillContainerFailure(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
 

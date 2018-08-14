@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -16,11 +17,11 @@ import (
 )
 
 var (
-	testPauseContainerFuncReturnNil = func(sandboxID, containerID string) error {
+	testPauseContainerFuncReturnNil = func(ctx context.Context, sandboxID, containerID string) error {
 		return nil
 	}
 
-	testResumeContainerFuncReturnNil = func(sandboxID, containerID string) error {
+	testResumeContainerFuncReturnNil = func(ctx context.Context, sandboxID, containerID string) error {
 		return nil
 	}
 )
@@ -38,7 +39,7 @@ func TestPauseCLIFunctionSuccessful(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
 
@@ -84,7 +85,7 @@ func TestPauseCLIFunctionPauseContainerFailure(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
 
@@ -111,7 +112,7 @@ func TestResumeCLIFunctionSuccessful(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
 
@@ -156,7 +157,7 @@ func TestResumeCLIFunctionPauseContainerFailure(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
 

@@ -142,10 +142,10 @@ other options are ignored.
 		containerID := context.Args().First()
 
 		kataLog = kataLog.WithField("container", containerID)
-		setExternalLoggers(kataLog)
+		setExternalLoggers(ctx, kataLog)
 		span.SetTag("container", containerID)
 
-		status, sandboxID, err := getExistingContainerInfo(containerID)
+		status, sandboxID, err := getExistingContainerInfo(ctx, containerID)
 		if err != nil {
 			return err
 		}
@@ -157,7 +157,7 @@ other options are ignored.
 			"sandbox":   sandboxID,
 		})
 
-		setExternalLoggers(kataLog)
+		setExternalLoggers(ctx, kataLog)
 
 		span.SetTag("container", containerID)
 		span.SetTag("sandbox", sandboxID)
@@ -281,6 +281,6 @@ other options are ignored.
 			r.Pids.Limit = int64(context.Int("pids-limit"))
 		}
 
-		return vci.UpdateContainer(sandboxID, containerID, r)
+		return vci.UpdateContainer(ctx, sandboxID, containerID, r)
 	},
 }

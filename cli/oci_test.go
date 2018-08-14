@@ -66,7 +66,7 @@ var cgroupTestData = []cgroupTestDataType{
 
 func TestGetContainerInfoContainerIDEmptyFailure(t *testing.T) {
 	assert := assert.New(t)
-	status, _, err := getContainerInfo("")
+	status, _, err := getContainerInfo(context.Background(), "")
 
 	assert.Error(err, "This test should fail because containerID is empty")
 	assert.Empty(status.ID, "Expected blank fullID, but got %v", status.ID)
@@ -92,7 +92,7 @@ func TestGetContainerInfo(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return containerStatus, nil
 	}
 
@@ -100,7 +100,7 @@ func TestGetContainerInfo(t *testing.T) {
 		testingImpl.StatusContainerFunc = nil
 	}()
 
-	status, sandboxID, err := getContainerInfo(testContainerID)
+	status, sandboxID, err := getContainerInfo(context.Background(), testContainerID)
 	assert.NoError(err)
 	assert.Equal(sandboxID, sandbox.ID())
 	assert.Equal(status, containerStatus)
@@ -108,7 +108,7 @@ func TestGetContainerInfo(t *testing.T) {
 
 func TestValidCreateParamsContainerIDEmptyFailure(t *testing.T) {
 	assert := assert.New(t)
-	_, err := validCreateParams("", "")
+	_, err := validCreateParams(context.Background(), "", "")
 
 	assert.Error(err, "This test should fail because containerID is empty")
 	assert.False(vcmock.IsMockError(err))
@@ -116,7 +116,7 @@ func TestValidCreateParamsContainerIDEmptyFailure(t *testing.T) {
 
 func TestGetExistingContainerInfoContainerIDEmptyFailure(t *testing.T) {
 	assert := assert.New(t)
-	status, _, err := getExistingContainerInfo("")
+	status, _, err := getExistingContainerInfo(context.Background(), "")
 
 	assert.Error(err, "This test should fail because containerID is empty")
 	assert.Empty(status.ID, "Expected blank fullID, but got %v", status.ID)
@@ -133,7 +133,7 @@ func TestValidCreateParamsContainerIDNotUnique(t *testing.T) {
 	err = os.MkdirAll(filepath.Join(ctrsMapTreePath, testContainerID, testSandboxID2), 0750)
 	assert.NoError(err)
 
-	_, err = validCreateParams(testContainerID, "")
+	_, err = validCreateParams(context.Background(), testContainerID, "")
 
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
@@ -153,7 +153,7 @@ func TestValidCreateParamsInvalidBundle(t *testing.T) {
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
 
-	_, err = validCreateParams(testContainerID, bundlePath)
+	_, err = validCreateParams(context.Background(), testContainerID, bundlePath)
 	// bundle is ENOENT
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
@@ -175,7 +175,7 @@ func TestValidCreateParamsBundleIsAFile(t *testing.T) {
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
 
-	_, err = validCreateParams(testContainerID, bundlePath)
+	_, err = validCreateParams(context.Background(), testContainerID, bundlePath)
 	// bundle exists as a file, not a directory
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))

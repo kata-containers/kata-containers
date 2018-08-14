@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -73,7 +74,7 @@ func TestMain(m *testing.M) {
 			logger.Logger.Level = logrus.DebugLevel
 		}
 	}
-	SetLogger(logger)
+	SetLogger(context.Background(), logger)
 
 	testDir, err = ioutil.TempDir("", "vc-tmp-")
 	if err != nil {
