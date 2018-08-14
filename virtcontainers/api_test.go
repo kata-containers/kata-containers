@@ -1358,6 +1358,8 @@ func TestStartStopSandboxHyperstartAgentSuccessfulWithCNMNetwork(t *testing.T) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
+	cleanUp()
+
 	config := newTestSandboxConfigHyperstartAgentCNMNetwork()
 
 	sockDir, err := testGenerateCCProxySockDir()
