@@ -194,16 +194,16 @@ func execute(ctx context.Context, context *cli.Context) error {
 	containerID := context.Args().First()
 
 	kataLog = kataLog.WithField("container", containerID)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("container", containerID)
 
-	status, sandboxID, err := getExistingContainerInfo(containerID)
+	status, sandboxID, err := getExistingContainerInfo(ctx, containerID)
 	if err != nil {
 		return err
 	}
 
 	kataLog = kataLog.WithField("sandbox", sandboxID)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("sandbox", sandboxID)
 
 	// Retrieve OCI spec configuration.
@@ -221,7 +221,7 @@ func execute(ctx context.Context, context *cli.Context) error {
 	containerID = params.cID
 
 	kataLog = kataLog.WithField("container", containerID)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("container", containerID)
 
 	// container MUST be ready or running.
@@ -257,7 +257,7 @@ func execute(ctx context.Context, context *cli.Context) error {
 		Detach:      noNeedForOutput(params.detach, params.ociProcess.Terminal),
 	}
 
-	_, _, process, err := vci.EnterContainer(sandboxID, params.cID, cmd)
+	_, _, process, err := vci.EnterContainer(ctx, sandboxID, params.cID, cmd)
 	if err != nil {
 		return err
 	}

@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -71,7 +72,7 @@ func TestUpdateCLIFailure(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: sandbox.ID(),
 			Annotations: map[string]string{
@@ -87,7 +88,7 @@ func TestUpdateCLIFailure(t *testing.T) {
 	assert.Error(err)
 
 	// resources file does not exist
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: sandbox.ID(),
 			Annotations: map[string]string{
@@ -98,7 +99,7 @@ func TestUpdateCLIFailure(t *testing.T) {
 			},
 		}, nil
 	}
-	testingImpl.UpdateContainerFunc = func(sandboxID, containerID string, resources specs.LinuxResources) error {
+	testingImpl.UpdateContainerFunc = func(ctx context.Context, sandboxID, containerID string, resources specs.LinuxResources) error {
 		return nil
 	}
 	defer func() {
@@ -160,7 +161,7 @@ func TestUpdateCLISuccessful(t *testing.T) {
 		},
 	}
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: sandbox.ID(),
 			Annotations: map[string]string{
@@ -171,7 +172,7 @@ func TestUpdateCLISuccessful(t *testing.T) {
 			},
 		}, nil
 	}
-	testingImpl.UpdateContainerFunc = func(sandboxID, containerID string, resources specs.LinuxResources) error {
+	testingImpl.UpdateContainerFunc = func(ctx context.Context, sandboxID, containerID string, resources specs.LinuxResources) error {
 		return nil
 	}
 	defer func() {

@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"os"
 	"runtime"
 	"syscall"
@@ -24,7 +25,7 @@ func init() {
 var virtLog = logrus.WithField("source", "virtcontainers")
 
 // SetLogger sets the logger for virtcontainers package.
-func SetLogger(logger *logrus.Entry) {
+func SetLogger(ctx context.Context, logger *logrus.Entry) {
 	fields := virtLog.Data
 	virtLog = logger.WithFields(fields)
 
@@ -33,7 +34,7 @@ func SetLogger(logger *logrus.Entry) {
 
 // CreateSandbox is the virtcontainers sandbox creation entry point.
 // CreateSandbox creates a sandbox and its containers. It does not start them.
-func CreateSandbox(sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
+func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
 	s, err := createSandboxFromConfig(sandboxConfig, factory)
 	if err == nil {
 		s.releaseStatelessSandbox()
@@ -104,7 +105,7 @@ func createSandboxFromConfig(sandboxConfig SandboxConfig, factory Factory) (*San
 
 // DeleteSandbox is the virtcontainers sandbox deletion entry point.
 // DeleteSandbox will stop an already running container and then delete it.
-func DeleteSandbox(sandboxID string) (VCSandbox, error) {
+func DeleteSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -134,7 +135,7 @@ func DeleteSandbox(sandboxID string) (VCSandbox, error) {
 // FetchSandbox will find out and connect to an existing sandbox and
 // return the sandbox structure. The caller is responsible of calling
 // VCSandbox.Release() after done with it.
-func FetchSandbox(sandboxID string) (VCSandbox, error) {
+func FetchSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -168,7 +169,7 @@ func FetchSandbox(sandboxID string) (VCSandbox, error) {
 // StartSandbox will talk to the given hypervisor to start an existing
 // sandbox and all its containers.
 // It returns the sandbox ID.
-func StartSandbox(sandboxID string) (VCSandbox, error) {
+func StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -206,7 +207,7 @@ func startSandbox(s *Sandbox) (*Sandbox, error) {
 
 // StopSandbox is the virtcontainers sandbox stopping entry point.
 // StopSandbox will talk to the given agent to stop an existing sandbox and destroy all containers within that sandbox.
-func StopSandbox(sandboxID string) (VCSandbox, error) {
+func StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandbox
 	}
@@ -245,7 +246,7 @@ func StopSandbox(sandboxID string) (VCSandbox, error) {
 
 // RunSandbox is the virtcontainers sandbox running entry point.
 // RunSandbox creates a sandbox and its containers and then it starts them.
-func RunSandbox(sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
+func RunSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
 	s, err := createSandboxFromConfig(sandboxConfig, factory)
 	if err != nil {
 		return nil, err
@@ -262,7 +263,7 @@ func RunSandbox(sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error)
 }
 
 // ListSandbox is the virtcontainers sandbox listing entry point.
-func ListSandbox() ([]SandboxStatus, error) {
+func ListSandbox(ctx context.Context) ([]SandboxStatus, error) {
 	dir, err := os.Open(configStoragePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -282,7 +283,7 @@ func ListSandbox() ([]SandboxStatus, error) {
 	var sandboxStatusList []SandboxStatus
 
 	for _, sandboxID := range sandboxesID {
-		sandboxStatus, err := StatusSandbox(sandboxID)
+		sandboxStatus, err := StatusSandbox(ctx, sandboxID)
 		if err != nil {
 			continue
 		}
@@ -294,7 +295,7 @@ func ListSandbox() ([]SandboxStatus, error) {
 }
 
 // StatusSandbox is the virtcontainers sandbox status entry point.
-func StatusSandbox(sandboxID string) (SandboxStatus, error) {
+func StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error) {
 	if sandboxID == "" {
 		return SandboxStatus{}, errNeedSandboxID
 	}
@@ -346,7 +347,7 @@ func StatusSandbox(sandboxID string) (SandboxStatus, error) {
 
 // CreateContainer is the virtcontainers container creation entry point.
 // CreateContainer creates a container on a given sandbox.
-func CreateContainer(sandboxID string, containerConfig ContainerConfig) (VCSandbox, VCContainer, error) {
+func CreateContainer(ctx context.Context, sandboxID string, containerConfig ContainerConfig) (VCSandbox, VCContainer, error) {
 	if sandboxID == "" {
 		return nil, nil, errNeedSandboxID
 	}
@@ -374,7 +375,7 @@ func CreateContainer(sandboxID string, containerConfig ContainerConfig) (VCSandb
 // DeleteContainer is the virtcontainers container deletion entry point.
 // DeleteContainer deletes a Container from a Sandbox. If the container is running,
 // it needs to be stopped first.
-func DeleteContainer(sandboxID, containerID string) (VCContainer, error) {
+func DeleteContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -400,7 +401,7 @@ func DeleteContainer(sandboxID, containerID string) (VCContainer, error) {
 
 // StartContainer is the virtcontainers container starting entry point.
 // StartContainer starts an already created container.
-func StartContainer(sandboxID, containerID string) (VCContainer, error) {
+func StartContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -431,7 +432,7 @@ func StartContainer(sandboxID, containerID string) (VCContainer, error) {
 
 // StopContainer is the virtcontainers container stopping entry point.
 // StopContainer stops an already running container.
-func StopContainer(sandboxID, containerID string) (VCContainer, error) {
+func StopContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -469,7 +470,7 @@ func StopContainer(sandboxID, containerID string) (VCContainer, error) {
 
 // EnterContainer is the virtcontainers container command execution entry point.
 // EnterContainer enters an already running container and runs a given command.
-func EnterContainer(sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContainer, *Process, error) {
+func EnterContainer(ctx context.Context, sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContainer, *Process, error) {
 	if sandboxID == "" {
 		return nil, nil, nil, errNeedSandboxID
 	}
@@ -500,7 +501,7 @@ func EnterContainer(sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContai
 
 // StatusContainer is the virtcontainers container status entry point.
 // StatusContainer returns a detailed container status.
-func StatusContainer(sandboxID, containerID string) (ContainerStatus, error) {
+func StatusContainer(ctx context.Context, sandboxID, containerID string) (ContainerStatus, error) {
 	if sandboxID == "" {
 		return ContainerStatus{}, errNeedSandboxID
 	}
@@ -587,7 +588,7 @@ func statusContainer(sandbox *Sandbox, containerID string) (ContainerStatus, err
 // KillContainer is the virtcontainers entry point to send a signal
 // to a container running inside a sandbox. If all is true, all processes in
 // the container will be sent the signal.
-func KillContainer(sandboxID, containerID string, signal syscall.Signal, all bool) error {
+func KillContainer(ctx context.Context, sandboxID, containerID string, signal syscall.Signal, all bool) error {
 	if sandboxID == "" {
 		return errNeedSandboxID
 	}
@@ -625,19 +626,19 @@ func KillContainer(sandboxID, containerID string, signal syscall.Signal, all boo
 
 // PauseSandbox is the virtcontainers pausing entry point which pauses an
 // already running sandbox.
-func PauseSandbox(sandboxID string) (VCSandbox, error) {
+func PauseSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	return togglePauseSandbox(sandboxID, true)
 }
 
 // ResumeSandbox is the virtcontainers resuming entry point which resumes
 // (or unpauses) and already paused sandbox.
-func ResumeSandbox(sandboxID string) (VCSandbox, error) {
+func ResumeSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	return togglePauseSandbox(sandboxID, false)
 }
 
 // ProcessListContainer is the virtcontainers entry point to list
 // processes running inside a container
-func ProcessListContainer(sandboxID, containerID string, options ProcessListOptions) (ProcessList, error) {
+func ProcessListContainer(ctx context.Context, sandboxID, containerID string, options ProcessListOptions) (ProcessList, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -669,7 +670,7 @@ func ProcessListContainer(sandboxID, containerID string, options ProcessListOpti
 
 // UpdateContainer is the virtcontainers entry point to update
 // container's resources.
-func UpdateContainer(sandboxID, containerID string, resources specs.LinuxResources) error {
+func UpdateContainer(ctx context.Context, sandboxID, containerID string, resources specs.LinuxResources) error {
 	if sandboxID == "" {
 		return errNeedSandboxID
 	}
@@ -695,7 +696,7 @@ func UpdateContainer(sandboxID, containerID string, resources specs.LinuxResourc
 
 // StatsContainer is the virtcontainers container stats entry point.
 // StatsContainer returns a detailed container stats.
-func StatsContainer(sandboxID, containerID string) (ContainerStats, error) {
+func StatsContainer(ctx context.Context, sandboxID, containerID string) (ContainerStats, error) {
 	if sandboxID == "" {
 		return ContainerStats{}, errNeedSandboxID
 	}
@@ -754,17 +755,17 @@ func togglePauseContainer(sandboxID, containerID string, pause bool) error {
 }
 
 // PauseContainer is the virtcontainers container pause entry point.
-func PauseContainer(sandboxID, containerID string) error {
+func PauseContainer(ctx context.Context, sandboxID, containerID string) error {
 	return togglePauseContainer(sandboxID, containerID, true)
 }
 
 // ResumeContainer is the virtcontainers container resume entry point.
-func ResumeContainer(sandboxID, containerID string) error {
+func ResumeContainer(ctx context.Context, sandboxID, containerID string) error {
 	return togglePauseContainer(sandboxID, containerID, false)
 }
 
 // AddDevice will add a device to sandbox
-func AddDevice(sandboxID string, info deviceConfig.DeviceInfo) (deviceApi.Device, error) {
+func AddDevice(ctx context.Context, sandboxID string, info deviceConfig.DeviceInfo) (deviceApi.Device, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -784,7 +785,7 @@ func AddDevice(sandboxID string, info deviceConfig.DeviceInfo) (deviceApi.Device
 	return s.AddDevice(info)
 }
 
-func toggleInterface(sandboxID string, inf *grpc.Interface, add bool) (*grpc.Interface, error) {
+func toggleInterface(ctx context.Context, sandboxID string, inf *grpc.Interface, add bool) (*grpc.Interface, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -806,17 +807,17 @@ func toggleInterface(sandboxID string, inf *grpc.Interface, add bool) (*grpc.Int
 }
 
 // AddInterface is the virtcontainers add interface entry point.
-func AddInterface(sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
-	return toggleInterface(sandboxID, inf, true)
+func AddInterface(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+	return toggleInterface(ctx, sandboxID, inf, true)
 }
 
 // RemoveInterface is the virtcontainers remove interface entry point.
-func RemoveInterface(sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
-	return toggleInterface(sandboxID, inf, false)
+func RemoveInterface(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+	return toggleInterface(ctx, sandboxID, inf, false)
 }
 
 // ListInterfaces is the virtcontainers list interfaces entry point.
-func ListInterfaces(sandboxID string) ([]*grpc.Interface, error) {
+func ListInterfaces(ctx context.Context, sandboxID string) ([]*grpc.Interface, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -836,7 +837,7 @@ func ListInterfaces(sandboxID string) ([]*grpc.Interface, error) {
 }
 
 // UpdateRoutes is the virtcontainers update routes entry point.
-func UpdateRoutes(sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error) {
+func UpdateRoutes(ctx context.Context, sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -855,7 +856,7 @@ func UpdateRoutes(sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error)
 }
 
 // ListRoutes is the virtcontainers list routes entry point.
-func ListRoutes(sandboxID string) ([]*grpc.Route, error) {
+func ListRoutes(ctx context.Context, sandboxID string) ([]*grpc.Route, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}

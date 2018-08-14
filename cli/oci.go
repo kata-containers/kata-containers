@@ -46,7 +46,7 @@ var procMountInfo = "/proc/self/mountinfo"
 var ctrsMapTreePath = "/var/run/kata-containers/containers-mapping"
 
 // getContainerInfo returns the container status and its sandbox ID.
-func getContainerInfo(containerID string) (vc.ContainerStatus, string, error) {
+func getContainerInfo(ctx context.Context, containerID string) (vc.ContainerStatus, string, error) {
 	// container ID MUST be provided.
 	if containerID == "" {
 		return vc.ContainerStatus{}, "", fmt.Errorf("Missing container ID")
@@ -63,7 +63,7 @@ func getContainerInfo(containerID string) (vc.ContainerStatus, string, error) {
 		return vc.ContainerStatus{}, "", nil
 	}
 
-	ctrStatus, err := vci.StatusContainer(sandboxID, containerID)
+	ctrStatus, err := vci.StatusContainer(ctx, sandboxID, containerID)
 	if err != nil {
 		return vc.ContainerStatus{}, "", err
 	}
@@ -71,8 +71,8 @@ func getContainerInfo(containerID string) (vc.ContainerStatus, string, error) {
 	return ctrStatus, sandboxID, nil
 }
 
-func getExistingContainerInfo(containerID string) (vc.ContainerStatus, string, error) {
-	cStatus, sandboxID, err := getContainerInfo(containerID)
+func getExistingContainerInfo(ctx context.Context, containerID string) (vc.ContainerStatus, string, error) {
+	cStatus, sandboxID, err := getContainerInfo(ctx, containerID)
 	if err != nil {
 		return vc.ContainerStatus{}, "", err
 	}
@@ -85,14 +85,14 @@ func getExistingContainerInfo(containerID string) (vc.ContainerStatus, string, e
 	return cStatus, sandboxID, nil
 }
 
-func validCreateParams(containerID, bundlePath string) (string, error) {
+func validCreateParams(ctx context.Context, containerID, bundlePath string) (string, error) {
 	// container ID MUST be provided.
 	if containerID == "" {
 		return "", fmt.Errorf("Missing container ID")
 	}
 
 	// container ID MUST be unique.
-	cStatus, _, err := getContainerInfo(containerID)
+	cStatus, _, err := getContainerInfo(ctx, containerID)
 	if err != nil {
 		return "", err
 	}

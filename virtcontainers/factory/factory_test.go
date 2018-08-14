@@ -6,6 +6,7 @@
 package factory
 
 import (
+	"context"
 	"io/ioutil"
 	"testing"
 
@@ -72,7 +73,7 @@ func TestFactorySetLogger(t *testing.T) {
 
 	testLog := logrus.WithFields(logrus.Fields{"testfield": "foobar"})
 	testLog.Level = logrus.DebugLevel
-	SetLogger(testLog)
+	SetLogger(context.Background(), testLog)
 
 	var config Config
 	config.VMConfig.HypervisorConfig = vc.HypervisorConfig{

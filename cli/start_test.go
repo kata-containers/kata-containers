@@ -58,7 +58,7 @@ func TestStartSandbox(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: sandbox.ID(),
 			Annotations: map[string]string{
@@ -75,7 +75,7 @@ func TestStartSandbox(t *testing.T) {
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
-	testingImpl.StartSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.StartSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
@@ -98,7 +98,7 @@ func TestStartMissingAnnotation(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID:          sandbox.ID(),
 			Annotations: map[string]string{},
@@ -132,7 +132,7 @@ func TestStartContainerSucessFailure(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: testContainerID,
 			Annotations: map[string]string{
@@ -149,7 +149,7 @@ func TestStartContainerSucessFailure(t *testing.T) {
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
-	testingImpl.StartContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	testingImpl.StartContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		return sandbox.MockContainers[0], nil
 	}
 
@@ -206,7 +206,7 @@ func TestStartCLIFunctionSuccess(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: testContainerID,
 			Annotations: map[string]string{
@@ -215,7 +215,7 @@ func TestStartCLIFunctionSuccess(t *testing.T) {
 		}, nil
 	}
 
-	testingImpl.StartContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	testingImpl.StartContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		return sandbox.MockContainers[0], nil
 	}
 

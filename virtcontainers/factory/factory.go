@@ -6,6 +6,7 @@
 package factory
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
@@ -68,7 +69,7 @@ func NewFactory(config Config, fetchOnly bool) (vc.Factory, error) {
 }
 
 // SetLogger sets the logger for the factory.
-func SetLogger(logger logrus.FieldLogger) {
+func SetLogger(ctx context.Context, logger logrus.FieldLogger) {
 	fields := logrus.Fields{
 		"source": "virtcontainers",
 	}

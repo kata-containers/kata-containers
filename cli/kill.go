@@ -101,11 +101,11 @@ func kill(ctx context.Context, containerID, signal string, all bool) error {
 	defer span.Finish()
 
 	kataLog = kataLog.WithField("container", containerID)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("container", containerID)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
-	status, sandboxID, err := getExistingContainerInfo(containerID)
+	status, sandboxID, err := getExistingContainerInfo(ctx, containerID)
 
 	if err != nil {
 		return err
@@ -121,7 +121,7 @@ func kill(ctx context.Context, containerID, signal string, all bool) error {
 	span.SetTag("container", containerID)
 	span.SetTag("sandbox", sandboxID)
 
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 
 	signum, err := processSignal(signal)
 	if err != nil {
@@ -133,7 +133,7 @@ func kill(ctx context.Context, containerID, signal string, all bool) error {
 		return fmt.Errorf("Container %s not ready, running or paused, cannot send a signal", containerID)
 	}
 
-	if err := vci.KillContainer(sandboxID, containerID, signum, all); err != nil {
+	if err := vci.KillContainer(ctx, sandboxID, containerID, signum, all); err != nil {
 		return err
 	}
 
@@ -148,9 +148,9 @@ func kill(ctx context.Context, containerID, signal string, all bool) error {
 
 	switch containerType {
 	case vc.PodSandbox:
-		_, err = vci.StopSandbox(sandboxID)
+		_, err = vci.StopSandbox(ctx, sandboxID)
 	case vc.PodContainer:
-		_, err = vci.StopContainer(sandboxID, containerID)
+		_, err = vci.StopContainer(ctx, sandboxID, containerID)
 	default:
 		return fmt.Errorf("Invalid container type found")
 	}

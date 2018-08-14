@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -46,7 +47,12 @@ var addIfaceCommand = cli.Command{
 	ArgsUsage: `add-iface <container-id> file or - for stdin`,
 	Flags:     []cli.Flag{},
 	Action: func(context *cli.Context) error {
-		return networkModifyCommand(context.Args().First(), context.Args().Get(1), interfaceType, true)
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
+		return networkModifyCommand(ctx, context.Args().First(), context.Args().Get(1), interfaceType, true)
 	},
 }
 
@@ -56,7 +62,12 @@ var delIfaceCommand = cli.Command{
 	ArgsUsage: `del-iface <container-id> file or - for stdin`,
 	Flags:     []cli.Flag{},
 	Action: func(context *cli.Context) error {
-		return networkModifyCommand(context.Args().First(), context.Args().Get(1), interfaceType, false)
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
+		return networkModifyCommand(ctx, context.Args().First(), context.Args().Get(1), interfaceType, false)
 	},
 }
 
@@ -66,7 +77,12 @@ var listIfacesCommand = cli.Command{
 	ArgsUsage: `list-ifaces <container-id>`,
 	Flags:     []cli.Flag{},
 	Action: func(context *cli.Context) error {
-		return networkListCommand(context.Args().First(), interfaceType)
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
+		return networkListCommand(ctx, context.Args().First(), interfaceType)
 	},
 }
 
@@ -76,7 +92,12 @@ var updateRoutesCommand = cli.Command{
 	ArgsUsage: `update-routes <container-id> file or - for stdin`,
 	Flags:     []cli.Flag{},
 	Action: func(context *cli.Context) error {
-		return networkModifyCommand(context.Args().First(), context.Args().Get(1), routeType, true)
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
+		return networkModifyCommand(ctx, context.Args().First(), context.Args().Get(1), routeType, true)
 	},
 }
 
@@ -86,12 +107,17 @@ var listRoutesCommand = cli.Command{
 	ArgsUsage: `list-routes <container-id>`,
 	Flags:     []cli.Flag{},
 	Action: func(context *cli.Context) error {
-		return networkListCommand(context.Args().First(), routeType)
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
+		return networkListCommand(ctx, context.Args().First(), routeType)
 	},
 }
 
-func networkModifyCommand(containerID, input string, opType networkType, add bool) (err error) {
-	status, sandboxID, err := getExistingContainerInfo(containerID)
+func networkModifyCommand(ctx context.Context, containerID, input string, opType networkType, add bool) (err error) {
+	status, sandboxID, err := getExistingContainerInfo(ctx, containerID)
 	if err != nil {
 		return err
 	}
@@ -103,7 +129,7 @@ func networkModifyCommand(containerID, input string, opType networkType, add boo
 		"sandbox":   sandboxID,
 	})
 
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 
 	// container MUST be running
 	if status.State.State != vc.StateRunning {
@@ -131,13 +157,13 @@ func networkModifyCommand(containerID, input string, opType networkType, add boo
 			return err
 		}
 		if add {
-			resultingInf, err = vci.AddInterface(sandboxID, inf)
+			resultingInf, err = vci.AddInterface(ctx, sandboxID, inf)
 			if err != nil {
 				kataLog.WithField("resulting-interface", fmt.Sprintf("%+v", resultingInf)).
 					WithError(err).Error("add interface failed")
 			}
 		} else {
-			resultingInf, err = vci.RemoveInterface(sandboxID, inf)
+			resultingInf, err = vci.RemoveInterface(ctx, sandboxID, inf)
 			if err != nil {
 				kataLog.WithField("resulting-interface", fmt.Sprintf("%+v", resultingInf)).
 					WithError(err).Error("delete interface failed")
@@ -149,7 +175,7 @@ func networkModifyCommand(containerID, input string, opType networkType, add boo
 		if err = json.NewDecoder(f).Decode(&routes); err != nil {
 			return err
 		}
-		resultingRoutes, err = vci.UpdateRoutes(sandboxID, routes)
+		resultingRoutes, err = vci.UpdateRoutes(ctx, sandboxID, routes)
 		json.NewEncoder(output).Encode(resultingRoutes)
 		if err != nil {
 			kataLog.WithField("resulting-routes", fmt.Sprintf("%+v", resultingRoutes)).
@@ -159,8 +185,8 @@ func networkModifyCommand(containerID, input string, opType networkType, add boo
 	return err
 }
 
-func networkListCommand(containerID string, opType networkType) (err error) {
-	status, sandboxID, err := getExistingContainerInfo(containerID)
+func networkListCommand(ctx context.Context, containerID string, opType networkType) (err error) {
+	status, sandboxID, err := getExistingContainerInfo(ctx, containerID)
 	if err != nil {
 		return err
 	}
@@ -172,7 +198,7 @@ func networkListCommand(containerID string, opType networkType) (err error) {
 		"sandbox":   sandboxID,
 	})
 
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 
 	// container MUST be running
 	if status.State.State != vc.StateRunning {
@@ -184,7 +210,7 @@ func networkListCommand(containerID string, opType networkType) (err error) {
 	switch opType {
 	case interfaceType:
 		var interfaces []*grpc.Interface
-		interfaces, err = vci.ListInterfaces(sandboxID)
+		interfaces, err = vci.ListInterfaces(ctx, sandboxID)
 		if err != nil {
 			kataLog.WithField("existing-interfaces", fmt.Sprintf("%+v", interfaces)).
 				WithError(err).Error("list interfaces failed")
@@ -192,7 +218,7 @@ func networkListCommand(containerID string, opType networkType) (err error) {
 		json.NewEncoder(file).Encode(interfaces)
 	case routeType:
 		var routes []*grpc.Route
-		routes, err = vci.ListRoutes(sandboxID)
+		routes, err = vci.ListRoutes(ctx, sandboxID)
 		if err != nil {
 			kataLog.WithField("resulting-routes", fmt.Sprintf("%+v", routes)).
 				WithError(err).Error("update routes failed")

@@ -99,11 +99,11 @@ func create(ctx context.Context, containerID, bundlePath, console, pidFilePath s
 	defer span.Finish()
 
 	kataLog = kataLog.WithField("container", containerID)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("container", containerID)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
-	if bundlePath, err = validCreateParams(containerID, bundlePath); err != nil {
+	if bundlePath, err = validCreateParams(ctx, containerID, bundlePath); err != nil {
 		return err
 	}
 
@@ -137,7 +137,7 @@ func create(ctx context.Context, containerID, bundlePath, console, pidFilePath s
 			}
 		}
 		if err == nil {
-			vci.SetFactory(f)
+			vci.SetFactory(ctx, f)
 		}
 	}
 
@@ -266,14 +266,14 @@ func createSandbox(ctx context.Context, ociSpec oci.CompatOCISpec, runtimeConfig
 		return vc.Process{}, err
 	}
 
-	sandbox, err := vci.CreateSandbox(sandboxConfig)
+	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig)
 	if err != nil {
 		return vc.Process{}, err
 	}
 
 	sid := sandbox.ID()
 	kataLog = kataLog.WithField("sandbox", sid)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("sandbox", sid)
 
 	containers := sandbox.GetAllContainers()
@@ -321,10 +321,10 @@ func createContainer(ctx context.Context, ociSpec oci.CompatOCISpec, containerID
 	}
 
 	kataLog = kataLog.WithField("sandbox", sandboxID)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("sandbox", sandboxID)
 
-	_, c, err := vci.CreateContainer(sandboxID, contConfig)
+	_, c, err := vci.CreateContainer(ctx, sandboxID, contConfig)
 	if err != nil {
 		return vc.Process{}, err
 	}

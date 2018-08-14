@@ -51,11 +51,11 @@ func start(ctx context.Context, containerID string) (vc.VCSandbox, error) {
 	defer span.Finish()
 
 	kataLog = kataLog.WithField("container", containerID)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("container", containerID)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
-	status, sandboxID, err := getExistingContainerInfo(containerID)
+	status, sandboxID, err := getExistingContainerInfo(ctx, containerID)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func start(ctx context.Context, containerID string) (vc.VCSandbox, error) {
 		"sandbox":   sandboxID,
 	})
 
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("container", containerID)
 	span.SetTag("sandbox", sandboxID)
 
@@ -77,10 +77,10 @@ func start(ctx context.Context, containerID string) (vc.VCSandbox, error) {
 	}
 
 	if containerType.IsSandbox() {
-		return vci.StartSandbox(sandboxID)
+		return vci.StartSandbox(ctx, sandboxID)
 	}
 
-	c, err := vci.StartContainer(sandboxID, containerID)
+	c, err := vci.StartContainer(ctx, sandboxID, containerID)
 	if err != nil {
 		return nil, err
 	}
