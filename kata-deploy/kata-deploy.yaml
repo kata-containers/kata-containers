@@ -77,8 +77,6 @@ spec:
         volumeMounts:
         - name: crio-conf
           mountPath: /etc/crio/
-        - name: kata-conf
-          mountPath: /usr/share/defaults/kata-containers/
         - name: kata-artifacts
           mountPath: /opt/kata/
         - name: dbus
@@ -89,10 +87,6 @@ spec:
         - name: crio-conf
           hostPath:
             path: /etc/crio/
-        - name: kata-conf
-          hostPath:
-            path: /usr/share/defaults/kata-containers/
-            type: DirectoryOrCreate
         - name: kata-artifacts
           hostPath:
             path: /opt/kata/
@@ -148,8 +142,6 @@ spec:
         volumeMounts:
         - name: containerd-conf
           mountPath: /etc/containerd/
-        - name: kata-conf
-          mountPath: /usr/share/defaults/kata-containers/
         - name: kata-artifacts
           mountPath: /opt/kata/
         - name: dbus
@@ -160,10 +152,6 @@ spec:
         - name: containerd-conf
           hostPath:
             path: /etc/containerd/
-            type: DirectoryOrCreate
-        - name: kata-conf
-          hostPath:
-            path: /usr/share/defaults/kata-containers/
             type: DirectoryOrCreate
         - name: kata-artifacts
           hostPath:
