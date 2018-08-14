@@ -868,14 +868,11 @@ func TestEnvHandleSettings(t *testing.T) {
 	_, err = getExpectedSettings(config, tmpdir, configFile)
 	assert.NoError(t, err)
 
-	app := cli.NewApp()
 	set := flag.NewFlagSet("test", flag.ContinueOnError)
-	ctx := cli.NewContext(app, set, nil)
-	app.Name = "foo"
-	ctx.App.Metadata = map[string]interface{}{
-		"configFile":    configFile,
-		"runtimeConfig": config,
-	}
+	ctx := createCLIContext(set)
+	ctx.App.Name = "foo"
+	ctx.App.Metadata["configFile"] = configFile
+	ctx.App.Metadata["runtimeConfig"] = config
 
 	tmpfile, err := ioutil.TempFile("", "")
 	assert.NoError(t, err)
@@ -905,13 +902,10 @@ func TestEnvHandleSettingsInvalidShimConfig(t *testing.T) {
 
 	config.ShimConfig = "invalid shim config"
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
-	ctx.App.Metadata = map[string]interface{}{
-		"configFile":    configFile,
-		"runtimeConfig": config,
-	}
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
+	ctx.App.Metadata["configFile"] = configFile
+	ctx.App.Metadata["runtimeConfig"] = config
 
 	tmpfile, err := ioutil.TempFile("", "")
 	assert.NoError(err)
@@ -931,59 +925,47 @@ func TestEnvHandleSettingsInvalidParams(t *testing.T) {
 	configFile, _, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(err)
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
-	ctx.App.Metadata = map[string]interface{}{
-		"configFile": configFile,
-	}
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
+	ctx.App.Metadata["configFile"] = configFile
+
 	err = handleSettings(nil, ctx)
 	assert.Error(err)
 }
 
 func TestEnvHandleSettingsEmptyMap(t *testing.T) {
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
 	ctx.App.Metadata = map[string]interface{}{}
 	err := handleSettings(os.Stdout, ctx)
 	assert.Error(t, err)
 }
 
 func TestEnvHandleSettingsInvalidFile(t *testing.T) {
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
-	ctx.App.Metadata = map[string]interface{}{
-		"configFile":    "foo",
-		"runtimeConfig": oci.RuntimeConfig{},
-	}
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
+	ctx.App.Metadata["configFile"] = "foo"
+	ctx.App.Metadata["runtimeConfig"] = oci.RuntimeConfig{}
 
 	err := handleSettings(nil, ctx)
 	assert.Error(t, err)
 }
 
 func TestEnvHandleSettingsInvalidConfigFileType(t *testing.T) {
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
-	ctx.App.Metadata = map[string]interface{}{
-		"configFile":    123,
-		"runtimeConfig": oci.RuntimeConfig{},
-	}
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
+	ctx.App.Metadata["configFile"] = 123
+	ctx.App.Metadata["runtimeConfig"] = oci.RuntimeConfig{}
 
 	err := handleSettings(os.Stderr, ctx)
 	assert.Error(t, err)
 }
 
 func TestEnvHandleSettingsInvalidRuntimeConfigType(t *testing.T) {
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
-	ctx.App.Metadata = map[string]interface{}{
-		"configFile":    "/some/where",
-		"runtimeConfig": true,
-	}
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
+	ctx.App.Metadata["configFile"] = "/some/where"
+	ctx.App.Metadata["runtimeConfig"] = true
 
 	err := handleSettings(os.Stderr, ctx)
 	assert.Error(t, err)
@@ -1004,13 +986,11 @@ func TestEnvCLIFunction(t *testing.T) {
 
 	app := cli.NewApp()
 	set := flag.NewFlagSet("test", flag.ContinueOnError)
-	ctx := cli.NewContext(app, set, nil)
+	ctx := createCLIContextWithApp(set, app)
 	app.Name = "foo"
 
-	ctx.App.Metadata = map[string]interface{}{
-		"configFile":    configFile,
-		"runtimeConfig": config,
-	}
+	ctx.App.Metadata["configFile"] = configFile
+	ctx.App.Metadata["runtimeConfig"] = config
 
 	fn, ok := kataEnvCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(t, ok)
@@ -1030,7 +1010,7 @@ func TestEnvCLIFunction(t *testing.T) {
 	assert.NoError(t, err)
 
 	set.Bool("json", true, "")
-	ctx = cli.NewContext(app, set, nil)
+	ctx = createCLIContextWithApp(set, app)
 
 	err = fn(ctx)
 	assert.NoError(t, err)
@@ -1049,14 +1029,11 @@ func TestEnvCLIFunctionFail(t *testing.T) {
 	_, err = getExpectedSettings(config, tmpdir, configFile)
 	assert.NoError(t, err)
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
 
-	ctx.App.Metadata = map[string]interface{}{
-		"configFile":    configFile,
-		"runtimeConfig": config,
-	}
+	ctx.App.Metadata["configFile"] = configFile
+	ctx.App.Metadata["runtimeConfig"] = config
 
 	fn, ok := kataEnvCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(t, ok)

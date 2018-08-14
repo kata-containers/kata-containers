@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -45,7 +46,7 @@ func mockCPUSetContent(contents map[string]string) error {
 }
 
 func testCreateCgroupsFilesSuccessful(t *testing.T, cgroupsDirPath string, cgroupsPathList []string, pid int) {
-	if err := createCgroupsFiles("foo", cgroupsDirPath, cgroupsPathList, pid); err != nil {
+	if err := createCgroupsFiles(context.Background(), "foo", cgroupsDirPath, cgroupsPathList, pid); err != nil {
 		t.Fatalf("This test should succeed (cgroupsPath %q, pid %d): %s", cgroupsPathList, pid, err)
 	}
 }
@@ -95,7 +96,7 @@ func TestCreateCgroupsFilesFailToWriteFile(t *testing.T) {
 
 	files := []string{file}
 
-	err = createCgroupsFiles("foo", "cgroups-file", files, testPID)
+	err = createCgroupsFiles(context.Background(), "foo", "cgroups-file", files, testPID)
 	assert.Error(err)
 }
 
@@ -135,7 +136,7 @@ func TestCreatePIDFileSuccessful(t *testing.T) {
 	}
 
 	pidFilePath := filepath.Join(pidDirPath, "pid-file-path")
-	if err := createPIDFile(pidFilePath, testPID); err != nil {
+	if err := createPIDFile(context.Background(), pidFilePath, testPID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -155,7 +156,7 @@ func TestCreatePIDFileSuccessful(t *testing.T) {
 
 func TestCreatePIDFileEmptyPathSuccessful(t *testing.T) {
 	file := ""
-	if err := createPIDFile(file, testPID); err != nil {
+	if err := createPIDFile(context.Background(), file, testPID); err != nil {
 		t.Fatalf("This test should not fail (pidFilePath %q, pid %d)", file, testPID)
 	}
 }
@@ -179,7 +180,7 @@ func TestCreatePIDFileUnableToRemove(t *testing.T) {
 	err = os.MkdirAll(subdir, os.FileMode(0000))
 	assert.NoError(err)
 
-	err = createPIDFile(file, testPID)
+	err = createPIDFile(context.Background(), file, testPID)
 	assert.Error(err)
 
 	// let it be deleted
@@ -196,7 +197,7 @@ func TestCreatePIDFileUnableToCreate(t *testing.T) {
 	subdir := filepath.Join(tmpdir, "dir")
 	file := filepath.Join(subdir, "pidfile")
 
-	err = createPIDFile(file, testPID)
+	err = createPIDFile(context.Background(), file, testPID)
 
 	// subdir doesn't exist
 	assert.Error(err)
@@ -206,12 +207,9 @@ func TestCreatePIDFileUnableToCreate(t *testing.T) {
 func TestCreateCLIFunctionNoRuntimeConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
-	ctx.App.Metadata = map[string]interface{}{
-		"foo": "bar",
-	}
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
+	ctx.App.Metadata["foo"] = "bar"
 
 	fn, ok := createCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
@@ -241,13 +239,10 @@ func TestCreateCLIFunctionSetupConsoleFail(t *testing.T) {
 
 	set.String("console-socket", consoleSocketPath, "")
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, set, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(set)
+	ctx.App.Name = "foo"
 
-	ctx.App.Metadata = map[string]interface{}{
-		"runtimeConfig": runtimeConfig,
-	}
+	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 
 	fn, ok := createCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
@@ -272,13 +267,10 @@ func TestCreateCLIFunctionCreateFail(t *testing.T) {
 
 	set.String("console-socket", "", "")
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, set, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(set)
+	ctx.App.Name = "foo"
 
-	ctx.App.Metadata = map[string]interface{}{
-		"runtimeConfig": runtimeConfig,
-	}
+	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 
 	fn, ok := createCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)
@@ -346,7 +338,7 @@ func TestCreateInvalidArgs(t *testing.T) {
 	}
 
 	for i, d := range data {
-		err := create(d.containerID, d.bundlePath, d.console, d.pidFilePath, d.detach, d.runtimeConfig)
+		err := create(context.Background(), d.containerID, d.bundlePath, d.console, d.pidFilePath, d.detach, d.runtimeConfig)
 		assert.Errorf(err, "test %d (%+v)", i, d)
 	}
 }
@@ -385,7 +377,7 @@ func TestCreateInvalidConfigJSON(t *testing.T) {
 	f.Close()
 
 	for detach := range []bool{true, false} {
-		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
+		err := create(context.Background(), testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
 		assert.False(vcmock.IsMockError(err))
 		os.RemoveAll(path)
@@ -429,7 +421,7 @@ func TestCreateInvalidContainerType(t *testing.T) {
 	assert.NoError(err)
 
 	for detach := range []bool{true, false} {
-		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
+		err := create(context.Background(), testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
 		assert.False(vcmock.IsMockError(err))
 		os.RemoveAll(path)
@@ -474,7 +466,7 @@ func TestCreateContainerInvalid(t *testing.T) {
 	assert.NoError(err)
 
 	for detach := range []bool{true, false} {
-		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
+		err := create(context.Background(), testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
 		assert.False(vcmock.IsMockError(err))
 		os.RemoveAll(path)
@@ -565,7 +557,7 @@ func TestCreateProcessCgroupsPathSuccessful(t *testing.T) {
 	assert.NoError(err)
 
 	for _, detach := range []bool{true, false} {
-		err := create(testContainerID, bundlePath, testConsole, pidFilePath, detach, runtimeConfig)
+		err := create(context.Background(), testContainerID, bundlePath, testConsole, pidFilePath, detach, runtimeConfig)
 		assert.NoError(err, "detached: %+v", detach)
 		os.RemoveAll(path)
 	}
@@ -649,7 +641,7 @@ func TestCreateCreateCgroupsFilesFail(t *testing.T) {
 	assert.NoError(err)
 
 	for detach := range []bool{true, false} {
-		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
+		err := create(context.Background(), testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
 		assert.False(vcmock.IsMockError(err))
 		os.RemoveAll(path)
@@ -725,7 +717,7 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 	assert.NoError(err)
 
 	for detach := range []bool{true, false} {
-		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
+		err := create(context.Background(), testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
 		assert.False(vcmock.IsMockError(err))
 		os.RemoveAll(path)
@@ -791,7 +783,7 @@ func TestCreate(t *testing.T) {
 	assert.NoError(err)
 
 	for detach := range []bool{true, false} {
-		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
+		err := create(context.Background(), testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.NoError(err, "%+v", detach)
 		os.RemoveAll(path)
 	}
@@ -848,7 +840,7 @@ func TestCreateInvalidKernelParams(t *testing.T) {
 	}
 
 	for detach := range []bool{true, false} {
-		err := create(testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
+		err := create(context.Background(), testContainerID, bundlePath, testConsole, pidFilePath, true, runtimeConfig)
 		assert.Errorf(err, "%+v", detach)
 		assert.False(vcmock.IsMockError(err))
 		os.RemoveAll(path)
@@ -893,7 +885,7 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 		Quota: &quota,
 	}
 
-	_, err = createSandbox(spec, runtimeConfig, testContainerID, bundlePath, testConsole, true)
+	_, err = createSandbox(context.Background(), spec, runtimeConfig, testContainerID, bundlePath, testConsole, true)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
@@ -924,7 +916,7 @@ func TestCreateCreateSandboxFail(t *testing.T) {
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
 
-	_, err = createSandbox(spec, runtimeConfig, testContainerID, bundlePath, testConsole, true)
+	_, err = createSandbox(context.Background(), spec, runtimeConfig, testContainerID, bundlePath, testConsole, true)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 }
@@ -962,7 +954,7 @@ func TestCreateCreateContainerContainerConfigFail(t *testing.T) {
 	assert.NoError(err)
 
 	for _, disableOutput := range []bool{true, false} {
-		_, err = createContainer(spec, testContainerID, bundlePath, testConsole, disableOutput)
+		_, err = createContainer(context.Background(), spec, testContainerID, bundlePath, testConsole, disableOutput)
 		assert.Error(err)
 		assert.False(vcmock.IsMockError(err))
 		assert.True(strings.Contains(err.Error(), containerType))
@@ -1003,7 +995,7 @@ func TestCreateCreateContainerFail(t *testing.T) {
 	assert.NoError(err)
 
 	for _, disableOutput := range []bool{true, false} {
-		_, err = createContainer(spec, testContainerID, bundlePath, testConsole, disableOutput)
+		_, err = createContainer(context.Background(), spec, testContainerID, bundlePath, testConsole, disableOutput)
 		assert.Error(err)
 		assert.True(vcmock.IsMockError(err))
 		os.RemoveAll(path)
@@ -1069,7 +1061,7 @@ func TestCreateCreateContainer(t *testing.T) {
 	assert.NoError(err)
 
 	for _, disableOutput := range []bool{true, false} {
-		_, err = createContainer(spec, testContainerID, bundlePath, testConsole, disableOutput)
+		_, err = createContainer(context.Background(), spec, testContainerID, bundlePath, testConsole, disableOutput)
 		assert.NoError(err)
 		os.RemoveAll(path)
 	}

@@ -102,6 +102,7 @@ type proxy struct {
 
 type runtime struct {
 	Debug             bool   `toml:"enable_debug"`
+	Tracing           bool   `toml:"enable_tracing"`
 	InterNetworkModel string `toml:"internetworking_model"`
 }
 
@@ -536,6 +537,10 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		// If debug is not required, switch back to the original
 		// default log priority, otherwise continue in debug mode.
 		kataLog.Logger.Level = originalLoggerLevel
+	}
+
+	if tomlConf.Runtime.Tracing {
+		tracing = true
 	}
 
 	if tomlConf.Runtime.InterNetworkModel != "" {

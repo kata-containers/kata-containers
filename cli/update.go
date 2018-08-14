@@ -15,6 +15,7 @@ import (
 	"github.com/docker/go-units"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -127,6 +128,14 @@ other options are ignored.
 		},
 	},
 	Action: func(context *cli.Context) error {
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
+		span, _ := opentracing.StartSpanFromContext(ctx, "update")
+		defer span.Finish()
+
 		if context.Args().Present() == false {
 			return fmt.Errorf("Missing container ID, should at least provide one")
 		}
@@ -135,6 +144,7 @@ other options are ignored.
 
 		kataLog = kataLog.WithField("container", containerID)
 		setExternalLoggers(kataLog)
+		span.SetTag("container", containerID)
 
 		status, sandboxID, err := getExistingContainerInfo(containerID)
 		if err != nil {
@@ -149,6 +159,9 @@ other options are ignored.
 		})
 
 		setExternalLoggers(kataLog)
+
+		span.SetTag("container", containerID)
+		span.SetTag("sandbox", sandboxID)
 
 		// container MUST be running
 		if status.State.State != vc.StateRunning {

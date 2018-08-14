@@ -31,10 +31,9 @@ func TestVersion(t *testing.T) {
 		return testAppVersion
 	}
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = testAppName
-	app.Version = runtimeVersion()
+	ctx := createCLIContext(nil)
+	ctx.App.Name = testAppName
+	ctx.App.Version = runtimeVersion()
 
 	fn, ok := versionCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(t, ok)

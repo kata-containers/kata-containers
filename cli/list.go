@@ -16,6 +16,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
@@ -108,6 +109,14 @@ To list containers created using a non-default value for "--root":
 		},
 	},
 	Action: func(context *cli.Context) error {
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
+		span, _ := opentracing.StartSpanFromContext(ctx, "list")
+		defer span.Finish()
+
 		s, err := getContainers(context)
 		if err != nil {
 			return err

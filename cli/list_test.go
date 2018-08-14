@@ -350,12 +350,9 @@ func TestStateToJSON(t *testing.T) {
 }
 
 func TestListCLIFunctionNoContainers(t *testing.T) {
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
-	ctx.App.Metadata = map[string]interface{}{
-		"foo": "bar",
-	}
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
+	ctx.App.Metadata["foo"] = "bar"
 
 	fn, ok := listCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(t, ok)
@@ -373,9 +370,8 @@ func TestListGetContainersListSandboxFail(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
@@ -405,9 +401,8 @@ func TestListGetContainers(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
@@ -445,9 +440,8 @@ func TestListGetContainersSandboxWithoutContainers(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(tmpdir)
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
@@ -495,16 +489,13 @@ func TestListGetContainersSandboxWithContainer(t *testing.T) {
 		testingImpl.ListSandboxFunc = nil
 	}()
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, nil, nil)
-	app.Name = "foo"
+	ctx := createCLIContext(nil)
+	ctx.App.Name = "foo"
 
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
 	assert.NoError(err)
 
-	ctx.App.Metadata = map[string]interface{}{
-		"runtimeConfig": runtimeConfig,
-	}
+	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 
 	_, err = getContainers(ctx)
 	assert.NoError(err)
@@ -580,12 +571,9 @@ func TestListCLIFunctionFormatFail(t *testing.T) {
 		// start off with an invalid output file
 		defaultOutputFile = invalidFile
 
-		app := cli.NewApp()
-		ctx := cli.NewContext(app, d.flags, nil)
-		app.Name = "foo"
-		ctx.App.Metadata = map[string]interface{}{
-			"foo": "bar",
-		}
+		ctx := createCLIContext(d.flags)
+		ctx.App.Name = "foo"
+		ctx.App.Metadata["foo"] = "bar"
 
 		fn, ok := listCLICommand.Action.(func(context *cli.Context) error)
 		assert.True(ok, d)
@@ -674,12 +662,9 @@ func TestListCLIFunctionQuiet(t *testing.T) {
 	set := flag.NewFlagSet("test", 0)
 	set.Bool("quiet", true, "")
 
-	app := cli.NewApp()
-	ctx := cli.NewContext(app, set, nil)
-	app.Name = "foo"
-	ctx.App.Metadata = map[string]interface{}{
-		"runtimeConfig": runtimeConfig,
-	}
+	ctx := createCLIContext(set)
+	ctx.App.Name = "foo"
+	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 
 	savedOutputFile := defaultOutputFile
 	defer func() {

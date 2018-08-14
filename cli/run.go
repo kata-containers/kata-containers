@@ -7,12 +7,14 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"syscall"
 
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 )
 
@@ -58,12 +60,17 @@ var runCLICommand = cli.Command{
 		},
 	},
 	Action: func(context *cli.Context) error {
+		ctx, err := cliContextToContext(context)
+		if err != nil {
+			return err
+		}
+
 		runtimeConfig, ok := context.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
 		if !ok {
 			return errors.New("invalid runtime config")
 		}
 
-		return run(context.Args().First(),
+		return run(ctx, context.Args().First(),
 			context.String("bundle"),
 			context.String("console"),
 			context.String("console-socket"),
@@ -73,19 +80,21 @@ var runCLICommand = cli.Command{
 	},
 }
 
-func run(containerID, bundle, console, consoleSocket, pidFile string, detach bool,
+func run(ctx context.Context, containerID, bundle, console, consoleSocket, pidFile string, detach bool,
 	runtimeConfig oci.RuntimeConfig) error {
+	span, ctx := opentracing.StartSpanFromContext(ctx, "run")
+	defer span.Finish()
 
 	consolePath, err := setupConsole(console, consoleSocket)
 	if err != nil {
 		return err
 	}
 
-	if err := create(containerID, bundle, consolePath, pidFile, detach, runtimeConfig); err != nil {
+	if err := create(ctx, containerID, bundle, consolePath, pidFile, detach, runtimeConfig); err != nil {
 		return err
 	}
 
-	sandbox, err := start(containerID)
+	sandbox, err := start(ctx, containerID)
 	if err != nil {
 		return err
 	}
@@ -110,7 +119,7 @@ func run(containerID, bundle, console, consoleSocket, pidFile string, detach boo
 	}
 
 	// delete container's resources
-	if err := delete(sandbox.ID(), true); err != nil {
+	if err := delete(ctx, sandbox.ID(), true); err != nil {
 		return err
 	}
 

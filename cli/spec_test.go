@@ -21,7 +21,7 @@ func TestSpecCliAction(t *testing.T) {
 	assert.True(ok)
 
 	flagSet := flag.NewFlagSet("flag", flag.ContinueOnError)
-	ctx := cli.NewContext(&cli.App{}, flagSet, nil)
+	ctx := createCLIContext(flagSet)
 	defer os.Remove(specConfig)
 	err := actionFunc(ctx)
 	assert.NoError(err)
