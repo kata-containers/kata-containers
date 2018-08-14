@@ -1,4 +1,4 @@
-# Kata Containers Iperf3 and Nuttcp network metrics
+# Kata Containers iperf3 and nuttcp network metrics
 
 Kata Containers provides a series of network performance tests. Running these provides
 a basic reference for measuring  network essentials like bandwidth, jitter,
@@ -6,9 +6,9 @@ packet per second throughput, and latency.
 
 ## Performance tools
 
-- Iperf3 measures bandwidth and the quality of a network link.
+- iperf3 measures bandwidth and the quality of a network link.
 
-- Nuttcp determines the raw UDP layer throughput.
+- nuttcp determines the raw UDP layer throughput.
 
 ## Networking tests
 
@@ -21,13 +21,16 @@ maximum number of (smallest sized) packets allowed through the transports.
 - `network-metrics-nuttcp.sh` measures the UDP bandwidth using nuttcp. This tool
 shows the speed of the data transfer for the UDP protocol.
  
+- `network-metrics-memory-pss.sh` measures the Proportional Set Size (PSS) of the hypervisor footprint on the host using smem
+while running a transfer of one GB with nuttcp.
+
 ## Running the tests
 
 Individual tests can be run by hand, for example:
 
 ```
 $ cd metrics
-$ bash network/network-metrics-nuttp.sh
+$ bash network/network-metrics-nuttcp.sh
 ```
 
 ## Expected results
