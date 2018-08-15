@@ -31,15 +31,8 @@ PAYLOAD="${PAYLOAD:-nginx}"
 # do we need a command argument for this payload?
 COMMAND="${COMMAND:-}"
 
-# Set the runtime if not set already
-RUNTIME="${RUNTIME:-kata-runtime}"
+# Runtime path
 RUNTIME_PATH=$(command -v $RUNTIME)
-
-# And set the names of the processes we look for
-QEMU_NAME="${QEMU_NAME:-qemu-lite-system-x86_64}"
-RUNTIME_NAME="${RUNTIME_NAME:-kata-runtime}"
-SHIM_NAME="${SHIM_NAME:-kata-shim}"
-PROXY_NAME="${PROXY_NAME:-kata-proxy}"
 
 # The place where virtcontainers keeps its active pod info
 # This is ultimately what 'kata-runtime list' uses to get its info, but
@@ -70,14 +63,14 @@ check_all_running() {
 	# Only check for Kata components if we are using a Kata runtime
 	if (( $check_kata_components )); then
 		# Check we have one proxy per container
-		how_many_proxys=$(ps --no-header -C ${PROXY_NAME} | wc -l)
+		how_many_proxys=$(pgrep -a -f ${PROXY_PATH} | wc -l)
 		if (( ${how_many_running} != ${how_many_proxys} )); then
 			echo "Wrong number of proxys running (${how_many_running} containers, ${how_many_proxys} proxys) - stopping"
 			((goterror++))
 		fi
 
 		# check we have the right number of shims
-		how_many_shims=$(ps --no-header -C ${SHIM_NAME} | wc -l)
+		how_many_shims=$(pgrep -a -f ${SHIM_PATH} | wc -l)
 		# one shim process per container...
 		if (( ${how_many_running} != ${how_many_shims} )); then
 			echo "Wrong number of shims running (${how_many_running} != ${how_many_shims}) - stopping"
@@ -85,14 +78,14 @@ check_all_running() {
 		fi
 
 		# check we have the right number of qemu's
-		how_many_qemus=$(ps --no-header -C ${QEMU_NAME} | wc -l)
+		how_many_qemus=$(pgrep -a -f ${HYPERVISOR_PATH} | wc -l)
 		if (( ${how_many_running} != ${how_many_qemus} )); then
 			echo "Wrong number of qemus running (${how_many_running} != ${how_many_qemus}) - stopping"
 			((goterror++))
 		fi
 
 		# check we have no runtimes running (they should be transient, we should not 'see them')
-		how_many_runtimes=$(ps --no-header -C ${RUNTIME_NAME} | wc -l)
+		how_many_runtimes=$(ps --no-header -C ${RUNTIME} | wc -l)
 		if (( ${how_many_runtimes} )); then
 			echo "Wrong number of runtimes running (${how_many_runtimes}) - stopping"
 			((goterror++))
