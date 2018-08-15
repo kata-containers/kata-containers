@@ -1629,3 +1629,79 @@ func TestAttachBlockDevice(t *testing.T) {
 	err = device.Detach(sandbox)
 	assert.Nil(t, err)
 }
+
+func TestPreAddDevice(t *testing.T) {
+	fs := &filesystem{}
+	hypervisor := &mockHypervisor{}
+
+	hConfig := HypervisorConfig{
+		BlockDeviceDriver: VirtioBlock,
+	}
+
+	sconfig := &SandboxConfig{
+		HypervisorConfig: hConfig,
+	}
+
+	dm := manager.NewDeviceManager(VirtioBlock, nil)
+	// create a sandbox first
+	sandbox := &Sandbox{
+		id:         testSandboxID,
+		storage:    fs,
+		hypervisor: hypervisor,
+		config:     sconfig,
+		devManager: dm,
+	}
+
+	contID := "100"
+	container := Container{
+		sandbox:   sandbox,
+		id:        contID,
+		sandboxID: testSandboxID,
+	}
+	container.state.State = StateReady
+
+	// create state file
+	path := filepath.Join(runStoragePath, testSandboxID, container.ID())
+	err := os.MkdirAll(path, dirMode)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	defer os.RemoveAll(path)
+
+	stateFilePath := filepath.Join(path, stateFile)
+	os.Remove(stateFilePath)
+
+	_, err = os.Create(stateFilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(stateFilePath)
+
+	path = "/dev/hda"
+	deviceInfo := config.DeviceInfo{
+		HostPath:      path,
+		ContainerPath: path,
+		DevType:       "b",
+	}
+
+	// Add a mount device for a mountpoint before container's creation
+	dev, err := sandbox.AddDevice(deviceInfo)
+	assert.Nil(t, err)
+
+	// in Frakti use case, here we will create and start the container
+	// which will attach same device twice
+	container.mounts = []Mount{
+		{
+			Destination:   path,
+			Source:        path,
+			Type:          "bind",
+			BlockDeviceID: dev.DeviceID(),
+		},
+	}
+
+	mounts, err := container.mountSharedDirMounts("", "")
+	assert.Nil(t, err)
+	assert.Equal(t, len(mounts), 0,
+		"mounts should contain nothing because it only contains a block device")
+}
