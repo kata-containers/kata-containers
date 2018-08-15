@@ -39,7 +39,9 @@ RUN git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
 ADD configure-hypervisor.sh /root/configure-hypervisor.sh
 
-RUN /root/configure-hypervisor.sh -s kata-qemu | xargs ./configure --prefix=/opt/kata --with-pkgversion=kata-static
+RUN PREFIX=/opt/kata /root/configure-hypervisor.sh -s kata-qemu | xargs ./configure \
+       --with-pkgversion=kata-static
+
 RUN make clean
 RUN make -j$(nproc)
 RUN make install DESTDIR=/tmp/qemu-static
