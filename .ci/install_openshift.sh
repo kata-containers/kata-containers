@@ -20,14 +20,6 @@ fi
 openshift_origin_version=$(get_version "externals.openshift.version")
 openshift_origin_commit=$(get_version "externals.openshift.commit")
 
-echo "Install Skopeo"
-skopeo_repo="github.com/projectatomic/skopeo"
-go get -d "$skopeo_repo" || true
-pushd "$GOPATH/src/$skopeo_repo"
-make binary-local
-sudo -E PATH=$PATH make install-binary
-popd
-
 echo "Install Openshift Origin"
 openshift_repo="github.com/openshift/origin"
 openshift_tarball="openshift-origin-server-${openshift_origin_version}-${openshift_origin_commit}-linux-64bit.tar.gz"
