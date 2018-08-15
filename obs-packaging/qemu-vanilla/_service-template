@@ -7,7 +7,7 @@
     <param name="filename">qemu-vanilla</param>
     <!--- %h in the version format is a hash from a given revision -->
     <param name="versionformat">@VERSION@+git.%h</param>
-    <param name="revision">stable-@VERSION@</param>
+    <param name="revision">@QEMU_VANILLA_HASH@</param>
  </service>
  <service name="recompress">
     <param name="file">*.tar*</param>
