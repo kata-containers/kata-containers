@@ -9,6 +9,8 @@ import (
 	"io"
 	"syscall"
 
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -41,6 +43,8 @@ type VC interface {
 	UpdateContainer(sandboxID, containerID string, resources specs.LinuxResources) error
 	PauseContainer(sandboxID, containerID string) error
 	ResumeContainer(sandboxID, containerID string) error
+
+	AddDevice(sandboxID string, info config.DeviceInfo) (api.Device, error)
 }
 
 // VCSandbox is the Sandbox interface
@@ -70,6 +74,8 @@ type VCSandbox interface {
 	SignalProcess(containerID, processID string, signal syscall.Signal, all bool) error
 	WinsizeProcess(containerID, processID string, height, width uint32) error
 	IOStream(containerID, processID string) (io.WriteCloser, io.Reader, io.Reader, error)
+
+	AddDevice(info config.DeviceInfo) (api.Device, error)
 }
 
 // VCContainer is the Container interface

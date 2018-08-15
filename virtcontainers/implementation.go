@@ -12,6 +12,8 @@ package virtcontainers
 import (
 	"syscall"
 
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -140,4 +142,9 @@ func (impl *VCImpl) PauseContainer(sandboxID, containerID string) error {
 // ResumeContainer implements the VC function of the same name.
 func (impl *VCImpl) ResumeContainer(sandboxID, containerID string) error {
 	return ResumeContainer(sandboxID, containerID)
+}
+
+// AddDevice will add a device to sandbox
+func (impl *VCImpl) AddDevice(sandboxID string, info config.DeviceInfo) (api.Device, error) {
+	return AddDevice(sandboxID, info)
 }
