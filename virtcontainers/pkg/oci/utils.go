@@ -533,7 +533,7 @@ func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid
 		ShimType:   runtime.ShimType,
 		ShimConfig: runtime.ShimConfig,
 
-		NetworkModel:  vc.CNMNetworkModel,
+		NetworkModel:  vc.DefaultNetworkModel,
 		NetworkConfig: networkConfig,
 
 		Containers: []vc.ContainerConfig{containerConfig},
