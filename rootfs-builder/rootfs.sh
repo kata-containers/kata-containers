@@ -162,6 +162,9 @@ generate_dockerfile()
 		"aarch64")
 			goarch=arm64
 			;;
+		"s390x")
+			goarch=s390x
+			;;
 
 		*)
 			goarch=amd64
