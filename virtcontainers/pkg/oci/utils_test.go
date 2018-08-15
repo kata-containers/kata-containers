@@ -222,7 +222,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		ProxyType:      vc.CCProxyType,
 		ShimType:       vc.CCShimType,
 
-		NetworkModel:  vc.CNMNetworkModel,
+		NetworkModel:  vc.DefaultNetworkModel,
 		NetworkConfig: expectedNetworkConfig,
 
 		Containers: []vc.ContainerConfig{expectedContainerConfig},

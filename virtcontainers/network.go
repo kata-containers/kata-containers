@@ -600,8 +600,8 @@ const (
 	// NoopNetworkModel is the No-Op network.
 	NoopNetworkModel NetworkModel = "noop"
 
-	// CNMNetworkModel is the CNM network.
-	CNMNetworkModel NetworkModel = "CNM"
+	// DefaultNetworkModel is the default network.
+	DefaultNetworkModel NetworkModel = "default"
 )
 
 // Set sets a network type based on the input string.
@@ -610,8 +610,8 @@ func (networkType *NetworkModel) Set(value string) error {
 	case "noop":
 		*networkType = NoopNetworkModel
 		return nil
-	case "CNM":
-		*networkType = CNMNetworkModel
+	case "default":
+		*networkType = DefaultNetworkModel
 		return nil
 	default:
 		return fmt.Errorf("Unknown network type %s", value)
@@ -623,8 +623,8 @@ func (networkType *NetworkModel) String() string {
 	switch *networkType {
 	case NoopNetworkModel:
 		return string(NoopNetworkModel)
-	case CNMNetworkModel:
-		return string(CNMNetworkModel)
+	case DefaultNetworkModel:
+		return string(DefaultNetworkModel)
 	default:
 		return ""
 	}
@@ -635,8 +635,8 @@ func newNetwork(networkType NetworkModel) network {
 	switch networkType {
 	case NoopNetworkModel:
 		return &noopNetwork{}
-	case CNMNetworkModel:
-		return &cnm{}
+	case DefaultNetworkModel:
+		return &defNetwork{}
 	default:
 		return &noopNetwork{}
 	}
@@ -741,68 +741,6 @@ func hostNetworkingRequested(configNetNs string) (bool, error) {
 	}
 
 	return false, nil
-}
-
-func initNetworkCommon(config NetworkConfig) (string, bool, error) {
-	if !config.InterworkingModel.IsValid() || config.InterworkingModel == NetXConnectDefaultModel {
-		config.InterworkingModel = DefaultNetInterworkingModel
-	}
-
-	if config.NetNSPath == "" {
-		path, err := createNetNS()
-		if err != nil {
-			return "", false, err
-		}
-
-		return path, true, nil
-	}
-
-	isHostNs, err := hostNetworkingRequested(config.NetNSPath)
-	if err != nil {
-		return "", false, err
-	}
-
-	if isHostNs {
-		return "", false, fmt.Errorf("Host networking requested, not supported by runtime")
-	}
-
-	return config.NetNSPath, false, nil
-}
-
-func runNetworkCommon(networkNSPath string, cb func() error) error {
-	if networkNSPath == "" {
-		return fmt.Errorf("networkNSPath cannot be empty")
-	}
-
-	return doNetNS(networkNSPath, func(_ ns.NetNS) error {
-		return cb()
-	})
-}
-
-func addNetworkCommon(sandbox *Sandbox, networkNS *NetworkNamespace) error {
-	err := doNetNS(networkNS.NetNsPath, func(_ ns.NetNS) error {
-		for _, endpoint := range networkNS.Endpoints {
-			if err := endpoint.Attach(sandbox.hypervisor); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
-
-	return err
-}
-
-func removeNetworkCommon(networkNS NetworkNamespace, netNsCreated bool) error {
-	for _, endpoint := range networkNS.Endpoints {
-		// Detach for an endpoint should enter the network namespace
-		// if required.
-		if err := endpoint.Detach(netNsCreated, networkNS.NetNsPath); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link) (netlink.Link, []*os.File, error) {
