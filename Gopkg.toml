@@ -3,10 +3,6 @@
   revision = "1d2a6a3ea132a86abd0731408b7dc34f2fc17d55"
 
 [[constraint]]
-  name = "github.com/containernetworking/cni"
-  revision = "384d8c0b5288c25b9f1da901c66ea5155e6c567d"
-
-[[constraint]]
   name = "github.com/containernetworking/plugins"
   revision = "7f98c94613021d8b57acfa1a2f0c8d0f6fd7ae5a"
 

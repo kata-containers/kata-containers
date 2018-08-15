@@ -37,14 +37,7 @@
 [[projects]]
   digest = "1:3e0383c8e6689f78621ca3592fe1adfc98c23a8bf354704c514d1e7c36d550d7"
   name = "github.com/containernetworking/cni"
-  packages = [
-    "libcni",
-    "pkg/invoke",
-    "pkg/types",
-    "pkg/types/020",
-    "pkg/types/current",
-    "pkg/version",
-  ]
+  packages = ["pkg/types"]
   pruneopts = "NUT"
   revision = "384d8c0b5288c25b9f1da901c66ea5155e6c567d"
 
@@ -396,10 +389,7 @@
     "github.com/clearcontainers/proxy/api",
     "github.com/clearcontainers/proxy/client",
     "github.com/containerd/cri-containerd/pkg/annotations",
-    "github.com/containernetworking/cni/libcni",
     "github.com/containernetworking/cni/pkg/types",
-    "github.com/containernetworking/cni/pkg/types/020",
-    "github.com/containernetworking/cni/pkg/types/current",
     "github.com/containernetworking/plugins/pkg/ns",
     "github.com/dlespiau/covertool/pkg/cover",
     "github.com/docker/go-units",

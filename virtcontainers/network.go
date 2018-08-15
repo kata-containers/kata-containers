@@ -540,9 +540,6 @@ const (
 	// NoopNetworkModel is the No-Op network.
 	NoopNetworkModel NetworkModel = "noop"
 
-	// CNINetworkModel is the CNI network.
-	CNINetworkModel NetworkModel = "CNI"
-
 	// CNMNetworkModel is the CNM network.
 	CNMNetworkModel NetworkModel = "CNM"
 )
@@ -552,9 +549,6 @@ func (networkType *NetworkModel) Set(value string) error {
 	switch value {
 	case "noop":
 		*networkType = NoopNetworkModel
-		return nil
-	case "CNI":
-		*networkType = CNINetworkModel
 		return nil
 	case "CNM":
 		*networkType = CNMNetworkModel
@@ -569,8 +563,6 @@ func (networkType *NetworkModel) String() string {
 	switch *networkType {
 	case NoopNetworkModel:
 		return string(NoopNetworkModel)
-	case CNINetworkModel:
-		return string(CNINetworkModel)
 	case CNMNetworkModel:
 		return string(CNMNetworkModel)
 	default:
@@ -583,8 +575,6 @@ func newNetwork(networkType NetworkModel) network {
 	switch networkType {
 	case NoopNetworkModel:
 		return &noopNetwork{}
-	case CNINetworkModel:
-		return &cni{}
 	case CNMNetworkModel:
 		return &cnm{}
 	default:

@@ -38,10 +38,6 @@ func TestNoopNetworkModelSet(t *testing.T) {
 	testNetworkModelSet(t, "noop", NoopNetworkModel)
 }
 
-func TestCNINetworkModelSet(t *testing.T) {
-	testNetworkModelSet(t, "CNI", CNINetworkModel)
-}
-
 func TestCNMNetworkModelSet(t *testing.T) {
 	testNetworkModelSet(t, "CNM", CNMNetworkModel)
 }
@@ -68,11 +64,6 @@ func TestNoopNetworkModelString(t *testing.T) {
 	testNetworkModelString(t, &netModel, string(NoopNetworkModel))
 }
 
-func TestCNINetworkModelString(t *testing.T) {
-	netModel := CNINetworkModel
-	testNetworkModelString(t, &netModel, string(CNINetworkModel))
-}
-
 func TestCNMNetworkModelString(t *testing.T) {
 	netModel := CNMNetworkModel
 	testNetworkModelString(t, &netModel, string(CNMNetworkModel))
@@ -93,10 +84,6 @@ func testNewNetworkFromNetworkModel(t *testing.T, netModel NetworkModel, expecte
 
 func TestNewNoopNetworkFromNetworkModel(t *testing.T) {
 	testNewNetworkFromNetworkModel(t, NoopNetworkModel, &noopNetwork{})
-}
-
-func TestNewCNINetworkFromNetworkModel(t *testing.T) {
-	testNewNetworkFromNetworkModel(t, CNINetworkModel, &cni{})
 }
 
 func TestNewCNMNetworkFromNetworkModel(t *testing.T) {
