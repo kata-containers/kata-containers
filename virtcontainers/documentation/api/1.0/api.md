@@ -266,9 +266,6 @@ const (
 	// NoopNetworkModel is the No-Op network.
 	NoopNetworkModel NetworkModel = "noop"
 
-	// CNINetworkModel is the CNI network.
-	CNINetworkModel NetworkModel = "CNI"
-
 	// CNMNetworkModel is the CNM network.
 	CNMNetworkModel NetworkModel = "CNM"
 )
