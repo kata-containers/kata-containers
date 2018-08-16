@@ -91,7 +91,7 @@ main()
 		shift
 	done
 
-	local -r arch=$(arch)
+	local -r arch=$(uname -m)
 
 	case "$type" in
 		default) echo "$arch";;
