@@ -15,7 +15,7 @@ os:
 go_import_path: github.com/kata-containers/runtime
 
 go:
-  - 1.8
+  - "1.10.x"
 
 before_script:
   - ".ci/static-checks.sh"
