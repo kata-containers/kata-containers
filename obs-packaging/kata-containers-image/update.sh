@@ -38,12 +38,12 @@ RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 ((RELEASE++))
 
 function check_image() {
-    [ ! -f "${SCRIPT_DIR}/kata-containers.tar.gz" ] && die "No kata-containers.tar.gz found!\nUse the build_image.sh script" || echo "Image: OK"
+	[ ! -f "${SCRIPT_DIR}/kata-containers.tar.gz" ] && die "No kata-containers.tar.gz found!\nUse the build_image.sh script" || echo "Image: OK"
 }
 
 replace_list=(
-"VERSION=$VERSION"
-"RELEASE=$RELEASE"
+	"VERSION=$VERSION"
+	"RELEASE=$RELEASE"
 )
 
 verify

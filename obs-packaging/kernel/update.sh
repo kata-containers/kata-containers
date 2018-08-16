@@ -51,10 +51,10 @@ KERNEL_ARCH=$(go get github.com/kata-containers/tests && $GOPATH/src/github.com/
 cp "${SCRIPT_DIR}/../../kernel/configs/${KERNEL_ARCH}_kata_kvm_${KR_LTS}.x" config
 
 replace_list=(
-"VERSION=${VERSION}"
-"CONFIG_VERSION=${KATA_CONFIG_VERSION}"
-"RELEASE=$RELEASE"
-"KERNEL_SHA256=$kernel_sha256"
+	"VERSION=${VERSION}"
+	"CONFIG_VERSION=${KATA_CONFIG_VERSION}"
+	"RELEASE=$RELEASE"
+	"KERNEL_SHA256=$kernel_sha256"
 )
 
 verify

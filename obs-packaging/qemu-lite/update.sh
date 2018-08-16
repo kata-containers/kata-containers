@@ -36,9 +36,9 @@ RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 set_versions "${qemu_lite_hash}"
 
 replace_list=(
-"VERSION=$VERSION"
-"RELEASE=$RELEASE"
-"QEMU_LITE_HASH=${qemu_lite_hash:0:10}"
+	"VERSION=$VERSION"
+	"RELEASE=$RELEASE"
+	"QEMU_LITE_HASH=${qemu_lite_hash:0:10}"
 )
 verify
 echo "Verify succeed."

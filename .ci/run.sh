@@ -15,7 +15,7 @@ source /etc/os-release
 
 # This script will execute packaging tests suite
 
-if [ "$ID" == ubuntu ];then
-	echo  "Building snap image"
+if [ "$ID" == ubuntu ]; then
+	echo "Building snap image"
 	make snap
 fi

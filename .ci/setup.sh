@@ -11,9 +11,9 @@ set -o pipefail
 
 source /etc/os-release
 
-echo  "Setup script for packaging"
+echo "Setup script for packaging"
 
-if [ "$ID" == ubuntu ];then
+if [ "$ID" == ubuntu ]; then
 	echo "Install snap dependencies"
 	sudo apt-get install -y snapd snapcraft
 

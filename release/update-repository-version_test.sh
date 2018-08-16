@@ -9,37 +9,37 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-readonly script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 out=""
 
-handle_error(){
+handle_error() {
 	echo "not ok"
 	echo "output: ${out}"
 }
 
-OK(){
+OK() {
 	echo "ok"
 }
-output_should_contain(){
+output_should_contain() {
 	local output="$1"
 	local text_to_find="$2"
-	[ -n  "$output" ]
-	[ -n  "$text_to_find" ]
+	[ -n "$output" ]
+	[ -n "$text_to_find" ]
 	echo "${output}" | grep "${text_to_find}"
 }
 
 trap handle_error ERR
 
 echo "Missing args show help"
-out=$("${script_dir}/update-repository-version.sh" 2>&1) || (($?!=0))
-echo "${out}" | grep Usage >> /dev/null
+out=$("${script_dir}/update-repository-version.sh" 2>&1) || (($? != 0))
+echo "${out}" | grep Usage >>/dev/null
 output_should_contain "${out}" "Usage"
 OK
 
 echo "Missing version show help"
-out=$("${script_dir}/update-repository-version.sh" runtime 2>&1) || (($?!=0))
-echo "${out}" | grep Usage >> /dev/null
-echo "${out}" | grep "no new version">> /dev/null
+out=$("${script_dir}/update-repository-version.sh" runtime 2>&1) || (($? != 0))
+echo "${out}" | grep Usage >>/dev/null
+echo "${out}" | grep "no new version" >>/dev/null
 OK
 
 echo "help option"

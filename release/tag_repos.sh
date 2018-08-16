@@ -88,7 +88,7 @@ tag_repos() {
 	info "Creating tag ${kata_version} in all repos"
 	for repo in "${repos[@]}"; do
 		git clone --quiet "https://github.com/${OWNER}/${repo}.git"
-		pushd "${repo}" >> /dev/null
+		pushd "${repo}" >>/dev/null
 		git remote set-url --push origin "git@github.com:${OWNER}/${repo}.git"
 		git fetch origin --tags
 		tag="$kata_version"
@@ -99,7 +99,7 @@ tag_repos() {
 			info "Creating tag ${tag} for ${repo}"
 			git tag -a "${tag}" -s -m "${PROJECT} release ${tag}"
 		fi
-		popd >> /dev/null
+		popd >>/dev/null
 	done
 }
 
@@ -107,21 +107,21 @@ push_tags() {
 	info "Pushing tags to repos"
 	build_hub
 	for repo in "${repos[@]}"; do
-		pushd "${repo}" >> /dev/null
+		pushd "${repo}" >>/dev/null
 		tag="$kata_version"
 		[[ "packaging" == "${repo}" ]] && tag="${tag}-kernel-config"
 		info "Push tag ${tag} for ${repo}"
 		git push origin "${tag}"
 		create_github_release "${PWD}" "${tag}"
-		popd >> /dev/null
+		popd >>/dev/null
 	done
 }
 
-create_github_release(){
+create_github_release() {
 	repo_dir=${1:-}
 	tag=${2:-}
-	[  -d "${repo_dir}" ] || die "No repository directory"
-	[  -n "${tag}" ] || die "No repository directory"
+	[ -d "${repo_dir}" ] || die "No repository directory"
+	[ -n "${tag}" ] || die "No repository directory"
 	if ! "${hub_bin}" release | grep "${tag}"; then
 		info "Creating Github release"
 		"${hub_bin}" -C "${repo_dir}" release create -m "${PROJECT} ${tag}" "${tag}"
@@ -136,13 +136,13 @@ while getopts "hp" opt; do
 	p) PUSH="true" ;;
 	esac
 done
-shift $(($OPTIND - 1))
+shift $((OPTIND - 1))
 
 subcmd=${1:-""}
 
 [ -z "${subcmd}" ] && usage && exit 0
 
-pushd "${tmp_dir}" >> /dev/null
+pushd "${tmp_dir}" >>/dev/null
 
 case "${subcmd}" in
 status)
@@ -167,4 +167,4 @@ tag)
 
 esac
 
-popd >> /dev/null
+popd >>/dev/null
