@@ -48,17 +48,15 @@ recognised_tags=(
 )
 
 # Display message to stderr and exit indicating script failed.
-die()
-{
+die() {
 	local msg="$*"
 	echo >&2 "$script_name: ERROR: $msg"
 	exit 1
 }
 
 # Display usage to stdout.
-usage()
-{
-cat <<EOT
+usage() {
+	cat <<EOT
 Overview:
 
 	Display configure options required to build the specified
@@ -83,8 +81,7 @@ Example:
 EOT
 }
 
-show_tags_header()
-{
+show_tags_header() {
 	local keys
 	local key
 	local value
@@ -96,10 +93,9 @@ EOT
 
 	# sort the tags
 	keys=${!recognised_tags[@]}
-	keys=$(echo "$keys"|tr ' ' '\n'|sort -u)
+	keys=$(echo "$keys" | tr ' ' '\n' | sort -u)
 
-	for key in $keys
-	do
+	for key in $keys; do
 		value="${recognised_tags[$key]}"
 		printf "#    %s\t%s.\n" "$key" "$value"
 	done
@@ -107,8 +103,7 @@ EOT
 	printf "#\n\n"
 }
 
-check_tag()
-{
+check_tag() {
 	local tag="$1"
 	local entry="$2"
 
@@ -123,18 +118,16 @@ check_tag()
 	die "invalid tag '$tag' found for entry '$entry'"
 }
 
-check_tags()
-{
+check_tags() {
 	local tags="$1"
 	local entry="$2"
 
 	[ -z "$tags" ] && die "entry '$entry' doesn't have any tags"
 	[ -z "$entry" ] && die "no entry for tags '$tags'"
 
-	tags=$(echo "$tags"|tr ',' '\n')
+	tags=$(echo "$tags" | tr ',' '\n')
 
-	for tag in $tags
-	do
+	for tag in $tags; do
 		check_tag "$tag" "$entry"
 	done
 }
@@ -151,8 +144,7 @@ check_tags()
 # $2: (optional) "multi" - show values across multiple lines,
 #    "dump" - show full hash values. Any other value results in the
 #    options being displayed on a single line.
-show_array()
-{
+show_array() {
 	local action="$1"
 	local _array=("$@")
 	_array=("${_array[@]:1}")
@@ -167,27 +159,23 @@ show_array()
 
 	[ "$action" = "dump" ] && show_tags_header
 
-	for entry in "${_array[@]}"
-	do
+	for entry in "${_array[@]}"; do
 		[ -z "$entry" ] && die "found empty entry"
 
-		tags=$(echo "$entry"|cut -s -d: -f1)
-		elem=$(echo "$entry"|cut -s -d: -f2-)
+		tags=$(echo "$entry" | cut -s -d: -f1)
+		elem=$(echo "$entry" | cut -s -d: -f2-)
 
 		[ -z "$elem" ] && die "no option for entry '$entry'"
 
 		check_tags "$tags" "$entry"
 
-		if [ "$action" = "dump" ]
-		then
+		if [ "$action" = "dump" ]; then
 			printf "%s\t\t%s\n" "$tags" "$elem"
-		elif [ "$action" = "multi" ]
-		then
-			if [ $i -eq $size ]
-			then
+		elif [ "$action" = "multi" ]; then
+			if [ $i -eq $size ]; then
 				suffix=""
 			else
-				suffix=" \\"
+				suffix=' \'
 			fi
 
 			printf '%s%s\n' "$elem" "$suffix"
@@ -202,8 +190,7 @@ show_array()
 	[ "$one_line" = yes ] && echo
 }
 
-generate_qemu_options()
-{
+generate_qemu_options() {
 	#---------------------------------------------------------------------
 	# Disabled options
 
@@ -255,10 +242,10 @@ generate_qemu_options()
 
 	# Disable TCG support
 	case "$arch" in
-		aarch64) ;;
-		x86_64)  qemu_options+=(size:--disable-tcg);;
-		ppc64le) ;;
-        esac
+	aarch64) ;;
+	x86_64) qemu_options+=(size:--disable-tcg) ;;
+	ppc64le) ;;
+	esac
 
 	# SECURITY: Don't build a static binary (lowers security)
 	# needed if qemu version is less than 2.7
@@ -272,18 +259,19 @@ generate_qemu_options()
 
 	# Disable debug and "-uuid ..." is always passed to the qemu binary so not required.
 	case "$arch" in
-		aarch64) qemu_options+=(size:--disable-uuid)
-			;;
-		x86_64)
-			qemu_options+=(size:--disable-uuid)
-			qemu_options+=(size:--disable-debug-tcg)
-			qemu_options+=(size:--disable-tcg-interpreter)
-			;;
-                ppc64le)
-			qemu_options+=(size:--disable-debug-tcg)
-			qemu_options+=(size:--disable-tcg-interpreter)
-			;;
-        esac
+	aarch64)
+		qemu_options+=(size:--disable-uuid)
+		;;
+	x86_64)
+		qemu_options+=(size:--disable-uuid)
+		qemu_options+=(size:--disable-debug-tcg)
+		qemu_options+=(size:--disable-tcg-interpreter)
+		;;
+	ppc64le)
+		qemu_options+=(size:--disable-debug-tcg)
+		qemu_options+=(size:--disable-tcg-interpreter)
+		;;
+	esac
 	qemu_options+=(size:--disable-qom-cast-debug)
 	qemu_options+=(size:--disable-tcmalloc)
 
@@ -299,10 +287,10 @@ generate_qemu_options()
 
 	# Disable XEN driver
 	case "$arch" in
-		aarch64) ;;
-		x86_64)  qemu_options+=(size:--disable-xen);;
-		ppc64le) qemu_options+=(size:--disable-xen);;
-        esac
+	aarch64) ;;
+	x86_64) qemu_options+=(size:--disable-xen) ;;
+	ppc64le) qemu_options+=(size:--disable-xen) ;;
+	esac
 
 	# FIXME: why is this disabled?
 	# (for reference, it's explicitly enabled in Ubuntu 17.10 and
@@ -369,9 +357,9 @@ generate_qemu_options()
 	# and take advantage of ASLR, making ROP attacks much harder to perform.
 	# (https://wiki.debian.org/Hardening)
 	case "$arch" in
-		aarch64) _qemu_cflags+=" -fPIC";;
-		x86_64)  _qemu_cflags+=" -fPIE";;
-		ppc64le) _qemu_cflags+=" -fPIE";;
+	aarch64) _qemu_cflags+=" -fPIC" ;;
+	x86_64) _qemu_cflags+=" -fPIE" ;;
+	ppc64le) _qemu_cflags+=" -fPIE" ;;
 	esac
 
 	# Set compile options
@@ -385,9 +373,9 @@ generate_qemu_options()
 	# and take advantage of ASLR, making ROP attacks much harder to perform.
 	# (https://wiki.debian.org/Hardening)
 	case "$arch" in
-		aarch64) ;;
-		x86_64)  [ -z "${static}" ] && _qemu_ldflags+=" -pie";;
-		ppc64le) [ -z "${static}" ] && _qemu_ldflags+=" -pie";;
+	aarch64) ;;
+	x86_64) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
+	ppc64le) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
 	esac
 
 	# SECURITY: Disallow executing code on the stack.
@@ -420,32 +408,30 @@ generate_qemu_options()
 }
 
 # Entry point
-main()
-{
+main() {
 	action=""
 
-	while getopts "dhms" opt
-	do
+	while getopts "dhms" opt; do
 		case "$opt" in
-			d)
-				action="dump"
-				;;
+		d)
+			action="dump"
+			;;
 
-			h)
-				usage
-				exit 0
-				;;
+		h)
+			usage
+			exit 0
+			;;
 
-			m)
-				action="multi"
-				;;
-			s)
-				static="true"
-				;;
+		m)
+			action="multi"
+			;;
+		s)
+			static="true"
+			;;
 		esac
 	done
 
-	shift $[$OPTIND-1]
+	shift $((OPTIND - 1))
 
 	[ -z "$1" ] && die "need hypervisor name"
 	hypervisor="$1"
@@ -456,23 +442,23 @@ main()
 	local qemu_version_major=$(cut -d. -f1 "${qemu_version_file}")
 	local qemu_version_minor=$(cut -d. -f2 "${qemu_version_file}")
 
-	[ -n "${qemu_version_major}" ] \
-		|| die "cannot determine qemu major version from file $qemu_version_file"
-	[ -n "${qemu_version_minor}" ] \
-		|| die "cannot determine qemu minor version from file $qemu_version_file"
+	[ -n "${qemu_version_major}" ] ||
+		die "cannot determine qemu major version from file $qemu_version_file"
+	[ -n "${qemu_version_minor}" ] ||
+		die "cannot determine qemu minor version from file $qemu_version_file"
 
 	local gcc_version_major=$(gcc -dumpversion | cut -f1 -d.)
 	local gcc_version_minor=$(gcc -dumpversion | cut -f2 -d.)
 
-	[ -n "${gcc_version_major}" ] \
-		|| die "cannot determine gcc major version, please ensure it is installed"
-	[ -n "${gcc_version_minor}" ] \
-		|| die "cannot determine gcc minor version, please ensure it is installed"
+	[ -n "${gcc_version_major}" ] ||
+		die "cannot determine gcc major version, please ensure it is installed"
+	[ -n "${gcc_version_minor}" ] ||
+		die "cannot determine gcc minor version, please ensure it is installed"
 
 	# Generate qemu options
 	generate_qemu_options
 
-	show_array  "$action" "${qemu_options[@]}"
+	show_array "$action" "${qemu_options[@]}"
 
 	exit 0
 }

@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # If we fail for any reason a message will be displayed
-die(){
+die() {
 	msg="$*"
 	echo "ERROR: $msg" >&2
 	exit 1
@@ -14,12 +14,10 @@ die(){
 export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 export tests_repo_dir="$GOPATH/src/$tests_repo"
 
-clone_tests_repo()
-{
+clone_tests_repo() {
 	# KATA_CI_NO_NETWORK is (has to be) ignored if there is
 	# no existing clone.
-	if [ -d "${tests_repo_dir}" ]  && [ -n "${KATA_CI_NO_NETWORK:-}" ]
-	then
+	if [ -d "${tests_repo_dir}" ] && [ -n "${KATA_CI_NO_NETWORK:-}" ]; then
 		return
 	fi
 
@@ -30,7 +28,7 @@ install_yq() {
 	path=$1
 	local yq_path=${path}/yq
 	local yq_pkg="github.com/mikefarah/yq"
-	[ -x  "${yq_path}" ] && return
+	[ -x "${yq_path}" ] && return
 
 	case "$(arch)" in
 	"aarch64")
@@ -59,7 +57,6 @@ install_yq() {
 	# The redirected url should include the latest release version
 	# https://github.com/mikefarah/yq/releases/tag/<VERSION-HERE>
 	yq_version=$(basename "${yq_latest_url}")
-
 
 	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_linux_${goarch}"
 	curl -o "${yq_path}" -L ${yq_url}

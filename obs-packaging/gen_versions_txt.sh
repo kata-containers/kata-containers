@@ -15,22 +15,21 @@ project="kata-containers"
 
 source "${script_dir}/../scripts/lib.sh"
 
-get_kata_hash_from_tag(){
+get_kata_hash_from_tag() {
 	repo=$1
 	git ls-remote --tags "https://github.com/${project}/${repo}.git" | grep "refs/tags/${kata_version}^{}" | awk '{print $1}'
 }
 
-gen_version_file(){
+gen_version_file() {
 	local branch="$1"
 	[ -n "${branch}" ] || exit 1
 
-	local kata_version=$(curl --silent  -L "https://raw.githubusercontent.com/${project}/runtime/${branch}/VERSION")
+	local kata_version=$(curl --silent -L "https://raw.githubusercontent.com/${project}/runtime/${branch}/VERSION")
 	kata_runtime_hash=$(get_kata_hash_from_tag "runtime" "${kata_version}")
 	kata_proxy_hash=$(get_kata_hash_from_tag "proxy" "${kata_version}")
 	kata_shim_hash=$(get_kata_hash_from_tag "shim" "${kata_version}")
 	kata_agent_hash=$(get_kata_hash_from_tag "agent" "${kata_version}")
 	kata_ksm_throttler_hash=$(get_kata_hash_from_tag "ksm-throttler" "${kata_version}")
-
 
 	qemu_lite_branch=$(get_from_kata_deps "assets.hypervisor.qemu-lite.branch" "${kata_version}")
 	qemu_lite_version=$(curl -s -L "https://raw.githubusercontent.com/${project}/qemu/${qemu_lite_branch}/VERSION")
@@ -48,7 +47,7 @@ gen_version_file(){
 	golang_version="1.10.2"
 	golang_x84_64_sha256=$(curl -s -L "https://storage.googleapis.com/golang/go${golang_version}.linux-amd64.tar.gz.sha256")
 
-cat > versions.txt  << EOT
+	cat >versions.txt <<EOT
 
 # This is a generated file from ${script_name}
 
@@ -84,10 +83,10 @@ go_checksum=${golang_x84_64_sha256}
 EOT
 }
 
-usage(){
+usage() {
 	msg="${1:-}"
 	exit_code=$"${2:-0}"
-cat << EOT
+	cat <<EOT
 ${msg}
 Usage:
 ${script_name} <kata-branch>
@@ -95,7 +94,7 @@ EOT
 	exit "${exit_code}"
 }
 
-main(){
+main() {
 	local branch="${1:-}"
 	[ -n "${branch}" ] || usage "missing branch" "1"
 	gen_version_file "${branch}"

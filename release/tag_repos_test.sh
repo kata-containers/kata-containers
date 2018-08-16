@@ -10,10 +10,10 @@ set -o nounset
 set -o pipefail
 
 echo "Check tag_repos.sh show help"
-./release/tag_repos.sh  | grep Usage
+./release/tag_repos.sh | grep Usage
 
 echo "Check tag_repos.sh -h option"
-./release/tag_repos.sh  -h | grep Usage
+./release/tag_repos.sh -h | grep Usage
 
 echo "Check tag_repos.sh status"
 ./release/tag_repos.sh status | grep runtime

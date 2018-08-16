@@ -9,7 +9,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-readonly script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 
 readonly tmp_dir=$(mktemp -t -d pr-bump.XXXX)
@@ -19,7 +19,7 @@ GOPATH=${GOPATH:-${HOME}/go}
 
 source "${script_dir}/../scripts/lib.sh"
 
-cleanup (){
+cleanup() {
 	[ -d "${tmp_dir}" ] && rm -rf "${tmp_dir}"
 }
 
@@ -36,8 +36,7 @@ get_changes() {
 	fi
 
 	# list all PRs merged from $current_version to HEAD
-	git log --merges "${current_version}..HEAD" | awk '/Merge pull/{getline; getline;print }' | while read pr
-	do
+	git log --merges "${current_version}..HEAD" | awk '/Merge pull/{getline; getline;print }' | while read pr; do
 		echo "- ${pr}"
 	done
 
@@ -71,7 +70,7 @@ bump_repo() {
 
 	git clone --quiet "${remote_github}"
 
-	pushd "${repo}" >> /dev/null
+	pushd "${repo}" >>/dev/null
 
 	# All repos we build should have a VERSION file
 	[ -f "VERSION" ] || die "VERSION file not found "
@@ -79,7 +78,7 @@ bump_repo() {
 
 	info "Creating PR message"
 	notes_file=notes.md
-	cat << EOT > "${notes_file}"
+	cat <<EOT >"${notes_file}"
 # Kata Containers ${new_version}
 
 $(get_changes "$current_version")
@@ -87,15 +86,15 @@ $(get_changes "$current_version")
 EOT
 
 	info "Updating VERSION file"
-	echo "${new_version}" > VERSION
+	echo "${new_version}" >VERSION
 	branch="${new_version}-branch-bump"
 	git checkout -b "${branch}" master
 	git add -u
 	info "Creating commit with new changes"
 	commit_msg="$(generate_commit $new_version $current_version)"
-	git  commit -s -m "${commit_msg}"
+	git commit -s -m "${commit_msg}"
 
-	if [[ "${PUSH}" == "true" ]]; then
+	if [[ ${PUSH} == "true" ]]; then
 		build_hub
 		info "Forking remote"
 		${hub_bin} fork --remote-name=fork
@@ -103,12 +102,12 @@ EOT
 		${hub_bin} push fork -f "${branch}"
 		info "Create PR"
 		out=""
-		out=$("${hub_bin}" pull-request -F "${notes_file}" 2>&1) || echo "$out" |  grep "A pull request already exists"
+		out=$("${hub_bin}" pull-request -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
 	fi
-	popd >> /dev/null
+	popd >>/dev/null
 }
 
-usage(){
+usage() {
 	exit_code="$1"
 	cat <<EOT
 Usage:
@@ -125,21 +124,20 @@ EOT
 	exit "$exit_code"
 }
 
-while getopts "hp" opt
-do
+while getopts "hp" opt; do
 	case $opt in
-		h)	usage 0 ;;
-		p)	PUSH="true" ;;
+	h) usage 0 ;;
+	p) PUSH="true" ;;
 	esac
 done
 
-shift $(( $OPTIND - 1 ))
+shift $((OPTIND - 1))
 
 repo=${1:-}
 new_version=${2:-}
 [ -n "${repo}" ] || (echo "ERROR: repository not provided" && usage 1)
-[ -n "$new_version" ] || (echo "ERROR: no new version" && usage 1 )
+[ -n "$new_version" ] || (echo "ERROR: no new version" && usage 1)
 
-pushd "$tmp_dir" >> /dev/null
+pushd "$tmp_dir" >>/dev/null
 bump_repo "${repo}" "${new_version}"
-popd >> /dev/null
+popd >>/dev/null

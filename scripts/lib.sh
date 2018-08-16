@@ -2,7 +2,7 @@ export GOPATH=${GOPATH:-${HOME}/go}
 readonly kata_arch_sh="${GOPATH}/src/github.com/kata-containers/tests/.ci/kata-arch.sh"
 hub_bin="hub-bin"
 
-get_kata_arch(){
+get_kata_arch() {
 	go get -u github.com/kata-containers/tests || true
 	[ -f "${kata_arch_sh}" ] || die "Not found $kata_arch_sh"
 }
@@ -11,7 +11,7 @@ install_yq() {
 	GOPATH=${GOPATH:-${HOME}/go}
 	local yq_path="${GOPATH}/bin/yq"
 	local yq_pkg="github.com/mikefarah/yq"
-	[ -x  "${GOPATH}/bin/yq" ] && return
+	[ -x "${GOPATH}/bin/yq" ] && return
 
 	get_kata_arch
 	goarch=$("${kata_arch_sh}" -g)
@@ -30,7 +30,7 @@ install_yq() {
 	chmod +x "${yq_path}"
 }
 
-get_from_kata_deps(){
+get_from_kata_deps() {
 	local dependency="$1"
 	local branch="${2:-master}"
 	local runtime_repo="github.com/kata-containers/runtime"
@@ -47,20 +47,20 @@ get_from_kata_deps(){
 }
 
 die() {
-		echo >&2 "ERROR: $*"
-			exit 1
+	echo >&2 "ERROR: $*"
+	exit 1
 }
 
 info() {
-		echo >&2 "INFO: $*"
+	echo >&2 "INFO: $*"
 }
 
-get_repo_hash(){
+get_repo_hash() {
 	local repo_dir=${1:-}
 	[ -d "${repo_dir}" ] || die "${repo_dir} is not a directory"
-	pushd "${repo_dir}" >> /dev/null
+	pushd "${repo_dir}" >>/dev/null
 	git rev-parse --verify HEAD
-	popd >> /dev/null
+	popd >>/dev/null
 }
 
 build_hub() {
@@ -68,18 +68,17 @@ build_hub() {
 
 	if cmd=$(command -v hub); then
 		hub_bin="${cmd}"
-		return 
+		return
 	else
 		hub_bin="${tmp_dir:-/tmp}/hub-bin"
 	fi
 
 	local hub_repo="github.com/github/hub"
 	local hub_repo_dir="${GOPATH}/src/${hub_repo}"
-	[ -d "${hub_repo_dir}" ]||  git clone --quiet --depth 1 "https://${hub_repo}.git" "${hub_repo_dir}"
-	pushd "${hub_repo_dir}" >> /dev/null
+	[ -d "${hub_repo_dir}" ] || git clone --quiet --depth 1 "https://${hub_repo}.git" "${hub_repo_dir}"
+	pushd "${hub_repo_dir}" >>/dev/null
 	git checkout master
 	git pull
 	./script/build -o "${hub_bin}"
-	popd >> /dev/null
+	popd >>/dev/null
 }
-

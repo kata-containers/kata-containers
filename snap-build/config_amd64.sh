@@ -13,7 +13,7 @@ local arch_bios_url=""
 local arch_qemu_cpu="qemu64"
 local arch_qemu_machine="pc"
 local arch_qemu_extra_opts=""
-if [ "$(arch)" == "x86_64" ];then
+if [ "$(arch)" == "x86_64" ]; then
 	arch_qemu_cpu="host"
 	arch_qemu_machine="pc,accel=kvm"
 	arch_qemu_extra_opts="-enable-kvm"
