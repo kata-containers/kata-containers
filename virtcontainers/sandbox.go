@@ -544,6 +544,11 @@ func (s *Sandbox) GetAnnotations() map[string]string {
 	return s.config.Annotations
 }
 
+// GetNetNs returns the network namespace of the current sandbox.
+func (s *Sandbox) GetNetNs() string {
+	return s.networkNS.NetNsPath
+}
+
 // GetAllContainers returns all containers.
 func (s *Sandbox) GetAllContainers() []VCContainer {
 	ifa := make([]VCContainer, len(s.containers))

@@ -36,6 +36,11 @@ func (s *Sandbox) GetAnnotations() map[string]string {
 	return s.MockAnnotations
 }
 
+// GetNetNs returns the network namespace of the current sandbox.
+func (s *Sandbox) GetNetNs() string {
+	return s.MockNetNs
+}
+
 // GetAllContainers implements the VCSandbox function of the same name.
 func (s *Sandbox) GetAllContainers() []vc.VCContainer {
 	var ifa = make([]vc.VCContainer, len(s.MockContainers))

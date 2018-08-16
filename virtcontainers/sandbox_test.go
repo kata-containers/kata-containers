@@ -1706,3 +1706,19 @@ func TestPreAddDevice(t *testing.T) {
 	assert.Equal(t, len(mounts), 0,
 		"mounts should contain nothing because it only contains a block device")
 }
+
+func TestGetNetNs(t *testing.T) {
+	s := Sandbox{}
+
+	expected := ""
+	netNs := s.GetNetNs()
+	assert.Equal(t, netNs, expected)
+
+	expected = "/foo/bar/ns/net"
+	s.networkNS = NetworkNamespace{
+		NetNsPath: expected,
+	}
+
+	netNs = s.GetNetNs()
+	assert.Equal(t, netNs, expected)
+}
