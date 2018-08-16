@@ -63,6 +63,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	disableBlock := true
 	blockStorageDriver := "virtio-scsi"
 	enableIOThreads := true
+	hotplugVFIOOnRootBus := true
 
 	// override
 	defaultProxyPath = proxyPath
@@ -108,6 +109,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		disableBlock,
 		blockStorageDriver,
 		enableIOThreads,
+		hotplugVFIOOnRootBus,
 	)
 
 	configFile = path.Join(prefixDir, "runtime.toml")

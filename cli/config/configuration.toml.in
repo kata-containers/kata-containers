@@ -140,6 +140,13 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # Default false
 #use_vsock = true
 
+# VFIO devices are hotplugged on a bridge by default. 
+# Enable hotplugging on root bus. This may be required for devices with
+# a large PCI bar, as this is a current limitation with hotplugging on 
+# a bridge. This value is valid for "pc" machine type.
+# Default false
+#hotplug_vfio_on_root_bus = true
+
 [factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and

@@ -223,6 +223,10 @@ type HypervisorConfig struct {
 	// UseVSock use a vsock for agent communication
 	UseVSock bool
 
+	// HotplugVFIOOnRootBus is used to indicate if devices need to be hotplugged on the
+	// root bus instead of a bridge.
+	HotplugVFIOOnRootBus bool
+
 	// BootToBeTemplate used to indicate if the VM is created to be a template VM
 	BootToBeTemplate bool
 
