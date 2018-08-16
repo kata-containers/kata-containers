@@ -9,7 +9,11 @@
 # ex: ts=8 sw=4 sts=4 et filetype=sh
 #
 # Automation script to create specs to build kata-shim
-set -e
+[ -z "${DEBUG}" ] || set -o xtrace
+
+set -o errexit
+set -o nounset
+set -o pipefail
 
 source ../versions.txt
 source ../scripts/pkglib.sh
@@ -29,7 +33,6 @@ cli "$@"
 PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/shim}
 RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 ((RELEASE++))
-[ -n "$APIURL" ] && APIURL="-A ${APIURL}"
 
 set_versions $kata_shim_hash
 replace_list=(

@@ -11,7 +11,12 @@
 # Automation script to create specs to build kata-containers-image
 # Default image to build is the one specified in file versions.txt
 # located at the root of the repository.
-set -e
+
+[ -z "${DEBUG}" ] || set -o xtrace
+
+set -o errexit
+set -o nounset
+set -o pipefail
 
 source ../versions.txt
 source ../scripts/pkglib.sh
@@ -31,7 +36,6 @@ cli "$@"
 PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/kata-containers-image}
 RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 ((RELEASE++))
-[ -n "$APIURL" ] && APIURL="-A ${APIURL}"
 
 function check_image() {
     [ ! -f "${SCRIPT_DIR}/kata-containers.tar.gz" ] && die "No kata-containers.tar.gz found!\nUse the build_image.sh script" || echo "Image: OK"
@@ -40,14 +44,19 @@ function check_image() {
 replace_list=(
 "VERSION=$VERSION"
 "RELEASE=$RELEASE"
-"AGENT_SHA=${kata_agent_hash:0:7}"
-"ROOTFS_OS=$osbuilder_default_os"
 )
 
 verify
+rm -rf kata-containers.tar.gz
+image_tarball=$(find . -name 'kata-containers-'"${VERSION}"'-*.tar.gz')
+[ -f "${image_tarball}" ] || die "image not found"
+cp "${image_tarball}" kata-containers.tar.gz
+
 check_image
 echo "Verify succeed."
 get_git_info
+#TODO delete me: used by changelog_update
+hash_tag="nocommit"
 changelog_update $VERSION
 generate_files "$SCRIPT_DIR" "${replace_list[@]}"
 build_pkg "${PROJECT_REPO}"

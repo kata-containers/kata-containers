@@ -9,7 +9,11 @@
 # ex: ts=8 sw=4 sts=4 et filetype=sh
 
 # Automation script to create specs to build Kata containers kernel
-set -e
+[ -z "${DEBUG}" ] || set -o xtrace
+
+set -o errexit
+set -o nounset
+set -o pipefail
 
 source ../versions.txt
 source ../scripts/pkglib.sh
@@ -56,6 +60,8 @@ replace_list=(
 verify
 echo "Verify succeed."
 get_git_info
+#TODO delete me: used by changelog_update
+hash_tag="nocommit"
 changelog_update "${VERSION}-${KATA_CONFIG_VERSION}"
 ln -sfT "${SCRIPT_DIR}/../../kernel/patches" "${SCRIPT_DIR}/patches"
 generate_files "$SCRIPT_DIR" "${replace_list[@]}"

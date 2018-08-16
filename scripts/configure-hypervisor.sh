@@ -34,6 +34,9 @@ typeset -a qemu_options
 
 typeset -A recognised_tags
 
+# Prefix were kata will be installed
+prefix=${PREFIX:-/usr}
+
 recognised_tags=(
 	[arch]="architecture-specific"
 	[functionality]="required functionality"
@@ -402,14 +405,17 @@ generate_qemu_options()
 
 	unset _qemu_ldflags
 
+	# Where to install qemu helper binaries
+	qemu_options+=(misc:--prefix=${prefix})
+
 	# Where to install qemu libraries
-	qemu_options+=(arch:--libdir=/usr/lib64/${hypervisor})
+	qemu_options+=(arch:--libdir=${prefix}/lib/${hypervisor})
 
 	# Where to install qemu helper binaries
-	qemu_options+=(misc:--libexecdir=/usr/libexec/${hypervisor})
+	qemu_options+=(misc:--libexecdir=${prefix}/libexec/${hypervisor})
 
 	# Where to install data files
-	qemu_options+=(misc:--datadir=/usr/share/${hypervisor})
+	qemu_options+=(misc:--datadir=${prefix}/share/${hypervisor})
 
 }
 

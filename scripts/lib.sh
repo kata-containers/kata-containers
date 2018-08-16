@@ -31,16 +31,16 @@ install_yq() {
 }
 
 get_from_kata_deps(){
-	dependency="$1"
+	local dependency="$1"
+	local branch="${2:-master}"
+	local runtime_repo="github.com/kata-containers/runtime"
 	GOPATH=${GOPATH:-${HOME}/go}
 	# This is needed in order to retrieve the version for qemu-lite
 	install_yq >&2
-	runtime_repo="github.com/kata-containers/runtime"
-	runtime_repo_dir="$GOPATH/src/${runtime_repo}"
-	versions_file="${runtime_repo_dir}/versions.yaml"
-	mkdir -p $(dirname "${runtime_repo_dir}")
-	[ -d "${runtime_repo_dir}" ] ||  git clone --quiet https://${runtime_repo}.git "${runtime_repo_dir}"
-	[ ! -f "$versions_file" ] && { echo >&2 "ERROR: cannot find $versions_file"; exit 1; }
+	yaml_url="https://raw.githubusercontent.com/kata-containers/runtime/${branch}/versions.yaml"
+	versions_file="versions_${branch}.yaml"
+	[ ! -e "${versions_file}" ] || download_on_new_flag="-z ${versions_file}"
+	curl --silent -o "${versions_file}" ${download_on_new_flag:-} "$yaml_url"
 	result=$("${GOPATH}/bin/yq" read "$versions_file" "$dependency")
 	[ "$result" = "null" ] && result=""
 	echo "$result"

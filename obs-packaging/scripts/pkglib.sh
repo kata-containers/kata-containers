@@ -47,7 +47,6 @@ function display_help()
 	Options:
 
     -l         --local-build     Build the runtime locally
-    -c         --commit-id       Build with a given commit ID
     -b         --branch          Build with a given branch name
     -p         --push            Push changes to OBS
     -a         --api-url         Especify an OBS API (e.g. custom private OBS)
@@ -61,9 +60,9 @@ function display_help()
     Usage examples:
 
     $SCRIPT_NAME --local-build --branch staging
-    $SCRIPT_NAME --commit-id a76f45c --push --api-url http://127.0.0.1
-    $SCRIPT_NAME --commit-id a76f45c --push --obs-repository home:userx/repository
-    $SCRIPT_NAME --commit-id a76f45c --push
+    $SCRIPT_NAME --push --api-url http://127.0.0.1
+    $SCRIPT_NAME --push --obs-repository home:userx/repository
+    $SCRIPT_NAME --push
 
 	EOL
 	exit 1
@@ -117,20 +116,7 @@ function get_git_info()
 function set_versions()
 {
     local commit_hash="$1"
-
-    if [ -n "$OBS_REVISION" ]
-    then
-	# Validate input is alphanumeric, commit ID
-	# If a commit ID is provided, override versions.txt one
-	if [ -n "$COMMIT" ] && [[ "$OBS_REVISION" =~ ^[a-zA-Z0-9][-a-zA-Z0-9]{0,40}[a-zA-Z0-9]$  ]]; then
-            hash_tag=$OBS_REVISION
-	elif [ -n "$BRANCH" ]
-	then
-            hash_tag=$commit_hash
-	fi
-    else
-        hash_tag=$commit_hash
-    fi
+    hash_tag="$commit_hash"
     short_hashtag="${hash_tag:0:7}"
 }
 
@@ -177,25 +163,23 @@ function local_build()
 
 function checkout_repo()
 {
-    local REPO="$1"
-    if [ -z "$OBS_WORKDIR" ]
+    local REPO="${1}"
+    if [ -z "${OBS_WORKDIR:-}" ]
     then
-        # If no workdir is provided, use a temporary directory.
-        temp=$(basename $0)
-        OBS_WORKDIR=$(mktemp -d -u -t ${temp}.XXXXXXXXXXX) || exit 1
-        osc $APIURL co $REPO -o $OBS_WORKDIR
+        OBS_WORKDIR=$(mktemp -d -u -t obs-repo.XXXXXXXXXXX) || exit 1
+        osc co "${REPO}" -o "${OBS_WORKDIR}"
     fi
-    find ${OBS_WORKDIR} -maxdepth 1 -mindepth 1 ! -name '.osc' -prune  -exec echo remove {} \; -exec  rm -rf {} \;
+    find "${OBS_WORKDIR}" -maxdepth 1 -mindepth 1 ! -name '.osc' -prune  -exec echo remove {} \; -exec  rm -rf {} \;
 
-    mv ${GENERATED_FILES[@]} "$OBS_WORKDIR"
-    cp ${STATIC_FILES[@]} "$OBS_WORKDIR"
+    mv "${GENERATED_FILES[@]}" "${OBS_WORKDIR}"
+    cp "${STATIC_FILES[@]}" "$OBS_WORKDIR"
 }
 
 function obs_push()
 {
     pushd $OBS_WORKDIR
-    osc $APIURL addremove
-    osc $APIURL commit -m "Update ${PKG_NAME} $VERSION: ${hash_tag:0:7}"
+    osc addremove
+    osc commit -m "Update ${PKG_NAME} $VERSION: ${hash_tag:0:7}"
     popd
 }
 
@@ -204,9 +188,7 @@ function cli()
 	OPTS=$(getopt -o abclprwvCVh: --long api-url,branch,commit-id,local-build,push,obs-repository,workdir,verbose,clean,verify,help -- "$@")
 	while true; do
 		case "${1}" in
-			-a | --api-url )        APIURL="$2"; shift 2;;
 			-b | --branch )         BRANCH="true"; OBS_REVISION="$2"; shift 2;;
-			-c | --commit-id )      COMMIT="true"; OBS_REVISION="$2"; shift 2;;
 			-l | --local-build )    LOCAL_BUILD="true"; shift;;
 			-p | --push )           OBS_PUSH="true"; shift;;
 			-r | --obs-repository ) PROJECT_REPO="$2"; shift 2;;
@@ -313,13 +295,25 @@ function get_obs_pkg_release() {
 	pkg=$(basename "${obs_pkg_name}")
 	repo_dir=$(mktemp -d -u -t "${pkg}.XXXXXXXXXXX")
 
-	out=$(osc ${APIURL} -q co "${obs_pkg_name}" -o "${repo_dir}") || die "failed to checkout:$out"
+	out=$(osc -q co "${obs_pkg_name}" -o "${repo_dir}") || die "failed to checkout:$out"
 
 	spec_file=$(find "${repo_dir}" -maxdepth 1 -type f -name '*.spec' | head -1)
+	# Find in specfile in Release: XX field.
 	release=$(grep -oP  'Release:\s+[0-9]+' "${spec_file}"  | grep -oP '[0-9]+')
 
 	if [ -z "${release}" ]; then
+		# Not release number found find in "%define release XX"
 		release=$(grep -oP  '%define\s+release\s+[0-9]+' "${spec_file}"  | grep -oP '[0-9]+')
+	fi
+
+	release_file=$(find "${repo_dir}" -maxdepth 1 -type f -name 'pkg-release')
+	if [ -z "${release}" ] && [ -f "${release_file}" ]; then
+		# Release still not found check pkg-release file
+		release=$(grep -oP '[0-9]+' ${release_file})
+	fi
+	if [ -z "${release}" ]; then
+		# Not release number found, this is a new repository.
+		release=1
 	fi
 
 	rm -r "${repo_dir}"
