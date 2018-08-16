@@ -16,6 +16,7 @@ import (
 	"github.com/BurntSushi/toml"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	vcUtils "github.com/kata-containers/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
@@ -25,7 +26,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.14"
+const formatVersion = "1.0.15"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -120,6 +121,7 @@ type HostInfo struct {
 	Distro             DistroInfo
 	CPU                CPUInfo
 	VMContainerCapable bool
+	SupportVSocks      bool
 }
 
 // EnvInfo collects all information that will be displayed by the
@@ -213,6 +215,7 @@ func getHostInfo() (HostInfo, error) {
 		Distro:             hostDistro,
 		CPU:                hostCPU,
 		VMContainerCapable: hostVMContainerCapable,
+		SupportVSocks:      vcUtils.SupportsVsocks(),
 	}
 
 	return host, nil
