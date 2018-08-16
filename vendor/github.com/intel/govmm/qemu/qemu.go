@@ -63,28 +63,28 @@ const (
 	NVDIMM DeviceDriver = "nvdimm"
 
 	// Virtio9P is the 9pfs device driver.
-	Virtio9P = "virtio-9p-pci"
+	Virtio9P DeviceDriver = "virtio-9p-pci"
 
 	// VirtioNet is the virt-io networking device driver.
-	VirtioNet = "virtio-net"
+	VirtioNet DeviceDriver = "virtio-net"
 
 	// VirtioNetPCI is the virt-io pci networking device driver.
-	VirtioNetPCI = "virtio-net-pci"
+	VirtioNetPCI DeviceDriver = "virtio-net-pci"
 
 	// VirtioSerial is the serial device driver.
-	VirtioSerial = "virtio-serial-pci"
+	VirtioSerial DeviceDriver = "virtio-serial-pci"
 
 	// VirtioBlock is the block device driver.
-	VirtioBlock = "virtio-blk"
+	VirtioBlock DeviceDriver = "virtio-blk"
 
 	// Console is the console device driver.
-	Console = "virtconsole"
+	Console DeviceDriver = "virtconsole"
 
 	// VirtioSerialPort is the serial port device driver.
-	VirtioSerialPort = "virtserialport"
+	VirtioSerialPort DeviceDriver = "virtserialport"
 
 	// VHostVSockPCI is the vhost vsock pci driver.
-	VHostVSockPCI = "vhost-vsock-pci"
+	VHostVSockPCI DeviceDriver = "vhost-vsock-pci"
 )
 
 // ObjectType is a string representing a qemu object type.
@@ -171,10 +171,10 @@ const (
 	Local FSDriver = "local"
 
 	// Handle is the handle qemu filesystem driver.
-	Handle = "handle"
+	Handle FSDriver = "handle"
 
 	// Proxy is the proxy qemu filesystem driver.
-	Proxy = "proxy"
+	Proxy FSDriver = "proxy"
 )
 
 const (
@@ -182,13 +182,13 @@ const (
 	None SecurityModelType = "none"
 
 	// PassThrough uses the same credentials on both the host and guest.
-	PassThrough = "passthrough"
+	PassThrough SecurityModelType = "passthrough"
 
 	// MappedXattr stores some files attributes as extended attributes.
-	MappedXattr = "mapped-xattr"
+	MappedXattr SecurityModelType = "mapped-xattr"
 
 	// MappedFile stores some files attributes in the .virtfs directory.
-	MappedFile = "mapped-file"
+	MappedFile SecurityModelType = "mapped-file"
 )
 
 // FSDevice represents a qemu filesystem configuration.
@@ -259,19 +259,19 @@ const (
 	Pipe CharDeviceBackend = "pipe"
 
 	// Socket creates a 2 way stream socket (TCP or Unix).
-	Socket = "socket"
+	Socket CharDeviceBackend = "socket"
 
 	// CharConsole sends traffic from the guest to QEMU's standard output.
-	CharConsole = "console"
+	CharConsole CharDeviceBackend = "console"
 
 	// Serial sends traffic from the guest to a serial device on the host.
-	Serial = "serial"
+	Serial CharDeviceBackend = "serial"
 
 	// TTY is an alias for Serial.
-	TTY = "tty"
+	TTY CharDeviceBackend = "tty"
 
 	// PTY creates a new pseudo-terminal on the host and connect to it.
-	PTY = "pty"
+	PTY CharDeviceBackend = "pty"
 )
 
 // CharDevice represents a qemu character device.
@@ -348,19 +348,19 @@ const (
 	TAP NetDeviceType = "tap"
 
 	// MACVTAP is a macvtap networking device type.
-	MACVTAP = "macvtap"
+	MACVTAP NetDeviceType = "macvtap"
 
 	// IPVTAP is a ipvtap virtual networking device type.
-	IPVTAP = "ipvtap"
+	IPVTAP NetDeviceType = "ipvtap"
 
 	// VETHTAP is a veth-tap virtual networking device type.
-	VETHTAP = "vethtap"
+	VETHTAP NetDeviceType = "vethtap"
 
 	// VFIO is a direct assigned PCI device or PCI VF
-	VFIO = "VFIO"
+	VFIO NetDeviceType = "VFIO"
 
 	// VHOSTUSER is a vhost-user port (socket)
-	VHOSTUSER = "vhostuser"
+	VHOSTUSER NetDeviceType = "vhostuser"
 )
 
 // QemuNetdevParam converts to the QEMU -netdev parameter notation
@@ -637,7 +637,7 @@ const (
 	NoInterface BlockDeviceInterface = "none"
 
 	// SCSI represents a SCSI block device interface.
-	SCSI = "scsi"
+	SCSI BlockDeviceInterface = "scsi"
 )
 
 const (
@@ -645,7 +645,7 @@ const (
 	Threads BlockDeviceAIO = "threads"
 
 	// Native is the pthread asynchronous I/O implementation.
-	Native = "native"
+	Native BlockDeviceAIO = "native"
 )
 
 const (
@@ -976,7 +976,9 @@ type VSOCKDevice struct {
 const (
 	// MinimalGuestCID is the smallest valid context ID for a guest.
 	MinimalGuestCID uint32 = 3
+)
 
+const (
 	// VhostVSOCKPCI is the VSOCK vhost device type.
 	VhostVSOCKPCI = "vhost-vsock-pci"
 
@@ -1029,7 +1031,7 @@ const (
 	UTC RTCBaseType = "utc"
 
 	// LocalTime is the local base time for qemu RTC.
-	LocalTime = "localtime"
+	LocalTime RTCBaseType = "localtime"
 )
 
 const (
@@ -1037,7 +1039,7 @@ const (
 	Host RTCClock = "host"
 
 	// VM is for using the guest clock as a reference
-	VM = "vm"
+	VM RTCClock = "vm"
 )
 
 const (
@@ -1045,7 +1047,7 @@ const (
 	Slew RTCDriftFix = "slew"
 
 	// NoDriftFix means we don't want/need to fix qemu's RTC drift.
-	NoDriftFix = "none"
+	NoDriftFix RTCDriftFix = "none"
 )
 
 // RTC represents a qemu Real Time Clock configuration.
@@ -1669,6 +1671,7 @@ func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*
 		path = "qemu-system-x86_64"
 	}
 
+	/* #nosec */
 	cmd := exec.Command(path, params...)
 	if len(fds) > 0 {
 		logger.Infof("Adding extra file %v", fds)

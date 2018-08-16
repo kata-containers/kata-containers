@@ -194,11 +194,19 @@ func (p *gRPCProxy) RemoveInterface(ctx context.Context, req *pb.RemoveInterface
 }
 
 func (p *gRPCProxy) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*pb.Interface, error) {
-	return nil, nil
+	return &pb.Interface{}, nil
 }
 
 func (p *gRPCProxy) UpdateRoutes(ctx context.Context, req *pb.UpdateRoutesRequest) (*pb.Routes, error) {
-	return nil, nil
+	return &pb.Routes{}, nil
+}
+
+func (p *gRPCProxy) ListInterfaces(ctx context.Context, req *pb.ListInterfacesRequest) (*pb.Interfaces, error) {
+	return &pb.Interfaces{}, nil
+}
+
+func (p *gRPCProxy) ListRoutes(ctx context.Context, req *pb.ListRoutesRequest) (*pb.Routes, error) {
+	return &pb.Routes{}, nil
 }
 
 func (p *gRPCProxy) OnlineCPUMem(ctx context.Context, req *pb.OnlineCPUMemRequest) (*gpb.Empty, error) {
@@ -838,4 +846,45 @@ func TestAgentCreateContainer(t *testing.T) {
 	// We'll fail on container metadata file creation, but it helps increasing coverage...
 	_, err = k.createContainer(sandbox, container)
 	assert.Error(err)
+}
+
+func TestAgentNetworkOperation(t *testing.T) {
+	assert := assert.New(t)
+
+	impl := &gRPCProxy{}
+
+	proxy := mock.ProxyGRPCMock{
+		GRPCImplementer: impl,
+		GRPCRegister:    gRPCRegister,
+	}
+
+	sockDir, err := testGenerateKataProxySockDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(sockDir)
+
+	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
+	if err := proxy.Start(testKataProxyURL); err != nil {
+		t.Fatal(err)
+	}
+	defer proxy.Stop()
+
+	k := &kataAgent{
+		state: KataAgentState{
+			URL: testKataProxyURL,
+		},
+	}
+
+	_, err = k.updateInterface(nil)
+	assert.Nil(err)
+
+	_, err = k.listInterfaces()
+	assert.Nil(err)
+
+	_, err = k.updateRoutes([]*pb.Route{})
+	assert.Nil(err)
+
+	_, err = k.listRoutes()
+	assert.Nil(err)
 }

@@ -206,3 +206,35 @@ func TestHyperReseedAPI(t *testing.T) {
 	err := h.reseedRNG([]byte{})
 	assert.Nil(err)
 }
+
+func TestHyperUpdateInterface(t *testing.T) {
+	assert := assert.New(t)
+
+	h := &hyper{}
+	_, err := h.updateInterface(nil)
+	assert.Nil(err)
+}
+
+func TestHyperListInterfaces(t *testing.T) {
+	assert := assert.New(t)
+
+	h := &hyper{}
+	_, err := h.listInterfaces()
+	assert.Nil(err)
+}
+
+func TestHyperUpdateRoutes(t *testing.T) {
+	assert := assert.New(t)
+
+	h := &hyper{}
+	_, err := h.updateRoutes(nil)
+	assert.Nil(err)
+}
+
+func TestHyperListRoutes(t *testing.T) {
+	assert := assert.New(t)
+
+	h := &hyper{}
+	_, err := h.listRoutes()
+	assert.Nil(err)
+}

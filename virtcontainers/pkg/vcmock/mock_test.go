@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/kata-containers/agent/protocols/grpc"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/factory"
 	"github.com/sirupsen/logrus"
@@ -709,4 +710,134 @@ func TestVCMockSetVMFactory(t *testing.T) {
 
 	m.SetFactory(f)
 	assert.Equal(factoryTriggered, 1)
+}
+
+func TestVCMockAddInterface(t *testing.T) {
+	assert := assert.New(t)
+
+	m := &VCMock{}
+	config := &vc.SandboxConfig{}
+	assert.Nil(m.AddInterfaceFunc)
+
+	_, err := m.AddInterface(config.ID, nil)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+
+	m.AddInterfaceFunc = func(sid string, inf *grpc.Interface) (*grpc.Interface, error) {
+		return nil, nil
+	}
+
+	_, err = m.AddInterface(config.ID, nil)
+	assert.NoError(err)
+
+	// reset
+	m.AddInterfaceFunc = nil
+
+	_, err = m.AddInterface(config.ID, nil)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+}
+
+func TestVCMockRemoveInterface(t *testing.T) {
+	assert := assert.New(t)
+
+	m := &VCMock{}
+	config := &vc.SandboxConfig{}
+	assert.Nil(m.RemoveInterfaceFunc)
+
+	_, err := m.RemoveInterface(config.ID, nil)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+
+	m.RemoveInterfaceFunc = func(sid string, inf *grpc.Interface) (*grpc.Interface, error) {
+		return nil, nil
+	}
+
+	_, err = m.RemoveInterface(config.ID, nil)
+	assert.NoError(err)
+
+	// reset
+	m.RemoveInterfaceFunc = nil
+
+	_, err = m.RemoveInterface(config.ID, nil)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+}
+
+func TestVCMockListInterfaces(t *testing.T) {
+	assert := assert.New(t)
+
+	m := &VCMock{}
+	config := &vc.SandboxConfig{}
+	assert.Nil(m.ListInterfacesFunc)
+
+	_, err := m.ListInterfaces(config.ID)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+
+	m.ListInterfacesFunc = func(sid string) ([]*grpc.Interface, error) {
+		return nil, nil
+	}
+
+	_, err = m.ListInterfaces(config.ID)
+	assert.NoError(err)
+
+	// reset
+	m.ListInterfacesFunc = nil
+
+	_, err = m.ListInterfaces(config.ID)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+}
+
+func TestVCMockUpdateRoutes(t *testing.T) {
+	assert := assert.New(t)
+
+	m := &VCMock{}
+	config := &vc.SandboxConfig{}
+	assert.Nil(m.UpdateRoutesFunc)
+
+	_, err := m.UpdateRoutes(config.ID, nil)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+
+	m.UpdateRoutesFunc = func(sid string, routes []*grpc.Route) ([]*grpc.Route, error) {
+		return nil, nil
+	}
+
+	_, err = m.UpdateRoutes(config.ID, nil)
+	assert.NoError(err)
+
+	// reset
+	m.UpdateRoutesFunc = nil
+
+	_, err = m.UpdateRoutes(config.ID, nil)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+}
+
+func TestVCMockListRoutes(t *testing.T) {
+	assert := assert.New(t)
+
+	m := &VCMock{}
+	config := &vc.SandboxConfig{}
+	assert.Nil(m.ListRoutesFunc)
+
+	_, err := m.ListRoutes(config.ID)
+	assert.Error(err)
+	assert.True(IsMockError(err))
+
+	m.ListRoutesFunc = func(sid string) ([]*grpc.Route, error) {
+		return nil, nil
+	}
+
+	_, err = m.ListRoutes(config.ID)
+	assert.NoError(err)
+
+	// reset
+	m.ListRoutesFunc = nil
+
+	_, err = m.ListRoutes(config.ID)
+	assert.Error(err)
+	assert.True(IsMockError(err))
 }
