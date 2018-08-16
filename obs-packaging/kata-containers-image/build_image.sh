@@ -11,8 +11,6 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-[ -z  "${DEBUG:-}"  ] ||  set -x
-
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly project="kata-containers"
@@ -25,13 +23,6 @@ source "${script_dir}/../../scripts/lib.sh"
 
 
 arch_target="$(uname -m)"
-#image information
-img_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name")
-img_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version")
-
-#initrd information
-initrd_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name")
-initrd_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version")
 
 kata_version="master"
 
@@ -41,11 +32,12 @@ kata_osbuilder_version="${KATA_OSBUILDER_VERSION:-}"
 agent_version="${AGENT_VERSION:-}"
 
 
-readonly destdir="${script_dir}"
+readonly destdir="${PWD}"
 
 build_initrd(){
 	sudo -E PATH="$PATH" make initrd\
 	     DISTRO="$initrd_distro" \
+	     DEBUG="${DEBUG:-}" \
 	     AGENT_VERSION="${agent_version}" \
 	     OS_VERSION="${initrd_os_version}" \
 	     DISTRO_ROOTFS="${tmp_dir}/initrd-image" \
@@ -57,6 +49,7 @@ build_initrd(){
 build_image(){
 	sudo -E PATH="${PATH}" make image \
 	     DISTRO="${img_distro}" \
+	     DEBUG="${DEBUG:-}" \
 	     AGENT_VERSION="${agent_version}" \
 	     IMG_OS_VERSION="${img_os_version}" \
 	     DISTRO_ROOTFS="${tmp_dir}/rootfs-image"
@@ -106,6 +99,14 @@ main(){
 	[ -n "${kata_osbuilder_version}" ] || kata_osbuilder_version="${kata_version}"
 	# Agent version
 	[ -n "${agent_version}" ] || agent_version="${kata_version}"
+
+	#image information
+	img_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name" "${kata_version}")
+	img_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version" "${kata_version}")
+
+	#initrd information
+	initrd_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name" "${kata_version}")
+	initrd_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version" "${kata_version}")
 
 	shift "$(( $OPTIND - 1 ))"
 	git clone "$osbuilder_url" "${tmp_dir}/osbuilder"

@@ -1,32 +1,32 @@
-kata_agent_hash=7b458b18ffcbb90a1aed1644d109ea438f39c9a0
-kata_ksm_throttler_hash=1fecaffc98386fdb080979d38d5688566eec54a1
-kata_proxy_hash=8a305e5a61856c7510350b0ade5a5dc5e9255dbf
-kata_runtime_hash=bf1cf684f5d48d3142665f98daf719faf94039e2
-kata_shim_hash=de2d2a67659cab7928b81f836a8f64450c998453
+
+# This is a generated file from gen_versions_txt.sh
+
+kata_runtime_version=1.2.0
+kata_runtime_hash=0bcb32f7042625ea0ecee8f37b99b4459ebd5af8
+
+kata_proxy_version=1.2.0
+kata_proxy_hash=17962180fc61c66066905546bfd5d8933bf73df1
+
+kata_shim_version=1.2.0
+kata_shim_hash=0a37760c0224167143cb3cc920c78f5147f52e70
+
+kata_agent_version=1.2.0
+kata_agent_hash=fcfa054a757e7c17afba47b0b4d7e91cbb8688ed
+
+kata_ksm_throttler_version=1.2.0
+kata_ksm_throttler_hash=f232434f36b1b2c916eb6211118cf26671bd04ef
 
 # Dependencies
-qemu_lite_hash=6ba2bfbee9a80bfd03605c5eb2ca743c8b68389e
-qemu_vanilla_hash=e3050471ff1daa7fefe88388dfa4e1d97ba1f0bc
+kata_osbuilder_version=1.2.0
 
-kata_runtime_version=1.1.0
-kata_proxy_version=1.1.0
-kata_shim_version=1.1.0
-kata_agent_version=1.1.0
-kata_ksm_throttler_version=1.1.0
-kata_osbuilder_version=1.1.0
 qemu_lite_version=2.11.0
-qemu_vanilla_version=2.11
+qemu_lite_hash=a39e0b3e828ff6fb4457865ef7a021f1e7320c27
+
+qemu_vanilla_version=2.11.2
+qemu_vanilla_hash=a39e0b3e828ff6fb4457865ef7a021f1e7320c27
+
 kernel_version=4.14.51
-
-# Default osbuilder image options
-osbuilder_default_os=clearlinux
-clearlinux_version=20640
-
-# Default osbuilder initrd options
-osbuilder_default_initrd_os=alpine
-alpine_version=3.7
 
 # Golang
 go_version=1.10.2
-# sha256 checksum for the go_version binary distribution ("go${go_version}.linux-amd64.tar.gz")
 go_checksum=4b677d698c65370afa33757b6954ade60347aaca310ea92a63ed717d7cb0c2ff

@@ -149,7 +149,7 @@ get_config_version() {
 	if [ -f "${config_version_file}" ]; then
 		cat "${config_version_file}"
 	else
-		echo "unknown"
+		die "failed to find ${config_version_file}"
 	fi
 }
 

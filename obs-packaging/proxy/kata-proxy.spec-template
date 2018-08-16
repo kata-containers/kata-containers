@@ -6,11 +6,7 @@
 %global IMPORTNAME %{DOMAIN}/%{ORG}/%{PROJECT}
 %global GO_VERSION @GO_VERSION@
 
-%if 0%{?suse_version}
-%define LIBEXECDIR %{_libdir}
-%else
-%define LIBEXECDIR %{_libexecdir}
-%endif
+%define LIBEXECDIR /usr/libexec
 
 %undefine _missing_build_ids_terminate_build
 Name:      kata-proxy
