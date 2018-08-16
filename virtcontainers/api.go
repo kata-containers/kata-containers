@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"syscall"
 
+	"github.com/kata-containers/agent/protocols/grpc"
 	deviceApi "github.com/kata-containers/runtime/virtcontainers/device/api"
 	deviceConfig "github.com/kata-containers/runtime/virtcontainers/device/config"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -781,4 +782,94 @@ func AddDevice(sandboxID string, info deviceConfig.DeviceInfo) (deviceApi.Device
 	defer s.releaseStatelessSandbox()
 
 	return s.AddDevice(info)
+}
+
+func toggleInterface(sandboxID string, inf *grpc.Interface, add bool) (*grpc.Interface, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
+	}
+
+	lockFile, err := rwLockSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlockSandbox(lockFile)
+
+	s, err := fetchSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	if add {
+		return s.AddInterface(inf)
+	}
+	return s.RemoveInterface(inf)
+}
+
+// AddInterface is the virtcontainers add interface entry point.
+func AddInterface(sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+	return toggleInterface(sandboxID, inf, true)
+}
+
+// RemoveInterface is the virtcontainers remove interface entry point.
+func RemoveInterface(sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+	return toggleInterface(sandboxID, inf, false)
+}
+
+// ListInterfaces is the virtcontainers list interfaces entry point.
+func ListInterfaces(sandboxID string) ([]*grpc.Interface, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
+	}
+
+	lockFile, err := rLockSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlockSandbox(lockFile)
+
+	s, err := fetchSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.ListInterfaces()
+}
+
+// UpdateRoutes is the virtcontainers update routes entry point.
+func UpdateRoutes(sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
+	}
+
+	lockFile, err := rwLockSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlockSandbox(lockFile)
+
+	s, err := fetchSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	return s.UpdateRoutes(routes)
+}
+
+// ListRoutes is the virtcontainers list routes entry point.
+func ListRoutes(sandboxID string) ([]*grpc.Route, error) {
+	if sandboxID == "" {
+		return nil, errNeedSandboxID
+	}
+
+	lockFile, err := rLockSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+	defer unlockSandbox(lockFile)
+
+	s, err := fetchSandbox(sandboxID)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.ListRoutes()
 }

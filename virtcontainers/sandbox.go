@@ -8,19 +8,23 @@ package virtcontainers
 import (
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
 
+	"github.com/containernetworking/plugins/pkg/ns"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 
+	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	deviceManager "github.com/kata-containers/runtime/virtcontainers/device/manager"
+	"github.com/vishvananda/netlink"
 )
 
 // vmStartTimeout represents the time in seconds a sandbox can wait before
@@ -974,6 +978,93 @@ func (s *Sandbox) createNetwork() error {
 
 func (s *Sandbox) removeNetwork() error {
 	return s.network.remove(s, s.networkNS, s.networkNS.NetNsCreated)
+}
+
+func (s *Sandbox) generateNetInfo(inf *grpc.Interface) (NetworkInfo, error) {
+	hw, err := net.ParseMAC(inf.HwAddr)
+	if err != nil {
+		return NetworkInfo{}, err
+	}
+
+	var addrs []netlink.Addr
+	for _, addr := range inf.IPAddresses {
+		netlinkAddrStr := fmt.Sprintf("%s/%s", addr.Address, addr.Mask)
+		netlinkAddr, err := netlink.ParseAddr(netlinkAddrStr)
+		if err != nil {
+			return NetworkInfo{}, fmt.Errorf("could not parse %q: %v", netlinkAddrStr, err)
+		}
+
+		addrs = append(addrs, *netlinkAddr)
+	}
+
+	return NetworkInfo{
+		Iface: NetlinkIface{
+			LinkAttrs: netlink.LinkAttrs{
+				Name:         inf.Name,
+				HardwareAddr: hw,
+				MTU:          int(inf.Mtu),
+			},
+			Type: "",
+		},
+		Addrs: addrs,
+	}, nil
+}
+
+// AddInterface adds new nic to the sandbox.
+func (s *Sandbox) AddInterface(inf *grpc.Interface) (*grpc.Interface, error) {
+	netInfo, err := s.generateNetInfo(inf)
+	if err != nil {
+		return nil, err
+	}
+
+	endpoint, err := createVirtualNetworkEndpoint(len(s.networkNS.Endpoints), inf.Name, s.config.NetworkConfig.InterworkingModel)
+	if err != nil {
+		return nil, err
+	}
+	endpoint.SetProperties(netInfo)
+	if err := doNetNS(s.networkNS.NetNsPath, func(_ ns.NetNS) error {
+		return endpoint.HotAttach(s.hypervisor)
+	}); err != nil {
+		return nil, err
+	}
+
+	// Update the sandbox storage
+	s.networkNS.Endpoints = append(s.networkNS.Endpoints, endpoint)
+	if err := s.storage.storeSandboxNetwork(s.id, s.networkNS); err != nil {
+		return nil, err
+	}
+
+	// Add network for vm
+	return s.agent.updateInterface(inf)
+}
+
+// RemoveInterface removes a nic of the sandbox.
+func (s *Sandbox) RemoveInterface(inf *grpc.Interface) (*grpc.Interface, error) {
+	for i, endpoint := range s.networkNS.Endpoints {
+		if endpoint.HardwareAddr() == inf.HwAddr {
+			if err := endpoint.HotDetach(s.hypervisor, s.networkNS.NetNsCreated, s.networkNS.NetNsPath); err != nil {
+				return inf, err
+			}
+			s.networkNS.Endpoints = append(s.networkNS.Endpoints[:i], s.networkNS.Endpoints[i+1:]...)
+			break
+		}
+	}
+	return nil, nil
+}
+
+// ListInterfaces lists all nics and their configurations in the sandbox.
+func (s *Sandbox) ListInterfaces() ([]*grpc.Interface, error) {
+	return s.agent.listInterfaces()
+}
+
+// UpdateRoutes updates the sandbox route table (e.g. for portmapping support).
+func (s *Sandbox) UpdateRoutes(routes []*grpc.Route) ([]*grpc.Route, error) {
+	return s.agent.updateRoutes(routes)
+}
+
+// ListRoutes lists all routes and their configurations in the sandbox.
+func (s *Sandbox) ListRoutes() ([]*grpc.Route, error) {
+	return s.agent.listRoutes()
 }
 
 // startVM starts the VM.

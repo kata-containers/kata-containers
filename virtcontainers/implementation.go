@@ -12,6 +12,7 @@ package virtcontainers
 import (
 	"syscall"
 
+	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -147,4 +148,29 @@ func (impl *VCImpl) ResumeContainer(sandboxID, containerID string) error {
 // AddDevice will add a device to sandbox
 func (impl *VCImpl) AddDevice(sandboxID string, info config.DeviceInfo) (api.Device, error) {
 	return AddDevice(sandboxID, info)
+}
+
+// AddInterface implements the VC function of the same name.
+func (impl *VCImpl) AddInterface(sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+	return AddInterface(sandboxID, inf)
+}
+
+// RemoveInterface implements the VC function of the same name.
+func (impl *VCImpl) RemoveInterface(sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+	return RemoveInterface(sandboxID, inf)
+}
+
+// ListInterfaces implements the VC function of the same name.
+func (impl *VCImpl) ListInterfaces(sandboxID string) ([]*grpc.Interface, error) {
+	return ListInterfaces(sandboxID)
+}
+
+// UpdateRoutes implements the VC function of the same name.
+func (impl *VCImpl) UpdateRoutes(sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error) {
+	return UpdateRoutes(sandboxID, routes)
+}
+
+// ListRoutes implements the VC function of the same name.
+func (impl *VCImpl) ListRoutes(sandboxID string) ([]*grpc.Route, error) {
+	return ListRoutes(sandboxID)
 }
