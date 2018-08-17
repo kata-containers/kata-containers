@@ -91,7 +91,7 @@ install_image() {
 install_kernel() {
 	go get "github.com/${project}/packaging" || true
 	pushd ${GOPATH}/src/github.com/${project}/packaging >>/dev/null
-		git checkout "${kata_version}-kernel-config"
+	git checkout "${kata_version}-kernel-config"
 	popd >>/dev/null
 	pushd "${script_dir}/../kernel" >>/dev/null
 

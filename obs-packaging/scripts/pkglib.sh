@@ -33,180 +33,197 @@ else
 	echo "Go not installed using $GO_ARCH to install go in dockerfile"
 fi
 
-function display_help()
-{
+function display_help() {
 	cat <<-EOL
-	$SCRIPT_NAME
-
-	This script is intended to create Kata Containers packages for the OBS
-	(Open Build Service) platform.
-
-    Usage:
-        $SCRIPT_NAME [options]
-
-	Options:
-
-    -l         --local-build     Build the runtime locally
-    -b         --branch          Build with a given branch name
-    -p         --push            Push changes to OBS
-    -a         --api-url         Especify an OBS API (e.g. custom private OBS)
-    -r         --obs-repository  An OBS repository to push the changes.
-    -w         --workdir         Directory of a working copy of the OBS runtime repo
-    -v         --verbose         Set the -x flag for verbosity
-    -C         --clean           Clean the repository
-    -V         --verify          Verify the environment
-    -h         --help            Display this help message
-
-    Usage examples:
-
-    $SCRIPT_NAME --local-build --branch staging
-    $SCRIPT_NAME --push --api-url http://127.0.0.1
-    $SCRIPT_NAME --push --obs-repository home:userx/repository
-    $SCRIPT_NAME --push
-
+		$SCRIPT_NAME
+		
+		This script is intended to create Kata Containers packages for the OBS
+		(Open Build Service) platform.
+		
+		    Usage:
+		        $SCRIPT_NAME [options]
+		
+		Options:
+		
+		    -l         --local-build     Build the runtime locally
+		    -b         --branch          Build with a given branch name
+		    -p         --push            Push changes to OBS
+		    -a         --api-url         Especify an OBS API (e.g. custom private OBS)
+		    -r         --obs-repository  An OBS repository to push the changes.
+		    -w         --workdir         Directory of a working copy of the OBS runtime repo
+		    -v         --verbose         Set the -x flag for verbosity
+		    -C         --clean           Clean the repository
+		    -V         --verify          Verify the environment
+		    -h         --help            Display this help message
+		
+		    Usage examples:
+		
+		    $SCRIPT_NAME --local-build --branch staging
+		    $SCRIPT_NAME --push --api-url http://127.0.0.1
+		    $SCRIPT_NAME --push --obs-repository home:userx/repository
+		    $SCRIPT_NAME --push
+		
 	EOL
 	exit 1
 }
 
-die()
-{
+die() {
 	msg="$*"
 	echo >&2 "ERROR: $msg"
 	exit 1
 }
 
-info()
-{
+info() {
 	msg="$*"
 	echo "INFO: $msg"
 }
 
-function verify()
-{
-    # This function perform some checks in order to make sure
-    # the script will run flawlessly.
+function verify() {
+	# This function perform some checks in order to make sure
+	# the script will run flawlessly.
 
-    # Make sure this script is called from ./
-    [ "$SCRIPT_DIR" != "." ] && die "The script must be called from its base dir."
+	# Make sure this script is called from ./
+	[ "$SCRIPT_DIR" != "." ] && die "The script must be called from its base dir."
 
-    # Verify if osc is installed, exit otherwise.
-    [ ! -x "$(command -v osc)" ] && die "osc is not installed."
+	# Verify if osc is installed, exit otherwise.
+	[ ! -x "$(command -v osc)" ] && die "osc is not installed."
 
-    info "OK"
+	info "OK"
 }
 
-function clean()
-{
-    # This function clean generated files
-    for file in "$@"
-    do
-        [ -e $file ] && rm -v $file
-    done
-    [ -e ./debian.changelog ] && git checkout ./debian.changelog
-    [ -e ./release ] && git checkout ./release
-    echo "Clean done."
+function clean() {
+	# This function clean generated files
+	for file in "$@"; do
+		[ -e $file ] && rm -v $file
+	done
+	[ -e ./debian.changelog ] && git checkout ./debian.changelog
+	[ -e ./release ] && git checkout ./release
+	echo "Clean done."
 }
 
-function get_git_info()
-{
-    AUTHOR=${AUTHOR:-$(git config user.name)}
-    AUTHOR_EMAIL=${AUTHOR_EMAIL:-$(git config user.email)}
+function get_git_info() {
+	AUTHOR=${AUTHOR:-$(git config user.name)}
+	AUTHOR_EMAIL=${AUTHOR_EMAIL:-$(git config user.email)}
 }
 
-function set_versions()
-{
-    local commit_hash="$1"
-    hash_tag="$commit_hash"
-    short_hashtag="${hash_tag:0:7}"
+function set_versions() {
+	local commit_hash="$1"
+	hash_tag="$commit_hash"
+	short_hashtag="${hash_tag:0:7}"
 }
 
-function changelog_update {
-    d=$(date -R)
-    cat <<< "$PKG_NAME ($VERSION) stable; urgency=medium
+function changelog_update() {
+	d=$(date -R)
+	cat <<<"$PKG_NAME ($VERSION) stable; urgency=medium
 
   * Update $PKG_NAME $VERSION ${hash_tag:0:7}
 
  -- $AUTHOR <$AUTHOR_EMAIL>  $d
-" > debian.changelog
+" >debian.changelog
 	# Append, so it can be copied to the OBS repository
 	GENERATED_FILES+=('debian.changelog')
 }
 
-function local_build()
-{
-    [ ! -e $PACKAGING_DIR ] && mkdir $PACKAGING_DIR
-    [ ! -e $LOG_DIR ] && mkdir $LOG_DIR
+function local_build() {
+	[ ! -e $PACKAGING_DIR ] && mkdir $PACKAGING_DIR
+	[ ! -e $LOG_DIR ] && mkdir $LOG_DIR
 
-    pushd $OBS_WORKDIR
+	pushd $OBS_WORKDIR
 
-    BUILD_ARGS=('--local-package' '--no-verify' '--noservice' '--trust-all-projects' '--keep-pkgs=/var/packaging/results')
-    [ "$OFFLINE" == "true" ] && BUILD_ARGS+=('--offline')
+	BUILD_ARGS=('--local-package' '--no-verify' '--noservice' '--trust-all-projects' '--keep-pkgs=/var/packaging/results')
+	[ "$OFFLINE" == "true" ] && BUILD_ARGS+=('--offline')
 
-    osc service run
-    for distro in ${BUILD_DISTROS[@]}
-    do
-        # If more distros are supported, add here the relevant validations.
-        if [[ "$distro" =~ ^Fedora.* ]] || [[ "$distro" =~ ^CentOS.* ]]
-        then
-	    echo "Perform a local build for ${distro}"
-	    osc build ${BUILD_ARGS[@]} \
-                ${distro} $BUILD_ARCH *.spec | tee ${LOG_DIR}/${distro}_${PKG_NAME}_build.log
+	osc service run
+	for distro in ${BUILD_DISTROS[@]}; do
+		# If more distros are supported, add here the relevant validations.
+		if [[ $distro =~ ^Fedora.* ]] || [[ $distro =~ ^CentOS.* ]]; then
+			echo "Perform a local build for ${distro}"
+			osc build ${BUILD_ARGS[@]} \
+				${distro} $BUILD_ARCH *.spec | tee ${LOG_DIR}/${distro}_${PKG_NAME}_build.log
 
-        elif [[ "$distro" =~ ^xUbuntu.* ]]
-        then
-	    echo "Perform a local build for ${distro}"
-	    osc build ${BUILD_ARGS[@]} \
-		${distro} $BUILD_ARCH *.dsc | tee ${LOG_DIR}/${distro}_${PKG_NAME}_build.log
-        fi
-    done
+		elif [[ $distro =~ ^xUbuntu.* ]]; then
+			echo "Perform a local build for ${distro}"
+			osc build ${BUILD_ARGS[@]} \
+				${distro} $BUILD_ARCH *.dsc | tee ${LOG_DIR}/${distro}_${PKG_NAME}_build.log
+		fi
+	done
 }
 
-function checkout_repo()
-{
-    local REPO="${1}"
-    if [ -z "${OBS_WORKDIR:-}" ]
-    then
-        OBS_WORKDIR=$(mktemp -d -u -t obs-repo.XXXXXXXXXXX) || exit 1
-        osc co "${REPO}" -o "${OBS_WORKDIR}"
-    fi
-    find "${OBS_WORKDIR}" -maxdepth 1 -mindepth 1 ! -name '.osc' -prune  -exec echo remove {} \; -exec  rm -rf {} \;
+function checkout_repo() {
+	local REPO="${1}"
+	if [ -z "${OBS_WORKDIR:-}" ]; then
+		OBS_WORKDIR=$(mktemp -d -u -t obs-repo.XXXXXXXXXXX) || exit 1
+		osc co "${REPO}" -o "${OBS_WORKDIR}"
+	fi
+	find "${OBS_WORKDIR}" -maxdepth 1 -mindepth 1 ! -name '.osc' -prune -exec echo remove {} \; -exec rm -rf {} \;
 
-    mv "${GENERATED_FILES[@]}" "${OBS_WORKDIR}"
-    cp "${STATIC_FILES[@]}" "$OBS_WORKDIR"
+	mv "${GENERATED_FILES[@]}" "${OBS_WORKDIR}"
+	cp "${STATIC_FILES[@]}" "$OBS_WORKDIR"
 }
 
-function obs_push()
-{
-    pushd $OBS_WORKDIR
-    osc addremove
-    osc commit -m "Update ${PKG_NAME} $VERSION: ${hash_tag:0:7}"
-    popd
+function obs_push() {
+	pushd $OBS_WORKDIR
+	osc addremove
+	osc commit -m "Update ${PKG_NAME} $VERSION: ${hash_tag:0:7}"
+	popd
 }
 
-function cli()
-{
+function cli() {
 	OPTS=$(getopt -o abclprwvCVh: --long api-url,branch,commit-id,local-build,push,obs-repository,workdir,verbose,clean,verify,help -- "$@")
 	while true; do
 		case "${1}" in
-			-b | --branch )         BRANCH="true"; OBS_REVISION="$2"; shift 2;;
-			-l | --local-build )    LOCAL_BUILD="true"; shift;;
-			-p | --push )           OBS_PUSH="true"; shift;;
-			-r | --obs-repository ) PROJECT_REPO="$2"; shift 2;;
-			-w | --workdir )        OBS_WORKDIR="$2"; shift 2;;
-			-v | --verbose )        VERBOSE="true"; shift;;
-			-o | --offline )        OFFLINE="true"; shift;;
-			-C | --clean )          clean ${GENERATED_FILES[@]}; exit $?;;
-			-V | --verify )         verify; exit $?;;
-			-h | --help )           display_help; exit $?;;
-			-- )               shift; break ;;
-			* )                break ;;
+		-b | --branch)
+			BRANCH="true"
+			OBS_REVISION="$2"
+			shift 2
+			;;
+		-l | --local-build)
+			LOCAL_BUILD="true"
+			shift
+			;;
+		-p | --push)
+			OBS_PUSH="true"
+			shift
+			;;
+		-r | --obs-repository)
+			PROJECT_REPO="$2"
+			shift 2
+			;;
+		-w | --workdir)
+			OBS_WORKDIR="$2"
+			shift 2
+			;;
+		-v | --verbose)
+			VERBOSE="true"
+			shift
+			;;
+		-o | --offline)
+			OFFLINE="true"
+			shift
+			;;
+		-C | --clean)
+			clean ${GENERATED_FILES[@]}
+			exit $?
+			;;
+		-V | --verify)
+			verify
+			exit $?
+			;;
+		-h | --help)
+			display_help
+			exit $?
+			;;
+		--)
+			shift
+			break
+			;;
+		*) break ;;
 		esac
 	done
 
 }
 
-function build_pkg()
-{
+function build_pkg() {
 
 	obs_repository="${1}"
 
@@ -226,7 +243,7 @@ function build_pkg()
 
 }
 
-function generate_files () {
+function generate_files() {
 
 	directory=$1
 	replace_list=$2
@@ -242,8 +259,8 @@ function generate_files () {
 
 	# check replace list
 	# key=val
-	for replace in "${replace_list[@]}" ; do
-		[[ "$replace" = *"="* ]] || die "invalid replace $replace"
+	for replace in "${replace_list[@]}"; do
+		[[ $replace == *"="* ]] || die "invalid replace $replace"
 		local key="${replace%%=*}"
 		local value="${replace##*=}"
 		[ -n "$key" ] || die "${replace} key is empty"
@@ -255,13 +272,13 @@ function generate_files () {
 		genfile="${f%-template}"
 		cp "$f" "${genfile}"
 		info "Generate file ${genfile}"
-		for replace in "${replace_list[@]}" ; do
-			[[ "$replace" = *"="* ]] || die "invalid replace $replace"
+		for replace in "${replace_list[@]}"; do
+			[[ $replace == *"="* ]] || die "invalid replace $replace"
 			local key="${replace%%=*}"
 			local value="${replace##*=}"
 			export k="@${key}@"
 			export v="$value"
-			perl -p -e 's/$ENV{k}/$ENV{v}/g' "${genfile}" > "${genfile}.out"
+			perl -p -e 's/$ENV{k}/$ENV{v}/g' "${genfile}" >"${genfile}.out"
 			mv "${genfile}.out" ${genfile}
 		done
 	done
@@ -299,11 +316,11 @@ function get_obs_pkg_release() {
 
 	spec_file=$(find "${repo_dir}" -maxdepth 1 -type f -name '*.spec' | head -1)
 	# Find in specfile in Release: XX field.
-	release=$(grep -oP  'Release:\s+[0-9]+' "${spec_file}"  | grep -oP '[0-9]+')
+	release=$(grep -oP 'Release:\s+[0-9]+' "${spec_file}" | grep -oP '[0-9]+')
 
 	if [ -z "${release}" ]; then
 		# Not release number found find in "%define release XX"
-		release=$(grep -oP  '%define\s+release\s+[0-9]+' "${spec_file}"  | grep -oP '[0-9]+')
+		release=$(grep -oP '%define\s+release\s+[0-9]+' "${spec_file}" | grep -oP '[0-9]+')
 	fi
 
 	release_file=$(find "${repo_dir}" -maxdepth 1 -type f -name 'pkg-release')
@@ -335,11 +352,11 @@ function find_patches() {
 	patches=$(find patches/ -type f -name '*.patch' -exec basename {} \;)
 	n="1"
 	rm -f debian.series
-	for p in ${patches} ; do
+	for p in ${patches}; do
 		STATIC_FILES+=("patches/$p")
 		RPM_PATCH_LIST+="Patch00${n}: $p"$'\n'
 		RPM_APPLY_PATCHES+="%patch00${n} -p1"$'\n'
-		echo "$p" >> debian.series
+		echo "$p" >>debian.series
 		((n++))
 	done
 	GENERATED_FILES+=(debian.series)
