@@ -273,6 +273,14 @@ func createSandbox(ctx context.Context, ociSpec oci.CompatOCISpec, runtimeConfig
 		return vc.Process{}, err
 	}
 
+	// Run pre-start OCI hooks.
+	err = enterNetNS(sandboxConfig.NetworkConfig.NetNSPath, func() error {
+		return preStartHooks(ctx, ociSpec, containerID, bundlePath)
+	})
+	if err != nil {
+		return vc.Process{}, err
+	}
+
 	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig)
 	if err != nil {
 		return vc.Process{}, err
@@ -331,7 +339,15 @@ func createContainer(ctx context.Context, ociSpec oci.CompatOCISpec, containerID
 	setExternalLoggers(ctx, kataLog)
 	span.SetTag("sandbox", sandboxID)
 
-	_, c, err := vci.CreateContainer(ctx, sandboxID, contConfig)
+	s, c, err := vci.CreateContainer(ctx, sandboxID, contConfig)
+	if err != nil {
+		return vc.Process{}, err
+	}
+
+	// Run pre-start OCI hooks.
+	err = enterNetNS(s.GetNetNs(), func() error {
+		return preStartHooks(ctx, ociSpec, containerID, bundlePath)
+	})
 	if err != nil {
 		return vc.Process{}, err
 	}

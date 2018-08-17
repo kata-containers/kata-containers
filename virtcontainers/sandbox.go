@@ -319,9 +319,6 @@ type SandboxConfig struct {
 
 	Hostname string
 
-	// Field specific to OCI specs, needed to setup all the hooks
-	Hooks Hooks
-
 	// VMConfig is the VM configuration to set for this sandbox.
 	VMConfig Resources
 
@@ -975,13 +972,6 @@ func (s *Sandbox) Delete() error {
 func (s *Sandbox) createNetwork() error {
 	span, _ := s.trace("createNetwork")
 	defer span.Finish()
-
-	// Execute prestart hooks inside netns
-	if err := s.network.run(s.config.NetworkConfig.NetNSPath, func() error {
-		return s.config.Hooks.preStartHooks(s)
-	}); err != nil {
-		return err
-	}
 
 	// Add the network
 	if err := s.network.add(s); err != nil {

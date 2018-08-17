@@ -12,6 +12,7 @@ import (
 	"os"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	vcAnnot "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -115,6 +116,11 @@ func delete(ctx context.Context, containerID string, force bool) error {
 		}
 	default:
 		return fmt.Errorf("Invalid container type found")
+	}
+
+	// Run post-stop OCI hooks.
+	if err := postStopHooks(ctx, ociSpec, sandboxID, status.Annotations[vcAnnot.BundlePathKey]); err != nil {
+		return err
 	}
 
 	// In order to prevent any file descriptor leak related to cgroups files
