@@ -1064,16 +1064,12 @@ type RTC struct {
 
 // Valid returns true if the RTC structure is valid and complete.
 func (rtc RTC) Valid() bool {
-	if rtc.Clock != "" {
-		if rtc.Clock != Host && rtc.Clock != VM {
-			return false
-		}
+	if rtc.Clock != Host && rtc.Clock != VM {
+		return false
 	}
 
-	if rtc.DriftFix != "" {
-		if rtc.DriftFix != Slew && rtc.DriftFix != NoDriftFix {
-			return false
-		}
+	if rtc.DriftFix != Slew && rtc.DriftFix != NoDriftFix {
+		return false
 	}
 
 	return true
@@ -1239,7 +1235,7 @@ type Config struct {
 	// Path is the qemu binary path.
 	Path string
 
-	// Ctx is not used at the moment.
+	// Ctx is the context used when launching qemu.
 	Ctx context.Context
 
 	// Name is the qemu guest name
@@ -1636,17 +1632,18 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 		return "", err
 	}
 
-	return LaunchCustomQemu(config.Ctx, config.Path, config.qemuParams,
+	ctx := config.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	return LaunchCustomQemu(ctx, config.Path, config.qemuParams,
 		config.fds, nil, logger)
 }
 
 // LaunchCustomQemu can be used to launch a new qemu instance.
 //
 // The path parameter is used to pass the qemu executable path.
-//
-// The ctx parameter is not currently used but has been added so that the
-// signature of this function will not need to change when launch cancellation
-// is implemented.
 //
 // params is a slice of options to pass to qemu-system-x86_64 and fds is a
 // list of open file descriptors that are to be passed to the spawned qemu
@@ -1672,7 +1669,7 @@ func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*
 	}
 
 	/* #nosec */
-	cmd := exec.Command(path, params...)
+	cmd := exec.CommandContext(ctx, path, params...)
 	if len(fds) > 0 {
 		logger.Infof("Adding extra file %v", fds)
 		cmd.ExtraFiles = fds
