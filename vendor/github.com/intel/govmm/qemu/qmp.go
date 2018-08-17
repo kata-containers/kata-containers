@@ -671,7 +671,8 @@ func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID string)
 // to a previous call to ExecuteBlockdevAdd.  devID is the id of the device to
 // add.  Both strings must be valid QMP identifiers.  driver is the name of the
 // driver,e.g., virtio-blk-pci, and bus is the name of the bus.  bus is optional.
-func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus string) error {
+// shared denotes if the drive can be shared allowing it to be passed more than once.
+func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus string, shared bool) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": driver,
@@ -679,6 +680,9 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 	}
 	if bus != "" {
 		args["bus"] = bus
+	}
+	if shared && (q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 10)) {
+		args["share-rw"] = "on"
 	}
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
@@ -689,8 +693,9 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 // the device to add.  Both strings must be valid QMP identifiers.  driver is the name of the
 // scsi driver,e.g., scsi-hd, and bus is the name of a SCSI controller bus.
 // scsiID is the SCSI id, lun is logical unit number. scsiID and lun are optional, a negative value
-// for scsiID and lun is ignored.
-func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus string, scsiID, lun int) error {
+// for scsiID and lun is ignored. shared denotes if the drive can be shared allowing it
+// to be passed more than once.
+func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus string, scsiID, lun int, shared bool) error {
 	// TBD: Add drivers for scsi passthrough like scsi-generic and scsi-block
 	drivers := []string{"scsi-hd", "scsi-cd", "scsi-disk"}
 
@@ -717,6 +722,9 @@ func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, drive
 	}
 	if lun >= 0 {
 		args["lun"] = lun
+	}
+	if shared && (q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 10)) {
+		args["share-rw"] = "on"
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
@@ -820,8 +828,9 @@ func (q *QMP) ExecuteDeviceDel(ctx context.Context, devID string) error {
 
 // ExecutePCIDeviceAdd is the PCI version of ExecuteDeviceAdd. This function can be used
 // to hot plug PCI devices on PCI(E) bridges, unlike ExecuteDeviceAdd this function receive the
-// device address on its parent bus. bus is optional.
-func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus string) error {
+// device address on its parent bus. bus is optional. shared denotes if the drive can be shared
+// allowing it to be passed more than once.
+func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus string, shared bool) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": driver,
@@ -831,6 +840,10 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 	if bus != "" {
 		args["bus"] = bus
 	}
+	if shared && (q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 10)) {
+		args["share-rw"] = "on"
+	}
+
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
@@ -858,6 +871,24 @@ func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus
 		"driver": "vfio-pci",
 		"host":   bdf,
 		"addr":   addr,
+	}
+	if bus != "" {
+		args["bus"] = bus
+	}
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
+// ExecutePCIVFIOMediatedDeviceAdd adds a VFIO mediated device to a QEMU instance using the device_add command.
+// This function can be used to hot plug VFIO mediated devices on PCI(E) bridges, unlike
+// ExecuteVFIODeviceAdd this function receives the bus and the device address on its parent bus.
+// bus is optional. devID is the id of the device to add. Must be valid QMP identifier. sysfsdev is the VFIO
+// mediated device.
+func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsdev, addr, bus string) error {
+	args := map[string]interface{}{
+		"id":       devID,
+		"driver":   "vfio-pci",
+		"sysfsdev": sysfsdev,
+		"addr":     addr,
 	}
 	if bus != "" {
 		args["bus"] = bus
@@ -956,12 +987,17 @@ func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string
 }
 
 // ExecutePCIVSockAdd adds a vhost-vsock-pci bus
-func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID, vhostfd string, disableModern bool) error {
+func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID, vhostfd, addr, bus string, disableModern bool) error {
 	args := map[string]interface{}{
 		"driver":    VHostVSockPCI,
 		"id":        id,
 		"guest-cid": guestCID,
 		"vhostfd":   vhostfd,
+		"addr":      addr,
+	}
+
+	if bus != "" {
+		args["bus"] = bus
 	}
 
 	if disableModern {
