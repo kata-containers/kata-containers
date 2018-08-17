@@ -17,10 +17,10 @@ echo "create containerd configuration for Kata"
 mkdir -p /etc/containerd/
 
 if [ -f /etc/containerd/config.toml ]; then
-  cp /etc/containerd/config.toml /etc/containerd/config.toml.bak
+	cp /etc/containerd/config.toml /etc/containerd/config.toml.bak
 fi
 
-cat << EOT | tee /etc/containerd/config.toml
+cat <<EOT | tee /etc/containerd/config.toml
 [plugins]
     [plugins.cri.containerd]
       [plugins.cri.containerd.untrusted_workload_runtime]

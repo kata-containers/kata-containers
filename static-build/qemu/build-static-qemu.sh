@@ -8,7 +8,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-script_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "${script_dir}/../../scripts/lib.sh"
 
@@ -23,11 +23,10 @@ if [ -z "$qemu_repo" ]; then
 	[ -n "$qemu_url" ] || die "failed to get qemu url"
 	qemu_repo="${qemu_url}.git"
 fi
-[ -n "$qemu_repo" ] ||  die "failed to get qemu repo"
-
+[ -n "$qemu_repo" ] || die "failed to get qemu repo"
 
 [ -n "$qemu_version" ] || qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.version")
-[ -n "$qemu_version" ] ||  die "failed to get qemu version"
+[ -n "$qemu_version" ] || die "failed to get qemu version"
 
 info "Build ${qemu_repo} version: ${qemu_version}"
 

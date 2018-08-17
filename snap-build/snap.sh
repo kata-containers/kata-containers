@@ -12,28 +12,28 @@ set -x -e
 
 sudo apt-get update -y
 sudo apt-get install -y \
-	 build-essential \
-	 cpio \
-	 docker.io \
-	 golang-go \
-	 libattr1-dev \
-	 libcap-dev \
-	 libcap-ng-dev \
-	 libdw-dev \
-	 libelf-dev \
-	 libfdt-dev \
-	 libglib2.0-dev \
-	 libiberty-dev \
-	 libnewt-dev \
-	 libpci-dev \
-	 libpixman-1-dev \
-	 librbd-dev \
-	 libssl-dev \
-	 libz-dev \
-	 openssl \
-	 python \
-	 snapcraft \
-	 snapd
+	build-essential \
+	cpio \
+	docker.io \
+	golang-go \
+	libattr1-dev \
+	libcap-dev \
+	libcap-ng-dev \
+	libdw-dev \
+	libelf-dev \
+	libfdt-dev \
+	libglib2.0-dev \
+	libiberty-dev \
+	libnewt-dev \
+	libpci-dev \
+	libpixman-1-dev \
+	librbd-dev \
+	libssl-dev \
+	libz-dev \
+	openssl \
+	python \
+	snapcraft \
+	snapd
 
 # start docker
 sudo systemctl start docker

@@ -36,12 +36,12 @@ RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 
 set_versions $kata_shim_hash
 replace_list=(
-"GO_CHECKSUM=$go_checksum"
-"GO_VERSION=$go_version"
-"GO_ARCH=$GO_ARCH"
-"HASH=$short_hashtag"
-"RELEASE=$RELEASE"
-"VERSION=$VERSION"
+	"GO_CHECKSUM=$go_checksum"
+	"GO_VERSION=$go_version"
+	"GO_ARCH=$GO_ARCH"
+	"HASH=$short_hashtag"
+	"RELEASE=$RELEASE"
+	"VERSION=$VERSION"
 )
 
 verify

@@ -23,7 +23,7 @@ scp="scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o Identiti
 gen_seed() {
 	rm -f "${seed_img}"
 	truncate --size 2M "${seed_img}"
-	mkfs.vfat -n cidata "${seed_img}" &> /dev/null
+	mkfs.vfat -n cidata "${seed_img}" &>/dev/null
 
 	if [ -n "${http_proxy}" ]; then
 		apt_proxy="apt:\n  https_proxy: ${https_proxy}\n  proxy: ${http_proxy}"
@@ -38,7 +38,7 @@ gen_seed() {
 
 	docker_dns="$(get_dns)"
 
-	[ ! -f "${id_rsa_file}" ] && ssh-keygen -t rsa -f ${id_rsa_file} -P '' &> /dev/null
+	[ ! -f "${id_rsa_file}" ] && ssh-keygen -t rsa -f ${id_rsa_file} -P '' &>/dev/null
 	ssh_key="$(cat ${id_rsa_pub_file})"
 
 	sed \
@@ -48,9 +48,9 @@ gen_seed() {
 		-e "s|@DOCKER_ENV@|""${docker_env}""|g" \
 		-e "s|@DOCKER_DNS@|""${docker_dns}""|g" \
 		-e "s|@ENV@|""${env}""|g" \
-		${seed_dir}/user-data.in > ${seed_dir}/user-data
+		${seed_dir}/user-data.in >${seed_dir}/user-data
 
-	mcopy -oi "${seed_img}" ${seed_dir}/user-data  ${seed_dir}/meta-data ::
+	mcopy -oi "${seed_img}" ${seed_dir}/user-data ${seed_dir}/meta-data ::
 }
 
 poweroff_and_die() {
@@ -77,13 +77,13 @@ build_arch() {
 
 	# run QEMU
 	run_qemu "${arch_qemu}" \
-			 "${arch_qemu_cpu}" \
-			 "${arch_qemu_machine}" \
-			 "${ip}" \
-			 "${port}" \
-			 "${arch_image}" \
-			 "${seed_img}" \
-			 "${arch_qemu_extra_opts}"
+		"${arch_qemu_cpu}" \
+		"${arch_qemu_machine}" \
+		"${ip}" \
+		"${port}" \
+		"${arch_image}" \
+		"${seed_img}" \
+		"${arch_qemu_extra_opts}"
 
 	# copy snap script to VM
 	${scp} -P "${port}" "${snap_sh}" "${ip}:~/" || poweroff_and_die "${ip}" "${port}" "Could not copy snap script"
@@ -92,15 +92,15 @@ build_arch() {
 	${ssh} "${ip}" -p "${port}" "~/snap.sh" || poweroff_and_die "${ip}" "${port}" "Failed to run build script"
 
 	# copy snap image from VM
-	${scp} -P "${port}" "${ip}:~/packaging/*.snap" . ||  poweroff_and_die "${ip}" "${port}" "Failed to get snap image"
+	${scp} -P "${port}" "${ip}:~/packaging/*.snap" . || poweroff_and_die "${ip}" "${port}" "Failed to get snap image"
 
 	# poweroff VM
 	${ssh} "${ip}" -p "${port}" sudo poweroff
 }
 
-help()
-{
-	usage=$(cat << EOF
+help() {
+	usage=$(
+		cat <<EOF
 Usage: $0 [-h] [options]
   Description:
     Build snap images.
@@ -109,9 +109,12 @@ Usage: $0 [-h] [options]
     -h,         Show this help text and exit.
 
   Supported architectures:
-    $(IFS=$'\t'; echo -e "${supported_archs[*]}")
+    $(
+			IFS=$'\t'
+			echo -e "${supported_archs[*]}"
+		)
 EOF
-)
+	)
 	echo "$usage"
 }
 
@@ -121,20 +124,20 @@ main() {
 	while getopts "a:h" opt; do
 		case ${opt} in
 		a)
-		    arch="${OPTARG}"
-		    ;;
+			arch="${OPTARG}"
+			;;
 		h)
-		    help
-		    exit 0;
-		    ;;
+			help
+			exit 0
+			;;
 		?)
-		    # parse failure
-		    help
-		    die "Failed to parse arguments"
-		    ;;
+			# parse failure
+			help
+			die "Failed to parse arguments"
+			;;
 		esac
 	done
-	shift $((OPTIND-1))
+	shift $((OPTIND - 1))
 
 	[ -z "${arch}" ] && help && die "Mandatory architecture not supplied"
 	if ! [[ " ${supported_archs[@]} " =~ " ${arch} " ]]; then
@@ -145,10 +148,10 @@ main() {
 	gen_seed
 
 	if [ "${arch}" != "all" ]; then
-		build_arch "${arch}" &> "${arch}.log"
+		build_arch "${arch}" &>"${arch}.log"
 	else
 		for a in ${supported_archs[@]}; do
-			(build_arch "${a}" &> "${a}.log") &
+			(build_arch "${a}" &>"${a}.log") &
 		done
 		wait
 	fi

@@ -5,12 +5,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-error(){
+error() {
 	msg="$*"
 	echo "ERROR: $msg" >&2
 }
 
-die(){
+die() {
 	error "$*"
 	exit 1
 }
@@ -46,7 +46,10 @@ setup_image() {
 	img_url=$1
 	img=$2
 	[ -f "${img}" ] && return
-	{ download "${img_url}" "$(dirname ${img})"; ret=$?; } || true
+	{
+		download "${img_url}" "$(dirname ${img})"
+		ret=$?
+	} || true
 	[ ${ret} != 0 ] && rm -f "${img}" && return
 	qemu-img resize "${img}" +5G
 }
@@ -63,7 +66,7 @@ ping_vm() {
 	timeout=$4
 	minute=60
 	sleeptime=10
-	timeoutsec=$((timeout*minute))
+	timeoutsec=$((timeout * minute))
 	tries=$((timeoutsec/sleeptime))
 
 	for i in $(seq 1 ${tries}); do
@@ -102,9 +105,9 @@ run_qemu() {
 	fi
 
 	qemu-system-${arch} -cpu "${cpu}" -machine "${machine}" -smp cpus=4 -m 2048M \
-				-net nic,model=virtio -device virtio-rng-pci -net user,hostfwd=tcp:${ip}:${port}-:22,dnssearch="$(get_dnssearch)" \
-				${img_opts} ${seed_opts} \
-				-display none -vga none -daemonize ${extra_opts}
+		-net nic,model=virtio -device virtio-rng-pci -net user,hostfwd=tcp:${ip}:${port}-:22,dnssearch="$(get_dnssearch)" \
+		${img_opts} ${seed_opts} \
+		-display none -vga none -daemonize ${extra_opts}
 	[ $? != 0 ] && return 1
 
 	# depending of the host's hw, it takes for around ~15 minutes

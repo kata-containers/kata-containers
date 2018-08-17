@@ -10,11 +10,11 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-script_dir=$( cd $( dirname "${BASH_SOURCE[0]}" ) && pwd )
+script_dir=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
 script_name="$(basename "${BASH_SOURCE[0]}")"
 cache_dir=${PWD}/obs-cache
 #where packaing repo lives
-packaging_repo_dir=$(cd "${script_dir}/.." && pwd )
+packaging_repo_dir=$(cd "${script_dir}/.." && pwd)
 #where results will be stored
 host_datadir="${PWD}/pkgs"
 obs_image="obs-kata"
@@ -27,7 +27,7 @@ PUSH=${PUSH:-}
 GO_ARCH=$(go env GOARCH)
 export GO_ARCH
 
-docker_run(){
+docker_run() {
 	local cmd="$@"
 	sudo docker run \
 		--rm \
@@ -39,7 +39,7 @@ docker_run(){
 		--env no_proxy="${no_proxy}" \
 		--env PUSH="${PUSH}" \
 		--env DEBUG="${DEBUG:-}" \
-		--env OBS_SUBPROJECT="${OBS_SUBPROJECT:-}"\
+		--env OBS_SUBPROJECT="${OBS_SUBPROJECT:-}" \
 		-v "${HOME}/.bashrc":/root/.bashrc \
 		-v "$cache_dir":/var/tmp/osbuild-packagecache/ \
 		-v "$packaging_repo_dir":${packaging_repo_dir} \
@@ -47,10 +47,10 @@ docker_run(){
 		-v "$HOME/.oscrc":/root/.oscrc \
 		-ti "$obs_image" bash -c "${cmd}"
 }
-usage(){
+usage() {
 	msg="${1:-}"
 	exit_code=$"${2:-0}"
-cat << EOT
+	cat <<EOT
 ${msg}
 Usage:
 ${script_name} <kata-branch>
@@ -58,16 +58,16 @@ EOT
 	exit "${exit_code}"
 }
 
-main(){
+main() {
 	local branch="${1:-}"
 	[ -n "${branch}" ] || usage "missing branch" "1"
-	pushd "${script_dir}/kata-containers-image/" >> /dev/null
+	pushd "${script_dir}/kata-containers-image/" >>/dev/null
 	echo "Building image"
 	image_tarball=$(find . -name 'kata-containers-'"${branch}"'-*.tar.gz')
 	[ -f "${image_tarball}" ] || "${script_dir}/../obs-packaging/kata-containers-image/build_image.sh" -v "${branch}"
 	image_tarball=$(find . -name 'kata-containers-'"${branch}"'-*.tar.gz')
 	[ -f "${image_tarball}" ] || die "image not found"
-	popd >> /dev/null
+	popd >>/dev/null
 	sudo docker build \
 		--build-arg http_proxy="${http_proxy}" \
 		--build-arg https_proxy="${https_proxy}" \

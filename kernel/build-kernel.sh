@@ -165,7 +165,7 @@ setup_kernel() {
 	download_kernel="true"
 	[ -n "$kernel_version" ] || die "failed to get kernel version: Kernel version is emtpy"
 
-	if [[ "${download_kernel}" == "true" ]]; then
+	if [[ ${download_kernel} == "true" ]]; then
 		get_kernel "${kernel_version}" "${kernel_path}"
 	fi
 
@@ -273,7 +273,7 @@ main() {
 		esac
 	done
 
-	shift $(($OPTIND - 1))
+	shift $((OPTIND - 1))
 
 	subcmd="${1:-}"
 

@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-[ -z "${DEBUG}" ]  || set -x
+[ -z "${DEBUG}" ] || set -x
 
 set -o errexit
 set -o nounset
@@ -17,10 +17,8 @@ readonly project="kata-containers"
 readonly tmp_dir=$(mktemp -d -t build-image-tmp.XXXXXXXXXX)
 readonly osbuilder_url=https://github.com/${project}/osbuilder.git
 
-
 export GOPATH=${GOPATH:-${HOME}/go}
 source "${script_dir}/../../scripts/lib.sh"
-
 
 arch_target="$(uname -m)"
 
@@ -31,31 +29,30 @@ kata_osbuilder_version="${KATA_OSBUILDER_VERSION:-}"
 # Agent version
 agent_version="${AGENT_VERSION:-}"
 
-
 readonly destdir="${PWD}"
 
-build_initrd(){
-	sudo -E PATH="$PATH" make initrd\
-	     DISTRO="$initrd_distro" \
-	     DEBUG="${DEBUG:-}" \
-	     AGENT_VERSION="${agent_version}" \
-	     OS_VERSION="${initrd_os_version}" \
-	     DISTRO_ROOTFS="${tmp_dir}/initrd-image" \
-	     USE_DOCKER=1 \
-	     AGENT_INIT="yes"
+build_initrd() {
+	sudo -E PATH="$PATH" make initrd \
+		DISTRO="$initrd_distro" \
+		DEBUG="${DEBUG:-}" \
+		AGENT_VERSION="${agent_version}" \
+		OS_VERSION="${initrd_os_version}" \
+		DISTRO_ROOTFS="${tmp_dir}/initrd-image" \
+		USE_DOCKER=1 \
+		AGENT_INIT="yes"
 
 }
 
-build_image(){
+build_image() {
 	sudo -E PATH="${PATH}" make image \
-	     DISTRO="${img_distro}" \
-	     DEBUG="${DEBUG:-}" \
-	     AGENT_VERSION="${agent_version}" \
-	     IMG_OS_VERSION="${img_os_version}" \
-	     DISTRO_ROOTFS="${tmp_dir}/rootfs-image"
+		DISTRO="${img_distro}" \
+		DEBUG="${DEBUG:-}" \
+		AGENT_VERSION="${agent_version}" \
+		IMG_OS_VERSION="${img_os_version}" \
+		DISTRO_ROOTFS="${tmp_dir}/rootfs-image"
 }
 
-create_tarball(){
+create_tarball() {
 	agent_sha=$(get_repo_hash "${GOPATH}/src/github.com/kata-containers/agent")
 	#reduce sha size for short names
 	agent_sha=${agent_sha:0:11}
@@ -68,9 +65,9 @@ create_tarball(){
 	sudo tar cfzv "${tarball_name}" "${initrd_name}" "${image_name}"
 }
 
-usage(){
+usage() {
 	return_code=${1:-0}
-cat << EOT
+	cat <<EOT
 Create image and initrd in a tarball for kata containers.
 Use it to build an image to distribute kata.
 
@@ -83,16 +80,18 @@ Options:
 
 EOT
 
-exit "${return_code}"
+	exit "${return_code}"
 }
 
-main(){
-	while getopts "v:h" opt
-	do
+main() {
+	while getopts "v:h" opt; do
 		case "$opt" in
-			h)	usage 0 ;;
-			v)	kata_version="${OPTARG}" ;;
-			*) 	echo "Invalid option $opt"; usage 1;;
+		h) usage 0 ;;
+		v) kata_version="${OPTARG}" ;;
+		*)
+			echo "Invalid option $opt"
+			usage 1
+			;;
 		esac
 	done
 	# osbuilder info
@@ -108,7 +107,7 @@ main(){
 	initrd_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name" "${kata_version}")
 	initrd_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version" "${kata_version}")
 
-	shift "$(( $OPTIND - 1 ))"
+	shift "$((OPTIND - 1))"
 	git clone "$osbuilder_url" "${tmp_dir}/osbuilder"
 	pushd "${tmp_dir}/osbuilder"
 	git checkout "${kata_osbuilder_version}"
