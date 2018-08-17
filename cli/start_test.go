@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
@@ -58,11 +60,15 @@ func TestStartSandbox(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
+	ociSpecJSON, err := json.Marshal(oci.CompatOCISpec{})
+	assert.NoError(err)
+
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: sandbox.ID(),
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
+				vcAnnotations.ConfigJSONKey:    string(ociSpecJSON),
 			},
 		}, nil
 	}
@@ -132,11 +138,15 @@ func TestStartContainerSucessFailure(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
+	ociSpecJSON, err := json.Marshal(oci.CompatOCISpec{})
+	assert.NoError(err)
+
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: testContainerID,
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
+				vcAnnotations.ConfigJSONKey:    string(ociSpecJSON),
 			},
 		}, nil
 	}
@@ -206,11 +216,15 @@ func TestStartCLIFunctionSuccess(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
+	ociSpecJSON, err := json.Marshal(oci.CompatOCISpec{})
+	assert.NoError(err)
+
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: testContainerID,
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
+				vcAnnotations.ConfigJSONKey:    string(ociSpecJSON),
 			},
 		}, nil
 	}

@@ -143,22 +143,10 @@ func newTestSandboxConfigHyperstartAgentDefaultNetwork() SandboxConfig {
 		SockTtyName: testHyperstartTtySocket,
 	}
 
-	hooks := Hooks{
-		PreStartHooks: []Hook{
-			{
-				Path: getMockHookBinPath(),
-				Args: []string{testKeyHook, testContainerIDHook, testControllerIDHook},
-			},
-		},
-		PostStartHooks: []Hook{},
-		PostStopHooks:  []Hook{},
-	}
-
 	netConfig := NetworkConfig{}
 
 	sandboxConfig := SandboxConfig{
-		ID:    testSandboxID,
-		Hooks: hooks,
+		ID: testSandboxID,
 
 		HypervisorType:   MockHypervisor,
 		HypervisorConfig: hypervisorConfig,

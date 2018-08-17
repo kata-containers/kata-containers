@@ -40,14 +40,6 @@ func trace(parent context.Context, name string) (opentracing.Span, context.Conte
 	return span, ctx
 }
 
-func traceWithSubsys(ctx context.Context, subsys, name string) (opentracing.Span, context.Context) {
-	span, ctx := opentracing.StartSpanFromContext(ctx, name)
-
-	span.SetTag("subsystem", subsys)
-
-	return span, ctx
-}
-
 // SetLogger sets the logger for virtcontainers package.
 func SetLogger(ctx context.Context, logger *logrus.Entry) {
 	fields := virtLog.Data
@@ -236,11 +228,6 @@ func startSandbox(s *Sandbox) (*Sandbox, error) {
 		return nil, err
 	}
 
-	// Execute poststart hooks.
-	if err := s.config.Hooks.postStartHooks(s); err != nil {
-		return nil, err
-	}
-
 	return s, nil
 }
 
@@ -275,11 +262,6 @@ func StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 
 	// Remove the network.
 	if err := s.removeNetwork(); err != nil {
-		return nil, err
-	}
-
-	// Execute poststop hooks.
-	if err := s.config.Hooks.postStopHooks(s); err != nil {
 		return nil, err
 	}
 
