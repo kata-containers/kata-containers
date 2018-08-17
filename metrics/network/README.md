@@ -12,7 +12,7 @@ packet per second throughput, and latency.
 
 ## Networking tests
 
-- `network-metrics-iperf3.sh` measures bandwidth, jitter, bidirectional bandwidth,
+- `network-metrics-iperf3.sh` measures bandwidth, jitter,
 and packet-per-second throughput using iperf3 on single threaded connections. The
 bandwidth test shows the speed of the data transfer. The jitter test measures the
 variation in the delay of received packets. The packet-per-second tests show the
@@ -20,6 +20,9 @@ maximum number of (smallest sized) packets allowed through the transports.
 
 - `network-metrics-nuttcp.sh` measures the UDP bandwidth using nuttcp. This tool
 shows the speed of the data transfer for the UDP protocol.
+
+- `network-metrics-iperf.sh` measures bidirectional bandwidth. Bidirectional tests
+are used to test both servers for the maximum amount of throughput.
  
 ## Running the tests
 
