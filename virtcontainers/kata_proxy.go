@@ -6,7 +6,6 @@
 package virtcontainers
 
 import (
-	"fmt"
 	"os/exec"
 	"syscall"
 )
@@ -23,46 +22,28 @@ func (p *kataProxy) consoleWatched() bool {
 }
 
 // start is kataProxy start implementation for proxy interface.
-func (p *kataProxy) start(sandbox *Sandbox, params proxyParams) (int, string, error) {
-	sandbox.Logger().Info("Starting regular Kata proxy rather than built-in")
-	if sandbox.config == nil {
-		return -1, "", fmt.Errorf("Sandbox config cannot be nil")
-	}
-
-	if sandbox.agent == nil {
-		return -1, "", fmt.Errorf("No agent")
-	}
-
-	if params.agentURL == "" {
-		return -1, "", fmt.Errorf("AgentURL cannot be empty")
-	}
-
-	config := sandbox.config.ProxyConfig
-	if err := validateProxyConfig(config); err != nil {
+func (p *kataProxy) start(params proxyParams) (int, string, error) {
+	if err := validateProxyParams(params); err != nil {
 		return -1, "", err
 	}
 
+	params.logger.Info("Starting regular Kata proxy rather than built-in")
+
 	// construct the socket path the proxy instance will use
-	proxyURL, err := defaultProxyURL(sandbox, SocketTypeUNIX)
+	proxyURL, err := defaultProxyURL(params.id, SocketTypeUNIX)
 	if err != nil {
 		return -1, "", err
 	}
 
 	args := []string{
-		config.Path,
+		params.path,
 		"-listen-socket", proxyURL,
 		"-mux-socket", params.agentURL,
-		"-sandbox", sandbox.ID(),
+		"-sandbox", params.id,
 	}
 
-	if config.Debug {
-		args = append(args, "-log", "debug")
-		console, err := sandbox.hypervisor.getSandboxConsole(sandbox.id)
-		if err != nil {
-			return -1, "", err
-		}
-
-		args = append(args, "-agent-logs-socket", console)
+	if params.debug {
+		args = append(args, "-log", "debug", "-agent-logs-socket", params.consoleURL)
 	}
 
 	cmd := exec.Command(args[0], args[1:]...)
@@ -74,7 +55,7 @@ func (p *kataProxy) start(sandbox *Sandbox, params proxyParams) (int, string, er
 }
 
 // stop is kataProxy stop implementation for proxy interface.
-func (p *kataProxy) stop(sandbox *Sandbox, pid int) error {
+func (p *kataProxy) stop(pid int) error {
 	// Signal the proxy with SIGTERM.
 	return syscall.Kill(pid, syscall.SIGTERM)
 }

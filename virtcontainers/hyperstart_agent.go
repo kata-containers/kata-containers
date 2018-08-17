@@ -390,7 +390,11 @@ func (h *hyper) startProxy(sandbox *Sandbox) error {
 	}
 
 	// Start the proxy here
-	pid, uri, err := h.proxy.start(sandbox, proxyParams{})
+	pid, uri, err := h.proxy.start(proxyParams{
+		id:     sandbox.id,
+		path:   sandbox.config.ProxyConfig.Path,
+		logger: h.Logger(),
+	})
 	if err != nil {
 		return err
 	}
@@ -461,7 +465,7 @@ func (h *hyper) stopSandbox(sandbox *Sandbox) error {
 		return err
 	}
 
-	return h.proxy.stop(sandbox, h.state.ProxyPid)
+	return h.proxy.stop(h.state.ProxyPid)
 }
 
 // handleBlockVolumes handles volumes that are block device files, by

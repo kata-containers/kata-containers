@@ -477,13 +477,22 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 		return err
 	}
 
+	consoleURL, err := sandbox.hypervisor.getSandboxConsole(sandbox.id)
+	if err != nil {
+		return err
+	}
+
 	proxyParams := proxyParams{
-		agentURL: agentURL,
-		logger:   k.Logger().WithField("sandbox", sandbox.id),
+		id:         sandbox.id,
+		path:       sandbox.config.ProxyConfig.Path,
+		agentURL:   agentURL,
+		consoleURL: consoleURL,
+		logger:     k.Logger().WithField("sandbox", sandbox.id),
+		debug:      sandbox.config.ProxyConfig.Debug,
 	}
 
 	// Start the proxy here
-	pid, uri, err := k.proxy.start(sandbox, proxyParams)
+	pid, uri, err := k.proxy.start(proxyParams)
 	if err != nil {
 		return err
 	}
@@ -492,7 +501,7 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 	// then rollback to kill kata-proxy process
 	defer func() {
 		if err != nil && pid > 0 {
-			k.proxy.stop(sandbox, pid)
+			k.proxy.stop(pid)
 		}
 	}()
 
@@ -602,7 +611,7 @@ func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 		return err
 	}
 
-	return k.proxy.stop(sandbox, k.state.ProxyPid)
+	return k.proxy.stop(k.state.ProxyPid)
 }
 
 func (k *kataAgent) cleanupSandbox(sandbox *Sandbox) error {
