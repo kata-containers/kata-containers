@@ -286,6 +286,7 @@ func (endpoint *VhostUserEndpoint) Attach(h hypervisor) error {
 		ID:         id,
 		SocketPath: endpoint.SocketPath,
 		MacAddress: endpoint.HardAddr,
+		Type:       config.VhostUserNet,
 	}
 
 	return h.addDevice(d, vhostuserDev)
