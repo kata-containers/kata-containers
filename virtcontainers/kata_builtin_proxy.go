@@ -14,6 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var buildinProxyConsoleProto = consoleProtoUnix
+
 // This is a kata builtin proxy implementation of the proxy interface. Kata proxy
 // functionality is implemented inside the virtcontainers library.
 type kataBuiltInProxy struct {
@@ -53,7 +55,7 @@ func (p *kataBuiltInProxy) start(params proxyParams) (int, string, error) {
 	params.logger.Info("Starting builtin kata proxy")
 
 	p.sandboxID = params.id
-	err := p.watchConsole(consoleProtoUnix, params.consoleURL, params.logger)
+	err := p.watchConsole(buildinProxyConsoleProto, params.consoleURL, params.logger)
 	if err != nil {
 		p.sandboxID = ""
 		return -1, "", err

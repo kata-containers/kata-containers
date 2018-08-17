@@ -238,3 +238,26 @@ func TestHyperListRoutes(t *testing.T) {
 	_, err := h.listRoutes()
 	assert.Nil(err)
 }
+
+func TestHyperSetProxy(t *testing.T) {
+	assert := assert.New(t)
+
+	h := &hyper{}
+	p := &ccProxy{}
+	s := &Sandbox{storage: &filesystem{}}
+
+	err := h.setProxy(s, p, 0, "")
+	assert.Error(err)
+
+	err = h.setProxy(s, p, 0, "foobar")
+	assert.Error(err)
+}
+
+func TestHyperGetAgentUrl(t *testing.T) {
+	assert := assert.New(t)
+	h := &hyper{}
+
+	url, err := h.getAgentURL()
+	assert.Nil(err)
+	assert.Empty(url)
+}

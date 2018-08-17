@@ -389,20 +389,34 @@ func (h *hyper) startProxy(sandbox *Sandbox) error {
 		return nil
 	}
 
+	if h.state.URL != "" {
+		h.Logger().WithFields(logrus.Fields{
+			"sandbox":   sandbox.id,
+			"proxy-pid": h.state.ProxyPid,
+			"proxy-url": h.state.URL,
+		}).Infof("proxy already started")
+		return nil
+	}
+
 	// Start the proxy here
 	pid, uri, err := h.proxy.start(proxyParams{
 		id:     sandbox.id,
 		path:   sandbox.config.ProxyConfig.Path,
+		debug:  sandbox.config.ProxyConfig.Debug,
 		logger: h.Logger(),
 	})
 	if err != nil {
 		return err
 	}
 
+	defer func() {
+		if err != nil {
+			h.proxy.stop(pid)
+		}
+	}()
+
 	// Fill agent state with proxy information, and store them.
-	h.state.ProxyPid = pid
-	h.state.URL = uri
-	if err := sandbox.storage.storeAgentState(sandbox.id, h.state); err != nil {
+	if err = h.setProxy(sandbox, h.proxy, pid, uri); err != nil {
 		return err
 	}
 
@@ -465,7 +479,18 @@ func (h *hyper) stopSandbox(sandbox *Sandbox) error {
 		return err
 	}
 
-	return h.proxy.stop(h.state.ProxyPid)
+	if err := h.proxy.stop(h.state.ProxyPid); err != nil {
+		return err
+	}
+
+	h.state.ProxyPid = -1
+	h.state.URL = ""
+	if err := sandbox.storage.storeAgentState(sandbox.id, h.state); err != nil {
+		// ignore error
+		h.Logger().WithError(err).WithField("sandbox", sandbox.id).Error("failed to clean up agent state")
+	}
+
+	return nil
 }
 
 // handleBlockVolumes handles volumes that are block device files, by
@@ -934,5 +959,31 @@ func (h *hyper) cleanupSandbox(sandbox *Sandbox) error {
 
 func (h *hyper) reseedRNG(data []byte) error {
 	// hyperstart-agent does not support reseeding
+	return nil
+}
+
+func (h *hyper) getAgentURL() (string, error) {
+	// hyperstart-agent does not support getting agent url
+	return "", nil
+}
+
+func (h *hyper) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error {
+	if url == "" {
+		return fmt.Errorf("invalid empty proxy url")
+	}
+
+	if h.state.URL != "" && h.state.URL != url {
+		h.proxy.stop(h.state.ProxyPid)
+	}
+
+	h.proxy = proxy
+	h.state.ProxyPid = pid
+	h.state.URL = url
+	if sandbox != nil {
+		if err := sandbox.storage.storeAgentState(sandbox.id, h.state); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
