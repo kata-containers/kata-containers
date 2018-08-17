@@ -12,5 +12,5 @@ import (
 func TestCCProxyStart(t *testing.T) {
 	proxy := &ccProxy{}
 
-	testProxyStart(t, nil, proxy, CCProxyType)
+	testProxyStart(t, nil, proxy)
 }
