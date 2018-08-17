@@ -357,9 +357,6 @@ func networkConfig(ocispec CompatOCISpec, config RuntimeConfig) (vc.NetworkConfi
 			continue
 		}
 
-		// Bug: This is not the interface count
-		// It is just an indication that you need networking
-		netConf.NumInterfaces = 1
 		if n.Path != "" {
 			netConf.NetNSPath = n.Path
 		}
