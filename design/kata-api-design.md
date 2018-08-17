@@ -31,11 +31,12 @@ To fulfill the [kata design requirements](kata-design-requirements.md), and base
 ### Sandbox Hotplug API
 |Name|Description|
 |---|---|
-|sandbox.AddStorage()| Add new storage to the sandbox.|
-|sandbox.AddNetwork()| Add new nic to the sandbox.|
-|sandbox.ListNetwork()| List all nics and their configurations in the sandbox.|
-|sandbox.UpdateNetwork()| Update the configuration of an existing network interface.|
-|sandbox.UpdateRoute()| Update the sandbox route table (e.g. for portmapping support).|
+|sandbox.AddDevice()| Add new storage device to the sandbox.|
+|sandbox.AddInterface()| Add new nic to the sandbox.|
+|sandbox.RemoveInterface()| Remove a nic from the sandbox.|
+|sandbox.ListInterfaces()| List all nics and their configurations in the sandbox.|
+|sandbox.UpdateRoutes()| Update the sandbox route table (e.g. for portmapping support).|
+|sandbox.ListRoutes()| List the sandbox route table.|
 
 ### Sandbox Relay API
 |Name|Description|
