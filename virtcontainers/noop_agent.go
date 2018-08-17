@@ -187,3 +187,13 @@ func (n *noopAgent) getSharePath(id string) string {
 func (n *noopAgent) reseedRNG(data []byte) error {
 	return nil
 }
+
+// getAgentURL is the Noop agent url getter. It returns nothing.
+func (n *noopAgent) getAgentURL() (string, error) {
+	return "", nil
+}
+
+// setProxy is the Noop agent proxy setter. It does nothing.
+func (n *noopAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error {
+	return nil
+}

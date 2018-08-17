@@ -145,6 +145,12 @@ type agent interface {
 	// start the proxy
 	startProxy(sandbox *Sandbox) error
 
+	// set to use an existing proxy
+	setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error
+
+	// get agent url
+	getAgentURL() (string, error)
+
 	// createSandbox will tell the agent to perform necessary setup for a Sandbox.
 	createSandbox(sandbox *Sandbox) error
 

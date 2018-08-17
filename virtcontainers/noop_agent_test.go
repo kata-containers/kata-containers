@@ -9,6 +9,8 @@ package virtcontainers
 import (
 	"context"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func testCreateNoopContainer() (*Sandbox, *Container, error) {
@@ -250,4 +252,23 @@ func TestNoopAgentListRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal("listRoutes failed")
 	}
+}
+
+func TestNoopAgentRSetProxy(t *testing.T) {
+	n := &noopAgent{}
+	p := &noopProxy{}
+	s := &Sandbox{}
+	err := n.setProxy(s, p, 0, "")
+	if err != nil {
+		t.Fatal("set proxy failed")
+	}
+}
+
+func TestNoopGetAgentUrl(t *testing.T) {
+	assert := assert.New(t)
+	n := &noopAgent{}
+
+	url, err := n.getAgentURL()
+	assert.Nil(err)
+	assert.Empty(url)
 }
