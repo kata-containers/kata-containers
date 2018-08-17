@@ -211,9 +211,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		DeviceInfos: expectedDeviceInfo,
 	}
 
-	expectedNetworkConfig := vc.NetworkConfig{
-		NumInterfaces: 1,
-	}
+	expectedNetworkConfig := vc.NetworkConfig{}
 
 	expectedSandboxConfig := vc.SandboxConfig{
 		ID:       containerID,
