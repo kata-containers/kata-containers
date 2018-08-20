@@ -176,9 +176,7 @@ func buildSandboxConfig(context *cli.Context) (vc.SandboxConfig, error) {
 		return vc.SandboxConfig{}, err
 	}
 
-	netConfig := vc.NetworkConfig{
-		NumInterfaces: 1,
-	}
+	netConfig := vc.NetworkConfig{}
 
 	switch *agentType {
 	case vc.HyperstartAgent:
