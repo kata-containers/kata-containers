@@ -21,7 +21,6 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -128,7 +127,7 @@ func validCreateParams(containerID, bundlePath string) (string, error) {
 // OCI runtime specification. It returns a list of complete paths
 // that should be created and used for every specified resource.
 func processCgroupsPath(ctx context.Context, ociSpec oci.CompatOCISpec, isSandbox bool) ([]string, error) {
-	span, _ := opentracing.StartSpanFromContext(ctx, "processCgroupsPath")
+	span, _ := trace(ctx, "processCgroupsPath")
 	defer span.Finish()
 
 	var cgroupsPathList []string
@@ -377,7 +376,7 @@ func fetchContainerIDMapping(containerID string) (string, error) {
 }
 
 func addContainerIDMapping(ctx context.Context, containerID, sandboxID string) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "addContainerIDMapping")
+	span, _ := trace(ctx, "addContainerIDMapping")
 	defer span.Finish()
 
 	if containerID == "" {
@@ -404,7 +403,7 @@ func addContainerIDMapping(ctx context.Context, containerID, sandboxID string) e
 }
 
 func delContainerIDMapping(ctx context.Context, containerID string) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "delContainerIDMapping")
+	span, _ := trace(ctx, "delContainerIDMapping")
 	defer span.Finish()
 
 	if containerID == "" {

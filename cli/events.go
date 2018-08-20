@@ -14,7 +14,6 @@ import (
 	"time"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	opentracing "github.com/opentracing/opentracing-go"
 
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -142,7 +141,7 @@ information is displayed once every 5 seconds.`,
 			return err
 		}
 
-		span, _ := opentracing.StartSpanFromContext(ctx, "events")
+		span, _ := trace(ctx, "events")
 		defer span.Finish()
 
 		containerID := context.Args().First()

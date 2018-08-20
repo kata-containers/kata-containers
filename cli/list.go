@@ -16,7 +16,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
@@ -114,7 +113,7 @@ To list containers created using a non-default value for "--root":
 			return err
 		}
 
-		span, _ := opentracing.StartSpanFromContext(ctx, "list")
+		span, _ := trace(ctx, "list")
 		defer span.Finish()
 
 		s, err := getContainers(context)

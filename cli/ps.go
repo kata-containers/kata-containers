@@ -11,7 +11,6 @@ import (
 	"fmt"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -51,7 +50,7 @@ var psCLICommand = cli.Command{
 }
 
 func ps(ctx context.Context, containerID, format string, args []string) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "ps")
+	span, _ := trace(ctx, "ps")
 	defer span.Finish()
 
 	if containerID == "" {

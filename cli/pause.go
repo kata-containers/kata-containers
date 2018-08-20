@@ -9,7 +9,6 @@ package main
 import (
 	"context"
 
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -58,7 +57,7 @@ func toggle(c *cli.Context, pause bool) error {
 }
 
 func toggleContainerPause(ctx context.Context, containerID string, pause bool) (err error) {
-	span, _ := opentracing.StartSpanFromContext(ctx, "pause")
+	span, _ := trace(ctx, "pause")
 	defer span.Finish()
 	span.SetTag("pause", pause)
 

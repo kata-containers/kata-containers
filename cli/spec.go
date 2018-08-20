@@ -13,7 +13,6 @@ import (
 	"os"
 
 	"github.com/opencontainers/runc/libcontainer/specconv"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 )
 
@@ -78,7 +77,7 @@ generate a proper rootless spec file.`,
 			return err
 		}
 
-		span, _ := opentracing.StartSpanFromContext(ctx, "spec")
+		span, _ := trace(ctx, "spec")
 		defer span.Finish()
 
 		spec := specconv.Example()

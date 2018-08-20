@@ -76,3 +76,14 @@ func stopTracing(ctx context.Context) {
 	// report all possible spans to the collector
 	tracerCloser.Close()
 }
+
+// trace creates a new tracing span based on the specified name and parent
+// context.
+func trace(parent context.Context, name string) (opentracing.Span, context.Context) {
+	span, ctx := opentracing.StartSpanFromContext(parent, name)
+
+	span.SetTag("source", "runtime")
+	span.SetTag("component", "cli")
+
+	return span, ctx
+}

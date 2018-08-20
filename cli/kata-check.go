@@ -24,7 +24,6 @@ import (
 	"syscall"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -288,7 +287,7 @@ var kataCheckCLICommand = cli.Command{
 			return err
 		}
 
-		span, _ := opentracing.StartSpanFromContext(ctx, "kata-check")
+		span, _ := trace(ctx, "kata-check")
 		defer span.Finish()
 
 		setCPUtype()
