@@ -688,3 +688,295 @@ func TestAppendIncomingExec(t *testing.T) {
 
 	testAppend(source, incomingStringExec, t)
 }
+
+func TestBadName(t *testing.T) {
+	c := &Config{}
+	c.appendName()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadMachine(t *testing.T) {
+	c := &Config{}
+	c.appendMachine()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadCPUModel(t *testing.T) {
+	c := &Config{}
+	c.appendCPUModel()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadQMPSockets(t *testing.T) {
+	c := &Config{}
+	c.appendQMPSockets()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+
+	c = &Config{
+		QMPSockets: []QMPSocket{{}},
+	}
+
+	c.appendQMPSockets()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+
+	c = &Config{
+		QMPSockets: []QMPSocket{{Name: "test"}},
+	}
+
+	c.appendQMPSockets()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+
+	c = &Config{
+		QMPSockets: []QMPSocket{
+			{
+				Name: "test",
+				Type: QMPSocketType("ip"),
+			},
+		},
+	}
+
+	c.appendQMPSockets()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadDevices(t *testing.T) {
+	c := &Config{}
+	c.appendDevices()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+
+	c = &Config{
+		Devices: []Device{
+			FSDevice{},
+			FSDevice{
+				ID:       "id0",
+				MountTag: "tag",
+			},
+			CharDevice{},
+			CharDevice{
+				ID: "id1",
+			},
+			NetDevice{},
+			NetDevice{
+				ID:     "id1",
+				IFName: "if",
+				Type:   IPVTAP,
+			},
+			SerialDevice{},
+			SerialDevice{
+				ID: "id0",
+			},
+			BlockDevice{},
+			BlockDevice{
+				Driver: "drv",
+				ID:     "id1",
+			},
+			VhostUserDevice{},
+			VhostUserDevice{
+				CharDevID: "devid",
+			},
+			VhostUserDevice{
+				CharDevID:  "devid",
+				SocketPath: "/var/run/sock",
+			},
+			VhostUserDevice{
+				CharDevID:     "devid",
+				SocketPath:    "/var/run/sock",
+				VhostUserType: VhostUserNet,
+			},
+			VhostUserDevice{
+				CharDevID:     "devid",
+				SocketPath:    "/var/run/sock",
+				VhostUserType: VhostUserSCSI,
+			},
+		},
+	}
+
+	c.appendDevices()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadRTC(t *testing.T) {
+	c := &Config{}
+	c.appendRTC()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+
+	c = &Config{
+		RTC: RTC{
+			Clock: RTCClock("invalid"),
+		},
+	}
+	c.appendRTC()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+
+	c = &Config{
+		RTC: RTC{
+			Clock:    Host,
+			DriftFix: RTCDriftFix("invalid"),
+		},
+	}
+	c.appendRTC()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadGlobalParam(t *testing.T) {
+	c := &Config{}
+	c.appendGlobalParam()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadVGA(t *testing.T) {
+	c := &Config{}
+	c.appendVGA()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadKernel(t *testing.T) {
+	c := &Config{}
+	c.appendKernel()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadMemoryKnobs(t *testing.T) {
+	c := &Config{}
+	c.appendMemoryKnobs()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+
+	c = &Config{
+		Knobs: Knobs{
+			HugePages: true,
+		},
+	}
+	c.appendMemoryKnobs()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+
+	c = &Config{
+		Knobs: Knobs{
+			HugePages: true,
+		},
+	}
+	c.appendMemoryKnobs()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+
+	c = &Config{
+		Knobs: Knobs{
+			MemPrealloc: true,
+		},
+	}
+	c.appendMemoryKnobs()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+
+	c = &Config{
+		Knobs: Knobs{
+			FileBackedMem: true,
+		},
+		Memory: Memory{
+			Size: "1024",
+		},
+	}
+	c.appendMemoryKnobs()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadKnobs(t *testing.T) {
+	c := &Config{
+		Knobs: Knobs{
+			Mlock: true,
+		},
+	}
+	c.appendKnobs()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadBios(t *testing.T) {
+	c := &Config{}
+	c.appendBios()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadIOThreads(t *testing.T) {
+	c := &Config{}
+	c.appendIOThreads()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+
+	c = &Config{
+		IOThreads: []IOThread{{ID: ""}},
+	}
+	c.appendIOThreads()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadIncoming(t *testing.T) {
+	c := &Config{}
+	c.appendIncoming()
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+}
+
+func TestBadCPUs(t *testing.T) {
+	c := &Config{}
+	if err := c.appendCPUs(); err != nil {
+		t.Fatalf("No error expected got %v", err)
+	}
+	if len(c.qemuParams) != 0 {
+		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
+	}
+
+	c = &Config{
+		SMP: SMP{
+			MaxCPUs: 1,
+			CPUs:    2,
+		},
+	}
+	if c.appendCPUs() == nil {
+		t.Errorf("Error expected")
+	}
+}
