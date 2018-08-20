@@ -152,9 +152,7 @@ func newTestSandboxConfigHyperstartAgentCNMNetwork() SandboxConfig {
 		PostStopHooks:  []Hook{},
 	}
 
-	netConfig := NetworkConfig{
-		NumInterfaces: len(hooks.PreStartHooks),
-	}
+	netConfig := NetworkConfig{}
 
 	sandboxConfig := SandboxConfig{
 		ID:    testSandboxID,
@@ -1980,9 +1978,7 @@ func createNewSandboxConfig(hType HypervisorType, aType AgentType, aConfig inter
 		HypervisorPath: "/usr/bin/qemu-system-x86_64",
 	}
 
-	netConfig := NetworkConfig{
-		NumInterfaces: 1,
-	}
+	netConfig := NetworkConfig{}
 
 	return SandboxConfig{
 		ID:               testSandboxID,

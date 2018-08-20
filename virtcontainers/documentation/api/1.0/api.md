@@ -276,7 +276,6 @@ const (
 // NetworkConfig is the network configuration related to a network.
 type NetworkConfig struct {
 	NetNSPath         string
-	NumInterfaces     int
 	InterworkingModel NetInterworkingModel
 }
 ```
