@@ -13,7 +13,6 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -60,7 +59,7 @@ EXAMPLE:
 }
 
 func delete(ctx context.Context, containerID string, force bool) error {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "delete")
+	span, ctx := trace(ctx, "delete")
 	defer span.Finish()
 
 	kataLog = kataLog.WithField("container", containerID)
@@ -134,7 +133,7 @@ func delete(ctx context.Context, containerID string, force bool) error {
 }
 
 func deleteSandbox(ctx context.Context, sandboxID string) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "deleteSandbox")
+	span, _ := trace(ctx, "deleteSandbox")
 	defer span.Finish()
 
 	status, err := vci.StatusSandbox(sandboxID)
@@ -156,7 +155,7 @@ func deleteSandbox(ctx context.Context, sandboxID string) error {
 }
 
 func deleteContainer(ctx context.Context, sandboxID, containerID string, forceStop bool) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "deleteContainer")
+	span, _ := trace(ctx, "deleteContainer")
 	defer span.Finish()
 
 	if forceStop {
@@ -173,7 +172,7 @@ func deleteContainer(ctx context.Context, sandboxID, containerID string, forceSt
 }
 
 func removeCgroupsPath(ctx context.Context, containerID string, cgroupsPathList []string) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "removeCgroupsPath")
+	span, _ := trace(ctx, "removeCgroupsPath")
 	defer span.Finish()
 
 	if len(cgroupsPathList) == 0 {

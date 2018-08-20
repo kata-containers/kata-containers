@@ -14,7 +14,6 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -98,7 +97,7 @@ var signals = map[string]syscall.Signal{
 }
 
 func kill(ctx context.Context, containerID, signal string, all bool) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "kill")
+	span, _ := trace(ctx, "kill")
 	defer span.Finish()
 
 	kataLog = kataLog.WithField("container", containerID)

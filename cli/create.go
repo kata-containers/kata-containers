@@ -18,7 +18,6 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vf "github.com/kata-containers/runtime/virtcontainers/factory"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 )
 
@@ -96,7 +95,7 @@ func create(ctx context.Context, containerID, bundlePath, console, pidFilePath s
 	runtimeConfig oci.RuntimeConfig) error {
 	var err error
 
-	span, ctx := opentracing.StartSpanFromContext(ctx, "create")
+	span, ctx := trace(ctx, "create")
 	defer span.Finish()
 
 	kataLog = kataLog.WithField("container", containerID)
@@ -254,7 +253,7 @@ func setKernelParams(containerID string, runtimeConfig *oci.RuntimeConfig) error
 
 func createSandbox(ctx context.Context, ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
 	containerID, bundlePath, console string, disableOutput bool) (vc.Process, error) {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "createSandbox")
+	span, ctx := trace(ctx, "createSandbox")
 	defer span.Finish()
 
 	err := setKernelParams(containerID, &runtimeConfig)
@@ -306,7 +305,7 @@ func setEphemeralStorageType(ociSpec oci.CompatOCISpec) oci.CompatOCISpec {
 func createContainer(ctx context.Context, ociSpec oci.CompatOCISpec, containerID, bundlePath,
 	console string, disableOutput bool) (vc.Process, error) {
 
-	span, ctx := opentracing.StartSpanFromContext(ctx, "createContainer")
+	span, ctx := trace(ctx, "createContainer")
 	defer span.Finish()
 
 	ociSpec = setEphemeralStorageType(ociSpec)
@@ -338,7 +337,7 @@ func createContainer(ctx context.Context, ociSpec oci.CompatOCISpec, containerID
 }
 
 func createCgroupsFiles(ctx context.Context, containerID string, cgroupsDirPath string, cgroupsPathList []string, pid int) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "createCgroupsFiles")
+	span, _ := trace(ctx, "createCgroupsFiles")
 	defer span.Finish()
 
 	if len(cgroupsPathList) == 0 {
@@ -384,7 +383,7 @@ func createCgroupsFiles(ctx context.Context, containerID string, cgroupsDirPath 
 }
 
 func createPIDFile(ctx context.Context, pidFilePath string, pid int) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "createPIDFile")
+	span, _ := trace(ctx, "createPIDFile")
 	defer span.Finish()
 
 	if pidFilePath == "" {

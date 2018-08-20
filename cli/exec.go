@@ -17,7 +17,6 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 )
 
@@ -189,7 +188,7 @@ func generateExecParams(context *cli.Context, specProcess *oci.CompatOCIProcess)
 }
 
 func execute(ctx context.Context, context *cli.Context) error {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "execute")
+	span, ctx := trace(ctx, "execute")
 	defer span.Finish()
 
 	containerID := context.Args().First()

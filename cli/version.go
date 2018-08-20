@@ -6,7 +6,6 @@
 package main
 
 import (
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 )
 
@@ -19,7 +18,7 @@ var versionCLICommand = cli.Command{
 			return err
 		}
 
-		span, _ := opentracing.StartSpanFromContext(ctx, "version")
+		span, _ := trace(ctx, "version")
 		defer span.Finish()
 
 		cli.VersionPrinter(context)

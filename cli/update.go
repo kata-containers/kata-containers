@@ -15,7 +15,6 @@ import (
 	"github.com/docker/go-units"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -133,7 +132,7 @@ other options are ignored.
 			return err
 		}
 
-		span, _ := opentracing.StartSpanFromContext(ctx, "update")
+		span, _ := trace(ctx, "update")
 		defer span.Finish()
 
 		if context.Args().Present() == false {
