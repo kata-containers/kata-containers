@@ -242,6 +242,8 @@ func ExistDockerContainer(name string) bool {
 		return true
 	}
 
+	// If we reach this point means that the container doesn't exist in docker,
+	// but we have to check that the components (qemu, shim, proxy) are not running.
 	// Read container ID from file created by run/create
 	path := cidFilePath(name)
 	defer os.Remove(path)
@@ -253,9 +255,26 @@ func ExistDockerContainer(name string) bool {
 
 	// Use container ID to check if kata components are still running.
 	cid := string(content)
-	return tests.HypervisorRunning(cid) ||
-		tests.ProxyRunning(cid) ||
-		tests.ShimRunning(cid)
+	exitCh := make(chan bool)
+	go func() {
+		for {
+			if !tests.HypervisorRunning(cid) &&
+				!tests.ProxyRunning(cid) &&
+				!tests.ShimRunning(cid) {
+				close(exitCh)
+				return
+			}
+			time.Sleep(time.Second)
+		}
+	}()
+
+	select {
+	case <-exitCh:
+		return false
+	case <-time.After(time.Duration(tests.Timeout) * time.Second):
+		tests.LogIfFail("Timeout reached after %ds", tests.Timeout)
+		return true
+	}
 }
 
 // RemoveDockerContainer removes a container using docker rm -f
