@@ -35,7 +35,7 @@
   revision = "3d382e2f5dabe3bae62ceb9ded56bdee847008ee"
 
 [[projects]]
-  digest = "1:3e0383c8e6689f78621ca3592fe1adfc98c23a8bf354704c514d1e7c36d550d7"
+  digest = "1:827ed8a74e55981880c4d77f8472d638bceb899188104ba7bf24a9548fd97292"
   name = "github.com/containernetworking/cni"
   packages = ["pkg/types"]
   pruneopts = "NUT"
@@ -122,14 +122,14 @@
   revision = "eda239928bfa12b214e9c93192d548cccf4e7f1e"
 
 [[projects]]
-  digest = "1:f2f0d25f32da7843fa4cdc2becb88eea9d1aa9f9c4167431b4c1cd1c3b7fb17c"
+  digest = "1:55460fbdfca464360cec902b0805126451908aa1a058fe4072b01650ebe768b3"
   name = "github.com/kata-containers/agent"
   packages = [
     "protocols/client",
     "protocols/grpc",
   ]
   pruneopts = "NUT"
-  revision = "e6d26c1bbbaf1c7292b1ee5dfa17ca13159f73b7"
+  revision = "cd8f37b29332cbc081f00e4186c59944a79574fd"
 
 [[projects]]
   digest = "1:04054595e5c5a35d1553a7f3464d18577caf597445d643992998643df56d4afd"
@@ -389,7 +389,6 @@
     "github.com/clearcontainers/proxy/api",
     "github.com/clearcontainers/proxy/client",
     "github.com/containerd/cri-containerd/pkg/annotations",
-    "github.com/containernetworking/cni/pkg/types",
     "github.com/containernetworking/plugins/pkg/ns",
     "github.com/dlespiau/covertool/pkg/cover",
     "github.com/docker/go-units",
@@ -410,6 +409,7 @@
     "github.com/sirupsen/logrus",
     "github.com/sirupsen/logrus/hooks/syslog",
     "github.com/stretchr/testify/assert",
+    "github.com/uber/jaeger-client-go",
     "github.com/uber/jaeger-client-go/config",
     "github.com/urfave/cli",
     "github.com/vishvananda/netlink",

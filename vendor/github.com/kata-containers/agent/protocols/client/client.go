@@ -28,7 +28,7 @@ const (
 	vsockSocketScheme = "vsock"
 )
 
-var defaultDialTimeout = 5 * time.Second
+var defaultDialTimeout = 15 * time.Second
 
 // AgentClient is an agent gRPC client connection wrapper for agentgrpc.AgentServiceClient
 type AgentClient struct {
@@ -179,9 +179,13 @@ func agentDialer(addr *url.URL, enableYamux bool) dialer {
 	}
 }
 
-// unix addr are parsed by grpc
 func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
-	return net.DialTimeout("unix", sock, timeout)
+	dialFunc := func() (net.Conn, error) {
+		return net.DialTimeout("unix", sock, timeout)
+	}
+
+	timeoutErr := grpcStatus.Errorf(codes.DeadlineExceeded, "timed out connecting to unix socket %s", sock)
+	return commonDialer(timeout, dialFunc, timeoutErr)
 }
 
 func parseGrpcVsockAddr(sock string) (uint32, uint32, error) {
@@ -205,12 +209,12 @@ func parseGrpcVsockAddr(sock string) (uint32, uint32, error) {
 	return uint32(cid), uint32(port), nil
 }
 
-func vsockDialer(sock string, timeout time.Duration) (net.Conn, error) {
-	cid, port, err := parseGrpcVsockAddr(sock)
-	if err != nil {
-		return nil, err
-	}
-
+// This would bypass the grpc dialer backoff strategy and handle dial timeout
+// internally. Because we do not have a large number of concurrent dialers,
+// it is not reasonable to have such aggressive backoffs which would kill kata
+// containers boot up speed. For more information, see
+// https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md
+func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), timeoutErrMsg error) (net.Conn, error) {
 	t := time.NewTimer(timeout)
 	cancel := make(chan bool)
 	ch := make(chan net.Conn)
@@ -223,7 +227,7 @@ func vsockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 			default:
 			}
 
-			conn, err := vsock.Dial(cid, port)
+			conn, err := dialFunc()
 			if err == nil {
 				// Send conn back iff timer is not fired
 				// Otherwise there might be no one left reading it
@@ -239,7 +243,6 @@ func vsockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 
 	var conn net.Conn
 	var ok bool
-	timeoutErrMsg := grpcStatus.Errorf(codes.DeadlineExceeded, "timed out connecting to vsock %d:%d", cid, port)
 	select {
 	case conn, ok = <-ch:
 		if !ok {
@@ -248,4 +251,19 @@ func vsockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	}
 
 	return conn, nil
+}
+
+func vsockDialer(sock string, timeout time.Duration) (net.Conn, error) {
+	cid, port, err := parseGrpcVsockAddr(sock)
+	if err != nil {
+		return nil, err
+	}
+
+	dialFunc := func() (net.Conn, error) {
+		return vsock.Dial(cid, port)
+	}
+
+	timeoutErr := grpcStatus.Errorf(codes.DeadlineExceeded, "timed out connecting to vsock %d:%d", cid, port)
+
+	return commonDialer(timeout, dialFunc, timeoutErr)
 }
