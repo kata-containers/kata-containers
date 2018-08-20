@@ -64,7 +64,7 @@ then
 
 	# Create a separate branch for the PR. This is required to allow
 	# checkcommits to be able to determine how the PR differs from
-	# "master".
+	# the target branch.
 	git fetch origin "pull/${pr_number}/head:${pr_branch}"
 	git checkout "${pr_branch}"
 	git rebase "origin/${ghprbTargetBranch}"
@@ -75,8 +75,11 @@ then
 	# This condition should be removed when we have one runtime.
 	[ -f .gitmodules ] && git submodule update
 else
-	# Othewise we test the master branch
-	git fetch origin && git checkout master && git reset --hard origin/master
+	# Othewise we test an specific branch
+	# GIT_BRANCH env variable is set by the jenkins Github Plugin.
+	remote="${GIT_BRANCH/\/*/}"
+	branch="${GIT_BRANCH/*\//}"
+	git fetch "$remote" && git checkout "$branch" && git reset --hard "$GIT_BRANCH"
 fi
 
 # Install go after repository is cloned and checkout to PR
@@ -108,10 +111,10 @@ fi
 
 if [ -n "$pr_number" ]
 then
-	# Now that checkcommits has run, move the PR commits into the master
-	# branch before running the tests. Having the commits in "master" is
-	# required to ensure coveralls works.
-	git checkout master
+	# Now that checkcommits has run, move the PR commits into the target
+	# branch before running the tests. Having the commits in the target branch
+	# is required to ensure coveralls works.
+	git checkout ${ghprbTargetBranch}
 	git reset --hard "$pr_branch"
 	git branch -D "$pr_branch"
 fi
