@@ -251,6 +251,22 @@ func TestQMPStartStopLoop(t *testing.T) {
 	<-disconnectedCh
 }
 
+// Checks that a call to QMPStart with an invalid path exits gracefully.
+//
+// We call QMPStart with an invalid path.
+//
+// An error should be returned and the disconnected channel should be closed.
+func TestQMPStartBadPath(t *testing.T) {
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	disconnectedCh := make(chan struct{})
+	q, _, err := QMPStart(context.Background(), "", cfg, disconnectedCh)
+	if err == nil {
+		t.Errorf("Expected error")
+		q.Shutdown()
+	}
+	<-disconnectedCh
+}
+
 // Checks that the qmp_capabilities command is correctly sent.
 //
 // We start a QMPLoop, send the qmp_capabilities command and stop the
@@ -269,6 +285,28 @@ func TestQMPCapabilities(t *testing.T) {
 	err := q.ExecuteQMPCapabilities(context.Background())
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
+// Checks that an error returned by a QMP command is correctly handled.
+//
+// We start a QMPLoop, send the qmp_capabilities command and stop the
+// loop.
+//
+// The qmp_capabilities command fails and yet we should exit gracefully.
+func TestQMPBadCapabilities(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("qmp_capabilities", nil, "error", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecuteQMPCapabilities(context.Background())
+	if err == nil {
+		t.Fatalf("Expected error")
 	}
 	q.Shutdown()
 	<-disconnectedCh
