@@ -5,7 +5,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # Description:
-# This metrics test measures Proportional Set Size memory while an interconnection
+# This metrics test measures Proportional Set Size, Resident Set Size,
+# and Virtual Set Size memory while an interconnection
 # between container-client <----> container-server transfers 1 Gb rate as a
 # network workload using nuttcp.
 
@@ -16,14 +17,14 @@ source "${SCRIPT_PATH}/../lib/common.bash"
 source "${SCRIPT_PATH}/lib/network-common.bash"
 
 # Test name
-TEST_NAME="${TEST_NAME:-network memory pss}"
+TEST_NAME="${TEST_NAME:-network memory}"
 # Image name
 image="${IMAGE:-local-nuttcp}"
 # Dockerfile
 dockerfile="${SCRIPT_PATH}/nuttcp_dockerfile/Dockerfile"
 # Time for the test to run (seconds)
 total_time="${total_time:-30}"
-# Time in which we sample PSS (seconds)
+# Time in which we sample PSS, RSS, and VSS (seconds)
 settle_time="${settle_time:-15}"
 # Rate limit (speed at which transmitter send data, megabytes)
 rate_limit="${rate_limit:-1000}"
@@ -77,24 +78,36 @@ function main() {
 	docker exec ${server_name} sh -c "${server_command}"
 	start_client "$image" "$client_command" "$client_extra_args" > /dev/null
 
-	# Time when we are taking our PSS measurement
-	echo >&2 "WARNING: sleeping for $settle_time seconds in order to sample the PSS"
+	# Time when we are taking our PSS, RSS, and VSS measurement
+	echo >&2 "WARNING: sleeping for $settle_time seconds in order to sample the PSS, RSS, and VSS"
 	sleep ${settle_time}
 
 	metrics_json_start_array
 
-	# Determine the process that will be measured (PSS memory consumption)
+	# Determine the process that will be measured (PSS, RSS, and VSS memory consumption)
 	local process="${HYPERVISOR_PATH}"
 
-	local memory_command="sudo smem --no-header -c pss"
-	local result=$(${memory_command} -P ^${process})
+	local vss_memory_command="sudo smem --no-header -c vss"
+	local vss_result=$(${vss_memory_command} -P ^${process} | awk '{ total += $1 } END { print total/NR }')
 
-	local pss_memory=$(echo "$result" | awk '{ total += $1 } END { print total/NR }')
+	local rss_memory_command="sudo smem --no-header -c rss"
+	local rss_result=$(${rss_memory_command} -P ^${process} | awk '{ total += $1 } END { print total/NR }')
+
+	local pss_memory_command="sudo smem --no-header -c pss"
+	local pss_result=$(${pss_memory_command} -P ^${process} | awk '{ total += $1 } END { print total/NR }')
 
 	local json="$(cat << EOF
 	{
 		"PSS network memory": {
-			"Result" : $pss_memory,
+			"Result" : $pss_result,
+			"Units"  : "Kb"
+		},
+		"RSS network memory": {
+			"Result" : $rss_result,
+			"Units"  : "Kb"
+		},
+		"VSS network memory": {
+			"Result" : $vss_result,
 			"Units"  : "Kb"
 		}
 	}
