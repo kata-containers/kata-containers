@@ -60,6 +60,17 @@ pr_number=
 
 if [ -n "$pr_number" ]
 then
+	if [ "${kata_repo}" != "${tests_repo}" ]
+	then
+		# Use the correct branch for testing.
+		# 'tests' repository branch should have the same name
+		# of the kata repository branch where the change is
+		# going to be merged.
+		pushd "${test_repo_dir}"
+		git fetch origin && git checkout "${ghprbTargetBranch}"
+		popd
+	fi
+
 	pr_branch="PR_${pr_number}"
 
 	# Create a separate branch for the PR. This is required to allow
@@ -79,6 +90,17 @@ else
 	# GIT_BRANCH env variable is set by the jenkins Github Plugin.
 	remote="${GIT_BRANCH/\/*/}"
 	branch="${GIT_BRANCH/*\//}"
+
+	if [ "${kata_repo}" != "${tests_repo}" ]
+	then
+		# Use the correct branch for testing.
+		# 'tests' repository branch should have the same name
+		# as the kata repository branch that will be tested.
+		pushd "${test_repo_dir}"
+		git fetch "$remote" && git checkout "$branch"
+		popd
+	fi
+
 	git fetch "$remote" && git checkout "$branch" && git reset --hard "$GIT_BRANCH"
 fi
 
