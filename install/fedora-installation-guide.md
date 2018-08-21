@@ -3,7 +3,7 @@
 > **Notes:**
 >
 > - Kata Containers packages are available for [Fedora\*](https://fedoraproject.org)
->   versions **26** and **27** (currently `x86_64` only).
+>   versions **27** and **28** (currently `x86_64` only).
 >
 > - If you are installing on a system that already has Clear Containers or `runv` installed,
 >   first read [the upgrading document](../Upgrading.md).
