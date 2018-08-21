@@ -33,7 +33,7 @@ type testRuntimeConfig struct {
 	LogPath           string
 }
 
-func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, logPath string, disableBlock bool, blockDeviceDriver string, enableIOThreads bool) string {
+func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, logPath string, disableBlock bool, blockDeviceDriver string, enableIOThreads bool, hotplugVFIOOnRootBus bool) string {
 	return `
 	# Runtime configuration file
 
@@ -49,6 +49,7 @@ func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath
 	default_memory = ` + strconv.FormatUint(uint64(defaultMemSize), 10) + `
 	disable_block_device_use =  ` + strconv.FormatBool(disableBlock) + `
 	enable_iothreads =  ` + strconv.FormatBool(enableIOThreads) + `
+	hotplug_vfio_on_root_bus =  ` + strconv.FormatBool(hotplugVFIOOnRootBus) + `
 	msize_9p = ` + strconv.FormatUint(uint64(defaultMsize9p), 10) + `
 
 	[proxy.kata]
@@ -97,8 +98,9 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	disableBlockDevice := true
 	blockDeviceDriver := "virtio-scsi"
 	enableIOThreads := true
+	hotplugVFIOOnRootBus := true
 
-	runtimeConfigFileData := makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, logPath, disableBlockDevice, blockDeviceDriver, enableIOThreads)
+	runtimeConfigFileData := makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, logPath, disableBlockDevice, blockDeviceDriver, enableIOThreads, hotplugVFIOOnRootBus)
 
 	configPath := path.Join(dir, "runtime.toml")
 	err = createConfig(configPath, runtimeConfigFileData)
@@ -138,6 +140,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		DefaultBridges:        defaultBridgesCount,
 		Mlock:                 !defaultEnableSwap,
 		EnableIOThreads:       enableIOThreads,
+		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		Msize9p:               defaultMsize9p,
 	}
 
@@ -617,6 +620,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	machineType := "machineType"
 	disableBlock := true
 	enableIOThreads := true
+	hotplugVFIOOnRootBus := true
 	orgVSockDevicePath := utils.VSockDevicePath
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
 	defer func() {
@@ -633,6 +637,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		MachineType:           machineType,
 		DisableBlockDeviceUse: disableBlock,
 		EnableIOThreads:       enableIOThreads,
+		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		UseVSock:              true,
 	}
 
@@ -688,6 +693,9 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		t.Errorf("Expected value for enable IOThreads  %v, got %v", enableIOThreads, config.EnableIOThreads)
 	}
 
+	if config.HotplugVFIOOnRootBus != hotplugVFIOOnRootBus {
+		t.Errorf("Expected value for HotplugVFIOOnRootBus %v, got %v", hotplugVFIOOnRootBus, config.HotplugVFIOOnRootBus)
+	}
 }
 
 func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
@@ -710,6 +718,7 @@ func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 	machineType := "machineType"
 	disableBlock := true
 	enableIOThreads := true
+	hotplugVFIOOnRootBus := true
 
 	hypervisor := hypervisor{
 		Path:                  hypervisorPath,
@@ -719,6 +728,7 @@ func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 		MachineType:           machineType,
 		DisableBlockDeviceUse: disableBlock,
 		EnableIOThreads:       enableIOThreads,
+		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 	}
 
 	_, err = newQemuHypervisorConfig(hypervisor)

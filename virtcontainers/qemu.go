@@ -40,9 +40,10 @@ type CPUDevice struct {
 type QemuState struct {
 	Bridges []Bridge
 	// HotpluggedCPUs is the list of CPUs that were hot-added
-	HotpluggedVCPUs  []CPUDevice
-	HotpluggedMemory int
-	UUID             string
+	HotpluggedVCPUs      []CPUDevice
+	HotpluggedMemory     int
+	UUID                 string
+	HotplugVFIOOnRootBus bool
 }
 
 // qemu is an Hypervisor interface implementation for the Linux qemu hypervisor.
@@ -194,6 +195,8 @@ func (q *qemu) init(id string, hypervisorConfig *HypervisorConfig, vmConfig Reso
 
 		q.Logger().Debug("Creating UUID")
 		q.state.UUID = uuid.Generate().String()
+
+		q.state.HotplugVFIOOnRootBus = q.config.HotplugVFIOOnRootBus
 
 		// The path might already exist, but in case of VM templating,
 		// we have to create it since the sandbox has not created it yet.
@@ -736,6 +739,13 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) error {
 	devID := device.ID
 
 	if op == addDevice {
+		// In case HotplugVFIOOnRootBus is true, devices are hotplugged on the root bus
+		// for pc machine type instead of bridge. This is useful for devices that require
+		// a large PCI BAR which is a currently a limitation with PCI bridges.
+		if q.state.HotplugVFIOOnRootBus {
+			return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF)
+		}
+
 		addr, bridge, err := q.addDeviceToBridge(devID)
 		if err != nil {
 			return err
@@ -745,8 +755,10 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) error {
 			return err
 		}
 	} else {
-		if err := q.removeDeviceFromBridge(devID); err != nil {
-			return err
+		if !q.state.HotplugVFIOOnRootBus {
+			if err := q.removeDeviceFromBridge(devID); err != nil {
+				return err
+			}
 		}
 
 		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
