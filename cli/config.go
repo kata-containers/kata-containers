@@ -79,12 +79,12 @@ type hypervisor struct {
 	MachineAccelerators   string `toml:"machine_accelerators"`
 	KernelParams          string `toml:"kernel_params"`
 	MachineType           string `toml:"machine_type"`
+	BlockDeviceDriver     string `toml:"block_device_driver"`
 	DefaultVCPUs          int32  `toml:"default_vcpus"`
 	DefaultMaxVCPUs       uint32 `toml:"default_maxvcpus"`
 	DefaultMemSz          uint32 `toml:"default_memory"`
 	DefaultBridges        uint32 `toml:"default_bridges"`
 	Msize9p               uint32 `toml:"msize_9p"`
-	BlockDeviceDriver     string `toml:"block_device_driver"`
 	DisableBlockDeviceUse bool   `toml:"disable_block_device_use"`
 	MemPrealloc           bool   `toml:"enable_mem_prealloc"`
 	HugePages             bool   `toml:"enable_hugepages"`
@@ -93,6 +93,7 @@ type hypervisor struct {
 	DisableNestingChecks  bool   `toml:"disable_nesting_checks"`
 	EnableIOThreads       bool   `toml:"enable_iothreads"`
 	UseVSock              bool   `toml:"use_vsock"`
+	HotplugVFIOOnRootBus  bool   `toml:"hotplug_vfio_on_root_bus"`
 }
 
 type proxy struct {
@@ -373,6 +374,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableIOThreads:       h.EnableIOThreads,
 		Msize9p:               h.msize9p(),
 		UseVSock:              useVSock,
+		HotplugVFIOOnRootBus:  h.HotplugVFIOOnRootBus,
 	}, nil
 }
 
@@ -489,6 +491,7 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
 		EnableIOThreads:       defaultEnableIOThreads,
 		Msize9p:               defaultMsize9p,
+		HotplugVFIOOnRootBus:  defaultHotplugVFIOOnRootBus,
 	}
 
 	err = config.InterNetworkModel.SetModel(defaultInterNetworkingModel)

@@ -130,6 +130,7 @@ DEFENABLESWAP := false
 DEFENABLEDEBUG := false
 DEFDISABLENESTINGCHECKS := false
 DEFMSIZE9P := 8192
+DEFHOTPLUGVFIOONROOTBUS := false
 
 SED = sed
 
@@ -202,6 +203,7 @@ USER_VARS += DEFENABLESWAP
 USER_VARS += DEFENABLEDEBUG
 USER_VARS += DEFDISABLENESTINGCHECKS
 USER_VARS += DEFMSIZE9P
+USER_VARS += DEFHOTPLUGVFIOONROOTBUS
 
 V              = @
 Q              = $(V:1=)
@@ -296,6 +298,7 @@ const defaultEnableSwap bool = $(DEFENABLESWAP)
 const defaultEnableDebug bool = $(DEFENABLEDEBUG)
 const defaultDisableNestingChecks bool = $(DEFDISABLENESTINGCHECKS)
 const defaultMsize9p uint32 = $(DEFMSIZE9P)
+const defaultHotplugVFIOOnRootBus bool = $(DEFHOTPLUGVFIOONROOTBUS)
 
 // Default config file used by stateless systems.
 var defaultRuntimeConfiguration = "$(CONFIG_PATH)"
@@ -382,6 +385,7 @@ $(GENERATED_FILES): %: %.in Makefile VERSION
 		-e "s|@DEFENABLEDEBUG@|$(DEFENABLEDEBUG)|g" \
 		-e "s|@DEFDISABLENESTINGCHECKS@|$(DEFDISABLENESTINGCHECKS)|g" \
 		-e "s|@DEFMSIZE9P@|$(DEFMSIZE9P)|g" \
+		-e "s|@DEFHOTPLUGONROOTBUS@|$(DEFHOTPLUGVFIOONROOTBUS)|g" \
 		$< > $@
 
 generate-config: $(CONFIG)
