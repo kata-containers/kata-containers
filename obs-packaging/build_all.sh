@@ -12,18 +12,9 @@ set -o pipefail
 
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-#Note:Lets update qemu and the kernel first, they take longer to build.
-#Note: runtime is build at the end to get the version from all its dependencies.
-projects=(
-	qemu-lite
-	qemu-vanilla
-	kernel
-	kata-containers-image
-	proxy
-	shim
-	ksm-throttler
-	runtime
-)
+
+# shellcheck source=scripts/obs-docker.sh
+source "${script_dir}/scripts/obs-pkgs.sh"
 
 OSCRC="${HOME}/.oscrc"
 PUSH=${PUSH:-""}
@@ -64,7 +55,7 @@ eom
 	fi
 
 	pushd "${script_dir}"
-	for p in "${projects[@]}"; do
+	for p in "${OBS_PKGS_PROJECTS[@]}"; do
 		if [[ "$GO_ARCH" != "amd64" && "$p" == "qemu-lite" ]]; then
 			echo "Skipping packaging qemu-lite as its only for amd64 arch"
 			continue
