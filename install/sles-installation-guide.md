@@ -23,9 +23,6 @@
    ```bash
    $ sudo -E zypper addrepo "http://download.opensuse.org/repositories/home:/katacontainers:/release/SLE_12_SP3/home:katacontainers:release.repo"
    $ sudo -E zypper -n --no-gpg-checks install kata-runtime kata-proxy kata-shim
-   $ sudo mkdir -p /usr/libexec/kata-containers
-   $ sudo ln -s /usr/lib64/kata-containers/kata-proxy /usr/libexec/kata-containers/kata-proxy
-   $ sudo ln -s /usr/lib64/kata-containers/kata-shim /usr/libexec/kata-containers/kata-shim
    ```
 
 2. Decide which container manager to use and select the corresponding link that follows:
