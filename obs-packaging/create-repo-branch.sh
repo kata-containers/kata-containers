@@ -23,16 +23,8 @@ readonly home_project="home:katacontainers"
 readonly template_pkg="kata-pkg-template"
 arch_target=${ARCH:-$(uname -m)}
 
-projects=(
-	qemu-lite
-	qemu-vanilla
-	linux-container
-	kata-containers-image
-	proxy
-	shim
-	ksm-throttler
-	runtime
-)
+# shellcheck source=scripts/obs-docker.sh
+source "${script_dir}/scripts/obs-pkgs.sh"
 
 pkg_exist() {
 	local project="$1"
@@ -142,7 +134,7 @@ main() {
 	info "Creating/Updating project with name ${project_branch}"
 	# Update /Create project metadata.
 	docker_run osc meta prj "${project_branch}" -F meta_project.xml
-	for pkg in "${projects[@]}"; do
+	for pkg in "${OBS_PKGS_PROJECTS[@]}"; do
 		if ! pkg_exist "${project_branch}" "${pkg}"; then
 			echo "Package ${pkg} does not exit in ${project_branch}, creating ..."
 			docker_run osc branch "${home_project}" "${template_pkg}" "${project_branch}" "${pkg}"
