@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -55,7 +56,7 @@ func TestFilesystemCreateAllResourcesSuccessful(t *testing.T) {
 		os.RemoveAll(runPath)
 	}
 
-	err := fs.createAllResources(sandbox)
+	err := fs.createAllResources(context.Background(), sandbox)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +103,7 @@ func TestFilesystemCreateAllResourcesFailingSandboxIDEmpty(t *testing.T) {
 
 	sandbox := &Sandbox{}
 
-	err := fs.createAllResources(sandbox)
+	err := fs.createAllResources(context.Background(), sandbox)
 	if err == nil {
 		t.Fatal()
 	}
@@ -120,7 +121,7 @@ func TestFilesystemCreateAllResourcesFailingContainerIDEmpty(t *testing.T) {
 		containers: containers,
 	}
 
-	err := fs.createAllResources(sandbox)
+	err := fs.createAllResources(context.Background(), sandbox)
 	if err == nil {
 		t.Fatal()
 	}

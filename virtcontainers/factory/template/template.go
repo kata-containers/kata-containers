@@ -7,6 +7,7 @@
 package template
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"syscall"
@@ -37,20 +38,20 @@ func Fetch(config vc.VMConfig) (base.FactoryBase, error) {
 }
 
 // New creates a new VM template factory.
-func New(config vc.VMConfig) base.FactoryBase {
+func New(ctx context.Context, config vc.VMConfig) base.FactoryBase {
 	statePath := vc.RunVMStoragePath + "/template"
 	t := &template{statePath, config}
 
 	err := t.prepareTemplateFiles()
 	if err != nil {
 		// fallback to direct factory if template is not supported.
-		return direct.New(config)
+		return direct.New(ctx, config)
 	}
 
-	err = t.createTemplateVM()
+	err = t.createTemplateVM(ctx)
 	if err != nil {
 		// fallback to direct factory if template is not supported.
-		return direct.New(config)
+		return direct.New(ctx, config)
 	}
 
 	return t
@@ -62,12 +63,12 @@ func (t *template) Config() vc.VMConfig {
 }
 
 // GetBaseVM creates a new paused VM from the template VM.
-func (t *template) GetBaseVM() (*vc.VM, error) {
-	return t.createFromTemplateVM()
+func (t *template) GetBaseVM(ctx context.Context) (*vc.VM, error) {
+	return t.createFromTemplateVM(ctx)
 }
 
 // CloseFactory cleans up the template VM.
-func (t *template) CloseFactory() {
+func (t *template) CloseFactory(ctx context.Context) {
 	syscall.Unmount(t.statePath, 0)
 	os.RemoveAll(t.statePath)
 }
@@ -92,7 +93,7 @@ func (t *template) prepareTemplateFiles() error {
 	return nil
 }
 
-func (t *template) createTemplateVM() error {
+func (t *template) createTemplateVM(ctx context.Context) error {
 	// create the template vm
 	config := t.config
 	config.HypervisorConfig.BootToBeTemplate = true
@@ -100,7 +101,7 @@ func (t *template) createTemplateVM() error {
 	config.HypervisorConfig.MemoryPath = t.statePath + "/memory"
 	config.HypervisorConfig.DevicesStatePath = t.statePath + "/state"
 
-	vm, err := vc.NewVM(config)
+	vm, err := vc.NewVM(ctx, config)
 	if err != nil {
 		return err
 	}
@@ -122,14 +123,14 @@ func (t *template) createTemplateVM() error {
 	return nil
 }
 
-func (t *template) createFromTemplateVM() (*vc.VM, error) {
+func (t *template) createFromTemplateVM(ctx context.Context) (*vc.VM, error) {
 	config := t.config
 	config.HypervisorConfig.BootToBeTemplate = false
 	config.HypervisorConfig.BootFromTemplate = true
 	config.HypervisorConfig.MemoryPath = t.statePath + "/memory"
 	config.HypervisorConfig.DevicesStatePath = t.statePath + "/state"
 
-	return vc.NewVM(config)
+	return vc.NewVM(ctx, config)
 }
 
 func (t *template) checkTemplateVM() error {

@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -212,7 +213,7 @@ func TestGetDeviceForPathBindMount(t *testing.T) {
 
 	defer os.Remove(dest)
 
-	err = bindMount(source, dest, false)
+	err = bindMount(context.Background(), source, dest, false)
 	if err != nil {
 		t.Fatal(err)
 	}
