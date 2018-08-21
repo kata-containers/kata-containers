@@ -128,7 +128,7 @@ function local_build() {
 	[ ! -e $PACKAGING_DIR ] && mkdir $PACKAGING_DIR
 	[ ! -e $LOG_DIR ] && mkdir $LOG_DIR
 
-	pushd $OBS_WORKDIR
+	pushd "${obs_repo_dir}"
 
 	BUILD_ARGS=('--local-package' '--no-verify' '--noservice' '--trust-all-projects' '--keep-pkgs=/var/packaging/results')
 	[ "$OFFLINE" == "true" ] && BUILD_ARGS+=('--offline')
@@ -147,22 +147,24 @@ function local_build() {
 				${distro} $BUILD_ARCH *.dsc | tee ${LOG_DIR}/${distro}_${PKG_NAME}_build.log
 		fi
 	done
+	popd
+
 }
 
 function checkout_repo() {
-	local REPO="${1}"
-	if [ -z "${OBS_WORKDIR:-}" ]; then
-		OBS_WORKDIR=$(mktemp -d -u -t obs-repo.XXXXXXXXXXX) || exit 1
-		osc co "${REPO}" -o "${OBS_WORKDIR}"
-	fi
-	find "${OBS_WORKDIR}" -maxdepth 1 -mindepth 1 ! -name '.osc' -prune -exec echo remove {} \; -exec rm -rf {} \;
+	local repo="${1}"
+	export obs_repo_dir="${repo}"
 
-	mv "${GENERATED_FILES[@]}" "${OBS_WORKDIR}"
-	cp "${STATIC_FILES[@]}" "$OBS_WORKDIR"
+	mkdir -p "${obs_repo_dir}"
+	osc co "${repo}" -o "${obs_repo_dir}"
+	find "${obs_repo_dir}" -maxdepth 1 -mindepth 1 ! -name '.osc' -prune -exec echo remove {} \; -exec rm -rf {} \;
+
+	mv "${GENERATED_FILES[@]}" "${obs_repo_dir}"
+	cp "${STATIC_FILES[@]}" "$obs_repo_dir"
 }
 
 function obs_push() {
-	pushd $OBS_WORKDIR
+	pushd "${obs_repo_dir}"
 	osc addremove
 	osc commit -m "Update ${PKG_NAME} $VERSION: ${hash_tag:0:7}"
 	popd
@@ -187,10 +189,6 @@ function cli() {
 			;;
 		-r | --obs-repository)
 			PROJECT_REPO="$2"
-			shift 2
-			;;
-		-w | --workdir)
-			OBS_WORKDIR="$2"
 			shift 2
 			;;
 		-v | --verbose)
