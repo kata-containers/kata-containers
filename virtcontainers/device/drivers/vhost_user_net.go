@@ -16,8 +16,8 @@ import (
 
 // VhostUserNetDevice is a network vhost-user based device
 type VhostUserNetDevice struct {
+	*GenericDevice
 	config.VhostUserDeviceAttrs
-	DeviceInfo *config.DeviceInfo
 }
 
 //
@@ -38,7 +38,7 @@ func (device *VhostUserNetDevice) Attach(devReceiver api.DeviceReceiver) (err er
 	}
 	id := hex.EncodeToString(randBytes)
 
-	device.ID = id
+	device.DevID = id
 	device.Type = device.DeviceType()
 
 	defer func() {
@@ -60,16 +60,6 @@ func (device *VhostUserNetDevice) Detach(devReceiver api.DeviceReceiver) error {
 	return nil
 }
 
-// IsAttached checks if the device is attached
-func (device *VhostUserNetDevice) IsAttached() bool {
-	return device.DeviceInfo.Hotplugged
-}
-
-// DeviceID returns device ID
-func (device *VhostUserNetDevice) DeviceID() string {
-	return device.ID
-}
-
 // DeviceType is standard interface of api.Device, it returns device type
 func (device *VhostUserNetDevice) DeviceType() config.DeviceType {
 	return config.VhostUserNet
@@ -80,3 +70,6 @@ func (device *VhostUserNetDevice) GetDeviceInfo() interface{} {
 	device.Type = device.DeviceType()
 	return &device.VhostUserDeviceAttrs
 }
+
+// It should implement IsAttached() and DeviceID() as api.Device implementation
+// here it shares function from *GenericDevice so we don't need duplicate codes

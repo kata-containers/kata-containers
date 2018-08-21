@@ -43,16 +43,6 @@ func (device *GenericDevice) Detach(devReceiver api.DeviceReceiver) error {
 	return nil
 }
 
-// IsAttached checks if the device is attached
-func (device *GenericDevice) IsAttached() bool {
-	return device.DeviceInfo.Hotplugged
-}
-
-// DeviceID returns device ID
-func (device *GenericDevice) DeviceID() string {
-	return device.ID
-}
-
 // DeviceType is standard interface of api.Device, it returns device type
 func (device *GenericDevice) DeviceType() config.DeviceType {
 	return config.DeviceGeneric
@@ -61,4 +51,14 @@ func (device *GenericDevice) DeviceType() config.DeviceType {
 // GetDeviceInfo returns device information used for creating
 func (device *GenericDevice) GetDeviceInfo() interface{} {
 	return device.DeviceInfo
+}
+
+// IsAttached checks if the device is attached
+func (device *GenericDevice) IsAttached() bool {
+	return device.DeviceInfo.Hotplugged
+}
+
+// DeviceID returns device ID
+func (device *GenericDevice) DeviceID() string {
+	return device.ID
 }

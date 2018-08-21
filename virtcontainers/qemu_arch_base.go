@@ -476,16 +476,16 @@ func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, attr co
 	// TODO: find a way to remove dependency of drivers package
 	switch attr.Type {
 	case config.VhostUserNet:
-		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("net", attr.ID, maxDevIDSize)
+		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("net", attr.DevID, maxDevIDSize)
 		qemuVhostUserDevice.Address = attr.MacAddress
 	case config.VhostUserSCSI:
-		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("scsi", attr.ID, maxDevIDSize)
+		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("scsi", attr.DevID, maxDevIDSize)
 	case config.VhostUserBlk:
 	}
 
 	qemuVhostUserDevice.VhostUserType = govmmQemu.VhostUserDeviceType(attr.Type)
 	qemuVhostUserDevice.SocketPath = attr.SocketPath
-	qemuVhostUserDevice.CharDevID = utils.MakeNameID("char", attr.ID, maxDevIDSize)
+	qemuVhostUserDevice.CharDevID = utils.MakeNameID("char", attr.DevID, maxDevIDSize)
 
 	devices = append(devices, qemuVhostUserDevice)
 

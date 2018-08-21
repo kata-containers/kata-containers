@@ -323,7 +323,7 @@ func (endpoint *VhostUserEndpoint) Attach(h hypervisor) error {
 	id := hex.EncodeToString(randBytes)
 
 	d := config.VhostUserDeviceAttrs{
-		ID:         id,
+		DevID:      id,
 		SocketPath: endpoint.SocketPath,
 		MacAddress: endpoint.HardAddr,
 		Type:       config.VhostUserNet,
