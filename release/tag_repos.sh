@@ -15,10 +15,10 @@ script_name="$(basename "${BASH_SOURCE[0]}")"
 OWNER=${OWNER:-"kata-containers"}
 PROJECT="Kata Containers"
 PUSH="${PUSH:-"false"}"
-commit="master"
+branch="master"
 readonly URL_RAW_FILE="https://raw.githubusercontent.com/${OWNER}"
 #The runtime version is used as reference of latest release
-readonly kata_version=$(curl -Ls "${URL_RAW_FILE}/runtime/${commit}/VERSION" | grep -v -P "^#")
+readonly kata_version=$(curl -Ls "${URL_RAW_FILE}/runtime/${branch}/VERSION" | grep -v -P "^#")
 
 source "${script_dir}/../scripts/lib.sh"
 
@@ -40,8 +40,9 @@ status : Get Current ${PROJECT} tags status
 tag    : Create tags for ${PROJECT}
 
 Options:
--h : Show this help
--p : push tags
+-b <branch>: branch were will check the version.
+-h         : Show this help
+-p         : push tags
 
 EOT
 
@@ -77,7 +78,7 @@ check_versions() {
 	info "Check all repos has version ${kata_version} in VERSION file"
 
 	for repo in "${repos[@]}"; do
-		repo_version=$(curl -Ls "${URL_RAW_FILE}/${repo}/${commit}/VERSION" | grep -v -P "^#")
+		repo_version=$(curl -Ls "${URL_RAW_FILE}/${repo}/${branch}/VERSION" | grep -v -P "^#")
 		info "${repo} is in $repo_version"
 		[ "${repo_version}" == "${kata_version}" ] || die "${repo} is not in version ${kata_version}"
 	done
@@ -130,8 +131,9 @@ create_github_release() {
 	fi
 }
 
-while getopts "hp" opt; do
+while getopts "b:hp" opt; do
 	case $opt in
+	b) branch="${OPTARG}" ;;
 	h) usage && exit 0 ;;
 	p) PUSH="true" ;;
 	esac
