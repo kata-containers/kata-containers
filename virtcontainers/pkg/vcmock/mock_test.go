@@ -721,7 +721,7 @@ func TestVCMockSetVMFactory(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	f, err := factory.NewFactory(factory.Config{VMConfig: vmConfig}, false)
+	f, err := factory.NewFactory(ctx, factory.Config{VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
 	assert.Equal(factoryTriggered, 0)

@@ -35,7 +35,7 @@ func TestNoopAgentInit(t *testing.T) {
 	n := &noopAgent{}
 	sandbox := &Sandbox{}
 
-	err := n.init(sandbox, nil)
+	err := n.init(context.Background(), sandbox, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

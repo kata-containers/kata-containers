@@ -6,6 +6,7 @@
 package template
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -29,14 +30,16 @@ func TestTemplateFactory(t *testing.T) {
 		HypervisorConfig: hyperConfig,
 	}
 
+	ctx := context.Background()
+
 	// New
-	f := New(vmConfig)
+	f := New(ctx, vmConfig)
 
 	// Config
 	assert.Equal(f.Config(), vmConfig)
 
 	// GetBaseVM
-	_, err := f.GetBaseVM()
+	_, err := f.GetBaseVM(ctx)
 	assert.Nil(err)
 
 	// Fetch
@@ -58,13 +61,13 @@ func TestTemplateFactory(t *testing.T) {
 	err = tt.checkTemplateVM()
 	assert.Nil(err)
 
-	err = tt.createTemplateVM()
+	err = tt.createTemplateVM(ctx)
 	assert.Nil(err)
 
-	_, err = tt.GetBaseVM()
+	_, err = tt.GetBaseVM(ctx)
 	assert.Nil(err)
 
 	// CloseFactory
-	f.CloseFactory()
-	tt.CloseFactory()
+	f.CloseFactory(ctx)
+	tt.CloseFactory(ctx)
 }

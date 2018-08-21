@@ -40,6 +40,14 @@ func trace(parent context.Context, name string) (opentracing.Span, context.Conte
 	return span, ctx
 }
 
+func traceWithSubsys(ctx context.Context, subsys, name string) (opentracing.Span, context.Context) {
+	span, ctx := opentracing.StartSpanFromContext(ctx, name)
+
+	span.SetTag("subsystem", subsys)
+
+	return span, ctx
+}
+
 // SetLogger sets the logger for virtcontainers package.
 func SetLogger(ctx context.Context, logger *logrus.Entry) {
 	fields := virtLog.Data
@@ -54,7 +62,7 @@ func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	span, ctx := trace(ctx, "CreateSandbox")
 	defer span.Finish()
 
-	s, err := createSandboxFromConfig(sandboxConfig, factory)
+	s, err := createSandboxFromConfig(ctx, sandboxConfig, factory)
 	if err == nil {
 		s.releaseStatelessSandbox()
 	}
@@ -62,11 +70,14 @@ func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	return s, err
 }
 
-func createSandboxFromConfig(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
+func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
+	span, ctx := trace(ctx, "createSandboxFromConfig")
+	defer span.Finish()
+
 	var err error
 
 	// Create the sandbox.
-	s, err := createSandbox(sandboxConfig, factory)
+	s, err := createSandbox(ctx, sandboxConfig, factory)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +150,7 @@ func DeleteSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	defer unlockSandbox(lockFile)
 
 	// Fetch the sandbox from storage and create it.
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +183,7 @@ func FetchSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	defer unlockSandbox(lockFile)
 
 	// Fetch the sandbox from storage and create it.
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +220,7 @@ func StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	defer unlockSandbox(lockFile)
 
 	// Fetch the sandbox from storage and create it.
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +261,7 @@ func StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	defer unlockSandbox(lockFile)
 
 	// Fetch the sandbox from storage and create it.
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +292,7 @@ func RunSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	span, ctx := trace(ctx, "RunSandbox")
 	defer span.Finish()
 
-	s, err := createSandboxFromConfig(sandboxConfig, factory)
+	s, err := createSandboxFromConfig(ctx, sandboxConfig, factory)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +356,7 @@ func StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error)
 		return SandboxStatus{}, err
 	}
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		unlockSandbox(lockFile)
 		return SandboxStatus{}, err
@@ -401,7 +412,7 @@ func CreateContainer(ctx context.Context, sandboxID string, containerConfig Cont
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -433,7 +444,7 @@ func DeleteContainer(ctx context.Context, sandboxID, containerID string) (VCCont
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +470,7 @@ func StartContainer(ctx context.Context, sandboxID, containerID string) (VCConta
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -493,7 +504,7 @@ func StopContainer(ctx context.Context, sandboxID, containerID string) (VCContai
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -534,7 +545,7 @@ func EnterContainer(ctx context.Context, sandboxID, containerID string, cmd Cmd)
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -567,7 +578,7 @@ func StatusContainer(ctx context.Context, sandboxID, containerID string) (Contai
 		return ContainerStatus{}, err
 	}
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		unlockSandbox(lockFile)
 		return ContainerStatus{}, err
@@ -658,7 +669,7 @@ func KillContainer(ctx context.Context, sandboxID, containerID string, signal sy
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return err
 	}
@@ -685,7 +696,7 @@ func PauseSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	span, ctx := trace(ctx, "PauseSandbox")
 	defer span.Finish()
 
-	return togglePauseSandbox(sandboxID, true)
+	return togglePauseSandbox(ctx, sandboxID, true)
 }
 
 // ResumeSandbox is the virtcontainers resuming entry point which resumes
@@ -694,7 +705,7 @@ func ResumeSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	span, ctx := trace(ctx, "ResumeSandbox")
 	defer span.Finish()
 
-	return togglePauseSandbox(sandboxID, false)
+	return togglePauseSandbox(ctx, sandboxID, false)
 }
 
 // ProcessListContainer is the virtcontainers entry point to list
@@ -717,7 +728,7 @@ func ProcessListContainer(ctx context.Context, sandboxID, containerID string, op
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -752,7 +763,7 @@ func UpdateContainer(ctx context.Context, sandboxID, containerID string, resourc
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return err
 	}
@@ -781,7 +792,7 @@ func StatsContainer(ctx context.Context, sandboxID, containerID string) (Contain
 
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return ContainerStats{}, err
 	}
@@ -790,7 +801,7 @@ func StatsContainer(ctx context.Context, sandboxID, containerID string) (Contain
 	return s.StatsContainer(containerID)
 }
 
-func togglePauseContainer(sandboxID, containerID string, pause bool) error {
+func togglePauseContainer(ctx context.Context, sandboxID, containerID string, pause bool) error {
 	if sandboxID == "" {
 		return errNeedSandboxID
 	}
@@ -805,7 +816,7 @@ func togglePauseContainer(sandboxID, containerID string, pause bool) error {
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return err
 	}
@@ -829,7 +840,7 @@ func PauseContainer(ctx context.Context, sandboxID, containerID string) error {
 	span, ctx := trace(ctx, "PauseContainer")
 	defer span.Finish()
 
-	return togglePauseContainer(sandboxID, containerID, true)
+	return togglePauseContainer(ctx, sandboxID, containerID, true)
 }
 
 // ResumeContainer is the virtcontainers container resume entry point.
@@ -837,7 +848,7 @@ func ResumeContainer(ctx context.Context, sandboxID, containerID string) error {
 	span, ctx := trace(ctx, "ResumeContainer")
 	defer span.Finish()
 
-	return togglePauseContainer(sandboxID, containerID, false)
+	return togglePauseContainer(ctx, sandboxID, containerID, false)
 }
 
 // AddDevice will add a device to sandbox
@@ -852,7 +863,7 @@ func AddDevice(ctx context.Context, sandboxID string, info deviceConfig.DeviceIn
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -872,7 +883,7 @@ func toggleInterface(ctx context.Context, sandboxID string, inf *grpc.Interface,
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -904,7 +915,7 @@ func ListInterfaces(ctx context.Context, sandboxID string) ([]*grpc.Interface, e
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -924,7 +935,7 @@ func UpdateRoutes(ctx context.Context, sandboxID string, routes []*grpc.Route) (
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -943,7 +954,7 @@ func ListRoutes(ctx context.Context, sandboxID string) ([]*grpc.Route, error) {
 	}
 	defer unlockSandbox(lockFile)
 
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}

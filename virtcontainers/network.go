@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"bufio"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -1581,7 +1582,7 @@ func vhostUserSocketPath(info interface{}) (string, error) {
 // between VM netns and the host network physical interface.
 type network interface {
 	// init initializes the network, setting a new network namespace.
-	init(config NetworkConfig) (string, bool, error)
+	init(ctx context.Context, config NetworkConfig) (string, bool, error)
 
 	// run runs a callback function in a specified network namespace.
 	run(networkNSPath string, cb func() error) error

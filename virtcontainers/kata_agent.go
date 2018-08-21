@@ -24,6 +24,7 @@ import (
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
+	opentracing "github.com/opentracing/opentracing-go"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -96,6 +97,21 @@ type kataAgent struct {
 	proxyBuiltIn bool
 
 	vmSocket interface{}
+	ctx      context.Context
+}
+
+func (k *kataAgent) trace(name string) (opentracing.Span, context.Context) {
+	if k.ctx == nil {
+		k.Logger().WithField("type", "bug").Error("trace called before context set")
+		k.ctx = context.Background()
+	}
+
+	span, ctx := opentracing.StartSpanFromContext(k.ctx, name)
+
+	span.SetTag("subsystem", "agent")
+	span.SetTag("type", "kata")
+
+	return span, ctx
 }
 
 func (k *kataAgent) Logger() *logrus.Entry {
@@ -135,7 +151,13 @@ func (k *kataAgent) generateVMSocket(id string, c KataAgentConfig) error {
 	return nil
 }
 
-func (k *kataAgent) init(sandbox *Sandbox, config interface{}) (err error) {
+func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface{}) (err error) {
+	// save
+	k.ctx = sandbox.ctx
+
+	span, _ := k.trace("init")
+	defer span.Finish()
+
 	switch c := config.(type) {
 	case KataAgentConfig:
 		if err := k.generateVMSocket(sandbox.id, c); err != nil {
@@ -240,6 +262,9 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 }
 
 func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
+	span, _ := k.trace("createSandbox")
+	defer span.Finish()
+
 	return k.configure(sandbox.hypervisor, sandbox.id, k.getSharePath(sandbox.id), k.proxyBuiltIn, nil)
 }
 
@@ -321,6 +346,9 @@ func cmdEnvsToStringSlice(ev []EnvVar) []string {
 }
 
 func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, error) {
+	span, _ := k.trace("exec")
+	defer span.Finish()
+
 	var kataProcess *grpc.Process
 
 	kataProcess, err := cmdToKataProcess(cmd)
@@ -354,6 +382,8 @@ func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, erro
 }
 
 func (k *kataAgent) generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*grpc.Interface, []*grpc.Route, error) {
+	span, _ := k.trace("generateInterfacesAndRoutes")
+	defer span.Finish()
 
 	if networkNS.NetNsPath == "" {
 		return nil, nil, nil
@@ -517,6 +547,9 @@ func (k *kataAgent) listRoutes() ([]*grpc.Route, error) {
 }
 
 func (k *kataAgent) startProxy(sandbox *Sandbox) error {
+	span, _ := k.trace("startProxy")
+	defer span.Finish()
+
 	var err error
 
 	if k.proxy == nil {
@@ -569,6 +602,9 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 }
 
 func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
+	span, _ := k.trace("startSandbox")
+	defer span.Finish()
+
 	err := k.startProxy(sandbox)
 	if err != nil {
 		return err
@@ -642,6 +678,9 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 }
 
 func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
+	span, _ := k.trace("stopSandbox")
+	defer span.Finish()
+
 	if k.proxy == nil {
 		return errorMissingProxy
 	}
@@ -811,7 +850,7 @@ func (k *kataAgent) rollbackFailingContainerCreation(c *Container) {
 			k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
 		}
 
-		if err2 := bindUnmountContainerRootfs(kataHostSharedDir, c.sandbox.id, c.id); err2 != nil {
+		if err2 := bindUnmountContainerRootfs(k.ctx, kataHostSharedDir, c.sandbox.id, c.id); err2 != nil {
 			k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
 		}
 	}
@@ -861,7 +900,7 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 	// (kataGuestSharedDir) is already mounted in the
 	// guest. We only need to mount the rootfs from
 	// the host and it will show up in the guest.
-	if err := bindMountContainerRootfs(kataHostSharedDir, sandbox.id, c.id, c.rootFs, false); err != nil {
+	if err := bindMountContainerRootfs(k.ctx, kataHostSharedDir, sandbox.id, c.id, c.rootFs, false); err != nil {
 		return nil, err
 	}
 
@@ -869,6 +908,9 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 }
 
 func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process, err error) {
+	span, _ := k.trace("createContainer")
+	defer span.Finish()
+
 	ociSpecJSON, ok := c.config.Annotations[vcAnnotations.ConfigJSONKey]
 	if !ok {
 		return nil, errorMissingOCISpec
@@ -1101,6 +1143,9 @@ func (k *kataAgent) handlePidNamespace(grpcSpec *grpc.Spec, sandbox *Sandbox) (b
 }
 
 func (k *kataAgent) startContainer(sandbox *Sandbox, c *Container) error {
+	span, _ := k.trace("startContainer")
+	defer span.Finish()
+
 	req := &grpc.StartContainerRequest{
 		ContainerId: c.id,
 	}
@@ -1110,6 +1155,9 @@ func (k *kataAgent) startContainer(sandbox *Sandbox, c *Container) error {
 }
 
 func (k *kataAgent) stopContainer(sandbox *Sandbox, c Container) error {
+	span, _ := k.trace("stopContainer")
+	defer span.Finish()
+
 	req := &grpc.RemoveContainerRequest{
 		ContainerId: c.id,
 	}
@@ -1122,7 +1170,7 @@ func (k *kataAgent) stopContainer(sandbox *Sandbox, c Container) error {
 		return err
 	}
 
-	if err := bindUnmountContainerRootfs(kataHostSharedDir, sandbox.id, c.id); err != nil {
+	if err := bindUnmountContainerRootfs(k.ctx, kataHostSharedDir, sandbox.id, c.id); err != nil {
 		return err
 	}
 
@@ -1261,6 +1309,9 @@ func (k *kataAgent) connect() error {
 		return nil
 	}
 
+	span, _ := k.trace("connect")
+	defer span.Finish()
+
 	// This is for the first connection only, to prevent race
 	k.Lock()
 	defer k.Unlock()
@@ -1281,6 +1332,9 @@ func (k *kataAgent) connect() error {
 }
 
 func (k *kataAgent) disconnect() error {
+	span, _ := k.trace("disconnect")
+	defer span.Finish()
+
 	k.Lock()
 	defer k.Unlock()
 
@@ -1300,6 +1354,9 @@ func (k *kataAgent) disconnect() error {
 
 // check grpc server is serving
 func (k *kataAgent) check() error {
+	span, _ := k.trace("check")
+	defer span.Finish()
+
 	_, err := k.sendReq(&grpc.CheckRequest{})
 	if err != nil {
 		err = fmt.Errorf("Failed to check if grpc server is working: %s", err)
@@ -1308,6 +1365,9 @@ func (k *kataAgent) check() error {
 }
 
 func (k *kataAgent) waitProcess(c *Container, processID string) (int32, error) {
+	span, _ := k.trace("waitProcess")
+	defer span.Finish()
+
 	resp, err := k.sendReq(&grpc.WaitProcessRequest{
 		ContainerId: c.id,
 		ExecId:      processID,
@@ -1428,6 +1488,10 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 }
 
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
+	span, _ := k.trace("sendReq")
+	span.SetTag("request", request)
+	defer span.Finish()
+
 	if err := k.connect(); err != nil {
 		return nil, err
 	}
@@ -1443,7 +1507,7 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	message := request.(proto.Message)
 	k.Logger().WithField("name", msgName).WithField("req", message.String()).Debug("sending request")
 
-	return handler(context.Background(), request)
+	return handler(k.ctx, request)
 }
 
 // readStdout and readStderr are special that we cannot differentiate them with the request types...
@@ -1473,7 +1537,7 @@ func (k *kataAgent) readProcessStderr(c *Container, processID string, data []byt
 type readFn func(context.Context, *grpc.ReadStreamRequest, ...golangGrpc.CallOption) (*grpc.ReadStreamResponse, error)
 
 func (k *kataAgent) readProcessStream(containerID, processID string, data []byte, read readFn) (int, error) {
-	resp, err := read(context.Background(), &grpc.ReadStreamRequest{
+	resp, err := read(k.ctx, &grpc.ReadStreamRequest{
 		ContainerId: containerID,
 		ExecId:      processID,
 		Len:         uint32(len(data))})

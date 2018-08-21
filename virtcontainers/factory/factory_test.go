@@ -21,9 +21,10 @@ func TestNewFactory(t *testing.T) {
 
 	assert := assert.New(t)
 
-	_, err := NewFactory(config, true)
+	ctx := context.Background()
+	_, err := NewFactory(ctx, config, true)
 	assert.Error(err)
-	_, err = NewFactory(config, false)
+	_, err = NewFactory(ctx, config, false)
 	assert.Error(err)
 
 	config.VMConfig = vc.VMConfig{
@@ -31,7 +32,7 @@ func TestNewFactory(t *testing.T) {
 		AgentType:      vc.NoopAgentType,
 	}
 
-	_, err = NewFactory(config, false)
+	_, err = NewFactory(ctx, config, false)
 	assert.Error(err)
 
 	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
@@ -42,29 +43,29 @@ func TestNewFactory(t *testing.T) {
 	}
 
 	// direct
-	_, err = NewFactory(config, false)
+	_, err = NewFactory(ctx, config, false)
 	assert.Nil(err)
-	_, err = NewFactory(config, true)
+	_, err = NewFactory(ctx, config, true)
 	assert.Nil(err)
 
 	// template
 	config.Template = true
-	_, err = NewFactory(config, false)
+	_, err = NewFactory(ctx, config, false)
 	assert.Nil(err)
-	_, err = NewFactory(config, true)
+	_, err = NewFactory(ctx, config, true)
 	assert.Error(err)
 
 	// Cache
 	config.Cache = 10
-	_, err = NewFactory(config, false)
+	_, err = NewFactory(ctx, config, false)
 	assert.Nil(err)
-	_, err = NewFactory(config, true)
+	_, err = NewFactory(ctx, config, true)
 	assert.Error(err)
 
 	config.Template = false
-	_, err = NewFactory(config, false)
+	_, err = NewFactory(ctx, config, false)
 	assert.Nil(err)
-	_, err = NewFactory(config, true)
+	_, err = NewFactory(ctx, config, true)
 	assert.Error(err)
 }
 
@@ -80,7 +81,8 @@ func TestFactorySetLogger(t *testing.T) {
 		KernelPath: "foo",
 		ImagePath:  "bar",
 	}
-	vf, err := NewFactory(config, false)
+	ctx := context.Background()
+	vf, err := NewFactory(ctx, config, false)
 	assert.Nil(err)
 
 	f, ok := vf.(*factory)
@@ -167,66 +169,68 @@ func TestFactoryGetVM(t *testing.T) {
 		HypervisorConfig: hyperConfig,
 	}
 
+	ctx := context.Background()
+
 	// direct factory
-	f, err := NewFactory(Config{VMConfig: vmConfig}, false)
+	f, err := NewFactory(ctx, Config{VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
-	_, err = f.GetVM(vmConfig)
+	_, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	f.CloseFactory()
+	f.CloseFactory(ctx)
 
 	// template factory
-	f, err = NewFactory(Config{Template: true, VMConfig: vmConfig}, false)
+	f, err = NewFactory(ctx, Config{Template: true, VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
-	_, err = f.GetVM(vmConfig)
+	_, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	f.CloseFactory()
+	f.CloseFactory(ctx)
 
 	// fetch template factory
-	f, err = NewFactory(Config{Template: true, VMConfig: vmConfig}, false)
+	f, err = NewFactory(ctx, Config{Template: true, VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
-	_, err = NewFactory(Config{Template: true, VMConfig: vmConfig}, true)
+	_, err = NewFactory(ctx, Config{Template: true, VMConfig: vmConfig}, true)
 	assert.Error(err)
 
-	_, err = f.GetVM(vmConfig)
+	_, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	f.CloseFactory()
+	f.CloseFactory(ctx)
 
 	// cache factory over direct factory
-	f, err = NewFactory(Config{Cache: 2, VMConfig: vmConfig}, false)
+	f, err = NewFactory(ctx, Config{Cache: 2, VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
-	_, err = f.GetVM(vmConfig)
+	_, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	f.CloseFactory()
+	f.CloseFactory(ctx)
 
 	// cache factory over template factory
-	f, err = NewFactory(Config{Template: true, Cache: 2, VMConfig: vmConfig}, false)
+	f, err = NewFactory(ctx, Config{Template: true, Cache: 2, VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
-	_, err = f.GetVM(vmConfig)
+	_, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
 	// CPU hotplug
 	vmConfig.HypervisorConfig.DefaultVCPUs++
-	_, err = f.GetVM(vmConfig)
+	_, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
 	// Memory hotplug
 	vmConfig.HypervisorConfig.DefaultMemSz += 128
-	_, err = f.GetVM(vmConfig)
+	_, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
 	// checkConfig fall back
 	vmConfig.HypervisorConfig.Mlock = true
-	_, err = f.GetVM(vmConfig)
+	_, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	f.CloseFactory()
+	f.CloseFactory(ctx)
 }

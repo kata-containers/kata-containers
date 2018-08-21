@@ -491,7 +491,7 @@ func TestStartSandboxHyperstartAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(defaultSharedDir, pImpl)
+	bindUnmountAllRootfs(ctx, defaultSharedDir, pImpl)
 }
 
 func TestStartSandboxKataAgentSuccessful(t *testing.T) {
@@ -532,7 +532,7 @@ func TestStartSandboxKataAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(defaultSharedDir, pImpl)
+	bindUnmountAllRootfs(ctx, defaultSharedDir, pImpl)
 }
 
 func TestStartSandboxFailing(t *testing.T) {
@@ -770,7 +770,7 @@ func TestRunSandboxHyperstartAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(defaultSharedDir, pImpl)
+	bindUnmountAllRootfs(ctx, defaultSharedDir, pImpl)
 }
 
 func TestRunSandboxKataAgentSuccessful(t *testing.T) {
@@ -817,7 +817,7 @@ func TestRunSandboxKataAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(defaultSharedDir, pImpl)
+	bindUnmountAllRootfs(ctx, defaultSharedDir, pImpl)
 }
 
 func TestRunSandboxFailing(t *testing.T) {
@@ -1380,7 +1380,7 @@ func TestStartStopContainerHyperstartAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(defaultSharedDir, pImpl)
+	bindUnmountAllRootfs(ctx, defaultSharedDir, pImpl)
 }
 
 func TestStartStopSandboxHyperstartAgentSuccessfulWithCNMNetwork(t *testing.T) {
@@ -1608,7 +1608,7 @@ func TestEnterContainerHyperstartAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(defaultSharedDir, pImpl)
+	bindUnmountAllRootfs(ctx, defaultSharedDir, pImpl)
 }
 
 func TestEnterContainerFailingNoSandbox(t *testing.T) {
@@ -1770,7 +1770,7 @@ func TestStatusContainerStateReady(t *testing.T) {
 	}
 
 	// fresh lookup
-	p2, err := fetchSandbox(p.ID())
+	p2, err := fetchSandbox(ctx, p.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1845,7 +1845,7 @@ func TestStatusContainerStateRunning(t *testing.T) {
 	}
 
 	// fresh lookup
-	p2, err := fetchSandbox(p.ID())
+	p2, err := fetchSandbox(ctx, p.ID())
 	if err != nil {
 		t.Fatal(err)
 	}

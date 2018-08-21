@@ -6,12 +6,14 @@
 package virtcontainers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
@@ -115,7 +117,7 @@ var RunVMStoragePath = filepath.Join("/run", storagePathSuffix, vmPathSuffix)
 // The default resource storage implementation is filesystem.
 type resourceStorage interface {
 	// Create all resources for a sandbox
-	createAllResources(sandbox *Sandbox) error
+	createAllResources(ctx context.Context, sandbox *Sandbox) error
 
 	// Resources URIs functions return both the URI
 	// for the actual resource and the URI base.
@@ -155,14 +157,37 @@ type resourceStorage interface {
 
 // filesystem is a resourceStorage interface implementation for a local filesystem.
 type filesystem struct {
+	ctx context.Context
 }
 
 // Logger returns a logrus logger appropriate for logging filesystem messages
 func (fs *filesystem) Logger() *logrus.Entry {
-	return virtLog.WithField("subsystem", "filesystem")
+	return virtLog.WithFields(logrus.Fields{
+		"subsystem": "storage",
+		"type":      "filesystem",
+	})
 }
 
-func (fs *filesystem) createAllResources(sandbox *Sandbox) (err error) {
+func (fs *filesystem) trace(name string) (opentracing.Span, context.Context) {
+	if fs.ctx == nil {
+		fs.Logger().WithField("type", "bug").Error("trace called before context set")
+		fs.ctx = context.Background()
+	}
+
+	span, ctx := opentracing.StartSpanFromContext(fs.ctx, name)
+
+	span.SetTag("subsystem", "storage")
+	span.SetTag("type", "filesystem")
+
+	return span, ctx
+}
+
+func (fs *filesystem) createAllResources(ctx context.Context, sandbox *Sandbox) (err error) {
+	fs.ctx = ctx
+
+	span, _ := fs.trace("createAllResources")
+	defer span.Finish()
+
 	for _, resource := range []sandboxResource{stateFileType, configFileType} {
 		_, path, _ := fs.sandboxURI(sandbox.id, resource)
 		err = os.MkdirAll(path, dirMode)
@@ -386,6 +411,33 @@ func resourceNeedsContainerID(sandboxSpecific bool, resource sandboxResource) bo
 		return false
 	default:
 		return !sandboxSpecific
+	}
+}
+
+func resourceName(resource sandboxResource) string {
+	switch resource {
+	case agentFileType:
+		return "agentFileType"
+	case configFileType:
+		return "configFileType"
+	case devicesFileType:
+		return "devicesFileType"
+	case devicesIDFileType:
+		return "devicesIDFileType"
+	case hypervisorFileType:
+		return "hypervisorFileType"
+	case lockFileType:
+		return "lockFileType"
+	case mountsFileType:
+		return "mountsFileType"
+	case networkFileType:
+		return "networkFileType"
+	case processFileType:
+		return "processFileType"
+	case stateFileType:
+		return "stateFileType"
+	default:
+		return ""
 	}
 }
 
@@ -635,6 +687,17 @@ func (fs *filesystem) storeResource(sandboxSpecific bool, sandboxID, containerID
 }
 
 func (fs *filesystem) fetchResource(sandboxSpecific bool, sandboxID, containerID string, resource sandboxResource, data interface{}) error {
+	var span opentracing.Span
+
+	if fs.ctx != nil {
+		span, _ = fs.trace("fetchResource")
+		defer span.Finish()
+
+		span.SetTag("sandbox", sandboxID)
+		span.SetTag("container", containerID)
+		span.SetTag("resource", resourceName(resource))
+	}
+
 	if err := fs.commonResourceChecks(sandboxSpecific, sandboxID, containerID, resource); err != nil {
 		return err
 	}
@@ -715,6 +778,9 @@ func (fs *filesystem) storeHypervisorState(sandboxID string, state interface{}) 
 }
 
 func (fs *filesystem) storeAgentState(sandboxID string, state interface{}) error {
+	span, _ := fs.trace("storeAgentState")
+	defer span.Finish()
+
 	agentFile, _, err := fs.resourceURI(true, sandboxID, "", agentFileType)
 	if err != nil {
 		return err

@@ -7,6 +7,7 @@
 package cache
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -24,7 +25,7 @@ type cache struct {
 }
 
 // New creates a new cached vm factory.
-func New(count uint, b base.FactoryBase) base.FactoryBase {
+func New(ctx context.Context, count uint, b base.FactoryBase) base.FactoryBase {
 	if count < 1 {
 		return b
 	}
@@ -36,10 +37,10 @@ func New(count uint, b base.FactoryBase) base.FactoryBase {
 		c.wg.Add(1)
 		go func() {
 			for {
-				vm, err := b.GetBaseVM()
+				vm, err := b.GetBaseVM(ctx)
 				if err != nil {
 					c.wg.Done()
-					c.CloseFactory()
+					c.CloseFactory(ctx)
 					return
 				}
 
@@ -62,7 +63,7 @@ func (c *cache) Config() vc.VMConfig {
 }
 
 // GetBaseVM returns a base VM from cache factory's base factory.
-func (c *cache) GetBaseVM() (*vc.VM, error) {
+func (c *cache) GetBaseVM(ctx context.Context) (*vc.VM, error) {
 	vm, ok := <-c.cacheCh
 	if ok {
 		return vm, nil
@@ -71,13 +72,13 @@ func (c *cache) GetBaseVM() (*vc.VM, error) {
 }
 
 // CloseFactory closes the cache factory.
-func (c *cache) CloseFactory() {
+func (c *cache) CloseFactory(ctx context.Context) {
 	c.closeOnce.Do(func() {
 		for len(c.closed) < cap(c.closed) { // send sufficient closed signal
 			c.closed <- 0
 		}
 		c.wg.Wait()
 		close(c.cacheCh)
-		c.base.CloseFactory()
+		c.base.CloseFactory(ctx)
 	})
 }

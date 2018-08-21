@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -51,7 +52,7 @@ func testCreateSandbox(t *testing.T, id string,
 		Containers:       containers,
 	}
 
-	sandbox, err := createSandbox(sconfig, nil)
+	sandbox, err := createSandbox(context.Background(), sconfig, nil)
 	if err != nil {
 		return nil, fmt.Errorf("Could not create sandbox: %s", err)
 	}
@@ -585,7 +586,7 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	}
 
 	// force state to be read from disk
-	p2, err := fetchSandbox(p.ID())
+	p2, err := fetchSandbox(context.Background(), p.ID())
 	if err != nil {
 		t.Fatalf("Failed to fetch sandbox %v: %v", p.ID(), err)
 	}
@@ -1184,7 +1185,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 	}
 
 	containers[c.id].sandbox = &sandbox
-	err = sandbox.storage.createAllResources(&sandbox)
+	err = sandbox.storage.createAllResources(context.Background(), &sandbox)
 	assert.Nil(t, err, "Error while create all resources for sandbox")
 
 	err = sandbox.storeSandboxDevices()
@@ -1226,7 +1227,7 @@ func TestSandboxCreateAssets(t *testing.T) {
 		HypervisorConfig: hc,
 	}
 
-	err = createAssets(p)
+	err = createAssets(context.Background(), p)
 	assert.Nil(err)
 
 	a, ok := p.HypervisorConfig.customAssets[kernelAsset]
@@ -1242,7 +1243,7 @@ func TestSandboxCreateAssets(t *testing.T) {
 		HypervisorConfig: hc,
 	}
 
-	err = createAssets(p)
+	err = createAssets(context.Background(), p)
 	assert.NotNil(err)
 }
 

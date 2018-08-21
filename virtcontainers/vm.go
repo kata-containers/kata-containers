@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -41,7 +42,7 @@ func (c *VMConfig) Valid() error {
 }
 
 // NewVM creates a new VM based on provided VMConfig.
-func NewVM(config VMConfig) (*VM, error) {
+func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	hypervisor, err := newHypervisor(config.HypervisorType)
 	if err != nil {
 		return nil, err
@@ -61,7 +62,7 @@ func NewVM(config VMConfig) (*VM, error) {
 		}
 	}()
 
-	if err = hypervisor.init(id, &config.HypervisorConfig, Resources{}, &filesystem{}); err != nil {
+	if err = hypervisor.init(ctx, id, &config.HypervisorConfig, Resources{}, &filesystem{}); err != nil {
 		return nil, err
 	}
 

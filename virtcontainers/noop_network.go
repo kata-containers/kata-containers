@@ -5,6 +5,8 @@
 
 package virtcontainers
 
+import "context"
+
 // noopNetwork a.k.a. NO-OP Network is an empty network implementation, for
 // testing and mocking purposes.
 type noopNetwork struct {
@@ -12,7 +14,7 @@ type noopNetwork struct {
 
 // init initializes the network, setting a new network namespace for the Noop network.
 // It does nothing.
-func (n *noopNetwork) init(config NetworkConfig) (string, bool, error) {
+func (n *noopNetwork) init(ctx context.Context, config NetworkConfig) (string, bool, error) {
 	return "", true, nil
 }
 

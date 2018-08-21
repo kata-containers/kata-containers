@@ -128,10 +128,10 @@ func create(ctx context.Context, containerID, bundlePath, console, pidFilePath s
 			},
 		}
 		kataLog.WithField("factory", factoryConfig).Info("load vm factory")
-		f, err := vf.NewFactory(factoryConfig, true)
+		f, err := vf.NewFactory(ctx, factoryConfig, true)
 		if err != nil {
 			kataLog.WithError(err).Warn("load vm factory failed, about to create new one")
-			f, err = vf.NewFactory(factoryConfig, false)
+			f, err = vf.NewFactory(ctx, factoryConfig, false)
 			if err != nil {
 				kataLog.WithError(err).Warn("create vm factory failed")
 			}

@@ -7,15 +7,19 @@ package virtcontainers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/log"
 	"github.com/sirupsen/logrus"
 )
 
@@ -48,7 +52,22 @@ func buildHookState(processID int, s *Sandbox) specs.State {
 	}
 }
 
+func (h *Hook) trace(ctx context.Context, name string) (opentracing.Span, context.Context) {
+	return traceWithSubsys(ctx, "hook", name)
+}
+
+func (h *Hooks) trace(ctx context.Context, name string) (opentracing.Span, context.Context) {
+	return traceWithSubsys(ctx, "hooks", name)
+}
+
 func (h *Hook) runHook(s *Sandbox) error {
+	span, _ := h.trace(s.ctx, "runHook")
+	defer span.Finish()
+
+	span.LogFields(
+		log.String("hook-name", h.Path),
+		log.String("hook-args", strings.Join(h.Args, " ")))
+
 	state := buildHookState(os.Getpid(), s)
 	stateJSON, err := json.Marshal(state)
 	if err != nil {
@@ -100,6 +119,9 @@ func (h *Hook) runHook(s *Sandbox) error {
 }
 
 func (h *Hooks) preStartHooks(s *Sandbox) error {
+	span, _ := h.trace(s.ctx, "preStartHooks")
+	defer span.Finish()
+
 	if len(h.PreStartHooks) == 0 {
 		return nil
 	}
@@ -120,6 +142,9 @@ func (h *Hooks) preStartHooks(s *Sandbox) error {
 }
 
 func (h *Hooks) postStartHooks(s *Sandbox) error {
+	span, _ := h.trace(s.ctx, "postStartHooks")
+	defer span.Finish()
+
 	if len(h.PostStartHooks) == 0 {
 		return nil
 	}
@@ -140,6 +165,9 @@ func (h *Hooks) postStartHooks(s *Sandbox) error {
 }
 
 func (h *Hooks) postStopHooks(s *Sandbox) error {
+	span, _ := h.trace(s.ctx, "postStopHooks")
+	defer span.Finish()
+
 	if len(h.PostStopHooks) == 0 {
 		return nil
 	}

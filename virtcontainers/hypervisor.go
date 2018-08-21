@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"runtime"
@@ -545,7 +546,8 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
-	init(id string, hypervisorConfig *HypervisorConfig, vmConfig Resources, storage resourceStorage) error
+	init(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, vmConfig Resources, storage resourceStorage) error
+
 	createSandbox() error
 	startSandbox() error
 	waitSandbox(timeout int) error

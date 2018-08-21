@@ -7,6 +7,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -17,7 +18,7 @@ func TestBindMountInvalidSourceSymlink(t *testing.T) {
 	source := filepath.Join(testDir, "fooFile")
 	os.Remove(source)
 
-	err := bindMount(source, "", false)
+	err := bindMount(context.Background(), source, "", false)
 	if err == nil {
 		t.Fatal()
 	}
@@ -39,7 +40,7 @@ func TestBindMountFailingMount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = bindMount(source, "", false)
+	err = bindMount(context.Background(), source, "", false)
 	if err == nil {
 		t.Fatal()
 	}
@@ -66,7 +67,7 @@ func TestBindMountSuccessful(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = bindMount(source, dest, false)
+	err = bindMount(context.Background(), source, dest, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +96,7 @@ func TestBindMountReadonlySuccessful(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = bindMount(source, dest, true)
+	err = bindMount(context.Background(), source, dest, true)
 	if err != nil {
 		t.Fatal(err)
 	}

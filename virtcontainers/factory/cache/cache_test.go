@@ -6,6 +6,7 @@
 package cache
 
 import (
+	"context"
 	"io/ioutil"
 	"testing"
 
@@ -29,16 +30,18 @@ func TestTemplateFactory(t *testing.T) {
 		HypervisorConfig: hyperConfig,
 	}
 
+	ctx := context.Background()
+
 	// New
-	f := New(2, direct.New(vmConfig))
+	f := New(ctx, 2, direct.New(ctx, vmConfig))
 
 	// Config
 	assert.Equal(f.Config(), vmConfig)
 
 	// GetBaseVM
-	_, err := f.GetBaseVM()
+	_, err := f.GetBaseVM(ctx)
 	assert.Nil(err)
 
 	// CloseFactory
-	f.CloseFactory()
+	f.CloseFactory(ctx)
 }
