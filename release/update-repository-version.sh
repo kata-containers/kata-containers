@@ -59,11 +59,13 @@ generate_commit() {
 }
 
 bump_repo() {
-	repo=$1
-	new_version=$2
+	local repo="${1:-}"
+	local new_version="${2:-}"
+	local target_branch="${3:-}"
 	[ -n "${repo}" ] || die "repository not provided"
-	[ -n "$new_version" ] || die "no new version"
-	remote_github="https://github.com/${organization}/${repo}.git"
+	[ -n "${new_version}" ] || die "no new version"
+	[ -n "${target_branch}" ] || die "no target branch"
+	local remote_github="https://github.com/${organization}/${repo}.git"
 	info "Update $repo to version $new_version"
 
 	info "remote: ${remote_github}"
@@ -88,7 +90,8 @@ EOT
 	info "Updating VERSION file"
 	echo "${new_version}" >VERSION
 	branch="${new_version}-branch-bump"
-	git checkout -b "${branch}" master
+	git fetch origin "${target_branch}"
+	git checkout "origin/${target_branch}" -b "${branch}"
 	git add -u
 	info "Creating commit with new changes"
 	commit_msg="$(generate_commit $new_version $current_version)"
@@ -102,7 +105,7 @@ EOT
 		${hub_bin} push fork -f "${branch}"
 		info "Create PR"
 		out=""
-		out=$("${hub_bin}" pull-request -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
+		out=$("${hub_bin}" pull-request -b "${target_branch}" -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
 	fi
 	popd >>/dev/null
 }
@@ -114,7 +117,8 @@ Usage:
 	${script_name} [options] <args>
 Args:
 	<repository-name> : Name of repository to fork and send PR from github.com/${organization}
-	<new-version>    : New version to bump the repository
+	<new-version>     : New version to bump the repository
+	<target-branch>   : The base branch to create to PR
 Example:
 	${script_name} 1.10
 Options
@@ -135,9 +139,11 @@ shift $((OPTIND - 1))
 
 repo=${1:-}
 new_version=${2:-}
+target_branch=${3:-}
 [ -n "${repo}" ] || (echo "ERROR: repository not provided" && usage 1)
-[ -n "$new_version" ] || (echo "ERROR: no new version" && usage 1)
+[ -n "${new_version}" ] || (echo "ERROR: no new version" && usage 1)
+[ -n "${target_branch}" ] || die "no target branch"
 
 pushd "$tmp_dir" >>/dev/null
-bump_repo "${repo}" "${new_version}"
+bump_repo "${repo}" "${new_version}" "${target_branch}"
 popd >>/dev/null
