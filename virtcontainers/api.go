@@ -15,6 +15,7 @@ import (
 	deviceApi "github.com/kata-containers/runtime/virtcontainers/device/api"
 	deviceConfig "github.com/kata-containers/runtime/virtcontainers/device/config"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -23,6 +24,21 @@ func init() {
 }
 
 var virtLog = logrus.WithField("source", "virtcontainers")
+
+// trace creates a new tracing span based on the specified name and parent
+// context.
+func trace(parent context.Context, name string) (opentracing.Span, context.Context) {
+	span, ctx := opentracing.StartSpanFromContext(parent, name)
+
+	// Should not need to be changed (again).
+	span.SetTag("source", "virtcontainers")
+	span.SetTag("component", "virtcontainers")
+
+	// Should be reset as new subsystems are entered.
+	span.SetTag("subsystem", "api")
+
+	return span, ctx
+}
 
 // SetLogger sets the logger for virtcontainers package.
 func SetLogger(ctx context.Context, logger *logrus.Entry) {
@@ -35,6 +51,9 @@ func SetLogger(ctx context.Context, logger *logrus.Entry) {
 // CreateSandbox is the virtcontainers sandbox creation entry point.
 // CreateSandbox creates a sandbox and its containers. It does not start them.
 func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
+	span, ctx := trace(ctx, "CreateSandbox")
+	defer span.Finish()
+
 	s, err := createSandboxFromConfig(sandboxConfig, factory)
 	if err == nil {
 		s.releaseStatelessSandbox()
@@ -106,6 +125,9 @@ func createSandboxFromConfig(sandboxConfig SandboxConfig, factory Factory) (*San
 // DeleteSandbox is the virtcontainers sandbox deletion entry point.
 // DeleteSandbox will stop an already running container and then delete it.
 func DeleteSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
+	span, ctx := trace(ctx, "DeleteSandbox")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -136,6 +158,9 @@ func DeleteSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 // return the sandbox structure. The caller is responsible of calling
 // VCSandbox.Release() after done with it.
 func FetchSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
+	span, ctx := trace(ctx, "FetchSandbox")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -170,6 +195,9 @@ func FetchSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 // sandbox and all its containers.
 // It returns the sandbox ID.
 func StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
+	span, ctx := trace(ctx, "StartSandbox")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -208,6 +236,9 @@ func startSandbox(s *Sandbox) (*Sandbox, error) {
 // StopSandbox is the virtcontainers sandbox stopping entry point.
 // StopSandbox will talk to the given agent to stop an existing sandbox and destroy all containers within that sandbox.
 func StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
+	span, ctx := trace(ctx, "StopSandbox")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, errNeedSandbox
 	}
@@ -247,6 +278,9 @@ func StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 // RunSandbox is the virtcontainers sandbox running entry point.
 // RunSandbox creates a sandbox and its containers and then it starts them.
 func RunSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (VCSandbox, error) {
+	span, ctx := trace(ctx, "RunSandbox")
+	defer span.Finish()
+
 	s, err := createSandboxFromConfig(sandboxConfig, factory)
 	if err != nil {
 		return nil, err
@@ -264,6 +298,9 @@ func RunSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 
 // ListSandbox is the virtcontainers sandbox listing entry point.
 func ListSandbox(ctx context.Context) ([]SandboxStatus, error) {
+	span, ctx := trace(ctx, "ListSandbox")
+	defer span.Finish()
+
 	dir, err := os.Open(configStoragePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -296,6 +333,9 @@ func ListSandbox(ctx context.Context) ([]SandboxStatus, error) {
 
 // StatusSandbox is the virtcontainers sandbox status entry point.
 func StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error) {
+	span, ctx := trace(ctx, "StatusSandbox")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return SandboxStatus{}, errNeedSandboxID
 	}
@@ -348,6 +388,9 @@ func StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error)
 // CreateContainer is the virtcontainers container creation entry point.
 // CreateContainer creates a container on a given sandbox.
 func CreateContainer(ctx context.Context, sandboxID string, containerConfig ContainerConfig) (VCSandbox, VCContainer, error) {
+	span, ctx := trace(ctx, "CreateContainer")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, nil, errNeedSandboxID
 	}
@@ -433,6 +476,9 @@ func StartContainer(ctx context.Context, sandboxID, containerID string) (VCConta
 // StopContainer is the virtcontainers container stopping entry point.
 // StopContainer stops an already running container.
 func StopContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error) {
+	span, ctx := trace(ctx, "StopContainer")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -471,6 +517,9 @@ func StopContainer(ctx context.Context, sandboxID, containerID string) (VCContai
 // EnterContainer is the virtcontainers container command execution entry point.
 // EnterContainer enters an already running container and runs a given command.
 func EnterContainer(ctx context.Context, sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContainer, *Process, error) {
+	span, ctx := trace(ctx, "EnterContainer")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, nil, nil, errNeedSandboxID
 	}
@@ -502,6 +551,9 @@ func EnterContainer(ctx context.Context, sandboxID, containerID string, cmd Cmd)
 // StatusContainer is the virtcontainers container status entry point.
 // StatusContainer returns a detailed container status.
 func StatusContainer(ctx context.Context, sandboxID, containerID string) (ContainerStatus, error) {
+	span, ctx := trace(ctx, "StatusContainer")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return ContainerStatus{}, errNeedSandboxID
 	}
@@ -589,6 +641,9 @@ func statusContainer(sandbox *Sandbox, containerID string) (ContainerStatus, err
 // to a container running inside a sandbox. If all is true, all processes in
 // the container will be sent the signal.
 func KillContainer(ctx context.Context, sandboxID, containerID string, signal syscall.Signal, all bool) error {
+	span, ctx := trace(ctx, "KillContainer")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return errNeedSandboxID
 	}
@@ -627,18 +682,27 @@ func KillContainer(ctx context.Context, sandboxID, containerID string, signal sy
 // PauseSandbox is the virtcontainers pausing entry point which pauses an
 // already running sandbox.
 func PauseSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
+	span, ctx := trace(ctx, "PauseSandbox")
+	defer span.Finish()
+
 	return togglePauseSandbox(sandboxID, true)
 }
 
 // ResumeSandbox is the virtcontainers resuming entry point which resumes
 // (or unpauses) and already paused sandbox.
 func ResumeSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
+	span, ctx := trace(ctx, "ResumeSandbox")
+	defer span.Finish()
+
 	return togglePauseSandbox(sandboxID, false)
 }
 
 // ProcessListContainer is the virtcontainers entry point to list
 // processes running inside a container
 func ProcessListContainer(ctx context.Context, sandboxID, containerID string, options ProcessListOptions) (ProcessList, error) {
+	span, ctx := trace(ctx, "ProcessListContainer")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -671,6 +735,9 @@ func ProcessListContainer(ctx context.Context, sandboxID, containerID string, op
 // UpdateContainer is the virtcontainers entry point to update
 // container's resources.
 func UpdateContainer(ctx context.Context, sandboxID, containerID string, resources specs.LinuxResources) error {
+	span, ctx := trace(ctx, "UpdateContainer")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return errNeedSandboxID
 	}
@@ -697,6 +764,9 @@ func UpdateContainer(ctx context.Context, sandboxID, containerID string, resourc
 // StatsContainer is the virtcontainers container stats entry point.
 // StatsContainer returns a detailed container stats.
 func StatsContainer(ctx context.Context, sandboxID, containerID string) (ContainerStats, error) {
+	span, ctx := trace(ctx, "StatsContainer")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return ContainerStats{}, errNeedSandboxID
 	}
@@ -756,11 +826,17 @@ func togglePauseContainer(sandboxID, containerID string, pause bool) error {
 
 // PauseContainer is the virtcontainers container pause entry point.
 func PauseContainer(ctx context.Context, sandboxID, containerID string) error {
+	span, ctx := trace(ctx, "PauseContainer")
+	defer span.Finish()
+
 	return togglePauseContainer(sandboxID, containerID, true)
 }
 
 // ResumeContainer is the virtcontainers container resume entry point.
 func ResumeContainer(ctx context.Context, sandboxID, containerID string) error {
+	span, ctx := trace(ctx, "ResumeContainer")
+	defer span.Finish()
+
 	return togglePauseContainer(sandboxID, containerID, false)
 }
 
