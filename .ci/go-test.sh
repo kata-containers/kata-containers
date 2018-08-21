@@ -7,6 +7,15 @@
 
 set -e
 
+script_name=${0##*/}
+typeset -A long_options
+
+long_options=(
+	[help]="Show usage"
+	[list]="List available packages"
+	[package:]="Specify test package to run"
+)
+
 # Set default test run timeout value.
 #
 # KATA_GO_TEST_TIMEOUT can be set to any value accepted by
@@ -24,7 +33,7 @@ go_test_flags=${KATA_GO_TEST_FLAGS:-"-v $race -timeout $timeout_value"}
 #
 # - The vendor filtering is required for versions of go older than 1.9.
 # - The test package filtering is required since those packages need special setup.
-test_packages=$(go list ./... 2>/dev/null |\
+all_test_packages=$(go list ./... 2>/dev/null |\
 	grep -v "/vendor/" |\
 	grep -v "github.com/kata-containers/tests/functional" |\
 	grep -v "github.com/kata-containers/tests/integration/docker" \
@@ -50,15 +59,63 @@ warn()
 	echo >&2 "WARNING: $msg"
 }
 
+usage()
+{
+	cat <<EOT
+
+Usage: $script_name help
+       $script_name [options] [cmd]
+
+Options:
+
+EOT
+
+	local option
+	local description
+
+	local long_option_names="${!long_options[@]}"
+
+	# Sort space-separated list by converting to newline separated list
+	# and back again.
+	long_option_names=$(echo "$long_option_names"|tr ' ' '\n'|sort|tr '\n' ' ')
+
+	# Display long options
+	for option in ${long_option_names}
+	do
+		description=${long_options[$option]}
+
+		# Remove any trailing colon which is for getopt(1) alone.
+		option=$(echo "$option"|sed 's/:$//g')
+
+		printf "    --%-10.10s # %s\n" "$option" "$description"
+	done
+
+	cat <<EOT
+
+Commands:
+
+    help           # Show usage.
+    html-coverage  # Run tests and create HTML coverage report.
+
+EOT
+}
+
+list_packages()
+{
+	echo "$all_test_packages"
+}
+
 # Run a command as either root or the current user (which might still be root).
 #
 # If the first argument is "root", run using sudo, else run as the current
 # user. All arguments after the first will be treated as the command to run.
 run_as_user()
 {
-	user="$1"
+	local user="$1"
+
 	shift
-	cmd=$*
+
+	local cmd=$*
 
 	if [ "$user" = root ]; then
 		# use a shell to ensure PATH is correct.
@@ -76,6 +133,29 @@ test_html_coverage()
 	go tool cover -html="${test_coverage_file}" -o "${html_report_file}"
 
 	run_as_user "current" chmod "${coverage_file_mode}" "${html_report_file}"
+}
+
+# Test a single golang package
+test_go_package()
+{
+	local -r pkg="$1"
+	local -r user="$2"
+
+	printf "INFO: Running 'go test' as %s user on package '%s' with flags '%s'\n" \
+		"$user" "$pkg" "$go_test_flags"
+
+	eval run_as_user "$user" go test "$go_test_flags" -covermode=atomic -coverprofile="$tmp_coverage_file" "$pkg"
+
+	# Check for the temporary coverage file since if will
+	# not be generated unless a package actually contains
+	# tests.
+	if [ -f "${tmp_coverage_file}" ]; then
+		# Save these package test results into the
+		# master coverage file.
+		run_as_user "$user" chmod "${coverage_file_mode}" "$tmp_coverage_file"
+		tail -n +2 "$tmp_coverage_file" >> "$test_coverage_file"
+		run_as_user "$user" rm -f "$tmp_coverage_file"
+	fi
 }
 
 # Run all tests and generate a test coverage file.
@@ -110,21 +190,7 @@ test_coverage()
 				continue
 			fi
 
-			printf "INFO: Running 'go test' as %s user on package '%s' with flags '%s'\n" \
-				"$user" "$pkg" "$go_test_flags"
-
-			eval run_as_user "$user" go test "$go_test_flags" -covermode=atomic -coverprofile="$tmp_coverage_file" "$pkg"
-
-			# Check for the temporary coverage file since if will
-			# not be generated unless a package actually contains
-			# tests.
-			if [ -f "${tmp_coverage_file}" ]; then
-				# Save these package test results into the
-				# master coverage file.
-				run_as_user "$user" chmod "${coverage_file_mode}" "$tmp_coverage_file"
-				tail -n +2 "$tmp_coverage_file" >> "$test_coverage_file"
-				run_as_user "$user" rm -f "$tmp_coverage_file"
-			fi
+			test_go_package "$pkg" "$user"
 		done
 	done
 }
@@ -139,6 +205,43 @@ test_local()
 
 main()
 {
+	local long_option_names="${!long_options[@]}"
+
+	local args=$(getopt \
+		-n "$script_name" \
+		-a \
+		--options="h" \
+		--longoptions="$long_option_names" \
+		-- "$@")
+
+	local package
+
+	eval set -- "$args"
+	[ $? -ne 0 ] && { usage >&2; exit 1; }
+
+	while [ $# -gt 1 ]
+	do
+		case "$1" in
+			-h|--help) usage; exit 0 ;;
+			--list) list_packages; exit 0 ;;
+			--package) package="$2"; shift 2;;
+			--) shift; break ;;
+		esac
+
+		shift
+	done
+
+	if [ -n "$package" ]; then
+		test_packages="$package"
+	else
+		test_packages="$all_test_packages"
+	fi
+
+	# Consume getopt cruft
+	[ "$1" = "--" ] && shift
+
+	[ "$1" = "help" ] && usage && exit 0
+
 	run_coverage=no
 	if [ "$CI" = true ] || [ -n "$KATA_DEV_MODE" ]; then
 		run_coverage=yes
