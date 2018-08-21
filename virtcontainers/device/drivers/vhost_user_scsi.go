@@ -16,8 +16,8 @@ import (
 
 // VhostUserSCSIDevice is a SCSI vhost-user based device
 type VhostUserSCSIDevice struct {
+	*GenericDevice
 	config.VhostUserDeviceAttrs
-	DeviceInfo *config.DeviceInfo
 }
 
 //
@@ -38,7 +38,7 @@ func (device *VhostUserSCSIDevice) Attach(devReceiver api.DeviceReceiver) (err e
 	}
 	id := hex.EncodeToString(randBytes)
 
-	device.ID = id
+	device.DevID = id
 	device.Type = device.DeviceType()
 
 	defer func() {
@@ -60,16 +60,6 @@ func (device *VhostUserSCSIDevice) Detach(devReceiver api.DeviceReceiver) error 
 	return nil
 }
 
-// IsAttached checks if the device is attached
-func (device *VhostUserSCSIDevice) IsAttached() bool {
-	return device.DeviceInfo.Hotplugged
-}
-
-// DeviceID returns device ID
-func (device *VhostUserSCSIDevice) DeviceID() string {
-	return device.ID
-}
-
 // DeviceType is standard interface of api.Device, it returns device type
 func (device *VhostUserSCSIDevice) DeviceType() config.DeviceType {
 	return config.VhostUserSCSI
@@ -80,3 +70,6 @@ func (device *VhostUserSCSIDevice) GetDeviceInfo() interface{} {
 	device.Type = device.DeviceType()
 	return &device.VhostUserDeviceAttrs
 }
+
+// It should implement IsAttached() and DeviceID() as api.Device implementation
+// here it shares function from *GenericDevice so we don't need duplicate codes

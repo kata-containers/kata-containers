@@ -18,16 +18,17 @@ const maxDevIDSize = 31
 
 // BlockDevice refers to a block storage device implementation.
 type BlockDevice struct {
-	ID         string
-	DeviceInfo *config.DeviceInfo
+	*GenericDevice
 	BlockDrive *config.BlockDrive
 }
 
 // NewBlockDevice creates a new block device based on DeviceInfo
 func NewBlockDevice(devInfo *config.DeviceInfo) *BlockDevice {
 	return &BlockDevice{
-		ID:         devInfo.ID,
-		DeviceInfo: devInfo,
+		GenericDevice: &GenericDevice{
+			ID:         devInfo.ID,
+			DeviceInfo: devInfo,
+		},
 	}
 }
 
@@ -105,22 +106,15 @@ func (device *BlockDevice) Detach(devReceiver api.DeviceReceiver) error {
 	return nil
 }
 
-// IsAttached checks if the device is attached
-func (device *BlockDevice) IsAttached() bool {
-	return device.DeviceInfo.Hotplugged
-}
-
 // DeviceType is standard interface of api.Device, it returns device type
 func (device *BlockDevice) DeviceType() config.DeviceType {
 	return config.DeviceBlock
-}
-
-// DeviceID returns device ID
-func (device *BlockDevice) DeviceID() string {
-	return device.ID
 }
 
 // GetDeviceInfo returns device information used for creating
 func (device *BlockDevice) GetDeviceInfo() interface{} {
 	return device.BlockDrive
 }
+
+// It should implement IsAttached() and DeviceID() as api.Device implementation
+// here it shares function from *GenericDevice so we don't need duplicate codes

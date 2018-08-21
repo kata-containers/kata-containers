@@ -123,7 +123,7 @@ type VFIODev struct {
 
 // VhostUserDeviceAttrs represents data shared by most vhost-user devices
 type VhostUserDeviceAttrs struct {
-	ID         string
+	DevID      string
 	SocketPath string
 	Type       DeviceType
 
