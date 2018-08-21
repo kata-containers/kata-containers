@@ -24,7 +24,8 @@ shows the speed of the data transfer for the UDP protocol.
 - `network-metrics-iperf.sh` measures bidirectional bandwidth. Bidirectional tests
 are used to test both servers for the maximum amount of throughput.
  
-- `network-metrics-memory-pss.sh` measures the Proportional Set Size (PSS) of the hypervisor footprint on the host using smem
+- `network-metrics-memory.sh` measures the Proportional Set Size (PSS), Resident Set Size (RSS),
+and Virtual Set Size (VSS) of the hypervisor footprint on the host using smem
 while running a transfer of one GB with nuttcp.
 
 ## Running the tests
