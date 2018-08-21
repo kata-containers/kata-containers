@@ -793,7 +793,8 @@ func (q *QMP) ExecuteNetdevDel(ctx context.Context, netdevID string) error {
 // ExecuteNetPCIDeviceAdd adds a Net PCI device to a QEMU instance
 // using the device_add command. devID is the id of the device to add.
 // Must be valid QMP identifier. netdevID is the id of nic added by previous netdev_add.
-func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAddr, addr, bus string) error {
+// queues is the number of queues of a nic.
+func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAddr, addr, bus string, queues int) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": VirtioNetPCI,
@@ -805,6 +806,18 @@ func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAd
 	if bus != "" {
 		args["bus"] = bus
 	}
+
+	if queues > 0 {
+		// (2N+2 vectors, N for tx queues, N for rx queues, 1 for config, and one for possible control vq)
+		// -device virtio-net-pci,mq=on,vectors=2N+2...
+		// enable mq in guest by 'ethtool -L eth0 combined $queue_num'
+		// Clearlinux automatically sets up the queues properly
+		// The agent implementation should do this to ensure that it is
+		// always set
+		args["mq"] = "on"
+		args["vectors"] = 2*queues + 2
+	}
+
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
