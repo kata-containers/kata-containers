@@ -48,6 +48,7 @@ main() {
 	[ -f "${image_tarball}" ] || die "image not found"
 	popd >>/dev/null
 	#Build all kata packages
+	make -f "${script_dir}/Makefile" clean
 	docker_run "${packaging_repo_dir}/obs-packaging/build_all.sh ${branch}"
 }
 
