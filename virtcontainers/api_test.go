@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -1391,6 +1392,15 @@ func TestStartStopSandboxHyperstartAgentSuccessfulWithDefaultNetwork(t *testing.
 	cleanUp()
 
 	config := newTestSandboxConfigHyperstartAgentDefaultNetwork()
+
+	n, err := ns.NewNS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer n.Close()
+
+	config.NetworkConfig.NetNSPath = n.Path()
+	config.NetworkConfig.NetNsCreated = true
 
 	sockDir, err := testGenerateCCProxySockDir()
 	if err != nil {

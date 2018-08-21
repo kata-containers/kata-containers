@@ -474,6 +474,10 @@ func TestCreateContainerInvalid(t *testing.T) {
 }
 
 func TestCreateProcessCgroupsPathSuccessful(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledNeedNonRoot)
+	}
+
 	assert := assert.New(t)
 
 	sandbox := &vcmock.Sandbox{
@@ -725,6 +729,10 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledNeedNonRoot)
+	}
+
 	assert := assert.New(t)
 
 	sandbox := &vcmock.Sandbox{
@@ -891,6 +899,10 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 }
 
 func TestCreateCreateSandboxFail(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledNeedNonRoot)
+	}
+
 	assert := assert.New(t)
 
 	path, err := ioutil.TempDir("", "containers-mapping")

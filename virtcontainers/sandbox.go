@@ -971,49 +971,27 @@ func (s *Sandbox) createNetwork() error {
 	span, _ := s.trace("createNetwork")
 	defer span.Finish()
 
-	var netNsPath string
-	var netNsCreated bool
-	var networkNS NetworkNamespace
-	var err error
-
-	//rollback the NetNs when createNetwork failed
-	defer func() {
-		if err != nil && netNsPath != "" && netNsCreated {
-			deleteNetNS(netNsPath)
-		}
-	}()
-
-	// Initialize the network.
-	netNsPath, netNsCreated, err = s.network.init(s.ctx, s.config.NetworkConfig)
-	if err != nil {
-		return err
-	}
-
 	// Execute prestart hooks inside netns
-	if err := s.network.run(netNsPath, func() error {
+	if err := s.network.run(s.config.NetworkConfig.NetNSPath, func() error {
 		return s.config.Hooks.preStartHooks(s)
 	}); err != nil {
 		return err
 	}
 
 	// Add the network
-	networkNS, err = s.network.add(s, s.config.NetworkConfig, netNsPath, netNsCreated)
-	if err != nil {
+	if err := s.network.add(s); err != nil {
 		return err
 	}
-	s.networkNS = networkNS
 
 	// Store the network
-	err = s.storage.storeSandboxNetwork(s.id, networkNS)
-
-	return err
+	return s.storage.storeSandboxNetwork(s.id, s.networkNS)
 }
 
 func (s *Sandbox) removeNetwork() error {
 	span, _ := s.trace("removeNetwork")
 	defer span.Finish()
 
-	return s.network.remove(s, s.networkNS, s.networkNS.NetNsCreated)
+	return s.network.remove(s)
 }
 
 func (s *Sandbox) generateNetInfo(inf *grpc.Interface) (NetworkInfo, error) {
