@@ -266,6 +266,13 @@ func createSandbox(ctx context.Context, ociSpec oci.CompatOCISpec, runtimeConfig
 		return vc.Process{}, err
 	}
 
+	// Important to create the network namespace before the sandbox is
+	// created, because it is not responsible for the creation of the
+	// netns if it does not exist.
+	if err := setupNetworkNamespace(&sandboxConfig.NetworkConfig); err != nil {
+		return vc.Process{}, err
+	}
+
 	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig)
 	if err != nil {
 		return vc.Process{}, err

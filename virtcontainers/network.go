@@ -6,8 +6,6 @@
 package virtcontainers
 
 import (
-	"bufio"
-	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -144,6 +142,7 @@ type NetworkInterfacePair struct {
 // NetworkConfig is the network configuration related to a network.
 type NetworkConfig struct {
 	NetNSPath         string
+	NetNsCreated      bool
 	InterworkingModel NetInterworkingModel
 }
 
@@ -640,107 +639,6 @@ func newNetwork(networkType NetworkModel) network {
 	default:
 		return &noopNetwork{}
 	}
-}
-
-const procMountInfoFile = "/proc/self/mountinfo"
-
-// getNetNsFromBindMount returns the network namespace for the bind-mounted path
-func getNetNsFromBindMount(nsPath string, procMountFile string) (string, error) {
-	netNsMountType := "nsfs"
-
-	// Resolve all symlinks in the path as the mountinfo file contains
-	// resolved paths.
-	nsPath, err := filepath.EvalSymlinks(nsPath)
-	if err != nil {
-		return "", err
-	}
-
-	f, err := os.Open(procMountFile)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		text := scanner.Text()
-
-		// Scan the mountinfo file to search for the network namespace path
-		// This file contains mounts in the eg format:
-		// "711 26 0:3 net:[4026532009] /run/docker/netns/default rw shared:535 - nsfs nsfs rw"
-		//
-		// Reference: https://www.kernel.org/doc/Documentation/filesystems/proc.txt
-
-		// We are interested in the first 9 fields of this file,
-		// to check for the correct mount type.
-		fields := strings.Split(text, " ")
-		if len(fields) < 9 {
-			continue
-		}
-
-		// We check here if the mount type is a network namespace mount type, namely "nsfs"
-		mountTypeFieldIdx := 8
-		if fields[mountTypeFieldIdx] != netNsMountType {
-			continue
-		}
-
-		// This is the mount point/destination for the mount
-		mntDestIdx := 4
-		if fields[mntDestIdx] != nsPath {
-			continue
-		}
-
-		// This is the root/source of the mount
-		return fields[3], nil
-	}
-
-	return "", nil
-}
-
-// hostNetworkingRequested checks if the network namespace requested is the
-// same as the current process.
-func hostNetworkingRequested(configNetNs string) (bool, error) {
-	var evalNS, nsPath, currentNsPath string
-	var err error
-
-	// Net namespace provided as "/proc/pid/ns/net" or "/proc/<pid>/task/<tid>/ns/net"
-	if strings.HasPrefix(configNetNs, "/proc") && strings.HasSuffix(configNetNs, "/ns/net") {
-		if _, err := os.Stat(configNetNs); err != nil {
-			return false, err
-		}
-
-		// Here we are trying to resolve the path but it fails because
-		// namespaces links don't really exist. For this reason, the
-		// call to EvalSymlinks will fail when it will try to stat the
-		// resolved path found. As we only care about the path, we can
-		// retrieve it from the PathError structure.
-		if _, err = filepath.EvalSymlinks(configNetNs); err != nil {
-			nsPath = err.(*os.PathError).Path
-		} else {
-			return false, fmt.Errorf("Net namespace path %s is not a symlink", configNetNs)
-		}
-
-		_, evalNS = filepath.Split(nsPath)
-
-	} else {
-		// Bind-mounted path provided
-		evalNS, _ = getNetNsFromBindMount(configNetNs, procMountInfoFile)
-	}
-
-	currentNS := fmt.Sprintf("/proc/%d/task/%d/ns/net", os.Getpid(), unix.Gettid())
-	if _, err = filepath.EvalSymlinks(currentNS); err != nil {
-		currentNsPath = err.(*os.PathError).Path
-	} else {
-		return false, fmt.Errorf("Unexpected: Current network namespace path is not a symlink")
-	}
-
-	_, evalCurrentNS := filepath.Split(currentNsPath)
-
-	if evalNS == evalCurrentNS {
-		return true, nil
-	}
-
-	return false, nil
 }
 
 func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link) (netlink.Link, []*os.File, error) {
@@ -1607,16 +1505,13 @@ func vhostUserSocketPath(info interface{}) (string, error) {
 // Container network plugins are used to setup virtual network
 // between VM netns and the host network physical interface.
 type network interface {
-	// init initializes the network, setting a new network namespace.
-	init(ctx context.Context, config NetworkConfig) (string, bool, error)
-
 	// run runs a callback function in a specified network namespace.
 	run(networkNSPath string, cb func() error) error
 
 	// add adds all needed interfaces inside the network namespace.
-	add(sandbox *Sandbox, config NetworkConfig, netNsPath string, netNsCreated bool) (NetworkNamespace, error)
+	add(sandbox *Sandbox) error
 
 	// remove unbridges and deletes TAP interfaces. It also removes virtual network
 	// interfaces and deletes the network namespace.
-	remove(sandbox *Sandbox, networkNS NetworkNamespace, netNsCreated bool) error
+	remove(sandbox *Sandbox) error
 }
