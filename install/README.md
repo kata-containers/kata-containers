@@ -22,7 +22,7 @@ Select your preferred distribution or cloud service:
 * [CentOS](centos-installation-guide.md)
 * [Fedora](fedora-installation-guide.md)
 * [Red Hat](rhel-installation-guide.md)
-* [OpenSuse] (opensuse-installation-guide.md)
+* [OpenSuse](opensuse-installation-guide.md)
 * [Ubuntu](ubuntu-installation-guide.md)
 * [SLES](sles-installation-guide.md)
 
