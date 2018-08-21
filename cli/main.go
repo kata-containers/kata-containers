@@ -340,6 +340,8 @@ func setupTracing(context *cli.Context, rootSpanName string) error {
 		return err
 	}
 
+	span.SetTag("subsystem", "runtime")
+
 	// Associate the root span with the context
 	ctx = opentracing.ContextWithSpan(ctx, span)
 
