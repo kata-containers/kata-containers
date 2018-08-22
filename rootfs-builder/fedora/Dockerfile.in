@@ -7,7 +7,7 @@ From fedora:@OS_VERSION@
 
 @SET_PROXY@
 
-RUN dnf -y update && dnf install -y git redhat-release systemd pkgconfig gcc coreutils
+RUN dnf -y update && dnf install -y git redhat-release systemd pkgconfig gcc make
 
 # This will install the proper golang to build Kata components
 @INSTALL_GO@
