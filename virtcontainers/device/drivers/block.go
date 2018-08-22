@@ -35,7 +35,11 @@ func NewBlockDevice(devInfo *config.DeviceInfo) *BlockDevice {
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
 func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
-	if device.DeviceInfo.Hotplugged {
+	skip, err := device.bumpAttachCount(true)
+	if err != nil {
+		return err
+	}
+	if skip {
 		return nil
 	}
 
@@ -47,6 +51,8 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 	defer func() {
 		if err != nil {
 			devReceiver.DecrementSandboxBlockIndex()
+		} else {
+			device.AttachCount = 1
 		}
 	}()
 
@@ -84,15 +90,17 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 		return err
 	}
 
-	device.DeviceInfo.Hotplugged = true
-
 	return nil
 }
 
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
 func (device *BlockDevice) Detach(devReceiver api.DeviceReceiver) error {
-	if !device.DeviceInfo.Hotplugged {
+	skip, err := device.bumpAttachCount(false)
+	if err != nil {
+		return err
+	}
+	if skip {
 		return nil
 	}
 
@@ -102,7 +110,7 @@ func (device *BlockDevice) Detach(devReceiver api.DeviceReceiver) error {
 		deviceLogger().WithError(err).Error("Failed to unplug block device")
 		return err
 	}
-	device.DeviceInfo.Hotplugged = false
+	device.AttachCount = 0
 	return nil
 }
 
@@ -116,5 +124,5 @@ func (device *BlockDevice) GetDeviceInfo() interface{} {
 	return device.BlockDrive
 }
 
-// It should implement IsAttached() and DeviceID() as api.Device implementation
+// It should implement GetAttachCount() and DeviceID() as api.Device implementation
 // here it shares function from *GenericDevice so we don't need duplicate codes

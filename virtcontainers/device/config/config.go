@@ -75,10 +75,6 @@ type DeviceInfo struct {
 	// id of the device group.
 	GID uint32
 
-	// Hotplugged is used to store device state indicating if the
-	// device was hotplugged.
-	Hotplugged bool
-
 	// ID for the device that is passed to the hypervisor.
 	ID string
 

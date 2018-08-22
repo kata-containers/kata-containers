@@ -457,8 +457,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 		// instead of passing this as a shared mount.
 		if len(m.BlockDeviceID) > 0 {
 			// Attach this block device, all other devices passed in the config have been attached at this point
-			if err := c.sandbox.devManager.AttachDevice(m.BlockDeviceID, c.sandbox); err != nil &&
-				err != manager.ErrDeviceAttached {
+			if err := c.sandbox.devManager.AttachDevice(m.BlockDeviceID, c.sandbox); err != nil {
 				return nil, err
 			}
 
@@ -1153,10 +1152,6 @@ func (c *Container) attachDevices() error {
 	// and rollbackFailingContainerCreation could do all the rollbacks
 	for _, dev := range c.devices {
 		if err := c.sandbox.devManager.AttachDevice(dev.ID, c.sandbox); err != nil {
-			if err == manager.ErrDeviceAttached {
-				// skip if device is already attached before
-				continue
-			}
 			return err
 		}
 	}
