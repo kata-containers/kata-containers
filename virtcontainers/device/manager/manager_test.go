@@ -216,13 +216,18 @@ func TestAttachDetachDevice(t *testing.T) {
 	device, err := dm.NewDevice(deviceInfo)
 	assert.Nil(t, err)
 
+	// attach non-exist device
+	err = dm.AttachDevice("non-exist", devReceiver)
+	assert.NotNil(t, err)
+
 	// attach device
 	err = dm.AttachDevice(device.DeviceID(), devReceiver)
 	assert.Nil(t, err)
+	assert.Equal(t, device.GetAttachCount(), uint(1), "attach device count should be 1")
 	// attach device again(twice)
 	err = dm.AttachDevice(device.DeviceID(), devReceiver)
-	assert.NotNil(t, err)
-	assert.Equal(t, err, ErrDeviceAttached, "attach device twice should report error %q", ErrDeviceAttached)
+	assert.Nil(t, err)
+	assert.Equal(t, device.GetAttachCount(), uint(2), "attach device count should be 2")
 
 	attached := dm.IsDeviceAttached(device.DeviceID())
 	assert.True(t, attached)
@@ -230,12 +235,20 @@ func TestAttachDetachDevice(t *testing.T) {
 	// detach device
 	err = dm.DetachDevice(device.DeviceID(), devReceiver)
 	assert.Nil(t, err)
+	assert.Equal(t, device.GetAttachCount(), uint(1), "attach device count should be 1")
 	// detach device again(twice)
 	err = dm.DetachDevice(device.DeviceID(), devReceiver)
+	assert.Nil(t, err)
+	assert.Equal(t, device.GetAttachCount(), uint(0), "attach device count should be 0")
+	// detach device again should report error
+	err = dm.DetachDevice(device.DeviceID(), devReceiver)
 	assert.NotNil(t, err)
-	assert.Equal(t, err, ErrDeviceNotAttached, "attach device twice should report error %q", ErrDeviceNotAttached)
+	assert.Equal(t, err, ErrDeviceNotAttached, "")
+	assert.Equal(t, device.GetAttachCount(), uint(0), "attach device count should be 0")
 
 	attached = dm.IsDeviceAttached(device.DeviceID())
 	assert.False(t, attached)
 
+	err = dm.RemoveDevice(device.DeviceID())
+	assert.Nil(t, err)
 }

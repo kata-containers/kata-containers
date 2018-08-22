@@ -391,7 +391,7 @@ func TestQemuArchBaseAppendVhostUserDevice(t *testing.T) {
 		Type:       config.VhostUserNet,
 		MacAddress: macAddress,
 	}
-	vhostUserDevice.ID = id
+	vhostUserDevice.DevID = id
 	vhostUserDevice.SocketPath = socketPath
 
 	testQemuArchBaseAppend(t, vhostUserDevice, expectedOut)
