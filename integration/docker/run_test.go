@@ -93,10 +93,12 @@ var _ = Describe("run", func() {
 		id         string
 	)
 
+	if os.Getuid() != 0 {
+		GinkgoT().Skip("only root user can create loop devices")
+		return
+	}
+
 	BeforeEach(func() {
-		if os.Getuid() != 0 {
-			Skip("only root user can create loop devices")
-		}
 		id = RandID(30)
 
 		for i := 0; i < loopDevices; i++ {

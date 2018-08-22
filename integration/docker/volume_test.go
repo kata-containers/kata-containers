@@ -30,6 +30,11 @@ var _ = Describe("docker volume", func() {
 		diskFile      string
 	)
 
+	if os.Getuid() != 0 {
+		GinkgoT().Skip("only root user can create files under /dev")
+		return
+	}
+
 	Context("create volume", func() {
 		It("should display the volume's name", func() {
 			_, _, exitCode = dockerVolume("create", "--name", volumeName)
@@ -98,9 +103,6 @@ var _ = Describe("docker volume", func() {
 
 	Context("creating a text file under /dev", func() {
 		It("should be passed the content to the container", func() {
-			if os.Getuid() != 0 {
-				Skip("only root user can create files under /dev")
-			}
 			fileName := "/dev/foo"
 			textContent := "hello"
 			err = ioutil.WriteFile(fileName, []byte(textContent), 0644)
@@ -119,10 +121,6 @@ var _ = Describe("docker volume", func() {
 
 	Context("passing a block device", func() {
 		It("should be mounted", func() {
-			if os.Getuid() != 0 {
-				Skip("only root user can create loop devices")
-			}
-
 			diskFile, loopFile, err = createLoopDevice()
 			Expect(err).ToNot(HaveOccurred())
 
