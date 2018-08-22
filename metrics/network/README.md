@@ -28,6 +28,9 @@ are used to test both servers for the maximum amount of throughput.
 and Virtual Set Size (VSS) of the hypervisor footprint on the host using smem
 while running a transfer of one GB with nuttcp.
 
+- `network-metrics-nginx-ab-benchmark.sh` uses an nginx container and runs the apache
+benchmarking tool on the host to calculate the requests per second.
+
 ## Running the tests
 
 Individual tests can be run by hand, for example:
