@@ -33,6 +33,10 @@ function clone_and_build() {
 
 	pushd ${project_dir}
 
+	# Override branch if we are testing a PR.
+	[ -z "$pr_number" ] || branch="${target_branch}"
+	git fetch origin && git checkout "${branch}"
+
 	echo "Build ${github_project}"
 	if [ ! -f Makefile ]; then
 		echo "Run autogen.sh to generate Makefile"
