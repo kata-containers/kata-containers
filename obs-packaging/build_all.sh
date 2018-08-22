@@ -16,7 +16,6 @@ readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/obs-docker.sh
 source "${script_dir}/scripts/obs-pkgs.sh"
 
-OSCRC="${HOME}/.oscrc"
 PUSH=${PUSH:-""}
 LOCAL=${LOCAL:-""}
 PUSH_TO_OBS=""
@@ -26,8 +25,6 @@ export BUILD_DISTROS=${BUILD_DISTROS:-xUbuntu_16.04}
 # On CI git user is not set
 export AUTHOR="${AUTHOR:-user}"
 export AUTHOR_EMAIL="${AUTHOR_EMAIL:-user@example.com}"
-
-OBS_API="https://api.opensuse.org"
 
 usage() {
 	msg="${1:-}"
@@ -43,16 +40,6 @@ EOT
 main() {
 	local branch="${1:-}"
 	[ -n "${branch}" ] || usage "missing branch" "1"
-	if [ -n "${OBS_USER:-}" ] && [ -n "${OBS_PASS:-}" ] && [ ! -e "${OSCRC:-}" ]; then
-		echo "Creating  ${OSCRC} with user $OBS_USER"
-		cat <<eom >"${OSCRC}"
-[general]
-apiurl = ${OBS_API}
-[${OBS_API}]
-user = ${OBS_USER}
-pass = ${OBS_PASS}
-eom
-	fi
 
 	pushd "${script_dir}"
 	for p in "${OBS_PKGS_PROJECTS[@]}"; do
