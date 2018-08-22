@@ -18,7 +18,7 @@ spec:
           kata-containers.io/kata-runtime: cleanup
       containers:
       - name: kube-kata-cleanup
-        image: katadocker/kata-deploy:1.1.0
+        image: katadocker/kata-deploy
         imagePullPolicy: Always
         command: [ "sh", "-c" ]
         args:
