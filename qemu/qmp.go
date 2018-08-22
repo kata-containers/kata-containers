@@ -561,6 +561,10 @@ func (q *QMP) executeCommand(ctx context.Context, name string, args map[string]i
 // block until they have received a success or failure message from QMP,
 // i.e., {"return": {}} or {"error":{}}, and in some cases certain events
 // are received.
+//
+// QEMU currently requires that the "qmp_capabilties" command is sent before any
+// other command. Therefore you must call qmp.ExecuteQMPCapabilities() before
+// you execute any other command.
 func QMPStart(ctx context.Context, socket string, cfg QMPConfig, disconnectedCh chan struct{}) (*QMP, *QMPVersion, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = qmpNullLogger{}
