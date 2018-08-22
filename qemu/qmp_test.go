@@ -425,6 +425,28 @@ func TestQMPNetdevAdd(t *testing.T) {
 	<-disconnectedCh
 }
 
+// Checks that the netdev_add command is correctly sent.
+//
+// We start a QMPLoop, send the netdev_add command and stop the loop.
+//
+// The netdev_add command should be correctly sent and the QMP loop should
+// exit gracefully.
+func TestQMPNetdevChardevAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("netdev_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	q.version = checkVersion(t, connectedCh)
+	err := q.ExecuteNetdevChardevAdd(context.Background(), "tap", "br0", "chr0", 8)
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks that the netdev_add command with fds is correctly sent.
 //
 // We start a QMPLoop, send the netdev_add command with fds and stop the loop.

@@ -764,6 +764,22 @@ func (q *QMP) ExecuteNetdevAdd(ctx context.Context, netdevType, netdevID, ifname
 	return q.executeCommand(ctx, "netdev_add", args, nil)
 }
 
+// ExecuteNetdevChardevAdd adds a Net device to a QEMU instance
+// using the netdev_add command. netdevID is the id of the device to add.
+// Must be valid QMP identifier.
+func (q *QMP) ExecuteNetdevChardevAdd(ctx context.Context, netdevType, netdevID, chardev string, queues int) error {
+	args := map[string]interface{}{
+		"type":    netdevType,
+		"id":      netdevID,
+		"chardev": chardev,
+	}
+	if queues > 1 {
+		args["queues"] = queues
+	}
+
+	return q.executeCommand(ctx, "netdev_add", args, nil)
+}
+
 // ExecuteNetdevAddByFds adds a Net device to a QEMU instance
 // using the netdev_add command by fds and vhostfds. netdevID is the id of the device to add.
 // Must be valid QMP identifier.
