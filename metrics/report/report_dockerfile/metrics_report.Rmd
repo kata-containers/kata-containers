@@ -66,6 +66,26 @@ source('lifecycle-time.R')
 ```
 \pagebreak
 
+# Storage I/O
+
+Measure storage I/O bandwidth, latency and IOPS using 
+this [test](https://github.com/kata-containers/tests/blob/master/metrics/storage/fio.sh).
+
+This test measures using separate random read and write tests.
+
+## Reads
+
+```{r, echo=FALSE, fig.cap="Storage I/O Reads"}
+source('fio-reads.R')
+```
+
+## Writes
+
+```{r, echo=FALSE, fig.cap="Storage I/O Writes"}
+source('fio-writes.R')
+```
+\pagebreak
+
 # Test setup details
 
 This table describes the test system details, as derived from the information contained

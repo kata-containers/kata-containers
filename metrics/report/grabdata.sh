@@ -27,10 +27,10 @@ help() {
 Usage: $0 [-h] [options]
    Description:
         This script gathers a number of metrics for use in the
-	report generation script. Which tests are run can be
-	configured on the commandline. Specifically enabling
-	individual tests will disable the 'all' option, unless
-	'all' is also specified last.
+        report generation script. Which tests are run can be
+        configured on the commandline. Specifically enabling
+        individual tests will disable the 'all' option, unless
+        'all' is also specified last.
    Options:
         -a,         Run all tests (default).
         -d,         Run the density tests.
@@ -50,7 +50,7 @@ init() {
 	local OPTIND
 	while getopts "adhnst" opt;do
 		case ${opt} in
-		a)	# all
+		a)
 		    RUN_ALL=1
 		    ;;
 		d)
@@ -87,10 +87,10 @@ run_density_ksm() {
 	echo "Running KSM density tests"
 
 	# Run the memory footprint test - the main test that
-	# KSM affects. Run for 20 containers (that gives us a fair
-	# view of how memory gets shared across containers), and
-	# a default timeout of 300s - if KSM has not settled down
-	# by then, just take the measurement.
+	# KSM affects. Run for a sufficient number of containers
+	# (that gives us a fair view of how memory gets shared across
+	# containers), and a large enough timeout  for KSM to settle.
+	# If KSM has not settled down by then, just take the measurement.
 	# 'auto' mode should detect when KSM has settled automatically.
 	bash density/docker_memory_usage.sh 20 300 auto
 
@@ -105,6 +105,7 @@ run_density_ksm() {
 	bash density/footprint_data.sh
 
 	# mysql - medium sized container
+	# Need to wait for mysql to boot and settle before we measure
 	export PAYLOAD_SLEEP="10"
 	export PAYLOAD="mysql"
 	PAYLOAD_ARGS=" --innodb_use_native_aio=0 --disable-log-bin"
@@ -112,6 +113,7 @@ run_density_ksm() {
 	bash density/footprint_data.sh
 
 	# elasticsearch - large container
+	# Need to wait for elasticsearch to boot and settle before we measure
 	export PAYLOAD_SLEEP="10"
 	export PAYLOAD="elasticsearch"
 	PAYLOAD_ARGS=" "
@@ -123,7 +125,8 @@ run_density() {
 	echo "Running non-KSM density tests"
 
 	# Run the density tests - no KSM, so no need to wait for settle
-	# (so set a token 5s wait). Take the measure across 20 containers.
+	# Set a token short timeout, and use enough containers to get a
+	# good average measurement.
 	bash density/docker_memory_usage.sh 20 5
 }
 
@@ -137,7 +140,11 @@ run_time() {
 }
 
 run_storage() {
-	echo "No storage tests to run"
+	echo "Running storage tests"
+
+	# Enable this if you want to test a volume mount
+	#export TEST_VOLUME_MOUNT=1
+	bash storage/fio.sh
 }
 
 run_network() {
