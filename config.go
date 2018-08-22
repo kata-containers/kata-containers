@@ -45,6 +45,7 @@ type hypervisor struct {
 	Debug                 bool   `toml:"enable_debug"`
 	DisableNestingChecks  bool   `toml:"disable_nesting_checks"`
 	EnableIOThreads       bool   `toml:"enable_iothreads"`
+	Vsock                 bool   `toml:"use_vsock"`
 }
 
 type proxy struct {

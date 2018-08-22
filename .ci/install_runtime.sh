@@ -26,6 +26,8 @@ export SYSCONFDIR=/etc
 # Artifacts (kernel + image) live below here
 export SHAREDIR=/usr/share
 
+USE_VSOCK="${USE_VSOCK:-no}"
+
 runtime_config_path="${SYSCONFDIR}/kata-containers/configuration.toml"
 
 PKGDEFAULTSDIR="${SHAREDIR}/defaults/kata-containers"
@@ -54,6 +56,20 @@ if [ x"${TEST_INITRD}" == x"yes" ]; then
 else
 	echo "Set to test rootfs image"
 	sudo sed -i -e '/^initrd =/d' ${runtime_config_path}
+fi
+
+if [ "$USE_VSOCK" == "yes" ]; then
+	echo "Configure use of VSOCK in ${runtime_config_path}"
+	sudo sed -i -e 's/^#use_vsock.*/use_vsock = true/' "${runtime_config_path}"
+
+	vsock_module="vhost_vsock"
+	echo "Check if ${vsock_module} is loaded"
+	if lsmod | grep -q "$vsock_module" &> /dev/null ; then
+		echo "Module ${vsock_module} is already loaded"
+	else
+		echo "Load ${vsock_module} module"
+		sudo modprobe "${vsock_module}"
+	fi
 fi
 
 echo "Add runtime as a new/default Docker runtime. Docker version \"$(docker --version)\" could change according to updates."

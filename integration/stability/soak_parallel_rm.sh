@@ -43,6 +43,16 @@ VC_POD_DIR="${VC_POD_DIR:-/var/lib/vc/sbs}"
 # then just set this to a very large number
 MAX_CONTAINERS="${MAX_CONTAINERS:-110}"
 
+check_vsock_active() {
+	vsock_configured=$($RUNTIME_PATH kata-env | awk '/UseVSock/ {print $3}')
+	vsock_supported=$($RUNTIME_PATH kata-env | awk '/SupportVSock/ {print $3}')
+	if [ "$vsock_configured" == true ] && [ "$vsock_supported" == true ]; then
+		return 0
+	else
+		return 1
+	fi
+}
+
 count_containers() {
 	docker ps -qa | wc -l
 }
@@ -64,9 +74,18 @@ check_all_running() {
 	if (( $check_kata_components )); then
 		# Check we have one proxy per container
 		how_many_proxys=$(pgrep -a -f ${PROXY_PATH} | wc -l)
-		if (( ${how_many_running} != ${how_many_proxys} )); then
-			echo "Wrong number of proxys running (${how_many_running} containers, ${how_many_proxys} proxys) - stopping"
-			((goterror++))
+		if check_vsock_active; then
+			if (( ${how_many_proxys} != 0 )); then
+				echo "Wrong number of proxys running (${how_many_running} containers, ${how_many_proxys} proxys)"
+				echo "When using vsocks, the number of proxies should be Zero - stopping"
+				((goterror++))
+			fi
+
+		else
+			if (( ${how_many_running} != ${how_many_proxys} )); then
+				echo "Wrong number of proxys running (${how_many_running} containers, ${how_many_proxys} proxys) - stopping"
+				((goterror++))
+			fi
 		fi
 
 		# check we have the right number of shims
