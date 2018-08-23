@@ -499,7 +499,7 @@ func TestQMPNetPCIDeviceAdd(t *testing.T) {
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
-	err := q.ExecuteNetPCIDeviceAdd(context.Background(), "br0", "virtio-0", "02:42:ac:11:00:02", "0x7", "")
+	err := q.ExecuteNetPCIDeviceAdd(context.Background(), "br0", "virtio-0", "02:42:ac:11:00:02", "0x7", "", 8)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
