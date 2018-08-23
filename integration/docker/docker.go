@@ -237,6 +237,11 @@ func IsRunningDockerContainer(name string) bool {
 // - the shim is running
 // else false is returned
 func ExistDockerContainer(name string) bool {
+	if name == "" {
+		tests.LogIfFail("Container name is empty")
+		return false
+	}
+
 	state := StatusDockerContainer(name)
 	if state != "" {
 		return true
