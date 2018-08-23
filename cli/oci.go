@@ -21,7 +21,6 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/opencontainers/runc/libcontainer/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -47,7 +46,7 @@ var procMountInfo = "/proc/self/mountinfo"
 var ctrsMapTreePath = "/var/run/kata-containers/containers-mapping"
 
 // getContainerInfo returns the container status and its sandbox ID.
-func getContainerInfo(containerID string) (vc.ContainerStatus, string, error) {
+func getContainerInfo(ctx context.Context, containerID string) (vc.ContainerStatus, string, error) {
 	// container ID MUST be provided.
 	if containerID == "" {
 		return vc.ContainerStatus{}, "", fmt.Errorf("Missing container ID")
@@ -64,7 +63,7 @@ func getContainerInfo(containerID string) (vc.ContainerStatus, string, error) {
 		return vc.ContainerStatus{}, "", nil
 	}
 
-	ctrStatus, err := vci.StatusContainer(sandboxID, containerID)
+	ctrStatus, err := vci.StatusContainer(ctx, sandboxID, containerID)
 	if err != nil {
 		return vc.ContainerStatus{}, "", err
 	}
@@ -72,8 +71,8 @@ func getContainerInfo(containerID string) (vc.ContainerStatus, string, error) {
 	return ctrStatus, sandboxID, nil
 }
 
-func getExistingContainerInfo(containerID string) (vc.ContainerStatus, string, error) {
-	cStatus, sandboxID, err := getContainerInfo(containerID)
+func getExistingContainerInfo(ctx context.Context, containerID string) (vc.ContainerStatus, string, error) {
+	cStatus, sandboxID, err := getContainerInfo(ctx, containerID)
 	if err != nil {
 		return vc.ContainerStatus{}, "", err
 	}
@@ -86,14 +85,14 @@ func getExistingContainerInfo(containerID string) (vc.ContainerStatus, string, e
 	return cStatus, sandboxID, nil
 }
 
-func validCreateParams(containerID, bundlePath string) (string, error) {
+func validCreateParams(ctx context.Context, containerID, bundlePath string) (string, error) {
 	// container ID MUST be provided.
 	if containerID == "" {
 		return "", fmt.Errorf("Missing container ID")
 	}
 
 	// container ID MUST be unique.
-	cStatus, _, err := getContainerInfo(containerID)
+	cStatus, _, err := getContainerInfo(ctx, containerID)
 	if err != nil {
 		return "", err
 	}
@@ -128,7 +127,7 @@ func validCreateParams(containerID, bundlePath string) (string, error) {
 // OCI runtime specification. It returns a list of complete paths
 // that should be created and used for every specified resource.
 func processCgroupsPath(ctx context.Context, ociSpec oci.CompatOCISpec, isSandbox bool) ([]string, error) {
-	span, _ := opentracing.StartSpanFromContext(ctx, "processCgroupsPath")
+	span, _ := trace(ctx, "processCgroupsPath")
 	defer span.Finish()
 
 	var cgroupsPathList []string
@@ -377,7 +376,7 @@ func fetchContainerIDMapping(containerID string) (string, error) {
 }
 
 func addContainerIDMapping(ctx context.Context, containerID, sandboxID string) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "addContainerIDMapping")
+	span, _ := trace(ctx, "addContainerIDMapping")
 	defer span.Finish()
 
 	if containerID == "" {
@@ -404,7 +403,7 @@ func addContainerIDMapping(ctx context.Context, containerID, sandboxID string) e
 }
 
 func delContainerIDMapping(ctx context.Context, containerID string) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "delContainerIDMapping")
+	span, _ := trace(ctx, "delContainerIDMapping")
 	defer span.Finish()
 
 	if containerID == "" {

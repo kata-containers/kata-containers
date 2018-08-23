@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/agent/protocols/grpc"
@@ -360,6 +362,19 @@ type SandboxConfig struct {
 	Stateful bool
 }
 
+func (s *Sandbox) trace(name string) (opentracing.Span, context.Context) {
+	if s.ctx == nil {
+		s.Logger().WithField("type", "bug").Error("trace called before context set")
+		s.ctx = context.Background()
+	}
+
+	span, ctx := opentracing.StartSpanFromContext(s.ctx, name)
+
+	span.SetTag("subsystem", "sandbox")
+
+	return span, ctx
+}
+
 func (s *Sandbox) startProxy() error {
 
 	// If the proxy is KataBuiltInProxyType type, it needs to restart the proxy
@@ -477,6 +492,8 @@ type Sandbox struct {
 	shmSize    uint64
 	sharePidNs bool
 	stateful   bool
+
+	ctx context.Context
 }
 
 // ID returns the sandbox identifier string.
@@ -667,7 +684,10 @@ func (s *Sandbox) IOStream(containerID, processID string) (io.WriteCloser, io.Re
 	return c.ioStream(processID)
 }
 
-func createAssets(sandboxConfig *SandboxConfig) error {
+func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
+	span, _ := trace(ctx, "createAssets")
+	defer span.Finish()
+
 	kernel, err := newAsset(sandboxConfig, kernelAsset)
 	if err != nil {
 		return err
@@ -701,12 +721,15 @@ func createAssets(sandboxConfig *SandboxConfig) error {
 // It will create and store the sandbox structure, and then ask the hypervisor
 // to physically create that sandbox i.e. starts a VM for that sandbox to eventually
 // be started.
-func createSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
-	if err := createAssets(&sandboxConfig); err != nil {
+func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
+	span, ctx := trace(ctx, "createSandbox")
+	defer span.Finish()
+
+	if err := createAssets(ctx, &sandboxConfig); err != nil {
 		return nil, err
 	}
 
-	s, err := newSandbox(sandboxConfig, factory)
+	s, err := newSandbox(ctx, sandboxConfig, factory)
 	if err != nil {
 		return nil, err
 	}
@@ -746,7 +769,10 @@ func createSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, erro
 	return s, nil
 }
 
-func newSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
+func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
+	span, ctx := trace(ctx, "newSandbox")
+	defer span.Finish()
+
 	if sandboxConfig.valid() == false {
 		return nil, fmt.Errorf("Invalid sandbox configuration")
 	}
@@ -778,6 +804,7 @@ func newSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) 
 		shmSize:         sandboxConfig.ShmSize,
 		sharePidNs:      sandboxConfig.SharePidNs,
 		stateful:        sandboxConfig.Stateful,
+		ctx:             ctx,
 	}
 
 	if err = globalSandboxList.addSandbox(s); err != nil {
@@ -791,7 +818,7 @@ func newSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) 
 		}
 	}()
 
-	if err = s.storage.createAllResources(s); err != nil {
+	if err = s.storage.createAllResources(ctx, s); err != nil {
 		return nil, err
 	}
 
@@ -801,7 +828,7 @@ func newSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) 
 		}
 	}()
 
-	if err = s.hypervisor.init(s.id, &sandboxConfig.HypervisorConfig, sandboxConfig.VMConfig, s.storage); err != nil {
+	if err = s.hypervisor.init(ctx, s.id, &sandboxConfig.HypervisorConfig, sandboxConfig.VMConfig, s.storage); err != nil {
 		return nil, err
 	}
 
@@ -810,7 +837,7 @@ func newSandbox(sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) 
 	}
 
 	agentConfig := newAgentConfig(sandboxConfig.AgentType, sandboxConfig.AgentConfig)
-	if err = s.agent.init(s, agentConfig); err != nil {
+	if err = s.agent.init(ctx, s, agentConfig); err != nil {
 		return nil, err
 	}
 
@@ -823,6 +850,9 @@ func (s *Sandbox) storeSandboxDevices() error {
 
 // storeSandbox stores a sandbox config.
 func (s *Sandbox) storeSandbox() error {
+	span, _ := s.trace("storeSandbox")
+	defer span.Finish()
+
 	err := s.storage.storeSandboxResource(s.id, configFileType, *(s.config))
 	if err != nil {
 		return err
@@ -839,7 +869,7 @@ func (s *Sandbox) storeSandbox() error {
 }
 
 // fetchSandbox fetches a sandbox config from a sandbox ID and returns a sandbox.
-func fetchSandbox(sandboxID string) (sandbox *Sandbox, err error) {
+func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err error) {
 	virtLog.Info("fetch sandbox")
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
@@ -857,7 +887,7 @@ func fetchSandbox(sandboxID string) (sandbox *Sandbox, err error) {
 	}
 
 	// fetchSandbox is not suppose to create new sandbox VM.
-	sandbox, err = createSandbox(config, nil)
+	sandbox, err = createSandbox(ctx, config, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sandbox with config %+v: %v", config, err)
 	}
@@ -938,6 +968,9 @@ func (s *Sandbox) Delete() error {
 }
 
 func (s *Sandbox) createNetwork() error {
+	span, _ := s.trace("createNetwork")
+	defer span.Finish()
+
 	var netNsPath string
 	var netNsCreated bool
 	var networkNS NetworkNamespace
@@ -951,7 +984,7 @@ func (s *Sandbox) createNetwork() error {
 	}()
 
 	// Initialize the network.
-	netNsPath, netNsCreated, err = s.network.init(s.config.NetworkConfig)
+	netNsPath, netNsCreated, err = s.network.init(s.ctx, s.config.NetworkConfig)
 	if err != nil {
 		return err
 	}
@@ -977,6 +1010,9 @@ func (s *Sandbox) createNetwork() error {
 }
 
 func (s *Sandbox) removeNetwork() error {
+	span, _ := s.trace("removeNetwork")
+	defer span.Finish()
+
 	return s.network.remove(s, s.networkNS, s.networkNS.NetNsCreated)
 }
 
@@ -1069,13 +1105,16 @@ func (s *Sandbox) ListRoutes() ([]*grpc.Route, error) {
 
 // startVM starts the VM.
 func (s *Sandbox) startVM() error {
+	span, ctx := s.trace("startVM")
+	defer span.Finish()
+
 	s.Logger().Info("Starting VM")
 
 	// FIXME: This would break cached VMs. We need network hotplug and move
 	// oci hooks and netns handling to cli. See #273.
 	if err := s.network.run(s.networkNS.NetNsPath, func() error {
 		if s.factory != nil {
-			vm, err := s.factory.GetVM(VMConfig{
+			vm, err := s.factory.GetVM(ctx, VMConfig{
 				HypervisorType:   s.config.HypervisorType,
 				HypervisorConfig: s.config.HypervisorConfig,
 				AgentType:        s.config.AgentType,
@@ -1109,6 +1148,9 @@ func (s *Sandbox) startVM() error {
 
 // stopVM: stop the sandbox's VM
 func (s *Sandbox) stopVM() error {
+	span, _ := s.trace("stopVM")
+	defer span.Finish()
+
 	return s.hypervisor.stopSandbox()
 }
 
@@ -1291,6 +1333,9 @@ func (s *Sandbox) StatsContainer(containerID string) (ContainerStats, error) {
 // createContainers registers all containers to the proxy, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers() error {
+	span, _ := s.trace("createContainers")
+	defer span.Finish()
+
 	for _, contConfig := range s.config.Containers {
 		newContainer, err := createContainer(s, contConfig)
 		if err != nil {
@@ -1330,6 +1375,9 @@ func (s *Sandbox) start() error {
 // stop stops a sandbox. The containers that are making the sandbox
 // will be destroyed.
 func (s *Sandbox) stop() error {
+	span, _ := s.trace("stop")
+	defer span.Finish()
+
 	if err := s.state.validTransition(s.state.State, StateStopped); err != nil {
 		return err
 	}
@@ -1510,7 +1558,10 @@ func (s *Sandbox) deleteContainersState() error {
 
 // togglePauseSandbox pauses a sandbox if pause is set to true, else it resumes
 // it.
-func togglePauseSandbox(sandboxID string, pause bool) (*Sandbox, error) {
+func togglePauseSandbox(ctx context.Context, sandboxID string, pause bool) (*Sandbox, error) {
+	span, ctx := trace(ctx, "togglePauseSandbox")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, errNeedSandbox
 	}
@@ -1522,7 +1573,7 @@ func togglePauseSandbox(sandboxID string, pause bool) (*Sandbox, error) {
 	defer unlockSandbox(lockFile)
 
 	// Fetch the sandbox from storage and create it.
-	s, err := fetchSandbox(sandboxID)
+	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -1544,6 +1595,9 @@ func togglePauseSandbox(sandboxID string, pause bool) (*Sandbox, error) {
 // HotplugAddDevice is used for add a device to sandbox
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
 func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType) error {
+	span, _ := s.trace("HotplugAddDevice")
+	defer span.Finish()
+
 	switch devType {
 	case config.DeviceVFIO:
 		vfioDevices, ok := device.GetDeviceInfo().([]*config.VFIODev)

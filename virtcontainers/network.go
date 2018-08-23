@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"bufio"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -1417,7 +1418,7 @@ func createEndpointsFromScan(networkNSPath string, config NetworkConfig) ([]Endp
 			}
 
 			if isPhysical {
-				cnmLogger().WithField("interface", netInfo.Iface.Name).Info("Physical network interface found")
+				networkLogger().WithField("interface", netInfo.Iface.Name).Info("Physical network interface found")
 				endpoint, err = createPhysicalEndpoint(netInfo)
 			} else {
 				var socketPath string
@@ -1429,7 +1430,7 @@ func createEndpointsFromScan(networkNSPath string, config NetworkConfig) ([]Endp
 				}
 
 				if socketPath != "" {
-					cnmLogger().WithField("interface", netInfo.Iface.Name).Info("VhostUser network interface found")
+					networkLogger().WithField("interface", netInfo.Iface.Name).Info("VhostUser network interface found")
 					endpoint, err = createVhostUserEndpoint(netInfo, socketPath)
 				} else {
 					endpoint, err = createVirtualNetworkEndpoint(idx, netInfo.Iface.Name, config.InterworkingModel)
@@ -1581,7 +1582,7 @@ func vhostUserSocketPath(info interface{}) (string, error) {
 // between VM netns and the host network physical interface.
 type network interface {
 	// init initializes the network, setting a new network namespace.
-	init(config NetworkConfig) (string, bool, error)
+	init(ctx context.Context, config NetworkConfig) (string, bool, error)
 
 	// run runs a callback function in a specified network namespace.
 	run(networkNSPath string, cb func() error) error

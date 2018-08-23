@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -229,7 +230,10 @@ const mountPerm = os.FileMode(0755)
 // * evaluate all symlinks
 // * ensure the source exists
 // * recursively create the destination
-func bindMount(source, destination string, readonly bool) error {
+func bindMount(ctx context.Context, source, destination string, readonly bool) error {
+	span, _ := trace(ctx, "bindMount")
+	defer span.Finish()
+
 	if source == "" {
 		return fmt.Errorf("source must be specified")
 	}
@@ -259,10 +263,13 @@ func bindMount(source, destination string, readonly bool) error {
 
 // bindMountContainerRootfs bind mounts a container rootfs into a 9pfs shared
 // directory between the guest and the host.
-func bindMountContainerRootfs(sharedDir, sandboxID, cID, cRootFs string, readonly bool) error {
+func bindMountContainerRootfs(ctx context.Context, sharedDir, sandboxID, cID, cRootFs string, readonly bool) error {
+	span, _ := trace(ctx, "bindMountContainerRootfs")
+	defer span.Finish()
+
 	rootfsDest := filepath.Join(sharedDir, sandboxID, cID, rootfsDir)
 
-	return bindMount(cRootFs, rootfsDest, readonly)
+	return bindMount(ctx, cRootFs, rootfsDest, readonly)
 }
 
 // Mount describes a container mount.
@@ -288,20 +295,26 @@ type Mount struct {
 	BlockDeviceID string
 }
 
-func bindUnmountContainerRootfs(sharedDir, sandboxID, cID string) error {
+func bindUnmountContainerRootfs(ctx context.Context, sharedDir, sandboxID, cID string) error {
+	span, _ := trace(ctx, "bindUnmountContainerRootfs")
+	defer span.Finish()
+
 	rootfsDest := filepath.Join(sharedDir, sandboxID, cID, rootfsDir)
 	syscall.Unmount(rootfsDest, 0)
 
 	return nil
 }
 
-func bindUnmountAllRootfs(sharedDir string, sandbox *Sandbox) {
+func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) {
+	span, _ := trace(ctx, "bindUnmountAllRootfs")
+	defer span.Finish()
+
 	for _, c := range sandbox.containers {
 		c.unmountHostMounts()
 		if c.state.Fstype == "" {
 			// Need to check for error returned by this call.
 			// See: https://github.com/containers/virtcontainers/issues/295
-			bindUnmountContainerRootfs(sharedDir, sandbox.id, c.id)
+			bindUnmountContainerRootfs(c.ctx, sharedDir, sandbox.id, c.id)
 		}
 	}
 }

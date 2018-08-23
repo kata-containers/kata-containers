@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -82,6 +83,8 @@ type hyper struct {
 	state   HyperAgentState
 
 	sockets []Socket
+
+	ctx context.Context
 }
 
 type hyperstartProxyCmd struct {
@@ -258,7 +261,10 @@ func fsMapFromDevices(c *Container) ([]*hyperstart.FsmapDescriptor, error) {
 }
 
 // init is the agent initialization implementation for hyperstart.
-func (h *hyper) init(sandbox *Sandbox, config interface{}) (err error) {
+func (h *hyper) init(ctx context.Context, sandbox *Sandbox, config interface{}) (err error) {
+	// save
+	h.ctx = ctx
+
 	switch c := config.(type) {
 	case HyperConfig:
 		// Create agent sockets from paths provided through
@@ -503,8 +509,8 @@ func (h *hyper) startOneContainer(sandbox *Sandbox, c *Container) error {
 		container.Fstype = c.state.Fstype
 	} else {
 
-		if err := bindMountContainerRootfs(defaultSharedDir, sandbox.id, c.id, c.rootFs, false); err != nil {
-			bindUnmountAllRootfs(defaultSharedDir, sandbox)
+		if err := bindMountContainerRootfs(c.ctx, defaultSharedDir, sandbox.id, c.id, c.rootFs, false); err != nil {
+			bindUnmountAllRootfs(c.ctx, defaultSharedDir, sandbox)
 			return err
 		}
 	}
@@ -514,7 +520,7 @@ func (h *hyper) startOneContainer(sandbox *Sandbox, c *Container) error {
 	// Handle container mounts
 	newMounts, err := c.mountSharedDirMounts(defaultSharedDir, "")
 	if err != nil {
-		bindUnmountAllRootfs(defaultSharedDir, sandbox)
+		bindUnmountAllRootfs(c.ctx, defaultSharedDir, sandbox)
 		return err
 	}
 
@@ -599,7 +605,7 @@ func (h *hyper) stopOneContainer(sandboxID string, c Container) error {
 	}
 
 	if c.state.Fstype == "" {
-		if err := bindUnmountContainerRootfs(defaultSharedDir, sandboxID, c.id); err != nil {
+		if err := bindUnmountContainerRootfs(c.ctx, defaultSharedDir, sandboxID, c.id); err != nil {
 			return err
 		}
 	}

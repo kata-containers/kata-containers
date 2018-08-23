@@ -208,23 +208,35 @@ func setupSignalHandler(ctx context.Context) {
 
 // setExternalLoggers registers the specified logger with the external
 // packages which accept a logger to handle their own logging.
-func setExternalLoggers(logger *logrus.Entry) {
+func setExternalLoggers(ctx context.Context, logger *logrus.Entry) {
+	var span opentracing.Span
+
+	// Only create a new span if a root span already exists. This is
+	// required to ensure that this function will not disrupt the root
+	// span logic by creating a span before the proper root span has been
+	// created.
+
+	if opentracing.SpanFromContext(ctx) != nil {
+		span, ctx = trace(ctx, "setExternalLoggers")
+		defer span.Finish()
+	}
+
 	// Set virtcontainers logger.
-	vci.SetLogger(logger)
+	vci.SetLogger(ctx, logger)
 
 	// Set vm factory logger.
-	vf.SetLogger(logger)
+	vf.SetLogger(ctx, logger)
 
 	// Set the OCI package logger.
-	oci.SetLogger(logger)
+	oci.SetLogger(ctx, logger)
 }
 
 // beforeSubcommands is the function to perform preliminary checks
 // before command-line parsing occurs.
-func beforeSubcommands(context *cli.Context) error {
-	handleShowConfig(context)
+func beforeSubcommands(c *cli.Context) error {
+	handleShowConfig(c)
 
-	if userWantsUsage(context) || (context.NArg() == 1 && (context.Args()[0] == checkCmd)) {
+	if userWantsUsage(c) || (c.NArg() == 1 && (c.Args()[0] == checkCmd)) {
 		// No setup required if the user just
 		// wants to see the usage statement or are
 		// running a command that does not manipulate
@@ -232,7 +244,7 @@ func beforeSubcommands(context *cli.Context) error {
 		return nil
 	}
 
-	if path := context.GlobalString("log"); path != "" {
+	if path := c.GlobalString("log"); path != "" {
 		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND|os.O_SYNC, 0640)
 		if err != nil {
 			return err
@@ -240,21 +252,21 @@ func beforeSubcommands(context *cli.Context) error {
 		kataLog.Logger.Out = f
 	}
 
-	switch context.GlobalString("log-format") {
+	switch c.GlobalString("log-format") {
 	case "text":
 		// retain logrus's default.
 	case "json":
 		kataLog.Logger.Formatter = new(logrus.JSONFormatter)
 	default:
-		return fmt.Errorf("unknown log-format %q", context.GlobalString("log-format"))
+		return fmt.Errorf("unknown log-format %q", c.GlobalString("log-format"))
 	}
 
 	var traceRootSpan string
 
 	// Add the name of the sub-command to each log entry for easier
 	// debugging.
-	cmdName := context.Args().First()
-	if context.App.Command(cmdName) != nil {
+	cmdName := c.Args().First()
+	if c.App.Command(cmdName) != nil {
 		kataLog = kataLog.WithField("command", cmdName)
 
 		// Name for the root span (used for tracing) now the
@@ -262,16 +274,19 @@ func beforeSubcommands(context *cli.Context) error {
 		traceRootSpan = name + " " + cmdName
 	}
 
-	setExternalLoggers(kataLog)
+	// Since a context is required, pass a new (throw-away) one - we
+	// cannot use the main context as tracing hasn't been enabled yet
+	// (meaning any spans created at this point will be silently ignored).
+	setExternalLoggers(context.Background(), kataLog)
 
 	ignoreLogging := false
 
-	if context.NArg() == 1 && context.Args()[0] == envCmd {
+	if c.NArg() == 1 && c.Args()[0] == envCmd {
 		// simply report the logging setup
 		ignoreLogging = true
 	}
 
-	configFile, runtimeConfig, err := loadConfiguration(context.GlobalString(configFilePathOption), ignoreLogging)
+	configFile, runtimeConfig, err := loadConfiguration(c.GlobalString(configFilePathOption), ignoreLogging)
 	if err != nil {
 		fatal(err)
 	}
@@ -283,13 +298,13 @@ func beforeSubcommands(context *cli.Context) error {
 		// This delays collection of trace data slightly but benefits the user by
 		// ensuring the first span is the name of the sub-command being
 		// invoked from the command-line.
-		err = setupTracing(context, traceRootSpan)
+		err = setupTracing(c, traceRootSpan)
 		if err != nil {
 			return err
 		}
 	}
 
-	args := strings.Join(context.Args(), " ")
+	args := strings.Join(c.Args(), " ")
 
 	fields := logrus.Fields{
 		"version":   version,
@@ -300,8 +315,8 @@ func beforeSubcommands(context *cli.Context) error {
 	kataLog.WithFields(fields).Info()
 
 	// make the data accessible to the sub-commands.
-	context.App.Metadata["runtimeConfig"] = runtimeConfig
-	context.App.Metadata["configFile"] = configFile
+	c.App.Metadata["runtimeConfig"] = runtimeConfig
+	c.App.Metadata["configFile"] = configFile
 
 	return nil
 }
@@ -339,6 +354,8 @@ func setupTracing(context *cli.Context, rootSpanName string) error {
 	if err != nil {
 		return err
 	}
+
+	span.SetTag("subsystem", "runtime")
 
 	// Associate the root span with the context
 	ctx = opentracing.ContextWithSpan(ctx, span)

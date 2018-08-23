@@ -67,7 +67,7 @@ func TestStateSuccessful(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: testContainerID,
 			Annotations: map[string]string{

@@ -5,11 +5,13 @@
 
 package virtcontainers
 
+import "context"
+
 // Factory controls how a new VM is created.
 type Factory interface {
 	// GetVM gets a new VM from the factory.
-	GetVM(config VMConfig) (*VM, error)
+	GetVM(ctx context.Context, config VMConfig) (*VM, error)
 
 	// CloseFactory closes and cleans up the factory.
-	CloseFactory()
+	CloseFactory(ctx context.Context)
 }

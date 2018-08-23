@@ -15,7 +15,6 @@ import (
 	"github.com/docker/go-units"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -133,7 +132,7 @@ other options are ignored.
 			return err
 		}
 
-		span, _ := opentracing.StartSpanFromContext(ctx, "update")
+		span, _ := trace(ctx, "update")
 		defer span.Finish()
 
 		if context.Args().Present() == false {
@@ -143,10 +142,10 @@ other options are ignored.
 		containerID := context.Args().First()
 
 		kataLog = kataLog.WithField("container", containerID)
-		setExternalLoggers(kataLog)
+		setExternalLoggers(ctx, kataLog)
 		span.SetTag("container", containerID)
 
-		status, sandboxID, err := getExistingContainerInfo(containerID)
+		status, sandboxID, err := getExistingContainerInfo(ctx, containerID)
 		if err != nil {
 			return err
 		}
@@ -158,7 +157,7 @@ other options are ignored.
 			"sandbox":   sandboxID,
 		})
 
-		setExternalLoggers(kataLog)
+		setExternalLoggers(ctx, kataLog)
 
 		span.SetTag("container", containerID)
 		span.SetTag("sandbox", sandboxID)
@@ -282,6 +281,6 @@ other options are ignored.
 			r.Pids.Limit = int64(context.Int("pids-limit"))
 		}
 
-		return vci.UpdateContainer(sandboxID, containerID, r)
+		return vci.UpdateContainer(ctx, sandboxID, containerID, r)
 	},
 }

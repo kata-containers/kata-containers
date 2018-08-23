@@ -6,6 +6,7 @@
 package oci
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -134,7 +135,7 @@ var ociLog = logrus.WithFields(logrus.Fields{
 })
 
 // SetLogger sets the logger for oci package.
-func SetLogger(logger *logrus.Entry) {
+func SetLogger(ctx context.Context, logger *logrus.Entry) {
 	fields := ociLog.Data
 	ociLog = logger.WithFields(fields)
 }

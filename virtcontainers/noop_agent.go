@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"syscall"
 
 	"github.com/kata-containers/agent/protocols/grpc"
@@ -23,7 +24,7 @@ func (n *noopAgent) startProxy(sandbox *Sandbox) error {
 }
 
 // init initializes the Noop agent, i.e. it does nothing.
-func (n *noopAgent) init(sandbox *Sandbox, config interface{}) error {
+func (n *noopAgent) init(ctx context.Context, sandbox *Sandbox, config interface{}) error {
 	return nil
 }
 

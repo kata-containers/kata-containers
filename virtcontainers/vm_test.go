@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"io/ioutil"
 	"testing"
 
@@ -25,12 +26,14 @@ func TestNewVM(t *testing.T) {
 		ImagePath:  testDir,
 	}
 
+	ctx := context.Background()
+
 	var vm *VM
-	_, err := NewVM(config)
+	_, err := NewVM(ctx, config)
 	assert.Error(err)
 
 	config.HypervisorConfig = hyperConfig
-	vm, err = NewVM(config)
+	vm, err = NewVM(ctx, config)
 	assert.Nil(err)
 
 	// VM operations
@@ -55,15 +58,15 @@ func TestNewVM(t *testing.T) {
 
 	// template VM
 	config.HypervisorConfig.BootFromTemplate = true
-	_, err = NewVM(config)
+	_, err = NewVM(ctx, config)
 	assert.Error(err)
 
 	config.HypervisorConfig.MemoryPath = testDir
-	_, err = NewVM(config)
+	_, err = NewVM(ctx, config)
 	assert.Error(err)
 
 	config.HypervisorConfig.DevicesStatePath = testDir
-	_, err = NewVM(config)
+	_, err = NewVM(ctx, config)
 	assert.Nil(err)
 }
 

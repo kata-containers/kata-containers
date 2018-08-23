@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"io"
 	"syscall"
 
@@ -18,40 +19,40 @@ import (
 
 // VC is the Virtcontainers interface
 type VC interface {
-	SetLogger(logger *logrus.Entry)
-	SetFactory(Factory)
+	SetLogger(ctx context.Context, logger *logrus.Entry)
+	SetFactory(ctx context.Context, factory Factory)
 
-	CreateSandbox(sandboxConfig SandboxConfig) (VCSandbox, error)
-	DeleteSandbox(sandboxID string) (VCSandbox, error)
-	FetchSandbox(sandboxID string) (VCSandbox, error)
-	ListSandbox() ([]SandboxStatus, error)
-	PauseSandbox(sandboxID string) (VCSandbox, error)
-	ResumeSandbox(sandboxID string) (VCSandbox, error)
-	RunSandbox(sandboxConfig SandboxConfig) (VCSandbox, error)
-	StartSandbox(sandboxID string) (VCSandbox, error)
-	StatusSandbox(sandboxID string) (SandboxStatus, error)
-	StopSandbox(sandboxID string) (VCSandbox, error)
+	CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error)
+	DeleteSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
+	FetchSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
+	ListSandbox(ctx context.Context) ([]SandboxStatus, error)
+	PauseSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
+	ResumeSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
+	RunSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error)
+	StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
+	StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error)
+	StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
 
-	CreateContainer(sandboxID string, containerConfig ContainerConfig) (VCSandbox, VCContainer, error)
-	DeleteContainer(sandboxID, containerID string) (VCContainer, error)
-	EnterContainer(sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContainer, *Process, error)
-	KillContainer(sandboxID, containerID string, signal syscall.Signal, all bool) error
-	StartContainer(sandboxID, containerID string) (VCContainer, error)
-	StatusContainer(sandboxID, containerID string) (ContainerStatus, error)
-	StatsContainer(sandboxID, containerID string) (ContainerStats, error)
-	StopContainer(sandboxID, containerID string) (VCContainer, error)
-	ProcessListContainer(sandboxID, containerID string, options ProcessListOptions) (ProcessList, error)
-	UpdateContainer(sandboxID, containerID string, resources specs.LinuxResources) error
-	PauseContainer(sandboxID, containerID string) error
-	ResumeContainer(sandboxID, containerID string) error
+	CreateContainer(ctx context.Context, sandboxID string, containerConfig ContainerConfig) (VCSandbox, VCContainer, error)
+	DeleteContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error)
+	EnterContainer(ctx context.Context, sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContainer, *Process, error)
+	KillContainer(ctx context.Context, sandboxID, containerID string, signal syscall.Signal, all bool) error
+	StartContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error)
+	StatusContainer(ctx context.Context, sandboxID, containerID string) (ContainerStatus, error)
+	StatsContainer(ctx context.Context, sandboxID, containerID string) (ContainerStats, error)
+	StopContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error)
+	ProcessListContainer(ctx context.Context, sandboxID, containerID string, options ProcessListOptions) (ProcessList, error)
+	UpdateContainer(ctx context.Context, sandboxID, containerID string, resources specs.LinuxResources) error
+	PauseContainer(ctx context.Context, sandboxID, containerID string) error
+	ResumeContainer(ctx context.Context, sandboxID, containerID string) error
 
-	AddDevice(sandboxID string, info config.DeviceInfo) (api.Device, error)
+	AddDevice(ctx context.Context, sandboxID string, info config.DeviceInfo) (api.Device, error)
 
-	AddInterface(sandboxID string, inf *grpc.Interface) (*grpc.Interface, error)
-	RemoveInterface(sandboxID string, inf *grpc.Interface) (*grpc.Interface, error)
-	ListInterfaces(sandboxID string) ([]*grpc.Interface, error)
-	UpdateRoutes(sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error)
-	ListRoutes(sandboxID string) ([]*grpc.Route, error)
+	AddInterface(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error)
+	RemoveInterface(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error)
+	ListInterfaces(ctx context.Context, sandboxID string) ([]*grpc.Interface, error)
+	UpdateRoutes(ctx context.Context, sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error)
+	ListRoutes(ctx context.Context, sandboxID string) ([]*grpc.Route, error)
 }
 
 // VCSandbox is the Sandbox interface

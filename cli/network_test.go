@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -17,19 +18,19 @@ import (
 )
 
 var (
-	testAddInterfaceFuncReturnNil = func(sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+	testAddInterfaceFuncReturnNil = func(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
 		return nil, nil
 	}
-	testRemoveInterfaceFuncReturnNil = func(sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+	testRemoveInterfaceFuncReturnNil = func(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
 		return nil, nil
 	}
-	testListInterfacesFuncReturnNil = func(sandboxID string) ([]*grpc.Interface, error) {
+	testListInterfacesFuncReturnNil = func(ctx context.Context, sandboxID string) ([]*grpc.Interface, error) {
 		return nil, nil
 	}
-	testUpdateRoutsFuncReturnNil = func(sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error) {
+	testUpdateRoutsFuncReturnNil = func(ctx context.Context, sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error) {
 		return nil, nil
 	}
-	testListRoutesFuncReturnNil = func(sandboxID string) ([]*grpc.Route, error) {
+	testListRoutesFuncReturnNil = func(ctx context.Context, sandboxID string) ([]*grpc.Route, error) {
 		return nil, nil
 	}
 )
@@ -51,7 +52,7 @@ func TestNetworkCliFunction(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
 	}
 

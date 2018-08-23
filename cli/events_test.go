@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 	"testing"
@@ -74,7 +75,7 @@ func TestEventsCLIFailure(t *testing.T) {
 		},
 	}
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: sandbox.ID(),
 			Annotations: map[string]string{
@@ -104,7 +105,7 @@ func TestEventsCLISuccessful(t *testing.T) {
 		},
 	}
 
-	testingImpl.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: sandbox.ID(),
 			Annotations: map[string]string{
@@ -116,7 +117,7 @@ func TestEventsCLISuccessful(t *testing.T) {
 		}, nil
 	}
 
-	testingImpl.StatsContainerFunc = func(sandboxID, containerID string) (vc.ContainerStats, error) {
+	testingImpl.StatsContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStats, error) {
 		return vc.ContainerStats{}, nil
 	}
 

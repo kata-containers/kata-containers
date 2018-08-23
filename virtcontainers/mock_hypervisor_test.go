@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"testing"
 )
@@ -25,8 +26,10 @@ func TestMockHypervisorInit(t *testing.T) {
 		storage: &filesystem{},
 	}
 
+	ctx := context.Background()
+
 	// wrong config
-	if err := m.init(sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.config.VMConfig, sandbox.storage); err == nil {
+	if err := m.init(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.config.VMConfig, sandbox.storage); err == nil {
 		t.Fatal()
 	}
 
@@ -37,7 +40,7 @@ func TestMockHypervisorInit(t *testing.T) {
 	}
 
 	// right config
-	if err := m.init(sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.config.VMConfig, sandbox.storage); err != nil {
+	if err := m.init(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.config.VMConfig, sandbox.storage); err != nil {
 		t.Fatal(err)
 	}
 }

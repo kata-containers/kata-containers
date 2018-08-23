@@ -17,7 +17,6 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 )
 
@@ -189,22 +188,22 @@ func generateExecParams(context *cli.Context, specProcess *oci.CompatOCIProcess)
 }
 
 func execute(ctx context.Context, context *cli.Context) error {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "execute")
+	span, ctx := trace(ctx, "execute")
 	defer span.Finish()
 
 	containerID := context.Args().First()
 
 	kataLog = kataLog.WithField("container", containerID)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("container", containerID)
 
-	status, sandboxID, err := getExistingContainerInfo(containerID)
+	status, sandboxID, err := getExistingContainerInfo(ctx, containerID)
 	if err != nil {
 		return err
 	}
 
 	kataLog = kataLog.WithField("sandbox", sandboxID)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("sandbox", sandboxID)
 
 	// Retrieve OCI spec configuration.
@@ -222,7 +221,7 @@ func execute(ctx context.Context, context *cli.Context) error {
 	containerID = params.cID
 
 	kataLog = kataLog.WithField("container", containerID)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("container", containerID)
 
 	// container MUST be ready or running.
@@ -258,7 +257,7 @@ func execute(ctx context.Context, context *cli.Context) error {
 		Detach:      noNeedForOutput(params.detach, params.ociProcess.Terminal),
 	}
 
-	_, _, process, err := vci.EnterContainer(sandboxID, params.cID, cmd)
+	_, _, process, err := vci.EnterContainer(ctx, sandboxID, params.cID, cmd)
 	if err != nil {
 		return err
 	}
