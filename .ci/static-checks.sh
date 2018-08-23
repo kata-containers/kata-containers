@@ -634,7 +634,13 @@ main()
 	[ -n "$func" ] && info "running $func function" && eval "$func" && exit 0
 
 	# Run all checks
-	check_commits
+	if [ -n "$TRAVIS_BRANCH" ] && [ "$TRAVIS_BRANCH" != "master" ]
+	then
+		echo "Skipping checkcommits"
+		echo "See issue: https://github.com/kata-containers/tests/issues/632"
+	else
+		check_commits
+	fi
 	check_license_headers
 	check_go
 	check_versions
