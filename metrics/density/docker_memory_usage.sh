@@ -182,7 +182,7 @@ get_docker_memory_usage(){
 
 	for ((i=1; i<= NUM_CONTAINERS; i++)); do
 		containers+=($(random_name))
-		${DOCKER_EXE} run --rm --runtime "$RUNTIME" --name ${containers[-1]} -tid $IMAGE $CMD
+		${DOCKER_EXE} run --runtime "$RUNTIME" --name ${containers[-1]} -tid $IMAGE $CMD
 	done
 
 	if [ "$AUTO_MODE" == "auto" ]; then
@@ -277,16 +277,7 @@ EOF
 	metrics_json_add_array_element "$json"
 	metrics_json_end_array "Results"
 
-	# FIXME - temporary workaround for https://github.com/kata-containers/runtime/issues/406
-	# When that is fixed, we can go back to a hard 'docker rm -f *' with no sleep.
-	# Or, in fact we can leave the '--rm' on the docker run, and just change this
-	# to a 'docker stop *'.
-	for c in ${containers[@]}; do
-		# Use a kill, as the containers are benign, and most of the time
-		# a stop request ends up being a kill anyway.
-		docker kill $c
-		sleep 3
-	done
+	docker rm -f ${containers[@]}
 }
 
 save_config(){
