@@ -149,16 +149,8 @@ function cleanup() {
 	# This is what we have for now from the generics.
 	# Expect this to be improved (the generics) soon...
 
-	# FIXME - temporary workaround for https://github.com/kata-containers/runtime/issues/406
-	# When that is fixed, we can go back to a hard 'docker rm -f *' with no sleep.
-	# Or, in fact we can leave the '--rm' on the docker run, and just change this
-	# to a 'docker stop *'.
-	for c in $(docker ps -qa); do
-		# Use a kill, as the containers are benign, and most of the time the stop
-		# request ends up doing a kill anyhow
-		docker kill $c
-		sleep 3
-	done
+	docker kill $(docker ps -qa)
+
 #	kill_processes_before_start
 }
 
