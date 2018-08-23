@@ -33,8 +33,13 @@ var factoryCLICommand = cli.Command{
 var initFactoryCommand = cli.Command{
 	Name:  "init",
 	Usage: "initialize a VM factory based on kata-runtime configuration",
-	Action: func(context *cli.Context) error {
-		runtimeConfig, ok := context.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
+	Action: func(c *cli.Context) error {
+		ctx, err := cliContextToContext(c)
+		if err != nil {
+			return err
+		}
+
+		runtimeConfig, ok := c.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
 		if !ok {
 			return errors.New("invalid runtime config")
 		}
@@ -50,7 +55,7 @@ var initFactoryCommand = cli.Command{
 				},
 			}
 			kataLog.WithField("factory", factoryConfig).Info("create vm factory")
-			_, err := vf.NewFactory(factoryConfig, false)
+			_, err := vf.NewFactory(ctx, factoryConfig, false)
 			if err != nil {
 				kataLog.WithError(err).Error("create vm factory failed")
 				return err
@@ -68,8 +73,13 @@ var initFactoryCommand = cli.Command{
 var destroyFactoryCommand = cli.Command{
 	Name:  "destroy",
 	Usage: "destroy the VM factory",
-	Action: func(context *cli.Context) error {
-		runtimeConfig, ok := context.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
+	Action: func(c *cli.Context) error {
+		ctx, err := cliContextToContext(c)
+		if err != nil {
+			return err
+		}
+
+		runtimeConfig, ok := c.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
 		if !ok {
 			return errors.New("invalid runtime config")
 		}
@@ -85,12 +95,12 @@ var destroyFactoryCommand = cli.Command{
 				},
 			}
 			kataLog.WithField("factory", factoryConfig).Info("load vm factory")
-			f, err := vf.NewFactory(factoryConfig, true)
+			f, err := vf.NewFactory(ctx, factoryConfig, true)
 			if err != nil {
 				kataLog.WithError(err).Error("load vm factory failed")
 				// ignore error
 			} else {
-				f.CloseFactory()
+				f.CloseFactory(ctx)
 			}
 		}
 		fmt.Fprintln(defaultOutputFile, "vm factory destroyed")
@@ -101,8 +111,13 @@ var destroyFactoryCommand = cli.Command{
 var statusFactoryCommand = cli.Command{
 	Name:  "status",
 	Usage: "query the status of VM factory",
-	Action: func(context *cli.Context) error {
-		runtimeConfig, ok := context.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
+	Action: func(c *cli.Context) error {
+		ctx, err := cliContextToContext(c)
+		if err != nil {
+			return err
+		}
+
+		runtimeConfig, ok := c.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
 		if !ok {
 			return errors.New("invalid runtime config")
 		}
@@ -118,11 +133,11 @@ var statusFactoryCommand = cli.Command{
 				},
 			}
 			kataLog.WithField("factory", factoryConfig).Info("load vm factory")
-			f, err := vf.NewFactory(factoryConfig, true)
+			f, err := vf.NewFactory(ctx, factoryConfig, true)
 			if err != nil {
 				fmt.Fprintln(defaultOutputFile, "vm factory is off")
 			} else {
-				f.CloseFactory()
+				f.CloseFactory(ctx)
 				fmt.Fprintln(defaultOutputFile, "vm factory is on")
 			}
 		} else {

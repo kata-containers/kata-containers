@@ -11,7 +11,6 @@ import (
 	"fmt"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -51,7 +50,7 @@ var psCLICommand = cli.Command{
 }
 
 func ps(ctx context.Context, containerID, format string, args []string) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "ps")
+	span, _ := trace(ctx, "ps")
 	defer span.Finish()
 
 	if containerID == "" {
@@ -59,11 +58,11 @@ func ps(ctx context.Context, containerID, format string, args []string) error {
 	}
 
 	kataLog = kataLog.WithField("container", containerID)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("container", containerID)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
-	status, sandboxID, err := getExistingContainerInfo(containerID)
+	status, sandboxID, err := getExistingContainerInfo(ctx, containerID)
 	if err != nil {
 		return err
 	}
@@ -75,7 +74,7 @@ func ps(ctx context.Context, containerID, format string, args []string) error {
 		"sandbox":   sandboxID,
 	})
 
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("container", containerID)
 	span.SetTag("sandbox", sandboxID)
 
@@ -93,7 +92,7 @@ func ps(ctx context.Context, containerID, format string, args []string) error {
 
 	options.Format = format
 
-	msg, err := vci.ProcessListContainer(containerID, sandboxID, options)
+	msg, err := vci.ProcessListContainer(ctx, containerID, sandboxID, options)
 	if err != nil {
 		return err
 	}

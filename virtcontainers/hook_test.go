@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -90,6 +91,7 @@ func createTestSandbox() *Sandbox {
 		annotationsLock: &sync.RWMutex{},
 		config:          c,
 		id:              testSandboxID,
+		ctx:             context.Background(),
 	}
 }
 

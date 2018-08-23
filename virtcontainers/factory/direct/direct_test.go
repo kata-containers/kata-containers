@@ -6,6 +6,7 @@
 package direct
 
 import (
+	"context"
 	"io/ioutil"
 	"testing"
 
@@ -28,16 +29,18 @@ func TestTemplateFactory(t *testing.T) {
 		HypervisorConfig: hyperConfig,
 	}
 
+	ctx := context.Background()
+
 	// New
-	f := New(vmConfig)
+	f := New(ctx, vmConfig)
 
 	// Config
 	assert.Equal(f.Config(), vmConfig)
 
 	// GetBaseVM
-	_, err := f.GetBaseVM()
+	_, err := f.GetBaseVM(ctx)
 	assert.Nil(err)
 
 	// CloseFactory
-	f.CloseFactory()
+	f.CloseFactory(ctx)
 }

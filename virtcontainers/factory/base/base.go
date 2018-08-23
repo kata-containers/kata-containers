@@ -5,7 +5,11 @@
 
 package base
 
-import vc "github.com/kata-containers/runtime/virtcontainers"
+import (
+	"context"
+
+	vc "github.com/kata-containers/runtime/virtcontainers"
+)
 
 // FactoryBase is vm factory's internal base factory interfaces.
 // The difference between FactoryBase and Factory is that the Factory
@@ -17,8 +21,8 @@ type FactoryBase interface {
 	Config() vc.VMConfig
 
 	// GetBaseVM returns a paused VM created by the base factory.
-	GetBaseVM() (*vc.VM, error)
+	GetBaseVM(ctx context.Context) (*vc.VM, error)
 
 	// CloseFactory closes the base factory.
-	CloseFactory()
+	CloseFactory(ctx context.Context)
 }

@@ -13,7 +13,6 @@ import (
 	"os"
 
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 )
 
@@ -41,16 +40,16 @@ instance of a container.`,
 }
 
 func state(ctx context.Context, containerID string) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "state")
+	span, _ := trace(ctx, "state")
 	defer span.Finish()
 
 	kataLog = kataLog.WithField("container", containerID)
 	span.SetTag("container", containerID)
 
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
-	status, _, err := getExistingContainerInfo(containerID)
+	status, _, err := getExistingContainerInfo(ctx, containerID)
 	if err != nil {
 		return err
 	}

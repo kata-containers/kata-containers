@@ -7,6 +7,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -261,6 +263,8 @@ type Container struct {
 	devices []ContainerDevice
 
 	systemMountsInfo SystemMountsInfo
+
+	ctx context.Context
 }
 
 // ID returns the container identifier string.
@@ -274,6 +278,19 @@ func (c *Container) Logger() *logrus.Entry {
 		"subsystem": "container",
 		"sandbox":   c.sandboxID,
 	})
+}
+
+func (c *Container) trace(name string) (opentracing.Span, context.Context) {
+	if c.ctx == nil {
+		c.Logger().WithField("type", "bug").Error("trace called before context set")
+		c.ctx = context.Background()
+	}
+
+	span, ctx := opentracing.StartSpanFromContext(c.ctx, name)
+
+	span.SetTag("subsystem", "container")
+
+	return span, ctx
 }
 
 // Sandbox returns the sandbox handler related to this container.
@@ -468,7 +485,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 		filename := fmt.Sprintf("%s-%s-%s", c.id, hex.EncodeToString(randBytes), filepath.Base(m.Destination))
 		mountDest := filepath.Join(hostSharedDir, c.sandbox.id, filename)
 
-		if err := bindMount(m.Source, mountDest, false); err != nil {
+		if err := bindMount(c.ctx, m.Source, mountDest, false); err != nil {
 			return nil, err
 		}
 
@@ -503,8 +520,15 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 }
 
 func (c *Container) unmountHostMounts() error {
+	var span opentracing.Span
+	span, c.ctx = c.trace("unmountHostMounts")
+	defer span.Finish()
+
 	for _, m := range c.mounts {
 		if m.HostPath != "" {
+			span, _ := c.trace("unmount")
+			span.SetTag("host-path", m.HostPath)
+
 			logger := c.Logger().WithField("host-path", m.HostPath)
 			if err := syscall.Unmount(m.HostPath, 0); err != nil {
 				// Unable to unmount paths could be a really big problem here
@@ -520,6 +544,8 @@ func (c *Container) unmountHostMounts() error {
 				logger.WithError(err).Warn("Could not be removed")
 				return err
 			}
+
+			span.Finish()
 		}
 	}
 
@@ -528,6 +554,9 @@ func (c *Container) unmountHostMounts() error {
 
 // newContainer creates a Container structure from a sandbox and a container configuration.
 func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, error) {
+	span, _ := sandbox.trace("newContainer")
+	defer span.Finish()
+
 	if contConfig.valid() == false {
 		return &Container{}, fmt.Errorf("Invalid container configuration")
 	}
@@ -544,6 +573,7 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		state:         State{},
 		process:       Process{},
 		mounts:        contConfig.Mounts,
+		ctx:           sandbox.ctx,
 	}
 
 	state, err := c.sandbox.storage.fetchContainerState(c.sandboxID, c.id)
@@ -790,6 +820,9 @@ func (c *Container) start() error {
 }
 
 func (c *Container) stop() error {
+	span, _ := c.trace("stop")
+	defer span.Finish()
+
 	// In case the container status has been updated implicitly because
 	// the container process has terminated, it might be possible that
 	// someone try to stop the container, and we don't want to issue an
@@ -811,6 +844,9 @@ func (c *Container) stop() error {
 	}
 
 	defer func() {
+		span, _ := c.trace("stopShim")
+		defer span.Finish()
+
 		// If shim is still running something went wrong
 		// Make sure we stop the shim process
 		if running, _ := isShimRunning(c.process.Pid); running {

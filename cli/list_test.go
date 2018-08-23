@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -380,7 +381,7 @@ func TestListGetContainersListSandboxFail(t *testing.T) {
 		"runtimeConfig": runtimeConfig,
 	}
 
-	_, err = getContainers(ctx)
+	_, err = getContainers(context.Background(), ctx)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 }
@@ -388,7 +389,7 @@ func TestListGetContainersListSandboxFail(t *testing.T) {
 func TestListGetContainers(t *testing.T) {
 	assert := assert.New(t)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+	testingImpl.ListSandboxFunc = func(ctx context.Context) ([]vc.SandboxStatus, error) {
 		// No pre-existing sandboxes
 		return []vc.SandboxStatus{}, nil
 	}
@@ -411,7 +412,7 @@ func TestListGetContainers(t *testing.T) {
 		"runtimeConfig": runtimeConfig,
 	}
 
-	state, err := getContainers(ctx)
+	state, err := getContainers(context.Background(), ctx)
 	assert.NoError(err)
 	assert.Equal(state, []fullContainerState(nil))
 }
@@ -423,7 +424,7 @@ func TestListGetContainersSandboxWithoutContainers(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+	testingImpl.ListSandboxFunc = func(ctx context.Context) ([]vc.SandboxStatus, error) {
 		return []vc.SandboxStatus{
 			{
 				ID:               sandbox.ID(),
@@ -450,7 +451,7 @@ func TestListGetContainersSandboxWithoutContainers(t *testing.T) {
 		"runtimeConfig": runtimeConfig,
 	}
 
-	state, err := getContainers(ctx)
+	state, err := getContainers(context.Background(), ctx)
 	assert.NoError(err)
 	assert.Equal(state, []fullContainerState(nil))
 }
@@ -470,7 +471,7 @@ func TestListGetContainersSandboxWithContainer(t *testing.T) {
 	err = os.MkdirAll(rootfs, testDirMode)
 	assert.NoError(err)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+	testingImpl.ListSandboxFunc = func(ctx context.Context) ([]vc.SandboxStatus, error) {
 		return []vc.SandboxStatus{
 			{
 				ID: sandbox.ID(),
@@ -497,7 +498,7 @@ func TestListGetContainersSandboxWithContainer(t *testing.T) {
 
 	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 
-	_, err = getContainers(ctx)
+	_, err = getContainers(context.Background(), ctx)
 	assert.NoError(err)
 }
 
@@ -538,7 +539,7 @@ func TestListCLIFunctionFormatFail(t *testing.T) {
 
 	rootfs := filepath.Join(tmpdir, "rootfs")
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+	testingImpl.ListSandboxFunc = func(ctx context.Context) ([]vc.SandboxStatus, error) {
 		return []vc.SandboxStatus{
 			{
 				ID: sandbox.ID(),
@@ -638,7 +639,7 @@ func TestListCLIFunctionQuiet(t *testing.T) {
 	err = os.MkdirAll(rootfs, testDirMode)
 	assert.NoError(err)
 
-	testingImpl.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+	testingImpl.ListSandboxFunc = func(ctx context.Context) ([]vc.SandboxStatus, error) {
 		return []vc.SandboxStatus{
 			{
 				ID: sandbox.ID(),

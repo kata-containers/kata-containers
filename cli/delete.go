@@ -13,7 +13,6 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -60,15 +59,15 @@ EXAMPLE:
 }
 
 func delete(ctx context.Context, containerID string, force bool) error {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "delete")
+	span, ctx := trace(ctx, "delete")
 	defer span.Finish()
 
 	kataLog = kataLog.WithField("container", containerID)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("container", containerID)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
-	status, sandboxID, err := getExistingContainerInfo(containerID)
+	status, sandboxID, err := getExistingContainerInfo(ctx, containerID)
 	if err != nil {
 		return err
 	}
@@ -80,7 +79,7 @@ func delete(ctx context.Context, containerID string, force bool) error {
 		"sandbox":   sandboxID,
 	})
 
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 
 	span.SetTag("container", containerID)
 	span.SetTag("sandbox", sandboxID)
@@ -134,21 +133,21 @@ func delete(ctx context.Context, containerID string, force bool) error {
 }
 
 func deleteSandbox(ctx context.Context, sandboxID string) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "deleteSandbox")
+	span, _ := trace(ctx, "deleteSandbox")
 	defer span.Finish()
 
-	status, err := vci.StatusSandbox(sandboxID)
+	status, err := vci.StatusSandbox(ctx, sandboxID)
 	if err != nil {
 		return err
 	}
 
 	if oci.StateToOCIState(status.State) != oci.StateStopped {
-		if _, err := vci.StopSandbox(sandboxID); err != nil {
+		if _, err := vci.StopSandbox(ctx, sandboxID); err != nil {
 			return err
 		}
 	}
 
-	if _, err := vci.DeleteSandbox(sandboxID); err != nil {
+	if _, err := vci.DeleteSandbox(ctx, sandboxID); err != nil {
 		return err
 	}
 
@@ -156,16 +155,16 @@ func deleteSandbox(ctx context.Context, sandboxID string) error {
 }
 
 func deleteContainer(ctx context.Context, sandboxID, containerID string, forceStop bool) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "deleteContainer")
+	span, _ := trace(ctx, "deleteContainer")
 	defer span.Finish()
 
 	if forceStop {
-		if _, err := vci.StopContainer(sandboxID, containerID); err != nil {
+		if _, err := vci.StopContainer(ctx, sandboxID, containerID); err != nil {
 			return err
 		}
 	}
 
-	if _, err := vci.DeleteContainer(sandboxID, containerID); err != nil {
+	if _, err := vci.DeleteContainer(ctx, sandboxID, containerID); err != nil {
 		return err
 	}
 
@@ -173,7 +172,7 @@ func deleteContainer(ctx context.Context, sandboxID, containerID string, forceSt
 }
 
 func removeCgroupsPath(ctx context.Context, containerID string, cgroupsPathList []string) error {
-	span, _ := opentracing.StartSpanFromContext(ctx, "removeCgroupsPath")
+	span, _ := trace(ctx, "removeCgroupsPath")
 	defer span.Finish()
 
 	if len(cgroupsPathList) == 0 {

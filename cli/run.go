@@ -14,7 +14,6 @@ import (
 	"syscall"
 
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/urfave/cli"
 )
 
@@ -82,7 +81,7 @@ var runCLICommand = cli.Command{
 
 func run(ctx context.Context, containerID, bundle, console, consoleSocket, pidFile string, detach bool,
 	runtimeConfig oci.RuntimeConfig) error {
-	span, ctx := opentracing.StartSpanFromContext(ctx, "run")
+	span, ctx := trace(ctx, "run")
 	defer span.Finish()
 
 	consolePath, err := setupConsole(console, consoleSocket)

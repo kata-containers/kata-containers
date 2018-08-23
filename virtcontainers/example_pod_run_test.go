@@ -6,6 +6,7 @@
 package virtcontainers_test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -68,7 +69,7 @@ func Example_createAndStartSandbox() {
 		Containers: []vc.ContainerConfig{container},
 	}
 
-	_, err := vc.RunSandbox(sandboxConfig, nil)
+	_, err := vc.RunSandbox(context.Background(), sandboxConfig, nil)
 	if err != nil {
 		fmt.Printf("Could not run sandbox: %s", err)
 	}

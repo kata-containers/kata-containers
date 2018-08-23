@@ -9,7 +9,6 @@ package main
 import (
 	"context"
 
-	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -58,16 +57,16 @@ func toggle(c *cli.Context, pause bool) error {
 }
 
 func toggleContainerPause(ctx context.Context, containerID string, pause bool) (err error) {
-	span, _ := opentracing.StartSpanFromContext(ctx, "pause")
+	span, _ := trace(ctx, "pause")
 	defer span.Finish()
 	span.SetTag("pause", pause)
 
 	kataLog = kataLog.WithField("container", containerID)
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("container", containerID)
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
-	status, sandboxID, err := getExistingContainerInfo(containerID)
+	status, sandboxID, err := getExistingContainerInfo(ctx, containerID)
 	if err != nil {
 		return err
 	}
@@ -79,14 +78,14 @@ func toggleContainerPause(ctx context.Context, containerID string, pause bool) (
 		"sandbox":   sandboxID,
 	})
 
-	setExternalLoggers(kataLog)
+	setExternalLoggers(ctx, kataLog)
 	span.SetTag("container", containerID)
 	span.SetTag("sandbox", sandboxID)
 
 	if pause {
-		err = vci.PauseContainer(sandboxID, containerID)
+		err = vci.PauseContainer(ctx, sandboxID, containerID)
 	} else {
-		err = vci.ResumeContainer(sandboxID, containerID)
+		err = vci.ResumeContainer(ctx, sandboxID, containerID)
 	}
 
 	return err

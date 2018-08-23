@@ -6,6 +6,7 @@
 package hyperstart
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -123,7 +124,7 @@ type Hyperstart struct {
 var hyperLog = logrus.FieldLogger(logrus.New())
 
 // SetLogger sets the logger for hyperstart package.
-func SetLogger(logger logrus.FieldLogger) {
+func SetLogger(ctx context.Context, logger logrus.FieldLogger) {
 	hyperLog = logger.WithFields(logrus.Fields{
 		"source":    "virtcontainers",
 		"subsystem": "hyperstart",

@@ -293,7 +293,7 @@ func TestCreateInvalidArgs(t *testing.T) {
 		},
 	}
 
-	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
@@ -488,7 +488,7 @@ func TestCreateProcessCgroupsPathSuccessful(t *testing.T) {
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
 
-	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
@@ -583,7 +583,7 @@ func TestCreateCreateCgroupsFilesFail(t *testing.T) {
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
 
-	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
@@ -668,7 +668,7 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
 
-	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
@@ -739,7 +739,7 @@ func TestCreate(t *testing.T) {
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
 
-	testingImpl.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
@@ -1028,7 +1028,7 @@ func TestCreateCreateContainer(t *testing.T) {
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
 
-	testingImpl.CreateContainerFunc = func(sandboxID string, containerConfig vc.ContainerConfig) (vc.VCSandbox, vc.VCContainer, error) {
+	testingImpl.CreateContainerFunc = func(ctx context.Context, sandboxID string, containerConfig vc.ContainerConfig) (vc.VCSandbox, vc.VCContainer, error) {
 		return &vcmock.Sandbox{}, &vcmock.Container{}, nil
 	}
 

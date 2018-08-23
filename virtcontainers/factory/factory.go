@@ -6,6 +6,7 @@
 package factory
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/factory/cache"
 	"github.com/kata-containers/runtime/virtcontainers/factory/direct"
 	"github.com/kata-containers/runtime/virtcontainers/factory/template"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 )
 
@@ -35,8 +37,19 @@ type factory struct {
 	base base.FactoryBase
 }
 
+func trace(parent context.Context, name string) (opentracing.Span, context.Context) {
+	span, ctx := opentracing.StartSpanFromContext(parent, name)
+
+	span.SetTag("subsystem", "factory")
+
+	return span, ctx
+}
+
 // NewFactory returns a working factory.
-func NewFactory(config Config, fetchOnly bool) (vc.Factory, error) {
+func NewFactory(ctx context.Context, config Config, fetchOnly bool) (vc.Factory, error) {
+	span, _ := trace(ctx, "NewFactory")
+	defer span.Finish()
+
 	err := config.validate()
 	if err != nil {
 		return nil, err
@@ -54,21 +67,21 @@ func NewFactory(config Config, fetchOnly bool) (vc.Factory, error) {
 				return nil, err
 			}
 		} else {
-			b = template.New(config.VMConfig)
+			b = template.New(ctx, config.VMConfig)
 		}
 	} else {
-		b = direct.New(config.VMConfig)
+		b = direct.New(ctx, config.VMConfig)
 	}
 
 	if config.Cache > 0 {
-		b = cache.New(config.Cache, b)
+		b = cache.New(ctx, config.Cache, b)
 	}
 
 	return &factory{b}, nil
 }
 
 // SetLogger sets the logger for the factory.
-func SetLogger(logger logrus.FieldLogger) {
+func SetLogger(ctx context.Context, logger logrus.FieldLogger) {
 	fields := logrus.Fields{
 		"source": "virtcontainers",
 	}
@@ -117,7 +130,10 @@ func (f *factory) checkConfig(config vc.VMConfig) error {
 }
 
 // GetVM returns a working blank VM created by the factory.
-func (f *factory) GetVM(config vc.VMConfig) (*vc.VM, error) {
+func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error) {
+	span, _ := trace(ctx, "GetVM")
+	defer span.Finish()
+
 	hypervisorConfig := config.HypervisorConfig
 	err := config.Valid()
 	if err != nil {
@@ -128,11 +144,11 @@ func (f *factory) GetVM(config vc.VMConfig) (*vc.VM, error) {
 	err = f.checkConfig(config)
 	if err != nil {
 		f.log().WithError(err).Info("fallback to direct factory vm")
-		return direct.New(config).GetBaseVM()
+		return direct.New(ctx, config).GetBaseVM(ctx)
 	}
 
 	f.log().Info("get base VM")
-	vm, err := f.base.GetBaseVM()
+	vm, err := f.base.GetBaseVM(ctx)
 	if err != nil {
 		f.log().WithError(err).Error("failed to get base VM")
 		return nil, err
@@ -186,6 +202,6 @@ func (f *factory) GetVM(config vc.VMConfig) (*vc.VM, error) {
 }
 
 // CloseFactory closes the factory.
-func (f *factory) CloseFactory() {
-	f.base.CloseFactory()
+func (f *factory) CloseFactory(ctx context.Context) {
+	f.base.CloseFactory(ctx)
 }

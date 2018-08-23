@@ -7,6 +7,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"testing"
 )
 
@@ -14,14 +15,15 @@ func testCreateNoopContainer() (*Sandbox, *Container, error) {
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
-	p, err := CreateSandbox(config, nil)
+	ctx := context.Background()
+	p, err := CreateSandbox(ctx, config, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	contConfig := newTestContainerConfigNoop(contID)
 
-	p, c, err := CreateContainer(p.ID(), contConfig)
+	p, c, err := CreateContainer(ctx, p.ID(), contConfig)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -33,7 +35,7 @@ func TestNoopAgentInit(t *testing.T) {
 	n := &noopAgent{}
 	sandbox := &Sandbox{}
 
-	err := n.init(sandbox, nil)
+	err := n.init(context.Background(), sandbox, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

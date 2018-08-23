@@ -6,6 +6,7 @@
 package vcmock
 
 import (
+	"context"
 	"reflect"
 	"syscall"
 	"testing"
@@ -102,14 +103,15 @@ func TestVCMockSetLogger(t *testing.T) {
 	logger := logrus.NewEntry(logrus.New())
 
 	assert.Equal(loggerTriggered, 0)
-	m.SetLogger(logger)
+	ctx := context.Background()
+	m.SetLogger(ctx, logger)
 	assert.Equal(loggerTriggered, 0)
 
-	m.SetLoggerFunc = func(logger logrus.FieldLogger) {
+	m.SetLoggerFunc = func(ctx context.Context, logger *logrus.Entry) {
 		loggerTriggered = 1
 	}
 
-	m.SetLogger(logger)
+	m.SetLogger(ctx, logger)
 	assert.Equal(loggerTriggered, 1)
 }
 
@@ -119,22 +121,23 @@ func TestVCMockCreateSandbox(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.CreateSandboxFunc)
 
-	_, err := m.CreateSandbox(vc.SandboxConfig{})
+	ctx := context.Background()
+	_, err := m.CreateSandbox(ctx, vc.SandboxConfig{})
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.CreateSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	m.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return &Sandbox{}, nil
 	}
 
-	sandbox, err := m.CreateSandbox(vc.SandboxConfig{})
+	sandbox, err := m.CreateSandbox(ctx, vc.SandboxConfig{})
 	assert.NoError(err)
 	assert.Equal(sandbox, &Sandbox{})
 
 	// reset
 	m.CreateSandboxFunc = nil
 
-	_, err = m.CreateSandbox(vc.SandboxConfig{})
+	_, err = m.CreateSandbox(ctx, vc.SandboxConfig{})
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -145,22 +148,23 @@ func TestVCMockDeleteSandbox(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.DeleteSandboxFunc)
 
-	_, err := m.DeleteSandbox(testSandboxID)
+	ctx := context.Background()
+	_, err := m.DeleteSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.DeleteSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	m.DeleteSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return &Sandbox{}, nil
 	}
 
-	sandbox, err := m.DeleteSandbox(testSandboxID)
+	sandbox, err := m.DeleteSandbox(ctx, testSandboxID)
 	assert.NoError(err)
 	assert.Equal(sandbox, &Sandbox{})
 
 	// reset
 	m.DeleteSandboxFunc = nil
 
-	_, err = m.DeleteSandbox(testSandboxID)
+	_, err = m.DeleteSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -171,22 +175,23 @@ func TestVCMockListSandbox(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.ListSandboxFunc)
 
-	_, err := m.ListSandbox()
+	ctx := context.Background()
+	_, err := m.ListSandbox(ctx)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.ListSandboxFunc = func() ([]vc.SandboxStatus, error) {
+	m.ListSandboxFunc = func(ctx context.Context) ([]vc.SandboxStatus, error) {
 		return []vc.SandboxStatus{}, nil
 	}
 
-	sandboxes, err := m.ListSandbox()
+	sandboxes, err := m.ListSandbox(ctx)
 	assert.NoError(err)
 	assert.Equal(sandboxes, []vc.SandboxStatus{})
 
 	// reset
 	m.ListSandboxFunc = nil
 
-	_, err = m.ListSandbox()
+	_, err = m.ListSandbox(ctx)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -197,22 +202,23 @@ func TestVCMockPauseSandbox(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.PauseSandboxFunc)
 
-	_, err := m.PauseSandbox(testSandboxID)
+	ctx := context.Background()
+	_, err := m.PauseSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.PauseSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	m.PauseSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return &Sandbox{}, nil
 	}
 
-	sandbox, err := m.PauseSandbox(testSandboxID)
+	sandbox, err := m.PauseSandbox(ctx, testSandboxID)
 	assert.NoError(err)
 	assert.Equal(sandbox, &Sandbox{})
 
 	// reset
 	m.PauseSandboxFunc = nil
 
-	_, err = m.PauseSandbox(testSandboxID)
+	_, err = m.PauseSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -223,22 +229,23 @@ func TestVCMockResumeSandbox(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.ResumeSandboxFunc)
 
-	_, err := m.ResumeSandbox(testSandboxID)
+	ctx := context.Background()
+	_, err := m.ResumeSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.ResumeSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	m.ResumeSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return &Sandbox{}, nil
 	}
 
-	sandbox, err := m.ResumeSandbox(testSandboxID)
+	sandbox, err := m.ResumeSandbox(ctx, testSandboxID)
 	assert.NoError(err)
 	assert.Equal(sandbox, &Sandbox{})
 
 	// reset
 	m.ResumeSandboxFunc = nil
 
-	_, err = m.ResumeSandbox(testSandboxID)
+	_, err = m.ResumeSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -249,22 +256,23 @@ func TestVCMockRunSandbox(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.RunSandboxFunc)
 
-	_, err := m.RunSandbox(vc.SandboxConfig{})
+	ctx := context.Background()
+	_, err := m.RunSandbox(ctx, vc.SandboxConfig{})
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.RunSandboxFunc = func(sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
+	m.RunSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return &Sandbox{}, nil
 	}
 
-	sandbox, err := m.RunSandbox(vc.SandboxConfig{})
+	sandbox, err := m.RunSandbox(ctx, vc.SandboxConfig{})
 	assert.NoError(err)
 	assert.Equal(sandbox, &Sandbox{})
 
 	// reset
 	m.RunSandboxFunc = nil
 
-	_, err = m.RunSandbox(vc.SandboxConfig{})
+	_, err = m.RunSandbox(ctx, vc.SandboxConfig{})
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -275,22 +283,23 @@ func TestVCMockStartSandbox(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.StartSandboxFunc)
 
-	_, err := m.StartSandbox(testSandboxID)
+	ctx := context.Background()
+	_, err := m.StartSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.StartSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	m.StartSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return &Sandbox{}, nil
 	}
 
-	sandbox, err := m.StartSandbox(testSandboxID)
+	sandbox, err := m.StartSandbox(ctx, testSandboxID)
 	assert.NoError(err)
 	assert.Equal(sandbox, &Sandbox{})
 
 	// reset
 	m.StartSandboxFunc = nil
 
-	_, err = m.StartSandbox(testSandboxID)
+	_, err = m.StartSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -301,22 +310,23 @@ func TestVCMockStatusSandbox(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.StatusSandboxFunc)
 
-	_, err := m.StatusSandbox(testSandboxID)
+	ctx := context.Background()
+	_, err := m.StatusSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.StatusSandboxFunc = func(sandboxID string) (vc.SandboxStatus, error) {
+	m.StatusSandboxFunc = func(ctx context.Context, sandboxID string) (vc.SandboxStatus, error) {
 		return vc.SandboxStatus{}, nil
 	}
 
-	sandbox, err := m.StatusSandbox(testSandboxID)
+	sandbox, err := m.StatusSandbox(ctx, testSandboxID)
 	assert.NoError(err)
 	assert.Equal(sandbox, vc.SandboxStatus{})
 
 	// reset
 	m.StatusSandboxFunc = nil
 
-	_, err = m.StatusSandbox(testSandboxID)
+	_, err = m.StatusSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -327,22 +337,23 @@ func TestVCMockStopSandbox(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.StopSandboxFunc)
 
-	_, err := m.StopSandbox(testSandboxID)
+	ctx := context.Background()
+	_, err := m.StopSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.StopSandboxFunc = func(sandboxID string) (vc.VCSandbox, error) {
+	m.StopSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
 		return &Sandbox{}, nil
 	}
 
-	sandbox, err := m.StopSandbox(testSandboxID)
+	sandbox, err := m.StopSandbox(ctx, testSandboxID)
 	assert.NoError(err)
 	assert.Equal(sandbox, &Sandbox{})
 
 	// reset
 	m.StopSandboxFunc = nil
 
-	_, err = m.StopSandbox(testSandboxID)
+	_, err = m.StopSandbox(ctx, testSandboxID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -353,16 +364,17 @@ func TestVCMockCreateContainer(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.CreateContainerFunc)
 
+	ctx := context.Background()
 	config := vc.ContainerConfig{}
-	_, _, err := m.CreateContainer(testSandboxID, config)
+	_, _, err := m.CreateContainer(ctx, testSandboxID, config)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.CreateContainerFunc = func(sandboxID string, containerConfig vc.ContainerConfig) (vc.VCSandbox, vc.VCContainer, error) {
+	m.CreateContainerFunc = func(ctx context.Context, sandboxID string, containerConfig vc.ContainerConfig) (vc.VCSandbox, vc.VCContainer, error) {
 		return &Sandbox{}, &Container{}, nil
 	}
 
-	sandbox, container, err := m.CreateContainer(testSandboxID, config)
+	sandbox, container, err := m.CreateContainer(ctx, testSandboxID, config)
 	assert.NoError(err)
 	assert.Equal(sandbox, &Sandbox{})
 	assert.Equal(container, &Container{})
@@ -370,7 +382,7 @@ func TestVCMockCreateContainer(t *testing.T) {
 	// reset
 	m.CreateContainerFunc = nil
 
-	_, _, err = m.CreateContainer(testSandboxID, config)
+	_, _, err = m.CreateContainer(ctx, testSandboxID, config)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -381,22 +393,23 @@ func TestVCMockDeleteContainer(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.DeleteContainerFunc)
 
-	_, err := m.DeleteContainer(testSandboxID, testContainerID)
+	ctx := context.Background()
+	_, err := m.DeleteContainer(ctx, testSandboxID, testContainerID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.DeleteContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	m.DeleteContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		return &Container{}, nil
 	}
 
-	container, err := m.DeleteContainer(testSandboxID, testContainerID)
+	container, err := m.DeleteContainer(ctx, testSandboxID, testContainerID)
 	assert.NoError(err)
 	assert.Equal(container, &Container{})
 
 	// reset
 	m.DeleteContainerFunc = nil
 
-	_, err = m.DeleteContainer(testSandboxID, testContainerID)
+	_, err = m.DeleteContainer(ctx, testSandboxID, testContainerID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -407,16 +420,17 @@ func TestVCMockEnterContainer(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.EnterContainerFunc)
 
+	ctx := context.Background()
 	cmd := vc.Cmd{}
-	_, _, _, err := m.EnterContainer(testSandboxID, testContainerID, cmd)
+	_, _, _, err := m.EnterContainer(ctx, testSandboxID, testContainerID, cmd)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.EnterContainerFunc = func(sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
+	m.EnterContainerFunc = func(ctx context.Context, sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
 		return &Sandbox{}, &Container{}, &vc.Process{}, nil
 	}
 
-	sandbox, container, process, err := m.EnterContainer(testSandboxID, testContainerID, cmd)
+	sandbox, container, process, err := m.EnterContainer(ctx, testSandboxID, testContainerID, cmd)
 	assert.NoError(err)
 	assert.Equal(sandbox, &Sandbox{})
 	assert.Equal(container, &Container{})
@@ -425,7 +439,7 @@ func TestVCMockEnterContainer(t *testing.T) {
 	// reset
 	m.EnterContainerFunc = nil
 
-	_, _, _, err = m.EnterContainer(testSandboxID, testContainerID, cmd)
+	_, _, _, err = m.EnterContainer(ctx, testSandboxID, testContainerID, cmd)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -436,20 +450,21 @@ func TestVCMockKillContainer(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.KillContainerFunc)
 
+	ctx := context.Background()
 	sig := syscall.SIGTERM
 
 	for _, all := range []bool{true, false} {
-		err := m.KillContainer(testSandboxID, testContainerID, sig, all)
+		err := m.KillContainer(ctx, testSandboxID, testContainerID, sig, all)
 		assert.Error(err)
 		assert.True(IsMockError(err))
 	}
 
-	m.KillContainerFunc = func(sandboxID, containerID string, signal syscall.Signal, all bool) error {
+	m.KillContainerFunc = func(ctx context.Context, sandboxID, containerID string, signal syscall.Signal, all bool) error {
 		return nil
 	}
 
 	for _, all := range []bool{true, false} {
-		err := m.KillContainer(testSandboxID, testContainerID, sig, all)
+		err := m.KillContainer(ctx, testSandboxID, testContainerID, sig, all)
 		assert.NoError(err)
 	}
 
@@ -457,7 +472,7 @@ func TestVCMockKillContainer(t *testing.T) {
 	m.KillContainerFunc = nil
 
 	for _, all := range []bool{true, false} {
-		err := m.KillContainer(testSandboxID, testContainerID, sig, all)
+		err := m.KillContainer(ctx, testSandboxID, testContainerID, sig, all)
 		assert.Error(err)
 		assert.True(IsMockError(err))
 	}
@@ -469,22 +484,23 @@ func TestVCMockStartContainer(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.StartContainerFunc)
 
-	_, err := m.StartContainer(testSandboxID, testContainerID)
+	ctx := context.Background()
+	_, err := m.StartContainer(ctx, testSandboxID, testContainerID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.StartContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	m.StartContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		return &Container{}, nil
 	}
 
-	container, err := m.StartContainer(testSandboxID, testContainerID)
+	container, err := m.StartContainer(ctx, testSandboxID, testContainerID)
 	assert.NoError(err)
 	assert.Equal(container, &Container{})
 
 	// reset
 	m.StartContainerFunc = nil
 
-	_, err = m.StartContainer(testSandboxID, testContainerID)
+	_, err = m.StartContainer(ctx, testSandboxID, testContainerID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -495,22 +511,23 @@ func TestVCMockStatusContainer(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.StatusContainerFunc)
 
-	_, err := m.StatusContainer(testSandboxID, testContainerID)
+	ctx := context.Background()
+	_, err := m.StatusContainer(ctx, testSandboxID, testContainerID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.StatusContainerFunc = func(sandboxID, containerID string) (vc.ContainerStatus, error) {
+	m.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{}, nil
 	}
 
-	status, err := m.StatusContainer(testSandboxID, testContainerID)
+	status, err := m.StatusContainer(ctx, testSandboxID, testContainerID)
 	assert.NoError(err)
 	assert.Equal(status, vc.ContainerStatus{})
 
 	// reset
 	m.StatusContainerFunc = nil
 
-	_, err = m.StatusContainer(testSandboxID, testContainerID)
+	_, err = m.StatusContainer(ctx, testSandboxID, testContainerID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -521,23 +538,24 @@ func TestVCMockStatsContainer(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.StatsContainerFunc)
 
-	_, err := m.StatsContainer(testSandboxID, testContainerID)
+	ctx := context.Background()
+	_, err := m.StatsContainer(ctx, testSandboxID, testContainerID)
 
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.StatsContainerFunc = func(sandboxID, containerID string) (vc.ContainerStats, error) {
+	m.StatsContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStats, error) {
 		return vc.ContainerStats{}, nil
 	}
 
-	stats, err := m.StatsContainer(testSandboxID, testContainerID)
+	stats, err := m.StatsContainer(ctx, testSandboxID, testContainerID)
 	assert.NoError(err)
 	assert.Equal(stats, vc.ContainerStats{})
 
 	// reset
 	m.StatsContainerFunc = nil
 
-	_, err = m.StatsContainer(testSandboxID, testContainerID)
+	_, err = m.StatsContainer(ctx, testSandboxID, testContainerID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -548,22 +566,23 @@ func TestVCMockStopContainer(t *testing.T) {
 	m := &VCMock{}
 	assert.Nil(m.StopContainerFunc)
 
-	_, err := m.StopContainer(testSandboxID, testContainerID)
+	ctx := context.Background()
+	_, err := m.StopContainer(ctx, testSandboxID, testContainerID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.StopContainerFunc = func(sandboxID, containerID string) (vc.VCContainer, error) {
+	m.StopContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error) {
 		return &Container{}, nil
 	}
 
-	container, err := m.StopContainer(testSandboxID, testContainerID)
+	container, err := m.StopContainer(ctx, testSandboxID, testContainerID)
 	assert.NoError(err)
 	assert.Equal(container, &Container{})
 
 	// reset
 	m.StopContainerFunc = nil
 
-	_, err = m.StopContainer(testSandboxID, testContainerID)
+	_, err = m.StopContainer(ctx, testSandboxID, testContainerID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -579,24 +598,25 @@ func TestVCMockProcessListContainer(t *testing.T) {
 		Args:   []string{"-ef"},
 	}
 
-	_, err := m.ProcessListContainer(testSandboxID, testContainerID, options)
+	ctx := context.Background()
+	_, err := m.ProcessListContainer(ctx, testSandboxID, testContainerID, options)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
 	processList := vc.ProcessList("hi")
 
-	m.ProcessListContainerFunc = func(sandboxID, containerID string, options vc.ProcessListOptions) (vc.ProcessList, error) {
+	m.ProcessListContainerFunc = func(ctx context.Context, sandboxID, containerID string, options vc.ProcessListOptions) (vc.ProcessList, error) {
 		return processList, nil
 	}
 
-	pList, err := m.ProcessListContainer(testSandboxID, testContainerID, options)
+	pList, err := m.ProcessListContainer(ctx, testSandboxID, testContainerID, options)
 	assert.NoError(err)
 	assert.Equal(pList, processList)
 
 	// reset
 	m.ProcessListContainerFunc = nil
 
-	_, err = m.ProcessListContainer(testSandboxID, testContainerID, options)
+	_, err = m.ProcessListContainer(ctx, testSandboxID, testContainerID, options)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -608,22 +628,23 @@ func TestVCMockFetchSandbox(t *testing.T) {
 	config := &vc.SandboxConfig{}
 	assert.Nil(m.FetchSandboxFunc)
 
-	_, err := m.FetchSandbox(config.ID)
+	ctx := context.Background()
+	_, err := m.FetchSandbox(ctx, config.ID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.FetchSandboxFunc = func(id string) (vc.VCSandbox, error) {
+	m.FetchSandboxFunc = func(ctx context.Context, id string) (vc.VCSandbox, error) {
 		return &Sandbox{}, nil
 	}
 
-	sandbox, err := m.FetchSandbox(config.ID)
+	sandbox, err := m.FetchSandbox(ctx, config.ID)
 	assert.NoError(err)
 	assert.Equal(sandbox, &Sandbox{})
 
 	// reset
 	m.FetchSandboxFunc = nil
 
-	_, err = m.FetchSandbox(config.ID)
+	_, err = m.FetchSandbox(ctx, config.ID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
@@ -636,21 +657,22 @@ func TestVCMockPauseContainer(t *testing.T) {
 	config := &vc.SandboxConfig{}
 	assert.Nil(m.PauseContainerFunc)
 
-	err := m.PauseContainer(config.ID, config.ID)
+	ctx := context.Background()
+	err := m.PauseContainer(ctx, config.ID, config.ID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.PauseContainerFunc = func(sid, cid string) error {
+	m.PauseContainerFunc = func(ctx context.Context, sid, cid string) error {
 		return nil
 	}
 
-	err = m.PauseContainer(config.ID, config.ID)
+	err = m.PauseContainer(ctx, config.ID, config.ID)
 	assert.NoError(err)
 
 	// reset
 	m.PauseContainerFunc = nil
 
-	err = m.PauseContainer(config.ID, config.ID)
+	err = m.PauseContainer(ctx, config.ID, config.ID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -662,21 +684,22 @@ func TestVCMockResumeContainer(t *testing.T) {
 	config := &vc.SandboxConfig{}
 	assert.Nil(m.ResumeContainerFunc)
 
-	err := m.ResumeContainer(config.ID, config.ID)
+	ctx := context.Background()
+	err := m.ResumeContainer(ctx, config.ID, config.ID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.ResumeContainerFunc = func(sid, cid string) error {
+	m.ResumeContainerFunc = func(ctx context.Context, sid, cid string) error {
 		return nil
 	}
 
-	err = m.ResumeContainer(config.ID, config.ID)
+	err = m.ResumeContainer(ctx, config.ID, config.ID)
 	assert.NoError(err)
 
 	// reset
 	m.ResumeContainerFunc = nil
 
-	err = m.ResumeContainer(config.ID, config.ID)
+	err = m.ResumeContainer(ctx, config.ID, config.ID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -697,18 +720,19 @@ func TestVCMockSetVMFactory(t *testing.T) {
 		HypervisorConfig: hyperConfig,
 	}
 
-	f, err := factory.NewFactory(factory.Config{VMConfig: vmConfig}, false)
+	ctx := context.Background()
+	f, err := factory.NewFactory(ctx, factory.Config{VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
 	assert.Equal(factoryTriggered, 0)
-	m.SetFactory(f)
+	m.SetFactory(ctx, f)
 	assert.Equal(factoryTriggered, 0)
 
-	m.SetFactoryFunc = func(factory vc.Factory) {
+	m.SetFactoryFunc = func(ctx context.Context, factory vc.Factory) {
 		factoryTriggered = 1
 	}
 
-	m.SetFactory(f)
+	m.SetFactory(ctx, f)
 	assert.Equal(factoryTriggered, 1)
 }
 
@@ -719,21 +743,22 @@ func TestVCMockAddInterface(t *testing.T) {
 	config := &vc.SandboxConfig{}
 	assert.Nil(m.AddInterfaceFunc)
 
-	_, err := m.AddInterface(config.ID, nil)
+	ctx := context.Background()
+	_, err := m.AddInterface(ctx, config.ID, nil)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.AddInterfaceFunc = func(sid string, inf *grpc.Interface) (*grpc.Interface, error) {
+	m.AddInterfaceFunc = func(ctx context.Context, sid string, inf *grpc.Interface) (*grpc.Interface, error) {
 		return nil, nil
 	}
 
-	_, err = m.AddInterface(config.ID, nil)
+	_, err = m.AddInterface(ctx, config.ID, nil)
 	assert.NoError(err)
 
 	// reset
 	m.AddInterfaceFunc = nil
 
-	_, err = m.AddInterface(config.ID, nil)
+	_, err = m.AddInterface(ctx, config.ID, nil)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -745,21 +770,22 @@ func TestVCMockRemoveInterface(t *testing.T) {
 	config := &vc.SandboxConfig{}
 	assert.Nil(m.RemoveInterfaceFunc)
 
-	_, err := m.RemoveInterface(config.ID, nil)
+	ctx := context.Background()
+	_, err := m.RemoveInterface(ctx, config.ID, nil)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.RemoveInterfaceFunc = func(sid string, inf *grpc.Interface) (*grpc.Interface, error) {
+	m.RemoveInterfaceFunc = func(ctx context.Context, sid string, inf *grpc.Interface) (*grpc.Interface, error) {
 		return nil, nil
 	}
 
-	_, err = m.RemoveInterface(config.ID, nil)
+	_, err = m.RemoveInterface(ctx, config.ID, nil)
 	assert.NoError(err)
 
 	// reset
 	m.RemoveInterfaceFunc = nil
 
-	_, err = m.RemoveInterface(config.ID, nil)
+	_, err = m.RemoveInterface(ctx, config.ID, nil)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -771,21 +797,22 @@ func TestVCMockListInterfaces(t *testing.T) {
 	config := &vc.SandboxConfig{}
 	assert.Nil(m.ListInterfacesFunc)
 
-	_, err := m.ListInterfaces(config.ID)
+	ctx := context.Background()
+	_, err := m.ListInterfaces(ctx, config.ID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.ListInterfacesFunc = func(sid string) ([]*grpc.Interface, error) {
+	m.ListInterfacesFunc = func(ctx context.Context, sid string) ([]*grpc.Interface, error) {
 		return nil, nil
 	}
 
-	_, err = m.ListInterfaces(config.ID)
+	_, err = m.ListInterfaces(ctx, config.ID)
 	assert.NoError(err)
 
 	// reset
 	m.ListInterfacesFunc = nil
 
-	_, err = m.ListInterfaces(config.ID)
+	_, err = m.ListInterfaces(ctx, config.ID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -797,21 +824,22 @@ func TestVCMockUpdateRoutes(t *testing.T) {
 	config := &vc.SandboxConfig{}
 	assert.Nil(m.UpdateRoutesFunc)
 
-	_, err := m.UpdateRoutes(config.ID, nil)
+	ctx := context.Background()
+	_, err := m.UpdateRoutes(ctx, config.ID, nil)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.UpdateRoutesFunc = func(sid string, routes []*grpc.Route) ([]*grpc.Route, error) {
+	m.UpdateRoutesFunc = func(ctx context.Context, sid string, routes []*grpc.Route) ([]*grpc.Route, error) {
 		return nil, nil
 	}
 
-	_, err = m.UpdateRoutes(config.ID, nil)
+	_, err = m.UpdateRoutes(ctx, config.ID, nil)
 	assert.NoError(err)
 
 	// reset
 	m.UpdateRoutesFunc = nil
 
-	_, err = m.UpdateRoutes(config.ID, nil)
+	_, err = m.UpdateRoutes(ctx, config.ID, nil)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
@@ -823,21 +851,22 @@ func TestVCMockListRoutes(t *testing.T) {
 	config := &vc.SandboxConfig{}
 	assert.Nil(m.ListRoutesFunc)
 
-	_, err := m.ListRoutes(config.ID)
+	ctx := context.Background()
+	_, err := m.ListRoutes(ctx, config.ID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.ListRoutesFunc = func(sid string) ([]*grpc.Route, error) {
+	m.ListRoutesFunc = func(ctx context.Context, sid string) ([]*grpc.Route, error) {
 		return nil, nil
 	}
 
-	_, err = m.ListRoutes(config.ID)
+	_, err = m.ListRoutes(ctx, config.ID)
 	assert.NoError(err)
 
 	// reset
 	m.ListRoutesFunc = nil
 
-	_, err = m.ListRoutes(config.ID)
+	_, err = m.ListRoutes(ctx, config.ID)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }
