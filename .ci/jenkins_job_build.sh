@@ -52,14 +52,23 @@ mkdir -p $(dirname "${kata_repo_dir}")
 
 pushd "${kata_repo_dir}"
 
+
+# Variables needed when we test a PR.
 pr_number=
+target_branch=
+
+# Variable needed when a merge to a branch needs to be tested.
+branch=
 
 # $ghprbPullId and $ghprbTargetBranch are variables from
 # the Jenkins GithubPullRequestBuilder Plugin
-[ "${ghprbPullId}" ] && [ "${ghprbTargetBranch}" ] && pr_number="${ghprbPullId}"
+[ "${ghprbPullId}" ] && [ "${ghprbTargetBranch}" ] && export pr_number="${ghprbPullId}"
+
+
 
 if [ -n "$pr_number" ]
 then
+	export target_branch="${ghprbTargetBranch:-master}"
 	if [ "${kata_repo}" != "${tests_repo}" ]
 	then
 		# Use the correct branch for testing.
@@ -67,7 +76,7 @@ then
 		# of the kata repository branch where the change is
 		# going to be merged.
 		pushd "${test_repo_dir}"
-		git fetch origin && git checkout "${ghprbTargetBranch}"
+		git fetch origin && git checkout "${target_branch}"
 		popd
 	fi
 
@@ -78,7 +87,7 @@ then
 	# the target branch.
 	git fetch origin "pull/${pr_number}/head:${pr_branch}"
 	git checkout "${pr_branch}"
-	git rebase "origin/${ghprbTargetBranch}"
+	git rebase "origin/${target_branch}"
 
 	# As we currently have CC and runv runtimes as git submodules
 	# we need to update the submodules in order to get
@@ -88,8 +97,8 @@ then
 else
 	# Othewise we test an specific branch
 	# GIT_BRANCH env variable is set by the jenkins Github Plugin.
-	remote="${GIT_BRANCH/\/*/}"
-	branch="${GIT_BRANCH/*\//}"
+	[ -z "${GIT_BRANCH}" ] && echo >&2 "GIT_BRANCH is empty" && exit 1
+	export branch="${GIT_BRANCH/*\//}"
 
 	if [ "${kata_repo}" != "${tests_repo}" ]
 	then
@@ -97,11 +106,11 @@ else
 		# 'tests' repository branch should have the same name
 		# as the kata repository branch that will be tested.
 		pushd "${test_repo_dir}"
-		git fetch "$remote" && git checkout "$branch"
+		git fetch origin && git checkout "$branch"
 		popd
 	fi
 
-	git fetch "$remote" && git checkout "$branch" && git reset --hard "$GIT_BRANCH"
+	git fetch origin && git checkout "$branch" && git reset --hard "$GIT_BRANCH"
 fi
 
 # Install go after repository is cloned and checkout to PR
