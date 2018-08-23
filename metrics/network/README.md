@@ -31,6 +31,9 @@ while running a transfer of one GB with nuttcp.
 - `network-metrics-nginx-ab-benchmark.sh` uses an nginx container and runs the apache
 benchmarking tool on the host to calculate the requests per second.
 
+- `network-latency.sh` measures the latency using ping. The ping utility measures
+how long it takes one packet to get from one point to another.
+
 ## Running the tests
 
 Individual tests can be run by hand, for example:
