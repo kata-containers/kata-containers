@@ -233,3 +233,31 @@ var _ = Describe("Check read-only cgroup filesystem", func() {
 		})
 	})
 })
+
+var _ = Describe("run host networking", func() {
+	var (
+		args     []string
+		id       string
+		stderr   string
+		exitCode int
+	)
+
+	BeforeEach(func() {
+		id = randomDockerName()
+	})
+
+	AfterEach(func() {
+		Expect(RemoveDockerContainer(id)).To(BeTrue())
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	Context("Run with host networking", func() {
+		It("should error out", func() {
+			Skip("Issue: https://github.com/kata-containers/runtime/issues/652")
+			args = []string{"--name", id, "-d", "--net=host", DebianImage, "sh"}
+			_, stderr, exitCode = dockerRun(args...)
+			Expect(exitCode).NotTo(Equal(0))
+			Expect(stderr).NotTo(BeEmpty())
+		})
+	})
+})
