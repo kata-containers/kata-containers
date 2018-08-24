@@ -474,6 +474,38 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	shimPath := path.Join(dir, "shim")
 	proxyPath := path.Join(dir, "proxy")
 
+	imagePath := path.Join(dir, "image.img")
+	initrdPath := path.Join(dir, "initrd.img")
+
+	hypervisorPath := path.Join(dir, "hypervisor")
+	kernelPath := path.Join(dir, "kernel")
+
+	savedDefaultImagePath := defaultImagePath
+	savedDefaultInitrdPath := defaultInitrdPath
+	savedDefaultHypervisorPath := defaultHypervisorPath
+	savedDefaultKernelPath := defaultKernelPath
+
+	defer func() {
+		defaultImagePath = savedDefaultImagePath
+		defaultInitrdPath = savedDefaultInitrdPath
+		defaultHypervisorPath = savedDefaultHypervisorPath
+		defaultKernelPath = savedDefaultKernelPath
+	}()
+
+	// Temporarily change the defaults to avoid this test using the real
+	// resource files that might be installed on the system!
+	defaultImagePath = imagePath
+	defaultInitrdPath = initrdPath
+	defaultHypervisorPath = hypervisorPath
+	defaultKernelPath = kernelPath
+
+	for _, file := range []string{defaultImagePath, defaultInitrdPath, defaultHypervisorPath, defaultKernelPath} {
+		err = writeFile(file, "foo", testFileMode)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	runtimeMinimalConfig := `
 	# Runtime configuration file
 
@@ -555,9 +587,50 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	if reflect.DeepEqual(config, expectedConfig) == false {
 		t.Fatalf("Got %+v\n expecting %+v", config, expectedConfig)
 	}
+}
+
+func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
+	dir, err := ioutil.TempDir(testDir, "minimal-runtime-config-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	imagePath := path.Join(dir, "image.img")
+	initrdPath := path.Join(dir, "initrd.img")
+	proxyPath := path.Join(dir, "proxy")
+	shimPath := path.Join(dir, "shim")
+	hypervisorPath := path.Join(dir, "hypervisor")
+	kernelPath := path.Join(dir, "kernel")
+
+	savedDefaultImagePath := defaultImagePath
+	savedDefaultInitrdPath := defaultInitrdPath
+	savedDefaultHypervisorPath := defaultHypervisorPath
+	savedDefaultKernelPath := defaultKernelPath
+
+	defer func() {
+		defaultImagePath = savedDefaultImagePath
+		defaultInitrdPath = savedDefaultInitrdPath
+		defaultHypervisorPath = savedDefaultHypervisorPath
+		defaultKernelPath = savedDefaultKernelPath
+	}()
+
+	// Temporarily change the defaults to avoid this test using the real
+	// resource files that might be installed on the system!
+	defaultImagePath = imagePath
+	defaultInitrdPath = initrdPath
+	defaultHypervisorPath = hypervisorPath
+	defaultKernelPath = kernelPath
+
+	for _, file := range []string{proxyPath, shimPath, hypervisorPath, kernelPath} {
+		err = writeFile(file, "foo", testFileMode)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	// minimal config with vsock enabled
-	runtimeMinimalConfig = `
+	runtimeMinimalConfig := `
 	# Runtime configuration file
 	[hypervisor.qemu]
 	use_vsock = true
@@ -579,13 +652,13 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	utils.VHostVSockDevicePath = "/dev/null"
 	utils.VSockDevicePath = "/dev/null"
 
-	configPath = path.Join(dir, "runtime.toml")
+	configPath := path.Join(dir, "runtime.toml")
 	err = createConfig(configPath, runtimeMinimalConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, config, err = loadConfiguration(configPath, false)
+	_, config, err := loadConfiguration(configPath, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -600,10 +673,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 	if config.HypervisorConfig.UseVSock != true {
 		t.Fatalf("use_vsock must be true, got %v", config.HypervisorConfig.UseVSock)
-	}
-
-	if err := os.Remove(configPath); err != nil {
-		t.Fatal(err)
 	}
 }
 
