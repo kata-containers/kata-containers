@@ -6,9 +6,12 @@
 package virtcontainers
 
 import (
+	"io/ioutil"
 	"runtime"
+	"strings"
 
 	govmmQemu "github.com/intel/govmm/qemu"
+	"github.com/sirupsen/logrus"
 )
 
 type qemuArm64 struct {
@@ -20,7 +23,7 @@ const defaultQemuPath = "/usr/bin/qemu-system-aarch64"
 
 const defaultQemuMachineType = QemuVirt
 
-const defaultQemuMachineOptions = "gic-version=host,usb=off,accel=kvm"
+var defaultQemuMachineOptions = "usb=off,accel=kvm,gic-version=" + getGuestGICVersion()
 
 // Not used
 const defaultPCBridgeBus = ""
@@ -43,6 +46,65 @@ var supportedQemuMachines = []govmmQemu.Machine{
 		Type:    QemuVirt,
 		Options: defaultQemuMachineOptions,
 	},
+}
+
+// Logger returns a logrus logger appropriate for logging qemu-aarch64 messages
+func qemuArmLogger() *logrus.Entry {
+	return virtLog.WithField("subsystem", "qemu-aarch64")
+}
+
+// On ARM platform, we have different GIC interrupt controllers. Different
+// GIC supports different QEMU parameters for virtual GIC and max VCPUs
+var hostGICVersion = getHostGICVersion()
+
+// We will access this file on host to detect host GIC version
+var gicProfile = "/proc/interrupts"
+
+// Detect the host GIC version.
+// Success: return the number of GIC version
+// Failed: return 0
+func getHostGICVersion() (version uint32) {
+	bytes, err := ioutil.ReadFile(gicProfile)
+	if err != nil {
+		qemuArmLogger().WithField("GIC profile", gicProfile).WithError(err).Error("Failed to parse GIC profile")
+		return 0
+	}
+
+	s := string(bytes)
+	if strings.Contains(s, "GICv2") {
+		return 2
+	}
+
+	if strings.Contains(s, "GICv3") {
+		return 3
+	}
+
+	if strings.Contains(s, "GICv4") {
+		return 4
+	}
+
+	return 0
+}
+
+// QEMU supports GICv2, GICv3 and host parameters for gic-version. The host
+// parameter will let QEMU detect GIC version by itself. This parameter
+// will work properly when host GIC version is GICv2 or GICv3. But the
+// detection will failed when host GIC is gicv4 or higher. In this case,
+// we have to detect the host GIC version manually and force QEMU to use
+// GICv3 when host GIC is GICv4 or higher.
+func getGuestGICVersion() (version string) {
+	if hostGICVersion == 2 {
+		return "2"
+	}
+
+	if hostGICVersion >= 3 {
+		return "3"
+	}
+
+	// We can't parse valid host GIC version from GIC profile.
+	// But we can use "host" to ask QEMU to detect valid GIC
+	// through KVM API for a try.
+	return "host"
 }
 
 // MaxQemuVCPUs returns the maximum number of vCPUs supported
