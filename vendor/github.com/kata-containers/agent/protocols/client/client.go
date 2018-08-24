@@ -14,8 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 	"github.com/hashicorp/yamux"
 	"github.com/mdlayher/vsock"
+	opentracing "github.com/opentracing/opentracing-go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
@@ -54,14 +56,28 @@ type dialer func(string, time.Duration) (net.Conn, error)
 //   - unix://<unix socket path>
 //   - vsock://<cid>:<port>
 //   - <unix socket path>
-func NewAgentClient(sock string, enableYamux bool) (*AgentClient, error) {
+func NewAgentClient(ctx context.Context, sock string, enableYamux bool) (*AgentClient, error) {
 	grpcAddr, parsedAddr, err := parse(sock)
 	if err != nil {
 		return nil, err
 	}
 	dialOpts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
 	dialOpts = append(dialOpts, grpc.WithDialer(agentDialer(parsedAddr, enableYamux)))
-	ctx := context.Background()
+
+	var tracer opentracing.Tracer
+
+	span := opentracing.SpanFromContext(ctx)
+
+	// If the context contains a trace span, trace all client comms
+	if span != nil {
+		tracer = span.Tracer()
+
+		dialOpts = append(dialOpts,
+			grpc.WithUnaryInterceptor(otgrpc.OpenTracingClientInterceptor(tracer)))
+		dialOpts = append(dialOpts,
+			grpc.WithStreamInterceptor(otgrpc.OpenTracingStreamClientInterceptor(tracer)))
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, defaultDialTimeout)
 	defer cancel()
 	conn, err := grpc.DialContext(ctx, grpcAddr, dialOpts...)
