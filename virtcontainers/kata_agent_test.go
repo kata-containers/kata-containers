@@ -20,7 +20,6 @@ import (
 	gpb "github.com/gogo/protobuf/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
-	"github.com/vishvananda/netlink"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
@@ -337,100 +336,6 @@ func TestKataAgentSendReq(t *testing.T) {
 
 	_, err = k.readProcessStderr(container, execid, []byte{})
 	assert.Nil(err)
-}
-
-func TestGenerateInterfacesAndRoutes(t *testing.T) {
-
-	impl := &gRPCProxy{}
-
-	proxy := mock.ProxyGRPCMock{
-		GRPCImplementer: impl,
-		GRPCRegister:    gRPCRegister,
-	}
-
-	sockDir, err := testGenerateKataProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(sockDir)
-
-	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
-	if err := proxy.Start(testKataProxyURL); err != nil {
-		t.Fatal(err)
-	}
-	defer proxy.Stop()
-
-	k := &kataAgent{
-		state: KataAgentState{
-			URL: testKataProxyURL,
-		},
-	}
-
-	//
-	//Create a couple of addresses
-	//
-	address1 := &net.IPNet{IP: net.IPv4(172, 17, 0, 2), Mask: net.CIDRMask(16, 32)}
-	address2 := &net.IPNet{IP: net.IPv4(182, 17, 0, 2), Mask: net.CIDRMask(16, 32)}
-
-	addrs := []netlink.Addr{
-		{IPNet: address1, Label: "phyaddr1"},
-		{IPNet: address2, Label: "phyaddr2"},
-	}
-
-	// Create a couple of routes:
-	dst2 := &net.IPNet{IP: net.IPv4(172, 17, 0, 0), Mask: net.CIDRMask(16, 32)}
-	src2 := net.IPv4(172, 17, 0, 2)
-	gw2 := net.IPv4(172, 17, 0, 1)
-
-	routes := []netlink.Route{
-		{LinkIndex: 329, Dst: nil, Src: nil, Gw: net.IPv4(172, 17, 0, 1), Scope: netlink.Scope(254)},
-		{LinkIndex: 329, Dst: dst2, Src: src2, Gw: gw2},
-	}
-
-	networkInfo := NetworkInfo{
-		Iface: NetlinkIface{
-			LinkAttrs: netlink.LinkAttrs{MTU: 1500},
-			Type:      "",
-		},
-		Addrs:  addrs,
-		Routes: routes,
-	}
-
-	ep0 := &PhysicalEndpoint{
-		IfaceName:          "eth0",
-		HardAddr:           net.HardwareAddr{0x02, 0x00, 0xca, 0xfe, 0x00, 0x04}.String(),
-		EndpointProperties: networkInfo,
-	}
-
-	endpoints := []Endpoint{ep0}
-
-	nns := NetworkNamespace{NetNsPath: "foobar", NetNsCreated: true, Endpoints: endpoints}
-
-	resInterfaces, resRoutes, err := k.generateInterfacesAndRoutes(nns)
-
-	//
-	// Build expected results:
-	//
-	expectedAddresses := []*pb.IPAddress{
-		{Family: 0, Address: "172.17.0.2", Mask: "16"},
-		{Family: 0, Address: "182.17.0.2", Mask: "16"},
-	}
-
-	expectedInterfaces := []*pb.Interface{
-		{Device: "eth0", Name: "eth0", IPAddresses: expectedAddresses, Mtu: 1500, HwAddr: "02:00:ca:fe:00:04"},
-	}
-
-	expectedRoutes := []*pb.Route{
-		{Dest: "", Gateway: "172.17.0.1", Device: "eth0", Source: "", Scope: uint32(254)},
-		{Dest: "172.17.0.0/16", Gateway: "172.17.0.1", Device: "eth0", Source: "172.17.0.2"},
-	}
-
-	assert.Nil(t, err, "unexpected failure when calling generateKataInterfacesAndRoutes")
-	assert.True(t, reflect.DeepEqual(resInterfaces, expectedInterfaces),
-		"Interfaces returned didn't match: got %+v, expecting %+v", resInterfaces, expectedInterfaces)
-	assert.True(t, reflect.DeepEqual(resRoutes, expectedRoutes),
-		"Routes returned didn't match: got %+v, expecting %+v", resRoutes, expectedRoutes)
-
 }
 
 func TestHandleEphemeralStorage(t *testing.T) {
