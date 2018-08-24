@@ -82,7 +82,10 @@ func (p *kataBuiltInProxy) watchConsole(proto, console string, logger *logrus.En
 	go func() {
 		scanner = bufio.NewScanner(conn)
 		for scanner.Scan() {
-			fmt.Printf("[SB-%s] vmconsole: %s\n", p.sandboxID, scanner.Text())
+			logger.WithFields(logrus.Fields{
+				"sandbox":   p.sandboxID,
+				"vmconsole": scanner.Text(),
+			}).Debug("reading guest console")
 		}
 
 		if err := scanner.Err(); err != nil {
