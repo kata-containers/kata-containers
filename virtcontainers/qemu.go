@@ -835,12 +835,6 @@ func (q *qemu) hotplugMacvtap(drive VirtualEndpoint) error {
 }
 
 func (q *qemu) hotplugNetDevice(drive VirtualEndpoint, op operation) error {
-	defer func(qemu *qemu) {
-		if q.qmpMonitorCh.qmp != nil {
-			q.qmpMonitorCh.qmp.Shutdown()
-		}
-	}(q)
-
 	err := q.qmpSetup()
 	if err != nil {
 		return err
