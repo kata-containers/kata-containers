@@ -108,6 +108,14 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:7b760aa6dbe426378f54934270dde1b176fda379111da2154748f030fffe4d3f"
+  name = "github.com/grpc-ecosystem/grpc-opentracing"
+  packages = ["go/otgrpc"]
+  pruneopts = "NUT"
+  revision = "8e809c8a86450a29b90dcc9efbf062d0fe6d9746"
+
+[[projects]]
+  branch = "master"
   digest = "1:63e0b20cfa3fe456480edf93a7995f776afb610e49da8e3da04d8904472a44cc"
   name = "github.com/hashicorp/yamux"
   packages = ["."]
@@ -122,14 +130,14 @@
   revision = "eda239928bfa12b214e9c93192d548cccf4e7f1e"
 
 [[projects]]
-  digest = "1:55460fbdfca464360cec902b0805126451908aa1a058fe4072b01650ebe768b3"
+  digest = "1:01c37fcb6e2a1fe1321a97faaef74c66ac531ea292ca3f929b7189cc400b1d47"
   name = "github.com/kata-containers/agent"
   packages = [
     "protocols/client",
     "protocols/grpc",
   ]
   pruneopts = "NUT"
-  revision = "cd8f37b29332cbc081f00e4186c59944a79574fd"
+  revision = "46396d205bf096db4e69fcfa319525858ce8050c"
 
 [[projects]]
   digest = "1:04054595e5c5a35d1553a7f3464d18577caf597445d643992998643df56d4afd"
@@ -405,6 +413,7 @@
     "github.com/opencontainers/runc/libcontainer/utils",
     "github.com/opencontainers/runtime-spec/specs-go",
     "github.com/opentracing/opentracing-go",
+    "github.com/opentracing/opentracing-go/log",
     "github.com/safchain/ethtool",
     "github.com/sirupsen/logrus",
     "github.com/sirupsen/logrus/hooks/syslog",
