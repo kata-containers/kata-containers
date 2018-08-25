@@ -1,0 +1,7 @@
+#
+# This file contains config options which is removed/modified in kernel 4.14 but
+# necessary for older kernels, if you're using a old kernel and failed to start
+# kata containers, try to add these options and hope it can help! Enjoy it!
+#
+CONFIG_DEVPTS_MULTIPLE_INSTANCES=y
+
