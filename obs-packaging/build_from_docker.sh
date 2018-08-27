@@ -34,6 +34,7 @@ docker_run() {
 		-v "${HOME}/.ssh":/root/.ssh \
 		-v "${HOME}/.gitconfig":/root/.gitconfig \
 		-v /etc/profile:/etc/profile \
+		--env GO_ARCH="${GO_ARCH}" \
 		--env http_proxy="${http_proxy}" \
 		--env https_proxy="${https_proxy}" \
 		--env no_proxy="${no_proxy}" \
@@ -71,6 +72,7 @@ main() {
 	sudo docker build \
 		--build-arg http_proxy="${http_proxy}" \
 		--build-arg https_proxy="${https_proxy}" \
+		--build-arg GO_ARCH="${GO_ARCH}" \
 		-t $obs_image "${script_dir}"
 
 	#Create/update OBS repository for branch
