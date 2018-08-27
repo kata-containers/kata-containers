@@ -73,7 +73,7 @@ guest kernel.
 
 You need to install the following to build Kata Containers components:
 
-- [golang](https://golang.org/dl) version 1.8.3 or newer.
+- [golang](https://golang.org/dl)
 
   To view the versions of go known to work, see the `golang` entry in the
   [versions database](https://github.com/kata-containers/runtime/blob/master/versions.yaml).
