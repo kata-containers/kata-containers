@@ -122,7 +122,7 @@ function apply_depends_on() {
 	for i in $(seq 1 "${nb_lines}")
 	do
 		label_line=$(echo "${label_lines}" | sed "${i}q;d")
-		label_str=$(echo "${label_line}" | awk '{print $2}')
+		label_str=$(echo "${label_line}" | cut -d ':' -f2)
 		repo=$(echo "${label_str}" | cut -d'#' -f1)
 		if [[ "${repos_found[@]}" =~ "${repo}" ]]; then
 			echo "Repository $repo was already defined in a 'Depends-on:' tag."
