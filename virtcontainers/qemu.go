@@ -859,7 +859,7 @@ func (q *qemu) hotplugNetDevice(drive VirtualEndpoint, op operation) error {
 			return err
 		}
 		drive.PCIAddr = fmt.Sprintf("%02x/%s", bridge.Addr, addr)
-		if err = q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, drive.NetPair.Name, devID, drive.NetPair.TAPIface.HardAddr, addr, bridge.ID); err != nil {
+		if err = q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, drive.NetPair.Name, devID, drive.NetPair.TAPIface.HardAddr, addr, bridge.ID, defaultQueues); err != nil {
 			return err
 		}
 	} else {
