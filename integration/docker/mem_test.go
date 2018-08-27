@@ -111,4 +111,48 @@ var _ = Describe("memory constraints", func() {
 			Expect(RemoveDockerContainer(id)).To(BeTrue())
 		})
 	})
+
+	Context("run container and update its memory constraints", func() {
+		It("should have applied the constraints", func() {
+			// 512MB
+			memSize = fmt.Sprintf("%d", 512*1024*1024)
+			args = []string{"--name", id, "-dti", "--rm", "-m", memSize, Image}
+
+			_, _, exitCode = dockerRun(args...)
+			Expect(exitCode).To(BeZero())
+
+			// 256 MB
+			memSize = fmt.Sprintf("%d", 256*1024*1024)
+
+			args = []string{"--memory", memSize, "--memory-reservation", memSize}
+			if useSwap {
+				args = append(args, "--memory-swap", memSize)
+			}
+
+			args = append(args, id)
+
+			// update memory constraints
+			_, _, exitCode = dockerUpdate(args...)
+			Expect(exitCode).To(BeZero())
+
+			// check memory limit
+			stdout, _, exitCode = dockerExec(id, "cat", memLimitPath)
+			Expect(exitCode).To(BeZero())
+			Expect(memSize).To(Equal(strings.Trim(stdout, " \n\t")))
+
+			// check memory soft limit
+			stdout, _, exitCode = dockerExec(id, "cat", memSoftLimitPath)
+			Expect(exitCode).To(BeZero())
+			Expect(memSize).To(Equal(strings.Trim(stdout, " \n\t")))
+
+			if useSwap {
+				// check memory swap limit
+				stdout, _, exitCode = dockerExec(id, "cat", memSWLimitPath)
+				Expect(exitCode).To(BeZero())
+				Expect(memSize).To(Equal(strings.Trim(stdout, " \n\t")))
+			}
+
+			Expect(RemoveDockerContainer(id)).To(BeTrue())
+		})
+	})
 })
