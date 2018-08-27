@@ -312,7 +312,7 @@ function get_obs_pkg_release() {
 	pkg=$(basename "${obs_pkg_name}")
 	repo_dir=$(mktemp -d -u -t "${pkg}.XXXXXXXXXXX")
 
-	out=$(osc -q co "${obs_pkg_name}" -o "${repo_dir}") || die "failed to checkout:$out"
+	out=$(osc -v co "${obs_pkg_name}" -o "${repo_dir}") || die "failed to checkout:$out"
 
 	spec_file=$(find "${repo_dir}" -maxdepth 1 -type f -name '*.spec' | head -1)
 	# Find in specfile in Release: XX field.
