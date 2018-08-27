@@ -7,7 +7,7 @@
 
 set -e
 
-export KATA_RUNTIME=${KATA_RUNTIME:-cc}
+export KATA_RUNTIME=${KATA_RUNTIME:-kata-runtime}
 
 # If we fail for any reason a message will be displayed
 die(){
