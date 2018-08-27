@@ -75,7 +75,7 @@ then
 		# 'tests' repository branch should have the same name
 		# of the kata repository branch where the change is
 		# going to be merged.
-		pushd "${test_repo_dir}"
+		pushd "${tests_repo_dir}"
 		git fetch origin && git checkout "${target_branch}"
 		popd
 	fi
@@ -105,7 +105,7 @@ else
 		# Use the correct branch for testing.
 		# 'tests' repository branch should have the same name
 		# as the kata repository branch that will be tested.
-		pushd "${test_repo_dir}"
+		pushd "${tests_repo_dir}"
 		git fetch origin && git checkout "$branch"
 		popd
 	fi
