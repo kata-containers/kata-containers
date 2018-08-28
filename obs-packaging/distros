@@ -1,0 +1,16 @@
+# Repositories.
+#
+# Each element is comprised of multiple parts in the form:
+#
+#   name::project::repository
+#
+CentOS_7::CentOS:CentOS-7::standard
+Fedora_26::Fedora:26::standard
+Fedora_27::Fedora:27::standard
+Fedora_28::Fedora:28::standard
+RHEL_7::RedHat:RHEL-7::standard
+SLE_12_SP3::SUSE:SLE-12-SP3:GA::standard
+openSUSE_Leap_42.3::openSUSE:Leap:42.3::standard
+xUbuntu_16.04::Ubuntu:16.04::universe
+xUbuntu_17.10::Ubuntu:17.10::universe
+xUbuntu_18.04::Ubuntu:18.04::universe

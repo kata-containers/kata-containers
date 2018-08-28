@@ -74,9 +74,16 @@ bump_repo() {
 
 	pushd "${repo}" >>/dev/null
 
+	branch="${new_version}-branch-bump"
+	git fetch origin "${target_branch}"
+	git checkout "origin/${target_branch}" -b "${branch}"
+
 	# All repos we build should have a VERSION file
 	[ -f "VERSION" ] || die "VERSION file not found "
 	current_version="$(cat ./VERSION | grep -v '#')"
+
+	info "Updating VERSION file"
+	echo "${new_version}" >VERSION
 
 	info "Creating PR message"
 	notes_file=notes.md
@@ -86,12 +93,8 @@ bump_repo() {
 $(get_changes "$current_version")
 
 EOT
+	cat "${notes_file}"
 
-	info "Updating VERSION file"
-	echo "${new_version}" >VERSION
-	branch="${new_version}-branch-bump"
-	git fetch origin "${target_branch}"
-	git checkout "origin/${target_branch}" -b "${branch}"
 	git add -u
 	info "Creating commit with new changes"
 	commit_msg="$(generate_commit $new_version $current_version)"
