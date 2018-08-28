@@ -1104,6 +1104,8 @@ func (s *Sandbox) startVM() error {
 				HypervisorConfig: s.config.HypervisorConfig,
 				AgentType:        s.config.AgentType,
 				AgentConfig:      s.config.AgentConfig,
+				ProxyType:        s.config.ProxyType,
+				ProxyConfig:      s.config.ProxyConfig,
 			})
 			if err != nil {
 				return err
@@ -1593,9 +1595,9 @@ func (s *Sandbox) HotplugAddDevice(device api.Device, devType config.DeviceType)
 			if _, err := s.hypervisor.hotplugAddDevice(dev, vfioDev); err != nil {
 				s.Logger().
 					WithFields(logrus.Fields{
-						"sandboxid":       s.id,
-						"vfio device ID":  dev.ID,
-						"vfio device BDF": dev.BDF,
+						"sandbox":         s.id,
+						"vfio-device-ID":  dev.ID,
+						"vfio-device-BDF": dev.BDF,
 					}).WithError(err).Error("failed to hotplug VFIO device")
 				return err
 			}
@@ -1630,9 +1632,9 @@ func (s *Sandbox) HotplugRemoveDevice(device api.Device, devType config.DeviceTy
 			if _, err := s.hypervisor.hotplugRemoveDevice(dev, vfioDev); err != nil {
 				s.Logger().WithError(err).
 					WithFields(logrus.Fields{
-						"sandboxid":       s.id,
-						"vfio device ID":  dev.ID,
-						"vfio device BDF": dev.BDF,
+						"sandbox":         s.id,
+						"vfio-device-ID":  dev.ID,
+						"vfio-device-BDF": dev.BDF,
 					}).Error("failed to hot unplug VFIO device")
 				return err
 			}
