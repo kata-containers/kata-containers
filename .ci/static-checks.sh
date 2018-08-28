@@ -18,7 +18,7 @@ source "${cidir}/lib.sh"
 script_name=${0##*/}
 
 repo=""
-master_branch="false"
+specific_branch="false"
 force="false"
 
 typeset -A long_options
@@ -31,7 +31,7 @@ long_options=(
 	[golang]="Check '.go' files"
 	[help]="Display usage statement"
 	[licenses]="Check licenses"
-	[master]="Force checking of master branch"
+	[all]="Force checking of all changes, including files in the base branch"
 	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
 	[versions]="Check versions files"
 )
@@ -74,8 +74,8 @@ Parameters:
   help      : Show usage.
   repo-name : GitHub URL of repo to check in form "github.com/user/repo"
               (equivalent to "--repo $URL").
-  true      : Specify as "true" if testing the 'master' branch, else assume a
-              PR branch (equivalent to "--master").
+  true      : Specify as "true" if testing the a specific branch, else assume a
+              PR branch (equivalent to "--all").
 
 Notes:
 
@@ -83,7 +83,7 @@ Notes:
 
 Examples:
 
-- Run all tests on master branch of runtime repository:
+- Run all tests on a specific branch (stable or master) of runtime repository:
 
   $ $script_name github.com/kata-containers/runtime true
 
@@ -94,7 +94,7 @@ Examples:
 - Run all tests on the agent repository, forcing the tests to consider all
   files, not just those changed by a PR branch:
 
-  $ $script_name github.com/kata-containers/agent --master
+  $ $script_name github.com/kata-containers/agent --all
 
 
 EOT
@@ -136,7 +136,7 @@ get_pr_changed_file_details()
 		-r \
 		--name-status \
 		--diff-filter="${filters}" \
-		origin/master HEAD | grep -v "vendor/"
+		"origin/${target_branch}" HEAD | grep -v "vendor/"
 }
 
 check_commits()
@@ -313,8 +313,8 @@ check_versions()
 # Ensure all files (where possible) contain an SPDX license header
 check_license_headers()
 {
-	# The master branch is the baseline - ignore it.
-	[ "$master_branch" = "true" ] && return
+	# The branch is the baseline - ignore it.
+	[ "$specific_branch" = "true" ] && return
 
 	# See: https://spdx.org/licenses/Apache-2.0.html
 	local -r spdx_tag="SPDX-License-Identifier"
@@ -379,9 +379,9 @@ check_docs()
 	local new_urls
 	local url
 
-	if [ "$master_branch" = "true" ]
+	if [ "$specific_branch" = "true" ]
 	then
-		info "Checking all documents in master branch"
+		info "Checking all documents in $branch branch"
 
 		docs=$(find . -name "*.md" | grep -v "vendor/" || true)
 	else
@@ -406,7 +406,7 @@ check_docs()
 			# document" *will* result in when the PR has landed
 			# and then check docs for that new URL and exclude
 			# them from the real URL check.
-			url="https://${repo}/blob/master/${doc}"
+			url="https://${repo}/blob/${target_branch}/${doc}"
 
 			new_urls+=" ${url}"
 		done
@@ -441,7 +441,7 @@ check_docs()
 
 	for url in $urls
 	do
-		if [ "$master_branch" != "true" ]
+		if [ "$specific_branch" != "true" ]
 		then
 			# If the URL is new on this PR, it cannot be checked.
 			echo "$new_urls" | grep -q "\<${url}\>" && \
@@ -508,9 +508,9 @@ check_files()
 
 	info "Checking files"
 
-	if [ "$master_branch" = "true" ]
+	if [ "$specifc_branch" = "true" ]
 	then
-		info "Checking all files in master branch"
+		info "Checking all files in $branch branch"
 
 		files=$(find . -type f | egrep -v "(.git|vendor)/" || true)
 	else
@@ -595,7 +595,7 @@ main()
 			--golang) func=check_go ;;
 			-h|--help) usage; exit 0 ;;
 			--licenses) func=check_license_headers ;;
-			--master) master_branch="true" ;;
+			--all) specific_branch="true" ;;
 			--repo) repo="$2"; shift ;;
 			--versions) func=check_versions ;;
 			--) shift; break ;;
@@ -611,7 +611,7 @@ main()
 
 	# Set if not already set by options
 	[ -z "$repo" ] && repo="$1"
-	[ "$master_branch" = "false" ] && master_branch="$2"
+	[ "$specific_branch" = "false" ] && specific_branch="$2"
 
 
 	if [ -z "$repo" ]
