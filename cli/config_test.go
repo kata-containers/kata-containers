@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -119,8 +120,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	files := []string{hypervisorPath, kernelPath, imagePath, shimPath, proxyPath}
 
 	for _, file := range files {
-		// create the resource
-		err = createEmptyFile(file)
+		// create the resource (which must be >0 bytes)
+		err := writeFile(file, "foo", testFileMode)
 		if err != nil {
 			return config, err
 		}
@@ -1305,4 +1306,108 @@ func TestUpdateRuntimeConfigurationFactoryConfig(t *testing.T) {
 	assert.NoError(err)
 
 	assert.Equal(expectedFactoryConfig, config.FactoryConfig)
+}
+
+func TestCheckHypervisorConfig(t *testing.T) {
+	assert := assert.New(t)
+
+	dir, err := ioutil.TempDir(testDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	// Not created on purpose
+	imageENOENT := filepath.Join(dir, "image-ENOENT.img")
+	initrdENOENT := filepath.Join(dir, "initrd-ENOENT.img")
+
+	imageEmpty := filepath.Join(dir, "image-empty.img")
+	initrdEmpty := filepath.Join(dir, "initrd-empty.img")
+
+	for _, file := range []string{imageEmpty, initrdEmpty} {
+		err = createEmptyFile(file)
+		assert.NoError(err)
+	}
+
+	image := filepath.Join(dir, "image.img")
+	initrd := filepath.Join(dir, "initrd.img")
+
+	mb := uint32(1024 * 1024)
+
+	fileSizeMB := uint32(3)
+	fileSizeBytes := fileSizeMB * mb
+
+	fileData := strings.Repeat("X", int(fileSizeBytes))
+
+	for _, file := range []string{image, initrd} {
+		err = writeFile(file, fileData, testFileMode)
+		assert.NoError(err)
+	}
+
+	type testData struct {
+		imagePath        string
+		initrdPath       string
+		memBytes         uint32
+		expectError      bool
+		expectLogWarning bool
+	}
+
+	// Note that checkHypervisorConfig() does not check to ensure an image
+	// or an initrd has been specified - that's handled by a separate
+	// function, hence no test for it here.
+
+	data := []testData{
+		{"", "", 0, true, false},
+
+		{imageENOENT, "", 2, true, false},
+		{"", initrdENOENT, 2, true, false},
+
+		{imageEmpty, "", 2, true, false},
+		{"", initrdEmpty, 2, true, false},
+
+		{image, "", fileSizeMB + 2, false, false},
+		{image, "", fileSizeMB + 1, false, false},
+		{image, "", fileSizeMB + 0, false, true},
+		{image, "", fileSizeMB - 1, false, true},
+		{image, "", fileSizeMB - 2, false, true},
+
+		{"", initrd, fileSizeMB + 2, false, false},
+		{"", initrd, fileSizeMB + 1, false, false},
+		{"", initrd, fileSizeMB + 0, true, false},
+		{"", initrd, fileSizeMB - 1, true, false},
+		{"", initrd, fileSizeMB - 2, true, false},
+	}
+
+	for i, d := range data {
+		savedOut := kataLog.Logger.Out
+
+		// create buffer to save logger output
+		logBuf := &bytes.Buffer{}
+
+		// capture output to buffer
+		kataLog.Logger.Out = logBuf
+
+		config := vc.HypervisorConfig{
+			ImagePath:    d.imagePath,
+			InitrdPath:   d.initrdPath,
+			DefaultMemSz: d.memBytes,
+		}
+
+		err := checkHypervisorConfig(config)
+
+		if d.expectError {
+			assert.Error(err, "test %d (%+v)", i, d)
+		} else {
+			assert.NoError(err, "test %d (%+v)", i, d)
+		}
+
+		if d.expectLogWarning {
+			assert.True(strings.Contains(logBuf.String(), "warning"))
+		} else {
+			assert.Empty(logBuf.String())
+		}
+
+		// reset logger
+		kataLog.Logger.Out = savedOut
+	}
 }

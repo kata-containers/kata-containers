@@ -577,7 +577,77 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		config.ProxyConfig = vc.ProxyConfig{}
 	}
 
+	if err := checkHypervisorConfig(config.HypervisorConfig); err != nil {
+		return "", config, err
+	}
+
 	return resolved, config, nil
+}
+
+// checkHypervisorConfig performs basic "sanity checks" on the hypervisor
+// config.
+func checkHypervisorConfig(config vc.HypervisorConfig) error {
+	type image struct {
+		path   string
+		initrd bool
+	}
+
+	images := []image{
+		{
+			path:   config.ImagePath,
+			initrd: false,
+		},
+		{
+			path:   config.InitrdPath,
+			initrd: true,
+		},
+	}
+
+	memSizeMB := int64(config.DefaultMemSz)
+
+	if memSizeMB == 0 {
+		return errors.New("VM memory cannot be zero")
+	}
+
+	mb := int64(1024 * 1024)
+
+	for _, image := range images {
+		if image.path == "" {
+			continue
+		}
+
+		imageSizeBytes, err := fileSize(image.path)
+		if err != nil {
+			return err
+		}
+
+		if imageSizeBytes == 0 {
+			return fmt.Errorf("image %q is empty", image.path)
+		}
+
+		if imageSizeBytes > mb {
+			imageSizeMB := imageSizeBytes / mb
+
+			msg := fmt.Sprintf("VM memory (%dMB) smaller than image %q size (%dMB)",
+				memSizeMB, image.path, imageSizeMB)
+
+			if imageSizeMB >= memSizeMB {
+				if image.initrd {
+					// Initrd's need to be fully read into memory
+					return errors.New(msg)
+				}
+
+				// Images do not need to be fully read
+				// into memory, but it would be highly
+				// unusual to have an image larger
+				// than the amount of memory assigned
+				// to the VM.
+				kataLog.Warn(msg)
+			}
+		}
+	}
+
+	return nil
 }
 
 // getDefaultConfigFilePaths returns a list of paths that will be
