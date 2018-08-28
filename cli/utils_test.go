@@ -362,3 +362,37 @@ func TestWriteFileErrNoPath(t *testing.T) {
 	err = writeFile(dir, "", 0000)
 	assert.Error(err)
 }
+
+func TestFileSize(t *testing.T) {
+	assert := assert.New(t)
+
+	dir, err := ioutil.TempDir(testDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	file := filepath.Join(dir, "foo")
+
+	// ENOENT
+	_, err = fileSize(file)
+	assert.Error(err)
+
+	err = createEmptyFile(file)
+	assert.NoError(err)
+
+	// zero size
+	size, err := fileSize(file)
+	assert.NoError(err)
+	assert.Equal(size, int64(0))
+
+	msg := "hello"
+	msgLen := len(msg)
+
+	err = writeFile(file, msg, testFileMode)
+	assert.NoError(err)
+
+	size, err = fileSize(file)
+	assert.NoError(err)
+	assert.Equal(size, int64(msgLen))
+}

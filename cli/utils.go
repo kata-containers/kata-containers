@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 )
 
 const (
@@ -229,4 +230,16 @@ func writeFile(filePath string, data string, fileMode os.FileMode) error {
 // isEmptyString return if string is empty
 func isEmptyString(b []byte) bool {
 	return len(bytes.Trim(b, "\n")) == 0
+}
+
+// fileSize returns the number of bytes in the specified file
+func fileSize(file string) (int64, error) {
+	st := syscall.Stat_t{}
+
+	err := syscall.Stat(file, &st)
+	if err != nil {
+		return 0, err
+	}
+
+	return st.Size, nil
 }
