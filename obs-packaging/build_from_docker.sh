@@ -12,49 +12,30 @@ set -o pipefail
 
 script_dir=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
 script_name="$(basename "${BASH_SOURCE[0]}")"
-cache_dir=${PWD}/obs-cache
 #where packaing repo lives
 packaging_repo_dir=$(cd "${script_dir}/.." && pwd)
-#where results will be stored
-host_datadir="${PWD}/pkgs"
-obs_image="obs-kata"
 export USE_DOCKER=1
 http_proxy=${http_proxy:-}
 https_proxy=${https_proxy:-}
 no_proxy=${no_proxy:-}
 PUSH=${PUSH:-}
 
+# shellcheck source=scripts/obs-docker.sh
+source "${script_dir}/scripts/obs-docker.sh"
+
 GO_ARCH=$(go env GOARCH)
 export GO_ARCH
 
-docker_run() {
-	local cmd="$@"
-	sudo docker run \
-		--rm \
-		-v "${HOME}/.ssh":/root/.ssh \
-		-v "${HOME}/.gitconfig":/root/.gitconfig \
-		-v /etc/profile:/etc/profile \
-		--env GO_ARCH="${GO_ARCH}" \
-		--env http_proxy="${http_proxy}" \
-		--env https_proxy="${https_proxy}" \
-		--env no_proxy="${no_proxy}" \
-		--env PUSH="${PUSH}" \
-		--env DEBUG="${DEBUG:-}" \
-		--env OBS_SUBPROJECT="${OBS_SUBPROJECT:-}" \
-		-v "${HOME}/.bashrc":/root/.bashrc \
-		-v "$cache_dir":/var/tmp/osbuild-packagecache/ \
-		-v "$packaging_repo_dir":${packaging_repo_dir} \
-		-v "$host_datadir":/var/packaging \
-		-v "$HOME/.oscrc":/root/.oscrc \
-		-ti "$obs_image" bash -c "${cmd}"
-}
+OSCRC="${HOME}/.oscrc"
+OBS_API="https://api.opensuse.org"
+
 usage() {
 	msg="${1:-}"
 	exit_code=$"${2:-0}"
 	cat <<EOT
 ${msg}
 Usage:
-${script_name} <kata-branch>
+${script_name} <kata-branch/tag>
 EOT
 	exit "${exit_code}"
 }
@@ -69,16 +50,24 @@ main() {
 	image_tarball=$(find . -name 'kata-containers-'"${branch}"'-*.tar.gz')
 	[ -f "${image_tarball}" ] || die "image not found"
 	popd >>/dev/null
-	sudo docker build \
-		--build-arg http_proxy="${http_proxy}" \
-		--build-arg https_proxy="${https_proxy}" \
-		--build-arg GO_ARCH="${GO_ARCH}" \
-		-t $obs_image "${script_dir}"
-
-	#Create/update OBS repository for branch
-	#docker_run "${packaging_repo_dir}/obs-packaging/create-pkg-branch.sh ${branch}"
 	#Build all kata packages
+	make -f "${script_dir}/Makefile" clean
+	if [ -n "${OBS_USER:-}" ] && [ -n "${OBS_PASS:-}" ] && [ ! -e "${OSCRC}" ]; then
+		echo "Creating  ${OSCRC} with user $OBS_USER"
+		cat <<eom >"${OSCRC}"
+[general]
+apiurl = ${OBS_API}
+[${OBS_API}]
+user = ${OBS_USER}
+pass = ${OBS_PASS}
+eom
+	fi
+
+	if [ ! -e "${OSCRC}" ]; then
+		echo "${OSCRC}, please  do 'export OBS_USER=your_user ; export OBS_PASS=your_pass' to configure osc for first time."
+		exit 1
+	fi
 	docker_run "${packaging_repo_dir}/obs-packaging/build_all.sh ${branch}"
 }
 
-main $@
+main "$@"
