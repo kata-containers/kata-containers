@@ -94,23 +94,21 @@ func TestFactorySetLogger(t *testing.T) {
 func TestVMConfigValid(t *testing.T) {
 	assert := assert.New(t)
 
-	config := Config{}
-
-	err := config.validate()
-	assert.Error(err)
-
 	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
 
-	config.VMConfig = vc.VMConfig{
+	config := vc.VMConfig{
 		HypervisorType: vc.MockHypervisor,
 		AgentType:      vc.NoopAgentType,
+		ProxyType:      vc.NoopProxyType,
 		HypervisorConfig: vc.HypervisorConfig{
 			KernelPath: testDir,
 			ImagePath:  testDir,
 		},
 	}
 
-	err = config.validate()
+	f := factory{}
+
+	err := f.validateNewVMConfig(config)
 	assert.Nil(err)
 }
 
@@ -165,8 +163,9 @@ func TestFactoryGetVM(t *testing.T) {
 	}
 	vmConfig := vc.VMConfig{
 		HypervisorType:   vc.MockHypervisor,
-		AgentType:        vc.NoopAgentType,
 		HypervisorConfig: hyperConfig,
+		AgentType:        vc.NoopAgentType,
+		ProxyType:        vc.NoopProxyType,
 	}
 
 	ctx := context.Background()

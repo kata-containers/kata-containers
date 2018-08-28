@@ -20,6 +20,7 @@ func TestNewVM(t *testing.T) {
 	config := VMConfig{
 		HypervisorType: MockHypervisor,
 		AgentType:      NoopAgentType,
+		ProxyType:      NoopProxyType,
 	}
 	hyperConfig := HypervisorConfig{
 		KernelPath: testDir,

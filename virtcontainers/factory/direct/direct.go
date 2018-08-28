@@ -28,8 +28,8 @@ func (d *direct) Config() vc.VMConfig {
 }
 
 // GetBaseVM create a new VM directly.
-func (d *direct) GetBaseVM(ctx context.Context) (*vc.VM, error) {
-	vm, err := vc.NewVM(ctx, d.config)
+func (d *direct) GetBaseVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error) {
+	vm, err := vc.NewVM(ctx, config)
 	if err != nil {
 		return nil, err
 	}
