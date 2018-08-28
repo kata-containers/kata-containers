@@ -451,7 +451,7 @@ func TestConstraintGRPCSpec(t *testing.T) {
 	assert.Nil(g.Hooks)
 	assert.Nil(g.Linux.Seccomp)
 	assert.Nil(g.Linux.Resources.Devices)
-	assert.Nil(g.Linux.Resources.Memory)
+	assert.NotNil(g.Linux.Resources.Memory)
 	assert.Nil(g.Linux.Resources.Pids)
 	assert.Nil(g.Linux.Resources.BlockIO)
 	assert.Nil(g.Linux.Resources.HugepageLimits)
