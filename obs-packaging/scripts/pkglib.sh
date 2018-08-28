@@ -13,7 +13,7 @@ OBS_SUBPROJECT="${OBS_SUBPROJECT:-alpha}"
 
 # BUILD OPTIONS
 BUILD_DISTROS=${BUILD_DISTROS:-Fedora_27 xUbuntu_16.04 CentOS_7}
-BUILD_ARCH=${BUILD_ARCH:-}x86_64
+BUILD_ARCH="$(uname -m)"
 
 COMMIT=false
 BRANCH=false
@@ -24,7 +24,7 @@ VERBOSE=false
 # Used for debian.control files
 # Architecture: The architecture specifies which type of hardware this
 # package was compiled for.
-DEB_ARCH="${DEB_ARCH:-amd64}"
+DEB_ARCH="$(go env GOARCH)"
 
 if command -v go; then
 	export GO_ARCH=$(go env GOARCH)
