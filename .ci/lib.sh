@@ -123,7 +123,7 @@ function apply_depends_on() {
 	do
 		label_line=$(echo "${label_lines}" | sed "${i}q;d")
 		label_str=$(echo "${label_line}" | cut -d ':' -f2)
-		repo=$(echo "${label_str}" | cut -d'#' -f1)
+		repo=$(echo "${label_str}" | tr -d '[:space:]' | cut -d'#' -f1)
 		if [[ "${repos_found[@]}" =~ "${repo}" ]]; then
 			echo "Repository $repo was already defined in a 'Depends-on:' tag."
 			echo "Only one repository per tag is allowed."
