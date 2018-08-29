@@ -26,7 +26,7 @@ MEM_CUTOFF="${MEM_CUTOFF:-(2*1024*1024*1024)}"
 # The default container/workload we run for testing
 # nginx has show up issues in the past, for whatever reason, so
 # let's default to that
-PAYLOAD="${PAYLOAD:-nginx}"
+PAYLOAD="${PAYLOAD:-nginx:1.14}"
 
 # do we need a command argument for this payload?
 COMMAND="${COMMAND:-}"
@@ -198,6 +198,12 @@ init() {
 	else
 		echo "Not a Kata runtime, not checking for Kata components"
 		check_kata_components=0
+	fi
+
+	# Pull nginx image
+	docker pull ${PAYLOAD}
+	if [ $? != 0 ]; then
+		die "Unable to retry docker image ${PAYLOAD}"
 	fi
 }
 

@@ -19,7 +19,7 @@ TEST_NAME="${TEST_NAME:-network nginx ab benchmark}"
 # Ports where it will run
 port="${port:-80:80}"
 # Image name
-image="${image:-nginx}"
+image="${image:-nginx:1.14}"
 # Url
 url="${url:-localhost:80}"
 # Number of requests to perform
