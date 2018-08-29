@@ -9,8 +9,11 @@ dist: trusty
 language: go
 
 go:
-  - 1.8
+  - "1.10.x"
   - stable
+
+env:
+  - target_branch=$TRAVIS_BRANCH
 
 before_script:
   - ".ci/static-checks.sh github.com/kata-containers/tests"
