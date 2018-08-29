@@ -6,11 +6,11 @@
 package virtcontainers
 
 import (
-	"context"
 	"syscall"
 
 	"github.com/kata-containers/agent/protocols/grpc"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"golang.org/x/net/context"
 )
 
 // noopAgent a.k.a. NO-OP Agent is an empty Agent implementation, for testing and
