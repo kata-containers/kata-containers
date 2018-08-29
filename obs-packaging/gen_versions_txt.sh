@@ -73,7 +73,7 @@ qemu_lite_version=${qemu_lite_version}
 qemu_lite_hash=${qemu_lite_hash}
 
 qemu_vanilla_version=${qemu_vanilla_version}
-qemu_vanilla_hash=${qemu_lite_hash}
+qemu_vanilla_hash=${qemu_vanilla_hash}
 
 kernel_version=${kernel_version}
 
