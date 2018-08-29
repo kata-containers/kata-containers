@@ -8,7 +8,7 @@
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 
 setup() {
-	nginx_image="nginx"
+	nginx_image="nginx:1.14"
 	busybox_image="busybox"
 	service_name="nginx-service"
 	export KUBECONFIG=/etc/kubernetes/admin.conf
