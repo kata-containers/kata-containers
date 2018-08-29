@@ -1055,6 +1055,42 @@ func TestQMPExecuteQueryHotpluggableCPUs(t *testing.T) {
 	<-disconnectedCh
 }
 
+// Checks that memory devices are listed correctly
+func TestQMPExecuteQueryMemoryDevices(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	memoryDevices := MemoryDevices{
+		Type: "dimm",
+		Data: MemoryDevicesData{
+			Slot:         1,
+			Node:         0,
+			Addr:         1234,
+			Memdev:       "dimm1",
+			ID:           "mem1",
+			Hotpluggable: true,
+			Hotplugged:   false,
+			Size:         1234,
+		},
+	}
+	buf.AddCommand("query-memory-devices", nil, "return", []interface{}{memoryDevices})
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	memDevices, err := q.ExecQueryMemoryDevices(context.Background())
+	if err != nil {
+		t.Fatalf("Unexpected error: %v\n", err)
+	}
+	if len(memDevices) != 1 {
+		t.Fatalf("Expected memory devices length equals to 1\n")
+	}
+	if reflect.DeepEqual(memDevices[0], memoryDevices) == false {
+		t.Fatalf("Expected %v equals to %v\n", memDevices[0], memoryDevices)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks that migrate capabilities can be set
 func TestExecSetMigrationCaps(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
