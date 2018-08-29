@@ -12,5 +12,8 @@ go:
   - 1.8
   - stable
 
+env:
+  - target_branch=$TRAVIS_BRANCH
+
 before_script:
   - ".ci/static-checks.sh github.com/kata-containers/tests"
