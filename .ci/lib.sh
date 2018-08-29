@@ -70,6 +70,9 @@ function install_yq() {
 	"x86_64")
 		goarch=amd64
 		;;
+	"s390x")
+		goarch=s390x
+		;;
 	"*")
 		echo "Arch $(arch) not supported"
 		exit

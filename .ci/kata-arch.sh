@@ -38,6 +38,7 @@ arch_to_golang()
 		aarch64) echo "arm64";;
 		ppc64le) echo "$arch";;
 		x86_64) echo "amd64";;
+		s390x) echo "s390x";;
 		*) die "unsupported architecture: $arch";;
 	esac
 }
@@ -51,6 +52,7 @@ arch_to_kernel()
 		aarch64) echo "arm64";;
 		ppc64le) echo "powerpc";;
 		x86_64) echo "$arch";;
+		s390x) echo "s390x";;
 		*) die "unsupported architecture: $arch";;
 	esac
 }
@@ -101,3 +103,4 @@ main()
 }
 
 main "$@"
+
