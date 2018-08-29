@@ -23,7 +23,7 @@ qemu_lite_version=2.11.0
 qemu_lite_hash=a39e0b3e828ff6fb4457865ef7a021f1e7320c27
 
 qemu_vanilla_version=2.11.2
-qemu_vanilla_hash=a39e0b3e828ff6fb4457865ef7a021f1e7320c27
+qemu_vanilla_hash=0982a56a551556c704dc15752dabf57b4be1c640
 
 kernel_version=4.14.51
 
