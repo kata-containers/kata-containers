@@ -66,7 +66,6 @@ info() {
 repos=(
 	"agent"
 	"ksm-throttler"
-	"osbuilder"
 	"proxy"
 	"runtime"
 	"shim"
@@ -156,6 +155,7 @@ tag)
 	# But we want to know the version compatible with a kata release.
 	repos+=("tests")
 	repos+=("packaging")
+	repos+=("osbuilder")
 	tag_repos
 	if [ "${PUSH}" == "true" ]; then
 		push_tags
