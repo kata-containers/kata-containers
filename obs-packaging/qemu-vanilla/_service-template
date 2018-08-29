@@ -2,7 +2,7 @@
 <services>
  <service name="tar_scm">
     <param name="scm">git</param>
-    <param name="url">https://github.com/kata-containers/qemu.git</param>
+    <param name="url">https://github.com/qemu/qemu.git</param>
     <param name="exclude">.git</param>
     <param name="filename">qemu-vanilla</param>
     <!--- %h in the version format is a hash from a given revision -->
