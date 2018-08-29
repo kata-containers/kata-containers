@@ -210,3 +210,7 @@ func TestKvmIsUsable(t *testing.T) {
 func TestGetCPUDetails(t *testing.T) {
 	genericTestGetCPUDetails(t)
 }
+
+func TestSetCPUtype(t *testing.T) {
+	testSetCPUTypeGeneric(t)
+}

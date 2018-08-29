@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+// +build arm64 ppc64le
+
 package main
 
 import (
@@ -13,11 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func getExpectedHostDetails(tmpdir string) (HostInfo, error) {
-	return genericGetExpectedHostDetails(tmpdir)
-}
-
-func TestEnvGetEnvInfoSetsCPUType(t *testing.T) {
+func testEnvGetEnvInfoSetsCPUTypeGeneric(t *testing.T) {
 	assert := assert.New(t)
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -34,9 +32,9 @@ func TestEnvGetEnvInfoSetsCPUType(t *testing.T) {
 		archRequiredKernelModules = savedArchRequiredKernelModules
 	}()
 
-	archRequiredCPUFlags = map[string]string{}
-	archRequiredCPUAttribs = map[string]string{}
-	archRequiredKernelModules = map[string]kernelModule{}
+	assert.Empty(archRequiredCPUFlags)
+	assert.Empty(archRequiredCPUAttribs)
+	assert.NotEmpty(archRequiredKernelModules)
 
 	configFile, config, err := makeRuntimeConfig(tmpdir)
 	assert.NoError(err)
@@ -49,12 +47,7 @@ func TestEnvGetEnvInfoSetsCPUType(t *testing.T) {
 
 	assert.Equal(expectedEnv, env)
 
-	assert.NotEmpty(archRequiredCPUFlags)
-	assert.NotEmpty(archRequiredCPUAttribs)
-	assert.NotEmpty(archRequiredKernelModules)
-
-	assert.Equal(archRequiredCPUFlags["vmx"], "Virtualization support")
-
-	_, ok := archRequiredKernelModules["kvm"]
-	assert.True(ok)
+	assert.Equal(archRequiredCPUFlags, savedArchRequiredCPUFlags)
+	assert.Equal(archRequiredCPUAttribs, savedArchRequiredCPUAttribs)
+	assert.Equal(archRequiredKernelModules, savedArchRequiredKernelModules)
 }
