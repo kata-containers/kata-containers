@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2017-2018 Intel Corporation
-# 
+#
 # SPDX-License-Identifier: Apache-2.0
 #
 #  Description of the test:
@@ -28,6 +28,14 @@ AUTO_MODE="$3"
 TEST_NAME="memory footprint"
 SMEM_BIN="smem"
 KSM_ENABLE_FILE="/sys/kernel/mm/ksm/run"
+MEM_TMP_FILE=$(mktemp meminfo.XXXXXXXXXX)
+PS_TMP_FILE=$(mktemp psinfo.XXXXXXXXXX)
+
+function remove_tmp_file() {
+	rm -rf $MEM_TMP_FILE $PS_TMP_FILE
+}
+
+trap remove_tmp_file EXIT
 
 # Show help about this script
 help(){
@@ -66,13 +74,15 @@ get_runc_pss_memory(){
         mem_amount=0
         count=0
 
-	#FIXME - it would be nice to spit out this data into
-	# the JSON file as well.
         shim_instances=$(pgrep  -f "^$docker_shim")
         for shim in $shim_instances; do
                 child_pid="$(pgrep -P $shim)"
                 child_mem=$(sudo "$SMEM_BIN" -c "pid pss" | \
                                 grep "$child_pid" | awk '{print $2}')
+
+		# Getting all individual results
+		echo $child_mem >> $MEM_TMP_FILE
+
                 if (( $child_mem > 0 ));then
                         mem_amount=$(( $child_mem + $mem_amount ))
                         (( count++ ))
@@ -87,6 +97,31 @@ get_runc_pss_memory(){
         echo "$avg"
 }
 
+get_runc_individual_memory() {
+	runc_process_result=$(cat $MEM_TMP_FILE | tr "\n" " " | sed -e 's/\s$//g' | sed 's/ /, /g')
+
+	# Verify runc process result
+	if [ -z "$runc_process_result" ];then
+		die "Runc process not found"
+	fi
+
+	read -r -a runc_values <<< "${runc_process_result}"
+
+	metrics_json_start_array
+
+	local json="$(cat << EOF
+	{
+		"runc individual results": [
+			$(for ((i=0;i<${NUM_CONTAINERS[@]};++i)); do
+				printf '%s\n\t\t\t' "${runc_values[i]}"
+			done)
+		]
+	}
+EOF
+)"
+	metrics_json_add_array_element "$json"
+	metrics_json_end_array "Raw results"
+}
 
 # This function measures the PSS average
 # memory of a process.
@@ -100,10 +135,16 @@ get_pss_memory(){
 		die "No argument to get_pss_memory()"
 	fi
 
-	# FIXME - it would be nice to spit this data out into the
-	# JSON file as well.
-	# See issue [232](https://github.com/kata-containers/tests/issues/232)
-	data=$(sudo "$SMEM_BIN" --no-header -P "^$ps" -c "pss")
+	# Save all the processes names
+	# This will be help us to retrieve raw information
+	echo $ps >> $PS_TMP_FILE
+
+	data=$(sudo "$SMEM_BIN" --no-header -P "^$ps" -c "pss" | sed 's/[[:space:]]//g')
+
+	# Save all the smem results
+	# This will help us to retrieve raw information
+	echo $data >> $MEM_TMP_FILE
+
 	for i in $data;do
 		if (( i > 0 ));then
 			mem_amount=$(( i + mem_amount ))
@@ -117,6 +158,48 @@ get_pss_memory(){
 
 	echo "$avg"
 }
+
+get_individual_memory(){
+	# Getting all the individual container information
+	first_process_name=$(cat $PS_TMP_FILE | awk 'NR==1' | awk -F "/" '{print $NF}' | sed 's/[[:space:]]//g')
+	first_process_result=$(cat $MEM_TMP_FILE | awk 'NR==1' | sed 's/ /, /g')
+
+	second_process_name=$(cat $PS_TMP_FILE | awk 'NR==2' | awk -F "/" '{print $NF}' | sed 's/[[:space:]]//g')
+	second_process_result=$(cat $MEM_TMP_FILE | awk 'NR==2' | sed 's/ /, /g')
+
+	third_process_name=$(cat $PS_TMP_FILE | awk 'NR==3' | awk -F "/" '{print $NF}' | sed 's/[[:space:]]//g')
+	third_process_result=$(cat $MEM_TMP_FILE | awk 'NR==3' | sed 's/ /, /g')
+
+	read -r -a first_values <<< "${first_process_result}"
+	read -r -a second_values <<< "${second_process_result}"
+	read -r -a third_values <<< "${third_process_result}"
+
+	metrics_json_start_array
+
+	local json="$(cat << EOF
+	{
+		"$first_process_name memory": [
+			$(for ((i=0;i<${NUM_CONTAINERS[@]};++i)); do
+				printf '%s\n\t\t\t' "${first_values[i]}"
+			done)
+		],
+		"$second_process_name memory": [
+			$(for ((i=0;i<${NUM_CONTAINERS[@]};++i)); do
+				printf '%s\n\t\t\t' "${second_values[i]}"
+			done)
+		],
+		"$third_process_name memory": [
+			$(for ((i=0;i<${NUM_CONTAINERS[@]};++i)); do
+				printf '%s\n\t\t\t' "${third_values[i]}"
+			done)
+		]
+	}
+EOF
+)"
+	metrics_json_add_array_element "$json"
+	metrics_json_end_array "Raw results"
+}
+
 
 # Wait for KSM to settle down, or timeout waiting
 # The basic algorithm is to look at the pages_shared value
@@ -317,6 +400,13 @@ main(){
 	metrics_json_init
 	save_config
 	get_docker_memory_usage
+
+	if [ "$RUNTIME" == "runc" ]; then
+		get_runc_individual_memory
+	elif [ "$RUNTIME" == "cor" ] || [ "$RUNTIME" == "cc-runtime" ] || [ "$RUNTIME" == "kata-runtime" ]; then
+		get_individual_memory
+	fi
+
 	metrics_json_save
 }
 
