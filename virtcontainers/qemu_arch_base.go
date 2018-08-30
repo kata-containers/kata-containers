@@ -459,6 +459,24 @@ func (q *qemuArchBase) appendNetwork(devices []govmmQemu.Device, endpoint Endpoi
 			},
 		)
 		q.networkIndex++
+	case *MacvtapEndpoint:
+		devices = append(devices,
+			govmmQemu.NetDevice{
+				Type:          govmmQemu.MACVTAP,
+				Driver:        govmmQemu.VirtioNetPCI,
+				ID:            fmt.Sprintf("network-%d", q.networkIndex),
+				IFName:        ep.Name(),
+				MACAddress:    ep.HardwareAddr(),
+				DownScript:    "no",
+				Script:        "no",
+				VHost:         q.vhost,
+				DisableModern: q.nestedRun,
+				FDs:           ep.VMFds,
+				VhostFDs:      ep.VhostFds,
+			},
+		)
+		q.networkIndex++
+
 	}
 
 	return devices
