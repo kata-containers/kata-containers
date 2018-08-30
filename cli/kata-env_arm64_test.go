@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"path/filepath"
 	goruntime "runtime"
+	"testing"
 )
 
 func getExpectedHostDetails(tmpdir string) (HostInfo, error) {
@@ -91,4 +92,8 @@ VERSION_ID="%s"
 	}
 
 	return expectedHostDetails, nil
+}
+
+func TestEnvGetEnvInfoSetsCPUType(t *testing.T) {
+	testEnvGetEnvInfoSetsCPUTypeGeneric(t)
 }

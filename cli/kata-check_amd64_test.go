@@ -491,3 +491,32 @@ func TestKvmIsUsable(t *testing.T) {
 func TestGetCPUDetails(t *testing.T) {
 	genericTestGetCPUDetails(t)
 }
+
+func TestSetCPUtype(t *testing.T) {
+	assert := assert.New(t)
+
+	savedArchRequiredCPUFlags := archRequiredCPUFlags
+	savedArchRequiredCPUAttribs := archRequiredCPUAttribs
+	savedArchRequiredKernelModules := archRequiredKernelModules
+
+	defer func() {
+		archRequiredCPUFlags = savedArchRequiredCPUFlags
+		archRequiredCPUAttribs = savedArchRequiredCPUAttribs
+		archRequiredKernelModules = savedArchRequiredKernelModules
+	}()
+
+	archRequiredCPUFlags = map[string]string{}
+	archRequiredCPUAttribs = map[string]string{}
+	archRequiredKernelModules = map[string]kernelModule{}
+
+	setCPUtype()
+
+	assert.NotEmpty(archRequiredCPUFlags)
+	assert.NotEmpty(archRequiredCPUAttribs)
+	assert.NotEmpty(archRequiredKernelModules)
+
+	assert.Equal(archRequiredCPUFlags["vmx"], "Virtualization support")
+
+	_, ok := archRequiredKernelModules["kvm"]
+	assert.True(ok)
+}
