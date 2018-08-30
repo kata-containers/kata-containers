@@ -5,6 +5,12 @@
 
 package main
 
+import "testing"
+
 func getExpectedHostDetails(tmpdir string) (HostInfo, error) {
 	return genericGetExpectedHostDetails(tmpdir)
+}
+
+func TestEnvGetEnvInfoSetsCPUType(t *testing.T) {
+	testEnvGetEnvInfoSetsCPUTypeGeneric(t)
 }
