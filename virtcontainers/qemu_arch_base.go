@@ -336,7 +336,7 @@ func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device, bridges []Bridg
 				Bus:  defaultBridgeBus,
 				ID:   b.ID,
 				// Each bridge is required to be assigned a unique chassis id > 0
-				Chassis: (idx + 1),
+				Chassis: idx + 1,
 				SHPC:    true,
 				Addr:    strconv.FormatInt(int64(bridges[idx].Addr), 10),
 			},
@@ -473,7 +473,6 @@ func (q *qemuArchBase) appendBlockDevice(devices []govmmQemu.Device, drive confi
 func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, attr config.VhostUserDeviceAttrs) []govmmQemu.Device {
 	qemuVhostUserDevice := govmmQemu.VhostUserDevice{}
 
-	// TODO: find a way to remove dependency of drivers package
 	switch attr.Type {
 	case config.VhostUserNet:
 		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("net", attr.ID, maxDevIDSize)
