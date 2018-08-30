@@ -204,6 +204,15 @@ type BridgedMacvlanEndpoint struct {
 	PCIAddr            string
 }
 
+// MacvtapEndpoint represents a macvtap endpoint
+type MacvtapEndpoint struct {
+	EndpointProperties NetworkInfo
+	EndpointType       EndpointType
+	VMFds              []*os.File
+	VhostFds           []*os.File
+	PCIAddr            string
+}
+
 // Properties returns properties for the veth interface in the network pair.
 func (endpoint *VirtualEndpoint) Properties() NetworkInfo {
 	return endpoint.EndpointProperties
@@ -545,6 +554,80 @@ func (endpoint *BridgedMacvlanEndpoint) HotDetach(h hypervisor, netNsCreated boo
 	return fmt.Errorf("BridgedMacvlanEndpoint does not support Hot detach")
 }
 
+//Macvtap
+
+// Properties returns the properties of the macvtap interface.
+func (endpoint *MacvtapEndpoint) Properties() NetworkInfo {
+	return endpoint.EndpointProperties
+}
+
+// HardwareAddr returns the mac address of the macvtap network interface.
+func (endpoint *MacvtapEndpoint) HardwareAddr() string {
+	return endpoint.EndpointProperties.Iface.HardwareAddr.String()
+}
+
+// Name returns name of the macvtap interface.
+func (endpoint *MacvtapEndpoint) Name() string {
+	return endpoint.EndpointProperties.Iface.Name
+}
+
+// Type indentifies the endpoint as a macvtap endpoint.
+func (endpoint *MacvtapEndpoint) Type() EndpointType {
+	return endpoint.EndpointType
+}
+
+// SetProperties sets the properties of the macvtap endpoint.
+func (endpoint *MacvtapEndpoint) SetProperties(properties NetworkInfo) {
+	endpoint.EndpointProperties = properties
+}
+
+// Attach for macvtap endpoint passes macvtap device to the hypervisor.
+func (endpoint *MacvtapEndpoint) Attach(h hypervisor) error {
+	networkLogger().WithField("endpoint-type", "macvtap").Info("Attaching endpoint")
+	var err error
+
+	endpoint.VMFds, err = createMacvtapFds(endpoint.EndpointProperties.Iface.Index, int(h.hypervisorConfig().NumVCPUs))
+	if err != nil {
+		return fmt.Errorf("Could not setup macvtap fds %s: %s", endpoint.EndpointProperties.Iface.Name, err)
+	}
+
+	if !h.hypervisorConfig().DisableVhostNet {
+		vhostFds, err := createVhostFds(int(h.hypervisorConfig().NumVCPUs))
+		if err != nil {
+			return fmt.Errorf("Could not setup vhost fds %s : %s", endpoint.EndpointProperties.Iface.Name, err)
+		}
+		endpoint.VhostFds = vhostFds
+	}
+
+	return h.addDevice(endpoint, netDev)
+}
+
+// Detach for macvtap endpoint does nothing.
+func (endpoint *MacvtapEndpoint) Detach(netNsCreated bool, netNsPath string) error {
+	networkLogger().WithField("endpoint-type", "macvtap").Info("Detaching endpoint")
+	return nil
+}
+
+// HotAttach for macvtap endpoint not supported yet
+func (endpoint *MacvtapEndpoint) HotAttach(h hypervisor) error {
+	return fmt.Errorf("MacvtapEndpoint does not support Hot attach")
+}
+
+// HotDetach for macvtap endpoint not supported yet
+func (endpoint *MacvtapEndpoint) HotDetach(h hypervisor, netNsCreated bool, netNsPath string) error {
+	return fmt.Errorf("MacvtapEndpoint does not support Hot detach")
+}
+
+// PciAddr returns the PCI address of the endpoint.
+func (endpoint *MacvtapEndpoint) PciAddr() string {
+	return endpoint.PCIAddr
+}
+
+// NetworkPair returns the network pair of the endpoint.
+func (endpoint *MacvtapEndpoint) NetworkPair() *NetworkInterfacePair {
+	return nil
+}
+
 // EndpointType identifies the type of the network endpoint.
 type EndpointType string
 
@@ -560,6 +643,9 @@ const (
 
 	// BridgedMacvlanEndpointType is macvlan network interface.
 	BridgedMacvlanEndpointType EndpointType = "macvlan"
+
+	// MacvtapEndpointType is macvtap network interface.
+	MacvtapEndpointType EndpointType = "macvtap"
 )
 
 // Set sets an endpoint type based on the input string.
@@ -577,6 +663,9 @@ func (endpointType *EndpointType) Set(value string) error {
 	case "macvlan":
 		*endpointType = BridgedMacvlanEndpointType
 		return nil
+	case "macvtap":
+		*endpointType = MacvtapEndpointType
+		return nil
 	default:
 		return fmt.Errorf("Unknown endpoint type %s", value)
 	}
@@ -593,6 +682,8 @@ func (endpointType *EndpointType) String() string {
 		return string(VhostUserEndpointType)
 	case BridgedMacvlanEndpointType:
 		return string(BridgedMacvlanEndpointType)
+	case MacvtapEndpointType:
+		return string(MacvtapEndpointType)
 	default:
 		return ""
 	}
@@ -721,6 +812,18 @@ func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 			networkLogger().WithFields(logrus.Fields{
 				"endpoint":      endpoint,
 				"endpoint-type": "macvlan",
+			}).Info("endpoint unmarshalled")
+
+		case MacvtapEndpointType:
+			var endpoint MacvtapEndpoint
+			err := json.Unmarshal(e.Data, &endpoint)
+			if err != nil {
+				return err
+			}
+
+			networkLogger().WithFields(logrus.Fields{
+				"endpoint":      endpoint,
+				"endpoint-type": "macvtap",
 			}).Info("endpoint unmarshalled")
 
 		default:
@@ -1365,6 +1468,15 @@ func createVirtualNetworkEndpoint(idx int, ifName string, interworkingModel NetI
 	return endpoint, nil
 }
 
+func createMacvtapNetworkEndpoint(netInfo NetworkInfo) (*MacvtapEndpoint, error) {
+	endpoint := &MacvtapEndpoint{
+		EndpointType:       MacvtapEndpointType,
+		EndpointProperties: netInfo,
+	}
+
+	return endpoint, nil
+}
+
 func createBridgedMacvlanNetworkEndpoint(idx int, ifName string, interworkingModel NetInterworkingModel) (*BridgedMacvlanEndpoint, error) {
 	if idx < 0 {
 		return &BridgedMacvlanEndpoint{}, fmt.Errorf("invalid network endpoint index: %d", idx)
@@ -1627,6 +1739,9 @@ func createEndpoint(netInfo NetworkInfo, idx int, model NetInterworkingModel) (E
 		} else if netInfo.Iface.Type == "macvlan" {
 			networkLogger().Infof("macvlan interface found")
 			endpoint, err = createBridgedMacvlanNetworkEndpoint(idx, netInfo.Iface.Name, model)
+		} else if netInfo.Iface.Type == "macvtap" {
+			networkLogger().Infof("macvtap interface found")
+			endpoint, err = createMacvtapNetworkEndpoint(netInfo)
 		} else {
 			endpoint, err = createVirtualNetworkEndpoint(idx, netInfo.Iface.Name, model)
 		}
