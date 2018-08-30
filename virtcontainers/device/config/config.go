@@ -53,7 +53,7 @@ type DeviceInfo struct {
 	HostPath string
 
 	// ContainerPath is device path inside container
-	ContainerPath string
+	ContainerPath string `json:"-"`
 
 	// Type of device: c, b, u or p
 	// c , u - character(unbuffered)
