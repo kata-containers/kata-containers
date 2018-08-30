@@ -6,6 +6,7 @@
 package main
 
 import (
+	"os"
 	"os/signal"
 	"sync"
 	"testing"
@@ -53,10 +54,8 @@ func TestShimOps(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	shim.proxyStdio(wg, true)
 
-	sigc := shim.forwardAllSignals()
+	sigc := shim.handleSignals(os.Stdin)
 	defer signal.Stop(sigc)
-
-	shim.monitorTtySize(tty)
 
 	status, err := shim.wait()
 	assert.Nil(t, err, "%s", err)
