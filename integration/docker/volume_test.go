@@ -121,6 +121,7 @@ var _ = Describe("docker volume", func() {
 
 	Context("passing a block device", func() {
 		It("should be mounted", func() {
+			Skip("Issue: https://github.com/kata-containers/runtime/issues/677")
 			diskFile, loopFile, err = createLoopDevice()
 			Expect(err).ToNot(HaveOccurred())
 
@@ -130,7 +131,7 @@ var _ = Describe("docker volume", func() {
 			Expect(exitCode).To(Equal(0))
 			Expect(err).ToNot(HaveOccurred())
 
-			args = []string{"--name", id, "--cap-add=SYS_ADMIN", "-v", loopFileP1 + ":" + loopFileP1, DebianImage, "bash", "-c", fmt.Sprintf("sleep 15; mount %s /mnt", loopFileP1)}
+			args = []string{"--name", id, "--cap-add=SYS_ADMIN", "--device", loopFileP1, "-v", loopFileP1 + ":" + loopFileP1, DebianImage, "bash", "-c", fmt.Sprintf("sleep 15; mount %s /mnt", loopFileP1)}
 			_, _, exitCode = dockerRun(args...)
 			Expect(exitCode).To(Equal(0))
 
