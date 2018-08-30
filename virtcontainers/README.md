@@ -16,7 +16,6 @@ Table of Contents
       * [Container API](#container-api)
    * [Networking](#networking)
       * [CNM](#cnm)
-      * [CNI](#cni)
    * [Storage](#storage)
       * [How to check if container uses devicemapper block device as its rootfs](#how-to-check-if-container-uses-devicemapper-block-device-as-its-rootfs)
    * [Devices](#devices)
@@ -217,23 +216,6 @@ There are three drawbacks about using CNM instead of CNI:
 * The way we call into it is not very explicit: Have to re-exec dockerd binary so that it can accept parameters and execute the prestart hook related to network setup.
 * Implicit way to designate the network namespace: Instead of explicitely giving the netns to dockerd, we give it the PID of our runtime so that it can find the netns from this PID. This means we have to make sure being in the right netns while calling the hook, otherwise the veth pair will be created with the wrong netns.
 * No results are back from the hook: We have to scan the network interfaces to discover which one has been created inside the netns. This introduces more latency in the code because it forces us to scan the network in the CreateSandbox path, which is critical for starting the VM as quick as possible.
-
-
-## CNI
-
-![CNI Diagram](documentation/network/CNI_diagram.png)
-
-__Runtime network setup with CNI__
-
-1. Create the network namespace ([code](https://github.com/containers/virtcontainers/blob/0.5.0/cni.go#L64-L76))
-
-2. Get CNI plugin information ([code](https://github.com/containers/virtcontainers/blob/0.5.0/cni.go#L29-L32))
-
-3. Start the plugin (providing previously created netns) to add a network described into /etc/cni/net.d/ directory. At that time, the CNI plugin will create the cni0 network interface and a veth pair between the host and the created netns. It links cni0 to the veth pair before to exit. ([code](https://github.com/containers/virtcontainers/blob/0.5.0/cni.go#L34-L45))
-
-4. Create bridge, TAP, and link all together with network interface previously created ([code](https://github.com/containers/virtcontainers/blob/0.5.0/network.go#L123-L205))
-
-5. Start VM inside the netns and start the container ([code](https://github.com/containers/virtcontainers/blob/0.5.0/api.go#L66-L70))
 
 # Storage
 
