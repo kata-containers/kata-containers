@@ -18,7 +18,8 @@ PUSH="${PUSH:-"false"}"
 branch="master"
 readonly URL_RAW_FILE="https://raw.githubusercontent.com/${OWNER}"
 #The runtime version is used as reference of latest release
-readonly kata_version=$(curl -Ls "${URL_RAW_FILE}/runtime/${branch}/VERSION" | grep -v -P "^#")
+# This is set to the right value later.
+kata_version=""
 
 source "${script_dir}/../scripts/lib.sh"
 
@@ -65,10 +66,26 @@ info() {
 
 repos=(
 	"agent"
-	"ksm-throttler"
 	"proxy"
 	"runtime"
 	"shim"
+)
+# Tag versions that do not have a VERSIONS file
+# But we want to know the version compatible with a kata release.
+repos_not_versions=(
+	"tests"
+	"packaging"
+	"osbuilder"
+	"ksm-throttler"
+)
+
+# List of repositories that does not have stable branch.
+# We want to do is just push the tags to master branch
+# since we don't maintain a seperate branch for following repos.
+not_stable_branch=(
+	"packaging"
+	"osbuilder"
+	"ksm-throttler"
 )
 
 check_versions() {
@@ -92,6 +109,12 @@ tag_repos() {
 		git remote set-url --push origin "git@github.com:${OWNER}/${repo}.git"
 		git fetch origin --tags
 		tag="$kata_version"
+		if [[ ! ${not_stable_branch[*]} =~ ${repo} ]]; then
+			info "Checkout to ${branch} in ${repo}"
+			git checkout "${branch}"
+		else
+			info "Checkout(${branch}) not need for ${repo}"
+		fi
 		[[ "packaging" == "${repo}" ]] && tag="${tag}-kernel-config"
 		if git rev-parse -q --verify "refs/tags/${tag}"; then
 			info "$repo already has tag "
@@ -140,6 +163,7 @@ done
 shift $((OPTIND - 1))
 
 subcmd=${1:-""}
+kata_version=$(curl -Ls "${URL_RAW_FILE}/runtime/${branch}/VERSION" | grep -v -P "^#")
 
 [ -z "${subcmd}" ] && usage && exit 0
 
@@ -151,11 +175,7 @@ status)
 	;;
 tag)
 	check_versions
-	# Tag versions that does not have VERSIONS file
-	# But we want to know the version compatible with a kata release.
-	repos+=("tests")
-	repos+=("packaging")
-	repos+=("osbuilder")
+	repos+=("${repos_not_versions[@]}")
 	tag_repos
 	if [ "${PUSH}" == "true" ]; then
 		push_tags
