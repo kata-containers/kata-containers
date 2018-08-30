@@ -62,11 +62,21 @@ function install_yq() {
 	local yq_pkg="github.com/mikefarah/yq"
 	[ -x  "${GOPATH}/bin/yq" ] && return
 
-	case "$(arch)" in
+	read -r -a sysInfo <<< "$(uname -sm)"
+
+	case "${sysInfo[0]}" in
+	"Linux" | "Darwin")
+		goos="${sysInfo[0],}"
+		;;
+	"*")
+		die "OS ${sysInfo[0]} not supported"
+		;;
+	esac
+
+	case "${sysInfo[1]}" in
 	"aarch64")
 		goarch=arm64
 		;;
-
 	"x86_64")
 		goarch=amd64
 		;;
@@ -74,8 +84,7 @@ function install_yq() {
 		goarch=s390x
 		;;
 	"*")
-		echo "Arch $(arch) not supported"
-		exit
+		die "Arch ${sysInfo[1]} not supported"
 		;;
 	esac
 
@@ -88,10 +97,13 @@ function install_yq() {
 	# https://github.com/mikefarah/yq/releases/tag/<VERSION-HERE>
 	yq_version=$(basename "${yq_latest_url}")
 
-
-	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_linux_${goarch}"
+	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos}_${goarch}"
 	curl -o "${yq_path}" -L ${yq_url}
 	chmod +x ${yq_path}
+
+	if ! command -v "${yq_path}" >/dev/null; then
+		die "Cannot not get ${yq_path} executable"
+	fi
 }
 
 function get_version(){
