@@ -35,7 +35,9 @@ function clone_and_build() {
 
 	# Override branch if we are testing a PR.
 	[ -z "$pr_number" ] || branch="${target_branch}"
-	git fetch origin && git checkout "${branch}"
+	if [ "$kata_repo" != "$github_project" ]; then
+		git fetch origin && git checkout "${branch}"
+	fi
 
 	echo "Build ${github_project}"
 	if [ ! -f Makefile ]; then
