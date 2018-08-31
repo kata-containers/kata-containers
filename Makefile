@@ -8,7 +8,7 @@
 TIMEOUT := 60
 
 # union for 'make test'
-UNION := functional docker crio docker-compose docker-stability openshift kubernetes swarm cri-containerd
+UNION := functional docker crio docker-compose docker-stability openshift kubernetes swarm cri-containerd vm-factory
 
 # skipped test suites for docker integration tests
 SKIP :=
@@ -84,21 +84,26 @@ openshift:
 	bash -f .ci/install_bats.sh
 	bash -f integration/openshift/run_openshift_tests.sh
 
+vm-factory:
+	bash -f integration/vm_factory/vm_templating_test.sh
+
 test: ${UNION}
 
 check: checkcommits log-parser
 
+# PHONY in alphabetical order
 .PHONY: \
 	check \
 	checkcommits \
 	crio \
+	docker \
 	docker-compose \
 	docker-stability \
 	functional \
 	ginkgo \
-	docker \
 	kubernetes \
 	log-parser \
 	openshift \
 	swarm \
-	test
+	test \
+	vm-factory
