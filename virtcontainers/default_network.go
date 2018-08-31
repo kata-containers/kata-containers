@@ -54,11 +54,7 @@ func (n *defNetwork) add(s *Sandbox) error {
 		return err
 	}
 
-	s.networkNS = NetworkNamespace{
-		NetNsPath:    s.config.NetworkConfig.NetNSPath,
-		NetNsCreated: s.config.NetworkConfig.NetNsCreated,
-		Endpoints:    endpoints,
-	}
+	s.networkNS.Endpoints = endpoints
 
 	err = doNetNS(s.config.NetworkConfig.NetNSPath, func(_ ns.NetNS) error {
 		for _, endpoint := range s.networkNS.Endpoints {
