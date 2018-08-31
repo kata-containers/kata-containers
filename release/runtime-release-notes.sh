@@ -143,6 +143,7 @@ main() {
 		echo "new-release not provided"
 		usage 1
 	fi
+	git checkout -q ${new_release}
 	get_release_info
 	print_release_notes
 	popd >>/dev/null
