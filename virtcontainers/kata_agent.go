@@ -669,6 +669,7 @@ func constraintGRPCSpec(grpcSpec *grpc.Spec) {
 	// By now only CPU constraints are supported
 	// Issue: https://github.com/kata-containers/runtime/issues/158
 	// Issue: https://github.com/kata-containers/runtime/issues/204
+	grpcSpec.Linux.Resources.Devices = nil
 	grpcSpec.Linux.Resources.Pids = nil
 	grpcSpec.Linux.Resources.BlockIO = nil
 	grpcSpec.Linux.Resources.HugepageLimits = nil
