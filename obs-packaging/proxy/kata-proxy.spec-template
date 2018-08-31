@@ -69,7 +69,7 @@ echo "Clean build root"
 rm -rf %{buildroot}
 
 %install
-make install LIBEXECDIR=%{buildroot}%{LIBEXECDIR} COMMIT=@HASH@
+make install DESTDIR=%{buildroot} COMMIT=@HASH@
 
 %files
 %defattr(-,root,root,-)
