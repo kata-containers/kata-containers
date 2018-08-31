@@ -6,7 +6,6 @@
 package virtcontainers
 
 import (
-	"context"
 	"fmt"
 	"net"
 	"net/url"
@@ -25,6 +24,7 @@ import (
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"golang.org/x/net/context"
 )
 
 var defaultSockPathTemplates = []string{"%s/%s/hyper.sock", "%s/%s/tty.sock"}
