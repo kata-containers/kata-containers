@@ -5,4 +5,4 @@
 
 
 clean:
-	find . -type d -name "*home:katacontainers*" -exec sudo rm -rf {} \;
+	find . -maxdepth 2 -type d -name '*home:katacontainers*' -exec sudo rm -rf {} \;
