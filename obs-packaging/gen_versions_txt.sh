@@ -15,11 +15,6 @@ project="kata-containers"
 
 source "${script_dir}/../scripts/lib.sh"
 
-get_kata_hash_from_tag() {
-	repo=$1
-	git ls-remote --tags "https://github.com/${project}/${repo}.git" | grep "refs/tags/${kata_version}^{}" | awk '{print $1}'
-}
-
 gen_version_file() {
 	local branch="$1"
 	[ -n "${branch}" ] || exit 1

@@ -305,7 +305,7 @@ function get_obs_pkg_release() {
 	local obs_pkg_name="$1"
 	local pkg
 	local repo_dir
-	local release
+	local release=""
 
 	pkg=$(basename "${obs_pkg_name}")
 	repo_dir=$(mktemp -d -u -t "${pkg}.XXXXXXXXXXX")
@@ -314,9 +314,9 @@ function get_obs_pkg_release() {
 
 	spec_file=$(find "${repo_dir}" -maxdepth 1 -type f -name '*.spec' | head -1)
 	# Find in specfile in Release: XX field.
-	release=$(grep -oP 'Release:\s+[0-9]+' "${spec_file}" | grep -oP '[0-9]+')
+	[ ! -f "${spec_file}" ] || release=$(grep -oP 'Release:\s+[0-9]+' "${spec_file}" | grep -oP '[0-9]+')
 
-	if [ -z "${release}" ]; then
+	if [ -z "${release}" ] && [ -f "${spec_file}" ] ; then
 		# Not release number found find in "%define release XX"
 		release=$(grep -oP '%define\s+release\s+[0-9]+' "${spec_file}" | grep -oP '[0-9]+')
 	fi
@@ -324,7 +324,7 @@ function get_obs_pkg_release() {
 	release_file=$(find "${repo_dir}" -maxdepth 1 -type f -name 'pkg-release')
 	if [ -z "${release}" ] && [ -f "${release_file}" ]; then
 		# Release still not found check pkg-release file
-		release=$(grep -oP '[0-9]+' ${release_file})
+		release=$(grep -oP '[0-9]+' "${release_file}")
 	fi
 	if [ -z "${release}" ]; then
 		# Not release number found, this is a new repository.

@@ -17,6 +17,8 @@ readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly project="kata-containers"
 GOPATH=${GOPATH:-${HOME}/go}
 
+source "${script_dir}/../scripts/lib.sh"
+
 die() {
 	msg="$*"
 	echo "ERROR: ${FUNCNAME[1]} ${msg}" >&2
@@ -56,9 +58,12 @@ main() {
 	kata_version=${1:-}
 	[ -n "${kata_version}" ] || usage "1"
 
-	image_tarball=$(find -name 'kata-containers-*.tar.gz' | grep "${kata_version}") ||
+	agent_sha=$(get_kata_hash_from_tag "agent" "${kata_version}")
+	# tarball only has 11 chars from agent sha
+	agent_sha=${agent_sha:0:11}
+	image_tarball=$(find -name 'kata-containers-*.tar.gz' | grep "${kata_version}" | grep "${agent_sha}") ||
 		"${script_dir}/../obs-packaging/kata-containers-image/build_image.sh" -v "${kata_version}"
-	image_tarball=$(find -name 'kata-containers-*.tar.gz' | grep "${kata_version}") || die "file not found ${image_tarball}"
+	image_tarball=$(find -name 'kata-containers-*.tar.gz' | grep "${kata_version}" | grep "${agent_sha}" ) || die "file not found ${image_tarball}"
 
 	if [ ${push} == "true" ]; then
 		hub -C "${GOPATH}/src/github.com/${project}/agent" release edit -a "${image_tarball}" "${kata_version}"
