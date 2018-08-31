@@ -54,17 +54,12 @@ const (
 type State struct {
 	State stateString `json:"state"`
 
+	BlockDeviceID string
 	// Index of the block device passed to hypervisor.
 	BlockIndex int `json:"blockIndex"`
 
 	// File system of the rootfs incase it is block device
 	Fstype string `json:"fstype"`
-
-	// Bool to indicate if the drive for a container was hotplugged.
-	HotpluggedDrive bool `json:"hotpluggedDrive"`
-
-	// PCI slot at which the block device backing the container rootfs is attached.
-	RootfsPCIAddr string `json:"rootfsPCIAddr"`
 
 	// Pid is the process id of the sandbox container which is the first
 	// container to be started.
