@@ -59,6 +59,7 @@ type VC interface {
 // (required since virtcontainers.Sandbox only contains private fields)
 type VCSandbox interface {
 	Annotations(key string) (string, error)
+	GetNetNs() string
 	GetAllContainers() []VCContainer
 	GetAnnotations() map[string]string
 	GetContainer(containerID string) VCContainer

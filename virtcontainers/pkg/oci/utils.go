@@ -157,43 +157,6 @@ func cmdEnvs(spec CompatOCISpec, envs []vc.EnvVar) []vc.EnvVar {
 	return envs
 }
 
-func newHook(h spec.Hook) vc.Hook {
-	timeout := 0
-	if h.Timeout != nil {
-		timeout = *h.Timeout
-	}
-
-	return vc.Hook{
-		Path:    h.Path,
-		Args:    h.Args,
-		Env:     h.Env,
-		Timeout: timeout,
-	}
-}
-
-func containerHooks(spec CompatOCISpec) vc.Hooks {
-	ociHooks := spec.Hooks
-	if ociHooks == nil {
-		return vc.Hooks{}
-	}
-
-	var hooks vc.Hooks
-
-	for _, h := range ociHooks.Prestart {
-		hooks.PreStartHooks = append(hooks.PreStartHooks, newHook(h))
-	}
-
-	for _, h := range ociHooks.Poststart {
-		hooks.PostStartHooks = append(hooks.PostStartHooks, newHook(h))
-	}
-
-	for _, h := range ociHooks.Poststop {
-		hooks.PostStopHooks = append(hooks.PostStopHooks, newHook(h))
-	}
-
-	return hooks
-}
-
 func newMount(m spec.Mount) vc.Mount {
 	return vc.Mount{
 		Source:      m.Source,
@@ -517,8 +480,6 @@ func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid
 
 		Hostname: ocispec.Hostname,
 
-		Hooks: containerHooks(ocispec),
-
 		VMConfig: resources,
 
 		HypervisorType:   runtime.HypervisorType,
@@ -533,7 +494,7 @@ func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid
 		ShimType:   runtime.ShimType,
 		ShimConfig: runtime.ShimConfig,
 
-		NetworkModel:  vc.CNMNetworkModel,
+		NetworkModel:  vc.DefaultNetworkModel,
 		NetworkConfig: networkConfig,
 
 		Containers: []vc.ContainerConfig{containerConfig},
