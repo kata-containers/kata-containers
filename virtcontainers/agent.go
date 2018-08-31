@@ -6,13 +6,13 @@
 package virtcontainers
 
 import (
-	"context"
 	"fmt"
 	"syscall"
 
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/mitchellh/mapstructure"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"golang.org/x/net/context"
 )
 
 // AgentType describes the type of guest agent a Sandbox should run.
