@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -121,7 +122,7 @@ func newTestSandboxConfigHyperstartAgent() SandboxConfig {
 	return sandboxConfig
 }
 
-func newTestSandboxConfigHyperstartAgentCNMNetwork() SandboxConfig {
+func newTestSandboxConfigHyperstartAgentDefaultNetwork() SandboxConfig {
 	// Define the container command and bundle.
 	container := ContainerConfig{
 		ID:          containerID,
@@ -142,22 +143,10 @@ func newTestSandboxConfigHyperstartAgentCNMNetwork() SandboxConfig {
 		SockTtyName: testHyperstartTtySocket,
 	}
 
-	hooks := Hooks{
-		PreStartHooks: []Hook{
-			{
-				Path: getMockHookBinPath(),
-				Args: []string{testKeyHook, testContainerIDHook, testControllerIDHook},
-			},
-		},
-		PostStartHooks: []Hook{},
-		PostStopHooks:  []Hook{},
-	}
-
 	netConfig := NetworkConfig{}
 
 	sandboxConfig := SandboxConfig{
-		ID:    testSandboxID,
-		Hooks: hooks,
+		ID: testSandboxID,
 
 		HypervisorType:   MockHypervisor,
 		HypervisorConfig: hypervisorConfig,
@@ -165,7 +154,7 @@ func newTestSandboxConfigHyperstartAgentCNMNetwork() SandboxConfig {
 		AgentType:   HyperstartAgent,
 		AgentConfig: agentConfig,
 
-		NetworkModel:  CNMNetworkModel,
+		NetworkModel:  DefaultNetworkModel,
 		NetworkConfig: netConfig,
 
 		Containers:  []ContainerConfig{container},
@@ -1383,14 +1372,23 @@ func TestStartStopContainerHyperstartAgentSuccessful(t *testing.T) {
 	bindUnmountAllRootfs(ctx, defaultSharedDir, pImpl)
 }
 
-func TestStartStopSandboxHyperstartAgentSuccessfulWithCNMNetwork(t *testing.T) {
+func TestStartStopSandboxHyperstartAgentSuccessfulWithDefaultNetwork(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
 	cleanUp()
 
-	config := newTestSandboxConfigHyperstartAgentCNMNetwork()
+	config := newTestSandboxConfigHyperstartAgentDefaultNetwork()
+
+	n, err := ns.NewNS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer n.Close()
+
+	config.NetworkConfig.NetNSPath = n.Path()
+	config.NetworkConfig.NetNsCreated = true
 
 	sockDir, err := testGenerateCCProxySockDir()
 	if err != nil {
@@ -2443,7 +2441,7 @@ func TestNetworkOperation(t *testing.T) {
 	defer deleteNetNS(netNSPath)
 
 	config := newTestSandboxConfigNoop()
-	config.NetworkModel = CNMNetworkModel
+	config.NetworkModel = DefaultNetworkModel
 	config.NetworkConfig = NetworkConfig{
 		NetNSPath: netNSPath,
 	}

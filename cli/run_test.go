@@ -221,6 +221,10 @@ func testRunContainerSetup(t *testing.T) runContainerData {
 }
 
 func TestRunContainerSuccessful(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledNeedNonRoot)
+	}
+
 	assert := assert.New(t)
 
 	d := testRunContainerSetup(t)
@@ -295,6 +299,10 @@ func TestRunContainerSuccessful(t *testing.T) {
 }
 
 func TestRunContainerDetachSuccessful(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledNeedNonRoot)
+	}
+
 	assert := assert.New(t)
 
 	d := testRunContainerSetup(t)

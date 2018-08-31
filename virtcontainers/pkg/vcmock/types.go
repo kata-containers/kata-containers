@@ -23,6 +23,7 @@ type Sandbox struct {
 	MockURL         string
 	MockAnnotations map[string]string
 	MockContainers  []*Container
+	MockNetNs       string
 }
 
 // Container is a fake Container type used for testing

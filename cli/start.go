@@ -11,6 +11,7 @@ import (
 	"fmt"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	vcAnnot "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -76,14 +77,36 @@ func start(ctx context.Context, containerID string) (vc.VCSandbox, error) {
 		return nil, err
 	}
 
-	if containerType.IsSandbox() {
-		return vci.StartSandbox(ctx, sandboxID)
-	}
-
-	c, err := vci.StartContainer(ctx, sandboxID, containerID)
+	ociSpec, err := oci.GetOCIConfig(status)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.Sandbox(), nil
+	var sandbox vc.VCSandbox
+
+	if containerType.IsSandbox() {
+		s, err := vci.StartSandbox(ctx, sandboxID)
+		if err != nil {
+			return nil, err
+		}
+
+		sandbox = s
+	} else {
+		c, err := vci.StartContainer(ctx, sandboxID, containerID)
+		if err != nil {
+			return nil, err
+		}
+
+		sandbox = c.Sandbox()
+	}
+
+	// Run post-start OCI hooks.
+	err = enterNetNS(sandbox.GetNetNs(), func() error {
+		return postStartHooks(ctx, ociSpec, sandboxID, status.Annotations[vcAnnot.BundlePathKey])
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return sandbox, nil
 }

@@ -319,9 +319,6 @@ type SandboxConfig struct {
 
 	Hostname string
 
-	// Field specific to OCI specs, needed to setup all the hooks
-	Hooks Hooks
-
 	// VMConfig is the VM configuration to set for this sandbox.
 	VMConfig Resources
 
@@ -542,6 +539,11 @@ func (s *Sandbox) GetAnnotations() map[string]string {
 	defer s.annotationsLock.RUnlock()
 
 	return s.config.Annotations
+}
+
+// GetNetNs returns the network namespace of the current sandbox.
+func (s *Sandbox) GetNetNs() string {
+	return s.networkNS.NetNsPath
 }
 
 // GetAllContainers returns all containers.
@@ -971,49 +973,37 @@ func (s *Sandbox) createNetwork() error {
 	span, _ := s.trace("createNetwork")
 	defer span.Finish()
 
-	var netNsPath string
-	var netNsCreated bool
-	var networkNS NetworkNamespace
-	var err error
-
-	//rollback the NetNs when createNetwork failed
-	defer func() {
-		if err != nil && netNsPath != "" && netNsCreated {
-			deleteNetNS(netNsPath)
-		}
-	}()
-
-	// Initialize the network.
-	netNsPath, netNsCreated, err = s.network.init(s.ctx, s.config.NetworkConfig)
-	if err != nil {
-		return err
-	}
-
-	// Execute prestart hooks inside netns
-	if err := s.network.run(netNsPath, func() error {
-		return s.config.Hooks.preStartHooks(s)
-	}); err != nil {
-		return err
+	// In case there is a factory, the network should be handled
+	// through some calls at the API level, in order to add or
+	// remove interfaces and routes.
+	// This prevents from any assumptions that could be made from
+	// virtcontainers, in particular that the VM has not been started
+	// before it starts to scan the current network.
+	if s.factory != nil {
+		return nil
 	}
 
 	// Add the network
-	networkNS, err = s.network.add(s, s.config.NetworkConfig, netNsPath, netNsCreated)
-	if err != nil {
+	if err := s.network.add(s); err != nil {
 		return err
 	}
-	s.networkNS = networkNS
 
 	// Store the network
-	err = s.storage.storeSandboxNetwork(s.id, networkNS)
-
-	return err
+	return s.storage.storeSandboxNetwork(s.id, s.networkNS)
 }
 
 func (s *Sandbox) removeNetwork() error {
 	span, _ := s.trace("removeNetwork")
 	defer span.Finish()
 
-	return s.network.remove(s, s.networkNS, s.networkNS.NetNsCreated)
+	// In case there is a factory, the network has been handled through
+	// some API calls to hotplug some interfaces and routes. This means
+	// the removal of the network should follow the same logic.
+	if s.factory != nil {
+		return nil
+	}
+
+	return s.network.remove(s)
 }
 
 func (s *Sandbox) generateNetInfo(inf *grpc.Interface) (NetworkInfo, error) {
