@@ -16,9 +16,15 @@ readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly project="kata-containers"
 readonly tmp_dir=$(mktemp -d -t build-image-tmp.XXXXXXXXXX)
 readonly osbuilder_url=https://github.com/${project}/osbuilder.git
+export   GOPATH="${tmp_dir}/go"
 
 export GOPATH=${GOPATH:-${HOME}/go}
 source "${script_dir}/../../scripts/lib.sh"
+
+exit_handler() {
+	[ -d "${tmp_dir}" ] && sudo rm -rf "$tmp_dir"
+}
+trap exit_handler EXIT
 
 arch_target="$(uname -m)"
 
@@ -47,6 +53,7 @@ build_image() {
 	sudo -E PATH="${PATH}" make image \
 		DISTRO="${img_distro}" \
 		DEBUG="${DEBUG:-}" \
+		USE_DOCKER="1" \
 		AGENT_VERSION="${agent_version}" \
 		IMG_OS_VERSION="${img_os_version}" \
 		DISTRO_ROOTFS="${tmp_dir}/rootfs-image"
