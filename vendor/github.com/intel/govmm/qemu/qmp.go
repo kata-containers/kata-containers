@@ -561,6 +561,10 @@ func (q *QMP) executeCommand(ctx context.Context, name string, args map[string]i
 // block until they have received a success or failure message from QMP,
 // i.e., {"return": {}} or {"error":{}}, and in some cases certain events
 // are received.
+//
+// QEMU currently requires that the "qmp_capabilties" command is sent before any
+// other command. Therefore you must call qmp.ExecuteQMPCapabilities() before
+// you execute any other command.
 func QMPStart(ctx context.Context, socket string, cfg QMPConfig, disconnectedCh chan struct{}) (*QMP, *QMPVersion, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = qmpNullLogger{}
@@ -653,7 +657,7 @@ func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID string)
 		},
 	}
 
-	if q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 9) {
+	if q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 8) {
 		blockdevArgs["node-name"] = blockdevID
 		args = blockdevArgs
 	} else {
@@ -742,7 +746,12 @@ func (q *QMP) ExecuteBlockdevDel(ctx context.Context, blockdevID string) error {
 		return q.executeCommand(ctx, "blockdev-del", args, nil)
 	}
 
-	args["id"] = blockdevID
+	if q.version.Major == 2 && q.version.Minor == 8 {
+		args["node-name"] = blockdevID
+	} else {
+		args["id"] = blockdevID
+	}
+
 	return q.executeCommand(ctx, "x-blockdev-del", args, nil)
 }
 
@@ -756,6 +765,22 @@ func (q *QMP) ExecuteNetdevAdd(ctx context.Context, netdevType, netdevID, ifname
 		"ifname":     ifname,
 		"downscript": downscript,
 		"script":     script,
+	}
+	if queues > 1 {
+		args["queues"] = queues
+	}
+
+	return q.executeCommand(ctx, "netdev_add", args, nil)
+}
+
+// ExecuteNetdevChardevAdd adds a Net device to a QEMU instance
+// using the netdev_add command. netdevID is the id of the device to add.
+// Must be valid QMP identifier.
+func (q *QMP) ExecuteNetdevChardevAdd(ctx context.Context, netdevType, netdevID, chardev string, queues int) error {
+	args := map[string]interface{}{
+		"type":    netdevType,
+		"id":      netdevID,
+		"chardev": chardev,
 	}
 	if queues > 1 {
 		args["queues"] = queues
@@ -793,7 +818,8 @@ func (q *QMP) ExecuteNetdevDel(ctx context.Context, netdevID string) error {
 // ExecuteNetPCIDeviceAdd adds a Net PCI device to a QEMU instance
 // using the device_add command. devID is the id of the device to add.
 // Must be valid QMP identifier. netdevID is the id of nic added by previous netdev_add.
-func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAddr, addr, bus string) error {
+// queues is the number of queues of a nic.
+func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAddr, addr, bus string, queues int) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": VirtioNetPCI,
@@ -805,6 +831,18 @@ func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAd
 	if bus != "" {
 		args["bus"] = bus
 	}
+
+	if queues > 0 {
+		// (2N+2 vectors, N for tx queues, N for rx queues, 1 for config, and one for possible control vq)
+		// -device virtio-net-pci,mq=on,vectors=2N+2...
+		// enable mq in guest by 'ethtool -L eth0 combined $queue_num'
+		// Clearlinux automatically sets up the queues properly
+		// The agent implementation should do this to ensure that it is
+		// always set
+		args["mq"] = "on"
+		args["vectors"] = 2*queues + 2
+	}
+
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
