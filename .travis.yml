@@ -4,9 +4,19 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-dist: trusty
+os:
+  - linux
+  - osx
+  - linux-ppc64le
+
+matrix:
+  include:
+    - os: linux
+      sudo: required
+      dist: trusty
 
 language: go
+go_import_path: github.com/kata-containers/tests
 
 go:
   - "1.10.x"
@@ -15,5 +25,10 @@ go:
 env:
   - target_branch=$TRAVIS_BRANCH
 
-before_script:
-  - ".ci/static-checks.sh github.com/kata-containers/tests"
+before_install:
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get update -qq              ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get install -y -qq automake ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install bash; fi
+
+script:
+  - bash .ci/static-checks.sh github.com/kata-containers/tests
