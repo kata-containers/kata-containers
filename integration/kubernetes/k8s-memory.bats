@@ -29,6 +29,7 @@ setup() {
 }
 
 @test "Running within memory constraints" {
+	skip "https://github.com/kata-containers/tests/issues/680"	
 	memory_limit_size="200Mi"
 	allocated_size="150M"
 	wait_time=120
