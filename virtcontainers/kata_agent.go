@@ -766,7 +766,7 @@ func (k *kataAgent) rollbackFailingContainerCreation(c *Container) {
 }
 
 func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
-	if c.state.Fstype != "" {
+	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {
 		// The rootfs storage volume represents the container rootfs
 		// mount point inside the guest.
 		// It can be a block based device (when using block based container
@@ -775,23 +775,25 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 		rootfs := &grpc.Storage{}
 
 		// This is a block based device rootfs.
-
-		// Pass a drive name only in case of virtio-blk driver.
-		// If virtio-scsi driver, the agent will be able to find the
-		// device based on the provided address.
-		if sandbox.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
-			rootfs.Driver = kataBlkDevType
-			rootfs.Source = c.state.RootfsPCIAddr
-		} else {
-			scsiAddr, err := utils.GetSCSIAddress(c.state.BlockIndex)
-			if err != nil {
-				return nil, err
-			}
-
-			rootfs.Driver = kataSCSIDevType
-			rootfs.Source = scsiAddr
+		device := sandbox.devManager.GetDeviceByID(c.state.BlockDeviceID)
+		if device == nil {
+			k.Logger().WithField("device", c.state.BlockDeviceID).Error("failed to find device by id")
+			return nil, fmt.Errorf("failed to find device by id %q", c.state.BlockDeviceID)
 		}
 
+		blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
+		if !ok || blockDrive == nil {
+			k.Logger().Error("malformed block drive")
+			return nil, fmt.Errorf("malformed block drive")
+		}
+
+		if sandbox.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
+			rootfs.Driver = kataBlkDevType
+			rootfs.Source = blockDrive.VirtPath
+		} else {
+			rootfs.Driver = kataSCSIDevType
+			rootfs.Source = blockDrive.SCSIAddr
+		}
 		rootfs.MountPoint = rootPathParent
 		rootfs.Fstype = c.state.Fstype
 
@@ -801,6 +803,7 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 
 		return rootfs, nil
 	}
+
 	// This is not a block based device rootfs.
 	// We are going to bind mount it into the 9pfs
 	// shared drive between the host and the guest.

@@ -200,12 +200,12 @@ func (v *VM) ReseedRNG() error {
 	data := make([]byte, 512)
 	f, err := os.OpenFile(urandomDev, os.O_RDONLY, 0)
 	if err != nil {
-		v.logger().WithError(err).Warn("fail to open %s", urandomDev)
+		v.logger().WithError(err).Warnf("fail to open %s", urandomDev)
 		return err
 	}
 	defer f.Close()
 	if _, err = f.Read(data); err != nil {
-		v.logger().WithError(err).Warn("fail to read %s", urandomDev)
+		v.logger().WithError(err).Warnf("fail to read %s", urandomDev)
 		return err
 	}
 

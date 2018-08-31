@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -15,6 +16,10 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/stretchr/testify/assert"
 )
@@ -83,7 +88,11 @@ func TestContainerSandbox(t *testing.T) {
 }
 
 func TestContainerRemoveDrive(t *testing.T) {
-	sandbox := &Sandbox{}
+	sandbox := &Sandbox{
+		id:         "sandbox",
+		devManager: manager.NewDeviceManager(manager.VirtioSCSI, nil),
+		storage:    &filesystem{},
+	}
 
 	container := Container{
 		sandbox: sandbox,
@@ -95,26 +104,35 @@ func TestContainerRemoveDrive(t *testing.T) {
 
 	// hotplugRemoveDevice for hypervisor should not be called.
 	// test should pass without a hypervisor created for the container's sandbox.
-	if err != nil {
-		t.Fatal("")
+	assert.Nil(t, err, "remove drive should succeed")
+
+	sandbox.hypervisor = &mockHypervisor{}
+	path := "/dev/hda"
+	deviceInfo := config.DeviceInfo{
+		HostPath:      path,
+		ContainerPath: path,
+		DevType:       "b",
 	}
+	devReceiver := &api.MockDeviceReceiver{}
+
+	device, err := sandbox.devManager.NewDevice(deviceInfo)
+	assert.Nil(t, err)
+	_, ok := device.(*drivers.BlockDevice)
+	assert.True(t, ok)
+	err = device.Attach(devReceiver)
+	assert.Nil(t, err)
+	err = sandbox.storage.createAllResources(context.Background(), sandbox)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = sandbox.storeSandboxDevices()
+	assert.Nil(t, err)
 
 	container.state.Fstype = "xfs"
-	container.state.HotpluggedDrive = false
+	container.state.BlockDeviceID = device.DeviceID()
 	err = container.removeDrive()
-
-	// hotplugRemoveDevice for hypervisor should not be called.
-	if err != nil {
-		t.Fatal("")
-	}
-
-	container.state.HotpluggedDrive = true
-	sandbox.hypervisor = &mockHypervisor{}
-	err = container.removeDrive()
-
-	if err != nil {
-		t.Fatal()
-	}
+	assert.Nil(t, err, "remove drive should succeed")
 }
 
 func testSetupFakeRootfs(t *testing.T) (testRawFile, loopDev, mntDir string, err error) {
@@ -197,6 +215,7 @@ func TestContainerAddDriveDir(t *testing.T) {
 	fs := &filesystem{}
 	sandbox := &Sandbox{
 		id:         testSandboxID,
+		devManager: manager.NewDeviceManager(manager.VirtioSCSI, nil),
 		storage:    fs,
 		hypervisor: &mockHypervisor{},
 		agent:      &noopAgent{},
@@ -243,14 +262,13 @@ func TestContainerAddDriveDir(t *testing.T) {
 	}()
 
 	container.state.Fstype = ""
-	container.state.HotpluggedDrive = false
 
 	err = container.hotplugDrive()
 	if err != nil {
 		t.Fatalf("Error with hotplugDrive :%v", err)
 	}
 
-	if container.state.Fstype == "" || !container.state.HotpluggedDrive {
+	if container.state.Fstype == "" {
 		t.Fatal()
 	}
 }
