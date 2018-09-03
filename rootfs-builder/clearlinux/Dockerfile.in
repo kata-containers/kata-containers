@@ -7,7 +7,7 @@ From fedora:27
 
 @SET_PROXY@
 
-RUN dnf -y update && dnf install -y git systemd pkgconfig gcc coreutils
+RUN dnf -y update && dnf install -y git systemd pkgconfig gcc coreutils libseccomp libseccomp-devel
 
 # This will install the proper golang to build Kata components
 @INSTALL_GO@
