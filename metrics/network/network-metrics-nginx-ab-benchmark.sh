@@ -14,8 +14,6 @@ set -e
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../lib/common.bash"
 
-# Test name
-TEST_NAME="${TEST_NAME:-network nginx ab benchmark}"
 # Ports where it will run
 port="${port:-80:80}"
 # Image name
@@ -29,14 +27,22 @@ requests="${requests:-10000}"
 start_time="${start_time:-2}"
 # File to save ab results
 TMP_FILE=$(mktemp results.XXXXXXXXXX)
-# Concurrency
-concurrency="${concurrency:-100}"
+# Maximum number of seconds to wait before
+# the  socket  times  out
+socket_time="${socket_time:-120}"
 
 function remove_tmp_file {
 	rm -rf $TMP_FILE
 }
 
 trap remove_tmp_file EXIT
+
+function concurrency {
+	local concurrency_value=$1
+	local TEST_NAME="${TEST_NAME:-network nginx ab benchmark with ${concurrency_value} concurrency}"
+	local result="$(nginx_ab_networking)"
+	save_results "$TEST_NAME"
+}
 
 function save_config {
 	metrics_json_start_array
@@ -45,7 +51,7 @@ function save_config {
 	{
 		"image": "$image",
 		"requests": "$requests",
-		"concurrency" : "$concurrency"
+		"concurrency" : "$concurrency_value"
 	}
 EOF
 )"
@@ -53,21 +59,31 @@ EOF
 	metrics_json_end_array "Config"
 }
 
-function main {
-	# Check tools/commands dependencies
-	cmds=("ab" "awk")
-	check_cmds "${cmds[@]}"
+function help {
+echo "$(cat << EOF
+Usage: $0 "[options]"
+	Description:
+		This test measures the request per second from the interconnection
+		between a server container and the host using ab tool.
+	Options:
+		-n      Run with other concurrency value (enter the value)
+		-h      Shows help
+EOF
+)"
+}
 
-	# Initialize/clean environment
-	init_env
-	check_images "$image"
-
+function nginx_ab_networking {
 	# Launch nginx container
 	docker run -d -p $port $image
 	echo >&2 "WARNING: sleeping for $start_time seconds to let the container start correctly"
 	sleep "$start_time"
-	ab -n ${requests} -c ${concurrency} http://${url}/ > $TMP_FILE
+	ab -s ${socket_time} -n ${requests} -r -c ${concurrency_value} http://${url}/ > $TMP_FILE
 
+	clean_env
+}
+
+function save_results {
+	local TEST_NAME="$1"
 	metrics_json_init
 	save_config
 
@@ -96,8 +112,45 @@ EOF
 	metrics_json_add_array_element "$json"
 	metrics_json_end_array "Results"
 	metrics_json_save
-
-	clean_env
 }
 
+function main() {
+	local OPTIND
+	while getopts ":h:n:" opt
+	do
+		case "$opt" in
+		n)	# Run with specific concurrency value
+			concurrency_value="$OPTARG"
+			;;
+		h)
+			help
+			exit 0;
+			;;
+		\?)
+			echo "An invalid option has been entered: -$OPTARG";
+			help
+			exit 1;
+			;;
+		:)
+			echo "Missing argument for -$OPTARG";
+			help
+			exit 1;
+			;;
+		esac
+	done
+	shift $((OPTIND-1))
+
+	[[ -z "$concurrency_value" ]] && \
+		help && die "Must choose at least one test"
+
+	# Check tools/commands dependencies
+	cmds=("ab" "awk")
+	check_cmds "${cmds[@]}"
+
+	# Initialize/clean environment
+	init_env
+	check_images "$image"
+
+	concurrency $concurrency_value
+}
 main "$@"
