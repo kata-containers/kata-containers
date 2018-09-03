@@ -121,7 +121,6 @@ var _ = Describe("docker volume", func() {
 
 	Context("passing a block device", func() {
 		It("should be mounted", func() {
-			Skip("Issue: https://github.com/kata-containers/runtime/issues/677")
 			diskFile, loopFile, err = createLoopDevice()
 			Expect(err).ToNot(HaveOccurred())
 
