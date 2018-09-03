@@ -92,7 +92,12 @@ To merge all logs:
    ```
    $ sudo chown $USER *.log
    ```
-1. Run the script:
+1. To install the program:
+   ```
+   $ go get -d github.com/kata-containers/tests
+   $ pushd $GOPATH/src/github.com/kata-containers/tests/cmd/log-parser && make install && popd
+   ```
+1. To run the program:
    ```
    $ kata-log-parser proxy.log runtime.log shim.log
    ```
