@@ -6,5 +6,5 @@
 From golang:@GO_VERSION@-alpine3.7
 
 # The "coreutils" package on alpine for reasons unknown does not provide arch(1), so simulate it.
-RUN apk update && apk add git make bash gcc musl-dev linux-headers apk-tools-static && \
+RUN apk update && apk add git make bash gcc musl-dev linux-headers apk-tools-static libseccomp libseccomp-dev && \
     echo -e '#!/bin/sh\nuname -m' > /usr/bin/arch && chmod +x /usr/bin/arch
