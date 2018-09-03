@@ -122,7 +122,7 @@ spun_stats = as_tibble(cbind(What=names(stats), t(stats)))
 
 # Build us a text table of numerical results
 stats_plot = suppressWarnings(ggtexttable(data.frame(spun_stats, check.names=FALSE),
-	theme=ttheme(base_size=8),
+	theme=ttheme(base_size=6),
 	rows=NULL
 	))
 
