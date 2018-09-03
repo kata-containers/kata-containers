@@ -684,6 +684,7 @@ func constraintGRPCSpec(grpcSpec *grpc.Spec) {
 	var tmpNamespaces []grpc.LinuxNamespace
 	for _, ns := range grpcSpec.Linux.Namespaces {
 		switch ns.Type {
+		case specs.CgroupNamespace:
 		case specs.NetworkNamespace:
 		default:
 			ns.Path = ""
