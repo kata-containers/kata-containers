@@ -11,6 +11,7 @@ cidir=$(dirname "$0")
 source /etc/os-release
 source "${cidir}/lib.sh"
 
+check_gopath
 apply_depends_on
 
 arch=$("${cidir}"/kata-arch.sh -d)

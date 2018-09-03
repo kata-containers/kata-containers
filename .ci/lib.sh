@@ -124,6 +124,12 @@ function get_version(){
 	echo "$result"
 }
 
+function check_gopath() {
+	# Verify GOPATH is set
+	if [ -z "$GOPATH" ]; then
+		export GOPATH=$(go env GOPATH)
+	fi
+}
 
 function apply_depends_on() {
 	pushd "${GOPATH}/src/${kata_repo}"
