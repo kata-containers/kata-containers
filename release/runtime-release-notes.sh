@@ -41,6 +41,13 @@ EOT
 	exit "${return_code}"
 }
 
+repos=(
+	"agent"
+	"proxy"
+	"runtime"
+	"shim"
+)
+
 get_release_info() {
 
 	docker_version=$(get_from_kata_deps "externals.docker.version" "${new_release}")
@@ -60,20 +67,13 @@ get_release_info() {
 	kata_kernel_config_version="${new_release}-kernel-config"
 	kata_kernel_config_version="${new_release}-kernel-config"
 
-	runtime_version=$(cat "./VERSION")
+	runtime_version=${new_release}
 }
 
 changes() {
-	echo "## Changes"
 	echo "**FIXME - massage this section by hand to produce a summary please**"
-	git log --merges "${previous_release}".."${new_release}" | awk '/Merge pull/{getline; getline;print }' |
-		while read -r pr; do
-			echo "- ${pr}"
-		done
 
-	echo ""
-
-	echo "## Shortlog"
+	echo "### Shortlog"
 	for cr in $(git log --merges "${previous_release}".."${new_release}" | grep 'Merge:' | awk '{print $2".."$3}'); do
 		git log --oneline "$cr"
 	done
@@ -83,7 +83,22 @@ print_release_notes() {
 	cat <<EOT
 # Release ${runtime_version}
 
+EOT
+
+	for repo in "${repos[@]}"; do
+		git clone -q "https://github.com/${project}/${repo}.git" "${tmp_dir}/${repo}"
+		pushd "${tmp_dir}/${repo}" >>/dev/null
+
+		cat <<EOT
+## ${repo} Changes
 $(changes)
+
+EOT
+		popd >>/dev/null
+		rm -rf "${tmp_dir}/${repo}"
+	done
+
+	cat <<EOT
 
 ## Compatibility with Docker
 Kata Containers ${runtime_version} is compatible with Docker ${docker_version}
@@ -91,7 +106,7 @@ Kata Containers ${runtime_version} is compatible with Docker ${docker_version}
 ## Compatibility with CRI-O
 Kata Containers ${runtime_version} is compatible with CRI-O ${crio_version}
 
-## Compatibility with cri-contaienrd
+## Compatibility with cri-containerd
 Kata Containers ${runtime_version} is compatible with cri-contaienrd ${cri_containerd_version}
 
 ## OCI Runtime Specification
@@ -133,8 +148,6 @@ EOT
 main() {
 	previous_release=${1:-}
 	new_release=${2:-}
-	git clone -q "https://github.com/${project}/runtime.git" "${tmp_dir}/runtime"
-	pushd "${tmp_dir}/runtime" >>/dev/null
 	if [ -z "${previous_release}" ]; then
 		echo "previous-release not provided"
 		usage 1
@@ -145,7 +158,6 @@ main() {
 	fi
 	get_release_info
 	print_release_notes
-	popd >>/dev/null
 }
 
 main "$@"
