@@ -23,11 +23,6 @@ ITERATIONS="${ITERATIONS:-5}"
 # We choose 2G, as that is one of the default VM sizes for Kata
 MEM_CUTOFF="${MEM_CUTOFF:-(2*1024*1024*1024)}"
 
-# The default container/workload we run for testing
-# nginx has show up issues in the past, for whatever reason, so
-# let's default to that
-PAYLOAD="${PAYLOAD:-nginx:1.14}"
-
 # do we need a command argument for this payload?
 COMMAND="${COMMAND:-}"
 
@@ -147,8 +142,8 @@ go() {
 	while true; do {
 		check_all_running
 
-		echo "Run $RUNTIME: $PAYLOAD: $COMMAND"
-		docker run --runtime=${RUNTIME} -tid ${PAYLOAD} ${COMMAND}
+		echo "Run $RUNTIME: $nginx_image: $COMMAND"
+		docker run --runtime=${RUNTIME} -tid ${nginx_image} ${COMMAND}
 
 		((how_many++))
 		if (( ${how_many} >= ${MAX_CONTAINERS} )); then
@@ -200,10 +195,14 @@ init() {
 		check_kata_components=0
 	fi
 
+	versions_file="${cidir}/../../versions.yaml"
+	nginx_version=$("${GOPATH}/bin/yq" read "$versions_file" "docker_images.nginx.version")
+	nginx_image="nginx:$nginx_version"
+
 	# Pull nginx image
-	docker pull ${PAYLOAD}
+	docker pull ${nginx_image}
 	if [ $? != 0 ]; then
-		die "Unable to retry docker image ${PAYLOAD}"
+		die "Unable to retry docker image ${nginx_image}"
 	fi
 }
 

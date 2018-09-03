@@ -16,8 +16,6 @@ source "${SCRIPT_PATH}/../lib/common.bash"
 
 # Ports where it will run
 port="${port:-80:80}"
-# Image name
-image="${image:-nginx:1.14}"
 # Url
 url="${url:-localhost:80}"
 # Number of requests to perform
@@ -74,7 +72,7 @@ EOF
 
 function nginx_ab_networking {
 	# Launch nginx container
-	docker run -d -p $port $image
+	docker run -d -p $port $nginx_image
 	echo >&2 "WARNING: sleeping for $start_time seconds to let the container start correctly"
 	sleep "$start_time"
 	ab -s ${socket_time} -n ${requests} -r -c ${concurrency_value} http://${url}/ > $TMP_FILE
@@ -149,7 +147,10 @@ function main() {
 
 	# Initialize/clean environment
 	init_env
-	check_images "$image"
+	versions_file="${SCRIPT_PATH}/../../versions.yaml"
+	nginx_version=$("${GOPATH}/bin/yq" read "$versions_file" "docker_images.nginx.version")
+	nginx_image="nginx:$nginx_version"
+	check_images "$nginx_image"
 
 	concurrency $concurrency_value
 }

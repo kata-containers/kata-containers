@@ -1,0 +1,13 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+docker_images:
+  description: "Docker hub images used for testing"
+
+  nginx:
+    description: "Proxy server for HTTP, HTTPS, SMTP, POP3 and IMAP protocols"
+    url: "https://hub.docker.com/_/nginx/"
+    version: "1.14"
