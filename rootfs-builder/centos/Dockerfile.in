@@ -7,7 +7,7 @@ From centos:@OS_VERSION@
 
 @SET_PROXY@
 
-RUN yum -y update && yum install -y git make gcc coreutils
+RUN yum -y update && yum install -y git make gcc coreutils libseccomp libseccomp-devel
 
 # This will install the proper golang to build Kata components
 @INSTALL_GO@
