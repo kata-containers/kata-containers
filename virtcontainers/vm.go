@@ -62,7 +62,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		}
 	}()
 
-	if err = hypervisor.init(ctx, id, &config.HypervisorConfig, Resources{}, &filesystem{}); err != nil {
+	if err = hypervisor.init(ctx, id, &config.HypervisorConfig, &filesystem{}); err != nil {
 		return nil, err
 	}
 

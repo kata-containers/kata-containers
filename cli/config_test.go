@@ -166,10 +166,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 
 		ShimType:   defaultShim,
 		ShimConfig: shimConfig,
-
-		VMConfig: vc.Resources{
-			Memory: uint(defaultMemSize),
-		},
 	}
 
 	config = testRuntimeConfig{
@@ -1196,12 +1192,10 @@ func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 	assert := assert.New(t)
 
 	vcpus := uint(2)
-	mem := uint(2048)
+	mem := uint32(2048)
 
 	config := oci.RuntimeConfig{}
-	expectedVMConfig := vc.Resources{
-		Memory: mem,
-	}
+	expectedVMConfig := mem
 
 	tomlConf := tomlConfig{
 		Hypervisor: map[string]hypervisor{
@@ -1219,7 +1213,7 @@ func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 	err := updateRuntimeConfig("", tomlConf, &config)
 	assert.NoError(err)
 
-	assert.Equal(expectedVMConfig, config.VMConfig)
+	assert.Equal(expectedVMConfig, config.HypervisorConfig.DefaultMemSz)
 }
 
 func TestUpdateRuntimeConfigurationFactoryConfig(t *testing.T) {

@@ -87,7 +87,7 @@ func TestQemuInit(t *testing.T) {
 		t.Fatalf("Could not create parent directory %s: %v", parentDir, err)
 	}
 
-	if err := q.init(context.Background(), sandbox.id, &sandbox.config.HypervisorConfig, sandbox.config.VMConfig, sandbox.storage); err != nil {
+	if err := q.init(context.Background(), sandbox.id, &sandbox.config.HypervisorConfig, sandbox.storage); err != nil {
 		t.Fatal(err)
 	}
 
@@ -118,7 +118,7 @@ func TestQemuInitMissingParentDirFail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := q.init(context.Background(), sandbox.id, &sandbox.config.HypervisorConfig, sandbox.config.VMConfig, sandbox.storage); err != nil {
+	if err := q.init(context.Background(), sandbox.id, &sandbox.config.HypervisorConfig, sandbox.storage); err != nil {
 		t.Fatalf("Qemu init() is not expected to fail because of missing parent directory for storage: %v", err)
 	}
 }
@@ -166,10 +166,6 @@ func TestQemuMemoryTopology(t *testing.T) {
 		Size:   fmt.Sprintf("%dM", mem),
 		Slots:  defaultMemSlots,
 		MaxMem: memMax,
-	}
-
-	q.vmConfig = Resources{
-		Memory: uint(mem),
 	}
 
 	memory, err := q.memoryTopology()

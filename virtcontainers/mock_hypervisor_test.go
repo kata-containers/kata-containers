@@ -29,7 +29,7 @@ func TestMockHypervisorInit(t *testing.T) {
 	ctx := context.Background()
 
 	// wrong config
-	if err := m.init(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.config.VMConfig, sandbox.storage); err == nil {
+	if err := m.init(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.storage); err == nil {
 		t.Fatal()
 	}
 
@@ -40,7 +40,7 @@ func TestMockHypervisorInit(t *testing.T) {
 	}
 
 	// right config
-	if err := m.init(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.config.VMConfig, sandbox.storage); err != nil {
+	if err := m.init(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.storage); err != nil {
 		t.Fatal(err)
 	}
 }

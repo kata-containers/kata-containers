@@ -173,6 +173,7 @@ func buildSandboxConfig(context *cli.Context) (vc.SandboxConfig, error) {
 		KernelPath:            kernelPath,
 		ImagePath:             "/usr/share/clear-containers/clear-containers.img",
 		HypervisorMachineType: machineType,
+		DefaultMemSz:          uint32(vmMemory),
 	}
 
 	if err := buildKernelParams(&hypervisorConfig); err != nil {
@@ -195,10 +196,6 @@ func buildSandboxConfig(context *cli.Context) (vc.SandboxConfig, error) {
 
 	shimConfig := getShimConfig(*shimType, shimPath)
 
-	vmConfig := vc.Resources{
-		Memory: vmMemory,
-	}
-
 	id := context.String("id")
 	if id == "" {
 		// auto-generate sandbox name
@@ -206,8 +203,7 @@ func buildSandboxConfig(context *cli.Context) (vc.SandboxConfig, error) {
 	}
 
 	sandboxConfig := vc.SandboxConfig{
-		ID:       id,
-		VMConfig: vmConfig,
+		ID: id,
 
 		HypervisorType:   vc.QemuHypervisor,
 		HypervisorConfig: hypervisorConfig,

@@ -319,9 +319,6 @@ type SandboxConfig struct {
 
 	Hostname string
 
-	// VMConfig is the VM configuration to set for this sandbox.
-	VMConfig Resources
-
 	HypervisorType   HypervisorType
 	HypervisorConfig HypervisorConfig
 
@@ -830,7 +827,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		}
 	}()
 
-	if err = s.hypervisor.init(ctx, s.id, &sandboxConfig.HypervisorConfig, sandboxConfig.VMConfig, s.storage); err != nil {
+	if err = s.hypervisor.init(ctx, s.id, &sandboxConfig.HypervisorConfig, s.storage); err != nil {
 		return nil, err
 	}
 

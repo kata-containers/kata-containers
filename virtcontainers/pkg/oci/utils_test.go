@@ -252,18 +252,17 @@ func TestMinimalSandboxConfig(t *testing.T) {
 	}
 }
 
-func TestVmConfig(t *testing.T) {
+func TestUpdateVmConfig(t *testing.T) {
 	var limitBytes int64 = 128 * 1024 * 1024
+	assert := assert.New(t)
 
 	config := RuntimeConfig{
-		VMConfig: vc.Resources{
-			Memory: 2048,
+		HypervisorConfig: vc.HypervisorConfig{
+			DefaultMemSz: 2048,
 		},
 	}
 
-	expectedResources := vc.Resources{
-		Memory: 128,
-	}
+	expectedMem := uint32(128)
 
 	ocispec := CompatOCISpec{
 		Spec: specs.Spec{
@@ -277,48 +276,28 @@ func TestVmConfig(t *testing.T) {
 		},
 	}
 
-	resources, err := vmConfig(ocispec, config)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(resources, expectedResources) == false {
-		t.Fatalf("Got %v\n expecting %v", resources, expectedResources)
-	}
+	err := updateVMConfig(ocispec, &config)
+	assert.Nil(err)
+	assert.Equal(config.HypervisorConfig.DefaultMemSz, expectedMem)
 
 	limitBytes = -128 * 1024 * 1024
 	ocispec.Linux.Resources.Memory.Limit = &limitBytes
 
-	resources, err = vmConfig(ocispec, config)
-	if err == nil {
-		t.Fatalf("Got %v\n expecting error", resources)
-	}
+	err = updateVMConfig(ocispec, &config)
+	assert.NotNil(err)
 
 	// Test case when Memory is nil
 	ocispec.Spec.Linux.Resources.Memory = nil
-	expectedResources.Memory = config.VMConfig.Memory
-	resources, err = vmConfig(ocispec, config)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(resources, expectedResources) == false {
-		t.Fatalf("Got %v\n expecting %v", resources, expectedResources)
-	}
+	err = updateVMConfig(ocispec, &config)
+	assert.Nil(err)
 
 	// Test case when CPU is nil
 	ocispec.Spec.Linux.Resources.CPU = nil
 	limitBytes = 20
 	ocispec.Linux.Resources.Memory = &specs.LinuxMemory{Limit: &limitBytes}
-	expectedResources.Memory = 1
-	resources, err = vmConfig(ocispec, config)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(resources, expectedResources) == false {
-		t.Fatalf("Got %v\n expecting %v", resources, expectedResources)
-	}
+	err = updateVMConfig(ocispec, &config)
+	assert.Nil(err)
+	assert.NotEqual(config.HypervisorConfig.DefaultMemSz, expectedMem)
 }
 
 func testStatusToOCIStateSuccessful(t *testing.T, cStatus vc.ContainerStatus, expected specs.State) {
