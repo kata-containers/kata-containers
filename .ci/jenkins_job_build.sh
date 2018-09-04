@@ -50,8 +50,13 @@ mkdir -p $(dirname "${tests_repo_dir}")
 mkdir -p $(dirname "${kata_repo_dir}")
 [ -d "${kata_repo_dir}" ] || git clone "https://${kata_repo}.git" "${kata_repo_dir}"
 
-pushd "${kata_repo_dir}"
+# If CI running on bare-metal, a few clean-up work before walking into test repo
+if [ "${BAREMETAL}" == true ]; then
+	clean_up_script="${tests_repo_dir}/.ci/${arch}/clean_up_${arch}.sh"
+	[ -f "${clean_up_script}" ] && source "${clean_up_script}"
+fi
 
+pushd "${kata_repo_dir}"
 
 # Variables needed when we test a PR.
 pr_number=
