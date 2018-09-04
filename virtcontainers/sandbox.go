@@ -973,19 +973,22 @@ func (s *Sandbox) createNetwork() error {
 	span, _ := s.trace("createNetwork")
 	defer span.Finish()
 
+	s.networkNS = NetworkNamespace{
+		NetNsPath:    s.config.NetworkConfig.NetNSPath,
+		NetNsCreated: s.config.NetworkConfig.NetNsCreated,
+	}
+
 	// In case there is a factory, the network should be handled
 	// through some calls at the API level, in order to add or
 	// remove interfaces and routes.
 	// This prevents from any assumptions that could be made from
 	// virtcontainers, in particular that the VM has not been started
 	// before it starts to scan the current network.
-	if s.factory != nil {
-		return nil
-	}
-
-	// Add the network
-	if err := s.network.add(s); err != nil {
-		return err
+	if s.factory == nil {
+		// Add the network
+		if err := s.network.add(s); err != nil {
+			return err
+		}
 	}
 
 	// Store the network
@@ -1117,8 +1120,6 @@ func (s *Sandbox) startVM() error {
 			if err != nil {
 				return err
 			}
-			// FIXME: factory vm needs network hotplug to add Nics.
-			s.networkNS.NetNsPath = ""
 			return nil
 		}
 
