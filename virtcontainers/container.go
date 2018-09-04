@@ -890,6 +890,12 @@ func (c *Container) stop() error {
 	// stopContainer() to succeed in such particular case.
 	c.kill(syscall.SIGKILL, true)
 
+	// Since the agent has supported the MultiWaitProcess, it's better to
+	// wait the process here to make sure the process has exited before to
+	// issue stopContainer, otherwise the RemoveContainerRequest in it will
+	// get failed if the process hasn't exited.
+	c.sandbox.agent.waitProcess(c, c.id)
+
 	if err := c.sandbox.agent.stopContainer(c.sandbox, *c); err != nil {
 		return err
 	}
