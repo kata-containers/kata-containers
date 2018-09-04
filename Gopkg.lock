@@ -130,14 +130,14 @@
   revision = "032705ba6aae05a9bf41e296cf89c8529cffb822"
 
 [[projects]]
-  digest = "1:01c37fcb6e2a1fe1321a97faaef74c66ac531ea292ca3f929b7189cc400b1d47"
+  digest = "1:aec1ed6dbfffe247e5a8a9e3102206fe97552077e10ea44e3e35dce98ab6e5aa"
   name = "github.com/kata-containers/agent"
   packages = [
     "protocols/client",
     "protocols/grpc",
   ]
   pruneopts = "NUT"
-  revision = "46396d205bf096db4e69fcfa319525858ce8050c"
+  revision = "7c95a50ef97052bf7f5566dcca53d6611f7458ac"
 
 [[projects]]
   digest = "1:04054595e5c5a35d1553a7f3464d18577caf597445d643992998643df56d4afd"
