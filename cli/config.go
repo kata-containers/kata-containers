@@ -403,8 +403,6 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 				return fmt.Errorf("%v: %v", configPath, err)
 			}
 
-			config.VMConfig.Memory = uint(hConfig.DefaultMemSz)
-
 			config.HypervisorConfig = hConfig
 		}
 	}

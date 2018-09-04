@@ -100,8 +100,6 @@ type FactoryConfig struct {
 
 // RuntimeConfig aggregates all runtime specific settings
 type RuntimeConfig struct {
-	VMConfig vc.Resources
-
 	HypervisorType   vc.HypervisorType
 	HypervisorConfig vc.HypervisorConfig
 
@@ -406,25 +404,23 @@ func (spec *CompatOCISpec) SandboxID() (string, error) {
 	return "", fmt.Errorf("Could not find sandbox ID")
 }
 
-func vmConfig(ocispec CompatOCISpec, config RuntimeConfig) (vc.Resources, error) {
-	resources := config.VMConfig
-
+func updateVMConfig(ocispec CompatOCISpec, config *RuntimeConfig) error {
 	if ocispec.Linux == nil || ocispec.Linux.Resources == nil {
-		return resources, nil
+		return nil
 	}
 
 	if ocispec.Linux.Resources.Memory != nil &&
 		ocispec.Linux.Resources.Memory.Limit != nil {
 		memBytes := *ocispec.Linux.Resources.Memory.Limit
 		if memBytes <= 0 {
-			return vc.Resources{}, fmt.Errorf("Invalid OCI memory limit %d", memBytes)
+			return fmt.Errorf("Invalid OCI memory limit %d", memBytes)
 		}
 		// Use some math magic to round up to the nearest Mb.
 		// This has the side effect that we can never have <1Mb assigned.
-		resources.Memory = uint((memBytes + (1024*1024 - 1)) / (1024 * 1024))
+		config.HypervisorConfig.DefaultMemSz = uint32((memBytes + (1024*1024 - 1)) / (1024 * 1024))
 	}
 
-	return resources, nil
+	return nil
 }
 
 func addAssetAnnotations(ocispec CompatOCISpec, config *vc.SandboxConfig) {
@@ -465,7 +461,7 @@ func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid
 		return vc.SandboxConfig{}, err
 	}
 
-	resources, err := vmConfig(ocispec, runtime)
+	err = updateVMConfig(ocispec, &runtime)
 	if err != nil {
 		return vc.SandboxConfig{}, err
 	}
@@ -479,8 +475,6 @@ func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid
 		ID: cid,
 
 		Hostname: ocispec.Hostname,
-
-		VMConfig: resources,
 
 		HypervisorType:   runtime.HypervisorType,
 		HypervisorConfig: runtime.HypervisorConfig,
