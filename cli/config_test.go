@@ -469,6 +469,8 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 	shimPath := path.Join(dir, "shim")
 	proxyPath := path.Join(dir, "proxy")
+	hypervisorPath := path.Join(dir, "hypervisor")
+	defaultHypervisorPath = hypervisorPath
 
 	runtimeMinimalConfig := `
 	# Runtime configuration file
@@ -499,6 +501,11 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	}
 
 	err = createEmptyFile(proxyPath)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = createEmptyFile(hypervisorPath)
 	if err != nil {
 		t.Error(err)
 	}
