@@ -20,7 +20,10 @@ language: go
 go_import_path: github.com/kata-containers/shim
 
 go:
-  - 1.8
+  - "1.10.x"
+
+env:
+  - target_branch=$TRAVIS_BRANCH
 
 before_script:
   - ".ci/static-checks.sh"
