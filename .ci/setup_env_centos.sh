@@ -77,3 +77,6 @@ chronic sudo -E yum install -y crudini
 
 echo "Install procenv"
 chronic sudo -E yum install -y procenv
+
+echo "Install haveged"
+chronic sudo -E yum install -y haveged

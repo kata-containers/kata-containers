@@ -29,6 +29,8 @@ else
 	exit 1
 fi
 
+sudo systemctl start haveged
+
 if ! command -v docker > /dev/null; then
         "${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker install
 fi

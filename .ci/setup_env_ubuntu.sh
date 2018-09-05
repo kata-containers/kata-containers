@@ -72,3 +72,6 @@ chronic sudo -E apt install -y crudini
 
 echo "Install procenv"
 chronic sudo -E apt install -y procenv
+
+echo "Install haveged"
+chronic sudo -E apt install -y haveged
