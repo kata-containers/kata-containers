@@ -44,7 +44,7 @@ die() {
 }
 
 ci_config() {
-	source /etc/os-release
+	source /etc/os-release || source /usr/lib/os-release
 	ID=${ID:-""}
 	if [ "$ID" == ubuntu ] &&  [ -n "${CI}" ] ;then
 		# https://github.com/kata-containers/tests/issues/352
@@ -55,7 +55,7 @@ ci_config() {
 }
 
 ci_cleanup() {
-	source /etc/os-release
+	source /etc/os-release || source /usr/lib/os-release
 	ID=${ID:-""}
 	if [ "$ID" == ubuntu ] &&  [ -n "${CI}" ] ;then
 		[ -f "${kata_config}" ] && sudo rm "${kata_config}"

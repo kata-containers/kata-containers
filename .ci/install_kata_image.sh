@@ -11,7 +11,7 @@ set -o pipefail
 
 cidir=$(dirname "$0")
 
-source /etc/os-release
+source /etc/os-release || source /usr/lib/os-release
 source "${cidir}/lib.sh"
 
 ARCH="$(${cidir}/kata-arch.sh -d)"

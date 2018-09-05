@@ -9,7 +9,7 @@ set -e
 
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
-source /etc/os-release
+source /etc/os-release || source /usr/lib/os-release
 
 CURRENT_QEMU_COMMIT=$(get_version "assets.hypervisor.qemu-lite.commit")
 PACKAGED_QEMU="qemu-lite"

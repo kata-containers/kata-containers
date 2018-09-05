@@ -16,7 +16,7 @@ set -o pipefail
 
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
-source "/etc/os-release"
+source "/etc/os-release" || source "/usr/lib/os-release"
 
 kernel_repo_name="packaging"
 kernel_repo_owner="kata-containers"

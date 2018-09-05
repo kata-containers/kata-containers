@@ -350,7 +350,7 @@ cmd_reset_config()
 
 setup()
 {
-	source /etc/os-release
+	source /etc/os-release || source /usr/lib/os-release
 
 	distro=$ID
 }
