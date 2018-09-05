@@ -51,7 +51,7 @@ IFS=''
 pushd "${crio_repository_path}/test/"
 for i in "${skipCRIOTests[@]}"
 do
-	sed -i '/'${i}'/a skip \"This is not working (Issue https://github.com/kata-containers/agent/issues/138)\"' "$GOPATH/src/${crio_repository}/test/ctr.bats"
+	sed -i '/'${i}'/a skip \"This is not working (Issue https://github.com/kata-containers/tests/issues/714)\"' "$GOPATH/src/${crio_repository}/test/ctr.bats"
 done
 
 IFS=$OLD_IFS
