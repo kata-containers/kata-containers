@@ -258,7 +258,7 @@ func TestUpdateVmConfig(t *testing.T) {
 
 	config := RuntimeConfig{
 		HypervisorConfig: vc.HypervisorConfig{
-			DefaultMemSz: 2048,
+			MemorySize: 2048,
 		},
 	}
 
@@ -278,7 +278,7 @@ func TestUpdateVmConfig(t *testing.T) {
 
 	err := updateVMConfig(ocispec, &config)
 	assert.Nil(err)
-	assert.Equal(config.HypervisorConfig.DefaultMemSz, expectedMem)
+	assert.Equal(config.HypervisorConfig.MemorySize, expectedMem)
 
 	limitBytes = -128 * 1024 * 1024
 	ocispec.Linux.Resources.Memory.Limit = &limitBytes
@@ -297,7 +297,7 @@ func TestUpdateVmConfig(t *testing.T) {
 	ocispec.Linux.Resources.Memory = &specs.LinuxMemory{Limit: &limitBytes}
 	err = updateVMConfig(ocispec, &config)
 	assert.Nil(err)
-	assert.NotEqual(config.HypervisorConfig.DefaultMemSz, expectedMem)
+	assert.NotEqual(config.HypervisorConfig.MemorySize, expectedMem)
 }
 
 func testStatusToOCIStateSuccessful(t *testing.T, cStatus vc.ContainerStatus, expected specs.State) {

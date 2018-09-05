@@ -94,8 +94,8 @@ func (f *factory) log() *logrus.Entry {
 }
 
 func resetHypervisorConfig(config *vc.HypervisorConfig) {
-	config.DefaultVCPUs = 0
-	config.DefaultMemSz = 0
+	config.NumVCPUs = 0
+	config.MemorySize = 0
 	config.BootToBeTemplate = false
 	config.BootFromTemplate = false
 	config.MemoryPath = ""
@@ -175,16 +175,16 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 
 	online := false
 	baseConfig := f.base.Config().HypervisorConfig
-	if baseConfig.DefaultVCPUs < hypervisorConfig.DefaultVCPUs {
-		err = vm.AddCPUs(hypervisorConfig.DefaultVCPUs - baseConfig.DefaultVCPUs)
+	if baseConfig.NumVCPUs < hypervisorConfig.NumVCPUs {
+		err = vm.AddCPUs(hypervisorConfig.NumVCPUs - baseConfig.NumVCPUs)
 		if err != nil {
 			return nil, err
 		}
 		online = true
 	}
 
-	if baseConfig.DefaultMemSz < hypervisorConfig.DefaultMemSz {
-		err = vm.AddMemory(hypervisorConfig.DefaultMemSz - baseConfig.DefaultMemSz)
+	if baseConfig.MemorySize < hypervisorConfig.MemorySize {
+		err = vm.AddMemory(hypervisorConfig.MemorySize - baseConfig.MemorySize)
 		if err != nil {
 			return nil, err
 		}

@@ -154,13 +154,13 @@ type HypervisorConfig struct {
 	// enable debug output where available.
 	Debug bool
 
-	// DefaultVCPUs specifies default number of vCPUs for the VM.
+	// NumVCPUs specifies default number of vCPUs for the VM.
 	// Sandbox configuration VMConfig.VCPUs overwrites this.
-	DefaultVCPUs uint32
+	NumVCPUs uint32
 
 	// DefaultMem specifies default memory size in MiB for the VM.
 	// Sandbox configuration VMConfig.Memory overwrites this.
-	DefaultMemSz uint32
+	MemorySize uint32
 
 	// DefaultBridges specifies default number of bridges for the VM.
 	// Bridges can be used to hot plug devices

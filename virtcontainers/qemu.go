@@ -248,7 +248,7 @@ func (q *qemu) init(ctx context.Context, id string, hypervisorConfig *Hypervisor
 }
 
 func (q *qemu) cpuTopology() govmmQemu.SMP {
-	return q.arch.cpuTopology(q.config.DefaultVCPUs, q.config.DefaultMaxVCPUs)
+	return q.arch.cpuTopology(q.config.NumVCPUs, q.config.DefaultMaxVCPUs)
 }
 
 func (q *qemu) hostMemMB() (uint64, error) {
@@ -269,7 +269,7 @@ func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 		return govmmQemu.Memory{}, err
 	}
 
-	memMb := uint64(q.config.DefaultMemSz)
+	memMb := uint64(q.config.MemorySize)
 
 	return q.arch.memoryTopology(memMb, hostMemMb), nil
 }
@@ -1033,12 +1033,12 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) error {
 	}
 
 	// calculate current memory
-	currentMemory := int(q.config.DefaultMemSz) + q.state.HotpluggedMemory
+	currentMemory := int(q.config.MemorySize) + q.state.HotpluggedMemory
 
 	// Don't exceed the maximum amount of memory
 	if currentMemory+memDev.sizeMB > int(maxMem) {
 		return fmt.Errorf("Unable to hotplug %d MiB memory, the SB has %d MiB and the maximum amount is %d MiB",
-			memDev.sizeMB, currentMemory, q.config.DefaultMemSz)
+			memDev.sizeMB, currentMemory, q.config.MemorySize)
 	}
 
 	return q.hotplugAddMemory(memDev)

@@ -43,7 +43,7 @@ func Example_createAndStartSandbox() {
 		KernelPath:     "/usr/share/kata-containers/vmlinux.container",
 		ImagePath:      "/usr/share/kata-containers/kata-containers.img",
 		HypervisorPath: "/usr/bin/qemu-system-x86_64",
-		DefaultMemSz:   1024,
+		MemorySize:     1024,
 	}
 
 	// Use hyperstart default values for the agent.
