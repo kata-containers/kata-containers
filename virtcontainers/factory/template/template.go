@@ -80,7 +80,7 @@ func (t *template) prepareTemplateFiles() error {
 		return err
 	}
 	flags := uintptr(syscall.MS_NOSUID | syscall.MS_NODEV)
-	opts := fmt.Sprintf("size=%dM", t.config.HypervisorConfig.DefaultMemSz+8)
+	opts := fmt.Sprintf("size=%dM", t.config.HypervisorConfig.MemorySize+8)
 	if err = syscall.Mount("tmpfs", t.statePath, "tmpfs", flags, opts); err != nil {
 		return err
 	}

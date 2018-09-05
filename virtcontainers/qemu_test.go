@@ -24,8 +24,8 @@ func newQemuConfig() HypervisorConfig {
 		ImagePath:         testQemuImagePath,
 		InitrdPath:        testQemuInitrdPath,
 		HypervisorPath:    testQemuPath,
-		DefaultVCPUs:      defaultVCPUs,
-		DefaultMemSz:      defaultMemSzMiB,
+		NumVCPUs:          defaultVCPUs,
+		MemorySize:        defaultMemSzMiB,
 		DefaultBridges:    defaultBridges,
 		BlockDeviceDriver: defaultBlockDriver,
 		DefaultMaxVCPUs:   defaultMaxQemuVCPUs,
@@ -129,7 +129,7 @@ func TestQemuCPUTopology(t *testing.T) {
 	q := &qemu{
 		arch: &qemuArchBase{},
 		config: HypervisorConfig{
-			DefaultVCPUs:    uint32(vcpus),
+			NumVCPUs:        uint32(vcpus),
 			DefaultMaxVCPUs: uint32(vcpus),
 		},
 	}
@@ -150,10 +150,13 @@ func TestQemuCPUTopology(t *testing.T) {
 }
 
 func TestQemuMemoryTopology(t *testing.T) {
-	mem := 1000
+	mem := uint32(1000)
 
 	q := &qemu{
 		arch: &qemuArchBase{},
+		config: HypervisorConfig{
+			MemorySize: mem,
+		},
 	}
 
 	hostMemKb, err := getHostMemorySizeKb(procMemInfo)

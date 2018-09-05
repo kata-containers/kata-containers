@@ -417,7 +417,7 @@ func updateVMConfig(ocispec CompatOCISpec, config *RuntimeConfig) error {
 		}
 		// Use some math magic to round up to the nearest Mb.
 		// This has the side effect that we can never have <1Mb assigned.
-		config.HypervisorConfig.DefaultMemSz = uint32((memBytes + (1024*1024 - 1)) / (1024 * 1024))
+		config.HypervisorConfig.MemorySize = uint32((memBytes + (1024*1024 - 1)) / (1024 * 1024))
 	}
 
 	return nil

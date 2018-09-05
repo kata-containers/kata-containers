@@ -218,12 +218,12 @@ func TestFactoryGetVM(t *testing.T) {
 	assert.Nil(err)
 
 	// CPU hotplug
-	vmConfig.HypervisorConfig.DefaultVCPUs++
+	vmConfig.HypervisorConfig.NumVCPUs++
 	_, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
 	// Memory hotplug
-	vmConfig.HypervisorConfig.DefaultMemSz += 128
+	vmConfig.HypervisorConfig.MemorySize += 128
 	_, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 

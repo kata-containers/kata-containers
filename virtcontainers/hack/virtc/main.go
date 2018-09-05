@@ -173,7 +173,7 @@ func buildSandboxConfig(context *cli.Context) (vc.SandboxConfig, error) {
 		KernelPath:            kernelPath,
 		ImagePath:             "/usr/share/clear-containers/clear-containers.img",
 		HypervisorMachineType: machineType,
-		DefaultMemSz:          uint32(vmMemory),
+		MemorySize:            uint32(vmMemory),
 	}
 
 	if err := buildKernelParams(&hypervisorConfig); err != nil {
