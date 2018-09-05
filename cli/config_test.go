@@ -30,6 +30,7 @@ var (
 	proxyDebug      = false
 	runtimeDebug    = false
 	shimDebug       = false
+	netmonDebug     = false
 )
 
 type testRuntimeConfig struct {
@@ -41,7 +42,7 @@ type testRuntimeConfig struct {
 	LogPath           string
 }
 
-func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, logPath string, disableBlock bool, blockDeviceDriver string, enableIOThreads bool, hotplugVFIOOnRootBus bool) string {
+func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, netmonPath, logPath string, disableBlock bool, blockDeviceDriver string, enableIOThreads bool, hotplugVFIOOnRootBus bool) string {
 	return `
 	# Runtime configuration file
 
@@ -70,6 +71,10 @@ func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath
 	enable_debug = ` + strconv.FormatBool(shimDebug) + `
 
 	[agent.kata]
+
+	[netmon]
+	path = "` + netmonPath + `"
+	enable_debug = ` + strconv.FormatBool(netmonDebug) + `
 
         [runtime]
 	enable_debug = ` + strconv.FormatBool(runtimeDebug)
@@ -103,6 +108,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	imagePath := path.Join(dir, "image")
 	shimPath := path.Join(dir, "shim")
 	proxyPath := path.Join(dir, "proxy")
+	netmonPath := path.Join(dir, "netmon")
 	logDir := path.Join(dir, "logs")
 	logPath := path.Join(logDir, "runtime.log")
 	machineType := "machineType"
@@ -111,7 +117,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 
-	runtimeConfigFileData := makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, logPath, disableBlockDevice, blockDeviceDriver, enableIOThreads, hotplugVFIOOnRootBus)
+	runtimeConfigFileData := makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, netmonPath, logPath, disableBlockDevice, blockDeviceDriver, enableIOThreads, hotplugVFIOOnRootBus)
 
 	configPath := path.Join(dir, "runtime.toml")
 	err = createConfig(configPath, runtimeConfigFileData)
@@ -165,6 +171,12 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		Path: shimPath,
 	}
 
+	netmonConfig := vc.NetmonConfig{
+		Path:   netmonPath,
+		Debug:  false,
+		Enable: false,
+	}
+
 	runtimeConfig := oci.RuntimeConfig{
 		HypervisorType:   defaultHypervisor,
 		HypervisorConfig: hypervisorConfig,
@@ -177,6 +189,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 
 		ShimType:   defaultShim,
 		ShimConfig: shimConfig,
+
+		NetmonConfig: netmonConfig,
 	}
 
 	config = testRuntimeConfig{
@@ -482,11 +496,11 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	proxyPath := path.Join(dir, "proxy")
 	hypervisorPath := path.Join(dir, "hypervisor")
 	defaultHypervisorPath = hypervisorPath
+	netmonPath := path.Join(dir, "netmon")
 
 	imagePath := path.Join(dir, "image.img")
 	initrdPath := path.Join(dir, "initrd.img")
 
-	hypervisorPath = path.Join(dir, "hypervisor")
 	kernelPath := path.Join(dir, "kernel")
 
 	savedDefaultImagePath := defaultImagePath
@@ -525,6 +539,9 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	path = "` + shimPath + `"
 
 	[agent.kata]
+
+	[netmon]
+	path = "` + netmonPath + `"
 `
 
 	configPath := path.Join(dir, "runtime.toml")
@@ -549,6 +566,11 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	}
 
 	err = createEmptyFile(hypervisorPath)
+	if err != nil {
+		t.Error(err)
+	}
+
+	err = createEmptyFile(netmonPath)
 	if err != nil {
 		t.Error(err)
 	}
@@ -584,6 +606,12 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		Path: shimPath,
 	}
 
+	expectedNetmonConfig := vc.NetmonConfig{
+		Path:   netmonPath,
+		Debug:  false,
+		Enable: false,
+	}
+
 	expectedConfig := oci.RuntimeConfig{
 		HypervisorType:   defaultHypervisor,
 		HypervisorConfig: expectedHypervisorConfig,
@@ -596,6 +624,8 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 		ShimType:   defaultShim,
 		ShimConfig: expectedShimConfig,
+
+		NetmonConfig: expectedNetmonConfig,
 	}
 
 	if reflect.DeepEqual(config, expectedConfig) == false {
