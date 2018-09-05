@@ -25,7 +25,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.15"
+const formatVersion = "1.0.16"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -123,6 +123,14 @@ type HostInfo struct {
 	SupportVSocks      bool
 }
 
+// NetmonInfo stores netmon details
+type NetmonInfo struct {
+	Version string
+	Path    string
+	Debug   bool
+	Enable  bool
+}
+
 // EnvInfo collects all information that will be displayed by the
 // env command.
 //
@@ -138,6 +146,7 @@ type EnvInfo struct {
 	Shim       ShimInfo
 	Agent      AgentInfo
 	Host       HostInfo
+	Netmon     NetmonInfo
 }
 
 func getMetaInfo() MetaInfo {
@@ -241,6 +250,22 @@ func getProxyInfo(config oci.RuntimeConfig) (ProxyInfo, error) {
 	return proxy, nil
 }
 
+func getNetmonInfo(config oci.RuntimeConfig) (NetmonInfo, error) {
+	version, err := getCommandVersion(defaultNetmonPath)
+	if err != nil {
+		version = unknown
+	}
+
+	netmon := NetmonInfo{
+		Version: version,
+		Path:    config.NetmonConfig.Path,
+		Debug:   config.NetmonConfig.Debug,
+		Enable:  config.NetmonConfig.Enable,
+	}
+
+	return netmon, nil
+}
+
 func getCommandVersion(cmd string) (string, error) {
 	return runCommand([]string{cmd, "--version"})
 }
@@ -309,6 +334,8 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 
 	proxy, _ := getProxyInfo(config)
 
+	netmon, _ := getNetmonInfo(config)
+
 	shim, err := getShimInfo(config)
 	if err != nil {
 		return EnvInfo{}, err
@@ -342,6 +369,7 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 		Shim:       shim,
 		Agent:      agent,
 		Host:       host,
+		Netmon:     netmon,
 	}
 
 	return env, nil

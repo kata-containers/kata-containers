@@ -31,6 +31,7 @@ import (
 const testProxyURL = "file:///proxyURL"
 const testProxyVersion = "proxy version 0.1"
 const testShimVersion = "shim version 0.1"
+const testNetmonVersion = "netmon version 0.1"
 const testHypervisorVersion = "QEMU emulator version 2.7.0+git.741f430a96-6.1, Copyright (c) 2003-2016 Fabrice Bellard and the QEMU Project developers"
 
 // makeVersionBinary creates a shell script with the specified file
@@ -61,6 +62,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	machineType := "machineType"
 	shimPath := filepath.Join(prefixDir, "shim")
 	proxyPath := filepath.Join(prefixDir, "proxy")
+	netmonPath := filepath.Join(prefixDir, "netmon")
 	disableBlock := true
 	blockStorageDriver := "virtio-scsi"
 	enableIOThreads := true
@@ -68,6 +70,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 
 	// override
 	defaultProxyPath = proxyPath
+	defaultNetmonPath = netmonPath
 
 	filesToCreate := []string{
 		hypervisorPath,
@@ -93,6 +96,11 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		return "", oci.RuntimeConfig{}, err
 	}
 
+	err = makeVersionBinary(netmonPath, testNetmonVersion)
+	if err != nil {
+		return "", oci.RuntimeConfig{}, err
+	}
+
 	err = makeVersionBinary(hypervisorPath, testHypervisorVersion)
 	if err != nil {
 		return "", oci.RuntimeConfig{}, err
@@ -107,6 +115,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		machineType,
 		shimPath,
 		testProxyURL,
+		netmonPath,
 		logPath,
 		disableBlock,
 		blockStorageDriver,
@@ -134,6 +143,15 @@ func getExpectedProxyDetails(config oci.RuntimeConfig) (ProxyInfo, error) {
 		Version: testProxyVersion,
 		Path:    config.ProxyConfig.Path,
 		Debug:   config.ProxyConfig.Debug,
+	}, nil
+}
+
+func getExpectedNetmonDetails(config oci.RuntimeConfig) (NetmonInfo, error) {
+	return NetmonInfo{
+		Version: testNetmonVersion,
+		Path:    config.NetmonConfig.Path,
+		Debug:   config.NetmonConfig.Debug,
+		Enable:  config.NetmonConfig.Enable,
 	}, nil
 }
 
@@ -303,6 +321,11 @@ func getExpectedSettings(config oci.RuntimeConfig, tmpdir, configFile string) (E
 		return EnvInfo{}, err
 	}
 
+	netmon, err := getExpectedNetmonDetails(config)
+	if err != nil {
+		return EnvInfo{}, err
+	}
+
 	hypervisor := getExpectedHypervisor(config)
 	kernel := getExpectedKernel(config)
 	image := getExpectedImage(config)
@@ -317,6 +340,7 @@ func getExpectedSettings(config oci.RuntimeConfig, tmpdir, configFile string) (E
 		Shim:       shim,
 		Agent:      agent,
 		Host:       host,
+		Netmon:     netmon,
 	}
 
 	return env, nil
@@ -606,6 +630,50 @@ func TestEnvGetProxyInfoNoVersion(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, expectedProxy, proxy)
+}
+
+func TestEnvGetNetmonInfo(t *testing.T) {
+	tmpdir, err := ioutil.TempDir("", "")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(tmpdir)
+
+	_, config, err := makeRuntimeConfig(tmpdir)
+	assert.NoError(t, err)
+
+	expectedNetmon, err := getExpectedNetmonDetails(config)
+	assert.NoError(t, err)
+
+	netmon, err := getNetmonInfo(config)
+	assert.NoError(t, err)
+
+	assert.Equal(t, expectedNetmon, netmon)
+}
+
+func TestEnvGetNetmonInfoNoVersion(t *testing.T) {
+	tmpdir, err := ioutil.TempDir("", "")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(tmpdir)
+
+	_, config, err := makeRuntimeConfig(tmpdir)
+	assert.NoError(t, err)
+
+	expectedNetmon, err := getExpectedNetmonDetails(config)
+	assert.NoError(t, err)
+
+	// remove the netmon ensuring its version cannot be queried
+	err = os.Remove(defaultNetmonPath)
+	assert.NoError(t, err)
+
+	expectedNetmon.Version = unknown
+
+	netmon, err := getNetmonInfo(config)
+	assert.NoError(t, err)
+
+	assert.Equal(t, expectedNetmon, netmon)
 }
 
 func TestEnvGetShimInfo(t *testing.T) {

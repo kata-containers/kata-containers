@@ -116,6 +116,9 @@ SHIMPATH := $(PKGLIBEXECDIR)/$(SHIMCMD)
 PROXYCMD := $(BIN_PREFIX)-proxy
 PROXYPATH := $(PKGLIBEXECDIR)/$(PROXYCMD)
 
+NETMONCMD := $(BIN_PREFIX)-netmon
+NETMONPATH := $(PKGLIBEXECDIR)/$(NETMONCMD)
+
 # Default number of vCPUs
 DEFVCPUS := 1
 # Default maximum number of vCPUs
@@ -189,6 +192,7 @@ USER_VARS += PROJECT_NAME
 USER_VARS += PROJECT_PREFIX
 USER_VARS += PROJECT_TYPE
 USER_VARS += PROXYPATH
+USER_VARS += NETMONPATH
 USER_VARS += QEMUBINDIR
 USER_VARS += QEMUCMD
 USER_VARS += QEMUPATH
@@ -319,6 +323,7 @@ var defaultRuntimeConfiguration = "$(CONFIG_PATH)"
 var defaultSysConfRuntimeConfiguration = "$(SYSCONFIG)"
 
 var defaultProxyPath = "$(PROXYPATH)"
+var defaultNetmonPath = "$(NETMONPATH)"
 endef
 
 export GENERATED_CODE
@@ -373,6 +378,7 @@ $(GENERATED_FILES): %: %.in Makefile VERSION
 		-e "s|@LOCALSTATEDIR@|$(LOCALSTATEDIR)|g" \
 		-e "s|@PKGLIBEXECDIR@|$(PKGLIBEXECDIR)|g" \
 		-e "s|@PROXYPATH@|$(PROXYPATH)|g" \
+		-e "s|@NETMONPATH@|$(NETMONPATH)|g" \
 		-e "s|@PROJECT_BUG_URL@|$(PROJECT_BUG_URL)|g" \
 		-e "s|@PROJECT_URL@|$(PROJECT_URL)|g" \
 		-e "s|@PROJECT_NAME@|$(PROJECT_NAME)|g" \
