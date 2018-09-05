@@ -5,6 +5,9 @@
 package docker
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	. "github.com/kata-containers/tests"
@@ -34,9 +37,28 @@ func TestIntegration(t *testing.T) {
 	}
 
 	for _, i := range images {
-		_, _, exitCode := dockerPull(i)
-		if exitCode != 0 {
-			t.Fatalf("failed to pull docker image: %s\n", i)
+		// vish/stress is single-arch image only for amd64
+		if i == StressImage && runtime.GOARCH == "arm64" {
+			//check if vish/stress has already been built
+			argsImage := []string{"--format", "'{{.Repository}}:{{.Tag}}'", StressImage}
+			imagesStdout, _, imagesExitcode := dockerImages(argsImage...)
+			if imagesExitcode != 0 {
+				t.Fatalf("failed to docker images --format '{{.Repository}}:{{.Tag}}' %s\n", StressImage)
+			}
+			if imagesStdout == "" {
+				gopath := os.Getenv("GOPATH")
+				entirePath := filepath.Join(gopath, StressDockerFile)
+				argsBuild := []string{"-t", StressImage, entirePath}
+				_, _, buildExitCode := dockerBuild(argsBuild...)
+				if buildExitCode != 0 {
+					t.Fatalf("failed to build stress image in %s\n", runtime.GOARCH)
+				}
+			}
+		} else {
+			_, _, exitCode := dockerPull(i)
+			if exitCode != 0 {
+				t.Fatalf("failed to pull docker image: %s\n", i)
+			}
 		}
 	}
 

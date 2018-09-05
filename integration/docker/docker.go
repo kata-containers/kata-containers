@@ -43,6 +43,9 @@ const (
 
 	// StressImage is the vish/stress image
 	StressImage = "vish/stress"
+
+	// StressDockerFile is the dockerfile to build vish/stress image
+	StressDockerFile = "src/github.com/kata-containers/tests/stress/."
 )
 
 // cidDirectory is the directory where container ID files are created.
@@ -424,7 +427,8 @@ func dockerDiff(args ...string) (string, string, int) {
 
 // dockerBuild builds an image from a Dockerfile
 func dockerBuild(args ...string) (string, string, int) {
-	return runDockerCommand("build", args...)
+	// 10 minutes should be enough to build a image
+	return runDockerCommandWithTimeout(600, "build", args...)
 }
 
 // dockerExport will export a container’s filesystem as a tar archive
