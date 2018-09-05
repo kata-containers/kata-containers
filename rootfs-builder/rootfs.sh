@@ -84,17 +84,29 @@ check_function_exist()
 	[ "$(type -t ${function_name})" == "function" ] || die "${function_name} function was not defined"
 }
 
-distro_needs_admin_caps()
+docker_extra_args()
 {
-		if [ "$1" = "ubuntu" ]
-		then
-			echo "true"
-		elif [ "$1" = "debian" ]
-		then
-			echo "true"
-		else
-			echo "false"
-		fi
+	local args=""
+
+	case "$1" in
+	 ubuntu | debian)
+		# Requred to chroot
+		args+=" --cap-add SYS_CHROOT"
+		# debootstrap needs to create device nodes to properly function
+		args+=" --cap-add MKNOD"
+		;&
+	suse)
+		# Required to mount inside a container
+		args+=" --cap-add SYS_ADMIN"
+		# When AppArmor is enabled, mounting inside a container is blocked with docker-default profile.
+		# See https://github.com/moby/moby/issues/16429
+		args+=" --security-opt apparmor:unconfined"
+		;;
+	*)
+		;;
+	esac
+
+	echo "$args"
 }
 
 generate_dockerfile()
@@ -239,17 +251,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 	docker_run_args+=" --rm"
 	docker_run_args+=" --runtime runc"
 
-	admin_caps=$(distro_needs_admin_caps "$distro")
-	if [ "$admin_caps" = "true" ]; then
-		# Required by debootstrap to mount inside a container
-		docker_run_args+=" --cap-add SYS_ADMIN"
-		# Requred to chroot
-		docker_run_args+=" --cap-add SYS_CHROOT"
-		# debootstrap needs to create device nodes to properly function
-		docker_run_args+=" --cap-add MKNOD"
-		# See https://github.com/moby/moby/issues/16429
-		docker_run_args+=" --security-opt apparmor:unconfined"
-	fi
+	docker_run_args+=" $(docker_extra_args $distro)"
 
 	#Make sure we use a compatible runtime to build rootfs
 	# In case Clear Containers Runtime is installed we dont want to hit issue:
