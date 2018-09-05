@@ -90,13 +90,13 @@ further details, see
 #### Image with systemd as init
 
 ```
-$ sudo -E PATH=$PATH make USE_DOCKER=true image-only
+$ sudo -E PATH=$PATH make USE_DOCKER=true image
 ```
 
 #### Image with the agent as init
 
 ```
-$ sudo -E PATH=$PATH make USE_DOCKER=true AGENT_INIT=yes image-only
+$ sudo -E PATH=$PATH make USE_DOCKER=true AGENT_INIT=yes image
 ```
 
 ### Initrd creation
@@ -104,7 +104,7 @@ $ sudo -E PATH=$PATH make USE_DOCKER=true AGENT_INIT=yes image-only
 To create an initrd from the already-created rootfs with the agent acting as the init daemon:
 
 ```
-$ sudo -E PATH=$PATH make AGENT_INIT=yes initrd-only
+$ sudo -E PATH=$PATH make AGENT_INIT=yes initrd
 ```
 
 For further details,
