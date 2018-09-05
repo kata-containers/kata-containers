@@ -142,6 +142,7 @@ type NetworkInterfacePair struct {
 type NetworkConfig struct {
 	NetNSPath         string
 	NetNsCreated      bool
+	NetmonConfig      NetmonConfig
 	InterworkingModel NetInterworkingModel
 }
 
@@ -474,6 +475,7 @@ type NetworkNamespace struct {
 	NetNsPath    string
 	NetNsCreated bool
 	Endpoints    []Endpoint
+	NetmonPID    int
 }
 
 // TypedJSONEndpoint is used as an intermediate representation for
