@@ -36,7 +36,15 @@ function clone_and_build() {
 	# Override branch if we are testing a PR.
 	[ -z "$pr_number" ] || branch="${target_branch}"
 	if [ "$kata_repo" != "$github_project" ]; then
-		git fetch origin && git checkout "${branch}"
+		current_branch=$(git rev-parse --abbrev-ref HEAD)
+		# check if we are on a branch created by the
+		# Depends-on feature.
+		if echo "${current_branch}" | egrep "p[0-9]+" > /dev/null; then
+			echo "already in the correct branch"
+		else
+			git fetch origin && git checkout "${branch}"
+		fi
+
 	fi
 
 	echo "Build ${github_project}"
@@ -162,7 +170,10 @@ function apply_depends_on() {
 
 		pushd "${GOPATH}/src/${repo}"
 		echo "Fetching pull request: ${pr_id} for repository: ${repo}"
-		git fetch origin "pull/${pr_id}/head" && git checkout FETCH_HEAD && git rebase origin/master
+		pr_branch="p${pr_id}"
+		git fetch origin "pull/${pr_id}/head:${pr_branch}" && \
+			git checkout "${pr_branch}" && \
+			git rebase "origin/${target_branch}"
 		popd
 	done
 
