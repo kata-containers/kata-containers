@@ -342,28 +342,6 @@ func (c *Container) setStateFstype(fstype string) error {
 	return nil
 }
 
-func (c *Container) setStateHotpluggedDrive(hotplugged bool) error {
-	c.state.HotpluggedDrive = hotplugged
-
-	err := c.sandbox.storage.storeContainerResource(c.sandbox.id, c.id, stateFileType, c.state)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (c *Container) setContainerRootfsPCIAddr(addr string) error {
-	c.state.RootfsPCIAddr = addr
-
-	err := c.sandbox.storage.storeContainerResource(c.sandbox.id, c.id, stateFileType, c.state)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // GetAnnotations returns container's annotations
 func (c *Container) GetAnnotations() map[string]string {
 	return c.config.Annotations
@@ -457,8 +435,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 		// instead of passing this as a shared mount.
 		if len(m.BlockDeviceID) > 0 {
 			// Attach this block device, all other devices passed in the config have been attached at this point
-			if err := c.sandbox.devManager.AttachDevice(m.BlockDeviceID, c.sandbox); err != nil &&
-				err != manager.ErrDeviceAttached {
+			if err := c.sandbox.devManager.AttachDevice(m.BlockDeviceID, c.sandbox); err != nil {
 				return nil, err
 			}
 
@@ -1087,38 +1064,43 @@ func (c *Container) hotplugDrive() error {
 		return err
 	}
 
+	devicePath, err = filepath.EvalSymlinks(devicePath)
+	if err != nil {
+		return err
+	}
+
 	c.Logger().WithFields(logrus.Fields{
 		"device-path": devicePath,
 		"fs-type":     fsType,
 	}).Info("Block device detected")
 
-	driveIndex, err := c.sandbox.getAndSetSandboxBlockIndex()
-	if err != nil {
-		return err
+	var stat unix.Stat_t
+	if err := unix.Stat(devicePath, &stat); err != nil {
+		return fmt.Errorf("stat %q failed: %v", devicePath, err)
 	}
 
-	// TODO: use general device manager instead of BlockDrive directly
-	// Add drive with id as container id
-	devID := utils.MakeNameID("drive", c.id, maxDevIDSize)
-	drive := config.BlockDrive{
-		File:   devicePath,
-		Format: "raw",
-		ID:     devID,
-		Index:  driveIndex,
-	}
+	if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
+		b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
+			HostPath:      devicePath,
+			ContainerPath: filepath.Join(kataGuestSharedDir, c.id),
+			DevType:       "b",
+			Major:         int64(unix.Major(stat.Rdev)),
+			Minor:         int64(unix.Minor(stat.Rdev)),
+		})
+		if err != nil {
+			return fmt.Errorf("device manager failed to create rootfs device for %q: %v", devicePath, err)
+		}
 
-	if _, err := c.sandbox.hypervisor.hotplugAddDevice(&drive, blockDev); err != nil {
-		return err
-	}
+		c.state.BlockDeviceID = b.DeviceID()
 
-	if drive.PCIAddr != "" {
-		c.setContainerRootfsPCIAddr(drive.PCIAddr)
-	}
+		// attach rootfs device
+		if err := c.sandbox.devManager.AttachDevice(b.DeviceID(), c.sandbox); err != nil {
+			return err
+		}
 
-	c.setStateHotpluggedDrive(true)
-
-	if err := c.setStateBlockIndex(driveIndex); err != nil {
-		return err
+		if err := c.sandbox.storeSandboxDevices(); err != nil {
+			return err
+		}
 	}
 
 	return c.setStateFstype(fsType)
@@ -1133,19 +1115,28 @@ func (c *Container) isDriveUsed() bool {
 }
 
 func (c *Container) removeDrive() (err error) {
-	if c.isDriveUsed() && c.state.HotpluggedDrive {
+	if c.isDriveUsed() {
 		c.Logger().Info("unplugging block device")
 
-		devID := utils.MakeNameID("drive", c.id, maxDevIDSize)
-		drive := &config.BlockDrive{
-			ID: devID,
+		devID := c.state.BlockDeviceID
+		err := c.sandbox.devManager.DetachDevice(devID, c.sandbox)
+		if err != nil && err != manager.ErrDeviceNotAttached {
+			return err
 		}
 
-		l := c.Logger().WithField("device-id", devID)
-		l.Info("Unplugging block device")
+		if err = c.sandbox.devManager.RemoveDevice(devID); err != nil {
+			c.Logger().WithFields(logrus.Fields{
+				"container": c.id,
+				"device-id": devID,
+			}).WithError(err).Error("remove device failed")
 
-		if _, err := c.sandbox.hypervisor.hotplugRemoveDevice(drive, blockDev); err != nil {
-			l.WithError(err).Info("Failed to unplug block device")
+			// ignore the device not exist error
+			if err != manager.ErrDeviceNotExist {
+				return err
+			}
+		}
+
+		if err := c.sandbox.storeSandboxDevices(); err != nil {
 			return err
 		}
 	}
@@ -1159,10 +1150,6 @@ func (c *Container) attachDevices() error {
 	// and rollbackFailingContainerCreation could do all the rollbacks
 	for _, dev := range c.devices {
 		if err := c.sandbox.devManager.AttachDevice(dev.ID, c.sandbox); err != nil {
-			if err == manager.ErrDeviceAttached {
-				// skip if device is already attached before
-				continue
-			}
 			return err
 		}
 	}

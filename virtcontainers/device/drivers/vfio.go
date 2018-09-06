@@ -30,23 +30,28 @@ const (
 // VFIODevice is a vfio device meant to be passed to the hypervisor
 // to be used by the Virtual Machine.
 type VFIODevice struct {
-	ID         string
-	DeviceInfo *config.DeviceInfo
-	vfioDevs   []*config.VFIODev
+	*GenericDevice
+	vfioDevs []*config.VFIODev
 }
 
 // NewVFIODevice create a new VFIO device
 func NewVFIODevice(devInfo *config.DeviceInfo) *VFIODevice {
 	return &VFIODevice{
-		ID:         devInfo.ID,
-		DeviceInfo: devInfo,
+		GenericDevice: &GenericDevice{
+			ID:         devInfo.ID,
+			DeviceInfo: devInfo,
+		},
 	}
 }
 
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
 func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) error {
-	if device.DeviceInfo.Hotplugged {
+	skip, err := device.bumpAttachCount(true)
+	if err != nil {
+		return err
+	}
+	if skip {
 		return nil
 	}
 
@@ -82,14 +87,18 @@ func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) error {
 		"device-group": device.DeviceInfo.HostPath,
 		"device-type":  "vfio-passthrough",
 	}).Info("Device group attached")
-	device.DeviceInfo.Hotplugged = true
+	device.AttachCount = 1
 	return nil
 }
 
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
 func (device *VFIODevice) Detach(devReceiver api.DeviceReceiver) error {
-	if !device.DeviceInfo.Hotplugged {
+	skip, err := device.bumpAttachCount(false)
+	if err != nil {
+		return err
+	}
+	if skip {
 		return nil
 	}
 
@@ -103,13 +112,8 @@ func (device *VFIODevice) Detach(devReceiver api.DeviceReceiver) error {
 		"device-group": device.DeviceInfo.HostPath,
 		"device-type":  "vfio-passthrough",
 	}).Info("Device group detached")
-	device.DeviceInfo.Hotplugged = false
+	device.AttachCount = 0
 	return nil
-}
-
-// IsAttached checks if the device is attached
-func (device *VFIODevice) IsAttached() bool {
-	return device.DeviceInfo.Hotplugged
 }
 
 // DeviceType is standard interface of api.Device, it returns device type
@@ -117,15 +121,13 @@ func (device *VFIODevice) DeviceType() config.DeviceType {
 	return config.DeviceVFIO
 }
 
-// DeviceID returns device ID
-func (device *VFIODevice) DeviceID() string {
-	return device.ID
-}
-
 // GetDeviceInfo returns device information used for creating
 func (device *VFIODevice) GetDeviceInfo() interface{} {
 	return device.vfioDevs
 }
+
+// It should implement GetAttachCount() and DeviceID() as api.Device implementation
+// here it shares function from *GenericDevice so we don't need duplicate codes
 
 // getBDF returns the BDF of pci device
 // Expected input strng format is [<domain>]:[<bus>][<slot>].[<func>] eg. 0000:02:10.0

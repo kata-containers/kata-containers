@@ -53,7 +53,7 @@ type DeviceInfo struct {
 	HostPath string
 
 	// ContainerPath is device path inside container
-	ContainerPath string
+	ContainerPath string `json:"-"`
 
 	// Type of device: c, b, u or p
 	// c , u - character(unbuffered)
@@ -74,10 +74,6 @@ type DeviceInfo struct {
 
 	// id of the device group.
 	GID uint32
-
-	// Hotplugged is used to store device state indicating if the
-	// device was hotplugged.
-	Hotplugged bool
 
 	// ID for the device that is passed to the hypervisor.
 	ID string
@@ -123,7 +119,7 @@ type VFIODev struct {
 
 // VhostUserDeviceAttrs represents data shared by most vhost-user devices
 type VhostUserDeviceAttrs struct {
-	ID         string
+	DevID      string
 	SocketPath string
 	Type       DeviceType
 

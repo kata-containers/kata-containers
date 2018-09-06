@@ -49,13 +49,20 @@ type Device interface {
 	// DeviceType indicates which kind of device it is
 	// e.g. block, vfio or vhost user
 	DeviceType() config.DeviceType
+	// GetMajorMinor returns major and minor numbers
+	GetMajorMinor() (int64, int64)
 	// GetDeviceInfo returns device specific data used for hotplugging by hypervisor
 	// Caller could cast the return value to device specific struct
 	// e.g. Block device returns *config.BlockDrive and
 	// vfio device returns []*config.VFIODev
 	GetDeviceInfo() interface{}
-	// IsAttached checks if the device is attached
-	IsAttached() bool
+	// GetAttachCount returns how many times the device has been attached
+	GetAttachCount() uint
+
+	// Reference adds one reference to device then returns final ref count
+	Reference() uint
+	// Dereference removes one reference to device then returns final ref count
+	Dereference() uint
 }
 
 // DeviceManager can be used to create a new device, this can be used as single
