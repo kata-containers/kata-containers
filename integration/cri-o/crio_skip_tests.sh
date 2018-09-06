@@ -9,6 +9,4 @@
 
 declare -a skipCRIOTests=(
 'test "ctr oom"'
-'test "ctr update resources"'
-'test "ctr resources"'
 );
