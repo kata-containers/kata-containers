@@ -76,7 +76,8 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	}
 
 	for _, file := range filesToCreate {
-		err := createEmptyFile(file)
+		// files must exist and be >0 bytes.
+		err := writeFile(file, "foo", testFileMode)
 		if err != nil {
 			return "", oci.RuntimeConfig{}, err
 		}
