@@ -170,6 +170,9 @@ type HypervisorConfig struct {
 	// MemOffset specifies memory space for nvdimm device
 	MemOffset uint32
 
+	// VirtioFSCacheSize is the DAX cache size in MiB
+	VirtioFSCacheSize uint32
+
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 

@@ -94,6 +94,7 @@ type hypervisor struct {
 	EntropySource           string `toml:"entropy_source"`
 	SharedFS                string `toml:"shared_fs"`
 	VirtioFSDaemon          string `toml:"virtio_fs_daemon"`
+	VirtioFSCacheSize       uint32 `toml:"virtio_fs_cache_size"`
 	BlockDeviceCacheSet     bool   `toml:"block_device_cache_set"`
 	BlockDeviceCacheDirect  bool   `toml:"block_device_cache_direct"`
 	BlockDeviceCacheNoflush bool   `toml:"block_device_cache_noflush"`
@@ -578,6 +579,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableBlockDeviceUse:   h.DisableBlockDeviceUse,
 		SharedFS:                sharedFS,
 		VirtioFSDaemon:          h.VirtioFSDaemon,
+		VirtioFSCacheSize:       h.VirtioFSCacheSize,
 		MemPrealloc:             h.MemPrealloc,
 		HugePages:               h.HugePages,
 		Mlock:                   !h.Swap,
