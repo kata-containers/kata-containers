@@ -382,7 +382,9 @@ func TestAppendDevices(t *testing.T) {
 	id := "test-append-block"
 	ctrDevices := []api.Device{
 		&drivers.BlockDevice{
-			ID: id,
+			GenericDevice: &drivers.GenericDevice{
+				ID: id,
+			},
 			BlockDrive: &config.BlockDrive{
 				PCIAddr: testPCIAddr,
 			},

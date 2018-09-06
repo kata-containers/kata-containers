@@ -16,8 +16,8 @@ import (
 
 // VhostUserSCSIDevice is a SCSI vhost-user based device
 type VhostUserSCSIDevice struct {
+	*GenericDevice
 	config.VhostUserDeviceAttrs
-	DeviceInfo *config.DeviceInfo
 }
 
 //
@@ -27,7 +27,11 @@ type VhostUserSCSIDevice struct {
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
 func (device *VhostUserSCSIDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
-	if device.DeviceInfo.Hotplugged {
+	skip, err := device.bumpAttachCount(true)
+	if err != nil {
+		return err
+	}
+	if skip {
 		return nil
 	}
 
@@ -38,12 +42,12 @@ func (device *VhostUserSCSIDevice) Attach(devReceiver api.DeviceReceiver) (err e
 	}
 	id := hex.EncodeToString(randBytes)
 
-	device.ID = id
+	device.DevID = id
 	device.Type = device.DeviceType()
 
 	defer func() {
 		if err == nil {
-			device.DeviceInfo.Hotplugged = true
+			device.AttachCount = 1
 		}
 	}()
 	return devReceiver.AppendDevice(device)
@@ -52,22 +56,15 @@ func (device *VhostUserSCSIDevice) Attach(devReceiver api.DeviceReceiver) (err e
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
 func (device *VhostUserSCSIDevice) Detach(devReceiver api.DeviceReceiver) error {
-	if !device.DeviceInfo.Hotplugged {
+	skip, err := device.bumpAttachCount(false)
+	if err != nil {
+		return err
+	}
+	if skip {
 		return nil
 	}
-
-	device.DeviceInfo.Hotplugged = false
+	device.AttachCount = 0
 	return nil
-}
-
-// IsAttached checks if the device is attached
-func (device *VhostUserSCSIDevice) IsAttached() bool {
-	return device.DeviceInfo.Hotplugged
-}
-
-// DeviceID returns device ID
-func (device *VhostUserSCSIDevice) DeviceID() string {
-	return device.ID
 }
 
 // DeviceType is standard interface of api.Device, it returns device type
@@ -80,3 +77,6 @@ func (device *VhostUserSCSIDevice) GetDeviceInfo() interface{} {
 	device.Type = device.DeviceType()
 	return &device.VhostUserDeviceAttrs
 }
+
+// It should implement GetAttachCount() and DeviceID() as api.Device implementation
+// here it shares function from *GenericDevice so we don't need duplicate codes
