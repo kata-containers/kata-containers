@@ -20,7 +20,7 @@ long_options=(
 #
 # KATA_GO_TEST_TIMEOUT can be set to any value accepted by
 # "go test -timeout X"
-timeout_value=${KATA_GO_TEST_TIMEOUT:-10s}
+timeout_value=${KATA_GO_TEST_TIMEOUT:-30s}
 
 # -race flag is supported only on amd64/x86_64 arch , hence 
 # enabling the flag depending on the arch.
