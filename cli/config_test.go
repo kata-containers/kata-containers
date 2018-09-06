@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -119,8 +120,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	files := []string{hypervisorPath, kernelPath, imagePath, shimPath, proxyPath}
 
 	for _, file := range files {
-		// create the resource
-		err = createEmptyFile(file)
+		// create the resource (which must be >0 bytes)
+		err := writeFile(file, "foo", testFileMode)
 		if err != nil {
 			return config, err
 		}
@@ -474,6 +475,38 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	shimPath := path.Join(dir, "shim")
 	proxyPath := path.Join(dir, "proxy")
 
+	imagePath := path.Join(dir, "image.img")
+	initrdPath := path.Join(dir, "initrd.img")
+
+	hypervisorPath := path.Join(dir, "hypervisor")
+	kernelPath := path.Join(dir, "kernel")
+
+	savedDefaultImagePath := defaultImagePath
+	savedDefaultInitrdPath := defaultInitrdPath
+	savedDefaultHypervisorPath := defaultHypervisorPath
+	savedDefaultKernelPath := defaultKernelPath
+
+	defer func() {
+		defaultImagePath = savedDefaultImagePath
+		defaultInitrdPath = savedDefaultInitrdPath
+		defaultHypervisorPath = savedDefaultHypervisorPath
+		defaultKernelPath = savedDefaultKernelPath
+	}()
+
+	// Temporarily change the defaults to avoid this test using the real
+	// resource files that might be installed on the system!
+	defaultImagePath = imagePath
+	defaultInitrdPath = initrdPath
+	defaultHypervisorPath = hypervisorPath
+	defaultKernelPath = kernelPath
+
+	for _, file := range []string{defaultImagePath, defaultInitrdPath, defaultHypervisorPath, defaultKernelPath} {
+		err = writeFile(file, "foo", testFileMode)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	runtimeMinimalConfig := `
 	# Runtime configuration file
 
@@ -555,9 +588,50 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	if reflect.DeepEqual(config, expectedConfig) == false {
 		t.Fatalf("Got %+v\n expecting %+v", config, expectedConfig)
 	}
+}
+
+func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
+	dir, err := ioutil.TempDir(testDir, "minimal-runtime-config-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	imagePath := path.Join(dir, "image.img")
+	initrdPath := path.Join(dir, "initrd.img")
+	proxyPath := path.Join(dir, "proxy")
+	shimPath := path.Join(dir, "shim")
+	hypervisorPath := path.Join(dir, "hypervisor")
+	kernelPath := path.Join(dir, "kernel")
+
+	savedDefaultImagePath := defaultImagePath
+	savedDefaultInitrdPath := defaultInitrdPath
+	savedDefaultHypervisorPath := defaultHypervisorPath
+	savedDefaultKernelPath := defaultKernelPath
+
+	defer func() {
+		defaultImagePath = savedDefaultImagePath
+		defaultInitrdPath = savedDefaultInitrdPath
+		defaultHypervisorPath = savedDefaultHypervisorPath
+		defaultKernelPath = savedDefaultKernelPath
+	}()
+
+	// Temporarily change the defaults to avoid this test using the real
+	// resource files that might be installed on the system!
+	defaultImagePath = imagePath
+	defaultInitrdPath = initrdPath
+	defaultHypervisorPath = hypervisorPath
+	defaultKernelPath = kernelPath
+
+	for _, file := range []string{proxyPath, shimPath, hypervisorPath, kernelPath} {
+		err = writeFile(file, "foo", testFileMode)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	// minimal config with vsock enabled
-	runtimeMinimalConfig = `
+	runtimeMinimalConfig := `
 	# Runtime configuration file
 	[hypervisor.qemu]
 	use_vsock = true
@@ -579,13 +653,13 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	utils.VHostVSockDevicePath = "/dev/null"
 	utils.VSockDevicePath = "/dev/null"
 
-	configPath = path.Join(dir, "runtime.toml")
+	configPath := path.Join(dir, "runtime.toml")
 	err = createConfig(configPath, runtimeMinimalConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, config, err = loadConfiguration(configPath, false)
+	_, config, err := loadConfiguration(configPath, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -600,10 +674,6 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 	if config.HypervisorConfig.UseVSock != true {
 		t.Fatalf("use_vsock must be true, got %v", config.HypervisorConfig.UseVSock)
-	}
-
-	if err := os.Remove(configPath); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -1236,4 +1306,108 @@ func TestUpdateRuntimeConfigurationFactoryConfig(t *testing.T) {
 	assert.NoError(err)
 
 	assert.Equal(expectedFactoryConfig, config.FactoryConfig)
+}
+
+func TestCheckHypervisorConfig(t *testing.T) {
+	assert := assert.New(t)
+
+	dir, err := ioutil.TempDir(testDir, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	// Not created on purpose
+	imageENOENT := filepath.Join(dir, "image-ENOENT.img")
+	initrdENOENT := filepath.Join(dir, "initrd-ENOENT.img")
+
+	imageEmpty := filepath.Join(dir, "image-empty.img")
+	initrdEmpty := filepath.Join(dir, "initrd-empty.img")
+
+	for _, file := range []string{imageEmpty, initrdEmpty} {
+		err = createEmptyFile(file)
+		assert.NoError(err)
+	}
+
+	image := filepath.Join(dir, "image.img")
+	initrd := filepath.Join(dir, "initrd.img")
+
+	mb := uint32(1024 * 1024)
+
+	fileSizeMB := uint32(3)
+	fileSizeBytes := fileSizeMB * mb
+
+	fileData := strings.Repeat("X", int(fileSizeBytes))
+
+	for _, file := range []string{image, initrd} {
+		err = writeFile(file, fileData, testFileMode)
+		assert.NoError(err)
+	}
+
+	type testData struct {
+		imagePath        string
+		initrdPath       string
+		memBytes         uint32
+		expectError      bool
+		expectLogWarning bool
+	}
+
+	// Note that checkHypervisorConfig() does not check to ensure an image
+	// or an initrd has been specified - that's handled by a separate
+	// function, hence no test for it here.
+
+	data := []testData{
+		{"", "", 0, true, false},
+
+		{imageENOENT, "", 2, true, false},
+		{"", initrdENOENT, 2, true, false},
+
+		{imageEmpty, "", 2, true, false},
+		{"", initrdEmpty, 2, true, false},
+
+		{image, "", fileSizeMB + 2, false, false},
+		{image, "", fileSizeMB + 1, false, false},
+		{image, "", fileSizeMB + 0, false, true},
+		{image, "", fileSizeMB - 1, false, true},
+		{image, "", fileSizeMB - 2, false, true},
+
+		{"", initrd, fileSizeMB + 2, false, false},
+		{"", initrd, fileSizeMB + 1, false, false},
+		{"", initrd, fileSizeMB + 0, true, false},
+		{"", initrd, fileSizeMB - 1, true, false},
+		{"", initrd, fileSizeMB - 2, true, false},
+	}
+
+	for i, d := range data {
+		savedOut := kataLog.Logger.Out
+
+		// create buffer to save logger output
+		logBuf := &bytes.Buffer{}
+
+		// capture output to buffer
+		kataLog.Logger.Out = logBuf
+
+		config := vc.HypervisorConfig{
+			ImagePath:    d.imagePath,
+			InitrdPath:   d.initrdPath,
+			DefaultMemSz: d.memBytes,
+		}
+
+		err := checkHypervisorConfig(config)
+
+		if d.expectError {
+			assert.Error(err, "test %d (%+v)", i, d)
+		} else {
+			assert.NoError(err, "test %d (%+v)", i, d)
+		}
+
+		if d.expectLogWarning {
+			assert.True(strings.Contains(logBuf.String(), "warning"))
+		} else {
+			assert.Empty(logBuf.String())
+		}
+
+		// reset logger
+		kataLog.Logger.Out = savedOut
+	}
 }
