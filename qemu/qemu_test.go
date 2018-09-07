@@ -475,7 +475,7 @@ func TestAppendMemoryMemPrealloc(t *testing.T) {
 		FileBackedMem:       true,
 		FileBackedMemShared: true,
 	}
-	knobsString := "-object memory-backend-ram,id=dimm1,size=1G,prealloc=on -device pc-dimm,id=dimm1,memdev=dimm1"
+	knobsString := "-object memory-backend-ram,id=dimm1,size=1G,prealloc=on -numa node,memdev=dimm1"
 	mlockFalseString := "-realtime mlock=off"
 
 	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
