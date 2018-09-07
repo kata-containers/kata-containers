@@ -142,8 +142,8 @@ var _ = Describe("memory constraints", func() {
 			_, _, exitCode = dockerRun(args...)
 			Expect(exitCode).To(BeZero())
 
-			// 256 MB
-			memSize = fmt.Sprintf("%d", 256*1024*1024)
+			// 640 MB: 512MB + 128MB
+			memSize = fmt.Sprintf("%d", 640*1024*1024)
 
 			args = []string{"--memory", memSize, "--memory-reservation", memSize}
 			if useSwap {
