@@ -9,7 +9,7 @@ DOCKER_BIN=docker
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 SCRIPT_NAME=${0##*/}
 source "${SCRIPT_PATH}/../../.ci/lib.sh"
-source /etc/os-release
+source /etc/os-release || source /usr/lib/os-release
 
 force=false
 ctr_manager=""

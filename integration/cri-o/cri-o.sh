@@ -10,7 +10,7 @@ set -e
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../../.ci/lib.sh"
 source "${SCRIPT_PATH}/crio_skip_tests.sh"
-source /etc/os-release
+source /etc/os-release || source /usr/lib/os-release
 
 crio_repository="github.com/kubernetes-incubator/cri-o"
 crio_repository_path="$GOPATH/src/${crio_repository}"

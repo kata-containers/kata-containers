@@ -19,7 +19,7 @@ source "${script_dir}/lib.sh"
 cri_containerd_version=$(get_version "externals.cri-containerd.version")
 containerd_version=$(get_version "externals.cri-containerd.meta.containerd-version")
 
-source /etc/os-release
+source /etc/os-release || source /usr/lib/os-release
 
 echo "Set up environment"
 if [ "$ID" == centos ];then

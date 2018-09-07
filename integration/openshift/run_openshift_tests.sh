@@ -7,7 +7,7 @@
 
 set -e
 
-source /etc/os-release
+source /etc/os-release || source /usr/lib/os-release
 openshift_dir=$(dirname $0)
 
 # Currently, the CI runs Openshift tests on Fedora.

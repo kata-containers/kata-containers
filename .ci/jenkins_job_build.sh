@@ -7,7 +7,7 @@
 
 set -e
 
-source "/etc/os-release"
+source "/etc/os-release" || source "/usr/lib/os-release"
 
 # Signify to all scripts that they are running in a CI environment
 [ -z "${KATA_DEV_MODE}" ] && export CI=true

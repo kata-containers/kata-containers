@@ -10,7 +10,7 @@ set -e
 cidir=$(dirname "$0")
 
 source "${cidir}/lib.sh"
-source /etc/os-release
+source /etc/os-release || source /usr/lib/os-release
 
 # Modify the runtimes build-time defaults
 

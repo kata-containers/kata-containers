@@ -7,7 +7,7 @@
 
 set -e
 
-source /etc/os-release
+source /etc/os-release || source /usr/lib/os-release
 kubernetes_dir=$(dirname $0)
 
 # Currently, Kubernetes tests only work on Ubuntu.

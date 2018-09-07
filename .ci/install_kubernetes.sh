@@ -13,7 +13,7 @@ source "${cidir}/lib.sh"
 echo "Install Kubernetes components"
 
 cidir=$(dirname "$0")
-source /etc/os-release
+source /etc/os-release || source /usr/lib/os-release
 kubernetes_version=$(get_version "externals.kubernetes.version")
 
 if [ "$ID" != "ubuntu" ]; then

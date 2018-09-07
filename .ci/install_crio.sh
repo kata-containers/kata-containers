@@ -9,7 +9,7 @@ set -e
 
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
-source /etc/os-release
+source /etc/os-release || source /usr/lib/os-release
 
 echo "Get CRI-O sources"
 crio_repo="github.com/kubernetes-incubator/cri-o"
