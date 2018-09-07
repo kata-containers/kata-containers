@@ -12,7 +12,6 @@
         * [Adding networks dynamically](#adding-networks-dynamically)
         * [Docker swarm support](#docker-swarm-support)
     * [Resource management](#resource-management)
-        * [docker run and kernel memory](#docker-run-and-kernel-memory)
         * [docker run and shared memory](#docker-run-and-shared-memory)
         * [docker run and sysctl](#docker-run-and-sysctl)
 * [Architectural limitations](#architectural-limitations)
@@ -168,14 +167,6 @@ See issue https://github.com/clearcontainers/runtime/issues/341 and [the constra
 
 For CPUs resource management see
 [cpu-constraints](constraints/cpu.md).
-
-### docker run and kernel memory
-
-The `docker run --kernel-memory=` option is not currently implemented.
-It should be possible to pass this information through to the QEMU
-command line CPU configuration options to gain a similar effect.
-
-See issue https://github.com/kata-containers/runtime/issues/187 for more information.
 
 ### docker run and shared memory
 
