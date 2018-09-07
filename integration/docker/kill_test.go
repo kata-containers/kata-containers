@@ -20,15 +20,32 @@ const (
 	canBeTrapped = true
 )
 
-func withSignal(signal syscall.Signal, trap bool) TableEntry {
-	expectedExitCode := int(signal)
-	if !trap {
-		// 128 -> command interrupted by a signal
-		// http://www.tldp.org/LDP/abs/html/exitcodes.html
-		expectedExitCode += 128
-	}
-
-	return Entry(fmt.Sprintf("with '%d'(%s) signal", signal, syscall.Signal(signal)), signal, expectedExitCode, true)
+var genericSignalMap = map[syscall.Signal]bool{
+	syscall.SIGHUP:    canBeTrapped,
+	syscall.SIGINT:    canBeTrapped,
+	syscall.SIGQUIT:   canBeTrapped,
+	syscall.SIGILL:    canBeTrapped,
+	syscall.SIGTRAP:   canBeTrapped,
+	syscall.SIGIOT:    canBeTrapped,
+	syscall.SIGFPE:    canBeTrapped,
+	syscall.SIGUSR1:   canBeTrapped,
+	syscall.SIGSEGV:   canBeTrapped,
+	syscall.SIGUSR2:   canBeTrapped,
+	syscall.SIGPIPE:   canBeTrapped,
+	syscall.SIGALRM:   canBeTrapped,
+	syscall.SIGTERM:   canBeTrapped,
+	syscall.SIGCHLD:   canBeTrapped,
+	syscall.SIGCONT:   canBeTrapped,
+	syscall.SIGTSTP:   canBeTrapped,
+	syscall.SIGTTIN:   canBeTrapped,
+	syscall.SIGTTOU:   canBeTrapped,
+	syscall.SIGURG:    canBeTrapped,
+	syscall.SIGXCPU:   canBeTrapped,
+	syscall.SIGXFSZ:   canBeTrapped,
+	syscall.SIGVTALRM: canBeTrapped,
+	syscall.SIGPROF:   canBeTrapped,
+	syscall.SIGWINCH:  canBeTrapped,
+	syscall.SIGIO:     canBeTrapped,
 }
 
 func withoutSignal() TableEntry {
@@ -41,6 +58,22 @@ func withoutSignal() TableEntry {
 
 func withSignalNotExitCode(signal syscall.Signal) TableEntry {
 	return Entry(fmt.Sprintf("with '%d' (%s) signal, don't change the exit code", signal, signal), signal, 0, false)
+}
+
+func withGenericSignals(signalsMap map[syscall.Signal]bool) []TableEntry {
+	var table []TableEntry
+	var expectedExitCode int
+	for signal, trap := range signalsMap {
+		expectedExitCode = int(signal)
+		if !trap {
+			// 128 -> command interrupted by a signal
+			// http://www.tldp.org/LDP/abs/html/exitcodes.html
+			expectedExitCode += 128
+
+		}
+		table = append(table, Entry(fmt.Sprintf("with '%d'(%s) signal", int(signal), signal), signal, expectedExitCode, true))
+	}
+	return append(table, withoutSignal(), withSignalNotExitCode(syscall.SIGSTOP))
 }
 
 var _ = Describe("docker kill", func() {
@@ -119,34 +152,6 @@ var _ = Describe("docker kill", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(exitCode).To(Equal(expectedExitCode))
 		},
-		withSignal(syscall.SIGHUP, canBeTrapped),
-		withSignal(syscall.SIGINT, canBeTrapped),
-		withSignal(syscall.SIGQUIT, canBeTrapped),
-		withSignal(syscall.SIGILL, canBeTrapped),
-		withSignal(syscall.SIGTRAP, canBeTrapped),
-		withSignal(syscall.SIGIOT, canBeTrapped),
-		withSignal(syscall.SIGFPE, canBeTrapped),
-		withSignal(syscall.SIGUSR1, canBeTrapped),
-		withSignal(syscall.SIGSEGV, canBeTrapped),
-		withSignal(syscall.SIGUSR2, canBeTrapped),
-		withSignal(syscall.SIGPIPE, canBeTrapped),
-		withSignal(syscall.SIGALRM, canBeTrapped),
-		withSignal(syscall.SIGTERM, canBeTrapped),
-		withSignal(syscall.SIGSTKFLT, canBeTrapped),
-		withSignal(syscall.SIGCHLD, canBeTrapped),
-		withSignal(syscall.SIGCONT, canBeTrapped),
-		withSignalNotExitCode(syscall.SIGSTOP),
-		withSignal(syscall.SIGTSTP, canBeTrapped),
-		withSignal(syscall.SIGTTIN, canBeTrapped),
-		withSignal(syscall.SIGTTOU, canBeTrapped),
-		withSignal(syscall.SIGURG, canBeTrapped),
-		withSignal(syscall.SIGXCPU, canBeTrapped),
-		withSignal(syscall.SIGXFSZ, canBeTrapped),
-		withSignal(syscall.SIGVTALRM, canBeTrapped),
-		withSignal(syscall.SIGPROF, canBeTrapped),
-		withSignal(syscall.SIGWINCH, canBeTrapped),
-		withSignal(syscall.SIGIO, canBeTrapped),
-		withSignal(syscall.SIGPWR, canBeTrapped),
-		withoutSignal(),
+		withOSSignals(genericSignalMap)...,
 	)
 })

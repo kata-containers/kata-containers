@@ -23,7 +23,8 @@ $(TARGET): $(SOURCES) check
 	go build -o "$(TARGET)" -ldflags "-X main.name=${TARGET} -X main.commit=${COMMIT} -X main.version=${VERSION}" .
 
 install: $(TARGET)
-	install -D $(TARGET) $(DESTTARGET)
+	install -d $(shell dirname $(DESTTARGET))
+	install $(TARGET) $(DESTTARGET)
 
 clean:
 	rm -f $(TARGET)
