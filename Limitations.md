@@ -24,6 +24,7 @@
         * [docker run --privileged](#docker-run---privileged)
 * [Miscellaneous](#miscellaneous)
     * [Docker ramdisk not supported](#docker-ramdisk-not-supported)
+    * [Docker --security-opt partially supported](#docker---security-opt-option-partially-supported)
 * [Appendices](#appendices)
     * [The constraints challenge](#the-constraints-challenge)
 
@@ -255,6 +256,13 @@ The `DOCKER_RAMDISK=true` environment variable used by Docker to force the
 container to run entirely on a RAM disk is not supported.
 
 See https://github.com/kata-containers/runtime/issues/134 for more information.
+
+## Docker --security-opt option partially supported
+
+The `--security-opt=` option used by Docker is partially supported.
+We only support --security-opt=no-new-privileges option as of today.
+
+See https://github.com/kata-containers/kata-containers/issues/31 for more information.
 
 # Appendices
 
