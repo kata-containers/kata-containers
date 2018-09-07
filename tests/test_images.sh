@@ -33,6 +33,12 @@ readonly docker_build_runtime="runc"
 test_images_only="false"
 test_initrds_only="false"
 
+# Hashes used to keep track of image sizes.
+# - Key: name of distro.
+# - Value: colon-separated roots and image sizes ("${rootfs_size}:${image_size}").
+typeset -A built_images
+typeset -A built_initrds
+
 usage()
 {
 	cat <<EOT
@@ -58,6 +64,73 @@ Notes:
 - If no options or parameters are specified, all tests will be run.
 
 EOT
+}
+
+# Add an entry to the specified stats file
+add_to_stats_file()
+{
+	local statsfile="$1"
+	local name="$2"
+	local entry="$3"
+	local entry_type="$4"
+
+	local rootfs_size_bytes
+	local rootfs_size_mb
+
+	local image_size_bytes
+	local image_size_mb
+
+	rootfs_size_bytes=$(echo "$entry"|cut -d: -f1)
+	image_size_bytes=$(echo "$entry"|cut -d: -f2)
+
+	rootfs_size_mb=$(bc <<< "scale=2; ${rootfs_size_bytes} / 2^20")
+	image_size_mb=$(bc <<< "scale=2; ${image_size_bytes} / 2^20")
+
+	printf '%12.12s\t%10.10s\t%12.12s\t%10.10s\t%-8.8s\t%-20.20s\n' \
+		"${image_size_bytes}" \
+		"${image_size_mb}" \
+		"${rootfs_size_bytes}" \
+		"${rootfs_size_mb}" \
+		"${entry_type}" \
+		"${name}" >> "$statsfile"
+}
+
+# Show the sizes of all the generated initrds and images
+show_stats()
+{
+	local name
+	local sizes
+
+	local tmpfile=$(mktemp)
+
+	# images
+	for name in "${!built_images[@]}"
+	do
+		sizes=${built_images[$name]}
+		add_to_stats_file "$tmpfile" "$name" "$sizes" 'image'
+	done
+
+	# initrds
+	for name in "${!built_initrds[@]}"
+	do
+		sizes=${built_initrds[$name]}
+		add_to_stats_file "$tmpfile" "$name" "$sizes" 'initrd'
+	done
+
+	info "Image and rootfs sizes (in bytes and MB), smallest image first:"
+	echo
+
+	printf '%12.12s\t%10.10s\t%12.12s\t%10.10s\t%-8.8s\t%-20.20s\n' \
+		"image-bytes" \
+		"image-MB" \
+		"rootfs-bytes" \
+		"rootfs-MB" \
+		"Type" \
+		"Name"
+
+	sort -k1,1n "$tmpfile"
+
+	rm -f "${tmpfile}"
 }
 
 exit_handler()
@@ -270,6 +343,8 @@ handle_options()
 
 		build_rootfs "${distro}" "${rootfs}"
 
+		local rootfs_size=$(du -sb "${rootfs}" | awk '{print $1}')
+
 		if [ "$type" = "image" ]
 		then
 			# Images need systemd
@@ -278,12 +353,20 @@ handle_options()
 			local image_path="${images_dir}/${type}-${distro}-agent-init-${AGENT_INIT}.img"
 
 			build_image "${image_path}" "${rootfs}"
+			local image_size=$(stat -c "%s" "${image_path}")
+
+			built_images["${distro}"]="${rootfs_size}:${image_size}"
+
 			install_image_create_container "${image_path}"
 		elif [ "$type" = "initrd" ]
 		then
 			local initrd_path="${images_dir}/${type}-${distro}-agent-init-${AGENT_INIT}.img"
 
 			build_initrd "${initrd_path}" "${rootfs}"
+			local initrd_size=$(stat -c "%s" "${initrd_path}")
+
+			built_initrds["${distro}"]="${rootfs_size}:${initrd_size}"
+
 			install_initrd_create_container "${initrd_path}"
 		else
 			die "invalid type: '$type' for distro $distro option $opt"
@@ -459,6 +542,8 @@ test_all_distros()
 	   # previous tests.
 	   test_distro_euleros
 	fi
+
+	show_stats
 }
 
 main()
