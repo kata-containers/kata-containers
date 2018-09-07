@@ -17,6 +17,7 @@
 package qemu
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -359,6 +360,48 @@ func TestVSOCKValid(t *testing.T) {
 	if vsockDevice.Valid() {
 		t.Fatalf("VSOCK ID is not valid")
 	}
+}
+
+func TestAppendVirtioRng(t *testing.T) {
+	var objectString = "-object rng-random,id=rng0"
+	var deviceString = "-device " + string(VirtioRng) + ",rng=rng0"
+	rngDevice := RngDevice{
+		ID: "rng0",
+	}
+
+	testAppend(rngDevice, objectString+" "+deviceString, t)
+
+	rngDevice.Filename = "/dev/urandom"
+	objectString += ",filename=" + rngDevice.Filename
+
+	testAppend(rngDevice, objectString+" "+deviceString, t)
+
+	rngDevice.MaxBytes = 20
+
+	deviceString += fmt.Sprintf(",max-bytes=%d", rngDevice.MaxBytes)
+	testAppend(rngDevice, objectString+" "+deviceString, t)
+
+	rngDevice.Period = 500
+
+	deviceString += fmt.Sprintf(",period=%d", rngDevice.Period)
+	testAppend(rngDevice, objectString+" "+deviceString, t)
+
+}
+
+func TestVirtioRngValid(t *testing.T) {
+	rng := RngDevice{
+		ID: "",
+	}
+
+	if rng.Valid() {
+		t.Fatalf("rng should be not valid when ID is empty")
+	}
+
+	rng.ID = "rng0"
+	if !rng.Valid() {
+		t.Fatalf("rng should be valid")
+	}
+
 }
 
 var deviceSCSIControllerStr = "-device virtio-scsi-pci,id=foo"
