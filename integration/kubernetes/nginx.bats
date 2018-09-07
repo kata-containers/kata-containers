@@ -8,7 +8,9 @@
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 
 setup() {
-	nginx_image="nginx:1.14"
+	versions_file="${BATS_TEST_DIRNAME}/../../versions.yaml"
+	nginx_version=$("${GOPATH}/bin/yq" read "$versions_file" "docker_images.nginx.version")
+	nginx_image="nginx:$nginx_version"
 	busybox_image="busybox"
 	service_name="nginx-service"
 	export KUBECONFIG=/etc/kubernetes/admin.conf
