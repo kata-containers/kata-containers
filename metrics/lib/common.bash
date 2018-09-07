@@ -246,16 +246,12 @@ kill_processes_before_start() {
 # Normally used to look for errant processes, and hence prints
 # a warning
 check_processes() {
-	process=$1
-
-	[[ -z "${process}" ]] && return 0
-
-	pgrep -f "$process"
-	if [ $? -eq 0 ]; then
-		warning "Found unexpected ${process} present"
-		ps -ef | grep $process
-		return 1
-	fi
+	general_processes=( ${PROXY_PATH} ${HYPERVISOR_PATH} ${SHIM_PATH} )
+	for i in "${general_processes[@]}"; do
+		if pgrep -f "$i"; then
+			die "Found unexpected ${i} present"
+		fi
+	done
 }
 
 # Generate a random name - generally used when creating containers, but can

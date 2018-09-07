@@ -9,6 +9,10 @@ set -e
 
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../../.ci/lib.sh"
+source "${SCRIPT_PATH}/../../metrics/lib/common.bash"
+
+# Check no processes are left behind
+check_processes
 
 # The next workaround is to be able to communicate between pods
 # Issue: https://github.com/kubernetes/kubernetes/issues/40182

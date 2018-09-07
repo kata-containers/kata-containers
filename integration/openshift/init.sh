@@ -10,6 +10,10 @@ set -e
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/openshiftrc"
 source "${SCRIPT_PATH}/../../.ci/lib.sh"
+source "${SCRIPT_PATH}/../../metrics/lib/common.bash"
+
+# Check no processes are left behind
+check_processes
 
 echo "Start crio service"
 sudo systemctl start crio
