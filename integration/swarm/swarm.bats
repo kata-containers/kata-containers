@@ -23,13 +23,8 @@ number_of_retries=5
 
 setup() {
 	# Check that processes are not running
-	run check_processes ${PROXY_PATH}
-	[ "$status" -eq 0 ]
-
-	run check_processes ${SHIM_PATH}
-	[ "$status" -eq 0 ]
-
-	run check_processes ${HYPERVISOR_PATH}
+	run check_processes
+	echo "$output"
 	[ "$status" -eq 0 ]
 
 	interfaces=$(basename -a /sys/class/net/*)
@@ -69,13 +64,8 @@ teardown() {
 	docker service remove "${SERVICE_NAME}"
 	docker swarm leave --force
 
-	# Check that processes are not left by Swarm
-	run check_processes ${PROXY_PATH}
-	[ "$status" -eq 0 ]
-
-	run check_processes ${SHIM_PATH}
-	[ "$status" -eq 0 ]
-
-	run check_processes ${HYPERVISOR_PATH}
+	# Check that processes are not running
+	run check_processes
+	echo "$output"
 	[ "$status" -eq 0 ]
 }

@@ -10,6 +10,10 @@
 source ${BATS_TEST_DIRNAME}/../../metrics/lib/common.bash
 
 setup() {
+	# Check that processes are not running
+	run check_processes
+	echo "$output"
+	[ "$status" -eq 0 ]
 	clean_env
 }
 
@@ -372,4 +376,8 @@ setup() {
 
 teardown() {
 	clean_env
+	# Check that processes are not running
+	run check_processes
+	echo "$output"
+	[ "$status" -eq 0 ]
 }
