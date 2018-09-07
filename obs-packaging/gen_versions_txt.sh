@@ -42,6 +42,9 @@ gen_version_file() {
 	golang_version="1.10.2"
 	golang_x84_64_sha256=$(curl -s -L "https://storage.googleapis.com/golang/go${golang_version}.linux-amd64.tar.gz.sha256")
 
+	# - is not a valid char for rpmbuild
+	# see https://github.com/semver/semver/issues/145
+	kata_version=${kata_version/-/\~}
 	cat >versions.txt <<EOT
 
 # This is a generated file from ${script_name}
