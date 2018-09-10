@@ -458,10 +458,15 @@ func TestQMPNetdevAddByFds(t *testing.T) {
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
 	buf.AddCommand("netdev_add", nil, "return", nil)
+	buf.AddCommand("netdev_add", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	q.version = checkVersion(t, connectedCh)
-	err := q.ExecuteNetdevAddByFds(context.Background(), "tap", "br0", nil, nil)
+	err := q.ExecuteNetdevAddByFds(context.Background(), "tap", "br0", nil, []string{})
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	err = q.ExecuteNetdevAddByFds(context.Background(), "tap", "br1", nil, []string{"3"})
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
