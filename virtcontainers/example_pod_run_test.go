@@ -43,23 +43,17 @@ func Example_createAndStartSandbox() {
 		KernelPath:     "/usr/share/kata-containers/vmlinux.container",
 		ImagePath:      "/usr/share/kata-containers/kata-containers.img",
 		HypervisorPath: "/usr/bin/qemu-system-x86_64",
+		MemorySize:     1024,
 	}
 
 	// Use hyperstart default values for the agent.
 	agConfig := vc.HyperConfig{}
-
-	// VM resources
-	vmConfig := vc.Resources{
-		Memory: 1024,
-	}
 
 	// The sandbox configuration:
 	// - One container
 	// - Hypervisor is QEMU
 	// - Agent is hyperstart
 	sandboxConfig := vc.SandboxConfig{
-		VMConfig: vmConfig,
-
 		HypervisorType:   vc.QemuHypervisor,
 		HypervisorConfig: hypervisorConfig,
 

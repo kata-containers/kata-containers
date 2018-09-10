@@ -11,7 +11,7 @@ type mockHypervisor struct {
 	vCPUs uint32
 }
 
-func (m *mockHypervisor) init(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, vmConfig Resources, storage resourceStorage) error {
+func (m *mockHypervisor) init(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error {
 	err := hypervisorConfig.valid()
 	if err != nil {
 		return err

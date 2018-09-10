@@ -51,8 +51,6 @@ type QemuState struct {
 type qemu struct {
 	id string
 
-	vmConfig Resources
-
 	storage resourceStorage
 
 	config HypervisorConfig
@@ -197,7 +195,7 @@ func (q *qemu) trace(name string) (opentracing.Span, context.Context) {
 }
 
 // init intializes the Qemu structure.
-func (q *qemu) init(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, vmConfig Resources, storage resourceStorage) error {
+func (q *qemu) init(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error {
 	// save
 	q.ctx = ctx
 
@@ -211,7 +209,6 @@ func (q *qemu) init(ctx context.Context, id string, hypervisorConfig *Hypervisor
 
 	q.id = id
 	q.storage = storage
-	q.vmConfig = vmConfig
 	q.config = *hypervisorConfig
 	q.arch = newQemuArch(q.config)
 
@@ -251,7 +248,7 @@ func (q *qemu) init(ctx context.Context, id string, hypervisorConfig *Hypervisor
 }
 
 func (q *qemu) cpuTopology() govmmQemu.SMP {
-	return q.arch.cpuTopology(q.config.DefaultVCPUs, q.config.DefaultMaxVCPUs)
+	return q.arch.cpuTopology(q.config.NumVCPUs, q.config.DefaultMaxVCPUs)
 }
 
 func (q *qemu) hostMemMB() (uint64, error) {
@@ -272,10 +269,7 @@ func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 		return govmmQemu.Memory{}, err
 	}
 
-	memMb := uint64(q.config.DefaultMemSz)
-	if q.vmConfig.Memory > 0 {
-		memMb = uint64(q.vmConfig.Memory)
-	}
+	memMb := uint64(q.config.MemorySize)
 
 	return q.arch.memoryTopology(memMb, hostMemMb), nil
 }
@@ -1039,16 +1033,12 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) error {
 	}
 
 	// calculate current memory
-	currentMemory := int(q.config.DefaultMemSz)
-	if q.vmConfig.Memory > 0 {
-		currentMemory = int(q.vmConfig.Memory)
-	}
-	currentMemory += q.state.HotpluggedMemory
+	currentMemory := int(q.config.MemorySize) + q.state.HotpluggedMemory
 
 	// Don't exceed the maximum amount of memory
 	if currentMemory+memDev.sizeMB > int(maxMem) {
 		return fmt.Errorf("Unable to hotplug %d MiB memory, the SB has %d MiB and the maximum amount is %d MiB",
-			memDev.sizeMB, currentMemory, q.config.DefaultMemSz)
+			memDev.sizeMB, currentMemory, q.config.MemorySize)
 	}
 
 	return q.hotplugAddMemory(memDev)

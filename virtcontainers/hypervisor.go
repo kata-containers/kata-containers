@@ -175,15 +175,14 @@ type HypervisorConfig struct {
 	// it will be used for the sandbox's kernel path instead of KernelPath.
 	customAssets map[assetType]*asset
 
-	// DefaultVCPUs specifies default number of vCPUs for the VM.
-	DefaultVCPUs uint32
+	// NumVCPUs specifies default number of vCPUs for the VM.
+	NumVCPUs uint32
 
 	//DefaultMaxVCPUs specifies the maximum number of vCPUs for the VM.
 	DefaultMaxVCPUs uint32
 
 	// DefaultMem specifies default memory size in MiB for the VM.
-	// Sandbox configuration VMConfig.Memory overwrites this.
-	DefaultMemSz uint32
+	MemorySize uint32
 
 	// DefaultBridges specifies default number of bridges for the VM.
 	// Bridges can be used to hot plug devices
@@ -274,12 +273,12 @@ func (conf *HypervisorConfig) valid() error {
 		return err
 	}
 
-	if conf.DefaultVCPUs == 0 {
-		conf.DefaultVCPUs = defaultVCPUs
+	if conf.NumVCPUs == 0 {
+		conf.NumVCPUs = defaultVCPUs
 	}
 
-	if conf.DefaultMemSz == 0 {
-		conf.DefaultMemSz = defaultMemSzMiB
+	if conf.MemorySize == 0 {
+		conf.MemorySize = defaultMemSzMiB
 	}
 
 	if conf.DefaultBridges == 0 {
@@ -546,7 +545,7 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
-	init(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, vmConfig Resources, storage resourceStorage) error
+	init(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error
 
 	createSandbox() error
 	startSandbox() error
