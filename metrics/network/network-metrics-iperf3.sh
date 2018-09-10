@@ -45,6 +45,10 @@ function iperf3_bandwidth() {
 	local TEST_NAME="network iperf3 bandwidth"
 	cmds=("bc" "jq")
 	check_cmds "${cmds[@]}"
+
+	# Check no processes are left behind
+	check_processes
+
 	init_env
 
 	local server_address=$(start_server "$image" "$server_command" "$server_extra_args")
@@ -89,6 +93,9 @@ EOF
 
 	metrics_json_save
 	clean_env
+
+	# Check no processes are left behind
+	check_processes
 }
 
 # Test jitter on single direction UDP
@@ -96,6 +103,9 @@ function iperf3_jitter() {
 	local TEST_NAME="network iperf3 jitter"
 	cmds=("jq")
 	check_cmds "${cmds[@]}"
+
+	# Check no processes are left behind
+	check_processes
 	init_env
 
 	# Start server
@@ -138,6 +148,9 @@ EOF
 
 	metrics_json_save
 	clean_env
+
+	# Check no processes are left behind
+	check_processes
 }
 
 # This function checks/verify if the iperf3 server
@@ -277,6 +290,9 @@ EOF
 function get_host_cnt_bwd() {
 	local cli_args="$1"
 
+	# Check no processes are left behind
+	check_processes 1>&2
+
 	# Initialize/clean environment
 	init_env 1>&2
 
@@ -298,6 +314,9 @@ function get_host_cnt_bwd() {
 
 	clean_env 1>&2
 	echo "$output"
+
+	# Check no processes are left behind
+	check_processes 1>&2
 }
 
 # Run a UDP PPS test between two containers.
@@ -309,6 +328,9 @@ function get_cnt_cnt_pps() {
 	# Check we have the json query tool to parse the results
 	local cmds=("jq" "iperf3")
 	check_cmds "${cmds[@]}" 1>&2
+
+	# Check no processes are left behind
+	check_processes 1>&2
 
 	# Initialize/clean environment
 	#  We need to do the stdout re-direct as we don't want any verbage in the
@@ -334,6 +356,9 @@ function get_cnt_cnt_pps() {
 
 	clean_env 1>&2
 	echo "$output"
+
+	# Check no processes are left behind
+	check_processes 1>&2
 }
 
 # Run a UDP PPS test between the host and a container, with the client on the host.
@@ -346,6 +371,9 @@ function get_host_cnt_pps() {
 	# We also need the json query tool, as we use JSON format results from iperf3
 	local cmds=("iperf3" "jq")
 	check_cmds "${cmds[@]}" 1>&2
+
+	# Check no processes are left behind
+	check_processes 1>&2
 
 	# Initialize/clean environment
 	init_env 1>&2
@@ -368,6 +396,9 @@ function get_host_cnt_pps() {
 
 	clean_env 1>&2
 	echo "$output"
+
+	# Check no processes are left behind
+	check_processes 1>&2
 }
 
 # This test measures the bandwidth between a container and the host.

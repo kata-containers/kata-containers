@@ -23,9 +23,9 @@ kill_stale_process()
 {
 	# use function kill_processes_before_start() under $metrics_lib_script to kill stale containers or shim/proxy/hypervisor process
 	kill_processes_before_start
+	check_processes
 	for stale_process in "${stale_process_union[@]}"; do
-		result=$(check_processes "${stale_process}")
-		if [[ $result -ne 0 ]]; then
+		if pgrep -f "${stale_process}"; then
 			sudo killall -9 "${stale_process}" || true
 		fi
 	done <<< "${stale_process_union}"

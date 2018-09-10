@@ -65,6 +65,9 @@ function udp_bandwidth {
 
 	clean_env
 	echo "$output"
+
+	# Check no processes are left behind
+	check_processes
 }
 
 function save_results {
@@ -180,6 +183,9 @@ function main() {
 	cmds=("docker")
 	check_cmds "${cmds[@]}"
 	check_dockerfiles_images "$image" "$dockerfile"
+
+	# Check no processes are left behind
+	check_processes
 
 	# Initialize/clean environment
 	init_env

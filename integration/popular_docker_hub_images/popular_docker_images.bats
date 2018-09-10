@@ -7,7 +7,7 @@
 #
 # Tests for the most popular images from docker hub.
 
-source ${BATS_TEST_DIRNAME}/../../metrics/lib/common.bash
+source ${BATS_TEST_DIRNAME}/../../lib/common.bash
 
 setup() {
 	# Check that processes are not running

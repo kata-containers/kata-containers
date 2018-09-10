@@ -48,6 +48,9 @@ function main() {
 	# Check tools/commands dependencies
 	cmds=("awk" "docker" "perf")
 
+	# Check no processes are left behind
+	check_processes
+
 	init_env
 	check_cmds "${cmds[@]}"
 	check_dockerfiles_images "$IMAGE" "$DOCKERFILE"
@@ -107,6 +110,9 @@ EOF
 	metrics_json_end_array "Results"
 	metrics_json_save
 	clean_env
+
+	# Check no processes are left behind
+	check_processes
 }
 
 main "$@"

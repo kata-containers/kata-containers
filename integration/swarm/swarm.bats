@@ -8,7 +8,7 @@
 # Swarm testing : This will start swarm as well as it will create and
 # run swarm replicas using Nginx
 
-load "${BATS_TEST_DIRNAME}/../../metrics/lib/common.bash"
+load "${BATS_TEST_DIRNAME}/../../lib/common.bash"
 
 # Image for swarm testing
 nginx_image="gabyct/nginx"

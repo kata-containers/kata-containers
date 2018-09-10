@@ -78,6 +78,9 @@ function nginx_ab_networking {
 	ab -s ${socket_time} -n ${requests} -r -c ${concurrency_value} http://${url}/ > $TMP_FILE
 
 	clean_env
+
+	# Check no processes are left behind
+	check_processes
 }
 
 function save_results {
@@ -144,6 +147,9 @@ function main() {
 	# Check tools/commands dependencies
 	cmds=("ab" "awk")
 	check_cmds "${cmds[@]}"
+
+	# Check no processes are left behind
+	check_processes
 
 	# Initialize/clean environment
 	init_env

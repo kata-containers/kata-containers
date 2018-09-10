@@ -9,7 +9,7 @@ set -e
 
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/openshiftrc"
-source "${SCRIPT_PATH}/../../metrics/lib/common.bash"
+source "${SCRIPT_PATH}/../../lib/common.bash"
 
 echo "Terminate Openshift master and node processes"
 pgrep openshift | xargs sudo kill -9
