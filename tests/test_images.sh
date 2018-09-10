@@ -42,7 +42,6 @@ Usage: $script_name [help|<distro>]
 Options:
 
   -h | --help          # Show usage.
-  --distro <distro>    # Only run tests for specified distro.
   --list               # List all distros that can be tested.
   --test-images-only   # Only run images tests for the list of distros under test.
   --test-initrds-only  # Only run initrds tests for the list of distros under test.
@@ -478,8 +477,6 @@ main()
 	while [ $# -gt 1 ]
 	do
 		case "$1" in
-			--distro) distro="$2";;
-
 			-h|--help) usage; exit 0 ;;
 
 			--list) list_distros; exit 0;;
