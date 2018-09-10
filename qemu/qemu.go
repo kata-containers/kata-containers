@@ -85,6 +85,9 @@ const (
 
 	// VHostVSockPCI is the vhost vsock pci driver.
 	VHostVSockPCI DeviceDriver = "vhost-vsock-pci"
+
+	// VirtioRng is the paravirtualized RNG device driver.
+	VirtioRng DeviceDriver = "virtio-rng"
 )
 
 // ObjectType is a string representing a qemu object type.
@@ -1013,6 +1016,63 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
+
+	return qemuParams
+}
+
+// RngDevice represents a random number generator device.
+type RngDevice struct {
+	// ID is the device ID
+	ID string
+	// Filename is entropy source on the host
+	Filename string
+	// MaxBytes is the bytes allowed to guest to get from the host’s entropy per period
+	MaxBytes uint
+	// Period is duration of a read period in seconds
+	Period uint
+}
+
+// Valid returns true if the RngDevice structure is valid and complete.
+func (v RngDevice) Valid() bool {
+	if v.ID == "" {
+		return false
+	}
+
+	return true
+}
+
+// QemuParams returns the qemu parameters built out of the RngDevice.
+func (v RngDevice) QemuParams(_ *Config) []string {
+	var qemuParams []string
+
+	//-object rng-random,filename=/dev/hwrng,id=rng0
+	var objectParams []string
+	//-device virtio-rng-pci,rng=rng0,max-bytes=1024,period=1000
+	var deviceParams []string
+
+	objectParams = append(objectParams, "rng-random")
+	objectParams = append(objectParams, "id="+v.ID)
+
+	deviceParams = append(deviceParams, string(VirtioRng))
+	deviceParams = append(deviceParams, "rng="+v.ID)
+
+	if v.Filename != "" {
+		objectParams = append(objectParams, "filename="+v.Filename)
+	}
+
+	if v.MaxBytes > 0 {
+		deviceParams = append(deviceParams, fmt.Sprintf("max-bytes=%d", v.MaxBytes))
+	}
+
+	if v.Period > 0 {
+		deviceParams = append(deviceParams, fmt.Sprintf("period=%d", v.Period))
+	}
+
+	qemuParams = append(qemuParams, "-object")
+	qemuParams = append(qemuParams, strings.Join(objectParams, ","))
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
 
 	return qemuParams
 }
