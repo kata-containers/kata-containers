@@ -160,6 +160,24 @@ type HotpluggableCPU struct {
 	QOMPath    string        `json:"qom-path"`
 }
 
+// MemoryDevicesData cotains the data describes a memory device
+type MemoryDevicesData struct {
+	Slot         int    `json:"slot"`
+	Node         int    `json:"node"`
+	Addr         uint64 `json:"addr"`
+	Memdev       string `json:"memdev"`
+	ID           string `json:"id"`
+	Hotpluggable bool   `json:"hotpluggable"`
+	Hotplugged   bool   `json:"hotplugged"`
+	Size         uint64 `json:"size"`
+}
+
+// MemoryDevices represents memory devices of vm
+type MemoryDevices struct {
+	Data MemoryDevicesData `json:"data"`
+	Type string            `json:"type"`
+}
+
 func (q *QMP) readLoop(fromVMCh chan<- []byte) {
 	scanner := bufio.NewScanner(q.conn)
 	for scanner.Scan() {
@@ -987,6 +1005,28 @@ func (q *QMP) ExecSetMigrateArguments(ctx context.Context, url string) error {
 	}
 
 	return q.executeCommand(ctx, "migrate", args, nil)
+}
+
+// ExecQueryMemoryDevices returns a slice with the list of memory devices
+func (q *QMP) ExecQueryMemoryDevices(ctx context.Context) ([]MemoryDevices, error) {
+	response, err := q.executeCommandWithResponse(ctx, "query-memory-devices", nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// convert response to json
+	data, err := json.Marshal(response)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to extract memory devices information: %v", err)
+	}
+
+	var memoryDevices []MemoryDevices
+	// convert json to []MemoryDevices
+	if err = json.Unmarshal(data, &memoryDevices); err != nil {
+		return nil, fmt.Errorf("unable to convert json to memory devices: %v", err)
+	}
+
+	return memoryDevices, nil
 }
 
 // ExecHotplugMemory adds size of MiB memory to the guest
