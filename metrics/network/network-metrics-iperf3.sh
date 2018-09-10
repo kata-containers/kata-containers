@@ -456,7 +456,6 @@ Usage: $0 "[options]"
 		-b      Run all bandwidth tests
 		-h      Shows help
 		-j      Run jitter tests
-		-l      Run parallel connection tests
 		-p      Run all PPS tests
 EOF
 )"
