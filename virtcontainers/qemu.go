@@ -81,6 +81,7 @@ const (
 	qmpExecCatCmd                     = "exec:cat"
 
 	scsiControllerID = "scsi0"
+	rngID            = "rng0"
 )
 
 var qemuMajorVersion int
@@ -488,6 +489,11 @@ func (q *qemu) createSandbox() error {
 	if ioThread != nil {
 		qemuConfig.IOThreads = []govmmQemu.IOThread{*ioThread}
 	}
+	// Add RNG device to hypervisor
+	rngDev := config.RNGDev{
+		ID: rngID,
+	}
+	qemuConfig.Devices = q.arch.appendRNGDevice(qemuConfig.Devices, rngDev)
 
 	q.qemuConfig = qemuConfig
 

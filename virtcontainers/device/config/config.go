@@ -117,6 +117,12 @@ type VFIODev struct {
 	BDF string
 }
 
+// RNGDev represents a random number generator device
+type RNGDev struct {
+	// ID is used to identify the device in the hypervisor options.
+	ID string
+}
+
 // VhostUserDeviceAttrs represents data shared by most vhost-user devices
 type VhostUserDeviceAttrs struct {
 	DevID      string
