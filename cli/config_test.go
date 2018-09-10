@@ -133,9 +133,9 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		ImagePath:             imagePath,
 		KernelParams:          vc.DeserializeParams(strings.Fields(kernelParams)),
 		HypervisorMachineType: machineType,
-		DefaultVCPUs:          defaultVCPUCount,
+		NumVCPUs:              defaultVCPUCount,
 		DefaultMaxVCPUs:       uint32(goruntime.NumCPU()),
-		DefaultMemSz:          defaultMemSize,
+		MemorySize:            defaultMemSize,
 		DisableBlockDeviceUse: disableBlockDevice,
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
 		DefaultBridges:        defaultBridgesCount,
@@ -167,10 +167,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 
 		ShimType:   defaultShim,
 		ShimConfig: shimConfig,
-
-		VMConfig: vc.Resources{
-			Memory: uint(defaultMemSize),
-		},
 	}
 
 	config = testRuntimeConfig{
@@ -474,6 +470,8 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 	shimPath := path.Join(dir, "shim")
 	proxyPath := path.Join(dir, "proxy")
+	hypervisorPath := path.Join(dir, "hypervisor")
+	defaultHypervisorPath = hypervisorPath
 
 	imagePath := path.Join(dir, "image.img")
 	initrdPath := path.Join(dir, "initrd.img")
@@ -540,6 +538,11 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		t.Error(err)
 	}
 
+	err = createEmptyFile(hypervisorPath)
+	if err != nil {
+		t.Error(err)
+	}
+
 	_, config, err = loadConfiguration(configPath, false)
 	if err != nil {
 		t.Fatal(err)
@@ -551,9 +554,9 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		ImagePath:             defaultImagePath,
 		InitrdPath:            defaultInitrdPath,
 		HypervisorMachineType: defaultMachineType,
-		DefaultVCPUs:          defaultVCPUCount,
+		NumVCPUs:              defaultVCPUCount,
 		DefaultMaxVCPUs:       defaultMaxVCPUCount,
-		DefaultMemSz:          defaultMemSize,
+		MemorySize:            defaultMemSize,
 		DisableBlockDeviceUse: defaultDisableBlockDeviceUse,
 		DefaultBridges:        defaultBridgesCount,
 		Mlock:                 !defaultEnableSwap,
@@ -857,13 +860,13 @@ func TestHypervisorDefaults(t *testing.T) {
 	assert.Equal(h.machineType(), machineType, "custom hypervisor machine type wrong")
 
 	// auto inferring
-	h.DefaultVCPUs = -1
+	h.NumVCPUs = -1
 	assert.Equal(h.defaultVCPUs(), uint32(numCPUs), "default vCPU number is wrong")
 
-	h.DefaultVCPUs = 2
+	h.NumVCPUs = 2
 	assert.Equal(h.defaultVCPUs(), uint32(2), "default vCPU number is wrong")
 
-	h.DefaultVCPUs = int32(numCPUs) + 1
+	h.NumVCPUs = int32(numCPUs) + 1
 	assert.Equal(h.defaultVCPUs(), uint32(numCPUs), "default vCPU number is wrong")
 
 	h.DefaultMaxVCPUs = 2
@@ -876,7 +879,7 @@ func TestHypervisorDefaults(t *testing.T) {
 	h.DefaultMaxVCPUs = uint32(maxvcpus) + 1
 	assert.Equal(h.defaultMaxVCPUs(), uint32(numCPUs), "default max vCPU number is wrong")
 
-	h.DefaultMemSz = 1024
+	h.MemorySize = 1024
 	assert.Equal(h.defaultMemSz(), uint32(1024), "default memory size is wrong")
 }
 
@@ -1266,22 +1269,20 @@ func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 	assert := assert.New(t)
 
 	vcpus := uint(2)
-	mem := uint(2048)
+	mem := uint32(2048)
 
 	config := oci.RuntimeConfig{}
-	expectedVMConfig := vc.Resources{
-		Memory: mem,
-	}
+	expectedVMConfig := mem
 
 	tomlConf := tomlConfig{
 		Hypervisor: map[string]hypervisor{
 			qemuHypervisorTableType: {
-				DefaultVCPUs: int32(vcpus),
-				DefaultMemSz: uint32(mem),
-				Path:         "/",
-				Kernel:       "/",
-				Image:        "/",
-				Firmware:     "/",
+				NumVCPUs:   int32(vcpus),
+				MemorySize: uint32(mem),
+				Path:       "/",
+				Kernel:     "/",
+				Image:      "/",
+				Firmware:   "/",
 			},
 		},
 	}
@@ -1289,7 +1290,7 @@ func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 	err := updateRuntimeConfig("", tomlConf, &config)
 	assert.NoError(err)
 
-	assert.Equal(expectedVMConfig, config.VMConfig)
+	assert.Equal(expectedVMConfig, config.HypervisorConfig.MemorySize)
 }
 
 func TestUpdateRuntimeConfigurationFactoryConfig(t *testing.T) {
