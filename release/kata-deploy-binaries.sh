@@ -124,10 +124,14 @@ install_kata_components() {
 			PREFIX="${prefix}" \
 			QEMUCMD="qemu-system-x86_64"
 		#TODO Remove libexecdir
+		libexecdir=""
+		if [ "$p" == "shim" ]; then
+			libexecdir="/${destdir}/${prefix}/libexec/"
+		fi
 		echo "Install"
 		make PREFIX="${prefix}" \
 			DESTDIR="${destdir}" \
-			LIBEXECDIR="/${destdir}/${prefix}/libexec/" \
+			LIBEXECDIR="${libexecdir}" \
 			install
 		popd >>/dev/null
 	done
