@@ -1,0 +1,13 @@
+#
+# Copyright (c) 2018 SUSE
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# NOTE: OS_VERSION is set according to config.sh
+from debian:@OS_VERSION@
+
+# RUN commands
+RUN apt-get update && apt-get install -y curl wget systemd debootstrap git build-essential
+# This will install the proper golang to build Kata components
+@INSTALL_GO@
+
