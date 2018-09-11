@@ -476,7 +476,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	imagePath := path.Join(dir, "image.img")
 	initrdPath := path.Join(dir, "initrd.img")
 
-	hypervisorPath := path.Join(dir, "hypervisor")
+	hypervisorPath = path.Join(dir, "hypervisor")
 	kernelPath := path.Join(dir, "kernel")
 
 	savedDefaultImagePath := defaultImagePath
@@ -1389,9 +1389,9 @@ func TestCheckHypervisorConfig(t *testing.T) {
 		kataLog.Logger.Out = logBuf
 
 		config := vc.HypervisorConfig{
-			ImagePath:    d.imagePath,
-			InitrdPath:   d.initrdPath,
-			DefaultMemSz: d.memBytes,
+			ImagePath:  d.imagePath,
+			InitrdPath: d.initrdPath,
+			MemorySize: d.memBytes,
 		}
 
 		err := checkHypervisorConfig(config)
