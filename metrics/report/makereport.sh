@@ -23,6 +23,12 @@ GUESTINPUTDIR="/inputdir/"
 GUESTOUTPUTDIR="/outputdir/"
 
 setup() {
+	echo "Checking subdirectories"
+	check_subdir="$(cd ${HOSTINPUTDIR}; ls -dx */ > /dev/null 2>&1 | wc -l)"
+	if [ $check_subdir -eq 0 ]; then
+		die "Subdirectory not found at metrics/results to store JSON results"
+	fi
+
 	echo "Checking Dockerfile"
 	check_dockerfiles_images "$IMAGE" "$DOCKERFILE"
 
