@@ -82,6 +82,9 @@ type qemuArch interface {
 	// appendVFIODevice appends a VFIO device to devices
 	appendVFIODevice(devices []govmmQemu.Device, vfioDevice config.VFIODev) []govmmQemu.Device
 
+	// appendRNGDevice appends a RNG device to devices
+	appendRNGDevice(devices []govmmQemu.Device, rngDevice config.RNGDev) []govmmQemu.Device
+
 	// handleImagePath handles the Hypervisor Config image path
 	handleImagePath(config HypervisorConfig)
 }
@@ -499,6 +502,16 @@ func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev conf
 	devices = append(devices,
 		govmmQemu.VFIODevice{
 			BDF: vfioDev.BDF,
+		},
+	)
+
+	return devices
+}
+
+func (q *qemuArchBase) appendRNGDevice(devices []govmmQemu.Device, rngDev config.RNGDev) []govmmQemu.Device {
+	devices = append(devices,
+		govmmQemu.RngDevice{
+			ID: rngDev.ID,
 		},
 	)
 
