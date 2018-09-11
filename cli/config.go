@@ -601,7 +601,7 @@ func checkHypervisorConfig(config vc.HypervisorConfig) error {
 		},
 	}
 
-	memSizeMB := int64(config.DefaultMemSz)
+	memSizeMB := int64(config.MemorySize)
 
 	if memSizeMB == 0 {
 		return errors.New("VM memory cannot be zero")
