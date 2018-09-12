@@ -19,9 +19,136 @@ SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_DIR}/../lib/common.bash"
 RESULTS_DIR=${SCRIPT_DIR}/../results
 
+# By default we run all the tests
+RUN_ALL=1
+
+help() {
+	usage=$(cat << EOF
+Usage: $0 [-h] [options]
+   Description:
+        This script gathers a number of metrics for use in the
+        report generation script. Which tests are run can be
+        configured on the commandline. Specifically enabling
+        individual tests will disable the 'all' option, unless
+        'all' is also specified last.
+   Options:
+        -a,         Run all tests (default).
+        -d,         Run the density tests.
+        -h,         Print this help.
+        -n,         Run the networking tests.
+        -s,         Run the storage tests.
+        -t,         Run the time tests.
+EOF
+)
+	echo "$usage"
+}
+
 # Set up the initial state
 init() {
 	metrics_onetime_init
+
+	local OPTIND
+	while getopts "adhnst" opt;do
+		case ${opt} in
+		a)
+		    RUN_ALL=1
+		    ;;
+		d)
+		    RUN_DENSITY=1
+		    RUN_ALL=
+		    ;;
+		h)
+		    help
+		    exit 0;
+		    ;;
+		n)
+		    RUN_NETWORK=1
+		    RUN_ALL=
+		    ;;
+		s)
+		    RUN_STORAGE=1
+		    RUN_ALL=
+		    ;;
+		t)
+		    RUN_TIME=1
+		    RUN_ALL=
+		    ;;
+		?)
+		    # parse failure
+		    help
+		    die "Failed to parse arguments"
+		    ;;
+		esac
+	done
+	shift $((OPTIND-1))
+}
+
+run_density_ksm() {
+	echo "Running KSM density tests"
+
+	# Run the memory footprint test - the main test that
+	# KSM affects. Run for a sufficient number of containers
+	# (that gives us a fair view of how memory gets shared across
+	# containers), and a large enough timeout  for KSM to settle.
+	# If KSM has not settled down by then, just take the measurement.
+	# 'auto' mode should detect when KSM has settled automatically.
+	bash density/docker_memory_usage.sh 20 300 auto
+
+	# Grab scaling system level footprint data for different sized
+	# container workloads - with KSM enabled.
+
+	# busybox - small container
+	export PAYLOAD_SLEEP="1"
+	export PAYLOAD="busybox"
+	export PAYLOAD_ARGS="tail -f /dev/null"
+	export PAYLOAD_RUNTIME_ARGS=" -m 2G"
+	bash density/footprint_data.sh
+
+	# mysql - medium sized container
+	# Need to wait for mysql to boot and settle before we measure
+	export PAYLOAD_SLEEP="10"
+	export PAYLOAD="mysql"
+	PAYLOAD_ARGS=" --innodb_use_native_aio=0 --disable-log-bin"
+	PAYLOAD_RUNTIME_ARGS=" -m 4G -e MYSQL_ALLOW_EMPTY_PASSWORD=1"
+	bash density/footprint_data.sh
+
+	# elasticsearch - large container
+	# Need to wait for elasticsearch to boot and settle before we measure
+	export PAYLOAD_SLEEP="10"
+	export PAYLOAD="elasticsearch"
+	PAYLOAD_ARGS=" "
+	PAYLOAD_RUNTIME_ARGS=" -m 8G"
+	bash density/footprint_data.sh
+}
+
+run_density() {
+	echo "Running non-KSM density tests"
+
+	# Run the density tests - no KSM, so no need to wait for settle
+	# Set a token short timeout, and use enough containers to get a
+	# good average measurement.
+	bash density/docker_memory_usage.sh 20 5
+}
+
+run_time() {
+	echo "Running time tests"
+	# Run the time tests - take time measures for an ubuntu image, over
+	# 100 'first and only container' launches.
+	# NOTE - whichever container you test here must support a full 'date'
+	# command - busybox based containers (including Alpine) will not work.
+	bash time/launch_times.sh -i ubuntu -n 100
+}
+
+run_storage() {
+	echo "Running storage tests"
+
+	# Enable this if you want to test a volume mount
+	#export TEST_VOLUME_MOUNT=1
+	bash storage/fio.sh
+}
+
+run_network() {
+	echo "No network tests to run"
 }
 
 # Execute metrics scripts
@@ -33,55 +160,36 @@ run() {
 	# rest of the tests, as KSM may introduce some extra noise in the
 	# results by stealing CPU time for instance.
 	if [[ -f ${KSM_ENABLE_FILE} ]]; then
-		save_ksm_settings
-		trap restore_ksm_settings EXIT QUIT KILL
-		set_ksm_aggressive
+		# No point enabling and disabling KSM if we have nothing to test.
+		if [ -n "$RUN_ALL" ] || [ -n "$RUN_DENSITY" ]; then
+			save_ksm_settings
+			trap restore_ksm_settings EXIT QUIT KILL
+			set_ksm_aggressive
 
-		# Run the memory footprint test - the main test that
-		# KSM affects. Run for 20 containers (that gives us a fair
-		# view of how memory gets shared across containers), and
-		# a default timeout of 300s - if KSM has not settled down
-		# by then, just take the measurement.
-		# 'auto' mode should detect when KSM has settled automatically.
-		bash density/docker_memory_usage.sh 20 300 auto
+			run_density_ksm
 
-		# Grab scaling system level footprint data for different sized
-		# container workloads - with KSM enabled.
-
-		# busybox - small container
-		export PAYLOAD_SLEEP="1"
-		export PAYLOAD="busybox"
-		export PAYLOAD_ARGS="tail -f /dev/null"
-		export PAYLOAD_RUNTIME_ARGS=" -m 2G"
-		bash density/footprint_data.sh
-
-		# mysql - medium sized container
-		export PAYLOAD_SLEEP="10"
-		export PAYLOAD="mysql"
-		PAYLOAD_ARGS=" --innodb_use_native_aio=0 --disable-log-bin"
-		PAYLOAD_RUNTIME_ARGS=" -m 4G -e MYSQL_ALLOW_EMPTY_PASSWORD=1"
-		bash density/footprint_data.sh
-
-		# elasticsearch - large container
-		export PAYLOAD_SLEEP="10"
-		export PAYLOAD="elasticsearch"
-		PAYLOAD_ARGS=" "
-		PAYLOAD_RUNTIME_ARGS=" -m 8G"
-		bash density/footprint_data.sh
-
-		# And now ensure KSM is turned off for the rest of the tests
-		disable_ksm
+			# And now ensure KSM is turned off for the rest of the tests
+			disable_ksm
+		fi
+	else
+		echo "No KSM control file, skipping KSM tests"
 	fi
 
-	# Run the time tests - take time measures for an ubuntu image, over
-	# 100 'first and only container' launches.
-	# NOTE - whichever container you test here must support a full 'date'
-	# command - busybox based containers (including Alpine) will not work.
-	bash time/launch_times.sh -i ubuntu -n 100
+	if [ -n "$RUN_ALL" ] || [ -n "$RUN_TIME" ]; then
+		run_time
+	fi
 
-	# Run the density tests - no KSM, so no need to wait for settle
-	# (so set a token 5s wait). Take the measure across 20 containers.
-	bash density/docker_memory_usage.sh 20 5
+	if [ -n "$RUN_ALL" ] || [ -n "$RUN_DENSITY" ]; then
+		run_density
+	fi
+
+	if [ -n "$RUN_ALL" ] || [ -n "$RUN_STORAGE" ]; then
+		run_storage
+	fi
+
+	if [ -n "$RUN_ALL" ] || [ -n "$RUN_NETWORK" ]; then
+		run_network
+	fi
 
 	popd
 }
@@ -92,7 +200,7 @@ finish() {
 	echo "this script again."
 }
 
-init
+init "$@"
 run
 finish
 

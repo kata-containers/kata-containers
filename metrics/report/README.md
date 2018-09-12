@@ -27,6 +27,10 @@ Repeat this process if you want to compare multiple sets of results. Note, the
 report generation scripts process all subfolders of `tests/metrics/results` when
 generating the report.
 
+> **Note:** By default, the `grabdata.sh` script tries to launch some moderately
+> large containers (i.e. 8Gbyte RAM) and may fail to produce some results on a memory
+> constrained system.
+
 ## Report generation
 
 Report generation is provided by the `makereport.sh` script. By default this script 
