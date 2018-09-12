@@ -44,6 +44,8 @@ func TestNewVM(t *testing.T) {
 	assert.Nil(err)
 	err = vm.Start()
 	assert.Nil(err)
+	err = vm.Disconnect()
+	assert.Nil(err)
 	err = vm.Save()
 	assert.Nil(err)
 	err = vm.Stop()
@@ -85,5 +87,26 @@ func TestVMConfigValid(t *testing.T) {
 		InitrdPath: testDir,
 	}
 	err = config.Valid()
+	assert.Nil(err)
+}
+
+func TestSetupProxy(t *testing.T) {
+	assert := assert.New(t)
+
+	config := VMConfig{
+		HypervisorType: MockHypervisor,
+		AgentType:      NoopAgentType,
+	}
+
+	hypervisor := &mockHypervisor{}
+	agent := &noopAgent{}
+
+	// wrong proxy type
+	config.ProxyType = "invalidProxyType"
+	_, _, _, err := setupProxy(hypervisor, agent, config, "foobar")
+	assert.NotNil(err)
+
+	config.ProxyType = NoopProxyType
+	_, _, _, err = setupProxy(hypervisor, agent, config, "foobar")
 	assert.Nil(err)
 }

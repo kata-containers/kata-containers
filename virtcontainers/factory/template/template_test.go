@@ -35,6 +35,9 @@ func TestTemplateFactory(t *testing.T) {
 		ProxyType:        vc.NoopProxyType,
 	}
 
+	err := vmConfig.Valid()
+	assert.Nil(err)
+
 	ctx := context.Background()
 
 	// New
@@ -44,7 +47,7 @@ func TestTemplateFactory(t *testing.T) {
 	assert.Equal(f.Config(), vmConfig)
 
 	// GetBaseVM
-	_, err := f.GetBaseVM(ctx, vmConfig)
+	_, err = f.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
 	// Fetch
@@ -52,6 +55,8 @@ func TestTemplateFactory(t *testing.T) {
 		statePath: testDir,
 		config:    vmConfig,
 	}
+
+	assert.Equal(tt.Config(), vmConfig)
 
 	err = tt.checkTemplateVM()
 	assert.Error(err)
@@ -69,11 +74,17 @@ func TestTemplateFactory(t *testing.T) {
 	err = tt.createTemplateVM(ctx)
 	assert.Error(err)
 
+	templateProxyType = vc.NoopProxyType
+	_, err = tt.GetBaseVM(ctx, vmConfig)
+	assert.Nil(err)
+
 	_, err = f.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	templateProxyType = vc.NoopProxyType
 	err = tt.createTemplateVM(ctx)
+	assert.Nil(err)
+
+	_, err = tt.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
 	_, err = f.GetBaseVM(ctx, vmConfig)

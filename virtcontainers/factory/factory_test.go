@@ -98,8 +98,6 @@ func TestVMConfigValid(t *testing.T) {
 
 	config := vc.VMConfig{
 		HypervisorType: vc.MockHypervisor,
-		AgentType:      vc.NoopAgentType,
-		ProxyType:      vc.NoopProxyType,
 		HypervisorConfig: vc.HypervisorConfig{
 			KernelPath: testDir,
 			ImagePath:  testDir,
@@ -109,6 +107,14 @@ func TestVMConfigValid(t *testing.T) {
 	f := factory{}
 
 	err := f.validateNewVMConfig(config)
+	assert.NotNil(err)
+
+	config.AgentType = vc.NoopAgentType
+	err = f.validateNewVMConfig(config)
+	assert.NotNil(err)
+
+	config.ProxyType = vc.NoopProxyType
+	err = f.validateNewVMConfig(config)
 	assert.Nil(err)
 }
 
@@ -167,6 +173,9 @@ func TestFactoryGetVM(t *testing.T) {
 		AgentType:        vc.NoopAgentType,
 		ProxyType:        vc.NoopProxyType,
 	}
+
+	err := vmConfig.Valid()
+	assert.Nil(err)
 
 	ctx := context.Background()
 
