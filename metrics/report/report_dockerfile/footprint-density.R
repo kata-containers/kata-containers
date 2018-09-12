@@ -40,12 +40,15 @@ for (currentdir in resultdirs) {
 		# Import the data
 		fdata=fromJSON(fname)
 
-		testname=paste(datasetname, fdata$Config$payload, sep="-")
+		payload=fdata$Config$payload
+		testname=paste(datasetname, payload)
 
 		cdata=data.frame(avail_mb=as.numeric(fdata$Results$system$avail)/(1024*1024))
 		cdata=cbind(cdata, avail_decr=as.numeric(fdata$Results$system$avail_decr))
 		cdata=cbind(cdata, count=seq_len(length(cdata[, "avail_mb"])))
 		cdata=cbind(cdata, testname=rep(testname, length(cdata[, "avail_mb"]) ))
+		cdata=cbind(cdata, payload=rep(payload, length(cdata[, "avail_mb"]) ))
+		cdata=cbind(cdata, dataset=rep(datasetname, length(cdata[, "avail_mb"]) ))
 
 		# Gather our statistics
 		sdata=data.frame(num_containers=length(cdata[, "avail_mb"]))
@@ -83,8 +86,8 @@ stats_plot = suppressWarnings(ggtexttable(data.frame(rstats),
 
 # plot how samples varioed over  'time'
 line_plot <- ggplot() +
-	geom_point( data=data, aes(count, avail_mb, color=testname)) +
-	geom_line( data=data, aes(count, avail_mb, color=testname)) +
+	geom_point( data=data, aes(count, avail_mb, group=testname, color=payload, shape=dataset)) +
+	geom_line( data=data, aes(count, avail_mb, group=testname, color=payload)) +
 	xlab("Containers") +
 	ylab("System Avail (Mb)") +
 	ggtitle("System Memory free") +
