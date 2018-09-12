@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -64,14 +65,14 @@ func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) error {
 	}
 
 	// Pass all devices in iommu group
-	for _, deviceFile := range deviceFiles {
+	for i, deviceFile := range deviceFiles {
 		//Get bdf of device eg 0000:00:1c.0
 		deviceBDF, err := getBDF(deviceFile.Name())
 		if err != nil {
 			return err
 		}
 		vfio := &config.VFIODev{
-			ID:  utils.MakeNameID("vfio", device.DeviceInfo.ID, maxDevIDSize),
+			ID:  utils.MakeNameID("vfio", device.DeviceInfo.ID+strconv.Itoa(i), maxDevIDSize),
 			BDF: deviceBDF,
 		}
 		device.vfioDevs = append(device.vfioDevs, vfio)
