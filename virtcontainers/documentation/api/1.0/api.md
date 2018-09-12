@@ -149,6 +149,9 @@ type HypervisorConfig struct {
 	// VirtioFSCacheSize is the virtio-fs DAX cache size in MiB
 	VirtioFSCacheSize uint32
 
+	// VirtioFSCache cache mode for fs version cache or "none"
+	VirtioFSCache string
+
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 

@@ -108,6 +108,21 @@ virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 # Default size of DAX cache in MiB
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
 
+# Cache mode:
+#
+#  - none
+#    Metadata, data, and pathname lookup are not cached in guest. They are
+#    always fetched from host and any changes are immediately pushed to host.
+#
+#  - auto
+#    Metadata and pathname lookup cache expires after a configured amount of
+#    time (default is 1 second). Data is cached while the file is open (close
+#    to open consistency).
+#
+#  - always
+#    Metadata, data, and pathname lookup are cached in guest and never expire.
+virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
+
 # Block storage driver to be used for the hypervisor in case the container
 # rootfs is backed by a block device. This is virtio-scsi, virtio-blk
 # or nvdimm.
