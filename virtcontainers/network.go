@@ -95,7 +95,6 @@ const (
 	defaultRouteLabel = "default"
 	defaultFilePerms  = 0600
 	defaultQlen       = 1500
-	defaultQueues     = 8
 )
 
 // DNSInfo describes the DNS setup related to a network interface.
@@ -226,7 +225,7 @@ func networkLogger() *logrus.Entry {
 func (endpoint *VirtualEndpoint) Attach(h hypervisor) error {
 	networkLogger().WithField("endpoint-type", "virtual").Info("Attaching endpoint")
 
-	if err := xconnectVMNetwork(&(endpoint.NetPair), true); err != nil {
+	if err := xconnectVMNetwork(&(endpoint.NetPair), true, h.hypervisorConfig().NumVCPUs); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual endpoint")
 		return err
 	}
@@ -246,14 +245,14 @@ func (endpoint *VirtualEndpoint) Detach(netNsCreated bool, netNsPath string) err
 	networkLogger().WithField("endpoint-type", "virtual").Info("Detaching endpoint")
 
 	return doNetNS(netNsPath, func(_ ns.NetNS) error {
-		return xconnectVMNetwork(&(endpoint.NetPair), false)
+		return xconnectVMNetwork(&(endpoint.NetPair), false, 0)
 	})
 }
 
 // HotAttach for the virtual endpoint uses hot plug device
 func (endpoint *VirtualEndpoint) HotAttach(h hypervisor) error {
 	networkLogger().Info("Hot attaching virtual endpoint")
-	if err := xconnectVMNetwork(&(endpoint.NetPair), true); err != nil {
+	if err := xconnectVMNetwork(&(endpoint.NetPair), true, h.hypervisorConfig().NumVCPUs); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual ep")
 		return err
 	}
@@ -272,7 +271,7 @@ func (endpoint *VirtualEndpoint) HotDetach(h hypervisor, netNsCreated bool, netN
 	}
 	networkLogger().Info("Hot detaching virtual endpoint")
 	if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
-		return xconnectVMNetwork(&(endpoint.NetPair), false)
+		return xconnectVMNetwork(&(endpoint.NetPair), false, 0)
 	}); err != nil {
 		networkLogger().WithError(err).Error("Error abridging virtual ep")
 		return err
@@ -641,7 +640,7 @@ func newNetwork(networkType NetworkModel) network {
 	}
 }
 
-func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link) (netlink.Link, []*os.File, error) {
+func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link, numCPUs int) (netlink.Link, []*os.File, error) {
 	var newLink netlink.Link
 	var fds []*os.File
 
@@ -655,7 +654,7 @@ func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Lin
 		newLink = &netlink.Tuntap{
 			LinkAttrs: netlink.LinkAttrs{Name: name},
 			Mode:      netlink.TUNTAP_MODE_TAP,
-			Queues:    defaultQueues,
+			Queues:    numCPUs,
 			Flags:     netlink.TUNTAP_MULTI_QUEUE_DEFAULTS | netlink.TUNTAP_VNET_HDR,
 		}
 	case (&netlink.Macvtap{}).Type():
@@ -722,7 +721,7 @@ func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.
 }
 
 // The endpoint type should dictate how the connection needs to be made
-func xconnectVMNetwork(netPair *NetworkInterfacePair, connect bool) error {
+func xconnectVMNetwork(netPair *NetworkInterfacePair, connect bool, numCPUs uint32) error {
 	if netPair.NetInterworkingModel == NetXConnectDefaultModel {
 		netPair.NetInterworkingModel = DefaultNetInterworkingModel
 	}
@@ -730,13 +729,13 @@ func xconnectVMNetwork(netPair *NetworkInterfacePair, connect bool) error {
 	case NetXConnectBridgedModel:
 		netPair.NetInterworkingModel = NetXConnectBridgedModel
 		if connect {
-			return bridgeNetworkPair(netPair)
+			return bridgeNetworkPair(netPair, numCPUs)
 		}
 		return unBridgeNetworkPair(*netPair)
 	case NetXConnectMacVtapModel:
 		netPair.NetInterworkingModel = NetXConnectMacVtapModel
 		if connect {
-			return tapNetworkPair(netPair)
+			return tapNetworkPair(netPair, numCPUs)
 		}
 		return untapNetworkPair(*netPair)
 	case NetXConnectEnlightenedModel:
@@ -786,10 +785,10 @@ const linkRange = 0xFFFF    // This will allow upto 2^16 containers
 const linkRetries = 128     // The numbers of time we try to find a non conflicting index
 const macvtapWorkaround = true
 
-func createMacVtap(netHandle *netlink.Handle, name string, link netlink.Link) (taplink netlink.Link, err error) {
+func createMacVtap(netHandle *netlink.Handle, name string, link netlink.Link, numCPUs int) (taplink netlink.Link, err error) {
 
 	if !macvtapWorkaround {
-		taplink, _, err = createLink(netHandle, name, link)
+		taplink, _, err = createLink(netHandle, name, link, numCPUs)
 		return
 	}
 
@@ -798,7 +797,7 @@ func createMacVtap(netHandle *netlink.Handle, name string, link netlink.Link) (t
 	for i := 0; i < linkRetries; i++ {
 		index := hostLinkOffset + (r.Int() & linkRange)
 		link.Attrs().Index = index
-		taplink, _, err = createLink(netHandle, name, link)
+		taplink, _, err = createLink(netHandle, name, link, numCPUs)
 		if err == nil {
 			break
 		}
@@ -825,7 +824,7 @@ func setIPs(link netlink.Link, addrs []netlink.Addr) error {
 	return nil
 }
 
-func tapNetworkPair(netPair *NetworkInterfacePair) error {
+func tapNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32) error {
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
@@ -848,7 +847,7 @@ func tapNetworkPair(netPair *NetworkInterfacePair) error {
 					ParentIndex: vethLinkAttrs.Index,
 				},
 			},
-		})
+		}, int(numCPUs))
 
 	if err != nil {
 		return fmt.Errorf("Could not create TAP interface: %s", err)
@@ -900,21 +899,12 @@ func tapNetworkPair(netPair *NetworkInterfacePair) error {
 
 	// Note: The underlying interfaces need to be up prior to fd creation.
 
-	// Setup the multiqueue fds to be consumed by QEMU as macvtap cannot
-	// be directly connected.
-	// Ideally we want
-	// netdev.FDs, err = createMacvtapFds(netdev.ID, int(config.SMP.CPUs))
-
-	// We do not have global context here, hence a manifest constant
-	// that matches our minimum vCPU configuration
-	// Another option is to defer this to ciao qemu library which does have
-	// global context but cannot handle errors when setting up the network
-	netPair.VMFds, err = createMacvtapFds(tapLink.Attrs().Index, defaultQueues)
+	netPair.VMFds, err = createMacvtapFds(tapLink.Attrs().Index, int(numCPUs))
 	if err != nil {
 		return fmt.Errorf("Could not setup macvtap fds %s: %s", netPair.TAPIface, err)
 	}
 
-	vhostFds, err := createVhostFds(defaultQueues)
+	vhostFds, err := createVhostFds(int(numCPUs))
 	if err != nil {
 		return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
 	}
@@ -923,20 +913,20 @@ func tapNetworkPair(netPair *NetworkInterfacePair) error {
 	return nil
 }
 
-func bridgeNetworkPair(netPair *NetworkInterfacePair) error {
+func bridgeNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32) error {
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
 	}
 	defer netHandle.Delete()
 
-	tapLink, fds, err := createLink(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{})
+	tapLink, fds, err := createLink(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{}, int(numCPUs))
 	if err != nil {
 		return fmt.Errorf("Could not create TAP interface: %s", err)
 	}
 	netPair.VMFds = fds
 
-	vhostFds, err := createVhostFds(defaultQueues)
+	vhostFds, err := createVhostFds(int(numCPUs))
 	if err != nil {
 		return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
 	}
@@ -970,7 +960,7 @@ func bridgeNetworkPair(netPair *NetworkInterfacePair) error {
 	}
 
 	mcastSnoop := false
-	bridgeLink, _, err := createLink(netHandle, netPair.Name, &netlink.Bridge{MulticastSnooping: &mcastSnoop})
+	bridgeLink, _, err := createLink(netHandle, netPair.Name, &netlink.Bridge{MulticastSnooping: &mcastSnoop}, int(numCPUs))
 	if err != nil {
 		return fmt.Errorf("Could not create bridge: %s", err)
 	}

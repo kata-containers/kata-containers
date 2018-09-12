@@ -848,7 +848,7 @@ func (q *qemu) hotplugNetDevice(drive VirtualEndpoint, op operation) error {
 	if op == addDevice {
 		switch drive.NetPair.NetInterworkingModel {
 		case NetXConnectBridgedModel:
-			if err := q.qmpMonitorCh.qmp.ExecuteNetdevAdd(q.qmpMonitorCh.ctx, "tap", drive.NetPair.Name, drive.NetPair.TAPIface.Name, "no", "no", defaultQueues); err != nil {
+			if err := q.qmpMonitorCh.qmp.ExecuteNetdevAdd(q.qmpMonitorCh.ctx, "tap", drive.NetPair.Name, drive.NetPair.TAPIface.Name, "no", "no", int(q.config.NumVCPUs)); err != nil {
 				return err
 			}
 		case NetXConnectMacVtapModel:
@@ -863,7 +863,7 @@ func (q *qemu) hotplugNetDevice(drive VirtualEndpoint, op operation) error {
 			return err
 		}
 		drive.PCIAddr = fmt.Sprintf("%02x/%s", bridge.Addr, addr)
-		if err = q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, drive.NetPair.Name, devID, drive.NetPair.TAPIface.HardAddr, addr, bridge.ID, defaultQueues); err != nil {
+		if err = q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, drive.NetPair.Name, devID, drive.NetPair.TAPIface.HardAddr, addr, bridge.ID, int(q.config.NumVCPUs)); err != nil {
 			return err
 		}
 	} else {
