@@ -74,7 +74,7 @@ for (currentdir in resultdirs) {
 }
 
 rstats=cbind(rstats_names, rstats)
-unts=c("Kb", "Kb")
+unts=rep("Kb", length(resultdirs))
 
 # If we have only 2 sets of results, then we can do some more
 # stats math for the text table
