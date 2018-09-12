@@ -560,4 +560,5 @@ type hypervisor interface {
 	getSandboxConsole(sandboxID string) (string, error)
 	disconnect()
 	capabilities() capabilities
+	hypervisorConfig() HypervisorConfig
 }

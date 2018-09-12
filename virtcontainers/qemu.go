@@ -160,6 +160,10 @@ func (q *qemu) capabilities() capabilities {
 	return q.arch.capabilities()
 }
 
+func (q *qemu) hypervisorConfig() HypervisorConfig {
+	return q.config
+}
+
 // get the QEMU binary path
 func (q *qemu) qemuPath() (string, error) {
 	p, err := q.config.HypervisorAssetPath()
