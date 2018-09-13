@@ -626,7 +626,7 @@ func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
 	defaultHypervisorPath = hypervisorPath
 	defaultKernelPath = kernelPath
 
-	for _, file := range []string{proxyPath, shimPath, hypervisorPath, kernelPath} {
+	for _, file := range []string{proxyPath, shimPath, hypervisorPath, kernelPath, imagePath} {
 		err = writeFile(file, "foo", testFileMode)
 		if err != nil {
 			t.Fatal(err)
@@ -638,6 +638,7 @@ func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
 	# Runtime configuration file
 	[hypervisor.qemu]
 	use_vsock = true
+	image = "` + imagePath + `"
 
 	[proxy.kata]
 	path = "` + proxyPath + `"
