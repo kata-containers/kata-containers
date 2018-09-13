@@ -24,6 +24,12 @@ type qemuArch interface {
 	// disableNestingChecks nesting checks will be ignored
 	disableNestingChecks()
 
+	// enableVhostNet vhost will be enabled
+	enableVhostNet()
+
+	// disableVhostNet vhost will be disabled
+	disableVhostNet()
+
 	// machine returns the machine type
 	machine() (govmmQemu.Machine, error)
 
@@ -92,6 +98,7 @@ type qemuArch interface {
 type qemuArchBase struct {
 	machineType           string
 	nestedRun             bool
+	vhost                 bool
 	networkIndex          int
 	qemuPaths             map[string]string
 	supportedQemuMachines []govmmQemu.Machine
@@ -174,6 +181,14 @@ func (q *qemuArchBase) enableNestingChecks() {
 
 func (q *qemuArchBase) disableNestingChecks() {
 	q.nestedRun = false
+}
+
+func (q *qemuArchBase) enableVhostNet() {
+	q.vhost = true
+}
+
+func (q *qemuArchBase) disableVhostNet() {
+	q.vhost = false
 }
 
 func (q *qemuArchBase) machine() (govmmQemu.Machine, error) {
@@ -437,7 +452,7 @@ func (q *qemuArchBase) appendNetwork(devices []govmmQemu.Device, endpoint Endpoi
 				MACAddress:    ep.NetPair.TAPIface.HardAddr,
 				DownScript:    "no",
 				Script:        "no",
-				VHost:         true,
+				VHost:         q.vhost,
 				DisableModern: q.nestedRun,
 				FDs:           ep.NetPair.VMFds,
 				VhostFDs:      ep.NetPair.VhostFds,

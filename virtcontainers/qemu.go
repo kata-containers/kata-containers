@@ -249,6 +249,13 @@ func (q *qemu) init(ctx context.Context, id string, hypervisorConfig *Hypervisor
 		q.arch.disableNestingChecks()
 	}
 
+	if !q.config.DisableVhostNet {
+		q.arch.enableVhostNet()
+	} else {
+		q.Logger().Debug("Disable vhost_net")
+		q.arch.disableVhostNet()
+	}
+
 	return nil
 }
 
