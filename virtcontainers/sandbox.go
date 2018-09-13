@@ -30,9 +30,11 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-// vmStartTimeout represents the time in seconds a sandbox can wait before
-// to consider the VM starting operation failed.
-const vmStartTimeout = 10
+const (
+	// vmStartTimeout represents the time in seconds a sandbox can wait before
+	// to consider the VM starting operation failed.
+	vmStartTimeout = 10
+)
 
 // stateString is a string representing a sandbox state.
 type stateString string
@@ -491,6 +493,8 @@ type Sandbox struct {
 	stateful   bool
 
 	ctx context.Context
+
+	cgroup *sandboxCgroups
 }
 
 // ID returns the sandbox identifier string.
@@ -861,6 +865,11 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	// create new cgroup for sandbox
+	if err := s.newCgroups(); err != nil {
+		return nil, err
+	}
+
 	return s, nil
 }
 
@@ -976,6 +985,12 @@ func (s *Sandbox) Delete() error {
 		if err := c.delete(); err != nil {
 			return err
 		}
+	}
+
+	// destroy sandbox cgroup
+	if err := s.destroyCgroups(); err != nil {
+		// continue the removal process even cgroup failed to destroy
+		s.Logger().WithError(err).Error("failed to destroy cgroup")
 	}
 
 	globalSandboxList.removeSandbox(s.id)
@@ -1283,6 +1298,10 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 		return nil, err
 	}
 
+	// Setup host cgroups for new container
+	if err := s.setupCgroups(); err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 

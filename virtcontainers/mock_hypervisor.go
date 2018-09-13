@@ -5,7 +5,10 @@
 
 package virtcontainers
 
-import "context"
+import (
+	"context"
+	"os"
+)
 
 type mockHypervisor struct {
 }
@@ -85,4 +88,9 @@ func (m *mockHypervisor) getSandboxConsole(sandboxID string) (string, error) {
 }
 
 func (m *mockHypervisor) disconnect() {
+}
+
+func (m *mockHypervisor) getThreadIDs() (*threadIDs, error) {
+	vcpus := []int{os.Getpid()}
+	return &threadIDs{vcpus}, nil
 }
