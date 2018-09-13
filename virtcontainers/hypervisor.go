@@ -252,6 +252,10 @@ type HypervisorConfig struct {
 	DisableVhostNet bool
 }
 
+type threadIDs struct {
+	vcpus []int
+}
+
 func (conf *HypervisorConfig) checkTemplateConfig() error {
 	if conf.BootToBeTemplate && conf.BootFromTemplate {
 		return fmt.Errorf("Cannot set both 'to be' and 'from' vm tempate")
@@ -571,4 +575,5 @@ type hypervisor interface {
 	disconnect()
 	capabilities() capabilities
 	hypervisorConfig() HypervisorConfig
+	getThreadIDs() (*threadIDs, error)
 }

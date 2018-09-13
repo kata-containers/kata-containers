@@ -36,22 +36,6 @@ const (
 
 var testStrPID = fmt.Sprintf("%d", testPID)
 
-func mockCPUSetContent(contents map[string]string) error {
-	for filePath, data := range contents {
-		if err := writeFile(filePath, data, testFileMode); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func testCreateCgroupsFilesSuccessful(t *testing.T, cgroupsDirPath string, cgroupsPathList []string, pid int) {
-	if err := createCgroupsFiles(context.Background(), "foo", cgroupsDirPath, cgroupsPathList, pid); err != nil {
-		t.Fatalf("This test should succeed (cgroupsPath %q, pid %d): %s", cgroupsPathList, pid, err)
-	}
-}
-
 // return the value of the *last* param with the specified key
 func findLastParam(key string, params []vc.Param) (string, error) {
 	if key == "" {
@@ -72,62 +56,6 @@ func findLastParam(key string, params []vc.Param) (string, error) {
 	}
 
 	return "", fmt.Errorf("no param called %q found", name)
-}
-
-func TestCgroupsFilesEmptyCgroupsPathSuccessful(t *testing.T) {
-	testCreateCgroupsFilesSuccessful(t, "", []string{}, testPID)
-}
-
-func TestCreateCgroupsFilesFailToWriteFile(t *testing.T) {
-	if os.Geteuid() == 0 {
-		// The os.FileMode(0000) trick doesn't work for root.
-		t.Skip(testDisabledNeedNonRoot)
-	}
-
-	assert := assert.New(t)
-
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
-
-	// create the file as a directory to force an error
-	file := filepath.Join(tmpdir, "cgroups-file")
-	err = os.MkdirAll(file, os.FileMode(0000))
-	assert.NoError(err)
-
-	files := []string{file}
-
-	err = createCgroupsFiles(context.Background(), "foo", "cgroups-file", files, testPID)
-	assert.Error(err)
-}
-
-func TestCgroupsFilesNonEmptyCgroupsPathSuccessful(t *testing.T) {
-	cgroupsPath, err := ioutil.TempDir(testDir, "cgroups-path-")
-	if err != nil {
-		t.Fatalf("Could not create temporary cgroups directory: %s", err)
-	}
-
-	testCreateCgroupsFilesSuccessful(t, "cgroups-path-", []string{cgroupsPath}, testPID)
-
-	defer os.RemoveAll(cgroupsPath)
-
-	tasksPath := filepath.Join(cgroupsPath, cgroupsTasksFile)
-	procsPath := filepath.Join(cgroupsPath, cgroupsProcsFile)
-
-	for _, path := range []string{tasksPath, procsPath} {
-		if _, err := os.Stat(path); err != nil {
-			t.Fatalf("Path %q should have been created: %s", path, err)
-		}
-
-		fileBytes, err := ioutil.ReadFile(path)
-		if err != nil {
-			t.Fatalf("Could not read %q previously created: %s", path, err)
-		}
-
-		if string(fileBytes) != testStrPID {
-			t.Fatalf("PID %s read from %q different from expected PID %s", string(fileBytes), path, testStrPID)
-		}
-	}
 }
 
 func TestCreatePIDFileSuccessful(t *testing.T) {
@@ -1085,56 +1013,6 @@ func TestCreateCreateContainer(t *testing.T) {
 		assert.NoError(err)
 		os.RemoveAll(path)
 	}
-}
-
-func TestCopyParentCPUSetFail(t *testing.T) {
-	assert := assert.New(t)
-
-	cgroupsPath, err := ioutil.TempDir(testDir, "cgroups-path-")
-	assert.NoError(err)
-	defer os.RemoveAll(cgroupsPath)
-
-	err = copyParentCPUSet(cgroupsPath, testDir)
-	assert.Error(err)
-}
-
-func TestCopyParentCPUSetSuccessful(t *testing.T) {
-	assert := assert.New(t)
-
-	cgroupsPath, err := ioutil.TempDir(testDir, "cgroups-path-")
-	assert.NoError(err)
-	defer os.RemoveAll(cgroupsPath)
-
-	cgroupsSrcPath := filepath.Join(cgroupsPath, "src")
-	err = os.Mkdir(cgroupsSrcPath, testDirMode)
-	assert.NoError(err)
-
-	err = mockCPUSetContent(map[string]string{
-		filepath.Join(cgroupsSrcPath, "cpuset.cpus"): "0-1",
-		filepath.Join(cgroupsSrcPath, "cpuset.mems"): "0-1",
-	})
-	assert.NoError(err)
-
-	cgroupsDstPath := filepath.Join(cgroupsPath, "dst")
-	err = os.Mkdir(cgroupsDstPath, testDirMode)
-	assert.NoError(err)
-
-	fd, err := os.Create(filepath.Join(cgroupsDstPath, "cpuset.cpus"))
-	assert.NoError(err)
-	fd.Close()
-
-	fd, err = os.Create(filepath.Join(cgroupsDstPath, "cpuset.mems"))
-	assert.NoError(err)
-	fd.Close()
-
-	err = copyParentCPUSet(cgroupsDstPath, cgroupsSrcPath)
-	assert.NoError(err)
-
-	currentCpus, currentMems, err := getCPUSet(cgroupsDstPath)
-	assert.NoError(err)
-
-	assert.False(isEmptyString(currentCpus))
-	assert.False(isEmptyString(currentMems))
 }
 
 func TestSetKernelParams(t *testing.T) {

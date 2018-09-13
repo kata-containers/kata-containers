@@ -126,6 +126,11 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		return nil, err
 	}
 
+	// Setup host cgroups
+	if err := s.setupCgroups(); err != nil {
+		return nil, err
+	}
+
 	return s, nil
 }
 
