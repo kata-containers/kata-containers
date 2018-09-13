@@ -532,6 +532,7 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	}
 
 	if tomlConf.Runtime.Debug {
+		config.Debug = true
 		debug = true
 		crashOnError = true
 	} else {
