@@ -103,8 +103,6 @@ type RuntimeConfig struct {
 	HypervisorType   vc.HypervisorType
 	HypervisorConfig vc.HypervisorConfig
 
-	FactoryConfig FactoryConfig
-
 	AgentType   vc.AgentType
 	AgentConfig interface{}
 
@@ -119,6 +117,8 @@ type RuntimeConfig struct {
 	//Determines how the VM should be connected to the
 	//the container network interface
 	InterNetworkModel vc.NetInterworkingModel
+	FactoryConfig     FactoryConfig
+	Debug             bool
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
