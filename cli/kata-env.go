@@ -160,6 +160,7 @@ func getRuntimeInfo(configFile string, config oci.RuntimeConfig) RuntimeInfo {
 	runtimePath, _ := os.Executable()
 
 	return RuntimeInfo{
+		Debug:   config.Debug,
 		Version: runtimeVersion,
 		Config:  runtimeConfig,
 		Path:    runtimePath,
@@ -284,6 +285,7 @@ func getHypervisorInfo(config oci.RuntimeConfig) HypervisorInfo {
 	}
 
 	return HypervisorInfo{
+		Debug:             config.HypervisorConfig.Debug,
 		MachineType:       config.HypervisorConfig.HypervisorMachineType,
 		Version:           version,
 		Path:              hypervisorPath,
