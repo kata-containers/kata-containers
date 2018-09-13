@@ -24,6 +24,10 @@ func (m *mockHypervisor) capabilities() capabilities {
 	return capabilities{}
 }
 
+func (m *mockHypervisor) hypervisorConfig() HypervisorConfig {
+	return HypervisorConfig{}
+}
+
 func (m *mockHypervisor) createSandbox() error {
 	return nil
 }
