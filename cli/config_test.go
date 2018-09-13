@@ -25,6 +25,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var (
+	hypervisorDebug = false
+	proxyDebug      = false
+	runtimeDebug    = false
+	shimDebug       = false
+)
+
 type testRuntimeConfig struct {
 	RuntimeConfig     oci.RuntimeConfig
 	RuntimeConfigFile string
@@ -52,17 +59,20 @@ func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath
 	enable_iothreads =  ` + strconv.FormatBool(enableIOThreads) + `
 	hotplug_vfio_on_root_bus =  ` + strconv.FormatBool(hotplugVFIOOnRootBus) + `
 	msize_9p = ` + strconv.FormatUint(uint64(defaultMsize9p), 10) + `
+	enable_debug = ` + strconv.FormatBool(hypervisorDebug) + `
 
 	[proxy.kata]
+	enable_debug = ` + strconv.FormatBool(proxyDebug) + `
 	path = "` + proxyPath + `"
 
 	[shim.kata]
 	path = "` + shimPath + `"
+	enable_debug = ` + strconv.FormatBool(shimDebug) + `
 
 	[agent.kata]
 
         [runtime]
-	`
+	enable_debug = ` + strconv.FormatBool(runtimeDebug)
 }
 
 func createConfig(configPath string, fileData string) error {
