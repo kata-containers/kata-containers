@@ -225,7 +225,7 @@ func networkLogger() *logrus.Entry {
 func (endpoint *VirtualEndpoint) Attach(h hypervisor) error {
 	networkLogger().WithField("endpoint-type", "virtual").Info("Attaching endpoint")
 
-	if err := xconnectVMNetwork(&(endpoint.NetPair), true, h.hypervisorConfig().NumVCPUs); err != nil {
+	if err := xconnectVMNetwork(&(endpoint.NetPair), true, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual endpoint")
 		return err
 	}
@@ -245,14 +245,14 @@ func (endpoint *VirtualEndpoint) Detach(netNsCreated bool, netNsPath string) err
 	networkLogger().WithField("endpoint-type", "virtual").Info("Detaching endpoint")
 
 	return doNetNS(netNsPath, func(_ ns.NetNS) error {
-		return xconnectVMNetwork(&(endpoint.NetPair), false, 0)
+		return xconnectVMNetwork(&(endpoint.NetPair), false, 0, false)
 	})
 }
 
 // HotAttach for the virtual endpoint uses hot plug device
 func (endpoint *VirtualEndpoint) HotAttach(h hypervisor) error {
 	networkLogger().Info("Hot attaching virtual endpoint")
-	if err := xconnectVMNetwork(&(endpoint.NetPair), true, h.hypervisorConfig().NumVCPUs); err != nil {
+	if err := xconnectVMNetwork(&(endpoint.NetPair), true, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual ep")
 		return err
 	}
@@ -271,7 +271,7 @@ func (endpoint *VirtualEndpoint) HotDetach(h hypervisor, netNsCreated bool, netN
 	}
 	networkLogger().Info("Hot detaching virtual endpoint")
 	if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
-		return xconnectVMNetwork(&(endpoint.NetPair), false, 0)
+		return xconnectVMNetwork(&(endpoint.NetPair), false, 0, h.hypervisorConfig().DisableVhostNet)
 	}); err != nil {
 		networkLogger().WithError(err).Error("Error abridging virtual ep")
 		return err
@@ -721,7 +721,7 @@ func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.
 }
 
 // The endpoint type should dictate how the connection needs to be made
-func xconnectVMNetwork(netPair *NetworkInterfacePair, connect bool, numCPUs uint32) error {
+func xconnectVMNetwork(netPair *NetworkInterfacePair, connect bool, numCPUs uint32, disableVhostNet bool) error {
 	if netPair.NetInterworkingModel == NetXConnectDefaultModel {
 		netPair.NetInterworkingModel = DefaultNetInterworkingModel
 	}
@@ -729,13 +729,13 @@ func xconnectVMNetwork(netPair *NetworkInterfacePair, connect bool, numCPUs uint
 	case NetXConnectBridgedModel:
 		netPair.NetInterworkingModel = NetXConnectBridgedModel
 		if connect {
-			return bridgeNetworkPair(netPair, numCPUs)
+			return bridgeNetworkPair(netPair, numCPUs, disableVhostNet)
 		}
 		return unBridgeNetworkPair(*netPair)
 	case NetXConnectMacVtapModel:
 		netPair.NetInterworkingModel = NetXConnectMacVtapModel
 		if connect {
-			return tapNetworkPair(netPair, numCPUs)
+			return tapNetworkPair(netPair, numCPUs, disableVhostNet)
 		}
 		return untapNetworkPair(*netPair)
 	case NetXConnectEnlightenedModel:
@@ -824,7 +824,7 @@ func setIPs(link netlink.Link, addrs []netlink.Addr) error {
 	return nil
 }
 
-func tapNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32) error {
+func tapNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32, disableVhostNet bool) error {
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
@@ -904,16 +904,18 @@ func tapNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32) error {
 		return fmt.Errorf("Could not setup macvtap fds %s: %s", netPair.TAPIface, err)
 	}
 
-	vhostFds, err := createVhostFds(int(numCPUs))
-	if err != nil {
-		return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
+	if !disableVhostNet {
+		vhostFds, err := createVhostFds(int(numCPUs))
+		if err != nil {
+			return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
+		}
+		netPair.VhostFds = vhostFds
 	}
-	netPair.VhostFds = vhostFds
 
 	return nil
 }
 
-func bridgeNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32) error {
+func bridgeNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32, disableVhostNet bool) error {
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
@@ -926,11 +928,13 @@ func bridgeNetworkPair(netPair *NetworkInterfacePair, numCPUs uint32) error {
 	}
 	netPair.VMFds = fds
 
-	vhostFds, err := createVhostFds(int(numCPUs))
-	if err != nil {
-		return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
+	if !disableVhostNet {
+		vhostFds, err := createVhostFds(int(numCPUs))
+		if err != nil {
+			return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
+		}
+		netPair.VhostFds = vhostFds
 	}
-	netPair.VhostFds = vhostFds
 
 	vethLink, err := getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
 	if err != nil {

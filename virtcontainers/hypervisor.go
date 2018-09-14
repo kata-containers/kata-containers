@@ -240,6 +240,9 @@ type HypervisorConfig struct {
 	// DevicesStatePath is the VM device state file path. Used when either BootToBeTemplate or
 	// BootFromTemplate is true.
 	DevicesStatePath string
+
+	// DisableVhostNet is used to indicate if host supports vhost_net
+	DisableVhostNet bool
 }
 
 func (conf *HypervisorConfig) checkTemplateConfig() error {

@@ -94,6 +94,7 @@ type hypervisor struct {
 	EnableIOThreads       bool   `toml:"enable_iothreads"`
 	UseVSock              bool   `toml:"use_vsock"`
 	HotplugVFIOOnRootBus  bool   `toml:"hotplug_vfio_on_root_bus"`
+	DisableVhostNet       bool   `toml:"disable_vhost_net"`
 }
 
 type proxy struct {
@@ -380,6 +381,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		Msize9p:               h.msize9p(),
 		UseVSock:              useVSock,
 		HotplugVFIOOnRootBus:  h.HotplugVFIOOnRootBus,
+		DisableVhostNet:       h.DisableVhostNet,
 	}, nil
 }
 

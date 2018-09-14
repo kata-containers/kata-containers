@@ -812,13 +812,15 @@ func (q *QMP) ExecuteNetdevChardevAdd(ctx context.Context, netdevType, netdevID,
 // Must be valid QMP identifier.
 func (q *QMP) ExecuteNetdevAddByFds(ctx context.Context, netdevType, netdevID string, fdNames, vhostFdNames []string) error {
 	fdNameStr := strings.Join(fdNames, ":")
-	vhostFdNameStr := strings.Join(vhostFdNames, ":")
 	args := map[string]interface{}{
-		"type":     netdevType,
-		"id":       netdevID,
-		"fds":      fdNameStr,
-		"vhost":    "on",
-		"vhostfds": vhostFdNameStr,
+		"type": netdevType,
+		"id":   netdevID,
+		"fds":  fdNameStr,
+	}
+	if len(vhostFdNames) > 0 {
+		vhostFdNameStr := strings.Join(vhostFdNames, ":")
+		args["vhost"] = "on"
+		args["vhostfds"] = vhostFdNameStr
 	}
 
 	return q.executeCommand(ctx, "netdev_add", args, nil)
