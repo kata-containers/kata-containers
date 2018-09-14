@@ -57,7 +57,7 @@ parts:
       export GOPATH=$(realpath ../go)
       cd ${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/proxy
       make
-      make install LIBEXECDIR=${SNAPCRAFT_PART_INSTALL}/usr/libexec
+      make install DESTDIR=${SNAPCRAFT_PART_INSTALL}
 
   shim:
     source: http://github.com/kata-containers/shim
@@ -101,8 +101,7 @@ parts:
 
       sed -i 's|^GO_VERSION=.*|GO_VERSION='$(go version | cut -d' ' -f3 | tr -d go)'|g' rootfs-builder/versions.txt
 
-      sudo -E PATH=$PATH make DISTRO=alpine USE_DOCKER=true AGENT_VERSION=${SNAPCRAFT_PROJECT_VERSION} AGENT_INIT=yes rootfs
-      sudo -E PATH=$PATH make DISTRO=alpine AGENT_INIT=yes initrd-only
+      sudo -E PATH=$PATH make DISTRO=alpine AGENT_INIT=yes USE_DOCKER=1 initrd
 
       kata_image_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
       mkdir -p ${kata_image_dir}
