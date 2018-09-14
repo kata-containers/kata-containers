@@ -14,13 +14,13 @@ source "${cidir}/lib.sh"
 source /etc/os-release
 
 if [ "$ID" == fedora ];then
-	sudo -E dnf -y install automake yamllint coreutils moreutils
+	sudo -E dnf -y install automake yamllint coreutils moreutils bc
 elif [ "$ID" == centos ];then
 	sudo -E yum -y install epel-release
-	sudo -E yum -y install automake yamllint coreutils moreutils
+	sudo -E yum -y install automake yamllint coreutils moreutils bc
 elif [ "$ID" == ubuntu ];then
 	sudo apt-get -qq update
-	sudo apt-get install -y -qq make automake qemu-utils python-pip coreutils moreutils
+	sudo apt-get install -y -qq make automake qemu-utils python-pip coreutils moreutils bc
 	sudo pip install yamllint
 else 
 	echo "Linux distribution not supported"
