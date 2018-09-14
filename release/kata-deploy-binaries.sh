@@ -91,7 +91,8 @@ install_image() {
 install_kernel() {
 	go get "github.com/${project}/packaging" || true
 	pushd ${GOPATH}/src/github.com/${project}/packaging >>/dev/null
-	git checkout "${kata_version}-kernel-config"
+	git checkout "${kata_version}-kernel-config" ||
+		git checkout "${kata_version}"
 	popd >>/dev/null
 	pushd "${script_dir}/../kernel" >>/dev/null
 
@@ -124,7 +125,7 @@ install_kata_components() {
 			PREFIX="${prefix}" \
 			QEMUCMD="qemu-system-x86_64"
 		#TODO Remove libexecdir
-		libexecdir=""
+		libexecdir="libexec"
 		if [ "$p" == "shim" ]; then
 			libexecdir="/${destdir}/${prefix}/libexec/"
 		fi

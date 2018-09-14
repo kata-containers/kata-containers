@@ -82,4 +82,4 @@ make install \
 %{LIBEXECDIR}/kata-ksm-throttler/trigger/virtcontainers
 %{LIBEXECDIR}/kata-ksm-throttler/trigger/virtcontainers/vc
 /usr/lib/systemd/system/kata-ksm-throttler.service
-/usr/lib/systemd/system/vc-throttler.service
+/usr/lib/systemd/system/kata-vc-throttler.service
