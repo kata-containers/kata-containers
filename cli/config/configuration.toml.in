@@ -147,6 +147,10 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # Default false
 #hotplug_vfio_on_root_bus = true
 
+# If host doesn't support vhost_net, set to true. Thus we won't create vhost fds for nics.
+# Default false
+#disable_vhost_net = true
+
 [factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and
