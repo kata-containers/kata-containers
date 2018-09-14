@@ -64,6 +64,7 @@ type tomlConfig struct {
 	Agent      map[string]agent
 	Runtime    runtime
 	Factory    factory
+	Netmon     netmon
 }
 
 type factory struct {
@@ -114,6 +115,12 @@ type shim struct {
 }
 
 type agent struct {
+}
+
+type netmon struct {
+	Path   string `toml:"path"`
+	Debug  bool   `toml:"enable_debug"`
+	Enable bool   `toml:"enable_netmon"`
 }
 
 func (h hypervisor) path() (string, error) {
@@ -302,6 +309,22 @@ func (s shim) debug() bool {
 	return s.Debug
 }
 
+func (n netmon) enable() bool {
+	return n.Enable
+}
+
+func (n netmon) path() string {
+	if n.Path == "" {
+		return defaultNetmonPath
+	}
+
+	return n.Path
+}
+
+func (n netmon) debug() bool {
+	return n.Debug
+}
+
 func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	hypervisor, err := h.path()
 	if err != nil {
@@ -463,6 +486,12 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 		return fmt.Errorf("%v: %v", configPath, err)
 	}
 	config.FactoryConfig = fConfig
+
+	config.NetmonConfig = vc.NetmonConfig{
+		Path:   tomlConf.Netmon.path(),
+		Debug:  tomlConf.Netmon.debug(),
+		Enable: tomlConf.Netmon.enable(),
+	}
 
 	return nil
 }

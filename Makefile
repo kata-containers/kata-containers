@@ -39,6 +39,7 @@ SCRIPTS :=
 
 # list of binaries to install
 BINLIST :=
+BINLIBEXECLIST :=
 
 BIN_PREFIX = $(PROJECT_TYPE)
 PROJECT_DIR = $(PROJECT_TAG)
@@ -48,6 +49,11 @@ INITRDNAME = $(PROJECT_TAG)-initrd.img
 TARGET = $(BIN_PREFIX)-runtime
 TARGET_OUTPUT = $(CURDIR)/$(TARGET)
 BINLIST += $(TARGET)
+
+NETMON_DIR = netmon
+NETMON_TARGET = $(PROJECT_TYPE)-netmon
+NETMON_TARGET_OUTPUT = $(CURDIR)/$(NETMON_TARGET)
+BINLIBEXECLIST += $(NETMON_TARGET)
 
 DESTDIR := /
 
@@ -109,6 +115,9 @@ SHIMPATH := $(PKGLIBEXECDIR)/$(SHIMCMD)
 
 PROXYCMD := $(BIN_PREFIX)-proxy
 PROXYPATH := $(PKGLIBEXECDIR)/$(PROXYCMD)
+
+NETMONCMD := $(BIN_PREFIX)-netmon
+NETMONPATH := $(PKGLIBEXECDIR)/$(NETMONCMD)
 
 # Default number of vCPUs
 DEFVCPUS := 1
@@ -183,6 +192,7 @@ USER_VARS += PROJECT_NAME
 USER_VARS += PROJECT_PREFIX
 USER_VARS += PROJECT_TYPE
 USER_VARS += PROXYPATH
+USER_VARS += NETMONPATH
 USER_VARS += QEMUBINDIR
 USER_VARS += QEMUCMD
 USER_VARS += QEMUPATH
@@ -225,7 +235,12 @@ define SHOW_ARCH
   $(shell printf "\\t%s%s\\\n" "$(1)" $(if $(filter $(ARCH),$(1))," (default)",""))
 endef
 
-all: runtime
+all: runtime netmon
+
+netmon: $(NETMON_TARGET_OUTPUT)
+
+$(NETMON_TARGET_OUTPUT): $(SOURCES)
+	$(QUIET_BUILD)(cd $(NETMON_DIR) && go build -i -o $@ -ldflags "-X main.version=$(VERSION)")
 
 runtime: $(TARGET_OUTPUT) $(CONFIG)
 .DEFAULT: default
@@ -308,6 +323,7 @@ var defaultRuntimeConfiguration = "$(CONFIG_PATH)"
 var defaultSysConfRuntimeConfiguration = "$(SYSCONFIG)"
 
 var defaultProxyPath = "$(PROXYPATH)"
+var defaultNetmonPath = "$(NETMONPATH)"
 endef
 
 export GENERATED_CODE
@@ -362,6 +378,7 @@ $(GENERATED_FILES): %: %.in Makefile VERSION
 		-e "s|@LOCALSTATEDIR@|$(LOCALSTATEDIR)|g" \
 		-e "s|@PKGLIBEXECDIR@|$(PKGLIBEXECDIR)|g" \
 		-e "s|@PROXYPATH@|$(PROXYPATH)|g" \
+		-e "s|@NETMONPATH@|$(NETMONPATH)|g" \
 		-e "s|@PROJECT_BUG_URL@|$(PROJECT_BUG_URL)|g" \
 		-e "s|@PROJECT_URL@|$(PROJECT_URL)|g" \
 		-e "s|@PROJECT_NAME@|$(PROJECT_NAME)|g" \
@@ -405,10 +422,13 @@ check-go-static:
 coverage:
 	$(QUIET_TEST).ci/go-test.sh html-coverage
 
-install: default runtime install-scripts install-completions install-config install-bin
+install: default runtime install-scripts install-completions install-config install-bin install-bin-libexec
 
 install-bin: $(BINLIST)
 	$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
+
+install-bin-libexec: $(BINLIBEXECLIST)
+	$(foreach f,$(BINLIBEXECLIST),$(call INSTALL_EXEC,$f,$(PKGLIBEXECDIR)))
 
 install-config: $(CONFIG)
 	$(QUIET_INST)install --mode 0644 -D $(CONFIG) $(DESTDIR)/$(CONFIG_PATH)
@@ -420,7 +440,7 @@ install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
 
 clean:
-	$(QUIET_CLEAN)rm -f $(TARGET) $(CONFIG) $(GENERATED_GO_FILES) $(GENERATED_FILES) $(COLLECT_SCRIPT)
+	$(QUIET_CLEAN)rm -f $(TARGET) $(NETMON_TARGET) $(CONFIG) $(GENERATED_GO_FILES) $(GENERATED_FILES) $(COLLECT_SCRIPT)
 
 show-usage: show-header
 	@printf "• Overview:\n"
@@ -483,6 +503,8 @@ show-summary: show-header
 	@printf "\tbinaries to install                   :\n"
 	@printf \
           "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+	@printf \
+          "$(foreach b,$(sort $(BINLIBEXECLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(PKGLIBEXECDIR)/$(b))\\\n"))"
 	@printf \
           "$(foreach s,$(sort $(SCRIPTS)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(s))\\\n"))"
 	@printf "\tconfig to install (CONFIG)            : %s\n" $(CONFIG)

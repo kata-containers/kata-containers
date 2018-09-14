@@ -103,6 +103,8 @@ type RuntimeConfig struct {
 	HypervisorType   vc.HypervisorType
 	HypervisorConfig vc.HypervisorConfig
 
+	NetmonConfig vc.NetmonConfig
+
 	AgentType   vc.AgentType
 	AgentConfig interface{}
 
@@ -324,6 +326,12 @@ func networkConfig(ocispec CompatOCISpec, config RuntimeConfig) (vc.NetworkConfi
 		}
 	}
 	netConf.InterworkingModel = config.InterNetworkModel
+
+	netConf.NetmonConfig = vc.NetmonConfig{
+		Path:   config.NetmonConfig.Path,
+		Debug:  config.NetmonConfig.Debug,
+		Enable: config.NetmonConfig.Enable,
+	}
 
 	return netConf, nil
 }

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"sync"
@@ -23,6 +24,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	"golang.org/x/sys/unix"
 )
 
 func newHypervisorConfig(kernelParams []Param, hParams []Param) HypervisorConfig {
@@ -1721,4 +1723,28 @@ func TestGetNetNs(t *testing.T) {
 
 	netNs = s.GetNetNs()
 	assert.Equal(t, netNs, expected)
+}
+
+func TestStartNetworkMonitor(t *testing.T) {
+	trueBinPath, err := exec.LookPath("true")
+	assert.Nil(t, err)
+	assert.NotEmpty(t, trueBinPath)
+
+	s := &Sandbox{
+		id: testSandboxID,
+		config: &SandboxConfig{
+			NetworkConfig: NetworkConfig{
+				NetmonConfig: NetmonConfig{
+					Path: trueBinPath,
+				},
+			},
+		},
+		network: &defNetwork{},
+		networkNS: NetworkNamespace{
+			NetNsPath: fmt.Sprintf("/proc/%d/task/%d/ns/net", os.Getpid(), unix.Gettid()),
+		},
+	}
+
+	err = s.startNetworkMonitor()
+	assert.Nil(t, err)
 }

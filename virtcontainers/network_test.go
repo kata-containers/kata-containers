@@ -209,13 +209,13 @@ func TestCreateVirtualNetworkEndpoint(t *testing.T) {
 	expected := &VirtualEndpoint{
 		NetPair: NetworkInterfacePair{
 			ID:   "uniqueTestID-4",
-			Name: "br4",
+			Name: "br4_kata",
 			VirtIface: NetworkInterface{
 				Name:     "eth4",
 				HardAddr: macAddr.String(),
 			},
 			TAPIface: NetworkInterface{
-				Name: "tap4",
+				Name: "tap4_kata",
 			},
 			NetInterworkingModel: DefaultNetInterworkingModel,
 		},
@@ -241,13 +241,13 @@ func TestCreateVirtualNetworkEndpointChooseIfaceName(t *testing.T) {
 	expected := &VirtualEndpoint{
 		NetPair: NetworkInterfacePair{
 			ID:   "uniqueTestID-4",
-			Name: "br4",
+			Name: "br4_kata",
 			VirtIface: NetworkInterface{
 				Name:     "eth1",
 				HardAddr: macAddr.String(),
 			},
 			TAPIface: NetworkInterface{
-				Name: "tap4",
+				Name: "tap4_kata",
 			},
 			NetInterworkingModel: DefaultNetInterworkingModel,
 		},
