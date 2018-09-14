@@ -181,6 +181,21 @@ path = "@SHIMPATH@"
 # There is no field for this section. The goal is only to be able to
 # specify which type of agent the user wants to use.
 
+[netmon]
+# If enabled, the network monitoring process gets started when the
+# sandbox is created. This allows for the detection of some additional
+# network being added to the existing network namespace, after the
+# sandbox has been created.
+# (default: disabled)
+#enable_netmon = true
+
+# Specify the path to the netmon binary.
+path = "@NETMONPATH@"
+
+# If enabled, netmon messages will be sent to the system log
+# (default: disabled)
+#enable_debug = true
+
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
 # system log

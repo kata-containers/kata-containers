@@ -142,6 +142,7 @@ type NetworkInterfacePair struct {
 type NetworkConfig struct {
 	NetNSPath         string
 	NetNsCreated      bool
+	NetmonConfig      NetmonConfig
 	InterworkingModel NetInterworkingModel
 }
 
@@ -257,7 +258,7 @@ func (endpoint *VirtualEndpoint) HotAttach(h hypervisor) error {
 		return err
 	}
 
-	if _, err := h.hotplugAddDevice(*endpoint, netDev); err != nil {
+	if _, err := h.hotplugAddDevice(endpoint, netDev); err != nil {
 		networkLogger().WithError(err).Error("Error attach virtual ep")
 		return err
 	}
@@ -273,11 +274,10 @@ func (endpoint *VirtualEndpoint) HotDetach(h hypervisor, netNsCreated bool, netN
 	if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
 		return xconnectVMNetwork(&(endpoint.NetPair), false, 0, h.hypervisorConfig().DisableVhostNet)
 	}); err != nil {
-		networkLogger().WithError(err).Error("Error abridging virtual ep")
-		return err
+		networkLogger().WithError(err).Warn("Error un-bridging virtual ep")
 	}
 
-	if _, err := h.hotplugRemoveDevice(*endpoint, netDev); err != nil {
+	if _, err := h.hotplugRemoveDevice(endpoint, netDev); err != nil {
 		networkLogger().WithError(err).Error("Error detach virtual ep")
 		return err
 	}
@@ -475,6 +475,7 @@ type NetworkNamespace struct {
 	NetNsPath    string
 	NetNsCreated bool
 	Endpoints    []Endpoint
+	NetmonPID    int
 }
 
 // TypedJSONEndpoint is used as an intermediate representation for
@@ -1151,13 +1152,13 @@ func createVirtualNetworkEndpoint(idx int, ifName string, interworkingModel NetI
 		// at the time of hypervisor attach and not here
 		NetPair: NetworkInterfacePair{
 			ID:   uniqueID,
-			Name: fmt.Sprintf("br%d", idx),
+			Name: fmt.Sprintf("br%d_kata", idx),
 			VirtIface: NetworkInterface{
 				Name:     fmt.Sprintf("eth%d", idx),
 				HardAddr: hardAddr.String(),
 			},
 			TAPIface: NetworkInterface{
-				Name: fmt.Sprintf("tap%d", idx),
+				Name: fmt.Sprintf("tap%d_kata", idx),
 			},
 			NetInterworkingModel: interworkingModel,
 		},

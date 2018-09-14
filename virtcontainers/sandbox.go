@@ -961,6 +961,40 @@ func (s *Sandbox) Delete() error {
 	return s.storage.deleteSandboxResources(s.id, nil)
 }
 
+func (s *Sandbox) startNetworkMonitor() error {
+	span, _ := s.trace("startNetworkMonitor")
+	defer span.Finish()
+
+	binPath, err := os.Executable()
+	if err != nil {
+		return err
+	}
+
+	logLevel := "info"
+	if s.config.NetworkConfig.NetmonConfig.Debug {
+		logLevel = "debug"
+	}
+
+	params := netmonParams{
+		netmonPath: s.config.NetworkConfig.NetmonConfig.Path,
+		debug:      s.config.NetworkConfig.NetmonConfig.Debug,
+		logLevel:   logLevel,
+		runtime:    binPath,
+		sandboxID:  s.id,
+	}
+
+	return s.network.run(s.networkNS.NetNsPath, func() error {
+		pid, err := startNetmon(params)
+		if err != nil {
+			return err
+		}
+
+		s.networkNS.NetmonPID = pid
+
+		return nil
+	})
+}
+
 func (s *Sandbox) createNetwork() error {
 	span, _ := s.trace("createNetwork")
 	defer span.Finish()
@@ -983,6 +1017,12 @@ func (s *Sandbox) createNetwork() error {
 		}
 	}
 
+	if s.config.NetworkConfig.NetmonConfig.Enable {
+		if err := s.startNetworkMonitor(); err != nil {
+			return err
+		}
+	}
+
 	// Store the network
 	return s.storage.storeSandboxNetwork(s.id, s.networkNS)
 }
@@ -990,6 +1030,12 @@ func (s *Sandbox) createNetwork() error {
 func (s *Sandbox) removeNetwork() error {
 	span, _ := s.trace("removeNetwork")
 	defer span.Finish()
+
+	if s.config.NetworkConfig.NetmonConfig.Enable {
+		if err := stopNetmon(s.networkNS.NetmonPID); err != nil {
+			return err
+		}
+	}
 
 	// In case there is a factory, the network has been handled through
 	// some API calls to hotplug some interfaces and routes. This means
@@ -1056,6 +1102,7 @@ func (s *Sandbox) AddInterface(inf *grpc.Interface) (*grpc.Interface, error) {
 	}
 
 	// Add network for vm
+	inf.PciAddr = endpoint.PCIAddr
 	return s.agent.updateInterface(inf)
 }
 
