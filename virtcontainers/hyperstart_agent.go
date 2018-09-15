@@ -883,7 +883,7 @@ func (h *hyper) sendCmd(proxyCmd hyperstartProxyCmd) (interface{}, error) {
 	return h.client.HyperWithTokens(proxyCmd.cmd, tokens, proxyCmd.message)
 }
 
-func (h *hyper) onlineCPUMem(cpus uint32) error {
+func (h *hyper) onlineCPUMem(cpus uint32, cpuOnly bool) error {
 	// hyperstart-agent uses udev to online CPUs automatically
 	return nil
 }
