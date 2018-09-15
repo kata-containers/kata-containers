@@ -237,6 +237,10 @@ func (p *gRPCProxy) ReseedRandomDev(ctx context.Context, req *pb.ReseedRandomDev
 	return emptyResp, nil
 }
 
+func (p *gRPCProxy) GetGuestDetails(ctx context.Context, req *pb.GuestDetailsRequest) (*pb.GuestDetailsResponse, error) {
+	return &pb.GuestDetailsResponse{}, nil
+}
+
 func gRPCRegister(s *grpc.Server, srv interface{}) {
 	switch g := srv.(type) {
 	case *gRPCProxy:
