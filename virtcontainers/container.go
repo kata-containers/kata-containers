@@ -1299,13 +1299,14 @@ func (c *Container) updateVCPUResources(oldResources, newResources ContainerReso
 	return nil
 }
 
-func (c *Container) memHotplugValid(mem *uint32) error {
-	// TODO: make memory aligned to correct memory boundary according to different architecture
-	const memorySectionSizeMB = 128
-	// TODO: make hot add memory to be aligned to memory section in more proper way. See https://github.com/kata-containers/runtime/pull/624#issuecomment-419656853
-	*mem = uint32(math.Ceil(float64(*mem)/memorySectionSizeMB)) * memorySectionSizeMB
+func (c *Container) memHotplugValid(mem uint32) (uint32, error) {
+	memorySectionSizeMB := c.sandbox.state.GuestMemoryBlockSizeMB
+	if memorySectionSizeMB == 0 {
+		return mem, nil
+	}
 
-	return nil
+	// TODO: hot add memory aligned to memory section should be more properly. See https://github.com/kata-containers/runtime/pull/624#issuecomment-419656853
+	return uint32(math.Ceil(float64(mem)/float64(memorySectionSizeMB))) * memorySectionSizeMB, nil
 }
 
 func (c *Container) updateMemoryResources(oldResources, newResources ContainerResources) error {
@@ -1323,15 +1324,16 @@ func (c *Container) updateMemoryResources(oldResources, newResources ContainerRe
 	if oldMemMB < newMemMB {
 		// hot add memory
 		addMemMB := newMemMB - oldMemMB
-		if err := c.memHotplugValid(&addMemMB); err != nil {
+		memHotplugMB, err := c.memHotplugValid(addMemMB)
+		if err != nil {
 			return err
 		}
 
-		virtLog.Debugf("hot adding %dMB mem", addMemMB)
+		virtLog.Debugf("hotplug %dMB mem", memHotplugMB)
 		addMemDevice := &memoryDevice{
-			sizeMB: int(addMemMB),
+			sizeMB: int(memHotplugMB),
 		}
-		_, err := c.sandbox.hypervisor.hotplugAddDevice(addMemDevice, memoryDev)
+		_, err = c.sandbox.hypervisor.hotplugAddDevice(addMemDevice, memoryDev)
 		if err != nil {
 			return err
 		}

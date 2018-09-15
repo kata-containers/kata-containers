@@ -197,3 +197,8 @@ func (n *noopAgent) getAgentURL() (string, error) {
 func (n *noopAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error {
 	return nil
 }
+
+// getGuestDetails is the Noop agent GuestDetails queryer. It does nothing.
+func (n *noopAgent) getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
+	return nil, nil
+}

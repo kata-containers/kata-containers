@@ -987,3 +987,8 @@ func (h *hyper) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) err
 
 	return nil
 }
+
+func (h *hyper) getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
+	// hyperstart-agent does not support getGuestDetails
+	return nil, nil
+}
