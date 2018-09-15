@@ -2330,11 +2330,17 @@ func TestUpdateContainer(t *testing.T) {
 
 	period := uint64(1000)
 	quota := int64(2000)
+	memoryLimit := int64(1073741824)
+	memorySwap := int64(1073741824)
 	assert := assert.New(t)
 	resources := specs.LinuxResources{
 		CPU: &specs.LinuxCPU{
 			Period: &period,
 			Quota:  &quota,
+		},
+		Memory: &specs.LinuxMemory{
+			Limit: &memoryLimit,
+			Swap:  &memorySwap,
 		},
 	}
 	err := UpdateContainer(ctx, "", "", resources)
