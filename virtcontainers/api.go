@@ -122,6 +122,11 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		return nil, err
 	}
 
+	// get and store guest details
+	if err := s.getAndStoreGuestDetails(); err != nil {
+		return nil, err
+	}
+
 	return s, nil
 }
 

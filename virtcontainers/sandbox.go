@@ -64,6 +64,9 @@ type State struct {
 	// Pid is the process id of the sandbox container which is the first
 	// container to be started.
 	Pid int `json:"pid"`
+
+	// GuestMemoryBlockSizeMB is the size of memory block of guestos
+	GuestMemoryBlockSizeMB uint32 `json:"guestMemoryBlockSize"`
 }
 
 // valid checks that the sandbox state is valid.
@@ -703,6 +706,24 @@ func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
 
 	for _, a := range []*asset{kernel, image, initrd} {
 		if err := sandboxConfig.HypervisorConfig.addCustomAsset(a); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Sandbox) getAndStoreGuestDetails() error {
+	guestDetailRes, err := s.agent.getGuestDetails(&grpc.GuestDetailsRequest{
+		MemBlockSize: true,
+	})
+	if err != nil {
+		return err
+	}
+
+	if guestDetailRes != nil {
+		s.state.GuestMemoryBlockSizeMB = uint32(guestDetailRes.MemBlockSizeBytes >> 20)
+		if err = s.storage.storeSandboxResource(s.id, stateFileType, s.state); err != nil {
 			return err
 		}
 	}

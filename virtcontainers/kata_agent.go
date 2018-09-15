@@ -1459,6 +1459,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers["grpc.ReseedRandomDevRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.ReseedRandomDev(ctx, req.(*grpc.ReseedRandomDevRequest), opts...)
 	}
+	k.reqHandlers["grpc.GuestDetailsRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.GetGuestDetails(ctx, req.(*grpc.GuestDetailsRequest), opts...)
+	}
 }
 
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
@@ -1521,4 +1524,13 @@ func (k *kataAgent) readProcessStream(containerID, processID string, data []byte
 	}
 
 	return 0, err
+}
+
+func (k *kataAgent) getGuestDetails(req *grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
+	resp, err := k.sendReq(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.(*grpc.GuestDetailsResponse), nil
 }

@@ -242,4 +242,7 @@ type agent interface {
 
 	// listRoutes will tell the agent to list routes of an existed Sandbox
 	listRoutes() ([]*grpc.Route, error)
+
+	// getGuestDetails will tell the agent to get some information of guest
+	getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error)
 }
