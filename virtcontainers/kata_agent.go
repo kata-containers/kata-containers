@@ -31,6 +31,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	golangGrpc "google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	grpcStatus "google.golang.org/grpc/status"
 )
 
 var (
@@ -1313,7 +1315,7 @@ func (k *kataAgent) disconnect() error {
 		return nil
 	}
 
-	if err := k.client.Close(); err != nil && err != golangGrpc.ErrClientConnClosing {
+	if err := k.client.Close(); err != nil && grpcStatus.Convert(err).Code() != codes.Canceled {
 		return err
 	}
 

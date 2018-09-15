@@ -217,6 +217,10 @@ func agentDialer(addr *url.URL, enableYamux bool) dialer {
 }
 
 func unixDialer(sock string, timeout time.Duration) (net.Conn, error) {
+	if strings.HasPrefix(sock, "unix:") {
+		sock = strings.Trim(sock, "unix:")
+	}
+
 	dialFunc := func() (net.Conn, error) {
 		return net.DialTimeout("unix", sock, timeout)
 	}
@@ -285,6 +289,9 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 		if !ok {
 			return nil, timeoutErrMsg
 		}
+	case <-t.C:
+		cancel <- true
+		return nil, timeoutErrMsg
 	}
 
 	return conn, nil

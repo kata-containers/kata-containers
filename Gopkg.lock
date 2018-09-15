@@ -130,14 +130,14 @@
   revision = "032705ba6aae05a9bf41e296cf89c8529cffb822"
 
 [[projects]]
-  digest = "1:aec1ed6dbfffe247e5a8a9e3102206fe97552077e10ea44e3e35dce98ab6e5aa"
+  digest = "1:672470f31bc4e50f9ba09a1af7ab6035bf8b1452db64dfd79b1a22614bb30710"
   name = "github.com/kata-containers/agent"
   packages = [
     "protocols/client",
     "protocols/grpc",
   ]
   pruneopts = "NUT"
-  revision = "7c95a50ef97052bf7f5566dcca53d6611f7458ac"
+  revision = "7e8e20b10b71fe3044a24175b8a686421e9d2c24"
 
 [[projects]]
   digest = "1:04054595e5c5a35d1553a7f3464d18577caf597445d643992998643df56d4afd"
@@ -361,16 +361,18 @@
   revision = "2c5e7ac708aaa719366570dd82bda44541ca2a63"
 
 [[projects]]
-  digest = "1:abbcaa84ed484e328cef0cd0bc0130641edc52b4bc6bfb0090dadfd2c1033b6f"
+  digest = "1:3d43152515ea791363eb0d1d21378fbf70e7df4a3954fd315898532cf5e64a8c"
   name = "google.golang.org/grpc"
   packages = [
     ".",
     "balancer",
+    "balancer/base",
     "balancer/roundrobin",
     "codes",
     "connectivity",
     "credentials",
     "encoding",
+    "encoding/proto",
     "grpclb/grpc_lb_v1/messages",
     "grpclog",
     "internal",
@@ -387,7 +389,7 @@
     "transport",
   ]
   pruneopts = "NUT"
-  revision = "5a9f7b402fe85096d2e1d0383435ee1876e863d0"
+  revision = "d11072e7ca9811b1100b80ca0269ac831f06d024"
 
 [solve-meta]
   analyzer-name = "dep"
