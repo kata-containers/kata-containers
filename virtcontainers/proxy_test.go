@@ -13,8 +13,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
+
+var testDefaultLogger = logrus.WithField("proxy", "test")
 
 func testSetProxyType(t *testing.T, value string, expected ProxyType) {
 	var proxyType ProxyType
@@ -154,15 +157,15 @@ func TestNewProxyFromUnknownProxyType(t *testing.T) {
 	}
 }
 
-func testNewProxyConfigFromSandboxConfig(t *testing.T, sandboxConfig SandboxConfig, expected ProxyConfig) {
-	result, err := newProxyConfig(&sandboxConfig)
-	if err != nil {
+func testNewProxyFromSandboxConfig(t *testing.T, sandboxConfig SandboxConfig) {
+	if _, err := newProxy(sandboxConfig.ProxyType); err != nil {
 		t.Fatal(err)
 	}
 
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("Got %+v\nExpecting %+v", result, expected)
+	if err := validateProxyConfig(sandboxConfig.ProxyConfig); err != nil {
+		t.Fatal(err)
 	}
+
 }
 
 var testProxyPath = "proxy-path"
@@ -177,7 +180,7 @@ func TestNewProxyConfigFromCCProxySandboxConfig(t *testing.T) {
 		ProxyConfig: proxyConfig,
 	}
 
-	testNewProxyConfigFromSandboxConfig(t, sandboxConfig, proxyConfig)
+	testNewProxyFromSandboxConfig(t, sandboxConfig)
 }
 
 func TestNewProxyConfigFromKataProxySandboxConfig(t *testing.T) {
@@ -190,22 +193,11 @@ func TestNewProxyConfigFromKataProxySandboxConfig(t *testing.T) {
 		ProxyConfig: proxyConfig,
 	}
 
-	testNewProxyConfigFromSandboxConfig(t, sandboxConfig, proxyConfig)
-}
-
-func TestNewProxyConfigNilSandboxConfigFailure(t *testing.T) {
-	if _, err := newProxyConfig(nil); err == nil {
-		t.Fatal("Should fail because SandboxConfig provided is nil")
-	}
+	testNewProxyFromSandboxConfig(t, sandboxConfig)
 }
 
 func TestNewProxyConfigNoPathFailure(t *testing.T) {
-	sandboxConfig := &SandboxConfig{
-		ProxyType:   CCProxyType,
-		ProxyConfig: ProxyConfig{},
-	}
-
-	if _, err := newProxyConfig(sandboxConfig); err == nil {
+	if err := validateProxyConfig(ProxyConfig{}); err == nil {
 		t.Fatal("Should fail because ProxyConfig has no Path")
 	}
 }
@@ -217,7 +209,7 @@ func testDefaultProxyURL(expectedURL string, socketType string, sandboxID string
 		id: sandboxID,
 	}
 
-	url, err := defaultProxyURL(sandbox, socketType)
+	url, err := defaultProxyURL(sandbox.id, socketType)
 	if err != nil {
 		return err
 	}
@@ -253,7 +245,7 @@ func TestDefaultProxyURLUnknown(t *testing.T) {
 	}
 }
 
-func testProxyStart(t *testing.T, agent agent, proxy proxy, proxyType ProxyType) {
+func testProxyStart(t *testing.T, agent agent, proxy proxy) {
 	assert := assert.New(t)
 
 	assert.NotNil(proxy)
@@ -263,7 +255,6 @@ func testProxyStart(t *testing.T, agent agent, proxy proxy, proxyType ProxyType)
 	defer os.RemoveAll(tmpdir)
 
 	type testData struct {
-		sandbox     *Sandbox
 		params      proxyParams
 		expectedURI string
 		expectError bool
@@ -274,60 +265,43 @@ func testProxyStart(t *testing.T, agent agent, proxy proxy, proxyType ProxyType)
 	expectedURI := fmt.Sprintf("unix://%s", expectedSocketPath)
 
 	data := []testData{
-		{&Sandbox{}, proxyParams{}, "", true},
+		{proxyParams{}, "", true},
 		{
-			&Sandbox{
-				config: &SandboxConfig{
-					ProxyType: "invalid",
-				},
-			},
-			proxyParams{},
-			"", true,
-		},
-		{
-			&Sandbox{
-				config: &SandboxConfig{
-					ProxyType: proxyType,
-					// invalid - no path
-					ProxyConfig: ProxyConfig{},
-				},
-			},
-			proxyParams{},
-			"", true,
-		},
-		{
-			&Sandbox{
-				config: &SandboxConfig{
-					ProxyType: proxyType,
-					ProxyConfig: ProxyConfig{
-						Path: invalidPath,
-					},
-				},
-			},
-			proxyParams{},
-			"", true,
-		},
-
-		{
-			&Sandbox{
-				id:    testSandboxID,
-				agent: agent,
-				config: &SandboxConfig{
-					ProxyType: proxyType,
-					ProxyConfig: ProxyConfig{
-						Path: "echo",
-					},
-				},
-			},
+			// no path
 			proxyParams{
-				agentURL: "agentURL",
+				id:         "foobar",
+				agentURL:   "agentURL",
+				consoleURL: "consoleURL",
+				logger:     testDefaultLogger,
+			},
+			"", true,
+		},
+		{
+			// invalid path
+			proxyParams{
+				id:         "foobar",
+				path:       invalidPath,
+				agentURL:   "agentURL",
+				consoleURL: "consoleURL",
+				logger:     testDefaultLogger,
+			},
+			"", true,
+		},
+		{
+			// good case
+			proxyParams{
+				id:         testSandboxID,
+				path:       "echo",
+				agentURL:   "agentURL",
+				consoleURL: "consoleURL",
+				logger:     testDefaultLogger,
 			},
 			expectedURI, false,
 		},
 	}
 
 	for _, d := range data {
-		pid, uri, err := proxy.start(d.sandbox, d.params)
+		pid, uri, err := proxy.start(d.params)
 		if d.expectError {
 			assert.Error(err)
 			continue
@@ -337,4 +311,44 @@ func testProxyStart(t *testing.T, agent agent, proxy proxy, proxyType ProxyType)
 		assert.True(pid > 0)
 		assert.Equal(d.expectedURI, uri)
 	}
+}
+
+func TestValidateProxyConfig(t *testing.T) {
+	assert := assert.New(t)
+
+	config := ProxyConfig{}
+	err := validateProxyConfig(config)
+	assert.Error(err)
+
+	config.Path = "foobar"
+	err = validateProxyConfig(config)
+	assert.Nil(err)
+}
+
+func TestValidateProxyParams(t *testing.T) {
+	assert := assert.New(t)
+
+	p := proxyParams{}
+	err := validateProxyParams(p)
+	assert.Error(err)
+
+	p.path = "foobar"
+	err = validateProxyParams(p)
+	assert.Error(err)
+
+	p.id = "foobar1"
+	err = validateProxyParams(p)
+	assert.Error(err)
+
+	p.agentURL = "foobar2"
+	err = validateProxyParams(p)
+	assert.Error(err)
+
+	p.consoleURL = "foobar3"
+	err = validateProxyParams(p)
+	assert.Error(err)
+
+	p.logger = &logrus.Entry{}
+	err = validateProxyParams(p)
+	assert.Nil(err)
 }

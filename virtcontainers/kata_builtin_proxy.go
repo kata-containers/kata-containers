@@ -14,6 +14,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var buildinProxyConsoleProto = consoleProtoUnix
+
 // This is a kata builtin proxy implementation of the proxy interface. Kata proxy
 // functionality is implemented inside the virtcontainers library.
 type kataBuiltInProxy struct {
@@ -26,22 +28,36 @@ func (p *kataBuiltInProxy) consoleWatched() bool {
 	return p.conn != nil
 }
 
+func (p *kataBuiltInProxy) validateParams(params proxyParams) error {
+	if len(params.id) == 0 || len(params.agentURL) == 0 || len(params.consoleURL) == 0 {
+		return fmt.Errorf("Invalid proxy parameters %+v", params)
+	}
+
+	if params.logger == nil {
+		return fmt.Errorf("Invalid proxy parameter: proxy logger is not set")
+	}
+
+	return nil
+}
+
 // start is the proxy start implementation for kata builtin proxy.
 // It starts the console watcher for the guest.
 // It returns agentURL to let agent connect directly.
-func (p *kataBuiltInProxy) start(sandbox *Sandbox, params proxyParams) (int, string, error) {
-	if p.consoleWatched() {
-		return -1, "", fmt.Errorf("kata builtin proxy running for sandbox %s", p.sandboxID)
-	}
-
-	p.sandboxID = sandbox.id
-	console, err := sandbox.hypervisor.getSandboxConsole(sandbox.id)
-	if err != nil {
+func (p *kataBuiltInProxy) start(params proxyParams) (int, string, error) {
+	if err := p.validateParams(params); err != nil {
 		return -1, "", err
 	}
 
-	err = p.watchConsole(consoleProtoUnix, console, params.logger)
+	if p.consoleWatched() {
+		return -1, "", fmt.Errorf("kata builtin proxy running for sandbox %s", params.id)
+	}
+
+	params.logger.Info("Starting builtin kata proxy")
+
+	p.sandboxID = params.id
+	err := p.watchConsole(buildinProxyConsoleProto, params.consoleURL, params.logger)
 	if err != nil {
+		p.sandboxID = ""
 		return -1, "", err
 	}
 
@@ -49,7 +65,7 @@ func (p *kataBuiltInProxy) start(sandbox *Sandbox, params proxyParams) (int, str
 }
 
 // stop is the proxy stop implementation for kata builtin proxy.
-func (p *kataBuiltInProxy) stop(sandbox *Sandbox, pid int) error {
+func (p *kataBuiltInProxy) stop(pid int) error {
 	if p.conn != nil {
 		p.conn.Close()
 		p.conn = nil

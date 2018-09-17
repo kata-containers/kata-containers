@@ -13,13 +13,13 @@ var noopProxyURL = "noopProxyURL"
 
 // register is the proxy start implementation for testing purpose.
 // It does nothing.
-func (p *noopProxy) start(sandbox *Sandbox, params proxyParams) (int, string, error) {
+func (p *noopProxy) start(params proxyParams) (int, string, error) {
 	return 0, noopProxyURL, nil
 }
 
 // stop is the proxy stop implementation for testing purpose.
 // It does nothing.
-func (p *noopProxy) stop(sandbox *Sandbox, pid int) error {
+func (p *noopProxy) stop(pid int) error {
 	return nil
 }
 

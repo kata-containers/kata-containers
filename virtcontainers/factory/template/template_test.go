@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 
@@ -19,6 +20,9 @@ import (
 func TestTemplateFactory(t *testing.T) {
 	assert := assert.New(t)
 
+	templateWaitForMigration = 1 * time.Microsecond
+	templateWaitForAgent = 1 * time.Microsecond
+
 	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
 	hyperConfig := vc.HypervisorConfig{
 		KernelPath: testDir,
@@ -26,9 +30,13 @@ func TestTemplateFactory(t *testing.T) {
 	}
 	vmConfig := vc.VMConfig{
 		HypervisorType:   vc.MockHypervisor,
-		AgentType:        vc.NoopAgentType,
 		HypervisorConfig: hyperConfig,
+		AgentType:        vc.NoopAgentType,
+		ProxyType:        vc.NoopProxyType,
 	}
+
+	err := vmConfig.Valid()
+	assert.Nil(err)
 
 	ctx := context.Background()
 
@@ -39,7 +47,7 @@ func TestTemplateFactory(t *testing.T) {
 	assert.Equal(f.Config(), vmConfig)
 
 	// GetBaseVM
-	_, err := f.GetBaseVM(ctx)
+	_, err = f.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
 	// Fetch
@@ -47,6 +55,8 @@ func TestTemplateFactory(t *testing.T) {
 		statePath: testDir,
 		config:    vmConfig,
 	}
+
+	assert.Equal(tt.Config(), vmConfig)
 
 	err = tt.checkTemplateVM()
 	assert.Error(err)
@@ -62,9 +72,22 @@ func TestTemplateFactory(t *testing.T) {
 	assert.Nil(err)
 
 	err = tt.createTemplateVM(ctx)
+	assert.Error(err)
+
+	templateProxyType = vc.NoopProxyType
+	_, err = tt.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	_, err = tt.GetBaseVM(ctx)
+	_, err = f.GetBaseVM(ctx, vmConfig)
+	assert.Nil(err)
+
+	err = tt.createTemplateVM(ctx)
+	assert.Nil(err)
+
+	_, err = tt.GetBaseVM(ctx, vmConfig)
+	assert.Nil(err)
+
+	_, err = f.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
 	// CloseFactory

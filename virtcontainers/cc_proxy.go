@@ -5,28 +5,27 @@
 
 package virtcontainers
 
-import (
-	"os/exec"
-)
+import "os/exec"
 
 type ccProxy struct {
 }
 
 // start is the proxy start implementation for ccProxy.
-func (p *ccProxy) start(sandbox *Sandbox, params proxyParams) (int, string, error) {
-	config, err := newProxyConfig(sandbox.config)
-	if err != nil {
+func (p *ccProxy) start(params proxyParams) (int, string, error) {
+	if err := validateProxyParams(params); err != nil {
 		return -1, "", err
 	}
+
+	params.logger.Info("Starting cc proxy")
 
 	// construct the socket path the proxy instance will use
-	proxyURL, err := defaultProxyURL(sandbox, SocketTypeUNIX)
+	proxyURL, err := defaultProxyURL(params.id, SocketTypeUNIX)
 	if err != nil {
 		return -1, "", err
 	}
 
-	args := []string{config.Path, "-uri", proxyURL}
-	if config.Debug {
+	args := []string{params.path, "-uri", proxyURL}
+	if params.debug {
 		args = append(args, "-log", "debug")
 	}
 
@@ -38,7 +37,7 @@ func (p *ccProxy) start(sandbox *Sandbox, params proxyParams) (int, string, erro
 	return cmd.Process.Pid, proxyURL, nil
 }
 
-func (p *ccProxy) stop(sandbox *Sandbox, pid int) error {
+func (p *ccProxy) stop(pid int) error {
 	return nil
 }
 

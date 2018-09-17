@@ -795,3 +795,35 @@ func TestAgentNetworkOperation(t *testing.T) {
 	_, err = k.listRoutes()
 	assert.Nil(err)
 }
+
+func TestKataAgentSetProxy(t *testing.T) {
+	assert := assert.New(t)
+
+	k := &kataAgent{}
+	p := &kataBuiltInProxy{}
+	s := &Sandbox{storage: &filesystem{}}
+
+	err := k.setProxy(s, p, 0, "")
+	assert.Error(err)
+
+	err = k.setProxy(s, p, 0, "foobar")
+	assert.Error(err)
+}
+
+func TestKataGetAgentUrl(t *testing.T) {
+	assert := assert.New(t)
+
+	k := &kataAgent{}
+	err := k.generateVMSocket("foobar", KataAgentConfig{})
+	assert.Nil(err)
+	url, err := k.getAgentURL()
+	assert.Nil(err)
+	assert.NotEmpty(url)
+
+	err = k.generateVMSocket("foobar", KataAgentConfig{UseVSock: true})
+	assert.Nil(err)
+	url, err = k.getAgentURL()
+	assert.Nil(err)
+	assert.NotEmpty(url)
+
+}

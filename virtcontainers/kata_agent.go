@@ -471,19 +471,37 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 		return nil
 	}
 
+	if k.state.URL != "" {
+		k.Logger().WithFields(logrus.Fields{
+			"sandbox":   sandbox.id,
+			"proxy-pid": k.state.ProxyPid,
+			"proxy-url": k.state.URL,
+		}).Infof("proxy already started")
+		return nil
+	}
+
 	// Get agent socket path to provide it to the proxy.
 	agentURL, err := k.agentURL()
 	if err != nil {
 		return err
 	}
 
+	consoleURL, err := sandbox.hypervisor.getSandboxConsole(sandbox.id)
+	if err != nil {
+		return err
+	}
+
 	proxyParams := proxyParams{
-		agentURL: agentURL,
-		logger:   k.Logger().WithField("sandbox", sandbox.id),
+		id:         sandbox.id,
+		path:       sandbox.config.ProxyConfig.Path,
+		agentURL:   agentURL,
+		consoleURL: consoleURL,
+		logger:     k.Logger().WithField("sandbox", sandbox.id),
+		debug:      sandbox.config.ProxyConfig.Debug,
 	}
 
 	// Start the proxy here
-	pid, uri, err := k.proxy.start(sandbox, proxyParams)
+	pid, uri, err := k.proxy.start(proxyParams)
 	if err != nil {
 		return err
 	}
@@ -491,15 +509,13 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 	// If error occurs after kata-proxy process start,
 	// then rollback to kill kata-proxy process
 	defer func() {
-		if err != nil && pid > 0 {
-			k.proxy.stop(sandbox, pid)
+		if err != nil {
+			k.proxy.stop(pid)
 		}
 	}()
 
 	// Fill agent state with proxy information, and store them.
-	k.state.ProxyPid = pid
-	k.state.URL = uri
-	if err = sandbox.storage.storeAgentState(sandbox.id, k.state); err != nil {
+	if err = k.setProxy(sandbox, k.proxy, pid, uri); err != nil {
 		return err
 	}
 
@@ -508,6 +524,35 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 		"proxy-pid": pid,
 		"proxy-url": uri,
 	}).Info("proxy started")
+
+	return nil
+}
+
+func (k *kataAgent) getAgentURL() (string, error) {
+	return k.agentURL()
+}
+
+func (k *kataAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error {
+	if url == "" {
+		var err error
+		if url, err = k.agentURL(); err != nil {
+			return err
+		}
+	}
+
+	// Are we setting the same proxy again?
+	if k.proxy != nil && k.state.URL != "" && k.state.URL != url {
+		k.proxy.stop(k.state.ProxyPid)
+	}
+
+	k.proxy = proxy
+	k.state.ProxyPid = pid
+	k.state.URL = url
+	if sandbox != nil {
+		if err := sandbox.storage.storeAgentState(sandbox.id, k.state); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -602,7 +647,19 @@ func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 		return err
 	}
 
-	return k.proxy.stop(sandbox, k.state.ProxyPid)
+	if err := k.proxy.stop(k.state.ProxyPid); err != nil {
+		return err
+	}
+
+	// clean up agent state
+	k.state.ProxyPid = -1
+	k.state.URL = ""
+	if err := sandbox.storage.storeAgentState(sandbox.id, k.state); err != nil {
+		// ignore error
+		k.Logger().WithError(err).WithField("sandbox", sandbox.id).Error("failed to clean up agent state")
+	}
+
+	return nil
 }
 
 func (k *kataAgent) cleanupSandbox(sandbox *Sandbox) error {

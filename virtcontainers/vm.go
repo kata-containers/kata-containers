@@ -21,6 +21,10 @@ type VM struct {
 	hypervisor hypervisor
 	agent      agent
 
+	proxy    proxy
+	proxyPid int
+	proxyURL string
+
 	cpu    uint32
 	memory uint32
 
@@ -34,6 +38,9 @@ type VMConfig struct {
 
 	AgentType   AgentType
 	AgentConfig interface{}
+
+	ProxyType   ProxyType
+	ProxyConfig ProxyConfig
 }
 
 // Valid check VMConfig validity.
@@ -41,8 +48,56 @@ func (c *VMConfig) Valid() error {
 	return c.HypervisorConfig.valid()
 }
 
+func setupProxy(h hypervisor, agent agent, config VMConfig, id string) (int, string, proxy, error) {
+	consoleURL, err := h.getSandboxConsole(id)
+	if err != nil {
+		return -1, "", nil, err
+	}
+	agentURL, err := agent.getAgentURL()
+	if err != nil {
+		return -1, "", nil, err
+	}
+
+	// default to kata builtin proxy
+	proxyType := config.ProxyType
+	if len(proxyType.String()) == 0 {
+		proxyType = KataBuiltInProxyType
+	}
+	proxy, err := newProxy(proxyType)
+	if err != nil {
+		return -1, "", nil, err
+	}
+
+	proxyParams := proxyParams{
+		id:         id,
+		path:       config.ProxyConfig.Path,
+		agentURL:   agentURL,
+		consoleURL: consoleURL,
+		logger:     virtLog.WithField("vm", id),
+		debug:      config.ProxyConfig.Debug,
+	}
+	pid, url, err := proxy.start(proxyParams)
+	if err != nil {
+		virtLog.WithFields(logrus.Fields{
+			"vm":         id,
+			"proxy type": config.ProxyType,
+			"params":     proxyParams,
+		}).WithError(err).Error("failed to start proxy")
+		return -1, "", nil, err
+	}
+
+	return pid, url, proxy, nil
+}
+
 // NewVM creates a new VM based on provided VMConfig.
 func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
+	var (
+		proxy proxy
+		pid   int
+		url   string
+	)
+
+	// 1. setup hypervisor
 	hypervisor, err := newHypervisor(config.HypervisorType)
 	if err != nil {
 		return nil, err
@@ -54,11 +109,11 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 
 	id := uuid.Generate().String()
 
-	virtLog.WithField("vm id", id).WithField("config", config).Info("create new vm")
+	virtLog.WithField("vm", id).WithField("config", config).Info("create new vm")
 
 	defer func() {
 		if err != nil {
-			virtLog.WithField("vm id", id).WithError(err).Error("failed to create new vm")
+			virtLog.WithField("vm", id).WithError(err).Error("failed to create new vm")
 		}
 	}()
 
@@ -70,37 +125,48 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		return nil, err
 	}
 
+	// 2. setup agent
 	agent := newAgent(config.AgentType)
-	agentConfig := newAgentConfig(config.AgentType, config.AgentConfig)
-	// do not keep connection for temp agent
-	if c, ok := agentConfig.(KataAgentConfig); ok {
-		c.LongLiveConn = false
-	}
 	vmSharePath := buildVMSharePath(id)
-	err = agent.configure(hypervisor, id, vmSharePath, true, agentConfig)
+	err = agent.configure(hypervisor, id, vmSharePath, isProxyBuiltIn(config.ProxyType), config.AgentConfig)
 	if err != nil {
 		return nil, err
 	}
 
+	// 3. boot up guest vm
 	if err = hypervisor.startSandbox(); err != nil {
+		return nil, err
+	}
+	if err = hypervisor.waitSandbox(vmStartTimeout); err != nil {
 		return nil, err
 	}
 
 	defer func() {
 		if err != nil {
-			virtLog.WithField("vm id", id).WithError(err).Info("clean up vm")
+			virtLog.WithField("vm", id).WithError(err).Info("clean up vm")
 			hypervisor.stopSandbox()
 		}
 	}()
 
+	// 4. setup proxy
+	pid, url, proxy, err = setupProxy(hypervisor, agent, config, id)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			virtLog.WithField("vm", id).WithError(err).Info("clean up proxy")
+			proxy.stop(pid)
+		}
+	}()
+	if err = agent.setProxy(nil, proxy, pid, url); err != nil {
+		return nil, err
+	}
+
+	// 5. check agent aliveness
 	// VMs booted from template are paused, do not check
 	if !config.HypervisorConfig.BootFromTemplate {
-		err = hypervisor.waitSandbox(vmStartTimeout)
-		if err != nil {
-			return nil, err
-		}
-
-		virtLog.WithField("vm id", id).Info("check agent status")
+		virtLog.WithField("vm", id).Info("check agent status")
 		err = agent.check()
 		if err != nil {
 			return nil, err
@@ -111,6 +177,9 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		id:         id,
 		hypervisor: hypervisor,
 		agent:      agent,
+		proxy:      proxy,
+		proxyPid:   pid,
+		proxyURL:   url,
 		cpu:        config.HypervisorConfig.NumVCPUs,
 		memory:     config.HypervisorConfig.MemorySize,
 	}, nil
@@ -121,7 +190,7 @@ func buildVMSharePath(id string) string {
 }
 
 func (v *VM) logger() logrus.FieldLogger {
-	return virtLog.WithField("vm id", v.id)
+	return virtLog.WithField("vm", v.id)
 }
 
 // Pause pauses a VM.
@@ -148,9 +217,24 @@ func (v *VM) Start() error {
 	return v.hypervisor.startSandbox()
 }
 
+// Disconnect agent and proxy connections to a VM
+func (v *VM) Disconnect() error {
+	v.logger().Info("kill vm")
+
+	if err := v.agent.disconnect(); err != nil {
+		v.logger().WithError(err).Error("failed to disconnect agent")
+	}
+	if err := v.proxy.stop(v.proxyPid); err != nil {
+		v.logger().WithError(err).Error("failed to stop proxy")
+	}
+
+	return nil
+}
+
 // Stop stops a VM process.
 func (v *VM) Stop() error {
 	v.logger().Info("kill vm")
+
 	return v.hypervisor.stopSandbox()
 }
 
@@ -227,7 +311,13 @@ func (v *VM) assignSandbox(s *Sandbox) error {
 		"vmSockDir":   vmSockDir,
 		"sbSharePath": sbSharePath,
 		"sbSockDir":   sbSockDir,
+		"proxy-pid":   v.proxyPid,
+		"proxy-url":   v.proxyURL,
 	}).Infof("assign vm to sandbox %s", s.id)
+
+	if err := s.agent.setProxy(s, v.proxy, v.proxyPid, v.proxyURL); err != nil {
+		return err
+	}
 
 	// First make sure the symlinks do not exist
 	os.RemoveAll(sbSharePath)

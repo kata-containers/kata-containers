@@ -23,8 +23,13 @@ type noProxy struct {
 }
 
 // start is noProxy start implementation for proxy interface.
-func (p *noProxy) start(sandbox *Sandbox, params proxyParams) (int, string, error) {
-	sandbox.Logger().Info("No proxy started because of no-proxy implementation")
+func (p *noProxy) start(params proxyParams) (int, string, error) {
+	if params.logger == nil {
+		return -1, "", fmt.Errorf("proxy logger is not set")
+	}
+
+	params.logger.Info("No proxy started because of no-proxy implementation")
+
 	if params.agentURL == "" {
 		return -1, "", fmt.Errorf("AgentURL cannot be empty")
 	}
@@ -33,7 +38,7 @@ func (p *noProxy) start(sandbox *Sandbox, params proxyParams) (int, string, erro
 }
 
 // stop is noProxy stop implementation for proxy interface.
-func (p *noProxy) stop(sandbox *Sandbox, pid int) error {
+func (p *noProxy) stop(pid int) error {
 	return nil
 }
 
