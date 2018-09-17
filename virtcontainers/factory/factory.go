@@ -29,10 +29,6 @@ type Config struct {
 	VMConfig vc.VMConfig
 }
 
-func (f *Config) validate() error {
-	return f.VMConfig.Valid()
-}
-
 type factory struct {
 	base base.FactoryBase
 }
@@ -50,7 +46,7 @@ func NewFactory(ctx context.Context, config Config, fetchOnly bool) (vc.Factory,
 	span, _ := trace(ctx, "NewFactory")
 	defer span.Finish()
 
-	err := config.validate()
+	err := config.VMConfig.Valid()
 	if err != nil {
 		return nil, err
 	}
@@ -93,13 +89,15 @@ func (f *factory) log() *logrus.Entry {
 	return factoryLogger.WithField("subsystem", "factory")
 }
 
-func resetHypervisorConfig(config *vc.HypervisorConfig) {
-	config.NumVCPUs = 0
-	config.MemorySize = 0
-	config.BootToBeTemplate = false
-	config.BootFromTemplate = false
-	config.MemoryPath = ""
-	config.DevicesStatePath = ""
+func resetHypervisorConfig(config *vc.VMConfig) {
+	config.HypervisorConfig.NumVCPUs = 0
+	config.HypervisorConfig.MemorySize = 0
+	config.HypervisorConfig.BootToBeTemplate = false
+	config.HypervisorConfig.BootFromTemplate = false
+	config.HypervisorConfig.MemoryPath = ""
+	config.HypervisorConfig.DevicesStatePath = ""
+	config.ProxyType = vc.NoopProxyType
+	config.ProxyConfig = vc.ProxyConfig{}
 }
 
 // It's important that baseConfig and newConfig are passed by value!
@@ -113,8 +111,8 @@ func checkVMConfig(config1, config2 vc.VMConfig) error {
 	}
 
 	// check hypervisor config details
-	resetHypervisorConfig(&config1.HypervisorConfig)
-	resetHypervisorConfig(&config2.HypervisorConfig)
+	resetHypervisorConfig(&config1)
+	resetHypervisorConfig(&config2)
 
 	if !reflect.DeepEqual(config1, config2) {
 		return fmt.Errorf("hypervisor config does not match, base: %+v. new: %+v", config1, config2)
@@ -129,13 +127,25 @@ func (f *factory) checkConfig(config vc.VMConfig) error {
 	return checkVMConfig(config, baseConfig)
 }
 
+func (f *factory) validateNewVMConfig(config vc.VMConfig) error {
+	if len(config.AgentType.String()) == 0 {
+		return fmt.Errorf("Missing agent type")
+	}
+
+	if len(config.ProxyType.String()) == 0 {
+		return fmt.Errorf("Missing proxy type")
+	}
+
+	return config.Valid()
+}
+
 // GetVM returns a working blank VM created by the factory.
 func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error) {
 	span, _ := trace(ctx, "GetVM")
 	defer span.Finish()
 
 	hypervisorConfig := config.HypervisorConfig
-	err := config.Valid()
+	err := f.validateNewVMConfig(config)
 	if err != nil {
 		f.log().WithError(err).Error("invalid hypervisor config")
 		return nil, err
@@ -144,11 +154,11 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 	err = f.checkConfig(config)
 	if err != nil {
 		f.log().WithError(err).Info("fallback to direct factory vm")
-		return direct.New(ctx, config).GetBaseVM(ctx)
+		return direct.New(ctx, config).GetBaseVM(ctx, config)
 	}
 
 	f.log().Info("get base VM")
-	vm, err := f.base.GetBaseVM(ctx)
+	vm, err := f.base.GetBaseVM(ctx, config)
 	if err != nil {
 		f.log().WithError(err).Error("failed to get base VM")
 		return nil, err

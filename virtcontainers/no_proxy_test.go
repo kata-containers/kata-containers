@@ -7,34 +7,30 @@ package virtcontainers
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNoProxyStart(t *testing.T) {
-	sandbox := &Sandbox{
-		agent: newAgent(NoopAgentType),
-	}
-
 	p := &noProxy{}
+	assert := assert.New(t)
 
 	agentURL := "agentURL"
-	pid, vmURL, err := p.start(sandbox, proxyParams{agentURL: agentURL})
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, _, err := p.start(proxyParams{
+		agentURL: agentURL,
+	})
+	assert.NotNil(err)
 
-	if vmURL != agentURL {
-		t.Fatalf("Got URL %q, expecting %q", vmURL, agentURL)
-	}
+	pid, vmURL, err := p.start(proxyParams{
+		agentURL: agentURL,
+		logger:   testDefaultLogger,
+	})
+	assert.Nil(err)
+	assert.Equal(vmURL, agentURL)
+	assert.Equal(pid, 0)
 
-	if pid != 0 {
-		t.Fatal("Failure since returned PID should be 0")
-	}
-}
+	err = p.stop(0)
+	assert.Nil(err)
 
-func TestNoProxyStop(t *testing.T) {
-	p := &noProxy{}
-
-	if err := p.stop(&Sandbox{}, 0); err != nil {
-		t.Fatal(err)
-	}
+	assert.False(p.consoleWatched())
 }

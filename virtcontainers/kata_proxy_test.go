@@ -13,5 +13,5 @@ func TestKataProxyStart(t *testing.T) {
 	agent := &kataAgent{}
 	proxy := &kataProxy{}
 
-	testProxyStart(t, agent, proxy, KataProxyType)
+	testProxyStart(t, agent, proxy)
 }
