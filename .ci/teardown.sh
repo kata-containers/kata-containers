@@ -152,12 +152,12 @@ check_log_files()
 	make log-parser
 
 	local component
+	local unit
 	local file
 	local args
 	local cmd
 
 	for component in \
-		kata-ksm-throttler \
 		kata-proxy \
 		kata-runtime \
 		kata-shim
@@ -166,6 +166,16 @@ check_log_files()
 		args="--no-pager -q -o cat -a -t \"${component}\""
 
 		cmd="sudo journalctl ${args} > ${file}"
+		eval "$cmd" || true
+	done
+
+	for unit in \
+		kata-ksm-throttler
+	do
+		file="${unit}.log"
+		args="--no-pager -q -o cat -a -u \"${unit}\""
+
+		cmd="sudo journalctl ${args} |grep ^time= > ${file}"
 		eval "$cmd" || true
 	done
 
