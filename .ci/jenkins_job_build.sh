@@ -135,6 +135,13 @@ ${GOPATH}/src/${tests_repo}/.ci/install_go.sh -p
 #   directly.
 # - If the repo is not "tests", call the repo-specific script (which is
 #   expected to call the script of the same name in the "tests" repo).
+if [  "$CI_JOB" == "CRI_CONTAINERD_K8S" ]; then
+	# This job only tests containerd + k8s
+	export CRI_CONTAINERD="yes"
+	export KUBERNETES="yes"
+	export CRIO="no"
+	export OPENSHIFT="no"
+fi
 .ci/setup.sh
 
 # Run the static analysis tools
