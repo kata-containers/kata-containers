@@ -170,7 +170,8 @@ check_log_files()
 	done
 
 	for unit in \
-		kata-ksm-throttler
+		kata-ksm-throttler \
+		kata-vc-throttler
 	do
 		file="${unit}.log"
 		args="--no-pager -q -o cat -a -u \"${unit}\""
