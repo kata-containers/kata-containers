@@ -206,6 +206,7 @@ show_log_details()
 	show_runtime_log_details
 	show_proxy_log_details
 	show_shim_log_details
+	show_throttler_log_details
 
 	separator
 }
@@ -256,6 +257,13 @@ show_shim_log_details()
 	find_system_journal_problems "shim" "@PROJECT_TYPE@-shim" ""
 }
 
+show_throttler_log_details()
+{
+	subheading "Throttler logs"
+
+	find_system_journal_problems "throttler" "" "@PROJECT_TYPE@-ksm-throttler"
+}
+
 show_package_versions()
 {
 	heading "Packages"
@@ -275,6 +283,7 @@ show_package_versions()
 		pattern+="|${project}-proxy"
 		pattern+="|${project}-runtime"
 		pattern+="|${project}-shim"
+		pattern+="|${project}-ksm-throttler"
 		pattern+="|${project}-containers-image"
 	done
 
@@ -543,6 +552,44 @@ release_device()
 	losetup -d "$device"
 }
 
+show_throttler_details()
+{
+	heading "KSM throttler"
+
+	subheading "version"
+
+	local throttlers
+	local throttler
+
+	throttlers=$(find /usr/libexec /usr/lib* -type f |\
+		grep -v trigger |\
+		egrep "(cc|kata)-ksm-throttler" |\
+		sort -u)
+
+	echo "$throttlers" | while read throttler
+	do
+		local cmd
+		cmd="$throttler --version"
+		run_cmd_and_show_quoted_output "$cmd"
+	done
+
+	subheading "systemd service"
+
+	local unit
+
+	# Note: "vc-throttler" is the old CC service, replaced by
+	# "kata-vc-throttler".
+	for unit in \
+		"cc-ksm-throttler" \
+		"kata-ksm-throttler" \
+		"kata-vc-throttler" \
+		"vc-throttler"
+	do
+		systemctl status "${unit}" >/dev/null 2>&1 && \
+			run_cmd_and_show_quoted_output "systemctl show ${unit}"
+	done
+}
+
 # Retrieve details of the image containing
 # the rootfs used to boot the virtual machine.
 show_image_details()
@@ -642,6 +689,7 @@ main()
 	show_meta
 	show_runtime
 	show_runtime_configs
+	show_throttler_details
 	show_image_details
 	show_initrd_details
 	show_log_details
