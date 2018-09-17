@@ -74,7 +74,6 @@ swarm:
 	bats swarm.bats
 
 cri-containerd:
-	bash -f .ci/install_cri_containerd.sh
 	bash integration/containerd/cri/integration-tests.sh
 
 log-parser:
