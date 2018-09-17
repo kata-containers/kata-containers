@@ -24,4 +24,4 @@ before_script:
   - ".ci/setup.sh"
 
 script:
-- "travis_wait 30 .ci/run.sh"
+- "travis_wait 50 .ci/run.sh"
