@@ -41,4 +41,28 @@ if [ -n "$CI" ]; then
 	sudo mv /etc/cni/net.d/10-containerd-net.conflist  "$cni_test_dir"
 fi
 
+cat | sudo tee /etc/systemd/system/containerd.service  << EOT
+[Unit]
+Description=containerd container runtime
+Documentation=https://containerd.io
+After=containerd-installation.service
+[Service]
+Restart=always
+RestartSec=5
+Delegate=yes
+KillMode=process
+OOMScoreAdjust=-999
+LimitNOFILE=1048576
+# Having non-zero Limit*s causes performance problems due to accounting overhead
+# in the kernel. We recommend using cgroups to do container-local accounting.
+LimitNPROC=infinity
+LimitCORE=infinity
+ExecStartPre=/sbin/modprobe overlay
+ExecStart=/usr/local/bin/containerd
+[Install]
+WantedBy=containerd.target
+EOT
+
+sudo systemctl daemon-reload
+
 popd  >> /dev/null
