@@ -28,7 +28,3 @@ curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add
 chronic sudo -E apt update
 chronic sudo -E apt install -y kubelet="$kubernetes_version" kubeadm="$kubernetes_version" kubectl="$kubernetes_version"
 
-echo "Modify kubelet systemd configuration to use CRI-O"
-k8s_systemd_file="/etc/systemd/system/kubelet.service.d/10-kubeadm.conf"
-sudo sed -i '/KUBELET_AUTHZ_ARGS=/a Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --container-runtime-endpoint=unix:///var/run/crio/crio.sock --runtime-request-timeout=30m"' "$k8s_systemd_file"
-sudo systemctl daemon-reload
