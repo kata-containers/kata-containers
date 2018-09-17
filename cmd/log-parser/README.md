@@ -88,6 +88,11 @@ To merge all logs:
        ```
        $ sudo journalctl -q -o cat -a -t kata-shim > ./shim.log
        ```
+    1. Save the throttler logs:
+       ```
+       $ sudo journalctl -q -o cat -a -u kata-vc-throttler | grep ^time= > ./vc-throttler.log
+       $ sudo journalctl -q -o cat -a -u kata-ksm-throttler | grep ^time= > ./ksm-throttler.log
+       ```
 1. Ensure the logs are readable:
    ```
    $ sudo chown $USER *.log
@@ -99,5 +104,5 @@ To merge all logs:
    ```
 1. To run the program:
    ```
-   $ kata-log-parser proxy.log runtime.log shim.log
+   $ kata-log-parser proxy.log runtime.log shim.log vc-throttler.log ksm-throttler.log
    ```
