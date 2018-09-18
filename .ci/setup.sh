@@ -89,13 +89,25 @@ install_extra_tools() {
 		source "${cidir}/${arch}/lib_setup_${arch}.sh"
 	fi
 
-	[ "${CRIO}" = "yes" ] && echo "Install CRI-O" && bash -f "${cidir}/install_crio.sh"
+	[ "${CRIO}" = "yes" ] &&
+		echo "Install CRI-O" &&
+		bash -f "${cidir}/install_crio.sh" ||
+		echo "CRI-O not installed"
 
-	[ "${CRI_CONTAINERD}" = "yes" ] && echo "Install cri-containerd" && bash -f "${cidir}/install_cri_containerd.sh"
+	[ "${CRI_CONTAINERD}" = "yes" ] &&
+		echo "Install cri-containerd" &&
+		bash -f "${cidir}/install_cri_containerd.sh" ||
+		echo "containerd not installed"
 
-	[ "${KUBERNETES}" = "yes" ] && echo "Install Kubernetes" && bash -f "${cidir}/install_kubernetes.sh"
+	[ "${KUBERNETES}" = "yes" ] &&
+		echo "Install Kubernetes" &&
+		bash -f "${cidir}/install_kubernetes.sh" ||
+		echo "Kubernetes not installed"
 
-	[ "${OPENSHIFT}" = "yes" ] && echo "Install Openshift" && bash -f "${cidir}/install_openshift.sh"
+	[ "${OPENSHIFT}" = "yes" ] &&
+		echo "Install Openshift" &&
+		bash -f "${cidir}/install_openshift.sh" ||
+		echo "Openshift not installed"
 }
 
 main() {
