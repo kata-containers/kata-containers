@@ -48,6 +48,10 @@ collect_logs()
 	local -r kubelet_log_path="${log_copy_dest}/${kubelet_log_filename}"
 	local -r kubelet_log_prefix="kubelet_"
 
+	local -r kernel_log_filename="kernel.log"
+	local -r kernel_log_path="${log_copy_dest}/${kernel_log_filename}"
+	local -r kernel_log_prefix="kernel_"
+
 	local -r collect_script="kata-collect-data.sh"
 
 	# If available, procenv will be run twice - once as the current user
@@ -76,6 +80,7 @@ collect_logs()
 		sudo journalctl --no-pager -u crio > "${crio_log_path}"
 		sudo journalctl --no-pager -u docker > "${docker_log_path}"
 		sudo journalctl --no-pager -u kubelet > "${kubelet_log_path}"
+		sudo journalctl --no-pager -t kernel > "${kernel_log_path}"
 
 		[ "${have_collect_script}" = "yes" ] && sudo -E PATH="$PATH" $collect_script > "${collect_data_log_path}"
 
@@ -91,6 +96,7 @@ collect_logs()
 		split -b "${subfile_size}" -d "${crio_log_path}" "${crio_log_prefix}"
 		split -b "${subfile_size}" -d "${docker_log_path}" "${docker_log_prefix}"
 		split -b "${subfile_size}" -d "${kubelet_log_path}" "${kubelet_log_prefix}"
+		split -b "${subfile_size}" -d "${kernel_log_path}" "${kernel_log_prefix}"
 
 		[ "${have_collect_script}" = "yes" ] &&  split -b "${subfile_size}" -d "${collect_data_log_path}" "${collect_data_log_prefix}"
 
@@ -146,6 +152,9 @@ collect_logs()
 
 		echo "Kubelet Log:"
 		sudo journalctl --no-pager -u kubelet
+
+		echo "Kernel Log:"
+		sudo journalctl --no-pager -t kernel
 
 		if [ "${have_collect_script}" = "yes" ]
 		then
