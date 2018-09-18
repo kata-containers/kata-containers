@@ -20,7 +20,6 @@ import (
 func TestTemplateFactory(t *testing.T) {
 	assert := assert.New(t)
 
-	templateWaitForMigration = 1 * time.Microsecond
 	templateWaitForAgent = 1 * time.Microsecond
 
 	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")

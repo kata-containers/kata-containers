@@ -76,6 +76,7 @@ const (
 	qmpCapErrMsg                      = "Failed to negoatiate QMP capabilities"
 	qmpCapMigrationBypassSharedMemory = "bypass-shared-memory"
 	qmpExecCatCmd                     = "exec:cat"
+	qmpMigrationWaitTimeout           = 5 * time.Second
 
 	scsiControllerID = "scsi0"
 	rngID            = "rng0"
@@ -1179,6 +1180,29 @@ func (q *qemu) saveSandbox() error {
 	if err != nil {
 		q.Logger().WithError(err).Error("exec migration")
 		return err
+	}
+
+	t := time.NewTimer(qmpMigrationWaitTimeout)
+	defer t.Stop()
+	for {
+		status, err := q.qmpMonitorCh.qmp.ExecuteQueryMigration(q.qmpMonitorCh.ctx)
+		if err != nil {
+			q.Logger().WithError(err).Error("failed to query migration status")
+			return err
+		}
+		if status.Status == "completed" {
+			break
+		}
+
+		select {
+		case <-t.C:
+			q.Logger().WithField("migration-status", status).Error("timeout waiting for qemu migration")
+			return fmt.Errorf("timed out after %d seconds waiting for qemu migration", qmpMigrationWaitTimeout)
+		default:
+			// migration in progress
+			q.Logger().WithField("migration-status", status).Debug("migration in progress")
+			time.Sleep(100 * time.Millisecond)
+		}
 	}
 
 	return nil
