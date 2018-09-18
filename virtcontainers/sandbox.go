@@ -352,6 +352,9 @@ type SandboxConfig struct {
 	// Stateful keeps sandbox resources in memory across APIs. Users will be responsible
 	// for calling Release() to release the memory resources.
 	Stateful bool
+
+	// SystemdCgroup enables systemd cgroup support
+	SystemdCgroup bool
 }
 
 func (s *Sandbox) trace(name string) (opentracing.Span, context.Context) {

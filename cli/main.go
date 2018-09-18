@@ -105,6 +105,10 @@ var runtimeFlags = []cli.Flag{
 		Name:  showConfigPathsOption,
 		Usage: "show config file paths that will be checked for (in order)",
 	},
+	cli.BoolFlag{
+		Name:  "systemd-cgroup",
+		Usage: "enable systemd cgroup support, expects cgroupsPath to be of form \"slice:prefix:name\" for e.g. \"system.slice:runc:434234\"",
+	},
 }
 
 // runtimeCommands is the list of supported command-line (sub-)

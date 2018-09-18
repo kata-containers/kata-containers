@@ -118,32 +118,33 @@ func TestRunInvalidArgs(t *testing.T) {
 		consoleSocket string
 		pidFile       string
 		detach        bool
+		systemdCgroup bool
 		runtimeConfig oci.RuntimeConfig
 	}
 
 	args := []testArgs{
-		{"", "", "", "", "", true, oci.RuntimeConfig{}},
-		{"", "", "", "", "", false, oci.RuntimeConfig{}},
-		{"", "", "", "", "", true, runtimeConfig},
-		{"", "", "", "", "", false, runtimeConfig},
-		{"", "", "", "", pidFilePath, false, runtimeConfig},
-		{"", "", "", "", inexistentPath, false, runtimeConfig},
-		{"", "", "", "", pidFilePath, false, runtimeConfig},
-		{"", "", "", inexistentPath, pidFilePath, false, runtimeConfig},
-		{"", "", inexistentPath, inexistentPath, pidFilePath, false, runtimeConfig},
-		{"", "", inexistentPath, "", pidFilePath, false, runtimeConfig},
-		{"", "", consolePath, "", pidFilePath, false, runtimeConfig},
-		{"", bundlePath, consolePath, "", pidFilePath, false, runtimeConfig},
-		{testContainerID, inexistentPath, consolePath, "", pidFilePath, false, oci.RuntimeConfig{}},
-		{testContainerID, inexistentPath, consolePath, "", inexistentPath, false, oci.RuntimeConfig{}},
-		{testContainerID, bundlePath, consolePath, "", pidFilePath, false, oci.RuntimeConfig{}},
-		{testContainerID, inexistentPath, consolePath, "", pidFilePath, false, runtimeConfig},
-		{testContainerID, inexistentPath, consolePath, "", inexistentPath, false, runtimeConfig},
-		{testContainerID, bundlePath, consolePath, "", pidFilePath, false, runtimeConfig},
+		{"", "", "", "", "", true, true, oci.RuntimeConfig{}},
+		{"", "", "", "", "", false, false, oci.RuntimeConfig{}},
+		{"", "", "", "", "", true, false, runtimeConfig},
+		{"", "", "", "", "", false, true, runtimeConfig},
+		{"", "", "", "", pidFilePath, false, false, runtimeConfig},
+		{"", "", "", "", inexistentPath, false, false, runtimeConfig},
+		{"", "", "", "", pidFilePath, false, true, runtimeConfig},
+		{"", "", "", inexistentPath, pidFilePath, false, true, runtimeConfig},
+		{"", "", inexistentPath, inexistentPath, pidFilePath, false, false, runtimeConfig},
+		{"", "", inexistentPath, "", pidFilePath, false, false, runtimeConfig},
+		{"", "", consolePath, "", pidFilePath, false, true, runtimeConfig},
+		{"", bundlePath, consolePath, "", pidFilePath, false, true, runtimeConfig},
+		{testContainerID, inexistentPath, consolePath, "", pidFilePath, false, true, oci.RuntimeConfig{}},
+		{testContainerID, inexistentPath, consolePath, "", inexistentPath, false, true, oci.RuntimeConfig{}},
+		{testContainerID, bundlePath, consolePath, "", pidFilePath, false, false, oci.RuntimeConfig{}},
+		{testContainerID, inexistentPath, consolePath, "", pidFilePath, false, false, runtimeConfig},
+		{testContainerID, inexistentPath, consolePath, "", inexistentPath, false, true, runtimeConfig},
+		{testContainerID, bundlePath, consolePath, "", pidFilePath, false, true, runtimeConfig},
 	}
 
 	for i, a := range args {
-		err := run(context.Background(), a.containerID, a.bundle, a.console, a.consoleSocket, a.pidFile, a.detach, a.runtimeConfig)
+		err := run(context.Background(), a.containerID, a.bundle, a.console, a.consoleSocket, a.pidFile, a.detach, a.systemdCgroup, a.runtimeConfig)
 		assert.Errorf(err, "test %d (%+v)", i, a)
 	}
 }
@@ -289,7 +290,7 @@ func TestRunContainerSuccessful(t *testing.T) {
 		testingImpl.DeleteContainerFunc = nil
 	}()
 
-	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
+	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, true, d.runtimeConfig)
 
 	// should return ExitError with the message and exit code
 	e, ok := err.(*cli.ExitError)
@@ -367,7 +368,7 @@ func TestRunContainerDetachSuccessful(t *testing.T) {
 		testingImpl.DeleteContainerFunc = nil
 	}()
 
-	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, true, d.runtimeConfig)
+	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, true, true, d.runtimeConfig)
 
 	// should not return ExitError
 	assert.NoError(err)
@@ -440,7 +441,7 @@ func TestRunContainerDeleteFail(t *testing.T) {
 		testingImpl.DeleteContainerFunc = nil
 	}()
 
-	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
+	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, true, d.runtimeConfig)
 
 	// should not return ExitError
 	err, ok := err.(*cli.ExitError)
@@ -517,7 +518,7 @@ func TestRunContainerWaitFail(t *testing.T) {
 		testingImpl.DeleteContainerFunc = nil
 	}()
 
-	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
+	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, true, d.runtimeConfig)
 
 	// should not return ExitError
 	err, ok := err.(*cli.ExitError)
@@ -575,7 +576,7 @@ func TestRunContainerStartFail(t *testing.T) {
 		testingImpl.StatusContainerFunc = nil
 	}()
 
-	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
+	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, true, d.runtimeConfig)
 
 	// should not return ExitError
 	err, ok := err.(*cli.ExitError)
@@ -630,7 +631,7 @@ func TestRunContainerStartFailExistingContainer(t *testing.T) {
 		testingImpl.StartSandboxFunc = nil
 	}()
 
-	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, d.runtimeConfig)
+	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, true, d.runtimeConfig)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
 }
