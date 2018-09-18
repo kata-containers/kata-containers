@@ -200,6 +200,46 @@ type CPUInfoFast struct {
 	Props    CPUProperties `json:"props"`
 }
 
+// MigrationRAM represents migration ram status
+type MigrationRAM struct {
+	Total            int64 `json:"total"`
+	Remaining        int64 `json:"remaining"`
+	Transferred      int64 `json:"transferred"`
+	TotalTime        int64 `json:"total-time"`
+	SetupTime        int64 `json:"setup-time"`
+	ExpectedDowntime int64 `json:"expected-downtime"`
+	Duplicate        int64 `json:"duplicate"`
+	Normal           int64 `json:"normal"`
+	NormalBytes      int64 `json:"normal-bytes"`
+	DirtySyncCount   int64 `json:"dirty-sync-count"`
+}
+
+// MigrationDisk represents migration disk status
+type MigrationDisk struct {
+	Total       int64 `json:"total"`
+	Remaining   int64 `json:"remaining"`
+	Transferred int64 `json:"transferred"`
+}
+
+// MigrationXbzrleCache represents migration XbzrleCache status
+type MigrationXbzrleCache struct {
+	CacheSize     int64 `json:"cache-size"`
+	Bytes         int64 `json:"bytes"`
+	Pages         int64 `json:"pages"`
+	CacheMiss     int64 `json:"cache-miss"`
+	CacheMissRate int64 `json:"cache-miss-rate"`
+	Overflow      int64 `json:"overflow"`
+}
+
+// MigrationStatus represents migration status of a vm
+type MigrationStatus struct {
+	Status       string                   `json:"status"`
+	Capabilities []map[string]interface{} `json:"capabilities,omitempty"`
+	RAM          MigrationRAM             `json:"ram,omitempty"`
+	Disk         MigrationDisk            `json:"disk,omitempty"`
+	XbzrleCache  MigrationXbzrleCache     `json:"xbzrle-cache,omitempty"`
+}
+
 func (q *QMP) readLoop(fromVMCh chan<- []byte) {
 	scanner := bufio.NewScanner(q.conn)
 	for scanner.Scan() {
@@ -1205,4 +1245,24 @@ func (q *QMP) ExecuteVirtSerialPortAdd(ctx context.Context, id, name, chardev st
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
+// ExecuteQueryMigration queries migration progress.
+func (q *QMP) ExecuteQueryMigration(ctx context.Context) (MigrationStatus, error) {
+	response, err := q.executeCommandWithResponse(ctx, "query-migrate", nil, nil, nil)
+	if err != nil {
+		return MigrationStatus{}, err
+	}
+
+	data, err := json.Marshal(response)
+	if err != nil {
+		return MigrationStatus{}, fmt.Errorf("Unable to extract migrate status information: %v", err)
+	}
+
+	var status MigrationStatus
+	if err = json.Unmarshal(data, &status); err != nil {
+		return MigrationStatus{}, fmt.Errorf("Unable to convert migrate status information: %v", err)
+	}
+
+	return status, nil
 }
