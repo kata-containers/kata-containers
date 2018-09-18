@@ -45,9 +45,10 @@ if ip a show "$cni_interface"; then
 	sudo ip link del "$cni_interface"
 fi
 
-echo "Start crio service"
+echo "Start ${cri_runtime} service"
 sudo systemctl start ${cri_runtime}
 
+echo "Init cluster using ${cri_runtime_socket}"
 sudo -E kubeadm init --pod-network-cidr 10.244.0.0/16 --cri-socket="unix://${cri_runtime_socket}"
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
