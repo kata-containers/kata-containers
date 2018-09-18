@@ -186,9 +186,10 @@ languages:
   golang:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.9.7"
+    issue: "https://github.com/golang/go/issues/20676"
+    version: "1.10.4"
     meta:
-      newest-version: "1.10"
+      newest-version: "1.11"
 
 specs:
   description: "Details of important specifications"
