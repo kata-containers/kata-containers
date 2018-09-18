@@ -20,6 +20,8 @@ setup() {
 }
 
 @test "Check UTS and IPC namespaces" {
+	issue="https://github.com/kata-containers/tests/issues/793"
+	[ "${CRI_RUNTIME}" == "containerd" ] && skip "test not working with ${CRI_RUNTIME} see: ${issue}"
 	wait_time=120
 	sleep_time=5
 
