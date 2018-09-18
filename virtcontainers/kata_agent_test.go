@@ -421,6 +421,7 @@ func TestAppendDevices(t *testing.T) {
 
 func TestConstraintGRPCSpec(t *testing.T) {
 	assert := assert.New(t)
+	expectedCgroupPath := "/foo/bar"
 
 	g := &pb.Spec{
 		Hooks: &pb.Hooks{},
@@ -448,10 +449,11 @@ func TestConstraintGRPCSpec(t *testing.T) {
 				HugepageLimits: []pb.LinuxHugepageLimit{},
 				Network:        &pb.LinuxNetwork{},
 			},
+			CgroupsPath: "system.slice:foo:bar",
 		},
 	}
 
-	constraintGRPCSpec(g)
+	constraintGRPCSpec(g, true)
 
 	// check nil fields
 	assert.Nil(g.Hooks)
@@ -470,6 +472,9 @@ func TestConstraintGRPCSpec(t *testing.T) {
 
 	// check mounts
 	assert.Len(g.Mounts, 1)
+
+	// check cgroup path
+	assert.Equal(expectedCgroupPath, g.Linux.CgroupsPath)
 }
 
 func TestHandleShm(t *testing.T) {
