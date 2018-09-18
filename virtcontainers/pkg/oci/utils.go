@@ -566,6 +566,11 @@ func ContainerConfig(ocispec CompatOCISpec, bundlePath, cid, console string, det
 			resources.VCPUs = uint32(utils.ConstraintsToVCPUs(*ocispec.Linux.Resources.CPU.Quota, *ocispec.Linux.Resources.CPU.Period))
 		}
 	}
+	if ocispec.Linux.Resources.Memory != nil {
+		if ocispec.Linux.Resources.Memory.Limit != nil {
+			resources.MemMB = uint32(*ocispec.Linux.Resources.Memory.Limit >> 20)
+		}
+	}
 
 	containerConfig := vc.ContainerConfig{
 		ID:             cid,

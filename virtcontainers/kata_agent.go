@@ -31,6 +31,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	golangGrpc "google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	grpcStatus "google.golang.org/grpc/status"
 )
 
 var (
@@ -1232,10 +1234,11 @@ func (k *kataAgent) resumeContainer(sandbox *Sandbox, c Container) error {
 	return err
 }
 
-func (k *kataAgent) onlineCPUMem(cpus uint32) error {
+func (k *kataAgent) onlineCPUMem(cpus uint32, cpuOnly bool) error {
 	req := &grpc.OnlineCPUMemRequest{
-		Wait:   false,
-		NbCpus: cpus,
+		Wait:    false,
+		NbCpus:  cpus,
+		CpuOnly: cpuOnly,
 	}
 
 	_, err := k.sendReq(req)
@@ -1313,7 +1316,7 @@ func (k *kataAgent) disconnect() error {
 		return nil
 	}
 
-	if err := k.client.Close(); err != nil && err != golangGrpc.ErrClientConnClosing {
+	if err := k.client.Close(); err != nil && grpcStatus.Convert(err).Code() != codes.Canceled {
 		return err
 	}
 
@@ -1456,6 +1459,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers["grpc.ReseedRandomDevRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.ReseedRandomDev(ctx, req.(*grpc.ReseedRandomDevRequest), opts...)
 	}
+	k.reqHandlers["grpc.GuestDetailsRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.GetGuestDetails(ctx, req.(*grpc.GuestDetailsRequest), opts...)
+	}
 }
 
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
@@ -1518,4 +1524,13 @@ func (k *kataAgent) readProcessStream(containerID, processID string, data []byte
 	}
 
 	return 0, err
+}
+
+func (k *kataAgent) getGuestDetails(req *grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
+	resp, err := k.sendReq(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.(*grpc.GuestDetailsResponse), nil
 }

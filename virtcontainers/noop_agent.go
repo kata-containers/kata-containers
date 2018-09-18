@@ -94,7 +94,7 @@ func (n *noopAgent) updateContainer(sandbox *Sandbox, c Container, resources spe
 }
 
 // onlineCPUMem is the Noop agent Container online CPU and Memory implementation. It does nothing.
-func (n *noopAgent) onlineCPUMem(cpus uint32) error {
+func (n *noopAgent) onlineCPUMem(cpus uint32, cpuOnly bool) error {
 	return nil
 }
 
@@ -196,4 +196,9 @@ func (n *noopAgent) getAgentURL() (string, error) {
 // setProxy is the Noop agent proxy setter. It does nothing.
 func (n *noopAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error {
 	return nil
+}
+
+// getGuestDetails is the Noop agent GuestDetails queryer. It does nothing.
+func (n *noopAgent) getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
+	return nil, nil
 }

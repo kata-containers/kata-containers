@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -177,7 +178,7 @@ type ContainerResources struct {
 	VCPUs uint32
 
 	// Mem is the memory that is being used by the container
-	Mem uint32
+	MemMB uint32
 }
 
 // ContainerConfig describes one container runtime configuration.
@@ -991,6 +992,7 @@ func (c *Container) update(resources specs.LinuxResources) error {
 
 	newResources := ContainerResources{
 		VCPUs: uint32(utils.ConstraintsToVCPUs(*resources.CPU.Quota, *resources.CPU.Period)),
+		MemMB: uint32(*resources.Memory.Limit >> 20),
 	}
 
 	if err := c.updateResources(currentConfig.Resources, newResources); err != nil {
@@ -1216,7 +1218,7 @@ func (c *Container) addResources() error {
 			}
 		}
 
-		return c.sandbox.agent.onlineCPUMem(vcpusAdded)
+		return c.sandbox.agent.onlineCPUMem(vcpusAdded, true)
 	}
 
 	return nil
@@ -1247,16 +1249,14 @@ func (c *Container) removeResources() error {
 	return nil
 }
 
-func (c *Container) updateResources(oldResources, newResources ContainerResources) error {
-	//TODO add support for memory, Issue: https://github.com/containers/virtcontainers/issues/578
+func (c *Container) updateVCPUResources(oldResources, newResources ContainerResources) error {
 	var vCPUs uint32
 	oldVCPUs := oldResources.VCPUs
 	newVCPUs := newResources.VCPUs
 
-	// Update vCPUs is not possible if period and/or quota are not set or
-	// oldVCPUs and newVCPUs are equal.
+	// Update vCPUs is not possible if oldVCPUs and newVCPUs are equal.
 	// Don't fail, the constraint still can be applied in the cgroup.
-	if newVCPUs == 0 || oldVCPUs == newVCPUs {
+	if oldVCPUs == newVCPUs {
 		c.Logger().WithFields(logrus.Fields{
 			"old-vcpus": fmt.Sprintf("%d", oldVCPUs),
 			"new-vcpus": fmt.Sprintf("%d", newVCPUs),
@@ -1278,7 +1278,7 @@ func (c *Container) updateResources(oldResources, newResources ContainerResource
 		}
 		// recalculate the actual number of vCPUs if a different number of vCPUs was added
 		newResources.VCPUs = oldVCPUs + vcpusAdded
-		if err := c.sandbox.agent.onlineCPUMem(vcpusAdded); err != nil {
+		if err := c.sandbox.agent.onlineCPUMem(vcpusAdded, true); err != nil {
 			return err
 		}
 	} else {
@@ -1296,8 +1296,84 @@ func (c *Container) updateResources(oldResources, newResources ContainerResource
 		// recalculate the actual number of vCPUs if a different number of vCPUs was removed
 		newResources.VCPUs = oldVCPUs - vcpusRemoved
 	}
+	return nil
+}
 
-	// Set and save container's config
-	c.config.Resources = newResources
-	return c.storeContainer()
+func (c *Container) memHotplugValid(mem uint32) (uint32, error) {
+	memorySectionSizeMB := c.sandbox.state.GuestMemoryBlockSizeMB
+	if memorySectionSizeMB == 0 {
+		return mem, nil
+	}
+
+	// TODO: hot add memory aligned to memory section should be more properly. See https://github.com/kata-containers/runtime/pull/624#issuecomment-419656853
+	return uint32(math.Ceil(float64(mem)/float64(memorySectionSizeMB))) * memorySectionSizeMB, nil
+}
+
+func (c *Container) updateMemoryResources(oldResources, newResources ContainerResources) error {
+	oldMemMB := oldResources.MemMB
+	newMemMB := newResources.MemMB
+
+	if oldMemMB == newMemMB {
+		c.Logger().WithFields(logrus.Fields{
+			"old-mem": fmt.Sprintf("%dMB", oldMemMB),
+			"new-mem": fmt.Sprintf("%dMB", newMemMB),
+		}).Debug("the actual number of Mem will not be modified")
+		return nil
+	}
+
+	if oldMemMB < newMemMB {
+		// hot add memory
+		addMemMB := newMemMB - oldMemMB
+		memHotplugMB, err := c.memHotplugValid(addMemMB)
+		if err != nil {
+			return err
+		}
+
+		virtLog.Debugf("hotplug %dMB mem", memHotplugMB)
+		addMemDevice := &memoryDevice{
+			sizeMB: int(memHotplugMB),
+		}
+		_, err = c.sandbox.hypervisor.hotplugAddDevice(addMemDevice, memoryDev)
+		if err != nil {
+			return err
+		}
+		newResources.MemMB = newMemMB
+		if err := c.sandbox.agent.onlineCPUMem(0, false); err != nil {
+			return err
+		}
+	}
+	// hot remove memory unsupported
+	return nil
+}
+
+func (c *Container) updateResources(oldResources, newResources ContainerResources) error {
+	// initialize with oldResources
+	c.config.Resources.VCPUs = oldResources.VCPUs
+	c.config.Resources.MemMB = oldResources.MemMB
+
+	// Cpu is not updated if period and/or quota not set
+	if newResources.VCPUs != 0 {
+		if err := c.updateVCPUResources(oldResources, newResources); err != nil {
+			return err
+		}
+
+		// Set and save container's config VCPUs field only
+		c.config.Resources.VCPUs = newResources.VCPUs
+		if err := c.storeContainer(); err != nil {
+			return err
+		}
+	}
+
+	// Memory is not updated if memory limit not set
+	if newResources.MemMB != 0 {
+		if err := c.updateMemoryResources(oldResources, newResources); err != nil {
+			return err
+		}
+
+		// Set and save container's config MemMB field only
+		c.config.Resources.MemMB = newResources.MemMB
+		return c.storeContainer()
+	}
+
+	return nil
 }

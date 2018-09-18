@@ -883,7 +883,7 @@ func (h *hyper) sendCmd(proxyCmd hyperstartProxyCmd) (interface{}, error) {
 	return h.client.HyperWithTokens(proxyCmd.cmd, tokens, proxyCmd.message)
 }
 
-func (h *hyper) onlineCPUMem(cpus uint32) error {
+func (h *hyper) onlineCPUMem(cpus uint32, cpuOnly bool) error {
 	// hyperstart-agent uses udev to online CPUs automatically
 	return nil
 }
@@ -986,4 +986,9 @@ func (h *hyper) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) err
 	}
 
 	return nil
+}
+
+func (h *hyper) getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
+	// hyperstart-agent does not support getGuestDetails
+	return nil, nil
 }

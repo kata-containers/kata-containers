@@ -207,7 +207,8 @@ type agent interface {
 	// onlineCPUMem will online CPUs and Memory inside the Sandbox.
 	// This function should be called after hot adding vCPUs or Memory.
 	// cpus specifies the number of CPUs that were added and the agent should online
-	onlineCPUMem(cpus uint32) error
+	// cpuOnly specifies that we should online cpu or online memory or both
+	onlineCPUMem(cpus uint32, cpuOnly bool) error
 
 	// statsContainer will tell the agent to get stats from a container related to a Sandbox
 	statsContainer(sandbox *Sandbox, c Container) (*ContainerStats, error)
@@ -241,4 +242,7 @@ type agent interface {
 
 	// listRoutes will tell the agent to list routes of an existed Sandbox
 	listRoutes() ([]*grpc.Route, error)
+
+	// getGuestDetails will tell the agent to get some information of guest
+	getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error)
 }

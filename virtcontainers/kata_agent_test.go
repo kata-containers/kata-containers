@@ -237,6 +237,10 @@ func (p *gRPCProxy) ReseedRandomDev(ctx context.Context, req *pb.ReseedRandomDev
 	return emptyResp, nil
 }
 
+func (p *gRPCProxy) GetGuestDetails(ctx context.Context, req *pb.GuestDetailsRequest) (*pb.GuestDetailsResponse, error) {
+	return &pb.GuestDetailsResponse{}, nil
+}
+
 func gRPCRegister(s *grpc.Server, srv interface{}) {
 	switch g := srv.(type) {
 	case *gRPCProxy:
@@ -313,7 +317,7 @@ func TestKataAgentSendReq(t *testing.T) {
 	err = k.resumeContainer(sandbox, Container{})
 	assert.Nil(err)
 
-	err = k.onlineCPUMem(1)
+	err = k.onlineCPUMem(1, true)
 	assert.Nil(err)
 
 	_, err = k.statsContainer(sandbox, Container{})
