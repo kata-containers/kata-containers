@@ -75,13 +75,15 @@ This test measures using separate random read and write tests.
 
 ## Reads
 
-```{r, echo=FALSE, fig.cap="Storage I/O Reads"}
+```{r, echo=FALSE, fig.cap="Storage I/O Reads", results='asis'}
 source('fio-reads.R')
 ```
 
+\pagebreak
+
 ## Writes
 
-```{r, echo=FALSE, fig.cap="Storage I/O Writes"}
+```{r, echo=FALSE, fig.cap="Storage I/O Writes", results='asis'}
 source('fio-writes.R')
 ```
 \pagebreak

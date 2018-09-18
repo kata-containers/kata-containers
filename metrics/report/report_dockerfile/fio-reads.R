@@ -33,18 +33,27 @@ stats=c()
 rstats=c()
 rstats_names=c()
 
+# Where to store up the stats for the tables
+read_bw_stats=c()
+read_iops_stats=c()
+read_lat95_stats=c()
+read_lat99_stats=c()
+
 # For each set of results
 for (currentdir in resultdirs) {
-	dirstats=c()
+	bw_dirstats=c()
+	iops_dirstats=c()
+	lat95_dirstats=c()
+	lat99_dirstats=c()
+	# Derive the name from the test result dirname
+	datasetname=basename(currentdir)
+
 	for (resultsfile in resultsfiles) {
 		fname=paste(inputdir, currentdir, resultsfile, sep="")
 		if ( !file.exists(fname)) {
 			#warning(paste("Skipping non-existent file: ", fname))
 			next
 		}
-
-		# Derive the name from the test result dirname
-		datasetname=basename(currentdir)
 
 		# Import the data
 		fdata=fromJSON(fname)
@@ -85,12 +94,51 @@ for (currentdir in resultdirs) {
 		mdata=cbind(mdata, runtime=rep(datasetname, length(mdata[, "read_bw_mps"]) ))
 		mdata=cbind(mdata, blocksize=rep(blocksize, length(mdata[, "read_bw_mps"]) ))
 
+		# Extract the stats tables
+		bw_dirstats=rbind(bw_dirstats, round(mdata$read_bw_mps, digits=1))
+		# Rowname hack to get the blocksize recorded
+		rownames(bw_dirstats)[nrow(bw_dirstats)]=blocksize
+
+		iops_dirstats=rbind(iops_dirstats, round(mdata$iops_tot, digits=1))
+		rownames(iops_dirstats)[nrow(iops_dirstats)]=blocksize
+
+		# And do the 95 and 99 percentiles as tables as well
+		lat95_dirstats=rbind(lat95_dirstats, round(mean(clat$clat_ns.95.000000)/1000000, digits=1))
+		rownames(lat95_dirstats)[nrow(lat95_dirstats)]=blocksize
+		lat99_dirstats=rbind(lat99_dirstats, round(mean(clat$clat_ns.99.000000)/1000000, digits=1))
+		rownames(lat99_dirstats)[nrow(lat99_dirstats)]=blocksize
+
 		# Collect up as sets across all files and runtimes.
 		data2=rbind(data2, mdata)
 		all_ldata=rbind(all_ldata, ldata)
 		all_ldata2=rbind(all_ldata2, ldata2)
 	}
+
+	# Collect up for each dir we process into a column
+	read_bw_stats=cbind(read_bw_stats, bw_dirstats)
+	colnames(read_bw_stats)[ncol(read_bw_stats)]=datasetname
+
+	read_iops_stats=cbind(read_iops_stats, iops_dirstats)
+	colnames(read_iops_stats)[ncol(read_iops_stats)]=datasetname
+
+	read_lat95_stats=cbind(read_lat95_stats, lat95_dirstats)
+	colnames(read_lat95_stats)[ncol(read_lat95_stats)]=datasetname
+	read_lat99_stats=cbind(read_lat99_stats, lat99_dirstats)
+	colnames(read_lat99_stats)[ncol(read_lat99_stats)]=datasetname
 }
+
+# To get a nice looking table, we need to extract the rownames into their
+# own column
+read_bw_stats=cbind(Bandwidth=rownames(read_bw_stats), read_bw_stats)
+read_bw_stats=cbind(read_bw_stats, Units=rep("MB/s", nrow(read_bw_stats)))
+
+read_iops_stats=cbind(IOPS=rownames(read_iops_stats), read_iops_stats)
+read_iops_stats=cbind(read_iops_stats, Units=rep("IOP/s", nrow(read_iops_stats)))
+
+read_lat95_stats=cbind('lat 95pc'=rownames(read_lat95_stats), read_lat95_stats)
+read_lat95_stats=cbind(read_lat95_stats, Units=rep("ms", nrow(read_lat95_stats)))
+read_lat99_stats=cbind('lat 99pc'=rownames(read_lat99_stats), read_lat99_stats)
+read_lat99_stats=cbind(read_lat99_stats, Units=rep("ms", nrow(read_lat99_stats)))
 
 # Bandwidth line plot
 read_bw_line_plot <- ggplot() +
@@ -175,7 +223,8 @@ read_clat_line_plot <- ggplot() +
 		legend.background = element_rect(fill=alpha('blue', 0.2))
 	)
 
-master_plot = grid.arrange(
+# Output the pretty pictures
+graphics_plot = grid.arrange(
 	read_bw_line_plot,
 	read_iops_line_plot,
 	read_clat_box_plot,
@@ -183,3 +232,35 @@ master_plot = grid.arrange(
 	nrow=2,
 	ncol=2 )
 
+# A bit of an odd tweak to force a pagebreak between the pictures and
+# the tables. This only works because we have a `results='asis'` in the Rmd
+# R fragment.
+cat("\n\n\\pagebreak\n")
+
+read_bw_stats_plot = suppressWarnings(ggtexttable(read_bw_stats,
+	theme=ttheme(base_size=10),
+	rows=NULL
+	))
+
+read_iops_stats_plot = suppressWarnings(ggtexttable(read_iops_stats,
+	theme=ttheme(base_size=10),
+	rows=NULL
+	))
+
+read_lat95_stats_plot = suppressWarnings(ggtexttable(read_lat95_stats,
+	theme=ttheme(base_size=10),
+	rows=NULL
+	))
+read_lat99_stats_plot = suppressWarnings(ggtexttable(read_lat99_stats,
+	theme=ttheme(base_size=10),
+	rows=NULL
+	))
+
+# and then the statistics tables
+stats_plot = grid.arrange(
+	read_bw_stats_plot,
+	read_iops_stats_plot,
+	read_lat95_stats_plot,
+	read_lat99_stats_plot,
+	nrow=4,
+	ncol=1 )

@@ -68,7 +68,7 @@ FIO_TIMEBASED=${FIO_TIMEBASED:-1}
 #  And 60s seems a good balance to get us repeatable numbers in not too long a time.
 FIO_RUNTIME=${FIO_RUNTIME:-60}
 #  By default we have no ramp (warmup) time.
-FIO_RAMPTIME=${FIO_RUNTIME:-0}
+FIO_RAMPTIME=${FIO_RAMPTIME:-0}
 #  Drop the caches in the guest using fio. Note, we need CAP_SYS_ADMIN in the container
 #  for this to work.
 FIO_INVALIDATE=${FIO_INVALIDATE:-1}

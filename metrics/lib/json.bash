@@ -79,14 +79,35 @@ EOF
 )"
 	metrics_json_add_fragment "$json"
 
-	if [ "$RUNTIME" == "kata-runtime" ] ; then
-		local json="$(cat << EOF
-		"kata-env" :
-		$(kata-runtime kata-env --json)
+	case "$RUNTIME" in
+		kata-runtime)
+			local json="$(cat << EOF
+	"kata-env" :
+	$(kata-runtime kata-env --json)
 EOF
 )"
-		metrics_json_add_fragment "$json"
-	fi
+			metrics_json_add_fragment "$json"
+			;;
+		runc)
+			local output=$(docker-runc -v)
+			local runcversion=$(grep version <<< "$output" | sed 's/runc version //')
+			local runccommit=$(grep commit <<< "$output" | sed 's/commit: //')
+			local json="$(cat << EOF
+	"runc-env" :
+	{
+		"Version": {
+			"Semver": "$runcversion",
+			"Commit": "$runccommit"
+		}
+	}
+EOF
+)"
+			metrics_json_add_fragment "$json"
+			;;
+		*)
+			warning "Unrecognised runtime ${RUNTIME}"
+			;;
+	esac
 }
 
 # Save out the final JSON file

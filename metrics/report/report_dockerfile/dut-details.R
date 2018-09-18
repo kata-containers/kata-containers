@@ -7,18 +7,30 @@
 
 suppressMessages(suppressWarnings(library(tidyr)))	# for gather().
 library(tibble)
+library(plyr)						# rbind.fill
 							# So we can plot multiple graphs
 library(gridExtra)					# together.
 suppressMessages(suppressWarnings(library(ggpubr)))	# for ggtexttable.
 suppressMessages(library(jsonlite))			# to load the data.
 
+# A list of all the known results files we might find the information inside.
 resultsfiles=c(
 	"boot-times.json",
 	"footprint-busybox-ksm.json",
 	"footprint-elasticsearch-ksm.json",
 	"footprint-mysql-ksm.json",
 	"memory-footprint.json",
-	"memory-footprint-ksm.json"
+	"memory-footprint-ksm.json",
+	"fio-randread-16k.json",
+	"fio-randread-32k.json",
+	"fio-randread-4k.json",
+	"fio-randread-64k.json",
+	"fio-randread-8k.json",
+	"fio-randwrite-16k.json",
+	"fio-randwrite-32k.json",
+	"fio-randwrite-4k.json",
+	"fio-randwrite-64k.json",
+	"fio-randwrite-8k.json"
 	)
 
 data=c()
@@ -79,7 +91,17 @@ for (currentdir in resultdirs) {
 			dirstats=cbind(dirstats, "Host DistVer"=as.character(fdata$'kata-env'$Host$Distro$Version))
 			dirstats=cbind(dirstats, "Host Model"=as.character(fdata$'kata-env'$Host$CPU$Model))
 			dirstats=cbind(dirstats, "Host Krnl"=as.character(fdata$'kata-env'$Host$Kernel))
+			dirstats=cbind(dirstats, "runtime"=as.character(fdata$test$runtime))
 
+			break
+		} else {
+			if (length(fdata$'runc-env') != 0 ) {
+				dirstats=tibble("Run Ver"=as.character(fdata$'runc-env'$Version$Semver))
+				dirstats=cbind(dirstats, "Run SHA"=as.character(fdata$'runc-env'$Version$Commit))
+				dirstats=cbind(dirstats, "runtime"=as.character(fdata$test$runtime))
+			} else {
+				dirstats=tibble("runtime"="Unknown")
+			}
 			break
 		}
 	}
@@ -88,7 +110,8 @@ for (currentdir in resultdirs) {
 		warning(paste("No valid data found for directory ", currentdir))
 	}
 
-	stats=rbind(stats, dirstats)
+	# use plyr rbind.fill so we can combine disparate version info frames
+	stats=rbind.fill(stats, dirstats)
 	stats_names=rbind(stats_names, datasetname)
 }
 
@@ -99,7 +122,7 @@ spun_stats = as_tibble(cbind(What=names(stats), t(stats)))
 
 # Build us a text table of numerical results
 stats_plot = suppressWarnings(ggtexttable(data.frame(spun_stats, check.names=FALSE),
-	theme=ttheme(base_size=8),
+	theme=ttheme(base_size=6),
 	rows=NULL
 	))
 
