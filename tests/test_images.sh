@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright (c) 2018 Intel Corporation
 #
@@ -42,26 +42,20 @@ typeset -A built_initrds
 usage()
 {
 	cat <<EOT
-Usage: $script_name [help|<distro>]
-       $script_name [options]
+Usage: $script_name [options] [command | <distro>]
 
 Options:
-
   -h | --help          # Show usage.
   --list               # List all distros that can be tested.
   --test-images-only   # Only run images tests for the list of distros under test.
   --test-initrds-only  # Only run initrds tests for the list of distros under test.
 
-Parameters:
-
-
+Commands:
 help     : Show usage.
-<distro> : Only run tests for specified distro.
 
-Notes:
 
-- If no options or parameters are specified, all tests will be run.
-
+When <distro> is specified, tests are run only for the specified <distro> distribution.
+Otherwise, tests are be run on all distros.
 EOT
 }
 
@@ -170,8 +164,6 @@ exit_handler()
 	info "processes:"
 	sudo -E ps -efwww | egrep "docker|kata" >&2
 }
-
-trap exit_handler EXIT ERR
 
 die()
 {
@@ -586,10 +578,12 @@ main()
 	[ "$1" = "--" ] && shift
 
 	case "$1" in
-		help) usage && exit 0;;
+		help) usage; exit 0;;
+
 		*) distro="$1";;
 	esac
 
+	trap exit_handler EXIT ERR
 	setup
 
 	if [ -n "$distro" ]
