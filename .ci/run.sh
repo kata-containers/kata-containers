@@ -22,6 +22,7 @@ case "${CI_JOB}" in
 	"CRI_CONTAINERD_K8S")
 		echo "INFO: Containerd checks"
 		sudo -E PATH="$PATH" bash -c "make cri-containerd"
+		sudo -E PATH="$PATH" CRI_RUNTIME="containerd" bash -c "make kubernetes"
 		;;
 	*)
 		echo "INFO: Running checks"

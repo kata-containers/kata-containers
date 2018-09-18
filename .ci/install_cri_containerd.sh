@@ -41,7 +41,7 @@ if [ -n "$CI" ]; then
 	sudo mv /etc/cni/net.d/10-containerd-net.conflist  "$cni_test_dir"
 fi
 
-cat | sudo tee /etc/systemd/system/containerd.service  << EOT
+cat <<EOT | sudo tee /etc/systemd/system/containerd.service
 [Unit]
 Description=containerd container runtime
 Documentation=https://containerd.io
@@ -62,6 +62,12 @@ ExecStart=/usr/local/bin/containerd
 [Install]
 WantedBy=containerd.target
 EOT
+
+sudo mkdir -p  /etc/systemd/system/kubelet.service.d/
+cat << EOF | sudo tee  /etc/systemd/system/kubelet.service.d/0-containerd.conf
+[Service]                                                 
+Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
+EOF
 
 sudo systemctl daemon-reload
 
