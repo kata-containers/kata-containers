@@ -1044,6 +1044,11 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) error {
 		return errors.New("cannot hot unplug memory device")
 	}
 
+	err := q.qmpSetup()
+	if err != nil {
+		return err
+	}
+
 	maxMem, err := q.hostMemMB()
 	if err != nil {
 		return err
@@ -1058,16 +1063,20 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) error {
 			memDev.sizeMB, currentMemory, q.config.MemorySize)
 	}
 
+	memoryDevices, err := q.qmpMonitorCh.qmp.ExecQueryMemoryDevices(q.qmpMonitorCh.ctx)
+	if err != nil {
+		return fmt.Errorf("failed to query memory devices: %v", err)
+	}
+
+	if len(memoryDevices) != 0 {
+		memDev.slot = memoryDevices[len(memoryDevices)-1].Data.Slot + 1
+	}
+
 	return q.hotplugAddMemory(memDev)
 }
 
 func (q *qemu) hotplugAddMemory(memDev *memoryDevice) error {
-	err := q.qmpSetup()
-	if err != nil {
-		return err
-	}
-
-	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, "memory-backend-ram", "mem"+strconv.Itoa(memDev.slot), "", memDev.sizeMB)
+	err := q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, "memory-backend-ram", "mem"+strconv.Itoa(memDev.slot), "", memDev.sizeMB)
 	if err != nil {
 		q.Logger().WithError(err).Error("hotplug memory")
 		return err
