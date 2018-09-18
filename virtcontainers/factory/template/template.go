@@ -25,7 +25,6 @@ type template struct {
 
 var templateProxyType = vc.KataBuiltInProxyType
 var templateWaitForAgent = 2 * time.Second
-var templateWaitForMigration = 1 * time.Second
 
 // Fetch finds and returns a pre-built template factory.
 // TODO: save template metadata and fetch from storage.
@@ -144,9 +143,6 @@ func (t *template) createTemplateVM(ctx context.Context) error {
 	if err = vm.Save(); err != nil {
 		return err
 	}
-
-	// qemu QMP does not wait for migration to finish...
-	time.Sleep(templateWaitForMigration)
 
 	return nil
 }
