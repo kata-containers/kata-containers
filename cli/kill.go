@@ -58,7 +58,7 @@ EXAMPLE:
 	},
 }
 
-var signals = map[string]syscall.Signal{
+var signalList = map[string]syscall.Signal{
 	"SIGABRT":   syscall.SIGABRT,
 	"SIGALRM":   syscall.SIGALRM,
 	"SIGBUS":    syscall.SIGBUS,
@@ -159,13 +159,13 @@ func kill(ctx context.Context, containerID, signal string, all bool) error {
 }
 
 func processSignal(signal string) (syscall.Signal, error) {
-	signum, signalOk := signals[signal]
+	signum, signalOk := signalList[signal]
 	if signalOk {
 		return signum, nil
 	}
 
 	// Support for short name signals (INT)
-	signum, signalOk = signals["SIG"+signal]
+	signum, signalOk = signalList["SIG"+signal]
 	if signalOk {
 		return signum, nil
 	}
@@ -178,7 +178,7 @@ func processSignal(signal string) (syscall.Signal, error) {
 
 	signum = syscall.Signal(s)
 	// Check whether signal is valid or not
-	for _, sig := range signals {
+	for _, sig := range signalList {
 		if sig == signum {
 			// signal is a valid signal
 			return signum, nil
