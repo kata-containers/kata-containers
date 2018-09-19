@@ -28,6 +28,14 @@
   revision = "3a0bb77429bd3a61596f5e8a3172445844342120"
 
 [[projects]]
+  branch = "master"
+  digest = "1:73f5d6c006826b458d9ab942581ed24486a3b3c69f5b3e6794f8bdfe8e306080"
+  name = "github.com/containerd/cgroups"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "5017d4e9a9cf2d4381db99eacd9baf84b95bfb14"
+
+[[projects]]
   digest = "1:3d1a50e9f27c661df8c5552e7f2f6b9d2a8b641c65aeac7373f8a5c60d9f6856"
   name = "github.com/containerd/cri-containerd"
   packages = ["pkg/annotations"]
@@ -47,6 +55,14 @@
   packages = ["pkg/ns"]
   pruneopts = "NUT"
   revision = "7f98c94613021d8b57acfa1a2f0c8d0f6fd7ae5a"
+
+[[projects]]
+  digest = "1:c262724e34fd94dbdcc64516cbf638d5a6737edcd63ec4efebc284e92309afe7"
+  name = "github.com/coreos/go-systemd"
+  packages = ["dbus"]
+  pruneopts = "NUT"
+  revision = "39ca1b05acc7ad1220e09f133283b8859a8b71ab"
+  version = "v17"
 
 [[projects]]
   digest = "1:a2c1d0e43bd3baaa071d1b9ed72c27d78169b2b269f71c105ac4ba34b1be4a39"
@@ -78,6 +94,14 @@
   packages = ["."]
   pruneopts = "NUT"
   revision = "20b96f641a5ea98f2f8619ff4f3e061cff4833bd"
+
+[[projects]]
+  digest = "1:ca3369c0fc8d471d8698f85a37a4f8c98a847402681a31431fb87a84fa2e5373"
+  name = "github.com/godbus/dbus"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "a389bdde4dd695d414e47b755e95e72b7826432c"
+  version = "v4.1.0"
 
 [[projects]]
   digest = "1:0dfc35f448d29c2ff6a29fb3a6643f44175dc2a07925b1add2dea74e1dd6bf8d"
@@ -399,6 +423,7 @@
     "github.com/BurntSushi/toml",
     "github.com/clearcontainers/proxy/api",
     "github.com/clearcontainers/proxy/client",
+    "github.com/containerd/cgroups",
     "github.com/containerd/cri-containerd/pkg/annotations",
     "github.com/containernetworking/plugins/pkg/ns",
     "github.com/dlespiau/covertool/pkg/cover",
