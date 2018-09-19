@@ -1105,10 +1105,11 @@ func (s *Sandbox) AddInterface(inf *grpc.Interface) (*grpc.Interface, error) {
 		return nil, err
 	}
 
-	endpoint, err := createVirtualNetworkEndpoint(len(s.networkNS.Endpoints), inf.Name, s.config.NetworkConfig.InterworkingModel)
+	endpoint, err := createEndpoint(netInfo, len(s.networkNS.Endpoints), s.config.NetworkConfig.InterworkingModel)
 	if err != nil {
 		return nil, err
 	}
+
 	endpoint.SetProperties(netInfo)
 	if err := doNetNS(s.networkNS.NetNsPath, func(_ ns.NetNS) error {
 		return endpoint.HotAttach(s.hypervisor)
@@ -1123,7 +1124,7 @@ func (s *Sandbox) AddInterface(inf *grpc.Interface) (*grpc.Interface, error) {
 	}
 
 	// Add network for vm
-	inf.PciAddr = endpoint.PCIAddr
+	inf.PciAddr = endpoint.PciAddr()
 	return s.agent.updateInterface(inf)
 }
 
