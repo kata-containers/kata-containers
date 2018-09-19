@@ -7,6 +7,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -14,10 +15,13 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/kata-containers/runtime/pkg/signals"
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 	"github.com/vishvananda/netlink"
@@ -201,6 +205,39 @@ func (n *netmon) cleanup() {
 	n.netHandler.Delete()
 	close(n.linkDoneCh)
 	close(n.rtDoneCh)
+}
+
+// setupSignalHandler sets up signal handling, starting a go routine to deal
+// with signals as they arrive.
+func (n *netmon) setupSignalHandler() {
+	signals.SetLogger(n.logger())
+
+	sigCh := make(chan os.Signal, 8)
+
+	for _, sig := range signals.HandledSignals() {
+		signal.Notify(sigCh, sig)
+	}
+
+	go func() {
+		for {
+			sig := <-sigCh
+
+			nativeSignal, ok := sig.(syscall.Signal)
+			if !ok {
+				err := errors.New("unknown signal")
+				netmonLog.WithError(err).WithField("signal", sig.String()).Error()
+				continue
+			}
+
+			if signals.FatalSignal(nativeSignal) {
+				netmonLog.WithField("signal", sig).Error("received fatal signal")
+				signals.Die(nil)
+			} else if n.debug && signals.NonFatalSignal(nativeSignal) {
+				netmonLog.WithField("signal", sig).Debug("handling signal")
+				signals.Backtrace()
+			}
+		}
+	}()
 }
 
 func (n *netmon) logger() *logrus.Entry {
@@ -640,6 +677,9 @@ func main() {
 		netmonLog.WithError(err).Fatal("setupLogger()")
 		os.Exit(1)
 	}
+
+	// Setup signal handlers
+	n.setupSignalHandler()
 
 	// Scan the current interfaces.
 	if err := n.scanNetwork(); err != nil {
