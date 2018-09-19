@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/kata-containers/runtime/pkg/signals"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vf "github.com/kata-containers/runtime/virtcontainers/factory"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
@@ -178,10 +179,16 @@ func init() {
 // first (root) span must be created in beforeSubcommands()): it is simply
 // used to pass to the crash handling functions to finalise tracing.
 func setupSignalHandler(ctx context.Context) {
+	signals.SetLogger(kataLog)
+
 	sigCh := make(chan os.Signal, 8)
 
-	for _, sig := range handledSignals() {
+	for _, sig := range signals.HandledSignals() {
 		signal.Notify(sigCh, sig)
+	}
+
+	dieCb := func() {
+		stopTracing(ctx)
 	}
 
 	go func() {
@@ -195,12 +202,12 @@ func setupSignalHandler(ctx context.Context) {
 				continue
 			}
 
-			if fatalSignal(nativeSignal) {
+			if signals.FatalSignal(nativeSignal) {
 				kataLog.WithField("signal", sig).Error("received fatal signal")
-				die(ctx)
-			} else if debug && nonFatalSignal(nativeSignal) {
+				signals.Die(dieCb)
+			} else if debug && signals.NonFatalSignal(nativeSignal) {
 				kataLog.WithField("signal", sig).Debug("handling signal")
-				backtrace()
+				signals.Backtrace()
 			}
 		}
 	}()
@@ -521,7 +528,11 @@ func main() {
 	// create a new empty context
 	ctx := context.Background()
 
-	defer handlePanic(ctx)
+	dieCb := func() {
+		stopTracing(ctx)
+	}
+
+	defer signals.HandlePanic(dieCb)
 
 	createRuntime(ctx)
 }
