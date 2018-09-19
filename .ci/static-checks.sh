@@ -249,6 +249,8 @@ check_go()
 
 	[ "$TRAVIS_GO_VERSION" != "tip" ] && linter_args+=" --enable=gofmt"
 
+	linter_args+=" --concurrency=$(nproc)"
+
 	linter_args+=" --enable=misspell"
 	linter_args+=" --enable=vet"
 	linter_args+=" --enable=ineffassign"
