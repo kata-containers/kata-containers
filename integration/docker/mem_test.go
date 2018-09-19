@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 )
 
@@ -20,6 +21,18 @@ const (
 	memSwappinessPath = "/sys/fs/cgroup/memory/memory.swappiness"
 	memKmemLimitPath  = "/sys/fs/cgroup/memory/memory.kmem.limit_in_bytes"
 )
+
+func withUpdateMemoryConstraints(dockerMemMB uint32, updateMemMB uint32, fail bool) TableEntry {
+	var msg string
+
+	if fail {
+		msg = "update memory constraints should fail"
+	} else {
+		msg = "update memory constraints should not fail"
+	}
+
+	return Entry(msg, dockerMemMB, updateMemMB, fail)
+}
 
 var _ = Describe("memory constraints", func() {
 	var (
@@ -132,19 +145,41 @@ var _ = Describe("memory constraints", func() {
 			Expect(RemoveDockerContainer(id)).To(BeTrue())
 		})
 	})
+})
 
-	Context("run container and update its memory constraints", func() {
-		It("should have applied the constraints", func() {
-			// 512MB
-			memSize = fmt.Sprintf("%d", 512*1024*1024)
+var _ = Describe("run container and update its memory constraints", func() {
+	var (
+		args     []string
+		id       string
+		memSize  string
+		stdout   string
+		exitCode int
+		useSwap  bool
+		err      error
+	)
+
+	BeforeEach(func() {
+		useSwap = true
+		if _, err = os.Stat(memSWLimitPath); err != nil {
+			useSwap = false
+		}
+
+		id = randomDockerName()
+	})
+
+	AfterEach(func() {
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	DescribeTable("should have applied the memory constraints",
+		func(dockerMemMB uint32, updateMemMB uint32, fail bool) {
+			memSize = fmt.Sprintf("%d", dockerMemMB<<20)
 			args = []string{"--name", id, "-dti", "--rm", "-m", memSize, Image}
 
 			_, _, exitCode = dockerRun(args...)
 			Expect(exitCode).To(BeZero())
 
-			// 640 MB: 512MB + 128MB
-			memSize = fmt.Sprintf("%d", 640*1024*1024)
-
+			memSize = fmt.Sprintf("%d", updateMemMB<<20)
 			args = []string{"--memory", memSize, "--memory-reservation", memSize}
 			if useSwap {
 				args = append(args, "--memory-swap", memSize)
@@ -154,6 +189,10 @@ var _ = Describe("memory constraints", func() {
 
 			// update memory constraints
 			_, _, exitCode = dockerUpdate(args...)
+			if fail {
+				Expect(exitCode).ToNot(BeZero())
+				return
+			}
 			Expect(exitCode).To(BeZero())
 
 			// check memory limit
@@ -174,6 +213,9 @@ var _ = Describe("memory constraints", func() {
 			}
 
 			Expect(RemoveDockerContainer(id)).To(BeTrue())
-		})
-	})
+		},
+		withUpdateMemoryConstraints(500, 400, shouldNotFail),
+		withUpdateMemoryConstraints(500, 500, shouldNotFail),
+		withUpdateMemoryConstraints(500, 600, shouldNotFail),
+	)
 })
