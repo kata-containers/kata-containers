@@ -649,6 +649,7 @@ func TestAgentConfigure(t *testing.T) {
 
 	err = k.configure(h, id, dir, true, c)
 	assert.Nil(err)
+	assert.Empty(k.state.URL)
 
 	err = k.configure(h, id, dir, false, c)
 	assert.Nil(err)

@@ -247,7 +247,6 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 
 	if builtin {
 		k.proxyBuiltIn = true
-		k.state.URL, _ = k.agentURL()
 	}
 
 	// Adding the shared volume.
