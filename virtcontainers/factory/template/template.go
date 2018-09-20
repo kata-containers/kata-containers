@@ -51,6 +51,11 @@ func New(ctx context.Context, config vc.VMConfig) base.FactoryBase {
 		// fallback to direct factory if template is not supported.
 		return direct.New(ctx, config)
 	}
+	defer func() {
+		if err != nil {
+			t.close()
+		}
+	}()
 
 	err = t.createTemplateVM(ctx)
 	if err != nil {
@@ -73,6 +78,10 @@ func (t *template) GetBaseVM(ctx context.Context, config vc.VMConfig) (*vc.VM, e
 
 // CloseFactory cleans up the template VM.
 func (t *template) CloseFactory(ctx context.Context) {
+	t.close()
+}
+
+func (t *template) close() {
 	syscall.Unmount(t.statePath, 0)
 	os.RemoveAll(t.statePath)
 }
@@ -86,10 +95,12 @@ func (t *template) prepareTemplateFiles() error {
 	flags := uintptr(syscall.MS_NOSUID | syscall.MS_NODEV)
 	opts := fmt.Sprintf("size=%dM", t.config.HypervisorConfig.MemorySize+8)
 	if err = syscall.Mount("tmpfs", t.statePath, "tmpfs", flags, opts); err != nil {
+		t.close()
 		return err
 	}
 	f, err := os.Create(t.statePath + "/memory")
 	if err != nil {
+		t.close()
 		return err
 	}
 	f.Close()
