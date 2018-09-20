@@ -148,6 +148,7 @@ type NetworkInterfacePair struct {
 type NetworkConfig struct {
 	NetNSPath         string
 	NetNsCreated      bool
+	DisableNewNetNs   bool
 	NetmonConfig      NetmonConfig
 	InterworkingModel NetInterworkingModel
 }

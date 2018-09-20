@@ -336,6 +336,11 @@ func hostNetworkingRequested(configNetNs string) (bool, error) {
 }
 
 func setupNetworkNamespace(config *vc.NetworkConfig) error {
+	if config.DisableNewNetNs {
+		kataLog.Info("DisableNewNetNs is on, shim and hypervisor are running in the host netns")
+		return nil
+	}
+
 	if config.NetNSPath == "" {
 		n, err := ns.NewNS()
 		if err != nil {
