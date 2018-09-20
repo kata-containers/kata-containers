@@ -30,6 +30,7 @@ func TestNewFactory(t *testing.T) {
 	config.VMConfig = vc.VMConfig{
 		HypervisorType: vc.MockHypervisor,
 		AgentType:      vc.NoopAgentType,
+		ProxyType:      vc.NoopProxyType,
 	}
 
 	_, err = NewFactory(ctx, config, false)
@@ -43,28 +44,33 @@ func TestNewFactory(t *testing.T) {
 	}
 
 	// direct
-	_, err = NewFactory(ctx, config, false)
+	f, err := NewFactory(ctx, config, false)
 	assert.Nil(err)
-	_, err = NewFactory(ctx, config, true)
+	f.CloseFactory(ctx)
+	f, err = NewFactory(ctx, config, true)
 	assert.Nil(err)
+	f.CloseFactory(ctx)
 
 	// template
 	config.Template = true
-	_, err = NewFactory(ctx, config, false)
+	f, err = NewFactory(ctx, config, false)
 	assert.Nil(err)
+	f.CloseFactory(ctx)
 	_, err = NewFactory(ctx, config, true)
 	assert.Error(err)
 
 	// Cache
 	config.Cache = 10
-	_, err = NewFactory(ctx, config, false)
+	f, err = NewFactory(ctx, config, false)
 	assert.Nil(err)
+	f.CloseFactory(ctx)
 	_, err = NewFactory(ctx, config, true)
 	assert.Error(err)
 
 	config.Template = false
-	_, err = NewFactory(ctx, config, false)
+	f, err = NewFactory(ctx, config, false)
 	assert.Nil(err)
+	f.CloseFactory(ctx)
 	_, err = NewFactory(ctx, config, true)
 	assert.Error(err)
 }
