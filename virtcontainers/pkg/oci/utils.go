@@ -453,7 +453,7 @@ func addAssetAnnotations(ocispec CompatOCISpec, config *vc.SandboxConfig) {
 
 // SandboxConfig converts an OCI compatible runtime configuration file
 // to a virtcontainers sandbox configuration structure.
-func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid, console string, detach bool) (vc.SandboxConfig, error) {
+func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid, console string, detach, systemdCgroup bool) (vc.SandboxConfig, error) {
 	containerConfig, err := ContainerConfig(ocispec, bundlePath, cid, console, detach)
 	if err != nil {
 		return vc.SandboxConfig{}, err
@@ -507,6 +507,8 @@ func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid
 		},
 
 		ShmSize: shmSize,
+
+		SystemdCgroup: systemdCgroup,
 	}
 
 	addAssetAnnotations(ocispec, &sandboxConfig)

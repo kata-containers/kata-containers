@@ -83,6 +83,7 @@ var createCLICommand = cli.Command{
 			console,
 			context.String("pid-file"),
 			true,
+			context.Bool("systemd-cgroup"),
 			runtimeConfig,
 		)
 	},
@@ -91,7 +92,7 @@ var createCLICommand = cli.Command{
 // Use a variable to allow tests to modify its value
 var getKernelParamsFunc = getKernelParams
 
-func create(ctx context.Context, containerID, bundlePath, console, pidFilePath string, detach bool,
+func create(ctx context.Context, containerID, bundlePath, console, pidFilePath string, detach, systemdCgroup bool,
 	runtimeConfig oci.RuntimeConfig) error {
 	var err error
 
@@ -146,7 +147,7 @@ func create(ctx context.Context, containerID, bundlePath, console, pidFilePath s
 	var process vc.Process
 	switch containerType {
 	case vc.PodSandbox:
-		process, err = createSandbox(ctx, ociSpec, runtimeConfig, containerID, bundlePath, console, disableOutput)
+		process, err = createSandbox(ctx, ociSpec, runtimeConfig, containerID, bundlePath, console, disableOutput, systemdCgroup)
 		if err != nil {
 			return err
 		}
@@ -252,7 +253,7 @@ func setKernelParams(containerID string, runtimeConfig *oci.RuntimeConfig) error
 }
 
 func createSandbox(ctx context.Context, ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
-	containerID, bundlePath, console string, disableOutput bool) (vc.Process, error) {
+	containerID, bundlePath, console string, disableOutput, systemdCgroup bool) (vc.Process, error) {
 	span, ctx := trace(ctx, "createSandbox")
 	defer span.Finish()
 
@@ -261,7 +262,7 @@ func createSandbox(ctx context.Context, ociSpec oci.CompatOCISpec, runtimeConfig
 		return vc.Process{}, err
 	}
 
-	sandboxConfig, err := oci.SandboxConfig(ociSpec, runtimeConfig, bundlePath, containerID, console, disableOutput)
+	sandboxConfig, err := oci.SandboxConfig(ociSpec, runtimeConfig, bundlePath, containerID, console, disableOutput, systemdCgroup)
 	if err != nil {
 		return vc.Process{}, err
 	}

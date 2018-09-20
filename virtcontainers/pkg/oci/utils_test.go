@@ -231,6 +231,8 @@ func TestMinimalSandboxConfig(t *testing.T) {
 			vcAnnotations.ConfigJSONKey: string(ociSpecJSON),
 			vcAnnotations.BundlePathKey: tempBundlePath,
 		},
+
+		SystemdCgroup: true,
 	}
 
 	ociSpec, err := ParseConfigJSON(tempBundlePath)
@@ -238,7 +240,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		t.Fatalf("Could not parse config.json: %v", err)
 	}
 
-	sandboxConfig, err := SandboxConfig(ociSpec, runtimeConfig, tempBundlePath, containerID, consolePath, false)
+	sandboxConfig, err := SandboxConfig(ociSpec, runtimeConfig, tempBundlePath, containerID, consolePath, false, true)
 	if err != nil {
 		t.Fatalf("Could not create Sandbox configuration %v", err)
 	}
