@@ -216,6 +216,7 @@ func TestNetInterworkingModelSetModel(t *testing.T) {
 		{"bridged Model", "bridged", false},
 		{"macvtap Model", "macvtap", false},
 		{"enlightened Model", "enlightened", false},
+		{"none Model", "none", false},
 	}
 
 	for _, tt := range tests {

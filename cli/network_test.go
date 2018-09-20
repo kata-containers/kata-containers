@@ -217,4 +217,9 @@ func TestSetupNetworkNamespace(t *testing.T) {
 	n.Close()
 	unix.Unmount(config.NetNSPath, unix.MNT_DETACH)
 	os.RemoveAll(config.NetNSPath)
+
+	// Config with DisableNewNetNs
+	config = &vc.NetworkConfig{DisableNewNetNs: true}
+	err = setupNetworkNamespace(config)
+	assert.NoError(err)
 }
