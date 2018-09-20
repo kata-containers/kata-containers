@@ -123,15 +123,8 @@ See issue https://github.com/kata-containers/runtime/issues/129 for more informa
 
 ### update command
 
-The runtime does not currently implement the update command, hence
-does not support some of the `docker update` functionality. Much of the
-`update` functionality is based around cgroup configurations.
-
-It might be possible to implement some of the update functionality by adjusting cgroups either around the VM or inside the container VM, or by some other VM functional equivalent. See [the constraints challenge](#the-constraints-challenge) section for further information on how to handle constraints.
-
-Note that the OCI standard does not specify an `update` command.
-
-See issue https://github.com/kata-containers/runtime/issues/189 for more information.
+Currently, only block I/O weight is not supported.
+All other configurations are supported and are working properly.
 
 ## Networking
 
