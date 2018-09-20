@@ -946,10 +946,12 @@ func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsd
 		"id":       devID,
 		"driver":   "vfio-pci",
 		"sysfsdev": sysfsdev,
-		"addr":     addr,
 	}
 	if bus != "" {
 		args["bus"] = bus
+	}
+	if addr != "" {
+		args["addr"] = addr
 	}
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
