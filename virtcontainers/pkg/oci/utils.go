@@ -121,6 +121,9 @@ type RuntimeConfig struct {
 	InterNetworkModel vc.NetInterworkingModel
 	FactoryConfig     FactoryConfig
 	Debug             bool
+
+	//Determines if create a netns for hypervisor process
+	DisableNewNetNs bool
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
@@ -326,6 +329,7 @@ func networkConfig(ocispec CompatOCISpec, config RuntimeConfig) (vc.NetworkConfi
 		}
 	}
 	netConf.InterworkingModel = config.InterNetworkModel
+	netConf.DisableNewNetNs = config.DisableNewNetNs
 
 	netConf.NetmonConfig = vc.NetmonConfig{
 		Path:   config.NetmonConfig.Path,

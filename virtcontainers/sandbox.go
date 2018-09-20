@@ -1021,6 +1021,10 @@ func (s *Sandbox) startNetworkMonitor() error {
 }
 
 func (s *Sandbox) createNetwork() error {
+	if s.config.NetworkConfig.DisableNewNetNs {
+		return nil
+	}
+
 	span, _ := s.trace("createNetwork")
 	defer span.Finish()
 
