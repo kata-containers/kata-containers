@@ -795,7 +795,14 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) error {
 		// for pc machine type instead of bridge. This is useful for devices that require
 		// a large PCI BAR which is a currently a limitation with PCI bridges.
 		if q.state.HotplugVFIOOnRootBus {
-			return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF)
+			switch device.Type {
+			case config.VFIODeviceNormalType:
+				return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF)
+			case config.VFIODeviceMediatedType:
+				return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, "", "")
+			default:
+				return fmt.Errorf("Incorrect VFIO device type found")
+			}
 		}
 
 		addr, bridge, err := q.addDeviceToBridge(devID)
@@ -803,8 +810,13 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) error {
 			return err
 		}
 
-		if err := q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bridge.ID); err != nil {
-			return err
+		switch device.Type {
+		case config.VFIODeviceNormalType:
+			return q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bridge.ID)
+		case config.VFIODeviceMediatedType:
+			return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, addr, bridge.ID)
+		default:
+			return fmt.Errorf("Incorrect VFIO device type found")
 		}
 	} else {
 		if !q.state.HotplugVFIOOnRootBus {
