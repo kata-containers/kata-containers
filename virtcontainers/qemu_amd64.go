@@ -122,8 +122,8 @@ func (q *qemuAmd64) cpuModel() string {
 	return cpuModel
 }
 
-func (q *qemuAmd64) memoryTopology(memoryMb, hostMemoryMb uint64) govmmQemu.Memory {
-	return genericMemoryTopology(memoryMb, hostMemoryMb)
+func (q *qemuAmd64) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
+	return genericMemoryTopology(memoryMb, hostMemoryMb, slots)
 }
 
 func (q *qemuAmd64) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {

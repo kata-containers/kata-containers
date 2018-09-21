@@ -185,13 +185,14 @@ func TestQemuArchBaseMemoryTopology(t *testing.T) {
 
 	hostMem := uint64(100)
 	mem := uint64(120)
+	slots := uint8(12)
 	expectedMemory := govmmQemu.Memory{
 		Size:   fmt.Sprintf("%dM", mem),
-		Slots:  defaultMemSlots,
+		Slots:  slots,
 		MaxMem: fmt.Sprintf("%dM", hostMem),
 	}
 
-	m := qemuArchBase.memoryTopology(mem, hostMem)
+	m := qemuArchBase.memoryTopology(mem, hostMem, slots)
 	assert.Equal(expectedMemory, m)
 }
 

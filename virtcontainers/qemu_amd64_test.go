@@ -86,13 +86,14 @@ func TestQemuAmd64MemoryTopology(t *testing.T) {
 
 	hostMem := uint64(100)
 	mem := uint64(120)
+	slots := uint8(10)
 	expectedMemory := govmmQemu.Memory{
 		Size:   fmt.Sprintf("%dM", mem),
-		Slots:  defaultMemSlots,
+		Slots:  slots,
 		MaxMem: fmt.Sprintf("%dM", hostMem+uint64(memoryOffset)),
 	}
 
-	m := amd64.memoryTopology(mem, hostMem)
+	m := amd64.memoryTopology(mem, hostMem, slots)
 	assert.Equal(expectedMemory, m)
 }
 

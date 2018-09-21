@@ -283,7 +283,7 @@ func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 
 	memMb := uint64(q.config.MemorySize)
 
-	return q.arch.memoryTopology(memMb, hostMemMb), nil
+	return q.arch.memoryTopology(memMb, hostMemMb, uint8(q.config.MemSlots)), nil
 }
 
 func (q *qemu) qmpSocketPath(id string) (string, error) {
@@ -1248,7 +1248,7 @@ func genericBridges(number uint32, machineType string) []Bridge {
 	return bridges
 }
 
-func genericMemoryTopology(memoryMb, hostMemoryMb uint64) govmmQemu.Memory {
+func genericMemoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
 	// NVDIMM device needs memory space 1024MB
 	// See https://github.com/clearcontainers/runtime/issues/380
 	memoryOffset := 1024
@@ -1260,7 +1260,7 @@ func genericMemoryTopology(memoryMb, hostMemoryMb uint64) govmmQemu.Memory {
 
 	memory := govmmQemu.Memory{
 		Size:   mem,
-		Slots:  defaultMemSlots,
+		Slots:  slots,
 		MaxMem: memMax,
 	}
 

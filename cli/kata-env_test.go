@@ -262,6 +262,7 @@ func getExpectedHypervisor(config oci.RuntimeConfig) HypervisorInfo {
 		MachineType:       config.HypervisorConfig.HypervisorMachineType,
 		BlockDeviceDriver: config.HypervisorConfig.BlockDeviceDriver,
 		Msize9p:           config.HypervisorConfig.Msize9p,
+		MemorySlots:       config.HypervisorConfig.MemSlots,
 		Debug:             config.HypervisorConfig.Debug,
 	}
 }
