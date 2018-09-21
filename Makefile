@@ -63,7 +63,7 @@ snap-xbuild:
 	cd $(MK_DIR)/snap-build; ./xbuild.sh -a all
 
 clean:
-	rm $(SNAPCRAFT_FILE)
+	rm -f $(SNAPCRAFT_FILE)
 
 .PHONY: test test-release-tools test-static-build test-packaging-tools snap clean \
 	$(VERSION_FILE) $(VERSIONS_YAML_FILE)
