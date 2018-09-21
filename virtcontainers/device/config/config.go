@@ -109,12 +109,33 @@ type BlockDrive struct {
 	VirtPath string
 }
 
+// VFIODeviceType indicates VFIO device type
+type VFIODeviceType uint32
+
+const (
+	// VFIODeviceErrorType is the error type of VFIO device
+	VFIODeviceErrorType VFIODeviceType = iota
+
+	// VFIODeviceNormalType is a normal VFIO device type
+	VFIODeviceNormalType
+
+	// VFIODeviceMediatedType is a VFIO mediated device type
+	VFIODeviceMediatedType
+)
+
 // VFIODev represents a VFIO drive used for hotplugging
 type VFIODev struct {
 	// ID is used to identify this drive in the hypervisor options.
 	ID string
+
+	// Type of VFIO device
+	Type VFIODeviceType
+
 	// BDF (Bus:Device.Function) of the PCI address
 	BDF string
+
+	// sysfsdev of VFIO mediated device
+	SysfsDev string
 }
 
 // RNGDev represents a random number generator device
