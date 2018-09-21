@@ -4,7 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-_obs_docker_packaging_repo_dir=$(cd $(basename "${BASH_SOURCE[0]}"/../..) && pwd)
+_obs_docker_packaging_repo_dir=$(cd $(dirname "${BASH_SOURCE[0]}") && cd ../.. && pwd)
 GO_ARCH=$(go env GOARCH)
 
 docker_run() {
