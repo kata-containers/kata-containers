@@ -152,6 +152,7 @@ type Endpoint interface {
 	Name() string
 	HardwareAddr() string
 	Type() EndpointType
+	PciAddr() string
 
 	SetProperties(NetworkInfo)
 	Attach(hypervisor) error
@@ -178,6 +179,7 @@ type PhysicalEndpoint struct {
 	BDF                string
 	Driver             string
 	VendorDeviceID     string
+	PCIAddr            string
 }
 
 // VhostUserEndpoint represents a vhost-user socket based network interface
@@ -189,6 +191,7 @@ type VhostUserEndpoint struct {
 	IfaceName          string
 	EndpointProperties NetworkInfo
 	EndpointType       EndpointType
+	PCIAddr            string
 }
 
 // Properties returns properties for the veth interface in the network pair.
@@ -210,6 +213,11 @@ func (endpoint *VirtualEndpoint) HardwareAddr() string {
 // Type identifies the endpoint as a virtual endpoint.
 func (endpoint *VirtualEndpoint) Type() EndpointType {
 	return endpoint.EndpointType
+}
+
+// PciAddr returns the PCI address of the endpoint.
+func (endpoint *VirtualEndpoint) PciAddr() string {
+	return endpoint.PCIAddr
 }
 
 // SetProperties sets the properties for the endpoint.
@@ -309,6 +317,11 @@ func (endpoint *VhostUserEndpoint) SetProperties(properties NetworkInfo) {
 	endpoint.EndpointProperties = properties
 }
 
+// PciAddr returns the PCI address of the endpoint.
+func (endpoint *VhostUserEndpoint) PciAddr() string {
+	return endpoint.PCIAddr
+}
+
 // Attach for vhostuser endpoint
 func (endpoint *VhostUserEndpoint) Attach(h hypervisor) error {
 	networkLogger().WithField("endpoint-type", "vhostuser").Info("Attaching endpoint")
@@ -376,6 +389,11 @@ func (endpoint *PhysicalEndpoint) Name() string {
 // Type indentifies the endpoint as a physical endpoint.
 func (endpoint *PhysicalEndpoint) Type() EndpointType {
 	return endpoint.EndpointType
+}
+
+// PciAddr returns the PCI address of the endpoint.
+func (endpoint *PhysicalEndpoint) PciAddr() string {
+	return endpoint.PCIAddr
 }
 
 // SetProperties sets the properties of the physical endpoint.
@@ -1302,7 +1320,10 @@ func createEndpointsFromScan(networkNSPath string, config NetworkConfig) ([]Endp
 
 	idx := 0
 	for _, link := range linkList {
-		var endpoint Endpoint
+		var (
+			endpoint  Endpoint
+			errCreate error
+		)
 
 		netInfo, err := networkInfoFromLink(netlinkHandle, link)
 		if err != nil {
@@ -1323,40 +1344,8 @@ func createEndpointsFromScan(networkNSPath string, config NetworkConfig) ([]Endp
 		}
 
 		if err := doNetNS(networkNSPath, func(_ ns.NetNS) error {
-
-			// TODO: This is the incoming interface
-			// based on the incoming interface we should create
-			// an appropriate EndPoint based on interface type
-			// This should be a switch
-
-			// Check if interface is a physical interface. Do not create
-			// tap interface/bridge if it is.
-			isPhysical, err := isPhysicalIface(netInfo.Iface.Name)
-			if err != nil {
-				return err
-			}
-
-			if isPhysical {
-				networkLogger().WithField("interface", netInfo.Iface.Name).Info("Physical network interface found")
-				endpoint, err = createPhysicalEndpoint(netInfo)
-			} else {
-				var socketPath string
-
-				// Check if this is a dummy interface which has a vhost-user socket associated with it
-				socketPath, err = vhostUserSocketPath(netInfo)
-				if err != nil {
-					return err
-				}
-
-				if socketPath != "" {
-					networkLogger().WithField("interface", netInfo.Iface.Name).Info("VhostUser network interface found")
-					endpoint, err = createVhostUserEndpoint(netInfo, socketPath)
-				} else {
-					endpoint, err = createVirtualNetworkEndpoint(idx, netInfo.Iface.Name, config.InterworkingModel)
-				}
-			}
-
-			return err
+			endpoint, errCreate = createEndpoint(netInfo, idx, config.InterworkingModel)
+			return errCreate
 		}); err != nil {
 			return []Endpoint{}, err
 		}
@@ -1368,6 +1357,43 @@ func createEndpointsFromScan(networkNSPath string, config NetworkConfig) ([]Endp
 	}
 
 	return endpoints, nil
+}
+
+func createEndpoint(netInfo NetworkInfo, idx int, model NetInterworkingModel) (Endpoint, error) {
+	var endpoint Endpoint
+	// TODO: This is the incoming interface
+	// based on the incoming interface we should create
+	// an appropriate EndPoint based on interface type
+	// This should be a switch
+
+	// Check if interface is a physical interface. Do not create
+	// tap interface/bridge if it is.
+	isPhysical, err := isPhysicalIface(netInfo.Iface.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	if isPhysical {
+		networkLogger().WithField("interface", netInfo.Iface.Name).Info("Physical network interface found")
+		endpoint, err = createPhysicalEndpoint(netInfo)
+	} else {
+		var socketPath string
+
+		// Check if this is a dummy interface which has a vhost-user socket associated with it
+		socketPath, err = vhostUserSocketPath(netInfo)
+		if err != nil {
+			return nil, err
+		}
+
+		if socketPath != "" {
+			networkLogger().WithField("interface", netInfo.Iface.Name).Info("VhostUser network interface found")
+			endpoint, err = createVhostUserEndpoint(netInfo, socketPath)
+		} else {
+			endpoint, err = createVirtualNetworkEndpoint(idx, netInfo.Iface.Name, model)
+		}
+	}
+
+	return endpoint, err
 }
 
 // isPhysicalIface checks if an interface is a physical device.
