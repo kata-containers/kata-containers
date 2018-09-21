@@ -9,26 +9,38 @@ package drivers
 import (
 	"testing"
 
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestGetBDF(t *testing.T) {
+func TestGetVFIODetails(t *testing.T) {
 	type testData struct {
 		deviceStr   string
-		expectedBDF string
+		expectedStr string
 	}
 
 	data := []testData{
 		{"0000:02:10.0", "02:10.0"},
 		{"0000:0210.0", ""},
+		{"f79944e4-5a3d-11e8-99ce-", ""},
+		{"f79944e4-5a3d-11e8-99ce", ""},
 		{"test", ""},
 		{"", ""},
 	}
 
 	for _, d := range data {
-		deviceBDF, err := getBDF(d.deviceStr)
-		assert.Equal(t, d.expectedBDF, deviceBDF)
-		if d.expectedBDF == "" {
+		deviceBDF, deviceSysfsDev, vfioDeviceType, err := getVFIODetails(d.deviceStr, "")
+
+		switch vfioDeviceType {
+		case config.VFIODeviceNormalType:
+			assert.Equal(t, d.expectedStr, deviceBDF)
+		case config.VFIODeviceMediatedType:
+			assert.Equal(t, d.expectedStr, deviceSysfsDev)
+		default:
+			assert.NotNil(t, err)
+		}
+
+		if d.expectedStr == "" {
 			assert.NotNil(t, err)
 		} else {
 			assert.Nil(t, err)

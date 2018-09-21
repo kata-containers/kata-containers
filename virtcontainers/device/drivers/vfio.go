@@ -67,13 +67,15 @@ func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) error {
 	// Pass all devices in iommu group
 	for i, deviceFile := range deviceFiles {
 		//Get bdf of device eg 0000:00:1c.0
-		deviceBDF, err := getBDF(deviceFile.Name())
+		deviceBDF, deviceSysfsDev, vfioDeviceType, err := getVFIODetails(deviceFile.Name(), iommuDevicesPath)
 		if err != nil {
 			return err
 		}
 		vfio := &config.VFIODev{
-			ID:  utils.MakeNameID("vfio", device.DeviceInfo.ID+strconv.Itoa(i), maxDevIDSize),
-			BDF: deviceBDF,
+			ID:       utils.MakeNameID("vfio", device.DeviceInfo.ID+strconv.Itoa(i), maxDevIDSize),
+			Type:     vfioDeviceType,
+			BDF:      deviceBDF,
+			SysfsDev: deviceSysfsDev,
 		}
 		device.vfioDevs = append(device.vfioDevs, vfio)
 	}
@@ -130,17 +132,45 @@ func (device *VFIODevice) GetDeviceInfo() interface{} {
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation
 // here it shares function from *GenericDevice so we don't need duplicate codes
 
-// getBDF returns the BDF of pci device
-// Expected input strng format is [<domain>]:[<bus>][<slot>].[<func>] eg. 0000:02:10.0
-func getBDF(deviceSysStr string) (string, error) {
-	tokens := strings.Split(deviceSysStr, ":")
-
-	if len(tokens) != 3 {
-		return "", fmt.Errorf("Incorrect number of tokens found while parsing bdf for device : %s", deviceSysStr)
+func getVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceSysfsDev string, vfioDeviceType config.VFIODeviceType, err error) {
+	tokens := strings.Split(deviceFileName, ":")
+	vfioDeviceType = config.VFIODeviceErrorType
+	if len(tokens) == 3 {
+		vfioDeviceType = config.VFIODeviceNormalType
+	} else {
+		tokens = strings.Split(deviceFileName, "-")
+		if len(tokens) == 5 {
+			vfioDeviceType = config.VFIODeviceMediatedType
+		}
 	}
 
-	tokens = strings.SplitN(deviceSysStr, ":", 2)
-	return tokens[1], nil
+	switch vfioDeviceType {
+	case config.VFIODeviceNormalType:
+		// Get bdf of device eg. 0000:00:1c.0
+		deviceBDF = getBDF(deviceFileName)
+	case config.VFIODeviceMediatedType:
+		// Get sysfsdev of device eg. /sys/devices/pci0000:00/0000:00:02.0/f79944e4-5a3d-11e8-99ce-479cbab002e4
+		sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
+		deviceSysfsDev, err = getSysfsDev(sysfsDevStr)
+	default:
+		err = fmt.Errorf("Incorrect tokens found while parsing vfio details: %s", deviceFileName)
+	}
+
+	return deviceBDF, deviceSysfsDev, vfioDeviceType, err
+}
+
+// getBDF returns the BDF of pci device
+// Expected input string format is [<domain>]:[<bus>][<slot>].[<func>] eg. 0000:02:10.0
+func getBDF(deviceSysStr string) string {
+	tokens := strings.SplitN(deviceSysStr, ":", 2)
+	return tokens[1]
+}
+
+// getSysfsDev returns the sysfsdev of mediated device
+// Expected input string format is absolute path to the sysfs dev node
+// eg. /sys/kernel/iommu_groups/0/devices/f79944e4-5a3d-11e8-99ce-479cbab002e4
+func getSysfsDev(sysfsDevStr string) (string, error) {
+	return filepath.EvalSymlinks(sysfsDevStr)
 }
 
 // BindDevicetoVFIO binds the device to vfio driver after unbinding from host.
