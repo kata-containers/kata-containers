@@ -440,6 +440,12 @@ test_distro_ubuntu()
        run_test "${name}" "" "ubuntu" "service" "no"
 }
 
+test_distro_debian()
+{
+       local -r name="Can create and run debian image"
+       run_test "${name}" "" "debian" "service" "no"
+}
+
 
 test_distro_fedora()
 {
@@ -526,6 +532,7 @@ test_all_distros()
 	test_distro_centos
 	test_distro_alpine
 	test_distro_ubuntu
+	test_distro_debian
 	if [ $MACHINE_TYPE != "ppc64le" ]; then
 	   test_distro_clearlinux
 
