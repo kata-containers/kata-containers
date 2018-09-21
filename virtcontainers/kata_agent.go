@@ -568,6 +568,12 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 		return err
 	}
 
+	defer func() {
+		if err != nil {
+			k.proxy.stop(k.state.ProxyPid)
+		}
+	}()
+
 	hostname := sandbox.config.Hostname
 	if len(hostname) > maxHostnameLen {
 		hostname = hostname[:maxHostnameLen]
@@ -585,10 +591,10 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	if err != nil {
 		return err
 	}
-	if err := k.updateInterfaces(interfaces); err != nil {
+	if err = k.updateInterfaces(interfaces); err != nil {
 		return err
 	}
-	if _, err := k.updateRoutes(routes); err != nil {
+	if _, err = k.updateRoutes(routes); err != nil {
 		return err
 	}
 
