@@ -249,7 +249,11 @@ check_go()
 
 	[ "$TRAVIS_GO_VERSION" != "tip" ] && linter_args+=" --enable=gofmt"
 
-	linter_args+=" --concurrency=$(nproc)"
+	if [ "$(uname -s)" == "Linux" ]; then
+		linter_args+=" --concurrency=$(nproc)"
+	elif [ "$(uname -s)" == "Darwin" ]; then
+		linter_args+=" --concurrency=$(sysctl -n hw.activecpu)"
+	fi
 
 	linter_args+=" --enable=misspell"
 	linter_args+=" --enable=vet"
