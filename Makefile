@@ -125,6 +125,13 @@ DEFVCPUS := 1
 DEFMAXVCPUS := 0
 # Default memory size in MiB
 DEFMEMSZ := 2048
+# Default memory slots
+# Cases to consider :
+# - nvdimm rootfs image
+# - preallocated memory
+# - vm template memory
+# - hugepage memory
+DEFMEMSLOTS := 10
 #Default number of bridges
 DEFBRIDGES := 1
 #Default network model
@@ -202,6 +209,7 @@ USER_VARS += SYSCONFDIR
 USER_VARS += DEFVCPUS
 USER_VARS += DEFMAXVCPUS
 USER_VARS += DEFMEMSZ
+USER_VARS += DEFMEMSLOTS
 USER_VARS += DEFBRIDGES
 USER_VARS += DEFNETWORKMODEL
 USER_VARS += DEFDISABLEBLOCK
@@ -302,6 +310,7 @@ const defaultRootDirectory = "$(PKGRUNDIR)"
 const defaultVCPUCount uint32 = $(DEFVCPUS)
 const defaultMaxVCPUCount uint32 = $(DEFMAXVCPUS)
 const defaultMemSize uint32 = $(DEFMEMSZ) // MiB
+const defaultMemSlots uint32 = $(DEFMEMSLOTS)
 const defaultBridgesCount uint32 = $(DEFBRIDGES)
 const defaultInterNetworkingModel = "$(DEFNETWORKMODEL)"
 const defaultDisableBlockDeviceUse bool = $(DEFDISABLEBLOCK)
@@ -391,6 +400,7 @@ $(GENERATED_FILES): %: %.in Makefile VERSION
 		-e "s|@DEFVCPUS@|$(DEFVCPUS)|g" \
 		-e "s|@DEFMAXVCPUS@|$(DEFMAXVCPUS)|g" \
 		-e "s|@DEFMEMSZ@|$(DEFMEMSZ)|g" \
+		-e "s|@DEFMEMSLOTS@|$(DEFMEMSLOTS)|g" \
 		-e "s|@DEFBRIDGES@|$(DEFBRIDGES)|g" \
 		-e "s|@DEFNETWORKMODEL@|$(DEFNETWORKMODEL)|g" \
 		-e "s|@DEFDISABLEBLOCK@|$(DEFDISABLEBLOCK)|g" \

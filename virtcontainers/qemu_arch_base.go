@@ -53,7 +53,7 @@ type qemuArch interface {
 	cpuModel() string
 
 	// memoryTopology returns the memory topology using the given amount of memoryMb and hostMemoryMb
-	memoryTopology(memoryMb, hostMemoryMb uint64) govmmQemu.Memory
+	memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory
 
 	// appendConsole appends a console to devices
 	appendConsole(devices []govmmQemu.Device, path string) []govmmQemu.Device
@@ -110,7 +110,6 @@ type qemuArchBase struct {
 const (
 	defaultCores     uint32 = 1
 	defaultThreads   uint32 = 1
-	defaultMemSlots  uint8  = 2
 	defaultCPUModel         = "host"
 	defaultBridgeBus        = "pcie.0"
 	maxDevIDSize            = 31
@@ -258,12 +257,12 @@ func (q *qemuArchBase) cpuModel() string {
 	return defaultCPUModel
 }
 
-func (q *qemuArchBase) memoryTopology(memoryMb, hostMemoryMb uint64) govmmQemu.Memory {
+func (q *qemuArchBase) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
 	memMax := fmt.Sprintf("%dM", hostMemoryMb)
 	mem := fmt.Sprintf("%dM", memoryMb)
 	memory := govmmQemu.Memory{
 		Size:   mem,
-		Slots:  defaultMemSlots,
+		Slots:  slots,
 		MaxMem: memMax,
 	}
 

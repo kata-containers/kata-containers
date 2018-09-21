@@ -41,12 +41,13 @@ func TestQemuPPC64leMemoryTopology(t *testing.T) {
 
 	hostMem := uint64(1024)
 	mem := uint64(120)
+	slots := uint8(10)
 	expectedMemory := govmmQemu.Memory{
 		Size:   fmt.Sprintf("%dM", mem),
-		Slots:  defaultMemSlots,
+		Slots:  slots,
 		MaxMem: fmt.Sprintf("%dM", hostMem+uint64(memoryOffset)),
 	}
 
-	m := ppc64le.memoryTopology(mem, hostMem)
+	m := ppc64le.memoryTopology(mem, hostMem, slots)
 	assert.Equal(expectedMemory, m)
 }

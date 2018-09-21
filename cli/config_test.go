@@ -159,6 +159,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		Msize9p:               defaultMsize9p,
+		MemSlots:              defaultMemSlots,
 	}
 
 	agentConfig := vc.KataAgentConfig{}
