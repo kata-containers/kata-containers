@@ -102,8 +102,7 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 func (q *qemuAmd64) capabilities() capabilities {
 	var caps capabilities
 
-	// Only pc machine type supports hotplugging drives
-	if q.machineType == QemuPC {
+	if q.machineType == QemuPC || q.machineType == QemuQ35 {
 		caps.setBlockDeviceHotplugSupport()
 	}
 
