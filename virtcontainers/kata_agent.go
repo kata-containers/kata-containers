@@ -874,7 +874,7 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 
 		if sandbox.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
 			rootfs.Driver = kataBlkDevType
-			rootfs.Source = blockDrive.VirtPath
+			rootfs.Source = blockDrive.PCIAddr
 		} else {
 			rootfs.Driver = kataSCSIDevType
 			rootfs.Source = blockDrive.SCSIAddr
