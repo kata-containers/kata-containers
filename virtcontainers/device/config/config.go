@@ -142,6 +142,8 @@ type VFIODev struct {
 type RNGDev struct {
 	// ID is used to identify the device in the hypervisor options.
 	ID string
+	// Filename is the file to use as entropy source.
+	Filename string
 }
 
 // VhostUserDeviceAttrs represents data shared by most vhost-user devices

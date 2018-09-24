@@ -136,6 +136,8 @@ DEFMEMSLOTS := 10
 DEFBRIDGES := 1
 #Default network model
 DEFNETWORKMODEL := macvtap
+#Default entropy source
+DEFENTROPYSOURCE := /dev/urandom
 
 DEFDISABLEBLOCK := false
 DEFBLOCKSTORAGEDRIVER := virtio-scsi
@@ -222,6 +224,8 @@ USER_VARS += DEFENABLEDEBUG
 USER_VARS += DEFDISABLENESTINGCHECKS
 USER_VARS += DEFMSIZE9P
 USER_VARS += DEFHOTPLUGVFIOONROOTBUS
+USER_VARS += DEFENTROPYSOURCE
+
 
 V              = @
 Q              = $(V:1=)
@@ -323,6 +327,7 @@ const defaultEnableDebug bool = $(DEFENABLEDEBUG)
 const defaultDisableNestingChecks bool = $(DEFDISABLENESTINGCHECKS)
 const defaultMsize9p uint32 = $(DEFMSIZE9P)
 const defaultHotplugVFIOOnRootBus bool = $(DEFHOTPLUGVFIOONROOTBUS)
+const defaultEntropySource = "$(DEFENTROPYSOURCE)"
 
 // Default config file used by stateless systems.
 var defaultRuntimeConfiguration = "$(CONFIG_PATH)"
@@ -413,6 +418,7 @@ $(GENERATED_FILES): %: %.in Makefile VERSION
 		-e "s|@DEFDISABLENESTINGCHECKS@|$(DEFDISABLENESTINGCHECKS)|g" \
 		-e "s|@DEFMSIZE9P@|$(DEFMSIZE9P)|g" \
 		-e "s|@DEFHOTPLUGONROOTBUS@|$(DEFHOTPLUGVFIOONROOTBUS)|g" \
+		-e "s|@DEFENTROPYSOURCE@|$(DEFENTROPYSOURCE)|g" \
 		$< > $@
 
 generate-config: $(CONFIG)
