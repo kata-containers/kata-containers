@@ -341,16 +341,16 @@ check_license_headers()
 		--exclude=".git/*" \
 		--exclude=".gitignore" \
 		--exclude="Gopkg.lock" \
+		--exclude="LICENSE" \
 		--exclude="protocols/grpc/*.pb.go" \
 		--exclude="vendor/*" \
-		--exclude="LICENSE" \
 		--exclude="VERSION" \
+		--exclude="*.jpg" \
 		--exclude="*.json" \
 		--exclude="*.md" \
+		--exclude="*.png" \
 		--exclude="*.toml" \
 		--exclude="*.yaml" \
-		--exclude="*.png" \
-		--exclude="*.jpg" \
 		-EL "\<${pattern}\>" \
 		$files || true)
 
