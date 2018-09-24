@@ -143,22 +143,30 @@ have_cmd()
 
 show_quoted_text()
 {
+	local language="$1"
+
+	shift
+
 	local text="$*"
 
-	echo "\`\`\`"
+	echo "\`\`\`${language}"
 	echo "$text"
 	echo "\`\`\`"
 }
 
 run_cmd_and_show_quoted_output()
 {
+	local language="$1"
+
+	shift
+
 	local cmd="$*"
 
 	local output
 
 	msg "Output of \"\`$cmd\`\":"
 	output=$(eval "$cmd" 2>&1)
-	show_quoted_text "$output"
+	show_quoted_text "${language}" "$output"
 }
 
 show_runtime_configs()
@@ -175,7 +183,7 @@ show_runtime_configs()
 
 	subheading "Runtime default config files"
 
-	show_quoted_text "$configs"
+	show_quoted_text "" "$configs"
 
 	# add in the standard defaults for good measure "just in case"
 	configs+=" /etc/@PROJECT_TAG@/configuration.toml"
@@ -190,7 +198,7 @@ show_runtime_configs()
 
 	for config in $configs; do
 		if [ -e "$config" ]; then
-			run_cmd_and_show_quoted_output "cat \"$config\""
+			run_cmd_and_show_quoted_output "toml" "cat \"$config\""
 		else
 			msg "Config file \`$config\` not found"
 		fi
@@ -237,7 +245,7 @@ find_system_journal_problems()
 
 	if [ -n "$problems" ]; then
 		msg "Recent $name problems found in $data_source:"
-		show_quoted_text "$problems"
+		show_quoted_text "" "$problems"
 	else
 		msg "No recent $name problems found in $data_source."
 	fi
@@ -296,11 +304,11 @@ show_package_versions()
 	pattern+=")"
 
 	if have_cmd "dpkg"; then
-		run_cmd_and_show_quoted_output "dpkg -l|egrep \"$pattern\""
+		run_cmd_and_show_quoted_output "" "dpkg -l|egrep \"$pattern\""
 	fi
 
 	if have_cmd "rpm"; then
-		run_cmd_and_show_quoted_output "rpm -qa|egrep \"$pattern\""
+		run_cmd_and_show_quoted_output "" "rpm -qa|egrep \"$pattern\""
 	fi
 
 	separator
@@ -312,20 +320,20 @@ show_container_mgr_details()
 
 	if have_cmd "docker"; then
 		subheading "Docker"
-		run_cmd_and_show_quoted_output "docker version"
-		run_cmd_and_show_quoted_output "docker info"
-		run_cmd_and_show_quoted_output "systemctl show docker"
+		run_cmd_and_show_quoted_output "" "docker version"
+		run_cmd_and_show_quoted_output "" "docker info"
+		run_cmd_and_show_quoted_output "" "systemctl show docker"
 	fi
 
 	if have_cmd "kubectl"; then
 		subheading "Kubernetes"
-		run_cmd_and_show_quoted_output "kubectl version"
-		run_cmd_and_show_quoted_output "kubectl config view"
-		run_cmd_and_show_quoted_output "systemctl show kubelet"
+		run_cmd_and_show_quoted_output "" "kubectl version"
+		run_cmd_and_show_quoted_output "" "kubectl config view"
+		run_cmd_and_show_quoted_output "" "systemctl show kubelet"
 
 		if have_cmd "crio"; then
-			run_cmd_and_show_quoted_output "crio --version"
-			run_cmd_and_show_quoted_output "systemctl show crio"
+			run_cmd_and_show_quoted_output "" "crio --version"
+			run_cmd_and_show_quoted_output "" "systemctl show crio"
 		fi
 	fi
 
@@ -352,7 +360,7 @@ show_runtime()
 
 	cmd="@PROJECT_TYPE@-env"
 	heading "\`$cmd\`"
-	run_cmd_and_show_quoted_output "$runtime $cmd"
+	run_cmd_and_show_quoted_output "toml" "$runtime $cmd"
 
 	separator
 }
@@ -570,7 +578,7 @@ show_throttler_details()
 	do
 		local cmd
 		cmd="$throttler --version"
-		run_cmd_and_show_quoted_output "$cmd"
+		run_cmd_and_show_quoted_output "" "$cmd"
 	done
 
 	subheading "systemd service"
@@ -586,7 +594,7 @@ show_throttler_details()
 		"vc-throttler"
 	do
 		systemctl status "${unit}" >/dev/null 2>&1 && \
-			run_cmd_and_show_quoted_output "systemctl show ${unit}"
+			run_cmd_and_show_quoted_output "" "systemctl show ${unit}"
 	done
 }
 
@@ -604,7 +612,7 @@ show_image_details()
 	if [ -n "$image" ]
 	then
 		details=$(get_image_details "$image")
-		show_quoted_text "$details"
+		show_quoted_text "yaml" "$details"
 	else
 		msg "No image"
 	fi
@@ -626,7 +634,7 @@ show_initrd_details()
 	if [ -n "$initrd" ]
 	then
 		details=$(get_initrd_details "$initrd")
-		show_quoted_text "$details"
+		show_quoted_text "yaml" "$details"
 	else
 		msg "No initrd"
 	fi
