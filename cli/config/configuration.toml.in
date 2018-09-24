@@ -155,6 +155,17 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # If host doesn't support vhost_net, set to true. Thus we won't create vhost fds for nics.
 # Default false
 #disable_vhost_net = true
+#
+# Default entropy source.
+# The path to a host source of entropy (including a real hardware RNG)
+# /dev/urandom and /dev/random are two main options.
+# Be aware that /dev/random is a blocking source of entropy.  If the host
+# runs out of entropy, the VMs boot time will increase leading to get startup
+# timeouts.
+# The source of entropy /dev/urandom is non-blocking and provides a
+# generally acceptable source of entropy. It should work well for pretty much
+# all practical purposes.
+#entropy_source= "@DEFENTROPYSOURCE@"
 
 [factory]
 # VM templating support. Once enabled, new VMs are created from template

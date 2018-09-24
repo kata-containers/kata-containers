@@ -264,6 +264,7 @@ func getExpectedHypervisor(config oci.RuntimeConfig) HypervisorInfo {
 		Msize9p:           config.HypervisorConfig.Msize9p,
 		MemorySlots:       config.HypervisorConfig.MemSlots,
 		Debug:             config.HypervisorConfig.Debug,
+		EntropySource:     config.HypervisorConfig.EntropySource,
 	}
 }
 
