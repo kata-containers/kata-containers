@@ -324,6 +324,20 @@ disable_ksm(){
 	sudo bash -c "echo 0 > ${KSM_ENABLE_FILE}"
 }
 
+# See if KSM is enabled.
+# If so, amend the test name to reflect that
+check_for_ksm(){
+	if [ ! -f ${KSM_ENABLE_FILE} ]; then
+		return
+	fi
+
+	ksm_on=$(< ${KSM_ENABLE_FILE})
+
+	if [ $ksm_on == "1" ]; then
+		TEST_NAME="${TEST_NAME} ksm"
+	fi
+}
+
 # Wait for KSM to settle down, or timeout waiting
 # The basic algorithm is to look at the pages_shared value
 # at the end of every 'full scan', and if the value

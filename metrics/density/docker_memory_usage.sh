@@ -50,20 +50,6 @@ Usage: $0 <count> <wait_time> [auto]
 EOF
 }
 
-# See if KSM is enabled.
-# If so, ammend the test name to reflect that
-check_for_ksm(){
-	if [ ! -f ${KSM_ENABLE_FILE} ]; then
-		return
-	fi
-
-	ksm_on=$(< ${KSM_ENABLE_FILE})
-
-	if [ $ksm_on == "1" ]; then
-		TEST_NAME="${TEST_NAME} ksm"
-	fi
-}
-
 # This function measures the PSS average
 # memory about the child process of each
 # docker-containerd-shim instance in the

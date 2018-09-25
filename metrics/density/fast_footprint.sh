@@ -161,21 +161,6 @@ function cleanup() {
 	docker kill $(docker ps -qa)
 }
 
-# See if KSM is enabled.
-# If so, ammend the test name to reflect that
-# FIXME - needs refactoring - see https://github.com/kata-containers/tests/issues/519
-check_for_ksm(){
-	if [ ! -f ${KSM_ENABLE_FILE} ]; then
-		return
-	fi
-
-	ksm_on=$(< ${KSM_ENABLE_FILE})
-
-	if [ $ksm_on == "1" ]; then
-		TEST_NAME="${TEST_NAME} ksm"
-	fi
-}
-
 # helper function to get USS of prcess in arg1
 function get_proc_uss() {
 	item=$(sudo smem -t -P "^$1" | tail -1 | awk '{print $4}')
