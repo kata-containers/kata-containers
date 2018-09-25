@@ -84,6 +84,9 @@ openshift:
 	bash -f .ci/install_bats.sh
 	bash -f integration/openshift/run_openshift_tests.sh
 
+pentest:
+	bash -f pentest/all.sh
+
 vm-factory:
 	bash -f integration/vm_factory/vm_templating_test.sh
 
@@ -104,6 +107,7 @@ check: checkcommits log-parser
 	kubernetes \
 	log-parser \
 	openshift \
+	pentest \
 	swarm \
 	test \
 	vm-factory
