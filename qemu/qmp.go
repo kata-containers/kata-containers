@@ -144,7 +144,7 @@ type QMPVersion struct {
 	Capabilities []string
 }
 
-// CPUProperties contains the properties to be used for hotplugging a CPU instance
+// CPUProperties contains the properties of a CPU instance
 type CPUProperties struct {
 	Node   int `json:"node-id"`
 	Socket int `json:"socket-id"`
@@ -176,6 +176,28 @@ type MemoryDevicesData struct {
 type MemoryDevices struct {
 	Data MemoryDevicesData `json:"data"`
 	Type string            `json:"type"`
+}
+
+// CPUInfo represents information about each virtual CPU
+type CPUInfo struct {
+	CPU      int           `json:"CPU"`
+	Current  bool          `json:"current"`
+	Halted   bool          `json:"halted"`
+	QomPath  string        `json:"qom_path"`
+	Arch     string        `json:"arch"`
+	Pc       int           `json:"pc"`
+	ThreadID int           `json:"thread_id"`
+	Props    CPUProperties `json:"props"`
+}
+
+// CPUInfoFast represents information about each virtual CPU
+type CPUInfoFast struct {
+	CPUIndex int           `json:"cpu-index"`
+	QomPath  string        `json:"qom-path"`
+	Arch     string        `json:"arch"`
+	ThreadID int           `json:"thread-id"`
+	Target   string        `json:"target"`
+	Props    CPUProperties `json:"props"`
 }
 
 func (q *QMP) readLoop(fromVMCh chan<- []byte) {
@@ -1031,6 +1053,54 @@ func (q *QMP) ExecQueryMemoryDevices(ctx context.Context) ([]MemoryDevices, erro
 	}
 
 	return memoryDevices, nil
+}
+
+// ExecQueryCpus returns a slice with the list of `CpuInfo`
+// Since qemu 2.12, we have `query-cpus-fast` as a better choice in production
+// we can still choose `ExecQueryCpus` for compatibility though not recommended.
+func (q *QMP) ExecQueryCpus(ctx context.Context) ([]CPUInfo, error) {
+	response, err := q.executeCommandWithResponse(ctx, "query-cpus", nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// convert response to json
+	data, err := json.Marshal(response)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to extract memory devices information: %v", err)
+	}
+
+	var cpuInfo []CPUInfo
+	// convert json to []CPUInfo
+	if err = json.Unmarshal(data, &cpuInfo); err != nil {
+		return nil, fmt.Errorf("unable to convert json to CPUInfo: %v", err)
+	}
+
+	return cpuInfo, nil
+}
+
+// ExecQueryCpusFast returns a slice with the list of `CpuInfoFast`
+// This is introduced since 2.12, it does not incur a performance penalty and
+// should be used in production instead of query-cpus.
+func (q *QMP) ExecQueryCpusFast(ctx context.Context) ([]CPUInfoFast, error) {
+	response, err := q.executeCommandWithResponse(ctx, "query-cpus-fast", nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// convert response to json
+	data, err := json.Marshal(response)
+	if err != nil {
+		return nil, fmt.Errorf("Unable to extract memory devices information: %v", err)
+	}
+
+	var cpuInfoFast []CPUInfoFast
+	// convert json to []CPUInfoFast
+	if err = json.Unmarshal(data, &cpuInfoFast); err != nil {
+		return nil, fmt.Errorf("unable to convert json to CPUInfoFast: %v", err)
+	}
+
+	return cpuInfoFast, nil
 }
 
 // ExecHotplugMemory adds size of MiB memory to the guest

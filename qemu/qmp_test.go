@@ -1096,6 +1096,80 @@ func TestQMPExecuteQueryMemoryDevices(t *testing.T) {
 	<-disconnectedCh
 }
 
+// Checks that cpus are listed correctly
+func TestQMPExecuteQueryCpus(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	cpuInfo := CPUInfo{
+		CPU:      1,
+		Current:  false,
+		Halted:   false,
+		Arch:     "x86_64",
+		QomPath:  "/tmp/testQom",
+		Pc:       123456,
+		ThreadID: 123457,
+		Props: CPUProperties{
+			Node:   0,
+			Socket: 1,
+			Core:   1,
+			Thread: 1966,
+		},
+	}
+	buf.AddCommand("query-cpus", nil, "return", []interface{}{cpuInfo})
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	cpus, err := q.ExecQueryCpus(context.Background())
+	if err != nil {
+		t.Fatalf("Unexpected error: %v\n", err)
+	}
+	if len(cpus) != 1 {
+		t.Fatalf("Expected memory devices length equals to 1\n")
+	}
+	if reflect.DeepEqual(cpus[0], cpuInfo) == false {
+		t.Fatalf("Expected %v equals to %v\n", cpus[0], cpuInfo)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
+// Checks that cpus are listed correctly
+func TestQMPExecuteQueryCpusFast(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	cpuInfoFast := CPUInfoFast{
+		CPUIndex: 1,
+		Arch:     "x86",
+		Target:   "x86_64",
+		QomPath:  "/tmp/testQom",
+		ThreadID: 123457,
+		Props: CPUProperties{
+			Node:   0,
+			Socket: 1,
+			Core:   1,
+			Thread: 1966,
+		},
+	}
+	buf.AddCommand("query-cpus-fast", nil, "return", []interface{}{cpuInfoFast})
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	cpus, err := q.ExecQueryCpusFast(context.Background())
+	if err != nil {
+		t.Fatalf("Unexpected error: %v\n", err)
+	}
+	if len(cpus) != 1 {
+		t.Fatalf("Expected memory devices length equals to 1\n")
+	}
+	if reflect.DeepEqual(cpus[0], cpuInfoFast) == false {
+		t.Fatalf("Expected %v equals to %v\n", cpus[0], cpuInfoFast)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks that migrate capabilities can be set
 func TestExecSetMigrationCaps(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
