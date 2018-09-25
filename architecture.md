@@ -476,6 +476,37 @@ __Runtime network setup with CNM__
 5. Create bridge, TAP, and link all together with network interface previously
   created
 
+=======
+### CNI
+
+![CNI Diagram](arch-images/CNI_diagram.png)
+
+__Runtime network setup with CNI__
+
+1. Create the network namespace.
+
+2. Get CNI plugin information.
+
+3. Start the plugin (providing previously created network namespace) to add a network
+  described into `/etc/cni/net.d/ directory`. At that time, the CNI plugin will
+  create the `cni0` network interface and a veth pair between the host and the created
+  netns. It links `cni0` to the veth pair before to exit.
+
+4. Create network bridge, TAP, and link all together with network interface previously
+  created.
+
+5. Start VM inside the netns and start the container.
+
+
+### Network Hotplug
+
+Kata Containers has developed a set of network sub-commands and APIs to add, list and
+remove a guest network endpoint and to manipulate the guest route table.
+
+The following diagram illustrates the Kata Containers network hotplug workflow.
+
+![Network Hotplug](arch-images/kata-containers-network-hotplug.png)
+
 ## Storage
 Container workloads are shared with the virtualized environment through [9pfs](https://www.kernel.org/doc/Documentation/filesystems/9p.txt).
 The devicemapper storage driver is a special case. The driver uses dedicated block
