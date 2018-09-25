@@ -154,14 +154,14 @@ function cleanup() {
 #	kill_processes_before_start
 }
 
-# helper function to get USS of prcess in arg1
+# helper function to get USS of process in arg1
 function get_proc_uss() {
 	item=$(sudo smem -t -P "^$1" | tail -1 | awk '{print $4}')
 	((item*=1024))
 	echo $item
 }
 
-# helper function to get PSS of prcess in arg1
+# helper function to get PSS of process in arg1
 function get_proc_pss() {
 	item=$(sudo smem -t -P "^$1" | tail -1 | awk '{print $5}')
 	((item*=1024))
