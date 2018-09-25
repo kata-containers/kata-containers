@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/kata-containers/tests"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -47,6 +48,56 @@ var _ = Describe("docker cp", func() {
 			Expect(exitCode).To(Equal(0))
 			testFile := path.Base(file.Name())
 			Expect(stdout).To(ContainSubstring(testFile))
+		})
+	})
+})
+
+var _ = Describe("docker cp with volume attached", func() {
+	var (
+		id          string
+		exitCode    int
+		hostPath    string
+		cmd         *tests.Command
+		dirBeforeCp string
+		dirAfterCp  string
+	)
+
+	BeforeEach(func() {
+		hostPath = "/dev"
+		id = randomDockerName()
+	})
+
+	AfterEach(func() {
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	Context("check host path integrity", func() {
+		It("should not be modified", func() {
+			file, err := ioutil.TempFile(os.TempDir(), "file")
+			Expect(err).ToNot(HaveOccurred())
+			err = file.Close()
+			Expect(err).ToNot(HaveOccurred())
+			defer os.Remove(file.Name())
+			Expect(file.Name()).To(BeAnExistingFile())
+
+			// check hostPath before running docker cp
+			cmd = tests.NewCommand("ls", hostPath)
+			dirBeforeCp, _, exitCode = cmd.Run()
+			Expect(exitCode).To(BeZero())
+
+			_, _, exitCode = dockerRun("-td", "-v", hostPath+":"+hostPath, "--name", id, Image, "sh")
+			Expect(exitCode).To(Equal(0))
+			_, _, exitCode = dockerCp(file.Name(), id+":/")
+			Expect(exitCode).To(BeZero())
+			Expect(RemoveDockerContainer(id)).To(BeTrue())
+
+			// check hostPath after running docker cp
+			cmd = tests.NewCommand("ls", hostPath)
+			dirAfterCp, _, exitCode = cmd.Run()
+			Expect(exitCode).To(BeZero())
+
+			// hostPath files and directories should be the same
+			Expect(dirBeforeCp).To(Equal(dirAfterCp))
 		})
 	})
 })
