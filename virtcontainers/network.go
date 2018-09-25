@@ -1194,6 +1194,7 @@ func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*types.Interface
 			Name:        endpoint.Name(),
 			Mtu:         uint64(endpoint.Properties().Iface.MTU),
 			HwAddr:      endpoint.HardwareAddr(),
+			PciAddr:     endpoint.PciAddr(),
 		}
 
 		ifaces = append(ifaces, &ifc)
