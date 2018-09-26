@@ -254,54 +254,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 	}
 }
 
-func TestUpdateVmConfig(t *testing.T) {
-	var limitBytes int64 = 128 * 1024 * 1024
-	assert := assert.New(t)
-
-	config := RuntimeConfig{
-		HypervisorConfig: vc.HypervisorConfig{
-			MemorySize: 2048,
-		},
-	}
-
-	expectedMem := uint32(128)
-
-	ocispec := CompatOCISpec{
-		Spec: specs.Spec{
-			Linux: &specs.Linux{
-				Resources: &specs.LinuxResources{
-					Memory: &specs.LinuxMemory{
-						Limit: &limitBytes,
-					},
-				},
-			},
-		},
-	}
-
-	err := updateVMConfig(ocispec, &config)
-	assert.Nil(err)
-	assert.Equal(config.HypervisorConfig.MemorySize, expectedMem)
-
-	limitBytes = -128 * 1024 * 1024
-	ocispec.Linux.Resources.Memory.Limit = &limitBytes
-
-	err = updateVMConfig(ocispec, &config)
-	assert.NotNil(err)
-
-	// Test case when Memory is nil
-	ocispec.Spec.Linux.Resources.Memory = nil
-	err = updateVMConfig(ocispec, &config)
-	assert.Nil(err)
-
-	// Test case when CPU is nil
-	ocispec.Spec.Linux.Resources.CPU = nil
-	limitBytes = 20
-	ocispec.Linux.Resources.Memory = &specs.LinuxMemory{Limit: &limitBytes}
-	err = updateVMConfig(ocispec, &config)
-	assert.Nil(err)
-	assert.NotEqual(config.HypervisorConfig.MemorySize, expectedMem)
-}
-
 func testStatusToOCIStateSuccessful(t *testing.T, cStatus vc.ContainerStatus, expected specs.State) {
 	ociState := StatusToOCIState(cStatus)
 
