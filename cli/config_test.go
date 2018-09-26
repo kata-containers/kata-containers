@@ -160,6 +160,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		Msize9p:               defaultMsize9p,
 		MemSlots:              defaultMemSlots,
+		EntropySource:         defaultEntropySource,
 	}
 
 	agentConfig := vc.KataAgentConfig{}

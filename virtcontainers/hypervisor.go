@@ -196,6 +196,10 @@ type HypervisorConfig struct {
 	// BootFromTemplate is true.
 	DevicesStatePath string
 
+	// EntropySource is the path to a host source of
+	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
+	EntropySource string
+
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.
 	// For example, if there is a value for the "kernel" key in this map,

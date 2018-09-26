@@ -25,7 +25,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.17"
+const formatVersion = "1.0.18"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -81,6 +81,7 @@ type HypervisorInfo struct {
 	Version           string
 	Path              string
 	BlockDeviceDriver string
+	EntropySource     string
 	Msize9p           uint32
 	MemorySlots       uint32
 	Debug             bool
@@ -319,6 +320,7 @@ func getHypervisorInfo(config oci.RuntimeConfig) HypervisorInfo {
 		Msize9p:           config.HypervisorConfig.Msize9p,
 		UseVSock:          config.HypervisorConfig.UseVSock,
 		MemorySlots:       config.HypervisorConfig.MemSlots,
+		EntropySource:     config.HypervisorConfig.EntropySource,
 	}
 }
 
