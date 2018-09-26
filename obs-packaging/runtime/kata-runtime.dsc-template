@@ -15,7 +15,7 @@ Package: kata-runtime
 Architecture: @deb_arch@
 Depends: kata-containers-image (>= @kata_osbuilder_version@), kata-linux-container (>= @linux_container_version@),
          kata-proxy (>= @kata_proxy_version@), kata-shim (>= @kata_shim_version@),
-	 kata-ksm-throttler(>= @ksm_throttler_version@), qemu-lite(>= @qemu_lite_version@),
+	 kata-ksm-throttler(>= @ksm_throttler_version@), qemu-lite(>= @qemu_lite_version@) [amd64],
 	 qemu-vanilla(>= @qemu_vanilla_version@)
 Description:
  An Open Containers Initiative (OCI) "runtime" that launches an Intel VT-x secured Kata Containers hypervisor, rather than a standard Linux container.
