@@ -98,7 +98,8 @@ if (length(resultdirs) == 2) {
 	# This is a touch hard wired - but we *know* we only have two
 	# datasets...
 	for( i in 1:5) {
-		val = ((as.double(rstats[1,i]) / as.double(rstats[2,i])) * 100) - 100
+		difference = as.double(rstats[2,i]) - as.double(rstats[1,i])
+		val = 100 * (difference/as.double(rstats[1,i]))
 		diff[i] = paste(round(val, digits=2), "%", sep=" ")
 	}
 
