@@ -412,25 +412,6 @@ func (spec *CompatOCISpec) SandboxID() (string, error) {
 	return "", fmt.Errorf("Could not find sandbox ID")
 }
 
-func updateVMConfig(ocispec CompatOCISpec, config *RuntimeConfig) error {
-	if ocispec.Linux == nil || ocispec.Linux.Resources == nil {
-		return nil
-	}
-
-	if ocispec.Linux.Resources.Memory != nil &&
-		ocispec.Linux.Resources.Memory.Limit != nil {
-		memBytes := *ocispec.Linux.Resources.Memory.Limit
-		if memBytes <= 0 {
-			return fmt.Errorf("Invalid OCI memory limit %d", memBytes)
-		}
-		// Use some math magic to round up to the nearest Mb.
-		// This has the side effect that we can never have <1Mb assigned.
-		config.HypervisorConfig.MemorySize = uint32((memBytes + (1024*1024 - 1)) / (1024 * 1024))
-	}
-
-	return nil
-}
-
 func addAssetAnnotations(ocispec CompatOCISpec, config *vc.SandboxConfig) {
 	assetAnnotations := []string{
 		vcAnnotations.KernelPath,
@@ -465,11 +446,6 @@ func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid
 	}
 
 	networkConfig, err := networkConfig(ocispec, runtime)
-	if err != nil {
-		return vc.SandboxConfig{}, err
-	}
-
-	err = updateVMConfig(ocispec, &runtime)
 	if err != nil {
 		return vc.SandboxConfig{}, err
 	}
@@ -570,7 +546,8 @@ func ContainerConfig(ocispec CompatOCISpec, bundlePath, cid, console string, det
 	}
 	if ocispec.Linux.Resources.Memory != nil {
 		if ocispec.Linux.Resources.Memory.Limit != nil {
-			resources.MemMB = uint32(*ocispec.Linux.Resources.Memory.Limit >> 20)
+			// do page align to memory, as cgroup memory.limit_in_bytes will be aligned to page when effect
+			resources.MemByte = (*ocispec.Linux.Resources.Memory.Limit >> 12) << 12
 		}
 	}
 
