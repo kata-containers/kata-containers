@@ -1562,13 +1562,13 @@ func (config *Config) appendMemoryKnobs() {
 		if config.Memory.Size != "" {
 			dimmName := "dimm1"
 			objMemParam := "memory-backend-ram,id=" + dimmName + ",size=" + config.Memory.Size + ",prealloc=on"
-			deviceMemParam := "pc-dimm,id=" + dimmName + ",memdev=" + dimmName
+			numaMemParam := "node,memdev=" + dimmName
 
 			config.qemuParams = append(config.qemuParams, "-object")
 			config.qemuParams = append(config.qemuParams, objMemParam)
 
-			config.qemuParams = append(config.qemuParams, "-device")
-			config.qemuParams = append(config.qemuParams, deviceMemParam)
+			config.qemuParams = append(config.qemuParams, "-numa")
+			config.qemuParams = append(config.qemuParams, numaMemParam)
 		}
 	} else if config.Knobs.FileBackedMem == true {
 		if config.Memory.Size != "" && config.Memory.Path != "" {
