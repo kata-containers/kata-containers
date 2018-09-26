@@ -70,6 +70,9 @@ collect_logs()
 	# Copy log files if a destination path is provided, otherwise simply
 	# display them.
 	if [ "${log_copy_dest}" ]; then
+		# Create directory if it doesn't exist
+		[ -d "${log_copy_dest}" ] || mkdir -p "${log_copy_dest}"
+
 		# Create the log files
 		sudo journalctl --no-pager -t kata-runtime > "${kata_runtime_log_path}"
 		sudo journalctl --no-pager -t kata-proxy > "${proxy_log_path}"
