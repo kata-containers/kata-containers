@@ -56,7 +56,7 @@ var (
 	kata9pDevType        = "9p"
 	kataBlkDevType       = "blk"
 	kataSCSIDevType      = "scsi"
-	sharedDir9pOptions   = []string{"trans=virtio,version=9p2000.L", "nodev"}
+	sharedDir9pOptions   = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
 	shmDir               = "shm"
 	kataEphemeralDevType = "ephemeral"
 	ephemeralPath        = filepath.Join(kataGuestSandboxDir, kataEphemeralDevType)
