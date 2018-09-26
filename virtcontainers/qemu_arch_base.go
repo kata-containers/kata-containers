@@ -525,7 +525,8 @@ func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev conf
 func (q *qemuArchBase) appendRNGDevice(devices []govmmQemu.Device, rngDev config.RNGDev) []govmmQemu.Device {
 	devices = append(devices,
 		govmmQemu.RngDevice{
-			ID: rngDev.ID,
+			ID:       rngDev.ID,
+			Filename: rngDev.Filename,
 		},
 	)
 

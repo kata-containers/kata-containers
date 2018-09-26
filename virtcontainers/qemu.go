@@ -496,7 +496,8 @@ func (q *qemu) createSandbox() error {
 	}
 	// Add RNG device to hypervisor
 	rngDev := config.RNGDev{
-		ID: rngID,
+		ID:       rngID,
+		Filename: q.config.EntropySource,
 	}
 	qemuConfig.Devices = q.arch.appendRNGDevice(qemuConfig.Devices, rngDev)
 
