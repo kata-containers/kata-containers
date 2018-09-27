@@ -101,3 +101,57 @@ var _ = Describe("docker cp with volume attached", func() {
 		})
 	})
 })
+
+var _ = Describe("docker cp with volume", func() {
+	var (
+		id            string
+		exitCode      int
+		hostPath      string
+		cmd           *tests.Command
+		mountBeforeCp string
+		mountAfterCp  string
+	)
+
+	BeforeEach(func() {
+		hostPath = "/dev"
+		id = randomDockerName()
+	})
+
+	AfterEach(func() {
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	Context("check mount points", func() {
+		It("should be removed", func() {
+			Skip("Issue: https://github.com/kata-containers/runtime/issues/794")
+			file, err := ioutil.TempFile(os.TempDir(), "file")
+			Expect(err).ToNot(HaveOccurred())
+			err = file.Close()
+			Expect(err).ToNot(HaveOccurred())
+			defer os.Remove(file.Name())
+			Expect(file.Name()).To(BeAnExistingFile())
+
+			// check mount before cp
+			cmd = tests.NewCommand("mount")
+			mountBeforeCp, _, exitCode = cmd.Run()
+			Expect(exitCode).To(BeZero())
+
+			_, _, exitCode = dockerRun("-td", "-v", hostPath+":"+hostPath, "--name", id, Image, "sh")
+			Expect(exitCode).To(BeZero())
+
+			_, _, exitCode = dockerCp(file.Name(), id+":"+hostPath)
+			Expect(exitCode).To(BeZero())
+
+			// remove container
+			Expect(RemoveDockerContainer(id)).To(BeTrue())
+
+			// check mount points
+			cmd = tests.NewCommand("mount")
+			mountAfterCp, _, exitCode = cmd.Run()
+			Expect(exitCode).To(BeZero())
+
+			// check variables have the same content
+			Expect(mountBeforeCp).To(Equal(mountAfterCp))
+		})
+	})
+})
