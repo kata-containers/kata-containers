@@ -62,7 +62,7 @@ collect_logs()
 	local -r procenv_root_log_path="${log_copy_dest}/${procenv_root_log_filename}"
 
 	have_collect_script="no"
-	[ -n "$(command -v $collect_script)" ] && have_collect_script="yes"
+	collect_script_path="$(command -v $collect_script)" && have_collect_script="yes"
 
 	have_procenv="no"
 	[ -n "$(command -v procenv)" ] && have_procenv="yes"
@@ -70,6 +70,9 @@ collect_logs()
 	# Copy log files if a destination path is provided, otherwise simply
 	# display them.
 	if [ "${log_copy_dest}" ]; then
+		# Create directory if it doesn't exist
+		[ -d "${log_copy_dest}" ] || mkdir -p "${log_copy_dest}"
+
 		# Create the log files
 		sudo journalctl --no-pager -t kata-runtime > "${kata_runtime_log_path}"
 		sudo journalctl --no-pager -t kata-proxy > "${proxy_log_path}"
@@ -82,7 +85,7 @@ collect_logs()
 		sudo journalctl --no-pager -u kubelet > "${kubelet_log_path}"
 		sudo journalctl --no-pager -t kernel > "${kernel_log_path}"
 
-		[ "${have_collect_script}" = "yes" ] && sudo -E PATH="$PATH" $collect_script > "${collect_data_log_path}"
+		[ "${have_collect_script}" = "yes" ] && sudo -E PATH="$PATH" "${collect_script_path}" > "${collect_data_log_path}"
 
 		# Split them in 5 MiB subfiles to avoid too large files.
 		local -r subfile_size=5242880
