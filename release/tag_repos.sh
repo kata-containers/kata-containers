@@ -144,8 +144,8 @@ create_github_release() {
 	repo_dir=${1:-}
 	tag=${2:-}
 	[ -d "${repo_dir}" ] || die "No repository directory"
-	[ -n "${tag}" ] || die "No repository directory"
-	if ! "${hub_bin}" release | grep "${tag}"; then
+	[ -n "${tag}" ] || die "No tag specified"
+	if ! "${hub_bin}" release | grep -q "^${tag}$"; then
 		info "Creating Github release"
 		"${hub_bin}" -C "${repo_dir}" release create -m "${PROJECT} ${tag}" "${tag}"
 	else
