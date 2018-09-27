@@ -110,6 +110,9 @@ collect_logs()
 		prefixes+=" ${crio_log_prefix}"
 		prefixes+=" ${docker_log_prefix}"
 		prefixes+=" ${kubelet_log_prefix}"
+		prefixes+=" ${ksm_throttler_log_prefix}"
+		prefixes+=" ${vc_throttler_log_prefix}"
+		prefixes+=" ${kernel_log_prefix}"
 
 		[ "${have_collect_script}" = "yes" ] && prefixes+=" ${collect_data_log_prefix}"
 
