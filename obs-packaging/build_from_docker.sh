@@ -26,9 +26,6 @@ source "${script_dir}/scripts/obs-docker.sh"
 GO_ARCH=$(go env GOARCH)
 export GO_ARCH
 
-OSCRC="${HOME}/.oscrc"
-OBS_API="https://api.opensuse.org"
-
 usage() {
 	msg="${1:-}"
 	exit_code=$"${2:-0}"
@@ -52,21 +49,6 @@ main() {
 	popd >>/dev/null
 	#Build all kata packages
 	make -f "${script_dir}/Makefile" clean
-	if [ -n "${OBS_USER:-}" ] && [ -n "${OBS_PASS:-}" ] && [ ! -e "${OSCRC}" ]; then
-		echo "Creating  ${OSCRC} with user $OBS_USER"
-		cat <<eom >"${OSCRC}"
-[general]
-apiurl = ${OBS_API}
-[${OBS_API}]
-user = ${OBS_USER}
-pass = ${OBS_PASS}
-eom
-	fi
-
-	if [ ! -e "${OSCRC}" ]; then
-		echo "${OSCRC}, please  do 'export OBS_USER=your_user ; export OBS_PASS=your_pass' to configure osc for first time."
-		exit 1
-	fi
 	docker_run "${packaging_repo_dir}/obs-packaging/build_all.sh ${branch}"
 }
 
