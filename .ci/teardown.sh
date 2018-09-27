@@ -125,6 +125,7 @@ collect_logs()
 
 		local prefix
 
+		# Compress log files
 		for prefix in $prefixes
 		do
 			gzip -9 "$prefix"*
@@ -132,6 +133,9 @@ collect_logs()
 
 		# The procenv logs are tiny so don't require chunking
 		gzip -9 "${procenv_user_log_path}" "${procenv_root_log_path}"
+
+		# Remove *.log files, which contain the uncompressed data.
+		rm -f *".log"
 
 		popd
 	else
