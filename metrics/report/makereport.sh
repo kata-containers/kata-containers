@@ -24,9 +24,9 @@ GUESTOUTPUTDIR="/outputdir/"
 
 setup() {
 	echo "Checking subdirectories"
-	check_subdir="$(cd ${HOSTINPUTDIR}; ls -dx */ > /dev/null 2>&1 | wc -l)"
+	check_subdir="$(ls -dx ${HOSTINPUTDIR}/*/ 2> /dev/null | wc -l)"
 	if [ $check_subdir -eq 0 ]; then
-		die "Subdirectory not found at metrics/results to store JSON results"
+		die "No subdirs in [${HOSTINPUTDIR}] to read results from."
 	fi
 
 	echo "Checking Dockerfile"
