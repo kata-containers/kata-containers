@@ -83,6 +83,10 @@ if [ "$ID" == "fedora" ] || [ "$ID" == "centos" ]; then
 	export STORAGE_OPTIONS="$OVERLAY_STORAGE_OPTIONS"
 fi
 
+if [ "$ZUUL" = true ]; then
+	export STORAGE_OPTIONS="$OVERLAY_STORAGE_OPTIONS"
+fi
+
 echo "Ensure crio service is stopped before running the tests"
 if systemctl is-active --quiet crio; then
 	sudo systemctl stop crio
