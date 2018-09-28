@@ -1,23 +1,23 @@
 
 # This is a generated file from gen_versions_txt.sh
 
-kata_runtime_version=1.3.0~rc1
-kata_runtime_hash=22aedc4fb6b9a78a59f59df06f1b8d48021b952e
+kata_runtime_version=1.3.0
+kata_runtime_hash=a786643d0b3c0195deeb6ef5d4c2a161009a80aa
 
-kata_proxy_version=1.3.0~rc1
-kata_proxy_hash=981fef4774ba15cf94a3a9013629d0ab60668348
+kata_proxy_version=1.3.0
+kata_proxy_hash=6ddb006ad3f709cab018af9dc0bf9e756c3ce2cd
 
-kata_shim_version=1.3.0~rc1
-kata_shim_hash=9b2891cfb153967fa4a65e44b2928255c889f643
+kata_shim_version=1.3.0
+kata_shim_hash=5fbf1f0919ce0bb1f2b7e85692cdf3058023926f
 
-kata_agent_version=1.3.0~rc1
-kata_agent_hash=1ee972176ae437bcace0a37227818c506bb64ba9
+kata_agent_version=1.3.0
+kata_agent_hash=042c3ebd71c2ca425aa0c70fadcbf6370116659b
 
-kata_ksm_throttler_version=1.3.0~rc1
-kata_ksm_throttler_hash=48a9568e0e9e134c4409f767a870b422ad31ff16
+kata_ksm_throttler_version=1.3.0
+kata_ksm_throttler_hash=6e903fb19378a1a6132f8d3a43b65ee9c1643673
 
 # Dependencies
-kata_osbuilder_version=1.3.0~rc1
+kata_osbuilder_version=1.3.0
 
 qemu_lite_version=2.11.0
 qemu_lite_hash=f88622805677163b04498dcba35ceca0183b1318
