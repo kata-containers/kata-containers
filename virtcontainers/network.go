@@ -934,6 +934,21 @@ func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Lin
 	return newLink, fds, err
 }
 
+func getLinkForEndpoint(endpoint Endpoint, netHandle *netlink.Handle) (netlink.Link, error) {
+	var link netlink.Link
+
+	switch ep := endpoint.(type) {
+	case *VirtualEndpoint:
+		link = &netlink.Veth{}
+	case *BridgedMacvlanEndpoint:
+		link = &netlink.Macvlan{}
+	default:
+		return nil, fmt.Errorf("Unexpected endpointType %s", ep.Type())
+	}
+
+	return getLinkByName(netHandle, endpoint.NetworkPair().VirtIface.Name, link)
+}
+
 func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.Link) (netlink.Link, error) {
 	link, err := netHandle.LinkByName(name)
 	if err != nil {
@@ -1081,23 +1096,11 @@ func tapNetworkPair(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) err
 	}
 	defer netHandle.Delete()
 
-	var link netlink.Link
 	netPair := endpoint.NetworkPair()
 
-	switch ep := endpoint.(type) {
-	case *VirtualEndpoint:
-		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
-		if err != nil {
-			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
-		}
-	case *BridgedMacvlanEndpoint:
-		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Macvlan{})
-		if err != nil {
-			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
-		}
-
-	default:
-		return fmt.Errorf("Unexpected endpointType  %s", ep.Type())
+	link, err := getLinkForEndpoint(endpoint, netHandle)
+	if err != nil {
+		return err
 	}
 
 	attrs := link.Attrs()
@@ -1206,20 +1209,9 @@ func bridgeNetworkPair(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) 
 	var attrs *netlink.LinkAttrs
 	var link netlink.Link
 
-	switch ep := endpoint.(type) {
-	case *VirtualEndpoint:
-		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
-		if err != nil {
-			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
-		}
-	case *BridgedMacvlanEndpoint:
-		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Macvlan{})
-		if err != nil {
-			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
-		}
-
-	default:
-		return fmt.Errorf("Unexpected endpointType  %s", ep.Type())
+	link, err = getLinkForEndpoint(endpoint, netHandle)
+	if err != nil {
+		return err
 	}
 
 	attrs = link.Attrs()
@@ -1293,22 +1285,9 @@ func untapNetworkPair(endpoint Endpoint) error {
 		return fmt.Errorf("Could not remove TAP %s: %s", netPair.TAPIface.Name, err)
 	}
 
-	var link netlink.Link
-
-	switch ep := endpoint.(type) {
-	case *VirtualEndpoint:
-		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
-		if err != nil {
-			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
-		}
-	case *BridgedMacvlanEndpoint:
-		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Macvlan{})
-		if err != nil {
-			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
-		}
-
-	default:
-		return fmt.Errorf("Unexpected endpointType  %s", ep.Type())
+	link, err := getLinkForEndpoint(endpoint, netHandle)
+	if err != nil {
+		return err
 	}
 
 	if err := netHandle.LinkSetDown(link); err != nil {
@@ -1359,22 +1338,9 @@ func unBridgeNetworkPair(endpoint Endpoint) error {
 		return fmt.Errorf("Could not remove TAP %s: %s", netPair.TAPIface.Name, err)
 	}
 
-	var link netlink.Link
-
-	switch ep := endpoint.(type) {
-	case *VirtualEndpoint:
-		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Veth{})
-		if err != nil {
-			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
-		}
-	case *BridgedMacvlanEndpoint:
-		link, err = getLinkByName(netHandle, netPair.VirtIface.Name, &netlink.Macvlan{})
-		if err != nil {
-			return fmt.Errorf("Could not get interface %s : %s", netPair.VirtIface.Name, err)
-		}
-
-	default:
-		return fmt.Errorf("Unexpected endpointType  %s", ep.Type())
+	link, err := getLinkForEndpoint(endpoint, netHandle)
+	if err != nil {
+		return err
 	}
 
 	if err := netHandle.LinkSetDown(link); err != nil {
