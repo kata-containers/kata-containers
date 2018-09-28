@@ -8,11 +8,7 @@
 
 %global DEFAULT_QEMU qemu-lite-system-x86_64
 
-%if 0%{?suse_version}
-%define LIBEXECDIR %{_libdir}
-%else
-%define LIBEXECDIR %{_libexecdir}
-%endif
+%define LIBEXECDIR /usr/libexec
 
 %undefine _missing_build_ids_terminate_build
 %define  debug_package %{nil}
@@ -96,6 +92,9 @@ sed -i -e '/^initrd =/d' %{buildroot}/usr/share/defaults/kata-containers/configu
 %files
 %defattr(-,root,root,-)
 /usr/bin/kata-runtime
+%{LIBEXECDIR}
+%{LIBEXECDIR}/kata-containers
+%{LIBEXECDIR}/kata-containers/kata-netmon
 /usr/bin/kata-collect-data.sh
 /usr/share/defaults/
 /usr/share/defaults/kata-containers/
