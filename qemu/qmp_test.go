@@ -1295,3 +1295,53 @@ func TestExecuteVirtSerialPortAdd(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+// Checks migration status
+func TestExecuteQueryMigration(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	status := MigrationStatus{
+		Status: "completed",
+		RAM: MigrationRAM{
+			Total:            100,
+			Remaining:        101,
+			Transferred:      101,
+			TotalTime:        101,
+			SetupTime:        101,
+			ExpectedDowntime: 101,
+			Duplicate:        101,
+			Normal:           101,
+			NormalBytes:      101,
+			DirtySyncCount:   101,
+		},
+		Disk: MigrationDisk{
+			Total:       200,
+			Remaining:   200,
+			Transferred: 200,
+		},
+		XbzrleCache: MigrationXbzrleCache{
+			CacheSize:     300,
+			Bytes:         300,
+			Pages:         300,
+			CacheMiss:     300,
+			CacheMissRate: 300,
+			Overflow:      300,
+		},
+	}
+	caps := map[string]interface{}{"foo": true}
+	status.Capabilities = append(status.Capabilities, caps)
+	buf.AddCommand("query-migrate", nil, "return", interface{}(status))
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	s, err := q.ExecuteQueryMigration(context.Background())
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	if !reflect.DeepEqual(s, status) {
+		t.Fatalf("expected %v\n got %v", status, s)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
