@@ -3,7 +3,7 @@
 > **Notes:**
 >
 > - Kata Containers packages are available for [RHEL\*](https://www.redhat.com)
->   version 7 (currently `x86_64` only).
+>   version 7.
 >
 > - If you are installing on a system that already has Clear Containers or `runv` installed,
 >   first read [the upgrading document](../Upgrading.md).
@@ -22,7 +22,8 @@
 
    ```bash
    $ source /etc/os-release
-   $ sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo "http://download.opensuse.org/repositories/home:/katacontainers:/release/RHEL_${VERSION_ID}/home:katacontainers:release.repo"
+   $ ARCH=$(arch)
+   $ sudo -E yum-config-manager --add-repo "http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/RHEL_${VERSION_ID}/home:katacontainers:releases:${ARCH}:master.repo"
    $ sudo -E yum -y install kata-runtime kata-proxy kata-shim
    ```
 
