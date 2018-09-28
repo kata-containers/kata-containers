@@ -13,8 +13,8 @@ library(gridExtra)					# together.
 suppressMessages(suppressWarnings(library(ggpubr)))	# for ggtexttable.
 suppressMessages(library(jsonlite))			# to load the data.
 
-resultsfiles=c(
-	"boot-times.json"
+testnames=c(
+	"boot-times"
 )
 
 data=c()
@@ -26,8 +26,8 @@ rstats_names=c()
 for (currentdir in resultdirs) {
 	count=1
 	dirstats=c()
-	for (resultsfile in resultsfiles) {
-		fname=paste(inputdir, currentdir, resultsfile, sep="/")
+	for (testname in testnames) {
+		fname=paste(inputdir, currentdir, testname, '.json', sep="")
 		if ( !file.exists(fname)) {
 			warning(paste("Skipping non-existent file: ", fname))
 			next
@@ -38,6 +38,8 @@ for (currentdir in resultdirs) {
 
 		# Import the data
 		fdata=fromJSON(fname)
+		# De-nest the test specific name
+		fdata=fdata[[testname]]
 
 		cdata=data.frame(workload=as.numeric(fdata$Results$'to-workload'$Result))
 		cdata=cbind(cdata, quit=as.numeric(fdata$Results$'to-quit'$Result))
