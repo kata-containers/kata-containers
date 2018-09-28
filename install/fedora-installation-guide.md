@@ -3,7 +3,7 @@
 > **Notes:**
 >
 > - Kata Containers packages are available for [Fedora\*](https://fedoraproject.org)
->   versions **27** and **28** (currently `x86_64` only).
+>   versions **27** and **28**.
 >
 > - If you are installing on a system that already has Clear Containers or `runv` installed,
 >   first read [the upgrading document](../Upgrading.md).
@@ -22,8 +22,9 @@
 
    ```bash
    $ source /etc/os-release
+   $ ARCH=$(arch)
    $ sudo dnf -y install dnf-plugins-core
-   $ sudo -E VERSION_ID=$VERSION_ID dnf config-manager --add-repo http://download.opensuse.org/repositories/home:/katacontainers:/release/Fedora\_$VERSION_ID/home:katacontainers:release.repo
+   $ sudo -E dnf config-manager --add-repo "http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/Fedora_${VERSION_ID}/home:katacontainers:releases:${ARCH}:master.repo"
    $ sudo -E dnf -y install kata-runtime kata-proxy kata-shim
    ```
 

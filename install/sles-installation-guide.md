@@ -3,7 +3,7 @@
 > **Notes:**
 >
 > - Kata Containers packages are available for [openSUSE\*](https://www.opensuse.org/)
->   version 43.2 (currently `x86_64` only).
+>   version 43.2.
 >
 > - If you are installing on a system that already has Clear Containers or `runv` installed,
 >   first read [the upgrading document](../Upgrading.md).
@@ -21,7 +21,8 @@
    > redirects download URLs to `http`.
 
    ```bash
-   $ sudo -E zypper addrepo "http://download.opensuse.org/repositories/home:/katacontainers:/release/SLE_12_SP3/home:katacontainers:release.repo"
+   $ ARCH=$(arch)
+   $ sudo -E zypper addrepo "http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/SLE_12_SP3/home:katacontainers:releases:${ARCH}:master.repo"
    $ sudo -E zypper -n --no-gpg-checks install kata-runtime kata-proxy kata-shim
    ```
 
