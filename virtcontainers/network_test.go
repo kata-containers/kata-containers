@@ -230,8 +230,11 @@ func TestCreateVirtualNetworkEndpoint(t *testing.T) {
 	// the resulting ID  will be random - so let's overwrite to test the rest of the flow
 	result.NetPair.ID = "uniqueTestID-4"
 
+	// the resulting mac address will be random - so lets overwrite it
+	result.NetPair.VirtIface.HardAddr = macAddr.String()
+
 	if reflect.DeepEqual(result, expected) == false {
-		t.Fatal()
+		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
 	}
 }
 
@@ -262,8 +265,11 @@ func TestCreateVirtualNetworkEndpointChooseIfaceName(t *testing.T) {
 	// the resulting ID will be random - so let's overwrite to test the rest of the flow
 	result.NetPair.ID = "uniqueTestID-4"
 
+	// the resulting mac address will be random - so lets overwrite it
+	result.NetPair.VirtIface.HardAddr = macAddr.String()
+
 	if reflect.DeepEqual(result, expected) == false {
-		t.Fatal()
+		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
 	}
 }
 

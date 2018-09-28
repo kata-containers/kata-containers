@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	cryptoRand "crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -1345,7 +1346,10 @@ func createVirtualNetworkEndpoint(idx int, ifName string, interworkingModel NetI
 		return &VirtualEndpoint{}, fmt.Errorf("invalid network endpoint index: %d", idx)
 	}
 
-	netPair := createNetworkInterfacePair(idx, ifName, interworkingModel)
+	netPair, err := createNetworkInterfacePair(idx, ifName, interworkingModel)
+	if err != nil {
+		return nil, err
+	}
 
 	endpoint := &VirtualEndpoint{
 		// TODO This is too specific. We may need to create multiple
@@ -1366,7 +1370,10 @@ func createBridgedMacvlanNetworkEndpoint(idx int, ifName string, interworkingMod
 		return &BridgedMacvlanEndpoint{}, fmt.Errorf("invalid network endpoint index: %d", idx)
 	}
 
-	netPair := createNetworkInterfacePair(idx, ifName, interworkingModel)
+	netPair, err := createNetworkInterfacePair(idx, ifName, interworkingModel)
+	if err != nil {
+		return nil, err
+	}
 
 	endpoint := &BridgedMacvlanEndpoint{
 		NetPair:      netPair,
@@ -1466,17 +1473,20 @@ func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*grpc.Interface,
 	return ifaces, routes, nil
 }
 
-func createNetworkInterfacePair(idx int, ifName string, interworkingModel NetInterworkingModel) NetworkInterfacePair {
+func createNetworkInterfacePair(idx int, ifName string, interworkingModel NetInterworkingModel) (NetworkInterfacePair, error) {
 	uniqueID := uuid.Generate().String()
 
-	hardAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, byte(idx >> 8), byte(idx)}
+	randomMacAddr, err := generateRandomPrivateMacAddr()
+	if err != nil {
+		return NetworkInterfacePair{}, fmt.Errorf("Could not generate random mac address: %s", err)
+	}
 
 	netPair := NetworkInterfacePair{
 		ID:   uniqueID,
 		Name: fmt.Sprintf("br%d_kata", idx),
 		VirtIface: NetworkInterface{
 			Name:     fmt.Sprintf("eth%d", idx),
-			HardAddr: hardAddr.String(),
+			HardAddr: randomMacAddr,
 		},
 		TAPIface: NetworkInterface{
 			Name: fmt.Sprintf("tap%d_kata", idx),
@@ -1484,8 +1494,23 @@ func createNetworkInterfacePair(idx int, ifName string, interworkingModel NetInt
 		NetInterworkingModel: interworkingModel,
 	}
 
-	return netPair
+	return netPair, nil
+}
 
+func generateRandomPrivateMacAddr() (string, error) {
+	buf := make([]byte, 6)
+	_, err := cryptoRand.Read(buf)
+	if err != nil {
+		return "", err
+	}
+
+	// Set the local bit for local addresses
+	// Addresses in this range are local mac addresses:
+	// x2-xx-xx-xx-xx-xx , x6-xx-xx-xx-xx-xx , xA-xx-xx-xx-xx-xx , xE-xx-xx-xx-xx-xx
+	buf[0] = (buf[0] | 2) & 0xfe
+
+	hardAddr := net.HardwareAddr(buf)
+	return hardAddr.String(), nil
 }
 
 func networkInfoFromLink(handle *netlink.Handle, link netlink.Link) (NetworkInfo, error) {
