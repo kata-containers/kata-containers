@@ -937,10 +937,10 @@ func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus
 }
 
 // ExecutePCIVFIOMediatedDeviceAdd adds a VFIO mediated device to a QEMU instance using the device_add command.
-// This function can be used to hot plug VFIO mediated devices on PCI(E) bridges, unlike
+// This function can be used to hot plug VFIO mediated devices on PCI(E) bridges or root bus, unlike
 // ExecuteVFIODeviceAdd this function receives the bus and the device address on its parent bus.
-// bus is optional. devID is the id of the device to add. Must be valid QMP identifier. sysfsdev is the VFIO
-// mediated device.
+// devID is the id of the device to add. Must be valid QMP identifier. sysfsdev is the VFIO mediated device.
+// Both bus and addr are optional. If they are both set to be empty, the system will pick up an empty slot on root bus.
 func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsdev, addr, bus string) error {
 	args := map[string]interface{}{
 		"id":       devID,
