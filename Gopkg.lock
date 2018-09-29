@@ -123,7 +123,7 @@
   revision = "3520598351bb3500a49ae9563f5539666ae0a27c"
 
 [[projects]]
-  digest = "1:2b062c3645f86b71bdb0487b4d69746704695fc09158fe4638c213d38c6cc5dc"
+  digest = "1:034b5648db9f53a2b6f4f84925ee031cbeaba69daa10d95e74e8242707d7a5b0"
   name = "github.com/intel/govmm"
   packages = ["qemu"]
   pruneopts = "NUT"
@@ -428,6 +428,8 @@
     "golang.org/x/net/context",
     "golang.org/x/sys/unix",
     "google.golang.org/grpc",
+    "google.golang.org/grpc/codes",
+    "google.golang.org/grpc/status",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
