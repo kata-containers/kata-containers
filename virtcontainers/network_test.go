@@ -140,6 +140,18 @@ func TestVirtualEndpointTypeSet(t *testing.T) {
 	testEndpointTypeSet(t, "virtual", VirtualEndpointType)
 }
 
+func TestVhostUserEndpointTypeSet(t *testing.T) {
+	testEndpointTypeSet(t, "vhost-user", VhostUserEndpointType)
+}
+
+func TestBridgedMacvlanEndpointTypeSet(t *testing.T) {
+	testEndpointTypeSet(t, "macvlan", BridgedMacvlanEndpointType)
+}
+
+func TestMacvtapEndpointTypeSet(t *testing.T) {
+	testEndpointTypeSet(t, "macvtap", MacvtapEndpointType)
+}
+
 func TestEndpointTypeSetFailure(t *testing.T) {
 	var endpointType EndpointType
 
@@ -165,6 +177,21 @@ func TestPhysicalEndpointTypeString(t *testing.T) {
 func TestVirtualEndpointTypeString(t *testing.T) {
 	endpointType := VirtualEndpointType
 	testEndpointTypeString(t, &endpointType, string(VirtualEndpointType))
+}
+
+func TestVhostUserEndpointTypeString(t *testing.T) {
+	endpointType := VhostUserEndpointType
+	testEndpointTypeString(t, &endpointType, string(VhostUserEndpointType))
+}
+
+func TestBridgedMacvlanEndpointTypeString(t *testing.T) {
+	endpointType := BridgedMacvlanEndpointType
+	testEndpointTypeString(t, &endpointType, string(BridgedMacvlanEndpointType))
+}
+
+func TestMacvtapEndpointTypeString(t *testing.T) {
+	endpointType := MacvtapEndpointType
+	testEndpointTypeString(t, &endpointType, string(MacvtapEndpointType))
 }
 
 func TestIncorrectEndpointTypeString(t *testing.T) {
@@ -290,6 +317,62 @@ func TestCreateVirtualNetworkEndpointInvalidArgs(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected invalid endpoint for %v, got %v", d, result)
 		}
+	}
+}
+
+func TestCreateBridgedMacvlanEndpoint(t *testing.T) {
+	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
+
+	expected := &BridgedMacvlanEndpoint{
+		NetPair: NetworkInterfacePair{
+			ID:   "uniqueTestID-4",
+			Name: "br4_kata",
+			VirtIface: NetworkInterface{
+				Name:     "eth4",
+				HardAddr: macAddr.String(),
+			},
+			TAPIface: NetworkInterface{
+				Name: "tap4_kata",
+			},
+			NetInterworkingModel: DefaultNetInterworkingModel,
+		},
+		EndpointType: BridgedMacvlanEndpointType,
+	}
+
+	result, err := createBridgedMacvlanNetworkEndpoint(4, "", DefaultNetInterworkingModel)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// the resulting ID  will be random - so let's overwrite to test the rest of the flow
+	result.NetPair.ID = "uniqueTestID-4"
+
+	// the resulting mac address will be random - so lets overwrite it
+	result.NetPair.VirtIface.HardAddr = macAddr.String()
+
+	if reflect.DeepEqual(result, expected) == false {
+		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
+	}
+}
+
+func TestCreateMacvtapEndpoint(t *testing.T) {
+	netInfo := NetworkInfo{
+		Iface: NetlinkIface{
+			Type: "macvtap",
+		},
+	}
+	expected := &MacvtapEndpoint{
+		EndpointType:       MacvtapEndpointType,
+		EndpointProperties: netInfo,
+	}
+
+	result, err := createMacvtapNetworkEndpoint(netInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if reflect.DeepEqual(result, expected) == false {
+		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
 	}
 }
 
@@ -604,4 +687,22 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(resRoutes, expectedRoutes),
 		"Routes returned didn't match: got %+v, expecting %+v", resRoutes, expectedRoutes)
 
+}
+
+func TestGenerateRandomPrivateMacAdd(t *testing.T) {
+	assert := assert.New(t)
+
+	addr1, err := generateRandomPrivateMacAddr()
+	assert.NoError(err)
+
+	_, err = net.ParseMAC(addr1)
+	assert.NoError(err)
+
+	addr2, err := generateRandomPrivateMacAddr()
+	assert.NoError(err)
+
+	_, err = net.ParseMAC(addr2)
+	assert.NoError(err)
+
+	assert.NotEqual(addr1, addr2)
 }
