@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -913,7 +912,7 @@ func (q *qemu) hotplugDevice(devInfo interface{}, devType deviceType, op operati
 		return nil, q.hotplugVFIODevice(device, op)
 	case memoryDev:
 		memdev := devInfo.(*memoryDevice)
-		return nil, q.hotplugMemory(memdev, op)
+		return q.hotplugMemory(memdev, op)
 	case netDev:
 		device := devInfo.(*VirtualEndpoint)
 		return nil, q.hotplugNetDevice(device, op)
@@ -1047,24 +1046,27 @@ func (q *qemu) hotplugRemoveCPUs(amount uint32) (uint32, error) {
 	return amount, q.storage.storeHypervisorState(q.id, q.state)
 }
 
-func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) error {
+func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) (int, error) {
 	if memDev.sizeMB < 0 {
-		return fmt.Errorf("cannot hotplug negative size (%d) memory", memDev.sizeMB)
+		return 0, fmt.Errorf("cannot hotplug negative size (%d) memory", memDev.sizeMB)
 	}
 
 	// We do not support memory hot unplug.
 	if op == removeDevice {
-		return errors.New("cannot hot unplug memory device")
+		// Dont fail for now, until we fix it.
+		// We return that we only unplugged 0
+		q.Logger().Warn("hot-remove VM memory not supported")
+		return 0, nil
 	}
 
 	err := q.qmpSetup()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	maxMem, err := q.hostMemMB()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// calculate current memory
@@ -1072,13 +1074,13 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) error {
 
 	// Don't exceed the maximum amount of memory
 	if currentMemory+memDev.sizeMB > int(maxMem) {
-		return fmt.Errorf("Unable to hotplug %d MiB memory, the SB has %d MiB and the maximum amount is %d MiB",
+		return 0, fmt.Errorf("Unable to hotplug %d MiB memory, the SB has %d MiB and the maximum amount is %d MiB",
 			memDev.sizeMB, currentMemory, q.config.MemorySize)
 	}
 
 	memoryDevices, err := q.qmpMonitorCh.qmp.ExecQueryMemoryDevices(q.qmpMonitorCh.ctx)
 	if err != nil {
-		return fmt.Errorf("failed to query memory devices: %v", err)
+		return 0, fmt.Errorf("failed to query memory devices: %v", err)
 	}
 
 	if len(memoryDevices) != 0 {
@@ -1088,15 +1090,15 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) error {
 	return q.hotplugAddMemory(memDev)
 }
 
-func (q *qemu) hotplugAddMemory(memDev *memoryDevice) error {
+func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 	err := q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, "memory-backend-ram", "mem"+strconv.Itoa(memDev.slot), "", memDev.sizeMB)
 	if err != nil {
 		q.Logger().WithError(err).Error("hotplug memory")
-		return err
+		return 0, err
 	}
 
 	q.state.HotpluggedMemory += memDev.sizeMB
-	return q.storage.storeHypervisorState(q.id, q.state)
+	return memDev.sizeMB, q.storage.storeHypervisorState(q.id, q.state)
 }
 
 func (q *qemu) pauseSandbox() error {
