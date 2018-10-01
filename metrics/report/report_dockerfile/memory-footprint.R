@@ -82,9 +82,11 @@ if (length(resultdirs) == 2) {
 	# This is a touch hard wired - but we *know* we only have two
 	# datasets...
 	diff=c("diff")
-	val = ((as.double(rstats[1,2]) / as.double(rstats[2,2])) * 100) - 100
+	difference = (as.double(rstats[2,2]) - as.double(rstats[1,2]))
+	val = 100 * (difference/as.double(rstats[1,2]))
 	diff[2] = round(val, digits=2)
-	val = ((as.double(rstats[1,3]) / as.double(rstats[2,3])) * 100) - 100
+	difference = (as.double(rstats[2,3]) - as.double(rstats[1,3]))
+	val = 100 * (difference/as.double(rstats[1,3]))
 	diff[3] = round(val, digits=2)
 	rstats=rbind(rstats, diff)
 
