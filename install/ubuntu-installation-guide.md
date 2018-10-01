@@ -3,7 +3,7 @@
 > **Notes:**
 >
 > - Kata Containers packages are available for [Ubuntu\*](https://www.ubuntu.com)
->   versions **16.04** and **18.04** (currently `x86_64` only).
+>   versions **16.04** and **18.04**.
 >
 > - If you are installing on a system that already has Clear Containers or `runv` installed,
 >   first read [the upgrading document](../Upgrading.md).
@@ -21,8 +21,9 @@
    > redirects download URLs to `http`.
 
    ```bash
-   $ sudo sh -c "echo 'deb http://download.opensuse.org/repositories/home:/katacontainers:/release/xUbuntu_$(lsb_release -rs)/ /' > /etc/apt/sources.list.d/kata-containers.list"
-   $ curl -sL  http://download.opensuse.org/repositories/home:/katacontainers:/release/xUbuntu_$(lsb_release -rs)/Release.key | sudo apt-key add -
+   $ ARCH=$(arch)
+   $ sudo sh -c "echo 'deb http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/xUbuntu_$(lsb_release -rs)/ /' > /etc/apt/sources.list.d/kata-containers.list"
+   $ curl -sL  http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/xUbuntu_$(lsb_release -rs)/Release.key | sudo apt-key add -
    $ sudo -E apt-get update
    $ sudo -E apt-get -y install kata-runtime kata-proxy kata-shim
    ```
