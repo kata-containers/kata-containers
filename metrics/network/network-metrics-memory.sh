@@ -51,6 +51,9 @@ function main() {
 	# Check dependencies
 	cmds=("smem" "awk")
 
+	# Check no processes are left behind
+	check_processes
+
 	init_env
 	check_cmds "${cmds[@]}"
 	check_dockerfiles_images "$image" "$dockerfile"
@@ -119,6 +122,9 @@ EOF
 	metrics_json_save
 
 	clean_env
+
+	# Check no processes are left behind
+	check_processes
 }
 
 main "$@"

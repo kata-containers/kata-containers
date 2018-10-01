@@ -8,6 +8,7 @@ THIS_FILE=$(readlink -f ${BASH_SOURCE[0]})
 LIB_DIR=${THIS_FILE%/*}
 RESULT_DIR="${LIB_DIR}/../results"
 
+source ${LIB_DIR}/../../lib/common.bash
 source ${LIB_DIR}/json.bash
 
 # Set variables to reasonable defaults if unset or empty
@@ -23,30 +24,6 @@ KSM_SLEEP_FILE="${KSM_BASE}/sleep_millisecs"
 # Scan 1000 pages every 50ms - 20,000 pages/s
 KSM_AGGRESIVE_PAGES=1000
 KSM_AGGRESIVE_SLEEP=50
-
-extract_kata_env(){
-	local toml
-
-	toml="$(kata-runtime kata-env)"
-
-	# The runtime path itself, for kata-runtime, will be contained in the `kata-env`
-	# section. For other runtimes we do not know where the runtime Docker is using lives.
-	RUNTIME_CONFIG_PATH=$(awk '/^\[Runtime\]$/ {foundit=1} /^    Path =/ { if (foundit==1) {print $3; foundit=0} } ' <<< "$toml" | sed 's/"//g')
-	RUNTIME_VERSION=$(awk '/^  \[Runtime.Version\]$/ {foundit=1} /^    Semver =/ { if (foundit==1) {print $3; foundit=0} } ' <<< "$toml" | sed 's/"//g')
-	RUNTIME_COMMIT=$(awk '/^  \[Runtime.Version\]$/ {foundit=1} /^    Commit =/ { if (foundit==1) {print $3; foundit=0} } ' <<< "$toml" | sed 's/"//g')
-
-	SHIM_PATH=$(awk '/^\[Shim\]$/ {foundit=1} /^  Path =/ { if (foundit==1) {print $3; foundit=0} } ' <<< "$toml" | sed 's/"//g')
-	SHIM_VERSION=$(awk '/^\[Shim\]$/ {foundit=1} /^  Version =/ { if (foundit==1) {$1=$2=""; print $0; foundit=0} } ' <<< "$toml" | sed 's/"//g')
-
-	PROXY_PATH=$(awk '/^\[Proxy\]$/ {foundit=1} /^  Path =/ { if (foundit==1) {print $3; foundit=0} } ' <<< "$toml" | sed 's/"//g')
-	PROXY_VERSION=$(awk '/^\[Proxy\]$/ {foundit=1} /^  Version =/ { if (foundit==1) {print $5; foundit=0} } ' <<< "$toml" | sed 's/"//g')
-
-	HYPERVISOR_PATH=$(awk '/^\[Hypervisor\]$/ {foundit=1} /^  Path =/ { if (foundit==1) {print $3; foundit=0} } ' <<< "$toml" | sed 's/"//g')
-	HYPERVISOR_VERSION=$(awk '/^\[Hypervisor\]$/ {foundit=1} /^  Version =/ { if (foundit==1) {$1=$2=""; print $0; foundit=0} } ' <<< "$toml" | sed 's/"//g')
-
-	INITRD_PATH=$(awk '/^\[Initrd\]$/ {foundit=1} /^  Path =/ { if (foundit==1) {print $3; foundit=0} } ' <<< "$toml" | sed 's/"//g')
-
-}
 
 # If we fail for any reason, exit through here and we should log that to the correct
 # place and return the correct code to halt the run
@@ -195,65 +172,13 @@ init_env()
 	kill_processes_before_start
 }
 
-# Clean environment, this function will try to remove all
-# stopped/running containers, it is advisable to use this function
-# in the final of each metrics test.
-clean_env()
-{
-	containers_running=$(docker ps -q)
-
-	if [ ! -z "$containers_running" ]; then
-		# First stop all containers that are running
-		# Use kill, as the containers are generally benign, and most
-		# of the time our 'stop' request ends up doing a `kill` anyway
-		sudo $DOCKER_EXE kill $containers_running
-
-		# Remove all containers
-		sudo $DOCKER_EXE rm -f $(docker ps -qa)
-	fi
-}
-
 # This function checks if there are containers or
 # shim/proxy/hypervisor processes up, if found, they are
 # killed to start test with clean environment.
 kill_processes_before_start() {
 	DOCKER_PROCS=$(${DOCKER_EXE} ps -q)
 	[[ -n "${DOCKER_PROCS}" ]] && clean_env
-
-	result=$(check_processes "$HYPERVISOR_PATH")
-	if [[ $result -ne 0 ]]; then
-		warning "Found unexpected hypervisor [${HYPERVISOR_PATH}] processes present"
-		# Sometimes we race and the process has gone by the time we list
-		# it - so make a pgrep fail non-fatal
-		pgrep -a -f "$HYPERVISOR_PATH" || true
-		sudo killall -9 "${HYPERVISOR_PATH##*/}" || true
-	fi
-
-	result=$(check_processes "$SHIM_PATH")
-	if [[ $result -ne 0 ]]; then
-		warning "Found unexpected shim [${SHIM_PATH}] processes present"
-		pgrep -a -f "$SHIM_PATH" || true
-		sudo killall -9 "${SHIM_PATH##*/}" || true
-	fi
-
-	result=$(check_processes "$PROXY_PATH")
-	if [[ $result -ne 0 ]]; then
-		warning "Found unexpected proxy [${PROXY_PATH}] processes present"
-		pgrep -a -f "$PROXY_PATH" || true
-		sudo killall -9 "${PROXY_PATH##*/}" || true
-	fi
-}
-
-# Check if process $1 is running or not
-# Normally used to look for errant processes, and hence prints
-# a warning
-check_processes() {
-	general_processes=( ${PROXY_PATH} ${HYPERVISOR_PATH} ${SHIM_PATH} )
-	for i in "${general_processes[@]}"; do
-		if pgrep -f "$i"; then
-			die "Found unexpected ${i} present"
-		fi
-	done
+	check_processes
 }
 
 # Generate a random name - generally used when creating containers, but can

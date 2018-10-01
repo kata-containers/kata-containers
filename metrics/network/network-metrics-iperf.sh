@@ -44,6 +44,9 @@ EOF
 function main() {
 	cmds=("awk")
 	check_cmds "${cmds[@]}"
+
+	# Check no processes are left behind
+	check_processes
 	check_dockerfiles_images "$image" "$dockerfile"
 	init_env
 
@@ -92,5 +95,8 @@ EOF
 	metrics_json_end_array "Results"
 	metrics_json_save
 	clean_env
+
+	# Check no processes are left behind
+	check_processes
 }
 main "$@"

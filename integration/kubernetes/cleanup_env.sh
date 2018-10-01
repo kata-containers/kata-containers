@@ -6,7 +6,7 @@
 #
 
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
-source "${SCRIPT_PATH}/../../metrics/lib/common.bash"
+source "${SCRIPT_PATH}/../../lib/common.bash"
 
 export KUBECONFIG=/etc/kubernetes/admin.conf
 sudo -E kubeadm reset --cri-socket=/var/run/crio/crio.sock

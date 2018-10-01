@@ -37,6 +37,9 @@ EOF
 }
 
 function main() {
+	# Check no processes are left behind
+	check_processes
+
 	# Initialize/clean environment
 	init_env
 	check_images "$image"
@@ -75,6 +78,9 @@ EOF
 	metrics_json_end_array "Results"
 	metrics_json_save
 	clean_env
+
+	# Check no processes are left behind
+	check_processes
 }
 
 main "$@"
