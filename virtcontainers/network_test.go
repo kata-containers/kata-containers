@@ -706,3 +706,96 @@ func TestGenerateRandomPrivateMacAdd(t *testing.T) {
 
 	assert.NotEqual(addr1, addr2)
 }
+
+func TestCreateGetBridgeLink(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	assert := assert.New(t)
+
+	netHandle, err := netlink.NewHandle()
+	defer netHandle.Delete()
+
+	assert.NoError(err)
+
+	brName := "testbr0"
+	brLink, _, err := createLink(netHandle, brName, &netlink.Bridge{}, 1)
+	assert.NoError(err)
+	assert.NotNil(brLink)
+
+	brLink, err = getLinkByName(netHandle, brName, &netlink.Bridge{})
+	assert.NoError(err)
+
+	err = netHandle.LinkDel(brLink)
+	assert.NoError(err)
+}
+
+func TestCreateGetTunTapLink(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	assert := assert.New(t)
+
+	netHandle, err := netlink.NewHandle()
+	defer netHandle.Delete()
+
+	assert.NoError(err)
+
+	tapName := "testtap0"
+	tapLink, fds, err := createLink(netHandle, tapName, &netlink.Tuntap{}, 1)
+	assert.NoError(err)
+	assert.NotNil(tapLink)
+	assert.NotZero(len(fds))
+
+	tapLink, err = getLinkByName(netHandle, tapName, &netlink.Tuntap{})
+	assert.NoError(err)
+
+	err = netHandle.LinkDel(tapLink)
+	assert.NoError(err)
+}
+
+func TestCreateMacVtap(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	assert := assert.New(t)
+
+	netHandle, err := netlink.NewHandle()
+	defer netHandle.Delete()
+
+	assert.NoError(err)
+
+	brName := "testbr0"
+	brLink, _, err := createLink(netHandle, brName, &netlink.Bridge{}, 1)
+	assert.NoError(err)
+
+	attrs := brLink.Attrs()
+
+	mcLink := &netlink.Macvtap{
+		Macvlan: netlink.Macvlan{
+			LinkAttrs: netlink.LinkAttrs{
+				TxQLen:      attrs.TxQLen,
+				ParentIndex: attrs.Index,
+			},
+		},
+	}
+
+	macvtapName := "testmc0"
+	_, err = createMacVtap(netHandle, macvtapName, mcLink, 1)
+	assert.NoError(err)
+
+	macvtapLink, err := getLinkByName(netHandle, macvtapName, &netlink.Macvtap{})
+	assert.NoError(err)
+
+	err = netHandle.LinkDel(macvtapLink)
+	assert.NoError(err)
+
+	brLink, err = getLinkByName(netHandle, brName, &netlink.Bridge{})
+	assert.NoError(err)
+
+	err = netHandle.LinkDel(brLink)
+	assert.NoError(err)
+}
