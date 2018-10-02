@@ -79,7 +79,7 @@ BuildKernel() {
 
     %if 0%{?fedora}
     #Fedora uses gcc 8, build is failing due to warnings.
-    export CFLAGS="-Wno-error=restrict"	 
+    export CFLAGS="-Wno-error=restrict"
     export EXTRA_CFLAGS="-Wno-format-truncation -Wno-cast-function-type -Wno-error=restrict -Wno-error"
     %endif
 
