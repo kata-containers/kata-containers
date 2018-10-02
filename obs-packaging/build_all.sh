@@ -43,10 +43,6 @@ main() {
 
 	pushd "${script_dir}"
 	for p in "${OBS_PKGS_PROJECTS[@]}"; do
-		if [[ "$GO_ARCH" != "amd64" && "$p" == "qemu-lite" ]]; then
-			echo "Skipping packaging qemu-lite as its only for amd64 arch"
-			continue
-		fi
 		pushd "$p" >>/dev/null
 		update_cmd="./update.sh"
 		if [ -n "${PUSH}" ]; then
