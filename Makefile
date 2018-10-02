@@ -90,6 +90,12 @@ pentest:
 vm-factory:
 	bash -f integration/vm_factory/vm_templating_test.sh
 
+
+network:
+	bash -f .ci/install_bats.sh
+	cd integration/network/macvlan && \
+	bats macvlan_driver.bats
+
 test: ${UNION}
 
 check: checkcommits log-parser
@@ -109,5 +115,6 @@ check: checkcommits log-parser
 	openshift \
 	pentest \
 	swarm \
+	network \
 	test \
 	vm-factory
