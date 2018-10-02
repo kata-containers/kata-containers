@@ -3,21 +3,54 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-MK_DIR :=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+MK_DIR         := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+TEST_RUNNER    := $(MK_DIR)/tests/test_images.sh
+ROOTFS_BUILDER := $(MK_DIR)/rootfs-builder/rootfs.sh
+INITRD_BUILDER := $(MK_DIR)/initrd-builder/initrd_builder.sh
+IMAGE_BUILDER  := $(MK_DIR)/image-builder/image_builder.sh
 
-DISTRO ?= centos
-DISTRO_ROOTFS := $(PWD)/$(DISTRO)_rootfs
-DISTRO_ROOTFS_MARKER := .$(shell basename $(DISTRO_ROOTFS)).done
-IMAGE := kata-containers.img
-INITRD_IMAGE := kata-containers-initrd.img
-IMG_SIZE=500
-AGENT_INIT ?= no
+IMG_SIZE               = 500
+AGENT_INIT            ?= no
+DISTRO                ?= centos
+ROOTFS_BUILD_DEST     := $(PWD)
+IMAGES_BUILD_DEST     := $(PWD)
+DISTRO_ROOTFS         := $(ROOTFS_BUILD_DEST)/$(DISTRO)_rootfs
+DISTRO_ROOTFS_MARKER  := $(ROOTFS_BUILD_DEST)/.$(DISTRO)_rootfs.done
+DISTRO_IMAGE          := $(IMAGES_BUILD_DEST)/kata-containers.img
+DISTRO_INITRD         := $(IMAGES_BUILD_DEST)/kata-containers-initrd.img
 
-VERSION_FILE := ./VERSION
-VERSION := $(shell grep -v ^\# $(VERSION_FILE))
-COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
-COMMIT := $(if $(shell git status --porcelain --untracked-files=no),${COMMIT_NO}-dirty,${COMMIT_NO})
+VERSION_FILE   := ./VERSION
+VERSION        := $(shell grep -v ^\# $(VERSION_FILE))
+COMMIT_NO      := $(shell git rev-parse HEAD 2> /dev/null || true)
+COMMIT         := $(if $(shell git status --porcelain --untracked-files=no),${COMMIT_NO}-dirty,${COMMIT_NO})
 VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
+
+################################################################################
+
+rootfs-%: $(ROOTFS_BUILD_DEST)/.%_rootfs.done
+	@ # DONT remove. This is not cancellation rule.
+
+.PRECIOUS: $(ROOTFS_BUILD_DEST)/.%_rootfs.done
+$(ROOTFS_BUILD_DEST)/.%_rootfs.done:: rootfs-builder/%
+	@echo Creating rootfs for "$*"
+	$(ROOTFS_BUILDER) -o $(VERSION_COMMIT) -r $(ROOTFS_BUILD_DEST)/$*_rootfs $*
+	touch $@
+
+image-%: $(IMAGES_BUILD_DEST)/kata-containers-image-%.img
+	@ # DONT remove. This is not cancellation rule.
+
+.PRECIOUS: $(IMAGES_BUILD_DEST)/kata-containers-image-%.img
+$(IMAGES_BUILD_DEST)/kata-containers-image-%.img: rootfs-%
+	@echo Creating image based on $^
+	$(IMAGE_BUILDER) -s $(IMG_SIZE) -o $@ $(ROOTFS_BUILD_DEST)/$*_rootfs
+
+initrd-%: $(IMAGES_BUILD_DEST)/kata-containers-initrd-%.img
+	@ # DONT remove. This is not cancellation rule.
+
+.PRECIOUS: $(IMAGES_BUILD_DEST)/kata-containers-initrd-%.img
+$(IMAGES_BUILD_DEST)/kata-containers-initrd-%.img: rootfs-%
+	@echo Creating initrd image for $*
+	$(INITRD_BUILDER) -o $@ $(ROOTFS_BUILD_DEST)/$*_rootfs
 
 .PHONY: all
 all: image initrd
@@ -25,37 +58,32 @@ all: image initrd
 .PHONY: rootfs
 rootfs: $(DISTRO_ROOTFS_MARKER)
 
-$(DISTRO_ROOTFS_MARKER):
-	@echo Creating rootfs based on "$(DISTRO)"
-	"$(MK_DIR)/rootfs-builder/rootfs.sh" -o $(VERSION_COMMIT) -r $(DISTRO_ROOTFS) $(DISTRO)
-	touch $@
-
 .PHONY: image
-image: $(IMAGE)
+image: $(DISTRO_IMAGE)
 
-$(IMAGE): rootfs
+$(DISTRO_IMAGE): $(DISTRO_ROOTFS_MARKER)
 	@echo Creating image based on "$(DISTRO_ROOTFS)"
-	"$(MK_DIR)/image-builder/image_builder.sh" -s "$(IMG_SIZE)" "$(DISTRO_ROOTFS)"
+	$(IMAGE_BUILDER) -s "$(IMG_SIZE)" "$(DISTRO_ROOTFS)"
 
 .PHONY: initrd
-initrd: $(INITRD_IMAGE)
+initrd: $(DISTRO_INITRD)
 
-$(INITRD_IMAGE): rootfs
+$(DISTRO_INITRD): $(DISTRO_ROOTFS_MARKER)
 	@echo Creating initrd image based on "$(DISTRO_ROOTFS)"
-	"$(MK_DIR)/initrd-builder/initrd_builder.sh" "$(DISTRO_ROOTFS)"
+	$(INITRD_BUILDER) "$(DISTRO_ROOTFS)"
 
 .PHONY: test
 test:
-	"$(MK_DIR)/tests/test_images.sh" "$(DISTRO)"
+	$(TEST_RUNNER) "$(DISTRO)"
 
 .PHONY: test-image-only
 test-image-only:
-	"$(MK_DIR)/tests/test_images.sh" --test-images-only "$(DISTRO)"
+	$(TEST_RUNNER) --test-images-only "$(DISTRO)"
 
 .PHONY: test-initrd-only
 test-initrd-only:
-	"$(MK_DIR)/tests/test_images.sh" --test-initrds-only "$(DISTRO)"
+	$(TEST_RUNNER) --test-initrds-only "$(DISTRO)"
 
 .PHONY: clean
 clean:
-	rm -rf $(DISTRO_ROOTFS_MARKER) $(DISTRO_ROOTFS) $(IMAGE) $(INITRD_IMAGE)
+	rm -rf $(DISTRO_ROOTFS_MARKER) $(DISTRO_ROOTFS) $(DISTRO_IMAGE) $(DISTRO_INITRD)
