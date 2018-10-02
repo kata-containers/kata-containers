@@ -102,7 +102,9 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 func (q *qemuAmd64) capabilities() capabilities {
 	var caps capabilities
 
-	if q.machineType == QemuPC || q.machineType == QemuQ35 {
+	if q.machineType == QemuPC ||
+		q.machineType == QemuQ35 ||
+		q.machineType == QemuVirt {
 		caps.setBlockDeviceHotplugSupport()
 	}
 
