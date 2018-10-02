@@ -62,7 +62,7 @@ read_maintainers(){
 	while read -r p; do
 		[[ "$p" != "#"* ]] || continue
 		maintainers+=("${p}::maintainer")
-		echo "Adding mantainer: ${p}"
+		echo "Adding maintainer: ${p}"
 	done < "${script_dir}/maintainers"
 }
 
@@ -86,8 +86,8 @@ create_repos_xml_nodes() {
 	done
 }
 
-create_mantainers_xml_nodes() {
-	for entry in "${mantainers[@]}"; do
+create_maintainers_xml_nodes() {
+	for entry in "${maintainers[@]}"; do
 		[ -z "$entry" ] && die "found empty entry"
 		local userid=$(echo "$entry" | awk -F"::" '{print $1;}')
 		local role=$(echo "$entry" | awk -F"::" '{print $2;}')
@@ -109,7 +109,7 @@ create_meta_xml() {
 <project name="${project}">
   <title>Branch project for Kata Containers branch ${branch}</title>
   <description>This project is the Kata Containers branch ${branch}</description>
-$(create_mantainers_xml_nodes)
+$(create_maintainers_xml_nodes)
 $(create_repos_xml_nodes)
 </project>
 EOT
