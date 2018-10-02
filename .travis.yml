@@ -13,10 +13,6 @@ os:
 
 language: bash
 
-env:
-  - AGENT_INIT=no
-  - AGENT_INIT=yes
-
 services:
   - docker
 
