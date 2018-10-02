@@ -9,7 +9,7 @@
 OBS_PKGS_PROJECTS=(
 	qemu-lite
 	qemu-vanilla
-	kernel
+	linux-container
 	kata-containers-image
 	proxy
 	shim

@@ -42,7 +42,6 @@ ADD configure-hypervisor.sh /root/configure-hypervisor.sh
 RUN PREFIX=/opt/kata /root/configure-hypervisor.sh -s kata-qemu | xargs ./configure \
        --with-pkgversion=kata-static
 
-RUN make clean
 RUN make -j$(nproc)
 RUN make install DESTDIR=/tmp/qemu-static
 RUN cd /tmp/qemu-static && tar -czvf kata-qemu-static.tar.gz *
