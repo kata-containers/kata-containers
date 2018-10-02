@@ -189,7 +189,10 @@ languages:
     issue: "https://github.com/golang/go/issues/20676"
     version: "1.10.4"
     meta:
-      newest-version: "1.11"
+      description: |
+        'newest-version' is the latest version known to work when
+        building Kata
+      newest-version: "1.11.1"
 
 specs:
   description: "Details of important specifications"
