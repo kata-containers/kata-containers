@@ -7,7 +7,7 @@
 
 suppressMessages(suppressWarnings(library(tidyr)))	# for gather().
 library(tibble)
-library(plyr)						# rbind.fill
+suppressMessages(suppressWarnings(library(plyr)))	# rbind.fill
 							# So we can plot multiple graphs
 library(gridExtra)					# together.
 suppressMessages(suppressWarnings(library(ggpubr)))	# for ggtexttable.

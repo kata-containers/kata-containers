@@ -13,17 +13,17 @@ suppressMessages(library(jsonlite))			# to load the data
 suppressMessages(suppressWarnings(library(tidyr)))	# for gather
 library(tibble)
 
-resultsfiles=c(
-	"fio-randwrite-128.json",
-	"fio-randwrite-256.json",
-	"fio-randwrite-512.json",
-	"fio-randwrite-1k.json",
-	"fio-randwrite-2k.json",
-	"fio-randwrite-4k.json",
-	"fio-randwrite-8k.json",
-	"fio-randwrite-16k.json",
-	"fio-randwrite-32k.json",
-	"fio-randwrite-64k.json"
+testnames=c(
+	"fio-randwrite-128",
+	"fio-randwrite-256",
+	"fio-randwrite-512",
+	"fio-randwrite-1k",
+	"fio-randwrite-2k",
+	"fio-randwrite-4k",
+	"fio-randwrite-8k",
+	"fio-randwrite-16k",
+	"fio-randwrite-32k",
+	"fio-randwrite-64k"
 	)
 
 data2=c()
@@ -49,8 +49,8 @@ for (currentdir in resultdirs) {
 	# Derive the name from the test result dirname
 	datasetname=basename(currentdir)
 
-	for (resultsfile in resultsfiles) {
-		fname=paste(inputdir, currentdir, resultsfile, sep="")
+	for (testname in testnames) {
+		fname=paste(inputdir, currentdir, testname, '.json', sep="")
 		if ( !file.exists(fname)) {
 			#warning(paste("Skipping non-existent file: ", fname))
 			next
@@ -58,6 +58,8 @@ for (currentdir in resultdirs) {
 
 		# Import the data
 		fdata=fromJSON(fname)
+		# De-nest the test specific named data
+		fdata=fdata[[testname]]
 
 		blocksize=fdata$Raw$'global options'$bs
 

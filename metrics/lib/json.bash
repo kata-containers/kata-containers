@@ -32,10 +32,12 @@ timestamp_ms() {
 # Intialise the json subsystem
 metrics_json_init() {
 
+
 	# Clear out any previous results
 	json_result_array=()
 
-	json_filename=${RESULT_DIR}/$(echo ${TEST_NAME} | sed 's/[ \/]/-/g').json
+	despaced_name="$(echo ${TEST_NAME} | sed 's/[ \/]/-/g')"
+	json_filename="${RESULT_DIR}/${despaced_name}.json"
 
 	local json="$(cat << EOF
 	"@timestamp" : $(timestamp_ms)
@@ -108,10 +110,13 @@ EOF
 			warning "Unrecognised runtime ${RUNTIME}"
 			;;
 	esac
+
+	metrics_json_end_of_system
 }
 
 # Save out the final JSON file
 metrics_json_save() {
+
 	if [ ! -d ${RESULT_DIR} ];then
 		mkdir -p ${RESULT_DIR}
 	fi
@@ -120,12 +125,18 @@ metrics_json_save() {
 	local json="$(cat << EOF
 {
 $(for index in $(seq 0 $maxelem); do
+	# After the standard system data, we then place all the test generated
+	# data into its own unique named subsection.
+	if (( index == system_index )); then
+		echo "\"${despaced_name}\" : {"
+	fi
 	if (( index != maxelem )); then
 		echo "${json_result_array[$index]},"
 	else
 		echo "${json_result_array[$index]}"
 	fi
 done)
+	}
 }
 EOF
 )"
@@ -137,6 +148,10 @@ EOF
 		echo "Posting results to [$JSON_URL]"
 		curl -XPOST -H"Content-Type: application/json" "$JSON_URL" -d "@$json_filename"
 	fi
+}
+
+metrics_json_end_of_system() {
+	system_index=$(( ${#json_result_array[@]}))
 }
 
 # Add a top level (complete) JSON fragment to the data

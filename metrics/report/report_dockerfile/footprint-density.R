@@ -12,10 +12,10 @@ library(gridExtra)					# together.
 suppressMessages(suppressWarnings(library(ggpubr)))	# for ggtexttable.
 suppressMessages(library(jsonlite))			# to load the data.
 
-resultsfiles=c(
-	paste("footprint-busybox", test_name_extra, ".json", sep=""),
-	paste("footprint-mysql", test_name_extra, ".json", sep=""),
-	paste("footprint-elasticsearch", test_name_extra, ".json", sep="")
+testnames=c(
+	paste("footprint-busybox", test_name_extra, sep=""),
+	paste("footprint-mysql", test_name_extra, sep=""),
+	paste("footprint-elasticsearch", test_name_extra, sep="")
 )
 
 data=c()
@@ -27,8 +27,8 @@ rstats_names=c()
 for (currentdir in resultdirs) {
 	count=1
 	dirstats=c()
-	for (resultsfile in resultsfiles) {
-		fname=paste(inputdir, currentdir, resultsfile, sep="")
+	for (testname in testnames) {
+		fname=paste(inputdir, currentdir, testname, '.json', sep="")
 		if ( !file.exists(fname)) {
 			warning(paste("Skipping non-existent file: ", fname))
 			next
@@ -39,6 +39,8 @@ for (currentdir in resultdirs) {
 
 		# Import the data
 		fdata=fromJSON(fname)
+		# De-nest the test name specific data
+		fdata=fdata[[testname]]
 
 		payload=fdata$Config$payload
 		testname=paste(datasetname, payload)

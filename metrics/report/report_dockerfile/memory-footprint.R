@@ -11,9 +11,9 @@ library(gridExtra)					# together.
 suppressMessages(suppressWarnings(library(ggpubr)))	# for ggtexttable.
 suppressMessages(library(jsonlite))			# to load the data.
 
-resultsfiles=c(
-	"memory-footprint.json",
-	"memory-footprint-ksm.json"
+testnames=c(
+	"memory-footprint",
+	"memory-footprint-ksm"
 )
 
 resultsfilesshort=c(
@@ -30,9 +30,9 @@ for (currentdir in resultdirs) {
 	count=1
 	dirstats=c()
 	# For the two different types of memory footprint measures
-	for (resultsfile in resultsfiles) {
+	for (testname in testnames) {
 		# R seems not to like double path slashes '//' ?
-		fname=paste(inputdir, currentdir, resultsfile, sep="")
+		fname=paste(inputdir, currentdir, testname, '.json', sep="")
 		if ( !file.exists(fname)) {
 			warning(paste("Skipping non-existent file: ", fname))
 			next
@@ -44,6 +44,7 @@ for (currentdir in resultdirs) {
 
 		# Import the data
 		fdata=fromJSON(fname)
+		fdata=fdata[[testname]]
 		# Copy the average result into a shorter, more accesible name
 		fdata$Result=fdata$Results$average$Result
 		fdata$variant=rep(datasetvariant, length(fdata$Result) )
