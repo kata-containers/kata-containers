@@ -37,6 +37,10 @@ It should be pasted directly into a github issue and each item checked off as it
    - [ ] [shim][shim]
    - [ ] [throttler][throttler]
 
+- [ ] Generate snap packages based on `HEAD`
+   - [ ] Push snap packages via snapcraft tool
+   - [ ] Pubish snap packages in the snapcraft store
+
 - [ ] Installation tests (must be done for major releases):
   - [ ] Centos
   - [ ] Fedora
