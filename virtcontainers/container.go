@@ -1301,9 +1301,13 @@ func (c *Container) memHotplugValid(mem uint32) (uint32, error) {
 	return uint32(math.Ceil(float64(mem)/float64(memorySectionSizeMB))) * memorySectionSizeMB, nil
 }
 
-func (c *Container) updateMemoryResources(oldResources, newResources ContainerResources) error {
+func (c *Container) updateMemoryResources(oldResources ContainerResources, newResources *ContainerResources) error {
 	oldMemMB := oldResources.MemMB
 	newMemMB := newResources.MemMB
+	c.Logger().WithFields(logrus.Fields{
+		"old-mem": fmt.Sprintf("%dMB", oldMemMB),
+		"new-mem": fmt.Sprintf("%dMB", newMemMB),
+	}).Debug("Request update memory")
 
 	if oldMemMB == newMemMB {
 		c.Logger().WithFields(logrus.Fields{
@@ -1325,16 +1329,37 @@ func (c *Container) updateMemoryResources(oldResources, newResources ContainerRe
 		addMemDevice := &memoryDevice{
 			sizeMB: int(memHotplugMB),
 		}
-		_, err = c.sandbox.hypervisor.hotplugAddDevice(addMemDevice, memoryDev)
+		data, err := c.sandbox.hypervisor.hotplugAddDevice(addMemDevice, memoryDev)
 		if err != nil {
 			return err
 		}
-		newResources.MemMB = newMemMB
+		memoryAdded, ok := data.(int)
+		if !ok {
+			return fmt.Errorf("Could not get the memory added, got %+v", data)
+		}
+		newResources.MemMB = oldMemMB + uint32(memoryAdded)
 		if err := c.sandbox.agent.onlineCPUMem(0, false); err != nil {
 			return err
 		}
 	}
-	// hot remove memory unsupported
+	if oldMemMB > newMemMB {
+		// Try to remove a memory device with the difference
+		// from new memory and old memory
+		removeMem := &memoryDevice{
+			sizeMB: int(oldMemMB - newMemMB),
+		}
+
+		data, err := c.sandbox.hypervisor.hotplugRemoveDevice(removeMem, memoryDev)
+		if err != nil {
+			return err
+		}
+		memoryRemoved, ok := data.(int)
+		if !ok {
+			return fmt.Errorf("Could not get the memory added, got %+v", data)
+		}
+		newResources.MemMB = oldMemMB - uint32(memoryRemoved)
+		newResources.MemMB = oldResources.MemMB
+	}
 	return nil
 }
 
@@ -1358,7 +1383,7 @@ func (c *Container) updateResources(oldResources, newResources ContainerResource
 
 	// Memory is not updated if memory limit not set
 	if newResources.MemMB != 0 {
-		if err := c.updateMemoryResources(oldResources, newResources); err != nil {
+		if err := c.updateMemoryResources(oldResources, &newResources); err != nil {
 			return err
 		}
 

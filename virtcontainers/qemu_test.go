@@ -348,8 +348,10 @@ func TestHotplugRemoveMemory(t *testing.T) {
 	assert := assert.New(t)
 
 	qemuConfig := newQemuConfig()
+	fs := &filesystem{}
 	q := &qemu{
-		config: qemuConfig,
+		config:  qemuConfig,
+		storage: fs,
 	}
 
 	_, err := q.hotplugRemoveDevice(&memoryDevice{0, 128}, memoryDev)
@@ -360,8 +362,10 @@ func TestHotplugUnsupportedDeviceType(t *testing.T) {
 	assert := assert.New(t)
 
 	qemuConfig := newQemuConfig()
+	fs := &filesystem{}
 	q := &qemu{
-		config: qemuConfig,
+		config:  qemuConfig,
+		storage: fs,
 	}
 
 	_, err := q.hotplugAddDevice(&memoryDevice{0, 128}, fsDev)

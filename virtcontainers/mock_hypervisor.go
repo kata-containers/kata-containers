@@ -64,6 +64,9 @@ func (m *mockHypervisor) hotplugAddDevice(devInfo interface{}, devType deviceTyp
 	switch devType {
 	case cpuDev:
 		return m.vCPUs, nil
+	case memoryDev:
+		memdev := devInfo.(*memoryDevice)
+		return memdev.sizeMB, nil
 	}
 	return nil, nil
 }
