@@ -140,6 +140,18 @@ func TestVirtualEndpointTypeSet(t *testing.T) {
 	testEndpointTypeSet(t, "virtual", VirtualEndpointType)
 }
 
+func TestVhostUserEndpointTypeSet(t *testing.T) {
+	testEndpointTypeSet(t, "vhost-user", VhostUserEndpointType)
+}
+
+func TestBridgedMacvlanEndpointTypeSet(t *testing.T) {
+	testEndpointTypeSet(t, "macvlan", BridgedMacvlanEndpointType)
+}
+
+func TestMacvtapEndpointTypeSet(t *testing.T) {
+	testEndpointTypeSet(t, "macvtap", MacvtapEndpointType)
+}
+
 func TestEndpointTypeSetFailure(t *testing.T) {
 	var endpointType EndpointType
 
@@ -165,6 +177,21 @@ func TestPhysicalEndpointTypeString(t *testing.T) {
 func TestVirtualEndpointTypeString(t *testing.T) {
 	endpointType := VirtualEndpointType
 	testEndpointTypeString(t, &endpointType, string(VirtualEndpointType))
+}
+
+func TestVhostUserEndpointTypeString(t *testing.T) {
+	endpointType := VhostUserEndpointType
+	testEndpointTypeString(t, &endpointType, string(VhostUserEndpointType))
+}
+
+func TestBridgedMacvlanEndpointTypeString(t *testing.T) {
+	endpointType := BridgedMacvlanEndpointType
+	testEndpointTypeString(t, &endpointType, string(BridgedMacvlanEndpointType))
+}
+
+func TestMacvtapEndpointTypeString(t *testing.T) {
+	endpointType := MacvtapEndpointType
+	testEndpointTypeString(t, &endpointType, string(MacvtapEndpointType))
 }
 
 func TestIncorrectEndpointTypeString(t *testing.T) {
@@ -230,8 +257,11 @@ func TestCreateVirtualNetworkEndpoint(t *testing.T) {
 	// the resulting ID  will be random - so let's overwrite to test the rest of the flow
 	result.NetPair.ID = "uniqueTestID-4"
 
+	// the resulting mac address will be random - so lets overwrite it
+	result.NetPair.VirtIface.HardAddr = macAddr.String()
+
 	if reflect.DeepEqual(result, expected) == false {
-		t.Fatal()
+		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
 	}
 }
 
@@ -262,8 +292,11 @@ func TestCreateVirtualNetworkEndpointChooseIfaceName(t *testing.T) {
 	// the resulting ID will be random - so let's overwrite to test the rest of the flow
 	result.NetPair.ID = "uniqueTestID-4"
 
+	// the resulting mac address will be random - so lets overwrite it
+	result.NetPair.VirtIface.HardAddr = macAddr.String()
+
 	if reflect.DeepEqual(result, expected) == false {
-		t.Fatal()
+		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
 	}
 }
 
@@ -284,6 +317,62 @@ func TestCreateVirtualNetworkEndpointInvalidArgs(t *testing.T) {
 		if err == nil {
 			t.Fatalf("expected invalid endpoint for %v, got %v", d, result)
 		}
+	}
+}
+
+func TestCreateBridgedMacvlanEndpoint(t *testing.T) {
+	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
+
+	expected := &BridgedMacvlanEndpoint{
+		NetPair: NetworkInterfacePair{
+			ID:   "uniqueTestID-4",
+			Name: "br4_kata",
+			VirtIface: NetworkInterface{
+				Name:     "eth4",
+				HardAddr: macAddr.String(),
+			},
+			TAPIface: NetworkInterface{
+				Name: "tap4_kata",
+			},
+			NetInterworkingModel: DefaultNetInterworkingModel,
+		},
+		EndpointType: BridgedMacvlanEndpointType,
+	}
+
+	result, err := createBridgedMacvlanNetworkEndpoint(4, "", DefaultNetInterworkingModel)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// the resulting ID  will be random - so let's overwrite to test the rest of the flow
+	result.NetPair.ID = "uniqueTestID-4"
+
+	// the resulting mac address will be random - so lets overwrite it
+	result.NetPair.VirtIface.HardAddr = macAddr.String()
+
+	if reflect.DeepEqual(result, expected) == false {
+		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
+	}
+}
+
+func TestCreateMacvtapEndpoint(t *testing.T) {
+	netInfo := NetworkInfo{
+		Iface: NetlinkIface{
+			Type: "macvtap",
+		},
+	}
+	expected := &MacvtapEndpoint{
+		EndpointType:       MacvtapEndpointType,
+		EndpointProperties: netInfo,
+	}
+
+	result, err := createMacvtapNetworkEndpoint(netInfo)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if reflect.DeepEqual(result, expected) == false {
+		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
 	}
 }
 
@@ -598,4 +687,115 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(resRoutes, expectedRoutes),
 		"Routes returned didn't match: got %+v, expecting %+v", resRoutes, expectedRoutes)
 
+}
+
+func TestGenerateRandomPrivateMacAdd(t *testing.T) {
+	assert := assert.New(t)
+
+	addr1, err := generateRandomPrivateMacAddr()
+	assert.NoError(err)
+
+	_, err = net.ParseMAC(addr1)
+	assert.NoError(err)
+
+	addr2, err := generateRandomPrivateMacAddr()
+	assert.NoError(err)
+
+	_, err = net.ParseMAC(addr2)
+	assert.NoError(err)
+
+	assert.NotEqual(addr1, addr2)
+}
+
+func TestCreateGetBridgeLink(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	assert := assert.New(t)
+
+	netHandle, err := netlink.NewHandle()
+	defer netHandle.Delete()
+
+	assert.NoError(err)
+
+	brName := "testbr0"
+	brLink, _, err := createLink(netHandle, brName, &netlink.Bridge{}, 1)
+	assert.NoError(err)
+	assert.NotNil(brLink)
+
+	brLink, err = getLinkByName(netHandle, brName, &netlink.Bridge{})
+	assert.NoError(err)
+
+	err = netHandle.LinkDel(brLink)
+	assert.NoError(err)
+}
+
+func TestCreateGetTunTapLink(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	assert := assert.New(t)
+
+	netHandle, err := netlink.NewHandle()
+	defer netHandle.Delete()
+
+	assert.NoError(err)
+
+	tapName := "testtap0"
+	tapLink, fds, err := createLink(netHandle, tapName, &netlink.Tuntap{}, 1)
+	assert.NoError(err)
+	assert.NotNil(tapLink)
+	assert.NotZero(len(fds))
+
+	tapLink, err = getLinkByName(netHandle, tapName, &netlink.Tuntap{})
+	assert.NoError(err)
+
+	err = netHandle.LinkDel(tapLink)
+	assert.NoError(err)
+}
+
+func TestCreateMacVtap(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	assert := assert.New(t)
+
+	netHandle, err := netlink.NewHandle()
+	defer netHandle.Delete()
+
+	assert.NoError(err)
+
+	brName := "testbr0"
+	brLink, _, err := createLink(netHandle, brName, &netlink.Bridge{}, 1)
+	assert.NoError(err)
+
+	attrs := brLink.Attrs()
+
+	mcLink := &netlink.Macvtap{
+		Macvlan: netlink.Macvlan{
+			LinkAttrs: netlink.LinkAttrs{
+				TxQLen:      attrs.TxQLen,
+				ParentIndex: attrs.Index,
+			},
+		},
+	}
+
+	macvtapName := "testmc0"
+	_, err = createMacVtap(netHandle, macvtapName, mcLink, 1)
+	assert.NoError(err)
+
+	macvtapLink, err := getLinkByName(netHandle, macvtapName, &netlink.Macvtap{})
+	assert.NoError(err)
+
+	err = netHandle.LinkDel(macvtapLink)
+	assert.NoError(err)
+
+	brLink, err = getLinkByName(netHandle, brName, &netlink.Bridge{})
+	assert.NoError(err)
+
+	err = netHandle.LinkDel(brLink)
+	assert.NoError(err)
 }
