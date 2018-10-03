@@ -16,8 +16,19 @@ check_gopath
 
 export RUNTIME="kata-runtime"
 
-echo "INFO: Running checks"
-sudo -E PATH="$PATH" bash -c "make check"
+export CI_JOB="${CI_JOB:-default}"
 
-echo "INFO: Running functional and integration tests ($PWD)"
-sudo -E PATH="$PATH" bash -c "make test"
+case "${CI_JOB}" in
+	"CRI_CONTAINERD_K8S")
+		echo "INFO: Containerd checks"
+		sudo -E PATH="$PATH" bash -c "make cri-containerd"
+		sudo -E PATH="$PATH" CRI_RUNTIME="containerd" bash -c "make kubernetes"
+		;;
+	*)
+		echo "INFO: Running checks"
+		sudo -E PATH="$PATH" bash -c "make check"
+
+		echo "INFO: Running functional and integration tests ($PWD)"
+		sudo -E PATH="$PATH" bash -c "make test"
+		;;
+esac

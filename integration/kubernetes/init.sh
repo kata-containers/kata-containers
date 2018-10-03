@@ -11,6 +11,21 @@ SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../../.ci/lib.sh"
 source "${SCRIPT_PATH}/../../lib/common.bash"
 
+cri_runtime="${CRI_RUNTIME:-crio}"
+
+case "${cri_runtime}" in
+containerd)
+    cri_runtime_socket="/run/containerd/containerd.sock"
+    ;;
+crio)
+    cri_runtime_socket="/var/run/crio/crio.sock"
+    ;;
+*)
+    echo "Runtime ${cri_runtime} not supported"
+
+    ;;
+esac
+
 # Check no processes are left behind
 check_processes
 
@@ -30,10 +45,11 @@ if ip a show "$cni_interface"; then
 	sudo ip link del "$cni_interface"
 fi
 
-echo "Start crio service"
-sudo systemctl start crio
+echo "Start ${cri_runtime} service"
+sudo systemctl start ${cri_runtime}
 
-sudo -E kubeadm init --pod-network-cidr 10.244.0.0/16 --cri-socket=unix:///var/run/crio/crio.sock
+echo "Init cluster using ${cri_runtime_socket}"
+sudo -E kubeadm init --pod-network-cidr 10.244.0.0/16 --cri-socket="unix://${cri_runtime_socket}"
 export KUBECONFIG=/etc/kubernetes/admin.conf
 
 sudo -E kubectl get nodes

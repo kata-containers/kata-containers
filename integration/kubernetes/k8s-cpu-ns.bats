@@ -20,6 +20,8 @@ setup() {
 }
 
 @test "Check CPU constraints" {
+	issue="https://github.com/kata-containers/tests/issues/794"
+	[ "${CRI_RUNTIME}" == "containerd" ] && skip "test not working with ${CRI_RUNTIME} see: ${issue}"
 	wait_time=120
 	sleep_time=5
 

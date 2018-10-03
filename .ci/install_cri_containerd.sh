@@ -41,4 +41,34 @@ if [ -n "$CI" ]; then
 	sudo mv /etc/cni/net.d/10-containerd-net.conflist  "$cni_test_dir"
 fi
 
+cat <<EOT | sudo tee /etc/systemd/system/containerd.service
+[Unit]
+Description=containerd container runtime
+Documentation=https://containerd.io
+After=containerd-installation.service
+[Service]
+Restart=always
+RestartSec=5
+Delegate=yes
+KillMode=process
+OOMScoreAdjust=-999
+LimitNOFILE=1048576
+# Having non-zero Limit*s causes performance problems due to accounting overhead
+# in the kernel. We recommend using cgroups to do container-local accounting.
+LimitNPROC=infinity
+LimitCORE=infinity
+ExecStartPre=/sbin/modprobe overlay
+ExecStart=/usr/local/bin/containerd
+[Install]
+WantedBy=containerd.target
+EOT
+
+sudo mkdir -p  /etc/systemd/system/kubelet.service.d/
+cat << EOF | sudo tee  /etc/systemd/system/kubelet.service.d/0-containerd.conf
+[Service]                                                 
+Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
+EOF
+
+sudo systemctl daemon-reload
+
 popd  >> /dev/null

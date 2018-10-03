@@ -126,5 +126,14 @@ crio_service_file="${cidir}/data/crio.service"
 echo "Install crio service (${crio_service_file})"
 sudo install -m0444 "${crio_service_file}" "${service_path}"
 
+kubelet_service_dir="/etc/systemd/system/kubelet.service.d/"
+
+sudo mkdir -p "${kubelet_service_dir}"
+
+cat <<EOF| sudo tee "${kubelet_service_dir}/0-crio.conf"
+[Service]
+Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///var/run/crio/crio.sock"
+EOF
+
 echo "Reload systemd services"
 sudo systemctl daemon-reload
