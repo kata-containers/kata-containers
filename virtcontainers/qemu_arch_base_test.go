@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"path/filepath"
 	"testing"
 
@@ -431,4 +432,66 @@ func TestQemuArchBaseAppendSCSIController(t *testing.T) {
 
 	_, ioThread = qemuArchBase.appendSCSIController(devices, true)
 	assert.NotNil(ioThread)
+}
+
+func TestQemuArchBaseAppendNetwork(t *testing.T) {
+	var devices []govmmQemu.Device
+	assert := assert.New(t)
+	qemuArchBase := newQemuArchBase()
+
+	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
+
+	macvlanEp := &BridgedMacvlanEndpoint{
+		NetPair: NetworkInterfacePair{
+			ID:   "uniqueTestID-4",
+			Name: "br4_kata",
+			VirtIface: NetworkInterface{
+				Name:     "eth4",
+				HardAddr: macAddr.String(),
+			},
+			TAPIface: NetworkInterface{
+				Name: "tap4_kata",
+			},
+			NetInterworkingModel: DefaultNetInterworkingModel,
+		},
+		EndpointType: BridgedMacvlanEndpointType,
+	}
+
+	macvtapEp := &MacvtapEndpoint{
+		EndpointType: MacvtapEndpointType,
+		EndpointProperties: NetworkInfo{
+			Iface: NetlinkIface{
+				Type: "macvtap",
+			},
+		},
+	}
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.NetDevice{
+			Type:       networkModelToQemuType(macvlanEp.NetPair.NetInterworkingModel),
+			Driver:     govmmQemu.VirtioNetPCI,
+			ID:         fmt.Sprintf("network-%d", 0),
+			IFName:     macvlanEp.NetPair.TAPIface.Name,
+			MACAddress: macvlanEp.NetPair.TAPIface.HardAddr,
+			DownScript: "no",
+			Script:     "no",
+			FDs:        macvlanEp.NetPair.VMFds,
+			VhostFDs:   macvlanEp.NetPair.VhostFds,
+		},
+		govmmQemu.NetDevice{
+			Type:       govmmQemu.MACVTAP,
+			Driver:     govmmQemu.VirtioNetPCI,
+			ID:         fmt.Sprintf("network-%d", 1),
+			IFName:     macvtapEp.Name(),
+			MACAddress: macvtapEp.HardwareAddr(),
+			DownScript: "no",
+			Script:     "no",
+			FDs:        macvtapEp.VMFds,
+			VhostFDs:   macvtapEp.VhostFds,
+		},
+	}
+
+	devices = qemuArchBase.appendNetwork(devices, macvlanEp)
+	devices = qemuArchBase.appendNetwork(devices, macvtapEp)
+	assert.Equal(expectedOut, devices)
 }
