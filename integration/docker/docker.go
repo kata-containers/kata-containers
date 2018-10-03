@@ -7,6 +7,7 @@ package docker
 import (
 	"bytes"
 	"fmt"
+	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
 	"os"
@@ -26,9 +27,6 @@ const (
 	// Image used to run containers
 	Image = "busybox"
 
-	// AlpineImage is the alpine image
-	AlpineImage = "alpine:3.7"
-
 	// PostgresImage is the postgres image
 	PostgresImage = "postgres"
 
@@ -46,10 +44,34 @@ const (
 
 	// StressDockerFile is the dockerfile to build vish/stress image
 	StressDockerFile = "src/github.com/kata-containers/tests/stress/."
+
+	// VersionsPath is the path for the versions.yaml
+	VersionsPath = "src/github.com/kata-containers/tests/versions.yaml"
 )
 
 // cidDirectory is the directory where container ID files are created.
 var cidDirectory string
+
+// AlpineImage is the alpine image
+var AlpineImage string
+
+// versionDockerImage is the definition in the yaml for the Alpine image
+type versionDockerImage struct {
+	Description string `yaml:"description"`
+	URL         string `yaml:"url"`
+	Version     string `yaml:"version"`
+}
+
+// versionDockerImages is the complete information for docker images in the versions yaml
+type versionDockerImages struct {
+	Description string `yaml:"description"`
+	Alpine      versionDockerImage
+}
+
+// Versions will be used to parse the versions yaml
+type Versions struct {
+	Docker versionDockerImages `yaml:"docker_images"`
+}
 
 func init() {
 	var err error
@@ -57,6 +79,26 @@ func init() {
 	if err != nil {
 		log.Fatalf("Could not create cid directory: %v\n", err)
 	}
+
+	// Check versions.yaml
+	gopath := os.Getenv("GOPATH")
+	entirePath := filepath.Join(gopath, VersionsPath)
+
+	// Read versions.yaml
+	data, err := ioutil.ReadFile(entirePath)
+	if err != nil {
+		log.Fatalf("Could not read versions.yaml")
+	}
+
+	// Parse versions.yaml
+	var versions Versions
+	err = yaml.Unmarshal(data, &versions)
+	if err != nil {
+		log.Fatalf("Could not get alpine version")
+	}
+
+	// Define Alpine image with its proper version
+	AlpineImage = "alpine:" + versions.Docker.Alpine.Version
 }
 
 func cidFilePath(containerName string) string {

@@ -11,3 +11,8 @@ docker_images:
     description: "Proxy server for HTTP, HTTPS, SMTP, POP3 and IMAP protocols"
     url: "https://hub.docker.com/_/nginx/"
     version: "1.14"
+
+  alpine:
+    description: "Linux distribution built around busybox and musl libc"
+    url: "https://hub.docker.com/_/alpine/"
+    version: "3.7"
