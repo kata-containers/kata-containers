@@ -4,13 +4,6 @@
 >
 > - This guide assumes you have
 >   [already installed the Kata Containers packages](../centos-installation-guide.md).
->
-> - If you do not want to copy or type all these instructions by hand, you can use the
->   [`kata-manager`](https://github.com/kata-containers/tests/blob/master/cmd/kata-manager/kata-manager.sh)
->   script to install the packaged system including your chosen container
->   manager. Alternatively, you can generate a runnable shell script from
->   individual documents using the
->   [`kata-doc-to-script`](https://github.com/kata-containers/tests/blob/master/.ci/kata-doc-to-script.sh) script.
 
 1. Install the latest version of Docker with the following commands:
 
