@@ -1740,11 +1740,11 @@ func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	logger.Infof("launching qemu with: %v", params)
+	logger.Infof("launching %s with: %v", path, params)
 
 	err := cmd.Run()
 	if err != nil {
-		logger.Errorf("Unable to launch qemu: %v", err)
+		logger.Errorf("Unable to launch %s: %v", path, err)
 		errStr = stderr.String()
 		logger.Errorf("%s", errStr)
 	}
