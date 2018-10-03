@@ -1345,3 +1345,21 @@ func TestExecuteQueryMigration(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+// Checks balloon
+func TestExecuteBalloon(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("balloon", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecuteBalloon(context.Background(), 1073741824)
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}

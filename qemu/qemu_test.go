@@ -404,6 +404,45 @@ func TestVirtioRngValid(t *testing.T) {
 
 }
 
+func TestAppendVirtioBalloon(t *testing.T) {
+	balloonDevice := BalloonDevice{
+		ID: "balloon",
+	}
+
+	var deviceString = "-device " + string(VirtioBalloon)
+	deviceString += ",id=" + balloonDevice.ID
+
+	var OnDeflateOnOMM = ",deflate-on-oom=on"
+	var OffDeflateOnOMM = ",deflate-on-oom=off"
+
+	var OnDisableModern = ",disable-modern=on"
+	var OffDisableModern = ",disable-modern=off"
+
+	testAppend(balloonDevice, deviceString+OffDeflateOnOMM+OffDisableModern, t)
+
+	balloonDevice.DeflateOnOOM = true
+	testAppend(balloonDevice, deviceString+OnDeflateOnOMM+OffDisableModern, t)
+
+	balloonDevice.DisableModern = true
+	testAppend(balloonDevice, deviceString+OnDeflateOnOMM+OnDisableModern, t)
+
+}
+
+func TestVirtioBalloonValid(t *testing.T) {
+	balloon := BalloonDevice{
+		ID: "",
+	}
+
+	if balloon.Valid() {
+		t.Fatalf("balloon should be not valid when ID is empty")
+	}
+
+	balloon.ID = "balloon0"
+	if !balloon.Valid() {
+		t.Fatalf("balloon should be valid")
+	}
+}
+
 var deviceSCSIControllerStr = "-device virtio-scsi-pci,id=foo"
 var deviceSCSIControllerBusAddrStr = "-device virtio-scsi-pci,id=foo,bus=pci.0,addr=00:04.0,disable-modern=true,iothread=iothread1"
 
