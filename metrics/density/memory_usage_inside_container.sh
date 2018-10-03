@@ -15,7 +15,9 @@ SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../lib/common.bash"
 
 TEST_NAME="memory footprint inside container"
-IMAGE="alpine:3.7"
+VERSIONS_FILE="${SCRIPT_PATH}/../../versions.yaml"
+ALPINE_VERSION=$("${GOPATH}/bin/yq" read "$VERSIONS_FILE" "docker_images.alpine.version")
+IMAGE="alpine:$ALPINE_VERSION"
 CMD="cat /proc/meminfo"
 TMP_FILE=$(mktemp meminfo.XXXXXXXXXX || true)
 
