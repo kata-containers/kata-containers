@@ -11,4 +11,4 @@ cidir=$(dirname "$0")
 
 source "${cidir}/lib.sh"
 
-clone_build_and_install "github.com/kata-containers/proxy"
+build_and_install "github.com/kata-containers/proxy"

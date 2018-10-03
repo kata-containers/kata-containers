@@ -136,7 +136,7 @@ get_pr_changed_file_details()
 		-r \
 		--name-status \
 		--diff-filter="${filters}" \
-		"origin/${target_branch}" HEAD | grep -v "vendor/"
+		"origin/${branch}" HEAD | grep -v "vendor/"
 }
 
 check_commits()
@@ -413,7 +413,7 @@ check_docs()
 			# document" *will* result in when the PR has landed
 			# and then check docs for that new URL and exclude
 			# them from the real URL check.
-			url="https://${repo}/blob/${target_branch}/${doc}"
+			url="https://${repo}/blob/${branch}/${doc}"
 
 			new_urls+=" ${url}"
 		done
