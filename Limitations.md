@@ -14,6 +14,8 @@
     * [Resource management](#resource-management)
         * [docker run and shared memory](#docker-run-and-shared-memory)
         * [docker run and sysctl](#docker-run-and-sysctl)
+    * [Docker daemon features](#docker-daemon-features)
+        * [selinux support](#selinux-support)
 * [Architectural limitations](#architectural-limitations)
     * [Networking limitations](#networking-limitations)
         * [Support for joining an existing VM network](#support-for-joining-an-existing-vm-network)
@@ -176,6 +178,23 @@ level, this equates to the `linux.sysctl` OCI configuration. Docker
 allows configuring the sysctl settings that support namespacing. From a security and isolation point of view, it might make sense to set them in the VM, which isolates sysctl settings. Also, given that each Kata Container has its own kernel, we can support setting of sysctl settings that are not namespaced. In some cases, we might need to support configuring some of the settings on both the host side Kata Container namespace and the Kata Containers kernel.
 
 See issue https://github.com/kata-containers/runtime/issues/185 for more information.
+
+## Docker daemon features
+
+Some features enabled or implemented via the
+[dockerd daemon](https://docs.docker.com/config/daemon/) configuration are not yet
+implemented.
+
+### selinux support
+
+The `dockerd` configuration option `"selinux-enabled": true` is not presently implemented
+in Kata Containers. Enabling this option causes an OCI runtime error.
+
+See issue https://github.com/kata-containers/runtime/issues/784 for more information.
+
+The consequence of this is that the [Docker --security-opt is only partially supported](#docker---security-opt-option-partially-supported).
+
+Kubernetes [selinux labels](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#assign-selinux-labels-to-a-container) will also not be applied.
 
 # Architectural limitations
 
