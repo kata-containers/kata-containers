@@ -938,18 +938,19 @@ func (bridgeDev BridgeDevice) Valid() bool {
 // QemuParams returns the qemu parameters built out of this bridge device.
 func (bridgeDev BridgeDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
+	var deviceParam string
 
-	shpc := "off"
-	if bridgeDev.SHPC {
-		shpc = "on"
+	switch bridgeDev.Type {
+	case PCIEBridge:
+		deviceParam = fmt.Sprintf("pcie-pci-bridge,bus=%s,id=%s", bridgeDev.Bus, bridgeDev.ID)
+	default:
+		shpc := "off"
+		if bridgeDev.SHPC {
+			shpc = "on"
+		}
+		deviceParam = fmt.Sprintf("pci-bridge,bus=%s,id=%s,chassis_nr=%d,shpc=%s", bridgeDev.Bus, bridgeDev.ID, bridgeDev.Chassis, shpc)
 	}
 
-	deviceName := "pci-bridge"
-	if bridgeDev.Type == PCIEBridge {
-		deviceName = "pcie-pci-bridge"
-	}
-
-	deviceParam := fmt.Sprintf("%s,bus=%s,id=%s,chassis_nr=%d,shpc=%s", deviceName, bridgeDev.Bus, bridgeDev.ID, bridgeDev.Chassis, shpc)
 	if bridgeDev.Addr != "" {
 		addr, err := strconv.Atoi(bridgeDev.Addr)
 		if err == nil && addr >= 0 {
@@ -1562,13 +1563,13 @@ func (config *Config) appendMemoryKnobs() {
 		if config.Memory.Size != "" {
 			dimmName := "dimm1"
 			objMemParam := "memory-backend-ram,id=" + dimmName + ",size=" + config.Memory.Size + ",prealloc=on"
-			deviceMemParam := "pc-dimm,id=" + dimmName + ",memdev=" + dimmName
+			numaMemParam := "node,memdev=" + dimmName
 
 			config.qemuParams = append(config.qemuParams, "-object")
 			config.qemuParams = append(config.qemuParams, objMemParam)
 
-			config.qemuParams = append(config.qemuParams, "-device")
-			config.qemuParams = append(config.qemuParams, deviceMemParam)
+			config.qemuParams = append(config.qemuParams, "-numa")
+			config.qemuParams = append(config.qemuParams, numaMemParam)
 		}
 	} else if config.Knobs.FileBackedMem == true {
 		if config.Memory.Size != "" && config.Memory.Path != "" {
