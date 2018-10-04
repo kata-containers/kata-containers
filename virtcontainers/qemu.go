@@ -1194,7 +1194,8 @@ func (q *qemu) disconnect() {
 // genericAppendBridges appends to devices the given bridges
 func genericAppendBridges(devices []govmmQemu.Device, bridges []Bridge, machineType string) []govmmQemu.Device {
 	bus := defaultPCBridgeBus
-	if machineType == QemuQ35 {
+	switch machineType {
+	case QemuQ35, QemuVirt:
 		bus = defaultBridgeBus
 	}
 
@@ -1227,13 +1228,14 @@ func genericBridges(number uint32, machineType string) []Bridge {
 	var bt bridgeType
 
 	switch machineType {
-
 	case QemuQ35:
 		// currently only pci bridges are supported
 		// qemu-2.10 will introduce pcie bridges
 		fallthrough
 	case QemuPC:
 		bt = pciBridge
+	case QemuVirt:
+		bt = pcieBridge
 	case QemuPseries:
 		bt = pciBridge
 	default:
