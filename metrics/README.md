@@ -1,5 +1,31 @@
 # Kata Containers metrics
 
+* [Kata Containers metrics](#kata-containers-metrics)
+   * [Goals](#goals)
+      * [PR regression checks](#pr-regression-checks)
+      * [master branch trending](#master-branch-trending)
+      * [Developer pre-checking](#developer-pre-checking)
+   * [Stability or Performance?](#stability-or-performance)
+   * [Requirements](#requirements)
+      * [For PR checks](#for-pr-checks)
+      * [For master tracking](#for-master-tracking)
+   * [Categories](#categories)
+      * [Time (Speed)](#time-speed)
+      * [Density](#density)
+      * [Networking](#networking)
+      * [Storage](#storage)
+   * [Saving Results](#saving-results)
+      * [JSON API](#json-api)
+         * [metrics_json_init()](#metrics_json_init)
+         * [metrics_json_save()](#metrics_json_save)
+         * [metrics_json_add_fragment(json)](#metrics_json_add_fragmentjson)
+         * [metrics_json_start_array()](#metrics_json_start_array)
+         * [metrics_json_add_array_element(json)](#metrics_json_add_array_elementjson)
+         * [metrics_json_add_array_fragment(json)](#metrics_json_add_array_fragmentjson)
+         * [metrics_json_close_array_element()](#metrics_json_close_array_element)
+         * [metrics_json_end_array(name)](#metrics_json_end_arrayname)
+   * [Preserving results](#preserving-results)
+
 This directory contains the metrics tests for Kata Containers.
 
 The tests within this directory have a number of potential use cases:
@@ -216,3 +242,24 @@ name `name`.
 | ---- | ----------- |
 | name | The name to be given to the generated top level fragment array |
 
+## Preserving results
+
+The JSON library contains a hook that enables results to be injected to a
+data store at the same time they are saved to the results files.
+
+The hook supports transmission via [`curl`](https://curl.haxx.se/) or
+[`socat`](http://www.dest-unreach.org/socat/). Configuration is via environment
+variables.
+
+| Variable         | Description |
+| --------         | ----------- |
+| JSON_HOST        | Destination host path for use with `socat` |
+| JSON_SOCKET      | Destination socket number for use with `socat` |
+| JSON_URL         | Destination URL for use with `curl` |
+| JSON_TX_ONELINE  | If set, the JSON will be sent as a single line (CR and tabs stripped) |
+
+`socat` transmission will only happen if `JSON_HOST` is set. `curl` transmission will only
+happen if `JSON_URL` is set. The settings are not mutually exclusive, and both can be
+set if necessary.
+
+`JSON_TX_ONELINE` applies to both types of transmission.

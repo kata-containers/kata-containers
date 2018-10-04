@@ -143,10 +143,20 @@ EOF
 
 	echo "$json" > $json_filename
 
-	# If we have a JSON URL set up, post the results there as well
+	# If we have a JSON URL or host/socket pair set up, post the results there as well.
+	# Optionally compress into a single line.
+	if [[ $JSON_TX_ONELINE ]]; then
+		json="$(sed 's/[\n\t]//g' <<< ${json})"
+	fi
+
+	if [[ $JSON_HOST ]]; then
+		echo "socat'ing results to [$JSON_HOST:$JSON_SOCKET]"
+		socat -u - TCP:${JSON_HOST}:${JSON_SOCKET} <<< ${json}
+	fi
+
 	if [[ $JSON_URL ]]; then
-		echo "Posting results to [$JSON_URL]"
-		curl -XPOST -H"Content-Type: application/json" "$JSON_URL" -d "@$json_filename"
+		echo "curl'ing results to [$JSON_URL]"
+		curl -XPOST -H"Content-Type: application/json" "$JSON_URL" -d "@-" <<< ${json}
 	fi
 }
 
