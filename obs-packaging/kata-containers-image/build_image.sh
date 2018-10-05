@@ -43,7 +43,7 @@ build_initrd() {
 		DEBUG="${DEBUG:-}" \
 		AGENT_VERSION="${agent_version}" \
 		OS_VERSION="${initrd_os_version}" \
-		DISTRO_ROOTFS="${tmp_dir}/initrd-image" \
+		ROOTFS_BUILD_DEST="${tmp_dir}/initrd-image" \
 		USE_DOCKER=1 \
 		AGENT_INIT="yes"
 
@@ -56,7 +56,7 @@ build_image() {
 		USE_DOCKER="1" \
 		AGENT_VERSION="${agent_version}" \
 		IMG_OS_VERSION="${img_os_version}" \
-		DISTRO_ROOTFS="${tmp_dir}/rootfs-image"
+		ROOTFS_BUILD_DEST="${tmp_dir}/rootfs-image"
 }
 
 create_tarball() {
@@ -113,7 +113,7 @@ main() {
 	img_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version" "${kata_version}")
 
 	#initrd information
-	initrd_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name" "${kata_version}")
+	initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.name" "${kata_version}")
 	#In old branches this is not defined, use a default
 	initrd_distro=${initrd_distro:-alpine}
 	initrd_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version" "${kata_version}")
