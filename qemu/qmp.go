@@ -1178,6 +1178,15 @@ func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string
 	return err
 }
 
+// ExecuteBalloon sets the size of the balloon, hence updates the memory
+// allocated for the VM.
+func (q *QMP) ExecuteBalloon(ctx context.Context, bytes uint64) error {
+	args := map[string]interface{}{
+		"value": bytes,
+	}
+	return q.executeCommand(ctx, "balloon", args, nil)
+}
+
 // ExecutePCIVSockAdd adds a vhost-vsock-pci bus
 func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID, vhostfd, addr, bus string, disableModern bool) error {
 	args := map[string]interface{}{
