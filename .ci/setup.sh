@@ -112,7 +112,6 @@ install_extra_tools() {
 
 main() {
 	check_gopath
-	apply_depends_on
 	setup_distro_env
 	install_docker
 	enable_nested_virtualization

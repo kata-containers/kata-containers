@@ -12,7 +12,7 @@ source "/etc/os-release" || source "/usr/lib/os-release"
 # Signify to all scripts that they are running in a CI environment
 [ -z "${KATA_DEV_MODE}" ] && export CI=true
 
-# Need the repo to know which tests to run.
+# Name of the repo that we are going to test
 export kata_repo="$1"
 
 echo "Setup env for kata repository: $kata_repo"
@@ -46,7 +46,7 @@ tests_repo_dir="${GOPATH}/src/${tests_repo}"
 mkdir -p $(dirname "${tests_repo_dir}")
 [ -d "${tests_repo_dir}" ] || git clone "https://${tests_repo}.git" "${tests_repo_dir}"
 
-# Get the repository
+# Get the repository of the PR to be tested
 mkdir -p $(dirname "${kata_repo_dir}")
 [ -d "${kata_repo_dir}" ] || git clone "https://${kata_repo}.git" "${kata_repo_dir}"
 
@@ -58,65 +58,12 @@ fi
 
 pushd "${kata_repo_dir}"
 
-# Variables needed when we test a PR.
 pr_number=
-target_branch=
-
-# Variable needed when a merge to a branch needs to be tested.
 branch=
 
 # $ghprbPullId and $ghprbTargetBranch are variables from
 # the Jenkins GithubPullRequestBuilder Plugin
 [ "${ghprbPullId}" ] && [ "${ghprbTargetBranch}" ] && export pr_number="${ghprbPullId}"
-
-
-
-if [ -n "$pr_number" ]
-then
-	export target_branch="${ghprbTargetBranch:-master}"
-	if [ "${kata_repo}" != "${tests_repo}" ]
-	then
-		# Use the correct branch for testing.
-		# 'tests' repository branch should have the same name
-		# of the kata repository branch where the change is
-		# going to be merged.
-		pushd "${tests_repo_dir}"
-		git fetch origin && git checkout "${target_branch}"
-		popd
-	fi
-
-	pr_branch="PR_${pr_number}"
-
-	# Create a separate branch for the PR. This is required to allow
-	# checkcommits to be able to determine how the PR differs from
-	# the target branch.
-	git fetch origin "pull/${pr_number}/head:${pr_branch}"
-	git checkout "${pr_branch}"
-	git rebase "origin/${target_branch}"
-
-	# As we currently have CC and runv runtimes as git submodules
-	# we need to update the submodules in order to get
-	# the correct changes.
-	# This condition should be removed when we have one runtime.
-	[ -f .gitmodules ] && git submodule update
-else
-	# Othewise we test an specific branch
-	# GIT_BRANCH env variable is set by the jenkins Github Plugin.
-	[ -z "${GIT_BRANCH}" ] && echo >&2 "GIT_BRANCH is empty" && exit 1
-	export branch="${GIT_BRANCH/*\//}"
-
-	if [ "${kata_repo}" != "${tests_repo}" ]
-	then
-		# Use the correct branch for testing.
-		# 'tests' repository branch should have the same name
-		# as the kata repository branch that will be tested.
-		pushd "${tests_repo_dir}"
-		git fetch origin && git checkout "$branch"
-		popd
-	fi
-
-	git fetch origin && git checkout "$branch" && git reset --hard "$GIT_BRANCH"
-fi
 
 # Install go after repository is cloned and checkout to PR
 # This ensures:
@@ -128,6 +75,16 @@ ${GOPATH}/src/${tests_repo}/.ci/install_go.sh -p
 # This is needed in case a new image creation.
 # See https://github.com/clearcontainers/osbuilder/issues/8
 "${GOPATH}/src/${tests_repo}/cmd/container-manager/manage_ctr_mgr.sh" docker configure -r runc -f
+
+if [ -n "$pr_number" ]; then
+	export branch="${ghprbTargetBranch}"
+	export pr_branch="PR_${pr_number}"
+else
+	export branch="${GIT_BRANCH/*\//}"
+fi
+
+# Resolve kata dependencies
+"${GOPATH}/src/${tests_repo}/.ci/resolve-kata-dependencies.sh"
 
 # Setup Kata Containers Environment
 #
@@ -151,16 +108,6 @@ then
 	# If not a PR, we are testing on stable or master branch.
 	[ -z "$pr_number" ] && specific_branch="true"
 	.ci/static-checks.sh "$kata_repo" "$specific_branch"
-fi
-
-if [ -n "$pr_number" ]
-then
-	# Now that checkcommits has run, move the PR commits into the target
-	# branch before running the tests. Having the commits in the target branch
-	# is required to ensure coveralls works.
-	git checkout ${ghprbTargetBranch}
-	git reset --hard "$pr_branch"
-	git branch -D "$pr_branch"
 fi
 
 # Now we have all the components installed, log that info before we

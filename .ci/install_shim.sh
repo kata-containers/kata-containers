@@ -11,4 +11,4 @@ cidir=$(dirname "$0")
 
 source "${cidir}/lib.sh"
 
-clone_build_and_install "github.com/kata-containers/shim"
+build_and_install "github.com/kata-containers/shim"
