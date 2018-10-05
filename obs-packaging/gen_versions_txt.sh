@@ -12,6 +12,7 @@ set -o pipefail
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project="kata-containers"
+ARCH=${ARCH:-$(go env GOARCH)}
 
 source "${script_dir}/../scripts/lib.sh"
 
@@ -40,7 +41,7 @@ gen_version_file() {
 
 	golang_version=$(get_from_kata_deps "languages.golang.meta.newest-version" "${kata_version}")
 	golang_version="1.10.2"
-	golang_x84_64_sha256=$(curl -s -L "https://storage.googleapis.com/golang/go${golang_version}.linux-amd64.tar.gz.sha256")
+	golang_sha256=$(curl -s -L "https://storage.googleapis.com/golang/go${golang_version}.linux-${ARCH}.tar.gz.sha256")
 
 	# - is not a valid char for rpmbuild
 	# see https://github.com/semver/semver/issues/145
@@ -77,7 +78,7 @@ kernel_version=${kernel_version}
 
 # Golang
 go_version=${golang_version}
-go_checksum=${golang_x84_64_sha256}
+go_checksum=${golang_sha256}
 EOT
 }
 
