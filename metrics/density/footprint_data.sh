@@ -146,12 +146,7 @@ function cleanup() {
 	# Finish storing the results
 	metrics_json_save
 
-	# This is what we have for now from the generics.
-	# Expect this to be improved (the generics) soon...
-
 	docker kill $(docker ps -qa)
-
-#	kill_processes_before_start
 }
 
 # helper function to get USS of process in arg1
@@ -333,7 +328,7 @@ EOF
 function grab_stats() {
 	# If configured, dump the caches so we get a more stable
 	# view of what our static footprint really is
-	if [[ DUMP_CACHES ]] ; then
+	if [[ "$DUMP_CACHES" ]] ; then
 		dump_caches
 	fi
 
