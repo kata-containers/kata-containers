@@ -48,6 +48,16 @@ check_vsock_active() {
 	fi
 }
 
+enable_netmon() {
+	echo "Enabling netmon at the configuration file"
+	sed -i 's|#enable_netmon = true|enable_netmon = true|' ${RUNTIME_CONFIG_PATH}
+}
+
+disable_netmon() {
+	echo "Disabling netmon at the configuration file"
+	sed -i 's|enable_netmon = true|#enable_netmon = true|' ${RUNTIME_CONFIG_PATH}
+}
+
 count_containers() {
 	docker ps -qa | wc -l
 }
@@ -95,6 +105,13 @@ check_all_running() {
 		how_many_qemus=$(pgrep -a -f ${HYPERVISOR_PATH} | wc -l)
 		if (( ${how_many_running} != ${how_many_qemus} )); then
 			echo "Wrong number of qemus running (${how_many_running} != ${how_many_qemus}) - stopping"
+			((goterror++))
+		fi
+
+		# check we have the right number of netmon's
+		how_many_netmons=$(pgrep -a -f ${NETMON_PATH} | wc -l)
+		if (( ${how_many_running} != ${how_many_netmons} )); then
+			echo "Wrong number of netmons running (${how_many_running} != ${how_many_netmons}) - stopping"
 			((goterror++))
 		fi
 
@@ -182,6 +199,9 @@ check_mounts() {
 init() {
 	kill_all_containers
 
+	# Enable netmon
+	enable_netmon
+
 	# remember how many mount points we had before we do anything
 	# and then sanity check we end up with no new ones dangling at the end
 	initial_mount_count=$(count_mounts)
@@ -223,6 +243,9 @@ spin() {
 		check_mounts
 	}
 	done
+
+	# Disable netmon
+	disable_netmon
 }
 
 init
