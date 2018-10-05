@@ -88,6 +88,9 @@ const (
 
 	// VirtioRng is the paravirtualized RNG device driver.
 	VirtioRng DeviceDriver = "virtio-rng"
+
+	// VirtioBalloon is the memory balloon device driver.
+	VirtioBalloon DeviceDriver = "virtio-balloon"
 )
 
 // ObjectType is a string representing a qemu object type.
@@ -1076,6 +1079,51 @@ func (v RngDevice) QemuParams(_ *Config) []string {
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
 
 	return qemuParams
+}
+
+// BalloonDevice represents a memory balloon device.
+type BalloonDevice struct {
+	DeflateOnOOM  bool
+	DisableModern bool
+	ID            string
+}
+
+// QemuParams returns the qemu parameters built out of the BalloonDevice.
+func (b BalloonDevice) QemuParams(_ *Config) []string {
+	var qemuParams []string
+	var deviceParams []string
+
+	deviceParams = append(deviceParams, string(VirtioBalloon))
+
+	if b.ID != "" {
+		deviceParams = append(deviceParams, "id="+b.ID)
+	}
+
+	if b.DeflateOnOOM {
+		deviceParams = append(deviceParams, "deflate-on-oom=on")
+	} else {
+		deviceParams = append(deviceParams, "deflate-on-oom=off")
+	}
+
+	if b.DisableModern {
+		deviceParams = append(deviceParams, "disable-modern=on")
+	} else {
+		deviceParams = append(deviceParams, "disable-modern=off")
+	}
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+
+	return qemuParams
+}
+
+// Valid returns true if the balloonDevice structure is valid and complete.
+func (b BalloonDevice) Valid() bool {
+	if b.ID == "" {
+		return false
+	}
+
+	return true
 }
 
 // RTCBaseType is the qemu RTC base time type.
