@@ -120,7 +120,7 @@ show_stats()
 		"Type" \
 		"Name"
 
-	sort -k1,1n "$tmpfile"
+	sort -k1,1n -k3,3n "$tmpfile"
 
 	rm -f "${tmpfile}"
 }
