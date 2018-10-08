@@ -190,16 +190,15 @@ set_runtime()
 	# Travis doesn't support VT-x
 	[ -n "${TRAVIS:-}" ] && return
 
-	source /etc/os-release
-
-	if [[ "${ID_LIKE:-}" =~ suse ]]; then
+	if [ -f "$sysconfig_docker_config_file" ]; then
 		docker_config_file="$sysconfig_docker_config_file"
+		sed_script="s|^( *DOCKER_OPTS=.+--default-runtime[= ] *)[^ \"]+(.*\"$)|\1${name}\2|g"
 	else
 		docker_config_file="$systemd_docker_config_file"
+		sed_script="s/--default-runtime[= ][^ ]*/--default-runtime=${name}/g"
 	fi
 
-	sudo -E sed -i "s/--default-runtime=[^ ][^ ]*/--default-runtime=${name}/g" \
-		"${docker_config_file}"
+	sudo -E sed -i -E "$sed_script" "$docker_config_file"
 	sudo -E systemctl daemon-reload
 	sudo -E systemctl restart docker
 }
