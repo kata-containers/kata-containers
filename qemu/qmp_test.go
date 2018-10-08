@@ -504,7 +504,7 @@ func TestQMPNetPCIDeviceAdd(t *testing.T) {
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
-	err := q.ExecuteNetPCIDeviceAdd(context.Background(), "br0", "virtio-0", "02:42:ac:11:00:02", "0x7", "", 8)
+	err := q.ExecuteNetPCIDeviceAdd(context.Background(), "br0", "virtio-0", "02:42:ac:11:00:02", "0x7", "", "", 8)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -529,7 +529,7 @@ func TestQMPDeviceAdd(t *testing.T) {
 	blockdevID := fmt.Sprintf("drive_%s", volumeUUID)
 	devID := fmt.Sprintf("device_%s", volumeUUID)
 	err := q.ExecuteDeviceAdd(context.Background(), blockdevID, devID,
-		"virtio-blk-pci", "", true)
+		"virtio-blk-pci", "", "", true)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -554,7 +554,7 @@ func TestQMPSCSIDeviceAdd(t *testing.T) {
 	blockdevID := fmt.Sprintf("drive_%s", volumeUUID)
 	devID := fmt.Sprintf("device_%s", volumeUUID)
 	err := q.ExecuteSCSIDeviceAdd(context.Background(), blockdevID, devID,
-		"scsi-hd", "scsi0.0", 1, 2, true)
+		"scsi-hd", "scsi0.0", "", 1, 2, true)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -972,7 +972,7 @@ func TestQMPPCIDeviceAdd(t *testing.T) {
 	blockdevID := fmt.Sprintf("drive_%s", volumeUUID)
 	devID := fmt.Sprintf("device_%s", volumeUUID)
 	err := q.ExecutePCIDeviceAdd(context.Background(), blockdevID, devID,
-		"virtio-blk-pci", "0x1", "", true)
+		"virtio-blk-pci", "0x1", "", "", true)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -996,7 +996,7 @@ func TestQMPPCIVFIOMediatedDeviceAdd(t *testing.T) {
 	checkVersion(t, connectedCh)
 	sysfsDev := "/sys/bus/pci/devices/0000:00:02.0/a297db4a-f4c2-11e6-90f6-d3b88d6c9525"
 	devID := fmt.Sprintf("device_%s", volumeUUID)
-	err := q.ExecutePCIVFIOMediatedDeviceAdd(context.Background(), devID, sysfsDev, "0x1", "")
+	err := q.ExecutePCIVFIOMediatedDeviceAdd(context.Background(), devID, sysfsDev, "0x1", "", "")
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -1018,7 +1018,7 @@ func TestQMPCPUDeviceAdd(t *testing.T) {
 	socketID := "0"
 	coreID := "1"
 	threadID := "0"
-	err := q.ExecuteCPUDeviceAdd(context.Background(), driver, cpuID, socketID, coreID, threadID)
+	err := q.ExecuteCPUDeviceAdd(context.Background(), driver, cpuID, socketID, coreID, threadID, "")
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -1237,7 +1237,7 @@ func TestExecutePCIVSockAdd(t *testing.T) {
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
-	err := q.ExecutePCIVSockAdd(context.Background(), "vsock-pci0", "3", "1", "1", "1", true)
+	err := q.ExecutePCIVSockAdd(context.Background(), "vsock-pci0", "3", "1", "1", "1", "", true)
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
