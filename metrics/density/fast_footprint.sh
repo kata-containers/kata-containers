@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright (c) 2017-2018 Intel Corporation
-# 
+#
 # SPDX-License-Identifier: Apache-2.0
 #
 # A script to gather memory 'footprint' information as we launch more
@@ -23,15 +23,25 @@
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../lib/common.bash"
 
-KSM_ENABLE_FILE="/sys/kernel/mm/ksm/run"
-
 # Note that all vars that can be set from outside the script (that is,
 # passed in the ENV), use the ':-' setting to allow being over-ridden
 
-# Default sleep for 10s to let containers come up and finish their
+# Default sleep, in seconds, to let containers come up and finish their
 # initialisation before we take the measures. Some of the larger
 # containers can take a number of seconds to get running.
 PAYLOAD_SLEEP="${PAYLOAD_SLEEP:-10}"
+
+# How long, in seconds, do we wait for KSM to 'settle down', before we
+# timeout and just continue anyway.
+KSM_WAIT_TIME="${KSM_WAIT_TIME:-300}"
+
+# How long, in seconds, do we poll for docker to complete launching all the
+# containers?
+DOCKER_POLL_TIMEOUT="${DOCKER_POLL_TIMEOUT:-300}"
+
+# How many containers do we launch in parallel before taking the PAYLOAD_SLEEP
+# nap
+PARALLELISM="${PARALLELISM:-10}"
 
 ### The default config - run a small busybox image
 # Define what we will be running (app under test)
@@ -63,9 +73,9 @@ PAYLOAD_RUNTIME_ARGS="${PAYLOAD_RUNTIME_ARGS:- -m 2G}"
 ###
 # Define the cutoff checks for when we stop running the test
   # Run up to this many containers
-MAX_NUM_CONTAINERS="${MAX_NUM_CONTAINERS:-20}"
+NUM_CONTAINERS="${NUM_CONTAINERS:-200}"
   # Run until we have consumed this much memory (from MemFree)
-MAX_MEMORY_CONSUMED="${MAX_MEMORY_CONSUMED:-6*1024*1024*1024}"
+MAX_MEMORY_CONSUMED="${MAX_MEMORY_CONSUMED:-256*1024*1024*1024}"
   # Run until we have this much MemFree left
 MIN_MEMORY_FREE="${MIN_MEMORY_FREE:-2*1024*1024*1024}"
 
@@ -85,7 +95,7 @@ REQUIRED_COMMANDS="smem awk"
 DUMP_CACHES="${DUMP_CACHES:-1}"
 
 # Affects the name of the file to store the results in
-TEST_NAME="${TEST_NAME:-footprint-${PAYLOAD}}"
+TEST_NAME="${TEST_NAME:-fast-footprint-${PAYLOAD}}"
 
 ############# end of configurable items ###################
 
@@ -130,7 +140,9 @@ save_config(){
 		"payload_args": "${PAYLOAD_ARGS}",
 		"payload_runtime_args": "${PAYLOAD_RUNTIME_ARGS}",
 		"payload_sleep": ${PAYLOAD_SLEEP},
-		"max_containers": ${MAX_NUM_CONTAINERS},
+		"ksm_settle_time": ${KSM_WAIT_TIME},
+		"num_containers": ${NUM_CONTAINERS},
+		"parallelism": ${PARALLELISM},
 		"max_memory_consumed": "${MAX_MEMORY_CONSUMED}",
 		"min_memory_free": "${MIN_MEMORY_FREE}",
 		"dockerd_path": "${DOCKERD_PATH}",
@@ -377,31 +389,80 @@ function check_limits() {
 	echo 0
 }
 
-function go() {
-	# Init the json cycle for this save
-	metrics_json_start_array
+launch_containers() {
+	local parloops leftovers
 
-	for i in $(seq 1 $MAX_NUM_CONTAINERS); do
-		docker run --rm -tid --runtime=$RUNTIME $PAYLOAD_RUNTIME_ARGS $PAYLOAD $PAYLOAD_ARGS
+	(( parloops=${NUM_CONTAINERS}/${PARALLELISM} ))
+	(( leftovers=${NUM_CONTAINERS} - (${parloops}*${PARALLELISM}) ))
+
+	echo "Launching ${parloops}x${PARALLELISM} containers + ${leftovers} etras"
+
+	local iter n
+	for iter in $(seq 1 $parloops); do
+		echo "Launch iteration ${iter}"
+		for n in $(seq 1 $PARALLELISM); do
+			docker run --rm -d --runtime=$RUNTIME $PAYLOAD_RUNTIME_ARGS $PAYLOAD $PAYLOAD_ARGS &
+		done
 
 		if [[ $PAYLOAD_SLEEP ]]; then
 			sleep $PAYLOAD_SLEEP
 		fi
 
-		grab_stats
-
 		# check if we have hit one of our limits and need to wrap up the tests
 		if (($(check_limits))); then
-			# Wrap up the results array
-			metrics_json_end_array "Results"
+			echo "Ran out of resources, check_limits failed"
 			return
 		fi
 	done
 
+	for n in $(seq 1 $leftovers); do
+		docker run --rm -d --runtime=$RUNTIME $PAYLOAD_RUNTIME_ARGS $PAYLOAD $PAYLOAD_ARGS &
+	done
+}
+
+wait_containers() {
+	local t numcontainers
+	# nap 3s between checks
+	local step=3
+
+	for ((t=0; t<${DOCKER_POLL_TIMEOUT}; t+=step)); do
+
+		numcontainers=$(docker ps -qa | wc -l)
+
+		if (( numcontainers >=  ${NUM_CONTAINERS} )); then
+			echo "All containers now launched (${t}s)"
+				return
+		else
+			echo "Waiting for containers to launch (${numcontainers} at ${t}s)"
+		fi
+		sleep ${step}
+	done
+
+	echo "Timed out waiting for containers to launch (${t}s)"
+	cleanup
+	die "Timed out waiting for containers to launch (${t}s)"
+}
+
+function go() {
+	# Init the json cycle for this save
+	metrics_json_start_array
+
+	# Grab the first set of stats before we run any containers.
+	grab_stats
+
+	launch_containers
+	wait_containers
+
+	if [ $ksm_on == "1" ]; then
+		echo "Wating for KSM to settle..."
+		wait_ksm_settle ${KSM_WAIT_TIME}
+	fi
+
+	grab_stats
+
 	# Wrap up the results array
 	metrics_json_end_array "Results"
 }
-
 
 function show_vars()
 {
@@ -416,8 +477,14 @@ function show_vars()
 	echo -e "\t\tAny extra arguments passed into the docker 'run' command"
 	echo -e "\tPAYLOAD_SLEEP (${PAYLOAD_SLEEP})"
 	echo -e "\t\tSeconds to sleep between launch and measurement, to allow settling"
-	echo -e "\tMAX_NUM_CONTAINERS (${MAX_NUM_CONTAINERS})"
-	echo -e "\t\tThe maximum number of containers to run before terminating"
+	echo -e "\tKSM_WAIT_TIME (${KSM_WAIT_TIME})"
+	echo -e "\t\tSeconds to wait for KSM to settle before we take the final measure"
+	echo -e "\tDOCKER_POLL_TIMEOUT (${DOCKER_POLL_TIMEOUT})"
+	echo -e "\t\tSeconds to poll for docker to finish launching containers"
+	echo -e "\tPARALLELISM (${PARALLELISM})"
+	echo -e "\t\tNumber of containers we launch in parallel"
+	echo -e "\tNUM_CONTAINERS (${NUM_CONTAINERS})"
+	echo -e "\t\tThe total number of containers to run"
 	echo -e "\tMAX_MEMORY_CONSUMED (${MAX_MEMORY_CONSUMED})"
 	echo -e "\t\tThe maximum amount of memory to be consumed before terminating"
 	echo -e "\tMIN_MEMORY_FREE (${MIN_MEMORY_FREE})"

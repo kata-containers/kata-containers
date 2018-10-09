@@ -50,20 +50,6 @@ Usage: $0 <count> <wait_time> [auto]
 EOF
 }
 
-# See if KSM is enabled.
-# If so, ammend the test name to reflect that
-check_for_ksm(){
-	if [ ! -f ${KSM_ENABLE_FILE} ]; then
-		return
-	fi
-
-	ksm_on=$(< ${KSM_ENABLE_FILE})
-
-	if [ $ksm_on == "1" ]; then
-		TEST_NAME="${TEST_NAME} ksm"
-	fi
-}
-
 # This function measures the PSS average
 # memory about the child process of each
 # docker-containerd-shim instance in the
@@ -198,59 +184,6 @@ EOF
 )"
 	metrics_json_add_array_element "$json"
 	metrics_json_end_array "Raw results"
-}
-
-
-# Wait for KSM to settle down, or timeout waiting
-# The basic algorithm is to look at the pages_shared value
-# at the end of every 'full scan', and if the value
-# has changed very little, then we are done (because we presume
-# a full scan has managed to do few new merges)
-#
-# arg1 - timeout in seconds
-wait_ksm_settle(){
-	local t pcnt
-	local oldscan=-1 newscan
-	local oldpages=-1 newpages
-
-	oldscan=$(cat /sys/kernel/mm/ksm/full_scans)
-
-	# Go around the loop until either we see a small % change
-	# between two full_scans, or we timeout
-	for ((t=0; t<$1; t++)); do
-
-		newscan=$(cat /sys/kernel/mm/ksm/full_scans)
-		if (( newscan != oldscan )); then
-			echo -e "\nnew full_scan ($oldscan to $newscan)"
-
-			newpages=$(cat /sys/kernel/mm/ksm/pages_shared)
-			# Do we have a previous scan to compare with
-			echo "check pages $oldpages to $newpages"
-			if (( oldpages != -1 )); then
-				# avoid divide by zero problems
-				if (( $oldpages > 0 )); then
-					pcnt=$(( 100 - ((newpages * 100) / oldpages) ))
-					# abs()
-					pcnt=$(( $pcnt * -1 ))
-
-					echo "$oldpages to $newpages is ${pcnt}%"
-
-					if (( $pcnt <= 5 )); then
-						echo "KSM stabilised at ${t}s"
-						return
-					fi
-				else
-					echo "$oldpages KSM pages... waiting"
-				fi
-			fi
-			oldscan=$newscan
-			oldpages=$newpages
-		else
-			echo -n "."
-		fi
-		sleep 1
-	done
-	echo "Timed out after ${1}s waiting for KSM to settle"
 }
 
 # Try to work out the 'average memory footprint' of a container.
