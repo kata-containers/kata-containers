@@ -55,7 +55,6 @@ func (endpoint *MacvtapEndpoint) SetProperties(properties NetworkInfo) {
 
 // Attach for macvtap endpoint passes macvtap device to the hypervisor.
 func (endpoint *MacvtapEndpoint) Attach(h hypervisor) error {
-	networkLogger().WithField("endpoint-type", "macvtap").Info("Attaching endpoint")
 	var err error
 
 	endpoint.VMFds, err = createMacvtapFds(endpoint.EndpointProperties.Iface.Index, int(h.hypervisorConfig().NumVCPUs))
@@ -76,7 +75,6 @@ func (endpoint *MacvtapEndpoint) Attach(h hypervisor) error {
 
 // Detach for macvtap endpoint does nothing.
 func (endpoint *MacvtapEndpoint) Detach(netNsCreated bool, netNsPath string) error {
-	networkLogger().WithField("endpoint-type", "macvtap").Info("Detaching endpoint")
 	return nil
 }
 

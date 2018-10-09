@@ -69,8 +69,6 @@ func (endpoint *VhostUserEndpoint) NetworkPair() *NetworkInterfacePair {
 
 // Attach for vhostuser endpoint
 func (endpoint *VhostUserEndpoint) Attach(h hypervisor) error {
-	networkLogger().WithField("endpoint-type", "vhostuser").Info("Attaching endpoint")
-
 	// Generate a unique ID to be used for hypervisor commandline fields
 	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
@@ -90,7 +88,6 @@ func (endpoint *VhostUserEndpoint) Attach(h hypervisor) error {
 
 // Detach for vhostuser endpoint
 func (endpoint *VhostUserEndpoint) Detach(netNsCreated bool, netNsPath string) error {
-	networkLogger().WithField("endpoint-type", "vhostuser").Info("Detaching endpoint")
 	return nil
 }
 

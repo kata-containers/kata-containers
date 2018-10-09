@@ -79,7 +79,6 @@ func (endpoint *BridgedMacvlanEndpoint) NetworkPair() *NetworkInterfacePair {
 // Attach for virtual endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
 func (endpoint *BridgedMacvlanEndpoint) Attach(h hypervisor) error {
-	networkLogger().Info("Attaching macvlan endpoint")
 	if err := xconnectVMNetwork(endpoint, true, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual ep")
 		return err
@@ -97,10 +96,7 @@ func (endpoint *BridgedMacvlanEndpoint) Detach(netNsCreated bool, netNsPath stri
 		return nil
 	}
 
-	networkLogger().Info("Detaching virtual endpoint")
-
 	return doNetNS(netNsPath, func(_ ns.NetNS) error {
-		//return xconnectVMNetwork(&(endpoint.NetPair), false, 0, false, endpoint.EndpointType)
 		return xconnectVMNetwork(endpoint, false, 0, false)
 	})
 }
