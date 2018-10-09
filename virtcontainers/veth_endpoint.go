@@ -83,8 +83,6 @@ func (endpoint *VethEndpoint) SetProperties(properties NetworkInfo) {
 // Attach for veth endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
 func (endpoint *VethEndpoint) Attach(h hypervisor) error {
-	networkLogger().WithField("endpoint-type", "virtual").Info("Attaching endpoint")
-
 	if err := xconnectVMNetwork(endpoint, true, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual endpoint")
 		return err
@@ -102,8 +100,6 @@ func (endpoint *VethEndpoint) Detach(netNsCreated bool, netNsPath string) error 
 		return nil
 	}
 
-	networkLogger().WithField("endpoint-type", "virtual").Info("Detaching endpoint")
-
 	return doNetNS(netNsPath, func(_ ns.NetNS) error {
 		return xconnectVMNetwork(endpoint, false, 0, false)
 	})
@@ -111,7 +107,6 @@ func (endpoint *VethEndpoint) Detach(netNsCreated bool, netNsPath string) error 
 
 // HotAttach for the veth endpoint uses hot plug device
 func (endpoint *VethEndpoint) HotAttach(h hypervisor) error {
-	networkLogger().Info("Hot attaching virtual endpoint")
 	if err := xconnectVMNetwork(endpoint, true, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual ep")
 		return err
@@ -129,7 +124,7 @@ func (endpoint *VethEndpoint) HotDetach(h hypervisor, netNsCreated bool, netNsPa
 	if !netNsCreated {
 		return nil
 	}
-	networkLogger().Info("Hot detaching virtual endpoint")
+
 	if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
 		return xconnectVMNetwork(endpoint, false, 0, h.hypervisorConfig().DisableVhostNet)
 	}); err != nil {

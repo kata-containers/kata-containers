@@ -66,8 +66,6 @@ func (endpoint *PhysicalEndpoint) NetworkPair() *NetworkInterfacePair {
 // Attach for physical endpoint binds the physical network interface to
 // vfio-pci and adds device to the hypervisor with vfio-passthrough.
 func (endpoint *PhysicalEndpoint) Attach(h hypervisor) error {
-	networkLogger().WithField("endpoint-type", "physical").Info("Attaching endpoint")
-
 	// Unbind physical interface from host driver and bind to vfio
 	// so that it can be passed to qemu.
 	if err := bindNICToVFIO(endpoint); err != nil {
@@ -88,7 +86,6 @@ func (endpoint *PhysicalEndpoint) Detach(netNsCreated bool, netNsPath string) er
 	// Bind back the physical network interface to host.
 	// We need to do this even if a new network namespace has not
 	// been created by virtcontainers.
-	networkLogger().WithField("endpoint-type", "physical").Info("Detaching endpoint")
 
 	// We do not need to enter the network namespace to bind back the
 	// physical interface to host driver.

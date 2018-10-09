@@ -1116,6 +1116,7 @@ func (s *Sandbox) AddInterface(inf *grpc.Interface) (*grpc.Interface, error) {
 
 	endpoint.SetProperties(netInfo)
 	if err := doNetNS(s.networkNS.NetNsPath, func(_ ns.NetNS) error {
+		s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot attaching endpoint")
 		return endpoint.HotAttach(s.hypervisor)
 	}); err != nil {
 		return nil, err
@@ -1136,6 +1137,7 @@ func (s *Sandbox) AddInterface(inf *grpc.Interface) (*grpc.Interface, error) {
 func (s *Sandbox) RemoveInterface(inf *grpc.Interface) (*grpc.Interface, error) {
 	for i, endpoint := range s.networkNS.Endpoints {
 		if endpoint.HardwareAddr() == inf.HwAddr {
+			s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot detaching endpoint")
 			if err := endpoint.HotDetach(s.hypervisor, s.networkNS.NetNsCreated, s.networkNS.NetNsPath); err != nil {
 				return inf, err
 			}
