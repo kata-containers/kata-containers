@@ -320,8 +320,10 @@ func TestContainerAddResources(t *testing.T) {
 	assert.Nil(err)
 
 	vCPUs := uint32(5)
+	memByte := int64(104857600)
 	c.config.Resources = ContainerResources{
-		VCPUs: vCPUs,
+		VCPUs:   vCPUs,
+		MemByte: memByte,
 	}
 	c.sandbox = &Sandbox{
 		hypervisor: &mockHypervisor{
