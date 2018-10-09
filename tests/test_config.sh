@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-distrosSystemd=(fedora centos ubuntu debian)
+distrosSystemd=(fedora centos ubuntu debian suse)
 distrosAgent=(alpine)
 
 if [ $MACHINE_TYPE != "ppc64le" ]; then
