@@ -232,8 +232,8 @@ func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 				"endpoint-type": "physical",
 			}).Info("endpoint unmarshalled")
 
-		case VirtualEndpointType:
-			var endpoint VirtualEndpoint
+		case VethEndpointType:
+			var endpoint VethEndpoint
 			err := json.Unmarshal(e.Data, &endpoint)
 			if err != nil {
 				return err
@@ -394,7 +394,7 @@ func getLinkForEndpoint(endpoint Endpoint, netHandle *netlink.Handle) (netlink.L
 	var link netlink.Link
 
 	switch ep := endpoint.(type) {
-	case *VirtualEndpoint:
+	case *VethEndpoint:
 		link = &netlink.Veth{}
 	case *BridgedMacvlanEndpoint:
 		link = &netlink.Macvlan{}
@@ -1117,7 +1117,7 @@ func createEndpoint(netInfo NetworkInfo, idx int, model NetInterworkingModel) (E
 			networkLogger().Infof("macvtap interface found")
 			endpoint, err = createMacvtapNetworkEndpoint(netInfo)
 		} else {
-			endpoint, err = createVirtualNetworkEndpoint(idx, netInfo.Iface.Name, model)
+			endpoint, err = createVethNetworkEndpoint(idx, netInfo.Iface.Name, model)
 		}
 	}
 
