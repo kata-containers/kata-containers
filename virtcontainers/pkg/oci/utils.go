@@ -547,6 +547,7 @@ func ContainerConfig(ocispec CompatOCISpec, bundlePath, cid, console string, det
 	if ocispec.Linux.Resources.Memory != nil {
 		if ocispec.Linux.Resources.Memory.Limit != nil {
 			// do page align to memory, as cgroup memory.limit_in_bytes will be aligned to page when effect
+			// TODO use GetGuestDetails to get the guest OS page size.
 			resources.MemByte = (*ocispec.Linux.Resources.Memory.Limit >> 12) << 12
 		}
 	}

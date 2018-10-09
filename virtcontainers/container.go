@@ -1187,50 +1187,13 @@ func (c *Container) addResources() error {
 		return nil
 	}
 
-	// Container is being created, try to add the number of vCPUs specified
-	vCPUs := c.config.Resources.VCPUs
-	if vCPUs != 0 {
-		virtLog.Debugf("create container: hot adding %d vCPUs", vCPUs)
-		data, err := c.sandbox.hypervisor.hotplugAddDevice(vCPUs, cpuDev)
-		if err != nil {
-			return err
-		}
-
-		vcpusAdded, ok := data.(uint32)
-		if !ok {
-			return fmt.Errorf("Could not get the number of vCPUs added, got %+v", data)
-		}
-
-		// A different number of vCPUs was added, we have to update
-		// the resources in order to don't remove vCPUs used by other containers.
-		if vcpusAdded != vCPUs {
-			// Set and save container's config
-			c.config.Resources.VCPUs = vcpusAdded
-			if err := c.storeContainer(); err != nil {
-				return err
-			}
-		}
-
-		if err := c.sandbox.agent.onlineCPUMem(vcpusAdded, true); err != nil {
-			return err
-		}
+	addResources := ContainerResources{
+		VCPUs:   c.config.Resources.VCPUs,
+		MemByte: c.config.Resources.MemByte,
 	}
 
-	// try to add the number of Mem specified
-	addMemByte := c.config.Resources.MemByte
-	if addMemByte != 0 {
-		memHotplugMB, err := c.calcHotplugMemMiBSize(addMemByte)
-		if err != nil {
-			return err
-		}
-		virtLog.Debugf("create container: hotplug %dMB mem", memHotplugMB)
-		_, err = c.sandbox.hypervisor.hotplugAddDevice(&memoryDevice{sizeMB: int(memHotplugMB)}, memoryDev)
-		if err != nil {
-			return err
-		}
-		if err := c.sandbox.agent.onlineCPUMem(0, false); err != nil {
-			return err
-		}
+	if err := c.updateResources(ContainerResources{0, 0}, addResources); err != nil {
+		return err
 	}
 
 	return nil
@@ -1261,7 +1224,7 @@ func (c *Container) removeResources() error {
 	return nil
 }
 
-func (c *Container) updateVCPUResources(oldResources, newResources ContainerResources) error {
+func (c *Container) updateVCPUResources(oldResources ContainerResources, newResources *ContainerResources) error {
 	var vCPUs uint32
 	oldVCPUs := oldResources.VCPUs
 	newVCPUs := newResources.VCPUs
@@ -1274,12 +1237,10 @@ func (c *Container) updateVCPUResources(oldResources, newResources ContainerReso
 			"new-vcpus": fmt.Sprintf("%d", newVCPUs),
 		}).Debug("the actual number of vCPUs will not be modified")
 		return nil
-	}
-
-	if oldVCPUs < newVCPUs {
+	} else if oldVCPUs < newVCPUs {
 		// hot add vCPUs
 		vCPUs = newVCPUs - oldVCPUs
-		virtLog.Debugf("update container: hot adding %d vCPUs", vCPUs)
+		virtLog.Debugf("hot adding %d vCPUs", vCPUs)
 		data, err := c.sandbox.hypervisor.hotplugAddDevice(vCPUs, cpuDev)
 		if err != nil {
 			return err
@@ -1308,6 +1269,7 @@ func (c *Container) updateVCPUResources(oldResources, newResources ContainerReso
 		// recalculate the actual number of vCPUs if a different number of vCPUs was removed
 		newResources.VCPUs = oldVCPUs - vcpusRemoved
 	}
+
 	return nil
 }
 
@@ -1336,9 +1298,7 @@ func (c *Container) updateMemoryResources(oldResources ContainerResources, newRe
 			"new-mem": fmt.Sprintf("%dByte", newMemByte),
 		}).Debug("the actual number of Mem will not be modified")
 		return nil
-	}
-
-	if oldMemByte < newMemByte {
+	} else if oldMemByte < newMemByte {
 		// hot add memory
 		addMemByte := newMemByte - oldMemByte
 		memHotplugMB, err := c.calcHotplugMemMiBSize(addMemByte)
@@ -1362,8 +1322,7 @@ func (c *Container) updateMemoryResources(oldResources ContainerResources, newRe
 		if err := c.sandbox.agent.onlineCPUMem(0, false); err != nil {
 			return err
 		}
-	}
-	if oldMemByte > newMemByte {
+	} else {
 		// Try to remove a memory device with the difference
 		// from new memory and old memory
 		removeMem := &memoryDevice{
@@ -1380,6 +1339,7 @@ func (c *Container) updateMemoryResources(oldResources ContainerResources, newRe
 		}
 		newResources.MemByte = oldMemByte - int64(memoryRemoved)<<20
 	}
+
 	return nil
 }
 
@@ -1390,10 +1350,9 @@ func (c *Container) updateResources(oldResources, newResources ContainerResource
 
 	// Cpu is not updated if period and/or quota not set
 	if newResources.VCPUs != 0 {
-		if err := c.updateVCPUResources(oldResources, newResources); err != nil {
+		if err := c.updateVCPUResources(oldResources, &newResources); err != nil {
 			return err
 		}
-
 		// Set and save container's config VCPUs field only
 		c.config.Resources.VCPUs = newResources.VCPUs
 		if err := c.storeContainer(); err != nil {
