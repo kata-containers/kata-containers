@@ -32,8 +32,8 @@ const (
 	// PhysicalEndpointType is the physical network interface.
 	PhysicalEndpointType EndpointType = "physical"
 
-	// VirtualEndpointType is the virtual network interface.
-	VirtualEndpointType EndpointType = "virtual"
+	// VethEndpointType is the virtual network interface.
+	VethEndpointType EndpointType = "virtual"
 
 	// VhostUserEndpointType is the vhostuser network interface.
 	VhostUserEndpointType EndpointType = "vhost-user"
@@ -52,7 +52,7 @@ func (endpointType *EndpointType) Set(value string) error {
 		*endpointType = PhysicalEndpointType
 		return nil
 	case "virtual":
-		*endpointType = VirtualEndpointType
+		*endpointType = VethEndpointType
 		return nil
 	case "vhost-user":
 		*endpointType = VhostUserEndpointType
@@ -73,8 +73,8 @@ func (endpointType *EndpointType) String() string {
 	switch *endpointType {
 	case PhysicalEndpointType:
 		return string(PhysicalEndpointType)
-	case VirtualEndpointType:
-		return string(VirtualEndpointType)
+	case VethEndpointType:
+		return string(VethEndpointType)
 	case VhostUserEndpointType:
 		return string(VhostUserEndpointType)
 	case BridgedMacvlanEndpointType:

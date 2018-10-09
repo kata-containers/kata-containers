@@ -25,8 +25,8 @@ func TestPhysicalEndpointTypeSet(t *testing.T) {
 	testEndpointTypeSet(t, "physical", PhysicalEndpointType)
 }
 
-func TestVirtualEndpointTypeSet(t *testing.T) {
-	testEndpointTypeSet(t, "virtual", VirtualEndpointType)
+func TestVethEndpointTypeSet(t *testing.T) {
+	testEndpointTypeSet(t, "virtual", VethEndpointType)
 }
 
 func TestVhostUserEndpointTypeSet(t *testing.T) {
@@ -63,9 +63,9 @@ func TestPhysicalEndpointTypeString(t *testing.T) {
 	testEndpointTypeString(t, &endpointType, string(PhysicalEndpointType))
 }
 
-func TestVirtualEndpointTypeString(t *testing.T) {
-	endpointType := VirtualEndpointType
-	testEndpointTypeString(t, &endpointType, string(VirtualEndpointType))
+func TestVethEndpointTypeString(t *testing.T) {
+	endpointType := VethEndpointType
+	testEndpointTypeString(t, &endpointType, string(VethEndpointType))
 }
 
 func TestVhostUserEndpointTypeString(t *testing.T) {

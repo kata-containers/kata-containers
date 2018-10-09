@@ -11,8 +11,8 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 )
 
-// VirtualEndpoint gathers a network pair and its properties.
-type VirtualEndpoint struct {
+// VethEndpoint gathers a network pair and its properties.
+type VethEndpoint struct {
 	NetPair            NetworkInterfacePair
 	EndpointProperties NetworkInfo
 	Physical           bool
@@ -20,9 +20,9 @@ type VirtualEndpoint struct {
 	PCIAddr            string
 }
 
-func createVirtualNetworkEndpoint(idx int, ifName string, interworkingModel NetInterworkingModel) (*VirtualEndpoint, error) {
+func createVethNetworkEndpoint(idx int, ifName string, interworkingModel NetInterworkingModel) (*VethEndpoint, error) {
 	if idx < 0 {
-		return &VirtualEndpoint{}, fmt.Errorf("invalid network endpoint index: %d", idx)
+		return &VethEndpoint{}, fmt.Errorf("invalid network endpoint index: %d", idx)
 	}
 
 	netPair, err := createNetworkInterfacePair(idx, ifName, interworkingModel)
@@ -30,12 +30,12 @@ func createVirtualNetworkEndpoint(idx int, ifName string, interworkingModel NetI
 		return nil, err
 	}
 
-	endpoint := &VirtualEndpoint{
+	endpoint := &VethEndpoint{
 		// TODO This is too specific. We may need to create multiple
 		// end point types here and then decide how to connect them
 		// at the time of hypervisor attach and not here
 		NetPair:      netPair,
-		EndpointType: VirtualEndpointType,
+		EndpointType: VethEndpointType,
 	}
 	if ifName != "" {
 		endpoint.NetPair.VirtIface.Name = ifName
@@ -45,44 +45,44 @@ func createVirtualNetworkEndpoint(idx int, ifName string, interworkingModel NetI
 }
 
 // Properties returns properties for the veth interface in the network pair.
-func (endpoint *VirtualEndpoint) Properties() NetworkInfo {
+func (endpoint *VethEndpoint) Properties() NetworkInfo {
 	return endpoint.EndpointProperties
 }
 
 // Name returns name of the veth interface in the network pair.
-func (endpoint *VirtualEndpoint) Name() string {
+func (endpoint *VethEndpoint) Name() string {
 	return endpoint.NetPair.VirtIface.Name
 }
 
 // HardwareAddr returns the mac address that is assigned to the tap interface
 // in th network pair.
-func (endpoint *VirtualEndpoint) HardwareAddr() string {
+func (endpoint *VethEndpoint) HardwareAddr() string {
 	return endpoint.NetPair.TAPIface.HardAddr
 }
 
-// Type identifies the endpoint as a virtual endpoint.
-func (endpoint *VirtualEndpoint) Type() EndpointType {
+// Type identifies the endpoint as a veth endpoint.
+func (endpoint *VethEndpoint) Type() EndpointType {
 	return endpoint.EndpointType
 }
 
 // PciAddr returns the PCI address of the endpoint.
-func (endpoint *VirtualEndpoint) PciAddr() string {
+func (endpoint *VethEndpoint) PciAddr() string {
 	return endpoint.PCIAddr
 }
 
 // NetworkPair returns the network pair of the endpoint.
-func (endpoint *VirtualEndpoint) NetworkPair() *NetworkInterfacePair {
+func (endpoint *VethEndpoint) NetworkPair() *NetworkInterfacePair {
 	return &endpoint.NetPair
 }
 
 // SetProperties sets the properties for the endpoint.
-func (endpoint *VirtualEndpoint) SetProperties(properties NetworkInfo) {
+func (endpoint *VethEndpoint) SetProperties(properties NetworkInfo) {
 	endpoint.EndpointProperties = properties
 }
 
-// Attach for virtual endpoint bridges the network pair and adds the
+// Attach for veth endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
-func (endpoint *VirtualEndpoint) Attach(h hypervisor) error {
+func (endpoint *VethEndpoint) Attach(h hypervisor) error {
 	networkLogger().WithField("endpoint-type", "virtual").Info("Attaching endpoint")
 
 	if err := xconnectVMNetwork(endpoint, true, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
@@ -93,9 +93,9 @@ func (endpoint *VirtualEndpoint) Attach(h hypervisor) error {
 	return h.addDevice(endpoint, netDev)
 }
 
-// Detach for the virtual endpoint tears down the tap and bridge
+// Detach for the veth endpoint tears down the tap and bridge
 // created for the veth interface.
-func (endpoint *VirtualEndpoint) Detach(netNsCreated bool, netNsPath string) error {
+func (endpoint *VethEndpoint) Detach(netNsCreated bool, netNsPath string) error {
 	// The network namespace would have been deleted at this point
 	// if it has not been created by virtcontainers.
 	if !netNsCreated {
@@ -109,8 +109,8 @@ func (endpoint *VirtualEndpoint) Detach(netNsCreated bool, netNsPath string) err
 	})
 }
 
-// HotAttach for the virtual endpoint uses hot plug device
-func (endpoint *VirtualEndpoint) HotAttach(h hypervisor) error {
+// HotAttach for the veth endpoint uses hot plug device
+func (endpoint *VethEndpoint) HotAttach(h hypervisor) error {
 	networkLogger().Info("Hot attaching virtual endpoint")
 	if err := xconnectVMNetwork(endpoint, true, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual ep")
@@ -124,8 +124,8 @@ func (endpoint *VirtualEndpoint) HotAttach(h hypervisor) error {
 	return nil
 }
 
-// HotDetach for the virtual endpoint uses hot pull device
-func (endpoint *VirtualEndpoint) HotDetach(h hypervisor, netNsCreated bool, netNsPath string) error {
+// HotDetach for the veth endpoint uses hot pull device
+func (endpoint *VethEndpoint) HotDetach(h hypervisor, netNsCreated bool, netNsPath string) error {
 	if !netNsCreated {
 		return nil
 	}

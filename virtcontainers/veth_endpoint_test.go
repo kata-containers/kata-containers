@@ -11,10 +11,10 @@ import (
 	"testing"
 )
 
-func TestCreateVirtualNetworkEndpoint(t *testing.T) {
+func TestCreateVethNetworkEndpoint(t *testing.T) {
 	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
 
-	expected := &VirtualEndpoint{
+	expected := &VethEndpoint{
 		NetPair: NetworkInterfacePair{
 			ID:   "uniqueTestID-4",
 			Name: "br4_kata",
@@ -27,10 +27,10 @@ func TestCreateVirtualNetworkEndpoint(t *testing.T) {
 			},
 			NetInterworkingModel: DefaultNetInterworkingModel,
 		},
-		EndpointType: VirtualEndpointType,
+		EndpointType: VethEndpointType,
 	}
 
-	result, err := createVirtualNetworkEndpoint(4, "", DefaultNetInterworkingModel)
+	result, err := createVethNetworkEndpoint(4, "", DefaultNetInterworkingModel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,10 +46,10 @@ func TestCreateVirtualNetworkEndpoint(t *testing.T) {
 	}
 }
 
-func TestCreateVirtualNetworkEndpointChooseIfaceName(t *testing.T) {
+func TestCreateVethNetworkEndpointChooseIfaceName(t *testing.T) {
 	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
 
-	expected := &VirtualEndpoint{
+	expected := &VethEndpoint{
 		NetPair: NetworkInterfacePair{
 			ID:   "uniqueTestID-4",
 			Name: "br4_kata",
@@ -62,10 +62,10 @@ func TestCreateVirtualNetworkEndpointChooseIfaceName(t *testing.T) {
 			},
 			NetInterworkingModel: DefaultNetInterworkingModel,
 		},
-		EndpointType: VirtualEndpointType,
+		EndpointType: VethEndpointType,
 	}
 
-	result, err := createVirtualNetworkEndpoint(4, "eth1", DefaultNetInterworkingModel)
+	result, err := createVethNetworkEndpoint(4, "eth1", DefaultNetInterworkingModel)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestCreateVirtualNetworkEndpointChooseIfaceName(t *testing.T) {
 	}
 }
 
-func TestCreateVirtualNetworkEndpointInvalidArgs(t *testing.T) {
+func TestCreateVethNetworkEndpointInvalidArgs(t *testing.T) {
 	type endpointValues struct {
 		idx    int
 		ifName string
@@ -94,7 +94,7 @@ func TestCreateVirtualNetworkEndpointInvalidArgs(t *testing.T) {
 	}
 
 	for _, d := range failingValues {
-		result, err := createVirtualNetworkEndpoint(d.idx, d.ifName, DefaultNetInterworkingModel)
+		result, err := createVethNetworkEndpoint(d.idx, d.ifName, DefaultNetInterworkingModel)
 		if err == nil {
 			t.Fatalf("expected invalid endpoint for %v, got %v", d, result)
 		}
