@@ -1116,8 +1116,10 @@ func createEndpoint(netInfo NetworkInfo, idx int, model NetInterworkingModel) (E
 		} else if netInfo.Iface.Type == "macvtap" {
 			networkLogger().Infof("macvtap interface found")
 			endpoint, err = createMacvtapNetworkEndpoint(netInfo)
-		} else {
+		} else if netInfo.Iface.Type == "veth" {
 			endpoint, err = createVethNetworkEndpoint(idx, netInfo.Iface.Name, model)
+		} else {
+			return nil, fmt.Errorf("Unsupported network interface")
 		}
 	}
 
