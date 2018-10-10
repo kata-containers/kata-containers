@@ -8,7 +8,7 @@
 TIMEOUT := 60
 
 # union for 'make test'
-UNION := functional docker crio docker-compose docker-stability openshift kubernetes swarm vm-factory
+UNION := functional docker crio docker-compose docker-stability openshift kubernetes swarm vm-factory ramdisk
 
 # skipped test suites for docker integration tests
 SKIP :=
@@ -95,6 +95,9 @@ network:
 	cd integration/network/macvlan && \
 	bats macvlan_driver.bats
 
+ramdisk:
+	bash -f integration/ramdisk/ramdisk.sh
+
 test: ${UNION}
 
 check: checkcommits log-parser
@@ -115,5 +118,6 @@ check: checkcommits log-parser
 	pentest \
 	swarm \
 	network \
+	ramdisk \
 	test \
 	vm-factory
