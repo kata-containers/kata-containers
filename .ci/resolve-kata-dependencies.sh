@@ -15,6 +15,8 @@ shim_repo="${shim_repo:-github.com/kata-containers/shim}"
 tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 
 apply_depends_on() {
+	# kata_repo variable is set by the jenkins_job_build.sh
+	# and its value is the repository that we are currently testing.
 	pushd "${GOPATH}/src/${kata_repo}"
 	label_lines=$(git log --format=%s%b master.. | grep "Depends-on:" || true)
 	if [ "${label_lines}" == "" ]; then
@@ -62,13 +64,14 @@ clone_repos() {
 		echo "Cloning ${repo}"
 		go get -d "${repo}" || true
 		repo_dir="${GOPATH}/src/${repo}"
+		pushd "${repo_dir}"
 
-		# The tests repository is cloned and checkout to the PR branch directly in
-		# the CI configuration (e.g. jenkins file or zuul config), because we want
-		# to have latest changes of this repository, since the job starts. So we
-		# need to verify if we are already in the PR branch, before trying to
-		# fetch the same branch.
-		if [ ${repo} == ${tests_repo} ]
+		# When we have a change from the tests repo, the tests repository is cloned
+		# and checkout to the PR branch directly in the CI configuration (e.g. jenkins
+		# config file or zuul config), because we want to have latest changes
+		# of this repository since the job starts. So we need to verify if we
+		# are already in the PR branch, before trying to fetch the same branch.
+		if [ ${repo} == ${tests_repo} ] && [ "${repo}" == "${kata_repo}" ]
 		then
 		current_branch=$(git rev-parse --abbrev-ref HEAD)
 			if [ "${current_branch}" == "${pr_branch}" ]
@@ -78,8 +81,7 @@ clone_repos() {
 			fi
 		fi
 
-		pushd "${repo_dir}"
-		if [ "${repo}" == "${kata_repo}" ]
+		if [ "${repo}" == "${kata_repo}" ] && [ -n "${pr_number}" ]
 		then
 			git fetch origin "pull/${pr_number}/head:${pr_branch}"
 			echo "Checking out to ${pr_branch} branch"
