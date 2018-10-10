@@ -60,3 +60,5 @@ We request you give quality assurance some consideration by:
 If you have a problem, please let us know.  If it's a bug not already documented, by all means please [open an
 issue in github](https://github.com/intel/govmm/issues/new) so we all get visibility
 the problem and work toward resolution.
+
+Any security issues discovered with govmm should be reported by following the instructions on https://01.org/security.
