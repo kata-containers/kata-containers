@@ -896,7 +896,6 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 
 	_, err = createSandbox(context.Background(), spec, runtimeConfig, testContainerID, bundlePath, testConsole, true, true)
 	assert.Error(err)
-	assert.False(vcmock.IsMockError(err))
 }
 
 func TestCreateCreateSandboxFail(t *testing.T) {

@@ -8,7 +8,6 @@ package virtcontainers
 import "context"
 
 type mockHypervisor struct {
-	vCPUs uint32
 }
 
 func (m *mockHypervisor) init(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error {
@@ -63,7 +62,7 @@ func (m *mockHypervisor) addDevice(devInfo interface{}, devType deviceType) erro
 func (m *mockHypervisor) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	switch devType {
 	case cpuDev:
-		return m.vCPUs, nil
+		return devInfo.(uint32), nil
 	case memoryDev:
 		memdev := devInfo.(*memoryDevice)
 		return memdev.sizeMB, nil
@@ -74,7 +73,9 @@ func (m *mockHypervisor) hotplugAddDevice(devInfo interface{}, devType deviceTyp
 func (m *mockHypervisor) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	switch devType {
 	case cpuDev:
-		return m.vCPUs, nil
+		return devInfo.(uint32), nil
+	case memoryDev:
+		return 0, nil
 	}
 	return nil, nil
 }

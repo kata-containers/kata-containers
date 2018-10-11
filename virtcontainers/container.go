@@ -993,6 +993,10 @@ func (c *Container) update(resources specs.LinuxResources) error {
 		return err
 	}
 
+	if err := c.storeContainer(); err != nil {
+		return err
+	}
+
 	return c.sandbox.agent.updateContainer(c.sandbox, *c, resources)
 }
 
@@ -1353,11 +1357,8 @@ func (c *Container) updateResources(oldResources, newResources ContainerResource
 		if err := c.updateVCPUResources(oldResources, &newResources); err != nil {
 			return err
 		}
-		// Set and save container's config VCPUs field only
+		// Set container's config VCPUs field only
 		c.config.Resources.VCPUs = newResources.VCPUs
-		if err := c.storeContainer(); err != nil {
-			return err
-		}
 	}
 
 	// Memory is not updated if memory limit not set
@@ -1366,9 +1367,8 @@ func (c *Container) updateResources(oldResources, newResources ContainerResource
 			return err
 		}
 
-		// Set and save container's config Mem field only
+		// Set container's config MemByte field only
 		c.config.Resources.MemByte = newResources.MemByte
-		return c.storeContainer()
 	}
 
 	return nil
