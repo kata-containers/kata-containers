@@ -126,7 +126,7 @@ func TestAppendDeviceNVDIMM(t *testing.T) {
 	testAppend(object, deviceNVDIMMString, t)
 }
 
-var deviceFSString = "-device virtio-9p-pci,disable-modern=true,fsdev=workload9p,mount_tag=rootfs -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none"
+var deviceFSString = "-device virtio-9p-pci,disable-modern=true,fsdev=workload9p,mount_tag=rootfs,romfile=efi-virtio.rom -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none"
 
 func TestAppendDeviceFS(t *testing.T) {
 	fsdev := FSDevice{
@@ -137,12 +137,13 @@ func TestAppendDeviceFS(t *testing.T) {
 		MountTag:      "rootfs",
 		SecurityModel: None,
 		DisableModern: true,
+		ROMFile:       "efi-virtio.rom",
 	}
 
 	testAppend(fsdev, deviceFSString, t)
 }
 
-var deviceNetworkString = "-netdev tap,id=tap0,vhost=on,ifname=ceth0,downscript=no,script=no -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,disable-modern=true"
+var deviceNetworkString = "-netdev tap,id=tap0,vhost=on,ifname=ceth0,downscript=no,script=no -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,disable-modern=true,romfile=efi-virtio.rom"
 
 func TestAppendDeviceNetwork(t *testing.T) {
 	netdev := NetDevice{
@@ -155,12 +156,13 @@ func TestAppendDeviceNetwork(t *testing.T) {
 		VHost:         true,
 		MACAddress:    "01:02:de:ad:be:ef",
 		DisableModern: true,
+		ROMFile:       "efi-virtio.rom",
 	}
 
 	testAppend(netdev, deviceNetworkString, t)
 }
 
-var deviceNetworkStringMq = "-netdev tap,id=tap0,vhost=on,fds=3:4 -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,disable-modern=true,mq=on,vectors=6"
+var deviceNetworkStringMq = "-netdev tap,id=tap0,vhost=on,fds=3:4 -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,disable-modern=true,mq=on,vectors=6,romfile=efi-virtio.rom"
 
 func TestAppendDeviceNetworkMq(t *testing.T) {
 	foo, _ := ioutil.TempFile(os.TempDir(), "govmm-qemu-test")
@@ -184,12 +186,13 @@ func TestAppendDeviceNetworkMq(t *testing.T) {
 		VHost:         true,
 		MACAddress:    "01:02:de:ad:be:ef",
 		DisableModern: true,
+		ROMFile:       "efi-virtio.rom",
 	}
 
 	testAppend(netdev, deviceNetworkStringMq, t)
 }
 
-var deviceNetworkPCIString = "-netdev tap,id=tap0,vhost=on,ifname=ceth0,downscript=no,script=no -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true"
+var deviceNetworkPCIString = "-netdev tap,id=tap0,vhost=on,ifname=ceth0,downscript=no,script=no -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true,romfile=efi-virtio.rom"
 
 func TestAppendDeviceNetworkPCI(t *testing.T) {
 
@@ -205,12 +208,13 @@ func TestAppendDeviceNetworkPCI(t *testing.T) {
 		VHost:         true,
 		MACAddress:    "01:02:de:ad:be:ef",
 		DisableModern: true,
+		ROMFile:       "efi-virtio.rom",
 	}
 
 	testAppend(netdev, deviceNetworkPCIString, t)
 }
 
-var deviceNetworkPCIStringMq = "-netdev tap,id=tap0,vhost=on,fds=3:4 -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true,mq=on,vectors=6"
+var deviceNetworkPCIStringMq = "-netdev tap,id=tap0,vhost=on,fds=3:4 -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true,mq=on,vectors=6,romfile=efi-virtio.rom"
 
 func TestAppendDeviceNetworkPCIMq(t *testing.T) {
 	foo, _ := ioutil.TempFile(os.TempDir(), "govmm-qemu-test")
@@ -236,18 +240,20 @@ func TestAppendDeviceNetworkPCIMq(t *testing.T) {
 		VHost:         true,
 		MACAddress:    "01:02:de:ad:be:ef",
 		DisableModern: true,
+		ROMFile:       "efi-virtio.rom",
 	}
 
 	testAppend(netdev, deviceNetworkPCIStringMq, t)
 }
 
-var deviceSerialString = "-device virtio-serial-pci,disable-modern=true,id=serial0"
+var deviceSerialString = "-device virtio-serial-pci,disable-modern=true,id=serial0,romfile=efi-virtio.rom"
 
 func TestAppendDeviceSerial(t *testing.T) {
 	sdev := SerialDevice{
 		Driver:        VirtioSerial,
 		ID:            "serial0",
 		DisableModern: true,
+		ROMFile:       "efi-virtio.rom",
 	}
 
 	testAppend(sdev, deviceSerialString, t)
@@ -268,7 +274,7 @@ func TestAppendDeviceSerialPort(t *testing.T) {
 	testAppend(chardev, deviceSerialPortString, t)
 }
 
-var deviceBlockString = "-device virtio-blk,disable-modern=true,drive=hd0,scsi=off,config-wce=off -drive id=hd0,file=/var/lib/vm.img,aio=threads,format=qcow2,if=none"
+var deviceBlockString = "-device virtio-blk,disable-modern=true,drive=hd0,scsi=off,config-wce=off,romfile=efi-virtio.rom -drive id=hd0,file=/var/lib/vm.img,aio=threads,format=qcow2,if=none"
 
 func TestAppendDeviceBlock(t *testing.T) {
 	blkdev := BlockDevice{
@@ -281,14 +287,15 @@ func TestAppendDeviceBlock(t *testing.T) {
 		SCSI:          false,
 		WCE:           false,
 		DisableModern: true,
+		ROMFile:       "efi-virtio.rom",
 	}
 
 	testAppend(blkdev, deviceBlockString, t)
 }
 
-var deviceVhostUserNetString = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -netdev type=vhost-user,id=net1,chardev=char1,vhostforce -device virtio-net-pci,netdev=net1,mac=00:11:22:33:44:55"
-var deviceVhostUserSCSIString = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -device vhost-user-scsi-pci,id=scsi1,chardev=char1"
-var deviceVhostUserBlkString = "-chardev socket,id=char2,path=/tmp/nonexistentsocket.socket -device vhost-user-blk-pci,logical_block_size=4096,size=512M,chardev=char2"
+var deviceVhostUserNetString = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -netdev type=vhost-user,id=net1,chardev=char1,vhostforce -device virtio-net-pci,netdev=net1,mac=00:11:22:33:44:55,romfile=efi-virtio.rom"
+var deviceVhostUserSCSIString = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -device vhost-user-scsi-pci,id=scsi1,chardev=char1,romfile=efi-virtio.rom"
+var deviceVhostUserBlkString = "-chardev socket,id=char2,path=/tmp/nonexistentsocket.socket -device vhost-user-blk-pci,logical_block_size=4096,size=512M,chardev=char2,romfile=efi-virtio.rom"
 
 func TestAppendDeviceVhostUser(t *testing.T) {
 
@@ -298,6 +305,7 @@ func TestAppendDeviceVhostUser(t *testing.T) {
 		TypeDevID:     "",
 		Address:       "",
 		VhostUserType: VhostUserBlk,
+		ROMFile:       "efi-virtio.rom",
 	}
 	testAppend(vhostuserBlkDevice, deviceVhostUserBlkString, t)
 
@@ -307,6 +315,7 @@ func TestAppendDeviceVhostUser(t *testing.T) {
 		TypeDevID:     "scsi1",
 		Address:       "",
 		VhostUserType: VhostUserSCSI,
+		ROMFile:       "efi-virtio.rom",
 	}
 	testAppend(vhostuserSCSIDevice, deviceVhostUserSCSIString, t)
 
@@ -316,21 +325,23 @@ func TestAppendDeviceVhostUser(t *testing.T) {
 		TypeDevID:     "net1",
 		Address:       "00:11:22:33:44:55",
 		VhostUserType: VhostUserNet,
+		ROMFile:       "efi-virtio.rom",
 	}
 	testAppend(vhostuserNetDevice, deviceVhostUserNetString, t)
 }
 
-var deviceVFIOString = "-device vfio-pci,host=02:10.0"
+var deviceVFIOString = "-device vfio-pci,host=02:10.0,romfile=efi-virtio.rom"
 
 func TestAppendDeviceVFIO(t *testing.T) {
 	vfioDevice := VFIODevice{
-		BDF: "02:10.0",
+		BDF:     "02:10.0",
+		ROMFile: "efi-virtio.rom",
 	}
 
 	testAppend(vfioDevice, deviceVFIOString, t)
 }
 
-var deviceVSOCKString = "-device vhost-vsock-pci,disable-modern=true,id=vhost-vsock-pci0,guest-cid=4"
+var deviceVSOCKString = "-device vhost-vsock-pci,disable-modern=true,id=vhost-vsock-pci0,guest-cid=4,romfile=efi-virtio.rom"
 
 func TestAppendVSOCK(t *testing.T) {
 	vsockDevice := VSOCKDevice{
@@ -338,6 +349,7 @@ func TestAppendVSOCK(t *testing.T) {
 		ContextID:     4,
 		VHostFD:       nil,
 		DisableModern: true,
+		ROMFile:       "efi-virtio.rom",
 	}
 
 	testAppend(vsockDevice, deviceVSOCKString, t)
@@ -364,9 +376,10 @@ func TestVSOCKValid(t *testing.T) {
 
 func TestAppendVirtioRng(t *testing.T) {
 	var objectString = "-object rng-random,id=rng0"
-	var deviceString = "-device " + string(VirtioRng) + ",rng=rng0"
+	var deviceString = "-device " + string(VirtioRng) + ",rng=rng0,romfile=efi-virtio.rom"
 	rngDevice := RngDevice{
-		ID: "rng0",
+		ID:      "rng0",
+		ROMFile: "efi-virtio.rom",
 	}
 
 	testAppend(rngDevice, objectString+" "+deviceString, t)
@@ -406,11 +419,12 @@ func TestVirtioRngValid(t *testing.T) {
 
 func TestAppendVirtioBalloon(t *testing.T) {
 	balloonDevice := BalloonDevice{
-		ID: "balloon",
+		ID:      "balloon",
+		ROMFile: "efi-virtio.rom",
 	}
 
 	var deviceString = "-device " + string(VirtioBalloon)
-	deviceString += ",id=" + balloonDevice.ID
+	deviceString += ",id=" + balloonDevice.ID + ",romfile=" + balloonDevice.ROMFile
 
 	var OnDeflateOnOMM = ",deflate-on-oom=on"
 	var OffDeflateOnOMM = ",deflate-on-oom=off"
@@ -443,12 +457,13 @@ func TestVirtioBalloonValid(t *testing.T) {
 	}
 }
 
-var deviceSCSIControllerStr = "-device virtio-scsi-pci,id=foo"
-var deviceSCSIControllerBusAddrStr = "-device virtio-scsi-pci,id=foo,bus=pci.0,addr=00:04.0,disable-modern=true,iothread=iothread1"
+var deviceSCSIControllerStr = "-device virtio-scsi-pci,id=foo,romfile=efi-virtio.rom"
+var deviceSCSIControllerBusAddrStr = "-device virtio-scsi-pci,id=foo,bus=pci.0,addr=00:04.0,disable-modern=true,iothread=iothread1,romfile=efi-virtio.rom"
 
 func TestAppendDeviceSCSIController(t *testing.T) {
 	scsiCon := SCSIController{
-		ID: "foo",
+		ID:      "foo",
+		ROMFile: "efi-virtio.rom",
 	}
 	testAppend(scsiCon, deviceSCSIControllerStr, t)
 
@@ -459,7 +474,7 @@ func TestAppendDeviceSCSIController(t *testing.T) {
 	testAppend(scsiCon, deviceSCSIControllerBusAddrStr, t)
 }
 
-var devicePCIBridgeString = "-device pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,chassis_nr=5,shpc=on,addr=ff"
+var devicePCIBridgeString = "-device pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,chassis_nr=5,shpc=on,addr=ff,romfile=efi-virtio.rom"
 
 func TestAppendPCIBridgeDevice(t *testing.T) {
 
@@ -470,20 +485,22 @@ func TestAppendPCIBridgeDevice(t *testing.T) {
 		Addr:    "255",
 		Chassis: 5,
 		SHPC:    true,
+		ROMFile: "efi-virtio.rom",
 	}
 
 	testAppend(bridge, devicePCIBridgeString, t)
 }
 
-var devicePCIEBridgeString = "-device pcie-pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,addr=ff"
+var devicePCIEBridgeString = "-device pcie-pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,addr=ff,romfile=efi-virtio.rom"
 
 func TestAppendPCIEBridgeDevice(t *testing.T) {
 
 	bridge := BridgeDevice{
-		Type: PCIEBridge,
-		ID:   "mybridge",
-		Bus:  "/pci-bus/pcie.0",
-		Addr: "255",
+		Type:    PCIEBridge,
+		ID:      "mybridge",
+		Bus:     "/pci-bus/pcie.0",
+		Addr:    "255",
+		ROMFile: "efi-virtio.rom",
 	}
 
 	testAppend(bridge, devicePCIEBridgeString, t)
