@@ -58,6 +58,7 @@ func (n *defNetwork) add(s *Sandbox) error {
 
 	err = doNetNS(s.config.NetworkConfig.NetNSPath, func(_ ns.NetNS) error {
 		for _, endpoint := range s.networkNS.Endpoints {
+			n.logger().WithField("endpoint-type", endpoint.Type()).Info("Attaching endpoint")
 			if err := endpoint.Attach(s.hypervisor); err != nil {
 				return err
 			}
@@ -83,6 +84,7 @@ func (n *defNetwork) remove(s *Sandbox) error {
 	for _, endpoint := range s.networkNS.Endpoints {
 		// Detach for an endpoint should enter the network namespace
 		// if required.
+		n.logger().WithField("endpoint-type", endpoint.Type()).Info("Detaching endpoint")
 		if err := endpoint.Detach(s.networkNS.NetNsCreated, s.networkNS.NetNsPath); err != nil {
 			return err
 		}
