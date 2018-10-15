@@ -83,16 +83,13 @@ func TestCCCheckCLIFunction(t *testing.T) {
 
 		moduleData = []testModuleData{
 			{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), false, "Y"},
-			{filepath.Join(sysModuleDir, "kvm_intel/parameters/nested"), false, "Y"},
 		}
 	} else if cpuType == cpuTypeAMD {
 		cpuData = []testCPUData{
 			{archAuthenticAMD, "lm svm sse4_1", false},
 		}
 
-		moduleData = []testModuleData{
-			{filepath.Join(sysModuleDir, "kvm_amd/parameters/nested"), false, "1"},
-		}
+		moduleData = []testModuleData{}
 	}
 
 	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0666)
