@@ -67,7 +67,6 @@ func setCPUtype() {
 			"kvm_intel": {
 				desc: "Intel KVM",
 				parameters: map[string]string{
-					"nested": "Y",
 					// "VMX Unrestricted mode support". This is used
 					// as a heuristic to determine if the system is
 					// "new enough" to run a Kata Container
@@ -97,9 +96,6 @@ func setCPUtype() {
 			},
 			"kvm_amd": {
 				desc: "AMD KVM",
-				parameters: map[string]string{
-					"nested": "1",
-				},
 			},
 			"vhost": {
 				desc: msgKernelVirtio,
