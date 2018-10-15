@@ -6,17 +6,14 @@
 package virtcontainers
 
 import (
-	"fmt"
 	"net"
 	"os"
 	"reflect"
 	"testing"
 
-	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
-	"github.com/vishvananda/netns"
 )
 
 func testNetworkModelSet(t *testing.T, value string, expected NetworkModel) {
@@ -118,509 +115,6 @@ func TestCreateDeleteNetNS(t *testing.T) {
 	}
 }
 
-func testEndpointTypeSet(t *testing.T, value string, expected EndpointType) {
-	//var netModel NetworkModel
-	var endpointType EndpointType
-
-	err := endpointType.Set(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if endpointType != expected {
-		t.Fatal()
-	}
-}
-
-func TestPhysicalEndpointTypeSet(t *testing.T) {
-	testEndpointTypeSet(t, "physical", PhysicalEndpointType)
-}
-
-func TestVirtualEndpointTypeSet(t *testing.T) {
-	testEndpointTypeSet(t, "virtual", VirtualEndpointType)
-}
-
-func TestVhostUserEndpointTypeSet(t *testing.T) {
-	testEndpointTypeSet(t, "vhost-user", VhostUserEndpointType)
-}
-
-func TestBridgedMacvlanEndpointTypeSet(t *testing.T) {
-	testEndpointTypeSet(t, "macvlan", BridgedMacvlanEndpointType)
-}
-
-func TestMacvtapEndpointTypeSet(t *testing.T) {
-	testEndpointTypeSet(t, "macvtap", MacvtapEndpointType)
-}
-
-func TestEndpointTypeSetFailure(t *testing.T) {
-	var endpointType EndpointType
-
-	err := endpointType.Set("wrong-value")
-	if err == nil {
-		t.Fatal(err)
-	}
-}
-
-func testEndpointTypeString(t *testing.T, endpointType *EndpointType, expected string) {
-	result := endpointType.String()
-
-	if result != expected {
-		t.Fatal()
-	}
-}
-
-func TestPhysicalEndpointTypeString(t *testing.T) {
-	endpointType := PhysicalEndpointType
-	testEndpointTypeString(t, &endpointType, string(PhysicalEndpointType))
-}
-
-func TestVirtualEndpointTypeString(t *testing.T) {
-	endpointType := VirtualEndpointType
-	testEndpointTypeString(t, &endpointType, string(VirtualEndpointType))
-}
-
-func TestVhostUserEndpointTypeString(t *testing.T) {
-	endpointType := VhostUserEndpointType
-	testEndpointTypeString(t, &endpointType, string(VhostUserEndpointType))
-}
-
-func TestBridgedMacvlanEndpointTypeString(t *testing.T) {
-	endpointType := BridgedMacvlanEndpointType
-	testEndpointTypeString(t, &endpointType, string(BridgedMacvlanEndpointType))
-}
-
-func TestMacvtapEndpointTypeString(t *testing.T) {
-	endpointType := MacvtapEndpointType
-	testEndpointTypeString(t, &endpointType, string(MacvtapEndpointType))
-}
-
-func TestIncorrectEndpointTypeString(t *testing.T) {
-	var endpointType EndpointType
-	testEndpointTypeString(t, &endpointType, "")
-}
-
-func TestCreateVhostUserEndpoint(t *testing.T) {
-	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x48}
-	ifcName := "vhost-deadbeef"
-	socket := "/tmp/vhu_192.168.0.1"
-
-	netinfo := NetworkInfo{
-		Iface: NetlinkIface{
-			LinkAttrs: netlink.LinkAttrs{
-				HardwareAddr: macAddr,
-				Name:         ifcName,
-			},
-		},
-	}
-
-	expected := &VhostUserEndpoint{
-		SocketPath:   socket,
-		HardAddr:     macAddr.String(),
-		IfaceName:    ifcName,
-		EndpointType: VhostUserEndpointType,
-	}
-
-	result, err := createVhostUserEndpoint(netinfo, socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("\n\tGot %v\n\tExpecting %v", result, expected)
-	}
-}
-
-func TestCreateVirtualNetworkEndpoint(t *testing.T) {
-	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
-
-	expected := &VirtualEndpoint{
-		NetPair: NetworkInterfacePair{
-			ID:   "uniqueTestID-4",
-			Name: "br4_kata",
-			VirtIface: NetworkInterface{
-				Name:     "eth4",
-				HardAddr: macAddr.String(),
-			},
-			TAPIface: NetworkInterface{
-				Name: "tap4_kata",
-			},
-			NetInterworkingModel: DefaultNetInterworkingModel,
-		},
-		EndpointType: VirtualEndpointType,
-	}
-
-	result, err := createVirtualNetworkEndpoint(4, "", DefaultNetInterworkingModel)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// the resulting ID  will be random - so let's overwrite to test the rest of the flow
-	result.NetPair.ID = "uniqueTestID-4"
-
-	// the resulting mac address will be random - so lets overwrite it
-	result.NetPair.VirtIface.HardAddr = macAddr.String()
-
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
-	}
-}
-
-func TestCreateVirtualNetworkEndpointChooseIfaceName(t *testing.T) {
-	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
-
-	expected := &VirtualEndpoint{
-		NetPair: NetworkInterfacePair{
-			ID:   "uniqueTestID-4",
-			Name: "br4_kata",
-			VirtIface: NetworkInterface{
-				Name:     "eth1",
-				HardAddr: macAddr.String(),
-			},
-			TAPIface: NetworkInterface{
-				Name: "tap4_kata",
-			},
-			NetInterworkingModel: DefaultNetInterworkingModel,
-		},
-		EndpointType: VirtualEndpointType,
-	}
-
-	result, err := createVirtualNetworkEndpoint(4, "eth1", DefaultNetInterworkingModel)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// the resulting ID will be random - so let's overwrite to test the rest of the flow
-	result.NetPair.ID = "uniqueTestID-4"
-
-	// the resulting mac address will be random - so lets overwrite it
-	result.NetPair.VirtIface.HardAddr = macAddr.String()
-
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
-	}
-}
-
-func TestCreateVirtualNetworkEndpointInvalidArgs(t *testing.T) {
-	type endpointValues struct {
-		idx    int
-		ifName string
-	}
-
-	// all elements are expected to result in failure
-	failingValues := []endpointValues{
-		{-1, "bar"},
-		{-1, ""},
-	}
-
-	for _, d := range failingValues {
-		result, err := createVirtualNetworkEndpoint(d.idx, d.ifName, DefaultNetInterworkingModel)
-		if err == nil {
-			t.Fatalf("expected invalid endpoint for %v, got %v", d, result)
-		}
-	}
-}
-
-func TestCreateBridgedMacvlanEndpoint(t *testing.T) {
-	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
-
-	expected := &BridgedMacvlanEndpoint{
-		NetPair: NetworkInterfacePair{
-			ID:   "uniqueTestID-4",
-			Name: "br4_kata",
-			VirtIface: NetworkInterface{
-				Name:     "eth4",
-				HardAddr: macAddr.String(),
-			},
-			TAPIface: NetworkInterface{
-				Name: "tap4_kata",
-			},
-			NetInterworkingModel: DefaultNetInterworkingModel,
-		},
-		EndpointType: BridgedMacvlanEndpointType,
-	}
-
-	result, err := createBridgedMacvlanNetworkEndpoint(4, "", DefaultNetInterworkingModel)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// the resulting ID  will be random - so let's overwrite to test the rest of the flow
-	result.NetPair.ID = "uniqueTestID-4"
-
-	// the resulting mac address will be random - so lets overwrite it
-	result.NetPair.VirtIface.HardAddr = macAddr.String()
-
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
-	}
-}
-
-func TestCreateMacvtapEndpoint(t *testing.T) {
-	netInfo := NetworkInfo{
-		Iface: NetlinkIface{
-			Type: "macvtap",
-		},
-	}
-	expected := &MacvtapEndpoint{
-		EndpointType:       MacvtapEndpointType,
-		EndpointProperties: netInfo,
-	}
-
-	result, err := createMacvtapNetworkEndpoint(netInfo)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
-	}
-}
-
-func TestIsPhysicalIface(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledAsNonRoot)
-	}
-
-	testNetIface := "testIface0"
-	testMTU := 1500
-	testMACAddr := "00:00:00:00:00:01"
-
-	hwAddr, err := net.ParseMAC(testMACAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	link := &netlink.Bridge{
-		LinkAttrs: netlink.LinkAttrs{
-			Name:         testNetIface,
-			MTU:          testMTU,
-			HardwareAddr: hwAddr,
-			TxQLen:       -1,
-		},
-	}
-
-	n, err := ns.NewNS()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer n.Close()
-
-	netnsHandle, err := netns.GetFromPath(n.Path())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer netnsHandle.Close()
-
-	netlinkHandle, err := netlink.NewHandleAt(netnsHandle)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer netlinkHandle.Delete()
-
-	if err := netlinkHandle.LinkAdd(link); err != nil {
-		t.Fatal(err)
-	}
-
-	var isPhysical bool
-	err = doNetNS(n.Path(), func(_ ns.NetNS) error {
-		var err error
-		isPhysical, err = isPhysicalIface(testNetIface)
-		return err
-	})
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if isPhysical == true {
-		t.Fatalf("Got %+v\nExpecting %+v", isPhysical, false)
-	}
-}
-
-func TestNetInterworkingModelIsValid(t *testing.T) {
-	tests := []struct {
-		name string
-		n    NetInterworkingModel
-		want bool
-	}{
-		{"Invalid Model", NetXConnectInvalidModel, false},
-		{"Default Model", NetXConnectDefaultModel, true},
-		{"Bridged Model", NetXConnectBridgedModel, true},
-		{"Macvtap Model", NetXConnectMacVtapModel, true},
-		{"Enlightened Model", NetXConnectEnlightenedModel, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.n.IsValid(); got != tt.want {
-				t.Errorf("NetInterworkingModel.IsValid() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestNetInterworkingModelSetModel(t *testing.T) {
-	var n NetInterworkingModel
-	tests := []struct {
-		name      string
-		modelName string
-		wantErr   bool
-	}{
-		{"Invalid Model", "Invalid", true},
-		{"default Model", "default", false},
-		{"bridged Model", "bridged", false},
-		{"macvtap Model", "macvtap", false},
-		{"enlightened Model", "enlightened", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := n.SetModel(tt.modelName); (err != nil) != tt.wantErr {
-				t.Errorf("NetInterworkingModel.SetModel() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestVhostUserSocketPath(t *testing.T) {
-
-	// First test case: search for existing:
-	addresses := []netlink.Addr{
-		{
-			IPNet: &net.IPNet{
-				IP:   net.IPv4(192, 168, 0, 2),
-				Mask: net.IPv4Mask(192, 168, 0, 2),
-			},
-		},
-		{
-			IPNet: &net.IPNet{
-				IP:   net.IPv4(192, 168, 0, 1),
-				Mask: net.IPv4Mask(192, 168, 0, 1),
-			},
-		},
-	}
-
-	expectedPath := "/tmp/vhostuser_192.168.0.1"
-	expectedFileName := "vhu.sock"
-	expectedResult := fmt.Sprintf("%s/%s", expectedPath, expectedFileName)
-
-	err := os.Mkdir(expectedPath, 0777)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = os.Create(expectedResult)
-	if err != nil {
-		t.Fatal(err)
-	}
-	netinfo := NetworkInfo{
-		Addrs: addresses,
-	}
-
-	path, _ := vhostUserSocketPath(netinfo)
-
-	if path != expectedResult {
-		t.Fatalf("Got %+v\nExpecting %+v", path, expectedResult)
-	}
-
-	// Second test case: search doesn't include matching vsock:
-	addressesFalse := []netlink.Addr{
-		{
-			IPNet: &net.IPNet{
-				IP:   net.IPv4(192, 168, 0, 4),
-				Mask: net.IPv4Mask(192, 168, 0, 4),
-			},
-		},
-	}
-	netinfoFail := NetworkInfo{
-		Addrs: addressesFalse,
-	}
-
-	path, _ = vhostUserSocketPath(netinfoFail)
-	if path != "" {
-		t.Fatalf("Got %+v\nExpecting %+v", path, "")
-	}
-
-	err = os.Remove(expectedResult)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = os.Remove(expectedPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-}
-
-func TestVhostUserEndpointAttach(t *testing.T) {
-	v := &VhostUserEndpoint{
-		SocketPath:   "/tmp/sock",
-		HardAddr:     "mac-addr",
-		EndpointType: VhostUserEndpointType,
-	}
-
-	h := &mockHypervisor{}
-
-	err := v.Attach(h)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestVhostUserEndpoint_HotAttach(t *testing.T) {
-	assert := assert.New(t)
-	v := &VhostUserEndpoint{
-		SocketPath:   "/tmp/sock",
-		HardAddr:     "mac-addr",
-		EndpointType: VhostUserEndpointType,
-	}
-
-	h := &mockHypervisor{}
-
-	err := v.HotAttach(h)
-	assert.Error(err)
-}
-
-func TestVhostUserEndpoint_HotDetach(t *testing.T) {
-	assert := assert.New(t)
-	v := &VhostUserEndpoint{
-		SocketPath:   "/tmp/sock",
-		HardAddr:     "mac-addr",
-		EndpointType: VhostUserEndpointType,
-	}
-
-	h := &mockHypervisor{}
-
-	err := v.HotDetach(h, true, "")
-	assert.Error(err)
-}
-
-func TestPhysicalEndpoint_HotAttach(t *testing.T) {
-	assert := assert.New(t)
-	v := &PhysicalEndpoint{
-		IfaceName: "eth0",
-		HardAddr:  net.HardwareAddr{0x02, 0x00, 0xca, 0xfe, 0x00, 0x04}.String(),
-	}
-
-	h := &mockHypervisor{}
-
-	err := v.HotAttach(h)
-	assert.Error(err)
-}
-
-func TestPhysicalEndpoint_HotDetach(t *testing.T) {
-	assert := assert.New(t)
-	v := &PhysicalEndpoint{
-		IfaceName: "eth0",
-		HardAddr:  net.HardwareAddr{0x02, 0x00, 0xca, 0xfe, 0x00, 0x04}.String(),
-	}
-
-	h := &mockHypervisor{}
-
-	err := v.HotDetach(h, true, "")
-	assert.Error(err)
-}
-
 func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	//
 	//Create a couple of addresses
@@ -687,6 +181,50 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	assert.True(t, reflect.DeepEqual(resRoutes, expectedRoutes),
 		"Routes returned didn't match: got %+v, expecting %+v", resRoutes, expectedRoutes)
 
+}
+
+func TestNetInterworkingModelIsValid(t *testing.T) {
+	tests := []struct {
+		name string
+		n    NetInterworkingModel
+		want bool
+	}{
+		{"Invalid Model", NetXConnectInvalidModel, false},
+		{"Default Model", NetXConnectDefaultModel, true},
+		{"Bridged Model", NetXConnectBridgedModel, true},
+		{"Macvtap Model", NetXConnectMacVtapModel, true},
+		{"Enlightened Model", NetXConnectEnlightenedModel, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.n.IsValid(); got != tt.want {
+				t.Errorf("NetInterworkingModel.IsValid() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNetInterworkingModelSetModel(t *testing.T) {
+	var n NetInterworkingModel
+	tests := []struct {
+		name      string
+		modelName string
+		wantErr   bool
+	}{
+		{"Invalid Model", "Invalid", true},
+		{"default Model", "default", false},
+		{"bridged Model", "bridged", false},
+		{"macvtap Model", "macvtap", false},
+		{"enlightened Model", "enlightened", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := n.SetModel(tt.modelName); (err != nil) != tt.wantErr {
+				t.Errorf("NetInterworkingModel.SetModel() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
 }
 
 func TestGenerateRandomPrivateMacAdd(t *testing.T) {
