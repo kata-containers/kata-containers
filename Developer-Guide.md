@@ -338,6 +338,7 @@ $ tar -xf ${kernel_tar_file}
 $ mv .config "linux-${kernel_version}"
 $ pushd "linux-${kernel_version}"
 $ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/patches/0001-NO-UPSTREAM-9P-always-use-cached-inode-to-fill-in-v9.patch | patch -p1
+$ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/patches/0002-Compile-in-evged-always.patch | patch -p1
 $ make ARCH=${kernel_dir} -j$(nproc)
 $ kata_kernel_dir="/usr/share/kata-containers"
 $ kata_vmlinuz="${kata_kernel_dir}/kata-vmlinuz-${kernel_version}.container"
