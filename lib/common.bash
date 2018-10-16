@@ -7,6 +7,9 @@
 # This file contains common functions that
 # are being used by our metrics and integration tests
 
+# Place where virtcontainers keeps its active pod info
+VC_POD_DIR="${VC_POD_DIR:-/var/lib/vc/sbs}"
+
 die(){
 	msg="$*"
 	echo "ERROR: $msg" >&2
@@ -49,6 +52,27 @@ check_processes() {
 			die "Found unexpected ${i} present"
 		fi
 	done
+}
+
+# Checks that pods were not left
+check_pods() {
+	if [ -d ${VC_POD_DIR} ]; then
+		# Verify that pods were not left
+		pods_number=$(ls ${VC_POD_DIR} | wc -l)
+		if [ ${pods_number} -ne 0 ]; then
+			die "${pods_number} pods left and found at ${VC_POD_DIR}"
+		fi
+	else
+		echo "Not ${VC_POD_DIR} directory found"
+	fi
+}
+
+# Check that runtimes are not running, they should be transient
+check_runtimes() {
+	runtime_number=$(ps --no-header -C ${RUNTIME} | wc -l)
+	if [ ${runtime_number} -ne 0 ]; then
+		die "Unexpected runtime ${RUNTIME} running"
+	fi
 }
 
 # Clean environment, this function will try to remove all

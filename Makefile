@@ -40,6 +40,7 @@ ifeq (${RUNTIME},)
 	$(error RUNTIME is not set)
 else
 	./ginkgo -v functional/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+	bash sanity/check_sanity.sh
 endif
 
 docker: ginkgo
@@ -47,6 +48,7 @@ ifeq ($(RUNTIME),)
 	$(error RUNTIME is not set)
 else
 	./ginkgo -v -focus "${FOCUS}" -skip "${SKIP}" ./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+	bash sanity/check_sanity.sh
 endif
 
 crio:
