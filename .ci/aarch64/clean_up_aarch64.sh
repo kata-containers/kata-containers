@@ -13,22 +13,24 @@ stale_docker_mount_point_union=( "/var/lib/docker/containers" "/var/lib/docker/$
 stale_docker_dir_union=( "/var/lib/docker" )
 stale_kata_dir_union=( "/var/lib/vc" "/run/vc" )
 
-lib_script="${GOPATH}/src/${tests_repo}/.ci/lib.sh"
+lib_script="${GOPATH}/src/${tests_repo}/lib/common.bash"
+
 source "${lib_script}"
 
-metrics_lib_script="${GOPATH}/src/${tests_repo}/metrics/lib/common.bash"
-source "${metrics_lib_script}"
+info() {
+	echo -e "INFO: $*"
+}
 
 kill_stale_process()
 {
-	# use function kill_processes_before_start() under $metrics_lib_script to kill stale containers or shim/proxy/hypervisor process
-	kill_processes_before_start
-	check_processes
+	clean_env
+	extract_kata_env
+	stale_process_union=( "${stale_process_union[@]}" "${PROXY_PATH}" "${HYPERVISOR_PATH}" "${SHIM_PATH}" )
 	for stale_process in "${stale_process_union[@]}"; do
 		if pgrep -f "${stale_process}"; then
 			sudo killall -9 "${stale_process}" || true
 		fi
-	done <<< "${stale_process_union}"
+	done
 }
 
 delete_stale_docker_resource()
@@ -54,7 +56,7 @@ delete_stale_docker_resource()
 		if [ -d "${stale_docker_dir}" ]; then
 			sudo rm -rf "${stale_docker_dir}"
 		fi
-	done <<< "${stale_docker_dir_union}"
+	done
 	[ "${docker_status}" = true ] && sudo systemctl restart docker
 }
 
@@ -64,11 +66,11 @@ delete_stale_kata_resource()
 		if [ -d "${stale_kata_dir}" ]; then
 			sudo rm -rf "${stale_kata_dir}"
 		fi
-	done <<< "${stale_kata_dir_union}"
+	done
 }
 
 main() {
-	info "kill stale process: ${stale_process_union[@]}"
+	info "kill stale process"
 	kill_stale_process
 	info "delete stale docker resource under ${stale_docker_dir_union[@]}"
 	delete_stale_docker_resource
