@@ -28,6 +28,7 @@ BuildRequires:  elfutils-devel
 
 %if 0%{?suse_version}
 BuildRequires:  libelf-devel
+BuildRequires: fdupes
 %endif
 
 %if 0%{?fedora} || 0%{?centos_version}
@@ -51,7 +52,7 @@ BuildRequires:  bison
 The Linux kernel.
 
 %package debug
-Summary: Debug components for the kata-linux-container package.
+Summary: Debug components for the kata-linux-container package
 Group: Default
 
 %description debug
@@ -71,6 +72,10 @@ BuildKernel() {
 
     Arch=%{_arch}
     ExtraVer="-%{release}.container"
+
+    %ifarch ppc64le
+    Arch=powerpc
+    %endif
 
     perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = ${ExtraVer}/" Makefile
 
@@ -101,9 +106,11 @@ InstallKernel() {
 
     mkdir   -p ${KernelDir}
 
+    %ifarch x86_64
     cp $KernelImage ${KernelDir}/vmlinuz-$KernelVer
     chmod 755 ${KernelDir}/vmlinuz-$KernelVer
     ln -sf vmlinuz-$KernelVer ${KernelDir}/vmlinuz.container
+    %endif
 
     cp $KernelImageRaw ${KernelDir}/vmlinux-$KernelVer
     chmod 755 ${KernelDir}/vmlinux-$KernelVer
@@ -116,16 +123,26 @@ InstallKernel() {
     rm -f %{buildroot}/usr/lib/modules/$KernelVer/source
 }
 
+%ifarch ppc64le
+InstallKernel $(realpath vmlinux) $(realpath vmlinux)
+%else
 InstallKernel arch/%{bzimage_arch}/boot/bzImage vmlinux
+%endif
 
 rm -rf %{buildroot}/usr/lib/firmware
+
+%if 0%{?suse_version}
+%fdupes -s %{buildroot}
+%endif
 
 %files
 %dir /usr/share/kata-containers
 /usr/share/kata-containers/vmlinux-%{kversion}
 /usr/share/kata-containers/vmlinux.container
+%ifarch x86_64
 /usr/share/kata-containers/vmlinuz-%{kversion}
 /usr/share/kata-containers/vmlinuz.container
+%endif
 
 %files debug
 %defattr(-,root,root,-)
