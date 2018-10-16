@@ -912,14 +912,20 @@ func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAd
 	args := map[string]interface{}{
 		"id":      devID,
 		"driver":  VirtioNetPCI,
-		"netdev":  netdevID,
-		"mac":     macAddr,
-		"addr":    addr,
 		"romfile": romfile,
 	}
 
 	if bus != "" {
 		args["bus"] = bus
+	}
+	if addr != "" {
+		args["addr"] = addr
+	}
+	if macAddr != "" {
+		args["mac"] = macAddr
+	}
+	if netdevID != "" {
+		args["netdev"] = netdevID
 	}
 
 	if queues > 0 {
