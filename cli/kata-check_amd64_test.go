@@ -81,9 +81,7 @@ func TestCCCheckCLIFunction(t *testing.T) {
 			{archGenuineIntel, "lm vmx sse4_1", false},
 		}
 
-		moduleData = []testModuleData{
-			{filepath.Join(sysModuleDir, "kvm_intel/parameters/unrestricted_guest"), false, "Y"},
-		}
+		moduleData = []testModuleData{}
 	} else if cpuType == cpuTypeAMD {
 		cpuData = []testCPUData{
 			{archAuthenticAMD, "lm svm sse4_1", false},
@@ -393,7 +391,7 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 	}
 
 	err = hostIsVMContainerCapable(details)
-	assert.Error(err)
+	assert.Nil(err)
 }
 
 func TestArchKernelParamHandler(t *testing.T) {

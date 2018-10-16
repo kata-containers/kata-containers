@@ -44,7 +44,8 @@ var archRequiredKernelModules = map[string]kernelModule{
 	},
 }
 
-func setCPUtype() {
+func setCPUtype() error {
+	return nil
 }
 
 func archHostCanCreateVMContainer() error {

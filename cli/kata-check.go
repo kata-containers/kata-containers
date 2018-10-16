@@ -291,7 +291,10 @@ var kataCheckCLICommand = cli.Command{
 		span, _ := trace(ctx, "kata-check")
 		defer span.Finish()
 
-		setCPUtype()
+		err = setCPUtype()
+		if err != nil {
+			return err
+		}
 
 		details := vmContainerCapableDetails{
 			cpuInfoFile:           procCPUInfo,
