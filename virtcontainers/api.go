@@ -417,6 +417,9 @@ func CreateContainer(ctx context.Context, sandboxID string, containerConfig Cont
 // DeleteContainer deletes a Container from a Sandbox. If the container is running,
 // it needs to be stopped first.
 func DeleteContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error) {
+	span, ctx := trace(ctx, "DeleteContainer")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -443,6 +446,9 @@ func DeleteContainer(ctx context.Context, sandboxID, containerID string) (VCCont
 // StartContainer is the virtcontainers container starting entry point.
 // StartContainer starts an already created container.
 func StartContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error) {
+	span, ctx := trace(ctx, "StartContainer")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -840,6 +846,9 @@ func ResumeContainer(ctx context.Context, sandboxID, containerID string) error {
 
 // AddDevice will add a device to sandbox
 func AddDevice(ctx context.Context, sandboxID string, info deviceConfig.DeviceInfo) (deviceApi.Device, error) {
+	span, ctx := trace(ctx, "AddDevice")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -882,16 +891,25 @@ func toggleInterface(ctx context.Context, sandboxID string, inf *grpc.Interface,
 
 // AddInterface is the virtcontainers add interface entry point.
 func AddInterface(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+	span, ctx := trace(ctx, "AddInterface")
+	defer span.Finish()
+
 	return toggleInterface(ctx, sandboxID, inf, true)
 }
 
 // RemoveInterface is the virtcontainers remove interface entry point.
 func RemoveInterface(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+	span, ctx := trace(ctx, "RemoveInterface")
+	defer span.Finish()
+
 	return toggleInterface(ctx, sandboxID, inf, false)
 }
 
 // ListInterfaces is the virtcontainers list interfaces entry point.
 func ListInterfaces(ctx context.Context, sandboxID string) ([]*grpc.Interface, error) {
+	span, ctx := trace(ctx, "ListInterfaces")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -912,6 +930,9 @@ func ListInterfaces(ctx context.Context, sandboxID string) ([]*grpc.Interface, e
 
 // UpdateRoutes is the virtcontainers update routes entry point.
 func UpdateRoutes(ctx context.Context, sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error) {
+	span, ctx := trace(ctx, "UpdateRoutes")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -931,6 +952,9 @@ func UpdateRoutes(ctx context.Context, sandboxID string, routes []*grpc.Route) (
 
 // ListRoutes is the virtcontainers list routes entry point.
 func ListRoutes(ctx context.Context, sandboxID string) ([]*grpc.Route, error) {
+	span, ctx := trace(ctx, "ListRoutes")
+	defer span.Finish()
+
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
