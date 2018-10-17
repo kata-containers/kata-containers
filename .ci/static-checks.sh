@@ -73,8 +73,8 @@ Parameters:
 
   help      : Show usage.
   repo-name : GitHub URL of repo to check in form "github.com/user/repo"
-              (equivalent to "--repo $URL").
-  true      : Specify as "true" if testing the a specific branch, else assume a
+              (equivalent to "--repo \$URL").
+  true      : Specify as "true" if testing a specific branch, else assume a
               PR branch (equivalent to "--all").
 
 Notes:
