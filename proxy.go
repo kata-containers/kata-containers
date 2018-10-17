@@ -18,6 +18,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -30,6 +31,10 @@ import (
 const (
 	proxyName  = "kata-proxy"
 	termSignal = syscall.SIGTERM
+	// Max number of threads the proxy should consume.
+	// We choose 6 as we want a couple of threads for the runtime (gc etc.)
+	// and couple of threads for our parallel user code copy routines.
+	maxThreads = 6
 )
 
 var debug = false
@@ -348,9 +353,24 @@ func handleVersion(showVersion bool) {
 	}
 }
 
+func setThreads() {
+	// If GOMAXPROCS has not been set, restrict our thread usage
+	// so we don't grow many idle threads on large core count systems,
+	// which un-necessarily consume host PID space (and thus set an
+	// artificial max limit on the number of concurrent containers we can
+	// run)
+	if os.Getenv("GOMAXPROCS") == "" {
+		if runtime.NumCPU() > maxThreads {
+			runtime.GOMAXPROCS(maxThreads)
+		}
+	}
+}
+
 func realMain() {
 	var channel, proxyAddr, agentLogsSocket, logLevel string
 	var showVersion bool
+
+	setThreads()
 
 	flag.BoolVar(&debug, "debug", false, "enable debug mode")
 	flag.BoolVar(&showVersion, "version", false, "display program version and exit")
