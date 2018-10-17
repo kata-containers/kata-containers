@@ -88,7 +88,54 @@ const (
 
 	// VirtioRng is the paravirtualized RNG device driver.
 	VirtioRng DeviceDriver = "virtio-rng"
+
+	// VirtioBalloon is the memory balloon device driver.
+	VirtioBalloon DeviceDriver = "virtio-balloon"
+
+	//VhostUserSCSI represents a SCSI vhostuser device type.
+	VhostUserSCSI DeviceDriver = "vhost-user-scsi-pci"
+
+	//VhostUserNet represents a net vhostuser device type.
+	VhostUserNet DeviceDriver = "virtio-net-pci"
+
+	//VhostUserBlk represents a block vhostuser device type.
+	VhostUserBlk DeviceDriver = "vhost-user-blk-pci"
+
+	// VfioPCI represent a VFIO device type.
+	VfioPCI DeviceDriver = "vfio-pci"
+
+	// VirtioScsiPCI represents a SCSI device type.
+	VirtioScsiPCI DeviceDriver = "virtio-scsi-pci"
+
+	// PCIBridgeDriver represents a PCI bridge device type.
+	PCIBridgeDriver DeviceDriver = "pci-bridge"
+
+	// PCIePCIBridgeDriver represents a PCIe to PCI bridge device type.
+	PCIePCIBridgeDriver DeviceDriver = "pcie-pci-bridge"
 )
+
+// isVirtioPCI is a map indicating if a DeviceDriver is considered as a
+// virtio PCI device, which is helpful to determine if the option "romfile"
+// applies or not to this specific device.
+var isVirtioPCI = map[DeviceDriver]bool{
+	NVDIMM:              false,
+	Virtio9P:            true,
+	VirtioNet:           true,
+	VirtioNetPCI:        true,
+	VirtioSerial:        true,
+	VirtioBlock:         true,
+	Console:             false,
+	VirtioSerialPort:    false,
+	VHostVSockPCI:       true,
+	VirtioRng:           true,
+	VirtioBalloon:       true,
+	VhostUserSCSI:       true,
+	VhostUserBlk:        true,
+	VfioPCI:             true,
+	VirtioScsiPCI:       true,
+	PCIBridgeDriver:     true,
+	PCIePCIBridgeDriver: true,
+}
 
 // ObjectType is a string representing a qemu object type.
 type ObjectType string
@@ -216,6 +263,9 @@ type FSDevice struct {
 
 	// DisableModern prevents qemu from relying on fast MMIO.
 	DisableModern bool
+
+	// ROMFile specifies the ROM file being used for this device.
+	ROMFile string
 }
 
 // Valid returns true if the FSDevice structure is valid and complete.
@@ -239,6 +289,9 @@ func (fsdev FSDevice) QemuParams(config *Config) []string {
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",fsdev=%s", fsdev.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",mount_tag=%s", fsdev.MountTag))
+	if isVirtioPCI[fsdev.Driver] {
+		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", fsdev.ROMFile))
+	}
 
 	fsParams = append(fsParams, string(fsdev.FSDriver))
 	fsParams = append(fsParams, fmt.Sprintf(",id=%s", fsdev.ID))
@@ -296,6 +349,9 @@ type CharDevice struct {
 
 	// DisableModern prevents qemu from relying on fast MMIO.
 	DisableModern bool
+
+	// ROMFile specifies the ROM file being used for this device.
+	ROMFile string
 }
 
 // Valid returns true if the CharDevice structure is valid and complete.
@@ -324,6 +380,9 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", cdev.DeviceID))
 	if cdev.Name != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",name=%s", cdev.Name))
+	}
+	if isVirtioPCI[cdev.Driver] {
+		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", cdev.ROMFile))
 	}
 
 	cdevParams = append(cdevParams, string(cdev.Backend))
@@ -388,7 +447,7 @@ func (n NetDeviceType) QemuNetdevParam() string {
 }
 
 // QemuDeviceParam converts to the QEMU -device parameter notation
-func (n NetDeviceType) QemuDeviceParam() string {
+func (n NetDeviceType) QemuDeviceParam() DeviceDriver {
 	switch n {
 	case TAP:
 		return "virtio-net-pci"
@@ -447,6 +506,9 @@ type NetDevice struct {
 
 	// DisableModern prevents qemu from relying on fast MMIO.
 	DisableModern bool
+
+	// ROMFile specifies the ROM file being used for this device.
+	ROMFile string
 }
 
 // Valid returns true if the NetDevice structure is valid and complete.
@@ -473,8 +535,7 @@ func (netdev NetDevice) QemuDeviceParams(config *Config) []string {
 		return nil
 	}
 
-	deviceParams = append(deviceParams, "driver=")
-	deviceParams = append(deviceParams, netdev.Type.QemuDeviceParam())
+	deviceParams = append(deviceParams, fmt.Sprintf("driver=%s", netdev.Type.QemuDeviceParam()))
 	deviceParams = append(deviceParams, fmt.Sprintf(",netdev=%s", netdev.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",mac=%s", netdev.MACAddress))
 
@@ -508,6 +569,10 @@ func (netdev NetDevice) QemuDeviceParams(config *Config) []string {
 		// Note: We are appending to the device params here
 		deviceParams = append(deviceParams, ",mq=on")
 		deviceParams = append(deviceParams, fmt.Sprintf(",vectors=%d", vectors))
+	}
+
+	if isVirtioPCI[netdev.Driver] {
+		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", netdev.ROMFile))
 	}
 
 	return deviceParams
@@ -598,6 +663,9 @@ type SerialDevice struct {
 
 	// DisableModern prevents qemu from relying on fast MMIO.
 	DisableModern bool
+
+	// ROMFile specifies the ROM file being used for this device.
+	ROMFile string
 }
 
 // Valid returns true if the SerialDevice structure is valid and complete.
@@ -619,6 +687,9 @@ func (dev SerialDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, ",disable-modern=true")
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", dev.ID))
+	if isVirtioPCI[dev.Driver] {
+		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", dev.ROMFile))
+	}
 
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
@@ -669,6 +740,9 @@ type BlockDevice struct {
 
 	// DisableModern prevents qemu from relying on fast MMIO.
 	DisableModern bool
+
+	// ROMFile specifies the ROM file being used for this device.
+	ROMFile string
 }
 
 // Valid returns true if the BlockDevice structure is valid and complete.
@@ -699,6 +773,10 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, ",config-wce=off")
 	}
 
+	if isVirtioPCI[blkdev.Driver] {
+		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", blkdev.ROMFile))
+	}
+
 	blkParams = append(blkParams, fmt.Sprintf("id=%s", blkdev.ID))
 	blkParams = append(blkParams, fmt.Sprintf(",file=%s", blkdev.File))
 	blkParams = append(blkParams, fmt.Sprintf(",aio=%s", blkdev.AIO))
@@ -714,18 +792,6 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	return qemuParams
 }
 
-// VhostUserDeviceType is a qemu vhost-user device type.
-type VhostUserDeviceType string
-
-const (
-	//VhostUserSCSI represents a SCSI vhostuser device type
-	VhostUserSCSI = "vhost-user-scsi-pci"
-	//VhostUserNet represents a net vhostuser device type
-	VhostUserNet = "virtio-net-pci"
-	//VhostUserBlk represents a block vhostuser device type
-	VhostUserBlk = "vhost-user-blk-pci"
-)
-
 // VhostUserDevice represents a qemu vhost-user device meant to be passed
 // in to the guest
 type VhostUserDevice struct {
@@ -733,7 +799,10 @@ type VhostUserDevice struct {
 	CharDevID     string
 	TypeDevID     string //variable QEMU parameter based on value of VhostUserType
 	Address       string //used for MAC address in net case
-	VhostUserType VhostUserDeviceType
+	VhostUserType DeviceDriver
+
+	// ROMFile specifies the ROM file being used for this device.
+	ROMFile string
 }
 
 // Valid returns true if there is a valid structure defined for VhostUserDevice
@@ -766,6 +835,7 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 	var charParams []string
 	var netParams []string
 	var devParams []string
+	var driver DeviceDriver
 
 	charParams = append(charParams, "socket")
 	charParams = append(charParams, fmt.Sprintf("id=%s", vhostuserDev.CharDevID))
@@ -774,25 +844,32 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 	switch vhostuserDev.VhostUserType {
 	// if network based vhost device:
 	case VhostUserNet:
+		driver = VhostUserNet
 		netParams = append(netParams, "type=vhost-user")
 		netParams = append(netParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
 		netParams = append(netParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 		netParams = append(netParams, "vhostforce")
 
-		devParams = append(devParams, VhostUserNet)
+		devParams = append(devParams, string(driver))
 		devParams = append(devParams, fmt.Sprintf("netdev=%s", vhostuserDev.TypeDevID))
 		devParams = append(devParams, fmt.Sprintf("mac=%s", vhostuserDev.Address))
 	case VhostUserSCSI:
-		devParams = append(devParams, VhostUserSCSI)
+		driver = VhostUserSCSI
+		devParams = append(devParams, string(driver))
 		devParams = append(devParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
 		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 	case VhostUserBlk:
-		devParams = append(devParams, VhostUserBlk)
+		driver = VhostUserBlk
+		devParams = append(devParams, string(driver))
 		devParams = append(devParams, "logical_block_size=4096")
 		devParams = append(devParams, "size=512M")
 		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 	default:
 		return nil
+	}
+
+	if isVirtioPCI[driver] {
+		devParams = append(devParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
 	}
 
 	qemuParams = append(qemuParams, "-chardev")
@@ -813,6 +890,9 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 type VFIODevice struct {
 	// Bus-Device-Function of device
 	BDF string
+
+	// ROMFile specifies the ROM file being used for this device.
+	ROMFile string
 }
 
 // Valid returns true if the VFIODevice structure is valid and complete.
@@ -827,10 +907,17 @@ func (vfioDev VFIODevice) Valid() bool {
 // QemuParams returns the qemu parameters built out of this vfio device.
 func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 	var qemuParams []string
+	var deviceParams []string
 
-	deviceParam := fmt.Sprintf("vfio-pci,host=%s", vfioDev.BDF)
+	driver := VfioPCI
+
+	deviceParams = append(deviceParams, fmt.Sprintf("%s,host=%s", driver, vfioDev.BDF))
+	if isVirtioPCI[driver] {
+		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", vfioDev.ROMFile))
+	}
+
 	qemuParams = append(qemuParams, "-device")
-	qemuParams = append(qemuParams, deviceParam)
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
 
 	return qemuParams
 }
@@ -850,6 +937,9 @@ type SCSIController struct {
 
 	// IOThread is the IO thread on which IO will be handled
 	IOThread string
+
+	// ROMFile specifies the ROM file being used for this device.
+	ROMFile string
 }
 
 // Valid returns true if the SCSIController structure is valid and complete.
@@ -866,7 +956,8 @@ func (scsiCon SCSIController) QemuParams(config *Config) []string {
 	var qemuParams []string
 	var devParams []string
 
-	devParams = append(devParams, fmt.Sprintf("virtio-scsi-pci,id=%s", scsiCon.ID))
+	driver := VirtioScsiPCI
+	devParams = append(devParams, fmt.Sprintf("%s,id=%s", driver, scsiCon.ID))
 	if scsiCon.Bus != "" {
 		devParams = append(devParams, fmt.Sprintf("bus=%s", scsiCon.Bus))
 	}
@@ -878,6 +969,9 @@ func (scsiCon SCSIController) QemuParams(config *Config) []string {
 	}
 	if scsiCon.IOThread != "" {
 		devParams = append(devParams, fmt.Sprintf("iothread=%s", scsiCon.IOThread))
+	}
+	if isVirtioPCI[driver] {
+		devParams = append(devParams, fmt.Sprintf("romfile=%s", scsiCon.ROMFile))
 	}
 
 	qemuParams = append(qemuParams, "-device")
@@ -916,6 +1010,9 @@ type BridgeDevice struct {
 
 	// PCI Slot
 	Addr string
+
+	// ROMFile specifies the ROM file being used for this device.
+	ROMFile string
 }
 
 // Valid returns true if the BridgeDevice structure is valid and complete.
@@ -938,28 +1035,35 @@ func (bridgeDev BridgeDevice) Valid() bool {
 // QemuParams returns the qemu parameters built out of this bridge device.
 func (bridgeDev BridgeDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
-	var deviceParam string
+	var deviceParam []string
+	var driver DeviceDriver
 
 	switch bridgeDev.Type {
 	case PCIEBridge:
-		deviceParam = fmt.Sprintf("pcie-pci-bridge,bus=%s,id=%s", bridgeDev.Bus, bridgeDev.ID)
+		driver = PCIePCIBridgeDriver
+		deviceParam = append(deviceParam, fmt.Sprintf("%s,bus=%s,id=%s", driver, bridgeDev.Bus, bridgeDev.ID))
 	default:
+		driver = PCIBridgeDriver
 		shpc := "off"
 		if bridgeDev.SHPC {
 			shpc = "on"
 		}
-		deviceParam = fmt.Sprintf("pci-bridge,bus=%s,id=%s,chassis_nr=%d,shpc=%s", bridgeDev.Bus, bridgeDev.ID, bridgeDev.Chassis, shpc)
+		deviceParam = append(deviceParam, fmt.Sprintf("%s,bus=%s,id=%s,chassis_nr=%d,shpc=%s", driver, bridgeDev.Bus, bridgeDev.ID, bridgeDev.Chassis, shpc))
 	}
 
 	if bridgeDev.Addr != "" {
 		addr, err := strconv.Atoi(bridgeDev.Addr)
 		if err == nil && addr >= 0 {
-			deviceParam += fmt.Sprintf(",addr=%x", addr)
+			deviceParam = append(deviceParam, fmt.Sprintf(",addr=%x", addr))
 		}
 	}
 
+	if isVirtioPCI[driver] {
+		deviceParam = append(deviceParam, fmt.Sprintf(",romfile=%s", bridgeDev.ROMFile))
+	}
+
 	qemuParams = append(qemuParams, "-device")
-	qemuParams = append(qemuParams, deviceParam)
+	qemuParams = append(qemuParams, strings.Join(deviceParam, ""))
 
 	return qemuParams
 }
@@ -975,16 +1079,14 @@ type VSOCKDevice struct {
 
 	// DisableModern prevents qemu from relying on fast MMIO.
 	DisableModern bool
+
+	// ROMFile specifies the ROM file being used for this device.
+	ROMFile string
 }
 
 const (
 	// MinimalGuestCID is the smallest valid context ID for a guest.
 	MinimalGuestCID uint32 = 3
-)
-
-const (
-	// VhostVSOCKPCI is the VSOCK vhost device type.
-	VhostVSOCKPCI = "vhost-vsock-pci"
 
 	// VSOCKGuestCID is the VSOCK guest CID parameter.
 	VSOCKGuestCID = "guest-cid"
@@ -1004,7 +1106,8 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 	var qemuParams []string
 
-	deviceParams = append(deviceParams, fmt.Sprintf("%s", VhostVSOCKPCI))
+	driver := VHostVSockPCI
+	deviceParams = append(deviceParams, fmt.Sprintf("%s", driver))
 	if vsock.DisableModern {
 		deviceParams = append(deviceParams, ",disable-modern=true")
 	}
@@ -1014,6 +1117,10 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", vsock.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",%s=%d", VSOCKGuestCID, vsock.ContextID))
+
+	if isVirtioPCI[driver] {
+		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", vsock.ROMFile))
+	}
 
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
@@ -1031,6 +1138,8 @@ type RngDevice struct {
 	MaxBytes uint
 	// Period is duration of a read period in seconds
 	Period uint
+	// ROMFile specifies the ROM file being used for this device.
+	ROMFile string
 }
 
 // Valid returns true if the RngDevice structure is valid and complete.
@@ -1051,11 +1160,16 @@ func (v RngDevice) QemuParams(_ *Config) []string {
 	//-device virtio-rng-pci,rng=rng0,max-bytes=1024,period=1000
 	var deviceParams []string
 
+	driver := VirtioRng
 	objectParams = append(objectParams, "rng-random")
 	objectParams = append(objectParams, "id="+v.ID)
 
-	deviceParams = append(deviceParams, string(VirtioRng))
+	deviceParams = append(deviceParams, string(driver))
 	deviceParams = append(deviceParams, "rng="+v.ID)
+
+	if isVirtioPCI[driver] {
+		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", v.ROMFile))
+	}
 
 	if v.Filename != "" {
 		objectParams = append(objectParams, "filename="+v.Filename)
@@ -1076,6 +1190,59 @@ func (v RngDevice) QemuParams(_ *Config) []string {
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
 
 	return qemuParams
+}
+
+// BalloonDevice represents a memory balloon device.
+type BalloonDevice struct {
+	DeflateOnOOM  bool
+	DisableModern bool
+	ID            string
+
+	// ROMFile specifies the ROM file being used for this device.
+	ROMFile string
+}
+
+// QemuParams returns the qemu parameters built out of the BalloonDevice.
+func (b BalloonDevice) QemuParams(_ *Config) []string {
+	var qemuParams []string
+	var deviceParams []string
+
+	driver := VirtioBalloon
+	deviceParams = append(deviceParams, string(driver))
+
+	if b.ID != "" {
+		deviceParams = append(deviceParams, "id="+b.ID)
+	}
+
+	if isVirtioPCI[driver] {
+		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", b.ROMFile))
+	}
+
+	if b.DeflateOnOOM {
+		deviceParams = append(deviceParams, "deflate-on-oom=on")
+	} else {
+		deviceParams = append(deviceParams, "deflate-on-oom=off")
+	}
+
+	if b.DisableModern {
+		deviceParams = append(deviceParams, "disable-modern=on")
+	} else {
+		deviceParams = append(deviceParams, "disable-modern=off")
+	}
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+
+	return qemuParams
+}
+
+// Valid returns true if the balloonDevice structure is valid and complete.
+func (b BalloonDevice) Valid() bool {
+	if b.ID == "" {
+		return false
+	}
+
+	return true
 }
 
 // RTCBaseType is the qemu RTC base time type.
@@ -1740,11 +1907,11 @@ func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*
 
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	logger.Infof("launching qemu with: %v", params)
+	logger.Infof("launching %s with: %v", path, params)
 
 	err := cmd.Run()
 	if err != nil {
-		logger.Errorf("Unable to launch qemu: %v", err)
+		logger.Errorf("Unable to launch %s: %v", path, err)
 		errStr = stderr.String()
 		logger.Errorf("%s", errStr)
 	}

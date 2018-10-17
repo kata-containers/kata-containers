@@ -756,7 +756,7 @@ func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID string)
 // add.  Both strings must be valid QMP identifiers.  driver is the name of the
 // driver,e.g., virtio-blk-pci, and bus is the name of the bus.  bus is optional.
 // shared denotes if the drive can be shared allowing it to be passed more than once.
-func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus string, shared bool) error {
+func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus, romfile string, shared bool) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": driver,
@@ -768,6 +768,10 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 	if shared && (q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 10)) {
 		args["share-rw"] = "on"
 	}
+	if isVirtioPCI[DeviceDriver(driver)] {
+		args["romfile"] = romfile
+	}
+
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
@@ -779,7 +783,7 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 // scsiID is the SCSI id, lun is logical unit number. scsiID and lun are optional, a negative value
 // for scsiID and lun is ignored. shared denotes if the drive can be shared allowing it
 // to be passed more than once.
-func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus string, scsiID, lun int, shared bool) error {
+func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus, romfile string, scsiID, lun int, shared bool) error {
 	// TBD: Add drivers for scsi passthrough like scsi-generic and scsi-block
 	drivers := []string{"scsi-hd", "scsi-cd", "scsi-disk"}
 
@@ -809,6 +813,9 @@ func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, drive
 	}
 	if shared && (q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 10)) {
 		args["share-rw"] = "on"
+	}
+	if isVirtioPCI[DeviceDriver(driver)] {
+		args["romfile"] = romfile
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
@@ -901,17 +908,24 @@ func (q *QMP) ExecuteNetdevDel(ctx context.Context, netdevID string) error {
 // using the device_add command. devID is the id of the device to add.
 // Must be valid QMP identifier. netdevID is the id of nic added by previous netdev_add.
 // queues is the number of queues of a nic.
-func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAddr, addr, bus string, queues int) error {
+func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAddr, addr, bus, romfile string, queues int) error {
 	args := map[string]interface{}{
-		"id":     devID,
-		"driver": VirtioNetPCI,
-		"netdev": netdevID,
-		"mac":    macAddr,
-		"addr":   addr,
+		"id":      devID,
+		"driver":  VirtioNetPCI,
+		"romfile": romfile,
 	}
 
 	if bus != "" {
 		args["bus"] = bus
+	}
+	if addr != "" {
+		args["addr"] = addr
+	}
+	if macAddr != "" {
+		args["mac"] = macAddr
+	}
+	if netdevID != "" {
+		args["netdev"] = netdevID
 	}
 
 	if queues > 0 {
@@ -950,7 +964,7 @@ func (q *QMP) ExecuteDeviceDel(ctx context.Context, devID string) error {
 // to hot plug PCI devices on PCI(E) bridges, unlike ExecuteDeviceAdd this function receive the
 // device address on its parent bus. bus is optional. shared denotes if the drive can be shared
 // allowing it to be passed more than once.
-func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus string, shared bool) error {
+func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus, romfile string, shared bool) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": driver,
@@ -963,6 +977,9 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 	if shared && (q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 10)) {
 		args["share-rw"] = "on"
 	}
+	if isVirtioPCI[DeviceDriver(driver)] {
+		args["romfile"] = romfile
+	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
@@ -971,11 +988,12 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 // using the device_add command. devID is the id of the device to add.
 // Must be valid QMP identifier. bdf is the PCI bus-device-function
 // of the pci device.
-func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf string) error {
+func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, romfile string) error {
 	args := map[string]interface{}{
-		"id":     devID,
-		"driver": "vfio-pci",
-		"host":   bdf,
+		"id":      devID,
+		"driver":  "vfio-pci",
+		"host":    bdf,
+		"romfile": romfile,
 	}
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
@@ -985,12 +1003,13 @@ func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf string) error
 // ExecuteVFIODeviceAdd this function receives the bus and the device address on its parent bus.
 // bus is optional. devID is the id of the device to add.Must be valid QMP identifier. bdf is the
 // PCI bus-device-function of the pci device.
-func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus string) error {
+func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus, romfile string) error {
 	args := map[string]interface{}{
-		"id":     devID,
-		"driver": "vfio-pci",
-		"host":   bdf,
-		"addr":   addr,
+		"id":      devID,
+		"driver":  "vfio-pci",
+		"host":    bdf,
+		"addr":    addr,
+		"romfile": romfile,
 	}
 	if bus != "" {
 		args["bus"] = bus
@@ -1003,11 +1022,12 @@ func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus
 // ExecuteVFIODeviceAdd this function receives the bus and the device address on its parent bus.
 // devID is the id of the device to add. Must be valid QMP identifier. sysfsdev is the VFIO mediated device.
 // Both bus and addr are optional. If they are both set to be empty, the system will pick up an empty slot on root bus.
-func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsdev, addr, bus string) error {
+func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsdev, addr, bus, romfile string) error {
 	args := map[string]interface{}{
 		"id":       devID,
 		"driver":   "vfio-pci",
 		"sysfsdev": sysfsdev,
+		"romfile":  romfile,
 	}
 	if bus != "" {
 		args["bus"] = bus
@@ -1022,7 +1042,7 @@ func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsd
 // driver is the CPU model, cpuID must be a unique ID to identify the CPU, socketID is the socket number within
 // node/board the CPU belongs to, coreID is the core number within socket the CPU belongs to, threadID is the
 // thread number within core the CPU belongs to.
-func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, coreID, threadID string) error {
+func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, coreID, threadID, romfile string) error {
 	args := map[string]interface{}{
 		"driver":    driver,
 		"id":        cpuID,
@@ -1030,6 +1050,11 @@ func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, 
 		"core-id":   coreID,
 		"thread-id": threadID,
 	}
+
+	if isVirtioPCI[DeviceDriver(driver)] {
+		args["romfile"] = romfile
+	}
+
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
@@ -1178,14 +1203,24 @@ func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string
 	return err
 }
 
+// ExecuteBalloon sets the size of the balloon, hence updates the memory
+// allocated for the VM.
+func (q *QMP) ExecuteBalloon(ctx context.Context, bytes uint64) error {
+	args := map[string]interface{}{
+		"value": bytes,
+	}
+	return q.executeCommand(ctx, "balloon", args, nil)
+}
+
 // ExecutePCIVSockAdd adds a vhost-vsock-pci bus
-func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID, vhostfd, addr, bus string, disableModern bool) error {
+func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID, vhostfd, addr, bus, romfile string, disableModern bool) error {
 	args := map[string]interface{}{
 		"driver":    VHostVSockPCI,
 		"id":        id,
 		"guest-cid": guestCID,
 		"vhostfd":   vhostfd,
 		"addr":      addr,
+		"romfile":   romfile,
 	}
 
 	if bus != "" {
