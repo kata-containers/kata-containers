@@ -595,6 +595,7 @@ main()
 	while [ $# -gt 1 ]
 	do
 		case "$1" in
+			--all) specific_branch="true" ;;
 			--commits) func=check_commits ;;
 			--docs) func=check_docs ;;
 			--files) func=check_files ;;
@@ -602,7 +603,6 @@ main()
 			--golang) func=check_go ;;
 			-h|--help) usage; exit 0 ;;
 			--licenses) func=check_license_headers ;;
-			--all) specific_branch="true" ;;
 			--repo) repo="$2"; shift ;;
 			--versions) func=check_versions ;;
 			--) shift; break ;;
