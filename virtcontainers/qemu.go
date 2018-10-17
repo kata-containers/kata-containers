@@ -872,6 +872,9 @@ func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) error {
 		case VethEndpointType:
 			drive := endpoint.(*VethEndpoint)
 			tap = drive.NetPair.TapInterface
+		case TapEndpointType:
+			drive := endpoint.(*TapEndpoint)
+			tap = drive.TapInterface
 		default:
 			return fmt.Errorf("this endpoint is not supported")
 		}
@@ -896,6 +899,9 @@ func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) error {
 		case VethEndpointType:
 			drive := endpoint.(*VethEndpoint)
 			tap = drive.NetPair.TapInterface
+		case TapEndpointType:
+			drive := endpoint.(*TapEndpoint)
+			tap = drive.TapInterface
 		default:
 			return fmt.Errorf("this endpoint is not supported")
 		}
