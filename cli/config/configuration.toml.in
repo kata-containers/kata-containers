@@ -230,6 +230,10 @@ path = "@NETMONPATH@"
 #   - macvtap
 #     Used when the Container network interface can be bridged using
 #     macvtap.
+#
+#   - none
+#     Used when customize network. Only creates a tap device. No veth pair.
+#
 internetworking_model="@DEFNETWORKMODEL@"
 
 # If enabled, the runtime will create opentracing.io traces and spans.
