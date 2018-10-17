@@ -23,6 +23,11 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
+// romFile is the file name of the ROM that can be used for virtio-pci devices.
+// If this file name is empty, this means we expect the firmware used by Qemu,
+// such as SeaBIOS or OVMF for instance, to handle this directly.
+const romFile = ""
+
 type qmpChannel struct {
 	ctx     context.Context
 	path    string
@@ -744,7 +749,7 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 			// PCI address is in the format bridge-addr/device-addr eg. "03/02"
 			drive.PCIAddr = fmt.Sprintf("%02x", bridge.Addr) + "/" + addr
 
-			if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, true); err != nil {
+			if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, true); err != nil {
 				return err
 			}
 		} else {
@@ -759,7 +764,7 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 				return err
 			}
 
-			if err = q.qmpMonitorCh.qmp.ExecuteSCSIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, bus, scsiID, lun, true); err != nil {
+			if err = q.qmpMonitorCh.qmp.ExecuteSCSIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, bus, romFile, scsiID, lun, true); err != nil {
 				return err
 			}
 		}
@@ -797,9 +802,9 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) error {
 		if q.state.HotplugVFIOOnRootBus {
 			switch device.Type {
 			case config.VFIODeviceNormalType:
-				return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF)
+				return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, romFile)
 			case config.VFIODeviceMediatedType:
-				return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, "", "")
+				return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, "", "", romFile)
 			default:
 				return fmt.Errorf("Incorrect VFIO device type found")
 			}
@@ -812,9 +817,9 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) error {
 
 		switch device.Type {
 		case config.VFIODeviceNormalType:
-			return q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bridge.ID)
+			return q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bridge.ID, romFile)
 		case config.VFIODeviceMediatedType:
-			return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, addr, bridge.ID)
+			return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, addr, bridge.ID, romFile)
 		default:
 			return fmt.Errorf("Incorrect VFIO device type found")
 		}
@@ -882,7 +887,7 @@ func (q *qemu) hotplugNetDevice(drive *VethEndpoint, op operation) error {
 			return err
 		}
 		drive.PCIAddr = fmt.Sprintf("%02x/%s", bridge.Addr, addr)
-		if err = q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, drive.NetPair.Name, devID, drive.NetPair.TAPIface.HardAddr, addr, bridge.ID, int(q.config.NumVCPUs)); err != nil {
+		if err = q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, drive.NetPair.Name, devID, drive.NetPair.TAPIface.HardAddr, addr, bridge.ID, romFile, int(q.config.NumVCPUs)); err != nil {
 			return err
 		}
 	} else {
@@ -1000,7 +1005,7 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		socketID := fmt.Sprintf("%d", hc.Properties.Socket)
 		coreID := fmt.Sprintf("%d", hc.Properties.Core)
 		threadID := fmt.Sprintf("%d", hc.Properties.Thread)
-		if err := q.qmpMonitorCh.qmp.ExecuteCPUDeviceAdd(q.qmpMonitorCh.ctx, driver, cpuID, socketID, coreID, threadID); err != nil {
+		if err := q.qmpMonitorCh.qmp.ExecuteCPUDeviceAdd(q.qmpMonitorCh.ctx, driver, cpuID, socketID, coreID, threadID, romFile); err != nil {
 			// don't fail, let's try with other CPU
 			continue
 		}

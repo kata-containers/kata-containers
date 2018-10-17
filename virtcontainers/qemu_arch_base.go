@@ -518,7 +518,7 @@ func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, attr co
 	case config.VhostUserBlk:
 	}
 
-	qemuVhostUserDevice.VhostUserType = govmmQemu.VhostUserDeviceType(attr.Type)
+	qemuVhostUserDevice.VhostUserType = govmmQemu.DeviceDriver(attr.Type)
 	qemuVhostUserDevice.SocketPath = attr.SocketPath
 	qemuVhostUserDevice.CharDevID = utils.MakeNameID("char", attr.DevID, maxDevIDSize)
 
