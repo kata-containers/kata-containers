@@ -20,6 +20,7 @@ script_name=${0##*/}
 repo=""
 specific_branch="false"
 force="false"
+branch=${branch:-master}
 
 typeset -A long_options
 
@@ -31,6 +32,7 @@ long_options=(
 	[golang]="Check '.go' files"
 	[help]="Display usage statement"
 	[licenses]="Check licenses"
+	[branch]="Specify upstream branch to compare against (default '$branch')"
 	[all]="Force checking of all changes, including files in the base branch"
 	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
 	[versions]="Check versions files"
@@ -596,6 +598,7 @@ main()
 	do
 		case "$1" in
 			--all) specific_branch="true" ;;
+			--branch) branch="$2"; shift ;;
 			--commits) func=check_commits ;;
 			--docs) func=check_docs ;;
 			--files) func=check_files ;;
