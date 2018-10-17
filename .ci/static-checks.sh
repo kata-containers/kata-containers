@@ -20,6 +20,7 @@ script_name=${0##*/}
 repo=""
 specific_branch="false"
 force="false"
+branch=${branch:-master}
 
 typeset -A long_options
 
@@ -31,8 +32,10 @@ long_options=(
 	[golang]="Check '.go' files"
 	[help]="Display usage statement"
 	[licenses]="Check licenses"
+	[branch]="Specify upstream branch to compare against (default '$branch')"
 	[all]="Force checking of all changes, including files in the base branch"
 	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
+	[vendor]="Check vendor files"
 	[versions]="Check versions files"
 )
 
@@ -73,8 +76,8 @@ Parameters:
 
   help      : Show usage.
   repo-name : GitHub URL of repo to check in form "github.com/user/repo"
-              (equivalent to "--repo $URL").
-  true      : Specify as "true" if testing the a specific branch, else assume a
+              (equivalent to "--repo \$URL").
+  true      : Specify as "true" if testing a specific branch, else assume a
               PR branch (equivalent to "--all").
 
 Notes:
@@ -108,9 +111,9 @@ pkg_to_path()
 	go list -f '{{.Dir}}' "$pkg"
 }
 
-# Obtain a list of the files the PR changed, ignoring vendor files.
+# Obtain a list of the files the PR changed.
 # Returns the information in format "${filter}\t${file}".
-get_pr_changed_file_details()
+get_pr_changed_file_details_full()
 {
 	# List of filters used to restrict the types of file changes.
 	# See git-diff-tree(1) for further info.
@@ -136,7 +139,14 @@ get_pr_changed_file_details()
 		-r \
 		--name-status \
 		--diff-filter="${filters}" \
-		"origin/${branch}" HEAD | grep -v "vendor/"
+		"origin/${branch}" HEAD
+}
+
+# Obtain a list of the files the PR changed, ignoring vendor files.
+# Returns the information in format "${filter}\t${file}".
+get_pr_changed_file_details()
+{
+	get_pr_changed_file_details_full | grep -v "vendor/"
 }
 
 check_commits()
@@ -576,6 +586,38 @@ check_files()
 	exit 1
 }
 
+# Ensure that changes to vendored code are accompanied by an update to the
+# vendor tooling config file. If not, the user simply hacked the vendor files
+# rather than following the correct process:
+#
+# - https://github.com/kata-containers/community/blob/master/VENDORING.md
+check_vendor()
+{
+	local files
+	local vendor_files
+	local result
+
+	# All vendor operations should modify this file
+	local vendor_ctl_file="Gopkg.lock"
+
+	files=$(get_pr_changed_file_details_full || true)
+
+	# Strip off status
+	files=$(echo "$files"|awk '{print $NF}')
+
+	# No files were changed
+	[ -z "$files" ] && info "No files found" && return
+
+	vendor_files=$(echo "$files" | grep "vendor/" || true)
+
+	# No vendor files modified
+	[ -z "$vendor_files" ] && return
+
+	result=$(echo "$files" | egrep "\<${vendor_ctl_file}\>" || true)
+
+	[ -z "$result" ] && die "PR changes vendor files, but does not update ${vendor_ctl_file}"
+}
+
 main()
 {
 	local long_option_names="${!long_options[@]}"
@@ -595,6 +637,8 @@ main()
 	while [ $# -gt 1 ]
 	do
 		case "$1" in
+			--all) specific_branch="true" ;;
+			--branch) branch="$2"; shift ;;
 			--commits) func=check_commits ;;
 			--docs) func=check_docs ;;
 			--files) func=check_files ;;
@@ -602,8 +646,8 @@ main()
 			--golang) func=check_go ;;
 			-h|--help) usage; exit 0 ;;
 			--licenses) func=check_license_headers ;;
-			--all) specific_branch="true" ;;
 			--repo) repo="$2"; shift ;;
+			--vendor) func=check_vendor;;
 			--versions) func=check_versions ;;
 			--) shift; break ;;
 		esac
@@ -653,6 +697,7 @@ main()
 	check_versions
 	check_docs
 	check_files
+	check_vendor
 }
 
 main "$@"
