@@ -1073,7 +1073,7 @@ func (k *kataAgent) handleBlockVolumes(c *Container) []*grpc.Storage {
 		}
 		if c.sandbox.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
 			vol.Driver = kataBlkDevType
-			vol.Source = blockDrive.VirtPath
+			vol.Source = blockDrive.PCIAddr
 		} else {
 			vol.Driver = kataSCSIDevType
 			vol.Source = blockDrive.SCSIAddr
