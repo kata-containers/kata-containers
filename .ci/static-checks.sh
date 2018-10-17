@@ -615,7 +615,7 @@ check_vendor()
 
 	result=$(echo "$files" | egrep "\<${vendor_ctl_file}\>" || true)
 
-	[ -z "$result" ] && die "PR changes vendor files, but does not update ${vendor_ctl_file}"
+	[ -n "$result" ] || die "PR changes vendor files, but does not update ${vendor_ctl_file}"
 }
 
 main()
