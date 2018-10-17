@@ -35,6 +35,7 @@ long_options=(
 	[branch]="Specify upstream branch to compare against (default '$branch')"
 	[all]="Force checking of all changes, including files in the base branch"
 	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
+	[vendor]="Check vendor files"
 	[versions]="Check versions files"
 )
 
@@ -585,6 +586,38 @@ check_files()
 	exit 1
 }
 
+# Ensure that changes to vendored code are accompanied by an update to the
+# vendor tooling config file. If not, the user simply hacked the vendor files
+# rather than following the correct process:
+#
+# - https://github.com/kata-containers/community/blob/master/VENDORING.md
+check_vendor()
+{
+	local files
+	local vendor_files
+	local result
+
+	# All vendor operations should modify this file
+	local vendor_ctl_file="Gopkg.lock"
+
+	files=$(get_pr_changed_file_details_full || true)
+
+	# Strip off status
+	files=$(echo "$files"|awk '{print $NF}')
+
+	# No files were changed
+	[ -z "$files" ] && info "No files found" && return
+
+	vendor_files=$(echo "$files" | grep "vendor/" || true)
+
+	# No vendor files modified
+	[ -z "$vendor_files" ] && return
+
+	result=$(echo "$files" | egrep "\<${vendor_ctl_file}\>" || true)
+
+	[ -z "$result" ] && die "PR changes vendor files, but does not update ${vendor_ctl_file}"
+}
+
 main()
 {
 	local long_option_names="${!long_options[@]}"
@@ -614,6 +647,7 @@ main()
 			-h|--help) usage; exit 0 ;;
 			--licenses) func=check_license_headers ;;
 			--repo) repo="$2"; shift ;;
+			--vendor) func=check_vendor;;
 			--versions) func=check_versions ;;
 			--) shift; break ;;
 		esac
@@ -663,6 +697,7 @@ main()
 	check_versions
 	check_docs
 	check_files
+	check_vendor
 }
 
 main "$@"
