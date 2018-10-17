@@ -51,6 +51,11 @@ const (
 	// This will be used for vethtap, macvtap, ipvtap
 	NetXConnectEnlightenedModel
 
+	// NetXConnectTCFilterModel redirects traffic from the network interface
+	// provided by the network plugin to a tap interface.
+	// This works for ipvlan and macvlan as well.
+	NetXConnectTCFilterModel
+
 	// NetXConnectNoneModel can be used when the VM is in the host network namespace
 	NetXConnectNoneModel
 
@@ -77,6 +82,9 @@ func (n *NetInterworkingModel) SetModel(modelName string) error {
 		return nil
 	case "enlightened":
 		*n = NetXConnectEnlightenedModel
+		return nil
+	case "tcfilter":
+		*n = NetXConnectTCFilterModel
 		return nil
 	case "none":
 		*n = NetXConnectNoneModel
@@ -493,6 +501,11 @@ func xconnectVMNetwork(endpoint Endpoint, connect bool, numCPUs uint32, disableV
 			return tapNetworkPair(endpoint, numCPUs, disableVhostNet)
 		}
 		return untapNetworkPair(endpoint)
+	case NetXConnectTCFilterModel:
+		if connect {
+			return setupTCFiltering(endpoint, numCPUs, disableVhostNet)
+		}
+		return removeTCFiltering(endpoint)
 	case NetXConnectEnlightenedModel:
 		return fmt.Errorf("Unsupported networking model")
 	default:
@@ -757,6 +770,178 @@ func bridgeNetworkPair(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) 
 	return nil
 }
 
+func setupTCFiltering(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) error {
+	netHandle, err := netlink.NewHandle()
+	if err != nil {
+		return err
+	}
+	defer netHandle.Delete()
+
+	netPair := endpoint.NetworkPair()
+
+	tapLink, fds, err := createLink(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{}, int(numCPUs))
+	if err != nil {
+		return fmt.Errorf("Could not create TAP interface: %s", err)
+	}
+	netPair.VMFds = fds
+
+	if !disableVhostNet {
+		vhostFds, err := createVhostFds(int(numCPUs))
+		if err != nil {
+			return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
+		}
+		netPair.VhostFds = vhostFds
+	}
+
+	var attrs *netlink.LinkAttrs
+	var link netlink.Link
+
+	link, err = getLinkForEndpoint(endpoint, netHandle)
+	if err != nil {
+		return err
+	}
+
+	attrs = link.Attrs()
+
+	// Save the veth MAC address to the TAP so that it can later be used
+	// to build the hypervisor command line. This MAC address has to be
+	// the one inside the VM in order to avoid any firewall issues. The
+	// bridge created by the network plugin on the host actually expects
+	// to see traffic from this MAC address and not another one.
+	netPair.TAPIface.HardAddr = attrs.HardwareAddr.String()
+
+	if err := netHandle.LinkSetMTU(tapLink, attrs.MTU); err != nil {
+		return fmt.Errorf("Could not set TAP MTU %d: %s", attrs.MTU, err)
+	}
+
+	if err := netHandle.LinkSetUp(tapLink); err != nil {
+		return fmt.Errorf("Could not enable TAP %s: %s", netPair.TAPIface.Name, err)
+	}
+
+	tapAttrs := tapLink.Attrs()
+
+	if err := addQdiscIngress(tapAttrs.Index); err != nil {
+		return err
+	}
+
+	if err := addQdiscIngress(attrs.Index); err != nil {
+		return err
+	}
+
+	if err := addRedirectTCFilter(attrs.Index, tapAttrs.Index); err != nil {
+		return err
+	}
+
+	if err := addRedirectTCFilter(tapAttrs.Index, attrs.Index); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// addQdiscIngress creates a new qdisc for nwtwork interface with the specified network index
+// on "ingress". qdiscs normally don't work on ingress so this is really a special qdisc
+// that you can consider an "alternate root" for inbound packets.
+// Handle for ingress qdisc defaults to "ffff:"
+//
+// This is equivalent to calling `tc qdisc add dev eth0 ingress`
+func addQdiscIngress(index int) error {
+	qdisc := &netlink.Ingress{
+		QdiscAttrs: netlink.QdiscAttrs{
+			LinkIndex: index,
+			Parent:    netlink.HANDLE_INGRESS,
+		},
+	}
+
+	err := netlink.QdiscAdd(qdisc)
+	if err != nil {
+		return fmt.Errorf("Failed to add qdisc for network index %d : %s", index, err)
+	}
+
+	return nil
+}
+
+// addRedirectTCFilter adds a tc filter for device with index "sourceIndex".
+// All traffic for interface with index "sourceIndex" is redirected to interface with
+// index "destIndex"
+//
+// This is equivalent to calling:
+// `tc filter add dev source parent ffff: protocol all u32 match u8 0 0 action mirred egress redirect dev dest`
+func addRedirectTCFilter(sourceIndex, destIndex int) error {
+	filter := &netlink.U32{
+		FilterAttrs: netlink.FilterAttrs{
+			LinkIndex: sourceIndex,
+			Parent:    netlink.MakeHandle(0xffff, 0),
+			Protocol:  unix.ETH_P_ALL,
+		},
+		Actions: []netlink.Action{
+			&netlink.MirredAction{
+				ActionAttrs: netlink.ActionAttrs{
+					Action: netlink.TC_ACT_STOLEN,
+				},
+				MirredAction: netlink.TCA_EGRESS_REDIR,
+				Ifindex:      destIndex,
+			},
+		},
+	}
+
+	if err := netlink.FilterAdd(filter); err != nil {
+		return fmt.Errorf("Failed to add filter for index %d : %s", sourceIndex, err)
+	}
+
+	return nil
+}
+
+// removeRedirectTCFilter removes all tc u32 filters created on ingress qdisc for "link".
+func removeRedirectTCFilter(link netlink.Link) error {
+	if link == nil {
+		return nil
+	}
+
+	// Handle 0xffff is used for ingress
+	filters, err := netlink.FilterList(link, netlink.MakeHandle(0xffff, 0))
+	if err != nil {
+		return err
+	}
+
+	for _, f := range filters {
+		u32, ok := f.(*netlink.U32)
+
+		if !ok {
+			continue
+		}
+
+		if err := netlink.FilterDel(u32); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// removeQdiscIngress removes the ingress qdisc previously created on "link".
+func removeQdiscIngress(link netlink.Link) error {
+	if link == nil {
+		return nil
+	}
+
+	qdiscs, err := netlink.QdiscList(link)
+	if err != nil {
+		return err
+	}
+
+	for _, qdisc := range qdiscs {
+		ingress, ok := qdisc.(*netlink.Ingress)
+		if !ok {
+			continue
+		}
+
+		if err := netlink.QdiscDel(ingress); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func untapNetworkPair(endpoint Endpoint) error {
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
@@ -839,6 +1024,48 @@ func unBridgeNetworkPair(endpoint Endpoint) error {
 
 	if err := netHandle.LinkSetNoMaster(link); err != nil {
 		return fmt.Errorf("Could not detach veth %s: %s", netPair.VirtIface.Name, err)
+	}
+
+	return nil
+}
+
+func removeTCFiltering(endpoint Endpoint) error {
+	netHandle, err := netlink.NewHandle()
+	if err != nil {
+		return err
+	}
+	defer netHandle.Delete()
+
+	netPair := endpoint.NetworkPair()
+
+	tapLink, err := getLinkByName(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{})
+	if err != nil {
+		return fmt.Errorf("Could not get TAP interface: %s", err)
+	}
+
+	if err := netHandle.LinkSetDown(tapLink); err != nil {
+		return fmt.Errorf("Could not disable TAP %s: %s", netPair.TAPIface.Name, err)
+	}
+
+	if err := netHandle.LinkDel(tapLink); err != nil {
+		return fmt.Errorf("Could not remove TAP %s: %s", netPair.TAPIface.Name, err)
+	}
+
+	link, err := getLinkForEndpoint(endpoint, netHandle)
+	if err != nil {
+		return err
+	}
+
+	if err := removeRedirectTCFilter(link); err != nil {
+		return err
+	}
+
+	if err := removeQdiscIngress(link); err != nil {
+		return err
+	}
+
+	if err := netHandle.LinkSetDown(link); err != nil {
+		return fmt.Errorf("Could not disable veth %s: %s", netPair.VirtIface.Name, err)
 	}
 
 	return nil
