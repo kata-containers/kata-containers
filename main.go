@@ -13,6 +13,7 @@ import (
 	"log/syslog"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"time"
 
@@ -23,6 +24,11 @@ import (
 const (
 	shimName    = "kata-shim"
 	exitFailure = 1
+	// Max number of threads the shim should consume.
+	// We choose 6 as we want a couple of threads for the runtime (gc etc.)
+	// and couple of threads for our parallel user code, such as the copy
+	// code in shim.go
+	maxThreads = 6
 )
 
 // version is the shim version. This variable is populated at build time.
@@ -69,6 +75,19 @@ func initLogger(logLevel, container, execID string, announceFields logrus.Fields
 	return nil
 }
 
+func setThreads() {
+	// If GOMAXPROCS has not been set, restrict our thread usage
+	// so we don't grow many idle threads on large core count systems,
+	// which un-necessarily consume host PID space (and thus set an
+	// artificial max limit on the number of concurrent containers we can
+	// run)
+	if os.Getenv("GOMAXPROCS") == "" {
+		if runtime.NumCPU() > maxThreads {
+			runtime.GOMAXPROCS(maxThreads)
+		}
+	}
+}
+
 func realMain() {
 	var (
 		logLevel      string
@@ -79,6 +98,8 @@ func realMain() {
 		proxyExitCode bool
 		showVersion   bool
 	)
+
+	setThreads()
 
 	flag.BoolVar(&debug, "debug", false, "enable debug mode")
 	flag.BoolVar(&showVersion, "version", false, "display program version and exit")
