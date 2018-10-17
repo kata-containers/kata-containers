@@ -192,6 +192,7 @@ func TestNetInterworkingModelIsValid(t *testing.T) {
 		{"Invalid Model", NetXConnectInvalidModel, false},
 		{"Default Model", NetXConnectDefaultModel, true},
 		{"Bridged Model", NetXConnectBridgedModel, true},
+		{"TC Filter Model", NetXConnectTCFilterModel, true},
 		{"Macvtap Model", NetXConnectMacVtapModel, true},
 		{"Enlightened Model", NetXConnectEnlightenedModel, true},
 	}
@@ -216,6 +217,7 @@ func TestNetInterworkingModelSetModel(t *testing.T) {
 		{"bridged Model", "bridged", false},
 		{"macvtap Model", "macvtap", false},
 		{"enlightened Model", "enlightened", false},
+		{"tcfilter Model", "tcfilter", false},
 		{"none Model", "none", false},
 	}
 
