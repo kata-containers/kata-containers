@@ -36,7 +36,8 @@ NEW_RUNTIME_CONFIG="${PKGDEFAULTSDIR}/configuration.toml"
 build_and_install "github.com/kata-containers/runtime"
 
 # Check system supports running Kata Containers
-kata-runtime kata-check
+kata_runtime_path=$(command -v kata-runtime)
+sudo -E PATH=$PATH "$kata_runtime_path" kata-check
 
 if [ -e "${NEW_RUNTIME_CONFIG}" ]; then
 	# Remove the legacy config file
