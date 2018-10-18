@@ -19,12 +19,22 @@ to see if your system is capable of running Kata Containers.
 The following is an overview of the different installation methods available. All of these methods equally result
 in a system configured to run Kata Containers.
 
-|Installation method                                        |Suggested for                            |Supported on                             |
-|-----------------------------------------------------------|-----------------------------------------|-----------------------------------------|
-|[Automatic](#automatic-installation)                       |Quick installation; new users            |[distros list](#supported-distributions) |
-|[Scripted](#scripted-installation)                         |Generating installation scripts          |[distros list](#supported-distributions) |
-|[Manual](#manual-installation)                             |Full control over each installation step |[distros list](#supported-distributions) |
-|[Build from sources](#../Developer-Guide.md#initial-setup) |Developers and hackers                   |any distro                               |
+
+| Installation method                                        | Suggested for               | Description                                                                                                                                 | Packaged install | Distributions supported               |
+|------------------------------------------------------------|-----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|------------------|---------------------------------------|
+| [Automatic](#automatic-installation)                       | Quick start for new users   | Run a single command to install a full system.                                                                                              | yes              | [see table](#supported-distributions) |
+| [Manual](#manual-installation)                             | Self paced user install     | Allows the user to read a brief document and exectute the specified commands step-by-step.                                                  | yes              | [see table](#supported-distributions) |
+| [Scripted](#scripted-installation)                         | Administrators              | Generates an installation script which will result in a working system when executed.                                                       | yes              | [see table](#supported-distributions) |
+| [Build from sources](../Developer-Guide.md#initial-setup) | Developers and hackers only | Allows power users who are comfortable building software from source to use the latest component versions. Not recommended for normal users. | no               | any distro                            |
+
+> **Notes:**
+>
+> - The "Packaged install" column shows if the resulting installation
+>   uses your distribution's native package format (such as RPM or DEB).
+>
+> - Power users who decide to build from sources should be aware of the
+>   implications of using an unpackaged system which will not be automatically
+>   updated as new [releases](../Releases.md) are made available.
 
 ### Automatic Installation
 [Use kata-manager](installing-with-kata-manager.md) to automatically install Kata packages.
