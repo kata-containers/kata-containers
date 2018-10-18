@@ -57,7 +57,7 @@ Manual installation instructions are available for [these distributions](#suppor
 > **Notes on packages source verification**:
 > - The Kata packages hosted on the download server are signed with GPG to ensure integrity and authenticity.
 >
-> - The public key used to sign packages is available [at this link](https://github.com/kata-containers/tests/data/rpm-signkey.pub); the fingerprint is `9FDC0CB6 3708CF80 3696E2DC D0B37B82 6063F3ED`.
+> - The public key used to sign packages is available [at this link](https://raw.githubusercontent.com/kata-containers/tests/master/data/rpm-signkey.pub); the fingerprint is `9FDC0CB6 3708CF80 3696E2DC D0B37B82 6063F3ED`.
 >
 > - Only trust the signing key and fingerprint listed in the previous bullet point. Do not disable GPG checks,
 > otherwise packages source and authenticity is not guaranteed.
