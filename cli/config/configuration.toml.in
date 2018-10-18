@@ -75,7 +75,7 @@ default_bridges = @DEFBRIDGES@
 
 # Default memory size in MiB for SB/VM.
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
-#default_memory = @DEFMEMSZ@
+default_memory = @DEFMEMSZ@
 #
 # Default memory slots per SB/VM.
 # If unspecified then it will be set @DEFMEMSLOTS@.

@@ -320,15 +320,15 @@ func TestContainerAddResources(t *testing.T) {
 	assert.Nil(err)
 
 	vCPUs := uint32(5)
+	memByte := int64(104857600)
 	c.config.Resources = ContainerResources{
-		VCPUs: vCPUs,
+		VCPUs:   vCPUs,
+		MemByte: memByte,
 	}
 	c.sandbox = &Sandbox{
-		hypervisor: &mockHypervisor{
-			vCPUs: vCPUs,
-		},
-		agent:   &noopAgent{},
-		storage: &filesystem{},
+		hypervisor: &mockHypervisor{},
+		agent:      &noopAgent{},
+		storage:    &filesystem{},
 	}
 	err = c.addResources()
 	assert.Nil(err)
@@ -361,13 +361,91 @@ func TestContainerRemoveResources(t *testing.T) {
 	}
 
 	c.sandbox = &Sandbox{
-		hypervisor: &mockHypervisor{
-			vCPUs: vCPUs,
-		},
-		storage: &filesystem{},
+		hypervisor: &mockHypervisor{},
+		storage:    &filesystem{},
 	}
 
 	err = c.removeResources()
+	assert.Nil(err)
+}
+
+func TestContainerUpdateResources(t *testing.T) {
+	assert := assert.New(t)
+
+	sandbox := &Sandbox{
+		hypervisor: &mockHypervisor{},
+		agent:      &noopAgent{},
+		storage:    &filesystem{},
+	}
+
+	c := &Container{
+		sandbox: sandbox,
+	}
+	c.config = &ContainerConfig{Annotations: make(map[string]string)}
+
+	// VCPUs is equal to zero
+	oldResource := ContainerResources{
+		VCPUs:   0,
+		MemByte: 0,
+	}
+
+	newResource := ContainerResources{
+		VCPUs:   0,
+		MemByte: 104857600,
+	}
+
+	err := c.updateResources(oldResource, newResource)
+	assert.Nil(err)
+
+	// MemByte is equal to zero
+	newResource = ContainerResources{
+		VCPUs:   5,
+		MemByte: 0,
+	}
+
+	err = c.updateResources(oldResource, newResource)
+	assert.Nil(err)
+
+	// oldResource is equal to newResource
+	oldResource = ContainerResources{
+		VCPUs:   5,
+		MemByte: 104857600,
+	}
+
+	newResource = ContainerResources{
+		VCPUs:   5,
+		MemByte: 104857600,
+	}
+
+	err = c.updateResources(oldResource, newResource)
+	assert.Nil(err)
+
+	// memory hotplug and cpu hotplug
+	oldResource = ContainerResources{
+		VCPUs:   5,
+		MemByte: 104857600,
+	}
+
+	newResource = ContainerResources{
+		VCPUs:   10,
+		MemByte: 209715200,
+	}
+
+	err = c.updateResources(oldResource, newResource)
+	assert.Nil(err)
+
+	// memory hot remove and cpu hot remove
+	oldResource = ContainerResources{
+		VCPUs:   10,
+		MemByte: 209715200,
+	}
+
+	newResource = ContainerResources{
+		VCPUs:   5,
+		MemByte: 104857600,
+	}
+
+	err = c.updateResources(oldResource, newResource)
 	assert.Nil(err)
 }
 
