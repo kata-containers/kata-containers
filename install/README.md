@@ -30,7 +30,7 @@ in a system configured to run Kata Containers.
 [Use kata-manager](installing-with-kata-manager.md) to automatically install Kata packages.
 
 ### Scripted Installation
-[Use kata-doc-to-script](installing-with-kata-doc-to-script.md) to generate installation scripts.
+[Use kata-doc-to-script](installing-with-kata-doc-to-script.md) to generate installation scripts that can be reviewed before they are executed.
 
 ### Manual Installation
 Manual installation instructions are available for [these distributions](#supported-distributions) and document how to:
