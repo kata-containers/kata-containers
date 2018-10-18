@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"testing"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
@@ -290,13 +291,44 @@ func TestRunContainerSuccessful(t *testing.T) {
 		testingImpl.DeleteContainerFunc = nil
 	}()
 
-	err = run(context.Background(), d.sandbox.ID(), d.bundlePath, d.consolePath, "", d.pidFilePath, false, true, d.runtimeConfig)
+	type errorTestArgs struct {
+		bundlePath string
 
-	// should return ExitError with the message and exit code
-	e, ok := err.(*cli.ExitError)
-	assert.True(ok, "error should be a cli.ExitError: %s", err)
-	assert.Empty(e.Error())
-	assert.NotZero(e.ExitCode())
+		// regex string for text of error message
+		errorRE string
+
+		// If true, expect a cli.ExitError, else expect any other type
+		// of error.
+		expectExitError bool
+	}
+
+	args := []errorTestArgs{
+		{"", "config.json: no such file or directory", false},
+		{d.bundlePath, "", true},
+	}
+
+	for i, a := range args {
+		err = run(context.Background(), d.sandbox.ID(), a.bundlePath, d.consolePath, "", d.pidFilePath, false, true, d.runtimeConfig)
+		assert.Errorf(err, "test args %d (%+v)", i, a)
+
+		if a.errorRE == "" {
+			assert.Empty(err.Error())
+		} else {
+			re := regexp.MustCompile(a.errorRE)
+			matches := re.FindAllStringSubmatch(err.Error(), -1)
+			assert.NotEmpty(matches)
+		}
+
+		e, ok := err.(*cli.ExitError)
+
+		if a.expectExitError {
+			// should return ExitError with the message and exit code
+			assert.Truef(ok, "test args %d (%+v): error should be a cli.ExitError: %s", i, a, err)
+			assert.NotZero(e.ExitCode())
+		} else {
+			assert.Falsef(ok, "test args %d (%+v): error should not be a cli.ExitError: %s", i, a, err)
+		}
+	}
 }
 
 func TestRunContainerDetachSuccessful(t *testing.T) {
