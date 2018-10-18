@@ -112,6 +112,10 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		}
 	}()
 
+	if err := s.getAndStoreGuestDetails(); err != nil {
+		return nil, err
+	}
+
 	// Create Containers
 	if err = s.createContainers(); err != nil {
 		return nil, err
@@ -119,11 +123,6 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 
 	// The sandbox is completely created now, we can store it.
 	if err = s.storeSandbox(); err != nil {
-		return nil, err
-	}
-
-	// get and store guest details
-	if err := s.getAndStoreGuestDetails(); err != nil {
 		return nil, err
 	}
 
