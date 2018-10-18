@@ -20,9 +20,16 @@ REPO_TRANSPORT="https"
 # Can specify an alternative domain
 REPO_DOMAIN="download.opensuse.org"
 
+# Init process must be one of {systemd,kata-agent}
+INIT_PROCESS=systemd
+# List of zero or more architectures to exclude from build,
+# as reported by  `uname -m`
+ARCH_EXCLUDE_LIST=()
+
+###############################################################################
+#
 # NOTE: you probably dont need to edit things below this
 #
-###############################################################################
 
 SUSE_URL_BASE="${REPO_TRANSPORT}://${REPO_DOMAIN}"
 SUSE_PATH_OSS="/distribution/${OS_DISTRO,,}/$OS_VERSION/repo/oss"
