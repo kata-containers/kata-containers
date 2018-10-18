@@ -84,6 +84,10 @@ test-image-only:
 test-initrd-only:
 	$(TEST_RUNNER) --test-initrds-only "$(DISTRO)"
 
+.PHONY: list-distros
+list-distros:
+	@ $(ROOTFS_BUILDER) -l
+
 .PHONY: clean
 clean:
 	rm -rf $(DISTRO_ROOTFS_MARKER) $(DISTRO_ROOTFS) $(DISTRO_IMAGE) $(DISTRO_INITRD)

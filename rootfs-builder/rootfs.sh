@@ -54,8 +54,10 @@ Refer the Platform-OS Compatibility Matrix: https://github.com/kata-containers/o
 Options:
 -a  : agent version DEFAULT: ${AGENT_VERSION} ENV: AGENT_VERSION
 -h  : show this help message
+-l  : list the supported Linux distributions
 -o  : specify version of osbuilder
 -r  : rootfs directory DEFAULT: ${ROOTFS_DIR} ENV: ROOTFS_DIR
+-t  : print the test config for a given <distro_name>
 
 ENV VARIABLES:
 GO_AGENT_PKG: Change the golang package url to get the agent source code
@@ -76,6 +78,15 @@ get_distros() {
 	find ${cdirs} -maxdepth 1 -name "${CONFIG_SH}" -printf '%H\n' | while read dir; do
 		basename "${dir}"
 	done
+}
+
+get_test_config() {
+	local distro="$1"
+	local config="${script_dir}/${distro}/config.sh"
+	source ${config}
+
+	echo -e "INIT_PROCESS:\t\t$INIT_PROCESS"
+	echo -e "ARCH_EXCLUDE_LIST:\t\t${ARCH_EXCLUDE_LIST[@]}"
 }
 
 check_function_exist()
@@ -180,13 +191,15 @@ copy_kernel_modules()
 
 OSBUILDER_VERSION="unknown"
 
-while getopts a:ho:r: opt
+while getopts a:hlo:r:t: opt
 do
 	case $opt in
 		a)	AGENT_VERSION="${OPTARG}" ;;
 		h)	usage ;;
+		l)	get_distros | sort && exit 0;;
 		o)	OSBUILDER_VERSION="${OPTARG}" ;;
 		r)	ROOTFS_DIR="${OPTARG}" ;;
+		t)	get_test_config "${OPTARG}" && exit 0;;
 	esac
 done
 
