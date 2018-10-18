@@ -6,12 +6,14 @@ package docker
 
 import (
 	"fmt"
-	"os"
-	"strings"
-
+	. "github.com/kata-containers/tests"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"math"
+	"os"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -20,9 +22,23 @@ const (
 	memSWLimitPath    = "/sys/fs/cgroup/memory/memory.memsw.limit_in_bytes"
 	memSwappinessPath = "/sys/fs/cgroup/memory/memory.swappiness"
 	memKmemLimitPath  = "/sys/fs/cgroup/memory/memory.kmem.limit_in_bytes"
+	memBlockSizePath  = "/sys/devices/system/memory/block_size_bytes"
+	sysfsMemPath      = "/sys/devices/system/memory/"
 )
 
-func withUpdateMemoryConstraints(dockerMemMB uint32, updateMemMB uint32, fail bool) TableEntry {
+func withDockerMemory(dockerMem int64, fail bool) TableEntry {
+	var msg string
+
+	if fail {
+		msg = "hotplug memory when create containers should fail"
+	} else {
+		msg = "hotplug memory when create containers should not fail"
+	}
+
+	return Entry(msg, dockerMem, fail)
+}
+
+func withUpdateMemoryConstraints(dockerMem int64, updateMem int64, fail bool) TableEntry {
 	var msg string
 
 	if fail {
@@ -31,8 +47,55 @@ func withUpdateMemoryConstraints(dockerMemMB uint32, updateMemMB uint32, fail bo
 		msg = "update memory constraints should not fail"
 	}
 
-	return Entry(msg, dockerMemMB, updateMemMB, fail)
+	return Entry(msg, dockerMem, updateMem, fail)
 }
+
+var _ = Describe("Hotplug memory when create containers", func() {
+	var (
+		args         []string
+		id           string
+		defaultMemSz int64
+	)
+
+	BeforeEach(func() {
+		id = randomDockerName()
+		defaultMemSz = int64(KataConfig.Hypervisor[DefaultHypervisor].DefaultMemSz) << 20
+		Expect(defaultMemSz).To(BeNumerically(">", 0))
+	})
+
+	AfterEach(func() {
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	DescribeTable("Hotplug memory when create containers",
+		func(dockerMem int64, fail bool) {
+			args = []string{"--name", id, "-tid", "--rm", "-m", fmt.Sprintf("%d", dockerMem), Image}
+			_, _, exitCode := dockerRun(args...)
+			Expect(exitCode).To(BeZero())
+
+			stdout, _, exitCode := dockerExec(id, "cat", memBlockSizePath)
+			Expect(exitCode).To(BeZero())
+			data := strings.Trim(stdout, "\n\t ")
+			memBlockSize, err := strconv.ParseInt(data, 16, 64)
+			Expect(err).To(BeNil())
+
+			stdout, _, exitCode = dockerExec(id, "sh", "-c", fmt.Sprintf("find %v -name memory* | wc -l", sysfsMemPath))
+			Expect(exitCode).To(BeZero())
+			memBlockNum, err := strconv.Atoi(strings.Trim(stdout, "\n\t "))
+			Expect(err).To(BeNil())
+			memBlockNum--
+
+			mem := int64(math.Ceil(float64(dockerMem)/float64(memBlockSize))) * memBlockSize
+			Expect(int64(memBlockNum) * memBlockSize).To(Equal(mem + defaultMemSz))
+
+			Expect(RemoveDockerContainer(id)).To(BeTrue())
+		},
+		withDockerMemory(100*1024*1024, shouldNotFail),
+		withDockerMemory(200*1024*1024, shouldNotFail),
+		withDockerMemory(500*1024*1024, shouldNotFail),
+		withDockerMemory(1024*1024*1024, shouldNotFail),
+	)
+})
 
 var _ = Describe("memory constraints", func() {
 	var (
@@ -49,6 +112,7 @@ var _ = Describe("memory constraints", func() {
 		useSwap       bool
 		useKmem       bool
 		err           error
+		defaultMemSz  int
 	)
 
 	BeforeEach(func() {
@@ -68,6 +132,9 @@ var _ = Describe("memory constraints", func() {
 		}
 
 		id = randomDockerName()
+
+		defaultMemSz = int(KataConfig.Hypervisor[DefaultHypervisor].DefaultMemSz)
+		Expect(defaultMemSz).To(BeNumerically(">", 0))
 	})
 
 	AfterEach(func() {
@@ -77,7 +144,7 @@ var _ = Describe("memory constraints", func() {
 	Context("run container exceeding memory constraints", func() {
 		It("should ran out of memory", func() {
 			memSize = "256MB"
-			limSize = "260M"
+			limSize = strconv.Itoa(260+defaultMemSz) + "M"
 			args = []string{"--name", id, "--rm", "-m", memSize, StressImage, "-mem-total", limSize, "-mem-alloc-size", limSize}
 			_, stderr, exitCode = dockerRun(args...)
 			Expect(exitCode).NotTo(Equal(0))
@@ -172,14 +239,14 @@ var _ = Describe("run container and update its memory constraints", func() {
 	})
 
 	DescribeTable("should have applied the memory constraints",
-		func(dockerMemMB uint32, updateMemMB uint32, fail bool) {
-			memSize = fmt.Sprintf("%d", dockerMemMB<<20)
+		func(dockerMem int64, updateMem int64, fail bool) {
+			memSize = fmt.Sprintf("%d", dockerMem)
 			args = []string{"--name", id, "-dti", "--rm", "-m", memSize, Image}
 
 			_, _, exitCode = dockerRun(args...)
 			Expect(exitCode).To(BeZero())
 
-			memSize = fmt.Sprintf("%d", updateMemMB<<20)
+			memSize = fmt.Sprintf("%d", updateMem)
 			args = []string{"--memory", memSize, "--memory-reservation", memSize}
 			if useSwap {
 				args = append(args, "--memory-swap", memSize)
@@ -189,33 +256,43 @@ var _ = Describe("run container and update its memory constraints", func() {
 
 			// update memory constraints
 			_, _, exitCode = dockerUpdate(args...)
-			if fail {
-				Expect(exitCode).ToNot(BeZero())
-				return
-			}
 			Expect(exitCode).To(BeZero())
 
 			// check memory limit
 			stdout, _, exitCode = dockerExec(id, "cat", memLimitPath)
 			Expect(exitCode).To(BeZero())
-			Expect(memSize).To(Equal(strings.Trim(stdout, " \n\t")))
+			if fail {
+				Expect(memSize).ToNot(Equal(strings.Trim(stdout, " \n\t")))
+			} else {
+				Expect(memSize).To(Equal(strings.Trim(stdout, " \n\t")))
+			}
 
 			// check memory soft limit
 			stdout, _, exitCode = dockerExec(id, "cat", memSoftLimitPath)
 			Expect(exitCode).To(BeZero())
-			Expect(memSize).To(Equal(strings.Trim(stdout, " \n\t")))
+			if fail {
+				Expect(memSize).ToNot(Equal(strings.Trim(stdout, " \n\t")))
+			} else {
+				Expect(memSize).To(Equal(strings.Trim(stdout, " \n\t")))
+			}
 
 			if useSwap {
 				// check memory swap limit
 				stdout, _, exitCode = dockerExec(id, "cat", memSWLimitPath)
 				Expect(exitCode).To(BeZero())
-				Expect(memSize).To(Equal(strings.Trim(stdout, " \n\t")))
+				if fail {
+					Expect(memSize).ToNot(Equal(strings.Trim(stdout, " \n\t")))
+				} else {
+					Expect(memSize).To(Equal(strings.Trim(stdout, " \n\t")))
+				}
 			}
 
 			Expect(RemoveDockerContainer(id)).To(BeTrue())
 		},
-		withUpdateMemoryConstraints(500, 400, shouldNotFail),
-		withUpdateMemoryConstraints(500, 500, shouldNotFail),
-		withUpdateMemoryConstraints(500, 600, shouldNotFail),
+		withUpdateMemoryConstraints(500*1024*1024, 400*1024*1024, shouldNotFail),
+		withUpdateMemoryConstraints(500*1024*1024, 500*1024*1024, shouldNotFail),
+		withUpdateMemoryConstraints(500*1024*1024, 600*1024*1024, shouldNotFail),
+		withUpdateMemoryConstraints(500*1024*1024, 500*1024*1024+1, shouldFail),
+		withUpdateMemoryConstraints(500*1024*1024, 500*1024*1024+4096, shouldNotFail),
 	)
 })
