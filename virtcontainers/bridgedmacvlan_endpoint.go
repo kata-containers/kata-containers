@@ -71,6 +71,11 @@ func (endpoint *BridgedMacvlanEndpoint) PciAddr() string {
 	return endpoint.PCIAddr
 }
 
+// SetPciAddr sets the PCI address of the endpoint.
+func (endpoint *BridgedMacvlanEndpoint) SetPciAddr(pciAddr string) {
+	endpoint.PCIAddr = pciAddr
+}
+
 // NetworkPair returns the network pair of the endpoint.
 func (endpoint *BridgedMacvlanEndpoint) NetworkPair() *NetworkInterfacePair {
 	return &endpoint.NetPair

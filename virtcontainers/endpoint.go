@@ -19,6 +19,7 @@ type Endpoint interface {
 	NetworkPair() *NetworkInterfacePair
 
 	SetProperties(NetworkInfo)
+	SetPciAddr(string)
 	Attach(hypervisor) error
 	Detach(netNsCreated bool, netNsPath string) error
 	HotAttach(h hypervisor) error

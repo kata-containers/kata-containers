@@ -70,6 +70,11 @@ func (endpoint *VethEndpoint) PciAddr() string {
 	return endpoint.PCIAddr
 }
 
+// SetPciAddr sets the PCI address of the endpoint.
+func (endpoint *VethEndpoint) SetPciAddr(pciAddr string) {
+	endpoint.PCIAddr = pciAddr
+}
+
 // NetworkPair returns the network pair of the endpoint.
 func (endpoint *VethEndpoint) NetworkPair() *NetworkInterfacePair {
 	return &endpoint.NetPair
