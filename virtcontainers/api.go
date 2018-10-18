@@ -874,9 +874,12 @@ func toggleInterface(ctx context.Context, sandboxID string, inf *grpc.Interface,
 	if err != nil {
 		return nil, err
 	}
+	defer s.releaseStatelessSandbox()
+
 	if add {
 		return s.AddInterface(inf)
 	}
+
 	return s.RemoveInterface(inf)
 }
 
@@ -906,6 +909,7 @@ func ListInterfaces(ctx context.Context, sandboxID string) ([]*grpc.Interface, e
 	if err != nil {
 		return nil, err
 	}
+	defer s.releaseStatelessSandbox()
 
 	return s.ListInterfaces()
 }
@@ -926,6 +930,8 @@ func UpdateRoutes(ctx context.Context, sandboxID string, routes []*grpc.Route) (
 	if err != nil {
 		return nil, err
 	}
+	defer s.releaseStatelessSandbox()
+
 	return s.UpdateRoutes(routes)
 }
 
@@ -945,6 +951,7 @@ func ListRoutes(ctx context.Context, sandboxID string) ([]*grpc.Route, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer s.releaseStatelessSandbox()
 
 	return s.ListRoutes()
 }
