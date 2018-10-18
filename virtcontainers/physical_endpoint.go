@@ -53,6 +53,11 @@ func (endpoint *PhysicalEndpoint) PciAddr() string {
 	return endpoint.PCIAddr
 }
 
+// SetPciAddr sets the PCI address of the endpoint.
+func (endpoint *PhysicalEndpoint) SetPciAddr(pciAddr string) {
+	endpoint.PCIAddr = pciAddr
+}
+
 // SetProperties sets the properties of the physical endpoint.
 func (endpoint *PhysicalEndpoint) SetProperties(properties NetworkInfo) {
 	endpoint.EndpointProperties = properties

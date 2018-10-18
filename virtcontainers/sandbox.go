@@ -1142,6 +1142,9 @@ func (s *Sandbox) RemoveInterface(inf *grpc.Interface) (*grpc.Interface, error) 
 				return inf, err
 			}
 			s.networkNS.Endpoints = append(s.networkNS.Endpoints[:i], s.networkNS.Endpoints[i+1:]...)
+			if err := s.storage.storeSandboxNetwork(s.id, s.networkNS); err != nil {
+				return inf, err
+			}
 			break
 		}
 	}

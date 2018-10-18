@@ -93,6 +93,11 @@ func (endpoint *MacvtapEndpoint) PciAddr() string {
 	return endpoint.PCIAddr
 }
 
+// SetPciAddr sets the PCI address of the endpoint.
+func (endpoint *MacvtapEndpoint) SetPciAddr(pciAddr string) {
+	endpoint.PCIAddr = pciAddr
+}
+
 // NetworkPair returns the network pair of the endpoint.
 func (endpoint *MacvtapEndpoint) NetworkPair() *NetworkInterfacePair {
 	return nil

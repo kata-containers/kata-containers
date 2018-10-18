@@ -122,15 +122,20 @@ type NetworkInterface struct {
 	Addrs    []netlink.Addr
 }
 
-// NetworkInterfacePair defines a pair between VM and virtual network interfaces.
-type NetworkInterfacePair struct {
-	ID        string
-	Name      string
-	VirtIface NetworkInterface
-	TAPIface  NetworkInterface
-	NetInterworkingModel
+// TapInterface defines a tap nic.
+type TapInterface struct {
+	ID       string
+	Name     string
+	TAPIface NetworkInterface
 	VMFds    []*os.File
 	VhostFds []*os.File
+}
+
+// NetworkInterfacePair defines a pair between VM and virtual network interfaces.
+type NetworkInterfacePair struct {
+	TapInterface
+	VirtIface NetworkInterface
+	NetInterworkingModel
 }
 
 // NetworkConfig is the network configuration related to a network.
@@ -962,14 +967,16 @@ func createNetworkInterfacePair(idx int, ifName string, interworkingModel NetInt
 	}
 
 	netPair := NetworkInterfacePair{
-		ID:   uniqueID,
-		Name: fmt.Sprintf("br%d_kata", idx),
+		TapInterface: TapInterface{
+			ID:   uniqueID,
+			Name: fmt.Sprintf("br%d_kata", idx),
+			TAPIface: NetworkInterface{
+				Name: fmt.Sprintf("tap%d_kata", idx),
+			},
+		},
 		VirtIface: NetworkInterface{
 			Name:     fmt.Sprintf("eth%d", idx),
 			HardAddr: randomMacAddr,
-		},
-		TAPIface: NetworkInterface{
-			Name: fmt.Sprintf("tap%d_kata", idx),
 		},
 		NetInterworkingModel: interworkingModel,
 	}
