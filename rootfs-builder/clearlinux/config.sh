@@ -21,3 +21,9 @@ PACKAGES="iptables-bin libudev0-shim"
 # systemd: An init system that will start kata-agent if kata-agent
 #          itself is not configured as init process.
 [ "$AGENT_INIT" == "no" ] && PACKAGES+=" systemd" || true
+
+# Init process must be one of {systemd,kata-agent}
+INIT_PROCESS=systemd
+# List of zero or more architectures to exclude from build,
+# as reported by  `uname -m`
+ARCH_EXCLUDE_LIST=(ppc64le)

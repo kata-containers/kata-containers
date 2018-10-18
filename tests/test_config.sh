@@ -3,15 +3,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-distrosSystemd=(fedora centos ubuntu debian suse)
-distrosAgent=(alpine)
 
-if [ $MACHINE_TYPE != "ppc64le" ]; then
-	distrosSystemd+=(clearlinux)
+if [ -n "${CI:-}" ]; then
+	# "Not testing eurleros on Jenkins or Travis:
+	# (unreliable mirros, see: https://github.com/kata-containers/osbuilder/issues/182)
+	# (timeout, see: https://github.com/kata-containers/osbuilder/issues/46)"
+	skipWhenTestingAll=(euleros)
 fi
 
-# "Not testing eurleros on Travis: (timeout, see: https://github.com/kata-containers/osbuilder/issues/46)"
-if [ -z "${TRAVIS:-}" ]; then
-	distrosSystemd+=(euleros)
+if [ -n "${TRAVIS:-}" ]; then
+	skipWhenTestingAll+=()
 fi
 

@@ -22,3 +22,9 @@ case $(arch) in
 	aarch64) ARCHITECTURE="arm64";;
 	(*) die "$(arch) not supported "
 esac
+
+# Init process must be one of {systemd,kata-agent}
+INIT_PROCESS=systemd
+# List of zero or more architectures to exclude from build,
+# as reported by  `uname -m`
+ARCH_EXCLUDE_LIST=()
