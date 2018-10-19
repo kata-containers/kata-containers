@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright (c) 2018 Intel Corporation
 #
@@ -10,8 +10,10 @@ set -e
 
 typeset -r script_name=${0##*/}
 
-typeset -r doc_repo="github.com/kata-containers/documentation"
-typeset -r test_repo="github.com/kata-containers/tests"
+typeset -r kata_git_base="github.com/kata-containers"
+typeset -r doc_repo="${kata_git_base}/documentation"
+typeset -r test_repo="${kata_git_base}/tests"
+typeset -r tarball_suffix="/archive/master.tar.gz"
 
 typeset -r config_file_name="configuration.toml"
 typeset -r default_image_dir="/usr/share/kata-containers"
@@ -19,6 +21,9 @@ typeset -r default_image_file="${default_image_dir}/kata-containers.img"
 typeset -r default_initrd_file="${default_image_dir}/kata-containers-initrd.img"
 typeset -r default_config_file="/usr/share/defaults/kata-containers/${config_file_name}"
 typeset -r local_config_file="/etc/kata-containers/${config_file_name}"
+typeset -r kata_doc_to_script="${test_repo}/.ci/kata-doc-to-script.sh"
+# Downloaders list uses the format: [name of downloader]="downloader options"
+typeset -r -A downloaders_list=([curl]="-fsSL" [wget]="-O -")
 
 # kernel boot option to enable agent debug
 typeset -r agent_debug="agent.log=debug"
@@ -26,11 +31,17 @@ typeset -r agent_debug="agent.log=debug"
 verbose="no"
 execute="yes"
 
+# The default downloader to use
+downloader=
+
 # full path to the runtime configuration file to operate on
 config_file=
 
 # lower-case name of distribution
 distro=
+
+# Local path to kata git repositories, using the same hierarchy as GOPATH
+kata_repos_base=
 
 usage()
 {
@@ -44,8 +55,8 @@ Options:
   -c <file> : Specify full path to configuration file
               (default: '$local_config_file').
   -h        : Display this help.
-  -n        : No execute mode - for -install-*' commands, create a script but
-	      do not run it (to allow the user to review and run if they choose).
+  -n        : No execute mode (a.k.a. dry run). Show the commands that kata-manager would run,
+              without doing any change to the system.
   -v        : Verbose output.
 
 Commands:
@@ -220,24 +231,46 @@ cmd_configure_initrd()
 	disable_image
 }
 
-check_golang()
+detect_downloader()
 {
-	command -v go >/dev/null || die "need golang"
+	[ -n "$downloader" ] && return
 
-	GOPATH=$(go env GOPATH || true)
+	for d in ${!downloaders_list[@]}; do
+		info "Checking downloader $d ..."
 
-	[ -z "${GOPATH}" ] && die "need GOPATH" || true
+		if command -v $d >/dev/null; then
+			downloader="$d ${downloaders_list[$d]}"
+			return
+		fi
+	done
+
+	die "Could not find a suitable http downloader (tried: ${!downloaders_list[@]})"
 }
 
-get_docs_repo()
+get_git_repo()
 {
-	check_golang
+	local -r repo_path=$1
 
-	local doc_repo_url="https://${doc_repo}"
+	[ -z "$repo_path" ] && die "No repo path specified"
 
-	local repo_dir="${GOPATH}/src/${doc_repo}"
+	local -r local_dest="${kata_repos_base}/src/${repo_path}"
+	if [ -d "$local_dest" ]; then
+		info "repo $1 already available locally"
+		return
+	fi
 
-	[ ! -d "${repo_dir}" ] && (cd "$(dirname ${repo_dir})" && git clone "$doc_repo_url") || true
+	mkdir -p "$local_dest"
+	local -r repo_url="https://${repo_path}"
+
+	if ! command -v git >/dev/null; then
+		info "getting repo $1 using http downloader"
+		detect_downloader
+		$downloader "${repo_url}/${tarball_suffix}" | tar xz -C "$local_dest" --strip-components=1
+		return
+	fi
+
+	info "getting repo $1 using git"
+	git clone "$repo_url" "$local_dest"
 }
 
 exec_document()
@@ -245,15 +278,16 @@ exec_document()
 	local -r file="$1"
 	local -r msg="$2"
 
-	local -r doc_script="kata-doc-to-script.sh"
-	local -r tool="${GOPATH}/src/${test_repo}/.ci/${doc_script}"
+	get_git_repo "$test_repo"
 
-	[ ! -e "${tool}" ] && die "cannot find script ${doc_script}"
+	local -r doc2script="${kata_repos_base}/src/${kata_doc_to_script}"
+
+	[ ! -e "${doc2script}" ] && die "cannot find script ${doc2script}"
 
 	local -r install_script=$(mktemp)
 
 	# create the script
-	"${tool}" "${file}" "${install_script}" "${msg}"
+	"${doc2script}" "${file}" "${install_script}" "${msg}"
 
 	if [ "$execute" = "no" ]
 	then
@@ -277,11 +311,11 @@ exec_document()
 # specified in the installation guide document.
 cmd_install_packages()
 {
-	get_docs_repo
+	get_git_repo "$doc_repo"
 
 	local file="${distro}-installation-guide.md"
 
-	local doc="${GOPATH}/src/${doc_repo}/install/${file}"
+	local doc="${kata_repos_base}/src/${doc_repo}/install/${file}"
 	[ ! -e "$doc" ] && die "no install document for distro $distro"
 
 	exec_document "${doc}" "install packages for distro ${distro}"
@@ -291,11 +325,11 @@ install_container_manager()
 {
 	local mgr="$1"
 
-	get_docs_repo
+	get_git_repo "$doc_repo"
 
 	local file="install/${mgr}/${distro}-${mgr}-install.md"
 
-	local doc="${GOPATH}/src/${doc_repo}/${file}"
+	local doc="${kata_repos_base}/src/${doc_repo}/${file}"
 	[ ! -e "$doc" ] && die "no ${mgr} install document for distro ${distro}"
 
 	exec_document "${doc}" "install ${mgr} for distro ${distro}"
@@ -351,8 +385,14 @@ cmd_reset_config()
 setup()
 {
 	source /etc/os-release || source /usr/lib/os-release
-
 	distro=$ID
+
+	kata_repos_base=$(go env GOPATH 2>/dev/null || true)
+	if [ -z "$kata_repos_base" ]; then
+		kata_repos_base="$HOME/go"
+	fi
+
+	echo "kata_repos_base=$kata_repos_base"
 }
 
 parse_args()
@@ -404,8 +444,7 @@ parse_args()
 
 main()
 {
-    setup
-    parse_args "$@"
+	setup
+	parse_args "$@"
 }
-
 main "$@"
