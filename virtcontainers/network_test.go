@@ -340,3 +340,41 @@ func TestCreateMacVtap(t *testing.T) {
 	err = netHandle.LinkDel(brLink)
 	assert.NoError(err)
 }
+
+func TestTcRedirectNetwork(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	assert := assert.New(t)
+
+	netHandle, err := netlink.NewHandle()
+	assert.NoError(err)
+	defer netHandle.Delete()
+
+	// Create a test veth interface.
+	vethName := "foo"
+	veth := &netlink.Veth{LinkAttrs: netlink.LinkAttrs{Name: vethName, TxQLen: 200, MTU: 1400}, PeerName: "bar"}
+
+	err = netlink.LinkAdd(veth)
+	assert.NoError(err)
+
+	endpoint, err := createVethNetworkEndpoint(1, vethName, NetXConnectTCFilterModel)
+	assert.NoError(err)
+
+	link, err := netlink.LinkByName(vethName)
+	assert.NoError(err)
+
+	err = netHandle.LinkSetUp(link)
+	assert.NoError(err)
+
+	err = setupTCFiltering(endpoint, 1, true)
+	assert.NoError(err)
+
+	err = removeTCFiltering(endpoint)
+	assert.NoError(err)
+
+	// Remove the veth created for testing.
+	err = netHandle.LinkDel(link)
+	assert.NoError(err)
+}
