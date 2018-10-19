@@ -265,6 +265,7 @@ func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 				return err
 			}
 
+			endpoints = append(endpoints, &endpoint)
 			networkLogger().WithFields(logrus.Fields{
 				"endpoint":      endpoint,
 				"endpoint-type": "macvlan",
@@ -277,6 +278,7 @@ func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 				return err
 			}
 
+			endpoints = append(endpoints, &endpoint)
 			networkLogger().WithFields(logrus.Fields{
 				"endpoint":      endpoint,
 				"endpoint-type": "macvtap",
