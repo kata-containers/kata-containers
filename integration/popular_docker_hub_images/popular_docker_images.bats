@@ -9,6 +9,10 @@
 
 source ${BATS_TEST_DIRNAME}/../../lib/common.bash
 
+versions_file="${BATS_TEST_DIRNAME}/../../versions.yaml"
+kibana_version=$("${GOPATH}/bin/yq" read "$versions_file" "docker_images.kibana.version")
+kibana_image="kibana:$kibana_version"
+
 setup() {
 	# Check that processes are not running
 	run check_processes
@@ -199,7 +203,7 @@ setup() {
 }
 
 @test "[display version] display information kibana container" {
-	docker run --rm --runtime=$RUNTIME -i kibana --version
+	docker run --rm --runtime=$RUNTIME -i $kibana_image kibana --version
 }
 
 @test "[display configuration] check kong configuration file is valid" {
@@ -300,10 +304,6 @@ setup() {
 
 @test "[display text] print message in a r-base container" {
 	docker run --rm --runtime=$RUNTIME r-base r -e 'print ( "Hello World!")'
-}
-
-@test "[start application] create rails application" {
-	docker run --rm --runtime=$RUNTIME -i rails timeout 10 rails new commandsapp | grep create
 }
 
 @test "[perl application] run rakudo star container" {
