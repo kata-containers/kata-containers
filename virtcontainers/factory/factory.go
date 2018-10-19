@@ -100,6 +100,71 @@ func resetHypervisorConfig(config *vc.VMConfig) {
 	config.ProxyConfig = vc.ProxyConfig{}
 }
 
+func compareStruct(foo, bar reflect.Value) bool {
+	for i := 0; i < foo.NumField(); i++ {
+		if !deepCompareValue(foo.Field(i), bar.Field(i)) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func compareMap(foo, bar reflect.Value) bool {
+	if foo.Len() != bar.Len() {
+		return false
+	}
+
+	for _, k := range foo.MapKeys() {
+		if !deepCompareValue(foo.MapIndex(k), bar.MapIndex(k)) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func compareSlice(foo, bar reflect.Value) bool {
+	if foo.Len() != bar.Len() {
+		return false
+	}
+	for j := 0; j < foo.Len(); j++ {
+		if !deepCompareValue(foo.Index(j), bar.Index(j)) {
+			return false
+		}
+	}
+	return true
+}
+
+func deepCompareValue(foo, bar reflect.Value) bool {
+	if !foo.IsValid() || !bar.IsValid() {
+		return foo.IsValid() == bar.IsValid()
+	}
+
+	if foo.Type() != bar.Type() {
+		return false
+	}
+	switch foo.Kind() {
+	case reflect.Map:
+		return compareMap(foo, bar)
+	case reflect.Array:
+		fallthrough
+	case reflect.Slice:
+		return compareSlice(foo, bar)
+	case reflect.Struct:
+		return compareStruct(foo, bar)
+	default:
+		return foo.Interface() == bar.Interface()
+	}
+}
+
+func deepCompare(foo, bar interface{}) bool {
+	v1 := reflect.ValueOf(foo)
+	v2 := reflect.ValueOf(bar)
+
+	return deepCompareValue(v1, v2)
+}
+
 // It's important that baseConfig and newConfig are passed by value!
 func checkVMConfig(config1, config2 vc.VMConfig) error {
 	if config1.HypervisorType != config2.HypervisorType {
@@ -114,7 +179,7 @@ func checkVMConfig(config1, config2 vc.VMConfig) error {
 	resetHypervisorConfig(&config1)
 	resetHypervisorConfig(&config2)
 
-	if !reflect.DeepEqual(config1, config2) {
+	if !deepCompare(config1, config2) {
 		return fmt.Errorf("hypervisor config does not match, base: %+v. new: %+v", config1, config2)
 	}
 
