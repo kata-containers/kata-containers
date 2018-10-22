@@ -10,6 +10,8 @@ set -e
 # golang locations.
 export GOPATH=${GOPATH:-${HOME}/go}
 
+typeset -r docker_image="busybox"
+
 info()
 {
 	local msg="$*"
@@ -21,6 +23,17 @@ setup()
 	source /etc/os-release || source /usr/lib/os-release
 
 	mkdir -p "${GOPATH}"
+}
+
+# Perform a simple test to create a container
+create_kata_container()
+{
+	local -r test_name="$1"
+
+	local -r msg=$(info "Successfully tested ${test_name} on distro ${ID} ${VERSION}")
+
+	# Perform a basic test
+	sudo -E docker run --rm -i --runtime "kata-runtime" "${docker_image}" echo "$msg"
 }
 
 # Run the kata manager to "execute" the install guide to ensure the commands
@@ -38,10 +51,13 @@ test_distro_install_guide()
 	$mgr configure-image
 	$mgr enable-debug
 
-	msg="INFO: Successfully tested install guide for distro '$ID' $VERSION"
+	local mgr_name="${mgr##*/}"
 
-	# Perform a basic test
-	sudo -E docker run --rm -i --runtime "kata-runtime" busybox echo "$msg"
+	local test_name="${mgr_name} to test install guide"
+
+	info "Install using ${test_name}"
+
+	create_kata_container "${test_name}"
 }
 
 run_tests()
