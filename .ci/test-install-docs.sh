@@ -8,7 +8,7 @@ set -e
 
 info()
 {
-	msg="$*"
+	local msg="$*"
 	echo "INFO: $msg"
 }
 
