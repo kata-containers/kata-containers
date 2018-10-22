@@ -6,10 +6,21 @@
 
 set -e
 
+# The go binary isn't installed, but we checkout the repos to the standard
+# golang locations.
+export GOPATH=${GOPATH:-${HOME}/go}
+
 info()
 {
 	local msg="$*"
 	echo "INFO: $msg"
+}
+
+setup()
+{
+	source /etc/os-release || source /usr/lib/os-release
+
+	mkdir -p "${GOPATH}"
 }
 
 # Run the kata manager to "execute" the install guide to ensure the commands
@@ -22,8 +33,6 @@ test_distro_install_guide()
 	local -r mgr="${GOPATH}/src/github.com/kata-containers/tests/cmd/kata-manager/kata-manager.sh"
 
 	[ ! -e "$GOPATH" ] && die "cannot find $mgr"
-
-	source /etc/os-release
 
 	info "Installing system from the $ID install guide"
 
@@ -95,4 +104,5 @@ check_install_docs()
 	run_tests
 }
 
+setup
 check_install_docs
