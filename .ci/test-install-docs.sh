@@ -11,6 +11,20 @@ set -e
 export GOPATH=${GOPATH:-${HOME}/go}
 
 typeset -r docker_image="busybox"
+typeset -r kata_project_url="github.com/kata-containers"
+typeset -r test_repo="${kata_project_url}/tests"
+typeset -r test_repo_url="https://${test_repo}"
+typeset -r test_repo_dir="${GOPATH}/src/${test_repo}"
+typeset -r kata_project_dir="${GOPATH}/src/${kata_project_url}"
+
+typeset -r mgr="${test_repo_dir}/cmd/kata-manager/kata-manager.sh"
+
+die()
+{
+	local msg="$*"
+	echo >&2 "ERROR: $msg"
+	exit 1
+}
 
 info()
 {
@@ -18,11 +32,25 @@ info()
 	echo "INFO: $msg"
 }
 
+# Grab a copy of the tests repository
+get_tests_repo()
+{
+	[ -d "${test_repo_dir}" ] && return
+
+	mkdir -p "${kata_project_dir}"
+
+	git clone "${test_repo_url}" "${test_repo_dir}"
+}
+
 setup()
 {
 	source /etc/os-release || source /usr/lib/os-release
 
 	mkdir -p "${GOPATH}"
+
+	get_tests_repo
+
+	[ -e "$mgr" ] || die "cannot find $mgr"
 }
 
 # Perform a simple test to create a container
@@ -40,10 +68,6 @@ create_kata_container()
 # it specified result in a working system.
 test_distro_install_guide()
 {
-	local -r mgr="${GOPATH}/src/github.com/kata-containers/tests/cmd/kata-manager/kata-manager.sh"
-
-	[ ! -e "$GOPATH" ] && die "cannot find $mgr"
-
 	info "Installing system from the $ID install guide"
 
 	$mgr install-docker-system
