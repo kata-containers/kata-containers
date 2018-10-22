@@ -27,9 +27,6 @@ setup()
 # it specified result in a working system.
 test_distro_install_guide()
 {
-	local -r GOPATH=$(go env GOPATH)
-	[ -z "$GOPATH" ] && die "cannot determine GOPATH"
-
 	local -r mgr="${GOPATH}/src/github.com/kata-containers/tests/cmd/kata-manager/kata-manager.sh"
 
 	[ ! -e "$GOPATH" ] && die "cannot find $mgr"
