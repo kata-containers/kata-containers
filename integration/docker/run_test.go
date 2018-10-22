@@ -253,7 +253,6 @@ var _ = Describe("run host networking", func() {
 
 	Context("Run with host networking", func() {
 		It("should error out", func() {
-			Skip("Issue: https://github.com/kata-containers/runtime/issues/652")
 			args = []string{"--name", id, "-d", "--net=host", DebianImage, "sh"}
 			_, stderr, exitCode = dockerRun(args...)
 			Expect(exitCode).NotTo(Equal(0))
