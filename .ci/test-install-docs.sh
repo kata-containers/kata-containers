@@ -15,7 +15,7 @@ info()
 # Detect if any installation documents changed. If so, run the
 # kata manager to "execute" the install guide to ensure the
 # commands it specified result in a working system.
-check_install_guides()
+check_install_docs()
 {
 	if [ -n "$TRAVIS" ]
 	then
@@ -54,13 +54,13 @@ check_install_guides()
 	# No files were changed
 	[ -z "$files" ] && return
 
-	changed=$(echo "$files" | grep "^install/.*\.md$" || true)
+	changed=$(echo "${files}" | grep "^install/.*\.md$" || true)
 
-	[ -z "$changed" ] && info "No install guides modified" && return
+	[ -z "$changed" ] && info "No install documents modified" && return
 
-	info "Found modified install guides: $changed"
+	info "Found modified install documents: ${changed}"
 
-	# Regardless of which distro install guide(s) were changed, we test
+	# Regardless of which installation documents were changed, we test
 	# them all where possible.
 
 	local -r GOPATH=$(go env GOPATH)
@@ -85,4 +85,4 @@ check_install_guides()
 	sudo -E docker run --rm -i --runtime "kata-runtime" busybox echo "$msg"
 }
 
-check_install_guides
+check_install_docs
