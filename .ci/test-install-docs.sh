@@ -141,5 +141,10 @@ check_install_docs()
 	run_tests
 }
 
-setup
-check_install_docs
+main()
+{
+	setup
+	check_install_docs
+}
+
+main "$@"
