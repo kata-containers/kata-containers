@@ -213,12 +213,12 @@ func TestNetInterworkingModelSetModel(t *testing.T) {
 		wantErr   bool
 	}{
 		{"Invalid Model", "Invalid", true},
-		{"default Model", "default", false},
-		{"bridged Model", "bridged", false},
-		{"macvtap Model", "macvtap", false},
-		{"enlightened Model", "enlightened", false},
-		{"tcfilter Model", "tcfilter", false},
-		{"none Model", "none", false},
+		{"default Model", defaultNetModelStr, false},
+		{"bridged Model", bridgedNetModelStr, false},
+		{"macvtap Model", macvtapNetModelStr, false},
+		{"enlightened Model", enlightenedNetModelStr, false},
+		{"tcfilter Model", tcFilterNetModelStr, false},
+		{"none Model", noneNetModelStr, false},
 	}
 
 	for _, tt := range tests {

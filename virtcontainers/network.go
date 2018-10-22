@@ -68,22 +68,36 @@ func (n NetInterworkingModel) IsValid() bool {
 	return 0 <= int(n) && int(n) < int(NetXConnectInvalidModel)
 }
 
+const (
+	defaultNetModelStr = "default"
+
+	bridgedNetModelStr = "bridged"
+
+	macvtapNetModelStr = "macvtap"
+
+	enlightenedNetModelStr = "enlightened"
+
+	tcFilterNetModelStr = "tcfilter"
+
+	noneNetModelStr = "none"
+)
+
 //SetModel change the model string value
 func (n *NetInterworkingModel) SetModel(modelName string) error {
 	switch modelName {
-	case "default":
+	case defaultNetModelStr:
 		*n = DefaultNetInterworkingModel
 		return nil
-	case "bridged":
+	case bridgedNetModelStr:
 		*n = NetXConnectBridgedModel
 		return nil
-	case "macvtap":
+	case macvtapNetModelStr:
 		*n = NetXConnectMacVtapModel
 		return nil
-	case "enlightened":
+	case enlightenedNetModelStr:
 		*n = NetXConnectEnlightenedModel
 		return nil
-	case "tcfilter":
+	case tcFilterNetModelStr:
 		*n = NetXConnectTCFilterModel
 		return nil
 	case "none":
