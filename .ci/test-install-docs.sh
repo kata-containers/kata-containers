@@ -12,9 +12,39 @@ info()
 	echo "INFO: $msg"
 }
 
-# Detect if any installation documents changed. If so, run the
-# kata manager to "execute" the install guide to ensure the
-# commands it specified result in a working system.
+# Run the kata manager to "execute" the install guide to ensure the commands
+# it specified result in a working system.
+test_distro_install_guide()
+{
+	local -r GOPATH=$(go env GOPATH)
+	[ -z "$GOPATH" ] && die "cannot determine GOPATH"
+
+	local -r mgr="${GOPATH}/src/github.com/kata-containers/tests/cmd/kata-manager/kata-manager.sh"
+
+	[ ! -e "$GOPATH" ] && die "cannot find $mgr"
+
+	source /etc/os-release
+
+	info "Installing system from the $ID install guide"
+
+	$mgr install-docker-system
+
+	$mgr configure-image
+	$mgr enable-debug
+
+	msg="INFO: Successfully tested install guide for distro '$ID' $VERSION"
+
+	# Perform a basic test
+	sudo -E docker run --rm -i --runtime "kata-runtime" busybox echo "$msg"
+}
+
+run_tests()
+{
+	test_distro_install_guide
+}
+
+# Detect if any installation documents changed. If so, execute all the
+# documents to test they result in a working system.
 check_install_docs()
 {
 	if [ -n "$TRAVIS" ]
@@ -62,27 +92,7 @@ check_install_docs()
 
 	# Regardless of which installation documents were changed, we test
 	# them all where possible.
-
-	local -r GOPATH=$(go env GOPATH)
-	[ -z "$GOPATH" ] && die "cannot determine GOPATH"
-
-	local -r mgr="${GOPATH}/src/github.com/kata-containers/tests/cmd/kata-manager/kata-manager.sh"
-
-	[ ! -e "$GOPATH" ] && die "cannot find $mgr"
-
-	source /etc/os-release
-
-	info "Installing system from the $ID install guide"
-
-	$mgr install-docker-system
-
-	$mgr configure-image
-	$mgr enable-debug
-
-	msg="INFO: Successfully tested install guide for distro '$ID' $VERSION"
-
-	# Perform a basic test
-	sudo -E docker run --rm -i --runtime "kata-runtime" busybox echo "$msg"
+	run_tests
 }
 
 check_install_docs
