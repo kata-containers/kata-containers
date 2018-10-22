@@ -17,7 +17,11 @@ info()
 # commands it specified result in a working system.
 check_install_guides()
 {
-	[ -n "$TRAVIS" ] && info "Not testing install guide as Travis lacks modern distro support and VT-x" && return 
+	if [ -n "$TRAVIS" ]
+	then
+		info "Not testing install guide as Travis lacks modern distro support and VT-x"
+		return
+	fi
 
 	# List of filters used to restrict the types of file changes.
 	# See git-diff-tree(1) for further info.
