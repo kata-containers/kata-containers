@@ -19,18 +19,28 @@ to see if your system is capable of running Kata Containers.
 The following is an overview of the different installation methods available. All of these methods equally result
 in a system configured to run Kata Containers.
 
-|Installation method                                        |Suggested for                            |Supported on                             |
-|-----------------------------------------------------------|-----------------------------------------|-----------------------------------------|
-|[Automatic](#automatic-installation)                       |Quick installation; new users            |[distros list](#supported-distributions) |
-|[Scripted](#scripted-installation)                         |Generating installation scripts          |[distros list](#supported-distributions) |
-|[Manual](#manual-installation)                             |Full control over each installation step |[distros list](#supported-distributions) |
-|[Build from sources](#../Developer-Guide.md#initial-setup) |Developers and hackers                   |any distro                               |
+
+| Installation method                                        | Suggested for               | Description                                                                                                                                 | Packaged install | Distributions supported               |
+|------------------------------------------------------------|-----------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|------------------|---------------------------------------|
+| [Automatic](#automatic-installation)                       | Quick start for new users   | Run a single command to install a full system.                                                                                              | yes              | [see table](#supported-distributions) |
+| [Manual](#manual-installation)                             | Self paced user install     | Allows the user to read a brief document and exectute the specified commands step-by-step.                                                  | yes              | [see table](#supported-distributions) |
+| [Scripted](#scripted-installation)                         | Administrators              | Generates an installation script which will result in a working system when executed.                                                       | yes              | [see table](#supported-distributions) |
+| [Build from sources](../Developer-Guide.md#initial-setup) | Developers and hackers only | Allows power users who are comfortable building software from source to use the latest component versions. Not recommended for normal users. | no               | any distro                            |
+
+> **Notes:**
+>
+> - The "Packaged install" column shows if the resulting installation
+>   uses your distribution's native package format (such as RPM or DEB).
+>
+> - Power users who decide to build from sources should be aware of the
+>   implications of using an unpackaged system which will not be automatically
+>   updated as new [releases](../Releases.md) are made available.
 
 ### Automatic Installation
 [Use kata-manager](installing-with-kata-manager.md) to automatically install Kata packages.
 
 ### Scripted Installation
-[Use kata-doc-to-script](installing-with-kata-doc-to-script.md) to generate installation scripts.
+[Use kata-doc-to-script](installing-with-kata-doc-to-script.md) to generate installation scripts that can be reviewed before they are executed.
 
 ### Manual Installation
 Manual installation instructions are available for [these distributions](#supported-distributions) and document how to:
@@ -57,7 +67,7 @@ Manual installation instructions are available for [these distributions](#suppor
 > **Notes on packages source verification**:
 > - The Kata packages hosted on the download server are signed with GPG to ensure integrity and authenticity.
 >
-> - The public key used to sign packages is available [at this link](https://github.com/kata-containers/tests/data/rpm-signkey.pub); the fingerprint is `9FDC0CB6 3708CF80 3696E2DC D0B37B82 6063F3ED`.
+> - The public key used to sign packages is available [at this link](https://raw.githubusercontent.com/kata-containers/tests/master/data/rpm-signkey.pub); the fingerprint is `9FDC0CB6 3708CF80 3696E2DC D0B37B82 6063F3ED`.
 >
 > - Only trust the signing key and fingerprint listed in the previous bullet point. Do not disable GPG checks,
 > otherwise packages source and authenticity is not guaranteed.
