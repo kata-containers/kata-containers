@@ -18,6 +18,8 @@ readonly sysconfig_docker_config_file="/etc/sysconfig/docker"
 readonly tests_repo="github.com/kata-containers/tests"
 readonly tests_repo_dir="${script_dir}/../../tests"
 readonly mgr="${tests_repo_dir}/cmd/kata-manager/kata-manager.sh"
+readonly test_config=${script_dir}/test_config.sh
+readonly rootfs_builder=${script_dir}/../rootfs-builder/rootfs.sh
 readonly RUNTIME=${RUNTIME:-kata-runtime}
 readonly MACHINE_TYPE=`uname -m`
 
@@ -29,9 +31,8 @@ readonly docker_build_runtime="runc"
 
 build_images=1
 build_initrds=1
-
-source ${script_dir}/test_config.sh
-
+typeset -a distrosSystemd distrosAgent
+source ${test_config}
 # Hashes used to keep track of image sizes.
 # - Key: name of distro.
 # - Value: colon-separated roots and image sizes ("${rootfs_size}:${image_size}").
@@ -53,8 +54,12 @@ Commands:
 help     : Show usage.
 
 
-When <distro> is specified, tests are run only for the specified <distro> distribution.
-Otherwise, tests are be run on all distros.
+When <distro> is specified, tests are run only for the specified <distro>.
+Otherwise, tests are run on all distros.
+
+$(basename ${test_config}) includes a list of distros to exclude from testing,
+depending on the detected test environment. However, when a <distro> is specified,
+distro exclusion based on $(basename ${test_config}) is not enforced.
 EOT
 }
 
@@ -181,6 +186,14 @@ info()
 	echo -e "INFO: $s\n" >&2
 }
 
+debug()
+{
+	[ -z "${TEST_DEBUG:-}" ] && return
+	s="$*"
+	echo -e "DBG: $s" >&2
+}
+
+
 set_runtime()
 {
 	local name="$1"
@@ -220,6 +233,57 @@ setup()
 
 	# Ensure "docker build" works
 	set_runtime "${docker_build_runtime}"
+}
+
+# Fetches the distros test configuration from the distro-specific config.sh file.
+# $1 : only fetch configuration for the distro with name $1. When not specified,
+# fetch configuration for all distros.
+get_distros_config()
+{
+	local distro="$1"
+	local distrosList
+	local -A distroCfg=(\
+		[INIT_PROCESS]=\
+		[ARCH_EXCLUDE_LIST]=\
+		)
+
+	if [ -n "$distro" ]; then
+		distrosList=("$distro")
+		# When specifying a single distro name, skip does not apply
+		skipWhenTestingAll=()
+	else
+		distrosList=($(make list-distros))
+	fi
+
+	for d in ${distrosList[@]}; do
+		debug "Getting config for distro $d"
+		distroPattern="\<${d}\>"
+		if [[ "${skipWhenTestingAll[@]}" =~ $distroPattern ]]; then
+			info "Skipping distro $d as specified by $(basename ${test_config})"
+			continue
+		fi
+
+		tmpfile=$(mktemp /tmp/osbuilder-$d-config.XXX)
+		${rootfs_builder} -t $d  > $tmpfile
+		# Get value of all keys in distroCfg
+		for k in ${!distroCfg[@]}; do
+			distroCfg[$k]="$(awk -v cfgKey=$k 'BEGIN{FS=":\t+"}{if ($1 == cfgKey) print $2}' $tmpfile)"
+			debug "distroCfg[$k]=${distroCfg[$k]}"
+		done
+		rm -f $tmpfile
+
+		machinePattern="\<${MACHINE_TYPE}\>"
+		if [[ "${distroCfg[ARCH_EXCLUDE_LIST]}" =~ $machinePattern ]]; then
+			info "Skipping distro $d on architecture $MACHINE_TYPE"
+			continue
+		fi
+
+		case "${distroCfg[INIT_PROCESS]}" in
+			systemd)    distrosSystemd+=($d) ;;
+			kata-agent) distrosAgent+=($d) ;;
+			*)			die "Invalid init process specified for distro $d: \"${distroCfg[INIT_PROCESS]}\"" ;;
+		esac
+	done
 }
 
 create_container()
@@ -342,6 +406,7 @@ get_rootfs_size() {
 test_distros()
 {
 	local distro="$1"
+	get_distros_config "$distro"
 	local separator="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
 
 	echo -e "$separator"
