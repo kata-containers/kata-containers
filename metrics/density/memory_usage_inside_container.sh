@@ -19,7 +19,6 @@ VERSIONS_FILE="${SCRIPT_PATH}/../../versions.yaml"
 ALPINE_VERSION=$("${GOPATH}/bin/yq" read "$VERSIONS_FILE" "docker_images.alpine.version")
 IMAGE="alpine:$ALPINE_VERSION"
 CMD="cat /proc/meminfo"
-TMP_FILE=$(mktemp meminfo.XXXXXXXXXX || true)
 
 function main() {
 	# Check tools/commands dependencies
@@ -30,8 +29,7 @@ function main() {
 
 	metrics_json_init
 
-	docker run --rm --runtime=$RUNTIME $IMAGE $CMD > $TMP_FILE
-	local output=$(cat $TMP_FILE)
+	local output=$(docker run --rm --runtime=$RUNTIME $IMAGE $CMD)
 
 	# Save configuration
 	metrics_json_start_array
@@ -65,7 +63,6 @@ EOF
 	metrics_json_end_array "Results"
 	metrics_json_save
 	clean_env
-	rm -f $TMP_FILE
 }
 
 main "$@"
