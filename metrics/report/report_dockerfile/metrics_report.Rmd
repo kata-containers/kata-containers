@@ -53,6 +53,19 @@ rm(test_name_extra)
 ```
 \pagebreak
 
+# Memory used inside container
+This [test](https://github.com/kata-containers/tests/blob/master/metrics/density/memory_usage_inside_container.sh)
+measures the memory inside a container taken by the container runtime. It shows the difference between the amount of memory requested for the container, and the amount the container can actually 'see'.
+
+The *% Consumed* is the key row in the table, which compares the *Requested* against *Total* values.
+
+
+```{r, echo=FALSE, fig.cap="System Memory density"}
+source('mem-in-cont.R')
+```
+\pagebreak
+
+
 # Container Docker boot lifecycle times
 This [test](https://github.com/kata-containers/tests/blob/master/metrics/time/launch_times.sh)
 uses the `date` command on the host and in the container, as well as data from the container
@@ -85,6 +98,19 @@ source('fio-reads.R')
 
 ```{r, echo=FALSE, fig.cap="Storage I/O Writes", results='asis'}
 source('fio-writes.R')
+```
+\pagebreak
+
+# Network CPU costs
+
+Measure CPU costs whilst performing a fixed bandwidth container
+to container network test using
+this [test](https://github.com/kata-containers/tests/blob/master/metrics/network/cpu_statistics_iperf.sh).
+As local container-to-container networking is a pure local software activity, this test
+is a reasonable way to show changes in network stack processing costs.
+
+```{r, echo=FALSE, fig.cap="Storage I/O Writes", results='asis'}
+source('network-cpu.R')
 ```
 \pagebreak
 
