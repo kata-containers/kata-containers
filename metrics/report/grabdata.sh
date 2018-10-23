@@ -119,6 +119,9 @@ run_density_ksm() {
 	PAYLOAD_ARGS=" "
 	PAYLOAD_RUNTIME_ARGS=" -m 8G"
 	bash density/footprint_data.sh
+
+	# Get a measure for the overhead we take from the container memory
+	bash density/memory_usage_inside_container.sh
 }
 
 run_density() {
@@ -148,7 +151,7 @@ run_storage() {
 }
 
 run_network() {
-	echo "No network tests to run"
+	bash network/cpu_statistics_iperf.sh
 }
 
 # Execute metrics scripts
