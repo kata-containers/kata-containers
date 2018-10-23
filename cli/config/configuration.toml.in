@@ -234,6 +234,10 @@ path = "@NETMONPATH@"
 #   - none
 #     Used when customize network. Only creates a tap device. No veth pair.
 #
+#   - tcfilter
+#     Uses tc filter rules to redirect traffic from the network interface
+#     provided by plugin to a tap interface connected to the VM.
+#
 internetworking_model="@DEFNETWORKMODEL@"
 
 # If enabled, the runtime will create opentracing.io traces and spans.
