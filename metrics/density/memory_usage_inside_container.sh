@@ -19,6 +19,9 @@ VERSIONS_FILE="${SCRIPT_PATH}/../../versions.yaml"
 ALPINE_VERSION=$("${GOPATH}/bin/yq" read "$VERSIONS_FILE" "docker_images.alpine.version")
 IMAGE="alpine:$ALPINE_VERSION"
 CMD="cat /proc/meminfo"
+# We specify here in 'k', as that then matches the results we get from the meminfo,
+# which makes later direct comparison easier.
+MEMSIZE=${MEMSIZE:-$((2048*1024))}
 
 function main() {
 	# Check tools/commands dependencies
@@ -29,7 +32,7 @@ function main() {
 
 	metrics_json_init
 
-	local output=$(docker run --rm --runtime=$RUNTIME $IMAGE $CMD)
+	local output=$(docker run -m ${MEMSIZE}k --rm --runtime=$RUNTIME $IMAGE $CMD)
 
 	# Save configuration
 	metrics_json_start_array
@@ -43,6 +46,10 @@ function main() {
 
 	local json="$(cat << EOF
 	{
+		"memrequest": {
+			"Result" : $MEMSIZE,
+			"Units"  : "Kb"
+		},
 		"memtotal": {
 			"Result" : $memtotal,
 			"Units"  : "$units_memtotal"
