@@ -18,9 +18,9 @@ type monitor struct {
 	sandbox       *Sandbox
 	checkInterval time.Duration
 	watchers      []chan error
+	wg            sync.WaitGroup
 	running       bool
 	stopCh        chan bool
-	wg            sync.WaitGroup
 }
 
 func newMonitor(s *Sandbox) *monitor {

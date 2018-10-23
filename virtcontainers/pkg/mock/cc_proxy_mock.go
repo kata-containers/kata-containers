@@ -25,7 +25,6 @@ type CCProxyMock struct {
 	sync.Mutex
 
 	t              *testing.T
-	wg             sync.WaitGroup
 	connectionPath string
 
 	// proxy socket
@@ -43,6 +42,8 @@ type CCProxyMock struct {
 	Signal           chan ShimSignal
 	ShimDisconnected chan bool
 	StdinReceived    chan bool
+
+	wg sync.WaitGroup
 
 	stopped bool
 }
