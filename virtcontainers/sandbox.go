@@ -27,6 +27,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	deviceManager "github.com/kata-containers/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/vishvananda/netlink"
 )
 
@@ -342,6 +343,7 @@ type SandboxConfig struct {
 	// Containers describe the list of containers within a Sandbox.
 	// This list can be empty and populated by adding containers
 	// to the Sandbox a posteriori.
+	//TODO: this should be a map to avoid duplicated containers
 	Containers []ContainerConfig
 
 	// Annotations keys must be unique strings and must be name-spaced
@@ -1271,9 +1273,25 @@ func (s *Sandbox) newContainers() error {
 }
 
 // CreateContainer creates a new container in the sandbox
+// This should be called only when the sandbox is already created.
+// It will add new container config to sandbox.config.Containers
 func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, error) {
 	// Create the container.
-	c, err := createContainer(s, contConfig)
+	c, err := newContainer(s, contConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update sandbox config.
+	s.config.Containers = append(s.config.Containers, contConfig)
+
+	// Sandbox is reponsable to update VM resources needed by Containers
+	s.updateResources()
+	if err != nil {
+		return nil, err
+	}
+
+	err = c.create()
 	if err != nil {
 		return nil, err
 	}
@@ -1289,8 +1307,6 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 		return nil, err
 	}
 
-	// Update sandbox config.
-	s.config.Containers = append(s.config.Containers, contConfig)
 	err = s.storage.storeSandboxResource(s.id, configFileType, *(s.config))
 	if err != nil {
 		return nil, err
@@ -1316,6 +1332,7 @@ func (s *Sandbox) StartContainer(containerID string) (VCContainer, error) {
 	if err != nil {
 		return nil, err
 	}
+	//Fixme Container delete from sandbox, need to update resources
 
 	return c, nil
 }
@@ -1445,7 +1462,12 @@ func (s *Sandbox) UpdateContainer(containerID string, resources specs.LinuxResou
 		return err
 	}
 
-	return c.update(resources)
+	err = c.update(resources)
+	if err != nil {
+		return err
+	}
+
+	return c.storeContainer()
 }
 
 // StatsContainer return the stats of a running container
@@ -1493,13 +1515,21 @@ func (s *Sandbox) createContainers() error {
 	span, _ := s.trace("createContainers")
 	defer span.Finish()
 
+	if err := s.updateResources(); err != nil {
+		return err
+	}
+
 	for _, contConfig := range s.config.Containers {
-		newContainer, err := createContainer(s, contConfig)
+
+		c, err := newContainer(s, contConfig)
 		if err != nil {
 			return err
 		}
+		if err := c.create(); err != nil {
+			return err
+		}
 
-		if err := s.addContainer(newContainer); err != nil {
+		if err := s.addContainer(c); err != nil {
 			return err
 		}
 	}
@@ -1867,4 +1897,64 @@ func (s *Sandbox) AddDevice(info config.DeviceInfo) (api.Device, error) {
 	}
 
 	return b, nil
+}
+
+func (s *Sandbox) updateResources() error {
+	// the hypervisor.MemorySize is the amount of memory reserved for
+	// the VM and contaniners without memory limit
+
+	sumResources := specs.LinuxResources{
+		Memory: &specs.LinuxMemory{
+			Limit: new(int64),
+		},
+		CPU: &specs.LinuxCPU{
+			Period: new(uint64),
+			Quota:  new(int64),
+		},
+	}
+
+	for _, c := range s.config.Containers {
+		if m := c.Resources.Memory; m != nil && m.Limit != nil {
+			*sumResources.Memory.Limit += *m.Limit
+		}
+		if cpu := c.Resources.CPU; cpu != nil {
+			if cpu.Period != nil && cpu.Quota != nil {
+				*sumResources.CPU.Period += *cpu.Period
+				*sumResources.CPU.Quota += *cpu.Quota
+			}
+		}
+	}
+
+	sandboxVCPUs := uint32(utils.ConstraintsToVCPUs(*sumResources.CPU.Quota, *sumResources.CPU.Period))
+	sandboxVCPUs += s.hypervisor.hypervisorConfig().NumVCPUs
+
+	sandboxMemoryByte := int64(s.hypervisor.hypervisorConfig().MemorySize) << utils.MibToBytesShift
+	sandboxMemoryByte += *sumResources.Memory.Limit
+
+	// Update VCPUs
+	s.Logger().WithField("cpus-sandbox", sandboxVCPUs).Debugf("Request to hypervisor to update vCPUs")
+	oldCPUs, newCPUs, err := s.hypervisor.resizeVCPUs(sandboxVCPUs)
+	if err != nil {
+		return err
+	}
+	// The CPUs were increased, ask agent to online them
+	if oldCPUs < newCPUs {
+		vcpusAdded := newCPUs - oldCPUs
+		if err := s.agent.onlineCPUMem(vcpusAdded, true); err != nil {
+			return err
+		}
+	}
+	s.Logger().Debugf("Sandbox CPUs: %d", newCPUs)
+
+	// Update Memory
+	s.Logger().WithField("memory-sandbox-size-byte", sandboxMemoryByte).Debugf("Request to hypervisor to update memory")
+	newMemory, err := s.hypervisor.resizeMemory(uint32(sandboxMemoryByte>>utils.MibToBytesShift), s.state.GuestMemoryBlockSizeMB)
+	if err != nil {
+		return err
+	}
+	s.Logger().Debugf("Sandbox memory size: %d Byte", newMemory)
+	if err := s.agent.onlineCPUMem(0, false); err != nil {
+		return err
+	}
+	return nil
 }

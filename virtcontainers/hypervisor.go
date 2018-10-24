@@ -585,6 +585,8 @@ type hypervisor interface {
 	addDevice(devInfo interface{}, devType deviceType) error
 	hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error)
 	hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error)
+	resizeMemory(memMB uint32, memoryBlockSizeMB uint32) (uint32, error)
+	resizeVCPUs(vcpus uint32) (uint32, uint32, error)
 	getSandboxConsole(sandboxID string) (string, error)
 	disconnect()
 	capabilities() capabilities

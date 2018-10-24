@@ -18,6 +18,9 @@ const cpBinaryName = "cp"
 
 const fileMode0755 = os.FileMode(0755)
 
+// MibToBytesShift the number to shift needed to convert MiB to Bytes
+const MibToBytesShift = 20
+
 // MaxSocketPathLen is the effective maximum Unix domain socket length.
 //
 // See unix(7).

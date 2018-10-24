@@ -87,6 +87,13 @@ func (m *mockHypervisor) getSandboxConsole(sandboxID string) (string, error) {
 	return "", nil
 }
 
+func (m *mockHypervisor) resizeMemory(memMB uint32, memorySectionSizeMB uint32) (uint32, error) {
+	return 0, nil
+}
+func (m *mockHypervisor) resizeVCPUs(cpus uint32) (uint32, uint32, error) {
+	return 0, 0, nil
+}
+
 func (m *mockHypervisor) disconnect() {
 }
 
