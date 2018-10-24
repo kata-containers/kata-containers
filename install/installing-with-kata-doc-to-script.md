@@ -22,6 +22,12 @@ $ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/tests/
 ```
 
 For example, if your distribution is CentOS, the previous example will generate a runnable shell script called `centos-install.sh`.
+To proceed with the installation, run:
+
+```bash
+$ source /etc/os-release
+$ bash "./${ID}-install.sh"
+```
 
 ## Docker Installation and Setup
 
@@ -32,3 +38,10 @@ $ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/tests/
 ```
 
 For example, if your distribution is CentOS, this will generate a runnable shell script called `centos-docker-install.sh`.
+
+To proceed with the Docker installation, run:
+
+```bash
+$ source /etc/os-release
+$ bash "./${ID}-docker-install.sh"
+```
