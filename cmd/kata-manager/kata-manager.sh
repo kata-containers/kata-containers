@@ -391,8 +391,6 @@ setup()
 	if [ -z "$kata_repos_base" ]; then
 		kata_repos_base="$HOME/go"
 	fi
-
-	echo "kata_repos_base=$kata_repos_base"
 }
 
 parse_args()
