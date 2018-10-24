@@ -16,14 +16,16 @@ func TestCreateVethNetworkEndpoint(t *testing.T) {
 
 	expected := &VethEndpoint{
 		NetPair: NetworkInterfacePair{
-			ID:   "uniqueTestID-4",
-			Name: "br4_kata",
+			TapInterface: TapInterface{
+				ID:   "uniqueTestID-4",
+				Name: "br4_kata",
+				TAPIface: NetworkInterface{
+					Name: "tap4_kata",
+				},
+			},
 			VirtIface: NetworkInterface{
 				Name:     "eth4",
 				HardAddr: macAddr.String(),
-			},
-			TAPIface: NetworkInterface{
-				Name: "tap4_kata",
 			},
 			NetInterworkingModel: DefaultNetInterworkingModel,
 		},
@@ -51,14 +53,16 @@ func TestCreateVethNetworkEndpointChooseIfaceName(t *testing.T) {
 
 	expected := &VethEndpoint{
 		NetPair: NetworkInterfacePair{
-			ID:   "uniqueTestID-4",
-			Name: "br4_kata",
+			TapInterface: TapInterface{
+				ID:   "uniqueTestID-4",
+				Name: "br4_kata",
+				TAPIface: NetworkInterface{
+					Name: "tap4_kata",
+				},
+			},
 			VirtIface: NetworkInterface{
 				Name:     "eth1",
 				HardAddr: macAddr.String(),
-			},
-			TAPIface: NetworkInterface{
-				Name: "tap4_kata",
 			},
 			NetInterworkingModel: DefaultNetInterworkingModel,
 		},

@@ -67,6 +67,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	blockStorageDriver := "virtio-scsi"
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
+	disableNewNetNs := false
 
 	// override
 	defaultProxyPath = proxyPath
@@ -121,6 +122,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		blockStorageDriver,
 		enableIOThreads,
 		hotplugVFIOOnRootBus,
+		disableNewNetNs,
 	)
 
 	configFile = path.Join(prefixDir, "runtime.toml")
@@ -293,8 +295,9 @@ func getExpectedRuntimeDetails(config oci.RuntimeConfig, configFile string) Runt
 		Config: RuntimeConfigInfo{
 			Path: configFile,
 		},
-		Path:  runtimePath,
-		Debug: config.Debug,
+		Path:            runtimePath,
+		Debug:           config.Debug,
+		DisableNewNetNs: config.DisableNewNetNs,
 	}
 }
 

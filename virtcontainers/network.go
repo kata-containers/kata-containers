@@ -51,6 +51,9 @@ const (
 	// This will be used for vethtap, macvtap, ipvtap
 	NetXConnectEnlightenedModel
 
+	// NetXConnectNoneModel can be used when the VM is in the host network namespace
+	NetXConnectNoneModel
+
 	// NetXConnectInvalidModel is the last item to check valid values by IsValid()
 	NetXConnectInvalidModel
 )
@@ -74,6 +77,9 @@ func (n *NetInterworkingModel) SetModel(modelName string) error {
 		return nil
 	case "enlightened":
 		*n = NetXConnectEnlightenedModel
+		return nil
+	case "none":
+		*n = NetXConnectNoneModel
 		return nil
 	}
 	return fmt.Errorf("Unknown type %s", modelName)
@@ -122,21 +128,27 @@ type NetworkInterface struct {
 	Addrs    []netlink.Addr
 }
 
-// NetworkInterfacePair defines a pair between VM and virtual network interfaces.
-type NetworkInterfacePair struct {
-	ID        string
-	Name      string
-	VirtIface NetworkInterface
-	TAPIface  NetworkInterface
-	NetInterworkingModel
+// TapInterface defines a tap interface
+type TapInterface struct {
+	ID       string
+	Name     string
+	TAPIface NetworkInterface
 	VMFds    []*os.File
 	VhostFds []*os.File
+}
+
+// NetworkInterfacePair defines a pair between VM and virtual network interfaces.
+type NetworkInterfacePair struct {
+	TapInterface
+	VirtIface NetworkInterface
+	NetInterworkingModel
 }
 
 // NetworkConfig is the network configuration related to a network.
 type NetworkConfig struct {
 	NetNSPath         string
 	NetNsCreated      bool
+	DisableNewNetNs   bool
 	NetmonConfig      NetmonConfig
 	InterworkingModel NetInterworkingModel
 }
@@ -194,6 +206,96 @@ func (n NetworkNamespace) MarshalJSON() ([]byte, error) {
 	return b, err
 }
 
+func generateEndpoints(typedEndpoints []TypedJSONEndpoint) ([]Endpoint, error) {
+	var endpoints []Endpoint
+
+	for _, e := range typedEndpoints {
+		switch e.Type {
+		case PhysicalEndpointType:
+			var endpoint PhysicalEndpoint
+			err := json.Unmarshal(e.Data, &endpoint)
+			if err != nil {
+				return nil, err
+			}
+
+			endpoints = append(endpoints, &endpoint)
+			networkLogger().WithFields(logrus.Fields{
+				"endpoint":      endpoint,
+				"endpoint-type": "physical",
+			}).Info("endpoint unmarshalled")
+
+		case VethEndpointType:
+			var endpoint VethEndpoint
+			err := json.Unmarshal(e.Data, &endpoint)
+			if err != nil {
+				return nil, err
+			}
+
+			endpoints = append(endpoints, &endpoint)
+			networkLogger().WithFields(logrus.Fields{
+				"endpoint":      endpoint,
+				"endpoint-type": "virtual",
+			}).Info("endpoint unmarshalled")
+
+		case VhostUserEndpointType:
+			var endpoint VhostUserEndpoint
+			err := json.Unmarshal(e.Data, &endpoint)
+			if err != nil {
+				return nil, err
+			}
+
+			endpoints = append(endpoints, &endpoint)
+			networkLogger().WithFields(logrus.Fields{
+				"endpoint":      endpoint,
+				"endpoint-type": "vhostuser",
+			}).Info("endpoint unmarshalled")
+
+		case BridgedMacvlanEndpointType:
+			var endpoint BridgedMacvlanEndpoint
+			err := json.Unmarshal(e.Data, &endpoint)
+			if err != nil {
+				return nil, err
+			}
+
+			endpoints = append(endpoints, &endpoint)
+			networkLogger().WithFields(logrus.Fields{
+				"endpoint":      endpoint,
+				"endpoint-type": "macvlan",
+			}).Info("endpoint unmarshalled")
+
+		case MacvtapEndpointType:
+			var endpoint MacvtapEndpoint
+			err := json.Unmarshal(e.Data, &endpoint)
+			if err != nil {
+				return nil, err
+			}
+
+			endpoints = append(endpoints, &endpoint)
+			networkLogger().WithFields(logrus.Fields{
+				"endpoint":      endpoint,
+				"endpoint-type": "macvtap",
+			}).Info("endpoint unmarshalled")
+
+		case TapEndpointType:
+			var endpoint TapEndpoint
+			err := json.Unmarshal(e.Data, &endpoint)
+			if err != nil {
+				return nil, err
+			}
+
+			endpoints = append(endpoints, &endpoint)
+			networkLogger().WithFields(logrus.Fields{
+				"endpoint":      endpoint,
+				"endpoint-type": "tap",
+			}).Info("endpoint unmarshalled")
+
+		default:
+			networkLogger().WithField("endpoint-type", e.Type).Error("Ignoring unknown endpoint type")
+		}
+	}
+	return endpoints, nil
+}
+
 // UnmarshalJSON is the custom NetworkNamespace unmarshalling routine.
 // This is needed for unmarshalling the Endpoints interfaces array.
 func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
@@ -214,79 +316,9 @@ func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal([]byte(string(s.Endpoints)), &typedEndpoints); err != nil {
 		return err
 	}
-
-	var endpoints []Endpoint
-
-	for _, e := range typedEndpoints {
-		switch e.Type {
-		case PhysicalEndpointType:
-			var endpoint PhysicalEndpoint
-			err := json.Unmarshal(e.Data, &endpoint)
-			if err != nil {
-				return err
-			}
-
-			endpoints = append(endpoints, &endpoint)
-			networkLogger().WithFields(logrus.Fields{
-				"endpoint":      endpoint,
-				"endpoint-type": "physical",
-			}).Info("endpoint unmarshalled")
-
-		case VethEndpointType:
-			var endpoint VethEndpoint
-			err := json.Unmarshal(e.Data, &endpoint)
-			if err != nil {
-				return err
-			}
-
-			endpoints = append(endpoints, &endpoint)
-			networkLogger().WithFields(logrus.Fields{
-				"endpoint":      endpoint,
-				"endpoint-type": "virtual",
-			}).Info("endpoint unmarshalled")
-
-		case VhostUserEndpointType:
-			var endpoint VhostUserEndpoint
-			err := json.Unmarshal(e.Data, &endpoint)
-			if err != nil {
-				return err
-			}
-
-			endpoints = append(endpoints, &endpoint)
-			networkLogger().WithFields(logrus.Fields{
-				"endpoint":      endpoint,
-				"endpoint-type": "vhostuser",
-			}).Info("endpoint unmarshalled")
-
-		case BridgedMacvlanEndpointType:
-			var endpoint BridgedMacvlanEndpoint
-			err := json.Unmarshal(e.Data, &endpoint)
-			if err != nil {
-				return err
-			}
-
-			endpoints = append(endpoints, &endpoint)
-			networkLogger().WithFields(logrus.Fields{
-				"endpoint":      endpoint,
-				"endpoint-type": "macvlan",
-			}).Info("endpoint unmarshalled")
-
-		case MacvtapEndpointType:
-			var endpoint MacvtapEndpoint
-			err := json.Unmarshal(e.Data, &endpoint)
-			if err != nil {
-				return err
-			}
-
-			endpoints = append(endpoints, &endpoint)
-			networkLogger().WithFields(logrus.Fields{
-				"endpoint":      endpoint,
-				"endpoint-type": "macvtap",
-			}).Info("endpoint unmarshalled")
-
-		default:
-			networkLogger().WithField("endpoint-type", e.Type).Error("Ignoring unknown endpoint type")
-		}
+	endpoints, err := generateEndpoints(typedEndpoints)
+	if err != nil {
+		return err
 	}
 
 	(*n).Endpoints = endpoints
@@ -825,6 +857,13 @@ func createNetNS() (string, error) {
 // into runtime.LockOSThread(), meaning it won't be executed in a
 // different thread than the one expected by the caller.
 func doNetNS(netNSPath string, cb func(ns.NetNS) error) error {
+	// if netNSPath is empty, the callback function will be run in the current network namespace.
+	// So skip the whole function, just call cb(). cb() needs a NetNS as arg but ignored, give it a fake one.
+	if netNSPath == "" {
+		var netNs ns.NetNS
+		return cb(netNs)
+	}
+
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -964,14 +1003,16 @@ func createNetworkInterfacePair(idx int, ifName string, interworkingModel NetInt
 	}
 
 	netPair := NetworkInterfacePair{
-		ID:   uniqueID,
-		Name: fmt.Sprintf("br%d_kata", idx),
+		TapInterface: TapInterface{
+			ID:   uniqueID,
+			Name: fmt.Sprintf("br%d_kata", idx),
+			TAPIface: NetworkInterface{
+				Name: fmt.Sprintf("tap%d_kata", idx),
+			},
+		},
 		VirtIface: NetworkInterface{
 			Name:     fmt.Sprintf("eth%d", idx),
 			HardAddr: randomMacAddr,
-		},
-		TAPIface: NetworkInterface{
-			Name: fmt.Sprintf("tap%d_kata", idx),
 		},
 		NetInterworkingModel: interworkingModel,
 	}
@@ -1118,6 +1159,9 @@ func createEndpoint(netInfo NetworkInfo, idx int, model NetInterworkingModel) (E
 		} else if netInfo.Iface.Type == "macvtap" {
 			networkLogger().Infof("macvtap interface found")
 			endpoint, err = createMacvtapNetworkEndpoint(netInfo)
+		} else if netInfo.Iface.Type == "tap" {
+			networkLogger().Info("tap interface found")
+			endpoint, err = createTapNetworkEndpoint(idx, netInfo.Iface.Name)
 		} else if netInfo.Iface.Type == "veth" {
 			endpoint, err = createVethNetworkEndpoint(idx, netInfo.Iface.Name, model)
 		} else {
