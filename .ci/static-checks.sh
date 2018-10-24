@@ -244,7 +244,7 @@ check_go()
 	#
 	# Note that "--exclude=" patterns are *not* anchored meaning this will apply
 	# anywhere in the tree.
-	linter_args+=" --exclude=\"protocols/grpc/.*\.pb\.go\""
+	linter_args+=" --exclude=\".*\.pb\.go\""
 
 	# When running the linters in a CI environment we need to disable them all
 	# by default and then explicitly enable the ones we are care about. This is
