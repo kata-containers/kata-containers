@@ -192,6 +192,7 @@ func TestNetInterworkingModelIsValid(t *testing.T) {
 		{"Invalid Model", NetXConnectInvalidModel, false},
 		{"Default Model", NetXConnectDefaultModel, true},
 		{"Bridged Model", NetXConnectBridgedModel, true},
+		{"TC Filter Model", NetXConnectTCFilterModel, true},
 		{"Macvtap Model", NetXConnectMacVtapModel, true},
 		{"Enlightened Model", NetXConnectEnlightenedModel, true},
 	}
@@ -212,11 +213,12 @@ func TestNetInterworkingModelSetModel(t *testing.T) {
 		wantErr   bool
 	}{
 		{"Invalid Model", "Invalid", true},
-		{"default Model", "default", false},
-		{"bridged Model", "bridged", false},
-		{"macvtap Model", "macvtap", false},
-		{"enlightened Model", "enlightened", false},
-		{"none Model", "none", false},
+		{"default Model", defaultNetModelStr, false},
+		{"bridged Model", bridgedNetModelStr, false},
+		{"macvtap Model", macvtapNetModelStr, false},
+		{"enlightened Model", enlightenedNetModelStr, false},
+		{"tcfilter Model", tcFilterNetModelStr, false},
+		{"none Model", noneNetModelStr, false},
 	}
 
 	for _, tt := range tests {
@@ -336,5 +338,43 @@ func TestCreateMacVtap(t *testing.T) {
 	assert.NoError(err)
 
 	err = netHandle.LinkDel(brLink)
+	assert.NoError(err)
+}
+
+func TestTcRedirectNetwork(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	assert := assert.New(t)
+
+	netHandle, err := netlink.NewHandle()
+	assert.NoError(err)
+	defer netHandle.Delete()
+
+	// Create a test veth interface.
+	vethName := "foo"
+	veth := &netlink.Veth{LinkAttrs: netlink.LinkAttrs{Name: vethName, TxQLen: 200, MTU: 1400}, PeerName: "bar"}
+
+	err = netlink.LinkAdd(veth)
+	assert.NoError(err)
+
+	endpoint, err := createVethNetworkEndpoint(1, vethName, NetXConnectTCFilterModel)
+	assert.NoError(err)
+
+	link, err := netlink.LinkByName(vethName)
+	assert.NoError(err)
+
+	err = netHandle.LinkSetUp(link)
+	assert.NoError(err)
+
+	err = setupTCFiltering(endpoint, 1, true)
+	assert.NoError(err)
+
+	err = removeTCFiltering(endpoint)
+	assert.NoError(err)
+
+	// Remove the veth created for testing.
+	err = netHandle.LinkDel(link)
 	assert.NoError(err)
 }
