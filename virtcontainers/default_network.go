@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	opentracing "github.com/opentracing/opentracing-go"
@@ -34,10 +33,6 @@ func (n *defNetwork) trace(ctx context.Context, name string) (opentracing.Span, 
 func (n *defNetwork) run(networkNSPath string, cb func() error) error {
 	span, _ := n.trace(context.Background(), "run")
 	defer span.Finish()
-
-	if networkNSPath == "" {
-		return fmt.Errorf("networkNSPath cannot be empty")
-	}
 
 	return doNetNS(networkNSPath, func(_ ns.NetNS) error {
 		return cb()

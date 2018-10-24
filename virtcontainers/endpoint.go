@@ -19,6 +19,7 @@ type Endpoint interface {
 	NetworkPair() *NetworkInterfacePair
 
 	SetProperties(NetworkInfo)
+	SetPciAddr(string)
 	Attach(hypervisor) error
 	Detach(netNsCreated bool, netNsPath string) error
 	HotAttach(h hypervisor) error
@@ -43,6 +44,9 @@ const (
 
 	// MacvtapEndpointType is macvtap network interface.
 	MacvtapEndpointType EndpointType = "macvtap"
+
+	// TapEndpointType is tap network interface.
+	TapEndpointType EndpointType = "tap"
 )
 
 // Set sets an endpoint type based on the input string.
@@ -63,6 +67,9 @@ func (endpointType *EndpointType) Set(value string) error {
 	case "macvtap":
 		*endpointType = MacvtapEndpointType
 		return nil
+	case "tap":
+		*endpointType = TapEndpointType
+		return nil
 	default:
 		return fmt.Errorf("Unknown endpoint type %s", value)
 	}
@@ -81,6 +88,8 @@ func (endpointType *EndpointType) String() string {
 		return string(BridgedMacvlanEndpointType)
 	case MacvtapEndpointType:
 		return string(MacvtapEndpointType)
+	case TapEndpointType:
+		return string(TapEndpointType)
 	default:
 		return ""
 	}

@@ -42,7 +42,7 @@ type testRuntimeConfig struct {
 	LogPath           string
 }
 
-func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, netmonPath, logPath string, disableBlock bool, blockDeviceDriver string, enableIOThreads bool, hotplugVFIOOnRootBus bool) string {
+func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, netmonPath, logPath string, disableBlock bool, blockDeviceDriver string, enableIOThreads bool, hotplugVFIOOnRootBus, disableNewNetNs bool) string {
 	return `
 	# Runtime configuration file
 
@@ -77,7 +77,8 @@ func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath
 	enable_debug = ` + strconv.FormatBool(netmonDebug) + `
 
         [runtime]
-	enable_debug = ` + strconv.FormatBool(runtimeDebug)
+	enable_debug = ` + strconv.FormatBool(runtimeDebug) + `
+	disable_new_netns= ` + strconv.FormatBool(disableNewNetNs)
 }
 
 func createConfig(configPath string, fileData string) error {
@@ -116,8 +117,9 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	blockDeviceDriver := "virtio-scsi"
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
+	disableNewNetNs := false
 
-	runtimeConfigFileData := makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, netmonPath, logPath, disableBlockDevice, blockDeviceDriver, enableIOThreads, hotplugVFIOOnRootBus)
+	runtimeConfigFileData := makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, netmonPath, logPath, disableBlockDevice, blockDeviceDriver, enableIOThreads, hotplugVFIOOnRootBus, disableNewNetNs)
 
 	configPath := path.Join(dir, "runtime.toml")
 	err = createConfig(configPath, runtimeConfigFileData)
@@ -192,7 +194,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		ShimType:   defaultShim,
 		ShimConfig: shimConfig,
 
-		NetmonConfig: netmonConfig,
+		NetmonConfig:    netmonConfig,
+		DisableNewNetNs: disableNewNetNs,
 	}
 
 	config = testRuntimeConfig{
@@ -1454,4 +1457,24 @@ func TestCheckHypervisorConfig(t *testing.T) {
 		// reset logger
 		kataLog.Logger.Out = savedOut
 	}
+}
+
+func TestCheckNetNsConfig(t *testing.T) {
+	assert := assert.New(t)
+
+	config := oci.RuntimeConfig{
+		DisableNewNetNs: true,
+		NetmonConfig: vc.NetmonConfig{
+			Enable: true,
+		},
+	}
+	err := checkNetNsConfig(config)
+	assert.Error(err)
+
+	config = oci.RuntimeConfig{
+		DisableNewNetNs:   true,
+		InterNetworkModel: vc.NetXConnectDefaultModel,
+	}
+	err = checkNetNsConfig(config)
+	assert.Error(err)
 }

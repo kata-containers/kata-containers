@@ -108,6 +108,7 @@ type proxy struct {
 type runtime struct {
 	Debug             bool   `toml:"enable_debug"`
 	Tracing           bool   `toml:"enable_tracing"`
+	DisableNewNetNs   bool   `toml:"disable_new_netns"`
 	InterNetworkModel string `toml:"internetworking_model"`
 }
 
@@ -598,9 +599,7 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		kataLog.Logger.Level = originalLoggerLevel
 	}
 
-	if tomlConf.Runtime.Tracing {
-		tracing = true
-	}
+	tracing = tomlConf.Runtime.Tracing
 
 	if tomlConf.Runtime.InterNetworkModel != "" {
 		err = config.InterNetworkModel.SetModel(tomlConf.Runtime.InterNetworkModel)
@@ -626,6 +625,11 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		return "", config, err
 	}
 
+	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
+	if err := checkNetNsConfig(config); err != nil {
+		return "", config, err
+	}
+
 	// use no proxy if HypervisorConfig.UseVSock is true
 	if config.HypervisorConfig.UseVSock {
 		kataLog.Info("VSOCK supported, configure to not use proxy")
@@ -638,6 +642,20 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	}
 
 	return resolved, config, nil
+}
+
+// checkNetNsConfig performs sanity checks on disable_new_netns config.
+// Because it is an expert option and conflicts with some other common configs.
+func checkNetNsConfig(config oci.RuntimeConfig) error {
+	if config.DisableNewNetNs {
+		if config.NetmonConfig.Enable {
+			return fmt.Errorf("config disable_new_netns conflicts with enable_netmon")
+		}
+		if config.InterNetworkModel != vc.NetXConnectNoneModel {
+			return fmt.Errorf("config disable_new_netns only works with 'none' internetworking_model")
+		}
+	}
+	return nil
 }
 
 // checkHypervisorConfig performs basic "sanity checks" on the hypervisor

@@ -838,66 +838,83 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) error {
 	return nil
 }
 
-func (q *qemu) hotplugMacvtap(drive *VethEndpoint) error {
+func (q *qemu) hotAddNetDevice(name, hardAddr string, VMFds, VhostFds []*os.File) error {
 	var (
 		VMFdNames    []string
 		VhostFdNames []string
 	)
-	for i, VMFd := range drive.NetPair.VMFds {
+	for i, VMFd := range VMFds {
 		fdName := fmt.Sprintf("fd%d", i)
-		err := q.qmpMonitorCh.qmp.ExecuteGetFD(q.qmpMonitorCh.ctx, fdName, VMFd)
-		if err != nil {
+		if err := q.qmpMonitorCh.qmp.ExecuteGetFD(q.qmpMonitorCh.ctx, fdName, VMFd); err != nil {
 			return err
 		}
 		VMFdNames = append(VMFdNames, fdName)
 	}
-	for i, VhostFd := range drive.NetPair.VhostFds {
+	for i, VhostFd := range VhostFds {
 		fdName := fmt.Sprintf("vhostfd%d", i)
-		err := q.qmpMonitorCh.qmp.ExecuteGetFD(q.qmpMonitorCh.ctx, fdName, VhostFd)
-		if err != nil {
+		if err := q.qmpMonitorCh.qmp.ExecuteGetFD(q.qmpMonitorCh.ctx, fdName, VhostFd); err != nil {
 			return err
 		}
 		VhostFdNames = append(VhostFdNames, fdName)
 	}
-	return q.qmpMonitorCh.qmp.ExecuteNetdevAddByFds(q.qmpMonitorCh.ctx, "tap", drive.NetPair.Name, VMFdNames, VhostFdNames)
+	return q.qmpMonitorCh.qmp.ExecuteNetdevAddByFds(q.qmpMonitorCh.ctx, "tap", name, VMFdNames, VhostFdNames)
 }
 
-func (q *qemu) hotplugNetDevice(drive *VethEndpoint, op operation) error {
+func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) error {
 	err := q.qmpSetup()
 	if err != nil {
 		return err
 	}
-	devID := "virtio-" + drive.NetPair.ID
+	var tap TapInterface
 
 	if op == addDevice {
-		switch drive.NetPair.NetInterworkingModel {
-		case NetXConnectBridgedModel:
-			if err := q.qmpMonitorCh.qmp.ExecuteNetdevAdd(q.qmpMonitorCh.ctx, "tap", drive.NetPair.Name, drive.NetPair.TAPIface.Name, "no", "no", int(q.config.NumVCPUs)); err != nil {
-				return err
-			}
-		case NetXConnectMacVtapModel:
-			if err := q.hotplugMacvtap(drive); err != nil {
-				return err
-			}
+		switch endpoint.Type() {
+		case VethEndpointType:
+			drive := endpoint.(*VethEndpoint)
+			tap = drive.NetPair.TapInterface
+		case TapEndpointType:
+			drive := endpoint.(*TapEndpoint)
+			tap = drive.TapInterface
 		default:
-			return fmt.Errorf("this net interworking model is not supported")
+			return fmt.Errorf("this endpoint is not supported")
 		}
-		addr, bridge, err := q.addDeviceToBridge(drive.NetPair.ID)
+
+		if err = q.hotAddNetDevice(tap.Name, endpoint.HardwareAddr(), tap.VMFds, tap.VhostFds); err != nil {
+			return err
+		}
+
+		addr, bridge, err := q.addDeviceToBridge(tap.ID)
 		if err != nil {
 			return err
 		}
-		drive.PCIAddr = fmt.Sprintf("%02x/%s", bridge.Addr, addr)
-		if err = q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, drive.NetPair.Name, devID, drive.NetPair.TAPIface.HardAddr, addr, bridge.ID, romFile, int(q.config.NumVCPUs)); err != nil {
+		pciAddr := fmt.Sprintf("%02x/%s", bridge.Addr, addr)
+		endpoint.SetPciAddr(pciAddr)
+
+		devID := "virtio-" + tap.ID
+		if err = q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs)); err != nil {
 			return err
 		}
 	} else {
-		if err := q.removeDeviceFromBridge(drive.NetPair.ID); err != nil {
+		switch endpoint.Type() {
+		case VethEndpointType:
+			drive := endpoint.(*VethEndpoint)
+			tap = drive.NetPair.TapInterface
+		case TapEndpointType:
+			drive := endpoint.(*TapEndpoint)
+			tap = drive.TapInterface
+		default:
+			return fmt.Errorf("this endpoint is not supported")
+		}
+
+		if err := q.removeDeviceFromBridge(tap.ID); err != nil {
 			return err
 		}
+
+		devID := "virtio-" + tap.ID
 		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, devID); err != nil {
 			return err
 		}
-		if err := q.qmpMonitorCh.qmp.ExecuteNetdevDel(q.qmpMonitorCh.ctx, drive.NetPair.Name); err != nil {
+		if err := q.qmpMonitorCh.qmp.ExecuteNetdevDel(q.qmpMonitorCh.ctx, tap.Name); err != nil {
 			return err
 		}
 	}
@@ -919,7 +936,7 @@ func (q *qemu) hotplugDevice(devInfo interface{}, devType deviceType, op operati
 		memdev := devInfo.(*memoryDevice)
 		return q.hotplugMemory(memdev, op)
 	case netDev:
-		device := devInfo.(*VethEndpoint)
+		device := devInfo.(Endpoint)
 		return nil, q.hotplugNetDevice(device, op)
 	default:
 		return nil, fmt.Errorf("cannot hotplug device: unsupported device type '%v'", devType)

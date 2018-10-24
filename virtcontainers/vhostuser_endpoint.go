@@ -62,6 +62,11 @@ func (endpoint *VhostUserEndpoint) PciAddr() string {
 	return endpoint.PCIAddr
 }
 
+// SetPciAddr sets the PCI address of the endpoint.
+func (endpoint *VhostUserEndpoint) SetPciAddr(pciAddr string) {
+	endpoint.PCIAddr = pciAddr
+}
+
 // NetworkPair returns the network pair of the endpoint.
 func (endpoint *VhostUserEndpoint) NetworkPair() *NetworkInterfacePair {
 	return nil

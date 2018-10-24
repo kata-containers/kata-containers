@@ -1021,6 +1021,10 @@ func (s *Sandbox) startNetworkMonitor() error {
 }
 
 func (s *Sandbox) createNetwork() error {
+	if s.config.NetworkConfig.DisableNewNetNs {
+		return nil
+	}
+
 	span, _ := s.trace("createNetwork")
 	defer span.Finish()
 
@@ -1089,6 +1093,13 @@ func (s *Sandbox) generateNetInfo(inf *grpc.Interface) (NetworkInfo, error) {
 		addrs = append(addrs, *netlinkAddr)
 	}
 
+	var ifaceType string
+	if s.config.NetworkConfig.InterworkingModel == NetXConnectNoneModel {
+		ifaceType = "tap"
+	} else {
+		ifaceType = "veth"
+	}
+
 	return NetworkInfo{
 		Iface: NetlinkIface{
 			LinkAttrs: netlink.LinkAttrs{
@@ -1096,7 +1107,7 @@ func (s *Sandbox) generateNetInfo(inf *grpc.Interface) (NetworkInfo, error) {
 				HardwareAddr: hw,
 				MTU:          int(inf.Mtu),
 			},
-			Type: "",
+			Type: ifaceType,
 		},
 		Addrs: addrs,
 	}, nil
@@ -1142,6 +1153,9 @@ func (s *Sandbox) RemoveInterface(inf *grpc.Interface) (*grpc.Interface, error) 
 				return inf, err
 			}
 			s.networkNS.Endpoints = append(s.networkNS.Endpoints[:i], s.networkNS.Endpoints[i+1:]...)
+			if err := s.storage.storeSandboxNetwork(s.id, s.networkNS); err != nil {
+				return inf, err
+			}
 			break
 		}
 	}
