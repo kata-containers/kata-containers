@@ -344,21 +344,6 @@ func TestQemuQemuPath(t *testing.T) {
 	assert.Equal(path, "")
 }
 
-func TestHotplugRemoveMemory(t *testing.T) {
-	assert := assert.New(t)
-
-	qemuConfig := newQemuConfig()
-	fs := &filesystem{}
-	q := &qemu{
-		arch:    &qemuArchBase{},
-		config:  qemuConfig,
-		storage: fs,
-	}
-
-	_, err := q.hotplugRemoveDevice(&memoryDevice{0, 128}, memoryDev)
-	assert.Error(err)
-}
-
 func TestHotplugUnsupportedDeviceType(t *testing.T) {
 	assert := assert.New(t)
 
