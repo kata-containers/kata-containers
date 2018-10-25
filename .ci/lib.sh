@@ -71,6 +71,9 @@ function install_yq() {
 	"aarch64")
 		goarch=arm64
 		;;
+	"ppc64le")
+		goarch=ppc64le
+		;;
 	"x86_64")
 		goarch=amd64
 		;;
