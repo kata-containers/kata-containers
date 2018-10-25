@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/kata-containers/agent/protocols/grpc"
+	"github.com/kata-containers/agent/pkg/types"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/factory"
 	"github.com/sirupsen/logrus"
@@ -748,7 +748,7 @@ func TestVCMockAddInterface(t *testing.T) {
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.AddInterfaceFunc = func(ctx context.Context, sid string, inf *grpc.Interface) (*grpc.Interface, error) {
+	m.AddInterfaceFunc = func(ctx context.Context, sid string, inf *types.Interface) (*types.Interface, error) {
 		return nil, nil
 	}
 
@@ -775,7 +775,7 @@ func TestVCMockRemoveInterface(t *testing.T) {
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.RemoveInterfaceFunc = func(ctx context.Context, sid string, inf *grpc.Interface) (*grpc.Interface, error) {
+	m.RemoveInterfaceFunc = func(ctx context.Context, sid string, inf *types.Interface) (*types.Interface, error) {
 		return nil, nil
 	}
 
@@ -802,7 +802,7 @@ func TestVCMockListInterfaces(t *testing.T) {
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.ListInterfacesFunc = func(ctx context.Context, sid string) ([]*grpc.Interface, error) {
+	m.ListInterfacesFunc = func(ctx context.Context, sid string) ([]*types.Interface, error) {
 		return nil, nil
 	}
 
@@ -829,7 +829,7 @@ func TestVCMockUpdateRoutes(t *testing.T) {
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.UpdateRoutesFunc = func(ctx context.Context, sid string, routes []*grpc.Route) ([]*grpc.Route, error) {
+	m.UpdateRoutesFunc = func(ctx context.Context, sid string, routes []*types.Route) ([]*types.Route, error) {
 		return nil, nil
 	}
 
@@ -856,7 +856,7 @@ func TestVCMockListRoutes(t *testing.T) {
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.ListRoutesFunc = func(ctx context.Context, sid string) ([]*grpc.Route, error) {
+	m.ListRoutesFunc = func(ctx context.Context, sid string) ([]*types.Route, error) {
 		return nil, nil
 	}
 

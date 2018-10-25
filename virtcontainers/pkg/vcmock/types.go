@@ -9,7 +9,7 @@ import (
 	"context"
 	"syscall"
 
-	"github.com/kata-containers/agent/protocols/grpc"
+	"github.com/kata-containers/agent/pkg/types"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
@@ -69,9 +69,9 @@ type VCMock struct {
 
 	AddDeviceFunc func(ctx context.Context, sandboxID string, info config.DeviceInfo) (api.Device, error)
 
-	AddInterfaceFunc    func(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error)
-	RemoveInterfaceFunc func(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error)
-	ListInterfacesFunc  func(ctx context.Context, sandboxID string) ([]*grpc.Interface, error)
-	UpdateRoutesFunc    func(ctx context.Context, sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error)
-	ListRoutesFunc      func(ctx context.Context, sandboxID string) ([]*grpc.Route, error)
+	AddInterfaceFunc    func(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error)
+	RemoveInterfaceFunc func(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error)
+	ListInterfacesFunc  func(ctx context.Context, sandboxID string) ([]*types.Interface, error)
+	UpdateRoutesFunc    func(ctx context.Context, sandboxID string, routes []*types.Route) ([]*types.Route, error)
+	ListRoutesFunc      func(ctx context.Context, sandboxID string) ([]*types.Route, error)
 }

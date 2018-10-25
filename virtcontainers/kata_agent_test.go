@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/kata-containers/agent/pkg/types"
 	pb "github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
@@ -184,16 +185,16 @@ func (p *gRPCProxy) DestroySandbox(ctx context.Context, req *pb.DestroySandboxRe
 	return emptyResp, nil
 }
 
-func (p *gRPCProxy) AddInterface(ctx context.Context, req *pb.AddInterfaceRequest) (*pb.Interface, error) {
+func (p *gRPCProxy) AddInterface(ctx context.Context, req *pb.AddInterfaceRequest) (*types.Interface, error) {
 	return nil, nil
 }
 
-func (p *gRPCProxy) RemoveInterface(ctx context.Context, req *pb.RemoveInterfaceRequest) (*pb.Interface, error) {
+func (p *gRPCProxy) RemoveInterface(ctx context.Context, req *pb.RemoveInterfaceRequest) (*types.Interface, error) {
 	return nil, nil
 }
 
-func (p *gRPCProxy) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*pb.Interface, error) {
-	return &pb.Interface{}, nil
+func (p *gRPCProxy) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*types.Interface, error) {
+	return &types.Interface{}, nil
 }
 
 func (p *gRPCProxy) UpdateRoutes(ctx context.Context, req *pb.UpdateRoutesRequest) (*pb.Routes, error) {
@@ -799,7 +800,7 @@ func TestAgentNetworkOperation(t *testing.T) {
 	_, err = k.listInterfaces()
 	assert.Nil(err)
 
-	_, err = k.updateRoutes([]*pb.Route{})
+	_, err = k.updateRoutes([]*types.Route{})
 	assert.Nil(err)
 
 	_, err = k.listRoutes()

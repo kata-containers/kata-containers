@@ -13,7 +13,7 @@ import (
 	"context"
 	"syscall"
 
-	"github.com/kata-containers/agent/protocols/grpc"
+	"github.com/kata-containers/agent/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -152,26 +152,26 @@ func (impl *VCImpl) AddDevice(ctx context.Context, sandboxID string, info config
 }
 
 // AddInterface implements the VC function of the same name.
-func (impl *VCImpl) AddInterface(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+func (impl *VCImpl) AddInterface(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error) {
 	return AddInterface(ctx, sandboxID, inf)
 }
 
 // RemoveInterface implements the VC function of the same name.
-func (impl *VCImpl) RemoveInterface(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+func (impl *VCImpl) RemoveInterface(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error) {
 	return RemoveInterface(ctx, sandboxID, inf)
 }
 
 // ListInterfaces implements the VC function of the same name.
-func (impl *VCImpl) ListInterfaces(ctx context.Context, sandboxID string) ([]*grpc.Interface, error) {
+func (impl *VCImpl) ListInterfaces(ctx context.Context, sandboxID string) ([]*types.Interface, error) {
 	return ListInterfaces(ctx, sandboxID)
 }
 
 // UpdateRoutes implements the VC function of the same name.
-func (impl *VCImpl) UpdateRoutes(ctx context.Context, sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error) {
+func (impl *VCImpl) UpdateRoutes(ctx context.Context, sandboxID string, routes []*types.Route) ([]*types.Route, error) {
 	return UpdateRoutes(ctx, sandboxID, routes)
 }
 
 // ListRoutes implements the VC function of the same name.
-func (impl *VCImpl) ListRoutes(ctx context.Context, sandboxID string) ([]*grpc.Route, error) {
+func (impl *VCImpl) ListRoutes(ctx context.Context, sandboxID string) ([]*types.Route, error) {
 	return ListRoutes(ctx, sandboxID)
 }
