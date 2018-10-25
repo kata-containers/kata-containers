@@ -126,20 +126,43 @@ function install_yq() {
 	fi
 }
 
+function get_dep_from_yaml_db(){
+	local versions_file="$1"
+	local dependency="$2"
+
+	[ ! -f "$versions_file" ] && die "cannot find $versions_file"
+
+	install_yq >&2
+
+	result=$("${GOPATH}/bin/yq" read "$versions_file" "$dependency")
+	[ "$result" = "null" ] && result=""
+	echo "$result"
+}
+
 function get_version(){
 	dependency="$1"
 	GOPATH=${GOPATH:-${HOME}/go}
-	# This is needed in order to retrieve the version for qemu-lite
-	install_yq >&2
 	runtime_repo="github.com/kata-containers/runtime"
 	runtime_repo_dir="$GOPATH/src/${runtime_repo}"
 	versions_file="${runtime_repo_dir}/versions.yaml"
 	mkdir -p "$(dirname ${runtime_repo_dir})"
 	[ -d "${runtime_repo_dir}" ] ||  git clone --quiet https://${runtime_repo}.git "${runtime_repo_dir}"
-	[ ! -f "$versions_file" ] && { echo >&2 "ERROR: cannot find $versions_file"; exit 1; }
-	result=$("${GOPATH}/bin/yq" read "$versions_file" "$dependency")
-	[ "$result" = "null" ] && result=""
-	echo "$result"
+
+	get_dep_from_yaml_db "${versions_file}" "${dependency}"
+}
+
+function get_test_version(){
+	local dependency="$1"
+
+	local db
+	local cidir
+
+	# directory of this script, not the caller
+	local cidir=$(dirname "${BASH_SOURCE[0]}")
+
+	db="${cidir}/../versions.yaml"
+
+	get_dep_from_yaml_db "${db}" "${dependency}"
 }
 
 function check_gopath() {
