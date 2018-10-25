@@ -29,3 +29,12 @@ docker_images:
     description: "Proxy server for HTTP, HTTPS, SMTP, POP3 and IMAP protocols"
     url: "https://hub.docker.com/_/nginx/"
     version: "1.14"
+
+externals:
+  description: "Third-party projects used specifically for testing"
+
+  xurls:
+    description: |
+      Tool used by the CI to check URLs in documents and code comments.
+    url: "https://mvdan.cc/xurls/cmd/xurls"
+    version: "70405f5eab516c9f7b626d803b043415809499a6"
