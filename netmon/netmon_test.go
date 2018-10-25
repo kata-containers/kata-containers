@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/kata-containers/agent/pkg/types"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
@@ -173,14 +174,14 @@ func TestConvertInterface(t *testing.T) {
 		HardwareAddr: hwAddr,
 	}
 
-	expected := Interface{
+	expected := types.Interface{
 		Device: testIfaceName,
 		Name:   testIfaceName,
 		Mtu:    uint64(testMTU),
 		HwAddr: testHwAddr,
-		IPAddresses: []*IPAddress{
+		IPAddresses: []*types.IPAddress{
 			{
-				Family:  IPFamily(netlinkFamily),
+				Family:  types.IPFamily(netlinkFamily),
 				Address: testIPAddress,
 				Mask:    "0",
 			},
@@ -207,7 +208,7 @@ func TestConvertRoutes(t *testing.T) {
 		},
 	}
 
-	expected := []Route{
+	expected := []types.Route{
 		{
 			Dest:    testIPAddress,
 			Gateway: testIPAddress,
@@ -241,7 +242,7 @@ func testSetupNetwork(t *testing.T) testTeardownNetwork {
 	}
 }
 
-func testCreateDummyNetwork(t *testing.T, handler *netlink.Handle) (int, Interface) {
+func testCreateDummyNetwork(t *testing.T, handler *netlink.Handle) (int, types.Interface) {
 	hwAddr, err := net.ParseMAC(testHwAddr)
 	assert.Nil(t, err)
 
@@ -262,7 +263,7 @@ func testCreateDummyNetwork(t *testing.T, handler *netlink.Handle) (int, Interfa
 	attrs := link.Attrs()
 	assert.NotNil(t, attrs)
 
-	iface := Interface{
+	iface := types.Interface{
 		Device: testIfaceName,
 		Name:   testIfaceName,
 		Mtu:    uint64(testMTU),
@@ -284,7 +285,7 @@ func TestScanNetwork(t *testing.T) {
 	idx, expected := testCreateDummyNetwork(t, handler)
 
 	n := &netmon{
-		netIfaces:  make(map[int]Interface),
+		netIfaces:  make(map[int]types.Interface),
 		netHandler: handler,
 	}
 
@@ -295,9 +296,9 @@ func TestScanNetwork(t *testing.T) {
 }
 
 func TestStoreDataToSend(t *testing.T) {
-	var got Interface
+	var got types.Interface
 
-	expected := Interface{
+	expected := types.Interface{
 		Device: testIfaceName,
 		Name:   testIfaceName,
 		Mtu:    uint64(testMTU),
@@ -394,15 +395,15 @@ func TestActionsCLI(t *testing.T) {
 	defer os.RemoveAll(testStorageParentPath)
 
 	// Test addInterfaceCLI
-	err = n.addInterfaceCLI(Interface{})
+	err = n.addInterfaceCLI(types.Interface{})
 	assert.Nil(t, err)
 
 	// Test delInterfaceCLI
-	err = n.delInterfaceCLI(Interface{})
+	err = n.delInterfaceCLI(types.Interface{})
 	assert.Nil(t, err)
 
 	// Test updateRoutesCLI
-	err = n.updateRoutesCLI([]Route{})
+	err = n.updateRoutesCLI([]types.Route{})
 	assert.Nil(t, err)
 
 	tearDownNetworkCb := testSetupNetwork(t)
@@ -460,8 +461,8 @@ func TestHandleRTMNewLink(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Interface already exist in list
-	n.netIfaces = make(map[int]Interface)
-	n.netIfaces[testIfaceIndex] = Interface{}
+	n.netIfaces = make(map[int]types.Interface)
+	n.netIfaces[testIfaceIndex] = types.Interface{}
 	ev = netlink.LinkUpdate{
 		Link: &netlink.Dummy{
 			LinkAttrs: netlink.LinkAttrs{
@@ -474,7 +475,7 @@ func TestHandleRTMNewLink(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Flags are not up and running
-	n.netIfaces = make(map[int]Interface)
+	n.netIfaces = make(map[int]types.Interface)
 	ev = netlink.LinkUpdate{
 		Link: &netlink.Dummy{
 			LinkAttrs: netlink.LinkAttrs{
@@ -487,7 +488,7 @@ func TestHandleRTMNewLink(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Invalid link
-	n.netIfaces = make(map[int]Interface)
+	n.netIfaces = make(map[int]types.Interface)
 	ev = netlink.LinkUpdate{
 		Link: &netlink.Dummy{
 			LinkAttrs: netlink.LinkAttrs{
@@ -528,7 +529,7 @@ func TestHandleRTMDelLink(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Interface does not exist in list
-	n.netIfaces = make(map[int]Interface)
+	n.netIfaces = make(map[int]types.Interface)
 	ev = netlink.LinkUpdate{
 		Link: &netlink.Dummy{
 			LinkAttrs: netlink.LinkAttrs{
@@ -543,7 +544,7 @@ func TestHandleRTMDelLink(t *testing.T) {
 
 func TestHandleRTMNewRouteIfaceNotFound(t *testing.T) {
 	n := &netmon{
-		netIfaces: make(map[int]Interface),
+		netIfaces: make(map[int]types.Interface),
 	}
 
 	err := n.handleRTMNewRoute(netlink.RouteUpdate{})
