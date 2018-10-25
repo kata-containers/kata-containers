@@ -20,14 +20,23 @@ info() {
 	echo -e "INFO: $*"
 }
 
-function build() {
+function build_version() {
 	github_project="$1"
 	make_target="$2"
+	version="$3"
+
+	[ -z "${version}" ] && die "need version to build"
+
 	project_dir="${GOPATH}/src/${github_project}"
 
 	[ -d "${project_dir}" ] || go get -d "${github_project}" || true
 
 	pushd "${project_dir}"
+
+	if [ "$version" != "HEAD" ]; then
+		info "Using ${github_project} version ${version}"
+		git checkout -b "${version}" "${version}"
+	fi
 
 	info "Building ${github_project}"
 	if [ ! -f Makefile ]; then
@@ -45,6 +54,13 @@ function build() {
 	fi
 
 	popd
+}
+
+function build() {
+	github_project="$1"
+	make_target="$2"
+
+	build_version "${github_project}" "${make_target}" "HEAD"
 }
 
 function build_and_install() {
