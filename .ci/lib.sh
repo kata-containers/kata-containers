@@ -35,7 +35,7 @@ function build() {
 		bash -f autogen.sh
 	fi
 
-	make
+	make ${make_target}
 
 	popd
 }
