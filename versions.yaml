@@ -16,3 +16,8 @@ docker_images:
     description: "Linux distribution built around busybox and musl libc"
     url: "https://hub.docker.com/_/alpine/"
     version: "3.7"
+
+  kibana:
+    description: "Open source analytics and visualization platform"
+    url: "https://hub.docker.com/_/kibana/"
+    version: "6.4.0"
