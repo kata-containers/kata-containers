@@ -25,7 +25,7 @@ function build() {
 	make_target="$2"
 	project_dir="${GOPATH}/src/${github_project}"
 
-	[ -d "${project_dir}" ] || go get "${github_project}" || true
+	[ -d "${project_dir}" ] || go get -d "${github_project}" || true
 
 	pushd "${project_dir}"
 
@@ -37,7 +37,12 @@ function build() {
 		fi
 	fi
 
-	make ${make_target}
+	if [ -f Makefile ]; then
+		make ${make_target}
+	else
+		# install locally (which is what "go get" does by default)
+		go install ./...
+	fi
 
 	popd
 }
