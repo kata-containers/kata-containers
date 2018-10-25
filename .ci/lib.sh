@@ -31,8 +31,10 @@ function build() {
 
 	info "Building ${github_project}"
 	if [ ! -f Makefile ]; then
-		info "Run autogen.sh to generate Makefile"
-		bash -f autogen.sh
+		if [ -f autogen.sh ]; then
+			info "Run autogen.sh to generate Makefile"
+			bash -f autogen.sh
+		fi
 	fi
 
 	make ${make_target}
