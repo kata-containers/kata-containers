@@ -21,6 +21,7 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 
+	"github.com/kata-containers/agent/pkg/types"
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
@@ -1076,7 +1077,7 @@ func (s *Sandbox) removeNetwork() error {
 	return s.network.remove(s)
 }
 
-func (s *Sandbox) generateNetInfo(inf *grpc.Interface) (NetworkInfo, error) {
+func (s *Sandbox) generateNetInfo(inf *types.Interface) (NetworkInfo, error) {
 	hw, err := net.ParseMAC(inf.HwAddr)
 	if err != nil {
 		return NetworkInfo{}, err
@@ -1114,7 +1115,7 @@ func (s *Sandbox) generateNetInfo(inf *grpc.Interface) (NetworkInfo, error) {
 }
 
 // AddInterface adds new nic to the sandbox.
-func (s *Sandbox) AddInterface(inf *grpc.Interface) (*grpc.Interface, error) {
+func (s *Sandbox) AddInterface(inf *types.Interface) (*types.Interface, error) {
 	netInfo, err := s.generateNetInfo(inf)
 	if err != nil {
 		return nil, err
@@ -1145,7 +1146,7 @@ func (s *Sandbox) AddInterface(inf *grpc.Interface) (*grpc.Interface, error) {
 }
 
 // RemoveInterface removes a nic of the sandbox.
-func (s *Sandbox) RemoveInterface(inf *grpc.Interface) (*grpc.Interface, error) {
+func (s *Sandbox) RemoveInterface(inf *types.Interface) (*types.Interface, error) {
 	for i, endpoint := range s.networkNS.Endpoints {
 		if endpoint.HardwareAddr() == inf.HwAddr {
 			s.Logger().WithField("endpoint-type", endpoint.Type()).Info("Hot detaching endpoint")
@@ -1163,17 +1164,17 @@ func (s *Sandbox) RemoveInterface(inf *grpc.Interface) (*grpc.Interface, error) 
 }
 
 // ListInterfaces lists all nics and their configurations in the sandbox.
-func (s *Sandbox) ListInterfaces() ([]*grpc.Interface, error) {
+func (s *Sandbox) ListInterfaces() ([]*types.Interface, error) {
 	return s.agent.listInterfaces()
 }
 
 // UpdateRoutes updates the sandbox route table (e.g. for portmapping support).
-func (s *Sandbox) UpdateRoutes(routes []*grpc.Route) ([]*grpc.Route, error) {
+func (s *Sandbox) UpdateRoutes(routes []*types.Route) ([]*types.Route, error) {
 	return s.agent.updateRoutes(routes)
 }
 
 // ListRoutes lists all routes and their configurations in the sandbox.
-func (s *Sandbox) ListRoutes() ([]*grpc.Route, error) {
+func (s *Sandbox) ListRoutes() ([]*types.Route, error) {
 	return s.agent.listRoutes()
 }
 

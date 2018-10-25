@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"syscall"
 
-	"github.com/kata-containers/agent/protocols/grpc"
+	"github.com/kata-containers/agent/pkg/types"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
@@ -254,7 +254,7 @@ func (m *VCMock) AddDevice(ctx context.Context, sandboxID string, info config.De
 }
 
 // AddInterface implements the VC function of the same name.
-func (m *VCMock) AddInterface(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+func (m *VCMock) AddInterface(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error) {
 	if m.AddInterfaceFunc != nil {
 		return m.AddInterfaceFunc(ctx, sandboxID, inf)
 	}
@@ -263,7 +263,7 @@ func (m *VCMock) AddInterface(ctx context.Context, sandboxID string, inf *grpc.I
 }
 
 // RemoveInterface implements the VC function of the same name.
-func (m *VCMock) RemoveInterface(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+func (m *VCMock) RemoveInterface(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error) {
 	if m.RemoveInterfaceFunc != nil {
 		return m.RemoveInterfaceFunc(ctx, sandboxID, inf)
 	}
@@ -272,7 +272,7 @@ func (m *VCMock) RemoveInterface(ctx context.Context, sandboxID string, inf *grp
 }
 
 // ListInterfaces implements the VC function of the same name.
-func (m *VCMock) ListInterfaces(ctx context.Context, sandboxID string) ([]*grpc.Interface, error) {
+func (m *VCMock) ListInterfaces(ctx context.Context, sandboxID string) ([]*types.Interface, error) {
 	if m.ListInterfacesFunc != nil {
 		return m.ListInterfacesFunc(ctx, sandboxID)
 	}
@@ -281,7 +281,7 @@ func (m *VCMock) ListInterfaces(ctx context.Context, sandboxID string) ([]*grpc.
 }
 
 // UpdateRoutes implements the VC function of the same name.
-func (m *VCMock) UpdateRoutes(ctx context.Context, sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error) {
+func (m *VCMock) UpdateRoutes(ctx context.Context, sandboxID string, routes []*types.Route) ([]*types.Route, error) {
 	if m.UpdateRoutesFunc != nil {
 		return m.UpdateRoutesFunc(ctx, sandboxID, routes)
 	}
@@ -290,7 +290,7 @@ func (m *VCMock) UpdateRoutes(ctx context.Context, sandboxID string, routes []*g
 }
 
 // ListRoutes implements the VC function of the same name.
-func (m *VCMock) ListRoutes(ctx context.Context, sandboxID string) ([]*grpc.Route, error) {
+func (m *VCMock) ListRoutes(ctx context.Context, sandboxID string) ([]*types.Route, error) {
 	if m.ListRoutesFunc != nil {
 		return m.ListRoutesFunc(ctx, sandboxID)
 	}

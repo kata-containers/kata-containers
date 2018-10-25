@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kata-containers/agent/pkg/types"
 	kataclient "github.com/kata-containers/agent/protocols/client"
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
@@ -383,7 +384,7 @@ func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, erro
 		k.state.URL, cmd, []ns.NSType{}, enterNSList)
 }
 
-func (k *kataAgent) updateInterface(ifc *grpc.Interface) (*grpc.Interface, error) {
+func (k *kataAgent) updateInterface(ifc *types.Interface) (*types.Interface, error) {
 	// send update interface request
 	ifcReq := &grpc.UpdateInterfaceRequest{
 		Interface: ifc,
@@ -395,13 +396,13 @@ func (k *kataAgent) updateInterface(ifc *grpc.Interface) (*grpc.Interface, error
 			"resulting-interface": fmt.Sprintf("%+v", resultingInterface),
 		}).WithError(err).Error("update interface request failed")
 	}
-	if resultInterface, ok := resultingInterface.(*grpc.Interface); ok {
+	if resultInterface, ok := resultingInterface.(*types.Interface); ok {
 		return resultInterface, err
 	}
 	return nil, err
 }
 
-func (k *kataAgent) updateInterfaces(interfaces []*grpc.Interface) error {
+func (k *kataAgent) updateInterfaces(interfaces []*types.Interface) error {
 	for _, ifc := range interfaces {
 		if _, err := k.updateInterface(ifc); err != nil {
 			return err
@@ -410,7 +411,7 @@ func (k *kataAgent) updateInterfaces(interfaces []*grpc.Interface) error {
 	return nil
 }
 
-func (k *kataAgent) updateRoutes(routes []*grpc.Route) ([]*grpc.Route, error) {
+func (k *kataAgent) updateRoutes(routes []*types.Route) ([]*types.Route, error) {
 	if routes != nil {
 		routesReq := &grpc.UpdateRoutesRequest{
 			Routes: &grpc.Routes{
@@ -433,7 +434,7 @@ func (k *kataAgent) updateRoutes(routes []*grpc.Route) ([]*grpc.Route, error) {
 	return nil, nil
 }
 
-func (k *kataAgent) listInterfaces() ([]*grpc.Interface, error) {
+func (k *kataAgent) listInterfaces() ([]*types.Interface, error) {
 	req := &grpc.ListInterfacesRequest{}
 	resultingInterfaces, err := k.sendReq(req)
 	if err != nil {
@@ -446,7 +447,7 @@ func (k *kataAgent) listInterfaces() ([]*grpc.Interface, error) {
 	return nil, err
 }
 
-func (k *kataAgent) listRoutes() ([]*grpc.Route, error) {
+func (k *kataAgent) listRoutes() ([]*types.Route, error) {
 	req := &grpc.ListRoutesRequest{}
 	resultingRoutes, err := k.sendReq(req)
 	if err != nil {
