@@ -6,6 +6,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+description: |
+  This file contains test specific version details.
+  For other version details, see the master database:
+
+  https://github.com/kata-containers/runtime/blob/master/versions.yaml
+
 docker_images:
   description: "Docker hub images used for testing"
 
