@@ -12,6 +12,7 @@ set -o pipefail
 tmp_dir=$(mktemp -d -t install-go-tmp.XXXXXXXXXX)
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 script_name="$(basename "${BASH_SOURCE[0]}")"
+force=""
 USE_VERSIONS_FILE=""
 PROJECT="Kata Containers"
 
@@ -47,6 +48,7 @@ ${script_name} 1.10
 
 Options
 -d <path> : destination path, path where go will be installed.
+-f        : Force remove old go version and install the specified one.
 -h        : Show this help
 -p        : Install go defined in ${PROJECT} versions file.
 
@@ -59,10 +61,11 @@ trap finish EXIT
 
 pushd "${tmp_dir}"
 
-while getopts "d:hp" opt
+while getopts "d:fhp" opt
 do
 	case $opt in
 		d)	install_dest="${OPTARG}" ;;
+		f)	force="true" ;;
 		h)	usage 0 ;;
 		p)	USE_VERSIONS_FILE="true" ;;
 	esac
@@ -85,7 +88,12 @@ if command -v go; then
 	[[ "$(go version)" == *"go${go_version}"* ]] && \
 		info "Go ${go_version} already installed" && \
 		exit
-	die "$(go version) is installed, remove it before install go ${go_version}"
+	if [ "${force}" = "true" ]; then
+		info "removing $(go version)"
+		sudo rm -rf "${install_dest}/go"
+	else
+		die "$(go version) is installed, use -f or remove it before install go ${go_version}"
+	fi
 fi
 
 case "$(arch)" in

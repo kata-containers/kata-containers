@@ -69,7 +69,7 @@ branch=
 # This ensures:
 # - We have latest changes in install_go.sh
 # - We got get changes if versions.yaml changed.
-${GOPATH}/src/${tests_repo}/.ci/install_go.sh -p
+${GOPATH}/src/${tests_repo}/.ci/install_go.sh -p -f
 
 # Make sure runc is default runtime.
 # This is needed in case a new image creation.
