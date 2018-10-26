@@ -385,7 +385,16 @@ check_docs()
 	if [ ! "$(command -v $cmd)" ]
 	then
 		info "Installing $cmd utility"
-		go get -u "github.com/mvdan/xurls/cmd/${cmd}"
+
+		local version
+		local url
+		local dir
+
+		version=$(get_test_version "externals.xurls.version")
+		url=$(get_test_version "externals.xurls.url")
+		dir=$(echo "$url"|sed 's!https://!!g')
+
+		build_version "${dir}" "" "${version}"
 	fi
 
 	info "Checking documentation"

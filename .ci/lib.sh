@@ -20,24 +20,47 @@ info() {
 	echo -e "INFO: $*"
 }
 
-function build() {
+function build_version() {
 	github_project="$1"
 	make_target="$2"
+	version="$3"
+
+	[ -z "${version}" ] && die "need version to build"
+
 	project_dir="${GOPATH}/src/${github_project}"
 
-	[ -d "${project_dir}" ] || go get "${github_project}" || true
+	[ -d "${project_dir}" ] || go get -d "${github_project}" || true
 
 	pushd "${project_dir}"
 
-	info "Building ${github_project}"
-	if [ ! -f Makefile ]; then
-		info "Run autogen.sh to generate Makefile"
-		bash -f autogen.sh
+	if [ "$version" != "HEAD" ]; then
+		info "Using ${github_project} version ${version}"
+		git checkout -b "${version}" "${version}"
 	fi
 
-	make
+	info "Building ${github_project}"
+	if [ ! -f Makefile ]; then
+		if [ -f autogen.sh ]; then
+			info "Run autogen.sh to generate Makefile"
+			bash -f autogen.sh
+		fi
+	fi
+
+	if [ -f Makefile ]; then
+		make ${make_target}
+	else
+		# install locally (which is what "go get" does by default)
+		go install ./...
+	fi
 
 	popd
+}
+
+function build() {
+	github_project="$1"
+	make_target="$2"
+
+	build_version "${github_project}" "${make_target}" "HEAD"
 }
 
 function build_and_install() {
@@ -103,20 +126,43 @@ function install_yq() {
 	fi
 }
 
+function get_dep_from_yaml_db(){
+	local versions_file="$1"
+	local dependency="$2"
+
+	[ ! -f "$versions_file" ] && die "cannot find $versions_file"
+
+	install_yq >&2
+
+	result=$("${GOPATH}/bin/yq" read "$versions_file" "$dependency")
+	[ "$result" = "null" ] && result=""
+	echo "$result"
+}
+
 function get_version(){
 	dependency="$1"
 	GOPATH=${GOPATH:-${HOME}/go}
-	# This is needed in order to retrieve the version for qemu-lite
-	install_yq >&2
 	runtime_repo="github.com/kata-containers/runtime"
 	runtime_repo_dir="$GOPATH/src/${runtime_repo}"
 	versions_file="${runtime_repo_dir}/versions.yaml"
 	mkdir -p "$(dirname ${runtime_repo_dir})"
 	[ -d "${runtime_repo_dir}" ] ||  git clone --quiet https://${runtime_repo}.git "${runtime_repo_dir}"
-	[ ! -f "$versions_file" ] && { echo >&2 "ERROR: cannot find $versions_file"; exit 1; }
-	result=$("${GOPATH}/bin/yq" read "$versions_file" "$dependency")
-	[ "$result" = "null" ] && result=""
-	echo "$result"
+
+	get_dep_from_yaml_db "${versions_file}" "${dependency}"
+}
+
+function get_test_version(){
+	local dependency="$1"
+
+	local db
+	local cidir
+
+	# directory of this script, not the caller
+	local cidir=$(dirname "${BASH_SOURCE[0]}")
+
+	db="${cidir}/../versions.yaml"
+
+	get_dep_from_yaml_db "${db}" "${dependency}"
 }
 
 function check_gopath() {
