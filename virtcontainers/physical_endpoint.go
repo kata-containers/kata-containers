@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -148,11 +149,14 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 		return nil, err
 	}
 
-	// Get Driver
-	driver, err := ethHandle.DriverName(netInfo.Iface.Name)
+	// Get driver by following symlink /sys/bus/pci/devices/$bdf/driver
+	driverPath := filepath.Join(sysPCIDevicesPath, bdf, "driver")
+	link, err := os.Readlink(driverPath)
 	if err != nil {
 		return nil, err
 	}
+
+	driver := filepath.Base(link)
 
 	// Get vendor and device id from pci space (sys/bus/pci/devices/$bdf)
 
