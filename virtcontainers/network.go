@@ -22,7 +22,7 @@ import (
 	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
 
-	"github.com/kata-containers/agent/protocols/grpc"
+	"github.com/kata-containers/agent/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
@@ -1148,18 +1148,18 @@ func deleteNetNS(netNSPath string) error {
 	return nil
 }
 
-func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*grpc.Interface, []*grpc.Route, error) {
+func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*types.Interface, []*types.Route, error) {
 
 	if networkNS.NetNsPath == "" {
 		return nil, nil, nil
 	}
 
-	var routes []*grpc.Route
-	var ifaces []*grpc.Interface
+	var routes []*types.Route
+	var ifaces []*types.Interface
 
 	for _, endpoint := range networkNS.Endpoints {
 
-		var ipAddresses []*grpc.IPAddress
+		var ipAddresses []*types.IPAddress
 		for _, addr := range endpoint.Properties().Addrs {
 			// Skip IPv6 because not supported
 			if addr.IP.To4() == nil {
@@ -1175,14 +1175,14 @@ func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*grpc.Interface,
 				continue
 			}
 			netMask, _ := addr.Mask.Size()
-			ipAddress := grpc.IPAddress{
-				Family:  grpc.IPFamily_v4,
+			ipAddress := types.IPAddress{
+				Family:  types.IPFamily_v4,
 				Address: addr.IP.String(),
 				Mask:    fmt.Sprintf("%d", netMask),
 			}
 			ipAddresses = append(ipAddresses, &ipAddress)
 		}
-		ifc := grpc.Interface{
+		ifc := types.Interface{
 			IPAddresses: ipAddresses,
 			Device:      endpoint.Name(),
 			Name:        endpoint.Name(),
@@ -1193,7 +1193,7 @@ func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*grpc.Interface,
 		ifaces = append(ifaces, &ifc)
 
 		for _, route := range endpoint.Properties().Routes {
-			var r grpc.Route
+			var r types.Route
 
 			if route.Dst != nil {
 				r.Dest = route.Dst.String()

@@ -165,6 +165,26 @@ func parse(sock string) (string, *url.URL, error) {
 	return grpcAddr, addr, nil
 }
 
+// This function is meant to run in a go routine since it will send ping
+// commands every second. It behaves as a heartbeat to maintain a proper
+// communication state with the Yamux server in the agent.
+func heartBeat(session *yamux.Session) {
+	if session == nil {
+		return
+	}
+
+	for {
+		if session.IsClosed() {
+			break
+		}
+
+		session.Ping()
+
+		// 1 Hz heartbeat
+		time.Sleep(time.Second)
+	}
+}
+
 func agentDialer(addr *url.URL, enableYamux bool) dialer {
 	var d dialer
 	switch addr.Scheme {
@@ -196,10 +216,14 @@ func agentDialer(addr *url.URL, enableYamux bool) dialer {
 		sessionConfig := yamux.DefaultConfig()
 		// Disable keepAlive since we don't know how much time a container can be paused
 		sessionConfig.EnableKeepAlive = false
+		sessionConfig.ConnectionWriteTimeout = time.Second
 		session, err = yamux.Client(conn, sessionConfig)
 		if err != nil {
 			return nil, err
 		}
+
+		// Start the heartbeat in a separate go routine
+		go heartBeat(session)
 
 		var stream net.Conn
 		stream, err = session.Open()
