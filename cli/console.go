@@ -91,27 +91,23 @@ func (c *Console) Close() error {
 	return nil
 }
 
-func ioctl(fd uintptr, flag, data uintptr) error {
-	if _, _, err := unix.Syscall(unix.SYS_IOCTL, fd, flag, data); err != 0 {
+// unlockpt unlocks the slave pseudoterminal device corresponding to the master pseudoterminal referred to by f.
+// unlockpt should be called before opening the slave side of a pty.
+func unlockpt(f *os.File) error {
+	var u int32
+	if _, _, err := unix.Syscall(unix.SYS_IOCTL, f.Fd(), unix.TIOCSPTLCK, uintptr(unsafe.Pointer(&u))); err != 0 {
 		return err
 	}
 	return nil
 }
 
-// unlockpt unlocks the slave pseudoterminal device corresponding to the master pseudoterminal referred to by f.
-// unlockpt should be called before opening the slave side of a pty.
-func unlockpt(f *os.File) error {
-	var u int32
-	return ioctl(f.Fd(), unix.TIOCSPTLCK, uintptr(unsafe.Pointer(&u)))
-}
-
 // ptsname retrieves the name of the first available pts for the given master.
 func ptsname(f *os.File) (string, error) {
-	var n int32
-	if err := ioctl(f.Fd(), unix.TIOCGPTN, uintptr(unsafe.Pointer(&n))); err != nil {
+	var u uint32
+	if _, _, err := unix.Syscall(unix.SYS_IOCTL, f.Fd(), unix.TIOCGPTN, uintptr(unsafe.Pointer(&u))); err != 0 {
 		return "", err
 	}
-	return fmt.Sprintf("/dev/pts/%d", n), nil
+	return fmt.Sprintf("/dev/pts/%d", u), nil
 }
 
 // saneTerminal sets the necessary tty_ioctl(4)s to ensure that a pty pair
@@ -123,14 +119,14 @@ func saneTerminal(terminal *os.File) error {
 	// Go doesn't have a wrapper for any of the termios ioctls.
 	var termios unix.Termios
 
-	if err := ioctl(terminal.Fd(), unix.TCGETS, uintptr(unsafe.Pointer(&termios))); err != nil {
+	if _, _, err := unix.Syscall(unix.SYS_IOCTL, terminal.Fd(), unix.TCGETS, uintptr(unsafe.Pointer(&termios))); err != 0 {
 		return fmt.Errorf("ioctl(tty, tcgets): %s", err.Error())
 	}
 
 	// Set -onlcr so we don't have to deal with \r.
 	termios.Oflag &^= unix.ONLCR
 
-	if err := ioctl(terminal.Fd(), unix.TCSETS, uintptr(unsafe.Pointer(&termios))); err != nil {
+	if _, _, err := unix.Syscall(unix.SYS_IOCTL, terminal.Fd(), unix.TCSETS, uintptr(unsafe.Pointer(&termios))); err != 0 {
 		return fmt.Errorf("ioctl(tty, tcsets): %s", err.Error())
 	}
 
