@@ -83,6 +83,7 @@ Manual installation instructions are available for [these distributions](#suppor
 |[Ubuntu](ubuntu-installation-guide.md)                             | 16.04, 18.04    |
 
 ## Installing on a Cloud Service Platform
+* [Amazon Web Services (AWS)](aws-installation-guide.md)
 * [Google Compute Engine (GCE)](gce-installation-guide.md)
 
 ## Further information
