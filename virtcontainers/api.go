@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/kata-containers/agent/protocols/grpc"
+	"github.com/kata-containers/agent/pkg/types"
 	deviceApi "github.com/kata-containers/runtime/virtcontainers/device/api"
 	deviceConfig "github.com/kata-containers/runtime/virtcontainers/device/config"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -867,7 +867,7 @@ func AddDevice(ctx context.Context, sandboxID string, info deviceConfig.DeviceIn
 	return s.AddDevice(info)
 }
 
-func toggleInterface(ctx context.Context, sandboxID string, inf *grpc.Interface, add bool) (*grpc.Interface, error) {
+func toggleInterface(ctx context.Context, sandboxID string, inf *types.Interface, add bool) (*types.Interface, error) {
 	if sandboxID == "" {
 		return nil, errNeedSandboxID
 	}
@@ -892,7 +892,7 @@ func toggleInterface(ctx context.Context, sandboxID string, inf *grpc.Interface,
 }
 
 // AddInterface is the virtcontainers add interface entry point.
-func AddInterface(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+func AddInterface(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error) {
 	span, ctx := trace(ctx, "AddInterface")
 	defer span.Finish()
 
@@ -900,7 +900,7 @@ func AddInterface(ctx context.Context, sandboxID string, inf *grpc.Interface) (*
 }
 
 // RemoveInterface is the virtcontainers remove interface entry point.
-func RemoveInterface(ctx context.Context, sandboxID string, inf *grpc.Interface) (*grpc.Interface, error) {
+func RemoveInterface(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error) {
 	span, ctx := trace(ctx, "RemoveInterface")
 	defer span.Finish()
 
@@ -908,7 +908,7 @@ func RemoveInterface(ctx context.Context, sandboxID string, inf *grpc.Interface)
 }
 
 // ListInterfaces is the virtcontainers list interfaces entry point.
-func ListInterfaces(ctx context.Context, sandboxID string) ([]*grpc.Interface, error) {
+func ListInterfaces(ctx context.Context, sandboxID string) ([]*types.Interface, error) {
 	span, ctx := trace(ctx, "ListInterfaces")
 	defer span.Finish()
 
@@ -932,7 +932,7 @@ func ListInterfaces(ctx context.Context, sandboxID string) ([]*grpc.Interface, e
 }
 
 // UpdateRoutes is the virtcontainers update routes entry point.
-func UpdateRoutes(ctx context.Context, sandboxID string, routes []*grpc.Route) ([]*grpc.Route, error) {
+func UpdateRoutes(ctx context.Context, sandboxID string, routes []*types.Route) ([]*types.Route, error) {
 	span, ctx := trace(ctx, "UpdateRoutes")
 	defer span.Finish()
 
@@ -956,7 +956,7 @@ func UpdateRoutes(ctx context.Context, sandboxID string, routes []*grpc.Route) (
 }
 
 // ListRoutes is the virtcontainers list routes entry point.
-func ListRoutes(ctx context.Context, sandboxID string) ([]*grpc.Route, error) {
+func ListRoutes(ctx context.Context, sandboxID string) ([]*types.Route, error) {
 	span, ctx := trace(ctx, "ListRoutes")
 	defer span.Finish()
 

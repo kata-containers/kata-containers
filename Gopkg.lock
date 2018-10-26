@@ -130,14 +130,15 @@
   revision = "e82e8498c5a214b24ac75e0a05ace556bf91a9ab"
 
 [[projects]]
-  digest = "1:672470f31bc4e50f9ba09a1af7ab6035bf8b1452db64dfd79b1a22614bb30710"
+  digest = "1:e96806ae1b041a36386249b22ef9eaf5af1788c0f86f686c6296e5a9caf53df8"
   name = "github.com/kata-containers/agent"
   packages = [
+    "pkg/types",
     "protocols/client",
     "protocols/grpc",
   ]
   pruneopts = "NUT"
-  revision = "7e8e20b10b71fe3044a24175b8a686421e9d2c24"
+  revision = "dd8f32c7a2e6e7effed9d12bac97e7d48473e684"
 
 [[projects]]
   digest = "1:04054595e5c5a35d1553a7f3464d18577caf597445d643992998643df56d4afd"
@@ -173,11 +174,11 @@
   revision = "0351df1c5a66838d0c392b4ac4cf9450de844e2d"
 
 [[projects]]
-  digest = "1:57234a321bf1f8f98a8a9a5122a2404cc60d0800516f4ab7a7b2375e4b2d19ea"
+  digest = "1:0d447d4961f4f9270457fbc20d0261bba8d3056f395efd2e2480e2dfa4487a60"
   name = "github.com/opencontainers/runtime-spec"
   packages = ["specs-go"]
   pruneopts = "NUT"
-  revision = "4e3b9264a330d094b0386c3703c5f379119711e8"
+  revision = "5806c35637336642129d03657419829569abc5aa"
 
 [[projects]]
   digest = "1:7da29c22bcc5c2ffb308324377dc00b5084650348c2799e573ed226d8cc9faf0"
@@ -406,6 +407,7 @@
     "github.com/gogo/protobuf/proto",
     "github.com/gogo/protobuf/types",
     "github.com/intel/govmm/qemu",
+    "github.com/kata-containers/agent/pkg/types",
     "github.com/kata-containers/agent/protocols/client",
     "github.com/kata-containers/agent/protocols/grpc",
     "github.com/kubernetes-incubator/cri-o/pkg/annotations",

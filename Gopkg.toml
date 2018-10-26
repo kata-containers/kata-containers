@@ -24,7 +24,7 @@
 
 [[constraint]]
   name = "github.com/opencontainers/runtime-spec"
-  revision = "4e3b9264a330d094b0386c3703c5f379119711e8"
+  revision = "5806c35637336642129d03657419829569abc5aa"
 
 [[constraint]]
   name = "github.com/stretchr/testify"
@@ -56,7 +56,7 @@
 
 [[constraint]]
   name = "github.com/kata-containers/agent"
-  revision = "7e8e20b10b71fe3044a24175b8a686421e9d2c24"
+  revision = "dd8f32c7a2e6e7effed9d12bac97e7d48473e684"
 
 [[constraint]]
   name = "github.com/containerd/cri-containerd"

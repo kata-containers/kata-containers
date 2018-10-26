@@ -21,47 +21,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kata-containers/agent/pkg/types"
 	"github.com/kata-containers/runtime/pkg/signals"
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
-
-// The following types and structures have to be kept in sync with the
-// description of the agent protocol. Those definitions need to be in their
-// own separate package so that they can be imported directly from this code.
-// The reason for not importing them now, is because importing the whole agent
-// protocol adds up too much overhead because of the grpc protocol involved.
-
-// IPFamily define the IP address family type.
-type IPFamily int32
-
-// IPAddress describes the IP address format expected by Kata API.
-type IPAddress struct {
-	Family  IPFamily `json:"family,omitempty"`
-	Address string   `json:"address,omitempty"`
-	Mask    string   `json:"mask,omitempty"`
-}
-
-// Interface describes the network interface format expected by Kata API.
-type Interface struct {
-	Device      string       `json:"device,omitempty"`
-	Name        string       `json:"name,omitempty"`
-	IPAddresses []*IPAddress `json:"IPAddresses,omitempty"`
-	Mtu         uint64       `json:"mtu,omitempty"`
-	HwAddr      string       `json:"hwAddr,omitempty"`
-	PciAddr     string       `json:"pciAddr,omitempty"`
-}
-
-// Route describes the network route format expected by Kata API.
-type Route struct {
-	Dest    string `json:"dest,omitempty"`
-	Gateway string `json:"gateway,omitempty"`
-	Device  string `json:"device,omitempty"`
-	Source  string `json:"source,omitempty"`
-	Scope   uint32 `json:"scope,omitempty"`
-}
 
 const (
 	netmonName = "kata-netmon"
@@ -104,7 +70,7 @@ type netmon struct {
 	storagePath string
 	sharedFile  string
 
-	netIfaces map[int]Interface
+	netIfaces map[int]types.Interface
 
 	linkUpdateCh chan netlink.LinkUpdate
 	linkDoneCh   chan struct{}
@@ -185,7 +151,7 @@ func newNetmon(params netmonParams) (*netmon, error) {
 		netmonParams: params,
 		storagePath:  filepath.Join(storageParentPath, params.sandboxID),
 		sharedFile:   filepath.Join(storageParentPath, params.sandboxID, sharedFile),
-		netIfaces:    make(map[int]Interface),
+		netIfaces:    make(map[int]types.Interface),
 		linkUpdateCh: make(chan netlink.LinkUpdate),
 		linkDoneCh:   make(chan struct{}),
 		rtUpdateCh:   make(chan netlink.RouteUpdate),
@@ -293,13 +259,13 @@ func (n *netmon) listenNetlinkEvents() error {
 // convertInterface converts a link and its IP addresses as defined by netlink
 // package, into the Interface structure format expected by kata-runtime to
 // describe an interface and its associated IP addresses.
-func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) Interface {
+func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) types.Interface {
 	if linkAttrs == nil {
 		netmonLog.Warn("Link attributes are nil")
-		return Interface{}
+		return types.Interface{}
 	}
 
-	var ipAddrs []*IPAddress
+	var ipAddrs []*types.IPAddress
 
 	for _, addr := range addrs {
 		if addr.IPNet == nil {
@@ -308,8 +274,8 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) Interf
 
 		netMask, _ := addr.Mask.Size()
 
-		ipAddr := &IPAddress{
-			Family:  IPFamily(netlinkFamily),
+		ipAddr := &types.IPAddress{
+			Family:  types.IPFamily(netlinkFamily),
 			Address: addr.IP.String(),
 			Mask:    fmt.Sprintf("%d", netMask),
 		}
@@ -317,7 +283,7 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) Interf
 		ipAddrs = append(ipAddrs, ipAddr)
 	}
 
-	iface := Interface{
+	iface := types.Interface{
 		Device:      linkAttrs.Name,
 		Name:        linkAttrs.Name,
 		IPAddresses: ipAddrs,
@@ -333,8 +299,8 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) Interf
 // convertRoutes converts a list of routes as defined by netlink package,
 // into a list of Route structure format expected by kata-runtime to
 // describe a set of routes.
-func convertRoutes(netRoutes []netlink.Route) []Route {
-	var routes []Route
+func convertRoutes(netRoutes []netlink.Route) []types.Route {
+	var routes []types.Route
 
 	// Ignore routes with IPv6 addresses as this is not supported
 	// by Kata yet.
@@ -368,7 +334,7 @@ func convertRoutes(netRoutes []netlink.Route) []Route {
 			dev = iface.Name
 		}
 
-		route := Route{
+		route := types.Route{
 			Dest:    dst,
 			Gateway: gw,
 			Device:  dev,
@@ -440,7 +406,7 @@ func (n *netmon) execKataCmd(subCmd string) error {
 	return os.Remove(n.sharedFile)
 }
 
-func (n *netmon) addInterfaceCLI(iface Interface) error {
+func (n *netmon) addInterfaceCLI(iface types.Interface) error {
 	if err := n.storeDataToSend(iface); err != nil {
 		return err
 	}
@@ -448,7 +414,7 @@ func (n *netmon) addInterfaceCLI(iface Interface) error {
 	return n.execKataCmd(kataCLIAddIfaceCmd)
 }
 
-func (n *netmon) delInterfaceCLI(iface Interface) error {
+func (n *netmon) delInterfaceCLI(iface types.Interface) error {
 	if err := n.storeDataToSend(iface); err != nil {
 		return err
 	}
@@ -456,7 +422,7 @@ func (n *netmon) delInterfaceCLI(iface Interface) error {
 	return n.execKataCmd(kataCLIDelIfaceCmd)
 }
 
-func (n *netmon) updateRoutesCLI(routes []Route) error {
+func (n *netmon) updateRoutesCLI(routes []types.Route) error {
 	if err := n.storeDataToSend(routes); err != nil {
 		return err
 	}

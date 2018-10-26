@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"syscall"
 
+	"github.com/kata-containers/agent/pkg/types"
 	"github.com/kata-containers/agent/protocols/grpc"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/net/context"
@@ -94,22 +95,22 @@ func (n *noopAgent) onlineCPUMem(cpus uint32, cpuOnly bool) error {
 }
 
 // updateInterface is the Noop agent Interface update implementation. It does nothing.
-func (n *noopAgent) updateInterface(inf *grpc.Interface) (*grpc.Interface, error) {
+func (n *noopAgent) updateInterface(inf *types.Interface) (*types.Interface, error) {
 	return nil, nil
 }
 
 // listInterfaces is the Noop agent Interfaces list implementation. It does nothing.
-func (n *noopAgent) listInterfaces() ([]*grpc.Interface, error) {
+func (n *noopAgent) listInterfaces() ([]*types.Interface, error) {
 	return nil, nil
 }
 
 // updateRoutes is the Noop agent Routes update implementation. It does nothing.
-func (n *noopAgent) updateRoutes(routes []*grpc.Route) ([]*grpc.Route, error) {
+func (n *noopAgent) updateRoutes(routes []*types.Route) ([]*types.Route, error) {
 	return nil, nil
 }
 
 // listRoutes is the Noop agent Routes list implementation. It does nothing.
-func (n *noopAgent) listRoutes() ([]*grpc.Route, error) {
+func (n *noopAgent) listRoutes() ([]*types.Route, error) {
 	return nil, nil
 }
 
