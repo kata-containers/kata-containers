@@ -10,9 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"strings"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
@@ -175,26 +173,6 @@ func create(ctx context.Context, containerID, bundlePath, console, pidFilePath s
 		if err != nil {
 			return err
 		}
-	}
-
-	// config.json provides a cgroups path that has to be used to create "tasks"
-	// and "cgroups.procs" files. Those files have to be filled with a PID, which
-	// is shim's in our case. This is mandatory to make sure there is no one
-	// else (like Docker) trying to create those files on our behalf. We want to
-	// know those files location so that we can remove them when delete is called.
-	cgroupsPathList, err := processCgroupsPath(ctx, ociSpec, containerType.IsSandbox())
-	if err != nil {
-		return err
-	}
-
-	// cgroupsDirPath is CgroupsPath fetch from OCI spec
-	var cgroupsDirPath string
-	if ociSpec.Linux != nil {
-		cgroupsDirPath = ociSpec.Linux.CgroupsPath
-	}
-
-	if err := createCgroupsFiles(ctx, containerID, cgroupsDirPath, cgroupsPathList, process.Pid); err != nil {
-		return err
 	}
 
 	// Creation of PID file has to be the last thing done in the create
@@ -379,52 +357,6 @@ func createContainer(ctx context.Context, ociSpec oci.CompatOCISpec, containerID
 	return c.Process(), nil
 }
 
-func createCgroupsFiles(ctx context.Context, containerID string, cgroupsDirPath string, cgroupsPathList []string, pid int) error {
-	span, _ := trace(ctx, "createCgroupsFiles")
-	defer span.Finish()
-
-	if len(cgroupsPathList) == 0 {
-		kataLog.WithField("pid", pid).Info("Cgroups files not created because cgroupsPath was empty")
-		return nil
-	}
-
-	for _, cgroupsPath := range cgroupsPathList {
-		if err := os.MkdirAll(cgroupsPath, cgroupsDirMode); err != nil {
-			return err
-		}
-
-		if strings.Contains(cgroupsPath, "cpu") && cgroupsDirPath != "" {
-			parent := strings.TrimSuffix(cgroupsPath, cgroupsDirPath)
-			copyParentCPUSet(cgroupsPath, parent)
-		}
-
-		tasksFilePath := filepath.Join(cgroupsPath, cgroupsTasksFile)
-		procsFilePath := filepath.Join(cgroupsPath, cgroupsProcsFile)
-
-		pidStr := fmt.Sprintf("%d", pid)
-
-		for _, path := range []string{tasksFilePath, procsFilePath} {
-			f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, cgroupsFileMode)
-			if err != nil {
-				return err
-			}
-			defer f.Close()
-
-			n, err := f.WriteString(pidStr)
-			if err != nil {
-				return err
-			}
-
-			if n < len(pidStr) {
-				return fmt.Errorf("Could not write pid to %q: only %d bytes written out of %d",
-					path, n, len(pidStr))
-			}
-		}
-	}
-
-	return nil
-}
-
 func createPIDFile(ctx context.Context, pidFilePath string, pid int) error {
 	span, _ := trace(ctx, "createPIDFile")
 	defer span.Finish()
@@ -456,49 +388,4 @@ func createPIDFile(ctx context.Context, pidFilePath string, pid int) error {
 	}
 
 	return nil
-}
-
-// copyParentCPUSet copies the cpuset.cpus and cpuset.mems from the parent
-// directory to the current directory if the file's contents are 0
-func copyParentCPUSet(current, parent string) error {
-	currentCpus, currentMems, err := getCPUSet(current)
-	if err != nil {
-		return err
-	}
-
-	parentCpus, parentMems, err := getCPUSet(parent)
-	if err != nil {
-		return err
-	}
-
-	if len(parentCpus) < 1 || len(parentMems) < 1 {
-		return nil
-	}
-
-	var cgroupsFileMode = os.FileMode(0600)
-	if isEmptyString(currentCpus) {
-		if err := writeFile(filepath.Join(current, "cpuset.cpus"), string(parentCpus), cgroupsFileMode); err != nil {
-			return err
-		}
-	}
-
-	if isEmptyString(currentMems) {
-		if err := writeFile(filepath.Join(current, "cpuset.mems"), string(parentMems), cgroupsFileMode); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func getCPUSet(parent string) (cpus []byte, mems []byte, err error) {
-	if cpus, err = ioutil.ReadFile(filepath.Join(parent, "cpuset.cpus")); err != nil {
-		return
-	}
-
-	if mems, err = ioutil.ReadFile(filepath.Join(parent, "cpuset.mems")); err != nil {
-		return
-	}
-
-	return cpus, mems, nil
 }

@@ -123,19 +123,7 @@ func delete(ctx context.Context, containerID string, force bool) error {
 		return err
 	}
 
-	// In order to prevent any file descriptor leak related to cgroups files
-	// that have been previously created, we have to remove them before this
-	// function returns.
-	cgroupsPathList, err := processCgroupsPath(ctx, ociSpec, containerType.IsSandbox())
-	if err != nil {
-		return err
-	}
-
-	if err := delContainerIDMapping(ctx, containerID); err != nil {
-		return err
-	}
-
-	return removeCgroupsPath(ctx, containerID, cgroupsPathList)
+	return delContainerIDMapping(ctx, containerID)
 }
 
 func deleteSandbox(ctx context.Context, sandboxID string) error {
