@@ -13,17 +13,13 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"reflect"
-	"syscall"
 	"testing"
 	"time"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/opencontainers/runc/libcontainer/utils"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,38 +27,6 @@ var (
 	consolePathTest       = "console-test"
 	consoleSocketPathTest = "console-socket-test"
 )
-
-type cgroupTestDataType struct {
-	resource  string
-	linuxSpec *specs.LinuxResources
-}
-
-var cgroupTestData = []cgroupTestDataType{
-	{
-		"memory",
-		&specs.LinuxResources{
-			Memory: &specs.LinuxMemory{},
-		},
-	},
-	{
-		"cpu",
-		&specs.LinuxResources{
-			CPU: &specs.LinuxCPU{},
-		},
-	},
-	{
-		"pids",
-		&specs.LinuxResources{
-			Pids: &specs.LinuxPids{},
-		},
-	},
-	{
-		"blkio",
-		&specs.LinuxResources{
-			BlockIO: &specs.LinuxBlockIO{},
-		},
-	},
-}
 
 func TestGetContainerInfoContainerIDEmptyFailure(t *testing.T) {
 	assert := assert.New(t)
@@ -179,141 +143,6 @@ func TestValidCreateParamsBundleIsAFile(t *testing.T) {
 	// bundle exists as a file, not a directory
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
-}
-
-func testProcessCgroupsPath(t *testing.T, ociSpec oci.CompatOCISpec, expected []string) {
-	assert := assert.New(t)
-	result, err := processCgroupsPath(context.Background(), ociSpec, true)
-
-	assert.NoError(err)
-
-	if reflect.DeepEqual(result, expected) == false {
-		assert.FailNow("DeepEqual failed", "Result path %q should match the expected one %q", result, expected)
-	}
-}
-
-func TestProcessCgroupsPathEmptyPathSuccessful(t *testing.T) {
-	ociSpec := oci.CompatOCISpec{}
-
-	ociSpec.Linux = &specs.Linux{
-		CgroupsPath: "",
-	}
-
-	testProcessCgroupsPath(t, ociSpec, []string{})
-}
-
-func TestProcessCgroupsPathEmptyResources(t *testing.T) {
-	ociSpec := oci.CompatOCISpec{}
-
-	ociSpec.Linux = &specs.Linux{
-		CgroupsPath: "foo",
-	}
-
-	testProcessCgroupsPath(t, ociSpec, []string{})
-}
-
-func TestProcessCgroupsPathRelativePathSuccessful(t *testing.T) {
-	relativeCgroupsPath := "relative/cgroups/path"
-	cgroupsDirPath = "/foo/runtime/base"
-
-	ociSpec := oci.CompatOCISpec{}
-
-	ociSpec.Linux = &specs.Linux{
-		CgroupsPath: relativeCgroupsPath,
-	}
-
-	for _, d := range cgroupTestData {
-		ociSpec.Linux.Resources = d.linuxSpec
-
-		p := filepath.Join(cgroupsDirPath, d.resource, relativeCgroupsPath)
-
-		testProcessCgroupsPath(t, ociSpec, []string{p})
-	}
-}
-
-func TestProcessCgroupsPathAbsoluteNoCgroupMountSuccessful(t *testing.T) {
-	absoluteCgroupsPath := "/absolute/cgroups/path"
-	cgroupsDirPath = "/foo/runtime/base"
-
-	ociSpec := oci.CompatOCISpec{}
-
-	ociSpec.Linux = &specs.Linux{
-		CgroupsPath: absoluteCgroupsPath,
-	}
-
-	for _, d := range cgroupTestData {
-		ociSpec.Linux.Resources = d.linuxSpec
-
-		p := filepath.Join(cgroupsDirPath, d.resource, absoluteCgroupsPath)
-
-		testProcessCgroupsPath(t, ociSpec, []string{p})
-	}
-}
-
-func TestProcessCgroupsPathAbsoluteNoCgroupMountDestinationFailure(t *testing.T) {
-	assert := assert.New(t)
-	absoluteCgroupsPath := "/absolute/cgroups/path"
-
-	ociSpec := oci.CompatOCISpec{}
-
-	ociSpec.Mounts = []specs.Mount{
-		{
-			Type: "cgroup",
-		},
-	}
-
-	ociSpec.Linux = &specs.Linux{
-		CgroupsPath: absoluteCgroupsPath,
-	}
-
-	for _, d := range cgroupTestData {
-		ociSpec.Linux.Resources = d.linuxSpec
-		for _, isSandbox := range []bool{true, false} {
-			_, err := processCgroupsPath(context.Background(), ociSpec, isSandbox)
-			assert.Error(err, "This test should fail because no cgroup mount destination provided")
-		}
-	}
-}
-
-func TestProcessCgroupsPathAbsoluteSuccessful(t *testing.T) {
-	assert := assert.New(t)
-
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedRoot)
-	}
-
-	memoryResource := "memory"
-	absoluteCgroupsPath := "/cgroup/mount/destination"
-
-	cgroupMountDest, err := ioutil.TempDir("", "cgroup-memory-")
-	assert.NoError(err)
-	defer os.RemoveAll(cgroupMountDest)
-
-	resourceMountPath := filepath.Join(cgroupMountDest, memoryResource)
-	err = os.MkdirAll(resourceMountPath, cgroupsDirMode)
-	assert.NoError(err)
-
-	err = syscall.Mount("go-test", resourceMountPath, "cgroup", 0, memoryResource)
-	assert.NoError(err)
-	defer syscall.Unmount(resourceMountPath, 0)
-
-	ociSpec := oci.CompatOCISpec{}
-
-	ociSpec.Linux = &specs.Linux{
-		Resources: &specs.LinuxResources{
-			Memory: &specs.LinuxMemory{},
-		},
-		CgroupsPath: absoluteCgroupsPath,
-	}
-
-	ociSpec.Mounts = []specs.Mount{
-		{
-			Type:        "cgroup",
-			Destination: cgroupMountDest,
-		},
-	}
-
-	testProcessCgroupsPath(t, ociSpec, []string{filepath.Join(resourceMountPath, absoluteCgroupsPath)})
 }
 
 func TestSetupConsoleExistingConsolePathSuccessful(t *testing.T) {
@@ -434,31 +263,6 @@ func TestIsCgroupMounted(t *testing.T) {
 	}
 
 	assert.True(isCgroupMounted(memoryCgroupPath), "%s is a cgroup", memoryCgroupPath)
-}
-
-func TestProcessCgroupsPathForResource(t *testing.T) {
-	assert := assert.New(t)
-
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
-
-	bundlePath := filepath.Join(tmpdir, "bundle")
-
-	err = makeOCIBundle(bundlePath)
-	assert.NoError(err)
-
-	ociConfigFile := filepath.Join(bundlePath, specConfig)
-	assert.True(fileExists(ociConfigFile))
-
-	spec, err := readOCIConfigFile(ociConfigFile)
-	assert.NoError(err)
-
-	for _, isSandbox := range []bool{true, false} {
-		_, err := processCgroupsPathForResource(spec, "", isSandbox)
-		assert.Error(err)
-		assert.False(vcmock.IsMockError(err))
-	}
 }
 
 func TestGetCgroupsDirPath(t *testing.T) {

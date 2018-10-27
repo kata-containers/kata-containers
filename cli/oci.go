@@ -8,7 +8,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -20,26 +19,17 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/opencontainers/runc/libcontainer/utils"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
-	"github.com/sirupsen/logrus"
 )
 
 // Contants related to cgroup memory directory
 const (
-	cgroupsTasksFile   = "tasks"
-	cgroupsProcsFile   = "cgroup.procs"
-	cgroupsDirMode     = os.FileMode(0750)
-	cgroupsFileMode    = os.FileMode(0640)
 	ctrsMappingDirMode = os.FileMode(0750)
 
 	// Filesystem type corresponding to CGROUP_SUPER_MAGIC as listed
 	// here: http://man7.org/linux/man-pages/man2/statfs.2.html
 	cgroupFsType = 0x27e0eb
 )
-
-var errNeedLinuxResource = errors.New("Linux resource cannot be empty")
 
 var cgroupsDirPath string
 
@@ -123,128 +113,6 @@ func validCreateParams(ctx context.Context, containerID, bundlePath string) (str
 	}
 
 	return resolved, nil
-}
-
-// processCgroupsPath process the cgroups path as expected from the
-// OCI runtime specification. It returns a list of complete paths
-// that should be created and used for every specified resource.
-func processCgroupsPath(ctx context.Context, ociSpec oci.CompatOCISpec, isSandbox bool) ([]string, error) {
-	span, _ := trace(ctx, "processCgroupsPath")
-	defer span.Finish()
-
-	var cgroupsPathList []string
-
-	if ociSpec.Linux.CgroupsPath == "" {
-		return []string{}, nil
-	}
-
-	if ociSpec.Linux.Resources == nil {
-		return []string{}, nil
-	}
-
-	if ociSpec.Linux.Resources.Memory != nil {
-		memCgroupsPath, err := processCgroupsPathForResource(ociSpec, "memory", isSandbox)
-		if err != nil {
-			return []string{}, err
-		}
-
-		if memCgroupsPath != "" {
-			cgroupsPathList = append(cgroupsPathList, memCgroupsPath)
-		}
-	}
-
-	if ociSpec.Linux.Resources.CPU != nil {
-		cpuCgroupsPath, err := processCgroupsPathForResource(ociSpec, "cpu", isSandbox)
-		if err != nil {
-			return []string{}, err
-		}
-
-		if cpuCgroupsPath != "" {
-			cgroupsPathList = append(cgroupsPathList, cpuCgroupsPath)
-		}
-	}
-
-	if ociSpec.Linux.Resources.Pids != nil {
-		pidsCgroupsPath, err := processCgroupsPathForResource(ociSpec, "pids", isSandbox)
-		if err != nil {
-			return []string{}, err
-		}
-
-		if pidsCgroupsPath != "" {
-			cgroupsPathList = append(cgroupsPathList, pidsCgroupsPath)
-		}
-	}
-
-	if ociSpec.Linux.Resources.BlockIO != nil {
-		blkIOCgroupsPath, err := processCgroupsPathForResource(ociSpec, "blkio", isSandbox)
-		if err != nil {
-			return []string{}, err
-		}
-
-		if blkIOCgroupsPath != "" {
-			cgroupsPathList = append(cgroupsPathList, blkIOCgroupsPath)
-		}
-	}
-
-	return cgroupsPathList, nil
-}
-
-func processCgroupsPathForResource(ociSpec oci.CompatOCISpec, resource string, isSandbox bool) (string, error) {
-	if resource == "" {
-		return "", errNeedLinuxResource
-	}
-
-	var err error
-	cgroupsDirPath, err = getCgroupsDirPath(procMountInfo)
-	if err != nil {
-		return "", fmt.Errorf("get CgroupsDirPath error: %s", err)
-	}
-
-	// Relative cgroups path provided.
-	if filepath.IsAbs(ociSpec.Linux.CgroupsPath) == false {
-		return filepath.Join(cgroupsDirPath, resource, ociSpec.Linux.CgroupsPath), nil
-	}
-
-	// Absolute cgroups path provided.
-	var cgroupMount specs.Mount
-	cgroupMountFound := false
-	for _, mount := range ociSpec.Mounts {
-		if mount.Type == "cgroup" {
-			cgroupMount = mount
-			cgroupMountFound = true
-			break
-		}
-	}
-
-	if !cgroupMountFound {
-		// According to the OCI spec, an absolute path should be
-		// interpreted as relative to the system cgroup mount point
-		// when there is no cgroup mount point.
-		return filepath.Join(cgroupsDirPath, resource, ociSpec.Linux.CgroupsPath), nil
-	}
-
-	if cgroupMount.Destination == "" {
-		return "", fmt.Errorf("cgroupsPath is absolute, cgroup mount destination cannot be empty")
-	}
-
-	cgroupPath := filepath.Join(cgroupMount.Destination, resource)
-
-	// It is not an error to have this cgroup not mounted. It is usually
-	// due to an old kernel version with missing support for specific
-	// cgroups.
-	fields := logrus.Fields{
-		"path": cgroupPath,
-		"type": "cgroup",
-	}
-
-	if !isCgroupMounted(cgroupPath) {
-		kataLog.WithFields(fields).Info("path not mounted")
-		return "", nil
-	}
-
-	kataLog.WithFields(fields).Info("path mounted")
-
-	return filepath.Join(cgroupPath, ociSpec.Linux.CgroupsPath), nil
 }
 
 func isCgroupMounted(cgroupPath string) bool {

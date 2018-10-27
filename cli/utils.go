@@ -6,7 +6,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -225,11 +224,6 @@ func writeFile(filePath string, data string, fileMode os.FileMode) error {
 	}
 
 	return nil
-}
-
-// isEmptyString return if string is empty
-func isEmptyString(b []byte) bool {
-	return len(bytes.Trim(b, "\n")) == 0
 }
 
 // fileSize returns the number of bytes in the specified file

@@ -1293,3 +1293,27 @@ func genericMemoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu
 
 	return memory
 }
+
+func (q *qemu) getThreadIDs() (*threadIDs, error) {
+	span, _ := q.trace("getThreadIDs")
+	defer span.Finish()
+
+	err := q.qmpSetup()
+	if err != nil {
+		return nil, err
+	}
+
+	cpuInfos, err := q.qmpMonitorCh.qmp.ExecQueryCpus(q.qmpMonitorCh.ctx)
+	if err != nil {
+		q.Logger().WithError(err).Error("failed to query cpu infos")
+		return nil, err
+	}
+
+	var tid threadIDs
+	for _, i := range cpuInfos {
+		if i.ThreadID > 0 {
+			tid.vcpus = append(tid.vcpus, i.ThreadID)
+		}
+	}
+	return &tid, nil
+}
