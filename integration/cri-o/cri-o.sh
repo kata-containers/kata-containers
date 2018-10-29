@@ -13,7 +13,7 @@ source "${SCRIPT_PATH}/crio_skip_tests.sh"
 source "${SCRIPT_PATH}/../../metrics/lib/common.bash"
 source /etc/os-release || source /usr/lib/os-release
 
-crio_repository="github.com/kubernetes-incubator/cri-o"
+crio_repository="github.com/kubernetes-sigs/cri-o"
 crio_repository_path="$GOPATH/src/${crio_repository}"
 
 # Check no processes are left behind

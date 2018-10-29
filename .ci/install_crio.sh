@@ -12,7 +12,8 @@ source "${cidir}/lib.sh"
 source /etc/os-release || source /usr/lib/os-release
 
 echo "Get CRI-O sources"
-crio_repo="github.com/kubernetes-incubator/cri-o"
+kubernetes_sigs_org="github.com/kubernetes-sigs"
+crio_repo="${kubernetes_sigs_org}/cri-o"
 go get -d "$crio_repo" || true
 pushd "${GOPATH}/src/${crio_repo}"
 
@@ -45,7 +46,7 @@ if [ ! -e "${GOBIN}/go-md2man" ]; then
 fi
 
 echo "Get CRI Tools"
-critools_repo="github.com/kubernetes-incubator/cri-tools"
+critools_repo="${kubernetes_sigs_org}/cri-tools"
 go get "$critools_repo" || true
 pushd "${GOPATH}/src/${critools_repo}"
 critools_version=$(grep "ENV CRICTL_COMMIT" "${GOPATH}/src/${crio_repo}/Dockerfile" | cut -d " " -f3)
