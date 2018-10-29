@@ -53,6 +53,7 @@ get_release_info() {
 	docker_version=$(get_from_kata_deps "externals.docker.version" "${new_release}")
 	crio_version=$(get_from_kata_deps "externals.crio.version")
 	cri_containerd_version=$(get_from_kata_deps "externals.cri-containerd.version" "${new_release}")
+	kubernetes_version=$(get_from_kata_deps "externals.kubernetes.version" "${new_release}")
 	oci_spec_version=$(get_from_kata_deps "specs.oci.version" "${new_release}")
 
 	#Image information
@@ -111,6 +112,9 @@ Kata Containers ${runtime_version} is compatible with cri-contaienrd ${cri_conta
 
 ## OCI Runtime Specification
 Kata Containers ${runtime_version} support the OCI Runtime Specification [${oci_spec_version}][ocispec]
+
+## Compatibility with Kubernetes
+Kata Containers ${runtime_version} is compatible with Kubernetes ${kubernetes_version}
 
 ## Kata Linux Containers image
 Agent version: ${new_release}
