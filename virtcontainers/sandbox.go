@@ -1098,13 +1098,6 @@ func (s *Sandbox) generateNetInfo(inf *types.Interface) (NetworkInfo, error) {
 		addrs = append(addrs, *netlinkAddr)
 	}
 
-	var ifaceType string
-	if s.config.NetworkConfig.InterworkingModel == NetXConnectNoneModel {
-		ifaceType = "tap"
-	} else {
-		ifaceType = "veth"
-	}
-
 	return NetworkInfo{
 		Iface: NetlinkIface{
 			LinkAttrs: netlink.LinkAttrs{
@@ -1112,7 +1105,7 @@ func (s *Sandbox) generateNetInfo(inf *types.Interface) (NetworkInfo, error) {
 				HardwareAddr: hw,
 				MTU:          int(inf.Mtu),
 			},
-			Type: ifaceType,
+			Type: inf.LinkType,
 		},
 		Addrs: addrs,
 	}, nil
