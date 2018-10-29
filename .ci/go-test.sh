@@ -26,9 +26,6 @@ timeout_value=${KATA_GO_TEST_TIMEOUT:-30s}
 # enabling the flag depending on the arch.
 [ "$(go env GOARCH)" = "amd64" ] && race="-race"
 
-# KATA_GO_TEST_FLAGS can be set to change the flags passed to "go test".
-go_test_flags=${KATA_GO_TEST_FLAGS:-"-v $race -timeout $timeout_value"}
-
 # Notes:
 #
 # - The vendor filtering is required for versions of go older than 1.9.
@@ -248,6 +245,9 @@ main()
 	fi
 
 	[ -z "$test_packages" ] && echo "INFO: no golang code to test" && exit 0
+
+	# KATA_GO_TEST_FLAGS can be set to change the flags passed to "go test".
+	go_test_flags=${KATA_GO_TEST_FLAGS:-"-v $race -timeout $timeout_value"}
 
 	if [ "$1" = "html-coverage" ]; then
 		test_html_coverage
