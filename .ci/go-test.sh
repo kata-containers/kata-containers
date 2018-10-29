@@ -246,8 +246,11 @@ main()
 
 	[ -z "$test_packages" ] && echo "INFO: no golang code to test" && exit 0
 
+	# directory to use for temporary files
+	golang_tmp=$(mktemp -d)
+
 	# KATA_GO_TEST_FLAGS can be set to change the flags passed to "go test".
-	go_test_flags=${KATA_GO_TEST_FLAGS:-"-v $race -timeout $timeout_value"}
+	go_test_flags=${KATA_GO_TEST_FLAGS:-"-v $race -timeout $timeout_value -outputdir \"${golang_tmp}\""}
 
 	if [ "$1" = "html-coverage" ]; then
 		test_html_coverage
@@ -256,6 +259,8 @@ main()
 	else
 		test_local
 	fi
+
+	[ -d "${golang_tmp}" ] && [ "${golang_tmp}" != "/" ] && rm -rf "${golang_tmp}"
 }
 
 main "$@"
