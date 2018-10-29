@@ -174,6 +174,8 @@ func TestConvertInterface(t *testing.T) {
 		HardwareAddr: hwAddr,
 	}
 
+	linkType := "link_type_test"
+
 	expected := types.Interface{
 		Device: testIfaceName,
 		Name:   testIfaceName,
@@ -186,9 +188,10 @@ func TestConvertInterface(t *testing.T) {
 				Mask:    "0",
 			},
 		},
+		LinkType: linkType,
 	}
 
-	got := convertInterface(linkAttrs, addrs)
+	got := convertInterface(linkAttrs, linkType, addrs)
 	assert.True(t, reflect.DeepEqual(expected, got),
 		"Got %+v\nExpected %+v", got, expected)
 }
@@ -264,10 +267,11 @@ func testCreateDummyNetwork(t *testing.T, handler *netlink.Handle) (int, types.I
 	assert.NotNil(t, attrs)
 
 	iface := types.Interface{
-		Device: testIfaceName,
-		Name:   testIfaceName,
-		Mtu:    uint64(testMTU),
-		HwAddr: testHwAddr,
+		Device:   testIfaceName,
+		Name:     testIfaceName,
+		Mtu:      uint64(testMTU),
+		HwAddr:   testHwAddr,
+		LinkType: link.Type(),
 	}
 
 	return attrs.Index, iface
