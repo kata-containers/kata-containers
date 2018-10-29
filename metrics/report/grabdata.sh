@@ -19,6 +19,11 @@ SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_DIR}/../lib/common.bash"
 RESULTS_DIR=${SCRIPT_DIR}/../results
 
+# Get working elasticsearch version
+VERSIONS_FILE="${SCRIPT_DIR}/../../versions.yaml"
+ELASTICSEARCH_VERSION=$("${GOPATH}/bin/yq" read "$VERSIONS_FILE" "docker_images.elasticsearch.version")
+ELASTICSEARCH_IMAGE="elasticsearch:$ELASTICSEARCH_VERSION"
+
 # By default we run all the tests
 RUN_ALL=1
 
@@ -115,7 +120,7 @@ run_density_ksm() {
 	# elasticsearch - large container
 	# Need to wait for elasticsearch to boot and settle before we measure
 	export PAYLOAD_SLEEP="10"
-	export PAYLOAD="elasticsearch"
+	export PAYLOAD=$ELASTICSEARCH_IMAGE
 	PAYLOAD_ARGS=" "
 	PAYLOAD_RUNTIME_ARGS=" -m 8G"
 	bash density/footprint_data.sh

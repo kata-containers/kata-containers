@@ -20,6 +20,11 @@ docker_images:
     url: "https://hub.docker.com/_/alpine/"
     version: "3.7"
 
+  elasticsearch:
+    description: "RESTful search and analytics engine"
+    url: "https://hub.docker.com/_/elasticsearch/"
+    version: "6.4.0"
+
   kibana:
     description: "Open source analytics and visualization platform"
     url: "https://hub.docker.com/_/kibana/"
