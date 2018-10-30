@@ -77,6 +77,13 @@ AGENT_VERSION       Version of the agent to include in the rootfs.
 GO_AGENT_PKG        URL of the Git repository hosting the agent package.
                     Default value: ${GO_AGENT_PKG}
 
+GRACEFUL_EXIT       If set, and if the <distro> configuration specifies a
+                    non-empty BUILD_CAN_FAIL variable, do not return with an
+                    error code in case any of the build step fails.
+                    This is used when running CI jobs, to tolerate failures for
+                    specific distributions.
+                    Default value: <not set>
+
 KERNEL_MODULES_DIR  Path to a directory containing kernel modules to include in
                     the rootfs.
                     Default value: <empty>
@@ -87,7 +94,6 @@ ROOTFS_DIR          Path to the directory that is populated with the rootfs.
 USE_DOCKER          If set, build the rootfs inside a container (requires
                     Docker).
                     Default value: <not set>
-
 
 Refer to the Platform-OS Compatibility Matrix for more details on the supported
 architectures:
@@ -213,6 +219,16 @@ copy_kernel_modules()
 	OK "Kernel modules copied"
 }
 
+error_handler()
+{
+	[ "$?" -eq 0 ] && return
+
+	if [ -n "$GRACEFUL_EXIT" ] && [ -n "$BUILD_CAN_FAIL" ]; then
+		info "Detected a build error, but $distro is allowed to fail (BUILD_CAN_FAIL specified), so exiting sucessfully"
+		touch "$(dirname ${ROOTFS_DIR})/${distro}_fail"
+		exit 0
+	fi
+}
 
 while getopts a:hlo:r:t: opt
 do
@@ -271,6 +287,11 @@ fi
 CONFIG_DIR=${distro_config_dir}
 check_function_exist "build_rootfs"
 
+if [ -z "$INSIDE_CONTAINER" ] ; then
+	# Capture errors, but only outside of the docker container
+	trap error_handler ERR
+fi
+
 if [ -n "${USE_DOCKER}" ] ; then
 	image_name="${distro}-rootfs-osbuilder"
 
@@ -304,6 +325,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 		--env EXTRA_PKGS="${EXTRA_PKGS}" \
 		--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
+		--env INSIDE_CONTAINER=1 \
 		-v "${script_dir}":"/osbuilder" \
 		-v "${ROOTFS_DIR}":"/rootfs" \
 		-v "${script_dir}/../scripts":"/scripts" \
