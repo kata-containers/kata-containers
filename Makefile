@@ -328,6 +328,7 @@ const defaultDisableNestingChecks bool = $(DEFDISABLENESTINGCHECKS)
 const defaultMsize9p uint32 = $(DEFMSIZE9P)
 const defaultHotplugVFIOOnRootBus bool = $(DEFHOTPLUGVFIOONROOTBUS)
 const defaultEntropySource = "$(DEFENTROPYSOURCE)"
+const defaultGuestHookPath string = ""
 
 // Default config file used by stateless systems.
 var defaultRuntimeConfiguration = "$(CONFIG_PATH)"
