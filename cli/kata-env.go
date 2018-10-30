@@ -239,7 +239,8 @@ func getProxyInfo(config oci.RuntimeConfig) (ProxyInfo, error) {
 		return ProxyInfo{Type: string(config.ProxyType)}, nil
 	}
 
-	version, err := getCommandVersion(defaultProxyPath)
+	proxyConfig := config.ProxyConfig
+	version, err := getCommandVersion(proxyConfig.Path)
 	if err != nil {
 		version = unknown
 	}
@@ -247,24 +248,26 @@ func getProxyInfo(config oci.RuntimeConfig) (ProxyInfo, error) {
 	proxy := ProxyInfo{
 		Type:    string(config.ProxyType),
 		Version: version,
-		Path:    config.ProxyConfig.Path,
-		Debug:   config.ProxyConfig.Debug,
+		Path:    proxyConfig.Path,
+		Debug:   proxyConfig.Debug,
 	}
 
 	return proxy, nil
 }
 
 func getNetmonInfo(config oci.RuntimeConfig) (NetmonInfo, error) {
-	version, err := getCommandVersion(defaultNetmonPath)
+	netmonConfig := config.NetmonConfig
+
+	version, err := getCommandVersion(netmonConfig.Path)
 	if err != nil {
 		version = unknown
 	}
 
 	netmon := NetmonInfo{
 		Version: version,
-		Path:    config.NetmonConfig.Path,
-		Debug:   config.NetmonConfig.Debug,
-		Enable:  config.NetmonConfig.Enable,
+		Path:    netmonConfig.Path,
+		Debug:   netmonConfig.Debug,
+		Enable:  netmonConfig.Enable,
 	}
 
 	return netmon, nil
