@@ -18,6 +18,7 @@ import (
 	"syscall"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/opencontainers/runc/libcontainer/utils"
 )
@@ -107,7 +108,7 @@ func validCreateParams(ctx context.Context, containerID, bundlePath string) (str
 		return "", fmt.Errorf("Invalid bundle path '%s', it should be a directory", bundlePath)
 	}
 
-	resolved, err := resolvePath(bundlePath)
+	resolved, err := katautils.ResolvePath(bundlePath)
 	if err != nil {
 		return "", err
 	}

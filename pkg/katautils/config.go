@@ -1,9 +1,10 @@
 // Copyright (c) 2017 Intel Corporation
+// Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package main
+package katautils
 
 import (
 	"errors"
@@ -21,9 +22,12 @@ import (
 
 const (
 	defaultHypervisor = vc.QemuHypervisor
-	defaultProxy      = vc.KataProxyType
-	defaultShim       = vc.KataShimType
 	defaultAgent      = vc.KataContainersAgent
+)
+
+var (
+	defaultProxy = vc.KataProxyType
+	defaultShim  = vc.KataShimType
 )
 
 // The TOML configuration file contains a number of sections (or
@@ -134,7 +138,7 @@ func (h hypervisor) path() (string, error) {
 		p = defaultHypervisorPath
 	}
 
-	return resolvePath(p)
+	return ResolvePath(p)
 }
 
 func (h hypervisor) kernel() (string, error) {
@@ -144,7 +148,7 @@ func (h hypervisor) kernel() (string, error) {
 		p = defaultKernelPath
 	}
 
-	return resolvePath(p)
+	return ResolvePath(p)
 }
 
 func (h hypervisor) initrd() (string, error) {
@@ -154,7 +158,7 @@ func (h hypervisor) initrd() (string, error) {
 		return "", nil
 	}
 
-	return resolvePath(p)
+	return ResolvePath(p)
 }
 
 func (h hypervisor) image() (string, error) {
@@ -164,7 +168,7 @@ func (h hypervisor) image() (string, error) {
 		return "", nil
 	}
 
-	return resolvePath(p)
+	return ResolvePath(p)
 }
 
 func (h hypervisor) firmware() (string, error) {
@@ -177,7 +181,7 @@ func (h hypervisor) firmware() (string, error) {
 		p = defaultFirmwarePath
 	}
 
-	return resolvePath(p)
+	return ResolvePath(p)
 }
 
 func (h hypervisor) machineAccelerators() string {
@@ -330,7 +334,7 @@ func (s shim) path() (string, error) {
 		p = defaultShimPath
 	}
 
-	return resolvePath(p)
+	return ResolvePath(p)
 }
 
 func (s shim) debug() bool {
@@ -401,10 +405,10 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	useVSock := false
 	if h.useVSock() {
 		if utils.SupportsVsocks() {
-			kataLog.Info("vsock supported")
+			kataUtilsLogger.Info("vsock supported")
 			useVSock = true
 		} else {
-			kataLog.Warn("No vsock support, falling back to legacy serial port")
+			kataUtilsLogger.Warn("No vsock support, falling back to legacy serial port")
 		}
 	}
 
@@ -527,15 +531,9 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 	return nil
 }
 
-// loadConfiguration loads the configuration file and converts it into a
-// runtime configuration.
-//
-// If ignoreLogging is true, the system logger will not be initialised nor
-// will this function make any log calls.
-//
-// All paths are resolved fully meaning if this function does not return an
-// error, all paths are valid at the time of the call.
-func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPath string, config oci.RuntimeConfig, err error) {
+func initConfig(builtIn bool) (config oci.RuntimeConfig, err error) {
+	var defaultAgentConfig interface{}
+
 	defaultHypervisorConfig := vc.HypervisorConfig{
 		HypervisorPath:        defaultHypervisorPath,
 		KernelPath:            defaultKernelPath,
@@ -562,10 +560,17 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 
 	err = config.InterNetworkModel.SetModel(defaultInterNetworkingModel)
 	if err != nil {
-		return "", config, err
+		return oci.RuntimeConfig{}, err
 	}
 
-	defaultAgentConfig := vc.HyperConfig{}
+	defaultAgentConfig = vc.HyperConfig{}
+
+	if builtIn {
+		defaultProxy = vc.KataBuiltInProxyType
+		defaultShim = vc.KataBuiltInShimType
+
+		defaultAgentConfig = vc.KataAgentConfig{LongLiveConn: true}
+	}
 
 	config = oci.RuntimeConfig{
 		HypervisorType:   defaultHypervisor,
@@ -576,37 +581,51 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 		ShimType:         defaultShim,
 	}
 
+	return config, nil
+}
+
+// LoadConfiguration loads the configuration file and converts it into a
+// runtime configuration.
+//
+// If ignoreLogging is true, the system logger will not be initialised nor
+// will this function make any log calls.
+//
+// All paths are resolved fully meaning if this function does not return an
+// error, all paths are valid at the time of the call.
+func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolvedConfigPath string, config oci.RuntimeConfig, tracing bool, err error) {
 	var resolved string
+
+	config, err = initConfig(builtIn)
+	if err != nil {
+		return "", oci.RuntimeConfig{}, tracing, err
+	}
 
 	if configPath == "" {
 		resolved, err = getDefaultConfigFile()
 	} else {
-		resolved, err = resolvePath(configPath)
+		resolved, err = ResolvePath(configPath)
 	}
 
 	if err != nil {
-		return "", config, fmt.Errorf("Cannot find usable config file (%v)", err)
+		return "", config, tracing, fmt.Errorf("Cannot find usable config file (%v)", err)
 	}
 
 	configData, err := ioutil.ReadFile(resolved)
 	if err != nil {
-		return "", config, err
+		return "", config, tracing, err
 	}
 
 	var tomlConf tomlConfig
 	_, err = toml.Decode(string(configData), &tomlConf)
 	if err != nil {
-		return "", config, err
+		return "", config, tracing, err
 	}
 
-	if tomlConf.Runtime.Debug {
-		config.Debug = true
-		debug = true
-		crashOnError = true
-	} else {
+	config.Debug = tomlConf.Runtime.Debug
+	if !tomlConf.Runtime.Debug {
 		// If debug is not required, switch back to the original
 		// default log priority, otherwise continue in debug mode.
-		kataLog.Logger.Level = originalLoggerLevel
+		kataUtilsLogger.Logger.Level = originalLoggerLevel
 	}
 
 	tracing = tomlConf.Runtime.Tracing
@@ -614,17 +633,17 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	if tomlConf.Runtime.InterNetworkModel != "" {
 		err = config.InterNetworkModel.SetModel(tomlConf.Runtime.InterNetworkModel)
 		if err != nil {
-			return "", config, err
+			return "", config, tracing, err
 		}
 	}
 
 	if !ignoreLogging {
-		err = handleSystemLog("", "")
+		err := handleSystemLog("", "")
 		if err != nil {
-			return "", config, err
+			return "", config, tracing, err
 		}
 
-		kataLog.WithFields(
+		kataUtilsLogger.WithFields(
 			logrus.Fields{
 				"format": "TOML",
 				"file":   resolved,
@@ -632,26 +651,26 @@ func loadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	}
 
 	if err := updateRuntimeConfig(resolved, tomlConf, &config); err != nil {
-		return "", config, err
+		return "", config, tracing, err
 	}
 
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
 	if err := checkNetNsConfig(config); err != nil {
-		return "", config, err
+		return "", config, tracing, err
 	}
 
 	// use no proxy if HypervisorConfig.UseVSock is true
 	if config.HypervisorConfig.UseVSock {
-		kataLog.Info("VSOCK supported, configure to not use proxy")
+		kataUtilsLogger.Info("VSOCK supported, configure to not use proxy")
 		config.ProxyType = vc.NoProxyType
 		config.ProxyConfig = vc.ProxyConfig{}
 	}
 
 	if err := checkHypervisorConfig(config.HypervisorConfig); err != nil {
-		return "", config, err
+		return "", config, tracing, err
 	}
 
-	return resolved, config, nil
+	return resolved, config, tracing, nil
 }
 
 // checkNetNsConfig performs sanity checks on disable_new_netns config.
@@ -714,7 +733,6 @@ func checkHypervisorConfig(config vc.HypervisorConfig) error {
 
 			msg := fmt.Sprintf("VM memory (%dMB) smaller than image %q size (%dMB)",
 				memSizeMB, image.path, imageSizeMB)
-
 			if imageSizeMB >= memSizeMB {
 				if image.initrd {
 					// Initrd's need to be fully read into memory
@@ -726,7 +744,7 @@ func checkHypervisorConfig(config vc.HypervisorConfig) error {
 				// unusual to have an image larger
 				// than the amount of memory assigned
 				// to the VM.
-				kataLog.Warn(msg)
+				kataUtilsLogger.Warn(msg)
 			}
 		}
 	}
@@ -734,9 +752,9 @@ func checkHypervisorConfig(config vc.HypervisorConfig) error {
 	return nil
 }
 
-// getDefaultConfigFilePaths returns a list of paths that will be
+// GetDefaultConfigFilePaths returns a list of paths that will be
 // considered as configuration files in priority order.
-func getDefaultConfigFilePaths() []string {
+func GetDefaultConfigFilePaths() []string {
 	return []string{
 		// normally below "/etc"
 		defaultSysConfRuntimeConfiguration,
@@ -752,8 +770,8 @@ func getDefaultConfigFilePaths() []string {
 func getDefaultConfigFile() (string, error) {
 	var errs []string
 
-	for _, file := range getDefaultConfigFilePaths() {
-		resolved, err := resolvePath(file)
+	for _, file := range GetDefaultConfigFilePaths() {
+		resolved, err := ResolvePath(file)
 		if err == nil {
 			return resolved, nil
 		}
@@ -762,4 +780,19 @@ func getDefaultConfigFile() (string, error) {
 	}
 
 	return "", errors.New(strings.Join(errs, ", "))
+}
+
+// SetConfigOptions will override some of the defaults settings.
+func SetConfigOptions(n, runtimeConfig, sysRuntimeConfig string) {
+	if n != "" {
+		name = n
+	}
+
+	if runtimeConfig != "" {
+		defaultRuntimeConfiguration = runtimeConfig
+	}
+
+	if sysRuntimeConfig != "" {
+		defaultSysConfRuntimeConfiguration = sysRuntimeConfig
+	}
 }

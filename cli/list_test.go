@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
@@ -686,7 +687,7 @@ func TestListCLIFunctionQuiet(t *testing.T) {
 	assert.NoError(err)
 	f.Close()
 
-	text, err := getFileContents(output)
+	text, err := katautils.GetFileContents(output)
 	assert.NoError(err)
 
 	trimmed := strings.TrimSpace(text)

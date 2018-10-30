@@ -291,6 +291,8 @@ const systemdUnitName = "$(PROJECT_TAG).target"
 // original URL for this project
 const projectURL = "$(PROJECT_URL)"
 
+const defaultRootDirectory = "$(PKGRUNDIR)"
+
 // commit is the git commit the runtime is compiled from.
 var commit = "$(COMMIT)"
 
@@ -305,46 +307,12 @@ var checkCmd = fmt.Sprintf("%s-check", projectPrefix)
 var configFilePathOption = fmt.Sprintf("%s-config", projectPrefix)
 var showConfigPathsOption = fmt.Sprintf("%s-show-default-config-paths", projectPrefix)
 
-var defaultHypervisorPath = "$(QEMUPATH)"
-var defaultImagePath = "$(IMAGEPATH)"
-var defaultKernelPath = "$(KERNELPATH)"
-var defaultInitrdPath = "$(INITRDPATH)"
-var defaultFirmwarePath = "$(FIRMWAREPATH)"
-var defaultMachineAccelerators = "$(MACHINEACCELERATORS)"
-var defaultShimPath = "$(SHIMPATH)"
-
-const defaultKernelParams = "$(KERNELPARAMS)"
-const defaultMachineType = "$(MACHINETYPE)"
-const defaultRootDirectory = "$(PKGRUNDIR)"
-
-const defaultVCPUCount uint32 = $(DEFVCPUS)
-const defaultMaxVCPUCount uint32 = $(DEFMAXVCPUS)
-const defaultMemSize uint32 = $(DEFMEMSZ) // MiB
-const defaultMemSlots uint32 = $(DEFMEMSLOTS)
-const defaultBridgesCount uint32 = $(DEFBRIDGES)
-const defaultInterNetworkingModel = "$(DEFNETWORKMODEL)"
-const defaultDisableBlockDeviceUse bool = $(DEFDISABLEBLOCK)
-const defaultBlockDeviceDriver = "$(DEFBLOCKSTORAGEDRIVER)"
-const defaultEnableIOThreads bool = $(DEFENABLEIOTHREADS)
-const defaultEnableMemPrealloc bool = $(DEFENABLEMEMPREALLOC)
-const defaultEnableHugePages bool = $(DEFENABLEHUGEPAGES)
-const defaultEnableSwap bool = $(DEFENABLESWAP)
-const defaultEnableDebug bool = $(DEFENABLEDEBUG)
-const defaultDisableNestingChecks bool = $(DEFDISABLENESTINGCHECKS)
-const defaultMsize9p uint32 = $(DEFMSIZE9P)
-const defaultHotplugVFIOOnRootBus bool = $(DEFHOTPLUGVFIOONROOTBUS)
-const defaultEntropySource = "$(DEFENTROPYSOURCE)"
-const defaultGuestHookPath string = ""
-
 // Default config file used by stateless systems.
 var defaultRuntimeConfiguration = "$(CONFIG_PATH)"
 
 // Alternate config file that takes precedence over
 // defaultRuntimeConfiguration.
 var defaultSysConfRuntimeConfiguration = "$(SYSCONFIG)"
-
-var defaultProxyPath = "$(PROXYPATH)"
-var defaultNetmonPath = "$(NETMONPATH)"
 endef
 
 export GENERATED_CODE

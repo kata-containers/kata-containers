@@ -24,14 +24,30 @@ import (
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/stretchr/testify/assert"
+	"strconv"
 )
 
 const testProxyVersion = "proxy version 0.1"
 const testShimVersion = "shim version 0.1"
 const testNetmonVersion = "netmon version 0.1"
 const testHypervisorVersion = "QEMU emulator version 2.7.0+git.741f430a96-6.1, Copyright (c) 2003-2016 Fabrice Bellard and the QEMU Project developers"
+
+const defaultVCPUCount uint32 = 1
+const defaultMaxVCPUCount uint32 = 0
+const defaultMemSize uint32 = 2048 // MiB
+const defaultMsize9p uint32 = 8192
+const defaultGuestHookPath string = ""
+
+var (
+	hypervisorDebug = false
+	proxyDebug      = false
+	runtimeDebug    = false
+	shimDebug       = false
+	netmonDebug     = false
+)
 
 // makeVersionBinary creates a shell script with the specified file
 // name. When run as "file --version", it will display the specified
@@ -50,6 +66,57 @@ func makeVersionBinary(file, version string) error {
 	}
 
 	return nil
+}
+
+func createConfig(configPath string, fileData string) error {
+
+	err := ioutil.WriteFile(configPath, []byte(fileData), testFileMode)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to create config file %s %v\n", configPath, err)
+		return err
+	}
+
+	return nil
+}
+
+func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, netmonPath, logPath string, disableBlock bool, blockDeviceDriver string, enableIOThreads bool, hotplugVFIOOnRootBus, disableNewNetNs bool) string {
+	return `
+	# Runtime configuration file
+
+	[hypervisor.` + hypervisor + `]
+	path = "` + hypervisorPath + `"
+	kernel = "` + kernelPath + `"
+	block_device_driver =  "` + blockDeviceDriver + `"
+	kernel_params = "` + kernelParams + `"
+	image = "` + imagePath + `"
+	machine_type = "` + machineType + `"
+	default_vcpus = ` + strconv.FormatUint(uint64(defaultVCPUCount), 10) + `
+	default_maxvcpus = ` + strconv.FormatUint(uint64(defaultMaxVCPUCount), 10) + `
+	default_memory = ` + strconv.FormatUint(uint64(defaultMemSize), 10) + `
+	disable_block_device_use =  ` + strconv.FormatBool(disableBlock) + `
+	enable_iothreads =  ` + strconv.FormatBool(enableIOThreads) + `
+	hotplug_vfio_on_root_bus =  ` + strconv.FormatBool(hotplugVFIOOnRootBus) + `
+	msize_9p = ` + strconv.FormatUint(uint64(defaultMsize9p), 10) + `
+	enable_debug = ` + strconv.FormatBool(hypervisorDebug) + `
+	guest_hook_path = "` + defaultGuestHookPath + `"
+
+	[proxy.kata]
+	enable_debug = ` + strconv.FormatBool(proxyDebug) + `
+	path = "` + proxyPath + `"
+
+	[shim.kata]
+	path = "` + shimPath + `"
+	enable_debug = ` + strconv.FormatBool(shimDebug) + `
+
+	[agent.kata]
+
+	[netmon]
+	path = "` + netmonPath + `"
+	enable_debug = ` + strconv.FormatBool(netmonDebug) + `
+
+        [runtime]
+	enable_debug = ` + strconv.FormatBool(runtimeDebug) + `
+	disable_new_netns= ` + strconv.FormatBool(disableNewNetNs)
 }
 
 func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeConfig, err error) {
@@ -76,7 +143,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 
 	for _, file := range filesToCreate {
 		// files must exist and be >0 bytes.
-		err := writeFile(file, "foo", testFileMode)
+		err := katautils.WriteFile(file, "foo", testFileMode)
 		if err != nil {
 			return "", oci.RuntimeConfig{}, err
 		}
@@ -126,7 +193,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		return "", oci.RuntimeConfig{}, err
 	}
 
-	_, config, err = loadConfiguration(configFile, true)
+	_, config, _, err = katautils.LoadConfiguration(configFile, true, false)
 	if err != nil {
 		return "", oci.RuntimeConfig{}, err
 	}
@@ -812,7 +879,7 @@ func testEnvShowTOMLSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 		return err
 	}
 
-	contents, err := getFileContents(tmpfile.Name())
+	contents, err := katautils.GetFileContents(tmpfile.Name())
 	assert.NoError(t, err)
 
 	buf := new(bytes.Buffer)
@@ -881,7 +948,7 @@ func testEnvShowJSONSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 		return err
 	}
 
-	contents, err := getFileContents(tmpfile.Name())
+	contents, err := katautils.GetFileContents(tmpfile.Name())
 	assert.NoError(t, err)
 
 	buf := new(bytes.Buffer)
