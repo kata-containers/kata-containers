@@ -22,6 +22,8 @@ readonly test_config=${script_dir}/test_config.sh
 readonly rootfs_builder=${script_dir}/../rootfs-builder/rootfs.sh
 readonly RUNTIME=${RUNTIME:-kata-runtime}
 readonly MACHINE_TYPE=`uname -m`
+readonly CI=${CI:-}
+readonly ci_results_dir="/var/osbuilder/tests"
 
 # all distro tests must have this prefix
 readonly test_func_prefix="test_distro_"
@@ -221,6 +223,11 @@ setup()
 	[ -z "$images_dir" ] && die "need images directory"
 	mkdir -p "${images_dir}"
 
+	if [ -n "$CI" ]; then
+		sudo -E rm -rf ${ci_results_dir}
+		sudo -E mkdir -p ${ci_results_dir}
+	fi
+
 	export USE_DOCKER=true
 
 	# Travis doesn't support VT-x
@@ -258,7 +265,7 @@ get_distros_config()
 	for d in ${distrosList[@]}; do
 		debug "Getting config for distro $d"
 		distroPattern="\<${d}\>"
-		if [[ "${skipWhenTestingAll[@]}" =~ $distroPattern ]]; then
+		if [[ "${skipWhenTestingAll[@]:-}" =~ $distroPattern ]]; then
 			info "Skipping distro $d as specified by $(basename ${test_config})"
 			continue
 		fi
@@ -360,7 +367,7 @@ call_make() {
 	done
 
 	makeJobs=
-	if [ -z "${CI:-}" ]; then
+	if [ -z "$CI" ]; then
 	  ((makeJobs=$(nproc) / 2))
 	fi
 
@@ -385,12 +392,24 @@ make_initrd() {
 }
 
 get_rootfs_size() {
-	[ $# -ne 1 ] && die "get_rootfs_size with wrong invalid argument"
+	[ $# -ne 1 ] && die "get_rootfs_size: wrong number of arguments"
 
 	local rootfs_dir=$1
 	! [ -d "$rootfs_dir" ] && die "$rootfs_dir is not a valid rootfs path"
 
 	sudo -E du -sb "${rootfs_dir}" | awk '{print $1}'
+}
+
+
+show_rootfs_metadata() {
+	[ $# -ne 1 ] && die "show_rootfs_metadata: wrong number of arguments"
+	local rootfs_path=$1
+	local osbuilder_file_fullpath="${rootfs_path}/${osbuilder_file}"
+	echo -e "$separator"
+	yamllint "${osbuilder_file_fullpath}"
+
+	info "osbuilder metadata file for $d:"
+	cat "${osbuilder_file_fullpath}" >&2
 }
 
 # Create an image and/or initrd for the available distributions,
@@ -408,6 +427,10 @@ test_distros()
 	local distro="$1"
 	get_distros_config "$distro"
 	local separator="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
+	local commonMakeVars=( \
+		USE_DOCKER=true \
+		ROOTFS_BUILD_DEST="$tmp_rootfs" \
+		IMAGES_BUILD_DEST="$images_dir" )
 
 	echo -e "$separator"
 
@@ -429,6 +452,8 @@ test_distros()
 
 	else
 		info "Running tests for all distros"
+		# Graceful exit allowed for selected distros, but only when testing all distros
+		commonMakeVars+=(GRACEFUL_EXIT=1)
 	fi
 
 	# distro with systemd as init    -> normal rootfs image
@@ -436,11 +461,6 @@ test_distros()
 
 	# If user does not need rootfs images, then do not build systemd rootfses
 	[ -z "$build_images" ] && distrosSystemd=()
-
-	commonMakeVars=( \
-		USE_DOCKER=true \
-		ROOTFS_BUILD_DEST="$tmp_rootfs" \
-		IMAGES_BUILD_DEST="$images_dir" )
 
 	# Build systemd and agent rootfs with 2 separate jobs
 	bgJobs=()
@@ -462,18 +482,6 @@ test_distros()
 		wait $j || die "Background build job failed"
 	done
 
-
-	for d in ${distrosSystemd[@]} ${distrosAgent[@]}; do
-		local rootfs_path="${tmp_rootfs}/${d}_rootfs"
-		osbuilder_file_fullpath="${rootfs_path}/${osbuilder_file}"
-		echo -e "$separator"
-		yamllint "${osbuilder_file_fullpath}"
-
-		info "osbuilder metadata file for $d:"
-		cat "${osbuilder_file_fullpath}" >&2
-	done
-
-
 	# TODO: once support for rootfs images with kata-agent as init is in place,
 	# uncomment the following line
 #	for d in ${distrosSystemd[@]} ${distrosAgent[@]}; do
@@ -482,6 +490,14 @@ test_distros()
 		local image_path="${images_dir}/kata-containers-image-$d.img"
 		local rootfs_size=$(get_rootfs_size "$rootfs_path")
 
+		# Skip failed distros
+		if [ -e "${tmp_rootfs}/${d}_fail" ]; then
+			info "Building rootfs for ${d} failed, not creating an image"
+			[ -n "$CI" ] && sudo -E touch "${ci_results_dir}/${d}_fail"
+			continue
+		fi
+
+		show_rootfs_metadata "$rootfs_path"
 		echo -e "$separator"
 		info "Making rootfs image for ${d}"
 		make_image ${commonMakeVars[@]} $d
@@ -497,6 +513,13 @@ test_distros()
 		local rootfs_path="${tmp_rootfs}/${d}_rootfs"
 		local initrd_path="${images_dir}/kata-containers-initrd-$d.img"
 		local rootfs_size=$(get_rootfs_size "$rootfs_path")
+
+		# Skip failed distros
+		if [ -e "${tmp_rootfs}/${d}_fail" ]; then
+			info "Building rootfs for ${d} failed, not creating an initrd"
+			[ -n "$CI" ] && touch "${ci_results_dir}/${d}_fail"
+			continue
+		fi
 
 		echo -e "$separator"
 		info "Making initrd image for ${d}"
