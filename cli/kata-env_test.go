@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const testProxyURL = "file:///proxyURL"
 const testProxyVersion = "proxy version 0.1"
 const testShimVersion = "shim version 0.1"
 const testNetmonVersion = "netmon version 0.1"
@@ -68,10 +67,6 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	disableNewNetNs := false
-
-	// override
-	defaultProxyPath = proxyPath
-	defaultNetmonPath = netmonPath
 
 	filesToCreate := []string{
 		hypervisorPath,
@@ -115,7 +110,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		kernelParams,
 		machineType,
 		shimPath,
-		testProxyURL,
+		proxyPath,
 		netmonPath,
 		logPath,
 		disableBlock,
@@ -626,7 +621,7 @@ func TestEnvGetProxyInfoNoVersion(t *testing.T) {
 	assert.NoError(t, err)
 
 	// remove the proxy ensuring its version cannot be queried
-	err = os.Remove(defaultProxyPath)
+	err = os.Remove(config.ProxyConfig.Path)
 	assert.NoError(t, err)
 
 	expectedProxy.Version = unknown
@@ -670,7 +665,7 @@ func TestEnvGetNetmonInfoNoVersion(t *testing.T) {
 	assert.NoError(t, err)
 
 	// remove the netmon ensuring its version cannot be queried
-	err = os.Remove(defaultNetmonPath)
+	err = os.Remove(config.NetmonConfig.Path)
 	assert.NoError(t, err)
 
 	expectedNetmon.Version = unknown
