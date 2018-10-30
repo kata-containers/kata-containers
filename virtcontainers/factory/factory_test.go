@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/factory/base"
 )
 
 func TestNewFactory(t *testing.T) {
@@ -247,4 +248,67 @@ func TestFactoryGetVM(t *testing.T) {
 	assert.Nil(err)
 
 	f.CloseFactory(ctx)
+}
+
+func TestDeepCompare(t *testing.T) {
+	assert := assert.New(t)
+
+	foo := vc.VMConfig{}
+	bar := vc.VMConfig{}
+	assert.True(deepCompare(foo, bar))
+
+	foo.HypervisorConfig.NumVCPUs = 1
+	assert.False(deepCompare(foo, bar))
+	bar.HypervisorConfig.NumVCPUs = 1
+	assert.True(deepCompare(foo, bar))
+
+	// slice
+	foo.HypervisorConfig.KernelParams = []vc.Param{}
+	assert.True(deepCompare(foo, bar))
+	foo.HypervisorConfig.KernelParams = append(foo.HypervisorConfig.KernelParams, vc.Param{Key: "key", Value: "value"})
+	assert.False(deepCompare(foo, bar))
+	bar.HypervisorConfig.KernelParams = append(bar.HypervisorConfig.KernelParams, vc.Param{Key: "key", Value: "value"})
+	assert.True(deepCompare(foo, bar))
+
+	// map
+	var fooMap map[string]vc.VMConfig
+	var barMap map[string]vc.VMConfig
+	assert.False(deepCompare(foo, fooMap))
+	assert.True(deepCompare(fooMap, barMap))
+	fooMap = make(map[string]vc.VMConfig)
+	assert.True(deepCompare(fooMap, barMap))
+	fooMap["foo"] = foo
+	assert.False(deepCompare(fooMap, barMap))
+	barMap = make(map[string]vc.VMConfig)
+	assert.False(deepCompare(fooMap, barMap))
+	barMap["foo"] = bar
+	assert.True(deepCompare(fooMap, barMap))
+
+	// invalid interface
+	var f1 vc.Factory
+	var f2 vc.Factory
+	var f3 base.FactoryBase
+	assert.True(deepCompare(f1, f2))
+	assert.True(deepCompare(f1, f3))
+
+	// valid interface
+	var config Config
+	var err error
+	ctx := context.Background()
+	config.VMConfig = vc.VMConfig{
+		HypervisorType: vc.MockHypervisor,
+		AgentType:      vc.NoopAgentType,
+		ProxyType:      vc.NoopProxyType,
+	}
+	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
+	config.VMConfig.HypervisorConfig = vc.HypervisorConfig{
+		KernelPath: testDir,
+		ImagePath:  testDir,
+	}
+	f1, err = NewFactory(ctx, config, false)
+	assert.Nil(err)
+	assert.True(deepCompare(f1, f1))
+	f2, err = NewFactory(ctx, config, false)
+	assert.Nil(err)
+	assert.False(deepCompare(f1, f2))
 }
