@@ -18,8 +18,8 @@ import (
 	"testing"
 
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/kata-containers/agent/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
