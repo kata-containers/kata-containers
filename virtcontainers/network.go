@@ -22,7 +22,7 @@ import (
 	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
 
-	"github.com/kata-containers/agent/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
@@ -1182,7 +1182,7 @@ func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*types.Interface
 			}
 			netMask, _ := addr.Mask.Size()
 			ipAddress := types.IPAddress{
-				Family:  types.IPFamily_v4,
+				Family:  netlink.FAMILY_V4,
 				Address: addr.IP.String(),
 				Mask:    fmt.Sprintf("%d", netMask),
 			}

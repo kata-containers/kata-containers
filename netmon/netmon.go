@@ -21,8 +21,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kata-containers/agent/pkg/types"
 	"github.com/kata-containers/runtime/pkg/signals"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 	"github.com/vishvananda/netlink"
@@ -275,7 +275,7 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) types.
 		netMask, _ := addr.Mask.Size()
 
 		ipAddr := &types.IPAddress{
-			Family:  types.IPFamily(netlinkFamily),
+			Family:  netlinkFamily,
 			Address: addr.IP.String(),
 			Mask:    fmt.Sprintf("%d", netMask),
 		}

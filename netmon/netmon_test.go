@@ -16,7 +16,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/kata-containers/agent/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
@@ -181,7 +181,7 @@ func TestConvertInterface(t *testing.T) {
 		HwAddr: testHwAddr,
 		IPAddresses: []*types.IPAddress{
 			{
-				Family:  types.IPFamily(netlinkFamily),
+				Family:  netlinkFamily,
 				Address: testIPAddress,
 				Mask:    "0",
 			},
