@@ -359,6 +359,7 @@ check_license_headers()
 		--exclude="*.md" \
 		--exclude="*.png" \
 		--exclude="*.pub" \
+		--exclude="*.service" \
 		--exclude="*.toml" \
 		--exclude="*.txt" \
 		--exclude="*.yaml" \
