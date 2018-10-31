@@ -46,10 +46,11 @@ $ SRCDIR=$PWD ./tools/build_aarch64.sh
 
 After those commands have successfully returned, you will find the NEMU binary at `$HOME/build-x86_64_virt/x86_64_virt-softmmu/qemu-system-x86_64_virt` (__x86__), or `$HOME/build-aarch64/aarch64-softmmu/qemu-system-aarch64` (__ARM__).
 
-You also need the `OVMF` firmware in order to boot the virtual machine's kernel. It can currently be found at this [location](https://github.com/intel/ovmf-virt/releases). Please choose the latest version of this firmware (`v0.4` in this example):
+You also need the `OVMF` firmware in order to boot the virtual machine's kernel. It can currently be found at this [location](https://github.com/intel/ovmf-virt/releases).
 ```bash
 $ sudo mkdir -p /usr/share/nemu
-$ curl -L https://github.com/intel/ovmf-virt/releases/download/0.4/OVMF.fd
+$ OVMF_URL=$(curl -sL https://api.github.com/repos/intel/ovmf-virt/releases/latest | jq -S '.assets[0].browser_download_url')
+$ curl -o OVMF.fd -L $(sed -e 's/^"//' -e 's/"$//' <<<"$OVMF_URL")
 $ sudo install -o root -g root -m 0640 OVMF.fd /usr/share/nemu/
 ```
 > **Note:** The OVMF firmware will be located at this temporary location until the changes can be pushed upstream.
