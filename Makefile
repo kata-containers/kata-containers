@@ -94,8 +94,8 @@ vm-factory:
 
 network:
 	bash -f .ci/install_bats.sh
-	cd integration/network/macvlan && \
-	bats macvlan_driver.bats
+	bats integration/network/macvlan/macvlan_driver.bats
+	bats integration/network/ipvlan/ipvlan_driver.bats
 
 ramdisk:
 	bash -f integration/ramdisk/ramdisk.sh
