@@ -71,11 +71,6 @@ branch=
 # - We got get changes if versions.yaml changed.
 ${GOPATH}/src/${tests_repo}/.ci/install_go.sh -p -f
 
-# Make sure runc is default runtime.
-# This is needed in case a new image creation.
-# See https://github.com/clearcontainers/osbuilder/issues/8
-"${GOPATH}/src/${tests_repo}/cmd/container-manager/manage_ctr_mgr.sh" docker configure -r runc -f
-
 if [ -n "$pr_number" ]; then
 	export branch="${ghprbTargetBranch}"
 	export pr_branch="PR_${pr_number}"
