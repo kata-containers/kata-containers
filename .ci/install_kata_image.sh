@@ -105,6 +105,11 @@ build_image() {
 	# Clone os-builder repository
 	go get -d "${osbuilder_repo}" || true
 
+	# Make sure runc is default runtime.
+	# The image builder with USER_DOCKER=true will not work otherwise.
+	# See https://github.com/clearcontainers/osbuilder/issues/8
+	"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker configure -r runc -f
+
 	(cd "${GOPATH}/src/${osbuilder_repo}/rootfs-builder" && \
 		sudo -E AGENT_INIT="${AGENT_INIT}" AGENT_VERSION="${agent_commit}" \
 		GOPATH="$GOPATH" USE_DOCKER=true ./rootfs.sh "${OSBUILDER_DISTRO}")
