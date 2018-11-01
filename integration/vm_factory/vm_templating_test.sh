@@ -65,9 +65,15 @@ check_qemu_for_vm_template() {
 	[ $? -eq 0 ] || die "vm is not backed by vm template"
 }
 
+check_vm_template_network_setup() {
+	IPADDR=$(sudo docker exec -t $CONTAINER_NAME ip addr show eth0| sed -ne "s|.*inet \(.*\)/.* brd .*|\1|p")
+	[[ ${IPADDR} =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "vm eth0 ip is ${IPADDR}"
+}
+
 test_create_container_with_vm_template() {
 	sudo docker run --runtime=$RUNTIME -d --name $CONTAINER_NAME $IMAGE $PAYLOAD_ARGS
 	check_qemu_for_vm_template
+	check_vm_template_network_setup
 	sudo docker rm -f $CONTAINER_NAME
 }
 
@@ -87,6 +93,7 @@ test_docker_create_auto_init_vm_factory() {
 	sudo docker run --runtime=$RUNTIME -d --name $CONTAINER_NAME $IMAGE $PAYLOAD_ARGS
 	check_vm_template_factory
 	check_qemu_for_vm_template
+	check_vm_template_network_setup
 	sudo docker rm -f $CONTAINER_NAME
 	destroy_vm_template
 	disable_vm_template_config
