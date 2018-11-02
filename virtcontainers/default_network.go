@@ -40,7 +40,7 @@ func (n *defNetwork) run(networkNSPath string, cb func() error) error {
 }
 
 // add adds all needed interfaces inside the network namespace.
-func (n *defNetwork) add(s *Sandbox) error {
+func (n *defNetwork) add(s *Sandbox, hotplug bool) error {
 	span, _ := n.trace(s.ctx, "add")
 	defer span.Finish()
 
@@ -53,9 +53,15 @@ func (n *defNetwork) add(s *Sandbox) error {
 
 	err = doNetNS(s.config.NetworkConfig.NetNSPath, func(_ ns.NetNS) error {
 		for _, endpoint := range s.networkNS.Endpoints {
-			n.logger().WithField("endpoint-type", endpoint.Type()).Info("Attaching endpoint")
-			if err := endpoint.Attach(s.hypervisor); err != nil {
-				return err
+			n.logger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
+			if hotplug {
+				if err := endpoint.HotAttach(s.hypervisor); err != nil {
+					return err
+				}
+			} else {
+				if err := endpoint.Attach(s.hypervisor); err != nil {
+					return err
+				}
 			}
 		}
 
@@ -72,16 +78,22 @@ func (n *defNetwork) add(s *Sandbox) error {
 
 // remove network endpoints in the network namespace. It also deletes the network
 // namespace in case the namespace has been created by us.
-func (n *defNetwork) remove(s *Sandbox) error {
+func (n *defNetwork) remove(s *Sandbox, hotunplug bool) error {
 	span, _ := n.trace(s.ctx, "remove")
 	defer span.Finish()
 
 	for _, endpoint := range s.networkNS.Endpoints {
 		// Detach for an endpoint should enter the network namespace
 		// if required.
-		n.logger().WithField("endpoint-type", endpoint.Type()).Info("Detaching endpoint")
-		if err := endpoint.Detach(s.networkNS.NetNsCreated, s.networkNS.NetNsPath); err != nil {
-			return err
+		n.logger().WithField("endpoint-type", endpoint.Type()).WithField("hotunplug", hotunplug).Info("Detaching endpoint")
+		if hotunplug {
+			if err := endpoint.HotDetach(s.hypervisor, s.networkNS.NetNsCreated, s.networkNS.NetNsPath); err != nil {
+				return err
+			}
+		} else {
+			if err := endpoint.Detach(s.networkNS.NetNsCreated, s.networkNS.NetNsPath); err != nil {
+				return err
+			}
 		}
 	}
 

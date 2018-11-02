@@ -1194,6 +1194,7 @@ func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*types.Interface
 			Name:        endpoint.Name(),
 			Mtu:         uint64(endpoint.Properties().Iface.MTU),
 			HwAddr:      endpoint.HardwareAddr(),
+			PciAddr:     endpoint.PciAddr(),
 		}
 
 		ifaces = append(ifaces, &ifc)
@@ -1429,9 +1430,9 @@ type network interface {
 	run(networkNSPath string, cb func() error) error
 
 	// add adds all needed interfaces inside the network namespace.
-	add(sandbox *Sandbox) error
+	add(sandbox *Sandbox, hotplug bool) error
 
 	// remove unbridges and deletes TAP interfaces. It also removes virtual network
 	// interfaces and deletes the network namespace.
-	remove(sandbox *Sandbox) error
+	remove(sandbox *Sandbox, hotunplug bool) error
 }
