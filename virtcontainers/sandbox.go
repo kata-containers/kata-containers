@@ -1049,22 +1049,18 @@ func (s *Sandbox) createNetwork() error {
 		NetNsCreated: s.config.NetworkConfig.NetNsCreated,
 	}
 
-	// In case there is a factory, the network should be handled
-	// through some calls at the API level, in order to add or
-	// remove interfaces and routes.
-	// This prevents from any assumptions that could be made from
-	// virtcontainers, in particular that the VM has not been started
-	// before it starts to scan the current network.
+	// In case there is a factory, network interfaces are hotplugged
+	// after vm is started.
 	if s.factory == nil {
 		// Add the network
-		if err := s.network.add(s); err != nil {
+		if err := s.network.add(s, false); err != nil {
 			return err
 		}
-	}
 
-	if s.config.NetworkConfig.NetmonConfig.Enable {
-		if err := s.startNetworkMonitor(); err != nil {
-			return err
+		if s.config.NetworkConfig.NetmonConfig.Enable {
+			if err := s.startNetworkMonitor(); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1082,14 +1078,7 @@ func (s *Sandbox) removeNetwork() error {
 		}
 	}
 
-	// In case there is a factory, the network has been handled through
-	// some API calls to hotplug some interfaces and routes. This means
-	// the removal of the network should follow the same logic.
-	if s.factory != nil {
-		return nil
-	}
-
-	return s.network.remove(s)
+	return s.network.remove(s, s.factory != nil)
 }
 
 func (s *Sandbox) generateNetInfo(inf *types.Interface) (NetworkInfo, error) {
@@ -1200,8 +1189,6 @@ func (s *Sandbox) startVM() error {
 
 	s.Logger().Info("Starting VM")
 
-	// FIXME: This would break cached VMs. We need network hotplug and move
-	// oci hooks and netns handling to cli. See #273.
 	if err := s.network.run(s.networkNS.NetNsPath, func() error {
 		if s.factory != nil {
 			vm, err := s.factory.GetVM(ctx, VMConfig{
@@ -1231,6 +1218,24 @@ func (s *Sandbox) startVM() error {
 		return err
 	}
 
+	// In case of vm factory, network interfaces are hotplugged
+	// after vm is started.
+	if s.factory != nil {
+		if err := s.network.add(s, true); err != nil {
+			return err
+		}
+
+		if s.config.NetworkConfig.NetmonConfig.Enable {
+			if err := s.startNetworkMonitor(); err != nil {
+				return err
+			}
+		}
+		if err := s.storage.storeSandboxNetwork(s.id, s.networkNS); err != nil {
+			return err
+		}
+	}
+
+	// Store the network
 	s.Logger().Info("VM started")
 
 	return nil
