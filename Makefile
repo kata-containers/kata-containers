@@ -225,6 +225,7 @@ USER_VARS += DEFDISABLENESTINGCHECKS
 USER_VARS += DEFMSIZE9P
 USER_VARS += DEFHOTPLUGVFIOONROOTBUS
 USER_VARS += DEFENTROPYSOURCE
+USER_VARS += BUILDFLAGS
 
 
 V              = @
@@ -236,6 +237,9 @@ QUIET_CONFIG   = $(Q:@=@echo    '     CONFIG  '$@;)
 QUIET_GENERATE = $(Q:@=@echo    '     GENERATE '$@;)
 QUIET_INST     = $(Q:@=@echo    '     INSTALL '$@;)
 QUIET_TEST     = $(Q:@=@echo    '     TEST    '$@;)
+
+# go build common flags
+BUILDFLAGS := -buildmode=pie
 
 # Return non-empty string if specified directory exists
 define DIR_EXISTS
@@ -252,7 +256,7 @@ all: runtime netmon
 netmon: $(NETMON_TARGET_OUTPUT)
 
 $(NETMON_TARGET_OUTPUT): $(SOURCES)
-	$(QUIET_BUILD)(cd $(NETMON_DIR) && go build -i -o $@ -ldflags "-X main.version=$(VERSION)")
+	$(QUIET_BUILD)(cd $(NETMON_DIR) && go build $(BUILDFLAGS) -o $@ -ldflags "-X main.version=$(VERSION)")
 
 runtime: $(TARGET_OUTPUT) $(CONFIG)
 .DEFAULT: default
@@ -359,7 +363,7 @@ $(GENERATED_CONFIG): Makefile VERSION
 	$(QUIET_GENERATE)echo "$$GENERATED_CODE" >$@
 
 $(TARGET_OUTPUT): $(EXTRA_DEPS) $(SOURCES) $(GENERATED_GO_FILES) $(GENERATED_FILES) Makefile | show-summary
-	$(QUIET_BUILD)(cd $(CLI_DIR) && go build -i -o $@ .)
+	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(BUILDFLAGS) -o $@ .)
 
 .PHONY: \
 	check \
