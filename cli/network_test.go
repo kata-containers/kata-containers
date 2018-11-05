@@ -18,8 +18,8 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/kata-containers/agent/pkg/types"
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -23,7 +23,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"github.com/kata-containers/agent/pkg/types"
+	aTypes "github.com/kata-containers/agent/pkg/types"
 	pb "github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
@@ -31,6 +31,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
 )
 
 var (
@@ -185,16 +186,16 @@ func (p *gRPCProxy) DestroySandbox(ctx context.Context, req *pb.DestroySandboxRe
 	return emptyResp, nil
 }
 
-func (p *gRPCProxy) AddInterface(ctx context.Context, req *pb.AddInterfaceRequest) (*types.Interface, error) {
+func (p *gRPCProxy) AddInterface(ctx context.Context, req *pb.AddInterfaceRequest) (*aTypes.Interface, error) {
 	return nil, nil
 }
 
-func (p *gRPCProxy) RemoveInterface(ctx context.Context, req *pb.RemoveInterfaceRequest) (*types.Interface, error) {
+func (p *gRPCProxy) RemoveInterface(ctx context.Context, req *pb.RemoveInterfaceRequest) (*aTypes.Interface, error) {
 	return nil, nil
 }
 
-func (p *gRPCProxy) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*types.Interface, error) {
-	return &types.Interface{}, nil
+func (p *gRPCProxy) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*aTypes.Interface, error) {
+	return &aTypes.Interface{}, nil
 }
 
 func (p *gRPCProxy) UpdateRoutes(ctx context.Context, req *pb.UpdateRoutesRequest) (*pb.Routes, error) {

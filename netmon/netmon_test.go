@@ -16,7 +16,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/kata-containers/agent/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
@@ -174,6 +174,8 @@ func TestConvertInterface(t *testing.T) {
 		HardwareAddr: hwAddr,
 	}
 
+	linkType := "link_type_test"
+
 	expected := types.Interface{
 		Device: testIfaceName,
 		Name:   testIfaceName,
@@ -181,14 +183,15 @@ func TestConvertInterface(t *testing.T) {
 		HwAddr: testHwAddr,
 		IPAddresses: []*types.IPAddress{
 			{
-				Family:  types.IPFamily(netlinkFamily),
+				Family:  netlinkFamily,
 				Address: testIPAddress,
 				Mask:    "0",
 			},
 		},
+		LinkType: linkType,
 	}
 
-	got := convertInterface(linkAttrs, addrs)
+	got := convertInterface(linkAttrs, linkType, addrs)
 	assert.True(t, reflect.DeepEqual(expected, got),
 		"Got %+v\nExpected %+v", got, expected)
 }
@@ -264,10 +267,11 @@ func testCreateDummyNetwork(t *testing.T, handler *netlink.Handle) (int, types.I
 	assert.NotNil(t, attrs)
 
 	iface := types.Interface{
-		Device: testIfaceName,
-		Name:   testIfaceName,
-		Mtu:    uint64(testMTU),
-		HwAddr: testHwAddr,
+		Device:   testIfaceName,
+		Name:     testIfaceName,
+		Mtu:      uint64(testMTU),
+		HwAddr:   testHwAddr,
+		LinkType: link.Type(),
 	}
 
 	return attrs.Index, iface

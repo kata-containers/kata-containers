@@ -11,9 +11,9 @@ import (
 	"runtime"
 	"syscall"
 
-	"github.com/kata-containers/agent/pkg/types"
 	deviceApi "github.com/kata-containers/runtime/virtcontainers/device/api"
 	deviceConfig "github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"

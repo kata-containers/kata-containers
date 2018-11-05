@@ -21,8 +21,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kata-containers/agent/pkg/types"
 	"github.com/kata-containers/runtime/pkg/signals"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 	"github.com/vishvananda/netlink"
@@ -259,7 +259,7 @@ func (n *netmon) listenNetlinkEvents() error {
 // convertInterface converts a link and its IP addresses as defined by netlink
 // package, into the Interface structure format expected by kata-runtime to
 // describe an interface and its associated IP addresses.
-func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) types.Interface {
+func convertInterface(linkAttrs *netlink.LinkAttrs, linkType string, addrs []netlink.Addr) types.Interface {
 	if linkAttrs == nil {
 		netmonLog.Warn("Link attributes are nil")
 		return types.Interface{}
@@ -275,7 +275,7 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) types.
 		netMask, _ := addr.Mask.Size()
 
 		ipAddr := &types.IPAddress{
-			Family:  types.IPFamily(netlinkFamily),
+			Family:  netlinkFamily,
 			Address: addr.IP.String(),
 			Mask:    fmt.Sprintf("%d", netMask),
 		}
@@ -289,6 +289,7 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, addrs []netlink.Addr) types.
 		IPAddresses: ipAddrs,
 		Mtu:         uint64(linkAttrs.MTU),
 		HwAddr:      linkAttrs.HardwareAddr.String(),
+		LinkType:    linkType,
 	}
 
 	netmonLog.WithField("interface", iface).Debug("Interface converted")
@@ -369,7 +370,7 @@ func (n *netmon) scanNetwork() error {
 			continue
 		}
 
-		iface := convertInterface(linkAttrs, addrs)
+		iface := convertInterface(linkAttrs, link.Type(), addrs)
 		n.netIfaces[linkAttrs.Index] = iface
 	}
 
@@ -497,7 +498,7 @@ func (n *netmon) handleRTMNewLink(ev netlink.LinkUpdate) error {
 	}
 
 	// Convert the interfaces in the appropriate structure format.
-	iface := convertInterface(linkAttrs, addrs)
+	iface := convertInterface(linkAttrs, ev.Link.Type(), addrs)
 
 	// Add the interface through the Kata CLI.
 	if err := n.addInterfaceCLI(iface); err != nil {
