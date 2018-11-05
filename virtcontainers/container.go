@@ -374,6 +374,9 @@ func (c *Container) GetAnnotations() map[string]string {
 
 // storeContainer stores a container config.
 func (c *Container) storeContainer() error {
+	if err := c.sandbox.newStore.Dump(); err != nil {
+		return err
+	}
 	return c.store.Store(store.Configuration, *(c.config))
 }
 
