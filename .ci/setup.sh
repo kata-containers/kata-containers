@@ -64,7 +64,7 @@ enable_nested_virtualization() {
 			fi
 		fi
 		;;
-	aarch64)
+	aarch64 | ppc64le)
 		info "CI running in bare machine"
 		;;
 	*)

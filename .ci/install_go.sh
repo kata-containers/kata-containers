@@ -104,6 +104,11 @@ case "$(arch)" in
 	"x86_64")
 		goarch=amd64
 		;;
+
+	"ppc64le")
+		goarch=ppc64le
+		;;
+		
 	"*")
 		die "Arch $(arch) not supported"
 		;;
