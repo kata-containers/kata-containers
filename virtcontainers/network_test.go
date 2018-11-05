@@ -11,7 +11,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/kata-containers/agent/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 )
@@ -162,8 +162,8 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	// Build expected results:
 	//
 	expectedAddresses := []*types.IPAddress{
-		{Family: 0, Address: "172.17.0.2", Mask: "16"},
-		{Family: 0, Address: "182.17.0.2", Mask: "16"},
+		{Family: netlink.FAMILY_V4, Address: "172.17.0.2", Mask: "16"},
+		{Family: netlink.FAMILY_V4, Address: "182.17.0.2", Mask: "16"},
 	}
 
 	expectedInterfaces := []*types.Interface{
