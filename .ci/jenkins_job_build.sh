@@ -52,8 +52,15 @@ mkdir -p $(dirname "${kata_repo_dir}")
 
 # If CI running on bare-metal, a few clean-up work before walking into test repo
 if [ "${BAREMETAL}" == true ]; then
+	arch=$("${tests_repo_dir}/.ci/kata-arch.sh")
+	echo "Looking for baremetal cleanup script for arch ${arch}"
 	clean_up_script="${tests_repo_dir}/.ci/${arch}/clean_up_${arch}.sh"
-	[ -f "${clean_up_script}" ] && source "${clean_up_script}"
+	if [ -f "${clean_up_script}" ]; then
+		echo "Running baremetal cleanup script for arch ${arch}"
+		"${clean_up_script}"
+	else
+		echo "No baremetal cleanup script for arch ${arch}"
+	fi
 fi
 
 pushd "${kata_repo_dir}"
