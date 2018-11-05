@@ -175,6 +175,7 @@ write_iops_line_plot <- ggplot() +
 # the blocksizes.
 write_clat_box_plot <- ggplot() +
 	geom_boxplot( data=all_ldata, aes(blocksize, percentile, color=runtime)) +
+	stat_summary( data=all_ldata, aes(blocksize, percentile, group=runtime, color=runtime), fun.y=mean, geom="line") +
 	ylim(0, NA) +
 	ggtitle("Random Write completion latency", subtitle="95&98 Percentiles, boxplot across jobs") +
 	xlab("Blocksize") +
