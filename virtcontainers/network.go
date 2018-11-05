@@ -100,7 +100,7 @@ func (n *NetInterworkingModel) SetModel(modelName string) error {
 	case tcFilterNetModelStr:
 		*n = NetXConnectTCFilterModel
 		return nil
-	case "none":
+	case noneNetModelStr:
 		*n = NetXConnectNoneModel
 		return nil
 	}
