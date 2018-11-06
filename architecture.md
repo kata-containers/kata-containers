@@ -607,14 +607,19 @@ with a Kubernetes pod:
 		return err
 	}
 
+	handleFactory(ctx, runtimeConfig)
+
+	disableOutput := noNeedForOutput(detach, ociSpec.Process.Terminal)
+
+	var process vc.Process
 	switch containerType {
 	case vc.PodSandbox:
-		process, err = createPod(ociSpec, runtimeConfig, containerID, bundlePath, console, disableOutput)
+		process, err = createSandbox(ctx, ociSpec, runtimeConfig, containerID, bundlePath, console, disableOutput, systemdCgroup)
 		if err != nil {
 			return err
 		}
 	case vc.PodContainer:
-		process, err = createContainer(ociSpec, containerID, bundlePath, console, disableOutput)
+		process, err = createContainer(ctx, ociSpec, containerID, bundlePath, console, disableOutput)
 		if err != nil {
 			return err
 		}
