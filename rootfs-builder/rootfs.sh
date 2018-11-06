@@ -15,6 +15,7 @@ GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
+OSBUILDER_VERSION="unknown"
 
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
@@ -40,35 +41,64 @@ usage()
 {
 	error="${1:-0}"
 	cat <<EOT
-USAGE: Build a Guest OS rootfs for Kata Containers image
-${script_name} [options] <distro_name>
 
-<distro_name> : Linux distribution to use as base OS.
+Usage: ${script_name} [options] <distro>
 
-Supported Linux distributions:
+Build a rootfs based on <distro> OS, to be included in a Kata Containers
+image.
 
-$(get_distros)
-
-Refer the Platform-OS Compatibility Matrix: https://github.com/kata-containers/osbuilder#platform-distro-compatibility-matrix
+Supported <distro> values:
+$(get_distros | tr "\n" " ")
 
 Options:
--a  : agent version DEFAULT: ${AGENT_VERSION} ENV: AGENT_VERSION
--h  : show this help message
--l  : list the supported Linux distributions
--o  : specify version of osbuilder
--r  : rootfs directory DEFAULT: ${ROOTFS_DIR} ENV: ROOTFS_DIR
--t  : print the test config for a given <distro_name>
+  -a <version>      Specify the agent version. Overrides the AGENT_VERSION
+                    environment variable.
+  -h                Show this help message.
+  -l                List the supported Linux distributions and exit immediately.
+  -o <version>      Specify the version of osbuilder to embed in the rootfs
+                    yaml description.
+  -r <directory>    Specify the rootfs base directory. Overrides the ROOTFS_DIR
+                    environment variable.
+  -t                Print the test configuration for <distro> and exit
+                    immediately.
 
-ENV VARIABLES:
-GO_AGENT_PKG: Change the golang package url to get the agent source code
-            DEFAULT: ${GO_AGENT_PKG}
-AGENT_BIN   : Name of the agent binary (needed to check if agent is installed)
-USE_DOCKER: If set will build rootfs in a Docker Container (requries docker)
-            DEFAULT: not set
-AGENT_INIT  : Use ${AGENT_BIN} as init process.
-            DEFAULT: no
-KERNEL_MODULES_DIR: Optional kernel modules to put into the rootfs.
-		    DEFAULT: ""
+Environment Variables:
+AGENT_BIN           Name of the agent binary (used when running sanity checks on
+                    the rootfs).
+                    Default value: ${AGENT_BIN}
+
+AGENT_INIT          When set to "yes", use ${AGENT_BIN} as init process in place
+                    of systemd.
+                    Default value: no
+
+AGENT_VERSION       Version of the agent to include in the rootfs.
+                    Default value: ${AGENT_VERSION:-<not set>}
+
+GO_AGENT_PKG        URL of the Git repository hosting the agent package.
+                    Default value: ${GO_AGENT_PKG}
+
+GRACEFUL_EXIT       If set, and if the <distro> configuration specifies a
+                    non-empty BUILD_CAN_FAIL variable, do not return with an
+                    error code in case any of the build step fails.
+                    This is used when running CI jobs, to tolerate failures for
+                    specific distributions.
+                    Default value: <not set>
+
+KERNEL_MODULES_DIR  Path to a directory containing kernel modules to include in
+                    the rootfs.
+                    Default value: <empty>
+
+ROOTFS_DIR          Path to the directory that is populated with the rootfs.
+                    Default value: <${script_name} path>/rootfs-<distro-name>
+
+USE_DOCKER          If set, build the rootfs inside a container (requires
+                    Docker).
+                    Default value: <not set>
+
+Refer to the Platform-OS Compatibility Matrix for more details on the supported
+architectures:
+https://github.com/kata-containers/osbuilder#platform-distro-compatibility-matrix
+
 EOT
 exit "${error}"
 }
@@ -189,7 +219,16 @@ copy_kernel_modules()
 	OK "Kernel modules copied"
 }
 
-OSBUILDER_VERSION="unknown"
+error_handler()
+{
+	[ "$?" -eq 0 ] && return
+
+	if [ -n "$GRACEFUL_EXIT" ] && [ -n "$BUILD_CAN_FAIL" ]; then
+		info "Detected a build error, but $distro is allowed to fail (BUILD_CAN_FAIL specified), so exiting sucessfully"
+		touch "$(dirname ${ROOTFS_DIR})/${distro}_fail"
+		exit 0
+	fi
+}
 
 while getopts a:hlo:r:t: opt
 do
@@ -248,6 +287,11 @@ fi
 CONFIG_DIR=${distro_config_dir}
 check_function_exist "build_rootfs"
 
+if [ -z "$INSIDE_CONTAINER" ] ; then
+	# Capture errors, but only outside of the docker container
+	trap error_handler ERR
+fi
+
 if [ -n "${USE_DOCKER}" ] ; then
 	image_name="${distro}-rootfs-osbuilder"
 
@@ -281,6 +325,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 		--env EXTRA_PKGS="${EXTRA_PKGS}" \
 		--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
+		--env INSIDE_CONTAINER=1 \
 		-v "${script_dir}":"/osbuilder" \
 		-v "${ROOTFS_DIR}":"/rootfs" \
 		-v "${script_dir}/../scripts":"/scripts" \
