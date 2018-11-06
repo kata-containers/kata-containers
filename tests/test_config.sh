@@ -3,15 +3,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-
-if [ -n "${CI:-}" ]; then
-	# "Not testing eurleros on Jenkins or Travis:
-	# (unreliable mirros, see: https://github.com/kata-containers/osbuilder/issues/182)
-	# (timeout, see: https://github.com/kata-containers/osbuilder/issues/46)"
-	skipWhenTestingAll=(euleros)
-fi
+# List of distros not to test, when running all tests with test_images.sh
+typeset -a skipWhenTestingAll
 
 if [ -n "${TRAVIS:-}" ]; then
-	skipWhenTestingAll+=()
+	# (travis may timeout with euleros, see:
+	#  https://github.com/kata-containers/osbuilder/issues/46)"
+	skipWhenTestingAll+=(euleros)
 fi
 
