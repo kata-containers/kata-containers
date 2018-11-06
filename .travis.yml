@@ -20,10 +20,15 @@ go:
 env:
   - target_branch=$TRAVIS_BRANCH
 
+before_install:
+  - sudo apt update -y -qq
+  - sudo apt install -y -qq curl	# for yq installer
+
 before_script:
   - ".ci/static-checks.sh"
 
 install:
   - cd ${TRAVIS_BUILD_DIR}
+  - ".ci/install-yq.sh"
   - make
   - sudo -E PATH=$PATH make install

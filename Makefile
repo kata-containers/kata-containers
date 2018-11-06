@@ -15,6 +15,8 @@ done)
 GOARCH=$(shell go env GOARCH)
 HOST_ARCH=$(shell arch)
 
+include golang.mk
+
 ifeq ($(ARCH),)
 	ARCH = $(GOARCH)
 endif
