@@ -8,7 +8,7 @@
 TIMEOUT := 60
 
 # union for 'make test'
-UNION := functional docker crio docker-compose docker-stability openshift kubernetes swarm vm-factory ramdisk
+UNION := functional docker crio docker-compose docker-stability openshift kubernetes swarm vm-factory entropy ramdisk
 
 # skipped test suites for docker integration tests
 SKIP :=
@@ -100,6 +100,11 @@ network:
 ramdisk:
 	bash -f integration/ramdisk/ramdisk.sh
 
+entropy:
+	bash -f .ci/install_bats.sh
+	cd integration/entropy && \
+	bats entropy_test.bats
+
 test: ${UNION}
 
 check: checkcommits log-parser
@@ -112,6 +117,7 @@ check: checkcommits log-parser
 	docker \
 	docker-compose \
 	docker-stability \
+	entropy \
 	functional \
 	ginkgo \
 	kubernetes \
