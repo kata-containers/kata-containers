@@ -523,8 +523,8 @@ metadata:
     io.kubernetes.cri.untrusted-workload: "true"
 spec:
   containers:
-    name: nginx
-    image: nginx
+    - name: nginx
+      image: nginx
 ```
 
 Next, you run your pod:
