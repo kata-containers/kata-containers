@@ -206,6 +206,7 @@ parts:
       - libltdl-dev
       - libcap-dev
       - libattr1-dev
+      - libfdt-dev
     override-build: |
       chmod +x ${SNAPCRAFT_STAGE}/qemu/scripts/configure-hypervisor.sh
       # static build
