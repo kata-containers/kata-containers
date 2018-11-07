@@ -5,11 +5,11 @@
 #
 
 DESTDIR :=
-PREFIX := usr
-LIBEXECDIR := libexec
+PREFIX := /usr
+LIBEXECDIR := $(PREFIX)/libexec
 PROJECT := kata-containers
 # Override will ignore PREFIX, LIBEXECDIR and PROJECT
-INSTALLDIR := /$(PREFIX)/$(LIBEXECDIR)/$(PROJECT)
+INSTALLDIR := $(LIBEXECDIR)/$(PROJECT)
 
 TARGET = kata-proxy
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.go$$')
