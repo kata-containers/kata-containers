@@ -57,7 +57,7 @@ if [ "${BAREMETAL}" == true ]; then
 	clean_up_script="${tests_repo_dir}/.ci/${arch}/clean_up_${arch}.sh"
 	if [ -f "${clean_up_script}" ]; then
 		echo "Running baremetal cleanup script for arch ${arch}"
-		"${clean_up_script}"
+		tests_repo="${tests_repo}" "${clean_up_script}"
 	else
 		echo "No baremetal cleanup script for arch ${arch}"
 	fi
