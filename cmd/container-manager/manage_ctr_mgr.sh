@@ -103,7 +103,7 @@ install_docker(){
 			curl -fsSL "${repo_url}/gpg" | sudo apt-key add -
 			sudo -E add-apt-repository "deb [arch=${arch}] ${repo_url} $(lsb_release -cs) stable"
 			sudo -E apt-get update
-			docker_version_full=$(apt-cache show $pkg_name | grep "^Version: $docker_version" | awk '{print $2}' | head -1)
+			docker_version_full=$(apt-cache madison $pkg_name | grep "$docker_version" | awk '{print $3}' | head -1)
 			sudo -E apt-get -y install "${pkg_name}=${docker_version_full}"
 		elif [ "$ID" == "fedora" ]; then
 			repo_url="https://download.docker.com/linux/fedora/docker-ce.repo"
