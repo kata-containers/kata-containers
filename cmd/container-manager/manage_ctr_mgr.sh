@@ -176,14 +176,15 @@ remove_docker(){
 	if [ -z "$pkg_name" ]; then
 		die "Docker not found in this system"
 	else
+		sudo systemctl stop docker
 		version=$(get_docker_version)
 		log_message "Removing package: $pkg_name version: $version"
 		if [ "$ID" == "ubuntu" ]; then
-			sudo apt -y purge "$pkg_name"
+			sudo apt -y purge ${pkg_name}
 		elif [ "$ID" == "fedora" ]; then
-			sudo dnf -y remove "$pkg_name"
+			sudo dnf -y remove ${pkg_name}
 		elif [ "$ID" == "centos" ]; then
-			sudo yum -y remove "$pkg_name"
+			sudo yum -y remove ${pkg_name}
 		else
 			die "This script doesn't support your Linux distribution"
 		fi
