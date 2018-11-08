@@ -1,9 +1,10 @@
 // Copyright (c) 2017 Intel Corporation
+// Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package main
+package katautils
 
 import (
 	"fmt"
@@ -25,10 +26,10 @@ type testData struct {
 
 func init() {
 	// Ensure all log levels are logged
-	kataLog.Logger.Level = logrus.DebugLevel
+	kataUtilsLogger.Logger.Level = logrus.DebugLevel
 
 	// Discard log output
-	kataLog.Logger.Out = ioutil.Discard
+	kataUtilsLogger.Logger.Out = ioutil.Discard
 }
 
 func TestHandleSystemLog(t *testing.T) {

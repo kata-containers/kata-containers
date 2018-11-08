@@ -17,6 +17,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/kata-containers/runtime/pkg/signals"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vf "github.com/kata-containers/runtime/virtcontainers/factory"
@@ -240,11 +241,18 @@ func setExternalLoggers(ctx context.Context, logger *logrus.Entry) {
 
 	// Set the OCI package logger.
 	oci.SetLogger(ctx, logger)
+
+	// Set the katautils package logger
+	katautils.SetLogger(ctx, logger, originalLoggerLevel)
 }
 
 // beforeSubcommands is the function to perform preliminary checks
 // before command-line parsing occurs.
 func beforeSubcommands(c *cli.Context) error {
+	var configFile string
+	var runtimeConfig oci.RuntimeConfig
+	var err error
+
 	handleShowConfig(c)
 
 	if userWantsUsage(c) || (c.NArg() == 1 && (c.Args()[0] == checkCmd)) {
@@ -297,10 +305,15 @@ func beforeSubcommands(c *cli.Context) error {
 		ignoreLogging = true
 	}
 
-	configFile, runtimeConfig, err := loadConfiguration(c.GlobalString(configFilePathOption), ignoreLogging)
+	katautils.SetConfigOptions(name, defaultRuntimeConfiguration, defaultSysConfRuntimeConfiguration)
+
+	configFile, runtimeConfig, tracing, err = katautils.LoadConfiguration(c.GlobalString(configFilePathOption), ignoreLogging, false)
 	if err != nil {
 		fatal(err)
 	}
+
+	debug = runtimeConfig.Debug
+	crashOnError = runtimeConfig.Debug
 
 	if traceRootSpan != "" {
 		// Create the tracer.
@@ -336,7 +349,7 @@ func beforeSubcommands(c *cli.Context) error {
 // paths. If so, it will display them and then exit.
 func handleShowConfig(context *cli.Context) {
 	if context.GlobalBool(showConfigPathsOption) {
-		files := getDefaultConfigFilePaths()
+		files := katautils.GetDefaultConfigFilePaths()
 
 		for _, file := range files {
 			fmt.Fprintf(defaultOutputFile, "%s\n", file)

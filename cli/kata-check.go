@@ -23,6 +23,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -70,7 +71,7 @@ var (
 
 // getCPUInfo returns details of the first CPU read from the specified cpuinfo file
 func getCPUInfo(cpuInfoFile string) (string, error) {
-	text, err := getFileContents(cpuInfoFile)
+	text, err := katautils.GetFileContents(cpuInfoFile)
 	if err != nil {
 		return "", err
 	}
@@ -206,7 +207,7 @@ func checkKernelModules(modules map[string]kernelModule, handler kernelParamHand
 
 		for param, expected := range details.parameters {
 			path := filepath.Join(sysModuleDir, module, moduleParamDir, param)
-			value, err := getFileContents(path)
+			value, err := katautils.GetFileContents(path)
 			if err != nil {
 				return 0, err
 			}

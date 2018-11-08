@@ -1,9 +1,10 @@
 // Copyright (c) 2017 Intel Corporation
+// Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package main
+package katautils
 
 import (
 	"bytes"
@@ -140,7 +141,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 
 	for _, file := range files {
 		// create the resource (which must be >0 bytes)
-		err := writeFile(file, "foo", testFileMode)
+		err := WriteFile(file, "foo", testFileMode)
 		if err != nil {
 			return config, err
 		}
@@ -248,7 +249,7 @@ func testLoadConfiguration(t *testing.T, dir string,
 					assert.NoError(t, err)
 				}
 
-				resolvedConfigPath, config, err := loadConfiguration(file, ignoreLogging)
+				resolvedConfigPath, config, _, err := LoadConfiguration(file, ignoreLogging, false)
 				if expectFail {
 					assert.Error(t, err)
 
@@ -476,7 +477,7 @@ func TestConfigLoadConfigurationFailTOMLConfigFileDuplicatedData(t *testing.T) {
 		func(config testRuntimeConfig, configFile string, ignoreLogging bool) (bool, error) {
 			expectFail := true
 
-			text, err := getFileContents(config.ConfigPath)
+			text, err := GetFileContents(config.ConfigPath)
 			if err != nil {
 				return expectFail, err
 			}
@@ -530,7 +531,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	defaultKernelPath = kernelPath
 
 	for _, file := range []string{defaultImagePath, defaultInitrdPath, defaultHypervisorPath, defaultKernelPath} {
-		err = writeFile(file, "foo", testFileMode)
+		err = WriteFile(file, "foo", testFileMode)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -557,7 +558,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, config, err := loadConfiguration(configPath, false)
+	_, config, _, err := LoadConfiguration(configPath, false, false)
 	if err == nil {
 		t.Fatalf("Expected loadConfiguration to fail as shim path does not exist: %+v", config)
 	}
@@ -582,7 +583,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, config, err = loadConfiguration(configPath, false)
+	_, config, _, err = LoadConfiguration(configPath, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -675,7 +676,7 @@ func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
 	defaultKernelPath = kernelPath
 
 	for _, file := range []string{proxyPath, shimPath, hypervisorPath, kernelPath, imagePath} {
-		err = writeFile(file, "foo", testFileMode)
+		err = WriteFile(file, "foo", testFileMode)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -711,7 +712,7 @@ func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, config, err := loadConfiguration(configPath, false)
+	_, config, _, err := LoadConfiguration(configPath, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1152,7 +1153,7 @@ func TestShimDefaults(t *testing.T) {
 func TestGetDefaultConfigFilePaths(t *testing.T) {
 	assert := assert.New(t)
 
-	results := getDefaultConfigFilePaths()
+	results := GetDefaultConfigFilePaths()
 	// There should be atleast two config file locations
 	assert.True(len(results) >= 2)
 
@@ -1405,7 +1406,7 @@ func TestCheckHypervisorConfig(t *testing.T) {
 	fileData := strings.Repeat("X", int(fileSizeBytes))
 
 	for _, file := range []string{image, initrd} {
-		err = writeFile(file, fileData, testFileMode)
+		err = WriteFile(file, fileData, testFileMode)
 		assert.NoError(err)
 	}
 
@@ -1444,13 +1445,13 @@ func TestCheckHypervisorConfig(t *testing.T) {
 	}
 
 	for i, d := range data {
-		savedOut := kataLog.Logger.Out
+		savedOut := kataUtilsLogger.Logger.Out
 
 		// create buffer to save logger output
 		logBuf := &bytes.Buffer{}
 
 		// capture output to buffer
-		kataLog.Logger.Out = logBuf
+		kataUtilsLogger.Logger.Out = logBuf
 
 		config := vc.HypervisorConfig{
 			ImagePath:  d.imagePath,
@@ -1473,7 +1474,7 @@ func TestCheckHypervisorConfig(t *testing.T) {
 		}
 
 		// reset logger
-		kataLog.Logger.Out = savedOut
+		kataUtilsLogger.Logger.Out = savedOut
 	}
 }
 

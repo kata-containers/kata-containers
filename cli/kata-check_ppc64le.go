@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -60,7 +61,7 @@ func hostIsVMContainerCapable(details vmContainerCapableDetails) error {
 		return err
 	}
 
-	text, err := getFileContents(details.cpuInfoFile)
+	text, err := katautils.GetFileContents(details.cpuInfoFile)
 	if err != nil {
 		return err
 	}

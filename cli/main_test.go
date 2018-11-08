@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/dlespiau/covertool/pkg/cover"
+	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
@@ -747,7 +748,7 @@ func TestMainBeforeSubCommandsShowCCConfigPaths(t *testing.T) {
 	_ = beforeSubcommands(ctx)
 	assert.Equal(exitStatus, 0)
 
-	text, err := getFileContents(output)
+	text, err := katautils.GetFileContents(output)
 	assert.NoError(err)
 
 	lines := strings.Split(text, "\n")
@@ -801,7 +802,7 @@ func TestMainFatal(t *testing.T) {
 	fatal(exitError)
 	assert.Equal(exitStatus, 1)
 
-	text, err := getFileContents(output)
+	text, err := katautils.GetFileContents(output)
 	assert.NoError(err)
 
 	trimmed := strings.TrimSpace(text)

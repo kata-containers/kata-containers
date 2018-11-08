@@ -1,17 +1,32 @@
 // Copyright (c) 2017 Intel Corporation
+// Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package main
+package katautils
 
 import (
+	"context"
 	"log/syslog"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 )
+
+var originalLoggerLevel = logrus.InfoLevel
+var kataUtilsLogger = logrus.NewEntry(logrus.New())
+
+// SetLogger sets the logger for the factory.
+func SetLogger(ctx context.Context, logger *logrus.Entry, level logrus.Level) {
+	fields := logrus.Fields{
+		"source": "katautils",
+	}
+
+	originalLoggerLevel = level
+	kataUtilsLogger = logger.WithFields(fields)
+}
 
 // sysLogHook wraps a syslog logrus hook and a formatter to be used for all
 // syslog entries.
@@ -64,7 +79,7 @@ func handleSystemLog(network, raddr string) error {
 		return err
 	}
 
-	kataLog.Logger.Hooks.Add(hook)
+	kataUtilsLogger.Logger.Hooks.Add(hook)
 
 	return nil
 }
