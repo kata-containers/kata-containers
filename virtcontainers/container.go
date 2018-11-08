@@ -28,6 +28,25 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
+// https://github.com/torvalds/linux/blob/master/include/uapi/linux/major.h
+// This file has definitions for major device numbers.
+var cdromMajors = map[int64]string{
+	11: "SCSI_CDROM_MAJOR",
+	15: "CDU31A_CDROM_MAJOR",
+	16: "GOLDSTAR_CDROM_MAJOR",
+	17: "OPTICS_CDROM_MAJOR",
+	18: "SANYO_CDROM_MAJOR",
+	20: "MITSUMI_X_CDROM_MAJOR",
+	23: "MITSUMI_CDROM_MAJOR",
+	24: "CDU535_CDROM_MAJOR",
+	25: "MATSUSHITA_CDROM_MAJOR",
+	26: "MATSUSHITA_CDROM2_MAJOR",
+	27: "MATSUSHITA_CDROM3_MAJOR",
+	28: "MATSUSHITA_CDROM4_MAJOR",
+	29: "AZTECH_CDROM_MAJOR",
+	32: "CM206_CDROM_MAJOR",
+}
+
 // Process gathers data related to a container process.
 type Process struct {
 	// Token is the process execution context ID. It must be
@@ -522,6 +541,20 @@ func (c *Container) unmountHostMounts() error {
 	return nil
 }
 
+func filterDevices(sandbox *Sandbox, c *Container, devices []ContainerDevice) (ret []ContainerDevice) {
+	for _, dev := range devices {
+		major, _ := sandbox.devManager.GetDeviceByID(dev.ID).GetMajorMinor()
+		if _, ok := cdromMajors[major]; ok {
+			c.Logger().WithFields(logrus.Fields{
+				"device": dev.ContainerPath,
+			}).Info("Not attach device because it is a CDROM")
+			continue
+		}
+		ret = append(ret, dev)
+	}
+	return
+}
+
 // newContainer creates a Container structure from a sandbox and a container configuration.
 func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, error) {
 	span, _ := sandbox.trace("newContainer")
@@ -609,11 +642,12 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 				return &Container{}, err
 			}
 
-			c.devices = append(c.devices, ContainerDevice{
+			storedDevices = append(storedDevices, ContainerDevice{
 				ID:            dev.DeviceID(),
 				ContainerPath: info.ContainerPath,
 			})
 		}
+		c.devices = filterDevices(sandbox, c, storedDevices)
 	}
 
 	return c, nil
