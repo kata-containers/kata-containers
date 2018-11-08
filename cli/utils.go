@@ -7,12 +7,11 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
-	"syscall"
+
+	"github.com/kata-containers/runtime/pkg/katautils"
 )
 
 const (
@@ -37,15 +36,6 @@ func fileExists(path string) bool {
 	return true
 }
 
-func getFileContents(file string) (string, error) {
-	bytes, err := ioutil.ReadFile(file)
-	if err != nil {
-		return "", err
-	}
-
-	return string(bytes), nil
-}
-
 // IsEphemeralStorage returns true if the given path
 // to the storage belongs to kubernetes ephemeral storage
 //
@@ -67,7 +57,7 @@ func IsEphemeralStorage(path string) bool {
 }
 
 func getKernelVersion() (string, error) {
-	contents, err := getFileContents(procVersion)
+	contents, err := katautils.GetFileContents(procVersion)
 	if err != nil {
 		return "", err
 	}
@@ -90,7 +80,7 @@ func getDistroDetails() (name, version string, err error) {
 	files := []string{osRelease, osReleaseClr}
 
 	for _, file := range files {
-		contents, err := getFileContents(file)
+		contents, err := katautils.GetFileContents(file)
 		if err != nil {
 			if os.IsNotExist(err) {
 				continue
@@ -162,31 +152,6 @@ func genericGetCPUDetails() (vendor, model string, err error) {
 	return vendor, model, nil
 }
 
-// resolvePath returns the fully resolved and expanded value of the
-// specified path.
-func resolvePath(path string) (string, error) {
-	if path == "" {
-		return "", fmt.Errorf("path must be specified")
-	}
-
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-
-	resolved, err := filepath.EvalSymlinks(absolute)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Make the error clearer than the default
-			return "", fmt.Errorf("file %v does not exist", absolute)
-		}
-
-		return "", err
-	}
-
-	return resolved, nil
-}
-
 // runCommandFull returns the commands space-trimmed standard output and
 // error on success. Note that if the command fails, the requested output will
 // still be returned, along with an error.
@@ -209,31 +174,4 @@ func runCommandFull(args []string, includeStderr bool) (string, error) {
 // runCommand returns the commands space-trimmed standard output on success
 func runCommand(args []string) (string, error) {
 	return runCommandFull(args, false)
-}
-
-// writeFile write data into specified file
-func writeFile(filePath string, data string, fileMode os.FileMode) error {
-	// Normally dir should not be empty, one case is that cgroup subsystem
-	// is not mounted, we will get empty dir, and we want it fail here.
-	if filePath == "" {
-		return fmt.Errorf("no such file for %s", filePath)
-	}
-
-	if err := ioutil.WriteFile(filePath, []byte(data), fileMode); err != nil {
-		return fmt.Errorf("failed to write %v to %v: %v", data, filePath, err)
-	}
-
-	return nil
-}
-
-// fileSize returns the number of bytes in the specified file
-func fileSize(file string) (int64, error) {
-	st := syscall.Stat_t{}
-
-	err := syscall.Stat(file, &st)
-	if err != nil {
-		return 0, err
-	}
-
-	return st.Size, nil
 }
