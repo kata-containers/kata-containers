@@ -25,3 +25,5 @@ ARCH_EXCLUDE_LIST=()
 # Allow the build to fail without generating an error.
 # For more info see: https://github.com/kata-containers/osbuilder/issues/190
 BUILD_CAN_FAIL=1
+
+[ "$SECCOMP" = "yes" ] && PACKAGES+=" libseccomp" || true
