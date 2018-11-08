@@ -27,20 +27,10 @@ parts:
       cd ${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/runtime
       QEMU_ARCH=$(arch)
       make \
-        QEMUPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/bin/qemu-system-${QEMU_ARCH} \
-        PROXYPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/${SNAPCRAFT_PROJECT_NAME}/kata-proxy \
-        SHIMPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/${SNAPCRAFT_PROJECT_NAME}/kata-shim \
-        KERNELPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/${SNAPCRAFT_PROJECT_NAME}/vmlinuz.container \
-        INITRDPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/${SNAPCRAFT_PROJECT_NAME}/kata-containers-initrd.img \
-        CONFIG_PATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
+        PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr
       make install \
         PREFIX=/usr \
-        DESTDIR=${SNAPCRAFT_PART_INSTALL} \
-        QEMUPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/bin/qemu-system-${QEMU_ARCH} \
-        PROXYPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/${SNAPCRAFT_PROJECT_NAME}/kata-proxy \
-        SHIMPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/${SNAPCRAFT_PROJECT_NAME}/kata-shim \
-        KERNELPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/${SNAPCRAFT_PROJECT_NAME}/vmlinuz.container \
-        INITRDPATH=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share/${SNAPCRAFT_PROJECT_NAME}/kata-containers-initrd.img
+        DESTDIR=${SNAPCRAFT_PART_INSTALL}
       sed -i -e '/^image =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
 
   proxy:
