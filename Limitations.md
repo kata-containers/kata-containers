@@ -24,7 +24,6 @@
     * [Host resource sharing](#host-resource-sharing)
         * [docker run --privileged](#docker-run---privileged)
 * [Miscellaneous](#miscellaneous)
-    * [Docker ramdisk not supported](#docker-ramdisk-not-supported)
     * [Docker --security-opt partially supported](#docker---security-opt-option-partially-supported)
 * [Appendices](#appendices)
     * [The constraints challenge](#the-constraints-challenge)
@@ -252,13 +251,6 @@ The `--privileged` option can be used with `runc` containers and inter-mixed wit
 # Miscellaneous
 
 This section lists limitations where the possible solutions are uncertain.
-
-## Docker ramdisk not supported
-
-The `DOCKER_RAMDISK=true` environment variable used by Docker to force the
-container to run entirely on a RAM disk is not supported.
-
-See https://github.com/kata-containers/runtime/issues/134 for more information.
 
 ## Docker --security-opt option partially supported
 
