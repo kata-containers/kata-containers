@@ -925,7 +925,7 @@ func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err 
 
 	// This sandbox already exists, we don't need to recreate the containers in the guest.
 	// We only need to fetch the containers from storage and create the container structs.
-	if err := sandbox.newContainers(); err != nil {
+	if err := sandbox.fetchContainers(); err != nil {
 		return nil, err
 	}
 
@@ -1257,7 +1257,7 @@ func (s *Sandbox) addContainer(c *Container) error {
 // adds them to the sandbox. It does not create the containers
 // in the guest. This should only be used when fetching a
 // sandbox that already exists.
-func (s *Sandbox) newContainers() error {
+func (s *Sandbox) fetchContainers() error {
 	for _, contConfig := range s.config.Containers {
 		c, err := newContainer(s, contConfig)
 		if err != nil {

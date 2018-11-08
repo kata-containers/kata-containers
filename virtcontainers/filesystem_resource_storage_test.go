@@ -38,7 +38,7 @@ func TestFilesystemCreateAllResourcesSuccessful(t *testing.T) {
 		containers: map[string]*Container{},
 	}
 
-	if err := sandbox.newContainers(); err != nil {
+	if err := sandbox.fetchContainers(); err != nil {
 		t.Fatal(err)
 	}
 
