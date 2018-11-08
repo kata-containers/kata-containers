@@ -74,6 +74,7 @@ parts:
     plugin: make
     build-packages:
       - docker.io
+      - cpio
     override-build: |
       # Don't use installed GOROOT
       unset GOROOT
