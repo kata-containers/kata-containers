@@ -28,3 +28,5 @@ INIT_PROCESS=systemd
 # List of zero or more architectures to exclude from build,
 # as reported by  `uname -m`
 ARCH_EXCLUDE_LIST=()
+
+[ "$SECCOMP" = "yes" ] && PACKAGES+=" libseccomp2" || true
