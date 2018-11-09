@@ -6,6 +6,7 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../../lib/common.bash"
+source "/etc/os-release" || "source /usr/lib/os-release"
 
 # Environment variables
 IMAGE="debian"
@@ -19,6 +20,9 @@ PACKET_NUMBER="5"
 PAYLOAD="tail -f /dev/null"
 
 setup() {
+	issue="https://github.com/kata-containers/runtime/issues/906"
+	[ "${ID}" == "centos" ] && skip "test not working with ${ID} see: ${issue}"
+
 	clean_env
 
 	# Check that processes are not running
@@ -51,6 +55,9 @@ setup() {
 }
 
 @test "ping container with ipvlan driver with mode l2" {
+	issue="https://github.com/kata-containers/runtime/issues/906"
+	[ "${ID}" == "centos" ] && skip "test not working with ${ID} see: ${issue}"
+
 	NETWORK_NAME="ipvlan2"
 	NETWORK_MODE="l2"
 
@@ -60,11 +67,11 @@ setup() {
 
 	# Run the first container
 	docker run -d --runtime=kata-runtime --network=${NETWORK_NAME} --ip=${FIRST_IP} \
-		--name=${FIRST_CONTAINER_NAME} --runtime=runc ${IMAGE} sh -c ${PAYLOAD}
+		--name=${FIRST_CONTAINER_NAME} --runtime=runc ${IMAGE} ${PAYLOAD}
 
 	# Run the second container
 	docker run -d --runtime=kata-runtime --network=${NETWORK_NAME} --ip=${SECOND_IP} \
-		--name=${SECOND_CONTAINER_NAME} --runtime=runc ${IMAGE} sh -c ${PAYLOAD}
+		--name=${SECOND_CONTAINER_NAME} --runtime=runc ${IMAGE} ${PAYLOAD}
 
 	# Ping to the first container
 	run docker exec ${SECOND_CONTAINER_NAME} sh -c "ping -c ${PACKET_NUMBER} ${FIRST_IP}"
@@ -72,6 +79,9 @@ setup() {
 }
 
 @test "ping container with ipvlan driver with mode l3" {
+	issue="https://github.com/kata-containers/runtime/issues/906"
+	[ "${ID}" == "centos" ] && skip "test not working with ${ID} see: ${issue}"
+
 	NETWORK_NAME="ipvlan3"
 	NETWORK_MODE="l3"
 
@@ -81,11 +91,11 @@ setup() {
 
 	# Run the first container
 	docker run -d --runtime=kata-runtime --network=${NETWORK_NAME} --ip=${FIRST_IP} \
-		--name=${FIRST_CONTAINER_NAME} --runtime=runc ${IMAGE} sh -c ${PAYLOAD}
+		--name=${FIRST_CONTAINER_NAME} --runtime=runc ${IMAGE} ${PAYLOAD}
 
 	# Run the second container
 	docker run -d --runtime=kata-runtime --network=${NETWORK_NAME} --ip=${SECOND_IP} \
-		--name=${SECOND_CONTAINER_NAME} --runtime=runc ${IMAGE} sh -c ${PAYLOAD}
+		--name=${SECOND_CONTAINER_NAME} --runtime=runc ${IMAGE} ${PAYLOAD}
 
 	# Ping to the first container
 	run docker exec ${SECOND_CONTAINER_NAME} sh -c "ping -c ${PACKET_NUMBER} ${FIRST_IP}"
@@ -93,6 +103,9 @@ setup() {
 }
 
 teardown() {
+	issue="https://github.com/kata-containers/runtime/issues/906"
+	[ "${ID}" == "centos" ] && skip "test not working with ${ID} see: ${issue}"
+
 	clean_env
 
 	# Remove network
@@ -101,7 +114,7 @@ teardown() {
 	# Remove experimental flag
 	check_which_flag=$(grep -c -x '{"experimental":true}' $docker_configuration_file)
 	if [ $check_which_flag -eq 1 ]; then
-		rm -f $docker_configuration_path
+		rm -rf $docker_configuration_path
 	else
 		sed -i 's|"experimental": true,||' $docker_configuration_file
 	fi

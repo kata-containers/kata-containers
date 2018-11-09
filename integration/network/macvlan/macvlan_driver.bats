@@ -6,6 +6,7 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../../lib/common.bash"
+source "/etc/os-release" || "source /usr/lib/os-release"
 
 # Image for macvlan testing
 IMAGE="debian"
@@ -18,8 +19,13 @@ FIRST_CONTAINER_NAME="containerA"
 SECOND_CONTAINER_NAME="containerB"
 # Number of packets
 PACKET_NUMBER="5"
+# PAYLOAD
+PAYLOAD_ARGS="tail -f /dev/null"
 
 setup () {
+	issue="https://github.com/kata-containers/runtime/issues/905"
+	[ "${ID}" == "centos" ] && skip "test not working with ${ID} see: ${issue}"
+
 	clean_env
 
 	# Check that processes are not running
@@ -29,14 +35,17 @@ setup () {
 }
 
 @test "ping container with macvlan driver" {
+	issue="https://github.com/kata-containers/runtime/issues/905"
+	[ "${ID}" == "centos" ] && skip "test not working with ${ID} see: ${issue}"
+
 	# Create network
 	docker network create -d ${NETWORK_DRIVER} ${NETWORK_NAME}
 
 	# Run the first container
-	docker run -d --runtime=${RUNTIME} --network=${NETWORK_NAME} --name=${FIRST_CONTAINER_NAME} ${IMAGE} sh -c "tail -f /dev/null"
+	docker run -d --runtime=${RUNTIME} --network=${NETWORK_NAME} --name=${FIRST_CONTAINER_NAME} ${IMAGE} ${PAYLOAD_ARGS}
 
 	# Verify ip address
-	ip_address=$(docker inspect --format "{{.NetworkSettings.IPAddress}}" ${FIRST_CONTAINER_NAME})
+	ip_address=$(docker inspect --format "{{.NetworkSettings.Networks.$NETWORK_NAME.IPAddress}}" ${FIRST_CONTAINER_NAME})
 	if [ -z "$ip_address" ]; then
 		echo >&2 "ERROR: Container ip address not found"
 		exit 1
@@ -48,6 +57,9 @@ setup () {
 }
 
 teardown() {
+	issue="https://github.com/kata-containers/runtime/issues/905"
+	[ "${ID}" == "centos" ] && skip "test not working with ${ID} see: ${issue}"
+
 	# Remove network
 	docker network rm ${NETWORK_NAME}
 
