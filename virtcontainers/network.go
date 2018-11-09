@@ -985,6 +985,15 @@ func untapNetworkPair(endpoint Endpoint) error {
 		return err
 	}
 
+	hardAddr, err := net.ParseMAC(netPair.TAPIface.HardAddr)
+	if err != nil {
+		return err
+	}
+	if err := netHandle.LinkSetHardwareAddr(link, hardAddr); err != nil {
+		return fmt.Errorf("Could not set MAC address %s for veth interface %s: %s",
+			netPair.VirtIface.HardAddr, netPair.VirtIface.Name, err)
+	}
+
 	if err := netHandle.LinkSetDown(link); err != nil {
 		return fmt.Errorf("Could not disable veth %s: %s", netPair.VirtIface.Name, err)
 	}
@@ -1036,6 +1045,15 @@ func unBridgeNetworkPair(endpoint Endpoint) error {
 	link, err := getLinkForEndpoint(endpoint, netHandle)
 	if err != nil {
 		return err
+	}
+
+	hardAddr, err := net.ParseMAC(netPair.TAPIface.HardAddr)
+	if err != nil {
+		return err
+	}
+	if err := netHandle.LinkSetHardwareAddr(link, hardAddr); err != nil {
+		return fmt.Errorf("Could not set MAC address %s for veth interface %s: %s",
+			netPair.VirtIface.HardAddr, netPair.VirtIface.Name, err)
 	}
 
 	if err := netHandle.LinkSetDown(link); err != nil {
