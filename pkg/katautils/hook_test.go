@@ -1,9 +1,10 @@
 // Copyright (c) 2018 Intel Corporation
+// Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package main
+package katautils
 
 import (
 	"context"
@@ -95,7 +96,7 @@ func TestPreStartHooks(t *testing.T) {
 
 	// Hooks field is nil
 	spec := oci.CompatOCISpec{}
-	err := preStartHooks(ctx, spec, "", "")
+	err := PreStartHooks(ctx, spec, "", "")
 	assert.NoError(err)
 
 	// Hooks list is empty
@@ -104,7 +105,7 @@ func TestPreStartHooks(t *testing.T) {
 			Hooks: &specs.Hooks{},
 		},
 	}
-	err = preStartHooks(ctx, spec, "", "")
+	err = PreStartHooks(ctx, spec, "", "")
 	assert.NoError(err)
 
 	// Run with timeout 0
@@ -116,7 +117,7 @@ func TestPreStartHooks(t *testing.T) {
 			},
 		},
 	}
-	err = preStartHooks(ctx, spec, testSandboxID, testBundlePath)
+	err = PreStartHooks(ctx, spec, testSandboxID, testBundlePath)
 	assert.NoError(err)
 
 	// Failure due to wrong hook
@@ -128,7 +129,7 @@ func TestPreStartHooks(t *testing.T) {
 			},
 		},
 	}
-	err = preStartHooks(ctx, spec, testSandboxID, testBundlePath)
+	err = PreStartHooks(ctx, spec, testSandboxID, testBundlePath)
 	assert.Error(err)
 }
 
@@ -143,7 +144,7 @@ func TestPostStartHooks(t *testing.T) {
 
 	// Hooks field is nil
 	spec := oci.CompatOCISpec{}
-	err := postStartHooks(ctx, spec, "", "")
+	err := PostStartHooks(ctx, spec, "", "")
 	assert.NoError(err)
 
 	// Hooks list is empty
@@ -152,7 +153,7 @@ func TestPostStartHooks(t *testing.T) {
 			Hooks: &specs.Hooks{},
 		},
 	}
-	err = postStartHooks(ctx, spec, "", "")
+	err = PostStartHooks(ctx, spec, "", "")
 	assert.NoError(err)
 
 	// Run with timeout 0
@@ -164,7 +165,7 @@ func TestPostStartHooks(t *testing.T) {
 			},
 		},
 	}
-	err = postStartHooks(ctx, spec, testSandboxID, testBundlePath)
+	err = PostStartHooks(ctx, spec, testSandboxID, testBundlePath)
 	assert.NoError(err)
 
 	// Failure due to wrong hook
@@ -176,7 +177,7 @@ func TestPostStartHooks(t *testing.T) {
 			},
 		},
 	}
-	err = postStartHooks(ctx, spec, testSandboxID, testBundlePath)
+	err = PostStartHooks(ctx, spec, testSandboxID, testBundlePath)
 	assert.Error(err)
 }
 
@@ -191,7 +192,7 @@ func TestPostStopHooks(t *testing.T) {
 
 	// Hooks field is nil
 	spec := oci.CompatOCISpec{}
-	err := postStopHooks(ctx, spec, "", "")
+	err := PostStopHooks(ctx, spec, "", "")
 	assert.NoError(err)
 
 	// Hooks list is empty
@@ -200,7 +201,7 @@ func TestPostStopHooks(t *testing.T) {
 			Hooks: &specs.Hooks{},
 		},
 	}
-	err = postStopHooks(ctx, spec, "", "")
+	err = PostStopHooks(ctx, spec, "", "")
 	assert.NoError(err)
 
 	// Run with timeout 0
@@ -212,7 +213,7 @@ func TestPostStopHooks(t *testing.T) {
 			},
 		},
 	}
-	err = postStopHooks(ctx, spec, testSandboxID, testBundlePath)
+	err = PostStopHooks(ctx, spec, testSandboxID, testBundlePath)
 	assert.NoError(err)
 
 	// Failure due to wrong hook
@@ -224,6 +225,6 @@ func TestPostStopHooks(t *testing.T) {
 			},
 		},
 	}
-	err = postStopHooks(ctx, spec, testSandboxID, testBundlePath)
+	err = PostStopHooks(ctx, spec, testSandboxID, testBundlePath)
 	assert.Error(err)
 }

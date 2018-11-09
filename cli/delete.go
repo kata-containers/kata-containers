@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnot "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
@@ -60,7 +61,7 @@ EXAMPLE:
 }
 
 func delete(ctx context.Context, containerID string, force bool) error {
-	span, ctx := trace(ctx, "delete")
+	span, ctx := katautils.Trace(ctx, "delete")
 	defer span.Finish()
 
 	kataLog = kataLog.WithField("container", containerID)
@@ -119,15 +120,15 @@ func delete(ctx context.Context, containerID string, force bool) error {
 	}
 
 	// Run post-stop OCI hooks.
-	if err := postStopHooks(ctx, ociSpec, sandboxID, status.Annotations[vcAnnot.BundlePathKey]); err != nil {
+	if err := katautils.PostStopHooks(ctx, ociSpec, sandboxID, status.Annotations[vcAnnot.BundlePathKey]); err != nil {
 		return err
 	}
 
-	return delContainerIDMapping(ctx, containerID)
+	return katautils.DelContainerIDMapping(ctx, containerID)
 }
 
 func deleteSandbox(ctx context.Context, sandboxID string) error {
-	span, _ := trace(ctx, "deleteSandbox")
+	span, _ := katautils.Trace(ctx, "deleteSandbox")
 	defer span.Finish()
 
 	status, err := vci.StatusSandbox(ctx, sandboxID)
@@ -149,7 +150,7 @@ func deleteSandbox(ctx context.Context, sandboxID string) error {
 }
 
 func deleteContainer(ctx context.Context, sandboxID, containerID string, forceStop bool) error {
-	span, _ := trace(ctx, "deleteContainer")
+	span, _ := katautils.Trace(ctx, "deleteContainer")
 	defer span.Finish()
 
 	if forceStop {
@@ -166,7 +167,7 @@ func deleteContainer(ctx context.Context, sandboxID, containerID string, forceSt
 }
 
 func removeCgroupsPath(ctx context.Context, containerID string, cgroupsPathList []string) error {
-	span, _ := trace(ctx, "removeCgroupsPath")
+	span, _ := katautils.Trace(ctx, "removeCgroupsPath")
 	defer span.Finish()
 
 	if len(cgroupsPathList) == 0 {

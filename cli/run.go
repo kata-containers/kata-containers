@@ -13,6 +13,7 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/urfave/cli"
 )
@@ -82,7 +83,7 @@ var runCLICommand = cli.Command{
 
 func run(ctx context.Context, containerID, bundle, console, consoleSocket, pidFile string, detach, systemdCgroup bool,
 	runtimeConfig oci.RuntimeConfig) error {
-	span, ctx := trace(ctx, "run")
+	span, ctx := katautils.Trace(ctx, "run")
 	defer span.Finish()
 
 	consolePath, err := setupConsole(console, consoleSocket)

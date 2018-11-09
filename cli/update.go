@@ -13,6 +13,7 @@ import (
 	"strconv"
 
 	"github.com/docker/go-units"
+	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
@@ -132,7 +133,7 @@ other options are ignored.
 			return err
 		}
 
-		span, _ := trace(ctx, "update")
+		span, _ := katautils.Trace(ctx, "update")
 		defer span.Finish()
 
 		if context.Args().Present() == false {

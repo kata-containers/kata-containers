@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Intel Corporation
+// Copyright (c) 2018 Intel Corporation
 // Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -249,7 +249,7 @@ func testLoadConfiguration(t *testing.T, dir string,
 					assert.NoError(t, err)
 				}
 
-				resolvedConfigPath, config, _, err := LoadConfiguration(file, ignoreLogging, false)
+				resolvedConfigPath, config, err := LoadConfiguration(file, ignoreLogging, false)
 				if expectFail {
 					assert.Error(t, err)
 
@@ -558,7 +558,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, config, _, err := LoadConfiguration(configPath, false, false)
+	_, config, err := LoadConfiguration(configPath, false, false)
 	if err == nil {
 		t.Fatalf("Expected loadConfiguration to fail as shim path does not exist: %+v", config)
 	}
@@ -583,7 +583,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, config, _, err = LoadConfiguration(configPath, false, false)
+	_, config, err = LoadConfiguration(configPath, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -712,7 +712,7 @@ func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, config, _, err := LoadConfiguration(configPath, false, false)
+	_, config, err := LoadConfiguration(configPath, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}

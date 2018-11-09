@@ -1,9 +1,10 @@
 // Copyright (c) 2018 Intel Corporation
+// Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package main
+package katautils
 
 import (
 	"bytes"
@@ -24,11 +25,11 @@ import (
 
 // Logger returns a logrus logger appropriate for logging hook messages
 func hookLogger() *logrus.Entry {
-	return kataLog.WithField("subsystem", "hook")
+	return kataUtilsLogger.WithField("subsystem", "hook")
 }
 
 func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string) error {
-	span, _ := trace(ctx, "hook")
+	span, _ := Trace(ctx, "hook")
 	defer span.Finish()
 
 	span.SetTag("subsystem", "runHook")
@@ -91,7 +92,7 @@ func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string) error
 }
 
 func runHooks(ctx context.Context, hooks []specs.Hook, cid, bundlePath, hookType string) error {
-	span, _ := trace(ctx, "hooks")
+	span, _ := Trace(ctx, "hooks")
 	defer span.Finish()
 
 	span.SetTag("subsystem", hookType)
@@ -110,7 +111,8 @@ func runHooks(ctx context.Context, hooks []specs.Hook, cid, bundlePath, hookType
 	return nil
 }
 
-func preStartHooks(ctx context.Context, spec oci.CompatOCISpec, cid, bundlePath string) error {
+// PreStartHooks run the hooks before start container
+func PreStartHooks(ctx context.Context, spec oci.CompatOCISpec, cid, bundlePath string) error {
 	// If no hook available, nothing needs to be done.
 	if spec.Hooks == nil {
 		return nil
@@ -119,7 +121,8 @@ func preStartHooks(ctx context.Context, spec oci.CompatOCISpec, cid, bundlePath 
 	return runHooks(ctx, spec.Hooks.Prestart, cid, bundlePath, "pre-start")
 }
 
-func postStartHooks(ctx context.Context, spec oci.CompatOCISpec, cid, bundlePath string) error {
+// PostStartHooks run the hooks just after start container
+func PostStartHooks(ctx context.Context, spec oci.CompatOCISpec, cid, bundlePath string) error {
 	// If no hook available, nothing needs to be done.
 	if spec.Hooks == nil {
 		return nil
@@ -128,7 +131,8 @@ func postStartHooks(ctx context.Context, spec oci.CompatOCISpec, cid, bundlePath
 	return runHooks(ctx, spec.Hooks.Poststart, cid, bundlePath, "post-start")
 }
 
-func postStopHooks(ctx context.Context, spec oci.CompatOCISpec, cid, bundlePath string) error {
+// PostStopHooks run the hooks after stop container
+func PostStopHooks(ctx context.Context, spec oci.CompatOCISpec, cid, bundlePath string) error {
 	// If no hook available, nothing needs to be done.
 	if spec.Hooks == nil {
 		return nil

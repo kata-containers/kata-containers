@@ -288,9 +288,6 @@ const project = "$(PROJECT_NAME)"
 // prefix used to denote non-standard CLI commands and options.
 const projectPrefix = "$(PROJECT_TYPE)"
 
-// systemdUnitName is the systemd(1) target used to launch the agent.
-const systemdUnitName = "$(PROJECT_TAG).target"
-
 // original URL for this project
 const projectURL = "$(PROJECT_URL)"
 

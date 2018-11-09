@@ -9,6 +9,7 @@ package main
 import (
 	"context"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -57,7 +58,7 @@ func toggle(c *cli.Context, pause bool) error {
 }
 
 func toggleContainerPause(ctx context.Context, containerID string, pause bool) (err error) {
-	span, _ := trace(ctx, "pause")
+	span, _ := katautils.Trace(ctx, "pause")
 	defer span.Finish()
 	span.SetTag("pause", pause)
 

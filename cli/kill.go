@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/sirupsen/logrus"
@@ -97,7 +98,7 @@ var signalList = map[string]syscall.Signal{
 }
 
 func kill(ctx context.Context, containerID, signal string, all bool) error {
-	span, _ := trace(ctx, "kill")
+	span, _ := katautils.Trace(ctx, "kill")
 	defer span.Finish()
 
 	kataLog = kataLog.WithField("container", containerID)

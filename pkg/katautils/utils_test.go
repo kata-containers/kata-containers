@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Intel Corporation
+// Copyright (c) 2018 Intel Corporation
 // Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -7,14 +7,18 @@
 package katautils
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
+	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,7 +26,16 @@ const (
 	testDirMode  = os.FileMode(0750)
 	testFileMode = os.FileMode(0640)
 
+	testDisabledNeedRoot    = "Test disabled as requires root user"
 	testDisabledNeedNonRoot = "Test disabled as requires non-root user"
+
+	// small docker image used to create root filesystems from
+	testDockerImage = "busybox"
+
+	testSandboxID   = "99999999-9999-9999-99999999999999999"
+	testContainerID = "1"
+	testBundle      = "bundle"
+	specConfig      = "config.json"
 )
 
 var testDir = ""
@@ -37,6 +50,148 @@ func init() {
 	}
 
 	fmt.Printf("INFO: test directory is %v\n", testDir)
+
+	testBundleDir = filepath.Join(testDir, testBundle)
+	err = os.MkdirAll(testBundleDir, testDirMode)
+	if err != nil {
+		panic(fmt.Sprintf("ERROR: failed to create bundle directory %v: %v", testBundleDir, err))
+	}
+
+	fmt.Printf("INFO: creating OCI bundle in %v for tests to use\n", testBundleDir)
+	err = realMakeOCIBundle(testBundleDir)
+	if err != nil {
+		panic(fmt.Sprintf("ERROR: failed to create OCI bundle: %v", err))
+	}
+}
+
+// createOCIConfig creates an OCI configuration (spec) file in
+// the bundle directory specified (which must exist).
+func createOCIConfig(bundleDir string) error {
+	if bundleDir == "" {
+		return errors.New("BUG: Need bundle directory")
+	}
+
+	if !FileExists(bundleDir) {
+		return fmt.Errorf("BUG: Bundle directory %s does not exist", bundleDir)
+	}
+
+	var configCmd string
+
+	// Search for a suitable version of runc to use to generate
+	// the OCI config file.
+	for _, cmd := range []string{"docker-runc", "runc"} {
+		fullPath, err := exec.LookPath(cmd)
+		if err == nil {
+			configCmd = fullPath
+			break
+		}
+	}
+
+	if configCmd == "" {
+		return errors.New("Cannot find command to generate OCI config file")
+	}
+
+	_, err := RunCommand([]string{configCmd, "spec", "--bundle", bundleDir})
+	if err != nil {
+		return err
+	}
+
+	specFile := filepath.Join(bundleDir, specConfig)
+	if !FileExists(specFile) {
+		return fmt.Errorf("generated OCI config file does not exist: %v", specFile)
+	}
+
+	return nil
+}
+
+// realMakeOCIBundle will create an OCI bundle (including the "config.json"
+// config file) in the directory specified (which must already exist).
+//
+// XXX: Note that tests should *NOT* call this function - they should
+// XXX: instead call makeOCIBundle().
+func realMakeOCIBundle(bundleDir string) error {
+	if bundleDir == "" {
+		return errors.New("BUG: Need bundle directory")
+	}
+
+	if !FileExists(bundleDir) {
+		return fmt.Errorf("BUG: Bundle directory %v does not exist", bundleDir)
+	}
+
+	err := createOCIConfig(bundleDir)
+	if err != nil {
+		return err
+	}
+
+	// Note the unusual parameter (a directory, not the config
+	// file to parse!)
+	spec, err := oci.ParseConfigJSON(bundleDir)
+	if err != nil {
+		return err
+	}
+
+	// Determine the rootfs directory name the OCI config refers to
+	ociRootPath := spec.Root.Path
+
+	rootfsDir := filepath.Join(bundleDir, ociRootPath)
+
+	if strings.HasPrefix(ociRootPath, "/") {
+		return fmt.Errorf("Cannot handle absolute rootfs as bundle must be unique to each test")
+	}
+
+	err = createRootfs(rootfsDir)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// createRootfs creates a minimal root filesystem below the specified
+// directory.
+func createRootfs(dir string) error {
+	err := os.MkdirAll(dir, testDirMode)
+	if err != nil {
+		return err
+	}
+
+	container, err := RunCommand([]string{"docker", "create", testDockerImage})
+	if err != nil {
+		return err
+	}
+
+	cmd1 := exec.Command("docker", "export", container)
+	cmd2 := exec.Command("tar", "-C", dir, "-xvf", "-")
+
+	cmd1Stdout, err := cmd1.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	cmd2.Stdin = cmd1Stdout
+
+	err = cmd2.Start()
+	if err != nil {
+		return err
+	}
+
+	err = cmd1.Run()
+	if err != nil {
+		return err
+	}
+
+	err = cmd2.Wait()
+	if err != nil {
+		return err
+	}
+
+	// Clean up
+	_, err = RunCommand([]string{"docker", "rm", container})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func createFile(file, contents string) error {
@@ -209,5 +364,19 @@ func TestGetFileContents(t *testing.T) {
 		contents, err := GetFileContents(file)
 		assert.NoError(t, err)
 		assert.Equal(t, contents, d.contents)
+	}
+}
+
+func TestIsEphemeralStorage(t *testing.T) {
+	sampleEphePath := "/var/lib/kubelet/pods/366c3a75-4869-11e8-b479-507b9ddd5ce4/volumes/kubernetes.io~empty-dir/cache-volume"
+	isEphe := IsEphemeralStorage(sampleEphePath)
+	if !isEphe {
+		t.Fatalf("Unable to correctly determine volume type")
+	}
+
+	sampleEphePath = "/var/lib/kubelet/pods/366c3a75-4869-11e8-b479-507b9ddd5ce4/volumes/cache-volume"
+	isEphe = IsEphemeralStorage(sampleEphePath)
+	if isEphe {
+		t.Fatalf("Unable to correctly determine volume type")
 	}
 }

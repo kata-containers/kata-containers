@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Intel Corporation
+// Copyright (c) 2018 Intel Corporation
 // Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -28,6 +28,9 @@ const (
 var (
 	defaultProxy = vc.KataProxyType
 	defaultShim  = vc.KataShimType
+
+	// if true, enable opentracing support.
+	tracing = false
 )
 
 // The TOML configuration file contains a number of sections (or
@@ -531,7 +534,7 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 	return nil
 }
 
-func initConfig(builtIn bool) (config oci.RuntimeConfig, err error) {
+func initConfig() (config oci.RuntimeConfig, err error) {
 	var defaultAgentConfig interface{}
 
 	defaultHypervisorConfig := vc.HypervisorConfig{
@@ -565,13 +568,6 @@ func initConfig(builtIn bool) (config oci.RuntimeConfig, err error) {
 
 	defaultAgentConfig = vc.HyperConfig{}
 
-	if builtIn {
-		defaultProxy = vc.KataBuiltInProxyType
-		defaultShim = vc.KataBuiltInShimType
-
-		defaultAgentConfig = vc.KataAgentConfig{LongLiveConn: true}
-	}
-
 	config = oci.RuntimeConfig{
 		HypervisorType:   defaultHypervisor,
 		HypervisorConfig: defaultHypervisorConfig,
@@ -592,12 +588,12 @@ func initConfig(builtIn bool) (config oci.RuntimeConfig, err error) {
 //
 // All paths are resolved fully meaning if this function does not return an
 // error, all paths are valid at the time of the call.
-func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolvedConfigPath string, config oci.RuntimeConfig, tracing bool, err error) {
+func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolvedConfigPath string, config oci.RuntimeConfig, err error) {
 	var resolved string
 
-	config, err = initConfig(builtIn)
+	config, err = initConfig()
 	if err != nil {
-		return "", oci.RuntimeConfig{}, tracing, err
+		return "", oci.RuntimeConfig{}, err
 	}
 
 	if configPath == "" {
@@ -607,18 +603,18 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 	}
 
 	if err != nil {
-		return "", config, tracing, fmt.Errorf("Cannot find usable config file (%v)", err)
+		return "", config, fmt.Errorf("Cannot find usable config file (%v)", err)
 	}
 
 	configData, err := ioutil.ReadFile(resolved)
 	if err != nil {
-		return "", config, tracing, err
+		return "", config, err
 	}
 
 	var tomlConf tomlConfig
 	_, err = toml.Decode(string(configData), &tomlConf)
 	if err != nil {
-		return "", config, tracing, err
+		return "", config, err
 	}
 
 	config.Debug = tomlConf.Runtime.Debug
@@ -633,14 +629,14 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 	if tomlConf.Runtime.InterNetworkModel != "" {
 		err = config.InterNetworkModel.SetModel(tomlConf.Runtime.InterNetworkModel)
 		if err != nil {
-			return "", config, tracing, err
+			return "", config, err
 		}
 	}
 
 	if !ignoreLogging {
 		err := handleSystemLog("", "")
 		if err != nil {
-			return "", config, tracing, err
+			return "", config, err
 		}
 
 		kataUtilsLogger.WithFields(
@@ -650,13 +646,13 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 			}).Info("loaded configuration")
 	}
 
-	if err := updateRuntimeConfig(resolved, tomlConf, &config); err != nil {
-		return "", config, tracing, err
+	if err := updateConfig(resolved, tomlConf, &config, builtIn); err != nil {
+		return "", config, err
 	}
 
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
 	if err := checkNetNsConfig(config); err != nil {
-		return "", config, tracing, err
+		return "", config, err
 	}
 
 	// use no proxy if HypervisorConfig.UseVSock is true
@@ -667,10 +663,26 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 	}
 
 	if err := checkHypervisorConfig(config.HypervisorConfig); err != nil {
-		return "", config, tracing, err
+		return "", config, err
 	}
 
-	return resolved, config, tracing, nil
+	return resolved, config, nil
+}
+
+func updateConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
+
+	if err := updateRuntimeConfig(configPath, tomlConf, config); err != nil {
+		return err
+	}
+
+	if builtIn {
+		config.ProxyType = vc.KataBuiltInProxyType
+		config.ShimType = vc.KataBuiltInShimType
+		config.AgentType = vc.KataContainersAgent
+		config.AgentConfig = vc.KataAgentConfig{LongLiveConn: true}
+	}
+
+	return nil
 }
 
 // checkNetNsConfig performs sanity checks on disable_new_netns config.
