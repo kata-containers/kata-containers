@@ -7,16 +7,15 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"testing"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
@@ -29,34 +28,14 @@ const (
 	testPID                     = 100
 	testConsole                 = "/dev/pts/999"
 	testContainerTypeAnnotation = "io.kubernetes.cri-o.ContainerType"
-	testSandboxIDAnnotation     = "io.kubernetes.cri-o.SandboxID"
 	testContainerTypeSandbox    = "sandbox"
 	testContainerTypeContainer  = "container"
 )
 
-var testStrPID = fmt.Sprintf("%d", testPID)
-
-// return the value of the *last* param with the specified key
-func findLastParam(key string, params []vc.Param) (string, error) {
-	if key == "" {
-		return "", errors.New("ERROR: need non-nil key")
-	}
-
-	l := len(params)
-	if l == 0 {
-		return "", errors.New("ERROR: no params")
-	}
-
-	for i := l - 1; i >= 0; i-- {
-		p := params[i]
-
-		if key == p.Key {
-			return p.Value, nil
-		}
-	}
-
-	return "", fmt.Errorf("no param called %q found", name)
-}
+var (
+	testStrPID      = fmt.Sprintf("%d", testPID)
+	ctrsMapTreePath = "/var/run/kata-containers/containers-mapping"
+)
 
 func TestCreatePIDFileSuccessful(t *testing.T) {
 	pidDirPath, err := ioutil.TempDir(testDir, "pid-path-")
@@ -230,6 +209,7 @@ func TestCreateInvalidArgs(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
+	katautils.SetCtrsMapTreePath(ctrsMapTreePath)
 
 	defer func() {
 		testingImpl.CreateSandboxFunc = nil
@@ -280,6 +260,7 @@ func TestCreateInvalidConfigJSON(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
+	katautils.SetCtrsMapTreePath(ctrsMapTreePath)
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -296,7 +277,7 @@ func TestCreateInvalidConfigJSON(t *testing.T) {
 	pidFilePath := filepath.Join(tmpdir, "pidfile.txt")
 
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(fileExists(ociConfigFile))
+	assert.True(katautils.FileExists(ociConfigFile))
 
 	f, err := os.OpenFile(ociConfigFile, os.O_APPEND|os.O_WRONLY, testFileMode)
 	assert.NoError(err)
@@ -321,6 +302,7 @@ func TestCreateInvalidContainerType(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
+	katautils.SetCtrsMapTreePath(ctrsMapTreePath)
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -337,7 +319,7 @@ func TestCreateInvalidContainerType(t *testing.T) {
 	pidFilePath := filepath.Join(tmpdir, "pidfile.txt")
 
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(fileExists(ociConfigFile))
+	assert.True(katautils.FileExists(ociConfigFile))
 
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
@@ -365,6 +347,7 @@ func TestCreateContainerInvalid(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
+	katautils.SetCtrsMapTreePath(ctrsMapTreePath)
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -381,7 +364,7 @@ func TestCreateContainerInvalid(t *testing.T) {
 	pidFilePath := filepath.Join(tmpdir, "pidfile.txt")
 
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(fileExists(ociConfigFile))
+	assert.True(katautils.FileExists(ociConfigFile))
 
 	spec, err := readOCIConfigFile(ociConfigFile)
 
@@ -421,6 +404,7 @@ func TestCreateProcessCgroupsPathSuccessful(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
+	katautils.SetCtrsMapTreePath(ctrsMapTreePath)
 
 	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
@@ -445,7 +429,7 @@ func TestCreateProcessCgroupsPathSuccessful(t *testing.T) {
 	pidFilePath := filepath.Join(tmpdir, "pidfile.txt")
 
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(fileExists(ociConfigFile))
+	assert.True(katautils.FileExists(ociConfigFile))
 
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
@@ -523,6 +507,7 @@ func TestCreateCreateCgroupsFilesFail(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
+	katautils.SetCtrsMapTreePath(ctrsMapTreePath)
 
 	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
@@ -547,7 +532,7 @@ func TestCreateCreateCgroupsFilesFail(t *testing.T) {
 	pidFilePath := filepath.Join(tmpdir, "pidfile.txt")
 
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(fileExists(ociConfigFile))
+	assert.True(katautils.FileExists(ociConfigFile))
 
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
@@ -608,6 +593,7 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
+	katautils.SetCtrsMapTreePath(ctrsMapTreePath)
 
 	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
@@ -633,7 +619,7 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 	pidFilePath := filepath.Join(pidDir, "pidfile.txt")
 
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(fileExists(ociConfigFile))
+	assert.True(katautils.FileExists(ociConfigFile))
 
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
@@ -683,6 +669,7 @@ func TestCreate(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
+	katautils.SetCtrsMapTreePath(ctrsMapTreePath)
 
 	testingImpl.CreateSandboxFunc = func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error) {
 		return sandbox, nil
@@ -707,7 +694,7 @@ func TestCreate(t *testing.T) {
 	pidFilePath := filepath.Join(tmpdir, "pidfile.txt")
 
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(fileExists(ociConfigFile))
+	assert.True(katautils.FileExists(ociConfigFile))
 
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
@@ -741,6 +728,7 @@ func TestCreateInvalidKernelParams(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 	ctrsMapTreePath = path
+	katautils.SetCtrsMapTreePath(ctrsMapTreePath)
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
@@ -757,7 +745,7 @@ func TestCreateInvalidKernelParams(t *testing.T) {
 	pidFilePath := filepath.Join(tmpdir, "pidfile.txt")
 
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(fileExists(ociConfigFile))
+	assert.True(katautils.FileExists(ociConfigFile))
 
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
@@ -770,12 +758,12 @@ func TestCreateInvalidKernelParams(t *testing.T) {
 	err = writeOCIConfigFile(spec, ociConfigFile)
 	assert.NoError(err)
 
-	savedFunc := getKernelParamsFunc
+	savedFunc := katautils.GetKernelParamsFunc
 	defer func() {
-		getKernelParamsFunc = savedFunc
+		katautils.GetKernelParamsFunc = savedFunc
 	}()
 
-	getKernelParamsFunc = func(needSystemd bool) []vc.Param {
+	katautils.GetKernelParamsFunc = func(needSystemd bool) []vc.Param {
 		return []vc.Param{
 			{
 				Key:   "",
@@ -790,282 +778,4 @@ func TestCreateInvalidKernelParams(t *testing.T) {
 		assert.False(vcmock.IsMockError(err))
 		os.RemoveAll(path)
 	}
-}
-
-func TestCreateSandboxConfigFail(t *testing.T) {
-	assert := assert.New(t)
-
-	path, err := ioutil.TempDir("", "containers-mapping")
-	assert.NoError(err)
-	defer os.RemoveAll(path)
-	ctrsMapTreePath = path
-
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
-
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
-	assert.NoError(err)
-
-	bundlePath := filepath.Join(tmpdir, "bundle")
-
-	err = makeOCIBundle(bundlePath)
-	assert.NoError(err)
-
-	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(fileExists(ociConfigFile))
-
-	spec, err := readOCIConfigFile(ociConfigFile)
-	assert.NoError(err)
-
-	quota := int64(0)
-	limit := int64(0)
-
-	spec.Linux.Resources.Memory = &specs.LinuxMemory{
-		Limit: &limit,
-	}
-
-	spec.Linux.Resources.CPU = &specs.LinuxCPU{
-		// specify an invalid value
-		Quota: &quota,
-	}
-
-	_, err = createSandbox(context.Background(), spec, runtimeConfig, testContainerID, bundlePath, testConsole, true, true)
-	assert.Error(err)
-}
-
-func TestCreateCreateSandboxFail(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedNonRoot)
-	}
-
-	assert := assert.New(t)
-
-	path, err := ioutil.TempDir("", "containers-mapping")
-	assert.NoError(err)
-	defer os.RemoveAll(path)
-	ctrsMapTreePath = path
-
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
-
-	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
-	assert.NoError(err)
-
-	bundlePath := filepath.Join(tmpdir, "bundle")
-
-	err = makeOCIBundle(bundlePath)
-	assert.NoError(err)
-
-	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(fileExists(ociConfigFile))
-
-	spec, err := readOCIConfigFile(ociConfigFile)
-	assert.NoError(err)
-
-	_, err = createSandbox(context.Background(), spec, runtimeConfig, testContainerID, bundlePath, testConsole, true, true)
-	assert.Error(err)
-	assert.True(vcmock.IsMockError(err))
-}
-
-func TestCreateCreateContainerContainerConfigFail(t *testing.T) {
-	assert := assert.New(t)
-
-	path, err := ioutil.TempDir("", "containers-mapping")
-	assert.NoError(err)
-	defer os.RemoveAll(path)
-	ctrsMapTreePath = path
-
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
-
-	bundlePath := filepath.Join(tmpdir, "bundle")
-
-	err = makeOCIBundle(bundlePath)
-	assert.NoError(err)
-
-	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(fileExists(ociConfigFile))
-
-	spec, err := readOCIConfigFile(ociConfigFile)
-	assert.NoError(err)
-
-	// Set invalid container type
-	containerType := "你好，世界"
-	spec.Annotations = make(map[string]string)
-	spec.Annotations[testContainerTypeAnnotation] = containerType
-
-	// rewrite file
-	err = writeOCIConfigFile(spec, ociConfigFile)
-	assert.NoError(err)
-
-	for _, disableOutput := range []bool{true, false} {
-		_, err = createContainer(context.Background(), spec, testContainerID, bundlePath, testConsole, disableOutput)
-		assert.Error(err)
-		assert.False(vcmock.IsMockError(err))
-		assert.True(strings.Contains(err.Error(), containerType))
-		os.RemoveAll(path)
-	}
-}
-
-func TestCreateCreateContainerFail(t *testing.T) {
-	assert := assert.New(t)
-
-	path, err := ioutil.TempDir("", "containers-mapping")
-	assert.NoError(err)
-	defer os.RemoveAll(path)
-	ctrsMapTreePath = path
-
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
-
-	bundlePath := filepath.Join(tmpdir, "bundle")
-
-	err = makeOCIBundle(bundlePath)
-	assert.NoError(err)
-
-	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(fileExists(ociConfigFile))
-
-	spec, err := readOCIConfigFile(ociConfigFile)
-	assert.NoError(err)
-
-	// set expected container type and sandboxID
-	spec.Annotations = make(map[string]string)
-	spec.Annotations[testContainerTypeAnnotation] = testContainerTypeContainer
-	spec.Annotations[testSandboxIDAnnotation] = testSandboxID
-
-	// rewrite file
-	err = writeOCIConfigFile(spec, ociConfigFile)
-	assert.NoError(err)
-
-	for _, disableOutput := range []bool{true, false} {
-		_, err = createContainer(context.Background(), spec, testContainerID, bundlePath, testConsole, disableOutput)
-		assert.Error(err)
-		assert.True(vcmock.IsMockError(err))
-		os.RemoveAll(path)
-	}
-}
-
-func TestSetEphemeralStorageType(t *testing.T) {
-	assert := assert.New(t)
-
-	ociSpec := oci.CompatOCISpec{}
-	var ociMounts []specs.Mount
-	mount := specs.Mount{
-		Source: "/var/lib/kubelet/pods/366c3a77-4869-11e8-b479-507b9ddd5ce4/volumes/kubernetes.io~empty-dir/cache-volume",
-	}
-
-	ociMounts = append(ociMounts, mount)
-	ociSpec.Mounts = ociMounts
-	ociSpec = setEphemeralStorageType(ociSpec)
-
-	mountType := ociSpec.Mounts[0].Type
-	assert.Equal(mountType, "ephemeral",
-		"Unexpected mount type, got %s expected ephemeral", mountType)
-}
-
-func TestCreateCreateContainer(t *testing.T) {
-	assert := assert.New(t)
-
-	path, err := ioutil.TempDir("", "containers-mapping")
-	assert.NoError(err)
-	defer os.RemoveAll(path)
-	ctrsMapTreePath = path
-
-	testingImpl.CreateContainerFunc = func(ctx context.Context, sandboxID string, containerConfig vc.ContainerConfig) (vc.VCSandbox, vc.VCContainer, error) {
-		return &vcmock.Sandbox{}, &vcmock.Container{}, nil
-	}
-
-	defer func() {
-		testingImpl.CreateContainerFunc = nil
-	}()
-
-	tmpdir, err := ioutil.TempDir("", "")
-	assert.NoError(err)
-	defer os.RemoveAll(tmpdir)
-
-	bundlePath := filepath.Join(tmpdir, "bundle")
-
-	err = makeOCIBundle(bundlePath)
-	assert.NoError(err)
-
-	ociConfigFile := filepath.Join(bundlePath, "config.json")
-	assert.True(fileExists(ociConfigFile))
-
-	spec, err := readOCIConfigFile(ociConfigFile)
-	assert.NoError(err)
-
-	// set expected container type and sandboxID
-	spec.Annotations = make(map[string]string)
-	spec.Annotations[testContainerTypeAnnotation] = testContainerTypeContainer
-	spec.Annotations[testSandboxIDAnnotation] = testSandboxID
-
-	// rewrite file
-	err = writeOCIConfigFile(spec, ociConfigFile)
-	assert.NoError(err)
-
-	for _, disableOutput := range []bool{true, false} {
-		_, err = createContainer(context.Background(), spec, testContainerID, bundlePath, testConsole, disableOutput)
-		assert.NoError(err)
-		os.RemoveAll(path)
-	}
-}
-
-func TestSetKernelParams(t *testing.T) {
-	assert := assert.New(t)
-
-	config := oci.RuntimeConfig{}
-
-	assert.Empty(config.HypervisorConfig.KernelParams)
-
-	err := setKernelParams(testContainerID, &config)
-	assert.NoError(err)
-
-	if needSystemd(config.HypervisorConfig) {
-		assert.NotEmpty(config.HypervisorConfig.KernelParams)
-	}
-}
-
-func TestSetKernelParamsUserOptionTakesPriority(t *testing.T) {
-	assert := assert.New(t)
-
-	initName := "init"
-	initValue := "/sbin/myinit"
-
-	ipName := "ip"
-	ipValue := "127.0.0.1"
-
-	params := []vc.Param{
-		{Key: initName, Value: initValue},
-		{Key: ipName, Value: ipValue},
-	}
-
-	hypervisorConfig := vc.HypervisorConfig{
-		KernelParams: params,
-	}
-
-	// Config containing user-specified kernel parameters
-	config := oci.RuntimeConfig{
-		HypervisorConfig: hypervisorConfig,
-	}
-
-	assert.NotEmpty(config.HypervisorConfig.KernelParams)
-
-	err := setKernelParams(testContainerID, &config)
-	assert.NoError(err)
-
-	kernelParams := config.HypervisorConfig.KernelParams
-
-	init, err := findLastParam(initName, kernelParams)
-	assert.NoError(err)
-	assert.Equal(initValue, init)
-
-	ip, err := findLastParam(ipName, kernelParams)
-	assert.NoError(err)
-	assert.Equal(ipValue, ip)
-
 }

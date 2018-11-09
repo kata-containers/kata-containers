@@ -193,7 +193,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		return "", oci.RuntimeConfig{}, err
 	}
 
-	_, config, _, err = katautils.LoadConfiguration(configFile, true, false)
+	_, config, err = katautils.LoadConfiguration(configFile, true, false)
 	if err != nil {
 		return "", oci.RuntimeConfig{}, err
 	}

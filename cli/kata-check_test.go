@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
@@ -59,7 +60,7 @@ func createModules(assert *assert.Assertions, cpuInfoFile string, moduleData []t
 		}
 
 		err = hostIsVMContainerCapable(details)
-		if fileExists(cpuInfoFile) {
+		if katautils.FileExists(cpuInfoFile) {
 			assert.NoError(err)
 		} else {
 			assert.Error(err)

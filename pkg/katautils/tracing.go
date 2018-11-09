@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package main
+package katautils
 
 import (
 	"context"
@@ -22,14 +22,15 @@ type traceLogger struct {
 var tracerCloser io.Closer
 
 func (t traceLogger) Error(msg string) {
-	kataLog.Error(msg)
+	kataUtilsLogger.Error(msg)
 }
 
 func (t traceLogger) Infof(msg string, args ...interface{}) {
-	kataLog.Infof(msg, args...)
+	kataUtilsLogger.Infof(msg, args...)
 }
 
-func createTracer(name string) (opentracing.Tracer, error) {
+// CreateTracer create a tracer
+func CreateTracer(name string) (opentracing.Tracer, error) {
 	cfg := &config.Configuration{
 		ServiceName: name,
 
@@ -61,8 +62,8 @@ func createTracer(name string) (opentracing.Tracer, error) {
 	return tracer, nil
 }
 
-// stopTracing() ends all tracing, reporting the spans to the collector.
-func stopTracing(ctx context.Context) {
+// StopTracing ends all tracing, reporting the spans to the collector.
+func StopTracing(ctx context.Context) {
 	if !tracing {
 		return
 	}
@@ -74,12 +75,14 @@ func stopTracing(ctx context.Context) {
 	}
 
 	// report all possible spans to the collector
-	tracerCloser.Close()
+	if tracerCloser != nil {
+		tracerCloser.Close()
+	}
 }
 
-// trace creates a new tracing span based on the specified name and parent
+// Trace creates a new tracing span based on the specified name and parent
 // context.
-func trace(parent context.Context, name string) (opentracing.Span, context.Context) {
+func Trace(parent context.Context, name string) (opentracing.Span, context.Context) {
 	span, ctx := opentracing.StartSpanFromContext(parent, name)
 
 	span.SetTag("source", "runtime")

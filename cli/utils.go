@@ -8,15 +8,13 @@ package main
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/kata-containers/runtime/pkg/katautils"
 )
 
 const (
-	unknown     = "<<unknown>>"
-	k8sEmptyDir = "kubernetes.io~empty-dir"
+	unknown = "<<unknown>>"
 )
 
 // variables to allow tests to modify the values
@@ -27,34 +25,6 @@ var (
 	// Clear Linux has a different path (for stateless support)
 	osReleaseClr = "/usr/lib/os-release"
 )
-
-func fileExists(path string) bool {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return false
-	}
-
-	return true
-}
-
-// IsEphemeralStorage returns true if the given path
-// to the storage belongs to kubernetes ephemeral storage
-//
-// This method depends on a specific path used by k8s
-// to detect if it's of type ephemeral. As of now,
-// this is a very k8s specific solution that works
-// but in future there should be a better way for this
-// method to determine if the path is for ephemeral
-// volume type
-func IsEphemeralStorage(path string) bool {
-	splitSourceSlice := strings.Split(path, "/")
-	if len(splitSourceSlice) > 1 {
-		storageType := splitSourceSlice[len(splitSourceSlice)-2]
-		if storageType == k8sEmptyDir {
-			return true
-		}
-	}
-	return false
-}
 
 func getKernelVersion() (string, error) {
 	contents, err := katautils.GetFileContents(procVersion)
@@ -150,28 +120,4 @@ func genericGetCPUDetails() (vendor, model string, err error) {
 	}
 
 	return vendor, model, nil
-}
-
-// runCommandFull returns the commands space-trimmed standard output and
-// error on success. Note that if the command fails, the requested output will
-// still be returned, along with an error.
-func runCommandFull(args []string, includeStderr bool) (string, error) {
-	cmd := exec.Command(args[0], args[1:]...)
-	var err error
-	var bytes []byte
-
-	if includeStderr {
-		bytes, err = cmd.CombinedOutput()
-	} else {
-		bytes, err = cmd.Output()
-	}
-
-	trimmed := strings.TrimSpace(string(bytes))
-
-	return trimmed, err
-}
-
-// runCommand returns the commands space-trimmed standard output on success
-func runCommand(args []string) (string, error) {
-	return runCommandFull(args, false)
 }

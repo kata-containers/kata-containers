@@ -13,6 +13,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
@@ -41,7 +42,7 @@ func TestStartInvalidArgs(t *testing.T) {
 	path, err = ioutil.TempDir("", "containers-mapping")
 	assert.NoError(err)
 	defer os.RemoveAll(path)
-	ctrsMapTreePath = path
+	katautils.SetCtrsMapTreePath(path)
 
 	// Container missing in container mapping
 	_, err = start(context.Background(), testContainerID)

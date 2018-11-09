@@ -117,7 +117,7 @@ func getCPUFlags(cpuinfo string) string {
 func haveKernelModule(module string) bool {
 	// First, check to see if the module is already loaded
 	path := filepath.Join(sysModuleDir, module)
-	if fileExists(path) {
+	if katautils.FileExists(path) {
 		return true
 	}
 
@@ -288,7 +288,7 @@ var kataCheckCLICommand = cli.Command{
 			return err
 		}
 
-		span, _ := trace(ctx, "kata-check")
+		span, _ := katautils.Trace(ctx, "kata-check")
 		defer span.Finish()
 
 		setCPUtype()

@@ -9,15 +9,12 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
-	goruntime "runtime"
 	"strings"
 	"syscall"
 
-	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/opencontainers/runc/libcontainer/utils"
@@ -25,8 +22,6 @@ import (
 
 // Contants related to cgroup memory directory
 const (
-	ctrsMappingDirMode = os.FileMode(0750)
-
 	// Filesystem type corresponding to CGROUP_SUPER_MAGIC as listed
 	// here: http://man7.org/linux/man-pages/man2/statfs.2.html
 	cgroupFsType = 0x27e0eb
@@ -36,8 +31,6 @@ var cgroupsDirPath string
 
 var procMountInfo = "/proc/self/mountinfo"
 
-var ctrsMapTreePath = "/var/run/kata-containers/containers-mapping"
-
 // getContainerInfo returns the container status and its sandbox ID.
 func getContainerInfo(ctx context.Context, containerID string) (vc.ContainerStatus, string, error) {
 	// container ID MUST be provided.
@@ -45,7 +38,7 @@ func getContainerInfo(ctx context.Context, containerID string) (vc.ContainerStat
 		return vc.ContainerStatus{}, "", fmt.Errorf("Missing container ID")
 	}
 
-	sandboxID, err := fetchContainerIDMapping(containerID)
+	sandboxID, err := katautils.FetchContainerIDMapping(containerID)
 	if err != nil {
 		return vc.ContainerStatus{}, "", err
 	}
@@ -217,101 +210,4 @@ func getCgroupsDirPath(mountInfoFile string) (string, error) {
 	}
 
 	return cgroupRootPath, nil
-}
-
-// This function assumes it should find only one file inside the container
-// ID directory. If there are several files, we could not determine which
-// file name corresponds to the sandbox ID associated, and this would throw
-// an error.
-func fetchContainerIDMapping(containerID string) (string, error) {
-	if containerID == "" {
-		return "", fmt.Errorf("Missing container ID")
-	}
-
-	dirPath := filepath.Join(ctrsMapTreePath, containerID)
-
-	files, err := ioutil.ReadDir(dirPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", nil
-		}
-
-		return "", err
-	}
-
-	if len(files) != 1 {
-		return "", fmt.Errorf("Too many files (%d) in %q", len(files), dirPath)
-	}
-
-	return files[0].Name(), nil
-}
-
-func addContainerIDMapping(ctx context.Context, containerID, sandboxID string) error {
-	span, _ := trace(ctx, "addContainerIDMapping")
-	defer span.Finish()
-
-	if containerID == "" {
-		return fmt.Errorf("Missing container ID")
-	}
-
-	if sandboxID == "" {
-		return fmt.Errorf("Missing sandbox ID")
-	}
-
-	parentPath := filepath.Join(ctrsMapTreePath, containerID)
-
-	if err := os.RemoveAll(parentPath); err != nil {
-		return err
-	}
-
-	path := filepath.Join(parentPath, sandboxID)
-
-	if err := os.MkdirAll(path, ctrsMappingDirMode); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func delContainerIDMapping(ctx context.Context, containerID string) error {
-	span, _ := trace(ctx, "delContainerIDMapping")
-	defer span.Finish()
-
-	if containerID == "" {
-		return fmt.Errorf("Missing container ID")
-	}
-
-	path := filepath.Join(ctrsMapTreePath, containerID)
-
-	return os.RemoveAll(path)
-}
-
-// enterNetNS is free from any call to a go routine, and it calls
-// into runtime.LockOSThread(), meaning it won't be executed in a
-// different thread than the one expected by the caller.
-func enterNetNS(netNSPath string, cb func() error) error {
-	if netNSPath == "" {
-		return cb()
-	}
-
-	goruntime.LockOSThread()
-	defer goruntime.UnlockOSThread()
-
-	currentNS, err := ns.GetCurrentNS()
-	if err != nil {
-		return err
-	}
-	defer currentNS.Close()
-
-	targetNS, err := ns.GetNS(netNSPath)
-	if err != nil {
-		return err
-	}
-
-	if err := targetNS.Set(); err != nil {
-		return err
-	}
-	defer currentNS.Set()
-
-	return cb()
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Intel Corporation
+// Copyright (c) 2018 Intel Corporation
 // Copyright (c) 2018 HyperHQ Inc.
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -15,6 +15,7 @@ var defaultInitrdPath = "/usr/share/kata-containers/kata-containers-initrd.img"
 var defaultFirmwarePath = ""
 var defaultMachineAccelerators = ""
 var defaultShimPath = "/usr/libexec/kata-containers/kata-shim"
+var systemdUnitName = "kata-containers.target"
 
 const defaultKernelParams = ""
 const defaultMachineType = "pc"

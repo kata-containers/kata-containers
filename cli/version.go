@@ -6,6 +6,7 @@
 package main
 
 import (
+	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/urfave/cli"
 )
 
@@ -18,7 +19,7 @@ var versionCLICommand = cli.Command{
 			return err
 		}
 
-		span, _ := trace(ctx, "version")
+		span, _ := katautils.Trace(ctx, "version")
 		defer span.Finish()
 
 		cli.VersionPrinter(context)

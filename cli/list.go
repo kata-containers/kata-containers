@@ -19,6 +19,7 @@ import (
 
 	"github.com/urfave/cli"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	oci "github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 )
@@ -114,7 +115,7 @@ To list containers created using a non-default value for "--root":
 			return err
 		}
 
-		span, ctx := trace(ctx, "list")
+		span, ctx := katautils.Trace(ctx, "list")
 		defer span.Finish()
 
 		s, err := getContainers(ctx, context)
