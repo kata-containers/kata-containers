@@ -73,7 +73,7 @@ clone_repos() {
 		# are already in the PR branch, before trying to fetch the same branch.
 		if [ ${repo} == ${tests_repo} ] && [ "${repo}" == "${kata_repo}" ]
 		then
-		current_branch=$(git rev-parse --abbrev-ref HEAD)
+			current_branch=$(git rev-parse --abbrev-ref HEAD)
 			if [ "${current_branch}" == "${pr_branch}" ]
 			then
 				echo "Already on branch ${current_branch}"
