@@ -8,7 +8,7 @@
 TIMEOUT := 60
 
 # union for 'make test'
-UNION := functional docker crio docker-compose docker-stability openshift kubernetes swarm vm-factory entropy ramdisk
+UNION := functional docker crio docker-compose netmon docker-stability openshift kubernetes swarm vm-factory entropy ramdisk
 
 # skipped test suites for docker integration tests
 SKIP :=
@@ -105,6 +105,11 @@ entropy:
 	cd integration/entropy && \
 	bats entropy_test.bats
 
+netmon:
+	systemctl is-active --quiet docker || sudo systemctl start docker
+	bash -f .ci/install_bats.sh
+	bats integration/netmon/netmon_test.bats
+
 test: ${UNION}
 
 check: checkcommits log-parser
@@ -125,6 +130,7 @@ check: checkcommits log-parser
 	openshift \
 	pentest \
 	swarm \
+	netmon \
 	network \
 	ramdisk \
 	test \
