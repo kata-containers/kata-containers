@@ -6,7 +6,14 @@
 # Check that the system golang version is within the required version range
 # for this project.
 
-golang_version_min=$(shell yq r versions.yaml languages.golang.version)
+have_yq=$(shell if [ -x "$(GOPATH)/bin/yq" ]; then echo "true"; else echo ""; fi)
+ifeq (,$(have_yq))
+    install_yq=$(shell .ci/install-yq.sh)
+endif
+ifneq (,$(install_yq))
+    $(error "ERROR: install yq failed")
+endif
+golang_version_min=$(shell $(GOPATH)/bin/yq r versions.yaml languages.golang.version)
 
 ifeq (,$(golang_version_min))
     $(error "ERROR: cannot determine minimum golang version")
