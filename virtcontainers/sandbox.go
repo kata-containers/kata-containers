@@ -1442,9 +1442,9 @@ func (s *Sandbox) createContainers() error {
 	return nil
 }
 
-// start starts a sandbox. The containers that are making the sandbox
+// Start starts a sandbox. The containers that are making the sandbox
 // will be started.
-func (s *Sandbox) start() error {
+func (s *Sandbox) Start() error {
 	if err := s.state.validTransition(s.state.State, StateRunning); err != nil {
 		return err
 	}

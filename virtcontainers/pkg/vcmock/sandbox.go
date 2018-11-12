@@ -67,6 +67,11 @@ func (s *Sandbox) Release() error {
 	return nil
 }
 
+// Start implements the VCSandbox function of the same name.
+func (s *Sandbox) Start() error {
+	return nil
+}
+
 // Pause implements the VCSandbox function of the same name.
 func (s *Sandbox) Pause() error {
 	return nil

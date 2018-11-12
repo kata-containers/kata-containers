@@ -66,6 +66,7 @@ type VCSandbox interface {
 	ID() string
 	SetAnnotations(annotations map[string]string) error
 
+	Start() error
 	Pause() error
 	Resume() error
 	Release() error

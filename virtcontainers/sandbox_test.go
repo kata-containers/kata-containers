@@ -1345,7 +1345,7 @@ func TestStartContainer(t *testing.T) {
 	_, err = s.StartContainer(contID)
 	assert.NotNil(t, err, "Starting non-existing container should fail")
 
-	err = s.start()
+	err = s.Start()
 	assert.Nil(t, err, "Failed to start sandbox: %v", err)
 
 	contConfig := newTestContainerConfigNoop(contID)
@@ -1401,7 +1401,7 @@ func TestEnterContainer(t *testing.T) {
 	_, _, err = s.EnterContainer(contID, cmd)
 	assert.NotNil(t, err, "Entering non-running container should fail")
 
-	err = s.start()
+	err = s.Start()
 	assert.Nil(t, err, "Failed to start sandbox: %v", err)
 
 	_, _, err = s.EnterContainer(contID, cmd)
@@ -1416,7 +1416,7 @@ func TestMonitor(t *testing.T) {
 	_, err = s.Monitor()
 	assert.NotNil(t, err, "Monitoring non-running container should fail")
 
-	err = s.start()
+	err = s.Start()
 	assert.Nil(t, err, "Failed to start sandbox: %v", err)
 
 	_, err = s.Monitor()
@@ -1438,7 +1438,7 @@ func TestWaitProcess(t *testing.T) {
 	_, err = s.WaitProcess(contID, execID)
 	assert.NotNil(t, err, "Wait process in stopped sandbox should fail")
 
-	err = s.start()
+	err = s.Start()
 	assert.Nil(t, err, "Failed to start sandbox: %v", err)
 
 	_, err = s.WaitProcess(contID, execID)
@@ -1468,7 +1468,7 @@ func TestSignalProcess(t *testing.T) {
 	err = s.SignalProcess(contID, execID, syscall.SIGKILL, true)
 	assert.NotNil(t, err, "Wait process in stopped sandbox should fail")
 
-	err = s.start()
+	err = s.Start()
 	assert.Nil(t, err, "Failed to start sandbox: %v", err)
 
 	err = s.SignalProcess(contID, execID, syscall.SIGKILL, false)
@@ -1498,7 +1498,7 @@ func TestWinsizeProcess(t *testing.T) {
 	err = s.WinsizeProcess(contID, execID, 100, 200)
 	assert.NotNil(t, err, "Winsize process in stopped sandbox should fail")
 
-	err = s.start()
+	err = s.Start()
 	assert.Nil(t, err, "Failed to start sandbox: %v", err)
 
 	err = s.WinsizeProcess(contID, execID, 100, 200)
@@ -1528,7 +1528,7 @@ func TestContainerProcessIOStream(t *testing.T) {
 	_, _, _, err = s.IOStream(contID, execID)
 	assert.NotNil(t, err, "Winsize process in stopped sandbox should fail")
 
-	err = s.start()
+	err = s.Start()
 	assert.Nil(t, err, "Failed to start sandbox: %v", err)
 
 	_, _, _, err = s.IOStream(contID, execID)
