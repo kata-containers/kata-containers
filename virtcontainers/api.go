@@ -264,13 +264,8 @@ func StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	defer s.releaseStatelessSandbox()
 
 	// Stop it.
-	err = s.stop()
+	err = s.Stop()
 	if err != nil {
-		return nil, err
-	}
-
-	// Remove the network.
-	if err := s.removeNetwork(); err != nil {
 		return nil, err
 	}
 

@@ -1464,9 +1464,9 @@ func (s *Sandbox) Start() error {
 	return nil
 }
 
-// stop stops a sandbox. The containers that are making the sandbox
+// Stop stops a sandbox. The containers that are making the sandbox
 // will be destroyed.
-func (s *Sandbox) stop() error {
+func (s *Sandbox) Stop() error {
 	span, _ := s.trace("stop")
 	defer span.Finish()
 
@@ -1489,7 +1489,12 @@ func (s *Sandbox) stop() error {
 		return err
 	}
 
-	return s.setSandboxState(StateStopped)
+	if err := s.setSandboxState(StateStopped); err != nil {
+		return err
+	}
+
+	// Remove the network.
+	return s.removeNetwork()
 }
 
 // Pause pauses the sandbox
