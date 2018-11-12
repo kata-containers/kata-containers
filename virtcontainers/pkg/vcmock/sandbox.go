@@ -147,6 +147,11 @@ func (s *Sandbox) UpdateContainer(containerID string, resources specs.LinuxResou
 	return nil
 }
 
+// ProcessListContainer implements the VCSandbox function of the same name.
+func (s *Sandbox) ProcessListContainer(containerID string, options vc.ProcessListOptions) (vc.ProcessList, error) {
+	return nil, nil
+}
+
 // WaitProcess implements the VCSandbox function of the same name.
 func (s *Sandbox) WaitProcess(containerID, processID string) (int32, error) {
 	return 0, nil
