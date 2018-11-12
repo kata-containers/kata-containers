@@ -127,6 +127,16 @@ func (s *Sandbox) StatsContainer(contID string) (vc.ContainerStats, error) {
 	return vc.ContainerStats{}, nil
 }
 
+// PauseContainer implements the VCSandbox function of the same name.
+func (s *Sandbox) PauseContainer(contID string) error {
+	return nil
+}
+
+// ResumeContainer implements the VCSandbox function of the same name.
+func (s *Sandbox) ResumeContainer(contID string) error {
+	return nil
+}
+
 // Status implements the VCSandbox function of the same name.
 func (s *Sandbox) Status() vc.SandboxStatus {
 	return vc.SandboxStatus{}

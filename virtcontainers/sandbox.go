@@ -1463,6 +1463,30 @@ func (s *Sandbox) StatsContainer(containerID string) (ContainerStats, error) {
 	return *stats, nil
 }
 
+// PauseContainer pauses a running container.
+func (s *Sandbox) PauseContainer(containerID string) error {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	// Pause the container.
+	return c.pause()
+}
+
+// ResumeContainer resumes a paused container.
+func (s *Sandbox) ResumeContainer(containerID string) error {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	// Resume the container.
+	return c.resume()
+}
+
 // createContainers registers all containers to the proxy, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers() error {
