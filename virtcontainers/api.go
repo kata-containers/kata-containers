@@ -784,17 +784,11 @@ func togglePauseContainer(ctx context.Context, sandboxID, containerID string, pa
 	}
 	defer s.releaseStatelessSandbox()
 
-	// Fetch the container.
-	c, err := s.findContainer(containerID)
-	if err != nil {
-		return err
-	}
-
 	if pause {
-		return c.pause()
+		return s.PauseContainer(containerID)
 	}
 
-	return c.resume()
+	return s.ResumeContainer(containerID)
 }
 
 // PauseContainer is the virtcontainers container pause entry point.
