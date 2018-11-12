@@ -1320,6 +1320,22 @@ func (s *Sandbox) StartContainer(containerID string) (VCContainer, error) {
 	return c, nil
 }
 
+// StopContainer stops a container in the sandbox
+func (s *Sandbox) StopContainer(containerID string) (VCContainer, error) {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Stop it.
+	if err := c.stop(); err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
 // DeleteContainer deletes a container from the sandbox
 func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
 	if containerID == "" {

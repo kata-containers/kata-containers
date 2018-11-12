@@ -502,19 +502,7 @@ func StopContainer(ctx context.Context, sandboxID, containerID string) (VCContai
 	}
 	defer s.releaseStatelessSandbox()
 
-	// Fetch the container.
-	c, err := s.findContainer(containerID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Stop it.
-	err = c.stop()
-	if err != nil {
-		return nil, err
-	}
-
-	return c, nil
+	return s.StopContainer(containerID)
 }
 
 // EnterContainer is the virtcontainers container command execution entry point.
