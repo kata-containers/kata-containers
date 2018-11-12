@@ -702,13 +702,7 @@ func ProcessListContainer(ctx context.Context, sandboxID, containerID string, op
 	}
 	defer s.releaseStatelessSandbox()
 
-	// Fetch the container.
-	c, err := s.findContainer(containerID)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.processList(options)
+	return s.ProcessListContainer(containerID, options)
 }
 
 // UpdateContainer is the virtcontainers entry point to update

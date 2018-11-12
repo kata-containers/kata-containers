@@ -1383,6 +1383,19 @@ func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
 	return c, nil
 }
 
+// ProcessListContainer lists every process running inside a specific
+// container in the sandbox.
+func (s *Sandbox) ProcessListContainer(containerID string, options ProcessListOptions) (ProcessList, error) {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the process list related to the container.
+	return c.processList(options)
+}
+
 // StatusContainer gets the status of a container
 // TODO: update container status properly, see kata-containers/runtime#253
 func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {

@@ -83,6 +83,7 @@ type VCSandbox interface {
 	StatsContainer(containerID string) (ContainerStats, error)
 	EnterContainer(containerID string, cmd Cmd) (VCContainer, *Process, error)
 	UpdateContainer(containerID string, resources specs.LinuxResources) error
+	ProcessListContainer(containerID string, options ProcessListOptions) (ProcessList, error)
 	WaitProcess(containerID, processID string) (int32, error)
 	SignalProcess(containerID, processID string, signal syscall.Signal, all bool) error
 	WinsizeProcess(containerID, processID string, height, width uint32) error
