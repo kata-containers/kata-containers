@@ -77,6 +77,7 @@ type VCSandbox interface {
 	CreateContainer(contConfig ContainerConfig) (VCContainer, error)
 	DeleteContainer(contID string) (VCContainer, error)
 	StartContainer(containerID string) (VCContainer, error)
+	StopContainer(containerID string) (VCContainer, error)
 	StatusContainer(containerID string) (ContainerStatus, error)
 	StatsContainer(containerID string) (ContainerStats, error)
 	EnterContainer(containerID string, cmd Cmd) (VCContainer, *Process, error)

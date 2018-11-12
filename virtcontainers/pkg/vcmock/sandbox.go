@@ -107,6 +107,11 @@ func (s *Sandbox) StartContainer(contID string) (vc.VCContainer, error) {
 	return &Container{}, nil
 }
 
+// StopContainer implements the VCSandbox function of the same name.
+func (s *Sandbox) StopContainer(contID string) (vc.VCContainer, error) {
+	return &Container{}, nil
+}
+
 // StatusContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) StatusContainer(contID string) (vc.ContainerStatus, error) {
 	return vc.ContainerStatus{}, nil
