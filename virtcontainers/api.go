@@ -468,12 +468,7 @@ func StartContainer(ctx context.Context, sandboxID, containerID string) (VCConta
 	}
 	defer s.releaseStatelessSandbox()
 
-	c, err := s.StartContainer(containerID)
-	if err != nil {
-		return nil, err
-	}
-
-	return c, nil
+	return s.StartContainer(containerID)
 }
 
 // StopContainer is the virtcontainers container stopping entry point.
