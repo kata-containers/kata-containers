@@ -1336,6 +1336,18 @@ func (s *Sandbox) StopContainer(containerID string) (VCContainer, error) {
 	return c, nil
 }
 
+// KillContainer signals a container in the sandbox
+func (s *Sandbox) KillContainer(containerID string, signal syscall.Signal, all bool) error {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	// Send a signal to the process.
+	return c.kill(signal, all)
+}
+
 // DeleteContainer deletes a container from the sandbox
 func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
 	if containerID == "" {

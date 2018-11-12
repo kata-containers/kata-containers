@@ -78,6 +78,7 @@ type VCSandbox interface {
 	DeleteContainer(contID string) (VCContainer, error)
 	StartContainer(containerID string) (VCContainer, error)
 	StopContainer(containerID string) (VCContainer, error)
+	KillContainer(containerID string, signal syscall.Signal, all bool) error
 	StatusContainer(containerID string) (ContainerStatus, error)
 	StatsContainer(containerID string) (ContainerStats, error)
 	EnterContainer(containerID string, cmd Cmd) (VCContainer, *Process, error)

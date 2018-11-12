@@ -655,19 +655,7 @@ func KillContainer(ctx context.Context, sandboxID, containerID string, signal sy
 	}
 	defer s.releaseStatelessSandbox()
 
-	// Fetch the container.
-	c, err := s.findContainer(containerID)
-	if err != nil {
-		return err
-	}
-
-	// Send a signal to the process.
-	err = c.kill(signal, all)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.KillContainer(containerID, signal, all)
 }
 
 // PauseSandbox is the virtcontainers pausing entry point which pauses an
