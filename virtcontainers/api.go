@@ -232,7 +232,7 @@ func StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 
 func startSandbox(s *Sandbox) (*Sandbox, error) {
 	// Start it
-	err := s.start()
+	err := s.Start()
 	if err != nil {
 		return nil, err
 	}
