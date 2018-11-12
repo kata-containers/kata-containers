@@ -19,3 +19,5 @@ PACKAGES="iptables"
 # Init process must be one of {systemd,kata-agent}
 INIT_PROCESS=systemd
 ARCH_EXCLUDE_LIST=()
+
+[ "$SECCOMP" = "yes" ] && PACKAGES+=" libseccomp" || true
