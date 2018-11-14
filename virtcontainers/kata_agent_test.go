@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -925,4 +926,22 @@ func TestKataCopyFile(t *testing.T) {
 
 	err = k.copyFile(src.Name(), dst.Name())
 	assert.NoError(err)
+}
+
+func TestKataCleanupSandbox(t *testing.T) {
+	assert := assert.New(t)
+
+	s := Sandbox{
+		id: "testFoo",
+	}
+	dir := path.Join(kataHostSharedDir, s.id)
+	err := os.MkdirAll(dir, 0777)
+	assert.Nil(err)
+
+	k := &kataAgent{}
+	k.cleanup(s.id)
+
+	if _, err = os.Stat(dir); os.IsExist(err) {
+		t.Fatalf("%s still exists\n", dir)
+	}
 }
