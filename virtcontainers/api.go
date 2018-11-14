@@ -232,7 +232,7 @@ func StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 
 func startSandbox(s *Sandbox) (*Sandbox, error) {
 	// Start it
-	err := s.start()
+	err := s.Start()
 	if err != nil {
 		return nil, err
 	}
@@ -264,13 +264,8 @@ func StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	defer s.releaseStatelessSandbox()
 
 	// Stop it.
-	err = s.stop()
+	err = s.Stop()
 	if err != nil {
-		return nil, err
-	}
-
-	// Remove the network.
-	if err := s.removeNetwork(); err != nil {
 		return nil, err
 	}
 
@@ -473,12 +468,7 @@ func StartContainer(ctx context.Context, sandboxID, containerID string) (VCConta
 	}
 	defer s.releaseStatelessSandbox()
 
-	c, err := s.StartContainer(containerID)
-	if err != nil {
-		return nil, err
-	}
-
-	return c, nil
+	return s.StartContainer(containerID)
 }
 
 // StopContainer is the virtcontainers container stopping entry point.
@@ -507,19 +497,7 @@ func StopContainer(ctx context.Context, sandboxID, containerID string) (VCContai
 	}
 	defer s.releaseStatelessSandbox()
 
-	// Fetch the container.
-	c, err := s.findContainer(containerID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Stop it.
-	err = c.stop()
-	if err != nil {
-		return nil, err
-	}
-
-	return c, nil
+	return s.StopContainer(containerID)
 }
 
 // EnterContainer is the virtcontainers container command execution entry point.
@@ -672,19 +650,7 @@ func KillContainer(ctx context.Context, sandboxID, containerID string, signal sy
 	}
 	defer s.releaseStatelessSandbox()
 
-	// Fetch the container.
-	c, err := s.findContainer(containerID)
-	if err != nil {
-		return err
-	}
-
-	// Send a signal to the process.
-	err = c.kill(signal, all)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.KillContainer(containerID, signal, all)
 }
 
 // PauseSandbox is the virtcontainers pausing entry point which pauses an
@@ -731,13 +697,7 @@ func ProcessListContainer(ctx context.Context, sandboxID, containerID string, op
 	}
 	defer s.releaseStatelessSandbox()
 
-	// Fetch the container.
-	c, err := s.findContainer(containerID)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.processList(options)
+	return s.ProcessListContainer(containerID, options)
 }
 
 // UpdateContainer is the virtcontainers entry point to update
@@ -819,17 +779,11 @@ func togglePauseContainer(ctx context.Context, sandboxID, containerID string, pa
 	}
 	defer s.releaseStatelessSandbox()
 
-	// Fetch the container.
-	c, err := s.findContainer(containerID)
-	if err != nil {
-		return err
-	}
-
 	if pause {
-		return c.pause()
+		return s.PauseContainer(containerID)
 	}
 
-	return c.resume()
+	return s.ResumeContainer(containerID)
 }
 
 // PauseContainer is the virtcontainers container pause entry point.
