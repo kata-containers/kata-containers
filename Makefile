@@ -8,7 +8,7 @@
 TIMEOUT := 60
 
 # union for 'make test'
-UNION := functional docker crio docker-compose netmon docker-stability openshift kubernetes swarm vm-factory entropy ramdisk
+UNION := functional docker crio docker-compose network netmon docker-stability openshift kubernetes swarm vm-factory entropy ramdisk
 
 # skipped test suites for docker integration tests
 SKIP :=
@@ -93,6 +93,7 @@ vm-factory:
 
 
 network:
+	systemctl is-active --quiet docker || sudo systemctl start docker
 	bash -f .ci/install_bats.sh
 	bats integration/network/macvlan/macvlan_driver.bats
 	bats integration/network/ipvlan/ipvlan_driver.bats
