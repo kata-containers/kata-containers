@@ -67,6 +67,16 @@ func (s *Sandbox) Release() error {
 	return nil
 }
 
+// Start implements the VCSandbox function of the same name.
+func (s *Sandbox) Start() error {
+	return nil
+}
+
+// Stop implements the VCSandbox function of the same name.
+func (s *Sandbox) Stop() error {
+	return nil
+}
+
 // Pause implements the VCSandbox function of the same name.
 func (s *Sandbox) Pause() error {
 	return nil
@@ -97,6 +107,16 @@ func (s *Sandbox) StartContainer(contID string) (vc.VCContainer, error) {
 	return &Container{}, nil
 }
 
+// StopContainer implements the VCSandbox function of the same name.
+func (s *Sandbox) StopContainer(contID string) (vc.VCContainer, error) {
+	return &Container{}, nil
+}
+
+// KillContainer implements the VCSandbox function of the same name.
+func (s *Sandbox) KillContainer(contID string, signal syscall.Signal, all bool) error {
+	return nil
+}
+
 // StatusContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) StatusContainer(contID string) (vc.ContainerStatus, error) {
 	return vc.ContainerStatus{}, nil
@@ -105,6 +125,16 @@ func (s *Sandbox) StatusContainer(contID string) (vc.ContainerStatus, error) {
 // StatsContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) StatsContainer(contID string) (vc.ContainerStats, error) {
 	return vc.ContainerStats{}, nil
+}
+
+// PauseContainer implements the VCSandbox function of the same name.
+func (s *Sandbox) PauseContainer(contID string) error {
+	return nil
+}
+
+// ResumeContainer implements the VCSandbox function of the same name.
+func (s *Sandbox) ResumeContainer(contID string) error {
+	return nil
 }
 
 // Status implements the VCSandbox function of the same name.
@@ -125,6 +155,11 @@ func (s *Sandbox) Monitor() (chan error, error) {
 // UpdateContainer implements the VCSandbox function of the same name.
 func (s *Sandbox) UpdateContainer(containerID string, resources specs.LinuxResources) error {
 	return nil
+}
+
+// ProcessListContainer implements the VCSandbox function of the same name.
+func (s *Sandbox) ProcessListContainer(containerID string, options vc.ProcessListOptions) (vc.ProcessList, error) {
+	return nil, nil
 }
 
 // WaitProcess implements the VCSandbox function of the same name.

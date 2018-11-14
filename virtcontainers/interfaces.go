@@ -66,6 +66,8 @@ type VCSandbox interface {
 	ID() string
 	SetAnnotations(annotations map[string]string) error
 
+	Start() error
+	Stop() error
 	Pause() error
 	Resume() error
 	Release() error
@@ -75,10 +77,15 @@ type VCSandbox interface {
 	CreateContainer(contConfig ContainerConfig) (VCContainer, error)
 	DeleteContainer(contID string) (VCContainer, error)
 	StartContainer(containerID string) (VCContainer, error)
+	StopContainer(containerID string) (VCContainer, error)
+	KillContainer(containerID string, signal syscall.Signal, all bool) error
 	StatusContainer(containerID string) (ContainerStatus, error)
 	StatsContainer(containerID string) (ContainerStats, error)
+	PauseContainer(containerID string) error
+	ResumeContainer(containerID string) error
 	EnterContainer(containerID string, cmd Cmd) (VCContainer, *Process, error)
 	UpdateContainer(containerID string, resources specs.LinuxResources) error
+	ProcessListContainer(containerID string, options ProcessListOptions) (ProcessList, error)
 	WaitProcess(containerID, processID string) (int32, error)
 	SignalProcess(containerID, processID string, signal syscall.Signal, all bool) error
 	WinsizeProcess(containerID, processID string, height, width uint32) error

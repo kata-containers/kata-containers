@@ -1320,6 +1320,34 @@ func (s *Sandbox) StartContainer(containerID string) (VCContainer, error) {
 	return c, nil
 }
 
+// StopContainer stops a container in the sandbox
+func (s *Sandbox) StopContainer(containerID string) (VCContainer, error) {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Stop it.
+	if err := c.stop(); err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+// KillContainer signals a container in the sandbox
+func (s *Sandbox) KillContainer(containerID string, signal syscall.Signal, all bool) error {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	// Send a signal to the process.
+	return c.kill(signal, all)
+}
+
 // DeleteContainer deletes a container from the sandbox
 func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
 	if containerID == "" {
@@ -1353,6 +1381,19 @@ func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
 	}
 
 	return c, nil
+}
+
+// ProcessListContainer lists every process running inside a specific
+// container in the sandbox.
+func (s *Sandbox) ProcessListContainer(containerID string, options ProcessListOptions) (ProcessList, error) {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Get the process list related to the container.
+	return c.processList(options)
 }
 
 // StatusContainer gets the status of a container
@@ -1422,6 +1463,30 @@ func (s *Sandbox) StatsContainer(containerID string) (ContainerStats, error) {
 	return *stats, nil
 }
 
+// PauseContainer pauses a running container.
+func (s *Sandbox) PauseContainer(containerID string) error {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	// Pause the container.
+	return c.pause()
+}
+
+// ResumeContainer resumes a paused container.
+func (s *Sandbox) ResumeContainer(containerID string) error {
+	// Fetch the container.
+	c, err := s.findContainer(containerID)
+	if err != nil {
+		return err
+	}
+
+	// Resume the container.
+	return c.resume()
+}
+
 // createContainers registers all containers to the proxy, create the
 // containers in the guest and starts one shim per container.
 func (s *Sandbox) createContainers() error {
@@ -1442,9 +1507,9 @@ func (s *Sandbox) createContainers() error {
 	return nil
 }
 
-// start starts a sandbox. The containers that are making the sandbox
+// Start starts a sandbox. The containers that are making the sandbox
 // will be started.
-func (s *Sandbox) start() error {
+func (s *Sandbox) Start() error {
 	if err := s.state.validTransition(s.state.State, StateRunning); err != nil {
 		return err
 	}
@@ -1464,9 +1529,9 @@ func (s *Sandbox) start() error {
 	return nil
 }
 
-// stop stops a sandbox. The containers that are making the sandbox
+// Stop stops a sandbox. The containers that are making the sandbox
 // will be destroyed.
-func (s *Sandbox) stop() error {
+func (s *Sandbox) Stop() error {
 	span, _ := s.trace("stop")
 	defer span.Finish()
 
@@ -1489,7 +1554,12 @@ func (s *Sandbox) stop() error {
 		return err
 	}
 
-	return s.setSandboxState(StateStopped)
+	if err := s.setSandboxState(StateStopped); err != nil {
+		return err
+	}
+
+	// Remove the network.
+	return s.removeNetwork()
 }
 
 // Pause pauses the sandbox
