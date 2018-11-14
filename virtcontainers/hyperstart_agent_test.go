@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
+	"path"
 	"reflect"
 	"testing"
 
@@ -275,4 +277,22 @@ func TestHyperCopyFile(t *testing.T) {
 
 	err := h.copyFile("", "")
 	assert.Nil(err)
+}
+
+func TestHyperCleanupSandbox(t *testing.T) {
+	assert := assert.New(t)
+
+	s := Sandbox{
+		id: "testFoo",
+	}
+	dir := path.Join(defaultSharedDir, s.id)
+	err := os.MkdirAll(dir, 0777)
+	assert.Nil(err)
+
+	h := &hyper{}
+	h.cleanup(s.id)
+
+	if _, err = os.Stat(dir); os.IsExist(err) {
+		t.Fatalf("%s still exists\n", dir)
+	}
 }

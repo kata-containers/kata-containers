@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"reflect"
 	"sync"
@@ -1524,4 +1525,52 @@ func TestSandboxStopStopped(t *testing.T) {
 	err := s.Stop()
 
 	assert.Nil(t, err)
+}
+
+func checkDirNotExist(path string) error {
+	if _, err := os.Stat(path); os.IsExist(err) {
+		return fmt.Errorf("%s is still exists", path)
+	}
+	return nil
+}
+
+func checkSandboxRemains() error {
+	var err error
+	if err = checkDirNotExist(sandboxDirConfig); err != nil {
+		return fmt.Errorf("%s still exists", sandboxDirConfig)
+	}
+	if err = checkDirNotExist(sandboxDirState); err != nil {
+		return fmt.Errorf("%s still exists", sandboxDirState)
+	}
+	if err = checkDirNotExist(path.Join(kataHostSharedDir, testSandboxID)); err != nil {
+		return fmt.Errorf("%s still exists", path.Join(kataHostSharedDir, testSandboxID))
+	}
+	if _, err = globalSandboxList.lookupSandbox(testSandboxID); err == nil {
+		return fmt.Errorf("globalSandboxList for %s stil exists", testSandboxID)
+	}
+
+	return nil
+}
+
+func TestSandboxCreationFromConfigRollbackFromCreateSandbox(t *testing.T) {
+	cleanUp()
+	assert := assert.New(t)
+	ctx := context.Background()
+	hConf := newHypervisorConfig(nil, nil)
+	sConf := SandboxConfig{
+		ID:               testSandboxID,
+		HypervisorType:   QemuHypervisor,
+		HypervisorConfig: hConf,
+		AgentType:        KataContainersAgent,
+		NetworkConfig:    NetworkConfig{},
+		Volumes:          nil,
+		Containers:       nil,
+	}
+	_, err := createSandboxFromConfig(ctx, sConf, nil)
+	// Fail at createSandbox: QEMU path does not exist, it is expected. Then rollback is called
+	assert.Error(err)
+
+	// check dirs
+	err = checkSandboxRemains()
+	assert.NoError(err)
 }
