@@ -41,6 +41,9 @@ In order to setup your host for SR-IOV, the following has to be true:
   Controller (NIC). The section [Checking your NIC for SR-IOV](#checking-your-nic-for-sr-iov) describes how to assess if you need to make NIC changes and how to make
   the necessary changes.
 
+Besides, you need to enable the NIC driver in your guest kernel config (e.g. mlx5 for Mellanox NIC).
+All the modules need to be complied as built-in instead of loadable.
+
 ### Checking your NIC for SR-IOV
 
 The following is an example of how to use `lspci` to check if your NIC supports

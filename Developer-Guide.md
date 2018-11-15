@@ -342,7 +342,8 @@ $ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/ker
 $ make ARCH=${kernel_dir} -j$(nproc)
 $ kata_kernel_dir="/usr/share/kata-containers"
 $ kata_vmlinuz="${kata_kernel_dir}/kata-vmlinuz-${kernel_version}.container"
-$ [ $kernel_arch = ppc64le ] && kernel_file="$(realpath ./vmlinux)" || kernel_file="$(realpath arch/${kernel_arch}/boot/bzImage)"
+$ case $kernel_arch in ppc64le) kernel_path="./vmlinux";; aarch64) kernel_path="arch/arm64/boot/Image";; *) kernel_path="arch/${kernel_arch}/boot/bzImage";; esac
+$ kernel_file="$(realpath $kernel_path)"
 $ sudo install -o root -g root -m 0755 -D "${kernel_file}" "${kata_vmlinuz}"
 $ sudo ln -sf "${kata_vmlinuz}" "${kata_kernel_dir}/vmlinuz.container"
 $ kata_vmlinux="${kata_kernel_dir}/kata-vmlinux-${kernel_version}"
