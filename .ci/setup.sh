@@ -15,6 +15,7 @@ source "${cidir}/lib.sh"
 
 arch=$("${cidir}"/kata-arch.sh -d)
 INSTALL_KATA="${INSTALL_KATA:-yes}"
+CI=${CI:-false}
 
 # values indicating whether related intergration tests have been supported
 CRIO="${CRIO:-yes}"
