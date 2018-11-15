@@ -9,4 +9,5 @@
 
 declare -a skipCRIOTests=(
 'test "ctr oom"'
+'test "ulimits"'
 );
