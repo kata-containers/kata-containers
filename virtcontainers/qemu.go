@@ -1070,6 +1070,10 @@ func (q *qemu) hotplugRemoveCPUs(amount uint32) (uint32, error) {
 }
 
 func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) (int, error) {
+
+	if !q.arch.supportGuestMemoryHotplug() {
+		return 0, fmt.Errorf("guest memory hotplug not supported")
+	}
 	if memDev.sizeMB < 0 {
 		return 0, fmt.Errorf("cannot hotplug negative size (%d) memory", memDev.sizeMB)
 	}

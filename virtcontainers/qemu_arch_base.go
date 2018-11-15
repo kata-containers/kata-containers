@@ -93,6 +93,9 @@ type qemuArch interface {
 
 	// handleImagePath handles the Hypervisor Config image path
 	handleImagePath(config HypervisorConfig)
+
+	// supportGuestMemoryHotplug returns if the guest supports memory hotplug
+	supportGuestMemoryHotplug() bool
 }
 
 type qemuArchBase struct {
@@ -558,4 +561,8 @@ func (q *qemuArchBase) handleImagePath(config HypervisorConfig) {
 		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
 		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
 	}
+}
+
+func (q *qemuArchBase) supportGuestMemoryHotplug() bool {
+	return true
 }
