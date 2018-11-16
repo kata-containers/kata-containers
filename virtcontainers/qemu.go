@@ -736,7 +736,12 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 	devID := "virtio-" + drive.ID
 
 	if op == addDevice {
-		if err := q.qmpMonitorCh.qmp.ExecuteBlockdevAdd(q.qmpMonitorCh.ctx, drive.File, drive.ID); err != nil {
+		if q.config.BlockDeviceCacheSet {
+			err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithCache(q.qmpMonitorCh.ctx, drive.File, drive.ID, q.config.BlockDeviceCacheDirect, q.config.BlockDeviceCacheNoflush)
+		} else {
+			err = q.qmpMonitorCh.qmp.ExecuteBlockdevAdd(q.qmpMonitorCh.ctx, drive.File, drive.ID)
+		}
+		if err != nil {
 			return err
 		}
 
