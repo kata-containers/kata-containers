@@ -206,6 +206,17 @@ type HypervisorConfig struct {
 	// it will be used for the sandbox's kernel path instead of KernelPath.
 	customAssets map[assetType]*asset
 
+	// BlockDeviceCacheSet specifies cache-related options will be set to block devices or not.
+	BlockDeviceCacheSet bool
+
+	// BlockDeviceCacheDirect specifies cache-related options for block devices.
+	// Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.
+	BlockDeviceCacheDirect bool
+
+	// BlockDeviceCacheNoflush specifies cache-related options for block devices.
+	// Denotes whether flush requests for the device are ignored.
+	BlockDeviceCacheNoflush bool
+
 	// DisableBlockDeviceUse disallows a block device from being used.
 	DisableBlockDeviceUse bool
 

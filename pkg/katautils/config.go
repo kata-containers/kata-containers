@@ -79,33 +79,36 @@ type factory struct {
 }
 
 type hypervisor struct {
-	Path                  string `toml:"path"`
-	Kernel                string `toml:"kernel"`
-	Initrd                string `toml:"initrd"`
-	Image                 string `toml:"image"`
-	Firmware              string `toml:"firmware"`
-	MachineAccelerators   string `toml:"machine_accelerators"`
-	KernelParams          string `toml:"kernel_params"`
-	MachineType           string `toml:"machine_type"`
-	BlockDeviceDriver     string `toml:"block_device_driver"`
-	EntropySource         string `toml:"entropy_source"`
-	NumVCPUs              int32  `toml:"default_vcpus"`
-	DefaultMaxVCPUs       uint32 `toml:"default_maxvcpus"`
-	MemorySize            uint32 `toml:"default_memory"`
-	MemSlots              uint32 `toml:"memory_slots"`
-	DefaultBridges        uint32 `toml:"default_bridges"`
-	Msize9p               uint32 `toml:"msize_9p"`
-	DisableBlockDeviceUse bool   `toml:"disable_block_device_use"`
-	MemPrealloc           bool   `toml:"enable_mem_prealloc"`
-	HugePages             bool   `toml:"enable_hugepages"`
-	Swap                  bool   `toml:"enable_swap"`
-	Debug                 bool   `toml:"enable_debug"`
-	DisableNestingChecks  bool   `toml:"disable_nesting_checks"`
-	EnableIOThreads       bool   `toml:"enable_iothreads"`
-	UseVSock              bool   `toml:"use_vsock"`
-	HotplugVFIOOnRootBus  bool   `toml:"hotplug_vfio_on_root_bus"`
-	DisableVhostNet       bool   `toml:"disable_vhost_net"`
-	GuestHookPath         string `toml:"guest_hook_path"`
+	Path                    string `toml:"path"`
+	Kernel                  string `toml:"kernel"`
+	Initrd                  string `toml:"initrd"`
+	Image                   string `toml:"image"`
+	Firmware                string `toml:"firmware"`
+	MachineAccelerators     string `toml:"machine_accelerators"`
+	KernelParams            string `toml:"kernel_params"`
+	MachineType             string `toml:"machine_type"`
+	BlockDeviceDriver       string `toml:"block_device_driver"`
+	EntropySource           string `toml:"entropy_source"`
+	BlockDeviceCacheSet     bool   `toml:"block_device_cache_set"`
+	BlockDeviceCacheDirect  bool   `toml:"block_device_cache_direct"`
+	BlockDeviceCacheNoflush bool   `toml:"block_device_cache_noflush"`
+	NumVCPUs                int32  `toml:"default_vcpus"`
+	DefaultMaxVCPUs         uint32 `toml:"default_maxvcpus"`
+	MemorySize              uint32 `toml:"default_memory"`
+	MemSlots                uint32 `toml:"memory_slots"`
+	DefaultBridges          uint32 `toml:"default_bridges"`
+	Msize9p                 uint32 `toml:"msize_9p"`
+	DisableBlockDeviceUse   bool   `toml:"disable_block_device_use"`
+	MemPrealloc             bool   `toml:"enable_mem_prealloc"`
+	HugePages               bool   `toml:"enable_hugepages"`
+	Swap                    bool   `toml:"enable_swap"`
+	Debug                   bool   `toml:"enable_debug"`
+	DisableNestingChecks    bool   `toml:"disable_nesting_checks"`
+	EnableIOThreads         bool   `toml:"enable_iothreads"`
+	UseVSock                bool   `toml:"use_vsock"`
+	HotplugVFIOOnRootBus    bool   `toml:"hotplug_vfio_on_root_bus"`
+	DisableVhostNet         bool   `toml:"disable_vhost_net"`
+	GuestHookPath           string `toml:"guest_hook_path"`
 }
 
 type proxy struct {
@@ -416,33 +419,36 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}
 
 	return vc.HypervisorConfig{
-		HypervisorPath:        hypervisor,
-		KernelPath:            kernel,
-		InitrdPath:            initrd,
-		ImagePath:             image,
-		FirmwarePath:          firmware,
-		MachineAccelerators:   machineAccelerators,
-		KernelParams:          vc.DeserializeParams(strings.Fields(kernelParams)),
-		HypervisorMachineType: machineType,
-		NumVCPUs:              h.defaultVCPUs(),
-		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
-		MemorySize:            h.defaultMemSz(),
-		MemSlots:              h.defaultMemSlots(),
-		EntropySource:         h.GetEntropySource(),
-		DefaultBridges:        h.defaultBridges(),
-		DisableBlockDeviceUse: h.DisableBlockDeviceUse,
-		MemPrealloc:           h.MemPrealloc,
-		HugePages:             h.HugePages,
-		Mlock:                 !h.Swap,
-		Debug:                 h.Debug,
-		DisableNestingChecks:  h.DisableNestingChecks,
-		BlockDeviceDriver:     blockDriver,
-		EnableIOThreads:       h.EnableIOThreads,
-		Msize9p:               h.msize9p(),
-		UseVSock:              useVSock,
-		HotplugVFIOOnRootBus:  h.HotplugVFIOOnRootBus,
-		DisableVhostNet:       h.DisableVhostNet,
-		GuestHookPath:         h.guestHookPath(),
+		HypervisorPath:          hypervisor,
+		KernelPath:              kernel,
+		InitrdPath:              initrd,
+		ImagePath:               image,
+		FirmwarePath:            firmware,
+		MachineAccelerators:     machineAccelerators,
+		KernelParams:            vc.DeserializeParams(strings.Fields(kernelParams)),
+		HypervisorMachineType:   machineType,
+		NumVCPUs:                h.defaultVCPUs(),
+		DefaultMaxVCPUs:         h.defaultMaxVCPUs(),
+		MemorySize:              h.defaultMemSz(),
+		MemSlots:                h.defaultMemSlots(),
+		EntropySource:           h.GetEntropySource(),
+		DefaultBridges:          h.defaultBridges(),
+		DisableBlockDeviceUse:   h.DisableBlockDeviceUse,
+		MemPrealloc:             h.MemPrealloc,
+		HugePages:               h.HugePages,
+		Mlock:                   !h.Swap,
+		Debug:                   h.Debug,
+		DisableNestingChecks:    h.DisableNestingChecks,
+		BlockDeviceDriver:       blockDriver,
+		BlockDeviceCacheSet:     h.BlockDeviceCacheSet,
+		BlockDeviceCacheDirect:  h.BlockDeviceCacheDirect,
+		BlockDeviceCacheNoflush: h.BlockDeviceCacheNoflush,
+		EnableIOThreads:         h.EnableIOThreads,
+		Msize9p:                 h.msize9p(),
+		UseVSock:                useVSock,
+		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
+		DisableVhostNet:         h.DisableVhostNet,
+		GuestHookPath:           h.guestHookPath(),
 	}, nil
 }
 
@@ -538,27 +544,30 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 	var defaultAgentConfig interface{}
 
 	defaultHypervisorConfig := vc.HypervisorConfig{
-		HypervisorPath:        defaultHypervisorPath,
-		KernelPath:            defaultKernelPath,
-		ImagePath:             defaultImagePath,
-		InitrdPath:            defaultInitrdPath,
-		FirmwarePath:          defaultFirmwarePath,
-		MachineAccelerators:   defaultMachineAccelerators,
-		HypervisorMachineType: defaultMachineType,
-		NumVCPUs:              defaultVCPUCount,
-		DefaultMaxVCPUs:       defaultMaxVCPUCount,
-		MemorySize:            defaultMemSize,
-		DefaultBridges:        defaultBridgesCount,
-		MemPrealloc:           defaultEnableMemPrealloc,
-		HugePages:             defaultEnableHugePages,
-		Mlock:                 !defaultEnableSwap,
-		Debug:                 defaultEnableDebug,
-		DisableNestingChecks:  defaultDisableNestingChecks,
-		BlockDeviceDriver:     defaultBlockDeviceDriver,
-		EnableIOThreads:       defaultEnableIOThreads,
-		Msize9p:               defaultMsize9p,
-		HotplugVFIOOnRootBus:  defaultHotplugVFIOOnRootBus,
-		GuestHookPath:         defaultGuestHookPath,
+		HypervisorPath:          defaultHypervisorPath,
+		KernelPath:              defaultKernelPath,
+		ImagePath:               defaultImagePath,
+		InitrdPath:              defaultInitrdPath,
+		FirmwarePath:            defaultFirmwarePath,
+		MachineAccelerators:     defaultMachineAccelerators,
+		HypervisorMachineType:   defaultMachineType,
+		NumVCPUs:                defaultVCPUCount,
+		DefaultMaxVCPUs:         defaultMaxVCPUCount,
+		MemorySize:              defaultMemSize,
+		DefaultBridges:          defaultBridgesCount,
+		MemPrealloc:             defaultEnableMemPrealloc,
+		HugePages:               defaultEnableHugePages,
+		Mlock:                   !defaultEnableSwap,
+		Debug:                   defaultEnableDebug,
+		DisableNestingChecks:    defaultDisableNestingChecks,
+		BlockDeviceDriver:       defaultBlockDeviceDriver,
+		BlockDeviceCacheSet:     defaultBlockDeviceCacheSet,
+		BlockDeviceCacheDirect:  defaultBlockDeviceCacheDirect,
+		BlockDeviceCacheNoflush: defaultBlockDeviceCacheNoflush,
+		EnableIOThreads:         defaultEnableIOThreads,
+		Msize9p:                 defaultMsize9p,
+		HotplugVFIOOnRootBus:    defaultHotplugVFIOOnRootBus,
+		GuestHookPath:           defaultGuestHookPath,
 	}
 
 	err = config.InterNetworkModel.SetModel(defaultInterNetworkingModel)
