@@ -123,7 +123,7 @@ func isCgroupMounted(cgroupPath string) bool {
 		return false
 	}
 
-	if statFs.Type != int64(cgroupFsType) {
+	if statFs.Type != archConvertStatFs(cgroupFsType) {
 		return false
 	}
 
