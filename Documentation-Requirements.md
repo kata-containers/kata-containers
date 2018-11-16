@@ -100,6 +100,14 @@ utility.
 
   ```
 
+- Long lines should not span across multiple lines by using the '`\`'
+  continuation character.
+
+  GitHub automatically renders such blocks with scrollbars. Consequently,
+  backslash continuation characters are not necessary and are a visual
+  distraction. These characters also mess up a user's shell history when
+  commands are pasted into a terminal.
+
 # Images
 
 All binary image files must be in a standard and well-supported format such as
