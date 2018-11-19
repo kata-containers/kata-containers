@@ -484,8 +484,19 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (*ptypes.Emp
 }
 
 // Pids returns all pids inside the container
+// Since for kata, it cannot get the process's pid from VM,
+// thus only return the Shim's pid directly.
 func (s *service) Pids(ctx context.Context, r *taskAPI.PidsRequest) (*taskAPI.PidsResponse, error) {
-	return nil, errdefs.ErrNotImplemented
+	var processes []*task.ProcessInfo
+
+	pInfo := task.ProcessInfo{
+		Pid: s.pid,
+	}
+	processes = append(processes, &pInfo)
+
+	return &taskAPI.PidsResponse{
+		Processes: processes,
+	}, nil
 }
 
 // CloseIO of a process
