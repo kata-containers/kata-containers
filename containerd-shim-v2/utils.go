@@ -15,9 +15,10 @@ import (
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/opencontainers/runtime-spec/specs-go"
 )
 
-func validCreateParams(containerID, bundlePath string) (string, error) {
+func validBundle(containerID, bundlePath string) (string, error) {
 	// container ID MUST be provided.
 	if containerID == "" {
 		return "", fmt.Errorf("Missing container ID")
@@ -49,7 +50,7 @@ func getAddress(ctx context.Context, bundlePath, id string) (string, error) {
 	var err error
 
 	// Checks the MUST and MUST NOT from OCI runtime specification
-	if bundlePath, err = validCreateParams(id, bundlePath); err != nil {
+	if bundlePath, err = validBundle(id, bundlePath); err != nil {
 		return "", err
 	}
 
@@ -76,4 +77,25 @@ func getAddress(ctx context.Context, bundlePath, id string) (string, error) {
 	}
 
 	return "", nil
+}
+
+func noNeedForOutput(detach bool, tty bool) bool {
+	if !detach {
+		return false
+	}
+
+	if !tty {
+		return false
+	}
+
+	return true
+}
+
+func removeNamespace(s *oci.CompatOCISpec, nsType specs.LinuxNamespaceType) {
+	for i, n := range s.Linux.Namespaces {
+		if n.Type == nsType {
+			s.Linux.Namespaces = append(s.Linux.Namespaces[:i], s.Linux.Namespaces[i+1:]...)
+			return
+		}
+	}
 }

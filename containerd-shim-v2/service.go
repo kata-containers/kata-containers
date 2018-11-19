@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	sysexec "os/exec"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -15,6 +16,7 @@ import (
 	eventstypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/events"
+	"github.com/containerd/containerd/mount"
 	"github.com/containerd/containerd/namespaces"
 	cdruntime "github.com/containerd/containerd/runtime"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
@@ -23,7 +25,9 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 
+	"github.com/containerd/containerd/api/types/task"
 	ptypes "github.com/gogo/protobuf/types"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -235,7 +239,46 @@ func (s *service) Cleanup(ctx context.Context) (*taskAPI.DeleteResponse, error) 
 
 // Create a new sandbox or container with the underlying OCI runtime
 func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *taskAPI.CreateTaskResponse, err error) {
-	return nil, errdefs.ErrNotImplemented
+	s.Lock()
+	defer s.Unlock()
+
+	//the network namespace created by cni plugin
+	netns, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return nil, errors.Wrap(err, "create namespace")
+	}
+
+	rootfs := filepath.Join(r.Bundle, "rootfs")
+	defer func() {
+		if err != nil {
+			if err2 := mount.UnmountAll(rootfs, 0); err2 != nil {
+				logrus.WithError(err2).Warn("failed to cleanup rootfs mount")
+			}
+		}
+	}()
+	for _, rm := range r.Rootfs {
+		m := &mount.Mount{
+			Type:    rm.Type,
+			Source:  rm.Source,
+			Options: rm.Options,
+		}
+		if err := m.Mount(rootfs); err != nil {
+			return nil, errors.Wrapf(err, "failed to mount rootfs component %v", m)
+		}
+	}
+
+	container, err := create(ctx, s, r, netns, s.config)
+	if err != nil {
+		return nil, err
+	}
+
+	container.status = task.StatusCreated
+
+	s.containers[r.ID] = container
+
+	return &taskAPI.CreateTaskResponse{
+		Pid: s.pid,
+	}, nil
 }
 
 // Start a process

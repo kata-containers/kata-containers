@@ -10,6 +10,9 @@ import (
 	"time"
 
 	"github.com/containerd/containerd/api/types/task"
+	"github.com/containerd/containerd/errdefs"
+	taskAPI "github.com/containerd/containerd/runtime/v2/task"
+
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 )
@@ -32,4 +35,33 @@ type container struct {
 	exit     uint32
 	status   task.Status
 	terminal bool
+}
+
+func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.ContainerType, spec *oci.CompatOCISpec) (*container, error) {
+	if r == nil {
+		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, " CreateTaskRequest points to nil")
+	}
+
+	// in order to avoid deferencing a nil pointer in test
+	if spec == nil {
+		spec = &oci.CompatOCISpec{}
+	}
+
+	c := &container{
+		s:        s,
+		spec:     spec,
+		id:       r.ID,
+		bundle:   r.Bundle,
+		stdin:    r.Stdin,
+		stdout:   r.Stdout,
+		stderr:   r.Stderr,
+		terminal: r.Terminal,
+		cType:    containerType,
+		execs:    make(map[string]*exec),
+		status:   task.StatusCreated,
+		exitIOch: make(chan struct{}),
+		exitCh:   make(chan uint32, 1),
+		time:     time.Now(),
+	}
+	return c, nil
 }
