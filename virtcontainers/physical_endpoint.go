@@ -119,6 +119,7 @@ func isPhysicalIface(ifaceName string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	defer ethHandle.Close()
 
 	bus, err := ethHandle.BusInfo(ifaceName)
 	if err != nil {
@@ -142,6 +143,7 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer ethHandle.Close()
 
 	// Get BDF
 	bdf, err := ethHandle.BusInfo(netInfo.Iface.Name)
