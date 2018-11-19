@@ -545,7 +545,27 @@ func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (*task
 }
 
 func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (*ptypes.Empty, error) {
-	return nil, errdefs.ErrNotImplemented
+	s.Lock()
+	defer s.Unlock()
+
+	if len(s.containers) != 0 {
+		return empty, nil
+	}
+
+	defer os.Exit(0)
+
+	err := s.sandbox.Stop()
+	if err != nil {
+		logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
+		return empty, err
+	}
+
+	err = s.sandbox.Delete()
+	if err != nil {
+		logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
+	}
+
+	return empty, err
 }
 
 func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (*taskAPI.StatsResponse, error) {
