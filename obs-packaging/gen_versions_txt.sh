@@ -5,6 +5,7 @@
 #
 
 [ -z "${DEBUG}" ] || set -x
+set -e
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -40,7 +41,6 @@ gen_version_file() {
 	kernel_version=${kernel_version#v}
 
 	golang_version=$(get_from_kata_deps "languages.golang.meta.newest-version" "${kata_version}")
-	golang_version="1.10.2"
 	golang_sha256=$(curl -s -L "https://storage.googleapis.com/golang/go${golang_version}.linux-${ARCH}.tar.gz.sha256")
 
 	# - is not a valid char for rpmbuild
