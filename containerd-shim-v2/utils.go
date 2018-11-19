@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	"github.com/kata-containers/runtime/pkg/katautils"
@@ -17,6 +18,16 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
+
+func cReap(s *service, status int, id, execid string, exitat time.Time) {
+	s.ec <- exit{
+		timestamp: exitat,
+		pid:       s.pid,
+		status:    status,
+		id:        id,
+		execid:    execid,
+	}
+}
 
 func validBundle(containerID, bundlePath string) (string, error) {
 	// container ID MUST be provided.

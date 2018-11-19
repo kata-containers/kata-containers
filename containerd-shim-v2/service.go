@@ -283,6 +283,27 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 
 // Start a process
 func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (*taskAPI.StartResponse, error) {
+	s.Lock()
+	defer s.Unlock()
+
+	c, err := s.getContainer(r.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	//start a container
+	if r.ExecID == "" {
+		err = startContainer(ctx, s, c)
+		if err != nil {
+			return nil, errdefs.ToGRPC(err)
+		}
+
+		return &taskAPI.StartResponse{
+			Pid: s.pid,
+		}, nil
+	}
+
+	//start an exec
 	return nil, errdefs.ErrNotImplemented
 }
 
@@ -381,4 +402,14 @@ func (s *service) checkProcesses(e exit) {
 		ExitedAt:    e.timestamp,
 	}
 	return
+}
+
+func (s *service) getContainer(id string) (*container, error) {
+	c := s.containers[id]
+
+	if c == nil {
+		return nil, errdefs.ToGRPCf(errdefs.ErrNotFound, "container does not exist %s", id)
+	}
+
+	return c, nil
 }
