@@ -14,11 +14,14 @@ done)
 
 GOARCH=$(shell go env GOARCH)
 HOST_ARCH=$(shell arch)
+SKIP_GO_VERSION_CHECK=
 
-include golang.mk
+ifeq ($(SKIP_GO_VERSION_CHECK),)
+    include golang.mk
+endif
 
 ifeq ($(ARCH),)
-	ARCH = $(GOARCH)
+    ARCH = $(GOARCH)
 endif
 
 ARCH_DIR = arch
