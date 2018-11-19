@@ -59,7 +59,7 @@ function install_yq() {
 	yq_version=$(basename "${yq_latest_url}")
 
 	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos}_${goarch}"
-	curl -o "${yq_path}" -L ${yq_url}
+	curl -o "${yq_path}" -LSs ${yq_url}
 	chmod +x ${yq_path}
 
 	if ! command -v "${yq_path}" >/dev/null; then
