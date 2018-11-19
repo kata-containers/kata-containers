@@ -347,7 +347,46 @@ func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (*
 
 // State returns runtime state information for a process
 func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (*taskAPI.StateResponse, error) {
-	return nil, errdefs.ErrNotImplemented
+	s.Lock()
+	defer s.Unlock()
+
+	c, err := s.getContainer(r.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	if r.ExecID == "" {
+		return &taskAPI.StateResponse{
+			ID:         c.id,
+			Bundle:     c.bundle,
+			Pid:        s.pid,
+			Status:     c.status,
+			Stdin:      c.stdin,
+			Stdout:     c.stdout,
+			Stderr:     c.stderr,
+			Terminal:   c.terminal,
+			ExitStatus: c.exit,
+		}, nil
+	}
+
+	//deal with exec case
+	execs, err := c.getExec(r.ExecID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &taskAPI.StateResponse{
+		ID:         execs.id,
+		Bundle:     c.bundle,
+		Pid:        s.pid,
+		Status:     execs.status,
+		Stdin:      execs.tty.stdin,
+		Stdout:     execs.tty.stdout,
+		Stderr:     execs.tty.stderr,
+		Terminal:   execs.tty.terminal,
+		ExitStatus: uint32(execs.exitCode),
+	}, nil
+
 }
 
 // Pause the container
