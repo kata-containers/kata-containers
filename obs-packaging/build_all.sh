@@ -41,9 +41,13 @@ main() {
 	local branch="${1:-}"
 	[ -n "${branch}" ] || usage "missing branch" "1"
 
-	pushd "${script_dir}"
-	for p in "${OBS_PKGS_PROJECTS[@]}"; do
-		pushd "$p" >>/dev/null
+	shift
+	local projectsList=("$@")
+	[ "${#projectsList[@]}" = "0" ] && projectsList=("${OBS_PKGS_PROJECTS[@]}")
+
+	pushd "${script_dir}" >>/dev/null
+	for p in "${projectsList[@]}"; do
+		[ -d "$p" ] || usage "$p is not a valid project directory" "1"
 		update_cmd="./update.sh"
 		if [ -n "${PUSH}" ]; then
 			# push to obs
@@ -53,11 +57,13 @@ main() {
 			update_cmd+=" -l"
 		fi
 
-		echo "update ${p}"
+		echo "======= Updating ${p} ======="
+		pushd "$p" >>/dev/null
 		bash -c "${update_cmd} ${branch}"
 		popd >>/dev/null
+		echo ""
 	done
-	popd
+	popd >> /dev/null
 }
 
 main $@
