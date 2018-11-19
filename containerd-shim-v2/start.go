@@ -69,3 +69,47 @@ func startContainer(ctx context.Context, s *service, c *container) error {
 
 	return nil
 }
+
+func startExec(ctx context.Context, s *service, containerID, execID string) (*exec, error) {
+	//start an exec
+	c, err := s.getContainer(containerID)
+	if err != nil {
+		return nil, err
+	}
+
+	execs, err := c.getExec(execID)
+	if err != nil {
+		return nil, err
+	}
+
+	_, proc, err := s.sandbox.EnterContainer(containerID, *execs.cmds)
+	if err != nil {
+		err := fmt.Errorf("cannot enter container %s, with err %s", containerID, err)
+		return nil, err
+	}
+	execs.id = proc.Token
+
+	execs.status = task.StatusRunning
+	if execs.tty.height != 0 && execs.tty.width != 0 {
+		err = s.sandbox.WinsizeProcess(c.id, execs.id, execs.tty.height, execs.tty.width)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	stdin, stdout, stderr, err := s.sandbox.IOStream(c.id, execs.id)
+	if err != nil {
+		return nil, err
+	}
+	tty, err := newTtyIO(ctx, execs.tty.stdin, execs.tty.stdout, execs.tty.stderr, execs.tty.terminal)
+	if err != nil {
+		return nil, err
+	}
+	execs.ttyio = tty
+
+	go ioCopy(execs.exitIOch, tty, stdin, stdout, stderr)
+
+	go wait(s, c, execID)
+
+	return execs, nil
+}

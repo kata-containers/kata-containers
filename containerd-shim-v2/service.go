@@ -37,7 +37,8 @@ const (
 	// it to containerd as the containerd event format.
 	bufferSize = 32
 
-	chSize = 128
+	chSize      = 128
+	exitCode255 = 255
 )
 
 var (
@@ -297,14 +298,17 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (*taskAPI.
 		if err != nil {
 			return nil, errdefs.ToGRPC(err)
 		}
-
-		return &taskAPI.StartResponse{
-			Pid: s.pid,
-		}, nil
+	} else {
+		//start an exec
+		_, err = startExec(ctx, s, r.ID, r.ExecID)
+		if err != nil {
+			return nil, errdefs.ToGRPC(err)
+		}
 	}
 
-	//start an exec
-	return nil, errdefs.ErrNotImplemented
+	return &taskAPI.StartResponse{
+		Pid: s.pid,
+	}, nil
 }
 
 // Delete the initial process and container
@@ -314,7 +318,26 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (*taskAP
 
 // Exec an additional process inside the container
 func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (*ptypes.Empty, error) {
-	return nil, errdefs.ErrNotImplemented
+	s.Lock()
+	defer s.Unlock()
+
+	c, err := s.getContainer(r.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	if execs := c.execs[r.ExecID]; execs != nil {
+		return nil, errdefs.ToGRPCf(errdefs.ErrAlreadyExists, "id %s", r.ExecID)
+	}
+
+	execs, err := newExec(c, r.Stdin, r.Stdout, r.Stderr, r.Terminal, r.Spec)
+	if err != nil {
+		return nil, errdefs.ToGRPC(err)
+	}
+
+	c.execs[r.ExecID] = execs
+
+	return empty, nil
 }
 
 // ResizePty of a process
