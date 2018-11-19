@@ -29,6 +29,7 @@ import (
 	ptypes "github.com/gogo/protobuf/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -235,7 +236,53 @@ func getTopic(ctx context.Context, e interface{}) string {
 }
 
 func (s *service) Cleanup(ctx context.Context) (*taskAPI.DeleteResponse, error) {
-	return nil, errdefs.ErrNotImplemented
+	//Since the binary cleanup will return the DeleteResponse from stdout to
+	//containerd, thus we must make sure there is no any outputs in stdout except
+	//the returned response, thus here redirect the log to stderr in case there's
+	//any log output to stdout.
+	logrus.SetOutput(os.Stderr)
+
+	if s.id == "" {
+		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "the container id is empty, please specify the container id")
+	}
+
+	path, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	ociSpec, err := oci.ParseConfigJSON(path)
+	if err != nil {
+		return nil, err
+	}
+
+	containerType, err := ociSpec.ContainerType()
+	if err != nil {
+		return nil, err
+	}
+
+	switch containerType {
+	case vc.PodSandbox:
+		err = cleanupContainer(ctx, s.id, s.id, path)
+		if err != nil {
+			return nil, err
+		}
+	case vc.PodContainer:
+		sandboxID, err := ociSpec.SandboxID()
+		if err != nil {
+			return nil, err
+		}
+
+		err = cleanupContainer(ctx, sandboxID, s.id, path)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &taskAPI.DeleteResponse{
+		ExitedAt:   time.Now(),
+		ExitStatus: 128 + uint32(unix.SIGKILL),
+	}, nil
 }
 
 // Create a new sandbox or container with the underlying OCI runtime
