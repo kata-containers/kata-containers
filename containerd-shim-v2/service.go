@@ -501,7 +501,30 @@ func (s *service) Pids(ctx context.Context, r *taskAPI.PidsRequest) (*taskAPI.Pi
 
 // CloseIO of a process
 func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (*ptypes.Empty, error) {
-	return nil, errdefs.ErrNotImplemented
+	s.Lock()
+	defer s.Unlock()
+
+	c, err := s.getContainer(r.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	tty := c.ttyio
+	if r.ExecID != "" {
+		execs, err := c.getExec(r.ExecID)
+		if err != nil {
+			return nil, err
+		}
+		tty = execs.ttyio
+	}
+
+	if tty != nil && tty.Stdin != nil {
+		if err := tty.Stdin.Close(); err != nil {
+			return nil, errors.Wrap(err, "close stdin")
+		}
+	}
+
+	return empty, nil
 }
 
 // Checkpoint the container
