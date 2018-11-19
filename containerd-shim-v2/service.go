@@ -534,7 +534,14 @@ func (s *service) Checkpoint(ctx context.Context, r *taskAPI.CheckpointTaskReque
 
 // Connect returns shim information such as the shim's pid
 func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (*taskAPI.ConnectResponse, error) {
-	return nil, errdefs.ErrNotImplemented
+	s.Lock()
+	defer s.Unlock()
+
+	return &taskAPI.ConnectResponse{
+		ShimPid: s.pid,
+		//Since kata cannot get the container's pid in VM, thus only return the shim's pid.
+		TaskPid: s.pid,
+	}, nil
 }
 
 func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (*ptypes.Empty, error) {
