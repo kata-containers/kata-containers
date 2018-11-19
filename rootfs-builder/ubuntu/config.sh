@@ -20,6 +20,7 @@ case $(arch) in
 	x86_64) ARCHITECTURE="amd64";;
 	ppc64le) ARCHITECTURE="ppc64el";;
 	aarch64) ARCHITECTURE="arm64";;
+	s390x)	ARCHITECTURE="s390x";;
 	(*) die "$(arch) not supported "
 esac
 
