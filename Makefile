@@ -158,6 +158,10 @@ DEFHOTPLUGVFIOONROOTBUS := false
 SED = sed
 
 CLI_DIR = cli
+SHIMV2 = containerd-shim-kata-v2
+SHIMV2_OUTPUT = $(CURDIR)/$(SHIMV2)
+SHIMV2_DIR = $(CLI_DIR)/$(SHIMV2)
+
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 VERSION := ${shell cat ./VERSION}
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
@@ -256,7 +260,9 @@ define SHOW_ARCH
   $(shell printf "\\t%s%s\\\n" "$(1)" $(if $(filter $(ARCH),$(1))," (default)",""))
 endef
 
-all: runtime netmon
+all: runtime containerd-shim-v2 netmon
+
+containerd-shim-v2: $(SHIMV2_OUTPUT)
 
 netmon: $(NETMON_TARGET_OUTPUT)
 
@@ -334,6 +340,9 @@ $(GENERATED_CONFIG): Makefile VERSION
 
 $(TARGET_OUTPUT): $(EXTRA_DEPS) $(SOURCES) $(GENERATED_GO_FILES) $(GENERATED_FILES) Makefile | show-summary
 	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(BUILDFLAGS) -o $@ .)
+
+$(SHIMV2_OUTPUT): $(TARGET_OUTPUT)
+	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build -i -o $@ .)
 
 .PHONY: \
 	check \
@@ -413,10 +422,13 @@ check-go-static:
 coverage:
 	$(QUIET_TEST).ci/go-test.sh html-coverage
 
-install: default runtime install-scripts install-completions install-config install-bin install-bin-libexec
+install: default runtime install-scripts install-completions install-config install-bin install-containerd-shim-v2 install-bin-libexec
 
 install-bin: $(BINLIST)
 	$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
+
+install-containerd-shim-v2: $(SHIMV2)
+	$(call INSTALL_EXEC,$<,$(BINDIR))
 
 install-bin-libexec: $(BINLIBEXECLIST)
 	$(foreach f,$(BINLIBEXECLIST),$(call INSTALL_EXEC,$f,$(PKGLIBEXECDIR)))
@@ -431,7 +443,7 @@ install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
 
 clean:
-	$(QUIET_CLEAN)rm -f $(TARGET) $(NETMON_TARGET) $(CONFIG) $(GENERATED_GO_FILES) $(GENERATED_FILES) $(COLLECT_SCRIPT)
+	$(QUIET_CLEAN)rm -f $(TARGET) $(SHIMV2) $(NETMON_TARGET) $(CONFIG) $(GENERATED_GO_FILES) $(GENERATED_FILES) $(COLLECT_SCRIPT)
 
 show-usage: show-header
 	@printf "• Overview:\n"
@@ -494,6 +506,8 @@ show-summary: show-header
 	@printf "\tbinaries to install                   :\n"
 	@printf \
           "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
+	@printf \
+          "$(foreach b,$(sort $(SHIMV2)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
           "$(foreach b,$(sort $(BINLIBEXECLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(PKGLIBEXECDIR)/$(b))\\\n"))"
 	@printf \

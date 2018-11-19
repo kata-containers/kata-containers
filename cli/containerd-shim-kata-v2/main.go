@@ -13,4 +13,3 @@ import (
 func main() {
 	shim.Run("io.containerd.kata.v2", containerdshim.New)
 }
-
