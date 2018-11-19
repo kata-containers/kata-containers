@@ -350,6 +350,7 @@ func TestHotplugRemoveMemory(t *testing.T) {
 	qemuConfig := newQemuConfig()
 	fs := &filesystem{}
 	q := &qemu{
+		arch:    &qemuArchBase{},
 		config:  qemuConfig,
 		storage: fs,
 	}
