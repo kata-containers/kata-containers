@@ -6,8 +6,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-set -e
-
 export KATA_RUNTIME=${KATA_RUNTIME:-kata-runtime}
 
 tests_repo="${tests_repo:-github.com/kata-containers/tests}"
