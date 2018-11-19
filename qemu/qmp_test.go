@@ -403,6 +403,30 @@ func TestQMPBlockdevAdd(t *testing.T) {
 	<-disconnectedCh
 }
 
+// Checks that the blockdev-add with cache options command is correctly sent.
+//
+// We start a QMPLoop, send the blockdev-add with cache options
+// command and stop the loop.
+//
+// The blockdev-add with cache options command should be correctly sent and
+// the QMP loop should exit gracefully.
+func TestQMPBlockdevAddWithCache(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("blockdev-add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	q.version = checkVersion(t, connectedCh)
+	err := q.ExecuteBlockdevAddWithCache(context.Background(), "/dev/rbd0",
+		fmt.Sprintf("drive_%s", volumeUUID), true, true)
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks that the netdev_add command is correctly sent.
 //
 // We start a QMPLoop, send the netdev_add command and stop the loop.
