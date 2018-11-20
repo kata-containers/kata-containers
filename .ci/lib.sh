@@ -253,5 +253,7 @@ gen_clean_arch() {
 	delete_stale_docker_resource
 	info "delete stale kata resource under ${stale_kata_dir_union[@]}"
 	delete_stale_kata_resource
+	info "Remove installed kata packages"
+	${GOPATH}/src/${tests_repo}/cmd/kata-manager/kata-manager.sh remove-packages
 }
 
