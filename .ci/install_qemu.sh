@@ -35,10 +35,13 @@ install_packaged_qemu() {
 	# Timeout to download packages from OBS
 	limit=180
 	if [ "$ID"  == "ubuntu" ]; then
+		chronic sudo apt remove -y "$PACKAGED_QEMU" || true
 		chronic sudo apt install -y "$PACKAGED_QEMU" || rc=1
 	elif [ "$ID"  == "fedora" ]; then
+		chronic sudo dnf remove -y "$PACKAGED_QEMU" || true
 		chronic sudo dnf install -y "$PACKAGED_QEMU" || rc=1
 	elif [ "$ID"  == "centos" ]; then
+		chronic sudo yum remove -y "$PACKAGED_QEMU" || true
 		chronic sudo yum install -y "$PACKAGED_QEMU" || rc=1
 	else
 		die "Unrecognized distro"
