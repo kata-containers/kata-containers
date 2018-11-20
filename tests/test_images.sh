@@ -235,7 +235,17 @@ setup()
 
 	[ ! -d "${tests_repo_dir}" ] && git clone "https://${tests_repo}" "${tests_repo_dir}"
 
-	chronic $mgr install-docker-system
+	if [ -z "${KATA_DEV_MODE:-}" ]; then
+		chronic $mgr install-docker-system
+	else
+		info "Running with KATA_DEV_MODE set, skipping installation of docker and kata packages"
+		# Make sure docker & kata are available
+		command -v docker >/dev/null || die "docker cannot be found on your PATH"
+		local cfgRuntime=
+		cfgRuntime="$(docker info --format "{{(index .Runtimes \"${RUNTIME}\").Path}}")"
+		[ -n "$cfgRuntime" ] || die "${RUNTIME} is not a configured runtime for docker"
+		[ -x "$cfgRuntime" ] || die "docker ${RUNTIME} is linked to an invalid executable: $cfgRuntime"
+	fi
 	chronic $mgr enable-debug
 
 	# Ensure "docker build" works
