@@ -32,7 +32,7 @@ const (
 // to be used by the Virtual Machine.
 type VFIODevice struct {
 	*GenericDevice
-	vfioDevs []*config.VFIODev
+	VfioDevs []*config.VFIODev
 }
 
 // NewVFIODevice create a new VFIO device
@@ -77,7 +77,7 @@ func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) error {
 			BDF:      deviceBDF,
 			SysfsDev: deviceSysfsDev,
 		}
-		device.vfioDevs = append(device.vfioDevs, vfio)
+		device.VfioDevs = append(device.VfioDevs, vfio)
 	}
 
 	// hotplug a VFIO device is actually hotplugging a group of iommu devices
@@ -126,7 +126,7 @@ func (device *VFIODevice) DeviceType() config.DeviceType {
 
 // GetDeviceInfo returns device information used for creating
 func (device *VFIODevice) GetDeviceInfo() interface{} {
-	return device.vfioDevs
+	return device.VfioDevs
 }
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation
