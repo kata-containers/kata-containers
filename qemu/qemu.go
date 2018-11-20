@@ -62,17 +62,8 @@ const (
 	// NVDIMM is the Non Volatile DIMM device driver.
 	NVDIMM DeviceDriver = "nvdimm"
 
-	// Virtio9P is the 9pfs device driver.
-	Virtio9P DeviceDriver = "virtio-9p-pci"
-
-	// VirtioNet is the virt-io networking device driver.
-	VirtioNet DeviceDriver = "virtio-net"
-
 	// VirtioNetPCI is the virt-io pci networking device driver.
 	VirtioNetPCI DeviceDriver = "virtio-net-pci"
-
-	// VirtioSerial is the serial device driver.
-	VirtioSerial DeviceDriver = "virtio-serial-pci"
 
 	// VirtioBlock is the block device driver.
 	VirtioBlock DeviceDriver = "virtio-blk"
@@ -82,9 +73,6 @@ const (
 
 	// VirtioSerialPort is the serial port device driver.
 	VirtioSerialPort DeviceDriver = "virtserialport"
-
-	// VHostVSockPCI is the vhost vsock pci driver.
-	VHostVSockPCI DeviceDriver = "vhost-vsock-pci"
 
 	// VirtioRng is the paravirtualized RNG device driver.
 	VirtioRng DeviceDriver = "virtio-rng"
@@ -101,12 +89,6 @@ const (
 	//VhostUserBlk represents a block vhostuser device type.
 	VhostUserBlk DeviceDriver = "vhost-user-blk-pci"
 
-	// VfioPCI represent a VFIO device type.
-	VfioPCI DeviceDriver = "vfio-pci"
-
-	// VirtioScsiPCI represents a SCSI device type.
-	VirtioScsiPCI DeviceDriver = "virtio-scsi-pci"
-
 	// PCIBridgeDriver represents a PCI bridge device type.
 	PCIBridgeDriver DeviceDriver = "pci-bridge"
 
@@ -114,27 +96,19 @@ const (
 	PCIePCIBridgeDriver DeviceDriver = "pcie-pci-bridge"
 )
 
-// isVirtioPCI is a map indicating if a DeviceDriver is considered as a
-// virtio PCI device, which is helpful to determine if the option "romfile"
-// applies or not to this specific device.
-var isVirtioPCI = map[DeviceDriver]bool{
-	NVDIMM:              false,
-	Virtio9P:            true,
-	VirtioNet:           true,
-	VirtioNetPCI:        true,
-	VirtioSerial:        true,
-	VirtioBlock:         true,
-	Console:             false,
-	VirtioSerialPort:    false,
-	VHostVSockPCI:       true,
-	VirtioRng:           true,
-	VirtioBalloon:       true,
-	VhostUserSCSI:       true,
-	VhostUserBlk:        true,
-	VfioPCI:             true,
-	VirtioScsiPCI:       true,
-	PCIBridgeDriver:     true,
-	PCIePCIBridgeDriver: true,
+// disableModern returns the parameters with the disable-modern option.
+// In case the device driver is not a PCI device and it doesn't have the option
+// an empty string is returned.
+func (driver DeviceDriver) disableModern(disable bool) string {
+	if !isVirtioPCI[driver] {
+		return ""
+	}
+
+	if disable {
+		return "disable-modern=true"
+	}
+
+	return "disable-modern=false"
 }
 
 // ObjectType is a string representing a qemu object type.
@@ -284,8 +258,8 @@ func (fsdev FSDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s", fsdev.Driver))
-	if fsdev.DisableModern {
-		deviceParams = append(deviceParams, ",disable-modern=true")
+	if s := fsdev.Driver.disableModern(fsdev.DisableModern); s != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",fsdev=%s", fsdev.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",mount_tag=%s", fsdev.MountTag))
@@ -370,8 +344,8 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s", cdev.Driver))
-	if cdev.DisableModern {
-		deviceParams = append(deviceParams, ",disable-modern=true")
+	if s := cdev.Driver.disableModern(cdev.DisableModern); s != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
 	if cdev.Bus != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",bus=%s", cdev.Bus))
@@ -424,48 +398,6 @@ const (
 	// VHOSTUSER is a vhost-user port (socket)
 	VHOSTUSER NetDeviceType = "vhostuser"
 )
-
-// QemuNetdevParam converts to the QEMU -netdev parameter notation
-func (n NetDeviceType) QemuNetdevParam() string {
-	switch n {
-	case TAP:
-		return "tap"
-	case MACVTAP:
-		return "tap"
-	case IPVTAP:
-		return "tap"
-	case VETHTAP:
-		return "tap" // -netdev type=tap -device virtio-net-pci
-	case VFIO:
-		return "" // -device vfio-pci (no netdev)
-	case VHOSTUSER:
-		return "vhost-user" // -netdev type=vhost-user (no device)
-	default:
-		return ""
-
-	}
-}
-
-// QemuDeviceParam converts to the QEMU -device parameter notation
-func (n NetDeviceType) QemuDeviceParam() DeviceDriver {
-	switch n {
-	case TAP:
-		return "virtio-net-pci"
-	case MACVTAP:
-		return "virtio-net-pci"
-	case IPVTAP:
-		return "virtio-net-pci"
-	case VETHTAP:
-		return "virtio-net-pci" // -netdev type=tap -device virtio-net-pci
-	case VFIO:
-		return "vfio-pci" // -device vfio-pci (no netdev)
-	case VHOSTUSER:
-		return "" // -netdev type=vhost-user (no device)
-	default:
-		return ""
-
-	}
-}
 
 // NetDevice represents a guest networking device
 type NetDevice struct {
@@ -527,6 +459,29 @@ func (netdev NetDevice) Valid() bool {
 	}
 }
 
+// mqParameter returns the parameters for multi-queue driver. If the driver is a PCI device then the
+// vector flag is required. If the driver is a CCW type than the vector flag is not implemented and only
+// multi-queue option mq needs to be activated. See comment in libvirt code at
+// https://github.com/libvirt/libvirt/blob/6e7e965dcd3d885739129b1454ce19e819b54c25/src/qemu/qemu_command.c#L3633
+func (netdev NetDevice) mqParameter() string {
+	p := []string{",mq=on"}
+
+	if isVirtioPCI[netdev.Driver] {
+		// https://www.linux-kvm.org/page/Multiqueue
+		// -netdev tap,vhost=on,queues=N
+		// enable mq and specify msix vectors in qemu cmdline
+		// (2N+2 vectors, N for tx queues, N for rx queues, 1 for config, and one for possible control vq)
+		// -device virtio-net-pci,mq=on,vectors=2N+2...
+		// enable mq in guest by 'ethtool -L eth0 combined $queue_num'
+		// Clearlinux automatically sets up the queues properly
+		// The agent implementation should do this to ensure that it is
+		// always set
+		vectors := len(netdev.FDs)*2 + 2
+		p = append(p, fmt.Sprintf(",vectors=%d", vectors))
+	}
+	return strings.Join(p, "")
+}
+
 // QemuDeviceParams returns the -device parameters for this network device
 func (netdev NetDevice) QemuDeviceParams(config *Config) []string {
 	var deviceParams []string
@@ -549,26 +504,13 @@ func (netdev NetDevice) QemuDeviceParams(config *Config) []string {
 			deviceParams = append(deviceParams, fmt.Sprintf(",addr=%x", addr))
 		}
 	}
-
-	if netdev.DisableModern {
-		deviceParams = append(deviceParams, ",disable-modern=true")
+	if s := netdev.Driver.disableModern(netdev.DisableModern); s != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
 
 	if len(netdev.FDs) > 0 {
-		// https://www.linux-kvm.org/page/Multiqueue
-		// -netdev tap,vhost=on,queues=N
-		// enable mq and specify msix vectors in qemu cmdline
-		// (2N+2 vectors, N for tx queues, N for rx queues, 1 for config, and one for possible control vq)
-		// -device virtio-net-pci,mq=on,vectors=2N+2...
-		// enable mq in guest by 'ethtool -L eth0 combined $queue_num'
-		// Clearlinux automatically sets up the queues properly
-		// The agent implementation should do this to ensure that it is
-		// always set
-		vectors := len(netdev.FDs)*2 + 2
-
 		// Note: We are appending to the device params here
-		deviceParams = append(deviceParams, ",mq=on")
-		deviceParams = append(deviceParams, fmt.Sprintf(",vectors=%d", vectors))
+		deviceParams = append(deviceParams, netdev.mqParameter())
 	}
 
 	if isVirtioPCI[netdev.Driver] {
@@ -683,8 +625,8 @@ func (dev SerialDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s", dev.Driver))
-	if dev.DisableModern {
-		deviceParams = append(deviceParams, ",disable-modern=true")
+	if s := dev.Driver.disableModern(dev.DisableModern); s != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", dev.ID))
 	if isVirtioPCI[dev.Driver] {
@@ -761,8 +703,8 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s", blkdev.Driver))
-	if blkdev.DisableModern {
-		deviceParams = append(deviceParams, ",disable-modern=true")
+	if s := blkdev.Driver.disableModern(blkdev.DisableModern); s != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",drive=%s", blkdev.ID))
 	if blkdev.SCSI == false {
@@ -909,7 +851,7 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 	var deviceParams []string
 
-	driver := VfioPCI
+	driver := Vfio
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s,host=%s", driver, vfioDev.BDF))
 	if isVirtioPCI[driver] {
@@ -956,7 +898,7 @@ func (scsiCon SCSIController) QemuParams(config *Config) []string {
 	var qemuParams []string
 	var devParams []string
 
-	driver := VirtioScsiPCI
+	driver := VirtioScsi
 	devParams = append(devParams, fmt.Sprintf("%s,id=%s", driver, scsiCon.ID))
 	if scsiCon.Bus != "" {
 		devParams = append(devParams, fmt.Sprintf("bus=%s", scsiCon.Bus))
@@ -964,8 +906,8 @@ func (scsiCon SCSIController) QemuParams(config *Config) []string {
 	if scsiCon.Addr != "" {
 		devParams = append(devParams, fmt.Sprintf("addr=%s", scsiCon.Addr))
 	}
-	if scsiCon.DisableModern {
-		devParams = append(devParams, fmt.Sprintf("disable-modern=true"))
+	if s := driver.disableModern(scsiCon.DisableModern); s != "" {
+		devParams = append(devParams, fmt.Sprintf("%s", s))
 	}
 	if scsiCon.IOThread != "" {
 		devParams = append(devParams, fmt.Sprintf("iothread=%s", scsiCon.IOThread))
@@ -1087,7 +1029,9 @@ type VSOCKDevice struct {
 const (
 	// MinimalGuestCID is the smallest valid context ID for a guest.
 	MinimalGuestCID uint32 = 3
+)
 
+const (
 	// VSOCKGuestCID is the VSOCK guest CID parameter.
 	VSOCKGuestCID = "guest-cid"
 )
@@ -1106,10 +1050,10 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 	var qemuParams []string
 
-	driver := VHostVSockPCI
+	driver := VHostVSock
 	deviceParams = append(deviceParams, fmt.Sprintf("%s", driver))
-	if vsock.DisableModern {
-		deviceParams = append(deviceParams, ",disable-modern=true")
+	if s := driver.disableModern(vsock.DisableModern); s != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
 	if vsock.VHostFD != nil {
 		qemuFDs := config.appendFDs([]*os.File{vsock.VHostFD})
@@ -1223,13 +1167,9 @@ func (b BalloonDevice) QemuParams(_ *Config) []string {
 	} else {
 		deviceParams = append(deviceParams, "deflate-on-oom=off")
 	}
-
-	if b.DisableModern {
-		deviceParams = append(deviceParams, "disable-modern=on")
-	} else {
-		deviceParams = append(deviceParams, "disable-modern=off")
+	if s := driver.disableModern(b.DisableModern); s != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("%s", s))
 	}
-
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
 

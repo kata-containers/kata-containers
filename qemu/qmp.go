@@ -991,7 +991,7 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, romfile string) error {
 	args := map[string]interface{}{
 		"id":      devID,
-		"driver":  "vfio-pci",
+		"driver":  Vfio,
 		"host":    bdf,
 		"romfile": romfile,
 	}
@@ -1006,11 +1006,12 @@ func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, romfile stri
 func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus, romfile string) error {
 	args := map[string]interface{}{
 		"id":      devID,
-		"driver":  "vfio-pci",
+		"driver":  Vfio,
 		"host":    bdf,
 		"addr":    addr,
 		"romfile": romfile,
 	}
+
 	if bus != "" {
 		args["bus"] = bus
 	}
@@ -1025,10 +1026,11 @@ func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus
 func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsdev, addr, bus, romfile string) error {
 	args := map[string]interface{}{
 		"id":       devID,
-		"driver":   "vfio-pci",
+		"driver":   Vfio,
 		"sysfsdev": sysfsdev,
 		"romfile":  romfile,
 	}
+
 	if bus != "" {
 		args["bus"] = bus
 	}
@@ -1215,7 +1217,7 @@ func (q *QMP) ExecuteBalloon(ctx context.Context, bytes uint64) error {
 // ExecutePCIVSockAdd adds a vhost-vsock-pci bus
 func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID, vhostfd, addr, bus, romfile string, disableModern bool) error {
 	args := map[string]interface{}{
-		"driver":    VHostVSockPCI,
+		"driver":    VHostVSock,
 		"id":        id,
 		"guest-cid": guestCID,
 		"vhostfd":   vhostfd,
