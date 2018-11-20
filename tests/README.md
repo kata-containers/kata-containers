@@ -7,10 +7,10 @@ osbuilder provides a test script that creates all images and initrds for all
 supported distributions and then tests them to ensure a Kata Container can
 be created with each.
 
-The test script installs all required Kata components on the host system
-before creating the images.
-
-To run all available osbuilder tests:
+Before the build phase, the test script installs the Docker container manager
+and all the Kata components required to run test containers. This step can be
+skipped by setting the environment variable `KATA_DEV_MODE` to a non-empty
+value.
 
 ```
 $ ./test_images.sh
