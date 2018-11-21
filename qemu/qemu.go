@@ -65,6 +65,9 @@ const (
 	// VirtioNetPCI is the virt-io pci networking device driver.
 	VirtioNetPCI DeviceDriver = "virtio-net-pci"
 
+	// VirtioNetCCW is the virt-io ccw networking device driver.
+	VirtioNetCCW DeviceDriver = "virtio-net-ccw"
+
 	// VirtioBlock is the block device driver.
 	VirtioBlock DeviceDriver = "virtio-blk"
 
