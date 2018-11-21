@@ -1,6 +1,7 @@
 * [Introduction](#introduction)
 * [General requirements](#general-requirements)
 * [Notes](#notes)
+* [Warnings and other admonitions](#warnings-and-other-admonitions)
 * [Files and command names](#files-and-command-names)
 * [Code blocks](#code-blocks)
 * [Images](#images)
@@ -34,6 +35,24 @@ If there are multiple notes, bullets should be used:
 > - I am important point 2.
 >
 > - I am important point *n*.
+
+# Warnings and other admonitions
+
+Use the same approach as for [notes](#notes). For example:
+
+> **Warning:** Running this command assumes you understand the risks of doing so.
+
+Other examples:
+
+> **Warnings:**
+>
+> - Do not unplug your computer!
+> - Always read the label.
+> - Do not pass go. Do not collect $200.
+
+> **Tip:** Read the manual page for further information on available options.
+
+> **Hint:** Look behind you!
 
 # Files and command names
 
