@@ -72,7 +72,7 @@ utility.
       ```bash
       $ echo "Hi - I am some bash code"
       $ sudo docker run -ti busybox true
-      $ [ $? -eq 0 ] && echo "success!"
+      $ [ $? -eq 0 ] && echo "success"
       ```
 
   ```
