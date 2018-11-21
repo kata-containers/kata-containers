@@ -10,6 +10,7 @@ load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 setup() {
 	export KUBECONFIG=/etc/kubernetes/admin.conf
 	pod_name="memory-test"
+	pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
 }
 
 @test "Exceeding memory constraints" {
@@ -19,33 +20,30 @@ setup() {
         sed \
             -e "s/\${memory_size}/${memory_limit_size}/" \
             -e "s/\${memory_allocated}/${allocated_size}/" \
-            pod-memory-limit.yaml > test_exceed_memory.yaml
+            "${pod_config_dir}/pod-memory-limit.yaml" > "${pod_config_dir}/test_exceed_memory.yaml"
 
 	# Create the pod exceeding memory constraints
-	run sudo -E kubectl create -f test_exceed_memory.yaml
+	run sudo -E kubectl create -f "${pod_config_dir}/test_exceed_memory.yaml"
 	[ "$status" -ne 0 ]
 
-	rm -f test_exceed_memory.yaml
+	rm -f "${pod_config_dir}/test_exceed_memory.yaml"
 }
 
 @test "Running within memory constraints" {
 	memory_limit_size="200Mi"
 	allocated_size="100M"
-	wait_time=300
-	sleep_time=5
 	# Create test .yaml
         sed \
             -e "s/\${memory_size}/${memory_limit_size}/" \
             -e "s/\${memory_allocated}/${allocated_size}/" \
-            pod-memory-limit.yaml > test_within_memory.yaml
+            "${pod_config_dir}/pod-memory-limit.yaml" > "${pod_config_dir}/test_within_memory.yaml"
 
 	# Create the pod within memory constraints
-	sudo -E kubectl create -f test_within_memory.yaml
+	sudo -E kubectl create -f "${pod_config_dir}/test_within_memory.yaml"
 
 	# Check pod creation
-	pod_status_cmd="sudo -E kubectl get pods -a | grep $pod_name | grep Running"
-	waitForProcess "$wait_time" "$sleep_time" "$pod_status_cmd"
+	sudo -E kubectl wait --for=condition=Ready pod "$pod_name"
 
-	rm -f test_within_memory.yaml
+	rm -f "${pod_config_dir}/test_within_memory.yaml"
 	sudo -E kubectl delete pod "$pod_name"
 }

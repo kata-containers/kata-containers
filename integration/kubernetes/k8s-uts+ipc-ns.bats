@@ -12,49 +12,42 @@ setup() {
 	export KUBECONFIG=/etc/kubernetes/admin.conf
 	first_pod_name="first-test"
 	second_pod_name="second-test"
-	sleep_cmd="sleep 30"
-	# Pull the images before launching workload. This is mainly because we use
-	# a timeout and in slow networks it may result in not been able to pull the image
-	# successfully.
+	# Pull the images before launching workload.
 	sudo -E crictl pull "$busybox_image"
+	pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+
+	uts_cmd="ls -la /proc/self/ns/uts"
+	ipc_cmd="ls -la /proc/self/ns/ipc"
 }
 
 @test "Check UTS and IPC namespaces" {
 	issue="https://github.com/kata-containers/tests/issues/793"
 	[ "${CRI_RUNTIME}" == "containerd" ] && skip "test not working with ${CRI_RUNTIME} see: ${issue}"
-	wait_time=120
-	sleep_time=5
 
 	# Run the first pod
-	sudo -E kubectl run $first_pod_name --image=$busybox_image -- sh  -c "eval $sleep_cmd"
-	first_pod_status_cmd="sudo -E kubectl get pods -a | grep $first_pod_name | grep Running"
-	waitForProcess "$wait_time" "$sleep_time" "$first_pod_status_cmd"
+	first_pod_config=$(mktemp --tmpdir pod_config.XXXXXX.yaml)
+	cp "$pod_config_dir/busybox-template.yaml" "$first_pod_config"
+	sed -i "s/NAME/${first_pod_name}/" "$first_pod_config"
+	sudo -E kubectl create -f "$first_pod_config"
+	sudo -E kubectl wait --for=condition=Ready pod "$first_pod_name"
+	first_pod_uts_ns=$(sudo -E kubectl exec "$first_pod_name" -- sh -c "$uts_cmd" | grep uts | cut -d ':' -f3)
+	first_pod_ipc_ns=$(sudo -E kubectl exec "$first_pod_name" -- sh -c "$ipc_cmd" | grep ipc | cut -d ':' -f3)
 
 	# Run the second pod
-	sudo -E kubectl run $second_pod_name --image=$busybox_image -- sh  -c "eval $sleep_cmd"
-	second_pod_status_cmd="sudo -E kubectl get pods -a | grep $second_pod_name | grep Running"
-	waitForProcess "$wait_time" "$sleep_time" "$second_pod_status_cmd"
+	second_pod_config=$(mktemp --tmpdir pod_config.XXXXXX.yaml)
+	cp "$pod_config_dir/busybox-template.yaml" "$second_pod_config"
+	sed -i "s/NAME/${second_pod_name}/" "$second_pod_config"
+	sudo -E kubectl create -f "$second_pod_config"
+	sudo -E kubectl wait --for=condition=Ready pod "$second_pod_name"
+	second_pod_uts_ns=$(sudo -E kubectl exec "$second_pod_name" -- sh -c "$uts_cmd" | grep uts | cut -d ':' -f3)
+	second_pod_ipc_ns=$(sudo -E kubectl exec "$second_pod_name" -- sh -c "$ipc_cmd" | grep ipc | cut -d ':' -f3)
 
-	# Check UTS namespace
-	uts_cmd="ls -la /proc/self/ns/uts"
-	first_complete_pod_name=$(sudo -E kubectl get pods | grep "$first_pod_name" | cut -d ' ' -f1)
-	second_complete_pod_name=$(sudo -E kubectl get pods | grep "$second_pod_name" | cut -d ' ' -f1)
-	first_pod_uts_namespace=$(sudo -E kubectl exec "$first_complete_pod_name" -- sh -c "$uts_cmd" | grep uts | cut -d ':' -f3)
-	second_pod_uts_namespace=$(sudo -E kubectl exec "$second_complete_pod_name" -- sh -c "$uts_cmd" | grep uts | cut -d ':' -f3)
-	[ "$first_pod_uts_namespace" == "$second_pod_uts_namespace" ]
-
-	# Check IPC namespace
-	ipc_cmd="ls -la /proc/self/ns/ipc"
-	first_pod_ipc_namespace=$(sudo -E kubectl exec "$first_complete_pod_name" -- sh -c "$ipc_cmd" | grep ipc | cut -d ':' -f3)
-	second_pod_ipc_namespace=$(sudo -E kubectl exec "$second_complete_pod_name" -- sh -c "$ipc_cmd" | grep ipc | cut -d ':' -f3)
-	[ "$first_pod_ipc_namespace" == "$second_pod_ipc_namespace" ]
+	# Check UTS and IPC namespaces
+	[ "$first_pod_uts_ns" == "$second_pod_uts_ns" ]
+	[ "$first_pod_ipc_ns" == "$second_pod_ipc_ns" ]
 }
 
 teardown() {
-	sudo -E kubectl delete deployment "$first_pod_name"
-	sudo -E kubectl delete deployment "$second_pod_name"
-	# Wait for the pods to be deleted
-	cmd="sudo -E kubectl get pods | grep found."
-	waitForProcess "$wait_time" "$sleep_time" "$cmd"
-	sudo -E kubectl get pods
+	sudo -E kubectl delete pod "$first_pod_name"
+	sudo -E kubectl delete pod "$second_pod_name"
 }

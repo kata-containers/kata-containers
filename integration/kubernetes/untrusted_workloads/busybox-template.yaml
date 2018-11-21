@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: NAME
+  annotations:
+    io.kubernetes.cri-o.TrustedSandbox: "false"
+    io.kubernetes.cri.untrusted-workload: "true"
+spec:
+  shareProcessNamespace: true
+  containers:
+  - name: busybox
+    image: busybox
+    command:
+      - sleep
+      - "120"
