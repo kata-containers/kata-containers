@@ -153,11 +153,26 @@ exit_handler()
 	info "ERROR: test failed"
 
 	# The test failed so dump what we can
-	info "images:"
-	sudo -E ls -l "${images_dir}" >&2
+	if [ -d "${tmp_rootfs}" ]; then
+		info "rootfs:"
+		sudo -E ls -l "${tmp_rootfs}" >&2
+	else
+		info "no rootfs created"
+		# If no rootfs are created, no need to dump other info
+		return
+	fi
 
-	info "rootfs:"
-	sudo -E ls -l "${tmp_rootfs}" >&2
+	if [ -d "${images_dir}" ]; then
+		info "images:"
+		sudo -E ls -l "${images_dir}" >&2
+	else
+		info "no images created"
+		# If no images are created, no need to dump other info
+		return
+	fi
+
+	# Travis tests do not install kata
+	[ -n "${TRAVIS:-}" ] && return
 
 	info "local runtime config:"
 	cat /etc/kata-containers/configuration.toml >&2
@@ -172,7 +187,7 @@ exit_handler()
 	sudo -E ps -efwww | egrep "docker|kata" >&2
 
 	# Restore the default image in config file
-	[ -n "${TRAVIS:-}" ] || chronic $mgr configure-image
+	chronic $mgr configure-image
 }
 
 die()
