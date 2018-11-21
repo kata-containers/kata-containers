@@ -18,7 +18,7 @@ Containers](https://github.com/kata-containers) project.
 # Notes
 
 Important information that is not part of the main document flow should be
-added as a Note in bold with all content contained within block quote:
+added as a Note in bold with all content contained within a block quote:
 
 > **Note:** This is areally important point!
 >
