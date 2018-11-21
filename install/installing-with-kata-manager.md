@@ -12,7 +12,7 @@
 > - `kata-manager` requires `curl` and `sudo` installed on your system.
 >
 > - Full installation mode is only available for Docker container manager. For other setups, you
-> can still use `kata-manager` to [install Kata package](#install-kata-packages-only), and then setup your container manager manually.
+> can still use `kata-manager` to [install Kata package](#install-the-kata-packages-only), and then setup your container manager manually.
 >
 > - You can run `kata-manager` in dry run mode by passing the `-n` flag. Dry run mode allows you to review the
 > commands that `kata-manager` would run, without doing any change to your system.
