@@ -1,11 +1,16 @@
 # Kata Containers tests
 
 * [Getting the code](#getting-the-code)
+* [Test Content](#test-content)
 * [CI Content](#ci-content)
     * [Centralised scripts](#centralised-scripts)
     * [CI setup](#ci-setup)
     * [Detecting a CI system](#detecting-a-ci-system)
 * [Developer Mode](#developer-mode)
+* [Run the Kata Containers tests](#run-the-kata-containers-tests)
+    * [Requirements to run Kata Containers tests](#requirements-to-run-kata-containers-tests)
+    * [Prepare an environment](#prepare-an-environment)
+    * [Run the tests](#run-the-tests)
 
 This repository contains various types of tests and utilities (called
 "content" from now on) for testing the [Kata Containers](https://github.com/kata-containers)
@@ -16,6 +21,25 @@ code repositories.
 ```
 $ go get -d github.com/kata-containers/tests
 ```
+
+## Test Content
+
+We provide several tests to ensure Kata-Containers run on different scenarios
+and with different container managers.
+
+1. [Functional tests](https://github.com/kata-containers/tests/tree/master/functional)
+2. Integration tests to ensure compatibility with:
+   - [Docker](https://github.com/kata-containers/tests/tree/master/integration/docker)
+   - [Kubernetes](https://github.com/kata-containers/tests/tree/master/integration/kubernetes)
+   - [CRI-O](https://github.com/kata-containers/tests/tree/master/integration/cri-o)
+   - [Containerd](https://github.com/kata-containers/tests/tree/master/integration/containerd)
+   - [Openshift](https://github.com/kata-containers/tests/tree/master/integration/openshift)
+3. [Network tests](https://github.com/kata-containers/tests/tree/master/integration/network)
+4. [Stability tests](https://github.com/kata-containers/tests/tree/master/integration/stability)
+5. [Metrics](https://github.com/kata-containers/tests/tree/master/metrics)
+
+> **Note:** The unit tests of the different Kata Containers components are stored in each repository
+> along with the source code they test.
 
 ## CI Content
 
@@ -107,3 +131,69 @@ You should be aware that setting this variable provides a safe *subset* of
 functionality; it is still possible that PRs raised for code repositories will
 still fail under the automated CI systems since those systems are running all
 possible tests.
+
+
+## Run the Kata Containers tests
+
+### Requirements to run Kata Containers tests
+
+You need to install the following to run Kata Containers tests:
+
+- [golang](https://golang.org/dl)
+
+  To view the versions of go known to work, see the `golang` entry in the
+  [versions database](https://github.com/kata-containers/runtime/blob/master/versions.yaml).
+
+- `make`.
+
+### Prepare an environment
+
+The recommended method to set up Kata Containers is to use the official and latest
+stable release. You can find the official documentation to do this in the
+[Kata Containers installation user guides](https://github.com/kata-containers/documentation/blob/master/install/README.md).
+
+To try the latest commits of Kata use the CI scripts, which build and install from the
+kata-containers repositories, with the following steps:
+
+> **Warning:** This may replace/delete packages and configuration that you already have.
+> Please use these steps only on a testing environment.
+
+Add the `$GOPATH/bin` directory to the PATH:
+```
+$ export PATH=${GOPATH}/bin:${PATH}
+```
+
+Clone the `kata-container/tests` repository:
+```
+$ go get -d github.com/kata-containers/tests
+```
+
+Go to the tests repo directory:
+```
+$ cd $GOPATH/src/github.com/kata-containers/tests
+```
+
+Execute the setup script:
+```
+$ .ci/setup.sh
+```
+> **Limitation:** If the script fails for a reason and it is re-executed, it will execute
+all steps from the beginning and not from the failed step.
+
+### Run the tests
+
+If you have already installed the Kata Containers packages and a container
+manager (i.e. Docker or Kubernetes), and you want to execute the content
+for all the tests, run the following:
+
+```
+$ export RUNTIME=kata-runtime
+$ export KATA_DEV_MODE=true
+$ sudo -E PATH=$PATH make test
+```
+
+You can also execute a single test suite. For example, if you want to execute
+the docker integration tests, run the following:
+```
+$ sudo -E PATH=$PATH make docker
+```
