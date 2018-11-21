@@ -47,9 +47,13 @@ if [ -e "${NEW_RUNTIME_CONFIG}" ]; then
 	runtime_config_path="${NEW_RUNTIME_CONFIG}"
 fi
 
-echo "Enabling all debug options in file ${runtime_config_path}"
-sudo sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${runtime_config_path}"
-sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' "${runtime_config_path}"
+if [ -z "${METRICS_CI}" ]; then
+	echo "Enabling all debug options in file ${runtime_config_path}"
+	sudo sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${runtime_config_path}"
+	sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' "${runtime_config_path}"
+else
+	echo "Metrics run - do not enable all debug options in file ${runtime_config_path}"
+fi
 
 if [ x"${TEST_INITRD}" == x"yes" ]; then
 	echo "Set to test initrd image"
