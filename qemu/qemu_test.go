@@ -738,7 +738,8 @@ func TestAppendQMPSocketServer(t *testing.T) {
 	testAppend(qmp, qmpSocketServerString, t)
 }
 
-var qemuString = "-name cc-qemu -cpu host -uuid " + agentUUID
+var pidfile = "/run/vc/vm/iamsandboxid/pidfile"
+var qemuString = "-name cc-qemu -cpu host -uuid " + agentUUID + " -pidfile " + pidfile
 
 func TestAppendStrings(t *testing.T) {
 	config := Config{
@@ -746,11 +747,13 @@ func TestAppendStrings(t *testing.T) {
 		Name:     "cc-qemu",
 		UUID:     agentUUID,
 		CPUModel: "host",
+		PidFile:  pidfile,
 	}
 
 	config.appendName()
 	config.appendCPUModel()
 	config.appendUUID()
+	config.appendPidFile()
 
 	result := strings.Join(config.qemuParams, " ")
 	if result != qemuString {

@@ -1516,6 +1516,9 @@ type Config struct {
 
 	IOThreads []IOThread
 
+	// PidFile is the -pidfile parameter
+	PidFile string
+
 	qemuParams []string
 }
 
@@ -1830,6 +1833,13 @@ func (config *Config) appendIncoming() {
 	config.qemuParams = append(config.qemuParams, "-S", "-incoming", uri)
 }
 
+func (config *Config) appendPidFile() {
+	if config.PidFile != "" {
+		config.qemuParams = append(config.qemuParams, "-pidfile")
+		config.qemuParams = append(config.qemuParams, config.PidFile)
+	}
+}
+
 // LaunchQemu can be used to launch a new qemu instance.
 //
 // The Config parameter contains a set of qemu parameters and settings.
@@ -1855,6 +1865,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendBios()
 	config.appendIOThreads()
 	config.appendIncoming()
+	config.appendPidFile()
 
 	if err := config.appendCPUs(); err != nil {
 		return "", err
