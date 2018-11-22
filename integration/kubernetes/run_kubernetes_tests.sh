@@ -36,5 +36,6 @@ bats k8s-uts+ipc-ns.bats
 bats k8s-pid-ns.bats
 bats k8s-cpu-ns.bats
 bats k8s-memory.bats
+bats k8s-liveness-probes.bats
 ./cleanup_env.sh
 popd
