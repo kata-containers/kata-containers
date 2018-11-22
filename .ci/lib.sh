@@ -255,5 +255,10 @@ gen_clean_arch() {
 	delete_stale_kata_resource
 	info "Remove installed kata packages"
 	${GOPATH}/src/${tests_repo}/cmd/kata-manager/kata-manager.sh remove-packages
+	info "Remove installed kubernetes packages and configuration"
+	if [ "$ID" == ubuntu ]; then
+		sudo rm -rf /etc/systemd/system/kubelet.service.d
+		sudo apt-get purge kubeadm kubelet kubectl -y
+	fi
 }
 
