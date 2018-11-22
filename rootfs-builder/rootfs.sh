@@ -74,6 +74,10 @@ AGENT_INIT          When set to "yes", use ${AGENT_BIN} as init process in place
 AGENT_VERSION       Version of the agent to include in the rootfs.
                     Default value: ${AGENT_VERSION:-<not set>}
 
+AGENT_SOURCE_BIN    Path to the directory of agent binary.
+                    If set, use the binary as agent but not build agent package.
+                    Default value: <not set>
+
 GO_AGENT_PKG        URL of the Git repository hosting the agent package.
                     Default value: ${GO_AGENT_PKG}
 
@@ -313,6 +317,13 @@ if [ -n "${USE_DOCKER}" ] ; then
 	docker_run_args+=" --rm"
 	docker_run_args+=" --runtime runc"
 
+	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
+		docker_run_args+=" --env GO_AGENT_PKG=${GO_AGENT_PKG}"
+	else
+		docker_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
+		docker_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
+	fi
+
 	docker_run_args+=" $(docker_extra_args $distro)"
 
 	#Make sure we use a compatible runtime to build rootfs
@@ -323,7 +334,6 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--env http_proxy="${http_proxy}" \
 		--env AGENT_VERSION="${AGENT_VERSION}" \
 		--env ROOTFS_DIR="/rootfs" \
-		--env GO_AGENT_PKG="${GO_AGENT_PKG}" \
 		--env AGENT_BIN="${AGENT_BIN}" \
 		--env AGENT_INIT="${AGENT_INIT}" \
 		--env GOPATH="${GOPATH_LOCAL}" \
@@ -349,20 +359,26 @@ build_rootfs ${ROOTFS_DIR}
 
 [ -n "${KERNEL_MODULES_DIR}" ] && copy_kernel_modules ${KERNEL_MODULES_DIR} ${ROOTFS_DIR}
 
-info "Pull Agent source code"
-go get -d "${GO_AGENT_PKG}" || true
-OK "Pull Agent source code"
-
-info "Build agent"
-pushd "${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
-[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful"
-make clean
-make INIT=${AGENT_INIT}
-make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
-popd
-
 AGENT_DIR="${ROOTFS_DIR}/usr/bin"
 AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
+
+if [ -z "${AGENT_SOURCE_BIN}" ] ; then
+	info "Pull Agent source code"
+	go get -d "${GO_AGENT_PKG}" || true
+	OK "Pull Agent source code"
+
+	info "Build agent"
+	pushd "${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
+	[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful"
+	make clean
+	make INIT=${AGENT_INIT}
+	make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
+	popd
+else
+	cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
+	OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
+fi
+
 [ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
 OK "Agent installed"
 
