@@ -21,9 +21,6 @@ setup() {
 }
 
 @test "Check CPU constraints" {
-	issue="https://github.com/kata-containers/tests/issues/794"
-	[ "${CRI_RUNTIME}" == "containerd" ] && skip "test not working with ${CRI_RUNTIME} see: ${issue}"
-
 	# Create the pod
 	sudo -E kubectl create -f "${pod_config_dir}/pod-cpu.yaml"
 

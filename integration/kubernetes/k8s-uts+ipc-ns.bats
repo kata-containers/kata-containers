@@ -21,9 +21,6 @@ setup() {
 }
 
 @test "Check UTS and IPC namespaces" {
-	issue="https://github.com/kata-containers/tests/issues/793"
-	[ "${CRI_RUNTIME}" == "containerd" ] && skip "test not working with ${CRI_RUNTIME} see: ${issue}"
-
 	# Run the first pod
 	first_pod_config=$(mktemp --tmpdir pod_config.XXXXXX.yaml)
 	cp "$pod_config_dir/busybox-template.yaml" "$first_pod_config"
