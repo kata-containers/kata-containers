@@ -26,5 +26,4 @@ deb http://apt.kubernetes.io/ kubernetes-xenial-unstable main
 EOF"
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 chronic sudo -E apt update
-chronic sudo -E apt install -y kubelet="$kubernetes_version" kubeadm="$kubernetes_version" kubectl="$kubernetes_version"
-
+chronic sudo -E apt install --allow-downgrades -y kubelet="$kubernetes_version" kubeadm="$kubernetes_version" kubectl="$kubernetes_version"
