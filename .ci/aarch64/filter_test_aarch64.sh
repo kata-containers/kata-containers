@@ -16,8 +16,12 @@ test_filter_flag="test"
 
 _test_union=()
 
+source "${ci_dir}/lib.sh"
+
 main()
 {
+	# install yq if not exist
+	[ -z "$(command -v yq)" ] && install_yq
 	local array_test=$("${GOPATH_LOCAL}/bin/yq" read "${test_config_file}" "${test_filter_flag}")
 	[ "${array_test}" = "null" ] && return
 	mapfile -t _array_test <<< "${array_test}"

@@ -19,6 +19,8 @@ it_skip_flag="docker.It"
 # value for '-skip' in ginkgo
 _skip_options=()
 
+source "${ci_dir}/lib.sh"
+
 filter_and_build()
 {
 	local dependency="$1"
@@ -33,6 +35,8 @@ filter_and_build()
 
 main()
 {
+	# install yq if not exist
+	[ -z "$(command -v yq)" ] && install_yq
 	# build skip option based on Describe block
 	filter_and_build "${describe_skip_flag}"
 
