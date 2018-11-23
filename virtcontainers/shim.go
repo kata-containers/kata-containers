@@ -56,6 +56,7 @@ type ShimParams struct {
 type ShimConfig struct {
 	Path  string
 	Debug bool
+	Trace bool
 }
 
 // Set sets a shim type based on the input string.
