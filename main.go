@@ -17,8 +17,10 @@ import (
 	"sync"
 	"time"
 
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
+	context "golang.org/x/net/context"
 )
 
 const (
@@ -39,6 +41,9 @@ var debug bool
 
 // if true, coredump when an internal error occurs or a fatal signal is received
 var crashOnError = false
+
+// if true, enable opentracing support.
+var tracing = false
 
 var shimLog *logrus.Entry
 
@@ -89,7 +94,7 @@ func setThreads() {
 	}
 }
 
-func realMain() (exitCode int) {
+func realMain(ctx context.Context) (exitCode int) {
 	var (
 		logLevel      string
 		agentAddr     string
@@ -103,6 +108,7 @@ func realMain() (exitCode int) {
 	setThreads()
 
 	flag.BoolVar(&debug, "debug", false, "enable debug mode")
+	flag.BoolVar(&tracing, "trace", false, "enable opentracing support")
 	flag.BoolVar(&showVersion, "version", false, "display program version and exit")
 	flag.StringVar(&logLevel, "log", "warn", "set shim log level: debug, info, warn, error, fatal or panic")
 	flag.StringVar(&agentAddr, "agent", "", "agent gRPC socket endpoint")
@@ -139,6 +145,7 @@ func realMain() (exitCode int) {
 		"agent-socket":    agentAddr,
 		"terminal":        terminal,
 		"proxy-exit-code": proxyExitCode,
+		"tracing":         tracing,
 	}
 
 	// The final parameter makes sure all output going to stdout/stderr is discarded.
@@ -148,7 +155,19 @@ func realMain() (exitCode int) {
 		return exitFailure
 	}
 
-	shim, err := newShim(agentAddr, container, execID)
+	// Initialise tracing now the logger is ready
+	tracer, err := createTracer(shimName)
+	if err != nil {
+		logger().WithError(err).Fatal("failed to setup tracing")
+		return exitFailure
+	}
+
+	// create root span
+	span := tracer.StartSpan("realMain")
+	ctx = opentracing.ContextWithSpan(ctx, span)
+	defer span.Finish()
+
+	shim, err := newShim(ctx, agentAddr, container, execID)
 	if err != nil {
 		logger().WithError(err).Error("failed to create new shim")
 		return exitFailure
@@ -165,7 +184,7 @@ func realMain() (exitCode int) {
 	}
 
 	// signals
-	sigc := shim.handleSignals(os.Stdin)
+	sigc := shim.handleSignals(ctx, os.Stdin)
 	defer signal.Stop(sigc)
 
 	// This wait call cannot be deferred and has to wait for every
@@ -174,8 +193,20 @@ func realMain() (exitCode int) {
 	// waited for, we cannot expect to do any more calls related to
 	// this process since it is going to be removed from the agent.
 	wg := &sync.WaitGroup{}
+
+	// Encapsulate the call the I/O handling function in a span here since
+	// that function returns quickly and we want to know how long I/O
+	// took.
+	stdioSpan, _ := trace(ctx, "proxyStdio")
+
+	// Add a tag to allow the I/O to be filtered out.
+	stdioSpan.SetTag("category", "interactive")
+
 	shim.proxyStdio(wg, terminal)
+
 	wg.Wait()
+
+	stdioSpan.Finish()
 
 	// wait until exit
 	exitcode, err := shim.wait()
@@ -193,7 +224,14 @@ func realMain() (exitCode int) {
 }
 
 func main() {
-	defer handlePanic()
-	exitCode := realMain()
+	// create a new empty context
+	ctx := context.Background()
+
+	defer handlePanic(ctx)
+
+	exitCode := realMain(ctx)
+
+	stopTracing(ctx)
+
 	os.Exit(exitCode)
 }
