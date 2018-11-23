@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Kata containers team <https://github.com/kata-containers/>
 Standards-Version: 3.9.6
 Homepage: https://katacontainers.io
-Build-Depends: dh-make, git, ca-certificates, execstack, devscripts, debhelper, build-essential, dh-autoreconf, make, dh-modaliases, pkg-config, dh-systemd, systemd
+Build-Depends: dh-make, git, ca-certificates, execstack, devscripts, debhelper, build-essential, dh-autoreconf, make, pkg-config, dh-systemd, systemd
 
 Package: kata-ksm-throttler
 Architecture: @deb_arch@
