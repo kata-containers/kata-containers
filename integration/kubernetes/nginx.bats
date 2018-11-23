@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bats
 #
 # Copyright (c) 2018 Intel Corporation
 #
@@ -12,30 +12,24 @@ setup() {
 	nginx_version=$("${GOPATH}/bin/yq" read "$versions_file" "docker_images.nginx.version")
 	nginx_image="nginx:$nginx_version"
 	busybox_image="busybox"
-	service_name="nginx-service"
+	deployment="nginx-deployment"
 	export KUBECONFIG=/etc/kubernetes/admin.conf
-	master=$(hostname)
-	sudo -E kubectl taint nodes "$master" node-role.kubernetes.io/master:NoSchedule-
-	# Pull the images before launching workload. This is mainly because we use
-	# a timeout and in slow networks it may result in not been able to pull the image
-	# successfully.
+	# Pull the images before launching workload.
 	sudo -E crictl pull "$busybox_image"
 	sudo -E crictl pull "$nginx_image"
+	pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
 }
 
 @test "Verify nginx connectivity between pods" {
-	wait_time=120
-	sleep_time=5
-	cmd="sudo -E kubectl get pods | grep $service_name | grep Running"
-	sudo -E kubectl run "$service_name" --image="$nginx_image" --replicas=2
-	sudo -E kubectl expose deployment "$service_name" --port=80
-	sudo -E kubectl get svc,pod
-	# Wait for nginx service to come up
-	waitForProcess "$wait_time" "$sleep_time" "$cmd"
-	sudo -E kubectl describe service "$service_name"
+	wait_time=30
+	sleep_time=3
+	sudo -E kubectl create -f "${pod_config_dir}/${deployment}.yaml"
+	sudo -E kubectl wait --for=condition=Available deployment/${deployment}
+	sudo -E kubectl expose deployment/${deployment}
+
 	busybox_pod="test-nginx"
 	sudo -E kubectl run $busybox_pod --restart=Never --image="$busybox_image" \
-		-- wget --timeout=5 "$service_name"
+		-- wget --timeout=5 "$deployment"
 	cmd="sudo -E kubectl get pods -a | grep $busybox_pod | grep Completed"
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 	sudo -E kubectl logs "$busybox_pod" | grep "index.html"
@@ -43,11 +37,7 @@ setup() {
 }
 
 teardown() {
-	sudo -E kubectl delete deployment "$service_name"
-	sudo -E kubectl delete service "$service_name"
+	sudo -E kubectl delete deployment "$deployment"
+	sudo -E kubectl delete service "$deployment"
 	sudo -E kubectl delete pod "$busybox_pod"
-	# Wait for the pods to be deleted
-	cmd="sudo -E kubectl get pods | grep found."
-	waitForProcess "$wait_time" "$sleep_time" "$cmd"
-	sudo -E kubectl get pods
 }

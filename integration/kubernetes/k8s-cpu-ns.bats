@@ -17,20 +17,15 @@ setup() {
 	total_cpus=2
 	total_requests=512
 	total_cpu_container=1
+	pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
 }
 
 @test "Check CPU constraints" {
-	issue="https://github.com/kata-containers/tests/issues/794"
-	[ "${CRI_RUNTIME}" == "containerd" ] && skip "test not working with ${CRI_RUNTIME} see: ${issue}"
-	wait_time=120
-	sleep_time=5
-
 	# Create the pod
-	sudo -E kubectl create -f pod-cpu.yaml
+	sudo -E kubectl create -f "${pod_config_dir}/pod-cpu.yaml"
 
 	# Check pod creation
-	pod_status_cmd="sudo -E kubectl get pods -a | grep $pod_name | grep Running"
-	waitForProcess "$wait_time" "$sleep_time" "$pod_status_cmd"
+	sudo -E kubectl wait --for=condition=Ready pod "$pod_name"
 
 	# Check the total of cpus
 	total_cpus_container=$(sudo -E kubectl exec $pod_name -c $container_name nproc)
@@ -54,9 +49,5 @@ setup() {
 }
 
 teardown() {
-       sudo -E kubectl delete deployment "$pod_name"
-       # Wait for the pods to be deleted
-       cmd="sudo -E kubectl get pods | grep found."
-       waitForProcess "$wait_time" "$sleep_time" "$cmd"
-       sudo -E kubectl get pods
+       sudo -E kubectl delete pod "$pod_name"
 }

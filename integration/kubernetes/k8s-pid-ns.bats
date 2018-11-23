@@ -13,6 +13,7 @@ setup() {
 	pod_name="busybox"
 	first_container_name="first-test-container"
 	second_container_name="second-test-container"
+	pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
 }
 
 @test "Check PID namespaces" {
@@ -21,7 +22,7 @@ setup() {
 	sleep_time=5
 
 	# Create the pod
-	sudo -E kubectl create -f pod.yaml
+	sudo -E kubectl create -f "${pod_config_dir}/busybox-pod.yaml"
 
 	# Check pod creation
 	pod_status_cmd="sudo -E kubectl get pods -a | grep $pod_name | grep Running"
