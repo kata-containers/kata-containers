@@ -132,7 +132,7 @@ externals:
     description: |
       OCI-based Kubernetes Container Runtime Interface implementation
     url: "https://github.com/kubernetes-incubator/cri-o"
-    version: "6273bea4c9ed788aeb3d051ebf2d030060c05b6c"
+    version: "fa540c8e806d28c2cbcd157bdf8acf2b20990ab6"
     meta:
       openshift: "6273bea4c9ed788aeb3d051ebf2d030060c05b6c"
 
@@ -143,9 +143,9 @@ externals:
       Note that the current version is required for golang 1.10.2
       (see https://github.com/containerd/cri/pull/941).
     url: "https://github.com/containerd/cri"
-    version: "8b0d53c09c41d9fbc3b3896548ecf011518e3c42"
+    version: "54b1c00b3b307b0fadd10c02d9467a6545c2c4d5"
     meta:
-      containerd-version: "1.1.3"
+      containerd-version: "1.2.0"
 
   docker:
     description: "Moby project container manager"
@@ -163,7 +163,7 @@ externals:
   kubernetes:
     description: "Kubernetes project container manager"
     url: "https://github.com/kubernetes/kubernetes"
-    version: "1.10.5-00"
+    version: "1.12.2-00"
 
   openshift:
     description: |
