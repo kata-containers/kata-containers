@@ -78,6 +78,9 @@ AGENT_SOURCE_BIN    Path to the directory of agent binary.
                     If set, use the binary as agent but not build agent package.
                     Default value: <not set>
 
+DISTRO_REPO         Use host repositories to install guest packages.
+                    Default value: <not set>
+
 GO_AGENT_PKG        URL of the Git repository hosting the agent package.
                     Default value: ${GO_AGENT_PKG}
 
@@ -356,6 +359,11 @@ fi
 
 mkdir -p ${ROOTFS_DIR}
 build_rootfs ${ROOTFS_DIR}
+pushd "${ROOTFS_DIR}" >> /dev/null
+if [ "$PWD" != "/" ] ; then
+	rm -rf ./var/cache/dnf/
+fi
+popd  >> /dev/null
 
 [ -n "${KERNEL_MODULES_DIR}" ] && copy_kernel_modules ${KERNEL_MODULES_DIR} ${ROOTFS_DIR}
 

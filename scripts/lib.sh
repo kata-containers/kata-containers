@@ -47,7 +47,7 @@ check_root()
 generate_dnf_config()
 {
 	REPO_NAME=${REPO_NAME:-"base"}
-	CACHE_DIR=${CACHE_DIR:-"/var/cache/dnf-${OS_NAME}"}
+	CACHE_DIR=${CACHE_DIR:-"/var/cache/dnf"}
 	cat > "${DNF_CONF}" << EOF
 [main]
 cachedir=${CACHE_DIR}
@@ -118,7 +118,7 @@ build_rootfs()
 	#local CONFIG_DIR=${CONFIG_DIR}
 
 	check_root
-	if [ ! -f "${DNF_CONF}" ]; then
+	if [ ! -f "${DNF_CONF}" ] && [ -z "${DISTRO_REPO}" ] ; then
 		DNF_CONF="./kata-${OS_NAME}-dnf.conf"
 		generate_dnf_config
 	fi
@@ -133,10 +133,13 @@ build_rootfs()
 		die "neither yum nor dnf is installed"
 	fi
 
-	DNF="${PKG_MANAGER} --config=$DNF_CONF -y --installroot=${ROOTFS_DIR} --noplugins"
+	DNF="${PKG_MANAGER} -y --installroot=${ROOTFS_DIR} --noplugins"
+	if [ -n "${DNF_CONF}" ] ; then
+		DNF="${DNF} --config=${DNF_CONF}"
+	else
+		DNF="${DNF} --releasever=${OS_VERSION}"
+	fi
 	$DNF install ${EXTRA_PKGS} ${PACKAGES}
-
-	[ -n "${ROOTFS_DIR}" ]  && rm -r "${ROOTFS_DIR}${CACHE_DIR}"
 }
 
 # Create a YAML metadata file inside the rootfs.
