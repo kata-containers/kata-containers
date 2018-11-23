@@ -25,7 +25,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.19"
+const formatVersion = "1.0.20"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -65,6 +65,7 @@ type RuntimeInfo struct {
 	Version         RuntimeVersionInfo
 	Config          RuntimeConfigInfo
 	Debug           bool
+	Trace           bool
 	DisableNewNetNs bool
 	Path            string
 }
@@ -173,6 +174,7 @@ func getRuntimeInfo(configFile string, config oci.RuntimeConfig) RuntimeInfo {
 
 	return RuntimeInfo{
 		Debug:           config.Debug,
+		Trace:           config.Trace,
 		Version:         runtimeVersion,
 		Config:          runtimeConfig,
 		Path:            runtimePath,
