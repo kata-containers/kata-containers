@@ -24,6 +24,7 @@ import (
 const (
 	shimName    = "kata-shim"
 	exitFailure = 1
+	exitSuccess = 0
 	// Max number of threads the shim should consume.
 	// We choose 6 as we want a couple of threads for the runtime (gc etc.)
 	// and couple of threads for our parallel user code, such as the copy
@@ -88,7 +89,7 @@ func setThreads() {
 	}
 }
 
-func realMain() {
+func realMain() (exitCode int) {
 	var (
 		logLevel      string
 		agentAddr     string
@@ -115,7 +116,7 @@ func realMain() {
 
 	if showVersion {
 		fmt.Printf("%v version %v\n", shimName, version)
-		os.Exit(0)
+		return exitSuccess
 	}
 
 	if logLevel == "debug" {
@@ -128,7 +129,7 @@ func realMain() {
 
 	if agentAddr == "" || container == "" || execID == "" {
 		logger().WithField("agentAddr", agentAddr).WithField("container", container).WithField("exec-id", execID).Error("container ID, exec ID and agent socket endpoint must be set")
-		os.Exit(exitFailure)
+		return exitFailure
 	}
 
 	announceFields := logrus.Fields{
@@ -144,13 +145,13 @@ func realMain() {
 	err := initLogger(logLevel, container, execID, announceFields, ioutil.Discard)
 	if err != nil {
 		logger().WithError(err).WithField("loglevel", logLevel).Error("invalid log level")
-		os.Exit(exitFailure)
+		return exitFailure
 	}
 
 	shim, err := newShim(agentAddr, container, execID)
 	if err != nil {
 		logger().WithError(err).Error("failed to create new shim")
-		os.Exit(exitFailure)
+		return exitFailure
 	}
 
 	// winsize
@@ -158,7 +159,7 @@ func realMain() {
 		termios, err := setupTerminal(int(os.Stdin.Fd()))
 		if err != nil {
 			logger().WithError(err).Error("failed to set raw terminal")
-			os.Exit(exitFailure)
+			return exitFailure
 		}
 		defer restoreTerminal(int(os.Stdin.Fd()), termios)
 	}
@@ -180,16 +181,19 @@ func realMain() {
 	exitcode, err := shim.wait()
 	if err != nil {
 		logger().WithError(err).WithField("exec-id", execID).Error("failed waiting for process")
-		os.Exit(exitFailure)
+		return exitFailure
 	} else if proxyExitCode {
 		logger().WithField("exitcode", exitcode).Info("using shim to proxy exit code")
 		if exitcode != 0 {
-			os.Exit(int(exitcode))
+			return int(exitcode)
 		}
 	}
+
+	return exitSuccess
 }
 
 func main() {
 	defer handlePanic()
-	realMain()
+	exitCode := realMain()
+	os.Exit(exitCode)
 }
