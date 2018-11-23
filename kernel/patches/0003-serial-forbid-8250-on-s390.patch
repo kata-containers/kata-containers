@@ -1,0 +1,35 @@
+From 897514eadc2dd1b7cb71099b0495752bdf21390d Mon Sep 17 00:00:00 2001
+From: Christian Borntraeger <borntraeger@de.ibm.com>
+Date: Tue, 12 Dec 2017 09:08:35 +0100
+Subject: [PATCH 19/21] serial: forbid 8250 on s390
+
+Using "make kvmconfig" results in a potentially unusable linux image
+on s390.  The reason is that both the (default on s390) sclp consoles
+as well as the 8250 console register a ttyS<x> as console. Since there
+will be no 8250 on s390 let's fence 8250. This will ensure that there
+is always a working sclp console.
+
+Reported-by: Alice Frosi <alice@linux.vnet.ibm.com>
+Signed-off-by: Christian Borntraeger <borntraeger@de.ibm.com>
+Reviewed-by: Hendrik Brueckner <brueckner@linux.vnet.ibm.com>
+Signed-off-by: Greg Kroah-Hartman <gregkh@linuxfoundation.org>
+(cherry picked from commit 1598e38c0770b08c4d6371b670f9ee61a42ec68b)
+---
+ drivers/tty/serial/8250/Kconfig | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/drivers/tty/serial/8250/Kconfig b/drivers/tty/serial/8250/Kconfig
+index a5c0ef1e7695..16b1496e6105 100644
+--- a/drivers/tty/serial/8250/Kconfig
++++ b/drivers/tty/serial/8250/Kconfig
+@@ -5,6 +5,7 @@
+ 
+ config SERIAL_8250
+ 	tristate "8250/16550 and compatible serial support"
++	depends on !S390
+ 	select SERIAL_CORE
+ 	---help---
+ 	  This selects whether you want to include the driver for the standard
+-- 
+2.18.0
+
