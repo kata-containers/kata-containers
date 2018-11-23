@@ -212,6 +212,17 @@ path = "@SHIMPATH@"
 # (default: disabled)
 #enable_debug = true
 
+# If enabled, the shim will create opentracing.io traces and spans.
+# (See https://www.jaegertracing.io/docs/getting-started).
+#
+# Note: By default, the shim runs in a separate network namespace. Therefore,
+# to allow it to send trace details to the Jaeger agent running on the host,
+# it is necessary to set 'disable_new_netns=true' so that it runs in the host
+# network namespace.
+#
+# (default: disabled)
+#enable_tracing = true
+
 [agent.@PROJECT_TYPE@]
 # There is no field for this section. The goal is only to be able to
 # specify which type of agent the user wants to use.
