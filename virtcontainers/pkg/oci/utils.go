@@ -121,6 +121,7 @@ type RuntimeConfig struct {
 	InterNetworkModel vc.NetInterworkingModel
 	FactoryConfig     FactoryConfig
 	Debug             bool
+	Trace             bool
 
 	//Determines if create a netns for hypervisor process
 	DisableNewNetNs bool
