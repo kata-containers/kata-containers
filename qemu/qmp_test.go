@@ -33,10 +33,10 @@ import (
 
 const (
 	microStr = "50"
-	minorStr = "6"
+	minorStr = "9"
 	majorStr = "2"
 	micro    = 50
-	minor    = 6
+	minor    = 9
 	major    = 2
 	cap1     = "one"
 	cap2     = "two"
@@ -562,17 +562,17 @@ func TestQMPSCSIDeviceAdd(t *testing.T) {
 	<-disconnectedCh
 }
 
-// Checks that the x-blockdev-del command is correctly sent.
+// Checks that the blockdev-del command is correctly sent.
 //
-// We start a QMPLoop, send the x-blockdev-del command and stop the loop.
+// We start a QMPLoop, send the blockdev-del command and stop the loop.
 //
-// The x-blockdev-del command should be correctly sent and the QMP loop should
+// The blockdev-del command should be correctly sent and the QMP loop should
 // exit gracefully.
-func TestQMPXBlockdevDel(t *testing.T) {
+func TestQMPBlockdevDel(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
 	disconnectedCh := make(chan struct{})
 	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommand("x-blockdev-del", nil, "return", nil)
+	buf.AddCommand("blockdev-del", nil, "return", nil)
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	q.version = checkVersion(t, connectedCh)
