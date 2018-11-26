@@ -84,6 +84,7 @@ Manual installation instructions are available for [these distributions](#suppor
 
 ## Installing on a Cloud Service Platform
 * [Amazon Web Services (AWS)](aws-installation-guide.md)
+* [Microsoft Azure](azure-installation-guide.md)
 * [Google Compute Engine (GCE)](gce-installation-guide.md)
 
 ## Further information
