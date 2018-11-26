@@ -97,6 +97,7 @@ network:
 	bash -f .ci/install_bats.sh
 	bats integration/network/macvlan/macvlan_driver.bats
 	bats integration/network/ipvlan/ipvlan_driver.bats
+	bats integration/network/disable_net/net_none.bats
 
 ramdisk:
 	bash -f integration/ramdisk/ramdisk.sh
