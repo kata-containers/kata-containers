@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Kata containers team <https://github.com/kata-containers/>
 Standards-Version: 3.9.6
 Homepage: https://katacontainers.io
-Build-Depends: debhelper (>= 9), git, ca-certificates, dh-modaliases, execstack, devscripts, dh-make
+Build-Depends: debhelper (>= 9), git, ca-certificates, execstack, devscripts, dh-make
 
 Package: kata-shim
 Architecture: @deb_arch@
