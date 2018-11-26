@@ -97,7 +97,8 @@ install_extra_tools() {
 
 	[ "${CRI_CONTAINERD}" = "yes" ] &&
 		echo "Install cri-containerd" &&
-		bash -f "${cidir}/install_cri_containerd.sh" ||
+		bash -f "${cidir}/install_cri_containerd.sh" &&
+		bash -f "${cidir}/configure_containerd_for_kata.sh" ||
 		echo "containerd not installed"
 
 	[ "${KUBERNETES}" = "yes" ] &&
