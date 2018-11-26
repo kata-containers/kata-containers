@@ -92,7 +92,8 @@ install_extra_tools() {
 
 	[ "${CRIO}" = "yes" ] &&
 		echo "Install CRI-O" &&
-		bash -f "${cidir}/install_crio.sh" ||
+		bash -f "${cidir}/install_crio.sh" &&
+		bash -f "${cidir}/configure_crio_for_kata.sh" ||
 		echo "CRI-O not installed"
 
 	[ "${CRI_CONTAINERD}" = "yes" ] &&
