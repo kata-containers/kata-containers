@@ -196,8 +196,9 @@ kill_stale_process()
 	extract_kata_env
 	stale_process_union=( "${stale_process_union[@]}" "${PROXY_PATH}" "${HYPERVISOR_PATH}" "${SHIM_PATH}" )
 	for stale_process in "${stale_process_union[@]}"; do
-		if pgrep -f "${stale_process}"; then
-			sudo killall -9 "${stale_process}" || true
+		local pids=$(pgrep -f "${stale_process}")
+		if [ -n "$pids" ]; then
+			sudo kill -9 "${pids}" || true
 		fi
 	done
 }
