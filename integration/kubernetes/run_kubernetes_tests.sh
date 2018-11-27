@@ -18,13 +18,6 @@ if [ "$ID" != ubuntu  ]; then
 	exit
 fi
 
-# Currently, Kubernetes tests are not working with initrd.
-if [ "$TEST_INITRD" = yes ] && [ "$AGENT_INIT" = yes ]; then
-	echo "Skip Kubernetes tests on INITRD"
-	echo "Issue github.com/kata-containers/tests/issues/335"
-	exit
-fi
-
 # Docker is required to initialize kubeadm, even if we are
 # using cri-o as the runtime.
 systemctl is-active --quiet docker || sudo systemctl start docker
