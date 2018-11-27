@@ -15,13 +15,15 @@ import (
 
 const (
 	cpuFlagsTag        = genericCPUFlagsTag
-	archCPUVendorField = genericCPUVendorField
-	archCPUModelField  = genericCPUModelField
+	archCPUVendorField = ""
+	archCPUModelField  = "model"
 )
 
 var (
 	ppc64CpuCmd     = "ppc64_cpu"
 	smtStatusOption = "--smt"
+	_               = genericCPUVendorField
+	_               = genericCPUModelField
 )
 
 // archRequiredCPUFlags maps a CPU flag value to search for and a
@@ -94,7 +96,11 @@ func archKernelParamHandler(onVMM bool, fields logrus.Fields, msg string) bool {
 }
 
 func getCPUDetails() (vendor, model string, err error) {
-	return genericGetCPUDetails()
+	vendor, model, err = genericGetCPUDetails()
+	if err == nil {
+		model = "POWER8"
+	}
+	return vendor, model, err
 }
 
 func isSMTOff() bool {

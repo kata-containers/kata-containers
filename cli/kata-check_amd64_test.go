@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -488,8 +489,36 @@ func TestKvmIsUsable(t *testing.T) {
 	assert.Error(err)
 }
 
+type TestDataa struct {
+	contents       string
+	expectedVendor string
+	expectedModel  string
+	expectError    bool
+}
+
 func TestGetCPUDetails(t *testing.T) {
-	genericTestGetCPUDetails(t)
+	const validVendorName = "a vendor"
+	validVendor := fmt.Sprintf(`%s  : %s`, archCPUVendorField, validVendorName)
+
+	const validModelName = "some CPU model"
+	validModel := fmt.Sprintf(`%s   : %s`, archCPUModelField, validModelName)
+
+	validContents := fmt.Sprintf(`
+a       : b
+%s
+foo     : bar
+%s
+`, validVendor, validModel)
+
+	data := []TestDataa{
+		{"", "", "", true},
+		{"invalid", "", "", true},
+		{archCPUVendorField, "", "", true},
+		{validVendor, "", "", true},
+		{validModel, "", "", true},
+		{validContents, validVendorName, validModelName, false},
+	}
+	genericTestGetCPUDetails(t, validVendor, validModel, validContents, data)
 }
 
 func TestSetCPUtype(t *testing.T) {

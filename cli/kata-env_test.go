@@ -179,7 +179,7 @@ func getExpectedAgentDetails(config oci.RuntimeConfig) (AgentInfo, error) {
 	}, nil
 }
 
-func genericGetExpectedHostDetails(tmpdir string) (HostInfo, error) {
+func genericGetExpectedHostDetails(tmpdir string, expectedVendor string, expectedModel string) (HostInfo, error) {
 	type filesToCreate struct {
 		file     string
 		contents string
@@ -194,8 +194,8 @@ func genericGetExpectedHostDetails(tmpdir string) (HostInfo, error) {
 	}
 
 	expectedCPU := CPUInfo{
-		Vendor: "moi",
-		Model:  "awesome XI",
+		Vendor: expectedVendor,
+		Model:  expectedModel,
 	}
 
 	expectedHostDetails := HostInfo{
