@@ -6,9 +6,12 @@
 package main
 
 import (
+	"fmt"
 	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"strings"
+
+	vc "github.com/kata-containers/runtime/virtcontainers"
 )
 
 const (
@@ -45,13 +48,23 @@ var archRequiredCPUAttribs map[string]string
 // required module parameters.
 var archRequiredKernelModules map[string]kernelModule
 
-func setCPUtype() {
+func setCPUtype() error {
 	cpuType = getCPUtype()
 
 	if cpuType == cpuTypeUnknown {
-		kataLog.Fatal("Unknown CPU Type")
-		exit(1)
+		return fmt.Errorf("Unknow CPU Type")
 	} else if cpuType == cpuTypeIntel {
+		var kvmIntelParams map[string]string
+		onVMM, err := vc.RunningOnVMM(procCPUInfo)
+		if err != nil && !onVMM {
+			kvmIntelParams = map[string]string{
+				// "VMX Unrestricted mode support". This is used
+				// as a heuristic to determine if the system is
+				// "new enough" to run a Kata Container
+				// (atleast a Westmere).
+				"unrestricted_guest": "Y",
+			}
+		}
 		archRequiredCPUFlags = map[string]string{
 			"vmx":    "Virtualization support",
 			"lm":     "64Bit CPU",
@@ -65,15 +78,8 @@ func setCPUtype() {
 				desc: msgKernelVM,
 			},
 			"kvm_intel": {
-				desc: "Intel KVM",
-				parameters: map[string]string{
-					"nested": "Y",
-					// "VMX Unrestricted mode support". This is used
-					// as a heuristic to determine if the system is
-					// "new enough" to run a Kata Container
-					// (atleast a Westmere).
-					"unrestricted_guest": "Y",
-				},
+				desc:       "Intel KVM",
+				parameters: kvmIntelParams,
 			},
 			"vhost": {
 				desc: msgKernelVirtio,
@@ -97,9 +103,6 @@ func setCPUtype() {
 			},
 			"kvm_amd": {
 				desc: "AMD KVM",
-				parameters: map[string]string{
-					"nested": "1",
-				},
 			},
 			"vhost": {
 				desc: msgKernelVirtio,
@@ -109,6 +112,8 @@ func setCPUtype() {
 			},
 		}
 	}
+
+	return nil
 }
 
 func getCPUtype() int {
