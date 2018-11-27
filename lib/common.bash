@@ -80,15 +80,19 @@ check_runtimes() {
 # stopped/running containers.
 clean_env()
 {
-	containers_running=$(docker ps -q)
+	# If the timeout has not been set, default it to 30s
+	# Docker has a built in 10s default timeout, so make ours
+	# longer than that.
+	KATA_DOCKER_TIMEOUT=${KATA_DOCKER_TIMEOUT:-30}
+	containers_running=$(timeout ${KATA_DOCKER_TIMEOUT} docker ps -q)
 
 	if [ ! -z "$containers_running" ]; then
 		# First stop all containers that are running
 		# Use kill, as the containers are generally benign, and most
 		# of the time our 'stop' request ends up doing a `kill` anyway
-		sudo docker kill $containers_running
+		sudo timeout ${KATA_DOCKER_TIMEOUT} docker kill $containers_running
 
 		# Remove all containers
-		sudo docker rm -f $(docker ps -qa)
+		sudo timeout ${KATA_DOCKER_TIMEOUT} docker rm -f $(docker ps -qa)
 	fi
 }
