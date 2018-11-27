@@ -1,5 +1,5 @@
 FROM centos/systemd
-ARG KATA_VER=1.2.0
+ARG KATA_VER=1.4.0
 ARG ARCH=x86_64
 ARG KATA_URL=https://github.com/kata-containers/runtime/releases/download/${KATA_VER}
 ARG KATA_FILE=kata-static-${KATA_VER}-${ARCH}.tar.xz
