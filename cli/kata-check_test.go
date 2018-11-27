@@ -137,36 +137,7 @@ func makeCPUInfoFile(path, vendorID, flags string) error {
 	return ioutil.WriteFile(path, contents.Bytes(), testFileMode)
 }
 
-func genericTestGetCPUDetails(t *testing.T) {
-	type testData struct {
-		contents       string
-		expectedVendor string
-		expectedModel  string
-		expectError    bool
-	}
-
-	const validVendorName = "a vendor"
-	validVendor := fmt.Sprintf(`%s  : %s`, archCPUVendorField, validVendorName)
-
-	const validModelName = "some CPU model"
-	validModel := fmt.Sprintf(`%s   : %s`, archCPUModelField, validModelName)
-
-	validContents := fmt.Sprintf(`
-a       : b
-%s
-foo     : bar
-%s
-`, validVendor, validModel)
-
-	data := []testData{
-		{"", "", "", true},
-		{"invalid", "", "", true},
-		{archCPUVendorField, "", "", true},
-		{validVendor, "", "", true},
-		{validModel, "", "", true},
-		{validContents, validVendorName, validModelName, false},
-	}
-
+func genericTestGetCPUDetails(t *testing.T, validVendor string, validModel string, validContents string, data []TestDataa) {
 	tmpdir, err := ioutil.TempDir("", "")
 	if err != nil {
 		panic(err)
