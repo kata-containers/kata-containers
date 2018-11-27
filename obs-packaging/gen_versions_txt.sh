@@ -12,16 +12,22 @@ set -o pipefail
 
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+readonly versions_txt="versions.txt"
 project="kata-containers"
 ARCH=${ARCH:-$(go env GOARCH)}
 
 source "${script_dir}/../scripts/lib.sh"
 
+get_kata_version() {
+	local branch="$1"
+	curl -SsL "https://raw.githubusercontent.com/${project}/runtime/${branch}/VERSION"
+}
+
 gen_version_file() {
 	local branch="$1"
 	[ -n "${branch}" ] || exit 1
 
-	local kata_version=$(curl --silent -L "https://raw.githubusercontent.com/${project}/runtime/${branch}/VERSION")
+	local kata_version=$(get_kata_version "${branch}")
 	kata_runtime_hash=$(get_kata_hash_from_tag "runtime" "${kata_version}")
 	kata_proxy_hash=$(get_kata_hash_from_tag "proxy" "${kata_version}")
 	kata_shim_hash=$(get_kata_hash_from_tag "shim" "${kata_version}")
@@ -46,9 +52,10 @@ gen_version_file() {
 	# - is not a valid char for rpmbuild
 	# see https://github.com/semver/semver/issues/145
 	kata_version=${kata_version/-/\~}
-	cat >versions.txt <<EOT
-
+	cat > "$versions_txt" <<EOT
 # This is a generated file from ${script_name}
+
+kata_version=${kata_version}
 
 kata_runtime_version=${kata_version}
 kata_runtime_hash=${kata_runtime_hash}
@@ -82,20 +89,60 @@ go_checksum=${golang_sha256}
 EOT
 }
 
+die() {
+	local msg="${1:-}"
+	local print_usage=$"${2:-}"
+	if [ -n "${msg}" ]; then
+		echo -e "ERROR: ${msg}\n"
+	fi
+
+	[ -n "${print_usage}" ] && usage 1
+}
+
 usage() {
-	msg="${1:-}"
-	exit_code=$"${2:-0}"
+	exit_code=$"${1:-0}"
 	cat <<EOT
-${msg}
 Usage:
-${script_name} <kata-branch>
+${script_name} [--compare | -h | --help] <kata-branch>
+
+Generate a ${versions_txt} file, containing  version numbers and commit hashes
+of all the kata components under the git branch <kata-branch>.
+
+Options:
+
+-h, --help        Print this help.
+--compare         Only compare the kata version at branch <kata-branch> with the
+                  one in ${versions_txt} and leave the file untouched.
 EOT
 	exit "${exit_code}"
 }
 
 main() {
+	local compareOnly=
+
+	case "${1:-}" in
+		"-h"|"--help")
+			usage
+			;;
+		--compare)
+			compareOnly=1
+			shift
+			;;
+		-*)
+			die "Invalid option: ${1:-}" "1"
+			shift
+			;;
+	esac
 	local branch="${1:-}"
-	[ -n "${branch}" ] || usage "missing branch" "1"
+	[ -n "${branch}" ] || die "No branch specified" "1"
+
+	if [ -n "$compareOnly" ]; then
+		source "./${versions_txt}" || exit 1
+		[ -n "${kata_version}" ] || die "${version_file} does not contain a valid kata_version variable"
+		[ "$(get_kata_version $branch)" = "${kata_version}" ] && compare_result="matches" || compare_result="is different from"
+		echo "${kata_version} in ${versions_txt} ${compare_result} the version at branch ${branch}"
+		return
+	fi
 	gen_version_file "${branch}"
 }
 
