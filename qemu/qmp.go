@@ -722,11 +722,7 @@ func (q *QMP) ExecuteQuit(ctx context.Context) error {
 	return q.executeCommand(ctx, "quit", nil, nil)
 }
 
-// ExecuteBlockdevAdd sends a blockdev-add to the QEMU instance.  device is the
-// path of the device to add, e.g., /dev/rdb0, and blockdevID is an identifier
-// used to name the device.  As this identifier will be passed directly to QMP,
-// it must obey QMP's naming rules, e,g., it must start with a letter.
-func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID string) error {
+func (q *QMP) blockdevAddBaseArgs(device, blockdevID string) (map[string]interface{}, map[string]interface{}) {
 	var args map[string]interface{}
 
 	blockdevArgs := map[string]interface{}{
@@ -745,6 +741,39 @@ func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID string)
 		args = map[string]interface{}{
 			"options": blockdevArgs,
 		}
+	}
+
+	return args, blockdevArgs
+}
+
+// ExecuteBlockdevAdd sends a blockdev-add to the QEMU instance.  device is the
+// path of the device to add, e.g., /dev/rdb0, and blockdevID is an identifier
+// used to name the device.  As this identifier will be passed directly to QMP,
+// it must obey QMP's naming rules, e,g., it must start with a letter.
+func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, device, blockdevID string) error {
+	args, _ := q.blockdevAddBaseArgs(device, blockdevID)
+
+	return q.executeCommand(ctx, "blockdev-add", args, nil)
+}
+
+// ExecuteBlockdevAddWithCache has two more parameters direct and noFlush
+// than ExecuteBlockdevAdd.
+// They are cache-related options for block devices that are described in
+// https://github.com/qemu/qemu/blob/master/qapi/block-core.json.
+// direct denotes whether use of O_DIRECT (bypass the host page cache)
+// is enabled.  noFlush denotes whether flush requests for the device are
+// ignored.
+func (q *QMP) ExecuteBlockdevAddWithCache(ctx context.Context, device, blockdevID string, direct, noFlush bool) error {
+	args, blockdevArgs := q.blockdevAddBaseArgs(device, blockdevID)
+
+	if q.version.Major < 2 || (q.version.Major == 2 && q.version.Minor < 9) {
+		return fmt.Errorf("versions of qemu (%d.%d) older than 2.9 do not support set cache-related options for block devices",
+			q.version.Major, q.version.Minor)
+	}
+
+	blockdevArgs["cache"] = map[string]interface{}{
+		"direct":   direct,
+		"no-flush": noFlush,
 	}
 
 	return q.executeCommand(ctx, "blockdev-add", args, nil)
