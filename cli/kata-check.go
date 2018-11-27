@@ -61,7 +61,7 @@ const (
 var (
 	procCPUInfo  = "/proc/cpuinfo"
 	sysModuleDir = "/sys/module"
-	modInfoCmd   = "modinfo"
+	modProbeCmd  = "modprobe"
 )
 
 // variables rather than consts to allow tests to modify them
@@ -121,8 +121,9 @@ func haveKernelModule(module string) bool {
 		return true
 	}
 
-	// Now, check if the module is unloaded, but available
-	cmd := exec.Command(modInfoCmd, module)
+	// Now, check if the module is unloaded, but available.
+	// And modprobe it if so.
+	cmd := exec.Command(modProbeCmd, module)
 	err := cmd.Run()
 	return err == nil
 }
@@ -291,7 +292,10 @@ var kataCheckCLICommand = cli.Command{
 		span, _ := trace(ctx, "kata-check")
 		defer span.Finish()
 
-		setCPUtype()
+		err = setCPUtype()
+		if err != nil {
+			return err
+		}
 
 		details := vmContainerCapableDetails{
 			cpuInfoFile:           procCPUInfo,

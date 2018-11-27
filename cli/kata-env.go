@@ -332,7 +332,10 @@ func getHypervisorInfo(config oci.RuntimeConfig) HypervisorInfo {
 }
 
 func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err error) {
-	setCPUtype()
+	err = setCPUtype()
+	if err != nil {
+		return EnvInfo{}, err
+	}
 
 	meta := getMetaInfo()
 

@@ -40,7 +40,8 @@ var archRequiredKernelModules = map[string]kernelModule{
 	},
 }
 
-func setCPUtype() {
+func setCPUtype() error {
+	return nil
 }
 
 // kvmIsUsable determines if it will be possible to create a full virtual machine
