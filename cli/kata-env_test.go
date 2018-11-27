@@ -24,10 +24,11 @@ import (
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 
+	"strconv"
+
 	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/stretchr/testify/assert"
-	"strconv"
 )
 
 const testProxyVersion = "proxy version 0.1"
@@ -45,6 +46,7 @@ var (
 	hypervisorDebug = false
 	proxyDebug      = false
 	runtimeDebug    = false
+	runtimeTrace    = false
 	shimDebug       = false
 	netmonDebug     = false
 )
@@ -116,6 +118,7 @@ func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath
 
         [runtime]
 	enable_debug = ` + strconv.FormatBool(runtimeDebug) + `
+	enable_tracing = ` + strconv.FormatBool(runtimeTrace) + `
 	disable_new_netns= ` + strconv.FormatBool(disableNewNetNs)
 }
 
@@ -359,6 +362,7 @@ func getExpectedRuntimeDetails(config oci.RuntimeConfig, configFile string) Runt
 		},
 		Path:            runtimePath,
 		Debug:           config.Debug,
+		Trace:           config.Trace,
 		DisableNewNetNs: config.DisableNewNetNs,
 	}
 }
@@ -501,13 +505,14 @@ func TestEnvGetEnvInfo(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpdir)
 
-	// Run test twice to ensure the individual component debug options are
-	// tested.
-	for _, debug := range []bool{false, true} {
-		hypervisorDebug = debug
-		proxyDebug = debug
-		runtimeDebug = debug
-		shimDebug = debug
+	// Run test twice to ensure the individual component debug+trace
+	// options are tested.
+	for _, toggle := range []bool{false, true} {
+		hypervisorDebug = toggle
+		proxyDebug = toggle
+		runtimeDebug = toggle
+		runtimeTrace = toggle
+		shimDebug = toggle
 
 		configFile, config, err := makeRuntimeConfig(tmpdir)
 		assert.NoError(t, err)
