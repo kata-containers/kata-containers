@@ -25,15 +25,18 @@ export BUILD_DISTROS=${BUILD_DISTROS:-xUbuntu_16.04}
 export AUTHOR="${AUTHOR:-user}"
 export AUTHOR_EMAIL="${AUTHOR_EMAIL:-user@example.com}"
 
-usage() {
-	msg="${1:-}"
-	exit_code=$"${2:-0}"
+die() {
+	local msg="${1:-}"
+	local print_usage=$"${2:-}"
 	if [ -n "${msg}" ]; then
-		local logPrefix=""
-		[ ${exit_code} != "0" ] && logPrefix="ERROR: "
-		echo -e "${logPrefix}${msg}\n"
+		echo -e "ERROR: ${msg}\n"
 	fi
 
+	[ -n "${print_usage}" ] && usage 1
+}
+
+usage() {
+	exit_code=$"${1:-0}"
 	cat <<EOT
 Usage:
 ${script_name} [-h | --help] <kata-branch> [PROJ1 PROJ2 ... ]
@@ -56,13 +59,13 @@ EOT
 main() {
 	case "${1:-}" in
 		"-h"|"--help")
-			usage "" "0"
+			usage
 			;;
 		-*)
-			usage "Invalid option: ${1:-}" "1"
+			die "Invalid option: ${1:-}" "1"
 			;;
 		"")
-			usage "missing branch" "1"
+			die "missing branch" "1"
 			;;
 		*)
 			branch="${1:-}"
@@ -74,8 +77,10 @@ main() {
 	[ "${#projectsList[@]}" = "0" ] && projectsList=("${OBS_PKGS_PROJECTS[@]}")
 
 	pushd "${script_dir}" >>/dev/null
+	local compare_result="$(./gen_versions_txt.sh --compare ${branch})"
+	[[ "$compare_result" =~ different ]] && die "$compare_result -- you need to run gen_versions_txt.sh"
 	for p in "${projectsList[@]}"; do
-		[ -d "$p" ] || usage "$p is not a valid project directory" "1"
+		[ -d "$p" ] || die "$p is not a valid project directory"
 		update_cmd="./update.sh"
 		if [ -n "${PUSH}" ]; then
 			# push to obs
