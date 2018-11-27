@@ -1,23 +1,24 @@
-
 # This is a generated file from gen_versions_txt.sh
 
-kata_runtime_version=1.3.0
-kata_runtime_hash=a786643d0b3c0195deeb6ef5d4c2a161009a80aa
+kata_version=1.4.0
 
-kata_proxy_version=1.3.0
-kata_proxy_hash=6ddb006ad3f709cab018af9dc0bf9e756c3ce2cd
+kata_runtime_version=1.4.0
+kata_runtime_hash=21f005948717eb4fd232f7f3eb6d4fd3f93b6387
 
-kata_shim_version=1.3.0
-kata_shim_hash=5fbf1f0919ce0bb1f2b7e85692cdf3058023926f
+kata_proxy_version=1.4.0
+kata_proxy_hash=e1856c20778348562581d7364d7b22642c594fe5
 
-kata_agent_version=1.3.0
-kata_agent_hash=042c3ebd71c2ca425aa0c70fadcbf6370116659b
+kata_shim_version=1.4.0
+kata_shim_hash=b02868bfcd086ebc25a36aa7c9ff8ddf74429b72
 
-kata_ksm_throttler_version=1.3.0
-kata_ksm_throttler_hash=6e903fb19378a1a6132f8d3a43b65ee9c1643673
+kata_agent_version=1.4.0
+kata_agent_hash=0ff30063f7e71eb0f48d60c21156cd18b8a58024
+
+kata_ksm_throttler_version=1.4.0
+kata_ksm_throttler_hash=1212de221aac7fe0092e2ce2ac18cf794ecf8c89
 
 # Dependencies
-kata_osbuilder_version=1.3.0
+kata_osbuilder_version=1.4.0
 
 qemu_lite_version=2.11.0
 qemu_lite_hash=f88622805677163b04498dcba35ceca0183b1318
@@ -28,5 +29,5 @@ qemu_vanilla_hash=0982a56a551556c704dc15752dabf57b4be1c640
 kernel_version=4.14.67
 
 # Golang
-go_version=1.10.2
-go_checksum=4b677d698c65370afa33757b6954ade60347aaca310ea92a63ed717d7cb0c2ff
+go_version=1.11.1
+go_checksum=2871270d8ff0c8c69f161aaae42f9f28739855ff5c5204752a8d92a1c9f63993
