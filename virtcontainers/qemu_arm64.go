@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"io/ioutil"
+	"os"
 	"runtime"
 	"strings"
 
@@ -24,7 +25,7 @@ const defaultQemuPath = "/usr/bin/qemu-system-aarch64"
 
 const defaultQemuMachineType = QemuVirt
 
-var defaultQemuMachineOptions = "usb=off,accel=kvm,gic-version=" + getGuestGICVersion()
+var defaultQemuMachineOptions = "usb=off,accel=kvm,nvdimm,gic-version=" + getGuestGICVersion()
 
 var qemuPaths = map[string]string{
 	QemuVirt: defaultQemuPath,
@@ -37,7 +38,9 @@ var kernelParams = []Param{
 }
 
 var kernelRootParams = []Param{
-	{"root", "/dev/vda1"},
+	{"root", "/dev/pmem0p1"},
+	{"rootflags", "data=ordered,errors=remount-ro rw"},
+	{"rootfstype", "ext4"},
 }
 
 var supportedQemuMachines = []govmmQemu.Machine{
@@ -159,4 +162,30 @@ func (q *qemuArm64) bridges(number uint32) []types.PCIBridge {
 // appendBridges appends to devices the given bridges
 func (q *qemuArm64) appendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge) []govmmQemu.Device {
 	return genericAppendBridges(devices, bridges, q.machineType)
+}
+
+func (q *qemuArm64) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+	imageFile, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer imageFile.Close()
+
+	imageStat, err := imageFile.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	object := govmmQemu.Object{
+		Driver:   govmmQemu.NVDIMM,
+		Type:     govmmQemu.MemoryBackendFile,
+		DeviceID: "nv0",
+		ID:       "mem0",
+		MemPath:  path,
+		Size:     (uint64)(imageStat.Size()),
+	}
+
+	devices = append(devices, object)
+
+	return devices, nil
 }
