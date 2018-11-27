@@ -85,6 +85,7 @@ Manual installation instructions are available for [these distributions](#suppor
 ## Installing on a Cloud Service Platform
 * [Amazon Web Services (AWS)](aws-installation-guide.md)
 * [Google Compute Engine (GCE)](gce-installation-guide.md)
+# [VEXXHOST OpenStack Cloud](vexxhost-installation-guide.md)
 
 ## Further information
 * The [upgrading document](../Upgrading.md).
