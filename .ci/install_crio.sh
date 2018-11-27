@@ -111,12 +111,6 @@ sudo sed -i 's/^#registries = \[/registries = \[ "docker.io" \] /' "$crio_config
 echo "Change stream_port where cri-o will listen"
 sudo sed -i 's/^stream_port.*/stream_port = "10020"/' "$crio_config_file"
 
-echo "Configure runtimes for trusted/untrusted annotations"
-sudo sed -i 's/^#* *runtime =.*/runtime = "\/usr\/local\/bin\/crio-runc"/' "$crio_config_file"
-sudo sed -i 's/^default_runtime/# default_runtime/' "$crio_config_file"
-sudo sed -i 's/^#*runtime_untrusted_workload = ""/runtime_untrusted_workload = "\/usr\/local\/bin\/kata-runtime"/' "$crio_config_file"
-sudo sed -i 's/#*default_workload_trust = ""/default_workload_trust = "trusted"/' "$crio_config_file"
-
 service_path="/etc/systemd/system"
 crio_service_file="${cidir}/data/crio.service"
 

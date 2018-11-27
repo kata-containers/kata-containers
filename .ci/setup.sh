@@ -92,12 +92,14 @@ install_extra_tools() {
 
 	[ "${CRIO}" = "yes" ] &&
 		echo "Install CRI-O" &&
-		bash -f "${cidir}/install_crio.sh" ||
+		bash -f "${cidir}/install_crio.sh" &&
+		bash -f "${cidir}/configure_crio_for_kata.sh" ||
 		echo "CRI-O not installed"
 
 	[ "${CRI_CONTAINERD}" = "yes" ] &&
 		echo "Install cri-containerd" &&
-		bash -f "${cidir}/install_cri_containerd.sh" ||
+		bash -f "${cidir}/install_cri_containerd.sh" &&
+		bash -f "${cidir}/configure_containerd_for_kata.sh" ||
 		echo "containerd not installed"
 
 	[ "${KUBERNETES}" = "yes" ] &&

@@ -11,7 +11,6 @@ set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cri_repository="github.com/containerd/cri"
-readonly runtime_path=$(which ${RUNTIME:-kata-runtime})
 
 # Flag to do tasks for CI
 CI=${CI:-""}
@@ -69,15 +68,6 @@ cat << EOF | sudo tee  /etc/systemd/system/kubelet.service.d/0-containerd.conf
 [Service]                                                 
 Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
 EOF
-
-sudo mkdir -p /etc/containerd/
-cat << EOT | sudo tee /etc/containerd/config.toml
-[plugins]
-    [plugins.cri.containerd]
-          [plugins.cri.containerd.untrusted_workload_runtime]
-	          runtime_type = "io.containerd.runtime.v1.linux"
-		          runtime_engine = "${runtime_path}"
-EOT
 
 sudo systemctl daemon-reload
 
