@@ -60,9 +60,6 @@ var originalLoggerLevel logrus.Level
 
 var debug = false
 
-// if true, enable opentracing support.
-var tracing = false
-
 // if true, coredump when an internal error occurs or a fatal signal is received
 var crashOnError = false
 
@@ -193,7 +190,7 @@ func setupSignalHandler(ctx context.Context) {
 	}
 
 	dieCb := func() {
-		stopTracing(ctx)
+		katautils.StopTracing(ctx)
 	}
 
 	go func() {
@@ -229,7 +226,7 @@ func setExternalLoggers(ctx context.Context, logger *logrus.Entry) {
 	// created.
 
 	if opentracing.SpanFromContext(ctx) != nil {
-		span, ctx = trace(ctx, "setExternalLoggers")
+		span, ctx = katautils.Trace(ctx, "setExternalLoggers")
 		defer span.Finish()
 	}
 
@@ -307,7 +304,7 @@ func beforeSubcommands(c *cli.Context) error {
 
 	katautils.SetConfigOptions(name, defaultRuntimeConfiguration, defaultSysConfRuntimeConfiguration)
 
-	configFile, runtimeConfig, tracing, err = katautils.LoadConfiguration(c.GlobalString(configFilePathOption), ignoreLogging, false)
+	configFile, runtimeConfig, err = katautils.LoadConfiguration(c.GlobalString(configFilePathOption), ignoreLogging, false)
 	if err != nil {
 		fatal(err)
 	}
@@ -360,7 +357,7 @@ func handleShowConfig(context *cli.Context) {
 }
 
 func setupTracing(context *cli.Context, rootSpanName string) error {
-	tracer, err := createTracer(name)
+	tracer, err := katautils.CreateTracer(name)
 	if err != nil {
 		fatal(err)
 	}
@@ -397,7 +394,7 @@ func afterSubcommands(c *cli.Context) error {
 		return err
 	}
 
-	stopTracing(ctx)
+	katautils.StopTracing(ctx)
 
 	return nil
 }
@@ -546,7 +543,7 @@ func main() {
 	ctx := context.Background()
 
 	dieCb := func() {
-		stopTracing(ctx)
+		katautils.StopTracing(ctx)
 	}
 
 	defer signals.HandlePanic(dieCb)

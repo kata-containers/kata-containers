@@ -15,6 +15,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -141,7 +142,7 @@ information is displayed once every 5 seconds.`,
 			return err
 		}
 
-		span, _ := trace(ctx, "events")
+		span, _ := katautils.Trace(ctx, "events")
 		defer span.Finish()
 
 		containerID := context.Args().First()

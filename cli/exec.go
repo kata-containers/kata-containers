@@ -14,6 +14,7 @@ import (
 	"os"
 	"syscall"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -188,7 +189,7 @@ func generateExecParams(context *cli.Context, specProcess *oci.CompatOCIProcess)
 }
 
 func execute(ctx context.Context, context *cli.Context) error {
-	span, ctx := trace(ctx, "execute")
+	span, ctx := katautils.Trace(ctx, "execute")
 	defer span.Finish()
 
 	containerID := context.Args().First()

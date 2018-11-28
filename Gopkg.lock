@@ -10,6 +10,37 @@
   version = "v0.3.0"
 
 [[projects]]
+  digest = "1:2be791e7b333ff7c06f8fb3dc18a7d70580e9399dbdffd352621d067ff260b6e"
+  name = "github.com/Microsoft/go-winio"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "97e4973ce50b2ff5f09635a57e2b88a037aae829"
+  version = "v0.4.11"
+
+[[projects]]
+  digest = "1:46df22fa970c4b4384851338ada3a67f32d1c1400d27aa69b09e493dd01bb8bf"
+  name = "github.com/Microsoft/hcsshim"
+  packages = [
+    ".",
+    "internal/guestrequest",
+    "internal/guid",
+    "internal/hcs",
+    "internal/hcserror",
+    "internal/hns",
+    "internal/interop",
+    "internal/longpath",
+    "internal/mergemaps",
+    "internal/safefile",
+    "internal/schema1",
+    "internal/schema2",
+    "internal/timeout",
+    "internal/wclayer",
+  ]
+  pruneopts = "NUT"
+  revision = "4f64a598035b09da04155f7dfd76b63edf04fca1"
+  version = "v0.8.1"
+
+[[projects]]
   digest = "1:3ac89be767202cf44b33eec1b41b3c6255ec1c79d893304ff621cceada4e53d0"
   name = "github.com/clearcontainers/proxy"
   packages = [
@@ -36,11 +67,71 @@
   revision = "5017d4e9a9cf2d4381db99eacd9baf84b95bfb14"
 
 [[projects]]
+  branch = "master"
+  digest = "1:da4daad2ec1737eec4ebeeed7afedb631711f96bbac0c361a17a4d0369d00c6d"
+  name = "github.com/containerd/console"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "0650fd9eeb50bab4fc99dceb9f2e14cf58f36e7f"
+
+[[projects]]
+  digest = "1:d9120dea4d91818f1c859242cb96825faf6d375a4e0231263ecaec5905143757"
+  name = "github.com/containerd/containerd"
+  packages = [
+    "api/events",
+    "api/types",
+    "api/types/task",
+    "errdefs",
+    "events",
+    "log",
+    "mount",
+    "namespaces",
+    "runtime",
+    "runtime/v2/shim",
+    "runtime/v2/task",
+    "sys",
+  ]
+  pruneopts = "NUT"
+  revision = "29eab28b8e4e18231b6b2f077ab653c719d25dd5"
+
+[[projects]]
   digest = "1:3d1a50e9f27c661df8c5552e7f2f6b9d2a8b641c65aeac7373f8a5c60d9f6856"
   name = "github.com/containerd/cri-containerd"
   packages = ["pkg/annotations"]
   pruneopts = "NUT"
   revision = "3d382e2f5dabe3bae62ceb9ded56bdee847008ee"
+
+[[projects]]
+  branch = "master"
+  digest = "1:a16d601cf7295c29ccc3e7711be788bca1376e1f22e0826929f8883ed36c7c99"
+  name = "github.com/containerd/fifo"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "3d5202aec260678c48179c56f40e6f38a095738c"
+
+[[projects]]
+  branch = "master"
+  digest = "1:4455e7f226d40cb6e52bb570cc246e667cdfc6370ec2e8c3b6d5b8993ad38eeb"
+  name = "github.com/containerd/go-runc"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "5a6d9f37cfa36b15efba46dc7ea349fa9b7143c3"
+
+[[projects]]
+  branch = "master"
+  digest = "1:1b7f9015632851c458c7b713d1a29c9d763c5a2bd85c4e3731139e198b2df2c8"
+  name = "github.com/containerd/ttrpc"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "f51df4475b76e0ab0315ee0684bef0703a070e6b"
+
+[[projects]]
+  branch = "master"
+  digest = "1:07ac073876dbf7df80789ba4c2959a969200b34875a34fc13848f76d60b51551"
+  name = "github.com/containerd/typeurl"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "461401dc8f19d80baa4b70178935e4501286c00b"
 
 [[projects]]
   digest = "1:827ed8a74e55981880c4d77f8472d638bceb899188104ba7bf24a9548fd97292"
@@ -186,12 +277,21 @@
   revision = "d0303fe809921458f417bcf828397a65db30a7e4"
 
 [[projects]]
-  digest = "1:7876a956f7aa42e9830566efbe4278e2963ae0c723b472a0dba27d5fffd066ab"
+  digest = "1:e0cc8395ea893c898ff5eb0850f4d9851c1f57c78c232304a026379a47a552d0"
+  name = "github.com/opencontainers/go-digest"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "279bed98673dd5bef374d3b6e4b09e2af76183bf"
+  version = "v1.0.0-rc1"
+
+[[projects]]
+  digest = "1:26537bc93f1e164bbc305117029de9933656ff81c4549609939212aca20a4710"
   name = "github.com/opencontainers/runc"
   packages = [
     "libcontainer/configs",
     "libcontainer/seccomp",
     "libcontainer/specconv",
+    "libcontainer/system",
     "libcontainer/utils",
   ]
   pruneopts = "NUT"
@@ -424,7 +524,18 @@
     "github.com/clearcontainers/proxy/api",
     "github.com/clearcontainers/proxy/client",
     "github.com/containerd/cgroups",
+    "github.com/containerd/containerd/api/events",
+    "github.com/containerd/containerd/api/types/task",
+    "github.com/containerd/containerd/errdefs",
+    "github.com/containerd/containerd/events",
+    "github.com/containerd/containerd/mount",
+    "github.com/containerd/containerd/namespaces",
+    "github.com/containerd/containerd/runtime",
+    "github.com/containerd/containerd/runtime/v2/shim",
+    "github.com/containerd/containerd/runtime/v2/task",
     "github.com/containerd/cri-containerd/pkg/annotations",
+    "github.com/containerd/fifo",
+    "github.com/containerd/typeurl",
     "github.com/containernetworking/plugins/pkg/ns",
     "github.com/dlespiau/covertool/pkg/cover",
     "github.com/docker/go-units",
@@ -443,6 +554,7 @@
     "github.com/opencontainers/runtime-spec/specs-go",
     "github.com/opentracing/opentracing-go",
     "github.com/opentracing/opentracing-go/log",
+    "github.com/pkg/errors",
     "github.com/safchain/ethtool",
     "github.com/sirupsen/logrus",
     "github.com/sirupsen/logrus/hooks/syslog",
