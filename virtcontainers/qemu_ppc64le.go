@@ -74,6 +74,7 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 	q := &qemuPPC64le{
 		qemuArchBase{
 			machineType:           machineType,
+			memoryOffset:          config.MemOffset,
 			qemuPaths:             qemuPaths,
 			supportedQemuMachines: supportedQemuMachines,
 			kernelParamsNonDebug:  kernelParamsNonDebug,
@@ -83,6 +84,9 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 	}
 
 	q.handleImagePath(config)
+
+	q.memoryOffset = config.MemOffset
+
 	return q
 }
 
@@ -121,7 +125,7 @@ func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8)
 		hostMemoryMb = defaultMemMaxPPC64le
 	}
 
-	return genericMemoryTopology(memoryMb, hostMemoryMb, slots)
+	return genericMemoryTopology(memoryMb, hostMemoryMb, slots, q.memoryOffset)
 }
 
 func (q *qemuPPC64le) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {

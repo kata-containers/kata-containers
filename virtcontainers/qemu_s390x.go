@@ -61,6 +61,7 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 	q := &qemuS390x{
 		qemuArchBase{
 			machineType:           machineType,
+			memoryOffset:          config.MemOffset,
 			qemuPaths:             qemuPaths,
 			supportedQemuMachines: supportedQemuMachines,
 			kernelParamsNonDebug:  kernelParamsNonDebug,

@@ -82,6 +82,13 @@ default_memory = @DEFMEMSZ@
 # This is will determine the times that memory will be hotadded to sandbox/VM.
 #memory_slots = @DEFMEMSLOTS@
 
+# The size in MiB will be plused to max memory of hypervisor.
+# It is the memory address space for the NVDIMM devie.
+# If set block storage driver (block_device_driver) to "nvdimm",
+# should set memory_offset to the size of block device.
+# Default 0
+#memory_offset = 0
+
 # Disable block device from being used for a container's rootfs.
 # In case of a storage driver like devicemapper where a container's 
 # root file system is backed by a block device, the block device is passed
