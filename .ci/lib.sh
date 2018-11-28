@@ -8,6 +8,13 @@
 
 export KATA_RUNTIME=${KATA_RUNTIME:-kata-runtime}
 
+# How long do we wait for docker to perform a task before we
+# timeout with the presumption it has hung.
+# Docker itself has a 10s timeout, so make our timeout longer
+# than that. Measured in seconds by default (see timeout(1) for
+# more formats).
+export KATA_DOCKER_TIMEOUT=30
+
 tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 lib_script="${GOPATH}/src/${tests_repo}/lib/common.bash"
 source "${lib_script}"
@@ -243,7 +250,7 @@ gen_clean_arch() {
 	# Set up some vars
 	stale_process_union=( "docker-containerd-shim" )
 	#docker supports different storage driver, such like overlay2, aufs, etc.
-	docker_storage_driver=$(docker info --format='{{.Driver}}')
+	docker_storage_driver=$(timeout ${KATA_DOCKER_TIMEOUT} docker info --format='{{.Driver}}')
 	stale_docker_mount_point_union=( "/var/lib/docker/containers" "/var/lib/docker/${docker_storage_driver}" )
 	stale_docker_dir_union=( "/var/lib/docker" )
 	stale_kata_dir_union=( "/var/lib/vc" "/run/vc" )
