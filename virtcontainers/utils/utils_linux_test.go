@@ -15,7 +15,7 @@ import (
 func TestFindContextID(t *testing.T) {
 	assert := assert.New(t)
 
-	ioctlFunc = func(fd uintptr, request int, arg1 uint32) error {
+	ioctlFunc = func(fd uintptr, request int, arg1 uint64) error {
 		return errors.New("ioctl")
 	}
 
