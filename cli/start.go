@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnot "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
@@ -48,7 +49,7 @@ var startCLICommand = cli.Command{
 }
 
 func start(ctx context.Context, containerID string) (vc.VCSandbox, error) {
-	span, _ := trace(ctx, "start")
+	span, _ := katautils.Trace(ctx, "start")
 	defer span.Finish()
 
 	kataLog = kataLog.WithField("container", containerID)
@@ -101,8 +102,8 @@ func start(ctx context.Context, containerID string) (vc.VCSandbox, error) {
 	}
 
 	// Run post-start OCI hooks.
-	err = enterNetNS(sandbox.GetNetNs(), func() error {
-		return postStartHooks(ctx, ociSpec, sandboxID, status.Annotations[vcAnnot.BundlePathKey])
+	err = katautils.EnterNetNS(sandbox.GetNetNs(), func() error {
+		return katautils.PostStartHooks(ctx, ociSpec, sandboxID, status.Annotations[vcAnnot.BundlePathKey])
 	})
 	if err != nil {
 		return nil, err

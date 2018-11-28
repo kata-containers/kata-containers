@@ -33,7 +33,6 @@ import (
 )
 
 const (
-	testDisabledNeedRoot    = "Test disabled as requires root user"
 	testDisabledNeedNonRoot = "Test disabled as requires non-root user"
 	testDirMode             = os.FileMode(0750)
 	testFileMode            = os.FileMode(0640)
@@ -90,7 +89,7 @@ func init() {
 	fmt.Printf("INFO: test directory is %v\n", testDir)
 
 	fmt.Printf("INFO: ensuring docker is running\n")
-	output, err := runCommandFull([]string{"docker", "version"}, true)
+	output, err := katautils.RunCommandFull([]string{"docker", "version"}, true)
 	if err != nil {
 		panic(fmt.Sprintf("ERROR: docker daemon is not installed, not running, or not accessible to current user: %v (error %v)",
 			output, err))
@@ -101,11 +100,11 @@ func init() {
 	fmt.Printf("INFO: ensuring required docker image (%v) is available\n", testDockerImage)
 
 	// Only hit the network if the image doesn't exist locally
-	_, err = runCommand([]string{"docker", "inspect", "--type=image", testDockerImage})
+	_, err = katautils.RunCommand([]string{"docker", "inspect", "--type=image", testDockerImage})
 	if err == nil {
 		fmt.Printf("INFO: docker image %v already exists locally\n", testDockerImage)
 	} else {
-		_, err = runCommand([]string{"docker", "pull", testDockerImage})
+		_, err = katautils.RunCommand([]string{"docker", "pull", testDockerImage})
 		if err != nil {
 			panic(err)
 		}
@@ -256,7 +255,7 @@ func createOCIConfig(bundleDir string) error {
 		return errors.New("BUG: Need bundle directory")
 	}
 
-	if !fileExists(bundleDir) {
+	if !katautils.FileExists(bundleDir) {
 		return fmt.Errorf("BUG: Bundle directory %s does not exist", bundleDir)
 	}
 
@@ -276,13 +275,13 @@ func createOCIConfig(bundleDir string) error {
 		return errors.New("Cannot find command to generate OCI config file")
 	}
 
-	_, err := runCommand([]string{configCmd, "spec", "--bundle", bundleDir})
+	_, err := katautils.RunCommand([]string{configCmd, "spec", "--bundle", bundleDir})
 	if err != nil {
 		return err
 	}
 
 	specFile := filepath.Join(bundleDir, specConfig)
-	if !fileExists(specFile) {
+	if !katautils.FileExists(specFile) {
 		return fmt.Errorf("generated OCI config file does not exist: %v", specFile)
 	}
 
@@ -297,7 +296,7 @@ func createRootfs(dir string) error {
 		return err
 	}
 
-	container, err := runCommand([]string{"docker", "create", testDockerImage})
+	container, err := katautils.RunCommand([]string{"docker", "create", testDockerImage})
 	if err != nil {
 		return err
 	}
@@ -328,7 +327,7 @@ func createRootfs(dir string) error {
 	}
 
 	// Clean up
-	_, err = runCommand([]string{"docker", "rm", container})
+	_, err = katautils.RunCommand([]string{"docker", "rm", container})
 	if err != nil {
 		return err
 	}
@@ -346,7 +345,7 @@ func realMakeOCIBundle(bundleDir string) error {
 		return errors.New("BUG: Need bundle directory")
 	}
 
-	if !fileExists(bundleDir) {
+	if !katautils.FileExists(bundleDir) {
 		return fmt.Errorf("BUG: Bundle directory %v does not exist", bundleDir)
 	}
 
@@ -396,12 +395,12 @@ func makeOCIBundle(bundleDir string) error {
 	base := filepath.Dir(bundleDir)
 
 	for _, dir := range []string{from, base} {
-		if !fileExists(dir) {
+		if !katautils.FileExists(dir) {
 			return fmt.Errorf("BUG: directory %v should exist", dir)
 		}
 	}
 
-	output, err := runCommandFull([]string{"cp", "-a", from, to}, true)
+	output, err := katautils.RunCommandFull([]string{"cp", "-a", from, to}, true)
 	if err != nil {
 		return fmt.Errorf("failed to copy test OCI bundle from %v to %v: %v (output: %v)", from, to, err, output)
 	}
@@ -501,7 +500,7 @@ func TestMakeOCIBundle(t *testing.T) {
 	assert.NoError(err)
 
 	specFile := filepath.Join(bundleDir, specConfig)
-	assert.True(fileExists(specFile))
+	assert.True(katautils.FileExists(specFile))
 }
 
 func TestCreateOCIConfig(t *testing.T) {
@@ -524,7 +523,7 @@ func TestCreateOCIConfig(t *testing.T) {
 	assert.NoError(err)
 
 	specFile := filepath.Join(bundleDir, specConfig)
-	assert.True(fileExists(specFile))
+	assert.True(katautils.FileExists(specFile))
 }
 
 func TestCreateRootfs(t *testing.T) {
@@ -535,7 +534,7 @@ func TestCreateRootfs(t *testing.T) {
 	defer os.RemoveAll(tmpdir)
 
 	rootfsDir := filepath.Join(tmpdir, "rootfs")
-	assert.False(fileExists(rootfsDir))
+	assert.False(katautils.FileExists(rootfsDir))
 
 	err = createRootfs(rootfsDir)
 	assert.NoError(err)
@@ -543,11 +542,11 @@ func TestCreateRootfs(t *testing.T) {
 	// non-comprehensive list of expected directories
 	expectedDirs := []string{"bin", "dev", "etc", "usr", "var"}
 
-	assert.True(fileExists(rootfsDir))
+	assert.True(katautils.FileExists(rootfsDir))
 
 	for _, dir := range expectedDirs {
 		dirPath := filepath.Join(rootfsDir, dir)
-		assert.True(fileExists(dirPath))
+		assert.True(katautils.FileExists(dirPath))
 	}
 }
 
@@ -1122,5 +1121,6 @@ func createTempContainerIDMapping(containerID, sandboxID string) (string, error)
 		return "", err
 	}
 
+	katautils.SetCtrsMapTreePath(ctrsMapTreePath)
 	return tmpDir, nil
 }
