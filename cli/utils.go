@@ -140,7 +140,7 @@ func genericGetCPUDetails() (vendor, model string, err error) {
 		}
 	}
 
-	if vendor == "" {
+	if archCPUVendorField != "" && vendor == "" {
 		return "", "", fmt.Errorf("cannot find vendor field in file %v", procCPUInfo)
 	}
 
