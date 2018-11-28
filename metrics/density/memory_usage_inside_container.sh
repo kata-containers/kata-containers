@@ -18,7 +18,7 @@ TEST_NAME="memory footprint inside container"
 VERSIONS_FILE="${SCRIPT_PATH}/../../versions.yaml"
 ALPINE_VERSION=$("${GOPATH}/bin/yq" read "$VERSIONS_FILE" "docker_images.alpine.version")
 IMAGE="alpine:$ALPINE_VERSION"
-CMD="cat /proc/meminfo"
+CMD="sleep 10; cat /proc/meminfo"
 # We specify here in 'k', as that then matches the results we get from the meminfo,
 # which makes later direct comparison easier.
 MEMSIZE=${MEMSIZE:-$((2048*1024))}
@@ -32,7 +32,7 @@ function main() {
 
 	metrics_json_init
 
-	local output=$(docker run -m ${MEMSIZE}k --rm --runtime=$RUNTIME $IMAGE $CMD)
+	local output=$(docker run -m ${MEMSIZE}k --rm --runtime=$RUNTIME $IMAGE sh -c "$CMD")
 
 	# Save configuration
 	metrics_json_start_array
