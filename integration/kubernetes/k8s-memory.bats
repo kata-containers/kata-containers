@@ -36,7 +36,7 @@ setup() {
 
 @test "Running within memory constraints" {
 	memory_limit_size="200Mi"
-	allocated_size="100M"
+	allocated_size="150M"
 	# Create test .yaml
         sed \
             -e "s/\${memory_size}/${memory_limit_size}/" \
