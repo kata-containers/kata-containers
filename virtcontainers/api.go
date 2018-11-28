@@ -337,10 +337,11 @@ func StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error)
 		return SandboxStatus{}, errNeedSandboxID
 	}
 
-	lockFile, err := rLockSandbox(sandboxID)
+	lockFile, err := rwLockSandbox(sandboxID)
 	if err != nil {
 		return SandboxStatus{}, err
 	}
+	defer unlockSandbox(lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -348,16 +349,6 @@ func StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error)
 		return SandboxStatus{}, err
 	}
 	defer s.releaseStatelessSandbox()
-
-	// We need to potentially wait for a separate container.stop() routine
-	// that needs to be terminated before we return from this function.
-	// Deferring the synchronization here is very important since we want
-	// to avoid a deadlock. Indeed, the goroutine started by statusContainer
-	// will need to lock an exclusive lock, meaning that all other locks have
-	// to be released to let this happen. This call ensures this will be the
-	// last operation executed by this function.
-	defer s.wg.Wait()
-	defer unlockSandbox(lockFile)
 
 	var contStatusList []ContainerStatus
 	for _, container := range s.containers {
@@ -548,10 +539,11 @@ func StatusContainer(ctx context.Context, sandboxID, containerID string) (Contai
 		return ContainerStatus{}, errNeedContainerID
 	}
 
-	lockFile, err := rLockSandbox(sandboxID)
+	lockFile, err := rwLockSandbox(sandboxID)
 	if err != nil {
 		return ContainerStatus{}, err
 	}
+	defer unlockSandbox(lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -560,21 +552,21 @@ func StatusContainer(ctx context.Context, sandboxID, containerID string) (Contai
 	}
 	defer s.releaseStatelessSandbox()
 
-	// We need to potentially wait for a separate container.stop() routine
-	// that needs to be terminated before we return from this function.
-	// Deferring the synchronization here is very important since we want
-	// to avoid a deadlock. Indeed, the goroutine started by statusContainer
-	// will need to lock an exclusive lock, meaning that all other locks have
-	// to be released to let this happen. This call ensures this will be the
-	// last operation executed by this function.
-	defer s.wg.Wait()
-	defer unlockSandbox(lockFile)
-
 	return statusContainer(s, containerID)
 }
 
-// This function is going to spawn a goroutine and it needs to be waited for
-// by the caller.
+// This function might have to stop the container if it realizes the shim
+// process is not running anymore. This might be caused by two different
+// reasons, either the process inside the VM exited and the shim terminated
+// accordingly, or the shim has been killed directly and we need to make sure
+// that we properly stop the container process inside the VM.
+//
+// When a container needs to be stopped because of those reasons, we want this
+// to happen atomically from a sandbox perspective. That's why we cannot afford
+// to take a read or read/write lock based on the situation, as it would break
+// the initial locking from the caller. Instead, a read/write lock has to be
+// taken from the caller, even if we simply return the container status without
+// taking any action regarding the container.
 func statusContainer(sandbox *Sandbox, containerID string) (ContainerStatus, error) {
 	for _, container := range sandbox.containers {
 		if container.id == containerID {
@@ -592,19 +584,9 @@ func statusContainer(sandbox *Sandbox, containerID string) (ContainerStatus, err
 				}
 
 				if !running {
-					sandbox.wg.Add(1)
-					go func() {
-						defer sandbox.wg.Done()
-						lockFile, err := rwLockSandbox(sandbox.id)
-						if err != nil {
-							return
-						}
-						defer unlockSandbox(lockFile)
-
-						if err := container.stop(); err != nil {
-							return
-						}
-					}()
+					if err := container.stop(); err != nil {
+						return ContainerStatus{}, err
+					}
 				}
 			}
 
