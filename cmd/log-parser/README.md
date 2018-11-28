@@ -67,7 +67,7 @@ The primary logfiles the tool reads are:
 
 To merge all logs:
 
-1. [Enable full debug](https://github.com/kata-containers/documentation/wiki/Developer-Guide#enable-full-debug).
+1. [Enable full debug](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#enable-full-debug).
 1. Clear the systemd journal (optional):
    ```
    $ sudo systemctl stop systemd-journald
