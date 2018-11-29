@@ -659,15 +659,25 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 	}
 
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
-	if err := checkNetNsConfig(config); err != nil {
-		return "", config, err
-	}
 
-	if err := checkHypervisorConfig(config.HypervisorConfig); err != nil {
+	if err := checkConfig(config); err != nil {
 		return "", config, err
 	}
 
 	return resolved, config, nil
+}
+
+// checkConfig checks the validity of the specified config.
+func checkConfig(config oci.RuntimeConfig) error {
+	if err := checkNetNsConfig(config); err != nil {
+		return err
+	}
+
+	if err := checkHypervisorConfig(config.HypervisorConfig); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func updateConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
