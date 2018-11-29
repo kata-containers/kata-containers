@@ -60,6 +60,9 @@ func NewBundle(workload []string) (*Bundle, error) {
 		return nil, err
 	}
 
+	// By default, let's not create a terminal
+	config.Process.Terminal = false
+
 	config.Process.Args = workload
 
 	bundle := &Bundle{
