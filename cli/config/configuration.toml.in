@@ -193,6 +193,8 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 #
 # When disabled, new VMs are created from scratch.
 #
+# Note: Requires "initrd=" to be set ("image=" is not supported).
+#
 # Default false
 #enable_template = true
 

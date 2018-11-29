@@ -1497,3 +1497,44 @@ func TestCheckNetNsConfig(t *testing.T) {
 	err = checkNetNsConfig(config)
 	assert.Error(err)
 }
+
+func TestCheckFactoryConfig(t *testing.T) {
+	assert := assert.New(t)
+
+	type testData struct {
+		factoryEnabled bool
+		imagePath      string
+		initrdPath     string
+		expectError    bool
+	}
+
+	data := []testData{
+		{false, "", "", false},
+		{false, "image", "", false},
+		{false, "", "initrd", false},
+
+		{true, "", "initrd", false},
+		{true, "image", "", true},
+	}
+
+	for i, d := range data {
+		config := oci.RuntimeConfig{
+			HypervisorConfig: vc.HypervisorConfig{
+				ImagePath:  d.imagePath,
+				InitrdPath: d.initrdPath,
+			},
+
+			FactoryConfig: oci.FactoryConfig{
+				Template: d.factoryEnabled,
+			},
+		}
+
+		err := checkFactoryConfig(config)
+
+		if d.expectError {
+			assert.Error(err, "test %d (%+v)", i, d)
+		} else {
+			assert.NoError(err, "test %d (%+v)", i, d)
+		}
+	}
+}
