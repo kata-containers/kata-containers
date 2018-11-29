@@ -313,7 +313,7 @@ func (q *QMP) finaliseCommandWithResponse(cmdEl *list.Element, cmdQueue *list.Li
 		if succeeded {
 			cmd.res <- qmpResult{response: response}
 		} else {
-			cmd.res <- qmpResult{err: fmt.Errorf("QMP command failed")}
+			cmd.res <- qmpResult{err: fmt.Errorf("QMP command failed: %v", response)}
 		}
 	}
 	if cmdQueue.Len() > 0 {
@@ -323,6 +323,23 @@ func (q *QMP) finaliseCommandWithResponse(cmdEl *list.Element, cmdQueue *list.Li
 
 func (q *QMP) finaliseCommand(cmdEl *list.Element, cmdQueue *list.List, succeeded bool) {
 	q.finaliseCommandWithResponse(cmdEl, cmdQueue, succeeded, nil)
+}
+
+func (q *QMP) errorDesc(errorData interface{}) (string, error) {
+	// convert error to json
+	data, err := json.Marshal(errorData)
+	if err != nil {
+		return "", fmt.Errorf("Unable to extract error information: %v", err)
+	}
+
+	// see: https://github.com/qemu/qemu/blob/stable-2.12/qapi/qmp-dispatch.c#L125
+	var qmpErr map[string]string
+	// convert json to qmpError
+	if err = json.Unmarshal(data, &qmpErr); err != nil {
+		return "", fmt.Errorf("Unable to convert json to qmpError: %v", err)
+	}
+
+	return qmpErr["desc"], nil
 }
 
 func (q *QMP) processQMPInput(line []byte, cmdQueue *list.List) {
@@ -339,7 +356,7 @@ func (q *QMP) processQMPInput(line []byte, cmdQueue *list.List) {
 	}
 
 	response, succeeded := vmData["return"]
-	_, failed := vmData["error"]
+	errData, failed := vmData["error"]
 
 	if !succeeded && !failed {
 		return
@@ -353,6 +370,14 @@ func (q *QMP) processQMPInput(line []byte, cmdQueue *list.List) {
 	}
 	cmd := cmdEl.Value.(*qmpCommand)
 	if failed || cmd.filter == nil {
+		if errData != nil {
+			desc, err := q.errorDesc(errData)
+			if err != nil {
+				q.cfg.Logger.Infof("Get error description failed: %v", err)
+			} else {
+				response = desc
+			}
+		}
 		q.finaliseCommandWithResponse(cmdEl, cmdQueue, succeeded, response)
 	} else {
 		cmd.resultReceived = true
