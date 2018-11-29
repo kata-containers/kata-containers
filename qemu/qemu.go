@@ -1014,7 +1014,7 @@ func (bridgeDev BridgeDevice) QemuParams(config *Config) []string {
 type VSOCKDevice struct {
 	ID string
 
-	ContextID uint32
+	ContextID uint64
 
 	// VHostFD vhost file descriptor that holds the ContextID
 	VHostFD *os.File
@@ -1028,7 +1028,10 @@ type VSOCKDevice struct {
 
 const (
 	// MinimalGuestCID is the smallest valid context ID for a guest.
-	MinimalGuestCID uint32 = 3
+	MinimalGuestCID uint64 = 3
+
+	// MaxGuestCID is the largest valid context ID for a guest.
+	MaxGuestCID uint64 = 1<<32 - 1
 )
 
 const (
@@ -1038,7 +1041,7 @@ const (
 
 // Valid returns true if the VSOCKDevice structure is valid and complete.
 func (vsock VSOCKDevice) Valid() bool {
-	if vsock.ID == "" || vsock.ContextID < MinimalGuestCID {
+	if vsock.ID == "" || vsock.ContextID < MinimalGuestCID || vsock.ContextID > MaxGuestCID {
 		return false
 	}
 

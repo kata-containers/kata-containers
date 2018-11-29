@@ -312,6 +312,12 @@ func TestVSOCKValid(t *testing.T) {
 		t.Fatalf("VSOCK Context ID is not valid")
 	}
 
+	vsockDevice.ContextID = MaxGuestCID + 1
+
+	if vsockDevice.Valid() {
+		t.Fatalf("VSOCK Context ID is not valid")
+	}
+
 	vsockDevice.ID = ""
 
 	if vsockDevice.Valid() {
