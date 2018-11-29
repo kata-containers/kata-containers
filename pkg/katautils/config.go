@@ -677,6 +677,10 @@ func checkConfig(config oci.RuntimeConfig) error {
 		return err
 	}
 
+	if err := checkFactoryConfig(config); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -707,6 +711,15 @@ func checkNetNsConfig(config oci.RuntimeConfig) error {
 			return fmt.Errorf("config disable_new_netns only works with 'none' internetworking_model")
 		}
 	}
+	return nil
+}
+
+// checkFactoryConfig ensures the VM factory configuration is valid.
+func checkFactoryConfig(config oci.RuntimeConfig) error {
+	if config.FactoryConfig.Template && config.HypervisorConfig.InitrdPath == "" {
+		return errors.New("Factory option enable_template requires an initrd image")
+	}
+
 	return nil
 }
 
