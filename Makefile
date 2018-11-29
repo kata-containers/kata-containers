@@ -8,7 +8,7 @@
 TIMEOUT := 60
 
 # union for 'make test'
-UNION := functional docker crio docker-compose network netmon docker-stability openshift kubernetes swarm vm-factory entropy ramdisk
+UNION := functional docker crio docker-compose network netmon docker-stability oci openshift kubernetes swarm vm-factory entropy ramdisk
 
 # skipped test suites for docker integration tests
 SKIP :=
@@ -81,6 +81,11 @@ cri-containerd:
 log-parser:
 	make -C cmd/log-parser
 
+oci:
+	systemctl is-active --quiet docker || sudo systemctl start docker
+	cd integration/oci_calls && \
+	bash -f oci_call_test.sh
+
 openshift:
 	bash -f .ci/install_bats.sh
 	bash -f integration/openshift/run_openshift_tests.sh
@@ -128,6 +133,7 @@ check: checkcommits log-parser
 	ginkgo \
 	kubernetes \
 	log-parser \
+	oci \
 	openshift \
 	pentest \
 	swarm \
