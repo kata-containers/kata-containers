@@ -124,20 +124,10 @@ install_kata_components() {
 		make \
 			PREFIX="${prefix}" \
 			QEMUCMD="qemu-system-x86_64"
-		#TODO Remove libexecdir
-		libexecdir="libexec"
-		if [ "$p" == "shim" ]; then
-			libexecdir="/${destdir}/${prefix}/libexec/"
-			make PREFIX="${prefix}" \
-				DESTDIR="${destdir}" \
-				LIBEXECDIR="${libexecdir}" \
-				install
-		else
-			echo "Install"
-			make PREFIX="${prefix}" \
-				DESTDIR="${destdir}" \
-				install
-		fi
+		echo "Install"
+		make PREFIX="${prefix}" \
+			DESTDIR="${destdir}" \
+			install
 		popd >>/dev/null
 	done
 	sed -i -e '/^initrd =/d' "${destdir}/${prefix}/share/defaults/${project}/configuration.toml"
