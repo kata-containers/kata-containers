@@ -651,11 +651,6 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 		return "", config, err
 	}
 
-	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
-	if err := checkNetNsConfig(config); err != nil {
-		return "", config, err
-	}
-
 	// use no proxy if HypervisorConfig.UseVSock is true
 	if config.HypervisorConfig.UseVSock {
 		kataUtilsLogger.Info("VSOCK supported, configure to not use proxy")
@@ -663,11 +658,30 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 		config.ProxyConfig = vc.ProxyConfig{}
 	}
 
-	if err := checkHypervisorConfig(config.HypervisorConfig); err != nil {
+	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
+
+	if err := checkConfig(config); err != nil {
 		return "", config, err
 	}
 
 	return resolved, config, nil
+}
+
+// checkConfig checks the validity of the specified config.
+func checkConfig(config oci.RuntimeConfig) error {
+	if err := checkNetNsConfig(config); err != nil {
+		return err
+	}
+
+	if err := checkHypervisorConfig(config.HypervisorConfig); err != nil {
+		return err
+	}
+
+	if err := checkFactoryConfig(config); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func updateConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
@@ -697,6 +711,15 @@ func checkNetNsConfig(config oci.RuntimeConfig) error {
 			return fmt.Errorf("config disable_new_netns only works with 'none' internetworking_model")
 		}
 	}
+	return nil
+}
+
+// checkFactoryConfig ensures the VM factory configuration is valid.
+func checkFactoryConfig(config oci.RuntimeConfig) error {
+	if config.FactoryConfig.Template && config.HypervisorConfig.InitrdPath == "" {
+		return errors.New("Factory option enable_template requires an initrd image")
+	}
+
 	return nil
 }
 
