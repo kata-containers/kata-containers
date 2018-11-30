@@ -5,6 +5,7 @@ revision history in source control.
 Contributors who wish to be recognized in this file should add
 themselves (or their employer, as appropriate).
 
+- afrosi@de.ibm.com
 - archana.m.shinde@intel.com
 - eric.ernst@intel.com
 - james.o.hunt@intel.com
