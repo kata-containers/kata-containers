@@ -249,14 +249,14 @@ func TestQemuAddDeviceSerialPortDev(t *testing.T) {
 }
 
 func TestQemuAddDeviceKataVSOCK(t *testing.T) {
-	contextID := uint32(3)
+	contextID := uint64(3)
 	port := uint32(1024)
 	vHostFD := os.NewFile(1, "vsock")
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.VSOCKDevice{
 			ID:        fmt.Sprintf("vsock-%d", contextID),
-			ContextID: uint64(contextID),
+			ContextID: contextID,
 			VHostFD:   vHostFD,
 		},
 	}
