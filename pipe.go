@@ -6,6 +6,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 
 	context "golang.org/x/net/context"
@@ -13,6 +14,7 @@ import (
 	"google.golang.org/grpc/codes"
 
 	pb "github.com/kata-containers/agent/protocols/grpc"
+	grpcStatus "google.golang.org/grpc/status"
 )
 
 type inPipe struct {
@@ -55,7 +57,12 @@ func pipeRead(ctx context.Context, containerID, execID string, data []byte, read
 	}
 
 	// check if it is &grpc.rpcError{code:0xb, desc:"EOF"} and return io.EOF instead
-	if grpc.Code(err) == codes.OutOfRange && grpc.ErrorDesc(err) == "EOF" {
+	status, ok := grpcStatus.FromError(err)
+	if !ok {
+		return 0, fmt.Errorf("expected a gRPC error, got %v", err)
+	}
+
+	if status.Code() == codes.OutOfRange && status.Message() == "EOF" {
 		return 0, io.EOF
 	}
 	return 0, err

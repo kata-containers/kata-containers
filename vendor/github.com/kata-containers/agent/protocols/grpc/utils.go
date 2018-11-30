@@ -7,8 +7,10 @@
 package grpc
 
 import (
-	"fmt"
 	"reflect"
+
+	"google.golang.org/grpc/codes"
+	grpcStatus "google.golang.org/grpc/status"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -22,48 +24,55 @@ func copyValue(to, from reflect.Value) error {
 	}
 
 	if toKind == reflect.Ptr {
-		// If the destination is a pointer, we need to allocate a new one.
+		// Handle the case of nil pointers.
+		if fromKind == reflect.Ptr && from.IsNil() {
+			return nil
+		}
+
+		// If the destination and the origin are both pointers, and
+		// if the origin is not nil, we need to allocate a new one
+		// for the destination.
 		to.Set(reflect.New(to.Type().Elem()))
 		if fromKind == reflect.Ptr {
 			return copyValue(to.Elem(), from.Elem())
-		} else {
-			return copyValue(to.Elem(), from)
-		}
-	} else {
-		// Here the destination is not a pointer.
-		// Let's check what's the origin.
-		if fromKind == reflect.Ptr {
-			return copyValue(to, from.Elem())
 		}
 
-		switch toKind {
-		case reflect.Struct:
-			return copyStructValue(to, from)
-		case reflect.Slice:
-			return copySliceValue(to, from)
-		case reflect.Map:
-			return copyMapValue(to, from)
-		default:
-			// We now are copying non pointers scalar.
-			// This is the leaf of the recursion.
-			if from.Type() != to.Type() {
-				if from.Type().ConvertibleTo(to.Type()) {
-					to.Set(from.Convert(to.Type()))
-					return nil
-				} else {
-					return fmt.Errorf("Can not convert %v to %v", from.Type(), to.Type())
-				}
-			} else {
-				to.Set(from)
+		return copyValue(to.Elem(), from)
+	}
+
+	// Here the destination is not a pointer.
+	// Let's check what's the origin.
+	if fromKind == reflect.Ptr {
+		return copyValue(to, from.Elem())
+	}
+
+	switch toKind {
+	case reflect.Struct:
+		return copyStructValue(to, from)
+	case reflect.Slice:
+		return copySliceValue(to, from)
+	case reflect.Map:
+		return copyMapValue(to, from)
+	default:
+		// We now are copying non pointers scalar.
+		// This is the leaf of the recursion.
+		if from.Type() != to.Type() {
+			if from.Type().ConvertibleTo(to.Type()) {
+				to.Set(from.Convert(to.Type()))
 				return nil
 			}
+
+			return grpcStatus.Errorf(codes.InvalidArgument, "Can not convert %v to %v", from.Type(), to.Type())
 		}
+
+		to.Set(from)
+		return nil
 	}
 }
 
 func copyMapValue(to, from reflect.Value) error {
 	if to.Kind() != reflect.Map && from.Kind() != reflect.Map {
-		return fmt.Errorf("Can only copy maps into maps")
+		return grpcStatus.Errorf(codes.InvalidArgument, "Can only copy maps into maps")
 	}
 
 	to.Set(reflect.MakeMap(to.Type()))
@@ -86,7 +95,7 @@ func copyMapValue(to, from reflect.Value) error {
 
 func copySliceValue(to, from reflect.Value) error {
 	if to.Kind() != reflect.Slice && from.Kind() != reflect.Slice {
-		return fmt.Errorf("Can only copy slices into slices")
+		return grpcStatus.Errorf(codes.InvalidArgument, "Can only copy slices into slices")
 	}
 
 	sliceLen := from.Len()
@@ -123,7 +132,7 @@ func copyStructSkipField(to, from reflect.Value) bool {
 
 func structFieldName(v reflect.Value, index int) (string, error) {
 	if v.Kind() != reflect.Struct {
-		return "", fmt.Errorf("Can only infer field name from structs")
+		return "", grpcStatus.Errorf(codes.InvalidArgument, "Can only infer field name from structs")
 	}
 
 	return v.Type().Field(index).Name, nil
@@ -139,7 +148,7 @@ func isEmbeddedStruct(v reflect.Value, index int) bool {
 
 func findStructField(v reflect.Value, name string) (reflect.Value, error) {
 	if v.Kind() != reflect.Struct {
-		return reflect.Value{}, fmt.Errorf("Can only infer field name from structs")
+		return reflect.Value{}, grpcStatus.Errorf(codes.InvalidArgument, "Can only infer field name from structs")
 	}
 
 	for i := 0; i < v.NumField(); i++ {
@@ -148,12 +157,12 @@ func findStructField(v reflect.Value, name string) (reflect.Value, error) {
 		}
 	}
 
-	return reflect.Value{}, fmt.Errorf("Could not find field %s", name)
+	return reflect.Value{}, grpcStatus.Errorf(codes.InvalidArgument, "Could not find field %s", name)
 }
 
 func copyStructValue(to, from reflect.Value) error {
 	if to.Kind() != reflect.Struct && from.Kind() != reflect.Struct {
-		return fmt.Errorf("Can only copy structs into structs")
+		return grpcStatus.Errorf(codes.InvalidArgument, "Can only copy structs into structs")
 	}
 
 	if copyStructSkipField(to, from) {
@@ -212,7 +221,7 @@ func copyStruct(to interface{}, from interface{}) (err error) {
 
 	if toVal.Kind() != reflect.Ptr || toVal.Elem().Kind() != reflect.Struct ||
 		fromVal.Kind() != reflect.Ptr || fromVal.Elem().Kind() != reflect.Struct {
-		return fmt.Errorf("Arguments must be pointers to structures")
+		return grpcStatus.Errorf(codes.InvalidArgument, "Arguments must be pointers to structures")
 	}
 
 	toVal = toVal.Elem()
@@ -221,6 +230,7 @@ func copyStruct(to interface{}, from interface{}) (err error) {
 	return copyStructValue(toVal, fromVal)
 }
 
+// OCItoGRPC converts an OCI specification to its gRPC representation
 func OCItoGRPC(ociSpec *specs.Spec) (*Spec, error) {
 	s := &Spec{}
 
@@ -229,6 +239,7 @@ func OCItoGRPC(ociSpec *specs.Spec) (*Spec, error) {
 	return s, err
 }
 
+// GRPCtoOCI converts a gRPC specification back into an OCI representation
 func GRPCtoOCI(grpcSpec *Spec) (*specs.Spec, error) {
 	s := &specs.Spec{}
 
@@ -237,6 +248,8 @@ func GRPCtoOCI(grpcSpec *Spec) (*specs.Spec, error) {
 	return s, err
 }
 
+// ProcessOCItoGRPC converts an OCI process specification into its gRPC
+// representation
 func ProcessOCItoGRPC(ociProcess *specs.Process) (*Process, error) {
 	s := &Process{}
 
@@ -245,10 +258,32 @@ func ProcessOCItoGRPC(ociProcess *specs.Process) (*Process, error) {
 	return s, err
 }
 
+// ProcessGRPCtoOCI converts a gRPC specification back into an OCI
+// representation
 func ProcessGRPCtoOCI(grpcProcess *Process) (*specs.Process, error) {
 	s := &specs.Process{}
 
 	err := copyStruct(s, grpcProcess)
+
+	return s, err
+}
+
+// ResourcesOCItoGRPC converts an OCI LinuxResources specification into its gRPC
+// representation
+func ResourcesOCItoGRPC(ociResources *specs.LinuxResources) (*LinuxResources, error) {
+	s := &LinuxResources{}
+
+	err := copyStruct(s, ociResources)
+
+	return s, err
+}
+
+// ResourcesGRPCtoOCI converts an gRPC LinuxResources specification into its OCI
+// representation
+func ResourcesGRPCtoOCI(grpcResources *LinuxResources) (*specs.LinuxResources, error) {
+	s := &specs.LinuxResources{}
+
+	err := copyStruct(s, grpcResources)
 
 	return s, err
 }

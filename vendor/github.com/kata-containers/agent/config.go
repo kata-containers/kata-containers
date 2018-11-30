@@ -7,16 +7,18 @@
 package main
 
 import (
-	"fmt"
 	"io/ioutil"
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	grpcStatus "google.golang.org/grpc/status"
 )
 
 const (
 	optionPrefix      = "agent."
 	logLevelFlag      = optionPrefix + "log"
+	devModeFlag       = optionPrefix + "devmode"
 	kernelCmdlineFile = "/proc/cmdline"
 )
 
@@ -33,7 +35,7 @@ func newConfig(level logrus.Level) agentConfig {
 //Get the agent configuration from kernel cmdline
 func (c *agentConfig) getConfig(cmdLineFile string) error {
 	if cmdLineFile == "" {
-		return fmt.Errorf("Kernel cmdline file cannot be empty")
+		return grpcStatus.Error(codes.FailedPrecondition, "Kernel cmdline file cannot be empty")
 	}
 
 	kernelCmdline, err := ioutil.ReadFile(cmdLineFile)
@@ -42,8 +44,7 @@ func (c *agentConfig) getConfig(cmdLineFile string) error {
 	}
 
 	words := strings.Fields(string(kernelCmdline))
-	for _, w := range words {
-		word := string(w)
+	for _, word := range words {
 		if err := c.parseCmdlineOption(word); err != nil {
 			agentLog.WithFields(logrus.Fields{
 				"error":  err,
@@ -55,8 +56,11 @@ func (c *agentConfig) getConfig(cmdLineFile string) error {
 	return nil
 }
 
-func (c *agentConfig) applyConfig() {
+func (c *agentConfig) applyConfig(s *sandbox) {
 	agentLog.Logger.SetLevel(c.logLevel)
+	if c.logLevel == logrus.DebugLevel {
+		s.enableGrpcTrace = true
+	}
 }
 
 //Parse a string that represents a kernel cmdline option
@@ -66,6 +70,13 @@ func (c *agentConfig) parseCmdlineOption(option string) error {
 		valuePosition
 		optionSeparator = "="
 	)
+
+	if option == devModeFlag {
+		crashOnError = true
+		debug = true
+
+		return nil
+	}
 
 	split := strings.Split(option, optionSeparator)
 
@@ -80,9 +91,12 @@ func (c *agentConfig) parseCmdlineOption(option string) error {
 			return err
 		}
 		c.logLevel = level
+		if level == logrus.DebugLevel {
+			debug = true
+		}
 	default:
 		if strings.HasPrefix(split[optionPosition], optionPrefix) {
-			return fmt.Errorf("Unknown option %s", split[optionPosition])
+			return grpcStatus.Errorf(codes.NotFound, "Unknown option %s", split[optionPosition])
 		}
 	}
 

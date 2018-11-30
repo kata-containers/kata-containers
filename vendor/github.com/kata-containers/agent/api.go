@@ -11,7 +11,7 @@ import (
 )
 
 // Serial channel
-const (
+var (
 	serialChannelName = "agent.channel.0"
 	virtIOPath        = "/sys/class/virtio-ports"
 	devRootPath       = "/dev"
@@ -19,9 +19,10 @@ const (
 
 // VSock
 const (
-	vSockDevPath = "/dev/vsock"
-	vSockPort    = 1024
+	vSockPort = 1024
 )
+
+var vSockDevPath = "/dev/vsock"
 
 // Signals
 const (
@@ -36,7 +37,6 @@ const (
 	agentName       = "kata-agent"
 	exitSuccess     = 0
 	exitFailure     = 1
-	fileMode0750    = 0750
 	defaultLogLevel = logrus.InfoLevel
 	selfBinPath     = "/proc/self/exe"
 )
