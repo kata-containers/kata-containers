@@ -185,6 +185,22 @@ func (c *Container) Exec(process Process) (string, string, int) {
 	return cmd.Run()
 }
 
+// State returns the state of the container
+// calls into state command returning its stdout, stderr and exit code
+func (c *Container) State() (string, string, int) {
+	args := []string{}
+
+	args = append(args, "state")
+
+	if c.ID != nil {
+		args = append(args, *c.ID)
+	}
+
+	cmd := NewCommand(Runtime, args...)
+
+	return cmd.Run()
+}
+
 // List the containers
 // calls to list command returning its stdout, stderr and exit code
 func (c *Container) List(format string, quiet bool, all bool) (string, string, int) {
