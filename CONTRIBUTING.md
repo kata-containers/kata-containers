@@ -44,6 +44,38 @@ Fixes #1
 Signed-off-by: Mark Ryan <mark.d.ryan@intel.com>
 ```
 
+## New files
+
+Each Go source file in the Virtual Machine Manager for Go project must
+contain the following header:
+
+```
+/*
+// Copyright contributors to the Virtual Machine Manager for Go project
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+*/
+```
+
+## Contributors File
+
+This CONTRIBUTORS.md file is a partial list of contributors to the
+Virtual Machine Manager for Go project. To see the full list of
+contributors, see the revision history in source control.
+
+Contributors who wish to be recognized in this file should add
+themselves (or their employer, as appropriate).
+
 ## Pull requests
 
 We accept github pull requests.
