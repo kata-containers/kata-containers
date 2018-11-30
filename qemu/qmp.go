@@ -971,6 +971,26 @@ func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAd
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
+// ExecuteNetCCWDeviceAdd adds a Net CCW device to a QEMU instance
+// using the device_add command. devID is the id of the device to add.
+// Must be valid QMP identifier. netdevID is the id of nic added by previous netdev_add.
+// queues is the number of queues of a nic.
+func (q *QMP) ExecuteNetCCWDeviceAdd(ctx context.Context, netdevID, devID, macAddr, addr, bus string, queues int) error {
+	args := map[string]interface{}{
+		"id":     devID,
+		"driver": VirtioNetCCW,
+		"netdev": netdevID,
+		"mac":    macAddr,
+		"addr":   addr,
+	}
+
+	if queues > 0 {
+		args["mq"] = "on"
+	}
+
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
 // ExecuteDeviceDel deletes guest portion of a QEMU device by sending a
 // device_del command.   devId is the identifier of the device to delete.
 // Typically it would match the devID parameter passed to an earlier call

@@ -536,6 +536,22 @@ func TestQMPNetPCIDeviceAdd(t *testing.T) {
 	<-disconnectedCh
 }
 
+func TestQMPNetCCWDeviceAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecuteNetCCWDeviceAdd(context.Background(), "br0", "virtio-0", "02:42:ac:11:00:02", "0x7", "", 8)
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks that the device_add command is correctly sent.
 //
 // We start a QMPLoop, send the device_add command and stop the loop.
