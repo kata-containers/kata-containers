@@ -34,3 +34,17 @@ func TestBlockDeviceHotplugCapability(t *testing.T) {
 		t.Fatal()
 	}
 }
+
+func TestFsSharingCapability(t *testing.T) {
+	var caps capabilities
+
+	if !caps.isFsSharingSupported() {
+		t.Fatal()
+	}
+
+	caps.setFsSharingUnsupported()
+
+	if caps.isFsSharingSupported() {
+		t.Fatal()
+	}
+}

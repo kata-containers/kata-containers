@@ -9,6 +9,7 @@ const (
 	blockDeviceSupport = 1 << iota
 	blockDeviceHotplugSupport
 	multiQueueSupport
+	fsSharingUnsupported
 )
 
 type capabilities struct {
@@ -46,4 +47,12 @@ func (caps *capabilities) isMultiQueueSupported() bool {
 
 func (caps *capabilities) setMultiQueueSupport() {
 	caps.flags |= multiQueueSupport
+}
+
+func (caps *capabilities) isFsSharingSupported() bool {
+	return caps.flags&fsSharingUnsupported == 0
+}
+
+func (caps *capabilities) setFsSharingUnsupported() {
+	caps.flags |= fsSharingUnsupported
 }
