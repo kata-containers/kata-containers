@@ -60,6 +60,16 @@ assets:
   hypervisor:
     description: "Component used to create virtual machines"
 
+    nemu:
+      description: "Modern Hypervisor for the Cloud"
+      url: "https://github.com/intel/nemu"
+      version: "release-2018-11-29"
+
+    nemu-ovmf:
+      description: "OVMF firmware used by nemu hypervisor"
+      url: "https://github.com/intel/ovmf-virt"
+      version: "0.6"
+
     qemu-lite:
       description: "lightweight VMM that uses KVM"
       url: "https://github.com/kata-containers/qemu"
