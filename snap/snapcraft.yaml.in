@@ -26,10 +26,12 @@ parts:
       export GOPATH=$(realpath ../go)
       cd ${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/runtime
       make \
-        PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr
+        PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
+        SKIP_GO_VERSION_CHECK=1
       make install \
         PREFIX=/usr \
-        DESTDIR=${SNAPCRAFT_PART_INSTALL}
+        DESTDIR=${SNAPCRAFT_PART_INSTALL} \
+        SKIP_GO_VERSION_CHECK=1
       sed -i -e '/^image =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
 
   proxy:
