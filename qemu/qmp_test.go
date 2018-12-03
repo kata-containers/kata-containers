@@ -1363,3 +1363,86 @@ func TestExecuteBalloon(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+func TestErrorDesc(t *testing.T) {
+	errDesc := "Somthing err messages"
+	errData := map[string]string{
+		"class": "GenericError",
+		"desc":  errDesc,
+	}
+
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+
+	desc, err := q.errorDesc(errData)
+	if err != nil {
+		t.Fatalf("Unexpected error '%v'", err)
+	}
+	if desc != errDesc {
+		t.Fatalf("expected '%v'\n got '%v'", errDesc, desc)
+	}
+
+	q.Shutdown()
+	<-disconnectedCh
+}
+
+func TestExecCommandFailed(t *testing.T) {
+	errDesc := "unable to map backing store for guest RAM: Cannot allocate memory"
+	errData := map[string]string{
+		"class": "GenericError",
+		"desc":  errDesc,
+	}
+
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("object-add", nil, "error", errData)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+
+	_, err := q.executeCommandWithResponse(context.Background(), "object-add", nil, nil, nil)
+	if err == nil {
+		t.Fatalf("expected error but got nil")
+	}
+
+	expectedString := "QMP command failed: " + errDesc
+	if err.Error() != expectedString {
+		t.Fatalf("expected '%v' but got '%v'", expectedString, err)
+	}
+
+	q.Shutdown()
+	<-disconnectedCh
+}
+
+func TestExecCommandFailedWithInnerError(t *testing.T) {
+	errData := map[string]string{
+		"class":            "GenericError",
+		"descFieldInvalid": "Invalid",
+	}
+
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("object-add", nil, "error", errData)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+
+	_, err := q.executeCommandWithResponse(context.Background(), "object-add", nil, nil, nil)
+	if err == nil {
+		t.Fatalf("expected error but got nil")
+	}
+
+	expectedString := "QMP command failed: "
+	if err.Error() != expectedString {
+		t.Fatalf("expected '%v' but got '%v'", expectedString, err)
+	}
+
+	q.Shutdown()
+	<-disconnectedCh
+}
