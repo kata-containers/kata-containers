@@ -8,6 +8,7 @@ themselves (or their employer, as appropriate).
 - afrosi@de.ibm.com
 - archana.m.shinde@intel.com
 - caoruidong@huawei.com
+- clare.chenhui@huawei.com
 - eric.ernst@intel.com
 - james.o.hunt@intel.com
 - jose.carlos.venegas.munoz@intel.com
