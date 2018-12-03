@@ -88,6 +88,40 @@ test-initrd-only:
 list-distros:
 	@ $(ROOTFS_BUILDER) -l
 
+DESTDIR := /
+KATADIR := /usr/libexec/kata-containers
+OSBUILDER_DIR := $(KATADIR)/osbuilder
+INSTALL_DIR :=$(DESTDIR)/$(OSBUILDER_DIR)
+DIST_CONFIGS:= $(wildcard rootfs-builder/*/config.sh)
+
+SCRIPTS :=
+SCRIPTS += rootfs-builder/rootfs.sh
+SCRIPTS += image-builder/image_builder.sh
+SCRIPTS += initrd-builder/initrd_builder.sh
+
+FILES :=
+FILES += rootfs-builder/versions.txt
+FILES += scripts/lib.sh
+
+define INSTALL_FILE
+	echo "Installing $(abspath $2/$1)";
+	install -m 644 -D $1 $2/$1;
+endef
+
+define INSTALL_SCRIPT
+	echo "Installing $(abspath $2/$1)";
+	install -m 755 -D $1 $(abspath $2/$1);
+endef
+
+.PHONY: install-scripts
+install-scripts:
+	@echo "Installing scripts"
+	@$(foreach f,$(SCRIPTS),$(call INSTALL_SCRIPT,$f,$(INSTALL_DIR)))
+	@echo "Installing helper files"
+	@$(foreach f,$(FILES),$(call INSTALL_FILE,$f,$(INSTALL_DIR)))
+	@echo "Installing installing config files"
+	@$(foreach f,$(DIST_CONFIGS),$(call INSTALL_FILE,$f,$(INSTALL_DIR)))
+
 .PHONY: clean
 clean:
 	rm -rf $(DISTRO_ROOTFS_MARKER) $(DISTRO_ROOTFS) $(DISTRO_IMAGE) $(DISTRO_INITRD)
