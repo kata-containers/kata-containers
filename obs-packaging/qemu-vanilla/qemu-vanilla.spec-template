@@ -42,6 +42,7 @@ BuildRequires : libnuma-devel
 %else
 BuildRequires : numactl-devel
 %endif
+BuildRequires : python
 BuildRequires : python-devel
 BuildRequires : zlib-devel
 BuildRequires : pkgconfig(pixman-1)
