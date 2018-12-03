@@ -4,6 +4,7 @@
 /cli/config/configuration.toml
 /cli/config-generated.go
 /cli/coverage.html
+/containerd-shim-kata-v2
 /data/kata-collect-data.sh
 /kata-netmon
 /kata-runtime
