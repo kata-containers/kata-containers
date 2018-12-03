@@ -3,116 +3,266 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:81f8c061c3d18ed1710957910542bc17d2b789c6cd19e0f654c30b35fd255ca5"
   name = "github.com/Azure/go-ansiterm"
-  packages = [".","winterm"]
+  packages = [
+    ".",
+    "winterm",
+  ]
+  pruneopts = "NT"
   revision = "d6e3b3328b783f23731bc4d058875b0371ff8109"
 
 [[projects]]
+  digest = "1:bc4aca7160cb2b28276850ff96acabaf834402a7edcf59bf82c31fbe7916f906"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
+  pruneopts = "NT"
   revision = "346938d642f2ec3594ed81d874461961cd0faa76"
   version = "v1.1.0"
 
 [[projects]]
   branch = "master"
+  digest = "1:760f7542d276f521255498123ffa6998d79d77d05c2ce0ece88db7e9b7bdf9e9"
   name = "github.com/docker/docker"
   packages = ["pkg/term/windows"]
+  pruneopts = "NT"
   revision = "bc183a0062c1283cfc47f42ec78501868629dd2b"
 
 [[projects]]
+  digest = "1:b30982388481180ce6d5fdd719e97896c4a1282f00df20a2fdcc5ce4634aa6eb"
   name = "github.com/gogo/protobuf"
-  packages = ["gogoproto","proto","protoc-gen-gogo/descriptor","sortkeys","types"]
+  packages = [
+    "gogoproto",
+    "proto",
+    "protoc-gen-gogo/descriptor",
+    "sortkeys",
+    "types",
+  ]
+  pruneopts = "NT"
   revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
 
 [[projects]]
   branch = "master"
+  digest = "1:62dda88bebd48ab48b133f91d884b3e5e8df7ff71cab0f7fba3df06d9ef0df16"
   name = "github.com/golang/protobuf"
-  packages = ["proto","ptypes","ptypes/any","ptypes/duration","ptypes/timestamp"]
+  packages = [
+    "proto",
+    "ptypes",
+    "ptypes/any",
+    "ptypes/duration",
+    "ptypes/timestamp",
+  ]
+  pruneopts = "NT"
   revision = "1e59b77b52bf8e4b449a57e6f79f21226d571845"
 
 [[projects]]
-  name = "github.com/kata-containers/agent"
-  packages = ["protocols/client","protocols/grpc","protocols/mockserver"]
-  revision = "8f22514ae5790f3b6953cf93692e663fa29469e3"
+  branch = "master"
+  digest = "1:28cabbdc6fca3fb9661f6861d948e22cacba6c4fe801594123d7ee314518300c"
+  name = "github.com/grpc-ecosystem/grpc-opentracing"
+  packages = ["go/otgrpc"]
+  pruneopts = "NT"
+  revision = "8e809c8a86450a29b90dcc9efbf062d0fe6d9746"
 
 [[projects]]
+  digest = "1:63e0b20cfa3fe456480edf93a7995f776afb610e49da8e3da04d8904472a44cc"
+  name = "github.com/hashicorp/yamux"
+  packages = ["."]
+  pruneopts = "NT"
+  revision = "cc6d2ea263b2471faabce371255777a365bf8306"
+
+[[projects]]
+  digest = "1:adc8d7c6bee7c3c86b8802b827ec21b4b1417852c294bc67600d64f0cc569103"
+  name = "github.com/kata-containers/agent"
+  packages = [
+    "pkg/types",
+    "protocols/client",
+    "protocols/grpc",
+    "protocols/mockserver",
+  ]
+  pruneopts = "NT"
+  revision = "0ff30063f7e71eb0f48d60c21156cd18b8a58024"
+
+[[projects]]
+  digest = "1:f0491ec759a06331ed36c81e8b0846058a36b4ae9d9b8ca4a60c46d223e4fcea"
   name = "github.com/kr/pty"
   packages = ["."]
+  pruneopts = "NT"
   revision = "1278f20d9cf7455f0465f3bf74a73d1eeb555c0f"
   version = "v1.1.0"
 
 [[projects]]
+  digest = "1:3a1206c559dd966160406d9d08a0b61ed6af6db2f5e0865792f78e0400530412"
   name = "github.com/mdlayher/vsock"
   packages = ["."]
+  pruneopts = "NT"
   revision = "738c88d6e4cfd60e8124a5344fa10d205fd828b9"
 
 [[projects]]
+  digest = "1:4cfe9622e2fc395f055f823013c33118ccffb7bc4c0da242c4a13203ab2c6692"
   name = "github.com/moby/moby"
   packages = ["pkg/term"]
+  pruneopts = "NT"
   revision = "092cba3727bb9b4a2f0e922cd6c0f93ea270e363"
   version = "v1.13.1"
 
 [[projects]]
+  digest = "1:c0b1724c2fb5c355085c7d529a6f4b7dff4eb28227b8859c930f40f5e457cd76"
   name = "github.com/opencontainers/runtime-spec"
   packages = ["specs-go"]
-  revision = "4e3b9264a330d094b0386c3703c5f379119711e8"
+  pruneopts = "NT"
+  revision = "5806c35637336642129d03657419829569abc5aa"
 
 [[projects]]
+  digest = "1:6e36c3eab25478d363e7eb669f253d9f9a620e640b0e1d86d3e909cbb1a56ab6"
+  name = "github.com/opentracing/opentracing-go"
+  packages = [
+    ".",
+    "ext",
+    "log",
+  ]
+  pruneopts = "NT"
+  revision = "1949ddbfd147afd4d964a9f00b24eb291e0e7c38"
+  version = "v1.0.2"
+
+[[projects]]
+  digest = "1:0028cb19b2e4c3112225cd871870f2d9cf49b9b4276531f03438a88e94be86fe"
   name = "github.com/pmezard/go-difflib"
   packages = ["difflib"]
+  pruneopts = "NT"
   revision = "792786c7400a136282c1664665ae0a8db921c6c2"
   version = "v1.0.0"
 
 [[projects]]
+  digest = "1:87d2486e70b24aefe104d9ce5cdb0928385d86f5763ec938cc4d4c03a8a7724d"
   name = "github.com/sirupsen/logrus"
-  packages = [".","hooks/syslog"]
+  packages = [
+    ".",
+    "hooks/syslog",
+  ]
+  pruneopts = "NT"
   revision = "d682213848ed68c0a260ca37d6dd5ace8423f5ba"
   version = "v1.0.4"
 
 [[projects]]
+  digest = "1:76192bb31efa333288421ef0a5bafea6d803610f2f33678ab2aac4db6716bb27"
   name = "github.com/stretchr/testify"
   packages = ["assert"]
+  pruneopts = "NT"
   revision = "b91bfb9ebec76498946beb6af7c0230c7cc7ba6c"
   version = "v1.2.0"
 
 [[projects]]
   branch = "master"
+  digest = "1:c0127a099bffb96b4e8c3a5c9104df389fbc69ecdfce20fcd12c864e9419ce25"
   name = "golang.org/x/crypto"
   packages = ["ssh/terminal"]
+  pruneopts = "NT"
   revision = "13931e22f9e72ea58bb73048bc752b48c6d4d4ac"
 
 [[projects]]
+  digest = "1:439245ff2f6a128d4a6590c48ca1218a7fa4f57b8e7db2fd8221991207f96e58"
   name = "golang.org/x/net"
-  packages = ["context","http2","http2/hpack","idna","internal/timeseries","lex/httplex","trace"]
+  packages = [
+    "context",
+    "http2",
+    "http2/hpack",
+    "idna",
+    "internal/timeseries",
+    "lex/httplex",
+    "trace",
+  ]
+  pruneopts = "NT"
   revision = "a8b9294777976932365dabb6640cf1468d95c70f"
 
 [[projects]]
   branch = "master"
+  digest = "1:ee1d60ddc5117221f974653c278894ba9e253d9d81dc5c0ee20b80d3bf537611"
   name = "golang.org/x/sys"
-  packages = ["unix","windows"]
+  packages = [
+    "unix",
+    "windows",
+  ]
+  pruneopts = "NT"
   revision = "810d7000345868fc619eb81f46307107118f4ae1"
 
 [[projects]]
   branch = "master"
+  digest = "1:cce417f0bf93e01bad4737220aea56fd113c34866ff514398085c49a04825b02"
   name = "golang.org/x/text"
-  packages = ["collate","collate/build","internal/colltab","internal/gen","internal/tag","internal/triegen","internal/ucd","language","secure/bidirule","transform","unicode/bidi","unicode/cldr","unicode/norm","unicode/rangetable"]
+  packages = [
+    "collate",
+    "collate/build",
+    "internal/colltab",
+    "internal/gen",
+    "internal/tag",
+    "internal/triegen",
+    "internal/ucd",
+    "language",
+    "secure/bidirule",
+    "transform",
+    "unicode/bidi",
+    "unicode/cldr",
+    "unicode/norm",
+    "unicode/rangetable",
+  ]
+  pruneopts = "NT"
   revision = "e19ae1496984b1c655b8044a65c0300a3c878dd3"
 
 [[projects]]
   branch = "master"
+  digest = "1:d9b986751c1c574c3e43e124a331d0b9eb2f6c39d4de9a5108646d89e56679a7"
   name = "google.golang.org/genproto"
   packages = ["googleapis/rpc/status"]
+  pruneopts = "NT"
   revision = "a8101f21cf983e773d0c1133ebc5424792003214"
 
 [[projects]]
+  digest = "1:03e953cd9dada02b537584e076198abe4bf084610bb0f365e03dd5233203e2d5"
   name = "google.golang.org/grpc"
-  packages = [".","balancer","balancer/roundrobin","codes","connectivity","credentials","encoding","grpclb/grpc_lb_v1/messages","grpclog","internal","keepalive","metadata","naming","peer","resolver","resolver/dns","resolver/passthrough","stats","status","tap","transport"]
-  revision = "5a9f7b402fe85096d2e1d0383435ee1876e863d0"
-  version = "v1.8.0"
+  packages = [
+    ".",
+    "balancer",
+    "balancer/base",
+    "balancer/roundrobin",
+    "codes",
+    "connectivity",
+    "credentials",
+    "encoding",
+    "encoding/proto",
+    "grpclb/grpc_lb_v1/messages",
+    "grpclog",
+    "internal",
+    "keepalive",
+    "metadata",
+    "naming",
+    "peer",
+    "resolver",
+    "resolver/dns",
+    "resolver/passthrough",
+    "stats",
+    "status",
+    "tap",
+    "transport",
+  ]
+  pruneopts = "NT"
+  revision = "d11072e7ca9811b1100b80ca0269ac831f06d024"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ee82d5aef326424a4a8e96aa896b9e4879e2db90bdb2f697e55d2f08860aa8d3"
+  input-imports = [
+    "github.com/kata-containers/agent/protocols/client",
+    "github.com/kata-containers/agent/protocols/grpc",
+    "github.com/kata-containers/agent/protocols/mockserver",
+    "github.com/kr/pty",
+    "github.com/moby/moby/pkg/term",
+    "github.com/sirupsen/logrus",
+    "github.com/sirupsen/logrus/hooks/syslog",
+    "github.com/stretchr/testify/assert",
+    "golang.org/x/net/context",
+    "golang.org/x/sys/unix",
+    "google.golang.org/grpc",
+    "google.golang.org/grpc/codes",
+  ]
   solver-name = "gps-cdcl"
   solver-version = 1

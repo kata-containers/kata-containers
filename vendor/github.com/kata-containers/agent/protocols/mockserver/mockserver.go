@@ -15,13 +15,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	pbTypes "github.com/kata-containers/agent/pkg/types"
 	pb "github.com/kata-containers/agent/protocols/grpc"
 )
 
 const (
+	// MockServerVersion specifies the version of the fake server
 	MockServerVersion = "mock.0.1"
-
-	podStartingPid = 100
 )
 
 // If an rpc changes any pod/container/process, take a write lock.
@@ -47,6 +47,7 @@ type mockServer struct {
 	pod *pod
 }
 
+// NewMockServer creates a new gRPC server
 func NewMockServer() *grpc.Server {
 	mock := &mockServer{}
 	serv := grpc.NewServer()
@@ -63,48 +64,48 @@ func validateOCISpec(spec *pb.Spec) error {
 	return nil
 }
 
-func (m *mockServer) checkExist(containerId, execId string, createContainer, checkProcess bool) error {
+func (m *mockServer) checkExist(containerID, execID string, createContainer, checkProcess bool) error {
 	if m.pod == nil {
 		return status.Error(codes.NotFound, "pod not created")
 	}
-	if containerId == "" {
+	if containerID == "" {
 		return status.Error(codes.InvalidArgument, "container ID must be set")
 	}
-	if checkProcess && execId == "0" {
+	if checkProcess && execID == "0" {
 		return status.Error(codes.InvalidArgument, "process ID must be set")
 	}
 
 	// Check container existence
 	if createContainer {
-		if m.pod.containers[containerId] != nil {
-			return status.Errorf(codes.AlreadyExists, "container ID %s already taken", containerId)
+		if m.pod.containers[containerID] != nil {
+			return status.Errorf(codes.AlreadyExists, "container ID %s already taken", containerID)
 		}
 		return nil
-	} else if m.pod.containers[containerId] == nil {
-		return status.Errorf(codes.NotFound, "container %s does not exist", containerId)
+	} else if m.pod.containers[containerID] == nil {
+		return status.Errorf(codes.NotFound, "container %s does not exist", containerID)
 	}
 
 	// Check process existence
 	if checkProcess {
-		c := m.pod.containers[containerId]
-		if c.proc[execId] == nil {
-			return status.Errorf(codes.NotFound, "process %s does not exist", execId)
+		c := m.pod.containers[containerID]
+		if c.proc[execID] == nil {
+			return status.Errorf(codes.NotFound, "process %s does not exist", execID)
 		}
 	}
 
 	return nil
 }
 
-func (m *mockServer) processExist(containerId string, execId string) error {
-	return m.checkExist(containerId, execId, false, true)
+func (m *mockServer) processExist(containerID string, execID string) error {
+	return m.checkExist(containerID, execID, false, true)
 }
 
-func (m *mockServer) containerExist(containerId string) error {
-	return m.checkExist(containerId, "0", false, false)
+func (m *mockServer) containerExist(containerID string) error {
+	return m.checkExist(containerID, "0", false, false)
 }
 
-func (m *mockServer) containerNonExist(containerId string) error {
-	return m.checkExist(containerId, "0", true, false)
+func (m *mockServer) containerNonExist(containerID string) error {
+	return m.checkExist(containerID, "0", true, false)
 }
 
 func (m *mockServer) podExist() error {
@@ -286,54 +287,44 @@ func (m *mockServer) DestroySandbox(ctx context.Context, req *pb.DestroySandboxR
 	return &types.Empty{}, nil
 }
 
-func (m *mockServer) AddInterface(context.Context, *pb.AddInterfaceRequest) (*types.Empty, error) {
+func (m *mockServer) AddInterface(context.Context, *pb.AddInterfaceRequest) (*pbTypes.Interface, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
 
-	return &types.Empty{}, nil
+	return nil, nil
 }
 
-func (m *mockServer) RemoveInterface(context.Context, *pb.RemoveInterfaceRequest) (*types.Empty, error) {
+func (m *mockServer) RemoveInterface(context.Context, *pb.RemoveInterfaceRequest) (*pbTypes.Interface, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
 
-	return &types.Empty{}, nil
+	return nil, nil
 }
 
-func (m *mockServer) RemoveRoute(context.Context, *pb.RouteRequest) (*types.Empty, error) {
+func (m *mockServer) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*pbTypes.Interface, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
 
-	return &types.Empty{}, nil
+	return nil, nil
 }
 
-func (m *mockServer) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*types.Empty, error) {
+func (m *mockServer) UpdateRoutes(ctx context.Context, req *pb.UpdateRoutesRequest) (*pb.Routes, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
 	if err := m.podExist(); err != nil {
 		return nil, err
 	}
 
-	return &types.Empty{}, nil
-}
-
-func (m *mockServer) AddRoute(ctx context.Context, req *pb.RouteRequest) (*types.Empty, error) {
-	mockLock.RLock()
-	defer mockLock.RUnlock()
-	if err := m.podExist(); err != nil {
-		return nil, err
-	}
-
-	return &types.Empty{}, nil
+	return nil, nil
 }
 
 func (m *mockServer) OnlineCPUMem(ctx context.Context, req *pb.OnlineCPUMemRequest) (*types.Empty, error) {
@@ -344,4 +335,88 @@ func (m *mockServer) OnlineCPUMem(ctx context.Context, req *pb.OnlineCPUMemReque
 	}
 
 	return &types.Empty{}, nil
+}
+
+func (m *mockServer) ListProcesses(ctx context.Context, req *pb.ListProcessesRequest) (*pb.ListProcessesResponse, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
+	if err := m.podExist(); err != nil {
+		return nil, err
+	}
+
+	return &pb.ListProcessesResponse{}, nil
+}
+
+func (m *mockServer) UpdateContainer(ctx context.Context, req *pb.UpdateContainerRequest) (*types.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
+	if err := m.podExist(); err != nil {
+		return nil, err
+	}
+
+	return &types.Empty{}, nil
+}
+func (m *mockServer) StatsContainer(ctx context.Context, req *pb.StatsContainerRequest) (*pb.StatsContainerResponse, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
+	if err := m.podExist(); err != nil {
+		return nil, err
+	}
+
+	return &pb.StatsContainerResponse{}, nil
+
+}
+
+func (m *mockServer) PauseContainer(ctx context.Context, req *pb.PauseContainerRequest) (*types.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
+	if err := m.podExist(); err != nil {
+		return nil, err
+	}
+
+	return &types.Empty{}, nil
+}
+
+func (m *mockServer) ResumeContainer(ctx context.Context, req *pb.ResumeContainerRequest) (*types.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
+	if err := m.podExist(); err != nil {
+		return nil, err
+	}
+
+	return &types.Empty{}, nil
+}
+
+func (m *mockServer) ReseedRandomDev(ctx context.Context, req *pb.ReseedRandomDevRequest) (*types.Empty, error) {
+	return &types.Empty{}, nil
+}
+
+func (m *mockServer) ListInterfaces(ctx context.Context, req *pb.ListInterfacesRequest) (*pb.Interfaces, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
+	if err := m.podExist(); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+func (m *mockServer) ListRoutes(ctx context.Context, req *pb.ListRoutesRequest) (*pb.Routes, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
+	if err := m.podExist(); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+func (m *mockServer) GetGuestDetails(ctx context.Context, req *pb.GuestDetailsRequest) (*pb.GuestDetailsResponse, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
+	if err := m.podExist(); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }

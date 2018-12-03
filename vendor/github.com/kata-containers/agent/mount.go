@@ -12,16 +12,17 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"time"
 
-	"github.com/kata-containers/agent/pkg/uevent"
 	pb "github.com/kata-containers/agent/protocols/grpc"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+	"google.golang.org/grpc/codes"
+	grpcStatus "google.golang.org/grpc/status"
 )
 
 const (
 	type9pFs       = "9p"
+	typeTmpFs      = "tmpfs"
 	devPrefix      = "/dev/"
 	timeoutHotplug = 3
 	mountPerm      = os.FileMode(0755)
@@ -57,29 +58,68 @@ var flagList = map[string]int{
 	"runbindable": unix.MS_UNBINDABLE | unix.MS_REC,
 }
 
+func createDestinationDir(dest string) error {
+	targetPath, _ := filepath.Split(dest)
+
+	return os.MkdirAll(targetPath, mountPerm)
+}
+
 // mount mounts a source in to a destination. This will do some bookkeeping:
 // * evaluate all symlinks
 // * ensure the source exists
 func mount(source, destination, fsType string, flags int, options string) error {
 	var absSource string
 
-	if fsType != type9pFs {
-		absSource, err := filepath.EvalSymlinks(source)
-		if err != nil {
-			return fmt.Errorf("Could not resolve symlink for source %v", source)
-		}
+	// Log before validation. This is useful to debug cases where the gRPC
+	// protocol version being used by the client is out-of-sync with the
+	// agents version. gRPC message members are strictly ordered, so it's
+	// quite possible that if the protocol changes, the client may
+	// try to pass a valid mountpoint, but the gRPC layer may change that
+	// through the member ordering to be a mount *option* for example.
+	agentLog.WithFields(logrus.Fields{
+		"mount-source":      source,
+		"mount-destination": destination,
+		"mount-fstype":      fsType,
+		"mount-flags":       flags,
+		"mount-options":     options,
+	}).Debug()
 
-		if err := ensureDestinationExists(absSource, destination, fsType); err != nil {
-			return fmt.Errorf("Could not create destination mount point: %v: %v",
-				destination, err)
-		}
-	} else {
-		absSource = source
+	if source == "" {
+		return fmt.Errorf("need mount source")
 	}
 
-	if err := syscall.Mount(absSource, destination,
+	if destination == "" {
+		return fmt.Errorf("need mount destination")
+	}
+
+	if fsType == "" {
+		return fmt.Errorf("need mount FS type")
+	}
+
+	var err error
+	switch fsType {
+	case type9pFs:
+		if err = createDestinationDir(destination); err != nil {
+			return err
+		}
+		absSource = source
+	case typeTmpFs:
+		absSource = source
+	default:
+		absSource, err = filepath.EvalSymlinks(source)
+		if err != nil {
+			return grpcStatus.Errorf(codes.Internal, "Could not resolve symlink for source %v", source)
+		}
+
+		if err = ensureDestinationExists(absSource, destination, fsType); err != nil {
+			return grpcStatus.Errorf(codes.Internal, "Could not create destination mount point: %v: %v",
+				destination, err)
+		}
+	}
+
+	if err = syscall.Mount(absSource, destination,
 		fsType, uintptr(flags), options); err != nil {
-		return fmt.Errorf("Could not bind mount %v to %v: %v",
+		return grpcStatus.Errorf(codes.Internal, "Could not mount %v to %v: %v",
 			absSource, destination, err)
 	}
 
@@ -91,14 +131,13 @@ func mount(source, destination, fsType string, flags int, options string) error 
 func ensureDestinationExists(source, destination string, fsType string) error {
 	fileInfo, err := os.Stat(source)
 	if err != nil {
-		return fmt.Errorf("could not stat source location: %v",
+		return grpcStatus.Errorf(codes.Internal, "could not stat source location: %v",
 			source)
 	}
 
-	targetPathParent, _ := filepath.Split(destination)
-	if err := os.MkdirAll(targetPathParent, mountPerm); err != nil {
-		return fmt.Errorf("could not create parent directory: %v",
-			targetPathParent)
+	if err := createDestinationDir(destination); err != nil {
+		return grpcStatus.Errorf(codes.Internal, "could not create parent directory: %v",
+			destination)
 	}
 
 	if fsType != "bind" || fileInfo.IsDir() {
@@ -113,72 +152,6 @@ func ensureDestinationExists(source, destination string, fsType string) error {
 
 		file.Close()
 	}
-	return nil
-}
-
-func waitForDevice(devicePath string) error {
-	deviceName := strings.TrimPrefix(devicePath, devPrefix)
-
-	if _, err := os.Stat(devicePath); err == nil {
-		return nil
-	}
-
-	uEvHandler, err := uevent.NewHandler()
-	if err != nil {
-		return err
-	}
-	defer uEvHandler.Close()
-
-	fieldLogger := agentLog.WithField("device", deviceName)
-
-	// Check if the device already exists.
-	if _, err := os.Stat(devicePath); err == nil {
-		fieldLogger.Info("Device already hotplugged, quit listening")
-		return nil
-	}
-
-	fieldLogger.Info("Started listening for uevents for device hotplug")
-
-	// Channel to signal when desired uevent has been received.
-	done := make(chan bool)
-
-	go func() {
-		// This loop will be either ended if the hotplugged device is
-		// found by listening to the netlink socket, or it will end
-		// after the function returns and the uevent handler is closed.
-		for {
-			uEv, err := uEvHandler.Read()
-			if err != nil {
-				fieldLogger.Error(err)
-				continue
-			}
-
-			fieldLogger = fieldLogger.WithFields(logrus.Fields{
-				"uevent-action":    uEv.Action,
-				"uevent-devpath":   uEv.DevPath,
-				"uevent-subsystem": uEv.SubSystem,
-				"uevent-seqnum":    uEv.SeqNum,
-			})
-
-			fieldLogger.Info("Got uevent")
-
-			if uEv.Action == "add" &&
-				filepath.Base(uEv.DevPath) == deviceName {
-				fieldLogger.Info("Hotplug event received")
-				break
-			}
-		}
-
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(time.Duration(timeoutHotplug) * time.Second):
-		return fmt.Errorf("Timeout reached after %ds waiting for device %s",
-			timeoutHotplug, deviceName)
-	}
-
 	return nil
 }
 
@@ -201,42 +174,6 @@ func parseMountFlagsAndOptions(optionList []string) (int, string, error) {
 	return flags, strings.Join(options, ","), nil
 }
 
-func addMounts(mounts []*pb.Storage) ([]string, error) {
-	var mountList []string
-
-	for _, mnt := range mounts {
-		if mnt == nil {
-			continue
-		}
-
-		// Consider all other fs types as being hotpluggable, meaning
-		// we should wait for them to show up before trying to mount
-		// them.
-		if mnt.Fstype != "" &&
-			mnt.Fstype != "bind" &&
-			mnt.Fstype != type9pFs {
-			if err := waitForDevice(mnt.Source); err != nil {
-				return nil, err
-			}
-		}
-
-		flags, options, err := parseMountFlagsAndOptions(mnt.Options)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := mount(mnt.Source, mnt.MountPoint, mnt.Fstype,
-			flags, options); err != nil {
-			return nil, err
-		}
-
-		// Prepend mount point to mount list.
-		mountList = append([]string{mnt.MountPoint}, mountList...)
-	}
-
-	return mountList, nil
-}
-
 func removeMounts(mounts []string) error {
 	for _, mount := range mounts {
 		if err := syscall.Unmount(mount, 0); err != nil {
@@ -245,4 +182,112 @@ func removeMounts(mounts []string) error {
 	}
 
 	return nil
+}
+
+// storageHandler is the type of callback to be defined to handle every
+// type of storage driver.
+type storageHandler func(storage pb.Storage, s *sandbox) (string, error)
+
+// storageHandlerList lists the supported drivers.
+var storageHandlerList = map[string]storageHandler{
+	driver9pType:        virtio9pStorageHandler,
+	driverBlkType:       virtioBlkStorageHandler,
+	driverSCSIType:      virtioSCSIStorageHandler,
+	driverEphemeralType: ephemeralStorageHandler,
+}
+
+func ephemeralStorageHandler(storage pb.Storage, s *sandbox) (string, error) {
+	s.Lock()
+	defer s.Unlock()
+	newStorage := s.setSandboxStorage(storage.MountPoint)
+
+	if newStorage {
+		var err error
+		if err = os.MkdirAll(storage.MountPoint, os.ModePerm); err == nil {
+			_, err = commonStorageHandler(storage)
+		}
+		return "", err
+	}
+	return "", nil
+}
+
+// virtio9pStorageHandler handles the storage for 9p driver.
+func virtio9pStorageHandler(storage pb.Storage, s *sandbox) (string, error) {
+	return commonStorageHandler(storage)
+}
+
+// virtioBlkStorageHandler handles the storage for blk driver.
+func virtioBlkStorageHandler(storage pb.Storage, s *sandbox) (string, error) {
+	// Get the device node path based on the PCI address provided
+	// in Storage Source
+	devPath, err := getPCIDeviceName(s, storage.Source)
+	if err != nil {
+		return "", err
+	}
+	storage.Source = devPath
+
+	return commonStorageHandler(storage)
+}
+
+// virtioSCSIStorageHandler handles the storage for scsi driver.
+func virtioSCSIStorageHandler(storage pb.Storage, s *sandbox) (string, error) {
+	// Retrieve the device path from SCSI address.
+	devPath, err := getSCSIDevPath(storage.Source)
+	if err != nil {
+		return "", err
+	}
+	storage.Source = devPath
+
+	return commonStorageHandler(storage)
+}
+
+func commonStorageHandler(storage pb.Storage) (string, error) {
+	// Mount the storage device.
+	if err := mountStorage(storage); err != nil {
+		return "", err
+	}
+
+	return storage.MountPoint, nil
+}
+
+// mountStorage performs the mount described by the storage structure.
+func mountStorage(storage pb.Storage) error {
+	flags, options, err := parseMountFlagsAndOptions(storage.Options)
+	if err != nil {
+		return err
+	}
+
+	return mount(storage.Source, storage.MountPoint, storage.Fstype, flags, options)
+}
+
+// addStorages takes a list of storages passed by the caller, and perform the
+// associated operations such as waiting for the device to show up, and mount
+// it to a specific location, according to the type of handler chosen, and for
+// each storage.
+func addStorages(storages []*pb.Storage, s *sandbox) ([]string, error) {
+	var mountList []string
+
+	for _, storage := range storages {
+		if storage == nil {
+			continue
+		}
+
+		devHandler, ok := storageHandlerList[storage.Driver]
+		if !ok {
+			return nil, grpcStatus.Errorf(codes.InvalidArgument,
+				"Unknown storage driver %q", storage.Driver)
+		}
+
+		mountPoint, err := devHandler(*storage, s)
+		if err != nil {
+			return nil, err
+		}
+
+		if mountPoint != "" {
+			// Prepend mount point to mount list.
+			mountList = append([]string{mountPoint}, mountList...)
+		}
+	}
+
+	return mountList, nil
 }

@@ -25,7 +25,7 @@
   go-tests = true
 
 [[constraint]]
-  revision = "8f22514ae5790f3b6953cf93692e663fa29469e3"
+  revision = "0ff30063f7e71eb0f48d60c21156cd18b8a58024"
   name = "github.com/kata-containers/agent"
 
 [[constraint]]
@@ -42,4 +42,4 @@
 
 [[constraint]]
   name = "google.golang.org/grpc"
-  version = "1.8.0"
+  revision = "d11072e7ca9811b1100b80ca0269ac831f06d024"
