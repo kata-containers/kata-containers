@@ -3,7 +3,8 @@
 
 # Shim
 
-This project implements the shim for kata project.
+This project implements a shim called `kata-shim` for the [Kata
+Containers](https://katacontainers.io/) project.
 
-The goal for this component is to handle stdio and signals of the
-container process.
+The shim runs in the host environment, handling standard I/O and signals on
+behalf of the container process which runs inside the virtual machine.
