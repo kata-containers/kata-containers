@@ -243,6 +243,10 @@ func (p *gRPCProxy) GetGuestDetails(ctx context.Context, req *pb.GuestDetailsReq
 	return &pb.GuestDetailsResponse{}, nil
 }
 
+func (p *gRPCProxy) SetGuestDateTime(ctx context.Context, req *pb.SetGuestDateTimeRequest) (*gpb.Empty, error) {
+	return &gpb.Empty{}, nil
+}
+
 func gRPCRegister(s *grpc.Server, srv interface{}) {
 	switch g := srv.(type) {
 	case *gRPCProxy:
@@ -262,6 +266,7 @@ var reqList = []interface{}{
 	&pb.CheckRequest{},
 	&pb.WaitProcessRequest{},
 	&pb.StatsContainerRequest{},
+	&pb.SetGuestDateTimeRequest{},
 }
 
 func TestKataAgentSendReq(t *testing.T) {
