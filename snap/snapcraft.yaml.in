@@ -25,7 +25,6 @@ parts:
       unset GOROOT
       export GOPATH=$(realpath ../go)
       cd ${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/runtime
-      QEMU_ARCH=$(arch)
       make \
         PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr
       make install \
