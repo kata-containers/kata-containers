@@ -6,14 +6,15 @@ package docker
 
 import (
 	"fmt"
-	. "github.com/kata-containers/tests"
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/extensions/table"
-	. "github.com/onsi/gomega"
 	"math"
 	"os"
 	"strconv"
 	"strings"
+
+	. "github.com/kata-containers/tests"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
+	. "github.com/onsi/gomega"
 )
 
 const (
@@ -26,16 +27,9 @@ const (
 	sysfsMemPath      = "/sys/devices/system/memory/"
 )
 
-func withDockerMemory(dockerMem int64, fail bool) TableEntry {
-	var msg string
-
-	if fail {
-		msg = "hotplug memory when create containers should fail"
-	} else {
-		msg = "hotplug memory when create containers should not fail"
-	}
-
-	return Entry(msg, dockerMem, fail)
+func withDockerMemory(dockerMem int64) TableEntry {
+	msg := "hotplug memory when create containers should not fail"
+	return Entry(msg, dockerMem)
 }
 
 func withUpdateMemoryConstraints(dockerMem int64, updateMem int64, fail bool) TableEntry {
@@ -55,12 +49,18 @@ var _ = Describe("Hotplug memory when create containers", func() {
 		args         []string
 		id           string
 		defaultMemSz int64
+		memBlockSize int64
+		exitCode     int
+		stdout       string
+		err          error
+		data         string
+		memBlockNum  int
 	)
 
 	BeforeEach(func() {
 		id = randomDockerName()
 		defaultMemSz = int64(KataConfig.Hypervisor[DefaultHypervisor].DefaultMemSz) << 20
-		Expect(defaultMemSz).To(BeNumerically(">", 0))
+		Expect(defaultMemSz).To(BeNumerically(">", int64(0)))
 	})
 
 	AfterEach(func() {
@@ -68,21 +68,21 @@ var _ = Describe("Hotplug memory when create containers", func() {
 	})
 
 	DescribeTable("Hotplug memory when create containers",
-		func(dockerMem int64, fail bool) {
+		func(dockerMem int64) {
 			args = []string{"--name", id, "-tid", "--rm", "-m", fmt.Sprintf("%d", dockerMem), Image}
-			_, _, exitCode := dockerRun(args...)
+			_, _, exitCode = dockerRun(args...)
 			Expect(exitCode).To(BeZero())
 
-			stdout, _, exitCode := dockerExec(id, "cat", memBlockSizePath)
+			stdout, _, exitCode = dockerExec(id, "cat", memBlockSizePath)
 			Expect(exitCode).To(BeZero())
-			data := strings.Trim(stdout, "\n\t ")
-			memBlockSize, err := strconv.ParseInt(data, 16, 64)
-			Expect(err).To(BeNil())
+			data = strings.Trim(stdout, "\n\t ")
+			memBlockSize, err = strconv.ParseInt(data, 16, 64)
+			Expect(err).ToNot(HaveOccurred())
 
 			stdout, _, exitCode = dockerExec(id, "sh", "-c", fmt.Sprintf("find %v -name memory* | wc -l", sysfsMemPath))
 			Expect(exitCode).To(BeZero())
-			memBlockNum, err := strconv.Atoi(strings.Trim(stdout, "\n\t "))
-			Expect(err).To(BeNil())
+			memBlockNum, err = strconv.Atoi(strings.Trim(stdout, "\n\t "))
+			Expect(err).ToNot(HaveOccurred())
 			memBlockNum--
 
 			mem := int64(math.Ceil(float64(dockerMem)/float64(memBlockSize))) * memBlockSize
@@ -90,10 +90,10 @@ var _ = Describe("Hotplug memory when create containers", func() {
 
 			Expect(RemoveDockerContainer(id)).To(BeTrue())
 		},
-		withDockerMemory(100*1024*1024, shouldNotFail),
-		withDockerMemory(200*1024*1024, shouldNotFail),
-		withDockerMemory(500*1024*1024, shouldNotFail),
-		withDockerMemory(1024*1024*1024, shouldNotFail),
+		withDockerMemory(100*1024*1024),
+		withDockerMemory(200*1024*1024),
+		withDockerMemory(500*1024*1024),
+		withDockerMemory(1024*1024*1024),
 	)
 })
 
