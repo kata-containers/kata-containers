@@ -50,7 +50,7 @@ get_kata_config_version() {
 }
 
 get_packaged_kernel_version() {
-	if [ "$ID" == "ubuntu" ]; then
+	if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
 		kernel_version=$(sudo apt-cache madison $packaged_kernel | awk '{print $3}' | cut -d'-' -f1)
 	elif [ "$ID" == "fedora" ]; then
 		kernel_version=$(sudo dnf --showduplicate list ${packaged_kernel}.${kernel_arch} |
@@ -76,7 +76,7 @@ build_and_install_kernel() {
 install_packaged_kernel(){
 	info "Install packaged kernel version"
 	rc=0
-	if [ "$ID"  == "ubuntu" ]; then
+	if [ "$ID"  == "ubuntu" ] || [ "$ID" == "debian" ]; then
 		chronic sudo apt install -y "$packaged_kernel" || rc=1
 	elif [ "$ID"  == "fedora" ]; then
 		chronic sudo dnf install -y "$packaged_kernel" || rc=1

@@ -59,7 +59,7 @@ get_packaged_agent_version() {
 
 install_packaged_image() {
 	rc=0
-	if [ "$ID"  == "ubuntu" ]; then
+	if [ "$ID"  == "ubuntu" ] || [ "$ID" == "debian" ]; then
 		chronic sudo -E apt install -y "$PACKAGED_IMAGE" || rc=1
 	elif [ "$ID"  == "fedora" ]; then
 		chronic sudo -E dnf install -y "$PACKAGED_IMAGE" || rc=1
