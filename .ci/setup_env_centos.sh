@@ -47,8 +47,9 @@ echo "Install kernel dependencies"
 chronic sudo -E yum -y install elfutils-libelf-devel
 
 echo "Install CRI-O dependencies for CentOS"
-chronic sudo -E yum install -y glibc-static libglib2.0-devel libseccomp-devel libassuan-devel libgpg-error-devel device-mapper-libs \
-	 btrfs-progs-devel util-linux gpgme-devel
+chronic sudo -E yum install -y glibc-static libseccomp-devel libassuan-devel libgpg-error-devel device-mapper-libs \
+	 btrfs-progs-devel util-linux gpgme-devel glib2-devel glibc-devel libselinux-devel ostree-devel \
+	 pkgconfig
 
 echo "Install bison binary"
 chronic sudo -E yum install -y bison
@@ -77,7 +78,7 @@ if [ "$(arch)" == "x86_64" ]; then
 fi
 
 echo "Install cri-containerd dependencies"
-chronic sudo -E yum install -y libseccomp-devel btrfs-progs-devel libseccomp-static
+chronic sudo -E yum install -y libseccomp-devel btrfs-progs-devel
 
 echo "Install crudini"
 chronic sudo -E yum install -y crudini
