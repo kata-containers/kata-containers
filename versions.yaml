@@ -70,7 +70,11 @@ assets:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
       version: "stable-2.11"
-
+      architecture:
+        aarch64:
+          branch: "master"
+          tag: "v3.1.0-rc2"
+          commit: "47c1cc30e440860aa695358f7c2dd0b9d7b53d16"
   image:
     description: |
       Root filesystem disk image used to boot the guest virtual
