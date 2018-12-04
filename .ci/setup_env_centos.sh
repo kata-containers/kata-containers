@@ -44,7 +44,7 @@ echo "Install kernel dependencies"
 chronic sudo -E yum -y install elfutils-libelf-devel
 
 echo "Install CRI-O dependencies for CentOS"
-chronic sudo -E yum install -y glibc-static libglib2.0-devel libseccomp-devel libassuan-devel libgpg-error-devel go-md2man device-mapper-libs \
+chronic sudo -E yum install -y glibc-static libglib2.0-devel libseccomp-devel libassuan-devel libgpg-error-devel device-mapper-libs \
 	 btrfs-progs-devel util-linux gpgme-devel
 
 echo "Install bison binary"

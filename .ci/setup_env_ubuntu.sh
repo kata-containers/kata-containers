@@ -28,7 +28,7 @@ chronic sudo -E apt install -y libelf-dev
 
 echo "Install CRI-O dependencies for all Ubuntu versions"
 chronic sudo -E apt install -y libglib2.0-dev libseccomp-dev libapparmor-dev \
-	libgpgme11-dev go-md2man thin-provisioning-tools
+	libgpgme11-dev thin-provisioning-tools
 
 echo "Install bison binary"
 chronic sudo -E apt install -y bison
