@@ -810,7 +810,10 @@ func (q *QMP) ExecuteBlockdevAddWithCache(ctx context.Context, device, blockdevI
 // add.  Both strings must be valid QMP identifiers.  driver is the name of the
 // driver,e.g., virtio-blk-pci, and bus is the name of the bus.  bus is optional.
 // shared denotes if the drive can be shared allowing it to be passed more than once.
-func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus, romfile string, shared bool) error {
+// disableModern indicates if virtio version 1.0 should be replaced by the
+// former version 0.9, as there is a KVM bug that occurs when using virtio
+// 1.0 in nested environments.
+func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus, romfile string, shared, disableModern bool) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": driver,
@@ -824,6 +827,10 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 	}
 	if isVirtioPCI[DeviceDriver(driver)] {
 		args["romfile"] = romfile
+
+		if disableModern {
+			args["disable-modern"] = disableModern
+		}
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
@@ -837,7 +844,10 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 // scsiID is the SCSI id, lun is logical unit number. scsiID and lun are optional, a negative value
 // for scsiID and lun is ignored. shared denotes if the drive can be shared allowing it
 // to be passed more than once.
-func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus, romfile string, scsiID, lun int, shared bool) error {
+// disableModern indicates if virtio version 1.0 should be replaced by the
+// former version 0.9, as there is a KVM bug that occurs when using virtio
+// 1.0 in nested environments.
+func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, driver, bus, romfile string, scsiID, lun int, shared, disableModern bool) error {
 	// TBD: Add drivers for scsi passthrough like scsi-generic and scsi-block
 	drivers := []string{"scsi-hd", "scsi-cd", "scsi-disk"}
 
@@ -870,6 +880,10 @@ func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, drive
 	}
 	if isVirtioPCI[DeviceDriver(driver)] {
 		args["romfile"] = romfile
+
+		if disableModern {
+			args["disable-modern"] = disableModern
+		}
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
@@ -962,7 +976,10 @@ func (q *QMP) ExecuteNetdevDel(ctx context.Context, netdevID string) error {
 // using the device_add command. devID is the id of the device to add.
 // Must be valid QMP identifier. netdevID is the id of nic added by previous netdev_add.
 // queues is the number of queues of a nic.
-func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAddr, addr, bus, romfile string, queues int) error {
+// disableModern indicates if virtio version 1.0 should be replaced by the
+// former version 0.9, as there is a KVM bug that occurs when using virtio
+// 1.0 in nested environments.
+func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAddr, addr, bus, romfile string, queues int, disableModern bool) error {
 	args := map[string]interface{}{
 		"id":      devID,
 		"driver":  VirtioNetPCI,
@@ -980,6 +997,9 @@ func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAd
 	}
 	if netdevID != "" {
 		args["netdev"] = netdevID
+	}
+	if disableModern {
+		args["disable-modern"] = disableModern
 	}
 
 	if queues > 0 {
@@ -1038,7 +1058,10 @@ func (q *QMP) ExecuteDeviceDel(ctx context.Context, devID string) error {
 // to hot plug PCI devices on PCI(E) bridges, unlike ExecuteDeviceAdd this function receive the
 // device address on its parent bus. bus is optional. shared denotes if the drive can be shared
 // allowing it to be passed more than once.
-func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus, romfile string, shared bool) error {
+// disableModern indicates if virtio version 1.0 should be replaced by the
+// former version 0.9, as there is a KVM bug that occurs when using virtio
+// 1.0 in nested environments.
+func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus, romfile string, shared, disableModern bool) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": driver,
@@ -1053,6 +1076,10 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 	}
 	if isVirtioPCI[DeviceDriver(driver)] {
 		args["romfile"] = romfile
+
+		if disableModern {
+			args["disable-modern"] = disableModern
+		}
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
@@ -1290,6 +1317,9 @@ func (q *QMP) ExecuteBalloon(ctx context.Context, bytes uint64) error {
 }
 
 // ExecutePCIVSockAdd adds a vhost-vsock-pci bus
+// disableModern indicates if virtio version 1.0 should be replaced by the
+// former version 0.9, as there is a KVM bug that occurs when using virtio
+// 1.0 in nested environments.
 func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID, vhostfd, addr, bus, romfile string, disableModern bool) error {
 	args := map[string]interface{}{
 		"driver":    VHostVSock,
