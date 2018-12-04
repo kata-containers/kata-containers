@@ -18,6 +18,9 @@ else
   centos_version=$(grep VERSION_ID /usr/lib/os-release | cut -d '"' -f2)
 fi
 
+# Send error when a package is not available in the repositories
+echo "skip_missing_names_on_install=0" | sudo tee -a /etc/yum.conf
+
 # Check EPEL repository is enabled on CentOS
 if [ -z $(yum repolist | grep "Extra Packages") ]; then
 	echo >&2 "ERROR: EPEL repository is not enabled on CentOS."
