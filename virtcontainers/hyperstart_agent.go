@@ -1000,3 +1000,8 @@ func (h *hyper) getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsRe
 	// hyperstart-agent does not support getGuestDetails
 	return nil, nil
 }
+
+func (h *hyper) setGuestDateTime(time.Time) error {
+	// hyperstart-agent does not support setGuestDateTime
+	return nil
+}

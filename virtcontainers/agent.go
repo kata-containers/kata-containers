@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"fmt"
 	"syscall"
+	"time"
 
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
@@ -246,4 +247,7 @@ type agent interface {
 
 	// getGuestDetails will tell the agent to get some information of guest
 	getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error)
+
+	// setGuestDateTime asks the agent to set guest time to the provided one
+	setGuestDateTime(time.Time) error
 }

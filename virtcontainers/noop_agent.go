@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"syscall"
+	"time"
 
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
@@ -202,4 +203,9 @@ func (n *noopAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string)
 // getGuestDetails is the Noop agent GuestDetails queryer. It does nothing.
 func (n *noopAgent) getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {
 	return nil, nil
+}
+
+// setGuestDateTime is the Noop agent guest time setter. It does nothing.
+func (n *noopAgent) setGuestDateTime(time.Time) error {
+	return nil
 }
