@@ -43,3 +43,8 @@ externals:
       Tool used by the CI to check URLs in documents and code comments.
     url: "https://mvdan.cc/xurls/cmd/xurls"
     version: "70405f5eab516c9f7b626d803b043415809499a6"
+
+  go-md2man:
+    description: "cri-o dependency used for building documentation"
+    url: "https://github.com/cpuguy83/go-md2man"
+    version: "v1.0.8"

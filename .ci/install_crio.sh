@@ -13,6 +13,17 @@ cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 source /etc/os-release || source /usr/lib/os-release
 
+echo "Install go-md2man"
+go_md2man_url=$(get_test_version "externals.go-md2man.url")
+go_md2man_version=$(get_test_version "externals.go-md2man.version")
+go_md2man_repo=${go_md2man_url/https:\/\/}
+go get -d "${go_md2man_repo}"
+pushd "$GOPATH/src/${go_md2man_repo}"
+git checkout "${go_md2man_version}"
+go build
+go install
+popd
+
 echo "Get CRI-O sources"
 kubernetes_sigs_org="github.com/kubernetes-sigs"
 ghprbGhRepository="${ghprbGhRepository:-}"
@@ -36,17 +47,6 @@ then
 
 	git fetch
 	git checkout "${crio_version}"
-fi
-
-# Add link of go-md2man to $GOPATH/bin
-GOBIN="$GOPATH/bin"
-if [ ! -d "$GOBIN" ]
-then
-        mkdir -p "$GOBIN"
-fi
-
-if [ ! -e "${GOBIN}/go-md2man" ]; then
-	ln -sf $(command -v go-md2man) "$GOBIN"
 fi
 
 echo "Get CRI Tools"
