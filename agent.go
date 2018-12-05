@@ -14,8 +14,11 @@ type shimAgent struct {
 	*client.AgentClient
 }
 
-func newShimAgent(addr string) (*shimAgent, error) {
-	client, err := client.NewAgentClient(context.Background(), addr, false)
+func newShimAgent(ctx context.Context, addr string) (*shimAgent, error) {
+	span, _ := trace(ctx, "newShimAgent")
+	defer span.Finish()
+
+	client, err := client.NewAgentClient(ctx, addr, false)
 	if err != nil {
 		return nil, err
 	}

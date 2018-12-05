@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"os"
 	"os/signal"
 	"sync"
@@ -24,11 +25,11 @@ func TestNewShim(t *testing.T) {
 	err := agent.addContainer(contID, execID)
 	assert.Nil(t, err, "%s", err)
 
-	shim, err := newShim(mockSockAddr, contID, execID)
+	shim, err := newShim(context.Background(), mockSockAddr, contID, execID)
 	assert.Nil(t, err, "%s", err)
 	defer shim.agent.Close()
 
-	_, err = newShim(badMockAddr, contID, execID)
+	_, err = newShim(context.Background(), badMockAddr, contID, execID)
 	assert.NotNil(t, err, "New shim with wrong socket address should fail")
 }
 
@@ -41,7 +42,7 @@ func TestShimOps(t *testing.T) {
 	err := agent.addContainer(contID, execID)
 	assert.Nil(t, err, "%s", err)
 
-	shim, err := newShim(mockSockAddr, contID, execID)
+	shim, err := newShim(context.Background(), mockSockAddr, contID, execID)
 	assert.Nil(t, err, "%s", err)
 	defer shim.agent.Close()
 
@@ -54,7 +55,7 @@ func TestShimOps(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	shim.proxyStdio(wg, true)
 
-	sigc := shim.handleSignals(os.Stdin)
+	sigc := shim.handleSignals(context.Background(), os.Stdin)
 	defer signal.Stop(sigc)
 
 	status, err := shim.wait()

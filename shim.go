@@ -35,15 +35,18 @@ type shim struct {
 	agent *shimAgent
 }
 
-func newShim(addr, containerID, execID string) (*shim, error) {
-	agent, err := newShimAgent(addr)
+func newShim(ctx context.Context, addr, containerID, execID string) (*shim, error) {
+	span, ctx := trace(ctx, "newShim")
+	defer span.Finish()
+
+	agent, err := newShimAgent(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
 
 	return &shim{containerID: containerID,
 		execID: execID,
-		ctx:    context.Background(),
+		ctx:    ctx,
 		agent:  agent}, nil
 }
 
@@ -95,7 +98,7 @@ func (s *shim) proxyStdio(wg *sync.WaitGroup, terminal bool) {
 // handleSignals performs all signal handling.
 //
 // The tty parameter is specific to SIGWINCH handling.
-func (s *shim) handleSignals(tty *os.File) chan os.Signal {
+func (s *shim) handleSignals(ctx context.Context, tty *os.File) chan os.Signal {
 	sigc := make(chan os.Signal, sigChanSize)
 	// handle all signals for the process.
 	signal.Notify(sigc)
@@ -142,7 +145,7 @@ func (s *shim) handleSignals(tty *os.File) chan os.Signal {
 
 			if fatalSignal(sysSig) {
 				logger().WithField("signal", sig).Error("received fatal signal")
-				die()
+				die(ctx)
 			}
 		}
 	}()
@@ -174,6 +177,9 @@ func (s *shim) resizeTty(fromTty *os.File) error {
 }
 
 func (s *shim) wait() (int32, error) {
+	span, _ := trace(s.ctx, "wait")
+	defer span.Finish()
+
 	resp, err := s.agent.WaitProcess(s.ctx, &pb.WaitProcessRequest{
 		ContainerId: s.containerID,
 		ExecId:      s.execID})

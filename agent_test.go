@@ -53,7 +53,7 @@ func startMockServer(t *testing.T) (*grpc.Server, chan error) {
 func testSetup(t *testing.T) *testAgent {
 	mock, waitCh := startMockServer(t)
 
-	agent, err := newShimAgent(mockSockAddr)
+	agent, err := newShimAgent(context.Background(), mockSockAddr)
 	if !assert.Nil(t, err, "Failed to create new agent client: %s", err) {
 		t.FailNow()
 	}
@@ -123,7 +123,7 @@ func TestNewShimAgent(t *testing.T) {
 	mock, waitCh := startMockServer(t)
 
 	cliFunc := func(sock string, success bool) {
-		agent, err := newShimAgent(sock)
+		agent, err := newShimAgent(context.Background(), sock)
 		if success {
 			assert.Nil(t, err, "Failed to create new agent client: %s", err)
 		} else if !success {

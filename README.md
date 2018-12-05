@@ -3,7 +3,25 @@
 
 # Shim
 
-This project implements the shim for kata project.
+* [Debug mode](#debug-mode)
+* [Enable trace support](#enable-trace-support)
 
-The goal for this component is to handle stdio and signals of the
-container process.
+This project implements a shim called `kata-shim` for the [Kata
+Containers](https://katacontainers.io/) project.
+
+The shim runs in the host environment, handling standard I/O and signals on
+behalf of the container process which runs inside the virtual machine.
+
+## Debug mode
+
+To enable agent debug output to the system journal, run with `-debug`.
+
+## Enable trace support
+
+To generate [OpenTracing](https://opentracing.io/) traces using [Jaeger](https://www.jaegertracing.io), run with `-trace`.
+
+> **Note:**
+>
+> Since the Jaeger package used by the shim needs to communicate trace
+> information to the Jaeger agent, it is necessary to ensure the shim runs in
+> the same network namespace as the Jaeger agent.

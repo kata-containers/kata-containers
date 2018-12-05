@@ -17,13 +17,16 @@ import (
 	"sync"
 	"time"
 
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
+	context "golang.org/x/net/context"
 )
 
 const (
 	shimName    = "kata-shim"
 	exitFailure = 1
+	exitSuccess = 0
 	// Max number of threads the shim should consume.
 	// We choose 6 as we want a couple of threads for the runtime (gc etc.)
 	// and couple of threads for our parallel user code, such as the copy
@@ -38,6 +41,9 @@ var debug bool
 
 // if true, coredump when an internal error occurs or a fatal signal is received
 var crashOnError = false
+
+// if true, enable opentracing support.
+var tracing = false
 
 var shimLog *logrus.Entry
 
@@ -88,7 +94,7 @@ func setThreads() {
 	}
 }
 
-func realMain() {
+func realMain(ctx context.Context) (exitCode int) {
 	var (
 		logLevel      string
 		agentAddr     string
@@ -102,6 +108,7 @@ func realMain() {
 	setThreads()
 
 	flag.BoolVar(&debug, "debug", false, "enable debug mode")
+	flag.BoolVar(&tracing, "trace", false, "enable opentracing support")
 	flag.BoolVar(&showVersion, "version", false, "display program version and exit")
 	flag.StringVar(&logLevel, "log", "warn", "set shim log level: debug, info, warn, error, fatal or panic")
 	flag.StringVar(&agentAddr, "agent", "", "agent gRPC socket endpoint")
@@ -115,7 +122,7 @@ func realMain() {
 
 	if showVersion {
 		fmt.Printf("%v version %v\n", shimName, version)
-		os.Exit(0)
+		return exitSuccess
 	}
 
 	if logLevel == "debug" {
@@ -128,7 +135,7 @@ func realMain() {
 
 	if agentAddr == "" || container == "" || execID == "" {
 		logger().WithField("agentAddr", agentAddr).WithField("container", container).WithField("exec-id", execID).Error("container ID, exec ID and agent socket endpoint must be set")
-		os.Exit(exitFailure)
+		return exitFailure
 	}
 
 	announceFields := logrus.Fields{
@@ -138,19 +145,32 @@ func realMain() {
 		"agent-socket":    agentAddr,
 		"terminal":        terminal,
 		"proxy-exit-code": proxyExitCode,
+		"tracing":         tracing,
 	}
 
 	// The final parameter makes sure all output going to stdout/stderr is discarded.
 	err := initLogger(logLevel, container, execID, announceFields, ioutil.Discard)
 	if err != nil {
 		logger().WithError(err).WithField("loglevel", logLevel).Error("invalid log level")
-		os.Exit(exitFailure)
+		return exitFailure
 	}
 
-	shim, err := newShim(agentAddr, container, execID)
+	// Initialise tracing now the logger is ready
+	tracer, err := createTracer(shimName)
+	if err != nil {
+		logger().WithError(err).Fatal("failed to setup tracing")
+		return exitFailure
+	}
+
+	// create root span
+	span := tracer.StartSpan("realMain")
+	ctx = opentracing.ContextWithSpan(ctx, span)
+	defer span.Finish()
+
+	shim, err := newShim(ctx, agentAddr, container, execID)
 	if err != nil {
 		logger().WithError(err).Error("failed to create new shim")
-		os.Exit(exitFailure)
+		return exitFailure
 	}
 
 	// winsize
@@ -158,13 +178,13 @@ func realMain() {
 		termios, err := setupTerminal(int(os.Stdin.Fd()))
 		if err != nil {
 			logger().WithError(err).Error("failed to set raw terminal")
-			os.Exit(exitFailure)
+			return exitFailure
 		}
 		defer restoreTerminal(int(os.Stdin.Fd()), termios)
 	}
 
 	// signals
-	sigc := shim.handleSignals(os.Stdin)
+	sigc := shim.handleSignals(ctx, os.Stdin)
 	defer signal.Stop(sigc)
 
 	// This wait call cannot be deferred and has to wait for every
@@ -173,23 +193,45 @@ func realMain() {
 	// waited for, we cannot expect to do any more calls related to
 	// this process since it is going to be removed from the agent.
 	wg := &sync.WaitGroup{}
+
+	// Encapsulate the call the I/O handling function in a span here since
+	// that function returns quickly and we want to know how long I/O
+	// took.
+	stdioSpan, _ := trace(ctx, "proxyStdio")
+
+	// Add a tag to allow the I/O to be filtered out.
+	stdioSpan.SetTag("category", "interactive")
+
 	shim.proxyStdio(wg, terminal)
+
 	wg.Wait()
+
+	stdioSpan.Finish()
 
 	// wait until exit
 	exitcode, err := shim.wait()
 	if err != nil {
 		logger().WithError(err).WithField("exec-id", execID).Error("failed waiting for process")
-		os.Exit(exitFailure)
+		return exitFailure
 	} else if proxyExitCode {
 		logger().WithField("exitcode", exitcode).Info("using shim to proxy exit code")
 		if exitcode != 0 {
-			os.Exit(int(exitcode))
+			return int(exitcode)
 		}
 	}
+
+	return exitSuccess
 }
 
 func main() {
-	defer handlePanic()
-	realMain()
+	// create a new empty context
+	ctx := context.Background()
+
+	defer handlePanic(ctx)
+
+	exitCode := realMain(ctx)
+
+	stopTracing(ctx)
+
+	os.Exit(exitCode)
 }
