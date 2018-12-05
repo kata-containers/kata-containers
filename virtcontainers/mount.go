@@ -248,8 +248,14 @@ func bindMount(ctx context.Context, source, destination string, readonly bool) e
 
 	if err := ensureDestinationExists(absSource, destination); err != nil {
 		return fmt.Errorf("Could not create destination mount point %v: %v", destination, err)
-	} else if err := syscall.Mount(absSource, destination, "bind", syscall.MS_BIND, ""); err != nil {
+	}
+
+	if err := syscall.Mount(absSource, destination, "bind", syscall.MS_BIND, ""); err != nil {
 		return fmt.Errorf("Could not bind mount %v to %v: %v", absSource, destination, err)
+	}
+
+	if err := syscall.Mount("none", destination, "", syscall.MS_PRIVATE, ""); err != nil {
+		return fmt.Errorf("Could not make mount point %v private: %v", destination, err)
 	}
 
 	// For readonly bind mounts, we need to remount with the readonly flag.
