@@ -26,7 +26,7 @@ func TestFindContextID(t *testing.T) {
 		maxUInt = orgMaxUInt
 	}()
 	VHostVSockDevicePath = "/dev/null"
-	maxUInt = uint32(1000000)
+	maxUInt = uint64(1000000)
 
 	f, cid, err := FindContextID()
 	assert.Nil(f)

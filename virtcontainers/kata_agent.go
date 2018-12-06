@@ -73,7 +73,7 @@ type KataAgentConfig struct {
 }
 
 type kataVSOCK struct {
-	contextID uint32
+	contextID uint64
 	port      uint32
 	vhostFd   *os.File
 }
