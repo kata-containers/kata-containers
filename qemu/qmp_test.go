@@ -1486,3 +1486,21 @@ func TestExecCommandFailedWithInnerError(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+// Checks NVDIMM device add
+func TestExecuteNVDIMMDeviceAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("object-add", nil, "return", nil)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecuteNVDIMMDeviceAdd(context.Background(), "nvdimm0", "/dev/rbd0", 1024)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v\n", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
