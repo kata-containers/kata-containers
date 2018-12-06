@@ -18,4 +18,5 @@ themselves (or their employer, as appropriate).
 - robert.bradford@intel.com
 - sameo@linux.intel.com
 - sebastien.boeuf@intel.com
+- teawater@hyper.sh
 - xinda.zhao@intel.com
