@@ -402,9 +402,16 @@ func TestAppendDevices(t *testing.T) {
 		},
 	}
 
+	sandboxConfig := &SandboxConfig{
+		HypervisorConfig: HypervisorConfig{
+			BlockDeviceDriver: config.VirtioBlock,
+		},
+	}
+
 	c := &Container{
 		sandbox: &Sandbox{
-			devManager: manager.NewDeviceManager("virtio-scsi", ctrDevices),
+			devManager: manager.NewDeviceManager("virtio-blk", ctrDevices),
+			config:     sandboxConfig,
 		},
 	}
 	c.devices = append(c.devices, ContainerDevice{

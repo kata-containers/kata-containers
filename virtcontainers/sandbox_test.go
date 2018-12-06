@@ -1553,7 +1553,7 @@ func TestAttachBlockDevice(t *testing.T) {
 	hypervisor := &mockHypervisor{}
 
 	hConfig := HypervisorConfig{
-		BlockDeviceDriver: VirtioBlock,
+		BlockDeviceDriver: config.VirtioBlock,
 	}
 
 	sconfig := &SandboxConfig{
@@ -1598,7 +1598,7 @@ func TestAttachBlockDevice(t *testing.T) {
 		DevType:       "b",
 	}
 
-	dm := manager.NewDeviceManager(VirtioBlock, nil)
+	dm := manager.NewDeviceManager(config.VirtioBlock, nil)
 	device, err := dm.NewDevice(deviceInfo)
 	assert.Nil(t, err)
 	_, ok := device.(*drivers.BlockDevice)
@@ -1618,7 +1618,7 @@ func TestAttachBlockDevice(t *testing.T) {
 	err = device.Detach(sandbox)
 	assert.Nil(t, err)
 
-	container.sandbox.config.HypervisorConfig.BlockDeviceDriver = VirtioSCSI
+	container.sandbox.config.HypervisorConfig.BlockDeviceDriver = config.VirtioSCSI
 	err = device.Attach(sandbox)
 	assert.Nil(t, err)
 
@@ -1638,14 +1638,14 @@ func TestPreAddDevice(t *testing.T) {
 	hypervisor := &mockHypervisor{}
 
 	hConfig := HypervisorConfig{
-		BlockDeviceDriver: VirtioBlock,
+		BlockDeviceDriver: config.VirtioBlock,
 	}
 
 	sconfig := &SandboxConfig{
 		HypervisorConfig: hConfig,
 	}
 
-	dm := manager.NewDeviceManager(VirtioBlock, nil)
+	dm := manager.NewDeviceManager(config.VirtioBlock, nil)
 	// create a sandbox first
 	sandbox := &Sandbox{
 		id:         testSandboxID,

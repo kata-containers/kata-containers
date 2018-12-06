@@ -20,6 +20,8 @@ import (
 )
 
 const (
+	// VirtioMmio indicates block driver is virtio-mmio based
+	VirtioMmio string = "virtio-mmio"
 	// VirtioBlock indicates block driver is virtio-blk based
 	VirtioBlock string = "virtio-blk"
 	// VirtioSCSI indicates block driver is virtio-scsi based
@@ -55,7 +57,9 @@ func NewDeviceManager(blockDriver string, devices []api.Device) api.DeviceManage
 	dm := &deviceManager{
 		devices: make(map[string]api.Device),
 	}
-	if blockDriver == VirtioBlock {
+	if blockDriver == VirtioMmio {
+		dm.blockDriver = VirtioMmio
+	} else if blockDriver == VirtioBlock {
 		dm.blockDriver = VirtioBlock
 	} else {
 		dm.blockDriver = VirtioSCSI

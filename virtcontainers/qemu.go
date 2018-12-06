@@ -372,7 +372,7 @@ func (q *qemu) buildDevices(initrdPath string) ([]govmmQemu.Device, *govmmQemu.I
 	}
 
 	var ioThread *govmmQemu.IOThread
-	if q.config.BlockDeviceDriver == VirtioSCSI {
+	if q.config.BlockDeviceDriver == config.VirtioSCSI {
 		devices, ioThread = q.arch.appendSCSIController(devices, q.config.EnableIOThreads)
 	}
 
@@ -746,7 +746,7 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 			return err
 		}
 
-		if q.config.BlockDeviceDriver == VirtioBlock {
+		if q.config.BlockDeviceDriver == config.VirtioBlock {
 			driver := "virtio-blk-pci"
 			addr, bridge, err := q.addDeviceToBridge(drive.ID)
 			if err != nil {
@@ -776,7 +776,7 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 			}
 		}
 	} else {
-		if q.config.BlockDeviceDriver == VirtioBlock {
+		if q.config.BlockDeviceDriver == config.VirtioBlock {
 			if err := q.removeDeviceFromBridge(drive.ID); err != nil {
 				return err
 			}
