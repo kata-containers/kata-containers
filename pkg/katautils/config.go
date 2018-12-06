@@ -121,8 +121,9 @@ type runtime struct {
 }
 
 type shim struct {
-	Path  string `toml:"path"`
-	Debug bool   `toml:"enable_debug"`
+	Path    string `toml:"path"`
+	Debug   bool   `toml:"enable_debug"`
+	Tracing bool   `toml:"enable_tracing"`
 }
 
 type agent struct {
@@ -344,6 +345,10 @@ func (s shim) debug() bool {
 	return s.Debug
 }
 
+func (s shim) trace() bool {
+	return s.Tracing
+}
+
 func (n netmon) enable() bool {
 	return n.Enable
 }
@@ -459,6 +464,7 @@ func newShimConfig(s shim) (vc.ShimConfig, error) {
 	return vc.ShimConfig{
 		Path:  path,
 		Debug: s.debug(),
+		Trace: s.trace(),
 	}, nil
 }
 
@@ -710,7 +716,13 @@ func checkNetNsConfig(config oci.RuntimeConfig) error {
 		if config.InterNetworkModel != vc.NetXConnectNoneModel {
 			return fmt.Errorf("config disable_new_netns only works with 'none' internetworking_model")
 		}
+	} else if config.ShimConfig.(vc.ShimConfig).Trace {
+		// Normally, the shim runs in a separate network namespace.
+		// But when tracing, the shim process needs to be able to talk
+		// to the Jaeger agent running in the host network namespace.
+		return errors.New("Shim tracing requires disable_new_netns for Jaeger agent communication")
 	}
+
 	return nil
 }
 

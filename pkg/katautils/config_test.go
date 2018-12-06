@@ -1148,6 +1148,10 @@ func TestShimDefaults(t *testing.T) {
 	assert.False(s.debug())
 	s.Debug = true
 	assert.True(s.debug())
+
+	assert.False(s.trace())
+	s.Tracing = true
+	assert.True(s.trace())
 }
 
 func TestGetDefaultConfigFilePaths(t *testing.T) {
@@ -1530,6 +1534,44 @@ func TestCheckFactoryConfig(t *testing.T) {
 		}
 
 		err := checkFactoryConfig(config)
+
+		if d.expectError {
+			assert.Error(err, "test %d (%+v)", i, d)
+		} else {
+			assert.NoError(err, "test %d (%+v)", i, d)
+		}
+	}
+}
+
+func TestCheckNetNsConfigShimTrace(t *testing.T) {
+	assert := assert.New(t)
+
+	type testData struct {
+		disableNetNs bool
+		networkModel vc.NetInterworkingModel
+		shimTrace    bool
+		expectError  bool
+	}
+
+	data := []testData{
+		{false, vc.NetXConnectMacVtapModel, false, false},
+		{false, vc.NetXConnectMacVtapModel, true, true},
+		{true, vc.NetXConnectMacVtapModel, true, true},
+		{true, vc.NetXConnectMacVtapModel, false, true},
+		{true, vc.NetXConnectNoneModel, false, false},
+		{true, vc.NetXConnectNoneModel, true, false},
+	}
+
+	for i, d := range data {
+		config := oci.RuntimeConfig{
+			DisableNewNetNs:   d.disableNetNs,
+			InterNetworkModel: d.networkModel,
+			ShimConfig: vc.ShimConfig{
+				Trace: d.shimTrace,
+			},
+		}
+
+		err := checkNetNsConfig(config)
 
 		if d.expectError {
 			assert.Error(err, "test %d (%+v)", i, d)

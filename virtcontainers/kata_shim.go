@@ -57,5 +57,9 @@ func (s *kataShim) start(sandbox *Sandbox, params ShimParams) (int, error) {
 		args = append(args, "-log", "debug")
 	}
 
+	if config.Trace {
+		args = append(args, "-trace")
+	}
+
 	return startShim(args, params)
 }
