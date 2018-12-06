@@ -522,7 +522,8 @@ func (h *hyper) startOneContainer(sandbox *Sandbox, c *Container) error {
 
 	if c.state.Fstype != "" {
 		// Pass a drive name only in case of block driver
-		if sandbox.config.HypervisorConfig.BlockDeviceDriver == VirtioBlock {
+		if sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock ||
+			sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio {
 			driveName, err := utils.GetVirtDriveName(c.state.BlockIndex)
 			if err != nil {
 				return err
