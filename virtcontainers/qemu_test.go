@@ -256,7 +256,7 @@ func TestQemuAddDeviceKataVSOCK(t *testing.T) {
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.VSOCKDevice{
 			ID:        fmt.Sprintf("vsock-%d", contextID),
-			ContextID: contextID,
+			ContextID: uint64(contextID),
 			VHostFD:   vHostFD,
 		},
 	}

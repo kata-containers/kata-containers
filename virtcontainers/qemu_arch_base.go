@@ -24,6 +24,9 @@ type qemuArch interface {
 	// disableNestingChecks nesting checks will be ignored
 	disableNestingChecks()
 
+	// runNested indicates if the hypervisor runs in a nested environment
+	runNested() bool
+
 	// enableVhostNet vhost will be enabled
 	enableVhostNet()
 
@@ -183,6 +186,10 @@ func (q *qemuArchBase) enableNestingChecks() {
 
 func (q *qemuArchBase) disableNestingChecks() {
 	q.nestedRun = false
+}
+
+func (q *qemuArchBase) runNested() bool {
+	return q.nestedRun
 }
 
 func (q *qemuArchBase) enableVhostNet() {
@@ -415,7 +422,7 @@ func (q *qemuArchBase) appendVSockPCI(devices []govmmQemu.Device, vsock kataVSOC
 	devices = append(devices,
 		govmmQemu.VSOCKDevice{
 			ID:            fmt.Sprintf("vsock-%d", vsock.contextID),
-			ContextID:     vsock.contextID,
+			ContextID:     uint64(vsock.contextID),
 			VHostFD:       vsock.vhostFd,
 			DisableModern: q.nestedRun,
 		},
