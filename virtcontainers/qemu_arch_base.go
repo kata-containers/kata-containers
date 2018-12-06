@@ -422,7 +422,7 @@ func (q *qemuArchBase) appendVSockPCI(devices []govmmQemu.Device, vsock kataVSOC
 	devices = append(devices,
 		govmmQemu.VSOCKDevice{
 			ID:            fmt.Sprintf("vsock-%d", vsock.contextID),
-			ContextID:     uint64(vsock.contextID),
+			ContextID:     vsock.contextID,
 			VHostFD:       vsock.vhostFd,
 			DisableModern: q.nestedRun,
 		},
