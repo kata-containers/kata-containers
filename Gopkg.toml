@@ -52,7 +52,7 @@
 
 [[constraint]]
   name = "github.com/intel/govmm"
-  revision = "e82e8498c5a214b24ac75e0a05ace556bf91a9ab"
+  revision = "32f64a0630c7602d536be2a9c83bc3eee160359b"
 
 [[constraint]]
   name = "github.com/kata-containers/agent"
