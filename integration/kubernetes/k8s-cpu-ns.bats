@@ -17,7 +17,12 @@ setup() {
 	total_cpus=2
 	total_requests=512
 	total_cpu_container=1
-	pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+
+	if sudo -E kubectl get runtimeclass | grep kata; then
+		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
+	else
+		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+	fi
 }
 
 @test "Check CPU constraints" {

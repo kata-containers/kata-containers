@@ -14,7 +14,12 @@ setup() {
 	second_pod_name="second-test"
 	# Pull the images before launching workload.
 	sudo -E crictl pull "$busybox_image"
-	pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+
+	if sudo -E kubectl get runtimeclass | grep kata; then
+		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
+	else
+		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+	fi
 
 	uts_cmd="ls -la /proc/self/ns/uts"
 	ipc_cmd="ls -la /proc/self/ns/ipc"

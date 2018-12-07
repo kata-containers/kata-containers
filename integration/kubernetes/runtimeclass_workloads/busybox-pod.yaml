@@ -1,0 +1,25 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox
+spec:
+  shareProcessNamespace: true
+  runtimeClassName: kata
+  containers:
+  - name: first-test-container
+    image: busybox
+    command:
+        - sleep
+        - "30"
+  - name: second-test-container
+    image: busybox
+    command:
+        - sleep
+        - "30"
+    stdin: true
+    tty: true

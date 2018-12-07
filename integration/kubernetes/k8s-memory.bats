@@ -10,7 +10,12 @@ load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 setup() {
 	export KUBECONFIG=/etc/kubernetes/admin.conf
 	pod_name="memory-test"
-	pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+
+	if sudo -E kubectl get runtimeclass | grep kata; then
+		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
+	else
+		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+	fi
 }
 
 @test "Exceeding memory constraints" {

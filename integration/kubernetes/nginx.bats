@@ -17,7 +17,12 @@ setup() {
 	# Pull the images before launching workload.
 	sudo -E crictl pull "$busybox_image"
 	sudo -E crictl pull "$nginx_image"
-	pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+
+	if sudo -E kubectl get runtimeclass | grep kata; then
+		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
+	else
+		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+	fi
 }
 
 @test "Verify nginx connectivity between pods" {
