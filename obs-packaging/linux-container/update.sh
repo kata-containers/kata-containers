@@ -32,8 +32,10 @@ KR_PATCHES=$(eval find "${SCRIPT_DIR}/../../kernel/patches" -type f -name "*.pat
 KR_REL=https://www.kernel.org/releases.json
 KR_SHA=https://cdn.kernel.org/pub/linux/kernel/v"${KR_SERIES}"/sha256sums.asc
 
-GENERATED_FILES=(kata-linux-container.dsc kata-linux-container.spec _service config debian.control)
-STATIC_FILES=(debian.dirs debian.rules debian.compat debian.copyright)
+KR_CONFIGS="kata-kernel-configs"
+
+GENERATED_FILES=(kata-linux-container.dsc kata-linux-container.spec _service debian.control ${KR_CONFIGS}.tar.gz)
+STATIC_FILES=(debian.dirs debian.rules debian.compat debian.copyright kata-multiarch.sh)
 #STATIC_FILES+=($KR_PATCHES)
 
 # Parse arguments
@@ -46,9 +48,10 @@ RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 
 kernel_sha256=$(curl -L -s -f ${KR_SHA} | awk '/linux-'${VERSION}'.tar.xz/ {print $1}')
 
-# Generate the kernel config file
-KERNEL_ARCH=$(go get github.com/kata-containers/tests && $GOPATH/src/github.com/kata-containers/tests/.ci/kata-arch.sh --kernel)
-cp "${SCRIPT_DIR}/../../kernel/configs/${KERNEL_ARCH}_kata_kvm_${KR_LTS}.x" config
+# Copy the kernel config files for all architecture
+mkdir -p configs
+readonly configs_dir="kernel/configs"
+find "${SCRIPT_DIR}/../../${configs_dir}" -name "*_kata_kvm_${KR_LTS}.x" -exec tar --transform="s,${configs_dir},${KR_CONFIGS}," -czf ${KR_CONFIGS}.tar.gz {} +
 
 replace_list=(
 	"VERSION=${VERSION}"
