@@ -4,17 +4,16 @@
 # This specialization allows us to optimize memory footprint and boot time.
 #
 
-%define bzimage_arch x86
-
 Name:           kata-linux-container
 Version:        @VERSION@.@CONFIG_VERSION@
 Release:        @RELEASE@.<B_CNT>
 License:        GPL-2.0
 Summary:        The Linux kernel optimized for running inside a container
+Group:          System/Kernel
 Url:            http://www.kernel.org/
-Group:          kernel
 Source0:        https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-@VERSION@.tar.xz
-Source1:        config
+Source1:        kata-kernel-configs.tar.gz
+Source2:        kata-multiarch.sh
 
 %define kversion %{version}-%{release}.container
 
@@ -52,8 +51,8 @@ BuildRequires:  bison
 The Linux kernel.
 
 %package debug
-Summary: Debug components for the kata-linux-container package
-Group: Default
+Summary: Debug components for the %{name} package
+Group:   System/Kernel
 
 %description debug
 Debug components for the kata-linux-container package.
@@ -61,26 +60,27 @@ This package includes the kernel config and the kernel map.
 
 %prep
 %setup -q -n linux-@VERSION@
+%setup -q -T -D -n linux-@VERSION@ -a 1
+cp %{SOURCE2} .
+chmod +x $(basename %{SOURCE2})
 
 # Patches
 @RPM_APPLY_PATCHES@
 
-cp %{SOURCE1} .
-
 %build
+
 BuildKernel() {
-
-    Arch=%{_arch}
+    local kernelArch=$(./kata-multiarch.sh -a %{_arch})
     ExtraVer="-%{release}.container"
-
-    %ifarch ppc64le
-    Arch=powerpc
-    %endif
 
     perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = ${ExtraVer}/" Makefile
 
     make -s mrproper
-    cp config .config
+
+    # Runtime .config selection based on kernelArch
+    rm -f .config
+    find kata-kernel-configs -name "${kernelArch}_kata_kvm_*" -exec cp {} .config \;
+	[ -f .config ] || (echo "ERROR: cannot find the kernel config file for the ${kernelArch} architecture"; exit 1)
 
     %if 0%{?fedora}
     #Fedora uses gcc 8, build is failing due to warnings.
@@ -88,8 +88,8 @@ BuildKernel() {
     export EXTRA_CFLAGS="-Wno-format-truncation -Wno-cast-function-type -Wno-error=restrict -Wno-error"
     %endif
 
-    make -s ARCH=$Arch oldconfig > /dev/null
-    make -s CONFIG_DEBUG_SECTION_MISMATCH=y %{?_smp_mflags} ARCH=$Arch %{?sparse_mflags} || exit 1
+    make -s ARCH=$kernelArch oldconfig > /dev/null
+    make -s CONFIG_DEBUG_SECTION_MISMATCH=y %{?_smp_mflags} ARCH=$kernelArch %{?sparse_mflags} || exit 1
 }
 
 BuildKernel
@@ -97,22 +97,20 @@ BuildKernel
 %install
 
 InstallKernel() {
-    KernelImage=$1
-    KernelImageRaw=$2
-
-    Arch=%{_arch}
+    compressedImage=$(./kata-multiarch.sh -i %{_arch})
+    rawImage="vmlinux"
     KernelVer=%{kversion}
     KernelDir=%{buildroot}/usr/share/kata-containers
 
     mkdir   -p ${KernelDir}
 
-    %ifarch x86_64
-    cp $KernelImage ${KernelDir}/vmlinuz-$KernelVer
-    chmod 755 ${KernelDir}/vmlinuz-$KernelVer
-    ln -sf vmlinuz-$KernelVer ${KernelDir}/vmlinuz.container
-    %endif
+    if [ -n "$compressedImage" ]; then
+        cp "$compressedImage" ${KernelDir}/vmlinuz-$KernelVer
+        chmod 755 ${KernelDir}/vmlinuz-$KernelVer
+        ln -sf vmlinuz-$KernelVer ${KernelDir}/vmlinuz.container
+    fi
 
-    cp $KernelImageRaw ${KernelDir}/vmlinux-$KernelVer
+    cp $rawImage ${KernelDir}/vmlinux-$KernelVer
     chmod 755 ${KernelDir}/vmlinux-$KernelVer
     ln -sf vmlinux-$KernelVer ${KernelDir}/vmlinux.container
 
@@ -123,11 +121,7 @@ InstallKernel() {
     rm -f %{buildroot}/usr/lib/modules/$KernelVer/source
 }
 
-%ifarch ppc64le
-InstallKernel $(realpath vmlinux) $(realpath vmlinux)
-%else
-InstallKernel arch/%{bzimage_arch}/boot/bzImage vmlinux
-%endif
+InstallKernel
 
 rm -rf %{buildroot}/usr/lib/firmware
 
@@ -139,7 +133,8 @@ rm -rf %{buildroot}/usr/lib/firmware
 %dir /usr/share/kata-containers
 /usr/share/kata-containers/vmlinux-%{kversion}
 /usr/share/kata-containers/vmlinux.container
-%ifarch x86_64
+
+%ifnarch ppc64le
 /usr/share/kata-containers/vmlinuz-%{kversion}
 /usr/share/kata-containers/vmlinuz.container
 %endif
