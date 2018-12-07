@@ -33,6 +33,7 @@ bats k8s-memory.bats
 bats k8s-liveness-probes.bats
 bats k8s-attach-handlers.bats
 bats k8s-qos-pods.bats
+bats k8s-pod-quota.bats
 bats k8s-volume.bats
 ./cleanup_env.sh
 popd
