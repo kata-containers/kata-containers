@@ -1307,6 +1307,42 @@ func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string
 	return err
 }
 
+// ExecuteNVDIMMDeviceAdd adds a block device to a QEMU instance using
+// a NVDIMM driver with the device_add command.
+// id is the id of the device to add.  It must be a valid QMP identifier.
+// mempath is the path of the device to add, e.g., /dev/rdb0.  size is
+// the data size of the device.
+func (q *QMP) ExecuteNVDIMMDeviceAdd(ctx context.Context, id, mempath string, size int64) error {
+	args := map[string]interface{}{
+		"qom-type": "memory-backend-file",
+		"id":       "nvdimmbackmem" + id,
+		"props": map[string]interface{}{
+			"mem-path": mempath,
+			"size":     size,
+			"share":    true,
+		},
+	}
+	err := q.executeCommand(ctx, "object-add", args, nil)
+	if err != nil {
+		return err
+	}
+
+	args = map[string]interface{}{
+		"driver": "nvdimm",
+		"id":     "nvdimm" + id,
+		"memdev": "nvdimmbackmem" + id,
+	}
+	if err = q.executeCommand(ctx, "device_add", args, nil); err != nil {
+		q.cfg.Logger.Errorf("Unable to hotplug NVDIMM device: %v", err)
+		err2 := q.executeCommand(ctx, "object-del", map[string]interface{}{"id": "nvdimmbackmem" + id}, nil)
+		if err2 != nil {
+			q.cfg.Logger.Warningf("Unable to clean up memory object: %v", err2)
+		}
+	}
+
+	return err
+}
+
 // ExecuteBalloon sets the size of the balloon, hence updates the memory
 // allocated for the VM.
 func (q *QMP) ExecuteBalloon(ctx context.Context, bytes uint64) error {
