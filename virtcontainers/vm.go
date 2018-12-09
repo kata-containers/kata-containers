@@ -118,11 +118,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		}
 	}()
 
-	if err = hypervisor.init(ctx, id, &config.HypervisorConfig, &filesystem{}); err != nil {
-		return nil, err
-	}
-
-	if err = hypervisor.createSandbox(); err != nil {
+	if err = hypervisor.createSandbox(ctx, id, &config.HypervisorConfig, &filesystem{}); err != nil {
 		return nil, err
 	}
 
