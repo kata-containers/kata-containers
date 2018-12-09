@@ -126,15 +126,12 @@ func (fc *firecracker) trace(name string) (opentracing.Span, context.Context) {
 	return span, ctx
 }
 
-//
-// init: initialize the firecracker hypervisor's structure. Doesn't
-//  actually do anything with firecracker itself, rather it just parses
-//  through and provides necessary details for its structs...
-//
-func (fc *firecracker) init(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error {
+// For firecracker this call only sets the internal structure up.
+// The sandbox will be created and started through startSandbox().
+func (fc *firecracker) createSandbox(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error {
 	fc.ctx = ctx
 
-	span, _ := fc.trace("init")
+	span, _ := fc.trace("createSandbox")
 	defer span.Finish()
 
 	//TODO: check validity of the hypervisor config provided
@@ -150,14 +147,6 @@ func (fc *firecracker) init(ctx context.Context, id string, hypervisorConfig *Hy
 	if err := fc.storage.fetchHypervisorState(fc.id, &fc.info); err != nil {
 		fc.Logger().WithField("function", "init").WithError(err).Info("No info could be fetched")
 	}
-
-	return nil
-}
-
-// for firecracker this call isn't necessary
-func (fc *firecracker) createSandbox() error {
-	span, _ := fc.trace("createSandbox")
-	defer span.Finish()
 
 	return nil
 }

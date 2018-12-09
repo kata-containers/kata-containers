@@ -590,9 +590,7 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
-	init(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error
-
-	createSandbox() error
+	createSandbox(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error
 	startSandbox() error
 	waitSandbox(timeout int) error
 	stopSandbox() error

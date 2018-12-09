@@ -208,12 +208,9 @@ func (q *qemu) trace(name string) (opentracing.Span, context.Context) {
 	return span, ctx
 }
 
-// init intializes the Qemu structure.
-func (q *qemu) init(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error {
-	// save
-	q.ctx = ctx
-
-	span, _ := q.trace("init")
+// setup sets the Qemu structure up.
+func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error {
+	span, _ := q.trace("setup")
 	defer span.Finish()
 
 	err := hypervisorConfig.valid()
@@ -418,9 +415,16 @@ func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) g
 }
 
 // createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.
-func (q *qemu) createSandbox() error {
+func (q *qemu) createSandbox(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error {
+	// Save the tracing context
+	q.ctx = ctx
+
 	span, _ := q.trace("createSandbox")
 	defer span.Finish()
+
+	if err := q.setup(id, hypervisorConfig, storage); err != nil {
+		return err
+	}
 
 	machine, err := q.getQemuMachine()
 	if err != nil {
