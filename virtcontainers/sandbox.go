@@ -1234,8 +1234,17 @@ func (s *Sandbox) startVM() error {
 		}
 	}
 
-	// Store the network
 	s.Logger().Info("VM started")
+
+	// Once the hypervisor is done starting the sandbox,
+	// we want to guarantee that it is manageable.
+	// For that we need to ask the agent to start the
+	// sandbox inside the VM.
+	if err := s.agent.startSandbox(s); err != nil {
+		return err
+	}
+
+	s.Logger().Info("Agent started in the sandbox")
 
 	return nil
 }
@@ -1244,6 +1253,10 @@ func (s *Sandbox) startVM() error {
 func (s *Sandbox) stopVM() error {
 	span, _ := s.trace("stopVM")
 	defer span.Finish()
+
+	if err := s.agent.stopSandbox(s); err != nil {
+		s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("Agent did not stop sandbox")
+	}
 
 	return s.hypervisor.stopSandbox()
 }
