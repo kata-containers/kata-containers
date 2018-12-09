@@ -234,12 +234,8 @@ func StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	}
 	defer s.releaseStatelessSandbox()
 
-	return startSandbox(s)
-}
-
-func startSandbox(s *Sandbox) (*Sandbox, error) {
 	// Start it
-	err := s.Start()
+	err = s.Start()
 	if err != nil {
 		return nil, err
 	}
@@ -285,6 +281,7 @@ func RunSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	span, ctx := trace(ctx, "RunSandbox")
 	defer span.Finish()
 
+	// Create the sandbox
 	s, err := createSandboxFromConfig(ctx, sandboxConfig, factory)
 	if err != nil {
 		return nil, err
@@ -297,7 +294,13 @@ func RunSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 	defer unlockSandbox(lockFile)
 
-	return startSandbox(s)
+	// Start the sandbox
+	err = s.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
 }
 
 // ListSandbox is the virtcontainers sandbox listing entry point.
