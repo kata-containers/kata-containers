@@ -947,12 +947,8 @@ func (s *Sandbox) startVM() error {
 			return nil
 		}
 
-		return s.hypervisor.startSandbox()
+		return s.hypervisor.startSandbox(vmStartTimeout)
 	}); err != nil {
-		return err
-	}
-
-	if err := s.hypervisor.waitSandbox(vmStartTimeout); err != nil {
 		return err
 	}
 
