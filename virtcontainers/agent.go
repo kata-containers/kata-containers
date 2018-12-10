@@ -152,6 +152,9 @@ type agent interface {
 	// get agent url
 	getAgentURL() (string, error)
 
+	// update the agent using some elements from another agent
+	reuseAgent(agent agent) error
+
 	// createSandbox will tell the agent to perform necessary setup for a Sandbox.
 	createSandbox(sandbox *Sandbox) error
 
