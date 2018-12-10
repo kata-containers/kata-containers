@@ -7,6 +7,10 @@
 
 load "${BATS_TEST_DIRNAME}/../../../lib/common.bash"
 
+IMAGE="busybox"
+PAYLOAD="tail -f /dev/null"
+NAME="test"
+
 setup () {
 	clean_env
 
@@ -16,11 +20,33 @@ setup () {
 	[ "$status" -eq 0 ]
 }
 
-@test "Disable net" {
-	IMAGE="busybox"
-	PAYLOAD="tail -f /dev/null"
-	NAME="test"
+@test "Disable_new_netns equal to false" {
+	extract_kata_env
 
+	sudo sed -i 's/#disable_new_netns = true/disable_new_netns = false/g' ${RUNTIME_CONFIG_PATH}
+
+	# Run a container with no network
+	docker run -d --runtime=${RUNTIME} --name=${NAME} --net=none ${IMAGE} ${PAYLOAD}
+
+	# Check namespaces of host init daemon with no network
+	network_ns=$(sudo stat -L -c "%i" /proc/1/ns/net)
+
+	# Check namespaces of the processes (shim and hypervisor)
+	general_processes=( ${SHIM_PATH} ${HYPERVISOR_PATH} )
+	for i in "${general_processes[@]}"; do
+		process_pid=$(pgrep -f "$i")
+		process_ns=$(sudo stat -L -c "%i" /proc/$process_pid/ns/net)
+		# Compare namespace of host init daemon is not equal to namespace of the process
+		[ $process_ns -ne $network_ns ]
+	done
+
+	# Remove container
+	docker rm -f $NAME
+
+	sudo sed -i 's/disable_new_netns = false/#disable_new_netns = true/g' ${RUNTIME_CONFIG_PATH}
+}
+
+@test "Disable net" {
 	extract_kata_env
 
 	# Get the name of the network name at the configuration.toml
