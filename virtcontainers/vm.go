@@ -131,10 +131,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	}
 
 	// 3. boot up guest vm
-	if err = hypervisor.startSandbox(); err != nil {
-		return nil, err
-	}
-	if err = hypervisor.waitSandbox(vmStartTimeout); err != nil {
+	if err = hypervisor.startSandbox(vmStartTimeout); err != nil {
 		return nil, err
 	}
 
@@ -211,7 +208,7 @@ func (v *VM) Resume() error {
 // Start kicks off a configured VM.
 func (v *VM) Start() error {
 	v.logger().Info("start vm")
-	return v.hypervisor.startSandbox()
+	return v.hypervisor.startSandbox(vmStartTimeout)
 }
 
 // Disconnect agent and proxy connections to a VM

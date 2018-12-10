@@ -47,15 +47,7 @@ func TestMockHypervisorCreateSandbox(t *testing.T) {
 func TestMockHypervisorStartSandbox(t *testing.T) {
 	var m *mockHypervisor
 
-	if err := m.startSandbox(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestMockHypervisorWaitSandbox(t *testing.T) {
-	var m *mockHypervisor
-
-	if err := m.waitSandbox(0); err != nil {
+	if err := m.startSandbox(vmStartTimeout); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -591,8 +591,7 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
 	createSandbox(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error
-	startSandbox() error
-	waitSandbox(timeout int) error
+	startSandbox(timeout int) error
 	stopSandbox() error
 	pauseSandbox() error
 	saveSandbox() error

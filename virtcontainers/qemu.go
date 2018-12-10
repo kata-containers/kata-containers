@@ -534,7 +534,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, hypervisorConfig *H
 }
 
 // startSandbox will start the Sandbox's VM.
-func (q *qemu) startSandbox() error {
+func (q *qemu) startSandbox(timeout int) error {
 	span, _ := q.trace("startSandbox")
 	defer span.Finish()
 
@@ -578,7 +578,7 @@ func (q *qemu) startSandbox() error {
 		return fmt.Errorf("%s", strErr)
 	}
 
-	return nil
+	return q.waitSandbox(timeout)
 }
 
 // waitSandbox will wait for the Sandbox's VM to be up and running.

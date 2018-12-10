@@ -30,11 +30,7 @@ func (m *mockHypervisor) createSandbox(ctx context.Context, id string, hyperviso
 	return nil
 }
 
-func (m *mockHypervisor) startSandbox() error {
-	return nil
-}
-
-func (m *mockHypervisor) waitSandbox(timeout int) error {
+func (m *mockHypervisor) startSandbox(timeout int) error {
 	return nil
 }
 
