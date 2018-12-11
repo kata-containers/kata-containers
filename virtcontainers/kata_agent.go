@@ -537,6 +537,17 @@ func (k *kataAgent) getAgentURL() (string, error) {
 	return k.agentURL()
 }
 
+func (k *kataAgent) reuseAgent(agent agent) error {
+	a, ok := agent.(*kataAgent)
+	if !ok {
+		return fmt.Errorf("Bug: get a wrong type of agent")
+	}
+
+	k.installReqFunc(a.client)
+	k.client = a.client
+	return nil
+}
+
 func (k *kataAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error {
 	if url == "" {
 		var err error

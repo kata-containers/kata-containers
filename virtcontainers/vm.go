@@ -319,6 +319,10 @@ func (v *VM) assignSandbox(s *Sandbox) error {
 		return err
 	}
 
+	if err := s.agent.reuseAgent(v.agent); err != nil {
+		return err
+	}
+
 	// First make sure the symlinks do not exist
 	os.RemoveAll(sbSharePath)
 	os.RemoveAll(sbSockDir)

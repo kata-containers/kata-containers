@@ -964,6 +964,17 @@ func (h *hyper) getAgentURL() (string, error) {
 	return "", nil
 }
 
+func (h *hyper) reuseAgent(agent agent) error {
+	a, ok := agent.(*hyper)
+	if !ok {
+		return fmt.Errorf("Bug: get a wrong type of agent")
+	}
+
+	h.client = a.client
+
+	return nil
+}
+
 func (h *hyper) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error {
 	if url == "" {
 		return fmt.Errorf("invalid empty proxy url")
