@@ -75,7 +75,7 @@
   revision = "0650fd9eeb50bab4fc99dceb9f2e14cf58f36e7f"
 
 [[projects]]
-  digest = "1:d9120dea4d91818f1c859242cb96825faf6d375a4e0231263ecaec5905143757"
+  digest = "1:8787d42e39854db19dd09d79e39df2a9975c00d3560fa3fdfa180a89e36552a2"
   name = "github.com/containerd/containerd"
   packages = [
     "api/events",
@@ -92,7 +92,7 @@
     "sys",
   ]
   pruneopts = "NUT"
-  revision = "29eab28b8e4e18231b6b2f077ab653c719d25dd5"
+  revision = "f05672357f56f26751a521175c5a96fc21fa8603"
 
 [[projects]]
   digest = "1:3d1a50e9f27c661df8c5552e7f2f6b9d2a8b641c65aeac7373f8a5c60d9f6856"
