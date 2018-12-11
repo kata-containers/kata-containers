@@ -184,6 +184,11 @@ func (n *noopAgent) reseedRNG(data []byte) error {
 	return nil
 }
 
+// reuseAgent is the Noop agent reuser. It does nothing.
+func (n *noopAgent) reuseAgent(agent agent) error {
+	return nil
+}
+
 // getAgentURL is the Noop agent url getter. It returns nothing.
 func (n *noopAgent) getAgentURL() (string, error) {
 	return "", nil
