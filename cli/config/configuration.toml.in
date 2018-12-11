@@ -95,6 +95,20 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 # virtio-blk.
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER@"
 
+# Specifies cache-related options will be set to block devices or not.
+# Default false
+#block_device_cache_set = true
+
+# Specifies cache-related options for block devices.
+# Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.
+# Default false
+#block_device_cache_direct = true
+
+# Specifies cache-related options for block devices.
+# Denotes whether flush requests for the device are ignored.
+# Default false
+#block_device_cache_noflush = true
+
 # Enable iothreads (data-plane) to be used. This causes IO to be
 # handled in a separate IO thread. This is currently only implemented
 # for SCSI.
