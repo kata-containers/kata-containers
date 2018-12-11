@@ -6,6 +6,7 @@
     * [Scripted Installation](#scripted-installation)
     * [Manual Installation](#manual-installation)
         + [Supported Distributions](#supported-distributions)
+    * [Snap Installation](#snap-installation)
 - [Installing on a Cloud Service Platform](#installing-on-a-cloud-service-platform)
 - [Further information](#further-information)
 
@@ -26,6 +27,7 @@ in a system configured to run Kata Containers.
 | [Manual](#manual-installation)                             | Self paced user install     | Allows the user to read a brief document and exectute the specified commands step-by-step.                                                  | yes              | [see table](#supported-distributions) |
 | [Scripted](#scripted-installation)                         | Administrators              | Generates an installation script which will result in a working system when executed.                                                       | yes              | [see table](#supported-distributions) |
 | [Build from sources](../Developer-Guide.md#initial-setup) | Developers and hackers only | Allows power users who are comfortable building software from source to use the latest component versions. Not recommended for normal users. | no               | any distro                            |
+| [Using snap](#snap-installation)                           | Users and Administrators    | Easy to install and automatic updates                                                                                                       | yes              | any distro that supports snapd        |
 
 > **Notes:**
 >
@@ -71,6 +73,10 @@ Manual installation instructions are available for [these distributions](#suppor
 >
 > - Only trust the signing key and fingerprint listed in the previous bullet point. Do not disable GPG checks,
 > otherwise packages source and authenticity is not guaranteed.
+
+### Snap Installation
+
+[Use snap](snap-installation-guide.md) to install Kata Containers from snapcraft.io.
 
 #### Supported Distributions
 |Distro specific installation instructions                          | Versions        |
