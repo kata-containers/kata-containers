@@ -199,6 +199,7 @@ func TestQemuArchBaseMemoryTopology(t *testing.T) {
 
 func testQemuArchBaseAppend(t *testing.T, structure interface{}, expected []govmmQemu.Device) {
 	var devices []govmmQemu.Device
+	var err error
 	assert := assert.New(t)
 	qemuArchBase := newQemuArchBase()
 
@@ -212,9 +213,10 @@ func testQemuArchBaseAppend(t *testing.T, structure interface{}, expected []govm
 	case config.VFIODev:
 		devices = qemuArchBase.appendVFIODevice(devices, s)
 	case config.VhostUserDeviceAttrs:
-		devices = qemuArchBase.appendVhostUserDevice(devices, s)
+		devices, err = qemuArchBase.appendVhostUserDevice(devices, s)
 	}
 
+	assert.NoError(err)
 	assert.Equal(devices, expected)
 }
 
@@ -471,7 +473,7 @@ func TestQemuArchBaseAppendNetwork(t *testing.T) {
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.NetDevice{
 			Type:       networkModelToQemuType(macvlanEp.NetPair.NetInterworkingModel),
-			Driver:     govmmQemu.VirtioNetPCI,
+			Driver:     govmmQemu.VirtioNet,
 			ID:         fmt.Sprintf("network-%d", 0),
 			IFName:     macvlanEp.NetPair.TAPIface.Name,
 			MACAddress: macvlanEp.NetPair.TAPIface.HardAddr,
@@ -482,7 +484,7 @@ func TestQemuArchBaseAppendNetwork(t *testing.T) {
 		},
 		govmmQemu.NetDevice{
 			Type:       govmmQemu.MACVTAP,
-			Driver:     govmmQemu.VirtioNetPCI,
+			Driver:     govmmQemu.VirtioNet,
 			ID:         fmt.Sprintf("network-%d", 1),
 			IFName:     macvtapEp.Name(),
 			MACAddress: macvtapEp.HardwareAddr(),
