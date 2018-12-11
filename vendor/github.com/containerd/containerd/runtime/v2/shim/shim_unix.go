@@ -39,9 +39,13 @@ import (
 
 // setupSignals creates a new signal handler for all signals and sets the shim as a
 // sub-reaper so that the container processes are reparented
-func setupSignals() (chan os.Signal, error) {
+func setupSignals(config Config) (chan os.Signal, error) {
 	signals := make(chan os.Signal, 32)
-	signal.Notify(signals, unix.SIGTERM, unix.SIGINT, unix.SIGCHLD, unix.SIGPIPE)
+	smp := []os.Signal{unix.SIGTERM, unix.SIGINT, unix.SIGPIPE}
+	if !config.NoReaper {
+		smp = append(smp, unix.SIGCHLD)
+	}
+	signal.Notify(signals, smp...)
 	return signals, nil
 }
 
@@ -87,7 +91,7 @@ func handleSignals(logger *logrus.Entry, signals chan os.Signal) error {
 }
 
 func openLog(ctx context.Context, _ string) (io.Writer, error) {
-	return fifo.OpenFifo(context.Background(), "log", unix.O_WRONLY, 0700)
+	return fifo.OpenFifo(ctx, "log", unix.O_WRONLY, 0700)
 }
 
 func (l *remoteEventsPublisher) Publish(ctx context.Context, topic string, event events.Event) error {
@@ -102,6 +106,15 @@ func (l *remoteEventsPublisher) Publish(ctx context.Context, topic string, event
 	}
 	cmd := exec.CommandContext(ctx, l.containerdBinaryPath, "--address", l.address, "publish", "--topic", topic, "--namespace", ns)
 	cmd.Stdin = bytes.NewReader(data)
+	if l.noReaper {
+		if err := cmd.Start(); err != nil {
+			return err
+		}
+		if err := cmd.Wait(); err != nil {
+			return errors.Wrap(err, "failed to publish event")
+		}
+		return nil
+	}
 	c, err := Default.Start(cmd)
 	if err != nil {
 		return err

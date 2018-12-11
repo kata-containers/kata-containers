@@ -68,7 +68,7 @@
 
 [[constraint]]
  name = "github.com/containerd/containerd"
- revision = "29eab28b8e4e18231b6b2f077ab653c719d25dd5"
+ revision = "f05672357f56f26751a521175c5a96fc21fa8603"
 
 [[override]]
   branch = "master"
