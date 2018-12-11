@@ -9,7 +9,13 @@ load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 
 setup() {
 	export KUBECONFIG=/etc/kubernetes/admin.conf
-	pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+
+	if sudo -E kubectl get runtimeclass | grep kata; then
+		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
+	else
+		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+	fi
+
 	tmp_file=$(mktemp -d /tmp/data.XXXX)
 	msg="Hello from Kubernetes"
 	echo $msg > $tmp_file/index.html

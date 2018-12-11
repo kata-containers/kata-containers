@@ -5,13 +5,18 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-set -e
+set -o errexit
+set -o nounset
+set -o pipefail
+
 
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../../.ci/lib.sh"
 source "${SCRIPT_PATH}/../../lib/common.bash"
 
 cri_runtime="${CRI_RUNTIME:-crio}"
+use_runtime_class=${use_runtime_class:-false}
+kubernetes_version=$(get_version "externals.kubernetes.version")
 
 case "${cri_runtime}" in
 containerd)
@@ -46,6 +51,12 @@ kubeadm_config_file="$(mktemp --tmpdir kubeadm_config.XXXXXX.yaml)"
 
 sed -e "s|CRI_RUNTIME_SOCKET|${cri_runtime_socket}|" "${kubeadm_config_template}" > "${kubeadm_config_file}"
 
+if [ "${use_runtime_class}"  == true ]; then
+	echo "Add RuntimeClass feature for apiserver in kubeadm config file"
+	echo "apiServerExtraArgs:" >> "${kubeadm_config_file}"
+	echo "  feature-gates: RuntimeClass=true" >> "${kubeadm_config_file}"
+fi
+
 sudo -E kubeadm init --config "${kubeadm_config_file}"
 
 export KUBECONFIG=/etc/kubernetes/admin.conf
@@ -65,6 +76,15 @@ dns_wait_time=120
 sleep_time=5
 cmd="sudo -E kubectl get pods --all-namespaces | grep 'coredns.*1/1.*Running'"
 waitForProcess "$dns_wait_time" "$sleep_time" "$cmd"
+
+if [ "${use_runtime_class}" == true ]; then
+	runtimeclass_files_path="${SCRIPT_PATH}/runtimeclass_workloads"
+	echo "Install RuntimeClass resource definition"
+	sudo -E kubectl apply -f \
+		"https://raw.githubusercontent.com/kubernetes/kubernetes/v${kubernetes_version/-*}/cluster/addons/runtimeclass/runtimeclass_crd.yaml"
+	echo "Create kata RuntimeClass resource"
+	sudo -E kubectl create -f "${runtimeclass_files_path}/kata-runtimeclass.yaml"
+fi
 
 # Enable the master node to be able to schedule pods.
 sudo -E kubectl taint nodes "$(hostname)" node-role.kubernetes.io/master:NoSchedule-

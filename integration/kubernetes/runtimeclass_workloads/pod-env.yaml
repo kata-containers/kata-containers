@@ -1,0 +1,27 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-env
+spec:
+  runtimeClassName: kata
+  containers:
+    - name: test-container
+      image: busybox
+      command: [ "sh", "-c"]
+      args:
+      - while true; do
+          echo -en '\n';
+          printenv MY_POD_NAME;
+          sleep 1;
+        done;
+      env:
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+  restartPolicy: Never

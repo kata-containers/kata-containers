@@ -13,7 +13,12 @@ setup() {
 	pod_name="busybox"
 	first_container_name="first-test-container"
 	second_container_name="second-test-container"
-	pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+
+	if sudo -E kubectl get runtimeclass | grep kata; then
+		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
+	else
+		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+	fi
 }
 
 @test "Check PID namespaces" {

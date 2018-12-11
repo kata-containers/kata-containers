@@ -1,0 +1,21 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: memory-test
+spec:
+  runtimeClassName: kata
+  containers:
+  - name: memory-test-ctr
+    image: polinux/stress
+    resources:
+      limits:
+        memory: "${memory_size}"
+      requests:
+        memory: "100Mi"
+    command: ["stress"]
+    args: ["--vm", "1", "--vm-bytes", "${memory_allocated}", "--vm-hang", "1"]
