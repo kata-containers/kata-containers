@@ -48,7 +48,10 @@ var tracing = false
 var shimLog *logrus.Entry
 
 func logger() *logrus.Entry {
-	return shimLog
+	if shimLog != nil {
+		return shimLog
+	}
+	return logrus.NewEntry(logrus.StandardLogger())
 }
 
 func initLogger(logLevel, container, execID string, announceFields logrus.Fields, loggerOutput io.Writer) error {
