@@ -16,12 +16,38 @@ die(){
 	exit 1
 }
 
+info() {
+        echo -e "INFO: $*"
+}
+
 # Gets versions and paths of all the components
 # list in kata-env
 extract_kata_env(){
 	local toml
 
-	toml="$(kata-runtime kata-env)"
+	# If we cannot find the runtime, or it fails to run for some reason, do not die
+	# on the error, but set some sane defaults
+	toml="$(set +e; kata-runtime kata-env)"
+	if [ $? != 0 ]; then
+		# We could be more diligent here and search for each individual component,
+		# but if the runtime cannot tell us the exact details it is configured for then
+		# we would be guessing anyway - so, set some defaults that may be true and give
+		# strong hints that we 'made them up'.
+		info "Runtime environment not found - setting defaults"
+		RUNTIME_CONFIG_PATH="/usr/share/defaults/kata-containers/configuration.toml"
+		RUNTIME_VERSION="0.0.0"
+		RUNTIME_COMMIT="unknown"
+		RUNTIME_PATH="/usr/local/bin/kata-runtime"
+		SHIM_PATH="/usr/libexec/kata-containers/kata-shim"
+		SHIM_VERSION="0.0.0"
+		PROXY_PATH="/usr/libexec/kata-containers/kata-proxy"
+		PROXY_VERSION="0.0.0"
+		HYPERVISOR_PATH="/usr/bin/qemu-system-x86_64"
+		HYPERVISOR_VERSION="0.0.0"
+		INITRD_PATH=""
+		NETMON_PATH="/usr/libexec/kata-containers/kata-netmon"
+		return 0
+	fi
 
 	# The runtime path itself, for kata-runtime, will be contained in the `kata-env`
 	# section. For other runtimes we do not know where the runtime Docker is using lives.
