@@ -54,7 +54,7 @@ mkdir -p $(dirname "${kata_repo_dir}")
 if [ "${BAREMETAL}" == true ]; then
 	arch=$("${tests_repo_dir}/.ci/kata-arch.sh")
 	echo "Looking for baremetal cleanup script for arch ${arch}"
-	clean_up_script="${tests_repo_dir}/.ci/${arch}/clean_up_${arch}.sh"
+	clean_up_script=("${tests_repo_dir}/.ci/${arch}/clean_up_${arch}.sh") || true
 	if [ -f "${clean_up_script}" ]; then
 		echo "Running baremetal cleanup script for arch ${arch}"
 		tests_repo="${tests_repo}" "${clean_up_script}"
