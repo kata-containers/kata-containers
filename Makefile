@@ -8,7 +8,7 @@
 TIMEOUT := 60
 
 # union for 'make test'
-UNION := functional docker crio docker-compose network netmon docker-stability oci openshift kubernetes swarm vm-factory entropy ramdisk
+UNION := functional docker crio docker-compose network netmon docker-stability oci openshift kubernetes swarm vm-factory entropy ramdisk shimv2
 
 # skipped test suites for docker integration tests
 SKIP :=
@@ -74,6 +74,10 @@ swarm:
 	bash -f .ci/install_bats.sh
 	cd integration/swarm && \
 	bats swarm.bats
+
+shimv2:
+	bash integration/containerd/shimv2/shimv2-tests.sh
+	bash integration/containerd/shimv2/shimv2-factory-tests.sh
 
 cri-containerd:
 	bash integration/containerd/cri/integration-tests.sh
