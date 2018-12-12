@@ -1490,6 +1490,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers["grpc.GuestDetailsRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.GetGuestDetails(ctx, req.(*grpc.GuestDetailsRequest), opts...)
 	}
+	k.reqHandlers["grpc.SetGuestDateTimeRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.SetGuestDateTime(ctx, req.(*grpc.SetGuestDateTimeRequest), opts...)
+	}
 }
 
 func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
@@ -1561,6 +1564,15 @@ func (k *kataAgent) getGuestDetails(req *grpc.GuestDetailsRequest) (*grpc.GuestD
 	}
 
 	return resp.(*grpc.GuestDetailsResponse), nil
+}
+
+func (k *kataAgent) setGuestDateTime(tv time.Time) error {
+	_, err := k.sendReq(&grpc.SetGuestDateTimeRequest{
+		Sec:  tv.Unix(),
+		Usec: int64(tv.Nanosecond() / 1e3),
+	})
+
+	return err
 }
 
 func (k *kataAgent) convertToKataAgentIPFamily(ipFamily int) aTypes.IPFamily {

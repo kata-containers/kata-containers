@@ -9,6 +9,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/sirupsen/logrus"
@@ -294,6 +295,13 @@ func (v *VM) ReseedRNG() error {
 	}
 
 	return v.agent.reseedRNG(data)
+}
+
+// SyncTime syncs guest time with host time.
+func (v *VM) SyncTime() error {
+	now := time.Now()
+	v.logger().WithField("time", now).Infof("sync guest time")
+	return v.agent.setGuestDateTime(now)
 }
 
 func (v *VM) assignSandbox(s *Sandbox) error {

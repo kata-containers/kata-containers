@@ -248,6 +248,12 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 		return nil, err
 	}
 
+	// sync guest time since we might have paused it for a long time.
+	err = vm.SyncTime()
+	if err != nil {
+		return nil, err
+	}
+
 	online := false
 	baseConfig := f.base.Config().HypervisorConfig
 	if baseConfig.NumVCPUs < hypervisorConfig.NumVCPUs {
