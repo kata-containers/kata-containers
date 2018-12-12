@@ -53,11 +53,32 @@ type Shim interface {
 	StartShim(ctx context.Context, id, containerdBinary, containerdAddress string) (string, error)
 }
 
+// OptsKey is the context key for the Opts value.
+type OptsKey struct{}
+
+// Opts are context options associated with the shim invocation.
+type Opts struct {
+	BundlePath string
+	Debug      bool
+}
+
+// BinaryOpts allows the configuration of a shims binary setup
+type BinaryOpts func(*Config)
+
+// Config of shim binary options provided by shim implementations
+type Config struct {
+	// NoSubreaper disables setting the shim as a child subreaper
+	NoSubreaper bool
+	// NoReaper disables the shim binary from reaping any child process implicitly
+	NoReaper bool
+}
+
 var (
 	debugFlag            bool
 	idFlag               string
 	namespaceFlag        string
 	socketFlag           string
+	bundlePath           string
 	addressFlag          string
 	containerdBinaryFlag string
 	action               string
@@ -68,6 +89,7 @@ func parseFlags() {
 	flag.StringVar(&namespaceFlag, "namespace", "", "namespace that owns the shim")
 	flag.StringVar(&idFlag, "id", "", "id of the task")
 	flag.StringVar(&socketFlag, "socket", "", "abstract socket path to serve")
+	flag.StringVar(&bundlePath, "bundle", "", "path to the bundle if not workdir")
 
 	flag.StringVar(&addressFlag, "address", "", "grpc address back to main containerd")
 	flag.StringVar(&containerdBinaryFlag, "publish-binary", "containerd", "path to publish binary (used for publishing events)")
@@ -107,32 +129,40 @@ func setLogger(ctx context.Context, id string) error {
 }
 
 // Run initializes and runs a shim server
-func Run(id string, initFunc Init) {
-	if err := run(id, initFunc); err != nil {
+func Run(id string, initFunc Init, opts ...BinaryOpts) {
+	var config Config
+	for _, o := range opts {
+		o(&config)
+	}
+	if err := run(id, initFunc, config); err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %s\n", id, err)
 		os.Exit(1)
 	}
 }
 
-func run(id string, initFunc Init) error {
+func run(id string, initFunc Init, config Config) error {
 	parseFlags()
 	setRuntime()
 
-	signals, err := setupSignals()
+	signals, err := setupSignals(config)
 	if err != nil {
 		return err
 	}
-	if err := subreaper(); err != nil {
-		return err
+	if !config.NoSubreaper {
+		if err := subreaper(); err != nil {
+			return err
+		}
 	}
 	publisher := &remoteEventsPublisher{
 		address:              addressFlag,
 		containerdBinaryPath: containerdBinaryFlag,
+		noReaper:             config.NoReaper,
 	}
 	if namespaceFlag == "" {
 		return fmt.Errorf("shim namespace cannot be empty")
 	}
 	ctx := namespaces.WithNamespace(context.Background(), namespaceFlag)
+	ctx = context.WithValue(ctx, OptsKey{}, Opts{BundlePath: bundlePath, Debug: debugFlag})
 	ctx = log.WithLogger(ctx, log.G(ctx).WithField("runtime", id))
 
 	service, err := initFunc(ctx, idFlag, publisher)
@@ -254,4 +284,5 @@ func dumpStacks(logger *logrus.Entry) {
 type remoteEventsPublisher struct {
 	address              string
 	containerdBinaryPath string
+	noReaper             bool
 }
