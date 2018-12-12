@@ -12,26 +12,32 @@ for file in /etc/os-release /usr/lib/os-release; do \
     fi \
 done)
 
-GOARCH=$(shell go env GOARCH)
 HOST_ARCH=$(shell arch)
-SKIP_GO_VERSION_CHECK=
+ifeq ($(GOPATH),)
+    SKIP_GO_VERSION_CHECK=y
+else
+    SKIP_GO_VERSION_CHECK=
+endif
 
 ifeq ($(SKIP_GO_VERSION_CHECK),)
     include golang.mk
 endif
 
-ifeq ($(ARCH),)
-    ARCH = $(GOARCH)
+ifneq ($(GOPATH),)
+    GOARCH=$(shell go env GOARCH)
+    ifeq ($(ARCH),)
+        ARCH = $(GOARCH)
+    endif
+
+    ARCH_DIR = arch
+    ARCH_FILE_SUFFIX = -options.mk
+    ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
+    ARCH_FILES = $(wildcard arch/*$(ARCH_FILE_SUFFIX))
+    ALL_ARCHES = $(patsubst $(ARCH_DIR)/%$(ARCH_FILE_SUFFIX),%,$(ARCH_FILES))
+
+    # Load architecture-dependent settings
+    include $(ARCH_FILE)
 endif
-
-ARCH_DIR = arch
-ARCH_FILE_SUFFIX = -options.mk
-ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
-ARCH_FILES = $(wildcard arch/*$(ARCH_FILE_SUFFIX))
-ALL_ARCHES = $(patsubst $(ARCH_DIR)/%$(ARCH_FILE_SUFFIX),%,$(ARCH_FILES))
-
-# Load architecture-dependent settings
-include $(ARCH_FILE)
 
 PROJECT_TYPE = kata
 PROJECT_NAME = Kata Containers
@@ -490,6 +496,7 @@ show-footer:
 	@printf "\tBugs: $(PROJECT_BUG_URL)\n\n"
 
 show-summary: show-header
+ifneq ($(GOPATH),)
 	@printf "• architecture:\n"
 	@printf "\tHost: $(HOST_ARCH)\n"
 	@printf "\tgolang: $(GOARCH)\n"
@@ -498,6 +505,10 @@ show-summary: show-header
 	@printf "• golang:\n"
 	@printf "\t"
 	@go version
+else
+	@printf "• GOPATH not set:\n"
+	@printf "\tCan only install prebuilt binaries\n"
+endif
 	@printf "\n"
 	@printf "• Summary:\n"
 	@printf "\n"
