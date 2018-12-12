@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/containerd/containerd/namespaces"
@@ -31,6 +32,8 @@ import (
 )
 
 const shimBinaryFormat = "containerd-shim-%s-%s"
+
+var runtimePaths sync.Map
 
 // Command returns the shim command with the provided args and configuration
 func Command(ctx context.Context, runtime, containerdAddress, path string, cmdArgs ...string) (*exec.Cmd, error) {
@@ -49,19 +52,33 @@ func Command(ctx context.Context, runtime, containerdAddress, path string, cmdAr
 	}
 	args = append(args, cmdArgs...)
 	name := BinaryName(runtime)
+	if name == "" {
+		return nil, fmt.Errorf("invalid runtime name %s, correct runtime name should format like io.containerd.runc.v1", runtime)
+	}
+
 	var cmdPath string
-	var lerr error
-	if cmdPath, lerr = exec.LookPath(name); lerr != nil {
-		if eerr, ok := lerr.(*exec.Error); ok {
-			if eerr.Err == exec.ErrNotFound {
-				return nil, errors.Wrapf(os.ErrNotExist, "runtime %q binary not installed %q", runtime, name)
+	cmdPathI, cmdPathFound := runtimePaths.Load(name)
+	if cmdPathFound {
+		cmdPath = cmdPathI.(string)
+	} else {
+		var lerr error
+		if cmdPath, lerr = exec.LookPath(name); lerr != nil {
+			if eerr, ok := lerr.(*exec.Error); ok {
+				if eerr.Err == exec.ErrNotFound {
+					return nil, errors.Wrapf(os.ErrNotExist, "runtime %q binary not installed %q", runtime, name)
+				}
 			}
 		}
+		cmdPath, err = filepath.Abs(cmdPath)
+		if err != nil {
+			return nil, err
+		}
+		if cmdPathI, cmdPathFound = runtimePaths.LoadOrStore(name, cmdPath); cmdPathFound {
+			// We didn't store cmdPath we loaded an already cached value. Use it.
+			cmdPath = cmdPathI.(string)
+		}
 	}
-	cmdPath, err = filepath.Abs(cmdPath)
-	if err != nil {
-		return nil, err
-	}
+
 	cmd := exec.Command(cmdPath, args...)
 	cmd.Dir = path
 	cmd.Env = append(os.Environ(), "GOMAXPROCS=2")
@@ -69,10 +86,15 @@ func Command(ctx context.Context, runtime, containerdAddress, path string, cmdAr
 	return cmd, nil
 }
 
-// BinaryName returns the shim binary name from the runtime name
+// BinaryName returns the shim binary name from the runtime name,
+// empty string returns means runtime name is invalid
 func BinaryName(runtime string) string {
+	// runtime name should format like $prefix.name.version
 	parts := strings.Split(runtime, ".")
-	// TODO: add validation for runtime
+	if len(parts) < 2 {
+		return ""
+	}
+
 	return fmt.Sprintf(shimBinaryFormat, parts[len(parts)-2], parts[len(parts)-1])
 }
 

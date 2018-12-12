@@ -10,6 +10,11 @@ import (
 	"github.com/kata-containers/runtime/containerd-shim-v2"
 )
 
+func shimConfig(config *shim.Config) {
+	config.NoReaper = true
+	config.NoSubreaper = true
+}
+
 func main() {
-	shim.Run("io.containerd.kata.v2", containerdshim.New)
+	shim.Run("io.containerd.kata.v2", containerdshim.New, shimConfig)
 }
