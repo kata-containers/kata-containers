@@ -122,6 +122,6 @@ For further details, see [the tests documentation](tests/README.md).
 
 |           |Alpine            |CentOS            |ClearLinux        |Debian/Ubuntu     |EulerOS           |Fedora            |openSUSE          |
 |--         |--                |--                |--                |--                |--                |--                |--                |
-|**ARM64**  |:heavy_check_mark:|:heavy_check_mark:|                  |                  |:heavy_check_mark:|:heavy_check_mark:|                  |
+|**ARM64**  |:heavy_check_mark:|:heavy_check_mark:|                  |                  |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
 |**PPC64le**|:heavy_check_mark:|:heavy_check_mark:|                  |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
 |**x86_64** |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
