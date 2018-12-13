@@ -55,5 +55,7 @@ setup() {
 
 teardown() {
 	sudo -E kubectl delete pod "$pod_name"
+	sudo -E kubectl delete pvc "$volume_claim"
+	sudo -E kubectl delete pv "$volume_name"
 	sudo rm -rf $tmp_file
 }
