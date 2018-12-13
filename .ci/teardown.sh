@@ -236,22 +236,11 @@ check_log_files()
 
 		# Display *all* errors caused by runtime exceptions and fatal
 		# signals.
-		for pattern in "fatal error" "fatal signal"
+		for pattern in "fatal error" "fatal signal" "segfault at [0-9]"
 		do
 			# Search for pattern and print all subsequent lines with specified log
 			# level.
-			results=$(sed -ne "/\<${pattern}\>/,\$ p" "$log" || true | grep "level=\"*error\"*")
-			if [ -n "$results" ]
-			then
-				errors=1
-				echo >&2 -e "ERROR: detected ${pattern} in '${log}'\n${results}"
-			fi
-		done
-
-		for pattern in "segfault at [0-9]"
-		do
-			results=$(sed -ne "/\<${pattern}\>/,\$ p" "$log" || true)
-
+			results=$(grep "${pattern}" "$log" || true )
 			if [ -n "$results" ]
 			then
 				errors=1
