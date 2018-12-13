@@ -70,10 +70,19 @@ check_vm_template_network_setup() {
 	[[ ${IPADDR} =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "vm eth0 ip is ${IPADDR}"
 }
 
+check_new_guest_date_time() {
+	HOSTTIME=$(date +%s)
+	GUESTTIME=$(sudo docker exec $CONTAINER_NAME date +%s)
+	[[ ${HOSTTIME} -le ${GUESTTIME} ]] || die "hosttime ${HOSTTIME} guesttime ${GUESTTIME}"
+}
+
 test_create_container_with_vm_template() {
+	# sleep a bit so that template VM time is in the past
+	sleep 2
 	sudo docker run --runtime=$RUNTIME -d --name $CONTAINER_NAME $IMAGE $PAYLOAD_ARGS
 	check_qemu_for_vm_template
 	check_vm_template_network_setup
+	check_new_guest_date_time
 	sudo docker rm -f $CONTAINER_NAME
 }
 
