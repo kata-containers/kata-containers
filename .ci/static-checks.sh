@@ -540,7 +540,7 @@ check_files()
 
 	info "Checking files"
 
-	if [ "$specifc_branch" = "true" ]
+	if [ "$specific_branch" = "true" ]
 	then
 		info "Checking all files in $branch branch"
 
