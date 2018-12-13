@@ -25,6 +25,8 @@ setup() {
 }
 
 @test "Create Persistent Volume" {
+	wait_time=10
+	sleep_time=2
 	volume_name="pv-volume"
 	volume_claim="pv-claim"
 
@@ -38,7 +40,8 @@ setup() {
 	sudo -E kubectl create -f "${pod_config_dir}/volume-claim.yaml"
 
 	# Check the persistent volume claim
-	sudo -E kubectl get pvc $volume_claim | grep Bound
+	cmd="sudo -E kubectl get pvc $volume_claim | grep Bound"
+	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
 	# Create pod
 	sudo -E kubectl create -f "${pod_config_dir}/pv-pod.yaml"
