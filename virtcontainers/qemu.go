@@ -8,20 +8,22 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
+	govmmQemu "github.com/intel/govmm/qemu"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
+	"github.com/opentracing/opentracing-go"
+	"github.com/sirupsen/logrus"
 	"math"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
-
-	govmmQemu "github.com/intel/govmm/qemu"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
-	opentracing "github.com/opentracing/opentracing-go"
-	"github.com/sirupsen/logrus"
+	"unsafe"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
+	"golang.org/x/sys/unix"
 )
 
 // romFile is the file name of the ROM that can be used for virtio-pci devices.
@@ -73,6 +75,8 @@ type qemu struct {
 	fds []*os.File
 
 	ctx context.Context
+
+	nvdimmCount int
 }
 
 const (
@@ -220,6 +224,20 @@ func (q *qemu) init(ctx context.Context, id string, hypervisorConfig *Hypervisor
 	q.storage = storage
 	q.config = *hypervisorConfig
 	q.arch = newQemuArch(q.config)
+
+	initrdPath, err := q.config.InitrdAssetPath()
+	if err != nil {
+		return err
+	}
+	imagePath, err := q.config.ImageAssetPath()
+	if err != nil {
+		return err
+	}
+	if initrdPath == "" && imagePath != "" {
+		q.nvdimmCount = 1
+	} else {
+		q.nvdimmCount = 0
+	}
 
 	if err = q.storage.fetchHypervisorState(q.id, &q.state); err != nil {
 		q.Logger().Debug("Creating bridges")
@@ -727,6 +745,69 @@ func (q *qemu) removeDeviceFromBridge(ID string) error {
 	return err
 }
 
+func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, devID string) error {
+	var err error
+
+	if q.config.BlockDeviceDriver == config.Nvdimm {
+		var blocksize int64
+		file, err := os.Open(drive.File)
+		if err != nil {
+			return err
+		}
+		if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, file.Fd(), unix.BLKGETSIZE64, uintptr(unsafe.Pointer(&blocksize))); err != 0 {
+			return err
+		}
+		if err = q.qmpMonitorCh.qmp.ExecuteNVDIMMDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, drive.File, blocksize); err != nil {
+			q.Logger().WithError(err).Errorf("Failed to add NVDIMM device %s", drive.File)
+			return err
+		}
+		drive.NvdimmID = strconv.Itoa(q.nvdimmCount)
+		q.nvdimmCount++
+		return nil
+	}
+
+	if q.config.BlockDeviceCacheSet {
+		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithCache(q.qmpMonitorCh.ctx, drive.File, drive.ID, q.config.BlockDeviceCacheDirect, q.config.BlockDeviceCacheNoflush)
+	} else {
+		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAdd(q.qmpMonitorCh.ctx, drive.File, drive.ID)
+	}
+	if err != nil {
+		return err
+	}
+
+	if q.config.BlockDeviceDriver == config.VirtioBlock {
+		driver := "virtio-blk-pci"
+		addr, bridge, err := q.addDeviceToBridge(drive.ID)
+		if err != nil {
+			return err
+		}
+
+		// PCI address is in the format bridge-addr/device-addr eg. "03/02"
+		drive.PCIAddr = fmt.Sprintf("%02x", bridge.Addr) + "/" + addr
+
+		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, true, q.arch.runNested()); err != nil {
+			return err
+		}
+	} else {
+		driver := "scsi-hd"
+
+		// Bus exposed by the SCSI Controller
+		bus := scsiControllerID + ".0"
+
+		// Get SCSI-id and LUN based on the order of attaching drives.
+		scsiID, lun, err := utils.GetSCSIIdLun(drive.Index)
+		if err != nil {
+			return err
+		}
+
+		if err = q.qmpMonitorCh.qmp.ExecuteSCSIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, bus, romFile, scsiID, lun, true, q.arch.runNested()); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error {
 	err := q.qmpSetup()
 	if err != nil {
@@ -736,44 +817,7 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 	devID := "virtio-" + drive.ID
 
 	if op == addDevice {
-		if q.config.BlockDeviceCacheSet {
-			err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithCache(q.qmpMonitorCh.ctx, drive.File, drive.ID, q.config.BlockDeviceCacheDirect, q.config.BlockDeviceCacheNoflush)
-		} else {
-			err = q.qmpMonitorCh.qmp.ExecuteBlockdevAdd(q.qmpMonitorCh.ctx, drive.File, drive.ID)
-		}
-		if err != nil {
-			return err
-		}
-
-		if q.config.BlockDeviceDriver == config.VirtioBlock {
-			driver := "virtio-blk-pci"
-			addr, bridge, err := q.addDeviceToBridge(drive.ID)
-			if err != nil {
-				return err
-			}
-
-			// PCI address is in the format bridge-addr/device-addr eg. "03/02"
-			drive.PCIAddr = fmt.Sprintf("%02x", bridge.Addr) + "/" + addr
-
-			if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, true, q.arch.runNested()); err != nil {
-				return err
-			}
-		} else {
-			driver := "scsi-hd"
-
-			// Bus exposed by the SCSI Controller
-			bus := scsiControllerID + ".0"
-
-			// Get SCSI-id and LUN based on the order of attaching drives.
-			scsiID, lun, err := utils.GetSCSIIdLun(drive.Index)
-			if err != nil {
-				return err
-			}
-
-			if err = q.qmpMonitorCh.qmp.ExecuteSCSIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, bus, romFile, scsiID, lun, true, q.arch.runNested()); err != nil {
-				return err
-			}
-		}
+		err = q.hotplugAddBlockDevice(drive, op, devID)
 	} else {
 		if q.config.BlockDeviceDriver == config.VirtioBlock {
 			if err := q.removeDeviceFromBridge(drive.ID); err != nil {
@@ -790,7 +834,7 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 		}
 	}
 
-	return nil
+	return err
 }
 
 func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) error {
