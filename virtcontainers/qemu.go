@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -1078,34 +1079,52 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) (int, error) {
 	if memDev.sizeMB < 0 {
 		return 0, fmt.Errorf("cannot hotplug negative size (%d) memory", memDev.sizeMB)
 	}
+	memLog := q.Logger().WithField("hotplug", "memory")
 
-	// We do not support memory hot unplug.
-	if op == removeDevice {
-		// Dont fail for now, until we fix it.
-		// We return that we only unplugged 0
-		q.Logger().Warn("hot-remove VM memory not supported")
-		return 0, nil
-	}
-
+	memLog.WithField("hotplug-memory-mb", memDev.sizeMB).Debug("requested memory hotplug")
 	err := q.qmpSetup()
 	if err != nil {
 		return 0, err
 	}
 
-	maxMem, err := q.hostMemMB()
-	if err != nil {
-		return 0, err
-	}
-
-	// calculate current memory
 	currentMemory := int(q.config.MemorySize) + q.state.HotpluggedMemory
 
-	// Don't exceed the maximum amount of memory
-	if currentMemory+memDev.sizeMB > int(maxMem) {
-		return 0, fmt.Errorf("Unable to hotplug %d MiB memory, the SB has %d MiB and the maximum amount is %d MiB",
-			memDev.sizeMB, currentMemory, q.config.MemorySize)
+	if memDev.sizeMB == 0 {
+		memLog.Debug("hotplug is not required")
+		return 0, nil
 	}
 
+	switch op {
+	case removeDevice:
+		memLog.WithField("operation", "remove").Debugf("Requested to remove memory: %d MB", memDev.sizeMB)
+		// Dont fail but warn that this is not supported.
+		memLog.Warn("hot-remove VM memory not supported")
+		return 0, nil
+	case addDevice:
+		memLog.WithField("operation", "add").Debugf("Requested to add memory: %d MB", memDev.sizeMB)
+		maxMem, err := q.hostMemMB()
+		if err != nil {
+			return 0, err
+		}
+
+		// Don't exceed the maximum amount of memory
+		if currentMemory+memDev.sizeMB > int(maxMem) {
+			// Fixme: return a typed error
+			return 0, fmt.Errorf("Unable to hotplug %d MiB memory, the SB has %d MiB and the maximum amount is %d MiB",
+				memDev.sizeMB, currentMemory, q.config.MemorySize)
+		}
+		memoryAdded, err := q.hotplugAddMemory(memDev)
+		if err != nil {
+			return memoryAdded, err
+		}
+		return memoryAdded, nil
+	default:
+		return 0, fmt.Errorf("invalid operation %v", op)
+	}
+
+}
+
+func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 	memoryDevices, err := q.qmpMonitorCh.qmp.ExecQueryMemoryDevices(q.qmpMonitorCh.ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to query memory devices: %v", err)
@@ -1114,12 +1133,7 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) (int, error) {
 	if len(memoryDevices) != 0 {
 		memDev.slot = memoryDevices[len(memoryDevices)-1].Data.Slot + 1
 	}
-
-	return q.hotplugAddMemory(memDev)
-}
-
-func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
-	err := q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, "memory-backend-ram", "mem"+strconv.Itoa(memDev.slot), "", memDev.sizeMB)
+	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, "memory-backend-ram", "mem"+strconv.Itoa(memDev.slot), "", memDev.sizeMB)
 	if err != nil {
 		q.Logger().WithError(err).Error("hotplug memory")
 		return 0, err
@@ -1243,6 +1257,77 @@ func (q *qemu) disconnect() {
 	q.qmpShutdown()
 }
 
+// resizeMemory get a request to update the VM memory to reqMemMB
+// Memory update is managed with two approaches
+// Add memory to VM:
+// When memory is required to be added we hotplug memory
+// Remove Memory from VM/ Return memory to host.
+//
+// Memory unplug can be slow and it cannot be guaranteed.
+// Additionally, the unplug has not small granularly it has to be
+// the memory to remove has to be at least the size of one slot.
+// To return memory back we are resizing the VM memory balloon.
+// A longer term solution is evaluate solutions like virtio-mem
+func (q *qemu) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint32) (uint32, error) {
+
+	currentMemory := q.config.MemorySize + uint32(q.state.HotpluggedMemory)
+	err := q.qmpSetup()
+	if err != nil {
+		return 0, err
+	}
+	switch {
+	case currentMemory < reqMemMB:
+		//hotplug
+		addMemMB := reqMemMB - currentMemory
+		memHotplugMB, err := calcHotplugMemMiBSize(addMemMB, memoryBlockSizeMB)
+		if err != nil {
+			return currentMemory, err
+		}
+
+		addMemDevice := &memoryDevice{
+			sizeMB: int(memHotplugMB),
+		}
+		data, err := q.hotplugAddDevice(addMemDevice, memoryDev)
+		if err != nil {
+			return currentMemory, err
+		}
+		memoryAdded, ok := data.(int)
+		if !ok {
+			return currentMemory, fmt.Errorf("Could not get the memory added, got %+v", data)
+		}
+		currentMemory += uint32(memoryAdded)
+	case currentMemory > reqMemMB:
+		//hotunplug
+		addMemMB := currentMemory - reqMemMB
+		memHotunplugMB, err := calcHotplugMemMiBSize(addMemMB, memoryBlockSizeMB)
+		if err != nil {
+			return currentMemory, err
+		}
+
+		addMemDevice := &memoryDevice{
+			sizeMB: int(memHotunplugMB),
+		}
+		data, err := q.hotplugRemoveDevice(addMemDevice, memoryDev)
+		if err != nil {
+			return currentMemory, err
+		}
+		memoryRemoved, ok := data.(int)
+		if !ok {
+			return currentMemory, fmt.Errorf("Could not get the memory removed, got %+v", data)
+		}
+		//FIXME: This is to check memory hotplugRemoveDevice reported 0, as this is not supported.
+		// In the future if this is implemented this validation should be removed.
+		if memoryRemoved != 0 {
+			return currentMemory, fmt.Errorf("memory hot unplug is not supported, something went wrong")
+		}
+		currentMemory -= uint32(memoryRemoved)
+	}
+
+	// currentMemory is the current memory (updated) of the VM, return to caller to allow verify
+	// the current VM memory state.
+	return currentMemory, nil
+}
+
 // genericAppendBridges appends to devices the given bridges
 func genericAppendBridges(devices []govmmQemu.Device, bridges []Bridge, machineType string) []govmmQemu.Device {
 	bus := defaultPCBridgeBus
@@ -1348,4 +1433,46 @@ func (q *qemu) getThreadIDs() (*threadIDs, error) {
 		}
 	}
 	return &tid, nil
+}
+
+func calcHotplugMemMiBSize(mem uint32, memorySectionSizeMB uint32) (uint32, error) {
+	if memorySectionSizeMB == 0 {
+		return mem, nil
+	}
+
+	// TODO: hot add memory aligned to memory section should be more properly. See https://github.com/kata-containers/runtime/pull/624#issuecomment-419656853
+	return uint32(math.Ceil(float64(mem)/float64(memorySectionSizeMB))) * memorySectionSizeMB, nil
+}
+
+func (q *qemu) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
+
+	currentVCPUs = q.config.NumVCPUs + uint32(len(q.state.HotpluggedVCPUs))
+	newVCPUs = currentVCPUs
+	switch {
+	case currentVCPUs < reqVCPUs:
+		//hotplug
+		addCPUs := reqVCPUs - currentVCPUs
+		data, err := q.hotplugAddDevice(addCPUs, cpuDev)
+		if err != nil {
+			return currentVCPUs, newVCPUs, err
+		}
+		vCPUsAdded, ok := data.(uint32)
+		if !ok {
+			return currentVCPUs, newVCPUs, fmt.Errorf("Could not get the vCPUs added, got %+v", data)
+		}
+		newVCPUs += vCPUsAdded
+	case currentVCPUs > reqVCPUs:
+		//hotunplug
+		removeCPUs := currentVCPUs - reqVCPUs
+		data, err := q.hotplugRemoveDevice(removeCPUs, cpuDev)
+		if err != nil {
+			return currentVCPUs, newVCPUs, err
+		}
+		vCPUsRemoved, ok := data.(uint32)
+		if !ok {
+			return currentVCPUs, newVCPUs, fmt.Errorf("Could not get the vCPUs removed, got %+v", data)
+		}
+		newVCPUs -= vCPUsRemoved
+	}
+	return currentVCPUs, newVCPUs, nil
 }
