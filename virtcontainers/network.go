@@ -505,7 +505,12 @@ func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.
 func xConnectVMNetwork(endpoint Endpoint, h hypervisor) error {
 	netPair := endpoint.NetworkPair()
 
-	queues := int(h.hypervisorConfig().NumVCPUs)
+	queues := 0
+	caps := h.capabilities()
+	if caps.isMultiQueueSupported() {
+		queues = int(h.hypervisorConfig().NumVCPUs)
+	}
+
 	disableVhostNet := h.hypervisorConfig().DisableVhostNet
 
 	if netPair.NetInterworkingModel == NetXConnectDefaultModel {
