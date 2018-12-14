@@ -903,12 +903,12 @@ func TestSandboxGetContainer(t *testing.T) {
 
 	contID := "999"
 	contConfig := newTestContainerConfigNoop(contID)
-	newContainer, err := createContainer(p, contConfig)
+	nc, err := newContainer(p, contConfig)
 	if err != nil {
 		t.Fatalf("Failed to create container %+v in sandbox %+v: %v", contConfig, p, err)
 	}
 
-	if err := p.addContainer(newContainer); err != nil {
+	if err := p.addContainer(nc); err != nil {
 		t.Fatalf("Could not add container to sandbox %v", err)
 	}
 

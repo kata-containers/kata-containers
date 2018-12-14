@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -224,7 +223,7 @@ type ContainerConfig struct {
 	DeviceInfos []config.DeviceInfo
 
 	// Resources container resources
-	Resources ContainerResources
+	Resources specs.LinuxResources
 }
 
 // valid checks that the container configuration is valid.
@@ -658,9 +657,6 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 // - Unplug CPU and memory resources from the VM.
 // - Unplug devices from the VM.
 func (c *Container) rollbackFailingContainerCreation() {
-	if err := c.removeResources(); err != nil {
-		c.Logger().WithError(err).Error("rollback failed removeResources()")
-	}
 	if err := c.detachDevices(); err != nil {
 		c.Logger().WithError(err).Error("rollback failed detachDevices()")
 	}
@@ -684,15 +680,7 @@ func (c *Container) checkBlockDeviceSupport() bool {
 
 // createContainer creates and start a container inside a Sandbox. It has to be
 // called only when a new container, not known by the sandbox, has to be created.
-func createContainer(sandbox *Sandbox, contConfig ContainerConfig) (c *Container, err error) {
-	if sandbox == nil {
-		return nil, errNeedSandbox
-	}
-
-	c, err = newContainer(sandbox, contConfig)
-	if err != nil {
-		return
-	}
+func (c *Container) create() (err error) {
 
 	if err = c.createContainersDirs(); err != nil {
 		return
@@ -717,10 +705,6 @@ func createContainer(sandbox *Sandbox, contConfig ContainerConfig) (c *Container
 		return
 	}
 
-	if err = c.addResources(); err != nil {
-		return
-	}
-
 	// Deduce additional system mount info that should be handled by the agent
 	// inside the VM
 	c.getSystemMountInfo()
@@ -729,16 +713,16 @@ func createContainer(sandbox *Sandbox, contConfig ContainerConfig) (c *Container
 		return
 	}
 
-	process, err := sandbox.agent.createContainer(c.sandbox, c)
+	process, err := c.sandbox.agent.createContainer(c.sandbox, c)
 	if err != nil {
-		return c, err
+		return err
 	}
 	c.process = *process
 
 	// If this is a sandbox container, store the pid for sandbox
 	ann := c.GetAnnotations()
 	if ann[annotations.ContainerTypeKey] == string(PodSandbox) {
-		sandbox.setSandboxPid(c.process.Pid)
+		c.sandbox.setSandboxPid(c.process.Pid)
 	}
 
 	// Store the container process returned by the agent.
@@ -750,7 +734,7 @@ func createContainer(sandbox *Sandbox, contConfig ContainerConfig) (c *Container
 		return
 	}
 
-	return c, nil
+	return nil
 }
 
 func (c *Container) delete() error {
@@ -904,10 +888,6 @@ func (c *Container) stop() error {
 		return err
 	}
 
-	if err := c.removeResources(); err != nil {
-		return err
-	}
-
 	if err := c.detachDevices(); err != nil {
 		return err
 	}
@@ -1010,24 +990,28 @@ func (c *Container) update(resources specs.LinuxResources) error {
 		return fmt.Errorf("Container not running, impossible to update")
 	}
 
-	// fetch current configuration
-	currentConfig, err := c.sandbox.storage.fetchContainerConfig(c.sandbox.id, c.id)
-	if err != nil {
-		return err
+	if c.config.Resources.CPU == nil {
+		c.config.Resources.CPU = &specs.LinuxCPU{}
 	}
 
-	newResources := ContainerResources{
-		VCPUs: uint32(utils.ConstraintsToVCPUs(*resources.CPU.Quota, *resources.CPU.Period)),
-		// do page align to memory, as cgroup memory.limit_in_bytes will be aligned to page when effect.
-		// TODO use GetGuestDetails to get the guest OS page size.
-		MemByte: (*resources.Memory.Limit >> 12) << 12,
+	if cpu := resources.CPU; cpu != nil {
+		if p := cpu.Period; p != nil && *p != 0 {
+			c.config.Resources.CPU.Period = p
+		}
+		if q := cpu.Quota; q != nil && *q != 0 {
+			c.config.Resources.CPU.Quota = q
+		}
 	}
 
-	if err := c.updateResources(currentConfig.Resources, newResources); err != nil {
-		return err
+	if c.config.Resources.Memory == nil {
+		c.config.Resources.Memory = &specs.LinuxMemory{}
 	}
 
-	if err := c.storeContainer(); err != nil {
+	if mem := resources.Memory; mem != nil && mem.Limit != nil {
+		c.config.Resources.Memory.Limit = mem.Limit
+	}
+
+	if err := c.sandbox.updateResources(); err != nil {
 		return err
 	}
 
@@ -1217,193 +1201,5 @@ func (c *Container) detachDevices() error {
 	if err := c.sandbox.storeSandboxDevices(); err != nil {
 		return err
 	}
-	return nil
-}
-
-func (c *Container) addResources() error {
-	if c.config == nil {
-		return nil
-	}
-
-	addResources := ContainerResources{
-		VCPUs:   c.config.Resources.VCPUs,
-		MemByte: c.config.Resources.MemByte,
-	}
-
-	if err := c.updateResources(ContainerResources{0, 0}, addResources); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (c *Container) removeResources() error {
-	if c.config == nil {
-		return nil
-	}
-
-	// In order to don't remove vCPUs used by other containers, we have to remove
-	// only the vCPUs assigned to the container
-	config, err := c.sandbox.storage.fetchContainerConfig(c.sandbox.id, c.id)
-	if err != nil {
-		// don't fail, let's use the default configuration
-		config = *c.config
-	}
-
-	vCPUs := config.Resources.VCPUs
-	if vCPUs != 0 {
-		virtLog.Debugf("hot removing %d vCPUs", vCPUs)
-		if _, err := c.sandbox.hypervisor.hotplugRemoveDevice(vCPUs, cpuDev); err != nil {
-			return err
-		}
-	}
-	// hot remove memory unsupported
-
-	return nil
-}
-
-func (c *Container) updateVCPUResources(oldResources ContainerResources, newResources *ContainerResources) error {
-	var vCPUs uint32
-	oldVCPUs := oldResources.VCPUs
-	newVCPUs := newResources.VCPUs
-
-	// Update vCPUs is not possible if oldVCPUs and newVCPUs are equal.
-	// Don't fail, the constraint still can be applied in the cgroup.
-	if oldVCPUs == newVCPUs {
-		c.Logger().WithFields(logrus.Fields{
-			"old-vcpus": fmt.Sprintf("%d", oldVCPUs),
-			"new-vcpus": fmt.Sprintf("%d", newVCPUs),
-		}).Debug("the actual number of vCPUs will not be modified")
-		return nil
-	} else if oldVCPUs < newVCPUs {
-		// hot add vCPUs
-		vCPUs = newVCPUs - oldVCPUs
-		virtLog.Debugf("hot adding %d vCPUs", vCPUs)
-		data, err := c.sandbox.hypervisor.hotplugAddDevice(vCPUs, cpuDev)
-		if err != nil {
-			return err
-		}
-		vcpusAdded, ok := data.(uint32)
-		if !ok {
-			return fmt.Errorf("Could not get the number of vCPUs added, got %+v", data)
-		}
-		// recalculate the actual number of vCPUs if a different number of vCPUs was added
-		newResources.VCPUs = oldVCPUs + vcpusAdded
-		if err := c.sandbox.agent.onlineCPUMem(vcpusAdded, true); err != nil {
-			return err
-		}
-	} else {
-		// hot remove vCPUs
-		vCPUs = oldVCPUs - newVCPUs
-		virtLog.Debugf("hot removing %d vCPUs", vCPUs)
-		data, err := c.sandbox.hypervisor.hotplugRemoveDevice(vCPUs, cpuDev)
-		if err != nil {
-			return err
-		}
-		vcpusRemoved, ok := data.(uint32)
-		if !ok {
-			return fmt.Errorf("Could not get the number of vCPUs removed, got %+v", data)
-		}
-		// recalculate the actual number of vCPUs if a different number of vCPUs was removed
-		newResources.VCPUs = oldVCPUs - vcpusRemoved
-	}
-
-	return nil
-}
-
-// calculate hotplug memory size with memory block size of guestos
-func (c *Container) calcHotplugMemMiBSize(memByte int64) (uint32, error) {
-	memoryBlockSize := int64(c.sandbox.state.GuestMemoryBlockSizeMB)
-	if memoryBlockSize == 0 {
-		return uint32(memByte >> 20), nil
-	}
-
-	// TODO: hot add memory aligned to memory section should be more properly. See https://github.com/kata-containers/runtime/pull/624#issuecomment-419656853
-	return uint32(int64(math.Ceil(float64(memByte)/float64(memoryBlockSize<<20))) * memoryBlockSize), nil
-}
-
-func (c *Container) updateMemoryResources(oldResources ContainerResources, newResources *ContainerResources) error {
-	oldMemByte := oldResources.MemByte
-	newMemByte := newResources.MemByte
-	c.Logger().WithFields(logrus.Fields{
-		"old-mem": fmt.Sprintf("%dByte", oldMemByte),
-		"new-mem": fmt.Sprintf("%dByte", newMemByte),
-	}).Debug("Request update memory")
-
-	if oldMemByte == newMemByte {
-		c.Logger().WithFields(logrus.Fields{
-			"old-mem": fmt.Sprintf("%dByte", oldMemByte),
-			"new-mem": fmt.Sprintf("%dByte", newMemByte),
-		}).Debug("the actual number of Mem will not be modified")
-		return nil
-	} else if oldMemByte < newMemByte {
-		// hot add memory
-		addMemByte := newMemByte - oldMemByte
-		memHotplugMB, err := c.calcHotplugMemMiBSize(addMemByte)
-		if err != nil {
-			return err
-		}
-
-		virtLog.Debugf("hotplug %dMB mem", memHotplugMB)
-		addMemDevice := &memoryDevice{
-			sizeMB: int(memHotplugMB),
-		}
-		data, err := c.sandbox.hypervisor.hotplugAddDevice(addMemDevice, memoryDev)
-		if err != nil {
-			return err
-		}
-		memoryAdded, ok := data.(int)
-		if !ok {
-			return fmt.Errorf("Could not get the memory added, got %+v", data)
-		}
-		newResources.MemByte = oldMemByte + int64(memoryAdded)<<20
-		if err := c.sandbox.agent.onlineCPUMem(0, false); err != nil {
-			return err
-		}
-	} else {
-		// Try to remove a memory device with the difference
-		// from new memory and old memory
-		removeMem := &memoryDevice{
-			sizeMB: int((oldMemByte - newMemByte) >> 20),
-		}
-
-		data, err := c.sandbox.hypervisor.hotplugRemoveDevice(removeMem, memoryDev)
-		if err != nil {
-			return err
-		}
-		memoryRemoved, ok := data.(int)
-		if !ok {
-			return fmt.Errorf("Could not get the memory added, got %+v", data)
-		}
-		newResources.MemByte = oldMemByte - int64(memoryRemoved)<<20
-	}
-
-	return nil
-}
-
-func (c *Container) updateResources(oldResources, newResources ContainerResources) error {
-	// initialize with oldResources
-	c.config.Resources.VCPUs = oldResources.VCPUs
-	c.config.Resources.MemByte = oldResources.MemByte
-
-	// Cpu is not updated if period and/or quota not set
-	if newResources.VCPUs != 0 {
-		if err := c.updateVCPUResources(oldResources, &newResources); err != nil {
-			return err
-		}
-		// Set container's config VCPUs field only
-		c.config.Resources.VCPUs = newResources.VCPUs
-	}
-
-	// Memory is not updated if memory limit not set
-	if newResources.MemByte != 0 {
-		if err := c.updateMemoryResources(oldResources, &newResources); err != nil {
-			return err
-		}
-
-		// Set container's config MemByte field only
-		c.config.Resources.MemByte = newResources.MemByte
-	}
-
 	return nil
 }

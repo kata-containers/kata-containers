@@ -25,7 +25,6 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	dockershimAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations/dockershim"
-	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
 type annotationContainerType struct {
@@ -542,21 +541,6 @@ func ContainerConfig(ocispec CompatOCISpec, bundlePath, cid, console string, det
 		cmd.Capabilities = caps
 	}
 
-	var resources vc.ContainerResources
-	if ocispec.Linux.Resources.CPU != nil {
-		if ocispec.Linux.Resources.CPU.Quota != nil &&
-			ocispec.Linux.Resources.CPU.Period != nil {
-			resources.VCPUs = uint32(utils.ConstraintsToVCPUs(*ocispec.Linux.Resources.CPU.Quota, *ocispec.Linux.Resources.CPU.Period))
-		}
-	}
-	if ocispec.Linux.Resources.Memory != nil {
-		if ocispec.Linux.Resources.Memory.Limit != nil {
-			// do page align to memory, as cgroup memory.limit_in_bytes will be aligned to page when effect
-			// TODO use GetGuestDetails to get the guest OS page size.
-			resources.MemByte = (*ocispec.Linux.Resources.Memory.Limit >> 12) << 12
-		}
-	}
-
 	containerConfig := vc.ContainerConfig{
 		ID:             cid,
 		RootFs:         rootfs,
@@ -568,7 +552,7 @@ func ContainerConfig(ocispec CompatOCISpec, bundlePath, cid, console string, det
 		},
 		Mounts:      containerMounts(ocispec),
 		DeviceInfos: deviceInfos,
-		Resources:   resources,
+		Resources:   *ocispec.Linux.Resources,
 	}
 
 	cType, err := ocispec.ContainerType()
