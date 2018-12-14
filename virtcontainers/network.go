@@ -501,30 +501,45 @@ func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.
 	return nil, fmt.Errorf("Incorrect link type %s, expecting %s", link.Type(), expectedLink.Type())
 }
 
-// The endpoint type should dictate how the connection needs to be made
-func xconnectVMNetwork(endpoint Endpoint, connect bool, numCPUs uint32, disableVhostNet bool) error {
+// The endpoint type should dictate how the connection needs to happen.
+func xConnectVMNetwork(endpoint Endpoint, h hypervisor) error {
+	netPair := endpoint.NetworkPair()
+
+	numCPUs := h.hypervisorConfig().NumVCPUs
+	disableVhostNet := h.hypervisorConfig().DisableVhostNet
+
+	if netPair.NetInterworkingModel == NetXConnectDefaultModel {
+		netPair.NetInterworkingModel = DefaultNetInterworkingModel
+	}
+
+	switch netPair.NetInterworkingModel {
+	case NetXConnectBridgedModel:
+		return bridgeNetworkPair(endpoint, numCPUs, disableVhostNet)
+	case NetXConnectMacVtapModel:
+		return tapNetworkPair(endpoint, numCPUs, disableVhostNet)
+	case NetXConnectTCFilterModel:
+		return setupTCFiltering(endpoint, numCPUs, disableVhostNet)
+	case NetXConnectEnlightenedModel:
+		return fmt.Errorf("Unsupported networking model")
+	default:
+		return fmt.Errorf("Invalid internetworking model")
+	}
+}
+
+// The endpoint type should dictate how the disconnection needs to happen.
+func xDisconnectVMNetwork(endpoint Endpoint) error {
 	netPair := endpoint.NetworkPair()
 
 	if netPair.NetInterworkingModel == NetXConnectDefaultModel {
 		netPair.NetInterworkingModel = DefaultNetInterworkingModel
 	}
+
 	switch netPair.NetInterworkingModel {
 	case NetXConnectBridgedModel:
-		netPair.NetInterworkingModel = NetXConnectBridgedModel
-		if connect {
-			return bridgeNetworkPair(endpoint, numCPUs, disableVhostNet)
-		}
 		return unBridgeNetworkPair(endpoint)
 	case NetXConnectMacVtapModel:
-		netPair.NetInterworkingModel = NetXConnectMacVtapModel
-		if connect {
-			return tapNetworkPair(endpoint, numCPUs, disableVhostNet)
-		}
 		return untapNetworkPair(endpoint)
 	case NetXConnectTCFilterModel:
-		if connect {
-			return setupTCFiltering(endpoint, numCPUs, disableVhostNet)
-		}
 		return removeTCFiltering(endpoint)
 	case NetXConnectEnlightenedModel:
 		return fmt.Errorf("Unsupported networking model")
