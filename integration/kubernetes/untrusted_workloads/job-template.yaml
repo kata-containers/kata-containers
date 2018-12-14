@@ -1,0 +1,26 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: process-item-$ITEM
+  labels:
+    jobgroup: jobtest
+spec:
+  template:
+    metadata:
+      name: jobtest
+      annotations:
+        io.kubernetes.cri-o.TrustedSandbox: "false"
+        io.kubernetes.cri.untrusted-workload: "true"
+      labels:
+        jobgroup: jobtest
+    spec:
+      containers:
+      - name: test
+        image: busybox
+        command: ["tail", "-f", "/dev/null"]
+      restartPolicy: Never
