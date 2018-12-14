@@ -35,15 +35,19 @@ SUSE_URL_BASE="${REPO_TRANSPORT}://${REPO_DOMAIN}"
 SUSE_PATH_OSS="/distribution/${OS_DISTRO,,}/$OS_VERSION/repo/oss"
 SUSE_PATH_UPDATE="/update/${OS_DISTRO,,}/$OS_VERSION/oss"
 
-case "$(uname -m)" in
+arch="$(uname -m)"
+case "$arch" in
 	x86_64)
 		REPO_URL_PORT=""
 		;;
 	ppc|ppc64le)
 		REPO_URL_PORT="/ports/ppc"
 		;;
+	aarch64)
+		REPO_URL_PORT="/ports/aarch64"
+		;;
 	*)
-		REPO_URL_PORT="/ports/$arch"
+		die "Unsupported architecture: $arch"
 		;;
 esac
 SUSE_FULLURL_OSS="${SUSE_URL_BASE}${REPO_URL_PORT}${SUSE_PATH_OSS}"
