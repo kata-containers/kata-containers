@@ -259,7 +259,7 @@ $ script -fec 'sudo -E USE_DOCKER=true ./image_builder.sh ${ROOTFS_DIR}'
 ```
 
 > **Notes:**
-> 
+>
 > - You must ensure that the *default Docker runtime* is `runc` to make use of
 >   the `USE_DOCKER` variable. If that is not the case, remove the variable
 >   from the previous command. See [Checking Docker default runtime](#checking-docker-default-runtime).
@@ -356,14 +356,13 @@ $ rm -rf "${tmpdir}"
 
 # Run Kata Containers with Docker
 
-## Update Docker configuration
+## Update the Docker systemd unit file
 
 ```
-$ dir=/etc/systemd/system/docker.service.d
-$ file="$dir/kata-containers.conf"
-$ sudo mkdir -p "$dir"
-$ sudo test -e "$file" || echo -e "[Service]\nType=simple\nExecStart=\nExecStart=/usr/bin/dockerd -D --default-runtime runc" | sudo tee "$file"
-$ sudo grep -q "kata-runtime=" $file || sudo sed -i 's!^\(ExecStart=[^$].*$\)!\1 --add-runtime kata-runtime=/usr/local/bin/kata-runtime!g' "$file"
+$ dockerUnit=$(systemctl show -p FragmentPath docker.service | cut -d "=" -f 2)
+$ unitFile=${dockerUnit:-/etc/systemd/system/docker.service.d/kata-containers.conf}
+$ test -e "$unitFile" || { sudo mkdir -p "$(dirname $unitFile)"; echo -e "[Service]\nType=simple\nExecStart=\nExecStart=/usr/bin/dockerd -D --default-runtime runc" | sudo tee "$unitFile"; }
+$ grep -q "kata-runtime=" $unitFile || sudo sed -i 's!^\(ExecStart=[^$].*$\)!\1 --add-runtime kata-runtime=/usr/local/bin/kata-runtime!g' "$unitFile"
 $ sudo systemctl daemon-reload
 $ sudo systemctl restart docker
 ```
@@ -479,7 +478,7 @@ implementation you chose, and the kubelet service has to be updated accordingly.
 
 `/etc/systemd/system/kubelet.service.d/0-crio.conf`
 ```
-[Service]                                                 
+[Service]
 Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///var/run/crio/crio.sock"
 ```
 
@@ -487,7 +486,7 @@ Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-tim
 
 `/etc/systemd/system/kubelet.service.d/0-cri-containerd.conf`
 ```
-[Service]                                                 
+[Service]
 Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
 ```
 For more information about CRI-containerd see the "Configure Kubelet to use containerd"
