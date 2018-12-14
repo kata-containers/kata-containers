@@ -31,6 +31,7 @@ bats k8s-credentials-secrets.bats
 bats k8s-pid-ns.bats
 bats k8s-cpu-ns.bats
 bats k8s-parallel.bats
+bats k8s-security-context.bats
 bats k8s-memory.bats
 bats k8s-liveness-probes.bats
 bats k8s-attach-handlers.bats

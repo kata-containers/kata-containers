@@ -1,0 +1,17 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: security-context-test
+spec:
+  runtimeClassName: kata
+  securityContext:
+    runAsUser: 1000
+  containers:
+  - name: sec-text
+    image: busybox
+    command: ["tail", "-f", "/dev/null"]
