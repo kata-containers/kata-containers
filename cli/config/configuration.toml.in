@@ -91,8 +91,8 @@ default_memory = @DEFMEMSZ@
 disable_block_device_use = @DEFDISABLEBLOCK@
 
 # Block storage driver to be used for the hypervisor in case the container
-# rootfs is backed by a block device. This is either virtio-scsi or 
-# virtio-blk.
+# rootfs is backed by a block device. This is virtio-scsi, virtio-blk
+# or nvdimm.
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER@"
 
 # Specifies cache-related options will be set to block devices or not.
