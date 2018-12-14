@@ -92,7 +92,7 @@ func ps(ctx context.Context, containerID, format string, args []string) error {
 
 	options.Format = format
 
-	msg, err := vci.ProcessListContainer(ctx, containerID, sandboxID, options)
+	msg, err := vci.ProcessListContainer(ctx, sandboxID, containerID, options)
 	if err != nil {
 		return err
 	}
