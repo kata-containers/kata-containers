@@ -8,6 +8,7 @@ package virtcontainers
 const (
 	blockDeviceSupport = 1 << iota
 	blockDeviceHotplugSupport
+	multiQueueSupport
 )
 
 type capabilities struct {
@@ -34,4 +35,15 @@ func (caps *capabilities) isBlockDeviceHotplugSupported() bool {
 
 func (caps *capabilities) setBlockDeviceHotplugSupport() {
 	caps.flags |= blockDeviceHotplugSupport
+}
+
+func (caps *capabilities) isMultiQueueSupported() bool {
+	if caps.flags&multiQueueSupport != 0 {
+		return true
+	}
+	return false
+}
+
+func (caps *capabilities) setMultiQueueSupport() {
+	caps.flags |= multiQueueSupport
 }

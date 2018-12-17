@@ -108,6 +108,8 @@ func (q *qemuAmd64) capabilities() capabilities {
 		caps.setBlockDeviceHotplugSupport()
 	}
 
+	caps.setMultiQueueSupport()
+
 	return caps
 }
 

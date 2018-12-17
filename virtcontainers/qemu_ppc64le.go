@@ -94,6 +94,8 @@ func (q *qemuPPC64le) capabilities() capabilities {
 		caps.setBlockDeviceHotplugSupport()
 	}
 
+	caps.setMultiQueueSupport()
+
 	return caps
 }
 

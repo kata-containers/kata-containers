@@ -87,7 +87,7 @@ func (endpoint *IPVlanEndpoint) NetworkPair() *NetworkInterfacePair {
 // Attach for virtual endpoint bridges the network pair and adds the
 // tap interface of the network pair to the hypervisor.
 func (endpoint *IPVlanEndpoint) Attach(h hypervisor) error {
-	if err := xconnectVMNetwork(endpoint, true, h.hypervisorConfig().NumVCPUs, h.hypervisorConfig().DisableVhostNet); err != nil {
+	if err := xConnectVMNetwork(endpoint, h); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual ep")
 		return err
 	}
@@ -105,7 +105,7 @@ func (endpoint *IPVlanEndpoint) Detach(netNsCreated bool, netNsPath string) erro
 	}
 
 	return doNetNS(netNsPath, func(_ ns.NetNS) error {
-		return xconnectVMNetwork(endpoint, false, 0, false)
+		return xDisconnectVMNetwork(endpoint)
 	})
 }
 
