@@ -33,7 +33,8 @@ var qemuPaths = map[string]string{
 }
 
 var kernelParams = []Param{
-	{"console", "ttyAMA0"},
+	{"console", "hvc0"},
+	{"console", "hvc1"},
 	{"iommu.passthrough", "0"},
 }
 
