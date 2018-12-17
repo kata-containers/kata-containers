@@ -396,7 +396,7 @@ func newNetwork(networkType NetworkModel) network {
 	}
 }
 
-func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link, numCPUs int) (netlink.Link, []*os.File, error) {
+func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link, queues int) (netlink.Link, []*os.File, error) {
 	var newLink netlink.Link
 	var fds []*os.File
 
@@ -410,7 +410,7 @@ func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Lin
 		newLink = &netlink.Tuntap{
 			LinkAttrs: netlink.LinkAttrs{Name: name},
 			Mode:      netlink.TUNTAP_MODE_TAP,
-			Queues:    numCPUs,
+			Queues:    queues,
 			Flags:     netlink.TUNTAP_MULTI_QUEUE_DEFAULTS | netlink.TUNTAP_VNET_HDR,
 		}
 	case (&netlink.Macvtap{}).Type():
@@ -501,30 +501,50 @@ func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.
 	return nil, fmt.Errorf("Incorrect link type %s, expecting %s", link.Type(), expectedLink.Type())
 }
 
-// The endpoint type should dictate how the connection needs to be made
-func xconnectVMNetwork(endpoint Endpoint, connect bool, numCPUs uint32, disableVhostNet bool) error {
+// The endpoint type should dictate how the connection needs to happen.
+func xConnectVMNetwork(endpoint Endpoint, h hypervisor) error {
+	netPair := endpoint.NetworkPair()
+
+	queues := 0
+	caps := h.capabilities()
+	if caps.isMultiQueueSupported() {
+		queues = int(h.hypervisorConfig().NumVCPUs)
+	}
+
+	disableVhostNet := h.hypervisorConfig().DisableVhostNet
+
+	if netPair.NetInterworkingModel == NetXConnectDefaultModel {
+		netPair.NetInterworkingModel = DefaultNetInterworkingModel
+	}
+
+	switch netPair.NetInterworkingModel {
+	case NetXConnectBridgedModel:
+		return bridgeNetworkPair(endpoint, queues, disableVhostNet)
+	case NetXConnectMacVtapModel:
+		return tapNetworkPair(endpoint, queues, disableVhostNet)
+	case NetXConnectTCFilterModel:
+		return setupTCFiltering(endpoint, queues, disableVhostNet)
+	case NetXConnectEnlightenedModel:
+		return fmt.Errorf("Unsupported networking model")
+	default:
+		return fmt.Errorf("Invalid internetworking model")
+	}
+}
+
+// The endpoint type should dictate how the disconnection needs to happen.
+func xDisconnectVMNetwork(endpoint Endpoint) error {
 	netPair := endpoint.NetworkPair()
 
 	if netPair.NetInterworkingModel == NetXConnectDefaultModel {
 		netPair.NetInterworkingModel = DefaultNetInterworkingModel
 	}
+
 	switch netPair.NetInterworkingModel {
 	case NetXConnectBridgedModel:
-		netPair.NetInterworkingModel = NetXConnectBridgedModel
-		if connect {
-			return bridgeNetworkPair(endpoint, numCPUs, disableVhostNet)
-		}
 		return unBridgeNetworkPair(endpoint)
 	case NetXConnectMacVtapModel:
-		netPair.NetInterworkingModel = NetXConnectMacVtapModel
-		if connect {
-			return tapNetworkPair(endpoint, numCPUs, disableVhostNet)
-		}
 		return untapNetworkPair(endpoint)
 	case NetXConnectTCFilterModel:
-		if connect {
-			return setupTCFiltering(endpoint, numCPUs, disableVhostNet)
-		}
 		return removeTCFiltering(endpoint)
 	case NetXConnectEnlightenedModel:
 		return fmt.Errorf("Unsupported networking model")
@@ -573,10 +593,10 @@ const linkRange = 0xFFFF    // This will allow upto 2^16 containers
 const linkRetries = 128     // The numbers of time we try to find a non conflicting index
 const macvtapWorkaround = true
 
-func createMacVtap(netHandle *netlink.Handle, name string, link netlink.Link, numCPUs int) (taplink netlink.Link, err error) {
+func createMacVtap(netHandle *netlink.Handle, name string, link netlink.Link, queues int) (taplink netlink.Link, err error) {
 
 	if !macvtapWorkaround {
-		taplink, _, err = createLink(netHandle, name, link, numCPUs)
+		taplink, _, err = createLink(netHandle, name, link, queues)
 		return
 	}
 
@@ -585,7 +605,7 @@ func createMacVtap(netHandle *netlink.Handle, name string, link netlink.Link, nu
 	for i := 0; i < linkRetries; i++ {
 		index := hostLinkOffset + (r.Int() & linkRange)
 		link.Attrs().Index = index
-		taplink, _, err = createLink(netHandle, name, link, numCPUs)
+		taplink, _, err = createLink(netHandle, name, link, queues)
 		if err == nil {
 			break
 		}
@@ -612,7 +632,7 @@ func setIPs(link netlink.Link, addrs []netlink.Addr) error {
 	return nil
 }
 
-func tapNetworkPair(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) error {
+func tapNetworkPair(endpoint Endpoint, queues int, disableVhostNet bool) error {
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
@@ -638,7 +658,7 @@ func tapNetworkPair(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) err
 					ParentIndex: attrs.Index,
 				},
 			},
-		}, int(numCPUs))
+		}, queues)
 
 	if err != nil {
 		return fmt.Errorf("Could not create TAP interface: %s", err)
@@ -690,13 +710,13 @@ func tapNetworkPair(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) err
 
 	// Note: The underlying interfaces need to be up prior to fd creation.
 
-	netPair.VMFds, err = createMacvtapFds(tapLink.Attrs().Index, int(numCPUs))
+	netPair.VMFds, err = createMacvtapFds(tapLink.Attrs().Index, queues)
 	if err != nil {
 		return fmt.Errorf("Could not setup macvtap fds %s: %s", netPair.TAPIface, err)
 	}
 
 	if !disableVhostNet {
-		vhostFds, err := createVhostFds(int(numCPUs))
+		vhostFds, err := createVhostFds(queues)
 		if err != nil {
 			return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
 		}
@@ -706,7 +726,7 @@ func tapNetworkPair(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) err
 	return nil
 }
 
-func bridgeNetworkPair(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) error {
+func bridgeNetworkPair(endpoint Endpoint, queues int, disableVhostNet bool) error {
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
@@ -715,14 +735,14 @@ func bridgeNetworkPair(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) 
 
 	netPair := endpoint.NetworkPair()
 
-	tapLink, fds, err := createLink(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{}, int(numCPUs))
+	tapLink, fds, err := createLink(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{}, queues)
 	if err != nil {
 		return fmt.Errorf("Could not create TAP interface: %s", err)
 	}
 	netPair.VMFds = fds
 
 	if !disableVhostNet {
-		vhostFds, err := createVhostFds(int(numCPUs))
+		vhostFds, err := createVhostFds(queues)
 		if err != nil {
 			return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
 		}
@@ -760,7 +780,7 @@ func bridgeNetworkPair(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) 
 	}
 
 	mcastSnoop := false
-	bridgeLink, _, err := createLink(netHandle, netPair.Name, &netlink.Bridge{MulticastSnooping: &mcastSnoop}, int(numCPUs))
+	bridgeLink, _, err := createLink(netHandle, netPair.Name, &netlink.Bridge{MulticastSnooping: &mcastSnoop}, queues)
 	if err != nil {
 		return fmt.Errorf("Could not create bridge: %s", err)
 	}
@@ -790,7 +810,7 @@ func bridgeNetworkPair(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) 
 	return nil
 }
 
-func setupTCFiltering(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) error {
+func setupTCFiltering(endpoint Endpoint, queues int, disableVhostNet bool) error {
 	netHandle, err := netlink.NewHandle()
 	if err != nil {
 		return err
@@ -799,14 +819,14 @@ func setupTCFiltering(endpoint Endpoint, numCPUs uint32, disableVhostNet bool) e
 
 	netPair := endpoint.NetworkPair()
 
-	tapLink, fds, err := createLink(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{}, int(numCPUs))
+	tapLink, fds, err := createLink(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{}, queues)
 	if err != nil {
 		return fmt.Errorf("Could not create TAP interface: %s", err)
 	}
 	netPair.VMFds = fds
 
 	if !disableVhostNet {
-		vhostFds, err := createVhostFds(int(numCPUs))
+		vhostFds, err := createVhostFds(queues)
 		if err != nil {
 			return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
 		}
