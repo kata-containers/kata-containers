@@ -18,6 +18,8 @@ setup() {
 @test "Pod quota" {
 	resource_name="pod-quota"
 	deployment_name="deploymenttest"
+	wait_time=10
+	sleep_time=2
 
 	# Create the resourcequota
 	sudo -E kubectl create -f "${pod_config_dir}/resource-quota.yaml"
@@ -29,7 +31,8 @@ setup() {
 	sudo -E kubectl create -f "${pod_config_dir}/pod-quota-deployment.yaml"
 
 	# View information about the deployment
-	sudo -E kubectl get deployment "$deployment_name" --output=yaml | grep "forbidden: exceeded quota"
+	cmd="sudo -E kubectl get deployment \"$deployment_name\" --output=yaml | grep -q 'forbidden: exceeded quota'"
+	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 }
 
 teardown() {

@@ -21,3 +21,4 @@ spec:
       containers:
       - name: pod-quota-demo
         image: busybox
+        command: ["tail", "-f", "/dev/null"]
