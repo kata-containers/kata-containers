@@ -709,7 +709,10 @@ func updateConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeCon
 		config.ProxyType = vc.KataBuiltInProxyType
 		config.ShimType = vc.KataBuiltInShimType
 		config.AgentType = vc.KataContainersAgent
-		config.AgentConfig = vc.KataAgentConfig{LongLiveConn: true}
+		config.AgentConfig = vc.KataAgentConfig{
+			LongLiveConn: true,
+			UseVSock:     config.HypervisorConfig.UseVSock,
+		}
 	}
 
 	return nil
