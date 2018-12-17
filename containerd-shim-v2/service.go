@@ -8,6 +8,7 @@ package containerdshim
 import (
 	"context"
 	"encoding/json"
+	"io/ioutil"
 	"os"
 	sysexec "os/exec"
 	"path/filepath"
@@ -56,9 +57,13 @@ var vci vc.VC = &vc.VCImpl{}
 // New returns a new shim service that can be used via GRPC
 func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shim, error) {
 	logger := logrus.WithField("ID", id)
+	// Discard the log before shim init its log output. Otherwise
+	// it will output into stdio, from which containerd would like
+	// to get the shim's socket address.
+	logrus.SetOutput(ioutil.Discard)
 	vci.SetLogger(ctx, logger)
 	katautils.SetLogger(ctx, logger, logger.Logger.Level)
-	_, runtimeConfig, err := katautils.LoadConfiguration("", true, true)
+	_, runtimeConfig, err := katautils.LoadConfiguration("", false, true)
 	if err != nil {
 		return nil, err
 	}
