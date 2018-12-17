@@ -55,7 +55,7 @@ technologies:
 - [Intel](https://www.intel.com)'s VT-x technology.
 - [ARM](https://www.arm.com)'s Hyp mode (virtualization extension).
 - [IBM](https://www.ibm.com)'s Power Systems.
-
+- [IBM](https://www.ibm.com) Z mainframes.
 ### Hardware requirements
 
 The runtime has a built-in command to determine if your host system is capable
