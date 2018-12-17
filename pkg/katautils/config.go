@@ -547,7 +547,7 @@ func newShimConfig(s shim) (vc.ShimConfig, error) {
 	}, nil
 }
 
-func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
+func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	for k, hypervisor := range tomlConf.Hypervisor {
 		var err error
 		var hConfig vc.HypervisorConfig
@@ -567,6 +567,10 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 		config.HypervisorConfig = hConfig
 	}
 
+	return nil
+}
+
+func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	for k, proxy := range tomlConf.Proxy {
 		switch k {
 		case ccProxyTableType:
@@ -581,6 +585,10 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 		}
 	}
 
+	return nil
+}
+
+func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	for k := range tomlConf.Agent {
 		switch k {
 		case hyperstartAgentTableType:
@@ -595,6 +603,10 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 		}
 	}
 
+	return nil
+}
+
+func updateRuntimeConfigShim(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	for k, shim := range tomlConf.Shim {
 		switch k {
 		case ccShimTableType:
@@ -609,6 +621,26 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 		}
 
 		config.ShimConfig = shConfig
+	}
+
+	return nil
+}
+
+func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
+	if err := updateRuntimeConfigHypervisor(configPath, tomlConf, config); err != nil {
+		return err
+	}
+
+	if err := updateRuntimeConfigProxy(configPath, tomlConf, config); err != nil {
+		return err
+	}
+
+	if err := updateRuntimeConfigAgent(configPath, tomlConf, config); err != nil {
+		return err
+	}
+
+	if err := updateRuntimeConfigShim(configPath, tomlConf, config); err != nil {
+		return err
 	}
 
 	fConfig, err := newFactoryConfig(tomlConf.Factory)
