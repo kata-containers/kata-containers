@@ -203,6 +203,26 @@ func (fs *filesystem) storeFile(file string, data interface{}) error {
 	return nil
 }
 
+// createSandboxTempFile is used to create a temporary file under sandbox runtime storage path.
+func (fs *filesystem) createSandboxTempFile(sandboxID string) (string, error) {
+	if sandboxID == "" {
+		return "", errNeedSandboxID
+	}
+
+	dirPath := filepath.Join(runStoragePath, sandboxID, "tempDir")
+	err := os.MkdirAll(dirPath, dirMode)
+	if err != nil {
+		return "", err
+	}
+
+	f, err := ioutil.TempFile(dirPath, "tmp-")
+	if err != nil {
+		return "", err
+	}
+
+	return f.Name(), nil
+}
+
 // storeDeviceIDFile is used to marshal and store device IDs to disk.
 func (fs *filesystem) storeDeviceIDFile(file string, data interface{}) error {
 	if file == "" {
