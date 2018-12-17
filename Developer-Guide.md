@@ -24,6 +24,9 @@
         * [Build an initrd image](#build-an-initrd-image)
         * [Install the initrd image](#install-the-initrd-image)
 * [Install guest kernel images](#install-guest-kernel-images)
+* [Install a hypervisor](#install-a-hypervisor)
+    * [Build a custom QEMU](#build-a-custom-qemu)
+        * [Build a custom QEMU for aarch64/arm64 - REQUIRED](#Build-a-custom-qemu-for-aarch64/arm64---required)
 * [Run Kata Containers with Docker](#run-kata-containers-with-docker)
     * [Update Docker configuration](#update-docker-configuration)
     * [Create a container using Kata](#create-a-container-using-kata)
@@ -352,6 +355,36 @@ $ sudo ln -sf "${kata_vmlinux}" "${kata_kernel_dir}/vmlinux.container"
 $ popd
 $ popd
 $ rm -rf "${tmpdir}"
+```
+
+# Install a hypervisor
+
+When setting up Kata using a [packaged installation method](https://github.com/kata-containers/documentation/tree/master/install#installing-on-a-linux-system), the `qemu-lite` hypervisor is installed automatically. For other installation methods, you will need to manually install a suitable hypervisor.
+
+## Build a custom QEMU
+
+To build a version of QEMU using the same options as the default `qemu-lite` version , you could use the `configure-hypervisor.sh` script:
+
+```
+$ go get -d github.com/kata-containers/packaging
+$ cd $your_qemu_directory
+$ ${GOPATH}/src/github.com/kata-containers/packaging/scripts/configure-hypervisor.sh qemu > kata.cfg
+$ eval ./configure "$(cat kata.cfg)"
+$ make -j $(nproc)
+$ sudo -E make install
+```
+
+### Build a custom QEMU for aarch64/arm64 - REQUIRED
+> **Note:**
+>
+> - You should only do this step if you are on aarch64/arm64.
+> - You should include [Eric Auger's latest PCDIMM/NVDIMM patches](https://patchwork.kernel.org/cover/10647305/) which are
+>   under upstream review for supporting nvdimm on aarch64.
+>
+You could build the custom `qemu-system-aarch64` as required with the following command:
+```
+$ go get -d github.com/kata-containers/tests
+$ script -fec 'sudo -E ${GOPATH}/src/github.com/kata-containers/tests/.ci/install_qemu.sh'
 ```
 
 # Run Kata Containers with Docker
