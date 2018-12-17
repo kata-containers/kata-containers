@@ -41,6 +41,30 @@
   version = "v0.8.1"
 
 [[projects]]
+  digest = "1:d8ebbd207f3d3266d4423ce4860c9f3794956306ded6c7ba312ecc69cdfbf04c"
+  name = "github.com/PuerkitoBio/purell"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "0bcb03f4b4d0a9428594752bd2a3b9aa0a9d4bd4"
+  version = "v1.1.0"
+
+[[projects]]
+  branch = "master"
+  digest = "1:8098cd40cd09879efbf12e33bcd51ead4a66006ac802cd563a66c4f3373b9727"
+  name = "github.com/PuerkitoBio/urlesc"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "de5bf2ad457846296e2031421a34e2568e304e35"
+
+[[projects]]
+  digest = "1:5a23cd3a5496a0b2da7e3b348d14e77b11a210738c398200d7d6f04ea8cf3bd8"
+  name = "github.com/asaskevich/govalidator"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "ccb8e960c48f04d6935e72476ae4a51028f9e22f"
+  version = "v9"
+
+[[projects]]
   digest = "1:3ac89be767202cf44b33eec1b41b3c6255ec1c79d893304ff621cceada4e53d0"
   name = "github.com/clearcontainers/proxy"
   packages = [
@@ -180,11 +204,126 @@
   version = "v0.3.3"
 
 [[projects]]
+  digest = "1:61eec5f342089feaaa1690354a62102a90a64dcf7bbc4c6d840dc5edd66ae451"
+  name = "github.com/firecracker-microvm/firecracker-go-sdk"
+  packages = [
+    ".",
+    "client",
+    "client/models",
+    "client/operations",
+  ]
+  pruneopts = "NUT"
+  revision = "840c1e37f5f2bbcbff1fdbfcfcea09d0bf158977"
+
+[[projects]]
+  branch = "master"
+  digest = "1:ce0cdcf4a121add67d3c6f7cc08e6233275d0f417852f025b790d35da88fab10"
+  name = "github.com/globalsign/mgo"
+  packages = [
+    "bson",
+    "internal/json",
+  ]
+  pruneopts = "NUT"
+  revision = "eeefdecb41b842af6dc652aaea4026e8403e62df"
+
+[[projects]]
   digest = "1:021d6ee454d87208dd1cd731cd702d3521aa8a51ad2072fa7beffbb3d677d8bb"
   name = "github.com/go-ini/ini"
   packages = ["."]
   pruneopts = "NUT"
   revision = "20b96f641a5ea98f2f8619ff4f3e061cff4833bd"
+
+[[projects]]
+  digest = "1:da40b9e5973892e2bd37a72c36464b8252a4034522925d920983edaabda03693"
+  name = "github.com/go-openapi/analysis"
+  packages = [
+    ".",
+    "internal",
+  ]
+  pruneopts = "NUT"
+  revision = "c701774f4e604d952e4e8c56dee260be696e33c3"
+  version = "v0.17.2"
+
+[[projects]]
+  digest = "1:02356188d2100454319fc9f17e956bf6db7abd0fd66fef602ffa17d7ceb2808b"
+  name = "github.com/go-openapi/errors"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "d9664f9fab8994271e573ed69cf2adfc09b7a800"
+  version = "v0.17.2"
+
+[[projects]]
+  digest = "1:260f7ebefc63024c8dfe2c9f1a2935a89fa4213637a1f522f592f80c001cc441"
+  name = "github.com/go-openapi/jsonpointer"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "ef5f0afec364d3b9396b7b77b43dbe26bf1f8004"
+  version = "v0.17.2"
+
+[[projects]]
+  digest = "1:98abd61947ff5c7c6fcfec5473d02a4821ed3a2dd99a4fbfdb7925b0dd745546"
+  name = "github.com/go-openapi/jsonreference"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "8483a886a90412cd6858df4ea3483dce9c8e35a3"
+  version = "v0.17.2"
+
+[[projects]]
+  digest = "1:cc4186672d13bce6e14f7b39c6f51b2f8c5126532a020ced03841e7175886651"
+  name = "github.com/go-openapi/loads"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "150d36912387ec2f607be674c5be309ddccc0eed"
+  version = "v0.17.2"
+
+[[projects]]
+  digest = "1:4493a5de5ae6e54fcedc502715c0254fd0dec1cd872fa6ca99f28e61cebc4d11"
+  name = "github.com/go-openapi/runtime"
+  packages = [
+    ".",
+    "client",
+    "logger",
+    "middleware",
+    "middleware/denco",
+    "middleware/header",
+    "middleware/untyped",
+    "security",
+  ]
+  pruneopts = "NUT"
+  revision = "231d7876b7019dbcbfc97a7ba764379497b67c1d"
+  version = "v0.17.2"
+
+[[projects]]
+  digest = "1:dfab391de021809e0041f0ab5648da6b74dd16a685472a1b8c3dc06b3dca1ee2"
+  name = "github.com/go-openapi/spec"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "5bae59e25b21498baea7f9d46e9c147ec106a42e"
+  version = "v0.17.2"
+
+[[projects]]
+  digest = "1:76667bb6bc2df5b95be9efb9ee0b72b3550c639f530232a0b8fcf3347035d987"
+  name = "github.com/go-openapi/strfmt"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "edab9990ffc9b4a428f3306ecf4d18a069ca3317"
+  version = "v0.17.2"
+
+[[projects]]
+  digest = "1:983f95b2fae6fe8fdd361738325ed6090f4f3bd15ce4db745e899fb5b0fdfc46"
+  name = "github.com/go-openapi/swag"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "5899d5c5e619fda5fa86e14795a835f473ca284c"
+  version = "v0.17.2"
+
+[[projects]]
+  digest = "1:7d7626b94bc5e04d1c23eaa97816181f4ff6218540a6d43379070d6ece9ca467"
+  name = "github.com/go-openapi/validate"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "d2eab7d93009e9215fc85b2faa2c2f2a98c2af48"
+  version = "v0.17.2"
 
 [[projects]]
   digest = "1:ca3369c0fc8d471d8698f85a37a4f8c98a847402681a31431fb87a84fa2e5373"
@@ -261,6 +400,18 @@
   packages = ["pkg/annotations"]
   pruneopts = "NUT"
   revision = "3394b3b2d6af0e41d185bb695c6378be5dd4d61d"
+
+[[projects]]
+  branch = "master"
+  digest = "1:84a5a2b67486d5d67060ac393aa255d05d24ed5ee41daecd5635ec22657b6492"
+  name = "github.com/mailru/easyjson"
+  packages = [
+    "buffer",
+    "jlexer",
+    "jwriter",
+  ]
+  pruneopts = "NUT"
+  revision = "60711f1a8329503b04e1c88535f419d0bb440bff"
 
 [[projects]]
   digest = "1:0159dcdabe50788e5dcfb469521f8f8dcd362db3ab6b465b99a3d33a90726fc0"
@@ -455,7 +606,7 @@
   revision = "1d2aa6dbdea45adaaebb9905d0666e4537563829"
 
 [[projects]]
-  digest = "1:e7071ed636b5422cc51c0e3a6cebc229d6c9fffc528814b519a980641422d619"
+  digest = "1:e33513a825fcd765e97b5de639a2f7547542d1a8245df0cef18e1fd390b778a9"
   name = "golang.org/x/text"
   packages = [
     "collate",
@@ -472,6 +623,7 @@
     "unicode/cldr",
     "unicode/norm",
     "unicode/rangetable",
+    "width",
   ]
   pruneopts = "NUT"
   revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
@@ -516,6 +668,14 @@
   pruneopts = "NUT"
   revision = "d11072e7ca9811b1100b80ca0269ac831f06d024"
 
+[[projects]]
+  digest = "1:18108594151654e9e696b27b181b953f9a90b16bf14d253dd1b397b025a1487f"
+  name = "gopkg.in/yaml.v2"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "51d6538a90f86fe93ac480b35f37b2be17fef232"
+  version = "v2.2.2"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
@@ -539,7 +699,13 @@
     "github.com/containernetworking/plugins/pkg/ns",
     "github.com/dlespiau/covertool/pkg/cover",
     "github.com/docker/go-units",
+    "github.com/firecracker-microvm/firecracker-go-sdk",
+    "github.com/firecracker-microvm/firecracker-go-sdk/client",
+    "github.com/firecracker-microvm/firecracker-go-sdk/client/models",
+    "github.com/firecracker-microvm/firecracker-go-sdk/client/operations",
     "github.com/go-ini/ini",
+    "github.com/go-openapi/runtime/client",
+    "github.com/go-openapi/strfmt",
     "github.com/gogo/protobuf/proto",
     "github.com/gogo/protobuf/types",
     "github.com/intel/govmm/qemu",
