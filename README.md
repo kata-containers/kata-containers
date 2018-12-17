@@ -52,9 +52,9 @@ See [the license file](LICENSE) for further details.
 Kata Containers currently works on systems supporting the following
 technologies:
 
-- [Intel](https://www.intel.com)'s VT-x technology.
-- [ARM](https://www.arm.com)'s Hyp mode (virtualization extension).
-- [IBM](https://www.ibm.com)'s Power Systems.
+- [Intel](https://www.intel.com) VT-x technology.
+- [ARM](https://www.arm.com) Hyp mode (virtualization extension).
+- [IBM](https://www.ibm.com) Power Systems.
 - [IBM](https://www.ibm.com) Z mainframes.
 ### Hardware requirements
 
