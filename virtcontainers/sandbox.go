@@ -1254,10 +1254,12 @@ func (s *Sandbox) stopVM() error {
 	span, _ := s.trace("stopVM")
 	defer span.Finish()
 
+	s.Logger().Info("Stopping sandbox in the VM")
 	if err := s.agent.stopSandbox(s); err != nil {
 		s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("Agent did not stop sandbox")
 	}
 
+	s.Logger().Info("Stopping VM")
 	return s.hypervisor.stopSandbox()
 }
 
@@ -1592,12 +1594,7 @@ func (s *Sandbox) Stop() error {
 		}
 	}
 
-	if err := s.agent.stopSandbox(s); err != nil {
-		return err
-	}
-
-	s.Logger().Info("Stopping VM")
-	if err := s.hypervisor.stopSandbox(); err != nil {
+	if err := s.stopVM(); err != nil {
 		return err
 	}
 
