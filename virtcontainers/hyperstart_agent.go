@@ -1005,3 +1005,8 @@ func (h *hyper) setGuestDateTime(time.Time) error {
 	// hyperstart-agent does not support setGuestDateTime
 	return nil
 }
+
+func (h *hyper) copyFile(src, dst string) error {
+	// hyperstart-agent does not support copyFile
+	return nil
+}

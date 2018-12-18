@@ -272,3 +272,11 @@ func TestNoopGetAgentUrl(t *testing.T) {
 	assert.Nil(err)
 	assert.Empty(url)
 }
+
+func TestNoopCopyFile(t *testing.T) {
+	assert := assert.New(t)
+	n := &noopAgent{}
+
+	err := n.copyFile("", "")
+	assert.Nil(err)
+}
