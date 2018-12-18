@@ -104,7 +104,7 @@ main() {
 	elif [ "$QEMU_ARCH" == "aarch64" ]; then
 		packaged_qemu_version=$(get_packaged_qemu_version)
 		short_current_qemu_version=${CURRENT_QEMU_VERSION#*-}
-		if [ "$packaged_qemu_version" == "$short_current_qemu_version" ]; then
+		if [ "$packaged_qemu_version" == "$short_current_qemu_version" ] && [ -z "${CURRENT_QEMU_COMMIT}" ]; then
 			install_packaged_qemu || build_and_install_qemu
 		else
 			build_and_install_qemu

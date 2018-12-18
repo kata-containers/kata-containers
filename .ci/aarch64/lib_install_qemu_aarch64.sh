@@ -8,6 +8,8 @@ set -e
 
 CURRENT_QEMU_VERSION=$(get_version "assets.hypervisor.qemu.version")
 PACKAGED_QEMU="qemu"
+CURRENT_QEMU_PATCHES_BRANCH=$(get_version "assets.hypervisor.qemu.architecture.aarch64.branch")
+CURRENT_QEMU_COMMIT=$(get_version "assets.hypervisor.qemu.architecture.aarch64.commit")
 
 get_packaged_qemu_version() {
         if [ "$ID" == "ubuntu" ]; then
@@ -54,7 +56,20 @@ build_and_install_qemu() {
 
         pushd "${GOPATH}/src/${QEMU_REPO}"
         git fetch
-        git checkout "$CURRENT_QEMU_VERSION"
+        # if extra patches exist
+        if [ -n "${CURRENT_QEMU_COMMIT}" ]; then
+            git checkout "$CURRENT_QEMU_PATCHES_BRANCH"
+            git checkout "$CURRENT_QEMU_COMMIT"
+            # Apply required patches
+            QEMU_PATCHES_PATH="${GOPATH}/src/${PACKAGING_REPO}/obs-packaging/qemu-aarch64/patches"
+            for patch in ${QEMU_PATCHES_PATH}/*.patch; do
+                echo "Applying patch: $patch"
+                patch -p1 <"$patch"
+            done
+        else
+            git checkout "$CURRENT_QEMU_VERSION"
+        fi
+
         [ -d "capstone" ] || git clone https://github.com/qemu/capstone.git capstone
         [ -d "ui/keycodemapdb" ] || git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
@@ -65,8 +80,11 @@ build_and_install_qemu() {
         echo "Install Qemu"
         sudo -E make install
 
-        # Add link from /usr/local/bin to /usr/bin
-        sudo ln -sf $(command -v qemu-system-${QEMU_ARCH}) "/usr/bin/qemu-system-${QEMU_ARCH}"
+        local qemu_bin=$(command -v qemu-system-${QEMU_ARCH})
+        if [ $(dirname ${qemu_bin}) == "/usr/local/bin" ]; then
+            # Add link from /usr/local/bin to /usr/bin
+            sudo ln -sf $(command -v qemu-system-${QEMU_ARCH}) "/usr/bin/qemu-system-${QEMU_ARCH}"
+        fi
         popd
 }
 
