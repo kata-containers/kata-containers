@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -34,6 +35,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/context"
+	"golang.org/x/sys/unix"
 	golangGrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
@@ -63,6 +65,7 @@ var (
 	shmDir               = "shm"
 	kataEphemeralDevType = "ephemeral"
 	ephemeralPath        = filepath.Join(kataGuestSandboxDir, kataEphemeralDevType)
+	grpcMaxDataSize      = int64(1024 * 1024)
 )
 
 // KataAgentConfig is a structure storing information needed
@@ -1490,6 +1493,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers["grpc.GuestDetailsRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.GetGuestDetails(ctx, req.(*grpc.GuestDetailsRequest), opts...)
 	}
+	k.reqHandlers["grpc.CopyFileRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.CopyFile(ctx, req.(*grpc.CopyFileRequest), opts...)
+	}
 	k.reqHandlers["grpc.SetGuestDateTimeRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.SetGuestDateTime(ctx, req.(*grpc.SetGuestDateTimeRequest), opts...)
 	}
@@ -1707,4 +1713,57 @@ func (k *kataAgent) convertToRoutes(aRoutes []*aTypes.Route) (routes []*types.Ro
 	}
 
 	return routes
+}
+
+func (k *kataAgent) copyFile(src, dst string) error {
+	var st unix.Stat_t
+
+	err := unix.Stat(src, &st)
+	if err != nil {
+		return fmt.Errorf("Could not get file %s information: %v", src, err)
+	}
+
+	b, err := ioutil.ReadFile(src)
+	if err != nil {
+		return fmt.Errorf("Could not read file %s: %v", src, err)
+	}
+
+	fileSize := int64(len(b))
+
+	k.Logger().WithFields(logrus.Fields{
+		"source": src,
+		"dest":   dst,
+	}).Debugf("Copying file from host to guest")
+
+	cpReq := &grpc.CopyFileRequest{
+		Path:     dst,
+		DirMode:  uint32(dirMode),
+		FileMode: st.Mode,
+		FileSize: fileSize,
+		Uid:      int32(st.Uid),
+		Gid:      int32(st.Gid),
+	}
+
+	// Copy file by parts if it's needed
+	remainingBytes := fileSize
+	offset := int64(0)
+	for remainingBytes > 0 {
+		bytesToCopy := int64(len(b))
+		if bytesToCopy > grpcMaxDataSize {
+			bytesToCopy = grpcMaxDataSize
+		}
+
+		cpReq.Data = b[:bytesToCopy]
+		cpReq.Offset = offset
+
+		if _, err = k.sendReq(cpReq); err != nil {
+			return fmt.Errorf("Could not send CopyFile request: %v", err)
+		}
+
+		b = b[bytesToCopy:]
+		remainingBytes -= bytesToCopy
+		offset += grpcMaxDataSize
+	}
+
+	return nil
 }

@@ -261,3 +261,11 @@ func TestHyperGetAgentUrl(t *testing.T) {
 	assert.Nil(err)
 	assert.Empty(url)
 }
+
+func TestHyperCopyFile(t *testing.T) {
+	assert := assert.New(t)
+	h := &hyper{}
+
+	err := h.copyFile("", "")
+	assert.Nil(err)
+}
