@@ -18,7 +18,12 @@ import (
 // HypervisorType describes an hypervisor type.
 type HypervisorType string
 
+type operation int
+
 const (
+	// FirecrackerHypervisor is the FC hypervisor.
+	FirecrackerHypervisor HypervisorType = "firecracker"
+
 	// QemuHypervisor is the QEMU hypervisor.
 	QemuHypervisor HypervisorType = "qemu"
 
@@ -96,6 +101,9 @@ func (hType *HypervisorType) Set(value string) error {
 	case "qemu":
 		*hType = QemuHypervisor
 		return nil
+	case "firecracker":
+		*hType = FirecrackerHypervisor
+		return nil
 	case "mock":
 		*hType = MockHypervisor
 		return nil
@@ -109,6 +117,8 @@ func (hType *HypervisorType) String() string {
 	switch *hType {
 	case QemuHypervisor:
 		return string(QemuHypervisor)
+	case FirecrackerHypervisor:
+		return string(FirecrackerHypervisor)
 	case MockHypervisor:
 		return string(MockHypervisor)
 	default:
@@ -121,6 +131,8 @@ func newHypervisor(hType HypervisorType) (hypervisor, error) {
 	switch hType {
 	case QemuHypervisor:
 		return &qemu{}, nil
+	case FirecrackerHypervisor:
+		return &firecracker{}, nil
 	case MockHypervisor:
 		return &mockHypervisor{}, nil
 	default:
