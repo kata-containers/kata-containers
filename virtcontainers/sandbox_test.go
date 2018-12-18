@@ -1184,6 +1184,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 		storage:    &filesystem{},
 		hypervisor: &mockHypervisor{},
 		devManager: dm,
+		ctx:        context.Background(),
 	}
 
 	containers[c.id].sandbox = &sandbox
@@ -1565,6 +1566,7 @@ func TestAttachBlockDevice(t *testing.T) {
 		storage:    fs,
 		hypervisor: hypervisor,
 		config:     sconfig,
+		ctx:        context.Background(),
 	}
 
 	contID := "100"
@@ -1653,6 +1655,7 @@ func TestPreAddDevice(t *testing.T) {
 		hypervisor: hypervisor,
 		config:     sconfig,
 		devManager: dm,
+		ctx:        context.Background(),
 	}
 
 	contID := "100"
@@ -1743,6 +1746,7 @@ func TestStartNetworkMonitor(t *testing.T) {
 		networkNS: NetworkNamespace{
 			NetNsPath: fmt.Sprintf("/proc/%d/task/%d/ns/net", os.Getpid(), unix.Gettid()),
 		},
+		ctx: context.Background(),
 	}
 
 	err = s.startNetworkMonitor()
