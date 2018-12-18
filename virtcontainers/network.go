@@ -407,11 +407,15 @@ func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Lin
 			MulticastSnooping: expectedLink.(*netlink.Bridge).MulticastSnooping,
 		}
 	case (&netlink.Tuntap{}).Type():
+		flags := netlink.TUNTAP_VNET_HDR
+		if queues > 0 {
+			flags |= netlink.TUNTAP_MULTI_QUEUE_DEFAULTS
+		}
 		newLink = &netlink.Tuntap{
 			LinkAttrs: netlink.LinkAttrs{Name: name},
 			Mode:      netlink.TUNTAP_MODE_TAP,
 			Queues:    queues,
-			Flags:     netlink.TUNTAP_MULTI_QUEUE_DEFAULTS | netlink.TUNTAP_VNET_HDR,
+			Flags:     flags,
 		}
 	case (&netlink.Macvtap{}).Type():
 		qlen := expectedLink.Attrs().TxQLen
