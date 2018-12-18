@@ -81,27 +81,36 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
+	fmt.Printf("INFO: Creating virtcontainers test directory %s\n", testDir)
 	err = os.MkdirAll(testDir, dirMode)
 	if err != nil {
 		fmt.Println("Could not create test directories:", err)
 		os.Exit(1)
 	}
 
-	_, err = os.Create(filepath.Join(testDir, testKernel))
+	testQemuKernelPath = filepath.Join(testDir, testKernel)
+	testQemuInitrdPath = filepath.Join(testDir, testInitrd)
+	testQemuImagePath = filepath.Join(testDir, testImage)
+	testQemuPath = filepath.Join(testDir, testHypervisor)
+
+	fmt.Printf("INFO: Creating virtcontainers test kernel %s\n", testQemuKernelPath)
+	_, err = os.Create(testQemuKernelPath)
 	if err != nil {
 		fmt.Println("Could not create test kernel:", err)
 		os.RemoveAll(testDir)
 		os.Exit(1)
 	}
 
-	_, err = os.Create(filepath.Join(testDir, testImage))
+	fmt.Printf("INFO: Creating virtcontainers test image %s\n", testQemuImagePath)
+	_, err = os.Create(testQemuImagePath)
 	if err != nil {
 		fmt.Println("Could not create test image:", err)
 		os.RemoveAll(testDir)
 		os.Exit(1)
 	}
 
-	_, err = os.Create(filepath.Join(testDir, testHypervisor))
+	fmt.Printf("INFO: Creating virtcontainers test hypervisor %s\n", testQemuPath)
+	_, err = os.Create(testQemuPath)
 	if err != nil {
 		fmt.Println("Could not create test hypervisor:", err)
 		os.RemoveAll(testDir)
@@ -126,11 +135,6 @@ func TestMain(m *testing.M) {
 	sandboxDirLock = filepath.Join(runStoragePath, testSandboxID)
 	sandboxFileState = filepath.Join(runStoragePath, testSandboxID, stateFile)
 	sandboxFileLock = filepath.Join(runStoragePath, testSandboxID, lockFileName)
-
-	testQemuKernelPath = filepath.Join(testDir, testKernel)
-	testQemuInitrdPath = filepath.Join(testDir, testInitrd)
-	testQemuImagePath = filepath.Join(testDir, testImage)
-	testQemuPath = filepath.Join(testDir, testHypervisor)
 
 	testHyperstartCtlSocket = filepath.Join(testDir, "test_hyper.sock")
 	testHyperstartTtySocket = filepath.Join(testDir, "test_tty.sock")
