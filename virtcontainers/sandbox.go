@@ -1001,6 +1001,10 @@ func (s *Sandbox) Delete() error {
 		s.monitor.stop()
 	}
 
+	if err := s.hypervisor.cleanup(); err != nil {
+		s.Logger().WithError(err).Error("failed to cleanup hypervisor")
+	}
+
 	return s.storage.deleteSandboxResources(s.id, nil)
 }
 

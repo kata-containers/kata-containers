@@ -705,3 +705,7 @@ func (fc *firecracker) getThreadIDs() (*threadIDs, error) {
 	// of get /machine-config
 	return nil, nil
 }
+
+func (fc *firecracker) cleanup() error {
+	return nil
+}
