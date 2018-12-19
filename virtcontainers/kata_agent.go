@@ -255,7 +255,14 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 		k.proxyBuiltIn = true
 	}
 
-	// Adding the shared volume.
+	// Neither create shared directory nor add 9p device if hypervisor
+	// doesn't support filesystem sharing.
+	caps := h.capabilities()
+	if !caps.isFsSharingSupported() {
+		return nil
+	}
+
+	// Create shared directory and add the shared volume if filesystem sharing is supported.
 	// This volume contains all bind mounted container bundles.
 	sharedVolume := Volume{
 		MountTag: mountGuest9pTag,
@@ -615,22 +622,28 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 		return err
 	}
 
-	sharedDir9pOptions = append(sharedDir9pOptions, fmt.Sprintf("msize=%d", sandbox.config.HypervisorConfig.Msize9p))
+	storages := []*grpc.Storage{}
+	caps := sandbox.hypervisor.capabilities()
 
-	// We mount the shared directory in a predefined location
-	// in the guest.
-	// This is where at least some of the host config files
-	// (resolv.conf, etc...) and potentially all container
-	// rootfs will reside.
-	sharedVolume := &grpc.Storage{
-		Driver:     kata9pDevType,
-		Source:     mountGuest9pTag,
-		MountPoint: kataGuestSharedDir,
-		Fstype:     type9pFs,
-		Options:    sharedDir9pOptions,
+	// append 9p shared volume to storages only if filesystem sharing is supported
+	if caps.isFsSharingSupported() {
+		sharedDir9pOptions = append(sharedDir9pOptions, fmt.Sprintf("msize=%d", sandbox.config.HypervisorConfig.Msize9p))
+
+		// We mount the shared directory in a predefined location
+		// in the guest.
+		// This is where at least some of the host config files
+		// (resolv.conf, etc...) and potentially all container
+		// rootfs will reside.
+		sharedVolume := &grpc.Storage{
+			Driver:     kata9pDevType,
+			Source:     mountGuest9pTag,
+			MountPoint: kataGuestSharedDir,
+			Fstype:     type9pFs,
+			Options:    sharedDir9pOptions,
+		}
+
+		storages = append(storages, sharedVolume)
 	}
-
-	storages := []*grpc.Storage{sharedVolume}
 
 	if sandbox.shmSize > 0 {
 		path := filepath.Join(kataGuestSandboxDir, shmDir)
