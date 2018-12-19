@@ -740,8 +740,14 @@ func checkNetNsConfig(config oci.RuntimeConfig) error {
 
 // checkFactoryConfig ensures the VM factory configuration is valid.
 func checkFactoryConfig(config oci.RuntimeConfig) error {
-	if config.FactoryConfig.Template && config.HypervisorConfig.InitrdPath == "" {
-		return errors.New("Factory option enable_template requires an initrd image")
+	if config.FactoryConfig.Template {
+		if config.HypervisorConfig.InitrdPath == "" {
+			return errors.New("Factory option enable_template requires an initrd image")
+		}
+
+		if config.HypervisorConfig.UseVSock {
+			return errors.New("config vsock conflicts with factory, please disable one of them")
+		}
 	}
 
 	return nil
