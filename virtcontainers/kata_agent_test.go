@@ -247,6 +247,10 @@ func (p *gRPCProxy) SetGuestDateTime(ctx context.Context, req *pb.SetGuestDateTi
 	return &gpb.Empty{}, nil
 }
 
+func (p *gRPCProxy) CopyFile(ctx context.Context, req *pb.CopyFileRequest) (*gpb.Empty, error) {
+	return &gpb.Empty{}, nil
+}
+
 func gRPCRegister(s *grpc.Server, srv interface{}) {
 	switch g := srv.(type) {
 	case *gRPCProxy:
@@ -843,4 +847,56 @@ func TestKataGetAgentUrl(t *testing.T) {
 	assert.Nil(err)
 	assert.NotEmpty(url)
 
+}
+
+func TestKataCopyFile(t *testing.T) {
+	assert := assert.New(t)
+
+	impl := &gRPCProxy{}
+
+	proxy := mock.ProxyGRPCMock{
+		GRPCImplementer: impl,
+		GRPCRegister:    gRPCRegister,
+	}
+
+	sockDir, err := testGenerateKataProxySockDir()
+	assert.NoError(err)
+	defer os.RemoveAll(sockDir)
+
+	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
+	err = proxy.Start(testKataProxyURL)
+	assert.NoError(err)
+	defer proxy.Stop()
+
+	k := &kataAgent{
+		state: KataAgentState{
+			URL: testKataProxyURL,
+		},
+	}
+
+	err = k.copyFile("/abc/xyz/123", "/tmp")
+	assert.Error(err)
+
+	src, err := ioutil.TempFile("", "src")
+	assert.NoError(err)
+	defer os.Remove(src.Name())
+
+	data := []byte("abcdefghi123456789")
+	_, err = src.Write(data)
+	assert.NoError(err)
+	assert.NoError(src.Close())
+
+	dst, err := ioutil.TempFile("", "dst")
+	assert.NoError(err)
+	assert.NoError(dst.Close())
+	defer os.Remove(dst.Name())
+
+	orgGrpcMaxDataSize := grpcMaxDataSize
+	grpcMaxDataSize = 1
+	defer func() {
+		grpcMaxDataSize = orgGrpcMaxDataSize
+	}()
+
+	err = k.copyFile(src.Name(), dst.Name())
+	assert.NoError(err)
 }

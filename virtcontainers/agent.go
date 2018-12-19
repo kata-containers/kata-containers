@@ -250,4 +250,7 @@ type agent interface {
 
 	// setGuestDateTime asks the agent to set guest time to the provided one
 	setGuestDateTime(time.Time) error
+
+	// copyFile copies file from host to container's rootfs
+	copyFile(src, dst string) error
 }

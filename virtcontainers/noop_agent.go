@@ -209,3 +209,8 @@ func (n *noopAgent) getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetai
 func (n *noopAgent) setGuestDateTime(time.Time) error {
 	return nil
 }
+
+// copyFile is the Noop agent copy file. It does nothing.
+func (n *noopAgent) copyFile(src, dst string) error {
+	return nil
+}
