@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
-	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
 // https://github.com/torvalds/linux/blob/master/include/uapi/linux/major.h
@@ -431,6 +431,36 @@ func (c *Container) createContainersDirs() error {
 	return nil
 }
 
+func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir string) (string, error) {
+	randBytes, err := utils.GenerateRandomBytes(8)
+	if err != nil {
+		return "", err
+	}
+
+	filename := fmt.Sprintf("%s-%s-%s", c.id, hex.EncodeToString(randBytes), filepath.Base(m.Destination))
+	guestDest := filepath.Join(guestSharedDir, filename)
+
+	// copy file to contaier's rootfs if filesystem sharing is not supported, otherwise
+	// bind mount it in the shared directory.
+	caps := c.sandbox.hypervisor.capabilities()
+	if !caps.isFsSharingSupported() {
+		c.Logger().Debug("filesystem sharing is not supported, files will be copied")
+		if err := c.sandbox.agent.copyFile(m.Source, guestDest); err != nil {
+			return "", err
+		}
+	} else {
+		// These mounts are created in the shared dir
+		mountDest := filepath.Join(hostSharedDir, c.sandbox.id, filename)
+		if err := bindMount(c.ctx, m.Source, mountDest, false); err != nil {
+			return "", err
+		}
+		// Save HostPath mount value into the mount list of the container.
+		c.mounts[idx].HostPath = mountDest
+	}
+
+	return guestDest, nil
+}
+
 // mountSharedDirMounts handles bind-mounts by bindmounting to the host shared
 // directory which is mounted through 9pfs in the VM.
 // It also updates the container mount list with the HostPath info, and store
@@ -472,21 +502,10 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 			continue
 		}
 
-		randBytes, err := utils.GenerateRandomBytes(8)
+		guestDest, err := c.shareFiles(m, idx, hostSharedDir, guestSharedDir)
 		if err != nil {
 			return nil, err
 		}
-
-		// These mounts are created in the shared dir
-		filename := fmt.Sprintf("%s-%s-%s", c.id, hex.EncodeToString(randBytes), filepath.Base(m.Destination))
-		mountDest := filepath.Join(hostSharedDir, c.sandbox.id, filename)
-
-		if err := bindMount(c.ctx, m.Source, mountDest, false); err != nil {
-			return nil, err
-		}
-
-		// Save HostPath mount value into the mount list of the container.
-		c.mounts[idx].HostPath = mountDest
 
 		// Check if mount is readonly, let the agent handle the readonly mount
 		// within the VM.
@@ -498,7 +517,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 		}
 
 		sharedDirMount := Mount{
-			Source:      filepath.Join(guestSharedDir, filename),
+			Source:      guestDest,
 			Destination: m.Destination,
 			Type:        m.Type,
 			Options:     m.Options,
