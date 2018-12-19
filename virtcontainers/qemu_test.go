@@ -374,3 +374,14 @@ func TestQMPSetupShutdown(t *testing.T) {
 	err := q.qmpSetup()
 	assert.Nil(err)
 }
+
+func TestQemuCleanup(t *testing.T) {
+	assert := assert.New(t)
+
+	q := &qemu{
+		config: newQemuConfig(),
+	}
+
+	err := q.cleanup()
+	assert.Nil(err)
+}

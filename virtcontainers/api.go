@@ -74,6 +74,13 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		return nil, err
 	}
 
+	// cleanup sandbox resources in case of any failure
+	defer func() {
+		if err != nil {
+			s.Delete()
+		}
+	}()
+
 	// Create the sandbox network
 	if err = s.createNetwork(); err != nil {
 		return nil, err
@@ -112,7 +119,7 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		}
 	}()
 
-	if err := s.getAndStoreGuestDetails(); err != nil {
+	if err = s.getAndStoreGuestDetails(); err != nil {
 		return nil, err
 	}
 
@@ -127,7 +134,7 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 	}
 
 	// Setup host cgroups
-	if err := s.setupCgroups(); err != nil {
+	if err = s.setupCgroups(); err != nil {
 		return nil, err
 	}
 

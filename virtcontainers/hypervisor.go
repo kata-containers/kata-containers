@@ -606,4 +606,5 @@ type hypervisor interface {
 	capabilities() capabilities
 	hypervisorConfig() HypervisorConfig
 	getThreadIDs() (*threadIDs, error)
+	cleanup() error
 }
