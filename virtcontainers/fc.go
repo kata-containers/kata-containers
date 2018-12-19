@@ -462,6 +462,10 @@ func (fc *firecracker) fcAddVsock(vs kataVSOCK) error {
 	if err != nil {
 		return err
 	}
+	//Still racy. There is no way to send an fd to the firecracker
+	//REST API. We could release this just before we start the instance
+	//but even that will not eliminate the race
+	vs.vhostFd.Close()
 	return nil
 }
 
