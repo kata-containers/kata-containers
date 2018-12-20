@@ -537,14 +537,18 @@ func (fc *firecracker) fcUpdateBlockDrive(drive config.BlockDrive) error {
 		return err
 	}
 
-	actionParams := ops.NewCreateSyncActionParams()
-	actionInfo := &models.InstanceActionInfo{
-		ActionType: "BlockDeviceRescan",
-	}
-	actionParams.SetInfo(actionInfo)
-	_, err = fc.client().Operations.CreateSyncAction(actionParams)
-	if err != nil {
-		return err
+	// Rescan needs to used only if the VM is running
+	if fc.vmRunning() {
+		actionParams := ops.NewCreateSyncActionParams()
+		actionInfo := &models.InstanceActionInfo{
+			ActionType: "BlockDeviceRescan",
+			Payload:    driveID,
+		}
+		actionParams.SetInfo(actionInfo)
+		_, err = fc.client().Operations.CreateSyncAction(actionParams)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
