@@ -25,9 +25,11 @@ func TestNewStore(t *testing.T) {
 func TestManagerAddStore(t *testing.T) {
 	s, err := New(context.Background(), storeRoot)
 	assert.Nil(t, err)
-	err = stores.addStore(s)
 	defer stores.removeStore(storeRoot)
-	assert.Nil(t, err, "addStore failed")
+
+	// Positive find
+	newStore := stores.findStore(storeRoot)
+	assert.NotNil(t, newStore, "findStore failed")
 
 	// Duplicate, should fail
 	err = stores.addStore(s)
@@ -43,11 +45,8 @@ func TestManagerAddStore(t *testing.T) {
 }
 
 func TestManagerRemoveStore(t *testing.T) {
-	s, err := New(context.Background(), storeRoot)
+	_, err := New(context.Background(), storeRoot)
 	assert.Nil(t, err)
-
-	err = stores.addStore(s)
-	assert.Nil(t, err, "addStore failed")
 
 	// Positive find
 	newStore := stores.findStore(storeRoot)
@@ -69,12 +68,9 @@ func TestManagerRemoveStore(t *testing.T) {
 }
 
 func TestManagerFindStore(t *testing.T) {
-	s, err := New(context.Background(), storeRoot)
+	_, err := New(context.Background(), storeRoot)
 	assert.Nil(t, err)
-
-	err = stores.addStore(s)
 	defer stores.removeStore(storeRoot)
-	assert.Nil(t, err, "addStore failed")
 
 	// Positive find
 	newStore := stores.findStore(storeRoot)
