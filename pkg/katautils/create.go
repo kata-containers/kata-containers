@@ -53,18 +53,24 @@ func needSystemd(config vc.HypervisorConfig) bool {
 
 // HandleFactory  set the factory
 func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeConfig) {
-	if !runtimeConfig.FactoryConfig.Template {
+	if !runtimeConfig.FactoryConfig.Template && runtimeConfig.FactoryConfig.VMCacheNumber == 0 {
 		return
 	}
 
 	factoryConfig := vf.Config{
-		Template: true,
+		Template:        runtimeConfig.FactoryConfig.Template,
+		VMCache:         runtimeConfig.FactoryConfig.VMCacheNumber > 0,
+		VMCacheEndpoint: runtimeConfig.FactoryConfig.VMCacheEndpoint,
 		VMConfig: vc.VMConfig{
 			HypervisorType:   runtimeConfig.HypervisorType,
 			HypervisorConfig: runtimeConfig.HypervisorConfig,
 			AgentType:        runtimeConfig.AgentType,
 			AgentConfig:      runtimeConfig.AgentConfig,
 		},
+	}
+	if runtimeConfig.FactoryConfig.VMCacheNumber > 0 {
+		factoryConfig.VMConfig.ProxyType = runtimeConfig.ProxyType
+		factoryConfig.VMConfig.ProxyConfig = runtimeConfig.ProxyConfig
 	}
 
 	kataUtilsLogger.WithField("factory", factoryConfig).Info("load vm factory")

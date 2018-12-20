@@ -1,0 +1,35 @@
+//
+// Copyright 2019 HyperHQ Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
+syntax = "proto3";
+
+package cache;
+
+import "google/protobuf/empty.proto";
+
+service CacheService {
+    rpc Config(google.protobuf.Empty) returns (GrpcVMConfig);
+    rpc GetBaseVM(google.protobuf.Empty) returns (GrpcVM);
+}
+
+message GrpcVMConfig {
+    bytes Data = 1;
+    bytes AgentConfig = 2;
+}
+
+message GrpcVM {
+    string id = 1;
+
+    bytes hypervisor = 2;
+
+    int64 proxyPid = 3;
+    string proxyURL = 4;
+
+    uint32 cpu = 5;
+    uint32 memory = 6;
+
+    uint32 cpuDelta = 7;
+}

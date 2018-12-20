@@ -10,11 +10,11 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/sirupsen/logrus"
-	"github.com/stretchr/testify/assert"
-
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/factory/base"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
+	"github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewFactory(t *testing.T) {
@@ -279,41 +279,41 @@ func TestDeepCompare(t *testing.T) {
 
 	foo := vc.VMConfig{}
 	bar := vc.VMConfig{}
-	assert.True(deepCompare(foo, bar))
+	assert.True(utils.DeepCompare(foo, bar))
 
 	foo.HypervisorConfig.NumVCPUs = 1
-	assert.False(deepCompare(foo, bar))
+	assert.False(utils.DeepCompare(foo, bar))
 	bar.HypervisorConfig.NumVCPUs = 1
-	assert.True(deepCompare(foo, bar))
+	assert.True(utils.DeepCompare(foo, bar))
 
 	// slice
 	foo.HypervisorConfig.KernelParams = []vc.Param{}
-	assert.True(deepCompare(foo, bar))
+	assert.True(utils.DeepCompare(foo, bar))
 	foo.HypervisorConfig.KernelParams = append(foo.HypervisorConfig.KernelParams, vc.Param{Key: "key", Value: "value"})
-	assert.False(deepCompare(foo, bar))
+	assert.False(utils.DeepCompare(foo, bar))
 	bar.HypervisorConfig.KernelParams = append(bar.HypervisorConfig.KernelParams, vc.Param{Key: "key", Value: "value"})
-	assert.True(deepCompare(foo, bar))
+	assert.True(utils.DeepCompare(foo, bar))
 
 	// map
 	var fooMap map[string]vc.VMConfig
 	var barMap map[string]vc.VMConfig
-	assert.False(deepCompare(foo, fooMap))
-	assert.True(deepCompare(fooMap, barMap))
+	assert.False(utils.DeepCompare(foo, fooMap))
+	assert.True(utils.DeepCompare(fooMap, barMap))
 	fooMap = make(map[string]vc.VMConfig)
-	assert.True(deepCompare(fooMap, barMap))
+	assert.True(utils.DeepCompare(fooMap, barMap))
 	fooMap["foo"] = foo
-	assert.False(deepCompare(fooMap, barMap))
+	assert.False(utils.DeepCompare(fooMap, barMap))
 	barMap = make(map[string]vc.VMConfig)
-	assert.False(deepCompare(fooMap, barMap))
+	assert.False(utils.DeepCompare(fooMap, barMap))
 	barMap["foo"] = bar
-	assert.True(deepCompare(fooMap, barMap))
+	assert.True(utils.DeepCompare(fooMap, barMap))
 
 	// invalid interface
 	var f1 vc.Factory
 	var f2 vc.Factory
 	var f3 base.FactoryBase
-	assert.True(deepCompare(f1, f2))
-	assert.True(deepCompare(f1, f3))
+	assert.True(utils.DeepCompare(f1, f2))
+	assert.True(utils.DeepCompare(f1, f3))
 
 	// valid interface
 	var config Config
@@ -331,8 +331,8 @@ func TestDeepCompare(t *testing.T) {
 	}
 	f1, err = NewFactory(ctx, config, false)
 	assert.Nil(err)
-	assert.True(deepCompare(f1, f1))
+	assert.True(utils.DeepCompare(f1, f1))
 	f2, err = NewFactory(ctx, config, false)
 	assert.Nil(err)
-	assert.False(deepCompare(f1, f2))
+	assert.False(utils.DeepCompare(f1, f2))
 }

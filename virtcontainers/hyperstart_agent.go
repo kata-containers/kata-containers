@@ -327,6 +327,10 @@ func (h *hyper) configure(hv hypervisor, id, sharePath string, builtin bool, con
 	return hv.addDevice(sharedVolume, fsDev)
 }
 
+func (h *hyper) configureFromGrpc(id string, builtin bool, config interface{}) error {
+	return nil
+}
+
 func (h *hyper) createSandbox(sandbox *Sandbox) (err error) {
 	return h.configure(sandbox.hypervisor, "", h.getSharePath(sandbox.id), false, nil)
 }
@@ -997,6 +1001,12 @@ func (h *hyper) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) err
 	}
 
 	return nil
+}
+
+func (h *hyper) setProxyFromGrpc(proxy proxy, pid int, url string) {
+	h.proxy = proxy
+	h.state.ProxyPid = pid
+	h.state.URL = url
 }
 
 func (h *hyper) getGuestDetails(*grpc.GuestDetailsRequest) (*grpc.GuestDetailsResponse, error) {

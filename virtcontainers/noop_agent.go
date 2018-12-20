@@ -171,6 +171,10 @@ func (n *noopAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 	return nil
 }
 
+func (n *noopAgent) configureFromGrpc(id string, builtin bool, config interface{}) error {
+	return nil
+}
+
 // getVMPath is the Noop agent vm path getter. It does nothing.
 func (n *noopAgent) getVMPath(id string) string {
 	return ""
@@ -199,6 +203,9 @@ func (n *noopAgent) getAgentURL() (string, error) {
 // setProxy is the Noop agent proxy setter. It does nothing.
 func (n *noopAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error {
 	return nil
+}
+
+func (n *noopAgent) setProxyFromGrpc(proxy proxy, pid int, url string) {
 }
 
 // getGuestDetails is the Noop agent GuestDetails queryer. It does nothing.

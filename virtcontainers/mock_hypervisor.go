@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"github.com/kata-containers/runtime/virtcontainers/store"
@@ -104,4 +105,12 @@ func (m *mockHypervisor) cleanup() error {
 
 func (m *mockHypervisor) pid() int {
 	return m.mockPid
+}
+
+func (m *mockHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error {
+	return errors.New("mockHypervisor is not supported by VM cache")
+}
+
+func (m *mockHypervisor) toGrpc() ([]byte, error) {
+	return nil, errors.New("firecracker is not supported by VM cache")
 }
