@@ -45,6 +45,7 @@ func newBackend(scheme string) (backend, error) {
 
 type backend interface {
 	new(ctx context.Context, path string, host string) error
+	delete() error
 	load(item Item, data interface{}) error
 	store(item Item, data interface{}) error
 }
