@@ -173,8 +173,8 @@ func (f *filesystem) new(ctx context.Context, path string, host string) error {
 	return f.initialize()
 }
 
-func (f *filesystem) delete() {
-	os.RemoveAll(f.path)
+func (f *filesystem) delete() error {
+	return os.RemoveAll(f.path)
 }
 
 func (f *filesystem) load(item Item, data interface{}) error {

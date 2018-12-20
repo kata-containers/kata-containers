@@ -22,6 +22,18 @@ func TestNewStore(t *testing.T) {
 	assert.Equal(t, s.path, "/tmp/root1/")
 }
 
+func TestDeleteStore(t *testing.T) {
+	s, err := New(context.Background(), storeRoot)
+	assert.Nil(t, err)
+
+	err = s.Delete()
+	assert.Nil(t, err)
+
+	// We should no longer find storeRoot
+	newStore := stores.findStore(storeRoot)
+	assert.Nil(t, newStore, "findStore should not have found %s", storeRoot)
+}
+
 func TestManagerAddStore(t *testing.T) {
 	s, err := New(context.Background(), storeRoot)
 	assert.Nil(t, err)
