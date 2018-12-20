@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"sync"
 
@@ -85,6 +86,48 @@ type Store struct {
 	scheme string
 	path   string
 	host   string
+}
+
+type manager struct {
+	sync.RWMutex
+	stores map[string]*Store
+}
+
+var stores = &manager{stores: make(map[string]*Store)}
+
+func (m *manager) addStore(s *Store) (err error) {
+	if s == nil {
+		return fmt.Errorf("Store can not be nil")
+	}
+
+	if s.url == "" {
+		return fmt.Errorf("Store URL can not be nil")
+	}
+
+	m.Lock()
+	defer m.Unlock()
+
+	if m.stores[s.url] != nil {
+		return fmt.Errorf("Store %s already added", s.url)
+	}
+
+	m.stores[s.url] = s
+
+	return nil
+}
+
+func (m *manager) removeStore(url string) {
+	m.Lock()
+	defer m.Unlock()
+
+	delete(m.stores, url)
+}
+
+func (m *manager) findStore(url string) *Store {
+	m.RLock()
+	defer m.RUnlock()
+
+	return m.stores[url]
 }
 
 // New will return a new virtcontainers Store.
