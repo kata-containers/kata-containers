@@ -12,14 +12,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var storeRoot = "file:///root1/"
+var storeRoot = "file:///tmp/root1/"
 
 func TestNewStore(t *testing.T) {
 	s, err := New(context.Background(), storeRoot)
 	assert.Nil(t, err)
 	assert.Equal(t, s.scheme, "file")
 	assert.Equal(t, s.host, "")
-	assert.Equal(t, s.path, "/root1/")
+	assert.Equal(t, s.path, "/tmp/root1/")
 }
 
 func TestManagerAddStore(t *testing.T) {
