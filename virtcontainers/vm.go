@@ -7,10 +7,13 @@ package virtcontainers
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	pb "github.com/kata-containers/runtime/protocols/cache"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/sirupsen/logrus"
@@ -50,6 +53,63 @@ type VMConfig struct {
 // Valid check VMConfig validity.
 func (c *VMConfig) Valid() error {
 	return c.HypervisorConfig.valid()
+}
+
+// ToGrpc convert VMConfig struct to grpc format pb.GrpcVMConfig.
+func (c *VMConfig) ToGrpc() (*pb.GrpcVMConfig, error) {
+	data, err := json.Marshal(&c)
+	if err != nil {
+		return nil, err
+	}
+
+	var agentConfig []byte
+	switch aconf := c.AgentConfig.(type) {
+	case HyperConfig:
+		agentConfig, err = json.Marshal(&aconf)
+	case KataAgentConfig:
+		agentConfig, err = json.Marshal(&aconf)
+	default:
+		err = fmt.Errorf("agent type %s is not supported by VM cache", c.AgentType)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GrpcVMConfig{
+		Data:        data,
+		AgentConfig: agentConfig,
+	}, nil
+}
+
+// GrpcToVMConfig convert grpc format pb.GrpcVMConfig to VMConfig struct.
+func GrpcToVMConfig(j *pb.GrpcVMConfig) (*VMConfig, error) {
+	var config VMConfig
+	err := json.Unmarshal(j.Data, &config)
+	if err != nil {
+		return nil, err
+	}
+
+	switch config.AgentType {
+	case HyperstartAgent:
+		var hyperConfig HyperConfig
+		err := json.Unmarshal(j.AgentConfig, &hyperConfig)
+		if err == nil {
+			config.AgentConfig = hyperConfig
+		}
+	case KataContainersAgent:
+		var kataConfig KataAgentConfig
+		err := json.Unmarshal(j.AgentConfig, &kataConfig)
+		if err == nil {
+			config.AgentConfig = kataConfig
+		}
+	default:
+		err = fmt.Errorf("agent type %s is not supported by VM cache", config.AgentType)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return &config, nil
 }
 
 func setupProxy(h hypervisor, agent agent, config VMConfig, id string) (int, string, proxy, error) {
@@ -184,6 +244,57 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		cpu:        config.HypervisorConfig.NumVCPUs,
 		memory:     config.HypervisorConfig.MemorySize,
 		store:      vcStore,
+	}, nil
+}
+
+// NewVMFromGrpc creates a new VM based on provided pb.GrpcVM and VMConfig.
+func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, error) {
+	virtLog.WithField("GrpcVM", v).WithField("config", config).Info("create new vm from Grpc")
+
+	hypervisor, err := newHypervisor(config.HypervisorType)
+	if err != nil {
+		return nil, err
+	}
+
+	vcStore, err := store.NewVCStore(ctx,
+		store.SandboxConfigurationRoot(v.Id),
+		store.SandboxRuntimeRoot(v.Id))
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		if err != nil {
+			virtLog.WithField("vm", v.Id).WithError(err).Error("failed to create new vm from Grpc")
+			virtLog.WithField("vm", v.Id).Errorf("Deleting store for %s", v.Id)
+			vcStore.Delete()
+		}
+	}()
+
+	err = hypervisor.fromGrpc(ctx, &config.HypervisorConfig, vcStore, v.Hypervisor)
+	if err != nil {
+		return nil, err
+	}
+
+	agent := newAgent(config.AgentType)
+	agent.configureFromGrpc(v.Id, isProxyBuiltIn(config.ProxyType), config.AgentConfig)
+
+	proxy, err := newProxy(config.ProxyType)
+	if err != nil {
+		return nil, err
+	}
+	agent.setProxyFromGrpc(proxy, int(v.ProxyPid), v.ProxyURL)
+
+	return &VM{
+		id:         v.Id,
+		hypervisor: hypervisor,
+		agent:      agent,
+		proxy:      proxy,
+		proxyPid:   int(v.ProxyPid),
+		proxyURL:   v.ProxyURL,
+		cpu:        v.Cpu,
+		memory:     v.Memory,
+		cpuDelta:   v.CpuDelta,
 	}, nil
 }
 
@@ -352,4 +463,24 @@ func (v *VM) assignSandbox(s *Sandbox) error {
 	s.hypervisor = v.hypervisor
 
 	return nil
+}
+
+// ToGrpc convert VM struct to Grpc format pb.GrpcVM.
+func (v *VM) ToGrpc(config VMConfig) (*pb.GrpcVM, error) {
+	hJSON, err := v.hypervisor.toGrpc()
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.GrpcVM{
+		Id:         v.id,
+		Hypervisor: hJSON,
+
+		ProxyPid: int64(v.proxyPid),
+		ProxyURL: v.proxyURL,
+
+		Cpu:      v.cpu,
+		Memory:   v.memory,
+		CpuDelta: v.cpuDelta,
+	}, nil
 }

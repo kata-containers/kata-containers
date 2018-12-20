@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -109,4 +110,23 @@ func TestSetupProxy(t *testing.T) {
 	config.ProxyType = NoopProxyType
 	_, _, _, err = setupProxy(hypervisor, agent, config, "foobar")
 	assert.Nil(err)
+}
+
+func TestVMConfigGrpc(t *testing.T) {
+	assert := assert.New(t)
+	config := VMConfig{
+		HypervisorType:   QemuHypervisor,
+		HypervisorConfig: newQemuConfig(),
+		AgentType:        KataContainersAgent,
+		AgentConfig:      KataAgentConfig{false, true},
+		ProxyType:        NoopProxyType,
+	}
+
+	p, err := config.ToGrpc()
+	assert.Nil(err)
+
+	config2, err := GrpcToVMConfig(p)
+	assert.Nil(err)
+
+	assert.True(utils.DeepCompare(config, *config2))
 }

@@ -219,6 +219,30 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # Default false
 #enable_template = true
 
+# The number of caches of VMCache:
+# unspecified or == 0   --> VMCache is disabled
+# > 0                   --> will be set to the specified number
+#
+# VMCache is a function that creates VMs as caches before using it.
+# It helps speed up new container creation.
+# The function consists of a server and some clients communicating
+# through Unix socket.  The protocol is gRPC in protocols/cache/cache.proto.
+# The VMCache server will create some VMs and cache them by factory cache.
+# It will convert the VM to gRPC format and transport it when gets
+# requestion from clients.
+# Factory grpccache is the VMCache client.  It will request gRPC format
+# VM and convert it back to a VM.  If VMCache function is enabled,
+# kata-runtime will request VM from factory grpccache when it creates
+# a new sandbox.
+#
+# Default 0
+#vm_cache_number = 0
+
+# Specify the address of the Unix socket that is used by VMCache.
+#
+# Default /var/run/kata-containers/cache.sock
+#vm_cache_endpoint = "/var/run/kata-containers/cache.sock"
+
 [proxy.@PROJECT_TYPE@]
 path = "@PROXYPATH@"
 

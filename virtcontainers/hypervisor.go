@@ -610,4 +610,6 @@ type hypervisor interface {
 	getThreadIDs() (*threadIDs, error)
 	cleanup() error
 	pid() int
+	fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error
+	toGrpc() ([]byte, error)
 }

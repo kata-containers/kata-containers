@@ -184,6 +184,10 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		Enable: false,
 	}
 
+	factoryConfig := oci.FactoryConfig{
+		VMCacheEndpoint: defaultVMCacheEndpoint,
+	}
+
 	runtimeConfig := oci.RuntimeConfig{
 		HypervisorType:   defaultHypervisor,
 		HypervisorConfig: hypervisorConfig,
@@ -199,6 +203,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 
 		NetmonConfig:    netmonConfig,
 		DisableNewNetNs: disableNewNetNs,
+
+		FactoryConfig: factoryConfig,
 	}
 
 	err = SetKernelParams(&runtimeConfig)
@@ -626,6 +632,10 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		Enable: false,
 	}
 
+	expectedFactoryConfig := oci.FactoryConfig{
+		VMCacheEndpoint: defaultVMCacheEndpoint,
+	}
+
 	expectedConfig := oci.RuntimeConfig{
 		HypervisorType:   defaultHypervisor,
 		HypervisorConfig: expectedHypervisorConfig,
@@ -640,6 +650,8 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		ShimConfig: expectedShimConfig,
 
 		NetmonConfig: expectedNetmonConfig,
+
+		FactoryConfig: expectedFactoryConfig,
 	}
 	err = SetKernelParams(&expectedConfig)
 	if err != nil {
@@ -1376,7 +1388,8 @@ func TestUpdateRuntimeConfigurationFactoryConfig(t *testing.T) {
 
 	config := oci.RuntimeConfig{}
 	expectedFactoryConfig := oci.FactoryConfig{
-		Template: true,
+		Template:        true,
+		VMCacheEndpoint: defaultVMCacheEndpoint,
 	}
 
 	tomlConf := tomlConfig{Factory: factory{Template: true}}

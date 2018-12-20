@@ -424,3 +424,22 @@ func TestQemuCleanup(t *testing.T) {
 	err := q.cleanup()
 	assert.Nil(err)
 }
+
+func TestQemuGrpc(t *testing.T) {
+	assert := assert.New(t)
+
+	config := newQemuConfig()
+	q := &qemu{
+		id:     "testqemu",
+		config: config,
+	}
+
+	json, err := q.toGrpc()
+	assert.Nil(err)
+
+	var q2 qemu
+	err = q2.fromGrpc(context.Background(), &config, nil, json)
+	assert.Nil(err)
+
+	assert.True(q.id == q2.id)
+}
