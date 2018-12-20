@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	opentracing "github.com/opentracing/opentracing-go"
@@ -67,6 +68,12 @@ func (s vmmState) String() string {
 	return ""
 }
 
+// FirecrackerInfo contains information related to the hypervisor that we
+// want to store on disk
+type FirecrackerInfo struct {
+	PID int
+}
+
 type firecrackerState struct {
 	sync.RWMutex
 	state vmmState
@@ -83,6 +90,7 @@ func (s *firecrackerState) set(state vmmState) {
 type firecracker struct {
 	id    string //Unique ID per pod. Normally maps to the sandbox id
 	state firecrackerState
+	info  FirecrackerInfo
 
 	firecrackerd *exec.Cmd           //Tracks the firecracker process itself
 	fcClient     *client.Firecracker //Tracks the current active connection
@@ -136,6 +144,12 @@ func (fc *firecracker) init(ctx context.Context, id string, hypervisorConfig *Hy
 	fc.storage = storage
 	fc.config = *hypervisorConfig
 	fc.state.set(notReady)
+
+	// No need to return an error from there since there might be nothing
+	// to fetch if this is the first time the hypervisor is created.
+	if err := fc.storage.fetchHypervisorState(fc.id, &fc.info); err != nil {
+		fc.Logger().WithField("function", "init").WithError(err).Info("No info could be fetched")
+	}
 
 	return nil
 }
@@ -225,22 +239,24 @@ func (fc *firecracker) fcInit(timeout int) error {
 	args := []string{"--api-sock", fc.socketPath}
 
 	cmd := exec.Command(fc.config.HypervisorPath, args...)
-	err := cmd.Start()
-	if err != nil {
+	if err := cmd.Start(); err != nil {
+		fc.Logger().WithField("Error starting firecracker", err).Debug()
 		return err
 	}
 
+	fc.info.PID = cmd.Process.Pid
 	fc.firecrackerd = cmd
 	fc.fcClient = fc.newFireClient()
 
-	err = fc.waitVMM(timeout)
-	if err != nil {
+	if err := fc.waitVMM(timeout); err != nil {
+		fc.Logger().WithField("fcInit failed:", err).Debug()
 		return err
 	}
 
 	fc.state.set(apiReady)
 
-	return nil
+	// Store VMM information
+	return fc.storage.storeHypervisorState(fc.id, fc.info)
 }
 
 func (fc *firecracker) client() *client.Firecracker {
@@ -415,23 +431,52 @@ func (fc *firecracker) waitSandbox(timeout int) error {
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (fc *firecracker) stopSandbox() error {
+func (fc *firecracker) stopSandbox() (err error) {
 	span, _ := fc.trace("stopSandbox")
 	defer span.Finish()
 
-	fc.Logger().Info("Stopping Sandbox")
+	fc.Logger().Info("Stopping firecracker VM")
 
-	actionParams := ops.NewCreateSyncActionParams()
-	actionInfo := &models.InstanceActionInfo{
-		ActionType: "InstanceHalt",
+	defer func() {
+		if err != nil {
+			fc.Logger().Info("stopSandbox failed")
+		} else {
+			fc.Logger().Info("Firecracker VM stopped")
+		}
+	}()
+
+	pid := fc.info.PID
+
+	// Check if VM process is running, in case it is not, let's
+	// return from here.
+	if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
+		return nil
 	}
-	actionParams.SetInfo(actionInfo)
-	_, err := fc.client().Operations.CreateSyncAction(actionParams)
-	if err != nil {
+
+	// Send a SIGTERM to the VM process to try to stop it properly
+	if err = syscall.Kill(pid, syscall.SIGTERM); err != nil {
 		return err
 	}
 
-	return nil
+	// Wait for the VM process to terminate
+	tInit := time.Now()
+	for {
+		if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
+			return nil
+		}
+
+		if time.Since(tInit).Seconds() >= fcStopSandboxTimeout {
+			fc.Logger().Warnf("VM still running after waiting %ds", fcStopSandboxTimeout)
+			break
+		}
+
+		// Let's avoid to run a too busy loop
+		time.Sleep(time.Duration(50) * time.Millisecond)
+	}
+
+	// Let's try with a hammer now, a SIGKILL should get rid of the
+	// VM process.
+	return syscall.Kill(pid, syscall.SIGKILL)
 }
 
 func (fc *firecracker) pauseSandbox() error {
