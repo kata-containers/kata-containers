@@ -70,6 +70,10 @@
  name = "github.com/containerd/containerd"
  revision = "f05672357f56f26751a521175c5a96fc21fa8603"
 
+[[constraint]]
+  name = "github.com/firecracker-microvm/firecracker-go-sdk"
+  revision = "840c1e37f5f2bbcbff1fdbfcfcea09d0bf158977"
+
 [[override]]
   branch = "master"
   name = "github.com/hashicorp/yamux"
