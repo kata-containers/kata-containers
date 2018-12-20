@@ -86,6 +86,8 @@ type Store struct {
 	scheme string
 	path   string
 	host   string
+
+	backend backend
 }
 
 type manager struct {
@@ -152,6 +154,18 @@ func New(ctx context.Context, storeURL string) (*Store, error) {
 		host:   u.Host,
 	}
 
+	backend, err := newBackend(s.scheme)
+	if err != nil {
+		return nil, err
+	}
+
+	s.backend = backend
+
+	// Create new backend
+	if err := s.backend.new(ctx, s.path, s.host); err != nil {
+		return nil, err
+	}
+
 	if err := stores.addStore(s); err != nil {
 		return nil, err
 	}
@@ -193,7 +207,7 @@ func (s *Store) Load(item Item, data interface{}) error {
 	s.RLock()
 	defer s.RUnlock()
 
-	return nil
+	return s.backend.load(item, data)
 }
 
 // Store stores a virtcontainers item into a Store.
@@ -206,5 +220,5 @@ func (s *Store) Store(item Item, data interface{}) error {
 	s.Lock()
 	defer s.Unlock()
 
-	return nil
+	return s.backend.store(item, data)
 }
