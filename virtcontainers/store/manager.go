@@ -134,18 +134,29 @@ func (m *manager) findStore(url string) *Store {
 // If there is already a Store for the URL, we will re-use it.
 // Otherwise a new Store is created.
 func New(ctx context.Context, storeURL string) (*Store, error) {
+	// Do we already have such store?
+	if s := stores.findStore(storeURL); s != nil {
+		return s, nil
+	}
+
 	u, err := url.Parse(storeURL)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Store{
+	s := &Store{
 		ctx:    ctx,
 		url:    storeURL,
 		scheme: u.Scheme,
 		path:   u.Path,
 		host:   u.Host,
-	}, nil
+	}
+
+	if err := stores.addStore(s); err != nil {
+		return nil, err
+	}
+
+	return s, nil
 }
 
 var storeLog = logrus.WithField("source", "virtcontainers/store")
