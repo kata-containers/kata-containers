@@ -12,7 +12,7 @@ import (
 	"os"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -152,7 +152,7 @@ func networkModifyCommand(ctx context.Context, containerID, input string, opType
 	}
 	switch opType {
 	case interfaceType:
-		var inf, resultingInf *types.Interface
+		var inf, resultingInf *vcTypes.Interface
 		if err = json.NewDecoder(f).Decode(&inf); err != nil {
 			return err
 		}
@@ -171,7 +171,7 @@ func networkModifyCommand(ctx context.Context, containerID, input string, opType
 		}
 		json.NewEncoder(output).Encode(resultingInf)
 	case routeType:
-		var routes, resultingRoutes []*types.Route
+		var routes, resultingRoutes []*vcTypes.Route
 		if err = json.NewDecoder(f).Decode(&routes); err != nil {
 			return err
 		}
@@ -209,7 +209,7 @@ func networkListCommand(ctx context.Context, containerID string, opType networkT
 
 	switch opType {
 	case interfaceType:
-		var interfaces []*types.Interface
+		var interfaces []*vcTypes.Interface
 		interfaces, err = vci.ListInterfaces(ctx, sandboxID)
 		if err != nil {
 			kataLog.WithField("existing-interfaces", fmt.Sprintf("%+v", interfaces)).
@@ -217,7 +217,7 @@ func networkListCommand(ctx context.Context, containerID string, opType networkT
 		}
 		json.NewEncoder(file).Encode(interfaces)
 	case routeType:
-		var routes []*types.Route
+		var routes []*vcTypes.Route
 		routes, err = vci.ListRoutes(ctx, sandboxID)
 		if err != nil {
 			kataLog.WithField("resulting-routes", fmt.Sprintf("%+v", routes)).

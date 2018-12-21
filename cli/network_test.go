@@ -13,24 +13,24 @@ import (
 	"testing"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/stretchr/testify/assert"
 )
 
 var (
-	testAddInterfaceFuncReturnNil = func(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error) {
+	testAddInterfaceFuncReturnNil = func(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error) {
 		return nil, nil
 	}
-	testRemoveInterfaceFuncReturnNil = func(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error) {
+	testRemoveInterfaceFuncReturnNil = func(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error) {
 		return nil, nil
 	}
-	testListInterfacesFuncReturnNil = func(ctx context.Context, sandboxID string) ([]*types.Interface, error) {
+	testListInterfacesFuncReturnNil = func(ctx context.Context, sandboxID string) ([]*vcTypes.Interface, error) {
 		return nil, nil
 	}
-	testUpdateRoutsFuncReturnNil = func(ctx context.Context, sandboxID string, routes []*types.Route) ([]*types.Route, error) {
+	testUpdateRoutsFuncReturnNil = func(ctx context.Context, sandboxID string, routes []*vcTypes.Route) ([]*vcTypes.Route, error) {
 		return nil, nil
 	}
-	testListRoutesFuncReturnNil = func(ctx context.Context, sandboxID string) ([]*types.Route, error) {
+	testListRoutesFuncReturnNil = func(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error) {
 		return nil, nil
 	}
 )
