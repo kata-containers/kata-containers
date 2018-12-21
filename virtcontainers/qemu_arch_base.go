@@ -129,14 +129,6 @@ const (
 const bridgePCIStartAddr = 2
 
 const (
-	// VirtioBlock means use virtio-blk for hotplugging drives
-	VirtioBlock = "virtio-blk"
-
-	// VirtioSCSI means use virtio-scsi for hotplugging drives
-	VirtioSCSI = "virtio-scsi"
-)
-
-const (
 	// QemuPCLite is the QEMU pc-lite machine type for amd64
 	QemuPCLite = "pc-lite"
 

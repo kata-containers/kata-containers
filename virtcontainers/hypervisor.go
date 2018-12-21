@@ -13,6 +13,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
 )
 
 // HypervisorType describes an hypervisor type.
@@ -43,7 +45,7 @@ const (
 
 	defaultBridges = 1
 
-	defaultBlockDriver = VirtioSCSI
+	defaultBlockDriver = config.VirtioSCSI
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.

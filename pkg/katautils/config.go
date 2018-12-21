@@ -15,6 +15,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
@@ -292,15 +293,19 @@ func (h hypervisor) defaultBridges() uint32 {
 }
 
 func (h hypervisor) blockDeviceDriver() (string, error) {
+	supportedBlockDrivers := []string{config.VirtioSCSI, config.VirtioBlock, config.VirtioMmio}
+
 	if h.BlockDeviceDriver == "" {
 		return defaultBlockDeviceDriver, nil
 	}
 
-	if h.BlockDeviceDriver != vc.VirtioSCSI && h.BlockDeviceDriver != vc.VirtioBlock {
-		return "", fmt.Errorf("Invalid value %s provided for hypervisor block storage driver, can be either %s or %s", h.BlockDeviceDriver, vc.VirtioSCSI, vc.VirtioBlock)
+	for _, b := range supportedBlockDrivers {
+		if b == h.BlockDeviceDriver {
+			return h.BlockDeviceDriver, nil
+		}
 	}
 
-	return h.BlockDeviceDriver, nil
+	return "", fmt.Errorf("Invalid hypervisor block storage driver %v specified (supported drivers: %v)", h.BlockDeviceDriver, supportedBlockDrivers)
 }
 
 func (h hypervisor) msize9p() uint32 {
