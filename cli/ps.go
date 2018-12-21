@@ -12,6 +12,8 @@ import (
 
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/types"
+
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -80,7 +82,7 @@ func ps(ctx context.Context, containerID, format string, args []string) error {
 	span.SetTag("sandbox", sandboxID)
 
 	// container MUST be running
-	if status.State.State != vc.StateRunning {
+	if status.State.State != types.StateRunning {
 		return fmt.Errorf("Container %s is not running", containerID)
 	}
 

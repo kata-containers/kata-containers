@@ -11,7 +11,8 @@ import (
 
 	"github.com/containerd/containerd/mount"
 	"github.com/kata-containers/runtime/pkg/katautils"
-	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/types"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -21,7 +22,7 @@ func deleteContainer(ctx context.Context, s *service, c *container) error {
 	if err != nil {
 		return err
 	}
-	if status.State.State != vc.StateStopped {
+	if status.State.State != types.StateStopped {
 		_, err = s.sandbox.StopContainer(c.id)
 		if err != nil {
 			return err

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
@@ -66,7 +67,7 @@ type Process struct {
 // ContainerStatus describes a container status.
 type ContainerStatus struct {
 	ID        string
-	State     State
+	State     types.State
 	PID       int
 	StartTime time.Time
 	RootFs    string
@@ -210,7 +211,7 @@ type ContainerConfig struct {
 	ReadonlyRootfs bool
 
 	// Cmd specifies the command to run on a container
-	Cmd Cmd
+	Cmd types.Cmd
 
 	// Annotations allow clients to store arbitrary values,
 	// for example to add additional status values required
@@ -273,7 +274,7 @@ type Container struct {
 	configPath    string
 	containerPath string
 
-	state State
+	state types.State
 
 	process Process
 
@@ -399,7 +400,7 @@ func (c *Container) storeContainer() error {
 
 // setContainerState sets both the in-memory and on-disk state of the
 // container.
-func (c *Container) setContainerState(state stateString) error {
+func (c *Container) setContainerState(state types.StateString) error {
 	if state == "" {
 		return errNeedState
 	}
@@ -614,7 +615,7 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		runPath:       filepath.Join(runStoragePath, sandbox.id, contConfig.ID),
 		configPath:    filepath.Join(configStoragePath, sandbox.id, contConfig.ID),
 		containerPath: filepath.Join(sandbox.id, contConfig.ID),
-		state:         State{},
+		state:         types.State{},
 		process:       Process{},
 		mounts:        contConfig.Mounts,
 		ctx:           sandbox.ctx,
@@ -772,7 +773,7 @@ func (c *Container) create() (err error) {
 		return
 	}
 
-	if err = c.setContainerState(StateReady); err != nil {
+	if err = c.setContainerState(types.StateReady); err != nil {
 		return
 	}
 
@@ -780,8 +781,8 @@ func (c *Container) create() (err error) {
 }
 
 func (c *Container) delete() error {
-	if c.state.State != StateReady &&
-		c.state.State != StateStopped {
+	if c.state.State != types.StateReady &&
+		c.state.State != types.StateStopped {
 		return fmt.Errorf("Container not ready or stopped, impossible to delete")
 	}
 
@@ -803,7 +804,7 @@ func (c *Container) checkSandboxRunning(cmd string) error {
 		return fmt.Errorf("Cmd cannot be empty")
 	}
 
-	if c.sandbox.state.State != StateRunning {
+	if c.sandbox.state.State != types.StateRunning {
 		return fmt.Errorf("Sandbox not running, impossible to %s the container", cmd)
 	}
 
@@ -828,12 +829,12 @@ func (c *Container) start() error {
 		return err
 	}
 
-	if c.state.State != StateReady &&
-		c.state.State != StateStopped {
+	if c.state.State != types.StateReady &&
+		c.state.State != types.StateStopped {
 		return fmt.Errorf("Container not ready or stopped, impossible to start")
 	}
 
-	if err := c.state.validTransition(c.state.State, StateRunning); err != nil {
+	if err := c.state.ValidTransition(c.state.State, types.StateRunning); err != nil {
 		return err
 	}
 
@@ -846,7 +847,7 @@ func (c *Container) start() error {
 		return err
 	}
 
-	return c.setContainerState(StateRunning)
+	return c.setContainerState(types.StateRunning)
 }
 
 func (c *Container) stop() error {
@@ -860,16 +861,16 @@ func (c *Container) stop() error {
 	//
 	// This has to be handled before the transition validation since this
 	// is an exception.
-	if c.state.State == StateStopped {
+	if c.state.State == types.StateStopped {
 		c.Logger().Info("Container already stopped")
 		return nil
 	}
 
-	if c.sandbox.state.State != StateReady && c.sandbox.state.State != StateRunning {
+	if c.sandbox.state.State != types.StateReady && c.sandbox.state.State != types.StateRunning {
 		return fmt.Errorf("Sandbox not ready or running, impossible to stop the container")
 	}
 
-	if err := c.state.validTransition(c.state.State, StateStopped); err != nil {
+	if err := c.state.ValidTransition(c.state.State, types.StateStopped); err != nil {
 		return err
 	}
 
@@ -938,16 +939,16 @@ func (c *Container) stop() error {
 		return err
 	}
 
-	return c.setContainerState(StateStopped)
+	return c.setContainerState(types.StateStopped)
 }
 
-func (c *Container) enter(cmd Cmd) (*Process, error) {
+func (c *Container) enter(cmd types.Cmd) (*Process, error) {
 	if err := c.checkSandboxRunning("enter"); err != nil {
 		return nil, err
 	}
 
-	if c.state.State != StateReady &&
-		c.state.State != StateRunning {
+	if c.state.State != types.StateReady &&
+		c.state.State != types.StateRunning {
 		return nil, fmt.Errorf("Container not ready or running, " +
 			"impossible to enter")
 	}
@@ -961,8 +962,8 @@ func (c *Container) enter(cmd Cmd) (*Process, error) {
 }
 
 func (c *Container) wait(processID string) (int32, error) {
-	if c.state.State != StateReady &&
-		c.state.State != StateRunning {
+	if c.state.State != types.StateReady &&
+		c.state.State != types.StateRunning {
 		return 0, fmt.Errorf("Container not ready or running, " +
 			"impossible to wait")
 	}
@@ -975,11 +976,11 @@ func (c *Container) kill(signal syscall.Signal, all bool) error {
 }
 
 func (c *Container) signalProcess(processID string, signal syscall.Signal, all bool) error {
-	if c.sandbox.state.State != StateReady && c.sandbox.state.State != StateRunning {
+	if c.sandbox.state.State != types.StateReady && c.sandbox.state.State != types.StateRunning {
 		return fmt.Errorf("Sandbox not ready or running, impossible to signal the container")
 	}
 
-	if c.state.State != StateReady && c.state.State != StateRunning && c.state.State != StatePaused {
+	if c.state.State != types.StateReady && c.state.State != types.StateRunning && c.state.State != types.StatePaused {
 		return fmt.Errorf("Container not ready, running or paused, impossible to signal the container")
 	}
 
@@ -987,7 +988,7 @@ func (c *Container) signalProcess(processID string, signal syscall.Signal, all b
 }
 
 func (c *Container) winsizeProcess(processID string, height, width uint32) error {
-	if c.state.State != StateReady && c.state.State != StateRunning {
+	if c.state.State != types.StateReady && c.state.State != types.StateRunning {
 		return fmt.Errorf("Container not ready or running, impossible to signal the container")
 	}
 
@@ -995,7 +996,7 @@ func (c *Container) winsizeProcess(processID string, height, width uint32) error
 }
 
 func (c *Container) ioStream(processID string) (io.WriteCloser, io.Reader, io.Reader, error) {
-	if c.state.State != StateReady && c.state.State != StateRunning {
+	if c.state.State != types.StateReady && c.state.State != types.StateRunning {
 		return nil, nil, nil, fmt.Errorf("Container not ready or running, impossible to signal the container")
 	}
 
@@ -1009,7 +1010,7 @@ func (c *Container) processList(options ProcessListOptions) (ProcessList, error)
 		return nil, err
 	}
 
-	if c.state.State != StateRunning {
+	if c.state.State != types.StateRunning {
 		return nil, fmt.Errorf("Container not running, impossible to list processes")
 	}
 
@@ -1028,7 +1029,7 @@ func (c *Container) update(resources specs.LinuxResources) error {
 		return err
 	}
 
-	if c.state.State != StateRunning {
+	if c.state.State != types.StateRunning {
 		return fmt.Errorf("Container not running, impossible to update")
 	}
 
@@ -1065,7 +1066,7 @@ func (c *Container) pause() error {
 		return err
 	}
 
-	if c.state.State != StateRunning && c.state.State != StateReady {
+	if c.state.State != types.StateRunning && c.state.State != types.StateReady {
 		return fmt.Errorf("Container not running or ready, impossible to pause")
 	}
 
@@ -1073,7 +1074,7 @@ func (c *Container) pause() error {
 		return err
 	}
 
-	return c.setContainerState(StatePaused)
+	return c.setContainerState(types.StatePaused)
 }
 
 func (c *Container) resume() error {
@@ -1081,7 +1082,7 @@ func (c *Container) resume() error {
 		return err
 	}
 
-	if c.state.State != StatePaused {
+	if c.state.State != types.StatePaused {
 		return fmt.Errorf("Container not paused, impossible to resume")
 	}
 
@@ -1089,7 +1090,7 @@ func (c *Container) resume() error {
 		return err
 	}
 
-	return c.setContainerState(StateRunning)
+	return c.setContainerState(types.StateRunning)
 }
 
 func (c *Container) hotplugDrive() error {

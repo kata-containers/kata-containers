@@ -15,8 +15,9 @@ import (
 	"syscall"
 
 	"github.com/kata-containers/runtime/pkg/katautils"
-	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/runtime/virtcontainers/types"
+
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 )
@@ -226,8 +227,8 @@ func execute(ctx context.Context, context *cli.Context) error {
 	span.SetTag("container", containerID)
 
 	// container MUST be ready or running.
-	if status.State.State != vc.StateReady &&
-		status.State.State != vc.StateRunning {
+	if status.State.State != types.StateReady &&
+		status.State.State != types.StateRunning {
 		return fmt.Errorf("Container %s is not ready or running",
 			params.cID)
 	}
@@ -248,7 +249,7 @@ func execute(ctx context.Context, context *cli.Context) error {
 		user = params.ociProcess.User.Username
 	}
 
-	cmd := vc.Cmd{
+	cmd := types.Cmd{
 		Args:        params.ociProcess.Args,
 		Envs:        envVars,
 		WorkDir:     params.ociProcess.Cwd,

@@ -14,6 +14,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 
@@ -582,14 +583,14 @@ func createContainer(context *cli.Context) error {
 		interactive = true
 	}
 
-	envs := []vc.EnvVar{
+	envs := []types.EnvVar{
 		{
 			Var:   "PATH",
 			Value: "/bin:/usr/bin:/sbin:/usr/sbin",
 		},
 	}
 
-	cmd := vc.Cmd{
+	cmd := types.Cmd{
 		Args:        strings.Split(context.String("cmd"), " "),
 		Envs:        envs,
 		WorkDir:     "/",
@@ -660,14 +661,14 @@ func enterContainer(context *cli.Context) error {
 		interactive = true
 	}
 
-	envs := []vc.EnvVar{
+	envs := []types.EnvVar{
 		{
 			Var:   "PATH",
 			Value: "/bin:/usr/bin:/sbin:/usr/sbin",
 		},
 	}
 
-	cmd := vc.Cmd{
+	cmd := types.Cmd{
 		Args:        strings.Split(context.String("cmd"), " "),
 		Envs:        envs,
 		WorkDir:     "/",

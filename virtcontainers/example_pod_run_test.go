@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
 const containerRootfs = "/var/lib/container/bundle/"
@@ -18,14 +19,14 @@ const containerRootfs = "/var/lib/container/bundle/"
 // This example creates and starts a single container sandbox,
 // using qemu as the hypervisor and hyperstart as the VM agent.
 func Example_createAndStartSandbox() {
-	envs := []vc.EnvVar{
+	envs := []types.EnvVar{
 		{
 			Var:   "PATH",
 			Value: "/bin:/usr/bin:/sbin:/usr/sbin",
 		},
 	}
 
-	cmd := vc.Cmd{
+	cmd := types.Cmd{
 		Args:    strings.Split("/bin/sh", " "),
 		Envs:    envs,
 		WorkDir: "/",

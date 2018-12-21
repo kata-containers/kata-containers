@@ -14,6 +14,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/factory"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -421,12 +422,12 @@ func TestVCMockEnterContainer(t *testing.T) {
 	assert.Nil(m.EnterContainerFunc)
 
 	ctx := context.Background()
-	cmd := vc.Cmd{}
+	cmd := types.Cmd{}
 	_, _, _, err := m.EnterContainer(ctx, testSandboxID, testContainerID, cmd)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.EnterContainerFunc = func(ctx context.Context, sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
+	m.EnterContainerFunc = func(ctx context.Context, sandboxID, containerID string, cmd types.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
 		return &Sandbox{}, &Container{}, &vc.Process{}, nil
 	}
 

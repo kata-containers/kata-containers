@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
 // TypedDevice is used as an intermediate representation for marshalling
@@ -39,7 +40,7 @@ type resourceStorage interface {
 	storeSandboxResource(sandboxID string, resource sandboxResource, data interface{}) error
 	deleteSandboxResources(sandboxID string, resources []sandboxResource) error
 	fetchSandboxConfig(sandboxID string) (SandboxConfig, error)
-	fetchSandboxState(sandboxID string) (State, error)
+	fetchSandboxState(sandboxID string) (types.State, error)
 	fetchSandboxNetwork(sandboxID string) (NetworkNamespace, error)
 	storeSandboxNetwork(sandboxID string, networkNS NetworkNamespace) error
 	fetchSandboxDevices(sandboxID string) ([]api.Device, error)
@@ -57,7 +58,7 @@ type resourceStorage interface {
 	storeContainerResource(sandboxID, containerID string, resource sandboxResource, data interface{}) error
 	deleteContainerResources(sandboxID, containerID string, resources []sandboxResource) error
 	fetchContainerConfig(sandboxID, containerID string) (ContainerConfig, error)
-	fetchContainerState(sandboxID, containerID string) (State, error)
+	fetchContainerState(sandboxID, containerID string) (types.State, error)
 	fetchContainerProcess(sandboxID, containerID string) (Process, error)
 	storeContainerProcess(sandboxID, containerID string, process Process) error
 	fetchContainerMounts(sandboxID, containerID string) ([]Mount, error)

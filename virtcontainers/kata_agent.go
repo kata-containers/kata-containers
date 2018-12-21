@@ -27,6 +27,7 @@ import (
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	opentracing "github.com/opentracing/opentracing-go"
 
@@ -151,7 +152,7 @@ func (k *kataAgent) generateVMSocket(id string, c KataAgentConfig) error {
 			return err
 		}
 
-		k.vmSocket = Socket{
+		k.vmSocket = types.Socket{
 			DeviceID: defaultKataDeviceID,
 			ID:       defaultKataID,
 			HostPath: kataSock,
@@ -201,7 +202,7 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 
 func (k *kataAgent) agentURL() (string, error) {
 	switch s := k.vmSocket.(type) {
-	case Socket:
+	case types.Socket:
 		return s.HostPath, nil
 	case kataVSOCK:
 		return s.String(), nil
@@ -233,7 +234,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 	}
 
 	switch s := k.vmSocket.(type) {
-	case Socket:
+	case types.Socket:
 		err := h.addDevice(s, serialPortDev)
 		if err != nil {
 			return err
@@ -266,7 +267,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 
 	// Create shared directory and add the shared volume if filesystem sharing is supported.
 	// This volume contains all bind mounted container bundles.
-	sharedVolume := Volume{
+	sharedVolume := types.Volume{
 		MountTag: mountGuest9pTag,
 		HostPath: sharePath,
 	}
@@ -285,7 +286,7 @@ func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
 	return k.configure(sandbox.hypervisor, sandbox.id, k.getSharePath(sandbox.id), k.proxyBuiltIn, nil)
 }
 
-func cmdToKataProcess(cmd Cmd) (process *grpc.Process, err error) {
+func cmdToKataProcess(cmd types.Cmd) (process *grpc.Process, err error) {
 	var i uint64
 	var extraGids []uint32
 
@@ -351,7 +352,7 @@ func cmdToKataProcess(cmd Cmd) (process *grpc.Process, err error) {
 	return process, nil
 }
 
-func cmdEnvsToStringSlice(ev []EnvVar) []string {
+func cmdEnvsToStringSlice(ev []types.EnvVar) []string {
 	var env []string
 
 	for _, e := range ev {
@@ -362,7 +363,7 @@ func cmdEnvsToStringSlice(ev []EnvVar) []string {
 	return env
 }
 
-func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, error) {
+func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error) {
 	span, _ := k.trace("exec")
 	defer span.Finish()
 

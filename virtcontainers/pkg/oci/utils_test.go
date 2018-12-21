@@ -24,6 +24,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
 const (
@@ -114,9 +115,9 @@ func TestMinimalSandboxConfig(t *testing.T) {
 
 	capList := []string{"CAP_AUDIT_WRITE", "CAP_KILL", "CAP_NET_BIND_SERVICE"}
 
-	expectedCmd := vc.Cmd{
+	expectedCmd := types.Cmd{
 		Args: []string{"sh"},
-		Envs: []vc.EnvVar{
+		Envs: []types.EnvVar{
 			{
 				Var:   "PATH",
 				Value: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
@@ -133,7 +134,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		Interactive:         true,
 		Console:             consolePath,
 		NoNewPrivileges:     true,
-		Capabilities: vc.LinuxCapabilities{
+		Capabilities: types.LinuxCapabilities{
 			Bounding:    capList,
 			Effective:   capList,
 			Inheritable: capList,
@@ -271,8 +272,8 @@ func TestStatusToOCIStateSuccessfulWithReadyState(t *testing.T) {
 	testPID := 12345
 	testRootFs := "testRootFs"
 
-	state := vc.State{
-		State: vc.StateReady,
+	state := types.State{
+		State: types.StateReady,
 	}
 
 	containerAnnotations := map[string]string{
@@ -307,8 +308,8 @@ func TestStatusToOCIStateSuccessfulWithRunningState(t *testing.T) {
 	testPID := 12345
 	testRootFs := "testRootFs"
 
-	state := vc.State{
-		State: vc.StateRunning,
+	state := types.State{
+		State: types.StateRunning,
 	}
 
 	containerAnnotations := map[string]string{
@@ -342,8 +343,8 @@ func TestStatusToOCIStateSuccessfulWithStoppedState(t *testing.T) {
 	testPID := 12345
 	testRootFs := "testRootFs"
 
-	state := vc.State{
-		State: vc.StateStopped,
+	state := types.State{
+		State: types.StateStopped,
 	}
 
 	containerAnnotations := map[string]string{
@@ -403,28 +404,28 @@ func TestStatusToOCIStateSuccessfulWithNoState(t *testing.T) {
 }
 
 func TestStateToOCIState(t *testing.T) {
-	var state vc.State
+	var state types.State
 
 	if ociState := StateToOCIState(state); ociState != "" {
 		t.Fatalf("Expecting \"created\" state, got \"%s\"", ociState)
 	}
 
-	state.State = vc.StateReady
+	state.State = types.StateReady
 	if ociState := StateToOCIState(state); ociState != "created" {
 		t.Fatalf("Expecting \"created\" state, got \"%s\"", ociState)
 	}
 
-	state.State = vc.StateRunning
+	state.State = types.StateRunning
 	if ociState := StateToOCIState(state); ociState != "running" {
 		t.Fatalf("Expecting \"created\" state, got \"%s\"", ociState)
 	}
 
-	state.State = vc.StateStopped
+	state.State = types.StateStopped
 	if ociState := StateToOCIState(state); ociState != "stopped" {
 		t.Fatalf("Expecting \"created\" state, got \"%s\"", ociState)
 	}
 
-	state.State = vc.StatePaused
+	state.State = types.StatePaused
 	if ociState := StateToOCIState(state); ociState != "paused" {
 		t.Fatalf("Expecting \"paused\" state, got \"%s\"", ociState)
 	}
@@ -432,7 +433,7 @@ func TestStateToOCIState(t *testing.T) {
 
 func TestEnvVars(t *testing.T) {
 	envVars := []string{"foo=bar", "TERM=xterm", "HOME=/home/foo", "TERM=\"bar\"", "foo=\"\""}
-	expectecVcEnvVars := []vc.EnvVar{
+	expectecVcEnvVars := []types.EnvVar{
 		{
 			Var:   "foo",
 			Value: "bar",

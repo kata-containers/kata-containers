@@ -20,6 +20,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -289,8 +290,8 @@ func TestCheckSandboxRunningNotRunningFailure(t *testing.T) {
 func TestCheckSandboxRunningSuccessful(t *testing.T) {
 	c := &Container{
 		sandbox: &Sandbox{
-			state: State{
-				State: StateRunning,
+			state: types.State{
+				State: types.StateRunning,
 			},
 		},
 	}
@@ -302,24 +303,24 @@ func TestContainerEnterErrorsOnContainerStates(t *testing.T) {
 	assert := assert.New(t)
 	c := &Container{
 		sandbox: &Sandbox{
-			state: State{
-				State: StateRunning,
+			state: types.State{
+				State: types.StateRunning,
 			},
 		},
 	}
-	cmd := Cmd{}
+	cmd := types.Cmd{}
 
 	// Container state undefined
 	_, err := c.enter(cmd)
 	assert.Error(err)
 
 	// Container paused
-	c.state.State = StatePaused
+	c.state.State = types.StatePaused
 	_, err = c.enter(cmd)
 	assert.Error(err)
 
 	// Container stopped
-	c.state.State = StateStopped
+	c.state.State = types.StateStopped
 	_, err = c.enter(cmd)
 	assert.Error(err)
 }
@@ -328,8 +329,8 @@ func TestContainerWaitErrorState(t *testing.T) {
 	assert := assert.New(t)
 	c := &Container{
 		sandbox: &Sandbox{
-			state: State{
-				State: StateRunning,
+			state: types.State{
+				State: types.StateRunning,
 			},
 		},
 	}
@@ -340,12 +341,12 @@ func TestContainerWaitErrorState(t *testing.T) {
 	assert.Error(err)
 
 	// Container paused
-	c.state.State = StatePaused
+	c.state.State = types.StatePaused
 	_, err = c.wait(processID)
 	assert.Error(err)
 
 	// Container stopped
-	c.state.State = StateStopped
+	c.state.State = types.StateStopped
 	_, err = c.wait(processID)
 	assert.Error(err)
 }
@@ -354,8 +355,8 @@ func TestKillContainerErrorState(t *testing.T) {
 	assert := assert.New(t)
 	c := &Container{
 		sandbox: &Sandbox{
-			state: State{
-				State: StateRunning,
+			state: types.State{
+				State: types.StateRunning,
 			},
 		},
 	}
@@ -364,7 +365,7 @@ func TestKillContainerErrorState(t *testing.T) {
 	assert.Error(err)
 
 	// Container stopped
-	c.state.State = StateStopped
+	c.state.State = types.StateStopped
 	err = c.kill(syscall.SIGKILL, true)
 	assert.Error(err)
 }
@@ -373,8 +374,8 @@ func TestWinsizeProcessErrorState(t *testing.T) {
 	assert := assert.New(t)
 	c := &Container{
 		sandbox: &Sandbox{
-			state: State{
-				State: StateRunning,
+			state: types.State{
+				State: types.StateRunning,
 			},
 		},
 	}
@@ -385,12 +386,12 @@ func TestWinsizeProcessErrorState(t *testing.T) {
 	assert.Error(err)
 
 	// Container paused
-	c.state.State = StatePaused
+	c.state.State = types.StatePaused
 	err = c.winsizeProcess(processID, 100, 200)
 	assert.Error(err)
 
 	// Container stopped
-	c.state.State = StateStopped
+	c.state.State = types.StateStopped
 	err = c.winsizeProcess(processID, 100, 200)
 	assert.Error(err)
 }
@@ -399,8 +400,8 @@ func TestProcessIOStream(t *testing.T) {
 	assert := assert.New(t)
 	c := &Container{
 		sandbox: &Sandbox{
-			state: State{
-				State: StateRunning,
+			state: types.State{
+				State: types.StateRunning,
 			},
 		},
 	}
@@ -411,12 +412,12 @@ func TestProcessIOStream(t *testing.T) {
 	assert.Error(err)
 
 	// Container paused
-	c.state.State = StatePaused
+	c.state.State = types.StatePaused
 	_, _, _, err = c.ioStream(processID)
 	assert.Error(err)
 
 	// Container stopped
-	c.state.State = StateStopped
+	c.state.State = types.StateStopped
 	_, _, _, err = c.ioStream(processID)
 	assert.Error(err)
 }

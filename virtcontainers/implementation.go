@@ -16,6 +16,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -107,7 +108,7 @@ func (impl *VCImpl) StopContainer(ctx context.Context, sandboxID, containerID st
 }
 
 // EnterContainer implements the VC function of the same name.
-func (impl *VCImpl) EnterContainer(ctx context.Context, sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContainer, *Process, error) {
+func (impl *VCImpl) EnterContainer(ctx context.Context, sandboxID, containerID string, cmd types.Cmd) (VCSandbox, VCContainer, *Process, error) {
 	return EnterContainer(ctx, sandboxID, containerID, cmd)
 }
 

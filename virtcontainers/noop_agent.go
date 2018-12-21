@@ -11,6 +11,7 @@ import (
 
 	"github.com/kata-containers/agent/protocols/grpc"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/net/context"
 )
@@ -46,7 +47,7 @@ func (n *noopAgent) disconnect() error {
 }
 
 // exec is the Noop agent command execution implementation. It does nothing.
-func (n *noopAgent) exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, error) {
+func (n *noopAgent) exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error) {
 	return nil, nil
 }
 

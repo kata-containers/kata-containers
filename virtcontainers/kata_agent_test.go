@@ -32,6 +32,7 @@ import (
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
 var (
@@ -637,7 +638,7 @@ func TestAgentPathAPI(t *testing.T) {
 
 	err = k1.generateVMSocket(id, c)
 	assert.Nil(err)
-	_, ok := k1.vmSocket.(Socket)
+	_, ok := k1.vmSocket.(types.Socket)
 	assert.True(ok)
 
 	c.UseVSock = true
@@ -676,9 +677,9 @@ func TestAgentConfigure(t *testing.T) {
 func TestCmdToKataProcess(t *testing.T) {
 	assert := assert.New(t)
 
-	cmd := Cmd{
+	cmd := types.Cmd{
 		Args:         strings.Split("foo", " "),
-		Envs:         []EnvVar{},
+		Envs:         []types.EnvVar{},
 		WorkDir:      "/",
 		User:         "1000",
 		PrimaryGroup: "1000",
@@ -738,7 +739,7 @@ func TestAgentCreateContainer(t *testing.T) {
 		id:        "barfoo",
 		sandboxID: "foobar",
 		sandbox:   sandbox,
-		state: State{
+		state: types.State{
 			Fstype: "xfs",
 		},
 		config: &ContainerConfig{

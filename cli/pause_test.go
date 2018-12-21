@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,8 +30,8 @@ var (
 func TestPauseCLIFunctionSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	state := vc.State{
-		State: vc.StateRunning,
+	state := types.State{
+		State: types.StateRunning,
 	}
 
 	testingImpl.PauseContainerFunc = testPauseContainerFuncReturnNil
@@ -77,8 +78,8 @@ func TestPauseCLIFunctionContainerNotExistFailure(t *testing.T) {
 func TestPauseCLIFunctionPauseContainerFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	state := vc.State{
-		State: vc.StateRunning,
+	state := types.State{
+		State: types.StateRunning,
 	}
 
 	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
@@ -102,8 +103,8 @@ func TestPauseCLIFunctionPauseContainerFailure(t *testing.T) {
 func TestResumeCLIFunctionSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	state := vc.State{
-		State: vc.StateRunning,
+	state := types.State{
+		State: types.StateRunning,
 	}
 
 	testingImpl.ResumeContainerFunc = testResumeContainerFuncReturnNil
@@ -149,8 +150,8 @@ func TestResumeCLIFunctionContainerNotExistFailure(t *testing.T) {
 func TestResumeCLIFunctionPauseContainerFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	state := vc.State{
-		State: vc.StateRunning,
+	state := types.State{
+		State: types.StateRunning,
 	}
 
 	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
