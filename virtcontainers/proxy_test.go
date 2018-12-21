@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -222,7 +223,7 @@ func testDefaultProxyURL(expectedURL string, socketType string, sandboxID string
 }
 
 func TestDefaultProxyURLUnix(t *testing.T) {
-	path := filepath.Join(runStoragePath, sandboxID, "proxy.sock")
+	path := filepath.Join(store.SandboxRuntimeRootPath(sandboxID), "proxy.sock")
 	socketPath := fmt.Sprintf("unix://%s", path)
 
 	if err := testDefaultProxyURL(socketPath, SocketTypeUNIX, sandboxID); err != nil {
@@ -237,7 +238,7 @@ func TestDefaultProxyURLVSock(t *testing.T) {
 }
 
 func TestDefaultProxyURLUnknown(t *testing.T) {
-	path := filepath.Join(runStoragePath, sandboxID, "proxy.sock")
+	path := filepath.Join(store.SandboxRuntimeRootPath(sandboxID), "proxy.sock")
 	socketPath := fmt.Sprintf("unix://%s", path)
 
 	if err := testDefaultProxyURL(socketPath, "foobar", sandboxID); err == nil {
@@ -261,7 +262,7 @@ func testProxyStart(t *testing.T, agent agent, proxy proxy) {
 	}
 
 	invalidPath := filepath.Join(tmpdir, "enoent")
-	expectedSocketPath := filepath.Join(runStoragePath, testSandboxID, "proxy.sock")
+	expectedSocketPath := filepath.Join(store.SandboxRuntimeRootPath(testSandboxID), "proxy.sock")
 	expectedURI := fmt.Sprintf("unix://%s", expectedSocketPath)
 
 	data := []testData{

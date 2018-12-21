@@ -27,6 +27,7 @@ import (
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	opentracing "github.com/opentracing/opentracing-go"
@@ -131,7 +132,7 @@ func (k *kataAgent) Logger() *logrus.Entry {
 }
 
 func (k *kataAgent) getVMPath(id string) string {
-	return filepath.Join(RunVMStoragePath, id)
+	return filepath.Join(store.RunVMStoragePath, id)
 }
 
 func (k *kataAgent) getSharePath(id string) string {
@@ -193,7 +194,7 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 	k.proxyBuiltIn = isProxyBuiltIn(sandbox.config.ProxyType)
 
 	// Fetch agent runtime info.
-	if err := sandbox.storage.fetchAgentState(sandbox.id, &k.state); err != nil {
+	if err := sandbox.store.Load(store.Agent, &k.state); err != nil {
 		k.Logger().Debug("Could not retrieve anything from storage")
 	}
 
@@ -272,7 +273,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 		HostPath: sharePath,
 	}
 
-	if err := os.MkdirAll(sharedVolume.HostPath, dirMode); err != nil {
+	if err := os.MkdirAll(sharedVolume.HostPath, store.DirMode); err != nil {
 		return err
 	}
 
@@ -578,7 +579,7 @@ func (k *kataAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string)
 	k.state.ProxyPid = pid
 	k.state.URL = url
 	if sandbox != nil {
-		if err := sandbox.storage.storeAgentState(sandbox.id, k.state); err != nil {
+		if err := sandbox.store.Store(store.Agent, k.state); err != nil {
 			return err
 		}
 	}
@@ -696,7 +697,7 @@ func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 	// clean up agent state
 	k.state.ProxyPid = -1
 	k.state.URL = ""
-	if err := sandbox.storage.storeAgentState(sandbox.id, k.state); err != nil {
+	if err := sandbox.store.Store(store.Agent, k.state); err != nil {
 		// ignore error
 		k.Logger().WithError(err).WithField("sandbox", sandbox.id).Error("failed to clean up agent state")
 	}
@@ -1799,7 +1800,7 @@ func (k *kataAgent) copyFile(src, dst string) error {
 
 	cpReq := &grpc.CopyFileRequest{
 		Path:     dst,
-		DirMode:  uint32(dirMode),
+		DirMode:  uint32(store.DirMode),
 		FileMode: st.Mode,
 		FileSize: fileSize,
 		Uid:      int32(st.Uid),

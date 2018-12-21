@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
@@ -226,7 +227,7 @@ func TestQemuArchBaseAppendConsoles(t *testing.T) {
 	assert := assert.New(t)
 	qemuArchBase := newQemuArchBase()
 
-	path := filepath.Join(runStoragePath, sandboxID, consoleSocket)
+	path := filepath.Join(store.SandboxRuntimeRootPath(sandboxID), consoleSocket)
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.SerialDevice{
