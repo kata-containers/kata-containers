@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/agent/protocols/grpc"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/net/context"
 )
@@ -96,22 +96,22 @@ func (n *noopAgent) onlineCPUMem(cpus uint32, cpuOnly bool) error {
 }
 
 // updateInterface is the Noop agent Interface update implementation. It does nothing.
-func (n *noopAgent) updateInterface(inf *types.Interface) (*types.Interface, error) {
+func (n *noopAgent) updateInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error) {
 	return nil, nil
 }
 
 // listInterfaces is the Noop agent Interfaces list implementation. It does nothing.
-func (n *noopAgent) listInterfaces() ([]*types.Interface, error) {
+func (n *noopAgent) listInterfaces() ([]*vcTypes.Interface, error) {
 	return nil, nil
 }
 
 // updateRoutes is the Noop agent Routes update implementation. It does nothing.
-func (n *noopAgent) updateRoutes(routes []*types.Route) ([]*types.Route, error) {
+func (n *noopAgent) updateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error) {
 	return nil, nil
 }
 
 // listRoutes is the Noop agent Routes list implementation. It does nothing.
-func (n *noopAgent) listRoutes() ([]*types.Route, error) {
+func (n *noopAgent) listRoutes() ([]*vcTypes.Route, error) {
 	return nil, nil
 }
 
