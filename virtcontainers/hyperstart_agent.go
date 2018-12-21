@@ -549,7 +549,7 @@ func (h *hyper) startOneContainer(sandbox *Sandbox, c *Container) error {
 	//TODO : Enter mount namespace
 
 	// Handle container mounts
-	newMounts, err := c.mountSharedDirMounts(defaultSharedDir, "")
+	newMounts, _, err := c.mountSharedDirMounts(defaultSharedDir, "")
 	if err != nil {
 		bindUnmountAllRootfs(c.ctx, defaultSharedDir, sandbox)
 		return err

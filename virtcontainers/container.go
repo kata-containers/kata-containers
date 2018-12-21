@@ -431,10 +431,10 @@ func (c *Container) createContainersDirs() error {
 	return nil
 }
 
-func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir string) (string, error) {
+func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir string) (string, bool, error) {
 	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	filename := fmt.Sprintf("%s-%s-%s", c.id, hex.EncodeToString(randBytes), filepath.Base(m.Destination))
@@ -445,20 +445,35 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir s
 	caps := c.sandbox.hypervisor.capabilities()
 	if !caps.isFsSharingSupported() {
 		c.Logger().Debug("filesystem sharing is not supported, files will be copied")
+
+		fileInfo, err := os.Stat(m.Source)
+		if err != nil {
+			return "", false, err
+		}
+
+		// Ignore the mount if this is not a regular file (excludes
+		// directory, socket, device, ...) as it cannot be handled by
+		// a simple copy. But this should not be treated as an error,
+		// only as a limitation.
+		if !fileInfo.Mode().IsRegular() {
+			c.Logger().WithField("ignored-file", m.Source).Debug("Ignoring non-regular file as FS sharing not supported")
+			return "", true, nil
+		}
+
 		if err := c.sandbox.agent.copyFile(m.Source, guestDest); err != nil {
-			return "", err
+			return "", false, err
 		}
 	} else {
 		// These mounts are created in the shared dir
 		mountDest := filepath.Join(hostSharedDir, c.sandbox.id, filename)
 		if err := bindMount(c.ctx, m.Source, mountDest, false); err != nil {
-			return "", err
+			return "", false, err
 		}
 		// Save HostPath mount value into the mount list of the container.
 		c.mounts[idx].HostPath = mountDest
 	}
 
-	return guestDest, nil
+	return guestDest, false, nil
 }
 
 // mountSharedDirMounts handles bind-mounts by bindmounting to the host shared
@@ -466,8 +481,9 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir s
 // It also updates the container mount list with the HostPath info, and store
 // container mounts to the storage. This way, we will have the HostPath info
 // available when we will need to unmount those mounts.
-func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) ([]Mount, error) {
+func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) ([]Mount, []Mount, error) {
 	var sharedDirMounts []Mount
+	var ignoredMounts []Mount
 	for idx, m := range c.mounts {
 		if isSystemMount(m.Destination) || m.Type != "bind" {
 			continue
@@ -485,12 +501,12 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 		if len(m.BlockDeviceID) > 0 {
 			// Attach this block device, all other devices passed in the config have been attached at this point
 			if err := c.sandbox.devManager.AttachDevice(m.BlockDeviceID, c.sandbox); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			if err := c.sandbox.storeSandboxDevices(); err != nil {
 				//TODO: roll back?
-				return nil, err
+				return nil, nil, err
 			}
 			continue
 		}
@@ -502,9 +518,15 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 			continue
 		}
 
-		guestDest, err := c.shareFiles(m, idx, hostSharedDir, guestSharedDir)
+		guestDest, ignore, err := c.shareFiles(m, idx, hostSharedDir, guestSharedDir)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+
+		// Expand the list of mounts to ignore.
+		if ignore {
+			ignoredMounts = append(ignoredMounts, Mount{Source: m.Source})
+			continue
 		}
 
 		// Check if mount is readonly, let the agent handle the readonly mount
@@ -528,10 +550,10 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 	}
 
 	if err := c.storeMounts(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return sharedDirMounts, nil
+	return sharedDirMounts, ignoredMounts, nil
 }
 
 func (c *Container) unmountHostMounts() error {

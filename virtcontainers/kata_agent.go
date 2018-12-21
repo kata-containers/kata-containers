@@ -719,6 +719,30 @@ func (k *kataAgent) replaceOCIMountSource(spec *specs.Spec, guestMounts []Mount)
 	return nil
 }
 
+func (k *kataAgent) removeIgnoredOCIMount(spec *specs.Spec, ignoredMounts []Mount) error {
+	var mounts []specs.Mount
+
+	for _, m := range spec.Mounts {
+		found := false
+		for _, ignoredMount := range ignoredMounts {
+			if ignoredMount.Source == m.Source {
+				k.Logger().WithField("removed-mount", m.Source).Debug("Removing OCI mount")
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			mounts = append(mounts, m)
+		}
+	}
+
+	// Replace the OCI mounts with the updated list.
+	spec.Mounts = mounts
+
+	return nil
+}
+
 func (k *kataAgent) replaceOCIMountsForStorages(spec *specs.Spec, volumeStorages []*grpc.Storage) error {
 	ociMounts := spec.Mounts
 	var index int
@@ -981,7 +1005,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	}
 
 	// Handle container mounts
-	newMounts, err := c.mountSharedDirMounts(kataHostSharedDir, kataGuestSharedDir)
+	newMounts, ignoredMounts, err := c.mountSharedDirMounts(kataHostSharedDir, kataGuestSharedDir)
 	if err != nil {
 		return nil, err
 	}
@@ -992,6 +1016,11 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	// We replace all OCI mount sources that match our container mount
 	// with the right source path (The guest one).
 	if err = k.replaceOCIMountSource(ociSpec, newMounts); err != nil {
+		return nil, err
+	}
+
+	// Remove all mounts that should be ignored from the spec
+	if err = k.removeIgnoredOCIMount(ociSpec, ignoredMounts); err != nil {
 		return nil, err
 	}
 
@@ -1767,6 +1796,12 @@ func (k *kataAgent) copyFile(src, dst string) error {
 		FileSize: fileSize,
 		Uid:      int32(st.Uid),
 		Gid:      int32(st.Gid),
+	}
+
+	// Handle the special case where the file is empty
+	if fileSize == 0 {
+		_, err = k.sendReq(cpReq)
+		return err
 	}
 
 	// Copy file by parts if it's needed
