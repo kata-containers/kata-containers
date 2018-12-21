@@ -533,6 +533,7 @@ func (q *qemu) startSandbox() error {
 				q.Logger().WithError(err).Error("After launching Qemu")
 			}
 		}
+		q.fds = []*os.File{}
 	}()
 
 	vmPath := filepath.Join(RunVMStoragePath, q.id)
@@ -1473,4 +1474,18 @@ func (q *qemu) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint3
 		newVCPUs -= vCPUsRemoved
 	}
 	return currentVCPUs, newVCPUs, nil
+}
+
+func (q *qemu) cleanup() error {
+	span, _ := q.trace("cleanup")
+	defer span.Finish()
+
+	for _, fd := range q.fds {
+		if err := fd.Close(); err != nil {
+			q.Logger().WithError(err).Warn("failed closing fd")
+		}
+	}
+	q.fds = []*os.File{}
+
+	return nil
 }

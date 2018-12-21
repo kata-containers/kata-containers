@@ -101,3 +101,7 @@ func (m *mockHypervisor) getThreadIDs() (*threadIDs, error) {
 	vcpus := []int{os.Getpid()}
 	return &threadIDs{vcpus}, nil
 }
+
+func (m *mockHypervisor) cleanup() error {
+	return nil
+}
