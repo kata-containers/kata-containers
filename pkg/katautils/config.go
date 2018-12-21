@@ -47,7 +47,8 @@ var (
 // The currently supported types are listed below:
 const (
 	// supported hypervisor component types
-	qemuHypervisorTableType = "qemu"
+	firecrackerHypervisorTableType = "firecracker"
+	qemuHypervisorTableType        = "qemu"
 
 	// supported proxy component types
 	ccProxyTableType   = "cc"
@@ -327,6 +328,26 @@ func (h hypervisor) guestHookPath() string {
 	return h.GuestHookPath
 }
 
+func (h hypervisor) getInitrdAndImage() (initrd string, image string, err error) {
+	if initrd, err = h.initrd(); err != nil {
+		return
+	}
+
+	if image, err = h.image(); err != nil {
+		return
+	}
+
+	if image != "" && initrd != "" {
+		return "", "", errors.New("having both an image and an initrd defined in the configuration file is not supported")
+	}
+
+	if image == "" && initrd == "" {
+		return "", "", errors.New("either image or initrd must be defined in the configuration file")
+	}
+
+	return
+}
+
 func (p proxy) path() string {
 	if p.Path == "" {
 		return defaultProxyPath
@@ -373,6 +394,63 @@ func (n netmon) debug() bool {
 	return n.Debug
 }
 
+func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
+	hypervisor, err := h.path()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	kernel, err := h.kernel()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	initrd, image, err := h.getInitrdAndImage()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	firmware, err := h.firmware()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	kernelParams := h.kernelParams()
+
+	blockDriver, err := h.blockDeviceDriver()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	if !utils.SupportsVsocks() {
+		return vc.HypervisorConfig{}, errors.New("No vsock support, firecracker cannot be used")
+	}
+
+	return vc.HypervisorConfig{
+		HypervisorPath:        hypervisor,
+		KernelPath:            kernel,
+		InitrdPath:            initrd,
+		ImagePath:             image,
+		FirmwarePath:          firmware,
+		KernelParams:          vc.DeserializeParams(strings.Fields(kernelParams)),
+		NumVCPUs:              h.defaultVCPUs(),
+		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
+		MemorySize:            h.defaultMemSz(),
+		MemSlots:              h.defaultMemSlots(),
+		EntropySource:         h.GetEntropySource(),
+		DefaultBridges:        h.defaultBridges(),
+		DisableBlockDeviceUse: h.DisableBlockDeviceUse,
+		HugePages:             h.HugePages,
+		Mlock:                 !h.Swap,
+		Debug:                 h.Debug,
+		DisableNestingChecks:  h.DisableNestingChecks,
+		BlockDeviceDriver:     blockDriver,
+		EnableIOThreads:       h.EnableIOThreads,
+		UseVSock:              true,
+		GuestHookPath:         h.guestHookPath(),
+	}, nil
+}
+
 func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	hypervisor, err := h.path()
 	if err != nil {
@@ -384,12 +462,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	initrd, err := h.initrd()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
-
-	image, err := h.image()
+	initrd, image, err := h.getInitrdAndImage()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
 	}
@@ -479,19 +552,30 @@ func newShimConfig(s shim) (vc.ShimConfig, error) {
 	}, nil
 }
 
-func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
+func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	for k, hypervisor := range tomlConf.Hypervisor {
-		switch k {
-		case qemuHypervisorTableType:
-			hConfig, err := newQemuHypervisorConfig(hypervisor)
-			if err != nil {
-				return fmt.Errorf("%v: %v", configPath, err)
-			}
+		var err error
+		var hConfig vc.HypervisorConfig
 
-			config.HypervisorConfig = hConfig
+		switch k {
+		case firecrackerHypervisorTableType:
+			config.HypervisorType = vc.FirecrackerHypervisor
+			hConfig, err = newFirecrackerHypervisorConfig(hypervisor)
+		case qemuHypervisorTableType:
+			config.HypervisorType = vc.QemuHypervisor
+			hConfig, err = newQemuHypervisorConfig(hypervisor)
 		}
+
+		if err != nil {
+			return fmt.Errorf("%v: %v", configPath, err)
+		}
+		config.HypervisorConfig = hConfig
 	}
 
+	return nil
+}
+
+func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	for k, proxy := range tomlConf.Proxy {
 		switch k {
 		case ccProxyTableType:
@@ -506,6 +590,10 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 		}
 	}
 
+	return nil
+}
+
+func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	for k := range tomlConf.Agent {
 		switch k {
 		case hyperstartAgentTableType:
@@ -520,6 +608,10 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 		}
 	}
 
+	return nil
+}
+
+func updateRuntimeConfigShim(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	for k, shim := range tomlConf.Shim {
 		switch k {
 		case ccShimTableType:
@@ -534,6 +626,26 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 		}
 
 		config.ShimConfig = shConfig
+	}
+
+	return nil
+}
+
+func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
+	if err := updateRuntimeConfigHypervisor(configPath, tomlConf, config); err != nil {
+		return err
+	}
+
+	if err := updateRuntimeConfigProxy(configPath, tomlConf, config); err != nil {
+		return err
+	}
+
+	if err := updateRuntimeConfigAgent(configPath, tomlConf, config); err != nil {
+		return err
+	}
+
+	if err := updateRuntimeConfigShim(configPath, tomlConf, config); err != nil {
+		return err
 	}
 
 	fConfig, err := newFactoryConfig(tomlConf.Factory)
