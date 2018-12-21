@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/sirupsen/logrus"
 )
 
@@ -118,7 +119,14 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		}
 	}()
 
-	if err = hypervisor.createSandbox(ctx, id, &config.HypervisorConfig, &filesystem{}); err != nil {
+	vcStore, err := store.NewVCStore(ctx,
+		store.SandboxConfigurationRoot(id),
+		store.SandboxRuntimeRoot(id))
+	if err != nil {
+		return nil, err
+	}
+
+	if err = hypervisor.createSandbox(ctx, id, &config.HypervisorConfig, vcStore); err != nil {
 		return nil, err
 	}
 
@@ -180,7 +188,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 }
 
 func buildVMSharePath(id string) string {
-	return filepath.Join(RunVMStoragePath, id, "shared")
+	return filepath.Join(store.RunVMStoragePath, id, "shared")
 }
 
 func (v *VM) logger() logrus.FieldLogger {

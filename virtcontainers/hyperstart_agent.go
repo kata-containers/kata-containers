@@ -23,6 +23,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -46,8 +47,8 @@ type HyperConfig struct {
 
 func (h *hyper) generateSockets(sandbox *Sandbox, c HyperConfig) {
 	sandboxSocketPaths := []string{
-		fmt.Sprintf(defaultSockPathTemplates[0], runStoragePath, sandbox.id),
-		fmt.Sprintf(defaultSockPathTemplates[1], runStoragePath, sandbox.id),
+		fmt.Sprintf(defaultSockPathTemplates[0], store.RunStoragePath, sandbox.id),
+		fmt.Sprintf(defaultSockPathTemplates[1], store.RunStoragePath, sandbox.id),
 	}
 
 	if c.SockCtlName != "" {
@@ -289,7 +290,7 @@ func (h *hyper) init(ctx context.Context, sandbox *Sandbox, config interface{}) 
 	}
 
 	// Fetch agent runtime info.
-	if err := sandbox.storage.fetchAgentState(sandbox.id, &h.state); err != nil {
+	if err := sandbox.store.Load(store.Agent, &h.state); err != nil {
 		h.Logger().Debug("Could not retrieve anything from storage")
 	}
 
@@ -297,7 +298,7 @@ func (h *hyper) init(ctx context.Context, sandbox *Sandbox, config interface{}) 
 }
 
 func (h *hyper) getVMPath(id string) string {
-	return filepath.Join(runStoragePath, id)
+	return store.SandboxRuntimeRootPath(id)
 }
 
 func (h *hyper) getSharePath(id string) string {
@@ -319,7 +320,7 @@ func (h *hyper) configure(hv hypervisor, id, sharePath string, builtin bool, con
 		HostPath: sharePath,
 	}
 
-	if err := os.MkdirAll(sharedVolume.HostPath, dirMode); err != nil {
+	if err := os.MkdirAll(sharedVolume.HostPath, store.DirMode); err != nil {
 		return err
 	}
 
@@ -487,7 +488,7 @@ func (h *hyper) stopSandbox(sandbox *Sandbox) error {
 
 	h.state.ProxyPid = -1
 	h.state.URL = ""
-	if err := sandbox.storage.storeAgentState(sandbox.id, h.state); err != nil {
+	if err := sandbox.store.Store(store.Agent, h.state); err != nil {
 		// ignore error
 		h.Logger().WithError(err).WithField("sandbox", sandbox.id).Error("failed to clean up agent state")
 	}
@@ -990,7 +991,7 @@ func (h *hyper) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) err
 	h.state.ProxyPid = pid
 	h.state.URL = url
 	if sandbox != nil {
-		if err := sandbox.storage.storeAgentState(sandbox.id, h.state); err != nil {
+		if err := sandbox.store.Store(store.Agent, h.state); err != nil {
 			return err
 		}
 	}

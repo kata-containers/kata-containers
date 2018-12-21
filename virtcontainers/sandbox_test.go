@@ -24,6 +24,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"golang.org/x/sys/unix"
 )
@@ -176,92 +177,6 @@ func TestSandboxStatePausedReady(t *testing.T) {
 	err := testSandboxStateTransition(t, types.StateStopped, types.StateReady)
 	if err == nil {
 		t.Fatal("Invalid transition from Ready to Paused")
-	}
-}
-
-func testSandboxDir(t *testing.T, resource sandboxResource, expected string) error {
-	fs := filesystem{}
-	_, dir, err := fs.sandboxURI(testSandboxID, resource)
-	if err != nil {
-		return err
-	}
-
-	if dir != expected {
-		return fmt.Errorf("Unexpected sandbox directory %s vs %s", dir, expected)
-	}
-
-	return nil
-}
-
-func testSandboxFile(t *testing.T, resource sandboxResource, expected string) error {
-	fs := filesystem{}
-	file, _, err := fs.sandboxURI(testSandboxID, resource)
-	if err != nil {
-		return err
-	}
-
-	if file != expected {
-		return fmt.Errorf("Unexpected sandbox file %s vs %s", file, expected)
-	}
-
-	return nil
-}
-
-func TestSandboxDirConfig(t *testing.T) {
-	err := testSandboxDir(t, configFileType, sandboxDirConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestSandboxDirState(t *testing.T) {
-	err := testSandboxDir(t, stateFileType, sandboxDirState)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestSandboxDirLock(t *testing.T) {
-	err := testSandboxDir(t, lockFileType, sandboxDirLock)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestSandboxDirNegative(t *testing.T) {
-	fs := filesystem{}
-	_, _, err := fs.sandboxURI("", lockFileType)
-	if err == nil {
-		t.Fatal("Empty sandbox IDs should not be allowed")
-	}
-}
-
-func TestSandboxFileConfig(t *testing.T) {
-	err := testSandboxFile(t, configFileType, sandboxFileConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestSandboxFileState(t *testing.T) {
-	err := testSandboxFile(t, stateFileType, sandboxFileState)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestSandboxFileLock(t *testing.T) {
-	err := testSandboxFile(t, lockFileType, sandboxFileLock)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestSandboxFileNegative(t *testing.T) {
-	fs := filesystem{}
-	_, _, err := fs.sandboxURI("", lockFileType)
-	if err == nil {
-		t.Fatal("Empty sandbox IDs should not be allowed")
 	}
 }
 
@@ -619,174 +534,6 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	}
 }
 
-func TestSandboxSetSandboxStateFailingStoreSandboxResource(t *testing.T) {
-	fs := &filesystem{}
-	sandbox := &Sandbox{
-		storage: fs,
-	}
-
-	err := sandbox.setSandboxState(types.StateReady)
-	if err == nil {
-		t.Fatal()
-	}
-}
-
-func TestSandboxSetContainersStateFailingEmptySandboxID(t *testing.T) {
-	sandbox := &Sandbox{
-		storage: &filesystem{},
-	}
-
-	containers := map[string]*Container{
-		"100": {
-			id:      "100",
-			sandbox: sandbox,
-		},
-	}
-
-	sandbox.containers = containers
-
-	err := sandbox.setContainersState(types.StateReady)
-	if err == nil {
-		t.Fatal()
-	}
-}
-
-func TestSandboxDeleteContainerStateSuccessful(t *testing.T) {
-	contID := "100"
-
-	fs := &filesystem{}
-	sandbox := &Sandbox{
-		id:      testSandboxID,
-		storage: fs,
-	}
-
-	path := filepath.Join(runStoragePath, testSandboxID, contID)
-	err := os.MkdirAll(path, dirMode)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stateFilePath := filepath.Join(path, stateFile)
-
-	os.Remove(stateFilePath)
-
-	_, err = os.Create(stateFilePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = os.Stat(stateFilePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = sandbox.deleteContainerState(contID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = os.Stat(stateFilePath)
-	if err == nil {
-		t.Fatal()
-	}
-}
-
-func TestSandboxDeleteContainerStateFailingEmptySandboxID(t *testing.T) {
-	contID := "100"
-
-	fs := &filesystem{}
-	sandbox := &Sandbox{
-		storage: fs,
-	}
-
-	err := sandbox.deleteContainerState(contID)
-	if err == nil {
-		t.Fatal()
-	}
-}
-
-func TestSandboxDeleteContainersStateSuccessful(t *testing.T) {
-	var err error
-
-	containers := []ContainerConfig{
-		{
-			ID: "100",
-		},
-		{
-			ID: "200",
-		},
-	}
-
-	sandboxConfig := &SandboxConfig{
-		Containers: containers,
-	}
-
-	fs := &filesystem{}
-	sandbox := &Sandbox{
-		id:      testSandboxID,
-		config:  sandboxConfig,
-		storage: fs,
-	}
-
-	for _, c := range containers {
-		path := filepath.Join(runStoragePath, testSandboxID, c.ID)
-		err = os.MkdirAll(path, dirMode)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		stateFilePath := filepath.Join(path, stateFile)
-
-		os.Remove(stateFilePath)
-
-		_, err = os.Create(stateFilePath)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		_, err = os.Stat(stateFilePath)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	err = sandbox.deleteContainersState()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, c := range containers {
-		stateFilePath := filepath.Join(runStoragePath, testSandboxID, c.ID, stateFile)
-		_, err = os.Stat(stateFilePath)
-		if err == nil {
-			t.Fatal()
-		}
-	}
-}
-
-func TestSandboxDeleteContainersStateFailingEmptySandboxID(t *testing.T) {
-	containers := []ContainerConfig{
-		{
-			ID: "100",
-		},
-	}
-
-	sandboxConfig := &SandboxConfig{
-		Containers: containers,
-	}
-
-	fs := &filesystem{}
-	sandbox := &Sandbox{
-		config:  sandboxConfig,
-		storage: fs,
-	}
-
-	err := sandbox.deleteContainersState()
-	if err == nil {
-		t.Fatal()
-	}
-}
-
 func TestGetContainer(t *testing.T) {
 	containerIDs := []string{"abc", "123", "xyz", "rgb"}
 	containers := map[string]*Container{}
@@ -837,8 +584,8 @@ func TestGetAllContainers(t *testing.T) {
 
 func TestSetAnnotations(t *testing.T) {
 	sandbox := Sandbox{
+		ctx:             context.Background(),
 		id:              "abcxyz123",
-		storage:         &filesystem{},
 		annotationsLock: &sync.RWMutex{},
 		config: &SandboxConfig{
 			Annotations: map[string]string{
@@ -846,6 +593,12 @@ func TestSetAnnotations(t *testing.T) {
 			},
 		},
 	}
+
+	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sandbox.store = vcStore
 
 	keyAnnotation := "annotation2"
 	valueAnnotation := "xyz"
@@ -947,23 +700,27 @@ func TestContainerSetStateBlockIndex(t *testing.T) {
 	}
 	defer cleanUp()
 
-	fs := &filesystem{}
-	sandbox.storage = fs
+	sandboxStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sandbox.store = sandboxStore
 
 	c := sandbox.GetContainer("100")
 	if c == nil {
 		t.Fatal()
 	}
+	cImpl, ok := c.(*Container)
+	assert.True(t, ok)
 
-	path := filepath.Join(runStoragePath, testSandboxID, c.ID())
-	err = os.MkdirAll(path, dirMode)
+	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, c.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
+	cImpl.store = containerStore
 
-	stateFilePath := filepath.Join(path, stateFile)
-
-	os.Remove(stateFilePath)
+	path := store.ContainerRuntimeRootPath(testSandboxID, c.ID())
+	stateFilePath := filepath.Join(path, store.StateFile)
 
 	f, err := os.Create(stateFilePath)
 	if err != nil {
@@ -974,9 +731,6 @@ func TestContainerSetStateBlockIndex(t *testing.T) {
 		State:  "stopped",
 		Fstype: "vfs",
 	}
-
-	cImpl, ok := c.(*Container)
-	assert.True(t, ok)
 
 	cImpl.state = state
 
@@ -991,11 +745,6 @@ func TestContainerSetStateBlockIndex(t *testing.T) {
 		t.Fatal()
 	}
 	f.Close()
-
-	_, err = os.Stat(stateFilePath)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	newIndex := 20
 	if err := cImpl.setStateBlockIndex(newIndex); err != nil {
@@ -1046,22 +795,27 @@ func TestContainerStateSetFstype(t *testing.T) {
 	}
 	defer cleanUp()
 
-	fs := &filesystem{}
-	sandbox.storage = fs
+	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sandbox.store = vcStore
 
 	c := sandbox.GetContainer("100")
 	if c == nil {
 		t.Fatal()
 	}
+	cImpl, ok := c.(*Container)
+	assert.True(t, ok)
 
-	path := filepath.Join(runStoragePath, testSandboxID, c.ID())
-	err = os.MkdirAll(path, dirMode)
+	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, c.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
+	cImpl.store = containerStore
 
-	stateFilePath := filepath.Join(path, stateFile)
-	os.Remove(stateFilePath)
+	path := store.ContainerRuntimeRootPath(testSandboxID, c.ID())
+	stateFilePath := filepath.Join(path, store.StateFile)
 
 	f, err := os.Create(stateFilePath)
 	if err != nil {
@@ -1073,9 +827,6 @@ func TestContainerStateSetFstype(t *testing.T) {
 		Fstype:     "vfs",
 		BlockIndex: 3,
 	}
-
-	cImpl, ok := c.(*Container)
-	assert.True(t, ok)
 
 	cImpl.state = state
 
@@ -1091,11 +842,6 @@ func TestContainerStateSetFstype(t *testing.T) {
 		t.Fatal()
 	}
 	f.Close()
-
-	_, err = os.Stat(stateFilePath)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	newFstype := "ext4"
 	if err := cImpl.setStateFstype(newFstype); err != nil {
@@ -1141,7 +887,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 	testDeviceBDFPath := "0000:00:1c.0"
 
 	devicesDir := filepath.Join(tmpDir, testFDIOGroup, "devices")
-	err = os.MkdirAll(devicesDir, dirMode)
+	err = os.MkdirAll(devicesDir, store.DirMode)
 	assert.Nil(t, err)
 
 	deviceFile := filepath.Join(devicesDir, testDeviceBDFPath)
@@ -1181,15 +927,16 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 	sandbox := Sandbox{
 		id:         "100",
 		containers: containers,
-		storage:    &filesystem{},
 		hypervisor: &mockHypervisor{},
 		devManager: dm,
 		ctx:        context.Background(),
 	}
 
+	store, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
+	assert.Nil(t, err)
+	sandbox.store = store
+
 	containers[c.id].sandbox = &sandbox
-	err = sandbox.storage.createAllResources(context.Background(), &sandbox)
-	assert.Nil(t, err, "Error while create all resources for sandbox")
 
 	err = sandbox.storeSandboxDevices()
 	assert.Nil(t, err, "Error while store sandbox devices %s", err)
@@ -1554,7 +1301,6 @@ func TestContainerProcessIOStream(t *testing.T) {
 }
 
 func TestAttachBlockDevice(t *testing.T) {
-	fs := &filesystem{}
 	hypervisor := &mockHypervisor{}
 
 	hConfig := HypervisorConfig{
@@ -1567,11 +1313,14 @@ func TestAttachBlockDevice(t *testing.T) {
 
 	sandbox := &Sandbox{
 		id:         testSandboxID,
-		storage:    fs,
 		hypervisor: hypervisor,
 		config:     sconfig,
 		ctx:        context.Background(),
 	}
+
+	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
+	assert.Nil(t, err)
+	sandbox.store = vcStore
 
 	contID := "100"
 	container := Container{
@@ -1580,15 +1329,15 @@ func TestAttachBlockDevice(t *testing.T) {
 	}
 
 	// create state file
-	path := filepath.Join(runStoragePath, testSandboxID, container.ID())
-	err := os.MkdirAll(path, dirMode)
+	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
+	err = os.MkdirAll(path, store.DirMode)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	defer os.RemoveAll(path)
 
-	stateFilePath := filepath.Join(path, stateFile)
+	stateFilePath := filepath.Join(path, store.StateFile)
 	os.Remove(stateFilePath)
 
 	_, err = os.Create(stateFilePath)
@@ -1640,7 +1389,6 @@ func TestAttachBlockDevice(t *testing.T) {
 }
 
 func TestPreAddDevice(t *testing.T) {
-	fs := &filesystem{}
 	hypervisor := &mockHypervisor{}
 
 	hConfig := HypervisorConfig{
@@ -1655,12 +1403,15 @@ func TestPreAddDevice(t *testing.T) {
 	// create a sandbox first
 	sandbox := &Sandbox{
 		id:         testSandboxID,
-		storage:    fs,
 		hypervisor: hypervisor,
 		config:     sconfig,
 		devManager: dm,
 		ctx:        context.Background(),
 	}
+
+	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
+	assert.Nil(t, err)
+	sandbox.store = vcStore
 
 	contID := "100"
 	container := Container{
@@ -1670,16 +1421,20 @@ func TestPreAddDevice(t *testing.T) {
 	}
 	container.state.State = types.StateReady
 
+	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, container.id)
+	assert.Nil(t, err)
+	container.store = containerStore
+
 	// create state file
-	path := filepath.Join(runStoragePath, testSandboxID, container.ID())
-	err := os.MkdirAll(path, dirMode)
+	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
+	err = os.MkdirAll(path, store.DirMode)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	defer os.RemoveAll(path)
 
-	stateFilePath := filepath.Join(path, stateFile)
+	stateFilePath := filepath.Join(path, store.StateFile)
 	os.Remove(stateFilePath)
 
 	_, err = os.Create(stateFilePath)
