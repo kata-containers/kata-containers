@@ -7,11 +7,22 @@ package store
 
 import (
 	"context"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
+const testSandboxID = "7f49d00d-1995-4156-8c79-5f5ab24ce138"
+
+var sandboxDirConfig = ""
+var sandboxFileConfig = ""
+var sandboxDirState = ""
+var sandboxDirLock = ""
+var sandboxFileState = ""
+var sandboxFileLock = ""
 var storeRoot = "file:///tmp/root1/"
 
 func TestNewStore(t *testing.T) {
@@ -91,4 +102,29 @@ func TestManagerFindStore(t *testing.T) {
 	// Negative find
 	newStore = stores.findStore(storeRoot + "foobar")
 	assert.Nil(t, newStore, "findStore should not have found a new store")
+}
+
+// TestMain is the common main function used by ALL the test functions
+// for the store.
+func TestMain(m *testing.M) {
+	testDir, err := ioutil.TempDir("", "store-tmp-")
+	if err != nil {
+		panic(err)
+	}
+
+	// allow the tests to run without affecting the host system.
+	ConfigStoragePath = filepath.Join(testDir, StoragePathSuffix, "config")
+	RunStoragePath = filepath.Join(testDir, StoragePathSuffix, "run")
+
+	// set now that ConfigStoragePath has been overridden.
+	sandboxDirConfig = filepath.Join(ConfigStoragePath, testSandboxID)
+	sandboxFileConfig = filepath.Join(ConfigStoragePath, testSandboxID, ConfigurationFile)
+	sandboxDirState = filepath.Join(RunStoragePath, testSandboxID)
+	sandboxDirLock = filepath.Join(RunStoragePath, testSandboxID)
+	sandboxFileState = filepath.Join(RunStoragePath, testSandboxID, StateFile)
+	sandboxFileLock = filepath.Join(RunStoragePath, testSandboxID, LockFile)
+
+	ret := m.Run()
+
+	os.Exit(ret)
 }
