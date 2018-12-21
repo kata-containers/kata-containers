@@ -11,8 +11,8 @@ import (
 	"fmt"
 	"os"
 
-	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -132,7 +132,7 @@ func networkModifyCommand(ctx context.Context, containerID, input string, opType
 	setExternalLoggers(ctx, kataLog)
 
 	// container MUST be running
-	if status.State.State != vc.StateRunning {
+	if status.State.State != types.StateRunning {
 		return fmt.Errorf("container %s is not running", containerID)
 	}
 
@@ -201,7 +201,7 @@ func networkListCommand(ctx context.Context, containerID string, opType networkT
 	setExternalLoggers(ctx, kataLog)
 
 	// container MUST be running
-	if status.State.State != vc.StateRunning {
+	if status.State.State != types.StateRunning {
 		return fmt.Errorf("container %s is not running", containerID)
 	}
 

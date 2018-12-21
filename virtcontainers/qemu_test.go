@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	govmmQemu "github.com/intel/govmm/qemu"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -213,7 +214,7 @@ func TestQemuAddDeviceFsDev(t *testing.T) {
 		},
 	}
 
-	volume := Volume{
+	volume := types.Volume{
 		MountTag: mountTag,
 		HostPath: hostPath,
 	}
@@ -238,7 +239,7 @@ func TestQemuAddDeviceSerialPortDev(t *testing.T) {
 		},
 	}
 
-	socket := Socket{
+	socket := types.Socket{
 		DeviceID: deviceID,
 		ID:       id,
 		HostPath: hostPath,

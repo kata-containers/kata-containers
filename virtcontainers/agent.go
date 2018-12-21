@@ -12,6 +12,7 @@ import (
 
 	"github.com/kata-containers/agent/protocols/grpc"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/mitchellh/mapstructure"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"golang.org/x/net/context"
@@ -160,7 +161,7 @@ type agent interface {
 	createSandbox(sandbox *Sandbox) error
 
 	// exec will tell the agent to run a command in an already running container.
-	exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, error)
+	exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error)
 
 	// startSandbox will tell the agent to start all containers related to the Sandbox.
 	startSandbox(sandbox *Sandbox) error

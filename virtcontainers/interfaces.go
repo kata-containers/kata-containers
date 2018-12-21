@@ -13,6 +13,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -35,7 +36,7 @@ type VC interface {
 
 	CreateContainer(ctx context.Context, sandboxID string, containerConfig ContainerConfig) (VCSandbox, VCContainer, error)
 	DeleteContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error)
-	EnterContainer(ctx context.Context, sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContainer, *Process, error)
+	EnterContainer(ctx context.Context, sandboxID, containerID string, cmd types.Cmd) (VCSandbox, VCContainer, *Process, error)
 	KillContainer(ctx context.Context, sandboxID, containerID string, signal syscall.Signal, all bool) error
 	StartContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error)
 	StatusContainer(ctx context.Context, sandboxID, containerID string) (ContainerStatus, error)
@@ -83,7 +84,7 @@ type VCSandbox interface {
 	StatsContainer(containerID string) (ContainerStats, error)
 	PauseContainer(containerID string) error
 	ResumeContainer(containerID string) error
-	EnterContainer(containerID string, cmd Cmd) (VCContainer, *Process, error)
+	EnterContainer(containerID string, cmd types.Cmd) (VCContainer, *Process, error)
 	UpdateContainer(containerID string, resources specs.LinuxResources) error
 	ProcessListContainer(containerID string, options ProcessListOptions) (ProcessList, error)
 	WaitProcess(containerID, processID string) (int32, error)

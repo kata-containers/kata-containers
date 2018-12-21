@@ -10,6 +10,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -45,7 +46,7 @@ func TestNoopAgentInit(t *testing.T) {
 
 func TestNoopAgentExec(t *testing.T) {
 	n := &noopAgent{}
-	cmd := Cmd{}
+	cmd := types.Cmd{}
 	sandbox, container, err := testCreateNoopContainer()
 	if err != nil {
 		t.Fatal(err)

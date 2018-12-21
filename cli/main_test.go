@@ -26,6 +26,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 	jaeger "github.com/uber/jaeger-client-go"
@@ -444,7 +445,7 @@ func writeOCIConfigFile(spec oci.CompatOCISpec, configPath string) error {
 	return ioutil.WriteFile(configPath, bytes, testFileMode)
 }
 
-func newSingleContainerStatus(containerID string, containerState vc.State, annotations map[string]string) vc.ContainerStatus {
+func newSingleContainerStatus(containerID string, containerState types.State, annotations map[string]string) vc.ContainerStatus {
 	return vc.ContainerStatus{
 		ID:          containerID,
 		State:       containerState,

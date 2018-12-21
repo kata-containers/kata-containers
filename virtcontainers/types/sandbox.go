@@ -10,26 +10,26 @@ import (
 	"strings"
 )
 
-// stateString is a string representing a sandbox state.
-type stateString string
+// StateString is a string representing a sandbox state.
+type StateString string
 
 const (
 	// StateReady represents a sandbox/container that's ready to be run
-	StateReady stateString = "ready"
+	StateReady StateString = "ready"
 
 	// StateRunning represents a sandbox/container that's currently running.
-	StateRunning stateString = "running"
+	StateRunning StateString = "running"
 
 	// StatePaused represents a sandbox/container that has been paused.
-	StatePaused stateString = "paused"
+	StatePaused StateString = "paused"
 
 	// StateStopped represents a sandbox/container that has been stopped.
-	StateStopped stateString = "stopped"
+	StateStopped StateString = "stopped"
 )
 
 // State is a sandbox state structure.
 type State struct {
-	State stateString `json:"state"`
+	State StateString `json:"state"`
 
 	BlockDeviceID string
 	// Index of the block device passed to hypervisor.
@@ -46,9 +46,9 @@ type State struct {
 	GuestMemoryBlockSizeMB uint32 `json:"guestMemoryBlockSize"`
 }
 
-// valid checks that the sandbox state is valid.
-func (state *State) valid() bool {
-	for _, validState := range []stateString{StateReady, StateRunning, StatePaused, StateStopped} {
+// Valid checks that the sandbox state is valid.
+func (state *State) Valid() bool {
+	for _, validState := range []StateString{StateReady, StateRunning, StatePaused, StateStopped} {
 		if state.State == validState {
 			return true
 		}
@@ -57,9 +57,9 @@ func (state *State) valid() bool {
 	return false
 }
 
-// validTransition returns an error if we want to move to
+// ValidTransition returns an error if we want to move to
 // an unreachable state.
-func (state *State) validTransition(oldState stateString, newState stateString) error {
+func (state *State) ValidTransition(oldState StateString, newState StateString) error {
 	if state.State != oldState {
 		return fmt.Errorf("Invalid state %s (Expecting %s)", state.State, oldState)
 	}

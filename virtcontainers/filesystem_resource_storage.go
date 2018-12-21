@@ -19,6 +19,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
 // sandboxResource is an int representing a sandbox resource type.
@@ -630,7 +631,7 @@ func (fs *filesystem) storeResource(sandboxSpecific bool, sandboxID, containerID
 	case SandboxConfig, ContainerConfig:
 		return fs.storeSandboxAndContainerConfigResource(sandboxSpecific, sandboxID, containerID, resource, file)
 
-	case State:
+	case types.State:
 		return fs.storeStateResource(sandboxSpecific, sandboxID, containerID, resource, file)
 
 	case NetworkNamespace:
@@ -690,11 +691,11 @@ func (fs *filesystem) fetchSandboxConfig(sandboxID string) (SandboxConfig, error
 	return sandboxConfig, nil
 }
 
-func (fs *filesystem) fetchSandboxState(sandboxID string) (State, error) {
-	var state State
+func (fs *filesystem) fetchSandboxState(sandboxID string) (types.State, error) {
+	var state types.State
 
 	if err := fs.fetchResource(true, sandboxID, "", stateFileType, &state); err != nil {
-		return State{}, err
+		return types.State{}, err
 	}
 
 	return state, nil
@@ -797,11 +798,11 @@ func (fs *filesystem) fetchContainerConfig(sandboxID, containerID string) (Conta
 	return config, nil
 }
 
-func (fs *filesystem) fetchContainerState(sandboxID, containerID string) (State, error) {
-	var state State
+func (fs *filesystem) fetchContainerState(sandboxID, containerID string) (types.State, error) {
+	var state types.State
 
 	if err := fs.fetchResource(false, sandboxID, containerID, stateFileType, &state); err != nil {
-		return State{}, err
+		return types.State{}, err
 	}
 
 	return state, nil

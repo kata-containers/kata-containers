@@ -13,6 +13,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -143,7 +144,7 @@ func (s *Sandbox) Status() vc.SandboxStatus {
 }
 
 // EnterContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) EnterContainer(containerID string, cmd vc.Cmd) (vc.VCContainer, *vc.Process, error) {
+func (s *Sandbox) EnterContainer(containerID string, cmd types.Cmd) (vc.VCContainer, *vc.Process, error) {
 	return &Container{}, &vc.Process{}, nil
 }
 

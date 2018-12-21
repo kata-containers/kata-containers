@@ -18,6 +18,7 @@ import (
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 )
@@ -77,7 +78,7 @@ func TestExecuteErrors(t *testing.T) {
 	}
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, vc.State{}, annotations), nil
+		return newSingleContainerStatus(testContainerID, types.State{}, annotations), nil
 	}
 
 	defer func() {
@@ -99,7 +100,7 @@ func TestExecuteErrors(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	containerState := vc.State{}
+	containerState := types.State{}
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, containerState, annotations), nil
 	}
@@ -109,8 +110,8 @@ func TestExecuteErrors(t *testing.T) {
 	assert.False(vcmock.IsMockError(err))
 
 	// Container paused
-	containerState = vc.State{
-		State: vc.StatePaused,
+	containerState = types.State{
+		State: types.StatePaused,
 	}
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, containerState, annotations), nil
@@ -121,8 +122,8 @@ func TestExecuteErrors(t *testing.T) {
 	assert.False(vcmock.IsMockError(err))
 
 	// Container stopped
-	containerState = vc.State{
-		State: vc.StateStopped,
+	containerState = types.State{
+		State: types.StateStopped,
 	}
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, containerState, annotations), nil
@@ -158,8 +159,8 @@ func TestExecuteErrorReadingProcessJson(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := vc.State{
-		State: vc.StateRunning,
+	state := types.State{
+		State: types.StateRunning,
 	}
 
 	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
@@ -207,8 +208,8 @@ func TestExecuteErrorOpeningConsole(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := vc.State{
-		State: vc.StateRunning,
+	state := types.State{
+		State: types.StateRunning,
 	}
 
 	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
@@ -274,8 +275,8 @@ func TestExecuteWithFlags(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := vc.State{
-		State: vc.StateRunning,
+	state := types.State{
+		State: types.StateRunning,
 	}
 
 	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
@@ -299,7 +300,7 @@ func TestExecuteWithFlags(t *testing.T) {
 
 	assert.True(vcmock.IsMockError(err))
 
-	testingImpl.EnterContainerFunc = func(ctx context.Context, sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
+	testingImpl.EnterContainerFunc = func(ctx context.Context, sandboxID, containerID string, cmd types.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
 		return &vcmock.Sandbox{}, &vcmock.Container{}, &vc.Process{}, nil
 	}
 
@@ -316,7 +317,7 @@ func TestExecuteWithFlags(t *testing.T) {
 	os.Remove(pidFilePath)
 
 	// Process ran and exited successfully
-	testingImpl.EnterContainerFunc = func(ctx context.Context, sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
+	testingImpl.EnterContainerFunc = func(ctx context.Context, sandboxID, containerID string, cmd types.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
 		// create a fake container process
 		workload := []string{"cat", "/dev/null"}
 		command := exec.Command(workload[0], workload[1:]...)
@@ -364,8 +365,8 @@ func TestExecuteWithFlagsDetached(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := vc.State{
-		State: vc.StateRunning,
+	state := types.State{
+		State: types.StateRunning,
 	}
 
 	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
@@ -380,7 +381,7 @@ func TestExecuteWithFlagsDetached(t *testing.T) {
 		testingImpl.StatusContainerFunc = nil
 	}()
 
-	testingImpl.EnterContainerFunc = func(ctx context.Context, sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
+	testingImpl.EnterContainerFunc = func(ctx context.Context, sandboxID, containerID string, cmd types.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
 		// create a fake container process
 		workload := []string{"cat", "/dev/null"}
 		command := exec.Command(workload[0], workload[1:]...)
@@ -443,8 +444,8 @@ func TestExecuteWithInvalidProcessJson(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := vc.State{
-		State: vc.StateRunning,
+	state := types.State{
+		State: types.StateRunning,
 	}
 
 	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
@@ -495,8 +496,8 @@ func TestExecuteWithValidProcessJson(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := vc.State{
-		State: vc.StateRunning,
+	state := types.State{
+		State: types.StateRunning,
 	}
 
 	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
@@ -542,7 +543,7 @@ func TestExecuteWithValidProcessJson(t *testing.T) {
 
 	workload := []string{"cat", "/dev/null"}
 
-	testingImpl.EnterContainerFunc = func(ctx context.Context, sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
+	testingImpl.EnterContainerFunc = func(ctx context.Context, sandboxID, containerID string, cmd types.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
 		// create a fake container process
 		command := exec.Command(workload[0], workload[1:]...)
 		err := command.Start()
@@ -596,8 +597,8 @@ func TestExecuteWithEmptyEnvironmentValue(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := vc.State{
-		State: vc.StateRunning,
+	state := types.State{
+		State: types.StateRunning,
 	}
 
 	path, err := createTempContainerIDMapping(testContainerID, testSandboxID)
@@ -644,7 +645,7 @@ func TestExecuteWithEmptyEnvironmentValue(t *testing.T) {
 
 	workload := []string{"cat", "/dev/null"}
 
-	testingImpl.EnterContainerFunc = func(ctx context.Context, sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
+	testingImpl.EnterContainerFunc = func(ctx context.Context, sandboxID, containerID string, cmd types.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error) {
 		// create a fake container process
 		command := exec.Command(workload[0], workload[1:]...)
 		err := command.Start()

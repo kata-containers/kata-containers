@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
 type noopResourceStorage struct{}
@@ -35,8 +36,8 @@ func (n *noopResourceStorage) fetchSandboxConfig(sandboxID string) (SandboxConfi
 	return SandboxConfig{}, nil
 }
 
-func (n *noopResourceStorage) fetchSandboxState(sandboxID string) (State, error) {
-	return State{}, nil
+func (n *noopResourceStorage) fetchSandboxState(sandboxID string) (types.State, error) {
+	return types.State{}, nil
 }
 
 func (n *noopResourceStorage) fetchSandboxNetwork(sandboxID string) (NetworkNamespace, error) {
@@ -83,8 +84,8 @@ func (n *noopResourceStorage) fetchContainerConfig(sandboxID, containerID string
 	return ContainerConfig{}, nil
 }
 
-func (n *noopResourceStorage) fetchContainerState(sandboxID, containerID string) (State, error) {
-	return State{}, nil
+func (n *noopResourceStorage) fetchContainerState(sandboxID, containerID string) (types.State, error) {
+	return types.State{}, nil
 }
 
 func (n *noopResourceStorage) fetchContainerProcess(sandboxID, containerID string) (Process, error) {

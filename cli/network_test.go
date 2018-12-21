@@ -14,6 +14,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -38,8 +39,8 @@ var (
 func TestNetworkCliFunction(t *testing.T) {
 	assert := assert.New(t)
 
-	state := vc.State{
-		State: vc.StateRunning,
+	state := types.State{
+		State: types.StateRunning,
 	}
 
 	testingImpl.AddInterfaceFunc = testAddInterfaceFuncReturnNil
