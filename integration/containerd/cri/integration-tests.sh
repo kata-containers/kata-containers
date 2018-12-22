@@ -14,7 +14,16 @@ export PATH="$PATH:/usr/local/sbin"
 
 # Runtime to be used for testing
 RUNTIME=${RUNTIME:-kata-runtime}
-readonly runtime_bin=$(command -v "${RUNTIME}")
+SHIMV2_TEST=${SHIMV2_TEST:-""}
+FACTORY_TEST=${FACTORY_TEST:-""}
+runtime_bin=$(command -v "${RUNTIME}")
+runtime_cri="cli"
+
+if [ -n "${SHIMV2_TEST}" ]; then
+	runtime_bin="io.containerd.kata.v2"
+	runtime_cri="shimv2"
+fi
+
 readonly runc_runtime_bin=$(command -v "runc")
 
 readonly CRITEST=${GOPATH}/bin/critest
@@ -50,12 +59,23 @@ ci_config() {
 		# https://github.com/kata-containers/tests/issues/352
 		sudo mkdir -p $(dirname "${kata_config}")
 		sudo cp "${default_kata_config}" "${kata_config}"
-		sudo sed -i -e 's/^internetworking_model\s*=\s*".*"/internetworking_model = "bridged"/g' "/etc/kata-containers/configuration.toml"
+		sudo sed -i -e 's/^internetworking_model\s*=\s*".*"/internetworking_model = "bridged"/g' "${kata_config}"
+		if [ -n "${FACTORY_TEST}" ]; then
+			sudo sed -i -e 's/^#enable_template.*$/enable_template = true/g' "${kata_config}"
+			echo "init vm template"
+			sudo -E PATH=$PATH "$RUNTIME" factory init
+		fi
 	fi
 }
 
 ci_cleanup() {
 	source /etc/os-release || source /usr/lib/os-release
+
+	if [ -n "${FACTORY_TEST}" ]; then
+		echo "destroy vm template"
+		sudo -E PATH=$PATH "$RUNTIME" factory destroy
+	fi
+
 	ID=${ID:-""}
 	if [ "$ID" == ubuntu ] &&  [ -n "${CI}" ] ;then
 		[ -f "${kata_config}" ] && sudo rm "${kata_config}"
@@ -63,7 +83,13 @@ ci_cleanup() {
 }
 
 create_continerd_config() {
-	local runtime_config=$1
+	local runtime_type=$1
+	local runtime_config=$2
+	local runtime_cri="runtime_engine"
+
+	if [ ${runtime_type} == "shimv2" ]; then
+		runtime_cri="runtime_type"
+	fi
 	local stream_server_port="10030"
 	[ -n "${runtime_config}" ] || die "need runtime to create config"
 
@@ -73,7 +99,7 @@ create_continerd_config() {
     stream_server_port = "${stream_server_port}"
     [plugins.cri.containerd]
       [plugins.cri.containerd.default_runtime]
-	runtime_engine = "${runtime_config}"
+	${runtime_cri} = "${runtime_config}"
 [plugins.linux]
 	shim = "${containerd_shim_path}"
 [plugins.cri.cni]
@@ -100,7 +126,7 @@ trap err_report ERR
 
 check_daemon_setup() {
 	info "containerd(cri): Check daemon works with ${runc_runtime_bin}"
-	create_continerd_config "${runc_runtime_bin}"
+	create_continerd_config "cli" "${runc_runtime_bin}"
 
 	sudo -E PATH="${PATH}:/usr/local/bin" \
 		REPORT_DIR="${REPORT_DIR}" \
@@ -131,7 +157,7 @@ main() {
 
 	info "containerd(cri): testing using runtime: ${runtime_bin}"
 
-	create_continerd_config "${runtime_bin}"
+	create_continerd_config "${runtime_cri}" "${runtime_bin}"
 
 	info "containerd(cri): Running cri-tools"
 	sudo -E PATH="${PATH}:/usr/local/bin" \
