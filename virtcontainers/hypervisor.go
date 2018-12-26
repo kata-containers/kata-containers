@@ -169,6 +169,9 @@ type HypervisorConfig struct {
 	// MemSlots specifies default memory slots the VM.
 	MemSlots uint32
 
+	// MemOffset specifies memory space for nvdimm device
+	MemOffset uint32
+
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 

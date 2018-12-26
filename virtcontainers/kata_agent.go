@@ -62,6 +62,7 @@ var (
 	kataMmioBlkDevType   = "mmioblk"
 	kataBlkDevType       = "blk"
 	kataSCSIDevType      = "scsi"
+	kataNvdimmDevType    = "nvdimm"
 	sharedDir9pOptions   = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
 	shmDir               = "shm"
 	kataEphemeralDevType = "ephemeral"
@@ -883,6 +884,9 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 		case config.VirtioSCSI:
 			kataDevice.Type = kataSCSIDevType
 			kataDevice.Id = d.SCSIAddr
+		case config.Nvdimm:
+			kataDevice.Type = kataNvdimmDevType
+			kataDevice.VmPath = fmt.Sprintf("/dev/pmem%s", d.NvdimmID)
 		}
 
 		deviceList = append(deviceList, kataDevice)

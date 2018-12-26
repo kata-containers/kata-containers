@@ -78,7 +78,7 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 		}
 
 		drive.SCSIAddr = scsiAddr
-	} else {
+	} else if customOptions["block-driver"] != "nvdimm" {
 		var globalIdx int
 
 		switch customOptions["block-driver"] {
@@ -102,7 +102,7 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 		drive.VirtPath = filepath.Join("/dev", driveName)
 	}
 
-	deviceLogger().WithField("device", device.DeviceInfo.HostPath).Info("Attaching block device")
+	deviceLogger().WithField("device", device.DeviceInfo.HostPath).WithField("VirtPath", drive.VirtPath).Infof("Attaching %s device", customOptions["block-driver"])
 	device.BlockDrive = drive
 	if err = devReceiver.HotplugAddDevice(device, config.DeviceBlock); err != nil {
 		return err
