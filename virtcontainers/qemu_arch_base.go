@@ -103,6 +103,7 @@ type qemuArch interface {
 
 type qemuArchBase struct {
 	machineType           string
+	memoryOffset          uint32
 	nestedRun             bool
 	vhost                 bool
 	networkIndex          int

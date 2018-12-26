@@ -47,6 +47,9 @@ const (
 
 	// VirtioSCSI means use virtio-scsi for hotplugging drives
 	VirtioSCSI = "virtio-scsi"
+
+	// Nvdimm means use nvdimm for hotplugging drives
+	Nvdimm = "nvdimm"
 )
 
 // Defining these as a variable instead of a const, to allow
@@ -118,6 +121,9 @@ type BlockDrive struct {
 	// SCSI Address of the block device, in case the device is attached using SCSI driver
 	// SCSI address is in the format SCSI-Id:LUN
 	SCSIAddr string
+
+	// NvdimmID is the nvdimm id inside the VM
+	NvdimmID string
 
 	// VirtPath at which the device appears inside the VM, outside of the container mount namespace
 	VirtPath string
