@@ -98,6 +98,7 @@ sed -i -e '/^initrd =/d' %{buildroot}/usr/share/defaults/kata-containers/configu
 %files
 %defattr(-,root,root,-)
 /usr/bin/kata-runtime
+/usr/bin/containerd-shim-kata-v2
 %{LIBEXECDIR}
 %{LIBEXECDIR}/kata-containers
 %{LIBEXECDIR}/kata-containers/kata-netmon
