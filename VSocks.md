@@ -94,6 +94,14 @@ $ sudo modprobe -i vhost_vsock
 The Kata Containers version must be greater than or equal to 1.2.0 and `use_vsock`
 must be set to `true` in the runtime [configuration file][1].
 
+### With VMWare guest
+To use Kata Containers with vsocks in a VMWare guest environment, first stop the vmware-tools service and unload the VMWare Linux kernel module.
+```
+sudo systemctl stop vmware-tools
+sudo modprobe -r vmw_vsock_vmci_transport
+sudo modprobe -i vhost_vsock
+```
+
 ## Advantages of using vsocks
 
 ### High density
