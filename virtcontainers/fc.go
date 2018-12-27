@@ -525,7 +525,6 @@ func (fc *firecracker) fcAddNetDevice(endpoint Endpoint) error {
 		GuestMac:          endpoint.HardwareAddr(),
 		IfaceID:           &ifaceID,
 		HostDevName:       endpoint.NetworkPair().TapInterface.TAPIface.Name,
-		State:             "Attached",
 	}
 	cfg.SetBody(ifaceCfg)
 	cfg.SetIfaceID(ifaceID)
