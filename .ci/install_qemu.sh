@@ -16,7 +16,7 @@ PACKAGED_QEMU="qemu-lite"
 QEMU_ARCH=$(${cidir}/kata-arch.sh -d)
 
 get_packaged_qemu_commit() {
-	if [ "$ID" == "ubuntu" ]; then
+	if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
 		qemu_commit=$(sudo apt-cache madison $PACKAGED_QEMU \
 			| awk '{print $3}' | cut -d'-' -f1 | cut -d'.' -f4)
 	elif [ "$ID" == "fedora" ]; then
@@ -34,7 +34,7 @@ install_packaged_qemu() {
 	rc=0
 	# Timeout to download packages from OBS
 	limit=180
-	if [ "$ID"  == "ubuntu" ]; then
+	if [ "$ID"  == "ubuntu" ] || [ "$ID" == "debian" ]; then
 		chronic sudo apt remove -y "$PACKAGED_QEMU" || true
 		chronic sudo apt install -y "$PACKAGED_QEMU" || rc=1
 	elif [ "$ID"  == "fedora" ]; then
@@ -70,7 +70,7 @@ build_and_install_qemu() {
 	QEMU_PATCHES_PATH="${GOPATH}/src/${PACKAGING_REPO}/obs-packaging/qemu-lite/patches"
 	for patch in ${QEMU_PATCHES_PATH}/*.patch; do
 		echo "Applying patch: $patch"
-		git am -3 "$patch"
+		git apply "$patch"
 	done
 
 	echo "Build Qemu"

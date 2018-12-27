@@ -119,12 +119,21 @@ install_docker(){
 			sudo yum makecache
 			docker_version_full=$(yum --showduplicate list "$pkg_name" | grep "$docker_version" | awk '{print $2}' | tail -1)
 			sudo -E yum -y install "${pkg_name}-${docker_version_full}"
+		elif [ "$ID" == "debian" ]; then
+			sudo -E apt-get -y install apt-transport-https ca-certificates software-properties-common
+			curl -sL https://download.docker.com/linux/debian/gpg | sudo apt-key add -
+			arch=$(dpkg --print-architecture)
+			sudo -E add-apt-repository "deb [arch=${arch}] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
+			sudo -E apt-get update
+			docker_version_full=$(apt-cache madison $pkg_name | grep "$docker_version" | awk '{print $3}' | head -1)
+			sudo -E apt-get -y install "${pkg_name}=${docker_version_full}"
+
 		fi
 	elif [ "$tag" == "swarm" ]; then
 		# If tag is swarm, install docker 1.12.1
 		log_message "Installing docker $docker_swarm_version"
 		pkg_name="docker-engine"
-		if [ "$ID" == "ubuntu" ]; then
+		if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
 			# We stick to the xenial repo, since it is the only one that
 			# provides docker 1.12.1
 			repo_url="https://apt.dockerproject.org"
@@ -179,7 +188,7 @@ remove_docker(){
 		sudo systemctl stop docker
 		version=$(get_docker_version)
 		log_message "Removing package: $pkg_name version: $version"
-		if [ "$ID" == "ubuntu" ]; then
+		if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
 			sudo apt -y purge ${pkg_name}
 		elif [ "$ID" == "fedora" ]; then
 			sudo dnf -y remove ${pkg_name}
@@ -200,7 +209,7 @@ get_docker_version(){
 }
 
 get_docker_package_name(){
-	if [ "$ID" == "ubuntu" ]; then
+	if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
 		dpkg --get-selections | awk '/docker/ {print $1}'
 	elif [ "$ID" == "fedora" ] || [ "$ID" == "centos" ]; then
 		rpm -qa | grep docker | grep -v selinux
