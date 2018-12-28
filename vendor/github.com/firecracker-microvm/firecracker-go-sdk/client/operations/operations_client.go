@@ -126,7 +126,7 @@ func (a *Client) PatchMmds(params *PatchMmdsParams) (*PatchMmdsNoContent, error)
 /*
 PutMmds creates a m m d s microvm metadata service data store
 */
-func (a *Client) PutMmds(params *PutMmdsParams) (*PutMmdsCreated, *PutMmdsNoContent, error) {
+func (a *Client) PutMmds(params *PutMmdsParams) (*PutMmdsNoContent, error) {
 	// TODO: Validate the params before sending
 	if params == nil {
 		params = NewPutMmdsParams()
@@ -145,15 +145,9 @@ func (a *Client) PutMmds(params *PutMmdsParams) (*PutMmdsCreated, *PutMmdsNoCont
 		Client:             params.HTTPClient,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	switch value := result.(type) {
-	case *PutMmdsCreated:
-		return value, nil, nil
-	case *PutMmdsNoContent:
-		return nil, value, nil
-	}
-	return nil, nil, nil
+	return result.(*PutMmdsNoContent), nil
 
 }
 

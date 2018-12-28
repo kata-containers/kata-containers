@@ -42,6 +42,9 @@ type Logger struct {
 	// The named pipe where the JSON-formatted metrics will be flushed.
 	MetricsFifo string `json:"metrics_fifo,omitempty"`
 
+	// Additional logging options. Only "LogDirtyPages" is supported.
+	Options []string `json:"options"`
+
 	// Whether or not to output the level in the logs.
 	ShowLevel bool `json:"show_level,omitempty"`
 

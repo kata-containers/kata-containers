@@ -38,13 +38,6 @@ type PutMmdsReader struct {
 func (o *PutMmdsReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
 
-	case 201:
-		result := NewPutMmdsCreated()
-		if err := result.readResponse(response, consumer, o.formats); err != nil {
-			return nil, err
-		}
-		return result, nil
-
 	case 204:
 		result := NewPutMmdsNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -71,27 +64,6 @@ func (o *PutMmdsReader) ReadResponse(response runtime.ClientResponse, consumer r
 	}
 }
 
-// NewPutMmdsCreated creates a PutMmdsCreated with default headers values
-func NewPutMmdsCreated() *PutMmdsCreated {
-	return &PutMmdsCreated{}
-}
-
-/*PutMmdsCreated handles this case with default header values.
-
-MMDS data store created
-*/
-type PutMmdsCreated struct {
-}
-
-func (o *PutMmdsCreated) Error() string {
-	return fmt.Sprintf("[PUT /mmds][%d] putMmdsCreated ", 201)
-}
-
-func (o *PutMmdsCreated) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
-
-	return nil
-}
-
 // NewPutMmdsNoContent creates a PutMmdsNoContent with default headers values
 func NewPutMmdsNoContent() *PutMmdsNoContent {
 	return &PutMmdsNoContent{}
@@ -99,7 +71,7 @@ func NewPutMmdsNoContent() *PutMmdsNoContent {
 
 /*PutMmdsNoContent handles this case with default header values.
 
-MMDS data store updated.
+MMDS data store created/updated.
 */
 type PutMmdsNoContent struct {
 }
