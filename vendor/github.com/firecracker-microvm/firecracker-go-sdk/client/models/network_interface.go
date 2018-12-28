@@ -46,9 +46,6 @@ type NetworkInterface struct {
 	// rx rate limiter
 	RxRateLimiter *RateLimiter `json:"rx_rate_limiter,omitempty"`
 
-	// state
-	State DeviceState `json:"state,omitempty"`
-
 	// tx rate limiter
 	TxRateLimiter *RateLimiter `json:"tx_rate_limiter,omitempty"`
 }
@@ -62,10 +59,6 @@ func (m *NetworkInterface) Validate(formats strfmt.Registry) error {
 	}
 
 	if err := m.validateRxRateLimiter(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateState(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -101,22 +94,6 @@ func (m *NetworkInterface) validateRxRateLimiter(formats strfmt.Registry) error 
 			}
 			return err
 		}
-	}
-
-	return nil
-}
-
-func (m *NetworkInterface) validateState(formats strfmt.Registry) error {
-
-	if swag.IsZero(m.State) { // not required
-		return nil
-	}
-
-	if err := m.State.Validate(formats); err != nil {
-		if ve, ok := err.(*errors.Validation); ok {
-			return ve.ValidateName("state")
-		}
-		return err
 	}
 
 	return nil

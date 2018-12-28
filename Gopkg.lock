@@ -204,7 +204,7 @@
   version = "v0.3.3"
 
 [[projects]]
-  digest = "1:61eec5f342089feaaa1690354a62102a90a64dcf7bbc4c6d840dc5edd66ae451"
+  digest = "1:58b18038f51b6f79865fd00e3d883949c9507ede577cd9c4e743ed56cc454122"
   name = "github.com/firecracker-microvm/firecracker-go-sdk"
   packages = [
     ".",
@@ -213,7 +213,7 @@
     "client/operations",
   ]
   pruneopts = "NUT"
-  revision = "840c1e37f5f2bbcbff1fdbfcfcea09d0bf158977"
+  revision = "961461227bddf7e40a1d690634e866c343910f86"
 
 [[projects]]
   branch = "master"
