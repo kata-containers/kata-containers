@@ -82,6 +82,7 @@ Manual installation instructions are available for [these distributions](#suppor
 |Distro specific installation instructions                          | Versions        |
 |-------------------------------------------------------------------|-----------------|
 |[CentOS](centos-installation-guide.md)                             | 7               |
+|[Debian](debian-installation-guide.md)                             | 9               |
 |[Fedora](fedora-installation-guide.md)                             | 27, 28          |
 |[openSUSE](opensuse-installation-guide.md)                         | Leap (42.3)     |
 |[Red Hat Enterprise Linux (RHEL)](rhel-installation-guide.md)      | 7               |
