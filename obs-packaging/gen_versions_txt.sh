@@ -140,7 +140,9 @@ main() {
 		source "./${versions_txt}" || exit 1
 		kata_version=${kata_version/\~/-}
 		[ -n "${kata_version}" ] || die "${version_file} does not contain a valid kata_version variable"
-		[ "$(get_kata_version $branch)" = "${kata_version}" ] && compare_result="matches" || compare_result="is different from"
+		# Replacing ~ with -, as - is not a valid char for rpmbuild
+		# see https://github.com/semver/semver/issues/145
+		[ "$(get_kata_version $branch)" = "${kata_version/\~/-}" ] && compare_result="matches" || compare_result="is different from"
 		echo "${kata_version} in ${versions_txt} ${compare_result} the version at branch ${branch}"
 		return
 	fi
