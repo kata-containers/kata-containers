@@ -1569,6 +1569,11 @@ func (s *Sandbox) Stop() error {
 	span, _ := s.trace("stop")
 	defer span.Finish()
 
+	if s.state.State == StateStopped {
+		s.Logger().Info("sandbox already stopped")
+		return nil
+	}
+
 	if err := s.state.validTransition(s.state.State, StateStopped); err != nil {
 		return err
 	}
