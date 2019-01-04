@@ -80,19 +80,23 @@ stable and master. While this is not in place currently, it should be considered
 
 ### Patch releases
 
-Releases are made on a weekly cadence for patch releases, which include a GitHub release as
+Releases are normally made every other week for patch releases, which include a GitHub release as
 well as binary packages. These patch releases are made for both stable branches, and a 'release candidate'
 for the next `MAJOR` or `MINOR` is created from master. If there are no changes across all the repositories, no
 release is created and an announcement is made on the developer mailing list to highlight this.
 If a release is being made, each repository is tagged for this release, regardless
-of whether changes are introduced.
+of whether changes are introduced. The release schedule can be seen on the
+[release rotation wiki page](https://github.com/kata-containers/community/wiki/Release-Team-Rota).
+
+If there is urgent need for a fix, a patch release will be made outside of the planned schedule.
 
 ## Minor releases
 
 ###  Frequency
 Minor releases are less frequent in order to provide a more stable baseline for users. They are currently
 running on a six week cadence. As the Kata Containers code base matures it is expected this will become
-a much longer duration.
+a much longer duration. The release schedule can be seen on the
+[release rotation wiki page](https://github.com/kata-containers/community/wiki/Release-Team-Rota).
 
 ### Compatibility
 Kata guarantees compatibility between components that are within one minor release of each other. 
