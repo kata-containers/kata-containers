@@ -255,10 +255,10 @@ This section lists limitations where the possible solutions are uncertain.
 ## Docker --security-opt option partially supported
 
 The `--security-opt=` option used by Docker is partially supported.
-We only support --security-opt=no-new-privileges option as of today.
+We only support `--security-opt=no-new-privileges` and `--security-opt seccomp=/path/to/seccomp/profile.json`
+option as of today.
 
-See https://github.com/kata-containers/kata-containers/issues/31 for more information.
-
+Note: The `--security-opt apparmor=your_profile` is not yet supported. See https://github.com/kata-containers/runtime/issues/707.
 # Appendices
 
 ## The constraints challenge
