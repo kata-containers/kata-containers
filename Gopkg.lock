@@ -694,6 +694,8 @@
     "github.com/containerd/containerd/runtime/v2/shim",
     "github.com/containerd/containerd/runtime/v2/task",
     "github.com/containerd/cri-containerd/pkg/annotations",
+    "github.com/containerd/containerd/runtime/linux/runctypes"
+    "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1",
     "github.com/containerd/fifo",
     "github.com/containerd/typeurl",
     "github.com/containernetworking/plugins/pkg/ns",

@@ -10,18 +10,22 @@ package containerdshim
 import (
 	"context"
 	"fmt"
-
+	"github.com/containerd/typeurl"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"os"
 
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 
 	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/opencontainers/runtime-spec/specs-go"
+
+	// only register the proto type
+	_ "github.com/containerd/containerd/runtime/linux/runctypes"
+	crioption "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1"
 )
 
-func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest, netns string,
-	runtimeConfig *oci.RuntimeConfig) (*container, error) {
+func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest, netns string) (*container, error) {
 
 	detach := !r.Terminal
 
@@ -66,8 +70,6 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest, netns
 		}
 	}
 
-	katautils.HandleFactory(ctx, vci, runtimeConfig)
-
 	disableOutput := noNeedForOutput(detach, ociSpec.Process.Terminal)
 
 	switch containerType {
@@ -76,7 +78,13 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest, netns
 			return nil, fmt.Errorf("cannot create another sandbox in sandbox: %s", s.sandbox.ID())
 		}
 
-		sandbox, _, err := katautils.CreateSandbox(ctx, vci, ociSpec, *runtimeConfig, r.ID, bundlePath, "", disableOutput, false, true)
+		_, err := loadRuntimeConfig(s, r)
+		if err != nil {
+			return nil, err
+		}
+
+		katautils.HandleFactory(ctx, vci, s.config)
+		sandbox, _, err := katautils.CreateSandbox(ctx, vci, ociSpec, *s.config, r.ID, bundlePath, "", disableOutput, false, true)
 		if err != nil {
 			return nil, err
 		}
@@ -99,4 +107,38 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest, netns
 	}
 
 	return container, nil
+}
+
+func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest) (*oci.RuntimeConfig, error) {
+	var configPath string
+
+	if r.Options != nil {
+		v, err := typeurl.UnmarshalAny(r.Options)
+		if err != nil {
+			return nil, err
+		}
+		option, ok := v.(*crioption.Options)
+		// cri default runtime handler will pass a linux runc options,
+		// and we'll ignore it.
+		if ok {
+			configPath = option.ConfigPath
+		}
+	}
+
+	// Try to get the config file from the env KATA_CONF_FILE
+	if configPath == "" {
+		configPath = os.Getenv("KATA_CONF_FILE")
+	}
+
+	_, runtimeConfig, err := katautils.LoadConfiguration(configPath, false, true)
+	if err != nil {
+		return nil, err
+	}
+
+	// For the unit test, the config will be predefined
+	if s.config == nil {
+		s.config = &runtimeConfig
+	}
+
+	return &runtimeConfig, nil
 }
