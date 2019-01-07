@@ -480,10 +480,12 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	// register persist hook for now, data will be written to disk by Dump()
 	s.persistState()
 	s.persistHvState()
+	s.persistDevices()
 
 	if err := s.Restore(); err == nil && s.state.State != "" {
 		return s, nil
 	}
+
 	// We first try to fetch the sandbox state from storage.
 	// If it exists, this means this is a re-creation, i.e.
 	// we don't need to talk to the guest's agent, but only
@@ -495,6 +497,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	}*/
 
 	// if sandbox doesn't exist, set persist version to current version
+	// otherwise do nothing
 	s.persistVersion()
 
 	// Below code path is called only during create, because of earlier check.

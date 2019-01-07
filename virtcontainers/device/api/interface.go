@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 )
 
 var devLogger = logrus.WithField("subsystem", "device")
@@ -63,6 +64,9 @@ type Device interface {
 	Reference() uint
 	// Dereference removes one reference to device then returns final ref count
 	Dereference() uint
+
+	// Persist convert and return data in persist format
+	Dump() persistapi.DeviceState
 }
 
 // DeviceManager can be used to create a new device, this can be used as single

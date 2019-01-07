@@ -258,8 +258,18 @@ type SystemMountsInfo struct {
 type ContainerDevice struct {
 	// ID is device id referencing the device from sandbox's device manager
 	ID string
+
 	// ContainerPath is device path displayed in container
 	ContainerPath string
+
+	// FileMode permission bits for the device.
+	FileMode os.FileMode
+
+	// UID is user ID in the container namespace
+	UID uint32
+
+	// GID is group ID in the container namespace
+	GID uint32
 }
 
 // RootFs describes the container's rootfs.
@@ -711,6 +721,9 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 			storedDevices = append(storedDevices, ContainerDevice{
 				ID:            dev.DeviceID(),
 				ContainerPath: info.ContainerPath,
+				FileMode:      info.FileMode,
+				UID:           info.UID,
+				GID:           info.GID,
 			})
 		}
 		c.devices = filterDevices(sandbox, c, storedDevices)

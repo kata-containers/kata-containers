@@ -237,6 +237,10 @@ func TestContainerAddDriveDir(t *testing.T) {
 	assert.Nil(t, err)
 	sandbox.store = sandboxStore
 
+	if sandbox.newStore, err = persist.GetDriver("fs"); err != nil || sandbox.newStore == nil {
+		t.Fatalf("failed to get fs persist driver")
+	}
+
 	contID := "100"
 	container := Container{
 		sandbox: sandbox,
@@ -247,10 +251,6 @@ func TestContainerAddDriveDir(t *testing.T) {
 	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, container.id)
 	assert.Nil(t, err)
 	container.store = containerStore
-
-	if sandbox.newStore, err = persist.GetDriver("fs"); err != nil || sandbox.newStore == nil {
-		t.Fatalf("failed to get fs persist driver")
-	}
 
 	// create state file
 	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
