@@ -63,7 +63,10 @@ func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shi
 	logrus.SetOutput(ioutil.Discard)
 	vci.SetLogger(ctx, logger)
 	katautils.SetLogger(ctx, logger, logger.Logger.Level)
-	_, runtimeConfig, err := katautils.LoadConfiguration("", false, true)
+
+	// Try to get the config file from the env KATA_CONF_FILE
+	confPath := os.Getenv("KATA_CONF_FILE")
+	_, runtimeConfig, err := katautils.LoadConfiguration(confPath, false, true)
 	if err != nil {
 		return nil, err
 	}
