@@ -73,7 +73,7 @@ chronic sudo -E apt update && sudo -E apt install -y -t unstable librbd1
 
 if [ "$(arch)" == "x86_64" ]; then
 	echo "Install Kata Containers OBS repository"
-	obs_url="http://download.opensuse.org/repositories/home:/katacontainers:/releases:/$arch:/master/Debian_$VERSION_ID.0"
+	obs_url="http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${arch}:/master/Debian_${VERSION_ID}"
 	sudo sh -c "echo 'deb $obs_url /' > /etc/apt/sources.list.d/kata-containers.list"
 	curl -sL  "${obs_url}/Release.key" | sudo apt-key add -
 	chronic sudo -E apt-get update
