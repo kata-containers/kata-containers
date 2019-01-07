@@ -231,9 +231,9 @@ the following example.
 $ export ROOTFS_DIR=${GOPATH}/src/github.com/kata-containers/osbuilder/rootfs-builder/rootfs
 $ sudo rm -rf ${ROOTFS_DIR}
 $ cd $GOPATH/src/github.com/kata-containers/osbuilder/rootfs-builder
-$ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true ./rootfs.sh ${distro}'
+$ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true SECCOMP=no ./rootfs.sh ${distro}'
 ```
-You MUST choose one of `alpine`, `centos`, `clearlinux`, `euleros`, and `fedora` for `${distro}`.
+You MUST choose one of `alpine`, `centos`, `clearlinux`, `euleros`, and `fedora` for `${distro}`. By default `seccomp` packages are not included in the rootfs image. Set `SECCOMP` to `yes` to include them.
 
 > **Note:**
 >
@@ -287,10 +287,10 @@ $ (cd /usr/share/kata-containers && sudo ln -sf "$image" kata-containers.img)
 $ export ROOTFS_DIR="${GOPATH}/src/github.com/kata-containers/osbuilder/rootfs-builder/rootfs"
 $ sudo rm -rf ${ROOTFS_DIR}
 $ cd $GOPATH/src/github.com/kata-containers/osbuilder/rootfs-builder
-$ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true ./rootfs.sh ${distro}'
+$ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true SECCOMP=no ./rootfs.sh ${distro}'
 ```
 `AGENT_INIT` controls if the guest image uses kata agent as the guest `init` process. When you create an initrd image,
-always set `AGENT_INIT` to `yes`.
+always set `AGENT_INIT` to `yes`. By default `seccomp` packages are not included in the initrd image. Set `SECCOMP` to `yes` to include them.
 
 You MUST choose one of `alpine`, `centos`, `clearlinux`, `euleros`, and `fedora` for `${distro}`.
 
