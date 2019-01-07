@@ -225,7 +225,7 @@ func TestGetDeviceForPathBindMount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	defer syscall.Unmount(dest, 0)
+	defer syscall.Unmount(dest, syscall.MNT_DETACH)
 
 	destFile := filepath.Join(dest, "test")
 	_, err = os.Create(destFile)

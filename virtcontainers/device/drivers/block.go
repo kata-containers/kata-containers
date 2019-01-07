@@ -11,6 +11,7 @@ import (
 
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
@@ -144,6 +145,26 @@ func (device *BlockDevice) DeviceType() config.DeviceType {
 // GetDeviceInfo returns device information used for creating
 func (device *BlockDevice) GetDeviceInfo() interface{} {
 	return device.BlockDrive
+}
+
+// Dump convert and return data in persist format
+func (device *BlockDevice) Dump() persistapi.DeviceState {
+	ds := device.GenericDevice.Dump()
+	ds.Type = string(device.DeviceType())
+
+	drive := device.BlockDrive
+	ds.BlockDrive = &persistapi.BlockDrive{
+		File:     drive.File,
+		Format:   drive.Format,
+		ID:       drive.ID,
+		Index:    drive.Index,
+		MmioAddr: drive.MmioAddr,
+		PCIAddr:  drive.PCIAddr,
+		SCSIAddr: drive.SCSIAddr,
+		NvdimmID: drive.NvdimmID,
+		VirtPath: drive.VirtPath,
+	}
+	return ds
 }
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation

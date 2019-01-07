@@ -10,6 +10,7 @@ import (
 
 	//"github.com/sirupsen/logrus"
 
+	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 )
@@ -20,19 +21,70 @@ func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistap
 	ss.State = string(s.state.State)
 
 	for id, cont := range s.containers {
-		cs[id] = persistapi.ContainerState{
-			State: string(cont.state.State),
-			Rootfs: persistapi.RootfsState{
-				BlockDeviceID: cont.state.BlockDeviceID,
-				FsType:        cont.state.Fstype,
-			},
+		state := persistapi.ContainerState{}
+		if v, ok := cs[id]; ok {
+			state = v
+		}
+		state.State = string(cont.state.State)
+		state.Rootfs = persistapi.RootfsState{
+			BlockDeviceID: cont.state.BlockDeviceID,
+			FsType:        cont.state.Fstype,
+		}
+		cs[id] = state
+	}
+
+	// delete removed containers
+	for id := range cs {
+		if _, ok := s.containers[id]; !ok {
+			delete(cs, id)
 		}
 	}
+
 	return nil
 }
 
 func (s *Sandbox) dumpHypervisor(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) error {
 	ss.HypervisorState.BlockIndex = s.state.BlockIndex
+	return nil
+}
+
+func deviceToDeviceState(devices []api.Device) (dss []persistapi.DeviceState) {
+	for _, dev := range devices {
+		dss = append(dss, dev.Dump())
+	}
+	return
+}
+
+func (s *Sandbox) dumpDevices(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) error {
+	ss.Devices = deviceToDeviceState(s.devManager.GetAllDevices())
+
+	for id, cont := range s.containers {
+		state := persistapi.ContainerState{}
+		if v, ok := cs[id]; ok {
+			state = v
+		}
+
+		state.DeviceMaps = nil
+		for _, dev := range cont.devices {
+			state.DeviceMaps = append(state.DeviceMaps, persistapi.DeviceMap{
+				ID:            dev.ID,
+				ContainerPath: dev.ContainerPath,
+				FileMode:      dev.FileMode,
+				UID:           dev.UID,
+				GID:           dev.GID,
+			})
+		}
+
+		cs[id] = state
+	}
+
+	// delete removed containers
+	for id := range cs {
+		if _, ok := s.containers[id]; !ok {
+			delete(cs, id)
+		}
+	}
+
 	return nil
 }
 
@@ -52,6 +104,11 @@ func (s *Sandbox) persistState() {
 // PersistHvState register hook to save hypervisor state to persist data
 func (s *Sandbox) persistHvState() {
 	s.newStore.RegisterHook("hypervisor", s.dumpHypervisor)
+}
+
+// PersistDevices register hook to save device informations
+func (s *Sandbox) persistDevices() {
+	s.newStore.RegisterHook("devices", s.dumpDevices)
 }
 
 // Restore will restore data from persist disk on disk

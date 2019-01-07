@@ -11,6 +11,7 @@ import (
 
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 )
 
 // GenericDevice refers to a device that is neither a VFIO device or block device.
@@ -113,5 +114,21 @@ func (device *GenericDevice) bumpAttachCount(attach bool) (skip bool, err error)
 			device.AttachCount--
 			return true, nil
 		}
+	}
+}
+
+// Dump convert and return data in persist format
+func (device *GenericDevice) Dump() persistapi.DeviceState {
+	info := device.DeviceInfo
+	return persistapi.DeviceState{
+		ID:          device.ID,
+		Type:        string(device.DeviceType()),
+		RefCount:    device.RefCount,
+		AttachCount: device.AttachCount,
+
+		DevType:       info.DevType,
+		Major:         info.Major,
+		Minor:         info.Minor,
+		DriverOptions: info.DriverOptions,
 	}
 }
