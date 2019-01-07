@@ -65,18 +65,10 @@ func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shi
 	vci.SetLogger(ctx, logger)
 	katautils.SetLogger(ctx, logger, logger.Logger.Level)
 
-	// Try to get the config file from the env KATA_CONF_FILE
-	confPath := os.Getenv("KATA_CONF_FILE")
-	_, runtimeConfig, err := katautils.LoadConfiguration(confPath, false, true)
-	if err != nil {
-		return nil, err
-	}
-
 	s := &service{
 		id:         id,
 		pid:        uint32(os.Getpid()),
 		context:    ctx,
-		config:     &runtimeConfig,
 		containers: make(map[string]*container),
 		events:     make(chan interface{}, chSize),
 		ec:         make(chan exit, bufferSize),
@@ -327,7 +319,7 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 		}
 	}
 
-	container, err := create(ctx, s, r, netns, s.config)
+	container, err := create(ctx, s, r, netns)
 	if err != nil {
 		return nil, err
 	}
