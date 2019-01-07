@@ -52,7 +52,6 @@ check_cmds()
 	for cmd in "${req_cmds[@]}"; do
 		if ! command -v "$cmd" > /dev/null 2>&1; then
 			die "command $cmd not available"
-			exit 1;
 		fi
 		echo "command: $cmd: yes"
 	done
@@ -75,7 +74,6 @@ check_images()
 		echo "docker pull'ing: $img"
 		if ! docker pull "$img"; then
 			die "Failed to docker pull image $img"
-			exit 1;
 		fi
 		echo "docker pull'd: $img"
 	done
