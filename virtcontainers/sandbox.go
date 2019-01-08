@@ -361,6 +361,8 @@ type SandboxConfig struct {
 
 	// SystemdCgroup enables systemd cgroup support
 	SystemdCgroup bool
+
+	DisableGuestSeccomp bool
 }
 
 func (s *Sandbox) trace(name string) (opentracing.Span, context.Context) {
@@ -490,9 +492,10 @@ type Sandbox struct {
 
 	wg *sync.WaitGroup
 
-	shmSize    uint64
-	sharePidNs bool
-	stateful   bool
+	shmSize          uint64
+	sharePidNs       bool
+	stateful         bool
+	seccompSupported bool
 
 	ctx context.Context
 
@@ -734,6 +737,10 @@ func (s *Sandbox) getAndStoreGuestDetails() error {
 
 	if guestDetailRes != nil {
 		s.state.GuestMemoryBlockSizeMB = uint32(guestDetailRes.MemBlockSizeBytes >> 20)
+		if guestDetailRes.AgentDetails != nil {
+			s.seccompSupported = guestDetailRes.AgentDetails.SupportsSeccomp
+		}
+
 		if err = s.storage.storeSandboxResource(s.id, stateFileType, s.state); err != nil {
 			return err
 		}
