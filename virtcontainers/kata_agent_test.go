@@ -471,11 +471,11 @@ func TestConstraintGRPCSpec(t *testing.T) {
 		},
 	}
 
-	constraintGRPCSpec(g, true)
+	constraintGRPCSpec(g, true, true)
 
 	// check nil fields
 	assert.Nil(g.Hooks)
-	assert.Nil(g.Linux.Seccomp)
+	assert.NotNil(g.Linux.Seccomp)
 	assert.Nil(g.Linux.Resources.Devices)
 	assert.NotNil(g.Linux.Resources.Memory)
 	assert.Nil(g.Linux.Resources.Pids)
