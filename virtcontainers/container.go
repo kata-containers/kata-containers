@@ -404,6 +404,7 @@ func (c *Container) setContainerState(state stateString) error {
 		return errNeedState
 	}
 
+	c.Logger().Debugf("Setting container state from %v to %v", c.state.State, state)
 	// update in-memory state
 	c.state.State = state
 

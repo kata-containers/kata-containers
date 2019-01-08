@@ -129,13 +129,15 @@ func kill(ctx context.Context, containerID, signal string, all bool) error {
 		return err
 	}
 
-	// container MUST be created, running or paused
-	if status.State.State != vc.StateReady && status.State.State != vc.StateRunning && status.State.State != vc.StatePaused {
-		return fmt.Errorf("Container %s not ready, running or paused, cannot send a signal", containerID)
-	}
+	kataLog.WithField("signal", signal).WithField("container state", status.State.State).Info("kill")
 
-	if err := vci.KillContainer(ctx, sandboxID, containerID, signum, all); err != nil {
-		return err
+	// container MUST be created, running or paused
+	if status.State.State == vc.StateReady || status.State.State == vc.StateRunning || status.State.State == vc.StatePaused {
+		if err := vci.KillContainer(ctx, sandboxID, containerID, signum, all); err != nil {
+			return err
+		}
+	} else if !all {
+		return fmt.Errorf("container not running")
 	}
 
 	if signum != syscall.SIGKILL && signum != syscall.SIGTERM {

@@ -1754,3 +1754,10 @@ func TestStartNetworkMonitor(t *testing.T) {
 	err = s.startNetworkMonitor()
 	assert.Nil(t, err)
 }
+
+func TestSandboxStopStopped(t *testing.T) {
+	s := &Sandbox{state: State{State: StateStopped}}
+	err := s.Stop()
+
+	assert.Nil(t, err)
+}
