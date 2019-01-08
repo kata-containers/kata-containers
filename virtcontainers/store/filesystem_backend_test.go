@@ -87,3 +87,15 @@ func TestStoreFilesystemDelete(t *testing.T) {
 	_, err = os.Stat(f.path)
 	assert.NotNil(t, err)
 }
+
+func TestStoreFilesystemRaw(t *testing.T) {
+	f := filesystem{}
+
+	err := f.new(context.Background(), rootPath, "")
+	defer f.delete()
+	assert.Nil(t, err)
+
+	path, err := f.raw("roah")
+	assert.Nil(t, err)
+	assert.Equal(t, path, filesystemScheme+"://"+filepath.Join(rootPath, "raw", "roah"))
+}

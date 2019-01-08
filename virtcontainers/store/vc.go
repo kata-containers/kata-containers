@@ -191,6 +191,17 @@ func (s *VCStore) LoadDevices() ([]api.Device, error) {
 	return devices, nil
 }
 
+// Raw creates a raw item in the virtcontainer state Store. A raw
+// item is a custom one, not defined through the Item enum, and that
+// the caller needs to handle directly.
+// Typically this is used to create a custom virtcontainers file.
+// For example the Firecracker code uses this API to create temp
+// files under the sandbox state root path, and uses them as block
+// driver backend placeholder.
+func (s *VCStore) Raw(id string) (string, error) {
+	return s.state.Raw(id)
+}
+
 // Utilities for virtcontainers
 
 // SandboxConfigurationRoot returns a virtcontainers sandbox configuration root URL.

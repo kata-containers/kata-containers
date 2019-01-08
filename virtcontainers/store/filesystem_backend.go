@@ -101,7 +101,8 @@ func itemToFile(item Item) (string, error) {
 type filesystem struct {
 	ctx context.Context
 
-	path string
+	path    string
+	rawPath string
 }
 
 // Logger returns a logrus logger appropriate for logging Store filesystem messages
@@ -144,10 +145,15 @@ func (f *filesystem) initialize() error {
 	}
 
 	// Our root path does not exist, we need to create the initial layout:
-	// The root directory and a lock file
+	// The root directory, a lock file and a raw files directory.
 
 	// Root directory
 	if err := os.MkdirAll(f.path, DirMode); err != nil {
+		return err
+	}
+
+	// Raw directory
+	if err := os.MkdirAll(f.rawPath, DirMode); err != nil {
 		return err
 	}
 
@@ -167,6 +173,7 @@ func (f *filesystem) initialize() error {
 func (f *filesystem) new(ctx context.Context, path string, host string) error {
 	f.ctx = ctx
 	f.path = path
+	f.rawPath = filepath.Join(f.path, "raw")
 
 	f.logger().Debugf("New filesystem store backend for %s", path)
 
@@ -224,4 +231,31 @@ func (f *filesystem) store(item Item, data interface{}) error {
 	file.Write(jsonOut)
 
 	return nil
+}
+
+func (f *filesystem) raw(id string) (string, error) {
+	span, _ := f.trace("raw")
+	defer span.Finish()
+
+	span.SetTag("id", id)
+
+	// We must use the item ID.
+	if id != "" {
+		filePath := filepath.Join(f.rawPath, id)
+		file, err := os.Create(filePath)
+		if err != nil {
+			return "", err
+		}
+
+		return filesystemScheme + "://" + file.Name(), nil
+	}
+
+	// Generate a random temporary file.
+	file, err := ioutil.TempFile(f.rawPath, "raw-")
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	return filesystemScheme + "://" + file.Name(), nil
 }
