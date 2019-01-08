@@ -416,7 +416,8 @@ func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
 
 func (s *Sandbox) getAndStoreGuestDetails() error {
 	guestDetailRes, err := s.agent.getGuestDetails(&grpc.GuestDetailsRequest{
-		MemBlockSize: true,
+		MemBlockSize:    true,
+		MemHotplugProbe: true,
 	})
 	if err != nil {
 		return err
@@ -427,6 +428,7 @@ func (s *Sandbox) getAndStoreGuestDetails() error {
 		if guestDetailRes.AgentDetails != nil {
 			s.seccompSupported = guestDetailRes.AgentDetails.SupportsSeccomp
 		}
+		s.state.GuestMemoryHotplugProbe = guestDetailRes.SupportMemHotplugProbe
 
 		if err = s.store.Store(store.State, s.state); err != nil {
 			return err

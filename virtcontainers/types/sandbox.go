@@ -45,6 +45,9 @@ type State struct {
 	// GuestMemoryBlockSizeMB is the size of memory block of guestos
 	GuestMemoryBlockSizeMB uint32 `json:"guestMemoryBlockSize"`
 
+	// GuestMemoryHotplugProbe determines whether guest kernel supports memory hotplug probe interface
+	GuestMemoryHotplugProbe bool `json:"guestMemoryHotplugProbe"`
+
 	// CgroupPath is the cgroup hierarchy where sandbox's processes
 	// including the hypervisor are placed.
 	CgroupPath string `json:"cgroupPath,omitempty"`
