@@ -44,7 +44,7 @@ echo "Install qemu dependencies"
 chronic sudo -E yum install -y libcap-devel libcap-ng-devel libattr-devel libcap-ng-devel librbd1-devel flex libfdt-devel
 
 echo "Install kernel dependencies"
-chronic sudo -E yum -y install elfutils-libelf-devel
+chronic sudo -E yum -y install elfutils-libelf-devel flex
 
 echo "Install CRI-O dependencies for CentOS"
 chronic sudo -E yum install -y glibc-static libseccomp-devel libassuan-devel libgpg-error-devel device-mapper-libs \

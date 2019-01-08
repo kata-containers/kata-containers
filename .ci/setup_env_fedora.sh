@@ -29,7 +29,7 @@ chronic sudo -E dnf -y install libcap-devel libattr-devel \
 	libcap-ng-devel zlib-devel pixman-devel librbd-devel
 
 echo "Install kernel dependencies"
-chronic sudo -E dnf -y install elfutils-libelf-devel
+chronic sudo -E dnf -y install elfutils-libelf-devel flex
 
 echo "Install CRI-O dependencies"
 chronic sudo -E dnf -y install btrfs-progs-devel device-mapper-devel      \

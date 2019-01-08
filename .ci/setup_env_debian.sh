@@ -29,7 +29,7 @@ echo "Install qemu dependencies"
 chronic sudo -E apt install -y libcap-dev libattr1-dev libcap-ng-dev librbd-dev
 
 echo "Install kernel dependencies"
-chronic sudo -E apt install -y libelf-dev
+chronic sudo -E apt install -y libelf-dev flex
 
 echo "Install CRI-O dependencies for Debian"
 chronic sudo -E apt install -y libglib2.0-dev libseccomp-dev libapparmor-dev \
