@@ -48,4 +48,9 @@ type backend interface {
 	delete() error
 	load(item Item, data interface{}) error
 	store(item Item, data interface{}) error
+	// raw creates a raw Store item. A raw item is one that is
+	// not defined through the Item enum.
+	// The caller gets an item URL back and handles it directly,
+	// outside of the top level Store API.
+	raw(id string) (string, error)
 }
