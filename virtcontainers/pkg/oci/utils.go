@@ -122,6 +122,9 @@ type RuntimeConfig struct {
 	Debug             bool
 	Trace             bool
 
+	//Determines if seccomp should be applied inside guest
+	DisableGuestSeccomp bool
+
 	//Determines if create a netns for hypervisor process
 	DisableNewNetNs bool
 }
@@ -489,6 +492,8 @@ func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid
 		ShmSize: shmSize,
 
 		SystemdCgroup: systemdCgroup,
+
+		DisableGuestSeccomp: runtime.DisableGuestSeccomp,
 	}
 
 	addAssetAnnotations(ocispec, &sandboxConfig)

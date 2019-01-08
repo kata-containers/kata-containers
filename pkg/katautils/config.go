@@ -120,10 +120,11 @@ type proxy struct {
 }
 
 type runtime struct {
-	Debug             bool   `toml:"enable_debug"`
-	Tracing           bool   `toml:"enable_tracing"`
-	DisableNewNetNs   bool   `toml:"disable_new_netns"`
-	InterNetworkModel string `toml:"internetworking_model"`
+	Debug               bool   `toml:"enable_debug"`
+	Tracing             bool   `toml:"enable_tracing"`
+	DisableNewNetNs     bool   `toml:"disable_new_netns"`
+	DisableGuestSeccomp bool   `toml:"disable_guest_seccomp"`
+	InterNetworkModel   string `toml:"internetworking_model"`
 }
 
 type shim struct {
@@ -794,6 +795,8 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 	if err := updateConfig(resolved, tomlConf, &config, builtIn); err != nil {
 		return "", config, err
 	}
+
+	config.DisableGuestSeccomp = tomlConf.Runtime.DisableGuestSeccomp
 
 	// use no proxy if HypervisorConfig.UseVSock is true
 	if config.HypervisorConfig.UseVSock {
