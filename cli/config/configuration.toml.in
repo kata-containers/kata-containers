@@ -291,6 +291,13 @@ path = "@NETMONPATH@"
 #
 internetworking_model="@DEFNETWORKMODEL@"
 
+# disable guest seccomp
+# Determines whether container seccomp profiles are passed to the virtual
+# machine and applied by the kata agent. If set to true, seccomp is not applied
+# within the guest
+# (default: true)
+disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
+
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
 # (default: disabled)

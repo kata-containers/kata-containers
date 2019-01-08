@@ -773,16 +773,17 @@ func (k *kataAgent) replaceOCIMountsForStorages(spec *specs.Spec, volumeStorages
 	return nil
 }
 
-func constraintGRPCSpec(grpcSpec *grpc.Spec, systemdCgroup bool) {
+func constraintGRPCSpec(grpcSpec *grpc.Spec, systemdCgroup bool, passSeccomp bool) {
 	// Disable Hooks since they have been handled on the host and there is
 	// no reason to send them to the agent. It would make no sense to try
 	// to apply them on the guest.
 	grpcSpec.Hooks = nil
 
-	// Disable Seccomp since they cannot be handled properly by the agent
-	// until we provide a guest image with libseccomp support. More details
-	// here: https://github.com/kata-containers/agent/issues/104
-	grpcSpec.Linux.Seccomp = nil
+	// Pass seccomp only if disable_guest_seccomp is set to false in
+	// configuration.toml and guest image is seccomp capable.
+	if passSeccomp == false {
+		grpcSpec.Linux.Seccomp = nil
+	}
 
 	// By now only CPU constraints are supported
 	// Issue: https://github.com/kata-containers/runtime/issues/158
@@ -1055,9 +1056,11 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 		return nil, err
 	}
 
+	passSeccomp := !sandbox.config.DisableGuestSeccomp && sandbox.seccompSupported
+
 	// We need to constraint the spec to make sure we're not passing
 	// irrelevant information to the agent.
-	constraintGRPCSpec(grpcSpec, sandbox.config.SystemdCgroup)
+	constraintGRPCSpec(grpcSpec, sandbox.config.SystemdCgroup, passSeccomp)
 
 	k.handleShm(grpcSpec, sandbox)
 

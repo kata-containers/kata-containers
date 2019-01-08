@@ -63,12 +63,13 @@ type RuntimeConfigInfo struct {
 
 // RuntimeInfo stores runtime details.
 type RuntimeInfo struct {
-	Version         RuntimeVersionInfo
-	Config          RuntimeConfigInfo
-	Debug           bool
-	Trace           bool
-	DisableNewNetNs bool
-	Path            string
+	Version             RuntimeVersionInfo
+	Config              RuntimeConfigInfo
+	Debug               bool
+	Trace               bool
+	DisableGuestSeccomp bool
+	DisableNewNetNs     bool
+	Path                string
 }
 
 // RuntimeVersionInfo stores details of the runtime version
@@ -174,12 +175,13 @@ func getRuntimeInfo(configFile string, config oci.RuntimeConfig) RuntimeInfo {
 	runtimePath, _ := os.Executable()
 
 	return RuntimeInfo{
-		Debug:           config.Debug,
-		Trace:           config.Trace,
-		Version:         runtimeVersion,
-		Config:          runtimeConfig,
-		Path:            runtimePath,
-		DisableNewNetNs: config.DisableNewNetNs,
+		Debug:               config.Debug,
+		Trace:               config.Trace,
+		Version:             runtimeVersion,
+		Config:              runtimeConfig,
+		Path:                runtimePath,
+		DisableNewNetNs:     config.DisableNewNetNs,
+		DisableGuestSeccomp: config.DisableGuestSeccomp,
 	}
 }
 
