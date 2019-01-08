@@ -105,21 +105,7 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		}
 	}()
 
-	// Once startVM is done, we want to guarantee
-	// that the sandbox is manageable. For that we need
-	// to start the sandbox inside the VM.
-	if err = s.agent.startSandbox(s); err != nil {
-		return nil, err
-	}
-
-	// rollback to stop sandbox in VM
-	defer func() {
-		if err != nil {
-			s.agent.stopSandbox(s)
-		}
-	}()
-
-	if err = s.getAndStoreGuestDetails(); err != nil {
+	if err := s.getAndStoreGuestDetails(); err != nil {
 		return nil, err
 	}
 
@@ -234,12 +220,8 @@ func StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	}
 	defer s.releaseStatelessSandbox()
 
-	return startSandbox(s)
-}
-
-func startSandbox(s *Sandbox) (*Sandbox, error) {
 	// Start it
-	err := s.Start()
+	err = s.Start()
 	if err != nil {
 		return nil, err
 	}
@@ -285,6 +267,7 @@ func RunSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	span, ctx := trace(ctx, "RunSandbox")
 	defer span.Finish()
 
+	// Create the sandbox
 	s, err := createSandboxFromConfig(ctx, sandboxConfig, factory)
 	if err != nil {
 		return nil, err
@@ -297,7 +280,13 @@ func RunSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 	defer unlockSandbox(lockFile)
 
-	return startSandbox(s)
+	// Start the sandbox
+	err = s.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
 }
 
 // ListSandbox is the virtcontainers sandbox listing entry point.
