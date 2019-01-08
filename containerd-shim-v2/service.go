@@ -27,6 +27,7 @@ import (
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/containerd/containerd/api/types/task"
@@ -782,13 +783,13 @@ func (s *service) getContainerStatus(containerID string) (task.Status, error) {
 
 	var status task.Status
 	switch cStatus.State.State {
-	case vc.StateReady:
+	case types.StateReady:
 		status = task.StatusCreated
-	case vc.StateRunning:
+	case types.StateRunning:
 		status = task.StatusRunning
-	case vc.StatePaused:
+	case types.StatePaused:
 		status = task.StatusPaused
-	case vc.StateStopped:
+	case types.StateStopped:
 		status = task.StatusStopped
 	}
 

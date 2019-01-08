@@ -16,7 +16,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
@@ -176,12 +176,12 @@ func TestConvertInterface(t *testing.T) {
 
 	linkType := "link_type_test"
 
-	expected := types.Interface{
+	expected := vcTypes.Interface{
 		Device: testIfaceName,
 		Name:   testIfaceName,
 		Mtu:    uint64(testMTU),
 		HwAddr: testHwAddr,
-		IPAddresses: []*types.IPAddress{
+		IPAddresses: []*vcTypes.IPAddress{
 			{
 				Family:  netlinkFamily,
 				Address: testIPAddress,
@@ -211,7 +211,7 @@ func TestConvertRoutes(t *testing.T) {
 		},
 	}
 
-	expected := []types.Route{
+	expected := []vcTypes.Route{
 		{
 			Dest:    testIPAddress,
 			Gateway: testIPAddress,
@@ -245,7 +245,7 @@ func testSetupNetwork(t *testing.T) testTeardownNetwork {
 	}
 }
 
-func testCreateDummyNetwork(t *testing.T, handler *netlink.Handle) (int, types.Interface) {
+func testCreateDummyNetwork(t *testing.T, handler *netlink.Handle) (int, vcTypes.Interface) {
 	hwAddr, err := net.ParseMAC(testHwAddr)
 	assert.Nil(t, err)
 
@@ -266,7 +266,7 @@ func testCreateDummyNetwork(t *testing.T, handler *netlink.Handle) (int, types.I
 	attrs := link.Attrs()
 	assert.NotNil(t, attrs)
 
-	iface := types.Interface{
+	iface := vcTypes.Interface{
 		Device:   testIfaceName,
 		Name:     testIfaceName,
 		Mtu:      uint64(testMTU),
@@ -289,7 +289,7 @@ func TestScanNetwork(t *testing.T) {
 	idx, expected := testCreateDummyNetwork(t, handler)
 
 	n := &netmon{
-		netIfaces:  make(map[int]types.Interface),
+		netIfaces:  make(map[int]vcTypes.Interface),
 		netHandler: handler,
 	}
 
@@ -300,9 +300,9 @@ func TestScanNetwork(t *testing.T) {
 }
 
 func TestStoreDataToSend(t *testing.T) {
-	var got types.Interface
+	var got vcTypes.Interface
 
-	expected := types.Interface{
+	expected := vcTypes.Interface{
 		Device: testIfaceName,
 		Name:   testIfaceName,
 		Mtu:    uint64(testMTU),
@@ -399,15 +399,15 @@ func TestActionsCLI(t *testing.T) {
 	defer os.RemoveAll(testStorageParentPath)
 
 	// Test addInterfaceCLI
-	err = n.addInterfaceCLI(types.Interface{})
+	err = n.addInterfaceCLI(vcTypes.Interface{})
 	assert.Nil(t, err)
 
 	// Test delInterfaceCLI
-	err = n.delInterfaceCLI(types.Interface{})
+	err = n.delInterfaceCLI(vcTypes.Interface{})
 	assert.Nil(t, err)
 
 	// Test updateRoutesCLI
-	err = n.updateRoutesCLI([]types.Route{})
+	err = n.updateRoutesCLI([]vcTypes.Route{})
 	assert.Nil(t, err)
 
 	tearDownNetworkCb := testSetupNetwork(t)
@@ -465,8 +465,8 @@ func TestHandleRTMNewLink(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Interface already exist in list
-	n.netIfaces = make(map[int]types.Interface)
-	n.netIfaces[testIfaceIndex] = types.Interface{}
+	n.netIfaces = make(map[int]vcTypes.Interface)
+	n.netIfaces[testIfaceIndex] = vcTypes.Interface{}
 	ev = netlink.LinkUpdate{
 		Link: &netlink.Dummy{
 			LinkAttrs: netlink.LinkAttrs{
@@ -479,7 +479,7 @@ func TestHandleRTMNewLink(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Flags are not up and running
-	n.netIfaces = make(map[int]types.Interface)
+	n.netIfaces = make(map[int]vcTypes.Interface)
 	ev = netlink.LinkUpdate{
 		Link: &netlink.Dummy{
 			LinkAttrs: netlink.LinkAttrs{
@@ -492,7 +492,7 @@ func TestHandleRTMNewLink(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Invalid link
-	n.netIfaces = make(map[int]types.Interface)
+	n.netIfaces = make(map[int]vcTypes.Interface)
 	ev = netlink.LinkUpdate{
 		Link: &netlink.Dummy{
 			LinkAttrs: netlink.LinkAttrs{
@@ -533,7 +533,7 @@ func TestHandleRTMDelLink(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Interface does not exist in list
-	n.netIfaces = make(map[int]types.Interface)
+	n.netIfaces = make(map[int]vcTypes.Interface)
 	ev = netlink.LinkUpdate{
 		Link: &netlink.Dummy{
 			LinkAttrs: netlink.LinkAttrs{
@@ -548,7 +548,7 @@ func TestHandleRTMDelLink(t *testing.T) {
 
 func TestHandleRTMNewRouteIfaceNotFound(t *testing.T) {
 	n := &netmon{
-		netIfaces: make(map[int]types.Interface),
+		netIfaces: make(map[int]vcTypes.Interface),
 	}
 
 	err := n.handleRTMNewRoute(netlink.RouteUpdate{})

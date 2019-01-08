@@ -12,7 +12,8 @@ import (
 
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -35,7 +36,7 @@ type VC interface {
 
 	CreateContainer(ctx context.Context, sandboxID string, containerConfig ContainerConfig) (VCSandbox, VCContainer, error)
 	DeleteContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error)
-	EnterContainer(ctx context.Context, sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContainer, *Process, error)
+	EnterContainer(ctx context.Context, sandboxID, containerID string, cmd types.Cmd) (VCSandbox, VCContainer, *Process, error)
 	KillContainer(ctx context.Context, sandboxID, containerID string, signal syscall.Signal, all bool) error
 	StartContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error)
 	StatusContainer(ctx context.Context, sandboxID, containerID string) (ContainerStatus, error)
@@ -48,11 +49,11 @@ type VC interface {
 
 	AddDevice(ctx context.Context, sandboxID string, info config.DeviceInfo) (api.Device, error)
 
-	AddInterface(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error)
-	RemoveInterface(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error)
-	ListInterfaces(ctx context.Context, sandboxID string) ([]*types.Interface, error)
-	UpdateRoutes(ctx context.Context, sandboxID string, routes []*types.Route) ([]*types.Route, error)
-	ListRoutes(ctx context.Context, sandboxID string) ([]*types.Route, error)
+	AddInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error)
+	RemoveInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error)
+	ListInterfaces(ctx context.Context, sandboxID string) ([]*vcTypes.Interface, error)
+	UpdateRoutes(ctx context.Context, sandboxID string, routes []*vcTypes.Route) ([]*vcTypes.Route, error)
+	ListRoutes(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error)
 }
 
 // VCSandbox is the Sandbox interface
@@ -83,7 +84,7 @@ type VCSandbox interface {
 	StatsContainer(containerID string) (ContainerStats, error)
 	PauseContainer(containerID string) error
 	ResumeContainer(containerID string) error
-	EnterContainer(containerID string, cmd Cmd) (VCContainer, *Process, error)
+	EnterContainer(containerID string, cmd types.Cmd) (VCContainer, *Process, error)
 	UpdateContainer(containerID string, resources specs.LinuxResources) error
 	ProcessListContainer(containerID string, options ProcessListOptions) (ProcessList, error)
 	WaitProcess(containerID, processID string) (int32, error)
@@ -93,11 +94,11 @@ type VCSandbox interface {
 
 	AddDevice(info config.DeviceInfo) (api.Device, error)
 
-	AddInterface(inf *types.Interface) (*types.Interface, error)
-	RemoveInterface(inf *types.Interface) (*types.Interface, error)
-	ListInterfaces() ([]*types.Interface, error)
-	UpdateRoutes(routes []*types.Route) ([]*types.Route, error)
-	ListRoutes() ([]*types.Route, error)
+	AddInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error)
+	RemoveInterface(inf *vcTypes.Interface) (*vcTypes.Interface, error)
+	ListInterfaces() ([]*vcTypes.Interface, error)
+	UpdateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error)
+	ListRoutes() ([]*vcTypes.Route, error)
 }
 
 // VCContainer is the Container interface

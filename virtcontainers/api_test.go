@@ -19,7 +19,8 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
@@ -38,15 +39,15 @@ var containerAnnotations = map[string]string{
 	"container.hello": "container.world",
 }
 
-func newBasicTestCmd() Cmd {
-	envs := []EnvVar{
+func newBasicTestCmd() types.Cmd {
+	envs := []types.EnvVar{
 		{
 			Var:   "PATH",
 			Value: "/bin:/usr/bin:/sbin:/usr/sbin",
 		},
 	}
 
-	cmd := Cmd{
+	cmd := types.Cmd{
 		Args:    strings.Split("/bin/sh", " "),
 		Envs:    envs,
 		WorkDir: "/",
@@ -581,7 +582,7 @@ func TestPauseThenResumeSandboxNoopAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	expectedState := StatePaused
+	expectedState := types.StatePaused
 
 	assert.Equal(t, pImpl.state.State, expectedState, "unexpected paused sandbox state")
 
@@ -601,7 +602,7 @@ func TestPauseThenResumeSandboxNoopAgentSuccessful(t *testing.T) {
 	pImpl, ok = p.(*Sandbox)
 	assert.True(t, ok)
 
-	expectedState = StateRunning
+	expectedState = types.StateRunning
 
 	assert.Equal(t, pImpl.state.State, expectedState, "unexpected resumed sandbox state")
 
@@ -868,8 +869,8 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 
 	expectedStatus := SandboxStatus{
 		ID: testSandboxID,
-		State: State{
-			State: StateReady,
+		State: types.State{
+			State: types.StateReady,
 		},
 		Hypervisor:       MockHypervisor,
 		HypervisorConfig: hypervisorConfig,
@@ -878,8 +879,8 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 		ContainersStatus: []ContainerStatus{
 			{
 				ID: containerID,
-				State: State{
-					State: StateReady,
+				State: types.State{
+					State: types.StateReady,
 				},
 				PID:         0,
 				RootFs:      filepath.Join(testDir, testBundle),
@@ -926,8 +927,8 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 
 	expectedStatus := SandboxStatus{
 		ID: testSandboxID,
-		State: State{
-			State: StateRunning,
+		State: types.State{
+			State: types.StateRunning,
 		},
 		Hypervisor:       MockHypervisor,
 		HypervisorConfig: hypervisorConfig,
@@ -936,8 +937,8 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 		ContainersStatus: []ContainerStatus{
 			{
 				ID: containerID,
-				State: State{
-					State: StateRunning,
+				State: types.State{
+					State: types.StateRunning,
 				},
 				PID:         0,
 				RootFs:      filepath.Join(testDir, testBundle),
@@ -1776,8 +1777,8 @@ func TestStatusContainerStateReady(t *testing.T) {
 
 	expectedStatus := ContainerStatus{
 		ID: contID,
-		State: State{
-			State: StateReady,
+		State: types.State{
+			State: types.StateReady,
 		},
 		PID:         0,
 		RootFs:      filepath.Join(testDir, testBundle),
@@ -1851,8 +1852,8 @@ func TestStatusContainerStateRunning(t *testing.T) {
 
 	expectedStatus := ContainerStatus{
 		ID: contID,
-		State: State{
-			State: StateRunning,
+		State: types.State{
+			State: types.StateRunning,
 		},
 		PID:         0,
 		RootFs:      filepath.Join(testDir, testBundle),
@@ -2044,14 +2045,14 @@ func createNewSandboxConfig(hType HypervisorType, aType AgentType, aConfig inter
 func createNewContainerConfigs(numOfContainers int) []ContainerConfig {
 	var contConfigs []ContainerConfig
 
-	envs := []EnvVar{
+	envs := []types.EnvVar{
 		{
 			Var:   "PATH",
 			Value: "/bin:/usr/bin:/sbin:/usr/sbin",
 		},
 	}
 
-	cmd := Cmd{
+	cmd := types.Cmd{
 		Args:    strings.Split("/bin/ps -A", " "),
 		Envs:    envs,
 		WorkDir: "/",
@@ -2422,12 +2423,12 @@ func TestNetworkOperation(t *testing.T) {
 	cleanUp()
 
 	assert := assert.New(t)
-	inf := &types.Interface{
+	inf := &vcTypes.Interface{
 		Name:   "eno1",
 		Mtu:    1500,
 		HwAddr: "02:00:ca:fe:00:48",
 	}
-	ip := types.IPAddress{
+	ip := vcTypes.IPAddress{
 		Family:  0,
 		Address: "192.168.0.101",
 		Mask:    "24",

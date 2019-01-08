@@ -14,13 +14,13 @@ import (
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/errdefs"
 	googleProtobuf "github.com/gogo/protobuf/types"
-	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 type exec struct {
 	container *container
-	cmds      *vc.Cmd
+	cmds      *types.Cmd
 	tty       *tty
 	ttyio     *ttyIO
 	id        string
@@ -44,17 +44,17 @@ type tty struct {
 	terminal bool
 }
 
-func getEnvs(envs []string) []vc.EnvVar {
-	var vcEnvs = []vc.EnvVar{}
-	var env vc.EnvVar
+func getEnvs(envs []string) []types.EnvVar {
+	var vcEnvs = []types.EnvVar{}
+	var env types.EnvVar
 
 	for _, v := range envs {
 		pair := strings.SplitN(v, "=", 2)
 
 		if len(pair) == 2 {
-			env = vc.EnvVar{Var: pair[0], Value: pair[1]}
+			env = types.EnvVar{Var: pair[0], Value: pair[1]}
 		} else if len(pair) == 1 {
-			env = vc.EnvVar{Var: pair[0], Value: ""}
+			env = types.EnvVar{Var: pair[0], Value: ""}
 		}
 
 		vcEnvs = append(vcEnvs, env)
@@ -91,7 +91,7 @@ func newExec(c *container, stdin, stdout, stderr string, terminal bool, jspec *g
 		terminal: terminal,
 	}
 
-	cmds := &vc.Cmd{
+	cmds := &types.Cmd{
 		Args:            spec.Args,
 		Envs:            getEnvs(spec.Env),
 		User:            fmt.Sprintf("%d", spec.User.UID),

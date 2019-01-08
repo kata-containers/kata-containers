@@ -22,6 +22,7 @@ import (
 	"unsafe"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"golang.org/x/sys/unix"
 )
@@ -1207,9 +1208,9 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 	defer span.Finish()
 
 	switch v := devInfo.(type) {
-	case Volume:
+	case types.Volume:
 		q.qemuConfig.Devices = q.arch.append9PVolume(q.qemuConfig.Devices, v)
-	case Socket:
+	case types.Socket:
 		q.qemuConfig.Devices = q.arch.appendSocket(q.qemuConfig.Devices, v)
 	case kataVSOCK:
 		q.fds = append(q.fds, v.vhostFd)

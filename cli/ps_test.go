@@ -14,6 +14,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 )
@@ -95,8 +96,8 @@ func TestPSSuccessful(t *testing.T) {
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
-			State: vc.State{
-				State: vc.StateRunning,
+			State: types.State{
+				State: types.StateRunning,
 			},
 			ID: sandbox.ID(),
 			Annotations: map[string]string{

@@ -14,6 +14,7 @@ import (
 	govmmQemu "github.com/intel/govmm/qemu"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
@@ -71,10 +72,10 @@ type qemuArch interface {
 	appendBridges(devices []govmmQemu.Device, bridges []Bridge) []govmmQemu.Device
 
 	// append9PVolume appends a 9P volume to devices
-	append9PVolume(devices []govmmQemu.Device, volume Volume) []govmmQemu.Device
+	append9PVolume(devices []govmmQemu.Device, volume types.Volume) []govmmQemu.Device
 
 	// appendSocket appends a socket to devices
-	appendSocket(devices []govmmQemu.Device, socket Socket) []govmmQemu.Device
+	appendSocket(devices []govmmQemu.Device, socket types.Socket) []govmmQemu.Device
 
 	// appendVSockPCI appends a vsock PCI to devices
 	appendVSockPCI(devices []govmmQemu.Device, vsock kataVSOCK) []govmmQemu.Device
@@ -370,7 +371,7 @@ func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device, bridges []Bridg
 	return devices
 }
 
-func (q *qemuArchBase) append9PVolume(devices []govmmQemu.Device, volume Volume) []govmmQemu.Device {
+func (q *qemuArchBase) append9PVolume(devices []govmmQemu.Device, volume types.Volume) []govmmQemu.Device {
 	if volume.MountTag == "" || volume.HostPath == "" {
 		return devices
 	}
@@ -395,7 +396,7 @@ func (q *qemuArchBase) append9PVolume(devices []govmmQemu.Device, volume Volume)
 	return devices
 }
 
-func (q *qemuArchBase) appendSocket(devices []govmmQemu.Device, socket Socket) []govmmQemu.Device {
+func (q *qemuArchBase) appendSocket(devices []govmmQemu.Device, socket types.Socket) []govmmQemu.Device {
 	devID := socket.ID
 	if len(devID) > maxDevIDSize {
 		devID = devID[:maxDevIDSize]

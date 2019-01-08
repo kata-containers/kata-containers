@@ -25,8 +25,9 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	opentracing "github.com/opentracing/opentracing-go"
 
@@ -151,7 +152,7 @@ func (k *kataAgent) generateVMSocket(id string, c KataAgentConfig) error {
 			return err
 		}
 
-		k.vmSocket = Socket{
+		k.vmSocket = types.Socket{
 			DeviceID: defaultKataDeviceID,
 			ID:       defaultKataID,
 			HostPath: kataSock,
@@ -201,7 +202,7 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 
 func (k *kataAgent) agentURL() (string, error) {
 	switch s := k.vmSocket.(type) {
-	case Socket:
+	case types.Socket:
 		return s.HostPath, nil
 	case kataVSOCK:
 		return s.String(), nil
@@ -233,7 +234,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 	}
 
 	switch s := k.vmSocket.(type) {
-	case Socket:
+	case types.Socket:
 		err := h.addDevice(s, serialPortDev)
 		if err != nil {
 			return err
@@ -266,7 +267,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 
 	// Create shared directory and add the shared volume if filesystem sharing is supported.
 	// This volume contains all bind mounted container bundles.
-	sharedVolume := Volume{
+	sharedVolume := types.Volume{
 		MountTag: mountGuest9pTag,
 		HostPath: sharePath,
 	}
@@ -285,7 +286,7 @@ func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
 	return k.configure(sandbox.hypervisor, sandbox.id, k.getSharePath(sandbox.id), k.proxyBuiltIn, nil)
 }
 
-func cmdToKataProcess(cmd Cmd) (process *grpc.Process, err error) {
+func cmdToKataProcess(cmd types.Cmd) (process *grpc.Process, err error) {
 	var i uint64
 	var extraGids []uint32
 
@@ -351,7 +352,7 @@ func cmdToKataProcess(cmd Cmd) (process *grpc.Process, err error) {
 	return process, nil
 }
 
-func cmdEnvsToStringSlice(ev []EnvVar) []string {
+func cmdEnvsToStringSlice(ev []types.EnvVar) []string {
 	var env []string
 
 	for _, e := range ev {
@@ -362,7 +363,7 @@ func cmdEnvsToStringSlice(ev []EnvVar) []string {
 	return env
 }
 
-func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, error) {
+func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process, error) {
 	span, _ := k.trace("exec")
 	defer span.Finish()
 
@@ -398,7 +399,7 @@ func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd Cmd) (*Process, erro
 		k.state.URL, cmd, []ns.NSType{}, enterNSList)
 }
 
-func (k *kataAgent) updateInterface(ifc *types.Interface) (*types.Interface, error) {
+func (k *kataAgent) updateInterface(ifc *vcTypes.Interface) (*vcTypes.Interface, error) {
 	// send update interface request
 	ifcReq := &grpc.UpdateInterfaceRequest{
 		Interface: k.convertToKataAgentInterface(ifc),
@@ -410,13 +411,13 @@ func (k *kataAgent) updateInterface(ifc *types.Interface) (*types.Interface, err
 			"resulting-interface": fmt.Sprintf("%+v", resultingInterface),
 		}).WithError(err).Error("update interface request failed")
 	}
-	if resultInterface, ok := resultingInterface.(*types.Interface); ok {
+	if resultInterface, ok := resultingInterface.(*vcTypes.Interface); ok {
 		return resultInterface, err
 	}
 	return nil, err
 }
 
-func (k *kataAgent) updateInterfaces(interfaces []*types.Interface) error {
+func (k *kataAgent) updateInterfaces(interfaces []*vcTypes.Interface) error {
 	for _, ifc := range interfaces {
 		if _, err := k.updateInterface(ifc); err != nil {
 			return err
@@ -425,7 +426,7 @@ func (k *kataAgent) updateInterfaces(interfaces []*types.Interface) error {
 	return nil
 }
 
-func (k *kataAgent) updateRoutes(routes []*types.Route) ([]*types.Route, error) {
+func (k *kataAgent) updateRoutes(routes []*vcTypes.Route) ([]*vcTypes.Route, error) {
 	if routes != nil {
 		routesReq := &grpc.UpdateRoutesRequest{
 			Routes: &grpc.Routes{
@@ -448,7 +449,7 @@ func (k *kataAgent) updateRoutes(routes []*types.Route) ([]*types.Route, error) 
 	return nil, nil
 }
 
-func (k *kataAgent) listInterfaces() ([]*types.Interface, error) {
+func (k *kataAgent) listInterfaces() ([]*vcTypes.Interface, error) {
 	req := &grpc.ListInterfacesRequest{}
 	resultingInterfaces, err := k.sendReq(req)
 	if err != nil {
@@ -461,7 +462,7 @@ func (k *kataAgent) listInterfaces() ([]*types.Interface, error) {
 	return nil, err
 }
 
-func (k *kataAgent) listRoutes() ([]*types.Route, error) {
+func (k *kataAgent) listRoutes() ([]*vcTypes.Route, error) {
 	req := &grpc.ListRoutesRequest{}
 	resultingRoutes, err := k.sendReq(req)
 	if err != nil {
@@ -1664,7 +1665,7 @@ func (k *kataAgent) convertToIPFamily(ipFamily aTypes.IPFamily) int {
 	return netlink.FAMILY_V4
 }
 
-func (k *kataAgent) convertToKataAgentIPAddresses(ipAddrs []*types.IPAddress) (aIPAddrs []*aTypes.IPAddress) {
+func (k *kataAgent) convertToKataAgentIPAddresses(ipAddrs []*vcTypes.IPAddress) (aIPAddrs []*aTypes.IPAddress) {
 	for _, ipAddr := range ipAddrs {
 		if ipAddr == nil {
 			continue
@@ -1682,13 +1683,13 @@ func (k *kataAgent) convertToKataAgentIPAddresses(ipAddrs []*types.IPAddress) (a
 	return aIPAddrs
 }
 
-func (k *kataAgent) convertToIPAddresses(aIPAddrs []*aTypes.IPAddress) (ipAddrs []*types.IPAddress) {
+func (k *kataAgent) convertToIPAddresses(aIPAddrs []*aTypes.IPAddress) (ipAddrs []*vcTypes.IPAddress) {
 	for _, aIPAddr := range aIPAddrs {
 		if aIPAddr == nil {
 			continue
 		}
 
-		ipAddr := &types.IPAddress{
+		ipAddr := &vcTypes.IPAddress{
 			Family:  k.convertToIPFamily(aIPAddr.Family),
 			Address: aIPAddr.Address,
 			Mask:    aIPAddr.Mask,
@@ -1700,7 +1701,7 @@ func (k *kataAgent) convertToIPAddresses(aIPAddrs []*aTypes.IPAddress) (ipAddrs 
 	return ipAddrs
 }
 
-func (k *kataAgent) convertToKataAgentInterface(iface *types.Interface) *aTypes.Interface {
+func (k *kataAgent) convertToKataAgentInterface(iface *vcTypes.Interface) *aTypes.Interface {
 	if iface == nil {
 		return nil
 	}
@@ -1715,13 +1716,13 @@ func (k *kataAgent) convertToKataAgentInterface(iface *types.Interface) *aTypes.
 	}
 }
 
-func (k *kataAgent) convertToInterfaces(aIfaces []*aTypes.Interface) (ifaces []*types.Interface) {
+func (k *kataAgent) convertToInterfaces(aIfaces []*aTypes.Interface) (ifaces []*vcTypes.Interface) {
 	for _, aIface := range aIfaces {
 		if aIface == nil {
 			continue
 		}
 
-		iface := &types.Interface{
+		iface := &vcTypes.Interface{
 			Device:      aIface.Device,
 			Name:        aIface.Name,
 			IPAddresses: k.convertToIPAddresses(aIface.IPAddresses),
@@ -1736,7 +1737,7 @@ func (k *kataAgent) convertToInterfaces(aIfaces []*aTypes.Interface) (ifaces []*
 	return ifaces
 }
 
-func (k *kataAgent) convertToKataAgentRoutes(routes []*types.Route) (aRoutes []*aTypes.Route) {
+func (k *kataAgent) convertToKataAgentRoutes(routes []*vcTypes.Route) (aRoutes []*aTypes.Route) {
 	for _, route := range routes {
 		if route == nil {
 			continue
@@ -1756,13 +1757,13 @@ func (k *kataAgent) convertToKataAgentRoutes(routes []*types.Route) (aRoutes []*
 	return aRoutes
 }
 
-func (k *kataAgent) convertToRoutes(aRoutes []*aTypes.Route) (routes []*types.Route) {
+func (k *kataAgent) convertToRoutes(aRoutes []*aTypes.Route) (routes []*vcTypes.Route) {
 	for _, aRoute := range aRoutes {
 		if aRoute == nil {
 			continue
 		}
 
-		route := &types.Route{
+		route := &vcTypes.Route{
 			Dest:    aRoute.Dest,
 			Gateway: aRoute.Gateway,
 			Device:  aRoute.Device,

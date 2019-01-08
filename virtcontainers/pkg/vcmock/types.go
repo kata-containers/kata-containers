@@ -12,7 +12,8 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -57,7 +58,7 @@ type VCMock struct {
 
 	CreateContainerFunc      func(ctx context.Context, sandboxID string, containerConfig vc.ContainerConfig) (vc.VCSandbox, vc.VCContainer, error)
 	DeleteContainerFunc      func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error)
-	EnterContainerFunc       func(ctx context.Context, sandboxID, containerID string, cmd vc.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error)
+	EnterContainerFunc       func(ctx context.Context, sandboxID, containerID string, cmd types.Cmd) (vc.VCSandbox, vc.VCContainer, *vc.Process, error)
 	KillContainerFunc        func(ctx context.Context, sandboxID, containerID string, signal syscall.Signal, all bool) error
 	StartContainerFunc       func(ctx context.Context, sandboxID, containerID string) (vc.VCContainer, error)
 	StatusContainerFunc      func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error)
@@ -69,9 +70,9 @@ type VCMock struct {
 
 	AddDeviceFunc func(ctx context.Context, sandboxID string, info config.DeviceInfo) (api.Device, error)
 
-	AddInterfaceFunc    func(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error)
-	RemoveInterfaceFunc func(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error)
-	ListInterfacesFunc  func(ctx context.Context, sandboxID string) ([]*types.Interface, error)
-	UpdateRoutesFunc    func(ctx context.Context, sandboxID string, routes []*types.Route) ([]*types.Route, error)
-	ListRoutesFunc      func(ctx context.Context, sandboxID string) ([]*types.Route, error)
+	AddInterfaceFunc    func(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error)
+	RemoveInterfaceFunc func(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error)
+	ListInterfacesFunc  func(ctx context.Context, sandboxID string) ([]*vcTypes.Interface, error)
+	UpdateRoutesFunc    func(ctx context.Context, sandboxID string, routes []*vcTypes.Route) ([]*vcTypes.Route, error)
+	ListRoutesFunc      func(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error)
 }
