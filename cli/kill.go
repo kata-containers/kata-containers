@@ -15,6 +15,7 @@ import (
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -132,7 +133,7 @@ func kill(ctx context.Context, containerID, signal string, all bool) error {
 	kataLog.WithField("signal", signal).WithField("container state", status.State.State).Info("kill")
 
 	// container MUST be created, running or paused
-	if status.State.State == vc.StateReady || status.State.State == vc.StateRunning || status.State.State == vc.StatePaused {
+	if status.State.State == types.StateReady || status.State.State == types.StateRunning || status.State.State == types.StatePaused {
 		if err := vci.KillContainer(ctx, sandboxID, containerID, signum, all); err != nil {
 			return err
 		}

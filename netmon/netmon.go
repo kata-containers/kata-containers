@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/runtime/pkg/signals"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 	"github.com/vishvananda/netlink"
@@ -70,7 +70,7 @@ type netmon struct {
 	storagePath string
 	sharedFile  string
 
-	netIfaces map[int]types.Interface
+	netIfaces map[int]vcTypes.Interface
 
 	linkUpdateCh chan netlink.LinkUpdate
 	linkDoneCh   chan struct{}
@@ -151,7 +151,7 @@ func newNetmon(params netmonParams) (*netmon, error) {
 		netmonParams: params,
 		storagePath:  filepath.Join(storageParentPath, params.sandboxID),
 		sharedFile:   filepath.Join(storageParentPath, params.sandboxID, sharedFile),
-		netIfaces:    make(map[int]types.Interface),
+		netIfaces:    make(map[int]vcTypes.Interface),
 		linkUpdateCh: make(chan netlink.LinkUpdate),
 		linkDoneCh:   make(chan struct{}),
 		rtUpdateCh:   make(chan netlink.RouteUpdate),
@@ -259,13 +259,13 @@ func (n *netmon) listenNetlinkEvents() error {
 // convertInterface converts a link and its IP addresses as defined by netlink
 // package, into the Interface structure format expected by kata-runtime to
 // describe an interface and its associated IP addresses.
-func convertInterface(linkAttrs *netlink.LinkAttrs, linkType string, addrs []netlink.Addr) types.Interface {
+func convertInterface(linkAttrs *netlink.LinkAttrs, linkType string, addrs []netlink.Addr) vcTypes.Interface {
 	if linkAttrs == nil {
 		netmonLog.Warn("Link attributes are nil")
-		return types.Interface{}
+		return vcTypes.Interface{}
 	}
 
-	var ipAddrs []*types.IPAddress
+	var ipAddrs []*vcTypes.IPAddress
 
 	for _, addr := range addrs {
 		if addr.IPNet == nil {
@@ -274,7 +274,7 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, linkType string, addrs []net
 
 		netMask, _ := addr.Mask.Size()
 
-		ipAddr := &types.IPAddress{
+		ipAddr := &vcTypes.IPAddress{
 			Family:  netlinkFamily,
 			Address: addr.IP.String(),
 			Mask:    fmt.Sprintf("%d", netMask),
@@ -283,7 +283,7 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, linkType string, addrs []net
 		ipAddrs = append(ipAddrs, ipAddr)
 	}
 
-	iface := types.Interface{
+	iface := vcTypes.Interface{
 		Device:      linkAttrs.Name,
 		Name:        linkAttrs.Name,
 		IPAddresses: ipAddrs,
@@ -300,8 +300,8 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, linkType string, addrs []net
 // convertRoutes converts a list of routes as defined by netlink package,
 // into a list of Route structure format expected by kata-runtime to
 // describe a set of routes.
-func convertRoutes(netRoutes []netlink.Route) []types.Route {
-	var routes []types.Route
+func convertRoutes(netRoutes []netlink.Route) []vcTypes.Route {
+	var routes []vcTypes.Route
 
 	// Ignore routes with IPv6 addresses as this is not supported
 	// by Kata yet.
@@ -335,7 +335,7 @@ func convertRoutes(netRoutes []netlink.Route) []types.Route {
 			dev = iface.Name
 		}
 
-		route := types.Route{
+		route := vcTypes.Route{
 			Dest:    dst,
 			Gateway: gw,
 			Device:  dev,
@@ -407,7 +407,7 @@ func (n *netmon) execKataCmd(subCmd string) error {
 	return os.Remove(n.sharedFile)
 }
 
-func (n *netmon) addInterfaceCLI(iface types.Interface) error {
+func (n *netmon) addInterfaceCLI(iface vcTypes.Interface) error {
 	if err := n.storeDataToSend(iface); err != nil {
 		return err
 	}
@@ -415,7 +415,7 @@ func (n *netmon) addInterfaceCLI(iface types.Interface) error {
 	return n.execKataCmd(kataCLIAddIfaceCmd)
 }
 
-func (n *netmon) delInterfaceCLI(iface types.Interface) error {
+func (n *netmon) delInterfaceCLI(iface vcTypes.Interface) error {
 	if err := n.storeDataToSend(iface); err != nil {
 		return err
 	}
@@ -423,7 +423,7 @@ func (n *netmon) delInterfaceCLI(iface types.Interface) error {
 	return n.execKataCmd(kataCLIDelIfaceCmd)
 }
 
-func (n *netmon) updateRoutesCLI(routes []types.Route) error {
+func (n *netmon) updateRoutesCLI(routes []vcTypes.Route) error {
 	if err := n.storeDataToSend(routes); err != nil {
 		return err
 	}

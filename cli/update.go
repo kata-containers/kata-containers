@@ -14,7 +14,8 @@ import (
 
 	"github.com/docker/go-units"
 	"github.com/kata-containers/runtime/pkg/katautils"
-	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/types"
+
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -164,7 +165,7 @@ other options are ignored.
 		span.SetTag("sandbox", sandboxID)
 
 		// container MUST be running
-		if status.State.State != vc.StateRunning {
+		if status.State.State != types.StateRunning {
 			return fmt.Errorf("Container %s is not running", containerID)
 		}
 

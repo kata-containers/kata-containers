@@ -15,7 +15,8 @@ import (
 
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 )
@@ -107,7 +108,7 @@ func (impl *VCImpl) StopContainer(ctx context.Context, sandboxID, containerID st
 }
 
 // EnterContainer implements the VC function of the same name.
-func (impl *VCImpl) EnterContainer(ctx context.Context, sandboxID, containerID string, cmd Cmd) (VCSandbox, VCContainer, *Process, error) {
+func (impl *VCImpl) EnterContainer(ctx context.Context, sandboxID, containerID string, cmd types.Cmd) (VCSandbox, VCContainer, *Process, error) {
 	return EnterContainer(ctx, sandboxID, containerID, cmd)
 }
 
@@ -152,26 +153,26 @@ func (impl *VCImpl) AddDevice(ctx context.Context, sandboxID string, info config
 }
 
 // AddInterface implements the VC function of the same name.
-func (impl *VCImpl) AddInterface(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error) {
+func (impl *VCImpl) AddInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error) {
 	return AddInterface(ctx, sandboxID, inf)
 }
 
 // RemoveInterface implements the VC function of the same name.
-func (impl *VCImpl) RemoveInterface(ctx context.Context, sandboxID string, inf *types.Interface) (*types.Interface, error) {
+func (impl *VCImpl) RemoveInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error) {
 	return RemoveInterface(ctx, sandboxID, inf)
 }
 
 // ListInterfaces implements the VC function of the same name.
-func (impl *VCImpl) ListInterfaces(ctx context.Context, sandboxID string) ([]*types.Interface, error) {
+func (impl *VCImpl) ListInterfaces(ctx context.Context, sandboxID string) ([]*vcTypes.Interface, error) {
 	return ListInterfaces(ctx, sandboxID)
 }
 
 // UpdateRoutes implements the VC function of the same name.
-func (impl *VCImpl) UpdateRoutes(ctx context.Context, sandboxID string, routes []*types.Route) ([]*types.Route, error) {
+func (impl *VCImpl) UpdateRoutes(ctx context.Context, sandboxID string, routes []*vcTypes.Route) ([]*vcTypes.Route, error) {
 	return UpdateRoutes(ctx, sandboxID, routes)
 }
 
 // ListRoutes implements the VC function of the same name.
-func (impl *VCImpl) ListRoutes(ctx context.Context, sandboxID string) ([]*types.Route, error) {
+func (impl *VCImpl) ListRoutes(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error) {
 	return ListRoutes(ctx, sandboxID)
 }

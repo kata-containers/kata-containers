@@ -15,6 +15,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -38,8 +39,8 @@ func TestPauseContainerSuccess(t *testing.T) {
 		return vc.ContainerStatus{
 			ID:          testContainerID,
 			Annotations: make(map[string]string),
-			State: vc.State{
-				State: vc.StateRunning,
+			State: types.State{
+				State: types.StateRunning,
 			},
 		}, nil
 	}
@@ -86,8 +87,8 @@ func TestPauseContainerFail(t *testing.T) {
 		return vc.ContainerStatus{
 			ID:          testContainerID,
 			Annotations: make(map[string]string),
-			State: vc.State{
-				State: vc.StateRunning,
+			State: types.State{
+				State: types.StateRunning,
 			},
 		}, nil
 	}
@@ -129,8 +130,8 @@ func TestResumeContainerSuccess(t *testing.T) {
 		return vc.ContainerStatus{
 			ID:          testContainerID,
 			Annotations: make(map[string]string),
-			State: vc.State{
-				State: vc.StateRunning,
+			State: types.State{
+				State: types.StateRunning,
 			},
 		}, nil
 	}
@@ -177,8 +178,8 @@ func TestResumeContainerFail(t *testing.T) {
 		return vc.ContainerStatus{
 			ID:          testContainerID,
 			Annotations: make(map[string]string),
-			State: vc.State{
-				State: vc.StateRunning,
+			State: types.State{
+				State: types.StateRunning,
 			},
 		}, nil
 	}

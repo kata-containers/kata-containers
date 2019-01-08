@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
 const (
@@ -204,9 +205,9 @@ func testQemuArchBaseAppend(t *testing.T, structure interface{}, expected []govm
 	qemuArchBase := newQemuArchBase()
 
 	switch s := structure.(type) {
-	case Volume:
+	case types.Volume:
 		devices = qemuArchBase.append9PVolume(devices, s)
-	case Socket:
+	case types.Socket:
 		devices = qemuArchBase.appendSocket(devices, s)
 	case config.BlockDrive:
 		devices = qemuArchBase.appendBlockDevice(devices, s)
@@ -316,7 +317,7 @@ func TestQemuArchBaseAppend9PVolume(t *testing.T) {
 		},
 	}
 
-	volume := Volume{
+	volume := types.Volume{
 		MountTag: mountTag,
 		HostPath: hostPath,
 	}
@@ -341,7 +342,7 @@ func TestQemuArchBaseAppendSocket(t *testing.T) {
 		},
 	}
 
-	socket := Socket{
+	socket := types.Socket{
 		DeviceID: deviceID,
 		ID:       id,
 		HostPath: hostPath,

@@ -15,6 +15,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 )
@@ -111,8 +112,8 @@ func TestEventsCLISuccessful(t *testing.T) {
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
 			},
-			State: vc.State{
-				State: vc.StateRunning,
+			State: types.State{
+				State: types.StateRunning,
 			},
 		}, nil
 	}

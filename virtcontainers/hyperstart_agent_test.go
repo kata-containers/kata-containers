@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/pkg/hyperstart"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 )
@@ -36,7 +37,7 @@ func TestHyperstartGenerateSocketsSuccessful(t *testing.T) {
 
 	h.generateSockets(sandbox, config)
 
-	expectedSockets := []Socket{
+	expectedSockets := []types.Socket{
 		{
 			DeviceID: fmt.Sprintf(defaultDeviceIDTemplate, 0),
 			ID:       fmt.Sprintf(defaultIDTemplate, 0),
@@ -67,7 +68,7 @@ func TestHyperstartGenerateSocketsSuccessfulNoPathProvided(t *testing.T) {
 
 	h.generateSockets(sandbox, config)
 
-	expectedSockets := []Socket{
+	expectedSockets := []types.Socket{
 		{
 			DeviceID: fmt.Sprintf(defaultDeviceIDTemplate, 0),
 			ID:       fmt.Sprintf(defaultIDTemplate, 0),
