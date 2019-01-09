@@ -60,6 +60,11 @@ assets:
   hypervisor:
     description: "Component used to create virtual machines"
 
+    firecracker:
+      description: "Firecracker micro-Hypervisor"
+      url: "https://github.com/firecracker-microvm/firecracker"
+      version: "v0.12.0"
+
     nemu:
       description: "Modern Hypervisor for the Cloud"
       url: "https://github.com/intel/nemu"
