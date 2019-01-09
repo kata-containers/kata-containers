@@ -19,7 +19,7 @@ make_target() {
 
 	pushd "${script_dir}/.." >>/dev/null
 
-	if [ -n "${CI}" ] && ! git whatchanged origin/master..HEAD "${dir}" | grep "${dir}" >>/dev/null; then
+	if ! git diff --name-only origin/master..HEAD ${dir} | grep ${dir}; then
 		echo "Not changes in ${dir}"
 		return
 	fi
