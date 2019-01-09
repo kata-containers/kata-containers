@@ -13,7 +13,7 @@ proxy_repo="${proxy_repo:-github.com/kata-containers/proxy}"
 runtime_repo="${runtime_repo:-github.com/kata-containers/runtime}"
 shim_repo="${shim_repo:-github.com/kata-containers/shim}"
 tests_repo="${tests_repo:-github.com/kata-containers/tests}"
-packaging_repo="${tests_repo:-github.com/kata-containers/packaging}"
+packaging_repo="${packaging_repo:-github.com/kata-containers/packaging}"
 
 apply_depends_on() {
 	# kata_repo variable is set by the jenkins_job_build.sh
