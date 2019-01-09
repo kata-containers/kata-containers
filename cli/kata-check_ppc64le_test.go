@@ -220,7 +220,7 @@ func TestGetCPUDetails(t *testing.T) {
 	const validVendorName = ""
 	validVendor := fmt.Sprintf(`%s  : %s`, archCPUVendorField, validVendorName)
 
-	const validModelName = "POWER8"
+	const validModelName = "8247-22L"
 	validModel := fmt.Sprintf(`%s   : %s`, archCPUModelField, validModelName)
 
 	validContents := fmt.Sprintf(`
