@@ -597,11 +597,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		}
 	}()
 
-	if err = s.hypervisor.init(ctx, s.id, &sandboxConfig.HypervisorConfig, s.storage); err != nil {
-		return nil, err
-	}
-
-	if err = s.hypervisor.createSandbox(); err != nil {
+	if err = s.hypervisor.createSandbox(ctx, s.id, &sandboxConfig.HypervisorConfig, s.storage); err != nil {
 		return nil, err
 	}
 
@@ -951,12 +947,8 @@ func (s *Sandbox) startVM() error {
 			return nil
 		}
 
-		return s.hypervisor.startSandbox()
+		return s.hypervisor.startSandbox(vmStartTimeout)
 	}); err != nil {
-		return err
-	}
-
-	if err := s.hypervisor.waitSandbox(vmStartTimeout); err != nil {
 		return err
 	}
 

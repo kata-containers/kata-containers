@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestMockHypervisorInit(t *testing.T) {
+func TestMockHypervisorCreateSandbox(t *testing.T) {
 	var m *mockHypervisor
 
 	sandbox := &Sandbox{
@@ -29,7 +29,7 @@ func TestMockHypervisorInit(t *testing.T) {
 	ctx := context.Background()
 
 	// wrong config
-	if err := m.init(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.storage); err == nil {
+	if err := m.createSandbox(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.storage); err == nil {
 		t.Fatal()
 	}
 
@@ -39,16 +39,7 @@ func TestMockHypervisorInit(t *testing.T) {
 		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
 	}
 
-	// right config
-	if err := m.init(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.storage); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestMockHypervisorCreateSandbox(t *testing.T) {
-	var m *mockHypervisor
-
-	if err := m.createSandbox(); err != nil {
+	if err := m.createSandbox(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.storage); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -56,15 +47,7 @@ func TestMockHypervisorCreateSandbox(t *testing.T) {
 func TestMockHypervisorStartSandbox(t *testing.T) {
 	var m *mockHypervisor
 
-	if err := m.startSandbox(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestMockHypervisorWaitSandbox(t *testing.T) {
-	var m *mockHypervisor
-
-	if err := m.waitSandbox(0); err != nil {
+	if err := m.startSandbox(vmStartTimeout); err != nil {
 		t.Fatal(err)
 	}
 }
