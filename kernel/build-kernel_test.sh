@@ -7,6 +7,7 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -o errtrace
 
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly build_kernel_sh="${script_dir}/build-kernel.sh"
@@ -16,6 +17,16 @@ exit_handler() {
 	rm -rf "$tmp_dir"
 }
 trap exit_handler EXIT
+
+err_report() {
+	echo "Error:"
+	echo "line: $1"
+	echo "Last saved output:"
+	echo "${out:-}"
+}
+
+trap 'err_report $LINENO' ERR
+
 
 OK() {
 	echo "OK"
