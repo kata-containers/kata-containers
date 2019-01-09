@@ -97,12 +97,61 @@ func archKernelParamHandler(onVMM bool, fields logrus.Fields, msg string) bool {
 	return genericArchKernelParamHandler(onVMM, fields, msg)
 }
 
-func getCPUDetails() (vendor, model string, err error) {
-	vendor, model, err = genericGetCPUDetails()
-	if err == nil {
-		model = "POWER8"
+func getPPC64leCPUInfo(cpuInfoFile string) (string, error) {
+	text, err := katautils.GetFileContents(cpuInfoFile)
+	if err != nil {
+		return "", err
 	}
-	return vendor, model, err
+
+	if len(strings.TrimSpace(text)) == 0 {
+		return "", fmt.Errorf("Cannot determine CPU details")
+	}
+
+	return text, nil
+}
+
+func getCPUDetails() (vendor, model string, err error) {
+
+	if vendor, model, err := genericGetCPUDetails(); err == nil {
+		return vendor, model, nil
+	}
+
+	cpuinfo, err := getPPC64leCPUInfo(procCPUInfo)
+	if err != nil {
+		return "", "", err
+	}
+
+	lines := strings.Split(cpuinfo, "\n")
+
+	for _, line := range lines {
+		if archCPUVendorField != "" {
+			if strings.HasPrefix(line, archCPUVendorField) {
+				fields := strings.Split(line, ":")
+				if len(fields) > 1 {
+					vendor = strings.TrimSpace(fields[1])
+				}
+			}
+		}
+
+		if archCPUModelField != "" {
+			if strings.HasPrefix(line, archCPUModelField) {
+				fields := strings.Split(line, ":")
+				if len(fields) > 1 {
+					model = strings.TrimSpace(fields[1])
+				}
+			}
+		}
+	}
+
+	if archCPUVendorField != "" && vendor == "" {
+		return "", "", fmt.Errorf("cannot find vendor field in file %v", procCPUInfo)
+	}
+
+	if archCPUModelField != "" && model == "" {
+		return "", "", fmt.Errorf("cannot find model field in file %v", procCPUInfo)
+	}
+
+	return vendor, model, nil
 }
 
 func isSMTOff() bool {
