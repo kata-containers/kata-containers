@@ -145,7 +145,16 @@ get_default_kernel_config() {
 	echo "${config}"
 }
 
+get_config_and_patches() {
+	if [ -z "${patches_path}" ]; then
+		info "Clone config and patches"
+		patches_path="${default_patches_dir}"
+		[ -d "${patches_path}" ] || git clone "https://${patches_repo}.git" "${patches_repo_dir}"
+	fi
+}
+
 get_config_version() {
+	get_config_and_patches
 	config_version_file="${default_patches_dir}/../kata_config_version"
 	if [ -f "${config_version_file}" ]; then
 		cat "${config_version_file}"
@@ -172,10 +181,7 @@ setup_kernel() {
 
 	[ -n "$kernel_path" ] || die "failed to find kernel source path"
 
-	if [ -z "${patches_path}" ]; then
-		patches_path="${default_patches_dir}"
-		[ -d "${patches_path}" ] || git clone "https://${patches_repo}.git" "${patches_repo_dir}"
-	fi
+	get_config_and_patches
 
 	[ -d "${patches_path}" ] || die " patches path '${patches_path}' does not exist"
 
@@ -290,7 +296,10 @@ main() {
 	if [ -z "${kernel_path}" ]; then
 		config_version=$(get_config_version)
 		kernel_path="${PWD}/kata-linux-${kernel_version}-${config_version}"
+		info "Config version: ${config_version}"
 	fi
+
+	info "Kernel version: ${kernel_version}"
 
 	case "${subcmd}" in
 	build)
