@@ -261,3 +261,13 @@ func (s *Store) Raw(id string) (string, error) {
 
 	return s.backend.raw(id)
 }
+
+// ItemLock takes a lock on an item.
+func (s *Store) ItemLock(item Item, exclusive bool) (string, error) {
+	return s.backend.lock(item, exclusive)
+}
+
+// ItemUnlock unlocks an item.
+func (s *Store) ItemUnlock(item Item, token string) error {
+	return s.backend.unlock(item, token)
+}

@@ -202,6 +202,21 @@ func (s *VCStore) Raw(id string) (string, error) {
 	return s.state.Raw(id)
 }
 
+// Lock takes an exclusive lock on the virtcontainers state Lock item.
+func (s *VCStore) Lock() (string, error) {
+	return s.state.ItemLock(Lock, true)
+}
+
+// RLock takes a shared lock on the virtcontainers state Lock item.
+func (s *VCStore) RLock() (string, error) {
+	return s.state.ItemLock(Lock, false)
+}
+
+// Unlock unlocks the virtcontainers state Lock item.
+func (s *VCStore) Unlock(token string) error {
+	return s.state.ItemUnlock(Lock, token)
+}
+
 // Utilities for virtcontainers
 
 // SandboxConfigurationRoot returns a virtcontainers sandbox configuration root URL.

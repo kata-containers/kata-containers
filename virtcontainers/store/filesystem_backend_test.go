@@ -99,3 +99,51 @@ func TestStoreFilesystemRaw(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, path, filesystemScheme+"://"+filepath.Join(rootPath, "raw", "roah"))
 }
+
+func TestStoreFilesystemLockShared(t *testing.T) {
+	f := filesystem{}
+
+	err := f.new(context.Background(), rootPath, "")
+	defer f.delete()
+	assert.Nil(t, err)
+
+	// Take 2 shared locks
+	token1, err := f.lock(Lock, false)
+	assert.Nil(t, err)
+
+	token2, err := f.lock(Lock, false)
+	assert.Nil(t, err)
+
+	err = f.unlock(Lock, token1)
+	assert.Nil(t, err)
+
+	err = f.unlock(Lock, token2)
+	assert.Nil(t, err)
+
+	err = f.unlock(Lock, token2)
+	assert.NotNil(t, err)
+}
+
+func TestStoreFilesystemLockExclusive(t *testing.T) {
+	f := filesystem{}
+
+	err := f.new(context.Background(), rootPath, "")
+	defer f.delete()
+	assert.Nil(t, err)
+
+	// Take 1 exclusive lock
+	token, err := f.lock(Lock, true)
+	assert.Nil(t, err)
+
+	err = f.unlock(Lock, token)
+	assert.Nil(t, err)
+
+	token, err = f.lock(Lock, true)
+	assert.Nil(t, err)
+
+	err = f.unlock(Lock, token)
+	assert.Nil(t, err)
+
+	err = f.unlock(Lock, token)
+	assert.NotNil(t, err)
+}

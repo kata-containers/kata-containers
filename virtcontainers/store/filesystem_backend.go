@@ -12,7 +12,9 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"syscall"
 
+	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 )
@@ -103,6 +105,8 @@ type filesystem struct {
 
 	path    string
 	rawPath string
+
+	lockTokens map[string]*os.File
 }
 
 // Logger returns a logrus logger appropriate for logging Store filesystem messages
@@ -174,6 +178,7 @@ func (f *filesystem) new(ctx context.Context, path string, host string) error {
 	f.ctx = ctx
 	f.path = path
 	f.rawPath = filepath.Join(f.path, "raw")
+	f.lockTokens = make(map[string]*os.File)
 
 	f.logger().Debugf("New filesystem store backend for %s", path)
 
@@ -258,4 +263,49 @@ func (f *filesystem) raw(id string) (string, error) {
 	defer file.Close()
 
 	return filesystemScheme + "://" + file.Name(), nil
+}
+
+func (f *filesystem) lock(item Item, exclusive bool) (string, error) {
+	itemPath, err := f.itemToPath(item)
+	if err != nil {
+		return "", err
+	}
+
+	itemFile, err := os.Open(itemPath)
+	if err != nil {
+		return "", err
+	}
+
+	var lockType int
+	if exclusive {
+		lockType = syscall.LOCK_EX
+	} else {
+		lockType = syscall.LOCK_SH
+	}
+
+	if err := syscall.Flock(int(itemFile.Fd()), lockType); err != nil {
+		itemFile.Close()
+		return "", err
+	}
+
+	token := uuid.Generate().String()
+	f.lockTokens[token] = itemFile
+
+	return token, nil
+}
+
+func (f *filesystem) unlock(item Item, token string) error {
+	itemFile := f.lockTokens[token]
+	if itemFile == nil {
+		return fmt.Errorf("No lock for token %s", token)
+	}
+
+	if err := syscall.Flock(int(itemFile.Fd()), syscall.LOCK_UN); err != nil {
+		return err
+	}
+
+	itemFile.Close()
+	delete(f.lockTokens, token)
+
+	return nil
 }
