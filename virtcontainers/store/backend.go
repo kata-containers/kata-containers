@@ -53,4 +53,6 @@ type backend interface {
 	// The caller gets an item URL back and handles it directly,
 	// outside of the top level Store API.
 	raw(id string) (string, error)
+	lock(item Item, exclusive bool) (string, error)
+	unlock(item Item, token string) error
 }
