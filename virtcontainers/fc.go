@@ -126,15 +126,12 @@ func (fc *firecracker) trace(name string) (opentracing.Span, context.Context) {
 	return span, ctx
 }
 
-//
-// init: initialize the firecracker hypervisor's structure. Doesn't
-//  actually do anything with firecracker itself, rather it just parses
-//  through and provides necessary details for its structs...
-//
-func (fc *firecracker) init(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error {
+// For firecracker this call only sets the internal structure up.
+// The sandbox will be created and started through startSandbox().
+func (fc *firecracker) createSandbox(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error {
 	fc.ctx = ctx
 
-	span, _ := fc.trace("init")
+	span, _ := fc.trace("createSandbox")
 	defer span.Finish()
 
 	//TODO: check validity of the hypervisor config provided
@@ -150,14 +147,6 @@ func (fc *firecracker) init(ctx context.Context, id string, hypervisorConfig *Hy
 	if err := fc.storage.fetchHypervisorState(fc.id, &fc.info); err != nil {
 		fc.Logger().WithField("function", "init").WithError(err).Info("No info could be fetched")
 	}
-
-	return nil
-}
-
-// for firecracker this call isn't necessary
-func (fc *firecracker) createSandbox() error {
-	span, _ := fc.trace("createSandbox")
-	defer span.Finish()
 
 	return nil
 }
@@ -346,7 +335,7 @@ func (fc *firecracker) fcStartVM() error {
 // startSandbox will start the hypervisor for the given sandbox.
 // In the context of firecracker, this will start the hypervisor,
 // for configuration, but not yet start the actual virtual machine
-func (fc *firecracker) startSandbox() error {
+func (fc *firecracker) startSandbox(timeout int) error {
 	span, _ := fc.trace("startSandbox")
 	defer span.Finish()
 
@@ -386,7 +375,11 @@ func (fc *firecracker) startSandbox() error {
 		}
 	}
 
-	return fc.fcStartVM()
+	if err := fc.fcStartVM(); err != nil {
+		return err
+	}
+
+	return fc.waitVMM(timeout)
 }
 
 func (fc *firecracker) createDiskPool() error {
@@ -420,14 +413,6 @@ func (fc *firecracker) createDiskPool() error {
 	}
 
 	return nil
-}
-
-// waitSandbox will wait for the Sandbox's VM to be up and running.
-func (fc *firecracker) waitSandbox(timeout int) error {
-	span, _ := fc.trace("waitSandbox")
-	defer span.Finish()
-
-	return fc.waitVMM(timeout)
 }
 
 // stopSandbox will stop the Sandbox's VM.

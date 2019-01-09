@@ -13,15 +13,6 @@ import (
 type mockHypervisor struct {
 }
 
-func (m *mockHypervisor) init(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error {
-	err := hypervisorConfig.valid()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (m *mockHypervisor) capabilities() capabilities {
 	return capabilities{}
 }
@@ -30,15 +21,16 @@ func (m *mockHypervisor) hypervisorConfig() HypervisorConfig {
 	return HypervisorConfig{}
 }
 
-func (m *mockHypervisor) createSandbox() error {
+func (m *mockHypervisor) createSandbox(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error {
+	err := hypervisorConfig.valid()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func (m *mockHypervisor) startSandbox() error {
-	return nil
-}
-
-func (m *mockHypervisor) waitSandbox(timeout int) error {
+func (m *mockHypervisor) startSandbox(timeout int) error {
 	return nil
 }
 
