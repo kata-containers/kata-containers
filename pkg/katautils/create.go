@@ -85,7 +85,7 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 
 // SetKernelParams adds the user-specified kernel parameters (from the
 // configuration file) to the defaults so that the former take priority.
-func SetKernelParams(containerID string, runtimeConfig *oci.RuntimeConfig) error {
+func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 	defaultKernelParams := GetKernelParamsFunc(needSystemd(runtimeConfig.HypervisorConfig))
 
 	if runtimeConfig.HypervisorConfig.Debug {
@@ -138,7 +138,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec oci.CompatOCISpec, ru
 	span, ctx := Trace(ctx, "createSandbox")
 	defer span.Finish()
 
-	err := SetKernelParams(containerID, &runtimeConfig)
+	err := SetKernelParams(&runtimeConfig)
 	if err != nil {
 		return nil, vc.Process{}, err
 	}
