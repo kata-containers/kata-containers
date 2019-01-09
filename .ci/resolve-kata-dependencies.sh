@@ -90,8 +90,13 @@ clone_repos() {
 			echo "... and rebasing with origin/${branch}"
 			git rebase "origin/${branch}"
 		else
-			echo "Checking out to ${branch}"
-			git fetch origin && git checkout "$branch"
+			# Packaging repo only has master branch, so we
+			# cannot checkout to a different branch.
+			if  [ "${repo}" != "${packaging_repo}" ]
+			then
+				echo "Checking out to ${branch}"
+				git fetch origin && git checkout "$branch"
+			fi
 		fi
 		popd
 	done
