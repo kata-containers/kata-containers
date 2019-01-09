@@ -296,10 +296,10 @@ main() {
 	if [ -z "${kernel_path}" ]; then
 		config_version=$(get_config_version)
 		kernel_path="${PWD}/kata-linux-${kernel_version}-${config_version}"
+		info "Config version: ${config_version}"
 	fi
 
 	info "Kernel version: ${kernel_version}"
-	info "Config version: ${config_version}"
 
 	case "${subcmd}" in
 	build)
