@@ -82,12 +82,12 @@ run_workload() {
 		# Grab the last kernel dmesg time
 		# In our case, we need to find the last real kernel line before
 		# the systemd lines begin. The last:
-		# 'Freeing unused kernel memory' line is a reasonable
+		# 'Freeing unused kernel' line is a reasonable
 		# 'last in kernel line' to look for.
 		# We make a presumption here that as we are in a cold-boot VM
 		# kernel, the first dmesg is at '0 seconds', so the timestamp
 		# of that last line is the length of time in the kernel.
-		kernel_last_line=$( (fgrep "Freeing unused kernel memory" <<- EOF
+		kernel_last_line=$( (fgrep "Freeing unused kernel" <<- EOF
 				${workload_result[@]}
 			EOF
 			) | tail -1 )
