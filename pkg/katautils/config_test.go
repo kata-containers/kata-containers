@@ -201,6 +201,11 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		DisableNewNetNs: disableNewNetNs,
 	}
 
+	err = SetKernelParams(&runtimeConfig)
+	if err != nil {
+		return config, err
+	}
+
 	config = testRuntimeConfig{
 		RuntimeConfig:     runtimeConfig,
 		RuntimeConfigFile: configPath,
@@ -635,6 +640,10 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		ShimConfig: expectedShimConfig,
 
 		NetmonConfig: expectedNetmonConfig,
+	}
+	err = SetKernelParams(&expectedConfig)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	if reflect.DeepEqual(config, expectedConfig) == false {
@@ -1376,6 +1385,33 @@ func TestUpdateRuntimeConfigurationFactoryConfig(t *testing.T) {
 	assert.NoError(err)
 
 	assert.Equal(expectedFactoryConfig, config.FactoryConfig)
+}
+
+func TestUpdateRuntimeConfigurationInvalidKernelParams(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.NotEqual(defaultAgent, vc.HyperstartAgent)
+
+	config := oci.RuntimeConfig{}
+
+	tomlConf := tomlConfig{}
+
+	savedFunc := GetKernelParamsFunc
+	defer func() {
+		GetKernelParamsFunc = savedFunc
+	}()
+
+	GetKernelParamsFunc = func(needSystemd bool) []vc.Param {
+		return []vc.Param{
+			{
+				Key:   "",
+				Value: "",
+			},
+		}
+	}
+
+	err := updateRuntimeConfig("", tomlConf, &config)
+	assert.EqualError(err, "Empty kernel parameter")
 }
 
 func TestCheckHypervisorConfig(t *testing.T) {

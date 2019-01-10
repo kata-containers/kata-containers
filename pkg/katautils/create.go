@@ -9,7 +9,6 @@ package katautils
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vf "github.com/kata-containers/runtime/virtcontainers/factory"
@@ -83,41 +82,6 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 	vci.SetFactory(ctx, f)
 }
 
-// SetKernelParams adds the user-specified kernel parameters (from the
-// configuration file) to the defaults so that the former take priority.
-func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
-	defaultKernelParams := GetKernelParamsFunc(needSystemd(runtimeConfig.HypervisorConfig))
-
-	if runtimeConfig.HypervisorConfig.Debug {
-		strParams := vc.SerializeParams(defaultKernelParams, "=")
-		formatted := strings.Join(strParams, " ")
-
-		kataUtilsLogger.WithField("default-kernel-parameters", formatted).Debug()
-	}
-
-	// retrieve the parameters specified in the config file
-	userKernelParams := runtimeConfig.HypervisorConfig.KernelParams
-
-	// reset
-	runtimeConfig.HypervisorConfig.KernelParams = []vc.Param{}
-
-	// first, add default values
-	for _, p := range defaultKernelParams {
-		if err := (runtimeConfig).AddKernelParam(p); err != nil {
-			return err
-		}
-	}
-
-	// now re-add the user-specified values so that they take priority.
-	for _, p := range userKernelParams {
-		if err := (runtimeConfig).AddKernelParam(p); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // SetEphemeralStorageType sets the mount type to 'ephemeral'
 // if the mount source path is provisioned by k8s for ephemeral storage.
 // For the given pod ephemeral volume is created only once
@@ -137,11 +101,6 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec oci.CompatOCISpec, ru
 	containerID, bundlePath, console string, disableOutput, systemdCgroup, builtIn bool) (vc.VCSandbox, vc.Process, error) {
 	span, ctx := Trace(ctx, "createSandbox")
 	defer span.Finish()
-
-	err := SetKernelParams(&runtimeConfig)
-	if err != nil {
-		return nil, vc.Process{}, err
-	}
 
 	sandboxConfig, err := oci.SandboxConfig(ociSpec, runtimeConfig, bundlePath, containerID, console, disableOutput, systemdCgroup)
 	if err != nil {

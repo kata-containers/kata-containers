@@ -643,6 +643,41 @@ func updateRuntimeConfigShim(configPath string, tomlConf tomlConfig, config *oci
 	return nil
 }
 
+// SetKernelParams adds the user-specified kernel parameters (from the
+// configuration file) to the defaults so that the former take priority.
+func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
+	defaultKernelParams := GetKernelParamsFunc(needSystemd(runtimeConfig.HypervisorConfig))
+
+	if runtimeConfig.HypervisorConfig.Debug {
+		strParams := vc.SerializeParams(defaultKernelParams, "=")
+		formatted := strings.Join(strParams, " ")
+
+		kataUtilsLogger.WithField("default-kernel-parameters", formatted).Debug()
+	}
+
+	// retrieve the parameters specified in the config file
+	userKernelParams := runtimeConfig.HypervisorConfig.KernelParams
+
+	// reset
+	runtimeConfig.HypervisorConfig.KernelParams = []vc.Param{}
+
+	// first, add default values
+	for _, p := range defaultKernelParams {
+		if err := (runtimeConfig).AddKernelParam(p); err != nil {
+			return err
+		}
+	}
+
+	// now re-add the user-specified values so that they take priority.
+	for _, p := range userKernelParams {
+		if err := (runtimeConfig).AddKernelParam(p); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
 	if err := updateRuntimeConfigHypervisor(configPath, tomlConf, config); err != nil {
 		return err
@@ -670,6 +705,11 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 		Path:   tomlConf.Netmon.path(),
 		Debug:  tomlConf.Netmon.debug(),
 		Enable: tomlConf.Netmon.enable(),
+	}
+
+	err = SetKernelParams(config)
+	if err != nil {
+		return err
 	}
 
 	return nil
