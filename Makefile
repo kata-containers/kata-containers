@@ -16,6 +16,7 @@ VERSION_FILE_URL := https://raw.githubusercontent.com/kata-containers/runtime/ma
 
 export MK_DIR
 export YQ
+export SNAPCRAFT_FILE
 export VERSION_FILE
 export VERSIONS_YAML_FILE
 
@@ -44,26 +45,14 @@ $(VERSION_FILE):
 $(VERSIONS_YAML_FILE):
 	@curl -sO $(VERSIONS_YAML_FILE_URL)
 
-$(SNAPCRAFT_FILE): %: %.in Makefile $(YQ) $(VERSIONS_YAML_FILE) $(VERSION_FILE)
-	$(SED) \
-		-e "s|@KATA_RUNTIME_VERSION@|$$(cat $${VERSION_FILE})|g" \
-		-e "s|@KATA_PROXY_VERSION@|$$(cat $${VERSION_FILE})|g" \
-		-e "s|@KATA_SHIM_VERSION@|$$(cat $${VERSION_FILE})|g" \
-		-e "s|@KSM_THROTTLER_VERSION@|$$(cat $${VERSION_FILE})|g" \
-		-e "s|@QEMU_LITE_BRANCH@|$$($${YQ} r $${VERSIONS_YAML_FILE} assets.hypervisor.qemu-lite.branch)|g" \
-		-e "s|@KERNEL_URL@|$$($${YQ} r $${VERSIONS_YAML_FILE} assets.kernel.url)|g" \
-		-e "s|@KERNEL_VERSION@|$$($${YQ} r $${VERSIONS_YAML_FILE} assets.kernel.version | tr -d v)|g" \
-		-e "s|@GO_VERSION@|$$($${YQ} r $${VERSIONS_YAML_FILE} languages.golang.meta.newest-version)|g" \
-		$< > $@
-
-snap: $(SNAPCRAFT_FILE)
+snap: $(YQ) $(VERSION_FILE)
+	@if [ "$$(cat $(VERSION_FILE))" != "$$($(YQ) r $(SNAPCRAFT_FILE) version)" ]; then \
+		>&2 echo "Warning: $(SNAPCRAFT_FILE) version is different to upstream $(VERSION_FILE) file"; \
+	fi
 	snapcraft -d
 
 snap-xbuild:
 	cd $(MK_DIR)/snap-build; ./xbuild.sh -a all
 
-clean:
-	rm -f $(SNAPCRAFT_FILE)
-
-.PHONY: test test-release-tools test-static-build test-packaging-tools snap clean \
+.PHONY: test test-release-tools test-static-build test-packaging-tools snap snap-xbuild \
 	$(VERSION_FILE) $(VERSIONS_YAML_FILE)

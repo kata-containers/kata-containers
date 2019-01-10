@@ -14,6 +14,5 @@ snap-build/*.log
 snap-build/id_rsa*
 snap-build/seed/user-data
 snap/.snapcraft/
-snap/snapcraft.yaml
 stage/
 typescript
