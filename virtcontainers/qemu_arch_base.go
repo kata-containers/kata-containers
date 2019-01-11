@@ -45,7 +45,7 @@ type qemuArch interface {
 	kernelParameters(debug bool) []Param
 
 	//capabilities returns the capabilities supported by QEMU
-	capabilities() capabilities
+	capabilities() types.Capabilities
 
 	// bridges returns the number bridges for the machine type
 	bridges(number uint32) []Bridge
@@ -228,10 +228,10 @@ func (q *qemuArchBase) kernelParameters(debug bool) []Param {
 	return params
 }
 
-func (q *qemuArchBase) capabilities() capabilities {
-	var caps capabilities
-	caps.setBlockDeviceHotplugSupport()
-	caps.setMultiQueueSupport()
+func (q *qemuArchBase) capabilities() types.Capabilities {
+	var caps types.Capabilities
+	caps.SetBlockDeviceHotplugSupport()
+	caps.SetMultiQueueSupport()
 	return caps
 }
 

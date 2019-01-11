@@ -37,8 +37,8 @@ func (n *noopAgent) createSandbox(sandbox *Sandbox) error {
 }
 
 // capabilities returns empty capabilities, i.e no capabilties are supported.
-func (n *noopAgent) capabilities() capabilities {
-	return capabilities{}
+func (n *noopAgent) capabilities() types.Capabilities {
+	return types.Capabilities{}
 }
 
 // disconnect is the Noop agent connection closer. It does nothing.

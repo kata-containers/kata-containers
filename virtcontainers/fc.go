@@ -21,6 +21,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 
 	"net"
 	"net/http"
@@ -656,12 +657,12 @@ func (fc *firecracker) disconnect() {
 }
 
 // Adds all capabilities supported by firecracker implementation of hypervisor interface
-func (fc *firecracker) capabilities() capabilities {
+func (fc *firecracker) capabilities() types.Capabilities {
 	span, _ := fc.trace("capabilities")
 	defer span.Finish()
-	var caps capabilities
-	caps.setFsSharingUnsupported()
-	caps.setBlockDeviceHotplugSupport()
+	var caps types.Capabilities
+	caps.SetFsSharingUnsupported()
+	caps.SetBlockDeviceHotplugSupport()
 
 	return caps
 }

@@ -138,7 +138,7 @@ func TestQemuArchBaseCapabilities(t *testing.T) {
 	qemuArchBase := newQemuArchBase()
 
 	c := qemuArchBase.capabilities()
-	assert.True(c.isBlockDeviceHotplugSupported())
+	assert.True(c.IsBlockDeviceHotplugSupported())
 }
 
 func TestQemuArchBaseBridges(t *testing.T) {

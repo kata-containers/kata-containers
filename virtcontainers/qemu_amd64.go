@@ -8,6 +8,8 @@ package virtcontainers
 import (
 	"os"
 
+	"github.com/kata-containers/runtime/virtcontainers/types"
+
 	govmmQemu "github.com/intel/govmm/qemu"
 )
 
@@ -101,16 +103,16 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 	return q
 }
 
-func (q *qemuAmd64) capabilities() capabilities {
-	var caps capabilities
+func (q *qemuAmd64) capabilities() types.Capabilities {
+	var caps types.Capabilities
 
 	if q.machineType == QemuPC ||
 		q.machineType == QemuQ35 ||
 		q.machineType == QemuVirt {
-		caps.setBlockDeviceHotplugSupport()
+		caps.SetBlockDeviceHotplugSupport()
 	}
 
-	caps.setMultiQueueSupport()
+	caps.SetMultiQueueSupport()
 
 	return caps
 }
