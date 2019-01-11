@@ -162,7 +162,7 @@ func (q *qemu) kernelParameters() string {
 }
 
 // Adds all capabilities supported by qemu implementation of hypervisor interface
-func (q *qemu) capabilities() capabilities {
+func (q *qemu) capabilities() types.Capabilities {
 	span, _ := q.trace("capabilities")
 	defer span.Finish()
 

@@ -330,11 +330,11 @@ func (h *hyper) createSandbox(sandbox *Sandbox) (err error) {
 	return h.configure(sandbox.hypervisor, "", h.getSharePath(sandbox.id), false, nil)
 }
 
-func (h *hyper) capabilities() capabilities {
-	var caps capabilities
+func (h *hyper) capabilities() types.Capabilities {
+	var caps types.Capabilities
 
 	// add all capabilities supported by agent
-	caps.setBlockDeviceSupport()
+	caps.SetBlockDeviceSupport()
 
 	return caps
 }

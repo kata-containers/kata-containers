@@ -604,7 +604,7 @@ type hypervisor interface {
 	resizeVCPUs(vcpus uint32) (uint32, uint32, error)
 	getSandboxConsole(sandboxID string) (string, error)
 	disconnect()
-	capabilities() capabilities
+	capabilities() types.Capabilities
 	hypervisorConfig() HypervisorConfig
 	getThreadIDs() (*threadIDs, error)
 	cleanup() error

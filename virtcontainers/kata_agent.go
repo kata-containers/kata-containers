@@ -211,11 +211,11 @@ func (k *kataAgent) agentURL() (string, error) {
 	}
 }
 
-func (k *kataAgent) capabilities() capabilities {
-	var caps capabilities
+func (k *kataAgent) capabilities() types.Capabilities {
+	var caps types.Capabilities
 
 	// add all capabilities supported by agent
-	caps.setBlockDeviceSupport()
+	caps.SetBlockDeviceSupport()
 
 	return caps
 }
@@ -261,7 +261,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 	// Neither create shared directory nor add 9p device if hypervisor
 	// doesn't support filesystem sharing.
 	caps := h.capabilities()
-	if !caps.isFsSharingSupported() {
+	if !caps.IsFsSharingSupported() {
 		return nil
 	}
 
@@ -629,7 +629,7 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	caps := sandbox.hypervisor.capabilities()
 
 	// append 9p shared volume to storages only if filesystem sharing is supported
-	if caps.isFsSharingSupported() {
+	if caps.IsFsSharingSupported() {
 		sharedDir9pOptions = append(sharedDir9pOptions, fmt.Sprintf("msize=%d", sandbox.config.HypervisorConfig.Msize9p))
 
 		// We mount the shared directory in a predefined location
