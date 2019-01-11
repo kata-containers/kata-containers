@@ -116,16 +116,6 @@ All other configurations are supported and are working properly.
 
 ## Networking
 
-### Adding networks dynamically
-
-The runtime does not currently support adding networks to an already
-running container (`docker network connect`).
-
-The VM network configuration is set up with what is defined by the CNM
-plugin at startup time. Although it is possible to watch the networking namespace on the host to discover and propagate new networks at runtime, it is currently not implemented.
-
-See https://github.com/kata-containers/runtime/issues/113 for more information.
-
 ### Docker swarm support
 
 The newest version of Docker supported is specified by the
