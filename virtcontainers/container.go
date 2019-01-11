@@ -584,6 +584,42 @@ func filterDevices(sandbox *Sandbox, c *Container, devices []ContainerDevice) (r
 	return
 }
 
+func (c *Container) createBlockDevices() error {
+	// iterate all mounts and create block device if it's block based.
+	for i, m := range c.mounts {
+		if len(m.BlockDeviceID) > 0 || m.Type != "bind" {
+			// Non-empty m.BlockDeviceID indicates there's already one device
+			// associated with the mount,so no need to create a new device for it
+			// and we only create block device for bind mount
+			continue
+		}
+
+		var stat unix.Stat_t
+		if err := unix.Stat(m.Source, &stat); err != nil {
+			return fmt.Errorf("stat %q failed: %v", m.Source, err)
+		}
+
+		// Check if mount is a block device file. If it is, the block device will be attached to the host
+		// instead of passing this as a shared mount.
+		if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
+			b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
+				HostPath:      m.Source,
+				ContainerPath: m.Destination,
+				DevType:       "b",
+				Major:         int64(unix.Major(stat.Rdev)),
+				Minor:         int64(unix.Minor(stat.Rdev)),
+			})
+			if err != nil {
+				return fmt.Errorf("device manager failed to create new device for %q: %v", m.Source, err)
+			}
+
+			c.mounts[i].BlockDeviceID = b.DeviceID()
+		}
+	}
+
+	return nil
+}
+
 // newContainer creates a Container structure from a sandbox and a container configuration.
 func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, error) {
 	span, _ := sandbox.trace("newContainer")
@@ -630,37 +666,9 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		// restore mounts from disk
 		c.mounts = mounts
 	} else {
-		// for newly created container:
-		// iterate all mounts and create block device if it's block based.
-		for i, m := range c.mounts {
-			if len(m.BlockDeviceID) > 0 || m.Type != "bind" {
-				// Non-empty m.BlockDeviceID indicates there's already one device
-				// associated with the mount,so no need to create a new device for it
-				// and we only create block device for bind mount
-				continue
-			}
-
-			var stat unix.Stat_t
-			if err := unix.Stat(m.Source, &stat); err != nil {
-				return nil, fmt.Errorf("stat %q failed: %v", m.Source, err)
-			}
-
-			// Check if mount is a block device file. If it is, the block device will be attached to the host
-			// instead of passing this as a shared mount.
-			if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
-				b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
-					HostPath:      m.Source,
-					ContainerPath: m.Destination,
-					DevType:       "b",
-					Major:         int64(unix.Major(stat.Rdev)),
-					Minor:         int64(unix.Minor(stat.Rdev)),
-				})
-				if err != nil {
-					return nil, fmt.Errorf("device manager failed to create new device for %q: %v", m.Source, err)
-				}
-
-				c.mounts[i].BlockDeviceID = b.DeviceID()
-			}
+		// Create block devices for newly created container
+		if err := c.createBlockDevices(); err != nil {
+			return nil, err
 		}
 	}
 
