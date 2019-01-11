@@ -8,10 +8,6 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
-	govmmQemu "github.com/intel/govmm/qemu"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
-	"github.com/opentracing/opentracing-go"
-	"github.com/sirupsen/logrus"
 	"math"
 	"os"
 	"path/filepath"
@@ -20,6 +16,11 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	govmmQemu "github.com/intel/govmm/qemu"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
+	"github.com/opentracing/opentracing-go"
+	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/types"
