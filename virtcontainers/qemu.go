@@ -1240,7 +1240,19 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 		q.Logger().WithError(err).Error("hotplug memory")
 		return 0, err
 	}
-
+	// if guest kernel only supports memory hotplug via probe interface, we need to get address of hot-add memory device
+	if memDev.probe {
+		memoryDevices, err := q.qmpMonitorCh.qmp.ExecQueryMemoryDevices(q.qmpMonitorCh.ctx)
+		if err != nil {
+			return 0, fmt.Errorf("failed to query memory devices: %v", err)
+		}
+		if len(memoryDevices) != 0 {
+			q.Logger().WithField("addr", fmt.Sprintf("0x%x", memoryDevices[len(memoryDevices)-1].Data.Addr)).Debug("recently hot-add memory device")
+			memDev.addr = memoryDevices[len(memoryDevices)-1].Data.Addr
+		} else {
+			return 0, fmt.Errorf("failed to probe address of recently hot-add memory device, no device exists")
+		}
+	}
 	q.state.HotpluggedMemory += memDev.sizeMB
 	return memDev.sizeMB, q.store.Store(store.Hypervisor, q.state)
 }
@@ -1370,32 +1382,33 @@ func (q *qemu) disconnect() {
 // the memory to remove has to be at least the size of one slot.
 // To return memory back we are resizing the VM memory balloon.
 // A longer term solution is evaluate solutions like virtio-mem
-func (q *qemu) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint32) (uint32, error) {
+func (q *qemu) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error) {
 
 	currentMemory := q.config.MemorySize + uint32(q.state.HotpluggedMemory)
 	err := q.qmpSetup()
 	if err != nil {
-		return 0, err
+		return 0, memoryDevice{}, err
 	}
+	var addMemDevice memoryDevice
 	switch {
 	case currentMemory < reqMemMB:
 		//hotplug
 		addMemMB := reqMemMB - currentMemory
 		memHotplugMB, err := calcHotplugMemMiBSize(addMemMB, memoryBlockSizeMB)
 		if err != nil {
-			return currentMemory, err
+			return currentMemory, memoryDevice{}, err
 		}
 
-		addMemDevice := &memoryDevice{
-			sizeMB: int(memHotplugMB),
-		}
-		data, err := q.hotplugAddDevice(addMemDevice, memoryDev)
+		addMemDevice.sizeMB = int(memHotplugMB)
+		addMemDevice.probe = probe
+
+		data, err := q.hotplugAddDevice(&addMemDevice, memoryDev)
 		if err != nil {
-			return currentMemory, err
+			return currentMemory, addMemDevice, err
 		}
 		memoryAdded, ok := data.(int)
 		if !ok {
-			return currentMemory, fmt.Errorf("Could not get the memory added, got %+v", data)
+			return currentMemory, addMemDevice, fmt.Errorf("Could not get the memory added, got %+v", data)
 		}
 		currentMemory += uint32(memoryAdded)
 	case currentMemory > reqMemMB:
@@ -1403,31 +1416,31 @@ func (q *qemu) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint32) (uint32, 
 		addMemMB := currentMemory - reqMemMB
 		memHotunplugMB, err := calcHotplugMemMiBSize(addMemMB, memoryBlockSizeMB)
 		if err != nil {
-			return currentMemory, err
+			return currentMemory, memoryDevice{}, err
 		}
 
-		addMemDevice := &memoryDevice{
-			sizeMB: int(memHotunplugMB),
-		}
-		data, err := q.hotplugRemoveDevice(addMemDevice, memoryDev)
+		addMemDevice.sizeMB = int(memHotunplugMB)
+		addMemDevice.probe = probe
+
+		data, err := q.hotplugRemoveDevice(&addMemDevice, memoryDev)
 		if err != nil {
-			return currentMemory, err
+			return currentMemory, addMemDevice, err
 		}
 		memoryRemoved, ok := data.(int)
 		if !ok {
-			return currentMemory, fmt.Errorf("Could not get the memory removed, got %+v", data)
+			return currentMemory, addMemDevice, fmt.Errorf("Could not get the memory removed, got %+v", data)
 		}
 		//FIXME: This is to check memory hotplugRemoveDevice reported 0, as this is not supported.
 		// In the future if this is implemented this validation should be removed.
 		if memoryRemoved != 0 {
-			return currentMemory, fmt.Errorf("memory hot unplug is not supported, something went wrong")
+			return currentMemory, addMemDevice, fmt.Errorf("memory hot unplug is not supported, something went wrong")
 		}
 		currentMemory -= uint32(memoryRemoved)
 	}
 
 	// currentMemory is the current memory (updated) of the VM, return to caller to allow verify
 	// the current VM memory state.
-	return currentMemory, nil
+	return currentMemory, addMemDevice, nil
 }
 
 // genericAppendBridges appends to devices the given bridges
