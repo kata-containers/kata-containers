@@ -109,35 +109,12 @@ Note that the OCI standard does not specify an `events` command.
 
 See issue https://github.com/kata-containers/runtime/issues/308 and https://github.com/kata-containers/runtime/issues/309 for more information.
 
-### ps command
-
-The Kata Containers runtime does not currently support the `ps` command.
-
-Note that this is *not* the same as the `docker ps` command. The runtime `ps`
-command lists the processes running within a container. The `docker ps`
-command lists the containers themselves. The runtime `ps` command is
-invoked from `docker top`.
-
-Note that the OCI standard does not specify a `ps` command.
-
-See issue https://github.com/kata-containers/runtime/issues/129 for more information.
-
 ### update command
 
 Currently, only block I/O weight is not supported.
 All other configurations are supported and are working properly.
 
 ## Networking
-
-### Adding networks dynamically
-
-The runtime does not currently support adding networks to an already
-running container (`docker network connect`).
-
-The VM network configuration is set up with what is defined by the CNM
-plugin at startup time. Although it is possible to watch the networking namespace on the host to discover and propagate new networks at runtime, it is currently not implemented.
-
-See https://github.com/kata-containers/runtime/issues/113 for more information.
 
 ### Docker swarm support
 
