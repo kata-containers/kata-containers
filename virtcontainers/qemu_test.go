@@ -393,9 +393,9 @@ func TestHotplugUnsupportedDeviceType(t *testing.T) {
 	}
 	q.store = vcStore
 
-	_, err = q.hotplugAddDevice(&memoryDevice{0, 128}, fsDev)
+	_, err = q.hotplugAddDevice(&memoryDevice{0, 128, uint64(0), false}, fsDev)
 	assert.Error(err)
-	_, err = q.hotplugRemoveDevice(&memoryDevice{0, 128}, fsDev)
+	_, err = q.hotplugRemoveDevice(&memoryDevice{0, 128, uint64(0), false}, fsDev)
 	assert.Error(err)
 }
 

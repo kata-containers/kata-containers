@@ -373,7 +373,7 @@ func (v *VM) AddCPUs(num uint32) error {
 func (v *VM) AddMemory(numMB uint32) error {
 	if numMB > 0 {
 		v.logger().Infof("hot adding %d MB memory", numMB)
-		dev := &memoryDevice{1, int(numMB)}
+		dev := &memoryDevice{1, int(numMB), 0, false}
 		if _, err := v.hypervisor.hotplugAddDevice(dev, memoryDev); err != nil {
 			return err
 		}
