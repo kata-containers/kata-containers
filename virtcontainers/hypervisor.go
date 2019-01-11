@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
 // HypervisorType describes an hypervisor type.
@@ -221,7 +222,7 @@ type HypervisorConfig struct {
 	// Each value in that map takes precedence over the configured assets.
 	// For example, if there is a value for the "kernel" key in this map,
 	// it will be used for the sandbox's kernel path instead of KernelPath.
-	customAssets map[assetType]*asset
+	customAssets map[types.AssetType]*types.Asset
 
 	// BlockDeviceCacheSet specifies cache-related options will be set to block devices or not.
 	BlockDeviceCacheSet bool
@@ -357,53 +358,53 @@ func (conf *HypervisorConfig) AddKernelParam(p Param) error {
 	return nil
 }
 
-func (conf *HypervisorConfig) addCustomAsset(a *asset) error {
-	if a == nil || a.path == "" {
+func (conf *HypervisorConfig) addCustomAsset(a *types.Asset) error {
+	if a == nil || a.Path() == "" {
 		// We did not get a custom asset, we will use the default one.
 		return nil
 	}
 
-	if !a.valid() {
-		return fmt.Errorf("Invalid %s at %s", a.kind, a.path)
+	if !a.Valid() {
+		return fmt.Errorf("Invalid %s at %s", a.Type(), a.Path())
 	}
 
-	virtLog.Debugf("Using custom %v asset %s", a.kind, a.path)
+	virtLog.Debugf("Using custom %v asset %s", a.Type(), a.Path())
 
 	if conf.customAssets == nil {
-		conf.customAssets = make(map[assetType]*asset)
+		conf.customAssets = make(map[types.AssetType]*types.Asset)
 	}
 
-	conf.customAssets[a.kind] = a
+	conf.customAssets[a.Type()] = a
 
 	return nil
 }
 
-func (conf *HypervisorConfig) assetPath(t assetType) (string, error) {
+func (conf *HypervisorConfig) assetPath(t types.AssetType) (string, error) {
 	// Custom assets take precedence over the configured ones
 	a, ok := conf.customAssets[t]
 	if ok {
-		return a.path, nil
+		return a.Path(), nil
 	}
 
 	// We could not find a custom asset for the given type, let's
 	// fall back to the configured ones.
 	switch t {
-	case kernelAsset:
+	case types.KernelAsset:
 		return conf.KernelPath, nil
-	case imageAsset:
+	case types.ImageAsset:
 		return conf.ImagePath, nil
-	case initrdAsset:
+	case types.InitrdAsset:
 		return conf.InitrdPath, nil
-	case hypervisorAsset:
+	case types.HypervisorAsset:
 		return conf.HypervisorPath, nil
-	case firmwareAsset:
+	case types.FirmwareAsset:
 		return conf.FirmwarePath, nil
 	default:
 		return "", fmt.Errorf("Unknown asset type %v", t)
 	}
 }
 
-func (conf *HypervisorConfig) isCustomAsset(t assetType) bool {
+func (conf *HypervisorConfig) isCustomAsset(t types.AssetType) bool {
 	_, ok := conf.customAssets[t]
 	if ok {
 		return true
@@ -414,52 +415,52 @@ func (conf *HypervisorConfig) isCustomAsset(t assetType) bool {
 
 // KernelAssetPath returns the guest kernel path
 func (conf *HypervisorConfig) KernelAssetPath() (string, error) {
-	return conf.assetPath(kernelAsset)
+	return conf.assetPath(types.KernelAsset)
 }
 
 // CustomKernelAsset returns true if the kernel asset is a custom one, false otherwise.
 func (conf *HypervisorConfig) CustomKernelAsset() bool {
-	return conf.isCustomAsset(kernelAsset)
+	return conf.isCustomAsset(types.KernelAsset)
 }
 
 // ImageAssetPath returns the guest image path
 func (conf *HypervisorConfig) ImageAssetPath() (string, error) {
-	return conf.assetPath(imageAsset)
+	return conf.assetPath(types.ImageAsset)
 }
 
 // CustomImageAsset returns true if the image asset is a custom one, false otherwise.
 func (conf *HypervisorConfig) CustomImageAsset() bool {
-	return conf.isCustomAsset(imageAsset)
+	return conf.isCustomAsset(types.ImageAsset)
 }
 
 // InitrdAssetPath returns the guest initrd path
 func (conf *HypervisorConfig) InitrdAssetPath() (string, error) {
-	return conf.assetPath(initrdAsset)
+	return conf.assetPath(types.InitrdAsset)
 }
 
 // CustomInitrdAsset returns true if the initrd asset is a custom one, false otherwise.
 func (conf *HypervisorConfig) CustomInitrdAsset() bool {
-	return conf.isCustomAsset(initrdAsset)
+	return conf.isCustomAsset(types.InitrdAsset)
 }
 
 // HypervisorAssetPath returns the VM hypervisor path
 func (conf *HypervisorConfig) HypervisorAssetPath() (string, error) {
-	return conf.assetPath(hypervisorAsset)
+	return conf.assetPath(types.HypervisorAsset)
 }
 
 // CustomHypervisorAsset returns true if the hypervisor asset is a custom one, false otherwise.
 func (conf *HypervisorConfig) CustomHypervisorAsset() bool {
-	return conf.isCustomAsset(hypervisorAsset)
+	return conf.isCustomAsset(types.HypervisorAsset)
 }
 
 // FirmwareAssetPath returns the guest firmware path
 func (conf *HypervisorConfig) FirmwareAssetPath() (string, error) {
-	return conf.assetPath(firmwareAsset)
+	return conf.assetPath(types.FirmwareAsset)
 }
 
 // CustomFirmwareAsset returns true if the firmware asset is a custom one, false otherwise.
 func (conf *HypervisorConfig) CustomFirmwareAsset() bool {
-	return conf.isCustomAsset(firmwareAsset)
+	return conf.isCustomAsset(types.FirmwareAsset)
 }
 
 func appendParam(params []Param, parameter string, value string) []Param {

@@ -1201,6 +1201,10 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 	assert.Nil(t, err, "Error while detaching devices %s", err)
 }
 
+var assetContent = []byte("FakeAsset fake asset FAKE ASSET")
+var assetContentHash = "92549f8d2018a95a294d28a65e795ed7d1a9d150009a28cea108ae10101178676f04ab82a6950d0099e4924f9c5e41dcba8ece56b75fc8b4e0a7492cb2a8c880"
+var assetContentWrongHash = "92549f8d2018a95a294d28a65e795ed7d1a9d150009a28cea108ae10101178676f04ab82a6950d0099e4924f9c5e41dcba8ece56b75fc8b4e0a7492cb2a8c881"
+
 func TestSandboxCreateAssets(t *testing.T) {
 	assert := assert.New(t)
 
@@ -1234,9 +1238,9 @@ func TestSandboxCreateAssets(t *testing.T) {
 	err = createAssets(context.Background(), p)
 	assert.Nil(err)
 
-	a, ok := p.HypervisorConfig.customAssets[kernelAsset]
+	a, ok := p.HypervisorConfig.customAssets[types.KernelAsset]
 	assert.True(ok)
-	assert.Equal(a.path, tmpfile.Name())
+	assert.Equal(a.Path(), tmpfile.Name())
 
 	p = &SandboxConfig{
 		Annotations: map[string]string{

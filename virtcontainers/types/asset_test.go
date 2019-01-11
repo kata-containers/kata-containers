@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package virtcontainers
+package types
 
 import (
 	"io/ioutil"
@@ -32,11 +32,11 @@ func TestAssetWrongHashType(t *testing.T) {
 	_, err = tmpfile.Write(assetContent)
 	assert.Nil(err)
 
-	a := &asset{
+	a := &Asset{
 		path: tmpfile.Name(),
 	}
 
-	h, err := a.hash("shafoo")
+	h, err := a.Hash("shafoo")
 	assert.Equal(h, "")
 	assert.NotNil(err)
 }
@@ -55,11 +55,11 @@ func TestAssetHash(t *testing.T) {
 	_, err = tmpfile.Write(assetContent)
 	assert.Nil(err)
 
-	a := &asset{
+	a := &Asset{
 		path: tmpfile.Name(),
 	}
 
-	hash, err := a.hash(annotations.SHA512)
+	hash, err := a.Hash(annotations.SHA512)
 	assert.Nil(err)
 	assert.Equal(assetContentHash, hash)
 	assert.Equal(assetContentHash, a.computedHash)
@@ -79,28 +79,23 @@ func TestAssetNew(t *testing.T) {
 	_, err = tmpfile.Write(assetContent)
 	assert.Nil(err)
 
-	p := &SandboxConfig{
-		Annotations: map[string]string{
-			annotations.KernelPath: tmpfile.Name(),
-			annotations.KernelHash: assetContentHash,
-		},
+	anno := map[string]string{
+		annotations.KernelPath: tmpfile.Name(),
+		annotations.KernelHash: assetContentHash,
 	}
-
-	a, err := newAsset(p, imageAsset)
+	a, err := NewAsset(anno, ImageAsset)
 	assert.Nil(err)
 	assert.Nil(a)
 
-	a, err = newAsset(p, kernelAsset)
+	a, err = NewAsset(anno, KernelAsset)
 	assert.Nil(err)
 	assert.Equal(assetContentHash, a.computedHash)
 
-	p = &SandboxConfig{
-		Annotations: map[string]string{
-			annotations.KernelPath: tmpfile.Name(),
-			annotations.KernelHash: assetContentWrongHash,
-		},
+	anno = map[string]string{
+		annotations.KernelPath: tmpfile.Name(),
+		annotations.KernelHash: assetContentWrongHash,
 	}
 
-	_, err = newAsset(p, kernelAsset)
+	_, err = NewAsset(anno, KernelAsset)
 	assert.NotNil(err)
 }
