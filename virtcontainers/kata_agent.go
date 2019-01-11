@@ -1346,6 +1346,30 @@ func (k *kataAgent) resumeContainer(sandbox *Sandbox, c Container) error {
 	return err
 }
 
+func (k *kataAgent) memHotplugByProbe(addr uint64, sizeMB uint32, memorySectionSizeMB uint32) error {
+	if memorySectionSizeMB == uint32(0) {
+		return fmt.Errorf("memorySectionSizeMB couldn't be zero")
+	}
+	// hot-added memory device should be sliced into the size of memory section, which is the basic unit for
+	// memory hotplug
+	numSection := uint64(sizeMB / memorySectionSizeMB)
+	var addrList []uint64
+	index := uint64(0)
+	for index < numSection {
+		k.Logger().WithFields(logrus.Fields{
+			"addr": fmt.Sprintf("0x%x", addr+(index*uint64(memorySectionSizeMB))<<20),
+		}).Debugf("notify guest kernel the address of memory device")
+		addrList = append(addrList, addr+(index*uint64(memorySectionSizeMB))<<20)
+		index++
+	}
+	req := &grpc.MemHotplugByProbeRequest{
+		MemHotplugProbeAddr: addrList,
+	}
+
+	_, err := k.sendReq(req)
+	return err
+}
+
 func (k *kataAgent) onlineCPUMem(cpus uint32, cpuOnly bool) error {
 	req := &grpc.OnlineCPUMemRequest{
 		Wait:    false,
@@ -1573,6 +1597,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers["grpc.GuestDetailsRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.GetGuestDetails(ctx, req.(*grpc.GuestDetailsRequest), opts...)
+	}
+	k.reqHandlers["grpc.MemHotplugByProbeRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.MemHotplugByProbe(ctx, req.(*grpc.MemHotplugByProbeRequest), opts...)
 	}
 	k.reqHandlers["grpc.CopyFileRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.CopyFile(ctx, req.(*grpc.CopyFileRequest), opts...)
