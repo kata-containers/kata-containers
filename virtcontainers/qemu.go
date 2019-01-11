@@ -1160,7 +1160,7 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) (int, error) {
 		if currentMemory+memDev.sizeMB > int(maxMem) {
 			// Fixme: return a typed error
 			return 0, fmt.Errorf("Unable to hotplug %d MiB memory, the SB has %d MiB and the maximum amount is %d MiB",
-				memDev.sizeMB, currentMemory, q.config.MemorySize)
+				memDev.sizeMB, currentMemory, maxMem)
 		}
 		memoryAdded, err := q.hotplugAddMemory(memDev)
 		if err != nil {
