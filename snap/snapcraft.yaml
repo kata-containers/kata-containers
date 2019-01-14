@@ -1,5 +1,5 @@
 name: kata-containers
-version: @KATA_RUNTIME_VERSION@
+version: "1.5.0-rc2"
 summary: Build lightweight VMs that seamlessly plug into the containers ecosystem
 description: |
   Kata Containers is an open source project and community working to build a
@@ -11,20 +11,43 @@ confinement: classic
 
 parts:
   go:
-    source-tag: go@GO_VERSION@
+    override-build: |
+      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${SNAPCRAFT_PROJECT_VERSION}/versions.yaml
+      version="$(curl -sSL ${versions_url} | yq r - languages.golang.version)"
+      curl -LO https://dl.google.com/go/go${version}.src.tar.gz
+      tar -xf go${version}.src.tar.gz --strip-components=1
+      cd src && env GOROOT_BOOTSTRAP=$(go env GOROOT | tr -d '\n') ./make.bash
+    build-packages:
+      - golang-go
+      - g++
+      - curl
+    build-snaps:
+      - yq
+    plugin: nil
+    prime:
+      - -*
+
   runtime:
-    source: http://github.com/kata-containers/runtime
-    source-type: git
-    source-tag: @KATA_RUNTIME_VERSION@
     after: [go]
-    plugin: go
-    go-importpath: github.com/kata-containers/runtime
+    plugin: nil
     build-attributes: [no-patchelf]
     override-build: |
-      # Don't use installed GOROOT
-      unset GOROOT
-      export GOPATH=$(realpath ../go)
-      cd ${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/runtime
+      pkg_name=runtime
+
+      # set GOPATH
+      export GOPATH=$(realpath go)
+      # go was built in parts/go/build
+      export GOROOT=$(realpath ../../go/build)
+      export PATH="${GOROOT}/bin:${PATH}"
+      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
+      mkdir -p ${pkg_gopath}
+
+      # download source
+      curl -LO https://github.com/kata-containers/${pkg_name}/archive/${SNAPCRAFT_PROJECT_VERSION}.tar.gz
+      tar -xf ${SNAPCRAFT_PROJECT_VERSION}.tar.gz --strip-components=1 -C ${pkg_gopath}
+      cd ${pkg_gopath}
+
+      # build and install
       make \
         PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
         SKIP_GO_VERSION_CHECK=1
@@ -32,39 +55,56 @@ parts:
         PREFIX=/usr \
         DESTDIR=${SNAPCRAFT_PART_INSTALL} \
         SKIP_GO_VERSION_CHECK=1
+
+      # A snap is read-only squashfs, unfourtunately it's not possible to use the rootfs image with DAX
+      # since rw access is required therefore initrd image must be used instead.
       sed -i -e '/^image =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
 
   proxy:
-    source: http://github.com/kata-containers/proxy
-    source-type: git
-    source-tag: @KATA_PROXY_VERSION@
     after: [go]
-    plugin: go
-    go-importpath: github.com/kata-containers/proxy
+    plugin: nil
     build-attributes: [no-patchelf]
     override-build: |
-      # Don't use installed GOROOT
-      unset GOROOT
-      export GOPATH=$(realpath ../go)
-      cd ${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/proxy
+      pkg_name=proxy
+
+      # set GOPATH
+      export GOPATH=$(realpath go)
+      # go was built in parts/go/build
+      export GOROOT=$(realpath ../../go/build)
+      export PATH="${GOROOT}/bin:${PATH}"
+      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
+      mkdir -p ${pkg_gopath}
+
+      # download source
+      curl -LO https://github.com/kata-containers/${pkg_name}/archive/${SNAPCRAFT_PROJECT_VERSION}.tar.gz
+      tar -xf ${SNAPCRAFT_PROJECT_VERSION}.tar.gz --strip-components=1 -C ${pkg_gopath}
+      cd ${pkg_gopath}
+
+      # build and install
       make
       make install DESTDIR=${SNAPCRAFT_PART_INSTALL}
 
   shim:
-    source: http://github.com/kata-containers/shim
-    source-type: git
-    source-tag: @KATA_SHIM_VERSION@
     after: [go]
-    plugin: go
-    go-importpath: github.com/kata-containers/shim
+    plugin: nil
     build-attributes: [no-patchelf]
-    build-packages:
-      - libelf-dev
     override-build: |
-      # Don't use installed GOROOT
-      unset GOROOT
-      export GOPATH=$(realpath ../go)
-      cd ${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/shim
+      pkg_name=shim
+
+      # set GOPATH
+      export GOPATH=$(realpath go)
+      # go was built in parts/go/build
+      export GOROOT=$(realpath ../../go/build)
+      export PATH="${GOROOT}/bin:${PATH}"
+      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
+      mkdir -p ${pkg_gopath}
+
+      # download source
+      curl -LO https://github.com/kata-containers/${pkg_name}/archive/${SNAPCRAFT_PROJECT_VERSION}.tar.gz
+      tar -xf ${SNAPCRAFT_PROJECT_VERSION}.tar.gz --strip-components=1 -C ${pkg_gopath}
+      cd ${pkg_gopath}
+
+      # build and install
       make
       make install LIBEXECDIR=${SNAPCRAFT_PART_INSTALL}/usr/libexec
 
@@ -77,8 +117,11 @@ parts:
       - docker.io
       - cpio
     override-build: |
-      # Don't use installed GOROOT
-      unset GOROOT
+      set -x
+      # go was built in parts/go/build
+      export GOROOT=$(realpath ../../go/build)
+      export PATH="${GOROOT}/bin:${PATH}"
+      env
       if [ -n "$http_proxy" ]; then
         echo "Setting proxy $http_proxy"
         systemctl set-environment http_proxy=$http_proxy || true
@@ -88,9 +131,7 @@ parts:
       echo "Starting docker"
       systemctl start docker || true
 
-      export GOPATH=$(realpath ../go)
-      mkdir -p $GOPATH
-
+      # use the same go version for all packages
       sed -i 's|^GO_VERSION=.*|GO_VERSION='$(go version | cut -d' ' -f3 | tr -d go)'|g' rootfs-builder/versions.txt
 
       sudo -E PATH=$PATH make DISTRO=alpine AGENT_INIT=yes USE_DOCKER=1 initrd
@@ -100,40 +141,60 @@ parts:
       cp kata-containers-initrd.img ${kata_image_dir}
 
   ksm-throttler:
-    source: http://github.com/kata-containers/ksm-throttler
-    source-type: git
-    source-tag: @KSM_THROTTLER_VERSION@
     after: [go]
-    plugin: go
-    go-importpath: github.com/kata-containers/ksm-throttler
+    plugin: nil
     build-attributes: [no-patchelf]
     override-build: |
-      # Don't use installed GOROOT
-      unset GOROOT
-      export GOPATH=$(realpath ../go)
-      cd ${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/ksm-throttler
+      pkg_name=ksm-throttler
+
+      # set GOPATH
+      export GOPATH=$(realpath go)
+      # go was built in parts/go/build
+      export GOROOT=$(realpath ../../go/build)
+      export PATH="${GOROOT}/bin:${PATH}"
+      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
+      mkdir -p ${pkg_gopath}
+
+      # download source
+      curl -LO https://github.com/kata-containers/${pkg_name}/archive/${SNAPCRAFT_PROJECT_VERSION}.tar.gz
+      tar -xf ${SNAPCRAFT_PROJECT_VERSION}.tar.gz --strip-components=1 -C ${pkg_gopath}
+      cd ${pkg_gopath}
+
+      # build and install
       make TARGET=kata-ksm-throttler
       make install \
         DESTDIR=${SNAPCRAFT_PART_INSTALL} \
         TARGET=kata-ksm-throttler
 
   kernel:
-    source: @KERNEL_URL@/linux-@KERNEL_VERSION@.tar.xz
-    source-type: tar
+    override-pull: |
+      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${SNAPCRAFT_PROJECT_VERSION}/versions.yaml
+      version="$(curl -sSL ${versions_url} | yq r - assets.kernel.version | tr -d v)"
+      url="$(curl -sSL ${versions_url} | yq r - assets.kernel.url)"
+      curl -LO ${url}/linux-${version}.tar.xz
+      tar -xf linux-${version}.tar.xz --strip-components=1
     after: [kernel-dump]
     plugin: kernel
+    build-packages:
+      - libelf-dev
+      - curl
+    build-snaps:
+      - yq
     override-build: |
+      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${SNAPCRAFT_PROJECT_VERSION}/versions.yaml
+      version="$(curl -sSL ${versions_url} | yq r - assets.kernel.version | tr -d v)"
+      x_version="$(echo $version | sed -e 's|.[[:digit:]]*$||').x"
       case "$(arch)" in
         "x86_64")
-          config=x86_64_kata_kvm_4.14.x
+          config="x86_64_kata_kvm_${x_version}"
         ;;
 
         "ppc64le")
-          config=powerpc_kata_kvm_4.14.x
+          config="powerpc_kata_kvm_${x_version}"
         ;;
 
         "aarch64")
-          config=arm64_kata_kvm_4.14.x
+          config="arm64_kata_kvm_${x_version}"
         ;;
 
         *)
@@ -152,15 +213,14 @@ parts:
           --forward \
           --strip 1 \
           --input "$patch"
-        echo
       done
 
       # Copy config file
       cp ${SNAPCRAFT_STAGE}/kernel/configs/${config} .config
       make -s oldconfig EXTRAVERSION=".container" > /dev/null
-      make -j $(nproc) EXTRAVERSION=".container"
+      make -j $(($(nproc)-1)) EXTRAVERSION=".container"
 
-      kernel_suffix=@KERNEL_VERSION@.container
+      kernel_suffix=${version}.container
       kata_kernel_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
       mkdir -p ${kata_kernel_dir}
 
@@ -183,8 +243,12 @@ parts:
       - -*
 
   qemu:
-    source: https://github.com/kata-containers/qemu/archive/@QEMU_LITE_BRANCH@.tar.gz
-    source-type: tar
+    override-pull: |
+      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${SNAPCRAFT_PROJECT_VERSION}/versions.yaml
+      branch="$(curl -sSL ${versions_url} | yq r - assets.hypervisor.qemu-lite.branch)"
+      url="$(curl -sSL ${versions_url} | yq r - assets.hypervisor.qemu-lite.url)"
+      curl -LO ${url}/archive/${branch}.tar.gz
+      tar -xf ${branch}.tar.gz --strip-components=1
     plugin: make
     after: [qemu-scripts-dump, qemu-patches-dump]
     build-packages:
@@ -199,6 +263,9 @@ parts:
       - libcap-dev
       - libattr1-dev
       - libfdt-dev
+      - curl
+    build-snaps:
+      - yq
     override-build: |
       chmod +x ${SNAPCRAFT_STAGE}/qemu/scripts/configure-hypervisor.sh
       # static build
@@ -223,13 +290,18 @@ parts:
           --forward \
           --strip 1 \
           --input "$patch"
-        echo
       done
-      make -j $(nproc)
+
+      # build and install
+      make -j $(($(nproc)-1))
       make install DESTDIR=${SNAPCRAFT_PART_INSTALL}
     prime:
-      - -snap/*
-      - -usr/var/*
+      - -snap/
+      - -usr/var/
+      - -usr/libexec/
+      - -usr/bin/qemu-ga
+      - -usr/bin/qemu-pr-helper
+      - -usr/bin/virtfs-proxy-helper
       - usr/*
       - lib/*
     organize:
