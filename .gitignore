@@ -1,6 +1,7 @@
 *.o
 *.patch
 *.swp
+/cli/config/configuration-fc.toml
 /cli/config/configuration-qemu.toml
 /cli/config-generated.go
 /cli/coverage.html
