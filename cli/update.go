@@ -165,8 +165,8 @@ other options are ignored.
 		span.SetTag("sandbox", sandboxID)
 
 		// container MUST be running
-		if status.State.State != types.StateRunning {
-			return fmt.Errorf("Container %s is not running", containerID)
+		if state := status.State.State; !(state == types.StateRunning || state == types.StateReady) {
+			return fmt.Errorf("Container %s is not running or Ready, the state is %s", containerID, state)
 		}
 
 		r := specs.LinuxResources{
