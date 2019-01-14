@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -338,7 +338,7 @@ export GENERATED_CODE
 # $1 : file to install
 # $2 : directory path where file will be installed
 define INSTALL_EXEC
-	$(QUIET_INST)install -D $1 $(DESTDIR)$2/$(notdir $1);
+	install -D $1 $(DESTDIR)$2/$(notdir $1);
 endef
 
 GENERATED_CONFIG = $(CLI_DIR)/config-generated.go
@@ -436,19 +436,19 @@ coverage:
 install: default runtime install-scripts install-completions install-config install-bin install-containerd-shim-v2 install-bin-libexec
 
 install-bin: $(BINLIST)
-	$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
+	$(QUIET_INST)$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
 
 install-containerd-shim-v2: $(SHIMV2)
-	$(call INSTALL_EXEC,$<,$(BINDIR))
+	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
 
 install-bin-libexec: $(BINLIBEXECLIST)
-	$(foreach f,$(BINLIBEXECLIST),$(call INSTALL_EXEC,$f,$(PKGLIBEXECDIR)))
+	$(QUIET_INST)$(foreach f,$(BINLIBEXECLIST),$(call INSTALL_EXEC,$f,$(PKGLIBEXECDIR)))
 
 install-config: $(CONFIG)
 	$(QUIET_INST)install --mode 0644 -D $(CONFIG) $(DESTDIR)/$(CONFIG_PATH)
 
 install-scripts: $(SCRIPTS)
-	$(foreach f,$(SCRIPTS),$(call INSTALL_EXEC,$f,$(SCRIPTS_DIR)))
+	$(QUIET_INST)$(foreach f,$(SCRIPTS),$(call INSTALL_EXEC,$f,$(SCRIPTS_DIR)))
 
 install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
