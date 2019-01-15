@@ -14,6 +14,7 @@
 
 cidir=$(dirname "$0")
 source "${cidir}/../../metrics/lib/common.bash"
+source "/etc/os-release" || source "/usr/lib/os-release"
 
 # How many times will we run the test loop...
 ITERATIONS="${ITERATIONS:-5}"
@@ -44,6 +45,21 @@ if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
 	echo "Skip soak test on $KATA_HYPERVISOR (see: https://github.com/kata-containers/tests/issues/1029)"
 	exit
 fi
+
+if [ "$ID" == debian ]; then
+	echo "Skip soak test on ${ID} (see: https://github.com/kata-containers/runtime/issues/1132)"
+	exit
+fi
+
+install_kata_ksm_throttler() {
+	if [ "$ID" == "debian" ]; then
+		package="kata-ksm-throttler"
+		echo "Install ${package}"
+		sudo -E apt install -y ${package}
+		echo "Start ${package}"
+		systemctl start ${package}
+        fi
+}
 
 check_vsock_active() {
 	vsock_configured=$($RUNTIME_PATH kata-env | awk '/UseVSock/ {print $3}')
@@ -205,6 +221,8 @@ check_mounts() {
 
 init() {
 	kill_all_containers
+
+	install_kata_ksm_throttler
 
 	# Enable netmon
 	enable_netmon
