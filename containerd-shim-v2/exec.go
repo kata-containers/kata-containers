@@ -6,13 +6,13 @@
 package containerdshim
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/typeurl"
 	googleProtobuf "github.com/gogo/protobuf/types"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -72,9 +72,14 @@ func newExec(c *container, stdin, stdout, stderr string, terminal bool, jspec *g
 	}
 
 	// process exec request
-	var spec specs.Process
-	if err := json.Unmarshal(jspec.Value, &spec); err != nil {
+	var spec *specs.Process
+	v, err := typeurl.UnmarshalAny(jspec)
+	if err != nil {
 		return nil, err
+	}
+	spec, ok := v.(*specs.Process)
+	if !ok {
+		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "Get an invalid spec type")
 	}
 
 	if spec.ConsoleSize != nil {
