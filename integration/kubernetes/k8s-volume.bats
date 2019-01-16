@@ -6,8 +6,12 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
+TEST_INITRD="${TEST_INITRD:-no}"
+issue="https://github.com/kata-containers/runtime/issues/1127"
 
 setup() {
+	[ "${TEST_INITRD}" == "yes" ] && skip "test not working see: ${issue}"
+
 	export KUBECONFIG=/etc/kubernetes/admin.conf
 
 	if sudo -E kubectl get runtimeclass | grep kata; then
@@ -25,6 +29,7 @@ setup() {
 }
 
 @test "Create Persistent Volume" {
+	[ "${TEST_INITRD}" == "yes" ] && skip "test not working see: ${issue}"
 	wait_time=10
 	sleep_time=2
 	volume_name="pv-volume"
@@ -54,6 +59,7 @@ setup() {
 }
 
 teardown() {
+	[ "${TEST_INITRD}" == "yes" ] && skip "test not working see: ${issue}"
 	sudo -E kubectl delete pod "$pod_name"
 	sudo -E kubectl delete pvc "$volume_claim"
 	sudo -E kubectl delete pv "$volume_name"
