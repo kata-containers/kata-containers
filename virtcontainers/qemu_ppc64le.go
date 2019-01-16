@@ -104,7 +104,7 @@ func (q *qemuPPC64le) capabilities() types.Capabilities {
 	return caps
 }
 
-func (q *qemuPPC64le) bridges(number uint32) []Bridge {
+func (q *qemuPPC64le) bridges(number uint32) []types.PCIBridge {
 	return genericBridges(number, q.machineType)
 }
 
@@ -151,6 +151,6 @@ func (q *qemuPPC64le) appendImage(devices []govmmQemu.Device, path string) ([]go
 }
 
 // appendBridges appends to devices the given bridges
-func (q *qemuPPC64le) appendBridges(devices []govmmQemu.Device, bridges []Bridge) []govmmQemu.Device {
+func (q *qemuPPC64le) appendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge) []govmmQemu.Device {
 	return genericAppendBridges(devices, bridges, q.machineType)
 }
