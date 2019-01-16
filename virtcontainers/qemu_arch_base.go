@@ -45,10 +45,10 @@ type qemuArch interface {
 	kernelParameters(debug bool) []Param
 
 	//capabilities returns the capabilities supported by QEMU
-	capabilities() capabilities
+	capabilities() types.Capabilities
 
 	// bridges returns the number bridges for the machine type
-	bridges(number uint32) []Bridge
+	bridges(number uint32) []types.PCIBridge
 
 	// cpuTopology returns the CPU topology for the given amount of vcpus
 	cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP
@@ -69,7 +69,7 @@ type qemuArch interface {
 	appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread)
 
 	// appendBridges appends bridges to devices
-	appendBridges(devices []govmmQemu.Device, bridges []Bridge) []govmmQemu.Device
+	appendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge) []govmmQemu.Device
 
 	// append9PVolume appends a 9P volume to devices
 	append9PVolume(devices []govmmQemu.Device, volume types.Volume) []govmmQemu.Device
@@ -228,20 +228,20 @@ func (q *qemuArchBase) kernelParameters(debug bool) []Param {
 	return params
 }
 
-func (q *qemuArchBase) capabilities() capabilities {
-	var caps capabilities
-	caps.setBlockDeviceHotplugSupport()
-	caps.setMultiQueueSupport()
+func (q *qemuArchBase) capabilities() types.Capabilities {
+	var caps types.Capabilities
+	caps.SetBlockDeviceHotplugSupport()
+	caps.SetMultiQueueSupport()
 	return caps
 }
 
-func (q *qemuArchBase) bridges(number uint32) []Bridge {
-	var bridges []Bridge
+func (q *qemuArchBase) bridges(number uint32) []types.PCIBridge {
+	var bridges []types.PCIBridge
 
 	for i := uint32(0); i < number; i++ {
-		bridges = append(bridges, Bridge{
-			Type:    pciBridge,
-			ID:      fmt.Sprintf("%s-bridge-%d", pciBridge, i),
+		bridges = append(bridges, types.PCIBridge{
+			Type:    types.PCI,
+			ID:      fmt.Sprintf("%s-bridge-%d", types.PCI, i),
 			Address: make(map[uint32]string),
 		})
 	}
@@ -346,10 +346,10 @@ func (q *qemuArchBase) appendSCSIController(devices []govmmQemu.Device, enableIO
 }
 
 // appendBridges appends to devices the given bridges
-func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device, bridges []Bridge) []govmmQemu.Device {
+func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge) []govmmQemu.Device {
 	for idx, b := range bridges {
 		t := govmmQemu.PCIBridge
-		if b.Type == pcieBridge {
+		if b.Type == types.PCIE {
 			t = govmmQemu.PCIEBridge
 		}
 

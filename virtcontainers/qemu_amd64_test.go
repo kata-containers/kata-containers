@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	govmmQemu "github.com/intel/govmm/qemu"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,11 +28,11 @@ func TestQemuAmd64Capabilities(t *testing.T) {
 
 	amd64 := newTestQemu(QemuPC)
 	caps := amd64.capabilities()
-	assert.True(caps.isBlockDeviceHotplugSupported())
+	assert.True(caps.IsBlockDeviceHotplugSupported())
 
 	amd64 = newTestQemu(QemuQ35)
 	caps = amd64.capabilities()
-	assert.True(caps.isBlockDeviceHotplugSupported())
+	assert.True(caps.IsBlockDeviceHotplugSupported())
 }
 
 func TestQemuAmd64Bridges(t *testing.T) {
@@ -43,8 +44,8 @@ func TestQemuAmd64Bridges(t *testing.T) {
 	assert.Len(bridges, len)
 
 	for i, b := range bridges {
-		id := fmt.Sprintf("%s-bridge-%d", pciBridge, i)
-		assert.Equal(pciBridge, b.Type)
+		id := fmt.Sprintf("%s-bridge-%d", types.PCI, i)
+		assert.Equal(types.PCI, b.Type)
 		assert.Equal(id, b.ID)
 		assert.NotNil(b.Address)
 	}
@@ -54,8 +55,8 @@ func TestQemuAmd64Bridges(t *testing.T) {
 	assert.Len(bridges, len)
 
 	for i, b := range bridges {
-		id := fmt.Sprintf("%s-bridge-%d", pciBridge, i)
-		assert.Equal(pciBridge, b.Type)
+		id := fmt.Sprintf("%s-bridge-%d", types.PCI, i)
+		assert.Equal(types.PCI, b.Type)
 		assert.Equal(id, b.ID)
 		assert.NotNil(b.Address)
 	}

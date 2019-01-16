@@ -8,13 +8,15 @@ package virtcontainers
 import (
 	"context"
 	"os"
+
+	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
 type mockHypervisor struct {
 }
 
-func (m *mockHypervisor) capabilities() capabilities {
-	return capabilities{}
+func (m *mockHypervisor) capabilities() types.Capabilities {
+	return types.Capabilities{}
 }
 
 func (m *mockHypervisor) hypervisorConfig() HypervisorConfig {

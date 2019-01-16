@@ -306,7 +306,7 @@ func TestQemuCapabilities(t *testing.T) {
 	}
 
 	caps := q.capabilities()
-	if !caps.isBlockDeviceHotplugSupported() {
+	if !caps.IsBlockDeviceHotplugSupported() {
 		t.Fatal("Block device hotplug should be supported")
 	}
 }

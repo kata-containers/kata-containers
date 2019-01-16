@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package virtcontainers
+package types
 
 import (
 	"fmt"
@@ -16,22 +16,22 @@ func TestAddRemoveDevice(t *testing.T) {
 	assert := assert.New(t)
 
 	// create a bridge
-	bridges := []*Bridge{{make(map[uint32]string), pciBridge, "rgb123", 5}}
+	bridges := []*PCIBridge{{make(map[uint32]string), PCI, "rgb123", 5}}
 
 	// add device
 	devID := "abc123"
 	b := bridges[0]
-	addr, err := b.addDevice(devID)
+	addr, err := b.AddDevice(devID)
 	assert.NoError(err)
 	if addr < 1 {
 		assert.Fail("address cannot be less than 1")
 	}
 
 	// remove device
-	err = b.removeDevice("")
+	err = b.RemoveDevice("")
 	assert.Error(err)
 
-	err = b.removeDevice(devID)
+	err = b.RemoveDevice(devID)
 	assert.NoError(err)
 
 	// add device when the bridge is full
@@ -39,7 +39,7 @@ func TestAddRemoveDevice(t *testing.T) {
 	for i := uint32(1); i <= pciBridgeMaxCapacity; i++ {
 		bridges[0].Address[i] = fmt.Sprintf("%d", i)
 	}
-	addr, err = b.addDevice(devID)
+	addr, err = b.AddDevice(devID)
 	assert.Error(err)
 	if addr != 0 {
 		assert.Fail("address should be 0")

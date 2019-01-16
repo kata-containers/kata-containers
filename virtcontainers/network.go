@@ -511,7 +511,7 @@ func xConnectVMNetwork(endpoint Endpoint, h hypervisor) error {
 
 	queues := 0
 	caps := h.capabilities()
-	if caps.isMultiQueueSupported() {
+	if caps.IsMultiQueueSupported() {
 		queues = int(h.hypervisorConfig().NumVCPUs)
 	}
 

@@ -137,7 +137,7 @@ type agent interface {
 
 	// capabilities should return a structure that specifies the capabilities
 	// supported by the agent.
-	capabilities() capabilities
+	capabilities() types.Capabilities
 
 	// check will check the agent liveness
 	check() error
