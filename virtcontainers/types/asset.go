@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package virtcontainers
+package types
 
 import (
 	"crypto/sha512"
@@ -15,19 +15,21 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 )
 
-type assetType string
+// AssetType describe a type of assets.
+type AssetType string
 
-func (t assetType) annotations() (string, string, error) {
+// Annotations returns the path and hash annotations for a given Asset type.
+func (t AssetType) Annotations() (string, string, error) {
 	switch t {
-	case kernelAsset:
+	case KernelAsset:
 		return annotations.KernelPath, annotations.KernelHash, nil
-	case imageAsset:
+	case ImageAsset:
 		return annotations.ImagePath, annotations.ImageHash, nil
-	case initrdAsset:
+	case InitrdAsset:
 		return annotations.InitrdPath, annotations.InitrdHash, nil
-	case hypervisorAsset:
+	case HypervisorAsset:
 		return annotations.HypervisorPath, annotations.HypervisorHash, nil
-	case firmwareAsset:
+	case FirmwareAsset:
 		return annotations.FirmwarePath, annotations.FirmwareHash, nil
 	}
 
@@ -35,42 +37,63 @@ func (t assetType) annotations() (string, string, error) {
 }
 
 const (
-	kernelAsset     assetType = "kernel"
-	imageAsset      assetType = "image"
-	initrdAsset     assetType = "initrd"
-	hypervisorAsset assetType = "hypervisor"
-	firmwareAsset   assetType = "firmware"
+	// KernelAsset is a kernel asset.
+	KernelAsset AssetType = "kernel"
+
+	// ImageAsset is an image asset.
+	ImageAsset AssetType = "image"
+
+	// InitrdAsset is an intird asset.
+	InitrdAsset AssetType = "initrd"
+
+	// HypervisorAsset is an hypervisor asset.
+	HypervisorAsset AssetType = "hypervisor"
+
+	// FirmwareAsset is a firmware asset.
+	FirmwareAsset AssetType = "firmware"
 )
 
-type asset struct {
+// Asset represents a virtcontainers asset.
+type Asset struct {
 	path         string
 	computedHash string
-	kind         assetType
+	kind         AssetType
 }
 
-func (a *asset) valid() bool {
+// Path returns an asset path.
+func (a Asset) Path() string {
+	return a.path
+}
+
+// Type returns an asset type.
+func (a Asset) Type() AssetType {
+	return a.kind
+}
+
+// Valid checks if an asset is valid or not.
+func (a *Asset) Valid() bool {
 	if !filepath.IsAbs(a.path) {
 		return false
 	}
 
 	switch a.kind {
-	case kernelAsset:
+	case KernelAsset:
 		return true
-	case imageAsset:
+	case ImageAsset:
 		return true
-	case initrdAsset:
+	case InitrdAsset:
 		return true
-	case hypervisorAsset:
+	case HypervisorAsset:
 		return true
-	case firmwareAsset:
+	case FirmwareAsset:
 		return true
 	}
 
 	return false
 }
 
-// hash returns the hex encoded string for the asset hash
-func (a *asset) hash(hashType string) (string, error) {
+// Hash returns the hex encoded string for the asset hash
+func (a *Asset) Hash(hashType string) (string, error) {
 	var hashEncodedLen int
 	var hash string
 
@@ -88,13 +111,11 @@ func (a *asset) hash(hashType string) (string, error) {
 	// We only support SHA512 for now.
 	switch hashType {
 	case annotations.SHA512:
-		virtLog.Debugf("Computing %v hash", a.path)
 		hashComputed := sha512.Sum512(bytes)
 		hashEncodedLen = hex.EncodedLen(len(hashComputed))
 		hashEncoded := make([]byte, hashEncodedLen)
 		hex.Encode(hashEncoded, hashComputed[:])
 		hash = string(hashEncoded[:])
-		virtLog.Debugf("%v hash: %s", a.path, hash)
 	default:
 		return "", fmt.Errorf("Invalid hash type %s", hashType)
 	}
@@ -104,9 +125,9 @@ func (a *asset) hash(hashType string) (string, error) {
 	return hash, nil
 }
 
-// newAsset returns a new asset from the sandbox annotations.
-func newAsset(sandboxConfig *SandboxConfig, t assetType) (*asset, error) {
-	pathAnnotation, hashAnnotation, err := t.annotations()
+// NewAsset returns a new asset from a slice of annotations.
+func NewAsset(anno map[string]string, t AssetType) (*Asset, error) {
+	pathAnnotation, hashAnnotation, err := t.Annotations()
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +136,7 @@ func newAsset(sandboxConfig *SandboxConfig, t assetType) (*asset, error) {
 		return nil, fmt.Errorf("Missing annotation paths for %s", t)
 	}
 
-	path, ok := sandboxConfig.Annotations[pathAnnotation]
+	path, ok := anno[pathAnnotation]
 	if !ok || path == "" {
 		return nil, nil
 	}
@@ -124,21 +145,20 @@ func newAsset(sandboxConfig *SandboxConfig, t assetType) (*asset, error) {
 		return nil, fmt.Errorf("%s is not an absolute path", path)
 	}
 
-	a := &asset{path: path, kind: t}
+	a := &Asset{path: path, kind: t}
 
-	hash, ok := sandboxConfig.Annotations[hashAnnotation]
+	hash, ok := anno[hashAnnotation]
 	if !ok || hash == "" {
 		return a, nil
 	}
 
 	// We have a hash annotation, we need to verify the asset against it.
-	hashType, ok := sandboxConfig.Annotations[annotations.AssetHashType]
+	hashType, ok := anno[annotations.AssetHashType]
 	if !ok {
-		virtLog.Warningf("Unrecognized hash type: %s, switching to %s", hashType, annotations.SHA512)
 		hashType = annotations.SHA512
 	}
 
-	hashComputed, err := a.hash(hashType)
+	hashComputed, err := a.Hash(hashType)
 	if err != nil {
 		return a, err
 	}

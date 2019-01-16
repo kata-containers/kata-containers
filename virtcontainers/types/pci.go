@@ -3,37 +3,41 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-package virtcontainers
+package types
 
 import "fmt"
 
-type bridgeType string
+// PCIType represents a type of PCI bus and bridge.
+type PCIType string
 
 const (
-	pciBridge  bridgeType = "pci"
-	pcieBridge bridgeType = "pcie"
+	// PCI represents a PCI bus and bridge
+	PCI PCIType = "pci"
+
+	// PCIE represents a PCIe bus and bridge
+	PCIE PCIType = "pcie"
 )
 
 const pciBridgeMaxCapacity = 30
 
-// Bridge is a bridge where devices can be hot plugged
-type Bridge struct {
+// PCIBridge is a PCI or PCIe bridge where devices can be hot plugged
+type PCIBridge struct {
 	// Address contains information about devices plugged and its address in the bridge
 	Address map[uint32]string
 
-	// Type is the type of the bridge (pci, pcie, etc)
-	Type bridgeType
+	// Type is the PCI type of the bridge (pci, pcie, etc)
+	Type PCIType
 
-	//ID is used to identify the bridge in the hypervisor
+	// ID is used to identify the bridge in the hypervisor
 	ID string
 
 	// Addr is the PCI/e slot of the bridge
 	Addr int
 }
 
-// addDevice on success adds the device ID to the bridge and return the address
-// where the device was added, otherwise an error is returned
-func (b *Bridge) addDevice(ID string) (uint32, error) {
+// AddDevice on success adds the device ID to the PCI bridge and returns
+// the address where the device was added.
+func (b *PCIBridge) AddDevice(ID string) (uint32, error) {
 	var addr uint32
 
 	// looking for the first available address
@@ -53,9 +57,8 @@ func (b *Bridge) addDevice(ID string) (uint32, error) {
 	return addr, nil
 }
 
-// removeDevice on success removes the device ID from the bridge and return nil,
-// otherwise an error is returned
-func (b *Bridge) removeDevice(ID string) error {
+// RemoveDevice removes the device ID from the PCI bridge.
+func (b *PCIBridge) RemoveDevice(ID string) error {
 	// check if the device was hot plugged in the bridge
 	for addr, devID := range b.Address {
 		if devID == ID {

@@ -47,7 +47,7 @@ type CPUDevice struct {
 
 // QemuState keeps Qemu's state
 type QemuState struct {
-	Bridges []Bridge
+	Bridges []types.PCIBridge
 	// HotpluggedCPUs is the list of CPUs that were hot-added
 	HotpluggedVCPUs      []CPUDevice
 	HotpluggedMemory     int
@@ -162,7 +162,7 @@ func (q *qemu) kernelParameters() string {
 }
 
 // Adds all capabilities supported by qemu implementation of hypervisor interface
-func (q *qemu) capabilities() capabilities {
+func (q *qemu) capabilities() types.Capabilities {
 	span, _ := q.trace("capabilities")
 	defer span.Finish()
 
@@ -722,25 +722,25 @@ func (q *qemu) qmpShutdown() {
 	}
 }
 
-func (q *qemu) addDeviceToBridge(ID string) (string, Bridge, error) {
+func (q *qemu) addDeviceToBridge(ID string) (string, types.PCIBridge, error) {
 	var err error
 	var addr uint32
 
 	// looking for an empty address in the bridges
 	for _, b := range q.state.Bridges {
-		addr, err = b.addDevice(ID)
+		addr, err = b.AddDevice(ID)
 		if err == nil {
 			return fmt.Sprintf("%02x", addr), b, nil
 		}
 	}
 
-	return "", Bridge{}, err
+	return "", types.PCIBridge{}, err
 }
 
 func (q *qemu) removeDeviceFromBridge(ID string) error {
 	var err error
 	for _, b := range q.state.Bridges {
-		err = b.removeDevice(ID)
+		err = b.RemoveDevice(ID)
 		if err == nil {
 			// device was removed correctly
 			return nil
@@ -1377,7 +1377,7 @@ func (q *qemu) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint32) (uint32, 
 }
 
 // genericAppendBridges appends to devices the given bridges
-func genericAppendBridges(devices []govmmQemu.Device, bridges []Bridge, machineType string) []govmmQemu.Device {
+func genericAppendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge, machineType string) []govmmQemu.Device {
 	bus := defaultPCBridgeBus
 	switch machineType {
 	case QemuQ35, QemuVirt:
@@ -1386,7 +1386,7 @@ func genericAppendBridges(devices []govmmQemu.Device, bridges []Bridge, machineT
 
 	for idx, b := range bridges {
 		t := govmmQemu.PCIBridge
-		if b.Type == pcieBridge {
+		if b.Type == types.PCIE {
 			t = govmmQemu.PCIEBridge
 		}
 
@@ -1408,9 +1408,9 @@ func genericAppendBridges(devices []govmmQemu.Device, bridges []Bridge, machineT
 	return devices
 }
 
-func genericBridges(number uint32, machineType string) []Bridge {
-	var bridges []Bridge
-	var bt bridgeType
+func genericBridges(number uint32, machineType string) []types.PCIBridge {
+	var bridges []types.PCIBridge
+	var bt types.PCIType
 
 	switch machineType {
 	case QemuQ35:
@@ -1418,19 +1418,19 @@ func genericBridges(number uint32, machineType string) []Bridge {
 		// qemu-2.10 will introduce pcie bridges
 		fallthrough
 	case QemuPC:
-		bt = pciBridge
+		bt = types.PCI
 	case QemuVirt:
-		bt = pcieBridge
+		bt = types.PCIE
 	case QemuPseries:
-		bt = pciBridge
+		bt = types.PCI
 	case QemuCCWVirtio:
-		bt = pciBridge
+		bt = types.PCI
 	default:
 		return nil
 	}
 
 	for i := uint32(0); i < number; i++ {
-		bridges = append(bridges, Bridge{
+		bridges = append(bridges, types.PCIBridge{
 			Type:    bt,
 			ID:      fmt.Sprintf("%s-bridge-%d", bt, i),
 			Address: make(map[uint32]string),

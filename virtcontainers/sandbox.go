@@ -435,26 +435,26 @@ func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
 	span, _ := trace(ctx, "createAssets")
 	defer span.Finish()
 
-	kernel, err := newAsset(sandboxConfig, kernelAsset)
+	kernel, err := types.NewAsset(sandboxConfig.Annotations, types.KernelAsset)
 	if err != nil {
 		return err
 	}
 
-	image, err := newAsset(sandboxConfig, imageAsset)
+	image, err := types.NewAsset(sandboxConfig.Annotations, types.ImageAsset)
 	if err != nil {
 		return err
 	}
 
-	initrd, err := newAsset(sandboxConfig, initrdAsset)
+	initrd, err := types.NewAsset(sandboxConfig.Annotations, types.InitrdAsset)
 	if err != nil {
 		return err
 	}
 
 	if image != nil && initrd != nil {
-		return fmt.Errorf("%s and %s cannot be both set", imageAsset, initrdAsset)
+		return fmt.Errorf("%s and %s cannot be both set", types.ImageAsset, types.InitrdAsset)
 	}
 
-	for _, a := range []*asset{kernel, image, initrd} {
+	for _, a := range []*types.Asset{kernel, image, initrd} {
 		if err := sandboxConfig.HypervisorConfig.addCustomAsset(a); err != nil {
 			return err
 		}

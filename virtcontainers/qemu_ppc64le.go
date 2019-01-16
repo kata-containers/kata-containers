@@ -11,6 +11,7 @@ import (
 
 	govmmQemu "github.com/intel/govmm/qemu"
 	deviceConfig "github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -90,20 +91,20 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 	return q
 }
 
-func (q *qemuPPC64le) capabilities() capabilities {
-	var caps capabilities
+func (q *qemuPPC64le) capabilities() types.Capabilities {
+	var caps types.Capabilities
 
 	// pseries machine type supports hotplugging drives
 	if q.machineType == QemuPseries {
-		caps.setBlockDeviceHotplugSupport()
+		caps.SetBlockDeviceHotplugSupport()
 	}
 
-	caps.setMultiQueueSupport()
+	caps.SetMultiQueueSupport()
 
 	return caps
 }
 
-func (q *qemuPPC64le) bridges(number uint32) []Bridge {
+func (q *qemuPPC64le) bridges(number uint32) []types.PCIBridge {
 	return genericBridges(number, q.machineType)
 }
 
@@ -150,6 +151,6 @@ func (q *qemuPPC64le) appendImage(devices []govmmQemu.Device, path string) ([]go
 }
 
 // appendBridges appends to devices the given bridges
-func (q *qemuPPC64le) appendBridges(devices []govmmQemu.Device, bridges []Bridge) []govmmQemu.Device {
+func (q *qemuPPC64le) appendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge) []govmmQemu.Device {
 	return genericAppendBridges(devices, bridges, q.machineType)
 }
