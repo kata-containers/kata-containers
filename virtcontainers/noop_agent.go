@@ -215,3 +215,6 @@ func (n *noopAgent) setGuestDateTime(time.Time) error {
 func (n *noopAgent) copyFile(src, dst string) error {
 	return nil
 }
+
+func (n *noopAgent) cleanup(id string) {
+}
