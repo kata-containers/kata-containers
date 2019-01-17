@@ -1012,3 +1012,10 @@ func (h *hyper) copyFile(src, dst string) error {
 	// hyperstart-agent does not support copyFile
 	return nil
 }
+
+func (h *hyper) cleanup(id string) {
+	path := h.getSharePath(id)
+	if err := os.RemoveAll(path); err != nil {
+		h.Logger().WithError(err).Errorf("failed to cleanup vm share path %s", path)
+	}
+}
