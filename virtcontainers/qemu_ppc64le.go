@@ -25,7 +25,7 @@ const defaultQemuPath = "/usr/bin/qemu-system-ppc64le"
 
 const defaultQemuMachineType = QemuPseries
 
-const defaultQemuMachineOptions = "accel=kvm,usb=off,nvdimm"
+const defaultQemuMachineOptions = "accel=kvm,usb=off"
 
 const defaultPCBridgeBus = "pci.0"
 
