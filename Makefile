@@ -29,6 +29,7 @@ test-release-tools:
 
 test-static-build:
 	@make -f $(MK_DIR)/static-build/qemu/Makefile
+	@make -f $(MK_DIR)/static-build/firecracker/Makefile
 
 test-packaging-tools:
 	@$(MK_DIR)/obs-packaging/build_from_docker.sh

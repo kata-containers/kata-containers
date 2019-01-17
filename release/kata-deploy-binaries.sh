@@ -112,6 +112,16 @@ install_qemu() {
 	tar xf kata-qemu-static.tar.gz -C "${destdir}"
 }
 
+# Install static firecracker asset
+install_firecracker() {
+	info "build static firecracker"
+	"${script_dir}/../static-build/firecracker/build-static-firecracker.sh"
+	info "Install static firecracker"
+		mkdir -p "${destdir}/opt/kata/bin/"
+		install -D --owner root --group root --mode 0744  firecracker-static "${destdir}/opt/kata/bin/firecracker"
+
+}
+
 #Install all components that are not assets
 install_kata_components() {
 	for p in "${projects[@]}"; do
