@@ -12,6 +12,7 @@ set -e
 
 dir_path=$(dirname "$0")
 source "${dir_path}/../../lib/common.bash"
+source /etc/os-release || source /usr/lib/os-release
 
 # Save logs
 TMP_FILE=$(mktemp runtimelogs.XXXXX)
@@ -19,6 +20,11 @@ TMP_FILE=$(mktemp runtimelogs.XXXXX)
 IMAGE="busybox"
 PAYLOAD="tail -f /dev/null"
 NAME="testoci"
+
+if [ "$ID" == "debian" ]; then
+	echo "Skip oci_call_test on $ID (see: https://github.com/kata-containers/tests/issues/1065)"
+	exit
+fi
 
 function remove_tmp_file {
 	rm -rf $TMP_FILE
