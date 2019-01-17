@@ -8,10 +8,6 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
-	govmmQemu "github.com/intel/govmm/qemu"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
-	"github.com/opentracing/opentracing-go"
-	"github.com/sirupsen/logrus"
 	"math"
 	"os"
 	"path/filepath"
@@ -20,6 +16,11 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	govmmQemu "github.com/intel/govmm/qemu"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
+	"github.com/opentracing/opentracing-go"
+	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -653,9 +654,25 @@ func (q *qemu) stopSandbox() error {
 		return err
 	}
 
-	err = os.RemoveAll(filepath.Join(RunVMStoragePath, q.id))
+	// cleanup vm path
+	dir := filepath.Join(RunVMStoragePath, q.id)
+
+	// If it's a symlink, remove both dir and the target.
+	// This can happen when vm template links a sandbox to a vm.
+	link, err := filepath.EvalSymlinks(dir)
 	if err != nil {
-		q.Logger().WithError(err).Error("Fail to clean up vm directory")
+		// Well, it's just cleanup failure. Let's ignore it.
+		q.Logger().WithError(err).WithField("dir", dir).Warn("failed to resolve vm path")
+	}
+	q.Logger().WithField("link", link).WithField("dir", dir).Infof("cleanup vm path")
+
+	if err := os.RemoveAll(dir); err != nil {
+		q.Logger().WithError(err).Warnf("failed to remove vm path %s", dir)
+	}
+	if link != dir && link != "" {
+		if err := os.RemoveAll(link); err != nil {
+			q.Logger().WithError(err).WithField("link", link).Warn("failed to remove resolved vm path")
+		}
 	}
 
 	return nil
