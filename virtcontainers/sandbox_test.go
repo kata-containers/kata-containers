@@ -79,7 +79,7 @@ func testCreateSandbox(t *testing.T, id string,
 	return sandbox, nil
 }
 
-func TestCreateEmtpySandbox(t *testing.T) {
+func TestCreateEmptySandbox(t *testing.T) {
 	_, err := testCreateSandbox(t, testSandboxID, MockHypervisor, HypervisorConfig{}, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
 	if err == nil {
 		t.Fatalf("VirtContainers should not allow empty sandboxes")
@@ -87,7 +87,7 @@ func TestCreateEmtpySandbox(t *testing.T) {
 	defer cleanUp()
 }
 
-func TestCreateEmtpyHypervisorSandbox(t *testing.T) {
+func TestCreateEmptyHypervisorSandbox(t *testing.T) {
 	_, err := testCreateSandbox(t, testSandboxID, QemuHypervisor, HypervisorConfig{}, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
 	if err == nil {
 		t.Fatalf("VirtContainers should not allow sandboxes with empty hypervisors")
@@ -105,7 +105,7 @@ func TestCreateMockSandbox(t *testing.T) {
 	defer cleanUp()
 }
 
-func TestCreateSandboxEmtpyID(t *testing.T) {
+func TestCreateSandboxEmptyID(t *testing.T) {
 	hConfig := newHypervisorConfig(nil, nil)
 
 	p, err := testCreateSandbox(t, "", MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, nil, nil)
