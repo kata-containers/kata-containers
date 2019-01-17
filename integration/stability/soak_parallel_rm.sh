@@ -38,6 +38,13 @@ VC_POD_DIR="${VC_POD_DIR:-/var/lib/vc/sbs}"
 # then just set this to a very large number
 MAX_CONTAINERS="${MAX_CONTAINERS:-110}"
 
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+
+if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
+	echo "Skip soak test on $KATA_HYPERVISOR (see: https://github.com/kata-containers/tests/issues/1029)"
+	exit
+fi
+
 check_vsock_active() {
 	vsock_configured=$($RUNTIME_PATH kata-env | awk '/UseVSock/ {print $3}')
 	vsock_supported=$($RUNTIME_PATH kata-env | awk '/SupportVSock/ {print $3}')
