@@ -306,7 +306,7 @@ func bindUnmountContainerRootfs(ctx context.Context, sharedDir, sandboxID, cID s
 	defer span.Finish()
 
 	rootfsDest := filepath.Join(sharedDir, sandboxID, cID, rootfsDir)
-	syscall.Unmount(rootfsDest, 0)
+	syscall.Unmount(rootfsDest, syscall.MNT_DETACH)
 
 	return nil
 }
