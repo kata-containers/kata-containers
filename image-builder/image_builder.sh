@@ -50,8 +50,12 @@ MAX_IMG_SIZE_MB=2048
 
 FS_TYPE=${FS_TYPE:-"ext4"}
 
-# In order to support memory hotplug, image must be aligned to 128M
-MEM_BOUNDARY=128
+# In order to support memory hotplug, image must be aligned to memory section(size in MB) according to different architecture.
+ARCH=$(arch)
+case "$ARCH" in
+	aarch64)	MEM_BOUNDARY_MB=1024 ;;
+	      *)        MEM_BOUNDARY_MB=128  ;;
+esac
 
 # Maximum no of attempts to create a root disk before giving up
 MAX_ATTEMPTS=5
@@ -139,20 +143,21 @@ OK "Agent installed"
 ROOTFS_SIZE=$(du -B 1MB -s "${ROOTFS}" | awk '{print $1}')
 BLOCK_SIZE=${BLOCK_SIZE:-4096}
 OLD_IMG_SIZE=0
+ORIG_MEM_BOUNDARY_MB=${MEM_BOUNDARY_MB}
 
 align_memory()
 {
-	remaining=$(($IMG_SIZE % $MEM_BOUNDARY))
+	remaining=$(($IMG_SIZE % $MEM_BOUNDARY_MB))
 	if [ "$remaining" != "0" ];then
-		warning "image size '$IMG_SIZE' is not aligned to memory boundary '$MEM_BOUNDARY', aligning it"
-		IMG_SIZE=$(($IMG_SIZE + $MEM_BOUNDARY - $remaining))
+		warning "image size '$IMG_SIZE' is not aligned to memory boundary '$MEM_BOUNDARY_MB', aligning it"
+		IMG_SIZE=$(($IMG_SIZE + $MEM_BOUNDARY_MB - $remaining))
 	fi
 }
 
 # Calculate image size based on the rootfs
 calculate_img_size()
 {
-	IMG_SIZE=${IMG_SIZE:-$MEM_BOUNDARY}
+	IMG_SIZE=${IMG_SIZE:-$MEM_BOUNDARY_MB}
 	align_memory
 	if [ -n "$ROOT_FREE_SPACE" ] && [ "$IMG_SIZE" -gt "$ROOTFS_SIZE" ]; then
 		info "Ensure that root partition has at least ${ROOT_FREE_SPACE}MB of free space"
@@ -258,8 +263,8 @@ create_rootfs_disk()
 	# if the available disk space is less than rootfs size, repeat the process
 	# of disk creation by adding 5% in the inital assumed value $ROOTFS_SIZE
 	if [ $ROOTFS_SIZE -gt $AVAIL_DISK ]; then
-		# Increase the size but remain aligned to 128
-		MEM_BOUNDARY=$(($MEM_BOUNDARY+128))
+		# Increase the size but remain aligned to the original MEM_BOUNDARY_MB, which is stored in $ORIG_MEM_BOUNDARY_MB
+		MEM_BOUNDARY_MB=$(($MEM_BOUNDARY_MB+$ORIG_MEM_BOUNDARY_MB))
 		OLD_IMG_SIZE=${IMG_SIZE}
 		unset IMG_SIZE
 		unmount
