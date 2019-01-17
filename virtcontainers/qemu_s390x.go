@@ -9,6 +9,7 @@ import (
 	"fmt"
 	govmmQemu "github.com/intel/govmm/qemu"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
 type qemuS390x struct {
@@ -80,7 +81,7 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 }
 
 // appendBridges appends to devices the given bridges
-func (q *qemuS390x) appendBridges(devices []govmmQemu.Device, bridges []Bridge) []govmmQemu.Device {
+func (q *qemuS390x) appendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge) []govmmQemu.Device {
 	return genericAppendBridges(devices, bridges, q.machineType)
 }
 
