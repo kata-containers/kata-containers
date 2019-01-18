@@ -1,4 +1,4 @@
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -10,3 +10,6 @@ KERNELPARAMS :=
 MACHINEACCELERATORS :=
 
 QEMUCMD := qemu-lite-system-x86_64
+
+# Firecracker binary name
+FCCMD := firecracker

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -80,6 +80,7 @@ endif
 PREFIXDEPS    := $(PREFIX)
 BINDIR        := $(EXEC_PREFIX)/bin
 QEMUBINDIR    := $(PREFIXDEPS)/bin
+FCBINDIR      := $(PREFIXDEPS)/bin
 SYSCONFDIR    := /etc
 LOCALSTATEDIR := /var
 
@@ -87,12 +88,6 @@ ifeq (,$(installing))
     # Force a rebuild to ensure version details are correct
     # (but only for a non-install build phase).
     EXTRA_DEPS = clean
-endif
-
-ifeq (uncompressed,$(KERNELTYPE))
-    KERNEL_NAME = vmlinux.container
-else
-    KERNEL_NAME = vmlinuz.container
 endif
 
 LIBEXECDIR := $(PREFIXDEPS)/libexec
@@ -114,12 +109,27 @@ PKGLIBDIR := $(LOCALSTATEDIR)/lib/$(PROJECT_DIR)
 PKGRUNDIR := $(LOCALSTATEDIR)/run/$(PROJECT_DIR)
 PKGLIBEXECDIR := $(LIBEXECDIR)/$(PROJECT_DIR)
 
-KERNELPATH := $(PKGDATADIR)/$(KERNEL_NAME)
+KERNELDIR := $(PKGDATADIR)
+
 INITRDPATH := $(PKGDATADIR)/$(INITRDNAME)
 IMAGEPATH := $(PKGDATADIR)/$(IMAGENAME)
 FIRMWAREPATH :=
 
+# Name of default configuration file the runtime will use.
+CONFIG_FILE = configuration.toml
+
+HYPERVISOR_FC = firecracker
+HYPERVISOR_QEMU = qemu
+
+# Determines which hypervisor is specified in $(CONFIG_FILE).
+DEFAULT_HYPERVISOR = $(HYPERVISOR_QEMU)
+
+# List of hypervisors this build system can generate configuration for.
+HYPERVISORS := $(HYPERVISOR_FC) $(HYPERVISOR_QEMU)
+
 QEMUPATH := $(QEMUBINDIR)/$(QEMUCMD)
+
+FCPATH = $(FCBINDIR)/$(FCCMD)
 
 SHIMCMD := $(BIN_PREFIX)-shim
 SHIMPATH := $(PKGLIBEXECDIR)/$(SHIMCMD)
@@ -145,16 +155,12 @@ DEFMEMSZ := 2048
 DEFMEMSLOTS := 10
 #Default number of bridges
 DEFBRIDGES := 1
-#Default network model
-DEFNETWORKMODEL := macvtap
-
 DEFDISABLEGUESTSECCOMP := true
 
 #Default entropy source
 DEFENTROPYSOURCE := /dev/urandom
 
 DEFDISABLEBLOCK := false
-DEFBLOCKSTORAGEDRIVER := virtio-scsi
 DEFENABLEIOTHREADS := false
 DEFENABLEMEMPREALLOC := false
 DEFENABLEHUGEPAGES := false
@@ -176,9 +182,78 @@ VERSION := ${shell cat ./VERSION}
 COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT := $(if $(shell git status --porcelain --untracked-files=no),${COMMIT_NO}-dirty,${COMMIT_NO})
 
-CONFIG_FILE = configuration.toml
-CONFIG = $(CLI_DIR)/config/$(CONFIG_FILE)
-CONFIG_IN = $(CONFIG).in
+# List of configuration files to build and install
+CONFIGS =
+CONFIG_PATHS = 
+SYSCONFIG_PATHS =
+
+# List of hypervisors known for the current architecture
+KNOWN_HYPERVISORS =
+
+ifneq (,$(QEMUCMD))
+    KNOWN_HYPERVISORS += $(HYPERVISOR_QEMU)
+
+    CONFIG_FILE_QEMU = configuration-qemu.toml
+    CONFIG_QEMU = $(CLI_DIR)/config/$(CONFIG_FILE_QEMU)
+    CONFIG_QEMU_IN = $(CONFIG_QEMU).in
+
+    CONFIG_PATH_QEMU = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU)
+
+    SYSCONFIG_QEMU = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU))
+    SYSCONFIG_PATHS += $(SYSCONFIG_QEMU)
+
+    CONFIGS += $(CONFIG_QEMU)
+
+    # qemu-specific options (all should be suffixed by "_QEMU")
+    DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
+    DEFNETWORKMODEL_QEMU := macvtap
+    KERNELNAME_QEMU = $(call MAKE_KERNEL_NAME,$(KERNELTYPE))
+    KERNELPATH_QEMU = $(KERNELDIR)/$(KERNELNAME_QEMU)
+endif
+
+ifneq (,$(FCCMD))
+    KNOWN_HYPERVISORS += $(HYPERVISOR_FC)
+
+    CONFIG_FILE_FC = configuration-fc.toml
+    CONFIG_FC = $(CLI_DIR)/config/$(CONFIG_FILE_FC)
+    CONFIG_FC_IN = $(CONFIG_FC).in
+
+    CONFIG_PATH_FC = $(abspath $(CONFDIR)/$(CONFIG_FILE_FC))
+    CONFIG_PATHS += $(CONFIG_PATH_FC)
+
+    SYSCONFIG_FC = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_FC))
+    SYSCONFIG_PATHS += $(SYSCONFIG_FC)
+
+    CONFIGS += $(CONFIG_FC)
+
+    # firecracker-specific options (all should be suffixed by "_FC")
+    DEFBLOCKSTORAGEDRIVER_FC := virtio-mmio
+    DEFNETWORKMODEL_FC := tcfilter
+    KERNELTYPE_FC = uncompressed
+    KERNEL_NAME_FC = $(call MAKE_KERNEL_NAME,$(KERNELTYPE_FC))
+    KERNELPATH_FC = $(KERNELDIR)/$(KERNEL_NAME_FC)
+endif
+
+ifeq (,$(KNOWN_HYPERVISORS))
+    $(error "ERROR: No hypervisors known for architecture $(ARCH) (looked for: $(HYPERVISORS))")
+endif
+
+ifeq (,$(findstring $(DEFAULT_HYPERVISOR),$(HYPERVISORS)))
+    $(error "ERROR: Invalid default hypervisor: '$(DEFAULT_HYPERVISOR)'")
+endif
+
+ifeq (,$(findstring $(DEFAULT_HYPERVISOR),$(KNOWN_HYPERVISORS)))
+    $(error "ERROR: Default hypervisor '$(DEFAULT_HYPERVISOR)' not known for architecture $(ARCH)")
+endif
+
+ifeq ($(DEFAULT_HYPERVISOR),$(HYPERVISOR_QEMU))
+    DEFAULT_HYPERVISOR_CONFIG_PATH = $(CONFIG_PATH_QEMU)
+endif
+
+ifeq ($(DEFAULT_HYPERVISOR),$(HYPERVISOR_FC))
+    DEFAULT_HYPERVISOR_CONFIG_PATH = $(CONFIG_PATH_FC)
+endif
 
 CONFDIR := $(DEFAULTSDIR)/$(PROJECT_DIR)
 SYSCONFDIR := $(SYSCONFDIR)/$(PROJECT_DIR)
@@ -197,14 +272,18 @@ USER_VARS += ARCH
 USER_VARS += BINDIR
 USER_VARS += CONFIG_PATH
 USER_VARS += DESTDIR
+USER_VARS += DEFAULT_HYPERVISOR
+USER_VARS += FCCMD
+USER_VARS += FCPATH
 USER_VARS += SYSCONFIG
 USER_VARS += IMAGENAME
 USER_VARS += IMAGEPATH
 USER_VARS += INITRDNAME
 USER_VARS += INITRDPATH
 USER_VARS += MACHINETYPE
-USER_VARS += KERNELPATH
+USER_VARS += KERNELDIR
 USER_VARS += KERNELTYPE
+USER_VARS += KERNELTYPE_FC
 USER_VARS += FIRMWAREPATH
 USER_VARS += MACHINEACCELERATORS
 USER_VARS += KERNELPARAMS
@@ -231,10 +310,12 @@ USER_VARS += DEFMAXVCPUS
 USER_VARS += DEFMEMSZ
 USER_VARS += DEFMEMSLOTS
 USER_VARS += DEFBRIDGES
-USER_VARS += DEFNETWORKMODEL
+USER_VARS += DEFNETWORKMODEL_FC
+USER_VARS += DEFNETWORKMODEL_QEMU
 USER_VARS += DEFDISABLEGUESTSECCOMP
 USER_VARS += DEFDISABLEBLOCK
-USER_VARS += DEFBLOCKSTORAGEDRIVER
+USER_VARS += DEFBLOCKSTORAGEDRIVER_FC
+USER_VARS += DEFBLOCKSTORAGEDRIVER_QEMU
 USER_VARS += DEFENABLEIOTHREADS
 USER_VARS += DEFENABLEMEMPREALLOC
 USER_VARS += DEFENABLEHUGEPAGES
@@ -279,7 +360,7 @@ netmon: $(NETMON_TARGET_OUTPUT)
 $(NETMON_TARGET_OUTPUT): $(SOURCES)
 	$(QUIET_BUILD)(cd $(NETMON_DIR) && go build $(BUILDFLAGS) -o $@ -ldflags "-X main.version=$(VERSION)")
 
-runtime: $(TARGET_OUTPUT) $(CONFIG)
+runtime: $(TARGET_OUTPUT) $(CONFIGS)
 .DEFAULT: default
 
 build: default
@@ -338,7 +419,21 @@ export GENERATED_CODE
 # $1 : file to install
 # $2 : directory path where file will be installed
 define INSTALL_EXEC
-	$(QUIET_INST)install -D $1 $(DESTDIR)$2/$(notdir $1);
+	install -D $1 $(DESTDIR)$2/$(notdir $1);
+endef
+
+# Install a configuration file
+# params:
+# $1 : file to install
+# $2 : directory path where file will be installed
+define INSTALL_CONFIG
+	install --mode 0644 -D $1 $(DESTDIR)$2/$(notdir $1);
+endef
+
+# Returns the name of the kernel file to use based on the provided KERNELTYPE.
+# $1 : KERNELTYPE (compressed or uncompressed)
+define MAKE_KERNEL_NAME
+$(if $(findstring uncompressed,$1),vmlinux.container,vmlinuz.container)
 endef
 
 GENERATED_CONFIG = $(CLI_DIR)/config-generated.go
@@ -368,17 +463,20 @@ $(SHIMV2_OUTPUT): $(TARGET_OUTPUT)
 $(TARGET).coverage: $(SOURCES) $(GENERATED_FILES) Makefile
 	$(QUIET_TEST)go test -o $@ -covermode count
 
-GENERATED_FILES += $(CONFIG)
+GENERATED_FILES += $(CONFIGS)
 
 $(GENERATED_FILES): %: %.in Makefile VERSION
 	$(QUIET_CONFIG)$(SED) \
 		-e "s|@COMMIT@|$(COMMIT)|g" \
 		-e "s|@VERSION@|$(VERSION)|g" \
-		-e "s|@CONFIG_IN@|$(CONFIG_IN)|g" \
+		-e "s|@CONFIG_QEMU_IN@|$(CONFIG_QEMU_IN)|g" \
+		-e "s|@CONFIG_FC_IN@|$(CONFIG_FC_IN)|g" \
 		-e "s|@CONFIG_PATH@|$(CONFIG_PATH)|g" \
+		-e "s|@FCPATH@|$(FCPATH)|g" \
 		-e "s|@SYSCONFIG@|$(SYSCONFIG)|g" \
 		-e "s|@IMAGEPATH@|$(IMAGEPATH)|g" \
-		-e "s|@KERNELPATH@|$(KERNELPATH)|g" \
+		-e "s|@KERNELPATH_FC@|$(KERNELPATH_FC)|g" \
+		-e "s|@KERNELPATH_QEMU@|$(KERNELPATH_QEMU)|g" \
 		-e "s|@INITRDPATH@|$(INITRDPATH)|g" \
 		-e "s|@FIRMWAREPATH@|$(FIRMWAREPATH)|g" \
 		-e "s|@MACHINEACCELERATORS@|$(MACHINEACCELERATORS)|g" \
@@ -401,10 +499,12 @@ $(GENERATED_FILES): %: %.in Makefile VERSION
 		-e "s|@DEFMEMSZ@|$(DEFMEMSZ)|g" \
 		-e "s|@DEFMEMSLOTS@|$(DEFMEMSLOTS)|g" \
 		-e "s|@DEFBRIDGES@|$(DEFBRIDGES)|g" \
-		-e "s|@DEFNETWORKMODEL@|$(DEFNETWORKMODEL)|g" \
+		-e "s|@DEFNETWORKMODEL_FC@|$(DEFNETWORKMODEL_FC)|g" \
+		-e "s|@DEFNETWORKMODEL_QEMU@|$(DEFNETWORKMODEL_QEMU)|g" \
 		-e "s|@DEFDISABLEGUESTSECCOMP@|$(DEFDISABLEGUESTSECCOMP)|g" \
 		-e "s|@DEFDISABLEBLOCK@|$(DEFDISABLEBLOCK)|g" \
-		-e "s|@DEFBLOCKSTORAGEDRIVER@|$(DEFBLOCKSTORAGEDRIVER)|g" \
+		-e "s|@DEFBLOCKSTORAGEDRIVER_FC@|$(DEFBLOCKSTORAGEDRIVER_FC)|g" \
+		-e "s|@DEFBLOCKSTORAGEDRIVER_QEMU@|$(DEFBLOCKSTORAGEDRIVER_QEMU)|g" \
 		-e "s|@DEFENABLEIOTHREADS@|$(DEFENABLEIOTHREADS)|g" \
 		-e "s|@DEFENABLEMEMPREALLOC@|$(DEFENABLEMEMPREALLOC)|g" \
 		-e "s|@DEFENABLEHUGEPAGES@|$(DEFENABLEHUGEPAGES)|g" \
@@ -416,7 +516,7 @@ $(GENERATED_FILES): %: %.in Makefile VERSION
 		-e "s|@DEFENTROPYSOURCE@|$(DEFENTROPYSOURCE)|g" \
 		$< > $@
 
-generate-config: $(CONFIG)
+generate-config: $(CONFIGS)
 
 check: check-go-static
 
@@ -433,28 +533,29 @@ check-go-static:
 coverage:
 	$(QUIET_TEST).ci/go-test.sh html-coverage
 
-install: default runtime install-scripts install-completions install-config install-bin install-containerd-shim-v2 install-bin-libexec
+install: default runtime install-scripts install-completions install-configs install-bin install-containerd-shim-v2 install-bin-libexec
 
 install-bin: $(BINLIST)
-	$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
+	$(QUIET_INST)$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
 
 install-containerd-shim-v2: $(SHIMV2)
-	$(call INSTALL_EXEC,$<,$(BINDIR))
+	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
 
 install-bin-libexec: $(BINLIBEXECLIST)
-	$(foreach f,$(BINLIBEXECLIST),$(call INSTALL_EXEC,$f,$(PKGLIBEXECDIR)))
+	$(QUIET_INST)$(foreach f,$(BINLIBEXECLIST),$(call INSTALL_EXEC,$f,$(PKGLIBEXECDIR)))
 
-install-config: $(CONFIG)
-	$(QUIET_INST)install --mode 0644 -D $(CONFIG) $(DESTDIR)/$(CONFIG_PATH)
+install-configs: $(CONFIGS)
+	$(QUIET_INST)$(foreach f,$(CONFIGS),$(call INSTALL_CONFIG,$f,$(dir $(CONFIG_PATH))))
+	$(QUIET_INST)ln -sf $(DEFAULT_HYPERVISOR_CONFIG_PATH) $(CONFIG_PATH)
 
 install-scripts: $(SCRIPTS)
-	$(foreach f,$(SCRIPTS),$(call INSTALL_EXEC,$f,$(SCRIPTS_DIR)))
+	$(QUIET_INST)$(foreach f,$(SCRIPTS),$(call INSTALL_EXEC,$f,$(SCRIPTS_DIR)))
 
 install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
 
 clean:
-	$(QUIET_CLEAN)rm -f $(TARGET) $(SHIMV2) $(NETMON_TARGET) $(CONFIG) $(GENERATED_GO_FILES) $(GENERATED_FILES) $(COLLECT_SCRIPT)
+	$(QUIET_CLEAN)rm -f $(TARGET) $(SHIMV2) $(NETMON_TARGET) $(CONFIGS) $(GENERATED_GO_FILES) $(GENERATED_FILES) $(COLLECT_SCRIPT)
 
 show-usage: show-header
 	@printf "• Overview:\n"
@@ -515,11 +616,15 @@ else
 	@printf "\tCan only install prebuilt binaries\n"
 endif
 	@printf "\n"
+	@printf "• hypervisors:\n"
+	@printf "\tKnown: $(sort $(HYPERVISORS))\n"
+	@printf "\tAvailable for this architecture: $(sort $(KNOWN_HYPERVISORS))\n"
+	@printf "\n"
 	@printf "• Summary:\n"
 	@printf "\n"
-	@printf "\tdestination install path (DESTDIR)    : %s\n" $(abspath $(DESTDIR))
-	@printf "\tbinary installation path (BINDIR)     : %s\n" $(abspath $(BINDIR))
-	@printf "\tbinaries to install                   :\n"
+	@printf "\tdestination install path (DESTDIR) : %s\n" $(abspath $(DESTDIR))
+	@printf "\tbinary installation path (BINDIR) : %s\n" $(abspath $(BINDIR))
+	@printf "\tbinaries to install :\n"
 	@printf \
           "$(foreach b,$(sort $(BINLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(b))\\\n"))"
 	@printf \
@@ -528,10 +633,24 @@ endif
           "$(foreach b,$(sort $(BINLIBEXECLIST)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(PKGLIBEXECDIR)/$(b))\\\n"))"
 	@printf \
           "$(foreach s,$(sort $(SCRIPTS)),$(shell printf "\\t - $(shell readlink -m $(DESTDIR)/$(BINDIR)/$(s))\\\n"))"
-	@printf "\tconfig to install (CONFIG)            : %s\n" $(CONFIG)
-	@printf "\tinstall path (CONFIG_PATH)            : %s\n" $(abspath $(CONFIG_PATH))
-	@printf "\talternate config path (SYSCONFIG)     : %s\n" $(abspath $(SYSCONFIG))
-	@printf "\thypervisor path (QEMUPATH)            : %s\n" $(abspath $(QEMUPATH))
-	@printf "\tassets path (PKGDATADIR)              : %s\n" $(abspath $(PKGDATADIR))
-	@printf "\tproxy+shim path (PKGLIBEXECDIR)       : %s\n" $(abspath $(PKGLIBEXECDIR))
+	@printf "\tconfigs to install (CONFIGS) :\n"
+	@printf \
+	  "$(foreach c,$(sort $(CONFIGS)),$(shell printf "\\t - $(c)\\\n"))"
+	@printf "\tinstall paths (CONFIG_PATHS) :\n"
+	@printf \
+	  "$(foreach c,$(sort $(CONFIG_PATHS)),$(shell printf "\\t - $(c)\\\n"))"
+	@printf "\talternate config paths (SYSCONFIG_PATHS) : %s\n"
+	@printf \
+	  "$(foreach c,$(sort $(SYSCONFIG_PATHS)),$(shell printf "\\t - $(c)\\\n"))"
+
+	@printf "\tdefault install path for $(DEFAULT_HYPERVISOR) (CONFIG_PATH) : %s\n" $(abspath $(CONFIG_PATH))
+	@printf "\tdefault alternate config path (SYSCONFIG) : %s\n" $(abspath $(SYSCONFIG))
+ifneq (,$(findstring $(HYPERVISOR_QEMU),$(KNOWN_HYPERVISORS)))
+	@printf "\t$(HYPERVISOR_QEMU) hypervisor path (QEMUPATH) : %s\n" $(abspath $(QEMUPATH))
+endif
+ifneq (,$(findstring $(HYPERVISOR_FC),$(KNOWN_HYPERVISORS)))
+	@printf "\t$(HYPERVISOR_FC) hypervisor path (FCPATH) : %s\n" $(abspath $(FCPATH))
+endif
+	@printf "\tassets path (PKGDATADIR) : %s\n" $(abspath $(PKGDATADIR))
+	@printf "\tproxy+shim path (PKGLIBEXECDIR) : %s\n" $(abspath $(PKGLIBEXECDIR))
 	@printf "\n"

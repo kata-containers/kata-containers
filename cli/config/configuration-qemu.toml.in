@@ -1,18 +1,18 @@
-# Copyright (c) 2017-2018 Intel Corporation
+# Copyright (c) 2017-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
 # XXX: WARNING: this file is auto-generated.
 # XXX:
-# XXX: Source file: "@CONFIG_IN@"
+# XXX: Source file: "@CONFIG_QEMU_IN@"
 # XXX: Project:
 # XXX:   Name: @PROJECT_NAME@
 # XXX:   Type: @PROJECT_TYPE@
 
 [hypervisor.qemu]
 path = "@QEMUPATH@"
-kernel = "@KERNELPATH@"
+kernel = "@KERNELPATH_QEMU@"
 initrd = "@INITRDPATH@"
 image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
@@ -100,7 +100,7 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 # Block storage driver to be used for the hypervisor in case the container
 # rootfs is backed by a block device. This is virtio-scsi, virtio-blk
 # or nvdimm.
-block_device_driver = "@DEFBLOCKSTORAGEDRIVER@"
+block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
 
 # Specifies cache-related options will be set to block devices or not.
 # Default false
@@ -289,7 +289,7 @@ path = "@NETMONPATH@"
 #     Uses tc filter rules to redirect traffic from the network interface
 #     provided by plugin to a tap interface connected to the VM.
 #
-internetworking_model="@DEFNETWORKMODEL@"
+internetworking_model="@DEFNETWORKMODEL_QEMU@"
 
 # disable guest seccomp
 # Determines whether container seccomp profiles are passed to the virtual
