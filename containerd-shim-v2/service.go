@@ -386,6 +386,22 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (*taskAP
 			return nil, err
 		}
 
+		// Take care of the use case where it is a sandbox.
+		// Right after the container representing the sandbox has
+		// been deleted, let's make sure we stop and delete the
+		// sandbox.
+		if c.cType.IsSandbox() {
+			if err = s.sandbox.Stop(); err != nil {
+				logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
+				return nil, err
+			}
+
+			if err = s.sandbox.Delete(); err != nil {
+				logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
+				return nil, err
+			}
+		}
+
 		return &taskAPI.DeleteResponse{
 			ExitStatus: c.exit,
 			ExitedAt:   c.time,
@@ -654,26 +670,17 @@ func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (*task
 
 func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (*ptypes.Empty, error) {
 	s.Lock()
-	defer s.Unlock()
-
 	if len(s.containers) != 0 {
+		s.Unlock()
 		return empty, nil
 	}
+	s.Unlock()
 
-	defer os.Exit(0)
+	os.Exit(0)
 
-	err := s.sandbox.Stop()
-	if err != nil {
-		logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
-		return empty, err
-	}
-
-	err = s.sandbox.Delete()
-	if err != nil {
-		logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
-	}
-
-	return empty, err
+	// This will never be called, but this is only there to make sure the
+	// program can compile.
+	return empty, nil
 }
 
 func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (*taskAPI.StatsResponse, error) {
