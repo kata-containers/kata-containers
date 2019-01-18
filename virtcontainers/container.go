@@ -1029,8 +1029,8 @@ func (c *Container) update(resources specs.LinuxResources) error {
 		return err
 	}
 
-	if c.state.State != types.StateRunning {
-		return fmt.Errorf("Container not running, impossible to update")
+	if state := c.state.State; !(state == types.StateRunning || state == types.StateReady) {
+		return fmt.Errorf("Container(%s) not running or ready, impossible to update", state)
 	}
 
 	if c.config.Resources.CPU == nil {
