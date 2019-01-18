@@ -7,7 +7,6 @@ package containerdshim
 
 import (
 	"context"
-	"encoding/json"
 	"io/ioutil"
 	"os"
 	sysexec "os/exec"
@@ -31,6 +30,7 @@ import (
 	"github.com/opencontainers/runtime-spec/specs-go"
 
 	"github.com/containerd/containerd/api/types/task"
+	"github.com/containerd/typeurl"
 	ptypes "github.com/gogo/protobuf/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -707,12 +707,17 @@ func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (*pt
 	s.Lock()
 	defer s.Unlock()
 
-	var resources specs.LinuxResources
-	if err := json.Unmarshal(r.Resources.Value, &resources); err != nil {
-		return empty, err
+	var resources *specs.LinuxResources
+	v, err := typeurl.UnmarshalAny(r.Resources)
+	if err != nil {
+		return nil, err
+	}
+	resources, ok := v.(*specs.LinuxResources)
+	if !ok {
+		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "Invalid resources type for %s", s.id)
 	}
 
-	err := s.sandbox.UpdateContainer(r.ID, resources)
+	err = s.sandbox.UpdateContainer(r.ID, *resources)
 	if err != nil {
 		return nil, errdefs.ToGRPC(err)
 	}
