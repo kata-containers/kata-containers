@@ -728,12 +728,20 @@ func (s *service) Wait(ctx context.Context, r *taskAPI.WaitRequest) (*taskAPI.Wa
 	//wait for container
 	if r.ExecID == "" {
 		ret = <-c.exitCh
+
+		// refill the exitCh with the container process's exit code in case
+		// there were other waits on this process.
+		c.exitCh <- ret
 	} else { //wait for exec
 		execs, err := c.getExec(r.ExecID)
 		if err != nil {
 			return nil, err
 		}
 		ret = <-execs.exitCh
+
+		// refill the exitCh with the exec process's exit code in case
+		// there were other waits on this process.
+		execs.exitCh <- ret
 	}
 
 	return &taskAPI.WaitResponse{
