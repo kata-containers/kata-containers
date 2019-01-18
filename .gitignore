@@ -1,7 +1,8 @@
 *.o
 *.patch
 *.swp
-/cli/config/configuration.toml
+/cli/config/configuration-fc.toml
+/cli/config/configuration-qemu.toml
 /cli/config-generated.go
 /cli/coverage.html
 /containerd-shim-kata-v2
