@@ -30,11 +30,13 @@ var qemuPaths = map[string]string{
 	QemuCCWVirtio: defaultQemuPath,
 }
 
-var kernelRootParams = []Param{}
-
 // Verify needed parameters
 var kernelParams = []Param{
 	{"console", "ttysclp0"},
+}
+
+var kernelRootParams = []Param{
+	{"root", "/dev/vda1"},
 }
 
 var supportedQemuMachines = []govmmQemu.Machine{
