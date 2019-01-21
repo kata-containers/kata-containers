@@ -8,10 +8,6 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
-	govmmQemu "github.com/intel/govmm/qemu"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
-	"github.com/opentracing/opentracing-go"
-	"github.com/sirupsen/logrus"
 	"math"
 	"os"
 	"path/filepath"
@@ -20,6 +16,11 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	govmmQemu "github.com/intel/govmm/qemu"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
+	"github.com/opentracing/opentracing-go"
+	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -1159,7 +1160,7 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) (int, error) {
 		if currentMemory+memDev.sizeMB > int(maxMem) {
 			// Fixme: return a typed error
 			return 0, fmt.Errorf("Unable to hotplug %d MiB memory, the SB has %d MiB and the maximum amount is %d MiB",
-				memDev.sizeMB, currentMemory, q.config.MemorySize)
+				memDev.sizeMB, currentMemory, maxMem)
 		}
 		memoryAdded, err := q.hotplugAddMemory(memDev)
 		if err != nil {
