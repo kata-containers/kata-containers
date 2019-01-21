@@ -101,7 +101,7 @@ main() {
 		else
 			build_and_install_qemu
 		fi
-	elif [ "$QEMU_ARCH" == "aarch64" ]; then
+	elif [ "$QEMU_ARCH" == "aarch64" ] || [ "$QEMU_ARCH" == "ppc64le" ]; then
 		packaged_qemu_version=$(get_packaged_qemu_version)
 		short_current_qemu_version=${CURRENT_QEMU_VERSION#*-}
 		if [ "$packaged_qemu_version" == "$short_current_qemu_version" ]; then
