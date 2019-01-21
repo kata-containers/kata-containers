@@ -10,6 +10,8 @@
 # Place where virtcontainers keeps its active pod info
 VC_POD_DIR="${VC_POD_DIR:-/var/lib/vc/sbs}"
 
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+
 die(){
 	msg="$*"
 	echo "ERROR: $msg" >&2
@@ -42,7 +44,11 @@ extract_kata_env(){
 		SHIM_VERSION="0.0.0"
 		PROXY_PATH="/usr/libexec/kata-containers/kata-proxy"
 		PROXY_VERSION="0.0.0"
-		HYPERVISOR_PATH="/usr/bin/qemu-system-x86_64"
+		if [ "$KATA_HYPERVISOR" == firecracker ]; then
+			HYPERVISOR_PATH="/usr/bin/firecracker"
+		 else
+			HYPERVISOR_PATH="/usr/bin/qemu-system-x86_64"
+		fi
 		HYPERVISOR_VERSION="0.0.0"
 		INITRD_PATH=""
 		NETMON_PATH="/usr/libexec/kata-containers/kata-netmon"
@@ -73,7 +79,13 @@ extract_kata_env(){
 # Checks that processes are not running
 check_processes() {
 	extract_kata_env
-	general_processes=( ${PROXY_PATH} ${HYPERVISOR_PATH} ${SHIM_PATH} )
+	vsock_configured=$($RUNTIME_PATH kata-env | awk '/UseVSock/ {print $3}')
+	vsock_supported=$($RUNTIME_PATH kata-env | awk '/SupportVSock/ {print $3}')
+	if [ "$vsock_configured" == true ] && [ "$vsock_supported" == true ]; then
+		general_processes=( ${HYPERVISOR_PATH} ${SHIM_PATH} )
+	else
+		general_processes=( ${PROXY_PATH} ${HYPERVISOR_PATH} ${SHIM_PATH} )
+	fi
 	for i in "${general_processes[@]}"; do
 		if pgrep -f "$i"; then
 			die "Found unexpected ${i} present"
