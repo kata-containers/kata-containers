@@ -6,6 +6,8 @@ ARG KATA_URL=https://github.com/kata-containers/runtime/releases/download/${KATA
 ARG KATA_FILE=kata-static-${KATA_VER}-${ARCH}.tar.xz
 
 RUN \
+yum install -y epel-release && \
+yum install -y bzip2 jq && \
 curl -sOL ${KATA_URL}/${KATA_FILE} && \
 mkdir -p /opt/kata-artifacts && \
 tar xvf ${KATA_FILE} -C /opt/kata-artifacts/ && \
