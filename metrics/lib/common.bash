@@ -208,10 +208,12 @@ show_system_state() {
 	done
 
 	# Verify kata-ksm-throttler on Debian
-	debian_process="kata-ksm-throttler"
-	debian_process_path=$(whereis ${debian_process} | tr -d '[:space:]'| cut -d ':' -f2)
-	echo " --pgrep ${debian_process}--"
-	pgrep -f ${debian_process_path} > /dev/null
+	if [ "$ID" == "debian" ]; then
+		debian_process="kata-ksm-throttler"
+		debian_process_path=$(whereis ${debian_process} | tr -d '[:space:]'| cut -d ':' -f2)
+		echo " --pgrep ${debian_process}--"
+		pgrep -f ${debian_process_path} > /dev/null
+	fi
 }
 
 common_init(){
