@@ -41,12 +41,7 @@ MAX_CONTAINERS="${MAX_CONTAINERS:-110}"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
-if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
-	echo "Skip soak test on $KATA_HYPERVISOR (see: https://github.com/kata-containers/tests/issues/1029)"
-	exit
-fi
-
-if [ "$ID" == debian ]; then
+if [ "$ID" == "debian" ]; then
 	echo "Skip soak test on ${ID} (see: https://github.com/kata-containers/runtime/issues/1132)"
 	exit
 fi
@@ -100,19 +95,21 @@ check_all_running() {
 
 	# Only check for Kata components if we are using a Kata runtime
 	if (( $check_kata_components )); then
-		# Check we have one proxy per container
-		how_many_proxys=$(pgrep -a -f ${PROXY_PATH} | wc -l)
-		if check_vsock_active; then
-			if (( ${how_many_proxys} != 0 )); then
-				echo "Wrong number of proxys running (${how_many_running} containers, ${how_many_proxys} proxys)"
-				echo "When using vsocks, the number of proxies should be Zero - stopping"
-				((goterror++))
-			fi
+		if [ "$KATA_HYPERVISOR" == "qemu" ]; then
+			# Check we have one proxy per container
+			how_many_proxys=$(pgrep -a -f ${PROXY_PATH} | wc -l)
+			if check_vsock_active; then
+				if (( ${how_many_proxys} != 0 )); then
+					echo "Wrong number of proxys running (${how_many_running} containers, ${how_many_proxys} proxys)"
+					echo "When using vsocks, the number of proxies should be Zero - stopping"
+					((goterror++))
+				fi
 
-		else
-			if (( ${how_many_running} != ${how_many_proxys} )); then
-				echo "Wrong number of proxys running (${how_many_running} containers, ${how_many_proxys} proxys) - stopping"
-				((goterror++))
+			else
+				if (( ${how_many_running} != ${how_many_proxys} )); then
+					echo "Wrong number of proxys running (${how_many_running} containers, ${how_many_proxys} proxys) - stopping"
+					((goterror++))
+				fi
 			fi
 		fi
 
@@ -131,11 +128,13 @@ check_all_running() {
 			((goterror++))
 		fi
 
-		# check we have the right number of netmon's
-		how_many_netmons=$(pgrep -a -f ${NETMON_PATH} | wc -l)
-		if (( ${how_many_running} != ${how_many_netmons} )); then
-			echo "Wrong number of netmons running (${how_many_running} != ${how_many_netmons}) - stopping"
-			((goterror++))
+		if [ "$KATA_HYPERVISOR" == "qemu" ]; then
+			# check we have the right number of netmon's
+			how_many_netmons=$(pgrep -a -f ${NETMON_PATH} | wc -l)
+			if (( ${how_many_running} != ${how_many_netmons} )); then
+				echo "Wrong number of netmons running (${how_many_running} != ${how_many_netmons}) - stopping"
+				((goterror++))
+			fi
 		fi
 
 		# check we have no runtimes running (they should be transient, we should not 'see them')
