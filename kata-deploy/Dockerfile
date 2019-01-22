@@ -18,3 +18,6 @@ curl -Lso /bin/kubectl https://storage.googleapis.com/kubernetes-release/release
 chmod +x /bin/kubectl
 
 COPY scripts /opt/kata-artifacts/scripts
+RUN \
+ln -s /opt/kata-artifacts/scripts/kata-deploy-docker.sh /usr/bin/kata-deploy-docker && \
+ln -s /opt/kata-artifacts/scripts/kata-deploy.sh /usr/bin/kata-deploy
