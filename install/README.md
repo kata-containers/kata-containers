@@ -49,7 +49,9 @@ Manual installation instructions are available for [these distributions](#suppor
 1. Add the Kata Containers repository to your distro package manager, and import the packages signing key.
 2. Install the Kata Containers packages.
 3. Install a supported container manager.
-4. Configure the container manager to use `kata-runtime` as the default OCI runtime.
+4. Configure the container manager to use `kata-runtime` as the default OCI runtime. Or, for Kata Containers 1.5.0 or above, configure the 
+   `io.containerd.kata.v2` to be the runtime shim (see [containerd runtime v2 (shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2)
+   and [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)).
 
 > **Notes on upgrading**:
 > - If you are installing Kata Containers on a system that already has Clear Containers or `runv` installed,
