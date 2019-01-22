@@ -9,8 +9,8 @@
   
   ```bash
   $ sudo sh -c "echo '# for unstable packages
-  deb http://ftp.debian.org unstable main contrib non-free
-  deb-src http://ftp.debian.org unstable main contrib non-free' > /etc/apt/sources.list.d/unstable.list"
+  deb http://ftp.debian.org/debian/ unstable main contrib non-free
+  deb-src http://ftp.debian.org/debian/ unstable main contrib non-free' > /etc/apt/sources.list.d/unstable.list"
   ```
   
   Set the repository to a lower priority than stable, to ensures that APT will prefer stable packages over unstable ones. This can be specified in `/etc/apt/preferences.d/unstable`:
@@ -32,8 +32,8 @@
    ```bash
    $ ARCH=$(arch)
    $ source /etc/os-release
-   $ sudo sh -c "echo 'deb http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/Debian_9/$(lsb_release -rs)/ /' > /etc/apt/sources.list.d/kata-containers.list"
-   $ curl -sL  http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/Debian_9/$(lsb_release -rs)/Release.key | sudo apt-key add -
+   $ sudo sh -c "echo 'deb http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/Debian_${VERSION_ID}/ /' > /etc/apt/sources.list.d/kata-containers.list"
+   $ curl -sL  http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/Debian_${VERSION_ID}/Release.key | sudo apt-key add -
    $ sudo -E apt-get update
    $ sudo -E apt-get -y install kata-runtime kata-proxy kata-shim
    ```
