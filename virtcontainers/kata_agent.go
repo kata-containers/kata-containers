@@ -1835,3 +1835,11 @@ func (k *kataAgent) copyFile(src, dst string) error {
 
 	return nil
 }
+
+func (k *kataAgent) cleanup(id string) {
+	path := k.getSharePath(id)
+	k.Logger().WithField("path", path).Infof("cleanup agent")
+	if err := os.RemoveAll(path); err != nil {
+		k.Logger().WithError(err).Errorf("failed to cleanup vm share path %s", path)
+	}
+}
