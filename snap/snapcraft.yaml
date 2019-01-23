@@ -43,8 +43,7 @@ parts:
       mkdir -p ${pkg_gopath}
 
       # download source
-      curl -LO https://github.com/kata-containers/${pkg_name}/archive/${SNAPCRAFT_PROJECT_VERSION}.tar.gz
-      tar -xf ${SNAPCRAFT_PROJECT_VERSION}.tar.gz --strip-components=1 -C ${pkg_gopath}
+      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
 
       # build and install
@@ -76,8 +75,7 @@ parts:
       mkdir -p ${pkg_gopath}
 
       # download source
-      curl -LO https://github.com/kata-containers/${pkg_name}/archive/${SNAPCRAFT_PROJECT_VERSION}.tar.gz
-      tar -xf ${SNAPCRAFT_PROJECT_VERSION}.tar.gz --strip-components=1 -C ${pkg_gopath}
+      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
 
       # build and install
@@ -100,8 +98,7 @@ parts:
       mkdir -p ${pkg_gopath}
 
       # download source
-      curl -LO https://github.com/kata-containers/${pkg_name}/archive/${SNAPCRAFT_PROJECT_VERSION}.tar.gz
-      tar -xf ${SNAPCRAFT_PROJECT_VERSION}.tar.gz --strip-components=1 -C ${pkg_gopath}
+      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
 
       # build and install
@@ -156,8 +153,7 @@ parts:
       mkdir -p ${pkg_gopath}
 
       # download source
-      curl -LO https://github.com/kata-containers/${pkg_name}/archive/${SNAPCRAFT_PROJECT_VERSION}.tar.gz
-      tar -xf ${SNAPCRAFT_PROJECT_VERSION}.tar.gz --strip-components=1 -C ${pkg_gopath}
+      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
 
       # build and install
