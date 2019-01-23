@@ -12,6 +12,8 @@ import (
 
 	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/sirupsen/logrus"
+	"regexp"
+	"strconv"
 )
 
 const (
@@ -69,7 +71,14 @@ func hostIsVMContainerCapable(details vmContainerCapableDetails) error {
 		return err
 	}
 
-	if strings.Contains(text, "POWER8") {
+	ae := regexp.MustCompile("[0-9]+")
+	re := regexp.MustCompile("POWER[0-9]")
+	powerProcessor, err := strconv.Atoi(ae.FindString(re.FindString(text)))
+	if err != nil {
+		kataLog.WithError(err).Error("Failed to find Power Processor number from ", details.cpuInfoFile)
+	}
+
+	if powerProcessor <= 8 {
 		if !isSMTOff() {
 			return fmt.Errorf("SMT is not Off. %s", failMessage)
 		}
