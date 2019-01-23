@@ -1,39 +1,38 @@
 # Kata Containers Architecture
 
 * [Overview](#overview)
-    * [Hypervisor](#hypervisor)
-      * [Assets](#assets)
-        * [Guest kernel](#guest-kernel)
-        * [Root filesystem image](#root-filesystem-image)
-    * [Agent](#agent)
-    * [Runtime](#runtime)
-        * [Configuration](#configuration)
-        * [Significant commands](#significant-commands)
-            * [create](#create)
-            * [start](#start)
-            * [exec](#exec)
-            * [kill](#kill)
-            * [delete](#delete)
-    * [Proxy](#proxy)
-    * [Shim](#shim)
-    * [Networking](#networking)
-    * [Storage](#storage)
-    * [Kubernetes Support](#kubernetes-support)
-        * [Problem Statement](#problem-statement)
-        * [CRI-O](#cri-o)
-            * [OCI Annotations](#oci-annotations)
-            * [Mixing VM based and namespace based runtimes](#mixing-vm-based-and-namespace-based-runtimes)
-        * [Containerd CRI Plugin (Formerly CRI-containerd)](#containerd-cri-plugin-formerly-cri-containerd)
-            * [Mixing VM based and namespace based runtimes](#mixing-vm-based-and-namespace-based-runtimes-1)
+* [Hypervisor](#hypervisor)
+  * [Assets](#assets)
+    * [Guest kernel](#guest-kernel)
+    * [Root filesystem image](#root-filesystem-image)
+* [Agent](#agent)
+* [Runtime](#runtime)
+    * [Configuration](#configuration)
+    * [Significant commands](#significant-commands)
+        * [create](#create)
+        * [start](#start)
+        * [exec](#exec)
+        * [kill](#kill)
+        * [delete](#delete)
+* [Proxy](#proxy)
+* [Shim](#shim)
+* [Networking](#networking)
+* [Storage](#storage)
+* [Kubernetes Support](#kubernetes-support)
+    * [Problem Statement](#problem-statement)
+    * [Containerd](#containerd)
+    * [CRI-O](#cri-o)
+        * [OCI Annotations](#oci-annotations)
+        * [Mixing VM based and namespace based runtimes](#mixing-vm-based-and-namespace-based-runtimes)
 * [Appendices](#appendices)
     * [DAX](#dax)
 
 ## Overview
 
-This is an architectural overview of Kata Containers, based on the 1.2.0 release.
+This is an architectural overview of Kata Containers, based on the 1.5.0 release.
 
 The two primary deliverables of the Kata Containers project are a container runtime
-and a CRI friendly library API.
+and a CRI friendly shim. There is also a CRI friendly library API behind them.
 
 The [Kata Containers runtime (kata-runtime)](https://github.com/kata-containers/runtime)
 is compatible with the [OCI](https://github.com/opencontainers) [runtime specification](https://github.com/opencontainers/runtime-spec)
@@ -45,29 +44,39 @@ through the [CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and
 select between the [default Docker and CRI shim runtime (runc)](https://github.com/opencontainers/runc)
 and `kata-runtime`.
 
-![Docker and Kata Containers](arch-images/docker-kata.png)
-
 `kata-runtime` creates a QEMU\*/KVM virtual machine for each container or pod,
 the Docker engine or Kubernetes' `kubelet` creates respectively.
+
+![Docker and Kata Containers](arch-images/docker-kata.png)
+
+The [`containerd-shim-kata-v2` (shown as `shimv2` from this point onwards)](https://github.com/kata-containers/runtime/tree/master/containerd-shim-v2) 
+is another Kata Containers entrypoint, which 
+implements the [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2) for Kata.
+With `shimv2`, kubernetes can launch Pod and OCI compatible containers with one shim (the `shimv2`) per Pod instead
+of `2N+1` shims (a `containerd-shim` and a `kata-shim` for each container and the Pod sandbox itself), and no standalone
+`kata-proxy` process even if no vsock is available.
+
+![kubernetes integration with shimv2](arch-images/shimv2.svg)
 
 The container process is then spawned by
 [agent](https://github.com/kata-containers/agent), an agent process running
 as a daemon inside the virtual machine. kata-agent runs a gRPC server in
-the guest using a virtio serial interface which QEMU exposes as a serial
-device on the host. kata-runtime uses a gRPC protocol to communicate with
+the guest using a virtio serial or vsock interface which QEMU exposes as a socket
+file on the host. kata-runtime uses a gRPC protocol to communicate with
 the agent. This protocol allows the runtime to send container management
-commands to the agent. The protocol is also used to pass I/O streams (stdout,
-stderr, stdin) between the guest and the Docker Engine.
+commands to the agent. The protocol is also used to carry the I/O streams (stdout,
+stderr, stdin) between the containers and the manage engines (e.g. Docker Engine).
 
 For any given container, both the init process and all potentially executed
 commands within that container, together with their related I/O streams, need
-to go through the virtio serial interface exported by QEMU. A [Kata Containers
+to go through the virtio serial or vsock interface exported by QEMU. 
+In the virtio serial case, a [Kata Containers
 proxy (`kata-proxy`)](https://github.com/kata-containers/proxy) instance is
 launched for each virtual machine to handle multiplexing and demultiplexing
 those commands and streams.
 
 On the host, each container process's removal is handled by a reaper in the higher
-layers of the container stack. In the case of Docker it is handled by `containerd-shim`.
+layers of the container stack. In the case of Docker or containerd it is handled by `containerd-shim`.
 In the case of CRI-O it is handled by `conmon`. For clarity, for the remainder
 of this document the term "container process reaper" will be used to refer to
 either reaper. As Kata Containers processes run inside their own  virtual machines,
@@ -80,6 +89,10 @@ and `stderr` streams back up the stack to the CRI shim or Docker via the contain
 reaper. `kata-runtime` creates a `kata-shim` daemon for each container and for each
 OCI command received to run within an already running container (example, `docker
 exec`).
+
+Since Kata Containers version 1.5, the new introduced `shimv2` has integrated the
+functionalities of the reaper, the `kata-runtime`, the `kata-shim`, and the `kata-proxy`.
+As a result, there will not be any of the additional processes previously listed.
 
 The container workload, that is, the actual OCI bundle rootfs, is exported from the
 host to the virtual machine.  In the case where a block-based graph driver is
@@ -562,6 +575,17 @@ a previously created virtual machine. In both cases it will get called with very
 arguments, so it needs the help of the Kubernetes CRI runtime to be able to distinguish a
 pod creation request from a container one.
 
+### Containerd
+
+As of Kata Containers 1.5, using `shimv2` with containerd 1.2.0 or above is the preferred
+way to run Kata Containers with Kubernetes ([see the howto](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers)).
+The CRI-O will catch up soon ([kubernetes-sigs/cri-o#2024](https://github.com/kubernetes-sigs/cri-o/issues/2024)).
+
+Refer to the following how-to guides:
+
+- [How to use Kata Containers and Containerd](../how-to/containerd-kata.md)
+- [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](../how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)
+
 ### CRI-O
 
 ####  OCI annotations
@@ -607,6 +631,9 @@ with a Kubernetes pod:
 
 #### Mixing VM based and namespace based runtimes
 
+> **Note:** Since Kubernetes 1.12, the `[Kubernetes RuntimeClass](how-to/containerd-kata.md#kubernetes-runtimeclass)` 
+> has been supported and the user can specify runtime without the non-standardized annotations.
+
 One interesting evolution of the CRI-O support for `kata-runtime` is the ability
 to run virtual machine based pods alongside namespace ones. With CRI-O and Kata
 Containers, one can introduce the concept of workload trust inside a Kubernetes
@@ -635,53 +662,6 @@ a pod is **not** `Privileged` the runtime selection is done as follows:
 | Default CRI-O trust level: `trusted`   | runc                                           | runc                                          | Kata Containers |
 | Default CRI-O trust level: `untrusted` | Kata Containers                               | Kata Containers                              |  Kata Containers |
 
-
-### Containerd CRI Plugin (Formerly CRI-containerd)
-
-The general guidelines for the Containerd CRI Plugin support is similar to the CRI-O support. You can run trusted workloads with a runtime like `runc` and then run an untrusted workload with Kata Containers. The parameters that you can modify in the containerd config to run Kata Containers along with another 'trusted' runtime are the following:
-
-
-```
-# /etc/containerd/config.toml
-
-[plugins.cri]
-
-  [plugins.cri.containerd]
-  
-    # "plugins.cri.containerd.default_runtime" is the runtime to use in containerd.
-    [plugins.cri.containerd.default_runtime]
-      # runtime_type is the runtime type to use in containerd e.g. io.containerd.runtime.v1.linux
-      runtime_type = "io.containerd.runtime.v1.linux"
-
-      # runtime_engine is the name of the runtime engine used by containerd.
-      runtime_engine = ""
-
-      # runtime_root is the directory used by containerd for runtime state.
-      runtime_root = ""
-
-    # "plugins.cri.containerd.untrusted_workload_runtime" is a runtime to run untrusted workloads on it.
-    [plugins.cri.containerd.untrusted_workload_runtime]
-      # runtime_type is the runtime type to use in containerd e.g. io.containerd.runtime.v1.linux
-      runtime_type = "io.containerd.runtime.v1.linux"
-
-      # runtime_engine is the name of the runtime engine used by containerd.
-      runtime_engine = "/usr/bin/kata-runtime"
-
-      # runtime_root is the directory used by containerd for runtime state.
-      runtime_root = ""
-```
-
-You can find more information on the [Containerd config documentation](https://github.com/containerd/cri/blob/master/docs/config.md)
-
-
-#### Mixing VM based and namespace based runtimes
-
-The CRI Plugin supports the following annotation in a Kubernetes pod to identify as an untrusted workload
-
-```
-annotations:
-   io.kubernetes.cri.untrusted-workload: "true"
-```
 
 # Appendices
 
