@@ -123,7 +123,6 @@ var _ = Describe("docker cp with volume", func() {
 
 	Context("check mount points", func() {
 		It("should be removed", func() {
-			Skip("Issue: https://github.com/kata-containers/runtime/issues/794")
 			file, err := ioutil.TempFile(os.TempDir(), "file")
 			Expect(err).ToNot(HaveOccurred())
 			err = file.Close()
