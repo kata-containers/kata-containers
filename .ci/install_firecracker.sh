@@ -67,7 +67,7 @@ else
 	cat <<-EOF | sudo tee "$docker_configuration_file"
 	{
 	 "runtimes": {
-	  "kata": {
+	  "kata-runtime": {
 	   "path": "${path}"
 	  }
 	 },
