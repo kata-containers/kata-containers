@@ -25,9 +25,6 @@ Group    : Development/Tools
 License  : Apache-2.0
 
 BuildRequires: git
-%if 0%{?suse_version} && 0%{?is_opensuse}
-BuildRequires: openSUSE-release
-%endif
 
 %{!?el7 || !?suse_version:Requires: qemu-lite >= @qemu_lite_obs_fedora_version@ }
 
@@ -55,11 +52,10 @@ Overview
 %prep
 mkdir local
 tar -C local -xzf ../SOURCES/go%{GO_VERSION}.linux-@GO_ARCH@.tar.gz
+%autosetup -N -S git
 # Patches
 @RPM_APPLY_PATCHES@
 
-%setup -q
-%autosetup -S git
 
 %build
 export GOROOT=$HOME/rpmbuild/BUILD/local/go
