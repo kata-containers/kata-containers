@@ -133,11 +133,10 @@ var statusFactoryCommand = cli.Command{
 				},
 			}
 			kataLog.WithField("factory", factoryConfig).Info("load vm factory")
-			f, err := vf.NewFactory(ctx, factoryConfig, true)
+			_, err := vf.NewFactory(ctx, factoryConfig, true)
 			if err != nil {
 				fmt.Fprintln(defaultOutputFile, "vm factory is off")
 			} else {
-				f.CloseFactory(ctx)
 				fmt.Fprintln(defaultOutputFile, "vm factory is on")
 			}
 		} else {
