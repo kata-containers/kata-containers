@@ -105,7 +105,7 @@ sed -i -e '/^initrd =/d' %{buildroot}/usr/share/defaults/kata-containers/configu
 /usr/bin/kata-collect-data.sh
 /usr/share/defaults/
 /usr/share/defaults/kata-containers/
-/usr/share/defaults/kata-containers/configuration.toml
+/usr/share/defaults/kata-containers/configuration*.toml
 /usr/share/bash-completion
 /usr/share/bash-completion/completions
 /usr/share/bash-completion/completions/kata-runtime
