@@ -140,7 +140,8 @@ install_kata_components() {
 			install
 		popd >>/dev/null
 	done
-	sed -i -e '/^initrd =/d' "${destdir}/${prefix}/share/defaults/${project}/configuration.toml"
+	sed -i -e '/^initrd =/d' "${destdir}/${prefix}/share/defaults/${project}/configuration-qemu.toml"
+	sed -i -e '/^initrd =/d' "${destdir}/${prefix}/share/defaults/${project}/configuration-fc.toml"
 }
 
 main() {
