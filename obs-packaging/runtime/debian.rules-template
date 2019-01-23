@@ -28,7 +28,7 @@ override_dh_auto_build:
 	ln -s /usr/src/packages/BUILD /usr/src/packages/BUILD/go/src/$(IMPORTNAME)
 	cd $(GOPATH)/src/$(IMPORTNAME)/; \
 	make \
-		QEMUPATH=/usr/bin/$(DEFAULT_QEMU) \
+		QEMUCMD=$(DEFAULT_QEMU) \
 		COMMIT=@HASH@ \
 		SKIP_GO_VERSION_CHECK=1
 
@@ -40,7 +40,7 @@ override_dh_auto_install:
 		DESTDIR=$(shell pwd)/debian/$(PKG_NAME)/ \
 		PREFIX=/usr \
 		COMMIT=@HASH@ \
-		QEMUPATH=/usr/bin/$(DEFAULT_QEMU) \
+		QEMUCMD=$(DEFAULT_QEMU) \
 		SKIP_GO_VERSION_CHECK=1
 
 	sed -i -e '/^initrd =/d' $(shell pwd)/debian/$(PKG_NAME)/usr/share/defaults/kata-containers/configuration.toml

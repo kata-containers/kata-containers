@@ -66,7 +66,7 @@ mkdir -p $HOME/rpmbuild/BUILD/go/src/%{DOMAIN}/%{ORG}
 ln -s $HOME/rpmbuild/BUILD/kata-runtime-%{version} $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
 cd $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
 make \
-    QEMUPATH=/usr/bin/%{DEFAULT_QEMU} \
+    QEMUCMD=%{DEFAULT_QEMU} \
     COMMIT=@HASH@  \
     SKIP_GO_VERSION_CHECK=1
 
@@ -85,7 +85,7 @@ cd $HOME/rpmbuild/BUILD/go/src/%{IMPORTNAME}
 make \
     DESTDIR=%{buildroot} \
     PREFIX=/usr \
-    QEMUPATH=/usr/bin/%{DEFAULT_QEMU} \
+    QEMUCMD=%{DEFAULT_QEMU} \
     COMMIT=@HASH@ \
     SKIP_GO_VERSION_CHECK=1 \
     install
