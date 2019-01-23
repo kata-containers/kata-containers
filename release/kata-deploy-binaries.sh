@@ -115,10 +115,10 @@ install_qemu() {
 # Install static firecracker asset
 install_firecracker() {
 	info "build static firecracker"
-	"${script_dir}/../static-build/firecracker/build-static-firecracker.sh"
+	[ -f "firecracker/firecracker-static" ] || "${script_dir}/../static-build/firecracker/build-static-firecracker.sh"
 	info "Install static firecracker"
-		mkdir -p "${destdir}/opt/kata/bin/"
-		install -D --owner root --group root --mode 0744  firecracker-static "${destdir}/opt/kata/bin/firecracker"
+	mkdir -p "${destdir}/opt/kata/bin/"
+	sudo install -D --owner root --group root --mode 0744  firecracker/firecracker-static "${destdir}/opt/kata/bin/firecracker"
 
 }
 
@@ -165,6 +165,7 @@ main() {
 	install_kata_components
 	install_kernel
 	install_qemu
+	install_firecracker
 	tarball_name="${destdir}.tar.xz"
 	pushd "${destdir}" >>/dev/null
 	tar cfJ "${tarball_name}" "./opt"
