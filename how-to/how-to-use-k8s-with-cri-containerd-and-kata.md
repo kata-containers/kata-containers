@@ -1,13 +1,11 @@
 # How to use Kata Containers and CRI (containerd plugin) with Kubernetes
 
 * [Requirements](#requirements)
-* [Install containerd with CRI plugin enabled](#install-containerd-with-cri-plugin-enabled)
-* [Install Kata Containers](#install-kata-containers)
-* [Install Kubernetes](#install-kubernetes)
-* [Configure containerd to use Kata Containers](#configure-containerd-to-use-kata-containers)
-    * [Define the Kata runtime as the untrusted workload runtime](#define-the-kata-runtime-as-the-untrusted-workload-runtime)
-* [Configure Kubelet to use containerd](#configure-kubelet-to-use-containerd)
-* [Configure proxy - OPTIONAL](#configure-proxy---optional)
+* [Install and configure containerd](#install-and-configure-containerd)
+* [Install and configure Kubernetes](#install-and-configure-kubernetes)
+    * [Install Kubernetes](#install-kubernetes)
+    * [Configure Kubelet to use containerd](#configure-kubelet-to-use-containerd)
+    * [Configure HTTP proxy - OPTIONAL](#configure-http-proxy---optional)
 * [Start Kubernetes](#start-kubernetes)
 * [Install a Pod Network](#install-a-pod-network)
 * [Allow pods to run in the master node](#allow-pods-to-run-in-the-master-node)
@@ -20,10 +18,13 @@ The Kubernetes cluster will use the
 [CRI containerd plugin](https://github.com/containerd/cri) and
 [Kata Containers](https://katacontainers.io) to launch untrusted workloads.
 
+For Kata Containers 1.5.0-rc2 and above, we will use [`containerd-shim-kata-v2` (short as `shimv2` in this documentation)](../design/shimv2.md) 
+to launch Kata Containers. For the previous version of Kata Containers, the Pods are launched with `kata-runtime`.
+
 ## Requirements
 
 - Kubernetes, kubelet, kubeadm
-- cri-containerd
+- containerd with `cri` plug-in
 - Kata Containers
 
 > **Note:** For information about the supported versions of these components,
@@ -31,22 +32,14 @@ The Kubernetes cluster will use the
 > [versions.yaml](https://github.com/kata-containers/runtime/blob/master/versions.yaml)
 > file.
 
-## Install containerd with CRI plugin enabled
+## Install and configure containerd
 
-- Follow the instructions from the
-  [CRI installation guide](http://github.com/containerd/cri/blob/master/docs/installation.md).
+First, follow the [How to use Kata Containers and Containerd](containerd-kata.md) to install and configure containerd. 
+Then, make sure the containerd works with the [examples in it](containerd-kata.md#run).
 
-- Check if `containerd` is now available
-  ```bash
-  $ command -v containerd
-  ```
+## Install and configure Kubernetes
 
-## Install Kata Containers
-
-Follow the instructions to
-[install Kata Containers](https://github.com/kata-containers/documentation/blob/master/install/README.md).
-
-## Install Kubernetes
+### Install Kubernetes
 
 - Follow the instructions for
   [kubeadm installation](https://kubernetes.io/docs/setup/independent/install-kubeadm/).
@@ -57,39 +50,7 @@ Follow the instructions to
   $ command -v kubeadm
   ```
 
-## Configure containerd to use Kata Containers
-
-The CRI `containerd` plugin supports configuration for two runtime types.
-
-- **Default runtime:**
-
-  A runtime that is used by default to run workloads.
-
-- **Untrusted workload runtime:**
-
-  A runtime that will be used to run untrusted workloads. This is appropriate
-  for workloads that require a higher degree of security isolation.
-
-#### Define the Kata runtime as the untrusted workload runtime
-
-Configure `containerd` to use the Kata runtime to run untrusted workloads by
-setting the `plugins.cri.containerd.untrusted_workload_runtime`
-[config option](https://github.com/containerd/cri/blob/v1.0.0-rc.0/docs/config.md):
-
-```bash
-$ sudo mkdir -p /etc/containerd/
-$ cat << EOT | sudo tee /etc/containerd/config.toml
-[plugins]
-    [plugins.cri.containerd]
-      [plugins.cri.containerd.untrusted_workload_runtime]
-        runtime_type = "io.containerd.runtime.v1.linux"
-        runtime_engine = "/usr/bin/kata-runtime"
-EOT
-```
-
-> **Note:** Unless configured otherwise, the default runtime is set to `runc`.
-
-## Configure Kubelet to use containerd
+### Configure Kubelet to use containerd
 
 In order to allow kubelet to use containerd (using the CRI interface), configure the service to point to the `containerd` socket.
 
@@ -109,7 +70,7 @@ In order to allow kubelet to use containerd (using the CRI interface), configure
   $ sudo systemctl daemon-reload
   ```
 
-## Configure proxy - OPTIONAL
+### Configure HTTP proxy - OPTIONAL
 
 If you are behind a proxy, use the following script to configure your proxy for docker, kubelet, and containerd:
 
