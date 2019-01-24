@@ -142,6 +142,9 @@ install_kata_components() {
 	done
 	sed -i -e '/^initrd =/d' "${destdir}/${prefix}/share/defaults/${project}/configuration-qemu.toml"
 	sed -i -e '/^initrd =/d' "${destdir}/${prefix}/share/defaults/${project}/configuration-fc.toml"
+	pushd "${destdir}/${prefix}/share/defaults/${project}"
+	ln -sf "configuration-qemu.toml" configuration.toml
+	popd
 }
 
 main() {
