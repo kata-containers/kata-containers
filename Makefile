@@ -23,21 +23,19 @@ ifeq ($(SKIP_GO_VERSION_CHECK),)
     include golang.mk
 endif
 
-ifneq ($(GOPATH),)
-    GOARCH=$(shell go env GOARCH)
-    ifeq ($(ARCH),)
-        ARCH = $(GOARCH)
-    endif
-
-    ARCH_DIR = arch
-    ARCH_FILE_SUFFIX = -options.mk
-    ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
-    ARCH_FILES = $(wildcard arch/*$(ARCH_FILE_SUFFIX))
-    ALL_ARCHES = $(patsubst $(ARCH_DIR)/%$(ARCH_FILE_SUFFIX),%,$(ARCH_FILES))
-
-    # Load architecture-dependent settings
-    include $(ARCH_FILE)
+GOARCH=$(shell go env GOARCH)
+ifeq ($(ARCH),)
+    ARCH = $(GOARCH)
 endif
+
+ARCH_DIR = arch
+ARCH_FILE_SUFFIX = -options.mk
+ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
+ARCH_FILES = $(wildcard arch/*$(ARCH_FILE_SUFFIX))
+ALL_ARCHES = $(patsubst $(ARCH_DIR)/%$(ARCH_FILE_SUFFIX),%,$(ARCH_FILES))
+
+# Load architecture-dependent settings
+include $(ARCH_FILE)
 
 PROJECT_TYPE = kata
 PROJECT_NAME = Kata Containers
