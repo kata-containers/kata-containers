@@ -473,7 +473,7 @@ check_docs()
 		if [ "$specific_branch" != "true" ]
 		then
 			# If the URL is new on this PR, it cannot be checked.
-			echo "$new_urls" | grep -q "\<${url}\>" && \
+			echo "$new_urls" | egrep -q "\<${url}\>" && \
 				info "ignoring new (but correct) URL: $url" && continue
 		fi
 
