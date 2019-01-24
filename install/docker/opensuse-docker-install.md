@@ -26,7 +26,7 @@
        $ cat <<EOF | sudo tee /etc/systemd/system/docker.service.d/kata-containers.conf
        [Service]
        ExecStart=
-       ExecStart=/usr/bin/dockerd -D --containerd /run/containerd/containerd.sock --add-runtime kata-runtime=/usr/bin/kata-runtime --default-runtime=kata-runtime
+       ExecStart=/usr/bin/dockerd -D --add-runtime kata-runtime=/usr/bin/kata-runtime --default-runtime=kata-runtime
        EOF
        ```
 
