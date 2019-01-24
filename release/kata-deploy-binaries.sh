@@ -145,6 +145,21 @@ install_kata_components() {
 	pushd "${destdir}/${prefix}/share/defaults/${project}"
 	ln -sf "configuration-qemu.toml" configuration.toml
 	popd
+
+	pushd "${destdir}/${prefix}/bin"
+	cat <<EOT | sudo tee kata-fc
+#!/bin/bash
+${prefix}/bin/kata-runtime --kata-config "${prefix}/share/defaults/${project}/configuration-fc.toml" \$@
+EOT
+	sudo chmod +x kata-fc
+
+	cat <<EOT | sudo tee kata-qemu
+#!/bin/bash
+${prefix}/bin/kata-runtime --kata-config "${prefix}/share/defaults/${project}/configuration-qemu.toml" \$@
+EOT
+	sudo chmod +x kata-qemu
+
+	popd
 }
 
 main() {
