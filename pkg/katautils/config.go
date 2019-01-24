@@ -84,6 +84,7 @@ type factory struct {
 
 type hypervisor struct {
 	Path                    string `toml:"path"`
+	JailerPath              string `toml:"jailer_path"`
 	Kernel                  string `toml:"kernel"`
 	CtlPath                 string `toml:"ctlpath"`
 	Initrd                  string `toml:"initrd"`
@@ -170,6 +171,16 @@ func (h hypervisor) ctlpath() (string, error) {
 
 	if h.CtlPath == "" {
 		p = defaultHypervisorCtlPath
+	}
+
+	return ResolvePath(p)
+}
+
+func (h hypervisor) jailerPath() (string, error) {
+	p := h.JailerPath
+
+	if h.JailerPath == "" {
+		return "", nil
 	}
 
 	return ResolvePath(p)
@@ -463,6 +474,11 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	jailer, err := h.jailerPath()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	kernel, err := h.kernel()
 	if err != nil {
 		return vc.HypervisorConfig{}, err
@@ -491,6 +507,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 
 	return vc.HypervisorConfig{
 		HypervisorPath:        hypervisor,
+		JailerPath:            jailer,
 		KernelPath:            kernel,
 		InitrdPath:            initrd,
 		ImagePath:             image,
@@ -915,6 +932,7 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 	return vc.HypervisorConfig{
 		HypervisorPath:          defaultHypervisorPath,
+		JailerPath:              defaultJailerPath,
 		KernelPath:              defaultKernelPath,
 		ImagePath:               defaultImagePath,
 		InitrdPath:              defaultInitrdPath,
