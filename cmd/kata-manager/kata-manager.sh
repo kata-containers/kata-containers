@@ -270,7 +270,7 @@ get_git_repo()
 	fi
 
 	info "getting repo $1 using git"
-	git clone "$repo_url" "$local_dest"
+	git clone "$repo_url" "$local_dest" || (rm -fr "$local_dest" && exit 1)
 }
 
 exec_document()
