@@ -89,4 +89,4 @@ fi
 # FIXME - we need to create a symbolic link for kata-runtime
 # in order that kata-runtime kata-env works
 # https://github.com/kata-containers/runtime/issues/1144
-ln -s /opt/kata/bin/kata-runtime /usr/local/bin/
+sudo ln -s /opt/kata/bin/kata-runtime /usr/local/bin/

@@ -24,6 +24,12 @@ case "${CI_JOB}" in
 		sudo -E PATH="$PATH" bash -c "make cri-containerd"
 		sudo -E PATH="$PATH" CRI_RUNTIME="containerd" bash -c "make kubernetes"
 		;;
+	"FIRECRACKER")
+		echo "INFO: Running soak test"
+		sudo -E PATH="$PATH" bash -c "make docker-stability"
+		echo "INFO: Running oci call test"
+		sudo -E PATH="$PATH" bash -c "make oci"
+		;;
 	*)
 		echo "INFO: Running checks"
 		sudo -E PATH="$PATH" bash -c "make check"
