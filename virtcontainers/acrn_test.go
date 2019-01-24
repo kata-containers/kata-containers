@@ -251,7 +251,7 @@ func TestAcrnCreateSandbox(t *testing.T) {
 		t.Fatalf("Could not create hypervisor file %s: %v", testAcrnPath, err)
 	}
 
-	if err := a.createSandbox(context.Background(), sandbox.id, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
+	if err := a.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
 		t.Fatal(err)
 	}
 

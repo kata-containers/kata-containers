@@ -20,6 +20,9 @@ const (
 	// HypervisorPath is a sandbox annotation for passing a per container path pointing at the hypervisor that will run the container VM.
 	HypervisorPath = vcAnnotationsPrefix + "HypervisorPath"
 
+	// JailerPath is a sandbox annotation for passing a per container path pointing at the jailer that will constrain the container VM.
+	JailerPath = vcAnnotationsPrefix + "JailerPath"
+
 	// FirmwarePath is a sandbox annotation for passing a per container path pointing at the guest firmware that will run the container VM.
 	FirmwarePath = vcAnnotationsPrefix + "FirmwarePath"
 
@@ -34,6 +37,9 @@ const (
 
 	// HypervisorHash is an sandbox annotation for passing a container hypervisor binary SHA-512 hash value.
 	HypervisorHash = vcAnnotationsPrefix + "HypervisorHash"
+
+	// JailerHash is an sandbox annotation for passing a jailer binary SHA-512 hash value.
+	JailerHash = vcAnnotationsPrefix + "JailerHash"
 
 	// FirmwareHash is an sandbox annotation for passing a container guest firmware SHA-512 hash value.
 	FirmwareHash = vcAnnotationsPrefix + "FirmwareHash"
