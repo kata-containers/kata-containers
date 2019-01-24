@@ -16,7 +16,6 @@ source "${cidir}/lib.sh"
 arch=$("${cidir}"/kata-arch.sh -d)
 INSTALL_KATA="${INSTALL_KATA:-yes}"
 CI=${CI:-false}
-KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
 # values indicating whether related intergration tests have been supported
 CRIO="${CRIO:-yes}"
@@ -84,11 +83,6 @@ install_kata() {
 	fi
 }
 
-install_firecracker() {
-	echo "Install Firecracker"
-	bash -f ${cidir}/install_firecracker.sh
-}
-
 install_extra_tools() {
 	echo "Install CNI plugins"
 	bash -f "${cidir}/install_cni_plugins.sh"
@@ -126,11 +120,7 @@ main() {
 	setup_distro_env
 	install_docker
 	enable_nested_virtualization
-	if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
-		install_firecracker
-	else
-		install_kata
-	fi
+	install_kata
 	install_extra_tools
 	echo "Disable systemd-journald rate limit"
 	sudo crudini --set /etc/systemd/journald.conf Journal RateLimitInterval 0s

@@ -11,6 +11,7 @@ set -o pipefail
 cidir=$(dirname "$0")
 arch=$("${cidir}"/kata-arch.sh -d)
 source "${cidir}/lib.sh"
+KATA_DEV_MODE="${KATA_DEV_MODE:-false}"
 
 if [ "$arch" != "x86_64" ]; then
 	die "Static binaries for Firecracker only available with x86_64."
@@ -26,17 +27,23 @@ if [ "$docker_version" != "18.06" ]; then
 	die "Firecracker hypervisor only works with docker 18.06"
 fi
 
-# This is the initial release of Kata
-# Containers that introduces support for
-# the Firecracker hypervisor
-release_version="1.5.0-rc2"
-file_name="kata-fc-static-${release_version}-${arch}.tar.gz"
-url="https://github.com/kata-containers/runtime/releases/download/${release_version}/${file_name}"
-echo "Get static binaries from release version ${release_version}"
-curl -OL ${url}
+# Get url for firecracker from runtime/versions.yaml
+firecracker_repo=$(get_version "assets.hypervisor.firecracker.url")
+[ -n "$firecracker_repo" ] || die "failed to get firecracker repo"
+firecracker_repo=${firecracker_repo/https:\/\//}
 
-echo "Decompress binaries from release version ${release_version}"
-sudo tar -xvf ${file_name} -C /
+# Get version for firecracker from runtime/versions.yaml
+firecracker_version=$(get_version "assets.hypervisor.firecracker.version")
+[ -n "$firecracker_version" ] || die "failed to get firecracker version"
+
+# Get firecracker
+go get -d ${firecracker_repo} || true
+# Checkout to specific version
+pushd "${GOPATH}/src/${firecracker_repo}"
+git checkout tags/${firecracker_version}
+./tools/devtool --unattended build --release -- --features vsock
+sudo install ${GOPATH}/src/${firecracker_repo}/build/release/firecracker /usr/bin/
+popd
 
 echo "Install and configure docker"
 docker_configuration_path="/etc/docker"
@@ -51,10 +58,7 @@ docker_configuration_file=$docker_configuration_path/daemon.json
 # is required
 driver="devicemapper"
 
-# From decompressing the tarball, all the files are placed within
-# /opt/kata. The runtime configuration is expected to land at
-# /opt/kata/share/defaults/kata-containers/configuration.toml
-path="/opt/kata/bin/kata-runtime"
+path="/usr/local/bin/kata-runtime"
 
 if [ -f $docker_configuration_file ]; then
 	# Check devicemapper flag
@@ -85,8 +89,3 @@ check_vsock=$(sudo modprobe vhost_vsock)
 if [ $? != 0 ]; then
 	die "vsock is not supported on your host system"
 fi
-
-# FIXME - we need to create a symbolic link for kata-runtime
-# in order that kata-runtime kata-env works
-# https://github.com/kata-containers/runtime/issues/1144
-sudo ln -s /opt/kata/bin/kata-runtime /usr/local/bin/
