@@ -33,10 +33,10 @@
 * [Run Kata Containers with Kubernetes](#run-kata-containers-with-kubernetes)
     * [Install a CRI implementation](#install-a-cri-implementation)
         * [CRI-O](#cri-o)
-        * [CRI-containerd](#cri-containerd)
+        * [containerd with cri plugin](#containerd-with-cri-plugin)
     * [Install Kubernetes](#install-kubernetes)
         * [Configure for CRI-O](#configure-for-cri-o)
-        * [Configure for CRI-containerd](#configure-for-cri-containerd)
+        * [Configure for containerd](#configure-for-containerd)
     * [Run a Kubernetes pod with Kata Containers](#run-a-kubernetes-pod-with-kata-containers)
 * [Troubleshoot Kata Containers](#troubleshoot-kata-containers)
 * [Appendices](#appendices)
@@ -422,6 +422,10 @@ choose the one that you want, but you have to pick one. After choosing
 either CRI-O or CRI-containerd, you must make the appropriate changes
 to ensure it relies on the Kata Containers runtime.
 
+As of Kata Containers 1.5, using `shimv2` with containerd 1.2.0 or above is the preferred
+way to run Kata Containers with Kubernetes ([see the howto](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers)).
+The CRI-O will catch up soon.
+
 ### CRI-O
 
 If you select CRI-O, follow the "CRI-O Tutorial" instructions
@@ -486,13 +490,13 @@ Restart CRI-O to take changes into account
 $ sudo systemctl restart crio
 ```
 
-### CRI-containerd
+### containerd with cri plugin
 
-If you select CRI-containerd, follow the "Getting Started for Developers"
+If you select containerd with `cri` plugin, follow the "Getting Started for Developers"
 instructions [here](https://github.com/containerd/cri#getting-started-for-developers)
 to properly install it.
 
-To customize CRI-containerd to select Kata Containers runtime, follow our
+To customize containerd to select Kata Containers runtime, follow our
 "Configure containerd to use Kata Containers" internal documentation
 [here](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers).
 
@@ -515,14 +519,14 @@ implementation you chose, and the kubelet service has to be updated accordingly.
 Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///var/run/crio/crio.sock"
 ```
 
-### Configure for CRI-containerd
+### Configure for containerd
 
 `/etc/systemd/system/kubelet.service.d/0-cri-containerd.conf`
 ```
 [Service]
 Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
 ```
-For more information about CRI-containerd see the "Configure Kubelet to use containerd"
+For more information about containerd see the "Configure Kubelet to use containerd"
 documentation [here](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-kubelet-to-use-containerd).
 
 ## Run a Kubernetes pod with Kata Containers
