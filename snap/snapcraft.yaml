@@ -49,11 +49,13 @@ parts:
       # build and install
       make \
         PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
-        SKIP_GO_VERSION_CHECK=1
+        SKIP_GO_VERSION_CHECK=1 \
+        QEMUCMD=qemu-system-$(arch)
       make install \
         PREFIX=/usr \
         DESTDIR=${SNAPCRAFT_PART_INSTALL} \
-        SKIP_GO_VERSION_CHECK=1
+        SKIP_GO_VERSION_CHECK=1 \
+        QEMUCMD=qemu-system-$(arch)
 
       # A snap is read-only squashfs, unfourtunately it's not possible to use the rootfs image with DAX
       # since rw access is required therefore initrd image must be used instead.
