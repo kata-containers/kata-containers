@@ -33,6 +33,7 @@ parts:
     build-attributes: [no-patchelf]
     override-build: |
       pkg_name=runtime
+      patch1="$(realpath ../../../snap/1162-runtime.patch)"
 
       # set GOPATH
       export GOPATH=$(realpath go)
@@ -45,6 +46,9 @@ parts:
       # download source
       git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
+
+      #Issue: https://github.com/kata-containers/runtime/pull/1162
+      patch -p1 < "${patch1}"
 
       # build and install
       make \
