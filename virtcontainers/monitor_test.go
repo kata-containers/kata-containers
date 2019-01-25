@@ -18,7 +18,7 @@ func TestMonitorSuccess(t *testing.T) {
 	hConfig := newHypervisorConfig(nil, nil)
 
 	// create a sandbox
-	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, []ContainerConfig{contConfig}, nil)
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, []ContainerConfig{contConfig}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestMonitorClosedChannel(t *testing.T) {
 	hConfig := newHypervisorConfig(nil, nil)
 
 	// create a sandbox
-	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NoopNetworkModel, NetworkConfig{}, []ContainerConfig{contConfig}, nil)
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, []ContainerConfig{contConfig}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
