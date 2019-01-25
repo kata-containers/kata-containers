@@ -53,12 +53,6 @@ var sandboxConfigFlags = []cli.Flag{
 	},
 
 	cli.GenericFlag{
-		Name:  "network",
-		Value: new(vc.NetworkModel),
-		Usage: "the network model",
-	},
-
-	cli.GenericFlag{
 		Name:  "proxy",
 		Value: new(vc.ProxyType),
 		Usage: "the agent's proxy",
@@ -150,11 +144,6 @@ func buildSandboxConfig(context *cli.Context) (vc.SandboxConfig, error) {
 		return vc.SandboxConfig{}, fmt.Errorf("Could not convert agent type")
 	}
 
-	networkModel, ok := context.Generic("network").(*vc.NetworkModel)
-	if ok != true {
-		return vc.SandboxConfig{}, fmt.Errorf("Could not convert network model")
-	}
-
 	proxyType, ok := context.Generic("proxy").(*vc.ProxyType)
 	if ok != true {
 		return vc.SandboxConfig{}, fmt.Errorf("Could not convert proxy type")
@@ -212,7 +201,6 @@ func buildSandboxConfig(context *cli.Context) (vc.SandboxConfig, error) {
 		AgentType:   *agentType,
 		AgentConfig: agConfig,
 
-		NetworkModel:  *networkModel,
 		NetworkConfig: netConfig,
 
 		ProxyType:   *proxyType,

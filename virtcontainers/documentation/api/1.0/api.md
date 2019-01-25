@@ -40,7 +40,6 @@ sandbox lifecycle through the rest of the [sandbox API](#sandbox-functions).
   * [ProxyType](#proxytype)
   * [ProxyConfig](#proxyconfig)
   * [ShimType](#shimtype)
-  * [NetworkModel](#networkmodel)
   * [NetworkConfig](#networkconfig)
     * [NetInterworkingModel](#netinterworkingmodel)
   * [Volume](#volume)
@@ -76,7 +75,6 @@ type SandboxConfig struct {
 	ShimType   ShimType
 	ShimConfig interface{}
 
-	NetworkModel  NetworkModel
 	NetworkConfig NetworkConfig
 
 	// Volumes is a list of shared volumes between the host and the Sandbox.
@@ -254,20 +252,6 @@ const (
 
 	// KataShimType is the Kata Containers shim type.
 	KataShimType ShimType = "kataShim"
-)
-```
-
-##### `NetworkModel`
-```Go
-// NetworkModel describes the type of network specification.
-type NetworkModel string
-
-const (
-	// NoopNetworkModel is the No-Op network.
-	NoopNetworkModel NetworkModel = "noop"
-
-	// CNMNetworkModel is the CNM network.
-	CNMNetworkModel NetworkModel = "CNM"
 )
 ```
 
