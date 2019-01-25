@@ -2,8 +2,8 @@
 
 1. Install the unsatisfied dependencies
 
-  Kata Containers packages depends on a version of `librdbd1` that's not yet available in the `stable` repo.
-  A more recent version of `librdbd1` can be installed from the `unstable` repo: https://packages.debian.org/sid/librbd1
+  Kata Containers packages depends on a version of `librbd1` that's not yet available in the `stable` repo.
+  A more recent version of `librbd1` can be installed from the `unstable` repo: https://packages.debian.org/sid/librbd1
 
   Add `unstable` repo to `/etc/apt/sources.list.d/unstable.list` sources list:
   
