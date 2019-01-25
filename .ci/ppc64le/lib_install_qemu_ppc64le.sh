@@ -7,7 +7,8 @@
 set -e
 
 CURRENT_QEMU_VERSION=$(get_version "assets.hypervisor.qemu.version")
-PACKAGED_QEMU="qemu"
+PACKAGED_QEMU="qemu-system-ppc"
+BUILT_QEMU="qemu-system-ppc64"
 
 get_packaged_qemu_version() {
         if [ "$ID" == "ubuntu" ]; then
@@ -66,7 +67,6 @@ build_and_install_qemu() {
         echo "Install Qemu"
         sudo -E make install
 
-        # Add link from /usr/local/bin to /usr/bin
-        sudo ln -sf $(command -v qemu-system-${QEMU_ARCH}) "/usr/bin/qemu-system-${QEMU_ARCH}"
+        sudo ln -sf $(command -v ${BUILT_QEMU}) "/usr/bin/qemu-system-${QEMU_ARCH}"
         popd
 }
