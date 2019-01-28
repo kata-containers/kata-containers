@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/store"
@@ -31,13 +32,15 @@ const (
 )
 
 var sandboxAnnotations = map[string]string{
-	"sandbox.foo":   "sandbox.bar",
-	"sandbox.hello": "sandbox.world",
+	"sandbox.foo":             "sandbox.bar",
+	"sandbox.hello":           "sandbox.world",
+	annotations.ConfigJSONKey: `{"linux":{"resources":{}}}`,
 }
 
 var containerAnnotations = map[string]string{
-	"container.foo":   "container.bar",
-	"container.hello": "container.world",
+	"container.foo":           "container.bar",
+	"container.hello":         "container.world",
+	annotations.ConfigJSONKey: `{"linux":{"resources":{}}}`,
 }
 
 func newBasicTestCmd() types.Cmd {
