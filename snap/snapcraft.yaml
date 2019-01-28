@@ -34,6 +34,7 @@ parts:
     override-build: |
       pkg_name=runtime
       patch1="$(realpath ../../../snap/1162-runtime.patch)"
+      patch2="$(realpath ../../../snap/1185-runtime.patch)"
 
       # set GOPATH
       export GOPATH=$(realpath go)
@@ -49,6 +50,8 @@ parts:
 
       #Issue: https://github.com/kata-containers/runtime/pull/1162
       patch -p1 < "${patch1}"
+      #Issue: https://github.com/kata-containers/runtime/issues/1185
+      patch -p1 < "${patch2}"
 
       # build and install
       make \
