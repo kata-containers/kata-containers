@@ -329,14 +329,14 @@ func (q *QMP) errorDesc(errorData interface{}) (string, error) {
 	// convert error to json
 	data, err := json.Marshal(errorData)
 	if err != nil {
-		return "", fmt.Errorf("Unable to extract error information: %v", err)
+		return "", fmt.Errorf("unable to extract error information: %v", err)
 	}
 
 	// see: https://github.com/qemu/qemu/blob/stable-2.12/qapi/qmp-dispatch.c#L125
 	var qmpErr map[string]string
 	// convert json to qmpError
 	if err = json.Unmarshal(data, &qmpErr); err != nil {
-		return "", fmt.Errorf("Unable to convert json to qmpError: %v", err)
+		return "", fmt.Errorf("unable to convert json to qmpError: %v", err)
 	}
 
 	return qmpErr["desc"], nil
@@ -404,7 +404,7 @@ func (q *QMP) writeNextQMPCommand(cmdQueue *list.List) {
 	encodedCmd, err := json.Marshal(&cmdData)
 	if err != nil {
 		cmd.res <- qmpResult{
-			err: fmt.Errorf("Unable to marhsall command %s: %v",
+			err: fmt.Errorf("unable to marhsall command %s: %v",
 				cmd.name, err),
 		}
 		cmdQueue.Remove(cmdEl)
@@ -419,7 +419,7 @@ func (q *QMP) writeNextQMPCommand(cmdQueue *list.List) {
 
 	if err != nil {
 		cmd.res <- qmpResult{
-			err: fmt.Errorf("Unable to write command to qmp socket %v", err),
+			err: fmt.Errorf("unable to write command to qmp socket %v", err),
 		}
 		cmdQueue.Remove(cmdEl)
 	}
@@ -525,7 +525,7 @@ func (q *QMP) mainLoop() {
 		}
 		/* #nosec */
 		_ = q.conn.Close()
-		_ = <-fromVMCh
+		<-fromVMCh
 		failOutstandingCommands(cmdQueue)
 		close(q.disconnectedCh)
 	}()
@@ -689,12 +689,12 @@ func QMPStart(ctx context.Context, socket string, cfg QMPConfig, disconnectedCh 
 	case <-ctx.Done():
 		q.Shutdown()
 		<-disconnectedCh
-		return nil, nil, fmt.Errorf("Canceled by caller")
+		return nil, nil, fmt.Errorf("canceled by caller")
 	case <-disconnectedCh:
-		return nil, nil, fmt.Errorf("Lost connection to VM")
+		return nil, nil, fmt.Errorf("lost connection to VM")
 	case q.version = <-connectedCh:
 		if q.version == nil {
-			return nil, nil, fmt.Errorf("Failed to find QMP version information")
+			return nil, nil, fmt.Errorf("failed to find QMP version information")
 		}
 	}
 
@@ -860,7 +860,7 @@ func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, drive
 	}
 
 	if !isSCSIDriver {
-		return fmt.Errorf("Invalid SCSI driver provided %s", driver)
+		return fmt.Errorf("invalid SCSI driver provided %s", driver)
 	}
 
 	args := map[string]interface{}{
@@ -1144,14 +1144,21 @@ func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsd
 // ExecuteCPUDeviceAdd adds a CPU to a QEMU instance using the device_add command.
 // driver is the CPU model, cpuID must be a unique ID to identify the CPU, socketID is the socket number within
 // node/board the CPU belongs to, coreID is the core number within socket the CPU belongs to, threadID is the
-// thread number within core the CPU belongs to.
+// thread number within core the CPU belongs to. Note that socketID and threadID are not a requirement for
+// architecures like ppc64le.
 func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, coreID, threadID, romfile string) error {
 	args := map[string]interface{}{
-		"driver":    driver,
-		"id":        cpuID,
-		"socket-id": socketID,
-		"core-id":   coreID,
-		"thread-id": threadID,
+		"driver":  driver,
+		"id":      cpuID,
+		"core-id": coreID,
+	}
+
+	if socketID != "" {
+		args["socket-id"] = socketID
+	}
+
+	if threadID != "" {
+		args["thread-id"] = threadID
 	}
 
 	if isVirtioPCI[DeviceDriver(driver)] {
@@ -1171,13 +1178,13 @@ func (q *QMP) ExecuteQueryHotpluggableCPUs(ctx context.Context) ([]HotpluggableC
 	// convert response to json
 	data, err := json.Marshal(response)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to extract CPU information: %v", err)
+		return nil, fmt.Errorf("unable to extract CPU information: %v", err)
 	}
 
 	var cpus []HotpluggableCPU
 	// convert json to []HotpluggableCPU
 	if err = json.Unmarshal(data, &cpus); err != nil {
-		return nil, fmt.Errorf("Unable to convert json to hotpluggable CPU: %v", err)
+		return nil, fmt.Errorf("unable to convert json to hotpluggable CPU: %v", err)
 	}
 
 	return cpus, nil
@@ -1211,7 +1218,7 @@ func (q *QMP) ExecQueryMemoryDevices(ctx context.Context) ([]MemoryDevices, erro
 	// convert response to json
 	data, err := json.Marshal(response)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to extract memory devices information: %v", err)
+		return nil, fmt.Errorf("unable to extract memory devices information: %v", err)
 	}
 
 	var memoryDevices []MemoryDevices
@@ -1235,7 +1242,7 @@ func (q *QMP) ExecQueryCpus(ctx context.Context) ([]CPUInfo, error) {
 	// convert response to json
 	data, err := json.Marshal(response)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to extract memory devices information: %v", err)
+		return nil, fmt.Errorf("unable to extract memory devices information: %v", err)
 	}
 
 	var cpuInfo []CPUInfo
@@ -1259,7 +1266,7 @@ func (q *QMP) ExecQueryCpusFast(ctx context.Context) ([]CPUInfoFast, error) {
 	// convert response to json
 	data, err := json.Marshal(response)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to extract memory devices information: %v", err)
+		return nil, fmt.Errorf("unable to extract memory devices information: %v", err)
 	}
 
 	var cpuInfoFast []CPUInfoFast
@@ -1434,12 +1441,12 @@ func (q *QMP) ExecuteQueryMigration(ctx context.Context) (MigrationStatus, error
 
 	data, err := json.Marshal(response)
 	if err != nil {
-		return MigrationStatus{}, fmt.Errorf("Unable to extract migrate status information: %v", err)
+		return MigrationStatus{}, fmt.Errorf("unable to extract migrate status information: %v", err)
 	}
 
 	var status MigrationStatus
 	if err = json.Unmarshal(data, &status); err != nil {
-		return MigrationStatus{}, fmt.Errorf("Unable to convert migrate status information: %v", err)
+		return MigrationStatus{}, fmt.Errorf("unable to convert migrate status information: %v", err)
 	}
 
 	return status, nil
