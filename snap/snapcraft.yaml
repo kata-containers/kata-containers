@@ -123,6 +123,9 @@ parts:
       - docker.io
       - cpio
     override-build: |
+      # set GOPATH
+      export GOPATH=$(realpath go)
+      mkdir -p "${GOPATH}"
       # go was built in parts/go/build
       export GOROOT=$(realpath ../../go/build)
       export PATH="${GOROOT}/bin:${PATH}"
@@ -138,7 +141,7 @@ parts:
       # use the same go version for all packages
       sed -i 's|^GO_VERSION=.*|GO_VERSION='$(go version | cut -d' ' -f3 | tr -d go)'|g' rootfs-builder/versions.txt
 
-      sudo -E PATH=$PATH make DISTRO=alpine AGENT_INIT=yes USE_DOCKER=1 initrd
+      sudo -E PATH=$PATH make AGENT_VERSION=${SNAPCRAFT_PROJECT_VERSION} DISTRO=alpine AGENT_INIT=yes USE_DOCKER=1 initrd
 
       kata_image_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
       mkdir -p ${kata_image_dir}
