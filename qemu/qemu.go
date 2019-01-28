@@ -534,7 +534,7 @@ func (netdev NetDevice) QemuNetdevParams(config *Config) []string {
 	netdevParams = append(netdevParams, netdev.Type.QemuNetdevParam())
 	netdevParams = append(netdevParams, fmt.Sprintf(",id=%s", netdev.ID))
 
-	if netdev.VHost == true {
+	if netdev.VHost {
 		netdevParams = append(netdevParams, ",vhost=on")
 		if len(netdev.VhostFDs) > 0 {
 			var fdParams []string
@@ -710,11 +710,11 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",drive=%s", blkdev.ID))
-	if blkdev.SCSI == false {
+	if !blkdev.SCSI {
 		deviceParams = append(deviceParams, ",scsi=off")
 	}
 
-	if blkdev.WCE == false {
+	if !blkdev.WCE {
 		deviceParams = append(deviceParams, ",config-wce=off")
 	}
 
@@ -1523,15 +1523,15 @@ func (config *Config) appendCPUModel() {
 
 func (config *Config) appendQMPSockets() {
 	for _, q := range config.QMPSockets {
-		if q.Valid() == false {
+		if !q.Valid() {
 			continue
 		}
 
 		qmpParams := append([]string{}, fmt.Sprintf("%s:", q.Type))
 		qmpParams = append(qmpParams, q.Name)
-		if q.Server == true {
+		if q.Server {
 			qmpParams = append(qmpParams, ",server")
-			if q.NoWait == true {
+			if q.NoWait {
 				qmpParams = append(qmpParams, ",nowait")
 			}
 		}
@@ -1543,7 +1543,7 @@ func (config *Config) appendQMPSockets() {
 
 func (config *Config) appendDevices() {
 	for _, d := range config.Devices {
-		if d.Valid() == false {
+		if !d.Valid() {
 			continue
 		}
 
@@ -1611,7 +1611,7 @@ func (config *Config) appendCPUs() error {
 }
 
 func (config *Config) appendRTC() {
-	if config.RTC.Valid() == false {
+	if !config.RTC.Valid() {
 		return
 	}
 
@@ -1663,7 +1663,7 @@ func (config *Config) appendKernel() {
 }
 
 func (config *Config) appendMemoryKnobs() {
-	if config.Knobs.HugePages == true {
+	if config.Knobs.HugePages {
 		if config.Memory.Size != "" {
 			dimmName := "dimm1"
 			objMemParam := "memory-backend-file,id=" + dimmName + ",size=" + config.Memory.Size + ",mem-path=/dev/hugepages,share=on,prealloc=on"
@@ -1675,7 +1675,7 @@ func (config *Config) appendMemoryKnobs() {
 			config.qemuParams = append(config.qemuParams, "-numa")
 			config.qemuParams = append(config.qemuParams, numaMemParam)
 		}
-	} else if config.Knobs.MemPrealloc == true {
+	} else if config.Knobs.MemPrealloc {
 		if config.Memory.Size != "" {
 			dimmName := "dimm1"
 			objMemParam := "memory-backend-ram,id=" + dimmName + ",size=" + config.Memory.Size + ",prealloc=on"
@@ -1687,11 +1687,11 @@ func (config *Config) appendMemoryKnobs() {
 			config.qemuParams = append(config.qemuParams, "-numa")
 			config.qemuParams = append(config.qemuParams, numaMemParam)
 		}
-	} else if config.Knobs.FileBackedMem == true {
+	} else if config.Knobs.FileBackedMem {
 		if config.Memory.Size != "" && config.Memory.Path != "" {
 			dimmName := "dimm1"
 			objMemParam := "memory-backend-file,id=" + dimmName + ",size=" + config.Memory.Size + ",mem-path=" + config.Memory.Path
-			if config.Knobs.FileBackedMemShared == true {
+			if config.Knobs.FileBackedMemShared {
 				objMemParam += ",share=on"
 			}
 			numaMemParam := "node,memdev=" + dimmName
@@ -1706,45 +1706,45 @@ func (config *Config) appendMemoryKnobs() {
 }
 
 func (config *Config) appendKnobs() {
-	if config.Knobs.NoUserConfig == true {
+	if config.Knobs.NoUserConfig {
 		config.qemuParams = append(config.qemuParams, "-no-user-config")
 	}
 
-	if config.Knobs.NoDefaults == true {
+	if config.Knobs.NoDefaults {
 		config.qemuParams = append(config.qemuParams, "-nodefaults")
 	}
 
-	if config.Knobs.NoGraphic == true {
+	if config.Knobs.NoGraphic {
 		config.qemuParams = append(config.qemuParams, "-nographic")
 	}
 
-	if config.Knobs.Daemonize == true {
+	if config.Knobs.Daemonize {
 		config.qemuParams = append(config.qemuParams, "-daemonize")
 	}
 
 	config.appendMemoryKnobs()
 
-	if config.Knobs.Realtime == true {
+	if config.Knobs.Realtime {
 		config.qemuParams = append(config.qemuParams, "-realtime")
 		// This path is redundant as the default behaviour is locked memory
 		// Realtime today does not control any other feature even though
 		// other features may be added in the future
 		// https://lists.gnu.org/archive/html/qemu-devel/2012-12/msg03330.html
-		if config.Knobs.Mlock == true {
+		if config.Knobs.Mlock {
 			config.qemuParams = append(config.qemuParams, "mlock=on")
 		} else {
 			config.qemuParams = append(config.qemuParams, "mlock=off")
 		}
 	} else {
 		// In order to turn mlock off we need the -realtime option as well
-		if config.Knobs.Mlock == false {
+		if !config.Knobs.Mlock {
 			//Enable realtime anyway just to get the right swapping behaviour
 			config.qemuParams = append(config.qemuParams, "-realtime")
 			config.qemuParams = append(config.qemuParams, "mlock=off")
 		}
 	}
 
-	if config.Knobs.Stopped == true {
+	if config.Knobs.Stopped {
 		config.qemuParams = append(config.qemuParams, "-S")
 	}
 }
