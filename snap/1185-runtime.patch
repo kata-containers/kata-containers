@@ -1,0 +1,22 @@
+diff --git a/cli/main.go b/cli/main.go
+index a01a02dc5..a021a0a77 100644
+--- a/cli/main.go
++++ b/cli/main.go
+@@ -250,6 +250,8 @@ func beforeSubcommands(c *cli.Context) error {
+ 	var runtimeConfig oci.RuntimeConfig
+ 	var err error
+
++	katautils.SetConfigOptions(name, defaultRuntimeConfiguration, defaultSysConfRuntimeConfiguration)
++
+ 	handleShowConfig(c)
+
+ 	if userWantsUsage(c) || (c.NArg() == 1 && (c.Args()[0] == checkCmd)) {
+@@ -302,8 +304,6 @@ func beforeSubcommands(c *cli.Context) error {
+ 		ignoreLogging = true
+ 	}
+
+-	katautils.SetConfigOptions(name, defaultRuntimeConfiguration, defaultSysConfRuntimeConfiguration)
+-
+ 	configFile, runtimeConfig, err = katautils.LoadConfiguration(c.GlobalString(configFilePathOption), ignoreLogging, false)
+ 	if err != nil {
+ 		fatal(err)
