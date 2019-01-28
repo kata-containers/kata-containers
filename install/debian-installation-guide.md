@@ -30,6 +30,7 @@
 2. Install the Kata Containers components with the following commands:
 
    ```bash
+   $ export DEBIAN_FRONTEND=noninteractive
    $ ARCH=$(arch)
    $ source /etc/os-release
    $ sudo sh -c "echo 'deb http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/Debian_${VERSION_ID}/ /' > /etc/apt/sources.list.d/kata-containers.list"
