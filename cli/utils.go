@@ -48,6 +48,8 @@ func getKernelVersion() (string, error) {
 // returned.
 func getDistroDetails() (name, version string, err error) {
 	files := []string{osRelease, osReleaseClr}
+	name = ""
+	version = ""
 
 	for _, file := range files {
 		contents, err := katautils.GetFileContents(file)
@@ -62,10 +64,10 @@ func getDistroDetails() (name, version string, err error) {
 		lines := strings.Split(contents, "\n")
 
 		for _, line := range lines {
-			if strings.HasPrefix(line, "NAME=") {
+			if strings.HasPrefix(line, "NAME=") && name == "" {
 				fields := strings.Split(line, "=")
 				name = strings.Trim(fields[1], `"`)
-			} else if strings.HasPrefix(line, "VERSION_ID=") {
+			} else if strings.HasPrefix(line, "VERSION_ID=") && version == "" {
 				fields := strings.Split(line, "=")
 				version = strings.Trim(fields[1], `"`)
 			}
@@ -76,7 +78,15 @@ func getDistroDetails() (name, version string, err error) {
 		}
 	}
 
-	return "", "", fmt.Errorf("failed to find expected fields in one of %v", files)
+	if name == "" {
+		name = unknown
+	}
+
+	if version == "" {
+		version = unknown
+	}
+
+	return name, version, nil
 }
 
 // genericGetCPUDetails returns the vendor and model of the CPU.
