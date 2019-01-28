@@ -525,7 +525,7 @@ func (q *QMP) mainLoop() {
 		}
 		/* #nosec */
 		_ = q.conn.Close()
-		_ = <-fromVMCh
+		<-fromVMCh
 		failOutstandingCommands(cmdQueue)
 		close(q.disconnectedCh)
 	}()
