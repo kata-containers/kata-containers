@@ -260,7 +260,7 @@ func (fsdev FSDevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 	var qemuParams []string
 
-	deviceParams = append(deviceParams, fmt.Sprintf("%s", fsdev.Driver))
+	deviceParams = append(deviceParams, string(fsdev.Driver))
 	if s := fsdev.Driver.disableModern(fsdev.DisableModern); s != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
@@ -346,7 +346,7 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 	var qemuParams []string
 
-	deviceParams = append(deviceParams, fmt.Sprintf("%s", cdev.Driver))
+	deviceParams = append(deviceParams, string(cdev.Driver))
 	if s := cdev.Driver.disableModern(cdev.DisableModern); s != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
@@ -627,7 +627,7 @@ func (dev SerialDevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 	var qemuParams []string
 
-	deviceParams = append(deviceParams, fmt.Sprintf("%s", dev.Driver))
+	deviceParams = append(deviceParams, string(dev.Driver))
 	if s := dev.Driver.disableModern(dev.DisableModern); s != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
@@ -705,7 +705,7 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 	var qemuParams []string
 
-	deviceParams = append(deviceParams, fmt.Sprintf("%s", blkdev.Driver))
+	deviceParams = append(deviceParams, string(blkdev.Driver))
 	if s := blkdev.Driver.disableModern(blkdev.DisableModern); s != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
@@ -910,7 +910,7 @@ func (scsiCon SCSIController) QemuParams(config *Config) []string {
 		devParams = append(devParams, fmt.Sprintf("addr=%s", scsiCon.Addr))
 	}
 	if s := driver.disableModern(scsiCon.DisableModern); s != "" {
-		devParams = append(devParams, fmt.Sprintf("%s", s))
+		devParams = append(devParams, s)
 	}
 	if scsiCon.IOThread != "" {
 		devParams = append(devParams, fmt.Sprintf("iothread=%s", scsiCon.IOThread))
@@ -1057,7 +1057,7 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 
 	driver := VHostVSock
-	deviceParams = append(deviceParams, fmt.Sprintf("%s", driver))
+	deviceParams = append(deviceParams, string(driver))
 	if s := driver.disableModern(vsock.DisableModern); s != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
@@ -1174,7 +1174,7 @@ func (b BalloonDevice) QemuParams(_ *Config) []string {
 		deviceParams = append(deviceParams, "deflate-on-oom=off")
 	}
 	if s := driver.disableModern(b.DisableModern); s != "" {
-		deviceParams = append(deviceParams, fmt.Sprintf("%s", s))
+		deviceParams = append(deviceParams, string(s))
 	}
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
@@ -1528,7 +1528,7 @@ func (config *Config) appendQMPSockets() {
 		}
 
 		qmpParams := append([]string{}, fmt.Sprintf("%s:", q.Type))
-		qmpParams = append(qmpParams, fmt.Sprintf("%s", q.Name))
+		qmpParams = append(qmpParams, q.Name)
 		if q.Server == true {
 			qmpParams = append(qmpParams, ",server")
 			if q.NoWait == true {
