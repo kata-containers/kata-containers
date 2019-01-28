@@ -1,5 +1,5 @@
 name: kata-containers
-version: "1.5.0-rc2"
+version: "1.5.0"
 summary: Build lightweight VMs that seamlessly plug into the containers ecosystem
 description: |
   Kata Containers is an open source project and community working to build a
@@ -33,6 +33,8 @@ parts:
     build-attributes: [no-patchelf]
     override-build: |
       pkg_name=runtime
+      patch1="$(realpath ../../../snap/1162-runtime.patch)"
+      patch2="$(realpath ../../../snap/1185-runtime.patch)"
 
       # set GOPATH
       export GOPATH=$(realpath go)
@@ -43,18 +45,24 @@ parts:
       mkdir -p ${pkg_gopath}
 
       # download source
-      curl -LO https://github.com/kata-containers/${pkg_name}/archive/${SNAPCRAFT_PROJECT_VERSION}.tar.gz
-      tar -xf ${SNAPCRAFT_PROJECT_VERSION}.tar.gz --strip-components=1 -C ${pkg_gopath}
+      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
+
+      #Issue: https://github.com/kata-containers/runtime/pull/1162
+      patch -p1 < "${patch1}"
+      #Issue: https://github.com/kata-containers/runtime/issues/1185
+      patch -p1 < "${patch2}"
 
       # build and install
       make \
         PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
-        SKIP_GO_VERSION_CHECK=1
+        SKIP_GO_VERSION_CHECK=1 \
+        QEMUCMD=qemu-system-$(arch)
       make install \
         PREFIX=/usr \
         DESTDIR=${SNAPCRAFT_PART_INSTALL} \
-        SKIP_GO_VERSION_CHECK=1
+        SKIP_GO_VERSION_CHECK=1 \
+        QEMUCMD=qemu-system-$(arch)
 
       # A snap is read-only squashfs, unfourtunately it's not possible to use the rootfs image with DAX
       # since rw access is required therefore initrd image must be used instead.
@@ -76,8 +84,7 @@ parts:
       mkdir -p ${pkg_gopath}
 
       # download source
-      curl -LO https://github.com/kata-containers/${pkg_name}/archive/${SNAPCRAFT_PROJECT_VERSION}.tar.gz
-      tar -xf ${SNAPCRAFT_PROJECT_VERSION}.tar.gz --strip-components=1 -C ${pkg_gopath}
+      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
 
       # build and install
@@ -100,8 +107,7 @@ parts:
       mkdir -p ${pkg_gopath}
 
       # download source
-      curl -LO https://github.com/kata-containers/${pkg_name}/archive/${SNAPCRAFT_PROJECT_VERSION}.tar.gz
-      tar -xf ${SNAPCRAFT_PROJECT_VERSION}.tar.gz --strip-components=1 -C ${pkg_gopath}
+      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
 
       # build and install
@@ -117,11 +123,12 @@ parts:
       - docker.io
       - cpio
     override-build: |
-      set -x
+      # set GOPATH
+      export GOPATH=$(realpath go)
+      mkdir -p "${GOPATH}"
       # go was built in parts/go/build
       export GOROOT=$(realpath ../../go/build)
       export PATH="${GOROOT}/bin:${PATH}"
-      env
       if [ -n "$http_proxy" ]; then
         echo "Setting proxy $http_proxy"
         systemctl set-environment http_proxy=$http_proxy || true
@@ -134,7 +141,7 @@ parts:
       # use the same go version for all packages
       sed -i 's|^GO_VERSION=.*|GO_VERSION='$(go version | cut -d' ' -f3 | tr -d go)'|g' rootfs-builder/versions.txt
 
-      sudo -E PATH=$PATH make DISTRO=alpine AGENT_INIT=yes USE_DOCKER=1 initrd
+      sudo -E PATH=$PATH make AGENT_VERSION=${SNAPCRAFT_PROJECT_VERSION} DISTRO=alpine AGENT_INIT=yes USE_DOCKER=1 initrd
 
       kata_image_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
       mkdir -p ${kata_image_dir}
@@ -156,8 +163,7 @@ parts:
       mkdir -p ${pkg_gopath}
 
       # download source
-      curl -LO https://github.com/kata-containers/${pkg_name}/archive/${SNAPCRAFT_PROJECT_VERSION}.tar.gz
-      tar -xf ${SNAPCRAFT_PROJECT_VERSION}.tar.gz --strip-components=1 -C ${pkg_gopath}
+      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
 
       # build and install
