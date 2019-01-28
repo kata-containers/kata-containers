@@ -123,11 +123,9 @@ parts:
       - docker.io
       - cpio
     override-build: |
-      set -x
       # go was built in parts/go/build
       export GOROOT=$(realpath ../../go/build)
       export PATH="${GOROOT}/bin:${PATH}"
-      env
       if [ -n "$http_proxy" ]; then
         echo "Setting proxy $http_proxy"
         systemctl set-environment http_proxy=$http_proxy || true
