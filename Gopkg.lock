@@ -204,10 +204,9 @@
   version = "v0.3.3"
 
 [[projects]]
-  digest = "1:58b18038f51b6f79865fd00e3d883949c9507ede577cd9c4e743ed56cc454122"
+  digest = "1:351337e3b022de09e72306f1f9711314cc4bd407c15e8d328e218c655fd55731"
   name = "github.com/firecracker-microvm/firecracker-go-sdk"
   packages = [
-    ".",
     "client",
     "client/models",
     "client/operations",
@@ -377,11 +376,11 @@
   revision = "3520598351bb3500a49ae9563f5539666ae0a27c"
 
 [[projects]]
-  digest = "1:15f0da05538e2445b354c620555231448849b7ece222c45578668d0dfd6bec93"
+  digest = "1:270961b1d5e664d4939ffae00b990e256d92bb5039cae69208211a84c72fe5f5"
   name = "github.com/intel/govmm"
   packages = ["qemu"]
   pruneopts = "NUT"
-  revision = "737f03de595e216116264cc74a58e5f2a1df789a"
+  revision = "78d079db6d1f3e32e3ed7578a54baa6257b058a7"
 
 [[projects]]
   digest = "1:590bfb6f8d5741fa38bb3022f55588fb7e06389f6b7b6692a965e0e5a4363fb1"
@@ -699,7 +698,6 @@
     "github.com/containernetworking/plugins/pkg/ns",
     "github.com/dlespiau/covertool/pkg/cover",
     "github.com/docker/go-units",
-    "github.com/firecracker-microvm/firecracker-go-sdk",
     "github.com/firecracker-microvm/firecracker-go-sdk/client",
     "github.com/firecracker-microvm/firecracker-go-sdk/client/models",
     "github.com/firecracker-microvm/firecracker-go-sdk/client/operations",
