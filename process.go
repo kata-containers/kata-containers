@@ -53,17 +53,25 @@ func processRunning(regexps []string) bool {
 
 // HypervisorRunning returns true if the hypervisor is still running, otherwise false
 func HypervisorRunning(containerID string) bool {
-	hypervisorPath := KataConfig.Hypervisor[DefaultHypervisor].Path
-	if hypervisorPath == "" {
-		log.Fatal("Could not determine if hypervisor is running: hypervisor path is empty")
-		return false
+	var typeHypervisor = map[string]string{
+		DefaultHypervisor:     (".*-name.*" + containerID + ".*-qmp.*unix:.*/" + containerID + "/.*"),
+		FirecrackerHypervisor: (".*--api-sock.*" + containerID + ".*firecracker.sock.*"),
 	}
-	hypervisorRegexps := []string{hypervisorPath + ".*-name.*" + containerID + ".*-qmp.*unix:.*/" + containerID + "/.*"}
-	return processRunning(hypervisorRegexps)
+	for h, r := range typeHypervisor {
+		config, ok := KataConfig.Hypervisor[h]
+		if ok {
+			return processRunning([]string{config.Path + r})
+		}
+	}
+	log.Fatal("Could not determine if hypervisor is running")
+	return false
 }
 
 // ProxyRunning returns true if the proxy is still running, otherwise false
 func ProxyRunning(containerID string) bool {
+	if _, ok := KataConfig.Hypervisor[FirecrackerHypervisor]; ok {
+		return false
+	}
 	proxyPath := KataConfig.Proxy[DefaultProxy].Path
 	if proxyPath == "" {
 		log.Fatal("Could not determine if proxy is running: proxy path is empty")

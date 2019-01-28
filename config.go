@@ -70,6 +70,9 @@ const (
 	// DefaultHypervisor default hypervisor
 	DefaultHypervisor = "qemu"
 
+	// FirecrackerHypervisor is firecracker
+	FirecrackerHypervisor = "firecracker"
+
 	// DefaultProxy default proxy
 	DefaultProxy = "kata"
 
