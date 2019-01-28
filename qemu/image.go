@@ -51,18 +51,18 @@ func CreateCloudInitISO(ctx context.Context, scratchDir, isoPath string,
 
 	err := os.MkdirAll(dataDirPath, 0750)
 	if err != nil {
-		return fmt.Errorf("Unable to create config drive directory %s : %v",
+		return fmt.Errorf("unable to create config drive directory %s : %v",
 			dataDirPath, err)
 	}
 
 	err = ioutil.WriteFile(metaDataPath, metaData, 0644)
 	if err != nil {
-		return fmt.Errorf("Unable to create %s : %v", metaDataPath, err)
+		return fmt.Errorf("unable to create %s : %v", metaDataPath, err)
 	}
 
 	err = ioutil.WriteFile(userDataPath, userData, 0644)
 	if err != nil {
-		return fmt.Errorf("Unable to create %s : %v", userDataPath, err)
+		return fmt.Errorf("unable to create %s : %v", userDataPath, err)
 	}
 
 	cmd := exec.CommandContext(ctx, "xorriso", "-as", "mkisofs", "-R", "-V", "config-2",
@@ -70,7 +70,7 @@ func CreateCloudInitISO(ctx context.Context, scratchDir, isoPath string,
 	cmd.SysProcAttr = attr
 	err = cmd.Run()
 	if err != nil {
-		return fmt.Errorf("Unable to create cloudinit iso image %v", err)
+		return fmt.Errorf("unable to create cloudinit iso image %v", err)
 	}
 
 	return nil

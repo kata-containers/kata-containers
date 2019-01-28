@@ -30,8 +30,6 @@ const volumeUUID = "67d86208-b46c-4465-9018-e14187d4010"
 func testAppend(structure interface{}, expected string, t *testing.T) {
 	var config Config
 	testConfigAppend(&config, structure, expected, t)
-
-	return
 }
 
 func testConfigAppend(config *Config, structure interface{}, expected string, t *testing.T) {
