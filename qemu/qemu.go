@@ -842,11 +842,7 @@ type VFIODevice struct {
 
 // Valid returns true if the VFIODevice structure is valid and complete.
 func (vfioDev VFIODevice) Valid() bool {
-	if vfioDev.BDF == "" {
-		return false
-	}
-
-	return true
+	return vfioDev.BDF != ""
 }
 
 // QemuParams returns the qemu parameters built out of this vfio device.
@@ -889,11 +885,7 @@ type SCSIController struct {
 
 // Valid returns true if the SCSIController structure is valid and complete.
 func (scsiCon SCSIController) Valid() bool {
-	if scsiCon.ID == "" {
-		return false
-	}
-
-	return true
+	return scsiCon.ID != ""
 }
 
 // QemuParams returns the qemu parameters built out of this SCSIController device.
@@ -1094,11 +1086,7 @@ type RngDevice struct {
 
 // Valid returns true if the RngDevice structure is valid and complete.
 func (v RngDevice) Valid() bool {
-	if v.ID == "" {
-		return false
-	}
-
-	return true
+	return v.ID != ""
 }
 
 // QemuParams returns the qemu parameters built out of the RngDevice.
@@ -1184,11 +1172,7 @@ func (b BalloonDevice) QemuParams(_ *Config) []string {
 
 // Valid returns true if the balloonDevice structure is valid and complete.
 func (b BalloonDevice) Valid() bool {
-	if b.ID == "" {
-		return false
-	}
-
-	return true
+	return b.ID != ""
 }
 
 // RTCBaseType is the qemu RTC base time type.
