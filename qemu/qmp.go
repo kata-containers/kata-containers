@@ -1144,14 +1144,21 @@ func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsd
 // ExecuteCPUDeviceAdd adds a CPU to a QEMU instance using the device_add command.
 // driver is the CPU model, cpuID must be a unique ID to identify the CPU, socketID is the socket number within
 // node/board the CPU belongs to, coreID is the core number within socket the CPU belongs to, threadID is the
-// thread number within core the CPU belongs to.
+// thread number within core the CPU belongs to. Note that socketID and threadID are not a requirement for
+// architecures like ppc64le.
 func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, coreID, threadID, romfile string) error {
 	args := map[string]interface{}{
-		"driver":    driver,
-		"id":        cpuID,
-		"socket-id": socketID,
-		"core-id":   coreID,
-		"thread-id": threadID,
+		"driver":  driver,
+		"id":      cpuID,
+		"core-id": coreID,
+	}
+
+	if socketID != "" {
+		args["socket-id"] = socketID
+	}
+
+	if threadID != "" {
+		args["thread-id"] = threadID
 	}
 
 	if isVirtioPCI[DeviceDriver(driver)] {
