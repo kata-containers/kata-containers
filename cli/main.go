@@ -250,6 +250,8 @@ func beforeSubcommands(c *cli.Context) error {
 	var runtimeConfig oci.RuntimeConfig
 	var err error
 
+	katautils.SetConfigOptions(name, defaultRuntimeConfiguration, defaultSysConfRuntimeConfiguration)
+
 	handleShowConfig(c)
 
 	if userWantsUsage(c) || (c.NArg() == 1 && (c.Args()[0] == checkCmd)) {
@@ -301,8 +303,6 @@ func beforeSubcommands(c *cli.Context) error {
 		// simply report the logging setup
 		ignoreLogging = true
 	}
-
-	katautils.SetConfigOptions(name, defaultRuntimeConfiguration, defaultSysConfRuntimeConfiguration)
 
 	configFile, runtimeConfig, err = katautils.LoadConfiguration(c.GlobalString(configFilePathOption), ignoreLogging, false)
 	if err != nil {
