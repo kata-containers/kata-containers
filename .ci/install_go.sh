@@ -108,7 +108,10 @@ case "$(arch)" in
 	"ppc64le")
 		goarch=ppc64le
 		;;
-		
+
+	"s390x")
+		goarch=s390x
+		;;
 	"*")
 		die "Arch $(arch) not supported"
 		;;
