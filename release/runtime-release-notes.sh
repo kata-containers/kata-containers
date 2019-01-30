@@ -145,7 +145,7 @@ More information [Limitations][limitations]
 [image]: https://github.com/kata-containers/osbuilder/releases/tag/${runtime_version}
 [ocispec]: https://github.com/opencontainers/runtime-spec/releases/tag/${oci_spec_version}
 [limitations]: https://github.com/kata-containers/documentation/blob/master/Limitations.md
-[installation]: https://github.com/kata-containers/documentation/blob/${new_release}/install/README.md
+[installation]: https://github.com/kata-containers/documentation/tree/master/install
 EOT
 }
 
