@@ -10,8 +10,11 @@ load "${BATS_TEST_DIRNAME}/../../../lib/common.bash"
 IMAGE="busybox"
 PAYLOAD="tail -f /dev/null"
 NAME="test"
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+issue="https://github.com/kata-containers/runtime/issues/1197"
 
 setup () {
+	[ "${KATA_HYPERVISOR}" = "firecracker" ] && skip "test not working see: ${issue}"
 	clean_env
 
 	# Check that processes are not running
@@ -21,6 +24,7 @@ setup () {
 }
 
 @test "Disable_new_netns equal to false" {
+	[ "${KATA_HYPERVISOR}" = "firecracker" ] && skip "test not working see: ${issue}"
 	extract_kata_env
 
 	sudo sed -i 's/#disable_new_netns = true/disable_new_netns = false/g' ${RUNTIME_CONFIG_PATH}
@@ -47,6 +51,7 @@ setup () {
 }
 
 @test "Disable net" {
+	[ "${KATA_HYPERVISOR}" = "firecracker" ] && skip "test not working see: ${issue}"
 	extract_kata_env
 
 	# Get the name of the network name at the configuration.toml
@@ -80,6 +85,7 @@ setup () {
 }
 
 teardown() {
+	[ "${KATA_HYPERVISOR}" = "firecracker" ] && skip "test not working see: ${issue}"
 	clean_env
 
 	# Check that processes are not running
