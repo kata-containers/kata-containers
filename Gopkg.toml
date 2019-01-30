@@ -60,7 +60,7 @@
 
 [[constraint]]
   name = "github.com/containerd/cri-containerd"
-  revision = "3d382e2f5dabe3bae62ceb9ded56bdee847008ee"
+  revision = "4dd6735020f5596dd41738f8c4f5cb07fa804c5e"
 
 [[constraint]]
   name = "github.com/safchain/ethtool"
