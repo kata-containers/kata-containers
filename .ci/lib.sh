@@ -19,6 +19,8 @@ tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 lib_script="${GOPATH}/src/${tests_repo}/lib/common.bash"
 source "${lib_script}"
 
+export KATA_OBS_REPO_BASE="http://download.opensuse.org/repositories/home:/katacontainers:/releases:/$(arch):/master"
+
 # If we fail for any reason a message will be displayed
 die() {
 	msg="$*"
