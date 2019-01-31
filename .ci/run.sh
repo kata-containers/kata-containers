@@ -31,6 +31,8 @@ case "${CI_JOB}" in
 		sudo -E PATH="$PATH" bash -c "make docker-stability"
 		echo "INFO: Running oci call test"
 		sudo -E PATH="$PATH" bash -c "make oci"
+		echo "INFO: Running networking tests"
+		sudo -E PATH="$PATH" bash -c "make network"
 		;;
 	*)
 		echo "INFO: Running checks"
