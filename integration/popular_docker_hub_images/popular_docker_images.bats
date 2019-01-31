@@ -95,7 +95,7 @@ setup() {
 }
 
 @test "[display version] run a crate container" {
-	docker run --rm --runtime=$RUNTIME -i -e CRATE_HEAP_SIZE=1g crate timeout -t 10 crate -v
+	docker run --rm --runtime=$RUNTIME -i -e CRATE_HEAP_SIZE=1g crate timeout 10 crate -v
 }
 
 @test "[display nameserver] check the resolv.conf in a crux container" {
