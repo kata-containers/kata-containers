@@ -155,7 +155,6 @@ func newTestSandboxConfigHyperstartAgentDefaultNetwork() SandboxConfig {
 		AgentType:   HyperstartAgent,
 		AgentConfig: agentConfig,
 
-		NetworkModel:  DefaultNetworkModel,
 		NetworkConfig: netConfig,
 
 		Containers:  []ContainerConfig{container},
@@ -2020,7 +2019,7 @@ func TestProcessListContainer(t *testing.T) {
  * Benchmarks
  */
 
-func createNewSandboxConfig(hType HypervisorType, aType AgentType, aConfig interface{}, netModel NetworkModel) SandboxConfig {
+func createNewSandboxConfig(hType HypervisorType, aType AgentType, aConfig interface{}) SandboxConfig {
 	hypervisorConfig := HypervisorConfig{
 		KernelPath:     "/usr/share/kata-containers/vmlinux.container",
 		ImagePath:      "/usr/share/kata-containers/kata-containers.img",
@@ -2037,7 +2036,6 @@ func createNewSandboxConfig(hType HypervisorType, aType AgentType, aConfig inter
 		AgentType:   aType,
 		AgentConfig: aConfig,
 
-		NetworkModel:  netModel,
 		NetworkConfig: netConfig,
 	}
 }
@@ -2187,7 +2185,7 @@ func createStartStopDeleteContainers(b *testing.B, sandboxConfig SandboxConfig, 
 
 func BenchmarkCreateStartStopDeleteSandboxQemuHypervisorHyperstartAgentNetworkNoop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		sandboxConfig := createNewSandboxConfig(QemuHypervisor, HyperstartAgent, HyperConfig{}, NoopNetworkModel)
+		sandboxConfig := createNewSandboxConfig(QemuHypervisor, HyperstartAgent, HyperConfig{})
 
 		sockDir, err := testGenerateCCProxySockDir()
 		if err != nil {
@@ -2208,21 +2206,21 @@ func BenchmarkCreateStartStopDeleteSandboxQemuHypervisorHyperstartAgentNetworkNo
 
 func BenchmarkCreateStartStopDeleteSandboxQemuHypervisorNoopAgentNetworkNoop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		sandboxConfig := createNewSandboxConfig(QemuHypervisor, NoopAgentType, nil, NoopNetworkModel)
+		sandboxConfig := createNewSandboxConfig(QemuHypervisor, NoopAgentType, nil)
 		createStartStopDeleteSandbox(b, sandboxConfig)
 	}
 }
 
 func BenchmarkCreateStartStopDeleteSandboxMockHypervisorNoopAgentNetworkNoop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		sandboxConfig := createNewSandboxConfig(MockHypervisor, NoopAgentType, nil, NoopNetworkModel)
+		sandboxConfig := createNewSandboxConfig(MockHypervisor, NoopAgentType, nil)
 		createStartStopDeleteSandbox(b, sandboxConfig)
 	}
 }
 
 func BenchmarkStartStop1ContainerQemuHypervisorHyperstartAgentNetworkNoop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		sandboxConfig := createNewSandboxConfig(QemuHypervisor, HyperstartAgent, HyperConfig{}, NoopNetworkModel)
+		sandboxConfig := createNewSandboxConfig(QemuHypervisor, HyperstartAgent, HyperConfig{})
 		contConfigs := createNewContainerConfigs(1)
 
 		sockDir, err := testGenerateCCProxySockDir()
@@ -2244,7 +2242,7 @@ func BenchmarkStartStop1ContainerQemuHypervisorHyperstartAgentNetworkNoop(b *tes
 
 func BenchmarkStartStop10ContainerQemuHypervisorHyperstartAgentNetworkNoop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		sandboxConfig := createNewSandboxConfig(QemuHypervisor, HyperstartAgent, HyperConfig{}, NoopNetworkModel)
+		sandboxConfig := createNewSandboxConfig(QemuHypervisor, HyperstartAgent, HyperConfig{})
 		contConfigs := createNewContainerConfigs(10)
 
 		sockDir, err := testGenerateCCProxySockDir()
@@ -2448,7 +2446,6 @@ func TestNetworkOperation(t *testing.T) {
 	defer deleteNetNS(netNSPath)
 
 	config := newTestSandboxConfigNoop()
-	config.NetworkModel = DefaultNetworkModel
 	config.NetworkConfig = NetworkConfig{
 		NetNSPath: netNSPath,
 	}

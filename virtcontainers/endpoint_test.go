@@ -8,7 +8,6 @@ package virtcontainers
 import "testing"
 
 func testEndpointTypeSet(t *testing.T, value string, expected EndpointType) {
-	//var netModel NetworkModel
 	var endpointType EndpointType
 
 	err := endpointType.Set(value)
