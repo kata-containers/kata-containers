@@ -78,6 +78,8 @@ Manual installation instructions are available for [these distributions](#suppor
 
 ### Snap Installation
 
+[![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/kata-containers)
+
 [Use snap](snap-installation-guide.md) to install Kata Containers from snapcraft.io.
 
 #### Supported Distributions
