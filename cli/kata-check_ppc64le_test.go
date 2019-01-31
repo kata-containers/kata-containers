@@ -208,13 +208,6 @@ func TestKvmIsUsable(t *testing.T) {
 	assert.Error(err)
 }
 
-type TestDataa struct {
-	contents       string
-	expectedVendor string
-	expectedModel  string
-	expectError    bool
-}
-
 func TestGetCPUDetails(t *testing.T) {
 
 	const validVendorName = ""
@@ -230,7 +223,7 @@ foo     : bar
 %s
 `, validVendor, validModel)
 
-	data := []TestDataa{
+	data := []testCPUDetail{
 		{"", "", "", true},
 		{"invalid", "", "", true},
 		{archCPUVendorField, "", "", true},
