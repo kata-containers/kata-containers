@@ -101,6 +101,8 @@ func TestGetDistroDetails(t *testing.T) {
 		expectError     bool
 	}
 
+	const unknown = "<<unknown>>"
+
 	tmpdir, err := ioutil.TempDir("", "")
 	if err != nil {
 		panic(err)
@@ -144,11 +146,11 @@ VERSION_ID="%s"
 
 	_, _, err = getDistroDetails()
 	// ENOENT
-	assert.Error(t, err)
+	assert.NoError(t, err)
 
 	data := []testData{
-		{"", "", "", "", true},
-		{"invalid", "", "", "", true},
+		{"", "", unknown, unknown, false},
+		{"invalid", "", unknown, unknown, false},
 		{clrContents, "", clrExpectedName, clrExpectedVersion, false},
 		{"", nonClrContents, nonClrExpectedName, nonClrExpectedVersion, false},
 		{clrContents, nonClrContents, nonClrExpectedName, nonClrExpectedVersion, false},

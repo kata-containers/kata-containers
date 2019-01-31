@@ -478,7 +478,7 @@ func TestEnvGetHostInfoNoOSRelease(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = getHostInfo()
-	assert.Error(t, err)
+	assert.NoError(t, err)
 }
 
 func TestEnvGetHostInfoNoProcVersion(t *testing.T) {
@@ -600,7 +600,7 @@ func TestEnvGetEnvInfoNoOSRelease(t *testing.T) {
 	assert.NoError(t, err)
 
 	_, err = getEnvInfo(configFile, config)
-	assert.Error(t, err)
+	assert.NoError(t, err)
 }
 
 func TestEnvGetEnvInfoNoProcCPUInfo(t *testing.T) {
