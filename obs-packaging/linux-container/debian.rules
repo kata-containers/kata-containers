@@ -19,7 +19,7 @@ override_dh_auto_build:
 	find $(KERNEL_CONFIGS) -name "$(KERNEL_ARCH)_kata_kvm_*" -exec cp {} .config \;
 	[ -f .config ] || (@echo "ERROR: cannot find the kernel config file for the $(KERNEL_ARCH) architecture"; exit 1)
 	make -s ARCH=$(KERNEL_ARCH) oldconfig > /dev/null
-	make -s CONFIG_DEBUG_SECTION_MISMATCH=y ARCH=$(KERNEL_ARCH) -j all
+	make -s CONFIG_DEBUG_SECTION_MISMATCH=y ARCH=$(KERNEL_ARCH)
 
 override_dh_auto_install:
 
