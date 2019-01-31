@@ -1077,6 +1077,11 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		return 0, fmt.Errorf("failed to query hotpluggable CPUs: %v", err)
 	}
 
+	machine, err := q.arch.machine()
+	if err != nil {
+		return 0, fmt.Errorf("failed to query machine type: %v", err)
+	}
+
 	var hotpluggedVCPUs uint32
 	for _, hc := range hotpluggableVCPUs {
 		// qom-path is the path to the CPU, non-empty means that this CPU is already in use
@@ -1090,6 +1095,13 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		socketID := fmt.Sprintf("%d", hc.Properties.Socket)
 		coreID := fmt.Sprintf("%d", hc.Properties.Core)
 		threadID := fmt.Sprintf("%d", hc.Properties.Thread)
+
+		// If CPU type is IBM pSeries, we do not set socketID and threadID
+		if machine.Type == "pseries" {
+			socketID = ""
+			threadID = ""
+		}
+
 		if err := q.qmpMonitorCh.qmp.ExecuteCPUDeviceAdd(q.qmpMonitorCh.ctx, driver, cpuID, socketID, coreID, threadID, romFile); err != nil {
 			// don't fail, let's try with other CPU
 			continue
