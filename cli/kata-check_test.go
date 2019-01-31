@@ -33,6 +33,13 @@ type testCPUData struct {
 	expectError bool
 }
 
+type testCPUDetail struct {
+	contents       string
+	expectedVendor string
+	expectedModel  string
+	expectError    bool
+}
+
 func createFile(file, contents string) error {
 	return ioutil.WriteFile(file, []byte(contents), testFileMode)
 }
@@ -138,7 +145,7 @@ func makeCPUInfoFile(path, vendorID, flags string) error {
 	return ioutil.WriteFile(path, contents.Bytes(), testFileMode)
 }
 
-func genericTestGetCPUDetails(t *testing.T, validVendor string, validModel string, validContents string, data []TestDataa) {
+func genericTestGetCPUDetails(t *testing.T, validVendor string, validModel string, validContents string, data []testCPUDetail) {
 	tmpdir, err := ioutil.TempDir("", "")
 	if err != nil {
 		panic(err)
