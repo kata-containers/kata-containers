@@ -70,7 +70,6 @@ type SandboxConfig struct {
 	ShimType   ShimType
 	ShimConfig interface{}
 
-	NetworkModel  NetworkModel
 	NetworkConfig NetworkConfig
 
 	// Volumes is a list of shared volumes between the host and the Sandbox.
@@ -206,7 +205,7 @@ type Sandbox struct {
 	hypervisor hypervisor
 	agent      agent
 	storage    resourceStorage
-	network    network
+	network    Network
 	monitor    *monitor
 
 	config *SandboxConfig
@@ -553,15 +552,12 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
-	network := newNetwork(sandboxConfig.NetworkModel)
-
 	s := &Sandbox{
 		id:              sandboxConfig.ID,
 		factory:         factory,
 		hypervisor:      hypervisor,
 		agent:           agent,
 		storage:         &filesystem{},
-		network:         network,
 		config:          &sandboxConfig,
 		volumes:         sandboxConfig.Volumes,
 		containers:      map[string]*Container{},
@@ -771,7 +767,7 @@ func (s *Sandbox) startNetworkMonitor() error {
 		sandboxID:  s.id,
 	}
 
-	return s.network.run(s.networkNS.NetNsPath, func() error {
+	return s.network.Run(s.networkNS.NetNsPath, func() error {
 		pid, err := startNetmon(params)
 		if err != nil {
 			return err
@@ -784,7 +780,8 @@ func (s *Sandbox) startNetworkMonitor() error {
 }
 
 func (s *Sandbox) createNetwork() error {
-	if s.config.NetworkConfig.DisableNewNetNs {
+	if s.config.NetworkConfig.DisableNewNetNs ||
+		s.config.NetworkConfig.NetNSPath == "" {
 		return nil
 	}
 
@@ -800,9 +797,12 @@ func (s *Sandbox) createNetwork() error {
 	// after vm is started.
 	if s.factory == nil {
 		// Add the network
-		if err := s.network.add(s, false); err != nil {
+		endpoints, err := s.network.Add(s.ctx, &s.config.NetworkConfig, s.hypervisor, false)
+		if err != nil {
 			return err
 		}
+
+		s.networkNS.Endpoints = endpoints
 
 		if s.config.NetworkConfig.NetmonConfig.Enable {
 			if err := s.startNetworkMonitor(); err != nil {
@@ -825,7 +825,7 @@ func (s *Sandbox) removeNetwork() error {
 		}
 	}
 
-	return s.network.remove(s, s.factory != nil)
+	return s.network.Remove(s.ctx, &s.networkNS, s.hypervisor, s.factory != nil)
 }
 
 func (s *Sandbox) generateNetInfo(inf *vcTypes.Interface) (NetworkInfo, error) {
@@ -929,7 +929,7 @@ func (s *Sandbox) startVM() error {
 
 	s.Logger().Info("Starting VM")
 
-	if err := s.network.run(s.networkNS.NetNsPath, func() error {
+	if err := s.network.Run(s.networkNS.NetNsPath, func() error {
 		if s.factory != nil {
 			vm, err := s.factory.GetVM(ctx, VMConfig{
 				HypervisorType:   s.config.HypervisorType,
@@ -957,9 +957,12 @@ func (s *Sandbox) startVM() error {
 	// In case of vm factory, network interfaces are hotplugged
 	// after vm is started.
 	if s.factory != nil {
-		if err := s.network.add(s, true); err != nil {
+		endpoints, err := s.network.Add(s.ctx, &s.config.NetworkConfig, s.hypervisor, true)
+		if err != nil {
 			return err
 		}
+
+		s.networkNS.Endpoints = endpoints
 
 		if s.config.NetworkConfig.NetmonConfig.Enable {
 			if err := s.startNetworkMonitor(); err != nil {

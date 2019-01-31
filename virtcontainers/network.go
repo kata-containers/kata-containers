@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	cryptoRand "crypto/rand"
 	"encoding/json"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
@@ -345,55 +347,6 @@ func (n *NetworkNamespace) UnmarshalJSON(b []byte) error {
 
 	(*n).Endpoints = endpoints
 	return nil
-}
-
-// NetworkModel describes the type of network specification.
-type NetworkModel string
-
-const (
-	// NoopNetworkModel is the No-Op network.
-	NoopNetworkModel NetworkModel = "noop"
-
-	// DefaultNetworkModel is the default network.
-	DefaultNetworkModel NetworkModel = "default"
-)
-
-// Set sets a network type based on the input string.
-func (networkType *NetworkModel) Set(value string) error {
-	switch value {
-	case "noop":
-		*networkType = NoopNetworkModel
-		return nil
-	case "default":
-		*networkType = DefaultNetworkModel
-		return nil
-	default:
-		return fmt.Errorf("Unknown network type %s", value)
-	}
-}
-
-// String converts a network type to a string.
-func (networkType *NetworkModel) String() string {
-	switch *networkType {
-	case NoopNetworkModel:
-		return string(NoopNetworkModel)
-	case DefaultNetworkModel:
-		return string(DefaultNetworkModel)
-	default:
-		return ""
-	}
-}
-
-// newNetwork returns a network from a network type.
-func newNetwork(networkType NetworkModel) network {
-	switch networkType {
-	case NoopNetworkModel:
-		return &noopNetwork{}
-	case DefaultNetworkModel:
-		return &defNetwork{}
-	default:
-		return &noopNetwork{}
-	}
 }
 
 func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Link, queues int) (netlink.Link, []*os.File, error) {
@@ -1347,7 +1300,7 @@ func networkInfoFromLink(handle *netlink.Handle, link netlink.Link) (NetworkInfo
 	}, nil
 }
 
-func createEndpointsFromScan(networkNSPath string, config NetworkConfig) ([]Endpoint, error) {
+func createEndpointsFromScan(networkNSPath string, config *NetworkConfig) ([]Endpoint, error) {
 	var endpoints []Endpoint
 
 	netnsHandle, err := netns.GetFromPath(networkNSPath)
@@ -1464,17 +1417,91 @@ func createEndpoint(netInfo NetworkInfo, idx int, model NetInterworkingModel) (E
 	return endpoint, err
 }
 
-// network is the virtcontainers network interface.
-// Container network plugins are used to setup virtual network
-// between VM netns and the host network physical interface.
-type network interface {
-	// run runs a callback function in a specified network namespace.
-	run(networkNSPath string, cb func() error) error
+// Network is the virtcontainer network structure
+type Network struct {
+}
 
-	// add adds all needed interfaces inside the network namespace.
-	add(sandbox *Sandbox, hotplug bool) error
+func (n *Network) trace(ctx context.Context, name string) (opentracing.Span, context.Context) {
+	span, ct := opentracing.StartSpanFromContext(ctx, name)
 
-	// remove unbridges and deletes TAP interfaces. It also removes virtual network
-	// interfaces and deletes the network namespace.
-	remove(sandbox *Sandbox, hotunplug bool) error
+	span.SetTag("subsystem", "network")
+	span.SetTag("type", "default")
+
+	return span, ct
+}
+
+// Run runs a callback in the specified network namespace.
+func (n *Network) Run(networkNSPath string, cb func() error) error {
+	span, _ := n.trace(context.Background(), "run")
+	defer span.Finish()
+
+	return doNetNS(networkNSPath, func(_ ns.NetNS) error {
+		return cb()
+	})
+}
+
+// Add adds all needed interfaces inside the network namespace.
+func (n *Network) Add(ctx context.Context, config *NetworkConfig, hypervisor hypervisor, hotplug bool) ([]Endpoint, error) {
+	span, _ := n.trace(ctx, "add")
+	defer span.Finish()
+
+	endpoints, err := createEndpointsFromScan(config.NetNSPath, config)
+	if err != nil {
+		return endpoints, err
+	}
+
+	err = doNetNS(config.NetNSPath, func(_ ns.NetNS) error {
+		for _, endpoint := range endpoints {
+			networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
+			if hotplug {
+				if err := endpoint.HotAttach(hypervisor); err != nil {
+					return err
+				}
+			} else {
+				if err := endpoint.Attach(hypervisor); err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return []Endpoint{}, err
+	}
+
+	networkLogger().Debug("Network added")
+
+	return endpoints, nil
+}
+
+// Remove network endpoints in the network namespace. It also deletes the network
+// namespace in case the namespace has been created by us.
+func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor hypervisor, hotunplug bool) error {
+	span, _ := n.trace(ctx, "remove")
+	defer span.Finish()
+
+	for _, endpoint := range ns.Endpoints {
+		// Detach for an endpoint should enter the network namespace
+		// if required.
+		networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotunplug", hotunplug).Info("Detaching endpoint")
+		if hotunplug {
+			if err := endpoint.HotDetach(hypervisor, ns.NetNsCreated, ns.NetNsPath); err != nil {
+				return err
+			}
+		} else {
+			if err := endpoint.Detach(ns.NetNsCreated, ns.NetNsPath); err != nil {
+				return err
+			}
+		}
+	}
+
+	networkLogger().Debug("Network removed")
+
+	if ns.NetNsCreated {
+		networkLogger().Infof("Network namespace %q deleted", ns.NetNsPath)
+		return deleteNetNS(ns.NetNsPath)
+	}
+
+	return nil
 }

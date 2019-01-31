@@ -159,8 +159,6 @@ An example tool using the `virtcontainers` API is provided in the `hack/virtc` p
 
 Typically the former is the Docker default networking model while the later is used on Kubernetes deployments.
 
-`virtcontainers` callers can select one or the other, on a per sandbox basis, by setting their `SandboxConfig`'s `NetworkModel` field properly.
-
 [cnm]: https://github.com/docker/libnetwork/blob/master/docs/design.md
 [cni]: https://github.com/containernetworking/cni/
 
