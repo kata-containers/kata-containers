@@ -70,9 +70,9 @@ chronic sudo -E yum install -y smem jq
 
 if [ "$(arch)" == "x86_64" ]; then
 	echo "Install Kata Containers OBS repository"
-	obs_url="http://download.opensuse.org/repositories/home:/katacontainers:/release/CentOS_${VERSION_ID}/home:katacontainers:release.repo"
+	obs_url="${KATA_OBS_REPO_BASE}/CentOS_${VERSION_ID}/home:katacontainers:releases:$(arch):master.repo"
 	sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo "$obs_url"
-	repo_file="/etc/yum.repos.d/home\:katacontainers\:release.repo"
+	repo_file="/etc/yum.repos.d/home\:katacontainers\:releases\:$(arch)\:master.repo"
 	sudo bash -c "echo timeout=10 >> $repo_file"
 	sudo bash -c "echo retries=2 >> $repo_file"
 fi

@@ -10,7 +10,6 @@ set -e
 cidir=$(dirname "$0")
 source "/etc/os-release" || source "/usr/lib/os-release"
 source "${cidir}/lib.sh"
-arch=$("${cidir}"/kata-arch.sh -d)
 export DEBIAN_FRONTEND=noninteractive
 
 echo "Install chronic"
@@ -73,7 +72,7 @@ chronic sudo -E apt update && sudo -E apt install -y -t unstable librbd1
 
 if [ "$(arch)" == "x86_64" ]; then
 	echo "Install Kata Containers OBS repository"
-	obs_url="http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${arch}:/master/Debian_${VERSION_ID}"
+	obs_url="${KATA_OBS_REPO_BASE}/Debian_${VERSION_ID}"
 	sudo sh -c "echo 'deb $obs_url /' > /etc/apt/sources.list.d/kata-containers.list"
 	curl -sL  "${obs_url}/Release.key" | sudo apt-key add -
 	chronic sudo -E apt-get update
