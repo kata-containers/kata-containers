@@ -6,7 +6,7 @@ FROM golang:latest AS builder
 WORKDIR /go/src/kata-pod-annotate
 
 COPY . ./
-RUN go get ./... && CGO_ENABLED=0 go build -o /go/bin/kata-pod-annotate
+RUN CGO_ENABLED=0 go build -o /go/bin/kata-pod-annotate
 
 FROM alpine:latest
 COPY --from=builder /go/bin/kata-pod-annotate /kata-pod-annotate
