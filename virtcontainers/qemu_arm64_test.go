@@ -26,32 +26,27 @@ func newTestQemu(machineType string) qemuArch {
 
 func TestQemuArm64CPUModel(t *testing.T) {
 	assert := assert.New(t)
-	arm64 := newTestQemu(virt)
+	arm64 := newTestQemu(QemuVirt)
 
 	expectedOut := defaultCPUModel
 	model := arm64.cpuModel()
-	assert.Equal(expectedOut, model)
-
-	arm64.enableNestingChecks()
-	expectedOut = defaultCPUModel + ",pmu=off"
-	model = arm64.cpuModel()
 	assert.Equal(expectedOut, model)
 }
 
 func TestQemuArm64MemoryTopology(t *testing.T) {
 	assert := assert.New(t)
-	arm64 := newTestQemu(virt)
-	memoryOffset := 1024
+	arm64 := newTestQemu(QemuVirt)
 
-	hostMem := uint64(1024)
-	mem := uint64(120)
+	hostMem := uint64(4096)
+	mem := uint64(1024)
+	slots := uint8(3)
 	expectedMemory := govmmQemu.Memory{
 		Size:   fmt.Sprintf("%dM", mem),
-		Slots:  defaultMemSlots,
-		MaxMem: fmt.Sprintf("%dM", hostMem+uint64(memoryOffset)),
+		Slots:  slots,
+		MaxMem: fmt.Sprintf("%dM", hostMem),
 	}
 
-	m := arm64.memoryTopology(mem, hostMem)
+	m := arm64.memoryTopology(mem, hostMem, slots)
 	assert.Equal(expectedMemory, m)
 }
 
