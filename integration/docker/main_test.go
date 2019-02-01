@@ -38,7 +38,7 @@ func TestIntegration(t *testing.T) {
 
 	for _, i := range images {
 		// vish/stress is single-arch image only for amd64
-		if i == StressImage && runtime.GOARCH == "arm64" {
+		if i == StressImage && runtime.GOARCH != "amd64" {
 			//check if vish/stress has already been built
 			argsImage := []string{"--format", "'{{.Repository}}:{{.Tag}}'", StressImage}
 			imagesStdout, _, imagesExitcode := dockerImages(argsImage...)
