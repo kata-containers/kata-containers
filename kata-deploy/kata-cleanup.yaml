@@ -15,7 +15,7 @@ spec:
     spec:
       serviceAccountName: kata-label-node
       nodeSelector:
-          kata-containers.io/kata-runtime: cleanup
+          katacontainers.io/kata-runtime: cleanup
       containers:
       - name: kube-kata-cleanup
         image: katadocker/kata-deploy
