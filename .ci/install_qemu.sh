@@ -63,8 +63,8 @@ build_and_install_qemu() {
 	pushd "${GOPATH}/src/${QEMU_REPO}"
 	git fetch
 	git checkout "$CURRENT_QEMU_COMMIT"
-	[ -d "capstone" ] || git clone https://github.com/qemu/capstone.git capstone
-	[ -d "ui/keycodemapdb" ] || git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
+	[ -n "$(ls -A capstone)" ] || git clone https://github.com/qemu/capstone.git capstone
+	[ -n "$(ls -A ui/keycodemapdb)" ] || git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
 	# Apply required patches
 	QEMU_PATCHES_PATH="${GOPATH}/src/${PACKAGING_REPO}/obs-packaging/qemu-lite/patches"
