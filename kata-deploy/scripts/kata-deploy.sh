@@ -120,7 +120,7 @@ function cleanup_containerd() {
 }
 
 function reset_runtime() {
-	kubectl label node $NODE_NAME kata-containers.io/container-runtime- kata-containers.io/kata-runtime-
+	kubectl label node $NODE_NAME katacontainers.io/kata-runtime-
 	systemctl daemon-reload
 	systemctl restart $1
 	systemctl restart kubelet
@@ -158,7 +158,7 @@ function main() {
 		cleanup)
 			remove_artifacts
 			cleanup_cri_runtime $runtime
-			kubectl label node $NODE_NAME --overwrite kata-containers.io/kata-runtime=cleanup
+			kubectl label node $NODE_NAME --overwrite katacontainers.io/kata-runtime=cleanup
 			;;
 		reset)
 			reset_runtime $runtime
