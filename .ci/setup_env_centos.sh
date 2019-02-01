@@ -88,3 +88,8 @@ chronic sudo -E yum install -y procenv
 
 echo "Install haveged"
 chronic sudo -E yum install -y haveged
+
+if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
+	echo "Install ${KATA_KSM_THROTTLER_JOB}"
+	chronic sudo -E yum install ${KATA_KSM_THROTTLER_JOB}
+fi

@@ -7,6 +7,10 @@
 #
 
 export KATA_RUNTIME=${KATA_RUNTIME:-kata-runtime}
+export KATA_KSM_THROTTLER=${KATA_KSM_THROTTLER:-no}
+
+# Name of systemd service for the throttler
+KATA_KSM_THROTTLER_JOB="kata-ksm-throttler"
 
 # How long do we wait for docker to perform a task before we
 # timeout with the presumption it has hung.
