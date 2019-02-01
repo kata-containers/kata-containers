@@ -40,14 +40,25 @@ is_a_kata_runtime(){
 }
 
 
+# Try to find the real runtime path for the docker runtime passed in $1
+get_docker_kata_path(){
+	local jpaths=$(docker info --format "{{json .Runtimes}}")
+	local rpath=$(jq .\"$1\".path <<< "$jpaths")
+	# Now we have to de-quote it..
+	rpath="${rpath%\"}"
+	rpath="${rpath#\"}"
+	echo "$rpath"
+}
+
 # Gets versions and paths of all the components
 # list in kata-env
 extract_kata_env(){
 	local toml
+	local rpath=$(get_docker_kata_path "$RUNTIME")
 
 	# If we cannot find the runtime, or it fails to run for some reason, do not die
 	# on the error, but set some sane defaults
-	toml="$(set +e; kata-runtime kata-env)"
+	toml="$(set +e; $rpath kata-env)"
 	if [ $? != 0 ]; then
 		# We could be more diligent here and search for each individual component,
 		# but if the runtime cannot tell us the exact details it is configured for then
