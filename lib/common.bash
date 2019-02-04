@@ -119,8 +119,15 @@ extract_kata_env(){
 # Checks that processes are not running
 check_processes() {
 	extract_kata_env
-	vsock_configured=$($RUNTIME_PATH kata-env | awk '/UseVSock/ {print $3}')
-	vsock_supported=$($RUNTIME_PATH kata-env | awk '/SupportVSock/ {print $3}')
+
+	# Only check the kata-env if we have managed to find the kata executable...
+	if [ -x "$RUNTIME_PATH" ]; then
+		local vsock_configured=$($RUNTIME_PATH kata-env | awk '/UseVSock/ {print $3}')
+		local vsock_supported=$($RUNTIME_PATH kata-env | awk '/SupportVSock/ {print $3}')
+	else
+		local vsock_configured="false"
+		local vsock_supported="false"
+	fi
 	if [ "$vsock_configured" == true ] && [ "$vsock_supported" == true ]; then
 		general_processes=( ${HYPERVISOR_PATH} ${SHIM_PATH} )
 	else
