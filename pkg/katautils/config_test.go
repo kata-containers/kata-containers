@@ -1046,14 +1046,14 @@ func TestHypervisorDefaultsInitrd(t *testing.T) {
 	defaultInitrdPath = testInitrdPath
 	h := hypervisor{}
 	p, err := h.initrd()
-	assert.NoError(err)
+	assert.Error(err)
 	assert.Equal(p, "", "default Image path wrong")
 
 	// test path resolution
 	defaultInitrdPath = testInitrdLinkPath
 	h = hypervisor{}
 	p, err = h.initrd()
-	assert.NoError(err)
+	assert.Error(err)
 	assert.Equal(p, "")
 }
 
@@ -1083,14 +1083,14 @@ func TestHypervisorDefaultsImage(t *testing.T) {
 	defaultImagePath = testImagePath
 	h := hypervisor{}
 	p, err := h.image()
-	assert.NoError(err)
+	assert.Error(err)
 	assert.Equal(p, "", "default Image path wrong")
 
 	// test path resolution
 	defaultImagePath = testImageLinkPath
 	h = hypervisor{}
 	p, err = h.image()
-	assert.NoError(err)
+	assert.Error(err)
 	assert.Equal(p, "")
 }
 
