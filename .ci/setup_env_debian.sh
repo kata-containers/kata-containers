@@ -22,7 +22,7 @@ echo "Install git"
 sudo -E apt install -y git
 
 echo "Install kata containers dependencies"
-chronic sudo -E apt install -y libtool automake autotools-dev autoconf bc alien libpixman-1-dev coreutils
+chronic sudo -E apt install -y libtool automake autotools-dev autoconf bc alien libpixman-1-dev coreutils parted
 
 echo "Install qemu dependencies"
 chronic sudo -E apt install -y libcap-dev libattr1-dev libcap-ng-dev librbd-dev
