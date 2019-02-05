@@ -15,6 +15,9 @@ export KATA_RUNTIME=${KATA_RUNTIME:-kata-runtime}
 # more formats).
 export KATA_DOCKER_TIMEOUT=30
 
+# Ensure GOPATH set
+export GOPATH=${GOPATH:-$(go env GOPATH)}
+
 tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 lib_script="${GOPATH}/src/${tests_repo}/lib/common.bash"
 source "${lib_script}"
@@ -86,7 +89,6 @@ function build_and_install() {
 }
 
 function install_yq() {
-	GOPATH=${GOPATH:-${HOME}/go}
 	local yq_path="${GOPATH}/bin/yq"
 	local yq_pkg="github.com/mikefarah/yq"
 	[ -x  "${GOPATH}/bin/yq" ] && return
@@ -153,7 +155,6 @@ function get_dep_from_yaml_db(){
 
 function get_version(){
 	dependency="$1"
-	GOPATH=${GOPATH:-${HOME}/go}
 	runtime_repo="github.com/kata-containers/runtime"
 	runtime_repo_dir="$GOPATH/src/${runtime_repo}"
 	versions_file="${runtime_repo_dir}/versions.yaml"
@@ -175,13 +176,6 @@ function get_test_version(){
 	db="${cidir}/../versions.yaml"
 
 	get_dep_from_yaml_db "${db}" "${dependency}"
-}
-
-function check_gopath() {
-	# Verify GOPATH is set
-	if [ -z "$GOPATH" ]; then
-		export GOPATH=$(go env GOPATH)
-	fi
 }
 
 function waitForProcess(){

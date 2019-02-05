@@ -30,9 +30,6 @@ filter_and_build() {
 }
 
 main() {
-	# Check GOPATH is set
-	check_gopath
-
 	# Check if yq is installed
 	[ -z "$(command -v yq)" ] && install_yq
 
