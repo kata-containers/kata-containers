@@ -16,7 +16,7 @@ func (p *ccProxy) start(params proxyParams) (int, string, error) {
 		return -1, "", err
 	}
 
-	params.logger.Info("Starting cc proxy")
+	params.logger.Debug("Starting cc proxy")
 
 	// construct the socket path the proxy instance will use
 	proxyURL, err := defaultProxyURL(params.id, SocketTypeUNIX)
