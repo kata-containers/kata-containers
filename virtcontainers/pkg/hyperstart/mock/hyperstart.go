@@ -42,27 +42,6 @@ const (
 	SetupRoute      = "setuproute"
 )
 
-var codeList = map[int]string{
-	hyper.VersionCode:         Version,
-	hyper.StartSandboxCode:    StartSandbox,
-	hyper.DestroySandboxCode:  DestroySandbox,
-	hyper.ExecCmdCode:         ExecCmd,
-	hyper.ReadyCode:           Ready,
-	hyper.AckCode:             Ack,
-	hyper.ErrorCode:           Error,
-	hyper.WinsizeCode:         WinSize,
-	hyper.PingCode:            Ping,
-	hyper.NextCode:            Next,
-	hyper.WriteFileCode:       WriteFile,
-	hyper.ReadFileCode:        ReadFile,
-	hyper.NewContainerCode:    NewContainer,
-	hyper.KillContainerCode:   KillContainer,
-	hyper.OnlineCPUMemCode:    OnlineCPUMem,
-	hyper.SetupInterfaceCode:  SetupInterface,
-	hyper.SetupRouteCode:      SetupRoute,
-	hyper.RemoveContainerCode: RemoveContainer,
-}
-
 // Hyperstart is an object mocking the hyperstart agent.
 type Hyperstart struct {
 	t                           *testing.T
@@ -117,10 +96,6 @@ func (h *Hyperstart) GetLastMessages() []hyper.DecodedMessage {
 	msgs := h.lastMessages
 	h.lastMessages = newMessageList()
 	return msgs
-}
-
-func (h *Hyperstart) log(s string) {
-	h.logf("%s\n", s)
 }
 
 func (h *Hyperstart) logf(format string, args ...interface{}) {
@@ -214,24 +189,13 @@ func (h *Hyperstart) readMessage() (int, []byte, error) {
 	return cmd, data, nil
 }
 
-func cmdToString(cmd int) (string, error) {
-	_, ok := codeList[cmd]
-	if ok == false {
-		return "", fmt.Errorf("unknown command '%d'", cmd)
-	}
-
-	return codeList[cmd], nil
-}
-
 func (h *Hyperstart) handleCtl() {
 	for {
 		cmd, data, err := h.readMessage()
 		if err != nil {
 			break
 		}
-		cmdName, err := cmdToString(cmd)
-		assert.Nil(h.t, err)
-		h.logf("ctl: --> command %s, payload_len=%d\n", cmdName, len(data))
+
 		if len(data) != 0 {
 			h.logData(data)
 		}
@@ -244,8 +208,6 @@ func (h *Hyperstart) handleCtl() {
 		// answer back with the message exit status
 		// XXX: may be interesting to be able to configure the mock
 		// hyperstart to fail and test the reaction of proxy/clients
-		h.logf("ctl: <-- command %s executed successfully\n", cmdName)
-
 		h.SendMessage(hyper.AckCode, nil)
 
 	}
@@ -273,8 +235,6 @@ func (h *Hyperstart) writeIo(data []byte) {
 func (h *Hyperstart) SendIo(seq uint64, data []byte) {
 	length := ioHeaderSize + len(data)
 	header := make([]byte, ioHeaderSize)
-
-	h.logf("io: <-- writing %d bytes for seq %d\n", len(data), seq)
 
 	binary.BigEndian.PutUint64(header[:], seq)
 	binary.BigEndian.PutUint32(header[8:], uint32(length))
@@ -329,15 +289,14 @@ func (h *Hyperstart) startListening(path string, cb acceptCb) *net.UnixListener 
 	assert.Nil(h.t, err)
 
 	go func() {
-		h.logf("%s: waiting for connection\n", path)
 		c, err := l.Accept()
 		if err != nil {
+			h.logf("%s: Connection failed %s\n", path, err)
 			cb(nil)
 			return
 		}
 
 		cb(c)
-		h.logf("%s: accepted connection\n", path)
 	}()
 
 	return l
@@ -346,7 +305,6 @@ func (h *Hyperstart) startListening(path string, cb acceptCb) *net.UnixListener 
 // Start will
 // Once finished with the Hyperstart object, Close must be called.
 func (h *Hyperstart) Start() {
-	h.log("start")
 	h.wgConnected.Add(1)
 	h.wgConnected.Add(1)
 	h.ctlListener = h.startListening(h.ctlSocketPath, func(s net.Conn) {
@@ -394,6 +352,4 @@ func (h *Hyperstart) Stop() {
 
 	os.Remove(h.ctlSocketPath)
 	os.Remove(h.ioSocketPath)
-
-	h.log("stopped")
 }

@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -245,7 +246,9 @@ func TestHyperSetProxy(t *testing.T) {
 
 	h := &hyper{}
 	p := &ccProxy{}
-	s := &Sandbox{storage: &filesystem{}}
+	s := &Sandbox{
+		storage: &filesystem{ctx: context.Background()},
+	}
 
 	err := h.setProxy(s, p, 0, "")
 	assert.Error(err)
