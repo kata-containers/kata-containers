@@ -32,6 +32,7 @@ func TestFilesystemCreateAllResourcesSuccessful(t *testing.T) {
 	}
 
 	sandbox := &Sandbox{
+		ctx:        context.Background(),
 		id:         testSandboxID,
 		storage:    fs,
 		config:     sandboxConfig,
