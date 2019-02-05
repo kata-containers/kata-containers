@@ -16,12 +16,12 @@ PACKAGES="systemd iptables init"
 
 DEBOOTSTRAP=${PACKAGE_MANAGER:-"debootstrap"}
 
-case $(arch) in
+case $(uname -m) in
 	x86_64) ARCHITECTURE="amd64";;
 	ppc64le) ARCHITECTURE="ppc64el";;
 	aarch64) ARCHITECTURE="arm64";;
 	s390x)	ARCHITECTURE="s390x";;
-	(*) die "$(arch) not supported "
+	(*) die "$(uname -m) not supported "
 esac
 
 # Init process must be one of {systemd,kata-agent}
