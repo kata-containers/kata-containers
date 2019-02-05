@@ -15,7 +15,7 @@ For details of the other Kata Containers repositories, see the
 * [License](#license)
 * [Platform support](#platform-support)
     * [Hardware requirements](#hardware-requirements)
-* [Quick start for users](#quick-start-for-users)
+* [Download and install](#download-and-install)
 * [Quick start for developers](#quick-start-for-developers)
 * [Architecture overview](#architecture-overview)
 * [Configuration](#configuration)
@@ -74,7 +74,9 @@ $ kata-runtime kata-check
 > $ sudo kata-runtime kata-check
 > ```
 
-## Quick start for users
+## Download and install
+
+[![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/kata-containers)
 
 See the [installation guides](https://github.com/kata-containers/documentation/tree/master/install/README.md)
 available for various operating systems.
