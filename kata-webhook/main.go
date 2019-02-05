@@ -29,13 +29,13 @@ func annotatePodMutator(_ context.Context, obj metav1.Object) (bool, error) {
 	// We cannot support --net=host in Kata
 	// https://github.com/kata-containers/documentation/blob/master/Limitations.md#docker---nethost
 	if pod.Spec.HostNetwork {
-		fmt.Println("hostnetwork: ", pod.GetNamespace(), pod.GetName())
+		fmt.Println("host network: ", pod.GetNamespace(), pod.GetName())
 		return false, nil
 	}
 
 	switch pod.GetNamespace() {
 	case "rook-ceph-system", "rook-ceph":
-		fmt.Println("rookie: ", pod.GetNamespace(), pod.GetName())
+		fmt.Println("rook: ", pod.GetNamespace(), pod.GetName())
 		return false, nil
 	default:
 		break
@@ -44,22 +44,22 @@ func annotatePodMutator(_ context.Context, obj metav1.Object) (bool, error) {
 	for i := range pod.Spec.Containers {
 		if pod.Spec.Containers[i].SecurityContext != nil {
 			if *pod.Spec.Containers[i].SecurityContext.Privileged {
-				fmt.Println("Privileged container: ", pod.GetNamespace(), pod.GetName())
+				fmt.Println("privileged container: ", pod.GetNamespace(), pod.GetName())
 				return false, nil
 			}
 		}
 	}
 
-	fmt.Println("katait: ", pod.GetNamespace(), pod.GetName())
-
-	// Mutate our object with the required annotations.
-	if pod.Annotations == nil {
-		pod.Annotations = make(map[string]string)
+	if pod.Spec.RuntimeClassName != nil {
+		fmt.Println("explicit runtime: ", pod.GetNamespace(), pod.GetName(), pod.Spec.RuntimeClassName)
+		return false, nil
 	}
-	pod.Annotations["mutated"] = "true"
-	pod.Annotations["mutator"] = "pod-annotate"
-	pod.Annotations["io.kubernetes.cri-o.TrustedSandbox"] = "false"
-	pod.Annotations["io.kubernetes.cri.untrusted-workload"] = "true"
+
+	// Mutate the pod
+	fmt.Println("setting runtime to kata: ", pod.GetNamespace(), pod.GetName())
+
+	kataRuntimeClassName := "kata"
+	pod.Spec.RuntimeClassName = &kataRuntimeClassName
 
 	return false, nil
 }
