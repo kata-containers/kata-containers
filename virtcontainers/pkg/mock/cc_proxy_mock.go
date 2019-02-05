@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sync"
@@ -109,9 +110,8 @@ func connectShimHandler(data []byte, userData interface{}, response *handlerResp
 
 	if payload.Token != proxy.token {
 		response.SetErrorMsg("Invalid Token")
+		proxy.logF("Invalid Token (token=%s)", payload.Token)
 	}
-
-	proxy.logF("ConnectShim(token=%s)", payload.Token)
 
 	response.AddResult("version", api.Version)
 	proxy.ShimConnected <- true
@@ -125,8 +125,6 @@ func signalShimHandler(data []byte, userData interface{}, response *handlerRespo
 	err := json.Unmarshal(data, &signalPayload)
 	assert.Nil(proxy.t, err)
 
-	proxy.logF("CCProxyMock received signal: %v", signalPayload)
-
 	proxy.Signal <- signalPayload
 }
 
@@ -134,7 +132,6 @@ func disconnectShimHandler(data []byte, userData interface{}, response *handlerR
 	client := userData.(*client)
 	proxy := client.proxy
 
-	proxy.log("Client sent DisconnectShim Command")
 	proxy.ShimDisconnected <- true
 }
 
@@ -150,10 +147,9 @@ func registerVMHandler(data []byte, userData interface{}, response *handlerRespo
 	client := userData.(*client)
 	proxy := client.proxy
 
-	proxy.log("Register VM")
-
 	payload := api.RegisterVM{}
 	if err := json.Unmarshal(data, &payload); err != nil {
+		proxy.logF("Register VM failed (%s)", err)
 		response.SetError(err)
 		return
 	}
@@ -172,20 +168,15 @@ func registerVMHandler(data []byte, userData interface{}, response *handlerRespo
 }
 
 func unregisterVMHandler(data []byte, userData interface{}, response *handlerResponse) {
-	client := userData.(*client)
-	proxy := client.proxy
-
-	proxy.log("Unregister VM")
 }
 
 func attachVMHandler(data []byte, userData interface{}, response *handlerResponse) {
 	client := userData.(*client)
 	proxy := client.proxy
 
-	proxy.log("Attach VM")
-
 	payload := api.AttachVM{}
 	if err := json.Unmarshal(data, &payload); err != nil {
+		proxy.logF("Attach VM failed (%s)", err)
 		response.SetError(err)
 		return
 	}
@@ -204,11 +195,6 @@ func attachVMHandler(data []byte, userData interface{}, response *handlerRespons
 }
 
 func hyperCmdHandler(data []byte, userData interface{}, response *handlerResponse) {
-	client := userData.(*client)
-	proxy := client.proxy
-
-	proxy.log("Hyper command")
-
 	response.SetData([]byte{})
 }
 
@@ -235,8 +221,6 @@ func (proxy *CCProxyMock) startListening() {
 	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: proxy.connectionPath, Net: "unix"})
 	assert.Nil(proxy.t, err)
 
-	proxy.logF("listening on %s", proxy.connectionPath)
-
 	proxy.listener = l
 }
 
@@ -245,11 +229,11 @@ func (proxy *CCProxyMock) serveClient(proto *ccProxyProtocol, newConn net.Conn) 
 		proxy: proxy,
 		conn:  newConn,
 	}
-	err := proto.Serve(newConn, newClient)
-	proxy.logF("Error serving client : %v\n", err)
+	if err := proto.Serve(newConn, newClient); err != nil && err != io.EOF {
+		proxy.logF("Error serving client : %v\n", err)
+	}
 
 	newConn.Close()
-	proxy.log("Client closed connection")
 
 	proxy.wg.Done()
 }
@@ -281,7 +265,6 @@ func (proxy *CCProxyMock) serve() {
 	}
 
 	assert.NotNil(proxy.t, conn)
-	proxy.log("Client connected")
 
 	proxy.wg.Add(1)
 
@@ -319,7 +302,6 @@ func (proxy *CCProxyMock) Stop() {
 	proxy.listener.Close()
 
 	if proxy.cl != nil {
-		proxy.log("Closing client connection")
 		proxy.cl.Close()
 		proxy.cl = nil
 	} else {
@@ -332,7 +314,6 @@ func (proxy *CCProxyMock) Stop() {
 	close(proxy.ShimDisconnected)
 	close(proxy.StdinReceived)
 	os.Remove(proxy.connectionPath)
-	proxy.log("Stopped")
 }
 
 // XXX: could do with its own package to remove that ugly namespacing

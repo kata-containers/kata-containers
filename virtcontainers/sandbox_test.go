@@ -1759,7 +1759,10 @@ func TestStartNetworkMonitor(t *testing.T) {
 }
 
 func TestSandboxStopStopped(t *testing.T) {
-	s := &Sandbox{state: types.State{State: types.StateStopped}}
+	s := &Sandbox{
+		ctx:   context.Background(),
+		state: types.State{State: types.StateStopped},
+	}
 	err := s.Stop()
 
 	assert.Nil(t, err)

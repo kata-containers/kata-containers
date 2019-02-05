@@ -28,7 +28,7 @@ func (p *noProxy) start(params proxyParams) (int, string, error) {
 		return -1, "", fmt.Errorf("proxy logger is not set")
 	}
 
-	params.logger.Info("No proxy started because of no-proxy implementation")
+	params.logger.Debug("No proxy started because of no-proxy implementation")
 
 	if params.agentURL == "" {
 		return -1, "", fmt.Errorf("AgentURL cannot be empty")

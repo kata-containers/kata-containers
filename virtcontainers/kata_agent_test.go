@@ -73,6 +73,7 @@ func TestKataAgentConnect(t *testing.T) {
 	defer proxy.Stop()
 
 	k := &kataAgent{
+		ctx: context.Background(),
 		state: KataAgentState{
 			URL: testKataProxyURL,
 		},
@@ -105,6 +106,7 @@ func TestKataAgentDisconnect(t *testing.T) {
 	defer proxy.Stop()
 
 	k := &kataAgent{
+		ctx: context.Background(),
 		state: KataAgentState{
 			URL: testKataProxyURL,
 		},
@@ -294,6 +296,7 @@ func TestKataAgentSendReq(t *testing.T) {
 	defer proxy.Stop()
 
 	k := &kataAgent{
+		ctx: context.Background(),
 		state: KataAgentState{
 			URL: testKataProxyURL,
 		},
@@ -722,7 +725,8 @@ func TestAgentCreateContainer(t *testing.T) {
 	assert := assert.New(t)
 
 	sandbox := &Sandbox{
-		id: "foobar",
+		ctx: context.Background(),
+		id:  "foobar",
 		config: &SandboxConfig{
 			ID:             "foobar",
 			HypervisorType: MockHypervisor,
@@ -736,6 +740,7 @@ func TestAgentCreateContainer(t *testing.T) {
 	}
 
 	container := &Container{
+		ctx:       sandbox.ctx,
 		id:        "barfoo",
 		sandboxID: "foobar",
 		sandbox:   sandbox,
@@ -768,6 +773,7 @@ func TestAgentCreateContainer(t *testing.T) {
 	defer proxy.Stop()
 
 	k := &kataAgent{
+		ctx: context.Background(),
 		state: KataAgentState{
 			URL: testKataProxyURL,
 		},
@@ -807,6 +813,7 @@ func TestAgentNetworkOperation(t *testing.T) {
 	defer proxy.Stop()
 
 	k := &kataAgent{
+		ctx: context.Background(),
 		state: KataAgentState{
 			URL: testKataProxyURL,
 		},
@@ -828,9 +835,14 @@ func TestAgentNetworkOperation(t *testing.T) {
 func TestKataAgentSetProxy(t *testing.T) {
 	assert := assert.New(t)
 
-	k := &kataAgent{}
+	k := &kataAgent{ctx: context.Background()}
 	p := &kataBuiltInProxy{}
-	s := &Sandbox{storage: &filesystem{}}
+	s := &Sandbox{
+		ctx: context.Background(),
+		storage: &filesystem{
+			ctx: context.Background(),
+		},
+	}
 
 	err := k.setProxy(s, p, 0, "")
 	assert.Error(err)
@@ -877,6 +889,7 @@ func TestKataCopyFile(t *testing.T) {
 	defer proxy.Stop()
 
 	k := &kataAgent{
+		ctx: context.Background(),
 		state: KataAgentState{
 			URL: testKataProxyURL,
 		},
