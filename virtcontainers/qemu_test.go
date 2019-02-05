@@ -200,6 +200,7 @@ func TestQemuMemoryTopology(t *testing.T) {
 
 func testQemuAddDevice(t *testing.T, devInfo interface{}, devType deviceType, expected []govmmQemu.Device) {
 	q := &qemu{
+		ctx:  context.Background(),
 		arch: &qemuArchBase{},
 	}
 
@@ -286,7 +287,9 @@ func TestQemuAddDeviceKataVSOCK(t *testing.T) {
 }
 
 func TestQemuGetSandboxConsole(t *testing.T) {
-	q := &qemu{}
+	q := &qemu{
+		ctx: context.Background(),
+	}
 	sandboxID := "testSandboxID"
 	expected := filepath.Join(RunVMStoragePath, sandboxID, consoleSocket)
 
@@ -302,6 +305,7 @@ func TestQemuGetSandboxConsole(t *testing.T) {
 
 func TestQemuCapabilities(t *testing.T) {
 	q := &qemu{
+		ctx:  context.Background(),
 		arch: &qemuArchBase{},
 	}
 
@@ -365,6 +369,7 @@ func TestHotplugUnsupportedDeviceType(t *testing.T) {
 	qemuConfig := newQemuConfig()
 	fs := &filesystem{}
 	q := &qemu{
+		ctx:     context.Background(),
 		config:  qemuConfig,
 		storage: fs,
 	}
@@ -394,6 +399,7 @@ func TestQemuCleanup(t *testing.T) {
 	assert := assert.New(t)
 
 	q := &qemu{
+		ctx:    context.Background(),
 		config: newQemuConfig(),
 	}
 
