@@ -110,10 +110,8 @@ func TestNetInterworkingModelIsValid(t *testing.T) {
 	}{
 		{"Invalid Model", NetXConnectInvalidModel, false},
 		{"Default Model", NetXConnectDefaultModel, true},
-		{"Bridged Model", NetXConnectBridgedModel, true},
 		{"TC Filter Model", NetXConnectTCFilterModel, true},
 		{"Macvtap Model", NetXConnectMacVtapModel, true},
-		{"Enlightened Model", NetXConnectEnlightenedModel, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -133,9 +131,7 @@ func TestNetInterworkingModelSetModel(t *testing.T) {
 	}{
 		{"Invalid Model", "Invalid", true},
 		{"default Model", defaultNetModelStr, false},
-		{"bridged Model", bridgedNetModelStr, false},
 		{"macvtap Model", macvtapNetModelStr, false},
-		{"enlightened Model", enlightenedNetModelStr, false},
 		{"tcfilter Model", tcFilterNetModelStr, false},
 		{"none Model", noneNetModelStr, false},
 	}
@@ -165,30 +161,6 @@ func TestGenerateRandomPrivateMacAdd(t *testing.T) {
 	assert.NoError(err)
 
 	assert.NotEqual(addr1, addr2)
-}
-
-func TestCreateGetBridgeLink(t *testing.T) {
-	if tc.NotValid(ktu.NeedRoot()) {
-		t.Skip(testDisabledAsNonRoot)
-	}
-
-	assert := assert.New(t)
-
-	netHandle, err := netlink.NewHandle()
-	defer netHandle.Delete()
-
-	assert.NoError(err)
-
-	brName := "testbr0"
-	brLink, _, err := createLink(netHandle, brName, &netlink.Bridge{}, 1)
-	assert.NoError(err)
-	assert.NotNil(brLink)
-
-	brLink, err = getLinkByName(netHandle, brName, &netlink.Bridge{})
-	assert.NoError(err)
-
-	err = netHandle.LinkDel(brLink)
-	assert.NoError(err)
 }
 
 func TestCreateGetTunTapLink(t *testing.T) {
@@ -228,11 +200,11 @@ func TestCreateMacVtap(t *testing.T) {
 
 	assert.NoError(err)
 
-	brName := "testbr0"
-	brLink, _, err := createLink(netHandle, brName, &netlink.Bridge{}, 1)
+	tapName := "testtap0"
+	tapLink, _, err := createLink(netHandle, tapName, &netlink.Tuntap{}, 1)
 	assert.NoError(err)
 
-	attrs := brLink.Attrs()
+	attrs := tapLink.Attrs()
 
 	mcLink := &netlink.Macvtap{
 		Macvlan: netlink.Macvlan{
@@ -253,10 +225,10 @@ func TestCreateMacVtap(t *testing.T) {
 	err = netHandle.LinkDel(macvtapLink)
 	assert.NoError(err)
 
-	brLink, err = getLinkByName(netHandle, brName, &netlink.Bridge{})
+	tapLink, err = getLinkByName(netHandle, tapName, &netlink.Tuntap{})
 	assert.NoError(err)
 
-	err = netHandle.LinkDel(brLink)
+	err = netHandle.LinkDel(tapLink)
 	assert.NoError(err)
 }
 

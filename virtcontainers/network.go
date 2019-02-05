@@ -38,21 +38,9 @@ const (
 	// NetXConnectDefaultModel Ask to use DefaultNetInterworkingModel
 	NetXConnectDefaultModel NetInterworkingModel = iota
 
-	// NetXConnectBridgedModel uses a linux bridge to interconnect
-	// the container interface to the VM. This is the
-	// safe default that works for most cases except
-	// macvlan and ipvlan
-	NetXConnectBridgedModel
-
 	// NetXConnectMacVtapModel can be used when the Container network
 	// interface can be bridged using macvtap
 	NetXConnectMacVtapModel
-
-	// NetXConnectEnlightenedModel can be used when the Network plugins
-	// are enlightened to create VM native interfaces
-	// when requested by the runtime
-	// This will be used for vethtap, macvtap, ipvtap
-	NetXConnectEnlightenedModel
 
 	// NetXConnectTCFilterModel redirects traffic from the network interface
 	// provided by the network plugin to a tap interface.
@@ -74,11 +62,7 @@ func (n NetInterworkingModel) IsValid() bool {
 const (
 	defaultNetModelStr = "default"
 
-	bridgedNetModelStr = "bridged"
-
 	macvtapNetModelStr = "macvtap"
-
-	enlightenedNetModelStr = "enlightened"
 
 	tcFilterNetModelStr = "tcfilter"
 
@@ -91,14 +75,8 @@ func (n *NetInterworkingModel) SetModel(modelName string) error {
 	case defaultNetModelStr:
 		*n = DefaultNetInterworkingModel
 		return nil
-	case bridgedNetModelStr:
-		*n = NetXConnectBridgedModel
-		return nil
 	case macvtapNetModelStr:
 		*n = NetXConnectMacVtapModel
-		return nil
-	case enlightenedNetModelStr:
-		*n = NetXConnectEnlightenedModel
 		return nil
 	case tcFilterNetModelStr:
 		*n = NetXConnectTCFilterModel
@@ -325,11 +303,6 @@ func createLink(netHandle *netlink.Handle, name string, expectedLink netlink.Lin
 	var fds []*os.File
 
 	switch expectedLink.Type() {
-	case (&netlink.Bridge{}).Type():
-		newLink = &netlink.Bridge{
-			LinkAttrs:         netlink.LinkAttrs{Name: name},
-			MulticastSnooping: expectedLink.(*netlink.Bridge).MulticastSnooping,
-		}
 	case (&netlink.Tuntap{}).Type():
 		flags := netlink.TUNTAP_VNET_HDR
 		if queues > 0 {
@@ -400,10 +373,6 @@ func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.
 	}
 
 	switch expectedLink.Type() {
-	case (&netlink.Bridge{}).Type():
-		if l, ok := link.(*netlink.Bridge); ok {
-			return l, nil
-		}
 	case (&netlink.Tuntap{}).Type():
 		if l, ok := link.(*netlink.Tuntap); ok {
 			return l, nil
@@ -448,14 +417,10 @@ func xConnectVMNetwork(endpoint Endpoint, h hypervisor) error {
 	}
 
 	switch netPair.NetInterworkingModel {
-	case NetXConnectBridgedModel:
-		return bridgeNetworkPair(endpoint, queues, disableVhostNet)
 	case NetXConnectMacVtapModel:
 		return tapNetworkPair(endpoint, queues, disableVhostNet)
 	case NetXConnectTCFilterModel:
 		return setupTCFiltering(endpoint, queues, disableVhostNet)
-	case NetXConnectEnlightenedModel:
-		return fmt.Errorf("Unsupported networking model")
 	default:
 		return fmt.Errorf("Invalid internetworking model")
 	}
@@ -470,14 +435,10 @@ func xDisconnectVMNetwork(endpoint Endpoint) error {
 	}
 
 	switch netPair.NetInterworkingModel {
-	case NetXConnectBridgedModel:
-		return unBridgeNetworkPair(endpoint)
 	case NetXConnectMacVtapModel:
 		return untapNetworkPair(endpoint)
 	case NetXConnectTCFilterModel:
 		return removeTCFiltering(endpoint)
-	case NetXConnectEnlightenedModel:
-		return fmt.Errorf("Unsupported networking model")
 	default:
 		return fmt.Errorf("Invalid internetworking model")
 	}
@@ -651,100 +612,6 @@ func tapNetworkPair(endpoint Endpoint, queues int, disableVhostNet bool) error {
 			return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
 		}
 		netPair.VhostFds = vhostFds
-	}
-
-	return nil
-}
-
-func bridgeNetworkPair(endpoint Endpoint, queues int, disableVhostNet bool) error {
-	netHandle, err := netlink.NewHandle()
-	if err != nil {
-		return err
-	}
-	defer netHandle.Delete()
-
-	netPair := endpoint.NetworkPair()
-
-	tapLink, fds, err := createLink(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{}, queues)
-	if err != nil {
-		return fmt.Errorf("Could not create TAP interface: %s", err)
-	}
-	netPair.VMFds = fds
-
-	if !disableVhostNet {
-		vhostFds, err := createVhostFds(queues)
-		if err != nil {
-			return fmt.Errorf("Could not setup vhost fds %s : %s", netPair.VirtIface.Name, err)
-		}
-		netPair.VhostFds = vhostFds
-	}
-
-	var attrs *netlink.LinkAttrs
-	var link netlink.Link
-
-	link, err = getLinkForEndpoint(endpoint, netHandle)
-	if err != nil {
-		return err
-	}
-
-	attrs = link.Attrs()
-
-	// Save the veth MAC address to the TAP so that it can later be used
-	// to build the hypervisor command line. This MAC address has to be
-	// the one inside the VM in order to avoid any firewall issues. The
-	// bridge created by the network plugin on the host actually expects
-	// to see traffic from this MAC address and not another one.
-	netPair.TAPIface.HardAddr = attrs.HardwareAddr.String()
-
-	if err := netHandle.LinkSetMTU(tapLink, attrs.MTU); err != nil {
-		return fmt.Errorf("Could not set TAP MTU %d: %s", attrs.MTU, err)
-	}
-
-	hardAddr, err := net.ParseMAC(netPair.VirtIface.HardAddr)
-	if err != nil {
-		return err
-	}
-	if err := netHandle.LinkSetHardwareAddr(link, hardAddr); err != nil {
-		return fmt.Errorf("Could not set MAC address %s for veth interface %s: %s",
-			netPair.VirtIface.HardAddr, netPair.VirtIface.Name, err)
-	}
-
-	mcastSnoop := false
-	bridgeLink, _, err := createLink(netHandle, netPair.Name, &netlink.Bridge{MulticastSnooping: &mcastSnoop}, queues)
-	if err != nil {
-		return fmt.Errorf("Could not create bridge: %s", err)
-	}
-
-	if err := netHandle.LinkSetMaster(tapLink, bridgeLink.(*netlink.Bridge)); err != nil {
-		return fmt.Errorf("Could not attach TAP %s to the bridge %s: %s",
-			netPair.TAPIface.Name, netPair.Name, err)
-	}
-
-	if err := netHandle.LinkSetUp(tapLink); err != nil {
-		return fmt.Errorf("Could not enable TAP %s: %s", netPair.TAPIface.Name, err)
-	}
-
-	if err := netHandle.LinkSetMaster(link, bridgeLink.(*netlink.Bridge)); err != nil {
-		return fmt.Errorf("Could not attach veth %s to the bridge %s: %s",
-			netPair.VirtIface.Name, netPair.Name, err)
-	}
-
-	// Clear the IP addresses from the veth interface to prevent ARP conflict
-	netPair.VirtIface.Addrs, err = netlink.AddrList(link, netlink.FAMILY_V4)
-	if err != nil {
-		return fmt.Errorf("Unable to obtain veth IP addresses: %s", err)
-	}
-
-	if err := clearIPs(link, netPair.VirtIface.Addrs); err != nil {
-		return fmt.Errorf("Unable to clear veth IP addresses: %s", err)
-	}
-
-	if err := netHandle.LinkSetUp(link); err != nil {
-		return fmt.Errorf("Could not enable veth %s: %s", netPair.VirtIface.Name, err)
-	}
-
-	if err := netHandle.LinkSetUp(bridgeLink); err != nil {
-		return fmt.Errorf("Could not enable bridge %s: %s", netPair.Name, err)
 	}
 
 	return nil
@@ -961,71 +828,6 @@ func untapNetworkPair(endpoint Endpoint) error {
 	// Restore the IPs that were cleared
 	err = setIPs(link, netPair.VirtIface.Addrs)
 	return err
-}
-
-func unBridgeNetworkPair(endpoint Endpoint) error {
-	netHandle, err := netlink.NewHandle()
-	if err != nil {
-		return err
-	}
-	defer netHandle.Delete()
-
-	netPair := endpoint.NetworkPair()
-
-	tapLink, err := getLinkByName(netHandle, netPair.TAPIface.Name, &netlink.Tuntap{})
-	if err != nil {
-		return fmt.Errorf("Could not get TAP interface: %s", err)
-	}
-
-	bridgeLink, err := getLinkByName(netHandle, netPair.Name, &netlink.Bridge{})
-	if err != nil {
-		return fmt.Errorf("Could not get bridge interface: %s", err)
-	}
-
-	if err := netHandle.LinkSetDown(bridgeLink); err != nil {
-		return fmt.Errorf("Could not disable bridge %s: %s", netPair.Name, err)
-	}
-
-	if err := netHandle.LinkSetDown(tapLink); err != nil {
-		return fmt.Errorf("Could not disable TAP %s: %s", netPair.TAPIface.Name, err)
-	}
-
-	if err := netHandle.LinkSetNoMaster(tapLink); err != nil {
-		return fmt.Errorf("Could not detach TAP %s: %s", netPair.TAPIface.Name, err)
-	}
-
-	if err := netHandle.LinkDel(bridgeLink); err != nil {
-		return fmt.Errorf("Could not remove bridge %s: %s", netPair.Name, err)
-	}
-
-	if err := netHandle.LinkDel(tapLink); err != nil {
-		return fmt.Errorf("Could not remove TAP %s: %s", netPair.TAPIface.Name, err)
-	}
-
-	link, err := getLinkForEndpoint(endpoint, netHandle)
-	if err != nil {
-		return err
-	}
-
-	hardAddr, err := net.ParseMAC(netPair.TAPIface.HardAddr)
-	if err != nil {
-		return err
-	}
-	if err := netHandle.LinkSetHardwareAddr(link, hardAddr); err != nil {
-		return fmt.Errorf("Could not set MAC address %s for veth interface %s: %s",
-			netPair.VirtIface.HardAddr, netPair.VirtIface.Name, err)
-	}
-
-	if err := netHandle.LinkSetDown(link); err != nil {
-		return fmt.Errorf("Could not disable veth %s: %s", netPair.VirtIface.Name, err)
-	}
-
-	if err := netHandle.LinkSetNoMaster(link); err != nil {
-		return fmt.Errorf("Could not detach veth %s: %s", netPair.VirtIface.Name, err)
-	}
-
-	// Restore the IPs that were cleared
-	return setIPs(link, netPair.VirtIface.Addrs)
 }
 
 func removeTCFiltering(endpoint Endpoint) error {
