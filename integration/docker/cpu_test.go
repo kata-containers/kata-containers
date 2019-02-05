@@ -7,6 +7,7 @@ package docker
 import (
 	"fmt"
 	"math"
+	"runtime"
 	"strings"
 
 	. "github.com/kata-containers/tests"
@@ -312,7 +313,13 @@ func withCPUConstraintCheckPeriodAndQuota(cpus float64, fail bool) TableEntry {
 	return Entry(fmt.Sprintf("quota/period should be equal to %.1f", cpus), cpus, fail)
 }
 
-func withCPUSetConstraint(cpuset string, fail bool) TableEntry {
+func withCPUSetConstraint(cpuset string, minCpusNeeded int, fail bool) TableEntry {
+	// test should fail when the actual number of cpus is less than the minimum number
+	// of cpus needed to run the test, for example cpuset=0-2 requires 3 cpus(0,1,2)
+	if runtime.NumCPU() < minCpusNeeded {
+		fail = true
+	}
+
 	return Entry(fmt.Sprintf("cpuset should be equal to %s", cpuset), cpuset, fail)
 }
 
@@ -371,7 +378,9 @@ var _ = Describe("Update CPU constraints", func() {
 
 	DescribeTable("Update CPU set",
 		func(cpuset string, fail bool) {
-			runArgs = []string{"--rm", "--cpus=4", "--name", id, "-dt", DebianImage, "bash"}
+			// Use the actual number of CPUs
+			runArgs = []string{"--rm", fmt.Sprintf("--cpus=%d", runtime.NumCPU()),
+				"--name", id, "-dt", DebianImage, "bash"}
 			_, _, exitCode = dockerRun(runArgs...)
 			Expect(exitCode).To(BeZero())
 
@@ -388,15 +397,15 @@ var _ = Describe("Update CPU constraints", func() {
 			Expect(exitCode).To(BeZero())
 			Expect(cpuset).To(Equal(strings.Trim(stdout, "\n\t ")))
 		},
-		withCPUSetConstraint("0", shouldNotFail),
-		withCPUSetConstraint("2", shouldNotFail),
-		withCPUSetConstraint("0-1", shouldNotFail),
-		withCPUSetConstraint("0-2", shouldNotFail),
-		withCPUSetConstraint("0-3", shouldNotFail),
-		withCPUSetConstraint("0,2", shouldNotFail),
-		withCPUSetConstraint("0,3", shouldNotFail),
-		withCPUSetConstraint("0,-2,3", shouldFail),
-		withCPUSetConstraint("-1-3", shouldFail),
+		withCPUSetConstraint("0", 1, shouldNotFail),
+		withCPUSetConstraint("2", 3, shouldNotFail),
+		withCPUSetConstraint("0-1", 2, shouldNotFail),
+		withCPUSetConstraint("0-2", 3, shouldNotFail),
+		withCPUSetConstraint("0-3", 4, shouldNotFail),
+		withCPUSetConstraint("0,2", 3, shouldNotFail),
+		withCPUSetConstraint("0,3", 4, shouldNotFail),
+		withCPUSetConstraint("0,-2,3", 0, shouldFail),
+		withCPUSetConstraint("-1-3", 0, shouldFail),
 	)
 })
 
