@@ -27,7 +27,7 @@ func (p *kataProxy) start(params proxyParams) (int, string, error) {
 		return -1, "", err
 	}
 
-	params.logger.Info("Starting regular Kata proxy rather than built-in")
+	params.logger.Debug("Starting regular Kata proxy rather than built-in")
 
 	// construct the socket path the proxy instance will use
 	proxyURL, err := defaultProxyURL(params.id, SocketTypeUNIX)
