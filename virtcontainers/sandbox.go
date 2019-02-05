@@ -25,6 +25,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	deviceManager "github.com/kata-containers/runtime/virtcontainers/device/manager"
+	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/store"
@@ -100,6 +101,9 @@ type SandboxConfig struct {
 	SystemdCgroup bool
 
 	DisableGuestSeccomp bool
+
+	// Experimental features enabled
+	Experimental []exp.Feature
 }
 
 func (s *Sandbox) trace(name string) (opentracing.Span, context.Context) {
@@ -136,6 +140,12 @@ func (sandboxConfig *SandboxConfig) valid() bool {
 		sandboxConfig.HypervisorType = QemuHypervisor
 	}
 
+	// validate experimental features
+	for _, f := range sandboxConfig.Experimental {
+		if !exp.Supported(f) {
+			return false
+		}
+	}
 	return true
 }
 
@@ -437,6 +447,10 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	s, err := newSandbox(ctx, sandboxConfig, factory)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(s.config.Experimental) != 0 {
+		s.Logger().WithField("features", s.config.Experimental).Infof("Enable experimental features")
 	}
 
 	// Fetch sandbox network to be able to access it from the sandbox structure.
