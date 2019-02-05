@@ -6,16 +6,27 @@
 >   [already installed the Kata Containers packages](../debian-installation-guide.md).
 > - this guide allows for installation with `systemd` or `sysVinit` init systems
 
-1. Install the latest version of Docker with the following commands:
+1. Install Docker with the following commands:
 
-   > **Note:** This step is only required if Docker is not installed on the system.
+   > **Notes:**
+   >
+   > - This step is only required if Docker is not installed on the system.
+   > - Newer versions of Docker have
+   >   [removed devicemapper support](https://github.com/kata-containers/documentation/issues/373)
+   >   so the commands below install the latest version which includes
+   >   devicemapper support.
+   > - To remove the lock on the docker package to allow it to be updated:
+   >   ```sh
+   >   $ sudo apt-mark unhold docker-ce
+   >   ```
 
    ```bash
    $ sudo apt-get -y install apt-transport-https ca-certificates curl gnupg2 software-properties-common  
    $ curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg | sudo apt-key add -
    $ sudo add-apt-repository "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable"
    $ sudo apt-get update
-   $ sudo apt-get -y install docker-ce
+   $ sudo -E apt-get -y install --allow-downgrades docker-ce='18.06.2~ce~3-0~debian'
+   $ sudo apt-mark hold docker-ce
    ```
 
    For more information on installing Docker please refer to the
