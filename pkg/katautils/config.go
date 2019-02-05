@@ -16,6 +16,7 @@ import (
 	"github.com/BurntSushi/toml"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
@@ -122,11 +123,12 @@ type proxy struct {
 }
 
 type runtime struct {
-	Debug               bool   `toml:"enable_debug"`
-	Tracing             bool   `toml:"enable_tracing"`
-	DisableNewNetNs     bool   `toml:"disable_new_netns"`
-	DisableGuestSeccomp bool   `toml:"disable_guest_seccomp"`
-	InterNetworkModel   string `toml:"internetworking_model"`
+	Debug               bool     `toml:"enable_debug"`
+	Tracing             bool     `toml:"enable_tracing"`
+	DisableNewNetNs     bool     `toml:"disable_new_netns"`
+	DisableGuestSeccomp bool     `toml:"disable_guest_seccomp"`
+	Experimental        []string `toml:"experimental"`
+	InterNetworkModel   string   `toml:"internetworking_model"`
 }
 
 type shim struct {
@@ -800,32 +802,15 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 // All paths are resolved fully meaning if this function does not return an
 // error, all paths are valid at the time of the call.
 func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolvedConfigPath string, config oci.RuntimeConfig, err error) {
-	var resolved string
 
 	config, err = initConfig()
 	if err != nil {
 		return "", oci.RuntimeConfig{}, err
 	}
 
-	if configPath == "" {
-		resolved, err = getDefaultConfigFile()
-	} else {
-		resolved, err = ResolvePath(configPath)
-	}
-
+	tomlConf, resolved, err := decodeConfig(configPath)
 	if err != nil {
-		return "", config, fmt.Errorf("Cannot find usable config file (%v)", err)
-	}
-
-	configData, err := ioutil.ReadFile(resolved)
-	if err != nil {
-		return "", config, err
-	}
-
-	var tomlConf tomlConfig
-	_, err = toml.Decode(string(configData), &tomlConf)
-	if err != nil {
-		return "", config, err
+		return "", oci.RuntimeConfig{}, err
 	}
 
 	config.Debug = tomlConf.Runtime.Debug
@@ -872,12 +857,49 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 	}
 
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
+	for _, f := range tomlConf.Runtime.Experimental {
+		feature := exp.Feature(f)
+		if !exp.Supported(feature) {
+			return "", config, fmt.Errorf("Unsupported experimental feature %q", f)
+		}
+		config.Experimental = append(config.Experimental, feature)
+	}
 
 	if err := checkConfig(config); err != nil {
 		return "", config, err
 	}
 
 	return resolved, config, nil
+}
+
+func decodeConfig(configPath string) (tomlConfig, string, error) {
+	var (
+		resolved string
+		tomlConf tomlConfig
+		err      error
+	)
+
+	if configPath == "" {
+		resolved, err = getDefaultConfigFile()
+	} else {
+		resolved, err = ResolvePath(configPath)
+	}
+
+	if err != nil {
+		return tomlConf, "", fmt.Errorf("Cannot find usable config file (%v)", err)
+	}
+
+	configData, err := ioutil.ReadFile(resolved)
+	if err != nil {
+		return tomlConf, resolved, err
+	}
+
+	_, err = toml.Decode(string(configData), &tomlConf)
+	if err != nil {
+		return tomlConf, resolved, err
+	}
+
+	return tomlConf, resolved, nil
 }
 
 // checkConfig checks the validity of the specified config.
