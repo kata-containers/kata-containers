@@ -236,7 +236,7 @@ get_docker_memory_usage(){
 EOF
 )"
 
-	elif [ "$RUNTIME" == "cor" ] || [ "$RUNTIME" == "cc-runtime" ] || [ "$RUNTIME" == "kata-runtime" ]; then
+	elif [ "$RUNTIME" == "kata-qemu" ] || [ "$RUNTIME" == "kata-fc" ] || [ "$RUNTIME" == "kata-runtime" ]; then
 		# Get PSS memory of VM runtime components.
 		# And check that the smem search has found the process - we get a "0"
 		#  back if that procedure fails (such as if a process has changed its name
@@ -256,9 +256,14 @@ EOF
 			die "Failed to find PSS for $SHIM_PATH"
 		fi
 
-		proxy_mem="$(get_pss_memory "$PROXY_PATH")"
-		if [ "$proxy_mem" == "0" ]; then
-			die "Failed to find PSS for $PROXY_PATH"
+		# Some runtimes do not have a proxy, so just set it to 0 space...
+		if [ "$PROXY_PATH" != "" ]; then
+			proxy_mem="$(get_pss_memory "$PROXY_PATH")"
+			if [ "$proxy_mem" == "0" ]; then
+				die "Failed to find PSS for $PROXY_PATH"
+			fi
+		else
+			proxy_mem=0
 		fi
 
 		proxy_mem="$(bc -l <<< "scale=2; $proxy_mem / $NUM_CONTAINERS")"
