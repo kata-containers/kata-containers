@@ -26,6 +26,9 @@ get_packaged_qemu_commit() {
 	elif [ "$ID" == "centos" ]; then
 		qemu_commit=$(sudo yum --showduplicate list $PACKAGED_QEMU \
 			| awk '/'$PACKAGED_QEMU'/ {print $2}' | cut -d'-' -f1 | cut -d'.' -f4)
+	elif [[ "$ID" =~ ^opensuse.*$ ]]; then
+		qemu_commit=$(sudo zypper info $PACKAGED_QEMU \
+			| grep "Version" | sed -E "s/.+\+git\.([0-9a-f]+).+/\1/")
 	fi
 
 	echo "${qemu_commit}"
@@ -44,6 +47,9 @@ install_packaged_qemu() {
 	elif [ "$ID"  == "centos" ]; then
 		chronic sudo yum remove -y "$PACKAGED_QEMU" || true
 		chronic sudo yum install -y "$PACKAGED_QEMU" || rc=1
+	elif [[ "$ID" =~ ^opensuse.*$ ]]; then
+		chronic sudo zypper -n remove "$PACKAGED_QEMU" || true
+		chronic sudo zypper -n install "$PACKAGED_QEMU" || rc=1
 	else
 		die "Unrecognized distro"
 	fi
