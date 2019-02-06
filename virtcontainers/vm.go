@@ -31,6 +31,8 @@ type VM struct {
 	memory uint32
 
 	cpuDelta uint32
+
+	store *store.VCStore
 }
 
 // VMConfig is a collection of all info that a new blackbox VM needs.
@@ -113,18 +115,20 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 
 	virtLog.WithField("vm", id).WithField("config", config).Info("create new vm")
 
-	defer func() {
-		if err != nil {
-			virtLog.WithField("vm", id).WithError(err).Error("failed to create new vm")
-		}
-	}()
-
 	vcStore, err := store.NewVCStore(ctx,
 		store.SandboxConfigurationRoot(id),
 		store.SandboxRuntimeRoot(id))
 	if err != nil {
 		return nil, err
 	}
+
+	defer func() {
+		if err != nil {
+			virtLog.WithField("vm", id).WithError(err).Error("failed to create new vm")
+			virtLog.WithField("vm", id).Errorf("Deleting store for %s", id)
+			vcStore.Delete()
+		}
+	}()
 
 	if err = hypervisor.createSandbox(ctx, id, &config.HypervisorConfig, vcStore); err != nil {
 		return nil, err
@@ -184,6 +188,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		proxyURL:   url,
 		cpu:        config.HypervisorConfig.NumVCPUs,
 		memory:     config.HypervisorConfig.MemorySize,
+		store:      vcStore,
 	}, nil
 }
 
@@ -235,9 +240,13 @@ func (v *VM) Disconnect() error {
 
 // Stop stops a VM process.
 func (v *VM) Stop() error {
-	v.logger().Info("kill vm")
+	v.logger().Info("stop vm")
 
-	return v.hypervisor.stopSandbox()
+	if err := v.hypervisor.stopSandbox(); err != nil {
+		return err
+	}
+
+	return v.store.Delete()
 }
 
 // AddCPUs adds num of CPUs to the VM.
