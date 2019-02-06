@@ -12,8 +12,6 @@ set -e
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 
-check_gopath
-
 export RUNTIME="kata-runtime"
 
 export CI_JOB="${CI_JOB:-default}"
