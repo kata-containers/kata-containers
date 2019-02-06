@@ -245,6 +245,7 @@ generate_qemu_options() {
 	aarch64) ;;
 	x86_64) qemu_options+=(size:--disable-tcg) ;;
 	ppc64le) ;;
+	s390x) qemu_options+=(size:--disable-tcg) ;;
 	esac
 
 	# SECURITY: Don't build a static binary (lowers security)
@@ -271,6 +272,11 @@ generate_qemu_options() {
 		qemu_options+=(size:--disable-debug-tcg)
 		qemu_options+=(size:--disable-tcg-interpreter)
 		;;
+	s390x)
+		qemu_options+=(size:--disable-uuid)
+		qemu_options+=(size:--disable-debug-tcg)
+		qemu_options+=(size:--disable-tcg-interpreter)
+		;;
 	esac
 	qemu_options+=(size:--disable-qom-cast-debug)
 	qemu_options+=(size:--disable-tcmalloc)
@@ -290,6 +296,7 @@ generate_qemu_options() {
 	aarch64) ;;
 	x86_64) qemu_options+=(size:--disable-xen) ;;
 	ppc64le) qemu_options+=(size:--disable-xen) ;;
+	s390x) qemu_options+=(size:--disable-xen) ;;
 	esac
 
 	# FIXME: why is this disabled?
@@ -360,6 +367,7 @@ generate_qemu_options() {
 	aarch64) _qemu_cflags+=" -fPIC" ;;
 	x86_64) _qemu_cflags+=" -fPIE" ;;
 	ppc64le) _qemu_cflags+=" -fPIE" ;;
+	s390x) _qemu_cflags+=" -fPIE" ;;
 	esac
 
 	# Set compile options
@@ -376,6 +384,7 @@ generate_qemu_options() {
 	aarch64) ;;
 	x86_64) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
 	ppc64le) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
+	s390x) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
 	esac
 
 	# SECURITY: Disallow executing code on the stack.
