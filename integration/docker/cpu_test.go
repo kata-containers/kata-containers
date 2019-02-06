@@ -120,8 +120,8 @@ var _ = Describe("CPU constraints", func() {
 		args       []string
 		id         string
 		shares     int = 300
-		quota      int = 2000
-		period     int = 1500
+		quota      int = 20000
+		period     int = 15000
 		cpusetCpus int = 0
 		cpusetMems int = 0
 	)
