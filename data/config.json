@@ -122,6 +122,7 @@
 				}
 			]
 		},
+		"cgroupsPath": "kata",
 		"namespaces": [
 			{
 				"type": "pid"
