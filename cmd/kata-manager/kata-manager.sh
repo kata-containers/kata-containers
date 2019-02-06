@@ -470,4 +470,5 @@ main()
 	setup
 	parse_args "$@"
 }
+
 main "$@"
