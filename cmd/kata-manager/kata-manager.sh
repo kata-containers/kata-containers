@@ -31,6 +31,7 @@ typeset -r agent_debug="agent.log=debug"
 
 verbose="no"
 execute="yes"
+force="no"
 
 # The default downloader to use
 downloader=
@@ -55,6 +56,7 @@ Options:
 
   -c <file> : Specify full path to configuration file
               (default: '$local_config_file').
+  -f        : Force mode (for package removal).
   -h        : Display this help.
   -n        : No execute mode (a.k.a. dry run). Show the commands that kata-manager would run,
               without doing any change to the system.
@@ -371,6 +373,29 @@ cmd_remove_packages()
 
 	[ -z "$packages" ] && die "packages not installed"
 
+	if [ "$force" = "yes" ]
+	then
+		# Remove any locks held on the packages
+		#
+		# Note that these commands should not fail since:
+		#
+		# - There may be no lock on the package(s).
+		# - In the case of Fedora/CentOS, the required packages to
+		#   manipulate locks may not be installed. There is no point
+		#   installing them though since if they are not installed,
+		#   there can't be any locks on the packages so it's simplest to
+		#   just let the commands fail silently.
+		for pkg in $packages
+		do
+			case "$distro" in
+				centos|rhel) sudo yum versionlock delete "$pkg" &>/dev/null || true ;;
+				debian|ubuntu) sudo apt-mark unhold "$pkg" &>/dev/null || true ;;
+				fedora) sudo dnf versionlock delete "$pkg" &>/dev/null || true ;;
+				opensuse|sles) sudo zypper removelock "$pkg" &>/dev/null || true ;;
+			esac
+		done
+	fi
+
 	case "$distro" in
 		centos|rhel) sudo yum -y remove $packages ;;
 		debian|ubuntu) sudo apt-get -y remove $packages ;;
@@ -418,11 +443,12 @@ parse_args()
 {
 	config_file="${local_config_file}"
 
-	while getopts "c:hnv" opt
+	while getopts "c:fhnv" opt
 	do
 		case "$opt" in
 			c) config_file="$OPTARG" ;;
-			h) usage; exit 0 ;;
+			f) force="yes" ;;
+			h) usage && exit 0 ;;
 			n) execute="no"; verbose="yes" ;;
 			v) verbose="yes" ;;
 		esac
