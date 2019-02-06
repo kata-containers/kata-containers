@@ -59,7 +59,10 @@ fi
 
 sudo -E kubeadm init --config "${kubeadm_config_file}"
 
-export KUBECONFIG=/etc/kubernetes/admin.conf
+mkdir -p "$HOME/.kube"
+sudo cp "/etc/kubernetes/admin.conf" "$HOME/.kube/config"
+sudo chown $(id -u):$(id -g) "$HOME/.kube/config"
+export KUBECONFIG="$HOME/.kube/config"
 
 sudo -E kubectl get nodes
 sudo -E kubectl get pods
