@@ -21,8 +21,8 @@ spec:
         lifecycle:
           preStop:
             exec:
-              command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh", "cleanup"]
-        command: [ "bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh", "install" ]
+              command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh cleanup"]
+        command: [ "bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh install" ]
         env:
         - name: NODE_NAME
           valueFrom:
