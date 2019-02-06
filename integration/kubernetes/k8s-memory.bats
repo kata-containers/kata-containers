@@ -12,10 +12,10 @@ issue="https://github.com/kata-containers/runtime/issues/1127"
 setup() {
 	[ "${TEST_INITRD}" == "yes" ] && skip "test not working see: ${issue}"
 
-	export KUBECONFIG=/etc/kubernetes/admin.conf
+	export KUBECONFIG="$HOME/.kube/config"
 	pod_name="memory-test"
 
-	if sudo -E kubectl get runtimeclass | grep kata; then
+	if kubectl get runtimeclass | grep kata; then
 		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
 	else
 		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
@@ -34,7 +34,7 @@ setup() {
             "${pod_config_dir}/pod-memory-limit.yaml" > "${pod_config_dir}/test_exceed_memory.yaml"
 
 	# Create the pod exceeding memory constraints
-	run sudo -E kubectl create -f "${pod_config_dir}/test_exceed_memory.yaml"
+	run kubectl create -f "${pod_config_dir}/test_exceed_memory.yaml"
 	[ "$status" -ne 0 ]
 
 	rm -f "${pod_config_dir}/test_exceed_memory.yaml"
@@ -52,11 +52,11 @@ setup() {
             "${pod_config_dir}/pod-memory-limit.yaml" > "${pod_config_dir}/test_within_memory.yaml"
 
 	# Create the pod within memory constraints
-	sudo -E kubectl create -f "${pod_config_dir}/test_within_memory.yaml"
+	kubectl create -f "${pod_config_dir}/test_within_memory.yaml"
 
 	# Check pod creation
-	sudo -E kubectl wait --for=condition=Ready pod "$pod_name"
+	kubectl wait --for=condition=Ready pod "$pod_name"
 
 	rm -f "${pod_config_dir}/test_within_memory.yaml"
-	sudo -E kubectl delete pod "$pod_name"
+	kubectl delete pod "$pod_name"
 }

@@ -9,12 +9,12 @@ load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 
 setup() {
 	skip "This is not working (https://github.com/kata-containers/agent/issues/261)"
-	export KUBECONFIG=/etc/kubernetes/admin.conf
+	export KUBECONFIG="$HOME/.kube/config"
 	pod_name="busybox"
 	first_container_name="first-test-container"
 	second_container_name="second-test-container"
 
-	if sudo -E kubectl get runtimeclass | grep kata; then
+	if kubectl get runtimeclass | grep kata; then
 		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
 	else
 		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
@@ -27,26 +27,26 @@ setup() {
 	sleep_time=5
 
 	# Create the pod
-	sudo -E kubectl create -f "${pod_config_dir}/busybox-pod.yaml"
+	kubectl create -f "${pod_config_dir}/busybox-pod.yaml"
 
 	# Check pod creation
-	pod_status_cmd="sudo -E kubectl get pods -a | grep $pod_name | grep Running"
+	pod_status_cmd="kubectl get pods -a | grep $pod_name | grep Running"
 	waitForProcess "$wait_time" "$sleep_time" "$pod_status_cmd"
 
 	# Check PID from first container
-	first_pid_container=$(sudo -E kubectl exec $pod_name -c $first_container_name ps | grep "/pause")
+	first_pid_container=$(kubectl exec $pod_name -c $first_container_name ps | grep "/pause")
 
 	# Check PID from second container
-	second_pid_container=$(sudo -E kubectl exec $pod_name -c $second_container_name ps | grep "/pause")
+	second_pid_container=$(kubectl exec $pod_name -c $second_container_name ps | grep "/pause")
 
 	[ "$first_pid_container" == "$second_pid_container" ]
 }
 
 teardown() {
 	skip "This is not working (https://github.com/kata-containers/agent/issues/261)"
-	sudo -E kubectl delete deployment "$pod_name"
+	kubectl delete deployment "$pod_name"
 	# Wait for the pods to be deleted
-	cmd="sudo -E kubectl get pods | grep found."
+	cmd="kubectl get pods | grep found."
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
-	sudo -E kubectl get pods
+	kubectl get pods
 }

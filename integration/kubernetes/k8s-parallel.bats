@@ -8,8 +8,8 @@
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 
 setup() {
-	export KUBECONFIG=/etc/kubernetes/admin.conf
-	if sudo -E kubectl get runtimeclass | grep -q kata; then
+	export KUBECONFIG="$HOME/.kube/config"
+	if kubectl get runtimeclass | grep -q kata; then
 		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
 	else
 		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
@@ -26,24 +26,24 @@ setup() {
 
 	# Create the jobs
 	for i in "${names[@]}"; do
-		sudo -E kubectl create -f "${pod_config_dir}/job-$i.yaml"
+		kubectl create -f "${pod_config_dir}/job-$i.yaml"
 	done
 
 	# Check the jobs
-	sudo -E kubectl get jobs -l jobgroup=${job_name}
+	kubectl get jobs -l jobgroup=${job_name}
 
 	# Check the pods
-	sudo -E kubectl wait --for=condition=Ready pod -l jobgroup=${job_name}
+	kubectl wait --for=condition=Ready pod -l jobgroup=${job_name}
 
 	# Check output of the jobs
-	for i in $(sudo -E kubectl get pods -l jobgroup=${job_name} -o name); do
-		sudo -E kubectl logs ${i}
+	for i in $(kubectl get pods -l jobgroup=${job_name} -o name); do
+		kubectl logs ${i}
 	done
 }
 
 teardown() {
 	# Delete jobs
-	sudo -E kubectl delete jobs -l jobgroup=${job_name}
+	kubectl delete jobs -l jobgroup=${job_name}
 
 	# Remove generated yaml files
 	for i in "${names[@]}"; do

@@ -12,9 +12,9 @@ issue="https://github.com/kata-containers/runtime/issues/1127"
 setup() {
 	[ "${TEST_INITRD}" == "yes" ] && skip "test not working see: ${issue}"
 
-	export KUBECONFIG=/etc/kubernetes/admin.conf
+	export KUBECONFIG="$HOME/.kube/config"
 
-	if sudo -E kubectl get runtimeclass | grep kata; then
+	if kubectl get runtimeclass | grep kata; then
 		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
 	else
 		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
@@ -36,32 +36,32 @@ setup() {
 	volume_claim="pv-claim"
 
 	# Create the persistent volume
-	sudo -E kubectl create -f "${pod_config_dir}/pv-volume.yaml"
+	kubectl create -f "${pod_config_dir}/pv-volume.yaml"
 
 	# Check the persistent volume
-	sudo -E kubectl get pv $volume_name | grep Available
+	kubectl get pv $volume_name | grep Available
 
 	# Create the persistent volume claim
-	sudo -E kubectl create -f "${pod_config_dir}/volume-claim.yaml"
+	kubectl create -f "${pod_config_dir}/volume-claim.yaml"
 
 	# Check the persistent volume claim
-	cmd="sudo -E kubectl get pvc $volume_claim | grep Bound"
+	cmd="kubectl get pvc $volume_claim | grep Bound"
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
 	# Create pod
-	sudo -E kubectl create -f "${pod_config_dir}/pv-pod.yaml"
+	kubectl create -f "${pod_config_dir}/pv-pod.yaml"
 
 	# Check pod creation
-	sudo -E kubectl wait --for=condition=Ready pod "$pod_name"
+	kubectl wait --for=condition=Ready pod "$pod_name"
 
 	cmd="cat /mnt/index.html"
-	sudo -E kubectl exec $pod_name -- sh -c "$cmd" | grep "$msg"
+	kubectl exec $pod_name -- sh -c "$cmd" | grep "$msg"
 }
 
 teardown() {
 	[ "${TEST_INITRD}" == "yes" ] && skip "test not working see: ${issue}"
-	sudo -E kubectl delete pod "$pod_name"
-	sudo -E kubectl delete pvc "$volume_claim"
-	sudo -E kubectl delete pv "$volume_name"
+	kubectl delete pod "$pod_name"
+	kubectl delete pvc "$volume_claim"
+	kubectl delete pv "$volume_name"
 	sudo rm -rf $tmp_file
 }
