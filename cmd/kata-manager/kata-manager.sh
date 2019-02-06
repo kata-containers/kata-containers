@@ -422,23 +422,10 @@ parse_args()
 	while getopts "c:hnv" opt
 	do
 		case "$opt" in
-			c)
-				config_file="$OPTARG"
-				;;
-
-			h)
-				usage
-				exit 0
-				;;
-
-			n)
-				execute="no"
-				verbose="yes"
-				;;
-
-			v)
-				verbose="yes"
-				;;
+			c) config_file="$OPTARG" ;;
+			h) usage; exit 0 ;;
+			n) execute="no"; verbose="yes" ;;
+			v) verbose="yes" ;;
 		esac
 	done
 
