@@ -24,6 +24,7 @@ typeset -r local_config_file="/etc/kata-containers/${config_file_name}"
 typeset -r kata_doc_to_script="${test_repo}/.ci/kata-doc-to-script.sh"
 # Downloaders list uses the format: [name of downloader]="downloader options"
 typeset -r -A downloaders_list=([curl]="-fsSL" [wget]="-O -")
+typeset -r default_docker_pkg_name="docker-ce"
 
 # kernel boot option to enable agent debug
 typeset -r agent_debug="agent.log=debug"
@@ -65,8 +66,11 @@ Commands:
   configure-initrd      : Configure the runtime to use the specified initial ramdisk.
   disable-debug         : Turn off all debug options.
   enable-debug          : Turn on all debug options for all system components.
+  install-docker        : Only install and configure Docker.
   install-docker-system : Install and configure Docker (implies 'install-packages').
   install-packages      : Install the packaged version of Kata Containers only.
+  remove-docker         : Uninstall Docker only.
+  remove-docker-system  : Uninstall Docker and Kata packages.
   remove-packages       : Uninstall the packaged version of Kata Containers.
   reset-config          : Undo changes to the runtime configuration [1].
 
@@ -335,15 +339,20 @@ install_container_manager()
 	exec_document "${doc}" "install ${mgr} for distro ${distro}"
 }
 
+cmd_install_docker()
+{
+	install_container_manager "docker"
+}
+
 cmd_install_docker_system()
 {
 	cmd_install_packages
-	install_container_manager "docker"
+	cmd_install_docker
 }
 
 cmd_remove_packages()
 {
-	local packages_regex="^(kata|qemu-lite)-"
+	local packages_regex="${1:-^(kata|qemu-lite)-}"
 	local packages
 
 	info "removing packages"
@@ -369,6 +378,19 @@ cmd_remove_packages()
 		fedora) sudo dnf -y remove $packages ;;
 		ubuntu) sudo apt-get -y remove $packages ;;
 	esac
+}
+
+cmd_remove_docker()
+{
+	local docker_pkg="${KATA_DOCKER_PKG:-${default_docker_pkg_name}}"
+
+	cmd_remove_packages "$docker_pkg"
+}
+
+cmd_remove_docker_system()
+{
+	cmd_remove_docker
+	cmd_remove_packages
 }
 
 cmd_reset_config()
@@ -432,8 +454,11 @@ parse_args()
 		configure-initrd) cmd_configure_initrd "$1" ;;
 		disable-debug) cmd_disable_all_debug ;;
 		enable-debug) cmd_enable_full_debug ;;
+		install-docker) cmd_install_docker ;;
 		install-docker-system) cmd_install_docker_system ;;
 		install-packages) cmd_install_packages ;;
+		remove-docker) cmd_remove_docker ;;
+		remove-docker-system) cmd_remove_docker_system ;;
 		remove-packages) cmd_remove_packages ;;
 		reset-config) cmd_reset_config ;;
 		*) usage && die "invalid command: '$cmd'" ;;
