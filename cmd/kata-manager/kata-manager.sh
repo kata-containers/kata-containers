@@ -358,25 +358,24 @@ cmd_remove_packages()
 	info "removing packages"
 
 	case "$distro" in
-		centos|fedora)
+		centos|fedora|opensuse|rhel|sles)
 			packages=$(rpm -qa|egrep "${packages_regex}" || true)
 			;;
 
-		ubuntu)
+		debian|ubuntu)
 			packages=$(dpkg-query -W -f='${Package}\n'|egrep "${packages_regex}" || true)
 			;;
 
-		*)
-			die "invalid distro: '$distro'"
-			;;
+		*) die "invalid distro: '$distro'" ;;
 	esac
 
 	[ -z "$packages" ] && die "packages not installed"
 
 	case "$distro" in
-		centos) sudo yum -y remove $packages ;;
+		centos|rhel) sudo yum -y remove $packages ;;
+		debian|ubuntu) sudo apt-get -y remove $packages ;;
 		fedora) sudo dnf -y remove $packages ;;
-		ubuntu) sudo apt-get -y remove $packages ;;
+		opensuse|sles) sudo zypper remove -y $packages ;;
 	esac
 }
 
