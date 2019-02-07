@@ -65,6 +65,10 @@ func TestDeleteInvalidContainer(t *testing.T) {
 	err = delete(context.Background(), testContainerID, false)
 	assert.Error(err)
 	assert.False(vcmock.IsMockError(err))
+
+	// Force to delete missing container
+	err = delete(context.Background(), "non-existing-test", true)
+	assert.NoError(err)
 }
 
 func TestDeleteMissingContainerTypeAnnotation(t *testing.T) {
