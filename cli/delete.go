@@ -71,6 +71,10 @@ func delete(ctx context.Context, containerID string, force bool) error {
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	status, sandboxID, err := getExistingContainerInfo(ctx, containerID)
 	if err != nil {
+		if force {
+			kataLog.Warnf("Failed to get container, force will not fail: %s", err)
+			return nil
+		}
 		return err
 	}
 
