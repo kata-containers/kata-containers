@@ -23,7 +23,7 @@ crio)
 	;;
 esac
 
-export KUBECONFIG=/etc/kubernetes/admin.conf
+export KUBECONFIG="$HOME/.kube/config"
 sudo -E kubeadm reset -f --cri-socket="${cri_runtime_socket}"
 
 sudo systemctl stop "${cri_runtime}"

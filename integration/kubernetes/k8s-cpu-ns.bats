@@ -8,7 +8,7 @@
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 
 setup() {
-	export KUBECONFIG=/etc/kubernetes/admin.conf
+	export KUBECONFIG="$HOME/.kube/config"
 	pod_name="constraints-cpu-test"
 	container_name="first-cpu-container"
 	sharessyspath="/sys/fs/cgroup/cpu/cpu.shares"
@@ -18,7 +18,7 @@ setup() {
 	total_requests=512
 	total_cpu_container=1
 
-	if sudo -E kubectl get runtimeclass | grep kata; then
+	if kubectl get runtimeclass | grep kata; then
 		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
 	else
 		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
@@ -27,26 +27,26 @@ setup() {
 
 @test "Check CPU constraints" {
 	# Create the pod
-	sudo -E kubectl create -f "${pod_config_dir}/pod-cpu.yaml"
+	kubectl create -f "${pod_config_dir}/pod-cpu.yaml"
 
 	# Check pod creation
-	sudo -E kubectl wait --for=condition=Ready pod "$pod_name"
+	kubectl wait --for=condition=Ready pod "$pod_name"
 
 	# Check the total of cpus
-	total_cpus_container=$(sudo -E kubectl exec $pod_name -c $container_name nproc)
+	total_cpus_container=$(kubectl exec $pod_name -c $container_name nproc)
 
 	[ $total_cpus_container -eq $total_cpus ]
 
 	# Check the total of requests
-	total_requests_container=$(sudo -E kubectl exec $pod_name -c $container_name cat $sharessyspath)
+	total_requests_container=$(kubectl exec $pod_name -c $container_name cat $sharessyspath)
 
 	[ $total_requests_container -eq $total_requests ]
 
 	# Check the cpus inside the container
 
-	total_cpu_quota=$(sudo -E kubectl exec $pod_name -c $container_name cat $quotasyspath)
+	total_cpu_quota=$(kubectl exec $pod_name -c $container_name cat $quotasyspath)
 
-	total_cpu_period=$(sudo -E kubectl exec $pod_name -c $container_name cat $periodsyspath)
+	total_cpu_period=$(kubectl exec $pod_name -c $container_name cat $periodsyspath)
 
 	division_quota_period=$(echo $((total_cpu_quota/total_cpu_period)))
 
@@ -54,5 +54,5 @@ setup() {
 }
 
 teardown() {
-       sudo -E kubectl delete pod "$pod_name"
+       kubectl delete pod "$pod_name"
 }

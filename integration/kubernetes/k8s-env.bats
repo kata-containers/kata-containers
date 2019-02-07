@@ -8,10 +8,10 @@
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 
 setup() {
-	export KUBECONFIG=/etc/kubernetes/admin.conf
+	export KUBECONFIG="$HOME/.kube/config"
 	pod_name="test-env"
 
-	if sudo -E kubectl get runtimeclass | grep kata; then
+	if kubectl get runtimeclass | grep kata; then
 		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
 	else
 		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
@@ -20,16 +20,16 @@ setup() {
 
 @test "Environment variables" {
 	# Create pod
-	sudo -E kubectl create -f "${pod_config_dir}/pod-env.yaml"
+	kubectl create -f "${pod_config_dir}/pod-env.yaml"
 
 	# Check pod creation
-	sudo -E kubectl wait --for=condition=Ready pod "$pod_name"
+	kubectl wait --for=condition=Ready pod "$pod_name"
 
 	# Print environment variables
 	cmd="printenv"
-	sudo -E kubectl exec $pod_name -- sh -c $cmd | grep "MY_POD_NAME=$pod_name"
+	kubectl exec $pod_name -- sh -c $cmd | grep "MY_POD_NAME=$pod_name"
 }
 
 teardown() {
-	sudo -E kubectl delete pod "$pod_name"
+	kubectl delete pod "$pod_name"
 }

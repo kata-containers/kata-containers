@@ -59,32 +59,35 @@ fi
 
 sudo -E kubeadm init --config "${kubeadm_config_file}"
 
-export KUBECONFIG=/etc/kubernetes/admin.conf
+mkdir -p "$HOME/.kube"
+sudo cp "/etc/kubernetes/admin.conf" "$HOME/.kube/config"
+sudo chown $(id -u):$(id -g) "$HOME/.kube/config"
+export KUBECONFIG="$HOME/.kube/config"
 
-sudo -E kubectl get nodes
-sudo -E kubectl get pods
+kubectl get nodes
+kubectl get pods
 
 # kube-flannel config file taken from k8s 1.12 documentation:
 flannel_config="https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml"
 
-sudo -E kubectl apply -f "$flannel_config"
+kubectl apply -f "$flannel_config"
 
 # The kube-dns pod usually takes around 120 seconds to get ready
 # This instruction will wait until it is up and running, so we can
 # start creating our containers.
 dns_wait_time=120
 sleep_time=5
-cmd="sudo -E kubectl get pods --all-namespaces | grep 'coredns.*1/1.*Running'"
+cmd="kubectl get pods --all-namespaces | grep 'coredns.*1/1.*Running'"
 waitForProcess "$dns_wait_time" "$sleep_time" "$cmd"
 
 if [ "${use_runtime_class}" == true ]; then
 	runtimeclass_files_path="${SCRIPT_PATH}/runtimeclass_workloads"
 	echo "Install RuntimeClass resource definition"
-	sudo -E kubectl apply -f \
+	kubectl apply -f \
 		"https://raw.githubusercontent.com/kubernetes/kubernetes/v${kubernetes_version/-*}/cluster/addons/runtimeclass/runtimeclass_crd.yaml"
 	echo "Create kata RuntimeClass resource"
-	sudo -E kubectl create -f "${runtimeclass_files_path}/kata-runtimeclass.yaml"
+	kubectl create -f "${runtimeclass_files_path}/kata-runtimeclass.yaml"
 fi
 
 # Enable the master node to be able to schedule pods.
-sudo -E kubectl taint nodes "$(hostname)" node-role.kubernetes.io/master:NoSchedule-
+kubectl taint nodes "$(hostname)" node-role.kubernetes.io/master:NoSchedule-
