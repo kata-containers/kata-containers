@@ -11,7 +11,10 @@ TIMEOUT := 60
 UNION := functional docker crio docker-compose network netmon docker-stability oci openshift kubernetes swarm vm-factory entropy ramdisk shimv2
 
 # skipped test suites for docker integration tests
-SKIP := $(shell bash -f .ci/hypervisors/$(KATA_HYPERVISOR)/filter_docker_$(KATA_HYPERVISOR).sh)
+FILTER_FILE = .ci/hypervisors/$(KATA_HYPERVISOR)/filter_docker_$(KATA_HYPERVISOR).sh
+ifneq ($(wildcard $(FILTER_FILE)),)
+	SKIP := $(shell bash -f $(FILTER_FILE))
+endif
 
 # get arch
 ARCH := $(shell bash -c '.ci/kata-arch.sh -d')
