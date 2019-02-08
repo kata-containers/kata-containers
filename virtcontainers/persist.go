@@ -14,7 +14,6 @@ import (
 )
 
 var (
-	errSandboxPersistNotExist   = errors.New("sandbox doesn't exist in persist data")
 	errContainerPersistNotExist = errors.New("container doesn't exist in persist data")
 )
 
@@ -93,50 +92,35 @@ func (s *Sandbox) dumpDevices(ss *persistapi.SandboxState, cs map[string]persist
 	return nil
 }
 
-// PersistVersion set persist data version to current version in runtime
-func (s *Sandbox) persistVersion() {
-	s.newStore.RegisterHook("version", func(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) error {
+// versionCallback set persist data version to current version in runtime
+func (s *Sandbox) verSaveCallback() {
+	s.newStore.AddSaveCallback("version", func(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) error {
 		ss.PersistVersion = persistapi.CurPersistVersion
 		return nil
 	})
 }
 
 // PersistState register hook to set sandbox and container state to persist
-func (s *Sandbox) persistState() {
-	s.newStore.RegisterHook("state", s.dumpState)
+func (s *Sandbox) stateSaveCallback() {
+	s.newStore.AddSaveCallback("state", s.dumpState)
 }
 
 // PersistHvState register hook to save hypervisor state to persist data
-func (s *Sandbox) persistHvState() {
-	s.newStore.RegisterHook("hypervisor", s.dumpHypervisor)
+func (s *Sandbox) hvStateSaveCallback() {
+	s.newStore.AddSaveCallback("hypervisor", s.dumpHypervisor)
 }
 
 // PersistDevices register hook to save device informations
-func (s *Sandbox) persistDevices() {
-	s.newStore.RegisterHook("devices", s.dumpDevices)
+func (s *Sandbox) devicesSaveCallback() {
+	s.newStore.AddSaveCallback("devices", s.dumpDevices)
 }
 
 func (s *Sandbox) getSbxAndCntStates() (*persistapi.SandboxState, map[string]persistapi.ContainerState, error) {
-	ss, cs, err := s.newStore.GetStates()
-	if err != nil {
+	if err := s.newStore.Restore(s.id); err != nil {
 		return nil, nil, err
 	}
 
-	if len(cs) == 0 {
-		if err := s.newStore.Restore(s.id); err != nil {
-			return nil, nil, err
-		}
-
-		ss, cs, err = s.newStore.GetStates()
-		if err != nil {
-			return nil, nil, err
-		}
-
-		if len(cs) == 0 {
-			return nil, nil, errSandboxPersistNotExist
-		}
-	}
-	return ss, cs, nil
+	return s.newStore.GetStates()
 }
 
 // Restore will restore sandbox data from persist file on disk

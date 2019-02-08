@@ -16,9 +16,9 @@ type initFunc (func() (persistapi.PersistDriver, error))
 
 var (
 	supportedDrivers = map[string]initFunc{
+
 		"fs": fs.Init,
 	}
-	defaultDriver = "fs"
 )
 
 // GetDriver returns new PersistDriver according to driver name

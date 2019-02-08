@@ -7,10 +7,17 @@ package persistapi
 
 // PersistDriver is interface describing operations to save/restore persist data
 type PersistDriver interface {
-	// Dump persist data to
-	Dump() error
+	// ToDisk flushes data to disk(or other storage media such as a remote db)
+	ToDisk() error
+	// AddSaveCallback addes callback function named `name` to driver storage list
+	// The callback functions will be invoked when calling `ToDisk()`, notice that
+	// callback functions are not order guaranteed,
+	AddSaveCallback(name string, f SetFunc)
+	// Restore will restore all data for sandbox with `sid` from storage.
+	// We only support get data for one whole sandbox
 	Restore(sid string) error
+	// Destroy will remove everything from storage
 	Destroy() error
+	// GetStates will return SandboxState and ContainerState(s) directly
 	GetStates() (*SandboxState, map[string]ContainerState, error)
-	RegisterHook(name string, f SetFunc)
 }
