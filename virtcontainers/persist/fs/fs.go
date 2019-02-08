@@ -9,6 +9,7 @@ package fs
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -139,12 +140,9 @@ func (fs *FS) Restore(sid string) error {
 	}
 
 	fs.sandboxState.SandboxContainer = sid
+
 	sandboxDir, err := fs.sandboxDir()
 	if err != nil {
-		return err
-	}
-
-	if err := os.MkdirAll(sandboxDir, dirMode); err != nil {
 		return err
 	}
 
@@ -166,13 +164,7 @@ func (fs *FS) Restore(sid string) error {
 	}
 
 	// walk sandbox dir and find container
-	d, err := os.OpenFile(sandboxDir, os.O_RDONLY, fileMode)
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-
-	files, err := d.Readdir(-1)
+	files, err := ioutil.ReadDir(sandboxDir)
 	if err != nil {
 		return err
 	}

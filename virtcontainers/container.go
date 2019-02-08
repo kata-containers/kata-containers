@@ -442,6 +442,9 @@ func (c *Container) setContainerState(state types.StateString) error {
 		return err
 	}
 
+	if err = c.sandbox.newStore.Dump(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -683,9 +686,14 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 
 	c.store = ctrStore
 
-	state, err := c.store.LoadContainerState()
+	/*state, err := c.store.LoadContainerState()
 	if err == nil {
 		c.state = state
+	}*/
+
+	if err := c.Restore(); err != nil &&
+		!os.IsNotExist(err) && err != errContainerPersistNotExist {
+		return nil, err
 	}
 
 	var process Process
@@ -693,6 +701,18 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		c.process = process
 	}
 
+	if err = c.createMounts(); err != nil {
+		return nil, err
+	}
+
+	if err = c.createDevices(contConfig); err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+func (c *Container) createMounts() error {
 	mounts, err := c.loadMounts()
 	if err == nil {
 		// restore mounts from disk
@@ -700,10 +720,14 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 	} else {
 		// Create block devices for newly created container
 		if err := c.createBlockDevices(); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
+	return nil
+}
+
+func (c *Container) createDevices(contConfig ContainerConfig) error {
 	// Devices will be found in storage after create stage has completed.
 	// We load devices from storage at all other stages.
 	storedDevices, err := c.loadDevices()
@@ -713,9 +737,9 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		// If devices were not found in storage, create Device implementations
 		// from the configuration. This should happen at create.
 		for _, info := range contConfig.DeviceInfos {
-			dev, err := sandbox.devManager.NewDevice(info)
+			dev, err := c.sandbox.devManager.NewDevice(info)
 			if err != nil {
-				return &Container{}, err
+				return err
 			}
 
 			storedDevices = append(storedDevices, ContainerDevice{
@@ -726,10 +750,9 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 				GID:           info.GID,
 			})
 		}
-		c.devices = filterDevices(sandbox, c, storedDevices)
+		c.devices = filterDevices(c.sandbox, c, storedDevices)
 	}
-
-	return c, nil
+	return nil
 }
 
 // rollbackFailingContainerCreation rolls back important steps that might have

@@ -94,7 +94,7 @@ type ContainerState struct {
 
 	// CgroupPath is the cgroup hierarchy where sandbox's processes
 	// including the hypervisor are placed.
-	CgroupPath string `json:"cgroupPath,omitempty"`
+	CgroupPath string
 
 	// DeviceMaps is mapping between sandbox device to dest in container
 	DeviceMaps []DeviceMap
