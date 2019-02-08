@@ -70,8 +70,8 @@ func (fs *FS) sandboxDir() (string, error) {
 	return filepath.Join(runStoragePath, fs.sandboxState.SandboxContainer), nil
 }
 
-// Dump sandboxState and containerState to disk
-func (fs *FS) Dump() (retErr error) {
+// ToDisk sandboxState and containerState to disk
+func (fs *FS) ToDisk() (retErr error) {
 	// call registered hooks to set sandboxState and containerState
 	for _, fun := range fs.setFuncs {
 		fun(fs.sandboxState, fs.containerState)
@@ -214,8 +214,8 @@ func (fs *FS) GetStates() (*persistapi.SandboxState, map[string]persistapi.Conta
 	return fs.sandboxState, fs.containerState, nil
 }
 
-// RegisterHook registers processing hooks for Dump
-func (fs *FS) RegisterHook(name string, f persistapi.SetFunc) {
+// AddSaveCallback registers processing hooks for Dump
+func (fs *FS) AddSaveCallback(name string, f persistapi.SetFunc) {
 	// only accept last registered hook with same name
 	fs.setFuncs[name] = f
 }

@@ -384,7 +384,7 @@ func (c *Container) GetAnnotations() map[string]string {
 
 // storeContainer stores a container config.
 func (c *Container) storeContainer() error {
-	if err := c.sandbox.newStore.Dump(); err != nil {
+	if err := c.sandbox.newStore.ToDisk(); err != nil {
 		return err
 	}
 	return c.store.Store(store.Configuration, *(c.config))
@@ -442,7 +442,8 @@ func (c *Container) setContainerState(state types.StateString) error {
 		return err
 	}
 
-	if err = c.sandbox.newStore.Dump(); err != nil {
+	// flush data to storage
+	if err = c.sandbox.newStore.ToDisk(); err != nil {
 		return err
 	}
 	return nil

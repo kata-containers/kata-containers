@@ -477,10 +477,10 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	}
 	s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
 
-	// register persist hook for now, data will be written to disk by Dump()
-	s.persistState()
-	s.persistHvState()
-	s.persistDevices()
+	// register persist hook for now, data will be written to disk by ToDisk()
+	s.stateSaveCallback()
+	s.hvStateSaveCallback()
+	s.devicesSaveCallback()
 
 	if err := s.Restore(); err == nil && s.state.State != "" {
 		return s, nil
@@ -498,7 +498,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 
 	// if sandbox doesn't exist, set persist version to current version
 	// otherwise do nothing
-	s.persistVersion()
+	s.verSaveCallback()
 
 	// Below code path is called only during create, because of earlier check.
 	if err := s.agent.createSandbox(s); err != nil {
@@ -608,7 +608,8 @@ func (s *Sandbox) storeSandbox() error {
 		}
 	}
 
-	if err = s.newStore.Dump(); err != nil {
+	// flush data to storage
+	if err = s.newStore.ToDisk(); err != nil {
 		return err
 	}
 
