@@ -75,3 +75,8 @@ chronic sudo -E apt install -y procenv
 
 echo "Install haveged"
 chronic sudo -E apt install -y haveged
+
+if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
+	echo "Install ${KATA_KSM_THROTTLER_JOB}"
+	chronic sudo -E apt install -y ${KATA_KSM_THROTTLER_JOB}
+fi

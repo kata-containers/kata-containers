@@ -46,16 +46,6 @@ if [ "$ID" == "debian" ]; then
 	exit
 fi
 
-install_kata_ksm_throttler() {
-	if [ "$ID" == "debian" ]; then
-		package="kata-ksm-throttler"
-		echo "Install ${package}"
-		sudo -E apt install -y ${package}
-		echo "Start ${package}"
-		systemctl start ${package}
-        fi
-}
-
 check_vsock_active() {
 	vsock_configured=$($RUNTIME_PATH kata-env | awk '/UseVSock/ {print $3}')
 	vsock_supported=$($RUNTIME_PATH kata-env | awk '/SupportVSock/ {print $3}')
@@ -220,8 +210,6 @@ check_mounts() {
 
 init() {
 	kill_all_containers
-
-	install_kata_ksm_throttler
 
 	# Enable netmon
 	enable_netmon

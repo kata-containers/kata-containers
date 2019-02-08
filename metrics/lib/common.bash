@@ -11,6 +11,7 @@ RESULT_DIR="${LIB_DIR}/../results"
 source ${LIB_DIR}/../../lib/common.bash
 source ${LIB_DIR}/json.bash
 source /etc/os-release || source /usr/lib/os-release
+KATA_KSM_THROTTLER="${KATA_KSM_THROTTLER:-no}"
 
 # Set variables to reasonable defaults if unset or empty
 DOCKER_EXE="${DOCKER_EXE:-docker}"
@@ -196,23 +197,19 @@ show_system_state() {
 	local RPATH=$(command -v ${RUNTIME})
 	sudo ${RPATH} list
 
-	if [ "$ID" == debian ]; then
-		local processes="kata-proxy kata-shim kata-runtime qemu"
-	else
-		local processes="kata-proxy kata-shim kata-runtime qemu ksm-throttler"
-	fi
+	local processes="kata-proxy kata-shim kata-runtime qemu"
 
 	for p in ${processes}; do
 		echo " --pgrep ${p}--"
 		pgrep -a ${p}
 	done
 
-	# Verify kata-ksm-throttler on Debian
-	if [ "$ID" == "debian" ]; then
-		debian_process="kata-ksm-throttler"
-		debian_process_path=$(whereis ${debian_process} | tr -d '[:space:]'| cut -d ':' -f2)
-		echo " --pgrep ${debian_process}--"
-		pgrep -f ${debian_process_path} > /dev/null
+	# Verify kata-ksm-throttler
+	if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
+		process="kata-ksm-throttler"
+		process_path=$(whereis ${process} | tr -d '[:space:]'| cut -d ':' -f2)
+		echo " --pgrep ${process}--"
+		pgrep -f ${process_path} > /dev/null
 	fi
 }
 
