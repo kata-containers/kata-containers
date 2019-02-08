@@ -68,11 +68,12 @@ type SandboxState struct {
 	SandboxContainer string
 
 	// GuestMemoryHotplugProbe determines whether guest kernel supports memory hotplug probe interface
-	GuestMemoryHotplugProbe bool `json:"guestMemoryHotplugProbe"`
+	GuestMemoryHotplugProbe bool
 
 	// CgroupPath is the cgroup hierarchy where sandbox's processes
 	// including the hypervisor are placed.
-	CgroupPath string `json:"cgroupPath,omitempty"`
+	// FIXME: sandbox can reuse "SandboxContainer"'s CgroupPath so we can remove this field.
+	CgroupPath string
 
 	// GuestMemoryBlockSizeMB is the size of memory block of guestos
 	GuestMemoryBlockSizeMB uint32

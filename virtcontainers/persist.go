@@ -6,19 +6,23 @@
 package virtcontainers
 
 import (
-	//"fmt"
-
-	//"github.com/sirupsen/logrus"
+	"errors"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
+var (
+	errSandboxPersistNotExist   = errors.New("sandbox doesn't exist in persist data")
+	errContainerPersistNotExist = errors.New("container doesn't exist in persist data")
+)
+
 func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) error {
 	ss.SandboxContainer = s.id
 	ss.GuestMemoryBlockSizeMB = s.state.GuestMemoryBlockSizeMB
 	ss.State = string(s.state.State)
+	ss.CgroupPath = s.state.CgroupPath
 
 	for id, cont := range s.containers {
 		state := persistapi.ContainerState{}
@@ -30,6 +34,7 @@ func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistap
 			BlockDeviceID: cont.state.BlockDeviceID,
 			FsType:        cont.state.Fstype,
 		}
+		state.CgroupPath = cont.state.CgroupPath
 		cs[id] = state
 	}
 
@@ -111,43 +116,61 @@ func (s *Sandbox) persistDevices() {
 	s.newStore.RegisterHook("devices", s.dumpDevices)
 }
 
-// Restore will restore data from persist disk on disk
-func (s *Sandbox) Restore() error {
-	if err := s.newStore.Restore(s.id); err != nil {
-		return err
+func (s *Sandbox) getSbxAndCntStates() (*persistapi.SandboxState, map[string]persistapi.ContainerState, error) {
+	ss, cs, err := s.newStore.GetStates()
+	if err != nil {
+		return nil, nil, err
 	}
 
-	ss, _, err := s.newStore.GetStates()
+	if len(cs) == 0 {
+		if err := s.newStore.Restore(s.id); err != nil {
+			return nil, nil, err
+		}
+
+		ss, cs, err = s.newStore.GetStates()
+		if err != nil {
+			return nil, nil, err
+		}
+
+		if len(cs) == 0 {
+			return nil, nil, errSandboxPersistNotExist
+		}
+	}
+	return ss, cs, nil
+}
+
+// Restore will restore sandbox data from persist file on disk
+func (s *Sandbox) Restore() error {
+	ss, _, err := s.getSbxAndCntStates()
 	if err != nil {
 		return err
 	}
 
-	/*
-		// TODO: need more modifications, restoring containers
-		// will make sandbox.addContainer failing
-		if s.containers == nil {
-			s.containers = make(map[string]*Container)
-		}
-
-		for id, cont := range cs {
-			s.containers[id] = &Container{
-				state: State{
-					State:         stateString(cont.State),
-					BlockDeviceID: cont.Rootfs.BlockDeviceID,
-					Fstype:        cont.Rootfs.FsType,
-					Pid:           cont.ShimPid,
-				},
-			}
-		}
-
-		sbxCont, ok := s.containers[ss.SandboxContainer]
-		if !ok {
-			return fmt.Errorf("failed to get sandbox container state")
-		}
-	*/
 	s.state.GuestMemoryBlockSizeMB = ss.GuestMemoryBlockSizeMB
 	s.state.BlockIndex = ss.HypervisorState.BlockIndex
 	s.state.State = types.StateString(ss.State)
+	s.state.CgroupPath = ss.CgroupPath
+
+	return nil
+}
+
+// Restore will restore container data from persist file on disk
+func (c *Container) Restore() error {
+	_, cs, err := c.sandbox.getSbxAndCntStates()
+	if err != nil {
+		return err
+	}
+
+	if _, ok := cs[c.id]; !ok {
+		return errContainerPersistNotExist
+	}
+
+	c.state = types.ContainerState{
+		State:         types.StateString(cs[c.id].State),
+		BlockDeviceID: cs[c.id].Rootfs.BlockDeviceID,
+		Fstype:        cs[c.id].Rootfs.FsType,
+		CgroupPath:    cs[c.id].CgroupPath,
+	}
 
 	return nil
 }
