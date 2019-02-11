@@ -15,6 +15,8 @@ import (
 )
 
 func testCreateNoopContainer() (*Sandbox, *Container, error) {
+	cleanUp()
+
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 

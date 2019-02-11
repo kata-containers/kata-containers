@@ -14,8 +14,6 @@ var (
 	errNeedSandbox     = errors.New("Sandbox must be specified")
 	errNeedSandboxID   = errors.New("Sandbox ID cannot be empty")
 	errNeedContainerID = errors.New("Container ID cannot be empty")
-	errNeedFile        = errors.New("File cannot be empty")
 	errNeedState       = errors.New("State cannot be empty")
-	errInvalidResource = errors.New("Invalid sandbox resource")
 	errNoSuchContainer = errors.New("Container does not exist")
 )

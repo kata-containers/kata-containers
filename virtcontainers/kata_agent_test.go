@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -20,7 +21,6 @@ import (
 	gpb "github.com/gogo/protobuf/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	aTypes "github.com/kata-containers/agent/pkg/types"
@@ -32,6 +32,7 @@ import (
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
@@ -736,8 +737,12 @@ func TestAgentCreateContainer(t *testing.T) {
 			},
 		},
 		hypervisor: &mockHypervisor{},
-		storage:    &filesystem{},
 	}
+
+	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
+	assert.Nil(err)
+
+	sandbox.store = vcStore
 
 	container := &Container{
 		ctx:       sandbox.ctx,
@@ -839,15 +844,15 @@ func TestKataAgentSetProxy(t *testing.T) {
 	p := &kataBuiltInProxy{}
 	s := &Sandbox{
 		ctx: context.Background(),
-		storage: &filesystem{
-			ctx: context.Background(),
-		},
+		id:  "foobar",
 	}
 
-	err := k.setProxy(s, p, 0, "")
-	assert.Error(err)
+	vcStore, err := store.NewVCSandboxStore(s.ctx, s.id)
+	assert.Nil(err)
 
-	err = k.setProxy(s, p, 0, "foobar")
+	s.store = vcStore
+
+	err = k.setProxy(s, p, 0, "")
 	assert.Error(err)
 }
 

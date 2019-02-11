@@ -46,7 +46,10 @@ func TestTemplateFactory(t *testing.T) {
 	assert.Equal(f.Config(), vmConfig)
 
 	// GetBaseVM
-	_, err = f.GetBaseVM(ctx, vmConfig)
+	vm, err := f.GetBaseVM(ctx, vmConfig)
+	assert.Nil(err)
+
+	err = vm.Stop()
 	assert.Nil(err)
 
 	// Fetch
@@ -74,19 +77,31 @@ func TestTemplateFactory(t *testing.T) {
 	assert.Error(err)
 
 	templateProxyType = vc.NoopProxyType
-	_, err = tt.GetBaseVM(ctx, vmConfig)
+	vm, err = tt.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	_, err = f.GetBaseVM(ctx, vmConfig)
+	err = vm.Stop()
+	assert.Nil(err)
+
+	vm, err = f.GetBaseVM(ctx, vmConfig)
+	assert.Nil(err)
+
+	err = vm.Stop()
 	assert.Nil(err)
 
 	err = tt.createTemplateVM(ctx)
 	assert.Nil(err)
 
-	_, err = tt.GetBaseVM(ctx, vmConfig)
+	vm, err = tt.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
-	_, err = f.GetBaseVM(ctx, vmConfig)
+	err = vm.Stop()
+	assert.Nil(err)
+
+	vm, err = f.GetBaseVM(ctx, vmConfig)
+	assert.Nil(err)
+
+	err = vm.Stop()
 	assert.Nil(err)
 
 	// CloseFactory

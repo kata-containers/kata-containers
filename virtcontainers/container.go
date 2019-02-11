@@ -26,6 +26,7 @@ import (
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 )
 
 // https://github.com/torvalds/linux/blob/master/include/uapi/linux/major.h
@@ -285,6 +286,8 @@ type Container struct {
 	systemMountsInfo SystemMountsInfo
 
 	ctx context.Context
+
+	store *store.VCStore
 }
 
 // ID returns the container identifier string.
@@ -343,23 +346,13 @@ func (c *Container) SetPid(pid int) error {
 func (c *Container) setStateBlockIndex(index int) error {
 	c.state.BlockIndex = index
 
-	err := c.sandbox.storage.storeContainerResource(c.sandbox.id, c.id, stateFileType, c.state)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return c.storeState()
 }
 
 func (c *Container) setStateFstype(fstype string) error {
 	c.state.Fstype = fstype
 
-	err := c.sandbox.storage.storeContainerResource(c.sandbox.id, c.id, stateFileType, c.state)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return c.storeState()
 }
 
 // GetAnnotations returns container's annotations
@@ -367,35 +360,44 @@ func (c *Container) GetAnnotations() map[string]string {
 	return c.config.Annotations
 }
 
+// storeContainer stores a container config.
+func (c *Container) storeContainer() error {
+	return c.store.Store(store.Configuration, *(c.config))
+}
+
 func (c *Container) storeProcess() error {
-	return c.sandbox.storage.storeContainerProcess(c.sandboxID, c.id, c.process)
+	return c.store.Store(store.Process, c.process)
 }
 
 func (c *Container) storeMounts() error {
-	return c.sandbox.storage.storeContainerMounts(c.sandboxID, c.id, c.mounts)
-}
-
-func (c *Container) fetchMounts() ([]Mount, error) {
-	return c.sandbox.storage.fetchContainerMounts(c.sandboxID, c.id)
+	return c.store.Store(store.Mounts, c.mounts)
 }
 
 func (c *Container) storeDevices() error {
-	return c.sandbox.storage.storeContainerDevices(c.sandboxID, c.id, c.devices)
+	return c.store.Store(store.DeviceIDs, c.devices)
 }
 
-func (c *Container) fetchDevices() ([]ContainerDevice, error) {
-	return c.sandbox.storage.fetchContainerDevices(c.sandboxID, c.id)
+func (c *Container) storeState() error {
+	return c.store.Store(store.State, c.state)
 }
 
-// storeContainer stores a container config.
-func (c *Container) storeContainer() error {
-	fs := filesystem{}
-	err := fs.storeContainerResource(c.sandbox.id, c.id, configFileType, *(c.config))
-	if err != nil {
-		return err
+func (c *Container) loadMounts() ([]Mount, error) {
+	var mounts []Mount
+	if err := c.store.Load(store.Mounts, &mounts); err != nil {
+		return []Mount{}, err
 	}
 
-	return nil
+	return mounts, nil
+}
+
+func (c *Container) loadDevices() ([]ContainerDevice, error) {
+	var devices []ContainerDevice
+
+	if err := c.store.Load(store.DeviceIDs, &devices); err != nil {
+		return []ContainerDevice{}, err
+	}
+
+	return devices, nil
 }
 
 // setContainerState sets both the in-memory and on-disk state of the
@@ -410,23 +412,8 @@ func (c *Container) setContainerState(state types.StateString) error {
 	c.state.State = state
 
 	// update on-disk state
-	err := c.sandbox.storage.storeContainerResource(c.sandbox.id, c.id, stateFileType, c.state)
+	err := c.store.Store(store.State, c.state)
 	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (c *Container) createContainersDirs() error {
-	err := os.MkdirAll(c.runPath, dirMode)
-	if err != nil {
-		return err
-	}
-
-	err = os.MkdirAll(c.configPath, dirMode)
-	if err != nil {
-		c.sandbox.storage.deleteContainerResources(c.sandboxID, c.id, nil)
 		return err
 	}
 
@@ -597,6 +584,42 @@ func filterDevices(sandbox *Sandbox, c *Container, devices []ContainerDevice) (r
 	return
 }
 
+func (c *Container) createBlockDevices() error {
+	// iterate all mounts and create block device if it's block based.
+	for i, m := range c.mounts {
+		if len(m.BlockDeviceID) > 0 || m.Type != "bind" {
+			// Non-empty m.BlockDeviceID indicates there's already one device
+			// associated with the mount,so no need to create a new device for it
+			// and we only create block device for bind mount
+			continue
+		}
+
+		var stat unix.Stat_t
+		if err := unix.Stat(m.Source, &stat); err != nil {
+			return fmt.Errorf("stat %q failed: %v", m.Source, err)
+		}
+
+		// Check if mount is a block device file. If it is, the block device will be attached to the host
+		// instead of passing this as a shared mount.
+		if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
+			b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
+				HostPath:      m.Source,
+				ContainerPath: m.Destination,
+				DevType:       "b",
+				Major:         int64(unix.Major(stat.Rdev)),
+				Minor:         int64(unix.Minor(stat.Rdev)),
+			})
+			if err != nil {
+				return fmt.Errorf("device manager failed to create new device for %q: %v", m.Source, err)
+			}
+
+			c.mounts[i].BlockDeviceID = b.DeviceID()
+		}
+	}
+
+	return nil
+}
+
 // newContainer creates a Container structure from a sandbox and a container configuration.
 func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, error) {
 	span, _ := sandbox.trace("newContainer")
@@ -612,8 +635,8 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		rootFs:        contConfig.RootFs,
 		config:        &contConfig,
 		sandbox:       sandbox,
-		runPath:       filepath.Join(runStoragePath, sandbox.id, contConfig.ID),
-		configPath:    filepath.Join(configStoragePath, sandbox.id, contConfig.ID),
+		runPath:       store.ContainerRuntimeRootPath(sandbox.id, contConfig.ID),
+		configPath:    store.ContainerConfigurationRootPath(sandbox.id, contConfig.ID),
 		containerPath: filepath.Join(sandbox.id, contConfig.ID),
 		state:         types.State{},
 		process:       Process{},
@@ -621,58 +644,37 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		ctx:           sandbox.ctx,
 	}
 
-	state, err := c.sandbox.storage.fetchContainerState(c.sandboxID, c.id)
+	ctrStore, err := store.NewVCContainerStore(sandbox.ctx, c.sandboxID, c.id)
+	if err != nil {
+		return nil, err
+	}
+
+	c.store = ctrStore
+
+	state, err := c.store.LoadState()
 	if err == nil {
 		c.state = state
 	}
 
-	process, err := c.sandbox.storage.fetchContainerProcess(c.sandboxID, c.id)
-	if err == nil {
+	var process Process
+	if err := c.store.Load(store.Process, &process); err == nil {
 		c.process = process
 	}
 
-	mounts, err := c.fetchMounts()
+	mounts, err := c.loadMounts()
 	if err == nil {
 		// restore mounts from disk
 		c.mounts = mounts
 	} else {
-		// for newly created container:
-		// iterate all mounts and create block device if it's block based.
-		for i, m := range c.mounts {
-			if len(m.BlockDeviceID) > 0 || m.Type != "bind" {
-				// Non-empty m.BlockDeviceID indicates there's already one device
-				// associated with the mount,so no need to create a new device for it
-				// and we only create block device for bind mount
-				continue
-			}
-
-			var stat unix.Stat_t
-			if err := unix.Stat(m.Source, &stat); err != nil {
-				return nil, fmt.Errorf("stat %q failed: %v", m.Source, err)
-			}
-
-			// Check if mount is a block device file. If it is, the block device will be attached to the host
-			// instead of passing this as a shared mount.
-			if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
-				b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
-					HostPath:      m.Source,
-					ContainerPath: m.Destination,
-					DevType:       "b",
-					Major:         int64(unix.Major(stat.Rdev)),
-					Minor:         int64(unix.Minor(stat.Rdev)),
-				})
-				if err != nil {
-					return nil, fmt.Errorf("device manager failed to create new device for %q: %v", m.Source, err)
-				}
-
-				c.mounts[i].BlockDeviceID = b.DeviceID()
-			}
+		// Create block devices for newly created container
+		if err := c.createBlockDevices(); err != nil {
+			return nil, err
 		}
 	}
 
 	// Devices will be found in storage after create stage has completed.
-	// We fetch devices from storage at all other stages.
-	storedDevices, err := c.fetchDevices()
+	// We load devices from storage at all other stages.
+	storedDevices, err := c.loadDevices()
 	if err == nil {
 		c.devices = storedDevices
 	} else {
@@ -724,11 +726,6 @@ func (c *Container) checkBlockDeviceSupport() bool {
 // createContainer creates and start a container inside a Sandbox. It has to be
 // called only when a new container, not known by the sandbox, has to be created.
 func (c *Container) create() (err error) {
-
-	if err = c.createContainersDirs(); err != nil {
-		return
-	}
-
 	// In case the container creation fails, the following takes care
 	// of rolling back all the actions previously performed.
 	defer func() {
@@ -791,7 +788,7 @@ func (c *Container) delete() error {
 		return err
 	}
 
-	return c.sandbox.storage.deleteContainerResources(c.sandboxID, c.id, nil)
+	return c.store.Delete()
 }
 
 // checkSandboxRunning validates the container state.

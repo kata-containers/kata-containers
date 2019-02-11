@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os/exec"
 	"path/filepath"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 
 	"net"
@@ -97,7 +99,7 @@ type firecracker struct {
 	fcClient     *client.Firecracker //Tracks the current active connection
 	socketPath   string
 
-	storage        resourceStorage
+	store          *store.VCStore
 	config         HypervisorConfig
 	pendingDevices []firecrackerDevice // Devices to be added when the FC API is ready
 	ctx            context.Context
@@ -129,7 +131,7 @@ func (fc *firecracker) trace(name string) (opentracing.Span, context.Context) {
 
 // For firecracker this call only sets the internal structure up.
 // The sandbox will be created and started through startSandbox().
-func (fc *firecracker) createSandbox(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, storage resourceStorage) error {
+func (fc *firecracker) createSandbox(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore) error {
 	fc.ctx = ctx
 
 	span, _ := fc.trace("createSandbox")
@@ -138,14 +140,14 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, hypervisorC
 	//TODO: check validity of the hypervisor config provided
 	//https://github.com/kata-containers/runtime/issues/1065
 	fc.id = id
-	fc.socketPath = filepath.Join(runStoragePath, fc.id, fireSocket)
-	fc.storage = storage
+	fc.socketPath = filepath.Join(store.SandboxRuntimeRootPath(fc.id), fireSocket)
+	fc.store = vcStore
 	fc.config = *hypervisorConfig
 	fc.state.set(notReady)
 
 	// No need to return an error from there since there might be nothing
 	// to fetch if this is the first time the hypervisor is created.
-	if err := fc.storage.fetchHypervisorState(fc.id, &fc.info); err != nil {
+	if err := fc.store.Load(store.Hypervisor, &fc.info); err != nil {
 		fc.Logger().WithField("function", "init").WithError(err).Info("No info could be fetched")
 	}
 
@@ -246,7 +248,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 	fc.state.set(apiReady)
 
 	// Store VMM information
-	return fc.storage.storeHypervisorState(fc.id, fc.info)
+	return fc.store.Store(store.Hypervisor, fc.info)
 }
 
 func (fc *firecracker) client() *client.Firecracker {
@@ -395,7 +397,13 @@ func (fc *firecracker) createDiskPool() error {
 		isRootDevice := false
 
 		// Create a temporary file as a placeholder backend for the drive
-		hostPath, err := fc.storage.createSandboxTempFile(fc.id)
+		hostURL, err := fc.store.Raw("")
+		if err != nil {
+			return err
+		}
+
+		// We get a full URL from Raw(), we need to parse it.
+		u, err := url.Parse(hostURL)
 		if err != nil {
 			return err
 		}
@@ -404,7 +412,7 @@ func (fc *firecracker) createDiskPool() error {
 			DriveID:      &driveID,
 			IsReadOnly:   &isReadOnly,
 			IsRootDevice: &isRootDevice,
-			PathOnHost:   &hostPath,
+			PathOnHost:   &u.Path,
 		}
 		driveParams.SetBody(drive)
 		_, err = fc.client().Operations.PutGuestDriveByID(driveParams)

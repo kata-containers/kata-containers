@@ -20,6 +20,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -89,10 +90,15 @@ func TestContainerSandbox(t *testing.T) {
 
 func TestContainerRemoveDrive(t *testing.T) {
 	sandbox := &Sandbox{
+		ctx:        context.Background(),
 		id:         "sandbox",
 		devManager: manager.NewDeviceManager(manager.VirtioSCSI, nil),
-		storage:    &filesystem{},
 	}
+
+	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
+	assert.Nil(t, err)
+
+	sandbox.store = vcStore
 
 	container := Container{
 		sandbox: sandbox,
@@ -100,7 +106,7 @@ func TestContainerRemoveDrive(t *testing.T) {
 	}
 
 	container.state.Fstype = ""
-	err := container.removeDrive()
+	err = container.removeDrive()
 
 	// hotplugRemoveDevice for hypervisor should not be called.
 	// test should pass without a hypervisor created for the container's sandbox.
@@ -121,11 +127,6 @@ func TestContainerRemoveDrive(t *testing.T) {
 	assert.True(t, ok)
 	err = device.Attach(devReceiver)
 	assert.Nil(t, err)
-	err = sandbox.storage.createAllResources(context.Background(), sandbox)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	err = sandbox.storeSandboxDevices()
 	assert.Nil(t, err)
 
@@ -170,7 +171,7 @@ func testSetupFakeRootfs(t *testing.T) (testRawFile, loopDev, mntDir string, err
 	}
 
 	mntDir = filepath.Join(tmpDir, "rootfs")
-	err = os.Mkdir(mntDir, dirMode)
+	err = os.Mkdir(mntDir, store.DirMode)
 	if err != nil {
 		t.Fatalf("Error creating dir %s: %s", mntDir, err)
 	}
@@ -212,11 +213,10 @@ func TestContainerAddDriveDir(t *testing.T) {
 		t.Fatalf("Error while setting up fake rootfs: %v, Skipping test", err)
 	}
 
-	fs := &filesystem{}
 	sandbox := &Sandbox{
+		ctx:        context.Background(),
 		id:         testSandboxID,
 		devManager: manager.NewDeviceManager(manager.VirtioSCSI, nil),
-		storage:    fs,
 		hypervisor: &mockHypervisor{},
 		agent:      &noopAgent{},
 		config: &SandboxConfig{
@@ -226,6 +226,12 @@ func TestContainerAddDriveDir(t *testing.T) {
 		},
 	}
 
+	defer store.DeleteAll()
+
+	sandboxStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
+	assert.Nil(t, err)
+	sandbox.store = sandboxStore
+
 	contID := "100"
 	container := Container{
 		sandbox: sandbox,
@@ -233,23 +239,19 @@ func TestContainerAddDriveDir(t *testing.T) {
 		rootFs:  fakeRootfs,
 	}
 
+	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, container.id)
+	assert.Nil(t, err)
+	container.store = containerStore
+
 	// create state file
-	path := filepath.Join(runStoragePath, testSandboxID, container.ID())
-	err = os.MkdirAll(path, dirMode)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	defer os.RemoveAll(path)
-
-	stateFilePath := filepath.Join(path, stateFile)
+	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
+	stateFilePath := filepath.Join(path, store.StateFile)
 	os.Remove(stateFilePath)
 
 	_, err = os.Create(stateFilePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(stateFilePath)
 
 	// Make the checkStorageDriver func variable point to a fake check function
 	savedFunc := checkStorageDriver
