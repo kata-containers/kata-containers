@@ -29,6 +29,7 @@ remove_tmp_file() {
 trap remove_tmp_file EXIT
 
 setup() {
+	extract_kata_env
 	clean_env
 
 	# Stop docker
@@ -36,7 +37,6 @@ setup() {
 }
 
 test_ramdisk() {
-	extract_kata_env
 
 	# Grab the time (filter journalctl)
 	grab_time=$(date +"%H:%M:%S")
