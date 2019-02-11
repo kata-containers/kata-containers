@@ -374,7 +374,15 @@ func (c *Container) SetPid(pid int) error {
 func (c *Container) setStateFstype(fstype string) error {
 	c.state.Fstype = fstype
 
-	return c.storeState()
+	if !c.sandbox.supportNewStore() {
+		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
+		err := c.storeState()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // GetAnnotations returns container's annotations
@@ -384,8 +392,10 @@ func (c *Container) GetAnnotations() map[string]string {
 
 // storeContainer stores a container config.
 func (c *Container) storeContainer() error {
-	if err := c.sandbox.newStore.ToDisk(); err != nil {
-		return err
+	if c.sandbox.supportNewStore() {
+		if err := c.sandbox.newStore.ToDisk(); err != nil {
+			return err
+		}
 	}
 	return c.store.Store(store.Configuration, *(c.config))
 }
@@ -436,16 +446,20 @@ func (c *Container) setContainerState(state types.StateString) error {
 	// update in-memory state
 	c.state.State = state
 
-	// update on-disk state
-	err := c.store.Store(store.State, c.state)
-	if err != nil {
-		return err
+	if c.sandbox.supportNewStore() {
+		// flush data to storage
+		if err := c.sandbox.newStore.ToDisk(); err != nil {
+			return err
+		}
+	} else {
+		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
+		// update on-disk state
+		err := c.store.Store(store.State, c.state)
+		if err != nil {
+			return err
+		}
 	}
 
-	// flush data to storage
-	if err = c.sandbox.newStore.ToDisk(); err != nil {
-		return err
-	}
 	return nil
 }
 
@@ -687,10 +701,18 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 
 	c.store = ctrStore
 
-	/*state, err := c.store.LoadContainerState()
-	if err == nil {
-		c.state = state
-	}*/
+	// experimental runtime use "persist.json" instead of legacy "state.json" as storage
+	if c.sandbox.supportNewStore() {
+		if err := c.Restore(); err != nil &&
+			!os.IsNotExist(err) && err != errContainerPersistNotExist {
+			return nil, err
+		}
+	} else {
+		state, err := c.store.LoadContainerState()
+		if err == nil {
+			c.state = state
+		}
+	}
 
 	if err := c.Restore(); err != nil &&
 		!os.IsNotExist(err) && err != errContainerPersistNotExist {
