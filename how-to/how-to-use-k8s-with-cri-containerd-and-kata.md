@@ -171,7 +171,7 @@ By default, the cluster will not schedule pods in the master node. To enable mas
 $ sudo -E kubectl taint nodes --all node-role.kubernetes.io/master-
 ```
 
-## Create an unstrusted pod using Kata Containers
+## Create an untrusted pod using Kata Containers
 
 By default, all pods are created with the default runtime configured in CRI containerd plugin.
 
