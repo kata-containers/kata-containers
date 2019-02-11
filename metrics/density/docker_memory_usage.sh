@@ -64,7 +64,7 @@ get_runc_pss_memory(){
         for shim in $shim_instances; do
                 child_pid="$(pgrep -P $shim)"
                 child_mem=$(sudo "$SMEM_BIN" -c "pid pss" | \
-                                grep "$child_pid" | awk '{print $2}')
+                                awk "/^$child_pid / {print \$2}")
 
 		# Getting all individual results
 		echo $child_mem >> $MEM_TMP_FILE
