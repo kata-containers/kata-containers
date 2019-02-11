@@ -435,8 +435,10 @@ func (s *Sandbox) getAndStoreGuestDetails() error {
 		}
 		s.state.GuestMemoryHotplugProbe = guestDetailRes.SupportMemHotplugProbe
 
-		if err = s.store.Store(store.State, s.state); err != nil {
-			return err
+		if !s.supportNewStore() {
+			if err = s.store.Store(store.State, s.state); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -477,28 +479,30 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	}
 	s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
 
-	// register persist hook for now, data will be written to disk by ToDisk()
-	s.stateSaveCallback()
-	s.hvStateSaveCallback()
-	s.devicesSaveCallback()
+	if s.supportNewStore() {
+		// register persist hook for now, data will be written to disk by ToDisk()
+		s.stateSaveCallback()
+		s.hvStateSaveCallback()
+		s.devicesSaveCallback()
 
-	if err := s.Restore(); err == nil && s.state.State != "" {
-		return s, nil
+		if err := s.Restore(); err == nil && s.state.State != "" {
+			return s, nil
+		}
+
+		// if sandbox doesn't exist, set persist version to current version
+		// otherwise do nothing
+		s.verSaveCallback()
+	} else {
+		// We first try to fetch the sandbox state from storage.
+		// If it exists, this means this is a re-creation, i.e.
+		// we don't need to talk to the guest's agent, but only
+		// want to create the sandbox and its containers in memory.
+		state, err := s.store.LoadState()
+		if err == nil && state.State != "" {
+			s.state = state
+			return s, nil
+		}
 	}
-
-	// We first try to fetch the sandbox state from storage.
-	// If it exists, this means this is a re-creation, i.e.
-	// we don't need to talk to the guest's agent, but only
-	// want to create the sandbox and its containers in memory.
-	/* state, err := s.store.LoadState()
-	if err == nil && state.State != "" {
-		s.state = state
-		return s, nil
-	}*/
-
-	// if sandbox doesn't exist, set persist version to current version
-	// otherwise do nothing
-	s.verSaveCallback()
 
 	// Below code path is called only during create, because of earlier check.
 	if err := s.agent.createSandbox(s); err != nil {
@@ -608,9 +612,11 @@ func (s *Sandbox) storeSandbox() error {
 		}
 	}
 
-	// flush data to storage
-	if err = s.newStore.ToDisk(); err != nil {
-		return err
+	if s.supportNewStore() {
+		// flush data to storage
+		if err := s.newStore.ToDisk(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1037,7 +1043,9 @@ func (s *Sandbox) addContainer(c *Container) error {
 	ann := c.GetAnnotations()
 	if ann[annotations.ContainerTypeKey] == string(PodSandbox) {
 		s.state.CgroupPath = c.state.CgroupPath
-		return s.store.Store(store.State, s.state)
+		if !s.supportNewStore() {
+			return s.store.Store(store.State, s.state)
+		}
 	}
 
 	return nil
@@ -1512,7 +1520,10 @@ func (s *Sandbox) setSandboxState(state types.StateString) error {
 	s.state.State = state
 
 	// update on-disk state
-	return s.store.Store(store.State, s.state)
+	if !s.supportNewStore() {
+		return s.store.Store(store.State, s.state)
+	}
+	return nil
 }
 
 func (s *Sandbox) pauseSetStates() error {
@@ -1544,9 +1555,12 @@ func (s *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
 	// Increment so that container gets incremented block index
 	s.state.BlockIndex++
 
-	// update on-disk state
-	if err := s.store.Store(store.State, s.state); err != nil {
-		return -1, err
+	if !s.supportNewStore() {
+		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
+		// update on-disk state
+		if err := s.store.Store(store.State, s.state); err != nil {
+			return -1, err
+		}
 	}
 
 	return currentIndex, nil
@@ -1557,9 +1571,12 @@ func (s *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
 func (s *Sandbox) decrementSandboxBlockIndex() error {
 	s.state.BlockIndex--
 
-	// update on-disk state
-	if err := s.store.Store(store.State, s.state); err != nil {
-		return err
+	if !s.supportNewStore() {
+		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
+		// update on-disk state
+		if err := s.store.Store(store.State, s.state); err != nil {
+			return err
+		}
 	}
 
 	return nil

@@ -9,6 +9,8 @@ import (
 	"errors"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
+	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
+	"github.com/kata-containers/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 )
@@ -157,4 +159,13 @@ func (c *Container) Restore() error {
 	}
 
 	return nil
+}
+
+func (s *Sandbox) supportNewStore() bool {
+	for _, f := range s.config.Experimental {
+		if f == persist.NewStoreFeature && exp.Get("newstore") != nil {
+			return true
+		}
+	}
+	return false
 }
