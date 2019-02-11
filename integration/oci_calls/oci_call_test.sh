@@ -21,11 +21,6 @@ IMAGE="busybox"
 PAYLOAD="tail -f /dev/null"
 NAME="testoci"
 
-if [ "$ID" == "debian" ]; then
-	echo "Skip oci_call_test on $ID (see: https://github.com/kata-containers/tests/issues/1065)"
-	exit
-fi
-
 function remove_tmp_file {
 	rm -rf $TMP_FILE
 }
