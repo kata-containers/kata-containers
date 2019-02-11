@@ -42,7 +42,7 @@ is_a_kata_runtime(){
 
 # Try to find the real runtime path for the docker runtime passed in $1
 get_docker_kata_path(){
-	local jpaths=$(docker info --format "{{json .Runtimes}}")
+	local jpaths=$(docker info --format "{{json .Runtimes}}" || true)
 	local rpath=$(jq .\"$1\".path <<< "$jpaths")
 	# Now we have to de-quote it..
 	rpath="${rpath%\"}"
@@ -99,7 +99,13 @@ extract_kata_env(){
 	RUNTIME_CONFIG_PATH="/usr/share/defaults/kata-containers/configuration.toml"
 	RUNTIME_VERSION="0.0.0"
 	RUNTIME_COMMIT="unknown"
-	RUNTIME_PATH="$rpath"
+	# If docker is broken, disabled or not installed then we may not get a runtime
+	# path from it...
+	if [ -z "$RUNTIME_PATH" ]; then
+		RUNTIME_PATH="/usr/bin/kata-runtime"
+	else
+		RUNTIME_PATH="$rpath"
+	fi
 	SHIM_PATH="/usr/libexec/kata-containers/kata-shim"
 	SHIM_VERSION="0.0.0"
 	PROXY_PATH="/usr/libexec/kata-containers/kata-proxy"
