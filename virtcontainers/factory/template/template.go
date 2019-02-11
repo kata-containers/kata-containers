@@ -16,6 +16,7 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/factory/base"
 	"github.com/kata-containers/runtime/virtcontainers/factory/direct"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 )
 
 type template struct {
@@ -29,7 +30,7 @@ var templateWaitForAgent = 2 * time.Second
 // Fetch finds and returns a pre-built template factory.
 // TODO: save template metadata and fetch from storage.
 func Fetch(config vc.VMConfig) (base.FactoryBase, error) {
-	statePath := vc.RunVMStoragePath + "/template"
+	statePath := store.RunVMStoragePath + "/template"
 	t := &template{statePath, config}
 
 	err := t.checkTemplateVM()
@@ -42,7 +43,7 @@ func Fetch(config vc.VMConfig) (base.FactoryBase, error) {
 
 // New creates a new VM template factory.
 func New(ctx context.Context, config vc.VMConfig) base.FactoryBase {
-	statePath := vc.RunVMStoragePath + "/template"
+	statePath := store.RunVMStoragePath + "/template"
 	t := &template{statePath, config}
 
 	err := t.prepareTemplateFiles()

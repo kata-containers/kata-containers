@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/sirupsen/logrus"
 )
 
@@ -46,12 +47,13 @@ var testHyperstartTtySocket = ""
 // the next test to run.
 func cleanUp() {
 	globalSandboxList.removeSandbox(testSandboxID)
+	store.DeleteAll()
 	for _, dir := range []string{testDir, defaultSharedDir} {
 		os.RemoveAll(dir)
-		os.MkdirAll(dir, dirMode)
+		os.MkdirAll(dir, store.DirMode)
 	}
 
-	os.Mkdir(filepath.Join(testDir, testBundle), dirMode)
+	os.Mkdir(filepath.Join(testDir, testBundle), store.DirMode)
 
 	_, err := os.Create(filepath.Join(testDir, testImage))
 	if err != nil {
@@ -82,7 +84,7 @@ func TestMain(m *testing.M) {
 	}
 
 	fmt.Printf("INFO: Creating virtcontainers test directory %s\n", testDir)
-	err = os.MkdirAll(testDir, dirMode)
+	err = os.MkdirAll(testDir, store.DirMode)
 	if err != nil {
 		fmt.Println("Could not create test directories:", err)
 		os.Exit(1)
@@ -117,7 +119,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	err = os.Mkdir(filepath.Join(testDir, testBundle), dirMode)
+	err = os.Mkdir(filepath.Join(testDir, testBundle), store.DirMode)
 	if err != nil {
 		fmt.Println("Could not create test bundle directory:", err)
 		os.RemoveAll(testDir)
@@ -125,16 +127,16 @@ func TestMain(m *testing.M) {
 	}
 
 	// allow the tests to run without affecting the host system.
-	configStoragePath = filepath.Join(testDir, storagePathSuffix, "config")
-	runStoragePath = filepath.Join(testDir, storagePathSuffix, "run")
+	store.ConfigStoragePath = filepath.Join(testDir, store.StoragePathSuffix, "config")
+	store.RunStoragePath = filepath.Join(testDir, store.StoragePathSuffix, "run")
 
 	// set now that configStoragePath has been overridden.
-	sandboxDirConfig = filepath.Join(configStoragePath, testSandboxID)
-	sandboxFileConfig = filepath.Join(configStoragePath, testSandboxID, configFile)
-	sandboxDirState = filepath.Join(runStoragePath, testSandboxID)
-	sandboxDirLock = filepath.Join(runStoragePath, testSandboxID)
-	sandboxFileState = filepath.Join(runStoragePath, testSandboxID, stateFile)
-	sandboxFileLock = filepath.Join(runStoragePath, testSandboxID, lockFileName)
+	sandboxDirConfig = filepath.Join(store.ConfigStoragePath, testSandboxID)
+	sandboxFileConfig = filepath.Join(store.ConfigStoragePath, testSandboxID, store.ConfigurationFile)
+	sandboxDirState = filepath.Join(store.RunStoragePath, testSandboxID)
+	sandboxDirLock = filepath.Join(store.RunStoragePath, testSandboxID)
+	sandboxFileState = filepath.Join(store.RunStoragePath, testSandboxID, store.StateFile)
+	sandboxFileLock = filepath.Join(store.RunStoragePath, testSandboxID, store.LockFile)
 
 	testHyperstartCtlSocket = filepath.Join(testDir, "test_hyper.sock")
 	testHyperstartTtySocket = filepath.Join(testDir, "test_tty.sock")

@@ -190,7 +190,10 @@ func TestFactoryGetVM(t *testing.T) {
 	f, err := NewFactory(ctx, Config{VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
-	_, err = f.GetVM(ctx, vmConfig)
+	vm, err := f.GetVM(ctx, vmConfig)
+	assert.Nil(err)
+
+	err = vm.Stop()
 	assert.Nil(err)
 
 	f.CloseFactory(ctx)
@@ -199,7 +202,10 @@ func TestFactoryGetVM(t *testing.T) {
 	f, err = NewFactory(ctx, Config{Template: true, VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
-	_, err = f.GetVM(ctx, vmConfig)
+	vm, err = f.GetVM(ctx, vmConfig)
+	assert.Nil(err)
+
+	err = vm.Stop()
 	assert.Nil(err)
 
 	f.CloseFactory(ctx)
@@ -211,7 +217,10 @@ func TestFactoryGetVM(t *testing.T) {
 	_, err = NewFactory(ctx, Config{Template: true, VMConfig: vmConfig}, true)
 	assert.Error(err)
 
-	_, err = f.GetVM(ctx, vmConfig)
+	vm, err = f.GetVM(ctx, vmConfig)
+	assert.Nil(err)
+
+	err = vm.Stop()
 	assert.Nil(err)
 
 	f.CloseFactory(ctx)
@@ -220,7 +229,10 @@ func TestFactoryGetVM(t *testing.T) {
 	f, err = NewFactory(ctx, Config{Cache: 2, VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
-	_, err = f.GetVM(ctx, vmConfig)
+	vm, err = f.GetVM(ctx, vmConfig)
+	assert.Nil(err)
+
+	err = vm.Stop()
 	assert.Nil(err)
 
 	f.CloseFactory(ctx)
@@ -229,22 +241,34 @@ func TestFactoryGetVM(t *testing.T) {
 	f, err = NewFactory(ctx, Config{Template: true, Cache: 2, VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
-	_, err = f.GetVM(ctx, vmConfig)
+	vm, err = f.GetVM(ctx, vmConfig)
+	assert.Nil(err)
+
+	err = vm.Stop()
 	assert.Nil(err)
 
 	// CPU hotplug
 	vmConfig.HypervisorConfig.NumVCPUs++
-	_, err = f.GetVM(ctx, vmConfig)
+	vm, err = f.GetVM(ctx, vmConfig)
+	assert.Nil(err)
+
+	err = vm.Stop()
 	assert.Nil(err)
 
 	// Memory hotplug
 	vmConfig.HypervisorConfig.MemorySize += 128
-	_, err = f.GetVM(ctx, vmConfig)
+	vm, err = f.GetVM(ctx, vmConfig)
+	assert.Nil(err)
+
+	err = vm.Stop()
 	assert.Nil(err)
 
 	// checkConfig fall back
 	vmConfig.HypervisorConfig.Mlock = true
-	_, err = f.GetVM(ctx, vmConfig)
+	vm, err = f.GetVM(ctx, vmConfig)
+	assert.Nil(err)
+
+	err = vm.Stop()
 	assert.Nil(err)
 
 	f.CloseFactory(ctx)

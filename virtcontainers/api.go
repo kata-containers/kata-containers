@@ -14,6 +14,7 @@ import (
 	deviceApi "github.com/kata-containers/runtime/virtcontainers/device/api"
 	deviceConfig "github.com/kata-containers/runtime/virtcontainers/device/config"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
@@ -142,7 +143,7 @@ func DeleteSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	// Fetch the sandbox from storage and create it.
 	s, err := fetchSandbox(ctx, sandboxID)
@@ -175,7 +176,7 @@ func FetchSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	// Fetch the sandbox from storage and create it.
 	s, err := fetchSandbox(ctx, sandboxID)
@@ -212,7 +213,7 @@ func StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	// Fetch the sandbox from storage and create it.
 	s, err := fetchSandbox(ctx, sandboxID)
@@ -244,7 +245,7 @@ func StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	// Fetch the sandbox from storage and create it.
 	s, err := fetchSandbox(ctx, sandboxID)
@@ -279,7 +280,7 @@ func RunSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(s.id, lockFile)
 
 	// Start the sandbox
 	err = s.Start()
@@ -295,7 +296,7 @@ func ListSandbox(ctx context.Context) ([]SandboxStatus, error) {
 	span, ctx := trace(ctx, "ListSandbox")
 	defer span.Finish()
 
-	dir, err := os.Open(configStoragePath)
+	dir, err := os.Open(store.ConfigStoragePath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// No sandbox directory is not an error
@@ -338,11 +339,11 @@ func StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error)
 	if err != nil {
 		return SandboxStatus{}, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
-		unlockSandbox(lockFile)
+		unlockSandbox(sandboxID, lockFile)
 		return SandboxStatus{}, err
 	}
 	defer s.releaseStatelessSandbox()
@@ -384,7 +385,7 @@ func CreateContainer(ctx context.Context, sandboxID string, containerConfig Cont
 	if err != nil {
 		return nil, nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -419,7 +420,7 @@ func DeleteContainer(ctx context.Context, sandboxID, containerID string) (VCCont
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -448,7 +449,7 @@ func StartContainer(ctx context.Context, sandboxID, containerID string) (VCConta
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -477,7 +478,7 @@ func StopContainer(ctx context.Context, sandboxID, containerID string) (VCContai
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -506,7 +507,7 @@ func EnterContainer(ctx context.Context, sandboxID, containerID string, cmd type
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -540,11 +541,11 @@ func StatusContainer(ctx context.Context, sandboxID, containerID string) (Contai
 	if err != nil {
 		return ContainerStatus{}, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
-		unlockSandbox(lockFile)
+		unlockSandbox(sandboxID, lockFile)
 		return ContainerStatus{}, err
 	}
 	defer s.releaseStatelessSandbox()
@@ -621,7 +622,7 @@ func KillContainer(ctx context.Context, sandboxID, containerID string, signal sy
 	if err != nil {
 		return err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -668,7 +669,7 @@ func ProcessListContainer(ctx context.Context, sandboxID, containerID string, op
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -697,7 +698,7 @@ func UpdateContainer(ctx context.Context, sandboxID, containerID string, resourc
 	if err != nil {
 		return err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -726,7 +727,7 @@ func StatsContainer(ctx context.Context, sandboxID, containerID string) (Contain
 		return ContainerStats{}, err
 	}
 
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -750,7 +751,7 @@ func togglePauseContainer(ctx context.Context, sandboxID, containerID string, pa
 	if err != nil {
 		return err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -794,7 +795,7 @@ func AddDevice(ctx context.Context, sandboxID string, info deviceConfig.DeviceIn
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -814,7 +815,7 @@ func toggleInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interfa
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -858,7 +859,7 @@ func ListInterfaces(ctx context.Context, sandboxID string) ([]*vcTypes.Interface
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -882,7 +883,7 @@ func UpdateRoutes(ctx context.Context, sandboxID string, routes []*vcTypes.Route
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
@@ -906,7 +907,7 @@ func ListRoutes(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error)
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(lockFile)
+	defer unlockSandbox(sandboxID, lockFile)
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {

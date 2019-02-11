@@ -23,13 +23,12 @@ func TestMockHypervisorCreateSandbox(t *testing.T) {
 				HypervisorPath: "",
 			},
 		},
-		storage: &filesystem{},
 	}
 
 	ctx := context.Background()
 
 	// wrong config
-	if err := m.createSandbox(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.storage); err == nil {
+	if err := m.createSandbox(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, nil); err == nil {
 		t.Fatal()
 	}
 
@@ -39,7 +38,7 @@ func TestMockHypervisorCreateSandbox(t *testing.T) {
 		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
 	}
 
-	if err := m.createSandbox(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, sandbox.storage); err != nil {
+	if err := m.createSandbox(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, nil); err != nil {
 		t.Fatal(err)
 	}
 }
