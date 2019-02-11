@@ -166,7 +166,7 @@ func (h hypervisor) initrd() (string, error) {
 	p := h.Initrd
 
 	if p == "" {
-		return "", nil
+		return "", errors.New("initrd is not set")
 	}
 
 	return ResolvePath(p)
@@ -176,7 +176,7 @@ func (h hypervisor) image() (string, error) {
 	p := h.Image
 
 	if p == "" {
-		return "", nil
+		return "", errors.New("image is not set")
 	}
 
 	return ResolvePath(p)
@@ -340,20 +340,16 @@ func (h hypervisor) guestHookPath() string {
 }
 
 func (h hypervisor) getInitrdAndImage() (initrd string, image string, err error) {
-	if initrd, err = h.initrd(); err != nil {
-		return
-	}
+	initrd, errInitrd := h.initrd()
 
-	if image, err = h.image(); err != nil {
-		return
-	}
+	image, errImage := h.image()
 
 	if image != "" && initrd != "" {
 		return "", "", errors.New("having both an image and an initrd defined in the configuration file is not supported")
 	}
 
-	if image == "" && initrd == "" {
-		return "", "", errors.New("either image or initrd must be defined in the configuration file")
+	if errInitrd != nil && errImage != nil {
+		return "", "", fmt.Errorf("Either initrd or image must be set to a valid path (initrd: %v) (image: %v)", errInitrd, errImage)
 	}
 
 	return
