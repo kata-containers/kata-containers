@@ -93,25 +93,31 @@ if [ -f "${cidir}/${QEMU_ARCH}/lib_install_qemu_${QEMU_ARCH}.sh" ]; then
 fi
 
 main() {
-	if [ "$QEMU_ARCH" == "x86_64" ]; then
-		packaged_qemu_commit=$(get_packaged_qemu_commit)
-		short_current_qemu_commit=${CURRENT_QEMU_COMMIT:0:10}
-		if [ "$packaged_qemu_commit" == "$short_current_qemu_commit" ]; then
-			# If installing packaged qemu from OBS fails,
-			# then build and install it from sources.
-			install_packaged_qemu || build_and_install_qemu
-		else
-			build_and_install_qemu
-		fi
-	elif [ "$QEMU_ARCH" == "aarch64" ] || [ "$QEMU_ARCH" == "ppc64le" ]; then
-		packaged_qemu_version=$(get_packaged_qemu_version)
-		short_current_qemu_version=${CURRENT_QEMU_VERSION#*-}
-		if [ "$packaged_qemu_version" == "$short_current_qemu_version" ] && [ -z "${CURRENT_QEMU_COMMIT}" ]; then
-			install_packaged_qemu || build_and_install_qemu
-		else
-			build_and_install_qemu
-		fi
-	fi
+	case "$QEMU_ARCH" in
+		"x86_64")
+			packaged_qemu_commit=$(get_packaged_qemu_commit)
+			short_current_qemu_commit=${CURRENT_QEMU_COMMIT:0:10}
+			if [ "$packaged_qemu_commit" == "$short_current_qemu_commit" ]; then
+				# If installing packaged qemu from OBS fails,
+				# then build and install it from sources.
+				install_packaged_qemu || build_and_install_qemu
+			else
+				build_and_install_qemu
+			fi
+			;;
+		"aarch64"|"ppc64le"|"s390x")
+			packaged_qemu_version=$(get_packaged_qemu_version)
+			short_current_qemu_version=${CURRENT_QEMU_VERSION#*-}
+			if [ "$packaged_qemu_version" == "$short_current_qemu_version" ] && [ -z "${CURRENT_QEMU_COMMIT}" ] || [ "${QEMU_ARCH}" == "s390x" ]; then
+				install_packaged_qemu || build_and_install_qemu
+			else
+				build_and_install_qemu
+			fi
+			;;
+		*)
+			die "Architecture $QEMU_ARCH not supported"
+			;;
+	esac
 }
 
 main

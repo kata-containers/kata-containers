@@ -1,0 +1,22 @@
+#
+# Copyright (c) 2019 IBM
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+test:
+  - functional
+  - docker
+
+# Same model as is for aarch64
+docker:
+  Describe:
+    - CPUs and CPU set
+    - Update number of CPUs
+    - Hot plug CPUs
+    - Update CPU constraints
+    - Hotplug memory
+    - update memory constraints
+  Context:
+    - remove bind-mount source before container exits
+    - run container exceeding memory constraints
+  It:

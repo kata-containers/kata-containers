@@ -36,9 +36,6 @@ const (
 	// FedoraImage is the fedora image
 	FedoraImage = "fedora"
 
-	// CentosImage is the centos image
-	CentosImage = "centos"
-
 	// StressImage is the vish/stress image
 	StressImage = "vish/stress"
 

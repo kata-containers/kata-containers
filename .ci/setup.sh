@@ -57,12 +57,14 @@ install_docker() {
 
 enable_nested_virtualization() {
 	case "$arch" in
-	x86_64)
-		if [ "$CI" == true ] && grep -q "N" /sys/module/kvm_intel/parameters/nested 2>/dev/null; then
+	x86_64 | s390x)
+		kvm_arch="kvm"
+		[ ${arch} == "x86_64" ] && kvm_arch="kvm_intel"
+		if [ "$CI" == true ] && grep -q "N" /sys/module/$kvm_arch/parameters/nested 2>/dev/null; then
 			echo "enable Nested Virtualization"
-			sudo modprobe -r kvm_intel
-			sudo modprobe kvm_intel nested=1
-			if grep -q "N" /sys/module/kvm_intel/parameters/nested 2>/dev/null; then
+			sudo modprobe -r $kvm_arch
+			sudo modprobe $kvm_arch nested=1
+			if grep -q "N" /sys/module/$kvm_arch/parameters/nested 2>/dev/null; then
 				die "Failed to find or enable Nested virtualization"
 			fi
 		fi
