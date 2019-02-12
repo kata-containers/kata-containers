@@ -23,9 +23,17 @@ ifeq ($(SKIP_GO_VERSION_CHECK),)
     include golang.mk
 endif
 
-GOARCH=$(shell go env GOARCH)
-ifeq ($(ARCH),)
-    ARCH = $(GOARCH)
+#Get ARCH.
+ifneq ($(GOPATH),)
+    GOARCH=$(shell go env GOARCH)
+    ifeq ($(ARCH),)
+        ARCH = $(GOARCH)
+    endif
+else
+    ARCH = $(shell uname -m)
+    ifeq ($(ARCH),x86_64)
+        ARCH = amd64
+    endif
 endif
 
 ARCH_DIR = arch
