@@ -64,6 +64,7 @@ docker-stability:
 	systemctl is-active --quiet docker || sudo systemctl start docker
 	cd integration/stability && \
 	export ITERATIONS=2 && export MAX_CONTAINERS=20 && ./soak_parallel_rm.sh
+	cd integration/stability && ./bind_mount_linux.sh
 
 kubernetes:
 	bash -f .ci/install_bats.sh
