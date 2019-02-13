@@ -762,15 +762,11 @@ func TestContainerStateSetFstype(t *testing.T) {
 
 	hConfig := newHypervisorConfig(nil, nil)
 	sandbox, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, containers, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(t, err)
 	defer cleanUp()
 
 	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.Nil(t, err)
 	sandbox.store = vcStore
 
 	c := sandbox.GetContainer("100")
@@ -825,6 +821,11 @@ func TestContainerStateSetFstype(t *testing.T) {
 	fileData, err := ioutil.ReadFile(stateFilePath)
 	if err != nil {
 		t.Fatal()
+	}
+
+	// experimental features doesn't write state.json
+	if sandbox.supportNewStore() {
+		return
 	}
 
 	var res types.ContainerState
