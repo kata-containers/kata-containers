@@ -97,7 +97,6 @@ func TestSandboxRestore(t *testing.T) {
 	assert.Equal(t, sandbox.state.State, types.StateString(""))
 	assert.Equal(t, sandbox.state.GuestMemoryBlockSizeMB, uint32(0))
 	assert.Equal(t, sandbox.state.BlockIndex, 0)
-	assert.Equal(t, sandbox.state.Pid, 0)
 
 	// register callback function
 	sandbox.stateSaveCallback()
@@ -105,20 +104,18 @@ func TestSandboxRestore(t *testing.T) {
 	sandbox.state.State = types.StateString("running")
 	sandbox.state.GuestMemoryBlockSizeMB = uint32(1024)
 	sandbox.state.BlockIndex = 2
-	sandbox.state.Pid = 10000
 	// flush data to disk
 	err = sandbox.newStore.ToDisk()
 	assert.Nil(t, err)
 
 	// empty the sandbox
-	sandbox.state = types.State{}
+	sandbox.state = types.SandboxState{}
 
 	// restore data from disk
 	err = sandbox.Restore()
 	assert.Nil(t, err)
 	assert.Equal(t, sandbox.state.State, types.StateString("running"))
 	assert.Equal(t, sandbox.state.GuestMemoryBlockSizeMB, uint32(1024))
-	assert.Equal(t, sandbox.state.Pid, 10000)
 	// require hvStateSaveCallback to make it savable
 	assert.Equal(t, sandbox.state.BlockIndex, 0)
 
@@ -131,7 +128,6 @@ func TestSandboxRestore(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, sandbox.state.State, types.StateString("running"))
 	assert.Equal(t, sandbox.state.GuestMemoryBlockSizeMB, uint32(1024))
-	assert.Equal(t, sandbox.state.Pid, 10000)
 	assert.Equal(t, sandbox.state.BlockIndex, 2)
 
 }

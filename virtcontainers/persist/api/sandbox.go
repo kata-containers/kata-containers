@@ -57,6 +57,7 @@ type ProxyState struct {
 }
 
 // SandboxState contains state information of sandbox
+// nolint: maligned
 type SandboxState struct {
 	// PersistVersion of persist data format, can be used for keeping compatibility later
 	PersistVersion uint
@@ -64,19 +65,19 @@ type SandboxState struct {
 	// State is sandbox running status
 	State string
 
-	// SandboxContainer specifies which container is used to start the sandbox/vm
-	SandboxContainer string
+	// GuestMemoryBlockSizeMB is the size of memory block of guestos
+	GuestMemoryBlockSizeMB uint32
 
 	// GuestMemoryHotplugProbe determines whether guest kernel supports memory hotplug probe interface
 	GuestMemoryHotplugProbe bool
+
+	// SandboxContainer specifies which container is used to start the sandbox/vm
+	SandboxContainer string
 
 	// CgroupPath is the cgroup hierarchy where sandbox's processes
 	// including the hypervisor are placed.
 	// FIXME: sandbox can reuse "SandboxContainer"'s CgroupPath so we can remove this field.
 	CgroupPath string
-
-	// GuestMemoryBlockSizeMB is the size of memory block of guestos
-	GuestMemoryBlockSizeMB uint32
 
 	// Devices plugged to sandbox(hypervisor)
 	Devices []DeviceState
