@@ -107,7 +107,7 @@ assets:
         version: "latest"
       x86_64:
         name: &default-image-name "clearlinux"
-        version: "20640"
+        version: "latest"
     meta:
       image-type: *default-image-name
 
