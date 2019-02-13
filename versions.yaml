@@ -79,7 +79,7 @@ assets:
       description: "lightweight VMM that uses KVM"
       url: "https://github.com/kata-containers/qemu"
       branch: "qemu-lite-2.11.0"
-      commit: "f88622805677163b04498dcba35ceca0183b1318"
+      commit: "87517afd726526e6e32a3e0be07eca34b8cc6962"
 
     qemu:
       description: "VMM that uses KVM"
