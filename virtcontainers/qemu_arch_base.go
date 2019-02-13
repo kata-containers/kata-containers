@@ -116,12 +116,13 @@ type qemuArchBase struct {
 }
 
 const (
-	defaultCores     uint32 = 1
-	defaultThreads   uint32 = 1
-	defaultCPUModel         = "host"
-	defaultBridgeBus        = "pcie.0"
-	maxDevIDSize            = 31
-	defaultMsize9p          = 8192
+	defaultCores       uint32 = 1
+	defaultThreads     uint32 = 1
+	defaultCPUModel           = "host"
+	defaultBridgeBus          = "pcie.0"
+	defaultPCBridgeBus        = "pci.0"
+	maxDevIDSize              = 31
+	defaultMsize9p            = 8192
 )
 
 // This is the PCI start address assigned to the first bridge that

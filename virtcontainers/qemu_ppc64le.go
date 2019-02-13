@@ -27,8 +27,6 @@ const defaultQemuMachineType = QemuPseries
 
 const defaultQemuMachineOptions = "accel=kvm,usb=off"
 
-const defaultPCBridgeBus = "pci.0"
-
 const defaultMemMaxPPC64le = 32256 // Restrict MemMax to 32Gb on PPC64le
 
 var qemuPaths = map[string]string{

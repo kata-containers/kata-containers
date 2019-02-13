@@ -98,3 +98,30 @@ func TestMaxQemuVCPUs(t *testing.T) {
 		assert.Equal(d.expectedResult, vCPUs)
 	}
 }
+
+func TestQemuArm64AppendBridges(t *testing.T) {
+	var devices []govmmQemu.Device
+	assert := assert.New(t)
+
+	arm64 := newTestQemu(QemuVirt)
+
+	bridges := arm64.bridges(1)
+	assert.Len(bridges, 1)
+
+	devices = []govmmQemu.Device{}
+	devices = arm64.appendBridges(devices, bridges)
+	assert.Len(devices, 1)
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.BridgeDevice{
+			Type:    govmmQemu.PCIEBridge,
+			Bus:     defaultBridgeBus,
+			ID:      bridges[0].ID,
+			Chassis: 1,
+			SHPC:    true,
+			Addr:    "2",
+		},
+	}
+
+	assert.Equal(expectedOut, devices)
+}
