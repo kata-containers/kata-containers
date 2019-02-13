@@ -50,6 +50,7 @@ kubeadm_config_template="${SCRIPT_PATH}/kubeadm/config.yaml"
 kubeadm_config_file="$(mktemp --tmpdir kubeadm_config.XXXXXX.yaml)"
 
 sed -e "s|CRI_RUNTIME_SOCKET|${cri_runtime_socket}|" "${kubeadm_config_template}" > "${kubeadm_config_file}"
+sed -i "s|KUBERNETES_VERSION|v${kubernetes_version/-*}|" "${kubeadm_config_file}"
 
 if [ "${use_runtime_class}"  == true ]; then
 	echo "Add RuntimeClass feature for apiserver in kubeadm config file"
