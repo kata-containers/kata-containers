@@ -244,6 +244,7 @@ func getExpectedAgentDetails(config oci.RuntimeConfig) (AgentInfo, error) {
 	}, nil
 }
 
+// nolint: unused
 func genericGetExpectedHostDetails(tmpdir string, expectedVendor string, expectedModel string) (HostInfo, error) {
 	type filesToCreate struct {
 		file     string
