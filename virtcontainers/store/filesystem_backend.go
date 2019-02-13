@@ -152,11 +152,13 @@ func (f *filesystem) initialize() error {
 	// The root directory, a lock file and a raw files directory.
 
 	// Root directory
+	f.logger().WithField("path", f.path).Debugf("Creating root directory")
 	if err := os.MkdirAll(f.path, DirMode); err != nil {
 		return err
 	}
 
 	// Raw directory
+	f.logger().WithField("path", f.rawPath).Debugf("Creating raw directory")
 	if err := os.MkdirAll(f.rawPath, DirMode); err != nil {
 		return err
 	}
@@ -186,6 +188,7 @@ func (f *filesystem) new(ctx context.Context, path string, host string) error {
 }
 
 func (f *filesystem) delete() error {
+	f.logger().WithField("path", f.path).Debugf("Deleting files")
 	return os.RemoveAll(f.path)
 }
 
