@@ -23,8 +23,6 @@ const defaultQemuMachineType = QemuCCWVirtio
 
 const defaultQemuMachineOptions = "accel=kvm"
 
-const defaultPCBridgeBus = "pci.0"
-
 const VirtioSerialCCW = "virtio-serial-ccw"
 
 var qemuPaths = map[string]string{
