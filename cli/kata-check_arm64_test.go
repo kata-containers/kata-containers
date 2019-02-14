@@ -129,19 +129,17 @@ func TestKvmIsUsable(t *testing.T) {
 func TestGetCPUDetails(t *testing.T) {
 	type testData struct {
 		contents                string
-		expectedVendor          string
-		expectedModel           string
 		expectedNormalizeVendor string
 		expectedNormalizeModel  string
 		expectError             bool
 	}
 
-	const validVendorName = "0x41"
-	const validNormalizeVendorName = "ARM Limited"
+	validVendorName := "0x41"
+	validNormalizeVendorName := "ARM Limited"
 	validVendor := fmt.Sprintf(`%s  : %s`, archCPUVendorField, validVendorName)
 
-	const validModelName = "8"
-	const validNormalizeModelName = "v8"
+	validModelName := "8"
+	validNormalizeModelName := "v8"
 	validModel := fmt.Sprintf(`%s   : %s`, archCPUModelField, validModelName)
 
 	validContents := fmt.Sprintf(`
@@ -152,12 +150,12 @@ foo     : bar
 `, validVendor, validModel)
 
 	data := []testData{
-		{"", "", "", "", "", true},
-		{"invalid", "", "", "", "", true},
-		{archCPUVendorField, "", "", "", "", true},
-		{validVendor, "", "", "", "", true},
-		{validModel, "", "", "", "", true},
-		{validContents, validVendorName, validModelName, validNormalizeVendorName, validNormalizeModelName, false},
+		{"", "", "", true},
+		{"invalid", "", "", true},
+		{archCPUVendorField, "", "", true},
+		{validVendor, "", "", true},
+		{validModel, "", "", true},
+		{validContents, validNormalizeVendorName, validNormalizeModelName, false},
 	}
 
 	tmpdir, err := ioutil.TempDir("", "")
