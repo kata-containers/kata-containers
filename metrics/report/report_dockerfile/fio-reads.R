@@ -177,7 +177,7 @@ read_clat_box_plot <- ggplot() +
 	geom_boxplot( data=all_ldata, aes(blocksize, percentile, color=runtime)) +
 	stat_summary( data=all_ldata, aes(blocksize, percentile, group=runtime, color=runtime), fun.y=mean, geom="line") +
 	ylim(0, NA) +
-	ggtitle("Random Read completion latency", subtitle="95&98 percentiles, boxplot over jobs") +
+	ggtitle("Random Read completion latency", subtitle="95&99 percentiles, boxplot over jobs") +
 	xlab("Blocksize") +
 	ylab("Latency (ms)") +
 	theme(axis.text.x=element_text(angle=90)) +
