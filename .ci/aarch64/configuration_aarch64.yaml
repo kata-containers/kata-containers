@@ -25,5 +25,4 @@ docker:
     - Hotplug memory when create containers
     - run container and update its memory constraints
   Context:
-    - remove bind-mount source before container exits
   It:
