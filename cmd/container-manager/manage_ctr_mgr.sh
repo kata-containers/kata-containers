@@ -127,7 +127,10 @@ install_docker(){
 			sudo -E apt-get update
 			docker_version_full=$(apt-cache madison $pkg_name | grep "$docker_version" | awk '{print $3}' | head -1)
 			sudo -E apt-get -y install "${pkg_name}=${docker_version_full}"
-
+		elif [[ "$ID" =~ ^opensuse.*$ ]]; then
+			sudo zypper removelock docker
+			sudo zypper -n  install 'docker<18.09'
+			sudo zypper addlock docker
 		fi
 	elif [ "$tag" == "swarm" ]; then
 		# If tag is swarm, install docker 1.12.1
@@ -194,6 +197,8 @@ remove_docker(){
 			sudo dnf -y remove ${pkg_name}
 		elif [ "$ID" == "centos" ]; then
 			sudo yum -y remove ${pkg_name}
+		elif [[ "$ID" =~ ^opensuse.*$ ]]; then
+			sudo zypper -n remove ${pkg_name}
 		else
 			die "This script doesn't support your Linux distribution"
 		fi
@@ -211,7 +216,7 @@ get_docker_version(){
 get_docker_package_name(){
 	if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
 		dpkg --get-selections | awk '/docker/ {print $1}'
-	elif [ "$ID" == "fedora" ] || [ "$ID" == "centos" ]; then
+	elif [ "$ID" == "fedora" ] || [ "$ID" == "centos" ] || [[ "$ID" =~ ^opensuse.*$ ]]; then
 		rpm -qa | grep docker | grep -v selinux
 	else
 		die "This script doesn't support your Linux distribution"

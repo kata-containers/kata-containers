@@ -65,6 +65,8 @@ install_packaged_image() {
 		chronic sudo -E dnf install -y "$PACKAGED_IMAGE" || rc=1
 	elif [ "$ID"  == "centos" ]; then
 		chronic sudo -E yum install -y "$PACKAGED_IMAGE" || rc=1
+	elif [[ "$ID" =~ ^opensuse.*$ ]]; then
+		chronic sudo -E zypper -n install "$PACKAGED_IMAGE" || rc=1
 	else
 		die "Linux distribution not supported"
 	fi
