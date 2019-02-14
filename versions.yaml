@@ -24,6 +24,8 @@ format: |
      issue: "<bug-url>"
      commit: "<commit>"
      version: "<version>"
+     uscan-opts: "<optional uscan options>"
+     uscan-url: "<url regex for uscan to list versions>"
      release: "<version>"
      branch: "<git-branch>"
      meta:
@@ -54,6 +56,14 @@ format: |
     version containing a period being treated as a floating point
     number (and truncated!)
 
+  - NOTE: For the uscan related entries, refer to the following uscan pages:
+    https://manpages.debian.org/stretch/devscripts/uscan.1.en.html
+    https://wiki.debian.org/debian/watch
+    Particularly note the 'Common mistakes' section.
+    Also note, if you place the uscan strings on single lines in this file then
+    '\'s need to be '\'d, so are replaced with '\\', but this does not apply
+    for '>-' multi line entries, which can then use the normal uscan syntax.
+
 assets:
   description: "Additional required system elements"
 
@@ -63,16 +73,25 @@ assets:
     firecracker:
       description: "Firecracker micro-Hypervisor"
       url: "https://github.com/firecracker-microvm/firecracker"
+      uscan-url: >-
+        https://github.com/firecracker-microvm/firecracker/tags
+        .*/v?(\d\S+)\.tar\.gz
       version: "v0.12.0"
 
     nemu:
       description: "Modern Hypervisor for the Cloud"
       url: "https://github.com/intel/nemu"
+      uscan-url: >-
+        https://github.com/intel/nemu/tags
+        .*/release-?(\d\S+)\.tar\.gz
       version: "release-2018-11-29"
 
     nemu-ovmf:
       description: "OVMF firmware used by nemu hypervisor"
       url: "https://github.com/intel/ovmf-virt"
+      uscan-url: >-
+        https://github.com/intel/ovmf-virt/tags
+        .*/?(\d\S+)\.tar\.gz
       version: "0.6"
 
     qemu-lite:
@@ -85,6 +104,14 @@ assets:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
       version: "stable-2.11"
+      # Do not include any non-full release versions
+      # Break the line *without CR or space being appended*, to appease
+      # yamllint, and note the deliberate ' ' at the end of the expression.
+      uscan-opts: "opts=uversionmangle=s/(\\d)[_\\.\\-\\+]?\
+        ((RC|rc|pre|dev|beta|alpha)\\d*)$/$1~$2/ "
+      uscan-url: >-
+        https://github.com/qemu/qemu/tags
+        .*/v?(\d\S+)\.tar\.gz
       architecture:
         aarch64:
           branch: "master"
@@ -133,6 +160,8 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v4.x/"
+    uscan-url: >-
+      https://mirrors.edge.kernel.org/pub/linux/kernel/v4.x/linux-(4\.19\..+)\.tar\.gz
     version: "v4.19.24"
 
 components:
@@ -183,11 +212,19 @@ externals:
   gometalinter:
     description: "utility to run various golang linters"
     url: "https://github.com/alecthomas/gometalinter"
+    uscan-url: >-
+      https://github.com/alecthomas/gometalinter/tags
+      .*/v?([\d\.]+)\.tar\.gz
     version: "v2.0.5"
 
   kubernetes:
     description: "Kubernetes project container manager"
     url: "https://github.com/kubernetes/kubernetes"
+    # regexp formed to match 'd.tar.gz', deliberately to not match any alpha or
+    # beta type releases
+    uscan-url: >-
+      https://github.com/kubernetes/kubernetes/tags
+      .*/v?([\d\.]+)\.tar\.gz
     version: "1.13.3-00"
 
   openshift:
@@ -195,12 +232,20 @@ externals:
       Distribution of Kubernetes optimized for continuous application
       development and multi-tenant deployment.
     url: "https://github.com/openshift/origin"
+    uscan-url: >-
+      https://github.com/openshift/origin/tags
+      .*/v?([\d\.]+)\.tar\.gz
     version: "v3.10.0"
     commit: "dd10d17"
 
   runc:
     description: "OCI CLI reference runtime implementation"
     url: "https://github.com/opencontainers/runc"
+    # Oddly, here we do want rc versions, as there appears to be little else
+    # really for runc.
+    uscan-url: >-
+      https://github.com/opencontainers/runc/tags
+      .*/v?(\d\S+)\.tar\.gz
     version: "v1.0.0-rc5"
 
 languages:
@@ -212,6 +257,8 @@ languages:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
     issue: "https://github.com/golang/go/issues/20676"
+    uscan-url: >-
+      https://github.com/golang/go/tags .*/go?([\d\.]+)\.tar\.gz
     version: "1.10.4"
     meta:
       description: |
@@ -225,4 +272,7 @@ specs:
   oci:
     description: "Open Containers Initiative runtime specification"
     url: "https://github.com/opencontainers/runtime-spec/releases"
+    uscan-url: >-
+      https://github.com/opencontainers/runtime-spec/tags
+      .*/v?(\d\S+)\.tar\.gz
     version: "v1.0.0-rc5"
