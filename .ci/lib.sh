@@ -224,7 +224,7 @@ delete_stale_docker_resource()
 		local mount_point_union=$(mount | grep "${stale_docker_mount_point}" | awk '{print $3}')
 		if [ -n "${mount_point_union}" ]; then
 			while IFS='$\n' read mount_point; do
-				sudo umount "${mount_point}"
+				[ -n "$(grep "${mount_point}" "/proc/mounts")" ] && sudo umount -R "${mount_point}"
 			done <<< "${mount_point_union}"
 		fi
 	done
