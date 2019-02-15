@@ -52,9 +52,9 @@ const (
 	kernelPropertyCorrect = "Kernel property value correct"
 
 	// these refer to fields in the procCPUINFO file
-	genericCPUFlagsTag    = "flags"
-	genericCPUVendorField = "vendor_id"
-	genericCPUModelField  = "model name"
+	genericCPUFlagsTag    = "flags"      // nolint: varcheck, unused
+	genericCPUVendorField = "vendor_id"  // nolint: varcheck, unused
+	genericCPUModelField  = "model name" // nolint: varcheck, unused
 )
 
 // variables rather than consts to allow tests to modify them

@@ -437,84 +437,40 @@ func TestGetHostMemorySizeKb(t *testing.T) {
 	}
 }
 
-var dataFlagsFieldWithoutHypervisor = []byte(`
-fpu_exception   : yes
-cpuid level     : 20
-wp              : yes
-flags           : fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology eagerfpu pni pclmulqdq vmx ssse3 fma cx16 sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch tpr_shadow vnmi ept vpid fsgsbase bmi1 hle avx2 smep bmi2 erms rtm rdseed adx smap xsaveopt
-bugs            :
-bogomips        : 4589.35
-`)
-
-var dataFlagsFieldWithHypervisor = []byte(`
-fpu_exception   : yes
-cpuid level     : 20
-wp              : yes
-flags           : fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology eagerfpu pni pclmulqdq vmx ssse3 fma cx16 sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch tpr_shadow vnmi ept vpid fsgsbase bmi1 hle avx2 smep bmi2 erms rtm rdseed adx smap xsaveopt
-bugs            :
-bogomips        : 4589.35
-`)
-
-var dataWithoutFlagsField = []byte(`
-fpu_exception   : yes
-cpuid level     : 20
-wp              : yes
-bugs            :
-bogomips        : 4589.35
-`)
-
-func testRunningOnVMMSuccessful(t *testing.T, cpuInfoContent []byte, expectedErr bool, expected bool) {
-	f, err := ioutil.TempFile("", "cpuinfo")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(f.Name())
-	defer f.Close()
-
-	n, err := f.Write(cpuInfoContent)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != len(cpuInfoContent) {
-		t.Fatalf("Only %d bytes written out of %d expected", n, len(cpuInfoContent))
-	}
-
-	running, err := RunningOnVMM(f.Name())
-	if !expectedErr && err != nil {
-		t.Fatalf("This test should succeed: %v", err)
-	} else if expectedErr && err == nil {
-		t.Fatalf("This test should fail")
-	}
-
-	if running != expected {
-		t.Fatalf("Expecting running on VMM = %t, Got %t", expected, running)
-	}
+// nolint: unused
+type testNestedVMMData struct {
+	content     []byte
+	expectedErr bool
+	expected    bool
 }
 
-func TestRunningOnVMMFalseSuccessful(t *testing.T) {
-	testRunningOnVMMSuccessful(t, dataFlagsFieldWithoutHypervisor, false, false)
-}
+// nolint: unused
+func genericTestRunningOnVMM(t *testing.T, data []testNestedVMMData) {
+	for _, d := range data {
+		f, err := ioutil.TempFile("", "cpuinfo")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(f.Name())
+		defer f.Close()
 
-func TestRunningOnVMMTrueSuccessful(t *testing.T) {
-	testRunningOnVMMSuccessful(t, dataFlagsFieldWithHypervisor, false, true)
-}
+		n, err := f.Write(d.content)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != len(d.content) {
+			t.Fatalf("Only %d bytes written out of %d expected", n, len(d.content))
+		}
 
-func TestRunningOnVMMNoFlagsFieldFailure(t *testing.T) {
-	testRunningOnVMMSuccessful(t, dataWithoutFlagsField, true, false)
-}
+		running, err := RunningOnVMM(f.Name())
+		if !d.expectedErr && err != nil {
+			t.Fatalf("This test should succeed: %v", err)
+		} else if d.expectedErr && err == nil {
+			t.Fatalf("This test should fail")
+		}
 
-func TestRunningOnVMMNotExistingCPUInfoPathFailure(t *testing.T) {
-	f, err := ioutil.TempFile("", "cpuinfo")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	filePath := f.Name()
-
-	f.Close()
-	os.Remove(filePath)
-
-	if _, err := RunningOnVMM(filePath); err == nil {
-		t.Fatalf("Should fail because %q file path does not exist", filePath)
+		if running != d.expected {
+			t.Fatalf("Expecting running on VMM = %t, Got %t", d.expected, running)
+		}
 	}
 }

@@ -27,10 +27,19 @@ type testModuleData struct {
 	contents string
 }
 
+// nolint: structcheck, unused
 type testCPUData struct {
 	vendorID    string
 	flags       string
 	expectError bool
+}
+
+// nolint: structcheck, unused
+type testCPUDetail struct {
+	contents       string
+	expectedVendor string
+	expectedModel  string
+	expectError    bool
 }
 
 func createFile(file, contents string) error {
@@ -138,7 +147,8 @@ func makeCPUInfoFile(path, vendorID, flags string) error {
 	return ioutil.WriteFile(path, contents.Bytes(), testFileMode)
 }
 
-func genericTestGetCPUDetails(t *testing.T, validVendor string, validModel string, validContents string, data []TestDataa) {
+// nolint: unused
+func genericTestGetCPUDetails(t *testing.T, validVendor string, validModel string, validContents string, data []testCPUDetail) {
 	tmpdir, err := ioutil.TempDir("", "")
 	if err != nil {
 		panic(err)
