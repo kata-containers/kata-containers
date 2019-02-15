@@ -99,7 +99,7 @@
   revision = "0650fd9eeb50bab4fc99dceb9f2e14cf58f36e7f"
 
 [[projects]]
-  digest = "1:8787d42e39854db19dd09d79e39df2a9975c00d3560fa3fdfa180a89e36552a2"
+  digest = "1:b1ddab63ebf3a38cdc2a80fa1f00c45e8dc98e27387968ccc0e5275a43f6cb5e"
   name = "github.com/containerd/containerd"
   packages = [
     "api/events",
@@ -111,6 +111,7 @@
     "mount",
     "namespaces",
     "runtime",
+    "runtime/linux/runctypes",
     "runtime/v2/shim",
     "runtime/v2/task",
     "sys",
@@ -119,11 +120,14 @@
   revision = "f05672357f56f26751a521175c5a96fc21fa8603"
 
 [[projects]]
-  digest = "1:3d1a50e9f27c661df8c5552e7f2f6b9d2a8b641c65aeac7373f8a5c60d9f6856"
+  digest = "1:e7c346f795db5a431ca8bd284faed7aa5b4d544ba6538b20a39b968473f47774"
   name = "github.com/containerd/cri-containerd"
-  packages = ["pkg/annotations"]
+  packages = [
+    "pkg/annotations",
+    "pkg/api/runtimeoptions/v1",
+  ]
   pruneopts = "NUT"
-  revision = "3d382e2f5dabe3bae62ceb9ded56bdee847008ee"
+  revision = "4dd6735020f5596dd41738f8c4f5cb07fa804c5e"
 
 [[projects]]
   branch = "master"
@@ -690,10 +694,10 @@
     "github.com/containerd/containerd/mount",
     "github.com/containerd/containerd/namespaces",
     "github.com/containerd/containerd/runtime",
+    "github.com/containerd/containerd/runtime/linux/runctypes",
     "github.com/containerd/containerd/runtime/v2/shim",
     "github.com/containerd/containerd/runtime/v2/task",
     "github.com/containerd/cri-containerd/pkg/annotations",
-    "github.com/containerd/containerd/runtime/linux/runctypes"
     "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1",
     "github.com/containerd/fifo",
     "github.com/containerd/typeurl",
