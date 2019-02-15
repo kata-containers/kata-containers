@@ -26,32 +26,27 @@ func newTestQemu(machineType string) qemuArch {
 
 func TestQemuArm64CPUModel(t *testing.T) {
 	assert := assert.New(t)
-	arm64 := newTestQemu(virt)
+	arm64 := newTestQemu(QemuVirt)
 
 	expectedOut := defaultCPUModel
 	model := arm64.cpuModel()
-	assert.Equal(expectedOut, model)
-
-	arm64.enableNestingChecks()
-	expectedOut = defaultCPUModel + ",pmu=off"
-	model = arm64.cpuModel()
 	assert.Equal(expectedOut, model)
 }
 
 func TestQemuArm64MemoryTopology(t *testing.T) {
 	assert := assert.New(t)
-	arm64 := newTestQemu(virt)
-	memoryOffset := 1024
+	arm64 := newTestQemu(QemuVirt)
 
-	hostMem := uint64(1024)
-	mem := uint64(120)
+	hostMem := uint64(4096)
+	mem := uint64(1024)
+	slots := uint8(3)
 	expectedMemory := govmmQemu.Memory{
 		Size:   fmt.Sprintf("%dM", mem),
-		Slots:  defaultMemSlots,
-		MaxMem: fmt.Sprintf("%dM", hostMem+uint64(memoryOffset)),
+		Slots:  slots,
+		MaxMem: fmt.Sprintf("%dM", hostMem),
 	}
 
-	m := arm64.memoryTopology(mem, hostMem)
+	m := arm64.memoryTopology(mem, hostMem, slots)
 	assert.Equal(expectedMemory, m)
 }
 
@@ -102,4 +97,31 @@ func TestMaxQemuVCPUs(t *testing.T) {
 
 		assert.Equal(d.expectedResult, vCPUs)
 	}
+}
+
+func TestQemuArm64AppendBridges(t *testing.T) {
+	var devices []govmmQemu.Device
+	assert := assert.New(t)
+
+	arm64 := newTestQemu(QemuVirt)
+
+	bridges := arm64.bridges(1)
+	assert.Len(bridges, 1)
+
+	devices = []govmmQemu.Device{}
+	devices = arm64.appendBridges(devices, bridges)
+	assert.Len(devices, 1)
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.BridgeDevice{
+			Type:    govmmQemu.PCIEBridge,
+			Bus:     defaultBridgeBus,
+			ID:      bridges[0].ID,
+			Chassis: 1,
+			SHPC:    true,
+			Addr:    "2",
+		},
+	}
+
+	assert.Equal(expectedOut, devices)
 }

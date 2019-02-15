@@ -121,12 +121,12 @@ func normalizeArmModel(model string) string {
 	return model
 }
 
-func getCPUDetails() (vendor, model string, err error) {
-	if vendor, model, err := genericGetCPUDetails(); err == nil {
+func getCPUDetails() (string, string, error) {
+	vendor, model, err := genericGetCPUDetails()
+	if err == nil {
 		vendor = normalizeArmVendor(vendor)
 		model = normalizeArmModel(model)
-		return vendor, model, err
-	} else {
-		return vendor, model, err
 	}
+
+	return vendor, model, err
 }

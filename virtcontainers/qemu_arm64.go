@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	govmmQemu "github.com/intel/govmm/qemu"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/sirupsen/logrus"
 )
 
@@ -24,9 +25,6 @@ const defaultQemuPath = "/usr/bin/qemu-system-aarch64"
 const defaultQemuMachineType = QemuVirt
 
 var defaultQemuMachineOptions = "usb=off,accel=kvm,gic-version=" + getGuestGICVersion()
-
-// Not used
-const defaultPCBridgeBus = ""
 
 var qemuPaths = map[string]string{
 	QemuVirt: defaultQemuPath,
@@ -152,4 +150,13 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 	}
 
 	return q
+}
+
+func (q *qemuArm64) bridges(number uint32) []types.PCIBridge {
+	return genericBridges(number, q.machineType)
+}
+
+// appendBridges appends to devices the given bridges
+func (q *qemuArm64) appendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge) []govmmQemu.Device {
+	return genericAppendBridges(devices, bridges, q.machineType)
 }

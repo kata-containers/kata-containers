@@ -24,8 +24,6 @@ const defaultQemuMachineType = QemuPC
 
 const defaultQemuMachineOptions = "accel=kvm,kernel_irqchip,nvdimm"
 
-const defaultPCBridgeBus = "pci.0"
-
 var qemuPaths = map[string]string{
 	QemuPCLite: "/usr/bin/qemu-lite-system-x86_64",
 	QemuPC:     defaultQemuPath,
