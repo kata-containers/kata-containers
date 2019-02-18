@@ -928,6 +928,13 @@ func (c *Container) stop() error {
 	// get failed if the process hasn't exited.
 	c.sandbox.agent.waitProcess(c, c.id)
 
+	// container was killed by force, container MUST change its state
+	// as soon as possible just in case one of below operations fail leaving
+	// the containers in a bad state.
+	if err := c.setContainerState(types.StateStopped); err != nil {
+		return err
+	}
+
 	if err := c.sandbox.agent.stopContainer(c.sandbox, *c); err != nil {
 		return err
 	}
@@ -940,7 +947,7 @@ func (c *Container) stop() error {
 		return err
 	}
 
-	return c.setContainerState(types.StateStopped)
+	return nil
 }
 
 func (c *Container) enter(cmd types.Cmd) (*Process, error) {
