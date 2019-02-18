@@ -6,6 +6,7 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
+load "${BATS_TEST_DIRNAME}/../../lib/common.bash"
 
 setup() {
 	versions_file="${BATS_TEST_DIRNAME}/../../versions.yaml"
@@ -18,11 +19,7 @@ setup() {
 	sudo -E crictl pull "$busybox_image"
 	sudo -E crictl pull "$nginx_image"
 
-	if kubectl get runtimeclass | grep kata; then
-		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
-	else
-		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
-	fi
+	get_pod_config_dir
 }
 
 @test "Verify nginx connectivity between pods" {

@@ -6,6 +6,7 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
+load "${BATS_TEST_DIRNAME}/../../lib/common.bash"
 
 setup() {
 	busybox_image="busybox"
@@ -15,11 +16,7 @@ setup() {
 	# Pull the images before launching workload.
 	sudo -E crictl pull "$busybox_image"
 
-	if kubectl get runtimeclass | grep kata; then
-		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
-	else
-		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
-	fi
+	get_pod_config_dir
 
 	uts_cmd="ls -la /proc/self/ns/uts"
 	ipc_cmd="ls -la /proc/self/ns/ipc"

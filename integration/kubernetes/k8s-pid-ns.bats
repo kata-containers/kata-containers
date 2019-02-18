@@ -6,6 +6,7 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
+load "${BATS_TEST_DIRNAME}/../../lib/common.bash"
 
 setup() {
 	skip "This is not working (https://github.com/kata-containers/agent/issues/261)"
@@ -14,11 +15,7 @@ setup() {
 	first_container_name="first-test-container"
 	second_container_name="second-test-container"
 
-	if kubectl get runtimeclass | grep kata; then
-		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
-	else
-		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
-	fi
+	get_pod_config_dir
 }
 
 @test "Check PID namespaces" {
