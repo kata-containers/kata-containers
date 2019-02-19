@@ -6,6 +6,7 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
+load "${BATS_TEST_DIRNAME}/../../lib/common.bash"
 
 setup() {
 	export KUBECONFIG="$HOME/.kube/config"
@@ -18,11 +19,7 @@ setup() {
 	total_requests=512
 	total_cpu_container=1
 
-	if kubectl get runtimeclass | grep kata; then
-		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
-	else
-		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
-	fi
+	get_pod_config_dir
 }
 
 @test "Check CPU constraints" {

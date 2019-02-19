@@ -134,3 +134,13 @@ clean_env()
 		sudo timeout ${KATA_DOCKER_TIMEOUT} docker rm -f $(docker ps -qa)
 	fi
 }
+
+get_pod_config_dir() {
+	if kubectl get runtimeclass 2> /dev/null | grep -q "kata"; then
+		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
+		info "k8s configured to use runtimeclass"
+	else
+		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
+		info "k8s configured to use trusted and untrusted annotations"
+	fi
+}

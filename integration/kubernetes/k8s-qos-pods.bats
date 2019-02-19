@@ -6,18 +6,14 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
+load "${BATS_TEST_DIRNAME}/../../lib/common.bash"
 TEST_INITRD="${TEST_INITRD:-no}"
 issue="https://github.com/kata-containers/runtime/issues/1127"
 
 setup() {
 	[ "${TEST_INITRD}" == "yes" ] && skip "test not working see: ${issue}"
 	export KUBECONFIG="$HOME/.kube/config"
-
-	if kubectl get runtimeclass | grep kata; then
-		pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
-	else
-		pod_config_dir="${BATS_TEST_DIRNAME}/untrusted_workloads"
-	fi
+	get_pod_config_dir
 }
 
 @test "Guaranteed QoS" {
