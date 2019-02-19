@@ -162,7 +162,10 @@ init () {
 	echo "Executing test: ${TEST_NAME} ${TEST_ARGS}"
 	check_cmds "${REQUIRED_CMDS[@]}"
 
-	if [ "$RUNTIME" == "cor" ] || [ "$RUNTIME" == "cc-runtime" ] || [ "$RUNTIME" == "kata-runtime" ] ; then
+	# Only try to grab a dmesg boot time if we are pretty sure we are running a
+	# Kata runtime
+	local iskata=$(is_a_kata_runtime "$RUNTIME")
+	if [ "$iskata" == "1" ]; then
 		CALCULATE_KERNEL=1
 		DMESGCMD="; dmesg"
 	else

@@ -214,14 +214,19 @@ show_system_state() {
 }
 
 common_init(){
-	case "$RUNTIME" in
-		kata-runtime)
-			extract_kata_env
-			;;
-		*)
+
+	# If we are running a kata runtime, go extract its environment
+	# for later use.
+	local iskata=$(is_a_kata_runtime "$RUNTIME")
+
+	if [ "$iskata" == "1" ]; then
+		extract_kata_env
+	else
+		# We know we have nothing to do for runc
+		if [ "$RUNTIME" != "runc" ]; then
 			warning "Unrecognised runtime ${RUNTIME}"
-			;;
-	esac
+		fi
+	fi
 }
 
 
