@@ -8,7 +8,6 @@
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 
 setup() {
-	skip "This is not working (https://github.com/kata-containers/agent/issues/261)"
 	export KUBECONFIG="$HOME/.kube/config"
 	pod_name="busybox"
 	first_container_name="first-test-container"
@@ -22,16 +21,11 @@ setup() {
 }
 
 @test "Check PID namespaces" {
-	skip "This is not working (https://github.com/kata-containers/agent/issues/261)"
-	wait_time=60
-	sleep_time=5
-
 	# Create the pod
 	kubectl create -f "${pod_config_dir}/busybox-pod.yaml"
 
 	# Check pod creation
-	pod_status_cmd="kubectl get pods -a | grep $pod_name | grep Running"
-	waitForProcess "$wait_time" "$sleep_time" "$pod_status_cmd"
+	kubectl wait --for=condition=Ready pod "$pod_name"
 
 	# Check PID from first container
 	first_pid_container=$(kubectl exec $pod_name -c $first_container_name ps | grep "/pause")
@@ -43,10 +37,5 @@ setup() {
 }
 
 teardown() {
-	skip "This is not working (https://github.com/kata-containers/agent/issues/261)"
-	kubectl delete deployment "$pod_name"
-	# Wait for the pods to be deleted
-	cmd="kubectl get pods | grep found."
-	waitForProcess "$wait_time" "$sleep_time" "$cmd"
-	kubectl get pods
+	kubectl delete pod "$pod_name"
 }
