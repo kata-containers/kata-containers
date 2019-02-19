@@ -51,11 +51,19 @@ var _ = Describe("package manager update test", func() {
 		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
 	})
 
-	Context("check apt-get update", func() {
+	Context("check apt-get update and upgrade", func() {
 		It("should not fail", func() {
-			args = append(args, "--rm", "--name", id, DebianImage, "apt-get", "-y", "update")
+			args = append(args, "-td", "--name", id, DebianImage, "sh")
 			_, _, exitCode := dockerRun(args...)
 			Expect(exitCode).To(BeZero())
+
+			exitCode = tryPackageManagerCommand(id, []string{"apt-get", "-y", "update"}, 0)
+			Expect(exitCode).To(BeZero())
+
+			exitCode = tryPackageManagerCommand(id, []string{"apt-get", "-y", "upgrade"}, 0)
+			Expect(exitCode).To(BeZero())
+
+			Expect(RemoveDockerContainer(id)).To(BeTrue())
 		})
 	})
 
