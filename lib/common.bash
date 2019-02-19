@@ -19,7 +19,7 @@ die(){
 }
 
 info() {
-        echo -e "INFO: $*"
+	echo -e "INFO: $*"
 }
 
 # Check if the $1 argument is the name of a 'known'
