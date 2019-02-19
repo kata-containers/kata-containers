@@ -12,6 +12,23 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const (
+	packageManagerTimeout  = 900
+	packageManagerMaxTries = 5
+)
+
+func tryPackageManagerCommand(container string, command []string, expectedExitCode int) int {
+	cmd := []string{container}
+	exitCode := int(-1)
+	for i := 0; i < packageManagerMaxTries; i++ {
+		_, _, exitCode = runDockerCommandWithTimeout(packageManagerTimeout, "exec", append(cmd, command...)...)
+		if exitCode == expectedExitCode {
+			break
+		}
+	}
+	return exitCode
+}
+
 var _ = Describe("package manager update test", func() {
 	var (
 		id         string
