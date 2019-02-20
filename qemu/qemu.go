@@ -92,6 +92,9 @@ const (
 	//VhostUserBlk represents a block vhostuser device type.
 	VhostUserBlk DeviceDriver = "vhost-user-blk-pci"
 
+	//VhostUserFS represents a virtio-fs vhostuser device type
+	VhostUserFS DeviceDriver = "vhost-user-fs-pci"
+
 	// PCIBridgeDriver represents a PCI bridge device type.
 	PCIBridgeDriver DeviceDriver = "pci-bridge"
 
@@ -740,11 +743,14 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 // VhostUserDevice represents a qemu vhost-user device meant to be passed
 // in to the guest
 type VhostUserDevice struct {
-	SocketPath    string //path to vhostuser socket on host
-	CharDevID     string
-	TypeDevID     string //variable QEMU parameter based on value of VhostUserType
-	Address       string //used for MAC address in net case
-	VhostUserType DeviceDriver
+	SocketPath     string //path to vhostuser socket on host
+	CharDevID      string
+	TypeDevID      string //variable QEMU parameter based on value of VhostUserType
+	Address        string //used for MAC address in net case
+	Tag            string //virtio-fs volume id for mounting inside guest
+	CacheSize      uint32 //virtio-fs DAX cache size in GiB
+	SharedVersions bool   //enable virtio-fs shared version metadata
+	VhostUserType  DeviceDriver
 
 	// ROMFile specifies the ROM file being used for this device.
 	ROMFile string
@@ -767,6 +773,10 @@ func (vhostuserDev VhostUserDevice) Valid() bool {
 			return false
 		}
 	case VhostUserBlk:
+	case VhostUserFS:
+		if vhostuserDev.Tag == "" {
+			return false
+		}
 	default:
 		return false
 	}
@@ -809,6 +819,15 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 		devParams = append(devParams, "logical_block_size=4096")
 		devParams = append(devParams, "size=512M")
 		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
+	case VhostUserFS:
+		driver = VhostUserFS
+		devParams = append(devParams, string(driver))
+		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
+		devParams = append(devParams, fmt.Sprintf("tag=%s", vhostuserDev.Tag))
+		devParams = append(devParams, fmt.Sprintf("cache-size=%dG", vhostuserDev.CacheSize))
+		if vhostuserDev.SharedVersions {
+			devParams = append(devParams, "versiontable=/dev/shm/fuse_shared_versions")
+		}
 	default:
 		return nil
 	}
