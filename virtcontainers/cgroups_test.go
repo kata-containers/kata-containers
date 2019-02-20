@@ -6,206 +6,188 @@
 package virtcontainers
 
 import (
-	"bufio"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"reflect"
-	"strings"
 	"testing"
 
+	"github.com/containerd/cgroups"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 )
 
-func getCgroupDestination(subsystem string) (string, error) {
-	f, err := os.Open("/proc/self/mountinfo")
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	s := bufio.NewScanner(f)
-	for s.Scan() {
-		if err := s.Err(); err != nil {
-			return "", err
-		}
-		fields := strings.Fields(s.Text())
-		for _, opt := range strings.Split(fields[len(fields)-1], ",") {
-			if opt == subsystem {
-				return fields[4], nil
-			}
-		}
-	}
-	return "", fmt.Errorf("failed to find cgroup mountpoint for %q", subsystem)
+type mockCgroup struct {
 }
 
-func TestMergeSpecResource(t *testing.T) {
-	s := &Sandbox{
-		config: &SandboxConfig{
-			Containers: []ContainerConfig{
-				{
-					ID:          "containerA",
-					Annotations: make(map[string]string),
-				},
-				{
-					ID:          "containerA",
-					Annotations: make(map[string]string),
-				},
-			},
-		},
-	}
-
-	contA := s.config.Containers[0]
-	contB := s.config.Containers[1]
-
-	getIntP := func(x int64) *int64 { return &x }
-	getUintP := func(x uint64) *uint64 { return &x }
-
-	type testData struct {
-		first    *specs.LinuxResources
-		second   *specs.LinuxResources
-		expected *specs.LinuxResources
-	}
-
-	for _, testdata := range []testData{
-		{
-			nil,
-			nil,
-			&specs.LinuxResources{CPU: &specs.LinuxCPU{}},
-		},
-		{
-			nil,
-			&specs.LinuxResources{},
-			&specs.LinuxResources{CPU: &specs.LinuxCPU{}},
-		},
-		{
-			&specs.LinuxResources{CPU: &specs.LinuxCPU{Quota: getIntP(0), Period: getUintP(100000)}},
-			&specs.LinuxResources{CPU: &specs.LinuxCPU{Quota: getIntP(20000), Period: getUintP(100000)}},
-			&specs.LinuxResources{CPU: &specs.LinuxCPU{Quota: getIntP(20000), Period: getUintP(100000)}},
-		},
-		{
-			&specs.LinuxResources{CPU: &specs.LinuxCPU{Quota: getIntP(10000), Period: getUintP(0)}},
-			&specs.LinuxResources{CPU: &specs.LinuxCPU{Quota: getIntP(20000), Period: getUintP(100000)}},
-			&specs.LinuxResources{CPU: &specs.LinuxCPU{Quota: getIntP(20000), Period: getUintP(100000)}},
-		},
-		{
-			&specs.LinuxResources{CPU: &specs.LinuxCPU{Quota: getIntP(1000), Period: getUintP(2000)}},
-			&specs.LinuxResources{CPU: &specs.LinuxCPU{Quota: getIntP(20000), Period: getUintP(100000)}},
-			&specs.LinuxResources{CPU: &specs.LinuxCPU{Quota: getIntP(1400), Period: getUintP(2000)}},
-		},
-	} {
-		data, err := json.Marshal(&specs.Spec{
-			Linux: &specs.Linux{
-				Resources: testdata.first,
-			},
-		})
-		assert.Nil(t, err)
-		contA.Annotations[annotations.ConfigJSONKey] = string(data)
-
-		data, err = json.Marshal(&specs.Spec{
-			Linux: &specs.Linux{
-				Resources: testdata.second,
-			},
-		})
-		assert.Nil(t, err)
-		contB.Annotations[annotations.ConfigJSONKey] = string(data)
-
-		rc, err := s.mergeSpecResource()
-		assert.Nil(t, err)
-		assert.True(t, reflect.DeepEqual(rc, testdata.expected), "should be equal, got: %#v, expected: %#v", rc, testdata.expected)
-	}
+func (m *mockCgroup) New(string, *specs.LinuxResources) (cgroups.Cgroup, error) {
+	return &mockCgroup{}, nil
+}
+func (m *mockCgroup) Add(cgroups.Process) error {
+	return nil
 }
 
-func TestSetupCgroups(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip("Test disabled as requires root privileges")
-	}
+func (m *mockCgroup) AddTask(cgroups.Process) error {
+	return nil
+}
+
+func (m *mockCgroup) Delete() error {
+	return nil
+}
+
+func (m *mockCgroup) MoveTo(cgroups.Cgroup) error {
+	return nil
+}
+
+func (m *mockCgroup) Stat(...cgroups.ErrorHandler) (*cgroups.Metrics, error) {
+	return &cgroups.Metrics{}, nil
+}
+
+func (m *mockCgroup) Update(resources *specs.LinuxResources) error {
+	return nil
+}
+
+func (m *mockCgroup) Processes(cgroups.Name, bool) ([]cgroups.Process, error) {
+	return nil, nil
+}
+
+func (m *mockCgroup) Freeze() error {
+	return nil
+}
+
+func (m *mockCgroup) Thaw() error {
+	return nil
+}
+
+func (m *mockCgroup) OOMEventFD() (uintptr, error) {
+	return 0, nil
+}
+
+func (m *mockCgroup) State() cgroups.State {
+	return ""
+}
+
+func (m *mockCgroup) Subsystems() []cgroups.Subsystem {
+	return nil
+}
+
+func mockCgroupNew(hierarchy cgroups.Hierarchy, path cgroups.Path, resources *specs.LinuxResources) (cgroups.Cgroup, error) {
+	return &mockCgroup{}, nil
+}
+
+func mockCgroupLoad(hierarchy cgroups.Hierarchy, path cgroups.Path) (cgroups.Cgroup, error) {
+	return &mockCgroup{}, nil
+}
+
+func init() {
+	cgroupsNewFunc = mockCgroupNew
+	cgroupsLoadFunc = mockCgroupLoad
+}
+
+func TestV1Constraints(t *testing.T) {
+	assert := assert.New(t)
+
+	systems, err := V1Constraints()
+	assert.NoError(err)
+	assert.NotEmpty(systems)
+}
+
+func TestV1NoConstraints(t *testing.T) {
+	assert := assert.New(t)
+
+	systems, err := V1NoConstraints()
+	assert.NoError(err)
+	assert.NotEmpty(systems)
+}
+
+func TestCgroupNoConstraintsPath(t *testing.T) {
+	assert := assert.New(t)
+
+	cgrouPath := "abc"
+	expectedPath := filepath.Join(cgroupKataPath, cgrouPath)
+	path := cgroupNoConstraintsPath(cgrouPath)
+	assert.Equal(expectedPath, path)
+}
+
+func TestUpdateCgroups(t *testing.T) {
+	assert := assert.New(t)
+
+	oldCgroupsNew := cgroupsNewFunc
+	oldCgroupsLoad := cgroupsLoadFunc
+	cgroupsNewFunc = cgroups.New
+	cgroupsLoadFunc = cgroups.Load
+	defer func() {
+		cgroupsNewFunc = oldCgroupsNew
+		cgroupsLoadFunc = oldCgroupsLoad
+	}()
 
 	s := &Sandbox{
-		id:         "test-sandbox",
-		hypervisor: &mockHypervisor{},
-		config: &SandboxConfig{
-			Containers: []ContainerConfig{
-				{
-					ID:          "containerA",
-					Annotations: make(map[string]string),
-				},
-				{
-					ID:          "containerA",
-					Annotations: make(map[string]string),
-				},
+		state: types.State{
+			CgroupPath: "",
+		},
+	}
+
+	// empty path
+	err := s.updateCgroups()
+	assert.NoError(err)
+
+	// path doesn't exist
+	s.state.CgroupPath = "/abc/123/rgb"
+	err = s.updateCgroups()
+	assert.Error(err)
+
+	if os.Getuid() != 0 {
+		return
+	}
+
+	s.state.CgroupPath = fmt.Sprintf("/kata-tests-%d", os.Getpid())
+	testCgroup, err := cgroups.New(cgroups.V1, cgroups.StaticPath(s.state.CgroupPath), &specs.LinuxResources{})
+	assert.NoError(err)
+	defer testCgroup.Delete()
+	s.hypervisor = &mockHypervisor{mockPid: 0}
+
+	// bad pid
+	err = s.updateCgroups()
+	assert.Error(err)
+
+	// fake workload
+	cmd := exec.Command("tail", "-f", "/dev/null")
+	assert.NoError(cmd.Start())
+	s.state.Pid = cmd.Process.Pid
+	s.hypervisor = &mockHypervisor{mockPid: s.state.Pid}
+
+	// no containers
+	err = s.updateCgroups()
+	assert.NoError(err)
+
+	s.config = &SandboxConfig{}
+	s.config.HypervisorConfig.NumVCPUs = 1
+
+	s.containers = map[string]*Container{
+		"abc": {
+			process: Process{
+				Pid: s.state.Pid,
+			},
+			config: &ContainerConfig{
+				Annotations: containerAnnotations,
+			},
+		},
+		"xyz": {
+			process: Process{
+				Pid: s.state.Pid,
+			},
+			config: &ContainerConfig{
+				Annotations: containerAnnotations,
 			},
 		},
 	}
 
-	contA := s.config.Containers[0]
-	contB := s.config.Containers[1]
+	err = s.updateCgroups()
+	assert.NoError(err)
 
-	getIntP := func(x int64) *int64 { return &x }
-	getUintP := func(x uint64) *uint64 { return &x }
-
-	data, err := json.Marshal(&specs.Spec{
-		Linux: &specs.Linux{
-			Resources: &specs.LinuxResources{
-				CPU: &specs.LinuxCPU{
-					Quota:  getIntP(5000),
-					Period: getUintP(10000),
-				},
-			},
-		},
-	})
-	assert.Nil(t, err)
-	contA.Annotations[annotations.ConfigJSONKey] = string(data)
-
-	data, err = json.Marshal(&specs.Spec{
-		Linux: &specs.Linux{
-			Resources: &specs.LinuxResources{
-				CPU: &specs.LinuxCPU{
-					Quota:  getIntP(10000),
-					Period: getUintP(40000),
-				},
-			},
-		},
-	})
-	assert.Nil(t, err)
-	contB.Annotations[annotations.ConfigJSONKey] = string(data)
-
-	err = s.newCgroups()
-	assert.Nil(t, err, "failed to create cgroups")
-
-	defer s.destroyCgroups()
-
-	// test if function works without error
-	err = s.setupCgroups()
-	assert.Nil(t, err, "setup host cgroup failed")
-
-	// test if the quota and period value are written into cgroup files
-	cpu, err := getCgroupDestination("cpu")
-	assert.Nil(t, err, "failed to get cpu cgroup path")
-	assert.NotEqual(t, "", cpu, "cpu cgroup value can't be empty")
-
-	parentDir := filepath.Join(cpu, defaultCgroupParent, "test-sandbox", "vcpu")
-	quotaFile := filepath.Join(parentDir, "cpu.cfs_quota_us")
-	periodFile := filepath.Join(parentDir, "cpu.cfs_period_us")
-
-	expectedQuota := "7500\n"
-	expectedPeriod := "10000\n"
-
-	fquota, err := os.Open(quotaFile)
-	assert.Nil(t, err, "open file %q failed", quotaFile)
-	defer fquota.Close()
-	data, err = ioutil.ReadAll(fquota)
-	assert.Nil(t, err)
-	assert.Equal(t, expectedQuota, string(data), "failed to get expected cfs_quota")
-
-	fperiod, err := os.Open(periodFile)
-	assert.Nil(t, err, "open file %q failed", periodFile)
-	defer fperiod.Close()
-	data, err = ioutil.ReadAll(fperiod)
-	assert.Nil(t, err)
-	assert.Equal(t, expectedPeriod, string(data), "failed to get expected cfs_period")
+	// cleanup
+	assert.NoError(cmd.Process.Kill())
+	err = s.deleteCgroups()
+	assert.NoError(err)
 }

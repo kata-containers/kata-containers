@@ -1569,6 +1569,13 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	span.SetTag("request", request)
 	defer span.Finish()
 
+	if k.state.ProxyPid > 0 {
+		// check that proxy is running before talk with it avoiding long timeouts
+		if err := syscall.Kill(k.state.ProxyPid, syscall.Signal(0)); err != nil {
+			return nil, fmt.Errorf("Proxy is not running: %v", err)
+		}
+	}
+
 	if err := k.connect(); err != nil {
 		return nil, err
 	}

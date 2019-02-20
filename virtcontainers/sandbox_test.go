@@ -53,6 +53,7 @@ func testCreateSandbox(t *testing.T, id string,
 		NetworkConfig:    nconfig,
 		Volumes:          volumes,
 		Containers:       containers,
+		Annotations:      sandboxAnnotations,
 	}
 
 	sandbox, err := createSandbox(context.Background(), sconfig, nil)
@@ -689,7 +690,8 @@ func TestSandboxGetContainer(t *testing.T) {
 func TestContainerSetStateBlockIndex(t *testing.T) {
 	containers := []ContainerConfig{
 		{
-			ID: "100",
+			ID:          "100",
+			Annotations: containerAnnotations,
 		},
 	}
 
@@ -784,7 +786,8 @@ func TestContainerStateSetFstype(t *testing.T) {
 
 	containers := []ContainerConfig{
 		{
-			ID: "100",
+			ID:          "100",
+			Annotations: containerAnnotations,
 		},
 	}
 

@@ -14,6 +14,7 @@ import (
 )
 
 type mockHypervisor struct {
+	mockPid int
 }
 
 func (m *mockHypervisor) capabilities() types.Capabilities {
@@ -99,4 +100,8 @@ func (m *mockHypervisor) getThreadIDs() (*threadIDs, error) {
 
 func (m *mockHypervisor) cleanup() error {
 	return nil
+}
+
+func (m *mockHypervisor) pid() int {
+	return m.mockPid
 }

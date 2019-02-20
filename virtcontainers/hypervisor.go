@@ -609,4 +609,5 @@ type hypervisor interface {
 	hypervisorConfig() HypervisorConfig
 	getThreadIDs() (*threadIDs, error)
 	cleanup() error
+	pid() int
 }
