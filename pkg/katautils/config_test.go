@@ -83,6 +83,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	disableNewNetNs := false
+	sharedFS := "virtio-9p"
 
 	configFileOptions := katatestutils.RuntimeConfigOptions{
 		Hypervisor:           "qemu",
@@ -113,6 +114,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		NetmonDebug:          netmonDebug,
 		AgentDebug:           agentDebug,
 		AgentTrace:           agentTrace,
+		SharedFS:             sharedFS,
 	}
 
 	runtimeConfigFileData := katatestutils.MakeRuntimeConfigFileData(configFileOptions)
@@ -160,6 +162,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		MemSlots:              defaultMemSlots,
 		EntropySource:         defaultEntropySource,
 		GuestHookPath:         defaultGuestHookPath,
+		SharedFS:              sharedFS,
+		VirtioFSDaemon:        "/path/to/virtiofsd",
 	}
 
 	agentConfig := vc.KataAgentConfig{}
