@@ -12,6 +12,23 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const (
+	packageManagerTimeout  = 900
+	packageManagerMaxTries = 5
+)
+
+func tryPackageManagerCommand(container string, command []string, expectedExitCode int) int {
+	cmd := []string{container}
+	exitCode := int(-1)
+	for i := 0; i < packageManagerMaxTries; i++ {
+		_, _, exitCode = runDockerCommandWithTimeout(packageManagerTimeout, "exec", append(cmd, command...)...)
+		if exitCode == expectedExitCode {
+			break
+		}
+	}
+	return exitCode
+}
+
 var _ = Describe("package manager update test", func() {
 	var (
 		id         string
@@ -34,17 +51,24 @@ var _ = Describe("package manager update test", func() {
 		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
 	})
 
-	Context("check apt-get update", func() {
+	Context("check apt-get update and upgrade", func() {
 		It("should not fail", func() {
-			args = append(args, "--rm", "--name", id, DebianImage, "apt-get", "-y", "update")
+			args = append(args, "-td", "--name", id, DebianImage, "sh")
 			_, _, exitCode := dockerRun(args...)
 			Expect(exitCode).To(BeZero())
+
+			exitCode = tryPackageManagerCommand(id, []string{"apt-get", "-y", "update"}, 0)
+			Expect(exitCode).To(BeZero())
+
+			exitCode = tryPackageManagerCommand(id, []string{"apt-get", "-y", "upgrade"}, 0)
+			Expect(exitCode).To(BeZero())
+
+			Expect(RemoveDockerContainer(id)).To(BeTrue())
 		})
 	})
 
 	Context("check dnf update", func() {
 		It("should not fail", func() {
-			Skip("Issue: https://github.com/clearcontainers/runtime/issues/868")
 			args = append(args, "-td", "--name", id, FedoraImage, "sh")
 			_, _, exitCode := dockerRun(args...)
 			Expect(exitCode).To(BeZero())
@@ -54,7 +78,7 @@ var _ = Describe("package manager update test", func() {
 				Expect(exitCode).To(BeZero())
 			}
 
-			_, _, exitCode = dockerExec(id, "dnf", "-y", "update")
+			exitCode = tryPackageManagerCommand(id, []string{"dnf", "-y", "update"}, 0)
 			Expect(exitCode).To(BeZero())
 
 			Expect(RemoveDockerContainer(id)).To(BeTrue())
@@ -63,10 +87,14 @@ var _ = Describe("package manager update test", func() {
 
 	Context("check yum update", func() {
 		It("should not fail", func() {
-			Skip("Issue: https://github.com/kata-containers/tests/issues/264")
-			args = append(args, "--rm", "--name", id, CentosImage, "yum", "-y", "update")
+			args = append(args, "--rm", "-td", "--name", id, CentosImage, "sh")
 			_, _, exitCode := dockerRun(args...)
 			Expect(exitCode).To(BeZero())
+
+			exitCode = tryPackageManagerCommand(id, []string{"yum", "-y", "update"}, 0)
+			Expect(exitCode).To(BeZero())
+
+			Expect(RemoveDockerContainer(id)).To(BeTrue())
 		})
 	})
 })

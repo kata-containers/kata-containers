@@ -7,6 +7,7 @@ package tests
 import (
 	"bytes"
 	"flag"
+	"fmt"
 	"os/exec"
 	"syscall"
 	"time"
@@ -52,6 +53,8 @@ func (c *Command) Run() (string, string, int) {
 func (c *Command) RunWithPipe(stdin *bytes.Buffer) (string, string, int) {
 	LogIfFail("Running command '%s %s'\n", c.cmd.Path, c.cmd.Args)
 
+	keepAliveTime := 1 * time.Minute
+
 	var stdout, stderr bytes.Buffer
 	c.cmd.Stdout = &stdout
 	c.cmd.Stderr = &stderr
@@ -72,22 +75,33 @@ func (c *Command) RunWithPipe(stdin *bytes.Buffer) (string, string, int) {
 		timeout = time.After(c.Timeout * time.Second)
 	}
 
-	select {
-	case <-timeout:
-		LogIfFail("Killing process timeout reached '%d' seconds\n", c.Timeout)
-		_ = c.cmd.Process.Kill()
-		return "", "", -1
+	keepAliveCh := time.NewTimer(keepAliveTime)
 
-	case err := <-done:
-		if err != nil {
-			LogIfFail("command failed error '%s'\n", err)
+	for {
+		select {
+		case <-timeout:
+			keepAliveCh.Stop()
+			LogIfFail("Killing process timeout reached '%d' seconds\n", c.Timeout)
+			_ = c.cmd.Process.Kill()
+			return "", "", -1
+
+		case <-keepAliveCh.C:
+			// Avoid CI (i.e jenkins) kills the process for inactivity by printing a dot
+			fmt.Println(".")
+			keepAliveCh.Reset(keepAliveTime)
+
+		case err := <-done:
+			keepAliveCh.Stop()
+			if err != nil {
+				LogIfFail("command failed error '%s'\n", err)
+			}
+
+			exitCode := c.cmd.ProcessState.Sys().(syscall.WaitStatus).ExitStatus()
+
+			LogIfFail("%+v\nTimeout: %d seconds\nExit Code: %d\nStdout: %s\nStderr: %s\n",
+				c.cmd.Args, c.Timeout, exitCode, stdout.String(), stderr.String())
+
+			return stdout.String(), stderr.String(), exitCode
 		}
-
-		exitCode := c.cmd.ProcessState.Sys().(syscall.WaitStatus).ExitStatus()
-
-		LogIfFail("%+v\nTimeout: %d seconds\nExit Code: %d\nStdout: %s\nStderr: %s\n",
-			c.cmd.Args, c.Timeout, exitCode, stdout.String(), stderr.String())
-
-		return stdout.String(), stderr.String(), exitCode
 	}
 }
