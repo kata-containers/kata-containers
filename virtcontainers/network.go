@@ -234,88 +234,50 @@ func generateEndpoints(typedEndpoints []TypedJSONEndpoint) ([]Endpoint, error) {
 	var endpoints []Endpoint
 
 	for _, e := range typedEndpoints {
+		var endpointInf Endpoint
 		switch e.Type {
 		case PhysicalEndpointType:
 			var endpoint PhysicalEndpoint
-			err := json.Unmarshal(e.Data, &endpoint)
-			if err != nil {
-				return nil, err
-			}
-
-			endpoints = append(endpoints, &endpoint)
-			networkLogger().WithFields(logrus.Fields{
-				"endpoint":      endpoint,
-				"endpoint-type": "physical",
-			}).Info("endpoint unmarshalled")
+			endpointInf = &endpoint
 
 		case VethEndpointType:
 			var endpoint VethEndpoint
-			err := json.Unmarshal(e.Data, &endpoint)
-			if err != nil {
-				return nil, err
-			}
-
-			endpoints = append(endpoints, &endpoint)
-			networkLogger().WithFields(logrus.Fields{
-				"endpoint":      endpoint,
-				"endpoint-type": "virtual",
-			}).Info("endpoint unmarshalled")
+			endpointInf = &endpoint
 
 		case VhostUserEndpointType:
 			var endpoint VhostUserEndpoint
-			err := json.Unmarshal(e.Data, &endpoint)
-			if err != nil {
-				return nil, err
-			}
-
-			endpoints = append(endpoints, &endpoint)
-			networkLogger().WithFields(logrus.Fields{
-				"endpoint":      endpoint,
-				"endpoint-type": "vhostuser",
-			}).Info("endpoint unmarshalled")
+			endpointInf = &endpoint
 
 		case BridgedMacvlanEndpointType:
 			var endpoint BridgedMacvlanEndpoint
-			err := json.Unmarshal(e.Data, &endpoint)
-			if err != nil {
-				return nil, err
-			}
-
-			endpoints = append(endpoints, &endpoint)
-			networkLogger().WithFields(logrus.Fields{
-				"endpoint":      endpoint,
-				"endpoint-type": "macvlan",
-			}).Info("endpoint unmarshalled")
+			endpointInf = &endpoint
 
 		case MacvtapEndpointType:
 			var endpoint MacvtapEndpoint
-			err := json.Unmarshal(e.Data, &endpoint)
-			if err != nil {
-				return nil, err
-			}
-
-			endpoints = append(endpoints, &endpoint)
-			networkLogger().WithFields(logrus.Fields{
-				"endpoint":      endpoint,
-				"endpoint-type": "macvtap",
-			}).Info("endpoint unmarshalled")
+			endpointInf = &endpoint
 
 		case TapEndpointType:
 			var endpoint TapEndpoint
-			err := json.Unmarshal(e.Data, &endpoint)
-			if err != nil {
-				return nil, err
-			}
+			endpointInf = &endpoint
 
-			endpoints = append(endpoints, &endpoint)
-			networkLogger().WithFields(logrus.Fields{
-				"endpoint":      endpoint,
-				"endpoint-type": "tap",
-			}).Info("endpoint unmarshalled")
+		case IPVlanEndpointType:
+			var endpoint IPVlanEndpoint
+			endpointInf = &endpoint
 
 		default:
 			networkLogger().WithField("endpoint-type", e.Type).Error("Ignoring unknown endpoint type")
 		}
+
+		err := json.Unmarshal(e.Data, endpointInf)
+		if err != nil {
+			return nil, err
+		}
+
+		endpoints = append(endpoints, endpointInf)
+		networkLogger().WithFields(logrus.Fields{
+			"endpoint":      endpointInf,
+			"endpoint-type": e.Type,
+		}).Info("endpoint unmarshalled")
 	}
 	return endpoints, nil
 }
