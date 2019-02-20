@@ -24,6 +24,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	deviceManager "github.com/kata-containers/runtime/virtcontainers/device/manager"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -175,8 +176,6 @@ type Sandbox struct {
 	seccompSupported bool
 
 	ctx context.Context
-
-	cgroup *sandboxCgroups
 }
 
 // ID returns the sandbox identifier string.
@@ -541,11 +540,6 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
-	// create new cgroup for sandbox
-	if err := s.newCgroups(); err != nil {
-		return nil, err
-	}
-
 	return s, nil
 }
 
@@ -702,10 +696,8 @@ func (s *Sandbox) Delete() error {
 		}
 	}
 
-	// destroy sandbox cgroup
-	if err := s.destroyCgroups(); err != nil {
-		// continue the removal process even cgroup failed to destroy
-		s.Logger().WithError(err).Error("failed to destroy cgroup")
+	if err := s.deleteCgroups(); err != nil {
+		return err
 	}
 
 	globalSandboxList.removeSandbox(s.id)
@@ -987,6 +979,13 @@ func (s *Sandbox) addContainer(c *Container) error {
 	}
 	s.containers[c.id] = c
 
+	ann := c.GetAnnotations()
+	if ann[annotations.ContainerTypeKey] == string(PodSandbox) {
+		s.state.Pid = c.process.Pid
+		s.state.CgroupPath = c.state.CgroupPath
+		return s.store.Store(store.State, s.state)
+	}
+
 	return nil
 }
 
@@ -1048,10 +1047,10 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 		return nil, err
 	}
 
-	// Setup host cgroups for new container
-	if err := s.setupCgroups(); err != nil {
+	if err := s.updateCgroups(); err != nil {
 		return nil, err
 	}
+
 	return c, nil
 }
 
@@ -1202,6 +1201,10 @@ func (s *Sandbox) UpdateContainer(containerID string, resources specs.LinuxResou
 		return err
 	}
 
+	if err := s.updateCgroups(); err != nil {
+		return err
+	}
+
 	return c.storeContainer()
 }
 
@@ -1267,6 +1270,10 @@ func (s *Sandbox) createContainers() error {
 		if err := s.addContainer(c); err != nil {
 			return err
 		}
+	}
+
+	if err := s.updateCgroups(); err != nil {
+		return err
 	}
 
 	return nil
@@ -1425,15 +1432,6 @@ func (s *Sandbox) decrementSandboxBlockIndex() error {
 	}
 
 	return nil
-}
-
-// setSandboxPid sets the Pid of the the shim process belonging to the
-// sandbox container as the Pid of the sandbox.
-func (s *Sandbox) setSandboxPid(pid int) error {
-	s.state.Pid = pid
-
-	// update on-disk state
-	return s.store.Store(store.State, s.state)
 }
 
 func (s *Sandbox) setContainersState(state types.StateString) error {

@@ -9,6 +9,7 @@ package virtcontainers
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -16,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/containerd/cgroups"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -759,10 +761,8 @@ func (c *Container) create() (err error) {
 	}
 	c.process = *process
 
-	// If this is a sandbox container, store the pid for sandbox
-	ann := c.GetAnnotations()
-	if ann[annotations.ContainerTypeKey] == string(PodSandbox) {
-		c.sandbox.setSandboxPid(c.process.Pid)
+	if err = c.newCgroups(); err != nil {
+		return
 	}
 
 	// Store the container process returned by the agent.
@@ -785,6 +785,10 @@ func (c *Container) delete() error {
 
 	// Remove the container from sandbox structure
 	if err := c.sandbox.removeContainer(c.id); err != nil {
+		return err
+	}
+
+	if err := c.deleteCgroups(); err != nil {
 		return err
 	}
 
@@ -924,6 +928,13 @@ func (c *Container) stop() error {
 	// get failed if the process hasn't exited.
 	c.sandbox.agent.waitProcess(c, c.id)
 
+	// container was killed by force, container MUST change its state
+	// as soon as possible just in case one of below operations fail leaving
+	// the containers in a bad state.
+	if err := c.setContainerState(types.StateStopped); err != nil {
+		return err
+	}
+
 	if err := c.sandbox.agent.stopContainer(c.sandbox, *c); err != nil {
 		return err
 	}
@@ -936,7 +947,7 @@ func (c *Container) stop() error {
 		return err
 	}
 
-	return c.setContainerState(types.StateStopped)
+	return nil
 }
 
 func (c *Container) enter(cmd types.Cmd) (*Process, error) {
@@ -1052,6 +1063,10 @@ func (c *Container) update(resources specs.LinuxResources) error {
 	}
 
 	if err := c.sandbox.updateResources(); err != nil {
+		return err
+	}
+
+	if err := c.updateCgroups(resources); err != nil {
 		return err
 	}
 
@@ -1241,5 +1256,107 @@ func (c *Container) detachDevices() error {
 	if err := c.sandbox.storeSandboxDevices(); err != nil {
 		return err
 	}
+	return nil
+}
+
+// creates a new cgroup and return the cgroups path
+func (c *Container) newCgroups() error {
+	ann := c.GetAnnotations()
+
+	config, ok := ann[annotations.ConfigJSONKey]
+	if !ok {
+		return fmt.Errorf("Could not find json config in annotations")
+	}
+
+	var spec specs.Spec
+	if err := json.Unmarshal([]byte(config), &spec); err != nil {
+		return err
+	}
+
+	// https://github.com/kata-containers/runtime/issues/168
+	resources := specs.LinuxResources{
+		CPU: nil,
+	}
+
+	if spec.Linux != nil && spec.Linux.Resources != nil {
+		resources.CPU = validCPUResources(spec.Linux.Resources.CPU)
+	}
+
+	cgroup, err := cgroupsNewFunc(cgroups.V1,
+		cgroups.StaticPath(spec.Linux.CgroupsPath), &resources)
+	if err != nil {
+		return fmt.Errorf("Could not create cgroup for %v: %v", spec.Linux.CgroupsPath, err)
+	}
+
+	c.state.Resources = resources
+	c.state.CgroupPath = spec.Linux.CgroupsPath
+
+	// Add shim into cgroup
+	if c.process.Pid > 0 {
+		if err := cgroup.Add(cgroups.Process{Pid: c.process.Pid}); err != nil {
+			return fmt.Errorf("Could not add PID %d to cgroup %v: %v", c.process.Pid, spec.Linux.CgroupsPath, err)
+		}
+	}
+
+	return nil
+}
+
+func (c *Container) deleteCgroups() error {
+	cgroup, err := cgroupsLoadFunc(cgroups.V1,
+		cgroups.StaticPath(c.state.CgroupPath))
+
+	if err == cgroups.ErrCgroupDeleted {
+		// cgroup already deleted
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("Could not load container cgroup %v: %v", c.state.CgroupPath, err)
+	}
+
+	// move running process here, that way cgroup can be removed
+	parent, err := parentCgroup(c.state.CgroupPath)
+	if err != nil {
+		// parent cgroup doesn't exist, that means there are no process running
+		// and the container cgroup was removed.
+		c.Logger().WithError(err).Warn("Container cgroup doesn't exist")
+		return nil
+	}
+
+	if err := cgroup.MoveTo(parent); err != nil {
+		// Don't fail, cgroup can be deleted
+		c.Logger().WithError(err).Warn("Could not move container process into parent cgroup")
+	}
+
+	if err := cgroup.Delete(); err != nil {
+		return fmt.Errorf("Could not delete container cgroup %v: %v", c.state.CgroupPath, err)
+	}
+
+	return nil
+}
+
+func (c *Container) updateCgroups(resources specs.LinuxResources) error {
+	cgroup, err := cgroupsLoadFunc(cgroups.V1,
+		cgroups.StaticPath(c.state.CgroupPath))
+	if err != nil {
+		return fmt.Errorf("Could not load cgroup %v: %v", c.state.CgroupPath, err)
+	}
+
+	// Issue: https://github.com/kata-containers/runtime/issues/168
+	r := specs.LinuxResources{
+		CPU: validCPUResources(resources.CPU),
+	}
+
+	// update cgroup
+	if err := cgroup.Update(&r); err != nil {
+		return fmt.Errorf("Could not update cgroup %v: %v", c.state.CgroupPath, err)
+	}
+
+	// store new resources
+	c.state.Resources = r
+	if err := c.store.Store(store.State, c.state); err != nil {
+		return err
+	}
+
 	return nil
 }

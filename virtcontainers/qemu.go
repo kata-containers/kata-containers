@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"math"
 	"os"
 	"path/filepath"
@@ -500,6 +501,8 @@ func (q *qemu) createSandbox(ctx context.Context, id string, hypervisorConfig *H
 		return err
 	}
 
+	pidFile := q.pidFile()
+
 	qemuConfig := govmmQemu.Config{
 		Name:        fmt.Sprintf("sandbox-%s", q.id),
 		UUID:        q.state.UUID,
@@ -518,6 +521,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, hypervisorConfig *H
 		VGA:         "none",
 		GlobalParam: "kvm-pit.lost_tick_policy=discard",
 		Bios:        firmwarePath,
+		PidFile:     pidFile,
 	}
 
 	if ioThread != nil {
@@ -1569,4 +1573,24 @@ func (q *qemu) cleanup() error {
 	q.fds = []*os.File{}
 
 	return nil
+}
+
+func (q *qemu) pidFile() string {
+	return filepath.Join(store.RunVMStoragePath, q.id, "pid")
+}
+
+func (q *qemu) pid() int {
+	data, err := ioutil.ReadFile(q.pidFile())
+	if err != nil {
+		q.Logger().WithError(err).Error("Could not read qemu pid file")
+		return 0
+	}
+
+	pid, err := strconv.Atoi(strings.Trim(string(data), "\n\t "))
+	if err != nil {
+		q.Logger().WithError(err).Error("Could not convert string to int")
+		return 0
+	}
+
+	return pid
 }

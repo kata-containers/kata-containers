@@ -702,3 +702,7 @@ func (fc *firecracker) getThreadIDs() (*threadIDs, error) {
 func (fc *firecracker) cleanup() error {
 	return nil
 }
+
+func (fc *firecracker) pid() int {
+	return fc.info.PID
+}
