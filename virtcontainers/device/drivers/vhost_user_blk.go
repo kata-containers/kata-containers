@@ -56,7 +56,7 @@ func (device *VhostUserBlkDevice) Attach(devReceiver api.DeviceReceiver) (err er
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
 func (device *VhostUserBlkDevice) Detach(devReceiver api.DeviceReceiver) error {
-	skip, err := device.bumpAttachCount(true)
+	skip, err := device.bumpAttachCount(false)
 	if err != nil {
 		return err
 	}
