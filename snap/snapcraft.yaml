@@ -203,6 +203,10 @@ parts:
           config="arm64_kata_kvm_${x_version}"
         ;;
 
+        "s390x")
+          config="s390_kata_kvm_${x_version}"
+        ;;
+
         *)
           echo "ERROR: Unsupported architecture $(arch)"
           exit 1

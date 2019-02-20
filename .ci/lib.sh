@@ -43,6 +43,10 @@ install_yq() {
 		goarch=ppc64le
 		;;
 
+	"s390x")
+		goarch=s390x
+		;;
+
 	"*")
 		echo "Arch $(arch) not supported"
 		exit
