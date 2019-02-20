@@ -15,7 +15,7 @@ docker:
     - Hot plug CPUs
     - Update CPU constraints
     - Hotplug memory
-    - update memory constraints
+    - memory constraints
   Context:
     - remove bind-mount source before container exits
     - run container exceeding memory constraints
