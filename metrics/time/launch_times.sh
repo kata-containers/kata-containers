@@ -38,6 +38,24 @@ REQUIRED_CMDS=("bc" "awk")
 # Note the no-0-padding - 0 padding the results breaks bc in some cases
 DATECMD="date -u +%-s:%-N"
 
+# This the minimum entropy level produced
+# by haveged is 1000 see https://wiki.archlinux.org/index.php/Haveged
+# Less than 1000 could potentially slow down cryptographic
+# applications see https://www.suse.com/support/kb/doc/?id=7011351
+entropy_level="1000"
+
+check_entropy_level() {
+	retries="10"
+	for i in $(seq 1 "$retries"); do
+		if [ $(cat /proc/sys/kernel/random/entropy_avail) -ge ${entropy_level} ]; then
+			break;
+		fi
+		sleep 1
+	done
+	if [ $(cat /proc/sys/kernel/random/entropy_avail) -le ${entropy_level} ]; then
+		die "Not enough entropy level to run this test"
+	fi
+}
 
 # convert a 'seconds:nanoseconds' string into nanoseconds
 sn_to_ns() {
@@ -53,6 +71,9 @@ ns_to_s() {
 
 run_workload() {
 	start_time=$($DATECMD)
+
+	# Check entropy level of the host
+	check_entropy_level
 
 	# Run the image and command and capture the results into an array...
 	declare workload_result
