@@ -11,9 +11,6 @@ test:
 docker:
   Describe:
     - CPUs and CPU set
-    - Update number of CPUs
-    - Hot plug CPUs
-    - Update CPU constraints
     - Hotplug memory
     - update memory constraints
   Context:
