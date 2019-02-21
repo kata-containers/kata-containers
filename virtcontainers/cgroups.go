@@ -125,11 +125,11 @@ func cgroupNoConstraintsPath(path string) string {
 }
 
 // return the parent cgroup for the given path
-func parentCgroup(path string) (cgroups.Cgroup, error) {
+func parentCgroup(hierarchy cgroups.Hierarchy, path string) (cgroups.Cgroup, error) {
 	// append '/' just in case CgroupsPath doesn't start with it
 	parent := filepath.Dir("/" + path)
 
-	parentCgroup, err := cgroupsLoadFunc(cgroups.V1,
+	parentCgroup, err := cgroupsLoadFunc(hierarchy,
 		cgroups.StaticPath(parent))
 	if err != nil {
 		return nil, fmt.Errorf("Could not load parent cgroup %v: %v", parent, err)
@@ -186,7 +186,7 @@ func (s *Sandbox) deleteCgroups() error {
 	}
 
 	// move running process here, that way cgroup can be removed
-	parent, err := parentCgroup(path)
+	parent, err := parentCgroup(V1NoConstraints, path)
 	if err != nil {
 		// parent cgroup doesn't exist, that means there are no process running
 		// and the no constraints cgroup was removed.
