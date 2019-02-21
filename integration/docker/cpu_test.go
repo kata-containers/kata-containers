@@ -22,6 +22,8 @@ const (
 	periodSysPath     = "/sys/fs/cgroup/cpu/cpu.cfs_period_us"
 	cpusetCpusSysPath = "/sys/fs/cgroup/cpuset/cpuset.cpus"
 	cpusetMemsSysPath = "/sys/fs/cgroup/cpuset/cpuset.mems"
+
+	checkCpusCmdFmt = `for c in $(seq 1 %d); do if grep -q 1 /sys/devices/system/cpu/cpu%d/online; then nproc; exit 0; fi; sleep %d; done; exit 1`
 )
 
 func withCPUPeriodAndQuota(quota, period, defaultVCPUs int, fail bool) TableEntry {
@@ -51,18 +53,16 @@ func withCPUConstraint(cpus float64, defaultVCPUs int, fail bool) TableEntry {
 
 var _ = Describe("Hot plug CPUs", func() {
 	var (
-		args            []string
-		id              string
-		vCPUs           int
-		defaultVCPUs    int
-		waitTime        int
-		maxTries        int
-		checkCpusCmdFmt string
+		args         []string
+		id           string
+		vCPUs        int
+		defaultVCPUs int
+		waitTime     int
+		maxTries     int
 	)
 
 	BeforeEach(func() {
 		id = RandID(30)
-		checkCpusCmdFmt = `for c in $(seq 1 %d); do [ -d /sys/devices/system/cpu/cpu%d ] && nproc && exit 0; sleep %d; done; exit 1`
 		waitTime = 5
 		maxTries = 5
 		args = []string{"--rm", "--name", id}
@@ -227,22 +227,20 @@ var _ = Describe("Hot plug CPUs", func() {
 
 var _ = Describe("Update number of CPUs", func() {
 	var (
-		runArgs         []string
-		updateArgs      []string
-		execArgs        []string
-		id              string
-		vCPUs           int
-		defaultVCPUs    int
-		waitTime        int
-		maxTries        int
-		checkCpusCmdFmt string
-		stdout          string
-		exitCode        int
+		runArgs      []string
+		updateArgs   []string
+		execArgs     []string
+		id           string
+		vCPUs        int
+		defaultVCPUs int
+		waitTime     int
+		maxTries     int
+		stdout       string
+		exitCode     int
 	)
 
 	BeforeEach(func() {
 		id = RandID(30)
-		checkCpusCmdFmt = `for c in $(seq 1 %d); do [ -d /sys/devices/system/cpu/cpu%d ] && nproc && exit 0; sleep %d; done; exit 1`
 		waitTime = 5
 		maxTries = 5
 
