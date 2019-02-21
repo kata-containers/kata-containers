@@ -52,8 +52,5 @@ snap: $(YQ) $(VERSION_FILE)
 	fi
 	snapcraft -d
 
-snap-xbuild:
-	cd $(MK_DIR)/snap-build; ./xbuild.sh -a all
-
 .PHONY: test test-release-tools test-static-build test-packaging-tools snap snap-xbuild \
 	$(VERSION_FILE) $(VERSIONS_YAML_FILE)

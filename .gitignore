@@ -8,11 +8,6 @@ debian.series
 parts/
 prime/
 sha256sums.asc
-snap-build/*.fd
-snap-build/*.img
-snap-build/*.log
-snap-build/id_rsa*
-snap-build/seed/user-data
 snap/.snapcraft/
 stage/
 typescript
