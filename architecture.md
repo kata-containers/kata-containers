@@ -583,8 +583,8 @@ The CRI-O will catch up soon ([kubernetes-sigs/cri-o#2024](https://github.com/ku
 
 Refer to the following how-to guides:
 
-- [How to use Kata Containers and Containerd](../how-to/containerd-kata.md)
-- [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](../how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)
+- [How to use Kata Containers and Containerd](how-to/containerd-kata.md)
+- [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)
 
 ### CRI-O
 
