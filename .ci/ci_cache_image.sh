@@ -8,13 +8,10 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
-function handle_error {
-	local exit_code="${?}"
-	local line_number="${1:-}"
-	echo "Failed at $line_number: ${BASH_COMMAND}"
-	exit "${exit_code}"
-}
-trap 'handle_error $LINENO' ERR
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source to trap error line number
+source "${script_dir}/../lib/common.bash"
 
 WORKSPACE=${WORKSPACE:-$(pwd)}
 kata_dir="/usr/share/kata-containers/"
