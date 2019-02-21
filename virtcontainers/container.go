@@ -1315,7 +1315,7 @@ func (c *Container) deleteCgroups() error {
 	}
 
 	// move running process here, that way cgroup can be removed
-	parent, err := parentCgroup(c.state.CgroupPath)
+	parent, err := parentCgroup(cgroups.V1, c.state.CgroupPath)
 	if err != nil {
 		// parent cgroup doesn't exist, that means there are no process running
 		// and the container cgroup was removed.
