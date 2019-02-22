@@ -131,12 +131,19 @@ parts:
       export PATH="${GOROOT}/bin:${PATH}"
       if [ -n "$http_proxy" ]; then
         echo "Setting proxy $http_proxy"
-        systemctl set-environment http_proxy=$http_proxy || true
-        systemctl set-environment https_proxy=$https_proxy || true
+        sudo -E systemctl set-environment http_proxy=$http_proxy || true
+        sudo -E systemctl set-environment https_proxy=$https_proxy || true
       fi
 
+      echo "Unmasking docker service"
+      sudo -E systemctl unmask docker.service || true
+      sudo -E systemctl unmask docker.socket || true
+
+      echo "Adding $USER into docker group"
+      sudo -E gpasswd -a $USER docker
+
       echo "Starting docker"
-      systemctl start docker || true
+      sudo -E systemctl start docker || true
 
       # use the same go version for all packages
       sed -i 's|^GO_VERSION=.*|GO_VERSION='$(go version | cut -d' ' -f3 | tr -d go)'|g' rootfs-builder/versions.txt
