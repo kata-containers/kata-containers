@@ -5,9 +5,10 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-cidir=$(dirname "$0")
+SCRIPT_PATH=$(dirname "$0")
 
-source "${cidir}/../../lib/common.bash"
+source "${SCRIPT_PATH}/../../lib/common.bash"
+source "${SCRIPT_PATH}/../../.ci/lib.sh"
 
 set -e
 
@@ -43,6 +44,13 @@ test_ramdisk() {
 
 	# Enable ramdisk with dockerd
 	(sudo -E DOCKER_RAMDISK=true dockerd -D --add-runtime ${RUNTIME}=${RUNTIME_PATH} 2>/dev/null) &
+
+	# Verify that docker is already up by running a `docker ps` with a timeout of 10s.
+	# This will ensure we can run a container.
+	wait_time=10
+	sleep_time=2
+	cmd="docker ps"
+	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
 	# Run container
 	docker run --rm -d --name=${CONTAINER_NAME} --runtime=${RUNTIME} ${IMAGE} sh -c ${PAYLOAD_ARGS}
