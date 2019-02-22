@@ -139,6 +139,9 @@ parts:
       sudo -E systemctl unmask docker.service || true
       sudo -E systemctl unmask docker.socket || true
 
+      echo "Adding $USER into docker group"
+      sudo -E gpasswd -a $USER docker
+
       echo "Starting docker"
       sudo -E systemctl start docker || true
 
