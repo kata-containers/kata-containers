@@ -24,5 +24,6 @@ docker:
     - memory constraints
     - Hotplug memory when create containers
     - run container and update its memory constraints
+    - Checking CPU cgroups in the host
   Context:
   It:
