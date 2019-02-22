@@ -135,6 +135,10 @@ parts:
         sudo -E systemctl set-environment https_proxy=$https_proxy || true
       fi
 
+      echo "Unmasking docker service"
+      sudo -E systemctl unmask docker.service || true
+      sudo -E systemctl unmask docker.socket || true
+
       echo "Starting docker"
       sudo -E systemctl start docker || true
 
