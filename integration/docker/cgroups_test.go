@@ -23,8 +23,12 @@ const (
 )
 
 const (
-	sysCgroupPath    = "/sys/fs/cgroup/"
-	dockerCgroupName = "docker"
+	sysCgroupPath     = "/sys/fs/cgroup/"
+	dockerCgroupName  = "docker"
+	sysCPUSharesFile  = "cpu.shares"
+	sysCPUQuotaFile   = "cpu.cfs_quota_us"
+	sysCPUPeriodFile  = "cpu.cfs_period_us"
+	sysCpusetCpusFile = "cpuset.cpus"
 )
 
 func containerID(name string) (string, error) {
@@ -69,6 +73,10 @@ var _ = Describe("Checking CPU cgroups in the host", func() {
 		cpusetCgroupPath string
 		err              error
 		exitCode         int
+		expectedShares   string
+		expectedQuota    string
+		expectedPeriod   string
+		expectedCpuset   string
 	)
 
 	BeforeEach(func() {
@@ -112,6 +120,42 @@ var _ = Describe("Checking CPU cgroups in the host", func() {
 				// cgroups shouldn't exist
 				Expect(cpuCgroupPath).ShouldNot(BeADirectory())
 				Expect(cpusetCgroupPath).ShouldNot(BeADirectory())
+			})
+		})
+	})
+
+	Describe("checking whether cgroups are updated", func() {
+		Context("updating container cpu and cpuset cgroup", func() {
+			It("should be updated", func() {
+				_, _, exitCode = dockerRun(args...)
+				Expect(exitCode).To(BeZero())
+
+				expectedShares = "738"
+				expectedQuota = "250000"
+				expectedPeriod = "100000"
+				expectedCpuset = "1"
+
+				_, _, exitCode = dockerUpdate("--cpus=2.5", "--cpu-shares", expectedShares, "--cpuset-cpus", expectedCpuset, id)
+				Expect(exitCode).To(BeZero())
+
+				cpuCgroupPath, err = containerCgroupPath(id, cgroupCPU)
+				Expect(err).ToNot(HaveOccurred())
+
+				cpusetCgroupPath, err = containerCgroupPath(id, cgroupCpuset)
+				Expect(err).ToNot(HaveOccurred())
+
+				for r, v := range map[string]string{
+					filepath.Join(cpuCgroupPath, sysCPUQuotaFile):      expectedQuota,
+					filepath.Join(cpuCgroupPath, sysCPUPeriodFile):     expectedPeriod,
+					filepath.Join(cpuCgroupPath, sysCPUSharesFile):     expectedShares,
+					filepath.Join(cpusetCgroupPath, sysCpusetCpusFile): expectedCpuset,
+				} {
+					c, err := ioutil.ReadFile(r)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(strings.Trim(string(c), "\n\t ")).To(Equal(v))
+				}
+
+				Expect(RemoveDockerContainer(id)).To(BeTrue())
 			})
 		})
 	})
