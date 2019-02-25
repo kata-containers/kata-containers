@@ -17,11 +17,12 @@ setup() {
 	get_pod_config_dir
 
 	tmp_file=$(mktemp -d /tmp/data.XXXX)
+	pod_yaml=$(mktemp --tmpdir pod_config.XXXXXX.yaml)
 	msg="Hello from Kubernetes"
 	echo $msg > $tmp_file/index.html
 	pod_name="pv-pod"
 	# Define temporary file at yaml
-	sed -i "s|tmp_data|${tmp_file}|g" ${pod_config_dir}/pv-volume.yaml
+	sed -e "s|tmp_data|${tmp_file}|g" ${pod_config_dir}/pv-volume.yaml > "$pod_yaml"
 }
 
 @test "Create Persistent Volume" {
@@ -32,7 +33,7 @@ setup() {
 	volume_claim="pv-claim"
 
 	# Create the persistent volume
-	kubectl create -f "${pod_config_dir}/pv-volume.yaml"
+	kubectl create -f "$pod_yaml"
 
 	# Check the persistent volume
 	kubectl get pv $volume_name | grep Available
@@ -59,5 +60,6 @@ teardown() {
 	kubectl delete pod "$pod_name"
 	kubectl delete pvc "$volume_claim"
 	kubectl delete pv "$volume_name"
-	sudo rm -rf $tmp_file
+	rm -f "$pod_yaml"
+	rm -rf "$tmp_file"
 }

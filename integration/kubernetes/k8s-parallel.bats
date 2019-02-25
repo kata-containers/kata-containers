@@ -11,11 +11,11 @@ load "${BATS_TEST_DIRNAME}/../../lib/common.bash"
 setup() {
 	export KUBECONFIG="$HOME/.kube/config"
 	get_pod_config_dir
+	job_name="jobtest"
+	names=( "test1" "test2" "test3" )
 }
 
 @test "Parallel jobs" {
-	job_name="jobtest"
-	declare -a names=( test1 test2 test3 )
 	# Create yaml files
 	for i in "${names[@]}"; do
 		sed "s/\$ITEM/$i/" ${pod_config_dir}/job-template.yaml > ${pod_config_dir}/job-$i.yaml
