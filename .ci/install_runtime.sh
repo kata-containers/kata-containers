@@ -34,7 +34,7 @@ runtime_config_path="${SYSCONFDIR}/kata-containers/configuration.toml"
 PKGDEFAULTSDIR="${SHAREDIR}/defaults/kata-containers"
 NEW_RUNTIME_CONFIG="${PKGDEFAULTSDIR}/configuration.toml"
 # Note: This will also install the config file.
-build_and_install "github.com/kata-containers/runtime"
+build_and_install "github.com/kata-containers/runtime" "" "true"
 
 # Check system supports running Kata Containers
 kata_runtime_path=$(command -v kata-runtime)
