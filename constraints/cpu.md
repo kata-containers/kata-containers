@@ -1,3 +1,16 @@
+* [CPU constraints in Kata Containers](#cpu-constraints-in-kata-containers)
+    * [Default number of virtual CPUs](#default-number-of-virtual-cpus)
+    * [Virtual CPUs and Kubernetes pods](#virtual-cpus-and-kubernetes-pods)
+    * [Container lifecycle](#container-lifecycle)
+    * [Container without CPU constraint](#container-without-cpu-constraint)
+    * [Container with CPU constraint](#container-with-cpu-constraint)
+    * [Do not waste resources](#do-not-waste-resources)
+    * [CPU cgroups](#cpu-cgroups)
+    * [cgroups in the guest](#cgroups-in-the-guest)
+        * [CPU pinning](#cpu-pinning)
+    * [cgroups in the host](#cgroups-in-the-host)
+
+
 # CPU constraints in Kata Containers
 
 ## Default number of virtual CPUs
@@ -156,6 +169,84 @@ docker run --cpus 4 -ti debian bash -c "nproc; cat /sys/fs/cgroup/cpu,cpuacct/cp
 100000  # cfs period
 400000  # cfs quota
 ```
+
+
+## CPU cgroups
+
+Kata Containers runs over two layers of cgroups, the first layer is in the guest where
+only the workload is placed, the second layer is in the host that is more complex and
+might contain more than one process and task (thread) depending of the number of
+containers per POD and vCPUs per container. The following diagram represents a nginx container
+created with `docker` with the default number of vcpus.
+
+
+```
+$ docker run -dt --runtime=kata-runtime nginx
+
+
+       .-------.
+       | nginx |
+    .--'-------'---.  .------------.
+    | Guest Cgroup |  | Kata agent |
+  .-'--------------'--'------------'.    .-----------.
+  |  Thread: Hypervisor's vCPU 0    |    | Kata Shim |
+ .'---------------------------------'.  .'-----------'.
+ |             Tasks                 |  |  Processes  |
+.'-----------------------------------'--'-------------'.
+|                    Host Cgroup                       |
+'------------------------------------------------------'
+```
+
+The next sections explain the difference between processes and tasks and why only hypervisor
+vCPUs are constrained.
+
+### cgroups in the guest
+
+Only the workload process including all its threads are placed into cpu cgroups, this means
+that `kata-agent` and `systemd` run without constraints in the guest.
+
+#### CPU pinning
+
+Kata Containers tries to apply and honor the cgroups but sometimes that is not possible.
+An example of this occurs with cpu cgroups when the number of virtual CPUs (in the guest)
+does not match the actual number of physical host CPUs.
+In Kata Containers to have a good performance and small memory footprint, the resources are
+hot added when they are needed, therefore the number of virtual resources is not the same
+as the number of physical resources. The problem with this approach is that it's not possible
+to pin a process on a specific resource that is not present in the guest. To deal with this
+limitation and to not fail when the container is being created, Kata Containers does not apply
+the constraint in the first layer (guest) if the resource does not exist in the guest, but it
+is applied in the second layer (host) where the hypervisor is running. The constraint is applied
+in both layers when the resource is available in the guest and host. The next sections provide
+further details on what parts of the hypervisor are constrained.
+
+### cgroups in the host
+
+In Kata Containers the workloads run in a virtual machine that is managed and represented by a
+hypervisor running in the host. Like other processes the hypervisor might use threads to realize
+several tasks, for example IO and Network operations. One of the most important uses for the
+threads is as vCPUs. The processes running in the guest see these vCPUs as physical CPUs, while
+in the host those vCPU are just threads that are part of a process. This is the key to ensure
+workloads consumes only the amount of CPU resources that were assigned to it without impacting
+other operations. From user perspective the easier approach to implement it would be to take the
+whole hypervisor including its threads and move them into the cgroup, unfortunately this will
+impact negatively the performance, since vCPUs, IO and Network threads will be fighting for
+resources. The following table shows a random read performance comparison between a Kata Container
+with all its hypervisor threads in the cgroup and other with only its hypervisor vCPU threads
+constrained, the difference is huge.
+
+
+| Bandwidth     | All threads   | vCPU threads | Units |
+|:-------------:|:-------------:|:------------:|:-----:|
+| 4k            | 136.2         | 294.7        | MB/s  |
+| 8k            | 166.6         | 579.4        | MB/s  |
+| 16k           | 178.3         | 1093.3       | MB/s  |
+| 32k           | 179.9         | 1931.5       | MB/s  |
+| 64k           | 213.6         | 3994.2       | MB/s  |
+
+
+To have the best performance in Kata Containers only the vCPU threads are constrained.
+
 
 [1]: https://docs.docker.com/config/containers/resource_constraints/#cpu
 [2]: https://kubernetes.io/docs/tasks/configure-pod-container/assign-cpu-resource
