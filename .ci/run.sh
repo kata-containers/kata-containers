@@ -13,6 +13,10 @@ cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 source /etc/os-release
 
+pushd "${tests_repo_dir}"
+.ci/run.sh
+popd
+
 # This script will execute packaging tests suite
 
 if [ "$ID" == ubuntu ]; then
