@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	. "github.com/onsi/ginkgo"
@@ -135,6 +136,9 @@ var _ = Describe("Checking CPU cgroups in the host", func() {
 				expectedPeriod = "100000"
 				expectedCpuset = "1"
 
+				if runtime.GOARCH == "ppc64le" {
+					expectedCpuset = "8"
+				}
 				_, _, exitCode = dockerUpdate("--cpus=2.5", "--cpu-shares", expectedShares, "--cpuset-cpus", expectedCpuset, id)
 				Expect(exitCode).To(BeZero())
 
