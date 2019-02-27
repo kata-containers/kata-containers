@@ -1,0 +1,15 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: default-cpu-test
+spec:
+  runtimeClassName: kata
+  containers:
+  - name: default-cpu-demo-ctr
+    image: busybox
+    command: ["tail", "-f", "/dev/null"]
