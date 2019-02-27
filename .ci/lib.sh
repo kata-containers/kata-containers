@@ -246,6 +246,41 @@ delete_stale_kata_resource()
 	done
 }
 
+delete_kata_repo_registrations()
+{
+	case "$ID" in
+		ubuntu)
+			local apt_file="/etc/apt/sources.list.d/kata-containers.list"
+			if [ -f "$apt_file" ]; then
+				info "Removing Kata apt file [$apt_file]"
+				sudo rm -f "$apt_file"
+			fi
+
+			sudo apt-key list | grep 'home:katacontainers' > /dev/null
+			if [ $? -eq 0 ]; then
+				# apt-key output format changed at ubuntu 16.10
+				if [ "$VERSION_ID" \< "16.10" ]; then
+					kata_uuid="$(sudo apt-key list | awk '$2=="home:katacontainers" {print prev} {prev=$2}')"
+					kata_uuid="${kata_uuid##*/}"
+				else
+					kata_uuid="$(sudo apt-key list | awk '$4=="home:katacontainers" {print prev} {prev=$0}')"
+				fi
+
+				if [ -n "$kata_uuid" ]; then
+					info "Removing Kata apt key [$kata_uuid]"
+					sudo apt-key del "$kata_uuid"
+				else
+					die "Failed to parse apt-key output for [$ID][$VERSION_ID]"
+				fi
+			else
+				info "No katacontainers key found - not removing"
+			fi
+			;;
+
+		*) info "Do not know how to clean repos from distro [$ID]";;
+	esac
+}
+
 gen_clean_arch() {
 	# Set up some vars
 	stale_process_union=( "docker-containerd-shim" )
@@ -268,5 +303,7 @@ gen_clean_arch() {
 		sudo rm -rf /etc/systemd/system/kubelet.service.d
 		sudo apt-get purge kubeadm kubelet kubectl -y
 	fi
+	info "Remove Kata package repo registrations"
+	delete_kata_repo_registrations
 }
 
