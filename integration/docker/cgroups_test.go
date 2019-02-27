@@ -32,6 +32,13 @@ const (
 	sysCpusetCpusFile = "cpuset.cpus"
 )
 
+type expectedCPUValues struct {
+	shares string
+	quota  string
+	period string
+	cpuset string
+}
+
 func containerID(name string) (string, error) {
 	stdout, stderr, exitCode := dockerInspect("--format", "{{.Id}}", name)
 	if exitCode != 0 {
@@ -66,6 +73,37 @@ func addProcessToCgroup(pid int, cgroupPath string) error {
 		[]byte(fmt.Sprintf("%v", pid)), os.FileMode(0775))
 }
 
+func checkCPUCgroups(name string, expected expectedCPUValues) error {
+	cpuCgroupPath, err := containerCgroupPath(name, cgroupCPU)
+	if err != nil {
+		return err
+	}
+
+	cpusetCgroupPath, err := containerCgroupPath(name, cgroupCpuset)
+	if err != nil {
+		return err
+	}
+
+	for r, v := range map[string]string{
+		filepath.Join(cpuCgroupPath, sysCPUQuotaFile):      expected.quota,
+		filepath.Join(cpuCgroupPath, sysCPUPeriodFile):     expected.period,
+		filepath.Join(cpuCgroupPath, sysCPUSharesFile):     expected.shares,
+		filepath.Join(cpusetCgroupPath, sysCpusetCpusFile): expected.cpuset,
+	} {
+		c, err := ioutil.ReadFile(r)
+		if err != nil {
+			return err
+		}
+
+		cv := strings.Trim(string(c), "\n\t ")
+		if cv != v {
+			return fmt.Errorf("Cgroup %v, expected: %v, got: %v", r, cv, v)
+		}
+	}
+
+	return nil
+}
+
 var _ = Describe("Checking CPU cgroups in the host", func() {
 	var (
 		args             []string
@@ -74,10 +112,7 @@ var _ = Describe("Checking CPU cgroups in the host", func() {
 		cpusetCgroupPath string
 		err              error
 		exitCode         int
-		expectedShares   string
-		expectedQuota    string
-		expectedPeriod   string
-		expectedCpuset   string
+		expected         expectedCPUValues
 	)
 
 	BeforeEach(func() {
@@ -131,33 +166,38 @@ var _ = Describe("Checking CPU cgroups in the host", func() {
 				_, _, exitCode = dockerRun(args...)
 				Expect(exitCode).To(BeZero())
 
-				expectedShares = "738"
-				expectedQuota = "250000"
-				expectedPeriod = "100000"
-				expectedCpuset = "1"
+				expected.shares = "738"
+				expected.quota = "250000"
+				expected.period = "100000"
+				expected.cpuset = "1"
 
 				if runtime.GOARCH == "ppc64le" {
-					expectedCpuset = "8"
+					expected.cpuset = "8"
 				}
-				_, _, exitCode = dockerUpdate("--cpus=2.5", "--cpu-shares", expectedShares, "--cpuset-cpus", expectedCpuset, id)
+				_, _, exitCode = dockerUpdate("--cpus=2.5", "--cpu-shares", expected.shares, "--cpuset-cpus", expected.cpuset, id)
 				Expect(exitCode).To(BeZero())
 
-				cpuCgroupPath, err = containerCgroupPath(id, cgroupCPU)
+				err = checkCPUCgroups(id, expected)
 				Expect(err).ToNot(HaveOccurred())
 
-				cpusetCgroupPath, err = containerCgroupPath(id, cgroupCpuset)
-				Expect(err).ToNot(HaveOccurred())
+				Expect(RemoveDockerContainer(id)).To(BeTrue())
+			})
+		})
+	})
 
-				for r, v := range map[string]string{
-					filepath.Join(cpuCgroupPath, sysCPUQuotaFile):      expectedQuota,
-					filepath.Join(cpuCgroupPath, sysCPUPeriodFile):     expectedPeriod,
-					filepath.Join(cpuCgroupPath, sysCPUSharesFile):     expectedShares,
-					filepath.Join(cpusetCgroupPath, sysCpusetCpusFile): expectedCpuset,
-				} {
-					c, err := ioutil.ReadFile(r)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(strings.Trim(string(c), "\n\t ")).To(Equal(v))
-				}
+	Describe("checking hosts's cpu cgroups", func() {
+		Context("container with cpu and cpuset constraints", func() {
+			It("shold have its cgroup set correctly", func() {
+				_, _, exitCode = dockerRun(args...)
+				Expect(exitCode).To(BeZero())
+
+				expected.shares = "800"
+				expected.quota = "100000"
+				expected.period = "100000"
+				expected.cpuset = "0"
+
+				err = checkCPUCgroups(id, expected)
+				Expect(err).ToNot(HaveOccurred())
 
 				Expect(RemoveDockerContainer(id)).To(BeTrue())
 			})
