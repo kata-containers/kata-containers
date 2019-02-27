@@ -86,16 +86,10 @@ check_all_running() {
 	# Only check for Kata components if we are using a Kata runtime
 	if (( $check_kata_components )); then
 		if [ "$KATA_HYPERVISOR" == "qemu" ]; then
-			# Check we have one proxy per container
-			how_many_proxys=$(pgrep -a -f ${PROXY_PATH} | wc -l)
-			if check_vsock_active; then
-				if (( ${how_many_proxys} != 0 )); then
-					echo "Wrong number of proxys running (${how_many_running} containers, ${how_many_proxys} proxys)"
-					echo "When using vsocks, the number of proxies should be Zero - stopping"
-					((goterror++))
-				fi
-
-			else
+			# Only run proxy check if vsock is disabled
+			if ! check_vsock_active; then
+				# Check we have one proxy per container
+				how_many_proxys=$(pgrep -a -f ${PROXY_PATH} | wc -l)
 				if (( ${how_many_running} != ${how_many_proxys} )); then
 					echo "Wrong number of proxys running (${how_many_running} containers, ${how_many_proxys} proxys) - stopping"
 					((goterror++))
