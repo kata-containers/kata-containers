@@ -22,7 +22,7 @@ lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
 
 # Default architecture
-ARCH=$(arch)
+ARCH=$(uname -m)
 
 # Load default versions for golang and other componets
 source "${script_dir}/versions.txt"
@@ -162,7 +162,7 @@ generate_dockerfile()
 {
 	dir="$1"
 
-	case "$(arch)" in
+	case "$(uname -m)" in
 		"ppc64le")
 			goarch=ppc64le
 			;;
