@@ -51,7 +51,7 @@ MAX_IMG_SIZE_MB=2048
 FS_TYPE=${FS_TYPE:-"ext4"}
 
 # In order to support memory hotplug, image must be aligned to memory section(size in MB) according to different architecture.
-ARCH=$(arch)
+ARCH=$(uname -m)
 case "$ARCH" in
 	aarch64)	MEM_BOUNDARY_MB=1024 ;;
 	      *)        MEM_BOUNDARY_MB=128  ;;
