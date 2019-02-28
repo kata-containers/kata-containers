@@ -182,6 +182,13 @@ func DeleteAll() {
 
 var storeLog = logrus.WithField("source", "virtcontainers/store")
 
+// SetLogger sets the custom logger to be used by this package. If not called,
+// the package will create its own logger.
+func SetLogger(logger *logrus.Entry) {
+	fields := storeLog.Data
+	storeLog = logger.WithFields(fields)
+}
+
 // Logger returns a logrus logger appropriate for logging Store messages
 func (s *Store) Logger() *logrus.Entry {
 	return storeLog.WithFields(logrus.Fields{
