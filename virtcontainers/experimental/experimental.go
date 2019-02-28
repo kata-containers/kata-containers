@@ -7,26 +7,57 @@ package experimental
 
 import (
 	"fmt"
+	"regexp"
+)
+
+const (
+	nameRegStr = "^[a-z][a-z0-9_]*$"
 )
 
 // Feature to be experimental
-type Feature string
+type Feature struct {
+	Name        string
+	Description string
+	// the expected release version to move out from experimental
+	ExpRelease string
+}
 
 var (
-	supportedFeatures = make(map[Feature]struct{})
+	supportedFeatures = make(map[string]Feature)
 )
 
 // Register register a new experimental feature
 func Register(feature Feature) error {
-	if _, ok := supportedFeatures[feature]; ok {
-		return fmt.Errorf("Feature %q had been registered before", feature)
+	if err := validateFeature(feature); err != nil {
+		return err
 	}
-	supportedFeatures[feature] = struct{}{}
+
+	if _, ok := supportedFeatures[feature.Name]; ok {
+		return fmt.Errorf("Feature %q had been registered before", feature.Name)
+	}
+	supportedFeatures[feature.Name] = feature
 	return nil
 }
 
-// Supported check if the feature is supported
-func Supported(feature Feature) bool {
-	_, ok := supportedFeatures[feature]
-	return ok
+// Get returns Feature with requested name
+func Get(name string) *Feature {
+	if f, ok := supportedFeatures[name]; ok {
+		return &f
+	}
+	return nil
+}
+
+func validateFeature(feature Feature) error {
+	if len(feature.Name) == 0 ||
+		len(feature.Description) == 0 ||
+		len(feature.ExpRelease) == 0 {
+		return fmt.Errorf("experimental feature must have valid name, description and expected release")
+	}
+
+	reg := regexp.MustCompile(nameRegStr)
+	if !reg.MatchString(feature.Name) {
+		return fmt.Errorf("feature name must in the format %q", nameRegStr)
+	}
+
+	return nil
 }

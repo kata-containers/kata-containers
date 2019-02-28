@@ -142,7 +142,7 @@ func (sandboxConfig *SandboxConfig) valid() bool {
 
 	// validate experimental features
 	for _, f := range sandboxConfig.Experimental {
-		if !exp.Supported(f) {
+		if exp.Get(f.Name) == nil {
 			return false
 		}
 	}

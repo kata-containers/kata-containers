@@ -8,7 +8,7 @@ They are **always disabled** by default in Kata components releases,
 and can only be enabled by users when they want to have a try.
 
 We suggest you **NEVER** enable "experimental" features in production environment,
-unless you know what breakage they can bring and have confidence to handle it by youself.
+unless you know what breakage they can bring and have confidence to handle it by yourself.
 
 Criteria of an experimental feature are:
 
@@ -28,7 +28,13 @@ so it can improve in next few releases to be stable enough.
 Some features could be big, it adds/changes lots of codes so may need more tests.
 Our CI can help guarantee correctness of the feature, but it may not cover all scenarios.
 Before we're confident that the feature is ready for production use,
-the feature can be marked as "experimental" first, and users can test it manually in their own environment if intested in it.
+the feature can be marked as "experimental" first, and users can test it manually in their own environment if interested in it.
+
+We make no guarantees about experimental features, they can be removed entirely at any point,
+or become non-experimental at some release, so relative configuration options can change radically.
+
+An experimental feature **MUST** have a descriptive name containing only lower-case characters, numbers or '_', 
+e.g. new_hypervisor_2, the name **MUST** be unique and will never be re-used in future.
 
 ## 2. What's the difference between "WIP" and "experimental"?
 
@@ -42,7 +48,7 @@ In one word, "experimental" can be unstable currently but it **MUST** be complet
 
 That depends.
 
-For the feature who breaks backward compatibility, we usually land it as formal feature in a major version bump(x in x.y.z, e.g. 2.0.0).
+For the feature that breaks backward compatibility, we usually land it as formal feature in a major version bump(x in x.y.z, e.g. 2.0.0).
 But for a new feature who becomes stable and ready, we can release it formally in any minor version bump.
 
 Check Kata Container [versioning rules](https://github.com/kata-containers/documentation/blob/c556f1853f2e3df69d336de01ad4bb38e64ecc1b/Releases.md#versioning).
