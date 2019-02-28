@@ -858,11 +858,11 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
 	for _, f := range tomlConf.Runtime.Experimental {
-		feature := exp.Feature(f)
-		if !exp.Supported(feature) {
+		feature := exp.Get(f)
+		if feature == nil {
 			return "", config, fmt.Errorf("Unsupported experimental feature %q", f)
 		}
-		config.Experimental = append(config.Experimental, feature)
+		config.Experimental = append(config.Experimental, *feature)
 	}
 
 	if err := checkConfig(config); err != nil {

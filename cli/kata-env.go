@@ -27,7 +27,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.20"
+const formatVersion = "1.0.21"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {

@@ -1683,16 +1683,20 @@ func TestSandboxUpdateResources(t *testing.T) {
 }
 
 func TestSandboxExperimentalFeature(t *testing.T) {
-	testFeature := exp.Feature("mock")
+	testFeature := exp.Feature{
+		Name:        "mock",
+		Description: "exp feature for test",
+		ExpRelease:  "1.8.0",
+	}
 	sconfig := SandboxConfig{
 		ID:           testSandboxID,
 		Experimental: []exp.Feature{testFeature},
 	}
 
-	assert.False(t, exp.Supported(testFeature))
+	assert.Nil(t, exp.Get(testFeature.Name))
 	assert.False(t, sconfig.valid())
 
 	exp.Register(testFeature)
-	assert.True(t, exp.Supported(testFeature))
+	assert.NotNil(t, exp.Get(testFeature.Name))
 	assert.True(t, sconfig.valid())
 }
