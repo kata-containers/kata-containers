@@ -86,6 +86,8 @@ func newTestSandboxConfigNoop() SandboxConfig {
 		Containers: []ContainerConfig{container},
 
 		Annotations: sandboxAnnotations,
+
+		ProxyType: NoopProxyType,
 	}
 
 	return sandboxConfig
@@ -122,6 +124,8 @@ func newTestSandboxConfigHyperstartAgent() SandboxConfig {
 
 		Containers:  []ContainerConfig{container},
 		Annotations: sandboxAnnotations,
+
+		ProxyType: NoopProxyType,
 	}
 
 	return sandboxConfig
@@ -163,6 +167,8 @@ func newTestSandboxConfigHyperstartAgentDefaultNetwork() SandboxConfig {
 
 		Containers:  []ContainerConfig{container},
 		Annotations: sandboxAnnotations,
+
+		ProxyType: NoopProxyType,
 	}
 
 	return sandboxConfig
@@ -184,6 +190,8 @@ func newTestSandboxConfigKataAgent() SandboxConfig {
 		AgentType: KataContainersAgent,
 
 		Annotations: sandboxAnnotations,
+
+		ProxyType: NoopProxyType,
 	}
 
 	return sandboxConfig
@@ -2014,6 +2022,8 @@ func createNewSandboxConfig(hType HypervisorType, aType AgentType, aConfig inter
 		AgentConfig: aConfig,
 
 		NetworkConfig: netConfig,
+
+		ProxyType: NoopProxyType,
 	}
 }
 

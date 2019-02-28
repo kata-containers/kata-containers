@@ -109,6 +109,8 @@ func (pType *ProxyType) String() string {
 // newProxy returns a proxy from a proxy type.
 func newProxy(pType ProxyType) (proxy, error) {
 	switch pType {
+	case "":
+		return &kataBuiltInProxy{}, nil
 	case NoopProxyType:
 		return &noopProxy{}, nil
 	case NoProxyType:
@@ -120,7 +122,7 @@ func newProxy(pType ProxyType) (proxy, error) {
 	case KataBuiltInProxyType:
 		return &kataBuiltInProxy{}, nil
 	default:
-		return &noopProxy{}, nil
+		return &noopProxy{}, fmt.Errorf("Invalid proxy type: %s", pType)
 	}
 }
 
