@@ -48,6 +48,7 @@ func SetLogger(ctx context.Context, logger *logrus.Entry) {
 	virtLog = logger.WithFields(fields)
 
 	deviceApi.SetLogger(virtLog)
+	store.SetLogger(virtLog)
 }
 
 // CreateSandbox is the virtcontainers sandbox creation entry point.
