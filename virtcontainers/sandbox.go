@@ -1608,7 +1608,6 @@ func (s *Sandbox) AddDevice(info config.DeviceInfo) (api.Device, error) {
 func (s *Sandbox) updateResources() error {
 	// the hypervisor.MemorySize is the amount of memory reserved for
 	// the VM and contaniners without memory limit
-
 	sumResources := specs.LinuxResources{
 		Memory: &specs.LinuxMemory{
 			Limit: new(int64),
@@ -1619,19 +1618,22 @@ func (s *Sandbox) updateResources() error {
 		},
 	}
 
+	var mCPU uint32
+
+	// Calculate running total of memory and mCPUs requested
 	for _, c := range s.config.Containers {
 		if m := c.Resources.Memory; m != nil && m.Limit != nil {
 			*sumResources.Memory.Limit += *m.Limit
 		}
 		if cpu := c.Resources.CPU; cpu != nil {
 			if cpu.Period != nil && cpu.Quota != nil {
-				*sumResources.CPU.Period += *cpu.Period
-				*sumResources.CPU.Quota += *cpu.Quota
+				mCPU += utils.CalculateMilliCPUs(*cpu.Quota, *cpu.Period)
 			}
+
 		}
 	}
 
-	sandboxVCPUs := uint32(utils.ConstraintsToVCPUs(*sumResources.CPU.Quota, *sumResources.CPU.Period))
+	sandboxVCPUs := utils.CalculateVCpusFromMilliCpus(mCPU)
 	sandboxVCPUs += s.hypervisor.hypervisorConfig().NumVCPUs
 
 	sandboxMemoryByte := int64(s.hypervisor.hypervisorConfig().MemorySize) << utils.MibToBytesShift
