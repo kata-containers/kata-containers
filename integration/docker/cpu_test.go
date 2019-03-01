@@ -23,7 +23,7 @@ const (
 	cpusetCpusSysPath = "/sys/fs/cgroup/cpuset/cpuset.cpus"
 	cpusetMemsSysPath = "/sys/fs/cgroup/cpuset/cpuset.mems"
 
-	checkCpusCmdFmt = `for c in $(seq 1 %d); do if grep -q 1 /sys/devices/system/cpu/cpu%d/online; then nproc; exit 0; fi; sleep %d; done; exit 1`
+	checkCpusCmdFmt = `for c in $(seq 1 %d); do if [ "$(nproc)" == "%d" ]; then nproc; exit 0; fi; sleep %d; done; exit 1`
 )
 
 func withCPUPeriodAndQuota(quota, period, defaultVCPUs int, fail bool) TableEntry {
@@ -79,7 +79,7 @@ var _ = Describe("Hot plug CPUs", func() {
 			vCPUs = ((quota + period - 1) / period) + defaultVCPUs
 			args = append(args, "--cpu-quota", fmt.Sprintf("%d", quota),
 				"--cpu-period", fmt.Sprintf("%d", period), DebianImage, "bash", "-c",
-				fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs-1, waitTime))
+				fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs, waitTime))
 			stdout, _, exitCode := dockerRun(args...)
 			if fail {
 				Expect(exitCode).ToNot(BeZero())
@@ -98,7 +98,7 @@ var _ = Describe("Hot plug CPUs", func() {
 		func(cpus int, fail bool) {
 			vCPUs = cpus + defaultVCPUs
 			args = append(args, "--cpus", fmt.Sprintf("%d", cpus), DebianImage, "bash", "-c",
-				fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs-1, waitTime))
+				fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs, waitTime))
 			stdout, _, exitCode := dockerRun(args...)
 			if fail {
 				Expect(exitCode).ToNot(BeZero())
@@ -272,7 +272,7 @@ var _ = Describe("Update number of CPUs", func() {
 			}
 			Expect(exitCode).To(BeZero())
 
-			execArgs = append(execArgs, id, "bash", "-c", fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs-1, waitTime))
+			execArgs = append(execArgs, id, "bash", "-c", fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs, waitTime))
 			stdout, _, exitCode = dockerExec(execArgs...)
 			Expect(exitCode).To(BeZero())
 			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
@@ -294,7 +294,7 @@ var _ = Describe("Update number of CPUs", func() {
 			}
 			Expect(exitCode).To(BeZero())
 
-			execArgs = append(execArgs, id, "bash", "-c", fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs-1, waitTime))
+			execArgs = append(execArgs, id, "bash", "-c", fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs, waitTime))
 			stdout, _, exitCode = dockerExec(execArgs...)
 			Expect(exitCode).To(BeZero())
 			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
