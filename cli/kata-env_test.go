@@ -245,7 +245,7 @@ func getExpectedAgentDetails(config oci.RuntimeConfig) (AgentInfo, error) {
 }
 
 // nolint: unused
-func genericGetExpectedHostDetails(tmpdir string, expectedVendor string, expectedModel string) (HostInfo, error) {
+func genericGetExpectedHostDetails(tmpdir string, expectedVendor string, expectedModel string, expectedVMContainerCapable bool) (HostInfo, error) {
 	type filesToCreate struct {
 		file     string
 		contents string
@@ -269,7 +269,7 @@ func genericGetExpectedHostDetails(tmpdir string, expectedVendor string, expecte
 		Architecture:       expectedArch,
 		Distro:             expectedDistro,
 		CPU:                expectedCPU,
-		VMContainerCapable: false,
+		VMContainerCapable: expectedVMContainerCapable,
 		SupportVSocks:      vcUtils.SupportsVsocks(),
 	}
 
@@ -318,6 +318,11 @@ VERSION_ID="%s"
 		if err != nil {
 			return HostInfo{}, err
 		}
+	}
+
+	if goruntime.GOARCH == "arm64" {
+		expectedHostDetails.CPU.Vendor = "ARM Limited"
+		expectedHostDetails.CPU.Model = "v8"
 	}
 
 	return expectedHostDetails, nil
