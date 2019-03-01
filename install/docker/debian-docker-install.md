@@ -13,7 +13,7 @@
    > - This step is only required if Docker is not installed on the system.
    > - Newer versions of Docker have
    >   [removed devicemapper support](https://github.com/kata-containers/documentation/issues/373)
-   >   so the commands below install the latest version which includes
+   >   so the following commands install the latest version, which includes
    >   devicemapper support.
    > - To remove the lock on the docker package to allow it to be updated:
    >   ```sh
