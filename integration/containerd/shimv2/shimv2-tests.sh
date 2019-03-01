@@ -19,6 +19,12 @@ echo "========================================"
 echo "         start shimv2 testing"
 echo "========================================"
 
+if [[ "$ID" =~ ^opensuse.*$ ]]; then
+	issue="https://github.com/kata-containers/tests/issues/1251"
+	echo "Skip shimv2 on $ID, see: $issue"
+	exit
+fi
+
 if [ "$ID" != "centos" ]; then
 	${SCRIPT_PATH}/../cri/integration-tests.sh
 else
