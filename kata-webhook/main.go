@@ -16,14 +16,32 @@ import (
 
 	whhttp "github.com/slok/kubewebhook/pkg/http"
 	"github.com/slok/kubewebhook/pkg/log"
+	mctx "github.com/slok/kubewebhook/pkg/webhook/context"
 	mutatingwh "github.com/slok/kubewebhook/pkg/webhook/mutating"
 )
 
-func annotatePodMutator(_ context.Context, obj metav1.Object) (bool, error) {
+func annotatePodMutator(ctx context.Context, obj metav1.Object) (bool, error) {
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		// If not a pod just continue the mutation chain (if there is one) and don't do anything
 		return false, nil
+	}
+
+	request := mctx.GetAdmissionRequest(ctx)
+	if request == nil {
+		return false, nil
+	}
+
+	// The Namespace is not always available in the pod Spec
+	// specially when operators create the pods. Hence access
+	// the Namespace in the actual request (vs the object)
+	// https://godoc.org/k8s.io/api/admission/v1beta1#AdmissionRequest
+	switch request.Namespace {
+	case "rook-ceph-system", "rook-ceph":
+		fmt.Println("rook: ", pod.GetNamespace(), pod.GetName())
+		return false, nil
+	default:
+		break
 	}
 
 	// We cannot support --net=host in Kata
@@ -31,14 +49,6 @@ func annotatePodMutator(_ context.Context, obj metav1.Object) (bool, error) {
 	if pod.Spec.HostNetwork {
 		fmt.Println("host network: ", pod.GetNamespace(), pod.GetName())
 		return false, nil
-	}
-
-	switch pod.GetNamespace() {
-	case "rook-ceph-system", "rook-ceph":
-		fmt.Println("rook: ", pod.GetNamespace(), pod.GetName())
-		return false, nil
-	default:
-		break
 	}
 
 	for i := range pod.Spec.Containers {

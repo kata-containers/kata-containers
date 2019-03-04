@@ -22,6 +22,3 @@ webhooks:
         apiGroups: [""]
         apiVersions: ["v1"]
         resources: ["pods"]
-    namespaceSelector:
-      matchExpressions:
-        -  {key: "kata", operator: NotIn, values: ["false"]}
