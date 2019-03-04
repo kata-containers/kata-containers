@@ -583,7 +583,12 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 	return nil
 }
 
-func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
+func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
+	if builtIn {
+		config.ProxyType = vc.KataBuiltInProxyType
+		return nil
+	}
+
 	for k, proxy := range tomlConf.Proxy {
 		switch k {
 		case ccProxyTableType:
@@ -601,15 +606,25 @@ func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oc
 	return nil
 }
 
-func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
+func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
+	if builtIn {
+		config.AgentType = vc.KataContainersAgent
+		config.AgentConfig = vc.KataAgentConfig{
+			LongLiveConn: true,
+			UseVSock:     config.HypervisorConfig.UseVSock,
+		}
+
+		return nil
+	}
+
 	for k := range tomlConf.Agent {
 		switch k {
 		case hyperstartAgentTableType:
-			config.AgentType = hyperstartAgentTableType
+			config.AgentType = vc.HyperstartAgent
 			config.AgentConfig = vc.HyperConfig{}
 
 		case kataAgentTableType:
-			config.AgentType = kataAgentTableType
+			config.AgentType = vc.KataContainersAgent
 			config.AgentConfig = vc.KataAgentConfig{
 				UseVSock: config.HypervisorConfig.UseVSock,
 			}
@@ -619,7 +634,13 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 	return nil
 }
 
-func updateRuntimeConfigShim(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
+func updateRuntimeConfigShim(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
+	if builtIn {
+		config.ShimType = vc.KataBuiltInShimType
+		config.ShimConfig = vc.ShimConfig{}
+		return nil
+	}
+
 	for k, shim := range tomlConf.Shim {
 		switch k {
 		case ccShimTableType:
@@ -674,20 +695,20 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 	return nil
 }
 
-func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig) error {
+func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
 	if err := updateRuntimeConfigHypervisor(configPath, tomlConf, config); err != nil {
 		return err
 	}
 
-	if err := updateRuntimeConfigProxy(configPath, tomlConf, config); err != nil {
+	if err := updateRuntimeConfigProxy(configPath, tomlConf, config, builtIn); err != nil {
 		return err
 	}
 
-	if err := updateRuntimeConfigAgent(configPath, tomlConf, config); err != nil {
+	if err := updateRuntimeConfigAgent(configPath, tomlConf, config, builtIn); err != nil {
 		return err
 	}
 
-	if err := updateRuntimeConfigShim(configPath, tomlConf, config); err != nil {
+	if err := updateRuntimeConfigShim(configPath, tomlConf, config, builtIn); err != nil {
 		return err
 	}
 
@@ -828,7 +849,7 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 			}).Info("loaded configuration")
 	}
 
-	if err := updateConfig(resolved, tomlConf, &config, builtIn); err != nil {
+	if err := updateRuntimeConfig(resolved, tomlConf, &config, builtIn); err != nil {
 		return "", config, err
 	}
 
@@ -862,25 +883,6 @@ func checkConfig(config oci.RuntimeConfig) error {
 
 	if err := checkFactoryConfig(config); err != nil {
 		return err
-	}
-
-	return nil
-}
-
-func updateConfig(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
-
-	if err := updateRuntimeConfig(configPath, tomlConf, config); err != nil {
-		return err
-	}
-
-	if builtIn {
-		config.ProxyType = vc.KataBuiltInProxyType
-		config.ShimType = vc.KataBuiltInShimType
-		config.AgentType = vc.KataContainersAgent
-		config.AgentConfig = vc.KataAgentConfig{
-			LongLiveConn: true,
-			UseVSock:     config.HypervisorConfig.UseVSock,
-		}
 	}
 
 	return nil
