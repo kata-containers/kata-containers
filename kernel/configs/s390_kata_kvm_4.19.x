@@ -1,10 +1,10 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/s390 4.19.8 Kernel Configuration
+# Linux/s390 4.19.24 Kernel Configuration
 #
 
 #
-# Compiler: gcc (Ubuntu 7.3.0-16ubuntu3) 7.3.0
+# Compiler: gcc (Ubuntu 7.3.0-27ubuntu1~18.04) 7.3.0
 #
 CONFIG_CC_IS_GCC=y
 CONFIG_GCC_VERSION=70300
@@ -112,7 +112,7 @@ CONFIG_BLK_CGROUP=y
 CONFIG_CGROUP_WRITEBACK=y
 CONFIG_CGROUP_SCHED=y
 CONFIG_FAIR_GROUP_SCHED=y
-# CONFIG_CFS_BANDWIDTH is not set
+CONFIG_CFS_BANDWIDTH=y
 CONFIG_RT_GROUP_SCHED=y
 CONFIG_CGROUP_PIDS=y
 # CONFIG_CGROUP_RDMA is not set
@@ -1499,22 +1499,7 @@ CONFIG_BCMA_POSSIBLE=y
 # CONFIG_BACKLIGHT_LCD_SUPPORT is not set
 # CONFIG_SOUND is not set
 CONFIG_USB_OHCI_LITTLE_ENDIAN=y
-CONFIG_USB_SUPPORT=y
-CONFIG_USB_ARCH_HAS_HCD=y
-# CONFIG_USB is not set
-CONFIG_USB_PCI=y
-
-#
-# USB port drivers
-#
-
-#
-# USB Physical Layer drivers
-#
-# CONFIG_NOP_USB_XCEIV is not set
-# CONFIG_USB_GADGET is not set
-# CONFIG_TYPEC is not set
-# CONFIG_USB_ULPI_BUS is not set
+# CONFIG_USB_SUPPORT is not set
 # CONFIG_UWB is not set
 # CONFIG_MMC is not set
 # CONFIG_MEMSTICK is not set
