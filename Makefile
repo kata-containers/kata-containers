@@ -12,19 +12,11 @@ for file in /etc/os-release /usr/lib/os-release; do \
     fi \
 done)
 
-HOST_ARCH=$(shell arch)
-ifeq ($(GOPATH),)
-    SKIP_GO_VERSION_CHECK=y
-else
-    SKIP_GO_VERSION_CHECK=
-endif
-
-ifeq ($(SKIP_GO_VERSION_CHECK),)
-    include golang.mk
-endif
+SKIP_GO_VERSION_CHECK=
+include golang.mk
 
 #Get ARCH.
-ifneq ($(GOPATH),)
+ifneq (,$(golang_version_raw))
     GOARCH=$(shell go env GOARCH)
     ifeq ($(ARCH),)
         ARCH = $(GOARCH)
@@ -608,7 +600,7 @@ show-footer:
 	@printf "\tBugs: $(PROJECT_BUG_URL)\n\n"
 
 show-summary: show-header
-ifneq ($(GOPATH),)
+ifneq (,$(golang_version_raw))
 	@printf "• architecture:\n"
 	@printf "\tHost: $(HOST_ARCH)\n"
 	@printf "\tgolang: $(GOARCH)\n"
@@ -618,7 +610,7 @@ ifneq ($(GOPATH),)
 	@printf "\t"
 	@go version
 else
-	@printf "• GOPATH not set:\n"
+	@printf "• No GO command or GOPATH not set:\n"
 	@printf "\tCan only install prebuilt binaries\n"
 endif
 	@printf "\n"
