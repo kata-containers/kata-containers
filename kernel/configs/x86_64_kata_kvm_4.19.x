@@ -1,10 +1,10 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/x86 4.19.10 Kernel Configuration
+# Linux/x86 4.19.24 Kernel Configuration
 #
 
 #
-# Compiler: gcc (Ubuntu 5.4.0-6ubuntu1~16.04.10) 5.4.0 20160609
+# Compiler: gcc (Ubuntu 5.4.0-6ubuntu1~16.04.11) 5.4.0 20160609
 #
 CONFIG_CC_IS_GCC=y
 CONFIG_GCC_VERSION=50400
@@ -2073,6 +2073,7 @@ CONFIG_DRM_KMS_HELPER=y
 CONFIG_DRM_KMS_FB_HELPER=y
 CONFIG_DRM_FBDEV_EMULATION=y
 CONFIG_DRM_FBDEV_OVERALLOC=100
+# CONFIG_DRM_FBDEV_LEAK_PHYS_SMEM is not set
 # CONFIG_DRM_LOAD_EDID_FIRMWARE is not set
 # CONFIG_DRM_DP_CEC is not set
 
