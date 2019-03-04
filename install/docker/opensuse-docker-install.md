@@ -5,13 +5,24 @@
 > - This guide assumes you have
 >   [already installed the Kata Containers packages](../opensuse-installation-guide.md).
 
-1. Install the latest version of Docker with the following commands:
+1. Install Docker with the following commands:
 
-   > **Note:** This step is only required if Docker is not installed on the system.
+   > **Notes:**
+   >
+   > - This step is only required if Docker is not installed on the system.
+   > - Newer versions of Docker have
+   >   [removed devicemapper support](https://github.com/kata-containers/documentation/issues/373)
+   >   so the following commands install the latest version, which includes
+   >   devicemapper support.
+   > - To remove the lock on the docker package to allow it to be updated:
+   >   ```sh
+   >   $ sudo zypper removelock docker
+   >   ```
 
    ```bash
    $ sudo zypper -n install libcgroup1
-   $ sudo zypper -n install docker
+   $ sudo zypper -n install 'docker<18.09'
+   $ sudo zypper addlock docker
    ```
 
    For more information on installing Docker please refer to the
