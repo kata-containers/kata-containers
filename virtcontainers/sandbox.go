@@ -567,8 +567,8 @@ func (s *Sandbox) storeSandbox() error {
 	return nil
 }
 
-func rLockSandbox(sandboxID string) (string, error) {
-	store, err := store.NewVCSandboxStore(context.Background(), sandboxID)
+func rLockSandbox(ctx context.Context, sandboxID string) (string, error) {
+	store, err := store.NewVCSandboxStore(ctx, sandboxID)
 	if err != nil {
 		return "", err
 	}
@@ -576,8 +576,8 @@ func rLockSandbox(sandboxID string) (string, error) {
 	return store.RLock()
 }
 
-func rwLockSandbox(sandboxID string) (string, error) {
-	store, err := store.NewVCSandboxStore(context.Background(), sandboxID)
+func rwLockSandbox(ctx context.Context, sandboxID string) (string, error) {
+	store, err := store.NewVCSandboxStore(ctx, sandboxID)
 	if err != nil {
 		return "", err
 	}
@@ -585,15 +585,15 @@ func rwLockSandbox(sandboxID string) (string, error) {
 	return store.Lock()
 }
 
-func unlockSandbox(sandboxID, token string) error {
+func unlockSandbox(ctx context.Context, sandboxID, token string) error {
 	// If the store no longer exists, we won't be able to unlock.
 	// Creating a new store for locking an item that does not even exist
 	// does not make sense.
-	if !store.VCSandboxStoreExists(context.Background(), sandboxID) {
+	if !store.VCSandboxStoreExists(ctx, sandboxID) {
 		return nil
 	}
 
-	store, err := store.NewVCSandboxStore(context.Background(), sandboxID)
+	store, err := store.NewVCSandboxStore(ctx, sandboxID)
 	if err != nil {
 		return err
 	}
@@ -614,7 +614,7 @@ func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err 
 	}
 
 	// We're bootstrapping
-	vcStore, err := store.NewVCSandboxStore(context.Background(), sandboxID)
+	vcStore, err := store.NewVCSandboxStore(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -1457,11 +1457,11 @@ func togglePauseSandbox(ctx context.Context, sandboxID string, pause bool) (*San
 		return nil, errNeedSandbox
 	}
 
-	lockFile, err := rwLockSandbox(sandboxID)
+	lockFile, err := rwLockSandbox(ctx, sandboxID)
 	if err != nil {
 		return nil, err
 	}
-	defer unlockSandbox(sandboxID, lockFile)
+	defer unlockSandbox(ctx, sandboxID, lockFile)
 
 	// Fetch the sandbox from storage and create it.
 	s, err := fetchSandbox(ctx, sandboxID)
