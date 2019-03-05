@@ -10,7 +10,8 @@ import "testing"
 func getExpectedHostDetails(tmpdir string) (HostInfo, error) {
 	expectedVendor := ""
 	expectedModel := "POWER8"
-	return genericGetExpectedHostDetails(tmpdir, expectedVendor, expectedModel)
+	expectedVMContainerCapable := false
+	return genericGetExpectedHostDetails(tmpdir, expectedVendor, expectedModel, expectedVMContainerCapable)
 }
 
 func TestEnvGetEnvInfoSetsCPUType(t *testing.T) {
