@@ -55,10 +55,13 @@ func (p *kataBuiltInProxy) start(params proxyParams) (int, string, error) {
 	params.logger.Debug("Starting builtin kata proxy")
 
 	p.sandboxID = params.id
-	err := p.watchConsole(buildinProxyConsoleProto, params.consoleURL, params.logger)
-	if err != nil {
-		p.sandboxID = ""
-		return -1, "", err
+
+	if params.debug {
+		err := p.watchConsole(buildinProxyConsoleProto, params.consoleURL, params.logger)
+		if err != nil {
+			p.sandboxID = ""
+			return -1, "", err
+		}
 	}
 
 	return -1, params.agentURL, nil

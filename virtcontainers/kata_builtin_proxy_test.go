@@ -17,7 +17,7 @@ func TestKataBuiltinProxy(t *testing.T) {
 
 	p := kataBuiltInProxy{}
 
-	params := proxyParams{}
+	params := proxyParams{debug: true}
 
 	err := p.validateParams(params)
 	assert.NotNil(err)
