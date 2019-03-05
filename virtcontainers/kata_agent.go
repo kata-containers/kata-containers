@@ -986,7 +986,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 
 	// This is the guest absolute root path for that container.
 	rootPathParent := filepath.Join(kataGuestSharedDir, c.id)
-	rootPath := filepath.Join(rootPathParent, rootfsDir)
+	rootPath := filepath.Join(rootPathParent, c.rootfsSuffix)
 
 	// In case the container creation fails, the following defer statement
 	// takes care of rolling back actions previously performed.
