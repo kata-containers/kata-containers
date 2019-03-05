@@ -1336,7 +1336,7 @@ func TestUpdateRuntimeConfiguration(t *testing.T) {
 	assert.NotEqual(config.AgentType, vc.AgentType(kataAgentTableType))
 	assert.NotEqual(config.AgentConfig, vc.KataAgentConfig{})
 
-	err := updateRuntimeConfig("", tomlConf, &config)
+	err := updateRuntimeConfig("", tomlConf, &config, false)
 	assert.NoError(err)
 
 	assert.Equal(config.AgentType, vc.AgentType(kataAgentTableType))
@@ -1365,7 +1365,7 @@ func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 		},
 	}
 
-	err := updateRuntimeConfig("", tomlConf, &config)
+	err := updateRuntimeConfig("", tomlConf, &config, false)
 	assert.NoError(err)
 
 	assert.Equal(expectedVMConfig, config.HypervisorConfig.MemorySize)
@@ -1381,7 +1381,7 @@ func TestUpdateRuntimeConfigurationFactoryConfig(t *testing.T) {
 
 	tomlConf := tomlConfig{Factory: factory{Template: true}}
 
-	err := updateRuntimeConfig("", tomlConf, &config)
+	err := updateRuntimeConfig("", tomlConf, &config, false)
 	assert.NoError(err)
 
 	assert.Equal(expectedFactoryConfig, config.FactoryConfig)
@@ -1410,7 +1410,7 @@ func TestUpdateRuntimeConfigurationInvalidKernelParams(t *testing.T) {
 		}
 	}
 
-	err := updateRuntimeConfig("", tomlConf, &config)
+	err := updateRuntimeConfig("", tomlConf, &config, false)
 	assert.EqualError(err, "Empty kernel parameter")
 }
 
