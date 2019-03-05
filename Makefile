@@ -26,6 +26,9 @@ else
     ifeq ($(ARCH),x86_64)
         ARCH = amd64
     endif
+    ifeq ($(ARCH),aarch64)
+        ARCH = arm64
+    endif
 endif
 
 ARCH_DIR = arch
