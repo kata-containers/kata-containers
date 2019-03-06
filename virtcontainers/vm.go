@@ -62,12 +62,7 @@ func setupProxy(h hypervisor, agent agent, config VMConfig, id string) (int, str
 		return -1, "", nil, err
 	}
 
-	// default to kata builtin proxy
-	proxyType := config.ProxyType
-	if len(proxyType.String()) == 0 {
-		proxyType = KataBuiltInProxyType
-	}
-	proxy, err := newProxy(proxyType)
+	proxy, err := newProxy(config.ProxyType)
 	if err != nil {
 		return -1, "", nil, err
 	}
