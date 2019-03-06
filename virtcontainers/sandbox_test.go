@@ -19,14 +19,14 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
 )
 
@@ -1573,4 +1573,46 @@ func TestSandboxCreationFromConfigRollbackFromCreateSandbox(t *testing.T) {
 	// check dirs
 	err = checkSandboxRemains()
 	assert.NoError(err)
+}
+
+func TestSandboxUpdateResources(t *testing.T) {
+	contConfig1 := newTestContainerConfigNoop("cont-00001")
+	contConfig2 := newTestContainerConfigNoop("cont-00002")
+	hConfig := newHypervisorConfig(nil, nil)
+
+	defer cleanUp()
+	// create a sandbox
+	s, err := testCreateSandbox(t,
+		testSandboxID,
+		MockHypervisor,
+		hConfig,
+		NoopAgentType,
+		NetworkConfig{},
+		[]ContainerConfig{contConfig1, contConfig2},
+		nil)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = s.updateResources()
+	if err != nil {
+		t.Fatal(err)
+	}
+	containerMemLimit := int64(1000)
+	containerCPUPeriod := uint64(1000)
+	containerCPUQouta := int64(5)
+	for _, c := range s.config.Containers {
+		c.Resources.Memory = &specs.LinuxMemory{
+			Limit: new(int64),
+		}
+		c.Resources.CPU = &specs.LinuxCPU{
+			Period: new(uint64),
+			Quota:  new(int64),
+		}
+		c.Resources.Memory.Limit = &containerMemLimit
+		c.Resources.CPU.Period = &containerCPUPeriod
+		c.Resources.CPU.Quota = &containerCPUQouta
+	}
+	err = s.updateResources()
 }
