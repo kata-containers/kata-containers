@@ -30,7 +30,7 @@ func TestQemuS390xCPUModel(t *testing.T) {
 	assert.Equal(expectedOut, model)
 
 	s390x.enableNestingChecks()
-	expectedOut = defaultCPUModel + ",pmu=off"
+	expectedOut = defaultCPUModel
 	model = s390x.cpuModel()
 	assert.Equal(expectedOut, model)
 }
