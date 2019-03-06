@@ -107,6 +107,67 @@ func TestCreateMockSandbox(t *testing.T) {
 	defer cleanUp()
 }
 
+func TestCalculateSandboxCPUs(t *testing.T) {
+	sandbox := &Sandbox{}
+	sandbox.config = &SandboxConfig{}
+	unconstrained := newTestContainerConfigNoop("cont-00001")
+	constrained := newTestContainerConfigNoop("cont-00001")
+	quota := int64(4000)
+	period := uint64(1000)
+	constrained.Resources.CPU = &specs.LinuxCPU{Period: &period, Quota: &quota}
+
+	tests := []struct {
+		name       string
+		containers []ContainerConfig
+		want       uint32
+	}{
+		{"1-unconstrained", []ContainerConfig{unconstrained}, 0},
+		{"2-unconstrained", []ContainerConfig{unconstrained, unconstrained}, 0},
+		{"1-constrained", []ContainerConfig{constrained}, 4},
+		{"2-constrained", []ContainerConfig{constrained, constrained}, 8},
+		{"3-mix-constraints", []ContainerConfig{unconstrained, constrained, constrained}, 8},
+		{"3-constrained", []ContainerConfig{constrained, constrained, constrained}, 12},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sandbox.config.Containers = tt.containers
+			if got := sandbox.calculateSandboxCPUs(); got != tt.want {
+				t.Errorf("calculateSandboxCPUs() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCalculateSandboxMem(t *testing.T) {
+	sandbox := &Sandbox{}
+	sandbox.config = &SandboxConfig{}
+	unconstrained := newTestContainerConfigNoop("cont-00001")
+	constrained := newTestContainerConfigNoop("cont-00001")
+	limit := int64(4000)
+	constrained.Resources.Memory = &specs.LinuxMemory{Limit: &limit}
+
+	tests := []struct {
+		name       string
+		containers []ContainerConfig
+		want       int64
+	}{
+		{"1-unconstrained", []ContainerConfig{unconstrained}, 0},
+		{"2-unconstrained", []ContainerConfig{unconstrained, unconstrained}, 0},
+		{"1-constrained", []ContainerConfig{constrained}, limit},
+		{"2-constrained", []ContainerConfig{constrained, constrained}, limit * 2},
+		{"3-mix-constraints", []ContainerConfig{unconstrained, constrained, constrained}, limit * 2},
+		{"3-constrained", []ContainerConfig{constrained, constrained, constrained}, limit * 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sandbox.config.Containers = tt.containers
+			if got := sandbox.calculateSandboxMemory(); got != tt.want {
+				t.Errorf("calculateSandboxMemory() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestCreateSandboxEmptyID(t *testing.T) {
 	hConfig := newHypervisorConfig(nil, nil)
 
@@ -1615,4 +1676,7 @@ func TestSandboxUpdateResources(t *testing.T) {
 		c.Resources.CPU.Quota = &containerCPUQouta
 	}
 	err = s.updateResources()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
