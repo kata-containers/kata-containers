@@ -1,3 +1,9 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
 PREFIX := /usr
 BIN_DIR := $(PREFIX)/bin
 VC_BIN_DIR := $(BIN_DIR)/virtcontainers/bin
@@ -10,6 +16,7 @@ CC_SHIM_DIR := shim/mock/cc-shim
 CC_SHIM_BIN := cc-shim
 KATA_SHIM_DIR := shim/mock/kata-shim
 KATA_SHIM_BIN := kata-shim
+MK_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
 #
 # Pretty printing
@@ -49,10 +56,10 @@ binaries: virtc hook cc-shim kata-shim
 check: check-go-static check-go-test
 
 check-go-static:
-	bash .ci/go-lint.sh
+	bash $(MK_DIR)/../.ci/go-lint.sh
 
 check-go-test:
-	bash .ci/go-test.sh \
+	bash $(MK_DIR)/../.ci/go-test.sh \
 		$(TEST_BIN_DIR)/$(CC_SHIM_BIN) \
 		$(TEST_BIN_DIR)/$(KATA_SHIM_BIN) \
 		$(TEST_BIN_DIR)/$(HOOK_BIN)

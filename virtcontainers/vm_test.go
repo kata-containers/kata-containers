@@ -102,7 +102,7 @@ func TestSetupProxy(t *testing.T) {
 	agent := &noopAgent{}
 
 	// wrong proxy type
-	config.ProxyType = "invalidProxyType"
+	config.ProxyType = ProxyType("invalidProxyType")
 	_, _, _, err := setupProxy(hypervisor, agent, config, "foobar")
 	assert.NotNil(err)
 
