@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -1608,36 +1609,21 @@ func (s *Sandbox) AddDevice(info config.DeviceInfo) (api.Device, error) {
 func (s *Sandbox) updateResources() error {
 	// the hypervisor.MemorySize is the amount of memory reserved for
 	// the VM and contaniners without memory limit
-	sumResources := specs.LinuxResources{
-		Memory: &specs.LinuxMemory{
-			Limit: new(int64),
-		},
-		CPU: &specs.LinuxCPU{
-			Period: new(uint64),
-			Quota:  new(int64),
-		},
+
+	if s == nil {
+		return errors.New("sandbox is nil")
 	}
 
-	var mCPU uint32
-
-	// Calculate running total of memory and mCPUs requested
-	for _, c := range s.config.Containers {
-		if m := c.Resources.Memory; m != nil && m.Limit != nil {
-			*sumResources.Memory.Limit += *m.Limit
-		}
-		if cpu := c.Resources.CPU; cpu != nil {
-			if cpu.Period != nil && cpu.Quota != nil {
-				mCPU += utils.CalculateMilliCPUs(*cpu.Quota, *cpu.Period)
-			}
-
-		}
+	if s.config == nil {
+		return fmt.Errorf("sandbox config is nil")
 	}
 
-	sandboxVCPUs := utils.CalculateVCpusFromMilliCpus(mCPU)
+	sandboxVCPUs := s.calculateSandboxCPUs()
+	// Add default vcpus for sandbox
 	sandboxVCPUs += s.hypervisor.hypervisorConfig().NumVCPUs
 
 	sandboxMemoryByte := int64(s.hypervisor.hypervisorConfig().MemorySize) << utils.MibToBytesShift
-	sandboxMemoryByte += *sumResources.Memory.Limit
+	sandboxMemoryByte += s.calculateSandboxMemory()
 
 	// Update VCPUs
 	s.Logger().WithField("cpus-sandbox", sandboxVCPUs).Debugf("Request to hypervisor to update vCPUs")
@@ -1665,4 +1651,28 @@ func (s *Sandbox) updateResources() error {
 		return err
 	}
 	return nil
+}
+
+func (s *Sandbox) calculateSandboxMemory() int64 {
+	memorySandbox := int64(0)
+	for _, c := range s.config.Containers {
+		if m := c.Resources.Memory; m != nil && m.Limit != nil {
+			memorySandbox += *m.Limit
+		}
+	}
+	return memorySandbox
+}
+
+func (s *Sandbox) calculateSandboxCPUs() uint32 {
+	mCPU := uint32(0)
+
+	for _, c := range s.config.Containers {
+		if cpu := c.Resources.CPU; cpu != nil {
+			if cpu.Period != nil && cpu.Quota != nil {
+				mCPU += utils.CalculateMilliCPUs(*cpu.Quota, *cpu.Period)
+			}
+
+		}
+	}
+	return utils.CalculateVCpusFromMilliCpus(mCPU)
 }
