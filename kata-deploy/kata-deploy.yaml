@@ -41,6 +41,8 @@ spec:
           mountPath: /var/run/dbus
         - name: systemd
           mountPath: /run/systemd
+        - name: local-bin
+          mountPath: /usr/local/bin/
       volumes:
         - name: crio-conf
           hostPath:
@@ -58,6 +60,9 @@ spec:
         - name: systemd
           hostPath:
             path: /run/systemd
+        - name: local-bin
+          hostPath:
+            path: /usr/local/bin/
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1
