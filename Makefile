@@ -23,6 +23,11 @@ ARCH_DIR = arch
 ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 
+# Number of processor units available
+NPROCS := $(shell grep -c ^processor /proc/cpuinfo)
+# Number of `go test` processes that ginkgo will spawn.
+GINKGO_NODES := $(shell echo $(NPROCS)\-2 | bc)
+
 # Load architecture-dependent settings
 ifneq ($(wildcard $(ARCH_FILE)),)
 include $(ARCH_FILE)
@@ -49,8 +54,21 @@ endif
 docker: ginkgo
 ifeq ($(RUNTIME),)
 	$(error RUNTIME is not set)
+endif
+
+ifeq ($(KATA_HYPERVISOR),firecracker)
+	./ginkgo -v -focus "${FOCUS}" -skip "${SKIP}" \
+		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+else ifeq ($(ARCH),aarch64)
+	./ginkgo -v -focus "${FOCUS}" -skip "${SKIP}" \
+		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 else
-	./ginkgo -v -focus "${FOCUS}" -skip "${SKIP}" ./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+	# Run tests in parallel, skip tests that need to be run serialized
+	./ginkgo -nodes=${GINKGO_NODES} -v -focus "${FOCUS}" -skip "${SKIP}" -skip "\[Serial Test\]" \
+		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+	# Now run serialized tests
+	./ginkgo -v -focus "${FOCUS}" -focus "\[Serial Test\]" -skip "${SKIP}" \
+		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 	bash sanity/check_sanity.sh
 endif
 

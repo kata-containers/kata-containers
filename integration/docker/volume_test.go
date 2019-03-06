@@ -15,7 +15,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("docker volume", func() {
+var _ = Describe("[Serial Test] docker volume", func() {
 	var (
 		args          []string
 		id            string = randomDockerName()

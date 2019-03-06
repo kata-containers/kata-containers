@@ -52,7 +52,7 @@ var _ = Describe("docker cp", func() {
 	})
 })
 
-var _ = Describe("docker cp with volume attached", func() {
+var _ = Describe("[Serial Test] docker cp with volume attached", func() {
 	var (
 		id          string
 		exitCode    int
@@ -102,7 +102,7 @@ var _ = Describe("docker cp with volume attached", func() {
 	})
 })
 
-var _ = Describe("docker cp with volume", func() {
+var _ = Describe("[Serial Test] docker cp with volume", func() {
 	var (
 		id            string
 		exitCode      int
