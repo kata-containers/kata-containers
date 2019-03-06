@@ -29,14 +29,6 @@ make_target() {
 		[ -n "${CI}" ] && echo "${skip_msg}" && return
 		;;
 
-	test-build-kernel)
-		[ -n "${CI}" ] && check_kata_kernel_version
-		# Setup testing script to test Kata with new kernel changes.
-		[ -n "${CI}" ] && clone_tests_repo &&
-			pushd "${tests_repo_dir}" &&
-			.ci/setup.sh &&
-			popd
-		;;
 	esac
 
 	popd >>/dev/null
@@ -66,4 +58,5 @@ check_kata_kernel_version() {
 make_target test-release-tools "release/"
 make_target test-packaging-tools "obs-packaging/"
 make_target test-static-build "static-build/"
-make_target test-build-kernel "kernel/"
+
+[ -n "${CI}" ] && check_kata_kernel_version
