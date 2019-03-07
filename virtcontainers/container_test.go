@@ -275,6 +275,57 @@ func TestContainerAddDriveDir(t *testing.T) {
 	}
 }
 
+func TestContainerRootfsPath(t *testing.T) {
+
+	testRawFile, loopDev, fakeRootfs, err := testSetupFakeRootfs(t)
+	defer cleanupFakeRootfsSetup(testRawFile, loopDev, fakeRootfs)
+	assert.Nil(t, err)
+
+	truecheckstoragedriver := checkStorageDriver
+	checkStorageDriver = func(major, minor int) (bool, error) {
+		return true, nil
+	}
+	defer func() {
+		checkStorageDriver = truecheckstoragedriver
+	}()
+
+	sandbox := &Sandbox{
+		ctx:        context.Background(),
+		id:         "rootfstestsandbox",
+		agent:      &noopAgent{},
+		hypervisor: &mockHypervisor{},
+		config: &SandboxConfig{
+			HypervisorConfig: HypervisorConfig{
+				DisableBlockDeviceUse: false,
+			},
+		},
+	}
+	vcstore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
+	sandbox.store = vcstore
+	assert.Nil(t, err)
+	container := Container{
+		id:           "rootfstestcontainerid",
+		sandbox:      sandbox,
+		rootFs:       fakeRootfs,
+		rootfsSuffix: "rootfs",
+	}
+	cvcstore, err := store.NewVCContainerStore(context.Background(),
+		sandbox.id,
+		container.id)
+	assert.Nil(t, err)
+	container.store = cvcstore
+
+	container.hotplugDrive()
+	assert.Empty(t, container.rootfsSuffix)
+
+	// Reset the value to test the other case
+	container.rootFs = fakeRootfs + "/rootfs"
+	container.rootfsSuffix = "rootfs"
+
+	container.hotplugDrive()
+	assert.Equal(t, container.rootfsSuffix, "rootfs")
+}
+
 func TestCheckSandboxRunningEmptyCmdFailure(t *testing.T) {
 	c := &Container{}
 	err := c.checkSandboxRunning("")
