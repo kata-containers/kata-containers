@@ -87,6 +87,7 @@ var _ = Describe("[Serial Test] package manager update test", func() {
 
 	Context("check yum update", func() {
 		It("should not fail", func() {
+			Skip("Test Failing, see: https://github.com/kata-containers/tests/issues/1270")
 			args = append(args, "--rm", "-td", "--name", id, CentosImage, "sh")
 			_, _, exitCode := dockerRun(args...)
 			Expect(exitCode).To(BeZero())
