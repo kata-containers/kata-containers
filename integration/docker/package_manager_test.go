@@ -29,7 +29,7 @@ func tryPackageManagerCommand(container string, command []string, expectedExitCo
 	return exitCode
 }
 
-var _ = Describe("package manager update test", func() {
+var _ = Describe("[Serial Test] package manager update test", func() {
 	var (
 		id         string
 		args       []string
