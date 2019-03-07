@@ -12,6 +12,7 @@ crio_conf_file="/etc/crio/crio.conf"
 crio_conf_file_backup="${crio_conf_file}.bak"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
+
 shim_binary="containerd-shim-kata-v2"
 shim_file="/usr/local/bin/${shim_binary}"
 shim_backup="/usr/local/bin/${shim_binary}.bak"
@@ -94,6 +95,7 @@ function configure_containerd() {
         runtime_type = "io.containerd.kata.v2"
 EOT
 
+
 	#Currently containerd has an assumption on the location of the shimv2 implementation
 	#Until support is added (see https://github.com/containerd/containerd/issues/3073),
         #create a link in /usr/local/bin/ to the v2-shim implementation in /opt/kata/bin.
@@ -106,7 +108,13 @@ EOT
 		fi
 	fi
 
-	ln -s /opt/kata/bin/${shim_binary} ${shim_file}
+	mkdir -p /usr/local/bin
+
+	cat << EOT | tee "$shim_file"
+#!/bin/bash
+KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration.toml /opt/kata/bin/${shim_binary} \$@
+EOT
+	chmod +x $shim_file
 
 }
 
