@@ -663,7 +663,7 @@ func updateRuntimeConfigShim(configPath string, tomlConf tomlConfig, config *oci
 // SetKernelParams adds the user-specified kernel parameters (from the
 // configuration file) to the defaults so that the former take priority.
 func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
-	defaultKernelParams := GetKernelParamsFunc(needSystemd(runtimeConfig.HypervisorConfig))
+	defaultKernelParams := GetKernelParamsFunc(needSystemd(runtimeConfig.HypervisorConfig), runtimeConfig.Trace)
 
 	if runtimeConfig.HypervisorConfig.Debug {
 		strParams := vc.SerializeParams(defaultKernelParams, "=")
