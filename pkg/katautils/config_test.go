@@ -1401,7 +1401,7 @@ func TestUpdateRuntimeConfigurationInvalidKernelParams(t *testing.T) {
 		GetKernelParamsFunc = savedFunc
 	}()
 
-	GetKernelParamsFunc = func(needSystemd bool) []vc.Param {
+	GetKernelParamsFunc = func(needSystemd, trace bool) []vc.Param {
 		return []vc.Param{
 			{
 				Key:   "",
