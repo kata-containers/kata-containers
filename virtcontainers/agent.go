@@ -151,6 +151,9 @@ type agent interface {
 	// set to use an existing proxy
 	setProxy(sandbox *Sandbox, proxy proxy, pid int, url string) error
 
+	// set to use an existing proxy from Grpc
+	setProxyFromGrpc(proxy proxy, pid int, url string)
+
 	// get agent url
 	getAgentURL() (string, error)
 
@@ -224,6 +227,9 @@ type agent interface {
 
 	// configure will update agent settings based on provided arguments
 	configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error
+
+	// configureFromGrpc will update agent settings based on provided arguments which from Grpc
+	configureFromGrpc(id string, builtin bool, config interface{}) error
 
 	// getVMPath will return the agent vm socket's directory path
 	getVMPath(id string) string
