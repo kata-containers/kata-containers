@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -1599,4 +1600,56 @@ func (q *qemu) pid() int {
 	}
 
 	return pid
+}
+
+type qemuGrpc struct {
+	ID             string
+	QmpChannelpath string
+	State          QemuState
+	NvdimmCount    int
+
+	// Most members of q.qemuConfig are just to generate
+	// q.qemuConfig.qemuParams that is used by LaunchQemu except
+	// q.qemuConfig.SMP.
+	// So just transport q.qemuConfig.SMP from VM Cache server to runtime.
+	QemuSMP govmmQemu.SMP
+}
+
+func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error {
+	var qp qemuGrpc
+	err := json.Unmarshal(j, &qp)
+	if err != nil {
+		return err
+	}
+
+	q.id = qp.ID
+	q.store = store
+	q.config = *hypervisorConfig
+	q.qmpMonitorCh.ctx = ctx
+	q.qmpMonitorCh.path = qp.QmpChannelpath
+	q.qemuConfig.Ctx = ctx
+	q.state = qp.State
+	q.arch = newQemuArch(q.config)
+	q.ctx = ctx
+	q.nvdimmCount = qp.NvdimmCount
+
+	q.qemuConfig.SMP = qp.QemuSMP
+
+	return nil
+}
+
+func (q *qemu) toGrpc() ([]byte, error) {
+	q.qmpShutdown()
+
+	q.cleanup()
+	qp := qemuGrpc{
+		ID:             q.id,
+		QmpChannelpath: q.qmpMonitorCh.path,
+		State:          q.state,
+		NvdimmCount:    q.nvdimmCount,
+
+		QemuSMP: q.qemuConfig.SMP,
+	}
+
+	return json.Marshal(&qp)
 }

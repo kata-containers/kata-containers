@@ -96,6 +96,12 @@ type CompatOCISpec struct {
 type FactoryConfig struct {
 	// Template enables VM templating support in VM factory.
 	Template bool
+
+	// VMCacheNumber specifies the the number of caches of VMCache.
+	VMCacheNumber uint
+
+	// VMCacheEndpoint specifies the endpoint of transport VM from the VM cache server to runtime.
+	VMCacheEndpoint string
 }
 
 // RuntimeConfig aggregates all runtime specific settings

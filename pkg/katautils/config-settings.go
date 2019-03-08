@@ -43,6 +43,8 @@ const defaultHotplugVFIOOnRootBus bool = false
 const defaultEntropySource = "/dev/urandom"
 const defaultGuestHookPath string = ""
 
+const defaultVMCacheEndpoint string = "/var/run/kata-containers/cache.sock"
+
 // Default config file used by stateless systems.
 var defaultRuntimeConfiguration = "/usr/share/defaults/kata-containers/configuration.toml"
 

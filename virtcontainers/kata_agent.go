@@ -221,7 +221,7 @@ func (k *kataAgent) capabilities() types.Capabilities {
 	return caps
 }
 
-func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error {
+func (k *kataAgent) internalConfigure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error {
 	if config != nil {
 		switch c := config.(type) {
 		case KataAgentConfig:
@@ -234,29 +234,37 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 		}
 	}
 
+	if builtin {
+		k.proxyBuiltIn = true
+	}
+
+	return nil
+}
+
+func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error {
+	err := k.internalConfigure(h, id, sharePath, builtin, config)
+	if err != nil {
+		return err
+	}
+
 	switch s := k.vmSocket.(type) {
 	case types.Socket:
-		err := h.addDevice(s, serialPortDev)
+		err = h.addDevice(s, serialPortDev)
 		if err != nil {
 			return err
 		}
 	case kataVSOCK:
-		var err error
 		s.vhostFd, s.contextID, err = utils.FindContextID()
 		if err != nil {
 			return err
 		}
 		s.port = uint32(vSockPort)
-		if err := h.addDevice(s, vSockPCIDev); err != nil {
+		if err = h.addDevice(s, vSockPCIDev); err != nil {
 			return err
 		}
 		k.vmSocket = s
 	default:
 		return fmt.Errorf("Invalid config type")
-	}
-
-	if builtin {
-		k.proxyBuiltIn = true
 	}
 
 	// Neither create shared directory nor add 9p device if hypervisor
@@ -273,11 +281,15 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 		HostPath: sharePath,
 	}
 
-	if err := os.MkdirAll(sharedVolume.HostPath, store.DirMode); err != nil {
+	if err = os.MkdirAll(sharedVolume.HostPath, store.DirMode); err != nil {
 		return err
 	}
 
 	return h.addDevice(sharedVolume, fsDev)
+}
+
+func (k *kataAgent) configureFromGrpc(id string, builtin bool, config interface{}) error {
+	return k.internalConfigure(nil, id, "", builtin, config)
 }
 
 func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
@@ -585,6 +597,12 @@ func (k *kataAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string)
 	}
 
 	return nil
+}
+
+func (k *kataAgent) setProxyFromGrpc(proxy proxy, pid int, url string) {
+	k.proxy = proxy
+	k.state.ProxyPid = pid
+	k.state.URL = url
 }
 
 func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
