@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strings"
 
 	. "github.com/kata-containers/tests"
 	. "github.com/onsi/ginkgo"
@@ -257,6 +258,34 @@ var _ = Describe("run host networking", func() {
 			_, stderr, exitCode = dockerRun(args...)
 			Expect(exitCode).NotTo(Equal(0))
 			Expect(stderr).NotTo(BeEmpty())
+		})
+	})
+})
+
+var _ = Describe("check dmesg logs errors", func() {
+	var (
+		args     []string
+		id       string
+		stdout   string
+		exitCode int
+	)
+
+	BeforeEach(func() {
+		id = randomDockerName()
+	})
+
+	AfterEach(func() {
+		Expect(RemoveDockerContainer(id)).To(BeTrue())
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	Context("Run to check dmesg log errors", func() {
+		It("should be empty", func() {
+			Skip("Issue: https://github.com/kata-containers/runtime/issues/1345")
+			args = []string{"--name", id, DebianImage, "dmesg", "-l", "err"}
+			stdout, _, exitCode = dockerRun(args...)
+			Expect(exitCode).To(Equal(0))
+			Expect(strings.Trim(stdout, "\n\t")).To(BeEmpty())
 		})
 	})
 })
