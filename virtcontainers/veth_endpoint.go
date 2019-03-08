@@ -15,7 +15,6 @@ import (
 type VethEndpoint struct {
 	NetPair            NetworkInterfacePair
 	EndpointProperties NetworkInfo
-	Physical           bool
 	EndpointType       EndpointType
 	PCIAddr            string
 }
