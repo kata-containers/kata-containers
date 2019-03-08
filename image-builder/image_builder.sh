@@ -17,6 +17,7 @@ source "$lib_file"
 [ "$(id -u)" -eq 0 ] || die "$0: must be run as root"
 
 IMAGE="${IMAGE:-kata-containers.img}"
+IMG_SIZE=128
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 
@@ -27,13 +28,10 @@ usage()
 Usage: ${script_name} [options] <rootfs-dir>
 	This script will create a Kata Containers image file of
 	an adequate size based on the <rootfs-dir> directory.
-	The size of the image can be also be specified manually
-	by '-s' flag.
 
 Options:
 	-h Show this help
 	-o path to generate image file ENV: IMAGE
-	-s Image size in MB ENV: IMG_SIZE
 	-r Free space of the root partition in MB ENV: ROOT_FREE_SPACE
 
 Extra environment variables:
@@ -67,16 +65,6 @@ do
 		h)	usage ;;
 		o)	IMAGE="${OPTARG}" ;;
 		r)	ROOT_FREE_SPACE="${OPTARG}" ;;
-		s)	{
-		IMG_SIZE=${OPTARG}
-		if [ ${IMG_SIZE} -le 0 ]; then
-			die "Image size has to be greater than 0 MB."
-		fi
-		if [ ${IMG_SIZE} -gt ${MAX_IMG_SIZE_MB} ]; then
-			die "Image size should not be greater than ${MAX_IMG_SIZE_MB} MB."
-		fi
-		 }
-		 ;;
 		f)	FS_TYPE="${OPTARG}" ;;
 	esac
 done

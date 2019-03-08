@@ -9,7 +9,6 @@ ROOTFS_BUILDER := $(MK_DIR)/rootfs-builder/rootfs.sh
 INITRD_BUILDER := $(MK_DIR)/initrd-builder/initrd_builder.sh
 IMAGE_BUILDER  := $(MK_DIR)/image-builder/image_builder.sh
 
-IMG_SIZE               = 500
 AGENT_INIT            ?= no
 DISTRO                ?= centos
 ROOTFS_BUILD_DEST     := $(PWD)
@@ -42,7 +41,7 @@ image-%: $(IMAGES_BUILD_DEST)/kata-containers-image-%.img
 .PRECIOUS: $(IMAGES_BUILD_DEST)/kata-containers-image-%.img
 $(IMAGES_BUILD_DEST)/kata-containers-image-%.img: rootfs-%
 	@echo Creating image based on $^
-	$(IMAGE_BUILDER) -s $(IMG_SIZE) -o $@ $(ROOTFS_BUILD_DEST)/$*_rootfs
+	$(IMAGE_BUILDER) -o $@ $(ROOTFS_BUILD_DEST)/$*_rootfs
 
 initrd-%: $(IMAGES_BUILD_DEST)/kata-containers-initrd-%.img
 	@ # DONT remove. This is not cancellation rule.
@@ -63,7 +62,7 @@ image: $(DISTRO_IMAGE)
 
 $(DISTRO_IMAGE): $(DISTRO_ROOTFS_MARKER)
 	@echo Creating image based on "$(DISTRO_ROOTFS)"
-	$(IMAGE_BUILDER) -s "$(IMG_SIZE)" "$(DISTRO_ROOTFS)"
+	$(IMAGE_BUILDER) "$(DISTRO_ROOTFS)"
 
 .PHONY: initrd
 initrd: $(DISTRO_INITRD)
