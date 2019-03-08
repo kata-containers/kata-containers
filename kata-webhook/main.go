@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,12 +37,9 @@ func annotatePodMutator(ctx context.Context, obj metav1.Object) (bool, error) {
 	// specially when operators create the pods. Hence access
 	// the Namespace in the actual request (vs the object)
 	// https://godoc.org/k8s.io/api/admission/v1beta1#AdmissionRequest
-	switch request.Namespace {
-	case "rook-ceph-system", "rook-ceph":
-		fmt.Println("rook: ", pod.GetNamespace(), pod.GetName())
+	if whPolicy.nsBlacklist[request.Namespace] {
+		fmt.Println("blacklisted namespace: ", request.Namespace)
 		return false, nil
-	default:
-		break
 	}
 
 	// We cannot support --net=host in Kata
@@ -75,9 +73,16 @@ func annotatePodMutator(ctx context.Context, obj metav1.Object) (bool, error) {
 }
 
 type config struct {
-	certFile string
-	keyFile  string
+	certFile    string
+	keyFile     string
+	nsBlacklist string
 }
+
+type policy struct {
+	nsBlacklist map[string]bool
+}
+
+var whPolicy *policy
 
 func initFlags() *config {
 	cfg := &config{}
@@ -85,6 +90,7 @@ func initFlags() *config {
 	fl := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fl.StringVar(&cfg.certFile, "tls-cert-file", "", "TLS certificate file")
 	fl.StringVar(&cfg.keyFile, "tls-key-file", "", "TLS key file")
+	fl.StringVar(&cfg.nsBlacklist, "exclude-namespaces", "", "Comma separated namespace blacklist")
 
 	fl.Parse(os.Args[1:])
 	return cfg
@@ -94,6 +100,14 @@ func main() {
 	logger := &log.Std{Debug: true}
 
 	cfg := initFlags()
+
+	whPolicy = &policy{}
+	whPolicy.nsBlacklist = make(map[string]bool)
+	if cfg.nsBlacklist != "" {
+		for _, s := range strings.Split(cfg.nsBlacklist, ",") {
+			whPolicy.nsBlacklist[s] = true
+		}
+	}
 
 	// Create our mutator
 	mt := mutatingwh.MutatorFunc(annotatePodMutator)
