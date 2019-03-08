@@ -267,6 +267,7 @@ create_rootfs_disk
 info "rootfs size ${ROOTFS_SIZE} MB"
 info "Copying content from rootfs to root partition"
 cp -a "${ROOTFS}"/* ${MOUNT_DIR}
+sync
 OK "rootfs copied"
 
 unmount
