@@ -252,7 +252,7 @@ create_rootfs_disk()
 	# of disk creation by adding 5% in the inital assumed value $ROOTFS_SIZE
 	if [ $ROOTFS_SIZE -gt $AVAIL_DISK ]; then
 		# Increase the size but remain aligned to the original MEM_BOUNDARY_MB, which is stored in $ORIG_MEM_BOUNDARY_MB
-		MEM_BOUNDARY_MB=$(($MEM_BOUNDARY_MB+$ORIG_MEM_BOUNDARY_MB))
+		MEM_BOUNDARY_MB=$((MEM_BOUNDARY_MB+ORIG_MEM_BOUNDARY_MB))
 		OLD_IMG_SIZE=${IMG_SIZE}
 		unset IMG_SIZE
 		unmount
