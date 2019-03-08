@@ -362,7 +362,7 @@ mkdir -p ${ROOTFS_DIR}
 build_rootfs ${ROOTFS_DIR}
 pushd "${ROOTFS_DIR}" >> /dev/null
 if [ "$PWD" != "/" ] ; then
-	rm -rf ./var/cache/dnf/
+	rm -rf ./var/cache/ ./var/lib
 fi
 popd  >> /dev/null
 
