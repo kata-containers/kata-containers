@@ -1,5 +1,13 @@
 # Install Kata Containers on SLES
 
+> **Warning:**
+>
+> - The SLES packages are provided as a convenience to users until native
+>   packages are available in SLES. However, they are **NOT** currently tested
+>   (although openSUSE is) so caution should be exercised.
+>
+>   See https://github.com/kata-containers/ci/issues/126 for further details.
+
 1. Install the Kata Containers components with the following commands:
 
    ```bash
