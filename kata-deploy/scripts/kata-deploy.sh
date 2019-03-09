@@ -12,6 +12,10 @@ crio_conf_file="/etc/crio/crio.conf"
 crio_conf_file_backup="${crio_conf_file}.bak"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
+
+shim_binary="containerd-shim-kata-v2"
+shim_file="/usr/local/bin/${shim_binary}"
+shim_backup="/usr/local/bin/${shim_binary}.bak"
 # If we fail for any reason a message will be displayed
 die() {
         msg="$*"
@@ -74,6 +78,7 @@ EOT
 function configure_containerd() {
 	# Configure containerd to use Kata:
 	echo "Add Kata Containers as a supported runtime for containerd"
+
 	mkdir -p /etc/containerd/
 
 	if [ -f "$containerd_conf_file" ]; then
@@ -84,12 +89,33 @@ function configure_containerd() {
 	# https://github.com/kata-containers/packaging/issues/307
 	cat <<EOT | tee "$containerd_conf_file"
 [plugins]
-    [plugins.cri.containerd]
-      [plugins.cri.containerd.untrusted_workload_runtime]
-        runtime_type = "io.containerd.runtime.v1.linux"
-        runtime_engine = "/opt/kata/bin/kata-runtime"
-        runtime_root = ""
+  [plugins.cri]
+   [plugins.cri.containerd]
+     [plugins.cri.containerd.runtimes.kata]
+        runtime_type = "io.containerd.kata.v2"
 EOT
+
+
+	#Currently containerd has an assumption on the location of the shimv2 implementation
+	#Until support is added (see https://github.com/containerd/containerd/issues/3073),
+        #create a link in /usr/local/bin/ to the v2-shim implementation in /opt/kata/bin.
+	if [ -f ${shim_file} ]; then
+		echo "warning: ${shim_binary} already exists" >&2
+		if [ ! -f ${shim_backup} ]; then
+			mv ${shim_file} ${shim_backup}
+		else
+			rm ${shim_file}
+		fi
+	fi
+
+	mkdir -p /usr/local/bin
+
+	cat << EOT | tee "$shim_file"
+#!/bin/bash
+KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration.toml /opt/kata/bin/${shim_binary} \$@
+EOT
+	chmod +x $shim_file
+
 }
 
 function remove_artifacts() {
@@ -118,6 +144,13 @@ function cleanup_containerd() {
 	rm -f /etc/containerd/config.toml
 	if [ -f "$containerd_conf_file_backup" ]; then
 		mv "$containerd_conf_file_backup" "$containerd_conf_file"
+	fi
+
+	#Currently containerd has an assumption on the location of the shimv2 implementation
+	#Until support is added (see https://github.com/containerd/containerd/issues/3073), we manage
+	# a symlink to the v2-shim implementation
+	if [ -f "$shim_backup" ]; then
+		mv "$shim_backup" "$shim_file"
 	fi
 
 }
@@ -157,11 +190,12 @@ function main() {
 
 			install_artifacts
 			configure_cri_runtime $runtime
+			kubectl label node $NODE_NAME katacontainers.io/kata-runtime=true
 			;;
 		cleanup)
-			remove_artifacts
 			cleanup_cri_runtime $runtime
 			kubectl label node $NODE_NAME --overwrite katacontainers.io/kata-runtime=cleanup
+			remove_artifacts
 			;;
 		reset)
 			reset_runtime $runtime
