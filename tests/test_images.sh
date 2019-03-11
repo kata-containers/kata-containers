@@ -251,6 +251,7 @@ setup()
 	[ ! -d "${tests_repo_dir}" ] && git clone "https://${tests_repo}" "${tests_repo_dir}"
 
 	if [ -z "${KATA_DEV_MODE:-}" ]; then
+		chronic $mgr remove-docker
 		chronic $mgr install-docker-system
 	else
 		info "Running with KATA_DEV_MODE set, skipping installation of docker and kata packages"
