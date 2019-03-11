@@ -30,6 +30,7 @@ bats k8s-env.bats
 bats k8s-limit-range.bats
 bats k8s-credentials-secrets.bats
 bats k8s-configmap.bats
+bats k8s-custom-dns.bats
 bats k8s-pid-ns.bats
 bats k8s-cpu-ns.bats
 bats k8s-parallel.bats
