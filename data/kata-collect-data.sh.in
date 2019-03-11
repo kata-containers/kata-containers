@@ -337,11 +337,12 @@ show_container_mgr_details()
 		run_cmd_and_show_quoted_output "" "kubectl version"
 		run_cmd_and_show_quoted_output "" "kubectl config view"
 		run_cmd_and_show_quoted_output "" "systemctl show kubelet"
+	fi
 
-		if have_cmd "crio"; then
-			run_cmd_and_show_quoted_output "" "crio --version"
-			run_cmd_and_show_quoted_output "" "systemctl show crio"
-		fi
+	if have_cmd "crio"; then
+		subheading "crio"
+		run_cmd_and_show_quoted_output "" "crio --version"
+		run_cmd_and_show_quoted_output "" "systemctl show crio"
 	fi
 
 	separator
