@@ -141,6 +141,13 @@ have_cmd()
 	[ $ret -eq 0 ]
 }
 
+have_service()
+{
+	local service="$1"
+
+	systemctl status "${service}" >/dev/null 2>&1
+}
+
 show_quoted_text()
 {
 	local language="$1"
@@ -593,7 +600,7 @@ show_throttler_details()
 		"kata-vc-throttler" \
 		"vc-throttler"
 	do
-		systemctl status "${unit}" >/dev/null 2>&1 && \
+		have_service "${unit}" && \
 			run_cmd_and_show_quoted_output "" "systemctl show ${unit}"
 	done
 }
