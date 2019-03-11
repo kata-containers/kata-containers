@@ -19,14 +19,14 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
 )
 
@@ -105,6 +105,67 @@ func TestCreateMockSandbox(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer cleanUp()
+}
+
+func TestCalculateSandboxCPUs(t *testing.T) {
+	sandbox := &Sandbox{}
+	sandbox.config = &SandboxConfig{}
+	unconstrained := newTestContainerConfigNoop("cont-00001")
+	constrained := newTestContainerConfigNoop("cont-00001")
+	quota := int64(4000)
+	period := uint64(1000)
+	constrained.Resources.CPU = &specs.LinuxCPU{Period: &period, Quota: &quota}
+
+	tests := []struct {
+		name       string
+		containers []ContainerConfig
+		want       uint32
+	}{
+		{"1-unconstrained", []ContainerConfig{unconstrained}, 0},
+		{"2-unconstrained", []ContainerConfig{unconstrained, unconstrained}, 0},
+		{"1-constrained", []ContainerConfig{constrained}, 4},
+		{"2-constrained", []ContainerConfig{constrained, constrained}, 8},
+		{"3-mix-constraints", []ContainerConfig{unconstrained, constrained, constrained}, 8},
+		{"3-constrained", []ContainerConfig{constrained, constrained, constrained}, 12},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sandbox.config.Containers = tt.containers
+			if got := sandbox.calculateSandboxCPUs(); got != tt.want {
+				t.Errorf("calculateSandboxCPUs() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCalculateSandboxMem(t *testing.T) {
+	sandbox := &Sandbox{}
+	sandbox.config = &SandboxConfig{}
+	unconstrained := newTestContainerConfigNoop("cont-00001")
+	constrained := newTestContainerConfigNoop("cont-00001")
+	limit := int64(4000)
+	constrained.Resources.Memory = &specs.LinuxMemory{Limit: &limit}
+
+	tests := []struct {
+		name       string
+		containers []ContainerConfig
+		want       int64
+	}{
+		{"1-unconstrained", []ContainerConfig{unconstrained}, 0},
+		{"2-unconstrained", []ContainerConfig{unconstrained, unconstrained}, 0},
+		{"1-constrained", []ContainerConfig{constrained}, limit},
+		{"2-constrained", []ContainerConfig{constrained, constrained}, limit * 2},
+		{"3-mix-constraints", []ContainerConfig{unconstrained, constrained, constrained}, limit * 2},
+		{"3-constrained", []ContainerConfig{constrained, constrained, constrained}, limit * 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sandbox.config.Containers = tt.containers
+			if got := sandbox.calculateSandboxMemory(); got != tt.want {
+				t.Errorf("calculateSandboxMemory() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
 
 func TestCreateSandboxEmptyID(t *testing.T) {
@@ -1573,4 +1634,49 @@ func TestSandboxCreationFromConfigRollbackFromCreateSandbox(t *testing.T) {
 	// check dirs
 	err = checkSandboxRemains()
 	assert.NoError(err)
+}
+
+func TestSandboxUpdateResources(t *testing.T) {
+	contConfig1 := newTestContainerConfigNoop("cont-00001")
+	contConfig2 := newTestContainerConfigNoop("cont-00002")
+	hConfig := newHypervisorConfig(nil, nil)
+
+	defer cleanUp()
+	// create a sandbox
+	s, err := testCreateSandbox(t,
+		testSandboxID,
+		MockHypervisor,
+		hConfig,
+		NoopAgentType,
+		NetworkConfig{},
+		[]ContainerConfig{contConfig1, contConfig2},
+		nil)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = s.updateResources()
+	if err != nil {
+		t.Fatal(err)
+	}
+	containerMemLimit := int64(1000)
+	containerCPUPeriod := uint64(1000)
+	containerCPUQouta := int64(5)
+	for _, c := range s.config.Containers {
+		c.Resources.Memory = &specs.LinuxMemory{
+			Limit: new(int64),
+		}
+		c.Resources.CPU = &specs.LinuxCPU{
+			Period: new(uint64),
+			Quota:  new(int64),
+		}
+		c.Resources.Memory.Limit = &containerMemLimit
+		c.Resources.CPU.Period = &containerCPUPeriod
+		c.Resources.CPU.Quota = &containerCPUQouta
+	}
+	err = s.updateResources()
+	if err != nil {
+		t.Fatal(err)
+	}
 }
