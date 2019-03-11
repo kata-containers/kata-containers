@@ -365,6 +365,7 @@ check_license_headers()
 		--exclude="*.txt" \
 		--exclude="*.yaml" \
 		--exclude="*.pb.go" \
+		--exclude="*.gpl.c" \
 		-EL "\<${pattern}\>" \
 		$files || true)
 
