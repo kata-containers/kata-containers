@@ -276,6 +276,7 @@ type Container struct {
 	runPath       string
 	configPath    string
 	containerPath string
+	rootfsSuffix  string
 
 	state types.State
 
@@ -640,6 +641,7 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		runPath:       store.ContainerRuntimeRootPath(sandbox.id, contConfig.ID),
 		configPath:    store.ContainerConfigurationRootPath(sandbox.id, contConfig.ID),
 		containerPath: filepath.Join(sandbox.id, contConfig.ID),
+		rootfsSuffix:  "rootfs",
 		state:         types.State{},
 		process:       Process{},
 		mounts:        contConfig.Mounts,
@@ -1129,6 +1131,10 @@ func (c *Container) hotplugDrive() error {
 
 	if !isDM {
 		return nil
+	}
+
+	if dev.mountPoint == c.rootFs {
+		c.rootfsSuffix = ""
 	}
 
 	// If device mapper device, then fetch the full path of the device
