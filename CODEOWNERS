@@ -11,3 +11,4 @@
 
 *.md    @kata-containers/documentation
 
+/kernel/ @kata-containers/kernel
