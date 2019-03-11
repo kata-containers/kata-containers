@@ -343,6 +343,7 @@ show_container_mgr_details()
 		subheading "crio"
 		run_cmd_and_show_quoted_output "" "crio --version"
 		run_cmd_and_show_quoted_output "" "systemctl show crio"
+		run_cmd_and_show_quoted_output "" "cat /etc/crio/crio.conf"
 	fi
 
 	separator
