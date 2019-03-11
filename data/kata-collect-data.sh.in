@@ -346,6 +346,14 @@ show_container_mgr_details()
 		run_cmd_and_show_quoted_output "" "cat /etc/crio/crio.conf"
 	fi
 
+
+	if have_cmd "containerd"; then
+		subheading "containerd"
+		run_cmd_and_show_quoted_output "" "containerd --version"
+		run_cmd_and_show_quoted_output "" "systemctl show containerd"
+		run_cmd_and_show_quoted_output "" "cat /etc/containerd/config.toml"
+	fi
+
 	separator
 }
 
