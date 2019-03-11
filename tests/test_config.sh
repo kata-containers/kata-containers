@@ -6,9 +6,8 @@
 # List of distros not to test, when running all tests with test_images.sh
 typeset -a skipWhenTestingAll
 
-if [ -n "${TRAVIS:-}" ]; then
-	# (travis may timeout with euleros, see:
-	#  https://github.com/kata-containers/osbuilder/issues/46)"
+if [ -n "${CI:-}" ]; then
+	# CI tests may timeout with euleros, see:
+	#  https://github.com/kata-containers/osbuilder/issues/46"
 	skipWhenTestingAll+=(euleros)
 fi
-
