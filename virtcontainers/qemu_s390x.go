@@ -23,7 +23,7 @@ const defaultQemuMachineType = QemuCCWVirtio
 
 const defaultQemuMachineOptions = "accel=kvm"
 
-const VirtioSerialCCW = "virtio-serial-ccw"
+const virtioSerialCCW = "virtio-serial-ccw"
 
 var qemuPaths = map[string]string{
 	QemuCCWVirtio: defaultQemuPath,
@@ -89,7 +89,7 @@ func (q *qemuS390x) appendBridges(devices []govmmQemu.Device, bridges []types.PC
 // The function has been overwriten to correctly set the driver to the CCW device
 func (q *qemuS390x) appendConsole(devices []govmmQemu.Device, path string) []govmmQemu.Device {
 	serial := govmmQemu.SerialDevice{
-		Driver:        VirtioSerialCCW,
+		Driver:        virtioSerialCCW,
 		ID:            "serial0",
 		DisableModern: q.nestedRun,
 	}
