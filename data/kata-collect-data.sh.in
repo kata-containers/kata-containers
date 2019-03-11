@@ -141,6 +141,13 @@ have_cmd()
 	[ $ret -eq 0 ]
 }
 
+have_service()
+{
+	local service="$1"
+
+	systemctl status "${service}" >/dev/null 2>&1
+}
+
 show_quoted_text()
 {
 	local language="$1"
@@ -330,11 +337,21 @@ show_container_mgr_details()
 		run_cmd_and_show_quoted_output "" "kubectl version"
 		run_cmd_and_show_quoted_output "" "kubectl config view"
 		run_cmd_and_show_quoted_output "" "systemctl show kubelet"
+	fi
 
-		if have_cmd "crio"; then
-			run_cmd_and_show_quoted_output "" "crio --version"
-			run_cmd_and_show_quoted_output "" "systemctl show crio"
-		fi
+	if have_cmd "crio"; then
+		subheading "crio"
+		run_cmd_and_show_quoted_output "" "crio --version"
+		run_cmd_and_show_quoted_output "" "systemctl show crio"
+		run_cmd_and_show_quoted_output "" "cat /etc/crio/crio.conf"
+	fi
+
+
+	if have_cmd "containerd"; then
+		subheading "containerd"
+		run_cmd_and_show_quoted_output "" "containerd --version"
+		run_cmd_and_show_quoted_output "" "systemctl show containerd"
+		run_cmd_and_show_quoted_output "" "cat /etc/containerd/config.toml"
 	fi
 
 	separator
@@ -593,7 +610,7 @@ show_throttler_details()
 		"kata-vc-throttler" \
 		"vc-throttler"
 	do
-		systemctl status "${unit}" >/dev/null 2>&1 && \
+		have_service "${unit}" && \
 			run_cmd_and_show_quoted_output "" "systemctl show ${unit}"
 	done
 }
