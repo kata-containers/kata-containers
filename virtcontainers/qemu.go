@@ -768,7 +768,7 @@ func (q *qemu) addDeviceToBridge(ID string) (string, types.PCIBridge, error) {
 		}
 	}
 
-	return "", types.PCIBridge{}, err
+	return "", types.PCIBridge{}, fmt.Errorf("no more bridge slots available")
 }
 
 func (q *qemu) removeDeviceFromBridge(ID string) error {
