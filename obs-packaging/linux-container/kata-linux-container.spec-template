@@ -87,6 +87,11 @@ BuildKernel() {
     export CFLAGS="-Wno-error=restrict"
     export EXTRA_CFLAGS="-Wno-format-truncation -Wno-cast-function-type -Wno-error=restrict -Wno-error"
     %endif
+    # https://github.com/kata-containers/packaging/issues/394 enable reproducible builds:
+    export KBUILD_BUILD_USER=katabuilduser
+    export KBUILD_BUILD_HOST=katabuildhost
+    # Default to zero seconds after midnight 1970-01-01 (the epoch)
+    export KBUILD_BUILD_TIMESTAMP="$(LANG=C date -u -d "@${SOURCE_DATE_EPOCH:-0}")"
 
     make -s ARCH=$kernelArch oldconfig > /dev/null
     make -s CONFIG_DEBUG_SECTION_MISMATCH=y %{?_smp_mflags} ARCH=$kernelArch %{?sparse_mflags} || exit 1
