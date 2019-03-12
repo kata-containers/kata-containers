@@ -35,6 +35,8 @@ setup_distro_env() {
 		bash -f "${cidir}/setup_env_debian.sh"
 	elif [[ "$ID" =~ ^opensuse.*$ ]]; then
 		bash -f "${cidir}/setup_env_opensuse.sh"
+	elif [ "$ID" == sles ]; then
+		bash -f "${cidir}/setup_env_sles.sh"
 	else
 		die "ERROR: Unrecognised distribution: ${ID}."
 		exit 1
