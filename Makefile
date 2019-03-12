@@ -8,7 +8,9 @@
 TIMEOUT := 60
 
 # union for 'make test'
-UNION := functional docker crio docker-compose network netmon docker-stability oci openshift kubernetes swarm vm-factory entropy ramdisk shimv2
+UNION := functional docker crio docker-compose network netmon \
+	docker-stability oci openshift kubernetes swarm vm-factory \
+	entropy ramdisk shimv2 tracing
 
 # skipped test suites for docker integration tests
 FILTER_FILE = .ci/hypervisors/$(KATA_HYPERVISOR)/filter_docker_$(KATA_HYPERVISOR).sh
@@ -143,6 +145,9 @@ netmon:
 	bash -f .ci/install_bats.sh
 	bats integration/netmon/netmon_test.bats
 
+tracing:
+	bash tracing/tracing-test.sh
+
 test: ${UNION}
 
 check: checkcommits log-parser
@@ -168,4 +173,5 @@ check: checkcommits log-parser
 	network \
 	ramdisk \
 	test \
+	tracing \
 	vm-factory

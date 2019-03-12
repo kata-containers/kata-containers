@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -12,14 +12,20 @@ VC_POD_DIR="${VC_POD_DIR:-/var/lib/vc/sbs}"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
-die(){
-	msg="$*"
+die() {
+	local msg="$*"
 	echo "ERROR: $msg" >&2
 	exit 1
 }
 
+warn() {
+	local msg="$*"
+	echo "WARNING: $msg"
+}
+
 info() {
-	echo -e "INFO: $*"
+	local msg="$*"
+	echo "INFO: $msg"
 }
 
 # Check if the $1 argument is the name of a 'known'
