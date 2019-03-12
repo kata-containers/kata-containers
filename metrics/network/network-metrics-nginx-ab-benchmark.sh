@@ -72,7 +72,7 @@ EOF
 
 function nginx_ab_networking {
 	# Launch nginx container
-	docker run -d -p $port $nginx_image
+	docker run --runtime "$RUNTIME" -d -p $port $nginx_image
 	echo >&2 "WARNING: sleeping for $start_time seconds to let the container start correctly"
 	sleep "$start_time"
 	ab -s ${socket_time} -n ${requests} -r -c ${concurrency_value} http://${url}/ > $TMP_FILE
