@@ -71,10 +71,10 @@ func TestFsDriver(t *testing.T) {
 	})
 
 	// try non-existent dir
-	assert.NotNil(t, fs.Restore("test-fs"))
+	assert.NotNil(t, fs.FromDisk("test-fs"))
 
 	// since we didn't call ToDisk, Callbacks are not invoked, and state is still empty in disk file
-	assert.Nil(t, fs.Restore(id))
+	assert.Nil(t, fs.FromDisk(id))
 	ss, cs, err := fs.GetStates()
 	assert.Nil(t, err)
 	assert.NotNil(t, ss)
@@ -85,7 +85,7 @@ func TestFsDriver(t *testing.T) {
 
 	// flush all to disk
 	assert.Nil(t, fs.ToDisk())
-	assert.Nil(t, fs.Restore(id))
+	assert.Nil(t, fs.FromDisk(id))
 	ss, cs, err = fs.GetStates()
 	assert.Nil(t, err)
 	assert.NotNil(t, ss)

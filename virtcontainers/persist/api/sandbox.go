@@ -43,8 +43,7 @@ type HypervisorState struct {
 	HotpluggedMemory     int
 	UUID                 string
 	HotplugVFIOOnRootBus bool
-	// TODO: should this be map[index]bool to indicate available block id??
-	BlockIndex int
+	BlockIndex           int
 }
 
 // ProxyState save proxy state data

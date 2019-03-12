@@ -15,13 +15,14 @@ import (
 	"syscall"
 
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/sirupsen/logrus"
 )
 
 // persistFile is the file name for JSON sandbox/container configuration
 const persistFile = "persist.json"
 
 // dirMode is the permission bits used for creating a directory
-const dirMode = os.FileMode(0750)
+const dirMode = os.FileMode(0700)
 
 // fileMode is the permission bits used for creating a file
 const fileMode = os.FileMode(0640)
@@ -48,6 +49,15 @@ type FS struct {
 	lockFile *os.File
 }
 
+var fsLog = logrus.WithField("source", "virtcontainers/persist/fs")
+
+// Logger returns a logrus logger appropriate for logging Store messages
+func (fs *FS) Logger() *logrus.Entry {
+	return fsLog.WithFields(logrus.Fields{
+		"subsystem": "persist",
+	})
+}
+
 // Name returns driver name
 func Name() string {
 	return "fs"
@@ -63,11 +73,12 @@ func Init() (persistapi.PersistDriver, error) {
 }
 
 func (fs *FS) sandboxDir() (string, error) {
-	if fs.sandboxState.SandboxContainer == "" {
+	id := fs.sandboxState.SandboxContainer
+	if id == "" {
 		return "", fmt.Errorf("sandbox container id required")
 	}
 
-	return filepath.Join(runStoragePath, fs.sandboxState.SandboxContainer), nil
+	return filepath.Join(runStoragePath, id), nil
 }
 
 // ToDisk sandboxState and containerState to disk
@@ -76,14 +87,6 @@ func (fs *FS) ToDisk() (retErr error) {
 	for _, fun := range fs.setFuncs {
 		fun(fs.sandboxState, fs.containerState)
 	}
-
-	// if error happened, destroy all dirs
-	defer func() {
-		if retErr != nil {
-			// TODO: log error
-			fs.Destroy()
-		}
-	}()
 
 	sandboxDir, err := fs.sandboxDir()
 	if err != nil {
@@ -95,13 +98,25 @@ func (fs *FS) ToDisk() (retErr error) {
 	}
 
 	if err := fs.lock(); err != nil {
+		if err1 := fs.Destroy(); err1 != nil {
+			fs.Logger().WithError(err1).Errorf("failed to destroy dirs")
+		}
 		return err
 	}
 	defer fs.unlock()
 
+	// if error happened, destroy all dirs
+	defer func() {
+		if retErr != nil {
+			if err := fs.Destroy(); err != nil {
+				fs.Logger().WithError(err).Errorf("failed to destroy dirs")
+			}
+		}
+	}()
+
 	// persist sandbox configuration data
 	sandboxFile := filepath.Join(sandboxDir, persistFile)
-	f, err := os.OpenFile(sandboxFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileMode)
+	f, err := os.OpenFile(sandboxFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, fileMode)
 	if err != nil {
 		return err
 	}
@@ -133,8 +148,8 @@ func (fs *FS) ToDisk() (retErr error) {
 	return nil
 }
 
-// Restore state for sandbox with name sid
-func (fs *FS) Restore(sid string) error {
+// FromDisk restores state for sandbox with name sid
+func (fs *FS) FromDisk(sid string) error {
 	if sid == "" {
 		return fmt.Errorf("restore requires sandbox id")
 	}
