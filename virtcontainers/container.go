@@ -376,8 +376,7 @@ func (c *Container) setStateFstype(fstype string) error {
 
 	if !c.sandbox.supportNewStore() {
 		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
-		err := c.storeState()
-		if err != nil {
+		if err := c.storeState(); err != nil {
 			return err
 		}
 	}
@@ -454,8 +453,7 @@ func (c *Container) setContainerState(state types.StateString) error {
 	} else {
 		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
 		// update on-disk state
-		err := c.store.Store(store.State, c.state)
-		if err != nil {
+		if err := c.store.Store(store.State, c.state); err != nil {
 			return err
 		}
 	}
@@ -619,9 +617,9 @@ func (c *Container) unmountHostMounts() error {
 	return nil
 }
 
-func filterDevices(sandbox *Sandbox, c *Container, devices []ContainerDevice) (ret []ContainerDevice) {
+func filterDevices(c *Container, devices []ContainerDevice) (ret []ContainerDevice) {
 	for _, dev := range devices {
-		major, _ := sandbox.devManager.GetDeviceByID(dev.ID).GetMajorMinor()
+		major, _ := c.sandbox.devManager.GetDeviceByID(dev.ID).GetMajorMinor()
 		if _, ok := cdromMajors[major]; ok {
 			c.Logger().WithFields(logrus.Fields{
 				"device": dev.ContainerPath,
@@ -773,7 +771,7 @@ func (c *Container) createDevices(contConfig ContainerConfig) error {
 				GID:           info.GID,
 			})
 		}
-		c.devices = filterDevices(c.sandbox, c, storedDevices)
+		c.devices = filterDevices(c, storedDevices)
 	}
 	return nil
 }

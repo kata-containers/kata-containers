@@ -94,7 +94,7 @@ func (s *Sandbox) dumpDevices(ss *persistapi.SandboxState, cs map[string]persist
 	return nil
 }
 
-// versionCallback set persist data version to current version in runtime
+// verSaveCallback set persist data version to current version in runtime
 func (s *Sandbox) verSaveCallback() {
 	s.newStore.AddSaveCallback("version", func(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) error {
 		ss.PersistVersion = persistapi.CurPersistVersion
@@ -102,12 +102,12 @@ func (s *Sandbox) verSaveCallback() {
 	})
 }
 
-// PersistState register hook to set sandbox and container state to persist
+// stateSaveCallback register hook to set sandbox and container state to persist
 func (s *Sandbox) stateSaveCallback() {
 	s.newStore.AddSaveCallback("state", s.dumpState)
 }
 
-// PersistHvState register hook to save hypervisor state to persist data
+// hvStateSaveCallback register hook to save hypervisor state to persist data
 func (s *Sandbox) hvStateSaveCallback() {
 	s.newStore.AddSaveCallback("hypervisor", s.dumpHypervisor)
 }
@@ -118,7 +118,7 @@ func (s *Sandbox) devicesSaveCallback() {
 }
 
 func (s *Sandbox) getSbxAndCntStates() (*persistapi.SandboxState, map[string]persistapi.ContainerState, error) {
-	if err := s.newStore.Restore(s.id); err != nil {
+	if err := s.newStore.FromDisk(s.id); err != nil {
 		return nil, nil, err
 	}
 
