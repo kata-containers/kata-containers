@@ -184,6 +184,9 @@ parts:
     build-packages:
       - libelf-dev
       - curl
+      - build-essential
+      - bison
+      - flex
     build-snaps:
       - yq
     override-build: |
