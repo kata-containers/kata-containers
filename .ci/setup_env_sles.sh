@@ -42,6 +42,10 @@ chronic sudo -E zypper -n install libcap-devel libattr1 libcap-ng-devel librbd-d
 echo "Install kernel dependencies"
 chronic sudo -E zypper -n install libelf-devel flex
 
+echo "Install CRI-O dependencies"
+chronic sudo -E zypper -n install libglib-2_0-0 libseccomp-devel libapparmor-devel libgpg-error-devel \
+	glibc-devel-static libgpgme-devel libassuan-devel glib2-devel glibc-devel util-linux
+
 echo "Install bison binary"
 chronic sudo -E zypper -n install bison
 
