@@ -12,7 +12,10 @@ SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_DIR}/../metrics/lib/common.bash"
 RESULTS_DIR=${SCRIPT_DIR}/../metrics/results
 CHECKMETRICS_DIR=${SCRIPT_DIR}/../cmd/checkmetrics
-CHECKMETRICS_CONFIG_DIR="/etc/checkmetrics"
+# Where to look by default, if this machine is not a static CI machine with a fixed name.
+CHECKMETRICS_CONFIG_DEFDIR="/etc/checkmetrics"
+# Where to look if this machine is a static CI machine with a known fixed name.
+CHECKMETRICS_CONFIG_DIR="${CHECKMETRICS_DIR}/ci_slaves"
 CM_DEFAULT_DENSITY_CONFIG="${CHECKMETRICS_DIR}/baseline/density-CI.toml"
 
 # Set up the initial state
@@ -82,12 +85,12 @@ check() {
 		# we can expect the cloud image to have a default named file in the correct
 		# place.
 		if [ -n "${METRICS_CI_CLOUD}" ]; then
-			local CM_BASE_FILE="${CHECKMETRICS_CONFIG_DIR}/checkmetrics-json.toml"
+			local CM_BASE_FILE="${CHECKMETRICS_CONFIG_DEFDIR}/checkmetrics-json.toml"
 
 			# If we don't have a machine specific file in place, then copy
 			# over the default cloud density file.
 			if [ ! -f ${CM_BASE_FILE} ]; then
-				sudo mkdir -p ${CHECKMETRICS_CONFIG_DIR}
+				sudo mkdir -p ${CHECKMETRICS_CONFIG_DEFDIR}
 				sudo cp ${CM_DEFAULT_DENSITY_CONFIG} ${CM_BASE_FILE}
 			fi
 		else
