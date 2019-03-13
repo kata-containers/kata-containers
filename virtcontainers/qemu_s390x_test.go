@@ -30,7 +30,7 @@ func TestQemuS390xCPUModel(t *testing.T) {
 	assert.Equal(expectedOut, model)
 
 	s390x.enableNestingChecks()
-	expectedOut = defaultCPUModel + ",pmu=off"
+	expectedOut = defaultCPUModel
 	model = s390x.cpuModel()
 	assert.Equal(expectedOut, model)
 }
@@ -38,7 +38,6 @@ func TestQemuS390xCPUModel(t *testing.T) {
 func TestQemuS390xMemoryTopology(t *testing.T) {
 	assert := assert.New(t)
 	s390x := newTestQemu(QemuCCWVirtio)
-	memoryOffset := 1024
 
 	hostMem := uint64(1024)
 	mem := uint64(120)
@@ -46,7 +45,7 @@ func TestQemuS390xMemoryTopology(t *testing.T) {
 	expectedMemory := govmmQemu.Memory{
 		Size:   fmt.Sprintf("%dM", mem),
 		Slots:  slots,
-		MaxMem: fmt.Sprintf("%dM", hostMem+uint64(memoryOffset)),
+		MaxMem: fmt.Sprintf("%dM", hostMem),
 	}
 
 	m := s390x.memoryTopology(mem, hostMem, slots)
