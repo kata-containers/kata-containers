@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 )
 
@@ -203,4 +204,36 @@ var _ = Describe("Checking CPU cgroups in the host", func() {
 			})
 		})
 	})
+})
+
+var _ = Describe("Check cgroup paths", func() {
+	var (
+		args []string
+		id   string
+	)
+
+	BeforeEach(func() {
+		id = randomDockerName()
+		args = []string{"-d", "--name", id}
+	})
+
+	AfterEach(func() {
+		Expect(RemoveDockerContainer(id)).To(BeTrue())
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	DescribeTable("with a parent cgroup",
+		func(parentCgroup string) {
+			Skip("Issue: https://github.com/kata-containers/runtime/issues/1365")
+			args = append(args, "--cgroup-parent", parentCgroup, Image)
+			_, _, exitCode := dockerRun(args...)
+			Expect(exitCode).To(BeZero())
+		},
+		withParentCgroup("../"),
+		withParentCgroup("../../"),
+		withParentCgroup("../../../"),
+		withParentCgroup("../../../../"),
+		withParentCgroup("~"),
+		withParentCgroup("/../../../../hi"),
+	)
 })
