@@ -14,7 +14,7 @@ var _ = Describe("logs", func() {
 
 	BeforeEach(func() {
 		id = randomDockerName()
-		_, _, exitCode := dockerRun("-td", "--name", id, Image, "sh", "-c", "'echo hello'")
+		_, _, exitCode := dockerRun("-t", "--name", id, Image, "/bin/echo", "hello")
 		Expect(exitCode).To(Equal(0))
 	})
 
