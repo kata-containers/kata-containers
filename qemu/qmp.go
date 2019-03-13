@@ -247,7 +247,16 @@ func (q *QMP) readLoop(fromVMCh chan<- []byte) {
 		if q.cfg.Logger.V(1) {
 			q.cfg.Logger.Infof("%s", string(line))
 		}
-		fromVMCh <- line
+
+		// Since []byte channel type transfer slice info(include slice underlying array pointer, len, cap)
+		// between channel sender and receiver. scanner.Bytes() returned slice's underlying array
+		// may point to data that will be overwritten by a subsequent call to Scan(reference from:
+		// https://golang.org/pkg/bufio/#Scanner.Bytes), which may make receiver read mixed data,
+		// so we need to copy line to new allocated space and then send to channel receiver
+		sendLine := make([]byte, len(line))
+		copy(sendLine, line)
+
+		fromVMCh <- sendLine
 	}
 	close(fromVMCh)
 }
