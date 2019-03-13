@@ -67,7 +67,10 @@ func NewFactory(ctx context.Context, config Config, fetchOnly bool) (vc.Factory,
 				return nil, err
 			}
 		} else {
-			b = template.New(ctx, config.VMConfig)
+			b, err = template.New(ctx, config.VMConfig)
+			if err != nil {
+				return nil, err
+			}
 		}
 	} else if config.VMCache && config.Cache == 0 {
 		b, err = grpccache.New(ctx, config.VMCacheEndpoint)
