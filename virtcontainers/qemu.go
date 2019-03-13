@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -755,6 +756,10 @@ func (q *qemu) addDeviceToBridge(ID string) (string, types.PCIBridge, error) {
 	var err error
 	var addr uint32
 
+	if len(q.state.Bridges) == 0 {
+		return "", types.PCIBridge{}, errors.New("failed to get available address from bridges")
+	}
+
 	// looking for an empty address in the bridges
 	for _, b := range q.state.Bridges {
 		addr, err = b.AddDevice(ID)
@@ -763,7 +768,7 @@ func (q *qemu) addDeviceToBridge(ID string) (string, types.PCIBridge, error) {
 		}
 	}
 
-	return "", types.PCIBridge{}, err
+	return "", types.PCIBridge{}, fmt.Errorf("no more bridge slots available")
 }
 
 func (q *qemu) removeDeviceFromBridge(ID string) error {
