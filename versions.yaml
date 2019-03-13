@@ -162,7 +162,7 @@ assets:
     url: "https://cdn.kernel.org/pub/linux/kernel/v4.x/"
     uscan-url: >-
       https://mirrors.edge.kernel.org/pub/linux/kernel/v4.x/linux-(4\.19\..+)\.tar\.gz
-    version: "v4.19.24"
+    version: "v4.19.28"
 
 components:
   description: "Core system functionality"
