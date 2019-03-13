@@ -10,19 +10,35 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	whhttp "github.com/slok/kubewebhook/pkg/http"
 	"github.com/slok/kubewebhook/pkg/log"
+	mctx "github.com/slok/kubewebhook/pkg/webhook/context"
 	mutatingwh "github.com/slok/kubewebhook/pkg/webhook/mutating"
 )
 
-func annotatePodMutator(_ context.Context, obj metav1.Object) (bool, error) {
+func annotatePodMutator(ctx context.Context, obj metav1.Object) (bool, error) {
 	pod, ok := obj.(*corev1.Pod)
 	if !ok {
 		// If not a pod just continue the mutation chain (if there is one) and don't do anything
+		return false, nil
+	}
+
+	request := mctx.GetAdmissionRequest(ctx)
+	if request == nil {
+		return false, nil
+	}
+
+	// The Namespace is not always available in the pod Spec
+	// specially when operators create the pods. Hence access
+	// the Namespace in the actual request (vs the object)
+	// https://godoc.org/k8s.io/api/admission/v1beta1#AdmissionRequest
+	if whPolicy.nsBlacklist[request.Namespace] {
+		fmt.Println("blacklisted namespace: ", request.Namespace)
 		return false, nil
 	}
 
@@ -31,14 +47,6 @@ func annotatePodMutator(_ context.Context, obj metav1.Object) (bool, error) {
 	if pod.Spec.HostNetwork {
 		fmt.Println("host network: ", pod.GetNamespace(), pod.GetName())
 		return false, nil
-	}
-
-	switch pod.GetNamespace() {
-	case "rook-ceph-system", "rook-ceph":
-		fmt.Println("rook: ", pod.GetNamespace(), pod.GetName())
-		return false, nil
-	default:
-		break
 	}
 
 	for i := range pod.Spec.Containers {
@@ -65,9 +73,16 @@ func annotatePodMutator(_ context.Context, obj metav1.Object) (bool, error) {
 }
 
 type config struct {
-	certFile string
-	keyFile  string
+	certFile    string
+	keyFile     string
+	nsBlacklist string
 }
+
+type policy struct {
+	nsBlacklist map[string]bool
+}
+
+var whPolicy *policy
 
 func initFlags() *config {
 	cfg := &config{}
@@ -75,6 +90,7 @@ func initFlags() *config {
 	fl := flag.NewFlagSet(os.Args[0], flag.ExitOnError)
 	fl.StringVar(&cfg.certFile, "tls-cert-file", "", "TLS certificate file")
 	fl.StringVar(&cfg.keyFile, "tls-key-file", "", "TLS key file")
+	fl.StringVar(&cfg.nsBlacklist, "exclude-namespaces", "", "Comma separated namespace blacklist")
 
 	fl.Parse(os.Args[1:])
 	return cfg
@@ -84,6 +100,14 @@ func main() {
 	logger := &log.Std{Debug: true}
 
 	cfg := initFlags()
+
+	whPolicy = &policy{}
+	whPolicy.nsBlacklist = make(map[string]bool)
+	if cfg.nsBlacklist != "" {
+		for _, s := range strings.Split(cfg.nsBlacklist, ",") {
+			whPolicy.nsBlacklist[s] = true
+		}
+	}
 
 	// Create our mutator
 	mt := mutatingwh.MutatorFunc(annotatePodMutator)

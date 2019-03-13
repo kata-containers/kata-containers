@@ -22,6 +22,7 @@ spec:
           args:
             - -tls-cert-file=/etc/webhook/certs/cert.pem
             - -tls-key-file=/etc/webhook/certs/key.pem
+            - -exclude-namespaces=rook-ceph-system,rook-ceph
           volumeMounts:
             - name: webhook-certs
               mountPath: /etc/webhook/certs

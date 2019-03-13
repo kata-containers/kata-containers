@@ -30,27 +30,10 @@ and sample admission controller we created by running
 ```bash
 $ kubectl apply -f deploy/
 ```
-The admission webhook (deploy/webhook-registration.yaml)
-is setup to exclude certian namespaces from being run with Kata using filters on namespace labels.
 
-```yaml
-    namespaceSelector:
-      matchExpressions:
-        -  {key: "kata", operator: NotIn, values: ["false"]}
-```
-The rook operators for example are marked as such.
+The webhook mutates pods to use the kata runtime class for all pods except
+those with 
 
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: rook-ceph-system
-  labels:
-    kata: "false"
-```
-
-Pods not explicitly excluded by the namespace filter are dynamically tagged to run with Kata with some exceptions.
-
-* `hostNetwork: true`
-* `rook-ceph` and `rook-ceph-system` namespaces
+* `hostNetwork: true` 
+* namespace: `rook-ceph` and `rook-ceph-system`
 
