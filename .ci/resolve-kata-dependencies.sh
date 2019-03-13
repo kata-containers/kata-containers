@@ -52,6 +52,8 @@ apply_depends_on() {
 		git fetch origin "pull/${pr_id}/head:${dependency_branch}" && \
 			git checkout "${dependency_branch}" && \
 			git rebase "origin/${branch}"
+			# And show what we rebased on top of to aid debugging
+			git log --oneline master~1..HEAD
 		popd
 	done
 
@@ -89,6 +91,8 @@ clone_repos() {
 			git checkout "${pr_branch}"
 			echo "... and rebasing with origin/${branch}"
 			git rebase "origin/${branch}"
+			# And show what we rebased on top of to aid debugging
+			git log --oneline master~1..HEAD
 		else
 			# Packaging repo only has master branch, so we
 			# cannot checkout to a different branch.
