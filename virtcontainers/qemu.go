@@ -1220,7 +1220,13 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 	}
 
 	if len(memoryDevices) != 0 {
-		memDev.slot = memoryDevices[len(memoryDevices)-1].Data.Slot + 1
+		maxSlot := -1
+		for _, device := range memoryDevices {
+			if maxSlot < device.Data.Slot {
+				maxSlot = device.Data.Slot
+			}
+		}
+		memDev.slot = maxSlot + 1
 	}
 	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, "memory-backend-ram", "mem"+strconv.Itoa(memDev.slot), "", memDev.sizeMB)
 	if err != nil {
