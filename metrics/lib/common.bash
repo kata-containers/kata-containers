@@ -284,6 +284,7 @@ check_for_ksm(){
 #
 # arg1 - timeout in seconds
 wait_ksm_settle(){
+	[[ "$RUNTIME" == "runc" ]] || [[ "$RUNTIME" == "kata-fc" ]] && return
 	local t pcnt
 	local oldscan=-1 newscan
 	local oldpages=-1 newpages
@@ -295,12 +296,15 @@ wait_ksm_settle(){
 	for ((t=0; t<$1; t++)); do
 
 		newscan=$(cat /sys/kernel/mm/ksm/full_scans)
+		newpages=$(cat /sys/kernel/mm/ksm/pages_shared)
+		[[ "$newpages" -eq 0 ]] && echo "No need to wait for KSM to settle" && return
+
 		if (( newscan != oldscan )); then
 			echo -e "\nnew full_scan ($oldscan to $newscan)"
 
-			newpages=$(cat /sys/kernel/mm/ksm/pages_shared)
 			# Do we have a previous scan to compare with
 			echo "check pages $oldpages to $newpages"
+
 			if (( oldpages != -1 )); then
 				# avoid divide by zero problems
 				if (( $oldpages > 0 )); then
