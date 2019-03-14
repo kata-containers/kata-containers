@@ -49,7 +49,7 @@ functional: ginkgo
 ifeq (${RUNTIME},)
 	$(error RUNTIME is not set)
 else
-	./ginkgo -v functional/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+	./ginkgo -failFast -v functional/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 	bash sanity/check_sanity.sh
 endif
 
@@ -59,17 +59,17 @@ ifeq ($(RUNTIME),)
 endif
 
 ifeq ($(KATA_HYPERVISOR),firecracker)
-	./ginkgo -v -focus "${FOCUS}" -skip "${SKIP}" \
+	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 else ifeq ($(ARCH),aarch64)
-	./ginkgo -v -focus "${FOCUS}" -skip "${SKIP}" \
+	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 else
 	# Run tests in parallel, skip tests that need to be run serialized
-	./ginkgo -nodes=${GINKGO_NODES} -v -focus "${FOCUS}" -skip "${SKIP}" -skip "\[Serial Test\]" \
+	./ginkgo -failFast -nodes=${GINKGO_NODES} -v -focus "${FOCUS}" -skip "${SKIP}" -skip "\[Serial Test\]" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 	# Now run serialized tests
-	./ginkgo -v -focus "${FOCUS}" -focus "\[Serial Test\]" -skip "${SKIP}" \
+	./ginkgo -failFast -v -focus "${FOCUS}" -focus "\[Serial Test\]" -skip "${SKIP}" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 	bash sanity/check_sanity.sh
 endif
