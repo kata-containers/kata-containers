@@ -17,8 +17,11 @@ source "$lib_file"
 [ "$(id -u)" -eq 0 ] || die "$0: must be run as root"
 
 IMAGE="${IMAGE:-kata-containers.img}"
+IMG_SIZE=128
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
+IMG_HEADER_SZ=2
+IMG_HEADER_SZ_B=$((IMG_HEADER_SZ*1024*1024))
 
 usage()
 {
@@ -27,13 +30,10 @@ usage()
 Usage: ${script_name} [options] <rootfs-dir>
 	This script will create a Kata Containers image file of
 	an adequate size based on the <rootfs-dir> directory.
-	The size of the image can be also be specified manually
-	by '-s' flag.
 
 Options:
 	-h Show this help
 	-o path to generate image file ENV: IMAGE
-	-s Image size in MB ENV: IMG_SIZE
 	-r Free space of the root partition in MB ENV: ROOT_FREE_SPACE
 
 Extra environment variables:
@@ -67,16 +67,6 @@ do
 		h)	usage ;;
 		o)	IMAGE="${OPTARG}" ;;
 		r)	ROOT_FREE_SPACE="${OPTARG}" ;;
-		s)	{
-		IMG_SIZE=${OPTARG}
-		if [ ${IMG_SIZE} -le 0 ]; then
-			die "Image size has to be greater than 0 MB."
-		fi
-		if [ ${IMG_SIZE} -gt ${MAX_IMG_SIZE_MB} ]; then
-			die "Image size should not be greater than ${MAX_IMG_SIZE_MB} MB."
-		fi
-		 }
-		 ;;
 		f)	FS_TYPE="${OPTARG}" ;;
 	esac
 done
@@ -152,6 +142,16 @@ align_memory()
 		warning "image size '$IMG_SIZE' is not aligned to memory boundary '$MEM_BOUNDARY_MB', aligning it"
 		IMG_SIZE=$(($IMG_SIZE + $MEM_BOUNDARY_MB - $remaining))
 	fi
+
+	# To support:
+	# * memory hotplug: the image size MUST BE aligned to MEM_BOUNDARY_MB (128 or 1024 MB)
+	# * DAX: NVDIMM driver reads the device namespace information from nvdimm namespace (4K offset).
+	#        The namespace information is saved in the first 2MB of the image.
+	# * DAX huge pages [2]: 2MB alignment
+	#
+	# [1] - nd_pfn_validate(): https://github.com/torvalds/linux/blob/master/drivers/nvdimm/pfn_devs.c
+	# [2] - https://nvdimm.wiki.kernel.org/2mib_fs_dax
+	IMG_SIZE=$((IMG_SIZE-IMG_HEADER_SZ))
 }
 
 # Calculate image size based on the rootfs
@@ -223,8 +223,10 @@ create_rootfs_disk()
 	# The partition is the rootfs content
 
 	info "Creating partitions"
-	parted "${IMAGE}" --script "mklabel gpt" \
-	"mkpart ${FS_TYPE} 1M -1M"
+	parted -s -a optimal "${IMAGE}" \
+		   mklabel gpt -- \
+		   mkpart primary "${FS_TYPE}" 1M -1M \
+		   print
 	OK "Partitions created"
 
 	# Get the loop device bound to the image file (requires /dev mounted in the
@@ -264,7 +266,7 @@ create_rootfs_disk()
 	# of disk creation by adding 5% in the inital assumed value $ROOTFS_SIZE
 	if [ $ROOTFS_SIZE -gt $AVAIL_DISK ]; then
 		# Increase the size but remain aligned to the original MEM_BOUNDARY_MB, which is stored in $ORIG_MEM_BOUNDARY_MB
-		MEM_BOUNDARY_MB=$(($MEM_BOUNDARY_MB+$ORIG_MEM_BOUNDARY_MB))
+		MEM_BOUNDARY_MB=$((MEM_BOUNDARY_MB+ORIG_MEM_BOUNDARY_MB))
 		OLD_IMG_SIZE=${IMG_SIZE}
 		unset IMG_SIZE
 		unmount
@@ -279,11 +281,28 @@ create_rootfs_disk
 info "rootfs size ${ROOTFS_SIZE} MB"
 info "Copying content from rootfs to root partition"
 cp -a "${ROOTFS}"/* ${MOUNT_DIR}
+sync
 OK "rootfs copied"
 
 unmount
 # Optimize
 fsck.ext4 -D -y "${DEVICE}p1"
 detach
+
+info "Set device namespace information (metadata)"
+# Fill out namespace information
+tmp_img="$(mktemp)"
+chmod 0644 "${tmp_img}"
+# metadate header
+dd if=/dev/zero of="${tmp_img}" bs="${IMG_HEADER_SZ}M" count=1
+# append image data (rootfs)
+dd if="${IMAGE}" of="${tmp_img}" oflag=append conv=notrunc
+# copy final image
+mv "${tmp_img}" "${IMAGE}"
+# Set metadata header
+# Issue: https://github.com/kata-containers/osbuilder/issues/240
+gcc -O2 "${script_dir}/nsdax.gpl.c" -o "${script_dir}/nsdax"
+"${script_dir}/nsdax" "${IMAGE}" "${IMG_HEADER_SZ_B}" "${IMG_HEADER_SZ_B}"
+sync
 
 info "Image created. Virtual size: ${IMG_SIZE}MB."
