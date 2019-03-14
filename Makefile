@@ -69,7 +69,7 @@ else ifneq (${FOCUS},)
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 else
 	# Run tests in parallel, skip tests that need to be run serialized
-	./ginkgo -failFast -nodes=${GINKGO_NODES} -v -skip "${SKIP}" -skip "\[Serial Test\]" \
+	./ginkgo -failFast -nodes=${GINKGO_NODES} -stream -v -skip "${SKIP}" -skip "\[Serial Test\]" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 	# Now run serialized tests
 	./ginkgo -failFast -v -focus "\[Serial Test\]" -skip "${SKIP}" \
