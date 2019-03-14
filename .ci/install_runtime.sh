@@ -13,6 +13,8 @@ source "${cidir}/lib.sh"
 source /etc/os-release || source /usr/lib/os-release
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
+arch=$("${cidir}"/kata-arch.sh -d)
+
 # Modify the runtimes build-time defaults
 
 # enable verbose build
@@ -79,9 +81,23 @@ if [ "$USE_VSOCK" == "yes" ]; then
 fi
 
 if [ "$KATA_HYPERVISOR" == "qemu" ]; then
-	echo "Add runtime as a new/default Docker runtime. Docker version \"$(docker --version)\" could change according to updates."
-	docker_options="-D --add-runtime kata-runtime=/usr/local/bin/kata-runtime"
 	echo "Add kata-runtime as a new/default Docker runtime."
+	"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker configure -r kata-runtime -f
+elif [ "$KATA_HYPERVISOR" == "nemu" ]; then
+	echo "Configure Nemu as Kata Hypervisor"
+	sudo sed -i -e 's|machine_type = "pc"|machine_type = "virt"|' "${runtime_config_path}"
+	sudo sed -i -e 's|firmware = ""|firmware = "/usr/share/nemu/firmware/OVMF.fd"|' "${runtime_config_path}"
+	case "$arch" in
+	x86_64)
+		sudo sed -i -e "s|\"/usr/bin/qemu-lite-system-${arch}\"|\"/usr/local/bin/qemu-system-${arch}_virt\"|" "${runtime_config_path}"
+		;;
+	aarch64)
+		sudo sed -i -e "s|\"/usr/bin/qemu-lite-system-${arch}\"|\"/usr/local/bin/qemu-system-${arch}\"|" "${runtime_config_path}"
+		;;
+	*)
+		die "Unsupported architecture: $arch"
+		;;
+	esac
 	"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker configure -r kata-runtime -f
 else
 	echo "Kata runtime will not set as a default in Docker"

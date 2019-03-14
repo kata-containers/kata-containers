@@ -28,6 +28,9 @@ echo "Install qemu dependencies"
 chronic sudo -E dnf -y install libcap-devel libattr-devel \
 	libcap-ng-devel zlib-devel pixman-devel librbd-devel
 
+echo "Install nemu dependencies"
+chronic sudo -E dnf -y install brlapi
+
 echo "Install kernel dependencies"
 chronic sudo -E dnf -y install elfutils-libelf-devel flex
 

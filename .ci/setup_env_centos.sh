@@ -43,6 +43,9 @@ chronic sudo -E yum install -y libtool libtool-ltdl-devel device-mapper-persiste
 echo "Install qemu dependencies"
 chronic sudo -E yum install -y libcap-devel libcap-ng-devel libattr-devel libcap-ng-devel librbd1-devel flex libfdt-devel
 
+echo "Install nemu dependencies"
+chronic sudo -E yum install -y brlapi
+
 echo "Install kernel dependencies"
 chronic sudo -E yum -y install elfutils-libelf-devel flex
 

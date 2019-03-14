@@ -14,6 +14,10 @@ CONTAINER_NAME="containerA"
 PAYLOAD_ARGS="tail -f /dev/null"
 
 setup() {
+	if [ "$KATA_HYPERVISOR" == "nemu" ]; then
+		skip " issue: https://github.com/kata-containers/runtime/issues/1003"
+	fi
+
 	clean_env
 
 	# Check that processes are not running
@@ -28,6 +32,10 @@ setup() {
 }
 
 @test "test netmon" {
+	if [ "$KATA_HYPERVISOR" == "nemu" ]; then
+		skip " issue: https://github.com/kata-containers/runtime/issues/1003"
+	fi
+
 	# Create network
 	docker network create $NETWORK_NAME
 
@@ -65,6 +73,10 @@ setup() {
 }
 
 teardown() {
+	if [ "$KATA_HYPERVISOR" == "nemu" ]; then
+		skip " issue: https://github.com/kata-containers/runtime/issues/1003"
+	fi
+
 	clean_env
 
 	extract_kata_env
