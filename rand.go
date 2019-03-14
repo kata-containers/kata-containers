@@ -13,10 +13,9 @@ const letters = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 const lettersMask = 63
 
-var randSrc = rand.NewSource(time.Now().UnixNano())
-
 // RandID returns a random string
 func RandID(n int) string {
+	randSrc := rand.NewSource(time.Now().UnixNano())
 	b := make([]byte, n)
 	for i := 0; i < n; {
 		if j := int(randSrc.Int63() & lettersMask); j < len(letters) {
