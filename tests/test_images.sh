@@ -110,11 +110,13 @@ show_stats()
 	done
 
 	# initrds
-	for name in "${!built_initrds[@]}"
-	do
-		sizes=${built_initrds[$name]}
-		add_to_stats_file "$tmpfile" "$name" "$sizes" 'initrd'
-	done
+	if [ "$KATA_HYPERVISOR" != "firecracker" ]; then
+		for name in "${!built_initrds[@]}"
+		do
+			sizes=${built_initrds[$name]}
+			add_to_stats_file "$tmpfile" "$name" "$sizes" 'initrd'
+		done
+	fi
 
 	info "Image and rootfs sizes (in bytes and MB), smallest image first:"
 	echo
@@ -220,17 +222,19 @@ set_runtime()
 	# Travis doesn't support VT-x
 	[ -n "${TRAVIS:-}" ] && return
 
-	if [ -f "$sysconfig_docker_config_file" ]; then
-		docker_config_file="$sysconfig_docker_config_file"
-		sed_script="s|^( *DOCKER_OPTS=.+--default-runtime[= ] *)[^ \"]+(.*\"$)|\1${name}\2|g"
-	else
-		docker_config_file="$systemd_docker_config_file"
-		sed_script="s/--default-runtime[= ][^ ]*/--default-runtime=${name}/g"
-	fi
+	if [ "$KATA_HYPERVISOR" != "firecracker" ]; then
+		if [ -f "$sysconfig_docker_config_file" ]; then
+			docker_config_file="$sysconfig_docker_config_file"
+			sed_script="s|^( *DOCKER_OPTS=.+--default-runtime[= ] *)[^ \"]+(.*\"$)|\1${name}\2|g"
+		else
+			docker_config_file="$systemd_docker_config_file"
+			sed_script="s/--default-runtime[= ][^ ]*/--default-runtime=${name}/g"
+		fi
 
-	sudo -E sed -i -E "$sed_script" "$docker_config_file"
-	sudo -E systemctl daemon-reload
-	sudo -E systemctl restart docker
+		sudo -E sed -i -E "$sed_script" "$docker_config_file"
+		sudo -E systemctl daemon-reload
+		sudo -E systemctl restart docker
+	fi
 }
 
 setup()
@@ -498,10 +502,12 @@ test_distros()
 	  bgJobs+=($!)
 	fi
 
-	if [ ${#distrosAgent[@]} -gt 0 ]; then
-	  info "building all rootfses with kata-agent as init"
-	  make_rootfs ${commonMakeVars[@]} AGENT_INIT=yes "${distrosAgent[@]}" &
-	  bgJobs+=($!)
+	if [ "$KATA_HYPERVISOR" != "firecracker" ]; then
+		if [ ${#distrosAgent[@]} -gt 0 ]; then
+	  	info "building all rootfses with kata-agent as init"
+	  	make_rootfs ${commonMakeVars[@]} AGENT_INIT=yes "${distrosAgent[@]}" &
+	  	bgJobs+=($!)
+		fi
 	fi
 
 	# Check for build failures (`wait` remembers up to CHILD_MAX bg processes exit status)
@@ -548,15 +554,18 @@ test_distros()
 			continue
 		fi
 
-		echo -e "$separator"
-		info "Making initrd image for ${d}"
-		make_initrd ${commonMakeVars[@]} AGENT_INIT=yes $d
-		local initrd_size=$(stat -c "%s" "${initrd_path}")
 
-		echo -e "$separator"
-		built_initrds["${d}"]="${rootfs_size}:${initrd_size}"
-		info "Creating container for ${d}"
-		install_initrd_create_container $initrd_path
+		if [ "$KATA_HYPERVISOR" != "firecracker" ]; then
+			echo -e "$separator"
+			info "Making initrd image for ${d}"
+			make_initrd ${commonMakeVars[@]} AGENT_INIT=yes $d
+			local initrd_size=$(stat -c "%s" "${initrd_path}")
+
+			echo -e "$separator"
+			built_initrds["${d}"]="${rootfs_size}:${initrd_size}"
+			info "Creating container for ${d}"
+			install_initrd_create_container $initrd_path
+		fi
 	done
 
 	echo -e "$separator"
