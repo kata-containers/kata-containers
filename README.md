@@ -20,6 +20,7 @@ For details of the other Kata Containers repositories, see the
 * HOWTO: [Kata Containers with k8s and cri-containerd](./how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)
 * HOWTO: [OpenStack Zun with Kata Containers](zun/zun_kata.md)
 * HOWTO: [Kata Containers with Firecracker](https://github.com/kata-containers/documentation/wiki/Initial-release-of-Kata-Containers-with-Firecracker-support)
+* HOWTO: [Sysctls with Kata Containers](./how-to/how-to-use-sysctls-with-kata.md)
 
 ## Developer Guide
 
