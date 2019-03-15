@@ -13,20 +13,20 @@ import (
 
 func TestBumpAttachCount(t *testing.T) {
 	type testData struct {
-		attach      bool
 		attachCount uint
 		expectedAC  uint
+		attach      bool
 		expectSkip  bool
 		expectErr   bool
 	}
 
 	data := []testData{
-		{true, 0, 1, false, false},
-		{true, 1, 2, true, false},
-		{true, intMax, intMax, true, true},
-		{false, 0, 0, true, true},
-		{false, 1, 0, false, false},
-		{false, intMax, intMax - 1, true, false},
+		{0, 1, true, false, false},
+		{1, 2, true, true, false},
+		{intMax, intMax, true, true, true},
+		{0, 0, false, true, true},
+		{1, 0, false, false, false},
+		{intMax, intMax - 1, false, true, false},
 	}
 
 	dev := &GenericDevice{}

@@ -122,11 +122,7 @@ func newQMPLogger() qmpLogger {
 }
 
 func (l qmpLogger) V(level int32) bool {
-	if level != 0 {
-		return true
-	}
-
-	return false
+	return level != 0
 }
 
 func (l qmpLogger) Infof(format string, v ...interface{}) {
@@ -615,7 +611,7 @@ func (q *qemu) waitSandbox(timeout int) error {
 			break
 		}
 
-		if int(time.Now().Sub(timeStart).Seconds()) > timeout {
+		if int(time.Since(timeStart).Seconds()) > timeout {
 			return fmt.Errorf("Failed to connect to QEMU instance (timeout %ds): %v", timeout, err)
 		}
 

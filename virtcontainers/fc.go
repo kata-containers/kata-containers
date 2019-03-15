@@ -217,7 +217,7 @@ func (fc *firecracker) waitVMM(timeout int) error {
 			return nil
 		}
 
-		if int(time.Now().Sub(timeStart).Seconds()) > timeout {
+		if int(time.Since(timeStart).Seconds()) > timeout {
 			return fmt.Errorf("Failed to connect to firecrackerinstance (timeout %ds): %v", timeout, err)
 		}
 
@@ -624,7 +624,6 @@ func (fc *firecracker) addDevice(devInfo interface{}, devType deviceType) error 
 		return fc.fcAddVsock(v)
 	default:
 		fc.Logger().WithField("unknown-device-type", devInfo).Error("Adding device")
-		break
 	}
 
 	return nil

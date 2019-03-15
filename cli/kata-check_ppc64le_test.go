@@ -124,50 +124,50 @@ func TestArchKernelParamHandler(t *testing.T) {
 
 	type testData struct {
 		onVMM        bool
+		expectIgnore bool
 		fields       logrus.Fields
 		msg          string
-		expectIgnore bool
 	}
 
 	data := []testData{
-		{true, logrus.Fields{}, "", false},
-		{false, logrus.Fields{}, "", false},
+		{true, false, logrus.Fields{}, ""},
+		{false, false, logrus.Fields{}, ""},
 
 		{
+			false,
 			false,
 			logrus.Fields{
 				// wrong type
 				"parameter": 123,
 			},
 			"foo",
-			false,
 		},
 
 		{
+			false,
 			false,
 			logrus.Fields{
 				"parameter": "unrestricted_guest",
 			},
 			"",
-			false,
 		},
 
 		{
+			true,
 			true,
 			logrus.Fields{
 				"parameter": "unrestricted_guest",
 			},
 			"",
-			true,
 		},
 
 		{
 			false,
+			true,
 			logrus.Fields{
 				"parameter": "nested",
 			},
 			"",
-			true,
 		},
 	}
 

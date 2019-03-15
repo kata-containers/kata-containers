@@ -33,9 +33,5 @@ func isVFIO(hostPath string) bool {
 
 // isBlock checks if the device is a block device.
 func isBlock(devInfo config.DeviceInfo) bool {
-	if devInfo.DevType == "b" {
-		return true
-	}
-
-	return false
+	return devInfo.DevType == "b"
 }
