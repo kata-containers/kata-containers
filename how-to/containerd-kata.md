@@ -185,14 +185,19 @@ The following configuration includes three runtime classes:
            SystemdCgroup = false
 ```
 
-Based on the discussion in [containerd/containerd#2916](https://github.com/containerd/containerd/pull/2916),
-the containerd configuration will have a field for runtime configuration files (likely to be`config_file`). However, 
-the field is not available yet, and the `shimv2` will search the configuration file in the default paths, same as 
-`kata-runtime` cli): `/etc/kata-containers/configuration.toml`, `/usr/share/defaults/kata-containers/configuration.toml`. 
-We will update this document once the `config_file` field is available.
+From Containerd v1.2.4 and Kata v1.6.0, there is a new runtime option supported, which allows you to specify a specific Kata configuration file as follows:
 
-If you want to specify a configure file now, the following provides a workaround. The `shimv2` accepts an environment 
-variable, `KATA_CONF_FILE` for the config file path. Then, you can create a shell script with the following:
+```toml
+      [plugins.cri.containerd.runtimes.kata]
+         runtime_type = "io.containerd.kata.v2"
+	 [plugins.cri.containerd.runtimes.kata.options]
+	   ConfigPath = "/etc/kata-containers/config.toml"
+```
+
+This `ConfigPath` option is optional. If you do not specify it, shimv2 first tries to get the configuration file from the environment variable `KATA_CONF_FILE`. If neither are set, shimv2 will use the default Kata configuration file paths (`/etc/kata-containers/configuration.toml` and `/usr/share/defaults/kata-containers/configuration.toml`).
+
+If you use Containerd older than v1.2.4 or a version of Kata older than v1.6.0  and also want to specify a configuration file, you can use the following workaround, since the shimv2 accepts an environment variable, `KATA_CONF_FILE` for the configuration file path. Then, you can create a 
+shell script with the following:
 
 ```bash
 #!/bin/bash
@@ -201,7 +206,7 @@ KATA_CONF_FILE=/etc/kata-containers/firecracker.toml containerd-shim-kata-v2
 
 Name it as `/usr/local/bin/containerd-shim-katafc-v2` and reference it in the configuration of containerd:
 
-```
+```toml
       [plugins.cri.containerd.runtimes.kata-firecracker]
          runtime_type = "io.containerd.katafc.v2"
 ```
