@@ -61,13 +61,30 @@ function configure_crio() {
 	# backup the CRIO.conf only if a backup doesn't already exist (don't override original)
 	cp -n "$crio_conf_file" "$crio_conf_file_backup"
 
-	cat <<EOT | tee -a "$crio_conf_file"
-[crio.runtime.runtimes.kata-qemu]
-  runtime_path = "/opt/kata/bin/kata-qemu"
+	local kata_qemu_path="/opt/kata/bin/kata-qemu"
+	local kata_fc_path="/opt/kata/bin/kata-fc"
+	local kata_qemu_conf="crio.runtime.runtimes.kata-qemu"
+	local kata_fc_conf="crio.runtime.runtimes.kata-fc"
 
-[crio.runtime.runtimes.kata-fc]
-  runtime_path = "/opt/kata/bin/kata-fc"
+	if grep -q "^\[$kata_qemu_conf\]" $crio_conf_file; then
+		echo "Configuration exists $kata_qemu_conf, overwriting"
+		sed -i "/^\[$kata_qemu_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_qemu_path}\"#" $crio_conf_file 
+	else
+		cat <<EOT | tee -a "$crio_conf_file"
+[$kata_qemu_conf]
+  runtime_path = "${kata_qemu_path}"
 EOT
+	fi
+
+	if grep -q "^\[$kata_fc_conf\]" $crio_conf_file; then
+		echo "Configuration exists for $kata_fc_conf, overwriting"
+		sed -i "/^\[$kata_fc_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_fc_path}\"#" $crio_conf_file 
+	else
+		cat <<EOT | tee -a "$crio_conf_file"
+[$kata_fc_conf]
+  runtime_path = "${kata_fc_path}"
+EOT
+	fi
 
   # Replace if exists, insert otherwise
   grep -Fq 'manage_network_ns_lifecycle =' $crio_conf_file \
