@@ -164,7 +164,9 @@ const (
 	procTypeIndex
 )
 
-func getDevicePathAndFsType(mountPoint string) (devicePath, fsType string, err error) {
+// GetDevicePathAndFsType gets the device for the mount point and the file system type
+// of the mount.
+func GetDevicePathAndFsType(mountPoint string) (devicePath, fsType string, err error) {
 	if mountPoint == "" {
 		err = fmt.Errorf("Mount point cannot be empty")
 		return
