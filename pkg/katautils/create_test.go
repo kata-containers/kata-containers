@@ -16,6 +16,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
@@ -177,12 +178,30 @@ func findLastParam(key string, params []vc.Param) (string, error) {
 }
 
 func TestSetEphemeralStorageType(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledNeedRoot)
+	}
+
 	assert := assert.New(t)
+
+	dir, err := ioutil.TempDir(testDir, "foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	ephePath := filepath.Join(dir, k8sEmptyDir, "tmp-volume")
+	err = os.MkdirAll(ephePath, testDirMode)
+	assert.Nil(err)
+
+	err = syscall.Mount("tmpfs", ephePath, "tmpfs", 0, "")
+	assert.Nil(err)
+	defer syscall.Unmount(ephePath, 0)
 
 	ociSpec := oci.CompatOCISpec{}
 	var ociMounts []specs.Mount
 	mount := specs.Mount{
-		Source: "/var/lib/kubelet/pods/366c3a77-4869-11e8-b479-507b9ddd5ce4/volumes/kubernetes.io~empty-dir/cache-volume",
+		Source: ephePath,
 	}
 
 	ociMounts = append(ociMounts, mount)
