@@ -592,7 +592,7 @@ func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (*ptypes.E
 	}
 
 	s.send(&eventstypes.TaskPaused{
-		c.id,
+		ContainerID: c.id,
 	})
 
 	return empty, err
@@ -620,7 +620,7 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (*ptypes
 	}
 
 	s.send(&eventstypes.TaskResumed{
-		c.id,
+		ContainerID: c.id,
 	})
 
 	return empty, err
@@ -838,8 +838,6 @@ func (s *service) checkProcesses(e exit) {
 		ExitStatus:  uint32(e.status),
 		ExitedAt:    e.timestamp,
 	})
-
-	return
 }
 
 func (s *service) getContainer(id string) (*container, error) {

@@ -34,7 +34,7 @@ var startCLICommand = cli.Command{
 		}
 
 		args := context.Args()
-		if args.Present() == false {
+		if !args.Present() {
 			return fmt.Errorf("Missing container ID, should at least provide one")
 		}
 

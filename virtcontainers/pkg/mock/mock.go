@@ -90,14 +90,14 @@ func StartShim(config ShimMockConfig) error {
 	}
 
 	// Print some traces to stdout
-	fmt.Fprintf(os.Stdout, ShimStdoutOutput)
+	fmt.Fprint(os.Stdout, ShimStdoutOutput)
 	os.Stdout.Close()
 
 	// Print some traces to stderr
-	fmt.Fprintf(os.Stderr, ShimStderrOutput)
+	fmt.Fprint(os.Stderr, ShimStderrOutput)
 	os.Stderr.Close()
 
-	fmt.Fprintf(f, "INFO: Shim exited properly\n")
+	fmt.Fprint(f, "INFO: Shim exited properly\n")
 
 	return nil
 }

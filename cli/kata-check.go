@@ -243,6 +243,7 @@ func checkKernelModules(modules map[string]kernelModule, handler kernelParamHand
 
 // genericHostIsVMContainerCapable checks to see if the host is theoretically capable
 // of creating a VM container.
+//nolint: unused,deadcode
 func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 	cpuinfo, err := getCPUInfo(details.cpuInfoFile)
 	if err != nil {

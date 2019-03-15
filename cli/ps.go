@@ -35,7 +35,7 @@ var psCLICommand = cli.Command{
 			return err
 		}
 
-		if context.Args().Present() == false {
+		if !context.Args().Present() {
 			return fmt.Errorf("Missing container ID, should at least provide one")
 		}
 

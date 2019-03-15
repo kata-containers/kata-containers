@@ -941,13 +941,13 @@ func TestHypervisorDefaults(t *testing.T) {
 	assert.Equal(h.defaultVCPUs(), uint32(numCPUs), "default vCPU number is wrong")
 
 	h.DefaultMaxVCPUs = 2
-	assert.Equal(h.defaultMaxVCPUs(), uint32(h.DefaultMaxVCPUs), "default max vCPU number is wrong")
+	assert.Equal(h.defaultMaxVCPUs(), uint32(2), "default max vCPU number is wrong")
 
 	h.DefaultMaxVCPUs = uint32(numCPUs) + 1
 	assert.Equal(h.defaultMaxVCPUs(), uint32(numCPUs), "default max vCPU number is wrong")
 
 	maxvcpus := vc.MaxQemuVCPUs()
-	h.DefaultMaxVCPUs = uint32(maxvcpus) + 1
+	h.DefaultMaxVCPUs = maxvcpus + 1
 	assert.Equal(h.defaultMaxVCPUs(), uint32(numCPUs), "default max vCPU number is wrong")
 
 	h.MemorySize = 1024
@@ -1368,7 +1368,7 @@ func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 		Hypervisor: map[string]hypervisor{
 			qemuHypervisorTableType: {
 				NumVCPUs:   int32(vcpus),
-				MemorySize: uint32(mem),
+				MemorySize: mem,
 				Path:       "/",
 				Kernel:     "/",
 				Image:      "/",
@@ -1556,18 +1556,18 @@ func TestCheckFactoryConfig(t *testing.T) {
 
 	type testData struct {
 		factoryEnabled bool
+		expectError    bool
 		imagePath      string
 		initrdPath     string
-		expectError    bool
 	}
 
 	data := []testData{
-		{false, "", "", false},
-		{false, "image", "", false},
-		{false, "", "initrd", false},
+		{false, false, "", ""},
+		{false, false, "image", ""},
+		{false, false, "", "initrd"},
 
-		{true, "", "initrd", false},
-		{true, "image", "", true},
+		{true, false, "", "initrd"},
+		{true, true, "image", ""},
 	}
 
 	for i, d := range data {
@@ -1596,19 +1596,19 @@ func TestCheckNetNsConfigShimTrace(t *testing.T) {
 	assert := assert.New(t)
 
 	type testData struct {
-		disableNetNs bool
 		networkModel vc.NetInterworkingModel
+		disableNetNs bool
 		shimTrace    bool
 		expectError  bool
 	}
 
 	data := []testData{
-		{false, vc.NetXConnectMacVtapModel, false, false},
-		{false, vc.NetXConnectMacVtapModel, true, true},
-		{true, vc.NetXConnectMacVtapModel, true, true},
-		{true, vc.NetXConnectMacVtapModel, false, true},
-		{true, vc.NetXConnectNoneModel, false, false},
-		{true, vc.NetXConnectNoneModel, true, false},
+		{vc.NetXConnectMacVtapModel, false, false, false},
+		{vc.NetXConnectMacVtapModel, false, true, true},
+		{vc.NetXConnectMacVtapModel, true, true, true},
+		{vc.NetXConnectMacVtapModel, true, false, true},
+		{vc.NetXConnectNoneModel, true, false, false},
+		{vc.NetXConnectNoneModel, true, true, false},
 	}
 
 	for i, d := range data {

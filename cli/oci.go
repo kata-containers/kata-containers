@@ -97,7 +97,7 @@ func validCreateParams(ctx context.Context, containerID, bundlePath string) (str
 	if err != nil {
 		return "", fmt.Errorf("Invalid bundle path '%s': %s", bundlePath, err)
 	}
-	if fileInfo.IsDir() == false {
+	if !fileInfo.IsDir() {
 		return "", fmt.Errorf("Invalid bundle path '%s', it should be a directory", bundlePath)
 	}
 

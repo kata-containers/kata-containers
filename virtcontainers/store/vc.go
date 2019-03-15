@@ -300,9 +300,5 @@ func ContainerRuntimeRootPath(sandboxID, containerID string) string {
 // VCSandboxStoreExists returns true if a sandbox store already exists.
 func VCSandboxStoreExists(ctx context.Context, sandboxID string) bool {
 	s := stores.findStore(SandboxConfigurationRoot(sandboxID))
-	if s != nil {
-		return true
-	}
-
-	return false
+	return s != nil
 }

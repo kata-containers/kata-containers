@@ -287,9 +287,7 @@ func (q *qemuArchBase) appendConsole(devices []govmmQemu.Device, path string) []
 
 	devices = append(devices, serial)
 
-	var console govmmQemu.CharDevice
-
-	console = govmmQemu.CharDevice{
+	console := govmmQemu.CharDevice{
 		Driver:   govmmQemu.Console,
 		Backend:  govmmQemu.Socket,
 		DeviceID: "console0",

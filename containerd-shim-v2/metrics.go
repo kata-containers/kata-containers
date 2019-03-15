@@ -42,9 +42,7 @@ func statsToMetrics(cgStats *vc.CgroupStats) *cgroups.Metrics {
 	}
 
 	var perCPU []uint64
-	for _, v := range cgStats.CPUStats.CPUUsage.PercpuUsage {
-		perCPU = append(perCPU, v)
-	}
+	perCPU = append(perCPU, cgStats.CPUStats.CPUUsage.PercpuUsage...)
 
 	metrics := &cgroups.Metrics{
 		Hugetlb: hugetlb,
