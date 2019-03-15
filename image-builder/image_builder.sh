@@ -20,8 +20,9 @@ IMAGE="${IMAGE:-kata-containers.img}"
 IMG_SIZE=128
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
-IMG_HEADER_SZ=2
-IMG_HEADER_SZ_B=$((IMG_HEADER_SZ*1024*1024))
+DAX=${DAX:-no}
+DAX_HEADER_SZ=2
+
 
 usage()
 {
@@ -39,8 +40,22 @@ Options:
 Extra environment variables:
 	AGENT_BIN:  use it to change the expected agent binary name
 	AGENT_INIT: use kata agent as init process
+	DAX: If 'yes' will build the image with DAX support. The first 2 MB of the
+	     resulting image are reserved for the device namespace information
+	     (metadata) that is used by the guest kernel to enable DAX.
 	USE_DOCKER: If set will build image in a Docker Container (requries docker)
 	            DEFAULT: not set
+
+
+	When DAX is 'yes', the following diagram shows how a 128M image will looks like:
+		 .-----------------------------------.
+		 |-- 2 MB --|-------- 126 MB --------|
+		 | Metadata | Rootfs (/bin,/usr,etc) |
+		 '-----------------------------------'
+
+		 The resulting image can be mounted if the offset of 2 MB is specified:
+		 $ sudo losetup -v -fP -o $((2*1024*1024)) kata-containers.img
+
 EOT
 exit "${error}"
 }
@@ -101,6 +116,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--privileged \
 		--env IMG_SIZE="${IMG_SIZE}" \
 		--env AGENT_INIT=${AGENT_INIT} \
+		--env DAX="${DAX}" \
 		-v /dev:/dev \
 		-v "${script_dir}":"/osbuilder" \
 		-v "${script_dir}/../scripts":"/scripts" \
@@ -143,15 +159,18 @@ align_memory()
 		IMG_SIZE=$(($IMG_SIZE + $MEM_BOUNDARY_MB - $remaining))
 	fi
 
-	# To support:
-	# * memory hotplug: the image size MUST BE aligned to MEM_BOUNDARY_MB (128 or 1024 MB)
-	# * DAX: NVDIMM driver reads the device namespace information from nvdimm namespace (4K offset).
-	#        The namespace information is saved in the first 2MB of the image.
-	# * DAX huge pages [2]: 2MB alignment
-	#
-	# [1] - nd_pfn_validate(): https://github.com/torvalds/linux/blob/master/drivers/nvdimm/pfn_devs.c
-	# [2] - https://nvdimm.wiki.kernel.org/2mib_fs_dax
-	IMG_SIZE=$((IMG_SIZE-IMG_HEADER_SZ))
+
+	if [ "${DAX}" == "yes" ] ; then
+		# To support:
+		# * memory hotplug: the image size MUST BE aligned to MEM_BOUNDARY_MB (128 or 1024 MB)
+		# * DAX: NVDIMM driver reads the device namespace information from nvdimm namespace (4K offset).
+		#        The namespace information is saved in the first 2MB of the image.
+		# * DAX huge pages [2]: 2MB alignment
+		#
+		# [1] - nd_pfn_validate(): https://github.com/torvalds/linux/blob/master/drivers/nvdimm/pfn_devs.c
+		# [2] - https://nvdimm.wiki.kernel.org/2mib_fs_dax
+		IMG_SIZE=$((IMG_SIZE-DAX_HEADER_SZ))
+	fi
 }
 
 # Calculate image size based on the rootfs
@@ -276,6 +295,26 @@ create_rootfs_disk()
 	fi
 }
 
+set_dax_metadata()
+{
+	dax_header_bytes=$((DAX_HEADER_SZ*1024*1024))
+	info "Set device namespace information (metadata)"
+	# Fill out namespace information
+	tmp_img="$(mktemp)"
+	chmod 0644 "${tmp_img}"
+	# metadate header
+	dd if=/dev/zero of="${tmp_img}" bs="${DAX_HEADER_SZ}M" count=1
+	# append image data (rootfs)
+	dd if="${IMAGE}" of="${tmp_img}" oflag=append conv=notrunc
+	# copy final image
+	mv "${tmp_img}" "${IMAGE}"
+	# Set metadata header
+	# Issue: https://github.com/kata-containers/osbuilder/issues/240
+	gcc -O2 "${script_dir}/nsdax.gpl.c" -o "${script_dir}/nsdax"
+	"${script_dir}/nsdax" "${IMAGE}" "${dax_header_bytes}" "${dax_header_bytes}"
+	sync
+}
+
 create_rootfs_disk
 
 info "rootfs size ${ROOTFS_SIZE} MB"
@@ -289,20 +328,8 @@ unmount
 fsck.ext4 -D -y "${DEVICE}p1"
 detach
 
-info "Set device namespace information (metadata)"
-# Fill out namespace information
-tmp_img="$(mktemp)"
-chmod 0644 "${tmp_img}"
-# metadate header
-dd if=/dev/zero of="${tmp_img}" bs="${IMG_HEADER_SZ}M" count=1
-# append image data (rootfs)
-dd if="${IMAGE}" of="${tmp_img}" oflag=append conv=notrunc
-# copy final image
-mv "${tmp_img}" "${IMAGE}"
-# Set metadata header
-# Issue: https://github.com/kata-containers/osbuilder/issues/240
-gcc -O2 "${script_dir}/nsdax.gpl.c" -o "${script_dir}/nsdax"
-"${script_dir}/nsdax" "${IMAGE}" "${IMG_HEADER_SZ_B}" "${IMG_HEADER_SZ_B}"
-sync
+if [ "${DAX}" == "yes" ] ; then
+	set_dax_metadata
+fi
 
 info "Image created. Virtual size: ${IMG_SIZE}MB."
