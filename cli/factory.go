@@ -158,20 +158,21 @@ var initFactoryCommand = cli.Command{
 			return errors.New("invalid runtime config")
 		}
 
+		factoryConfig := vf.Config{
+			Template: runtimeConfig.FactoryConfig.Template,
+			Cache:    runtimeConfig.FactoryConfig.VMCacheNumber,
+			VMCache:  runtimeConfig.FactoryConfig.VMCacheNumber > 0,
+			VMConfig: vc.VMConfig{
+				HypervisorType:   runtimeConfig.HypervisorType,
+				HypervisorConfig: runtimeConfig.HypervisorConfig,
+				AgentType:        runtimeConfig.AgentType,
+				AgentConfig:      runtimeConfig.AgentConfig,
+				ProxyType:        runtimeConfig.ProxyType,
+				ProxyConfig:      runtimeConfig.ProxyConfig,
+			},
+		}
+
 		if runtimeConfig.FactoryConfig.VMCacheNumber > 0 {
-			factoryConfig := vf.Config{
-				Template: runtimeConfig.FactoryConfig.Template,
-				Cache:    runtimeConfig.FactoryConfig.VMCacheNumber,
-				VMCache:  true,
-				VMConfig: vc.VMConfig{
-					HypervisorType:   runtimeConfig.HypervisorType,
-					HypervisorConfig: runtimeConfig.HypervisorConfig,
-					AgentType:        runtimeConfig.AgentType,
-					AgentConfig:      runtimeConfig.AgentConfig,
-					ProxyType:        runtimeConfig.ProxyType,
-					ProxyConfig:      runtimeConfig.ProxyConfig,
-				},
-			}
 			f, err := vf.NewFactory(ctx, factoryConfig, false)
 			if err != nil {
 				return err
@@ -204,16 +205,6 @@ var initFactoryCommand = cli.Command{
 		}
 
 		if runtimeConfig.FactoryConfig.Template {
-			factoryConfig := vf.Config{
-				Template: true,
-				VMConfig: vc.VMConfig{
-					HypervisorType:   runtimeConfig.HypervisorType,
-					HypervisorConfig: runtimeConfig.HypervisorConfig,
-					AgentType:        runtimeConfig.AgentType,
-					AgentConfig:      runtimeConfig.AgentConfig,
-					ProxyType:        runtimeConfig.ProxyType,
-				},
-			}
 			kataLog.WithField("factory", factoryConfig).Info("create vm factory")
 			_, err := vf.NewFactory(ctx, factoryConfig, false)
 			if err != nil {
@@ -222,8 +213,9 @@ var initFactoryCommand = cli.Command{
 			}
 			fmt.Fprintln(defaultOutputFile, "vm factory initialized")
 		} else {
-			kataLog.Error("vm factory is not enabled")
-			fmt.Fprintln(defaultOutputFile, "vm factory is not enabled")
+			const errstring = "vm factory or VMCache is not enabled"
+			kataLog.Error(errstring)
+			fmt.Fprintln(defaultOutputFile, errstring)
 		}
 
 		return nil
