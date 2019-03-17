@@ -122,7 +122,6 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 	if !runtimeConfig.FactoryConfig.Template && runtimeConfig.FactoryConfig.VMCacheNumber == 0 {
 		return
 	}
-
 	factoryConfig := vf.Config{
 		Template:        runtimeConfig.FactoryConfig.Template,
 		VMCache:         runtimeConfig.FactoryConfig.VMCacheNumber > 0,
@@ -142,13 +141,13 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 	kataUtilsLogger.WithField("factory", factoryConfig).Info("load vm factory")
 
 	f, err := vf.NewFactory(ctx, factoryConfig, true)
-	if err != nil {
+	if err != nil && !factoryConfig.VMCache {
 		kataUtilsLogger.WithError(err).Warn("load vm factory failed, about to create new one")
 		f, err = vf.NewFactory(ctx, factoryConfig, false)
-		if err != nil {
-			kataUtilsLogger.WithError(err).Warn("create vm factory failed")
-			return
-		}
+	}
+	if err != nil {
+		kataUtilsLogger.WithError(err).Warn("create vm factory failed")
+		return
 	}
 
 	vci.SetFactory(ctx, f)

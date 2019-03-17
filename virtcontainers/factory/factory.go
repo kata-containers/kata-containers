@@ -61,29 +61,32 @@ func NewFactory(ctx context.Context, config Config, fetchOnly bool) (vc.Factory,
 	}
 
 	var b base.FactoryBase
-	if config.Template {
-		if fetchOnly {
-			b, err = template.Fetch(config.VMConfig)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			b, err = template.New(ctx, config.VMConfig)
-			if err != nil {
-				return nil, err
-			}
-		}
-	} else if config.VMCache && config.Cache == 0 {
+	if config.VMCache && config.Cache == 0 {
+		// For VMCache client
 		b, err = grpccache.New(ctx, config.VMCacheEndpoint)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		b = direct.New(ctx, config.VMConfig)
-	}
+		if config.Template {
+			if fetchOnly {
+				b, err = template.Fetch(config.VMConfig)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				b, err = template.New(ctx, config.VMConfig)
+				if err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			b = direct.New(ctx, config.VMConfig)
+		}
 
-	if config.Cache > 0 {
-		b = cache.New(ctx, config.Cache, b)
+		if config.Cache > 0 {
+			b = cache.New(ctx, config.Cache, b)
+		}
 	}
 
 	return &factory{b}, nil
