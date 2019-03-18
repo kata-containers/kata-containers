@@ -23,6 +23,12 @@ For details of the other Kata Containers repositories, see the
 * HOWTO: [Sysctls with Kata Containers](./how-to/how-to-use-sysctls-with-kata.md)
 * HOWTO: [VM Templating](./how-to/what-is-vm-cache-and-how-do-I-use-it.md) and [VM Cache](./how-to/what-is-vm-cache-and-how-do-I-use-it.md)
 
+## Kata Use-Cases
+
+* [VPP with Kata](./use-cases/using-vpp-and-kata.md)
+* [SR-IOV with Kata](./use-cases/using-SRIOV-and-kata.md)
+* [GPU Passthrough with Kata](./GPU-passthrough-and-Kata.md)
+
 ## Developer Guide
 
 Documents that help to understand and contribute to Kata Containers.
