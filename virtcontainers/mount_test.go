@@ -238,7 +238,7 @@ func TestGetDeviceForPathBindMount(t *testing.T) {
 }
 
 func TestGetDevicePathAndFsTypeEmptyMount(t *testing.T) {
-	_, _, err := getDevicePathAndFsType("")
+	_, _, err := GetDevicePathAndFsType("")
 
 	if err == nil {
 		t.Fatal()
@@ -246,7 +246,7 @@ func TestGetDevicePathAndFsTypeEmptyMount(t *testing.T) {
 }
 
 func TestGetDevicePathAndFsTypeSuccessful(t *testing.T) {
-	path, fstype, err := getDevicePathAndFsType("/proc")
+	path, fstype, err := GetDevicePathAndFsType("/proc")
 
 	if err != nil {
 		t.Fatal(err)

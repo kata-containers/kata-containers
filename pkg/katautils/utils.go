@@ -14,6 +14,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	vc "github.com/kata-containers/runtime/virtcontainers"
 )
 
 const (
@@ -43,7 +45,9 @@ func IsEphemeralStorage(path string) bool {
 	if len(splitSourceSlice) > 1 {
 		storageType := splitSourceSlice[len(splitSourceSlice)-2]
 		if storageType == k8sEmptyDir {
-			return true
+			if _, fsType, _ := vc.GetDevicePathAndFsType(path); fsType == "tmpfs" {
+				return true
+			}
 		}
 	}
 	return false
