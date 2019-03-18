@@ -1138,7 +1138,7 @@ func (c *Container) hotplugDrive() error {
 	}
 
 	// If device mapper device, then fetch the full path of the device
-	devicePath, fsType, err := getDevicePathAndFsType(dev.mountPoint)
+	devicePath, fsType, err := GetDevicePathAndFsType(dev.mountPoint)
 	if err != nil {
 		return err
 	}
