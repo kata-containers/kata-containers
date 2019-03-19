@@ -646,7 +646,8 @@ Description=Kata Containers debug console
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 StandardInput=tty
 StandardOutput=tty
-PrivateDevices=yes
+# Must be disabled to allow the job to access the real console
+PrivateDevices=no
 Type=simple
 ExecStart=/usr/bin/bash
 Restart=always
