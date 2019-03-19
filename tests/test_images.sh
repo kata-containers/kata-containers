@@ -23,6 +23,7 @@ readonly rootfs_builder=${script_dir}/../rootfs-builder/rootfs.sh
 readonly RUNTIME=${RUNTIME:-kata-runtime}
 readonly MACHINE_TYPE=`uname -m`
 readonly CI=${CI:-}
+readonly KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 readonly ci_results_dir="/var/osbuilder/tests"
 
 # all distro tests must have this prefix
@@ -458,6 +459,13 @@ test_distros()
 		USE_DOCKER=true \
 		ROOTFS_BUILD_DEST="$tmp_rootfs" \
 		IMAGES_BUILD_DEST="$images_dir" )
+
+
+	# Only firecracker doesn't support NVDIMM
+	if [ "${KATA_HYPERVISOR}" != "firecracker" ]; then
+		commonMakeVars+=(DAX="yes")
+	fi
+
 
 	echo -e "$separator"
 
