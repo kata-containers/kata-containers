@@ -23,6 +23,7 @@ import (
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
@@ -887,7 +888,8 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 			{
 				ID: containerID,
 				State: types.State{
-					State: types.StateReady,
+					State:      types.StateReady,
+					CgroupPath: utils.DefaultCgroupPath,
 				},
 				PID:         0,
 				RootFs:      filepath.Join(testDir, testBundle),
@@ -945,7 +947,8 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 			{
 				ID: containerID,
 				State: types.State{
-					State: types.StateRunning,
+					State:      types.StateRunning,
+					CgroupPath: utils.DefaultCgroupPath,
 				},
 				PID:         0,
 				RootFs:      filepath.Join(testDir, testBundle),
@@ -1768,7 +1771,8 @@ func TestStatusContainerStateReady(t *testing.T) {
 	expectedStatus := ContainerStatus{
 		ID: contID,
 		State: types.State{
-			State: types.StateReady,
+			State:      types.StateReady,
+			CgroupPath: utils.DefaultCgroupPath,
 		},
 		PID:         0,
 		RootFs:      filepath.Join(testDir, testBundle),
@@ -1843,7 +1847,8 @@ func TestStatusContainerStateRunning(t *testing.T) {
 	expectedStatus := ContainerStatus{
 		ID: contID,
 		State: types.State{
-			State: types.StateRunning,
+			State:      types.StateRunning,
+			CgroupPath: utils.DefaultCgroupPath,
 		},
 		PID:         0,
 		RootFs:      filepath.Join(testDir, testBundle),

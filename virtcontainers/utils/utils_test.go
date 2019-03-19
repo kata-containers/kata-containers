@@ -325,3 +325,18 @@ func TestSupportsVsocks(t *testing.T) {
 
 	assert.True(SupportsVsocks())
 }
+
+func TestValidCgroupPath(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.Equal(DefaultCgroupPath, ValidCgroupPath("../../../"))
+	assert.Equal(filepath.Join(DefaultCgroupPath, "foo"), ValidCgroupPath("../../../foo"))
+	assert.Equal("/hi", ValidCgroupPath("/../hi"))
+	assert.Equal("/hi/foo", ValidCgroupPath("/../hi/foo"))
+	assert.Equal(DefaultCgroupPath, ValidCgroupPath(""))
+	assert.Equal(DefaultCgroupPath, ValidCgroupPath(""))
+	assert.Equal(DefaultCgroupPath, ValidCgroupPath("../"))
+	assert.Equal(DefaultCgroupPath, ValidCgroupPath("."))
+	assert.Equal(DefaultCgroupPath, ValidCgroupPath("./../"))
+	assert.Equal(filepath.Join(DefaultCgroupPath, "o / g"), ValidCgroupPath("o / m /../ g"))
+}
