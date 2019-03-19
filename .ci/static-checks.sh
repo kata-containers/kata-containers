@@ -209,77 +209,21 @@ check_go()
 	# No packages to test
 	[ -z "$go_packages" ] && return
 
-	local linter="gometalinter"
+	local linter="golangci-lint"
 
 	# Run golang checks
 	if [ ! "$(command -v $linter)" ]
 	then
 		info "Installing ${linter}"
 
-		local linter_url="github.com/alecthomas/gometalinter"
-		go get -d "$linter_url"
-
-		# Pin to known good version.
-		#
-		# This project changes a lot but we don't want newly-added
-		# linter checks to break valid PR code.
-		#
-		local linter_version=$(get_version "externals.gometalinter.version")
+    local linter_url=$(get_test_version "externals.golangci-lint.url")
+    local linter_version=$(get_test_version "externals.golangci-lint.version")
 
 		info "Forcing ${linter} version ${linter_version}"
-
-		(cd "$GOPATH/src/$linter_url" && git checkout "$linter_version" && go install)
-		eval "$linter" --install --vendor
+    build_version ${linter_url} "" ${linter_version}
 	fi
 
-	# Ignore vendor directories
-	# Note: There is also a "--vendor" flag which claims to do what we want, but
-	# it doesn't work :(
-	local linter_args="--exclude=\"\\bvendor/.*\""
-
-	# Check test code too
-	linter_args+=" --tests"
-
-	# Ignore auto-generated protobuf code.
-	#
-	# Note that "--exclude=" patterns are *not* anchored meaning this will apply
-	# anywhere in the tree.
-	linter_args+=" --exclude=\".*\.pb\.go\""
-
-	# When running the linters in a CI environment we need to disable them all
-	# by default and then explicitly enable the ones we are care about. This is
-	# necessary since *if* gometalinter adds a new linter, that linter may cause
-	# the CI build to fail when it really shouldn't. However, when this script is
-	# run locally, all linters should be run to allow the developer to review any
-	# failures (and potentially decide whether we need to explicitly enable a new
-	# linter in the CI).
-	#
-	# Developers may set KATA_DEV_MODE to any value for the same behaviour.
-	[ "$CI" = true ] || [ -n "$KATA_DEV_MODE" ] && linter_args+=" --disable-all"
-
-	[ "$TRAVIS_GO_VERSION" != "tip" ] && linter_args+=" --enable=gofmt"
-
-	if [ "$(uname -s)" == "Linux" ]; then
-		linter_args+=" --concurrency=$(nproc)"
-	elif [ "$(uname -s)" == "Darwin" ]; then
-		linter_args+=" --concurrency=$(sysctl -n hw.activecpu)"
-	fi
-
-	linter_args+=" --enable=misspell"
-	linter_args+=" --enable=vet"
-	linter_args+=" --enable=ineffassign"
-	linter_args+=" --enable=gocyclo"
-	linter_args+=" --cyclo-over=15"
-	linter_args+=" --enable=golint"
-	linter_args+=" --deadline=600s"
-	linter_args+=" --enable=structcheck"
-	linter_args+=" --enable=unused"
-	linter_args+=" --enable=staticcheck"
-	linter_args+=" --enable=maligned"
-	linter_args+=" --enable=varcheck"
-	linter_args+=" --enable=unconvert"
-
-	info "$linter args: '$linter_args'"
+  local linter_args="run -c ${cidir}/.golangci.yml"
 
 	# Non-option arguments other than "./..." are
 	# considered to be directories by $linter, not package names.

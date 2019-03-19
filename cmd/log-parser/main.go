@@ -252,7 +252,7 @@ func showSummary(entries *LogEntries, files []string) {
 		counts[file] = count
 	}
 
-	sort.Sort(sort.StringSlice(files))
+	sort.Strings(files)
 
 	recordCount := entries.Len()
 	fileCount := len(files)

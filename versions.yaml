@@ -48,3 +48,11 @@ externals:
     description: "cri-o dependency used for building documentation"
     url: "https://github.com/cpuguy83/go-md2man"
     version: "v1.0.8"
+
+  golangci-lint:
+    description: "utility to run various golang linters"
+    url: "github.com/golangci/golangci-lint"
+    # Using HEAD for now as v1.15.0 does not compile with golang 1.12+. Will be
+    # pegged to the next release once it comes out.
+    # https://github.com/kata-containers/tests/issues/1329
+    version: "HEAD"

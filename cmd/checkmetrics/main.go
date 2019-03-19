@@ -97,7 +97,7 @@ func processMetricsBaseline(context *cli.Context) (err error) {
 		default:
 			{
 				log.Warnf("Unknown type [%s] for metric [%s]", m.Type, m.Name)
-				summary = (&metricsCheck{}).genErrorLine(false, m.Name, "Unsupported Type", fmt.Sprintf("%s", m.Type))
+				summary = (&metricsCheck{}).genErrorLine(false, m.Name, "Unsupported Type", fmt.Sprint(m.Type))
 				fails++
 			}
 		}
