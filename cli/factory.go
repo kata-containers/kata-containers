@@ -79,7 +79,10 @@ func getUnixListener(path string) (net.Listener, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err = unix.Unlink(path); err != nil && !os.IsNotExist(err) {
+	_, err = os.Stat(path)
+	if err == nil {
+		return nil, fmt.Errorf("%s already exist.  Please stop running VMCache server and remove %s", path, path)
+	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
 	l, err := net.Listen("unix", path)
