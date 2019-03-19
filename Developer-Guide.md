@@ -112,18 +112,24 @@ If your system is *not* able to run Kata Containers, the previous command will e
 Kata containers can run with either an initrd image or a rootfs image.
 
 If you want to test with `initrd`, make sure you have `initrd = /usr/share/kata-containers/kata-containers-initrd.img`
-in `/usr/share/defaults/kata-containers/configuration.toml` and comment out the `image` line with the following:
+in your configuration file, commenting out the `image` line:
+
+`/usr/share/defaults/kata-containers/configuration.toml` and comment out the `image` line with the following. For example:
 
 ```
-$ sudo sed -i 's/^\(image =.*\)/# \1/g' /usr/share/defaults/kata-containers/configuration.toml
+$ sudo mkdir -p /etc/kata-containers/
+$ sudo install -o root -g root -m 0640 /usr/share/defaults/kata-containers/configuration.toml /etc/kata-containers
+$ sudo sed -i 's/^\(image =.*\)/# \1/g' /etc/kata-containers/configuration.toml
 ```
 You can create the initrd image as shown in the [create an initrd image](#create-an-initrd-image---optional) section.
 
 If you want to test with a rootfs `image`, make sure you have `image = /usr/share/kata-containers/kata-containers.img`
-in `/usr/share/defaults/kata-containers/configuration.toml` and comment out the `initrd` line with the following:
+in your configuration file, commenting out the `initrd` line. For example:
 
 ```
-$ sudo sed -i 's/^\(initrd =.*\)/# \1/g' /usr/share/defaults/kata-containers/configuration.toml
+$ sudo mkdir -p /etc/kata-containers/
+$ sudo install -o root -g root -m 0640 /usr/share/defaults/kata-containers/configuration.toml /etc/kata-containers
+$ sudo sed -i 's/^\(initrd =.*\)/# \1/g' /etc/kata-containers/configuration.toml
 ```
 The rootfs image is created as shown in the [create a rootfs image](#create-a-rootfs-image) section.
 
@@ -136,8 +142,10 @@ rootfs `image`(100MB+).
 Enable full debug as follows:
 
 ```
-$ sudo sed -i -e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' /usr/share/defaults/kata-containers/configuration.toml
-$ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' /usr/share/defaults/kata-containers/configuration.toml
+$ sudo mkdir -p /etc/kata-containers/
+$ sudo install -o root -g root -m 0640 /usr/share/defaults/kata-containers/configuration.toml /etc/kata-containers
+$ sudo sed -i -e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' /etc/kata-containers/configuration.toml
+$ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' /etc/kata-containers/configuration.toml
 ```
 
 ### journald rate limiting
@@ -696,8 +704,10 @@ For the debug console to work, you **must** ensure that proxy debug is
 not see any output when you connect to the virtual machine:
 
 ```
-$ sudo awk '{if (/^\[proxy\.kata\]/) {got=1}; if (got == 1 && /^.*enable_debug/) {print "#enable_debug = true"; got=0; next; } else {print}}' /usr/share/defaults/kata-containers/configuration.toml > /tmp/configuration.toml
-$ sudo install -o root -g root -m 0640 /tmp/configuration.toml /usr/share/defaults/kata-containers/configuration.toml
+$ sudo mkdir -p /etc/kata-containers/
+$ sudo install -o root -g root -m 0640 /usr/share/defaults/kata-containers/configuration.toml /etc/kata-containers
+$ sudo awk '{if (/^\[proxy\.kata\]/) {got=1}; if (got == 1 && /^.*enable_debug/) {print "#enable_debug = true"; got=0; next; } else {print}}' /etc/kata-containers/configuration.toml > /tmp/configuration.toml
+$ sudo install -o root -g root -m 0640 /tmp/configuration.toml /etc/kata-containers/
 ```
 
 ### Create a container
