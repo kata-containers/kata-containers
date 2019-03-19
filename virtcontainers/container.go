@@ -1288,14 +1288,14 @@ func (c *Container) newCgroups() error {
 		resources.CPU = validCPUResources(spec.Linux.Resources.CPU)
 	}
 
+	c.state.CgroupPath = utils.ValidCgroupPath(spec.Linux.CgroupsPath)
 	cgroup, err := cgroupsNewFunc(cgroups.V1,
-		cgroups.StaticPath(spec.Linux.CgroupsPath), &resources)
+		cgroups.StaticPath(c.state.CgroupPath), &resources)
 	if err != nil {
-		return fmt.Errorf("Could not create cgroup for %v: %v", spec.Linux.CgroupsPath, err)
+		return fmt.Errorf("Could not create cgroup for %v: %v", c.state.CgroupPath, err)
 	}
 
 	c.state.Resources = resources
-	c.state.CgroupPath = spec.Linux.CgroupsPath
 
 	// Add shim into cgroup
 	if c.process.Pid > 0 {
