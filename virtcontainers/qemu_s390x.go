@@ -80,6 +80,10 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 	return q
 }
 
+func (q *qemuS390x) bridges(number uint32) []types.PCIBridge {
+	return genericBridges(number, q.machineType)
+}
+
 // appendBridges appends to devices the given bridges
 func (q *qemuS390x) appendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge) []govmmQemu.Device {
 	return genericAppendBridges(devices, bridges, q.machineType)
