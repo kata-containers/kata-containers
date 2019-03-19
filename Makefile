@@ -5,7 +5,7 @@
 #
 
 # The time limit in seconds for each test
-TIMEOUT := 60
+TIMEOUT := 120
 
 # union for 'make test'
 UNION := functional docker crio docker-compose network netmon \
@@ -24,11 +24,6 @@ ARCH := $(shell bash -c '.ci/kata-arch.sh -d')
 ARCH_DIR = arch
 ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
-
-# Number of processor units available
-NPROCS := $(shell grep -c ^processor /proc/cpuinfo)
-# Number of `go test` processes that ginkgo will spawn.
-GINKGO_NODES := $(shell echo $(NPROCS)\-2 | bc)
 
 # Load architecture-dependent settings
 ifneq ($(wildcard $(ARCH_FILE)),)
@@ -49,7 +44,7 @@ functional: ginkgo
 ifeq (${RUNTIME},)
 	$(error RUNTIME is not set)
 else
-	./ginkgo -v functional/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+	./ginkgo -failFast -v functional/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 	bash sanity/check_sanity.sh
 endif
 
@@ -59,17 +54,20 @@ ifeq ($(RUNTIME),)
 endif
 
 ifeq ($(KATA_HYPERVISOR),firecracker)
-	./ginkgo -v -focus "${FOCUS}" -skip "${SKIP}" \
+	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 else ifeq ($(ARCH),aarch64)
-	./ginkgo -v -focus "${FOCUS}" -skip "${SKIP}" \
+	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \
+		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+else ifneq (${FOCUS},)
+	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 else
 	# Run tests in parallel, skip tests that need to be run serialized
-	./ginkgo -nodes=${GINKGO_NODES} -v -focus "${FOCUS}" -skip "${SKIP}" -skip "\[Serial Test\]" \
+	./ginkgo -failFast -p -stream -v -skip "${SKIP}" -skip "\[Serial Test\]" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 	# Now run serialized tests
-	./ginkgo -v -focus "${FOCUS}" -focus "\[Serial Test\]" -skip "${SKIP}" \
+	./ginkgo -failFast -v -focus "\[Serial Test\]" -skip "${SKIP}" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 	bash sanity/check_sanity.sh
 endif

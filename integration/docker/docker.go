@@ -7,7 +7,6 @@ package docker
 import (
 	"bytes"
 	"fmt"
-	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"log"
 	"os"
@@ -16,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"gopkg.in/yaml.v2"
 
 	"github.com/kata-containers/tests"
 )
@@ -51,6 +52,8 @@ var cidDirectory string
 
 // AlpineImage is the alpine image
 var AlpineImage string
+
+var images []string
 
 // versionDockerImage is the definition in the yaml for the Alpine image
 type versionDockerImage struct {
@@ -96,6 +99,16 @@ func init() {
 
 	// Define Alpine image with its proper version
 	AlpineImage = "alpine:" + versions.Docker.Alpine.Version
+
+	images = []string{
+		Image,
+		AlpineImage,
+		PostgresImage,
+		DebianImage,
+		FedoraImage,
+		CentosImage,
+		StressImage,
+	}
 }
 
 func cidFilePath(containerName string) string {
