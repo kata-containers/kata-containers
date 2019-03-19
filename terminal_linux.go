@@ -27,8 +27,7 @@ func setupTerminal(fd int) (*unix.Termios, error) {
 		return nil, err
 	}
 
-	var savedTermios unix.Termios
-	savedTermios = *termios
+	savedTermios := *termios
 
 	// Set the terminal in raw mode
 	termios.Iflag &^= termiosIFlagRawTermInvMask
