@@ -5,7 +5,7 @@
 #
 
 # The time limit in seconds for each test
-TIMEOUT := 60
+TIMEOUT := 120
 
 # union for 'make test'
 UNION := functional docker crio docker-compose network netmon \
