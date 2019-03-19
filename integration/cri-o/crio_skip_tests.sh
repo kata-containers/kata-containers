@@ -9,5 +9,5 @@
 
 declare -a skipCRIOTests=(
 'test "ctr oom"'
-'test "ctr stats"'
+'test "ctr stats output"'
 );
