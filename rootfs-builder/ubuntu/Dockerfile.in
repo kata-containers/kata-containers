@@ -11,7 +11,7 @@ from ubuntu:@OS_VERSION@
 # Install any package need to create a rootfs (package manager, extra tools)
 
 # RUN commands
-RUN apt-get update && apt-get install -y curl wget systemd debootstrap git build-essential
+RUN apt-get update && apt-get install -y curl wget systemd debootstrap git build-essential chrony
 # This will install the proper golang to build Kata components
 @INSTALL_GO@
 
