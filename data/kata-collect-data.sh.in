@@ -672,8 +672,27 @@ read_osbuilder_file()
 	cat "$file"
 }
 
+show_header()
+{
+	cat <<EOT
+<details>
+<summary>Show <tt>$script_name</tt> details</summary>
+<p>
+EOT
+}
+
+show_footer()
+{
+	cat <<EOT
+</p>
+</details>
+EOT
+}
+
 show_details()
 {
+	show_header
+
 	show_meta
 	show_runtime
 	show_runtime_configs
@@ -683,6 +702,8 @@ show_details()
 	show_log_details
 	show_container_mgr_details
 	show_package_versions
+
+	show_footer
 }
 
 main()
