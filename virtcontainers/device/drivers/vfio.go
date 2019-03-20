@@ -47,7 +47,7 @@ func NewVFIODevice(devInfo *config.DeviceInfo) *VFIODevice {
 
 // Attach is standard interface of api.Device, it's used to add device to some
 // DeviceReceiver
-func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) error {
+func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) (retErr error) {
 	skip, err := device.bumpAttachCount(true)
 	if err != nil {
 		return err
@@ -55,6 +55,12 @@ func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) error {
 	if skip {
 		return nil
 	}
+
+	defer func() {
+		if retErr != nil {
+			device.bumpAttachCount(false)
+		}
+	}()
 
 	vfioGroup := filepath.Base(device.DeviceInfo.HostPath)
 	iommuDevicesPath := filepath.Join(config.SysIOMMUPath, vfioGroup, "devices")
@@ -90,13 +96,12 @@ func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) error {
 		"device-group": device.DeviceInfo.HostPath,
 		"device-type":  "vfio-passthrough",
 	}).Info("Device group attached")
-	device.AttachCount = 1
 	return nil
 }
 
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
-func (device *VFIODevice) Detach(devReceiver api.DeviceReceiver) error {
+func (device *VFIODevice) Detach(devReceiver api.DeviceReceiver) (retErr error) {
 	skip, err := device.bumpAttachCount(false)
 	if err != nil {
 		return err
@@ -104,6 +109,12 @@ func (device *VFIODevice) Detach(devReceiver api.DeviceReceiver) error {
 	if skip {
 		return nil
 	}
+
+	defer func() {
+		if retErr != nil {
+			device.bumpAttachCount(true)
+		}
+	}()
 
 	// hotplug a VFIO device is actually hotplugging a group of iommu devices
 	if err := devReceiver.HotplugRemoveDevice(device, config.DeviceVFIO); err != nil {
@@ -115,7 +126,6 @@ func (device *VFIODevice) Detach(devReceiver api.DeviceReceiver) error {
 		"device-group": device.DeviceInfo.HostPath,
 		"device-type":  "vfio-passthrough",
 	}).Info("Device group detached")
-	device.AttachCount = 0
 	return nil
 }
 

@@ -21,11 +21,11 @@ func TestBumpAttachCount(t *testing.T) {
 	}
 
 	data := []testData{
-		{true, 0, 0, false, false},
+		{true, 0, 1, false, false},
 		{true, 1, 2, true, false},
 		{true, intMax, intMax, true, true},
 		{false, 0, 0, true, true},
-		{false, 1, 1, false, false},
+		{false, 1, 0, false, false},
 		{false, intMax, intMax - 1, true, false},
 	}
 
