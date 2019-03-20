@@ -376,6 +376,10 @@ fi
 info "Configure chrony file ${chrony_conf_file}"
 echo "refclock PHC /dev/ptp0 poll 3 dpoll -2 offset 0" >> ${chrony_conf_file}
 
+# Comment out ntp sources for chrony to be extra careful
+# Reference:  https://chrony.tuxfamily.org/doc/3.4/chrony.conf.html
+sed -i 's/^\(server \|pool \|peer \)/# &/g'  ${chrony_conf_file}
+
 # The CC on s390x for fedora needs to be manually set to gcc when the golang is downloaded from the main page.
 # See issue: https://github.com/kata-containers/osbuilder/issues/217
 [ "$distro" == fedora ] && [ "$ARCH" == "s390x" ] && export CC=gcc
