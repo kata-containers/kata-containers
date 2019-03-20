@@ -34,6 +34,11 @@ func (device *VhostUserBlkDevice) Attach(devReceiver api.DeviceReceiver) (err er
 	if skip {
 		return nil
 	}
+	defer func() {
+		if err != nil {
+			device.bumpAttachCount(false)
+		}
+	}()
 
 	// generate a unique ID to be used for hypervisor commandline fields
 	randBytes, err := utils.GenerateRandomBytes(8)
@@ -45,27 +50,14 @@ func (device *VhostUserBlkDevice) Attach(devReceiver api.DeviceReceiver) (err er
 	device.DevID = id
 	device.Type = device.DeviceType()
 
-	defer func() {
-		if err == nil {
-			device.AttachCount = 1
-		}
-	}()
 	return devReceiver.AppendDevice(device)
 }
 
 // Detach is standard interface of api.Device, it's used to remove device from some
 // DeviceReceiver
 func (device *VhostUserBlkDevice) Detach(devReceiver api.DeviceReceiver) error {
-	skip, err := device.bumpAttachCount(false)
-	if err != nil {
-		return err
-	}
-	if skip {
-		return nil
-	}
-
-	device.AttachCount = 0
-	return nil
+	_, err := device.bumpAttachCount(false)
+	return err
 }
 
 // DeviceType is standard interface of api.Device, it returns device type
