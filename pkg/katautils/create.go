@@ -93,6 +93,11 @@ var noTraceKernelParam = []vc.Param{
 		Key:   "systemd.mask",
 		Value: "tmp.mount",
 	},
+	// No random seed
+	{
+		Key:   "systemd.mask",
+		Value: "systemd-random-seed.service",
+	},
 }
 
 func getKernelParams(needSystemd, trace bool) []vc.Param {
