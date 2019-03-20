@@ -5,6 +5,7 @@
 package docker
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,6 +14,7 @@ import (
 
 	. "github.com/kata-containers/tests"
 	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 )
 
@@ -22,7 +24,7 @@ const (
 )
 
 func randomDockerName() string {
-	return RandID(30)
+	return RandID(29) + fmt.Sprintf("%d", GinkgoConfig.ParallelNode)
 }
 
 var _ = SynchronizedBeforeSuite(func() []byte {
