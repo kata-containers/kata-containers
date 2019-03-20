@@ -51,8 +51,7 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 	defer func() {
 		if err != nil {
 			devReceiver.DecrementSandboxBlockIndex()
-		} else {
-			device.AttachCount = 1
+			device.bumpAttachCount(false)
 		}
 	}()
 
@@ -122,13 +121,18 @@ func (device *BlockDevice) Detach(devReceiver api.DeviceReceiver) error {
 		return nil
 	}
 
+	defer func() {
+		if err != nil {
+			device.bumpAttachCount(true)
+		}
+	}()
+
 	deviceLogger().WithField("device", device.DeviceInfo.HostPath).Info("Unplugging block device")
 
-	if err := devReceiver.HotplugRemoveDevice(device, config.DeviceBlock); err != nil {
+	if err = devReceiver.HotplugRemoveDevice(device, config.DeviceBlock); err != nil {
 		deviceLogger().WithError(err).Error("Failed to unplug block device")
 		return err
 	}
-	device.AttachCount = 0
 	return nil
 }
 
