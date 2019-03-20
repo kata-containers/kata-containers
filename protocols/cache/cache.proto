@@ -13,6 +13,7 @@ import "google/protobuf/empty.proto";
 service CacheService {
     rpc Config(google.protobuf.Empty) returns (GrpcVMConfig);
     rpc GetBaseVM(google.protobuf.Empty) returns (GrpcVM);
+    rpc Quit(google.protobuf.Empty) returns (google.protobuf.Empty);
 }
 
 message GrpcVMConfig {
