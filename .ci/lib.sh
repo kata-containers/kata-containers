@@ -20,7 +20,12 @@ KATA_KSM_THROTTLER_JOB="kata-ksm-throttler"
 export KATA_DOCKER_TIMEOUT=30
 
 # Ensure GOPATH set
-export GOPATH=${GOPATH:-$(go env GOPATH)}
+if command -v go > /dev/null; then
+	export GOPATH=${GOPATH:-$(go env GOPATH)}
+else
+	# if go isn't installed, set default location for GOPATH
+	export GOPATH="${GOPATH:-$HOME/go}"
+fi
 
 tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 lib_script="${GOPATH}/src/${tests_repo}/lib/common.bash"
