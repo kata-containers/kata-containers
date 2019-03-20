@@ -32,28 +32,14 @@ func NewGenericDevice(devInfo *config.DeviceInfo) *GenericDevice {
 
 // Attach is standard interface of api.Device
 func (device *GenericDevice) Attach(devReceiver api.DeviceReceiver) error {
-	skip, err := device.bumpAttachCount(true)
-	if err != nil {
-		return err
-	}
-	if skip {
-		return nil
-	}
-	device.AttachCount = 1
-	return nil
+	_, err := device.bumpAttachCount(true)
+	return err
 }
 
 // Detach is standard interface of api.Device
 func (device *GenericDevice) Detach(devReceiver api.DeviceReceiver) error {
-	skip, err := device.bumpAttachCount(false)
-	if err != nil {
-		return err
-	}
-	if skip {
-		return nil
-	}
-	device.AttachCount = 0
-	return nil
+	_, err := device.bumpAttachCount(false)
+	return err
 }
 
 // DeviceType is standard interface of api.Device, it returns device type
@@ -107,6 +93,7 @@ func (device *GenericDevice) bumpAttachCount(attach bool) (skip bool, err error)
 		switch device.AttachCount {
 		case 0:
 			// do real attach
+			device.AttachCount++
 			return false, nil
 		case intMax:
 			return true, fmt.Errorf("device was attached too many times")
@@ -120,6 +107,7 @@ func (device *GenericDevice) bumpAttachCount(attach bool) (skip bool, err error)
 			return true, fmt.Errorf("detaching a device that wasn't attached")
 		case 1:
 			// do real work
+			device.AttachCount--
 			return false, nil
 		default:
 			device.AttachCount--
