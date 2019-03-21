@@ -62,7 +62,7 @@ var _ = Describe("Hot plug CPUs", func() {
 	)
 
 	BeforeEach(func() {
-		id = RandID(30)
+		id = randomDockerName()
 		waitTime = 5
 		maxTries = 5
 		args = []string{"--rm", "--name", id}
@@ -127,7 +127,7 @@ var _ = Describe("CPU constraints", func() {
 	)
 
 	BeforeEach(func() {
-		id = RandID(30)
+		id = randomDockerName()
 		args = []string{"--rm", "--name", id}
 	})
 
@@ -195,7 +195,7 @@ var _ = Describe("Hot plug CPUs", func() {
 	)
 
 	BeforeEach(func() {
-		id = RandID(30)
+		id = randomDockerName()
 		args = []string{"--rm", "--name", id}
 		cpus = 2
 	})
@@ -240,7 +240,7 @@ var _ = Describe("Update number of CPUs", func() {
 	)
 
 	BeforeEach(func() {
-		id = RandID(30)
+		id = randomDockerName()
 		waitTime = 5
 		maxTries = 5
 
@@ -332,7 +332,7 @@ var _ = Describe("Update CPU constraints", func() {
 	)
 
 	BeforeEach(func() {
-		id = RandID(30)
+		id = randomDockerName()
 
 		updateArgs = []string{}
 		execArgs = []string{}
@@ -424,7 +424,7 @@ var _ = Describe("CPUs and CPU set", func() {
 	)
 
 	BeforeEach(func() {
-		id = RandID(30)
+		id = randomDockerName()
 		args = []string{"--rm", "-dt", "--name", id, Image, "sh"}
 		cpuTests = []cpuTest{
 			{"1", "0-1", "2"},
