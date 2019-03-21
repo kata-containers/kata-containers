@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2017-2018 Intel Corporation
+# Copyright (c) 2017-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -407,6 +407,11 @@ get_image_details()
 	fi
 
 	partitions=$(get_partitions "$loop_device")
+	if [ -z "$partitions" ]; then
+		release_device "$loop_device"
+		continue
+	fi
+
 	count=$(echo "$partitions"|wc -l)
 
 	expected=1
