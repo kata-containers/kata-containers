@@ -51,6 +51,11 @@ function install_yq() {
 
 	mkdir -p "${GOPATH}/bin"
 
+	# Check curl
+	if ! command -v "curl" >/dev/null; then
+		die "Please install curl"
+	fi
+
 	# Workaround to get latest release from github (to not use github token).
 	# Get the redirection to latest release on github.
 	yq_latest_url=$(curl -Ls -o /dev/null -w %{url_effective} "https://${yq_pkg}/releases/latest")
