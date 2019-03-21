@@ -34,4 +34,14 @@ var _ = Describe("sysctls", func() {
 			Expect(stdout).To(ContainSubstring(fsValue))
 		})
 	})
+
+	Context("sysctls for kernel", func() {
+		It("should be applied", func() {
+			kernelValue := "1024"
+			args = []string{"--name", id, "--rm", "--sysctl", "kernel.shmmax=" + kernelValue, Image, "cat", "/proc/sys/kernel/shmmax"}
+			stdout, _, exitCode = dockerRun(args...)
+			Expect(exitCode).To(Equal(0))
+			Expect(stdout).To(ContainSubstring(kernelValue))
+		})
+	})
 })
