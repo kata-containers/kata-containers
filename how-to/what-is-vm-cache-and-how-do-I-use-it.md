@@ -41,5 +41,4 @@ and purge it by ctrl-c it.
 
 ### Limitations
 * Cannot work with VM templating.
-* Cannot work with vsock.
 * Only supports the qemu hypervisor.
