@@ -27,6 +27,7 @@ pushd "$kubernetes_dir"
 bats nginx.bats
 bats k8s-uts+ipc-ns.bats
 bats k8s-env.bats
+bats k8s-empty-dirs.bats
 bats k8s-limit-range.bats
 bats k8s-credentials-secrets.bats
 bats k8s-configmap.bats
