@@ -10,7 +10,6 @@ import (
 	"os"
 	"strings"
 
-	. "github.com/kata-containers/tests"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -100,7 +99,7 @@ var _ = Describe("run", func() {
 	}
 
 	BeforeEach(func() {
-		id = RandID(30)
+		id = randomDockerName()
 
 		for i := 0; i < loopDevices; i++ {
 			diskFile, loopFile, err = createLoopDevice()

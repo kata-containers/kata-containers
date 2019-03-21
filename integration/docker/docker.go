@@ -368,6 +368,10 @@ func KillDockerContainer(name string) bool {
 	return true
 }
 
+func randomDockerName() string {
+	return tests.RandID(29) + fmt.Sprint(ginkgoconf.GinkgoConfig.ParallelNode)
+}
+
 // returns a random and valid repository name
 func randomDockerRepoName() string {
 	return strings.ToLower(tests.RandID(14)) + fmt.Sprint(ginkgoconf.GinkgoConfig.ParallelNode)

@@ -5,16 +5,13 @@
 package docker
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
-	. "github.com/kata-containers/tests"
 	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/ginkgo/config"
 	. "github.com/onsi/gomega"
 )
 
@@ -22,10 +19,6 @@ const (
 	shouldFail    = true
 	shouldNotFail = false
 )
-
-func randomDockerName() string {
-	return RandID(29) + fmt.Sprintf("%d", GinkgoConfig.ParallelNode)
-}
 
 var _ = SynchronizedBeforeSuite(func() []byte {
 	// before start we have to download the docker images
