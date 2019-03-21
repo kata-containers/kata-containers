@@ -56,7 +56,7 @@ endif
 ifeq ($(KATA_HYPERVISOR),firecracker)
 	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
-else ifeq ($(ARCH),aarch64)
+else ifeq ($(ARCH),$(filter $(ARCH), aarch64 s390x))
 	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 else ifneq (${FOCUS},)
