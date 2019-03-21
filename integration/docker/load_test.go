@@ -1,3 +1,7 @@
+// Copyright (c) 2019 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package docker
 
 import (
@@ -10,19 +14,20 @@ import (
 
 var _ = Describe("load", func() {
 	var (
-		id        string
-		imageName string
-		exitCode  int
+		id       string
+		repoName string
+		exitCode int
 	)
 
 	BeforeEach(func() {
 		id = randomDockerName()
 		_, _, exitCode = dockerRun("-td", "--name", id, Image)
 		Expect(exitCode).To(Equal(0))
+		repoName = randomDockerRepoName()
 	})
 
 	AfterEach(func() {
-		_, _, exitCode = dockerRmi(imageName)
+		_, _, exitCode = dockerRmi(repoName)
 		Expect(exitCode).To(Equal(0))
 		Expect(RemoveDockerContainer(id)).To(BeTrue())
 		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
@@ -37,13 +42,12 @@ var _ = Describe("load", func() {
 				Expect(err).ToNot(HaveOccurred())
 				defer os.Remove(file.Name())
 				Expect(file.Name()).To(BeAnExistingFile())
-				imageName = "test/container-test"
-				_, _, exitCode = dockerCommit(id, imageName)
+				_, _, exitCode = dockerCommit(id, repoName)
 				Expect(exitCode).To(Equal(0))
-				_, _, exitCode = dockerSave(imageName, "--output", file.Name())
+				_, _, exitCode = dockerSave(repoName, "--output", file.Name())
 				Expect(exitCode).To(Equal(0))
 				stdout, _, _ := dockerLoad("--input", file.Name())
-				Expect(stdout).To(ContainSubstring(imageName))
+				Expect(stdout).To(ContainSubstring(repoName))
 			})
 		})
 	})
