@@ -32,7 +32,7 @@ var qemuPaths = map[string]string{
 
 var kernelRootParams = []Param{
 	{"root", "/dev/pmem0p1"},
-	{"rootflags", "dax,data=ordered,errors=remount-ro rw"},
+	{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
 	{"rootfstype", "ext4"},
 }
 
