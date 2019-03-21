@@ -534,10 +534,14 @@ check-go-static:
 coverage:
 	$(QUIET_TEST).ci/go-test.sh html-coverage
 
-install: default runtime install-scripts install-completions install-configs install-bin install-containerd-shim-v2 install-bin-libexec
+install: default install-runtime install-containerd-shim-v2 install-netmon
 
 install-bin: $(BINLIST)
 	$(QUIET_INST)$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
+
+install-runtime: runtime install-scripts install-completions install-configs install-bin
+
+install-netmon: install-bin-libexec
 
 install-containerd-shim-v2: $(SHIMV2)
 	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
