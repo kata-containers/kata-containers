@@ -19,6 +19,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/kata-containers/tests"
+	ginkgoconf "github.com/onsi/ginkgo/config"
 )
 
 const (
@@ -365,6 +366,11 @@ func KillDockerContainer(name string) bool {
 	}
 
 	return true
+}
+
+// returns a random and valid repository name
+func randomDockerRepoName() string {
+	return strings.ToLower(tests.RandID(14)) + fmt.Sprint(ginkgoconf.GinkgoConfig.ParallelNode)
 }
 
 // dockerRm removes a container
