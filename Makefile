@@ -447,7 +447,7 @@ $(GENERATED_CONFIG): Makefile VERSION
 $(TARGET_OUTPUT): $(EXTRA_DEPS) $(SOURCES) $(GENERATED_GO_FILES) $(GENERATED_FILES) Makefile | show-summary
 	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(BUILDFLAGS) -o $@ .)
 
-$(SHIMV2_OUTPUT): $(TARGET_OUTPUT)
+$(SHIMV2_OUTPUT):
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build -i -o $@ .)
 
 .PHONY: \
