@@ -229,14 +229,6 @@ run_tests()
 	$mgr -v -f remove-docker
 
 	test_distro_install_guide
-
-	# Remove docker in preparation for the next test.
-	#
-	# This is required since docker may have been pinned (to ensure a
-	# particular version is installed). But when a package is pinned, you
-	# cannot change it (although you can remove it).
-	$mgr -v -f remove-docker
-
 	test_alternative_install_methods
 }
 

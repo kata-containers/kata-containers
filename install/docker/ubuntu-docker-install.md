@@ -5,19 +5,13 @@
 > - This guide assumes you have
 >   [already installed the Kata Containers packages](../ubuntu-installation-guide.md).
 
-1. Install Docker with the following commands:
+1. Install the latest version of Docker with the following commands:
 
    > **Notes:**
    >
    > - This step is only required if Docker is not installed on the system.
-   > - Newer versions of Docker have
-   >   [removed devicemapper support](https://github.com/kata-containers/documentation/issues/373)
-   >   so the following commands install the latest version, which includes
-   >   devicemapper support.
-   > - To remove the lock on the docker package to allow it to be updated:
-   >   ```sh
-   >   $ sudo apt-mark unhold docker-ce
-   >   ```
+   > - Docker version 18.09 [removed devicemapper support](https://github.com/kata-containers/documentation/issues/373).
+   >   If you wish to use a block based backend, see the options listed on https://github.com/kata-containers/documentation/issues/407.
 
    ```bash
    $ sudo -E apt-get -y install apt-transport-https ca-certificates software-properties-common
@@ -25,8 +19,7 @@
    $ arch=$(dpkg --print-architecture)
    $ sudo -E add-apt-repository "deb [arch=${arch}] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
    $ sudo -E apt-get update
-   $ sudo -E apt-get -y install --allow-downgrades docker-ce='18.06.2~ce~3-0~ubuntu'
-   $ sudo apt-mark hold docker-ce
+   $ sudo -E apt-get -y install docker-ce
    ```
 
    For more information on installing Docker please refer to the
