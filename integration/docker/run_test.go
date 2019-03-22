@@ -112,9 +112,7 @@ var _ = Describe("run", func() {
 
 		dockerArgs = append(dockerArgs, "--rm", "--name", id, Image, "stat")
 
-		for _, lf := range loopFiles {
-			dockerArgs = append(dockerArgs, lf)
-		}
+		dockerArgs = append(dockerArgs, loopFiles...)
 	})
 
 	AfterEach(func() {

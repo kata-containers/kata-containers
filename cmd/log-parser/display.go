@@ -126,7 +126,7 @@ func (d *DisplayHandlers) Get() []string {
 		formats = append(formats, f)
 	}
 
-	sort.Sort(sort.StringSlice(formats))
+	sort.Strings(formats)
 
 	return formats
 }

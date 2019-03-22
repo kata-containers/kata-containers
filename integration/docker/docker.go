@@ -279,11 +279,7 @@ func IsRunningDockerContainer(name string) bool {
 
 	output := strings.TrimSpace(stdout)
 	tests.LogIfFail("container running: " + output)
-	if output == "false" {
-		return false
-	}
-
-	return true
+	return !(output == "false")
 }
 
 // ExistDockerContainer returns true if any of next cases is true:
@@ -341,31 +337,19 @@ func ExistDockerContainer(name string) bool {
 // RemoveDockerContainer removes a container using docker rm -f
 func RemoveDockerContainer(name string) bool {
 	_, _, exitCode := dockerRm("-f", name)
-	if exitCode != 0 {
-		return false
-	}
-
-	return true
+	return (exitCode == 0)
 }
 
 // StopDockerContainer stops a container
 func StopDockerContainer(name string) bool {
 	_, _, exitCode := dockerStop(name)
-	if exitCode != 0 {
-		return false
-	}
-
-	return true
+	return (exitCode == 0)
 }
 
 // KillDockerContainer kills a container
 func KillDockerContainer(name string) bool {
 	_, _, exitCode := dockerKill(name)
-	if exitCode != 0 {
-		return false
-	}
-
-	return true
+	return (exitCode == 0)
 }
 
 func randomDockerName() string {
