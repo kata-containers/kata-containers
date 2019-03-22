@@ -7,7 +7,11 @@
 
 1. Install the latest version of Docker with the following commands:
 
-   > **Note:** This step is only required if Docker is not installed on the system.
+   > **Notes:**
+   >
+   > - This step is only required if Docker is not installed on the system.
+   > - Docker version 18.09 [removed devicemapper support](https://github.com/kata-containers/documentation/issues/373).
+   >   If you wish to use a block based backend, see the options listed on https://github.com/kata-containers/documentation/issues/407.
 
    ```bash
    $ export rhel_devtoolset_version="7"
