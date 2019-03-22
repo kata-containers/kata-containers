@@ -282,3 +282,13 @@ func TestIsDeviceMapper(t *testing.T) {
 		t.Fatal()
 	}
 }
+
+func TestIsDockerVolume(t *testing.T) {
+	path := "/var/lib/docker/volumes/00da1347c7cf4f15db35f/_data"
+	isDockerVolume := IsDockerVolume(path)
+	assert.True(t, isDockerVolume)
+
+	path = "/var/lib/testdir"
+	isDockerVolume := IsDockerVolume(path)
+	assert.False(t, isDockerVolume)
+}

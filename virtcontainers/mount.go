@@ -326,3 +326,19 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 		}
 	}
 }
+
+const (
+	dockerVolumePrefix = "/var/lib/docker/volumes"
+	dockerVolumeSuffix = "_data"
+)
+
+// IsDockerVolume returns true if the given source path is
+// a docker volume.
+// This uses a very specific path that is used by docker.
+func IsDockerVolume(path string) bool {
+	if strings.HasPrefix(path, dockerVolumePrefix) && filepath.Base(path) == dockerVolumeSuffix {
+		return true
+	}
+	return false
+}
+
