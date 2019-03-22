@@ -4,7 +4,7 @@
 >
 > - This guide assumes you have
 >   [already installed the Kata Containers packages](../debian-installation-guide.md).
-> - this guide allows for installation with `systemd` or `sysVinit` init systems
+> - This guide allows for installation with `systemd` or `sysVinit` init systems.
 
 1. Install Docker with the following commands:
 
