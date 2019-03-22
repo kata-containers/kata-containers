@@ -220,10 +220,12 @@ See more documentation at
 
 ### docker run --privileged
 
-The `docker run --privileged` command is not supported in the runtime.
-There is no simple way to grant the VM access to all of the host devices that this command needs to be complete.
-
-The `--privileged` option can be used with `runc` containers and inter-mixed with running Kata Containers. This enables use of `--privileged` when necessary.
+Privileged support in Kata is essentially different from `runc` containers.
+Kata does support `docker run --privileged` command, but in this case full access
+to the guest VM is provided instead of the host.
+The container runs with elevated capabilities within the guest and is granted 
+access to guest devices instead of the host devices.
+This is also true with using `securityContext privileged=true` with Kubernetes.
 
 # Miscellaneous
 
