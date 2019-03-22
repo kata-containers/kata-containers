@@ -940,9 +940,6 @@ func checkFactoryConfig(config oci.RuntimeConfig) error {
 		if config.AgentType != vc.KataContainersAgent {
 			return errors.New("VM cache just support kata agent")
 		}
-		if config.HypervisorConfig.UseVSock {
-			return errors.New("config vsock conflicts with VM cache, please disable one of them")
-		}
 	}
 
 	return nil
