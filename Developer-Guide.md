@@ -657,7 +657,7 @@ StandardOutput=tty
 # Must be disabled to allow the job to access the real console
 PrivateDevices=no
 Type=simple
-ExecStart=/usr/bin/bash
+ExecStart=/bin/bash
 Restart=always
 EOT
 ```
