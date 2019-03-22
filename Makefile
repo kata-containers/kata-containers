@@ -447,7 +447,7 @@ $(GENERATED_CONFIG): Makefile VERSION
 $(TARGET_OUTPUT): $(EXTRA_DEPS) $(SOURCES) $(GENERATED_GO_FILES) $(GENERATED_FILES) Makefile | show-summary
 	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(BUILDFLAGS) -o $@ .)
 
-$(SHIMV2_OUTPUT): $(TARGET_OUTPUT)
+$(SHIMV2_OUTPUT):
 	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build -i -o $@ .)
 
 .PHONY: \
@@ -534,10 +534,14 @@ check-go-static:
 coverage:
 	$(QUIET_TEST).ci/go-test.sh html-coverage
 
-install: default runtime install-scripts install-completions install-configs install-bin install-containerd-shim-v2 install-bin-libexec
+install: default install-runtime install-containerd-shim-v2 install-netmon
 
 install-bin: $(BINLIST)
 	$(QUIET_INST)$(foreach f,$(BINLIST),$(call INSTALL_EXEC,$f,$(BINDIR)))
+
+install-runtime: runtime install-scripts install-completions install-configs install-bin
+
+install-netmon: install-bin-libexec
 
 install-containerd-shim-v2: $(SHIMV2)
 	$(QUIET_INST)$(call INSTALL_EXEC,$<,$(BINDIR))
@@ -567,15 +571,21 @@ show-usage: show-header
 	@printf "\n"
 	@printf "• Additional targets:\n"
 	@printf "\n"
-	@printf "\tbuild               : standard build.\n"
-	@printf "\tcheck               : run tests.\n"
-	@printf "\tclean               : remove built files.\n"
-	@printf "\tcoverage            : run coverage tests.\n"
-	@printf "\tdefault             : same as 'make build' (or just 'make').\n"
-	@printf "\tgenerate-config     : create configuration file.\n"
-	@printf "\tinstall             : install files.\n"
-	@printf "\tshow-arches         : show supported architectures (ARCH variable values).\n"
-	@printf "\tshow-summary        : show install locations.\n"
+	@printf "\tbuild                      : standard build (build everything).\n"
+	@printf "\tcheck                      : run tests.\n"
+	@printf "\tclean                      : remove built files.\n"
+	@printf "\tcontainerd-shim-v2         : only build containerd shim v2.\n"
+	@printf "\tcoverage                   : run coverage tests.\n"
+	@printf "\tdefault                    : same as 'make build' (or just 'make').\n"
+	@printf "\tgenerate-config            : create configuration file.\n"
+	@printf "\tinstall                    : install everything.\n"
+	@printf "\tinstall-containerd-shim-v2 : only install containerd shim v2 files.\n"
+	@printf "\tinstall-netmon             : only install netmon files.\n"
+	@printf "\tinstall-runtime            : only install runtime files.\n"
+	@printf "\tnetmon                     : only build netmon.\n"
+	@printf "\truntime                    : only build runtime.\n"
+	@printf "\tshow-arches                : show supported architectures (ARCH variable values).\n"
+	@printf "\tshow-summary               : show install locations.\n"
 	@printf "\n"
 
 handle_help: show-usage show-summary show-variables show-footer
