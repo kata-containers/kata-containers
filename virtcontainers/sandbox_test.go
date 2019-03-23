@@ -22,6 +22,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
+	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -1679,4 +1680,23 @@ func TestSandboxUpdateResources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestSandboxExperimentalFeature(t *testing.T) {
+	testFeature := exp.Feature{
+		Name:        "mock",
+		Description: "exp feature for test",
+		ExpRelease:  "1.8.0",
+	}
+	sconfig := SandboxConfig{
+		ID:           testSandboxID,
+		Experimental: []exp.Feature{testFeature},
+	}
+
+	assert.Nil(t, exp.Get(testFeature.Name))
+	assert.False(t, sconfig.valid())
+
+	exp.Register(testFeature)
+	assert.NotNil(t, exp.Get(testFeature.Name))
+	assert.True(t, sconfig.valid())
 }

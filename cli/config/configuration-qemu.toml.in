@@ -336,3 +336,12 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # If you are using docker, `disable_new_netns` only works with `docker run --net=none`
 # (default: false)
 #disable_new_netns = true
+
+# Enabled experimental feature list, format: ["a", "b"].
+# Experimental features are features not stable enough for production,
+# They may break compatibility, and are prepared for a big version bump.
+# Supported experimental features:
+# 1. "newstore": new persist storage driver which breaks backward compatibility,
+#				expected to move out of experimental in 2.0.0.
+# (default: [])
+experimental=@DEFAULTEXPFEATURES@
