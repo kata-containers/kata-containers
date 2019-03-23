@@ -23,6 +23,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	dockershimAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations/dockershim"
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -134,6 +135,9 @@ type RuntimeConfig struct {
 
 	//Determines if create a netns for hypervisor process
 	DisableNewNetNs bool
+
+	//Experimental features enabled
+	Experimental []exp.Feature
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
@@ -500,6 +504,8 @@ func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid
 		SystemdCgroup: systemdCgroup,
 
 		DisableGuestSeccomp: runtime.DisableGuestSeccomp,
+
+		Experimental: runtime.Experimental,
 	}
 
 	addAssetAnnotations(ocispec, &sandboxConfig)

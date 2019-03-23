@@ -16,6 +16,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	vcUtils "github.com/kata-containers/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -26,7 +27,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.20"
+const formatVersion = "1.0.21"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -69,6 +70,7 @@ type RuntimeInfo struct {
 	Trace               bool
 	DisableGuestSeccomp bool
 	DisableNewNetNs     bool
+	Experimental        []exp.Feature
 	Path                string
 }
 
@@ -181,6 +183,7 @@ func getRuntimeInfo(configFile string, config oci.RuntimeConfig) RuntimeInfo {
 		Config:              runtimeConfig,
 		Path:                runtimePath,
 		DisableNewNetNs:     config.DisableNewNetNs,
+		Experimental:        config.Experimental,
 		DisableGuestSeccomp: config.DisableGuestSeccomp,
 	}
 }
