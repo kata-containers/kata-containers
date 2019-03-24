@@ -52,7 +52,11 @@ externals:
   golangci-lint:
     description: "utility to run various golang linters"
     url: "github.com/golangci/golangci-lint"
-    # Using HEAD for now as v1.15.0 does not compile with golang 1.12+. Will be
-    # pegged to the next release once it comes out.
+    # Using d278457390d8c314192c08a7024e4648c40883af for now as
+    # v1.15.0 does not compile with golang 1.12+ and HEAD cannot
+    # pass test with golang 1.10.8.
+    # Will be pegged to other version once there is a verion
+    # can work OK with golang 1.12+ and golang 1.10.8.
     # https://github.com/kata-containers/tests/issues/1329
-    version: "HEAD"
+    # https://github.com/kata-containers/tests/issues/1345
+    version: "d278457390d8c314192c08a7024e4648c40883af"
