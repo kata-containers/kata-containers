@@ -61,6 +61,7 @@ get_docker_kata_path(){
 extract_kata_env(){
 	local toml
 	local rpath=$(get_docker_kata_path "$RUNTIME")
+	rpath=$(command -v "$rpath")
 
 	# If we can execute the path handed back to us
 	if [ -x "$rpath" ]; then
