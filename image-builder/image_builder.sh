@@ -224,10 +224,10 @@ detach()
 create_rootfs_disk()
 {
 	ATTEMPT_NUM=$(($ATTEMPT_NUM+1))
-	info "Create root disk image. Attempt ${ATTEMPT_NUM} out of ${MAX_ATTEMPTS}."
 	if [ ${ATTEMPT_NUM} -gt ${MAX_ATTEMPTS} ]; then
 		die "Unable to create root disk image."
 	fi
+	info "Create root disk image. Attempt ${ATTEMPT_NUM} out of ${MAX_ATTEMPTS}."
 
 	calculate_img_size
 	if [ ${OLD_IMG_SIZE} -ne 0 ]; then
