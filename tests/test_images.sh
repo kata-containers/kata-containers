@@ -462,7 +462,8 @@ test_distros()
 	local commonMakeVars=( \
 		USE_DOCKER=true \
 		ROOTFS_BUILD_DEST="$tmp_rootfs" \
-		IMAGES_BUILD_DEST="$images_dir" )
+		IMAGES_BUILD_DEST="$images_dir" \
+		DEBUG=1 )
 
 
 	# Only firecracker doesn't support NVDIMM
