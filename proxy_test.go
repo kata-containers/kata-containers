@@ -77,9 +77,9 @@ func client(proxyAddr, file string) error {
 	var result []byte
 	for {
 		if expected >= 1024 {
-			result = make([]byte, 1024, 1024)
+			result = make([]byte, 1024)
 		} else if expected > 0 {
-			result = make([]byte, expected, expected)
+			result = make([]byte, expected)
 		} else {
 			break
 		}
