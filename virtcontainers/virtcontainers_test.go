@@ -48,10 +48,8 @@ var testHyperstartTtySocket = ""
 func cleanUp() {
 	globalSandboxList.removeSandbox(testSandboxID)
 	store.DeleteAll()
-	for _, dir := range []string{testDir, defaultSharedDir} {
-		os.RemoveAll(dir)
-		os.MkdirAll(dir, store.DirMode)
-	}
+	os.RemoveAll(testDir)
+	os.MkdirAll(testDir, store.DirMode)
 
 	setup()
 }

@@ -60,8 +60,7 @@ const (
 	kataShimTableType = "kata"
 
 	// supported agent component types
-	hyperstartAgentTableType = "hyperstart"
-	kataAgentTableType       = "kata"
+	kataAgentTableType = "kata"
 
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
 	maxPCIBridges uint32 = 5
@@ -639,15 +638,13 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 
 	for k := range tomlConf.Agent {
 		switch k {
-		case hyperstartAgentTableType:
-			config.AgentType = vc.HyperstartAgent
-			config.AgentConfig = vc.HyperConfig{}
-
 		case kataAgentTableType:
 			config.AgentType = vc.KataContainersAgent
 			config.AgentConfig = vc.KataAgentConfig{
 				UseVSock: config.HypervisorConfig.UseVSock,
 			}
+		default:
+			return fmt.Errorf("%s agent type is not supported", k)
 		}
 	}
 
@@ -788,7 +785,7 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 		return oci.RuntimeConfig{}, err
 	}
 
-	defaultAgentConfig = vc.HyperConfig{}
+	defaultAgentConfig = vc.KataAgentConfig{}
 
 	config = oci.RuntimeConfig{
 		HypervisorType:   defaultHypervisor,

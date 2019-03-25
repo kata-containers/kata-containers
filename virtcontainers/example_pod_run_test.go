@@ -17,7 +17,7 @@ import (
 var containerRootfs = vc.RootFs{Target: "/var/lib/container/bundle/", Mounted: true}
 
 // This example creates and starts a single container sandbox,
-// using qemu as the hypervisor and hyperstart as the VM agent.
+// using qemu as the hypervisor and kata as the VM agent.
 func Example_createAndStartSandbox() {
 	envs := []types.EnvVar{
 		{
@@ -47,18 +47,18 @@ func Example_createAndStartSandbox() {
 		MemorySize:     1024,
 	}
 
-	// Use hyperstart default values for the agent.
-	agConfig := vc.HyperConfig{}
+	// Use kata default values for the agent.
+	agConfig := vc.KataAgentConfig{}
 
 	// The sandbox configuration:
 	// - One container
 	// - Hypervisor is QEMU
-	// - Agent is hyperstart
+	// - Agent is kata
 	sandboxConfig := vc.SandboxConfig{
 		HypervisorType:   vc.QemuHypervisor,
 		HypervisorConfig: hypervisorConfig,
 
-		AgentType:   vc.HyperstartAgent,
+		AgentType:   vc.KataContainersAgent,
 		AgentConfig: agConfig,
 
 		Containers: []vc.ContainerConfig{container},

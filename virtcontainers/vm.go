@@ -62,15 +62,12 @@ func (c *VMConfig) ToGrpc() (*pb.GrpcVMConfig, error) {
 		return nil, err
 	}
 
-	var agentConfig []byte
-	switch aconf := c.AgentConfig.(type) {
-	case HyperConfig:
-		agentConfig, err = json.Marshal(&aconf)
-	case KataAgentConfig:
-		agentConfig, err = json.Marshal(&aconf)
-	default:
-		err = fmt.Errorf("agent type %s is not supported by VM cache", c.AgentType)
+	aconf, ok := c.AgentConfig.(KataAgentConfig)
+	if !ok {
+		return nil, fmt.Errorf("agent type is not supported by VM cache")
 	}
+
+	agentConfig, err := json.Marshal(&aconf)
 	if err != nil {
 		return nil, err
 	}
@@ -89,24 +86,14 @@ func GrpcToVMConfig(j *pb.GrpcVMConfig) (*VMConfig, error) {
 		return nil, err
 	}
 
-	switch config.AgentType {
-	case HyperstartAgent:
-		var hyperConfig HyperConfig
-		err := json.Unmarshal(j.AgentConfig, &hyperConfig)
-		if err == nil {
-			config.AgentConfig = hyperConfig
-		}
-	case KataContainersAgent:
-		var kataConfig KataAgentConfig
-		err := json.Unmarshal(j.AgentConfig, &kataConfig)
-		if err == nil {
-			config.AgentConfig = kataConfig
-		}
-	default:
-		err = fmt.Errorf("agent type %s is not supported by VM cache", config.AgentType)
+	if config.AgentType != KataContainersAgent {
+		return nil, fmt.Errorf("agent type %s is not supported by VM cache", config.AgentType)
 	}
-	if err != nil {
-		return nil, err
+
+	var kataConfig KataAgentConfig
+	err = json.Unmarshal(j.AgentConfig, &kataConfig)
+	if err == nil {
+		config.AgentConfig = kataConfig
 	}
 
 	return &config, nil

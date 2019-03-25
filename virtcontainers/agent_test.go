@@ -27,10 +27,6 @@ func TestSetNoopAgentType(t *testing.T) {
 	testSetAgentType(t, "noop", NoopAgentType)
 }
 
-func TestSetHyperstartAgentType(t *testing.T) {
-	testSetAgentType(t, "hyperstart", HyperstartAgent)
-}
-
 func TestSetKataAgentType(t *testing.T) {
 	testSetAgentType(t, "kata", KataContainersAgent)
 }
@@ -43,8 +39,7 @@ func TestSetUnknownAgentType(t *testing.T) {
 		t.Fatal()
 	}
 
-	if agentType == NoopAgentType ||
-		agentType == HyperstartAgent {
+	if agentType == NoopAgentType {
 		t.Fatal()
 	}
 }
@@ -58,10 +53,6 @@ func testStringFromAgentType(t *testing.T, agentType AgentType, expected string)
 
 func TestStringFromNoopAgentType(t *testing.T) {
 	testStringFromAgentType(t, NoopAgentType, "noop")
-}
-
-func TestStringFromHyperstartAgentType(t *testing.T) {
-	testStringFromAgentType(t, HyperstartAgent, "hyperstart")
 }
 
 func TestStringFromKataAgentType(t *testing.T) {
@@ -85,10 +76,6 @@ func TestNewAgentFromNoopAgentType(t *testing.T) {
 	testNewAgentFromAgentType(t, NoopAgentType, &noopAgent{})
 }
 
-func TestNewAgentFromHyperstartAgentType(t *testing.T) {
-	testNewAgentFromAgentType(t, HyperstartAgent, &hyper{})
-}
-
 func TestNewAgentFromKataAgentType(t *testing.T) {
 	testNewAgentFromAgentType(t, KataContainersAgent, &kataAgent{})
 }
@@ -110,17 +97,6 @@ func TestNewAgentConfigFromNoopAgentType(t *testing.T) {
 
 	sandboxConfig := SandboxConfig{
 		AgentType:   NoopAgentType,
-		AgentConfig: agentConfig,
-	}
-
-	testNewAgentConfig(t, sandboxConfig, agentConfig)
-}
-
-func TestNewAgentConfigFromHyperstartAgentType(t *testing.T) {
-	agentConfig := HyperConfig{}
-
-	sandboxConfig := SandboxConfig{
-		AgentType:   HyperstartAgent,
 		AgentConfig: agentConfig,
 	}
 

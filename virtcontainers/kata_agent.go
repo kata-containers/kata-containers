@@ -68,17 +68,19 @@ var (
 	vsockSocketScheme     = "vsock"
 	// port numbers below 1024 are called privileged ports. Only a process with
 	// CAP_NET_BIND_SERVICE capability may bind to these port numbers.
-	vSockPort          = 1024
-	kata9pDevType      = "9p"
-	kataMmioBlkDevType = "mmioblk"
-	kataBlkDevType     = "blk"
-	kataSCSIDevType    = "scsi"
-	kataNvdimmDevType  = "nvdimm"
-	sharedDir9pOptions = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
-	shmDir             = "shm"
-	ephemeralPath      = filepath.Join(kataGuestSandboxDir, KataEphemeralDevType)
-	grpcMaxDataSize    = int64(1024 * 1024)
-	localDirOptions    = []string{"mode=0777"}
+	vSockPort            = 1024
+	kata9pDevType        = "9p"
+	kataMmioBlkDevType   = "mmioblk"
+	kataBlkDevType       = "blk"
+	kataSCSIDevType      = "scsi"
+	kataNvdimmDevType    = "nvdimm"
+	sharedDir9pOptions   = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
+	shmDir               = "shm"
+	kataEphemeralDevType = "ephemeral"
+	ephemeralPath        = filepath.Join(kataGuestSandboxDir, kataEphemeralDevType)
+	grpcMaxDataSize      = int64(1024 * 1024)
+	localDirOptions      = []string{"mode=0777"}
+	maxHostnameLen       = 64
 )
 
 // KataAgentConfig is a structure storing information needed
