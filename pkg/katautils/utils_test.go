@@ -366,34 +366,3 @@ func TestGetFileContents(t *testing.T) {
 		assert.Equal(t, contents, d.contents)
 	}
 }
-
-func TestIsEphemeralStorage(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedRoot)
-	}
-
-	dir, err := ioutil.TempDir(testDir, "foo")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(dir)
-
-	sampleEphePath := filepath.Join(dir, k8sEmptyDir, "tmp-volume")
-	err = os.MkdirAll(sampleEphePath, testDirMode)
-	assert.Nil(t, err)
-
-	err = syscall.Mount("tmpfs", sampleEphePath, "tmpfs", 0, "")
-	assert.Nil(t, err)
-	defer syscall.Unmount(sampleEphePath, 0)
-
-	isEphe := IsEphemeralStorage(sampleEphePath)
-	if !isEphe {
-		t.Fatalf("Unable to correctly determine volume type")
-	}
-
-	sampleEphePath = "/var/lib/kubelet/pods/366c3a75-4869-11e8-b479-507b9ddd5ce4/volumes/cache-volume"
-	isEphe = IsEphemeralStorage(sampleEphePath)
-	if isEphe {
-		t.Fatalf("Unable to correctly determine volume type")
-	}
-}

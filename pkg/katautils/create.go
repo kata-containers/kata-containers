@@ -161,7 +161,7 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 // of the same pod the already existing volume is reused.
 func SetEphemeralStorageType(ociSpec oci.CompatOCISpec) oci.CompatOCISpec {
 	for idx, mnt := range ociSpec.Mounts {
-		if IsEphemeralStorage(mnt.Source) {
+		if vc.IsEphemeralStorage(mnt.Source) {
 			ociSpec.Mounts[idx].Type = "ephemeral"
 		}
 	}
