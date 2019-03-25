@@ -52,11 +52,9 @@ const (
 	qemuHypervisorTableType        = "qemu"
 
 	// supported proxy component types
-	ccProxyTableType   = "cc"
 	kataProxyTableType = "kata"
 
 	// supported shim component types
-	ccShimTableType   = "cc"
 	kataShimTableType = "kata"
 
 	// supported agent component types
@@ -605,10 +603,10 @@ func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oc
 
 	for k, proxy := range tomlConf.Proxy {
 		switch k {
-		case ccProxyTableType:
-			config.ProxyType = vc.CCProxyType
 		case kataProxyTableType:
 			config.ProxyType = vc.KataProxyType
+		default:
+			return fmt.Errorf("%s proxy type not supported", k)
 		}
 
 		path, err := proxy.path()
@@ -660,10 +658,10 @@ func updateRuntimeConfigShim(configPath string, tomlConf tomlConfig, config *oci
 
 	for k, shim := range tomlConf.Shim {
 		switch k {
-		case ccShimTableType:
-			config.ShimType = vc.CCShimType
 		case kataShimTableType:
 			config.ShimType = vc.KataShimType
+		default:
+			return fmt.Errorf("%s shim is not supported", k)
 		}
 
 		shConfig, err := newShimConfig(shim)
