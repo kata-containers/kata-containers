@@ -281,36 +281,36 @@ func (s *Sandbox) cpuResources() *specs.LinuxCPU {
 			continue
 		}
 
-		if c.state.Resources.CPU == nil {
+		if c.config.Resources.CPU == nil {
 			continue
 		}
 
-		if c.state.Resources.CPU.Shares != nil {
-			shares = uint64(math.Max(float64(*c.state.Resources.CPU.Shares), float64(shares)))
+		if c.config.Resources.CPU.Shares != nil {
+			shares = uint64(math.Max(float64(*c.config.Resources.CPU.Shares), float64(shares)))
 		}
 
-		if c.state.Resources.CPU.Quota != nil {
-			quota += *c.state.Resources.CPU.Quota
+		if c.config.Resources.CPU.Quota != nil {
+			quota += *c.config.Resources.CPU.Quota
 		}
 
-		if c.state.Resources.CPU.Period != nil {
-			period = uint64(math.Max(float64(*c.state.Resources.CPU.Period), float64(period)))
+		if c.config.Resources.CPU.Period != nil {
+			period = uint64(math.Max(float64(*c.config.Resources.CPU.Period), float64(period)))
 		}
 
-		if c.state.Resources.CPU.Cpus != "" {
-			cpu.Cpus += c.state.Resources.CPU.Cpus + ","
+		if c.config.Resources.CPU.Cpus != "" {
+			cpu.Cpus += c.config.Resources.CPU.Cpus + ","
 		}
 
-		if c.state.Resources.CPU.RealtimeRuntime != nil {
-			realtimeRuntime += *c.state.Resources.CPU.RealtimeRuntime
+		if c.config.Resources.CPU.RealtimeRuntime != nil {
+			realtimeRuntime += *c.config.Resources.CPU.RealtimeRuntime
 		}
 
-		if c.state.Resources.CPU.RealtimePeriod != nil {
-			realtimePeriod += *c.state.Resources.CPU.RealtimePeriod
+		if c.config.Resources.CPU.RealtimePeriod != nil {
+			realtimePeriod += *c.config.Resources.CPU.RealtimePeriod
 		}
 
-		if c.state.Resources.CPU.Mems != "" {
-			cpu.Mems += c.state.Resources.CPU.Mems + ","
+		if c.config.Resources.CPU.Mems != "" {
+			cpu.Mems += c.config.Resources.CPU.Mems + ","
 		}
 	}
 
