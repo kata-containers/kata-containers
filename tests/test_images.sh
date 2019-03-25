@@ -465,13 +465,6 @@ test_distros()
 		IMAGES_BUILD_DEST="$images_dir" \
 		DEBUG=1 )
 
-
-	# Only firecracker doesn't support NVDIMM
-	if [ "${KATA_HYPERVISOR}" != "firecracker" ]; then
-		commonMakeVars+=(DAX="yes")
-	fi
-
-
 	echo -e "$separator"
 
 	# If a distro was specified, filter out the distro list to only include that distro
