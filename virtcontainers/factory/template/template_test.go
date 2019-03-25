@@ -17,7 +17,13 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 )
 
+const testDisabledAsNonRoot = "Test disabled as requires root privileges"
+
 func TestTemplateFactory(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	assert := assert.New(t)
 
 	templateWaitForAgent = 1 * time.Microsecond
@@ -40,7 +46,8 @@ func TestTemplateFactory(t *testing.T) {
 	ctx := context.Background()
 
 	// New
-	f := New(ctx, vmConfig)
+	f, err := New(ctx, vmConfig)
+	assert.Nil(err)
 
 	// Config
 	assert.Equal(f.Config(), vmConfig)
@@ -74,7 +81,7 @@ func TestTemplateFactory(t *testing.T) {
 	assert.Nil(err)
 
 	err = tt.createTemplateVM(ctx)
-	assert.Error(err)
+	assert.Nil(err)
 
 	templateProxyType = vc.NoopProxyType
 	vm, err = tt.GetBaseVM(ctx, vmConfig)

@@ -8,6 +8,7 @@ package factory
 import (
 	"context"
 	"io/ioutil"
+	"os"
 	"testing"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
@@ -16,6 +17,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
+
+const testDisabledAsNonRoot = "Test disabled as requires root privileges"
 
 func TestNewFactory(t *testing.T) {
 	var config Config
@@ -53,6 +56,10 @@ func TestNewFactory(t *testing.T) {
 	f.CloseFactory(ctx)
 
 	// template
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	config.Template = true
 	f, err = NewFactory(ctx, config, false)
 	assert.Nil(err)
@@ -187,6 +194,10 @@ func TestFactoryGetVM(t *testing.T) {
 	ctx := context.Background()
 
 	// direct factory
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	f, err := NewFactory(ctx, Config{VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
