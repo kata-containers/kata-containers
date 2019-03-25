@@ -6,10 +6,15 @@
 
 set -e
 
-die()
+error()
 {
 	local msg="$*"
 	echo "ERROR: ${msg}" >&2
+}
+
+die()
+{
+	error "$*"
 	exit 1
 }
 
