@@ -346,6 +346,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 		--env INSIDE_CONTAINER=1 \
 		--env SECCOMP="${SECCOMP}" \
+		--env DEBUG="${DEBUG}" \
 		-v "${script_dir}":"/osbuilder" \
 		-v "${ROOTFS_DIR}":"/rootfs" \
 		-v "${script_dir}/../scripts":"/scripts" \

@@ -117,6 +117,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 		--env IMG_SIZE="${IMG_SIZE}" \
 		--env AGENT_INIT=${AGENT_INIT} \
 		--env DAX="${DAX}" \
+		--env DEBUG="${DEBUG}" \
 		-v /dev:/dev \
 		-v "${script_dir}":"/osbuilder" \
 		-v "${script_dir}/../scripts":"/scripts" \
