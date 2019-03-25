@@ -10,7 +10,7 @@ BASE_URL="http://developer.huawei.com/ict/site-euleros/euleros/repo/yum/${OS_VER
 
 GPG_KEY_FILE="RPM-GPG-KEY-EulerOS"
 
-PACKAGES="iptables"
+PACKAGES="iptables chrony"
 
 #Optional packages:
 # systemd: An init system that will start kata-agent if kata-agent
