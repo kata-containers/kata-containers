@@ -8,11 +8,9 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"syscall"
 	"testing"
@@ -131,18 +129,6 @@ func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-}
-
-var testCCProxySockPathTempl = "%s/cc-proxy-test.sock"
-var testCCProxyURLUnixScheme = "unix://"
-
-func testGenerateCCProxySockDir() (string, error) {
-	dir, err := ioutil.TempDir("", "cc-proxy-test")
-	if err != nil {
-		return "", err
-	}
-
-	return dir, nil
 }
 
 func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
@@ -1601,42 +1587,6 @@ func createNewSandboxConfig(hType HypervisorType, aType AgentType, aConfig inter
 	}
 }
 
-func createNewContainerConfigs(numOfContainers int) []ContainerConfig {
-	var contConfigs []ContainerConfig
-
-	envs := []types.EnvVar{
-		{
-			Var:   "PATH",
-			Value: "/bin:/usr/bin:/sbin:/usr/sbin",
-		},
-	}
-
-	cmd := types.Cmd{
-		Args:    strings.Split("/bin/ps -A", " "),
-		Envs:    envs,
-		WorkDir: "/",
-	}
-
-	_, thisFile, _, ok := runtime.Caller(0)
-	if ok == false {
-		return nil
-	}
-
-	rootFs := RootFs{Target: filepath.Dir(thisFile) + "/utils/supportfiles/bundles/busybox/", Mounted: true}
-
-	for i := 0; i < numOfContainers; i++ {
-		contConfig := ContainerConfig{
-			ID:     fmt.Sprintf("%d", i),
-			RootFs: rootFs,
-			Cmd:    cmd,
-		}
-
-		contConfigs = append(contConfigs, contConfig)
-	}
-
-	return contConfigs
-}
-
 // createAndStartSandbox handles the common test operation of creating and
 // starting a sandbox.
 func createAndStartSandbox(ctx context.Context, config SandboxConfig) (sandbox VCSandbox, sandboxDir string,
@@ -1669,66 +1619,6 @@ func createStartStopDeleteSandbox(b *testing.B, sandboxConfig SandboxConfig) {
 	p, _, err := createAndStartSandbox(ctx, sandboxConfig)
 	if p == nil || err != nil {
 		b.Fatalf("Could not create and start sandbox: %s", err)
-	}
-
-	// Stop sandbox
-	_, err = StopSandbox(ctx, p.ID())
-	if err != nil {
-		b.Fatalf("Could not stop sandbox: %s", err)
-	}
-
-	// Delete sandbox
-	_, err = DeleteSandbox(ctx, p.ID())
-	if err != nil {
-		b.Fatalf("Could not delete sandbox: %s", err)
-	}
-}
-
-func createStartStopDeleteContainers(b *testing.B, sandboxConfig SandboxConfig, contConfigs []ContainerConfig) {
-	ctx := context.Background()
-
-	// Create sandbox
-	p, err := CreateSandbox(ctx, sandboxConfig, nil)
-	if err != nil {
-		b.Fatalf("Could not create sandbox: %s", err)
-	}
-
-	// Start sandbox
-	_, err = StartSandbox(ctx, p.ID())
-	if err != nil {
-		b.Fatalf("Could not start sandbox: %s", err)
-	}
-
-	// Create containers
-	for _, contConfig := range contConfigs {
-		_, _, err := CreateContainer(ctx, p.ID(), contConfig)
-		if err != nil {
-			b.Fatalf("Could not create container %s: %s", contConfig.ID, err)
-		}
-	}
-
-	// Start containers
-	for _, contConfig := range contConfigs {
-		_, err := StartContainer(ctx, p.ID(), contConfig.ID)
-		if err != nil {
-			b.Fatalf("Could not start container %s: %s", contConfig.ID, err)
-		}
-	}
-
-	// Stop containers
-	for _, contConfig := range contConfigs {
-		_, err := StopContainer(ctx, p.ID(), contConfig.ID)
-		if err != nil {
-			b.Fatalf("Could not stop container %s: %s", contConfig.ID, err)
-		}
-	}
-
-	// Delete containers
-	for _, contConfig := range contConfigs {
-		_, err := DeleteContainer(ctx, p.ID(), contConfig.ID)
-		if err != nil {
-			b.Fatalf("Could not delete container %s: %s", contConfig.ID, err)
-		}
 	}
 
 	// Stop sandbox

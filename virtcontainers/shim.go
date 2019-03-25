@@ -22,9 +22,6 @@ import (
 type ShimType string
 
 const (
-	// CCShimType is the ccShim.
-	CCShimType ShimType = "ccShim"
-
 	// NoopShimType is the noopShim.
 	NoopShimType ShimType = "noopShim"
 
@@ -65,8 +62,6 @@ func (pType *ShimType) Set(value string) error {
 	switch value {
 	case "noopShim":
 		*pType = NoopShimType
-	case "ccShim":
-		*pType = CCShimType
 	case "kataShim":
 		*pType = KataShimType
 	case "kataBuiltInShim":
@@ -82,8 +77,6 @@ func (pType *ShimType) String() string {
 	switch *pType {
 	case NoopShimType:
 		return string(NoopShimType)
-	case CCShimType:
-		return string(CCShimType)
 	case KataShimType:
 		return string(KataShimType)
 	case KataBuiltInShimType:
@@ -98,8 +91,6 @@ func newShim(pType ShimType) (shim, error) {
 	switch pType {
 	case NoopShimType:
 		return &noopShim{}, nil
-	case CCShimType:
-		return &ccShim{}, nil
 	case KataShimType:
 		return &kataShim{}, nil
 	case KataBuiltInShimType:
@@ -114,7 +105,7 @@ func newShimConfig(config SandboxConfig) interface{} {
 	switch config.ShimType {
 	case NoopShimType, KataBuiltInShimType:
 		return nil
-	case CCShimType, KataShimType:
+	case KataShimType:
 		var shimConfig ShimConfig
 		err := mapstructure.Decode(config.ShimConfig, &shimConfig)
 		if err != nil {

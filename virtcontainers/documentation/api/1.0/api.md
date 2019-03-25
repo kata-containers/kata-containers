@@ -217,9 +217,6 @@ const (
 	// NoProxyType is the noProxy.
 	NoProxyType ProxyType = "noProxy"
 
-	// CCProxyType is the ccProxy.
-	CCProxyType ProxyType = "ccProxy"
-
 	// KataProxyType is the kataProxy.
 	KataProxyType ProxyType = "kataProxy"
 )
@@ -241,9 +238,6 @@ type ProxyConfig struct {
 type ShimType string
 
 const (
-	// CCShimType is the ccShim.
-	CCShimType ShimType = "ccShim"
-
 	// NoopShimType is the noopShim.
 	NoopShimType ShimType = "noopShim"
 
