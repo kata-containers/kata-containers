@@ -1295,7 +1295,7 @@ func (c *Container) newCgroups() error {
 		return fmt.Errorf("Could not create cgroup for %v: %v", c.state.CgroupPath, err)
 	}
 
-	c.state.Resources = resources
+	c.config.Resources = resources
 
 	// Add shim into cgroup
 	if c.process.Pid > 0 {
@@ -1359,8 +1359,8 @@ func (c *Container) updateCgroups(resources specs.LinuxResources) error {
 	}
 
 	// store new resources
-	c.state.Resources = r
-	if err := c.store.Store(store.State, c.state); err != nil {
+	c.config.Resources = r
+	if err := c.storeContainer(); err != nil {
 		return err
 	}
 
