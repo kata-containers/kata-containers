@@ -1,32 +1,50 @@
 #!/usr/bin/env bash
 #
-# Copyright (c) 2017 Intel Corporation
+# Copyright (c) 2017-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
 set -e
 
-[ -n "$DEBUG" ] && set -x
+[ -n "${DEBUG}" ] && set -x
 
-script_name="${0##*/}"
-script_dir="$(dirname $(readlink -f $0))"
+readonly script_name="${0##*/}"
+readonly script_dir=$(dirname "$(readlink -f "$0")")
+readonly lib_file="${script_dir}/../scripts/lib.sh"
 
-lib_file="${script_dir}/../scripts/lib.sh"
-source "$lib_file"
+readonly ext4_format="ext4"
+readonly xfs_format="xfs"
 
-[ "$(id -u)" -eq 0 ] || die "$0: must be run as root"
+# ext4: percentage of the filesystem which may only be allocated by privileged processes.
+readonly reserved_blocks_percentage=3
 
-IMAGE="${IMAGE:-kata-containers.img}"
-IMG_SIZE=128
-AGENT_BIN=${AGENT_BIN:-kata-agent}
-AGENT_INIT=${AGENT_INIT:-no}
-DAX=${DAX:-no}
-DAX_HEADER_SZ=2
+# Where the rootfs starts in MB
+readonly rootfs_start=1
 
+# Where the rootfs ends in MB
+readonly rootfs_end=-1
 
-usage()
-{
-	error="${1:-0}"
+# DAX header size
+# * NVDIMM driver reads the device namespace information from nvdimm namespace (4K offset).
+#   The MBR #1 + DAX metadata are saved in the first 2MB of the image.
+readonly dax_header_sz=2
+
+# DAX aligment
+# * DAX huge pages [2]: 2MB alignment
+# [2] - https://nvdimm.wiki.kernel.org/2mib_fs_dax
+readonly dax_alignment=2
+
+# In order to support memory hotplug, image must be aligned to
+# memory section(size in MB) according to different architecture.
+case "$(uname -m)" in
+	aarch64) readonly mem_boundary_mb=1024 ;;
+	*) readonly mem_boundary_mb=128 ;;
+esac
+
+# shellcheck source=../scripts/lib.sh
+source "${lib_file}"
+
+usage() {
 	cat <<EOT
 Usage: ${script_name} [options] <rootfs-dir>
 	This script will create a Kata Containers image file of
@@ -38,299 +56,373 @@ Options:
 	-r Free space of the root partition in MB ENV: ROOT_FREE_SPACE
 
 Extra environment variables:
-	AGENT_BIN:  use it to change the expected agent binary name
-	AGENT_INIT: use kata agent as init process
-	DAX: If 'yes' will build the image with DAX support. The first 2 MB of the
-	     resulting image are reserved for the device namespace information
-	     (metadata) that is used by the guest kernel to enable DAX.
+	AGENT_BIN:  Use it to change the expected agent binary name
+	AGENT_INIT: Use kata agent as init process
+	FS_TYPE:    Filesystem type to use. Only xfs and ext4 are supported.
 	USE_DOCKER: If set will build image in a Docker Container (requries docker)
 	            DEFAULT: not set
 
 
-	When DAX is 'yes', the following diagram shows how a 128M image will looks like:
-		 .-----------------------------------.
-		 |-- 2 MB --|-------- 126 MB --------|
-		 | Metadata | Rootfs (/bin,/usr,etc) |
-		 '-----------------------------------'
+Following diagram shows how the resulting image will look like
 
-		 The resulting image can be mounted if the offset of 2 MB is specified:
-		 $ sudo losetup -v -fP -o $((2*1024*1024)) kata-containers.img
+	.-----------.----------.---------------.-----------.
+	| 0 - 512 B | 4 - 8 Kb |  2M - 2M+512B |    3M     |
+	|-----------+----------+---------------+-----------+
+	|   MBR #1  |   DAX    |    MBR #2     |  Rootfs   |
+	'-----------'----------'---------------'-----------+
+	      |          |      ^      |        ^
+	      |          '-data-'      '--------'
+	      |                                 |
+	      '--------rootfs-partition---------'
+
+
+MBR: Master boot record.
+DAX: Metadata required by the NVDIMM driver to enable DAX in the guest [1][2] (struct nd_pfn_sb).
+Rootfs: partition that contains the root filesystem (/usr, /bin, ect).
+
+Kernels and hypervisors that support DAX/NVDIMM read the MBR #2, otherwise MBR #1 is read.
+
+[1] - https://github.com/kata-containers/osbuilder/blob/master/image-builder/nsdax.gpl.c
+[2] - https://github.com/torvalds/linux/blob/master/drivers/nvdimm/pfn.h
 
 EOT
-exit "${error}"
 }
 
-# Maximum allowed size in MB for root disk
-MAX_IMG_SIZE_MB=2048
 
-FS_TYPE=${FS_TYPE:-"ext4"}
+# build the image using docker
+build_with_docker() {
+	local rootfs="$1"
+	local image="$2"
+	local fs_type="$3"
+	local block_size="$4"
+	local root_free_space="$5"
+	local agent_bin="$6"
+	local agent_init="$7"
+	local docker_image_name="image-builder-osbuilder"
 
-# In order to support memory hotplug, image must be aligned to memory section(size in MB) according to different architecture.
-ARCH=$(uname -m)
-case "$ARCH" in
-	aarch64)	MEM_BOUNDARY_MB=1024 ;;
-	      *)        MEM_BOUNDARY_MB=128  ;;
-esac
-
-# Maximum no of attempts to create a root disk before giving up
-MAX_ATTEMPTS=5
-
-ATTEMPT_NUM=0
-while getopts "ho:r:s:f:" opt
-do
-	case "$opt" in
-		h)	usage ;;
-		o)	IMAGE="${OPTARG}" ;;
-		r)	ROOT_FREE_SPACE="${OPTARG}" ;;
-		f)	FS_TYPE="${OPTARG}" ;;
-	esac
-done
-
-shift $(( $OPTIND - 1 ))
-
-ROOTFS="$1"
-
-
-[ -n "${ROOTFS}" ] || usage
-[ -d "${ROOTFS}" ] || die "${ROOTFS} is not a directory"
-
-ROOTFS=$(readlink -f ${ROOTFS})
-IMAGE_DIR=$(dirname ${IMAGE})
-IMAGE_DIR=$(readlink -f ${IMAGE_DIR})
-IMAGE_NAME=$(basename ${IMAGE})
-
-if [ -n "${USE_DOCKER}" ] ; then
-	image_name="image-builder-osbuilder"
+	image_dir=$(readlink -f "$(dirname "${image}")")
+	image_name=$(basename "${image}")
 
 	docker build  \
-		--build-arg http_proxy="${http_proxy}" \
-		--build-arg https_proxy="${https_proxy}" \
-		-t "${image_name}" "${script_dir}"
+		   --build-arg http_proxy="${http_proxy}" \
+		   --build-arg https_proxy="${https_proxy}" \
+		   -t "${docker_image_name}" "${script_dir}"
 
 	#Make sure we use a compatible runtime to build rootfs
 	# In case Clear Containers Runtime is installed we dont want to hit issue:
 	#https://github.com/clearcontainers/runtime/issues/828
 	docker run  \
-		--rm \
-		--runtime runc  \
-		--privileged \
-		--env IMG_SIZE="${IMG_SIZE}" \
-		--env AGENT_INIT=${AGENT_INIT} \
-		--env DAX="${DAX}" \
-		--env DEBUG="${DEBUG}" \
-		-v /dev:/dev \
-		-v "${script_dir}":"/osbuilder" \
-		-v "${script_dir}/../scripts":"/scripts" \
-		-v "${ROOTFS}":"/rootfs" \
-		-v "${IMAGE_DIR}":"/image" \
-		${image_name} \
-		bash "/osbuilder/${script_name}" -o "/image/${IMAGE_NAME}" /rootfs
-
-	exit $?
-fi
-# The kata rootfs image expect init and kata-agent to be installed
-init_path="/sbin/init"
-init="${ROOTFS}${init_path}"
-[ -x "${init}" ] || [ -L ${init} ] || die "${init_path} is not installed in ${ROOTFS}"
-OK "init is installed"
-
-if [ "${AGENT_INIT}" == "no" ]
-then
-	systemd_path="/lib/systemd/systemd"
-	systemd="${ROOTFS}${systemd_path}"
-	[ -x "${systemd}" ] || [ -L ${systemd} ] || die "${systemd_path} is not installed in ${ROOTFS}"
-	OK "init is systemd"
-fi
-
-[ "${AGENT_INIT}" == "yes" ] || [ -x "${ROOTFS}/usr/bin/${AGENT_BIN}" ] || \
-	die "/usr/bin/${AGENT_BIN} is not installed in ${ROOTFS}
-	use AGENT_BIN env variable to change the expected agent binary name"
-OK "Agent installed"
-
-ROOTFS_SIZE=$(du -B 1MB -s "${ROOTFS}" | awk '{print $1}')
-BLOCK_SIZE=${BLOCK_SIZE:-4096}
-OLD_IMG_SIZE=0
-ORIG_MEM_BOUNDARY_MB=${MEM_BOUNDARY_MB}
-
-align_memory()
-{
-	remaining=$(($IMG_SIZE % $MEM_BOUNDARY_MB))
-	if [ "$remaining" != "0" ];then
-		warning "image size '$IMG_SIZE' is not aligned to memory boundary '$MEM_BOUNDARY_MB', aligning it"
-		IMG_SIZE=$(($IMG_SIZE + $MEM_BOUNDARY_MB - $remaining))
-	fi
-
-
-	if [ "${DAX}" == "yes" ] ; then
-		# To support:
-		# * memory hotplug: the image size MUST BE aligned to MEM_BOUNDARY_MB (128 or 1024 MB)
-		# * DAX: NVDIMM driver reads the device namespace information from nvdimm namespace (4K offset).
-		#        The namespace information is saved in the first 2MB of the image.
-		# * DAX huge pages [2]: 2MB alignment
-		#
-		# [1] - nd_pfn_validate(): https://github.com/torvalds/linux/blob/master/drivers/nvdimm/pfn_devs.c
-		# [2] - https://nvdimm.wiki.kernel.org/2mib_fs_dax
-		IMG_SIZE=$((IMG_SIZE-DAX_HEADER_SZ))
-	fi
+		   --rm \
+		   --runtime runc  \
+		   --privileged \
+		   --env AGENT_BIN="${agent_bin}" \
+		   --env AGENT_INIT="${agent_init}" \
+		   --env FS_TYPE="${fs_type}" \
+		   --env BLOCK_SIZE="${block_size}" \
+		   --env ROOT_FREE_SPACE="${root_free_space}" \
+		   --env DEBUG="${DEBUG}" \
+		   -v /dev:/dev \
+		   -v "${script_dir}":"/osbuilder" \
+		   -v "${script_dir}/../scripts":"/scripts" \
+		   -v "${rootfs}":"/rootfs" \
+		   -v "${image_dir}":"/image" \
+		   ${docker_image_name} \
+		   bash "/osbuilder/${script_name}" -o "/image/${image_name}" /rootfs
 }
 
-# Calculate image size based on the rootfs
-calculate_img_size()
-{
-	IMG_SIZE=${IMG_SIZE:-$MEM_BOUNDARY_MB}
-	align_memory
-	if [ -n "$ROOT_FREE_SPACE" ] && [ "$IMG_SIZE" -gt "$ROOTFS_SIZE" ]; then
-		info "Ensure that root partition has at least ${ROOT_FREE_SPACE}MB of free space"
-		IMG_SIZE=$(($IMG_SIZE + $ROOT_FREE_SPACE))
+check_rootfs() {
+	local rootfs="${1}"
+
+	[ -d "${rootfs}" ] || die "${rootfs} is not a directory"
+
+	# The kata rootfs image expect init and kata-agent to be installed
+	init_path="/sbin/init"
+	init="${rootfs}${init_path}"
+	if [ ! -x "${init}" ] && [ ! -L "${init}" ]; then
+		error "${init_path} is not installed in ${rootfs}"
+		return 1
 	fi
+	OK "init is installed"
 
+
+	# check agent or systemd
+	case "${AGENT_INIT}" in
+		"no")
+			systemd_path="/lib/systemd/systemd"
+			systemd="${rootfs}${systemd_path}"
+			if [ ! -x "${systemd}" ] && [ ! -L "${systemd}" ]; then
+				error "${systemd_path} is not installed in ${rootfs}"
+				return 1
+			fi
+			OK "init is systemd"
+			;;
+
+		"yes")
+			agent_path="/usr/bin/${AGENT_BIN}"
+			agent="${rootfs}${agent_path}"
+			if  [ ! -x "${agent}" ]; then
+				error "${agent_path} is not installed in ${rootfs}. Use AGENT_BIN env variable to change the expected agent binary name"
+				return 1
+			fi
+			OK "Agent installed"
+			;;
+
+		*)
+			error "Invalid value for AGENT_INIT: '${AGENT_INIT}'. Use to 'yes' or 'no'"
+			return 1
+			;;
+	esac
+
+	return 0
 }
 
-unmount()
-{
-	sync
-	umount -l ${MOUNT_DIR}
-	rmdir ${MOUNT_DIR}
-}
+calculate_required_disk_size() {
+	local rootfs="$1"
+	local fs_type="$2"
+	local block_size="$3"
 
-detach()
-{
-	losetup -d "${DEVICE}"
+	readonly rootfs_size_mb=$(du -B 1MB -s "${rootfs}" | awk '{print $1}')
+	readonly image="$(mktemp)"
+	readonly mount_dir="$(mktemp -d)"
+	readonly max_tries=20
+	readonly increment=10
 
-	# From `man losetup` about -d option:
-	# Note that since Linux v3.7 kernel uses "lazy device destruction".
-	# The detach operation does not return EBUSY  error  anymore  if
-	# device is actively used by system, but it is marked by autoclear
-	# flag and destroyed later
-	info "Waiting for ${DEVICE} to detach"
-
-	local i=0
-	local max_tries=5
-	while [[ "$i" < "$max_tries" ]]; do
-		sleep 1
-		# If either the 'p1' partition has disappeared or partprobe failed, then
-		# the loop device should be correctly detached
-		if ! [ -b "${DEVICE}p1" ] || ! partprobe -s ${DEVICE}; then
-			break
+	for i in $(seq 1 $max_tries); do
+		local img_size="$((rootfs_size_mb + (i * increment)))"
+		create_disk "${image}" "${img_size}" "${fs_type}" "${rootfs_start}" > /dev/null 2>&1
+		if ! device="$(setup_loop_device "${image}")"; then
+			continue
 		fi
-		((i+=1))
-		echo -n "."
+
+		format_loop "${device}" "${block_size}" > /dev/null 2>&1
+		mount "${device}p1" "${mount_dir}"
+		avail="$(df -h --output=avail "${mount_dir}" | tail -n1 | sed 's/[M ]//g')"
+		umount "${mount_dir}"
+		losetup -d "${device}"
+
+		if [ "${avail}" -gt "${rootfs_size_mb}" ]; then
+			rmdir "${mount_dir}"
+			rm -f "${image}"
+			echo "${img_size}"
+			return
+		fi
 	done
 
-	[[ "$i" == "$max_tries" ]] && die "Cannot detach ${DEVICE}"
-	info "detached"
+
+	rmdir "${mount_dir}"
+	rm -f "${image}"
+	error "Could not calculate the required disk size"
 }
 
+# Calculate image size based on the rootfs and free space
+calculate_img_size() {
+	local rootfs="$1"
+	local root_free_space_mb="$2"
+	local fs_type="$3"
+	local block_size="$4"
 
-create_rootfs_disk()
-{
-	ATTEMPT_NUM=$(($ATTEMPT_NUM+1))
-	if [ ${ATTEMPT_NUM} -gt ${MAX_ATTEMPTS} ]; then
-		die "Unable to create root disk image."
+	# rootfs start + DAX header size + rootfs end
+	local reserved_size_mb=$((rootfs_start + dax_header_sz + rootfs_end))
+
+	disk_size="$(calculate_required_disk_size "${rootfs}" "${fs_type}" "${block_size}")"
+
+	img_size="$((disk_size + reserved_size_mb))"
+	if [ -n "${root_free_space_mb}" ]; then
+		img_size="$((img_size + root_free_space_mb))"
 	fi
-	info "Create root disk image. Attempt ${ATTEMPT_NUM} out of ${MAX_ATTEMPTS}."
 
-	calculate_img_size
-	if [ ${OLD_IMG_SIZE} -ne 0 ]; then
-		info "Image size ${OLD_IMG_SIZE}MB too small, trying again with size ${IMG_SIZE}MB"
+	remaining="$((img_size % mem_boundary_mb))"
+	if [ "${remaining}" != "0" ]; then
+		img_size=$((img_size + mem_boundary_mb - remaining))
 	fi
 
-	info "Creating raw disk with size ${IMG_SIZE}M"
-	qemu-img create -q -f raw "${IMAGE}" "${IMG_SIZE}M"
+	echo "${img_size}"
+}
+
+setup_loop_device() {
+	local image="$1"
+
+	# Get the loop device bound to the image file (requires /dev mounted in the
+	# image build system and root privileges)
+	device=$(losetup -P -f --show "${image}")
+
+	#Refresh partition table
+	partprobe -s "${device}" > /dev/null
+	# Poll for the block device p1
+	for _ in $(seq 1 5); do
+		if [ -b "${device}p1" ]; then
+			echo "${device}"
+			return 0
+		fi
+		sleep 1
+	done
+
+	error "File ${device}p1 is not a block device"
+	return 1
+}
+
+format_loop() {
+	local device="$1"
+	local block_size="$2"
+
+	case "${fs_type}" in
+		"${ext4_format}")
+			mkfs.ext4 -q -F -b "${block_size}" "${device}p1"
+			info "Set filesystem reserved blocks percentage to ${reserved_blocks_percentage}%"
+			tune2fs -m "${reserved_blocks_percentage}" "${device}p1"
+			;;
+
+		"${xfs_format}")
+			mkfs.xfs -q -f -b size="${block_size}" "${device}p1"
+			;;
+
+		*)
+			error "Unsupported fs type: ${fs_type}"
+			return 1
+			;;
+	esac
+}
+
+create_disk() {
+	local image="$1"
+	local img_size="$2"
+	local fs_type="$3"
+	local part_start="$4"
+
+	info "Creating raw disk with size ${img_size}M"
+	qemu-img create -q -f raw "${image}" "${img_size}M"
 	OK "Image file created"
 
 	# Kata runtime expect an image with just one partition
 	# The partition is the rootfs content
-
 	info "Creating partitions"
-	parted -s -a optimal "${IMAGE}" \
-		   mklabel gpt -- \
-		   mkpart primary "${FS_TYPE}" 1M -1M \
-		   print
+	parted -s -a optimal "${image}" -- \
+		   mklabel msdos \
+		   mkpart primary "${fs_type}" "${part_start}"M "${rootfs_end}"M
+
 	OK "Partitions created"
-
-	# Get the loop device bound to the image file (requires /dev mounted in the
-	# image build system and root privileges)
-	DEVICE=$(losetup -P -f --show "${IMAGE}")
-
-	#Refresh partition table
-	partprobe -s "${DEVICE}"
-	# Poll for the block device p1
-	local i=0
-	local max_tries=5
-	while [[ "$i" < "$max_tries" ]]; do
-		[ -b "${DEVICE}p1" ] && break
-		((i+=1))
-		echo -n "."
-		sleep 1
-	done
-	[[ "$i" == "$max_tries" ]] && die "File ${DEVICE}p1 is not a block device"
-
-	MOUNT_DIR=$(mktemp -d osbuilder-mount-dir.XXXX)
-	info "Formatting Image using ext4 filesystem"
-	mkfs.ext4 -q -F -b "${BLOCK_SIZE}" "${DEVICE}p1"
-	OK "Image formatted"
-
-	info "Mounting root partition"
-	mount "${DEVICE}p1" "${MOUNT_DIR}"
-	OK "root partition mounted"
-	RESERVED_BLOCKS_PERCENTAGE=3
-	info "Set filesystem reserved blocks percentage to ${RESERVED_BLOCKS_PERCENTAGE}%"
-	tune2fs -m "${RESERVED_BLOCKS_PERCENTAGE}" "${DEVICE}p1"
-
-	AVAIL_DISK=$(df -B M --output=avail "${DEVICE}p1" | tail -1)
-	AVAIL_DISK=${AVAIL_DISK/M}
-	info "Free space root partition ${AVAIL_DISK} MB"
-
-	# if the available disk space is less than rootfs size, repeat the process
-	# of disk creation by adding 5% in the inital assumed value $ROOTFS_SIZE
-	if [ $ROOTFS_SIZE -gt $AVAIL_DISK ]; then
-		# Increase the size but remain aligned to the original MEM_BOUNDARY_MB, which is stored in $ORIG_MEM_BOUNDARY_MB
-		MEM_BOUNDARY_MB=$((MEM_BOUNDARY_MB+ORIG_MEM_BOUNDARY_MB))
-		OLD_IMG_SIZE=${IMG_SIZE}
-		unset IMG_SIZE
-		unmount
-		detach
-		rm -f ${IMAGE}
-		create_rootfs_disk
-	fi
 }
 
-set_dax_metadata()
-{
-	dax_header_bytes=$((DAX_HEADER_SZ*1024*1024))
-	info "Set device namespace information (metadata)"
-	# Fill out namespace information
-	tmp_img="$(mktemp)"
-	chmod 0644 "${tmp_img}"
-	# metadate header
-	dd if=/dev/zero of="${tmp_img}" bs="${DAX_HEADER_SZ}M" count=1
-	# append image data (rootfs)
-	dd if="${IMAGE}" of="${tmp_img}" oflag=append conv=notrunc
-	# copy final image
-	mv "${tmp_img}" "${IMAGE}"
+create_rootfs_image() {
+	local rootfs="$1"
+	local image="$2"
+	local img_size="$3"
+	local fs_type="$4"
+	local block_size="$5"
+
+	create_disk "${image}" "${img_size}" "${fs_type}" "${rootfs_start}"
+
+	if ! device="$(setup_loop_device "${image}")"; then
+		die "Could not setup loop device"
+	fi
+
+	format_loop "${device}" "${block_size}"
+
+	info "Mounting root partition"
+	readonly mount_dir=$(mktemp -d osbuilder-mount-dir.XXXX)
+	mount "${device}p1" "${mount_dir}"
+	OK "root partition mounted"
+
+	info "Copying content from rootfs to root partition"
+	cp -a "${rootfs}"/* "${mount_dir}"
+	sync
+	OK "rootfs copied"
+
+	info "Unmounting root partition"
+	umount "${mount_dir}"
+	OK "Root partition unmounted"
+
+	if [ "${fs_type}" = "${ext4_format}" ]; then
+		fsck.ext4 -D -y "${device}p1"
+	fi
+
+	losetup -d "${device}"
+	rmdir "${mount_dir}"
+}
+
+set_dax_header() {
+	local image="$1"
+	local img_size="$2"
+	local fs_type="$3"
+
+	# rootfs start + DAX header size
+	local rootfs_offset=$((rootfs_start + dax_header_sz))
+	local header_image="${image}.header"
+	local dax_image="${image}.dax"
+	rm -f "${dax_image}" "${header_image}"
+
+	create_disk "${header_image}" "${img_size}" "${fs_type}" "${rootfs_offset}"
+
+	dax_header_bytes=$((dax_header_sz * 1024 * 1024))
+	dax_alignment_bytes=$((dax_alignment * 1024 * 1024))
+	info "Set DAX metadata"
 	# Set metadata header
 	# Issue: https://github.com/kata-containers/osbuilder/issues/240
 	gcc -O2 "${script_dir}/nsdax.gpl.c" -o "${script_dir}/nsdax"
-	"${script_dir}/nsdax" "${IMAGE}" "${dax_header_bytes}" "${dax_header_bytes}"
+	"${script_dir}/nsdax" "${header_image}" "${dax_header_bytes}" "${dax_alignment_bytes}"
 	sync
+
+	touch "${dax_image}"
+	# Copy MBR #1 + DAX metadata
+	dd if="${header_image}" of="${dax_image}" bs="${dax_header_sz}M" count=1
+	# Copy MBR #2 + Rootfs
+	dd if="${image}" of="${dax_image}" oflag=append conv=notrunc
+	# final image
+	mv "${dax_image}" "${image}"
+	sync
+
+	rm -f "${dax_image}" "${header_image}"
 }
 
-create_rootfs_disk
+main() {
+	[ "$(id -u)" -eq 0 ] || die "$0: must be run as root"
 
-info "rootfs size ${ROOTFS_SIZE} MB"
-info "Copying content from rootfs to root partition"
-cp -a "${ROOTFS}"/* ${MOUNT_DIR}
-sync
-OK "rootfs copied"
+	# variables that can be overwritten by environment variables
+	local agent_bin="${AGENT_BIN:-kata-agent}"
+	local agent_init="${AGENT_INIT:-no}"
+	local fs_type="${FS_TYPE:-${ext4_format}}"
+	local image="${IMAGE:-kata-containers.img}"
+	local block_size="${BLOCK_SIZE:-4096}"
+	local root_free_space="${ROOT_FREE_SPACE:-}"
 
-unmount
-# Optimize
-fsck.ext4 -D -y "${DEVICE}p1"
-detach
+	while getopts "ho:r:f:" opt
+	do
+		case "$opt" in
+			h)	usage; return 0;;
+			o)	image="${OPTARG}" ;;
+			r)	root_free_space="${OPTARG}" ;;
+			f)	fs_type="${OPTARG}" ;;
+			*) break ;;
+		esac
+	done
 
-if [ "${DAX}" == "yes" ] ; then
-	set_dax_metadata
-fi
+	shift $(( OPTIND - 1 ))
+	rootfs="$(readlink -f "$1")"
+	if [ -z "${rootfs}" ]; then
+		usage
+		exit 0
+	fi
 
-info "Image created. Virtual size: ${IMG_SIZE}MB."
+	if [ -n "${USE_DOCKER}" ] ; then
+		build_with_docker "${rootfs}" "${image}" "${fs_type}" "${block_size}" \
+						  "${root_free_space}" "${agent_bin}" "${agent_init}"
+		exit $?
+	fi
+
+	if ! check_rootfs "${rootfs}" ; then
+		die "Invalid rootfs"
+	fi
+
+	img_size=$(calculate_img_size "${rootfs}" "${root_free_space}" "${fs_type}" "${block_size}")
+
+	# the first 2M are for the first MBR + NVDIMM metadata and were already
+	# consider in calculate_img_size
+	rootfs_img_size=$((img_size - dax_header_sz))
+	create_rootfs_image "${rootfs}" "${image}" "${rootfs_img_size}" \
+						"${fs_type}" "${block_size}"
+
+	# insert at the beginning of the image the MBR + DAX header
+	set_dax_header "${image}" "${img_size}" "${fs_type}"
+}
+
+main "$@"
