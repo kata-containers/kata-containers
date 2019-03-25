@@ -17,6 +17,8 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 )
 
+const testDisabledAsNonRoot = "Test disabled as requires root privileges"
+
 func TestFactoryCLIFunctionNoRuntimeConfig(t *testing.T) {
 	assert := assert.New(t)
 
@@ -63,9 +65,14 @@ func TestFactoryCLIFunctionInit(t *testing.T) {
 	assert.Nil(err)
 
 	// With template
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	runtimeConfig.FactoryConfig.Template = true
 	runtimeConfig.HypervisorType = vc.MockHypervisor
 	runtimeConfig.AgentType = vc.NoopAgentType
+	runtimeConfig.ProxyType = vc.NoopProxyType
 	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 	fn, ok = initFactoryCommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)

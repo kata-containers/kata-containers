@@ -185,6 +185,7 @@ var initFactoryCommand = cli.Command{
 					HypervisorConfig: runtimeConfig.HypervisorConfig,
 					AgentType:        runtimeConfig.AgentType,
 					AgentConfig:      runtimeConfig.AgentConfig,
+					ProxyType:        runtimeConfig.ProxyType,
 				},
 			}
 			kataLog.WithField("factory", factoryConfig).Info("create vm factory")
