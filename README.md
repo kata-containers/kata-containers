@@ -137,3 +137,8 @@ the environment before switching to the workload.
 The
 [www.katacontainers.io](https://github.com/kata-containers/www.katacontainers.io)
 repository contains all sources for the https://www.katacontainers.io site.
+
+## Credits
+
+Kata Containers uses [packagecloud](https://packagecloud.io) for package
+hosting.
