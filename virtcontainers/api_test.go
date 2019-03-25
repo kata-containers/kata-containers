@@ -17,7 +17,6 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
@@ -94,87 +93,6 @@ func newTestSandboxConfigNoop() SandboxConfig {
 	return sandboxConfig
 }
 
-func newTestSandboxConfigHyperstartAgent() SandboxConfig {
-	// Define the container command and bundle.
-	container := ContainerConfig{
-		ID:          containerID,
-		RootFs:      RootFs{Target: filepath.Join(testDir, testBundle), Mounted: true},
-		Cmd:         newBasicTestCmd(),
-		Annotations: containerAnnotations,
-	}
-
-	// Sets the hypervisor configuration.
-	hypervisorConfig := HypervisorConfig{
-		KernelPath:     filepath.Join(testDir, testKernel),
-		ImagePath:      filepath.Join(testDir, testImage),
-		HypervisorPath: filepath.Join(testDir, testHypervisor),
-	}
-
-	agentConfig := HyperConfig{
-		SockCtlName: testHyperstartCtlSocket,
-		SockTtyName: testHyperstartTtySocket,
-	}
-
-	sandboxConfig := SandboxConfig{
-		ID:               testSandboxID,
-		HypervisorType:   MockHypervisor,
-		HypervisorConfig: hypervisorConfig,
-
-		AgentType:   HyperstartAgent,
-		AgentConfig: agentConfig,
-
-		Containers:  []ContainerConfig{container},
-		Annotations: sandboxAnnotations,
-
-		ProxyType: NoopProxyType,
-	}
-
-	return sandboxConfig
-}
-
-func newTestSandboxConfigHyperstartAgentDefaultNetwork() SandboxConfig {
-	// Define the container command and bundle.
-	container := ContainerConfig{
-		ID:          containerID,
-		RootFs:      RootFs{Target: filepath.Join(testDir, testBundle), Mounted: true},
-		Cmd:         newBasicTestCmd(),
-		Annotations: containerAnnotations,
-	}
-
-	// Sets the hypervisor configuration.
-	hypervisorConfig := HypervisorConfig{
-		KernelPath:     filepath.Join(testDir, testKernel),
-		ImagePath:      filepath.Join(testDir, testImage),
-		HypervisorPath: filepath.Join(testDir, testHypervisor),
-	}
-
-	agentConfig := HyperConfig{
-		SockCtlName: testHyperstartCtlSocket,
-		SockTtyName: testHyperstartTtySocket,
-	}
-
-	netConfig := NetworkConfig{}
-
-	sandboxConfig := SandboxConfig{
-		ID: testSandboxID,
-
-		HypervisorType:   MockHypervisor,
-		HypervisorConfig: hypervisorConfig,
-
-		AgentType:   HyperstartAgent,
-		AgentConfig: agentConfig,
-
-		NetworkConfig: netConfig,
-
-		Containers:  []ContainerConfig{container},
-		Annotations: sandboxAnnotations,
-
-		ProxyType: NoopProxyType,
-	}
-
-	return sandboxConfig
-}
-
 func newTestSandboxConfigKataAgent() SandboxConfig {
 	// Sets the hypervisor configuration.
 	hypervisorConfig := HypervisorConfig{
@@ -225,39 +143,6 @@ func testGenerateCCProxySockDir() (string, error) {
 	}
 
 	return dir, nil
-}
-
-func TestCreateSandboxHyperstartAgentSuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledAsNonRoot)
-	}
-
-	defer cleanUp()
-
-	config := newTestSandboxConfigHyperstartAgent()
-
-	sockDir, err := testGenerateCCProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(sockDir)
-
-	testCCProxySockPath := fmt.Sprintf(testCCProxySockPathTempl, sockDir)
-	noopProxyURL = testCCProxyURLUnixScheme + testCCProxySockPath
-	proxy := mock.NewCCProxyMock(t, testCCProxySockPath)
-	proxy.Start()
-	defer proxy.Stop()
-
-	p, err := CreateSandbox(context.Background(), config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
-
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
-	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
 }
 
 func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
@@ -340,51 +225,6 @@ func TestDeleteSandboxNoopAgentSuccessful(t *testing.T) {
 	}
 }
 
-func TestDeleteSandboxHyperstartAgentSuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledAsNonRoot)
-	}
-
-	defer cleanUp()
-
-	config := newTestSandboxConfigHyperstartAgent()
-
-	sockDir, err := testGenerateCCProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(sockDir)
-
-	testCCProxySockPath := fmt.Sprintf(testCCProxySockPathTempl, sockDir)
-	noopProxyURL = testCCProxyURLUnixScheme + testCCProxySockPath
-	proxy := mock.NewCCProxyMock(t, testCCProxySockPath)
-	proxy.Start()
-	defer proxy.Stop()
-
-	ctx := context.Background()
-
-	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
-
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
-	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	p, err = DeleteSandbox(ctx, p.ID())
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = os.Stat(sandboxDir)
-	if err == nil {
-		t.Fatal(err)
-	}
-}
-
 func TestDeleteSandboxKataAgentSuccessful(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip(testDisabledAsNonRoot)
@@ -460,42 +300,6 @@ func TestStartSandboxNoopAgentSuccessful(t *testing.T) {
 	}
 }
 
-func TestStartSandboxHyperstartAgentSuccessful(t *testing.T) {
-	defer cleanUp()
-
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledAsNonRoot)
-	}
-
-	config := newTestSandboxConfigHyperstartAgent()
-
-	sockDir, err := testGenerateCCProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(sockDir)
-
-	testCCProxySockPath := fmt.Sprintf(testCCProxySockPathTempl, sockDir)
-	noopProxyURL = testCCProxyURLUnixScheme + testCCProxySockPath
-	proxy := mock.NewCCProxyMock(t, testCCProxySockPath)
-	proxy.Start()
-	defer proxy.Stop()
-
-	hyperConfig := config.AgentConfig.(HyperConfig)
-	config.AgentConfig = hyperConfig
-
-	ctx := context.Background()
-	p, _, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
-
-	pImpl, ok := p.(*Sandbox)
-	assert.True(t, ok)
-
-	bindUnmountAllRootfs(ctx, defaultSharedDir, pImpl)
-}
-
 func TestStartSandboxKataAgentSuccessful(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip(testDisabledAsNonRoot)
@@ -534,7 +338,10 @@ func TestStartSandboxKataAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(ctx, defaultSharedDir, pImpl)
+	// TODO: defaultSharedDir is a hyper var = /run/hyper/shared/sandboxes
+	// do we need to unmount sandboxes and containers?
+	bindUnmountAllRootfs(ctx, testDir, pImpl)
+
 }
 
 func TestStartSandboxFailing(t *testing.T) {
@@ -627,42 +434,6 @@ func TestPauseThenResumeSandboxNoopAgentSuccessful(t *testing.T) {
 	}
 }
 
-func TestStopSandboxHyperstartAgentSuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledAsNonRoot)
-	}
-
-	defer cleanUp()
-
-	config := newTestSandboxConfigHyperstartAgent()
-
-	sockDir, err := testGenerateCCProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(sockDir)
-
-	testCCProxySockPath := fmt.Sprintf(testCCProxySockPathTempl, sockDir)
-	noopProxyURL = testCCProxyURLUnixScheme + testCCProxySockPath
-	proxy := mock.NewCCProxyMock(t, testCCProxySockPath)
-	proxy.Start()
-	defer proxy.Stop()
-
-	hyperConfig := config.AgentConfig.(HyperConfig)
-	config.AgentConfig = hyperConfig
-
-	ctx := context.Background()
-	p, _, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
-
-	p, err = StopSandbox(ctx, p.ID())
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestStopSandboxKataAgentSuccessful(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip(testDisabledAsNonRoot)
@@ -733,48 +504,6 @@ func TestRunSandboxNoopAgentSuccessful(t *testing.T) {
 	}
 }
 
-func TestRunSandboxHyperstartAgentSuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledAsNonRoot)
-	}
-
-	defer cleanUp()
-
-	config := newTestSandboxConfigHyperstartAgent()
-
-	sockDir, err := testGenerateCCProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(sockDir)
-
-	testCCProxySockPath := fmt.Sprintf(testCCProxySockPathTempl, sockDir)
-	noopProxyURL = testCCProxyURLUnixScheme + testCCProxySockPath
-	proxy := mock.NewCCProxyMock(t, testCCProxySockPath)
-	proxy.Start()
-	defer proxy.Stop()
-
-	hyperConfig := config.AgentConfig.(HyperConfig)
-	config.AgentConfig = hyperConfig
-
-	ctx := context.Background()
-	p, err := RunSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
-
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
-	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pImpl, ok := p.(*Sandbox)
-	assert.True(t, ok)
-
-	bindUnmountAllRootfs(ctx, defaultSharedDir, pImpl)
-}
-
 func TestRunSandboxKataAgentSuccessful(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip(testDisabledAsNonRoot)
@@ -819,7 +548,7 @@ func TestRunSandboxKataAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(ctx, defaultSharedDir, pImpl)
+	bindUnmountAllRootfs(ctx, testDir, pImpl)
 }
 
 func TestRunSandboxFailing(t *testing.T) {
@@ -1322,118 +1051,6 @@ func TestStopContainerNoopAgentSuccessful(t *testing.T) {
 	}
 }
 
-func TestStartStopContainerHyperstartAgentSuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledAsNonRoot)
-	}
-
-	defer cleanUp()
-
-	contID := "100"
-	config := newTestSandboxConfigHyperstartAgent()
-
-	sockDir, err := testGenerateCCProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(sockDir)
-
-	testCCProxySockPath := fmt.Sprintf(testCCProxySockPathTempl, sockDir)
-	noopProxyURL = testCCProxyURLUnixScheme + testCCProxySockPath
-	proxy := mock.NewCCProxyMock(t, testCCProxySockPath)
-	proxy.Start()
-	defer proxy.Stop()
-
-	hyperConfig := config.AgentConfig.(HyperConfig)
-	config.AgentConfig = hyperConfig
-
-	ctx := context.Background()
-
-	p, sandboxDir, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
-
-	contConfig := newTestContainerConfigNoop(contID)
-
-	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
-
-	contDir := filepath.Join(sandboxDir, contID)
-	_, err = os.Stat(contDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	c, err = StartContainer(ctx, p.ID(), contID)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
-
-	c, err = StopContainer(ctx, p.ID(), contID)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
-
-	pImpl, ok := p.(*Sandbox)
-	assert.True(t, ok)
-
-	bindUnmountAllRootfs(ctx, defaultSharedDir, pImpl)
-}
-
-func TestStartStopSandboxHyperstartAgentSuccessfulWithDefaultNetwork(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledAsNonRoot)
-	}
-
-	defer cleanUp()
-
-	config := newTestSandboxConfigHyperstartAgentDefaultNetwork()
-
-	n, err := ns.NewNS()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer n.Close()
-
-	config.NetworkConfig.NetNSPath = n.Path()
-	config.NetworkConfig.NetNsCreated = true
-
-	sockDir, err := testGenerateCCProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(sockDir)
-
-	testCCProxySockPath := fmt.Sprintf(testCCProxySockPathTempl, sockDir)
-	noopProxyURL = testCCProxyURLUnixScheme + testCCProxySockPath
-	proxy := mock.NewCCProxyMock(t, testCCProxySockPath)
-	proxy.Start()
-	defer proxy.Stop()
-
-	hyperConfig := config.AgentConfig.(HyperConfig)
-	config.AgentConfig = hyperConfig
-
-	ctx := context.Background()
-
-	p, _, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
-
-	v, err := StopSandbox(ctx, p.ID())
-	if v == nil || err != nil {
-		t.Fatal(err)
-	}
-
-	v, err = DeleteSandbox(ctx, p.ID())
-	if v == nil || err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestStopContainerFailingNoSandbox(t *testing.T) {
 	defer cleanUp()
 
@@ -1547,74 +1164,6 @@ func TestEnterContainerNoopAgentSuccessful(t *testing.T) {
 	if c == nil || err != nil {
 		t.Fatal(err)
 	}
-}
-
-func TestEnterContainerHyperstartAgentSuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledAsNonRoot)
-	}
-
-	defer cleanUp()
-
-	contID := "100"
-	config := newTestSandboxConfigHyperstartAgent()
-
-	sockDir, err := testGenerateCCProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(sockDir)
-
-	testCCProxySockPath := fmt.Sprintf(testCCProxySockPathTempl, sockDir)
-	noopProxyURL = testCCProxyURLUnixScheme + testCCProxySockPath
-	proxy := mock.NewCCProxyMock(t, testCCProxySockPath)
-	proxy.Start()
-	defer proxy.Stop()
-
-	hyperConfig := config.AgentConfig.(HyperConfig)
-	config.AgentConfig = hyperConfig
-
-	ctx := context.Background()
-
-	p, sandboxDir, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
-
-	contConfig := newTestContainerConfigNoop(contID)
-
-	_, _, err = CreateContainer(ctx, p.ID(), contConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	contDir := filepath.Join(sandboxDir, contID)
-	_, err = os.Stat(contDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = StartContainer(ctx, p.ID(), contID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cmd := newBasicTestCmd()
-
-	_, _, _, err = EnterContainer(ctx, p.ID(), contID, cmd)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = StopContainer(ctx, p.ID(), contID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	pImpl, ok := p.(*Sandbox)
-	assert.True(t, ok)
-
-	bindUnmountAllRootfs(ctx, defaultSharedDir, pImpl)
 }
 
 func TestEnterContainerFailingNoSandbox(t *testing.T) {
@@ -2195,27 +1744,6 @@ func createStartStopDeleteContainers(b *testing.B, sandboxConfig SandboxConfig, 
 	}
 }
 
-func BenchmarkCreateStartStopDeleteSandboxQemuHypervisorHyperstartAgentNetworkNoop(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		sandboxConfig := createNewSandboxConfig(QemuHypervisor, HyperstartAgent, HyperConfig{})
-
-		sockDir, err := testGenerateCCProxySockDir()
-		if err != nil {
-			b.Fatal(err)
-		}
-		defer os.RemoveAll(sockDir)
-
-		var t testing.T
-		testCCProxySockPath := fmt.Sprintf(testCCProxySockPathTempl, sockDir)
-		noopProxyURL = testCCProxyURLUnixScheme + testCCProxySockPath
-		proxy := mock.NewCCProxyMock(&t, testCCProxySockPath)
-		proxy.Start()
-		defer proxy.Stop()
-
-		createStartStopDeleteSandbox(b, sandboxConfig)
-	}
-}
-
 func BenchmarkCreateStartStopDeleteSandboxQemuHypervisorNoopAgentNetworkNoop(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		sandboxConfig := createNewSandboxConfig(QemuHypervisor, NoopAgentType, nil)
@@ -2227,50 +1755,6 @@ func BenchmarkCreateStartStopDeleteSandboxMockHypervisorNoopAgentNetworkNoop(b *
 	for i := 0; i < b.N; i++ {
 		sandboxConfig := createNewSandboxConfig(MockHypervisor, NoopAgentType, nil)
 		createStartStopDeleteSandbox(b, sandboxConfig)
-	}
-}
-
-func BenchmarkStartStop1ContainerQemuHypervisorHyperstartAgentNetworkNoop(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		sandboxConfig := createNewSandboxConfig(QemuHypervisor, HyperstartAgent, HyperConfig{})
-		contConfigs := createNewContainerConfigs(1)
-
-		sockDir, err := testGenerateCCProxySockDir()
-		if err != nil {
-			b.Fatal(err)
-		}
-		defer os.RemoveAll(sockDir)
-
-		var t testing.T
-		testCCProxySockPath := fmt.Sprintf(testCCProxySockPathTempl, sockDir)
-		noopProxyURL = testCCProxyURLUnixScheme + testCCProxySockPath
-		proxy := mock.NewCCProxyMock(&t, testCCProxySockPath)
-		proxy.Start()
-		defer proxy.Stop()
-
-		createStartStopDeleteContainers(b, sandboxConfig, contConfigs)
-	}
-}
-
-func BenchmarkStartStop10ContainerQemuHypervisorHyperstartAgentNetworkNoop(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		sandboxConfig := createNewSandboxConfig(QemuHypervisor, HyperstartAgent, HyperConfig{})
-		contConfigs := createNewContainerConfigs(10)
-
-		sockDir, err := testGenerateCCProxySockDir()
-		if err != nil {
-			b.Fatal(err)
-		}
-		defer os.RemoveAll(sockDir)
-
-		var t testing.T
-		testCCProxySockPath := fmt.Sprintf(testCCProxySockPathTempl, sockDir)
-		noopProxyURL = testCCProxyURLUnixScheme + testCCProxySockPath
-		proxy := mock.NewCCProxyMock(&t, testCCProxySockPath)
-		proxy.Start()
-		defer proxy.Stop()
-
-		createStartStopDeleteContainers(b, sandboxConfig, contConfigs)
 	}
 }
 

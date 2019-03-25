@@ -653,10 +653,6 @@ func TestAgentConfigure(t *testing.T) {
 	c := KataAgentConfig{}
 	id := "foobar"
 
-	invalidAgent := HyperConfig{}
-	err = k.configure(h, id, dir, true, invalidAgent)
-	assert.Error(err)
-
 	err = k.configure(h, id, dir, true, c)
 	assert.Nil(err)
 

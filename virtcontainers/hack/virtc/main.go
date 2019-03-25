@@ -76,18 +76,6 @@ var sandboxConfigFlags = []cli.Flag{
 		Usage: "the shim binary path",
 	},
 
-	cli.StringFlag{
-		Name:  "hyper-ctl-sock-name",
-		Value: "",
-		Usage: "the hyperstart control socket name",
-	},
-
-	cli.StringFlag{
-		Name:  "hyper-tty-sock-name",
-		Value: "",
-		Usage: "the hyperstart tty socket name",
-	},
-
 	cli.UintFlag{
 		Name:  "cpus",
 		Value: 0,
@@ -133,8 +121,6 @@ func buildKernelParams(config *vc.HypervisorConfig) error {
 func buildSandboxConfig(context *cli.Context) (vc.SandboxConfig, error) {
 	var agConfig interface{}
 
-	hyperCtlSockName := context.String("hyper-ctl-sock-name")
-	hyperTtySockName := context.String("hyper-tty-sock-name")
 	proxyPath := context.String("proxy-path")
 	shimPath := context.String("shim-path")
 	machineType := context.String("machine-type")
@@ -171,16 +157,7 @@ func buildSandboxConfig(context *cli.Context) (vc.SandboxConfig, error) {
 	}
 
 	netConfig := vc.NetworkConfig{}
-
-	switch *agentType {
-	case vc.HyperstartAgent:
-		agConfig = vc.HyperConfig{
-			SockCtlName: hyperCtlSockName,
-			SockTtyName: hyperTtySockName,
-		}
-	default:
-		agConfig = nil
-	}
+	agConfig = nil
 
 	proxyConfig := getProxyConfig(*proxyType, proxyPath)
 
