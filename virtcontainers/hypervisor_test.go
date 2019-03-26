@@ -444,7 +444,7 @@ type testNestedVMMData struct {
 	expected    bool
 }
 
-// nolint: unused
+// nolint: unused,deadcode
 func genericTestRunningOnVMM(t *testing.T, data []testNestedVMMData) {
 	for _, d := range data {
 		f, err := ioutil.TempFile("", "cpuinfo")

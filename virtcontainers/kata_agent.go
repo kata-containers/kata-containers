@@ -801,7 +801,7 @@ func constraintGRPCSpec(grpcSpec *grpc.Spec, systemdCgroup bool, passSeccomp boo
 
 	// Pass seccomp only if disable_guest_seccomp is set to false in
 	// configuration.toml and guest image is seccomp capable.
-	if passSeccomp == false {
+	if !passSeccomp {
 		grpcSpec.Linux.Seccomp = nil
 	}
 

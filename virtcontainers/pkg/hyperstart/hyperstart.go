@@ -261,7 +261,7 @@ func (h *Hyperstart) IsStarted() bool {
 
 	h.SetDeadline(time.Time{})
 
-	if ret == false {
+	if !ret {
 		h.CloseSockets()
 	}
 
@@ -423,7 +423,7 @@ func (h *Hyperstart) SendIoMessage(ttyMsg *TtyMessage) error {
 // CodeFromCmd translates a string command to its corresponding code.
 func (h *Hyperstart) CodeFromCmd(cmd string) (uint32, error) {
 	_, ok := CodeList[cmd]
-	if ok == false {
+	if !ok {
 		return math.MaxUint32, fmt.Errorf("unknown command '%s'", cmd)
 	}
 

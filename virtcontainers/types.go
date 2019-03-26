@@ -18,9 +18,5 @@ const (
 // IsSandbox determines if the container type can be considered as a sandbox.
 // We can consider a sandbox in case we have a PodSandbox or a RegularContainer.
 func (cType ContainerType) IsSandbox() bool {
-	if cType == PodSandbox {
-		return true
-	}
-
-	return false
+	return cType == PodSandbox
 }

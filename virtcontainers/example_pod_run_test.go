@@ -68,6 +68,4 @@ func Example_createAndStartSandbox() {
 	if err != nil {
 		fmt.Printf("Could not run sandbox: %s", err)
 	}
-
-	return
 }
