@@ -357,12 +357,13 @@ func (h hypervisor) getInitrdAndImage() (initrd string, image string, err error)
 	return
 }
 
-func (p proxy) path() string {
-	if p.Path == "" {
-		return defaultProxyPath
+func (p proxy) path() (string, error) {
+	path := p.Path
+	if path == "" {
+		path = defaultProxyPath
 	}
 
-	return p.Path
+	return ResolvePath(path)
 }
 
 func (p proxy) debug() bool {
@@ -606,8 +607,13 @@ func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oc
 			config.ProxyType = vc.KataProxyType
 		}
 
+		path, err := proxy.path()
+		if err != nil {
+			return err
+		}
+
 		config.ProxyConfig = vc.ProxyConfig{
-			Path:  proxy.path(),
+			Path:  path,
 			Debug: proxy.debug(),
 		}
 	}
