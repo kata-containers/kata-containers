@@ -23,7 +23,7 @@ get_packaged_qemu_commit() {
 	elif [ "$ID" == "fedora" ]; then
 		qemu_commit=$(sudo dnf --showduplicate list ${PACKAGED_QEMU}.${QEMU_ARCH} \
 			| awk '/'$PACKAGED_QEMU'/ {print $2}' | cut -d'-' -f1 | cut -d'.' -f4)
-	elif [ "$ID" == "centos" ]; then
+	elif [ "$ID" == "centos" ] || [ "$ID" == "rhel" ]; then
 		qemu_commit=$(sudo yum --showduplicate list $PACKAGED_QEMU \
 			| awk '/'$PACKAGED_QEMU'/ {print $2}' | cut -d'-' -f1 | cut -d'.' -f4)
 	elif [[ "$ID" =~ ^opensuse.*$ ]] || [ "$ID" == "sles" ]; then
@@ -44,7 +44,7 @@ install_packaged_qemu() {
 	elif [ "$ID"  == "fedora" ]; then
 		chronic sudo dnf remove -y "$PACKAGED_QEMU" || true
 		chronic sudo dnf install -y "$PACKAGED_QEMU" || rc=1
-	elif [ "$ID"  == "centos" ]; then
+	elif [ "$ID"  == "centos" ] || [ "$ID"  == "rhel" ]; then
 		chronic sudo yum remove -y "$PACKAGED_QEMU" || true
 		chronic sudo yum install -y "$PACKAGED_QEMU" || rc=1
 	elif [[ "$ID" =~ ^opensuse.*$ ]] || [ "$ID" == "sles" ]; then

@@ -271,6 +271,7 @@ check_collect_script()
 	[ -z "$cmdpath" ] && info "$msg not found" && return
 
 	info "Checking $msg"
+
 	sudo -E PATH="$PATH" chronic $cmd
 }
 
