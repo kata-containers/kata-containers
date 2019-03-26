@@ -327,7 +327,7 @@ func newConsole() (*os.File, string, error) {
 }
 
 func TestCCShimStartWithConsoleSuccessful(t *testing.T) {
-	cleanUp()
+	defer cleanUp()
 
 	master, console, err := newConsole()
 	t.Logf("Console created for tests:%s\n", console)

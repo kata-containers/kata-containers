@@ -1615,7 +1615,7 @@ func checkSandboxRemains() error {
 }
 
 func TestSandboxCreationFromConfigRollbackFromCreateSandbox(t *testing.T) {
-	cleanUp()
+	defer cleanUp()
 	assert := assert.New(t)
 	ctx := context.Background()
 	hConf := newHypervisorConfig(nil, nil)
