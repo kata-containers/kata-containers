@@ -1122,13 +1122,43 @@ func TestHypervisorDefaultsGuestHookPath(t *testing.T) {
 }
 
 func TestProxyDefaults(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpdir, err := ioutil.TempDir(testDir, "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
+	testProxyPath := filepath.Join(tmpdir, "proxy")
+	testProxyLinkPath := filepath.Join(tmpdir, "proxy-link")
+
+	err = createEmptyFile(testProxyPath)
+	assert.NoError(err)
+
+	err = syscall.Symlink(testProxyPath, testProxyLinkPath)
+	assert.NoError(err)
+
+	savedProxyPath := defaultProxyPath
+
+	defer func() {
+		defaultProxyPath = savedProxyPath
+	}()
+
+	defaultProxyPath = testProxyPath
 	p := proxy{}
+	path, err := p.path()
+	assert.NoError(err)
+	assert.Equal(path, defaultProxyPath, "default proxy path wrong")
 
-	assert.Equal(t, p.path(), defaultProxyPath, "default proxy path wrong")
+	// test path resolution
+	defaultProxyPath = testProxyLinkPath
+	p = proxy{}
+	path, err = p.path()
+	assert.NoError(err)
+	assert.Equal(path, testProxyPath)
 
-	path := "/foo/bar/baz/proxy"
-	p.Path = path
-	assert.Equal(t, p.path(), path, "custom proxy path wrong")
+	assert.False(p.debug())
+	p.Debug = true
+	assert.True(p.debug())
 }
 
 func TestShimDefaults(t *testing.T) {
