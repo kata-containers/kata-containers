@@ -191,7 +191,7 @@ func (dm *deviceManager) DetachDevice(id string, dr api.DeviceReceiver) error {
 	if !ok {
 		return ErrDeviceNotExist
 	}
-	if d.GetAttachCount() <= 0 {
+	if d.GetAttachCount() == 0 {
 		return ErrDeviceNotAttached
 	}
 

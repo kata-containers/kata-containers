@@ -120,15 +120,15 @@ func TestQemuArchBaseKernelParameters(t *testing.T) {
 	qemuArchBase := newQemuArchBase()
 
 	// with debug params
-	expectedParams := []Param(qemuArchBaseKernelParams)
-	debugParams := []Param(qemuArchBaseKernelParamsDebug)
+	expectedParams := qemuArchBaseKernelParams
+	debugParams := qemuArchBaseKernelParamsDebug
 	expectedParams = append(expectedParams, debugParams...)
 	p := qemuArchBase.kernelParameters(true)
 	assert.Equal(expectedParams, p)
 
 	// with non-debug params
-	expectedParams = []Param(qemuArchBaseKernelParams)
-	nonDebugParams := []Param(qemuArchBaseKernelParamsNonDebug)
+	expectedParams = qemuArchBaseKernelParams
+	nonDebugParams := qemuArchBaseKernelParamsNonDebug
 	expectedParams = append(expectedParams, nonDebugParams...)
 	p = qemuArchBase.kernelParameters(false)
 	assert.Equal(expectedParams, p)

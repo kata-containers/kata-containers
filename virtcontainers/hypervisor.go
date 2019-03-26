@@ -66,14 +66,8 @@ const (
 	// NetDev is the network device type.
 	netDev
 
-	// SerialDev is the serial device type.
-	serialDev // nolint: varcheck,unused
-
 	// BlockDev is the block device type.
 	blockDev
-
-	// ConsoleDev is the console device type.
-	consoleDev // nolint: varcheck,unused
 
 	// SerialPortDev is the serial port device type.
 	serialPortDev
@@ -407,11 +401,7 @@ func (conf *HypervisorConfig) assetPath(t types.AssetType) (string, error) {
 
 func (conf *HypervisorConfig) isCustomAsset(t types.AssetType) bool {
 	_, ok := conf.customAssets[t]
-	if ok {
-		return true
-	}
-
-	return false
+	return ok
 }
 
 // KernelAssetPath returns the guest kernel path
@@ -476,12 +466,12 @@ func SerializeParams(params []Param, delim string) []string {
 		if p.Key == "" && p.Value == "" {
 			continue
 		} else if p.Key == "" {
-			parameters = append(parameters, fmt.Sprintf("%s", p.Value))
+			parameters = append(parameters, fmt.Sprint(p.Value))
 		} else if p.Value == "" {
-			parameters = append(parameters, fmt.Sprintf("%s", p.Key))
+			parameters = append(parameters, fmt.Sprint(p.Key))
 		} else if delim == "" {
-			parameters = append(parameters, fmt.Sprintf("%s", p.Key))
-			parameters = append(parameters, fmt.Sprintf("%s", p.Value))
+			parameters = append(parameters, fmt.Sprint(p.Key))
+			parameters = append(parameters, fmt.Sprint(p.Value))
 		} else {
 			parameters = append(parameters, fmt.Sprintf("%s%s%s", p.Key, delim, p.Value))
 		}

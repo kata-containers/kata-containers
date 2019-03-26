@@ -20,10 +20,7 @@ type Capabilities struct {
 
 // IsBlockDeviceSupported tells if an hypervisor supports block devices.
 func (caps *Capabilities) IsBlockDeviceSupported() bool {
-	if caps.flags&blockDeviceSupport != 0 {
-		return true
-	}
-	return false
+	return caps.flags&blockDeviceSupport != 0
 }
 
 // SetBlockDeviceSupport sets the block device support capability to true.
@@ -33,10 +30,7 @@ func (caps *Capabilities) SetBlockDeviceSupport() {
 
 // IsBlockDeviceHotplugSupported tells if an hypervisor supports hotplugging block devices.
 func (caps *Capabilities) IsBlockDeviceHotplugSupported() bool {
-	if caps.flags&blockDeviceHotplugSupport != 0 {
-		return true
-	}
-	return false
+	return caps.flags&blockDeviceHotplugSupport != 0
 }
 
 // SetBlockDeviceHotplugSupport sets the block device hotplugging capability to true.
@@ -46,10 +40,7 @@ func (caps *Capabilities) SetBlockDeviceHotplugSupport() {
 
 // IsMultiQueueSupported tells if an hypervisor supports device multi queue support.
 func (caps *Capabilities) IsMultiQueueSupported() bool {
-	if caps.flags&multiQueueSupport != 0 {
-		return true
-	}
-	return false
+	return caps.flags&multiQueueSupport != 0
 }
 
 // SetMultiQueueSupport sets the device multi queue capability to true.

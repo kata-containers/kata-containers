@@ -205,7 +205,7 @@ func (s *Sandbox) Logger() *logrus.Entry {
 // Annotations returns any annotation that a user could have stored through the sandbox.
 func (s *Sandbox) Annotations(key string) (string, error) {
 	value, exist := s.config.Annotations[key]
-	if exist == false {
+	if !exist {
 		return "", fmt.Errorf("Annotations key %s does not exist", key)
 	}
 
@@ -492,7 +492,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	span, ctx := trace(ctx, "newSandbox")
 	defer span.Finish()
 
-	if sandboxConfig.valid() == false {
+	if !sandboxConfig.valid() {
 		return nil, fmt.Errorf("Invalid sandbox configuration")
 	}
 
@@ -1037,7 +1037,7 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 	s.config.Containers = append(s.config.Containers, contConfig)
 
 	// Sandbox is reponsable to update VM resources needed by Containers
-	s.updateResources()
+	err = s.updateResources()
 	if err != nil {
 		return nil, err
 	}
