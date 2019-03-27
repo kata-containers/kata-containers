@@ -94,9 +94,9 @@ func (m *mockHypervisor) resizeVCPUs(cpus uint32) (uint32, uint32, error) {
 func (m *mockHypervisor) disconnect() {
 }
 
-func (m *mockHypervisor) getThreadIDs() (*threadIDs, error) {
-	vcpus := []int{os.Getpid()}
-	return &threadIDs{vcpus}, nil
+func (m *mockHypervisor) getThreadIDs() (vcpuThreadIDs, error) {
+	vcpus := map[int]int{0: os.Getpid()}
+	return vcpuThreadIDs{vcpus}, nil
 }
 
 func (m *mockHypervisor) cleanup() error {

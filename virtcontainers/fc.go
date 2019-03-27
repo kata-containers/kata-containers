@@ -700,10 +700,10 @@ func (fc *firecracker) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, newVCP
 // Need to see if there's an easy way to ask firecracker for thread ids associated with
 // the vCPUs.  Issue opened to ask for per vCPU thread IDs:
 // https://github.com/firecracker-microvm/firecracker/issues/718
-func (fc *firecracker) getThreadIDs() (*threadIDs, error) {
+func (fc *firecracker) getThreadIDs() (vcpuThreadIDs, error) {
 	//TODO: this may not be exactly supported in Firecracker. Closest is cpu-template as part
 	// of get /machine-config
-	return nil, nil
+	return vcpuThreadIDs{}, nil
 }
 
 func (fc *firecracker) cleanup() error {

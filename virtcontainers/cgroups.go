@@ -227,7 +227,7 @@ func (s *Sandbox) constrainHypervisor(cgroup cgroups.Cgroup) error {
 	if err != nil {
 		return fmt.Errorf("failed to get thread ids from hypervisor: %v", err)
 	}
-	if tids == nil || len(tids.vcpus) == 0 {
+	if len(tids.vcpus) == 0 {
 		// If there's no tid returned from the hypervisor, this is not
 		// a bug. It simply means there is nothing to constrain, hence
 		// let's return without any error from here.

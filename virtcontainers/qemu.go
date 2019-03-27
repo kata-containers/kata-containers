@@ -1509,28 +1509,29 @@ func genericMemoryTopology(memoryMb, hostMemoryMb uint64, slots uint8, memoryOff
 	return memory
 }
 
-func (q *qemu) getThreadIDs() (*threadIDs, error) {
+func (q *qemu) getThreadIDs() (vcpuThreadIDs, error) {
 	span, _ := q.trace("getThreadIDs")
 	defer span.Finish()
 
+	tid := vcpuThreadIDs{}
 	err := q.qmpSetup()
 	if err != nil {
-		return nil, err
+		return tid, err
 	}
 
 	cpuInfos, err := q.qmpMonitorCh.qmp.ExecQueryCpus(q.qmpMonitorCh.ctx)
 	if err != nil {
 		q.Logger().WithError(err).Error("failed to query cpu infos")
-		return nil, err
+		return tid, err
 	}
 
-	var tid threadIDs
+	tid.vcpus = make(map[int]int, len(cpuInfos))
 	for _, i := range cpuInfos {
 		if i.ThreadID > 0 {
-			tid.vcpus = append(tid.vcpus, i.ThreadID)
+			tid.vcpus[i.CPU] = i.ThreadID
 		}
 	}
-	return &tid, nil
+	return tid, nil
 }
 
 func calcHotplugMemMiBSize(mem uint32, memorySectionSizeMB uint32) (uint32, error) {
