@@ -54,7 +54,10 @@ install_docker() {
 	docker_version=$(get_version "externals.docker.version")
 	docker_version=${docker_version/v/}
 	docker_version=${docker_version/-*/}
-	if ! sudo docker version | grep -q "$docker_version" && [ "$CI" == true ]; then
+
+	sudo systemctl restart docker
+
+	if ( ! sudo docker version | grep -q "$docker_version" ) && [ "$CI" == true ]; then
 		"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker install -f
 	fi
 }
