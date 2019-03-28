@@ -317,5 +317,14 @@ gen_clean_arch() {
 	fi
 	info "Remove Kata package repo registrations"
 	delete_kata_repo_registrations
+
+	info "Clean GOCACHE"
+	if command -v go > /dev/null; then
+		GOCACHE=${GOCACHE:-$(go env GOCACHE)}
+	else
+		# if go isn't installed, try default dir
+		GOCACHE=${GOCACHE:-$HOME/.cache/go-build}
+	fi
+	[ -d "$GOCACHE" ] && sudo rm -rf ${GOCACHE}/*
 }
 
