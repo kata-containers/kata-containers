@@ -1119,6 +1119,8 @@ func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) []*grpc.Storage
 		if mnt.Type == kataEphemeralDevType {
 			// Set the mount source path to a path that resides inside the VM
 			mounts[idx].Source = filepath.Join(ephemeralPath, filepath.Base(mnt.Source))
+			// Set the mount type to "bind"
+			mounts[idx].Type = "bind"
 
 			// Create a storage struct so that kata agent is able to create
 			// tmpfs backed volume inside the VM
