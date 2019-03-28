@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 
+	pb "github.com/kata-containers/runtime/protocols/cache"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/factory/base"
 	"github.com/kata-containers/runtime/virtcontainers/factory/cache"
@@ -232,6 +233,11 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 // Config returns base factory config.
 func (f *factory) Config() vc.VMConfig {
 	return f.base.Config()
+}
+
+// GetVMStatus returns the status of the paused VM created by the base factory.
+func (f *factory) GetVMStatus() []*pb.GrpcVMStatus {
+	return f.base.GetVMStatus()
 }
 
 // GetBaseVM returns a paused VM created by the base factory.

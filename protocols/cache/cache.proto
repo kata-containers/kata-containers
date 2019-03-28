@@ -13,6 +13,7 @@ import "google/protobuf/empty.proto";
 service CacheService {
     rpc Config(google.protobuf.Empty) returns (GrpcVMConfig);
     rpc GetBaseVM(google.protobuf.Empty) returns (GrpcVM);
+    rpc Status(google.protobuf.Empty) returns (GrpcStatus);
     rpc Quit(google.protobuf.Empty) returns (google.protobuf.Empty);
 }
 
@@ -33,4 +34,17 @@ message GrpcVM {
     uint32 memory = 6;
 
     uint32 cpuDelta = 7;
+}
+
+message GrpcStatus {
+    int64 pid = 1;
+
+    repeated GrpcVMStatus vmstatus = 2;
+}
+
+message GrpcVMStatus {
+    int64 pid = 1;
+
+    uint32 cpu = 2;
+    uint32 memory = 3;
 }

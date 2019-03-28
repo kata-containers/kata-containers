@@ -91,6 +91,14 @@ func (s *cacheServer) Quit(ctx context.Context, empty *types.Empty) (*types.Empt
 	return nil, nil
 }
 
+func (s *cacheServer) Status(ctx context.Context, empty *types.Empty) (*pb.GrpcStatus, error) {
+	stat := pb.GrpcStatus{
+		Pid:      int64(os.Getpid()),
+		Vmstatus: s.factory.GetVMStatus(),
+	}
+	return &stat, nil
+}
+
 func getUnixListener(path string) (net.Listener, error) {
 	err := os.MkdirAll(filepath.Dir(path), 0755)
 	if err != nil {
@@ -286,6 +294,23 @@ var statusFactoryCommand = cli.Command{
 			return errors.New("invalid runtime config")
 		}
 
+		if runtimeConfig.FactoryConfig.VMCacheNumber > 0 {
+			conn, err := grpc.Dial(fmt.Sprintf("unix://%s", runtimeConfig.FactoryConfig.VMCacheEndpoint), grpc.WithInsecure())
+			if err != nil {
+				fmt.Fprintln(defaultOutputFile, errors.Wrapf(err, "failed to connect %q", runtimeConfig.FactoryConfig.VMCacheEndpoint))
+			} else {
+				defer conn.Close()
+				status, err := pb.NewCacheServiceClient(conn).Status(ctx, &types.Empty{})
+				if err != nil {
+					fmt.Fprintln(defaultOutputFile, errors.Wrapf(err, "failed to call gRPC Status\n"))
+				} else {
+					fmt.Fprintf(defaultOutputFile, "VM cache server pid = %d\n", status.Pid)
+					for _, vs := range status.Vmstatus {
+						fmt.Fprintf(defaultOutputFile, "VM pid = %d Cpu = %d Memory = %dMiB\n", vs.Pid, vs.Cpu, vs.Memory)
+					}
+				}
+			}
+		}
 		if runtimeConfig.FactoryConfig.Template {
 			factoryConfig := vf.Config{
 				Template: true,

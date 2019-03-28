@@ -9,6 +9,7 @@ package direct
 import (
 	"context"
 
+	pb "github.com/kata-containers/runtime/protocols/cache"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/factory/base"
 )
@@ -45,4 +46,9 @@ func (d *direct) GetBaseVM(ctx context.Context, config vc.VMConfig) (*vc.VM, err
 
 // CloseFactory closes the direct vm factory.
 func (d *direct) CloseFactory(ctx context.Context) {
+}
+
+// GetVMStatus is not supported
+func (d *direct) GetVMStatus() []*pb.GrpcVMStatus {
+	panic("ERROR: package direct does not support GetVMStatus")
 }
