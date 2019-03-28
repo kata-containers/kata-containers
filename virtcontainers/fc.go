@@ -7,34 +7,31 @@ package virtcontainers
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"net/url"
 	"os/exec"
 	"path/filepath"
-
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
+	"github.com/firecracker-microvm/firecracker-go-sdk/client"
+	models "github.com/firecracker-microvm/firecracker-go-sdk/client/models"
+	ops "github.com/firecracker-microvm/firecracker-go-sdk/client/operations"
+	httptransport "github.com/go-openapi/runtime/client"
+	"github.com/go-openapi/strfmt"
 	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
-
-	"net"
-	"net/http"
-
-	"github.com/go-openapi/strfmt"
-
-	"github.com/firecracker-microvm/firecracker-go-sdk/client"
-	models "github.com/firecracker-microvm/firecracker-go-sdk/client/models"
-	ops "github.com/firecracker-microvm/firecracker-go-sdk/client/operations"
-	httptransport "github.com/go-openapi/runtime/client"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
 type vmmState uint8
@@ -694,16 +691,42 @@ func (fc *firecracker) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, newVCP
 	return 0, 0, nil
 }
 
-// this is used to apply cgroup information on the host. not sure how necessary this
-// is in the first pass.
+// This is used to apply cgroup information on the host.
 //
-// Need to see if there's an easy way to ask firecracker for thread ids associated with
-// the vCPUs.  Issue opened to ask for per vCPU thread IDs:
-// https://github.com/firecracker-microvm/firecracker/issues/718
+// As suggested by https://github.com/firecracker-microvm/firecracker/issues/718,
+// let's use `ps -T -p <pid>` to get fc vcpu info.
 func (fc *firecracker) getThreadIDs() (vcpuThreadIDs, error) {
-	//TODO: this may not be exactly supported in Firecracker. Closest is cpu-template as part
-	// of get /machine-config
-	return vcpuThreadIDs{}, nil
+	var vcpuInfo vcpuThreadIDs
+
+	vcpuInfo.vcpus = make(map[int]int)
+	parent, err := utils.NewProc(fc.info.PID)
+	if err != nil {
+		return vcpuInfo, err
+	}
+	children, err := parent.Children()
+	if err != nil {
+		return vcpuInfo, err
+	}
+	for _, child := range children {
+		comm, err := child.Comm()
+		if err != nil {
+			return vcpuInfo, errors.New("Invalid fc thread info")
+		}
+		if !strings.HasPrefix(comm, "fc_vcpu") {
+			continue
+		}
+		cpus := strings.SplitAfter(comm, "fc_vcpu")
+		if len(cpus) != 2 {
+			return vcpuInfo, errors.Errorf("Invalid fc thread info: %v", comm)
+		}
+		cpuID, err := strconv.ParseInt(cpus[1], 10, 32)
+		if err != nil {
+			return vcpuInfo, errors.Wrapf(err, "Invalid fc thread info: %v", comm)
+		}
+		vcpuInfo.vcpus[int(cpuID)] = child.PID
+	}
+
+	return vcpuInfo, nil
 }
 
 func (fc *firecracker) cleanup() error {
