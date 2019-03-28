@@ -11,9 +11,6 @@ spec:
       run: php-apache-kata-qemu
   template:
     metadata:
-      annotations:
-        io.kubernetes.cri-o.TrustedSandbox: "false"
-        io.kubernetes.cri.untrusted-workload: "true"
       labels:
         run: php-apache-kata-qemu
     spec:
