@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	pb "github.com/kata-containers/runtime/protocols/cache"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/factory/base"
 	"github.com/kata-containers/runtime/virtcontainers/store"
@@ -76,6 +77,11 @@ func (t *template) GetBaseVM(ctx context.Context, config vc.VMConfig) (*vc.VM, e
 // CloseFactory cleans up the template VM.
 func (t *template) CloseFactory(ctx context.Context) {
 	t.close()
+}
+
+// GetVMStatus is not supported
+func (t *template) GetVMStatus() []*pb.GrpcVMStatus {
+	panic("ERROR: package template does not support GetVMStatus")
 }
 
 func (t *template) close() {

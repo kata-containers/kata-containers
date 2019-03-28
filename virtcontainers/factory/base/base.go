@@ -8,6 +8,7 @@ package base
 import (
 	"context"
 
+	pb "github.com/kata-containers/runtime/protocols/cache"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 )
 
@@ -19,6 +20,9 @@ import (
 type FactoryBase interface {
 	// Config returns base factory config.
 	Config() vc.VMConfig
+
+	// GetVMStatus returns the status of the paused VM created by the base factory.
+	GetVMStatus() []*pb.GrpcVMStatus
 
 	// GetBaseVM returns a paused VM created by the base factory.
 	GetBaseVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)

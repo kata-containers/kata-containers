@@ -5,12 +5,19 @@
 
 package virtcontainers
 
-import "context"
+import (
+	"context"
+
+	pb "github.com/kata-containers/runtime/protocols/cache"
+)
 
 // Factory controls how a new VM is created.
 type Factory interface {
 	// Config returns base factory config.
 	Config() VMConfig
+
+	// GetVMStatus returns the status of the paused VM created by the base factory.
+	GetVMStatus() []*pb.GrpcVMStatus
 
 	// GetVM gets a new VM from the factory.
 	GetVM(ctx context.Context, config VMConfig) (*VM, error)

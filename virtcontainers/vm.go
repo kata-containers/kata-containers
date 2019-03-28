@@ -484,3 +484,11 @@ func (v *VM) ToGrpc(config VMConfig) (*pb.GrpcVM, error) {
 		CpuDelta: v.cpuDelta,
 	}, nil
 }
+
+func (v *VM) GetVMStatus() *pb.GrpcVMStatus {
+	return &pb.GrpcVMStatus{
+		Pid:    int64(v.hypervisor.pid()),
+		Cpu:    v.cpu,
+		Memory: v.memory,
+	}
+}

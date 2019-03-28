@@ -9,6 +9,7 @@ package grpccache
 import (
 	"context"
 	"fmt"
+
 	types "github.com/gogo/protobuf/types"
 	pb "github.com/kata-containers/runtime/protocols/cache"
 	vc "github.com/kata-containers/runtime/virtcontainers"
@@ -59,4 +60,9 @@ func (g *grpccache) GetBaseVM(ctx context.Context, config vc.VMConfig) (*vc.VM, 
 
 // CloseFactory closes the direct vm factory.
 func (g *grpccache) CloseFactory(ctx context.Context) {
+}
+
+// GetVMStatus is not supported
+func (g *grpccache) GetVMStatus() []*pb.GrpcVMStatus {
+	panic("ERROR: package grpccache does not support GetVMStatus")
 }
