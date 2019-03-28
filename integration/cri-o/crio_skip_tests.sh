@@ -10,4 +10,6 @@
 declare -a skipCRIOTests=(
 'test "ctr oom"'
 'test "ctr stats output"'
+'test "ctr with run_as_username set to redis should get 101 as the gid for redis:alpine"'
+'test "ctr with run_as_user set to 100 should get 101 as the gid for redis:alpine"'
 );
