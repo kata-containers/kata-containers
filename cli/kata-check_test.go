@@ -27,14 +27,14 @@ type testModuleData struct {
 	contents string
 }
 
-// nolint: structcheck, unused
+// nolint: structcheck, unused, deadcode
 type testCPUData struct {
 	vendorID    string
 	flags       string
 	expectError bool
 }
 
-// nolint: structcheck, unused
+// nolint: structcheck, unused, deadcode
 type testCPUDetail struct {
 	contents       string
 	expectedVendor string
@@ -147,7 +147,7 @@ func makeCPUInfoFile(path, vendorID, flags string) error {
 	return ioutil.WriteFile(path, contents.Bytes(), testFileMode)
 }
 
-// nolint: unused
+// nolint: unused, deadcode
 func genericTestGetCPUDetails(t *testing.T, validVendor string, validModel string, validContents string, data []testCPUDetail) {
 	tmpdir, err := ioutil.TempDir("", "")
 	if err != nil {
