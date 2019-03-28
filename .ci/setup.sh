@@ -37,10 +37,13 @@ setup_distro_env() {
 		bash -f "${cidir}/setup_env_opensuse.sh"
 	elif [ "$ID" == sles ]; then
 		bash -f "${cidir}/setup_env_sles.sh"
+	elif [ "$ID" == rhel ]; then
+		bash -f "${cidir}/setup_env_rhel.sh"
 	else
 		die "ERROR: Unrecognised distribution: ${ID}."
 		exit 1
 	fi
+
 	sudo systemctl start haveged
 }
 

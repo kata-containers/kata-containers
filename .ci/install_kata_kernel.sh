@@ -57,7 +57,7 @@ get_packaged_kernel_version() {
 			awk '/'$packaged_kernel'/ {print $2}' |
 			tail -1 |
 			cut -d'-' -f1)
-	elif [ "$ID" == "centos" ]; then
+	elif [ "$ID" == "centos" ] || [ "$ID"  == "rhel" ]; then
 		kernel_version=$(sudo yum --showduplicate list $packaged_kernel | awk '/'$packaged_kernel'/ {print $2}' | cut -d'-' -f1)
 	fi
 
@@ -80,7 +80,7 @@ install_packaged_kernel(){
 		chronic sudo apt install -y "$packaged_kernel" || rc=1
 	elif [ "$ID"  == "fedora" ]; then
 		chronic sudo dnf install -y "$packaged_kernel" || rc=1
-	elif [ "$ID"  == "centos" ]; then
+	elif [ "$ID"  == "centos" ] || [ "$ID"  == "rhel" ]; then
 		chronic sudo yum install -y "$packaged_kernel" || rc=1
 	else
 		die "Unrecognized distro"
