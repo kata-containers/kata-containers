@@ -935,7 +935,7 @@ func checkNetNsConfig(config oci.RuntimeConfig) error {
 		if config.InterNetworkModel != vc.NetXConnectNoneModel {
 			return fmt.Errorf("config disable_new_netns only works with 'none' internetworking_model")
 		}
-	} else if config.ShimConfig.(vc.ShimConfig).Trace {
+	} else if shim, ok := config.ShimConfig.(vc.ShimConfig); ok && shim.Trace {
 		// Normally, the shim runs in a separate network namespace.
 		// But when tracing, the shim process needs to be able to talk
 		// to the Jaeger agent running in the host network namespace.
