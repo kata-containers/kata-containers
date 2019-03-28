@@ -305,6 +305,8 @@ if [ -z "$INSIDE_CONTAINER" ] ; then
 	trap error_handler ERR
 fi
 
+mkdir -p ${ROOTFS_DIR}
+
 if [ -n "${USE_DOCKER}" ] ; then
 	image_name="${distro}-rootfs-osbuilder"
 
@@ -329,6 +331,17 @@ if [ -n "${USE_DOCKER}" ] ; then
 	fi
 
 	docker_run_args+=" $(docker_extra_args $distro)"
+
+	# Relabel volumes so SELinux allows access (see docker-run(1))
+	if which selinuxenabled 2&>1 >/dev/null && selinuxenabled ; then
+		for volume_dir in "${script_dir}" \
+				  "${ROOTFS_DIR}" \
+				  "${script_dir}/../scripts" \
+				  "${kernel_mod_dir}" \
+				  "${GOPATH_LOCAL}"; do
+			chcon -Rt svirt_sandbox_file_t "$volume_dir"
+		done
+	fi
 
 	#Make sure we use a compatible runtime to build rootfs
 	# In case Clear Containers Runtime is installed we dont want to hit issue:
@@ -359,7 +372,6 @@ if [ -n "${USE_DOCKER}" ] ; then
 	exit $?
 fi
 
-mkdir -p ${ROOTFS_DIR}
 build_rootfs ${ROOTFS_DIR}
 pushd "${ROOTFS_DIR}" >> /dev/null
 if [ "$PWD" != "/" ] ; then
