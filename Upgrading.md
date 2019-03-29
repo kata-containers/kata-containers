@@ -142,7 +142,7 @@ standard package management tools for your distribution.
 
 Kata Containers requires additional resources to create a virtual machine
 container. These resources are called
-[Kata Containers assets](https://github.com/kata-containers/documentation/blob/master/design/architecture.md#assets),
+[Kata Containers assets](./design/architecture.md#assets),
 which comprise a guest kernel and a root filesystem or initrd image. This
 section describes when these components are updated.
 
