@@ -1109,8 +1109,8 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		coreID := fmt.Sprintf("%d", hc.Properties.Core)
 		threadID := fmt.Sprintf("%d", hc.Properties.Thread)
 
-		// If CPU type is IBM pSeries, we do not set socketID and threadID
-		if machine.Type == "pseries" {
+		// If CPU type is IBM pSeries or Z, we do not set socketID and threadID
+		if machine.Type == "pseries" || machine.Type == "s390-ccw-virtio" {
 			socketID = ""
 			threadID = ""
 		}
