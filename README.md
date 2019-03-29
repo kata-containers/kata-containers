@@ -35,7 +35,7 @@ Documents that help to understand and contribute to Kata Containers.
 
 ### Design and Implementations
 
-* [Kata Containers Architecture](architecture.md): Architectural overview of Kata Containers
+* [Kata Containers Architecture](design/architecture.md): Architectural overview of Kata Containers
 * [Kata Containers design](./design/README.md): More Kata Containers design documents
 
 ### How to Contribute

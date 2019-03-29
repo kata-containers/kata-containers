@@ -2,7 +2,7 @@
 
 Kata Containers design documentations, include the 
 
-- [Kata Containers architecture](../architecture.md)
+- [Kata Containers architecture](architecture.md)
 - Working scenarios of Kata Containers
 - [API Design of Kata Containers](kata-api-design.md)
 - Kata Containers lifecycle
