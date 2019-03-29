@@ -84,12 +84,11 @@
   revision = "3a0bb77429bd3a61596f5e8a3172445844342120"
 
 [[projects]]
-  branch = "master"
-  digest = "1:a6f5d43cbf707438b7d6e071c8574a043be3100071092d4c64f4981ed9641e87"
+  digest = "1:73f5d6c006826b458d9ab942581ed24486a3b3c69f5b3e6794f8bdfe8e306080"
   name = "github.com/containerd/cgroups"
   packages = ["."]
   pruneopts = "NUT"
-  revision = "dbea6f2bd41658b84b00417ceefa416b979cbf10"
+  revision = "5017d4e9a9cf2d4381db99eacd9baf84b95bfb14"
 
 [[projects]]
   branch = "master"
