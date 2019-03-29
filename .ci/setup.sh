@@ -142,5 +142,8 @@ main() {
 	sync
 	sudo -E PATH=$PATH bash -c "echo 3 > /proc/sys/vm/drop_caches"
 
+	if [ "$ID" == rhel ]; then
+		sudo -E PATH=$PATH bash -c "echo 1 > /proc/sys/fs/may_detach_mounts"
+	fi
 }
 main $*
