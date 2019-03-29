@@ -194,7 +194,9 @@ calculate_required_disk_size() {
 			continue
 		fi
 
-		format_loop "${device}" "${block_size}" "${fs_type}" > /dev/null 2>&1
+		if ! format_loop "${device}" "${block_size}" "${fs_type}" > /dev/null 2>&1 ; then
+			die "Could not format loop device: ${device}"
+		fi
 		mount "${device}p1" "${mount_dir}"
 		avail="$(df -h --output=avail "${mount_dir}" | tail -n1 | sed 's/[M ]//g')"
 		umount "${mount_dir}"
@@ -317,7 +319,9 @@ create_rootfs_image() {
 		die "Could not setup loop device"
 	fi
 
-	format_loop "${device}" "${block_size}" "${fs_type}"
+	if ! format_loop "${device}" "${block_size}" "${fs_type}"; then
+		die "Could not format loop device: ${device}"
+	fi
 
 	info "Mounting root partition"
 	readonly mount_dir=$(mktemp -d osbuilder-mount-dir.XXXX)
