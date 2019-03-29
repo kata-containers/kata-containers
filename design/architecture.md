@@ -544,8 +544,7 @@ dedicated master node) calls into a compute kubelet. This kubelet instance is
 responsible for managing the lifecycle of pods within the nodes and eventually relies
 on a container runtime to handle execution. The kubelet architecture decouples
 lifecycle management from container execution through the dedicated
-[`gRPC`](https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/apis/cri/runtime/v1alpha2/api.proto)
-based [Container Runtime Interface (CRI)](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/node/container-runtime-interface-v1.md).
+`gRPC` based [Container Runtime Interface (CRI)](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/node/container-runtime-interface-v1.md).
 
 In other words, a kubelet is a CRI client and expects a CRI implementation to
 handle the server side of the interface.

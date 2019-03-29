@@ -101,22 +101,22 @@ sudo systemctl daemon-reload
 sudo systemctl restart docker
 ```
 
-![kata zun image 1](kata-zun1.png)
+![kata zun image 1](./images/kata-zun1.png)
 
 Figure 1: Create a busybox container image
 
-![kata zun image 2](kata-zun2.png)
+![kata zun image 2](./images/kata-zun2.png)
 
 Figure 2: Select `kata-runtime` to use
 
-![kata zun image 3](kata-zun3.png)
+![kata zun image 3](./images/kata-zun3.png)
 
 Figure 3: Two busybox containers successfully launched
 
-![kata zun image 4](kata-zun4.png)
+![kata zun image 4](./images/kata-zun4.png)
 
 Figure 4: Test connectivity between Kata Containers
 
-![kata zun image 5](kata-zun5.png)
+![kata zun image 5](./images/kata-zun5.png)
 
 Figure 5: CLI for Zun
