@@ -130,5 +130,5 @@ the containers are removed automatically.
 [2]: https://github.com/kata-containers/proxy
 [3]: https://github.com/hashicorp/yamux
 [4]: https://wiki.qemu.org/Features/VirtioVsock
-[5]: https://github.com/kata-containers/documentation/blob/master/constraints/cpu.md#virtual-cpus-and-kubernetes-pods
+[5]: ./cpu-constraints.md#virtual-cpus-and-kubernetes-pods
 [6]: https://github.com/kata-containers/shim
