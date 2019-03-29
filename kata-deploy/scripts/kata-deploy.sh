@@ -71,6 +71,8 @@ function configure_crio() {
 		sed -i "/^\[$kata_qemu_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_qemu_path}\"#" $crio_conf_file 
 	else
 		cat <<EOT | tee -a "$crio_conf_file"
+
+# Path to the Kata Containers runtime binary that uses the QEMU hypervisor.
 [$kata_qemu_conf]
   runtime_path = "${kata_qemu_path}"
 EOT
@@ -81,6 +83,8 @@ EOT
 		sed -i "/^\[$kata_fc_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_fc_path}\"#" $crio_conf_file 
 	else
 		cat <<EOT | tee -a "$crio_conf_file"
+
+# Path to the Kata Containers runtime binary that uses the firecracker hypervisor.
 [$kata_fc_conf]
   runtime_path = "${kata_fc_path}"
 EOT
