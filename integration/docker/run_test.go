@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	. "github.com/kata-containers/tests"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -278,7 +279,9 @@ var _ = Describe("check dmesg logs errors", func() {
 
 	Context("Run to check dmesg log errors", func() {
 		It("should be empty", func() {
-			Skip("Issue: https://github.com/kata-containers/runtime/issues/1345")
+			if _, ok := KataConfig.Hypervisor[FirecrackerHypervisor]; ok {
+				Skip("https://github.com/kata-containers/runtime/issues/1450")
+			}
 			args = []string{"--name", id, DebianImage, "dmesg", "-l", "err"}
 			stdout, _, exitCode = dockerRun(args...)
 			Expect(exitCode).To(Equal(0))
