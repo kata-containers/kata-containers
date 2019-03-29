@@ -488,6 +488,14 @@
   version = "v1.0.0"
 
 [[projects]]
+  branch = "master"
+  digest = "1:7813f698f171bd7132b123364433e1b0362f7fdb4ed7f4a20df595a4c2410f8a"
+  name = "github.com/prometheus/procfs"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "af7bedc223fba51343f25a6fa7aba84355d0357a"
+
+[[projects]]
   digest = "1:31a930b9d0192b8d37755cd00b5bbd748ca007087235e6b976f7e4549331a2ce"
   name = "github.com/safchain/ethtool"
   packages = ["."]
@@ -727,6 +735,7 @@
     "github.com/opentracing/opentracing-go",
     "github.com/opentracing/opentracing-go/log",
     "github.com/pkg/errors",
+    "github.com/prometheus/procfs",
     "github.com/safchain/ethtool",
     "github.com/sirupsen/logrus",
     "github.com/sirupsen/logrus/hooks/syslog",

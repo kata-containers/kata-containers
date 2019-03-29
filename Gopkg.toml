@@ -90,3 +90,7 @@
 [[constraint]]
   revision = "5017d4e9a9cf2d4381db99eacd9baf84b95bfb14"
   name = "github.com/containerd/cgroups"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/prometheus/procfs"
