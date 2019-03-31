@@ -5,4 +5,4 @@
 
 The `kata-proxy` is part of the Kata Containers project. For more information on how
 the `proxy` fits into the Kata Containers architecture, refer to the
-[Kata Containers architecture documentation](https://github.com/kata-containers/documentation/blob/master/architecture.md#proxy).
+[Kata Containers architecture documentation](https://github.com/kata-containers/documentation/blob/master/design/architecture.md#proxy).
