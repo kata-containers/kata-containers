@@ -16,6 +16,7 @@ AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
+DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 export GOPATH=${GOPATH:-${HOME}/go}
 
 lib_file="${script_dir}/../scripts/lib.sh"
@@ -102,6 +103,9 @@ ROOTFS_DIR          Path to the directory that is populated with the rootfs.
 USE_DOCKER          If set, build the rootfs inside a container (requires
                     Docker).
                     Default value: <not set>
+
+DOCKER_RUNTIME      Docker runtime to use when USE_DOCKER is set.
+                    Default value: runc
 
 Refer to the Platform-OS Compatibility Matrix for more details on the supported
 architectures:
@@ -321,7 +325,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 
 	docker_run_args=""
 	docker_run_args+=" --rm"
-	docker_run_args+=" --runtime runc"
+	docker_run_args+=" --runtime ${DOCKER_RUNTIME}"
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
 		docker_run_args+=" --env GO_AGENT_PKG=${GO_AGENT_PKG}"
