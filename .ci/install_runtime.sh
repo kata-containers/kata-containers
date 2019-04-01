@@ -12,6 +12,7 @@ cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 source /etc/os-release || source /usr/lib/os-release
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+MACHINETYPE="${MACHINETYPE:-pc}"
 
 arch=$("${cidir}"/kata-arch.sh -d)
 
@@ -101,6 +102,11 @@ elif [ "$KATA_HYPERVISOR" == "nemu" ]; then
 	"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker configure -r kata-runtime -f
 else
 	echo "Kata runtime will not set as a default in Docker"
+fi
+
+if [ "$MACHINETYPE" == "q35" ]; then
+	echo "Use machine_type q35"
+	sudo sed -i -e 's|machine_type = "pc"|machine_type = "q35"|' "${runtime_config_path}"
 fi
 
 if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
