@@ -285,6 +285,13 @@ configure_docker(){
 		fi
 
 		storage_driver="overlay2"
+
+		if [ "$tag" == "swarm" ] ; then
+			default_runtime=$runtime
+		else
+			default_runtime="runc"
+		fi
+
 		if [ "$runtime" == "kata-runtime" ]  ; then
 			# Try to find kata-runtime in $PATH, if it is not present
 			# then the default location will be /usr/local/bin/kata-runtime
@@ -295,7 +302,7 @@ configure_docker(){
 				kata_runtime_bin="$(which $runtime)" || \
 					die "$runtime cannot be found in $PATH, please make sure it is installed"
 			fi
-			docker_options="-D --add-runtime $runtime=$kata_runtime_bin --default-runtime=$runtime --storage-driver=$storage_driver"
+			docker_options="-D --add-runtime $runtime=$kata_runtime_bin --default-runtime=$default_runtime --storage-driver=$storage_driver"
 			modify_docker_service "$docker_options"
 		elif [ "$runtime" == "runc" ]  ; then
 			docker_options="-D --storage-driver=$storage_driver"
