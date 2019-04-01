@@ -41,7 +41,7 @@ destroy_vm_template() {
 	echo "destroy vm template"
 	sudo -E PATH=$PATH "$kata_runtime_bin" factory destroy
 	# verify template is destroied
-	res=$(mount | grep template | wc -l)
+	res=$(mount | grep ${template_tmpfs_path} | wc -l)
 	[ $res -eq 0 ] || die "template factory is not cleaned up"
 }
 
@@ -54,9 +54,19 @@ check_vm_template_factory() {
 	[ $res -eq 1 ] || die "template factory is not set up, missing state file"
 }
 
+clean_vm_template() {
+	while [ $(mount | grep ${template_tmpfs_path} | wc -l) -ne 0 ]
+	do
+		echo "cleaning vm template"
+		{ umount ${template_tmpfs_path} ; res=$?; } || true
+		[ $res -eq 0 ] || die "clean vm template failed"
+	done
+}
+
 setup() {
 	clean_env
 	extract_kata_env
+	clean_vm_template
 }
 
 check_qemu_for_vm_template() {
