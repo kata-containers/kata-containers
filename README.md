@@ -88,7 +88,7 @@ See the
 
 ## Architecture overview
 
-See the [architecture overview](https://github.com/kata-containers/documentation/blob/master/architecture.md)
+See the [architecture overview](https://github.com/kata-containers/documentation/blob/master/design/architecture.md)
 for details on the Kata Containers design.
 
 ## Configuration
