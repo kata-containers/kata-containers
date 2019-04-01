@@ -14,6 +14,6 @@ which variables are available.
 
 ## `blogbench` test
 
-The `blogbench` script is based on the [blogbench program](https://www.pureftpd.org/project/blogbench)
+The `blogbench` script is based on the blogbench program
 which is designed to emulate a busy blog server with a number of concurrent threads
 performing a mixture of reads, writes and rewrites.
