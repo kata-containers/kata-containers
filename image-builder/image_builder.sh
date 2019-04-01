@@ -99,6 +99,7 @@ build_with_docker() {
 	local agent_bin="$6"
 	local agent_init="$7"
 	local docker_image_name="image-builder-osbuilder"
+	local shared_files=""
 
 	image_dir=$(readlink -f "$(dirname "${image}")")
 	image_name=$(basename "${image}")
@@ -107,6 +108,11 @@ build_with_docker() {
 		   --build-arg http_proxy="${http_proxy}" \
 		   --build-arg https_proxy="${https_proxy}" \
 		   -t "${docker_image_name}" "${script_dir}"
+
+	readonly mke2fs_conf="/etc/mke2fs.conf"
+	if [ -f "${mke2fs_conf}" ]; then
+		shared_files+="-v ${mke2fs_conf}:${mke2fs_conf}:ro "
+	fi
 
 	#Make sure we use a compatible runtime to build rootfs
 	# In case Clear Containers Runtime is installed we dont want to hit issue:
@@ -126,6 +132,7 @@ build_with_docker() {
 		   -v "${script_dir}/../scripts":"/scripts" \
 		   -v "${rootfs}":"/rootfs" \
 		   -v "${image_dir}":"/image" \
+		   ${shared_files} \
 		   ${docker_image_name} \
 		   bash "/osbuilder/${script_name}" -o "/image/${image_name}" /rootfs
 }
