@@ -44,4 +44,14 @@ var _ = Describe("sysctls", func() {
 			Expect(stdout).To(ContainSubstring(kernelValue))
 		})
 	})
+
+	Context("sysctls for net", func() {
+		It("should be applied", func() {
+			pmtuValue := "1024"
+			args = []string{"--name", id, "--rm", "--sysctl", "net.ipv4.route.min_pmtu=" + pmtuValue, Image, "cat", "/proc/sys/net/ipv4/route/min_pmtu"}
+			stdout, _, exitCode = dockerRun(args...)
+			Expect(exitCode).To(Equal(0))
+			Expect(stdout).To(ContainSubstring(pmtuValue))
+		})
+	})
 })
