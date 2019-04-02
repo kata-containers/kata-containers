@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"os"
 	sysexec "os/exec"
-	"path/filepath"
 	"sync"
 	"syscall"
 	"time"
@@ -18,7 +17,6 @@ import (
 	eventstypes "github.com/containerd/containerd/api/events"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/events"
-	"github.com/containerd/containerd/mount"
 	"github.com/containerd/containerd/namespaces"
 	cdruntime "github.com/containerd/containerd/runtime"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
@@ -72,6 +70,7 @@ func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shi
 		containers: make(map[string]*container),
 		events:     make(chan interface{}, chSize),
 		ec:         make(chan exit, bufferSize),
+		mount:      false,
 	}
 
 	go s.processExits()
@@ -98,6 +97,10 @@ type service struct {
 	// thus for the returned values needed pid, just return this shim's
 	// pid directly.
 	pid uint32
+
+	// if the container's rootfs is block device backed, kata shimv2
+	// will not do the rootfs mount.
+	mount bool
 
 	context    context.Context
 	sandbox    vc.VCSandbox
@@ -310,39 +313,23 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	var c *container
+	var netns string
+
 	//the network namespace created by cni plugin
-	netns, err := namespaces.NamespaceRequired(ctx)
+	netns, err = namespaces.NamespaceRequired(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "create namespace")
 	}
 
-	rootfs := filepath.Join(r.Bundle, "rootfs")
-	defer func() {
-		if err != nil {
-			if err2 := mount.UnmountAll(rootfs, 0); err2 != nil {
-				logrus.WithError(err2).Warn("failed to cleanup rootfs mount")
-			}
-		}
-	}()
-	for _, rm := range r.Rootfs {
-		m := &mount.Mount{
-			Type:    rm.Type,
-			Source:  rm.Source,
-			Options: rm.Options,
-		}
-		if err := m.Mount(rootfs); err != nil {
-			return nil, errors.Wrapf(err, "failed to mount rootfs component %v", m)
-		}
-	}
-
-	container, err := create(ctx, s, r, netns)
+	c, err = create(ctx, s, r, netns)
 	if err != nil {
 		return nil, err
 	}
 
-	container.status = task.StatusCreated
+	c.status = task.StatusCreated
 
-	s.containers[r.ID] = container
+	s.containers[r.ID] = c
 
 	s.send(&eventstypes.TaskCreate{
 		ContainerID: r.ID,

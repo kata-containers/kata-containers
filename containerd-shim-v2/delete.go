@@ -39,9 +39,11 @@ func deleteContainer(ctx context.Context, s *service, c *container) error {
 		return err
 	}
 
-	rootfs := path.Join(c.bundle, "rootfs")
-	if err := mount.UnmountAll(rootfs, 0); err != nil {
-		logrus.WithError(err).Warn("failed to cleanup rootfs mount")
+	if s.mount {
+		rootfs := path.Join(c.bundle, "rootfs")
+		if err := mount.UnmountAll(rootfs, 0); err != nil {
+			logrus.WithError(err).Warn("failed to cleanup rootfs mount")
+		}
 	}
 
 	delete(s.containers, c.id)
