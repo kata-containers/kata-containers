@@ -8,8 +8,6 @@ package types
 import (
 	"fmt"
 	"strings"
-
-	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 // StateString is a string representing a sandbox state.
@@ -50,12 +48,6 @@ type State struct {
 	// CgroupPath is the cgroup hierarchy where sandbox's processes
 	// including the hypervisor are placed.
 	CgroupPath string `json:"cgroupPath,omitempty"`
-
-	// Resources contains the resources assigned to the container.
-	// When a container is created resources specified in the config json
-	// are used, those resources change when a container is updated but
-	// the config json is not updated.
-	Resources specs.LinuxResources `json:"resources,omitempty"`
 }
 
 // Valid checks that the sandbox state is valid.
