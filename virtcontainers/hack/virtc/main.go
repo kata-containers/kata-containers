@@ -594,7 +594,7 @@ func createContainer(context *cli.Context) error {
 
 	containerConfig := vc.ContainerConfig{
 		ID:     id,
-		RootFs: context.String("rootfs"),
+		RootFs: vc.RootFs{Target: context.String("rootfs"), Mounted: true},
 		Cmd:    cmd,
 	}
 

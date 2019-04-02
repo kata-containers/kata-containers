@@ -208,7 +208,7 @@ type ContainerConfig struct {
 	ID string
 
 	// RootFs is the container workload image on the host.
-	RootFs string
+	RootFs RootFs
 
 	// ReadOnlyRootfs indicates if the rootfs should be mounted readonly
 	ReadonlyRootfs bool
@@ -261,13 +261,27 @@ type ContainerDevice struct {
 	ContainerPath string
 }
 
+// RootFs describes the container's rootfs.
+type RootFs struct {
+	// Source specifies the BlockDevice path
+	Source string
+	// Target specify where the rootfs is mounted if it has been mounted
+	Target string
+	// Type specifies the type of filesystem to mount.
+	Type string
+	// Options specifies zero or more fstab style mount options.
+	Options []string
+	// Mounted specifies whether the rootfs has be mounted or not
+	Mounted bool
+}
+
 // Container is composed of a set of containers and a runtime environment.
 // A Container can be created, deleted, started, stopped, listed, entered, paused and restored.
 type Container struct {
 	id        string
 	sandboxID string
 
-	rootFs string
+	rootFs RootFs
 
 	config *ContainerConfig
 
@@ -1108,7 +1122,17 @@ func (c *Container) resume() error {
 }
 
 func (c *Container) hotplugDrive() error {
-	dev, err := getDeviceForPath(c.rootFs)
+	var dev device
+	var err error
+
+	// container rootfs is blockdevice backed and isn't mounted
+	if !c.rootFs.Mounted {
+		dev, err = getDeviceForPath(c.rootFs.Source)
+		// there is no "rootfs" dir on block device backed rootfs
+		c.rootfsSuffix = ""
+	} else {
+		dev, err = getDeviceForPath(c.rootFs.Target)
+	}
 
 	if err == errMountPointNotFound {
 		return nil
@@ -1133,14 +1157,17 @@ func (c *Container) hotplugDrive() error {
 		return nil
 	}
 
-	if dev.mountPoint == c.rootFs {
-		c.rootfsSuffix = ""
-	}
-
-	// If device mapper device, then fetch the full path of the device
-	devicePath, fsType, err := GetDevicePathAndFsType(dev.mountPoint)
-	if err != nil {
-		return err
+	devicePath := c.rootFs.Source
+	fsType := c.rootFs.Type
+	if c.rootFs.Mounted {
+		if dev.mountPoint == c.rootFs.Target {
+			c.rootfsSuffix = ""
+		}
+		// If device mapper device, then fetch the full path of the device
+		devicePath, fsType, err = GetDevicePathAndFsType(dev.mountPoint)
+		if err != nil {
+			return err
+		}
 	}
 
 	devicePath, err = filepath.EvalSymlinks(devicePath)
@@ -1153,6 +1180,14 @@ func (c *Container) hotplugDrive() error {
 		"fs-type":     fsType,
 	}).Info("Block device detected")
 
+	if err = c.plugDevice(devicePath); err != nil {
+		return err
+	}
+
+	return c.setStateFstype(fsType)
+}
+
+func (c *Container) plugDevice(devicePath string) error {
 	var stat unix.Stat_t
 	if err := unix.Stat(devicePath, &stat); err != nil {
 		return fmt.Errorf("stat %q failed: %v", devicePath, err)
@@ -1181,8 +1216,7 @@ func (c *Container) hotplugDrive() error {
 			return err
 		}
 	}
-
-	return c.setStateFstype(fsType)
+	return nil
 }
 
 // isDriveUsed checks if a drive has been used for container rootfs

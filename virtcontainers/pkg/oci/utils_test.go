@@ -200,7 +200,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 
 	expectedContainerConfig := vc.ContainerConfig{
 		ID:             containerID,
-		RootFs:         path.Join(tempBundlePath, "rootfs"),
+		RootFs:         vc.RootFs{Target: path.Join(tempBundlePath, "rootfs"), Mounted: true},
 		ReadonlyRootfs: true,
 		Cmd:            expectedCmd,
 		Annotations: map[string]string{

@@ -546,7 +546,7 @@ func (h *hyper) startOneContainer(sandbox *Sandbox, c *Container) error {
 		container.Fstype = c.state.Fstype
 	} else {
 
-		if err := bindMountContainerRootfs(c.ctx, defaultSharedDir, sandbox.id, c.id, c.rootFs, false); err != nil {
+		if err := bindMountContainerRootfs(c.ctx, defaultSharedDir, sandbox.id, c.id, c.rootFs.Target, false); err != nil {
 			bindUnmountAllRootfs(c.ctx, defaultSharedDir, sandbox)
 			return err
 		}
