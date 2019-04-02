@@ -74,7 +74,7 @@ then a new configuration file can be [created](#configuring-kata-containers)
 and [configured][7].
 
 [1]: https://docs.snapcraft.io/snaps/intro
-[2]: https://github.com/kata-containers/documentation/blob/master/architecture.md#root-filesystem-image
+[2]: https://github.com/kata-containers/documentation/blob/master/design/architecture.md#root-filesystem-image
 [3]: https://docs.snapcraft.io/reference/confinement#classic
 [4]: https://github.com/kata-containers/runtime#configuration
 [5]: https://docs.docker.com/engine/reference/commandline/dockerd
