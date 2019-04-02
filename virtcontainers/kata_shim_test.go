@@ -273,7 +273,7 @@ func TestKataShimStartWithConsoleNonExistingFailure(t *testing.T) {
 }
 
 func TestKataShimStartWithConsoleSuccessful(t *testing.T) {
-	cleanUp()
+	defer cleanUp()
 
 	master, console, err := newConsole()
 	t.Logf("Console created for tests:%s\n", console)
