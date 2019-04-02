@@ -23,7 +23,7 @@ setup() {
 
 @test "[insert data] insert data in an aerospike container" {
 	image="aerospike/aerospike-server"
-	docker run --runtime=$RUNTIME -d --name aerospike $image
+	docker run -m 6G --runtime=$RUNTIME -d --name aerospike $image
 	status=1
 	set +e
 	for i in $(seq 1 5); do
