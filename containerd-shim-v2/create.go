@@ -13,29 +13,34 @@ import (
 	"github.com/containerd/typeurl"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/pkg/errors"
 	"os"
+	"path/filepath"
 
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 
 	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 
+	containerd_types "github.com/containerd/containerd/api/types"
+	"github.com/containerd/containerd/mount"
+	"github.com/sirupsen/logrus"
 	// only register the proto type
 	_ "github.com/containerd/containerd/runtime/linux/runctypes"
 	crioption "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1"
 )
 
 func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest, netns string) (*container, error) {
-
-	detach := !r.Terminal
-
-	// Checks the MUST and MUST NOT from OCI runtime specification
-	bundlePath, err := validBundle(r.ID, r.Bundle)
-	if err != nil {
-		return nil, err
+	rootFs := vc.RootFs{Mounted: s.mount}
+	if len(r.Rootfs) == 1 {
+		m := r.Rootfs[0]
+		rootFs.Source = m.Source
+		rootFs.Type = m.Type
+		rootFs.Options = m.Options
 	}
 
-	ociSpec, err := oci.ParseConfigJSON(bundlePath)
+	detach := !r.Terminal
+	ociSpec, bundlePath, err := loadSpec(r, netns)
 	if err != nil {
 		return nil, err
 	}
@@ -45,13 +50,86 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest, netns
 		return nil, err
 	}
 
-	// Todo:
-	// Since there is a bug in kata for sharedPidNs, here to
-	// remove the pidns to disable the sharePidNs temporarily,
-	// once kata fixed this issue, we can remove this line.
-	// For the bug, please see:
-	// https://github.com/kata-containers/runtime/issues/930
-	removeNamespace(&ociSpec, specs.PIDNamespace)
+	disableOutput := noNeedForOutput(detach, ociSpec.Process.Terminal)
+	rootfs := filepath.Join(r.Bundle, "rootfs")
+
+	switch containerType {
+	case vc.PodSandbox:
+		if s.sandbox != nil {
+			return nil, fmt.Errorf("cannot create another sandbox in sandbox: %s", s.sandbox.ID())
+		}
+
+		_, err := loadRuntimeConfig(s, r)
+		if err != nil {
+			return nil, err
+		}
+
+		defer func() {
+			if err != nil && s.mount {
+				if err2 := mount.UnmountAll(rootfs, 0); err2 != nil {
+					logrus.WithError(err2).Warn("failed to cleanup rootfs mount")
+				}
+			}
+		}()
+
+		s.mount = true
+		if err = checkAndMount(s, r); err != nil {
+			return nil, err
+		}
+
+		rootFs.Mounted = s.mount
+
+		katautils.HandleFactory(ctx, vci, s.config)
+		sandbox, _, err := katautils.CreateSandbox(ctx, vci, *ociSpec, *s.config, rootFs, r.ID, bundlePath, "", disableOutput, false, true)
+		if err != nil {
+			return nil, err
+		}
+		s.sandbox = sandbox
+
+	case vc.PodContainer:
+		if s.sandbox == nil {
+			return nil, fmt.Errorf("BUG: Cannot start the container, since the sandbox hasn't been created")
+		}
+
+		if s.mount {
+			defer func() {
+				if err != nil {
+					if err2 := mount.UnmountAll(rootfs, 0); err2 != nil {
+						logrus.WithError(err2).Warn("failed to cleanup rootfs mount")
+					}
+				}
+			}()
+
+			if err = doMount(r.Rootfs, rootfs); err != nil {
+				return nil, err
+			}
+		}
+
+		_, err = katautils.CreateContainer(ctx, vci, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, "", disableOutput, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	container, err := newContainer(s, r, containerType, ociSpec)
+	if err != nil {
+		return nil, err
+	}
+
+	return container, nil
+}
+
+func loadSpec(r *taskAPI.CreateTaskRequest, netns string) (*oci.CompatOCISpec, string, error) {
+	// Checks the MUST and MUST NOT from OCI runtime specification
+	bundlePath, err := validBundle(r.ID, r.Bundle)
+	if err != nil {
+		return nil, "", err
+	}
+
+	ociSpec, err := oci.ParseConfigJSON(bundlePath)
+	if err != nil {
+		return nil, "", err
+	}
 
 	//set the network namespace path
 	//this set will be applied to sandbox's
@@ -70,43 +148,15 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest, netns
 		}
 	}
 
-	disableOutput := noNeedForOutput(detach, ociSpec.Process.Terminal)
+	// Todo:
+	// Since there is a bug in kata for sharedPidNs, here to
+	// remove the pidns to disable the sharePidNs temporarily,
+	// once kata fixed this issue, we can remove this line.
+	// For the bug, please see:
+	// https://github.com/kata-containers/runtime/issues/930
+	removeNamespace(&ociSpec, specs.PIDNamespace)
 
-	switch containerType {
-	case vc.PodSandbox:
-		if s.sandbox != nil {
-			return nil, fmt.Errorf("cannot create another sandbox in sandbox: %s", s.sandbox.ID())
-		}
-
-		_, err := loadRuntimeConfig(s, r)
-		if err != nil {
-			return nil, err
-		}
-
-		katautils.HandleFactory(ctx, vci, s.config)
-		sandbox, _, err := katautils.CreateSandbox(ctx, vci, ociSpec, *s.config, r.ID, bundlePath, "", disableOutput, false, true)
-		if err != nil {
-			return nil, err
-		}
-		s.sandbox = sandbox
-
-	case vc.PodContainer:
-		if s.sandbox == nil {
-			return nil, fmt.Errorf("BUG: Cannot start the container, since the sandbox hasn't been created")
-		}
-
-		_, err = katautils.CreateContainer(ctx, vci, s.sandbox, ociSpec, r.ID, bundlePath, "", disableOutput, true)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	container, err := newContainer(s, r, containerType, &ociSpec)
-	if err != nil {
-		return nil, err
-	}
-
-	return container, nil
+	return &ociSpec, bundlePath, nil
 }
 
 func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest) (*oci.RuntimeConfig, error) {
@@ -141,4 +191,34 @@ func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest) (*oci.RuntimeCo
 	}
 
 	return &runtimeConfig, nil
+}
+
+func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) error {
+	if len(r.Rootfs) == 1 {
+		m := r.Rootfs[0]
+
+		if katautils.IsBlockDevice(m.Source) && !s.config.HypervisorConfig.DisableBlockDeviceUse {
+			s.mount = false
+			return nil
+		}
+	}
+	rootfs := filepath.Join(r.Bundle, "rootfs")
+	if err := doMount(r.Rootfs, rootfs); err != nil {
+		return err
+	}
+	return nil
+}
+
+func doMount(mounts []*containerd_types.Mount, rootfs string) error {
+	for _, rm := range mounts {
+		m := &mount.Mount{
+			Type:    rm.Type,
+			Source:  rm.Source,
+			Options: rm.Options,
+		}
+		if err := m.Mount(rootfs); err != nil {
+			return errors.Wrapf(err, "failed to mount rootfs component %v", m)
+		}
+	}
+	return nil
 }
