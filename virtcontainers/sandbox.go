@@ -913,7 +913,7 @@ func (s *Sandbox) ListRoutes() ([]*vcTypes.Route, error) {
 }
 
 // startVM starts the VM.
-func (s *Sandbox) startVM() error {
+func (s *Sandbox) startVM() (err error) {
 	span, ctx := s.trace("startVM")
 	defer span.Finish()
 
@@ -943,6 +943,12 @@ func (s *Sandbox) startVM() error {
 	}); err != nil {
 		return err
 	}
+
+	defer func() {
+		if err != nil {
+			s.hypervisor.stopSandbox()
+		}
+	}()
 
 	// In case of vm factory, network interfaces are hotplugged
 	// after vm is started.
