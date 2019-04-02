@@ -279,8 +279,9 @@ type HypervisorConfig struct {
 	GuestHookPath string
 }
 
-type threadIDs struct {
-	vcpus []int
+// vcpu mapping from vcpu number to thread number
+type vcpuThreadIDs struct {
+	vcpus map[int]int
 }
 
 func (conf *HypervisorConfig) checkTemplateConfig() error {
@@ -597,7 +598,7 @@ type hypervisor interface {
 	disconnect()
 	capabilities() types.Capabilities
 	hypervisorConfig() HypervisorConfig
-	getThreadIDs() (*threadIDs, error)
+	getThreadIDs() (vcpuThreadIDs, error)
 	cleanup() error
 	pid() int
 	fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error
