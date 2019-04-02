@@ -274,12 +274,17 @@ func (s *Sandbox) releaseStatelessSandbox() error {
 func (s *Sandbox) Status() SandboxStatus {
 	var contStatusList []ContainerStatus
 	for _, c := range s.containers {
+		rootfs := c.config.RootFs.Source
+		if c.config.RootFs.Mounted {
+			rootfs = c.config.RootFs.Target
+		}
+
 		contStatusList = append(contStatusList, ContainerStatus{
 			ID:          c.id,
 			State:       c.state,
 			PID:         c.process.Pid,
 			StartTime:   c.process.StartTime,
-			RootFs:      c.config.RootFs,
+			RootFs:      rootfs,
 			Annotations: c.config.Annotations,
 		})
 	}
@@ -1156,13 +1161,17 @@ func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
 	}
 
 	for id, c := range s.containers {
+		rootfs := c.config.RootFs.Source
+		if c.config.RootFs.Mounted {
+			rootfs = c.config.RootFs.Target
+		}
 		if id == containerID {
 			return ContainerStatus{
 				ID:          c.id,
 				State:       c.state,
 				PID:         c.process.Pid,
 				StartTime:   c.process.StartTime,
-				RootFs:      c.config.RootFs,
+				RootFs:      rootfs,
 				Annotations: c.config.Annotations,
 			}, nil
 		}

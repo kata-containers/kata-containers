@@ -65,7 +65,7 @@ func newTestSandboxConfigNoop() SandboxConfig {
 	// Define the container command and bundle.
 	container := ContainerConfig{
 		ID:          containerID,
-		RootFs:      filepath.Join(testDir, testBundle),
+		RootFs:      RootFs{Target: filepath.Join(testDir, testBundle), Mounted: true},
 		Cmd:         newBasicTestCmd(),
 		Annotations: containerAnnotations,
 	}
@@ -98,7 +98,7 @@ func newTestSandboxConfigHyperstartAgent() SandboxConfig {
 	// Define the container command and bundle.
 	container := ContainerConfig{
 		ID:          containerID,
-		RootFs:      filepath.Join(testDir, testBundle),
+		RootFs:      RootFs{Target: filepath.Join(testDir, testBundle), Mounted: true},
 		Cmd:         newBasicTestCmd(),
 		Annotations: containerAnnotations,
 	}
@@ -136,7 +136,7 @@ func newTestSandboxConfigHyperstartAgentDefaultNetwork() SandboxConfig {
 	// Define the container command and bundle.
 	container := ContainerConfig{
 		ID:          containerID,
-		RootFs:      filepath.Join(testDir, testBundle),
+		RootFs:      RootFs{Target: filepath.Join(testDir, testBundle), Mounted: true},
 		Cmd:         newBasicTestCmd(),
 		Annotations: containerAnnotations,
 	}
@@ -1026,7 +1026,7 @@ func newTestContainerConfigNoop(contID string) ContainerConfig {
 	// Define the container command and bundle.
 	container := ContainerConfig{
 		ID:          contID,
-		RootFs:      filepath.Join(testDir, testBundle),
+		RootFs:      RootFs{Target: filepath.Join(testDir, testBundle), Mounted: true},
 		Cmd:         newBasicTestCmd(),
 		Annotations: containerAnnotations,
 	}
@@ -2053,7 +2053,7 @@ func createNewContainerConfigs(numOfContainers int) []ContainerConfig {
 		return nil
 	}
 
-	rootFs := filepath.Dir(thisFile) + "/utils/supportfiles/bundles/busybox/"
+	rootFs := RootFs{Target: filepath.Dir(thisFile) + "/utils/supportfiles/bundles/busybox/", Mounted: true}
 
 	for i := 0; i < numOfContainers; i++ {
 		contConfig := ContainerConfig{

@@ -164,7 +164,7 @@ func SetEphemeralStorageType(ociSpec oci.CompatOCISpec) oci.CompatOCISpec {
 }
 
 // CreateSandbox create a sandbox container
-func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig,
+func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig, rootFs vc.RootFs,
 	containerID, bundlePath, console string, disableOutput, systemdCgroup, builtIn bool) (vc.VCSandbox, vc.Process, error) {
 	span, ctx := Trace(ctx, "createSandbox")
 	defer span.Finish()
@@ -176,6 +176,17 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec oci.CompatOCISpec, ru
 
 	if builtIn {
 		sandboxConfig.Stateful = true
+	}
+
+	if !rootFs.Mounted && len(sandboxConfig.Containers) == 1 {
+		if rootFs.Source != "" {
+			realPath, err := ResolvePath(rootFs.Source)
+			if err != nil {
+				return nil, vc.Process{}, err
+			}
+			rootFs.Source = realPath
+		}
+		sandboxConfig.Containers[0].RootFs = rootFs
 	}
 
 	// Important to create the network namespace before the sandbox is
@@ -218,7 +229,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec oci.CompatOCISpec, ru
 }
 
 // CreateContainer create a container
-func CreateContainer(ctx context.Context, vci vc.VC, sandbox vc.VCSandbox, ociSpec oci.CompatOCISpec, containerID, bundlePath, console string, disableOutput, builtIn bool) (vc.Process, error) {
+func CreateContainer(ctx context.Context, vci vc.VC, sandbox vc.VCSandbox, ociSpec oci.CompatOCISpec, rootFs vc.RootFs, containerID, bundlePath, console string, disableOutput, builtIn bool) (vc.Process, error) {
 	var c vc.VCContainer
 
 	span, ctx := Trace(ctx, "createContainer")
@@ -229,6 +240,17 @@ func CreateContainer(ctx context.Context, vci vc.VC, sandbox vc.VCSandbox, ociSp
 	contConfig, err := oci.ContainerConfig(ociSpec, bundlePath, containerID, console, disableOutput)
 	if err != nil {
 		return vc.Process{}, err
+	}
+
+	if !rootFs.Mounted {
+		if rootFs.Source != "" {
+			realPath, err := ResolvePath(rootFs.Source)
+			if err != nil {
+				return vc.Process{}, err
+			}
+			rootFs.Source = realPath
+		}
+		contConfig.RootFs = rootFs
 	}
 
 	sandboxID, err := ociSpec.SandboxID()

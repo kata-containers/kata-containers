@@ -8,6 +8,7 @@ package katautils
 
 import (
 	"fmt"
+	"golang.org/x/sys/unix"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -76,6 +77,29 @@ func ResolvePath(path string) (string, error) {
 	}
 
 	return resolved, nil
+}
+
+// IsBlockDevice returns true if the give path is a block device
+func IsBlockDevice(filePath string) bool {
+	var stat unix.Stat_t
+
+	if filePath == "" {
+		return false
+	}
+
+	devicePath, err := ResolvePath(filePath)
+	if err != nil {
+		return false
+	}
+
+	if err := unix.Stat(devicePath, &stat); err != nil {
+		return false
+	}
+
+	if stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
+		return true
+	}
+	return false
 }
 
 // fileSize returns the number of bytes in the specified file
