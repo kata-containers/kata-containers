@@ -306,7 +306,9 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 		Quota: &quota,
 	}
 
-	_, _, err = CreateSandbox(context.Background(), testingImpl, spec, runtimeConfig, testContainerID, bundlePath, testConsole, true, true, false)
+	rootFs := vc.RootFs{Mounted: true}
+
+	_, _, err = CreateSandbox(context.Background(), testingImpl, spec, runtimeConfig, rootFs, testContainerID, bundlePath, testConsole, true, true, false)
 	assert.Error(err)
 }
 
@@ -340,7 +342,9 @@ func TestCreateSandboxFail(t *testing.T) {
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
 
-	_, _, err = CreateSandbox(context.Background(), testingImpl, spec, runtimeConfig, testContainerID, bundlePath, testConsole, true, true, false)
+	rootFs := vc.RootFs{Mounted: true}
+
+	_, _, err = CreateSandbox(context.Background(), testingImpl, spec, runtimeConfig, rootFs, testContainerID, bundlePath, testConsole, true, true, false)
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 }
@@ -377,8 +381,10 @@ func TestCreateContainerContainerConfigFail(t *testing.T) {
 	err = writeOCIConfigFile(spec, ociConfigFile)
 	assert.NoError(err)
 
+	rootFs := vc.RootFs{Mounted: true}
+
 	for _, disableOutput := range []bool{true, false} {
-		_, err = CreateContainer(context.Background(), testingImpl, nil, spec, testContainerID, bundlePath, testConsole, disableOutput, false)
+		_, err = CreateContainer(context.Background(), testingImpl, nil, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput, false)
 		assert.Error(err)
 		assert.False(vcmock.IsMockError(err))
 		assert.True(strings.Contains(err.Error(), containerType))
@@ -418,8 +424,10 @@ func TestCreateContainerFail(t *testing.T) {
 	err = writeOCIConfigFile(spec, ociConfigFile)
 	assert.NoError(err)
 
+	rootFs := vc.RootFs{Mounted: true}
+
 	for _, disableOutput := range []bool{true, false} {
-		_, err = CreateContainer(context.Background(), testingImpl, nil, spec, testContainerID, bundlePath, testConsole, disableOutput, false)
+		_, err = CreateContainer(context.Background(), testingImpl, nil, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput, false)
 		assert.Error(err)
 		assert.True(vcmock.IsMockError(err))
 		os.RemoveAll(path)
@@ -466,8 +474,10 @@ func TestCreateContainer(t *testing.T) {
 	err = writeOCIConfigFile(spec, ociConfigFile)
 	assert.NoError(err)
 
+	rootFs := vc.RootFs{Mounted: true}
+
 	for _, disableOutput := range []bool{true, false} {
-		_, err = CreateContainer(context.Background(), testingImpl, nil, spec, testContainerID, bundlePath, testConsole, disableOutput, false)
+		_, err = CreateContainer(context.Background(), testingImpl, nil, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput, false)
 		assert.NoError(err)
 		os.RemoveAll(path)
 	}
