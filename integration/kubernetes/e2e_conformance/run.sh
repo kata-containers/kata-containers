@@ -19,6 +19,8 @@ SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../../../lib/common.bash"
 
 RUNTIME="${RUNTIME:-kata-runtime}"
+CRI_RUNTIME="${CRI_RUNTIME:-crio}"
+
 
 # Check if Sonobuoy is still running every 5 minutes.
 WAIT_TIME=300
@@ -26,6 +28,8 @@ WAIT_TIME=300
 # Add a global timeout of 2 hours to stop the execution
 # in case Sonobuoy gets hanged.
 GLOBAL_TIMEOUT=$((WAIT_TIME*24))
+
+SONOBUOY_KATA_YAML="${SCRIPT_PATH}/sonobuoy_kata.yaml"
 
 create_kata_webhook() {
 	pushd "${SCRIPT_PATH}/../../../kata-webhook" >> /dev/null
@@ -38,13 +42,13 @@ create_kata_webhook() {
 }
 
 run_sonobuoy() {
-	sonobuoy_repo="github.com/heptio/sonobuoy"
-	go get -u "$sonobuoy_repo"
-
 	# Run Sonobuoy e2e tests
 	info "Starting sonobuoy execution."
 	info "When using kata as k8s runtime, the tests take around 2 hours to finish."
-	sonobuoy run
+	# Verify that the Sonobuoy yaml for kata has been created.
+	[ -f "$SONOBUOY_KATA_YAML" ] || die "Please generate $SONOBUOY_KATA_YAML to run the tests"
+
+	kubectl apply -f "$SONOBUOY_KATA_YAML"
 
 	start_time=$(date +%s)
 	estimated_end_time=$((start_time + GLOBAL_TIMEOUT))
@@ -78,6 +82,25 @@ run_sonobuoy() {
 	popd
 }
 
+generate_sonobuoy_workload(){
+	local runtime_interface="$CRI_RUNTIME"
+	local skipped_tests_file="${SCRIPT_PATH}/skipped_tests_e2e.yaml"
+	local skipped_tests=$("${GOPATH}/bin/yq" read "${skipped_tests_file}" "${runtime_interface}")
+
+	# Default skipped tests for Conformance testing:
+	_skip_options=("Alpha|\[(Disruptive|Feature:[^\]]+|Flaky)\]|")
+	mapfile -t _skipped_tests <<< "${skipped_tests}"
+	for entry in "${_skipped_tests[@]}"
+	do
+		_skip_options+=("${entry#- }|")
+	done
+
+	skip_options=$(IFS= ; echo "${_skip_options[*]}")
+	skip_options="${skip_options%|}"
+
+	sonobuoy gen --e2e-skip="$skip_options" > "$SONOBUOY_KATA_YAML"
+}
+
 cleanup() {
 	# Remove sonobuoy execution pods
 	sonobuoy delete
@@ -85,8 +108,12 @@ cleanup() {
 }
 
 main() {
+	sonobuoy_repo="github.com/heptio/sonobuoy"
+	go get -u "$sonobuoy_repo"
+
 	if [ "$RUNTIME" == "kata-runtime" ]; then
 		create_kata_webhook
+		generate_sonobuoy_workload
 	fi
 	run_sonobuoy
 	cleanup
