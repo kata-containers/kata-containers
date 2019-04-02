@@ -193,13 +193,9 @@ externals:
   cri-containerd:
     description: |
       Containerd Plugin for Kubernetes Container Runtime Interface.
-
-      Note that the current version is required for golang 1.10.2
-      (see https://github.com/containerd/cri/pull/941).
-    url: "https://github.com/containerd/cri"
-    version: "da0c016c830b2ea97fd1d737c49a568a816bf964"
-    meta:
-      containerd-version: "1.2.4"
+    url: "github.com/containerd/cri"
+    tarball_url: "https://storage.googleapis.com/cri-containerd-release"
+    version: "1.2.6"
 
   docker:
     description: "Moby project container manager"
