@@ -24,7 +24,7 @@ PAYLOAD_ARGS="tail -f /dev/null"
 
 setup () {
 	issue="https://github.com/kata-containers/runtime/issues/905"
-	[ "${ID}" == "centos" ] && skip "test not working with ${ID} see: ${issue}"
+	[ "${ID}" == "centos" ] || [ "$ID" == rhel ] && skip "test not working with ${ID} see: ${issue}"
 
 	clean_env
 
@@ -36,7 +36,7 @@ setup () {
 
 @test "ping container with macvlan driver" {
 	issue="https://github.com/kata-containers/runtime/issues/905"
-	[ "${ID}" == "centos" ] && skip "test not working with ${ID} see: ${issue}"
+	[ "${ID}" == "centos" ] || [ "$ID" == rhel ] && skip "test not working with ${ID} see: ${issue}"
 
 	# Create network
 	docker network create -d ${NETWORK_DRIVER} ${NETWORK_NAME}
@@ -58,7 +58,7 @@ setup () {
 
 teardown() {
 	issue="https://github.com/kata-containers/runtime/issues/905"
-	[ "${ID}" == "centos" ] && skip "test not working with ${ID} see: ${issue}"
+	[ "${ID}" == "centos" ] || [ "$ID" == rhel ] && skip "test not working with ${ID} see: ${issue}"
 
 	# Remove network
 	docker network rm ${NETWORK_NAME}
