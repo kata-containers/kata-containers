@@ -127,15 +127,18 @@ func create(ctx context.Context, containerID, bundlePath, console, pidFilePath s
 
 	disableOutput := noNeedForOutput(detach, ociSpec.Process.Terminal)
 
+	//rootfs has been mounted by containerd shim
+	rootFs := vc.RootFs{Mounted: true}
+
 	var process vc.Process
 	switch containerType {
 	case vc.PodSandbox:
-		_, process, err = katautils.CreateSandbox(ctx, vci, ociSpec, runtimeConfig, containerID, bundlePath, console, disableOutput, systemdCgroup, false)
+		_, process, err = katautils.CreateSandbox(ctx, vci, ociSpec, runtimeConfig, rootFs, containerID, bundlePath, console, disableOutput, systemdCgroup, false)
 		if err != nil {
 			return err
 		}
 	case vc.PodContainer:
-		process, err = katautils.CreateContainer(ctx, vci, nil, ociSpec, containerID, bundlePath, console, disableOutput, false)
+		process, err = katautils.CreateContainer(ctx, vci, nil, ociSpec, rootFs, containerID, bundlePath, console, disableOutput, false)
 		if err != nil {
 			return err
 		}

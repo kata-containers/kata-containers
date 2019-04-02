@@ -236,7 +236,7 @@ func TestContainerAddDriveDir(t *testing.T) {
 	container := Container{
 		sandbox: sandbox,
 		id:      contID,
-		rootFs:  fakeRootfs,
+		rootFs:  RootFs{Target: fakeRootfs, Mounted: true},
 	}
 
 	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, container.id)
@@ -306,7 +306,7 @@ func TestContainerRootfsPath(t *testing.T) {
 	container := Container{
 		id:           "rootfstestcontainerid",
 		sandbox:      sandbox,
-		rootFs:       fakeRootfs,
+		rootFs:       RootFs{Target: fakeRootfs, Mounted: true},
 		rootfsSuffix: "rootfs",
 	}
 	cvcstore, err := store.NewVCContainerStore(context.Background(),
@@ -319,7 +319,7 @@ func TestContainerRootfsPath(t *testing.T) {
 	assert.Empty(t, container.rootfsSuffix)
 
 	// Reset the value to test the other case
-	container.rootFs = fakeRootfs + "/rootfs"
+	container.rootFs = RootFs{Target: fakeRootfs + "/rootfs", Mounted: true}
 	container.rootfsSuffix = "rootfs"
 
 	container.hotplugDrive()

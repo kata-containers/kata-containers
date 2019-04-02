@@ -510,17 +510,17 @@ func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid
 // ContainerConfig converts an OCI compatible runtime configuration
 // file to a virtcontainers container configuration structure.
 func ContainerConfig(ocispec CompatOCISpec, bundlePath, cid, console string, detach bool) (vc.ContainerConfig, error) {
-
 	ociSpecJSON, err := json.Marshal(ocispec)
 	if err != nil {
 		return vc.ContainerConfig{}, err
 	}
 
-	rootfs := ocispec.Root.Path
-	if !filepath.IsAbs(rootfs) {
-		rootfs = filepath.Join(bundlePath, ocispec.Root.Path)
+	rootfs := vc.RootFs{Target: ocispec.Root.Path, Mounted: true}
+	if !filepath.IsAbs(rootfs.Target) {
+		rootfs.Target = filepath.Join(bundlePath, ocispec.Root.Path)
 	}
-	ociLog.Debugf("container rootfs: %s", rootfs)
+
+	ociLog.Debugf("container rootfs: %s", rootfs.Target)
 
 	cmd := types.Cmd{
 		Args:            ocispec.Process.Args,
