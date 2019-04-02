@@ -55,9 +55,16 @@ const (
 	// We attach a pool of placeholder drives before the guest has started, and then
 	// patch the replace placeholder drives with drives with actual contents.
 	fcDiskPoolSize = 8
-	// The boot source is the first partition of the first block device added
-	rootDevice = "root=/dev/vda1"
 )
+
+var fcKernelParams = []Param{
+	// The boot source is the first partition of the first block device added
+	{"root", "/dev/vda1"},
+
+	// Firecracker doesn't support ACPI
+	// Fix kernel error "ACPI BIOS Error (bug)"
+	{"acpi", "off"},
+}
 
 func (s vmmState) String() string {
 	switch s {
@@ -269,11 +276,10 @@ func (fc *firecracker) fcSetBootSource(path, params string) error {
 	fc.Logger().WithFields(logrus.Fields{"kernel-path": path,
 		"kernel-params": params}).Debug("fcSetBootSource")
 
-	bootParams := params + " " + rootDevice
 	bootSrcParams := ops.NewPutGuestBootSourceParams()
 	src := &models.BootSource{
 		KernelImagePath: &path,
-		BootArgs:        bootParams,
+		BootArgs:        params,
 	}
 	bootSrcParams.SetBody(src)
 
@@ -353,7 +359,8 @@ func (fc *firecracker) startSandbox(timeout int) error {
 		return err
 	}
 
-	strParams := SerializeParams(fc.config.KernelParams, "=")
+	kernelParams := append(fc.config.KernelParams, fcKernelParams...)
+	strParams := SerializeParams(kernelParams, "=")
 	formattedParams := strings.Join(strParams, " ")
 
 	fc.fcSetBootSource(kernelPath, formattedParams)
