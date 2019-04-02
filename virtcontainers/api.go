@@ -108,7 +108,7 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		}
 	}()
 
-	if err := s.getAndStoreGuestDetails(); err != nil {
+	if err = s.getAndStoreGuestDetails(); err != nil {
 		return nil, err
 	}
 
