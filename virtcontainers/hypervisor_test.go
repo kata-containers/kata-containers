@@ -437,14 +437,14 @@ func TestGetHostMemorySizeKb(t *testing.T) {
 	}
 }
 
-// nolint: unused
+// nolint: unused, deadcode
 type testNestedVMMData struct {
 	content     []byte
 	expectedErr bool
 	expected    bool
 }
 
-// nolint: unused,deadcode
+// nolint: unused, deadcode
 func genericTestRunningOnVMM(t *testing.T, data []testNestedVMMData) {
 	for _, d := range data {
 		f, err := ioutil.TempFile("", "cpuinfo")
