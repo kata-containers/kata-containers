@@ -448,7 +448,7 @@ to be used when the workload cannot be trusted and a higher level of security
 is required. An additional flag can be used to let CRI-O know if a workload
 should be considered _trusted_ or _untrusted_ by default.
 For further details, see the documentation
-[here](https://github.com/kata-containers/documentation/blob/master/architecture.md#mixing-vm-based-and-namespace-based-runtimes).
+[here](https://github.com/kata-containers/documentation/blob/master/design/architecture.md#mixing-vm-based-and-namespace-based-runtimes).
 
 Additionally, we need CRI-O to perform the network namespace management.
 Otherwise, when the VM starts the network will not be available.
