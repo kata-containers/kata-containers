@@ -12,6 +12,7 @@ set -o errtrace
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cri_repository="github.com/containerd/cri"
+containerd_repository="github.com/containerd/containerd"
 
 # Flag to do tasks for CI
 CI=${CI:-""}
@@ -59,10 +60,25 @@ install_from_static_tarball() {
 
 	echo "Download tarball from ${url}"
 	if ! curl -OL -f "${url}"; then
+		echo "Failed to download tarball from ${url}"
 		return 1
 	fi
 
 	sudo tar -xvf "${tarball_name}" -C /
+	echo "Get containerd source"
+	go get "${containerd_repository}"
+	echo "checkout to ${cri_containerd_version}"
+	cri_version=$(
+		cd "${GOPATH}/src/${containerd_repository}";
+		git checkout "v${cri_containerd_version}" >&2;
+		cat vendor.conf | grep "github.com/containerd/cri" | awk '{print $2}';
+	)
+	echo "vendored cri version ${cri_version}"
+	(
+		cd "${GOPATH}/src/${cri_containerd_repo}" >>/dev/null
+		echo "checkout to cri version ${cri_version}"
+		git checkout "${cri_version}"
+	)
 }
 
 go get "${cri_containerd_repo}"

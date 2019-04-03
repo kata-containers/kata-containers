@@ -7,6 +7,11 @@
 
 set -e
 
+if [ "${CI_JOB}" == "CRI_CONTAINERD_K8S" ];then
+	echo "CRI_CONTAINERD_K8S: cri-o cni config will not be installed"
+	exit 0;
+fi
+
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 
