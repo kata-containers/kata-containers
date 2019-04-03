@@ -36,7 +36,7 @@ hardware-virtualized containers.
 
 The runtime is
 [OCI](https://github.com/opencontainers/runtime-spec)-compatible,
-[CRI-O](https://github.com/kubernetes-incubator/cri-o)-compatible, and
+[CRI-O](https://github.com/cri-o/cri-o)-compatible, and
 [Containerd](https://github.com/containerd/containerd)-compatible,
  allowing it
 to work seamlessly with both Docker and Kubernetes respectively.
