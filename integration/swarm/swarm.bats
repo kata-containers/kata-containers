@@ -31,12 +31,12 @@ setup() {
 	swarm_interface_arg=""
 	for i in ${interfaces[@]}; do
 		check_ip_address=$(ip a show dev ${i} | awk '/inet / {print $2}' | cut -d'/' -f1)
-		if [ "$(cat /sys/class/net/${i}/operstate)" == "up" ] && [ -n ${check_ip_address} ]; then
-			swarm_interface_arg="--advertise-addr ${check_ip_address}"
+		if [ "$(cat /sys/class/net/${i}/operstate)" == "up" ] && [ -n "${check_ip_address}" ]; then
+			swarm_interface_arg="${check_ip_address}"
 			break;
 		fi
 	done
-	docker swarm init ${swarm_interface_arg}
+	docker swarm init --advertise-addr "${swarm_interface_arg}"
 	nginx_command="hostname > /usr/share/nginx/html/hostname; nginx -g \"daemon off;\""
 	docker service create \
 		--name "${SERVICE_NAME}" --replicas $number_of_replicas \
