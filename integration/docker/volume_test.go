@@ -166,15 +166,6 @@ var _ = Describe("[Serial Test] docker volume", func() {
 			// remove container
 			Expect(RemoveDockerContainer(id)).To(BeTrue())
 			Expect(ExistDockerContainer(id)).NotTo(BeTrue())
-
-			// check not kata-proxy or kata-shim left
-			psArgs := []string{"-ef"}
-			psCmd := tests.NewCommand("ps", psArgs...)
-			stdout, _, exitCode := psCmd.Run()
-			Expect(exitCode).To(Equal(0))
-			Expect(stdout).NotTo(ContainSubstring("kata-proxy"))
-			Expect(stdout).NotTo(ContainSubstring("kata-shim"))
-			Expect(stdout).NotTo(ContainSubstring("qemu"))
 		})
 	})
 })
