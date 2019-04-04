@@ -459,7 +459,6 @@ func (q *QMP) parseVersion(version []byte) *QMPVersion {
 	for _, k := range []string{"QMP", "version", "qemu"} {
 		versionMap, _ = versionMap[k].(map[string]interface{})
 		if versionMap == nil {
-			q.cfg.Logger.Errorf("Invalid QMP greeting: %s", string(version))
 			return nil
 		}
 	}
@@ -530,31 +529,9 @@ func (q *QMP) mainLoop() {
 		close(q.disconnectedCh)
 	}()
 
-	var version []byte
 	var cmdDoneCh <-chan struct{}
-
-DONE:
-	for {
-		var ok bool
-		select {
-		case cmd, ok := <-q.cmdCh:
-			if !ok {
-				return
-			}
-			_ = cmdQueue.PushBack(&cmd)
-		case version, ok = <-fromVMCh:
-			if !ok {
-				return
-			}
-			if cmdQueue.Len() >= 1 {
-				q.writeNextQMPCommand(cmdQueue)
-				cmdDoneCh = currentCommandDoneCh(cmdQueue)
-			}
-			break DONE
-		}
-	}
-
-	q.connectedCh <- q.parseVersion(version)
+	var version *QMPVersion
+	ready := false
 
 	for {
 		select {
@@ -564,21 +541,37 @@ DONE:
 			}
 			_ = cmdQueue.PushBack(&cmd)
 
-			// We only want to execute the new cmd if there
-			// are no other commands pending.  If there are
-			// commands pending our new command will get
-			// run when the pending commands complete.
-
-			if cmdQueue.Len() == 1 {
+			// We only want to execute the new cmd if QMP is
+			// ready and there are no other commands pending.
+			// If there are commands pending our new command
+			// will get run when the pending commands complete.
+			if ready && cmdQueue.Len() == 1 {
 				q.writeNextQMPCommand(cmdQueue)
 				cmdDoneCh = currentCommandDoneCh(cmdQueue)
 			}
+
 		case line, ok := <-fromVMCh:
 			if !ok {
 				return
 			}
+
+			if !ready {
+				// Not ready yet. Check if line is the QMP version.
+				// Sometimes QMP events are thrown before the QMP version,
+				// hence it's not a guarantee that the first data read from
+				// the channel is the QMP version.
+				version = q.parseVersion(line)
+				if version != nil {
+					q.connectedCh <- version
+					ready = true
+				}
+				// Do not process QMP input to avoid deadlocks.
+				break
+			}
+
 			q.processQMPInput(line, cmdQueue)
 			cmdDoneCh = currentCommandDoneCh(cmdQueue)
+
 		case <-cmdDoneCh:
 			q.cancelCurrentCommand(cmdQueue)
 			cmdDoneCh = currentCommandDoneCh(cmdQueue)
