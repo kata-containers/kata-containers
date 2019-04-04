@@ -304,6 +304,36 @@ generate_qemu_options() {
 	# implicitly enabled in Fedora 27).
 	qemu_options+=(size:--disable-linux-aio)
 
+	if [ "${qemu_version_major}" -ge 3 ] && [ "${qemu_version_minor}" -ge 1 ]; then
+		# Disable libpmem, vNVDIMM backend (aka rootfs image) shouldn't be modifed
+		# by the guest
+		qemu_options+=(security:--disable-libpmem)
+
+		# Disable graphics
+		qemu_options+=(size:--disable-virglrenderer)
+
+		# Disable block replication
+		qemu_options+=(size:--disable-replication)
+
+		# Disable USB smart card reader
+		qemu_options+=(size:--disable-smartcard)
+
+		# Disable guest agent
+		qemu_options+=(size:--disable-guest-agent)
+		qemu_options+=(size:--disable-guest-agent-msi)
+
+		# unused image formats
+		qemu_options+=(size:--disable-vvfat)
+		qemu_options+=(size:--disable-vdi)
+		qemu_options+=(size:--disable-qed)
+		qemu_options+=(size:--disable-qcow1)
+		qemu_options+=(size:--disable-bochs)
+		qemu_options+=(size:--disable-cloop)
+		qemu_options+=(size:--disable-dmg)
+		qemu_options+=(size:--disable-parallels)
+		qemu_options+=(size:--disable-vxhs)
+	fi
+
 	#---------------------------------------------------------------------
 	# Enabled options
 
@@ -330,6 +360,11 @@ generate_qemu_options() {
 	qemu_options+=(functionality:--enable-virtfs)
 	qemu_options+=(functionality:--enable-attr)
 	qemu_options+=(functionality:--enable-cap-ng)
+
+	# AVX2 is enabled by default, make sure it's on
+	if [ "${qemu_version_major}" -ge 3 ] && [ "${qemu_version_minor}" -ge 1 ]; then
+		qemu_options+=(speed:--enable-avx2)
+	fi
 
 	#---------------------------------------------------------------------
 	# Other options
