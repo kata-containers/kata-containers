@@ -103,6 +103,19 @@ func newQMPTestCommandBuffer(t *testing.T) *qmpTestCommandBuffer {
 	return b
 }
 
+func newQMPTestCommandBufferNoGreeting(t *testing.T) *qmpTestCommandBuffer {
+	b := &qmpTestCommandBuffer{
+		newDataCh: make(chan []byte, 1),
+		t:         t,
+		buf:       bytes.NewBuffer([]byte{}),
+		forceFail: make(chan struct{}),
+	}
+	b.cmds = make([]qmpTestCommand, 0, 8)
+	b.events = make([]qmpTestEvent, 0, 8)
+	b.results = make([]qmpTestResult, 0, 8)
+	return b
+}
+
 func (b *qmpTestCommandBuffer) startEventLoop(wg *sync.WaitGroup) {
 	wg.Add(1)
 	go func() {
@@ -1501,6 +1514,51 @@ func TestExecuteNVDIMMDeviceAdd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error: %v\n", err)
 	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
+func TestMainLoopEventBeforeGreeting(t *testing.T) {
+	const (
+		seconds      = 1352167040730
+		microseconds = 123456
+	)
+
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBufferNoGreeting(t)
+
+	// Add events
+	var wg sync.WaitGroup
+	buf.AddEvent("VSERPORT_CHANGE", time.Millisecond*100,
+		map[string]interface{}{
+			"open": false,
+			"id":   "channel0",
+		},
+		map[string]interface{}{
+			"seconds":      seconds,
+			"microseconds": microseconds,
+		})
+	buf.AddEvent("POWERDOWN", time.Millisecond*200, nil,
+		map[string]interface{}{
+			"seconds":      seconds,
+			"microseconds": microseconds,
+		})
+
+	// register a channel to receive events
+	eventCh := make(chan QMPEvent)
+	cfg := QMPConfig{EventCh: eventCh, Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+
+	// Start events, this will lead to a deadlock if mainLoop is not implemented
+	// correctly
+	buf.startEventLoop(&wg)
+	wg.Wait()
+
+	// Send greeting and check version
+	buf.newDataCh <- []byte(qmpHello)
+	checkVersion(t, connectedCh)
+
 	q.Shutdown()
 	<-disconnectedCh
 }
