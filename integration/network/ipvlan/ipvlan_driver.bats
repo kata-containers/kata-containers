@@ -21,7 +21,7 @@ PAYLOAD="tail -f /dev/null"
 
 setup() {
 	issue="https://github.com/kata-containers/runtime/issues/906"
-	[ "${ID}" == "centos" ] && skip "test not working with ${ID} see: ${issue}"
+	[ "${ID}" == "centos" ] || [ "${ID}" == "rhel" ] && skip "test not working with ${ID} see: ${issue}"
 
 	clean_env
 
@@ -56,7 +56,7 @@ setup() {
 
 @test "ping container with ipvlan driver with mode l2" {
 	issue="https://github.com/kata-containers/runtime/issues/906"
-	[ "${ID}" == "centos" ] && skip "test not working with ${ID} see: ${issue}"
+	[ "${ID}" == "centos" ] || [ "${ID}" == "rhel" ] && skip "test not working with ${ID} see: ${issue}"
 
 	NETWORK_NAME="ipvlan2"
 	NETWORK_MODE="l2"
@@ -80,7 +80,7 @@ setup() {
 
 @test "ping container with ipvlan driver with mode l3" {
 	issue="https://github.com/kata-containers/runtime/issues/906"
-	[ "${ID}" == "centos" ] && skip "test not working with ${ID} see: ${issue}"
+	[ "${ID}" == "centos" ] || [ "${ID}" == "rhel" ] && skip "test not working with ${ID} see: ${issue}"
 
 	NETWORK_NAME="ipvlan3"
 	NETWORK_MODE="l3"
