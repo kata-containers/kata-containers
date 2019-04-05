@@ -19,7 +19,7 @@ language: go
 go_import_path: github.com/kata-containers/proxy
 
 go:
-  - "1.10.x"
+  - "1.11.x"
 
 env:
   - target_branch=$TRAVIS_BRANCH
