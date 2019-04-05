@@ -162,7 +162,10 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 func SetEphemeralStorageType(ociSpec oci.CompatOCISpec) oci.CompatOCISpec {
 	for idx, mnt := range ociSpec.Mounts {
 		if vc.IsEphemeralStorage(mnt.Source) {
-			ociSpec.Mounts[idx].Type = "ephemeral"
+			ociSpec.Mounts[idx].Type = vc.KataEphemeralDevType
+		}
+		if vc.Isk8sHostEmptyDir(mnt.Source) {
+			ociSpec.Mounts[idx].Type = vc.KataLocalDevType
 		}
 	}
 	return ociSpec

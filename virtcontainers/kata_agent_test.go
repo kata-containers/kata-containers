@@ -365,7 +365,7 @@ func TestHandleEphemeralStorage(t *testing.T) {
 	mountSource := "/tmp/mountPoint"
 
 	mount := specs.Mount{
-		Type:   kataEphemeralDevType,
+		Type:   KataEphemeralDevType,
 		Source: mountSource,
 	}
 
