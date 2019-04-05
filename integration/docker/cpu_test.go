@@ -51,7 +51,7 @@ func withCPUConstraint(cpus float64, defaultVCPUs int, fail bool) TableEntry {
 	return Entry(msg, c, fail)
 }
 
-var _ = Describe("Hot plug CPUs", func() {
+var _ = Describe("[Serial Test] Hot plug CPUs", func() {
 	var (
 		args         []string
 		id           string
@@ -187,7 +187,7 @@ func withParentCgroup(parentCgroup string) TableEntry {
 	return Entry(fmt.Sprintf("should not fail with parent cgroup: %s", parentCgroup), parentCgroup)
 }
 
-var _ = Describe("Hot plug CPUs", func() {
+var _ = Describe("[Serial Test] Hot plug CPUs", func() {
 	var (
 		args []string
 		id   string
@@ -225,7 +225,7 @@ var _ = Describe("Hot plug CPUs", func() {
 	)
 })
 
-var _ = Describe("Update number of CPUs", func() {
+var _ = Describe("[Serial Test] Update number of CPUs", func() {
 	var (
 		runArgs      []string
 		updateArgs   []string
