@@ -19,7 +19,7 @@ echo "========================================"
 echo "         start shimv2 testing"
 echo "========================================"
 
-if [[ "$ID" =~ ^opensuse.*$ ]] || [ "$ID" == sles ]; then
+if [[ "$ID" =~ ^opensuse.*$ ]] || [ "$ID" == sles ] || [ "$ID" == rhel ]; then
 	issue="https://github.com/kata-containers/tests/issues/1251"
 	echo "Skip shimv2 on $ID, see: $issue"
 	exit
