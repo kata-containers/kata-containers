@@ -6,7 +6,7 @@
 #
 
 sudo: required
-dist: trusty
+dist: xenial
 
 language: go
 os:
