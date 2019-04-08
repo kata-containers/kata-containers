@@ -256,6 +256,10 @@ func (p *gRPCProxy) CopyFile(ctx context.Context, req *pb.CopyFileRequest) (*gpb
 	return &gpb.Empty{}, nil
 }
 
+func (p *gRPCProxy) MemHotplugByProbe(ctx context.Context, req *pb.MemHotplugByProbeRequest) (*gpb.Empty, error) {
+	return &gpb.Empty{}, nil
+}
+
 func gRPCRegister(s *grpc.Server, srv interface{}) {
 	switch g := srv.(type) {
 	case *gRPCProxy:
