@@ -210,7 +210,7 @@ ifneq (,$(QEMUCMD))
 
     # qemu-specific options (all should be suffixed by "_QEMU")
     DEFBLOCKSTORAGEDRIVER_QEMU := virtio-scsi
-    DEFNETWORKMODEL_QEMU := macvtap
+    DEFNETWORKMODEL_QEMU := tcfilter
     KERNELNAME_QEMU = $(call MAKE_KERNEL_NAME,$(KERNELTYPE))
     KERNELPATH_QEMU = $(KERNELDIR)/$(KERNELNAME_QEMU)
 endif
