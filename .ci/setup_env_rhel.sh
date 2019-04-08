@@ -13,7 +13,7 @@ source "${cidir}/lib.sh"
 
 echo "Add epel repository"
 epel_url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
-sudo -E yum install "$epel_url"
+sudo -E yum install -y "$epel_url"
 
 echo "Update repositories"
 sudo -E yum -y update
