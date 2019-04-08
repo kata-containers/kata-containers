@@ -690,6 +690,17 @@ func (q *qemu) cleanupVM() error {
 		}
 	}
 
+	if q.config.VMid != "" {
+		dir = store.SandboxConfigurationRootPath(q.config.VMid)
+		if err := os.RemoveAll(dir); err != nil {
+			q.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
+		}
+		dir = store.SandboxRuntimeRootPath(q.config.VMid)
+		if err := os.RemoveAll(dir); err != nil {
+			q.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
+		}
+	}
+
 	return nil
 }
 
