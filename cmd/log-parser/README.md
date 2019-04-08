@@ -37,7 +37,7 @@ The tool requires that the following fields are defined for each log record:
 - Source field (`source`): a single word that specifies the name of a unique
   part of the system (e.g. `proxy`, `runtime`, `shim`).
 
-- Timestamp field (`time`): in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt)
+- Timestamp field (`time`): in [RFC3339](https://tools.ietf.org/html/rfc3339)
   format and including a nanosecond value.
 
 Additional to the fields above, the tool also expects the following field:
