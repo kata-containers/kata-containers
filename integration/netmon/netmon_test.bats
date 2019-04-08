@@ -12,11 +12,15 @@ IMAGE="busybox"
 NETWORK_NAME="test"
 CONTAINER_NAME="containerA"
 PAYLOAD_ARGS="tail -f /dev/null"
+MACHINETYPE="${MACHINETYPE:-pc}"
+netmon_issue="https://github.com/kata-containers/runtime/issues/1486"
 
 setup() {
 	if [ "$KATA_HYPERVISOR" == "nemu" ]; then
 		skip " issue: https://github.com/kata-containers/runtime/issues/1003"
 	fi
+
+	[ "$MACHINETYPE" == "q35" ] && skip "test not working see: ${netmon_issue}"
 
 	clean_env
 
@@ -35,6 +39,8 @@ setup() {
 	if [ "$KATA_HYPERVISOR" == "nemu" ]; then
 		skip " issue: https://github.com/kata-containers/runtime/issues/1003"
 	fi
+
+	[ "$MACHINETYPE" == "q35" ] && skip "test not working see: ${netmon_issue}"
 
 	# Create network
 	docker network create $NETWORK_NAME
@@ -76,6 +82,8 @@ teardown() {
 	if [ "$KATA_HYPERVISOR" == "nemu" ]; then
 		skip " issue: https://github.com/kata-containers/runtime/issues/1003"
 	fi
+
+	[ "$MACHINETYPE" == "q35" ] && skip "test not working see: ${netmon_issue}"
 
 	clean_env
 
