@@ -18,8 +18,3 @@ pushd "${tests_repo_dir}"
 popd
 
 # This script will execute packaging tests suite
-
-if [ "$ID" == ubuntu ]; then
-	echo "Building snap image"
-	make snap
-fi
