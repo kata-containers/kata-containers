@@ -224,7 +224,6 @@ var _ = Describe("Check cgroup paths", func() {
 
 	DescribeTable("with a parent cgroup",
 		func(parentCgroup string) {
-			Skip("Issue: https://github.com/kata-containers/runtime/issues/1365")
 			args = append(args, "--cgroup-parent", parentCgroup, Image)
 			_, _, exitCode := dockerRun(args...)
 			Expect(exitCode).To(BeZero())
