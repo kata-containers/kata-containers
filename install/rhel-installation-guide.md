@@ -13,7 +13,8 @@
    ```bash
    $ source /etc/os-release
    $ ARCH=$(arch)
-   $ sudo -E yum-config-manager --add-repo "http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/RHEL_${VERSION_ID}/home:katacontainers:releases:${ARCH}:master.repo"
+   $ BRANCH="${BRANCH:-master}"
+   $ sudo -E yum-config-manager --add-repo "http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/${BRANCH}/RHEL_${VERSION_ID}/home:katacontainers:releases:${ARCH}:${BRANCH}.repo"
    $ sudo -E yum -y install kata-runtime kata-proxy kata-shim
    ```
 
