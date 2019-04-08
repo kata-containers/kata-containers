@@ -49,13 +49,7 @@ const (
 
 // CloneFlagsTable is exported so that consumers of this package don't need
 // to define this same table again.
-var CloneFlagsTable = map[NSType]int{
-	NSTypeCGroup: unix.CLONE_NEWCGROUP,
-	NSTypeIPC:    unix.CLONE_NEWIPC,
-	NSTypeNet:    unix.CLONE_NEWNET,
-	NSTypePID:    unix.CLONE_NEWPID,
-	NSTypeUTS:    unix.CLONE_NEWUTS,
-}
+var CloneFlagsTable = make(map[NSType]int)
 
 // Namespace describes a namespace that will be entered.
 type Namespace struct {
@@ -67,6 +61,22 @@ type Namespace struct {
 type nsPair struct {
 	targetNS *os.File
 	threadNS *os.File
+}
+
+func init() {
+	var ns = map[NSType]int{
+		NSTypeCGroup: unix.CLONE_NEWCGROUP,
+		NSTypeIPC:    unix.CLONE_NEWIPC,
+		NSTypeNet:    unix.CLONE_NEWNET,
+		NSTypePID:    unix.CLONE_NEWPID,
+		NSTypeUTS:    unix.CLONE_NEWUTS,
+	}
+
+	for k, v := range ns {
+		if _, err := os.Stat(fmt.Sprint("/proc/self/ns/", string(k))); err == nil {
+			CloneFlagsTable[k] = v
+		}
+	}
 }
 
 func getNSPathFromPID(pid int, nsType NSType) string {
