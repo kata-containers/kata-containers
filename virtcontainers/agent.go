@@ -216,6 +216,12 @@ type agent interface {
 	// cpuOnly specifies that we should online cpu or online memory or both
 	onlineCPUMem(cpus uint32, cpuOnly bool) error
 
+	// memHotplugByProbe will notify the guest kernel about memory hotplug event through
+	// probe interface.
+	// This function should be called after hot adding Memory and before online memory.
+	// addr specifies the address of the recently hotplugged or unhotplugged memory device.
+	memHotplugByProbe(addr uint64, sizeMB uint32, memorySectionSizeMB uint32) error
+
 	// statsContainer will tell the agent to get stats from a container related to a Sandbox
 	statsContainer(sandbox *Sandbox, c Container) (*ContainerStats, error)
 

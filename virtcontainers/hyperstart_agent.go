@@ -891,6 +891,11 @@ func (h *hyper) sendCmd(proxyCmd hyperstartProxyCmd) (interface{}, error) {
 	return h.client.HyperWithTokens(proxyCmd.cmd, tokens, proxyCmd.message)
 }
 
+func (h *hyper) memHotplugByProbe(addr uint64, sizeMB uint32, memorySectionSizeMB uint32) error {
+	// hyperstart-agent does not support notify memory hotplug event via probe interface
+	return nil
+}
+
 func (h *hyper) onlineCPUMem(cpus uint32, cpuOnly bool) error {
 	// hyperstart-agent uses udev to online CPUs automatically
 	return nil

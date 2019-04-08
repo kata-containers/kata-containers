@@ -91,6 +91,11 @@ func (n *noopAgent) updateContainer(sandbox *Sandbox, c Container, resources spe
 	return nil
 }
 
+// memHotplugByProbe is the Noop agent notify meomory hotplug event via probe interface implementation. It does nothing.
+func (n *noopAgent) memHotplugByProbe(addr uint64, sizeMB uint32, memorySectionSizeMB uint32) error {
+	return nil
+}
+
 // onlineCPUMem is the Noop agent Container online CPU and Memory implementation. It does nothing.
 func (n *noopAgent) onlineCPUMem(cpus uint32, cpuOnly bool) error {
 	return nil
