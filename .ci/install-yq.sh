@@ -56,15 +56,11 @@ function install_yq() {
 		die "Please install curl"
 	fi
 
-	# Workaround to get latest release from github (to not use github token).
-	# Get the redirection to latest release on github.
-	yq_latest_url=$(curl -Ls -o /dev/null -w %{url_effective} "https://${yq_pkg}/releases/latest")
-	# The redirected url should include the latest release version
-	# https://github.com/mikefarah/yq/releases/tag/<VERSION-HERE>
-	yq_version=$(basename "${yq_latest_url}")
+	local yq_version=2.3.0
 
 	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos}_${goarch}"
-	curl -o "${yq_path}" -LSs ${yq_url}
+	curl -o "${yq_path}" -LSsf ${yq_url}
+	[ $? -ne 0 ] && die "Download ${yq_url} failed"
 	chmod +x ${yq_path}
 
 	if ! command -v "${yq_path}" >/dev/null; then
