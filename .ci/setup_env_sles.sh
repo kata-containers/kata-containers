@@ -81,3 +81,7 @@ chronic sudo -E zypper -n install crudini
 
 echo "Install haveged"
 chronic sudo -E zypper -n install haveged
+
+echo "Install GNU parallel"
+chronic sudo -E yum -y install perl bzip2 make
+build_install_parallel
