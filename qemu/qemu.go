@@ -748,7 +748,7 @@ type VhostUserDevice struct {
 	TypeDevID      string //variable QEMU parameter based on value of VhostUserType
 	Address        string //used for MAC address in net case
 	Tag            string //virtio-fs volume id for mounting inside guest
-	CacheSize      uint32 //virtio-fs DAX cache size in GiB
+	CacheSize      uint32 //virtio-fs DAX cache size in MiB
 	SharedVersions bool   //enable virtio-fs shared version metadata
 	VhostUserType  DeviceDriver
 
@@ -824,7 +824,7 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 		devParams = append(devParams, string(driver))
 		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 		devParams = append(devParams, fmt.Sprintf("tag=%s", vhostuserDev.Tag))
-		devParams = append(devParams, fmt.Sprintf("cache-size=%dG", vhostuserDev.CacheSize))
+		devParams = append(devParams, fmt.Sprintf("cache-size=%dM", vhostuserDev.CacheSize))
 		if vhostuserDev.SharedVersions {
 			devParams = append(devParams, "versiontable=/dev/shm/fuse_shared_versions")
 		}
