@@ -17,7 +17,7 @@ import (
 	"syscall"
 
 	criContainerdAnnotations "github.com/containerd/cri-containerd/pkg/annotations"
-	crioAnnotations "github.com/kubernetes-incubator/cri-o/pkg/annotations"
+	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
 	spec "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 

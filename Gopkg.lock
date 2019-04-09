@@ -185,6 +185,13 @@
   version = "v18"
 
 [[projects]]
+  digest = "1:04054595e5c5a35d1553a7f3464d18577caf597445d643992998643df56d4afd"
+  name = "github.com/cri-o/cri-o"
+  packages = ["pkg/annotations"]
+  pruneopts = "NUT"
+  revision = "3394b3b2d6af0e41d185bb695c6378be5dd4d61d"
+
+[[projects]]
   digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
@@ -698,6 +705,7 @@
     "github.com/clearcontainers/proxy/client",
     "github.com/containerd/cgroups",
     "github.com/containerd/containerd/api/events",
+    "github.com/containerd/containerd/api/types",
     "github.com/containerd/containerd/api/types/task",
     "github.com/containerd/containerd/errdefs",
     "github.com/containerd/containerd/events",
@@ -712,6 +720,7 @@
     "github.com/containerd/fifo",
     "github.com/containerd/typeurl",
     "github.com/containernetworking/plugins/pkg/ns",
+    "github.com/cri-o/cri-o/pkg/annotations",
     "github.com/dlespiau/covertool/pkg/cover",
     "github.com/docker/go-units",
     "github.com/firecracker-microvm/firecracker-go-sdk/client",

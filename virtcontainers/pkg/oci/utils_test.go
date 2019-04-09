@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/kubernetes-incubator/cri-o/pkg/annotations"
+	"github.com/cri-o/cri-o/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
