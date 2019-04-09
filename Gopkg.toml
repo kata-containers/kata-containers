@@ -11,7 +11,7 @@
   revision = "20b96f641a5ea98f2f8619ff4f3e061cff4833bd"
 
 [[constraint]]
-  name = "github.com/kubernetes-incubator/cri-o"
+  name = "github.com/cri-o/cri-o"
   revision = "3394b3b2d6af0e41d185bb695c6378be5dd4d61d"
 
 [[constraint]]
