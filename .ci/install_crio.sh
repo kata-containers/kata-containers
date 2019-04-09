@@ -27,7 +27,9 @@ popd
 echo "Get CRI-O sources"
 kubernetes_sigs_org="github.com/kubernetes-sigs"
 ghprbGhRepository="${ghprbGhRepository:-}"
-crio_repo="${kubernetes_sigs_org}/cri-o"
+crio_repo=$(get_version "externals.crio.url")
+# remove https:// from the url
+crio_repo="${crio_repo#*//}"
 
 go get -d "$crio_repo" || true
 pushd "${GOPATH}/src/${crio_repo}"
