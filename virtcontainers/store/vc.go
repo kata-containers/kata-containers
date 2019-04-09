@@ -109,12 +109,23 @@ func (s *VCStore) Delete() error {
 	return nil
 }
 
-// LoadState loads an returns a virtcontainer state
-func (s *VCStore) LoadState() (types.State, error) {
-	var state types.State
+// LoadSandboxState loads an returns a virtcontainer state
+func (s *VCStore) LoadState() (types.SandboxState, error) {
+	var state types.SandboxState
 
 	if err := s.state.Load(State, &state); err != nil {
-		return types.State{}, err
+		return types.SandboxState{}, err
+	}
+
+	return state, nil
+}
+
+// LoadContainerState loads an returns a virtcontainer state
+func (s *VCStore) LoadContainerState() (types.ContainerState, error) {
+	var state types.ContainerState
+
+	if err := s.state.Load(State, &state); err != nil {
+		return types.ContainerState{}, err
 	}
 
 	return state, nil

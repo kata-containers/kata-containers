@@ -96,7 +96,7 @@ func TestPSSuccessful(t *testing.T) {
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
-			State: types.State{
+			State: types.ContainerState{
 				State: types.StateRunning,
 			},
 			ID: sandbox.ID(),

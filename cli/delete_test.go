@@ -168,7 +168,7 @@ func TestDeleteSandbox(t *testing.T) {
 				vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 				vcAnnotations.ConfigJSONKey:    configJSON,
 			},
-			State: types.State{
+			State: types.ContainerState{
 				State: "ready",
 			},
 		}, nil
@@ -185,7 +185,7 @@ func TestDeleteSandbox(t *testing.T) {
 	testingImpl.StatusSandboxFunc = func(ctx context.Context, sandboxID string) (vc.SandboxStatus, error) {
 		return vc.SandboxStatus{
 			ID: sandbox.ID(),
-			State: types.State{
+			State: types.SandboxState{
 				State: types.StateReady,
 			},
 		}, nil
@@ -246,7 +246,7 @@ func TestDeleteInvalidContainerType(t *testing.T) {
 				vcAnnotations.ContainerTypeKey: "InvalidType",
 				vcAnnotations.ConfigJSONKey:    configJSON,
 			},
-			State: types.State{
+			State: types.ContainerState{
 				State: "created",
 			},
 		}, nil
@@ -285,7 +285,7 @@ func TestDeleteSandboxRunning(t *testing.T) {
 				vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 				vcAnnotations.ConfigJSONKey:    configJSON,
 			},
-			State: types.State{
+			State: types.ContainerState{
 				State: "running",
 			},
 		}, nil
@@ -303,7 +303,7 @@ func TestDeleteSandboxRunning(t *testing.T) {
 	testingImpl.StatusSandboxFunc = func(ctx context.Context, sandboxID string) (vc.SandboxStatus, error) {
 		return vc.SandboxStatus{
 			ID: sandbox.ID(),
-			State: types.State{
+			State: types.SandboxState{
 				State: types.StateRunning,
 			},
 		}, nil
@@ -365,7 +365,7 @@ func TestDeleteRunningContainer(t *testing.T) {
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
 				vcAnnotations.ConfigJSONKey:    configJSON,
 			},
-			State: types.State{
+			State: types.ContainerState{
 				State: "running",
 			},
 		}, nil
@@ -448,7 +448,7 @@ func TestDeleteContainer(t *testing.T) {
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
 				vcAnnotations.ConfigJSONKey:    configJSON,
 			},
-			State: types.State{
+			State: types.ContainerState{
 				State: "ready",
 			},
 		}, nil
@@ -548,7 +548,7 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 				vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
 				vcAnnotations.ConfigJSONKey:    configJSON,
 			},
-			State: types.State{
+			State: types.ContainerState{
 				State: "ready",
 			},
 		}, nil
@@ -557,7 +557,7 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 	testingImpl.StatusSandboxFunc = func(ctx context.Context, sandboxID string) (vc.SandboxStatus, error) {
 		return vc.SandboxStatus{
 			ID: sandbox.ID(),
-			State: types.State{
+			State: types.SandboxState{
 				State: types.StateReady,
 			},
 		}, nil

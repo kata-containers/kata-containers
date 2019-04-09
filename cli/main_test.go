@@ -445,7 +445,7 @@ func writeOCIConfigFile(spec oci.CompatOCISpec, configPath string) error {
 	return ioutil.WriteFile(configPath, bytes, testFileMode)
 }
 
-func newSingleContainerStatus(containerID string, containerState types.State, annotations map[string]string) vc.ContainerStatus {
+func newSingleContainerStatus(containerID string, containerState types.ContainerState, annotations map[string]string) vc.ContainerStatus {
 	return vc.ContainerStatus{
 		ID:          containerID,
 		State:       containerState,

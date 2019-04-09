@@ -613,7 +613,7 @@ func StatusToOCIState(status vc.ContainerStatus) spec.State {
 	return spec.State{
 		Version:     spec.Version,
 		ID:          status.ID,
-		Status:      StateToOCIState(status.State),
+		Status:      StateToOCIState(status.State.State),
 		Pid:         status.PID,
 		Bundle:      status.Annotations[vcAnnotations.BundlePathKey],
 		Annotations: status.Annotations,
@@ -621,8 +621,8 @@ func StatusToOCIState(status vc.ContainerStatus) spec.State {
 }
 
 // StateToOCIState translates a virtcontainers container state into an OCI one.
-func StateToOCIState(state types.State) string {
-	switch state.State {
+func StateToOCIState(state types.StateString) string {
+	switch state {
 	case types.StateReady:
 		return StateCreated
 	case types.StateRunning:

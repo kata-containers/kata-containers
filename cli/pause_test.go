@@ -30,7 +30,7 @@ var (
 func TestPauseCLIFunctionSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -78,7 +78,7 @@ func TestPauseCLIFunctionContainerNotExistFailure(t *testing.T) {
 func TestPauseCLIFunctionPauseContainerFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -103,7 +103,7 @@ func TestPauseCLIFunctionPauseContainerFailure(t *testing.T) {
 func TestResumeCLIFunctionSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -150,7 +150,7 @@ func TestResumeCLIFunctionContainerNotExistFailure(t *testing.T) {
 func TestResumeCLIFunctionPauseContainerFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
