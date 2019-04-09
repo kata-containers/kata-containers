@@ -1009,7 +1009,6 @@ func (s *Sandbox) addContainer(c *Container) error {
 
 	ann := c.GetAnnotations()
 	if ann[annotations.ContainerTypeKey] == string(PodSandbox) {
-		s.state.Pid = c.process.Pid
 		s.state.CgroupPath = c.state.CgroupPath
 		return s.store.Store(store.State, s.state)
 	}

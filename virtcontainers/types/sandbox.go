@@ -34,10 +34,6 @@ type SandboxState struct {
 	// Index of the block device passed to hypervisor.
 	BlockIndex int `json:"blockIndex"`
 
-	// Pid is the process id of the sandbox container which is the first
-	// container to be started.
-	Pid int `json:"pid"`
-
 	// GuestMemoryBlockSizeMB is the size of memory block of guestos
 	GuestMemoryBlockSizeMB uint32 `json:"guestMemoryBlockSize"`
 
