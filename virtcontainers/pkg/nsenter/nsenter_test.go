@@ -138,22 +138,23 @@ func TestSetNSWrongFileFailure(t *testing.T) {
 	assert.NotNil(t, err, "Should fail because file is not a namespace")
 }
 
-var testNamespaceList = []Namespace{
-	{
-		Type: NSTypeCGroup,
-	},
-	{
-		Type: NSTypeIPC,
-	},
-	{
-		Type: NSTypeNet,
-	},
-	{
-		Type: NSTypePID,
-	},
-	{
-		Type: NSTypeUTS,
-	},
+func supportedNamespaces() []Namespace {
+	var list []Namespace
+	var ns = []Namespace{
+		{Type: NSTypeCGroup},
+		{Type: NSTypeIPC},
+		{Type: NSTypeNet},
+		{Type: NSTypePID},
+		{Type: NSTypeUTS},
+	}
+
+	for _, n := range ns {
+		if _, err := os.Stat(fmt.Sprint("/proc/self/ns/", string(n.Type))); err == nil {
+			list = append(list, n)
+		}
+	}
+
+	return list
 }
 
 func testToRunNil() error {
@@ -161,7 +162,7 @@ func testToRunNil() error {
 }
 
 func TestNsEnterEmptyPathAndPIDFromNSListFailure(t *testing.T) {
-	err := NsEnter(testNamespaceList, testToRunNil)
+	err := NsEnter(supportedNamespaces(), testToRunNil)
 	assert.NotNil(t, err, "Should fail because neither a path nor a PID"+
 		" has been provided by every namespace of the list")
 }
@@ -172,7 +173,7 @@ func TestNsEnterEmptyNamespaceListSuccess(t *testing.T) {
 }
 
 func TestNsEnterSuccessful(t *testing.T) {
-	nsList := testNamespaceList
+	nsList := supportedNamespaces()
 	sleepDuration := 60
 
 	cloneFlags := 0
