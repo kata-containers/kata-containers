@@ -570,7 +570,6 @@ func TestHandlePidNamespace(t *testing.T) {
 	}
 
 	sandbox := &Sandbox{}
-	sandbox.state.Pid = 0
 
 	k := kataAgent{}
 
