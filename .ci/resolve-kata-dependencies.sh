@@ -19,7 +19,7 @@ apply_depends_on() {
 	# kata_repo variable is set by the jenkins_job_build.sh
 	# and its value is the repository that we are currently testing.
 	pushd "${GOPATH}/src/${kata_repo}"
-	label_lines=$(git log --format=%s%b master.. | grep "Depends-on:" || true)
+	label_lines=$(git log --format=%b master.. | grep "Depends-on:" || true)
 	if [ "${label_lines}" == "" ]; then
 		popd
 		return 0
