@@ -271,7 +271,7 @@ func TestStatusToOCIStateSuccessfulWithReadyState(t *testing.T) {
 	testPID := 12345
 	testRootFs := "testRootFs"
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateReady,
 	}
 
@@ -307,7 +307,7 @@ func TestStatusToOCIStateSuccessfulWithRunningState(t *testing.T) {
 	testPID := 12345
 	testRootFs := "testRootFs"
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -342,7 +342,7 @@ func TestStatusToOCIStateSuccessfulWithStoppedState(t *testing.T) {
 	testPID := 12345
 	testRootFs := "testRootFs"
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateStopped,
 	}
 
@@ -403,28 +403,28 @@ func TestStatusToOCIStateSuccessfulWithNoState(t *testing.T) {
 }
 
 func TestStateToOCIState(t *testing.T) {
-	var state types.State
+	var state types.StateString
 
 	if ociState := StateToOCIState(state); ociState != "" {
 		t.Fatalf("Expecting \"created\" state, got \"%s\"", ociState)
 	}
 
-	state.State = types.StateReady
+	state = types.StateReady
 	if ociState := StateToOCIState(state); ociState != "created" {
 		t.Fatalf("Expecting \"created\" state, got \"%s\"", ociState)
 	}
 
-	state.State = types.StateRunning
+	state = types.StateRunning
 	if ociState := StateToOCIState(state); ociState != "running" {
 		t.Fatalf("Expecting \"created\" state, got \"%s\"", ociState)
 	}
 
-	state.State = types.StateStopped
+	state = types.StateStopped
 	if ociState := StateToOCIState(state); ociState != "stopped" {
 		t.Fatalf("Expecting \"created\" state, got \"%s\"", ociState)
 	}
 
-	state.State = types.StatePaused
+	state = types.StatePaused
 	if ociState := StateToOCIState(state); ociState != "paused" {
 		t.Fatalf("Expecting \"paused\" state, got \"%s\"", ociState)
 	}

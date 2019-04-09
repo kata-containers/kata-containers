@@ -48,7 +48,7 @@ func cleanupContainer(ctx context.Context, sid, cid, bundlePath string) error {
 		return err
 	}
 
-	if oci.StateToOCIState(status.State) != oci.StateStopped {
+	if oci.StateToOCIState(status.State.State) != oci.StateStopped {
 		err := sandbox.KillContainer(cid, syscall.SIGKILL, true)
 		if err != nil {
 			logrus.WithError(err).WithField("container", cid).Warn("failed to kill container")

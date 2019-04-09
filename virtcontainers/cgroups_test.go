@@ -123,7 +123,7 @@ func TestUpdateCgroups(t *testing.T) {
 	}()
 
 	s := &Sandbox{
-		state: types.State{
+		state: types.SandboxState{
 			CgroupPath: "",
 		},
 	}

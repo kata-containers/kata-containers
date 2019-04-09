@@ -27,16 +27,12 @@ const (
 	StateStopped StateString = "stopped"
 )
 
-// State is a sandbox state structure.
-type State struct {
+// SandboxState is a sandbox state structure
+type SandboxState struct {
 	State StateString `json:"state"`
 
-	BlockDeviceID string
 	// Index of the block device passed to hypervisor.
 	BlockIndex int `json:"blockIndex"`
-
-	// File system of the rootfs incase it is block device
-	Fstype string `json:"fstype"`
 
 	// Pid is the process id of the sandbox container which is the first
 	// container to be started.
@@ -54,9 +50,19 @@ type State struct {
 }
 
 // Valid checks that the sandbox state is valid.
-func (state *State) Valid() bool {
+func (state *SandboxState) Valid() bool {
+	return state.State.valid()
+}
+
+// ValidTransition returns an error if we want to move to
+// an unreachable state.
+func (state *SandboxState) ValidTransition(oldState StateString, newState StateString) error {
+	return state.State.validTransition(oldState, newState)
+}
+
+func (state *StateString) valid() bool {
 	for _, validState := range []StateString{StateReady, StateRunning, StatePaused, StateStopped} {
-		if state.State == validState {
+		if *state == validState {
 			return true
 		}
 	}
@@ -64,14 +70,12 @@ func (state *State) Valid() bool {
 	return false
 }
 
-// ValidTransition returns an error if we want to move to
-// an unreachable state.
-func (state *State) ValidTransition(oldState StateString, newState StateString) error {
-	if state.State != oldState {
-		return fmt.Errorf("Invalid state %s (Expecting %s)", state.State, oldState)
+func (state *StateString) validTransition(oldState StateString, newState StateString) error {
+	if *state != oldState {
+		return fmt.Errorf("Invalid state %v (Expecting %v)", state, oldState)
 	}
 
-	switch state.State {
+	switch *state {
 	case StateReady:
 		if newState == StateRunning || newState == StateStopped {
 			return nil
@@ -93,8 +97,8 @@ func (state *State) ValidTransition(oldState StateString, newState StateString) 
 		}
 	}
 
-	return fmt.Errorf("Can not move from %s to %s",
-		state.State, newState)
+	return fmt.Errorf("Can not move from %v to %v",
+		state, newState)
 }
 
 // Volume is a shared volume between the host and the VM,

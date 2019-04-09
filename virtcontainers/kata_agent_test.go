@@ -754,7 +754,7 @@ func TestAgentCreateContainer(t *testing.T) {
 		id:        "barfoo",
 		sandboxID: "foobar",
 		sandbox:   sandbox,
-		state: types.State{
+		state: types.ContainerState{
 			Fstype: "xfs",
 		},
 		config: &ContainerConfig{

@@ -102,7 +102,7 @@ func delete(ctx context.Context, containerID string, force bool) error {
 	}
 
 	forceStop := false
-	if oci.StateToOCIState(status.State) == oci.StateRunning {
+	if oci.StateToOCIState(status.State.State) == oci.StateRunning {
 		if !force {
 			return fmt.Errorf("Container still running, should be stopped")
 		}
@@ -140,7 +140,7 @@ func deleteSandbox(ctx context.Context, sandboxID string) error {
 		return err
 	}
 
-	if oci.StateToOCIState(status.State) != oci.StateStopped {
+	if oci.StateToOCIState(status.State.State) != oci.StateStopped {
 		if _, err := vci.StopSandbox(ctx, sandboxID); err != nil {
 			return err
 		}
