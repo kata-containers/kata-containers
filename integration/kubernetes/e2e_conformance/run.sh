@@ -21,13 +21,8 @@ source "${SCRIPT_PATH}/../../../lib/common.bash"
 RUNTIME="${RUNTIME:-kata-runtime}"
 CRI_RUNTIME="${CRI_RUNTIME:-crio}"
 
-
-# Check if Sonobuoy is still running every 5 minutes.
-WAIT_TIME=300
-
-# Add a global timeout of 2 hours to stop the execution
-# in case Sonobuoy gets hanged.
-GLOBAL_TIMEOUT=$((WAIT_TIME*24))
+# Overall Sonobuoy timeout in minutes.
+WAIT_TIME=${WAIT_TIME:-180}
 
 SONOBUOY_KATA_YAML="${SCRIPT_PATH}/sonobuoy_kata.yaml"
 
@@ -45,21 +40,22 @@ run_sonobuoy() {
 	# Run Sonobuoy e2e tests
 	info "Starting sonobuoy execution."
 	info "When using kata as k8s runtime, the tests take around 2 hours to finish."
-	# Verify that the Sonobuoy yaml for kata has been created.
-	[ -f "$SONOBUOY_KATA_YAML" ] || die "Please generate $SONOBUOY_KATA_YAML to run the tests"
 
-	kubectl apply -f "$SONOBUOY_KATA_YAML"
+	local skipped_tests_file="${SCRIPT_PATH}/skipped_tests_e2e.yaml"
+	local skipped_tests=$("${GOPATH}/bin/yq" read "${skipped_tests_file}" "${CRI_RUNTIME}")
 
-	start_time=$(date +%s)
-	estimated_end_time=$((start_time + GLOBAL_TIMEOUT))
-
-	# Wait for the sonobuoy pod to be running.
-	kubectl wait --for condition=Ready pod sonobuoy -n heptio-sonobuoy
-
-	while sonobuoy status | grep -Eq "running|pending" && [ "$(date +%s)" -le "$estimated_end_time" ]; do
-		info "sonobuoy still running, sleeping $WAIT_TIME seconds"
-		sleep "$WAIT_TIME"
+	# Default skipped tests for Conformance testing:
+	_skip_options=("Alpha|\[(Disruptive|Feature:[^\]]+|Flaky)\]|")
+	mapfile -t _skipped_tests <<< "${skipped_tests}"
+	for entry in "${_skipped_tests[@]}"
+	do
+		_skip_options+=("${entry#- }|")
 	done
+
+	skip_options=$(IFS= ; echo "${_skip_options[*]}")
+	skip_options="${skip_options%|}"
+
+	sonobuoy run --e2e-skip="$skip_options" --wait="$WAIT_TIME"
 
 	# Retrieve results
 	e2e_result_dir="$(mktemp -d /tmp/kata_e2e_results.XXXXX)"
@@ -82,25 +78,6 @@ run_sonobuoy() {
 	popd
 }
 
-generate_sonobuoy_workload(){
-	local runtime_interface="$CRI_RUNTIME"
-	local skipped_tests_file="${SCRIPT_PATH}/skipped_tests_e2e.yaml"
-	local skipped_tests=$("${GOPATH}/bin/yq" read "${skipped_tests_file}" "${runtime_interface}")
-
-	# Default skipped tests for Conformance testing:
-	_skip_options=("Alpha|\[(Disruptive|Feature:[^\]]+|Flaky)\]|")
-	mapfile -t _skipped_tests <<< "${skipped_tests}"
-	for entry in "${_skipped_tests[@]}"
-	do
-		_skip_options+=("${entry#- }|")
-	done
-
-	skip_options=$(IFS= ; echo "${_skip_options[*]}")
-	skip_options="${skip_options%|}"
-
-	sonobuoy gen --e2e-skip="$skip_options" > "$SONOBUOY_KATA_YAML"
-}
-
 cleanup() {
 	# Remove sonobuoy execution pods
 	sonobuoy delete
@@ -113,7 +90,6 @@ main() {
 
 	if [ "$RUNTIME" == "kata-runtime" ]; then
 		create_kata_webhook
-		generate_sonobuoy_workload
 	fi
 	run_sonobuoy
 	cleanup
