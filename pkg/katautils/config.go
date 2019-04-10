@@ -598,6 +598,9 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
 	if builtIn {
 		config.ProxyType = vc.KataBuiltInProxyType
+		config.ProxyConfig = vc.ProxyConfig{
+			Debug: config.Debug,
+		}
 		return nil
 	}
 
