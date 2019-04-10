@@ -60,3 +60,6 @@ chronic sudo -E zypper -n install crudini
 
 echo "Install haveged"
 chronic sudo -E zypper -n install haveged
+
+echo "Install GNU parallel"
+chronic sudo -E zypper -n install gnu_parallel

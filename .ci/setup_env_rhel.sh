@@ -75,6 +75,11 @@ chronic sudo -E yum install -y procenv
 echo "Install haveged"
 chronic sudo -E yum install -y haveged
 
+echo "Install GNU parallel"
+# GNU parallel not available in Centos repos, so build it instead.
+chronic sudo -E yum -y install perl bzip2 make
+build_install_parallel
+
 if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
 	echo "Install ${KATA_KSM_THROTTLER_JOB}"
 	sudo -E yum install ${KATA_KSM_THROTTLER_JOB}

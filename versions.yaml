@@ -53,3 +53,8 @@ externals:
     description: "utility to run various golang linters"
     url: "github.com/golangci/golangci-lint"
     version: "v1.16.0"
+
+  parallel:
+    description: "GNU parallel tool"
+    url: "https://ftp.gnu.org/gnu/parallel"
+    version: "20190222"
