@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	. "github.com/kata-containers/tests"
@@ -21,6 +22,20 @@ var loopDevices = 10
 
 func withWorkload(workload string, expectedExitCode int) TableEntry {
 	return Entry(fmt.Sprintf("with '%v' as workload", workload), workload, expectedExitCode)
+}
+
+func distroID() string {
+	pathFile := "/etc/os-release"
+	if _, err := os.Stat(pathFile); os.IsNotExist(err) {
+		pathFile = "/usr/lib/os-release"
+	}
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("source %s; echo -n $ID", pathFile))
+	id, err := cmd.CombinedOutput()
+	if err != nil {
+		LogIfFail("couldn't find distro ID %s\n", err)
+		return ""
+	}
+	return string(id)
 }
 
 var _ = Describe("run", func() {
@@ -279,6 +294,9 @@ var _ = Describe("check dmesg logs errors", func() {
 
 	Context("Run to check dmesg log errors", func() {
 		It("should be empty", func() {
+			if distroID() == "rhel" {
+				Skip("Issue:https://github.com/kata-containers/tests/issues/1443")
+			}
 			if _, ok := KataConfig.Hypervisor[FirecrackerHypervisor]; ok {
 				Skip("https://github.com/kata-containers/runtime/issues/1450")
 			}
