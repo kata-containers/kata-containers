@@ -461,6 +461,7 @@ func (v *VM) assignSandbox(s *Sandbox) error {
 	}
 
 	s.hypervisor = v.hypervisor
+	s.config.HypervisorConfig.VMid = v.id
 
 	return nil
 }
