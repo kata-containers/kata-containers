@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"fmt"
+	"time"
 	govmmQemu "github.com/intel/govmm/qemu"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -24,6 +25,10 @@ const defaultQemuMachineType = QemuCCWVirtio
 const defaultQemuMachineOptions = "accel=kvm"
 
 const virtioSerialCCW = "virtio-serial-ccw"
+
+const qmpCapMigrationBypassSharedMemory = "bypass-shared-memory"
+
+const qmpMigrationWaitTimeout = 5 * time.Second
 
 var qemuPaths = map[string]string{
 	QemuCCWVirtio: defaultQemuPath,
