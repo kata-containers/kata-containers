@@ -279,6 +279,10 @@ type HypervisorConfig struct {
 
 	// GuestHookPath is the path within the VM that will be used for 'drop-in' hooks
 	GuestHookPath string
+
+	// VMid is the id of the VM that create the hypervisor if the VM is created by the factory.
+	// VMid is "" if the hypervisor is not created by the factory.
+	VMid string
 }
 
 // vcpu mapping from vcpu number to thread number
