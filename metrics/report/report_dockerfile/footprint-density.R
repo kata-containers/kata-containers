@@ -13,9 +13,9 @@ suppressMessages(suppressWarnings(library(ggpubr)))	# for ggtexttable.
 suppressMessages(library(jsonlite))			# to load the data.
 
 testnames=c(
-	paste("footprint-busybox", test_name_extra, sep=""),
-	paste("footprint-mysql", test_name_extra, sep=""),
-	paste("footprint-elasticsearch", test_name_extra, sep="")
+	paste("footprint-busybox.*", test_name_extra, sep=""),
+	paste("footprint-mysql.*", test_name_extra, sep=""),
+	paste("footprint-elasticsearch.*", test_name_extra, sep="")
 )
 
 data=c()
@@ -23,57 +23,65 @@ stats=c()
 rstats=c()
 rstats_names=c()
 
-# For each set of results
 for (currentdir in resultdirs) {
 	count=1
 	dirstats=c()
 	for (testname in testnames) {
-		fname=paste(inputdir, currentdir, testname, '.json', sep="")
-		if ( !file.exists(fname)) {
-			warning(paste("Skipping non-existent file: ", fname))
-			next
+		matchdir=paste(inputdir, currentdir, sep="")
+		matchfile=paste(testname, '\\.json', sep="")
+		files=list.files(matchdir, pattern=matchfile)
+		if ( length(files) == 0 ) {
+			#warning(paste("Pattern [", matchdir, "/", matchfile, "] matched nothing"))
 		}
+		for (ffound in files) {
+			fname=paste(inputdir, currentdir, ffound, sep="")
+			if ( !file.exists(fname)) {
+				warning(paste("Skipping non-existent file: ", fname))
+				next
+			}
 
-		# Derive the name from the test result dirname
-		datasetname=basename(currentdir)
+			# Derive the name from the test result dirname
+			datasetname=basename(currentdir)
 
-		# Import the data
-		fdata=fromJSON(fname)
-		# De-nest the test name specific data
-		fdata=fdata[[testname]]
+			# Import the data
+			fdata=fromJSON(fname)
+			# De-nest the test name specific data
+			shortname=substr(ffound, 1, nchar(ffound)-nchar(".json"))
+			fdata=fdata[[shortname]]
 
-		payload=fdata$Config$payload
-		testname=paste(datasetname, payload)
+			payload=fdata$Config$payload
+			testname=paste(datasetname, payload)
 
-		cdata=data.frame(avail_mb=as.numeric(fdata$Results$system$avail)/(1024*1024))
-		cdata=cbind(cdata, avail_decr=as.numeric(fdata$Results$system$avail_decr))
-		cdata=cbind(cdata, count=seq_len(length(cdata[, "avail_mb"])))
-		cdata=cbind(cdata, testname=rep(testname, length(cdata[, "avail_mb"]) ))
-		cdata=cbind(cdata, payload=rep(payload, length(cdata[, "avail_mb"]) ))
-		cdata=cbind(cdata, dataset=rep(datasetname, length(cdata[, "avail_mb"]) ))
+			cdata=data.frame(avail_mb=as.numeric(fdata$Results$system$avail)/(1024*1024))
+			cdata=cbind(cdata, avail_decr=as.numeric(fdata$Results$system$avail_decr))
+			cdata=cbind(cdata, count=seq_len(length(cdata[, "avail_mb"])))
+			cdata=cbind(cdata, testname=rep(testname, length(cdata[, "avail_mb"]) ))
+			cdata=cbind(cdata, payload=rep(payload, length(cdata[, "avail_mb"]) ))
+			cdata=cbind(cdata, dataset=rep(datasetname, length(cdata[, "avail_mb"]) ))
 
-		# Gather our statistics
-		sdata=data.frame(num_containers=length(cdata[, "avail_mb"]))
-		# Pick out the last avail_decr value - which in theory should be
-		# the most we have consumed...
-		sdata=cbind(sdata, mem_consumed=cdata[, "avail_decr"][length(cdata[, "avail_decr"])])
-		sdata=cbind(sdata, avg_bytes_per_c=sdata$mem_consumed / sdata$num_containers)
-		sdata=cbind(sdata, runtime=testname)
+			# Gather our statistics
+			sdata=data.frame(num_containers=length(cdata[, "avail_mb"]))
+			# Pick out the last avail_decr value - which in theory should be
+			# the most we have consumed...
+			sdata=cbind(sdata, mem_consumed=cdata[, "avail_decr"][length(cdata[, "avail_decr"])])
+			sdata=cbind(sdata, avg_bytes_per_c=sdata$mem_consumed / sdata$num_containers)
+			sdata=cbind(sdata, runtime=testname)
 
-		# Store away as a single set
-		data=rbind(data, cdata)
-		stats=rbind(stats, sdata)
+			# Store away as a single set
+			data=rbind(data, cdata)
+			stats=rbind(stats, sdata)
 
-		s = c(
-			"Test"=testname,
-			"n"=sdata$num_containers,
-			"size"=(sdata$mem_consumed) / 1024,
-			"kb/n"=round((sdata$mem_consumed / sdata$num_containers) / 1024, digits=1),
-			"n/Gb"= round((1*1024*1024*1024) / (sdata$mem_consumed / sdata$num_containers), digits=1)
-		)
+			s = c(
+				"Test"=testname,
+				"n"=sdata$num_containers,
+				"size"=(sdata$mem_consumed) / 1024,
+				"kb/n"=round((sdata$mem_consumed / sdata$num_containers) / 1024, digits=1),
+				"n/Gb"= round((1*1024*1024*1024) / (sdata$mem_consumed / sdata$num_containers), digits=1)
+			)
 
-		rstats=rbind(rstats, s)
-		count = count + 1
+			rstats=rbind(rstats, s)
+			count = count + 1
+		}
 	}
 }
 
