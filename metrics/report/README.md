@@ -31,6 +31,17 @@ generating the report.
 > large containers (i.e. 8Gbyte RAM) and may fail to produce some results on a memory
 > constrained system.
 
+You can restrict the subset of tests run by `grabdata.sh` via its commandline parameters:
+
+| Option | Description |
+| ------ | ----------- |
+| -a | Run all tests (default) |
+| -d | Run the density tests |
+| -h | Print this help |
+| -n | Run the networking tests |
+| -s | Run the storage tests |
+| -t | Run the time tests |
+
 ## Report generation
 
 Report generation is provided by the `makereport.sh` script. By default this script 
