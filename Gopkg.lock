@@ -2,7 +2,7 @@
 
 
 [[projects]]
-  digest = "1:5d72bbcc9c8667b11c3dc3cbe681c5a6f71e5096744c0bf7726ab5c6425d5dc4"
+  digest = "1:79896046d0807ae89b74ae106b6cb0b346c201c02fc57b7c56017edad7493a61"
   name = "github.com/BurntSushi/toml"
   packages = ["."]
   pruneopts = "NUT"
@@ -10,7 +10,7 @@
   version = "v0.3.1"
 
 [[projects]]
-  digest = "1:2be791e7b333ff7c06f8fb3dc18a7d70580e9399dbdffd352621d067ff260b6e"
+  digest = "1:26b14a6dc72ace253599e969997d5ecf2143c63833c015179786bc756c76eaa4"
   name = "github.com/Microsoft/go-winio"
   packages = ["."]
   pruneopts = "NUT"
@@ -18,7 +18,7 @@
   version = "v0.4.12"
 
 [[projects]]
-  digest = "1:a8e16b4caf3575365c9aa3380d9418f31dd0b810596faebfe3a15c37fabeee4a"
+  digest = "1:e4eec8e05fe8611837a9b34a787cf9c714a2fd9228a0a1f41dd2ccccbaa21b7e"
   name = "github.com/Microsoft/hcsshim"
   packages = [
     ".",
@@ -66,7 +66,7 @@
   version = "v9"
 
 [[projects]]
-  digest = "1:3ac89be767202cf44b33eec1b41b3c6255ec1c79d893304ff621cceada4e53d0"
+  digest = "1:f1bb062def4356e0ffacbf80952a122489df3d26887249a6d351f5b3c98d4c16"
   name = "github.com/clearcontainers/proxy"
   packages = [
     "api",
@@ -99,7 +99,7 @@
   revision = "0650fd9eeb50bab4fc99dceb9f2e14cf58f36e7f"
 
 [[projects]]
-  digest = "1:b1ddab63ebf3a38cdc2a80fa1f00c45e8dc98e27387968ccc0e5275a43f6cb5e"
+  digest = "1:c572858cf95490994cee8faa84a57a8942f735e1a8b6a5a7876d13192754c05e"
   name = "github.com/containerd/containerd"
   packages = [
     "api/events",
@@ -120,7 +120,7 @@
   revision = "f05672357f56f26751a521175c5a96fc21fa8603"
 
 [[projects]]
-  digest = "1:e7c346f795db5a431ca8bd284faed7aa5b4d544ba6538b20a39b968473f47774"
+  digest = "1:4f06807f78ebb5fd6d5fcd539885c0a0be60732eda47189a7feb486ff60a519d"
   name = "github.com/containerd/cri-containerd"
   packages = [
     "pkg/annotations",
@@ -216,7 +216,7 @@
   version = "v0.3.3"
 
 [[projects]]
-  digest = "1:351337e3b022de09e72306f1f9711314cc4bd407c15e8d328e218c655fd55731"
+  digest = "1:2cbc5d9ad66b4eb1e82862757985de8c24d8ca299500e669998694329d05bfc9"
   name = "github.com/firecracker-microvm/firecracker-go-sdk"
   packages = [
     "client",
@@ -228,7 +228,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:ce0cdcf4a121add67d3c6f7cc08e6233275d0f417852f025b790d35da88fab10"
+  digest = "1:e30aea4f7e276dc80a7041b9e436b45a4c6636e5ba554de835b07beb0f97cc74"
   name = "github.com/globalsign/mgo"
   packages = [
     "bson",
@@ -245,7 +245,7 @@
   revision = "20b96f641a5ea98f2f8619ff4f3e061cff4833bd"
 
 [[projects]]
-  digest = "1:e101aa2e25fac7e82ba4d2f66807eedd4bcf11abc5afcb4a4629a88f9a652b84"
+  digest = "1:5b7a60e28d9315ba79fb73e6294e5823997673ee64797d28ba2dc7bf71dc6ba6"
   name = "github.com/go-openapi/analysis"
   packages = [
     ".",
@@ -288,7 +288,7 @@
   version = "v0.18.0"
 
 [[projects]]
-  digest = "1:757a8958779fedcfddafb3ac93f707876db7b4fbc71b76fbc25450b3f057025e"
+  digest = "1:36b4e8fb9b6f5896fe776b279a6e3a4115ab7d0258d0e0d2ac9c6c58e12531c7"
   name = "github.com/go-openapi/runtime"
   packages = [
     ".",
@@ -345,7 +345,7 @@
   version = "v5.0.1"
 
 [[projects]]
-  digest = "1:0dfc35f448d29c2ff6a29fb3a6643f44175dc2a07925b1add2dea74e1dd6bf8d"
+  digest = "1:34e8cbba4f0ad2eeda81c98d3f53af4c5862518ec0ebae38730fc36f8a7705f0"
   name = "github.com/gogo/protobuf"
   packages = [
     "gogoproto",
@@ -358,7 +358,7 @@
   revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
 
 [[projects]]
-  digest = "1:2d0636a8c490d2272dd725db26f74a537111b99b9dbdda0d8b98febe63702aa4"
+  digest = "1:a8b59d8995b50db3b206d9160817e00aace183e456cb60abf5157de16d12e3c9"
   name = "github.com/golang/protobuf"
   packages = [
     "proto",
@@ -388,14 +388,14 @@
   revision = "2f1d1f20f75d5404f53b9edf6b53ed5505508675"
 
 [[projects]]
-  digest = "1:270961b1d5e664d4939ffae00b990e256d92bb5039cae69208211a84c72fe5f5"
+  digest = "1:f49a8b8840fe74235515e5bdb18b641b9d1887f3af7a38bec8f6998994e5ffca"
   name = "github.com/intel/govmm"
   packages = ["qemu"]
   pruneopts = "NUT"
-  revision = "78d079db6d1f3e32e3ed7578a54baa6257b058a7"
+  revision = "35a8fd3ca9a36461b7dcf24e3b292f6e1ea4e71a"
 
 [[projects]]
-  digest = "1:2f9680b194232a3f8744fbfb2c353360c497ed59840f7cbee34e903b09cb00b6"
+  digest = "1:eaa44c90711ae244bae3ef4239edc720bbbd7dfc754bfdbd12407bdaf14d6777"
   name = "github.com/kata-containers/agent"
   packages = [
     "pkg/types",
@@ -414,7 +414,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:84a5a2b67486d5d67060ac393aa255d05d24ed5ee41daecd5635ec22657b6492"
+  digest = "1:ebd709f6c64e850ee37ffd662604b647934ba1b7da39c7ba26381d634a4b6d4d"
   name = "github.com/mailru/easyjson"
   packages = [
     "buffer",
@@ -447,7 +447,7 @@
   version = "v1.0.0-rc1"
 
 [[projects]]
-  digest = "1:26537bc93f1e164bbc305117029de9933656ff81c4549609939212aca20a4710"
+  digest = "1:d4dcb47c4324ed0af861eda17778f56229d44422819770972183bee0217f9cff"
   name = "github.com/opencontainers/runc"
   packages = [
     "libcontainer/configs",
@@ -467,7 +467,7 @@
   revision = "5806c35637336642129d03657419829569abc5aa"
 
 [[projects]]
-  digest = "1:7da29c22bcc5c2ffb308324377dc00b5084650348c2799e573ed226d8cc9faf0"
+  digest = "1:7fea98b6541d058ba0ae5496d57d420d396a3f121a0aec64b4ec2171b0a93846"
   name = "github.com/opentracing/opentracing-go"
   packages = [
     ".",
@@ -518,7 +518,7 @@
   version = "v0.9.0"
 
 [[projects]]
-  digest = "1:432ba4d123dc14d6e3b71ca22051bd1a5aa20a8e466e47edabd9af46405c5cfb"
+  digest = "1:e2930b698575a7f45df1eaa5473c76109b04a87d6a464e674a68f9c1dff244a1"
   name = "github.com/sirupsen/logrus"
   packages = [
     ".",
@@ -535,7 +535,7 @@
   revision = "890a5c3458b43e6104ff5da8dfa139d013d77544"
 
 [[projects]]
-  digest = "1:87dee780f88f86f300bbd90116e933347cf4a3c65c1960072d412597a8896d50"
+  digest = "1:d43a3612c85e592ffcefdbc426d3fc0bdbc71435c930664bef8c36034181d681"
   name = "github.com/uber/jaeger-client-go"
   packages = [
     ".",
@@ -576,7 +576,7 @@
   revision = "ac249472b7de27a9e8990819566d9be95ab5b816"
 
 [[projects]]
-  digest = "1:51b28ecbdddc7e0260899b64d8cf13343bb8f66b4b00585b46c775509755095a"
+  digest = "1:e53b4392978149151080be2de940b1cfbb542c3b2bc3281e091678a3626397f8"
   name = "github.com/vishvananda/netlink"
   packages = [
     ".",
@@ -601,7 +601,7 @@
   revision = "8dd112bcdc25174059e45e07517d9fc663123347"
 
 [[projects]]
-  digest = "1:b20c63a56900e442d5f435613fefc9392cbe8849467510fcc3869dbdad9441bb"
+  digest = "1:5985d67e107c875e2584b5a65f1590adee7677a4e44eb7e62cd54c7709abba4a"
   name = "golang.org/x/net"
   packages = [
     "context",
@@ -616,7 +616,7 @@
   revision = "a8b9294777976932365dabb6640cf1468d95c70f"
 
 [[projects]]
-  digest = "1:2fd19a8bed3f4ba8e3b26620f114efec5f39c7b02635a89a915b1cbaefeab5ff"
+  digest = "1:bfb083c1c1ae3c793c66773f32fa2f5934241d8c6327636f4761f269d018a171"
   name = "golang.org/x/sys"
   packages = [
     "unix",
@@ -626,7 +626,7 @@
   revision = "1d2aa6dbdea45adaaebb9905d0666e4537563829"
 
 [[projects]]
-  digest = "1:e33513a825fcd765e97b5de639a2f7547542d1a8245df0cef18e1fd390b778a9"
+  digest = "1:4e48d0d8df75f1bd0a0afe837599fc9ad96b59eecdd1900fc0dcceccaa5fdffc"
   name = "golang.org/x/text"
   packages = [
     "collate",
@@ -658,7 +658,7 @@
   revision = "5fe7a883aa19554f42890211544aa549836af7b7"
 
 [[projects]]
-  digest = "1:3d43152515ea791363eb0d1d21378fbf70e7df4a3954fd315898532cf5e64a8c"
+  digest = "1:c09d7ef1564ca6aee8193b8b9d2d831cb69d29581f53b1b1e6331142d07fddbd"
   name = "google.golang.org/grpc"
   packages = [
     ".",
