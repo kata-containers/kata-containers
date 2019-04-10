@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"os"
@@ -100,6 +101,9 @@ type qemuArch interface {
 
 	// supportGuestMemoryHotplug returns if the guest supports memory hotplug
 	supportGuestMemoryHotplug() bool
+
+	// setBypassSharedMemoryMigrationCaps set bypass-shared-memory capability for migration
+	setBypassSharedMemoryMigrationCaps(context.Context, *govmmQemu.QMP) error
 }
 
 type qemuArchBase struct {
@@ -569,4 +573,14 @@ func (q *qemuArchBase) handleImagePath(config HypervisorConfig) {
 
 func (q *qemuArchBase) supportGuestMemoryHotplug() bool {
 	return true
+}
+
+func (q *qemuArchBase) setBypassSharedMemoryMigrationCaps(ctx context.Context, qmp *govmmQemu.QMP) error {
+	err := qmp.ExecSetMigrationCaps(ctx, []map[string]interface{}{
+		{
+			"capability": qmpCapMigrationBypassSharedMemory,
+			"state":      true,
+		},
+	})
+	return err
 }

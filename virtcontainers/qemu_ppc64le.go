@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"encoding/hex"
 	"os"
+	"time"
 
 	govmmQemu "github.com/intel/govmm/qemu"
 	deviceConfig "github.com/kata-containers/runtime/virtcontainers/device/config"
@@ -28,6 +29,10 @@ const defaultQemuMachineType = QemuPseries
 const defaultQemuMachineOptions = "accel=kvm,usb=off"
 
 const defaultMemMaxPPC64le = 32256 // Restrict MemMax to 32Gb on PPC64le
+
+const qmpCapMigrationBypassSharedMemory = "bypass-shared-memory"
+
+const qmpMigrationWaitTimeout = 5 * time.Second
 
 var qemuPaths = map[string]string{
 	QemuPseries: defaultQemuPath,
