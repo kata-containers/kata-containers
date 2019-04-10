@@ -65,11 +65,12 @@ get_packaged_kernel_version() {
 }
 
 build_and_install_kernel() {
+	# Always build and install the kernel version found locally
 	info "Install kernel from sources"
 	pushd "${tmp_dir}" >> /dev/null
-	"${kernel_repo_dir}/kernel/build-kernel.sh" "setup"
-	"${kernel_repo_dir}/kernel/build-kernel.sh" "build"
-	sudo -E PATH="$PATH" "${kernel_repo_dir}/kernel/build-kernel.sh" "install"
+	"${kernel_repo_dir}/kernel/build-kernel.sh" -v "${kernel_version}" "setup"
+	"${kernel_repo_dir}/kernel/build-kernel.sh" -v "${kernel_version}" "build"
+	sudo -E PATH="$PATH" "${kernel_repo_dir}/kernel/build-kernel.sh" -v "${kernel_version}" "install"
 	popd >> /dev/null
 }
 
