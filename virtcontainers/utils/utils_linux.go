@@ -20,20 +20,18 @@ import (
 // VHOST_VSOCK_SET_GUEST_CID = _IOW(VHOST_VIRTIO, 0x60, __u64)
 const ioctlVhostVsockSetGuestCid = 0x4008AF60
 
-var ioctlFunc = ioctl
+var ioctlFunc = Ioctl
 
 // maxUInt represents the maximum valid value for the context ID.
 // The upper 32 bits of the CID are reserved and zeroed.
 // See http://stefanha.github.io/virtio/
 var maxUInt uint64 = 1<<32 - 1
 
-func ioctl(fd uintptr, request int, arg1 uint64) error {
-	if _, _, errno := unix.Syscall(
-		unix.SYS_IOCTL,
-		fd,
-		uintptr(request),
-		uintptr(unsafe.Pointer(&arg1)),
-	); errno != 0 {
+func Ioctl(fd uintptr, request, data uintptr) error {
+	if _, _, errno := unix.Syscall(unix.SYS_IOCTL, fd, request, data); errno != 0 {
+		//uintptr(request)
+		//uintptr(unsafe.Pointer(&arg1)),
+		//); errno != 0 {
 		return os.NewSyscallError("ioctl", fmt.Errorf("%d", int(errno)))
 	}
 
@@ -75,14 +73,14 @@ func FindContextID() (*os.File, uint64, error) {
 
 	// Looking for the first available context ID.
 	for cid := contextID; cid <= maxUInt; cid++ {
-		if err := ioctlFunc(vsockFd.Fd(), ioctlVhostVsockSetGuestCid, cid); err == nil {
+		if err := ioctlFunc(vsockFd.Fd(), ioctlVhostVsockSetGuestCid, uintptr(unsafe.Pointer(&cid))); err == nil {
 			return vsockFd, cid, nil
 		}
 	}
 
 	// Last chance to get a free context ID.
 	for cid := contextID - 1; cid >= firstContextID; cid-- {
-		if err := ioctlFunc(vsockFd.Fd(), ioctlVhostVsockSetGuestCid, cid); err == nil {
+		if err := ioctlFunc(vsockFd.Fd(), ioctlVhostVsockSetGuestCid, uintptr(unsafe.Pointer(&cid))); err == nil {
 			return vsockFd, cid, nil
 		}
 	}
