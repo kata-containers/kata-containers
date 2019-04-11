@@ -15,6 +15,9 @@ set -e
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 
+export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
+export tests_repo_dir="${GOPATH}/src/${tests_repo}"
+
 script_name=${0##*/}
 
 repo=""
@@ -153,8 +156,7 @@ check_commits()
 {
 	# Since this script is called from another repositories directory,
 	# ensure the utility is built before running it.
-	local self="$GOPATH/src/github.com/kata-containers/tests"
-	(cd "$self" && make checkcommits)
+	(cd "${tests_repo_dir}" && make checkcommits)
 
 	# Check the commits in the branch
 	{
