@@ -10,6 +10,9 @@
 # Place where virtcontainers keeps its active pod info
 VC_POD_DIR="${VC_POD_DIR:-/var/lib/vc/sbs}"
 
+# Sandbox runtime directory
+RUN_SBS_DIR="${RUN_SBS_DIR:-/run/vc/sbs}"
+
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
 die() {
@@ -155,17 +158,24 @@ check_processes() {
 	done
 }
 
-# Checks that pods were not left
-check_pods() {
-	if [ -d ${VC_POD_DIR} ]; then
+# Checks that pods were not left in a directory
+check_pods_in_dir() {
+    local DIR=$1
+    if [ -d ${DIR} ]; then
 		# Verify that pods were not left
-		pods_number=$(ls ${VC_POD_DIR} | wc -l)
+		pods_number=$(ls ${DIR} | wc -l)
 		if [ ${pods_number} -ne 0 ]; then
-			die "${pods_number} pods left and found at ${VC_POD_DIR}"
+            ls ${DIR}
+			die "${pods_number} pods left and found at ${DIR}"
 		fi
 	else
-		echo "Not ${VC_POD_DIR} directory found"
+		echo "Not ${DIR} directory found"
 	fi
+}
+
+# Checks that pods were not left
+check_pods() {
+	check_pods_in_dir ${VC_POD_DIR}
 }
 
 # Check that runtimes are not running, they should be transient

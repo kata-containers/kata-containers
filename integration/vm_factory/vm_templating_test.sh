@@ -54,6 +54,22 @@ check_vm_template_factory() {
 	[ $res -eq 1 ] || die "template factory is not set up, missing state file"
 }
 
+clean_storage_in_dir() {
+	for file in $(ls $1); do
+		sudo rm -rf $1/$file
+	done
+}
+
+clean_storage() {
+	clean_storage_in_dir ${VC_POD_DIR}
+	clean_storage_in_dir ${RUN_SBS_DIR}
+}
+
+check_storage_leak() {
+	check_pods_in_dir ${VC_POD_DIR}
+	check_pods_in_dir ${RUN_SBS_DIR}
+}
+
 clean_vm_template() {
 	while [ $(mount | grep ${template_tmpfs_path} | wc -l) -ne 0 ]
 	do
@@ -66,6 +82,7 @@ clean_vm_template() {
 setup() {
 	clean_env
 	extract_kata_env
+	clean_storage
 	clean_vm_template
 }
 
@@ -133,6 +150,9 @@ setup
 echo "Running vm templating test"
 test_factory_init_destroy
 test_docker_create_auto_init_vm_factory
+
+echo "check storage leak after vm templating test"
+check_storage_leak
 
 echo "Ending vm templating test"
 teardown
