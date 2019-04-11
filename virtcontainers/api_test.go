@@ -863,6 +863,11 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 	cleanUp()
 
 	config := newTestSandboxConfigNoop()
+	cgroupPath, err := renameCgroupPath(utils.DefaultCgroupPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	hypervisorConfig := HypervisorConfig{
 		KernelPath:        filepath.Join(testDir, testKernel),
 		ImagePath:         filepath.Join(testDir, testImage),
@@ -889,7 +894,7 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 				ID: containerID,
 				State: types.State{
 					State:      types.StateReady,
-					CgroupPath: utils.DefaultCgroupPath,
+					CgroupPath: cgroupPath,
 				},
 				PID:         0,
 				RootFs:      filepath.Join(testDir, testBundle),
@@ -922,6 +927,11 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 	cleanUp()
 
 	config := newTestSandboxConfigNoop()
+	cgroupPath, err := renameCgroupPath(utils.DefaultCgroupPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	hypervisorConfig := HypervisorConfig{
 		KernelPath:        filepath.Join(testDir, testKernel),
 		ImagePath:         filepath.Join(testDir, testImage),
@@ -948,7 +958,7 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 				ID: containerID,
 				State: types.State{
 					State:      types.StateRunning,
-					CgroupPath: utils.DefaultCgroupPath,
+					CgroupPath: cgroupPath,
 				},
 				PID:         0,
 				RootFs:      filepath.Join(testDir, testBundle),
@@ -1734,7 +1744,12 @@ func TestStatusContainerStateReady(t *testing.T) {
 
 	// (homage to a great album! ;)
 	contID := "101"
+
 	config := newTestSandboxConfigNoop()
+	cgroupPath, err := renameCgroupPath(utils.DefaultCgroupPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
@@ -1772,7 +1787,7 @@ func TestStatusContainerStateReady(t *testing.T) {
 		ID: contID,
 		State: types.State{
 			State:      types.StateReady,
-			CgroupPath: utils.DefaultCgroupPath,
+			CgroupPath: cgroupPath,
 		},
 		PID:         0,
 		RootFs:      filepath.Join(testDir, testBundle),
@@ -1800,7 +1815,12 @@ func TestStatusContainerStateRunning(t *testing.T) {
 
 	// (homage to a great album! ;)
 	contID := "101"
+
 	config := newTestSandboxConfigNoop()
+	cgroupPath, err := renameCgroupPath(utils.DefaultCgroupPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
@@ -1848,7 +1868,7 @@ func TestStatusContainerStateRunning(t *testing.T) {
 		ID: contID,
 		State: types.State{
 			State:      types.StateRunning,
-			CgroupPath: utils.DefaultCgroupPath,
+			CgroupPath: cgroupPath,
 		},
 		PID:         0,
 		RootFs:      filepath.Join(testDir, testBundle),
