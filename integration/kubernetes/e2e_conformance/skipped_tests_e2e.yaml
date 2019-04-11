@@ -1,0 +1,16 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# We need to skip some e2e conformance tests as they
+# are not running correctly using kata-runtime.
+
+containerd:
+  - SchedulerPredicates
+  - should ensure that all pods are removed when a namespace is deleted
+
+cri-o:
+  - InitContainer
+  - Projected downwardAPI
+  - Downward API

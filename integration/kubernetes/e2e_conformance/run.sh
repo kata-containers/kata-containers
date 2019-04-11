@@ -19,13 +19,12 @@ SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../../../lib/common.bash"
 
 RUNTIME="${RUNTIME:-kata-runtime}"
+CRI_RUNTIME="${CRI_RUNTIME:-crio}"
 
-# Check if Sonobuoy is still running every 5 minutes.
-WAIT_TIME=300
+# Overall Sonobuoy timeout in minutes.
+WAIT_TIME=${WAIT_TIME:-180}
 
-# Add a global timeout of 2 hours to stop the execution
-# in case Sonobuoy gets hanged.
-GLOBAL_TIMEOUT=$((WAIT_TIME*24))
+SONOBUOY_KATA_YAML="${SCRIPT_PATH}/sonobuoy_kata.yaml"
 
 create_kata_webhook() {
 	pushd "${SCRIPT_PATH}/../../../kata-webhook" >> /dev/null
@@ -38,24 +37,25 @@ create_kata_webhook() {
 }
 
 run_sonobuoy() {
-	sonobuoy_repo="github.com/heptio/sonobuoy"
-	go get -u "$sonobuoy_repo"
-
 	# Run Sonobuoy e2e tests
 	info "Starting sonobuoy execution."
 	info "When using kata as k8s runtime, the tests take around 2 hours to finish."
-	sonobuoy run
 
-	start_time=$(date +%s)
-	estimated_end_time=$((start_time + GLOBAL_TIMEOUT))
+	local skipped_tests_file="${SCRIPT_PATH}/skipped_tests_e2e.yaml"
+	local skipped_tests=$("${GOPATH}/bin/yq" read "${skipped_tests_file}" "${CRI_RUNTIME}")
 
-	# Wait for the sonobuoy pod to be running.
-	kubectl wait --for condition=Ready pod sonobuoy -n heptio-sonobuoy
-
-	while sonobuoy status | grep -Eq "running|pending" && [ "$(date +%s)" -le "$estimated_end_time" ]; do
-		info "sonobuoy still running, sleeping $WAIT_TIME seconds"
-		sleep "$WAIT_TIME"
+	# Default skipped tests for Conformance testing:
+	_skip_options=("Alpha|\[(Disruptive|Feature:[^\]]+|Flaky)\]|")
+	mapfile -t _skipped_tests <<< "${skipped_tests}"
+	for entry in "${_skipped_tests[@]}"
+	do
+		_skip_options+=("${entry#- }|")
 	done
+
+	skip_options=$(IFS= ; echo "${_skip_options[*]}")
+	skip_options="${skip_options%|}"
+
+	sonobuoy run --e2e-skip="$skip_options" --wait="$WAIT_TIME"
 
 	# Retrieve results
 	e2e_result_dir="$(mktemp -d /tmp/kata_e2e_results.XXXXX)"
@@ -85,6 +85,9 @@ cleanup() {
 }
 
 main() {
+	sonobuoy_repo="github.com/heptio/sonobuoy"
+	go get -u "$sonobuoy_repo"
+
 	if [ "$RUNTIME" == "kata-runtime" ]; then
 		create_kata_webhook
 	fi
