@@ -29,6 +29,7 @@ readonly runc_runtime_bin=$(command -v "runc")
 readonly CRITEST=${GOPATH}/bin/critest
 
 # Flag to do tasks for CI
+SNAP_CI=${SNAP_CI:-""}
 CI=${CI:-""}
 
 # Default CNI directory
@@ -77,8 +78,13 @@ ci_cleanup() {
 	fi
 
 	ID=${ID:-""}
-	if [ "$ID" == ubuntu ] &&  [ -n "${CI}" ] ;then
-		[ -f "${kata_config}" ] && sudo rm "${kata_config}"
+	if [ "$ID" == ubuntu ]; then
+		if [ -n "${SNAP_CI}" ]; then
+			# restore default configuration
+			sudo cp "${default_kata_config}" "${kata_config}"
+		elif [ -n "${CI}" ] ;then
+			[ -f "${kata_config}" ] && sudo rm "${kata_config}"
+		fi
 	fi
 }
 
