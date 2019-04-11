@@ -215,7 +215,7 @@ func TestCheckCheckKernelModulesNoNesting(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(count, uint32(0))
 
-	re := regexp.MustCompile(`\bwarning\b.*\bnested\b`)
+	re := regexp.MustCompile(`.*\bnested\b`)
 	matches := re.FindAllStringSubmatch(buf.String(), -1)
 	assert.NotEmpty(matches)
 }
@@ -309,7 +309,7 @@ func TestCheckCheckKernelModulesNoUnrestrictedGuest(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(count, uint32(0))
 
-	re := regexp.MustCompile(`\bwarning\b.*\bunrestricted_guest\b`)
+	re := regexp.MustCompile(`.*\bunrestricted_guest\b`)
 	matches := re.FindAllStringSubmatch(buf.String(), -1)
 	assert.NotEmpty(matches)
 }
