@@ -78,7 +78,7 @@ func TestExecuteErrors(t *testing.T) {
 	}
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, types.State{}, annotations), nil
+		return newSingleContainerStatus(testContainerID, types.ContainerState{}, annotations), nil
 	}
 
 	defer func() {
@@ -100,7 +100,7 @@ func TestExecuteErrors(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	containerState := types.State{}
+	containerState := types.ContainerState{}
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return newSingleContainerStatus(testContainerID, containerState, annotations), nil
 	}
@@ -110,7 +110,7 @@ func TestExecuteErrors(t *testing.T) {
 	assert.False(vcmock.IsMockError(err))
 
 	// Container paused
-	containerState = types.State{
+	containerState = types.ContainerState{
 		State: types.StatePaused,
 	}
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
@@ -122,7 +122,7 @@ func TestExecuteErrors(t *testing.T) {
 	assert.False(vcmock.IsMockError(err))
 
 	// Container stopped
-	containerState = types.State{
+	containerState = types.ContainerState{
 		State: types.StateStopped,
 	}
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
@@ -159,7 +159,7 @@ func TestExecuteErrorReadingProcessJson(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -208,7 +208,7 @@ func TestExecuteErrorOpeningConsole(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -275,7 +275,7 @@ func TestExecuteWithFlags(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -365,7 +365,7 @@ func TestExecuteWithFlagsDetached(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -444,7 +444,7 @@ func TestExecuteWithInvalidProcessJson(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -496,7 +496,7 @@ func TestExecuteWithValidProcessJson(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -597,7 +597,7 @@ func TestExecuteWithEmptyEnvironmentValue(t *testing.T) {
 		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 

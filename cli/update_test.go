@@ -95,7 +95,7 @@ func TestUpdateCLIFailure(t *testing.T) {
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
 			},
-			State: types.State{
+			State: types.ContainerState{
 				State: types.StateRunning,
 			},
 		}, nil
@@ -168,7 +168,7 @@ func TestUpdateCLISuccessful(t *testing.T) {
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
 			},
-			State: types.State{
+			State: types.ContainerState{
 				State: types.StateRunning,
 			},
 		}, nil

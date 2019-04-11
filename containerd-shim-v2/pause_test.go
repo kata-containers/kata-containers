@@ -39,7 +39,7 @@ func TestPauseContainerSuccess(t *testing.T) {
 		return vc.ContainerStatus{
 			ID:          testContainerID,
 			Annotations: make(map[string]string),
-			State: types.State{
+			State: types.ContainerState{
 				State: types.StateRunning,
 			},
 		}, nil
@@ -87,7 +87,7 @@ func TestPauseContainerFail(t *testing.T) {
 		return vc.ContainerStatus{
 			ID:          testContainerID,
 			Annotations: make(map[string]string),
-			State: types.State{
+			State: types.ContainerState{
 				State: types.StateRunning,
 			},
 		}, nil
@@ -130,7 +130,7 @@ func TestResumeContainerSuccess(t *testing.T) {
 		return vc.ContainerStatus{
 			ID:          testContainerID,
 			Annotations: make(map[string]string),
-			State: types.State{
+			State: types.ContainerState{
 				State: types.StateRunning,
 			},
 		}, nil
@@ -178,7 +178,7 @@ func TestResumeContainerFail(t *testing.T) {
 		return vc.ContainerStatus{
 			ID:          testContainerID,
 			Annotations: make(map[string]string),
-			State: types.State{
+			State: types.ContainerState{
 				State: types.StateRunning,
 			},
 		}, nil

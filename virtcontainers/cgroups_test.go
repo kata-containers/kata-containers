@@ -123,7 +123,7 @@ func TestUpdateCgroups(t *testing.T) {
 	}()
 
 	s := &Sandbox{
-		state: types.State{
+		state: types.SandboxState{
 			CgroupPath: "",
 		},
 	}
@@ -154,8 +154,7 @@ func TestUpdateCgroups(t *testing.T) {
 	// fake workload
 	cmd := exec.Command("tail", "-f", "/dev/null")
 	assert.NoError(cmd.Start())
-	s.state.Pid = cmd.Process.Pid
-	s.hypervisor = &mockHypervisor{mockPid: s.state.Pid}
+	s.hypervisor = &mockHypervisor{mockPid: cmd.Process.Pid}
 
 	// no containers
 	err = s.updateCgroups()
@@ -167,7 +166,7 @@ func TestUpdateCgroups(t *testing.T) {
 	s.containers = map[string]*Container{
 		"abc": {
 			process: Process{
-				Pid: s.state.Pid,
+				Pid: cmd.Process.Pid,
 			},
 			config: &ContainerConfig{
 				Annotations: containerAnnotations,
@@ -175,7 +174,7 @@ func TestUpdateCgroups(t *testing.T) {
 		},
 		"xyz": {
 			process: Process{
-				Pid: s.state.Pid,
+				Pid: cmd.Process.Pid,
 			},
 			config: &ContainerConfig{
 				Annotations: containerAnnotations,

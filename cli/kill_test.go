@@ -65,7 +65,7 @@ func TestProcessSignal(t *testing.T) {
 func testKillCLIFunctionTerminationSignalSuccessful(t *testing.T, sig string) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -123,7 +123,7 @@ func TestKillCLIFunctionSigtermSuccessful(t *testing.T) {
 func TestKillCLIFunctionNotTerminationSignalSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -151,7 +151,7 @@ func TestKillCLIFunctionNotTerminationSignalSuccessful(t *testing.T) {
 func TestKillCLIFunctionNoSignalSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -201,7 +201,7 @@ func TestKillCLIFunctionNoSignalSuccessful(t *testing.T) {
 func TestKillCLIFunctionEnableAllSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -289,7 +289,7 @@ func TestKillCLIFunctionContainerNotExistFailure(t *testing.T) {
 func TestKillCLIFunctionInvalidSignalFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -317,7 +317,7 @@ func TestKillCLIFunctionInvalidSignalFailure(t *testing.T) {
 func TestKillCLIFunctionStatePausedSuccessful(t *testing.T) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StatePaused,
 	}
 
@@ -348,7 +348,7 @@ func TestKillCLIFunctionStatePausedSuccessful(t *testing.T) {
 func TestKillCLIFunctionInvalidStateStoppedFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateStopped,
 	}
 
@@ -376,7 +376,7 @@ func TestKillCLIFunctionInvalidStateStoppedFailure(t *testing.T) {
 func TestKillCLIFunctionKillContainerFailure(t *testing.T) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
@@ -401,7 +401,7 @@ func TestKillCLIFunctionKillContainerFailure(t *testing.T) {
 func TestKillCLIFunctionInvalidStateStoppedAllSuccess(t *testing.T) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateStopped,
 	}
 

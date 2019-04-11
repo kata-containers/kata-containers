@@ -43,7 +43,7 @@ const (
 // SandboxStatus describes a sandbox status.
 type SandboxStatus struct {
 	ID               string
-	State            types.State
+	State            types.SandboxState
 	Hypervisor       HypervisorType
 	HypervisorConfig HypervisorConfig
 	Agent            AgentType
@@ -173,7 +173,7 @@ type Sandbox struct {
 	runPath    string
 	configPath string
 
-	state types.State
+	state types.SandboxState
 
 	networkNS NetworkNamespace
 
@@ -520,7 +520,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		containers:      map[string]*Container{},
 		runPath:         store.SandboxRuntimeRootPath(sandboxConfig.ID),
 		configPath:      store.SandboxConfigurationRootPath(sandboxConfig.ID),
-		state:           types.State{},
+		state:           types.SandboxState{},
 		annotationsLock: &sync.RWMutex{},
 		wg:              &sync.WaitGroup{},
 		shmSize:         sandboxConfig.ShmSize,
@@ -1009,7 +1009,6 @@ func (s *Sandbox) addContainer(c *Container) error {
 
 	ann := c.GetAnnotations()
 	if ann[annotations.ContainerTypeKey] == string(PodSandbox) {
-		s.state.Pid = c.process.Pid
 		s.state.CgroupPath = c.state.CgroupPath
 		return s.store.Store(store.State, s.state)
 	}

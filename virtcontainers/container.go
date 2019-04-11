@@ -70,7 +70,7 @@ type Process struct {
 // ContainerStatus describes a container status.
 type ContainerStatus struct {
 	ID        string
-	State     types.State
+	State     types.ContainerState
 	PID       int
 	StartTime time.Time
 	RootFs    string
@@ -292,7 +292,7 @@ type Container struct {
 	containerPath string
 	rootfsSuffix  string
 
-	state types.State
+	state types.ContainerState
 
 	process Process
 
@@ -656,7 +656,7 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		configPath:    store.ContainerConfigurationRootPath(sandbox.id, contConfig.ID),
 		containerPath: filepath.Join(sandbox.id, contConfig.ID),
 		rootfsSuffix:  "rootfs",
-		state:         types.State{},
+		state:         types.ContainerState{},
 		process:       Process{},
 		mounts:        contConfig.Mounts,
 		ctx:           sandbox.ctx,
@@ -669,7 +669,7 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 
 	c.store = ctrStore
 
-	state, err := c.store.LoadState()
+	state, err := c.store.LoadContainerState()
 	if err == nil {
 		c.state = state
 	}

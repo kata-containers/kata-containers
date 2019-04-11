@@ -343,7 +343,7 @@ func TestCheckSandboxRunningNotRunningFailure(t *testing.T) {
 func TestCheckSandboxRunningSuccessful(t *testing.T) {
 	c := &Container{
 		sandbox: &Sandbox{
-			state: types.State{
+			state: types.SandboxState{
 				State: types.StateRunning,
 			},
 		},
@@ -356,7 +356,7 @@ func TestContainerEnterErrorsOnContainerStates(t *testing.T) {
 	assert := assert.New(t)
 	c := &Container{
 		sandbox: &Sandbox{
-			state: types.State{
+			state: types.SandboxState{
 				State: types.StateRunning,
 			},
 		},
@@ -382,7 +382,7 @@ func TestContainerWaitErrorState(t *testing.T) {
 	assert := assert.New(t)
 	c := &Container{
 		sandbox: &Sandbox{
-			state: types.State{
+			state: types.SandboxState{
 				State: types.StateRunning,
 			},
 		},
@@ -408,7 +408,7 @@ func TestKillContainerErrorState(t *testing.T) {
 	assert := assert.New(t)
 	c := &Container{
 		sandbox: &Sandbox{
-			state: types.State{
+			state: types.SandboxState{
 				State: types.StateRunning,
 			},
 		},
@@ -427,7 +427,7 @@ func TestWinsizeProcessErrorState(t *testing.T) {
 	assert := assert.New(t)
 	c := &Container{
 		sandbox: &Sandbox{
-			state: types.State{
+			state: types.SandboxState{
 				State: types.StateRunning,
 			},
 		},
@@ -453,7 +453,7 @@ func TestProcessIOStream(t *testing.T) {
 	assert := assert.New(t)
 	c := &Container{
 		sandbox: &Sandbox{
-			state: types.State{
+			state: types.SandboxState{
 				State: types.StateRunning,
 			},
 		},

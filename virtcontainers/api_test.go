@@ -877,7 +877,7 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 
 	expectedStatus := SandboxStatus{
 		ID: testSandboxID,
-		State: types.State{
+		State: types.SandboxState{
 			State: types.StateReady,
 		},
 		Hypervisor:       MockHypervisor,
@@ -887,7 +887,7 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 		ContainersStatus: []ContainerStatus{
 			{
 				ID: containerID,
-				State: types.State{
+				State: types.ContainerState{
 					State:      types.StateReady,
 					CgroupPath: utils.DefaultCgroupPath,
 				},
@@ -936,7 +936,7 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 
 	expectedStatus := SandboxStatus{
 		ID: testSandboxID,
-		State: types.State{
+		State: types.SandboxState{
 			State: types.StateRunning,
 		},
 		Hypervisor:       MockHypervisor,
@@ -946,7 +946,7 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 		ContainersStatus: []ContainerStatus{
 			{
 				ID: containerID,
-				State: types.State{
+				State: types.ContainerState{
 					State:      types.StateRunning,
 					CgroupPath: utils.DefaultCgroupPath,
 				},
@@ -1770,7 +1770,7 @@ func TestStatusContainerStateReady(t *testing.T) {
 
 	expectedStatus := ContainerStatus{
 		ID: contID,
-		State: types.State{
+		State: types.ContainerState{
 			State:      types.StateReady,
 			CgroupPath: utils.DefaultCgroupPath,
 		},
@@ -1846,7 +1846,7 @@ func TestStatusContainerStateRunning(t *testing.T) {
 
 	expectedStatus := ContainerStatus{
 		ID: contID,
-		State: types.State{
+		State: types.ContainerState{
 			State:      types.StateRunning,
 			CgroupPath: utils.DefaultCgroupPath,
 		},

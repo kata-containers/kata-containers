@@ -39,7 +39,7 @@ var (
 func TestNetworkCliFunction(t *testing.T) {
 	assert := assert.New(t)
 
-	state := types.State{
+	state := types.ContainerState{
 		State: types.StateRunning,
 	}
 
