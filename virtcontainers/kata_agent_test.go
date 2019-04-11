@@ -570,12 +570,10 @@ func TestHandlePidNamespace(t *testing.T) {
 	}
 
 	sandbox := &Sandbox{}
-	sandbox.state.Pid = 0
 
 	k := kataAgent{}
 
-	sharedPid, err := k.handlePidNamespace(g, sandbox)
-	assert.Nil(err)
+	sharedPid := k.handlePidNamespace(g, sandbox)
 	assert.False(sharedPid)
 	assert.False(testIsPidNamespacePresent(g))
 
@@ -592,32 +590,19 @@ func TestHandlePidNamespace(t *testing.T) {
 	g.Linux.Namespaces = append(g.Linux.Namespaces, pidNs)
 	g.Linux.Namespaces = append(g.Linux.Namespaces, utsNs)
 
-	sharedPid, err = k.handlePidNamespace(g, sandbox)
-	assert.Nil(err)
+	sharedPid = k.handlePidNamespace(g, sandbox)
 	assert.False(sharedPid)
 	assert.False(testIsPidNamespacePresent(g))
 
-	sandbox.state.Pid = 112
 	pidNs = pb.LinuxNamespace{
 		Type: string(specs.PIDNamespace),
 		Path: "/proc/112/ns/pid",
 	}
 	g.Linux.Namespaces = append(g.Linux.Namespaces, pidNs)
 
-	sharedPid, err = k.handlePidNamespace(g, sandbox)
-	assert.Nil(err)
+	sharedPid = k.handlePidNamespace(g, sandbox)
 	assert.True(sharedPid)
 	assert.False(testIsPidNamespacePresent(g))
-
-	// Arbitrary path
-	pidNs = pb.LinuxNamespace{
-		Type: string(specs.PIDNamespace),
-		Path: "/proc/234/ns/pid",
-	}
-	g.Linux.Namespaces = append(g.Linux.Namespaces, pidNs)
-
-	_, err = k.handlePidNamespace(g, sandbox)
-	assert.NotNil(err)
 }
 
 func TestAgentPathAPI(t *testing.T) {
@@ -754,7 +739,7 @@ func TestAgentCreateContainer(t *testing.T) {
 		id:        "barfoo",
 		sandboxID: "foobar",
 		sandbox:   sandbox,
-		state: types.State{
+		state: types.ContainerState{
 			Fstype: "xfs",
 		},
 		config: &ContainerConfig{

@@ -188,7 +188,7 @@ func testSandboxStateTransition(t *testing.T, state types.StateString, newState 
 	}
 	defer cleanUp()
 
-	p.state = types.State{
+	p.state = types.SandboxState{
 		State: state,
 	}
 
@@ -245,7 +245,7 @@ func TestSandboxStatePausedReady(t *testing.T) {
 }
 
 func testStateValid(t *testing.T, stateStr types.StateString, expected bool) {
-	state := &types.State{
+	state := &types.SandboxState{
 		State: stateStr,
 	}
 
@@ -267,7 +267,7 @@ func TestStateValidFailing(t *testing.T) {
 }
 
 func TestValidTransitionFailingOldStateMismatch(t *testing.T) {
-	state := &types.State{
+	state := &types.SandboxState{
 		State: types.StateReady,
 	}
 
@@ -450,7 +450,7 @@ func TestSandboxEnterSuccessful(t *testing.T) {
 	}
 }
 
-func testCheckInitSandboxAndContainerStates(p *Sandbox, initialSandboxState types.State, c *Container, initialContainerState types.State) error {
+func testCheckInitSandboxAndContainerStates(p *Sandbox, initialSandboxState types.SandboxState, c *Container, initialContainerState types.ContainerState) error {
 	if p.state.State != initialSandboxState.State {
 		return fmt.Errorf("Expected sandbox state %v, got %v", initialSandboxState.State, p.state.State)
 	}
@@ -462,7 +462,7 @@ func testCheckInitSandboxAndContainerStates(p *Sandbox, initialSandboxState type
 	return nil
 }
 
-func testForceSandboxStateChangeAndCheck(t *testing.T, p *Sandbox, newSandboxState types.State) error {
+func testForceSandboxStateChangeAndCheck(t *testing.T, p *Sandbox, newSandboxState types.SandboxState) error {
 	// force sandbox state change
 	if err := p.setSandboxState(newSandboxState.State); err != nil {
 		t.Fatalf("Unexpected error: %v (sandbox %+v)", err, p)
@@ -476,7 +476,7 @@ func testForceSandboxStateChangeAndCheck(t *testing.T, p *Sandbox, newSandboxSta
 	return nil
 }
 
-func testForceContainerStateChangeAndCheck(t *testing.T, p *Sandbox, c *Container, newContainerState types.State) error {
+func testForceContainerStateChangeAndCheck(t *testing.T, p *Sandbox, c *Container, newContainerState types.ContainerState) error {
 	// force container state change
 	if err := c.setContainerState(newContainerState.State); err != nil {
 		t.Fatalf("Unexpected error: %v (sandbox %+v)", err, p)
@@ -490,7 +490,7 @@ func testForceContainerStateChangeAndCheck(t *testing.T, p *Sandbox, c *Containe
 	return nil
 }
 
-func testCheckSandboxOnDiskState(p *Sandbox, sandboxState types.State) error {
+func testCheckSandboxOnDiskState(p *Sandbox, sandboxState types.SandboxState) error {
 	// check on-disk state is correct
 	if p.state.State != sandboxState.State {
 		return fmt.Errorf("Expected state %v, got %v", sandboxState.State, p.state.State)
@@ -499,7 +499,7 @@ func testCheckSandboxOnDiskState(p *Sandbox, sandboxState types.State) error {
 	return nil
 }
 
-func testCheckContainerOnDiskState(c *Container, containerState types.State) error {
+func testCheckContainerOnDiskState(c *Container, containerState types.ContainerState) error {
 	// check on-disk state is correct
 	if c.state.State != containerState.State {
 		return fmt.Errorf("Expected state %v, got %v", containerState.State, c.state.State)
@@ -525,12 +525,12 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 		t.Fatalf("Expected 1 container found %v", l)
 	}
 
-	initialSandboxState := types.State{
+	initialSandboxState := types.SandboxState{
 		State: types.StateReady,
 	}
 
 	// After a sandbox creation, a container has a READY state
-	initialContainerState := types.State{
+	initialContainerState := types.ContainerState{
 		State: types.StateReady,
 	}
 
@@ -550,7 +550,7 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	newSandboxState := types.State{
+	newSandboxState := types.SandboxState{
 		State: types.StateRunning,
 	}
 
@@ -558,7 +558,7 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 		t.Error(err)
 	}
 
-	newContainerState := types.State{
+	newContainerState := types.ContainerState{
 		State: types.StateStopped,
 	}
 
@@ -792,7 +792,7 @@ func TestContainerSetStateBlockIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state := types.State{
+	state := types.ContainerState{
 		State:  "stopped",
 		Fstype: "vfs",
 	}
@@ -825,7 +825,7 @@ func TestContainerSetStateBlockIndex(t *testing.T) {
 		t.Fatal()
 	}
 
-	var res types.State
+	var res types.ContainerState
 	err = json.Unmarshal([]byte(string(fileData)), &res)
 	if err != nil {
 		t.Fatal(err)
@@ -888,7 +888,7 @@ func TestContainerStateSetFstype(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state := types.State{
+	state := types.ContainerState{
 		State:      "ready",
 		Fstype:     "vfs",
 		BlockIndex: 3,
@@ -923,7 +923,7 @@ func TestContainerStateSetFstype(t *testing.T) {
 		t.Fatal()
 	}
 
-	var res types.State
+	var res types.ContainerState
 	err = json.Unmarshal([]byte(string(fileData)), &res)
 	if err != nil {
 		t.Fatal(err)
@@ -1582,7 +1582,7 @@ func TestStartNetworkMonitor(t *testing.T) {
 func TestSandboxStopStopped(t *testing.T) {
 	s := &Sandbox{
 		ctx:   context.Background(),
-		state: types.State{State: types.StateStopped},
+		state: types.SandboxState{State: types.StateStopped},
 	}
 	err := s.Stop()
 
