@@ -35,6 +35,11 @@ get_from_kata_deps() {
 	local branch="${2:-master}"
 	local runtime_repo="github.com/kata-containers/runtime"
 	GOPATH=${GOPATH:-${HOME}/go}
+	# We will not query the local versions.yaml file here to allow releases to
+	# always get the version from the committed tree. For our CI,
+	# .ci/install_kata_kernel.sh file in tests repository will pass the kernel
+	# version as an override to this function to allow testing of kernels before
+	# they land in tree.
 	versions_file="versions-${branch}.yaml"
 	if [ ! -e "${versions_file}" ]; then
 		yaml_url="https://raw.githubusercontent.com/kata-containers/runtime/${branch}/versions.yaml"
