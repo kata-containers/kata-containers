@@ -13,6 +13,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/gogo/protobuf/types"
 	pb "github.com/kata-containers/runtime/protocols/cache"
@@ -43,6 +44,7 @@ var factoryCLICommand = cli.Command{
 type cacheServer struct {
 	rpc     *grpc.Server
 	factory vc.Factory
+	done    chan struct{}
 }
 
 var jsonVMConfig *pb.GrpcVMConfig
@@ -74,6 +76,29 @@ func (s *cacheServer) GetBaseVM(ctx context.Context, empty *types.Empty) (*pb.Gr
 	return vm.ToGrpc(config)
 }
 
+func (s *cacheServer) quit() {
+	s.rpc.GracefulStop()
+	close(s.done)
+}
+
+// Quit will stop VMCache server after 1 second.
+func (s *cacheServer) Quit(ctx context.Context, empty *types.Empty) (*types.Empty, error) {
+	go func() {
+		kataLog.Info("VM cache server will stop after 1 second")
+		time.Sleep(time.Second)
+		s.quit()
+	}()
+	return nil, nil
+}
+
+func (s *cacheServer) Status(ctx context.Context, empty *types.Empty) (*pb.GrpcStatus, error) {
+	stat := pb.GrpcStatus{
+		Pid:      int64(os.Getpid()),
+		Vmstatus: s.factory.GetVMStatus(),
+	}
+	return &stat, nil
+}
+
 func getUnixListener(path string) (net.Listener, error) {
 	err := os.MkdirAll(filepath.Dir(path), 0755)
 	if err != nil {
@@ -102,8 +127,8 @@ var handledSignals = []os.Signal{
 	syscall.SIGPIPE,
 }
 
-func handleSignals(s *cacheServer, signals chan os.Signal) chan struct{} {
-	done := make(chan struct{}, 1)
+func handleSignals(s *cacheServer, signals chan os.Signal) {
+	s.done = make(chan struct{}, 1)
 	go func() {
 		for {
 			sig := <-signals
@@ -112,13 +137,11 @@ func handleSignals(s *cacheServer, signals chan os.Signal) chan struct{} {
 			case unix.SIGPIPE:
 				continue
 			default:
-				s.rpc.GracefulStop()
-				close(done)
+				s.quit()
 				return
 			}
 		}
 	}()
-	return done
 }
 
 var initFactoryCommand = cli.Command{
@@ -168,13 +191,13 @@ var initFactoryCommand = cli.Command{
 			defer l.Close()
 
 			signals := make(chan os.Signal, 8)
-			done := handleSignals(s, signals)
+			handleSignals(s, signals)
 			signal.Notify(signals, handledSignals...)
 
 			kataLog.WithField("endpoint", runtimeConfig.FactoryConfig.VMCacheEndpoint).Info("VM cache server start")
 			s.rpc.Serve(l)
 
-			<-done
+			<-s.done
 
 			kataLog.WithField("endpoint", runtimeConfig.FactoryConfig.VMCacheEndpoint).Info("VM cache server stop")
 			return nil
@@ -221,7 +244,19 @@ var destroyFactoryCommand = cli.Command{
 			return errors.New("invalid runtime config")
 		}
 
-		if runtimeConfig.FactoryConfig.Template {
+		if runtimeConfig.FactoryConfig.VMCacheNumber > 0 {
+			conn, err := grpc.Dial(fmt.Sprintf("unix://%s", runtimeConfig.FactoryConfig.VMCacheEndpoint), grpc.WithInsecure())
+			if err != nil {
+				return errors.Wrapf(err, "failed to connect %q", runtimeConfig.FactoryConfig.VMCacheEndpoint)
+			}
+			defer conn.Close()
+			_, err = pb.NewCacheServiceClient(conn).Quit(ctx, &types.Empty{})
+			if err != nil {
+				return errors.Wrapf(err, "failed to call gRPC Quit")
+			}
+			// Wait VMCache server stop
+			time.Sleep(time.Second)
+		} else if runtimeConfig.FactoryConfig.Template {
 			factoryConfig := vf.Config{
 				Template: true,
 				VMConfig: vc.VMConfig{
@@ -259,6 +294,23 @@ var statusFactoryCommand = cli.Command{
 			return errors.New("invalid runtime config")
 		}
 
+		if runtimeConfig.FactoryConfig.VMCacheNumber > 0 {
+			conn, err := grpc.Dial(fmt.Sprintf("unix://%s", runtimeConfig.FactoryConfig.VMCacheEndpoint), grpc.WithInsecure())
+			if err != nil {
+				fmt.Fprintln(defaultOutputFile, errors.Wrapf(err, "failed to connect %q", runtimeConfig.FactoryConfig.VMCacheEndpoint))
+			} else {
+				defer conn.Close()
+				status, err := pb.NewCacheServiceClient(conn).Status(ctx, &types.Empty{})
+				if err != nil {
+					fmt.Fprintln(defaultOutputFile, errors.Wrapf(err, "failed to call gRPC Status\n"))
+				} else {
+					fmt.Fprintf(defaultOutputFile, "VM cache server pid = %d\n", status.Pid)
+					for _, vs := range status.Vmstatus {
+						fmt.Fprintf(defaultOutputFile, "VM pid = %d Cpu = %d Memory = %dMiB\n", vs.Pid, vs.Cpu, vs.Memory)
+					}
+				}
+			}
+		}
 		if runtimeConfig.FactoryConfig.Template {
 			factoryConfig := vf.Config{
 				Template: true,
