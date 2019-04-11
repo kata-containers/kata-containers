@@ -1297,7 +1297,7 @@ func (c *Container) detachDevices() error {
 }
 
 // creates a new cgroup and return the cgroups path
-func (c *Container) newCgroups() error {
+func (c *Container) newCgroups() (err error) {
 	ann := c.GetAnnotations()
 
 	config, ok := ann[annotations.ConfigJSONKey]
@@ -1319,7 +1319,12 @@ func (c *Container) newCgroups() error {
 		resources.CPU = validCPUResources(spec.Linux.Resources.CPU)
 	}
 
-	c.state.CgroupPath = utils.ValidCgroupPath(spec.Linux.CgroupsPath)
+	cgroupPath := utils.ValidCgroupPath(spec.Linux.CgroupsPath)
+	c.state.CgroupPath, err = renameCgroupPath(cgroupPath)
+	if err != nil {
+		return err
+	}
+
 	cgroup, err := cgroupsNewFunc(cgroups.V1,
 		cgroups.StaticPath(c.state.CgroupPath), &resources)
 	if err != nil {
