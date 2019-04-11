@@ -198,6 +198,7 @@ remove_docker(){
 		elif [ "$ID" == "centos" ] || [ "$ID" == "rhel" ]; then
 			sudo yum -y remove ${pkg_name}
 		elif [[ "$ID" =~ ^opensuse.*$ ]] || [ "$ID" == "sles" ]; then
+			sudo zypper removelock ${pkg_name}
 			sudo zypper -n remove ${pkg_name}
 		else
 			die "This script doesn't support your Linux distribution"
