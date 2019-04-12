@@ -53,12 +53,18 @@ func cleanUp() {
 		os.MkdirAll(dir, store.DirMode)
 	}
 
+	setup()
+}
+
+func setup() {
 	os.Mkdir(filepath.Join(testDir, testBundle), store.DirMode)
 
-	_, err := os.Create(filepath.Join(testDir, testImage))
-	if err != nil {
-		fmt.Println("Could not recreate test image:", err)
-		os.Exit(1)
+	for _, filename := range []string{testQemuKernelPath, testQemuInitrdPath, testQemuImagePath, testQemuPath} {
+		_, err := os.Create(filename)
+		if err != nil {
+			fmt.Printf("Could not recreate %s:%v", filename, err)
+			os.Exit(1)
+		}
 	}
 }
 
@@ -95,36 +101,7 @@ func TestMain(m *testing.M) {
 	testQemuImagePath = filepath.Join(testDir, testImage)
 	testQemuPath = filepath.Join(testDir, testHypervisor)
 
-	fmt.Printf("INFO: Creating virtcontainers test kernel %s\n", testQemuKernelPath)
-	_, err = os.Create(testQemuKernelPath)
-	if err != nil {
-		fmt.Println("Could not create test kernel:", err)
-		os.RemoveAll(testDir)
-		os.Exit(1)
-	}
-
-	fmt.Printf("INFO: Creating virtcontainers test image %s\n", testQemuImagePath)
-	_, err = os.Create(testQemuImagePath)
-	if err != nil {
-		fmt.Println("Could not create test image:", err)
-		os.RemoveAll(testDir)
-		os.Exit(1)
-	}
-
-	fmt.Printf("INFO: Creating virtcontainers test hypervisor %s\n", testQemuPath)
-	_, err = os.Create(testQemuPath)
-	if err != nil {
-		fmt.Println("Could not create test hypervisor:", err)
-		os.RemoveAll(testDir)
-		os.Exit(1)
-	}
-
-	err = os.Mkdir(filepath.Join(testDir, testBundle), store.DirMode)
-	if err != nil {
-		fmt.Println("Could not create test bundle directory:", err)
-		os.RemoveAll(testDir)
-		os.Exit(1)
-	}
+	setup()
 
 	// allow the tests to run without affecting the host system.
 	store.ConfigStoragePath = filepath.Join(testDir, store.StoragePathSuffix, "config")
