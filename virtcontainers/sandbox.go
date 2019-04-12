@@ -627,7 +627,7 @@ func unlockSandbox(ctx context.Context, sandboxID, token string) error {
 func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err error) {
 	virtLog.Info("fetch sandbox")
 	if sandboxID == "" {
-		return nil, errNeedSandboxID
+		return nil, vcTypes.ErrNeedSandboxID
 	}
 
 	sandbox, err = globalSandboxList.lookupSandbox(sandboxID)
@@ -665,11 +665,11 @@ func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err 
 // sandbox structure, based on a container ID.
 func (s *Sandbox) findContainer(containerID string) (*Container, error) {
 	if s == nil {
-		return nil, errNeedSandbox
+		return nil, vcTypes.ErrNeedSandbox
 	}
 
 	if containerID == "" {
-		return nil, errNeedContainerID
+		return nil, vcTypes.ErrNeedContainerID
 	}
 
 	for id, c := range s.containers {
@@ -686,11 +686,11 @@ func (s *Sandbox) findContainer(containerID string) (*Container, error) {
 // sandbox structure, based on a container ID.
 func (s *Sandbox) removeContainer(containerID string) error {
 	if s == nil {
-		return errNeedSandbox
+		return vcTypes.ErrNeedSandbox
 	}
 
 	if containerID == "" {
-		return errNeedContainerID
+		return vcTypes.ErrNeedContainerID
 	}
 
 	if _, ok := s.containers[containerID]; !ok {
@@ -1130,7 +1130,7 @@ func (s *Sandbox) KillContainer(containerID string, signal syscall.Signal, all b
 // DeleteContainer deletes a container from the sandbox
 func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
 	if containerID == "" {
-		return nil, errNeedContainerID
+		return nil, vcTypes.ErrNeedContainerID
 	}
 
 	// Fetch the container.
@@ -1178,7 +1178,7 @@ func (s *Sandbox) ProcessListContainer(containerID string, options ProcessListOp
 // TODO: update container status properly, see kata-containers/runtime#253
 func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
 	if containerID == "" {
-		return ContainerStatus{}, errNeedContainerID
+		return ContainerStatus{}, vcTypes.ErrNeedContainerID
 	}
 
 	for id, c := range s.containers {
@@ -1198,7 +1198,7 @@ func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
 		}
 	}
 
-	return ContainerStatus{}, errNoSuchContainer
+	return ContainerStatus{}, vcTypes.ErrNoSuchContainer
 }
 
 // EnterContainer is the virtcontainers container command execution entry point.
@@ -1405,7 +1405,7 @@ func (s *Sandbox) enter(args []string) error {
 // sandbox.
 func (s *Sandbox) setSandboxState(state types.StateString) error {
 	if state == "" {
-		return errNeedState
+		return vcTypes.ErrNeedState
 	}
 
 	// update in-memory state
@@ -1467,7 +1467,7 @@ func (s *Sandbox) decrementSandboxBlockIndex() error {
 
 func (s *Sandbox) setContainersState(state types.StateString) error {
 	if state == "" {
-		return errNeedState
+		return vcTypes.ErrNeedState
 	}
 
 	for _, c := range s.containers {
@@ -1485,7 +1485,7 @@ func togglePauseSandbox(ctx context.Context, sandboxID string, pause bool) (*San
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, errNeedSandbox
+		return nil, vcTypes.ErrNeedSandbox
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
