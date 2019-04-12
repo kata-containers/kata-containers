@@ -491,7 +491,13 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 	var sharedDirMounts []Mount
 	var ignoredMounts []Mount
 	for idx, m := range c.mounts {
-		if isSystemMount(m.Destination) || m.Type != "bind" {
+		if isSystemMount(m.Destination) {
+			if !(IsDockerVolume(m.Source) || Isk8sHostEmptyDir(m.Source)) {
+				continue
+			}
+		}
+
+		if m.Type != "bind" {
 			continue
 		}
 

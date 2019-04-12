@@ -9,6 +9,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/stretchr/testify/assert"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +18,11 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+)
+
+const (
+	testDisabledNeedRoot = "Test disabled as requires root user"
+	testDirMode          = os.FileMode(0750)
 )
 
 func TestIsSystemMount(t *testing.T) {
@@ -281,4 +288,47 @@ func TestIsDeviceMapper(t *testing.T) {
 	if !isDM {
 		t.Fatal()
 	}
+}
+
+func TestIsDockerVolume(t *testing.T) {
+	path := "/var/lib/docker/volumes/00da1347c7cf4f15db35f/_data"
+	isDockerVolume := IsDockerVolume(path)
+	assert.True(t, isDockerVolume)
+
+	path = "/var/lib/testdir"
+	isDockerVolume = IsDockerVolume(path)
+	assert.False(t, isDockerVolume)
+}
+
+func TestIsEphemeralStorage(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledNeedRoot)
+	}
+
+	dir, err := ioutil.TempDir(testDir, "foo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	sampleEphePath := filepath.Join(dir, K8sEmptyDir, "tmp-volume")
+	err = os.MkdirAll(sampleEphePath, testDirMode)
+	assert.Nil(t, err)
+
+	err = syscall.Mount("tmpfs", sampleEphePath, "tmpfs", 0, "")
+	assert.Nil(t, err)
+	defer syscall.Unmount(sampleEphePath, 0)
+
+	isEphe := IsEphemeralStorage(sampleEphePath)
+	assert.True(t, isEphe)
+
+	isHostEmptyDir := Isk8sHostEmptyDir(sampleEphePath)
+	assert.False(t, isHostEmptyDir)
+
+	sampleEphePath = "/var/lib/kubelet/pods/366c3a75-4869-11e8-b479-507b9ddd5ce4/volumes/cache-volume"
+	isEphe = IsEphemeralStorage(sampleEphePath)
+	assert.False(t, isEphe)
+
+	isHostEmptyDir = Isk8sHostEmptyDir(sampleEphePath)
+	assert.False(t, isHostEmptyDir)
 }

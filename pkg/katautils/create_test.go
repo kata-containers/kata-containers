@@ -190,7 +190,7 @@ func TestSetEphemeralStorageType(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
-	ephePath := filepath.Join(dir, k8sEmptyDir, "tmp-volume")
+	ephePath := filepath.Join(dir, vc.K8sEmptyDir, "tmp-volume")
 	err = os.MkdirAll(ephePath, testDirMode)
 	assert.Nil(err)
 

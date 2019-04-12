@@ -348,3 +348,69 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 		}
 	}
 }
+
+const (
+	dockerVolumePrefix = "/var/lib/docker/volumes"
+	dockerVolumeSuffix = "_data"
+)
+
+// IsDockerVolume returns true if the given source path is
+// a docker volume.
+// This uses a very specific path that is used by docker.
+func IsDockerVolume(path string) bool {
+	if strings.HasPrefix(path, dockerVolumePrefix) && filepath.Base(path) == dockerVolumeSuffix {
+		return true
+	}
+	return false
+}
+
+const (
+	// K8sEmptyDir is the k8s specific path for `empty-dir` volumes
+	K8sEmptyDir = "kubernetes.io~empty-dir"
+)
+
+// IsEphemeralStorage returns true if the given path
+// to the storage belongs to kubernetes ephemeral storage
+//
+// This method depends on a specific path used by k8s
+// to detect if it's of type ephemeral. As of now,
+// this is a very k8s specific solution that works
+// but in future there should be a better way for this
+// method to determine if the path is for ephemeral
+// volume type
+func IsEphemeralStorage(path string) bool {
+	if !isEmptyDir(path) {
+		return false
+	}
+
+	if _, fsType, _ := GetDevicePathAndFsType(path); fsType == "tmpfs" {
+		return true
+	}
+
+	return false
+}
+
+// Isk8sHostEmptyDir returns true if the given path
+// to the storage belongs to kubernetes empty-dir of medium "default"
+// i.e volumes that are directories on the host.
+func Isk8sHostEmptyDir(path string) bool {
+	if !isEmptyDir(path) {
+		return false
+	}
+
+	if _, fsType, _ := GetDevicePathAndFsType(path); fsType != "tmpfs" {
+		return true
+	}
+	return false
+}
+
+func isEmptyDir(path string) bool {
+	splitSourceSlice := strings.Split(path, "/")
+	if len(splitSourceSlice) > 1 {
+		storageType := splitSourceSlice[len(splitSourceSlice)-2]
+		if storageType == K8sEmptyDir {
+			return true
+		}
+	}
+	return false
+}

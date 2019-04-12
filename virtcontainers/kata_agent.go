@@ -43,6 +43,15 @@ import (
 	grpcStatus "google.golang.org/grpc/status"
 )
 
+const (
+	// KataEphemeralDevType creates a tmpfs backed volume for sharing files between containers.
+	KataEphemeralDevType = "ephemeral"
+
+	// KataLocalDevType creates a local directory inside the VM for sharing files between
+	// containers.
+	KataLocalDevType = "local"
+)
+
 var (
 	checkRequestTimeout   = 30 * time.Second
 	defaultKataSocketName = "kata.sock"
@@ -59,17 +68,17 @@ var (
 	vsockSocketScheme     = "vsock"
 	// port numbers below 1024 are called privileged ports. Only a process with
 	// CAP_NET_BIND_SERVICE capability may bind to these port numbers.
-	vSockPort            = 1024
-	kata9pDevType        = "9p"
-	kataMmioBlkDevType   = "mmioblk"
-	kataBlkDevType       = "blk"
-	kataSCSIDevType      = "scsi"
-	kataNvdimmDevType    = "nvdimm"
-	sharedDir9pOptions   = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
-	shmDir               = "shm"
-	kataEphemeralDevType = "ephemeral"
-	ephemeralPath        = filepath.Join(kataGuestSandboxDir, kataEphemeralDevType)
-	grpcMaxDataSize      = int64(1024 * 1024)
+	vSockPort          = 1024
+	kata9pDevType      = "9p"
+	kataMmioBlkDevType = "mmioblk"
+	kataBlkDevType     = "blk"
+	kataSCSIDevType    = "scsi"
+	kataNvdimmDevType  = "nvdimm"
+	sharedDir9pOptions = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
+	shmDir             = "shm"
+	ephemeralPath      = filepath.Join(kataGuestSandboxDir, KataEphemeralDevType)
+	grpcMaxDataSize    = int64(1024 * 1024)
+	localDirOptions    = []string{"mode=0777"}
 )
 
 // KataAgentConfig is a structure storing information needed
@@ -672,7 +681,7 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 		shmSizeOption := fmt.Sprintf("size=%d", sandbox.shmSize)
 
 		shmStorage := &grpc.Storage{
-			Driver:     kataEphemeralDevType,
+			Driver:     KataEphemeralDevType,
 			MountPoint: path,
 			Source:     "shm",
 			Fstype:     "tmpfs",
@@ -1038,6 +1047,9 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	epheStorages := k.handleEphemeralStorage(ociSpec.Mounts)
 	ctrStorages = append(ctrStorages, epheStorages...)
 
+	localStorages := k.handleLocalStorage(ociSpec.Mounts, sandbox.id)
+	ctrStorages = append(ctrStorages, localStorages...)
+
 	// We replace all OCI mount sources that match our container mount
 	// with the right source path (The guest one).
 	if err = k.replaceOCIMountSource(ociSpec, newMounts); err != nil {
@@ -1113,14 +1125,14 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) []*grpc.Storage {
 	var epheStorages []*grpc.Storage
 	for idx, mnt := range mounts {
-		if mnt.Type == kataEphemeralDevType {
+		if mnt.Type == KataEphemeralDevType {
 			// Set the mount source path to a path that resides inside the VM
 			mounts[idx].Source = filepath.Join(ephemeralPath, filepath.Base(mnt.Source))
 
 			// Create a storage struct so that kata agent is able to create
 			// tmpfs backed volume inside the VM
 			epheStorage := &grpc.Storage{
-				Driver:     kataEphemeralDevType,
+				Driver:     KataEphemeralDevType,
 				Source:     "tmpfs",
 				Fstype:     "tmpfs",
 				MountPoint: mounts[idx].Source,
@@ -1129,6 +1141,34 @@ func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) []*grpc.Storage
 		}
 	}
 	return epheStorages
+}
+
+// handleLocalStorage handles local storage within the VM
+// by creating a directory in the VM from the source of the mount point.
+func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string) []*grpc.Storage {
+	var localStorages []*grpc.Storage
+	for idx, mnt := range mounts {
+		if mnt.Type == KataLocalDevType {
+			// Set the mount source path to a the desired directory point in the VM.
+			// In this case it is located in the sandbox directory.
+			// We rely on the fact that the first container in the VM has the same ID as the sandbox ID.
+			// In Kubernetes, this is usually the pause container and we depend on it existing for
+			// local directories to work.
+			mounts[idx].Source = filepath.Join(kataGuestSharedDir, sandboxID, KataLocalDevType, filepath.Base(mnt.Source))
+
+			// Create a storage struct so that the kata agent is able to create the
+			// directory inside the VM.
+			localStorage := &grpc.Storage{
+				Driver:     KataLocalDevType,
+				Source:     KataLocalDevType,
+				Fstype:     KataLocalDevType,
+				MountPoint: mounts[idx].Source,
+				Options:    localDirOptions,
+			}
+			localStorages = append(localStorages, localStorage)
+		}
+	}
+	return localStorages
 }
 
 // handleBlockVolumes handles volumes that are block devices files
