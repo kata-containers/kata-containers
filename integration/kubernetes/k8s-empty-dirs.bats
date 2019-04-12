@@ -23,7 +23,6 @@ setup() {
 
 	# Check volume mounts
 	cmd="mount | grep cache"
-	kubectl exec $pod_name -- sh -c "$cmd" | grep "/host/cache type 9p"
 	kubectl exec $pod_name -- sh -c "$cmd" | grep "/tmp/cache type tmpfs"
 }
 
