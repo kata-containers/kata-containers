@@ -27,6 +27,7 @@ const (
 const (
 	sysCgroupPath     = "/sys/fs/cgroup/"
 	dockerCgroupName  = "docker"
+	cgroupPathPrefix  = "kata"
 	sysCPUSharesFile  = "cpu.shares"
 	sysCPUQuotaFile   = "cpu.cfs_quota_us"
 	sysCPUPeriodFile  = "cpu.cfs_period_us"
@@ -63,7 +64,8 @@ func containerCgroupPath(name string, t cgroupType) (string, error) {
 	}
 
 	if id, err := containerID(name); err == nil && id != "" {
-		return filepath.Join(sysCgroupPath, string(t), parentCgroup, id), nil
+		cgroupPath := fmt.Sprintf("%s_%s", cgroupPathPrefix, id)
+		return filepath.Join(sysCgroupPath, string(t), parentCgroup, cgroupPath), nil
 	}
 
 	return "", fmt.Errorf("Could not get container cgroup path")
