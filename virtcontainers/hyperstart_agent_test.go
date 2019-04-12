@@ -282,6 +282,12 @@ func TestHyperCopyFile(t *testing.T) {
 func TestHyperCleanupSandbox(t *testing.T) {
 	assert := assert.New(t)
 
+	defaultSharedDirSaved := defaultSharedDir
+	defaultSharedDir, _ = ioutil.TempDir("", "hyper-cleanup")
+	defer func() {
+		defaultSharedDir = defaultSharedDirSaved
+	}()
+
 	s := Sandbox{
 		id: "testFoo",
 	}
