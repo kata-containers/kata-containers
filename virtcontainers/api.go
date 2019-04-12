@@ -132,7 +132,7 @@ func DeleteSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, errNeedSandboxID
+		return nil, vcTypes.ErrNeedSandboxID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -165,7 +165,7 @@ func FetchSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, errNeedSandboxID
+		return nil, vcTypes.ErrNeedSandboxID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -202,7 +202,7 @@ func StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, errNeedSandboxID
+		return nil, vcTypes.ErrNeedSandboxID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -234,7 +234,7 @@ func StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, errNeedSandbox
+		return nil, vcTypes.ErrNeedSandbox
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -328,7 +328,7 @@ func StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error)
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return SandboxStatus{}, errNeedSandboxID
+		return SandboxStatus{}, vcTypes.ErrNeedSandboxID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -374,7 +374,7 @@ func CreateContainer(ctx context.Context, sandboxID string, containerConfig Cont
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, nil, errNeedSandboxID
+		return nil, nil, vcTypes.ErrNeedSandboxID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -405,11 +405,11 @@ func DeleteContainer(ctx context.Context, sandboxID, containerID string) (VCCont
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, errNeedSandboxID
+		return nil, vcTypes.ErrNeedSandboxID
 	}
 
 	if containerID == "" {
-		return nil, errNeedContainerID
+		return nil, vcTypes.ErrNeedContainerID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -434,11 +434,11 @@ func StartContainer(ctx context.Context, sandboxID, containerID string) (VCConta
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, errNeedSandboxID
+		return nil, vcTypes.ErrNeedSandboxID
 	}
 
 	if containerID == "" {
-		return nil, errNeedContainerID
+		return nil, vcTypes.ErrNeedContainerID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -463,11 +463,11 @@ func StopContainer(ctx context.Context, sandboxID, containerID string) (VCContai
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, errNeedSandboxID
+		return nil, vcTypes.ErrNeedSandboxID
 	}
 
 	if containerID == "" {
-		return nil, errNeedContainerID
+		return nil, vcTypes.ErrNeedContainerID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -492,11 +492,11 @@ func EnterContainer(ctx context.Context, sandboxID, containerID string, cmd type
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, nil, nil, errNeedSandboxID
+		return nil, nil, nil, vcTypes.ErrNeedSandboxID
 	}
 
 	if containerID == "" {
-		return nil, nil, nil, errNeedContainerID
+		return nil, nil, nil, vcTypes.ErrNeedContainerID
 	}
 
 	lockFile, err := rLockSandbox(ctx, sandboxID)
@@ -526,11 +526,11 @@ func StatusContainer(ctx context.Context, sandboxID, containerID string) (Contai
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return ContainerStatus{}, errNeedSandboxID
+		return ContainerStatus{}, vcTypes.ErrNeedSandboxID
 	}
 
 	if containerID == "" {
-		return ContainerStatus{}, errNeedContainerID
+		return ContainerStatus{}, vcTypes.ErrNeedContainerID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -607,11 +607,11 @@ func KillContainer(ctx context.Context, sandboxID, containerID string, signal sy
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return errNeedSandboxID
+		return vcTypes.ErrNeedSandboxID
 	}
 
 	if containerID == "" {
-		return errNeedContainerID
+		return vcTypes.ErrNeedContainerID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -654,11 +654,11 @@ func ProcessListContainer(ctx context.Context, sandboxID, containerID string, op
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, errNeedSandboxID
+		return nil, vcTypes.ErrNeedSandboxID
 	}
 
 	if containerID == "" {
-		return nil, errNeedContainerID
+		return nil, vcTypes.ErrNeedContainerID
 	}
 
 	lockFile, err := rLockSandbox(ctx, sandboxID)
@@ -683,11 +683,11 @@ func UpdateContainer(ctx context.Context, sandboxID, containerID string, resourc
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return errNeedSandboxID
+		return vcTypes.ErrNeedSandboxID
 	}
 
 	if containerID == "" {
-		return errNeedContainerID
+		return vcTypes.ErrNeedContainerID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -712,11 +712,11 @@ func StatsContainer(ctx context.Context, sandboxID, containerID string) (Contain
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return ContainerStats{}, errNeedSandboxID
+		return ContainerStats{}, vcTypes.ErrNeedSandboxID
 	}
 
 	if containerID == "" {
-		return ContainerStats{}, errNeedContainerID
+		return ContainerStats{}, vcTypes.ErrNeedContainerID
 	}
 	lockFile, err := rLockSandbox(ctx, sandboxID)
 	if err != nil {
@@ -736,11 +736,11 @@ func StatsContainer(ctx context.Context, sandboxID, containerID string) (Contain
 
 func togglePauseContainer(ctx context.Context, sandboxID, containerID string, pause bool) error {
 	if sandboxID == "" {
-		return errNeedSandboxID
+		return vcTypes.ErrNeedSandboxID
 	}
 
 	if containerID == "" {
-		return errNeedContainerID
+		return vcTypes.ErrNeedContainerID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -784,7 +784,7 @@ func AddDevice(ctx context.Context, sandboxID string, info deviceConfig.DeviceIn
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, errNeedSandboxID
+		return nil, vcTypes.ErrNeedSandboxID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -804,7 +804,7 @@ func AddDevice(ctx context.Context, sandboxID string, info deviceConfig.DeviceIn
 
 func toggleInterface(ctx context.Context, sandboxID string, inf *vcTypes.Interface, add bool) (*vcTypes.Interface, error) {
 	if sandboxID == "" {
-		return nil, errNeedSandboxID
+		return nil, vcTypes.ErrNeedSandboxID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -848,7 +848,7 @@ func ListInterfaces(ctx context.Context, sandboxID string) ([]*vcTypes.Interface
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, errNeedSandboxID
+		return nil, vcTypes.ErrNeedSandboxID
 	}
 
 	lockFile, err := rLockSandbox(ctx, sandboxID)
@@ -872,7 +872,7 @@ func UpdateRoutes(ctx context.Context, sandboxID string, routes []*vcTypes.Route
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, errNeedSandboxID
+		return nil, vcTypes.ErrNeedSandboxID
 	}
 
 	lockFile, err := rwLockSandbox(ctx, sandboxID)
@@ -896,7 +896,7 @@ func ListRoutes(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error)
 	defer span.Finish()
 
 	if sandboxID == "" {
-		return nil, errNeedSandboxID
+		return nil, vcTypes.ErrNeedSandboxID
 	}
 
 	lockFile, err := rLockSandbox(ctx, sandboxID)
