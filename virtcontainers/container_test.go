@@ -137,6 +137,10 @@ func TestContainerRemoveDrive(t *testing.T) {
 }
 
 func testSetupFakeRootfs(t *testing.T) (testRawFile, loopDev, mntDir string, err error) {
+	if os.Geteuid() != 0 {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
 	tmpDir, err := ioutil.TempDir("", "")
 	if err != nil {
 		t.Fatal(err)

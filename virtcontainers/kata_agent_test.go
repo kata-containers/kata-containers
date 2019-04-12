@@ -920,6 +920,12 @@ func TestKataCopyFile(t *testing.T) {
 func TestKataCleanupSandbox(t *testing.T) {
 	assert := assert.New(t)
 
+	kataHostSharedDirSaved := kataHostSharedDir
+	kataHostSharedDir, _ = ioutil.TempDir("", "kata-cleanup")
+	defer func() {
+		kataHostSharedDir = kataHostSharedDirSaved
+	}()
+
 	s := Sandbox{
 		id: "testFoo",
 	}
