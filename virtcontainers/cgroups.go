@@ -29,6 +29,12 @@ type cgroupPather interface {
 // where path is defined by the containers manager
 const cgroupKataPath = "/kata/"
 
+// prepend a kata specific string to oci cgroup path to
+// form a different cgroup path, thus cAdvisor couldn't
+// find kata containers cgroup path on host to prevent it
+// from grabbing the stats data.
+const cgroupKataPrefix = "kata"
+
 var cgroupsLoadFunc = cgroups.Load
 var cgroupsNewFunc = cgroups.New
 
@@ -354,4 +360,15 @@ func validCPUResources(cpuSpec *specs.LinuxCPU) *specs.LinuxCPU {
 	}
 
 	return &cpu
+}
+
+func renameCgroupPath(path string) (string, error) {
+	if path == "" {
+		return "", fmt.Errorf("Cgroup path is empty")
+	}
+
+	cgroupPathDir := filepath.Dir(path)
+	cgroupPathName := fmt.Sprintf("%s_%s", cgroupKataPrefix, filepath.Base(path))
+	return filepath.Join(cgroupPathDir, cgroupPathName), nil
+
 }
