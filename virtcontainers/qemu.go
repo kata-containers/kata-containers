@@ -89,10 +89,8 @@ const (
 	consoleSocket = "console.sock"
 	qmpSocket     = "qmp.sock"
 
-	qmpCapErrMsg                      = "Failed to negoatiate QMP capabilities"
-	qmpCapMigrationBypassSharedMemory = "bypass-shared-memory"
-	qmpExecCatCmd                     = "exec:cat"
-	qmpMigrationWaitTimeout           = 5 * time.Second
+	qmpCapErrMsg  = "Failed to negoatiate QMP capabilities"
+	qmpExecCatCmd = "exec:cat"
 
 	scsiControllerID  = "scsi0"
 	rngID             = "rng0"
@@ -1331,12 +1329,7 @@ func (q *qemu) saveSandbox() error {
 	// BootToBeTemplate sets the VM to be a template that other VMs can clone from. We would want to
 	// bypass shared memory when saving the VM to a local file through migration exec.
 	if q.config.BootToBeTemplate {
-		err = q.qmpMonitorCh.qmp.ExecSetMigrationCaps(q.qmpMonitorCh.ctx, []map[string]interface{}{
-			{
-				"capability": qmpCapMigrationBypassSharedMemory,
-				"state":      true,
-			},
-		})
+		err := q.arch.setBypassSharedMemoryMigrationCaps(q.qmpMonitorCh.ctx, q.qmpMonitorCh.qmp)
 		if err != nil {
 			q.Logger().WithError(err).Error("set migration bypass shared memory")
 			return err
