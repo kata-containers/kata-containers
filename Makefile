@@ -30,10 +30,13 @@ ifneq ($(wildcard $(ARCH_FILE)),)
 include $(ARCH_FILE)
 endif
 
-default: checkcommits
+default: checkcommits github-labels
 
 checkcommits:
 	make -C cmd/checkcommits
+
+github-labels:
+	make -C cmd/github-labels
 
 ginkgo:
 	ln -sf . vendor/src
