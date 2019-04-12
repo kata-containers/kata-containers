@@ -6,10 +6,12 @@
 package virtcontainers
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	govmmQemu "github.com/intel/govmm/qemu"
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -24,6 +26,10 @@ type qemuArm64 struct {
 const defaultQemuPath = "/usr/bin/qemu-system-aarch64"
 
 const defaultQemuMachineType = QemuVirt
+
+const qmpMigrationWaitTimeout = 10 * time.Second
+
+const qmpCapMigrationBypassSharedMemory = "bypass-shared-memory"
 
 var defaultQemuMachineOptions = "usb=off,accel=kvm,nvdimm,gic-version=" + getGuestGICVersion()
 
@@ -188,4 +194,9 @@ func (q *qemuArm64) appendImage(devices []govmmQemu.Device, path string) ([]govm
 	devices = append(devices, object)
 
 	return devices, nil
+}
+
+func (q *qemuArm64) setBypassSharedMemoryMigrationCaps(_ context.Context, _ *govmmQemu.QMP) error {
+	// bypass-shared-memory not support in arm64 for now
+	return nil
 }

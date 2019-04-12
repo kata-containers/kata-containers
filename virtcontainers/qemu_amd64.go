@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"os"
+	"time"
 
 	"github.com/kata-containers/runtime/virtcontainers/types"
 
@@ -23,6 +24,10 @@ const defaultQemuPath = "/usr/bin/qemu-system-x86_64"
 const defaultQemuMachineType = QemuPC
 
 const defaultQemuMachineOptions = "accel=kvm,kernel_irqchip,nvdimm"
+
+const qmpCapMigrationBypassSharedMemory = "bypass-shared-memory"
+
+const qmpMigrationWaitTimeout = 5 * time.Second
 
 var qemuPaths = map[string]string{
 	QemuPCLite: "/usr/bin/qemu-lite-system-x86_64",
