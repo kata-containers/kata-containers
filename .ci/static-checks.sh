@@ -34,6 +34,7 @@ long_options=(
 	[force]="Force a skipped test to run"
 	[golang]="Check '.go' files"
 	[help]="Display usage statement"
+	[labels]="Check labels databases"
 	[licenses]="Check licenses"
 	[branch]="Specify upstream branch to compare against (default '$branch')"
 	[all]="Force checking of all changes, including files in the base branch"
@@ -274,6 +275,27 @@ check_versions()
 	else
 		info "Cannot check versions as $yamllint_cmd not available"
 	fi
+}
+
+check_labels()
+{
+	[ $(uname -s) != Linux ] && info "Can only check labels under Linux" && return
+
+	# Handle SLES which doesn't provide the required command.
+	[ -z "$have_yamllint_cmd" ] && info "Cannot check labels as $yamllint_cmd not available" && return
+
+	# Since this script is called from another repositories directory,
+	# ensure the utility is built before the script below (which uses it) is run.
+	(cd "${tests_repo_dir}" && make github-labels)
+
+	tmp=$(mktemp)
+
+	info "Checking labels for repo ${repo} using temporary combined database ${tmp}"
+
+	bash -f "${tests_repo_dir}/cmd/github-labels/github-labels.sh" "generate" "${repo}" "${tmp}"
+
+	# All tests passed so remove combined labels database
+	rm -f "${tmp}"
 }
 
 # Ensure all files (where possible) contain an SPDX license header
@@ -618,6 +640,7 @@ main()
 			--force) force="true" ;;
 			--golang) func=check_go ;;
 			-h|--help) usage; exit 0 ;;
+			--labels) func=check_labels;;
 			--licenses) func=check_license_headers ;;
 			--repo) repo="$2"; shift ;;
 			--vendor) func=check_vendor;;
@@ -671,6 +694,7 @@ main()
 	check_docs
 	check_files
 	check_vendor
+	check_labels
 }
 
 main "$@"
