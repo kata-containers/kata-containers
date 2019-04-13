@@ -1364,7 +1364,7 @@ func TestDefaultMachineAccelerators(t *testing.T) {
 func TestUpdateRuntimeConfiguration(t *testing.T) {
 	assert := assert.New(t)
 
-	assert.NotEqual(defaultAgent, vc.HyperstartAgent)
+	assert.Equal(defaultAgent, vc.KataContainersAgent)
 
 	config := oci.RuntimeConfig{}
 
@@ -1433,7 +1433,7 @@ func TestUpdateRuntimeConfigurationFactoryConfig(t *testing.T) {
 func TestUpdateRuntimeConfigurationInvalidKernelParams(t *testing.T) {
 	assert := assert.New(t)
 
-	assert.NotEqual(defaultAgent, vc.HyperstartAgent)
+	assert.Equal(defaultAgent, vc.KataContainersAgent)
 
 	config := oci.RuntimeConfig{}
 

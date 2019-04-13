@@ -41,9 +41,6 @@ const (
 	// NoopAgentType is the No-Op agent.
 	NoopAgentType AgentType = "noop"
 
-	// HyperstartAgent is the Hyper hyperstart agent.
-	HyperstartAgent AgentType = "hyperstart"
-
 	// KataContainersAgent is the Kata Containers agent.
 	KataContainersAgent AgentType = "kata"
 
@@ -61,9 +58,6 @@ func (agentType *AgentType) Set(value string) error {
 	case "noop":
 		*agentType = NoopAgentType
 		return nil
-	case "hyperstart":
-		*agentType = HyperstartAgent
-		return nil
 	case "kata":
 		*agentType = KataContainersAgent
 		return nil
@@ -77,8 +71,6 @@ func (agentType *AgentType) String() string {
 	switch *agentType {
 	case NoopAgentType:
 		return string(NoopAgentType)
-	case HyperstartAgent:
-		return string(HyperstartAgent)
 	case KataContainersAgent:
 		return string(KataContainersAgent)
 	default:
@@ -91,8 +83,6 @@ func newAgent(agentType AgentType) agent {
 	switch agentType {
 	case NoopAgentType:
 		return &noopAgent{}
-	case HyperstartAgent:
-		return &hyper{}
 	case KataContainersAgent:
 		return &kataAgent{}
 	default:
@@ -105,13 +95,6 @@ func newAgentConfig(agentType AgentType, agentConfig interface{}) interface{} {
 	switch agentType {
 	case NoopAgentType:
 		return nil
-	case HyperstartAgent:
-		var hyperConfig HyperConfig
-		err := mapstructure.Decode(agentConfig, &hyperConfig)
-		if err != nil {
-			return err
-		}
-		return hyperConfig
 	case KataContainersAgent:
 		var kataAgentConfig KataAgentConfig
 		err := mapstructure.Decode(agentConfig, &kataAgentConfig)

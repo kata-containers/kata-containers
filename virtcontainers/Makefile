@@ -8,12 +8,8 @@ PREFIX := /usr
 BIN_DIR := $(PREFIX)/bin
 VC_BIN_DIR := $(BIN_DIR)/virtcontainers/bin
 TEST_BIN_DIR := $(VC_BIN_DIR)/test
-VIRTC_DIR := hack/virtc
-VIRTC_BIN := virtc
 HOOK_DIR := hook/mock
 HOOK_BIN := hook
-CC_SHIM_DIR := shim/mock/cc-shim
-CC_SHIM_BIN := cc-shim
 KATA_SHIM_DIR := shim/mock/kata-shim
 KATA_SHIM_BIN := kata-shim
 MK_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
@@ -35,19 +31,13 @@ all: build binaries
 build:
 	$(QUIET_GOBUILD)go build $(go list ./... | grep -v /vendor/)
 
-virtc:
-	$(QUIET_GOBUILD)go build -o $(VIRTC_DIR)/$@ $(VIRTC_DIR)/*.go
-
 hook:
 	$(QUIET_GOBUILD)go build -o $(HOOK_DIR)/$@ $(HOOK_DIR)/*.go
-
-cc-shim:
-	$(QUIET_GOBUILD)go build -o $(CC_SHIM_DIR)/$@ $(CC_SHIM_DIR)/*.go
 
 kata-shim:
 	$(QUIET_GOBUILD)go build -o $(KATA_SHIM_DIR)/$@ $(KATA_SHIM_DIR)/*.go
 
-binaries: virtc hook cc-shim kata-shim
+binaries: hook kata-shim
 
 #
 # Tests
@@ -60,7 +50,6 @@ check-go-static:
 
 check-go-test:
 	bash $(MK_DIR)/../.ci/go-test.sh \
-		$(TEST_BIN_DIR)/$(CC_SHIM_BIN) \
 		$(TEST_BIN_DIR)/$(KATA_SHIM_BIN) \
 		$(TEST_BIN_DIR)/$(HOOK_BIN)
 
@@ -78,10 +67,8 @@ endef
 
 install:
 	@mkdir -p $(VC_BIN_DIR)
-	$(call INSTALL_EXEC,$(VIRTC_DIR)/$(VIRTC_BIN))
 	@mkdir -p $(TEST_BIN_DIR)
 	$(call INSTALL_TEST_EXEC,$(HOOK_DIR)/$(HOOK_BIN))
-	$(call INSTALL_TEST_EXEC,$(CC_SHIM_DIR)/$(CC_SHIM_BIN))
 	$(call INSTALL_TEST_EXEC,$(KATA_SHIM_DIR)/$(KATA_SHIM_BIN))
 
 #
@@ -97,9 +84,7 @@ define UNINSTALL_TEST_EXEC
 endef
 
 uninstall:
-	$(call UNINSTALL_EXEC,$(VIRTC_BIN))
 	$(call UNINSTALL_TEST_EXEC,$(HOOK_BIN))
-	$(call UNINSTALL_TEST_EXEC,$(CC_SHIM_BIN))
 	$(call UNINSTALL_TEST_EXEC,$(KATA_SHIM_BIN))
 
 #
@@ -112,9 +97,7 @@ define FILE_SAFE_TO_REMOVE =
 $(shell test -e "$(1)" && test "$(1)" != "/" && echo "$(1)")
 endef
 
-CLEAN_FILES += $(VIRTC_DIR)/$(VIRTC_BIN)
 CLEAN_FILES += $(HOOK_DIR)/$(HOOK_BIN)
-CLEAN_FILES += $(SHIM_DIR)/$(CC_SHIM_BIN)
 CLEAN_FILES += $(SHIM_DIR)/$(KATA_SHIM_BIN)
 
 clean:
@@ -123,7 +106,6 @@ clean:
 .PHONY: \
 	all \
 	build \
-	virtc \
 	hook \
 	shim \
 	binaries \
