@@ -193,9 +193,6 @@ const (
 	// NoopAgentType is the No-Op agent.
 	NoopAgentType AgentType = "noop"
 
-	// HyperstartAgent is the Hyper hyperstart agent.
-	HyperstartAgent AgentType = "hyperstart"
-
 	// KataContainersAgent is the Kata Containers agent.
 	KataContainersAgent AgentType = "kata"
 
@@ -220,9 +217,6 @@ const (
 	// NoProxyType is the noProxy.
 	NoProxyType ProxyType = "noProxy"
 
-	// CCProxyType is the ccProxy.
-	CCProxyType ProxyType = "ccProxy"
-
 	// KataProxyType is the kataProxy.
 	KataProxyType ProxyType = "kataProxy"
 )
@@ -244,9 +238,6 @@ type ProxyConfig struct {
 type ShimType string
 
 const (
-	// CCShimType is the ccShim.
-	CCShimType ShimType = "ccShim"
-
 	// NoopShimType is the noopShim.
 	NoopShimType ShimType = "noopShim"
 
@@ -848,7 +839,7 @@ func ProcessListContainer(sandboxID, containerID string, options ProcessListOpti
 ```Go
 
 // This example creates and starts a single container sandbox,
-// using qemu as the hypervisor and hyperstart as the VM agent.
+// using qemu as the hypervisor and kata as the VM agent.
 func Example_createAndStartSandbox() {
 	envs := []vc.EnvVar{
 		{
@@ -877,8 +868,8 @@ func Example_createAndStartSandbox() {
 		HypervisorPath: "/usr/bin/qemu-system-x86_64",
 	}
 
-	// Use hyperstart default values for the agent.
-	agConfig := vc.HyperConfig{}
+	// Use kata default values for the agent.
+	agConfig := vc.KataAgentConfig{}
 
 	// VM resources
 	vmConfig := vc.Resources{
@@ -889,14 +880,14 @@ func Example_createAndStartSandbox() {
 	// The sandbox configuration:
 	// - One container
 	// - Hypervisor is QEMU
-	// - Agent is hyperstart
+	// - Agent is kata
 	sandboxConfig := vc.SandboxConfig{
 		VMConfig: vmConfig,
 
 		HypervisorType:   vc.QemuHypervisor,
 		HypervisorConfig: hypervisorConfig,
 
-		AgentType:   vc.HyperstartAgent,
+		AgentType:   vc.KataContainersAgent
 		AgentConfig: agConfig,
 
 		Containers: []vc.ContainerConfig{container},

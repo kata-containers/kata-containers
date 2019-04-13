@@ -116,10 +116,8 @@ var DefaultNetInterworkingModel = NetXConnectMacVtapModel
 
 // Introduces constants related to networking
 const (
-	defaultRouteDest  = "0.0.0.0/0"
-	defaultRouteLabel = "default"
-	defaultFilePerms  = 0600
-	defaultQlen       = 1500
+	defaultFilePerms = 0600
+	defaultQlen      = 1500
 )
 
 // DNSInfo describes the DNS setup related to a network interface.

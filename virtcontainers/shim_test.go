@@ -29,10 +29,6 @@ func testSetShimType(t *testing.T, value string, expected ShimType) {
 	}
 }
 
-func TestSetCCShimType(t *testing.T) {
-	testSetShimType(t, "ccShim", CCShimType)
-}
-
 func TestSetKataShimType(t *testing.T) {
 	testSetShimType(t, "kataShim", KataShimType)
 }
@@ -51,7 +47,7 @@ func TestSetUnknownShimType(t *testing.T) {
 		t.Fatalf("Should fail because %s type used", unknownType)
 	}
 
-	if shimType == CCShimType || shimType == NoopShimType {
+	if shimType == NoopShimType {
 		t.Fatalf("%s shim type was not expected", shimType)
 	}
 }
@@ -61,11 +57,6 @@ func testStringFromShimType(t *testing.T, shimType ShimType, expected string) {
 	if shimTypeStr != expected {
 		t.Fatalf("Got %s\nExpecting %s", shimTypeStr, expected)
 	}
-}
-
-func TestStringFromCCShimType(t *testing.T) {
-	shimType := CCShimType
-	testStringFromShimType(t, shimType, "ccShim")
 }
 
 func TestStringFromKataShimType(t *testing.T) {
@@ -97,12 +88,6 @@ func testNewShimFromShimType(t *testing.T, shimType ShimType, expected shim) {
 	if reflect.DeepEqual(result, expected) == false {
 		t.Fatalf("Got %+v\nExpecting %+v", result, expected)
 	}
-}
-
-func TestNewShimFromCCShimType(t *testing.T) {
-	shimType := CCShimType
-	expectedShim := &ccShim{}
-	testNewShimFromShimType(t, shimType, expectedShim)
 }
 
 func TestNewShimFromKataShimType(t *testing.T) {
@@ -138,17 +123,6 @@ func testNewShimConfigFromSandboxConfig(t *testing.T, sandboxConfig SandboxConfi
 	if reflect.DeepEqual(result, expected) == false {
 		t.Fatalf("Got %+v\nExpecting %+v", result, expected)
 	}
-}
-
-func TestNewShimConfigFromCCShimSandboxConfig(t *testing.T) {
-	shimConfig := ShimConfig{}
-
-	sandboxConfig := SandboxConfig{
-		ShimType:   CCShimType,
-		ShimConfig: shimConfig,
-	}
-
-	testNewShimConfigFromSandboxConfig(t, sandboxConfig, shimConfig)
 }
 
 func TestNewShimConfigFromKataShimSandboxConfig(t *testing.T) {

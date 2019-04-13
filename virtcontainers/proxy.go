@@ -41,20 +41,11 @@ const (
 	// NoProxyType is the noProxy.
 	NoProxyType ProxyType = "noProxy"
 
-	// CCProxyType is the ccProxy.
-	CCProxyType ProxyType = "ccProxy"
-
 	// KataProxyType is the kataProxy.
 	KataProxyType ProxyType = "kataProxy"
 
 	// KataBuiltInProxyType is the kataBuiltInProxy.
 	KataBuiltInProxyType ProxyType = "kataBuiltInProxy"
-)
-
-const (
-	// Number of seconds to wait for the proxy to respond to a connection
-	// request.
-	waitForProxyTimeoutSecs = 5.0
 )
 
 const (
@@ -74,9 +65,6 @@ func (pType *ProxyType) Set(value string) error {
 	case "noProxy":
 		*pType = NoProxyType
 		return nil
-	case "ccProxy":
-		*pType = CCProxyType
-		return nil
 	case "kataProxy":
 		*pType = KataProxyType
 		return nil
@@ -95,8 +83,6 @@ func (pType *ProxyType) String() string {
 		return string(NoopProxyType)
 	case NoProxyType:
 		return string(NoProxyType)
-	case CCProxyType:
-		return string(CCProxyType)
 	case KataProxyType:
 		return string(KataProxyType)
 	case KataBuiltInProxyType:
@@ -115,8 +101,6 @@ func newProxy(pType ProxyType) (proxy, error) {
 		return &noopProxy{}, nil
 	case NoProxyType:
 		return &noProxy{}, nil
-	case CCProxyType:
-		return &ccProxy{}, nil
 	case KataProxyType:
 		return &kataProxy{}, nil
 	case KataBuiltInProxyType:

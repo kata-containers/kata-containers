@@ -33,10 +33,6 @@ func testSetProxyType(t *testing.T, value string, expected ProxyType) {
 	}
 }
 
-func TestSetCCProxyType(t *testing.T) {
-	testSetProxyType(t, "ccProxy", CCProxyType)
-}
-
 func TestSetKataProxyType(t *testing.T) {
 	testSetProxyType(t, "kataProxy", KataProxyType)
 }
@@ -63,8 +59,7 @@ func TestSetUnknownProxyType(t *testing.T) {
 		t.Fatalf("Should fail because %s type used", unknownType)
 	}
 
-	if proxyType == CCProxyType ||
-		proxyType == NoopProxyType ||
+	if proxyType == NoopProxyType ||
 		proxyType == NoProxyType ||
 		proxyType == KataProxyType {
 		t.Fatalf("%s proxy type was not expected", proxyType)
@@ -76,11 +71,6 @@ func testStringFromProxyType(t *testing.T, proxyType ProxyType, expected string)
 	if proxyTypeStr != expected {
 		t.Fatalf("Got %s\nExpecting %s", proxyTypeStr, expected)
 	}
-}
-
-func TestStringFromCCProxyType(t *testing.T) {
-	proxyType := CCProxyType
-	testStringFromProxyType(t, proxyType, "ccProxy")
 }
 
 func TestStringFromKataProxyType(t *testing.T) {
@@ -117,12 +107,6 @@ func testNewProxyFromProxyType(t *testing.T, proxyType ProxyType, expected proxy
 	if reflect.DeepEqual(result, expected) == false {
 		t.Fatalf("Got %+v\nExpecting %+v", result, expected)
 	}
-}
-
-func TestNewProxyFromCCProxyType(t *testing.T) {
-	proxyType := CCProxyType
-	expectedProxy := &ccProxy{}
-	testNewProxyFromProxyType(t, proxyType, expectedProxy)
 }
 
 func TestNewProxyFromKataProxyType(t *testing.T) {
@@ -170,19 +154,6 @@ func testNewProxyFromSandboxConfig(t *testing.T, sandboxConfig SandboxConfig) {
 }
 
 var testProxyPath = "proxy-path"
-
-func TestNewProxyConfigFromCCProxySandboxConfig(t *testing.T) {
-	proxyConfig := ProxyConfig{
-		Path: testProxyPath,
-	}
-
-	sandboxConfig := SandboxConfig{
-		ProxyType:   CCProxyType,
-		ProxyConfig: proxyConfig,
-	}
-
-	testNewProxyFromSandboxConfig(t, sandboxConfig)
-}
 
 func TestNewProxyConfigFromKataProxySandboxConfig(t *testing.T) {
 	proxyConfig := ProxyConfig{

@@ -17,9 +17,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-// DefaultMockCCShimBinPath is populated at link time.
-var DefaultMockCCShimBinPath string
-
 // DefaultMockKataShimBinPath is populated at link time.
 var DefaultMockKataShimBinPath string
 

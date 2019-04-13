@@ -52,16 +52,13 @@ const (
 	qemuHypervisorTableType        = "qemu"
 
 	// supported proxy component types
-	ccProxyTableType   = "cc"
 	kataProxyTableType = "kata"
 
 	// supported shim component types
-	ccShimTableType   = "cc"
 	kataShimTableType = "kata"
 
 	// supported agent component types
-	hyperstartAgentTableType = "hyperstart"
-	kataAgentTableType       = "kata"
+	kataAgentTableType = "kata"
 
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
 	maxPCIBridges uint32 = 5
@@ -606,10 +603,10 @@ func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oc
 
 	for k, proxy := range tomlConf.Proxy {
 		switch k {
-		case ccProxyTableType:
-			config.ProxyType = vc.CCProxyType
 		case kataProxyTableType:
 			config.ProxyType = vc.KataProxyType
+		default:
+			return fmt.Errorf("%s proxy type not supported", k)
 		}
 
 		path, err := proxy.path()
@@ -639,15 +636,13 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 
 	for k := range tomlConf.Agent {
 		switch k {
-		case hyperstartAgentTableType:
-			config.AgentType = vc.HyperstartAgent
-			config.AgentConfig = vc.HyperConfig{}
-
 		case kataAgentTableType:
 			config.AgentType = vc.KataContainersAgent
 			config.AgentConfig = vc.KataAgentConfig{
 				UseVSock: config.HypervisorConfig.UseVSock,
 			}
+		default:
+			return fmt.Errorf("%s agent type is not supported", k)
 		}
 	}
 
@@ -663,10 +658,10 @@ func updateRuntimeConfigShim(configPath string, tomlConf tomlConfig, config *oci
 
 	for k, shim := range tomlConf.Shim {
 		switch k {
-		case ccShimTableType:
-			config.ShimType = vc.CCShimType
 		case kataShimTableType:
 			config.ShimType = vc.KataShimType
+		default:
+			return fmt.Errorf("%s shim is not supported", k)
 		}
 
 		shConfig, err := newShimConfig(shim)
@@ -788,7 +783,7 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 		return oci.RuntimeConfig{}, err
 	}
 
-	defaultAgentConfig = vc.HyperConfig{}
+	defaultAgentConfig = vc.KataAgentConfig{}
 
 	config = oci.RuntimeConfig{
 		HypervisorType:   defaultHypervisor,
