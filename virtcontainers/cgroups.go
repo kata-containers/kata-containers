@@ -266,6 +266,8 @@ func (s *Sandbox) resources() (specs.LinuxResources, error) {
 }
 
 func (s *Sandbox) cpuResources() *specs.LinuxCPU {
+	// Use default period and quota if they are not specified.
+	// Container will inherit the constraints from its parent.
 	quota := int64(0)
 	period := uint64(0)
 	shares := uint64(0)
@@ -321,13 +323,6 @@ func (s *Sandbox) cpuResources() *specs.LinuxCPU {
 	}
 
 	cpu.Cpus = strings.Trim(cpu.Cpus, " \n\t,")
-
-	// use a default constraint for sandboxes without cpu constraints
-	if period == uint64(0) && quota == int64(0) {
-		// set a quota and period equal to the default number of vcpus
-		quota = int64(s.config.HypervisorConfig.NumVCPUs) * 100000
-		period = 100000
-	}
 
 	return validCPUResources(cpu)
 }
