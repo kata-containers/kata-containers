@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Intel Corporation
+// Copyright (c) 2017-2019 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -27,7 +27,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.21"
+const formatVersion = "1.0.22"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -112,7 +112,8 @@ type ShimInfo struct {
 
 // AgentInfo stores agent details
 type AgentInfo struct {
-	Type string
+	Type  string
+	Debug bool
 }
 
 // DistroInfo stores host operating system distribution details.
@@ -308,12 +309,23 @@ func getShimInfo(config oci.RuntimeConfig) (ShimInfo, error) {
 	return shim, nil
 }
 
-func getAgentInfo(config oci.RuntimeConfig) AgentInfo {
+func getAgentInfo(config oci.RuntimeConfig) (AgentInfo, error) {
 	agent := AgentInfo{
 		Type: string(config.AgentType),
 	}
 
-	return agent
+	switch config.AgentType {
+	case vc.KataContainersAgent:
+		agentConfig, ok := config.AgentConfig.(vc.KataAgentConfig)
+		if !ok {
+			return AgentInfo{}, errors.New("cannot determine Kata agent config")
+		}
+		agent.Debug = agentConfig.Debug
+	default:
+		// Nothing useful to report for the other agent types
+	}
+
+	return agent, nil
 }
 
 func getHypervisorInfo(config oci.RuntimeConfig) HypervisorInfo {
@@ -361,7 +373,10 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 		return EnvInfo{}, err
 	}
 
-	agent := getAgentInfo(config)
+	agent, err := getAgentInfo(config)
+	if err != nil {
+		return EnvInfo{}, err
+	}
 
 	hypervisor := getHypervisorInfo(config)
 

@@ -136,6 +136,7 @@ type shim struct {
 }
 
 type agent struct {
+	Debug bool `toml:"enable_debug"`
 }
 
 type netmon struct {
@@ -388,6 +389,10 @@ func (s shim) trace() bool {
 	return s.Tracing
 }
 
+func (a agent) debug() bool {
+	return a.Debug
+}
+
 func (n netmon) enable() bool {
 	return n.Enable
 }
@@ -630,21 +635,29 @@ func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oc
 
 func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
 	if builtIn {
+		var agentConfig vc.KataAgentConfig
+
+		// If the agent config section isn't a Kata one, just default
+		// to everything being disabled.
+		agentConfig, _ = config.AgentConfig.(vc.KataAgentConfig)
+
 		config.AgentType = vc.KataContainersAgent
 		config.AgentConfig = vc.KataAgentConfig{
 			LongLiveConn: true,
 			UseVSock:     config.HypervisorConfig.UseVSock,
+			Debug:        agentConfig.Debug,
 		}
 
 		return nil
 	}
 
-	for k := range tomlConf.Agent {
+	for k, agent := range tomlConf.Agent {
 		switch k {
 		case kataAgentTableType:
 			config.AgentType = vc.KataContainersAgent
 			config.AgentConfig = vc.KataAgentConfig{
 				UseVSock: config.HypervisorConfig.UseVSock,
+				Debug:    agent.debug(),
 			}
 		default:
 			return fmt.Errorf("%s agent type is not supported", k)
@@ -702,6 +715,17 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 	for _, p := range defaultKernelParams {
 		if err := (runtimeConfig).AddKernelParam(p); err != nil {
 			return err
+		}
+	}
+
+	// next, check for agent specific kernel params
+	if agentConfig, ok := runtimeConfig.AgentConfig.(vc.KataAgentConfig); ok {
+		params := vc.KataAgentKernelParams(agentConfig)
+
+		for _, p := range params {
+			if err := (runtimeConfig).AddKernelParam(p); err != nil {
+				return err
+			}
 		}
 	}
 
