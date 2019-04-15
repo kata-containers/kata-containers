@@ -118,7 +118,7 @@ func TestVMConfigGrpc(t *testing.T) {
 		HypervisorType:   QemuHypervisor,
 		HypervisorConfig: newQemuConfig(),
 		AgentType:        KataContainersAgent,
-		AgentConfig:      KataAgentConfig{false, true, false},
+		AgentConfig:      KataAgentConfig{false, true, false, false, "", ""},
 		ProxyType:        NoopProxyType,
 	}
 

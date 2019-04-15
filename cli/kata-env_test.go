@@ -43,6 +43,7 @@ var (
 	shimDebug       = false
 	netmonDebug     = false
 	agentDebug      = false
+	agentTrace      = false
 )
 
 // makeVersionBinary creates a shell script with the specified file
@@ -155,6 +156,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		ShimDebug:            shimDebug,
 		NetmonDebug:          netmonDebug,
 		AgentDebug:           agentDebug,
+		AgentTrace:           agentTrace,
 	}
 
 	runtimeConfig := katatestutils.MakeRuntimeConfigFileData(configFileOptions)
@@ -217,6 +219,11 @@ func getExpectedAgentDetails(config oci.RuntimeConfig) (AgentInfo, error) {
 	return AgentInfo{
 		Type:  string(config.AgentType),
 		Debug: agentConfig.Debug,
+		Trace: agentConfig.Trace,
+
+		// No trace mode/type set by default
+		TraceMode: "",
+		TraceType: "",
 	}, nil
 }
 
@@ -496,6 +503,7 @@ func TestEnvGetEnvInfo(t *testing.T) {
 		runtimeTrace = toggle
 		shimDebug = toggle
 		agentDebug = toggle
+		agentTrace = toggle
 
 		configFile, config, err := makeRuntimeConfig(tmpdir)
 		assert.NoError(t, err)
@@ -822,6 +830,16 @@ func TestEnvGetAgentInfo(t *testing.T) {
 	agent, err = getAgentInfo(config)
 	assert.NoError(t, err)
 	assert.True(t, agent.Debug)
+
+	agentConfig.Trace = true
+	agentConfig.TraceMode = "traceMode"
+	agentConfig.TraceType = "traceType"
+	config.AgentConfig = agentConfig
+	agent, err = getAgentInfo(config)
+	assert.NoError(t, err)
+	assert.True(t, agent.Trace)
+	assert.Equal(t, agent.TraceMode, "traceMode")
+	assert.Equal(t, agent.TraceType, "traceType")
 
 	config.AgentConfig = "I am the wrong type"
 	_, err = getAgentInfo(config)

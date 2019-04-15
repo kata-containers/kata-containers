@@ -27,7 +27,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.22"
+const formatVersion = "1.0.23"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -112,8 +112,11 @@ type ShimInfo struct {
 
 // AgentInfo stores agent details
 type AgentInfo struct {
-	Type  string
-	Debug bool
+	Type      string
+	Debug     bool
+	Trace     bool
+	TraceMode string
+	TraceType string
 }
 
 // DistroInfo stores host operating system distribution details.
@@ -321,6 +324,9 @@ func getAgentInfo(config oci.RuntimeConfig) (AgentInfo, error) {
 			return AgentInfo{}, errors.New("cannot determine Kata agent config")
 		}
 		agent.Debug = agentConfig.Debug
+		agent.Trace = agentConfig.Trace
+		agent.TraceMode = agentConfig.TraceMode
+		agent.TraceType = agentConfig.TraceType
 	default:
 		// Nothing useful to report for the other agent types
 	}
