@@ -15,11 +15,11 @@ import (
 	"path/filepath"
 	"reflect"
 	goruntime "runtime"
-	"strconv"
 	"strings"
 	"syscall"
 	"testing"
 
+	"github.com/kata-containers/runtime/pkg/katatestutils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -30,6 +30,7 @@ var (
 	hypervisorDebug = false
 	proxyDebug      = false
 	runtimeDebug    = false
+	runtimeTrace    = false
 	shimDebug       = false
 	netmonDebug     = false
 )
@@ -41,46 +42,6 @@ type testRuntimeConfig struct {
 	ConfigPathLink    string
 	LogDir            string
 	LogPath           string
-}
-
-func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, netmonPath, logPath string, disableBlock bool, blockDeviceDriver string, enableIOThreads bool, hotplugVFIOOnRootBus, disableNewNetNs bool) string {
-	return `
-	# Runtime configuration file
-
-	[hypervisor.` + hypervisor + `]
-	path = "` + hypervisorPath + `"
-	kernel = "` + kernelPath + `"
-	block_device_driver =  "` + blockDeviceDriver + `"
-	kernel_params = "` + kernelParams + `"
-	image = "` + imagePath + `"
-	machine_type = "` + machineType + `"
-	default_vcpus = ` + strconv.FormatUint(uint64(defaultVCPUCount), 10) + `
-	default_maxvcpus = ` + strconv.FormatUint(uint64(defaultMaxVCPUCount), 10) + `
-	default_memory = ` + strconv.FormatUint(uint64(defaultMemSize), 10) + `
-	disable_block_device_use =  ` + strconv.FormatBool(disableBlock) + `
-	enable_iothreads =  ` + strconv.FormatBool(enableIOThreads) + `
-	hotplug_vfio_on_root_bus =  ` + strconv.FormatBool(hotplugVFIOOnRootBus) + `
-	msize_9p = ` + strconv.FormatUint(uint64(defaultMsize9p), 10) + `
-	enable_debug = ` + strconv.FormatBool(hypervisorDebug) + `
-	guest_hook_path = "` + defaultGuestHookPath + `"
-
-	[proxy.kata]
-	enable_debug = ` + strconv.FormatBool(proxyDebug) + `
-	path = "` + proxyPath + `"
-
-	[shim.kata]
-	path = "` + shimPath + `"
-	enable_debug = ` + strconv.FormatBool(shimDebug) + `
-
-	[agent.kata]
-
-	[netmon]
-	path = "` + netmonPath + `"
-	enable_debug = ` + strconv.FormatBool(netmonDebug) + `
-
-        [runtime]
-	enable_debug = ` + strconv.FormatBool(runtimeDebug) + `
-	disable_new_netns= ` + strconv.FormatBool(disableNewNetNs)
 }
 
 func createConfig(configPath string, fileData string) error {
@@ -121,7 +82,36 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	hotplugVFIOOnRootBus := true
 	disableNewNetNs := false
 
-	runtimeConfigFileData := makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, netmonPath, logPath, disableBlockDevice, blockDeviceDriver, enableIOThreads, hotplugVFIOOnRootBus, disableNewNetNs)
+	configFileOptions := katatestutils.RuntimeConfigOptions{
+		Hypervisor:           "qemu",
+		HypervisorPath:       hypervisorPath,
+		KernelPath:           kernelPath,
+		ImagePath:            imagePath,
+		KernelParams:         kernelParams,
+		MachineType:          machineType,
+		ShimPath:             shimPath,
+		ProxyPath:            proxyPath,
+		NetmonPath:           netmonPath,
+		LogPath:              logPath,
+		DefaultGuestHookPath: defaultGuestHookPath,
+		DisableBlock:         disableBlockDevice,
+		BlockDeviceDriver:    blockDeviceDriver,
+		EnableIOThreads:      enableIOThreads,
+		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
+		DisableNewNetNs:      disableNewNetNs,
+		DefaultVCPUCount:     defaultVCPUCount,
+		DefaultMaxVCPUCount:  defaultMaxVCPUCount,
+		DefaultMemSize:       defaultMemSize,
+		DefaultMsize9p:       defaultMsize9p,
+		HypervisorDebug:      hypervisorDebug,
+		RuntimeDebug:         runtimeDebug,
+		RuntimeTrace:         runtimeTrace,
+		ProxyDebug:           proxyDebug,
+		ShimDebug:            shimDebug,
+		NetmonDebug:          netmonDebug,
+	}
+
+	runtimeConfigFileData := katatestutils.MakeRuntimeConfigFileData(configFileOptions)
 
 	configPath := path.Join(dir, "runtime.toml")
 	err = createConfig(configPath, runtimeConfigFileData)
