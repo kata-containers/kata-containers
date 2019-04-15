@@ -34,6 +34,7 @@ var (
 	shimDebug       = false
 	netmonDebug     = false
 	agentDebug      = false
+	agentTrace      = false
 )
 
 type testRuntimeConfig struct {
@@ -111,6 +112,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		ShimDebug:            shimDebug,
 		NetmonDebug:          netmonDebug,
 		AgentDebug:           agentDebug,
+		AgentTrace:           agentTrace,
 	}
 
 	runtimeConfigFileData := katatestutils.MakeRuntimeConfigFileData(configFileOptions)
@@ -1208,6 +1210,14 @@ func TestAgentDefaults(t *testing.T) {
 
 	a.Debug = true
 	assert.Equal(a.debug(), a.Debug)
+
+	assert.Equal(a.trace(), a.Tracing)
+
+	a.Tracing = true
+	assert.Equal(a.trace(), a.Tracing)
+
+	assert.Equal(a.traceMode(), a.TraceMode)
+	assert.Equal(a.traceType(), a.TraceType)
 }
 
 func TestGetDefaultConfigFilePaths(t *testing.T) {

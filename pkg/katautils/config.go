@@ -136,7 +136,10 @@ type shim struct {
 }
 
 type agent struct {
-	Debug bool `toml:"enable_debug"`
+	Debug     bool   `toml:"enable_debug"`
+	Tracing   bool   `toml:"enable_tracing"`
+	TraceMode string `toml:"trace_mode"`
+	TraceType string `toml:"trace_type"`
 }
 
 type netmon struct {
@@ -391,6 +394,18 @@ func (s shim) trace() bool {
 
 func (a agent) debug() bool {
 	return a.Debug
+}
+
+func (a agent) trace() bool {
+	return a.Tracing
+}
+
+func (a agent) traceMode() string {
+	return a.TraceMode
+}
+
+func (a agent) traceType() string {
+	return a.TraceType
 }
 
 func (n netmon) enable() bool {
@@ -656,8 +671,11 @@ func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oc
 		case kataAgentTableType:
 			config.AgentType = vc.KataContainersAgent
 			config.AgentConfig = vc.KataAgentConfig{
-				UseVSock: config.HypervisorConfig.UseVSock,
-				Debug:    agent.debug(),
+				UseVSock:  config.HypervisorConfig.UseVSock,
+				Debug:     agent.debug(),
+				Trace:     agent.trace(),
+				TraceMode: agent.traceMode(),
+				TraceType: agent.traceType(),
 			}
 		default:
 			return fmt.Errorf("%s agent type is not supported", k)
@@ -720,6 +738,11 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 
 	// next, check for agent specific kernel params
 	if agentConfig, ok := runtimeConfig.AgentConfig.(vc.KataAgentConfig); ok {
+		err := vc.KataAgentSetDefaultTraceConfigOptions(&agentConfig)
+		if err != nil {
+			return err
+		}
+
 		params := vc.KataAgentKernelParams(agentConfig)
 
 		for _, p := range params {

@@ -116,7 +116,7 @@ type agent interface {
 	// init().
 	// After init() is called, agent implementations should be initialized and ready
 	// to handle all other Agent interface methods.
-	init(ctx context.Context, sandbox *Sandbox, config interface{}) error
+	init(ctx context.Context, sandbox *Sandbox, config interface{}) (disableVMShutdown bool, err error)
 
 	// capabilities should return a structure that specifies the capabilities
 	// supported by the agent.
