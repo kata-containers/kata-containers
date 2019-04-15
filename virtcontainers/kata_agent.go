@@ -88,6 +88,7 @@ var (
 type KataAgentConfig struct {
 	LongLiveConn bool
 	UseVSock     bool
+	Debug        bool
 }
 
 type kataVSOCK struct {
@@ -173,6 +174,18 @@ func (k *kataAgent) generateVMSocket(id string, c KataAgentConfig) error {
 	}
 
 	return nil
+}
+
+// KataAgentKernelParams returns a list of Kata Agent specific kernel
+// parameters.
+func KataAgentKernelParams(config KataAgentConfig) []Param {
+	var params []Param
+
+	if config.Debug {
+		params = append(params, Param{Key: "agent.log", Value: "debug"})
+	}
+
+	return params
 }
 
 func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface{}) (err error) {

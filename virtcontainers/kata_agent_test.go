@@ -934,3 +934,26 @@ func TestKataCleanupSandbox(t *testing.T) {
 		t.Fatalf("%s still exists\n", dir)
 	}
 }
+
+func TestKataAgentKernelParams(t *testing.T) {
+	assert := assert.New(t)
+
+	config := KataAgentConfig{}
+
+	params := KataAgentKernelParams(config)
+	assert.Empty(params)
+
+	config.Debug = true
+
+	params = KataAgentKernelParams(config)
+	assert.NotEmpty(params)
+
+	assert.Len(params, 1)
+
+	expected := Param{
+		Key:   "agent.log",
+		Value: "debug",
+	}
+
+	assert.Equal(params[0], expected)
+}

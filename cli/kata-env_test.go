@@ -42,6 +42,7 @@ var (
 	runtimeTrace    = false
 	shimDebug       = false
 	netmonDebug     = false
+	agentDebug      = false
 )
 
 // makeVersionBinary creates a shell script with the specified file
@@ -153,6 +154,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		ProxyDebug:           proxyDebug,
 		ShimDebug:            shimDebug,
 		NetmonDebug:          netmonDebug,
+		AgentDebug:           agentDebug,
 	}
 
 	runtimeConfig := katatestutils.MakeRuntimeConfigFileData(configFileOptions)
@@ -206,8 +208,15 @@ func getExpectedShimDetails(config oci.RuntimeConfig) (ShimInfo, error) {
 }
 
 func getExpectedAgentDetails(config oci.RuntimeConfig) (AgentInfo, error) {
+
+	agentConfig, ok := config.AgentConfig.(vc.KataAgentConfig)
+	if !ok {
+		return AgentInfo{}, fmt.Errorf("expected KataAgentConfig, got %T", config.AgentConfig)
+	}
+
 	return AgentInfo{
-		Type: string(config.AgentType),
+		Type:  string(config.AgentType),
+		Debug: agentConfig.Debug,
 	}, nil
 }
 
@@ -486,6 +495,7 @@ func TestEnvGetEnvInfo(t *testing.T) {
 		runtimeDebug = toggle
 		runtimeTrace = toggle
 		shimDebug = toggle
+		agentDebug = toggle
 
 		configFile, config, err := makeRuntimeConfig(tmpdir)
 		assert.NoError(t, err)
@@ -799,8 +809,23 @@ func TestEnvGetAgentInfo(t *testing.T) {
 	expectedAgent, err := getExpectedAgentDetails(config)
 	assert.NoError(t, err)
 
-	agent := getAgentInfo(config)
+	agent, err := getAgentInfo(config)
+	assert.NoError(t, err)
+
 	assert.Equal(t, expectedAgent, agent)
+
+	agentConfig, ok := config.AgentConfig.(vc.KataAgentConfig)
+	assert.True(t, ok)
+
+	agentConfig.Debug = true
+	config.AgentConfig = agentConfig
+	agent, err = getAgentInfo(config)
+	assert.NoError(t, err)
+	assert.True(t, agent.Debug)
+
+	config.AgentConfig = "I am the wrong type"
+	_, err = getAgentInfo(config)
+	assert.Error(t, err)
 }
 
 func testEnvShowTOMLSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
