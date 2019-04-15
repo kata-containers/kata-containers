@@ -752,10 +752,8 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 	return nil
 }
 
-func initConfig() (config oci.RuntimeConfig, err error) {
-	var defaultAgentConfig interface{}
-
-	defaultHypervisorConfig := vc.HypervisorConfig{
+func GetDefaultHypervisorConfig() vc.HypervisorConfig {
+	return vc.HypervisorConfig{
 		HypervisorPath:          defaultHypervisorPath,
 		KernelPath:              defaultKernelPath,
 		ImagePath:               defaultImagePath,
@@ -767,6 +765,7 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 		DefaultMaxVCPUs:         defaultMaxVCPUCount,
 		MemorySize:              defaultMemSize,
 		MemOffset:               defaultMemOffset,
+		DisableBlockDeviceUse:   defaultDisableBlockDeviceUse,
 		DefaultBridges:          defaultBridgesCount,
 		MemPrealloc:             defaultEnableMemPrealloc,
 		HugePages:               defaultEnableHugePages,
@@ -782,6 +781,10 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 		HotplugVFIOOnRootBus:    defaultHotplugVFIOOnRootBus,
 		GuestHookPath:           defaultGuestHookPath,
 	}
+}
+
+func initConfig() (config oci.RuntimeConfig, err error) {
+	var defaultAgentConfig interface{}
 
 	err = config.InterNetworkModel.SetModel(defaultInterNetworkingModel)
 	if err != nil {
@@ -792,7 +795,7 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 
 	config = oci.RuntimeConfig{
 		HypervisorType:   defaultHypervisor,
-		HypervisorConfig: defaultHypervisorConfig,
+		HypervisorConfig: GetDefaultHypervisorConfig(),
 		AgentType:        defaultAgent,
 		AgentConfig:      defaultAgentConfig,
 		ProxyType:        defaultProxy,
