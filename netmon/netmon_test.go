@@ -213,7 +213,7 @@ func TestConvertRoutes(t *testing.T) {
 
 	expected := []vcTypes.Route{
 		{
-			Dest:    testIPAddress,
+			Dest:    testIPAddressWithMask,
 			Gateway: testIPAddress,
 			Source:  testIPAddress,
 			Scope:   uint32(testScope),
