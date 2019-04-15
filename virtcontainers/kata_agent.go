@@ -189,7 +189,7 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 		}
 		k.keepConn = c.LongLiveConn
 	default:
-		return fmt.Errorf("Invalid config type")
+		return vcTypes.ErrInvalidConfigType
 	}
 
 	k.proxy, err = newProxy(sandbox.config.ProxyType)
@@ -241,7 +241,7 @@ func (k *kataAgent) internalConfigure(h hypervisor, id, sharePath string, builti
 			}
 			k.keepConn = c.LongLiveConn
 		default:
-			return fmt.Errorf("Invalid config type")
+			return vcTypes.ErrInvalidConfigType
 		}
 	}
 
@@ -275,7 +275,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 		}
 		k.vmSocket = s
 	default:
-		return fmt.Errorf("Invalid config type")
+		return vcTypes.ErrInvalidConfigType
 	}
 
 	// Neither create shared directory nor add 9p device if hypervisor
