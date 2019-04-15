@@ -7,10 +7,10 @@ package virtcontainers
 
 import (
 	"fmt"
-	"time"
 	govmmQemu "github.com/intel/govmm/qemu"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/types"
+	"time"
 )
 
 type qemuS390x struct {
