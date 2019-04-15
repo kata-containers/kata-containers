@@ -583,7 +583,11 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
-	agentConfig := newAgentConfig(sandboxConfig.AgentType, sandboxConfig.AgentConfig)
+	agentConfig, err := newAgentConfig(sandboxConfig.AgentType, sandboxConfig.AgentConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	if err = s.agent.init(ctx, s, agentConfig); err != nil {
 		return nil, err
 	}
