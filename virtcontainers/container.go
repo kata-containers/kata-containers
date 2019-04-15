@@ -19,6 +19,7 @@ import (
 
 	"github.com/containerd/cgroups"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -421,7 +422,7 @@ func (c *Container) loadDevices() ([]ContainerDevice, error) {
 // container.
 func (c *Container) setContainerState(state types.StateString) error {
 	if state == "" {
-		return errNeedState
+		return vcTypes.ErrNeedState
 	}
 
 	c.Logger().Debugf("Setting container state from %v to %v", c.state.State, state)
