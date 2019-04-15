@@ -112,7 +112,7 @@ func (n *NetInterworkingModel) SetModel(modelName string) error {
 // DefaultNetInterworkingModel is a package level default
 // that determines how the VM should be connected to the
 // the container network interface
-var DefaultNetInterworkingModel = NetXConnectMacVtapModel
+var DefaultNetInterworkingModel = NetXConnectTCFilterModel
 
 // Introduces constants related to networking
 const (
