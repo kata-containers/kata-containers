@@ -309,7 +309,7 @@ func convertRoutes(netRoutes []netlink.Route) []vcTypes.Route {
 		dst := ""
 		if netRoute.Dst != nil {
 			if netRoute.Dst.IP.To4() != nil {
-				dst = netRoute.Dst.IP.String()
+				dst = netRoute.Dst.String()
 			} else {
 				netmonLog.WithField("destination", netRoute.Dst.IP.String()).Warn("Not IPv4 format")
 			}
