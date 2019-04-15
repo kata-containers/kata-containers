@@ -128,6 +128,7 @@ install_extra_tools() {
 }
 
 main() {
+	bash -f "${cidir}/install_go.sh" -p -f
 	setup_distro_env
 	install_docker
 	enable_nested_virtualization
