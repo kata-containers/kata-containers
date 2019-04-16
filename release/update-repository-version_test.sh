@@ -37,7 +37,7 @@ output_should_contain "${out}" "Usage"
 OK
 
 echo "Missing version show help"
-out=$("${script_dir}/update-repository-version.sh" "runtime" 2>&1) || (($? != 0))
+out=$("${script_dir}/update-repository-version.sh" 2>&1) || (($? != 0))
 echo "${out}" | grep Usage >>/dev/null
 echo "${out}" | grep "no new version" >>/dev/null
 OK
@@ -49,6 +49,6 @@ OK
 
 echo "Local update version update should work"
 new_version=50.0.0
-out=$("${script_dir}/update-repository-version.sh" "runtime" "${new_version}" "master" 2>&1)
+out=$("${script_dir}/update-repository-version.sh" "${new_version}" "master" 2>&1)
 output_should_contain "${out}" "release: Kata Containers ${new_version}"
 OK

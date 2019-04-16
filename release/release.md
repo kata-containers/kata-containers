@@ -63,12 +63,7 @@ $ git pull
    $ cd ${GOPATH}/src/github.com/kata-containers/packaging/release
    $ export NEW_VERSION=X.Y.Z
    $ export BRANCH="master"
-   $ ./update-repository-version.sh -p ksm-throttler "$NEW_VERSION" "$BRANCH"
-   $ ./update-repository-version.sh -p proxy "$NEW_VERSION" "$BRANCH"
-   $ ./update-repository-version.sh -p shim "$NEW_VERSION" "$BRANCH"
-   $ ./update-repository-version.sh -p runtime "$NEW_VERSION" "$BRANCH"
-   $ ./update-repository-version.sh -p osbuilder "$NEW_VERSION" "$BRANCH"
-   $ ./update-repository-version.sh -p agent "$NEW_VERSION" "$BRANCH"
+   $ ./update-repository-version.sh -p "$NEW_VERSION" "$BRANCH"
    ```
    The commands from above will create a github pull request in the Kata projects.
    Work with the Kata approvers to verify that the CI works and the PR are merged.
