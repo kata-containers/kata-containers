@@ -69,8 +69,6 @@ BINLIBEXECLIST += $(NETMON_TARGET)
 
 DESTDIR := /
 
-installing = $(findstring install,$(MAKECMDGOALS))
-
 ifeq ($(PREFIX),)
 PREFIX        := /usr
 EXEC_PREFIX   := $(PREFIX)/local
@@ -84,12 +82,6 @@ QEMUBINDIR    := $(PREFIXDEPS)/bin
 FCBINDIR      := $(PREFIXDEPS)/bin
 SYSCONFDIR    := /etc
 LOCALSTATEDIR := /var
-
-ifeq (,$(installing))
-    # Force a rebuild to ensure version details are correct
-    # (but only for a non-install build phase).
-    EXTRA_DEPS = clean
-endif
 
 LIBEXECDIR := $(PREFIXDEPS)/libexec
 SHAREDIR := $(PREFIX)/share
@@ -400,7 +392,7 @@ endef
 
 GENERATED_FILES += $(CLI_DIR)/config-generated.go
 
-$(TARGET_OUTPUT): $(EXTRA_DEPS) $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
+$(TARGET_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
 	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(BUILDFLAGS) -o $@ .)
 
 $(SHIMV2_OUTPUT):
