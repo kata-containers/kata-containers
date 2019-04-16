@@ -71,6 +71,9 @@ const (
 	// VirtioBlock is the block device driver.
 	VirtioBlock DeviceDriver = "virtio-blk"
 
+	// VirtioBlockPCI is a pci bus block device driver
+	VirtioBlockPCI DeviceDriver = "virtio-blk-pci"
+
 	// Console is the console device driver.
 	Console DeviceDriver = "virtconsole"
 
