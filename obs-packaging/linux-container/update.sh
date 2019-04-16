@@ -27,7 +27,9 @@ KATA_CONFIG_VERSION=$(cat "${SCRIPT_DIR}/../../kernel/kata_config_version")
 
 KR_SERIES="$(echo $VERSION | cut -d "." -f 1).x"
 KR_LTS=$(echo $VERSION | cut -d "." -f 1,2)
-KR_PATCHES=$(eval find "${SCRIPT_DIR}/../../kernel/patches" -type f -name "*.patch")
+ln -sfT "${SCRIPT_DIR}/../../kernel/patches-${KR_LTS}" "${SCRIPT_DIR}/patches"
+
+KR_PATCHES=$(eval find "${SCRIPT_DIR}/patches" -type f -name "*.patch")
 
 KR_REL=https://www.kernel.org/releases.json
 KR_SHA=https://cdn.kernel.org/pub/linux/kernel/v"${KR_SERIES}"/sha256sums.asc
@@ -66,6 +68,5 @@ get_git_info
 #TODO delete me: used by changelog_update
 hash_tag="nocommit"
 changelog_update "${VERSION}-${KATA_CONFIG_VERSION}"
-ln -sfT "${SCRIPT_DIR}/../../kernel/patches" "${SCRIPT_DIR}/patches"
 generate_files "$SCRIPT_DIR" "${replace_list[@]}"
 build_pkg "${PROJECT_REPO}"

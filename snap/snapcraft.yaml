@@ -218,8 +218,9 @@ parts:
 
       make mrproper
 
+
       # Apply patches
-      for patch in ${SNAPCRAFT_STAGE}/kernel/patches/*.patch; do
+      for patch in ${SNAPCRAFT_STAGE}/kernel/patches/${x_version}/*.patch; do
         echo "Applying $(basename "$patch") ..."
         patch \
           --batch \

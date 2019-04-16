@@ -123,9 +123,17 @@ get_kernel() {
 
 	sha256sum -c "${kernel_tarball}.sha256"
 
-	tar xf ${kernel_tarball}
+	tar xf "${kernel_tarball}"
 
 	mv "linux-${version}" "${kernel_path}"
+}
+
+get_major_kernel_version() {
+	local version="${1}"
+	[ -n "${version}" ] || die "kernel version not provided"
+	major_version=$(echo "${version}" | cut -d. -f1)
+	minor_version=$(echo "${version}" | cut -d. -f2)
+	echo "${major_version}.${minor_version}"
 }
 
 get_default_kernel_config() {
@@ -138,9 +146,9 @@ get_default_kernel_config() {
 	[ -n "${hypervisor}" ] || die "hypervisor not provided"
 	[ -n "${kernel_arch}" ] || die "kernel arch not provided"
 
-	major_version=$(echo "${version}" | cut -d. -f1)
-	minor_version=$(echo "${version}" | cut -d. -f2)
-	config="${default_kernel_config_dir}/${kernel_arch}_kata_${hypervisor}_${major_version}.${minor_version}.x"
+	local kernel_ver
+	kernel_ver=$(get_major_kernel_version "${version}")
+	config="${default_kernel_config_dir}/${kernel_arch}_kata_${hypervisor}_${major_kernel}.x"
 	[ -f "${config}" ] || die "failed to find default config ${config}"
 	echo "${config}"
 }
@@ -185,21 +193,32 @@ setup_kernel() {
 
 	[ -d "${patches_path}" ] || die " patches path '${patches_path}' does not exist"
 
-	kernel_patches=$(find "${patches_path}" -name '*.patch' -type f)
+	local major_kernel
+	major_kernel=$(get_major_kernel_version "${kernel_version}")
+	local patches_dir_for_version="${patches_path}/${major_kernel}.x"
+	local kernel_patches=""
+	if [ -d "${patches_dir_for_version}" ]; then
+		kernel_patches=$(find "${patches_dir_for_version}" -name '*.patch' -type f)
+	else
+		info "kernel patches directory does not exit"
 
-	pushd "${kernel_path}" >>/dev/null
-	for p in ${kernel_patches}; do
-		info "Applying patch $p"
-		patch -p1 <"$p"
-	done
+	fi
 
-	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
-	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}")
+	(
+		cd "${kernel_path}" || exit 1
+		for p in ${kernel_patches}; do
+			info "Applying patch $p"
+			patch -p1 <"$p"
+		done
 
-	cp "${kernel_config_path}" ./.config
-	make oldconfig
+		[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
+		[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}")
+
+		cp "${kernel_config_path}" ./.config
+		make oldconfig
+	)
 }
 
 build_kernel() {
