@@ -40,9 +40,7 @@ docker_run() {
 	setup_oscrc
 
 	sudo docker build \
-		--quiet \
 		--build-arg http_proxy="${http_proxy:-}" \
-		--build-arg GO_ARCH="${GO_ARCH}" \
 		--build-arg https_proxy="${https_proxy:-}" \
 		-t $obs_image "${_obs_docker_packaging_repo_dir}/obs-packaging"
 
