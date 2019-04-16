@@ -14,7 +14,7 @@ matrix:
   include:
     - os: linux
       sudo: required
-      dist: trusty
+      dist: xenial
 
 language: go
 go_import_path: github.com/kata-containers/shim

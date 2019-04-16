@@ -90,7 +90,7 @@ func newTestSpec() *pb.Spec {
 		Version: "testGrpcVersion",
 		Process: &pb.Process{
 			Terminal:     true,
-			ConsoleSize:  &pb.Box{10, 10},
+			ConsoleSize:  &pb.Box{Height: 10, Width: 10},
 			User:         pb.User{UID: 0, GID: 0, Username: "root:root"},
 			Capabilities: &pb.LinuxCapabilities{},
 			Rlimits:      []pb.POSIXRlimit{},
