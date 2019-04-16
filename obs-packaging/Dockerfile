@@ -1,8 +1,6 @@
 FROM opensuse:leap
 
-ARG GO_VERSION=${GO_VERSION:-1.10.2}
 ARG SUSE_VERSION=${SUSE_VERSION:-42.3}
-ARG GO_ARCH=${GO_ARCH:-amd64}
 
 # Get OBS client, plugins and dependencies
 RUN zypper -v -n install osc-plugin-install vim curl bsdtar git sudo
@@ -15,14 +13,3 @@ RUN zypper -v -n install build \
     obs-service-obs_scm \
     obs-service-recompress \
     obs-service-download_url
-
-# Set Go environment
-RUN curl -OL https://dl.google.com/go/go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
-RUN tar -C /usr/local -xzf go${GO_VERSION}.linux-${GO_ARCH}.tar.gz
-
-# Local build dependencies
-RUN zypper -v -n install make gcc yum xz pcre-tools
-
-# Add go compiler to the PATH
-ENV PATH /usr/local/go/bin:$PATH
-ENV GOPATH /root/go

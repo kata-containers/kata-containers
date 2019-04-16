@@ -95,3 +95,16 @@ get_kata_hash_from_tag() {
 	repo=$1
 	git ls-remote --tags "https://github.com/${project}/${repo}.git" | grep "refs/tags/${kata_version}^{}" | awk '{print $1}'
 }
+
+arch_to_golang()
+{
+	local -r arch="$1"
+
+	case "$arch" in
+		aarch64) echo "arm64";;
+		ppc64le) echo "$arch";;
+		x86_64) echo "amd64";;
+		s390x) echo "s390x";;
+		*) die "unsupported architecture: $arch";;
+	esac
+}
