@@ -185,6 +185,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	}
 
 	factoryConfig := oci.FactoryConfig{
+		TemplatePath:    defaultTemplatePath,
 		VMCacheEndpoint: defaultVMCacheEndpoint,
 	}
 
@@ -633,6 +634,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	}
 
 	expectedFactoryConfig := oci.FactoryConfig{
+		TemplatePath:    defaultTemplatePath,
 		VMCacheEndpoint: defaultVMCacheEndpoint,
 	}
 
@@ -1419,6 +1421,7 @@ func TestUpdateRuntimeConfigurationFactoryConfig(t *testing.T) {
 	config := oci.RuntimeConfig{}
 	expectedFactoryConfig := oci.FactoryConfig{
 		Template:        true,
+		TemplatePath:    defaultTemplatePath,
 		VMCacheEndpoint: defaultVMCacheEndpoint,
 	}
 

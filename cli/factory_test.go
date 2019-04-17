@@ -70,6 +70,7 @@ func TestFactoryCLIFunctionInit(t *testing.T) {
 	}
 
 	runtimeConfig.FactoryConfig.Template = true
+	runtimeConfig.FactoryConfig.TemplatePath = "/run/vc/vm/template"
 	runtimeConfig.HypervisorType = vc.MockHypervisor
 	runtimeConfig.AgentType = vc.NoopAgentType
 	runtimeConfig.ProxyType = vc.NoopProxyType
