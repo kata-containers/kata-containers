@@ -334,13 +334,12 @@ USER_VARS += BUILDFLAGS
 
 V              = @
 Q              = $(V:1=)
-QUIET_BUILD    = $(Q:@=@echo    '     BUILD   '$@;)
-QUIET_CHECK    = $(Q:@=@echo    '     CHECK   '$@;)
-QUIET_CLEAN    = $(Q:@=@echo    '     CLEAN   '$@;)
-QUIET_CONFIG   = $(Q:@=@echo    '     CONFIG  '$@;)
+QUIET_BUILD    = $(Q:@=@echo    '     BUILD    '$@;)
+QUIET_CHECK    = $(Q:@=@echo    '     CHECK    '$@;)
+QUIET_CLEAN    = $(Q:@=@echo    '     CLEAN    '$@;)
 QUIET_GENERATE = $(Q:@=@echo    '     GENERATE '$@;)
-QUIET_INST     = $(Q:@=@echo    '     INSTALL '$@;)
-QUIET_TEST     = $(Q:@=@echo    '     TEST    '$@;)
+QUIET_INST     = $(Q:@=@echo    '     INSTALL  '$@;)
+QUIET_TEST     = $(Q:@=@echo    '     TEST     '$@;)
 
 # go build common flags
 BUILDFLAGS := -buildmode=pie
@@ -369,55 +368,6 @@ runtime: $(TARGET_OUTPUT) $(CONFIGS)
 
 build: default
 
-define GENERATED_CODE
-// WARNING: This file is auto-generated - DO NOT EDIT!
-//
-// Note that some variables are "var" to allow them to be modified
-// by the tests.
-package main
-
-import (
-	"fmt"
-)
-
-// name is the name of the runtime
-const name = "$(TARGET)"
-
-// name of the project
-const project = "$(PROJECT_NAME)"
-
-// prefix used to denote non-standard CLI commands and options.
-const projectPrefix = "$(PROJECT_TYPE)"
-
-// original URL for this project
-const projectURL = "$(PROJECT_URL)"
-
-const defaultRootDirectory = "$(PKGRUNDIR)"
-
-// commit is the git commit the runtime is compiled from.
-var commit = "$(COMMIT)"
-
-// version is the runtime version.
-var version = "$(VERSION)"
-
-// project-specific command names
-var envCmd = fmt.Sprintf("%s-env", projectPrefix)
-var checkCmd = fmt.Sprintf("%s-check", projectPrefix)
-
-// project-specific option names
-var configFilePathOption = fmt.Sprintf("%s-config", projectPrefix)
-var showConfigPathsOption = fmt.Sprintf("%s-show-default-config-paths", projectPrefix)
-
-// Default config file used by stateless systems.
-var defaultRuntimeConfiguration = "$(CONFIG_PATH)"
-
-// Alternate config file that takes precedence over
-// defaultRuntimeConfiguration.
-var defaultSysConfRuntimeConfiguration = "$(SYSCONFIG)"
-endef
-
-export GENERATED_CODE
-
 #Install an executable file
 # params:
 # $1 : file to install
@@ -440,14 +390,9 @@ define MAKE_KERNEL_NAME
 $(if $(findstring uncompressed,$1),vmlinux.container,vmlinuz.container)
 endef
 
-GENERATED_CONFIG = $(CLI_DIR)/config-generated.go
+GENERATED_FILES += $(CLI_DIR)/config-generated.go
 
-GENERATED_GO_FILES += $(GENERATED_CONFIG)
-
-$(GENERATED_CONFIG): $(MAKEFILE_LIST) VERSION
-	$(QUIET_GENERATE)echo "$$GENERATED_CODE" >$@
-
-$(TARGET_OUTPUT): $(EXTRA_DEPS) $(SOURCES) $(GENERATED_GO_FILES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
+$(TARGET_OUTPUT): $(EXTRA_DEPS) $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
 	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(BUILDFLAGS) -o $@ .)
 
 $(SHIMV2_OUTPUT):
@@ -470,7 +415,7 @@ $(TARGET).coverage: $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 GENERATED_FILES += $(CONFIGS)
 
 $(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION
-	$(QUIET_CONFIG)$(SED) \
+	$(QUIET_GENERATE)$(SED) \
 		-e "s|@COMMIT@|$(COMMIT)|g" \
 		-e "s|@VERSION@|$(VERSION)|g" \
 		-e "s|@CONFIG_QEMU_IN@|$(CONFIG_QEMU_IN)|g" \
@@ -487,6 +432,7 @@ $(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION
 		-e "s|@KERNELPARAMS@|$(KERNELPARAMS)|g" \
 		-e "s|@LOCALSTATEDIR@|$(LOCALSTATEDIR)|g" \
 		-e "s|@PKGLIBEXECDIR@|$(PKGLIBEXECDIR)|g" \
+		-e "s|@PKGRUNDIR@|$(PKGRUNDIR)|g" \
 		-e "s|@PROXYPATH@|$(PROXYPATH)|g" \
 		-e "s|@NETMONPATH@|$(NETMONPATH)|g" \
 		-e "s|@PROJECT_BUG_URL@|$(PROJECT_BUG_URL)|g" \
