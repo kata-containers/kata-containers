@@ -1,6 +1,8 @@
 *.o
 *.patch
 *.swp
+.git-commit
+.git-commit.tmp
 /cli/config/configuration-fc.toml
 /cli/config/configuration-qemu.toml
 /cli/config-generated.go

@@ -182,8 +182,16 @@ SHIMV2_DIR = $(CLI_DIR)/$(SHIMV2)
 
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 VERSION := ${shell cat ./VERSION}
-COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
-COMMIT := $(if $(shell git status --porcelain --untracked-files=no),${COMMIT_NO}-dirty,${COMMIT_NO})
+
+# Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
+# git revision string.  They will only be rebuilt if the revision string
+# actually changes.
+.PHONY: .git-commit.tmp
+.git-commit: .git-commit.tmp
+	@cmp $< $@ >/dev/null 2>&1 || cp $< $@
+.git-commit.tmp:
+	@echo -n "$$(git rev-parse HEAD 2>/dev/null)" >$@
+	@test -n "$$(git status --porcelain --untracked-files=no)" && echo -n "-dirty" >>$@ || true
 
 # List of configuration files to build and install
 CONFIGS =
@@ -414,9 +422,9 @@ $(TARGET).coverage: $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 
 GENERATED_FILES += $(CONFIGS)
 
-$(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION
+$(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION .git-commit
 	$(QUIET_GENERATE)$(SED) \
-		-e "s|@COMMIT@|$(COMMIT)|g" \
+		-e "s|@COMMIT@|$(shell cat .git-commit)|g" \
 		-e "s|@VERSION@|$(VERSION)|g" \
 		-e "s|@CONFIG_QEMU_IN@|$(CONFIG_QEMU_IN)|g" \
 		-e "s|@CONFIG_FC_IN@|$(CONFIG_FC_IN)|g" \
@@ -510,7 +518,7 @@ install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
 
 clean:
-	$(QUIET_CLEAN)rm -f $(TARGET) $(SHIMV2) $(NETMON_TARGET) $(CONFIGS) $(GENERATED_GO_FILES) $(GENERATED_FILES)
+	$(QUIET_CLEAN)rm -f $(TARGET) $(SHIMV2) $(NETMON_TARGET) $(CONFIGS) $(GENERATED_FILES) .git-commit .git-commit.tmp
 
 show-usage: show-header
 	@printf "• Overview:\n"
@@ -549,8 +557,8 @@ show-variables:
           "$(foreach v,$(sort $(USER_VARS)),$(shell printf "\\t$(v)='$($(v))'\\\n"))"
 	@printf "\n"
 
-show-header:
-	@printf "%s - version %s (commit %s)\n\n" $(TARGET) $(VERSION) $(COMMIT)
+show-header: .git-commit
+	@printf "%s - version %s (commit %s)\n\n" $(TARGET) $(VERSION) $(shell cat .git-commit)
 
 show-arches: show-header
 	@printf "Supported architectures (possible values for ARCH variable):\n\n"
