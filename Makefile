@@ -361,7 +361,7 @@ containerd-shim-v2: $(SHIMV2_OUTPUT)
 
 netmon: $(NETMON_TARGET_OUTPUT)
 
-$(NETMON_TARGET_OUTPUT): $(SOURCES)
+$(NETMON_TARGET_OUTPUT): $(SOURCES) VERSION
 	$(QUIET_BUILD)(cd $(NETMON_DIR) && go build $(BUILDFLAGS) -o $@ -ldflags "-X main.version=$(VERSION)")
 
 runtime: $(TARGET_OUTPUT) $(CONFIGS)
