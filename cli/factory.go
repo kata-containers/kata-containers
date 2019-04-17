@@ -159,9 +159,10 @@ var initFactoryCommand = cli.Command{
 		}
 
 		factoryConfig := vf.Config{
-			Template: runtimeConfig.FactoryConfig.Template,
-			Cache:    runtimeConfig.FactoryConfig.VMCacheNumber,
-			VMCache:  runtimeConfig.FactoryConfig.VMCacheNumber > 0,
+			Template:     runtimeConfig.FactoryConfig.Template,
+			TemplatePath: runtimeConfig.FactoryConfig.TemplatePath,
+			Cache:        runtimeConfig.FactoryConfig.VMCacheNumber,
+			VMCache:      runtimeConfig.FactoryConfig.VMCacheNumber > 0,
 			VMConfig: vc.VMConfig{
 				HypervisorType:   runtimeConfig.HypervisorType,
 				HypervisorConfig: runtimeConfig.HypervisorConfig,
@@ -250,7 +251,8 @@ var destroyFactoryCommand = cli.Command{
 			time.Sleep(time.Second)
 		} else if runtimeConfig.FactoryConfig.Template {
 			factoryConfig := vf.Config{
-				Template: true,
+				Template:     true,
+				TemplatePath: runtimeConfig.FactoryConfig.TemplatePath,
 				VMConfig: vc.VMConfig{
 					HypervisorType:   runtimeConfig.HypervisorType,
 					HypervisorConfig: runtimeConfig.HypervisorConfig,
@@ -305,7 +307,8 @@ var statusFactoryCommand = cli.Command{
 		}
 		if runtimeConfig.FactoryConfig.Template {
 			factoryConfig := vf.Config{
-				Template: true,
+				Template:     true,
+				TemplatePath: runtimeConfig.FactoryConfig.TemplatePath,
 				VMConfig: vc.VMConfig{
 					HypervisorType:   runtimeConfig.HypervisorType,
 					HypervisorConfig: runtimeConfig.HypervisorConfig,

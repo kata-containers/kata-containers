@@ -46,7 +46,7 @@ func TestTemplateFactory(t *testing.T) {
 	ctx := context.Background()
 
 	// New
-	f, err := New(ctx, vmConfig)
+	f, err := New(ctx, vmConfig, testDir)
 	assert.Nil(err)
 
 	// Config

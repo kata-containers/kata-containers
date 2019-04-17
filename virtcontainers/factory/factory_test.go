@@ -61,6 +61,7 @@ func TestNewFactory(t *testing.T) {
 	}
 
 	config.Template = true
+	config.TemplatePath = testDir
 	f, err = NewFactory(ctx, config, false)
 	assert.Nil(err)
 	f.CloseFactory(ctx)
@@ -210,7 +211,7 @@ func TestFactoryGetVM(t *testing.T) {
 	f.CloseFactory(ctx)
 
 	// template factory
-	f, err = NewFactory(ctx, Config{Template: true, VMConfig: vmConfig}, false)
+	f, err = NewFactory(ctx, Config{Template: true, TemplatePath: testDir, VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
 	vm, err = f.GetVM(ctx, vmConfig)
@@ -222,10 +223,10 @@ func TestFactoryGetVM(t *testing.T) {
 	f.CloseFactory(ctx)
 
 	// fetch template factory
-	f, err = NewFactory(ctx, Config{Template: true, VMConfig: vmConfig}, false)
+	f, err = NewFactory(ctx, Config{Template: true, TemplatePath: testDir, VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
-	_, err = NewFactory(ctx, Config{Template: true, VMConfig: vmConfig}, true)
+	_, err = NewFactory(ctx, Config{Template: true, TemplatePath: testDir, VMConfig: vmConfig}, true)
 	assert.Error(err)
 
 	vm, err = f.GetVM(ctx, vmConfig)
@@ -249,7 +250,7 @@ func TestFactoryGetVM(t *testing.T) {
 	f.CloseFactory(ctx)
 
 	// cache factory over template factory
-	f, err = NewFactory(ctx, Config{Template: true, Cache: 2, VMConfig: vmConfig}, false)
+	f, err = NewFactory(ctx, Config{Template: true, TemplatePath: testDir, Cache: 2, VMConfig: vmConfig}, false)
 	assert.Nil(err)
 
 	vm, err = f.GetVM(ctx, vmConfig)
