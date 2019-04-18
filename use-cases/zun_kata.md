@@ -35,6 +35,7 @@ cat /opt/stack/zun/devstack/local.conf.sample \
     > /opt/stack/devstack/local.conf
 sed -i "s/KURYR_CAPABILITY_SCOPE=.*/KURYR_CAPABILITY_SCOPE=local/" /opt/stack/devstack/local.conf
 echo "ENABLE_CLEAR_CONTAINER=true" >> /opt/stack/devstack/local.conf
+echo "enable_plugin zun-ui https://git.openstack.org/openstack/zun-ui" >> /opt/stack/devstack/local.conf
 /opt/stack/devstack/stack.sh
 source /opt/stack/devstack/openrc admin admin
 ```
