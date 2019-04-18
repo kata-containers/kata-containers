@@ -361,12 +361,6 @@ func (c *Container) SetPid(pid int) error {
 	return c.storeProcess()
 }
 
-func (c *Container) setStateBlockIndex(index int) error {
-	c.state.BlockIndex = index
-
-	return c.storeState()
-}
-
 func (c *Container) setStateFstype(fstype string) error {
 	c.state.Fstype = fstype
 
