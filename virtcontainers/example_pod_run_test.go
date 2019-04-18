@@ -14,7 +14,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
-var containerRootfs = vc.RootFs{Target: "/var/lib/container/bundle/", Mounted: true}
+var containerRootfs = vc.Mount{Destination: "/var/lib/container/bundle/", Mounted: true}
 
 // This example creates and starts a single container sandbox,
 // using qemu as the hypervisor and kata as the VM agent.
