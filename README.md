@@ -27,7 +27,7 @@ For details of the other Kata Containers repositories, see the
 
 * [VPP with Kata](./use-cases/using-vpp-and-kata.md)
 * [SR-IOV with Kata](./use-cases/using-SRIOV-and-kata.md)
-* [GPU Passthrough with Kata](./GPU-passthrough-and-Kata.md)
+* [GPU Passthrough with Kata](./use-cases/GPU-passthrough-and-Kata.md)
 
 ## Developer Guide
 
