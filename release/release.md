@@ -1,7 +1,7 @@
 # How to do a Kata Containers Release
 
-* [Introduction](#Introduction)
-* [Requirements](#Requirements)
+* [Introduction](#introduction)
+* [Requirements](#requirements)
 * [Release process](#release-process)
 
 # Introduction
