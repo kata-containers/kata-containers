@@ -9,7 +9,7 @@
 * [Start Kubernetes](#start-kubernetes)
 * [Install a Pod Network](#install-a-pod-network)
 * [Allow pods to run in the master node](#allow-pods-to-run-in-the-master-node)
-* [Create an unstrusted pod using Kata Containers](#create-an-unstrusted-pod-using-kata-containers)
+* [Create an untrusted pod using Kata Containers](#create-an-untrusted-pod-using-kata-containers)
 * [Delete created pod](#delete-created-pod)
 
 This document describes how to set up a single-machine Kubernetes (k8s) cluster.
@@ -18,7 +18,7 @@ The Kubernetes cluster will use the
 [CRI containerd plugin](https://github.com/containerd/cri) and
 [Kata Containers](https://katacontainers.io) to launch untrusted workloads.
 
-For Kata Containers 1.5.0-rc2 and above, we will use [`containerd-shim-kata-v2` (short as `shimv2` in this documentation)](../design/shimv2.md) 
+For Kata Containers 1.5.0-rc2 and above, we will use `containerd-shim-kata-v2` (short as `shimv2` in this documentation)
 to launch Kata Containers. For the previous version of Kata Containers, the Pods are launched with `kata-runtime`.
 
 ## Requirements
@@ -159,6 +159,7 @@ A pod network plugin is needed to allow pods to communicate with each other.
   ```
 
 - Check the pod network is running
+
   ```bash
   $ sudo -E kubectl get pods --all-namespaces | grep dns | grep Running && echo "OK" || ( echo "FAIL" && false )
   ```

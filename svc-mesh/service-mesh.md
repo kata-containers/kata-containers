@@ -1,20 +1,20 @@
 # Kata Containers and service mesh for Kubernetes
 
 * [Assumptions](#assumptions)
-* [How do they work?](#how-do-they-work)
+* [How they work](#how-they-work)
 * [Prerequisites](#prerequisites)
     * [Kata and Kubernetes](#kata-and-kubernetes)
     * [Restrictions](#restrictions)
 * [Install and deploy your service mesh](#install-and-deploy-your-service-mesh)
-    * [Istio](#istio)
-    * [Conduit](#conduit)
+    * [Service Mesh Istio](#service-mesh-istio)
+    * [Service Mesh Conduit](#service-mesh-conduit)
 * [Inject your services with sidecars](#inject-your-services-with-sidecars)
-    * [Istio](#istio-1)
-    * [Conduit](#conduit-1)
+    * [Sidecar Istio](#sidecar-istio)
+    * [Sidecar Conduit](#sidecar-conduit)
 * [Run your services with Kata](#run-your-services-with-kata)
     * [Lower privileges](#lower-privileges)
     * [Add annotations](#add-annotations)
-    * [Deploy!](#deploy)
+    * [Deploy](#deploy)
 
 A service mesh is a way to monitor and control the traffic between
 micro-services running in your Kubernetes cluster. It is a powerful
@@ -26,7 +26,7 @@ brought by Kata Containers.
 You are expected to be familiar with concepts such as __pods__,
 __containers__, __control plane__, __data plane__, and __sidecar__.
 
-## How do they work?
+## How they work
 
 Istio and Conduit both rely on the same model, where they run controller
 applications in the control plane, and inject a proxy as a sidecar inside
@@ -74,7 +74,7 @@ is not able to perform a proper setup of the rules.
 
 ## Install and deploy your service mesh
 
-### Istio
+### Service Mesh Istio
 
 As a reference, you can follow Istio [instructions](https://istio.io/docs/setup/kubernetes/quick-start/#download-and-prepare-for-the-installation).
 
@@ -97,7 +97,7 @@ $ kubectl get svc -n istio-system
 $ kubectl get pods -n istio-system -o wide
 ```
 
-### Conduit
+### Service Mesh Conduit
 
 As a reference, follow the Conduit [instructions](https://conduit.io/getting-started/index.html).
 
@@ -128,20 +128,19 @@ sidecar proxy using the tools provided by each service mesh.
 If you do not have such a deployment ready, refer to the samples provided
 by each project.
 
-### Istio
+### Sidecar Istio
 
-Istio provides a [bookinfo](https://istio.io/docs/guides/bookinfo/)
+Istio provides a [bookinfo](https://istio.io/docs/examples/bookinfo/)
 sample, which you can rely on to inject their `envoy` proxy as a
 sidecar.
 
 You need to use their tool called `istioctl kube-inject` to inject
-your YAML file. We use their [bookinfo](https://istio.io/docs/guides/bookinfo/)
-sample as example:
+your YAML file. We use their bookinfo sample as an example:
 ```
 $ istioctl kube-inject -f samples/bookinfo/kube/bookinfo.yaml -o bookinfo-injected.yaml
 ```
 
-### Conduit
+### Sidecar Conduit
 
 Conduit provides an [emojivoto](https://conduit.io/getting-started/index.html)
 sample, which you can rely on to inject their `conduit` proxy as a
@@ -240,7 +239,7 @@ spec:
 ...
 ```
 
-### Deploy!
+### Deploy
 
 Deploy your application by using the following:
 ```
