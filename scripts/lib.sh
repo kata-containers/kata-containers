@@ -32,7 +32,8 @@ install_yq() {
 
 get_from_kata_deps() {
 	local dependency="$1"
-	local branch="${2:-master}"
+	BRANCH=${BRANCH:-master}
+	local branch="${2:-${BRANCH}}"
 	local runtime_repo="github.com/kata-containers/runtime"
 	GOPATH=${GOPATH:-${HOME}/go}
 	# We will not query the local versions.yaml file here to allow releases to
