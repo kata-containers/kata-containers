@@ -68,11 +68,7 @@ $ kata-runtime kata-check
 > **Note:**
 >
 > If you run the previous command as the `root` user, further checks will be
-> performed (e.g. it will check if another incompatible hypervisor is running):
->
-> ```bash
-> $ sudo kata-runtime kata-check
-> ```
+> performed (e.g. it will check if another incompatible hypervisor is running).
 
 ## Download and install
 
