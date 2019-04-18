@@ -10,8 +10,6 @@ type ContainerState struct {
 	State StateString `json:"state"`
 
 	BlockDeviceID string
-	// Index of the block device passed to hypervisor.
-	BlockIndex int `json:"blockIndex"`
 
 	// File system of the rootfs incase it is block device
 	Fstype string `json:"fstype"`
