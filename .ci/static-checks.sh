@@ -438,6 +438,12 @@ check_docs()
 		# Google APIs typically require an auth token.
 		echo "$url"|grep -q 'https://www.googleapis.com' && continue
 
+		# Git repo URL check
+		if echo "$url"|grep -q '^https.*git'
+		then
+			git ls-remote "$url" > /dev/null 2>&1 && continue
+		fi
+
 		# Check the URL, saving it if invalid
 		( curl -sLf -o /dev/null "$url" ||\
 				echo "$url" >> "$invalid_urls") &
