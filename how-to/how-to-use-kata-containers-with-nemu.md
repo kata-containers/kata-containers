@@ -5,7 +5,7 @@
 * [Pre-requisites](#pre-requisites)
 * [NEMU](#nemu)
     * [Download and build](#download-and-build)
-        * [x86_64](#x86-64)
+        * [x86_64](#x86_64)
         * [aarch64](#aarch64)
 * [Configure Kata Containers](#configure-kata-containers)
 
