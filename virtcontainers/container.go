@@ -209,7 +209,7 @@ type ContainerConfig struct {
 	ID string
 
 	// RootFs is the container workload image on the host.
-	RootFs RootFs
+	RootFs Mount
 
 	// ReadOnlyRootfs indicates if the rootfs should be mounted readonly
 	ReadonlyRootfs bool
@@ -272,27 +272,13 @@ type ContainerDevice struct {
 	GID uint32
 }
 
-// RootFs describes the container's rootfs.
-type RootFs struct {
-	// Source specifies the BlockDevice path
-	Source string
-	// Target specify where the rootfs is mounted if it has been mounted
-	Target string
-	// Type specifies the type of filesystem to mount.
-	Type string
-	// Options specifies zero or more fstab style mount options.
-	Options []string
-	// Mounted specifies whether the rootfs has be mounted or not
-	Mounted bool
-}
-
 // Container is composed of a set of containers and a runtime environment.
 // A Container can be created, deleted, started, stopped, listed, entered, paused and restored.
 type Container struct {
 	id        string
 	sandboxID string
 
-	rootFs RootFs
+	rootFs Mount
 
 	config *ContainerConfig
 
@@ -371,19 +357,6 @@ func (c *Container) SetPid(pid int) error {
 	return c.storeProcess()
 }
 
-func (c *Container) setStateFstype(fstype string) error {
-	c.state.Fstype = fstype
-
-	if !c.sandbox.supportNewStore() {
-		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
-		if err := c.storeState(); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
 // GetAnnotations returns container's annotations
 func (c *Container) GetAnnotations() map[string]string {
 	return c.config.Annotations
@@ -409,10 +382,6 @@ func (c *Container) storeMounts() error {
 
 func (c *Container) storeDevices() error {
 	return c.store.Store(store.DeviceIDs, c.devices)
-}
-
-func (c *Container) storeState() error {
-	return c.store.Store(store.State, c.state)
 }
 
 func (c *Container) loadMounts() ([]Mount, error) {
@@ -1183,6 +1152,14 @@ func (c *Container) resume() error {
 }
 
 func (c *Container) hotplugDrive() error {
+	if err := c.hotplugRootfsDrive(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *Container) hotplugRootfsDrive() error {
 	var dev device
 	var err error
 
@@ -1192,7 +1169,7 @@ func (c *Container) hotplugDrive() error {
 		// there is no "rootfs" dir on block device backed rootfs
 		c.rootfsSuffix = ""
 	} else {
-		dev, err = getDeviceForPath(c.rootFs.Target)
+		dev, err = getDeviceForPath(c.rootFs.Destination)
 	}
 
 	if err == errMountPointNotFound {
@@ -1221,7 +1198,7 @@ func (c *Container) hotplugDrive() error {
 	devicePath := c.rootFs.Source
 	fsType := c.rootFs.Type
 	if c.rootFs.Mounted {
-		if dev.mountPoint == c.rootFs.Target {
+		if dev.mountPoint == c.rootFs.Destination {
 			c.rootfsSuffix = ""
 		}
 		// If device mapper device, then fetch the full path of the device
@@ -1229,6 +1206,7 @@ func (c *Container) hotplugDrive() error {
 		if err != nil {
 			return err
 		}
+		c.rootFs.Type = fsType
 	}
 
 	devicePath, err = filepath.EvalSymlinks(devicePath)
@@ -1241,11 +1219,7 @@ func (c *Container) hotplugDrive() error {
 		"fs-type":     fsType,
 	}).Info("Block device detected")
 
-	if err = c.plugDevice(devicePath); err != nil {
-		return err
-	}
-
-	return c.setStateFstype(fsType)
+	return c.plugDevice(devicePath)
 }
 
 func (c *Container) plugDevice(devicePath string) error {
@@ -1266,7 +1240,7 @@ func (c *Container) plugDevice(devicePath string) error {
 			return fmt.Errorf("device manager failed to create rootfs device for %q: %v", devicePath, err)
 		}
 
-		c.state.BlockDeviceID = b.DeviceID()
+		c.rootFs.BlockDeviceID = b.DeviceID()
 
 		// attach rootfs device
 		if err := c.sandbox.devManager.AttachDevice(b.DeviceID(), c.sandbox); err != nil {
@@ -1280,16 +1254,11 @@ func (c *Container) plugDevice(devicePath string) error {
 	return nil
 }
 
-// isDriveUsed checks if a drive has been used for container rootfs
-func (c *Container) isDriveUsed() bool {
-	return !(c.state.Fstype == "")
-}
-
 func (c *Container) removeDrive() (err error) {
-	if c.isDriveUsed() {
+	if c.rootFs.BlockDeviceID != "" {
 		c.Logger().Info("unplugging block device")
 
-		devID := c.state.BlockDeviceID
+		devID := c.rootFs.BlockDeviceID
 		err := c.sandbox.devManager.DetachDevice(devID, c.sandbox)
 		if err != nil && err != manager.ErrDeviceNotAttached {
 			return err

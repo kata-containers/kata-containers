@@ -601,7 +601,7 @@ func statusContainer(sandbox *Sandbox, containerID string) (ContainerStatus, err
 				State:       container.state,
 				PID:         container.process.Pid,
 				StartTime:   container.process.StartTime,
-				RootFs:      container.config.RootFs.Target,
+				RootFs:      container.config.RootFs.Destination,
 				Annotations: container.config.Annotations,
 			}, nil
 		}

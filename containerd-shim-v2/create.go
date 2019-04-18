@@ -10,12 +10,13 @@ package containerdshim
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/containerd/typeurl"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/pkg/errors"
-	"os"
-	"path/filepath"
 
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 
@@ -31,7 +32,7 @@ import (
 )
 
 func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest, netns string) (*container, error) {
-	rootFs := vc.RootFs{Mounted: s.mount}
+	rootFs := vc.Mount{Mounted: s.mount}
 	if len(r.Rootfs) == 1 {
 		m := r.Rootfs[0]
 		rootFs.Source = m.Source
