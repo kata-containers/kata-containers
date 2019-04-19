@@ -25,10 +25,10 @@ var factoryLogger = logrus.FieldLogger(logrus.New())
 
 // Config is a collection of VM factory configurations.
 type Config struct {
-	Template bool
-
+	Template        bool
 	VMCache         bool
 	Cache           uint
+	TemplatePath    string
 	VMCacheEndpoint string
 
 	VMConfig vc.VMConfig
@@ -70,12 +70,12 @@ func NewFactory(ctx context.Context, config Config, fetchOnly bool) (vc.Factory,
 	} else {
 		if config.Template {
 			if fetchOnly {
-				b, err = template.Fetch(config.VMConfig)
+				b, err = template.Fetch(config.VMConfig, config.TemplatePath)
 				if err != nil {
 					return nil, err
 				}
 			} else {
-				b, err = template.New(ctx, config.VMConfig)
+				b, err = template.New(ctx, config.VMConfig, config.TemplatePath)
 				if err != nil {
 					return nil, err
 				}

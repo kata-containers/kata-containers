@@ -124,6 +124,7 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 	}
 	factoryConfig := vf.Config{
 		Template:        runtimeConfig.FactoryConfig.Template,
+		TemplatePath:    runtimeConfig.FactoryConfig.TemplatePath,
 		VMCache:         runtimeConfig.FactoryConfig.VMCacheNumber > 0,
 		VMCacheEndpoint: runtimeConfig.FactoryConfig.VMCacheEndpoint,
 		VMConfig: vc.VMConfig{
