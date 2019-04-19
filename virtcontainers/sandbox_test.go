@@ -750,100 +750,6 @@ func TestSandboxGetContainer(t *testing.T) {
 	}
 }
 
-func TestContainerSetStateBlockIndex(t *testing.T) {
-	containers := []ContainerConfig{
-		{
-			ID:          "100",
-			Annotations: containerAnnotations,
-		},
-	}
-
-	hConfig := newHypervisorConfig(nil, nil)
-	sandbox, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, containers, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer cleanUp()
-
-	sandboxStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sandbox.store = sandboxStore
-
-	c := sandbox.GetContainer("100")
-	if c == nil {
-		t.Fatal()
-	}
-	cImpl, ok := c.(*Container)
-	assert.True(t, ok)
-
-	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, c.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	cImpl.store = containerStore
-
-	path := store.ContainerRuntimeRootPath(testSandboxID, c.ID())
-	stateFilePath := filepath.Join(path, store.StateFile)
-
-	f, err := os.Create(stateFilePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	state := types.ContainerState{
-		State:  "stopped",
-		Fstype: "vfs",
-	}
-
-	cImpl.state = state
-
-	stateData := `{
-		"state":"stopped",
-		"fstype":"vfs"
-	}`
-
-	n, err := f.WriteString(stateData)
-	if err != nil || n != len(stateData) {
-		f.Close()
-		t.Fatal()
-	}
-	f.Close()
-
-	newIndex := 20
-	if err := cImpl.setStateBlockIndex(newIndex); err != nil {
-		t.Fatal(err)
-	}
-
-	if cImpl.state.BlockIndex != newIndex {
-		t.Fatal()
-	}
-
-	fileData, err := ioutil.ReadFile(stateFilePath)
-	if err != nil {
-		t.Fatal()
-	}
-
-	var res types.ContainerState
-	err = json.Unmarshal([]byte(string(fileData)), &res)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if res.BlockIndex != newIndex {
-		t.Fatal()
-	}
-
-	if res.Fstype != state.Fstype {
-		t.Fatal()
-	}
-
-	if res.State != state.State {
-		t.Fatal()
-	}
-}
-
 func TestContainerStateSetFstype(t *testing.T) {
 	var err error
 
@@ -889,9 +795,8 @@ func TestContainerStateSetFstype(t *testing.T) {
 	}
 
 	state := types.ContainerState{
-		State:      "ready",
-		Fstype:     "vfs",
-		BlockIndex: 3,
+		State:  "ready",
+		Fstype: "vfs",
 	}
 
 	cImpl.state = state
@@ -899,7 +804,6 @@ func TestContainerStateSetFstype(t *testing.T) {
 	stateData := `{
 		"state":"ready",
 		"fstype":"vfs",
-		"blockIndex": 3
 	}`
 
 	n, err := f.WriteString(stateData)
@@ -930,10 +834,6 @@ func TestContainerStateSetFstype(t *testing.T) {
 	}
 
 	if res.Fstype != newFstype {
-		t.Fatal()
-	}
-
-	if res.BlockIndex != state.BlockIndex {
 		t.Fatal()
 	}
 
