@@ -35,6 +35,9 @@ disable_vm_template_config() {
 init_vm_template() {
 	echo "init vm template"
 	sudo -E PATH=$PATH "$kata_runtime_bin" factory init
+
+	{ sudo -E PATH=$PATH "$kata_runtime_bin" factory init ; res=$?; } || true
+	[ $res -ne 0 ] || die "factory init already called so expected 2nd call to fail"
 }
 
 destroy_vm_template() {
