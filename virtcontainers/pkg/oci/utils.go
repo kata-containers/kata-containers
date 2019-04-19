@@ -98,6 +98,9 @@ type FactoryConfig struct {
 	// Template enables VM templating support in VM factory.
 	Template bool
 
+	// TemplatePath specifies the path of template.
+	TemplatePath string
+
 	// VMCacheNumber specifies the the number of caches of VMCache.
 	VMCacheNumber uint
 

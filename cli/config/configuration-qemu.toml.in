@@ -219,6 +219,11 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # Default false
 #enable_template = true
 
+# Specifies the path of template.
+#
+# Default "/run/vc/vm/template"
+#template_path = "/run/vc/vm/template"
+
 # The number of caches of VMCache:
 # unspecified or == 0   --> VMCache is disabled
 # > 0                   --> will be set to the specified number

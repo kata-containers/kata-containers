@@ -76,6 +76,7 @@ type tomlConfig struct {
 
 type factory struct {
 	Template        bool   `toml:"enable_template"`
+	TemplatePath    string `toml:"template_path"`
 	VMCacheNumber   uint   `toml:"vm_cache_number"`
 	VMCacheEndpoint string `toml:"vm_cache_endpoint"`
 }
@@ -546,11 +547,15 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 }
 
 func newFactoryConfig(f factory) (oci.FactoryConfig, error) {
+	if f.TemplatePath == "" {
+		f.TemplatePath = defaultTemplatePath
+	}
 	if f.VMCacheEndpoint == "" {
 		f.VMCacheEndpoint = defaultVMCacheEndpoint
 	}
 	return oci.FactoryConfig{
 		Template:        f.Template,
+		TemplatePath:    f.TemplatePath,
 		VMCacheNumber:   f.VMCacheNumber,
 		VMCacheEndpoint: f.VMCacheEndpoint,
 	}, nil
