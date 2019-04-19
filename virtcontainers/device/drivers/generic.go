@@ -119,16 +119,19 @@ func (device *GenericDevice) bumpAttachCount(attach bool) (skip bool, err error)
 
 // Dump convert and return data in persist format
 func (device *GenericDevice) Dump() persistapi.DeviceState {
-	info := device.DeviceInfo
-	return persistapi.DeviceState{
+	dss := persistapi.DeviceState{
 		ID:          device.ID,
 		Type:        string(device.DeviceType()),
 		RefCount:    device.RefCount,
 		AttachCount: device.AttachCount,
-
-		DevType:       info.DevType,
-		Major:         info.Major,
-		Minor:         info.Minor,
-		DriverOptions: info.DriverOptions,
 	}
+
+	info := device.DeviceInfo
+	if info != nil {
+		dss.DevType = info.DevType
+		dss.Major = info.Major
+		dss.Minor = info.Minor
+		dss.DriverOptions = info.DriverOptions
+	}
+	return dss
 }

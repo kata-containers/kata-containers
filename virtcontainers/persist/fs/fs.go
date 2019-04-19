@@ -98,9 +98,6 @@ func (fs *FS) ToDisk() (retErr error) {
 	}
 
 	if err := fs.lock(); err != nil {
-		if err1 := fs.Destroy(); err1 != nil {
-			fs.Logger().WithError(err1).Errorf("failed to destroy dirs")
-		}
 		return err
 	}
 	defer fs.unlock()

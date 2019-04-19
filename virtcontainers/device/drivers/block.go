@@ -153,16 +153,18 @@ func (device *BlockDevice) Dump() persistapi.DeviceState {
 	ds.Type = string(device.DeviceType())
 
 	drive := device.BlockDrive
-	ds.BlockDrive = &persistapi.BlockDrive{
-		File:     drive.File,
-		Format:   drive.Format,
-		ID:       drive.ID,
-		Index:    drive.Index,
-		MmioAddr: drive.MmioAddr,
-		PCIAddr:  drive.PCIAddr,
-		SCSIAddr: drive.SCSIAddr,
-		NvdimmID: drive.NvdimmID,
-		VirtPath: drive.VirtPath,
+	if drive != nil {
+		ds.BlockDrive = &persistapi.BlockDrive{
+			File:     drive.File,
+			Format:   drive.Format,
+			ID:       drive.ID,
+			Index:    drive.Index,
+			MmioAddr: drive.MmioAddr,
+			PCIAddr:  drive.PCIAddr,
+			SCSIAddr: drive.SCSIAddr,
+			NvdimmID: drive.NvdimmID,
+			VirtPath: drive.VirtPath,
+		}
 	}
 	return ds
 }

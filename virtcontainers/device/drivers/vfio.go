@@ -147,12 +147,14 @@ func (device *VFIODevice) Dump() persistapi.DeviceState {
 
 	devs := device.VfioDevs
 	for _, dev := range devs {
-		ds.VFIODevs = append(ds.VFIODevs, &persistapi.VFIODev{
-			ID:       dev.ID,
-			Type:     string(dev.Type),
-			BDF:      dev.BDF,
-			SysfsDev: dev.SysfsDev,
-		})
+		if dev != nil {
+			ds.VFIODevs = append(ds.VFIODevs, &persistapi.VFIODev{
+				ID:       dev.ID,
+				Type:     string(dev.Type),
+				BDF:      dev.BDF,
+				SysfsDev: dev.SysfsDev,
+			})
+		}
 	}
 	return ds
 }
