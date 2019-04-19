@@ -371,6 +371,16 @@ When setting up Kata using a [packaged installation method](https://github.com/k
 
 ## Build a custom QEMU
 
+Your qemu directory need to be prepared with source code. Alternatively, you can use the [Kata containers QEMU](https://github.com/kata-containers/qemu/tree/master) and checkout the recommended branch:
+
+```
+$ go get -d github.com/kata-containers/qemu
+$ qemu_branch=$(grep qemu-lite- ${GOPATH}/src/github.com/kata-containers/runtime/versions.yaml | cut -d '"' -f2)
+$ cd ${GOPATH}/src/github.com/kata-containers/qemu
+$ git checkout -b $qemu_branch remotes/origin/$qemu_branch
+$ your_qemu_directory=${GOPATH}/src/github.com/kata-containers/qemu
+```
+
 To build a version of QEMU using the same options as the default `qemu-lite` version , you could use the `configure-hypervisor.sh` script:
 
 ```
