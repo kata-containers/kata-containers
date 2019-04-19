@@ -46,7 +46,12 @@ func New(ctx context.Context, config vc.VMConfig) (base.FactoryBase, error) {
 	statePath := store.RunVMStoragePath + "/template"
 	t := &template{statePath, config}
 
-	err := t.prepareTemplateFiles()
+	err := t.checkTemplateVM()
+	if err == nil {
+		return nil, fmt.Errorf("There is already a VM template in %s", statePath)
+	}
+
+	err = t.prepareTemplateFiles()
 	if err != nil {
 		return nil, err
 	}
