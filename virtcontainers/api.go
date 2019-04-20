@@ -224,6 +224,10 @@ func StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 		return nil, err
 	}
 
+	if err = s.storeSandbox(); err != nil {
+		return nil, err
+	}
+
 	return s, nil
 }
 
@@ -253,6 +257,10 @@ func StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	// Stop it.
 	err = s.Stop()
 	if err != nil {
+		return nil, err
+	}
+
+	if err = s.storeSandbox(); err != nil {
 		return nil, err
 	}
 
@@ -391,6 +399,10 @@ func CreateContainer(ctx context.Context, sandboxID string, containerConfig Cont
 
 	c, err := s.CreateContainer(containerConfig)
 	if err != nil {
+		return nil, nil, err
+	}
+
+	if err = s.storeSandbox(); err != nil {
 		return nil, nil, err
 	}
 

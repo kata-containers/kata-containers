@@ -20,6 +20,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
+	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
@@ -235,6 +236,10 @@ func TestContainerAddDriveDir(t *testing.T) {
 	sandboxStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
 	assert.Nil(t, err)
 	sandbox.store = sandboxStore
+
+	if sandbox.newStore, err = persist.GetDriver("fs"); err != nil || sandbox.newStore == nil {
+		t.Fatalf("failed to get fs persist driver")
+	}
 
 	contID := "100"
 	container := Container{

@@ -27,6 +27,8 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	deviceManager "github.com/kata-containers/runtime/virtcontainers/device/manager"
 	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
+	"github.com/kata-containers/runtime/virtcontainers/persist"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/store"
@@ -159,8 +161,11 @@ type Sandbox struct {
 	hypervisor hypervisor
 	agent      agent
 	store      *store.VCStore
-	network    Network
-	monitor    *monitor
+	// store is used to replace VCStore step by step
+	newStore persistapi.PersistDriver
+
+	network Network
+	monitor *monitor
 
 	config *SandboxConfig
 
@@ -430,8 +435,10 @@ func (s *Sandbox) getAndStoreGuestDetails() error {
 		}
 		s.state.GuestMemoryHotplugProbe = guestDetailRes.SupportMemHotplugProbe
 
-		if err = s.store.Store(store.State, s.state); err != nil {
-			return err
+		if !s.supportNewStore() {
+			if err = s.store.Store(store.State, s.state); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -472,14 +479,29 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	}
 	s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
 
-	// We first try to fetch the sandbox state from storage.
-	// If it exists, this means this is a re-creation, i.e.
-	// we don't need to talk to the guest's agent, but only
-	// want to create the sandbox and its containers in memory.
-	state, err := s.store.LoadState()
-	if err == nil && state.State != "" {
-		s.state = state
-		return s, nil
+	if s.supportNewStore() {
+		// register persist hook for now, data will be written to disk by ToDisk()
+		s.stateSaveCallback()
+		s.hvStateSaveCallback()
+		s.devicesSaveCallback()
+
+		if err := s.Restore(); err == nil && s.state.State != "" {
+			return s, nil
+		}
+
+		// if sandbox doesn't exist, set persist version to current version
+		// otherwise do nothing
+		s.verSaveCallback()
+	} else {
+		// We first try to fetch the sandbox state from storage.
+		// If it exists, this means this is a re-creation, i.e.
+		// we don't need to talk to the guest's agent, but only
+		// want to create the sandbox and its containers in memory.
+		state, err := s.store.LoadState()
+		if err == nil && state.State != "" {
+			s.state = state
+			return s, nil
+		}
 	}
 
 	// Below code path is called only during create, because of earlier check.
@@ -536,6 +558,10 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 
 	s.store = vcStore
 
+	if s.newStore, err = persist.GetDriver("fs"); err != nil || s.newStore == nil {
+		return nil, fmt.Errorf("failed to get fs persist driver")
+	}
+
 	if err = globalSandboxList.addSandbox(s); err != nil {
 		return nil, err
 	}
@@ -582,6 +608,13 @@ func (s *Sandbox) storeSandbox() error {
 	for _, container := range s.containers {
 		err = container.store.Store(store.Configuration, *(container.config))
 		if err != nil {
+			return err
+		}
+	}
+
+	if s.supportNewStore() {
+		// flush data to storage
+		if err := s.newStore.ToDisk(); err != nil {
 			return err
 		}
 	}
@@ -1010,7 +1043,9 @@ func (s *Sandbox) addContainer(c *Container) error {
 	ann := c.GetAnnotations()
 	if ann[annotations.ContainerTypeKey] == string(PodSandbox) {
 		s.state.CgroupPath = c.state.CgroupPath
-		return s.store.Store(store.State, s.state)
+		if !s.supportNewStore() {
+			return s.store.Store(store.State, s.state)
+		}
 	}
 
 	return nil
@@ -1078,6 +1113,10 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 		return nil, err
 	}
 
+	if err = s.storeSandbox(); err != nil {
+		return nil, err
+	}
+
 	return c, nil
 }
 
@@ -1094,6 +1133,11 @@ func (s *Sandbox) StartContainer(containerID string) (VCContainer, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if err = s.storeSandbox(); err != nil {
+		return nil, err
+	}
+
 	//Fixme Container delete from sandbox, need to update resources
 
 	return c, nil
@@ -1112,6 +1156,9 @@ func (s *Sandbox) StopContainer(containerID string) (VCContainer, error) {
 		return nil, err
 	}
 
+	if err = s.storeSandbox(); err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 
@@ -1124,7 +1171,14 @@ func (s *Sandbox) KillContainer(containerID string, signal syscall.Signal, all b
 	}
 
 	// Send a signal to the process.
-	return c.kill(signal, all)
+	if err := c.kill(signal, all); err != nil {
+		return err
+	}
+
+	if err = s.storeSandbox(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // DeleteContainer deletes a container from the sandbox
@@ -1158,6 +1212,9 @@ func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
 		return nil, err
 	}
 
+	if err = s.storeSandbox(); err != nil {
+		return nil, err
+	}
 	return c, nil
 }
 
@@ -1236,7 +1293,13 @@ func (s *Sandbox) UpdateContainer(containerID string, resources specs.LinuxResou
 		return err
 	}
 
-	return c.storeContainer()
+	if err := c.storeContainer(); err != nil {
+		return err
+	}
+	if err = s.storeSandbox(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // StatsContainer return the stats of a running container
@@ -1263,7 +1326,14 @@ func (s *Sandbox) PauseContainer(containerID string) error {
 	}
 
 	// Pause the container.
-	return c.pause()
+	if err := c.pause(); err != nil {
+		return err
+	}
+
+	if err = s.storeSandbox(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ResumeContainer resumes a paused container.
@@ -1275,7 +1345,14 @@ func (s *Sandbox) ResumeContainer(containerID string) error {
 	}
 
 	// Resume the container.
-	return c.resume()
+	if err := c.resume(); err != nil {
+		return err
+	}
+
+	if err = s.storeSandbox(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // createContainers registers all containers to the proxy, create the
@@ -1306,6 +1383,9 @@ func (s *Sandbox) createContainers() error {
 	if err := s.updateCgroups(); err != nil {
 		return err
 	}
+	if err := s.storeSandbox(); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -1325,6 +1405,10 @@ func (s *Sandbox) Start() error {
 		if err := c.start(); err != nil {
 			return err
 		}
+	}
+
+	if err := s.storeSandbox(); err != nil {
+		return err
 	}
 
 	s.Logger().Info("Sandbox is started")
@@ -1362,7 +1446,15 @@ func (s *Sandbox) Stop() error {
 	}
 
 	// Remove the network.
-	return s.removeNetwork()
+	if err := s.removeNetwork(); err != nil {
+		return err
+	}
+
+	if err := s.storeSandbox(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Pause pauses the sandbox
@@ -1379,7 +1471,15 @@ func (s *Sandbox) Pause() error {
 		s.monitor.stop()
 	}
 
-	return s.pauseSetStates()
+	if err := s.pauseSetStates(); err != nil {
+		return err
+	}
+
+	if err := s.storeSandbox(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Resume resumes the sandbox
@@ -1388,7 +1488,15 @@ func (s *Sandbox) Resume() error {
 		return err
 	}
 
-	return s.resumeSetStates()
+	if err := s.resumeSetStates(); err != nil {
+		return err
+	}
+
+	if err := s.storeSandbox(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // list lists all sandbox running on the host.
@@ -1412,7 +1520,10 @@ func (s *Sandbox) setSandboxState(state types.StateString) error {
 	s.state.State = state
 
 	// update on-disk state
-	return s.store.Store(store.State, s.state)
+	if !s.supportNewStore() {
+		return s.store.Store(store.State, s.state)
+	}
+	return nil
 }
 
 func (s *Sandbox) pauseSetStates() error {
@@ -1444,9 +1555,12 @@ func (s *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
 	// Increment so that container gets incremented block index
 	s.state.BlockIndex++
 
-	// update on-disk state
-	if err := s.store.Store(store.State, s.state); err != nil {
-		return -1, err
+	if !s.supportNewStore() {
+		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
+		// update on-disk state
+		if err := s.store.Store(store.State, s.state); err != nil {
+			return -1, err
+		}
 	}
 
 	return currentIndex, nil
@@ -1457,9 +1571,12 @@ func (s *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
 func (s *Sandbox) decrementSandboxBlockIndex() error {
 	s.state.BlockIndex--
 
-	// update on-disk state
-	if err := s.store.Store(store.State, s.state); err != nil {
-		return err
+	if !s.supportNewStore() {
+		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
+		// update on-disk state
+		if err := s.store.Store(store.State, s.state); err != nil {
+			return err
+		}
 	}
 
 	return nil

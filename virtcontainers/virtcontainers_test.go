@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/sirupsen/logrus"
 )
@@ -104,6 +105,7 @@ func TestMain(m *testing.M) {
 	// allow the tests to run without affecting the host system.
 	store.ConfigStoragePath = filepath.Join(testDir, store.StoragePathSuffix, "config")
 	store.RunStoragePath = filepath.Join(testDir, store.StoragePathSuffix, "run")
+	fs.TestSetRunStoragePath(filepath.Join(testDir, "vc", "sbs"))
 
 	// set now that configStoragePath has been overridden.
 	sandboxDirConfig = filepath.Join(store.ConfigStoragePath, testSandboxID)
