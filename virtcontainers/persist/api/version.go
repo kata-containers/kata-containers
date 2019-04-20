@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Huawei Corporation
+// Copyright (c) 2019 Huawei Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
