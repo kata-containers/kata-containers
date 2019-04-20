@@ -11,6 +11,7 @@ import (
 
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
@@ -69,6 +70,19 @@ func (device *VhostUserBlkDevice) DeviceType() config.DeviceType {
 func (device *VhostUserBlkDevice) GetDeviceInfo() interface{} {
 	device.Type = device.DeviceType()
 	return &device.VhostUserDeviceAttrs
+}
+
+// Dump convert and return data in persist format
+func (device *VhostUserBlkDevice) Dump() persistapi.DeviceState {
+	ds := device.GenericDevice.Dump()
+	ds.Type = string(device.DeviceType())
+	ds.VhostUserDev = &persistapi.VhostUserDeviceAttrs{
+		DevID:      device.DevID,
+		SocketPath: device.SocketPath,
+		Type:       string(device.Type),
+		MacAddress: device.MacAddress,
+	}
+	return ds
 }
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation

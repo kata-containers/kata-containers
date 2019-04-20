@@ -258,8 +258,18 @@ type SystemMountsInfo struct {
 type ContainerDevice struct {
 	// ID is device id referencing the device from sandbox's device manager
 	ID string
+
 	// ContainerPath is device path displayed in container
 	ContainerPath string
+
+	// FileMode permission bits for the device.
+	FileMode os.FileMode
+
+	// UID is user ID in the container namespace
+	UID uint32
+
+	// GID is group ID in the container namespace
+	GID uint32
 }
 
 // RootFs describes the container's rootfs.
@@ -364,7 +374,14 @@ func (c *Container) SetPid(pid int) error {
 func (c *Container) setStateFstype(fstype string) error {
 	c.state.Fstype = fstype
 
-	return c.storeState()
+	if !c.sandbox.supportNewStore() {
+		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
+		if err := c.storeState(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // GetAnnotations returns container's annotations
@@ -374,6 +391,11 @@ func (c *Container) GetAnnotations() map[string]string {
 
 // storeContainer stores a container config.
 func (c *Container) storeContainer() error {
+	if c.sandbox.supportNewStore() {
+		if err := c.sandbox.newStore.ToDisk(); err != nil {
+			return err
+		}
+	}
 	return c.store.Store(store.Configuration, *(c.config))
 }
 
@@ -423,10 +445,17 @@ func (c *Container) setContainerState(state types.StateString) error {
 	// update in-memory state
 	c.state.State = state
 
-	// update on-disk state
-	err := c.store.Store(store.State, c.state)
-	if err != nil {
-		return err
+	if c.sandbox.supportNewStore() {
+		// flush data to storage
+		if err := c.sandbox.newStore.ToDisk(); err != nil {
+			return err
+		}
+	} else {
+		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
+		// update on-disk state
+		if err := c.store.Store(store.State, c.state); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -588,9 +617,9 @@ func (c *Container) unmountHostMounts() error {
 	return nil
 }
 
-func filterDevices(sandbox *Sandbox, c *Container, devices []ContainerDevice) (ret []ContainerDevice) {
+func filterDevices(c *Container, devices []ContainerDevice) (ret []ContainerDevice) {
 	for _, dev := range devices {
-		major, _ := sandbox.devManager.GetDeviceByID(dev.ID).GetMajorMinor()
+		major, _ := c.sandbox.devManager.GetDeviceByID(dev.ID).GetMajorMinor()
 		if _, ok := cdromMajors[major]; ok {
 			c.Logger().WithFields(logrus.Fields{
 				"device": dev.ContainerPath,
@@ -670,9 +699,22 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 
 	c.store = ctrStore
 
-	state, err := c.store.LoadContainerState()
-	if err == nil {
-		c.state = state
+	// experimental runtime use "persist.json" instead of legacy "state.json" as storage
+	if c.sandbox.supportNewStore() {
+		if err := c.Restore(); err != nil &&
+			!os.IsNotExist(err) && err != errContainerPersistNotExist {
+			return nil, err
+		}
+	} else {
+		state, err := c.store.LoadContainerState()
+		if err == nil {
+			c.state = state
+		}
+	}
+
+	if err := c.Restore(); err != nil &&
+		!os.IsNotExist(err) && err != errContainerPersistNotExist {
+		return nil, err
 	}
 
 	var process Process
@@ -680,6 +722,18 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		c.process = process
 	}
 
+	if err = c.createMounts(); err != nil {
+		return nil, err
+	}
+
+	if err = c.createDevices(contConfig); err != nil {
+		return nil, err
+	}
+
+	return c, nil
+}
+
+func (c *Container) createMounts() error {
 	mounts, err := c.loadMounts()
 	if err == nil {
 		// restore mounts from disk
@@ -687,10 +741,14 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 	} else {
 		// Create block devices for newly created container
 		if err := c.createBlockDevices(); err != nil {
-			return nil, err
+			return err
 		}
 	}
 
+	return nil
+}
+
+func (c *Container) createDevices(contConfig ContainerConfig) error {
 	// Devices will be found in storage after create stage has completed.
 	// We load devices from storage at all other stages.
 	storedDevices, err := c.loadDevices()
@@ -700,20 +758,22 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		// If devices were not found in storage, create Device implementations
 		// from the configuration. This should happen at create.
 		for _, info := range contConfig.DeviceInfos {
-			dev, err := sandbox.devManager.NewDevice(info)
+			dev, err := c.sandbox.devManager.NewDevice(info)
 			if err != nil {
-				return &Container{}, err
+				return err
 			}
 
 			storedDevices = append(storedDevices, ContainerDevice{
 				ID:            dev.DeviceID(),
 				ContainerPath: info.ContainerPath,
+				FileMode:      info.FileMode,
+				UID:           info.UID,
+				GID:           info.GID,
 			})
 		}
-		c.devices = filterDevices(sandbox, c, storedDevices)
+		c.devices = filterDevices(c, storedDevices)
 	}
-
-	return c, nil
+	return nil
 }
 
 // rollbackFailingContainerCreation rolls back important steps that might have
