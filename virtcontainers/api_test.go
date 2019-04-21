@@ -62,7 +62,7 @@ func newTestSandboxConfigNoop() SandboxConfig {
 	// Define the container command and bundle.
 	container := ContainerConfig{
 		ID:          containerID,
-		RootFs:      RootFs{Target: filepath.Join(testDir, testBundle), Mounted: true},
+		RootFs:      Mount{Destination: filepath.Join(testDir, testBundle), Mounted: true},
 		Cmd:         newBasicTestCmd(),
 		Annotations: containerAnnotations,
 	}
@@ -751,7 +751,7 @@ func newTestContainerConfigNoop(contID string) ContainerConfig {
 	// Define the container command and bundle.
 	container := ContainerConfig{
 		ID:          contID,
-		RootFs:      RootFs{Target: filepath.Join(testDir, testBundle), Mounted: true},
+		RootFs:      Mount{Destination: filepath.Join(testDir, testBundle), Mounted: true},
 		Cmd:         newBasicTestCmd(),
 		Annotations: containerAnnotations,
 	}
