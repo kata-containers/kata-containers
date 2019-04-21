@@ -31,9 +31,9 @@ func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistap
 			state = v
 		}
 		state.State = string(cont.state.State)
-		state.Rootfs = persistapi.RootfsState{
-			BlockDeviceID: cont.state.BlockDeviceID,
-			FsType:        cont.state.Fstype,
+		state.Rootfs = persistapi.Mount{
+			BlockDeviceID: cont.rootFs.BlockDeviceID,
+			Type:          cont.rootFs.Type,
 		}
 		state.CgroupPath = cont.state.CgroupPath
 		cs[id] = state
@@ -152,10 +152,8 @@ func (c *Container) Restore() error {
 	}
 
 	c.state = types.ContainerState{
-		State:         types.StateString(cs[c.id].State),
-		BlockDeviceID: cs[c.id].Rootfs.BlockDeviceID,
-		Fstype:        cs[c.id].Rootfs.FsType,
-		CgroupPath:    cs[c.id].CgroupPath,
+		State:      types.StateString(cs[c.id].State),
+		CgroupPath: cs[c.id].CgroupPath,
 	}
 
 	return nil

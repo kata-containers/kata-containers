@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -747,99 +746,6 @@ func TestSandboxGetContainer(t *testing.T) {
 
 	if !got {
 		t.Fatalf("Failed to find container %v", contID)
-	}
-}
-
-func TestContainerStateSetFstype(t *testing.T) {
-	var err error
-
-	containers := []ContainerConfig{
-		{
-			ID:          "100",
-			Annotations: containerAnnotations,
-		},
-	}
-
-	hConfig := newHypervisorConfig(nil, nil)
-	sandbox, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, containers, nil)
-	assert.Nil(t, err)
-	defer cleanUp()
-
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(t, err)
-	sandbox.store = vcStore
-
-	c := sandbox.GetContainer("100")
-	if c == nil {
-		t.Fatal()
-	}
-	cImpl, ok := c.(*Container)
-	assert.True(t, ok)
-
-	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, c.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	cImpl.store = containerStore
-
-	path := store.ContainerRuntimeRootPath(testSandboxID, c.ID())
-	stateFilePath := filepath.Join(path, store.StateFile)
-
-	f, err := os.Create(stateFilePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	state := types.ContainerState{
-		State:  "ready",
-		Fstype: "vfs",
-	}
-
-	cImpl.state = state
-
-	stateData := `{
-		"state":"ready",
-		"fstype":"vfs",
-	}`
-
-	n, err := f.WriteString(stateData)
-	if err != nil || n != len(stateData) {
-		f.Close()
-		t.Fatal()
-	}
-	f.Close()
-
-	newFstype := "ext4"
-	if err := cImpl.setStateFstype(newFstype); err != nil {
-		t.Fatal(err)
-	}
-
-	if cImpl.state.Fstype != newFstype {
-		t.Fatal()
-	}
-
-	fileData, err := ioutil.ReadFile(stateFilePath)
-	if err != nil {
-		t.Fatal()
-	}
-
-	// experimental features doesn't write state.json
-	if sandbox.supportNewStore() {
-		return
-	}
-
-	var res types.ContainerState
-	err = json.Unmarshal([]byte(string(fileData)), &res)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if res.Fstype != newFstype {
-		t.Fatal()
-	}
-
-	if res.State != state.State {
-		t.Fatal()
 	}
 }
 

@@ -172,7 +172,7 @@ func SetEphemeralStorageType(ociSpec oci.CompatOCISpec) oci.CompatOCISpec {
 }
 
 // CreateSandbox create a sandbox container
-func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig, rootFs vc.RootFs,
+func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig, rootFs vc.Mount,
 	containerID, bundlePath, console string, disableOutput, systemdCgroup, builtIn bool) (vc.VCSandbox, vc.Process, error) {
 	span, ctx := Trace(ctx, "createSandbox")
 	defer span.Finish()
@@ -237,7 +237,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec oci.CompatOCISpec, ru
 }
 
 // CreateContainer create a container
-func CreateContainer(ctx context.Context, vci vc.VC, sandbox vc.VCSandbox, ociSpec oci.CompatOCISpec, rootFs vc.RootFs, containerID, bundlePath, console string, disableOutput, builtIn bool) (vc.Process, error) {
+func CreateContainer(ctx context.Context, vci vc.VC, sandbox vc.VCSandbox, ociSpec oci.CompatOCISpec, rootFs vc.Mount, containerID, bundlePath, console string, disableOutput, builtIn bool) (vc.Process, error) {
 	var c vc.VCContainer
 
 	span, ctx := Trace(ctx, "createContainer")

@@ -306,7 +306,7 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 		Quota: &quota,
 	}
 
-	rootFs := vc.RootFs{Mounted: true}
+	rootFs := vc.Mount{Mounted: true}
 
 	_, _, err = CreateSandbox(context.Background(), testingImpl, spec, runtimeConfig, rootFs, testContainerID, bundlePath, testConsole, true, true, false)
 	assert.Error(err)
@@ -342,7 +342,7 @@ func TestCreateSandboxFail(t *testing.T) {
 	spec, err := readOCIConfigFile(ociConfigFile)
 	assert.NoError(err)
 
-	rootFs := vc.RootFs{Mounted: true}
+	rootFs := vc.Mount{Mounted: true}
 
 	_, _, err = CreateSandbox(context.Background(), testingImpl, spec, runtimeConfig, rootFs, testContainerID, bundlePath, testConsole, true, true, false)
 	assert.Error(err)
@@ -381,7 +381,7 @@ func TestCreateContainerContainerConfigFail(t *testing.T) {
 	err = writeOCIConfigFile(spec, ociConfigFile)
 	assert.NoError(err)
 
-	rootFs := vc.RootFs{Mounted: true}
+	rootFs := vc.Mount{Mounted: true}
 
 	for _, disableOutput := range []bool{true, false} {
 		_, err = CreateContainer(context.Background(), testingImpl, nil, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput, false)
@@ -424,7 +424,7 @@ func TestCreateContainerFail(t *testing.T) {
 	err = writeOCIConfigFile(spec, ociConfigFile)
 	assert.NoError(err)
 
-	rootFs := vc.RootFs{Mounted: true}
+	rootFs := vc.Mount{Mounted: true}
 
 	for _, disableOutput := range []bool{true, false} {
 		_, err = CreateContainer(context.Background(), testingImpl, nil, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput, false)
@@ -474,7 +474,7 @@ func TestCreateContainer(t *testing.T) {
 	err = writeOCIConfigFile(spec, ociConfigFile)
 	assert.NoError(err)
 
-	rootFs := vc.RootFs{Mounted: true}
+	rootFs := vc.Mount{Mounted: true}
 
 	for _, disableOutput := range []bool{true, false} {
 		_, err = CreateContainer(context.Background(), testingImpl, nil, spec, rootFs, testContainerID, bundlePath, testConsole, disableOutput, false)
