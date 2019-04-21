@@ -30,7 +30,7 @@ install_yq() {
 	local yq_pkg="github.com/mikefarah/yq"
 	[ -x "${yq_path}" ] && return
 
-	case "$(arch)" in
+	case "$(uname -m)" in
 	"aarch64")
 		goarch=arm64
 		;;
@@ -48,7 +48,7 @@ install_yq() {
 		;;
 
 	"*")
-		echo "Arch $(arch) not supported"
+		echo "Arch $(uname -m) not supported"
 		exit
 		;;
 	esac
