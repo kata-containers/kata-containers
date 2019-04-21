@@ -16,7 +16,7 @@
 
 script_name=${0##*/}
 
-arch=$(arch)
+arch=$(uname -m)
 
 # Array of configure options.
 #

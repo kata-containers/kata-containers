@@ -176,7 +176,7 @@ main() {
 	[ -n "${kata_version}" ] || usage 1
 	info "Requested version: ${kata_version}"
 
-	destdir="${workdir}/kata-static-${kata_version}-$(arch)"
+	destdir="${workdir}/kata-static-${kata_version}-$(uname -m)"
 	info "DESTDIR ${destdir}"
 	mkdir -p "${destdir}"
 	install_image
