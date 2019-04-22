@@ -60,9 +60,8 @@ done
 
 IFS=$OLD_IFS
 
-# run CRI-O tests using devicemapper on ubuntu 16.04
-MAJOR=$(echo "$VERSION_ID"|cut -d\. -f1)
-if [ "$ID" == "ubuntu" ] && [ "$MAJOR" -eq 16 ]; then
+# run CRI-O tests using devicemapper on ubuntu
+if [ "$ID" == "ubuntu" ]; then
 	# Block device attached to the VM where we run the CI
 	# If the block device has a partition, cri-o will not be able to use it.
 	export LVM_DEVICE
@@ -72,13 +71,9 @@ if [ "$ID" == "ubuntu" ] && [ "$MAJOR" -eq 16 ]; then
 	export STORAGE_OPTIONS="$DM_STORAGE_OPTIONS"
 fi
 
-# But if on ubuntu 17.10 or newer, test using overlay
+# On other distros or on ZUUL, use overlay.
 # This will allow us to run tests with at least 2 different
 # storage drivers.
-if [ "$ID" == "ubuntu" ] && [ "$MAJOR" -ge 17 ]; then
-	export STORAGE_OPTIONS="$OVERLAY_STORAGE_OPTIONS"
-fi
-
 if [ "$ID" == "fedora" ] || [ "$ID" == "centos" ]; then
 	export STORAGE_OPTIONS="$OVERLAY_STORAGE_OPTIONS"
 fi
