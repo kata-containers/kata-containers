@@ -19,7 +19,16 @@ var (
 	errContainerPersistNotExist = errors.New("container doesn't exist in persist data")
 )
 
-func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) error {
+func (s *Sandbox) dumpVersion(ss *persistapi.SandboxState) {
+	// New created sandbox has a uninitialized `PersistVersion` which should be set to current version when do the first saving;
+	// Old restored sandbox should keep its original version and shouldn't be modified any more after it's initialized.
+	ss.PersistVersion = s.state.PersistVersion
+	if ss.PersistVersion == 0 {
+		ss.PersistVersion = persistapi.CurPersistVersion
+	}
+}
+
+func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) {
 	ss.SandboxContainer = s.id
 	ss.GuestMemoryBlockSizeMB = s.state.GuestMemoryBlockSizeMB
 	ss.State = string(s.state.State)
@@ -45,13 +54,10 @@ func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistap
 			delete(cs, id)
 		}
 	}
-
-	return nil
 }
 
-func (s *Sandbox) dumpHypervisor(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) error {
+func (s *Sandbox) dumpHypervisor(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) {
 	ss.HypervisorState.BlockIndex = s.state.BlockIndex
-	return nil
 }
 
 func deviceToDeviceState(devices []api.Device) (dss []persistapi.DeviceState) {
@@ -61,7 +67,7 @@ func deviceToDeviceState(devices []api.Device) (dss []persistapi.DeviceState) {
 	return
 }
 
-func (s *Sandbox) dumpDevices(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) error {
+func (s *Sandbox) dumpDevices(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) {
 	ss.Devices = deviceToDeviceState(s.devManager.GetAllDevices())
 
 	for id, cont := range s.containers {
@@ -90,48 +96,34 @@ func (s *Sandbox) dumpDevices(ss *persistapi.SandboxState, cs map[string]persist
 			delete(cs, id)
 		}
 	}
+}
+
+func (s *Sandbox) Save() error {
+	var (
+		ss = persistapi.SandboxState{}
+		cs = make(map[string]persistapi.ContainerState)
+	)
+
+	s.dumpVersion(&ss)
+	s.dumpState(&ss, cs)
+	s.dumpHypervisor(&ss, cs)
+	s.dumpDevices(&ss, cs)
+
+	if err := s.newStore.ToDisk(ss, cs); err != nil {
+		return err
+	}
 
 	return nil
 }
 
-// verSaveCallback set persist data version to current version in runtime
-func (s *Sandbox) verSaveCallback() {
-	s.newStore.AddSaveCallback("version", func(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) error {
-		ss.PersistVersion = persistapi.CurPersistVersion
-		return nil
-	})
-}
-
-// stateSaveCallback register hook to set sandbox and container state to persist
-func (s *Sandbox) stateSaveCallback() {
-	s.newStore.AddSaveCallback("state", s.dumpState)
-}
-
-// hvStateSaveCallback register hook to save hypervisor state to persist data
-func (s *Sandbox) hvStateSaveCallback() {
-	s.newStore.AddSaveCallback("hypervisor", s.dumpHypervisor)
-}
-
-// PersistDevices register hook to save device informations
-func (s *Sandbox) devicesSaveCallback() {
-	s.newStore.AddSaveCallback("devices", s.dumpDevices)
-}
-
-func (s *Sandbox) getSbxAndCntStates() (*persistapi.SandboxState, map[string]persistapi.ContainerState, error) {
-	if err := s.newStore.FromDisk(s.id); err != nil {
-		return nil, nil, err
-	}
-
-	return s.newStore.GetStates()
-}
-
 // Restore will restore sandbox data from persist file on disk
 func (s *Sandbox) Restore() error {
-	ss, _, err := s.getSbxAndCntStates()
+	ss, _, err := s.newStore.FromDisk(s.id)
 	if err != nil {
 		return err
 	}
 
+	s.state.PersistVersion = ss.PersistVersion
 	s.state.GuestMemoryBlockSizeMB = ss.GuestMemoryBlockSizeMB
 	s.state.BlockIndex = ss.HypervisorState.BlockIndex
 	s.state.State = types.StateString(ss.State)
@@ -141,8 +133,9 @@ func (s *Sandbox) Restore() error {
 }
 
 // Restore will restore container data from persist file on disk
+// TODO:
 func (c *Container) Restore() error {
-	_, cs, err := c.sandbox.getSbxAndCntStates()
+	_, cs, err := c.sandbox.newStore.FromDisk(c.sandbox.id)
 	if err != nil {
 		return err
 	}

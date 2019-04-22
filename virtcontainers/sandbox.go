@@ -481,18 +481,10 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
 
 	if s.supportNewStore() {
-		// register persist hook for now, data will be written to disk by ToDisk()
-		s.stateSaveCallback()
-		s.hvStateSaveCallback()
-		s.devicesSaveCallback()
-
 		if err := s.Restore(); err == nil && s.state.State != "" {
 			return s, nil
 		}
 
-		// if sandbox doesn't exist, set persist version to current version
-		// otherwise do nothing
-		s.verSaveCallback()
 	} else {
 		// We first try to fetch the sandbox state from storage.
 		// If it exists, this means this is a re-creation, i.e.
@@ -619,7 +611,7 @@ func (s *Sandbox) storeSandbox() error {
 
 	if s.supportNewStore() {
 		// flush data to storage
-		if err := s.newStore.ToDisk(); err != nil {
+		if err := s.Save(); err != nil {
 			return err
 		}
 	}
