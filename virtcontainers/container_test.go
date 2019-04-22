@@ -106,7 +106,7 @@ func TestContainerRemoveDrive(t *testing.T) {
 		id:      "testContainer",
 	}
 
-	container.rootFs.Type = ""
+	container.state.Fstype = ""
 	err = container.removeDrive()
 
 	// hotplugRemoveDevice for hypervisor should not be called.
@@ -131,8 +131,8 @@ func TestContainerRemoveDrive(t *testing.T) {
 	err = sandbox.storeSandboxDevices()
 	assert.Nil(t, err)
 
-	container.rootFs.Type = "xfs"
-	container.rootFs.BlockDeviceID = device.DeviceID()
+	container.state.Fstype = "xfs"
+	container.state.BlockDeviceID = device.DeviceID()
 	err = container.removeDrive()
 	assert.Nil(t, err, "remove drive should succeed")
 }
@@ -245,7 +245,7 @@ func TestContainerAddDriveDir(t *testing.T) {
 	container := Container{
 		sandbox: sandbox,
 		id:      contID,
-		rootFs:  Mount{Destination: fakeRootfs, Mounted: true},
+		rootFs:  RootFs{Target: fakeRootfs, Mounted: true},
 	}
 
 	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, container.id)
@@ -272,14 +272,14 @@ func TestContainerAddDriveDir(t *testing.T) {
 		checkStorageDriver = savedFunc
 	}()
 
-	container.rootFs.Type = "xfs"
+	container.state.Fstype = ""
 
 	err = container.hotplugDrive()
 	if err != nil {
 		t.Fatalf("Error with hotplugDrive :%v", err)
 	}
 
-	if container.rootFs.Type == "" {
+	if container.state.Fstype == "" {
 		t.Fatal()
 	}
 }
@@ -315,7 +315,7 @@ func TestContainerRootfsPath(t *testing.T) {
 	container := Container{
 		id:           "rootfstestcontainerid",
 		sandbox:      sandbox,
-		rootFs:       Mount{Destination: fakeRootfs, Mounted: true},
+		rootFs:       RootFs{Target: fakeRootfs, Mounted: true},
 		rootfsSuffix: "rootfs",
 	}
 	cvcstore, err := store.NewVCContainerStore(context.Background(),
@@ -328,7 +328,7 @@ func TestContainerRootfsPath(t *testing.T) {
 	assert.Empty(t, container.rootfsSuffix)
 
 	// Reset the value to test the other case
-	container.rootFs = Mount{Destination: fakeRootfs + "/rootfs", Mounted: true}
+	container.rootFs = RootFs{Target: fakeRootfs + "/rootfs", Mounted: true}
 	container.rootfsSuffix = "rootfs"
 
 	container.hotplugDrive()

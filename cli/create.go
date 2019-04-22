@@ -128,7 +128,7 @@ func create(ctx context.Context, containerID, bundlePath, console, pidFilePath s
 	disableOutput := noNeedForOutput(detach, ociSpec.Process.Terminal)
 
 	//rootfs has been mounted by containerd shim
-	rootFs := vc.Mount{Mounted: true}
+	rootFs := vc.RootFs{Mounted: true}
 
 	var process vc.Process
 	switch containerType {

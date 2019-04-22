@@ -183,7 +183,6 @@ func newMount(m spec.Mount) vc.Mount {
 		Destination: m.Destination,
 		Type:        m.Type,
 		Options:     m.Options,
-		Mounted:     true, // All OCI volumes are mounted on the host ATM.
 	}
 }
 
@@ -525,12 +524,12 @@ func ContainerConfig(ocispec CompatOCISpec, bundlePath, cid, console string, det
 		return vc.ContainerConfig{}, err
 	}
 
-	rootfs := vc.Mount{Destination: ocispec.Root.Path, Mounted: true}
-	if !filepath.IsAbs(rootfs.Destination) {
-		rootfs.Destination = filepath.Join(bundlePath, ocispec.Root.Path)
+	rootfs := vc.RootFs{Target: ocispec.Root.Path, Mounted: true}
+	if !filepath.IsAbs(rootfs.Target) {
+		rootfs.Target = filepath.Join(bundlePath, ocispec.Root.Path)
 	}
 
-	ociLog.Debugf("container rootfs: %s", rootfs.Destination)
+	ociLog.Debugf("container rootfs: %s", rootfs.Target)
 
 	cmd := types.Cmd{
 		Args:            ocispec.Process.Args,
