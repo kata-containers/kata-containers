@@ -381,6 +381,10 @@ pushd "${ROOTFS_DIR}" >> /dev/null
 if [ "$PWD" != "/" ] ; then
 	rm -rf ./var/cache/ ./var/lib ./var/log
 fi
+
+info "Create symlink to /tmp in /var to create private temporal directories with systemd"
+rm -rf ./var/tmp
+ln -s ../tmp ./var/
 popd  >> /dev/null
 
 [ -n "${KERNEL_MODULES_DIR}" ] && copy_kernel_modules ${KERNEL_MODULES_DIR} ${ROOTFS_DIR}
