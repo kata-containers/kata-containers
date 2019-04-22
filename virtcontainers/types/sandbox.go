@@ -43,6 +43,11 @@ type SandboxState struct {
 	// CgroupPath is the cgroup hierarchy where sandbox's processes
 	// including the hypervisor are placed.
 	CgroupPath string `json:"cgroupPath,omitempty"`
+
+	// PersistVersion indicates current storage api version.
+	// It's also known as ABI version of kata-runtime.
+	// Note: it won't be written to disk
+	PersistVersion uint `json:"-"`
 }
 
 // Valid checks that the sandbox state is valid.

@@ -51,31 +51,21 @@ func TestFsDriver(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
 
-	fs.AddSaveCallback("test", func(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) error {
-		return nil
-	})
+	ss := persistapi.SandboxState{}
+	cs := make(map[string]persistapi.ContainerState)
 	// missing sandbox container id
-	assert.NotNil(t, fs.ToDisk())
+	assert.NotNil(t, fs.ToDisk(ss, cs))
 
 	id := "test-fs-driver"
-	// missing sandbox container id
-	fs.AddSaveCallback("test", func(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) error {
-		ss.SandboxContainer = id
-		return nil
-	})
-	assert.Nil(t, fs.ToDisk())
-
-	fs.AddSaveCallback("test1", func(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) error {
-		ss.State = "running"
-		return nil
-	})
+	ss.SandboxContainer = id
+	assert.Nil(t, fs.ToDisk(ss, cs))
 
 	// try non-existent dir
-	assert.NotNil(t, fs.FromDisk("test-fs"))
+	_, _, err = fs.FromDisk("test-fs")
+	assert.NotNil(t, err)
 
-	// since we didn't call ToDisk, Callbacks are not invoked, and state is still empty in disk file
-	assert.Nil(t, fs.FromDisk(id))
-	ss, cs, err := fs.GetStates()
+	// since we didn't call ToDisk, state is still empty in disk file
+	ss, cs, err = fs.FromDisk(id)
 	assert.Nil(t, err)
 	assert.NotNil(t, ss)
 	assert.Equal(t, len(cs), 0)
@@ -84,9 +74,9 @@ func TestFsDriver(t *testing.T) {
 	assert.Equal(t, ss.State, "")
 
 	// flush all to disk
-	assert.Nil(t, fs.ToDisk())
-	assert.Nil(t, fs.FromDisk(id))
-	ss, cs, err = fs.GetStates()
+	ss.State = "running"
+	assert.Nil(t, fs.ToDisk(ss, cs))
+	ss, cs, err = fs.FromDisk(id)
 	assert.Nil(t, err)
 	assert.NotNil(t, ss)
 	assert.Equal(t, len(cs), 0)
