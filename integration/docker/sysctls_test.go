@@ -5,6 +5,8 @@
 package docker
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -52,6 +54,16 @@ var _ = Describe("sysctls", func() {
 			stdout, _, exitCode = dockerRun(args...)
 			Expect(exitCode).To(Equal(0))
 			Expect(stdout).To(ContainSubstring(pmtuValue))
+		})
+	})
+
+	Context("sysctl for IP forwarding", func() {
+		It("should be applied", func() {
+			ipforwardValue := "1"
+			args = []string{"--name", id, "--rm", "--sysctl", "net.ipv4.ip_forward=" + ipforwardValue, Image, "cat", "/proc/sys/net/ipv4/ip_forward"}
+			stdout, _, exitCode = dockerRun(args...)
+			Expect(exitCode).To(Equal(0))
+			Expect(strings.Trim(stdout, " \n\t")).To(Equal(ipforwardValue))
 		})
 	})
 })
