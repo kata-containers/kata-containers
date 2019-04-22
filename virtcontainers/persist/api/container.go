@@ -47,16 +47,23 @@ type Mount struct {
 	// HostPath used to store host side bind mount path
 	HostPath string
 
+	// ReadOnly specifies if the mount should be read only or not
+	ReadOnly bool
+
 	// BlockDeviceID represents block device that is attached to the
 	// VM in case this mount is a block device file or a directory
 	// backed by a block device.
 	BlockDeviceID string
+}
 
-	// ReadOnly specifies if the mount should be read only or not
-	ReadOnly bool
+// RootfsState saves state of container rootfs
+type RootfsState struct {
+	// BlockDeviceID represents container rootfs block device ID
+	// when backed by devicemapper
+	BlockDeviceID string
 
-	// Mounted specifies if the target has been mounted on the host
-	Mounted bool
+	// RootFStype is file system of the rootfs incase it is block device
+	FsType string
 }
 
 // Process gathers data related to a container process.
@@ -83,7 +90,7 @@ type ContainerState struct {
 	State string
 
 	// Rootfs contains information of container rootfs
-	Rootfs Mount
+	Rootfs RootfsState
 
 	// CgroupPath is the cgroup hierarchy where sandbox's processes
 	// including the hypervisor are placed.

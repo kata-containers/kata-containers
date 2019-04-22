@@ -304,10 +304,7 @@ func bindMountContainerRootfs(ctx context.Context, sharedDir, sandboxID, cID, cR
 
 // Mount describes a container mount.
 type Mount struct {
-	// Mount source
-	Source string
-
-	// Mount destination in the guest
+	Source      string
 	Destination string
 
 	// Type specifies the type of filesystem to mount.
@@ -319,16 +316,13 @@ type Mount struct {
 	// HostPath used to store host side bind mount path
 	HostPath string
 
+	// ReadOnly specifies if the mount should be read only or not
+	ReadOnly bool
+
 	// BlockDeviceID represents block device that is attached to the
 	// VM in case this mount is a block device file or a directory
 	// backed by a block device.
 	BlockDeviceID string
-
-	// ReadOnly specifies if the mount should be read only or not
-	ReadOnly bool
-
-	// Mounted specifies if the target has been mounted on the host
-	Mounted bool
 }
 
 func bindUnmountContainerRootfs(ctx context.Context, sharedDir, sandboxID, cID string) error {
@@ -347,7 +341,7 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 
 	for _, c := range sandbox.containers {
 		c.unmountHostMounts()
-		if c.rootFs.Type == "" {
+		if c.state.Fstype == "" {
 			// Need to check for error returned by this call.
 			// See: https://github.com/containers/virtcontainers/issues/295
 			bindUnmountContainerRootfs(c.ctx, sharedDir, sandbox.id, c.id)
