@@ -60,13 +60,21 @@ teardown() {
 	issue="https://github.com/kata-containers/runtime/issues/905"
 	[ "${ID}" == "centos" ] || [ "$ID" == rhel ] && skip "test not working with ${ID} see: ${issue}"
 
-	# Remove network
-	docker network rm ${NETWORK_NAME}
+	# Stop containers
+	docker stop ${FIRST_CONTAINER_NAME}
+	docker stop ${SECOND_CONTAINER_NAME}
 
-	clean_env
+	# Remove containers
+	docker rm ${FIRST_CONTAINER_NAME}
+	docker rm ${SECOND_CONTAINER_NAME}
+
+	# Remove network
+	run docker network rm ${NETWORK_NAME}
+	echo "$output"
+	[ "$status" -eq 0 ] || return 1
 
 	# Check that processes are not running
 	run check_processes
 	echo "$output"
-	[ "$status" -eq 0 ]
+	[ "$status" -eq 0 ] || return 1
 }

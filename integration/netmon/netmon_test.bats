@@ -74,8 +74,6 @@ setup() {
 	final_interfaces=$(docker exec $CONTAINER_NAME ip addr show | awk '/inet.*brd/{print $NF}' | wc -l)
 
 	[ "$before_interfaces" -eq "$final_interfaces" ]
-
-	docker network rm $NETWORK_NAME
 }
 
 teardown() {
@@ -85,14 +83,20 @@ teardown() {
 
 	[ "$MACHINETYPE" == "q35" ] && skip "test not working see: ${netmon_issue}"
 
-	clean_env
+	docker stop "$CONTAINER_NAME"
+
+	docker rm "$CONTAINER_NAME"
+
+	run docker network rm "$NETWORK_NAME"
+	echo "$output"
+	[ "$status" -eq 0 ] || return 1
 
 	extract_kata_env
 
 	# Check that processes are not running
 	run check_processes
 	echo "$output"
-	[ "$status" -eq 0 ]
+	[ "$status" -eq 0 ] || return 1
 
 	# Disabling netmon at the configuration file
 	sudo sed -i -e 's/^\(enable_netmon =\).*$/#\1 true/g' ${RUNTIME_CONFIG_PATH}
