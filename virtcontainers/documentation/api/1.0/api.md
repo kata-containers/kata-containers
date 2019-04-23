@@ -16,7 +16,7 @@ semantics strictly follow the
 
 The sandbox API allows callers to [create](#createsandbox), [delete](#deletesandbox),
 [start](#startsandbox), [stop](#stopsandbox), [run](#runsandbox), [pause](#pausesandbox),
-[resume](resumesandbox) and [list](#listsandbox) VM (Virtual Machine) based sandboxes.
+[resume](#resumesandbox) and [list](#listsandbox) VM (Virtual Machine) based sandboxes.
 
 To initially create a sandbox, the API caller must prepare a
 [`SandboxConfig`](#sandboxconfig) and pass it to either [`CreateSandbox`](#createsandbox)
@@ -43,10 +43,10 @@ sandbox lifecycle through the rest of the [sandbox API](#sandbox-functions).
   * [NetworkConfig](#networkconfig)
     * [NetInterworkingModel](#netinterworkingmodel)
   * [Volume](#volume)
-  * [ContainerConfig](#containerconfig)
-    * [Cmd](#cmd)
-    * [Mount](#mount)
-    * [DeviceInfo](#deviceinfo)
+  * [Sandbox ContainerConfig](#sandbox-containerconfig)
+    * [Sandbox Cmd](#sandbox-cmd)
+    * [Sandbox Mount](#sandbox-mount)
+    * [Sandbox DeviceInfo](#sandbox-deviceinfo)
 * [VCSandbox](#vcsandbox)
 
 #### `SandboxConfig`
@@ -298,7 +298,7 @@ type Volume struct {
 }
 ```
 
-##### `ContainerConfig`
+##### Sandbox `ContainerConfig`
 ```Go
 // ContainerConfig describes one container runtime configuration.
 type ContainerConfig struct {
@@ -325,7 +325,7 @@ type ContainerConfig struct {
 }
 ```
 
-###### `Cmd`
+###### Sandbox `Cmd`
 ```Go
 // Cmd represents a command to execute in a running container.
 type Cmd struct {
@@ -367,7 +367,7 @@ type Cmd struct {
 }
 ```
 
-###### `Mount`
+###### Sandbox `Mount`
 ```Go
 // Mount describes a container mount.
 type Mount struct {
@@ -388,7 +388,7 @@ type Mount struct {
 }
 ```
 
-###### `DeviceInfo`
+###### Sandbox `DeviceInfo`
 ```Go
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
 type DeviceInfo struct {
@@ -541,7 +541,7 @@ As a virtcontainers container is always linked to a sandbox, the entire containe
 API always takes a sandbox ID as its first argument.
 
 To create a container, the API caller must prepare a
-[`ContainerConfig`](#containerconfig) and pass it to
+[`ContainerConfig`](#sandbox-containerconfig) and pass it to
 [`CreateContainer`](#createcontainer) together with a sandbox ID. Upon successful
 container creation, the virtcontainers API will return a
 [`VCContainer`](#vccontainer) interface back to the caller.
@@ -556,17 +556,17 @@ to manage the container lifecycle through the rest of the
 
 ### Container Structures
 
-* [ContainerConfig](#containerconfig-1)
-  * [Cmd](#cmd-1)
-  * [Mount](#mount-1)
-  * [DeviceInfo](#deviceinfo-1)
+* [Container ContainerConfig](#container-containerconfig)
+  * [Container Cmd](#container-cmd)
+  * [Container Mount](#container-mount)
+  * [Container DeviceInfo](#container-deviceinfo)
 * [Process](#process)
 * [ContainerStatus](#containerstatus)
 * [ProcessListOptions](#processlistoptions)
 * [VCContainer](#vccontainer)
 
 
-#### `ContainerConfig`
+#### Container `ContainerConfig`
 ```Go
 // ContainerConfig describes one container runtime configuration.
 type ContainerConfig struct {
@@ -593,7 +593,7 @@ type ContainerConfig struct {
 }
 ```
 
-##### `Cmd`
+##### Container `Cmd`
 ```Go
 // Cmd represents a command to execute in a running container.
 type Cmd struct {
@@ -635,7 +635,7 @@ type Cmd struct {
 }
 ```
 
-##### `Mount`
+##### Container `Mount`
 ```Go
 // Mount describes a container mount.
 type Mount struct {
@@ -656,7 +656,7 @@ type Mount struct {
 }
 ```
 
-##### `DeviceInfo`
+##### Container `DeviceInfo`
 ```Go
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
 type DeviceInfo struct {
