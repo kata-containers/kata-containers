@@ -15,7 +15,7 @@
       - [Kata deploy](#kata-deploy)
       - [Kata cleanup](#kata-cleanup)
 
-[kata-deploy](kata-deploy) provides a Dockerfile, which contains all of the binaries
+[kata-deploy](.) provides a Dockerfile, which contains all of the binaries
 and artifacts required to run Kata Containers, as well as reference daemonsets, which can
 be utilized to install Kata Containers for both Docker and on a running Kubernetes cluster.
 
@@ -128,7 +128,7 @@ kubectl delete -f kata-rbac.yaml
 
 ### Dockerfile
 
-The [Dockerfile](kata-deploy/Dockerfile)  used to create the container image deployed in the DaemonSet is provided here.
+The [Dockerfile](Dockerfile)  used to create the container image deployed in the DaemonSet is provided here.
 This image contains all the necessary artifacts for running Kata Containers, all of which are pulled
 from the [Kata Containers release page](https://github.com/kata-containers/runtime/releases).
 

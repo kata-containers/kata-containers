@@ -70,7 +70,7 @@ The [miniOS image][2] is not included in the snap image as it is not possible fo
 QEMU to open a guest RAM backing store on a read-only filesystem. Fortunately,
 you can start Kata Containers with a Linux initial RAM disk (initrd) that is
 included in the snap image. If you want to use the miniOS image instead of initrd,
-then a new configuration file can be [created](#configuring-kata-containers)
+then a new configuration file can be [created](#configure-kata-containers)
 and [configured][7].
 
 [1]: https://docs.snapcraft.io/snaps/intro
