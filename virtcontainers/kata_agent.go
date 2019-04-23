@@ -1789,6 +1789,7 @@ func (k *kataAgent) convertToKataAgentInterface(iface *vcTypes.Interface) *aType
 		Name:        iface.Name,
 		IPAddresses: k.convertToKataAgentIPAddresses(iface.IPAddresses),
 		Mtu:         iface.Mtu,
+		RawFlags:    iface.RawFlags,
 		HwAddr:      iface.HwAddr,
 		PciAddr:     iface.PciAddr,
 	}

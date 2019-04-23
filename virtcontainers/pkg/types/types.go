@@ -18,6 +18,7 @@ type Interface struct {
 	Name        string
 	IPAddresses []*IPAddress
 	Mtu         uint64
+	RawFlags    uint32
 	HwAddr      string
 	// pciAddr is the PCI address in the format  "bridgeAddr/deviceAddr".
 	// Here, bridgeAddr is the address at which the bridge is attached on the root bus,
