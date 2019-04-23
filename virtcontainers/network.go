@@ -1143,11 +1143,13 @@ func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*vcTypes.Interfa
 			}
 			ipAddresses = append(ipAddresses, &ipAddress)
 		}
+		noarp := endpoint.Properties().Iface.RawFlags & unix.IFF_NOARP
 		ifc := vcTypes.Interface{
 			IPAddresses: ipAddresses,
 			Device:      endpoint.Name(),
 			Name:        endpoint.Name(),
 			Mtu:         uint64(endpoint.Properties().Iface.MTU),
+			RawFlags:    noarp,
 			HwAddr:      endpoint.HardwareAddr(),
 			PciAddr:     endpoint.PciAddr(),
 		}
