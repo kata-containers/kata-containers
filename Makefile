@@ -69,8 +69,6 @@ BINLIBEXECLIST += $(NETMON_TARGET)
 
 DESTDIR := /
 
-installing = $(findstring install,$(MAKECMDGOALS))
-
 ifeq ($(PREFIX),)
 PREFIX        := /usr
 EXEC_PREFIX   := $(PREFIX)/local
@@ -84,12 +82,6 @@ QEMUBINDIR    := $(PREFIXDEPS)/bin
 FCBINDIR      := $(PREFIXDEPS)/bin
 SYSCONFDIR    := /etc
 LOCALSTATEDIR := /var
-
-ifeq (,$(installing))
-    # Force a rebuild to ensure version details are correct
-    # (but only for a non-install build phase).
-    EXTRA_DEPS = clean
-endif
 
 LIBEXECDIR := $(PREFIXDEPS)/libexec
 SHAREDIR := $(PREFIX)/share
@@ -182,8 +174,16 @@ SHIMV2_DIR = $(CLI_DIR)/$(SHIMV2)
 
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 VERSION := ${shell cat ./VERSION}
-COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
-COMMIT := $(if $(shell git status --porcelain --untracked-files=no),${COMMIT_NO}-dirty,${COMMIT_NO})
+
+# Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
+# git revision string.  They will only be rebuilt if the revision string
+# actually changes.
+.PHONY: .git-commit.tmp
+.git-commit: .git-commit.tmp
+	@cmp $< $@ >/dev/null 2>&1 || cp $< $@
+.git-commit.tmp:
+	@echo -n "$$(git rev-parse HEAD 2>/dev/null)" >$@
+	@test -n "$$(git status --porcelain --untracked-files=no)" && echo -n "-dirty" >>$@ || true
 
 # List of configuration files to build and install
 CONFIGS =
@@ -334,13 +334,12 @@ USER_VARS += BUILDFLAGS
 
 V              = @
 Q              = $(V:1=)
-QUIET_BUILD    = $(Q:@=@echo    '     BUILD   '$@;)
-QUIET_CHECK    = $(Q:@=@echo    '     CHECK   '$@;)
-QUIET_CLEAN    = $(Q:@=@echo    '     CLEAN   '$@;)
-QUIET_CONFIG   = $(Q:@=@echo    '     CONFIG  '$@;)
+QUIET_BUILD    = $(Q:@=@echo    '     BUILD    '$@;)
+QUIET_CHECK    = $(Q:@=@echo    '     CHECK    '$@;)
+QUIET_CLEAN    = $(Q:@=@echo    '     CLEAN    '$@;)
 QUIET_GENERATE = $(Q:@=@echo    '     GENERATE '$@;)
-QUIET_INST     = $(Q:@=@echo    '     INSTALL '$@;)
-QUIET_TEST     = $(Q:@=@echo    '     TEST    '$@;)
+QUIET_INST     = $(Q:@=@echo    '     INSTALL  '$@;)
+QUIET_TEST     = $(Q:@=@echo    '     TEST     '$@;)
 
 # go build common flags
 BUILDFLAGS := -buildmode=pie
@@ -361,62 +360,13 @@ containerd-shim-v2: $(SHIMV2_OUTPUT)
 
 netmon: $(NETMON_TARGET_OUTPUT)
 
-$(NETMON_TARGET_OUTPUT): $(SOURCES)
+$(NETMON_TARGET_OUTPUT): $(SOURCES) VERSION
 	$(QUIET_BUILD)(cd $(NETMON_DIR) && go build $(BUILDFLAGS) -o $@ -ldflags "-X main.version=$(VERSION)")
 
 runtime: $(TARGET_OUTPUT) $(CONFIGS)
 .DEFAULT: default
 
 build: default
-
-define GENERATED_CODE
-// WARNING: This file is auto-generated - DO NOT EDIT!
-//
-// Note that some variables are "var" to allow them to be modified
-// by the tests.
-package main
-
-import (
-	"fmt"
-)
-
-// name is the name of the runtime
-const name = "$(TARGET)"
-
-// name of the project
-const project = "$(PROJECT_NAME)"
-
-// prefix used to denote non-standard CLI commands and options.
-const projectPrefix = "$(PROJECT_TYPE)"
-
-// original URL for this project
-const projectURL = "$(PROJECT_URL)"
-
-const defaultRootDirectory = "$(PKGRUNDIR)"
-
-// commit is the git commit the runtime is compiled from.
-var commit = "$(COMMIT)"
-
-// version is the runtime version.
-var version = "$(VERSION)"
-
-// project-specific command names
-var envCmd = fmt.Sprintf("%s-env", projectPrefix)
-var checkCmd = fmt.Sprintf("%s-check", projectPrefix)
-
-// project-specific option names
-var configFilePathOption = fmt.Sprintf("%s-config", projectPrefix)
-var showConfigPathsOption = fmt.Sprintf("%s-show-default-config-paths", projectPrefix)
-
-// Default config file used by stateless systems.
-var defaultRuntimeConfiguration = "$(CONFIG_PATH)"
-
-// Alternate config file that takes precedence over
-// defaultRuntimeConfiguration.
-var defaultSysConfRuntimeConfiguration = "$(SYSCONFIG)"
-endef
-
-export GENERATED_CODE
 
 #Install an executable file
 # params:
@@ -440,14 +390,9 @@ define MAKE_KERNEL_NAME
 $(if $(findstring uncompressed,$1),vmlinux.container,vmlinuz.container)
 endef
 
-GENERATED_CONFIG = $(CLI_DIR)/config-generated.go
+GENERATED_FILES += $(CLI_DIR)/config-generated.go
 
-GENERATED_GO_FILES += $(GENERATED_CONFIG)
-
-$(GENERATED_CONFIG): Makefile VERSION
-	$(QUIET_GENERATE)echo "$$GENERATED_CODE" >$@
-
-$(TARGET_OUTPUT): $(EXTRA_DEPS) $(SOURCES) $(GENERATED_GO_FILES) $(GENERATED_FILES) Makefile | show-summary
+$(TARGET_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
 	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(BUILDFLAGS) -o $@ .)
 
 $(SHIMV2_OUTPUT):
@@ -464,14 +409,14 @@ $(SHIMV2_OUTPUT):
 	show-summary \
 	show-variables
 
-$(TARGET).coverage: $(SOURCES) $(GENERATED_FILES) Makefile
+$(TARGET).coverage: $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
 	$(QUIET_TEST)go test -o $@ -covermode count
 
 GENERATED_FILES += $(CONFIGS)
 
-$(GENERATED_FILES): %: %.in Makefile VERSION
-	$(QUIET_CONFIG)$(SED) \
-		-e "s|@COMMIT@|$(COMMIT)|g" \
+$(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION .git-commit
+	$(QUIET_GENERATE)$(SED) \
+		-e "s|@COMMIT@|$(shell cat .git-commit)|g" \
 		-e "s|@VERSION@|$(VERSION)|g" \
 		-e "s|@CONFIG_QEMU_IN@|$(CONFIG_QEMU_IN)|g" \
 		-e "s|@CONFIG_FC_IN@|$(CONFIG_FC_IN)|g" \
@@ -487,6 +432,7 @@ $(GENERATED_FILES): %: %.in Makefile VERSION
 		-e "s|@KERNELPARAMS@|$(KERNELPARAMS)|g" \
 		-e "s|@LOCALSTATEDIR@|$(LOCALSTATEDIR)|g" \
 		-e "s|@PKGLIBEXECDIR@|$(PKGLIBEXECDIR)|g" \
+		-e "s|@PKGRUNDIR@|$(PKGRUNDIR)|g" \
 		-e "s|@PROXYPATH@|$(PROXYPATH)|g" \
 		-e "s|@NETMONPATH@|$(NETMONPATH)|g" \
 		-e "s|@PROJECT_BUG_URL@|$(PROJECT_BUG_URL)|g" \
@@ -564,7 +510,7 @@ install-completions:
 	$(QUIET_INST)install --mode 0644 -D  $(BASH_COMPLETIONS) $(DESTDIR)/$(BASH_COMPLETIONSDIR)/$(notdir $(BASH_COMPLETIONS));
 
 clean:
-	$(QUIET_CLEAN)rm -f $(TARGET) $(SHIMV2) $(NETMON_TARGET) $(CONFIGS) $(GENERATED_GO_FILES) $(GENERATED_FILES) $(COLLECT_SCRIPT)
+	$(QUIET_CLEAN)rm -f $(TARGET) $(SHIMV2) $(NETMON_TARGET) $(CONFIGS) $(GENERATED_FILES) .git-commit .git-commit.tmp
 
 show-usage: show-header
 	@printf "• Overview:\n"
@@ -603,8 +549,8 @@ show-variables:
           "$(foreach v,$(sort $(USER_VARS)),$(shell printf "\\t$(v)='$($(v))'\\\n"))"
 	@printf "\n"
 
-show-header:
-	@printf "%s - version %s (commit %s)\n\n" $(TARGET) $(VERSION) $(COMMIT)
+show-header: .git-commit
+	@printf "%s - version %s (commit %s)\n\n" $(TARGET) $(VERSION) $(shell cat .git-commit)
 
 show-arches: show-header
 	@printf "Supported architectures (possible values for ARCH variable):\n\n"
