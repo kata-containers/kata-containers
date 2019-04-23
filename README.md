@@ -68,11 +68,7 @@ $ kata-runtime kata-check
 > **Note:**
 >
 > If you run the previous command as the `root` user, further checks will be
-> performed (e.g. it will check if another incompatible hypervisor is running):
->
-> ```bash
-> $ sudo kata-runtime kata-check
-> ```
+> performed (e.g. it will check if another incompatible hypervisor is running).
 
 ## Download and install
 
@@ -124,7 +120,7 @@ $ kata-runtime --kata-config=/some/where/configuration.toml ...
 ```
 
 The runtime will log the full path to the configuration file it is using. See
-the [logging](#Logging) section for further details.
+the [logging](#logging) section for further details.
 
 To see details of your systems runtime environment (including the location of
 the configuration file being used), run:

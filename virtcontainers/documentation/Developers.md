@@ -52,5 +52,5 @@ This will:
 # Submitting changes
 
 For details on the format and how to submit changes, refer to the
-[Contributing](CONTRIBUTING.md) document.
+[Contributing](../../CONTRIBUTING.md) document.
 
