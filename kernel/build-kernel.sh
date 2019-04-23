@@ -206,7 +206,7 @@ build_kernel() {
 	local kernel_path=${1:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ -d "${kernel_path}" ] || die "path to kernel does not exist, use ${script_name} setup"
-	[ -n "${arch_target}" ] || arch_target="$(arch)"
+	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
 	make -j $(nproc) ARCH="${arch_target}"

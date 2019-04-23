@@ -50,12 +50,12 @@ parts:
       make \
         PREFIX=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
         SKIP_GO_VERSION_CHECK=1 \
-        QEMUCMD=qemu-system-$(arch)
+        QEMUCMD=qemu-system-$(uname -m)
       make install \
         PREFIX=/usr \
         DESTDIR=${SNAPCRAFT_PART_INSTALL} \
         SKIP_GO_VERSION_CHECK=1 \
-        QEMUCMD=qemu-system-$(arch)
+        QEMUCMD=qemu-system-$(uname -m)
 
       # A snap is read-only squashfs, unfourtunately it's not possible to use the rootfs image with DAX
       # since rw access is required therefore initrd image must be used instead.
@@ -193,7 +193,7 @@ parts:
       versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${SNAPCRAFT_PROJECT_VERSION}/versions.yaml
       version="$(curl -sSL ${versions_url} | yq r - assets.kernel.version | tr -d v)"
       x_version="$(echo $version | sed -e 's|.[[:digit:]]*$||').x"
-      case "$(arch)" in
+      case "$(uname -m)" in
         "x86_64")
           config="x86_64_kata_kvm_${x_version}"
         ;;
@@ -211,7 +211,7 @@ parts:
         ;;
 
         *)
-          echo "ERROR: Unsupported architecture $(arch)"
+          echo "ERROR: Unsupported architecture $(uname -m)"
           exit 1
         ;;
       esac
@@ -279,7 +279,7 @@ parts:
 
       versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${SNAPCRAFT_PROJECT_VERSION}/versions.yaml
       # arch-specific definition
-      case "$(arch)" in
+      case "$(uname -m)" in
         "aarch64")
           branch="$(curl -sSL ${versions_url} | yq r - assets.hypervisor.qemu.architecture.aarch64.branch)"
           url="$(curl -sSL ${versions_url} | yq r - assets.hypervisor.qemu.url)"

@@ -30,7 +30,7 @@ write_files:
 runcmd:
 
  - {{beginTask . "Install kata"}}
- - ARCH=$(arch)
+ - ARCH=$(uname -m)
  - sudo sh -c "echo 'deb http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/xUbuntu_$(lsb_release -rs)/ /' > /etc/apt/sources.list.d/kata-containers.list"
  - {{proxyVars .}} curl -sL  http://download.opensuse.org/repositories/home:/katacontainers:/releases:/${ARCH}:/master/xUbuntu_$(lsb_release -rs)/Release.key | sudo apt-key add -
  - sudo -E apt-get update
