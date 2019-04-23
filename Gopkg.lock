@@ -395,7 +395,7 @@
   revision = "35a8fd3ca9a36461b7dcf24e3b292f6e1ea4e71a"
 
 [[projects]]
-  digest = "1:eaa44c90711ae244bae3ef4239edc720bbbd7dfc754bfdbd12407bdaf14d6777"
+  digest = "1:36dfd4701e98a9d8371dd3053e32d4f29e82b07bcc9e655db82138f9273bcb0f"
   name = "github.com/kata-containers/agent"
   packages = [
     "pkg/types",
@@ -403,7 +403,7 @@
     "protocols/grpc",
   ]
   pruneopts = "NUT"
-  revision = "17192be88b2725b0e7f482a8b7616935e1b1ddf4"
+  revision = "48dd1c031530fce9bf16b0f6a7305979cedd8fc9"
 
 [[projects]]
   digest = "1:04054595e5c5a35d1553a7f3464d18577caf597445d643992998643df56d4afd"
@@ -425,11 +425,11 @@
   revision = "6243d8e04c3f819e79757e8bc3faa15c3cb27003"
 
 [[projects]]
-  digest = "1:0159dcdabe50788e5dcfb469521f8f8dcd362db3ab6b465b99a3d33a90726fc0"
+  digest = "1:f3e11773cc8a305f97b42c276f62d92899c9b0c1c3c584a667149b18f18a530a"
   name = "github.com/mdlayher/vsock"
   packages = ["."]
   pruneopts = "NUT"
-  revision = "738c88d6e4cfd60e8124a5344fa10d205fd828b9"
+  revision = "676f733b747cd6406f297a51bd086ee8ec8abdbe"
 
 [[projects]]
   digest = "1:6a65dcd0d14fc0595ee982afc3c59deb5b769ca374455c80c649d92f8a152930"
