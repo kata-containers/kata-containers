@@ -1,5 +1,5 @@
 // Copyright (c) 2017-2018 Intel Corporation
-// Copyright (c) 2018 Huawei Corporation
+// Copyright (c) 2018-2019 Huawei Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -140,9 +140,9 @@ func (device *VFIODevice) GetDeviceInfo() interface{} {
 	return device.VfioDevs
 }
 
-// Dump convert and return data in persist format
-func (device *VFIODevice) Dump() persistapi.DeviceState {
-	ds := device.GenericDevice.Dump()
+// Save converts Device to DeviceState
+func (device *VFIODevice) Save() persistapi.DeviceState {
+	ds := device.GenericDevice.Save()
 	ds.Type = string(device.DeviceType())
 
 	devs := device.VfioDevs
@@ -150,13 +150,28 @@ func (device *VFIODevice) Dump() persistapi.DeviceState {
 		if dev != nil {
 			ds.VFIODevs = append(ds.VFIODevs, &persistapi.VFIODev{
 				ID:       dev.ID,
-				Type:     string(dev.Type),
+				Type:     uint32(dev.Type),
 				BDF:      dev.BDF,
 				SysfsDev: dev.SysfsDev,
 			})
 		}
 	}
 	return ds
+}
+
+// Load loads DeviceState and converts it to specific device
+func (device *VFIODevice) Load(ds persistapi.DeviceState) {
+	device.GenericDevice = &GenericDevice{}
+	device.GenericDevice.Load(ds)
+
+	for _, dev := range ds.VFIODevs {
+		device.VfioDevs = append(device.VfioDevs, &config.VFIODev{
+			ID:       dev.ID,
+			Type:     config.VFIODeviceType(dev.Type),
+			BDF:      dev.BDF,
+			SysfsDev: dev.SysfsDev,
+		})
+	}
 }
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation

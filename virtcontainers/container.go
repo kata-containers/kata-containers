@@ -540,9 +540,11 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 				return nil, nil, err
 			}
 
-			if err := c.sandbox.storeSandboxDevices(); err != nil {
-				//TODO: roll back?
-				return nil, nil, err
+			if !c.sandbox.supportNewStore() {
+				if err := c.sandbox.storeSandboxDevices(); err != nil {
+					//TODO: roll back?
+					return nil, nil, err
+				}
 			}
 			continue
 		}
@@ -710,11 +712,6 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		if err == nil {
 			c.state = state
 		}
-	}
-
-	if err := c.Restore(); err != nil &&
-		!os.IsNotExist(err) && err != errContainerPersistNotExist {
-		return nil, err
 	}
 
 	var process Process
@@ -1012,6 +1009,16 @@ func (c *Container) stop() error {
 		return err
 	}
 
+	defer func() {
+		// Save device and drive data.
+		// TODO: can we merge this saving with setContainerState()?
+		if c.sandbox.supportNewStore() {
+			if err := c.sandbox.Save(); err != nil {
+				c.Logger().WithError(err).Info("save container state failed")
+			}
+		}
+	}()
+
 	if err := c.sandbox.agent.stopContainer(c.sandbox, *c); err != nil {
 		return err
 	}
@@ -1273,8 +1280,10 @@ func (c *Container) plugDevice(devicePath string) error {
 			return err
 		}
 
-		if err := c.sandbox.storeSandboxDevices(); err != nil {
-			return err
+		if !c.sandbox.supportNewStore() {
+			if err := c.sandbox.storeSandboxDevices(); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -1307,8 +1316,10 @@ func (c *Container) removeDrive() (err error) {
 			}
 		}
 
-		if err := c.sandbox.storeSandboxDevices(); err != nil {
-			return err
+		if !c.sandbox.supportNewStore() {
+			if err := c.sandbox.storeSandboxDevices(); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -1325,8 +1336,10 @@ func (c *Container) attachDevices() error {
 		}
 	}
 
-	if err := c.sandbox.storeSandboxDevices(); err != nil {
-		return err
+	if !c.sandbox.supportNewStore() {
+		if err := c.sandbox.storeSandboxDevices(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -1351,8 +1364,10 @@ func (c *Container) detachDevices() error {
 		}
 	}
 
-	if err := c.sandbox.storeSandboxDevices(); err != nil {
-		return err
+	if !c.sandbox.supportNewStore() {
+		if err := c.sandbox.storeSandboxDevices(); err != nil {
+			return err
+		}
 	}
 	return nil
 }

@@ -897,6 +897,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 		hypervisor: &mockHypervisor{},
 		devManager: dm,
 		ctx:        context.Background(),
+		config:     &SandboxConfig{},
 	}
 
 	store, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
