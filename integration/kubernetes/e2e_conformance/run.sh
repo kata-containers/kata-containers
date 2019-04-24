@@ -72,7 +72,7 @@ run_sonobuoy() {
 	[ "$CI" == true ] && cat "$e2e_result_log"
 
 	# Check for Success message on the logs.
-	grep -aq " 0 Failed" "$e2e_result_log"
+	grep -aq " 0 Failed" "$e2e_result_log" || die "A failure has been found"
 	grep -aq "SUCCESS" "$e2e_result_log" && \
 		info " k8s e2e conformance using Kata runtime finished successfully"
 	popd

@@ -10,7 +10,7 @@ containerd:
   - SchedulerPredicates
   - should ensure that all pods are removed when a namespace is deleted
 
-cri-o:
+crio:
   - InitContainer
   - Projected downwardAPI
   - Downward API
