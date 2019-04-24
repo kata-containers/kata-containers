@@ -191,14 +191,6 @@ func (p *gRPCProxy) DestroySandbox(ctx context.Context, req *pb.DestroySandboxRe
 	return emptyResp, nil
 }
 
-func (p *gRPCProxy) AddInterface(ctx context.Context, req *pb.AddInterfaceRequest) (*aTypes.Interface, error) {
-	return nil, nil
-}
-
-func (p *gRPCProxy) RemoveInterface(ctx context.Context, req *pb.RemoveInterfaceRequest) (*aTypes.Interface, error) {
-	return nil, nil
-}
-
 func (p *gRPCProxy) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*aTypes.Interface, error) {
 	return &aTypes.Interface{}, nil
 }
