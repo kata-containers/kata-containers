@@ -5,6 +5,7 @@
 * [Build and install snap image](#build-and-install-snap-image)
 * [Configure Kata Containers](#configure-kata-containers)
 * [Integration with docker and kubernetes](#integration-with-docker-and-kubernetes)
+* [Remove Snap](#remove-snap)
 * [Limitations](#limitations)
 
 This directory contains the resources needed to build the Kata Containers
@@ -20,7 +21,7 @@ $ sudo apt-get install -y snapd snapcraft
 
 ## Install snap
 
-You can install Kata Containers from the [snapcraft store][8] or by running the following command:
+You can install the Kata Containers snap from the [snapcraft store][8] or by running the following command:
 
 ```sh
 $ sudo snap install kata-containers
@@ -63,6 +64,14 @@ $ $EDITOR /etc/kata-containers/configuration.toml
 The path to the runtime provided by the Kata Containers snap image is
 `/snap/kata-containers/current/usr/bin/kata-runtime`. You should use it to
 run Kata Containers with [docker][9] and [kubernetes][10].
+
+## Remove snap
+
+You can remove the Kata Containers snap by running the following command:
+
+```sh
+$ sudo snap remove kata-containers
+```
 
 ## Limitations
 
