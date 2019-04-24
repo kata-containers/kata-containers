@@ -1,5 +1,5 @@
 // Copyright (c) 2017-2018 Intel Corporation
-// Copyright (c) 2018 Huawei Corporation
+// Copyright (c) 2018-2019 Huawei Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -72,9 +72,9 @@ func (device *VhostUserBlkDevice) GetDeviceInfo() interface{} {
 	return &device.VhostUserDeviceAttrs
 }
 
-// Dump convert and return data in persist format
-func (device *VhostUserBlkDevice) Dump() persistapi.DeviceState {
-	ds := device.GenericDevice.Dump()
+// Save converts Device to DeviceState
+func (device *VhostUserBlkDevice) Save() persistapi.DeviceState {
+	ds := device.GenericDevice.Save()
 	ds.Type = string(device.DeviceType())
 	ds.VhostUserDev = &persistapi.VhostUserDeviceAttrs{
 		DevID:      device.DevID,
@@ -83,6 +83,24 @@ func (device *VhostUserBlkDevice) Dump() persistapi.DeviceState {
 		MacAddress: device.MacAddress,
 	}
 	return ds
+}
+
+// Load loads DeviceState and converts it to specific device
+func (device *VhostUserBlkDevice) Load(ds persistapi.DeviceState) {
+	device.GenericDevice = &GenericDevice{}
+	device.GenericDevice.Load(ds)
+
+	dev := ds.VhostUserDev
+	if dev == nil {
+		return
+	}
+
+	device.VhostUserDeviceAttrs = config.VhostUserDeviceAttrs{
+		DevID:      dev.DevID,
+		SocketPath: dev.SocketPath,
+		Type:       config.DeviceType(dev.Type),
+		MacAddress: dev.MacAddress,
+	}
 }
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation

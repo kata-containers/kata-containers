@@ -46,7 +46,7 @@ type VFIODev struct {
 	ID string
 
 	// Type of VFIO device
-	Type string
+	Type uint32
 
 	// BDF (Bus:Device.Function) of the PCI address
 	BDF string

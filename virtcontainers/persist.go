@@ -62,7 +62,7 @@ func (s *Sandbox) dumpHypervisor(ss *persistapi.SandboxState, cs map[string]pers
 
 func deviceToDeviceState(devices []api.Device) (dss []persistapi.DeviceState) {
 	for _, dev := range devices {
-		dss = append(dss, dev.Dump())
+		dss = append(dss, dev.Save())
 	}
 	return
 }
@@ -116,6 +116,18 @@ func (s *Sandbox) Save() error {
 	return nil
 }
 
+func (s *Sandbox) loadState(ss persistapi.SandboxState) {
+	s.state.PersistVersion = ss.PersistVersion
+	s.state.GuestMemoryBlockSizeMB = ss.GuestMemoryBlockSizeMB
+	s.state.BlockIndex = ss.HypervisorState.BlockIndex
+	s.state.State = types.StateString(ss.State)
+	s.state.CgroupPath = ss.CgroupPath
+}
+
+func (s *Sandbox) loadDevices(devStates []persistapi.DeviceState) {
+	s.devManager.LoadDevices(devStates)
+}
+
 // Restore will restore sandbox data from persist file on disk
 func (s *Sandbox) Restore() error {
 	ss, _, err := s.newStore.FromDisk(s.id)
@@ -123,17 +135,12 @@ func (s *Sandbox) Restore() error {
 		return err
 	}
 
-	s.state.PersistVersion = ss.PersistVersion
-	s.state.GuestMemoryBlockSizeMB = ss.GuestMemoryBlockSizeMB
-	s.state.BlockIndex = ss.HypervisorState.BlockIndex
-	s.state.State = types.StateString(ss.State)
-	s.state.CgroupPath = ss.CgroupPath
-
+	s.loadState(ss)
+	s.loadDevices(ss.Devices)
 	return nil
 }
 
 // Restore will restore container data from persist file on disk
-// TODO:
 func (c *Container) Restore() error {
 	_, cs, err := c.sandbox.newStore.FromDisk(c.sandbox.id)
 	if err != nil {

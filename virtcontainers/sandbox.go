@@ -474,18 +474,20 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 		s.networkNS = networkNS
 	}
 
-	devices, err := s.store.LoadDevices()
-	if err != nil {
-		s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("load sandbox devices failed")
-	}
-	s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
-
 	if s.supportNewStore() {
+		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, nil)
+
 		if err := s.Restore(); err == nil && s.state.State != "" {
 			return s, nil
 		}
 
 	} else {
+		devices, err := s.store.LoadDevices()
+		if err != nil {
+			s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("load sandbox devices failed")
+		}
+		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
+
 		// We first try to fetch the sandbox state from storage.
 		// If it exists, this means this is a re-creation, i.e.
 		// we don't need to talk to the guest's agent, but only
@@ -1142,6 +1144,7 @@ func (s *Sandbox) StartContainer(containerID string) (VCContainer, error) {
 		return nil, err
 	}
 
+	s.Logger().Info("Container is started")
 	//Fixme Container delete from sandbox, need to update resources
 
 	return c, nil
@@ -1750,8 +1753,10 @@ func (s *Sandbox) AddDevice(info config.DeviceInfo) (api.Device, error) {
 		return nil, err
 	}
 
-	if err := s.storeSandboxDevices(); err != nil {
-		return nil, err
+	if !s.supportNewStore() {
+		if err := s.storeSandboxDevices(); err != nil {
+			return nil, err
+		}
 	}
 
 	return b, nil

@@ -590,6 +590,10 @@ func statusContainer(sandbox *Sandbox, containerID string) (ContainerStatus, err
 				}
 
 				if !running {
+					virtLog.WithFields(logrus.Fields{
+						"state":       container.state.State,
+						"process pid": container.process.Pid}).
+						Info("container isn't running")
 					if err := container.stop(); err != nil {
 						return ContainerStatus{}, err
 					}
