@@ -60,7 +60,7 @@ With `shimv2`, kubernetes can launch Pod and OCI-compatible containers with one 
 shims (i.e. a `containerd-shim` and a `kata-shim` for each container and the Pod sandbox itself) and no standalone `kata-proxy` 
 process were used, even with vsock not available.
 
-![kubernetes integration with shimv2](../arch-images/shimv2.svg)
+![kubernetes integration with shimv2](../design/arch-images/shimv2.svg)
 
 The shim v2 is introduced in containerd [v1.2.0](https://github.com/containerd/containerd/releases/tag/v1.2.0) and kata `shimv2`
 is implemented in Kata Containers v1.5.0.
