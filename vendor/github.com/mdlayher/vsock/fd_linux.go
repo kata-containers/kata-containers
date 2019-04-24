@@ -11,11 +11,12 @@ import (
 type fd interface {
 	Accept4(flags int) (fd, unix.Sockaddr, error)
 	Bind(sa unix.Sockaddr) error
-	Connect(sa unix.Sockaddr) error
 	Close() error
+	Connect(sa unix.Sockaddr) error
 	Getsockname() (unix.Sockaddr, error)
 	Listen(n int) error
 	NewFile(name string) *os.File
+	SetNonblock(nonblocking bool) error
 }
 
 var _ fd = &sysFD{}
@@ -38,6 +39,7 @@ func (fd *sysFD) Accept4(flags int) (fd, unix.Sockaddr, error) {
 func (fd *sysFD) Bind(sa unix.Sockaddr) error         { return unix.Bind(fd.fd, sa) }
 func (fd *sysFD) Close() error                        { return unix.Close(fd.fd) }
 func (fd *sysFD) Connect(sa unix.Sockaddr) error      { return unix.Connect(fd.fd, sa) }
+func (fd *sysFD) Getsockname() (unix.Sockaddr, error) { return unix.Getsockname(fd.fd) }
 func (fd *sysFD) Listen(n int) error                  { return unix.Listen(fd.fd, n) }
 func (fd *sysFD) NewFile(name string) *os.File        { return os.NewFile(uintptr(fd.fd), name) }
-func (fd *sysFD) Getsockname() (unix.Sockaddr, error) { return unix.Getsockname(fd.fd) }
+func (fd *sysFD) SetNonblock(nonblocking bool) error  { return unix.SetNonblock(fd.fd, nonblocking) }
