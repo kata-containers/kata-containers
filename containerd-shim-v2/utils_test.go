@@ -17,6 +17,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
@@ -41,8 +42,6 @@ const (
 	testBundle      = "bundle"
 	testConsole     = "/dev/pts/888"
 
-	testDisabledNeedRoot = "Test disabled as requires root user"
-
 	testContainerTypeAnnotation = "io.kubernetes.cri.container-type"
 	testSandboxIDAnnotation     = "io.kubernetes.cri.sandbox-id"
 	testContainerTypeSandbox    = "sandbox"
@@ -53,6 +52,7 @@ var (
 	// package variables set by calling TestMain()
 	testDir       = ""
 	testBundleDir = ""
+	tc            ktu.TestConstraint
 )
 
 // testingImpl is a concrete mock RVC implementation used for testing
@@ -108,6 +108,8 @@ func init() {
 	if err != nil {
 		panic(fmt.Sprintf("ERROR: failed to create OCI bundle: %v", err))
 	}
+
+	tc = ktu.NewTestConstraint(false)
 }
 
 // createOCIConfig creates an OCI configuration (spec) file in

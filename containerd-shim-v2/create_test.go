@@ -19,14 +19,15 @@ import (
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/pkg/katautils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestCreateSandboxSuccess(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	assert := assert.New(t)
@@ -97,9 +98,10 @@ func TestCreateSandboxSuccess(t *testing.T) {
 }
 
 func TestCreateSandboxFail(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
+
 	assert := assert.New(t)
 
 	tmpdir, err := ioutil.TempDir("", "")
@@ -142,8 +144,8 @@ func TestCreateSandboxFail(t *testing.T) {
 }
 
 func TestCreateSandboxConfigFail(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	assert := assert.New(t)

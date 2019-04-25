@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"testing"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
@@ -38,7 +39,13 @@ var (
 
 	// testingImpl is a concrete mock RVC implementation used for testing
 	testingImpl = &vcmock.VCMock{}
+
+	tc ktu.TestConstraint
 )
+
+func init() {
+	tc = ktu.NewTestConstraint(false)
+}
 
 // readOCIConfig returns an OCI spec.
 func readOCIConfigFile(configPath string) (oci.CompatOCISpec, error) {
@@ -178,8 +185,8 @@ func findLastParam(key string, params []vc.Param) (string, error) {
 }
 
 func TestSetEphemeralStorageType(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	assert := assert.New(t)
@@ -313,8 +320,8 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 }
 
 func TestCreateSandboxFail(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedNonRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	assert := assert.New(t)

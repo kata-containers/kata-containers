@@ -7,10 +7,10 @@ package virtcontainers
 
 import (
 	"net"
-	"os"
 	"testing"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
@@ -43,7 +43,7 @@ func TestPhysicalEndpoint_HotDetach(t *testing.T) {
 }
 
 func TestIsPhysicalIface(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 

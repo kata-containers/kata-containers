@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"testing"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
@@ -138,7 +139,7 @@ func TestContainerRemoveDrive(t *testing.T) {
 }
 
 func testSetupFakeRootfs(t *testing.T) (testRawFile, loopDev, mntDir string, err error) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
@@ -206,7 +207,7 @@ func cleanupFakeRootfsSetup(testRawFile, loopDev, mntDir string) {
 }
 
 func TestContainerAddDriveDir(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 

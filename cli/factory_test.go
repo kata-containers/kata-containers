@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 )
 
@@ -65,7 +66,7 @@ func TestFactoryCLIFunctionInit(t *testing.T) {
 	assert.Nil(err)
 
 	// With template
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
