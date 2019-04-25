@@ -274,8 +274,30 @@ path = "@SHIMPATH@"
 #enable_tracing = true
 
 [agent.@PROJECT_TYPE@]
-# There is no field for this section. The goal is only to be able to
-# specify which type of agent the user wants to use.
+# If enabled, make the agent display debug-level messages.
+# (default: disabled)
+#enable_debug = true
+
+# Enable agent tracing.
+#
+# If enabled, the default trace mode is "dynamic" and the
+# default trace type is "isolated". The trace mode and type are set
+# explicity with the `trace_type=` and `trace_mode=` options.
+#
+# Notes:
+#
+# - Tracing is ONLY enabled when `enable_tracing` is set: explicitly
+#   setting `trace_mode=` and/or `trace_type=` without setting `enable_tracing`
+#   will NOT activate agent tracing.
+#
+# - See https://github.com/kata-containers/agent/blob/master/TRACING.md for
+#   full details.
+#
+# (default: disabled)
+#enable_tracing = true
+#
+#trace_mode = "dynamic"
+#trace_type = "isolated"
 
 [netmon]
 # If enabled, the network monitoring process gets started when the

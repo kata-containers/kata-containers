@@ -27,8 +27,8 @@ func (n *noopAgent) startProxy(sandbox *Sandbox) error {
 }
 
 // init initializes the Noop agent, i.e. it does nothing.
-func (n *noopAgent) init(ctx context.Context, sandbox *Sandbox, config interface{}) error {
-	return nil
+func (n *noopAgent) init(ctx context.Context, sandbox *Sandbox, config interface{}) (bool, error) {
+	return false, nil
 }
 
 // createSandbox is the Noop agent sandbox creation implementation. It does nothing.

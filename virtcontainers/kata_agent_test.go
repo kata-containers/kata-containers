@@ -191,14 +191,6 @@ func (p *gRPCProxy) DestroySandbox(ctx context.Context, req *pb.DestroySandboxRe
 	return emptyResp, nil
 }
 
-func (p *gRPCProxy) AddInterface(ctx context.Context, req *pb.AddInterfaceRequest) (*aTypes.Interface, error) {
-	return nil, nil
-}
-
-func (p *gRPCProxy) RemoveInterface(ctx context.Context, req *pb.RemoveInterfaceRequest) (*aTypes.Interface, error) {
-	return nil, nil
-}
-
 func (p *gRPCProxy) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*aTypes.Interface, error) {
 	return &aTypes.Interface{}, nil
 }
@@ -253,6 +245,14 @@ func (p *gRPCProxy) SetGuestDateTime(ctx context.Context, req *pb.SetGuestDateTi
 }
 
 func (p *gRPCProxy) CopyFile(ctx context.Context, req *pb.CopyFileRequest) (*gpb.Empty, error) {
+	return &gpb.Empty{}, nil
+}
+
+func (p *gRPCProxy) StartTracing(ctx context.Context, req *pb.StartTracingRequest) (*gpb.Empty, error) {
+	return &gpb.Empty{}, nil
+}
+
+func (p *gRPCProxy) StopTracing(ctx context.Context, req *pb.StopTracingRequest) (*gpb.Empty, error) {
 	return &gpb.Empty{}, nil
 }
 
@@ -932,5 +932,201 @@ func TestKataCleanupSandbox(t *testing.T) {
 
 	if _, err = os.Stat(dir); os.IsExist(err) {
 		t.Fatalf("%s still exists\n", dir)
+	}
+}
+
+func TestKataAgentKernelParams(t *testing.T) {
+	assert := assert.New(t)
+
+	type testData struct {
+		debug          bool
+		trace          bool
+		traceMode      string
+		traceType      string
+		expectedParams []Param
+	}
+
+	debugParam := Param{Key: "agent.log", Value: "debug"}
+
+	traceIsolatedParam := Param{Key: "agent.trace", Value: "isolated"}
+	traceCollatedParam := Param{Key: "agent.trace", Value: "collated"}
+
+	traceFooParam := Param{Key: "agent.trace", Value: "foo"}
+
+	data := []testData{
+		{false, false, "", "", []Param{}},
+		{true, false, "", "", []Param{debugParam}},
+
+		{false, false, "foo", "", []Param{}},
+		{false, false, "foo", "", []Param{}},
+		{false, false, "", "foo", []Param{}},
+		{false, false, "", "foo", []Param{}},
+		{false, false, "foo", "foo", []Param{}},
+		{false, true, "foo", "foo", []Param{}},
+
+		{false, false, agentTraceModeDynamic, "", []Param{}},
+		{false, false, agentTraceModeStatic, "", []Param{}},
+		{false, false, "", agentTraceTypeIsolated, []Param{}},
+		{false, false, "", agentTraceTypeCollated, []Param{}},
+		{false, false, "foo", agentTraceTypeIsolated, []Param{}},
+		{false, false, "foo", agentTraceTypeCollated, []Param{}},
+
+		{false, false, agentTraceModeDynamic, agentTraceTypeIsolated, []Param{}},
+		{false, false, agentTraceModeDynamic, agentTraceTypeCollated, []Param{}},
+
+		{false, false, agentTraceModeStatic, agentTraceTypeCollated, []Param{}},
+		{false, false, agentTraceModeStatic, agentTraceTypeCollated, []Param{}},
+
+		{false, true, agentTraceModeDynamic, agentTraceTypeIsolated, []Param{}},
+		{false, true, agentTraceModeDynamic, agentTraceTypeCollated, []Param{}},
+		{true, true, agentTraceModeDynamic, agentTraceTypeCollated, []Param{debugParam}},
+
+		{false, true, "", agentTraceTypeIsolated, []Param{}},
+		{false, true, "", agentTraceTypeCollated, []Param{}},
+		{true, true, "", agentTraceTypeIsolated, []Param{debugParam}},
+		{true, true, "", agentTraceTypeCollated, []Param{debugParam}},
+		{false, true, "foo", agentTraceTypeIsolated, []Param{}},
+		{false, true, "foo", agentTraceTypeCollated, []Param{}},
+		{true, true, "foo", agentTraceTypeIsolated, []Param{debugParam}},
+		{true, true, "foo", agentTraceTypeCollated, []Param{debugParam}},
+
+		{false, true, agentTraceModeStatic, agentTraceTypeIsolated, []Param{traceIsolatedParam}},
+		{false, true, agentTraceModeStatic, agentTraceTypeCollated, []Param{traceCollatedParam}},
+		{true, true, agentTraceModeStatic, agentTraceTypeIsolated, []Param{traceIsolatedParam, debugParam}},
+		{true, true, agentTraceModeStatic, agentTraceTypeCollated, []Param{traceCollatedParam, debugParam}},
+
+		{false, true, agentTraceModeStatic, "foo", []Param{traceFooParam}},
+		{true, true, agentTraceModeStatic, "foo", []Param{debugParam, traceFooParam}},
+	}
+
+	for i, d := range data {
+		config := KataAgentConfig{
+			Debug:     d.debug,
+			Trace:     d.trace,
+			TraceMode: d.traceMode,
+			TraceType: d.traceType,
+		}
+
+		count := len(d.expectedParams)
+
+		params := KataAgentKernelParams(config)
+
+		if count == 0 {
+			assert.Emptyf(params, "test %d (%+v)", i, d)
+			continue
+		}
+
+		assert.Len(params, count)
+
+		for _, p := range d.expectedParams {
+			assert.Containsf(params, p, "test %d (%+v)", i, d)
+		}
+	}
+}
+
+func TestKataAgentHandleTraceSettings(t *testing.T) {
+	assert := assert.New(t)
+
+	type testData struct {
+		traceMode               string
+		trace                   bool
+		expectDisableVMShutdown bool
+		expectDynamicTracing    bool
+	}
+
+	data := []testData{
+		{"", false, false, false},
+		{"", true, false, false},
+		{agentTraceModeStatic, true, true, false},
+		{agentTraceModeDynamic, true, false, true},
+	}
+
+	for i, d := range data {
+		k := &kataAgent{}
+
+		config := KataAgentConfig{
+			Trace:     d.trace,
+			TraceMode: d.traceMode,
+		}
+
+		disableVMShutdown := k.handleTraceSettings(config)
+
+		if d.expectDisableVMShutdown {
+			assert.Truef(disableVMShutdown, "test %d (%+v)", i, d)
+		} else {
+			assert.Falsef(disableVMShutdown, "test %d (%+v)", i, d)
+		}
+
+		if d.expectDynamicTracing {
+			assert.Truef(k.dynamicTracing, "test %d (%+v)", i, d)
+		} else {
+			assert.Falsef(k.dynamicTracing, "test %d (%+v)", i, d)
+		}
+	}
+}
+
+func TestKataAgentSetDefaultTraceConfigOptions(t *testing.T) {
+	assert := assert.New(t)
+
+	type testData struct {
+		traceMode              string
+		traceType              string
+		trace                  bool
+		expectDefaultTraceMode bool
+		expectDefaultTraceType bool
+		expectError            bool
+	}
+
+	data := []testData{
+		{"", "", false, false, false, false},
+		{agentTraceModeDynamic, agentTraceTypeCollated, false, false, false, false},
+		{agentTraceModeDynamic, agentTraceTypeIsolated, false, false, false, false},
+		{agentTraceModeStatic, agentTraceTypeCollated, false, false, false, false},
+		{agentTraceModeStatic, agentTraceTypeIsolated, false, false, false, false},
+
+		{agentTraceModeDynamic, agentTraceTypeCollated, true, false, false, false},
+		{agentTraceModeDynamic, agentTraceTypeIsolated, true, false, false, false},
+
+		{agentTraceModeStatic, agentTraceTypeCollated, true, false, false, false},
+		{agentTraceModeStatic, agentTraceTypeIsolated, true, false, false, false},
+
+		{agentTraceModeDynamic, "", true, false, true, false},
+		{agentTraceModeDynamic, "invalid", true, false, false, true},
+
+		{agentTraceModeStatic, "", true, false, true, false},
+		{agentTraceModeStatic, "invalid", true, false, false, true},
+
+		{"", agentTraceTypeIsolated, true, true, false, false},
+		{"invalid", agentTraceTypeIsolated, true, false, false, true},
+
+		{"", agentTraceTypeCollated, true, true, false, false},
+		{"invalid", agentTraceTypeCollated, true, false, false, true},
+
+		{"", "", true, true, true, false},
+		{"invalid", "invalid", true, false, false, true},
+	}
+
+	for i, d := range data {
+		config := &KataAgentConfig{
+			Trace:     d.trace,
+			TraceMode: d.traceMode,
+			TraceType: d.traceType,
+		}
+
+		err := KataAgentSetDefaultTraceConfigOptions(config)
+		if d.expectError {
+			assert.Error(err, "test %d (%+v)", i, d)
+			continue
+		} else {
+			assert.NoError(err, "test %d (%+v)", i, d)
+		}
+
+		if d.expectDefaultTraceMode {
+			assert.Equalf(config.TraceMode, defaultAgentTraceMode, "test %d (%+v)", i, d)
+		}
+
+		if d.expectDefaultTraceType {
+			assert.Equalf(config.TraceType, defaultAgentTraceType, "test %d (%+v)", i, d)
+		}
 	}
 }

@@ -86,7 +86,12 @@ func TestNewAgentFromUnknownAgentType(t *testing.T) {
 }
 
 func testNewAgentConfig(t *testing.T, config SandboxConfig, expected interface{}) {
-	agentConfig := newAgentConfig(config.AgentType, config.AgentConfig)
+	agentConfig, err := newAgentConfig(config.AgentType, config.AgentConfig)
+	if err != nil {
+		t.Fatal(err)
+
+	}
+
 	if reflect.DeepEqual(agentConfig, expected) == false {
 		t.Fatal()
 	}

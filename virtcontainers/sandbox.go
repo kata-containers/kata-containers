@@ -186,10 +186,11 @@ type Sandbox struct {
 
 	wg *sync.WaitGroup
 
-	shmSize          uint64
-	sharePidNs       bool
-	stateful         bool
-	seccompSupported bool
+	shmSize           uint64
+	sharePidNs        bool
+	stateful          bool
+	seccompSupported  bool
+	disableVMShutdown bool
 
 	ctx context.Context
 }
@@ -583,8 +584,12 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
-	agentConfig := newAgentConfig(sandboxConfig.AgentType, sandboxConfig.AgentConfig)
-	if err = s.agent.init(ctx, s, agentConfig); err != nil {
+	agentConfig, err := newAgentConfig(sandboxConfig.AgentType, sandboxConfig.AgentConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.disableVMShutdown, err = s.agent.init(ctx, s, agentConfig); err != nil {
 		return nil, err
 	}
 
@@ -1028,6 +1033,13 @@ func (s *Sandbox) stopVM() error {
 	s.Logger().Info("Stopping sandbox in the VM")
 	if err := s.agent.stopSandbox(s); err != nil {
 		s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("Agent did not stop sandbox")
+	}
+
+	if s.disableVMShutdown {
+		// Do not kill the VM - allow the agent to shut it down
+		// (only used to support static agent tracing).
+		s.Logger().Info("Not stopping VM")
+		return nil
 	}
 
 	s.Logger().Info("Stopping VM")

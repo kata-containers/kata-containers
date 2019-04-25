@@ -83,11 +83,25 @@ var (
 	maxHostnameLen       = 64
 )
 
+const (
+	agentTraceModeDynamic  = "dynamic"
+	agentTraceModeStatic   = "static"
+	agentTraceTypeIsolated = "isolated"
+	agentTraceTypeCollated = "collated"
+
+	defaultAgentTraceMode = agentTraceModeDynamic
+	defaultAgentTraceType = agentTraceTypeIsolated
+)
+
 // KataAgentConfig is a structure storing information needed
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
 	LongLiveConn bool
 	UseVSock     bool
+	Debug        bool
+	Trace        bool
+	TraceMode    string
+	TraceType    string
 }
 
 type kataVSOCK struct {
@@ -115,10 +129,11 @@ type kataAgent struct {
 	sync.Mutex
 	client *kataclient.AgentClient
 
-	reqHandlers  map[string]reqFunc
-	state        KataAgentState
-	keepConn     bool
-	proxyBuiltIn bool
+	reqHandlers    map[string]reqFunc
+	state          KataAgentState
+	keepConn       bool
+	proxyBuiltIn   bool
+	dynamicTracing bool
 
 	vmSocket interface{}
 	ctx      context.Context
@@ -175,7 +190,68 @@ func (k *kataAgent) generateVMSocket(id string, c KataAgentConfig) error {
 	return nil
 }
 
-func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface{}) (err error) {
+// KataAgentSetDefaultTraceConfigOptions validates agent trace options and
+// sets defaults.
+func KataAgentSetDefaultTraceConfigOptions(config *KataAgentConfig) error {
+	if !config.Trace {
+		return nil
+	}
+
+	switch config.TraceMode {
+	case agentTraceModeDynamic:
+	case agentTraceModeStatic:
+	case "":
+		config.TraceMode = defaultAgentTraceMode
+	default:
+		return fmt.Errorf("invalid kata agent trace mode: %q (need %q or %q)", config.TraceMode, agentTraceModeDynamic, agentTraceModeStatic)
+	}
+
+	switch config.TraceType {
+	case agentTraceTypeIsolated:
+	case agentTraceTypeCollated:
+	case "":
+		config.TraceType = defaultAgentTraceType
+	default:
+		return fmt.Errorf("invalid kata agent trace type: %q (need %q or %q)", config.TraceType, agentTraceTypeIsolated, agentTraceTypeCollated)
+	}
+
+	return nil
+}
+
+// KataAgentKernelParams returns a list of Kata Agent specific kernel
+// parameters.
+func KataAgentKernelParams(config KataAgentConfig) []Param {
+	var params []Param
+
+	if config.Debug {
+		params = append(params, Param{Key: "agent.log", Value: "debug"})
+	}
+
+	if config.Trace && config.TraceMode == agentTraceModeStatic {
+		params = append(params, Param{Key: "agent.trace", Value: config.TraceType})
+	}
+
+	return params
+}
+
+func (k *kataAgent) handleTraceSettings(config KataAgentConfig) bool {
+	if !config.Trace {
+		return false
+	}
+
+	disableVMShutdown := false
+
+	switch config.TraceMode {
+	case agentTraceModeStatic:
+		disableVMShutdown = true
+	case agentTraceModeDynamic:
+		k.dynamicTracing = true
+	}
+
+	return disableVMShutdown
+}
+
+func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface{}) (disableVMShutdown bool, err error) {
 	// save
 	k.ctx = sandbox.ctx
 
@@ -185,21 +261,23 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 	switch c := config.(type) {
 	case KataAgentConfig:
 		if err := k.generateVMSocket(sandbox.id, c); err != nil {
-			return err
+			return false, err
 		}
+
+		disableVMShutdown = k.handleTraceSettings(c)
 		k.keepConn = c.LongLiveConn
 	default:
-		return fmt.Errorf("Invalid config type")
+		return false, vcTypes.ErrInvalidConfigType
 	}
 
 	k.proxy, err = newProxy(sandbox.config.ProxyType)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	k.shim, err = newShim(sandbox.config.ShimType)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	k.proxyBuiltIn = isProxyBuiltIn(sandbox.config.ProxyType)
@@ -209,7 +287,7 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 		k.Logger().Debug("Could not retrieve anything from storage")
 	}
 
-	return nil
+	return disableVMShutdown, nil
 }
 
 func (k *kataAgent) agentURL() (string, error) {
@@ -241,7 +319,7 @@ func (k *kataAgent) internalConfigure(h hypervisor, id, sharePath string, builti
 			}
 			k.keepConn = c.LongLiveConn
 		default:
-			return fmt.Errorf("Invalid config type")
+			return vcTypes.ErrInvalidConfigType
 		}
 	}
 
@@ -275,7 +353,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 		}
 		k.vmSocket = s
 	default:
-		return fmt.Errorf("Invalid config type")
+		return vcTypes.ErrInvalidConfigType
 	}
 
 	// Neither create shared directory nor add 9p device if hypervisor
@@ -702,7 +780,18 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	}
 
 	_, err = k.sendReq(req)
-	return err
+	if err != nil {
+		return err
+	}
+
+	if k.dynamicTracing {
+		_, err = k.sendReq(&grpc.StartTracingRequest{})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
@@ -717,6 +806,13 @@ func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 
 	if _, err := k.sendReq(req); err != nil {
 		return err
+	}
+
+	if k.dynamicTracing {
+		_, err := k.sendReq(&grpc.StopTracingRequest{})
+		if err != nil {
+			return err
+		}
 	}
 
 	if err := k.proxy.stop(k.state.ProxyPid); err != nil {
@@ -1631,6 +1727,12 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	}
 	k.reqHandlers["grpc.SetGuestDateTimeRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
 		return k.client.SetGuestDateTime(ctx, req.(*grpc.SetGuestDateTimeRequest), opts...)
+	}
+	k.reqHandlers["grpc.StartTracingRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.StartTracing(ctx, req.(*grpc.StartTracingRequest), opts...)
+	}
+	k.reqHandlers["grpc.StopTracingRequest"] = func(ctx context.Context, req interface{}, opts ...golangGrpc.CallOption) (interface{}, error) {
+		return k.client.StopTracing(ctx, req.(*grpc.StopTracingRequest), opts...)
 	}
 }
 

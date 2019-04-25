@@ -11,13 +11,6 @@ import (
 
 type kataShim struct{}
 
-// KataShimConfig is the structure providing specific configuration
-// for kataShim implementation.
-type KataShimConfig struct {
-	Path  string
-	Debug bool
-}
-
 // start is the ccShim start implementation.
 // It starts the cc-shim binary with URL and token flags provided by
 // the proxy.
@@ -28,7 +21,7 @@ func (s *kataShim) start(sandbox *Sandbox, params ShimParams) (int, error) {
 
 	config, ok := newShimConfig(*(sandbox.config)).(ShimConfig)
 	if !ok {
-		return -1, fmt.Errorf("Wrong shim config type, should be KataShimConfig type")
+		return -1, fmt.Errorf("Wrong shim config type, should be ShimConfig type")
 	}
 
 	if config.Path == "" {

@@ -136,6 +136,10 @@ type shim struct {
 }
 
 type agent struct {
+	Debug     bool   `toml:"enable_debug"`
+	Tracing   bool   `toml:"enable_tracing"`
+	TraceMode string `toml:"trace_mode"`
+	TraceType string `toml:"trace_type"`
 }
 
 type netmon struct {
@@ -388,6 +392,22 @@ func (s shim) trace() bool {
 	return s.Tracing
 }
 
+func (a agent) debug() bool {
+	return a.Debug
+}
+
+func (a agent) trace() bool {
+	return a.Tracing
+}
+
+func (a agent) traceMode() string {
+	return a.TraceMode
+}
+
+func (a agent) traceType() string {
+	return a.TraceType
+}
+
 func (n netmon) enable() bool {
 	return n.Enable
 }
@@ -630,21 +650,32 @@ func updateRuntimeConfigProxy(configPath string, tomlConf tomlConfig, config *oc
 
 func updateRuntimeConfigAgent(configPath string, tomlConf tomlConfig, config *oci.RuntimeConfig, builtIn bool) error {
 	if builtIn {
+		var agentConfig vc.KataAgentConfig
+
+		// If the agent config section isn't a Kata one, just default
+		// to everything being disabled.
+		agentConfig, _ = config.AgentConfig.(vc.KataAgentConfig)
+
 		config.AgentType = vc.KataContainersAgent
 		config.AgentConfig = vc.KataAgentConfig{
 			LongLiveConn: true,
 			UseVSock:     config.HypervisorConfig.UseVSock,
+			Debug:        agentConfig.Debug,
 		}
 
 		return nil
 	}
 
-	for k := range tomlConf.Agent {
+	for k, agent := range tomlConf.Agent {
 		switch k {
 		case kataAgentTableType:
 			config.AgentType = vc.KataContainersAgent
 			config.AgentConfig = vc.KataAgentConfig{
-				UseVSock: config.HypervisorConfig.UseVSock,
+				UseVSock:  config.HypervisorConfig.UseVSock,
+				Debug:     agent.debug(),
+				Trace:     agent.trace(),
+				TraceMode: agent.traceMode(),
+				TraceType: agent.traceType(),
 			}
 		default:
 			return fmt.Errorf("%s agent type is not supported", k)
@@ -705,6 +736,22 @@ func SetKernelParams(runtimeConfig *oci.RuntimeConfig) error {
 		}
 	}
 
+	// next, check for agent specific kernel params
+	if agentConfig, ok := runtimeConfig.AgentConfig.(vc.KataAgentConfig); ok {
+		err := vc.KataAgentSetDefaultTraceConfigOptions(&agentConfig)
+		if err != nil {
+			return err
+		}
+
+		params := vc.KataAgentKernelParams(agentConfig)
+
+		for _, p := range params {
+			if err := (runtimeConfig).AddKernelParam(p); err != nil {
+				return err
+			}
+		}
+	}
+
 	// now re-add the user-specified values so that they take priority.
 	for _, p := range userKernelParams {
 		if err := (runtimeConfig).AddKernelParam(p); err != nil {
@@ -752,10 +799,8 @@ func updateRuntimeConfig(configPath string, tomlConf tomlConfig, config *oci.Run
 	return nil
 }
 
-func initConfig() (config oci.RuntimeConfig, err error) {
-	var defaultAgentConfig interface{}
-
-	defaultHypervisorConfig := vc.HypervisorConfig{
+func GetDefaultHypervisorConfig() vc.HypervisorConfig {
+	return vc.HypervisorConfig{
 		HypervisorPath:          defaultHypervisorPath,
 		KernelPath:              defaultKernelPath,
 		ImagePath:               defaultImagePath,
@@ -767,6 +812,7 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 		DefaultMaxVCPUs:         defaultMaxVCPUCount,
 		MemorySize:              defaultMemSize,
 		MemOffset:               defaultMemOffset,
+		DisableBlockDeviceUse:   defaultDisableBlockDeviceUse,
 		DefaultBridges:          defaultBridgesCount,
 		MemPrealloc:             defaultEnableMemPrealloc,
 		HugePages:               defaultEnableHugePages,
@@ -782,6 +828,10 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 		HotplugVFIOOnRootBus:    defaultHotplugVFIOOnRootBus,
 		GuestHookPath:           defaultGuestHookPath,
 	}
+}
+
+func initConfig() (config oci.RuntimeConfig, err error) {
+	var defaultAgentConfig interface{}
 
 	err = config.InterNetworkModel.SetModel(defaultInterNetworkingModel)
 	if err != nil {
@@ -792,7 +842,7 @@ func initConfig() (config oci.RuntimeConfig, err error) {
 
 	config = oci.RuntimeConfig{
 		HypervisorType:   defaultHypervisor,
-		HypervisorConfig: defaultHypervisorConfig,
+		HypervisorConfig: GetDefaultHypervisorConfig(),
 		AgentType:        defaultAgent,
 		AgentConfig:      defaultAgentConfig,
 		ProxyType:        defaultProxy,
