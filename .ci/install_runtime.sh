@@ -114,3 +114,10 @@ if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
 	path="/usr/share/defaults/kata-containers"
 	sudo mv ${path}/configuration-fc.toml ${path}/configuration.toml
 fi
+
+# Enable experimental features if KATA_EXPERIMENTAL_FEATURES is set to true
+if [ "$KATA_EXPERIMENTAL_FEATURES" = true ]; then
+	echo "Enable runtime experimental features"
+	feature="newstore"
+	sudo sed -i -e "s|^experimental.*$|experimental=[ \"$feature\" ]|" "${runtime_config_path}"
+fi
