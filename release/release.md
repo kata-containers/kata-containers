@@ -103,19 +103,29 @@ $ git pull
    $./gen_versions_txt.sh ${BRANCH}
    $PUSH=1 OBS_SUBPROJECT="releases:$(uname -m):${BRANCH}" ./build_from_docker.sh ${NEW_VERSION}
    ```
+
+6. Test packages
+After all the packages have built succesfully (see status in OBS web page: https://build.opensuse.org/project/subprojects/home:katacontainers),
+make sure the packages install and work. To help with this you can use the [package test job](http://jenkins.katacontainers.io/job/package-release-testing)
+
  
-6. Create release notes:
+7. Create release notes:
    ```bash
    $ cd ${GOPATH}/src/github.com/kata-containers/packaging/release
    # Note: OLD_VERSION is where the script should start to get changes.
    $ ./runtime-release-notes.sh OLD_VERSION ${NEW_VERSION} > notes.md
    # Add the release notes in GitHub runtime.
-   $ hub -C "${GOPATH}/src/github.com/kata-containers/runtime" release edit -F notes.md
+   $ hub -C "${GOPATH}/src/github.com/kata-containers/runtime" release edit -F notes.md "${NEW_VERSION}"
    ```
  
 7. Announce release:
 
    Publish in [Slack and Kata mailing list][join-us-kata] that new release is ready.
+
+8. Send changes to upstream.
+If you found any issue during the release process and you fix it, please send it back.
+After your changes are merged, tag kata packaging with `${NEW_VERSION}` to identify the code used for the release.
+
 
 [release-process-definition]: https://github.com/kata-containers/documentation/blob/master/Releases.md
 [release-checklist]: https://github.com/kata-containers/documentation/blob/master/Release-Checklist.md
