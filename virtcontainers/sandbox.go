@@ -292,7 +292,7 @@ func (s *Sandbox) Status() SandboxStatus {
 	for _, c := range s.containers {
 		rootfs := c.config.RootFs.Source
 		if c.config.RootFs.Mounted {
-			rootfs = c.config.RootFs.Destination
+			rootfs = c.config.RootFs.Target
 		}
 
 		contStatusList = append(contStatusList, ContainerStatus{
@@ -1253,7 +1253,7 @@ func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
 	for id, c := range s.containers {
 		rootfs := c.config.RootFs.Source
 		if c.config.RootFs.Mounted {
-			rootfs = c.config.RootFs.Destination
+			rootfs = c.config.RootFs.Target
 		}
 		if id == containerID {
 			return ContainerStatus{

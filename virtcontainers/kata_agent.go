@@ -1040,7 +1040,7 @@ func (k *kataAgent) rollbackFailingContainerCreation(c *Container) {
 }
 
 func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPathParent string) (*grpc.Storage, error) {
-	if c.rootFs.BlockDeviceID != "" {
+	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {
 		// The rootfs storage volume represents the container rootfs
 		// mount point inside the guest.
 		// It can be a block based device (when using block based container
@@ -1049,10 +1049,10 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 		rootfs := &grpc.Storage{}
 
 		// This is a block based device rootfs.
-		device := sandbox.devManager.GetDeviceByID(c.rootFs.BlockDeviceID)
+		device := sandbox.devManager.GetDeviceByID(c.state.BlockDeviceID)
 		if device == nil {
-			k.Logger().WithField("device", c.rootFs.BlockDeviceID).Error("failed to find device by id")
-			return nil, fmt.Errorf("failed to find device by id %q", c.rootFs.BlockDeviceID)
+			k.Logger().WithField("device", c.state.BlockDeviceID).Error("failed to find device by id")
+			return nil, fmt.Errorf("failed to find device by id %q", c.state.BlockDeviceID)
 		}
 
 		blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
@@ -1072,11 +1072,10 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 			rootfs.Source = blockDrive.SCSIAddr
 		}
 		rootfs.MountPoint = rootPathParent
-		rootfs.Fstype = c.rootFs.Type
-		rootfs.Options = c.rootFs.Options
+		rootfs.Fstype = c.state.Fstype
 
-		if rootfs.Fstype == "xfs" {
-			rootfs.Options = append(rootfs.Options, "nouuid")
+		if c.state.Fstype == "xfs" {
+			rootfs.Options = []string{"nouuid"}
 		}
 
 		return rootfs, nil
@@ -1090,7 +1089,7 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 	// (kataGuestSharedDir) is already mounted in the
 	// guest. We only need to mount the rootfs from
 	// the host and it will show up in the guest.
-	if err := bindMountContainerRootfs(k.ctx, kataHostSharedDir, sandbox.id, c.id, c.rootFs.Destination, false); err != nil {
+	if err := bindMountContainerRootfs(k.ctx, kataHostSharedDir, sandbox.id, c.id, c.rootFs.Target, false); err != nil {
 		return nil, err
 	}
 

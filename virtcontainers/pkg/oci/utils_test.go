@@ -150,7 +150,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 			Type:        "proc",
 			Options:     nil,
 			HostPath:    "",
-			Mounted:     true,
 		},
 		{
 			Source:      "tmpfs",
@@ -158,7 +157,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 			Type:        "tmpfs",
 			Options:     []string{"nosuid", "strictatime", "mode=755", "size=65536k"},
 			HostPath:    "",
-			Mounted:     true,
 		},
 		{
 			Source:      "devpts",
@@ -166,7 +164,6 @@ func TestMinimalSandboxConfig(t *testing.T) {
 			Type:        "devpts",
 			Options:     []string{"nosuid", "noexec", "newinstance", "ptmxmode=0666", "mode=0620", "gid=5"},
 			HostPath:    "",
-			Mounted:     true,
 		},
 	}
 
@@ -203,7 +200,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 
 	expectedContainerConfig := vc.ContainerConfig{
 		ID:             containerID,
-		RootFs:         vc.Mount{Destination: path.Join(tempBundlePath, "rootfs"), Mounted: true},
+		RootFs:         vc.RootFs{Target: path.Join(tempBundlePath, "rootfs"), Mounted: true},
 		ReadonlyRootfs: true,
 		Cmd:            expectedCmd,
 		Annotations: map[string]string{
