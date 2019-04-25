@@ -9,6 +9,11 @@ package types
 type ContainerState struct {
 	State StateString `json:"state"`
 
+	BlockDeviceID string
+
+	// File system of the rootfs incase it is block device
+	Fstype string `json:"fstype"`
+
 	// CgroupPath is the cgroup hierarchy where sandbox's processes
 	// including the hypervisor are placed.
 	CgroupPath string `json:"cgroupPath,omitempty"`
