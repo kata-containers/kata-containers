@@ -26,9 +26,6 @@ const (
 	testDirMode  = os.FileMode(0750)
 	testFileMode = os.FileMode(0640)
 
-	testDisabledNeedRoot    = "Test disabled as requires root user"
-	testDisabledNeedNonRoot = "Test disabled as requires non-root user"
-
 	// small docker image used to create root filesystems from
 	testDockerImage = "busybox"
 
@@ -38,7 +35,9 @@ const (
 	specConfig      = "config.json"
 )
 
-var testDir = ""
+var (
+	testDir = ""
+)
 
 func init() {
 	var err error

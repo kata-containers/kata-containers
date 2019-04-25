@@ -11,13 +11,14 @@ import (
 	"reflect"
 	"testing"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
 )
 
 func TestCreateDeleteNetNS(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
@@ -175,7 +176,7 @@ func TestGenerateRandomPrivateMacAdd(t *testing.T) {
 }
 
 func TestCreateGetBridgeLink(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
@@ -199,7 +200,7 @@ func TestCreateGetBridgeLink(t *testing.T) {
 }
 
 func TestCreateGetTunTapLink(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
@@ -224,7 +225,7 @@ func TestCreateGetTunTapLink(t *testing.T) {
 }
 
 func TestCreateMacVtap(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
@@ -268,7 +269,7 @@ func TestCreateMacVtap(t *testing.T) {
 }
 
 func TestTcRedirectNetwork(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 

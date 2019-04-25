@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
@@ -64,8 +65,8 @@ func TestGetNetNsFromBindMount(t *testing.T) {
 func TestHostNetworkingRequested(t *testing.T) {
 	assert := assert.New(t)
 
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	// Network namespace same as the host
@@ -101,8 +102,8 @@ func TestHostNetworkingRequested(t *testing.T) {
 }
 
 func TestSetupNetworkNamespace(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedNonRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	assert := assert.New(t)

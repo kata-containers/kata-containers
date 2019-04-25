@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -553,8 +554,8 @@ func TestCheckCheckKernelModules(t *testing.T) {
 func TestCheckCheckKernelModulesUnreadableFile(t *testing.T) {
 	assert := assert.New(t)
 
-	if os.Geteuid() == 0 {
-		t.Skip(testDisabledNeedNonRoot)
+	if tc.NotValid(ktu.NeedNonRoot()) {
+		t.Skip(ktu.TestDisabledNeedNonRoot)
 	}
 
 	dir, err := ioutil.TempDir("", "")

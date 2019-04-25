@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"testing"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
@@ -70,9 +71,9 @@ func TestCreatePIDFileEmptyPathSuccessful(t *testing.T) {
 }
 
 func TestCreatePIDFileUnableToRemove(t *testing.T) {
-	if os.Geteuid() == 0 {
+	if tc.NotValid(ktu.NeedNonRoot()) {
 		// The os.FileMode(0000) trick doesn't work for root.
-		t.Skip(testDisabledNeedNonRoot)
+		t.Skip(ktu.TestDisabledNeedNonRoot)
 	}
 
 	assert := assert.New(t)
@@ -387,8 +388,8 @@ func TestCreateContainerInvalid(t *testing.T) {
 }
 
 func TestCreateProcessCgroupsPathSuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedNonRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	assert := assert.New(t)
@@ -489,9 +490,9 @@ func TestCreateProcessCgroupsPathSuccessful(t *testing.T) {
 }
 
 func TestCreateCreateCgroupsFilesFail(t *testing.T) {
-	if os.Geteuid() == 0 {
+	if tc.NotValid(ktu.NeedNonRoot()) {
 		// The os.FileMode(0000) trick doesn't work for root.
-		t.Skip(testDisabledNeedNonRoot)
+		t.Skip(ktu.TestDisabledNeedNonRoot)
 	}
 
 	assert := assert.New(t)
@@ -575,9 +576,9 @@ func TestCreateCreateCgroupsFilesFail(t *testing.T) {
 }
 
 func TestCreateCreateCreatePidFileFail(t *testing.T) {
-	if os.Geteuid() == 0 {
+	if tc.NotValid(ktu.NeedNonRoot()) {
 		// The os.FileMode(0000) trick doesn't work for root.
-		t.Skip(testDisabledNeedNonRoot)
+		t.Skip(ktu.TestDisabledNeedNonRoot)
 	}
 
 	assert := assert.New(t)
@@ -652,8 +653,8 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedNonRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	assert := assert.New(t)
