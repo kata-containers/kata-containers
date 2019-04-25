@@ -40,8 +40,12 @@ func TestNoopAgentInit(t *testing.T) {
 	n := &noopAgent{}
 	sandbox := &Sandbox{}
 
-	err := n.init(context.Background(), sandbox, nil)
+	disableVMShutdown, err := n.init(context.Background(), sandbox, nil)
 	if err != nil {
+		t.Fatal(err)
+	}
+
+	if disableVMShutdown != false {
 		t.Fatal(err)
 	}
 }

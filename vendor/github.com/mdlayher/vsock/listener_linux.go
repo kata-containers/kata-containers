@@ -35,11 +35,7 @@ func (l *listener) Accept() (net.Conn, error) {
 		Port:      savm.Port,
 	}
 
-	return &conn{
-		File:       cfd.NewFile(l.addr.fileName()),
-		localAddr:  l.addr,
-		remoteAddr: remoteAddr,
-	}, nil
+	return newConn(cfd, l.addr.fileName(), l.addr, remoteAddr)
 }
 
 // listenStream is the entry point for ListenStream on Linux.
@@ -85,6 +81,10 @@ func listenStreamLinux(lfd fd, cid, port uint32) (net.Listener, error) {
 	sa := &unix.SockaddrVM{
 		CID:  cid,
 		Port: port,
+	}
+
+	if err := lfd.SetNonblock(true); err != nil {
+		return nil, err
 	}
 
 	if err := lfd.Bind(sa); err != nil {

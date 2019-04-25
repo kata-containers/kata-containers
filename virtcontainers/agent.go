@@ -91,19 +91,19 @@ func newAgent(agentType AgentType) agent {
 }
 
 // newAgentConfig returns an agent config from a generic SandboxConfig interface.
-func newAgentConfig(agentType AgentType, agentConfig interface{}) interface{} {
+func newAgentConfig(agentType AgentType, agentConfig interface{}) (interface{}, error) {
 	switch agentType {
 	case NoopAgentType:
-		return nil
+		return nil, nil
 	case KataContainersAgent:
 		var kataAgentConfig KataAgentConfig
 		err := mapstructure.Decode(agentConfig, &kataAgentConfig)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		return kataAgentConfig
+		return kataAgentConfig, nil
 	default:
-		return nil
+		return nil, nil
 	}
 }
 
@@ -116,7 +116,7 @@ type agent interface {
 	// init().
 	// After init() is called, agent implementations should be initialized and ready
 	// to handle all other Agent interface methods.
-	init(ctx context.Context, sandbox *Sandbox, config interface{}) error
+	init(ctx context.Context, sandbox *Sandbox, config interface{}) (disableVMShutdown bool, err error)
 
 	// capabilities should return a structure that specifies the capabilities
 	// supported by the agent.

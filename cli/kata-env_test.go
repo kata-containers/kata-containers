@@ -24,8 +24,7 @@ import (
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/urfave/cli"
 
-	"strconv"
-
+	"github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/pkg/katautils"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/stretchr/testify/assert"
@@ -36,12 +35,6 @@ const testShimVersion = "shim version 0.1"
 const testNetmonVersion = "netmon version 0.1"
 const testHypervisorVersion = "QEMU emulator version 2.7.0+git.741f430a96-6.1, Copyright (c) 2003-2016 Fabrice Bellard and the QEMU Project developers"
 
-const defaultVCPUCount uint32 = 1
-const defaultMaxVCPUCount uint32 = 0
-const defaultMemSize uint32 = 2048 // MiB
-const defaultMsize9p uint32 = 8192
-const defaultGuestHookPath string = ""
-
 var (
 	hypervisorDebug = false
 	proxyDebug      = false
@@ -49,6 +42,8 @@ var (
 	runtimeTrace    = false
 	shimDebug       = false
 	netmonDebug     = false
+	agentDebug      = false
+	agentTrace      = false
 )
 
 // makeVersionBinary creates a shell script with the specified file
@@ -79,47 +74,6 @@ func createConfig(configPath string, fileData string) error {
 	}
 
 	return nil
-}
-
-func makeRuntimeConfigFileData(hypervisor, hypervisorPath, kernelPath, imagePath, kernelParams, machineType, shimPath, proxyPath, netmonPath, logPath string, disableBlock bool, blockDeviceDriver string, enableIOThreads bool, hotplugVFIOOnRootBus, disableNewNetNs bool) string {
-	return `
-	# Runtime configuration file
-
-	[hypervisor.` + hypervisor + `]
-	path = "` + hypervisorPath + `"
-	kernel = "` + kernelPath + `"
-	block_device_driver =  "` + blockDeviceDriver + `"
-	kernel_params = "` + kernelParams + `"
-	image = "` + imagePath + `"
-	machine_type = "` + machineType + `"
-	default_vcpus = ` + strconv.FormatUint(uint64(defaultVCPUCount), 10) + `
-	default_maxvcpus = ` + strconv.FormatUint(uint64(defaultMaxVCPUCount), 10) + `
-	default_memory = ` + strconv.FormatUint(uint64(defaultMemSize), 10) + `
-	disable_block_device_use =  ` + strconv.FormatBool(disableBlock) + `
-	enable_iothreads =  ` + strconv.FormatBool(enableIOThreads) + `
-	hotplug_vfio_on_root_bus =  ` + strconv.FormatBool(hotplugVFIOOnRootBus) + `
-	msize_9p = ` + strconv.FormatUint(uint64(defaultMsize9p), 10) + `
-	enable_debug = ` + strconv.FormatBool(hypervisorDebug) + `
-	guest_hook_path = "` + defaultGuestHookPath + `"
-
-	[proxy.kata]
-	enable_debug = ` + strconv.FormatBool(proxyDebug) + `
-	path = "` + proxyPath + `"
-
-	[shim.kata]
-	path = "` + shimPath + `"
-	enable_debug = ` + strconv.FormatBool(shimDebug) + `
-
-	[agent.kata]
-
-	[netmon]
-	path = "` + netmonPath + `"
-	enable_debug = ` + strconv.FormatBool(netmonDebug) + `
-
-        [runtime]
-	enable_debug = ` + strconv.FormatBool(runtimeDebug) + `
-	enable_tracing = ` + strconv.FormatBool(runtimeTrace) + `
-	disable_new_netns= ` + strconv.FormatBool(disableNewNetNs)
 }
 
 func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeConfig, err error) {
@@ -172,23 +126,40 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		return "", oci.RuntimeConfig{}, err
 	}
 
-	runtimeConfig := makeRuntimeConfigFileData(
-		"qemu",
-		hypervisorPath,
-		kernelPath,
-		imagePath,
-		kernelParams,
-		machineType,
-		shimPath,
-		proxyPath,
-		netmonPath,
-		logPath,
-		disableBlock,
-		blockStorageDriver,
-		enableIOThreads,
-		hotplugVFIOOnRootBus,
-		disableNewNetNs,
-	)
+	hypConfig := katautils.GetDefaultHypervisorConfig()
+
+	configFileOptions := katatestutils.RuntimeConfigOptions{
+		Hypervisor:           "qemu",
+		HypervisorPath:       hypervisorPath,
+		KernelPath:           kernelPath,
+		ImagePath:            imagePath,
+		KernelParams:         kernelParams,
+		MachineType:          machineType,
+		ShimPath:             shimPath,
+		ProxyPath:            proxyPath,
+		NetmonPath:           netmonPath,
+		LogPath:              logPath,
+		DefaultGuestHookPath: hypConfig.GuestHookPath,
+		DisableBlock:         disableBlock,
+		BlockDeviceDriver:    blockStorageDriver,
+		EnableIOThreads:      enableIOThreads,
+		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
+		DisableNewNetNs:      disableNewNetNs,
+		DefaultVCPUCount:     hypConfig.NumVCPUs,
+		DefaultMaxVCPUCount:  hypConfig.DefaultMaxVCPUs,
+		DefaultMemSize:       hypConfig.MemorySize,
+		DefaultMsize9p:       hypConfig.Msize9p,
+		HypervisorDebug:      hypervisorDebug,
+		RuntimeDebug:         runtimeDebug,
+		RuntimeTrace:         runtimeTrace,
+		ProxyDebug:           proxyDebug,
+		ShimDebug:            shimDebug,
+		NetmonDebug:          netmonDebug,
+		AgentDebug:           agentDebug,
+		AgentTrace:           agentTrace,
+	}
+
+	runtimeConfig := katatestutils.MakeRuntimeConfigFileData(configFileOptions)
 
 	configFile = path.Join(prefixDir, "runtime.toml")
 	err = createConfig(configFile, runtimeConfig)
@@ -239,8 +210,20 @@ func getExpectedShimDetails(config oci.RuntimeConfig) (ShimInfo, error) {
 }
 
 func getExpectedAgentDetails(config oci.RuntimeConfig) (AgentInfo, error) {
+
+	agentConfig, ok := config.AgentConfig.(vc.KataAgentConfig)
+	if !ok {
+		return AgentInfo{}, fmt.Errorf("expected KataAgentConfig, got %T", config.AgentConfig)
+	}
+
 	return AgentInfo{
-		Type: string(config.AgentType),
+		Type:  string(config.AgentType),
+		Debug: agentConfig.Debug,
+		Trace: agentConfig.Trace,
+
+		// No trace mode/type set by default
+		TraceMode: "",
+		TraceType: "",
 	}, nil
 }
 
@@ -519,6 +502,8 @@ func TestEnvGetEnvInfo(t *testing.T) {
 		runtimeDebug = toggle
 		runtimeTrace = toggle
 		shimDebug = toggle
+		agentDebug = toggle
+		agentTrace = toggle
 
 		configFile, config, err := makeRuntimeConfig(tmpdir)
 		assert.NoError(t, err)
@@ -832,8 +817,33 @@ func TestEnvGetAgentInfo(t *testing.T) {
 	expectedAgent, err := getExpectedAgentDetails(config)
 	assert.NoError(t, err)
 
-	agent := getAgentInfo(config)
+	agent, err := getAgentInfo(config)
+	assert.NoError(t, err)
+
 	assert.Equal(t, expectedAgent, agent)
+
+	agentConfig, ok := config.AgentConfig.(vc.KataAgentConfig)
+	assert.True(t, ok)
+
+	agentConfig.Debug = true
+	config.AgentConfig = agentConfig
+	agent, err = getAgentInfo(config)
+	assert.NoError(t, err)
+	assert.True(t, agent.Debug)
+
+	agentConfig.Trace = true
+	agentConfig.TraceMode = "traceMode"
+	agentConfig.TraceType = "traceType"
+	config.AgentConfig = agentConfig
+	agent, err = getAgentInfo(config)
+	assert.NoError(t, err)
+	assert.True(t, agent.Trace)
+	assert.Equal(t, agent.TraceMode, "traceMode")
+	assert.Equal(t, agent.TraceType, "traceType")
+
+	config.AgentConfig = "I am the wrong type"
+	_, err = getAgentInfo(config)
+	assert.Error(t, err)
 }
 
 func testEnvShowTOMLSettings(t *testing.T, tmpdir string, tmpfile *os.File) error {
