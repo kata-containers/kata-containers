@@ -269,8 +269,6 @@ get_git_repo()
 	local -r repo_url="https://${repo_path}"
 
 	if ! command -v git >/dev/null; then
-		info "getting repo $1 using http downloader"
-		detect_downloader
 		$downloader "${repo_url}/${tarball_suffix}" | tar xz -C "$local_dest" --strip-components=1
 		return
 	fi
@@ -436,6 +434,11 @@ setup()
 	kata_repos_base=$(go env GOPATH 2>/dev/null || true)
 	if [ -z "$kata_repos_base" ]; then
 		kata_repos_base="$HOME/go"
+	fi
+
+	if ! command -v git >/dev/null; then
+		info "git not installed - trying to use a downloader instead"
+		detect_downloader
 	fi
 }
 
