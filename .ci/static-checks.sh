@@ -42,6 +42,9 @@ long_options=(
 	[versions]="Check versions files"
 )
 
+yamllint_cmd="yamllint"
+have_yamllint_cmd=$(command -v "$yamllint_cmd" || true)
+
 usage()
 {
 	cat <<EOT
@@ -266,9 +269,10 @@ check_versions()
 
 	[ ! -e "$db" ] && return
 
-	cmd="yamllint"
-	if [ -n "$(command -v $cmd)" ]; then
-		eval "$cmd" "$db"
+	if [ -n "$have_yamllint_cmd" ]; then
+		eval "$yamllint_cmd" "$db"
+	else
+		info "Cannot check versions as $yamllint_cmd not available"
 	fi
 }
 
