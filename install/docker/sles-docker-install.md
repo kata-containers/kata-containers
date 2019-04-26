@@ -20,7 +20,7 @@
    For more information on installing Docker please refer to the
    [Docker Guide](https://www.suse.com/documentation/sles-12/singlehtml/book_sles_docker/book_sles_docker.html).
 
-2. Configure Docker to use Kata Containers with one of the following methods:
+2. Configure Docker to use Kata Containers by default with one of the following methods:
 
    1. systemd
 

@@ -31,7 +31,7 @@ a. sysVinit
     
     - with sysVinit,  docker config is stored in `/etc/default/docker`, edit the options similar to the following: 
        
-    ```
+    ```sh
     $ sudo sh -c "echo '# specify docker runtime for kata-containers
     DOCKER_OPTS=\"-D --add-runtime kata-runtime=/usr/bin/kata-runtime --default-runtime=kata-runtime\"' >> /etc/default/docker"
     ```
@@ -47,34 +47,34 @@ b. systemd
     EOF
     ```
 
-c. systemd Docker `daemon.json`
+c. Docker `daemon.json`
 
     Add the following definitions to `/etc/docker/daemon.json`:
 
-    ```bash
-    $ sudo sh -c "echo '{
-      \"default-runtime\": \"kata-runtime\",
-      \"runtimes\": {
-        \"kata-runtime\": {
-          \"path\": \"/usr/bin/kata-runtime\"
+    ```json
+    {
+      "default-runtime": "kata-runtime",
+      "runtimes": {
+        "kata-runtime": {
+          "path": "/usr/bin/kata-runtime"
         }
       }
-    }' >> /etc/docker/daemon.json"
+    }
     ```
 
 3. Restart the Docker systemd service with one of the following (depending on init choice):
 
     a. sysVinit
   
-    ```bash
+    ```sh
     $ sudo /etc/init.d/docker stop
     $ sudo /etc/init.d/docker start
     ```
 
-    to watch for errors:
+    To watch for errors:
 
-    ```bash
-    tail -f /var/log/docker.log
+    ```sh
+    $ tail -f /var/log/docker.log
     ```
     
     b. systemd
@@ -94,6 +94,3 @@ c. systemd Docker `daemon.json`
 
    The previous command shows details of the kernel version running inside the
    container, which is different to the host kernel version.
-
-   
-   
