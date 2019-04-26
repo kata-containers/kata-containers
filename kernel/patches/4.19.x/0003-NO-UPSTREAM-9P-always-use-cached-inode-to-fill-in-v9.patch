@@ -1,7 +1,7 @@
-From 0a235af3130a0c40fe2198f18198c7ac4e799a03 Mon Sep 17 00:00:00 2001
+From cab495651e8f71c39e87a08abbe051916110b3ca Mon Sep 17 00:00:00 2001
 From: Julio Montes <julio.montes@intel.com>
 Date: Mon, 18 Sep 2017 11:46:59 -0500
-Subject: [PATCH 2/3] NO-UPSTREAM: 9P: always use cached inode to fill in
+Subject: [PATCH 3/5] NO-UPSTREAM: 9P: always use cached inode to fill in
  v9fs_vfs_getattr
 
 So that if in cache=none mode, we don't have to lookup server that
@@ -17,10 +17,10 @@ Signed-off-by: Peng Tao <bergwolf@gmail.com>
  2 files changed, 2 insertions(+), 2 deletions(-)
 
 diff --git a/fs/9p/vfs_inode.c b/fs/9p/vfs_inode.c
-index bdabb27..30395e0 100644
+index 85ff859d3af5..efdc2a8f37bb 100644
 --- a/fs/9p/vfs_inode.c
 +++ b/fs/9p/vfs_inode.c
-@@ -1068,7 +1068,7 @@ v9fs_vfs_getattr(const struct path *path, struct kstat *stat,
+@@ -1080,7 +1080,7 @@ v9fs_vfs_getattr(const struct path *path, struct kstat *stat,
  
  	p9_debug(P9_DEBUG_VFS, "dentry: %p\n", dentry);
  	v9ses = v9fs_dentry2v9ses(dentry);
@@ -30,10 +30,10 @@ index bdabb27..30395e0 100644
  		return 0;
  	}
 diff --git a/fs/9p/vfs_inode_dotl.c b/fs/9p/vfs_inode_dotl.c
-index 7f6ae21..5d7e970 100644
+index 4823e1c46999..daa5e6a41864 100644
 --- a/fs/9p/vfs_inode_dotl.c
 +++ b/fs/9p/vfs_inode_dotl.c
-@@ -481,7 +481,7 @@ v9fs_vfs_getattr_dotl(const struct path *path, struct kstat *stat,
+@@ -480,7 +480,7 @@ v9fs_vfs_getattr_dotl(const struct path *path, struct kstat *stat,
  
  	p9_debug(P9_DEBUG_VFS, "dentry: %p\n", dentry);
  	v9ses = v9fs_dentry2v9ses(dentry);
@@ -43,5 +43,5 @@ index 7f6ae21..5d7e970 100644
  		return 0;
  	}
 -- 
-2.9.5
+2.20.1
 
