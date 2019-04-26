@@ -218,14 +218,14 @@ check_go()
 	then
 		info "Installing ${linter}"
 
-    local linter_url=$(get_test_version "externals.golangci-lint.url")
-    local linter_version=$(get_test_version "externals.golangci-lint.version")
+		local linter_url=$(get_test_version "externals.golangci-lint.url")
+		local linter_version=$(get_test_version "externals.golangci-lint.version")
 
 		info "Forcing ${linter} version ${linter_version}"
-    build_version ${linter_url} "" ${linter_version}
+		build_version ${linter_url} "" ${linter_version}
 	fi
 
-  local linter_args="run -c ${cidir}/.golangci.yml"
+	local linter_args="run -c ${cidir}/.golangci.yml"
 
 	# Non-option arguments other than "./..." are
 	# considered to be directories by $linter, not package names.
