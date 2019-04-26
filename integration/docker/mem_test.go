@@ -113,6 +113,7 @@ var _ = Describe("memory constraints", func() {
 		useKmem       bool
 		err           error
 		defaultMemSz  int
+		hotMemSz      int
 	)
 
 	BeforeEach(func() {
@@ -143,8 +144,9 @@ var _ = Describe("memory constraints", func() {
 
 	Context("run container exceeding memory constraints", func() {
 		It("should ran out of memory", func() {
-			memSize = "256MB"
-			limSize = strconv.Itoa(260+defaultMemSz) + "M"
+			hotMemSz = 256
+			memSize = fmt.Sprintf("%dMB", hotMemSz)
+			limSize = fmt.Sprintf("%dM", (hotMemSz*2)+defaultMemSz)
 			args = []string{"--name", id, "--rm", "-m", memSize, StressImage, "-mem-total", limSize, "-mem-alloc-size", limSize}
 			_, stderr, exitCode = dockerRun(args...)
 			Expect(exitCode).NotTo(Equal(0))
