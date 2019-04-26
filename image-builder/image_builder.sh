@@ -34,6 +34,10 @@ readonly dax_header_sz=2
 # [2] - https://nvdimm.wiki.kernel.org/2mib_fs_dax
 readonly dax_alignment=2
 
+# Set a default value
+AGENT_INIT=${AGENT_INIT:-no}
+
+
 # In order to support memory hotplug, image must be aligned to
 # memory section(size in MB) according to different architecture.
 case "$(uname -m)" in
