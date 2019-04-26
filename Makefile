@@ -98,9 +98,10 @@ SCRIPTS += rootfs-builder/rootfs.sh
 SCRIPTS += image-builder/image_builder.sh
 SCRIPTS += initrd-builder/initrd_builder.sh
 
-FILES :=
-FILES += rootfs-builder/versions.txt
-FILES += scripts/lib.sh
+HELPER_FILES :=
+HELPER_FILES += rootfs-builder/versions.txt
+HELPER_FILES += scripts/lib.sh
+HELPER_FILES += image-builder/nsdax.gpl.c
 
 define INSTALL_FILE
 	echo "Installing $(abspath $2/$1)";
@@ -117,7 +118,7 @@ install-scripts:
 	@echo "Installing scripts"
 	@$(foreach f,$(SCRIPTS),$(call INSTALL_SCRIPT,$f,$(INSTALL_DIR)))
 	@echo "Installing helper files"
-	@$(foreach f,$(FILES),$(call INSTALL_FILE,$f,$(INSTALL_DIR)))
+	@$(foreach f,$(HELPER_FILES),$(call INSTALL_FILE,$f,$(INSTALL_DIR)))
 	@echo "Installing installing config files"
 	@$(foreach f,$(DIST_CONFIGS),$(call INSTALL_FILE,$f,$(INSTALL_DIR)))
 
