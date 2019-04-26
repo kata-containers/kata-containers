@@ -38,6 +38,9 @@ checkcommits:
 github-labels:
 	make -C cmd/github-labels
 
+check-markdown:
+	make -C cmd/check-markdown
+
 ginkgo:
 	ln -sf . vendor/src
 	GOPATH=$(PWD)/vendor go build ./vendor/github.com/onsi/ginkgo/ginkgo
