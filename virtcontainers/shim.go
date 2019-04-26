@@ -38,15 +38,16 @@ var consoleFileMode = os.FileMode(0660)
 // ShimParams is the structure providing specific parameters needed
 // for the execution of the shim binary.
 type ShimParams struct {
-	Container string
-	Token     string
-	URL       string
-	Console   string
-	Terminal  bool
-	Detach    bool
-	PID       int
-	CreateNS  []ns.NSType
-	EnterNS   []ns.Namespace
+	Container  string
+	Token      string
+	URL        string
+	Console    string
+	ConsoleURL string
+	Terminal   bool
+	Detach     bool
+	PID        int
+	CreateNS   []ns.NSType
+	EnterNS    []ns.Namespace
 }
 
 // ShimConfig is the structure providing specific configuration
@@ -147,7 +148,7 @@ func stopShim(pid int) error {
 	return nil
 }
 
-func prepareAndStartShim(sandbox *Sandbox, shim shim, cid, token, url string, cmd types.Cmd,
+func prepareAndStartShim(sandbox *Sandbox, shim shim, cid, token, url, consoleURL string, cmd types.Cmd,
 	createNSList []ns.NSType, enterNSList []ns.Namespace) (*Process, error) {
 	process := &Process{
 		Token:     token,
@@ -155,14 +156,15 @@ func prepareAndStartShim(sandbox *Sandbox, shim shim, cid, token, url string, cm
 	}
 
 	shimParams := ShimParams{
-		Container: cid,
-		Token:     token,
-		URL:       url,
-		Console:   cmd.Console,
-		Terminal:  cmd.Interactive,
-		Detach:    cmd.Detach,
-		CreateNS:  createNSList,
-		EnterNS:   enterNSList,
+		Container:  cid,
+		Token:      token,
+		URL:        url,
+		Console:    cmd.Console,
+		Terminal:   cmd.Interactive,
+		Detach:     cmd.Detach,
+		CreateNS:   createNSList,
+		EnterNS:    enterNSList,
+		ConsoleURL: consoleURL,
 	}
 
 	pid, err := shim.start(sandbox, shimParams)
