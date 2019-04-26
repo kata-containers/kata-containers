@@ -24,16 +24,16 @@ License  : Apache-2.0
 
 BuildRequires: git
 
-%{!?el7 || !?suse_version:Requires: qemu-lite >= @qemu_lite_obs_fedora_version@ }
+%{!?el7 || !?suse_version:Requires: qemu-lite = @qemu_lite_obs_fedora_version@ }
 
-Requires: kata-containers-image >= @kata_osbuilder_version@
-Requires: kata-linux-container >= @linux_container_version@
-Requires: kata-proxy >= @kata_proxy_version@
-Requires: kata-shim >= @kata_shim_version@
-Requires: kata-ksm-throttler >= @ksm_throttler_version@
-Requires: qemu-vanilla >= @qemu_vanilla_version@
+Requires: kata-containers-image = @kata_osbuilder_version@
+Requires: kata-linux-container = @linux_container_version@
+Requires: kata-proxy = @kata_proxy_version@
+Requires: kata-shim = @kata_shim_version@
+Requires: kata-ksm-throttler = @ksm_throttler_version@
+Requires: qemu-vanilla = @qemu_vanilla_version@
 %ifarch x86_64
-Requires: qemu-lite >= @qemu_lite_version@
+Requires: qemu-lite = @qemu_lite_version@
 %endif
 
 # Patches
