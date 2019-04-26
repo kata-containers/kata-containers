@@ -65,4 +65,4 @@
     ```
 
     The previous command shows details of the kernel version running inside the
-    container, which is different from the host kernel version.
+    container, which is different to the host kernel version.
