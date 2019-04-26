@@ -1,6 +1,7 @@
 # Install Kata Containers on Ubuntu
 
 1. Install the Kata Containers components with the following commands:
+
    ```bash
    $ ARCH=$(arch)
    $ BRANCH="${BRANCH:-master}"
