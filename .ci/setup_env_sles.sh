@@ -55,6 +55,11 @@ chronic sudo -E zypper -n install libudev-devel
 echo "Install Build Tools"
 chronic sudo -E zypper -n install -t pattern "Basis-Devel" && sudo -E zypper -n install python zlib-devel
 
+echo "Install YAML validator"
+chronic sudo -E zypper -n install python-setuptools
+chronic sudo -E easy_install pip
+chronic sudo -E pip install yamllint
+
 echo "Install tools for metrics tests"
 chronic sudo -E zypper -n install  jq
 
