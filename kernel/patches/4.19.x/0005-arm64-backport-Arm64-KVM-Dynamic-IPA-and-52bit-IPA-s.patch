@@ -1,8 +1,8 @@
-From 60a4fed76e63c36cd327c4b404ec163e93a4805e Mon Sep 17 00:00:00 2001
+From 6823b343a7c5f6fc3b93d4a00e919d14cb6a4adb Mon Sep 17 00:00:00 2001
 From: Penny Zheng <penny.zheng@arm.com>
 Date: Tue, 19 Feb 2019 16:05:44 +0800
-Subject: [PATCH] arm64: backport Arm64 KVM Dynamic IPA and 52bit IPA support
- to  4.19.X
+Subject: [PATCH 5/5] arm64: backport Arm64 KVM Dynamic IPA and 52bit IPA
+ support to 4.19.X
 
 This patch is based on Suzuki K Poulose's
 [v6,00/18] kvm: arm64: Dynamic IPA and 52bit IPA
@@ -258,10 +258,10 @@ index 460d616bb2d6..f6a7ea805232 100644
  
  #endif	/* __ARM_S2_PGTABLE_H_ */
 diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
-index 1b1a0e95c751..f9162da575a9 100644
+index 881bea194d53..d77da7a56eb5 100644
 --- a/arch/arm64/Kconfig
 +++ b/arch/arm64/Kconfig
-@@ -1132,6 +1132,19 @@ config ARM64_RAS_EXTN
+@@ -1139,6 +1139,19 @@ config ARM64_RAS_EXTN
  	  and access the new registers if the system supports the extension.
  	  Platform RAS features may additionally depend on firmware support.
  
@@ -2273,5 +2273,5 @@ index a2a175b08b17..b3d1f0985117 100644
  }
  
 -- 
-2.17.1
+2.20.1
 
