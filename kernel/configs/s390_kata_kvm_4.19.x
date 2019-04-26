@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/s390 4.19.24 Kernel Configuration
+# Linux/s390 4.19.28 Kernel Configuration
 #
 
 #
@@ -1366,7 +1366,10 @@ CONFIG_HVC_DRIVER=y
 CONFIG_HVC_IUCV=y
 CONFIG_VIRTIO_CONSOLE=y
 # CONFIG_IPMI_HANDLER is not set
-# CONFIG_HW_RANDOM is not set
+CONFIG_HW_RANDOM=y
+# CONFIG_HW_RANDOM_TIMERIOMEM is not set
+CONFIG_HW_RANDOM_VIRTIO=y
+CONFIG_HW_RANDOM_S390=y
 # CONFIG_R3964 is not set
 # CONFIG_APPLICOM is not set
 # CONFIG_RAW_DRIVER is not set
