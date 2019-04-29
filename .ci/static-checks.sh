@@ -581,11 +581,15 @@ check_files()
 	exit 1
 }
 
-# Ensure that changes to vendored code are accompanied by an update to the
-# vendor tooling config file. If not, the user simply hacked the vendor files
-# rather than following the correct process:
+# Perform vendor checks:
 #
-# - https://github.com/kata-containers/community/blob/master/VENDORING.md
+# - Ensure that changes to vendored code are accompanied by an update to the
+#   vendor tooling config file. If not, the user simply hacked the vendor files
+#   rather than following the correct process:
+#
+#   https://github.com/kata-containers/community/blob/master/VENDORING.md
+#
+# - Ensure vendor metadata is valid.
 check_vendor()
 {
 	local files
@@ -615,6 +619,14 @@ check_vendor()
 			[ -n "$result" ] || die "PR changes vendor files, but does not update ${vendor_ctl_file}"
 		fi
 	fi
+
+	info "Checking vendoring metadata"
+
+	# Get the vendoring tool
+	go get github.com/golang/dep/cmd/dep
+
+	# Check, but don't touch!
+	dep ensure -no-vendor -dry-run
 }
 
 main()
