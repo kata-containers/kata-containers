@@ -595,22 +595,26 @@ check_vendor()
 	# All vendor operations should modify this file
 	local vendor_ctl_file="Gopkg.lock"
 
+	[ -e "$vendor_ctl_file" ] || { info "No vendoring in this repository" && return; }
+
+	info "Checking vendored code is pristine"
+
 	files=$(get_pr_changed_file_details_full || true)
 
 	# Strip off status
 	files=$(echo "$files"|awk '{print $NF}')
 
-	# No files were changed
-	[ -z "$files" ] && info "No files found" && return
+	if [ -n "$files" ]
+	then
+		# PR changed files so check if it changed any vendored files
+		vendor_files=$(echo "$files" | grep "vendor/" || true)
 
-	vendor_files=$(echo "$files" | grep "vendor/" || true)
-
-	# No vendor files modified
-	[ -z "$vendor_files" ] && return
-
-	result=$(echo "$files" | egrep "\<${vendor_ctl_file}\>" || true)
-
-	[ -n "$result" ] || die "PR changes vendor files, but does not update ${vendor_ctl_file}"
+		if [ -n "$vendor_files" ]
+		then
+			result=$(echo "$files" | egrep "\<${vendor_ctl_file}\>" || true)
+			[ -n "$result" ] || die "PR changes vendor files, but does not update ${vendor_ctl_file}"
+		fi
+	fi
 }
 
 main()
