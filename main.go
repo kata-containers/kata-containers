@@ -6,11 +6,15 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log/syslog"
+	"net"
+	"net/url"
 	"os"
 	"os/signal"
 	"runtime"
@@ -97,15 +101,82 @@ func setThreads() {
 	}
 }
 
+func unixAddr(uri string) (string, error) {
+	if uri == "" {
+		return "", errors.New("empty uri")
+
+	}
+	addr, err := url.Parse(uri)
+	if err != nil {
+		return "", err
+	}
+	if addr.Scheme != "" && addr.Scheme != "unix" {
+		return "", errors.New("invalid address scheme")
+	}
+	return addr.Host + addr.Path, nil
+}
+
+func printAgentLogs(sock string) error {
+	// Don't return an error if nothing has been provided. This flag is optional.
+	if sock == "" {
+		return nil
+	}
+
+	agentLogsAddr, err := unixAddr(sock)
+	if err != nil {
+		logger().WithField("socket-address", sock).WithError(err).Fatal("invalid agent logs socket address")
+		return err
+	}
+
+	// Check permissions socket for "other" is 0.
+	// For security reasons, the socket shouldn't be accessible
+	// for the "other" group.
+	fileInfo, err := os.Stat(agentLogsAddr)
+	if err != nil {
+		return err
+	}
+
+	otherMask := 0007
+	other := int(fileInfo.Mode().Perm()) & otherMask
+	if other != 0 {
+		return fmt.Errorf("All socket permissions for 'other' should be disabled, got %3.3o", other)
+	}
+
+	conn, err := net.Dial("unix", agentLogsAddr)
+	if err != nil {
+		return err
+	}
+
+	// Allow log messages coming from the agent to be distinguished from
+	// messages originating from the shim itself.
+	agentLogger := logger().WithFields(logrus.Fields{
+		"source": "agent",
+	})
+
+	go func() {
+		scanner := bufio.NewScanner(conn)
+		for scanner.Scan() {
+			agentLogger.Infof("%s\n", scanner.Text())
+		}
+
+		if err := scanner.Err(); err != nil {
+			logger().WithError(err).Error("Failed reading agent logs from socket")
+		}
+	}()
+
+	return nil
+}
+
 func realMain(ctx context.Context) (exitCode int) {
 	var (
-		logLevel      string
-		agentAddr     string
-		container     string
-		execID        string
-		terminal      bool
-		proxyExitCode bool
-		showVersion   bool
+		logLevel        string
+		agentAddr       string
+		container       string
+		execID          string
+		agentLogsSocket string
+		terminal        bool
+		proxyExitCode   bool
+		showVersion     bool
 	)
 
 	setThreads()
@@ -120,6 +191,7 @@ func realMain(ctx context.Context) (exitCode int) {
 	flag.StringVar(&execID, "exec-id", "", "process id for the shim")
 	flag.BoolVar(&terminal, "terminal", false, "specify if a terminal is setup")
 	flag.BoolVar(&proxyExitCode, "proxy-exit-code", true, "proxy exit code of the process")
+	flag.StringVar(&agentLogsSocket, "agent-logs-socket", "", "socket to listen on to retrieve agent logs")
 
 	flag.Parse()
 
@@ -169,6 +241,11 @@ func realMain(ctx context.Context) (exitCode int) {
 	span := tracer.StartSpan("realMain")
 	ctx = opentracing.ContextWithSpan(ctx, span)
 	defer span.Finish()
+
+	if err := printAgentLogs(agentLogsSocket); err != nil {
+		logger().WithError(err).Fatal("failed to print agent logs")
+		return exitFailure
+	}
 
 	shim, err := newShim(ctx, agentAddr, container, execID)
 	if err != nil {
