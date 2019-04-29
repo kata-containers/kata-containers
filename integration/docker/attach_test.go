@@ -21,11 +21,8 @@ var _ = Describe("docker attach", func() {
 
 	BeforeEach(func() {
 		containerExitCode = 13
-		destroyTimeout = 3
+		destroyTimeout = 10
 		id = randomDockerName()
-		_, _, exitCode = dockerRun("--name", id, "-d", Image, "sh", "-c",
-			fmt.Sprintf("sleep %d && exit %d", destroyTimeout, containerExitCode))
-		Expect(exitCode).To(Equal(0))
 	})
 
 	AfterEach(func() {
@@ -35,6 +32,9 @@ var _ = Describe("docker attach", func() {
 
 	Context("check attach functionality", func() {
 		It("should attach exit code", func() {
+			_, _, exitCode = dockerRun("--name", id, "-d", Image, "sh", "-c",
+				fmt.Sprintf("sleep %d && exit %d", destroyTimeout, containerExitCode))
+			Expect(exitCode).To(Equal(0))
 			_, _, exitCode = dockerAttach(id)
 			Expect(exitCode).To(Equal(containerExitCode))
 		})
