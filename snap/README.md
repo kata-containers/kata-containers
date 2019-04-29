@@ -13,8 +13,9 @@ This directory contains the resources needed to build the Kata Containers
 
 ## Initial setup
 
-*Ubuntu 18.04*
-
+Kata Containers can be installed in any Linux distribution that supports
+[snapd](https://docs.snapcraft.io/installing-snapd). For this example, we
+assume Ubuntu as your base distro.
 ```sh
 $ sudo apt-get install -y snapd snapcraft
 ```
@@ -24,7 +25,7 @@ $ sudo apt-get install -y snapd snapcraft
 You can install the Kata Containers snap from the [snapcraft store][8] or by running the following command:
 
 ```sh
-$ sudo snap install kata-containers
+$ sudo snap install kata-containers --classic
 ```
 
 ## Build and install snap image
