@@ -379,7 +379,7 @@ fi
 build_rootfs ${ROOTFS_DIR}
 pushd "${ROOTFS_DIR}" >> /dev/null
 if [ "$PWD" != "/" ] ; then
-	rm -rf ./var/cache/ ./var/lib
+	rm -rf ./var/cache/ ./var/lib ./var/log
 fi
 popd  >> /dev/null
 
