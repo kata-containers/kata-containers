@@ -41,24 +41,24 @@ func wait(s *service, c *container, execID string) (int32, error) {
 		}).Error("Wait for process failed")
 	}
 
-	if execID == "" {
-		c.exitCh <- uint32(ret)
-	} else {
-		execs.exitCh <- uint32(ret)
-	}
-
 	timeStamp := time.Now()
 	c.mu.Lock()
 	if execID == "" {
 		c.status = task.StatusStopped
 		c.exit = uint32(ret)
-		c.time = timeStamp
+		c.exitTime = timeStamp
 	} else {
 		execs.status = task.StatusStopped
 		execs.exitCode = ret
 		execs.exitTime = timeStamp
 	}
 	c.mu.Unlock()
+
+	if execID == "" {
+		c.exitCh <- uint32(ret)
+	} else {
+		execs.exitCh <- uint32(ret)
+	}
 
 	go cReap(s, int(ret), c.id, execID, timeStamp)
 

@@ -21,7 +21,7 @@ type container struct {
 	s        *service
 	ttyio    *ttyIO
 	spec     *oci.CompatOCISpec
-	time     time.Time
+	exitTime time.Time
 	execs    map[string]*exec
 	exitIOch chan struct{}
 	exitCh   chan uint32
@@ -61,7 +61,6 @@ func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.Con
 		status:   task.StatusCreated,
 		exitIOch: make(chan struct{}),
 		exitCh:   make(chan uint32, 1),
-		time:     time.Now(),
 	}
 	return c, nil
 }
