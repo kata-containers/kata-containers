@@ -1,7 +1,7 @@
 %global qemu_lite_hash @QEMU_LITE_HASH@
 Name: qemu-lite
 Version: @VERSION@+git.%{qemu_lite_hash}
-Release: @RELEASE@.<B_CNT>
+Release: @RELEASE@
 Source0: %{name}-%{version}.tar.gz
 Source1: qemu-lite-rpmlintrc
 Source2: configure-hypervisor.sh

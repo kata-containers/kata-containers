@@ -4,7 +4,7 @@
     <param name="scm">git</param>
     <param name="url">https://github.com/kata-containers/ksm-throttler.git</param>
     <param name="filename">kata-ksm-throttler</param>
-    <param name="versionformat">@VERSION@.git+@HASH@</param>
+    <param name="versionformat">@VERSION@</param>
     <param name="revision">@HASH@</param>
  </service>
  <service name="recompress">

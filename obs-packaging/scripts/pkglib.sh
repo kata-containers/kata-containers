@@ -291,14 +291,16 @@ function pkg_version() {
 	local pkg_release="$2"
 	local commit_id="$3"
 	[ -n "${project_version}" ] || die "${FUNCNAME}: need version"
-	[ -n "${pkg_release}" ] || die "${FUNCNAME}: pkg release is needed"
 
 	pkg_version="${project_version}"
 
 	if [ -n "$commit_id" ]; then
 		pkg_version+="+git.${commit_id:0:7}"
 	fi
-	echo "$pkg_version-${pkg_release}"
+	if [ -n "$pkg_release" ]; then
+		pkg_version+="-${pkg_release}"
+	fi
+	echo "$pkg_version"
 }
 
 function get_obs_pkg_release() {
