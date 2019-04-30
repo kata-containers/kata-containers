@@ -6,7 +6,6 @@
     * [Runtime commands](#runtime-commands)
         * [checkpoint and restore](#checkpoint-and-restore)
         * [events command](#events-command)
-        * [ps command](#ps-command)
         * [update command](#update-command)
     * [Networking](#networking)
         * [Adding networks dynamically](#adding-networks-dynamically)
