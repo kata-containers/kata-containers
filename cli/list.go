@@ -331,7 +331,8 @@ func getContainers(ctx context.Context, context *cli.Context) ([]fullContainerSt
 
 			uid, err := getDirOwner(container.RootFs)
 			if err != nil {
-				return nil, err
+				fmt.Fprintf(os.Stderr, "WARNING: failed to get container %s rootfs: %s\n", ociState.ID, err)
+				continue
 			}
 
 			owner := fmt.Sprintf("#%v", uid)
