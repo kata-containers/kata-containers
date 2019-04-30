@@ -26,6 +26,8 @@ VERBOSE=false
 # package was compiled for.
 DEB_ARCH="$(go env GOARCH)"
 
+short_commit_length=7
+
 if command -v go; then
 	export GO_ARCH=$(go env GOARCH)
 else
@@ -295,7 +297,7 @@ function pkg_version() {
 	pkg_version="${project_version}"
 
 	if [ -n "$commit_id" ]; then
-		pkg_version+="+git.${commit_id:0:7}"
+		pkg_version+="+git.${commit_id:0:${short_commit_length}}"
 	fi
 	if [ -n "$pkg_release" ]; then
 		pkg_version+="-${pkg_release}"
