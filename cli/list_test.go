@@ -590,11 +590,6 @@ func TestListCLIFunctionFormatFail(t *testing.T) {
 
 		ctx.App.Metadata["runtimeConfig"] = runtimeConfig
 
-		_ = os.Remove(rootfs)
-
-		err = fn(ctx)
-		assert.Error(err)
-
 		err = os.MkdirAll(rootfs, testDirMode)
 		assert.NoError(err)
 
@@ -729,4 +724,62 @@ func TestListGetDirOwner(t *testing.T) {
 	dirUID, err := getDirOwner(dir)
 	assert.NoError(err)
 	assert.Equal(dirUID, uid)
+}
+
+func TestListWithRootfsMissShouldSuccess(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpdir, err := ioutil.TempDir(testDir, "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
+	sandbox := &vcmock.Sandbox{
+		MockID: testSandboxID,
+	}
+
+	rootfs := filepath.Join(tmpdir, "rootfs")
+	err = os.MkdirAll(rootfs, testDirMode)
+	assert.NoError(err)
+
+	testingImpl.ListSandboxFunc = func(ctx context.Context) ([]vc.SandboxStatus, error) {
+		return []vc.SandboxStatus{
+			{
+				ID: sandbox.ID(),
+				ContainersStatus: []vc.ContainerStatus{
+					{
+						ID: sandbox.ID(),
+						Annotations: map[string]string{
+							vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
+						},
+						RootFs: rootfs,
+					},
+				},
+			},
+		}, nil
+	}
+
+	defer func() {
+		testingImpl.ListSandboxFunc = nil
+	}()
+
+	set := flag.NewFlagSet("test", 0)
+	set.String("format", "table", "")
+	ctx := createCLIContext(set)
+	ctx.App.Name = "foo"
+
+	runtimeConfig, err := newTestRuntimeConfig(tmpdir, testConsole, true)
+	assert.NoError(err)
+
+	ctx.App.Metadata["runtimeConfig"] = runtimeConfig
+
+	fn, ok := listCLICommand.Action.(func(context *cli.Context) error)
+	assert.True(ok)
+
+	err = fn(ctx)
+	assert.NoError(err)
+
+	// remove container rootfs, check list command should also work
+	assert.NoError(os.RemoveAll(rootfs))
+	err = fn(ctx)
+	assert.NoError(err)
 }
