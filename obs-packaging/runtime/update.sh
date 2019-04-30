@@ -45,33 +45,26 @@ cli "$@"
 
 # Package depedencies
 info "requires:"
-PROXY_RELEASE=$(get_obs_pkg_release "home:${OBS_PROJECT}:${OBS_SUBPROJECT}/proxy")
-PROXY_REQUIRED_VERESION=$(pkg_version "${kata_proxy_version}" "${PROXY_RELEASE}" "${kata_proxy_hash}")
+PROXY_REQUIRED_VERESION=$(pkg_version "${kata_proxy_version}" "" "")
 info "proxy ${PROXY_REQUIRED_VERESION}"
 
-SHIM_RELEASE=$(get_obs_pkg_release "home:${OBS_PROJECT}:${OBS_SUBPROJECT}/shim")
-SHIM_REQUIRED_VERSION=$(pkg_version "${kata_shim_version}" "${SHIM_RELEASE}" "${kata_shim_hash}")
+SHIM_REQUIRED_VERSION=$(pkg_version "${kata_shim_version}" "" "")
 info "shim ${SHIM_REQUIRED_VERSION}"
 
-KERNEL_RELEASE=$(get_obs_pkg_release "home:${OBS_PROJECT}:${OBS_SUBPROJECT}/linux-container")
 KERNEL_CONFIG_VERSION=$(cat "${SCRIPT_DIR}/../../kernel/kata_config_version")
-KERNEL_REQUIRED_VERSION=$(pkg_version "${kernel_version}.${KERNEL_CONFIG_VERSION}" "${KERNEL_RELEASE}" "")
+KERNEL_REQUIRED_VERSION=$(pkg_version "${kernel_version}.${KERNEL_CONFIG_VERSION}" "" "")
 info "kata-linux-container ${KERNEL_REQUIRED_VERSION}"
 
-KSM_THROTTLER_RELEASE=$(get_obs_pkg_release "home:${OBS_PROJECT}:${OBS_SUBPROJECT}/ksm-throttler")
-KSM_THROTTLER_REQUIRED_VERSION=$(pkg_version "${kata_ksm_throttler_version}" "${KSM_THROTTLER_RELEASE}" "${kata_ksm_throttler_hash}")
+KSM_THROTTLER_REQUIRED_VERSION=$(pkg_version "${kata_ksm_throttler_version}" "" "")
 info "ksm-throttler ${KSM_THROTTLER_REQUIRED_VERSION}"
 
-KATA_CONTAINERS_IMAGE_RELEASE=$(get_obs_pkg_release "home:${OBS_PROJECT}:${OBS_SUBPROJECT}/kata-containers-image")
-KATA_IMAGE_REQUIRED_VERSION=$(pkg_version "${kata_osbuilder_version}" "${KATA_CONTAINERS_IMAGE_RELEASE}" "")
+KATA_IMAGE_REQUIRED_VERSION=$(pkg_version "${kata_osbuilder_version}" "" "")
 info "image ${KATA_IMAGE_REQUIRED_VERSION}"
 
-KATA_CONTAINERS_QEMU_LITE_RELEASE=$(get_obs_pkg_release "home:${OBS_PROJECT}:${OBS_SUBPROJECT}/qemu-lite")
-KATA_QEMU_LITE_REQUIRED_VERSION=$(pkg_version "${qemu_lite_version}" "${KATA_CONTAINERS_QEMU_LITE_RELEASE}" "${qemu_lite_hash}")
+KATA_QEMU_LITE_REQUIRED_VERSION=$(pkg_version "${qemu_lite_version}" "" "${qemu_lite_hash}")
 info "qemu-lite ${KATA_QEMU_LITE_REQUIRED_VERSION}"
 
-KATA_CONTAINERS_QEMU_VANILLA_RELEASE=$(get_obs_pkg_release "home:${OBS_PROJECT}:${OBS_SUBPROJECT}/qemu-vanilla")
-KATA_QEMU_VANILLA_REQUIRED_VERSION=$(pkg_version "${qemu_vanilla_version}" "${KATA_CONTAINERS_QEMU_VANILLA_RELEASE}" "${qemu_vanilla_hash}")
+KATA_QEMU_VANILLA_REQUIRED_VERSION=$(pkg_version "${qemu_vanilla_version}" "" "${qemu_vanilla_hash}")
 info "qemu-vanilla ${KATA_QEMU_VANILLA_REQUIRED_VERSION}"
 
 PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/runtime}

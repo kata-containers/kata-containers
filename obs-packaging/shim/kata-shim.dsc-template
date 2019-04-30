@@ -1,13 +1,13 @@
 Format: 3.0 (quilt)
 Source: kata-shim
-Version: @VERSION@+git.@HASH@-@RELEASE@
+Version: @VERSION@-@RELEASE@
 Section: devel
 Priority: optional
 Maintainer: Kata containers team <https://github.com/kata-containers/>
 Standards-Version: 3.9.6
 Build-Depends: debhelper (>= 9), git, ca-certificates, execstack, devscripts, dh-make
 Homepage: https://katacontainers.io
-Debtransform-Tar: kata-shim-@VERSION@+git.@HASH@.tar.gz
+Debtransform-Tar: kata-shim-@VERSION@.tar.gz
 
 Package: kata-shim
 Architecture: @deb_arch@

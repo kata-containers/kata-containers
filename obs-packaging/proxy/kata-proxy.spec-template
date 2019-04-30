@@ -10,8 +10,8 @@
 
 %undefine _missing_build_ids_terminate_build
 Name:      kata-proxy
-Version:   @VERSION@+git.@HASH@
-Release:   @RELEASE@.<B_CNT>
+Version:   @VERSION@
+Release:   @RELEASE@
 Source0:   %{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires: pkgconfig(systemd)

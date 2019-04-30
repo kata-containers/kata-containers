@@ -6,7 +6,7 @@
     <param name="url">https://github.com/kata-containers/runtime.git</param>
     <param name="filename">kata-runtime</param>
     <!--- versionformat defines the name of the  tarball. -->
-    <param name="versionformat">@VERSION@+git.@HASH@</param>
+    <param name="versionformat">@VERSION@</param>
     <param name="revision">@HASH@</param>
  </service>
  <service name="recompress">
