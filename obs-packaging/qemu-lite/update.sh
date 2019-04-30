@@ -38,7 +38,7 @@ set_versions "${qemu_lite_hash}"
 replace_list=(
 	"VERSION=$VERSION"
 	"RELEASE=$RELEASE"
-	"QEMU_LITE_HASH=${qemu_lite_hash:0:10}"
+	"QEMU_LITE_HASH=${qemu_lite_hash:0:${short_commit_length}}"
 )
 verify
 echo "Verify succeed."
