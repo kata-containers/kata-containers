@@ -35,6 +35,10 @@ kata_version="master"
 kata_osbuilder_version="${KATA_OSBUILDER_VERSION:-}"
 # Agent version
 agent_version="${AGENT_VERSION:-}"
+if [ -z "${agent_version}" ]; then
+	source "${script_dir}/../versions.txt"
+	agent_version="${kata_agent_hash}"
+fi
 
 readonly destdir="${PWD}"
 
