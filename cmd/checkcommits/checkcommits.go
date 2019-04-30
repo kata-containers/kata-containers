@@ -467,6 +467,13 @@ func detectCIEnvironment() (commit, dstBranch, srcBranch string) {
 			// contains that branch: master doesn't exist.
 			dstBranch = "origin"
 		}
+	} else if os.Getenv("ghprbPullId") != "" {
+		name = "JenkinsCI - github pull request builder"
+
+		commit = os.Getenv("ghprbActualCommit")
+
+		srcBranch = os.Getenv("ghprbSourceBranch")
+		dstBranch = os.Getenv("ghprbTargetBranch")
 	}
 
 	if verbose && name != "" {
