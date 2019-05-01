@@ -49,7 +49,7 @@ Kata Containers packaging repository holds the kernel configs and patches. The
 config and patches can work for many versions, but we only test the
 kernel version defined in the [runtime versions file][runtime-versions-file].
 
-## How is it tested.
+## How is it tested
 
 The Kata Containers CI scripts install the kernel from [CI cache
 job][cache-job] or build from sources.
