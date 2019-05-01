@@ -270,7 +270,7 @@ func getCommitRange(commit, branch string) ([]string, error) {
 	args = append(args, "rev-list")
 	args = append(args, "--no-merges")
 	args = append(args, "--reverse")
-	args = append(args, fmt.Sprintf("%s..%s", branch, commit))
+	args = append(args, fmt.Sprintf("origin/%s..%s", branch, commit))
 
 	return runCommand(args)
 }
