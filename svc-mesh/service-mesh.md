@@ -7,10 +7,10 @@
     * [Restrictions](#restrictions)
 * [Install and deploy your service mesh](#install-and-deploy-your-service-mesh)
     * [Service Mesh Istio](#service-mesh-istio)
-    * [Service Mesh Conduit](#service-mesh-conduit)
+    * [Service Mesh Linkerd](#service-mesh-linkerd)
 * [Inject your services with sidecars](#inject-your-services-with-sidecars)
     * [Sidecar Istio](#sidecar-istio)
-    * [Sidecar Conduit](#sidecar-conduit)
+    * [Sidecar Linkerd](#sidecar-linkerd)
 * [Run your services with Kata](#run-your-services-with-kata)
     * [Lower privileges](#lower-privileges)
     * [Add annotations](#add-annotations)
@@ -28,7 +28,7 @@ __containers__, __control plane__, __data plane__, and __sidecar__.
 
 ## How they work
 
-Istio and Conduit both rely on the same model, where they run controller
+Istio and Linkerd both rely on the same model, where they run controller
 applications in the control plane, and inject a proxy as a sidecar inside
 the pod running the service. The proxy registers in the control plane as
 a first step, and it constantly sends different sorts of information about
@@ -59,7 +59,7 @@ you choose to annotate run with Kata Containers.
 
 ### Restrictions
 
-As documented [here](https://github.com/runconduit/conduit/issues/982),
+As documented [here](https://github.com/linkerd/linkerd2/issues/982),
 a kernel version between 4.14.22 and 4.14.40 causes a deadlock when
 `getsockopt()` gets called with the `SO_ORIGINAL_DST` option. Unfortunately,
 both service meshes use this system call with this same option from the
@@ -97,26 +97,26 @@ $ kubectl get svc -n istio-system
 $ kubectl get pods -n istio-system -o wide
 ```
 
-### Service Mesh Conduit
+### Service Mesh Linkerd
 
-As a reference, follow the Conduit [instructions](https://conduit.io/getting-started/index.html).
+As a reference, follow the Linkerd [instructions](https://linkerd.io/2/getting-started/index.html).
 
-The following is a summary of what you need to install Conduit on your system:
+The following is a summary of what you need to install Linkerd on your system:
 ```
-$ curl https://run.conduit.io/install | sh
-$ export PATH=$PATH:$HOME/.conduit/bin
+$ curl https://run.linkerd.io/install | sh
+$ export PATH=$PATH:$HOME/.linkerd/bin
 ```
 
-Now deploy Conduit in the control plane of your cluster with the following:
+Now deploy Linkerd in the control plane of your cluster with the following:
 ```
-$ conduit install | kubectl apply -f -
+$ linkerd install | kubectl apply -f -
 ```
 
 To verify that the control plane is properly deployed, you can use both of
 the following commands:
 ```
-$ kubectl get svc -n conduit
-$ kubectl get pods -n conduit -o wide
+$ kubectl get svc -n linkerd
+$ kubectl get pods -n linkerd -o wide
 ```
 
 ## Inject your services with sidecars
@@ -140,18 +140,17 @@ your YAML file. We use their bookinfo sample as an example:
 $ istioctl kube-inject -f samples/bookinfo/kube/bookinfo.yaml -o bookinfo-injected.yaml
 ```
 
-### Sidecar Conduit
+### Sidecar Linkerd
 
-Conduit provides an [emojivoto](https://conduit.io/getting-started/index.html)
-sample, which you can rely on to inject their `conduit` proxy as a
+Linkerd provides an [emojivoto](https://linkerd.io/2/getting-started/index.html)
+sample, which you can rely on to inject their `linkerd` proxy as a
 sidecar.
 
-You need to use their tool called `conduit inject` to inject your YAML
-file. We use their [emojivoto](https://conduit.io/getting-started/index.html)
-sample as example:
+You need to use their tool called `linkerd inject` to inject your YAML
+file. We use their emojivoto sample as example:
 ```
 $ wget https://raw.githubusercontent.com/runconduit/conduit-examples/master/emojivoto/emojivoto.yml
-$ conduit inject emojivoto.yml > emojivoto-injected.yaml
+$ linkerd inject emojivoto.yml > emojivoto-injected.yaml
 ```
 
 ## Run your services with Kata
@@ -164,7 +163,7 @@ containers, manually edit your deployment to make it work with Kata.
 In Kubernetes, the __init__ container is often `privileged` as it needs to
 setup the environment, which often needs some root privileges. In the case
 of those services meshes, all they need is the `NET_ADMIN` capability to
-modify the underlying network rules. Conduit, by default, does not use
+modify the underlying network rules. Linkerd, by default, does not use
 `privileged` container, but Istio does.
 
 Because of the previous reason, if you use Istio you need to switch all
@@ -172,7 +171,7 @@ containers with `privileged: true` to `privileged: false`.
 
 ### Add annotations
 
-There is no difference between Istio and Conduit in this section. It is
+There is no difference between Istio and Linkerd in this section. It is
 about which CRI implementation you use.
 
 For both CRI-O and CRI-containerd, you have to add an annotation indicating
