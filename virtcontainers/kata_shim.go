@@ -48,6 +48,9 @@ func (s *kataShim) start(sandbox *Sandbox, params ShimParams) (int, error) {
 
 	if config.Debug {
 		args = append(args, "-log", "debug")
+		if params.ConsoleURL != "" {
+			args = append(args, "-agent-logs-socket", params.ConsoleURL)
+		}
 	}
 
 	if config.Trace {

@@ -498,7 +498,7 @@ func (k *kataAgent) exec(sandbox *Sandbox, c Container, cmd types.Cmd) (*Process
 	}
 
 	return prepareAndStartShim(sandbox, k.shim, c.id, req.ExecId,
-		k.state.URL, cmd, []ns.NSType{}, enterNSList)
+		k.state.URL, "", cmd, []ns.NSType{}, enterNSList)
 }
 
 func (k *kataAgent) updateInterface(ifc *vcTypes.Interface) (*vcTypes.Interface, error) {
@@ -1214,8 +1214,17 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 		})
 	}
 
+	// Ask to the shim to print the agent logs, if it's the process who monitors the sandbox and use_vsock is true (no proxy)
+	var consoleURL string
+	if sandbox.config.HypervisorConfig.UseVSock && c.GetAnnotations()[vcAnnotations.ContainerTypeKey] == string(PodSandbox) {
+		consoleURL, err = sandbox.hypervisor.getSandboxConsole(sandbox.id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return prepareAndStartShim(sandbox, k.shim, c.id, req.ExecId,
-		k.state.URL, c.config.Cmd, createNSList, enterNSList)
+		k.state.URL, consoleURL, c.config.Cmd, createNSList, enterNSList)
 }
 
 // handleEphemeralStorage handles ephemeral storages by
