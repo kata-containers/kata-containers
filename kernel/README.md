@@ -1,3 +1,14 @@
+* [Build Kata Containers Kernel](#build-kata-containers-kernel)
+    * [Requirements](#requirements)
+    * [Setup kernel source code](#setup-kernel-source-code)
+* [Build the kernel](#build-the-kernel)
+    * [Install the Kernel in the default path for Kata](#install-the-kernel-in-the-default-path-for-kata)
+    * [Submit Kernel Changes](#submit-kernel-changes)
+    * [How is it tested](#how-is-it-tested)
+* [Contribute](#contribute)
+
+---
+
 # Build Kata Containers Kernel
 
 This document explains the steps to build a kernel recommended for use with
