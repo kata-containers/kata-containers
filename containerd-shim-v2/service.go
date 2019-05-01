@@ -444,12 +444,12 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 			ContainerID: s.id,
 			Pid:         s.pid,
 			ExitStatus:  c.exit,
-			ExitedAt:    c.time,
+			ExitedAt:    c.exitTime,
 		})
 
 		return &taskAPI.DeleteResponse{
 			ExitStatus: c.exit,
-			ExitedAt:   c.time,
+			ExitedAt:   c.exitTime,
 			Pid:        s.pid,
 		}, nil
 	}
@@ -860,6 +860,7 @@ func (s *service) Wait(ctx context.Context, r *taskAPI.WaitRequest) (_ *taskAPI.
 
 	return &taskAPI.WaitResponse{
 		ExitStatus: ret,
+		ExitedAt:   c.exitTime,
 	}, nil
 }
 
