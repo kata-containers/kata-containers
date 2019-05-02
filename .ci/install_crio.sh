@@ -30,6 +30,7 @@ ghprbGhRepository="${ghprbGhRepository:-}"
 crio_repo=$(get_version "externals.crio.url")
 # remove https:// from the url
 crio_repo="${crio_repo#*//}"
+crio_config_file="/etc/crio/crio.conf"
 
 go get -d "$crio_repo" || true
 pushd "${GOPATH}/src/${crio_repo}"
@@ -76,11 +77,11 @@ sudo -E PATH=$PATH sh -c "make install"
 sudo -E PATH=$PATH sh -c "make install.config"
 
 
-# Change socket format
-# Needed for cri-o 1.10, when moving to 1.11, this should be removed.
-# Do not change on Fedora, since it runs cri-o 1.9 for openshift testing.
-if [ "$ID" != "fedora" ]; then
+# Change socket format and pause image used for infra containers
+# Needed for cri-o 1.10
+if crio --version | grep '1.10'; then
 	sudo sed -i 's|/var|unix:///var|' /etc/crictl.yaml
+	sudo sed -i 's|kubernetes/pause|k8s.gcr.io/pause|' "$crio_config_file"
 fi
 
 containers_config_path="/etc/containers"
@@ -97,8 +98,6 @@ git checkout "$runc_version"
 make
 sudo -E install -D -m0755 runc "/usr/local/bin/crio-runc"
 popd
-
-crio_config_file="/etc/crio/crio.conf"
 
 echo "Set manage_network_ns_lifecycle to true"
 network_ns_flag="manage_network_ns_lifecycle"
