@@ -1,12 +1,12 @@
 * [Supported base OSs](#supported-base-oss)
 * [Creating a rootfs](#creating-a-rootfs)
-* [Creating a rootfs with kernel modules](#creating-a-rootfs-with-kenrel-modules)
-* [Build a rootfs using Docker*](#build-a-rootfs-using-docker*)
+* [Creating a rootfs with kernel modules](#creating-a-rootfs-with-kernel-modules)
+* [Build a rootfs using Docker*](#build-a-rootfs-using-docker)
 * [Adding support for a new guest OS](#adding-support-for-a-new-guest-os)
     * [Create template files](#create-template-files)
     * [Modify template files](#modify-template-files)
     * [Expected rootfs directory content](#expected-rootfs-directory-content)
-    * [(optional) Customise the rootfs](#(optional)-customise-the-rootfs)
+    * [Optional - Customise the rootfs](#optional---customise-the-rootfs)
         * [Adding extra packages](#adding-extra-packages)
         * [Arbitary rootfs changes](#arbitary-rootfs-changes)
 
@@ -61,7 +61,7 @@ $ sudo KERNEL_MODULES_DIR=${kernel_mod_dir} ./rootfs.sh <distro>
 Where `kernel_mod_dir` points to the kernel modules directory to be put under the
 `/lib/modules/` directory of the created rootfs.
 
-## Build a rootfs using Docker*
+## Build a rootfs using Docker
 
 Depending on the base OS to build the rootfs guest OS, it is required some
 specific programs that probably are not available or installed in the system
@@ -157,7 +157,7 @@ After the new directory structure is created:
 After the function `build_rootfs` is called, the script expects the
 rootfs directory to contain `/sbin/init` and `/sbin/kata-agent` binaries.
 
-### (optional) Customise the rootfs
+### Optional - Customise the rootfs
 
 For particular use cases developers might want to modify the guest OS.
 
