@@ -1,5 +1,5 @@
 * [Overview](#overview)
-* [Definiton of a limitation](#definiton-of-a-limitation)
+* [Definition of a limitation](#definiton-of-a-limitation)
 * [Scope](#scope)
 * [Contributing](#contributing)
 * [Pending items](#pending-items)
@@ -45,7 +45,7 @@ launches each container within its own hardware isolated VM, and each VM has
 its own kernel. Due to this higher degree of isolation, certain container
 capabilities cannot be supported or are implicitly enabled through the VM.
 
-# Definiton of a limitation
+# Definition of a limitation
 
 The [Open Container Initiative](https://www.opencontainers.org/)
 [Runtime Specification](https://github.com/opencontainers/runtime-spec) ("OCI spec")
