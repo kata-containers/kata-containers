@@ -302,8 +302,9 @@ parts:
       esac
 
       # download source
-      git clone --branch ${branch} --single-branch ${url} ${pkg_name}
-      cd ${pkg_name}
+      pkg_repo_dir="${pkg_name}-repo"
+      git clone --branch ${branch} --single-branch ${url} "${pkg_repo_dir}"
+      cd ${pkg_repo_dir}
       git checkout ${commit}
 
       [ -n "$(ls -A ui/keycodemapdb)" ] || git clone https://github.com/qemu/keycodemapdb ui/keycodemapdb/
