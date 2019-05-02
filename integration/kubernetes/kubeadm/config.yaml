@@ -1,11 +1,11 @@
-apiVersion: kubeadm.k8s.io/v1alpha3
+apiVersion: kubeadm.k8s.io/v1beta1
 kind: InitConfiguration
 nodeRegistration:
   criSocket: CRI_RUNTIME_SOCKET
   kubeletExtraArgs:
     allowed-unsafe-sysctls: "kernel.msg*,kernel.shm.*,net.*"
 ---
-apiVersion: kubeadm.k8s.io/v1alpha3
+apiVersion: kubeadm.k8s.io/v1beta1
 kind: ClusterConfiguration
 kubernetesVersion: KUBERNETES_VERSION
 networking:

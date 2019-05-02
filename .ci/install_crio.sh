@@ -102,15 +102,13 @@ popd
 echo "Set manage_network_ns_lifecycle to true"
 network_ns_flag="manage_network_ns_lifecycle"
 sudo sed -i "/\[crio.runtime\]/a$network_ns_flag = true" "$crio_config_file"
+sudo sed -i 's/manage_network_ns_lifecycle = false/#manage_network_ns_lifecycle = false/' "$crio_config_file"
 
 echo "Add docker.io registry to pull images"
 # Matches cri-o 1.10 file format
 sudo sed -i 's/^registries = \[/registries = \[ "docker.io"/' "$crio_config_file"
 # Matches cri-o 1.12 file format
 sudo sed -i 's/^#registries = \[/registries = \[ "docker.io" \] /' "$crio_config_file"
-
-echo "Change stream_port where cri-o will listen"
-sudo sed -i 's/^stream_port.*/stream_port = "10020"/' "$crio_config_file"
 
 service_path="/etc/systemd/system"
 crio_service_file="${cidir}/data/crio.service"
