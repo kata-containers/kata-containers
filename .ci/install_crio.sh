@@ -77,9 +77,8 @@ sudo -E PATH=$PATH sh -c "make install.config"
 
 
 # Change socket format
-# Needed for cri-o 1.10, when moving to 1.11, this should be removed.
-# Do not change on Fedora, since it runs cri-o 1.9 for openshift testing.
-if [ "$ID" != "fedora" ]; then
+# Needed for cri-o 1.10
+if crio --version | grep '1.10'; then
 	sudo sed -i 's|/var|unix:///var|' /etc/crictl.yaml
 fi
 
