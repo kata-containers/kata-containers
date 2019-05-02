@@ -281,11 +281,7 @@ func (fc *firecracker) fcSetBootSource(path, params string) error {
 	bootSrcParams.SetBody(src)
 
 	_, err := fc.client().Operations.PutGuestBootSource(bootSrcParams)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (fc *firecracker) fcSetVMRootfs(path string) error {
@@ -308,11 +304,25 @@ func (fc *firecracker) fcSetVMRootfs(path string) error {
 	}
 	driveParams.SetBody(drive)
 	_, err := fc.client().Operations.PutGuestDriveByID(driveParams)
-	if err != nil {
-		return err
-	}
+	return err
+}
 
-	return nil
+func (fc *firecracker) fcSetVMBaseConfig(mem int64, vcpus int64, htEnabled bool) error {
+	span, _ := fc.trace("fcSetVMBaseConfig")
+	defer span.Finish()
+	fc.Logger().WithFields(logrus.Fields{"mem": mem,
+		"vcpus":     vcpus,
+		"htEnabled": htEnabled}).Debug("fcSetVMBaseConfig")
+
+	param := ops.NewPutMachineConfigurationParams()
+	cfg := &models.MachineConfiguration{
+		HtEnabled:  htEnabled,
+		MemSizeMib: mem,
+		VcpuCount:  vcpus,
+	}
+	param.SetBody(cfg)
+	_, err := fc.client().Operations.PutMachineConfiguration(param)
+	return err
 }
 
 func (fc *firecracker) fcStartVM() error {
@@ -348,6 +358,12 @@ func (fc *firecracker) startSandbox(timeout int) error {
 
 	err := fc.fcInit(fcTimeout)
 	if err != nil {
+		return err
+	}
+
+	if err := fc.fcSetVMBaseConfig(int64(fc.config.MemorySize),
+		int64(fc.config.NumVCPUs),
+		false); err != nil {
 		return err
 	}
 
@@ -528,11 +544,7 @@ func (fc *firecracker) fcAddNetDevice(endpoint Endpoint) error {
 	cfg.SetBody(ifaceCfg)
 	cfg.SetIfaceID(ifaceID)
 	_, err := fc.client().Operations.PutGuestNetworkInterfaceByID(cfg)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func (fc *firecracker) fcAddBlockDrive(drive config.BlockDrive) error {
@@ -552,11 +564,7 @@ func (fc *firecracker) fcAddBlockDrive(drive config.BlockDrive) error {
 	}
 	driveParams.SetBody(driveFc)
 	_, err := fc.client().Operations.PutGuestDriveByID(driveParams)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 // Firecracker supports replacing the host drive used once the VM has booted up
