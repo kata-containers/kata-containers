@@ -180,6 +180,11 @@ func clearCIVariables() {
 		"REVISION",
 		"BRANCH_NAME",
 		"PULL_REQUEST_NUMBER",
+
+		"ghprbPullId",
+		"ghprbActualCommit",
+		"ghprbSourceBranch",
+		"ghprbTargetBranch",
 	}
 
 	for _, envVar := range envVars {
