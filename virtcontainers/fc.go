@@ -406,12 +406,16 @@ func (fc *firecracker) startSandbox(timeout int) error {
 	return fc.waitVMM(timeout)
 }
 
+func fcDriveIndexToID(i int) string {
+	return "drive_" + strconv.Itoa(i)
+}
+
 func (fc *firecracker) createDiskPool() error {
 	span, _ := fc.trace("createDiskPool")
 	defer span.Finish()
 
 	for i := 0; i < fcDiskPoolSize; i++ {
-		driveID := "drive-" + strconv.Itoa(i)
+		driveID := fcDriveIndexToID(i)
 		driveParams := ops.NewPutGuestDriveByIDParams()
 		driveParams.SetDriveID(driveID)
 		isReadOnly := false
@@ -574,7 +578,7 @@ func (fc *firecracker) fcUpdateBlockDrive(drive config.BlockDrive) error {
 
 	// Use the global block index as an index into the pool of the devices
 	// created for firecracker.
-	driveID := "drive-" + strconv.Itoa(drive.Index)
+	driveID := fcDriveIndexToID(drive.Index)
 	driveParams := ops.NewPatchGuestDriveByIDParams()
 	driveParams.SetDriveID(driveID)
 
