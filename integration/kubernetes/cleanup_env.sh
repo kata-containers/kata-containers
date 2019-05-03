@@ -35,3 +35,6 @@ sudo ip link del flannel.1
 
 # Check no kata processes are left behind after reseting kubernetes
 check_processes
+
+# Checks that pods were not left
+check_pods
