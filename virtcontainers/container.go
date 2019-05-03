@@ -51,6 +51,10 @@ var cdromMajors = map[int64]string{
 	32: "CM206_CDROM_MAJOR",
 }
 
+// https://github.com/torvalds/linux/blob/master/include/uapi/linux/major.h
+// #define FLOPPY_MAJOR		2
+const floppyMajor = int64(2)
+
 // Process gathers data related to a container process.
 type Process struct {
 	// Token is the process execution context ID. It must be
@@ -626,6 +630,14 @@ func filterDevices(c *Container, devices []ContainerDevice) (ret []ContainerDevi
 			}).Info("Not attach device because it is a CDROM")
 			continue
 		}
+
+		if major == floppyMajor {
+			c.Logger().WithFields(logrus.Fields{
+				"device": dev.ContainerPath,
+			}).Info("Not attaching device because it is a floppy drive")
+			continue
+		}
+
 		ret = append(ret, dev)
 	}
 	return
