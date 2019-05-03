@@ -2,20 +2,20 @@ Format: 3.0 (quilt)
 Source: kata-runtime
 # Version is expected to be started with a digit following by an alphanumeric string
 # e.g. 1.0.0+git.1234567-1
-Version: @VERSION@+git.@HASH@-@RELEASE@
+Version: @VERSION@-@RELEASE@
 Section: devel
 Priority: optional
 Maintainer: Kata containers team <https://github.com/kata-containers/>
 Standards-Version: 3.9.6
 Build-Depends: dh-make, git, ca-certificates, execstack, devscripts, debhelper, build-essential, dh-autoreconf, make
 Homepage: https://katacontainers.io
-Debtransform-Tar: kata-runtime-@VERSION@+git.@HASH@.tar.gz
+Debtransform-Tar: kata-runtime-@VERSION@.tar.gz
 
 Package: kata-runtime
 Architecture: @deb_arch@
-Depends: kata-containers-image (>= @kata_osbuilder_version@), kata-linux-container (>= @linux_container_version@),
-         kata-proxy (>= @kata_proxy_version@), kata-shim (>= @kata_shim_version@),
-	 kata-ksm-throttler(>= @ksm_throttler_version@), qemu-lite(>= @qemu_lite_version@) [amd64],
-	 qemu-vanilla(>= @qemu_vanilla_version@)
+Depends: kata-containers-image (= @kata_osbuilder_version@), kata-linux-container (= @linux_container_version@),
+         kata-proxy (= @kata_proxy_version@), kata-shim (= @kata_shim_version@),
+	 kata-ksm-throttler(= @ksm_throttler_version@), qemu-lite(= @qemu_lite_version@) [amd64],
+	 qemu-vanilla(= @qemu_vanilla_version@)
 Description:
  An Open Containers Initiative (OCI) "runtime" that launches an Intel VT-x secured Kata Containers hypervisor, rather than a standard Linux container.

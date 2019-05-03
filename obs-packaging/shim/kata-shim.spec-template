@@ -8,8 +8,8 @@
 
 %undefine _missing_build_ids_terminate_build
 Name:      kata-shim
-Version:   @VERSION@+git.@HASH@
-Release:   @RELEASE@.<B_CNT>
+Version:   @VERSION@
+Release:   @RELEASE@
 Summary  : No detailed summary available
 Group    : Development/Tools
 License  : Apache-2.0

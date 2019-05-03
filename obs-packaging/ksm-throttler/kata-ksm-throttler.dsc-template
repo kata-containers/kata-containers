@@ -1,13 +1,13 @@
 Format: 3.0 (quilt)
 Source: kata-ksm-throttler
-Version: @VERSION@.git+@HASH@-@RELEASE@
+Version: @VERSION@-@RELEASE@
 Section: devel
 Priority: optional
 Maintainer: Kata containers team <https://github.com/kata-containers/>
 Standards-Version: 3.9.6
 Homepage: https://katacontainers.io
 Build-Depends: dh-make, git, ca-certificates, execstack, devscripts, debhelper, build-essential, dh-autoreconf, make, pkg-config, dh-systemd, systemd
-Debtransform-Tar: kata-ksm-throttler-@VERSION@.git+@HASH@.tar.gz
+Debtransform-Tar: kata-ksm-throttler-@VERSION@.tar.gz
 
 Package: kata-ksm-throttler
 Architecture: @deb_arch@

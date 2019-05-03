@@ -1,7 +1,7 @@
 %global qemu_vanilla_hash @QEMU_VANILLA_HASH@
 Name: qemu-vanilla
 Version: @VERSION@+git.%{qemu_vanilla_hash}
-Release: @RELEASE@.<B_CNT>
+Release: @RELEASE@
 Source0: %{name}-%{version}.tar.gz
 Source1: qemu-vanilla-rpmlintrc
 Source2: configure-hypervisor.sh

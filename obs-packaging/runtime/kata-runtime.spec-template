@@ -1,5 +1,3 @@
-%global PREFIX /usr/
-%global BINDIR %{PREFIX}/bin
 %global DOMAIN github.com
 %global ORG kata-containers
 %global PROJECT runtime
@@ -16,8 +14,8 @@
 Name:      kata-runtime
 # Version is expected to be started with a digit following by an alphanumeric string
 # e.g. 1.0.0+git.1234567
-Version:   @VERSION@+git.@HASH@
-Release:   @RELEASE@.<B_CNT>
+Version:   @VERSION@
+Release:   @RELEASE@
 Source0:   %{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 Summary  : No detailed summary available
@@ -26,16 +24,16 @@ License  : Apache-2.0
 
 BuildRequires: git
 
-%{!?el7 || !?suse_version:Requires: qemu-lite >= @qemu_lite_obs_fedora_version@ }
+%{!?el7 || !?suse_version:Requires: qemu-lite = @qemu_lite_obs_fedora_version@ }
 
-Requires: kata-containers-image >= @kata_osbuilder_version@
-Requires: kata-linux-container >= @linux_container_version@
-Requires: kata-proxy >= @kata_proxy_version@
-Requires: kata-shim >= @kata_shim_version@
-Requires: kata-ksm-throttler >= @ksm_throttler_version@
-Requires: qemu-vanilla >= @qemu_vanilla_version@
+Requires: kata-containers-image = @kata_osbuilder_version@
+Requires: kata-linux-container = @linux_container_version@
+Requires: kata-proxy = @kata_proxy_version@
+Requires: kata-shim = @kata_shim_version@
+Requires: kata-ksm-throttler = @ksm_throttler_version@
+Requires: qemu-vanilla = @qemu_vanilla_version@
 %ifarch x86_64
-Requires: qemu-lite >= @qemu_lite_version@
+Requires: qemu-lite = @qemu_lite_version@
 %endif
 
 # Patches
