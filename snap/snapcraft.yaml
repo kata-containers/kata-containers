@@ -48,7 +48,7 @@ parts:
 
       # build and install
       arch=$(uname -m)
-      if [ ${arch} == "ppc64le" ]; then
+      if [ ${arch} = "ppc64le" ]; then
         arch="ppc64"
       fi
 
