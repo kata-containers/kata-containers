@@ -515,10 +515,11 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 	var sharedDirMounts []Mount
 	var ignoredMounts []Mount
 	for idx, m := range c.mounts {
-		if isSystemMount(m.Destination) {
-			if !(IsDockerVolume(m.Source) || Isk8sHostEmptyDir(m.Source)) {
-				continue
-			}
+		// Skip mounting certain system paths from the source on the host side
+		// into the container as it does not make sense to do so.
+		// Example sources could be /sys/fs/cgroup etc.
+		if isSystemMount(m.Source) {
+			continue
 		}
 
 		if m.Type != "bind" {
