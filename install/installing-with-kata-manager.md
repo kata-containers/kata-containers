@@ -1,6 +1,6 @@
 # Installing with kata-manager
 
-* [Introduction](#Introduction)
+* [Introduction](#introduction)
 * [Full Installation](#full-installation)
 * [Install the Kata packages only](#install-the-kata-packages-only)
 * [Further Information](#further-information)
