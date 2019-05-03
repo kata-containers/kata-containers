@@ -26,7 +26,7 @@ VERBOSE=false
 # package was compiled for.
 DEB_ARCH="$(go env GOARCH)"
 
-short_commit_length=7
+short_commit_length=10
 
 if command -v go; then
 	export GO_ARCH=$(go env GOARCH)
