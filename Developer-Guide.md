@@ -26,9 +26,9 @@
 * [Install guest kernel images](#install-guest-kernel-images)
 * [Install a hypervisor](#install-a-hypervisor)
     * [Build a custom QEMU](#build-a-custom-qemu)
-        * [Build a custom QEMU for aarch64/arm64 - REQUIRED](#Build-a-custom-qemu-for-aarch64/arm64---required)
+        * [Build a custom QEMU for aarch64/arm64 - REQUIRED](#build-a-custom-qemu-for-aarch64arm64---required)
 * [Run Kata Containers with Docker](#run-kata-containers-with-docker)
-    * [Update Docker configuration](#update-docker-configuration)
+    * [Update the Docker systemd unit file](#update-the-docker-systemd-unit-file)
     * [Create a container using Kata](#create-a-container-using-kata)
 * [Run Kata Containers with Kubernetes](#run-kata-containers-with-kubernetes)
     * [Install a CRI implementation](#install-a-cri-implementation)
@@ -348,8 +348,8 @@ $ curl -LOk ${kernel_url}
 $ tar -xf ${kernel_tar_file}
 $ mv .config "linux-${kernel_version}"
 $ pushd "linux-${kernel_version}"
-$ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/patches/0001-NO-UPSTREAM-9P-always-use-cached-inode-to-fill-in-v9.patch | patch -p1
-$ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/patches/0002-Compile-in-evged-always.patch | patch -p1
+$ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/patches/4.19.x/0001-NO-UPSTREAM-9P-always-use-cached-inode-to-fill-in-v9.patch | patch -p1
+$ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/patches/4.19.x/0002-Compile-in-evged-always.patch | patch -p1
 $ make ARCH=${kernel_dir} -j$(nproc)
 $ kata_kernel_dir="/usr/share/kata-containers"
 $ kata_vmlinuz="${kata_kernel_dir}/kata-vmlinuz-${kernel_version}.container"

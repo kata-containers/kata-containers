@@ -8,7 +8,7 @@
 * [Agent](#agent)
 * [Runtime](#runtime)
     * [Configuration](#configuration)
-    * [Significant commands](#significant-commands)
+    * [Significant OCI commands](#significant-oci-commands)
         * [create](#create)
         * [start](#start)
         * [exec](#exec)
@@ -112,8 +112,8 @@ to create virtual machines where containers will run:
 
 Depending on the host architecture, Kata Containers supports various machine types,
 for example `pc` and `q35` on x86 systems, `virt` on ARM systems and `pseries` on IBM Power systems. Kata Containers'
-default machine type is `pc`. The default machine type and its [`Machine accelerators`](#Machine-accelerators) can
-be changed by editing the runtime [`configuration`](#Configuration) file.
+default machine type is `pc`. The default machine type and its [`Machine accelerators`](#machine-accelerators) can
+be changed by editing the runtime [`configuration`](#configuration) file.
 
 The following QEMU features are used in Kata Containers to manage resource constraints, improve
 boot time and reduce memory footprint:
@@ -249,9 +249,11 @@ The configuration file is also used to enable runtime [debug output](https://git
 
 Here we describe how `kata-runtime` handles the most important OCI commands.
 
-#### [`create`](https://github.com/kata-containers/runtime/blob/master/cli/create.go)
+#### `create`
 
-When handling the OCI `create` command, `kata-runtime` goes through the following steps:
+When handling the OCI
+[`create`](https://github.com/kata-containers/runtime/blob/master/cli/create.go)
+command, `kata-runtime` goes through the following steps:
 
 1. Create the network namespace where we will spawn VM and shims processes.
 2. Call into the pre-start hooks. One of them should be responsible for creating
@@ -277,11 +279,9 @@ on the host system by the `kata-shim` process.
 
 ![kata-oci-create](arch-images/kata-oci-create.svg)
 
+#### `start`
 
-
-#### [`start`](https://github.com/kata-containers/runtime/blob/master/cli/start.go)
-
-With traditional containers, `start` launches a container process in its own set of namespaces. With Kata Containers, the main task of `kata-runtime` is to ask [`kata-agent`](#agent) to start the container workload inside the virtual machine. `kata-runtime` will run through the following steps:
+With traditional containers, [`start`](https://github.com/kata-containers/runtime/blob/master/cli/start.go) launches a container process in its own set of namespaces. With Kata Containers, the main task of `kata-runtime` is to ask [`kata-agent`](#agent) to start the container workload inside the virtual machine. `kata-runtime` will run through the following steps:
 
 1. Communicate with `kata-agent` (through the proxy) to start the container workload
  inside the VM. If, for example, the command to execute inside of the container is `top`,
@@ -292,9 +292,9 @@ With traditional containers, `start` launches a container process in its own set
 
 ![kata-oci-start](arch-images/kata-oci-start.svg)
 
-#### [`exec`](https://github.com/kata-containers/runtime/blob/master/cli/exec.go)
+#### `exec`
 
-OCI `exec` allows you to run an additional command within an already running
+OCI [`exec`](https://github.com/kata-containers/runtime/blob/master/cli/exec.go) allows you to run an additional command within an already running
 container.  In Kata Containers, this is handled as follows:
 
 1. A request is sent to the `kata agent` (through the proxy) to start a new process
@@ -307,9 +307,9 @@ Now the `exec`'ed process is running within the VM, sharing `uts`, `pid`, `mnt` 
 
 ![kata-oci-exec](arch-images/kata-oci-exec.svg)
 
-#### [`kill`](https://github.com/kata-containers/runtime/blob/master/cli/kill.go)
+#### `kill`
 
-When sending the OCI `kill` command, the container runtime should send a
+When sending the OCI [`kill`](https://github.com/kata-containers/runtime/blob/master/cli/kill.go) command, the container runtime should send a
 [UNIX signal](https://en.wikipedia.org/wiki/Unix_signal) to the container process.
 A `kill` sending a termination signal such as `SIGKILL` or `SIGTERM` is expected
 to terminate the container process.  In the context of a traditional container,
@@ -334,9 +334,9 @@ the container and the VM associated with it.
 
 If `kill` was invoked with a non-termination signal, this simply signals the container process. Otherwise, everything has been torn down, and the VM has been removed.
 
-#### [`delete`](https://github.com/kata-containers/runtime/blob/master/cli/delete.go)
+#### `delete`
 
-`delete` removes all internal resources related to a container. A running container
+[`delete`](https://github.com/kata-containers/runtime/blob/master/cli/delete.go) removes all internal resources related to a container. A running container
 cannot be deleted unless the OCI runtime is explicitly being asked to, by using
 `--force` flag.
 
@@ -349,9 +349,10 @@ would go through for a termination signal. After this process, or if the sandbox
 
 At this point, everything related to the container should have been removed from the host system, and no related process should be running.
 
-#### [`state`](https://github.com/kata-containers/runtime/blob/master/cli/state.go)
+#### `state`
 
-`state` returns the status of the container. For `kata-runtime`, this means being
+[`state`](https://github.com/kata-containers/runtime/blob/master/cli/state.go)
+returns the status of the container. For `kata-runtime`, this means being
 able to detect if the container is still running by looking at the state of `kata-shim`
 process representing this container process.
 
@@ -582,8 +583,8 @@ The CRI-O will catch up soon ([kubernetes-sigs/cri-o#2024](https://github.com/ku
 
 Refer to the following how-to guides:
 
-- [How to use Kata Containers and Containerd](how-to/containerd-kata.md)
-- [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)
+- [How to use Kata Containers and Containerd](/how-to/containerd-kata.md)
+- [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)
 
 ### CRI-O
 
@@ -630,7 +631,7 @@ with a Kubernetes pod:
 
 #### Mixing VM based and namespace based runtimes
 
-> **Note:** Since Kubernetes 1.12, the `[Kubernetes RuntimeClass](how-to/containerd-kata.md#kubernetes-runtimeclass)` 
+> **Note:** Since Kubernetes 1.12, the [`Kubernetes RuntimeClass`](/how-to/containerd-kata.md#kubernetes-runtimeclass)
 > has been supported and the user can specify runtime without the non-standardized annotations.
 
 One interesting evolution of the CRI-O support for `kata-runtime` is the ability

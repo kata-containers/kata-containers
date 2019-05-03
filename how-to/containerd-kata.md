@@ -1,19 +1,22 @@
 # How to use Kata Containers and Containerd
 
 - [Concepts](#concepts)
-  - [Kubernetes RuntimeClass](#kubernetes-runtimeclass)
-  - [Containerd Runtime V2 API (Shim V2 API)](#containerd-runtime-v2-api-(shim-v2-api))
+    - [Kubernetes RuntimeClass](#kubernetes-runtimeclass)
+    - [Containerd Runtime V2 API: Shim V2 API](#containerd-runtime-v2-api-shim-v2-api)
 - [Install](#install)
-  - [Install Kata Containers](#install-kata-containers)
-  - [Install containerd with cri plugin](#install-containerd-with-cri-plugin)
-  - [Install CNI plugins](#install-cni-plugins)
-  - [Install cri-tools](#install-cri-tools)
+    - [Install Kata Containers](#install-kata-containers)
+    - [Install containerd with cri plugin](#install-containerd-with-cri-plugin)
+    - [Install CNI plugins](#install-cni-plugins)
+    - [Install cri-tools](#install-cri-tools)
 - [Configuration](#configuration)
-  - [Configure containerd to use Kata Containers](#configure-containerd-to-use-kata-containers)
-  - [Configuration for cri-tools](#configuration-for-cri-tools)
+    - [Configure containerd to use Kata Containers](#configure-containerd-to-use-kata-containers)
+        - [Kata Containers as a RuntimeClass](#kata-containers-as-a-runtimeclass)
+        - [Kata Containers as the runtime for untrusted workload](#kata-containers-as-the-runtime-for-untrusted-workload)
+    - [Kata Containers as the default runtime](#kata-containers-as-the-default-runtime)
+    - [Configuration for cri-tools](#configuration-for-cri-tools)
 - [Run](#run)
-  - [Launch containers with ctr command line](#launch-containers-with-ctr-command-line)
-  - [Launch Pods with crictl command line](#launch-pods-with-crictl-command-line)
+    - [Launch containers with ctr command line](#launch-containers-with-ctr-command-line)
+    - [Launch Pods with crictl command line](#launch-pods-with-crictl-command-line)
 
 This document covers the installation and configuration of [containerd](https://containerd.io/) 
 and [Kata Containers](https://katacontainers.io). The containerd provides not only the `ctr`
@@ -52,7 +55,7 @@ extensibility, `RuntimeClass` was introduced. This gives users the ability to af
 through 'RuntimeClass' without the knowledge of the CRI daemons. We suggest that users with multiple runtimes 
 use 'RuntimeClass' instead of the deprecated annotations.
 
-### Containerd Runtime V2 API (Shim V2 API)
+### Containerd Runtime V2 API: Shim V2 API
 
 The [`containerd-shim-kata-v2` (short as `shimv2` in this documentation)](https://github.com/kata-containers/runtime/tree/master/containerd-shim-v2) 
 implements the [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2) for Kata.
