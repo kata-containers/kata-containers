@@ -14,6 +14,8 @@ var _ = Describe("vsock test", func() {
 	var (
 		args     []string
 		name     string
+		stdout   string
+		stderr   string
 		exitCode int
 	)
 
@@ -41,6 +43,25 @@ var _ = Describe("vsock test", func() {
 			// Check no kata-proxy process is running
 			Expect(ProxyRunning(ctrID)).To(BeFalse())
 
+		})
+
+		It("should print the agent logs in the shim journal", func() {
+			if !KataConfig.Hypervisor[DefaultHypervisor].Vsock {
+				Skip("Use of vsock not enabled")
+			}
+			if !KataConfig.Shim[DefaultShim].Debug {
+				Skip("Shim debug is not enabled")
+			}
+			args = []string{"--name", name, Image, "sh"}
+			_, _, exitCode = dockerRun(args...)
+			Expect(exitCode).To(BeZero())
+
+			cmd := NewCommand("journalctl", "-e", "-q", "-b", "-n", "10",
+				"-t", DefaultShim+"-shim", "-g", "source=agent")
+			stdout, stderr, exitCode = cmd.Run()
+			Expect(exitCode).To(BeZero())
+			Expect(stderr).To(BeEmpty())
+			Expect(stdout).NotTo(BeEmpty())
 		})
 	})
 })
