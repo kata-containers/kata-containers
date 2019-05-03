@@ -11,6 +11,7 @@ import (
 	"os"
 	"testing"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	. "github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -55,8 +56,8 @@ func createWrongHook() specs.Hook {
 }
 
 func TestRunHook(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedNonRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	assert := assert.New(t)
@@ -86,8 +87,8 @@ func TestRunHook(t *testing.T) {
 }
 
 func TestPreStartHooks(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedNonRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	assert := assert.New(t)
@@ -134,8 +135,8 @@ func TestPreStartHooks(t *testing.T) {
 }
 
 func TestPostStartHooks(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedNonRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	assert := assert.New(t)
@@ -182,8 +183,8 @@ func TestPostStartHooks(t *testing.T) {
 }
 
 func TestPostStopHooks(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedNonRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	assert := assert.New(t)

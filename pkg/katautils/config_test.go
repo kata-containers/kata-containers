@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/kata-containers/runtime/pkg/katatestutils"
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -84,7 +84,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	hotplugVFIOOnRootBus := true
 	disableNewNetNs := false
 
-	configFileOptions := katatestutils.RuntimeConfigOptions{
+	configFileOptions := ktu.RuntimeConfigOptions{
 		Hypervisor:           "qemu",
 		HypervisorPath:       hypervisorPath,
 		KernelPath:           kernelPath,
@@ -115,7 +115,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		AgentTrace:           agentTrace,
 	}
 
-	runtimeConfigFileData := katatestutils.MakeRuntimeConfigFileData(configFileOptions)
+	runtimeConfigFileData := ktu.MakeRuntimeConfigFileData(configFileOptions)
 
 	configPath := path.Join(dir, "runtime.toml")
 	err = createConfig(configPath, runtimeConfigFileData)
@@ -422,8 +422,8 @@ func TestConfigLoadConfigurationFailMissingShim(t *testing.T) {
 }
 
 func TestConfigLoadConfigurationFailUnreadableConfig(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip(testDisabledNeedNonRoot)
+	if tc.NotValid(ktu.NeedNonRoot()) {
+		t.Skip(ktu.TestDisabledNeedNonRoot)
 	}
 
 	tmpdir, err := ioutil.TempDir(testDir, "runtime-config-")
@@ -445,8 +445,8 @@ func TestConfigLoadConfigurationFailUnreadableConfig(t *testing.T) {
 }
 
 func TestConfigLoadConfigurationFailTOMLConfigFileInvalidContents(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip(testDisabledNeedNonRoot)
+	if tc.NotValid(ktu.NeedNonRoot()) {
+		t.Skip(ktu.TestDisabledNeedNonRoot)
 	}
 
 	tmpdir, err := ioutil.TempDir(testDir, "runtime-config-")
@@ -471,8 +471,8 @@ func TestConfigLoadConfigurationFailTOMLConfigFileInvalidContents(t *testing.T) 
 }
 
 func TestConfigLoadConfigurationFailTOMLConfigFileDuplicatedData(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip(testDisabledNeedNonRoot)
+	if tc.NotValid(ktu.NeedNonRoot()) {
+		t.Skip(ktu.TestDisabledNeedNonRoot)
 	}
 
 	tmpdir, err := ioutil.TempDir(testDir, "runtime-config-")

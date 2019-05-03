@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"testing"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -42,7 +43,9 @@ const (
 )
 
 func skipUnlessRoot(t *testing.T) {
-	if os.Getuid() != 0 {
+	tc := ktu.NewTestConstraint(false)
+
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip("Test disabled as requires root user")
 	}
 }

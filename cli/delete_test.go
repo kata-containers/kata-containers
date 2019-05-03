@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
@@ -597,8 +598,8 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 }
 
 func TestRemoveCGroupsPath(t *testing.T) {
-	if os.Geteuid() == 0 {
-		t.Skip(testDisabledNeedNonRoot)
+	if tc.NotValid(ktu.NeedNonRoot()) {
+		t.Skip(ktu.TestDisabledNeedNonRoot)
 	}
 
 	assert := assert.New(t)

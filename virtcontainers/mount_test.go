@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -18,12 +17,20 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
-	testDisabledNeedRoot = "Test disabled as requires root user"
-	testDirMode          = os.FileMode(0750)
+	testDirMode = os.FileMode(0750)
 )
+
+var tc ktu.TestConstraint
+
+func init() {
+	tc = ktu.NewTestConstraint(false)
+}
 
 func TestIsSystemMount(t *testing.T) {
 	tests := []struct {
@@ -70,8 +77,8 @@ func TestIsHostDevice(t *testing.T) {
 }
 
 func TestIsHostDeviceCreateFile(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledAsNonRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 	// Create regular file in /dev
 
@@ -196,8 +203,8 @@ func TestGetDeviceForPath(t *testing.T) {
 }
 
 func TestGetDeviceForPathBindMount(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledAsNonRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	source := filepath.Join(testDir, "testDeviceDirSrc")
@@ -301,8 +308,8 @@ func TestIsDockerVolume(t *testing.T) {
 }
 
 func TestIsEphemeralStorage(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip(testDisabledNeedRoot)
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	dir, err := ioutil.TempDir(testDir, "foo")

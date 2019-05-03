@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/dlespiau/covertool/pkg/cover"
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
@@ -34,10 +35,9 @@ import (
 )
 
 const (
-	testDisabledNeedNonRoot = "Test disabled as requires non-root user"
-	testDirMode             = os.FileMode(0750)
-	testFileMode            = os.FileMode(0640)
-	testExeFileMode         = os.FileMode(0750)
+	testDirMode     = os.FileMode(0750)
+	testFileMode    = os.FileMode(0640)
+	testExeFileMode = os.FileMode(0750)
 
 	// small docker image used to create root filesystems from
 	testDockerImage = "busybox"
@@ -51,6 +51,7 @@ var (
 	// package variables set by calling TestMain()
 	testDir       = ""
 	testBundleDir = ""
+	tc            ktu.TestConstraint
 )
 
 // testingImpl is a concrete mock RVC implementation used for testing
@@ -122,6 +123,8 @@ func init() {
 	if err != nil {
 		panic(fmt.Sprintf("ERROR: failed to create OCI bundle: %v", err))
 	}
+
+	tc = ktu.NewTestConstraint(false)
 }
 
 // resetCLIGlobals undoes the effects of setCLIGlobals(), restoring the original values
