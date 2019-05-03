@@ -1,13 +1,13 @@
 format: 3.0 (quilt)
 Source: kata-proxy
-Version: @VERSION@+git.@HASH@-@RELEASE@
+Version: @VERSION@-@RELEASE@
 Section: devel
 Priority: optional
 Maintainer: Kata containers team <https://github.com/kata-containers/>
 Standards-Version: 3.9.6
 Build-Depends: dh-make, git, ca-certificates, execstack, devscripts, debhelper, build-essential, dh-autoreconf, make
 Homepage: https://katacontainers.io
-Debtransform-Tar: kata-proxy-@VERSION@+git.@HASH@.tar.gz
+Debtransform-Tar: kata-proxy-@VERSION@.tar.gz
 
 Package: kata-proxy
 Architecture: @deb_arch@

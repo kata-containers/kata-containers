@@ -6,7 +6,7 @@
 
 Name:           kata-linux-container
 Version:        @VERSION@.@CONFIG_VERSION@
-Release:        @RELEASE@.<B_CNT>
+Release:        @RELEASE@
 License:        GPL-2.0
 Summary:        The Linux kernel optimized for running inside a container
 Group:          System/Kernel

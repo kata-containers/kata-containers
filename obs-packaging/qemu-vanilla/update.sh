@@ -39,7 +39,7 @@ set_versions "${qemu_vanilla_hash}"
 replace_list=(
 	"VERSION=$VERSION"
 	"RELEASE=$RELEASE"
-	"QEMU_VANILLA_HASH=${qemu_vanilla_hash:0:10}"
+	"QEMU_VANILLA_HASH=${qemu_vanilla_hash:0:${short_commit_length}}"
 )
 
 verify
