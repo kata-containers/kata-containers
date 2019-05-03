@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"testing"
 
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
@@ -132,7 +133,7 @@ func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
 }
 
 func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
@@ -212,7 +213,7 @@ func TestDeleteSandboxNoopAgentSuccessful(t *testing.T) {
 }
 
 func TestDeleteSandboxKataAgentSuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
@@ -287,7 +288,7 @@ func TestStartSandboxNoopAgentSuccessful(t *testing.T) {
 }
 
 func TestStartSandboxKataAgentSuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
@@ -421,7 +422,7 @@ func TestPauseThenResumeSandboxNoopAgentSuccessful(t *testing.T) {
 }
 
 func TestStopSandboxKataAgentSuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
@@ -491,7 +492,7 @@ func TestRunSandboxNoopAgentSuccessful(t *testing.T) {
 }
 
 func TestRunSandboxKataAgentSuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
@@ -1705,7 +1706,7 @@ func TestReleaseSandbox(t *testing.T) {
 }
 
 func TestUpdateContainer(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
@@ -1758,7 +1759,7 @@ func TestUpdateContainer(t *testing.T) {
 }
 
 func TestPauseResumeContainer(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
@@ -1800,7 +1801,7 @@ func TestPauseResumeContainer(t *testing.T) {
 }
 
 func TestNetworkOperation(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 

@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"testing"
+
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 )
 
 func TestBindMountInvalidSourceSymlink(t *testing.T) {
@@ -47,7 +49,7 @@ func TestBindMountFailingMount(t *testing.T) {
 }
 
 func TestBindMountSuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
@@ -76,7 +78,7 @@ func TestBindMountSuccessful(t *testing.T) {
 }
 
 func TestBindMountReadonlySuccessful(t *testing.T) {
-	if os.Geteuid() != 0 {
+	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
