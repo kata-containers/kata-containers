@@ -57,6 +57,13 @@ const (
 var fcKernelParams = []Param{
 	// The boot source is the first partition of the first block device added
 	{"root", "/dev/vda1"},
+	{"pci", "off"},
+	{"reboot", "k"},
+	{"panic", "1"},
+	{"iommu", "off"},
+	{"8250.nr_uarts", "0"},
+	{"net.ifnames", "0"},
+	{"random.trust_cpu", "on"},
 
 	// Firecracker doesn't support ACPI
 	// Fix kernel error "ACPI BIOS Error (bug)"
