@@ -69,6 +69,9 @@ var _ = Describe("Hotplug memory when create containers", func() {
 
 	DescribeTable("Hotplug memory when create containers",
 		func(dockerMem int64) {
+			if KataConfig.Hypervisor[DefaultHypervisor].SharedFS == "virtio-fs" {
+				Skip("Skip issue: https://github.com/kata-containers/runtime/issues/1745")
+			}
 			args = []string{"--name", id, "-tid", "--rm", "-m", fmt.Sprintf("%d", dockerMem), Image}
 			_, _, exitCode = dockerRun(args...)
 			Expect(exitCode).To(BeZero())
@@ -117,6 +120,9 @@ var _ = Describe("memory constraints", func() {
 	)
 
 	BeforeEach(func() {
+		if KataConfig.Hypervisor[DefaultHypervisor].SharedFS == "virtio-fs" {
+			Skip("Skip issue: https://github.com/kata-containers/runtime/issues/1745")
+		}
 		useSwappiness = true
 		useSwap = true
 		useKmem = true
@@ -242,6 +248,9 @@ var _ = Describe("run container and update its memory constraints", func() {
 
 	DescribeTable("should have applied the memory constraints",
 		func(dockerMem int64, updateMem int64, fail bool) {
+			if KataConfig.Hypervisor[DefaultHypervisor].SharedFS == "virtio-fs" {
+				Skip("Skip issue: https://github.com/kata-containers/runtime/issues/1745")
+			}
 			memSize = fmt.Sprintf("%d", dockerMem)
 			args = []string{"--name", id, "-dti", "--rm", "-m", memSize, Image}
 
