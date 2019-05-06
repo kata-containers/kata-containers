@@ -645,6 +645,7 @@ func (q *qemu) startSandbox(timeout int) error {
 				}
 			}
 			q.Logger().Info("virtiofsd quits")
+			q.stopSandbox()
 		}()
 		timeoutDuration := time.Duration(timeout) * time.Second
 		select {
