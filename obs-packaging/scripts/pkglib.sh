@@ -3,7 +3,10 @@
 # This is a helper library for the setup scripts of each package
 # in this repository.
 
-source ../versions.txt
+source_dir_pkg_lib=$(dirname "${BASH_SOURCE[ ${#BASH_SOURCE[@]} - 1 ]}")
+source "${source_dir_pkg_lib}/../../scripts/lib.sh"
+source "${source_dir_pkg_lib}/../versions.txt"
+
 PACKAGING_DIR=/var/packaging
 LOG_DIR=${PACKAGING_DIR}/build_logs
 
@@ -21,19 +24,28 @@ LOCAL_BUILD=false
 OBS_PUSH=false
 VERBOSE=false
 
+arch_to_golang()
+{
+	local -r arch="$1"
+
+	case "$arch" in
+		aarch64) echo "arm64";;
+		ppc64le) echo "$arch";;
+		x86_64) echo "amd64";;
+		s390x) echo "s390x";;
+		*) die "unsupported architecture: $arch";;
+	esac
+}
 # Used for debian.control files
 # Architecture: The architecture specifies which type of hardware this
 # package was compiled for.
-DEB_ARCH="$(go env GOARCH)"
 
 short_commit_length=10
 
-if command -v go; then
-	export GO_ARCH=$(go env GOARCH)
-else
-	export GO_ARCH=amd64
-	echo "Go not installed using $GO_ARCH to install go in dockerfile"
-fi
+arch=$(uname -m)
+DEB_ARCH=$(arch_to_golang "$arch")
+GO_ARCH=$(arch_to_golang "$arch")
+export GO_ARCH
 
 function display_help() {
 	cat <<-EOL

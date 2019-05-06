@@ -82,7 +82,7 @@ BuildKernel() {
     find kata-kernel-configs -name "${kernelArch}_kata_kvm_*" -exec cp {} .config \;
 	[ -f .config ] || (echo "ERROR: cannot find the kernel config file for the ${kernelArch} architecture"; exit 1)
 
-    %if 0%{?rhel_version}
+    %if 0%{?rhel_version} || 0%{?suse_version}
     # RHEL in OBS has updated gcc.
     # https://github.com/kata-containers/packaging/pull/370#issuecomment-469620154
     sed -i -e 's/CONFIG_RETPOLINE=y/CONFIG_RETPOLINE=n/g' .config
