@@ -119,7 +119,6 @@ usage() {
 Usage:
 	${script_name} [options] <args>
 Args:
-	<repository-name> : Name of repository to fork and send PR from github.com/${organization}
 	<new-version>     : New version to bump the repository
 	<target-branch>   : The base branch to create to PR
 Example:
@@ -131,22 +130,52 @@ EOT
 	exit "$exit_code"
 }
 
-while getopts "hp" opt; do
-	case $opt in
-	h) usage 0 ;;
-	p) PUSH="true" ;;
-	esac
-done
+# The tests repository is not included due to does not provide VERSION file.
+repos=(
+	"agent"
+	"ksm-throttler"
+	"osbuilder"
+	"proxy"
+	"runtime"
+	"shim"
+)
 
-shift $((OPTIND - 1))
 
-repo=${1:-}
-new_version=${2:-}
-target_branch=${3:-}
-[ -n "${repo}" ] || (echo "ERROR: repository not provided" && usage 1)
-[ -n "${new_version}" ] || (echo "ERROR: no new version" && usage 1)
-[ -n "${target_branch}" ] || die "no target branch"
+main(){
+	while getopts "hp" opt; do
+		case $opt in
+			h) usage 0 ;;
+			p) PUSH="true" ;;
+		esac
+	done
 
-pushd "$tmp_dir" >>/dev/null
-bump_repo "${repo}" "${new_version}" "${target_branch}"
-popd >>/dev/null
+	shift $((OPTIND - 1))
+
+	declare -A bump_stable
+	# ksm-throttler is a project with low activity
+	# Also it has low interdependency with other Kata projects.
+	# Lets keep this as a single branch to simplify maintenance.
+	bump_stable[ksm-throttler]=no
+	# The image format is not likely to happen, unless a breaking change happens
+	# If image format breaks Kata major version should change 1.X to 2.X
+	# Lets keep this as a single branch to simplify maintenance.
+	bump_stable[osbuilder]=no
+
+	new_version=${1:-}
+	target_branch=${2:-}
+	[ -n "${new_version}" ] || { echo "ERROR: no new version" && usage 1; }
+	[ -n "${target_branch}" ] || die "no target branch"
+	for repo in "${repos[@]}"
+	do
+		echo "Bump ${repo} has stable : ${bump_stable[$repo]:-yes}"
+		if [ ${bump_stable[$repo]:-yes} == "no" ] && [[ ${target_branch} =~ .*stable-.* ]] ;then
+			echo "Not stable branch supported"
+			continue
+		fi
+		pushd "$tmp_dir" >>/dev/null
+		bump_repo "${repo}" "${new_version}" "${target_branch}"
+		popd >>/dev/null
+	done
+
+}
+main $@

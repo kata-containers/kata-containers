@@ -14,9 +14,10 @@ readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly versions_txt="versions.txt"
 project="kata-containers"
-ARCH=${ARCH:-$(go env GOARCH)}
 
 source "${script_dir}/../scripts/lib.sh"
+
+ARCH=${ARCH:-$(arch_to_golang "$(uname -m)")}
 
 get_kata_version() {
 	local branch="$1"

@@ -13,5 +13,5 @@ SLE_12_SP3::SUSE:SLE-12-SP3:GA::standard
 openSUSE_Leap_42.3::openSUSE:Leap:42.3::standard
 openSUSE_Leap_15.0::openSUSE:Leap:15.0::standard
 openSUSE_Tumbleweed::openSUSE:Factory::snapshot
-xUbuntu_16.04::Ubuntu:16.04::universe
+xUbuntu_16.04::Ubuntu:16.04::universe,universe-update,update
 xUbuntu_18.04::Ubuntu:18.04::universe

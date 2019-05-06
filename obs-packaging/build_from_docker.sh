@@ -32,23 +32,35 @@ usage() {
 	cat <<EOT
 ${msg}
 Usage:
-${script_name} <kata-branch/tag>
+${script_name} <kata-branch>
 EOT
 	exit "${exit_code}"
+}
+
+get_image() {
+	pushd "${script_dir}/kata-containers-image/"
+	local branch="${1:-}"
+	if [ -z "${branch}" ]; then
+		echo "branch not provided"
+		return 1
+	fi
+	if "${script_dir}/download_image.sh" "${branch}"; then
+		echo "OK image downloaded"
+		find . -name 'kata-containers-'"${branch}"'-*.tar.gz' || die "Failed to find downloaded image"
+		return 0
+	fi
+	echo "Building image"
+	"${script_dir}/../obs-packaging/kata-containers-image/build_image.sh" -v "${branch}"
+	find . -name 'kata-containers-'"${branch}"'-*.tar.gz' || die "built image not found"
+	popd
 }
 
 main() {
 	local branch="${1:-}"
 	[ -n "${branch}" ] || usage "missing branch" "1"
-	pushd "${script_dir}/kata-containers-image/" >>/dev/null
-	echo "Building image"
-	image_tarball=$(find . -name 'kata-containers-'"${branch}"'-*.tar.gz')
-	[ -f "${image_tarball}" ] || "${script_dir}/../obs-packaging/kata-containers-image/build_image.sh" -v "${branch}"
-	image_tarball=$(find . -name 'kata-containers-'"${branch}"'-*.tar.gz')
-	[ -f "${image_tarball}" ] || die "image not found"
-	popd >>/dev/null
 	#Build all kata packages
 	make -f "${script_dir}/Makefile" clean
+	get_image "${branch}"
 	docker_run "${packaging_repo_dir}/obs-packaging/build_all.sh ${branch}"
 }
 
