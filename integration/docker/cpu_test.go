@@ -51,7 +51,7 @@ func withCPUConstraint(cpus float64, defaultVCPUs int, fail bool) TableEntry {
 	return Entry(msg, c, fail)
 }
 
-var _ = Describe("[Serial Test] Hot plug CPUs", func() {
+var _ = Describe("Hot plug CPUs", func() {
 	var (
 		args         []string
 		id           string
@@ -59,34 +59,47 @@ var _ = Describe("[Serial Test] Hot plug CPUs", func() {
 		defaultVCPUs int
 		waitTime     int
 		maxTries     int
+		exitCode     int
+		stdout       string
 	)
 
 	BeforeEach(func() {
-		id = randomDockerName()
+		id = ""
 		waitTime = 5
 		maxTries = 5
-		args = []string{"--rm", "--name", id}
+		args = []string{}
 		defaultVCPUs = int(KataConfig.Hypervisor[DefaultHypervisor].DefaultVCPUs)
 		Expect(defaultVCPUs).To(BeNumerically(">", 0))
-	})
-
-	AfterEach(func() {
-		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
 	})
 
 	DescribeTable("container with CPU period and quota",
 		func(quota, period int, fail bool) {
 			vCPUs = ((quota + period - 1) / period) + defaultVCPUs
-			args = append(args, "--cpu-quota", fmt.Sprintf("%d", quota),
-				"--cpu-period", fmt.Sprintf("%d", period), DebianImage, "bash", "-c",
-				fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs, waitTime))
-			stdout, _, exitCode := dockerRun(args...)
-			if fail {
-				Expect(exitCode).ToNot(BeZero())
-				return
+
+			for i := 0; i < maxTries; i++ {
+				id = randomDockerName()
+				args = []string{
+					"--rm", "--name", id,
+					"--cpu-quota", fmt.Sprintf("%d", quota),
+					"--cpu-period", fmt.Sprintf("%d", period),
+					DebianImage, "bash", "-c",
+					fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs, waitTime),
+				}
+
+				stdout, _, exitCode = dockerRun(args...)
+				Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+
+				if fail {
+					Expect(exitCode).ToNot(BeZero())
+					return
+				}
+
+				if exitCode == 0 {
+					break
+				}
 			}
 			Expect(exitCode).To(BeZero())
-			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
+			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.TrimSpace(stdout)))
 		},
 		withCPUPeriodAndQuota(30000, 20000, defaultVCPUs, false),
 		withCPUPeriodAndQuota(30000, 10000, defaultVCPUs, false),
@@ -97,15 +110,29 @@ var _ = Describe("[Serial Test] Hot plug CPUs", func() {
 	DescribeTable("container with CPU constraint",
 		func(cpus int, fail bool) {
 			vCPUs = cpus + defaultVCPUs
-			args = append(args, "--cpus", fmt.Sprintf("%d", cpus), DebianImage, "bash", "-c",
-				fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs, waitTime))
-			stdout, _, exitCode := dockerRun(args...)
-			if fail {
-				Expect(exitCode).ToNot(BeZero())
-				return
+
+			for i := 0; i < maxTries; i++ {
+				id = randomDockerName()
+				args = []string{
+					"--rm", "--name", id,
+					"--cpus", fmt.Sprintf("%d", cpus),
+					DebianImage, "bash", "-c",
+					fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs, waitTime),
+				}
+
+				stdout, _, exitCode = dockerRun(args...)
+				Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+
+				if fail {
+					Expect(exitCode).ToNot(BeZero())
+					return
+				}
+				if exitCode == 0 {
+					break
+				}
 			}
 			Expect(exitCode).To(BeZero())
-			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
+			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.TrimSpace(stdout)))
 		},
 		withCPUConstraint(1, defaultVCPUs, false),
 		withCPUConstraint(1.5, defaultVCPUs, false),
@@ -225,7 +252,7 @@ var _ = Describe("[Serial Test] Hot plug CPUs", func() {
 	)
 })
 
-var _ = Describe("[Serial Test] Update number of CPUs", func() {
+var _ = Describe("Update number of CPUs", func() {
 	var (
 		runArgs      []string
 		updateArgs   []string
@@ -240,42 +267,59 @@ var _ = Describe("[Serial Test] Update number of CPUs", func() {
 	)
 
 	BeforeEach(func() {
-		id = randomDockerName()
+		id = ""
 		waitTime = 5
 		maxTries = 5
 
 		defaultVCPUs = int(KataConfig.Hypervisor[DefaultHypervisor].DefaultVCPUs)
 		Expect(defaultVCPUs).To(BeNumerically(">", 0))
 
-		runArgs = []string{"--rm", "--name", id, "-dt", DebianImage, "bash"}
-		_, _, exitCode := dockerRun(runArgs...)
-		Expect(exitCode).To(BeZero())
-
+		runArgs = []string{}
 		updateArgs = []string{}
 		execArgs = []string{}
-	})
-
-	AfterEach(func() {
-		Expect(RemoveDockerContainer(id)).To(BeTrue())
-		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
 	})
 
 	DescribeTable("Update CPU period and quota",
 		func(quota, period int, fail bool) {
 			vCPUs = ((quota + period - 1) / period) + defaultVCPUs
-			updateArgs = append(updateArgs, "--cpu-quota", fmt.Sprintf("%d", quota),
-				"--cpu-period", fmt.Sprintf("%d", period), id)
-			stdout, _, exitCode = dockerUpdate(updateArgs...)
-			if fail {
-				Expect(exitCode).ToNot(BeZero())
-				return
+
+			for i := 0; i < maxTries; i++ {
+				id = randomDockerName()
+				runArgs = []string{
+					"-dt", "--name", id,
+					DebianImage, "bash",
+				}
+				updateArgs = []string{
+					"--cpu-quota", fmt.Sprintf("%d", quota),
+					"--cpu-period", fmt.Sprintf("%d", period),
+					id,
+				}
+				execArgs = []string{
+					id, "bash", "-c",
+					fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs, waitTime),
+				}
+
+				_, _, exitCode = dockerRun(runArgs...)
+				Expect(exitCode).To(BeZero())
+
+				stdout, _, exitCode = dockerUpdate(updateArgs...)
+				if fail {
+					Expect(RemoveDockerContainer(id)).To(BeTrue())
+					Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+					Expect(exitCode).ToNot(BeZero())
+					return
+				}
+				Expect(exitCode).To(BeZero())
+
+				stdout, _, exitCode = dockerExec(execArgs...)
+				Expect(RemoveDockerContainer(id)).To(BeTrue())
+				Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+				if exitCode == 0 {
+					break
+				}
 			}
 			Expect(exitCode).To(BeZero())
-
-			execArgs = append(execArgs, id, "bash", "-c", fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs, waitTime))
-			stdout, _, exitCode = dockerExec(execArgs...)
-			Expect(exitCode).To(BeZero())
-			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
+			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.TrimSpace(stdout)))
 		},
 		withCPUPeriodAndQuota(30000, 20000, defaultVCPUs, false),
 		withCPUPeriodAndQuota(30000, 10000, defaultVCPUs, false),
@@ -286,18 +330,40 @@ var _ = Describe("[Serial Test] Update number of CPUs", func() {
 	DescribeTable("Update CPU constraint",
 		func(cpus int, fail bool) {
 			vCPUs = cpus + defaultVCPUs
-			updateArgs = append(updateArgs, "--cpus", fmt.Sprintf("%d", cpus), id)
-			stdout, _, exitCode = dockerUpdate(updateArgs...)
-			if fail {
-				Expect(exitCode).ToNot(BeZero())
-				return
+
+			for i := 0; i < maxTries; i++ {
+				id = randomDockerName()
+				runArgs = []string{
+					"-dt", "--name", id,
+					DebianImage, "bash",
+				}
+				execArgs = []string{
+					id, "bash", "-c",
+					fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs, waitTime),
+				}
+				updateArgs = []string{"--cpus", fmt.Sprintf("%d", cpus), id}
+
+				_, _, exitCode = dockerRun(runArgs...)
+				Expect(exitCode).To(BeZero())
+
+				stdout, _, exitCode = dockerUpdate(updateArgs...)
+				if fail {
+					Expect(RemoveDockerContainer(id)).To(BeTrue())
+					Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+					Expect(exitCode).ToNot(BeZero())
+					return
+				}
+				Expect(exitCode).To(BeZero())
+
+				stdout, _, exitCode = dockerExec(execArgs...)
+				Expect(RemoveDockerContainer(id)).To(BeTrue())
+				Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+				if exitCode == 0 {
+					break
+				}
 			}
 			Expect(exitCode).To(BeZero())
-
-			execArgs = append(execArgs, id, "bash", "-c", fmt.Sprintf(checkCpusCmdFmt, maxTries, vCPUs, waitTime))
-			stdout, _, exitCode = dockerExec(execArgs...)
-			Expect(exitCode).To(BeZero())
-			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.Trim(stdout, "\n\t ")))
+			Expect(fmt.Sprintf("%d", vCPUs)).To(Equal(strings.TrimSpace(stdout)))
 		},
 		withCPUConstraint(1, defaultVCPUs, false),
 		withCPUConstraint(1.3, defaultVCPUs, false),
