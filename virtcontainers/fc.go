@@ -57,6 +57,8 @@ const (
 var fcKernelParams = []Param{
 	// The boot source is the first partition of the first block device added
 	{"root", "/dev/vda1"},
+	{"rootflags", "data=ordered,errors=remount-ro ro"},
+	{"rootfstype", "ext4"},
 	{"pci", "off"},
 	{"reboot", "k"},
 	{"panic", "1"},
@@ -299,7 +301,7 @@ func (fc *firecracker) fcSetVMRootfs(path string) error {
 	driveID := "rootfs"
 	driveParams := ops.NewPutGuestDriveByIDParams()
 	driveParams.SetDriveID(driveID)
-	isReadOnly := false
+	isReadOnly := true
 	//Add it as a regular block device
 	//This allows us to use a paritioned root block device
 	isRootDevice := false
