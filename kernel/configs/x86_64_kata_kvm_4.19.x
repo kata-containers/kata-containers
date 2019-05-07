@@ -1,13 +1,13 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/x86 4.19.24 Kernel Configuration
+# Linux/x86 4.19.28 Kernel Configuration
 #
 
 #
-# Compiler: gcc (Ubuntu 5.4.0-6ubuntu1~16.04.11) 5.4.0 20160609
+# Compiler: gcc (Ubuntu 7.4.0-1ubuntu1~16.04~ppa1) 7.4.0
 #
 CONFIG_CC_IS_GCC=y
-CONFIG_GCC_VERSION=50400
+CONFIG_GCC_VERSION=70400
 CONFIG_CLANG_VERSION=0
 CONFIG_IRQ_WORK=y
 CONFIG_BUILDTIME_EXTABLE_SORT=y
@@ -2597,7 +2597,9 @@ CONFIG_FANOTIFY=y
 # CONFIG_QUOTA is not set
 CONFIG_AUTOFS4_FS=y
 CONFIG_AUTOFS_FS=y
-# CONFIG_FUSE_FS is not set
+CONFIG_FUSE_FS=y
+# CONFIG_CUSE is not set
+CONFIG_VIRTIO_FS=y
 # CONFIG_OVERLAY_FS is not set
 
 #
