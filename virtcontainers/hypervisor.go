@@ -170,6 +170,9 @@ type HypervisorConfig struct {
 	// MemOffset specifies memory space for nvdimm device
 	MemOffset uint32
 
+	// VirtioFSCacheSize is the DAX cache size in MiB
+	VirtioFSCacheSize uint32
+
 	// KernelParams are additional guest kernel parameters.
 	KernelParams []Param
 
@@ -214,6 +217,17 @@ type HypervisorConfig struct {
 	// EntropySource is the path to a host source of
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
 	EntropySource string
+
+	// Shared file system type:
+	//   - virtio-9p (default)
+	//   - virtio-fs
+	SharedFS string
+
+	// VirtioFSDaemon is the virtio-fs vhost-user daemon path
+	VirtioFSDaemon string
+
+	// VirtioFSCache cache mode for fs version cache or "none"
+	VirtioFSCache string
 
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.

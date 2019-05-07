@@ -27,6 +27,7 @@ type RuntimeConfigOptions struct {
 	BlockDeviceDriver    string
 	AgentTraceMode       string
 	AgentTraceType       string
+	SharedFS             string
 	DisableBlock         bool
 	EnableIOThreads      bool
 	HotplugVFIOOnRootBus bool
@@ -61,6 +62,8 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	msize_9p = ` + strconv.FormatUint(uint64(config.DefaultMsize9p), 10) + `
 	enable_debug = ` + strconv.FormatBool(config.HypervisorDebug) + `
 	guest_hook_path = "` + config.DefaultGuestHookPath + `"
+	shared_fs = "` + config.SharedFS + `"
+	virtio_fs_daemon = "/path/to/virtiofsd"
 
 	[proxy.kata]
 	enable_debug = ` + strconv.FormatBool(config.ProxyDebug) + `

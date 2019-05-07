@@ -92,6 +92,7 @@ type HypervisorInfo struct {
 	MemorySlots       uint32
 	Debug             bool
 	UseVSock          bool
+	SharedFS          string
 }
 
 // ProxyInfo stores proxy details
@@ -352,6 +353,7 @@ func getHypervisorInfo(config oci.RuntimeConfig) HypervisorInfo {
 		UseVSock:          config.HypervisorConfig.UseVSock,
 		MemorySlots:       config.HypervisorConfig.MemSlots,
 		EntropySource:     config.HypervisorConfig.EntropySource,
+		SharedFS:          config.HypervisorConfig.SharedFS,
 	}
 }
 

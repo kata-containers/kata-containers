@@ -36,6 +36,9 @@ const (
 
 	//VhostUserBlk represents a block vhostuser device type
 	VhostUserBlk = "vhost-user-blk-pci"
+
+	//VhostUserFS represents a virtio-fs vhostuser device type
+	VhostUserFS = "vhost-user-fs-pci"
 )
 
 const (
@@ -50,6 +53,14 @@ const (
 
 	// Nvdimm means use nvdimm for hotplugging drives
 	Nvdimm = "nvdimm"
+)
+
+const (
+	// Virtio9P means use virtio-9p for the shared file system
+	Virtio9P = "virtio-9p"
+
+	// VirtioFS means use virtio-fs for the shared file system
+	VirtioFS = "virtio-fs"
 )
 
 // Defining these as a variable instead of a const, to allow
@@ -174,6 +185,11 @@ type VhostUserDeviceAttrs struct {
 
 	// MacAddress is only meaningful for vhost user net device
 	MacAddress string
+
+	// These are only meaningful for vhost user fs devices
+	Tag       string
+	CacheSize uint32
+	Cache     string
 }
 
 // GetHostPathFunc is function pointer used to mock GetHostPath in tests.
