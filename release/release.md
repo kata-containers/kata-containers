@@ -81,6 +81,8 @@ $ git pull
  
 3. Create the Kata Containers image and upload it to GitHub:
    ```bash
+   $ cd ${GOPATH}/src/github.com/kata-containers/packaging/obs-packaging
+   $ ./gen_versions_txt.sh ${BRANCH}
    $ cd ${GOPATH}/src/github.com/kata-containers/packaging/release
    $ ./publish-kata-image.sh -p ${NEW_VERSION}
    ```
