@@ -43,6 +43,10 @@ const (
 
 	chSize      = 128
 	exitCode255 = 255
+
+	// A time span used to wait for publish a containerd event,
+	// once it costs a longer time than timeOut, it will be canceld.
+	timeOut = 5 * time.Second
 )
 
 var (
@@ -63,13 +67,16 @@ func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shi
 	vci.SetLogger(ctx, logger)
 	katautils.SetLogger(ctx, logger, logger.Logger.Level)
 
+	ctx, cancel := context.WithCancel(ctx)
+
 	s := &service{
 		id:         id,
 		pid:        uint32(os.Getpid()),
-		context:    ctx,
+		ctx:        ctx,
 		containers: make(map[string]*container),
 		events:     make(chan interface{}, chSize),
 		ec:         make(chan exit, bufferSize),
+		cancel:     cancel,
 		mount:      false,
 	}
 
@@ -102,11 +109,13 @@ type service struct {
 	// will not do the rootfs mount.
 	mount bool
 
-	context    context.Context
+	ctx        context.Context
 	sandbox    vc.VCSandbox
 	containers map[string]*container
 	config     *oci.RuntimeConfig
 	events     chan interface{}
+
+	cancel func()
 
 	ec chan exit
 	id string
@@ -209,7 +218,10 @@ func (s *service) StartShim(ctx context.Context, id, containerdBinary, container
 
 func (s *service) forward(publisher events.Publisher) {
 	for e := range s.events {
-		if err := publisher.Publish(s.context, getTopic(s.context, e), e); err != nil {
+		ctx, cancel := context.WithTimeout(s.ctx, timeOut)
+		err := publisher.Publish(ctx, getTopic(e), e)
+		cancel()
+		if err != nil {
 			logrus.WithError(err).Error("post event")
 		}
 	}
@@ -230,7 +242,7 @@ func (s *service) sendL(evt interface{}) {
 	s.eventSendMu.Unlock()
 }
 
-func getTopic(ctx context.Context, e interface{}) string {
+func getTopic(e interface{}) string {
 	switch e.(type) {
 	case *eventstypes.TaskCreate:
 		return cdruntime.TaskCreateEventTopic
@@ -765,6 +777,8 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 		return empty, nil
 	}
 	s.mu.Unlock()
+
+	s.cancel()
 
 	os.Exit(0)
 

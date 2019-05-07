@@ -80,7 +80,12 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest, netns
 		rootFs.Mounted = s.mount
 
 		katautils.HandleFactory(ctx, vci, s.config)
-		sandbox, _, err := katautils.CreateSandbox(ctx, vci, *ociSpec, *s.config, rootFs, r.ID, bundlePath, "", disableOutput, false, true)
+
+		// Pass service's context instead of local ctx to CreateSandbox(), since local
+		// ctx will be canceled after this rpc service call, but the sandbox will live
+		// across multiple rpc service calls.
+		//
+		sandbox, _, err := katautils.CreateSandbox(s.ctx, vci, *ociSpec, *s.config, rootFs, r.ID, bundlePath, "", disableOutput, false, true)
 		if err != nil {
 			return nil, err
 		}
