@@ -37,6 +37,7 @@ const testHypervisorVersion = "QEMU emulator version 2.7.0+git.741f430a96-6.1, C
 
 var (
 	hypervisorDebug = false
+	enableVirtioFS  = false
 	proxyDebug      = false
 	runtimeDebug    = false
 	runtimeTrace    = false
@@ -91,6 +92,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	disableNewNetNs := false
+	sharedFS := "virtio-9p"
 
 	filesToCreate := []string{
 		hypervisorPath,
@@ -126,6 +128,10 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		return "", oci.RuntimeConfig{}, err
 	}
 
+	if enableVirtioFS {
+		sharedFS = "virtio-fs"
+	}
+
 	hypConfig := katautils.GetDefaultHypervisorConfig()
 
 	configFileOptions := katatestutils.RuntimeConfigOptions{
@@ -157,6 +163,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 		NetmonDebug:          netmonDebug,
 		AgentDebug:           agentDebug,
 		AgentTrace:           agentTrace,
+		SharedFS:             sharedFS,
 	}
 
 	runtimeConfig := katatestutils.MakeRuntimeConfigFileData(configFileOptions)
@@ -321,6 +328,7 @@ func getExpectedHypervisor(config oci.RuntimeConfig) HypervisorInfo {
 		MemorySlots:       config.HypervisorConfig.MemSlots,
 		Debug:             config.HypervisorConfig.Debug,
 		EntropySource:     config.HypervisorConfig.EntropySource,
+		SharedFS:          config.HypervisorConfig.SharedFS,
 	}
 }
 
@@ -498,6 +506,7 @@ func TestEnvGetEnvInfo(t *testing.T) {
 	// options are tested.
 	for _, toggle := range []bool{false, true} {
 		hypervisorDebug = toggle
+		enableVirtioFS = toggle
 		proxyDebug = toggle
 		runtimeDebug = toggle
 		runtimeTrace = toggle
