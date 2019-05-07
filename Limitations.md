@@ -1,5 +1,5 @@
 * [Overview](#overview)
-* [Definiton of a limitation](#definiton-of-a-limitation)
+* [Definition of a limitation](#definiton-of-a-limitation)
 * [Scope](#scope)
 * [Contributing](#contributing)
 * [Pending items](#pending-items)
@@ -44,7 +44,7 @@ launches each container within its own hardware isolated VM, and each VM has
 its own kernel. Due to this higher degree of isolation, certain container
 capabilities cannot be supported or are implicitly enabled through the VM.
 
-# Definiton of a limitation
+# Definition of a limitation
 
 The [Open Container Initiative](https://www.opencontainers.org/)
 [Runtime Specification](https://github.com/opencontainers/runtime-spec) ("OCI spec")
@@ -220,10 +220,14 @@ See more documentation at
 
 Privileged support in Kata is essentially different from `runc` containers.
 Kata does support `docker run --privileged` command, but in this case full access
-to the guest VM is provided instead of the host.
+to the guest VM is provided in addition to some host access.
+
 The container runs with elevated capabilities within the guest and is granted 
 access to guest devices instead of the host devices.
 This is also true with using `securityContext privileged=true` with Kubernetes.
+
+The container may also be granted full access to a subset of host devices
+(https://github.com/kata-containers/runtime/issues/1568).
 
 # Miscellaneous
 
