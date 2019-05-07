@@ -1,7 +1,7 @@
-From 074a6a9d83a4e790f892ef0fc91cdabbfbf26202 Mon Sep 17 00:00:00 2001
+From 33ffc9a93a1d9e72594d5eb3e4fc583a1a2911d1 Mon Sep 17 00:00:00 2001
 From: Jianyong Wu <jianyong.wu@arm.com>
 Date: Tue, 19 Feb 2019 01:15:32 -0500
-Subject: [PATCH] Enable memory-hotplug using probe for arm64
+Subject: [PATCH 2/5] Enable memory-hotplug using probe for arm64
 
 ---
  arch/arm64/Kconfig   |  7 +++++++
@@ -94,5 +94,5 @@ index 146c04ceaa51..d276bd4d38b5 100644
 +	return 0;
 +}
 -- 
-2.17.1
+2.20.1
 
