@@ -8,6 +8,9 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
+script_dir=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
+source "${script_dir}/scripts/obs-docker.sh"
+
 handle_error() {
 	local exit_code="${?}"
 	local line_number="${1:-}"
@@ -43,7 +46,7 @@ commit=$(echo "$tag_info" | awk '{print $1}')
 echo "$commit"
 
 agent_repository="github.com/kata-containers/agent"
-tarball_name="kata-containers-${version}-${commit:0:11}-$(uname -m).tar.gz"
+tarball_name="kata-containers-${version}-${commit:0:${short_commit_length}}-$(uname -m).tar.gz"
 image_url="https://${agent_repository}/releases/download/${version}/${tarball_name}"
 curl -OL "${image_url}"
 tar xvf "${tarball_name}"
