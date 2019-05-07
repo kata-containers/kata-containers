@@ -1,5 +1,5 @@
 * [Overview](#overview)
-* [Definition of a limitation](#definiton-of-a-limitation)
+* [Definition of a limitation](#definition-of-a-limitation)
 * [Scope](#scope)
 * [Contributing](#contributing)
 * [Pending items](#pending-items)
