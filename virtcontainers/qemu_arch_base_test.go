@@ -165,7 +165,7 @@ func TestQemuArchBaseCPUTopology(t *testing.T) {
 
 	expectedSMP := govmmQemu.SMP{
 		CPUs:    vcpus,
-		Sockets: vcpus,
+		Sockets: defaultMaxQemuVCPUs,
 		Cores:   defaultCores,
 		Threads: defaultThreads,
 		MaxCPUs: defaultMaxQemuVCPUs,
