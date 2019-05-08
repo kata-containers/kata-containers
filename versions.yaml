@@ -71,7 +71,7 @@ assets:
     description: "Component used to create virtual machines"
 
     firecracker:
-      description: "Firecracker micro-Hypervisor"
+      description: "Firecracker micro-VMM"
       url: "https://github.com/firecracker-microvm/firecracker"
       uscan-url: >-
         https://github.com/firecracker-microvm/firecracker/tags
@@ -79,7 +79,7 @@ assets:
       version: "v0.16.0"
 
     nemu:
-      description: "Modern Hypervisor for the Cloud"
+      description: "Reduced-emulation VMM that uses KVM"
       url: "https://github.com/intel/nemu"
       uscan-url: >-
         https://github.com/intel/nemu/tags
@@ -87,7 +87,7 @@ assets:
       version: "release-2019-05-07"
 
     nemu-ovmf:
-      description: "OVMF firmware used by nemu hypervisor"
+      description: "OVMF firmware used by nemu VMM"
       url: "https://github.com/intel/ovmf-virt"
       uscan-url: >-
         https://github.com/intel/ovmf-virt/tags
