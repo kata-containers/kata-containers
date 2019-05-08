@@ -18,6 +18,7 @@ readonly project="kata-containers"
 GOPATH=${GOPATH:-${HOME}/go}
 
 source "${script_dir}/../scripts/lib.sh"
+source "${script_dir}/../obs-packaging/scripts/pkglib.sh"
 
 die() {
 	msg="$*"
@@ -59,8 +60,7 @@ main() {
 	[ -n "${kata_version}" ] || usage "1"
 
 	agent_sha=$(get_kata_hash_from_tag "agent" "${kata_version}")
-	# tarball only has 11 chars from agent sha
-	agent_sha=${agent_sha:0:11}
+	agent_sha=${agent_sha:0:${short_commit_length}}
 	image_tarball=$(find -name 'kata-containers-*.tar.gz' | grep "${kata_version}" | grep "${agent_sha}") ||
 		"${script_dir}/../obs-packaging/kata-containers-image/build_image.sh" -v "${kata_version}"
 	image_tarball=$(find -name 'kata-containers-*.tar.gz' | grep "${kata_version}" | grep "${agent_sha}" ) || die "file not found ${image_tarball}"

@@ -3,7 +3,8 @@
 # This is a helper library for the setup scripts of each package
 # in this repository.
 
-source_dir_pkg_lib=$(dirname "${BASH_SOURCE[ ${#BASH_SOURCE[@]} - 1 ]}")
+source_dir_pkg_lib=$(dirname "${BASH_SOURCE[0]}")
+source_dir_pkg_lib=$(realpath "${source_dir_pkg_lib}")
 source "${source_dir_pkg_lib}/../../scripts/lib.sh"
 source "${source_dir_pkg_lib}/../versions.txt"
 
