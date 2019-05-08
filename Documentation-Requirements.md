@@ -13,8 +13,10 @@ Containers](https://github.com/kata-containers) project.
 
 # General requirements
 
-- All documents are expected to be written in [GitHub Flavored Markdown](https://github.github.com/gfm) format.
-- All documents should have the `.md` file extension.
+All documents must:
+
+- Be written in [GitHub Flavored Markdown](https://github.github.com/gfm) format.
+- Have a `.md` file extension.
 
 # Notes
 
