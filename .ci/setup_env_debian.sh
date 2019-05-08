@@ -93,6 +93,9 @@ chronic sudo -E apt install -y haveged
 echo "Install GNU parallel"
 chronic sudo -E apt install -y parallel
 
+echo "Install libsystemd"
+chronic sudo -E apt install -y libsystemd-dev
+
 if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
 	echo "Install ${KATA_KSM_THROTTLER_JOB}"
 	chronic sudo -E apt install -y ${KATA_KSM_THROTTLER_JOB}

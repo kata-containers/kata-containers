@@ -68,3 +68,6 @@ chronic sudo -E zypper -n install haveged
 
 echo "Install GNU parallel"
 chronic sudo -E zypper -n install gnu_parallel
+
+echo "Install libsystemd"
+chronic sudo -E zypper -n install systemd-devel
