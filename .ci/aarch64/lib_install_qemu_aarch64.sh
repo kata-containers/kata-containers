@@ -8,7 +8,7 @@ set -e
 
 CURRENT_QEMU_VERSION=$(get_version "assets.hypervisor.qemu.version")
 PACKAGED_QEMU="qemu"
-CURRENT_QEMU_PATCHES_BRANCH=$(get_version "assets.hypervisor.qemu.architecture.aarch64.branch")
+CURRENT_QEMU_BRANCH=$(get_version "assets.hypervisor.qemu.architecture.aarch64.branch")
 CURRENT_QEMU_COMMIT=$(get_version "assets.hypervisor.qemu.architecture.aarch64.commit")
 
 get_packaged_qemu_version() {
@@ -45,33 +45,27 @@ install_packaged_qemu() {
 }
 
 build_and_install_qemu() {
-        QEMU_REPO=$(get_version "assets.hypervisor.qemu.url")
+        QEMU_REPO_URL=$(get_version "assets.hypervisor.qemu.url")
         # Remove 'https://' from the repo url to be able to clone the repo using 'go get'
-        QEMU_REPO=${QEMU_REPO/https:\/\//}
+        QEMU_REPO=${QEMU_REPO_URL/https:\/\//}
         PACKAGING_REPO="github.com/kata-containers/packaging"
         QEMU_CONFIG_SCRIPT="${GOPATH}/src/${PACKAGING_REPO}/scripts/configure-hypervisor.sh"
 
-        go get -d "${QEMU_REPO}" || true
-        go get -d "$PACKAGING_REPO" || true
+        git clone --branch "$CURRENT_QEMU_BRANCH" --single-branch "${QEMU_REPO_URL}" "${GOPATH}/src/${QEMU_REPO}"
+	go get -d "$PACKAGING_REPO" || true
 
         pushd "${GOPATH}/src/${QEMU_REPO}"
         git fetch
-        # if extra patches exist
-        if [ -n "${CURRENT_QEMU_COMMIT}" ]; then
-            git checkout "$CURRENT_QEMU_PATCHES_BRANCH"
-            git checkout "$CURRENT_QEMU_COMMIT"
-            # Apply required patches
-            QEMU_PATCHES_PATH="${GOPATH}/src/${PACKAGING_REPO}/obs-packaging/qemu-aarch64/patches"
-            for patch in ${QEMU_PATCHES_PATH}/*.patch; do
-                echo "Applying patch: $patch"
-                patch -p1 <"$patch"
-            done
-        else
-            git checkout "$CURRENT_QEMU_VERSION"
-        fi
-
+        git checkout "$CURRENT_QEMU_COMMIT"
         [ -d "capstone" ] || git clone https://github.com/qemu/capstone.git capstone
         [ -d "ui/keycodemapdb" ] || git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
+
+        # Apply required patches
+        QEMU_PATCHES_PATH="${GOPATH}/src/${PACKAGING_REPO}/obs-packaging/qemu-aarch64/patches"
+        for patch in ${QEMU_PATCHES_PATH}/*.patch; do
+                echo "Applying patch: $patch"
+                patch -p1 <"$patch"
+        done
 
         echo "Build Qemu"
         "${QEMU_CONFIG_SCRIPT}" "qemu" | xargs ./configure
