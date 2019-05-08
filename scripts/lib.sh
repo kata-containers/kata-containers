@@ -1,5 +1,5 @@
 export GOPATH=${GOPATH:-${HOME}/go}
-readonly kata_arch_sh="${GOPATH}/src/github.com/kata-containers/tests/.ci/kata-arch.sh"
+kata_arch_sh="${GOPATH}/src/github.com/kata-containers/tests/.ci/kata-arch.sh"
 hub_bin="hub-bin"
 
 get_kata_arch() {
