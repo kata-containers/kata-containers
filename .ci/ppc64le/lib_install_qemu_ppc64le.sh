@@ -45,18 +45,19 @@ install_packaged_qemu() {
 }
 
 build_and_install_qemu() {
-        QEMU_REPO=$(get_version "assets.hypervisor.qemu.url")
+        QEMU_REPO_URL=$(get_version "assets.hypervisor.qemu.url")
         # Remove 'https://' from the repo url to be able to clone the repo using 'go get'
-        QEMU_REPO=${QEMU_REPO/https:\/\//}
+        QEMU_REPO=${QEMU_REPO_URL/https:\/\//}
         PACKAGING_REPO="github.com/kata-containers/packaging"
         QEMU_CONFIG_SCRIPT="${GOPATH}/src/${PACKAGING_REPO}/scripts/configure-hypervisor.sh"
 
-        go get -d "${QEMU_REPO}" || true
+
+        git clone --branch "$CURRENT_QEMU_VERSION" --depth 1 "$QEMU_REPO_URL" "${GOPATH}/src/${QEMU_REPO}"
         go get -d "$PACKAGING_REPO" || true
 
         pushd "${GOPATH}/src/${QEMU_REPO}"
         git fetch
-        git checkout "$CURRENT_QEMU_VERSION"
+
         [ -d "capstone" ] || git clone https://github.com/qemu/capstone.git capstone
         [ -d "ui/keycodemapdb" ] || git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
