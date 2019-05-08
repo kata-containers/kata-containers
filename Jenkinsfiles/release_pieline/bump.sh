@@ -72,12 +72,7 @@ bump_kata() {
 	[ -d "${packaging_repo_dir}" ] || git clone "https://${packaging_repo}.git" "${packaging_repo_dir}"
 
 	cd "${packaging_repo_dir}/release"
-	[ "$branch" == "master" ] && ./update-repository-version.sh -p ksm-throttler "$new_version" "$branch"
-	./update-repository-version.sh -p proxy "$new_version" "$branch"
-	./update-repository-version.sh -p shim "$new_version" "$branch"
-	./update-repository-version.sh -p runtime "$new_version" "$branch"
-	[ "$branch" == "master" ] && ./update-repository-version.sh -p osbuilder "$new_version" "$branch"
-	./update-repository-version.sh -p agent "$new_version" "$branch"
+	./update-repository-version.sh -p "$new_version" "$branch"
 }
 
 setup() {
