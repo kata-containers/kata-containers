@@ -66,6 +66,7 @@ func SetupNetworkNamespace(config *vc.NetworkConfig) error {
 
 		config.NetNSPath = n.Path()
 		config.NetNsCreated = true
+		kataUtilsLogger.WithField("netns", n.Path()).Info("create netns")
 
 		return nil
 	}
@@ -178,4 +179,26 @@ func hostNetworkingRequested(configNetNs string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// cleanupNetNS cleanup netns created by kata, trigger only create sandbox fails
+func cleanupNetNS(netNSPath string) error {
+	n, err := ns.GetNS(netNSPath)
+	if err != nil {
+		return fmt.Errorf("failed to get netns %s: %v", netNSPath, err)
+	}
+
+	err = n.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close netns %s: %v", netNSPath, err)
+	}
+
+	if err = unix.Unmount(netNSPath, unix.MNT_DETACH); err != nil {
+		return fmt.Errorf("failed to unmount namespace %s: %v", netNSPath, err)
+	}
+	if err := os.RemoveAll(netNSPath); err != nil {
+		return fmt.Errorf("failed to clean up namespace %s: %v", netNSPath, err)
+	}
+
+	return nil
 }
