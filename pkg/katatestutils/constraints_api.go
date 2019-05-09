@@ -112,6 +112,11 @@ func (tc *TestConstraint) NotValid(constraints ...Constraint) bool {
 		panic("need atleast one constraint")
 	}
 
+	// Reset in case of a previous call
+	tc.Passed = nil
+	tc.Failed = nil
+	tc.Issue = ""
+
 	for _, c := range constraints {
 		invalid := tc.constraintInvalid(c)
 		if invalid {
