@@ -1,21 +1,19 @@
-# Copyright (c) 2017-2019 Intel Corporation
+# Copyright (c) 2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
 # XXX: WARNING: this file is auto-generated.
 # XXX:
-# XXX: Source file: "@CONFIG_QEMU_IN@"
+# XXX: Source file: "@CONFIG_NEMU_IN@"
 # XXX: Project:
 # XXX:   Name: @PROJECT_NAME@
 # XXX:   Type: @PROJECT_TYPE@
 
-[hypervisor.qemu]
-path = "@QEMUPATH@"
+[hypervisor.nemu]
+path = "@NEMUPATH@"
 kernel = "@KERNELPATH@"
-initrd = "@INITRDPATH@"
 image = "@IMAGEPATH@"
-machine_type = "@MACHINETYPE@"
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -31,12 +29,12 @@ kernel_params = "@KERNELPARAMS@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@FIRMWAREPATH@"
+firmware = "@FIRMWAREPATH_NEMU@"
 
 # Machine accelerators
 # comma-separated list of machine accelerators to pass to the hypervisor.
 # For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
-machine_accelerators="@MACHINEACCELERATORS@"
+machine_accelerators="@DEFMACHINEACCELERATOR_NEMU@"
 
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
@@ -66,7 +64,7 @@ default_maxvcpus = @DEFMAXVCPUS@
 # * Currently only pci bridges are supported
 # * Until 30 devices per bridge can be hot plugged.
 # * Until 5 PCI bridges can be cold plugged per VM.
-#   This limitation could be a bug in qemu or in the kernel
+#   This limitation could be a bug in the kernel
 # Default number of bridges per SB/VM:
 # unspecified or 0   --> will be set to @DEFBRIDGES@
 # > 1 <= 5           --> will be set to the specified number
@@ -100,7 +98,7 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 # Shared file system type:
 #   - virtio-9p (default)
 #   - virtio-fs
-shared_fs = "@DEFSHAREDFS@"
+shared_fs = "@DEFSHAREDFS_NEMU@"
 
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
@@ -126,7 +124,7 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # Block storage driver to be used for the hypervisor in case the container
 # rootfs is backed by a block device. This is virtio-scsi, virtio-blk
 # or nvdimm.
-block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
+block_device_driver = "@DEFBLOCKSTORAGEDRIVER_NEMU@"
 
 # Specifies cache-related options will be set to block devices or not.
 # Default false
@@ -187,10 +185,9 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 #msize_9p = @DEFMSIZE9P@
 
 # If true and vsocks are supported, use vsocks to communicate directly
-# with the agent and no proxy is started, otherwise use unix
-# sockets and start a proxy to communicate with the agent.
-# Default false
-#use_vsock = true
+# with the agent (no proxy is started).
+# Default true
+use_vsock = true
 
 # VFIO devices are hotplugged on a bridge by default. 
 # Enable hotplugging on root bus. This may be required for devices with
@@ -275,11 +272,6 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 #vm_cache_endpoint = "/var/run/kata-containers/cache.sock"
 
 [proxy.@PROJECT_TYPE@]
-path = "@PROXYPATH@"
-
-# If enabled, proxy messages will be sent to the system log
-# (default: disabled)
-#enable_debug = true
 
 [shim.@PROJECT_TYPE@]
 path = "@SHIMPATH@"
@@ -366,7 +358,7 @@ path = "@NETMONPATH@"
 #     Uses tc filter rules to redirect traffic from the network interface
 #     provided by plugin to a tap interface connected to the VM.
 #
-internetworking_model="@DEFNETWORKMODEL_QEMU@"
+internetworking_model="@DEFNETWORKMODEL_NEMU@"
 
 # disable guest seccomp
 # Determines whether container seccomp profiles are passed to the virtual

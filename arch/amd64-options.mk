@@ -13,3 +13,6 @@ QEMUCMD := qemu-lite-system-x86_64
 
 # Firecracker binary name
 FCCMD := firecracker
+
+# NEMU binary name
+NEMUCMD := nemu-system-x86_64
