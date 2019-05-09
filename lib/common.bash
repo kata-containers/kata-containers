@@ -31,6 +31,14 @@ info() {
 	echo "INFO: $msg"
 }
 
+handle_error() {
+	local exit_code="${?}"
+	local line_number="${1:-}"
+	echo "Failed at $line_number: ${BASH_COMMAND}"
+	exit "${exit_code}"
+}
+trap 'handle_error $LINENO' ERR
+
 # Check if the $1 argument is the name of a 'known'
 # Kata runtime. Of course, the end user can choose any name they
 # want in reality, but this function knows the names of the default
