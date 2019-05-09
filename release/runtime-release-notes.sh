@@ -132,7 +132,7 @@ See the kernel suggested [Guest Kernel config][kernel-config]
 
 ## Installation
 
-Follow the Kata [installation instructions](installation):
+Follow the Kata [installation instructions][installation].
 
 ## Issues & limitations
 
