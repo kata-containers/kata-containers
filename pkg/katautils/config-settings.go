@@ -35,6 +35,7 @@ const defaultBlockDeviceCacheNoflush bool = false
 const defaultEnableIOThreads bool = false
 const defaultEnableMemPrealloc bool = false
 const defaultEnableHugePages bool = false
+const defaultFileBackedMemRootDir string = ""
 const defaultEnableSwap bool = false
 const defaultEnableDebug bool = false
 const defaultDisableNestingChecks bool = false

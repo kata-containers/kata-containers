@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	govmmQemu "github.com/intel/govmm/qemu"
+	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
@@ -481,4 +482,71 @@ func TestQemuAddDeviceToBridge(t *testing.T) {
 	_, _, err = q.addDeviceToBridge("qemu-bridge")
 	exceptErr = errors.New("failed to get available address from bridges")
 	assert.Equal(exceptErr, err)
+}
+
+func TestQemuFileBackedMem(t *testing.T) {
+	assert := assert.New(t)
+
+	// Check default Filebackedmem location for virtio-fs
+	sandbox, err := createQemuSandboxConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	q := &qemu{}
+	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
+	if err = q.createSandbox(context.Background(), sandbox.id, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, true)
+	assert.Equal(q.qemuConfig.Knobs.FileBackedMemShared, true)
+	assert.Equal(q.qemuConfig.Memory.Path, fallbackFileBackedMemDir)
+
+	// Check failure for VM templating
+	sandbox, err = createQemuSandboxConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	q = &qemu{}
+	sandbox.config.HypervisorConfig.BootToBeTemplate = true
+	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
+	sandbox.config.HypervisorConfig.MemoryPath = fallbackFileBackedMemDir
+
+	err = q.createSandbox(context.Background(), sandbox.id, &sandbox.config.HypervisorConfig, sandbox.store)
+
+	expectErr := errors.New("VM templating has been enabled with either virtio-fs or file backed memory and this configuration will not work")
+	assert.Equal(expectErr, err)
+
+	// Check Setting of non-existent shared-mem path
+	sandbox, err = createQemuSandboxConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	q = &qemu{}
+	sandbox.config.HypervisorConfig.FileBackedMemRootDir = "/tmp/xyzabc"
+	if err = q.createSandbox(context.Background(), sandbox.id, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, false)
+	assert.Equal(q.qemuConfig.Knobs.FileBackedMemShared, false)
+	assert.Equal(q.qemuConfig.Memory.Path, "")
+}
+
+func createQemuSandboxConfig() (*Sandbox, error) {
+
+	qemuConfig := newQemuConfig()
+	sandbox := Sandbox{
+		ctx: context.Background(),
+		id:  "testSandbox",
+		config: &SandboxConfig{
+			HypervisorConfig: qemuConfig,
+		},
+	}
+
+	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
+	if err != nil {
+		return &Sandbox{}, err
+	}
+	sandbox.store = vcStore
+
+	return &sandbox, nil
 }

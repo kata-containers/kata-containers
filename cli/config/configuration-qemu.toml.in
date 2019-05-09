@@ -165,6 +165,12 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # result in memory pre allocation
 #enable_hugepages = true
 
+# Enable file based guest memory support. The default is an empty string which
+# will disable this feature. In the case of virtio-fs, this is enabled
+# automatically and '/dev/shm' is used as the backing folder.
+# This option will be ignored if VM templating is enabled.
+#file_mem_backend = ""
+
 # Enable swap of vm memory. Default false.
 # The behaviour is undefined if mem_prealloc is also set to true
 #enable_swap = true
