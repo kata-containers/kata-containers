@@ -32,7 +32,7 @@ setup() {
 	busybox_pod="test-nginx"
 	kubectl run $busybox_pod --restart=Never --image="$busybox_image" \
 		-- wget --timeout=5 "$deployment"
-	cmd="kubectl get pods -a | grep $busybox_pod | grep Completed"
+	cmd="kubectl get pods | grep $busybox_pod | grep Completed"
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 	kubectl logs "$busybox_pod" | grep "index.html"
 	kubectl describe pod "$busybox_pod"
