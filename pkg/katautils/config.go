@@ -109,6 +109,7 @@ type hypervisor struct {
 	DisableBlockDeviceUse   bool   `toml:"disable_block_device_use"`
 	MemPrealloc             bool   `toml:"enable_mem_prealloc"`
 	HugePages               bool   `toml:"enable_hugepages"`
+	FileBackedMemRootDir    string `toml:"file_mem_backend"`
 	Swap                    bool   `toml:"enable_swap"`
 	Debug                   bool   `toml:"enable_debug"`
 	DisableNestingChecks    bool   `toml:"disable_nesting_checks"`
@@ -584,6 +585,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		VirtioFSCache:           h.VirtioFSCache,
 		MemPrealloc:             h.MemPrealloc,
 		HugePages:               h.HugePages,
+		FileBackedMemRootDir:    h.FileBackedMemRootDir,
 		Mlock:                   !h.Swap,
 		Debug:                   h.Debug,
 		DisableNestingChecks:    h.DisableNestingChecks,
@@ -850,6 +852,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		DefaultBridges:          defaultBridgesCount,
 		MemPrealloc:             defaultEnableMemPrealloc,
 		HugePages:               defaultEnableHugePages,
+		FileBackedMemRootDir:    defaultFileBackedMemRootDir,
 		Mlock:                   !defaultEnableSwap,
 		Debug:                   defaultEnableDebug,
 		DisableNestingChecks:    defaultDisableNestingChecks,
