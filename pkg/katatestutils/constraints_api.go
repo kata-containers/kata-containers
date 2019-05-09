@@ -118,8 +118,8 @@ func (tc *TestConstraint) NotValid(constraints ...Constraint) bool {
 	tc.Issue = ""
 
 	for _, c := range constraints {
-		invalid := tc.constraintInvalid(c)
-		if invalid {
+		valid := tc.constraintValid(c)
+		if !valid {
 			return true
 		}
 	}
