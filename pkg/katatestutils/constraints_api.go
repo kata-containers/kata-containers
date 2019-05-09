@@ -190,12 +190,36 @@ func NeedDistroVersionEquals(version string) Constraint {
 	return NeedDistroVersionWithOp(version, eqOperator)
 }
 
+// NeedDistroVersionNotEquals will skip the test unless the distro version is
+// different to the specified version.
+//
+// Note: distro versions vary in format.
+func NeedDistroVersionNotEquals(version string) Constraint {
+	return NeedDistroVersionWithOp(version, neOperator)
+}
+
+// NeedDistroVersionLE will skip the test unless the distro version is older
+// than or the same as the specified version.
+//
+// Note: distro versions vary in format.
+func NeedDistroVersionLE(version string) Constraint {
+	return NeedDistroVersionWithOp(version, leOperator)
+}
+
 // NeedDistroVersionLT will skip the test unless the distro version is older
 // than the specified version.
 //
 // Note: distro versions vary in format.
 func NeedDistroVersionLT(version string) Constraint {
 	return NeedDistroVersionWithOp(version, ltOperator)
+}
+
+// NeedDistroVersionGE will skip the test unless the distro version is newer
+// than or the same as the specified version.
+//
+// Note: distro versions vary in format.
+func NeedDistroVersionGE(version string) Constraint {
+	return NeedDistroVersionWithOp(version, geOperator)
 }
 
 // NeedDistroVersionGT will skip the test unless the distro version is newer

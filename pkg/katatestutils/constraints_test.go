@@ -1295,16 +1295,34 @@ func TestConstraintNotValidDistroVersion(t *testing.T) {
 		result = tc.NotValid(NeedDistroVersionEquals(distroVersion))
 		assert.False(result)
 
+		result = tc.NotValid(NeedDistroVersionLE(higherVersion))
+		assert.False(result)
+
+		result = tc.NotValid(NeedDistroVersionLE(distroVersion))
+		assert.False(result)
+
 		result = tc.NotValid(NeedDistroVersionLT(higherVersion))
 		assert.False(result)
 
 		result = tc.NotValid(NeedDistroVersionLT(distroVersion))
 		assert.True(result)
 
+		result = tc.NotValid(NeedDistroVersionGE(higherVersion))
+		assert.True(result)
+
+		result = tc.NotValid(NeedDistroVersionGE(distroVersion))
+		assert.False(result)
+
 		result = tc.NotValid(NeedDistroVersionGT(higherVersion))
 		assert.True(result)
 
 		result = tc.NotValid(NeedDistroVersionGT(distroVersion))
+		assert.True(result)
+
+		result = tc.NotValid(NeedDistroVersionNotEquals(higherVersion))
+		assert.False(result)
+
+		result = tc.NotValid(NeedDistroVersionNotEquals(distroVersion))
 		assert.True(result)
 	}
 }
