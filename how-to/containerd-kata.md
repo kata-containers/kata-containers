@@ -76,9 +76,9 @@ Follow the instructions to [install Kata Containers](https://github.com/kata-con
 
 ### Install containerd with cri plugin
 
-> **Note:** `cri` is a native plugin of containerd 1.1 and above. It is built into containerd and enabled by default. 
-> You do not need to install `cri` if you have containerd 1.1 or above. Just check if the `cri` plugin has been disabled 
-> in the containerd configuration file.
+> **Note:** `cri` is a native plugin of containerd 1.1 and above. It is built into containerd and enabled by default.
+> You do not need to install `cri` if you have containerd 1.1 or above. Just remove the `cri` plugin from the list of
+> `disabled_plugins` in the containerd configuration file (`/etc/containerd/config.toml`).
 
 Follow the instructions from the [CRI installation guide](http://github.com/containerd/cri/blob/master/docs/installation.md).
 
