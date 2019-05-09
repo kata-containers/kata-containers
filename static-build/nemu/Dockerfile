@@ -7,6 +7,8 @@ from ubuntu:18.04
 ARG NEMU_REPO
 ARG NEMU_VERSION
 ARG NEMU_OVMF
+ARG VIRTIOFSD_RELEASE
+ARG VIRTIOFSD
 
 WORKDIR /root/nemu
 RUN apt-get update
@@ -52,5 +54,6 @@ RUN make install DESTDIR=/tmp/nemu-static
 
 RUN wget "${NEMU_OVMF}" && mv OVMF.fd /tmp/nemu-static/opt/kata/share/kata-nemu/
 RUN mv /tmp/nemu-static/opt/kata/bin/qemu-system-x86_64 /tmp/nemu-static/opt/kata/bin/nemu-system-x86_64
+RUN wget "${VIRTIOFSD_RELEASE}/${VIRTIOFSD}" && chmod +x ${VIRTIOFSD} && mv ${VIRTIOFSD} /tmp/nemu-static/opt/kata/bin/
 
 RUN cd /tmp/nemu-static && tar -czvf kata-nemu-static.tar.gz *
