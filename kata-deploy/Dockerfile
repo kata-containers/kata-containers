@@ -11,6 +11,7 @@ yum install -y bzip2 jq && \
 curl -sOL ${KATA_URL}/${KATA_FILE} && \
 mkdir -p /opt/kata-artifacts && \
 tar xvf ${KATA_FILE} -C /opt/kata-artifacts/ && \
+chown -R root:root /opt/kata-artifacts/ && \
 rm ${KATA_FILE}
 
 RUN \
