@@ -196,19 +196,34 @@ func semverBumpVersion(ver semver.Version, bumpMajor, bumpMinor, bumpPatch bool)
 	return ver.String(), nil
 }
 
-// incrementVersion increments the specified version and returns the
-// string representation.
-func incrementVersion(version string) (string, error) {
+// changeVersion modifies the specified version and returns the
+// string representation. If decrement is true the returned version is smaller
+// than the specified version, else it is larger.
+func changeVersion(version string, decrement bool) (string, error) {
+	operand := int64(1)
+
+	if decrement {
+		operand = -1
+	}
+
 	// Is it an integer?
 	intResult, err := strconv.ParseUint(version, 10, 0)
 	if err == nil {
-		return fmt.Sprintf("%d", intResult+1), nil
+		if intResult == 0 && decrement {
+			return "", fmt.Errorf("cannot decrement integer version with value zero")
+		}
+
+		return fmt.Sprintf("%d", uint64(int64(intResult)+operand)), nil
 	}
 
 	// Is it a float?
 	floatResult, err := strconv.ParseFloat(version, 32)
 	if err == nil {
-		return fmt.Sprintf("%f", floatResult+1), nil
+		if int(floatResult) == 0 && decrement {
+			return "", fmt.Errorf("cannot decrement integer part of floating point version with value zero: %v", version)
+		}
+
+		return fmt.Sprintf("%f", floatResult+float64(operand)), nil
 	}
 
 	// Not an int nor a float, so it must be a semantic version
@@ -218,12 +233,34 @@ func incrementVersion(version string) (string, error) {
 		return "", err
 	}
 
-	err = ver.IncrementMajor()
-	if err != nil {
-		return "", err
+	if decrement {
+		// the semver package only provides increment operations, so
+		// handle decrement ourselves.
+		major := ver.Major
+
+		if major == 0 {
+			return "", fmt.Errorf("cannot decrement semver with zero major version: %+v", version)
+		}
+
+		major--
+
+		ver.Major = major
+	} else {
+		err = ver.IncrementMajor()
+		if err != nil {
+			return "", err
+		}
 	}
 
 	return ver.String(), nil
+}
+
+func incrementVersion(version string) (string, error) {
+	return changeVersion(version, false)
+}
+
+func decrementVersion(version string) (string, error) {
+	return changeVersion(version, true)
 }
 
 // testGetDistro is an alternative implementation of getDistroDetails() used
@@ -550,16 +587,16 @@ func TestConstraintHandleDistroVersion(t *testing.T) {
 		{higherVersion, eqOperator, Result{Success: false}, false},
 
 		{distroVersion, gtOperator, Result{Success: false}, false},
-		{higherVersion, gtOperator, Result{Success: true}, false},
+		{higherVersion, gtOperator, Result{Success: false}, false},
 
 		{distroVersion, geOperator, Result{Success: true}, false},
-		{higherVersion, geOperator, Result{Success: true}, false},
+		{higherVersion, geOperator, Result{Success: false}, false},
 
 		{distroVersion, ltOperator, Result{Success: false}, false},
-		{higherVersion, ltOperator, Result{Success: false}, false},
+		{higherVersion, ltOperator, Result{Success: true}, false},
 
 		{distroVersion, leOperator, Result{Success: true}, false},
-		{higherVersion, leOperator, Result{Success: false}, false},
+		{higherVersion, leOperator, Result{Success: true}, false},
 
 		{distroVersion, neOperator, Result{Success: false}, false},
 		{higherVersion, neOperator, Result{Success: true}, false},
@@ -773,24 +810,24 @@ func TestConstraintHandleKernelVersion(t *testing.T) {
 		{kernelVersion, neOperator, Result{Success: false}, false},
 
 		{newerMajor, eqOperator, Result{Success: false}, false},
-		{newerMajor, geOperator, Result{Success: true}, false},
-		{newerMajor, gtOperator, Result{Success: true}, false},
-		{newerMajor, ltOperator, Result{Success: false}, false},
-		{newerMajor, leOperator, Result{Success: false}, false},
+		{newerMajor, geOperator, Result{Success: false}, false},
+		{newerMajor, gtOperator, Result{Success: false}, false},
+		{newerMajor, ltOperator, Result{Success: true}, false},
+		{newerMajor, leOperator, Result{Success: true}, false},
 		{newerMajor, neOperator, Result{Success: true}, false},
 
 		{newerMinor, eqOperator, Result{Success: false}, false},
-		{newerMinor, geOperator, Result{Success: true}, false},
-		{newerMinor, gtOperator, Result{Success: true}, false},
-		{newerMinor, ltOperator, Result{Success: false}, false},
-		{newerMinor, leOperator, Result{Success: false}, false},
+		{newerMinor, geOperator, Result{Success: false}, false},
+		{newerMinor, gtOperator, Result{Success: false}, false},
+		{newerMinor, ltOperator, Result{Success: true}, false},
+		{newerMinor, leOperator, Result{Success: true}, false},
 		{newerMinor, neOperator, Result{Success: true}, false},
 
 		{newerPatch, eqOperator, Result{Success: false}, false},
-		{newerPatch, geOperator, Result{Success: true}, false},
-		{newerPatch, gtOperator, Result{Success: true}, false},
-		{newerPatch, ltOperator, Result{Success: false}, false},
-		{newerPatch, leOperator, Result{Success: false}, false},
+		{newerPatch, geOperator, Result{Success: false}, false},
+		{newerPatch, gtOperator, Result{Success: false}, false},
+		{newerPatch, ltOperator, Result{Success: true}, false},
+		{newerPatch, leOperator, Result{Success: true}, false},
 		{newerPatch, neOperator, Result{Success: true}, false},
 	}
 
@@ -1145,7 +1182,152 @@ func TestConstraintNotValid(t *testing.T) {
 
 }
 
-func TestConstraintConstraintInvalid(t *testing.T) {
+func TestConstraintNotValidKernelVersion(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.NotNil(kernelVersion)
+
+	// Generate new kernel versions for testing purposes based on the
+	// current kernel version.
+	higherVersion, err := incrementVersion(kernelVersion)
+	assert.NoError(err)
+	assert.NotEqual(kernelVersion, higherVersion)
+
+	lowerVersion, err := decrementVersion(kernelVersion)
+	assert.NoError(err)
+	assert.NotEqual(kernelVersion, lowerVersion)
+
+	// Antique kernel version numbers.
+	//
+	// Note: Not all are actually real kernel releases - we're just trying
+	// to do a thorough test.
+	lowKernelVersions := []string{
+		"0.0.0",
+		"0.0.1",
+		"1.0.0",
+		"1.0.6-1.1.0",
+		"2.0.0",
+		"2.6.0",
+		lowerVersion,
+	}
+
+	// Host kernel is expected to be newer than all the low kernel versions
+	for _, debug := range []bool{true, false} {
+		tc := NewTestConstraint(debug)
+
+		for _, ver := range lowKernelVersions {
+			result := tc.NotValid(NeedKernelVersionEquals(ver))
+			assert.True(result)
+
+			result = tc.NotValid(NeedKernelVersionLE(ver))
+			assert.True(result)
+
+			result = tc.NotValid(NeedKernelVersionLT(ver))
+			assert.True(result)
+
+			result = tc.NotValid(NeedKernelVersionGT(ver))
+			assert.False(result)
+
+			result = tc.NotValid(NeedKernelVersionGE(ver))
+			assert.False(result)
+
+			result = tc.NotValid(NeedKernelVersionNotEquals(ver))
+			assert.False(result)
+		}
+	}
+
+	// Ridiculously high kernel version numbers. The host kernel is
+	// expected to never reach these values.
+	highKernelVersions := []string{
+		higherVersion,
+		"999.0.0",
+		"999.0.999",
+		"999.999.999",
+		"1024.0.0",
+	}
+
+	for _, debug := range []bool{true, false} {
+		tc := NewTestConstraint(debug)
+
+		for _, ver := range highKernelVersions {
+			result := tc.NotValid(NeedKernelVersionEquals(ver))
+			assert.True(result)
+
+			result = tc.NotValid(NeedKernelVersionGE(ver))
+			assert.True(result)
+
+			result = tc.NotValid(NeedKernelVersionGT(ver))
+			assert.True(result)
+
+			result = tc.NotValid(NeedKernelVersionLE(ver))
+			assert.False(result)
+
+			result = tc.NotValid(NeedKernelVersionLT(ver))
+			assert.False(result)
+
+			result = tc.NotValid(NeedKernelVersionNotEquals(ver))
+			assert.False(result)
+		}
+	}
+}
+
+func TestConstraintNotValidDistroVersion(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.NotNil(distroVersion)
+
+	// Generate new distro versions for testing purposes based on the
+	// current kernel version.
+	higherVersion, err := incrementVersion(distroVersion)
+	assert.NoError(err)
+	assert.NotEqual(distroVersion, higherVersion)
+
+	lowerVersion, err := decrementVersion(distroVersion)
+	assert.NoError(err)
+	assert.NotEqual(distroVersion, lowerVersion)
+
+	for _, debug := range []bool{true, false} {
+		tc := NewTestConstraint(debug)
+
+		result := tc.NotValid(NeedDistroVersionEquals(higherVersion))
+		assert.True(result)
+
+		result = tc.NotValid(NeedDistroVersionEquals(distroVersion))
+		assert.False(result)
+
+		result = tc.NotValid(NeedDistroVersionLE(higherVersion))
+		assert.False(result)
+
+		result = tc.NotValid(NeedDistroVersionLE(distroVersion))
+		assert.False(result)
+
+		result = tc.NotValid(NeedDistroVersionLT(higherVersion))
+		assert.False(result)
+
+		result = tc.NotValid(NeedDistroVersionLT(distroVersion))
+		assert.True(result)
+
+		result = tc.NotValid(NeedDistroVersionGE(higherVersion))
+		assert.True(result)
+
+		result = tc.NotValid(NeedDistroVersionGE(distroVersion))
+		assert.False(result)
+
+		result = tc.NotValid(NeedDistroVersionGT(higherVersion))
+		assert.True(result)
+
+		result = tc.NotValid(NeedDistroVersionGT(distroVersion))
+		assert.True(result)
+
+		result = tc.NotValid(NeedDistroVersionNotEquals(higherVersion))
+		assert.False(result)
+
+		result = tc.NotValid(NeedDistroVersionNotEquals(distroVersion))
+		assert.True(result)
+	}
+}
+
+func TestConstraintConstraintValid(t *testing.T) {
 	assert := assert.New(t)
 
 	type testData struct {
@@ -1312,7 +1494,7 @@ func TestConstraintConstraintInvalid(t *testing.T) {
 		for i, d := range data {
 			tc := NewTestConstraint(debug)
 
-			result := tc.constraintInvalid(d.fn)
+			result := tc.constraintValid(d.fn)
 
 			msg := fmt.Sprintf("test[%d]: %+v, result: %v", i, d, result)
 
@@ -1321,13 +1503,13 @@ func TestConstraintConstraintInvalid(t *testing.T) {
 			}
 
 			if d.valid {
-				assert.False(result, msg)
+				assert.True(result, msg)
 
 				if len(d.expected.Passed) != 0 {
 					assert.Equal(d.expected.Passed[0].Success, tc.Passed[0].Success, msg)
 				}
 			} else {
-				assert.True(result, msg)
+				assert.False(result, msg)
 
 				if len(d.expected.Failed) != 0 {
 					assert.Equal(d.expected.Failed[0].Success, tc.Failed[0].Success, msg)

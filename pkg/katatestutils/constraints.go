@@ -184,13 +184,13 @@ func (tc *TestConstraint) handleDistroName(name string, op Operator) (result Res
 // handleDistroVersion checks that the current distro version is compatible with
 // the constraint specified by the arguments.
 func (tc *TestConstraint) handleDistroVersion(version string, op Operator) (result Result, err error) {
-	return handleVersionType("distro", version, op, tc.DistroVersion)
+	return handleVersionType("distro", tc.DistroVersion, op, version)
 }
 
 // handleKernelVersion checks that the current kernel version is compatible with
 // the constraint specified by the arguments.
 func (tc *TestConstraint) handleKernelVersion(version string, op Operator) (result Result, err error) {
-	return handleVersionType("kernel", version, op, tc.KernelVersion)
+	return handleVersionType("kernel", tc.KernelVersion, op, version)
 }
 
 // handleVersionType checks that the current and new versions are compatible with
@@ -250,7 +250,7 @@ func handleVersionType(versionName, newVersion string, op Operator, currentVersi
 	}
 
 	descr := fmt.Sprintf("need %s version %s %q, got version %q",
-		versionName, op, newVersion, currentVersion)
+		versionName, op, currentVersion, newVersion)
 
 	result = Result{
 		Description: descr,
@@ -432,9 +432,9 @@ func (tc *TestConstraint) handleResults(result Result, err error) {
 	}
 }
 
-// constraintInvalid handles the specified constraint, returning true if the
-// constraint fails, else false.
-func (tc *TestConstraint) constraintInvalid(fn Constraint) bool {
+// constraintValid handles the specified constraint, returning true if the
+// constraint is valid, else false.
+func (tc *TestConstraint) constraintValid(fn Constraint) bool {
 	c := Constraints{}
 
 	// Call the constraint function that sets the Constraints values
@@ -449,7 +449,7 @@ func (tc *TestConstraint) constraintInvalid(fn Constraint) bool {
 		result, err := tc.handleUID(c.UID, c.Operator)
 		tc.handleResults(result, err)
 		if !result.Success {
-			return true
+			return false
 		}
 	}
 
@@ -457,7 +457,7 @@ func (tc *TestConstraint) constraintInvalid(fn Constraint) bool {
 		result, err := tc.handleDistroName(c.DistroName, c.Operator)
 		tc.handleResults(result, err)
 		if !result.Success {
-			return true
+			return false
 		}
 	}
 
@@ -465,7 +465,7 @@ func (tc *TestConstraint) constraintInvalid(fn Constraint) bool {
 		result, err := tc.handleDistroVersion(c.DistroVersion, c.Operator)
 		tc.handleResults(result, err)
 		if !result.Success {
-			return true
+			return false
 		}
 
 	}
@@ -474,11 +474,11 @@ func (tc *TestConstraint) constraintInvalid(fn Constraint) bool {
 		result, err := tc.handleKernelVersion(c.KernelVersion, c.Operator)
 		tc.handleResults(result, err)
 		if !result.Success {
-			return true
+			return false
 		}
 
 	}
 
 	// Constraint is valid
-	return false
+	return true
 }
