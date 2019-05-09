@@ -237,34 +237,28 @@ func (dm *deviceManager) LoadDevices(devStates []persistapi.DeviceState) {
 	defer dm.Unlock()
 
 	for _, ds := range devStates {
+		var dev api.Device
+
 		switch config.DeviceType(ds.Type) {
 		case config.DeviceGeneric:
-			dev := &drivers.GenericDevice{}
-			dev.Load(ds)
-			dm.devices[dev.DeviceID()] = dev
+			dev = &drivers.GenericDevice{}
 		case config.DeviceBlock:
-			dev := &drivers.BlockDevice{}
-			dev.Load(ds)
-			dm.devices[dev.DeviceID()] = dev
+			dev = &drivers.BlockDevice{}
 		case config.DeviceVFIO:
-			dev := &drivers.VFIODevice{}
-			dev.Load(ds)
-			dm.devices[dev.DeviceID()] = dev
+			dev = &drivers.VFIODevice{}
 		case config.VhostUserSCSI:
-			dev := &drivers.VhostUserSCSIDevice{}
-			dev.Load(ds)
-			dm.devices[dev.DeviceID()] = dev
+			dev = &drivers.VhostUserSCSIDevice{}
 		case config.VhostUserBlk:
-			dev := &drivers.VhostUserBlkDevice{}
-			dev.Load(ds)
-			dm.devices[dev.DeviceID()] = dev
+			dev = &drivers.VhostUserBlkDevice{}
 		case config.VhostUserNet:
-			dev := &drivers.VhostUserNetDevice{}
-			dev.Load(ds)
-			dm.devices[dev.DeviceID()] = dev
+			dev = &drivers.VhostUserNetDevice{}
 		default:
 			deviceLogger().WithField("device-type", ds.Type).Warning("unrecognized device type is detected")
+			// continue the for loop
+			continue
 		}
 
+		dev.Load(ds)
+		dm.devices[dev.DeviceID()] = dev
 	}
 }

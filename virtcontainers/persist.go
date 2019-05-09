@@ -31,6 +31,7 @@ func (s *Sandbox) dumpVersion(ss *persistapi.SandboxState) {
 func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) {
 	ss.SandboxContainer = s.id
 	ss.GuestMemoryBlockSizeMB = s.state.GuestMemoryBlockSizeMB
+	ss.GuestMemoryHotplugProbe = s.state.GuestMemoryHotplugProbe
 	ss.State = string(s.state.State)
 	ss.CgroupPath = s.state.CgroupPath
 
@@ -122,6 +123,7 @@ func (s *Sandbox) loadState(ss persistapi.SandboxState) {
 	s.state.BlockIndex = ss.HypervisorState.BlockIndex
 	s.state.State = types.StateString(ss.State)
 	s.state.CgroupPath = ss.CgroupPath
+	s.state.GuestMemoryHotplugProbe = ss.GuestMemoryHotplugProbe
 }
 
 func (s *Sandbox) loadDevices(devStates []persistapi.DeviceState) {
