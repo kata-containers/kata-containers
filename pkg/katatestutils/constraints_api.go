@@ -182,8 +182,8 @@ func NeedDistroVersionWithOp(version string, op Operator) Constraint {
 	}
 }
 
-// NeedDistroVersionLT will skip the test unless the distro version is older
-// than the specified version.
+// NeedDistroVersionEquals will skip the test unless the distro version is the
+// same as the specified version.
 //
 // Note: distro versions vary in format.
 func NeedDistroVersionEquals(version string) Constraint {
