@@ -8,7 +8,7 @@
 TIMEOUT := 120
 
 # union for 'make test'
-UNION := functional docker crio docker-compose network netmon \
+UNION := functional debug-console docker crio docker-compose network netmon \
 	docker-stability oci openshift kubernetes swarm vm-factory \
 	entropy ramdisk shimv2 tracing
 
@@ -50,6 +50,9 @@ else
 	./ginkgo -failFast -v functional/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 	bash sanity/check_sanity.sh
 endif
+
+debug-console:
+	bash -f ./functional/debug_console/run.sh
 
 docker: ginkgo
 ifeq ($(RUNTIME),)
@@ -158,6 +161,7 @@ check: checkcommits log-parser
 	check \
 	checkcommits \
 	crio \
+	debug-console \
 	docker \
 	docker-compose \
 	docker-stability \
