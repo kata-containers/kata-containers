@@ -1,5 +1,6 @@
 * [Introduction](#introduction)
 * [General requirements](#general-requirements)
+* [Linking advice](#linking-advice)
 * [Notes](#notes)
 * [Warnings and other admonitions](#warnings-and-other-admonitions)
 * [Files and command names](#files-and-command-names)
@@ -13,8 +14,24 @@ Containers](https://github.com/kata-containers) project.
 
 # General requirements
 
-- All documents are expected to be written in [GitHub Flavored Markdown](https://github.github.com/gfm) format.
-- All documents should have the `.md` file extension.
+All documents must:
+
+- Be written in [GitHub Flavored Markdown](https://github.github.com/gfm) format.
+- Have a `.md` file extension.
+- Include a TOC (table of contents) at the top of the document with links to
+  all heading sections.
+
+# Linking advice
+
+Linking between documents is strongly encouraged to help users and developers
+navigate the material more easily. Linking also avoids repetition - if a
+document needs to refer to a concept already well described in another section
+or document, do not repeat it, link to it
+(the [DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself) principle).
+
+Another advantage of this approach is that changes only need to be applied in
+one place: where the concept is defined (not the potentially many places where
+the concept is referred to using a link).
 
 # Notes
 
