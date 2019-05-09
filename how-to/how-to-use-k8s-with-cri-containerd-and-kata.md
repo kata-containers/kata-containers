@@ -119,7 +119,7 @@ $ sudo systemctl daemon-reload
 - Start cluster using `kubeadm`
 
   ```bash
-  $ sudo kubeadm init --skip-preflight-checks --cri-socket /run/containerd/containerd.sock --pod-network-cidr=10.244.0.0/16
+  $ sudo kubeadm init --cri-socket /run/containerd/containerd.sock --pod-network-cidr=10.244.0.0/16
   $ export KUBECONFIG=/etc/kubernetes/admin.conf
   $ sudo -E kubectl get nodes
   $ sudo -E kubectl get pods
