@@ -69,6 +69,10 @@ func TestHostNetworkingRequested(t *testing.T) {
 		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
+	if tc.NotValid(ktu.NeedKernelVersionGE("3.19.0")) {
+		t.Skip("skipping this test as it requires a greater kernel version")
+	}
+
 	// Network namespace same as the host
 	selfNsPath := "/proc/self/ns/net"
 	isHostNs, err := hostNetworkingRequested(selfNsPath)
