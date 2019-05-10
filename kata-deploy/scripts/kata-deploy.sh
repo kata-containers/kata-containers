@@ -211,7 +211,7 @@ function main() {
 
 			install_artifacts
 			configure_cri_runtime $runtime
-			kubectl label node $NODE_NAME katacontainers.io/kata-runtime=true
+			kubectl label node $NODE_NAME --overwrite katacontainers.io/kata-runtime=true
 			;;
 		cleanup)
 			cleanup_cri_runtime $runtime
