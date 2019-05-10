@@ -30,13 +30,20 @@ var archRequiredCPUAttribs = map[string]string{}
 // required module parameters.
 var archRequiredKernelModules = map[string]kernelModule{
 	"kvm": {
-		desc: "Kernel-based Virtual Machine",
+		desc:     "Kernel-based Virtual Machine",
+		required: true,
 	},
 	"vhost": {
-		desc: "Host kernel accelerator for virtio",
+		desc:     "Host kernel accelerator for virtio",
+		required: true,
 	},
 	"vhost_net": {
-		desc: "Host kernel accelerator for virtio network",
+		desc:     "Host kernel accelerator for virtio network",
+		required: true,
+	},
+	"vhost_vsock": {
+		desc:     "Host Support for Linux VM Sockets",
+		required: false,
 	},
 }
 
