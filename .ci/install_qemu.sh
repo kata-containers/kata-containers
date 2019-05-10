@@ -13,6 +13,9 @@ source /etc/os-release || source /usr/lib/os-release
 
 CURRENT_QEMU_BRANCH=$(get_version "assets.hypervisor.qemu-lite.branch")
 CURRENT_QEMU_COMMIT=$(get_version "assets.hypervisor.qemu-lite.commit")
+QEMU_REPO_URL=$(get_version "assets.hypervisor.qemu-lite.url")
+# Remove 'https://' from the repo url to be able to git clone the repo
+QEMU_REPO=${QEMU_REPO_URL/https:\/\//}
 PACKAGED_QEMU="qemu-lite"
 QEMU_ARCH=$(${cidir}/kata-arch.sh -d)
 
@@ -57,20 +60,21 @@ install_packaged_qemu() {
 	return "$rc"
 }
 
+clone_qemu_repo() {
+	git clone --branch "${CURRENT_QEMU_BRANCH}" --single-branch --depth 1 --shallow-submodules "${QEMU_REPO_URL}" "${GOPATH}/src/${QEMU_REPO}"
+}
+
 build_and_install_qemu() {
-	QEMU_REPO_URL=$(get_version "assets.hypervisor.qemu-lite.url")
-	# Remove 'https://' from the repo url to be able to clone the repo using 'go get'
-	QEMU_REPO=${QEMU_REPO_URL/https:\/\//}
 	PACKAGING_REPO="github.com/kata-containers/packaging"
 	QEMU_CONFIG_SCRIPT="${GOPATH}/src/${PACKAGING_REPO}/scripts/configure-hypervisor.sh"
 
 	mkdir -p "${GOPATH}/src"
-	git clone --branch "$CURRENT_QEMU_BRANCH" --single-branch "${QEMU_REPO_URL}" "${GOPATH}/src/${QEMU_REPO}"
 	go get -d "$PACKAGING_REPO" || true
+
+	clone_qemu_repo
 
 	pushd "${GOPATH}/src/${QEMU_REPO}"
 	git fetch
-	git checkout "$CURRENT_QEMU_COMMIT"
 	[ -n "$(ls -A capstone)" ] || git clone https://github.com/qemu/capstone.git capstone
 	[ -n "$(ls -A ui/keycodemapdb)" ] || git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
@@ -111,7 +115,7 @@ main() {
 				build_and_install_qemu
 			fi
 			;;
-		"aarch64"|"ppc64le"|"s390x")
+		"ppc64le"|"s390x")
 			packaged_qemu_version=$(get_packaged_qemu_version)
 			short_current_qemu_version=${CURRENT_QEMU_VERSION#*-}
 			if [ "$packaged_qemu_version" == "$short_current_qemu_version" ] && [ -z "${CURRENT_QEMU_COMMIT}" ] || [ "${QEMU_ARCH}" == "s390x" ]; then
@@ -119,6 +123,10 @@ main() {
 			else
 				build_and_install_qemu
 			fi
+			;;
+		"aarch64")
+			# For now, we don't follow stable version on aarch64, but one specific tag version, so we need to build from scratch.
+			build_and_install_qemu
 			;;
 		*)
 			die "Architecture $QEMU_ARCH not supported"
