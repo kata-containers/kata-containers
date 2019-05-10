@@ -15,14 +15,15 @@ import (
 )
 
 const (
-	cpuFlagsTag        = genericCPUFlagsTag
-	archCPUVendorField = genericCPUVendorField
-	archCPUModelField  = genericCPUModelField
-	archGenuineIntel   = "GenuineIntel"
-	archAuthenticAMD   = "AuthenticAMD"
-	msgKernelVM        = "Kernel-based Virtual Machine"
-	msgKernelVirtio    = "Host kernel accelerator for virtio"
-	msgKernelVirtioNet = "Host kernel accelerator for virtio network"
+	cpuFlagsTag               = genericCPUFlagsTag
+	archCPUVendorField        = genericCPUVendorField
+	archCPUModelField         = genericCPUModelField
+	archGenuineIntel          = "GenuineIntel"
+	archAuthenticAMD          = "AuthenticAMD"
+	msgKernelVM               = "Kernel-based Virtual Machine"
+	msgKernelVirtio           = "Host kernel accelerator for virtio"
+	msgKernelVirtioNet        = "Host kernel accelerator for virtio network"
+	msgKernelVirtioVhostVsock = "Host Support for Linux VM Sockets"
 )
 
 // CPU types
@@ -75,17 +76,25 @@ func setCPUtype() error {
 		}
 		archRequiredKernelModules = map[string]kernelModule{
 			"kvm": {
-				desc: msgKernelVM,
+				desc:     msgKernelVM,
+				required: true,
 			},
 			"kvm_intel": {
 				desc:       "Intel KVM",
 				parameters: kvmIntelParams,
+				required:   true,
 			},
 			"vhost": {
-				desc: msgKernelVirtio,
+				desc:     msgKernelVirtio,
+				required: true,
 			},
 			"vhost_net": {
-				desc: msgKernelVirtioNet,
+				desc:     msgKernelVirtioNet,
+				required: true,
+			},
+			"vhost_vsock": {
+				desc:     msgKernelVirtioVhostVsock,
+				required: false,
 			},
 		}
 	} else if cpuType == cpuTypeAMD {
@@ -99,16 +108,24 @@ func setCPUtype() error {
 		}
 		archRequiredKernelModules = map[string]kernelModule{
 			"kvm": {
-				desc: msgKernelVM,
+				desc:     msgKernelVM,
+				required: true,
 			},
 			"kvm_amd": {
-				desc: "AMD KVM",
+				desc:     "AMD KVM",
+				required: true,
 			},
 			"vhost": {
-				desc: msgKernelVirtio,
+				desc:     msgKernelVirtio,
+				required: true,
 			},
 			"vhost_net": {
-				desc: msgKernelVirtioNet,
+				desc:     msgKernelVirtioNet,
+				required: true,
+			},
+			"vhost_vsock": {
+				desc:     msgKernelVirtioVhostVsock,
+				required: false,
 			},
 		}
 	}
