@@ -173,7 +173,7 @@ func SetEphemeralStorageType(ociSpec oci.CompatOCISpec) oci.CompatOCISpec {
 
 // CreateSandbox create a sandbox container
 func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec oci.CompatOCISpec, runtimeConfig oci.RuntimeConfig, rootFs vc.RootFs,
-	containerID, bundlePath, console string, disableOutput, systemdCgroup, builtIn bool) (vc.VCSandbox, vc.Process, error) {
+	containerID, bundlePath, console string, disableOutput, systemdCgroup, builtIn bool) (_ vc.VCSandbox, _ vc.Process, err error) {
 	span, ctx := Trace(ctx, "createSandbox")
 	defer span.Finish()
 
@@ -203,6 +203,16 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec oci.CompatOCISpec, ru
 	if err := SetupNetworkNamespace(&sandboxConfig.NetworkConfig); err != nil {
 		return nil, vc.Process{}, err
 	}
+
+	defer func() {
+		// cleanup netns if kata creates it
+		ns := sandboxConfig.NetworkConfig
+		if err != nil && ns.NetNsCreated {
+			if ex := cleanupNetNS(ns.NetNSPath); ex != nil {
+				kataUtilsLogger.WithField("path", ns.NetNSPath).WithError(ex).Warn("failed to cleanup netns")
+			}
+		}
+	}()
 
 	// Run pre-start OCI hooks.
 	err = EnterNetNS(sandboxConfig.NetworkConfig.NetNSPath, func() error {
