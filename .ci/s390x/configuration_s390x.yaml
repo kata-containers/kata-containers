@@ -6,6 +6,12 @@
 test:
   - functional
   - docker
+  - network
+  - ramdisk
+  - docker-compose
+  - docker-stability
+  - entropy
+  - cri-containerd
 
 # Same model as is for aarch64
 docker:
