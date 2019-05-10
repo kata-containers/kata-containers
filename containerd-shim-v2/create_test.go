@@ -84,6 +84,7 @@ func TestCreateSandboxSuccess(t *testing.T) {
 		id:         testSandboxID,
 		containers: make(map[string]*container),
 		config:     &runtimeConfig,
+		ctx:        context.Background(),
 	}
 
 	req := &taskAPI.CreateTaskRequest{
@@ -129,6 +130,7 @@ func TestCreateSandboxFail(t *testing.T) {
 		id:         testSandboxID,
 		containers: make(map[string]*container),
 		config:     &runtimeConfig,
+		ctx:        context.Background(),
 	}
 
 	req := &taskAPI.CreateTaskRequest{
@@ -184,6 +186,7 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 		id:         testSandboxID,
 		containers: make(map[string]*container),
 		config:     &runtimeConfig,
+		ctx:        context.Background(),
 	}
 
 	req := &taskAPI.CreateTaskRequest{
@@ -245,6 +248,7 @@ func TestCreateContainerSuccess(t *testing.T) {
 		sandbox:    sandbox,
 		containers: make(map[string]*container),
 		config:     &runtimeConfig,
+		ctx:        context.Background(),
 	}
 
 	req := &taskAPI.CreateTaskRequest{
@@ -291,6 +295,7 @@ func TestCreateContainerFail(t *testing.T) {
 		id:         testContainerID,
 		containers: make(map[string]*container),
 		config:     &runtimeConfig,
+		ctx:        context.Background(),
 	}
 
 	req := &taskAPI.CreateTaskRequest{
@@ -351,6 +356,7 @@ func TestCreateContainerConfigFail(t *testing.T) {
 		sandbox:    sandbox,
 		containers: make(map[string]*container),
 		config:     &runtimeConfig,
+		ctx:        context.Background(),
 	}
 
 	req := &taskAPI.CreateTaskRequest{
