@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -74,6 +75,7 @@ func TestSandboxRestore(t *testing.T) {
 	sandbox := Sandbox{
 		id:         "test-exp",
 		containers: container,
+		devManager: manager.NewDeviceManager(manager.VirtioSCSI, nil),
 		hypervisor: &mockHypervisor{},
 		ctx:        context.Background(),
 		config:     &sconfig,
@@ -89,7 +91,7 @@ func TestSandboxRestore(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 
 	// disk data are empty
-	err = sandbox.newStore.ToDisk()
+	err = sandbox.Save()
 	assert.Nil(t, err)
 
 	err = sandbox.Restore()
@@ -98,14 +100,12 @@ func TestSandboxRestore(t *testing.T) {
 	assert.Equal(t, sandbox.state.GuestMemoryBlockSizeMB, uint32(0))
 	assert.Equal(t, sandbox.state.BlockIndex, 0)
 
-	// register callback function
-	sandbox.stateSaveCallback()
-
+	// set state data and save again
 	sandbox.state.State = types.StateString("running")
 	sandbox.state.GuestMemoryBlockSizeMB = uint32(1024)
 	sandbox.state.BlockIndex = 2
 	// flush data to disk
-	err = sandbox.newStore.ToDisk()
+	err = sandbox.Save()
 	assert.Nil(t, err)
 
 	// empty the sandbox
@@ -116,18 +116,5 @@ func TestSandboxRestore(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, sandbox.state.State, types.StateString("running"))
 	assert.Equal(t, sandbox.state.GuestMemoryBlockSizeMB, uint32(1024))
-	// require hvStateSaveCallback to make it savable
-	assert.Equal(t, sandbox.state.BlockIndex, 0)
-
-	// after use hvStateSaveCallbck, BlockIndex can be saved now
-	sandbox.state.BlockIndex = 2
-	sandbox.hvStateSaveCallback()
-	err = sandbox.newStore.ToDisk()
-	assert.Nil(t, err)
-	err = sandbox.Restore()
-	assert.Nil(t, err)
-	assert.Equal(t, sandbox.state.State, types.StateString("running"))
-	assert.Equal(t, sandbox.state.GuestMemoryBlockSizeMB, uint32(1024))
 	assert.Equal(t, sandbox.state.BlockIndex, 2)
-
 }

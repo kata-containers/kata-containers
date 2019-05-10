@@ -1,5 +1,5 @@
 // Copyright (c) 2017-2018 Intel Corporation
-// Copyright (c) 2018 Huawei Corporation
+// Copyright (c) 2018-2019 Huawei Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -117,8 +117,8 @@ func (device *GenericDevice) bumpAttachCount(attach bool) (skip bool, err error)
 	}
 }
 
-// Dump convert and return data in persist format
-func (device *GenericDevice) Dump() persistapi.DeviceState {
+// Save converts Device to DeviceState
+func (device *GenericDevice) Save() persistapi.DeviceState {
 	dss := persistapi.DeviceState{
 		ID:          device.ID,
 		Type:        string(device.DeviceType()),
@@ -134,4 +134,18 @@ func (device *GenericDevice) Dump() persistapi.DeviceState {
 		dss.DriverOptions = info.DriverOptions
 	}
 	return dss
+}
+
+// Load loads DeviceState and converts it to specific device
+func (device *GenericDevice) Load(ds persistapi.DeviceState) {
+	device.ID = ds.ID
+	device.RefCount = ds.RefCount
+	device.AttachCount = ds.AttachCount
+
+	device.DeviceInfo = &config.DeviceInfo{
+		DevType:       ds.DevType,
+		Major:         ds.Major,
+		Minor:         ds.Minor,
+		DriverOptions: ds.DriverOptions,
+	}
 }

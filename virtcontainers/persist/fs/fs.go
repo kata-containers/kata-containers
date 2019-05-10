@@ -44,7 +44,6 @@ var runStoragePath = filepath.Join("/run", storagePathSuffix, sandboxPathSuffix)
 type FS struct {
 	sandboxState   *persistapi.SandboxState
 	containerState map[string]persistapi.ContainerState
-	setFuncs       map[string]persistapi.SetFunc
 
 	lockFile *os.File
 }
@@ -68,7 +67,6 @@ func Init() (persistapi.PersistDriver, error) {
 	return &FS{
 		sandboxState:   &persistapi.SandboxState{},
 		containerState: make(map[string]persistapi.ContainerState),
-		setFuncs:       make(map[string]persistapi.SetFunc),
 	}, nil
 }
 
@@ -82,11 +80,9 @@ func (fs *FS) sandboxDir() (string, error) {
 }
 
 // ToDisk sandboxState and containerState to disk
-func (fs *FS) ToDisk() (retErr error) {
-	// call registered hooks to set sandboxState and containerState
-	for _, fun := range fs.setFuncs {
-		fun(fs.sandboxState, fs.containerState)
-	}
+func (fs *FS) ToDisk(ss persistapi.SandboxState, cs map[string]persistapi.ContainerState) (retErr error) {
+	fs.sandboxState = &ss
+	fs.containerState = cs
 
 	sandboxDir, err := fs.sandboxDir()
 	if err != nil {
@@ -146,20 +142,21 @@ func (fs *FS) ToDisk() (retErr error) {
 }
 
 // FromDisk restores state for sandbox with name sid
-func (fs *FS) FromDisk(sid string) error {
+func (fs *FS) FromDisk(sid string) (persistapi.SandboxState, map[string]persistapi.ContainerState, error) {
+	ss := persistapi.SandboxState{}
 	if sid == "" {
-		return fmt.Errorf("restore requires sandbox id")
+		return ss, nil, fmt.Errorf("restore requires sandbox id")
 	}
 
 	fs.sandboxState.SandboxContainer = sid
 
 	sandboxDir, err := fs.sandboxDir()
 	if err != nil {
-		return err
+		return ss, nil, err
 	}
 
 	if err := fs.lock(); err != nil {
-		return err
+		return ss, nil, err
 	}
 	defer fs.unlock()
 
@@ -167,18 +164,18 @@ func (fs *FS) FromDisk(sid string) error {
 	sandboxFile := filepath.Join(sandboxDir, persistFile)
 	f, err := os.OpenFile(sandboxFile, os.O_RDONLY, fileMode)
 	if err != nil {
-		return err
+		return ss, nil, err
 	}
 	defer f.Close()
 
 	if err := json.NewDecoder(f).Decode(fs.sandboxState); err != nil {
-		return err
+		return ss, nil, err
 	}
 
 	// walk sandbox dir and find container
 	files, err := ioutil.ReadDir(sandboxDir)
 	if err != nil {
-		return err
+		return ss, nil, err
 	}
 
 	for _, file := range files {
@@ -194,18 +191,19 @@ func (fs *FS) FromDisk(sid string) error {
 			if os.IsNotExist(err) {
 				continue
 			}
-			return err
+			return ss, nil, err
 		}
 
 		var cstate persistapi.ContainerState
 		if err := json.NewDecoder(cf).Decode(&cstate); err != nil {
-			return err
+			return ss, nil, err
 		}
 		cf.Close()
 
 		fs.containerState[cid] = cstate
 	}
-	return nil
+
+	return *fs.sandboxState, fs.containerState, nil
 }
 
 // Destroy removes everything from disk
@@ -219,17 +217,6 @@ func (fs *FS) Destroy() error {
 		return err
 	}
 	return nil
-}
-
-// GetStates returns SandboxState and ContainerState
-func (fs *FS) GetStates() (*persistapi.SandboxState, map[string]persistapi.ContainerState, error) {
-	return fs.sandboxState, fs.containerState, nil
-}
-
-// AddSaveCallback registers processing hooks for Dump
-func (fs *FS) AddSaveCallback(name string, f persistapi.SetFunc) {
-	// only accept last registered hook with same name
-	fs.setFuncs[name] = f
 }
 
 func (fs *FS) lock() error {

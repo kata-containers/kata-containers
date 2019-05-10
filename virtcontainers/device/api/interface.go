@@ -45,28 +45,37 @@ type DeviceReceiver interface {
 type Device interface {
 	Attach(DeviceReceiver) error
 	Detach(DeviceReceiver) error
+
 	// ID returns device identifier
 	DeviceID() string
+
 	// DeviceType indicates which kind of device it is
 	// e.g. block, vfio or vhost user
 	DeviceType() config.DeviceType
+
 	// GetMajorMinor returns major and minor numbers
 	GetMajorMinor() (int64, int64)
+
 	// GetDeviceInfo returns device specific data used for hotplugging by hypervisor
 	// Caller could cast the return value to device specific struct
 	// e.g. Block device returns *config.BlockDrive and
 	// vfio device returns []*config.VFIODev
 	GetDeviceInfo() interface{}
+
 	// GetAttachCount returns how many times the device has been attached
 	GetAttachCount() uint
 
 	// Reference adds one reference to device then returns final ref count
 	Reference() uint
+
 	// Dereference removes one reference to device then returns final ref count
 	Dereference() uint
 
-	// Persist convert and return data in persist format
-	Dump() persistapi.DeviceState
+	// Save converts Device to DeviceState
+	Save() persistapi.DeviceState
+
+	// Load loads DeviceState and converts it to specific device
+	Load(persistapi.DeviceState)
 }
 
 // DeviceManager can be used to create a new device, this can be used as single
@@ -79,4 +88,5 @@ type DeviceManager interface {
 	IsDeviceAttached(string) bool
 	GetDeviceByID(string) Device
 	GetAllDevices() []Device
+	LoadDevices([]persistapi.DeviceState)
 }
