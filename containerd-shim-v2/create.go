@@ -210,6 +210,16 @@ func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) error {
 }
 
 func doMount(mounts []*containerd_types.Mount, rootfs string) error {
+	if len(mounts) == 0 {
+		return nil
+	}
+
+	if _, err := os.Stat(rootfs); os.IsNotExist(err) {
+		if err := os.Mkdir(rootfs, 0711); err != nil {
+			return err
+		}
+	}
+
 	for _, rm := range mounts {
 		m := &mount.Mount{
 			Type:    rm.Type,
