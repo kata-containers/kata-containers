@@ -420,10 +420,14 @@ check_docs()
 	local url_map=$(mktemp)
 	local invalid_urls=$(mktemp)
 
-	info "Checking document code blocks"
+	info "Checking document code blocks and markdown references"
+
+	(cd "${tests_repo_dir}" && make check-markdown)
 
 	for doc in $docs
 	do
+		kata-check-markdown "$doc"
+
 		bash "${cidir}/kata-doc-to-script.sh" -csv "$doc"
 
 		# Look for URLs in the document
