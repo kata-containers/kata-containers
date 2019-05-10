@@ -80,6 +80,29 @@ Workloads which utilize Kata can node-select based on ```katacontainers.io/kata-
 run through an applicable runtime if they are marked with the appropriate runtimeClass annotation.
 
 
+In order to use a workload Kata with QEMU, first add a `RuntimeClass` as:
+- For k8s 1.14:
+  ```
+  kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/k8s-1.14/kata-qemu-runtimeClass.yaml
+  ```
+
+- For k8s 1.13:
+  ```
+  kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/k8s-1.13/kata-qemu-runtimeClass.yaml
+  ```
+
+
+In order to use a workload Kata with Firecracker, first add a `RuntimeClass` as:
+- For k8s 1.14:
+  ```
+  kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/k8s-1.14/kata-fc-runtimeClass.yaml
+  ```
+
+- For k8s 1.13:
+  ```
+  kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/k8s-1.13/kata-fc-runtimeClass.yaml
+  ```
+
 The following YAML snippet shows how to specify a workload should use Kata with QEMU:
 ```
 spec:
@@ -95,7 +118,6 @@ spec:
     spec:
       runtimeClassName: kata-fc
 ```
-
 
 To run an example with kata-qemu:
 
