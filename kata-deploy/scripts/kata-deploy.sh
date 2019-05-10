@@ -62,10 +62,13 @@ function configure_crio() {
 	cp -n "$crio_conf_file" "$crio_conf_file_backup"
 
 	local kata_qemu_path="/opt/kata/bin/kata-qemu"
+	local kata_nemu_path="/opt/kata/bin/kata-nemu"
 	local kata_fc_path="/opt/kata/bin/kata-fc"
 	local kata_qemu_conf="crio.runtime.runtimes.kata-qemu"
+	local kata_nemu_conf="crio.runtime.runtimes.kata-nemu"
 	local kata_fc_conf="crio.runtime.runtimes.kata-fc"
 
+	# add kata-qemu config
 	if grep -q "^\[$kata_qemu_conf\]" $crio_conf_file; then
 		echo "Configuration exists $kata_qemu_conf, overwriting"
 		sed -i "/^\[$kata_qemu_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_qemu_path}\"#" $crio_conf_file 
@@ -78,6 +81,20 @@ function configure_crio() {
 EOT
 	fi
 
+	# add kata-nemu config
+	if grep -q "^\[$kata_nemu_conf\]" $crio_conf_file; then
+		echo "Configuration exists $kata_nemu_conf, overwriting"
+		sed -i "/^\[$kata_nemu_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_nemu_path}\"#" $crio_conf_file
+	else
+		cat <<EOT | tee -a "$crio_conf_file"
+
+# Path to the Kata Containers runtime binary that uses the NEMU hypervisor.
+[$kata_nemu_conf]
+  runtime_path = "${kata_nemu_path}"
+EOT
+	fi
+
+	# add kata-fc config
 	if grep -q "^\[$kata_fc_conf\]" $crio_conf_file; then
 		echo "Configuration exists for $kata_fc_conf, overwriting"
 		sed -i "/^\[$kata_fc_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_fc_path}\"#" $crio_conf_file 
