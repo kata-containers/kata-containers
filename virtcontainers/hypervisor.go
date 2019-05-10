@@ -53,6 +53,20 @@ const (
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
 var defaultMaxQemuVCPUs = MaxQemuVCPUs()
 
+// agnostic list of kernel root parameters for NVDIMM
+var commonNvdimmKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
+	{"root", "/dev/pmem0p1"},
+	{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
+	{"rootfstype", "ext4"},
+}
+
+// agnostic list of kernel root parameters for virtio-blk
+var commonVirtioblkKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
+	{"root", "/dev/vda1"},
+	{"rootflags", "data=ordered,errors=remount-ro ro"},
+	{"rootfstype", "ext4"},
+}
+
 // deviceType describes a virtualized device type.
 type deviceType int
 

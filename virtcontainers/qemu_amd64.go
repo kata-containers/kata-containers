@@ -35,11 +35,7 @@ var qemuPaths = map[string]string{
 	QemuQ35:    defaultQemuPath,
 }
 
-var kernelRootParams = []Param{
-	{"root", "/dev/pmem0p1"},
-	{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
-	{"rootfstype", "ext4"},
-}
+var kernelRootParams = commonNvdimmKernelRootParams
 
 var kernelParams = []Param{
 	{"tsc", "reliable"},
