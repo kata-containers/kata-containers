@@ -1,5 +1,5 @@
 // Copyright (c) 2017-2018 Intel Corporation
-// Copyright (c) 2018 Huawei Corporation
+// Copyright (c) 2018-2019 Huawei Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -147,9 +147,9 @@ func (device *BlockDevice) GetDeviceInfo() interface{} {
 	return device.BlockDrive
 }
 
-// Dump convert and return data in persist format
-func (device *BlockDevice) Dump() persistapi.DeviceState {
-	ds := device.GenericDevice.Dump()
+// Save converts Device to DeviceState
+func (device *BlockDevice) Save() persistapi.DeviceState {
+	ds := device.GenericDevice.Save()
 	ds.Type = string(device.DeviceType())
 
 	drive := device.BlockDrive
@@ -167,6 +167,28 @@ func (device *BlockDevice) Dump() persistapi.DeviceState {
 		}
 	}
 	return ds
+}
+
+// Load loads DeviceState and converts it to specific device
+func (device *BlockDevice) Load(ds persistapi.DeviceState) {
+	device.GenericDevice = &GenericDevice{}
+	device.GenericDevice.Load(ds)
+
+	bd := ds.BlockDrive
+	if bd == nil {
+		return
+	}
+	device.BlockDrive = &config.BlockDrive{
+		File:     bd.File,
+		Format:   bd.Format,
+		ID:       bd.ID,
+		Index:    bd.Index,
+		MmioAddr: bd.MmioAddr,
+		PCIAddr:  bd.PCIAddr,
+		SCSIAddr: bd.SCSIAddr,
+		NvdimmID: bd.NvdimmID,
+		VirtPath: bd.VirtPath,
+	}
 }
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation

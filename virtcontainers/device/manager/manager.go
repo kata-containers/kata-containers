@@ -16,6 +16,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
@@ -228,4 +229,36 @@ func (dm *deviceManager) IsDeviceAttached(id string) bool {
 		return false
 	}
 	return d.GetAttachCount() > 0
+}
+
+// NewDevice creates a device based on specified DeviceInfo
+func (dm *deviceManager) LoadDevices(devStates []persistapi.DeviceState) {
+	dm.Lock()
+	defer dm.Unlock()
+
+	for _, ds := range devStates {
+		var dev api.Device
+
+		switch config.DeviceType(ds.Type) {
+		case config.DeviceGeneric:
+			dev = &drivers.GenericDevice{}
+		case config.DeviceBlock:
+			dev = &drivers.BlockDevice{}
+		case config.DeviceVFIO:
+			dev = &drivers.VFIODevice{}
+		case config.VhostUserSCSI:
+			dev = &drivers.VhostUserSCSIDevice{}
+		case config.VhostUserBlk:
+			dev = &drivers.VhostUserBlkDevice{}
+		case config.VhostUserNet:
+			dev = &drivers.VhostUserNetDevice{}
+		default:
+			deviceLogger().WithField("device-type", ds.Type).Warning("unrecognized device type is detected")
+			// continue the for loop
+			continue
+		}
+
+		dev.Load(ds)
+		dm.devices[dev.DeviceID()] = dev
+	}
 }
