@@ -1,8 +1,24 @@
+* [Build Kata Containers Kernel](#build-kata-containers-kernel)
+    * [Requirements](#requirements)
+    * [Setup kernel source code](#setup-kernel-source-code)
+* [Build the kernel](#build-the-kernel)
+    * [Install the Kernel in the default path for Kata](#install-the-kernel-in-the-default-path-for-kata)
+    * [Submit Kernel Changes](#submit-kernel-changes)
+    * [How is it tested](#how-is-it-tested)
+* [Contribute](#contribute)
+
+---
+
 # Build Kata Containers Kernel
 
 This document explains the steps to build a kernel recommended for use with
 Kata Containers. To do this use `build-kernel.sh`, this script
 automates the process to build a kernel for Kata Containers.
+
+## Requirements
+
+The `build-kernel.sh` script requires an installed Golang version matching the
+[component build requirements](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#requirements-to-build-individual-components).
 
 ## Setup kernel source code
 
@@ -44,7 +60,7 @@ Kata Containers packaging repository holds the kernel configs and patches. The
 config and patches can work for many versions, but we only test the
 kernel version defined in the [runtime versions file][runtime-versions-file].
 
-## How is it tested.
+## How is it tested
 
 The Kata Containers CI scripts install the kernel from [CI cache
 job][cache-job] or build from sources.
