@@ -337,7 +337,7 @@ if [ -n "${USE_DOCKER}" ] ; then
 	docker_run_args+=" $(docker_extra_args $distro)"
 
 	# Relabel volumes so SELinux allows access (see docker-run(1))
-	if which selinuxenabled 2&>1 >/dev/null && selinuxenabled ; then
+	if command -v selinuxenabled > /dev/null && selinuxenabled ; then
 		for volume_dir in "${script_dir}" \
 				  "${ROOTFS_DIR}" \
 				  "${script_dir}/../scripts" \
@@ -388,7 +388,7 @@ popd  >> /dev/null
 chrony_conf_file="${ROOTFS_DIR}/etc/chrony.conf"
 if [ ${distro} == ubuntu ] || [ ${distro} == debian ] ; then
 	chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
-fi 
+fi
 
 info "Configure chrony file ${chrony_conf_file}"
 echo "refclock PHC /dev/ptp0 poll 3 dpoll -2 offset 0" >> ${chrony_conf_file}
