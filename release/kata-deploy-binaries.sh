@@ -104,6 +104,14 @@ install_kernel() {
 	popd >>/dev/null
 }
 
+# Install static nemu asset
+install_nemu() {
+	info "build static nemu"
+	"${script_dir}/../static-build/nemu/build-static-nemu.sh"
+	info "Install static nemu"
+	tar xf kata-nemu-static.tar.gz -C "${destdir}"
+}
+
 # Install static qemu asset
 install_qemu() {
 	info "build static qemu"
@@ -159,6 +167,12 @@ ${prefix}/bin/kata-runtime --kata-config "${prefix}/share/defaults/${project}/co
 EOT
 	sudo chmod +x kata-qemu
 
+	cat <<EOT | sudo tee kata-nemu
+#!/bin/bash
+${prefix}/bin/kata-runtime --kata-config "${prefix}/share/defaults/${project}/configuration-nemu.toml" \$@
+EOT
+	sudo chmod +x kata-nemu
+
 	popd
 }
 
@@ -183,6 +197,7 @@ main() {
 	install_kata_components
 	install_kernel
 	install_qemu
+	install_nemu
 	install_firecracker
 	tarball_name="${destdir}.tar.xz"
 	pushd "${destdir}" >>/dev/null
