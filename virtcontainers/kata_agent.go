@@ -1311,9 +1311,12 @@ func (k *kataAgent) handleBlockVolumes(c *Container) []*grpc.Storage {
 		// Add the block device to the list of container devices, to make sure the
 		// device is detached with detachDevices() for a container.
 		c.devices = append(c.devices, ContainerDevice{ID: id, ContainerPath: m.Destination})
-		if err := c.storeDevices(); err != nil {
-			k.Logger().WithField("device", id).WithError(err).Error("store device failed")
-			return nil
+
+		if !c.sandbox.supportNewStore() {
+			if err := c.storeDevices(); err != nil {
+				k.Logger().WithField("device", id).WithError(err).Error("store device failed")
+				return nil
+			}
 		}
 
 		vol := &grpc.Storage{}
