@@ -108,6 +108,8 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		}
 	}()
 
+	s.postCreatedNetwork()
+
 	if err = s.getAndStoreGuestDetails(); err != nil {
 		return nil, err
 	}
