@@ -1,0 +1,20 @@
+language: go
+
+go:
+  - "1.9"
+  - "1.10"
+  - "1.11"
+
+sudo: false
+
+before_script: 
+    - go get -d gopkg.in/cheggaaa/pb.v1 
+    - go get -d github.com/peterhellberg/link
+
+script: 
+    - make all
+    - make test
+
+branches:
+  only:
+    - master
