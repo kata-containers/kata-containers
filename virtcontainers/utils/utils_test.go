@@ -298,23 +298,12 @@ func TestBuildSocketPath(t *testing.T) {
 func TestSupportsVsocks(t *testing.T) {
 	assert := assert.New(t)
 
-	orgVSockDevicePath := VSockDevicePath
 	orgVHostVSockDevicePath := VHostVSockDevicePath
 	defer func() {
-		VSockDevicePath = orgVSockDevicePath
 		VHostVSockDevicePath = orgVHostVSockDevicePath
 	}()
 
-	VSockDevicePath = "/abc/xyz/123"
 	VHostVSockDevicePath = "/abc/xyz/123"
-	assert.False(SupportsVsocks())
-
-	vSockDeviceFile, err := ioutil.TempFile("", "vsock")
-	assert.NoError(err)
-	defer os.Remove(vSockDeviceFile.Name())
-	defer vSockDeviceFile.Close()
-	VSockDevicePath = vSockDeviceFile.Name()
-
 	assert.False(SupportsVsocks())
 
 	vHostVSockFile, err := ioutil.TempFile("", "vhost-vsock")

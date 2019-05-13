@@ -719,13 +719,10 @@ func TestMinimalRuntimeConfigWithVsock(t *testing.T) {
 	[agent.kata]
 `
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
-	orgVSockDevicePath := utils.VSockDevicePath
 	defer func() {
 		utils.VHostVSockDevicePath = orgVHostVSockDevicePath
-		utils.VSockDevicePath = orgVSockDevicePath
 	}()
 	utils.VHostVSockDevicePath = "/dev/null"
-	utils.VSockDevicePath = "/dev/null"
 
 	configPath := path.Join(dir, "runtime.toml")
 	err = createConfig(configPath, runtimeMinimalConfig)
@@ -765,13 +762,10 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	disableBlock := true
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
-	orgVSockDevicePath := utils.VSockDevicePath
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
 	defer func() {
-		utils.VSockDevicePath = orgVSockDevicePath
 		utils.VHostVSockDevicePath = orgVHostVSockDevicePath
 	}()
-	utils.VSockDevicePath = "/dev/abc/xyz"
 	utils.VHostVSockDevicePath = "/dev/abc/xyz"
 
 	hypervisor := hypervisor{
@@ -808,7 +802,6 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	utils.VSockDevicePath = "/dev/null"
 	utils.VHostVSockDevicePath = "/dev/null"
 
 	// all paths exist now
