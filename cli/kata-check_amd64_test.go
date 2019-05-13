@@ -171,6 +171,7 @@ func TestCheckCheckKernelModulesNoNesting(t *testing.T) {
 				"nested":             "Y",
 				"unrestricted_guest": "Y",
 			},
+			required: true,
 		},
 	}
 
@@ -255,6 +256,7 @@ func TestCheckCheckKernelModulesNoUnrestrictedGuest(t *testing.T) {
 				"nested":             "Y",
 				"unrestricted_guest": "Y",
 			},
+			required: true,
 		},
 	}
 
