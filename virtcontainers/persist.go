@@ -99,6 +99,59 @@ func (s *Sandbox) dumpDevices(ss *persistapi.SandboxState, cs map[string]persist
 	}
 }
 
+func (s *Sandbox) dumpProcess(cs map[string]persistapi.ContainerState) {
+	for id, cont := range s.containers {
+		state := persistapi.ContainerState{}
+		if v, ok := cs[id]; ok {
+			state = v
+		}
+
+		state.Process = persistapi.Process{
+			Token:     cont.process.Token,
+			Pid:       cont.process.Pid,
+			StartTime: cont.process.StartTime,
+		}
+
+		cs[id] = state
+	}
+
+	// delete removed containers
+	for id := range cs {
+		if _, ok := s.containers[id]; !ok {
+			delete(cs, id)
+		}
+	}
+}
+
+func (s *Sandbox) dumpMounts(cs map[string]persistapi.ContainerState) {
+	for id, cont := range s.containers {
+		state := persistapi.ContainerState{}
+		if v, ok := cs[id]; ok {
+			state = v
+		}
+
+		for _, m := range cont.mounts {
+			state.Mounts = append(state.Mounts, persistapi.Mount{
+				Source:        m.Source,
+				Destination:   m.Destination,
+				Options:       m.Options,
+				HostPath:      m.HostPath,
+				ReadOnly:      m.ReadOnly,
+				BlockDeviceID: m.BlockDeviceID,
+			})
+		}
+
+		cs[id] = state
+	}
+
+	// delete removed containers
+	for id := range cs {
+		if _, ok := s.containers[id]; !ok {
+			delete(cs, id)
+		}
+	}
+}
+
 func (s *Sandbox) Save() error {
 	var (
 		ss = persistapi.SandboxState{}
@@ -109,6 +162,8 @@ func (s *Sandbox) Save() error {
 	s.dumpState(&ss, cs)
 	s.dumpHypervisor(&ss, cs)
 	s.dumpDevices(&ss, cs)
+	s.dumpProcess(cs)
+	s.dumpMounts(cs)
 
 	if err := s.newStore.ToDisk(ss, cs); err != nil {
 		return err
@@ -126,8 +181,52 @@ func (s *Sandbox) loadState(ss persistapi.SandboxState) {
 	s.state.GuestMemoryHotplugProbe = ss.GuestMemoryHotplugProbe
 }
 
+func (c *Container) loadContState(cs persistapi.ContainerState) {
+	c.state = types.ContainerState{
+		State:         types.StateString(cs.State),
+		BlockDeviceID: cs.Rootfs.BlockDeviceID,
+		Fstype:        cs.Rootfs.FsType,
+		CgroupPath:    cs.CgroupPath,
+	}
+}
+
 func (s *Sandbox) loadDevices(devStates []persistapi.DeviceState) {
 	s.devManager.LoadDevices(devStates)
+}
+
+func (c *Container) loadContDevices(cs persistapi.ContainerState) {
+	c.devices = nil
+	for _, dev := range cs.DeviceMaps {
+		c.devices = append(c.devices, ContainerDevice{
+			ID:            dev.ID,
+			ContainerPath: dev.ContainerPath,
+			FileMode:      dev.FileMode,
+			UID:           dev.UID,
+			GID:           dev.GID,
+		})
+	}
+}
+
+func (c *Container) loadContMounts(cs persistapi.ContainerState) {
+	c.mounts = nil
+	for _, m := range cs.Mounts {
+		c.mounts = append(c.mounts, Mount{
+			Source:        m.Source,
+			Destination:   m.Destination,
+			Options:       m.Options,
+			HostPath:      m.HostPath,
+			ReadOnly:      m.ReadOnly,
+			BlockDeviceID: m.BlockDeviceID,
+		})
+	}
+}
+
+func (c *Container) loadContProcess(cs persistapi.ContainerState) {
+	c.process = Process{
+		Token:     cs.Process.Token,
+		Pid:       cs.Process.Pid,
+		StartTime: cs.Process.StartTime,
+	}
 }
 
 // Restore will restore sandbox data from persist file on disk
@@ -144,22 +243,20 @@ func (s *Sandbox) Restore() error {
 
 // Restore will restore container data from persist file on disk
 func (c *Container) Restore() error {
-	_, cs, err := c.sandbox.newStore.FromDisk(c.sandbox.id)
+	_, css, err := c.sandbox.newStore.FromDisk(c.sandbox.id)
 	if err != nil {
 		return err
 	}
 
-	if _, ok := cs[c.id]; !ok {
+	cs, ok := css[c.id]
+	if !ok {
 		return errContainerPersistNotExist
 	}
 
-	c.state = types.ContainerState{
-		State:         types.StateString(cs[c.id].State),
-		BlockDeviceID: cs[c.id].Rootfs.BlockDeviceID,
-		Fstype:        cs[c.id].Rootfs.FsType,
-		CgroupPath:    cs[c.id].CgroupPath,
-	}
-
+	c.loadContState(cs)
+	c.loadContDevices(cs)
+	c.loadContProcess(cs)
+	c.loadContMounts(cs)
 	return nil
 }
 
