@@ -27,7 +27,7 @@ KATA_CONFIG_VERSION=$(cat "${SCRIPT_DIR}/../../kernel/kata_config_version")
 
 KR_SERIES="$(echo $VERSION | cut -d "." -f 1).x"
 KR_LTS=$(echo $VERSION | cut -d "." -f 1,2)
-ln -sfT "${SCRIPT_DIR}/../../kernel/patches-${KR_LTS}" "${SCRIPT_DIR}/patches"
+ln -sfT "${SCRIPT_DIR}/../../kernel/patches/${KR_LTS}.x" "${SCRIPT_DIR}/patches"
 
 KR_PATCHES=$(eval find "${SCRIPT_DIR}/patches" -type f -name "*.patch")
 
