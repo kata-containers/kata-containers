@@ -184,6 +184,7 @@ check_jaeger_status()
 		then
 			errors=$((errors+1))
 			warn "Found invalid parent span errors (attempt $attempt): $errors1"
+			attempt=$((attempt+1))
 			continue
 		else
 			errors=$((errors-1))
@@ -196,6 +197,7 @@ check_jaeger_status()
 		then
 			errors=$((errors+1))
 			warn "Found warnings (attempt $attempt): $errors2"
+			attempt=$((attempt+1))
 			continue
 		else
 			errors=$((errors-1))
