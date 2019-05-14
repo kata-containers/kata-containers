@@ -10,7 +10,8 @@
 # XXX:   Name: @PROJECT_NAME@
 # XXX:   Type: @PROJECT_TYPE@
 
-[hypervisor.nemu]
+# nemu utilizes the 'qemu' hypervisor template type, since it closely matches qemu
+[hypervisor.qemu]
 path = "@NEMUPATH@"
 kernel = "@KERNELPATH@"
 image = "@IMAGEPATH@"
@@ -96,8 +97,8 @@ default_memory = @DEFMEMSZ@
 disable_block_device_use = @DEFDISABLEBLOCK@
 
 # Shared file system type:
-#   - virtio-9p (default)
-#   - virtio-fs
+#   - virtio-fs (default)
+#   - virtio-9p
 shared_fs = "@DEFSHAREDFS_NEMU@"
 
 # Path to vhost-user-fs daemon.
@@ -161,7 +162,7 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # This is useful when you want to use vhost-user network
 # stacks within the container. This will automatically 
 # result in memory pre allocation
-#enable_hugepages = true
+enable_hugepages = @DEFENABLEHUGEPAGES_NEMU@
 
 # Enable swap of vm memory. Default false.
 # The behaviour is undefined if mem_prealloc is also set to true
@@ -187,7 +188,7 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # If true and vsocks are supported, use vsocks to communicate directly
 # with the agent (no proxy is started).
 # Default true
-use_vsock = true
+#use_vsock = true
 
 # VFIO devices are hotplugged on a bridge by default. 
 # Enable hotplugging on root bus. This may be required for devices with
@@ -272,6 +273,11 @@ use_vsock = true
 #vm_cache_endpoint = "/var/run/kata-containers/cache.sock"
 
 [proxy.@PROJECT_TYPE@]
+path = "@PROXYPATH@"
+
+# If enabled, proxy messages will be sent to the system log
+# (default: disabled)
+#enable_debug = true
 
 [shim.@PROJECT_TYPE@]
 path = "@SHIMPATH@"
