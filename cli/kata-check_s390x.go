@@ -33,7 +33,12 @@ var archRequiredCPUAttribs = map[string]string{}
 // required module parameters.
 var archRequiredKernelModules = map[string]kernelModule{
 	"kvm": {
-		desc: "Kernel-based Virtual Machine",
+		desc:     "Kernel-based Virtual Machine",
+		required: true,
+	},
+	"vhost_vsock": {
+		desc:     "Host Support for Linux VM Sockets",
+		required: false,
 	},
 }
 

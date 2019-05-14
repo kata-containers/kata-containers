@@ -29,9 +29,6 @@ const MibToBytesShift = 20
 // See unix(7).
 const MaxSocketPathLen = 107
 
-// VSockDevicePath path to vsock device
-var VSockDevicePath = "/dev/vsock"
-
 // VHostVSockDevicePath path to vhost-vsock device
 var VHostVSockDevicePath = "/dev/vhost-vsock"
 
@@ -234,10 +231,6 @@ func BuildSocketPath(elements ...string) (string, error) {
 
 // SupportsVsocks returns true if vsocks are supported, otherwise false
 func SupportsVsocks() bool {
-	if _, err := os.Stat(VSockDevicePath); err != nil {
-		return false
-	}
-
 	if _, err := os.Stat(VHostVSockDevicePath); err != nil {
 		return false
 	}

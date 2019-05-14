@@ -35,6 +35,9 @@ type kernelModule struct {
 
 	// maps parameter names to values
 	parameters map[string]string
+
+	// if it is definitely required
+	required bool
 }
 
 type vmContainerCapableDetails struct {
@@ -124,8 +127,11 @@ func haveKernelModule(module string) bool {
 	// Now, check if the module is unloaded, but available.
 	// And modprobe it if so.
 	cmd := exec.Command(modProbeCmd, module)
-	err := cmd.Run()
-	return err == nil
+	if output, err := cmd.CombinedOutput(); err != nil {
+		kataLog.WithField("module", module).WithError(err).Warnf("modprobe insert module failed: %s", string(output))
+		return false
+	}
+	return true
 }
 
 // checkCPU checks all required CPU attributes modules and returns a count of
@@ -200,7 +206,9 @@ func checkKernelModules(modules map[string]kernelModule, handler kernelParamHand
 
 		if !haveKernelModule(module) {
 			kataLog.WithFields(fields).Error("kernel property not found")
-			count++
+			if details.required {
+				count++
+			}
 			continue
 		}
 
