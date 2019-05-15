@@ -30,7 +30,7 @@ For details of the other Kata Containers repositories, see the
 
 `kata-runtime`, referred to as "the runtime", is the Command-Line Interface
 (CLI) part of the Kata Containers runtime component. It leverages the
-[virtcontainers](https://github.com/kata-containers/runtime/tree/master/virtcontainers)
+[virtcontainers](virtcontainers)
 package to provide a high-performance standards-compliant runtime that creates
 hardware-virtualized containers.
 
