@@ -1,6 +1,6 @@
 # Design
 
-Kata Containers design documentations, include the 
+Kata Containers design documents:
 
 - [Kata Containers architecture](architecture.md)
 - Working scenarios of Kata Containers
