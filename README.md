@@ -25,6 +25,7 @@ For details of the other Kata Containers repositories, see the
 * [Community](#community)
     * [Contact](#contact)
 * [Further information](#further-information)
+* [Additional packages](#additional-packages)
 
 ## Introduction
 
@@ -170,3 +171,8 @@ See the
 [project table of contents](https://github.com/kata-containers/kata-containers)
 and the
 [documentation repository](https://github.com/kata-containers/documentation).
+
+## Additional packages
+
+For details of the other packages contained in this repository, see the
+[package documentation](pkg).
