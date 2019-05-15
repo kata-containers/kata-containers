@@ -12,10 +12,14 @@ UNION := functional debug-console docker crio docker-compose network netmon \
 	docker-stability oci openshift kubernetes swarm vm-factory \
 	entropy ramdisk shimv2 tracing
 
-# skipped test suites for docker integration tests
-FILTER_FILE = .ci/hypervisors/$(KATA_HYPERVISOR)/filter_docker_$(KATA_HYPERVISOR).sh
+# filter scheme script for docker integration test suites
+FILTER_FILE = .ci/filter/filter_docker_test.sh
+
+# skipped docker integration tests for Firecraker
+# Firecracker configuration file
+FIRECRACKER_CONFIG = .ci/hypervisors/firecracker/configuration_firecracker.yaml
 ifneq ($(wildcard $(FILTER_FILE)),)
-	SKIP := $(shell bash -f $(FILTER_FILE))
+SKIP_FIRECRACKER := $(shell bash -c '$(FILTER_FILE) $(FIRECRACKER_CONFIG)')
 endif
 
 # get arch
@@ -63,7 +67,7 @@ ifeq ($(RUNTIME),)
 endif
 
 ifeq ($(KATA_HYPERVISOR),firecracker)
-	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \
+	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP_FIRECRACKER}" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 else ifeq ($(ARCH),$(filter $(ARCH), aarch64 s390x ppc64le))
 	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \

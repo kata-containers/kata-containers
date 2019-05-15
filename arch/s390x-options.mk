@@ -3,8 +3,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# configuration file
+CONFIG := .ci/s390x/configuration_s390x.yaml
+
 # union for 'make test'
-UNION := $(shell bash -f .ci/s390x/filter_test_s390x.sh)
+UNION := $(shell bash -c '.ci/filter/filter_test_union.sh $(CONFIG)')
 
 # skiped test suites for docker integration tests
-SKIP := $(shell bash -f .ci/s390x/filter_docker_s390x.sh)
+SKIP := $(shell bash -c '.ci/filter/filter_docker_test.sh $(CONFIG)')
+
