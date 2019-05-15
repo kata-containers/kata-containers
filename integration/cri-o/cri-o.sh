@@ -16,12 +16,19 @@ source /etc/os-release || source /usr/lib/os-release
 crio_repository="github.com/cri-o/cri-o"
 crio_repository_path="$GOPATH/src/${crio_repository}"
 
+img_file=""
+loop_device=""
+cleanup() {
+	[ -n "${loop_device}" ] && sudo losetup -d "${loop_device}"
+	[ -n "${img_file}" ] && rm -f "${img_file}"
+}
+
 # Check no processes are left behind
 check_processes
 
 # devicemapper device and options
 LVM_DEVICE=${LVM_DEVICE:-/dev/vdb}
-DM_STORAGE_OPTIONS="--storage-driver devicemapper --storage-opt dm.directlvm_device=${LVM_DEVICE}
+DM_STORAGE_OPTIONS="--storage-driver devicemapper
 	--storage-opt dm.directlvm_device_force=true --storage-opt dm.thinp_percent=95
 	--storage-opt dm.thinp_metapercent=1 --storage-opt dm.thinp_autoextend_threshold=80
 	--storage-opt dm.thinp_autoextend_percent=20"
@@ -62,13 +69,26 @@ IFS=$OLD_IFS
 
 # run CRI-O tests using devicemapper on ubuntu
 if [ "$ID" == "ubuntu" ]; then
+	if [ ! -b "${LVM_DEVICE}" ]; then
+		info "Creating a loop device to use it as LVM device"
+		# create a loop device and use it as lvm device
+		trap cleanup EXIT
+		img_file=devmap.img
+		dd if=/dev/zero of=${img_file} count=20 bs=50M
+		sync
+		printf "g\nn\n\n\nw\n" | fdisk ${img_file}
+		loop_device="$(sudo losetup --show -P -f ${img_file})"
+		sudo mkfs.ext4 "${loop_device}"
+		LVM_DEVICE="${loop_device}"
+	fi
+
 	# Block device attached to the VM where we run the CI
 	# If the block device has a partition, cri-o will not be able to use it.
 	export LVM_DEVICE
 	if sudo fdisk -l "$LVM_DEVICE" | grep "${LVM_DEVICE}[1-9]"; then
 		die "detected partitions on block device: ${LVM_DEVICE}. Will not continue"
 	fi
-	export STORAGE_OPTIONS="$DM_STORAGE_OPTIONS"
+	export STORAGE_OPTIONS="$DM_STORAGE_OPTIONS --storage-opt dm.directlvm_device=${LVM_DEVICE}"
 fi
 
 # On other distros or on ZUUL, use overlay.
