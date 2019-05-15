@@ -148,8 +148,7 @@ ramdisk:
 
 entropy:
 	bash -f .ci/install_bats.sh
-	cd integration/entropy && \
-	bats entropy_test.bats
+	bats integration/entropy/entropy_time.bats
 
 netmon:
 	systemctl is-active --quiet docker || sudo systemctl start docker
