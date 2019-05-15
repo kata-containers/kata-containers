@@ -52,6 +52,10 @@ var noTraceKernelParam = []vc.Param{
 		Key:   "systemd.mask",
 		Value: "systemd-journal-flush.service",
 	},
+	{
+		Key:   "systemd.mask",
+		Value: "systemd-journald-dev-log.socket",
+	},
 	// No udev events: agent implements udev events
 	{
 		Key:   "systemd.mask",
@@ -64,6 +68,14 @@ var noTraceKernelParam = []vc.Param{
 	{
 		Key:   "systemd.mask",
 		Value: "systemd-udev-trigger.service",
+	},
+	{
+		Key:   "systemd.mask",
+		Value: "systemd-udevd-kernel.socket",
+	},
+	{
+		Key:   "systemd.mask",
+		Value: "systemd-udevd-control.socket",
 	},
 	// No timesync: kata is able to setup the time and this service consume network
 	{
@@ -97,6 +109,11 @@ var noTraceKernelParam = []vc.Param{
 	{
 		Key:   "systemd.mask",
 		Value: "systemd-random-seed.service",
+	},
+	// No coredump
+	{
+		Key:   "systemd.mask",
+		Value: "systemd-coredump@.service",
 	},
 }
 
