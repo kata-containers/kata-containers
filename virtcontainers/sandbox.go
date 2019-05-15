@@ -543,6 +543,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		shmSize:         sandboxConfig.ShmSize,
 		sharePidNs:      sandboxConfig.SharePidNs,
 		stateful:        sandboxConfig.Stateful,
+		networkNS:       NetworkNamespace{NetNsPath: sandboxConfig.NetworkConfig.NetNSPath},
 		ctx:             ctx,
 	}
 
