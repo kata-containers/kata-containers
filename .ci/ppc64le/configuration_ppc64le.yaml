@@ -11,14 +11,21 @@ test:
   - docker
   - docker-compose
 
-# for now, not all test suites under docker integration are fully passed in aarch64.
+# for now, not all test suites under docker integration are fully passed in ppc64le.
 # some need to be tested, and some need to be refined.
 # ginkgo offers '-skip=REGEXP' flag to skip specific ones.
 # you can use infos from docker.Describe, docker.Context or docker.It to point to
-# specific test specs or whole container of specs.
+# specific test specs or whole container of specs. Issue #1580 tracks all the tests
+# that currently fail on ppc64le.
 docker:
   Describe:
     - Update CPU set
+    - CPUs and CPU set
+    - Update CPU constraints
+    - Hotplug memory when create containers
+    - run container and update its memory constraints
+    - check dmesg logs errors
+    - memory constraints
   Context:
+    - run container exceeding memory constraints
   It:
-    - should have the right number of vCPUs
