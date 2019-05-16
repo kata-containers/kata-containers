@@ -1,8 +1,8 @@
-# Release tools #
+# Release tools
 
 This directory contains tools for Kata Containers releases.
 
-## update-repository-version.sh ##
+## update-repository-version.sh
 
 This script creates a GitHub pull request (a.k.a PR) to change the version in
 all the Kata repositories.
@@ -13,7 +13,7 @@ For more information on using the script, run the following:
 $ ./update-repository-version.sh -h
 ```
 
-### Update Kata projects to a new version ###
+### Update Kata projects to a new version
 Kata Containers is divided into multiple projects. With each release, all
 project versions are updated to keep the version consistent.
 
@@ -28,7 +28,7 @@ repositories. These pull requests are tested by the Kata CI to ensure the
 entire project is working prior to the release. Next, the PR is approved and
 merged by Kata Containers members.
 
-## tag_repos.sh ##
+## tag_repos.sh
 
 After all the Kata repositories are updated with a new version, they need to be
 tagged.
