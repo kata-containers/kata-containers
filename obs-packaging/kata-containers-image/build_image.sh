@@ -111,6 +111,8 @@ main() {
 	# Agent version
 	[ -n "${agent_version}" ] || agent_version="${kata_version}"
 
+	install_yq
+
 	#image information
 	img_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name" "${kata_version}")
 	#In old branches this is not defined, use a default
