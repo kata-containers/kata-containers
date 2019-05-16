@@ -1,5 +1,23 @@
 # checkmetrics
 
+* [Overview](#overview)
+    * [JSON file format](#json-file-format)
+* [baseline TOML layout](#baseline-toml-layout)
+    * [Supported file types](#supported-file-types)
+    * [Supported checktypes](#supported-checktypes)
+* [Options](#options)
+    * [TOML basefile path (mandatory)](#toml-basefile-path-mandatory)
+    * [Debug mode](#debug-mode)
+    * [Log file path](#log-file-path)
+    * [Metrics results directory path (mandatory)](#metrics-results-directory-path-mandatory)
+    * [Percentage presentation mode](#percentage-presentation-mode)
+    * [Help](#help)
+    * [Version](#version)
+* [Output](#output)
+    * [Output Columns](#output-columns)
+* [Example invocation](#example-invocation)
+* [See also](#see-also)
+
 ## Overview
 
 The `checkmetrics` tool is used to check the metrics results files in
@@ -166,3 +184,6 @@ METRICSDIR=`pwd`/../../metrics/results
 $ ./checkmetrics --basefile ${BASEFILE} --metricsdir ${METRICSDIR}
 ```
 
+## See also
+
+- [CI slaves reference files](ci_slaves)

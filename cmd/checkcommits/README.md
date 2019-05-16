@@ -1,5 +1,17 @@
 # checkcommits
 
+* [Overview](#overview)
+* [Handling long lines](#handling-long-lines)
+* [Options](#options)
+    * [Verbose mode](#verbose-mode)
+    * [For full details](#for-full-details)
+* [How to use it](#how-to-use-it)
+    * [Download and Build](#download-and-build)
+    * [Basic use](#basic-use)
+    * [Example showing most of the available options:](#example-showing-most-of-the-available-options)
+    * [Run under TravisCI](#run-under-travisci)
+    * [Run under SemaphoreCI](#run-under-semaphoreci)
+
 ## Overview
 
 The `checkcommits` tool is used to perform basic checks on `git(1)`

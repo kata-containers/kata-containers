@@ -6,6 +6,7 @@
     * [Centralised scripts](#centralised-scripts)
     * [CI setup](#ci-setup)
     * [Detecting a CI system](#detecting-a-ci-system)
+    * [Breaking Compatibility](#breaking-compatibility)
 * [Developer Mode](#developer-mode)
 * [Run the Kata Containers tests](#run-the-kata-containers-tests)
     * [Requirements to run Kata Containers tests](#requirements-to-run-kata-containers-tests)
@@ -43,7 +44,7 @@ and with different container managers.
 
 ## CI Content
 
-This repository contains a [number of scripts](https://github.com/kata-containers/tests/tree/master/.ci)
+This repository contains a [number of scripts](/.ci)
 that run from under a "CI" (Continuous Integration) system.
 
 ### Centralised scripts
