@@ -30,6 +30,20 @@ setup() {
 	kubectl exec "$pod_name" -c "$first_container_name" -- sh -c "$cmd" | grep "$msg"
 }
 
+@test "initContainer with shared volume" {
+	pod_name="initcontainer-shared-volume"
+	last_container="last"
+
+	# Create pod
+	kubectl create -f "${pod_config_dir}/initContainer-shared-volume.yaml"
+
+	# Check pods
+	kubectl wait --for=condition=Ready pod "$pod_name"
+
+	cmd='test $(cat /volume/initContainer) -lt $(cat /volume/container)'
+	kubectl exec "$pod_name" -c "$last_container" -- sh -c "$cmd"
+}
+
 teardown() {
 	kubectl delete pod "$pod_name"
 }
