@@ -13,7 +13,8 @@ For more information on using the script, run the following:
 $ ./update-repository-version.sh -h
 ```
 
-### Update Kata projects to a new version
+## Update Kata projects to a new version
+
 Kata Containers is divided into multiple projects. With each release, all
 project versions are updated to keep the version consistent.
 
