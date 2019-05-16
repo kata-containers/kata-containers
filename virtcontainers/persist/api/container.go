@@ -103,8 +103,7 @@ type ContainerState struct {
 	Mounts []Mount
 
 	// Process on host representing container process
-	// FIXME: []Process or Process ?
-	Process []Process
+	Process Process
 
 	// BundlePath saves container OCI config.json, which can be unmarshaled
 	// and translated to "CompatOCISpec"

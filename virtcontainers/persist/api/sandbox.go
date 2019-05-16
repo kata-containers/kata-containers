@@ -14,7 +14,7 @@ type SetFunc (func(*SandboxState, map[string]ContainerState) error)
 
 // Bridge is a bridge where devices can be hot plugged
 type Bridge struct {
-	// Address contains information about devices plugged and its address in the bridge
+	// DeviceAddr contains information about devices plugged and its address in the bridge
 	DeviceAddr map[uint32]string
 
 	// Type is the type of the bridge (pci, pcie, etc)
