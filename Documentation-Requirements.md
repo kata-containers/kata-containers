@@ -123,6 +123,7 @@ utility.
 
 - If a command needs to be run as the `root` user, it must be run using
   `sudo(8)`.
+
   ```bash
 
   $ sudo echo "I'm running as root"
