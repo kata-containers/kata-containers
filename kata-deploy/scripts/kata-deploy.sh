@@ -13,9 +13,12 @@ crio_conf_file_backup="${crio_conf_file}.bak"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
 
-shim_binary="containerd-shim-kata-v2"
-shim_file="/usr/local/bin/${shim_binary}"
-shim_backup="/usr/local/bin/${shim_binary}.bak"
+shims=(
+	"qemu"
+	"nemu"
+	"fc"
+)
+
 # If we fail for any reason a message will be displayed
 die() {
         msg="$*"
@@ -62,10 +65,13 @@ function configure_crio() {
 	cp -n "$crio_conf_file" "$crio_conf_file_backup"
 
 	local kata_qemu_path="/opt/kata/bin/kata-qemu"
+	local kata_nemu_path="/opt/kata/bin/kata-nemu"
 	local kata_fc_path="/opt/kata/bin/kata-fc"
 	local kata_qemu_conf="crio.runtime.runtimes.kata-qemu"
+	local kata_nemu_conf="crio.runtime.runtimes.kata-nemu"
 	local kata_fc_conf="crio.runtime.runtimes.kata-fc"
 
+	# add kata-qemu config
 	if grep -q "^\[$kata_qemu_conf\]" $crio_conf_file; then
 		echo "Configuration exists $kata_qemu_conf, overwriting"
 		sed -i "/^\[$kata_qemu_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_qemu_path}\"#" $crio_conf_file 
@@ -78,6 +84,20 @@ function configure_crio() {
 EOT
 	fi
 
+	# add kata-nemu config
+	if grep -q "^\[$kata_nemu_conf\]" $crio_conf_file; then
+		echo "Configuration exists $kata_nemu_conf, overwriting"
+		sed -i "/^\[$kata_nemu_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_nemu_path}\"#" $crio_conf_file
+	else
+		cat <<EOT | tee -a "$crio_conf_file"
+
+# Path to the Kata Containers runtime binary that uses the NEMU hypervisor.
+[$kata_nemu_conf]
+  runtime_path = "${kata_nemu_path}"
+EOT
+	fi
+
+	# add kata-fc config
 	if grep -q "^\[$kata_fc_conf\]" $crio_conf_file; then
 		echo "Configuration exists for $kata_fc_conf, overwriting"
 		sed -i "/^\[$kata_fc_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_fc_path}\"#" $crio_conf_file 
@@ -114,29 +134,46 @@ function configure_containerd() {
    [plugins.cri.containerd]
      [plugins.cri.containerd.runtimes.kata]
         runtime_type = "io.containerd.kata.v2"
+        [plugins.cri.containerd.runtimes.kata.options]
+	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration.toml"
+     [plugins.cri.containerd.runtimes.kata-fc]
+        runtime_type = "io.containerd.kata-fc.v2"
+        [plugins.cri.containerd.runtimes.kata-fc.options]
+	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-fc.toml"
+     [plugins.cri.containerd.runtimes.kata-qemu]
+        runtime_type = "io.containerd.kata-qemu.v2"
+        [plugins.cri.containerd.runtimes.kata-qemu.options]
+	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-qemu.toml"
+     [plugins.cri.containerd.runtimes.kata-nemu]
+        runtime_type = "io.containerd.kata-nemu.v2"
+        [plugins.cri.containerd.runtimes.kata-nemu.options]
+	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-nemu.toml"
 EOT
-
-
 	#Currently containerd has an assumption on the location of the shimv2 implementation
 	#Until support is added (see https://github.com/containerd/containerd/issues/3073),
-        #create a link in /usr/local/bin/ to the v2-shim implementation in /opt/kata/bin.
-	if [ -f ${shim_file} ]; then
-		echo "warning: ${shim_binary} already exists" >&2
-		if [ ! -f ${shim_backup} ]; then
-			mv ${shim_file} ${shim_backup}
-		else
-			rm ${shim_file}
-		fi
-	fi
+    #create a link in /usr/local/bin/ to the v2-shim implementation in /opt/kata/bin.
 
 	mkdir -p /usr/local/bin
 
-	cat << EOT | tee "$shim_file"
-#!/bin/bash
-KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration.toml /opt/kata/bin/${shim_binary} \$@
-EOT
-	chmod +x $shim_file
+	for shim in ${shims[@]}; do
+		local shim_binary="containerd-shim-kata-${shim}-v2"
+		local shim_file="/usr/local/bin/${shim_binary}"
+		local shim_backup="/usr/local/bin/${shim_binary}.bak"
 
+		if [ -f ${shim_file} ]; then
+			echo "warning: ${shim_binary} already exists" >&2
+			if [ ! -f ${shim_backup} ]; then
+				mv ${shim_file} ${shim_backup}
+			else
+				rm ${shim_file}
+			fi
+		fi
+       cat << EOT | tee "$shim_file"
+#!/bin/bash
+KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-${shim}.toml /opt/kata/bin/containerd-shim-kata-v2 \$@
+EOT
+       chmod +x $shim_file
+	done
 }
 
 function remove_artifacts() {
@@ -169,10 +206,19 @@ function cleanup_containerd() {
 
 	#Currently containerd has an assumption on the location of the shimv2 implementation
 	#Until support is added (see https://github.com/containerd/containerd/issues/3073), we manage
-	# a symlink to the v2-shim implementation
-	if [ -f "$shim_backup" ]; then
-		mv "$shim_backup" "$shim_file"
-	fi
+	# a reference to the v2-shim implementation
+
+	for shim in ${shims[@]}; do
+		local shim_binary="containerd-shim-kata-${shim}-v2"
+		local shim_file="/usr/local/bin/${shim_binary}"
+		local shim_backup="/usr/local/bin/${shim_binary}.bak"
+
+		rm ${shim_file} || true
+
+		if [ -f ${shim_backup} ]; then
+			mv "$shim_backup" "$shim_file"
+		fi
+	done
 
 }
 
