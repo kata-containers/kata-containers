@@ -265,6 +265,54 @@ func (fc *firecracker) fcInit(timeout int) error {
 	return fc.store.Store(store.Hypervisor, fc.info)
 }
 
+func (fc *firecracker) fcEnd() (err error) {
+	span, _ := fc.trace("fcEnd")
+	defer span.Finish()
+
+	fc.Logger().Info("Stopping firecracker VM")
+
+	defer func() {
+		if err != nil {
+			fc.Logger().Info("fcEnd failed")
+		} else {
+			fc.Logger().Info("Firecracker VM stopped")
+		}
+	}()
+
+	pid := fc.info.PID
+
+	// Check if VM process is running, in case it is not, let's
+	// return from here.
+	if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
+		return nil
+	}
+
+	// Send a SIGTERM to the VM process to try to stop it properly
+	if err = syscall.Kill(pid, syscall.SIGTERM); err != nil {
+		return err
+	}
+
+	// Wait for the VM process to terminate
+	tInit := time.Now()
+	for {
+		if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
+			return nil
+		}
+
+		if time.Since(tInit).Seconds() >= fcStopSandboxTimeout {
+			fc.Logger().Warnf("VM still running after waiting %ds", fcStopSandboxTimeout)
+			break
+		}
+
+		// Let's avoid to run a too busy loop
+		time.Sleep(time.Duration(50) * time.Millisecond)
+	}
+
+	// Let's try with a hammer now, a SIGKILL should get rid of the
+	// VM process.
+	return syscall.Kill(pid, syscall.SIGKILL)
+}
+
 func (fc *firecracker) client() *client.Firecracker {
 	span, _ := fc.trace("client")
 	defer span.Finish()
@@ -370,6 +418,12 @@ func (fc *firecracker) startSandbox(timeout int) error {
 		return err
 	}
 
+	defer func() {
+		if err != nil {
+			fc.fcEnd()
+		}
+	}()
+
 	if err := fc.fcSetVMBaseConfig(int64(fc.config.MemorySize),
 		int64(fc.config.NumVCPUs),
 		false); err != nil {
@@ -463,48 +517,7 @@ func (fc *firecracker) stopSandbox() (err error) {
 	span, _ := fc.trace("stopSandbox")
 	defer span.Finish()
 
-	fc.Logger().Info("Stopping firecracker VM")
-
-	defer func() {
-		if err != nil {
-			fc.Logger().Info("stopSandbox failed")
-		} else {
-			fc.Logger().Info("Firecracker VM stopped")
-		}
-	}()
-
-	pid := fc.info.PID
-
-	// Check if VM process is running, in case it is not, let's
-	// return from here.
-	if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
-		return nil
-	}
-
-	// Send a SIGTERM to the VM process to try to stop it properly
-	if err = syscall.Kill(pid, syscall.SIGTERM); err != nil {
-		return err
-	}
-
-	// Wait for the VM process to terminate
-	tInit := time.Now()
-	for {
-		if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
-			return nil
-		}
-
-		if time.Since(tInit).Seconds() >= fcStopSandboxTimeout {
-			fc.Logger().Warnf("VM still running after waiting %ds", fcStopSandboxTimeout)
-			break
-		}
-
-		// Let's avoid to run a too busy loop
-		time.Sleep(time.Duration(50) * time.Millisecond)
-	}
-
-	// Let's try with a hammer now, a SIGKILL should get rid of the
-	// VM process.
-	return syscall.Kill(pid, syscall.SIGKILL)
+	return fc.fcEnd()
 }
 
 func (fc *firecracker) pauseSandbox() error {
