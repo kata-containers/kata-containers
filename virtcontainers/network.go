@@ -716,6 +716,16 @@ func bridgeNetworkPair(endpoint Endpoint, queues int, disableVhostNet bool) erro
 			netPair.VirtIface.Name, netPair.Name, err)
 	}
 
+	// Clear the IP addresses from the veth interface to prevent ARP conflict
+	netPair.VirtIface.Addrs, err = netlink.AddrList(link, netlink.FAMILY_V4)
+	if err != nil {
+		return fmt.Errorf("Unable to obtain veth IP addresses: %s", err)
+	}
+
+	if err := clearIPs(link, netPair.VirtIface.Addrs); err != nil {
+		return fmt.Errorf("Unable to clear veth IP addresses: %s", err)
+	}
+
 	if err := netHandle.LinkSetUp(link); err != nil {
 		return fmt.Errorf("Could not enable veth %s: %s", netPair.VirtIface.Name, err)
 	}
@@ -1001,7 +1011,8 @@ func unBridgeNetworkPair(endpoint Endpoint) error {
 		return fmt.Errorf("Could not detach veth %s: %s", netPair.VirtIface.Name, err)
 	}
 
-	return nil
+	// Restore the IPs that were cleared
+	return setIPs(link, netPair.VirtIface.Addrs)
 }
 
 func removeTCFiltering(endpoint Endpoint) error {
