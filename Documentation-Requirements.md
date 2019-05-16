@@ -109,7 +109,7 @@ utility.
 
 - If a document includes commands the user should run, they **MUST** be shown
   in a *bash code block* with every command line prefixed with `$ ` to denote
-  a prompt:
+  a shell prompt:
 
   ```
 
