@@ -1,6 +1,7 @@
 # Release tools
 
 * [Introduction](#introduction)
+* [Create a Kata Containers release](#create-a-kata-containers-release)
 * [`update-repository-version.sh`](#update-repository-versionsh)
 * [Update Kata projects to a new version](#update-kata-projects-to-a-new-version)
 * [`tag_repos.sh`](#tag_repossh)
@@ -8,6 +9,10 @@
 ## Introduction
 
 This directory contains tools for Kata Containers releases.
+
+## Create a Kata Containers release
+
+See [the release documentation](release.md).
 
 ## `update-repository-version.sh`
 
