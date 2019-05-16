@@ -1,5 +1,15 @@
 # Documentation
 
+* [Getting Started](#getting-started)
+* [More User Guides](#more-user-guides)
+* [Kata Use-Cases](#kata-use-cases)
+* [Developer Guide](#developer-guide)
+    * [Design and Implementations](#design-and-implementations)
+    * [How to Contribute](#how-to-contribute)
+    * [Code Licensing](#code-licensing)
+    * [The Release Process](#the-release-process)
+* [Help Improving the Documents](#help-improving-the-documents)
+
 The [Kata Containers](https://github.com/kata-containers)
 documentation repository hosts overall system documentation, with information
 common to multiple components.
@@ -17,17 +27,16 @@ For details of the other Kata Containers repositories, see the
 * [Limitations](Limitations.md): differences and limitations compared with the default [Docker](https://www.docker.com/) runtime,
 [`runc`](https://github.com/opencontainers/runc).
 
-* HOWTO: [Kata Containers with k8s and cri-containerd](./how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)
-* HOWTO: [OpenStack Zun with Kata Containers](./use-cases/zun_kata.md)
-* HOWTO: [Kata Containers with Firecracker](https://github.com/kata-containers/documentation/wiki/Initial-release-of-Kata-Containers-with-Firecracker-support)
-* HOWTO: [Sysctls with Kata Containers](./how-to/how-to-use-sysctls-with-kata.md)
-* HOWTO: [VM Templating](./how-to/what-is-vm-templating-and-how-do-I-use-it.md) and [VM Cache](./how-to/what-is-vm-cache-and-how-do-I-use-it.md)
+### Howto guides
+
+See the [howto documentation](how-to).
 
 ## Kata Use-Cases
 
-* [VPP with Kata](./use-cases/using-vpp-and-kata.md)
-* [SR-IOV with Kata](./use-cases/using-SRIOV-and-kata.md)
 * [GPU Passthrough with Kata](./use-cases/GPU-passthrough-and-Kata.md)
+* [OpenStack Zun with Kata Containers](./use-cases/zun_kata.md)
+* [SR-IOV with Kata](./use-cases/using-SRIOV-and-kata.md)
+* [VPP with Kata](./use-cases/using-vpp-and-kata.md)
 
 ## Developer Guide
 
@@ -52,6 +61,7 @@ Documents that help to understand and contribute to Kata Containers.
 
 * [Release strategy](Releases.md)
 * [Release Checklist](Release-Checklist.md)
+* [Stable branches](Stable-Branch-Strategy.md)
 
 ## Help Improving the Documents
 
