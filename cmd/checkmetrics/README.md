@@ -16,6 +16,7 @@
 * [Output](#output)
     * [Output Columns](#output-columns)
 * [Example invocation](#example-invocation)
+* [See also](#see-also)
 
 ## Overview
 
@@ -183,3 +184,6 @@ METRICSDIR=`pwd`/../../metrics/results
 $ ./checkmetrics --basefile ${BASEFILE} --metricsdir ${METRICSDIR}
 ```
 
+## See also
+
+- [CI slaves reference files](ci_slaves)

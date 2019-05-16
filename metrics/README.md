@@ -25,6 +25,7 @@
          * [metrics_json_close_array_element()](#metrics_json_close_array_element)
          * [metrics_json_end_array(name)](#metrics_json_end_arrayname)
    * [Preserving results](#preserving-results)
+   * [Report generator](#report-generator)
 
 This directory contains the metrics tests for Kata Containers.
 
@@ -132,12 +133,16 @@ for instance.
 Tests that measure the size and overheads of the runtime. Generally this is looking at
 memory footprint sizes, but could also cover disk space or even cpu consumption.
 
+For further details see the [density tests documentation](density).
+
 ### Networking
 
 Tests relating to networking. General items could include:
 - bandwidth
 - jitter
 - latency
+
+For further details see the [network tests documentation](network).
 
 ### Storage
 
@@ -146,6 +151,8 @@ Tests relating to the storage (graph, volume) drivers. Measures may include:
 - latency
 - jitter
 - conformance (to any relevant standards)
+
+For further details see the [storage tests documentation](storage).
 
 ## Saving Results
 
@@ -263,3 +270,7 @@ happen if `JSON_URL` is set. The settings are not mutually exclusive, and both c
 set if necessary.
 
 `JSON_TX_ONELINE` applies to both types of transmission.
+
+## Report generator
+
+See the [report generator](report) documentation.
