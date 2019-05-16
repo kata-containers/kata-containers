@@ -34,6 +34,31 @@ readonly dax_header_sz=2
 # [2] - https://nvdimm.wiki.kernel.org/2mib_fs_dax
 readonly dax_alignment=2
 
+# The list of systemd units and files that are not needed in Kata Containers
+readonly -a systemd_units=(
+	"systemd-coredump@"
+	"systemd-journald"
+	"systemd-journald-dev-log"
+	"systemd-journal-flush"
+	"systemd-random-seed"
+	"systemd-timesyncd"
+	"systemd-tmpfiles-setup"
+	"systemd-udevd"
+	"systemd-udevd-control"
+	"systemd-udevd-kernel"
+	"systemd-udev-trigger"
+	"systemd-update-utmp"
+)
+
+readonly -a systemd_files=(
+	"systemd-bless-boot-generator"
+	"systemd-fstab-generator"
+	"systemd-getty-generator"
+	"systemd-gpt-auto-generator"
+	"systemd-tmpfiles-cleanup.timer"
+	"tmp.mount"
+)
+
 # Set a default value
 AGENT_INIT=${AGENT_INIT:-no}
 
@@ -343,6 +368,19 @@ create_rootfs_image() {
 	cp -a "${rootfs}"/* "${mount_dir}"
 	sync
 	OK "rootfs copied"
+
+	info "Removing unneeded systemd services and sockets"
+	for u in "${systemd_units[@]}"; do
+		find "${mount_dir}" -type f \( \
+			 -name "${u}.service" -o \
+			 -name "${u}.socket" \) \
+			 -exec rm -f {} \;
+	done
+
+	info "Removing unneeded systemd files"
+	for u in "${systemd_files[@]}"; do
+		find "${mount_dir}" -type f -name "${u}" -exec rm -f {} \;
+	done
 
 	info "Unmounting root partition"
 	umount "${mount_dir}"
