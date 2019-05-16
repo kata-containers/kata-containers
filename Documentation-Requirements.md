@@ -20,6 +20,14 @@ All documents must:
 - Have a `.md` file extension.
 - Include a TOC (table of contents) at the top of the document with links to
   all heading sections.
+- Be linked to from another document in the same repository.
+
+  Although GitHub allows navigation of the entire repository, it should be
+  possible to access all documentation purely by navigating links inside the
+  documents, starting from the repositories top-level `README`.
+
+  If you are adding a new document, ensure you add a link to it in the
+  "closest" `README` above the directory where you created your document.
 
 # Linking advice
 
