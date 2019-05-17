@@ -22,8 +22,13 @@ elif [ "$ID" == ubuntu ];then
 	sudo apt-get -qq update
 	sudo apt-get install -y -qq make automake qemu-utils python-pip coreutils moreutils bc
 	sudo pip install yamllint
-else 
+else
 	echo "Linux distribution not supported"
 fi
 
+
+clone_tests_repo
 bash "${cidir}/static-checks.sh"
+# yq needed to correctly parse runtime/versions.yaml
+make -C ${tests_repo_dir} install-yq
+

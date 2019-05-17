@@ -17,6 +17,7 @@ AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
+GO_VERSION=
 export GOPATH=${GOPATH:-${HOME}/go}
 
 lib_file="${script_dir}/../scripts/lib.sh"
@@ -24,9 +25,6 @@ source "$lib_file"
 
 # Default architecture
 ARCH=$(uname -m)
-
-# Load default versions for golang and other componets
-source "${script_dir}/versions.txt"
 
 # distro-specific config file
 typeset -r CONFIG_SH="config.sh"
@@ -247,6 +245,18 @@ error_handler()
 	fi
 }
 
+detect_go_version()
+{
+	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq)
+	[ -z "$yq" ] && die "'yq' application not found (needed to parsing minimum Go version required)"
+
+	typeset -r runtimeVersion="${AGENT_VERSION:-master}"
+	typeset -r runtimeVersionsURL="https://raw.githubusercontent.com/kata-containers/runtime/${runtimeVersion}/versions.yaml"
+
+	GO_VERSION=$(curl -sSL "${runtimeVersionsURL}" | $yq r - languages.golang.version)
+	info "Detected Go version: $GO_VERSION"
+}
+
 while getopts a:hlo:r:t: opt
 do
 	case $opt in
@@ -310,6 +320,8 @@ if [ -z "$INSIDE_CONTAINER" ] ; then
 fi
 
 mkdir -p ${ROOTFS_DIR}
+
+detect_go_version
 
 if [ -n "${USE_DOCKER}" ] ; then
 	image_name="${distro}-rootfs-osbuilder"

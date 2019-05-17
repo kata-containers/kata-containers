@@ -7,7 +7,14 @@ FROM euleros:@OS_VERSION@
 
 @SET_PROXY@
 
-RUN yum -y update && yum install -y yum git make gcc coreutils chrony
+RUN yum -y update && yum install -y \
+yum \
+git \
+make \
+gcc \
+coreutils \
+chrony \
+curl
 
 # This will install the proper golang to build Kata components
 @INSTALL_GO@
