@@ -70,6 +70,7 @@ var isVirtioCCW = map[DeviceDriver]bool{
 	VirtioNetCCW:        true,
 	VirtioSerial:        true,
 	VirtioBlock:         true,
+	VirtioBlockCCW:      true,
 	Console:             false,
 	VirtioSerialPort:    false,
 	VHostVSock:          true,

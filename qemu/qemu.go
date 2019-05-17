@@ -103,6 +103,9 @@ const (
 
 	// PCIePCIBridgeDriver represents a PCIe to PCI bridge device type.
 	PCIePCIBridgeDriver DeviceDriver = "pcie-pci-bridge"
+
+	// VirtioBlockCCW is the CCW block device driver
+	VirtioBlockCCW DeviceDriver = "virtio-blk-ccw"
 )
 
 // disableModern returns the parameters with the disable-modern option.
