@@ -264,7 +264,7 @@ languages:
     issue: "https://github.com/golang/go/issues/20676"
     uscan-url: >-
       https://github.com/golang/go/tags .*/go?([\d\.]+)\.tar\.gz
-    version: "1.10.4"
+    version: "1.11.10"
     meta:
       description: |
         'newest-version' is the latest version known to work when
