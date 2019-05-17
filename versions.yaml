@@ -84,7 +84,7 @@ assets:
       uscan-url: >-
         https://github.com/intel/nemu/tags
         .*/release-?(\d\S+)\.tar\.gz
-      version: "release-2019-05-07"
+      version: "release-2019-05-21"
 
     nemu-ovmf:
       description: "OVMF firmware used by nemu VMM"
