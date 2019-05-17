@@ -51,6 +51,8 @@ func (p *kataProxy) start(params proxyParams) (int, string, error) {
 		return -1, "", err
 	}
 
+	go cmd.Wait()
+
 	return cmd.Process.Pid, proxyURL, nil
 }
 
