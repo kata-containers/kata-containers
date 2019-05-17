@@ -15,6 +15,7 @@
 path = "@NEMUPATH@"
 kernel = "@KERNELPATH@"
 image = "@IMAGEPATH@"
+machine_type = "@DEFMACHINETYPE_NEMU@"
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -35,7 +36,7 @@ firmware = "@FIRMWAREPATH_NEMU@"
 # Machine accelerators
 # comma-separated list of machine accelerators to pass to the hypervisor.
 # For example, `machine_accelerators = "nosmm,nosmbus,nosata,nopit,static-prt,nofw"`
-machine_accelerators="@DEFMACHINEACCELERATOR_NEMU@"
+machine_accelerators=""
 
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
