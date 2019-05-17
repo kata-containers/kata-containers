@@ -28,6 +28,13 @@ All documents must:
 
   If you are adding a new document, ensure you add a link to it in the
   "closest" `README` above the directory where you created your document.
+- If the document needs to tell the user to manipulate files or commands, use a
+  [code block](#code-blocks) to specify the commands.
+
+  If at all possible, ensure that every command in the code blocks can be run
+  non-interactively. If this is possible, the document can be tested by the CI
+  which can then execute the commands specified to ensure the instructions are
+  correct. This avoids documents becoming out of date over time.
 
 # Linking advice
 
@@ -109,7 +116,7 @@ utility.
 
 - If a document includes commands the user should run, they **MUST** be shown
   in a *bash code block* with every command line prefixed with `$ ` to denote
-  a prompt:
+  a shell prompt:
 
   ```
 
@@ -123,6 +130,7 @@ utility.
 
 - If a command needs to be run as the `root` user, it must be run using
   `sudo(8)`.
+
   ```bash
 
   $ sudo echo "I'm running as root"
