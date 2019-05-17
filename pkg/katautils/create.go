@@ -37,94 +37,11 @@ var systemdKernelParam = []vc.Param{
 	},
 }
 
-// kernel params to improve memory footprint
-var noTraceKernelParam = []vc.Param{
-	// No logs: agent has its own logging system
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-journald.service",
-	},
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-journald.socket",
-	},
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-journal-flush.service",
-	},
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-journald-dev-log.socket",
-	},
-	// No udev events: agent implements udev events
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-udevd.service",
-	},
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-udevd.socket",
-	},
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-udev-trigger.service",
-	},
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-udevd-kernel.socket",
-	},
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-udevd-control.socket",
-	},
-	// No timesync: kata is able to setup the time and this service consume network
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-timesyncd.service",
-	},
-	// No update audit logs
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-update-utmp.service",
-	},
-	// No temporal files
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-tmpfiles-setup.service",
-	},
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-tmpfiles-cleanup.service",
-	},
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-tmpfiles-cleanup.timer",
-	},
-	// No mounts
-	{
-		Key:   "systemd.mask",
-		Value: "tmp.mount",
-	},
-	// No random seed
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-random-seed.service",
-	},
-	// No coredump
-	{
-		Key:   "systemd.mask",
-		Value: "systemd-coredump@.service",
-	},
-}
-
 func getKernelParams(needSystemd, trace bool) []vc.Param {
 	p := []vc.Param{}
 
 	if needSystemd {
 		p = append(p, systemdKernelParam...)
-		if !trace {
-			p = append(p, noTraceKernelParam...)
-		}
 	}
 
 	return p
