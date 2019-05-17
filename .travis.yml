@@ -8,6 +8,9 @@ sudo: required
 dist: trusty
 
 language: go
+os:
+- linux
+- linux-ppc64le
 
 go:
   - "1.10.x"
