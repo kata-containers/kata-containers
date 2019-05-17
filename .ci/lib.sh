@@ -8,6 +8,7 @@
 
 export KATA_RUNTIME=${KATA_RUNTIME:-kata-runtime}
 export KATA_KSM_THROTTLER=${KATA_KSM_THROTTLER:-no}
+export KATA_NEMU_DESTDIR=${KATA_NEMU_DESTDIR:-"/usr/local"}
 
 # Name of systemd service for the throttler
 KATA_KSM_THROTTLER_JOB="kata-ksm-throttler"

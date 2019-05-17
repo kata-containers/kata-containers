@@ -86,14 +86,11 @@ if [ "$KATA_HYPERVISOR" == "qemu" ]; then
 	"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker configure -r kata-runtime -f
 elif [ "$KATA_HYPERVISOR" == "nemu" ]; then
 	echo "Configure Nemu as Kata Hypervisor"
-	sudo sed -i -e 's|machine_type = "pc"|machine_type = "virt"|' "${runtime_config_path}"
-	sudo sed -i -e 's|firmware = ""|firmware = "/usr/share/nemu/firmware/OVMF.fd"|' "${runtime_config_path}"
+	sudo crudini --set "${runtime_config_path}" hypervisor.qemu machine_type \"virt\"
+	sudo crudini --set "${runtime_config_path}" hypervisor.qemu firmware \"${KATA_NEMU_DESTDIR}/share/kata-nemu/OVMF.fd\"
 	case "$arch" in
 	x86_64)
-		sudo sed -i -e "s|\"/usr/bin/qemu-lite-system-${arch}\"|\"/usr/local/bin/qemu-system-${arch}_virt\"|" "${runtime_config_path}"
-		;;
-	aarch64)
-		sudo sed -i -e "s|\"/usr/bin/qemu-lite-system-${arch}\"|\"/usr/local/bin/qemu-system-${arch}\"|" "${runtime_config_path}"
+		sudo crudini --set "${runtime_config_path}" hypervisor.qemu path \"${KATA_NEMU_DESTDIR}/bin/nemu-system-${arch}\"
 		;;
 	*)
 		die "Unsupported architecture: $arch"

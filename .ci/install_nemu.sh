@@ -19,21 +19,22 @@ arch=$("${cidir}"/kata-arch.sh -d)
 install_nemu() {
 	local nemu_repo=$(get_version "assets.hypervisor.nemu.url")
 	local nemu_version=$(get_version "assets.hypervisor.nemu.version")
+	PACKAGING_REPO="github.com/kata-containers/packaging"
+	NEMU_TAR="kata-nemu-static.tar.gz"
 	case "$arch" in
 	x86_64)
-		local nemu_bin="qemu-system-${arch}_virt"
-		;;
-	aarch64)
-		local nemu_bin="qemu-system-${arch}"
+		local nemu_bin="nemu-system-${arch}"
 		;;
 	*)
 		die "Unsupported architecture: $arch"
 		;;
 	esac
 
-	curl -LO "${nemu_repo}/releases/download/${nemu_version}/${nemu_bin}"
-	sudo install -o root -g root -m 0755 "${nemu_bin}" "/usr/local/bin"
-	rm -rf "${nemu_bin}"
+	go get -d "${PACKAGING_REPO}" || true
+
+	prefix="${KATA_NEMU_DESTDIR}" ${GOPATH}/src/${PACKAGING_REPO}/static-build/nemu/build-static-nemu.sh
+	sudo tar -xvf ${NEMU_TAR} -C /
+	rm ${NEMU_TAR}
 }
 
 install_firmware() {
@@ -49,4 +50,5 @@ install_firmware() {
 }
 
 install_nemu
-install_firmware
+# NEMU static tar now also includes the OVMF.fd bios file.
+#install_firmware
