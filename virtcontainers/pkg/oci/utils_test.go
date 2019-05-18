@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strconv"
 	"testing"
 
@@ -816,6 +817,10 @@ func TestGetShmSizeBindMounted(t *testing.T) {
 	assert.Nil(t, err)
 
 	size := 8192
+	if runtime.GOARCH == "ppc64le" {
+		// PAGE_SIZE on ppc64le is 65536
+		size = 65536
+	}
 
 	shmOptions := "mode=1777,size=" + strconv.Itoa(size)
 	err = unix.Mount("shm", shmPath, "tmpfs", unix.MS_NOEXEC|unix.MS_NOSUID|unix.MS_NODEV, shmOptions)
