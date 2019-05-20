@@ -17,6 +17,8 @@ source "${SCRIPT_PATH}/../lib/common.bash"
 
 RUNTIME=${RUNTIME:-kata-runtime}
 
+TRACE_LOG_DIR=${TRACE_LOG_DIR:-${KATA_TESTS_LOGDIR}/traces}
+
 jaeger_server=${jaeger_server:-localhost}
 jaeger_ui_port=${jaeger_ui_port:-16686}
 jaeger_docker_container_name="jaeger"
@@ -51,6 +53,8 @@ start_jaeger()
 		-p 14268:14268 \
 		-p 9411:9411 \
 		"$jaeger_docker_image"
+
+	sudo mkdir -m 0750 -p "$TRACE_LOG_DIR"
 }
 
 stop_jaeger()
@@ -152,6 +156,10 @@ check_jaeger_status()
 	local attempt=0
 	local attempts=3
 
+	local trace_logfile=$(printf "%s/%s-traces.json" "$TRACE_LOG_DIR" "$service")
+
+	info "Checking Jaeger status (and logging traces to ${trace_logfile})"
+
 	while [ "$attempt" -lt "$attempts" ]
 	do
 		status=$(get_jaeger_status "$service")
@@ -162,6 +170,9 @@ check_jaeger_status()
 
 		local span_lines=$(echo "$status"|jq -S '.data[].spans | length')
 		[ -z "$span_lines" ] && die "no span status"
+
+		# Log the spans to allow for analysis in case the test fails
+		echo "$status"|jq -S .|sudo tee "$trace_logfile" >/dev/null
 
 		local span_lines_count=$(echo "$span_lines"|wc -l)
 
@@ -247,6 +258,13 @@ main()
 
 	info "Checking shim spans"
 	run_test "$shim_min_spans" "$shim_service"
+
+	# The tests worked so remove the logs
+	if sudo [ -d "$TRACE_LOG_DIR" ] && [ "$TRACE_LOG_DIR" != "/" ]
+	then
+		info "Removing cached trace logs from $TRACE_LOG_DIR"
+		sudo rm -rf "$TRACE_LOG_DIR"
+	fi
 }
 
 main "$@"
