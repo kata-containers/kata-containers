@@ -29,6 +29,9 @@ ARCH_DIR = arch
 ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 
+INSTALL_FILES := $(wildcard .ci/install_*.sh)
+INSTALL_TARGETS := $(INSTALL_FILES:.ci/install_%.sh=install-%)
+
 # Load architecture-dependent settings
 ifneq ($(wildcard $(ARCH_FILE)),)
 include $(ARCH_FILE)
@@ -163,6 +166,12 @@ test: ${UNION}
 
 check: checkcommits log-parser
 
+$(INSTALL_TARGETS): install-%: .ci/install_%.sh
+	@bash -f $<
+
+list-install-targets:
+	@echo $(INSTALL_TARGETS) | tr " " "\n"
+
 # PHONY in alphabetical order
 .PHONY: \
 	check \
@@ -175,7 +184,9 @@ check: checkcommits log-parser
 	entropy \
 	functional \
 	ginkgo \
+	$(INSTALL_TARGETS) \
 	kubernetes \
+	list-install-targets \
 	log-parser \
 	oci \
 	openshift \
