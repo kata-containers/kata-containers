@@ -620,7 +620,10 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 		agentURL:   agentURL,
 		consoleURL: consoleURL,
 		logger:     k.Logger().WithField("sandbox", sandbox.id),
-		debug:      sandbox.config.ProxyConfig.Debug,
+		// Disable debug so proxy doesn't read console if we want to
+		// debug the agent console ourselves.
+		debug: sandbox.config.ProxyConfig.Debug &&
+			!k.hasAgentDebugConsole(sandbox),
 	}
 
 	// Start the proxy here
@@ -1111,6 +1114,16 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 	return nil, nil
 }
 
+func (k *kataAgent) hasAgentDebugConsole(sandbox *Sandbox) bool {
+	for _, p := range sandbox.config.HypervisorConfig.KernelParams {
+		if p.Key == "agent.debug_console" {
+			k.Logger().Info("agent has debug console")
+			return true
+		}
+	}
+	return false
+}
+
 func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process, err error) {
 	span, _ := k.trace("createContainer")
 	defer span.Finish()
@@ -1230,8 +1243,11 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	}
 
 	// Ask to the shim to print the agent logs, if it's the process who monitors the sandbox and use_vsock is true (no proxy)
+	// Don't read the console socket if agent debug console is enabled.
 	var consoleURL string
-	if sandbox.config.HypervisorConfig.UseVSock && c.GetAnnotations()[vcAnnotations.ContainerTypeKey] == string(PodSandbox) {
+	if sandbox.config.HypervisorConfig.UseVSock &&
+		c.GetAnnotations()[vcAnnotations.ContainerTypeKey] == string(PodSandbox) &&
+		!k.hasAgentDebugConsole(sandbox) {
 		consoleURL, err = sandbox.hypervisor.getSandboxConsole(sandbox.id)
 		if err != nil {
 			return nil, err
