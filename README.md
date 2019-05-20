@@ -7,11 +7,14 @@
     * [CI setup](#ci-setup)
     * [Detecting a CI system](#detecting-a-ci-system)
     * [Breaking Compatibility](#breaking-compatibility)
+* [CLI tools](#cli-tools)
 * [Developer Mode](#developer-mode)
 * [Run the Kata Containers tests](#run-the-kata-containers-tests)
     * [Requirements to run Kata Containers tests](#requirements-to-run-kata-containers-tests)
     * [Prepare an environment](#prepare-an-environment)
     * [Run the tests](#run-the-tests)
+* [Metrics tests](#metrics-tests)
+* [Kata Admission controller webhook](#kata-admission-controller-webhook)
 
 This repository contains various types of tests and utilities (called
 "content" from now on) for testing the [Kata Containers](https://github.com/kata-containers)
@@ -110,6 +113,11 @@ In this example, we tell the CI to fetch the pull request 999 from the `runtime`
 repository and use that rather than the `master` branch when testing the changes
 contained in this pull request.
 
+## CLI tools
+
+This repository contains a number of [command line tools](cmd). They are used
+by the [CI](#ci-content) tests but may be useful for user to run stand alone.
+
 ## Developer Mode
 
 Developers need a way to run as much test content as possible locally, but as
@@ -198,3 +206,11 @@ the docker integration tests, run the following:
 ```
 $ sudo -E PATH=$PATH make docker
 ```
+
+## Metrics tests
+
+See the [metrics documentation](metrics).
+
+## Kata Admission controller webhook
+
+See the [webhook documentation](kata-webhook).
