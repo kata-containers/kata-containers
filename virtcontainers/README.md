@@ -21,6 +21,8 @@ Table of Contents
    * [Devices](#devices)
       * [How to pass a device using VFIO-passthrough](#how-to-pass-a-device-using-vfio-passthrough)
    * [Developers](#developers)
+   * [Persistent storage plugin support](#persistent-storage-plugin-support)
+   * [Experimental features](#experimental-features)
 
 # What is it ?
 
@@ -152,6 +154,8 @@ The Sandbox has to be running.
 * `KillContainer(sandboxID, containerID string, signal syscall.Signal, all bool)` sends a signal to all or one container inside a Sandbox.
 
 An example tool using the `virtcontainers` API is provided in the `hack/virtc` package.
+
+For further details, see the [API documentation](documentation/api/1.0/api.md).
 
 # Networking
 
@@ -324,3 +328,11 @@ tooling.
 
 For information on how to build, develop and test `virtcontainers`, see the
 [developer documentation](documentation/Developers.md).
+
+# Persistent storage plugin support
+
+See the [persistent storage plugin documentation](persist/plugin).
+
+# Experimental features
+
+See the [experimental features documenation](experimental).
