@@ -34,42 +34,37 @@ echo "Update repositories"
 sudo -E yum -y update
 
 echo "Install chronic"
-sudo -E yum install -y moreutils
+sudo -E yum -y install moreutils
 
-echo "Install kata containers dependencies"
-chronic sudo -E yum install -y libtool libtool-ltdl-devel device-mapper-persistent-data lvm2 device-mapper-devel libtool-ltdl bzip2 m4 \
-	 gettext-devel automake alien autoconf bc pixman-devel coreutils
+declare -A packages=( \
+	[kata_containers_dependencies]="libtool libtool-ltdl-devel device-mapper-persistent-data lvm2 device-mapper-devel libtool-ltdl" \
+	[qemu_dependencies]="libcap-devel libcap-ng-devel libattr-devel libcap-ng-devel librbd1-devel flex libfdt-devel" \
+	[nemu_dependencies]="brlapi" \
+	[kernel_dependencies]="elfutils-libelf-devel flex pkgconfig" \
+	[crio_dependencies]="glibc-static libseccomp-devel libassuan-devel libgpg-error-devel device-mapper-libs btrfs-progs-devel util-linux libselinux-devel" \
+	[bison_binary]="bison" \
+	[libgudev1-dev]="libgudev1-devel" \
+	[general_dependencies]="gpgme-devel glib2-devel glibc-devel bzip2 m4 gettext-devel automake alien autoconf pixman-devel coreutils" \
+	[build_tools]="python pkgconfig zlib-devel" \
+	[ostree]="ostree-devel" \
+	[yaml_validator]="yamllint" \
+	[metrics_dependencies]="smem jq" \
+	[cri-containerd_dependencies]="libseccomp-devel btrfs-progs-devel" \
+	[crudini]="crudini" \
+	[procenv]="procenv" \
+	[haveged]="haveged" \
+	[gnu_parallel_dependencies]="perl bzip2 make" \
+	[libsystemd]="systemd-devel" \
+)
 
-echo "Install qemu dependencies"
-chronic sudo -E yum install -y libcap-devel libcap-ng-devel libattr-devel libcap-ng-devel librbd1-devel flex libfdt-devel
+pkgs_to_install=${packages[@]}
 
-echo "Install nemu dependencies"
-chronic sudo -E yum install -y brlapi
-
-echo "Install kernel dependencies"
-chronic sudo -E yum -y install elfutils-libelf-devel flex
-
-echo "Install CRI-O dependencies for CentOS"
-chronic sudo -E yum install -y glibc-static libseccomp-devel libassuan-devel libgpg-error-devel device-mapper-libs \
-	 btrfs-progs-devel util-linux gpgme-devel glib2-devel glibc-devel libselinux-devel ostree-devel \
-	 pkgconfig
-
-echo "Install bison binary"
-chronic sudo -E yum install -y bison
-
-echo "Install libgudev1-devel"
-chronic sudo -E yum install -y libgudev1-devel
-
-echo "Install Build Tools"
-chronic sudo -E yum install -y python pkgconfig zlib-devel
-
-chronic sudo -E yum install -y ostree-devel
-
-echo "Install YAML validator"
-chronic sudo -E yum install -y yamllint
-
-echo "Install tools for metrics tests"
-chronic sudo -E yum install -y smem jq
+for j in ${packages[@]}; do
+	pkgs=$(echo "$j")
+	info "The following package will be installed: $pkgs"
+	pkgs_to_install+=" $pkgs"
+done
+chronic sudo -E yum -y install $pkgs_to_install
 
 if [ "$(arch)" == "x86_64" ]; then
 	echo "Install Kata Containers OBS repository"
@@ -80,25 +75,9 @@ if [ "$(arch)" == "x86_64" ]; then
 	sudo bash -c "echo retries=2 >> $repo_file"
 fi
 
-echo "Install cri-containerd dependencies"
-chronic sudo -E yum install -y libseccomp-devel btrfs-progs-devel
-
-echo "Install crudini"
-chronic sudo -E yum install -y crudini
-
-echo "Install procenv"
-chronic sudo -E yum install -y procenv
-
-echo "Install haveged"
-chronic sudo -E yum install -y haveged
-
 echo "Install GNU parallel"
 # GNU parallel not available in Centos repos, so build it instead.
-chronic sudo -E yum -y install perl bzip2 make
 build_install_parallel
-
-echo "Install libsystemd"
-chronic sudo -E yum install -y systemd-devel
 
 if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
 	echo "Install ${KATA_KSM_THROTTLER_JOB}"

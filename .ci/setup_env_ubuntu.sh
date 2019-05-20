@@ -17,33 +17,34 @@ sudo -E apt update
 echo "Install chronic"
 sudo -E apt install -y moreutils
 
-echo "Install kata containers dependencies"
-chronic sudo -E apt install -y libtool automake autotools-dev autoconf bc alien libpixman-1-dev coreutils
+declare -A packages=( \
+	[kata_containers_dependencies]="libtool automake autotools-dev autoconf bc alien libpixman-1-dev coreutils" \
+	[qemu_dependencies]="libcap-dev libattr1-dev libcap-ng-dev librbd-dev" \
+	[nemu_dependencies]="libbrlapi0.6" \
+	[kernel_dependencies]="libelf-dev flex" \
+	[crio_dependencies]="libglib2.0-dev libseccomp-dev libapparmor-dev libgpgme11-dev thin-provisioning-tools" \
+	[bison_binary]="bison" \
+	[libudev-dev]="libudev-dev" \
+	[build_tools]="build-essential python pkg-config zlib1g-dev" \
+	[crio_dependencies_for_ubuntu]="libdevmapper-dev btrfs-tools util-linux" \
+	[yaml_validator]="yamllint" \
+	[metrics_dependencies]="smem jq" \
+	[cri-containerd_dependencies]="libseccomp-dev libapparmor-dev btrfs-tools  make gcc pkg-config" \
+	[crudini]="crudini" \
+	[procenv]="procenv" \
+	[haveged]="haveged" \
+	[gnu_parallel]="parallel" \
+	[libsystemd]="libsystemd-dev" \
+)
 
-echo "Install qemu dependencies"
-chronic sudo -E apt install -y libcap-dev libattr1-dev libcap-ng-dev librbd-dev
+pkgs_to_install=${packages[@]}
 
-echo "Install nemu dependencies"
-chronic sudo -E apt install -y libbrlapi0.6
-
-echo "Install kernel dependencies"
-chronic sudo -E apt install -y libelf-dev flex
-
-echo "Install CRI-O dependencies for all Ubuntu versions"
-chronic sudo -E apt install -y libglib2.0-dev libseccomp-dev libapparmor-dev \
-	libgpgme11-dev thin-provisioning-tools
-
-echo "Install bison binary"
-chronic sudo -E apt install -y bison
-
-echo "Install libudev-dev"
-chronic sudo -E apt-get install -y libudev-dev
-
-echo "Install Build Tools"
-chronic sudo -E apt install -y build-essential python pkg-config zlib1g-dev
-
-echo -e "Install CRI-O dependencies available for Ubuntu $VERSION_ID"
-chronic sudo -E apt install -y libdevmapper-dev btrfs-tools util-linux
+for j in ${packages[@]}; do
+	pkgs=$(echo "$j")
+	info "The following package will be installed: $pkgs"
+	pkgs_to_install+=" $pkgs"
+done
+chronic sudo -E apt -y install $pkgs_to_install
 
 if [ "$VERSION_ID" == "16.04" ] && [ "$(arch)" != "ppc64le" ]; then
 	chronic sudo -E add-apt-repository ppa:alexlarsson/flatpak -y
@@ -53,12 +54,6 @@ fi
 echo "Install os-tree"
 chronic sudo -E apt install -y libostree-dev
 
-echo "Install YAML validator"
-chronic sudo -E apt install -y yamllint
-
-echo "Install tools for metrics tests"
-chronic sudo -E apt install -y smem jq
-
 if [ "$(arch)" == "x86_64" ]; then
 	echo "Install Kata Containers OBS repository"
 	obs_url="$KATA_OBS_REPO_BASE/xUbuntu_$(lsb_release -rs)/"
@@ -66,24 +61,6 @@ if [ "$(arch)" == "x86_64" ]; then
 	curl -sL  "${obs_url}/Release.key" | sudo apt-key add -
 	chronic sudo -E apt-get update
 fi
-
-echo -e "Install cri-containerd dependencies"
-chronic sudo -E apt install -y libseccomp-dev libapparmor-dev btrfs-tools  make gcc pkg-config
-
-echo "Install crudini"
-chronic sudo -E apt install -y crudini
-
-echo "Install procenv"
-chronic sudo -E apt install -y procenv
-
-echo "Install haveged"
-chronic sudo -E apt install -y haveged
-
-echo "Install GNU parallel"
-chronic sudo -E apt install -y parallel
-
-echo "Install libsystemd"
-chronic sudo -E apt install -y libsystemd-dev
 
 if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
 	echo "Install ${KATA_KSM_THROTTLER_JOB}"
