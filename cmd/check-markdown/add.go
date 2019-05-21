@@ -84,15 +84,20 @@ func (d *Doc) addLink(link Link) error {
 		"link": fmt.Sprintf("%+v", link),
 	}
 
-	if _, ok := d.Links[addr]; ok {
-		d.Logger.WithFields(fields).Debug("not adding duplicate link")
+	links := d.Links[addr]
 
-		return nil
+	for _, l := range links {
+		if l.Type == link.Type {
+			d.Logger.WithFields(fields).Debug("not adding duplicate link")
+
+			return nil
+		}
 	}
 
 	d.Logger.WithFields(fields).Debug("adding link")
 
-	d.Links[addr] = link
+	links = append(links, link)
+	d.Links[addr] = links
 
 	return nil
 }

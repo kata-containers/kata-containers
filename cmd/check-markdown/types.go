@@ -109,8 +109,9 @@ type Doc struct {
 	Headings map[string]Heading
 
 	// Key: link address
-	// Value: Link
-	Links map[string]Link
+	// Value: *list* of links. Required since you can have multiple links with
+	// the same _address_, but of a different type.
+	Links map[string][]Link
 
 	// true when this document has been fully parsed
 	Parsed bool

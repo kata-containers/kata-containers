@@ -112,10 +112,12 @@ func (d *Doc) checkLink(address string, link Link, checkOtherDoc bool) error {
 
 // check performs all checks on the document.
 func (d *Doc) check() error {
-	for name, link := range d.Links {
-		err := d.checkLink(name, link, false)
-		if err != nil {
-			return err
+	for name, linkList := range d.Links {
+		for _, link := range linkList {
+			err := d.checkLink(name, link, false)
+			if err != nil {
+				return err
+			}
 		}
 	}
 

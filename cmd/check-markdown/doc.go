@@ -26,7 +26,7 @@ func newDoc(name string, logger *logrus.Entry) *Doc {
 	d := &Doc{
 		Name:     name,
 		Headings: make(map[string]Heading),
-		Links:    make(map[string]Link),
+		Links:    make(map[string][]Link),
 		Parsed:   false,
 		ShowTOC:  false,
 		Logger:   logger,

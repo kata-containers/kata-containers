@@ -129,10 +129,12 @@ func (d *Doc) handleLink(node *bf.Node) error {
 // will ensure that "section-bar" exists in external file "foo.md".
 func handleIntraDocLinks() error {
 	for _, doc := range docs {
-		for addr, link := range doc.Links {
-			err := doc.checkLink(addr, link, true)
-			if err != nil {
-				return doc.Errorf("intra-doc link invalid: %v", err)
+		for addr, linkList := range doc.Links {
+			for _, link := range linkList {
+				err := doc.checkLink(addr, link, true)
+				if err != nil {
+					return doc.Errorf("intra-doc link invalid: %v", err)
+				}
 			}
 		}
 	}

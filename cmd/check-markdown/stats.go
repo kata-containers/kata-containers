@@ -17,9 +17,11 @@ func (d *Doc) showStats() {
 
 	linkCount := 0
 
-	for _, link := range d.Links {
-		counters[link.Type]++
-		linkCount++
+	for _, linkList := range d.Links {
+		for _, link := range linkList {
+			counters[link.Type]++
+			linkCount++
+		}
 	}
 
 	fields := logrus.Fields{
