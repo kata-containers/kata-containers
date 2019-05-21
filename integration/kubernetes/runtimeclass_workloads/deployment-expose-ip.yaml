@@ -1,0 +1,26 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-world
+spec:
+  selector:
+    matchLabels:
+      app: hello-world
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: hello-world
+        run: load-balancer-example
+    spec:
+      runtimeClassName: kata
+      containers:
+      - name: hello-world
+        image: gcr.io/google-samples/node-hello:1.0
+        ports:
+        - containerPort: 8080
