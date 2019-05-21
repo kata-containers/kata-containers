@@ -453,7 +453,7 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 		}
 
 		s.send(&eventstypes.TaskDelete{
-			ContainerID: s.id,
+			ContainerID: c.id,
 			Pid:         s.pid,
 			ExitStatus:  c.exit,
 			ExitedAt:    c.exitTime,
