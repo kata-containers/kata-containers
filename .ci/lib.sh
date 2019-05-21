@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Copyright (c) 2017-2018 Intel Corporation
 # Copyright (c) 2018 ARM Limited
