@@ -145,7 +145,7 @@ create_github_release() {
 	tag=${2:-}
 	[ -d "${repo_dir}" ] || die "No repository directory"
 	[ -n "${tag}" ] || die "No tag specified"
-	if ! "${hub_bin}" release | grep -q "^${tag}$"; then
+	if ! "${hub_bin}" release show "${tag}"; then
 		info "Creating Github release"
 		if [[ "$tag" =~ "-rc" ]]; then
 			rc_args="-p"
