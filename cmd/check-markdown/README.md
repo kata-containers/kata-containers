@@ -30,7 +30,7 @@ some errors it finds. It can also generate a TOC (table of contents).
 ## Basic
 
 ```sh
-$ kata-check-markdown README.md
+$ kata-check-markdown check README.md
 ```
 
 ## Generate a TOC

@@ -112,8 +112,8 @@ func handleDoc(c *cli.Context) error {
 		return errNeedFile
 	}
 
-	createTOC := c.Bool("create-toc")
-	singleDocOnly := c.Bool("single-doc-only")
+	createTOC := c.GlobalBool("create-toc")
+	singleDocOnly := c.GlobalBool("single-doc-only")
 
 	doc := newDoc(fileName, logger)
 	doc.ShowTOC = createTOC
@@ -212,7 +212,6 @@ func realMain() error {
 	app.Description = "Tool to check GitHub-Flavoured Markdown (GFM) format documents"
 	app.Usage = app.Description
 	app.UsageText = fmt.Sprintf("%s [options] file ...", app.Name)
-	app.Action = handleDoc
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
 			Name:  "create-toc, t",
@@ -234,6 +233,15 @@ func realMain() error {
 		cli.BoolFlag{
 			Name:  "strict, s",
 			Usage: "enable strict mode",
+		},
+	}
+
+	app.Commands = []cli.Command{
+		{
+			Name:        "check",
+			Usage:       "Perform tests on the specified document",
+			Description: "Exit code denotes success",
+			Action:      handleDoc,
 		},
 	}
 
