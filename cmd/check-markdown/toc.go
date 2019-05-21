@@ -52,7 +52,7 @@ func (d *Doc) displayTOCEntryFromHeading(heading Heading) error {
 		prefix = strings.Repeat(" ", level*indentSpaces)
 	}
 
-	entry := fmt.Sprintf("[%s](%s%s)", heading.Name, anchorPrefix, heading.LinkName)
+	entry := fmt.Sprintf("[%s](%s%s)", heading.MDName, anchorPrefix, heading.LinkName)
 
 	fmt.Printf("%s%s %s\n", prefix, listPrefix, entry)
 

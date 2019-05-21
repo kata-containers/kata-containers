@@ -47,14 +47,15 @@ func (t LinkType) String() string {
 //
 // Example: A heading like this:
 //
-//    ### This is a heading
+//    ### This is a `verbatim` heading
 //
 // ... would be described as:
 //
 // ```go
 // Heading{
-//   Name:     "This is a heading",
-//   LinkName: "this-is-a-heading",
+//   Name:     "This is a verbatim heading",
+//   MDName    "This is a `verbatim` heading",
+//   LinkName: "this-is-a-verbatim-heading",
 //   Level:    3,
 // }
 // ```
@@ -62,6 +63,9 @@ type Heading struct {
 	// Not strictly necessary since the name is used as a hash key.
 	// However, storing here too makes the code simpler ;)
 	Name string
+
+	// Name including any markdown syntax
+	MDName string
 
 	// The encoded value of Name.
 	LinkName string

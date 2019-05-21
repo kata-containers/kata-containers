@@ -49,7 +49,7 @@ func (d *Doc) makeHeading(node *bf.Node) (Heading, error) {
 		return Heading{}, err
 	}
 
-	name, err := headingName(node)
+	name, mdName, err := headingName(node)
 	if err != nil {
 		return Heading{}, d.Errorf("failed to get heading name: %v", err)
 	}
@@ -58,6 +58,7 @@ func (d *Doc) makeHeading(node *bf.Node) (Heading, error) {
 
 	heading := Heading{
 		Name:     name,
+		MDName:   mdName,
 		LinkName: data.HeadingID,
 		Level:    data.Level,
 	}
