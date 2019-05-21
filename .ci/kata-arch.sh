@@ -61,7 +61,12 @@ main()
 {
 	local type="default"
 
-	local args=$(getopt \
+	local getopt_cmd="getopt"
+
+	# macOS default getopt does not recognize GNU options
+	[ "$(uname -s)" == "Darwin" ] && getopt_cmd="/usr/local/opt/gnu-getopt/bin/${getopt_cmd}"
+
+	local args=$("$getopt_cmd" \
 		-n "$script_name" \
 		-a \
 		--options="dghk" \
