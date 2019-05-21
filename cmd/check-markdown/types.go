@@ -12,6 +12,7 @@ import "github.com/Sirupsen/logrus"
 type LinkType int
 
 const (
+	unknownLink   LinkType = iota
 	internalLink  LinkType = iota
 	externalLink  LinkType = iota // External ".md" file
 	externalFile  LinkType = iota // External non-".md" file
@@ -21,9 +22,11 @@ const (
 )
 
 func (t LinkType) String() string {
-	name := "unknown"
+	var name string
 
 	switch t {
+	case unknownLink:
+		name = "unknown"
 	case internalLink:
 		name = "internal-link"
 	case externalLink:

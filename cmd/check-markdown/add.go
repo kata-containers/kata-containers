@@ -69,6 +69,10 @@ func (d *Doc) addLink(link Link) error {
 		return d.Errorf("link address cannot be blank: %+v", link)
 	}
 
+	if link.Type == unknownLink {
+		return d.Errorf("BUG: link type invalid: %+v", link)
+	}
+
 	// Not checked by default as magic "build status" / go report / godoc
 	// links don't have a description - they have a image only.
 	if strict && link.Description == "" {
