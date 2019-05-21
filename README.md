@@ -63,6 +63,17 @@ The advantages of this approach are:
 
 - Assurance that all the code repositories are tested in this same way.
 
+CI scripts also provide a convenient way for other Kata repositories to
+install software. The preferred way to use these scripts is to invoke `make`
+with the corresponding `install-` target. For example, to install crio you
+would use:
+
+```
+$ make -C <path-to-this-repo> install-crio
+```
+
+Use `make list-install-targets` to retrieve all the available install targets.
+
 ### CI setup
 
 > **WARNING:**
