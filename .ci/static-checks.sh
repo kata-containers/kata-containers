@@ -375,17 +375,19 @@ check_docs()
 	info "Checking documentation"
 
 	local doc
+	local all_docs
 	local docs
 	local docs_status
 	local new_docs
 	local new_urls
 	local url
 
+	all_docs=$(find . -name "*.md" | grep -v "vendor/" | sort || true)
+
 	if [ "$specific_branch" = "true" ]
 	then
 		info "Checking all documents in $branch branch"
-
-		docs=$(find . -name "*.md" | grep -v "vendor/" || true)
+		docs="$all_docs"
 	else
 		info "Checking local branch for changed documents only"
 
@@ -419,15 +421,73 @@ check_docs()
 	local urls
 	local url_map=$(mktemp)
 	local invalid_urls=$(mktemp)
+	local md_links=$(mktemp)
 
-	info "Checking document code blocks and markdown references"
+	info "Checking document markdown references"
+
+	local md_docs_to_check
+
+	# All markdown docs are checked (not just those changed by a PR). This
+	# is necessary to guarantee that all docs are referenced.
+	md_docs_to_check="$all_docs"
 
 	(cd "${tests_repo_dir}" && make check-markdown)
 
+	for doc in $md_docs_to_check
+	do
+		kata-check-markdown check "$doc"
+
+		# Get a link of all other markdown files this doc references
+		kata-check-markdown list links --format tsv --no-header "$doc" |\
+			grep "external-link" |\
+			awk '{print $3}' |\
+			sort -u >> "$md_links"
+	done
+
+	# clean the list of links
+	local tmp
+	tmp=$(mktemp)
+
+	sort -u "$md_links" > "$tmp"
+	mv "$tmp" "$md_links"
+
+	# Remove initial "./" added by find(1).
+	md_docs_to_check=$(echo "$md_docs_to_check"|sed 's,^\./,,g')
+
+	# A list of markdown files that do not have to be referenced by any
+	# other markdown file.
+	exclude_doc_regexs+=()
+
+	exclude_doc_regexs+=(^CODE_OF_CONDUCT\.md$)
+	exclude_doc_regexs+=(^CONTRIBUTING\.md$)
+
+	# Magic github template files
+	exclude_doc_regexs+=(^\.github/.*\.md$)
+
+	# The top level README doesn't need to be referenced by any other
+	# since it displayed by default when visiting the repo.
+	exclude_doc_regexs+=(^README\.md$)
+
+	local exclude_pattern
+
+	# Convert the list of files into an egrep(1) alternation pattern.
+	exclude_pattern=$(echo "${exclude_doc_regexs[@]}"|sed 's, ,|,g')
+
+	# Every document in the repo (except a small handful of exceptions)
+	# should be referenced by another document.
+	for doc in $md_docs_to_check
+	do
+		# Check the ignore list for markdown files that do not need to
+		# be referenced by others.
+		echo "$doc"|egrep -q "(${exclude_pattern})" && continue
+
+		grep -q "$doc" "$md_links" || die "Document $doc is not referenced"
+	done
+
+	info "Checking document code blocks"
+
 	for doc in $docs
 	do
-		kata-check-markdown "$doc"
-
 		bash "${cidir}/kata-doc-to-script.sh" -csv "$doc"
 
 		# Look for URLs in the document
@@ -502,7 +562,7 @@ check_docs()
 		exit 1
 	fi
 
-	rm -f "$url_map" "$invalid_urls"
+	rm -f "$url_map" "$invalid_urls" "$md_links"
 }
 
 # Tests to apply to all files.
