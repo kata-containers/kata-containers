@@ -7,9 +7,6 @@
 package main
 
 import (
-	"regexp"
-	"strings"
-
 	bf "gopkg.in/russross/blackfriday.v2"
 )
 
@@ -56,12 +53,7 @@ func (d *Doc) makeHeading(node *bf.Node) (Heading, error) {
 
 	data := node.HeadingData
 
-	heading := Heading{
-		Name:     name,
-		MDName:   mdName,
-		LinkName: data.HeadingID,
-		Level:    data.Level,
-	}
+	heading := newHeading(name, mdName, data.HeadingID, data.Level)
 
 	return heading, nil
 }
@@ -92,33 +84,9 @@ func (d *Doc) handleLink(node *bf.Node) error {
 		return d.Errorf("failed to get link name: %v", err)
 	}
 
-	link := Link{
-		Address:     address,
-		Description: description,
-	}
-	// markdown file extension with optional link name ("#...")
-	const re = `\.md#*.*$`
-
-	pattern := regexp.MustCompile(re)
-
-	matched := pattern.MatchString(address)
-
-	if strings.HasPrefix(address, "http") {
-		link.Type = urlLink
-	} else if strings.HasPrefix(address, "mailto:") {
-		link.Type = mailLink
-	} else if strings.HasPrefix(address, anchorPrefix) {
-		link.Type = internalLink
-
-		// Remove the prefix to make a valid link address
-		address = strings.TrimPrefix(address, anchorPrefix)
-		link.Address = address
-
-	} else if matched {
-		link.Type = externalLink
-	} else {
-		// Link must be an external file, but not a markdown file.
-		link.Type = externalFile
+	link, err := newLink(d, address, description)
+	if err != nil {
+		return err
 	}
 
 	return d.addLink(link)

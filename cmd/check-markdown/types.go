@@ -91,6 +91,11 @@ type Heading struct {
 // }
 // ```
 type Link struct {
+	// Document this link refers to.
+	Doc *Doc
+
+	// Original address from document.
+	//
 	// Must be a valid Heading.LinkName.
 	//
 	// Not strictly necessary since the address is used as a hash key.
