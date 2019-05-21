@@ -840,6 +840,11 @@ func (s *Sandbox) createNetwork() error {
 	return s.store.Store(store.Network, s.networkNS)
 }
 
+func (s *Sandbox) postCreatedNetwork() error {
+
+	return s.network.PostAdd(s.ctx, &s.networkNS, s.factory != nil)
+}
+
 func (s *Sandbox) removeNetwork() error {
 	span, _ := s.trace("removeNetwork")
 	defer span.Finish()

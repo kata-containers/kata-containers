@@ -1448,6 +1448,32 @@ func (n *Network) Add(ctx context.Context, config *NetworkConfig, hypervisor hyp
 	return endpoints, nil
 }
 
+func (n *Network) PostAdd(ctx context.Context, ns *NetworkNamespace, hotplug bool) error {
+	if hotplug {
+		return nil
+	}
+
+	if ns.Endpoints == nil {
+		return nil
+	}
+
+	endpoints := ns.Endpoints
+
+	for _, endpoint := range endpoints {
+		netPair := endpoint.NetworkPair()
+		if netPair == nil {
+			continue
+		}
+		if netPair.VhostFds != nil {
+			for _, VhostFd := range netPair.VhostFds {
+				VhostFd.Close()
+			}
+		}
+	}
+
+	return nil
+}
+
 // Remove network endpoints in the network namespace. It also deletes the network
 // namespace in case the namespace has been created by us.
 func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor hypervisor, hotunplug bool) error {
