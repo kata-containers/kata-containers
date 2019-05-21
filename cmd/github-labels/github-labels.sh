@@ -38,7 +38,8 @@ merge_yaml()
 	[ -n "$file2" ] || die "need 2nd file"
 	[ -n "$out" ] || die "need output file"
 
-	[ -z "$(command -v yq)" ] && install_yq
+	# install yq if not exist
+	${cidir}/install_yq.sh
 
 	yq merge "$file1" --append "$file2" > "$out"
 }

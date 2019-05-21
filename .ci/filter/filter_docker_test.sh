@@ -36,7 +36,7 @@ filter_and_build()
 main()
 {
 	# install yq if not exist
-	[ -z "$(command -v yq)" ] && install_yq
+	${ci_dir}/install_yq.sh
 	# build skip option based on Describe block
 	filter_and_build "${describe_skip_flag}"
 
