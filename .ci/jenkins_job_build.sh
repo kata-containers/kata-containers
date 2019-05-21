@@ -91,6 +91,15 @@ fi
 # Resolve kata dependencies
 "${GOPATH}/src/${tests_repo}/.ci/resolve-kata-dependencies.sh"
 
+# Run the static analysis tools
+if [ -z "${METRICS_CI}" ]
+then
+	specific_branch=""
+	# If not a PR, we are testing on stable or master branch.
+	[ -z "$pr_number" ] && specific_branch="true"
+	.ci/static-checks.sh "$kata_repo" "$specific_branch"
+fi
+
 # Setup Kata Containers Environment
 #
 # - If the repo is "tests", this will call the script living in that repo
@@ -105,15 +114,6 @@ if [  "$CI_JOB" == "CRI_CONTAINERD_K8S" ]; then
 	export OPENSHIFT="no"
 fi
 .ci/setup.sh
-
-# Run the static analysis tools
-if [ -z "${METRICS_CI}" ]
-then
-	specific_branch=""
-	# If not a PR, we are testing on stable or master branch.
-	[ -z "$pr_number" ] && specific_branch="true"
-	.ci/static-checks.sh "$kata_repo" "$specific_branch"
-fi
 
 # Now we have all the components installed, log that info before we
 # run the tests.
