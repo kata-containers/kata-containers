@@ -36,7 +36,7 @@ $ kata-check-markdown check README.md
 ## Generate a TOC
 
 ```sh
-$ kata-check-markdown --create-toc README.md
+$ kata-check-markdown toc README.md
 ```
 
 ## Full details

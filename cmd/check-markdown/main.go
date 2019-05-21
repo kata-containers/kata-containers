@@ -100,7 +100,7 @@ func handleLogging(c *cli.Context) {
 	logger.Logger.SetLevel(logLevel)
 }
 
-func handleDoc(c *cli.Context) error {
+func handleDoc(c *cli.Context, createTOC bool) error {
 	handleLogging(c)
 
 	if c.NArg() == 0 {
@@ -112,7 +112,6 @@ func handleDoc(c *cli.Context) error {
 		return errNeedFile
 	}
 
-	createTOC := c.GlobalBool("create-toc")
 	singleDocOnly := c.GlobalBool("single-doc-only")
 
 	doc := newDoc(fileName, logger)
@@ -214,10 +213,6 @@ func realMain() error {
 	app.UsageText = fmt.Sprintf("%s [options] file ...", app.Name)
 	app.Flags = []cli.Flag{
 		cli.BoolFlag{
-			Name:  "create-toc, t",
-			Usage: "display a markdown Table of Contents for the document",
-		},
-		cli.BoolFlag{
 			Name:  "debug, d",
 			Usage: "display debug information",
 		},
@@ -239,9 +234,20 @@ func realMain() error {
 	app.Commands = []cli.Command{
 		{
 			Name:        "check",
-			Usage:       "Perform tests on the specified document",
+			Usage:       "perform tests on the specified document",
 			Description: "Exit code denotes success",
-			Action:      handleDoc,
+			Action: func(c *cli.Context) error {
+				handleDoc(c, false)
+				return nil
+			},
+		},
+		{
+			Name:  "toc",
+			Usage: "display a markdown Table of Contents",
+			Action: func(c *cli.Context) error {
+				handleDoc(c, true)
+				return nil
+			},
 		},
 	}
 
