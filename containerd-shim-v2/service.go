@@ -677,6 +677,20 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 		return nil, err
 	}
 
+	// According to CRI specs, kubelet will call StopPodSandbox()
+	// at least once before calling RemovePodSandbox, and this call
+	// is idempotent, and must not return an error if all relevant
+	// resources have already been reclaimed. And in that call it will
+	// send a SIGKILL signal first to try to stop the container, thus
+	// once the container has terminated, here should ignore this signal
+	// and return directly.
+	if signum == syscall.SIGKILL || signum == syscall.SIGTERM {
+		if c.status == task.StatusStopped {
+			logrus.WithField("sandbox", s.sandbox.ID()).WithField("Container", c.id).Debug("Container has already been stopped")
+			return empty, nil
+		}
+	}
+
 	processID := c.id
 	if r.ExecID != "" {
 		execs, err := c.getExec(r.ExecID)
