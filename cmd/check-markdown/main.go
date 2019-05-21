@@ -37,6 +37,8 @@ var (
 	listPrefix = "*"
 
 	logger *logrus.Entry
+
+	errNeedFile = errors.New("need markdown file")
 )
 
 // Black Friday sometimes chokes on markdown (I know!!), so record how many
@@ -102,12 +104,12 @@ func handleDoc(c *cli.Context) error {
 	handleLogging(c)
 
 	if c.NArg() == 0 {
-		return errors.New("need markdown file")
+		return errNeedFile
 	}
 
 	fileName := c.Args().First()
 	if fileName == "" {
-		return errors.New("invalid markdown file")
+		return errNeedFile
 	}
 
 	createTOC := c.Bool("create-toc")
