@@ -85,9 +85,24 @@ type Heading struct {
 //
 // ```go
 // Link{
-//   Address:     "internal-section-name",
-//   Description: "internal link",
-//   Type:        internalLink,
+//   Address:      "internal-section-name",
+//   ResolvedPath: "",
+//   Description:  "internal link",
+//   Type:         internalLink,
+// }
+//
+// And a link like this:
+//
+//     [external link](/foo.md#section-name)
+//
+// ... would be described as:
+//
+// ```go
+// Link{
+//   Address:      "foo.md#section-name",
+//   ResolvedPath: "/docroot/foo.md",
+//   Description:  "external link",
+//   Type:         externalLink,
 // }
 // ```
 type Link struct {
@@ -101,6 +116,11 @@ type Link struct {
 	// Not strictly necessary since the address is used as a hash key.
 	// However, storing here too makes the code simpler ;)
 	Address string
+
+	// The fully expanded address, without any anchor and heading suffix.
+	//
+	// Only applies to certain link types.
+	ResolvedPath string
 
 	// The text the user sees for the hyperlink address
 	Description string

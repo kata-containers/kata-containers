@@ -7,10 +7,39 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/Sirupsen/logrus"
 )
+
+// linkAddrToPath converts a link address into a path name.
+func (d *Doc) linkAddrToPath(address string) (string, error) {
+	if address == "" {
+		return "", errors.New("need address")
+	}
+
+	dir := filepath.Dir(d.Name)
+
+	var file string
+
+	// An "absolute link path" like this has been specified:
+	//
+	// [Foo](/absolute-link.md)
+	if strings.HasPrefix(address, absoluteLinkPrefix) {
+		if !fileExists(docRoot) {
+			return "", fmt.Errorf("document root %q does not exist", docRoot)
+		}
+
+		file = filepath.Join(docRoot, address)
+	} else {
+		file = filepath.Join(dir, address)
+	}
+
+	return file, nil
+}
 
 // addHeading adds the specified heading to the document.
 //
@@ -64,6 +93,10 @@ func (d *Doc) addHeading(heading Heading) error {
 //
 func (d *Doc) addLink(link Link) error {
 	addr := link.Address
+
+	if link.ResolvedPath != "" {
+		addr = link.ResolvedPath
+	}
 
 	if addr == "" {
 		return d.Errorf("link address cannot be blank: %+v", link)

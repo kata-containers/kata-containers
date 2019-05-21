@@ -9,8 +9,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
-	"strings"
 )
 
 // checkLink checks the validity of the specified link. If checkOtherDoc is
@@ -26,32 +24,27 @@ func (d *Doc) checkLink(address string, link Link, checkOtherDoc bool) error {
 		fallthrough
 	case externalLink:
 		// Check to ensure that referenced file actually exists
-		dir := filepath.Dir(d.Name)
-
-		filename, _, err := splitLink(address)
-		if err != nil {
-			return err
-		}
 
 		var file string
 
-		if strings.HasPrefix(address, absoluteLinkPrefix) {
-			// An "absolute link path" like this has been specified:
-			//
-			// [Foo](/absolute-link.md)
-			if !fileExists(docRoot) {
-				return fmt.Errorf("document root %q does not exist", docRoot)
+		if link.ResolvedPath != "" {
+			file = link.ResolvedPath
+		} else {
+			file, _, err := splitLink(address)
+			if err != nil {
+				return err
 			}
 
-			file = filepath.Join(docRoot, filename)
-		} else {
-			file = filepath.Join(dir, filename)
-		}
+			file, err = d.linkAddrToPath(file)
+			if err != nil {
+				return err
+			}
 
-		if !fileExists(file) {
-			return d.Errorf("link type %v invalid: %q does not exist",
-				link.Type,
-				file)
+			if !fileExists(file) {
+				return d.Errorf("link type %v invalid: %q does not exist",
+					link.Type,
+					file)
+			}
 		}
 
 		if link.Type == externalFile {
