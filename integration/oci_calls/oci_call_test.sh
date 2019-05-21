@@ -114,8 +114,8 @@ function stop_oci_call() {
 function run_oci_call_true() {
 	# Find docker version
 	version=$(docker version --format '{{.Server.Version}}' | cut -d '.' -f1-2)
-	result=$(echo "$version>=18.06" | bc)
-	if [ ${result} -ne 1 ]; then
+	result=$(echo "$version>18.06" | bc)
+	if [ ${result} -eq 1 ]; then
 		local -a oci_call=( "create" "start" "delete" "state" )
 	else
 		local -a oci_call=( "create" "start" "kill" "delete" "state" )
