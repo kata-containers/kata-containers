@@ -3,6 +3,8 @@
 * [Usage](#usage)
     * [Basic](#basic)
     * [Generate a TOC](#generate-a-toc)
+    * [List headings](#list-headings)
+    * [List links](#list-links)
     * [Full details](#full-details)
 
 # Overview
@@ -37,6 +39,22 @@ $ kata-check-markdown check README.md
 
 ```sh
 $ kata-check-markdown toc README.md
+```
+
+## List headings
+
+To list the document headings in the default `text` format:
+
+```sh
+$ kata-check-markdown list headings README.md
+```
+
+## List links
+
+To list the links in a document in tab-separated format:
+
+```sh
+$ kata-check-markdown list links --format tsv README.md
 ```
 
 ## Full details

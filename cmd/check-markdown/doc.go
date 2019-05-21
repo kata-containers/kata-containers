@@ -67,3 +67,10 @@ func (d *Doc) Errorf(format string, args ...interface{}) error {
 
 	return fmt.Errorf("file=%q: %s", d.Name, s)
 }
+
+// String "pretty-prints" the specified document
+//
+// Just display the name as that is enough in text output.
+func (d *Doc) String() string {
+	return d.Name
+}

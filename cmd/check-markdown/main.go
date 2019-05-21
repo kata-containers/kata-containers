@@ -16,6 +16,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+type DataToShow int
+
 const (
 	// Character used (after an optional filename) before a heading ID.
 	anchorPrefix = "#"
@@ -23,6 +25,14 @@ const (
 	// Character used to signify an "absolute link path" which should
 	// expand to the value of the document root.
 	absoluteLinkPrefix = "/"
+
+	showLinks    DataToShow = iota
+	showHeadings DataToShow = iota
+
+	textFormat          = "text"
+	tsvFormat           = "tsv"
+	defaultOutputFormat = textFormat
+	defaultSeparator    = "\t"
 )
 
 var (
@@ -70,6 +80,23 @@ LIMITATIONS:
   of a repository.
 
 `, absoluteLinkPrefix)
+
+var formatFlag = cli.StringFlag{
+	Name:  "format",
+	Usage: "display in specified format ('help' to show all)",
+	Value: defaultOutputFormat,
+}
+
+var separatorFlag = cli.StringFlag{
+	Name:  "separator",
+	Usage: fmt.Sprintf("use the specified separator character (%s format only)", tsvFormat),
+	Value: defaultSeparator,
+}
+
+var noHeaderFlag = cli.BoolFlag{
+	Name:  "no-header",
+	Usage: "disable display of header (if format supports one)",
+}
 
 func init() {
 	logger = logrus.WithFields(logrus.Fields{
@@ -191,6 +218,37 @@ func handleDoc(c *cli.Context, createTOC bool) error {
 	return nil
 }
 
+// commonListHandler is used to handle all list operations.
+func commonListHandler(context *cli.Context, what DataToShow) error {
+	handleLogging(context)
+
+	handlers := NewDisplayHandlers(context.String("separator"), context.Bool("no-header"))
+
+	format := context.String("format")
+	if format == "help" {
+		availableFormats := handlers.Get()
+
+		for _, format := range availableFormats {
+			fmt.Fprintf(outputFile, "%s\n", format)
+		}
+
+		return nil
+	}
+
+	handler := handlers.find(format)
+	if handler == nil {
+		return fmt.Errorf("no handler for format %q", format)
+	}
+
+	if context.NArg() == 0 {
+		return errNeedFile
+	}
+
+	file := context.Args().Get(0)
+
+	return show(file, logger, handler, what)
+}
+
 func realMain() error {
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -247,6 +305,36 @@ func realMain() error {
 			Action: func(c *cli.Context) error {
 				handleDoc(c, true)
 				return nil
+			},
+		},
+		{
+			Name:  "list",
+			Usage: "display particular parts of the document",
+			Subcommands: []cli.Command{
+				{
+					Name:  "headings",
+					Usage: "display headings",
+					Flags: []cli.Flag{
+						formatFlag,
+						noHeaderFlag,
+						separatorFlag,
+					},
+					Action: func(c *cli.Context) error {
+						return commonListHandler(c, showHeadings)
+					},
+				},
+				{
+					Name:  "links",
+					Usage: "display links",
+					Flags: []cli.Flag{
+						formatFlag,
+						noHeaderFlag,
+						separatorFlag,
+					},
+					Action: func(c *cli.Context) error {
+						return commonListHandler(c, showLinks)
+					},
+				},
 			},
 		},
 	}

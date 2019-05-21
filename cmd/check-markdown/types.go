@@ -148,5 +148,7 @@ type Doc struct {
 	// if true, only show the Table Of Contents
 	ShowTOC bool
 
+	ListMode bool
+
 	Logger *logrus.Entry
 }

@@ -19,7 +19,7 @@ import (
 var errorList []error
 
 func (d *Doc) parse() error {
-	if !d.ShowTOC {
+	if !d.ShowTOC && !d.ListMode {
 		d.Logger.Info("Checking file")
 	}
 
