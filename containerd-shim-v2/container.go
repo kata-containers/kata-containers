@@ -6,7 +6,6 @@
 package containerdshim
 
 import (
-	"sync"
 	"time"
 
 	"github.com/containerd/containerd/api/types/task"
@@ -31,7 +30,6 @@ type container struct {
 	stderr   string
 	bundle   string
 	cType    vc.ContainerType
-	mu       sync.Mutex
 	exit     uint32
 	status   task.Status
 	terminal bool

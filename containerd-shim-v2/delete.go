@@ -17,21 +17,21 @@ import (
 )
 
 func deleteContainer(ctx context.Context, s *service, c *container) error {
-
-	status, err := s.sandbox.StatusContainer(c.id)
-	if err != nil {
-		return err
-	}
-	if status.State.State != types.StateStopped {
-		_, err = s.sandbox.StopContainer(c.id)
+	if !c.cType.IsSandbox() {
+		status, err := s.sandbox.StatusContainer(c.id)
 		if err != nil {
 			return err
 		}
-	}
+		if status.State.State != types.StateStopped {
+			_, err = s.sandbox.StopContainer(c.id)
+			if err != nil {
+				return err
+			}
+		}
 
-	_, err = s.sandbox.DeleteContainer(c.id)
-	if err != nil {
-		return err
+		if _, err = s.sandbox.DeleteContainer(c.id); err != nil {
+			return err
+		}
 	}
 
 	// Run post-stop OCI hooks.
