@@ -76,6 +76,9 @@ main() {
 	local projectsList=("$@")
 	[ "${#projectsList[@]}" = "0" ] && projectsList=("${OBS_PKGS_PROJECTS[@]}")
 
+	# Make sure runtime is the last project
+	projectsList=($(echo "${projectsList[@]}" | sed -E "s/(^.*)(runtime)(.*$)/\1 \3 \2/"))
+
 	pushd "${script_dir}" >>/dev/null
 	local compare_result="$(./gen_versions_txt.sh --compare ${branch})"
 	[[ "$compare_result" =~ different ]] && die "$compare_result -- you need to run gen_versions_txt.sh"
