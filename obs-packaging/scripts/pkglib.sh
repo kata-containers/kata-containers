@@ -55,15 +55,15 @@ export GO_ARCH
 function display_help() {
 	cat <<-EOL
 		$SCRIPT_NAME
-		
+
 		This script is intended to create Kata Containers packages for the OBS
 		(Open Build Service) platform.
-		
+
 		    Usage:
 		        $SCRIPT_NAME [options]
-		
+
 		Options:
-		
+
 		    -l         --local-build     Build the runtime locally
 		    -b         --branch          Build with a given branch name
 		    -p         --push            Push changes to OBS
@@ -74,14 +74,14 @@ function display_help() {
 		    -C         --clean           Clean the repository
 		    -V         --verify          Verify the environment
 		    -h         --help            Display this help message
-		
+
 		    Usage examples:
-		
+
 		    $SCRIPT_NAME --local-build --branch staging
 		    $SCRIPT_NAME --push --api-url http://127.0.0.1
 		    $SCRIPT_NAME --push --obs-repository home:userx/repository
 		    $SCRIPT_NAME --push
-		
+
 	EOL
 	exit 1
 }
