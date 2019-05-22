@@ -8,67 +8,80 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -o errtrace
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cri_repository="github.com/containerd/cri"
+containerd_repository="github.com/containerd/containerd"
 
 # Flag to do tasks for CI
 CI=${CI:-""}
 
+# shellcheck source=./lib.sh
 source "${script_dir}/lib.sh"
+
+#Use cri contaienrd tarball format.
+#https://github.com/containerd/cri/blob/master/docs/installation.md#release-tarball
+CONTAINERD_OS=$(go env GOOS)
+CONTAIENRD_ARCH=$(go env GOARCH)
+
 cri_containerd_version=$(get_version "externals.cri-containerd.version")
-containerd_version=$(get_version "externals.cri-containerd.meta.containerd-version")
+cri_containerd_repo=$(get_version "externals.cri-containerd.url")
 
 source /etc/os-release || source /usr/lib/os-release
 
 echo "Set up environment"
-if [ "$ID" == centos ];then
+if [ "$ID" == centos ]; then
 	# Centos: remove seccomp  from runc build
 	export BUILDTAGS=${BUILDTAGS:-apparmor}
 fi
 
-go get github.com/containerd/cri
-pushd "${GOPATH}/src/${cri_repository}" >> /dev/null
-git fetch
-git checkout "${cri_containerd_version}"
-make
-sudo -E PATH=$PATH make install.deps
-sudo -E PATH=$PATH make install
-if [ -n "$CI" ]; then
-	cni_test_dir="/etc/cni-containerd-test"
-	sudo mkdir -p "${cni_test_dir}"
-	# if running on CI use a different CNI directory (cri-o and kubernetes configurations may be installed)
-	sudo mv /etc/cni/net.d/10-containerd-net.conflist  "$cni_test_dir"
-fi
+install_from_source() {
+	echo "Trying to install containerd from source"
+	(
+		cd "${GOPATH}/src/${cri_repository}" >>/dev/null
+		git fetch
+		git checkout "${cri_containerd_version}"
+		make release
+		local commit
+		commit=$(git rev-parse --short HEAD)
+		tarball_name="cri-containerd-${commit}.${CONTAINERD_OS}-${CONTAIENRD_ARCH}.tar.gz"
+		sudo tar -xvf "./_output/${tarball_name}" -C /
+	)
+}
 
-cat <<EOT | sudo tee /etc/systemd/system/containerd.service
-[Unit]
-Description=containerd container runtime
-Documentation=https://containerd.io
-After=containerd-installation.service
-[Service]
-Restart=always
-RestartSec=5
-Delegate=yes
-KillMode=process
-OOMScoreAdjust=-999
-LimitNOFILE=1048576
-# Having non-zero Limit*s causes performance problems due to accounting overhead
-# in the kernel. We recommend using cgroups to do container-local accounting.
-LimitNPROC=infinity
-LimitCORE=infinity
-ExecStartPre=/sbin/modprobe overlay
-ExecStart=/usr/local/bin/containerd
-[Install]
-WantedBy=containerd.target
-EOT
+install_from_static_tarball() {
+	echo "Trying to install containerd from static tarball"
+	local tarball_url
+	tarball_url=$(get_version "externals.cri-containerd.tarball_url")
 
-sudo mkdir -p  /etc/systemd/system/kubelet.service.d/
-cat << EOF | sudo tee  /etc/systemd/system/kubelet.service.d/0-containerd.conf
-[Service]                                                 
-Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
-EOF
+	tarball_name="cri-containerd-${cri_containerd_version}.${CONTAINERD_OS}-${CONTAIENRD_ARCH}.tar.gz"
+	local url="${tarball_url}/${tarball_name}"
+
+	echo "Download tarball from ${url}"
+	if ! curl -OL -f "${url}"; then
+		echo "Failed to download tarball from ${url}"
+		return 1
+	fi
+
+	sudo tar -xvf "${tarball_name}" -C /
+	echo "Get containerd source"
+	go get "${containerd_repository}"
+	echo "checkout to ${cri_containerd_version}"
+	cri_version=$(
+		cd "${GOPATH}/src/${containerd_repository}";
+		git checkout "v${cri_containerd_version}" >&2;
+		cat vendor.conf | grep "github.com/containerd/cri" | awk '{print $2}';
+	)
+	echo "vendored cri version ${cri_version}"
+	(
+		cd "${GOPATH}/src/${cri_containerd_repo}" >>/dev/null
+		echo "checkout to cri version ${cri_version}"
+		git checkout "${cri_version}"
+	)
+}
+
+go get "${cri_containerd_repo}"
+install_from_static_tarball || install_from_source
 
 sudo systemctl daemon-reload
-
-popd  >> /dev/null

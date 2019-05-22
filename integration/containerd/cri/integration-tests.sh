@@ -8,6 +8,7 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -o errtrace
 
 # runc is installed in /usr/local/sbin/ add that path
 export PATH="$PATH:/usr/local/sbin"
@@ -16,12 +17,15 @@ export PATH="$PATH:/usr/local/sbin"
 RUNTIME=${RUNTIME:-kata-runtime}
 SHIMV2_TEST=${SHIMV2_TEST:-""}
 FACTORY_TEST=${FACTORY_TEST:-""}
-runtime_bin=$(command -v "${RUNTIME}")
-runtime_cri="cli"
 
+default_runtime_type="io.containerd.runtime.v1.linux"
+# Type of containerd runtime to be tested
+containerd_runtime_type="${default_runtime_type}"
+# Runtime to be use for the test in containerd
+containerd_runtime_test=${RUNTIME}
 if [ -n "${SHIMV2_TEST}" ]; then
-	runtime_bin="io.containerd.kata.v2"
-	runtime_cri="shimv2"
+	containerd_runtime_type="io.containerd.kata.v2"
+	containerd_runtime_test="io.containerd.kata.v2"
 fi
 
 readonly runc_runtime_bin=$(command -v "runc")
@@ -32,8 +36,6 @@ readonly CRITEST=${GOPATH}/bin/critest
 SNAP_CI=${SNAP_CI:-""}
 CI=${CI:-""}
 
-# Default CNI directory
-cni_test_dir="/etc/cni/net.d"
 containerd_shim_path="$(command -v containerd-shim)"
 readonly cri_containerd_repo="github.com/containerd/cri"
 
@@ -60,12 +62,18 @@ ci_config() {
 		# https://github.com/kata-containers/tests/issues/352
 		sudo mkdir -p $(dirname "${kata_config}")
 		sudo cp "${default_kata_config}" "${kata_config}"
-		sudo sed -i -e 's/^internetworking_model\s*=\s*".*"/internetworking_model = "bridged"/g' "${kata_config}"
 		if [ -n "${FACTORY_TEST}" ]; then
 			sudo sed -i -e 's/^#enable_template.*$/enable_template = true/g' "${kata_config}"
 			echo "init vm template"
 			sudo -E PATH=$PATH "$RUNTIME" factory init
 		fi
+	fi
+	if [ -n "${CI}" ]; then
+		(
+		echo "Install cni config for cri-containerd test"
+		cd "${GOPATH}/src/${cri_containerd_repo}"
+		./hack/install/install-cni-config.sh
+		)
 	fi
 }
 
@@ -89,28 +97,31 @@ ci_cleanup() {
 }
 
 create_continerd_config() {
-	local runtime_type=$1
-	local runtime_config=$2
-	local runtime_cri="runtime_engine"
+	local runtime="$1"
+	[ -n "${runtime}" ] || die "need runtime to create config"
 
-	if [ ${runtime_type} == "shimv2" ]; then
-		runtime_cri="runtime_type"
+	local runtime_type="${containerd_runtime_type}"
+	if [ "${runtime}" == "runc" ]; then
+		runtime_type="io.containerd.runtime.v1.linux"
 	fi
-	local stream_server_port="10030"
-	[ -n "${runtime_config}" ] || die "need runtime to create config"
+	local containerd_runtime="${runtime}"
+	if [ "${runtime_type}" == "${default_runtime_type}" ];then
+		local containerd_runtime=$(command -v "${runtime}")
+	fi
+	# Remove dots.  Dots are used by toml syntax as atribute separator
+	runtime="${runtime//./-}"
 
-	cat > "${CONTAINERD_CONFIG_FILE}" << EOT
+	cat << EOT | sudo tee "${CONTAINERD_CONFIG_FILE}"
 [plugins]
   [plugins.cri]
-    stream_server_port = "${stream_server_port}"
     [plugins.cri.containerd]
-      [plugins.cri.containerd.default_runtime]
-	${runtime_cri} = "${runtime_config}"
+	default_runtime_name = "$runtime"
+      [plugins.cri.containerd.runtimes.${runtime}]
+        runtime_type = "${runtime_type}"
+        [plugins.cri.containerd.runtimes.${runtime}.options]
+          Runtime = "${containerd_runtime}"
 [plugins.linux]
-	shim = "${containerd_shim_path}"
-[plugins.cri.cni]
-    # conf_dir is the directory in which the admin places a CNI conf.
-    conf_dir = "${cni_test_dir}"
+       shim = "${containerd_shim_path}"
 EOT
 }
 
@@ -131,12 +142,13 @@ err_report() {
 trap err_report ERR
 
 check_daemon_setup() {
-	info "containerd(cri): Check daemon works with ${runc_runtime_bin}"
-	create_continerd_config "cli" "${runc_runtime_bin}"
+	info "containerd(cri): Check daemon works with runc"
+	create_continerd_config "runc"
 
 	sudo -E PATH="${PATH}:/usr/local/bin" \
 		REPORT_DIR="${REPORT_DIR}" \
 		FOCUS="TestImageLoad" \
+		RUNTIME="" \
 		CONTAINERD_CONFIG_FILE="$CONTAINERD_CONFIG_FILE" \
 		make -e test-integration
 }
@@ -152,22 +164,19 @@ main() {
 	# make sure cri-containerd test install the proper critest version its testing
 	rm -f "${CRITEST}"
 
-	if [ -n "$CI" ]; then
-		# if running on CI use a different CNI directory (cri-o and kubernetes configurations may be installed)
-		cni_test_dir="/etc/cni-containerd-test"
-	fi
-
 	pushd "${GOPATH}/src/${cri_containerd_repo}"
 
 	check_daemon_setup
 
-	info "containerd(cri): testing using runtime: ${runtime_bin}"
+	info "containerd(cri): testing using runtime: ${containerd_runtime_test}"
 
-	create_continerd_config "${runtime_cri}" "${runtime_bin}"
+	create_continerd_config "${containerd_runtime_test}"
 
 	info "containerd(cri): Running cri-tools"
 	sudo -E PATH="${PATH}:/usr/local/bin" \
 		FOCUS="runtime should support basic operations on container" \
+		RUNTIME="" \
+		SKIP="runtime should support execSync with timeout" \
 		REPORT_DIR="${REPORT_DIR}" \
 		CONTAINERD_CONFIG_FILE="$CONTAINERD_CONFIG_FILE" \
 		make -e test-cri
@@ -191,6 +200,7 @@ main() {
 		sudo -E PATH="${PATH}:/usr/local/bin" \
 			REPORT_DIR="${REPORT_DIR}" \
 			FOCUS="${t}" \
+			RUNTIME="" \
 			CONTAINERD_CONFIG_FILE="$CONTAINERD_CONFIG_FILE" \
 			make -e test-integration
 	done

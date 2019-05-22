@@ -111,7 +111,13 @@ check_missing_spans()
 	# https://godoc.org/github.com/uber/jaeger-client-go/config#ReporterConfig).
 	local jaeger_reporter_prefix="Reporting span"
 
-	local logged_spans=$(grep -E -o "${component_prefix} [^ ][^ ]*" "$logfile" | awk '{print $3}')
+	local logged_spans
+	if ! logged_spans=$(grep -E -o "${component_prefix} [^ ][^ ]*" "$logfile" | awk '{print $3}')
+	then
+		info "failed to check logged spans"
+		rm -f "$logfile"
+		return
+	fi
 
 	if [ -z "$logged_spans" ]
 	then
@@ -190,8 +196,8 @@ check_jaeger_status()
 		[ "$spans" -lt "$min_spans" ] && die "expected >= $min_spans spans, got $spans"
 
 		# Look for common errors in span data
-		local errors1=$(echo "$status"|jq -S . 2>/dev/null|grep "invalid parent span")
-		if [ -n "$errors1" ]
+		local errors1
+		if errors=$(echo "$status"|jq -S . 2>/dev/null|grep "invalid parent span")
 		then
 			errors=$((errors+1))
 			warn "Found invalid parent span errors (attempt $attempt): $errors1"
@@ -203,8 +209,8 @@ check_jaeger_status()
 		fi
 
 		# Crude but it works
-		local errors2=$(echo "$status"|jq -S . 2>/dev/null|grep "\"warnings\""|grep -E -v "\<null\>")
-		if [ -n "$errors2" ]
+		local errors2
+		if errors2=$(echo "$status"|jq -S . 2>/dev/null|grep "\"warnings\""|grep -E -v "\<null\>")
 		then
 			errors=$((errors+1))
 			warn "Found warnings (attempt $attempt): $errors2"
