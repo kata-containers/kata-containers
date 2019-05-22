@@ -49,5 +49,8 @@ snap: $(YQ) $(VERSION_FILE)
 	fi
 	snapcraft -d
 
-.PHONY: test test-release-tools test-static-build test-packaging-tools snap snap-xbuild \
+cmd-kata-pkgsync:
+	@make -C $(MK_DIR)/cmd/kata-pkgsync
+
+.PHONY: test test-release-tools test-static-build test-packaging-tools snap cmd-kata-pkgsync \
 	$(VERSION_FILE) $(VERSIONS_YAML_FILE)

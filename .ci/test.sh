@@ -58,5 +58,6 @@ check_kata_kernel_version() {
 make_target test-release-tools "release/"
 make_target test-packaging-tools "obs-packaging/"
 make_target test-static-build "static-build/"
+make_target cmd-kata-pkgsync "cmd/kata-pkgsync"
 
 [ -n "${CI}" ] && check_kata_kernel_version
