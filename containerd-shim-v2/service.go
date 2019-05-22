@@ -334,15 +334,8 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 	defer s.mu.Unlock()
 
 	var c *container
-	var netns string
 
-	//the network namespace created by cni plugin
-	netns, err = namespaces.NamespaceRequired(ctx)
-	if err != nil {
-		return nil, errors.Wrap(err, "create namespace")
-	}
-
-	c, err = create(ctx, s, r, netns)
+	c, err = create(ctx, s, r)
 	if err != nil {
 		return nil, err
 	}
