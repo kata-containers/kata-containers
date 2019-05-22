@@ -10,12 +10,13 @@ package containerdshim
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
+
 	"github.com/containerd/typeurl"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/pkg/errors"
-	"os"
-	"path/filepath"
 
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 
@@ -30,7 +31,7 @@ import (
 	crioption "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1"
 )
 
-func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest, netns string) (*container, error) {
+func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*container, error) {
 	rootFs := vc.RootFs{Mounted: s.mount}
 	if len(r.Rootfs) == 1 {
 		m := r.Rootfs[0]
@@ -40,7 +41,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest, netns
 	}
 
 	detach := !r.Terminal
-	ociSpec, bundlePath, err := loadSpec(r, netns)
+	ociSpec, bundlePath, err := loadSpec(r)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +125,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest, netns
 	return container, nil
 }
 
-func loadSpec(r *taskAPI.CreateTaskRequest, netns string) (*oci.CompatOCISpec, string, error) {
+func loadSpec(r *taskAPI.CreateTaskRequest) (*oci.CompatOCISpec, string, error) {
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	bundlePath, err := validBundle(r.ID, r.Bundle)
 	if err != nil {
@@ -134,23 +135,6 @@ func loadSpec(r *taskAPI.CreateTaskRequest, netns string) (*oci.CompatOCISpec, s
 	ociSpec, err := oci.ParseConfigJSON(bundlePath)
 	if err != nil {
 		return nil, "", err
-	}
-
-	//set the network namespace path
-	//this set will be applied to sandbox's
-	//network config and has nothing to
-	//do with containers in the sandbox since
-	//networkNamespace has been ignored by
-	//kata-agent in sandbox.
-
-	for _, n := range ociSpec.Linux.Namespaces {
-		if n.Type != specs.NetworkNamespace {
-			continue
-		}
-
-		if n.Path == "" {
-			n.Path = netns
-		}
 	}
 
 	// Todo:
