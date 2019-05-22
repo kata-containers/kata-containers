@@ -431,25 +431,8 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 	}
 
 	if r.ExecID == "" {
-		err = deleteContainer(ctx, s, c)
-		if err != nil {
+		if err = deleteContainer(ctx, s, c); err != nil {
 			return nil, err
-		}
-
-		// Take care of the use case where it is a sandbox.
-		// Right after the container representing the sandbox has
-		// been deleted, let's make sure we stop and delete the
-		// sandbox.
-		if c.cType.IsSandbox() {
-			if err = s.sandbox.Stop(); err != nil {
-				logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
-				return nil, err
-			}
-
-			if err = s.sandbox.Delete(); err != nil {
-				logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
-				return nil, err
-			}
 		}
 
 		s.send(&eventstypes.TaskDelete{

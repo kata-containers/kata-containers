@@ -42,23 +42,41 @@ func wait(s *service, c *container, execID string) (int32, error) {
 	}
 
 	timeStamp := time.Now()
-	c.mu.Lock()
+
+	s.mu.Lock()
 	if execID == "" {
+		// Take care of the use case where it is a sandbox.
+		// Right after the container representing the sandbox has
+		// been deleted, let's make sure we stop and delete the
+		// sandbox.
+
+		if c.cType.IsSandbox() {
+			if err = s.sandbox.Stop(); err != nil {
+				logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
+			}
+
+			if err = s.sandbox.Delete(); err != nil {
+				logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
+			}
+		} else {
+			if _, err = s.sandbox.StopContainer(c.id); err != nil {
+				logrus.WithError(err).WithField("container", c.id).Warn("stop container failed")
+			}
+		}
 		c.status = task.StatusStopped
 		c.exit = uint32(ret)
 		c.exitTime = timeStamp
+
+		c.exitCh <- uint32(ret)
+
 	} else {
 		execs.status = task.StatusStopped
 		execs.exitCode = ret
 		execs.exitTime = timeStamp
-	}
-	c.mu.Unlock()
 
-	if execID == "" {
-		c.exitCh <- uint32(ret)
-	} else {
 		execs.exitCh <- uint32(ret)
 	}
+	s.mu.Unlock()
 
 	go cReap(s, int(ret), c.id, execID, timeStamp)
 
