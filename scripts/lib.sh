@@ -36,12 +36,18 @@ get_from_kata_deps() {
 	local branch="${2:-${BRANCH}}"
 	local runtime_repo="github.com/kata-containers/runtime"
 	GOPATH=${GOPATH:-${HOME}/go}
-	# We will not query the local versions.yaml file here to allow releases to
-	# always get the version from the committed tree. For our CI,
-	# .ci/install_kata_kernel.sh file in tests repository will pass the kernel
-	# version as an override to this function to allow testing of kernels before
-	# they land in tree.
-	versions_file="versions-${branch}.yaml"
+	# For our CI, we will query the local versions.yaml file both for kernel and
+	# all other subsystems. eg: a new version of NEMU would be good to test
+	# through CI. For the kernel, .ci/install_kata_kernel.sh file in tests
+	# repository will pass the kernel version as an override to this function to
+	# allow testing of kernels before they land in tree.
+	if ${CI}; then
+		info "Sourcing versions from local file found in runtime repository"
+		versions_file="${GOPATH}/src/${runtime_repo}/versions.yaml"
+	else
+		info "Sourcing versions from github ${branch} branch"
+		versions_file="versions-${branch}.yaml"
+	fi
 	if [ ! -e "${versions_file}" ]; then
 		yaml_url="https://raw.githubusercontent.com/kata-containers/runtime/${branch}/versions.yaml"
 		echo "versions file (${versions_file}) does not exist" >&2
