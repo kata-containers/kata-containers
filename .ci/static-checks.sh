@@ -197,11 +197,11 @@ check_go()
 	# repositories, we assume they are tested independently in their
 	# repository so do not need to be re-tested here.
 	submodule_packages=$(mktemp)
-	git submodule -q foreach "go list ./..." > "$submodule_packages" || true
+	git submodule -q foreach "go list ./..." | sort > "$submodule_packages" || true
 
 	# all packages
 	all_packages=$(mktemp)
-	go list ./... > "$all_packages" || true
+	go list ./... | sort > "$all_packages" || true
 
 	# List of packages to consider which is defined as:
 	#
