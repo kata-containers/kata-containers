@@ -14,60 +14,39 @@ source "${cidir}/lib.sh"
 echo "Install chronic"
 sudo -E zypper -n install moreutils
 
-echo "Install curl"
-chronic sudo -E zypper -n install curl
+declare -A packages=( \
+	[general_dependencies]="curl python-setuptools git libcontainers-common libdevmapper1_03 util-linux" \
+	[kata_containers_dependencies]="libtool automake autoconf bc perl-Alien-SDL libpixman-1-0-devel coreutils python2-pkgconfig" \
+	[qemu_dependencies]="libcap-devel libattr1 libcap-ng-devel librbd-devel" \
+	[kernel_dependencies]="libelf-devel flex glibc-devel-static thin-provisioning-tools" \
+	[crio_dependencies]="libglib-2_0-0 libseccomp-devel libapparmor-devel libgpg-error-devel go-md2man libgpgme-devel libassuan-devel glib2-devel glibc-devel" \
+	[bison_binary]="bison" \
+	[build_tools]="patterns-devel-base-devel_basis python pkg-config zlib-devel" \
+	[os_tree]="libostree-devel" \
+	[libudev-dev]="libudev-devel" \
+	[metrics_dependencies]="smemstat jq" \
+	[cri-containerd_dependencies]="libseccomp-devel libapparmor-devel make pkg-config" \
+	[crudini]="crudini" \
+	[haveged]="haveged" \
+	[gnu_parallel]="gnu_parallel" \
+	[libsystemd]="systemd-devel" \
+)
 
-echo "Install git"
-chronic sudo -E zypper -n install git
+pkgs_to_install=${packages[@]}
 
-echo "Install kata containers dependencies"
-chronic sudo -E zypper -n install libtool automake autoconf bc perl-Alien-SDL libpixman-1-0-devel coreutils
-
-echo "Install qemu dependencies"
-chronic sudo -E zypper -n install libcap-devel libattr1 libcap-ng-devel librbd-devel
-
-echo "Install kernel dependencies"
-chronic sudo -E zypper -n install libelf-devel flex
-
-echo "Install CRI-O dependencies"
-chronic sudo -E zypper -n install libglib-2_0-0 libseccomp-devel libapparmor-devel libgpg-error-devel python2-pkgconfig \
-	go-md2man glibc-devel-static thin-provisioning-tools libgpgme-devel libassuan-devel glib2-devel glibc-devel \
-	libcontainers-common libostree-devel libdevmapper1_03 util-linux
-
-echo "Install bison binary"
-chronic sudo -E zypper -n install bison
-
-echo "Install libudev-dev"
-chronic sudo -E zypper -n install libudev-devel
-
-echo "Install Build Tools"
-chronic sudo -E zypper -n install patterns-devel-base-devel_basis python pkg-config zlib-devel
+for j in ${packages[@]}; do
+	pkgs=$(echo "$j")
+	info "The following package will be installed: $pkgs"
+	pkgs_to_install+=" $pkgs"
+done
+chronic sudo -E zypper -n install $pkgs_to_install
 
 echo "Install YAML validator"
-chronic sudo -E zypper -n install python-setuptools
 chronic sudo -E easy_install pip
 chronic sudo -E pip install yamllint
-
-echo "Install tools for metrics tests"
-chronic sudo -E zypper -n install smemstat jq
 
 if [ "$(arch)" == "x86_64" ]; then
 	echo "Install Kata Containers OBS repository"
 	obs_url="${KATA_OBS_REPO_BASE}/openSUSE_Leap_${VERSION_ID}"
 	chronic sudo -E zypper addrepo --no-gpgcheck "${obs_url}/home:katacontainers:releases:$(arch):master.repo"
 fi
-
-echo -e "Install cri-containerd dependencies"
-chronic sudo -E zypper -n install libseccomp-devel libapparmor-devel make pkg-config
-
-echo "Install crudini"
-chronic sudo -E zypper -n install crudini
-
-echo "Install haveged"
-chronic sudo -E zypper -n install haveged
-
-echo "Install GNU parallel"
-chronic sudo -E zypper -n install gnu_parallel
-
-echo "Install libsystemd"
-chronic sudo -E zypper -n install systemd-devel

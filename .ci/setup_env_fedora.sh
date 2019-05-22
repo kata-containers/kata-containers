@@ -14,64 +14,42 @@ source "${cidir}/lib.sh"
 echo "Install chronic"
 sudo -E dnf -y install moreutils
 
-chronic sudo -E dnf -y install dnf-plugins-core
-chronic sudo -E dnf makecache
+declare -A packages=( \
+	[general_dependencies]="dnf-plugins-core python pkgconfig util-linux libgpg-error-devel" \
+	[kata_containers_dependencies]="libtool automake autoconf bc pixman numactl-libs" \
+	[qemu_dependencies]="libcap-devel libattr-devel libcap-ng-devel zlib-devel pixman-devel librbd-devel" \
+	[nemu_dependencies]="brlapi" \
+	[kernel_dependencies]="elfutils-libelf-devel flex" \
+	[crio_dependencies]="btrfs-progs-devel device-mapper-devel glib2-devel glibc-devel glibc-static gpgme-devel libassuan-devel libseccomp-devel libselinux-devel" \
+	[bison_binary]="bison" \
+	[os_tree]="ostree-devel" \
+	[yaml_validator]="yamllint" \
+	[metrics_dependencies]="smem jq" \
+	[cri-containerd_dependencies]="libseccomp-devel btrfs-progs-devel libseccomp-static" \
+	[crudini]="crudini" \
+	[procenv]="procenv" \
+	[haveged]="haveged" \
+	[gnu_parallel]="parallel" \
+	[libsystemd]="systemd-devel" \
+)
 
-echo "Install test dependencies"
-chronic sudo -E dnf -y install python
+pkgs_to_install=${packages[@]}
+
+for j in ${packages[@]}; do
+	pkgs=$(echo "$j")
+	info "The following package will be installed: $pkgs"
+	pkgs_to_install+=" $pkgs"
+done
+chronic sudo -E dnf -y install $pkgs_to_install
 
 echo "Install kata containers dependencies"
 chronic sudo -E dnf -y groupinstall "Development tools"
-chronic sudo -E dnf -y install libtool automake autoconf bc pixman numactl-libs
-
-echo "Install qemu dependencies"
-chronic sudo -E dnf -y install libcap-devel libattr-devel \
-	libcap-ng-devel zlib-devel pixman-devel librbd-devel
-
-echo "Install nemu dependencies"
-chronic sudo -E dnf -y install brlapi
-
-echo "Install kernel dependencies"
-chronic sudo -E dnf -y install elfutils-libelf-devel flex
-
-echo "Install CRI-O dependencies"
-chronic sudo -E dnf -y install btrfs-progs-devel device-mapper-devel      \
-	glib2-devel glibc-devel glibc-static gpgme-devel libassuan-devel  \
-	libgpg-error-devel libseccomp-devel libselinux-devel ostree-devel \
-	pkgconfig util-linux
-
-echo "Install bison binary"
-chronic sudo -E dnf -y install bison
-
-echo "Install YAML validator"
-chronic sudo -E dnf -y install yamllint
-
-echo "Install tools for metrics tests"
-chronic sudo -E dnf -y install smem jq
 
 if [ "$(arch)" == "x86_64" ]; then
 	echo "Install Kata Containers OBS repository"
 	obs_url="${KATA_OBS_REPO_BASE}/Fedora_$VERSION_ID/home:katacontainers:releases:$(arch):master.repo"
 	sudo -E VERSION_ID=$VERSION_ID dnf config-manager --add-repo "$obs_url"
 fi
-
-echo "Install cri-containerd dependencies"
-chronic sudo -E dnf -y install libseccomp-devel btrfs-progs-devel libseccomp-static
-
-echo "Install crudini"
-chronic sudo -E dnf -y install crudini
-
-echo "Install procenv"
-chronic sudo -E dnf -y install procenv
-
-echo "Install haveged"
-chronic sudo -E dnf -y install haveged
-
-echo "Install GNU parallel"
-chronic sudo -E dnf -y install parallel
-
-echo "Install libsystemd"
-chronic sudo -E dnf -y install systemd-devel
 
 if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
 	echo "Install ${KATA_KSM_THROTTLER_JOB}"
