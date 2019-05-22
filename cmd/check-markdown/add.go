@@ -7,10 +7,39 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
 
 	"github.com/Sirupsen/logrus"
 )
+
+// linkAddrToPath converts a link address into a path name.
+func (d *Doc) linkAddrToPath(address string) (string, error) {
+	if address == "" {
+		return "", errors.New("need address")
+	}
+
+	dir := filepath.Dir(d.Name)
+
+	var file string
+
+	// An "absolute link path" like this has been specified:
+	//
+	// [Foo](/absolute-link.md)
+	if strings.HasPrefix(address, absoluteLinkPrefix) {
+		if !fileExists(docRoot) {
+			return "", fmt.Errorf("document root %q does not exist", docRoot)
+		}
+
+		file = filepath.Join(docRoot, address)
+	} else {
+		file = filepath.Join(dir, address)
+	}
+
+	return file, nil
+}
 
 // addHeading adds the specified heading to the document.
 //
@@ -65,8 +94,16 @@ func (d *Doc) addHeading(heading Heading) error {
 func (d *Doc) addLink(link Link) error {
 	addr := link.Address
 
+	if link.ResolvedPath != "" {
+		addr = link.ResolvedPath
+	}
+
 	if addr == "" {
 		return d.Errorf("link address cannot be blank: %+v", link)
+	}
+
+	if link.Type == unknownLink {
+		return d.Errorf("BUG: link type invalid: %+v", link)
 	}
 
 	// Not checked by default as magic "build status" / go report / godoc
@@ -80,15 +117,20 @@ func (d *Doc) addLink(link Link) error {
 		"link": fmt.Sprintf("%+v", link),
 	}
 
-	if _, ok := d.Links[addr]; ok {
-		d.Logger.WithFields(fields).Debug("not adding duplicate link")
+	links := d.Links[addr]
 
-		return nil
+	for _, l := range links {
+		if l.Type == link.Type {
+			d.Logger.WithFields(fields).Debug("not adding duplicate link")
+
+			return nil
+		}
 	}
 
 	d.Logger.WithFields(fields).Debug("adding link")
 
-	d.Links[addr] = link
+	links = append(links, link)
+	d.Links[addr] = links
 
 	return nil
 }

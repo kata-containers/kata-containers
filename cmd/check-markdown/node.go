@@ -7,9 +7,6 @@
 package main
 
 import (
-	"regexp"
-	"strings"
-
 	bf "gopkg.in/russross/blackfriday.v2"
 )
 
@@ -49,18 +46,14 @@ func (d *Doc) makeHeading(node *bf.Node) (Heading, error) {
 		return Heading{}, err
 	}
 
-	name, err := headingName(node)
+	name, mdName, err := headingName(node)
 	if err != nil {
 		return Heading{}, d.Errorf("failed to get heading name: %v", err)
 	}
 
 	data := node.HeadingData
 
-	heading := Heading{
-		Name:     name,
-		LinkName: data.HeadingID,
-		Level:    data.Level,
-	}
+	heading := newHeading(name, mdName, data.HeadingID, data.Level)
 
 	return heading, nil
 }
@@ -91,33 +84,9 @@ func (d *Doc) handleLink(node *bf.Node) error {
 		return d.Errorf("failed to get link name: %v", err)
 	}
 
-	link := Link{
-		Address:     address,
-		Description: description,
-	}
-	// markdown file extension with optional link name ("#...")
-	const re = `\.md#*.*$`
-
-	pattern := regexp.MustCompile(re)
-
-	matched := pattern.MatchString(address)
-
-	if strings.HasPrefix(address, "http") {
-		link.Type = urlLink
-	} else if strings.HasPrefix(address, "mailto:") {
-		link.Type = mailLink
-	} else if strings.HasPrefix(address, anchorPrefix) {
-		link.Type = internalLink
-
-		// Remove the prefix to make a valid link address
-		address = strings.TrimPrefix(address, anchorPrefix)
-		link.Address = address
-
-	} else if matched {
-		link.Type = externalLink
-	} else {
-		// Link must be an external file, but not a markdown file.
-		link.Type = externalFile
+	link, err := newLink(d, address, description)
+	if err != nil {
+		return err
 	}
 
 	return d.addLink(link)
@@ -129,10 +98,12 @@ func (d *Doc) handleLink(node *bf.Node) error {
 // will ensure that "section-bar" exists in external file "foo.md".
 func handleIntraDocLinks() error {
 	for _, doc := range docs {
-		for addr, link := range doc.Links {
-			err := doc.checkLink(addr, link, true)
-			if err != nil {
-				return doc.Errorf("intra-doc link invalid: %v", err)
+		for addr, linkList := range doc.Links {
+			for _, link := range linkList {
+				err := doc.checkLink(addr, link, true)
+				if err != nil {
+					return doc.Errorf("intra-doc link invalid: %v", err)
+				}
 			}
 		}
 	}

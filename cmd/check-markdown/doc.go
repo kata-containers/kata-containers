@@ -26,7 +26,7 @@ func newDoc(name string, logger *logrus.Entry) *Doc {
 	d := &Doc{
 		Name:     name,
 		Headings: make(map[string]Heading),
-		Links:    make(map[string]Link),
+		Links:    make(map[string][]Link),
 		Parsed:   false,
 		ShowTOC:  false,
 		Logger:   logger,
@@ -66,4 +66,11 @@ func (d *Doc) Errorf(format string, args ...interface{}) error {
 	s := fmt.Sprintf(format, args...)
 
 	return fmt.Errorf("file=%q: %s", d.Name, s)
+}
+
+// String "pretty-prints" the specified document
+//
+// Just display the name as that is enough in text output.
+func (d *Doc) String() string {
+	return d.Name
 }

@@ -12,6 +12,7 @@ import "github.com/Sirupsen/logrus"
 type LinkType int
 
 const (
+	unknownLink   LinkType = iota
 	internalLink  LinkType = iota
 	externalLink  LinkType = iota // External ".md" file
 	externalFile  LinkType = iota // External non-".md" file
@@ -21,9 +22,11 @@ const (
 )
 
 func (t LinkType) String() string {
-	name := "unknown"
+	var name string
 
 	switch t {
+	case unknownLink:
+		name = "unknown"
 	case internalLink:
 		name = "internal-link"
 	case externalLink:
@@ -44,14 +47,15 @@ func (t LinkType) String() string {
 //
 // Example: A heading like this:
 //
-//    ### This is a heading
+//    ### This is a `verbatim` heading
 //
 // ... would be described as:
 //
 // ```go
 // Heading{
-//   Name:     "This is a heading",
-//   LinkName: "this-is-a-heading",
+//   Name:     "This is a verbatim heading",
+//   MDName    "This is a `verbatim` heading",
+//   LinkName: "this-is-a-verbatim-heading",
 //   Level:    3,
 // }
 // ```
@@ -59,6 +63,9 @@ type Heading struct {
 	// Not strictly necessary since the name is used as a hash key.
 	// However, storing here too makes the code simpler ;)
 	Name string
+
+	// Name including any markdown syntax
+	MDName string
 
 	// The encoded value of Name.
 	LinkName string
@@ -78,17 +85,42 @@ type Heading struct {
 //
 // ```go
 // Link{
-//   Address:     "internal-section-name",
-//   Description: "internal link",
-//   Type:        internalLink,
+//   Address:      "internal-section-name",
+//   ResolvedPath: "",
+//   Description:  "internal link",
+//   Type:         internalLink,
+// }
+//
+// And a link like this:
+//
+//     [external link](/foo.md#section-name)
+//
+// ... would be described as:
+//
+// ```go
+// Link{
+//   Address:      "foo.md#section-name",
+//   ResolvedPath: "/docroot/foo.md",
+//   Description:  "external link",
+//   Type:         externalLink,
 // }
 // ```
 type Link struct {
+	// Document this link refers to.
+	Doc *Doc
+
+	// Original address from document.
+	//
 	// Must be a valid Heading.LinkName.
 	//
 	// Not strictly necessary since the address is used as a hash key.
 	// However, storing here too makes the code simpler ;)
 	Address string
+
+	// The fully expanded address, without any anchor and heading suffix.
+	//
+	// Only applies to certain link types.
+	ResolvedPath string
 
 	// The text the user sees for the hyperlink address
 	Description string
@@ -106,14 +138,17 @@ type Doc struct {
 	Headings map[string]Heading
 
 	// Key: link address
-	// Value: Link
-	Links map[string]Link
+	// Value: *list* of links. Required since you can have multiple links with
+	// the same _address_, but of a different type.
+	Links map[string][]Link
 
 	// true when this document has been fully parsed
 	Parsed bool
 
 	// if true, only show the Table Of Contents
 	ShowTOC bool
+
+	ListMode bool
 
 	Logger *logrus.Entry
 }

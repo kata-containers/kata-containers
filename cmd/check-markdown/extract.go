@@ -7,6 +7,8 @@
 package main
 
 import (
+	"fmt"
+
 	bf "gopkg.in/russross/blackfriday.v2"
 )
 
@@ -42,32 +44,40 @@ func linkDescription(l *bf.Node) (string, error) {
 	return text, nil
 }
 
-// headingName extracts the heading name from the specified Heading node.
-func headingName(h *bf.Node) (string, error) {
-	if err := checkNode(h, bf.Heading); err != nil {
-		return "", err
+// headingName extracts the heading name from the specified Heading node in
+// plain text, and markdown. The latter is used for creating TOC's which need
+// to include the original markdown value.
+func headingName(h *bf.Node) (name, mdName string, err error) {
+	if err = checkNode(h, bf.Heading); err != nil {
+		return "", "", err
 	}
 
 	// A heading can be comprised of various elements so scan
 	// through them to build up the final value.
 
-	text := ""
 	node := h.FirstChild
 
 	for node != nil {
 		switch node.Type {
 		case bf.Code:
-			text += string(node.Literal)
+			value := string(node.Literal)
+
+			name += value
+			mdName += fmt.Sprintf("`%s`", value)
 		case bf.Text:
-			text += string(node.Literal)
+			value := string(node.Literal)
+
+			name += value
+			mdName += value
 		case bf.Link:
 			// yep, people do crazy things like adding links into titles!
 			descr, err := linkDescription(node)
 			if err != nil {
-				return "", err
+				return "", "", err
 			}
 
-			text += descr
+			name += descr
+			mdName += descr
 		default:
 			logger.WithField("node", node).Debug("ignoring node")
 		}
@@ -79,5 +89,5 @@ func headingName(h *bf.Node) (string, error) {
 		node = node.Next
 	}
 
-	return text, nil
+	return name, mdName, nil
 }
