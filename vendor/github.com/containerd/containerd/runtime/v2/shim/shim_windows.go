@@ -25,15 +25,12 @@ import (
 	"io"
 	"net"
 	"os"
-	"os/exec"
 	"sync"
 	"unsafe"
 
 	winio "github.com/Microsoft/go-winio"
-	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/ttrpc"
-	"github.com/containerd/typeurl"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/windows"
@@ -106,14 +103,17 @@ func serveListener(path string) (net.Listener, error) {
 	return l, nil
 }
 
-func handleSignals(logger *logrus.Entry, signals chan os.Signal) error {
+func handleSignals(ctx context.Context, logger *logrus.Entry, signals chan os.Signal) error {
 	logger.Info("starting signal loop")
+
 	for {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case s := <-signals:
 			switch s {
 			case os.Interrupt:
-				break
+				return nil
 			}
 		}
 	}
@@ -284,19 +284,4 @@ func openLog(ctx context.Context, id string) (io.Writer, error) {
 	dswl.l = l
 	go dswl.beginAccept()
 	return dswl, nil
-}
-
-func (l *remoteEventsPublisher) Publish(ctx context.Context, topic string, event events.Event) error {
-	ns, _ := namespaces.Namespace(ctx)
-	encoded, err := typeurl.MarshalAny(event)
-	if err != nil {
-		return err
-	}
-	data, err := encoded.Marshal()
-	if err != nil {
-		return err
-	}
-	cmd := exec.CommandContext(ctx, l.containerdBinaryPath, "--address", l.address, "publish", "--topic", topic, "--namespace", ns)
-	cmd.Stdin = bytes.NewReader(data)
-	return cmd.Run()
 }
