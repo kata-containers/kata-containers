@@ -22,6 +22,7 @@ source ../scripts/pkglib.sh
 
 SCRIPT_NAME=$0
 SCRIPT_DIR=$(dirname "$0")
+replace_list=()
 
 # Package information
 # Used by pkglib.sh
@@ -61,11 +62,14 @@ info "ksm-throttler ${KSM_THROTTLER_REQUIRED_VERSION}"
 KATA_IMAGE_REQUIRED_VERSION=$(pkg_version "${kata_osbuilder_version}" "" "")
 info "image ${KATA_IMAGE_REQUIRED_VERSION}"
 
-KATA_QEMU_LITE_REQUIRED_VERSION=$(pkg_version "${qemu_lite_version}" "" "${qemu_lite_hash}")
-info "qemu-lite ${KATA_QEMU_LITE_REQUIRED_VERSION}"
-
 KATA_QEMU_VANILLA_REQUIRED_VERSION=$(pkg_version "${qemu_vanilla_version}" "" "${qemu_vanilla_hash}")
 info "qemu-vanilla ${KATA_QEMU_VANILLA_REQUIRED_VERSION}"
+
+if [ "$arch" == "x86_64" ]; then
+	KATA_QEMU_LITE_REQUIRED_VERSION=$(pkg_version "${qemu_lite_version}" "" "${qemu_lite_hash}")
+	info "qemu-lite ${KATA_QEMU_LITE_REQUIRED_VERSION}"
+	replace_list+=("qemu_lite_version=${KATA_QEMU_LITE_REQUIRED_VERSION}")
+fi
 
 PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/runtime}
 RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
@@ -73,7 +77,7 @@ RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 
 set_versions "$kata_runtime_hash"
 
-replace_list=(
+replace_list+=(
 	"GO_CHECKSUM=$go_checksum"
 	"GO_VERSION=$go_version"
 	"GO_ARCH=$GO_ARCH"
@@ -85,7 +89,6 @@ replace_list=(
 	"kata_shim_version=${SHIM_REQUIRED_VERSION}"
 	"ksm_throttler_version=${KSM_THROTTLER_REQUIRED_VERSION}"
 	"linux_container_version=${KERNEL_REQUIRED_VERSION}"
-	"qemu_lite_version=${KATA_QEMU_LITE_REQUIRED_VERSION}"
 	"qemu_vanilla_version=${KATA_QEMU_VANILLA_REQUIRED_VERSION}"
 )
 
