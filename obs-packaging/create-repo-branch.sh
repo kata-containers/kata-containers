@@ -47,7 +47,7 @@ read_repos(){
 		[[ "$p" != "#"* ]] || continue
 		repos+=("${p}")
 		echo "Adding distro: ${p}"
-	done < "${script_dir}/distros"
+	done < "${script_dir}/distros_${arch_target}"
 }
 
 # Array of maintainers
