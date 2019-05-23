@@ -1,4 +1,4 @@
-# Install Kata Containers on openSUSE Leap/Tumbleweed
+# Install Kata Containers on openSUSE
 
 1. Install the Kata Containers components with the following commands:
 
@@ -18,6 +18,5 @@
    ```
 
 2. Decide which container manager to use and select the corresponding link that follows:
-
    - [Docker](docker/opensuse-docker-install.md)
-   - [Kubernetes](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#run-kata-containers-with-kubernetes)
+   - [Kubernetes](../Developer-Guide.md#run-kata-containers-with-kubernetes)
