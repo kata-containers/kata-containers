@@ -16,8 +16,12 @@ typeset -r warning="WARNING: Do *NOT* run the generated script without reviewing
 
 # github markdown markers used to surround a code block. All text within the
 # markers is rendered in a fixed font.
-typeset -r block_open="\`\`\`bash"
+typeset -r bash_block_open="\`\`\`bash"
+typeset -r block_open="\`\`\`"
 typeset -r block_close="\`\`\`"
+
+# Used to delimit inline code blocks
+typeset -r backtick="\`"
 
 # convention used in all documentation to represent a non-privileged users
 # shell prompt. All lines starting with this value inside a code block are
@@ -30,6 +34,7 @@ typeset -r extension_regex="\.md$"
 strict="no"
 require_commands="no"
 check_only="no"
+invert="no"
 verbose="no"
 
 usage()
@@ -44,6 +49,8 @@ Options:
 
   -c : check the file but don't create the script (sets exit code).
   -h : show this usage.
+  -i : invert output (remove code blocks and inline code, displaying the
+       remaining parts of the document). Incompatible with '-c'.
   -r : require atleast one command block to be found.
   -s : strict mode - perform extra checks.
   -v : verbose mode.
@@ -103,17 +110,27 @@ doc_to_script()
 	file="$1"
 	outfile="$2"
 	description="$3"
+	invert="$4"
 
 	[ -n "$file" ] || die "need file"
 
 	[ "${check_only}" = "no" ] && [ -z "$outfile" ] && die "need output file"
 	[ "$outfile" = '-' ] && outfile="/dev/stdout"
 
+	if [ "$invert" = "yes" ]
+	then
+		cat "$file" |\
+			sed -e "/^[ \>]*${block_open}/,/^[ \>]*${block_close}/d" \
+			     -e "s/${backtick}[^${backtick}]*${backtick}//g" \
+			     > "$outfile"
+		return
+	fi
+
 	all=$(mktemp)
 	body=$(mktemp)
 
 	cat "$file" |\
-		sed -n "/^ *${block_open}/,/^ *${block_close}/ p" |\
+		sed -n "/^ *${bash_block_open}/,/^ *${block_close}/ p" |\
 		sed -e "/^ *${block_close}/ d" \
 		-e "s/^ *${code_prompt}//g" \
 		-e 's/^ *//g' > "$body"
@@ -138,11 +155,12 @@ doc_to_script()
 
 main()
 {
-	while getopts "chrsv" opt
+	while getopts "chirsv" opt
 	do
 		case $opt in
 			c)	check_only="yes" ;;
 			h)	usage ;;
+			i)	invert="yes" ;;
 			r)	require_commands="yes" ;;
 			s)	strict="yes" ;;
 			v)	verbose="yes" ;;
@@ -165,7 +183,7 @@ main()
 			die "file '$file' doesn't match pattern '$extension_regex'"
 	fi
 
-	doc_to_script "$file" "$outfile" "$description"
+	doc_to_script "$file" "$outfile" "$description" "$invert"
 }
 
 main "$@"
