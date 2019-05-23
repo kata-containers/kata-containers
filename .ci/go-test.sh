@@ -32,6 +32,7 @@ timeout_value=${KATA_GO_TEST_TIMEOUT:-30s}
 # - The test package filtering is required since those packages need special setup.
 all_test_packages=$(go list ./... 2>/dev/null |\
 	grep -v "/vendor/" |\
+	grep -v "github.com/kata-containers/agent/protocols/grpc" |\
 	grep -v "github.com/kata-containers/tests/functional" |\
 	grep -v "github.com/kata-containers/tests/integration/docker" \
 	|| true)
@@ -246,11 +247,8 @@ main()
 
 	[ -z "$test_packages" ] && echo "INFO: no golang code to test" && exit 0
 
-	# directory to use for temporary files
-	golang_tmp=$(mktemp -d)
-
 	# KATA_GO_TEST_FLAGS can be set to change the flags passed to "go test".
-	go_test_flags=${KATA_GO_TEST_FLAGS:-"-v $race -timeout $timeout_value -outputdir \"${golang_tmp}\""}
+	go_test_flags=${KATA_GO_TEST_FLAGS:-"-v $race -timeout $timeout_value"}
 
 	if [ "$1" = "html-coverage" ]; then
 		test_html_coverage
@@ -259,8 +257,6 @@ main()
 	else
 		test_local
 	fi
-
-	[ -d "${golang_tmp}" ] && [ "${golang_tmp}" != "/" ] && rm -rf "${golang_tmp}"
 }
 
 main "$@"
