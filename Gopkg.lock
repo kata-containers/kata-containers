@@ -66,6 +66,14 @@
   version = "v9"
 
 [[projects]]
+  digest = "1:45c41cd27a8d986998680bfc86da0bbff5fa4f90d0f446c00636c8b099028ffe"
+  name = "github.com/blang/semver"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "ba2c2ddd89069b46a7011d4106f6868f17ee1705"
+  version = "v3.6.1"
+
+[[projects]]
   branch = "master"
   digest = "1:8ecb89af7dfe3ac401bdb0c9390b134ef96a97e85f732d2b0604fb7b3977839f"
   name = "github.com/codahale/hdrhistogram"
@@ -89,10 +97,11 @@
   revision = "0650fd9eeb50bab4fc99dceb9f2e14cf58f36e7f"
 
 [[projects]]
-  digest = "1:b1ddab63ebf3a38cdc2a80fa1f00c45e8dc98e27387968ccc0e5275a43f6cb5e"
+  digest = "1:ef3233b859d777565e34a88b4dbf0a353225d10a6036c5581fe8b1fc6d2bda96"
   name = "github.com/containerd/containerd"
   packages = [
     "api/events",
+    "api/services/ttrpc/events/v1",
     "api/types",
     "api/types/task",
     "errdefs",
@@ -100,6 +109,7 @@
     "log",
     "mount",
     "namespaces",
+    "pkg/ttrpcutil",
     "runtime",
     "runtime/linux/runctypes",
     "runtime/v2/shim",
@@ -107,7 +117,7 @@
     "sys",
   ]
   pruneopts = "NUT"
-  revision = "f05672357f56f26751a521175c5a96fc21fa8603"
+  revision = "25daa7355cdc1334718ce42e887f1c367aff9d0e"
 
 [[projects]]
   digest = "1:e7c346f795db5a431ca8bd284faed7aa5b4d544ba6538b20a39b968473f47774"
@@ -136,12 +146,11 @@
   revision = "7d11b49dc0769f6dbb0d1b19f3d48524d1bad9ad"
 
 [[projects]]
-  branch = "master"
-  digest = "1:25435262330720ca0cade25af7ee7fb96d0cb70cc1ea0c0961694681c12a90e6"
+  digest = "1:1868182f06e2a19b42566facd65993accd29469fb3f7500ef23cdaffbfa98323"
   name = "github.com/containerd/ttrpc"
   packages = ["."]
   pruneopts = "NUT"
-  revision = "69144327078caa5a2f1d5eda8bea6110bf16eeb3"
+  revision = "f82148331ad2181edea8f3f649a1f7add6c3f9c2"
 
 [[projects]]
   branch = "master"
@@ -335,7 +344,7 @@
   version = "v5.0.1"
 
 [[projects]]
-  digest = "1:0dfc35f448d29c2ff6a29fb3a6643f44175dc2a07925b1add2dea74e1dd6bf8d"
+  digest = "1:1f05c5d4f7fe7a5ce1c509907a9f367f89e0c23de046263b8e298a7e350d0153"
   name = "github.com/gogo/protobuf"
   packages = [
     "gogoproto",
@@ -345,7 +354,7 @@
     "types",
   ]
   pruneopts = "NUT"
-  revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
+  revision = "4cbf7e384e768b4e01799441fdf2a706a5635ae7"
 
 [[projects]]
   digest = "1:2d0636a8c490d2272dd725db26f74a537111b99b9dbdda0d8b98febe63702aa4"
@@ -385,7 +394,7 @@
   revision = "b3e7a9e78463a10f2a19e1a966c76a3afb215781"
 
 [[projects]]
-  digest = "1:36dfd4701e98a9d8371dd3053e32d4f29e82b07bcc9e655db82138f9273bcb0f"
+  digest = "1:085659f5e732e3d3126863d90bdc92cf8f264b8f996e0bf5d4d412815fb2b15b"
   name = "github.com/kata-containers/agent"
   packages = [
     "pkg/types",
@@ -393,7 +402,7 @@
     "protocols/grpc",
   ]
   pruneopts = "NUT"
-  revision = "48dd1c031530fce9bf16b0f6a7305979cedd8fc9"
+  revision = "714bf625cc68505f31d802f98b84bf2b8006e146"
 
 [[projects]]
   branch = "master"
@@ -408,11 +417,11 @@
   revision = "6243d8e04c3f819e79757e8bc3faa15c3cb27003"
 
 [[projects]]
-  digest = "1:f3e11773cc8a305f97b42c276f62d92899c9b0c1c3c584a667149b18f18a530a"
+  digest = "1:b09f78822be5d574e052d4e377b133bac445cdbcbfaf884e0704f870e509ef21"
   name = "github.com/mdlayher/vsock"
   packages = ["."]
   pruneopts = "NUT"
-  revision = "676f733b747cd6406f297a51bd086ee8ec8abdbe"
+  revision = "7b7533a7ca4eba7dd23dab2de70e25ca6eecf7e2"
 
 [[projects]]
   digest = "1:6a65dcd0d14fc0595ee982afc3c59deb5b769ca374455c80c649d92f8a152930"
@@ -684,6 +693,7 @@
   analyzer-version = 1
   input-imports = [
     "github.com/BurntSushi/toml",
+    "github.com/blang/semver",
     "github.com/containerd/cgroups",
     "github.com/containerd/containerd/api/events",
     "github.com/containerd/containerd/api/types",
