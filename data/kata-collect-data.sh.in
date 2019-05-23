@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2017-2019 Intel Corporation
+# Copyright (c) 2017-2018 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,7 +14,6 @@ typeset -r script_version="@VERSION@ (commit @COMMIT@)"
 typeset -r unknown="unknown"
 
 typeset -r osbuilder_file="/var/lib/osbuilder/osbuilder.yaml"
-typeset -r dax_header_size_bytes=$((2 * 1024 * 1024))
 
 # Maximum number of errors to show for a single system component
 # (such as runtime or proxy).
@@ -401,34 +400,19 @@ get_image_details()
 	local contents
 	local expected
 
-	local found_valid_image=0
+	loop_device=$(loopmount_image "$img")
+	if [ -z "$loop_device" ]; then
+		echo "$unknown"
+		return
+	fi
 
-	# Newer images contain a dax header, but check for both types.
-	for use_dax_offset in true false
-	do
-		loop_device=$(loopmount_image "$img" "$use_dax_offset")
-		[ -z "$loop_device" ] && continue
+	partitions=$(get_partitions "$loop_device")
+	count=$(echo "$partitions"|wc -l)
 
-		partitions=$(get_partitions "$loop_device")
-		if [ -z "$partitions" ]; then
-			release_device "$loop_device"
-			continue
-		fi
+	expected=1
 
-		count=$(echo "$partitions"|wc -l)
-
-		expected=1
-
-		if [ "$count" -ne "$expected" ]; then
-			release_device "$loop_device"
-			continue
-		fi
-
-		found_valid_image=1
-		break
-	done
-
-	if [ "$found_valid_image" = 0 ]; then
+	if [ "$count" -ne "$expected" ]; then
+		release_device "$loop_device"
 		echo "$unknown"
 		return
 	fi
@@ -450,8 +434,7 @@ get_image_details()
 	unmount_partition "$mountpoint"
 	release_device "$loop_device"
 
-	# Supplement the output with details of whether the header was found
-	printf -- "%s\ndax-nvdimm-header: \"%s\"\n" "${contents}" "$use_dax_offset"
+	echo "$contents"
 }
 
 # Parameter 1: Path to the initrd file.
@@ -526,16 +509,10 @@ loopmount_image()
 {
 	local img="$1"
 	[ -n "$img" ] || die "need image file"
-	local use_dax_offset="$2"
-	[ -n "$use_dax_offset" ] || die "need dax offset value"
 
 	local device_path
 
-	local offset=0
-
-	[ "$use_dax_offset" = true ] && offset="$dax_header_size_bytes"
-
-	losetup -fP -o "$offset" "$img"
+	losetup -fP "$img"
 
 	device_path=$(losetup -j "$img" |\
 		cut -d: -f1 |\
