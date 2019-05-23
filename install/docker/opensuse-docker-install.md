@@ -1,4 +1,4 @@
-# Install Docker for Kata Containers on openSUSE Leap
+# Install Docker for Kata Containers on openSUSE Leap/Tumbleweed
 
 > **Note:**
 >

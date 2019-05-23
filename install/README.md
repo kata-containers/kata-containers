@@ -49,7 +49,7 @@ Manual installation instructions are available for [these distributions](#suppor
 1. Add the Kata Containers repository to your distro package manager, and import the packages signing key.
 2. Install the Kata Containers packages.
 3. Install a supported container manager.
-4. Configure the container manager to use `kata-runtime` as the default OCI runtime. Or, for Kata Containers 1.5.0 or above, configure the 
+4. Configure the container manager to use `kata-runtime` as the default OCI runtime. Or, for Kata Containers 1.5.0 or above, configure the
    `io.containerd.kata.v2` to be the runtime shim (see [containerd runtime v2 (shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2)
    and [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md)).
 
@@ -83,15 +83,15 @@ Manual installation instructions are available for [these distributions](#suppor
 [Use snap](snap-installation-guide.md) to install Kata Containers from snapcraft.io.
 
 #### Supported Distributions
-|Distro specific installation instructions                          | Versions        |
-|-------------------------------------------------------------------|-----------------|
-|[CentOS](centos-installation-guide.md)                             | 7               |
-|[Debian](debian-installation-guide.md)                             | 9               |
-|[Fedora](fedora-installation-guide.md)                             | 27, 28          |
-|[openSUSE](opensuse-installation-guide.md)                         | Leap (42.3)     |
-|[Red Hat Enterprise Linux (RHEL)](rhel-installation-guide.md)      | 7               |
-|[SUSE Linux Enterprise Server (SLES)](sles-installation-guide.md)  | SLES 12 SP3     |
-|[Ubuntu](ubuntu-installation-guide.md)                             | 16.04, 18.04    |
+|Distro specific installation instructions                        | Versions                                                                                                          |
+|-----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
+|[CentOS](centos-installation-guide.md)                           | 7                                                                                                                 |
+|[Debian](debian-installation-guide.md)                           | 9                                                                                                                 |
+|[Fedora](fedora-installation-guide.md)                           | 27, 28, 29                                                                                                        |
+|[openSUSE](opensuse-installation-guide.md)                       | [Leap](opensuse-leap-installation-guide.md) (42.3, 15)<br>[Tumbleweed](opensuse-tumbleweed-installation-guide.md) |
+|[Red Hat Enterprise Linux (RHEL)](rhel-installation-guide.md)    | 7                                                                                                                 |
+|[SUSE Linux Enterprise Server (SLES)](sles-installation-guide.md)| SLES 12 SP3                                                                                                       |
+|[Ubuntu](ubuntu-installation-guide.md)                           | 16.04, 18.04                                                                                                      |
 
 ## Installing on a Cloud Service Platform
 * [Amazon Web Services (AWS)](aws-installation-guide.md)
