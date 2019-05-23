@@ -56,6 +56,7 @@ Notes:
 
 - If a description is specified, it will be added to the script as a
   comment.
+- <script-file> may be specified as '-' meaning send output to stdout.
 
 ${warning}
 
@@ -106,6 +107,7 @@ doc_to_script()
 	[ -n "$file" ] || die "need file"
 
 	[ "${check_only}" = "no" ] && [ -z "$outfile" ] && die "need output file"
+	[ "$outfile" = '-' ] && outfile="/dev/stdout"
 
 	all=$(mktemp)
 	body=$(mktemp)
