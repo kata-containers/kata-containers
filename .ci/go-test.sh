@@ -32,6 +32,7 @@ timeout_value=${KATA_GO_TEST_TIMEOUT:-30s}
 # - The test package filtering is required since those packages need special setup.
 all_test_packages=$(go list ./... 2>/dev/null |\
 	grep -v "/vendor/" |\
+	grep -v "github.com/kata-containers/agent/protocols/grpc" |\
 	grep -v "github.com/kata-containers/tests/functional" |\
 	grep -v "github.com/kata-containers/tests/integration/docker" \
 	|| true)
