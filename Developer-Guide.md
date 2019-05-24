@@ -33,7 +33,7 @@
 * [Run Kata Containers with Kubernetes](#run-kata-containers-with-kubernetes)
     * [Install a CRI implementation](#install-a-cri-implementation)
         * [CRI-O](#cri-o)
-        * [containerd with cri plugin](#containerd-with-cri-plugin)
+        * [containerd with CRI plugin](#containerd-with-cri-plugin)
     * [Install Kubernetes](#install-kubernetes)
         * [Configure for CRI-O](#configure-for-cri-o)
         * [Configure for containerd](#configure-for-containerd)
@@ -133,7 +133,7 @@ $ sudo sed -i 's/^\(initrd =.*\)/# \1/g' /etc/kata-containers/configuration.toml
 ```
 The rootfs image is created as shown in the [create a rootfs image](#create-a-rootfs-image) section.
 
-One of the `initrd` and `image` options in kata runtime config file **MUST** be set but **not both**.
+One of the `initrd` and `image` options in Kata runtime config file **MUST** be set but **not both**.
 The main difference between the options is that the size of `initrd`(10MB+) is significantly smaller than
 rootfs `image`(100MB+).
 
@@ -297,7 +297,7 @@ $ sudo rm -rf ${ROOTFS_DIR}
 $ cd $GOPATH/src/github.com/kata-containers/osbuilder/rootfs-builder
 $ script -fec 'sudo -E GOPATH=$GOPATH AGENT_INIT=yes USE_DOCKER=true SECCOMP=no ./rootfs.sh ${distro}'
 ```
-`AGENT_INIT` controls if the guest image uses kata agent as the guest `init` process. When you create an initrd image,
+`AGENT_INIT` controls if the guest image uses the Kata agent as the guest `init` process. When you create an initrd image,
 always set `AGENT_INIT` to `yes`. By default `seccomp` packages are not included in the initrd image. Set `SECCOMP` to `yes` to include them.
 
 You MUST choose one of `alpine`, `centos`, `clearlinux`, `euleros`, and `fedora` for `${distro}`.
@@ -348,8 +348,8 @@ $ curl -LOk ${kernel_url}
 $ tar -xf ${kernel_tar_file}
 $ mv .config "linux-${kernel_version}"
 $ pushd "linux-${kernel_version}"
-$ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/patches/4.19.x/0001-NO-UPSTREAM-9P-always-use-cached-inode-to-fill-in-v9.patch | patch -p1
-$ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/patches/4.19.x/0002-Compile-in-evged-always.patch | patch -p1
+$ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/patches/4.19.x/0003-NO-UPSTREAM-9P-always-use-cached-inode-to-fill-in-v9.patch | patch -p1
+$ curl -L https://raw.githubusercontent.com/kata-containers/packaging/master/kernel/patches/4.19.x/0004-Compile-in-evged-always.patch | patch -p1
 $ make ARCH=${kernel_dir} -j$(nproc)
 $ kata_kernel_dir="/usr/share/kata-containers"
 $ kata_vmlinuz="${kata_kernel_dir}/kata-vmlinuz-${kernel_version}.container"
@@ -371,7 +371,7 @@ When setting up Kata using a [packaged installation method](https://github.com/k
 
 ## Build a custom QEMU
 
-Your qemu directory need to be prepared with source code. Alternatively, you can use the [Kata containers QEMU](https://github.com/kata-containers/qemu/tree/master) and checkout the recommended branch:
+Your QEMU directory need to be prepared with source code. Alternatively, you can use the [Kata containers QEMU](https://github.com/kata-containers/qemu/tree/master) and checkout the recommended branch:
 
 ```
 $ go get -d github.com/kata-containers/qemu
@@ -397,7 +397,7 @@ $ sudo -E make install
 >
 > - You should only do this step if you are on aarch64/arm64.
 > - You should include [Eric Auger's latest PCDIMM/NVDIMM patches](https://patchwork.kernel.org/cover/10647305/) which are
->   under upstream review for supporting nvdimm on aarch64.
+>   under upstream review for supporting NVDIMM on aarch64.
 >
 You could build the custom `qemu-system-aarch64` as required with the following command:
 ```
@@ -508,7 +508,7 @@ Restart CRI-O to take changes into account
 $ sudo systemctl restart crio
 ```
 
-### containerd with cri plugin
+### containerd with CRI plugin
 
 If you select containerd with `cri` plugin, follow the "Getting Started for Developers"
 instructions [here](https://github.com/containerd/cri#getting-started-for-developers)
@@ -522,12 +522,11 @@ To customize containerd to select Kata Containers runtime, follow our
 
 Depending on what your needs are and what you expect to do with Kubernetes,
 please refer to the following
-[documentation](https://kubernetes.io/docs/setup/pick-right-solution/) to
-install it correctly.
+[documentation](https://kubernetes.io/docs/setup/) to install it correctly.
 
 Kubernetes talks with CRI implementations through a `container-runtime-endpoint`,
 also called CRI socket. This socket path is different depending on which CRI
-implementation you chose, and the kubelet service has to be updated accordingly.
+implementation you chose, and the Kubelet service has to be updated accordingly.
 
 ### Configure for CRI-O
 
@@ -549,8 +548,8 @@ documentation [here](https://github.com/kata-containers/documentation/blob/maste
 
 ## Run a Kubernetes pod with Kata Containers
 
-After you update your kubelet service based on the CRI implementation you
-are using, reload and restart kubelet. Then, start your cluster:
+After you update your Kubelet service based on the CRI implementation you
+are using, reload and restart Kubelet. Then, start your cluster:
 ```bash
 $ sudo systemctl daemon-reload
 $ sudo systemctl restart kubelet
@@ -564,11 +563,11 @@ $ sudo kubeadm init --skip-preflight-checks --cri-socket /run/containerd/contain
 $ export KUBECONFIG=/etc/kubernetes/admin.conf
 ```
 
-You can force kubelet to use Kata Containers by adding some _untrusted_
+You can force Kubelet to use Kata Containers by adding some `untrusted`
 annotation to your pod configuration. In our case, this ensures Kata
 Containers is the selected runtime to run the described workload.
 
-_nginx-untrusted.yaml_
+`nginx-untrusted.yaml`
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -594,7 +593,7 @@ If you are unable to create a Kata Container first ensure you have
 before attempting to create a container. Then run the
 [`kata-collect-data.sh`](https://github.com/kata-containers/runtime/blob/master/data/kata-collect-data.sh.in)
 script and paste its output directly into a
-[github issue](https://github.com/kata-containers/kata-containers/issues/new).
+[GitHub issue](https://github.com/kata-containers/kata-containers/issues/new).
 
 > **Note:**
 >

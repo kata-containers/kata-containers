@@ -157,7 +157,7 @@ new package versions are published.
 
 The `kata-linux-container` package contains a Linux\* kernel based on the
 latest vanilla version of the
-[longterm kernel](https://www.kernel.org/)
+[long-term kernel](https://www.kernel.org/)
 plus a small number of
 [patches](https://github.com/kata-containers/packaging/tree/master/kernel).
 
@@ -165,7 +165,7 @@ The `Longterm` branch is only updated with
 [important bug fixes](https://www.kernel.org/category/releases.html)
 meaning this package is only updated when necessary.
 
-The guest kernel package is updated when a new longterm kernel is released
+The guest kernel package is updated when a new long-term kernel is released
 and when any patch updates are required.
 
 ### Image

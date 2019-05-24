@@ -39,10 +39,11 @@ in a system configured to run Kata Containers.
 >   updated as new [releases](../Releases.md) are made available.
 
 ### Automatic Installation
-[Use kata-manager](installing-with-kata-manager.md) to automatically install Kata packages.
+
+[Use `kata-manager`](installing-with-kata-manager.md) to automatically install Kata packages.
 
 ### Scripted Installation
-[Use kata-doc-to-script](installing-with-kata-doc-to-script.md) to generate installation scripts that can be reviewed before they are executed.
+[Use `kata-doc-to-script`](installing-with-kata-doc-to-script.md) to generate installation scripts that can be reviewed before they are executed.
 
 ### Manual Installation
 Manual installation instructions are available for [these distributions](#supported-distributions) and document how to:
@@ -80,7 +81,7 @@ Manual installation instructions are available for [these distributions](#suppor
 
 [![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/kata-containers)
 
-[Use snap](snap-installation-guide.md) to install Kata Containers from snapcraft.io.
+[Use snap](snap-installation-guide.md) to install Kata Containers from https://snapcraft.io.
 
 #### Supported Distributions
 |Distro specific installation instructions                        | Versions                                                                                                          |

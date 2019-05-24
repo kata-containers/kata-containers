@@ -1,22 +1,22 @@
 # How to use Kata Containers and Containerd
 
 - [Concepts](#concepts)
-    - [Kubernetes RuntimeClass](#kubernetes-runtimeclass)
+    - [Kubernetes `RuntimeClass`](#kubernetes-runtimeclass)
     - [Containerd Runtime V2 API: Shim V2 API](#containerd-runtime-v2-api-shim-v2-api)
 - [Install](#install)
     - [Install Kata Containers](#install-kata-containers)
-    - [Install containerd with cri plugin](#install-containerd-with-cri-plugin)
+    - [Install containerd with CRI plugin](#install-containerd-with-cri-plugin)
     - [Install CNI plugins](#install-cni-plugins)
-    - [Install cri-tools](#install-cri-tools)
+    - [Install `cri-tools`](#install-cri-tools)
 - [Configuration](#configuration)
     - [Configure containerd to use Kata Containers](#configure-containerd-to-use-kata-containers)
-        - [Kata Containers as a RuntimeClass](#kata-containers-as-a-runtimeclass)
+        - [Kata Containers as a `RuntimeClass`](#kata-containers-as-a-runtimeclass)
         - [Kata Containers as the runtime for untrusted workload](#kata-containers-as-the-runtime-for-untrusted-workload)
     - [Kata Containers as the default runtime](#kata-containers-as-the-default-runtime)
-    - [Configuration for cri-tools](#configuration-for-cri-tools)
+    - [Configuration for `cri-tools`](#configuration-for-cri-tools)
 - [Run](#run)
-    - [Launch containers with ctr command line](#launch-containers-with-ctr-command-line)
-    - [Launch Pods with crictl command line](#launch-pods-with-crictl-command-line)
+    - [Launch containers with `ctr` command line](#launch-containers-with-ctr-command-line)
+    - [Launch Pods with `crictl` command line](#launch-pods-with-crictl-command-line)
 
 This document covers the installation and configuration of [containerd](https://containerd.io/) 
 and [Kata Containers](https://katacontainers.io). The containerd provides not only the `ctr`
@@ -28,18 +28,18 @@ Previous versions are addressed here, but we suggest users upgrade to the newer 
 
 ## Concepts
 
-### Kubernetes RuntimeClass
+### Kubernetes `RuntimeClass`
 
-[RuntimeClass](https://kubernetes.io/docs/concepts/containers/runtime-class/) is a Kubernetes feature first 
+[`RuntimeClass`](https://kubernetes.io/docs/concepts/containers/runtime-class/) is a Kubernetes feature first 
 introduced in Kubernetes 1.12 as alpha. It is the feature for selecting the container runtime configuration to 
 use to run a pod’s containers. This feature is supported in `containerd` since [v1.2.0](https://github.com/containerd/containerd/releases/tag/v1.2.0).
 
-Before the RuntimeClass was introduced, Kubernetes was not aware of the difference of runtimes on the node. `kubelet`
+Before the `RuntimeClass` was introduced, Kubernetes was not aware of the difference of runtimes on the node. `kubelet`
 creates Pod sandboxes and containers through CRI implementations, and treats all the Pods equally. However, there
-are requirements to run trusted Pods (i.e. kubernetes plugin) in a native container like runC, and to run untrusted 
+are requirements to run trusted Pods (i.e. Kubernetes plugin) in a native container like runc, and to run untrusted 
 workloads with isolated sandboxes (i.e. Kata Containers).
 
-As a result, the CRI implementations extended their semanitics for the requirements:
+As a result, the CRI implementations extended their semantics for the requirements:
 
 - At the beginning, [frakti](https://github.com/kubernetes/frakti) checks the network configuration of a Pod, and
   treat Pod with `host` network as trusted, while others are treated as untrusted.
@@ -52,20 +52,20 @@ As a result, the CRI implementations extended their semanitics for the requireme
 
 To eliminate the complexity of user configuration introduced by the non-standardized annotations and provide 
 extensibility, `RuntimeClass` was introduced. This gives users the ability to affect the runtime behavior 
-through 'RuntimeClass' without the knowledge of the CRI daemons. We suggest that users with multiple runtimes 
-use 'RuntimeClass' instead of the deprecated annotations.
+through `RuntimeClass` without the knowledge of the CRI daemons. We suggest that users with multiple runtimes 
+use `RuntimeClass` instead of the deprecated annotations.
 
 ### Containerd Runtime V2 API: Shim V2 API
 
 The [`containerd-shim-kata-v2` (short as `shimv2` in this documentation)](https://github.com/kata-containers/runtime/tree/master/containerd-shim-v2) 
 implements the [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2) for Kata.
-With `shimv2`, kubernetes can launch Pod and OCI-compatible containers with one shim per Pod. Prior to `shimv2`, `2N+1` 
+With `shimv2`, Kubernetes can launch Pod and OCI-compatible containers with one shim per Pod. Prior to `shimv2`, `2N+1` 
 shims (i.e. a `containerd-shim` and a `kata-shim` for each container and the Pod sandbox itself) and no standalone `kata-proxy` 
-process were used, even with vsock not available.
+process were used, even with VSOCK not available.
 
-![kubernetes integration with shimv2](../design/arch-images/shimv2.svg)
+![Kubernetes integration with shimv2](../design/arch-images/shimv2.svg)
 
-The shim v2 is introduced in containerd [v1.2.0](https://github.com/containerd/containerd/releases/tag/v1.2.0) and kata `shimv2`
+The shim v2 is introduced in containerd [v1.2.0](https://github.com/containerd/containerd/releases/tag/v1.2.0) and Kata `shimv2`
 is implemented in Kata Containers v1.5.0.
 
 ## Install
@@ -74,7 +74,7 @@ is implemented in Kata Containers v1.5.0.
 
 Follow the instructions to [install Kata Containers](https://github.com/kata-containers/documentation/blob/master/install/README.md).
 
-### Install containerd with cri plugin
+### Install containerd with CRI plugin
 
 > **Note:** `cri` is a native plugin of containerd 1.1 and above. It is built into containerd and enabled by default.
 > You do not need to install `cri` if you have containerd 1.1 or above. Just remove the `cri` plugin from the list of
@@ -104,10 +104,10 @@ $ sudo cp -r bin /opt/cni/
 $ popd
 ```
 
-### Install cri-tools
+### Install `cri-tools`
 
 > **Note:** `cri-tools` is a set of tools for CRI used for development and testing. Users who only want 
-> to use containerd with kubernetes can skip the `cri-tools`.
+> to use containerd with Kubernetes can skip the `cri-tools`.
 
 You can install the `cri-tools` from source code:
 
@@ -140,20 +140,20 @@ By default, the configuration of containerd is located at `/etc/containerd/confi
 
 The following sections outline how to add Kata Containers to the configurations.
 
-#### Kata Containers as a RuntimeClass
+#### Kata Containers as a `RuntimeClass`
 
 For 
 - Kata Containers v1.5.0 or above (including 1.5.0-rc)
 - Containerd v1.2.0 or above
 - Kubernetes v1.12.0 or above
 
-The  RuntimeClass is suggested.
+The `RuntimeClass` is suggested.
 
 The following configuration includes three runtime classes:
 - `plugins.cri.containerd.runtimes.runc`: the runC, and it is the default runtime.
 - `plugins.cri.containerd.runtimes.kata`: The function in containerd (reference [the document here](https://github.com/containerd/containerd/tree/master/runtime/v2#binary-naming)) 
   where the dot-connected string `io.containerd.kata.v2` is translated to `containerd-shim-kata-v2` (i.e. the 
-  binary name of the kata implementation of [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2)).
+  binary name of the Kata implementation of [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2)).
 - `plugins.cri.containerd.runtimes.katacli`: the `containerd-shim-runc-v1` calls `kata-runtime`, which is the legacy process.
 
 ```toml
@@ -216,7 +216,7 @@ Name it as `/usr/local/bin/containerd-shim-katafc-v2` and reference it in the co
 
 #### Kata Containers as the runtime for untrusted workload
 
-For cases without RuntimeClass support, we can use the legacy annotation method to support using Kata Containers 
+For cases without `RuntimeClass` support, we can use the legacy annotation method to support using Kata Containers 
 for an untrusted workload. With the following configuration, you can run trusted workloads with a runtime such as `runc` 
 and then, run an untrusted workload with Kata Containers: 
 
@@ -274,9 +274,9 @@ Alternatively, for the earlier versions of Kata Containers and containerd that d
       runtime_engine = "/usr/bin/kata-runtime"
 ```
 
-### Configuration for cri-tools
+### Configuration for `cri-tools`
 
-> **Note:** If you skipped the [Install cri-tools](#install-cri-tools) section, you can skip this section too.
+> **Note:** If you skipped the [Install `cri-tools`](#install-cri-tools) section, you can skip this section too.
 
 First, add the CNI configuration in the containerd configuration. 
 
@@ -321,7 +321,7 @@ debug: true
 
 ## Run
 
-### Launch containers with ctr command line
+### Launch containers with `ctr` command line
 
 To run a container with Kata Containers through the containerd command line, you can run the following:
 
@@ -329,9 +329,9 @@ To run a container with Kata Containers through the containerd command line, you
 $ sudo ctr run --runtime io.containerd.run.kata.v2 -t --rm docker.io/library/busybox:latest hello sh
 ```
 
-This launchs a busybox container named `hello`, and it will be removed by `--rm` after it quits.
+This launches a BusyBox container named `hello`, and it will be removed by `--rm` after it quits.
 
-### Launch Pods with crictl command line
+### Launch Pods with `crictl` command line
 
 With the `crictl` command line of `cri-tools`, you can specify runtime class with `-r` or `--runtime` flag.
  Use the following to launch Pod with `kata` runtime class with the pod in [the example](https://github.com/kubernetes-sigs/cri-tools/tree/master/docs/examples)
@@ -356,10 +356,10 @@ $ sudo crictl start 1aab7585530e6
 1aab7585530e6
 ```
 
-In Kubernetes, you need to create a RuntimeClass resource and add the RuntimeClass field in the Pod Spec 
+In Kubernetes, you need to create a `RuntimeClass` resource and add the `RuntimeClass` field in the Pod Spec 
 (see this [document](https://kubernetes.io/docs/concepts/containers/runtime-class/) for more information).
 
-If RuntimeClass is not supported, you can use the following annotation in a Kubernetes pod to identify as an untrusted workload:
+If `RuntimeClass` is not supported, you can use the following annotation in a Kubernetes pod to identify as an untrusted workload:
 
 ```yaml
 annotations:

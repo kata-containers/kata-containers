@@ -34,7 +34,7 @@ This is an architectural overview of Kata Containers, based on the 1.5.0 release
 The two primary deliverables of the Kata Containers project are a container runtime
 and a CRI friendly shim. There is also a CRI friendly library API behind them.
 
-The [Kata Containers runtime (kata-runtime)](https://github.com/kata-containers/runtime)
+The [Kata Containers runtime (`kata-runtime`)](https://github.com/kata-containers/runtime)
 is compatible with the [OCI](https://github.com/opencontainers) [runtime specification](https://github.com/opencontainers/runtime-spec)
 and therefore works seamlessly with the
 [Docker\* Engine](https://www.docker.com/products/docker-engine) pluggable runtime
@@ -45,32 +45,32 @@ select between the [default Docker and CRI shim runtime (runc)](https://github.c
 and `kata-runtime`.
 
 `kata-runtime` creates a QEMU\*/KVM virtual machine for each container or pod,
-the Docker engine or Kubernetes' `kubelet` creates respectively.
+the Docker engine or `kubelet` (Kubernetes) creates respectively.
 
 ![Docker and Kata Containers](arch-images/docker-kata.png)
 
 The [`containerd-shim-kata-v2` (shown as `shimv2` from this point onwards)](https://github.com/kata-containers/runtime/tree/master/containerd-shim-v2) 
 is another Kata Containers entrypoint, which 
 implements the [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2) for Kata.
-With `shimv2`, kubernetes can launch Pod and OCI compatible containers with one shim (the `shimv2`) per Pod instead
+With `shimv2`, Kubernetes can launch Pod and OCI compatible containers with one shim (the `shimv2`) per Pod instead
 of `2N+1` shims (a `containerd-shim` and a `kata-shim` for each container and the Pod sandbox itself), and no standalone
-`kata-proxy` process even if no vsock is available.
+`kata-proxy` process even if no VSOCK is available.
 
-![kubernetes integration with shimv2](arch-images/shimv2.svg)
+![Kubernetes integration with shimv2](arch-images/shimv2.svg)
 
 The container process is then spawned by
 [agent](https://github.com/kata-containers/agent), an agent process running
-as a daemon inside the virtual machine. kata-agent runs a gRPC server in
-the guest using a virtio serial or vsock interface which QEMU exposes as a socket
-file on the host. kata-runtime uses a gRPC protocol to communicate with
+as a daemon inside the virtual machine. `kata-agent` runs a gRPC server in
+the guest using a VIRTIO serial or VSOCK interface which QEMU exposes as a socket
+file on the host. `kata-runtime` uses a gRPC protocol to communicate with
 the agent. This protocol allows the runtime to send container management
 commands to the agent. The protocol is also used to carry the I/O streams (stdout,
 stderr, stdin) between the containers and the manage engines (e.g. Docker Engine).
 
 For any given container, both the init process and all potentially executed
 commands within that container, together with their related I/O streams, need
-to go through the virtio serial or vsock interface exported by QEMU. 
-In the virtio serial case, a [Kata Containers
+to go through the VIRTIO serial or VSOCK interface exported by QEMU. 
+In the VIRTIO serial case, a [Kata Containers
 proxy (`kata-proxy`)](https://github.com/kata-containers/proxy) instance is
 launched for each virtual machine to handle multiplexing and demultiplexing
 those commands and streams.
@@ -96,7 +96,7 @@ As a result, there will not be any of the additional processes previously listed
 
 The container workload, that is, the actual OCI bundle rootfs, is exported from the
 host to the virtual machine.  In the case where a block-based graph driver is
-configured, virtio-scsi will be used. In all other cases a 9pfs virtio mount point
+configured, `virtio-scsi` will be used. In all other cases a 9pfs VIRTIO mount point
 will be used. `kata-agent` uses this mount point as the root filesystem for the
 container processes.
 
@@ -111,8 +111,8 @@ to create virtual machines where containers will run:
 ### QEMU/KVM
 
 Depending on the host architecture, Kata Containers supports various machine types,
-for example `pc` and `q35` on x86 systems, `virt` on ARM systems and `pseries` on IBM Power systems. Kata Containers'
-default machine type is `pc`. The default machine type and its [`Machine accelerators`](#machine-accelerators) can
+for example `pc` and `q35` on x86 systems, `virt` on ARM systems and `pseries` on IBM Power systems. The default Kata Containers
+machine type is `pc`. The default machine type and its [`Machine accelerators`](#machine-accelerators) can
 be changed by editing the runtime [`configuration`](#configuration) file.
 
 The following QEMU features are used in Kata Containers to manage resource constraints, improve
@@ -129,7 +129,7 @@ Machine accelerators are architecture specific and can be used to improve the pe
 and enable specific features of the machine types. The following machine accelerators
 are used in Kata Containers:
 
-- nvdimm: This machine accelerator is x86 specific and only supported by `pc` and
+- NVDIMM: This machine accelerator is x86 specific and only supported by `pc` and
 `q35` machine types. `nvdimm` is used to provide the root filesystem as a persistent
 memory device to the Virtual Machine.
 
@@ -277,7 +277,7 @@ spawns the container process inside the VM, leveraging the `libcontainer` packag
 At this point the container process is running inside of the VM, and it is represented
 on the host system by the `kata-shim` process.
 
-![kata-oci-create](arch-images/kata-oci-create.svg)
+![`kata-oci-create`](arch-images/kata-oci-create.svg)
 
 #### `start`
 
@@ -290,7 +290,7 @@ With traditional containers, [`start`](https://github.com/kata-containers/runtim
 2. Call into the post-start hooks. Usually, this is a no-op since nothing is provided
   (this needs clarification)
 
-![kata-oci-start](arch-images/kata-oci-start.svg)
+![`kata-oci-start`](arch-images/kata-oci-start.svg)
 
 #### `exec`
 
@@ -303,9 +303,9 @@ container.  In Kata Containers, this is handled as follows:
  original `kata-shim` representing the container process. This new `kata-shim` is
  used for the new exec process.
 
-Now the `exec`'ed process is running within the VM, sharing `uts`, `pid`, `mnt` and `ipc` namespaces with the container process.
+Now the process started with `exec` is running within the VM, sharing `uts`, `pid`, `mnt` and `ipc` namespaces with the container process.
 
-![kata-oci-exec](arch-images/kata-oci-exec.svg)
+![`kata-oci-exec`](arch-images/kata-oci-exec.svg)
 
 #### `kill`
 
@@ -342,7 +342,7 @@ cannot be deleted unless the OCI runtime is explicitly being asked to, by using
 
 If the sandbox is not stopped, but the particular container process returned on
 its own already, the `kata-runtime` will first go through most of the steps a `kill`
-would go through for a termination signal. After this process, or if the sandboxID was already stopped to begin with, then `kata-runtime` will:
+would go through for a termination signal. After this process, or if the `sandboxID` was already stopped to begin with, then `kata-runtime` will:
 
 1. Remove container resources. Every file kept under `/var/{lib,run}/virtcontainers/sandboxes/<sandboxID>/<containerID>`.
 2. Remove sandbox resources. Every file kept under `/var/{lib,run}/virtcontainers/sandboxes/<sandboxID>`.
@@ -380,13 +380,13 @@ is used, the I/O streams associated with each process needs to be multiplexed an
 to multiple `kata-shim` and `kata-runtime` clients associated with the VM. Its
 main role is to route the I/O streams and signals between each `kata-shim`
 instance and the `kata-agent`.
-`kata-proxy` connects to `kata-agent` on a unix domain socket that `kata-runtime` provides
+`kata-proxy` connects to `kata-agent` on a Unix domain socket that `kata-runtime` provides
 while spawning `kata-proxy`.
 `kata-proxy` uses [`yamux`](https://github.com/hashicorp/yamux) to multiplex gRPC
 requests on its connection to the `kata-agent`.
 
-When proxy type is configured as "proxyBuiltIn", we do not spawn a separate
-process to proxy grpc connections. Instead a built-in yamux grpc dialer is used to connect
+When proxy type is configured as `proxyBuiltIn`, we do not spawn a separate
+process to proxy gRPC connections. Instead a built-in Yamux gRPC dialer is used to connect
 directly to `kata-agent`. This is used by CRI container runtime server `frakti` which
 calls directly into `kata-runtime`.
 
@@ -411,11 +411,11 @@ reaper and the `kata-agent`. `kata-shim`:
   `containerID` and `execID`. The `containerID` and `execID` are used to identify
   the true container process that the shim process will be shadowing or representing.
 - Forwards the standard input stream from the container process reaper into
- `kata-proxy` using grpc `WriteStdin` gRPC API.
+ `kata-proxy` using gRPC `WriteStdin` gRPC API.
 - Reads the standard output/error from the container process.
 - Forwards signals it receives from the container process reaper to `kata-proxy`
   using `SignalProcessRequest` API.
-- Monitors terminal changes and forwards them to `kata-proxy` using grpc `TtyWinResize`
+- Monitors terminal changes and forwards them to `kata-proxy` using gRPC `TtyWinResize`
   API.
 
 
@@ -426,9 +426,9 @@ At some point in a container lifecycle, container engines will set up that names
 to add the container to a network which is isolated from the host network, but
 which is shared between containers
 
-In order to do so, container engines will usually add one end of a `virtual ethernet
-(veth)` pair into the container networking namespace. The other end of the `veth`
-pair is added to the container network.
+In order to do so, container engines will usually add one end of a virtual
+ethernet (`veth`) pair into the container networking namespace. The other end of
+the `veth` pair is added to the container network.
 
 This is a very namespace-centric approach as many hypervisors (in particular QEMU)
 cannot handle `veth` interfaces. Typically, `TAP` interfaces are created for VM
@@ -450,25 +450,25 @@ and [CNI](https://github.com/containernetworking/cni) for networking management.
 
 __CNM lifecycle__
 
-1.  RequestPool
+1.  `RequestPool`
 
-2.  CreateNetwork
+2.  `CreateNetwork`
 
-3.  RequestAddress
+3.  `RequestAddress`
 
-4.  CreateEndPoint
+4.  `CreateEndPoint`
 
-5.  CreateContainer
+5.  `CreateContainer`
 
 6.  Create `config.json`
 
 7.  Create PID and network namespace
 
-8.  ProcessExternalKey
+8.  `ProcessExternalKey`
 
-9.  JoinEndPoint
+9.  `JoinEndPoint`
 
-10. LaunchContainer
+10. `LaunchContainer`
 
 11. Launch
 
@@ -482,7 +482,7 @@ __Runtime network setup with CNM__
 
 2. Create the network namespace
 
-3. Call the prestart hook (from inside the netns)
+3. Call the `prestart` hook (from inside the netns)
 
 4. Scan network interfaces inside netns and get the name of the interface
   created by prestart hook
@@ -538,21 +538,21 @@ such as networking, storage, mount, PID, etc. is called a
 [Pod](https://kubernetes.io/docs/user-guide/pods/).
 A node can have multiple pods, but at a minimum, a node within a Kubernetes cluster
 only needs to run a container runtime and a container agent (called a
-[kubelet](https://kubernetes.io/docs/admin/kubelet/)).
+[Kubelet](https://kubernetes.io/docs/admin/kubelet/)).
 
 A Kubernetes cluster runs a control plane where a scheduler (typically running on a
-dedicated master node) calls into a compute kubelet. This kubelet instance is
+dedicated master node) calls into a compute Kubelet. This Kubelet instance is
 responsible for managing the lifecycle of pods within the nodes and eventually relies
-on a container runtime to handle execution. The kubelet architecture decouples
+on a container runtime to handle execution. The Kubelet architecture decouples
 lifecycle management from container execution through the dedicated
 `gRPC` based [Container Runtime Interface (CRI)](https://github.com/kubernetes/community/blob/master/contributors/design-proposals/node/container-runtime-interface-v1.md).
 
-In other words, a kubelet is a CRI client and expects a CRI implementation to
+In other words, a Kubelet is a CRI client and expects a CRI implementation to
 handle the server side of the interface.
 [CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and [Containerd CRI Plugin\*](https://github.com/containerd/cri) are CRI implementations that rely on [OCI](https://github.com/opencontainers/runtime-spec)
 compatible runtimes for managing container instances.
 
-Kata Containers is an officially supported CRI-O and Containerd CRI Plugin runtime. It is OCI compatible and therefore aligns with each projects' architecture and requirements.
+Kata Containers is an officially supported CRI-O and Containerd CRI Plugin runtime. It is OCI compatible and therefore aligns with project's architecture and requirements.
 However, due to the fact that Kubernetes execution units are sets of containers (also
 known as pods) rather than single containers, the Kata Containers runtime needs to
 get extra information to seamlessly integrate with Kubernetes.
@@ -562,7 +562,7 @@ get extra information to seamlessly integrate with Kubernetes.
 The Kubernetes\* execution unit is a pod that has specifications detailing constraints
 such as namespaces, groups, hardware resources, security contents, *etc* shared by all
 the containers within that pod.
-By default the kubelet will send a container creation request to its CRI runtime for
+By default the Kubelet will send a container creation request to its CRI runtime for
 each pod and container creation. Without additional metadata from the CRI runtime,
 the Kata Containers runtime will thus create one virtual machine for each pod and for
 each containers within a pod. However the task of providing the Kubernetes pod semantics
@@ -579,7 +579,7 @@ pod creation request from a container one.
 
 As of Kata Containers 1.5, using `shimv2` with containerd 1.2.0 or above is the preferred
 way to run Kata Containers with Kubernetes ([see the howto](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers)).
-The CRI-O will catch up soon ([kubernetes-sigs/cri-o#2024](https://github.com/kubernetes-sigs/cri-o/issues/2024)).
+The CRI-O will catch up soon ([`kubernetes-sigs/cri-o#2024`](https://github.com/kubernetes-sigs/cri-o/issues/2024)).
 
 Refer to the following how-to guides:
 
@@ -597,7 +597,7 @@ specific annotations to the OCI configuration file (`config.json`) which is pass
 the OCI compatible runtime.
 
 Before calling its runtime, CRI-O will always add a `io.kubernetes.cri-o.ContainerType`
-annotation to the `config.json` configuration file it produces from the kubelet CRI
+annotation to the `config.json` configuration file it produces from the Kubelet CRI
 request. The `io.kubernetes.cri-o.ContainerType` annotation can either be set to `sandbox`
 or `container`. Kata Containers will then use this annotation to decide if it needs to
 respectively create a virtual machine or a container inside a virtual machine associated
@@ -647,7 +647,7 @@ developers applications would be `untrusted` by default. Developers workloads ca
 be buggy, unstable or even include malicious code and thus from a security perspective
 it makes sense to tag them as `untrusted`. A CRI-O and Kata Containers based
 Kubernetes cluster handles this use case transparently as long as the deployed
-containers are properly tagged. All `untrusted` containers will be handled by kata Containers and thus run in a hardware virtualized secure sandbox while `runc`, for
+containers are properly tagged. All `untrusted` containers will be handled by Kata Containers and thus run in a hardware virtualized secure sandbox while `runc`, for
 example, could  handle the `trusted` ones.
 
 CRI-O's default behavior is to trust all pods, except when they're annotated with
@@ -669,7 +669,7 @@ a pod is **not** `Privileged` the runtime selection is done as follows:
 
 Kata Containers utilizes the Linux kernel DAX [(Direct Access filesystem)](https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/Documentation/filesystems/dax.txt)
 feature to efficiently map some host-side files into the guest VM space.
-In particular, Kata Containers uses the QEMU nvdimm feature to provide a
+In particular, Kata Containers uses the QEMU NVDIMM feature to provide a
 memory-mapped virtual device that can be used to DAX map the virtual machine's
 root filesystem into the guest memory address space.
 
@@ -677,7 +677,7 @@ Mapping files using DAX provides a number of benefits over more traditional VM
 file and device mapping mechanisms:
 
 - Mapping as a direct access devices allows the guest to directly access
-  the host memory pages (such as via eXicute In Place (XIP)), bypassing the guest
+  the host memory pages (such as via Execute In Place (XIP)), bypassing the guest
   page cache. This provides both time and space optimizations.
 - Mapping as a direct access device inside the VM allows pages from the
   host to be demand loaded using page faults, rather than having to make requests
@@ -687,12 +687,12 @@ file and device mapping mechanisms:
   share pages.
 
 Kata Containers uses the following steps to set up the DAX mappings:
-1. QEMU is configured with an nvdimm memory device, with a memory file
-  backend to map in the host-side file into the virtual nvdimm space.
-2. The guest kernel command line mounts this nvdimm device with the DAX
+1. QEMU is configured with an NVDIMM memory device, with a memory file
+  backend to map in the host-side file into the virtual NVDIMM space.
+2. The guest kernel command line mounts this NVDIMM device with the DAX
   feature enabled, allowing direct page mapping and access, thus bypassing the
   guest page cache.
 
 ![DAX](arch-images/DAX.png)
 
-Information on the use of nvdimm via QEMU is available in the [QEMU source code](http://git.qemu-project.org/?p=qemu.git;a=blob;f=docs/nvdimm.txt;hb=HEAD)
+Information on the use of NVDIMM via QEMU is available in the [QEMU source code](http://git.qemu-project.org/?p=qemu.git;a=blob;f=docs/nvdimm.txt;hb=HEAD)

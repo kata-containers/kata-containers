@@ -2,7 +2,7 @@
 
 This document lists the tasks required to create a Kata Release.
 
-It should be pasted directly into a github issue and each item checked off as it is completed.
+It should be pasted directly into a GitHub issue and each item checked off as it is completed.
 
 - [ ] Raise PRs to update the `VERSION` file in the following repositories:
    - [ ] [agent][agent]
@@ -32,17 +32,17 @@ It should be pasted directly into a github issue and each item checked off as it
    - [ ] [image][image]
    - [ ] [initrd][initrd]
    - [ ] [proxy][proxy]
-   - [ ] [qemu-lite][qemu-lite]
+   - [ ] [`qemu-lite`][qemu-lite]
    - [ ] [runtime][runtime]
    - [ ] [shim][shim]
    - [ ] [throttler][throttler]
 
 - [ ] Generate snap packages based on `HEAD`
    - [ ] Push snap packages via snapcraft tool
-   - [ ] Pubish snap packages in the snapcraft store
+   - [ ] Publish snap packages in the snapcraft store
 
 - [ ] Installation tests (must be done for major releases):
-  - [ ] Centos
+  - [ ] CentOS
   - [ ] Fedora
   - [ ] Ubuntu
 

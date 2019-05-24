@@ -104,7 +104,7 @@ This command will produce output similar to the following:
 ]
 ```
 
-Launch the EC2 instance and pick ip the `INSTANCEID`:
+Launch the EC2 instance and pick IP the `INSTANCEID`:
 
 ```bash
 $ aws ec2 run-instances --image-id ami-03d5270fcb641f79b --count 1 --instance-type i3.metal --key-name MyKeyPair --associate-public-ip-address > /tmp/aws.json

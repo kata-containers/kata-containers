@@ -13,7 +13,7 @@
         * [docker run and shared memory](#docker-run-and-shared-memory)
         * [docker run and sysctl](#docker-run-and-sysctl)
     * [Docker daemon features](#docker-daemon-features)
-        * [selinux support](#selinux-support)
+        * [SELinux support](#selinux-support)
 * [Architectural limitations](#architectural-limitations)
     * [Networking limitations](#networking-limitations)
         * [Support for joining an existing VM network](#support-for-joining-an-existing-vm-network)
@@ -64,10 +64,10 @@ spec and the non-standard extensions provided by `runc`.
 
 # Scope
 
-Each known limitation is captured in a separate github issue that contains
+Each known limitation is captured in a separate GitHub issue that contains
 detailed information about the issue. These issues are tagged with the
 `limitation` label. This document is a curated summary of important known
-limitations and provides links to the relevant github issues.
+limitations and provides links to the relevant GitHub issues.
 
 The following link shows the latest list of limitations:
 
@@ -76,7 +76,7 @@ The following link shows the latest list of limitations:
 # Contributing
 
 If you would like to work on resolving a limitation, please refer to the
-[contributers guide](https://github.com/kata-containers/community/blob/master/CONTRIBUTING.md).
+[contributors guide](https://github.com/kata-containers/community/blob/master/CONTRIBUTING.md).
 If you wish to raise an issue for a new limitation, either
 [raise an issue directly on the runtime](https://github.com/kata-containers/runtime/issues/new)
 or see the
@@ -136,7 +136,7 @@ these commands is potentially challenging.
 See issue https://github.com/clearcontainers/runtime/issues/341 and [the constraints challenge](#the-constraints-challenge) for more information.
 
 For CPUs resource management see
-[cpu-constraints](design/cpu-constraints.md).
+[CPU constraints](design/cpu-constraints.md).
 
 ### docker run and shared memory
 
@@ -156,10 +156,10 @@ See issue https://github.com/kata-containers/runtime/issues/185 for more informa
 ## Docker daemon features
 
 Some features enabled or implemented via the
-[dockerd daemon](https://docs.docker.com/config/daemon/) configuration are not yet
+[`dockerd` daemon](https://docs.docker.com/config/daemon/) configuration are not yet
 implemented.
 
-### selinux support
+### SELinux support
 
 The `dockerd` configuration option `"selinux-enabled": true` is not presently implemented
 in Kata Containers. Enabling this option causes an OCI runtime error.
@@ -168,7 +168,7 @@ See issue https://github.com/kata-containers/runtime/issues/784 for more informa
 
 The consequence of this is that the [Docker --security-opt is only partially supported](#docker---security-opt-option-partially-supported).
 
-Kubernetes [selinux labels](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#assign-selinux-labels-to-a-container) will also not be applied.
+Kubernetes [SELinux labels](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#assign-selinux-labels-to-a-container) will also not be applied.
 
 # Architectural limitations
 
@@ -244,7 +244,7 @@ Note: The `--security-opt apparmor=your_profile` is not yet supported. See https
 
 ## The constraints challenge
 
-Applying resource constraints such as cgroup, cpu, memory, and storage to a workload is not always straightforward with a VM based system. A Kata Container runs in an isolated environment inside a virtual machine. This, coupled with the architecture of Kata Containers, offers many more possibilities than are available to traditional Linux containers due to the various layers and contexts.
+Applying resource constraints such as cgroup, CPU, memory, and storage to a workload is not always straightforward with a VM based system. A Kata Container runs in an isolated environment inside a virtual machine. This, coupled with the architecture of Kata Containers, offers many more possibilities than are available to traditional Linux containers due to the various layers and contexts.
 
 In some cases it might be necessary to apply the constraints to multiple levels. In other cases, the hardware isolated VM provides equivalent functionality to the the requested constraint.
 

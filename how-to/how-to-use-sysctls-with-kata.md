@@ -59,7 +59,7 @@ For additional documentation on setting sysctls with Docker please refer to [Doc
 
 Kubernetes considers certain sysctls as safe and others as unsafe. For detailed
 information about what sysctls are considered unsafe, please refer to the [Kubernetes sysctl docs](https://kubernetes.io/docs/tasks/administer-cluster/sysctl-cluster/).
-For using unsafe systcls, the cluster admin would need to allow these as:
+For using unsafe sysctls, the cluster admin would need to allow these as:
 
 ```
 $ kubelet --allowed-unsafe-sysctls 'kernel.msg*,net.ipv4.route.min_pmtu' ...
@@ -77,12 +77,12 @@ nodeRegistration:
 ...
 ```
 
-The above yaml can then be passed to `kubeadm init` as:
+The above YAML can then be passed to `kubeadm init` as:
 ```
 $ sudo -E kubeadm init --config=kubeadm.yaml
 ```
 
-Both safe and unsafe sysctls can be enabled in the same way in the Pod yaml:
+Both safe and unsafe sysctls can be enabled in the same way in the Pod YAML:
 
 ```
 apiVersion: v1
