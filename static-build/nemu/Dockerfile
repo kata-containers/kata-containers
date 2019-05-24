@@ -9,6 +9,7 @@ ARG NEMU_VERSION
 ARG NEMU_OVMF
 ARG VIRTIOFSD_RELEASE
 ARG VIRTIOFSD
+ARG PREFIX
 
 WORKDIR /root/nemu
 RUN apt-get update
@@ -40,20 +41,20 @@ RUN apt-get install -y \
 	    zlib1g-dev
 
 RUN cd  .. && git clone --depth=1 "${NEMU_REPO}" nemu
-RUN git checkout "${NEMU_VERSION}"
+RUN git fetch origin --tags && git checkout "${NEMU_VERSION}"
 RUN git clone https://github.com/qemu/capstone.git capstone
 RUN git clone https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
 ADD configure-hypervisor.sh /root/configure-hypervisor.sh
 
-RUN PREFIX=/opt/kata /root/configure-hypervisor.sh -s kata-nemu | xargs ./configure \
+RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-nemu | xargs ./configure \
        --with-pkgversion=kata-static
 
 RUN make -j$(nproc)
 RUN make install DESTDIR=/tmp/nemu-static
 
-RUN wget "${NEMU_OVMF}" && mv OVMF.fd /tmp/nemu-static/opt/kata/share/kata-nemu/
-RUN mv /tmp/nemu-static/opt/kata/bin/qemu-system-x86_64 /tmp/nemu-static/opt/kata/bin/nemu-system-x86_64
-RUN wget "${VIRTIOFSD_RELEASE}/${VIRTIOFSD}" && chmod +x ${VIRTIOFSD} && mv ${VIRTIOFSD} /tmp/nemu-static/opt/kata/bin/
+RUN wget "${NEMU_OVMF}" && mv OVMF.fd /tmp/nemu-static/"${PREFIX}"/share/kata-nemu/
+RUN mv /tmp/nemu-static/"${PREFIX}"/bin/qemu-system-x86_64 /tmp/nemu-static/"${PREFIX}"/bin/nemu-system-x86_64
+RUN wget "${VIRTIOFSD_RELEASE}/${VIRTIOFSD}" && chmod +x ${VIRTIOFSD} && mv ${VIRTIOFSD} /tmp/nemu-static/"${PREFIX}"/bin/
 
 RUN cd /tmp/nemu-static && tar -czvf kata-nemu-static.tar.gz *
