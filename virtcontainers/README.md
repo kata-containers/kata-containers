@@ -1,30 +1,30 @@
 Table of Contents
 =================
 
-   * [What is it ?](#what-is-it-)
-   * [Background](#background)
-   * [Out of scope](#out-of-scope)
-      * [virtcontainers and Kubernetes CRI](#virtcontainers-and-kubernetes-cri)
-   * [Design](#design)
-      * [Sandboxes](#sandboxes)
-      * [Hypervisors](#hypervisors)
-      * [Agents](#agents)
-      * [Shim](#shim)
-      * [Proxy](#proxy)
-   * [API](#api)
-      * [Sandbox API](#sandbox-api)
-      * [Container API](#container-api)
-   * [Networking](#networking)
-      * [CNM](#cnm)
-   * [Storage](#storage)
-      * [How to check if container uses devicemapper block device as its rootfs](#how-to-check-if-container-uses-devicemapper-block-device-as-its-rootfs)
-   * [Devices](#devices)
-      * [How to pass a device using VFIO-passthrough](#how-to-pass-a-device-using-vfio-passthrough)
-   * [Developers](#developers)
-   * [Persistent storage plugin support](#persistent-storage-plugin-support)
-   * [Experimental features](#experimental-features)
+* [What is it?](#what-is-it)
+* [Background](#background)
+* [Out of scope](#out-of-scope)
+    * [virtcontainers and Kubernetes CRI](#virtcontainers-and-kubernetes-cri)
+* [Design](#design)
+    * [Sandboxes](#sandboxes)
+    * [Hypervisors](#hypervisors)
+    * [Agents](#agents)
+    * [Shim](#shim)
+    * [Proxy](#proxy)
+* [API](#api)
+    * [Sandbox API](#sandbox-api)
+    * [Container API](#container-api)
+* [Networking](#networking)
+    * [CNM](#cnm)
+* [Storage](#storage)
+    * [How to check if container uses devicemapper block device as its rootfs](#how-to-check-if-container-uses-devicemapper-block-device-as-its-rootfs)
+* [Devices](#devices)
+    * [How to pass a device using VFIO-passthrough](#how-to-pass-a-device-using-vfio-passthrough)
+* [Developers](#developers)
+* [Persistent storage plugin support](#persistent-storage-plugin-support)
+* [Experimental features](#experimental-features)
 
-# What is it ?
+# What is it?
 
 `virtcontainers` is a Go library that can be used to build hardware-virtualized container
 runtimes.
@@ -32,7 +32,7 @@ runtimes.
 # Background
 
 The few existing VM-based container runtimes (Clear Containers, runv, rkt's
-kvm stage 1) all share the same hardware virtualization semantics but use different
+KVM stage 1) all share the same hardware virtualization semantics but use different
 code bases to implement them. `virtcontainers`'s goal is to factorize this code into
 a common Go library.
 
@@ -40,8 +40,7 @@ Ideally, VM-based container runtime implementations would become translation
 layers from the runtime specification they implement (e.g. the [OCI runtime-spec][oci]
 or the [Kubernetes CRI][cri]) to the `virtcontainers` API.
 
-`virtcontainers` is [Clear Containers][cc]'s runtime foundational package for their
-[runtime][cc-runtime] implementation
+`virtcontainers` was used as a foundational package for the [Clear Containers][cc] [runtime][cc-runtime] implementation.
 
 [oci]: https://github.com/opencontainers/runtime-spec
 [cri]: https://github.com/kubernetes/community/blob/master/contributors/devel/container-runtime-interface.md
@@ -172,25 +171,25 @@ Typically the former is the Docker default networking model while the later is u
 
 __CNM lifecycle__
 
-1.  RequestPool
+1.  `RequestPool`
 
-2.  CreateNetwork
+2.  `CreateNetwork`
 
-3.  RequestAddress
+3.  `RequestAddress`
 
-4.  CreateEndPoint
+4.  `CreateEndPoint`
 
-5.  CreateContainer
+5.  `CreateContainer`
 
-6.  Create config.json
+6.  Create `config.json`
 
 7.  Create PID and network namespace
 
-8.  ProcessExternalKey
+8.  `ProcessExternalKey`
 
-9.  JoinEndPoint
+9.  `JoinEndPoint`
 
-10. LaunchContainer
+10. `LaunchContainer`
 
 11. Launch
 
@@ -200,7 +199,7 @@ __CNM lifecycle__
 
 __Runtime network setup with CNM__
 
-1. Read config.json
+1. Read `config.json`
 
 2. Create the network namespace ([code](https://github.com/containers/virtcontainers/blob/0.5.0/cnm.go#L108-L120))
 
@@ -216,8 +215,8 @@ __Drawbacks of CNM__
 
 There are three drawbacks about using CNM instead of CNI:
 * The way we call into it is not very explicit: Have to re-exec dockerd binary so that it can accept parameters and execute the prestart hook related to network setup.
-* Implicit way to designate the network namespace: Instead of explicitely giving the netns to dockerd, we give it the PID of our runtime so that it can find the netns from this PID. This means we have to make sure being in the right netns while calling the hook, otherwise the veth pair will be created with the wrong netns.
-* No results are back from the hook: We have to scan the network interfaces to discover which one has been created inside the netns. This introduces more latency in the code because it forces us to scan the network in the CreateSandbox path, which is critical for starting the VM as quick as possible.
+* Implicit way to designate the network namespace: Instead of explicitly giving the netns to dockerd, we give it the PID of our runtime so that it can find the netns from this PID. This means we have to make sure being in the right netns while calling the hook, otherwise the VETH pair will be created with the wrong netns.
+* No results are back from the hook: We have to scan the network interfaces to discover which one has been created inside the netns. This introduces more latency in the code because it forces us to scan the network in the `CreateSandbox` path, which is critical for starting the VM as quick as possible.
 
 # Storage
 
@@ -297,7 +296,7 @@ $ readlink /sys/bus/pci/devices/$BDF/iommu_group
 $ echo $BDF | sudo tee /sys/bus/pci/devices/$BDF/driver/unbind
 ```
 
-6. Bind the device to vfio-pci.
+6. Bind the device to `vfio-pci`.
 
 ```
 $ sudo modprobe vfio-pci
@@ -305,7 +304,7 @@ $ echo 8086 1528 | sudo tee /sys/bus/pci/drivers/vfio-pci/new_id
 $ echo $BDF | sudo tee --append /sys/bus/pci/drivers/vfio-pci/bind
 ```
 
-7. Check /dev/vfio
+7. Check `/dev/vfio`
 
 ```
 $ ls /dev/vfio
@@ -335,4 +334,4 @@ See the [persistent storage plugin documentation](persist/plugin).
 
 # Experimental features
 
-See the [experimental features documenation](experimental).
+See the [experimental features documentation](experimental).
