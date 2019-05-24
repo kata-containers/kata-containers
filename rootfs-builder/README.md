@@ -1,14 +1,15 @@
 * [Supported base OSs](#supported-base-oss)
+* [Rootfs requirements](#rootfs-requirements)
 * [Creating a rootfs](#creating-a-rootfs)
 * [Creating a rootfs with kernel modules](#creating-a-rootfs-with-kernel-modules)
-* [Build a rootfs using Docker*](#build-a-rootfs-using-docker)
+* [Build a rootfs using Docker](#build-a-rootfs-using-docker)
 * [Adding support for a new guest OS](#adding-support-for-a-new-guest-os)
     * [Create template files](#create-template-files)
     * [Modify template files](#modify-template-files)
     * [Expected rootfs directory content](#expected-rootfs-directory-content)
     * [Optional - Customise the rootfs](#optional---customise-the-rootfs)
         * [Adding extra packages](#adding-extra-packages)
-        * [Arbitary rootfs changes](#arbitary-rootfs-changes)
+        * [Arbitrary rootfs changes](#arbitrary-rootfs-changes)
 
 # Building a Guest OS rootfs for Kata Containers
 
@@ -186,7 +187,7 @@ To add additional packages, use one of the following methods:
   configuration file must use the package names from the distro for which they
   were created.
 
-#### Arbitary rootfs changes
+#### Arbitrary rootfs changes
 
 Once the rootfs directory is created, you can add and remove files as
 needed. Changes affect the files included in the final guest image.
