@@ -382,6 +382,9 @@ create_rootfs_image() {
 		find "${mount_dir}" -type f -name "${u}" -exec rm -f {} \;
 	done
 
+	info "Creating empty machine-id to allow systemd to bind-mount it"
+	touch "${mount_dir}/etc/machine-id"
+
 	info "Unmounting root partition"
 	umount "${mount_dir}"
 	OK "Root partition unmounted"
