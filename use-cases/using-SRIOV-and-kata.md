@@ -20,7 +20,7 @@ SR-IOV for network based devices.
 To create a network with associated VFs, which can be passed to
 Kata Containers, you must install a SR-IOV Docker plugin. The
 created network is based on a physical function (PF) device. The network can
-create 'n' containers, where 'n' is the number of VFs associated with the
+create `n` containers, where `n` is the number of VFs associated with the
 Physical Function (PF).
 
 To install the plugin, follow the [plugin installation instructions](https://github.com/clearcontainers/sriov).
@@ -242,7 +242,7 @@ set the number of VFs for a physical device just once.
    63
    ```
    The previous commands show how many VFs you can create. The `sriov_totalvfs`
-   file under sysfs for a PCI device specifies the total number of VFs that you
+   file under `sysfs` for a PCI device specifies the total number of VFs that you
    can create.
 
 4. Create the VFs:
@@ -293,7 +293,7 @@ The following example launches a Kata Containers container using SR-IOV:
    ee2e5a594f9e4d3796eda972f3b46e52342aea04cbae8e5eac9b2dd6ff37b067
    ```
 
-   The previous commands create the required SR-IOV docker network, subnet, vlanid,
+   The previous commands create the required SR-IOV docker network, subnet, `vlanid`,
    and physical interface.
 
 3. Start containers and test their connectivity:
@@ -304,7 +304,7 @@ The following example launches a Kata Containers container using SR-IOV:
 
    The previous example starts a container making use of SR-IOV.
    If two machines with SR-IOV enabled NICs are connected back-to-back and each
-   has a network with matching vlan-id created, use the following two commands
+   has a network with matching `vlanid` created, use the following two commands
    to test the connectivity:
 
    Machine 1:

@@ -55,7 +55,7 @@ line.
 ## Install and configure Kata Containers
 
 To use this feature, you need Kata version 1.3.0 or above.
-Follow the [Kata Containers' setup instructions](https://github.com/kata-containers/documentation/blob/master/install/README.md)
+Follow the [Kata Containers setup instructions](https://github.com/kata-containers/documentation/blob/master/install/README.md)
 to install the latest version of Kata.
 
 In order to pass a GPU to a Kata Container, you need to enable the `hotplug_vfio_on_root_bus`
@@ -66,7 +66,7 @@ $ sudo sed -i -e 's/^# *\(hotplug_vfio_on_root_bus\).*=.*$/\1 = true/g' /usr/sha
 ```
 
 Make sure you are using the `pc` machine type by verifying `machine_type = "pc"` is 
-set in the configuration.toml.
+set in the `configuration.toml`.
 
 ## Build Kata Containers kernel with GPU support
 
@@ -97,7 +97,7 @@ Use the following steps to pass an Intel Graphics device in GVT-d mode with Kata
    ```
 
    Run the previous command to determine the BDF for the GPU device on host.<br/>
-   From the previous output, PCI addres "0000:00:02.0" is assigned to the hardware GPU device.<br/>
+   From the previous output, PCI address `0000:00:02.0` is assigned to the hardware GPU device.<br/>
    This BDF is used later to unbind the GPU device from the host.<br/>
    "8086 1616" is the device ID of the hardware GPU device. It is used later to
    rebind the GPU device to `vfio-pci` driver.
@@ -219,13 +219,13 @@ Use the following steps to pass an Intel Graphics device in GVT-g mode to a Kata
 
 3. Create a VGPU:
 
-   * Generate a uuid:
+   * Generate a UUID:
 
      ```
      $ gpu_uuid=$(uuid)
      ```
 
-   * Write the uuid to the `create` file under the chosen mdev type:
+   * Write the UUID to the `create` file under the chosen `mdev` type:
 
      ```
      $ echo $(gpu_uuid) | sudo tee /sys/devices/pci0000:00/0000:00:02.0/mdev_supported_types/i915-GVTg_V4_8/create
