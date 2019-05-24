@@ -52,7 +52,7 @@
 
 [[constraint]]
   name = "github.com/kata-containers/agent"
-  revision = "48dd1c031530fce9bf16b0f6a7305979cedd8fc9"
+  revision = "714bf625cc68505f31d802f98b84bf2b8006e146"
 
 [[constraint]]
   name = "github.com/containerd/cri-containerd"
@@ -64,7 +64,7 @@
 
 [[constraint]]
  name = "github.com/containerd/containerd"
- revision = "f05672357f56f26751a521175c5a96fc21fa8603"
+ revision = "25daa7355cdc1334718ce42e887f1c367aff9d0e"
 
 [[constraint]]
   name = "github.com/firecracker-microvm/firecracker-go-sdk"
@@ -72,7 +72,11 @@
 
 [[constraint]]
   name = "github.com/gogo/protobuf"
-  revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
+  revision = "4cbf7e384e768b4e01799441fdf2a706a5635ae7"
+
+[[override]]
+  name = "github.com/containerd/ttrpc"
+  revision = "f82148331ad2181edea8f3f649a1f7add6c3f9c2"
 
 [[override]]
   branch = "master"
