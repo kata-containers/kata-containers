@@ -1,15 +1,12 @@
-* [Build Kata Containers Kernel](#build-kata-containers-kernel)
-    * [Requirements](#requirements)
-    * [Setup kernel source code](#setup-kernel-source-code)
-* [Build the kernel](#build-the-kernel)
-    * [Install the Kernel in the default path for Kata](#install-the-kernel-in-the-default-path-for-kata)
-    * [Submit Kernel Changes](#submit-kernel-changes)
-    * [How is it tested](#how-is-it-tested)
-* [Contribute](#contribute)
-
----
-
 # Build Kata Containers Kernel
+
+* [Requirements](#requirements)
+* [Setup kernel source code](#setup-kernel-source-code)
+* [Build the kernel](#build-the-kernel)
+* [Install the Kernel in the default path for Kata](#install-the-kernel-in-the-default-path-for-kata)
+* [Submit Kernel Changes](#submit-kernel-changes)
+* [How is it tested](#how-is-it-tested)
+* [Contribute](#contribute)
 
 This document explains the steps to build a kernel recommended for use with
 Kata Containers. To do this use `build-kernel.sh`, this script
@@ -35,14 +32,13 @@ The script also adds a kernel config file from
 `${GOPATH}/src/github.com/kata-containers/packaging/kernel/configs/` to `.config`
 in the kernel source code. You can modify it as needed.
 
-# Build the kernel
+## Build the kernel
 
 After the kernel source code is ready, it is possible to build the kernel.
 
 ```bash
 $ ./build-kernel.sh build
 ```
-
 
 ## Install the Kernel in the default path for Kata
 
@@ -89,7 +85,7 @@ $ latest_kernel_version=${kernel_version_in_versions_file}-${kata_config_version
 The resulting version is 4.10.1-25, this helps identify whether or not the kernel
 configs are up-to-date on a CI version.
 
-# Contribute
+## Contribute
 
 In order to do Kata Kernel changes. There are places to contribute:
 
@@ -123,7 +119,7 @@ In order to do Kata Kernel changes. There are places to contribute:
 Note: The kernel version and configuration file live in different locations,
 which could result in a circular dependency on your (runtime or packaging) PR.
 In this case, the PR you submit needs to be tested together with a patch from
-another kata-containers repository. To do this you have to specify which
+another Kata Containers repository. To do this you have to specify which
 repository and which pull request [it depends on][depends-on-docs].
 
 [runtime-versions-file]: https://github.com/kata-containers/runtime/blob/master/versions.yaml
