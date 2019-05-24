@@ -46,6 +46,7 @@ info "Build ${nemu_repo} version: ${nemu_version}"
 
 http_proxy="${http_proxy:-}"
 https_proxy="${https_proxy:-}"
+prefix="${prefix:-"/opt/kata"}"
 
 docker build \
 	--build-arg http_proxy="${http_proxy}" \
@@ -55,6 +56,7 @@ docker build \
 	--build-arg NEMU_OVMF="${nemu_ovmf_release}" \
 	--build-arg VIRTIOFSD_RELEASE="${nemu_virtiofsd_release}" \
 	--build-arg VIRTIOFSD="${nemu_virtiofsd_binary}" \
+	--build-arg PREFIX="${prefix}" \
 	"${config_dir}" \
 	-f "${script_dir}/Dockerfile" \
 	-t nemu-static
