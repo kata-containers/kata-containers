@@ -6,7 +6,7 @@ Kata runtime class.
 ## How to build the admission controller
 
 First build the admission controller image and the associated
-Kubernetes yaml files required to instantiate the admission
+Kubernetes YAML files required to instantiate the admission
 controller.
 
 ```bash
@@ -31,7 +31,7 @@ and sample admission controller we created by running
 $ kubectl apply -f deploy/
 ```
 
-The webhook mutates pods to use the kata runtime class for all pods except
+The webhook mutates pods to use the Kata runtime class for all pods except
 those with 
 
 * `hostNetwork: true` 

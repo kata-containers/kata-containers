@@ -36,7 +36,7 @@ This test shares many config options with the `footprint_data` test. Thus, refer
 to the [footprint test documentation](footprint_data.md) may be useful.
 
 > *Note:* If this test finds KSM is enabled on the host, it will wait for KSM
-> to 'settle' before taking the final measurement. If your KSM is not configured
+> to "settle" before taking the final measurement. If your KSM is not configured
 > to process all the allocated VM memory fast enough, the test will hit a timeout
 > and proceed to take the final measurement anyway.
 

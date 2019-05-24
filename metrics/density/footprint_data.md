@@ -49,13 +49,13 @@ The test measures, calculates, and stores a number of data items:
 | `pss` | PSS for all the VM runtime components
 | `all_pss` | PSS of all of userspace - to monitor if we had other impact on the system
 | `dockerd` | PSS of the dockerd process
-| `user_smem` | `smem` 'userspace' consumption value
-| `avail` | 'available' memory from `free`
-| `avail_decr` | `available` memory decrease since start of test
-| `cached` | 'Cached' memory from `/proc/meminfo`
+| `user_smem` | `smem` "userspace" consumption value
+| `avail` | "available" memory from `free`
+| `avail_decr` | "available" memory decrease since start of test
+| `cached` | "Cached" memory from `/proc/meminfo`
 | `smem_free` | Free memory as reported by `smem`
 | `free_decr` | Decrease in Free memory reported by `smem` since start of test
-| `anon` | AnonPages as reported from `/proc/meminfo`
+| `anon` | `AnonPages` as reported from `/proc/meminfo`
 | `mapped` | Mapped pages as reported from `/proc/meminfo`
 | `cached` | Cached pages as reported from `/proc/meminfo`
 | `slab` | Slab as reported from `/proc/meminfo`

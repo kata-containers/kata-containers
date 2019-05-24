@@ -37,7 +37,7 @@ and with different container managers.
    - [Kubernetes](https://github.com/kata-containers/tests/tree/master/integration/kubernetes)
    - [CRI-O](https://github.com/kata-containers/tests/tree/master/integration/cri-o)
    - [Containerd](https://github.com/kata-containers/tests/tree/master/integration/containerd)
-   - [Openshift](https://github.com/kata-containers/tests/tree/master/integration/openshift)
+   - [OpenShift](https://github.com/kata-containers/tests/tree/master/integration/openshift)
 3. [Network tests](https://github.com/kata-containers/tests/tree/master/integration/network)
 4. [Stability tests](https://github.com/kata-containers/tests/tree/master/integration/stability)
 5. [Metrics](https://github.com/kata-containers/tests/tree/master/metrics)
@@ -173,7 +173,7 @@ stable release. You can find the official documentation to do this in the
 [Kata Containers installation user guides](https://github.com/kata-containers/documentation/blob/master/install/README.md).
 
 To try the latest commits of Kata use the CI scripts, which build and install from the
-kata-containers repositories, with the following steps:
+`kata-containers` repositories, with the following steps:
 
 > **Warning:** This may replace/delete packages and configuration that you already have.
 > Please use these steps only on a testing environment.
