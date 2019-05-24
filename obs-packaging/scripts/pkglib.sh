@@ -45,6 +45,10 @@ short_commit_length=10
 
 arch=$(uname -m)
 DEB_ARCH=$(arch_to_golang "$arch")
+if [[ $DEB_ARCH == "ppc64le" ]]; then
+       DEB_ARCH="ppc64el"
+fi
+
 GO_ARCH=$(arch_to_golang "$arch")
 export GO_ARCH
 
