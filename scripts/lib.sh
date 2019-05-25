@@ -42,10 +42,8 @@ get_from_kata_deps() {
 	# repository will pass the kernel version as an override to this function to
 	# allow testing of kernels before they land in tree.
 	if ${CI}; then
-		info "Sourcing versions from local file found in runtime repository"
 		versions_file="${GOPATH}/src/${runtime_repo}/versions.yaml"
 	else
-		info "Sourcing versions from github ${branch} branch"
 		versions_file="versions-${branch}.yaml"
 	fi
 	if [ ! -e "${versions_file}" ]; then
