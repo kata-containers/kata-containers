@@ -228,12 +228,6 @@ func CreateContainer(ctx context.Context, vci vc.VC, sandbox vc.VCSandbox, ociSp
 		if err := AddContainerIDMapping(ctx, containerID, sandboxID); err != nil {
 			return vc.Process{}, err
 		}
-
-		kataUtilsLogger = kataUtilsLogger.WithField("sandbox", sandboxID)
-
-		if err := AddContainerIDMapping(ctx, containerID, sandboxID); err != nil {
-			return vc.Process{}, err
-		}
 	}
 
 	// Run pre-start OCI hooks.
