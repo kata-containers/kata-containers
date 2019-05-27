@@ -35,6 +35,7 @@ declare -A packages=( \
 	[haveged]="haveged" \
 	[gnu_parallel]="parallel" \
 	[libsystemd]="libsystemd-dev" \
+	[redis]="redis-server" \
 )
 
 pkgs_to_install=${packages[@]}
