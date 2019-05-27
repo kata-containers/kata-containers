@@ -9,7 +9,7 @@ MACHINETYPE := pc
 KERNELPARAMS :=
 MACHINEACCELERATORS :=
 
-QEMUCMD := qemu-lite-system-x86_64
+QEMUCMD := qemu-system-x86_64
 
 # Firecracker binary name
 FCCMD := firecracker
