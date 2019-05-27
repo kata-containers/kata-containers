@@ -13,6 +13,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/../../scripts/lib.sh"
 
 config_dir="${script_dir}/../../scripts/"
+nemu_tar="kata-nemu-static.tar.gz"
 
 nemu_repo="${nemu_repo:-}"
 nemu_version="${nemu_version:-}"
@@ -48,7 +49,7 @@ http_proxy="${http_proxy:-}"
 https_proxy="${https_proxy:-}"
 prefix="${prefix:-"/opt/kata"}"
 
-docker build \
+sudo docker build \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg NEMU_REPO="${nemu_repo}" \
@@ -61,7 +62,9 @@ docker build \
 	-f "${script_dir}/Dockerfile" \
 	-t nemu-static
 
-docker run \
+sudo docker run \
 	-i \
 	-v "${PWD}":/share nemu-static \
-	mv /tmp/nemu-static/kata-nemu-static.tar.gz /share/
+	mv "/tmp/nemu-static/${nemu_tar}" /share/
+
+sudo chown ${USER}:${USER} "${PWD}/${nemu_tar}"
