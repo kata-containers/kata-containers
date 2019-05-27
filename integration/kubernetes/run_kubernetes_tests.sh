@@ -45,6 +45,7 @@ bats k8s-pod-quota.bats
 bats k8s-sysctls.bats
 bats k8s-volume.bats
 bats k8s-projected-volume.bats
+bats k8s-job.bats
 bats k8s-memory.bats
 bats k8s-block-volume.bats
 bats k8s-shared-volume.bats
