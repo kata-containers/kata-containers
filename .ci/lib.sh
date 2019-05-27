@@ -297,3 +297,25 @@ build_install_parallel() {
 
 	rm -rf "$gnu_parallel_dir" "$gnu_parallel_tar_pkg"
 }
+
+check_git_version() {
+	result="true"
+
+        local required_version_major=$(echo "$1" | cut -d. -f1)
+        local required_version_medium=$(echo "$1" | cut -d. -f2)
+        local required_version_minor=$(echo "$1" | cut -d. -f3)
+
+        local git_version=$(git version | cut -d' ' -f3)
+        [ -n "${git_version}" ] || die "cannot determine git version, please ensure it is installed"
+
+        local current_version_major=$(echo "${git_version}" | cut -d. -f1)
+        local current_version_medium=$(echo "${git_version}" | cut -d. -f2)
+        local current_version_minor=$(echo "${git_version}" | cut -d. -f3)
+
+        [[ ${current_version_major} -lt ${required_version_major} ]] || \
+        [[ ( ${current_version_major} -eq ${required_version_major} ) && ( ${current_version_medium} -lt ${required_version_medium} ) ]] || \
+        [[ ( ${current_version_major} -eq ${required_version_major} ) && ( ${current_version_medium} -eq ${required_version_medium} ) && ( ${current_version_minor} -lt ${required_version_minor} ) ]] && \
+        result="false"
+
+	echo "${result}"
+}
