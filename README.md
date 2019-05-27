@@ -120,7 +120,7 @@ For further details, see [the tests documentation](tests/README.md).
 
 ## Platform-Distro Compatibility Matrix
 
-|           |Alpine            |CentOS            |ClearLinux        |Debian/Ubuntu     |EulerOS           |Fedora            |openSUSE          |
+|           |Alpine            |CentOS            |Clear Linux       |Debian/Ubuntu     |EulerOS           |Fedora            |openSUSE          |
 |--         |--                |--                |--                |--                |--                |--                |--                |
 |**ARM64**  |:heavy_check_mark:|:heavy_check_mark:|                  |                  |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
 |**PPC64le**|:heavy_check_mark:|:heavy_check_mark:|                  |:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|:heavy_check_mark:|
