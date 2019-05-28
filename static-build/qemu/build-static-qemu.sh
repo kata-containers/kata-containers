@@ -13,6 +13,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/../../scripts/lib.sh"
 
 config_dir="${script_dir}/../../scripts/"
+qemu_tar="kata-qemu-static.tar.gz"
 
 qemu_repo="${qemu_repo:-}"
 qemu_version="${qemu_version:-}"
@@ -33,7 +34,7 @@ info "Build ${qemu_repo} version: ${qemu_version}"
 http_proxy="${http_proxy:-}"
 https_proxy="${https_proxy:-}"
 
-docker build \
+sudo docker build \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg QEMU_REPO="${qemu_repo}" \
@@ -42,7 +43,9 @@ docker build \
 	-f "${script_dir}/Dockerfile" \
 	-t qemu-static
 
-docker run \
+sudo docker run \
 	-i \
 	-v "${PWD}":/share qemu-static \
-	mv /tmp/qemu-static/kata-qemu-static.tar.gz /share/
+	mv "/tmp/qemu-static/${qemu_tar}" /share/
+
+sudo chown ${USER}:${USER} "${PWD}/${qemu_tar}"
