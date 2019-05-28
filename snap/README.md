@@ -4,8 +4,8 @@
 * [Install snap](#install-snap)
 * [Build and install snap image](#build-and-install-snap-image)
 * [Configure Kata Containers](#configure-kata-containers)
-* [Integration with docker and kubernetes](#integration-with-docker-and-kubernetes)
-* [Remove Snap](#remove-snap)
+* [Integration with docker and Kubernetes](#integration-with-docker-and-kubernetes)
+* [Remove snap](#remove-snap)
 * [Limitations](#limitations)
 
 This directory contains the resources needed to build the Kata Containers
@@ -51,7 +51,7 @@ the system architecture.
 
 By default Kata Containers snap image is mounted at `/snap/kata-containers` as a
 read-only file system, therefore default configuration file can not be edited.
-Fortunately [kata-runtime][4] supports loading a configuration file from another
+Fortunately [`kata-runtime`][4] supports loading a configuration file from another
 path than the default.
 
 ```sh
@@ -60,11 +60,11 @@ $ sudo cp /snap/kata-containers/current/usr/share/defaults/kata-containers/confi
 $ $EDITOR /etc/kata-containers/configuration.toml
 ```
 
-## Integration with docker and kubernetes
+## Integration with docker and Kubernetes
 
 The path to the runtime provided by the Kata Containers snap image is
 `/snap/kata-containers/current/usr/bin/kata-runtime`. You should use it to
-run Kata Containers with [docker][9] and [kubernetes][10].
+run Kata Containers with [docker][9] and [Kubernetes][10].
 
 ## Remove snap
 
