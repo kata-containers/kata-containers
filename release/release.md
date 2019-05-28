@@ -4,7 +4,7 @@
 * [Requirements](#requirements)
 * [Release process](#release-process)
 
-# Introduction
+## Introduction
 
 If you are reading this document, you might want to create a Kata Containers
 Release.
@@ -14,7 +14,6 @@ The Kata Containers Release Process is defined in the following
 created a [Release Checklist][release-checklist]. Finally, to simplify the
 Release Checklist process we have automated most of the process, this document
 guides on how to use release scripts instead of do all the checklist manually.
-
 
 ## Requirements
 
@@ -31,7 +30,7 @@ guides on how to use release scripts instead of do all the checklist manually.
 - GPG configured to sign git tags. https://help.github.com/articles/generating-a-new-gpg-key/
 
 - You should configure your GitHub to use your ssh keys (to push to branches). See https://help.github.com/articles/adding-a-new-ssh-key-to-your-github-account/.
-    * As an alternative, configure hub to push and fork with https, `git config --global hub.protocol https` (Not tested yet) *
+    * As an alternative, configure hub to push and fork with HTTPS, `git config --global hub.protocol https` (Not tested yet) *
 
 - [Docker](https://docs.docker.com/install/)
 
@@ -65,7 +64,7 @@ $ git pull
    $ export BRANCH="master"
    $ ./update-repository-version.sh -p "$NEW_VERSION" "$BRANCH"
    ```
-   The commands from above will create a github pull request in the Kata projects.
+   The commands from above will create a GitHub pull request in the Kata projects.
    Work with the Kata approvers to verify that the CI works and the PR are merged.
  
    Note: There is not `VERSION` file in some repositories like `tests`. They are
@@ -102,7 +101,7 @@ $ git pull
    ```
 
 6. Test packages
-After all the packages have built succesfully (see status in OBS web page: https://build.opensuse.org/project/subprojects/home:katacontainers),
+After all the packages have built successfully (see status in OBS web page: https://build.opensuse.org/project/subprojects/home:katacontainers),
 make sure the packages install and work. To help with this you can use the [package test job](http://jenkins.katacontainers.io/job/package-release-testing)
 
  
@@ -121,7 +120,7 @@ make sure the packages install and work. To help with this you can use the [pack
 
 8. Send changes to upstream.
 If you found any issue during the release process and you fix it, please send it back.
-After your changes are merged, tag kata packaging with `${NEW_VERSION}` to identify the code used for the release.
+After your changes are merged, tag Kata packaging with `${NEW_VERSION}` to identify the code used for the release.
 
 
 [release-process-definition]: https://github.com/kata-containers/documentation/blob/master/Releases.md

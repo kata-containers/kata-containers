@@ -1,8 +1,12 @@
-### Kata OBS to Packagecloud sync tool
+# Kata OBS to Packagecloud sync tool
 
-`kata-pkgsync` is a tool to synchronize kata package from OBS to Packagecloud.
+* [How it works](#how-it-works)
+* [Detailed behaviour](#detailed-behaviour)
+* [Install and Usage](#install-and-usage)
 
-### How it works
+`kata-pkgsync` is a tool to synchronize Kata package from OBS to Packagecloud.
+
+## How it works
 
 `kata-pkgsync` autonomously discovers OBS packages, repositories, and architectures
 in a OBS project.
@@ -16,7 +20,7 @@ Based on this information, `kata-pkgsyncs` can download only the necessary
 files from OBS, upload them on Packagecloud, and delete orphans Packagecloud packages.
 
 
-### Detailed behaviour
+## Detailed behaviour
 
 This is the sequence of tasks executed:
 
@@ -34,7 +38,7 @@ of packages, to avoid re-downloading files if already done.
 6. Upload the identified files to Packagecloud.
 7. Optionally, delete orphans files from Packagecloud.
 
-### Install and Usage
+## Install and Usage
 
 Install with:
 ```
