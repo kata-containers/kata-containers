@@ -19,7 +19,7 @@ apply_depends_on() {
 	# kata_repo variable is set by the jenkins_job_build.sh
 	# and its value is the repository that we are currently testing.
 	pushd "${GOPATH}/src/${kata_repo}"
-	label_lines=$(git log --format=%b master.. | grep "Depends-on:" || true)
+	label_lines=$(git log --format=%b "origin/${branch}.." | grep "Depends-on:" || true)
 	if [ "${label_lines}" == "" ]; then
 		popd
 		return 0
@@ -53,7 +53,7 @@ apply_depends_on() {
 			git checkout "${dependency_branch}" && \
 			git rebase "origin/${branch}"
 			# And show what we rebased on top of to aid debugging
-			git log --oneline master~1..HEAD
+			git log --oneline "origin/${branch}~1..HEAD"
 		popd
 	done
 
@@ -92,7 +92,7 @@ clone_repos() {
 			echo "... and rebasing with origin/${branch}"
 			git rebase "origin/${branch}"
 			# And show what we rebased on top of to aid debugging
-			git log --oneline master~1..HEAD
+			git log --oneline "origin/${branch}~1..HEAD"
 		else
 			# Packaging repo only has master branch, so we
 			# cannot checkout to a different branch.
