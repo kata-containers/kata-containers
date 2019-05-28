@@ -121,6 +121,9 @@ type HypervisorConfig struct {
 	// HugePages specifies if the memory should be pre-allocated from huge pages
 	HugePages bool
 
+	// File based memory backend root directory
+	FileBackedMemRootDir string
+
 	// Realtime Used to enable/disable realtime
 	Realtime bool
 

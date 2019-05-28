@@ -96,9 +96,10 @@ const (
 	qmpCapErrMsg  = "Failed to negoatiate QMP capabilities"
 	qmpExecCatCmd = "exec:cat"
 
-	scsiControllerID  = "scsi0"
-	rngID             = "rng0"
-	vsockKernelOption = "agent.use_vsock"
+	scsiControllerID         = "scsi0"
+	rngID                    = "rng0"
+	vsockKernelOption        = "agent.use_vsock"
+	fallbackFileBackedMemDir = "/dev/shm"
 )
 
 var qemuMajorVersion int
@@ -423,6 +424,23 @@ func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) g
 	return incoming
 }
 
+func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) {
+	var target string
+	if q.config.FileBackedMemRootDir != "" {
+		target = q.config.FileBackedMemRootDir
+	} else {
+		target = fallbackFileBackedMemDir
+	}
+	if _, err := os.Stat(target); err != nil {
+		q.Logger().WithError(err).Error("File backed memory location does not exist")
+		return
+	}
+
+	knobs.FileBackedMem = true
+	knobs.FileBackedMemShared = true
+	memory.Path = target
+}
+
 // createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.
 func (q *qemu) createSandbox(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, store *store.VCStore) error {
 	// Save the tracing context
@@ -475,6 +493,19 @@ func (q *qemu) createSandbox(ctx context.Context, id string, hypervisorConfig *H
 	}
 
 	incoming := q.setupTemplate(&knobs, &memory)
+
+	// With the current implementations, VM templating will not work with file
+	// based memory (stand-alone) or virtiofs. This is because VM templating
+	// builds the first VM with file-backed memory and shared=on and the
+	// subsequent ones with shared=off. virtio-fs always requires shared=on for
+	// memory.
+	if q.config.SharedFS == config.VirtioFS || q.config.FileBackedMemRootDir != "" {
+		if !(q.config.BootToBeTemplate || q.config.BootFromTemplate) {
+			q.setupFileBackedMem(&knobs, &memory)
+		} else {
+			return errors.New("VM templating has been enabled with either virtio-fs or file backed memory and this configuration will not work")
+		}
+	}
 
 	rtc := govmmQemu.RTC{
 		Base:     "utc",
