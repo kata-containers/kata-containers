@@ -11,12 +11,14 @@ cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 source /etc/os-release || source /usr/lib/os-release
 
-CURRENT_QEMU_BRANCH=$(get_version "assets.hypervisor.qemu-lite.branch")
-CURRENT_QEMU_COMMIT=$(get_version "assets.hypervisor.qemu-lite.commit")
-QEMU_REPO_URL=$(get_version "assets.hypervisor.qemu-lite.url")
+KATA_DEV_MODE="${KATA_DEV_MODE:-}"
+
+CURRENT_QEMU_VERSION=$(get_version "assets.hypervisor.qemu.version")
+CURRENT_QEMU_TAG=$(get_version "assets.hypervisor.qemu.tag")
+QEMU_REPO_URL=$(get_version "assets.hypervisor.qemu.url")
 # Remove 'https://' from the repo url to be able to git clone the repo
 QEMU_REPO=${QEMU_REPO_URL/https:\/\//}
-PACKAGED_QEMU="qemu-lite"
+PACKAGED_QEMU="qemu"
 QEMU_ARCH=$(${cidir}/kata-arch.sh -d)
 
 # option "--shallow-submodules" was introduced in git v2.9.0
@@ -25,16 +27,16 @@ GIT_SHADOW_VERSION="2.9.0"
 get_packaged_qemu_commit() {
 	if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
 		qemu_commit=$(sudo apt-cache madison $PACKAGED_QEMU \
-			| awk '{print $3}' | cut -d'-' -f1 | cut -d'.' -f4)
+			| awk '{print $3}' | cut -d'+' -f1 | cut -d':' -f2)
 	elif [ "$ID" == "fedora" ]; then
 		qemu_commit=$(sudo dnf --showduplicate list ${PACKAGED_QEMU}.${QEMU_ARCH} \
-			| awk '/'$PACKAGED_QEMU'/ {print $2}' | cut -d'-' -f1 | cut -d'.' -f4)
+			| awk '/'$PACKAGED_QEMU'/ {print $2}' | cut -d':' -f2 | cut -d'.' -f1-2)
 	elif [ "$ID" == "centos" ] || [ "$ID" == "rhel" ]; then
 		qemu_commit=$(sudo yum --showduplicate list $PACKAGED_QEMU \
-			| awk '/'$PACKAGED_QEMU'/ {print $2}' | cut -d'-' -f1 | cut -d'.' -f4)
+			| awk '/'$PACKAGED_QEMU'/ {print $2}' | cut -d':' -f2 | cut -d'.' -f1-2)
 	elif [[ "$ID" =~ ^opensuse.*$ ]] || [ "$ID" == "sles" ]; then
 		qemu_commit=$(sudo zypper info $PACKAGED_QEMU \
-			| grep "Version" | sed -E "s/.+\+git\.([0-9a-f]+).+/\1/")
+			| grep "Version" | cut -d':' -f2 | cut -d'.' -f1-2 | tr -d '[:space:]')
 	fi
 
 	echo "${qemu_commit}"
@@ -68,13 +70,17 @@ clone_qemu_repo() {
         git_shadow_clone=$(check_git_version "${GIT_SHADOW_VERSION}")
 
 	if [ "$git_shadow_clone" == "true" ]; then
-		git clone --branch "${CURRENT_QEMU_BRANCH}" --single-branch --depth 1 --shallow-submodules "${QEMU_REPO_URL}" "${GOPATH}/src/${QEMU_REPO}"
+		git clone --branch "${CURRENT_QEMU_TAG}" --single-branch --depth 1 --shallow-submodules "${QEMU_REPO_URL}" "${GOPATH}/src/${QEMU_REPO}"
 	else
-		git clone --branch "${CURRENT_QEMU_BRANCH}" --single-branch --depth 1 "${QEMU_REPO_URL}" "${GOPATH}/src/${QEMU_REPO}"
+		git clone --branch "${CURRENT_QEMU_TAG}" --single-branch --depth 1 "${QEMU_REPO_URL}" "${GOPATH}/src/${QEMU_REPO}"
 	fi
 }
 
 build_and_install_qemu() {
+	if [ -n "$(command -v qemu-system-${QEMU_ARCH})" ] && [ -n "$KATA_DEV_MODE" ]; then
+		die "Qemu will not be installed"
+	fi
+
 	PACKAGING_REPO="github.com/kata-containers/packaging"
 	QEMU_CONFIG_SCRIPT="${GOPATH}/src/${PACKAGING_REPO}/scripts/configure-hypervisor.sh"
 
@@ -89,7 +95,8 @@ build_and_install_qemu() {
 	[ -n "$(ls -A ui/keycodemapdb)" ] || git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
 	# Apply required patches
-	QEMU_PATCHES_PATH="${GOPATH}/src/${PACKAGING_REPO}/obs-packaging/qemu-lite/patches"
+	QEMU_PATCHES_TAG=$(echo "${CURRENT_QEMU_VERSION}" | cut -d '.' -f1-2)
+	QEMU_PATCHES_PATH="${GOPATH}/src/${PACKAGING_REPO}/qemu/patches/${QEMU_PATCHES_TAG}.x"
 	for patch in ${QEMU_PATCHES_PATH}/*.patch; do
 		echo "Applying patch: $patch"
 		git apply "$patch"
@@ -101,9 +108,6 @@ build_and_install_qemu() {
 
 	echo "Install Qemu"
 	sudo -E make install
-
-	# Add link from /usr/local/bin to /usr/bin
-	sudo ln -sf $(command -v qemu-system-${QEMU_ARCH}) "/usr/bin/qemu-lite-system-${QEMU_ARCH}"
 	popd
 }
 
@@ -128,7 +132,7 @@ main() {
 		"ppc64le"|"s390x")
 			packaged_qemu_version=$(get_packaged_qemu_version)
 			short_current_qemu_version=${CURRENT_QEMU_VERSION#*-}
-			if [ "$packaged_qemu_version" == "$short_current_qemu_version" ] && [ -z "${CURRENT_QEMU_COMMIT}" ] || [ "${QEMU_ARCH}" == "s390x" ]; then
+			if [ "$packaged_qemu_version" == "$short_current_qemu_version" ] && [ -z "${CURRENT_QEMU_TAG}" ] || [ "${QEMU_ARCH}" == "s390x" ]; then
 				install_packaged_qemu || build_and_install_qemu
 			else
 				build_and_install_qemu

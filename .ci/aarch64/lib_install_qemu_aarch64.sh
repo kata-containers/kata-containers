@@ -6,9 +6,9 @@
 
 set -e
 
-CURRENT_QEMU_VERSION=$(get_version "assets.hypervisor.qemu.version")
+CURRENT_QEMU_VERSION=$(get_version "assets.hypervisor.qemu.architecture.aarch64.version")
 PACKAGED_QEMU="qemu"
-CURRENT_QEMU_BRANCH=$(get_version "assets.hypervisor.qemu.architecture.aarch64.tag")
+CURRENT_QEMU_TAG=$(get_version "assets.hypervisor.qemu.architecture.aarch64.tag")
 QEMU_REPO_URL=$(get_version "assets.hypervisor.qemu.url")
 # Remove 'https://' from the repo url to be able to git clone the repo
 QEMU_REPO=${QEMU_REPO_URL/https:\/\//}
@@ -80,4 +80,3 @@ build_and_install_qemu() {
         fi
         popd
 }
-
