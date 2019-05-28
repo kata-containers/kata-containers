@@ -39,36 +39,68 @@ LOCAL_BUILD=false
 OBS_PUSH=false
 VERBOSE=false
 
+pkg_2_version() {
+	local pkg="$1"
+	local versionVar="${pkg}_version"
+	local hashVar="${pkg}_hash"
+	local version=$(echo ${!versionVar})
+	local gitHash=
+
+	# Make pkg match the package name on OBS
+	pkg="${pkg#kata_}"
+	pkg="${pkg//_/-}"
+	pkg="${pkg//osbuilder/kata-containers-image}"
+	pkg="${pkg//linux/linux-container}"
+
+	if [ -n "${PROJECT_REPO:-}" ]; then
+		local proj="${PROJECT_REPO%/runtime}"
+	else
+		local proj="home:${OBS_PROJECT}:${OBS_SUBPROJECT}"
+	fi
+	local release="$(get_obs_pkg_release "${proj}/${pkg//_/-}")"
+
+	case "$pkg" in
+		linux-container)
+			version="${version}.$(cat "${SCRIPT_DIR}/../../kernel/kata_config_version")"
+			;;
+		qemu-*)
+			gitHash=$(echo ${!hashVar}})
+			;;
+	esac
+
+	pkg_version "$version" "$release" "$gitHash"
+}
+
+
 # Parse arguments
 cli "$@"
 
 [ "$VERBOSE" == "true" ] && set -x
 
 # Package depedencies
-info "requires:"
-PROXY_REQUIRED_VERESION=$(pkg_version "${kata_proxy_version}" "" "")
-info "proxy ${PROXY_REQUIRED_VERESION}"
+info "Requires:"
+PROXY_REQUIRED_VERSION=$(pkg_2_version "kata_proxy")
+info "proxy ${PROXY_REQUIRED_VERSION}"
 
-SHIM_REQUIRED_VERSION=$(pkg_version "${kata_shim_version}" "" "")
+SHIM_REQUIRED_VERSION=$(pkg_2_version "kata_shim")
 info "shim ${SHIM_REQUIRED_VERSION}"
 
-KERNEL_CONFIG_VERSION=$(cat "${SCRIPT_DIR}/../../kernel/kata_config_version")
-KERNEL_REQUIRED_VERSION=$(pkg_version "${kernel_version}.${KERNEL_CONFIG_VERSION}" "" "")
+KERNEL_REQUIRED_VERSION=$(pkg_2_version "kata_linux")
 info "kata-linux-container ${KERNEL_REQUIRED_VERSION}"
 
-KSM_THROTTLER_REQUIRED_VERSION=$(pkg_version "${kata_ksm_throttler_version}" "" "")
+KSM_THROTTLER_REQUIRED_VERSION=$(pkg_2_version "kata_ksm_throttler")
 info "ksm-throttler ${KSM_THROTTLER_REQUIRED_VERSION}"
 
-KATA_IMAGE_REQUIRED_VERSION=$(pkg_version "${kata_osbuilder_version}" "" "")
+KATA_IMAGE_REQUIRED_VERSION=$(pkg_2_version "kata_osbuilder")
 info "image ${KATA_IMAGE_REQUIRED_VERSION}"
 
-KATA_QEMU_VANILLA_REQUIRED_VERSION=$(pkg_version "${qemu_vanilla_version}" "" "${qemu_vanilla_hash}")
+
+KATA_QEMU_VANILLA_REQUIRED_VERSION=$(pkg_2_version "qemu_vanilla")
 info "qemu-vanilla ${KATA_QEMU_VANILLA_REQUIRED_VERSION}"
 
 if [ "$arch" == "x86_64" ]; then
-	KATA_QEMU_LITE_REQUIRED_VERSION=$(pkg_version "${qemu_lite_version}" "" "${qemu_lite_hash}")
+	KATA_QEMU_LITE_REQUIRED_VERSION=$(pkg_2_version "qemu_lite")
 	info "qemu-lite ${KATA_QEMU_LITE_REQUIRED_VERSION}"
-	replace_list+=("qemu_lite_version=${KATA_QEMU_LITE_REQUIRED_VERSION}")
 fi
 
 PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/runtime}
@@ -85,7 +117,7 @@ replace_list+=(
 	"RELEASE=$RELEASE"
 	"VERSION=$VERSION"
 	"kata_osbuilder_version=${KATA_IMAGE_REQUIRED_VERSION}"
-	"kata_proxy_version=${PROXY_REQUIRED_VERESION}"
+	"kata_proxy_version=${PROXY_REQUIRED_VERSION}"
 	"kata_shim_version=${SHIM_REQUIRED_VERSION}"
 	"ksm_throttler_version=${KSM_THROTTLER_REQUIRED_VERSION}"
 	"linux_container_version=${KERNEL_REQUIRED_VERSION}"
