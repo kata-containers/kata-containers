@@ -26,15 +26,14 @@
   version = "v0.0.4"
 
 [[projects]]
-  branch = "master"
-  digest = "1:237b43acafb17c01ca2939f940e61df737f2208c1646fe49abb7e4de781d6dd7"
+  digest = "1:c3d9c7aff913b274bb9cc000b57e87b721aa7296eeeb1ae8c0d1ccffcbc20c47"
   name = "github.com/mlafeldt/pkgcloud"
   packages = [
     ".",
     "upload",
   ]
   pruneopts = "UT"
-  revision = "49013a5afc7335e1d13d1f68be2a6a37496e6dc7"
+  revision = "926cf4b57c55666f6a386a50c2ab6581d15fd820"
 
 [[projects]]
   digest = "1:e8fcad58263a7511225a674d9c23b9c55aa2f8616e2dab59f184a516f55c6566"

@@ -30,7 +30,7 @@
   name = "github.com/marcov/obsgo"
 
 [[constraint]]
-  branch = "master"
+  revision = "926cf4b57c55666f6a386a50c2ab6581d15fd820"
   name = "github.com/mlafeldt/pkgcloud"
 
 [[constraint]]
