@@ -19,6 +19,9 @@ QEMU_REPO=${QEMU_REPO_URL/https:\/\//}
 PACKAGED_QEMU="qemu-lite"
 QEMU_ARCH=$(${cidir}/kata-arch.sh -d)
 
+# option "--shallow-submodules" was introduced in git v2.9.0
+GIT_SHADOW_VERSION="2.9.0"
+
 get_packaged_qemu_commit() {
 	if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
 		qemu_commit=$(sudo apt-cache madison $PACKAGED_QEMU \
@@ -61,7 +64,14 @@ install_packaged_qemu() {
 }
 
 clone_qemu_repo() {
-	git clone --branch "${CURRENT_QEMU_BRANCH}" --single-branch --depth 1 --shallow-submodules "${QEMU_REPO_URL}" "${GOPATH}/src/${QEMU_REPO}"
+	# check if git is capable of shadow cloning
+        git_shadow_clone=$(check_git_version "${GIT_SHADOW_VERSION}")
+
+	if [ "$git_shadow_clone" == "true" ]; then
+		git clone --branch "${CURRENT_QEMU_BRANCH}" --single-branch --depth 1 --shallow-submodules "${QEMU_REPO_URL}" "${GOPATH}/src/${QEMU_REPO}"
+	else
+		git clone --branch "${CURRENT_QEMU_BRANCH}" --single-branch --depth 1 "${QEMU_REPO_URL}" "${GOPATH}/src/${QEMU_REPO}"
+	fi
 }
 
 build_and_install_qemu() {
