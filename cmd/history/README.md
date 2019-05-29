@@ -1,7 +1,7 @@
 # history.sh
 
 A simple script to help extract git log history from the main Kata Containers
-github repos and sort them by date.
+GitHub repos and sort them by date.
 
 This can be very helpful for instance when:
 

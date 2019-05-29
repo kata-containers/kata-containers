@@ -19,7 +19,7 @@ $ kata-log-parser --help
 
 ## Logfile requirements
 
-The tool reads logfiles in the [logfmt](https://brandur.org/logfmt) structured
+The tool reads logfiles in the [`logfmt`](https://brandur.org/logfmt) structured
 logging format. For example, a logfile created by the golang
 [logrus](https://godoc.org/github.com/sirupsen/logrus) package.
 

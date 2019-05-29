@@ -4,9 +4,9 @@
     * [JSON file format](#json-file-format)
 * [baseline TOML layout](#baseline-toml-layout)
     * [Supported file types](#supported-file-types)
-    * [Supported checktypes](#supported-checktypes)
+    * [Supported `checktypes`](#supported-checktypes)
 * [Options](#options)
-    * [TOML basefile path (mandatory)](#toml-basefile-path-mandatory)
+    * [TOML base file path (mandatory)](#toml-base-file-path-mandatory)
     * [Debug mode](#debug-mode)
     * [Log file path](#log-file-path)
     * [Metrics results directory path (mandatory)](#metrics-results-directory-path-mandatory)
@@ -40,70 +40,76 @@ did not complete successfully.
 JSON results files only need to be valid JSON, and contain some form
 of numeric results that can be extracted into a string or list of
 numeric results using the
-[jq](https://stedolan.github.io/jq/) JSON query tool.
+[`jq`](https://stedolan.github.io/jq/) JSON query tool.
 
 ## baseline TOML layout
+
 The baseline TOML file is composed of one `[[metric]]` section per result
 that is processed.  Each section contains a number of parameters, some
 optional:
 
-| name        | type   | description                                        |
-| ----------- | ------ | -------------------------------------------------- |
-| name        | string | Filename containing results (minus .json ext.)     |
-| type        | string | "json"  (optional, "json" is the default)          |
-| description | string | Description of test (optional)                     |
-| checkvar    | string | `jq` query string to extract results from json     |
-| checktype   | string | Property to check ("mean", "max" etc.)             |
-| minval      | float  | Minimum value the checked property should be       |
-| maxval      | float  | Maximum value the checked property should be       |
-| midval      | float  | Middle value used for percentage range check       |
-| minpercent  | float  | Minimum percentage from midval check boundary      |
-| maxpercent  | float  | Maximum percentage from midval check boundary      |
+| name          | type     | description                                        |
+| ------------- | -------- | -------------------------------------------------- |
+| `name`        | `string` | Filename containing results (minus `.json` ext.)   |
+| `type`        | `string` | `json`  (optional, `json` is the default)          |
+| `description` | `string` | Description of test (optional)                     |
+| `checkvar`    | `string` | `jq` query string to extract results from JSON     |
+| `checktype`   | `string` | Property to check ("mean", "max" etc.)             |
+| `minval`      | `float`  | Minimum value the checked property should be       |
+| `maxval`      | `float`  | Maximum value the checked property should be       |
+| `midval`      | `float`  | Middle value used for percentage range check       |
+| `minpercent`  | `float`  | Minimum percentage from `midval` check boundary    |
+| `maxpercent`  | `float`  | Maximum percentage from `midval` check boundary    |
 
 ### Supported file types
 
 At this time only `JSON` formatted results files are supported.
 
-### Supported checktypes
+### Supported `checktypes`
 
 The following `checktype`s are supported. All are tested to fall within
-the bounds set by the minval and maxval. That is:
+the bounds set by the `minval` and `maxval`. That is:
 
->  minval <= Result <= maxval
+> `minval <= Result <= maxval`
 
-| check | description                                                       |
-| ----- | ----------------------------------------------------------------- |
-| mean  | the mean of all the results extracted by the `jq` query           |
-| min   | the minimum (smallest) result                                     |
-| max   | the maximum (largest) result                                      |
-| sd    | the standard deviation of the results                             |
-| cov   | the coefficient of variation (relative standard deviation)        |
+| check  | description                                                       |
+| ------ | ----------------------------------------------------------------- |
+| `mean` | the mean of all the results extracted by the `jq` query           |
+| `min`  | the minimum (smallest) result                                     |
+| `max`  | the maximum (largest) result                                      |
+| `sd`   | the standard deviation of the results                             |
+| `cov`  | the coefficient of variation (relative standard deviation)        |
 
 ## Options
+
 `checkmetrics` takes a number of options. Some are mandatory.
 
-### TOML basefile path (mandatory)
+### TOML base file path (mandatory)
 
 ```
 --basefile value    path to baseline TOML metrics file
 ```
 
 ### Debug mode
+
 ```
 --debug             enable debug output in the log
 ```
 
 ### Log file path
+
 ```
 --log value         set the log file path
 ```
 
 ### Metrics results directory path (mandatory)
+
 ```
 --metricsdir value  directory containing results files
 ```
 
 ### Percentage presentation mode
+
 ```
 --percentage        present results as percentage differences
 ```
@@ -115,16 +121,19 @@ the bounds set by the minval and maxval. That is:
 > calculations are correct.
 
 ### Help
+
 ```
 --help, -h          show help
 ```
 
 ### Version
+
 ```
 --version, -v       print the version
 ```
 
 ## Output
+
 The `checkmetrics` tool outputs a summary table after processing all metrics
 sections, and returns a non-zero return code if any of the metrics checks fail.
 
@@ -159,19 +168,19 @@ Fails: 2, Passes 1
 
 ### Output Columns
 
-| name | description                                                     |
-| ---- | --------------------------------------------------------------- |
-| P/F  | Pass/Fail                                                       |
-| NAME | Name of the test/check                                          |
-| FLR  | Floor - the minval to check against                             |
-| MEAN | The mean of the results                                         |
-| CEIL | Ceiling - the maxval to check against                           |
-| GAP  | The range (gap) between the minval and maxval, as a % of minval |
-| MIN  | The minimum result in the data set                              |
-| MAX  | The maximum result in the data set                              |
-| RNG  | The % range (spread) between the min and max result, wrt min    |
-| COV  | The coefficient of variation of the results                     |
-| ITS  | The number of results (iterations)                              |
+| name   | description                                                           |
+| ------ | --------------------------------------------------------------------- |
+| `P/F`  | Pass/Fail                                                             |
+| `NAME` | Name of the test/check                                                |
+| `FLR`  | Floor - the `minval` to check against                                 |
+| `MEAN` | The mean of the results                                               |
+| `CEIL` | Ceiling - the `maxval` to check against                               |
+| `GAP`  | The range (gap) between the `minval` and `maxval`, as a % of `minval` |
+| `MIN`  | The minimum result in the data set                                    |
+| `MAX`  | The maximum result in the data set                                    |
+| `RNG`  | The % range (spread) between the min and max result, WRT `min`        |
+| `COV`  | The coefficient of variation of the results                           |
+| `ITS`  | The number of results (iterations)                                    |
 
 ## Example invocation
 

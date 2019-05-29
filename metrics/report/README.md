@@ -4,7 +4,7 @@
 
 # Kata Containers metrics report generator
 
-The files within this directory can be used to generate a 'metrics report'
+The files within this directory can be used to generate a "metrics report"
 for Kata Containers.
 
 The primary workflow consists of two stages:
@@ -24,7 +24,7 @@ Once the results are generated, create a suitably named subdirectory of
 `tests/metrics/results`, and move the JSON files into it.
 
 Repeat this process if you want to compare multiple sets of results. Note, the
-report generation scripts process all subfolders of `tests/metrics/results` when
+report generation scripts process all subdirectories of `tests/metrics/results` when
 generating the report.
 
 > **Note:** By default, the `grabdata.sh` script tries to launch some moderately
@@ -52,12 +52,12 @@ To run in the default mode, execute the following:
 $ ./makereport.sh
 ```
 
-The report generation tool uses [Rmarkdown](https://github.com/rstudio/rmarkdown),
+The report generation tool uses [`Rmarkdown`](https://github.com/rstudio/rmarkdown),
 [R](https://www.r-project.org/about.html) and [pandoc](https://pandoc.org/) to produce
 a PDF report. To avoid the need for all users to set up a working environment
 with all the necessary tooling, the `makereport.sh` script utilises a `Dockerfile` with
 the environment pre-defined in order to produce the report. Thus, you need to
 have Docker installed on your system in order to run the report generation.
 
-The resulting `metrics_report.pdf` is generated into the `output` subdir of the `report`
+The resulting `metrics_report.pdf` is generated into the `output` subdirectory of the `report`
 directory.
