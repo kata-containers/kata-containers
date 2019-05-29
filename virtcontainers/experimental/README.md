@@ -1,6 +1,11 @@
 # Experimental package description
 
-## 1. What are "experimental" features?
+* [What are "experimental" features?](#what-are-experimental-features)
+* [What's the difference between "WIP" and "experimental"?](#what-s-the-difference-between-wip-and-experimental)
+* [When should "experimental" features be moved out from "experimental"?](#when-should-experimental-features-be-moved-out-from-experimental)
+* [Can "experimental" features fail the CI temporarily?](#can-experimental-features-fail-the-ci-temporarily)
+
+## What are "experimental" features?
 
 "Experimental" features are features living in master branch, 
 but Kata community thinks they're not ready for production use.
@@ -36,15 +41,15 @@ or become non-experimental at some release, so relative configuration options ca
 An experimental feature **MUST** have a descriptive name containing only lower-case characters, numbers or '_', 
 e.g. new_hypervisor_2, the name **MUST** be unique and will never be re-used in future.
 
-## 2. What's the difference between "WIP" and "experimental"?
+## What's the difference between "WIP" and "experimental"?
 
 "WIP"(work in progress) are usually used to mark the PR as incomplete before the PR can be reviewed and merged,
 after the PR finishes its designed purpose(fix bugs, add new features etc) and all CI jobs pass, the codes can be merged into master branch.
-After merging, we can still mark this part as "experimental", and leave some space for its evolvement in next several releases.
+After merging, we can still mark this part as "experimental", and leave some space for its evolution in future releases.
 
 In one word, "experimental" can be unstable currently but it **MUST** be complete and functional, thus different from "WIP".
 
-## 3. When should "experimental" features be moved out from "experimental"?
+## When should "experimental" features be moved out from "experimental"?
 
 That depends.
 
@@ -57,7 +62,7 @@ The experimental feature should state clearly in documentation the rationale for
 and when it is expected to be non-experimental,
 so that maintainers can consider to make it formal in right release.
 
-## 4. Can "experimental" features fail the CI temporarily?
+## Can "experimental" features fail the CI temporarily?
 
 No.
 

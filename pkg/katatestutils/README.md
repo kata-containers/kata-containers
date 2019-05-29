@@ -2,7 +2,7 @@
 
 * [Test Constraints](#test-constraints)
     * [Usage](#usage)
-        * [Displaying the TestConstraint](#displaying-the-testconstraint)
+        * [Displaying the `TestConstraint`](#displaying-the-testconstraint)
         * [Associating an issue with a constraint](#associating-an-issue-with-a-constraint)
     * [Examples](#examples)
         * [Skip tests based on user](#skip-tests-based-on-user)
@@ -57,7 +57,7 @@ func TestFoo(t *testing.T) {
 }
 ```
 
-#### Displaying the TestConstraint
+#### Displaying the `TestConstraint`
 
 Note that you could add the `TestConstraint` object to the `Skip()` call as it
 will provide details of why the skip occurred:
@@ -145,7 +145,7 @@ func TestDontRunOnFedora(t *testing.T) {
 #### Skip tests based on kernel version
 
 Use the `NeedKernelVersionGE()` constraint to skip a test unless running on a
-system with atleast the specified kernel version:
+system with at least the specified kernel version:
 
 ```go
 func TestNewKernelVersion(t *testing.T) {
