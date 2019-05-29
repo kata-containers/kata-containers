@@ -50,7 +50,7 @@ pkg_2_version() {
 	pkg="${pkg#kata_}"
 	pkg="${pkg//_/-}"
 	pkg="${pkg//osbuilder/kata-containers-image}"
-	pkg="${pkg//linux/linux-container}"
+	pkg="${pkg//kernel/linux-container}"
 
 	if [ -n "${PROJECT_REPO:-}" ]; then
 		local proj="${PROJECT_REPO%/runtime}"
@@ -85,7 +85,7 @@ info "proxy ${PROXY_REQUIRED_VERSION}"
 SHIM_REQUIRED_VERSION=$(pkg_2_version "kata_shim")
 info "shim ${SHIM_REQUIRED_VERSION}"
 
-KERNEL_REQUIRED_VERSION=$(pkg_2_version "kata_linux")
+KERNEL_REQUIRED_VERSION=$(pkg_2_version "kernel")
 info "kata-linux-container ${KERNEL_REQUIRED_VERSION}"
 
 KSM_THROTTLER_REQUIRED_VERSION=$(pkg_2_version "kata_ksm_throttler")
@@ -101,6 +101,7 @@ info "qemu-vanilla ${KATA_QEMU_VANILLA_REQUIRED_VERSION}"
 if [ "$arch" == "x86_64" ]; then
 	KATA_QEMU_LITE_REQUIRED_VERSION=$(pkg_2_version "qemu_lite")
 	info "qemu-lite ${KATA_QEMU_LITE_REQUIRED_VERSION}"
+	replace_list+=("qemu_lite_version=${KATA_QEMU_LITE_REQUIRED_VERSION}")
 fi
 
 PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/runtime}
