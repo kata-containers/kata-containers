@@ -32,22 +32,22 @@ sandbox lifecycle through the rest of the [sandbox API](#sandbox-functions).
 
 ### Sandbox Structures
 
-* [SandboxConfig](#sandboxconfig)
-  * [Resources](#resources)
-  * [HypervisorType](#hypervisortype)
-  * [HypervisorConfig](#hypervisorconfig)
-  * [AgentType](#agenttype)
-  * [ProxyType](#proxytype)
-  * [ProxyConfig](#proxyconfig)
-  * [ShimType](#shimtype)
-  * [NetworkConfig](#networkconfig)
-    * [NetInterworkingModel](#netinterworkingmodel)
-  * [Volume](#volume)
-  * [Sandbox ContainerConfig](#sandbox-containerconfig)
-    * [Sandbox Cmd](#sandbox-cmd)
-    * [Sandbox Mount](#sandbox-mount)
-    * [Sandbox DeviceInfo](#sandbox-deviceinfo)
-* [VCSandbox](#vcsandbox)
+* [`SandboxConfig`](#sandboxconfig)
+  * [`Resources`](#resources)
+  * [`HypervisorType`](#hypervisortype)
+  * [`HypervisorConfig`](#hypervisorconfig)
+  * [`AgentType`](#agenttype)
+  * [`ProxyType`](#proxytype)
+  * [`ProxyConfig`](#proxyconfig)
+  * [`ShimType`](#shimtype)
+  * [`NetworkConfig`](#networkconfig)
+    * [`NetInterworkingModel`](#netinterworkingmodel)
+  * [`Volume`](#volume)
+  * [`Sandbox ContainerConfig`](#sandbox-containerconfig)
+    * [`Sandbox Cmd`](#sandbox-cmd)
+    * [`Sandbox Mount`](#sandbox-mount)
+    * [`Sandbox DeviceInfo`](#sandbox-deviceinfo)
+* [`VCSandbox`](#vcsandbox)
 
 #### `SandboxConfig`
 ```Go
@@ -457,15 +457,15 @@ type VCSandbox interface {
 
 ### Sandbox Functions
 
-* [CreateSandbox](#createsandbox)
-* [DeleteSandbox](#deletesandbox)
-* [StartSandbox](#startsandbox)
-* [StopSandbox](#stopsandbox)
-* [RunSandbox](#runsandbox)
-* [ListSandbox](#listsandbox)
-* [StatusSandbox](#statussandbox)
-* [PauseSandbox](#pausesandbox)
-* [ResumeSandbox](#resumesandbox)
+* [`CreateSandbox`](#createsandbox)
+* [`DeleteSandbox`](#deletesandbox)
+* [`StartSandbox`](#startsandbox)
+* [`StopSandbox`](#stopsandbox)
+* [`RunSandbox`](#runsandbox)
+* [`ListSandbox`](#listsandbox)
+* [`StatusSandbox`](#statussandbox)
+* [`PauseSandbox`](#pausesandbox)
+* [`ResumeSandbox`](#resumesandbox)
 
 #### `CreateSandbox`
 ```Go
@@ -570,14 +570,14 @@ to manage the container lifecycle through the rest of the
 
 ### Container Structures
 
-* [Container ContainerConfig](#container-containerconfig)
-  * [Container Cmd](#container-cmd)
-  * [Container Mount](#container-mount)
-  * [Container DeviceInfo](#container-deviceinfo)
-* [Process](#process)
-* [ContainerStatus](#containerstatus)
-* [ProcessListOptions](#processlistoptions)
-* [VCContainer](#vccontainer)
+* [Container `ContainerConfig`](#container-containerconfig)
+  * [Container `Cmd`](#container-cmd)
+  * [Container `Mount`](#container-mount)
+  * [Container `DeviceInfo`](#container-deviceinfo)
+* [`Process`](#process)
+* [`ContainerStatus`](#containerstatus)
+* [`ProcessListOptions`](#processlistoptions)
+* [`VCContainer`](#vccontainer)
 
 
 #### Container `ContainerConfig`
