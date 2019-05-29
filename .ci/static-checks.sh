@@ -18,6 +18,9 @@ source "${cidir}/lib.sh"
 export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 export tests_repo_dir="${GOPATH}/src/${tests_repo}"
 
+# List of files to delete on exit
+files_to_remove=()
+
 script_name=${0##*/}
 
 repo=""
@@ -113,6 +116,10 @@ Examples:
 EOT
 }
 
+function remove_tmp_files() {
+	rm -f "${files_to_remove[@]}"
+}
+
 # Convert a golang package to a full path
 pkg_to_path()
 {
@@ -206,14 +213,14 @@ check_go()
 	all_packages=$(mktemp)
 	go list ./... | sort > "$all_packages" || true
 
+	files_to_remove+=("$submodule_packages" "$all_packages")
+
 	# List of packages to consider which is defined as:
 	#
 	#   "all packages" - "submodule packages"
 	#
 	# Note: the vendor filtering is required for versions of go older than 1.9
 	go_packages=$(comm -3 "$all_packages" "$submodule_packages" | grep -v "/vendor/" || true)
-
-	rm -f "$submodule_packages" "$all_packages"
 
 	# No packages to test
 	[ -z "$go_packages" ] && return
@@ -293,12 +300,11 @@ check_labels()
 
 	tmp=$(mktemp)
 
+	files_to_remove+=("${tmp}")
+
 	info "Checking labels for repo ${repo} using temporary combined database ${tmp}"
 
 	bash -f "${tests_repo_dir}/cmd/github-labels/github-labels.sh" "generate" "${repo}" "${tmp}"
-
-	# All tests passed so remove combined labels database
-	rm -f "${tmp}"
 }
 
 # Ensure all files (where possible) contain an SPDX license header
@@ -425,6 +431,7 @@ check_docs()
 	local url_map=$(mktemp)
 	local invalid_urls=$(mktemp)
 	local md_links=$(mktemp)
+	files_to_remove+=("${url_map}" "${invalid_urls}" "${md_links}")
 
 	info "Checking document markdown references"
 
@@ -507,8 +514,8 @@ check_docs()
 	urls=$(awk '{print $1}' "$url_map" | sort -u)
 
 	info "Checking all document URLs"
-
 	local invalid_urls_dir=$(mktemp -d)
+	files_to_remove+=("${invalid_urls_dir}")
 
 	for url in $urls
 	do
@@ -551,6 +558,7 @@ check_docs()
 			local ret
 
 			local curl_out=$(mktemp)
+			files_to_remove+=("${curl_out}")
 
 			# Process specific file to avoid out-of-order writes
 			local invalid_file=$(printf "%s/%d" "$invalid_urls_dir" "$$")
@@ -567,7 +575,7 @@ check_docs()
 			local http_statuses
 
 			http_statuses=$(grep -E "^HTTP" "$curl_out" | awk '{print $2}' || true)
-			rm -f "$curl_out"
+
 
 			# No status codes is an error
 			if [ -z "$http_statuses" ]; then
@@ -629,9 +637,6 @@ check_docs()
 
 		exit 1
 	fi
-
-	rm -f "$url_map" "$invalid_urls" "$md_links"
-	rm -r "$invalid_urls_dir"
 }
 
 # Tests to apply to all files.
@@ -764,6 +769,8 @@ check_vendor()
 
 main()
 {
+	trap remove_tmp_files EXIT
+
 	local long_option_names="${!long_options[@]}"
 
 	local args=$(getopt \
