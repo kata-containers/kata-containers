@@ -17,6 +17,8 @@ import (
 type qemuAmd64 struct {
 	// inherit from qemuArchBase, overwrite methods if needed
 	qemuArchBase
+
+	vmFactory bool
 }
 
 const defaultQemuPath = "/usr/bin/qemu-system-x86_64"
@@ -89,8 +91,13 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 		machineType = defaultQemuMachineType
 	}
 
+	factory := false
+	if config.BootToBeTemplate || config.BootFromTemplate {
+		factory = true
+	}
+
 	q := &qemuAmd64{
-		qemuArchBase{
+		qemuArchBase: qemuArchBase{
 			machineType:           machineType,
 			memoryOffset:          config.MemOffset,
 			qemuPaths:             qemuPaths,
@@ -99,6 +106,7 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,
 		},
+		vmFactory: factory,
 	}
 
 	q.handleImagePath(config)
@@ -129,6 +137,14 @@ func (q *qemuAmd64) cpuModel() string {
 	if q.nestedRun {
 		cpuModel += ",pmu=off"
 	}
+
+	// VMX is not migratable yet.
+	// issue: https://github.com/kata-containers/runtime/issues/1750
+	if q.vmFactory {
+		virtLog.WithField("subsystem", "qemuAmd64").Warn("VMX is not migratable yet: turning it off")
+		cpuModel += ",vmx=off"
+	}
+
 	return cpuModel
 }
 
