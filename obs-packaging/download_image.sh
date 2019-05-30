@@ -10,6 +10,7 @@ set -o errtrace
 
 script_dir=$(cd $(dirname "${BASH_SOURCE[0]}") && pwd)
 source "${script_dir}/scripts/obs-docker.sh"
+source "${script_dir}/scripts/pkglib.sh"
 
 handle_error() {
 	local exit_code="${?}"
