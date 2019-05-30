@@ -156,7 +156,7 @@ func handleDoc(c *cli.Context, createTOC bool) error {
 	}
 
 	if singleDocOnly && len(docs) > 1 {
-		doc.Logger.Debug("Not checking referenced files as user request")
+		doc.Logger.Debug("Not checking referenced files at user request")
 		return nil
 	}
 

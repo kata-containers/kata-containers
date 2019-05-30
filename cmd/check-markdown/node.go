@@ -53,7 +53,10 @@ func (d *Doc) makeHeading(node *bf.Node) (Heading, error) {
 
 	data := node.HeadingData
 
-	heading := newHeading(name, mdName, data.HeadingID, data.Level)
+	heading, err := newHeading(name, mdName, data.Level)
+	if err != nil {
+		return Heading{}, err
+	}
 
 	return heading, nil
 }

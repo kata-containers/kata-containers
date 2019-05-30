@@ -41,7 +41,7 @@ func (d *Doc) parseMarkdown() error {
 		return err
 	}
 
-	md := bf.New(bf.WithExtensions(bf.CommonExtensions | bf.AutoHeadingIDs))
+	md := bf.New(bf.WithExtensions(bf.CommonExtensions))
 
 	root := md.Parse(bytes)
 
