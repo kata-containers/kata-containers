@@ -209,7 +209,7 @@ labels:
   - name: bug
     description: Incorrect behaviour
     category: type
-    color: DEFAULT_COLOUR
+    color: ff0000
 
   - name: cannot-reproduce
     description: Issue cannot be recreated
