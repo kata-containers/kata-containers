@@ -361,6 +361,11 @@ labels:
     category: vendor
     color: DEFAULT_COLOUR
 
+  - name: needs-review
+    description: Needs to be assessed by the team.
+    category: team
+    color: 00ff00
+
   - name: needs-unit-tests
     description: Needs new unit tests to validate behaviour in this repository
     category: test
