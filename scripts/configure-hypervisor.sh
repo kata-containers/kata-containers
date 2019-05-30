@@ -217,6 +217,10 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-vnc-png)
 	qemu_options+=(size:--disable-vnc-sasl)
 
+	# Disable PAM authentication: it's a feature used together with VNC access
+	# that's not used. See QEMU commit 8953caf for more details
+	[ "${qemu_version_major}" -ge 4  ] && qemu_options+=(size:--disable-auth-pam)
+
 	# Disable unused filesystem support
 	[ "$arch" == x86_64 ] && qemu_options+=(size:--disable-fdt)
 	qemu_options+=(size:--disable-glusterfs)
