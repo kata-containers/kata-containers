@@ -56,7 +56,6 @@ readonly -a systemd_files=(
 	"systemd-getty-generator"
 	"systemd-gpt-auto-generator"
 	"systemd-tmpfiles-cleanup.timer"
-	"tmp.mount"
 )
 
 # Set a default value
