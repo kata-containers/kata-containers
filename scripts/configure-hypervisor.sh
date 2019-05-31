@@ -366,8 +366,13 @@ generate_qemu_options() {
 	qemu_options+=(functionality:--enable-cap-ng)
 
 	if [[ "${qemu_version_major}" -ge 4 || ( "${qemu_version_major}" -eq 3  &&  "${qemu_version_minor}" -ge 1 ) ]]; then
-		# AVX2 is enabled by default, make sure it's on.
-		qemu_options+=(speed:--enable-avx2)
+		# AVX2 is enabled by default by x86_64, make sure it's enabled only
+		# for that architecture
+		if [ "$arch" == x86_64 ]; then
+			qemu_options+=(speed:--enable-avx2)
+		else
+			qemu_options+=(speed:--disable-avx2)
+		fi
 		# Enable libc malloc_trim() for memory optimization.
 		qemu_options+=(speed:--enable-malloc-trim)
 	fi
