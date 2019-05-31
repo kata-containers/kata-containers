@@ -117,7 +117,7 @@ EOT
 }
 
 function remove_tmp_files() {
-	rm -f "${files_to_remove[@]}"
+	rm -rf "${files_to_remove[@]}"
 }
 
 # Convert a golang package to a full path
