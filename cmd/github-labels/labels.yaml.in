@@ -209,7 +209,7 @@ labels:
   - name: bug
     description: Incorrect behaviour
     category: type
-    color: DEFAULT_COLOUR
+    color: ff0000
 
   - name: cannot-reproduce
     description: Issue cannot be recreated
@@ -360,6 +360,11 @@ labels:
     description: Needs imported code to be re-vendored
     category: vendor
     color: DEFAULT_COLOUR
+
+  - name: needs-review
+    description: Needs to be assessed by the team.
+    category: team
+    color: 00ff00
 
   - name: needs-unit-tests
     description: Needs new unit tests to validate behaviour in this repository
