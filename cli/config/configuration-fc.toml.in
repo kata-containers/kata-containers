@@ -201,8 +201,6 @@ use_vsock = true
 # Default false
 #enable_template = true
 
-[proxy.@PROJECT_TYPE@]
-
 [shim.@PROJECT_TYPE@]
 path = "@SHIMPATH@"
 
