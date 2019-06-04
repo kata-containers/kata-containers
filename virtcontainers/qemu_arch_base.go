@@ -49,7 +49,7 @@ type qemuArch interface {
 	capabilities() types.Capabilities
 
 	// bridges returns the number bridges for the machine type
-	bridges(number uint32) []types.PCIBridge
+	bridges(number uint32) []types.Bridge
 
 	// cpuTopology returns the CPU topology for the given amount of vcpus
 	cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP
@@ -70,7 +70,7 @@ type qemuArch interface {
 	appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread)
 
 	// appendBridges appends bridges to devices
-	appendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge) []govmmQemu.Device
+	appendBridges(devices []govmmQemu.Device, bridges []types.Bridge) []govmmQemu.Device
 
 	// append9PVolume appends a 9P volume to devices
 	append9PVolume(devices []govmmQemu.Device, volume types.Volume) []govmmQemu.Device
@@ -242,15 +242,11 @@ func (q *qemuArchBase) capabilities() types.Capabilities {
 	return caps
 }
 
-func (q *qemuArchBase) bridges(number uint32) []types.PCIBridge {
-	var bridges []types.PCIBridge
+func (q *qemuArchBase) bridges(number uint32) []types.Bridge {
+	var bridges []types.Bridge
 
 	for i := uint32(0); i < number; i++ {
-		bridges = append(bridges, types.PCIBridge{
-			Type:    types.PCI,
-			ID:      fmt.Sprintf("%s-bridge-%d", types.PCI, i),
-			Address: make(map[uint32]string),
-		})
+		bridges = append(bridges, types.NewBridge(types.PCI, fmt.Sprintf("%s-bridge-%d", types.PCI, i), make(map[uint32]string), 0))
 	}
 
 	return bridges
@@ -351,7 +347,7 @@ func (q *qemuArchBase) appendSCSIController(devices []govmmQemu.Device, enableIO
 }
 
 // appendBridges appends to devices the given bridges
-func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge) []govmmQemu.Device {
+func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device, bridges []types.Bridge) []govmmQemu.Device {
 	for idx, b := range bridges {
 		t := govmmQemu.PCIBridge
 		if b.Type == types.PCIE {

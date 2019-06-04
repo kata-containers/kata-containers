@@ -154,7 +154,7 @@ func TestQemuArchBaseBridges(t *testing.T) {
 		id := fmt.Sprintf("%s-bridge-%d", types.PCI, i)
 		assert.Equal(types.PCI, b.Type)
 		assert.Equal(id, b.ID)
-		assert.NotNil(b.Address)
+		assert.NotNil(b.Devices)
 	}
 }
 
