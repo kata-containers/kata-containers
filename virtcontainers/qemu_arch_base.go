@@ -362,6 +362,9 @@ func (q *qemuArchBase) appendSCSIController(devices []govmmQemu.Device, enableIO
 // appendBridges appends to devices the given bridges
 func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
 	for idx, b := range q.Bridges {
+		if b.Type == types.CCW {
+			continue
+		}
 		t := govmmQemu.PCIBridge
 		if b.Type == types.PCIE {
 			t = govmmQemu.PCIEBridge
@@ -618,6 +621,8 @@ func (q *qemuArchBase) addDeviceToBridge(ID string, t types.Type) (string, types
 		addr, err = b.AddDevice(ID)
 		if err == nil {
 			switch t {
+			case types.CCW:
+				return fmt.Sprintf("%04x", addr), b, nil
 			case types.PCI, types.PCIE:
 				return fmt.Sprintf("%02x", addr), b, nil
 			}

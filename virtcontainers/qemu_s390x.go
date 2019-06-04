@@ -11,6 +11,7 @@ import (
 
 	govmmQemu "github.com/intel/govmm/qemu"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
 type qemuS390x struct {
@@ -38,6 +39,8 @@ var kernelParams = []Param{
 }
 
 var kernelRootParams = commonVirtioblkKernelRootParams
+
+var ccwbridge = types.NewBridge(types.CCW, "", make(map[uint32]string, types.CCWBridgeMaxCapacity), 0)
 
 var supportedQemuMachines = []govmmQemu.Machine{
 	{
@@ -71,6 +74,8 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 			kernelParams:          kernelParams,
 		},
 	}
+	// Set first bridge type to CCW
+	q.Bridges = append(q.Bridges, ccwbridge)
 
 	if config.ImagePath != "" {
 		q.kernelParams = append(q.kernelParams, kernelRootParams...)

@@ -1764,6 +1764,9 @@ func genericAppendBridges(devices []govmmQemu.Device, bridges []types.Bridge, ma
 		if b.Type == types.PCIE {
 			t = govmmQemu.PCIEBridge
 		}
+		if b.Type == types.CCW {
+			continue
+		}
 
 		bridges[idx].Addr = bridgePCIStartAddr + idx
 
@@ -1783,7 +1786,6 @@ func genericAppendBridges(devices []govmmQemu.Device, bridges []types.Bridge, ma
 	return devices
 }
 
-// nolint: unused, deadcode
 func genericBridges(number uint32, machineType string) []types.Bridge {
 	var bridges []types.Bridge
 	var bt types.Type
@@ -1800,7 +1802,7 @@ func genericBridges(number uint32, machineType string) []types.Bridge {
 	case QemuPseries:
 		bt = types.PCI
 	case QemuCCWVirtio:
-		bt = types.PCI
+		bt = types.CCW
 	default:
 		return nil
 	}
