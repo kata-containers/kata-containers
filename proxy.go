@@ -239,7 +239,18 @@ func printAgentLogs(sock string) error {
 	otherMask := 0007
 	other := int(fileInfo.Mode().Perm()) & otherMask
 	if other != 0 {
-		return fmt.Errorf("All socket permissions for 'other' should be disabled, got %3.3o", other)
+		logger().WithField("socket permissions", fmt.Sprintf("%4.4o", fileInfo.Mode().Perm())).
+			Info("All socket permissions for 'other' should be disabled")
+
+		// Setting permissions socket for "other" to 0.
+		otherMask = 0770
+		other := int(fileInfo.Mode().Perm()) & otherMask
+		logger().WithField("other", fmt.Sprintf("%4.4o", other)).Info("Changing socket permissions of 'other'")
+
+		err := os.Chmod(agentLogsAddr, os.FileMode(other))
+		if err != nil {
+			logger().WithError(err).Error("Cannot change socket permissions for 'other'")
+		}
 	}
 
 	conn, err := net.Dial("unix", agentLogsAddr)
