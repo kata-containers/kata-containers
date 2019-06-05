@@ -55,6 +55,10 @@ categories:
       How the issue affect the operation of the system. A more precise version
       of regression.
 
+  - name: block
+    description: |
+      Stop a PR from being merged.
+
   - name: cleanup
     description: Refactoring, restructuring or general tidy-up needed.
 
@@ -240,6 +244,11 @@ labels:
     description: Highlight a feature that will soon be removed
     category: cleanup
     color: DEFAULT_COLOUR
+
+  - name: do-not-merge
+    description: PR has problems or depends on another
+    category: block
+    color: ff0000
 
   - name: duplicate
     description: Same issue as one already reported
@@ -529,6 +538,11 @@ labels:
     description: Part of the system is not stable
     category: behaviour
     color: DEFAULT_COLOUR
+
+  - name: wip
+    description: Work in Progress (PR incomplete - needs more work or rework)
+    category: block
+    color: ff0000
 
   - name: wont-fix
     description: Issue will not be fixed (not a good use of limited resources)
