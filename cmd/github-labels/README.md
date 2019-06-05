@@ -5,6 +5,7 @@
     * [Show categories](#show-categories)
     * [Check only](#check-only)
     * [Full details](#full-details)
+* [Archive of old GitHub labels](#archive-of-old-github-labels)
 
 # Overview
 
@@ -73,3 +74,7 @@ Lists all available options:
 ```sh
 $ kata-github-labels -h
 ```
+
+# Archive of old GitHub labels
+
+See the [archive documentation](archive).
