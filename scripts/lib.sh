@@ -41,7 +41,7 @@ get_from_kata_deps() {
 	# through CI. For the kernel, .ci/install_kata_kernel.sh file in tests
 	# repository will pass the kernel version as an override to this function to
 	# allow testing of kernels before they land in tree.
-	if ${CI}; then
+	if [ "${CI:-}" = "true" ]; then
 		versions_file="${GOPATH}/src/${runtime_repo}/versions.yaml"
 	else
 		versions_file="versions-${branch}.yaml"
