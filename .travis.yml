@@ -14,6 +14,8 @@ matrix:
     - os: linux
       sudo: required
       dist: trusty
+  allow_failures:
+    - os: osx
 
 language: go
 go_import_path: github.com/kata-containers/proxy
