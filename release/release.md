@@ -95,7 +95,7 @@ $ git pull
 5. Create Kata packages:
    ```bash
    $ cd ${GOPATH}/src/github.com/kata-containers/packaging/obs-packaging
-   # Optional, if release is a new stable branch ./create-pkg-branch.sh ${BRANCH}
+   # Optional, if release is a new stable branch ./create-repo-branch.sh ${BRANCH}
    $./gen_versions_txt.sh ${BRANCH}
    $PUSH=1 OBS_SUBPROJECT="releases:$(uname -m):${BRANCH}" ./build_from_docker.sh ${NEW_VERSION}
    ```
