@@ -57,11 +57,11 @@ var _ = Describe("vsock test", func() {
 			Expect(exitCode).To(BeZero())
 
 			cmd := NewCommand("journalctl", "-e", "-q", "-b", "-n", "10",
-				"-t", DefaultShim+"-shim", "-g", "source=agent")
+				"-t", DefaultShim+"-shim")
 			stdout, stderr, exitCode = cmd.Run()
 			Expect(exitCode).To(BeZero())
 			Expect(stderr).To(BeEmpty())
-			Expect(stdout).NotTo(BeEmpty())
+			Expect(stdout).To(ContainSubstring("source=agent"))
 		})
 	})
 })
