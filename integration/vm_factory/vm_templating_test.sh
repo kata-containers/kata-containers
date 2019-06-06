@@ -25,11 +25,13 @@ template_tmpfs_path="/run/vc/vm/template"
 enable_vm_template_config() {
 	echo "enable vm template config ${RUNTIME_CONFIG_PATH}"
 	sudo sed -i -e 's/^#\(enable_template\).*=.*$/\1 = true/g' "${RUNTIME_CONFIG_PATH}"
+	sudo sed -i -e 's/^#\(use_vsock\).*=.*$/\1 = true/g' "${RUNTIME_CONFIG_PATH}"
 }
 
 disable_vm_template_config() {
 	echo "disable vm template config"
 	sudo sed -i -e 's/^\(enable_template\).*=.*$/#\1 = true/g' "${RUNTIME_CONFIG_PATH}"
+	sudo sed -i -e 's/^\(use_vsock\).*=.*$/#\1 = true/g' "${RUNTIME_CONFIG_PATH}"
 }
 
 init_vm_template() {
