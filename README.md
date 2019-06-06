@@ -33,7 +33,7 @@ For details of the other Kata Containers repositories, see the
 (CLI) part of the Kata Containers runtime component. It leverages the
 [virtcontainers](virtcontainers)
 package to provide a high-performance standards-compliant runtime that creates
-hardware-virtualized containers.
+hardware-virtualized [Linux](https://www.kernel.org/) containers running on Linux hosts.
 
 The runtime is
 [OCI](https://github.com/opencontainers/runtime-spec)-compatible,
