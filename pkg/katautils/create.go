@@ -66,11 +66,9 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 			HypervisorConfig: runtimeConfig.HypervisorConfig,
 			AgentType:        runtimeConfig.AgentType,
 			AgentConfig:      runtimeConfig.AgentConfig,
+			ProxyType:        runtimeConfig.ProxyType,
+			ProxyConfig:      runtimeConfig.ProxyConfig,
 		},
-	}
-	if runtimeConfig.FactoryConfig.VMCacheNumber > 0 {
-		factoryConfig.VMConfig.ProxyType = runtimeConfig.ProxyType
-		factoryConfig.VMConfig.ProxyConfig = runtimeConfig.ProxyConfig
 	}
 
 	kataUtilsLogger.WithField("factory", factoryConfig).Info("load vm factory")

@@ -258,6 +258,8 @@ var destroyFactoryCommand = cli.Command{
 					HypervisorConfig: runtimeConfig.HypervisorConfig,
 					AgentType:        runtimeConfig.AgentType,
 					AgentConfig:      runtimeConfig.AgentConfig,
+					ProxyType:        runtimeConfig.ProxyType,
+					ProxyConfig:      runtimeConfig.ProxyConfig,
 				},
 			}
 			kataLog.WithField("factory", factoryConfig).Info("load vm factory")
@@ -314,6 +316,8 @@ var statusFactoryCommand = cli.Command{
 					HypervisorConfig: runtimeConfig.HypervisorConfig,
 					AgentType:        runtimeConfig.AgentType,
 					AgentConfig:      runtimeConfig.AgentConfig,
+					ProxyType:        runtimeConfig.ProxyType,
+					ProxyConfig:      runtimeConfig.ProxyConfig,
 				},
 			}
 			kataLog.WithField("factory", factoryConfig).Info("load vm factory")
