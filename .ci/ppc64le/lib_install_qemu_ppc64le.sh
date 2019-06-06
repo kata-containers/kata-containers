@@ -6,7 +6,7 @@
 
 set -e
 
-CURRENT_QEMU_VERSION=$(get_version "assets.hypervisor.qemu.version")
+CURRENT_QEMU_TAG=$(get_version "assets.hypervisor.qemu.tag")
 PACKAGED_QEMU="qemu-system-ppc"
 BUILT_QEMU="qemu-system-ppc64"
 
@@ -52,7 +52,8 @@ build_and_install_qemu() {
         QEMU_CONFIG_SCRIPT="${GOPATH}/src/${PACKAGING_REPO}/scripts/configure-hypervisor.sh"
 
 
-        git clone --branch "$CURRENT_QEMU_VERSION" --depth 1 "$QEMU_REPO_URL" "${GOPATH}/src/${QEMU_REPO}"
+	git clone --branch "$CURRENT_QEMU_TAG" --depth 1 "$QEMU_REPO_URL" "${GOPATH}/src/${QEMU_REPO}"
+
         go get -d "$PACKAGING_REPO" || true
 
         pushd "${GOPATH}/src/${QEMU_REPO}"
