@@ -26,7 +26,7 @@ const defaultQemuPath = "/usr/bin/qemu-system-ppc64le"
 
 const defaultQemuMachineType = QemuPseries
 
-const defaultQemuMachineOptions = "accel=kvm,usb=off"
+const defaultQemuMachineOptions = "accel=kvm,usb=off,cap-cfpc=broken,cap-sbbc=broken,cap-ibs=broken"
 
 const defaultMemMaxPPC64le = 32256 // Restrict MemMax to 32Gb on PPC64le
 
