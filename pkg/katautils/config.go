@@ -1041,10 +1041,6 @@ func checkFactoryConfig(config oci.RuntimeConfig) error {
 		if config.HypervisorConfig.InitrdPath == "" {
 			return errors.New("Factory option enable_template requires an initrd image")
 		}
-
-		if config.HypervisorConfig.UseVSock {
-			return errors.New("config vsock conflicts with factory, please disable one of them")
-		}
 	}
 
 	if config.FactoryConfig.VMCacheNumber > 0 {
