@@ -112,7 +112,6 @@ func resetHypervisorConfig(config *vc.VMConfig) {
 	config.HypervisorConfig.BootFromTemplate = false
 	config.HypervisorConfig.MemoryPath = ""
 	config.HypervisorConfig.DevicesStatePath = ""
-	config.ProxyType = vc.NoopProxyType
 	config.ProxyConfig = vc.ProxyConfig{}
 }
 
@@ -140,7 +139,7 @@ func checkVMConfig(config1, config2 vc.VMConfig) error {
 func (f *factory) checkConfig(config vc.VMConfig) error {
 	baseConfig := f.base.Config()
 
-	return checkVMConfig(config, baseConfig)
+	return checkVMConfig(baseConfig, config)
 }
 
 func (f *factory) validateNewVMConfig(config vc.VMConfig) error {

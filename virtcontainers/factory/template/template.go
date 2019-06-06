@@ -23,7 +23,6 @@ type template struct {
 	config    vc.VMConfig
 }
 
-var templateProxyType = vc.KataBuiltInProxyType
 var templateWaitForAgent = 2 * time.Second
 
 // Fetch finds and returns a pre-built template factory.
@@ -120,10 +119,6 @@ func (t *template) createTemplateVM(ctx context.Context) error {
 	config.HypervisorConfig.BootFromTemplate = false
 	config.HypervisorConfig.MemoryPath = t.statePath + "/memory"
 	config.HypervisorConfig.DevicesStatePath = t.statePath + "/state"
-	// template vm uses builtin proxy
-	if config.ProxyType != "noopProxy" {
-		config.ProxyType = templateProxyType
-	}
 
 	vm, err := vc.NewVM(ctx, config)
 	if err != nil {
