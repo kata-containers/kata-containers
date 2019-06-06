@@ -83,7 +83,6 @@ func TestTemplateFactory(t *testing.T) {
 	err = tt.createTemplateVM(ctx)
 	assert.Nil(err)
 
-	templateProxyType = vc.NoopProxyType
 	vm, err = tt.GetBaseVM(ctx, vmConfig)
 	assert.Nil(err)
 
