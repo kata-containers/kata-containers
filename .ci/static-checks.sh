@@ -236,7 +236,10 @@ check_go()
 		local linter_version=$(get_test_version "externals.golangci-lint.version")
 
 		info "Forcing ${linter} version ${linter_version}"
-		build_version ${linter_url} "" ${linter_version}
+		build_version ${linter_url} "build" ${linter_version}
+		# golangci build only target does not install into ${GOPATH}/bin
+		# Hand install it...
+		go install -v "${linter_url}/..."
 	fi
 
 	local linter_args="run -c ${cidir}/.golangci.yml"
