@@ -15,8 +15,8 @@ setup() {
 
 @test "Containers with shared volume" {
 	pod_name="test-shared-volume"
-	first_container_name="nginx-container"
-	second_container_name="debian-container"
+	first_container_name="busybox-first-container"
+	second_container_name="busybox-second-container"
 
 	# Create pod
 	kubectl create -f "${pod_config_dir}/pod-shared-volume.yaml"
@@ -25,7 +25,7 @@ setup() {
 	kubectl wait --for=condition=Ready pod "$pod_name"
 
 	# Communicate containers
-	cmd="cat /usr/share/nginx/html/index.html"
+	cmd="cat /tmp/pod-data"
 	msg="Hello from the $second_container_name"
 	kubectl exec "$pod_name" -c "$first_container_name" -- sh -c "$cmd" | grep "$msg"
 }
