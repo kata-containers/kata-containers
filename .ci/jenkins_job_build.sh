@@ -45,6 +45,8 @@ export PATH=${GOPATH}/bin:/usr/local/go/bin:/usr/sbin:/sbin:${PATH}
 kata_repo_dir="${GOPATH}/src/${kata_repo}"
 tests_repo_dir="${GOPATH}/src/${tests_repo}"
 
+arch=$("${tests_repo_dir}/.ci/kata-arch.sh")
+
 # Get the tests repository
 mkdir -p $(dirname "${tests_repo_dir}")
 [ -d "${tests_repo_dir}" ] || git clone "https://${tests_repo}.git" "${tests_repo_dir}"
@@ -55,7 +57,6 @@ mkdir -p $(dirname "${kata_repo_dir}")
 
 # If CI running on bare-metal, a few clean-up work before walking into test repo
 if [ "${BAREMETAL}" == true ]; then
-	arch=$("${tests_repo_dir}/.ci/kata-arch.sh")
 	echo "Looking for baremetal cleanup script for arch ${arch}"
 	clean_up_script=("${tests_repo_dir}/.ci/${arch}/clean_up_${arch}.sh") || true
 	if [ -f "${clean_up_script}" ]; then
@@ -94,10 +95,16 @@ fi
 # Run the static analysis tools
 if [ -z "${METRICS_CI}" ]
 then
-	specific_branch=""
-	# If not a PR, we are testing on stable or master branch.
-	[ -z "$pr_number" ] && specific_branch="true"
-	.ci/static-checks.sh "$kata_repo" "$specific_branch"
+	# We also run static checks on travis for x86 and ppc64le,
+	# so run them on jenkins only on architectures that travis
+	# do not support.
+	if [ "$arch" = "s390x" ] || [ "$arch" = "aarch64" ]
+	then
+		specific_branch=""
+		# If not a PR, we are testing on stable or master branch.
+		[ -z "$pr_number" ] && specific_branch="true"
+		.ci/static-checks.sh "$kata_repo" "$specific_branch"
+	fi
 fi
 
 # Setup Kata Containers Environment
