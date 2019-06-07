@@ -17,7 +17,7 @@ providing only bug and security fixes.
 Kata Containers will maintain two stable release branches in addition to the master branch.
 Once a new MAJOR or MINOR release is created from master, a new stable branch is created for
 the prior MAJOR or MINOR release and the older stable branch is no longer maintained. End of
-maintainence for a branch is announced on the Kata Containers mailing list.  Users can determine
+maintenance for a branch is announced on the Kata Containers mailing list.  Users can determine
 the version currently installed by running `kata-runtime kata-env`. It is recommended to use the
 latest stable branch available.
 
@@ -81,7 +81,7 @@ stable and master. While this is not in place currently, it should be considered
 ### Patch releases
 
 Releases are normally made every other week for patch releases, which include a GitHub release as
-well as binary packages. These patch releases are made for both stable branches, and a 'release candidate'
+well as binary packages. These patch releases are made for both stable branches, and a "release candidate"
 for the next `MAJOR` or `MINOR` is created from master. If there are no changes across all the repositories, no
 release is created and an announcement is made on the developer mailing list to highlight this.
 If a release is being made, each repository is tagged for this release, regardless
@@ -103,8 +103,8 @@ Kata guarantees compatibility between components that are within one minor relea
  
 This is critical for dependencies which cross between host (runtime, shim, proxy) and
 the guest (hypervisor, rootfs and agent).  For example, consider a cluster with a long-running
-deployment, workload-never-dies, all on kata version 1.1.3 components. If the operator updates
+deployment, workload-never-dies, all on Kata version 1.1.3 components. If the operator updates
 the Kata components to the next new minor release (i.e. 1.2.0), we need to guarantee that the 1.2.0
 runtime still communicates with 1.1.3 agent within workload-never-dies.
 
-Handling live-update is out of the scope of this document. See this [kata-runtime issue](https://github.com/kata-containers/runtime/issues/492) for details.
+Handling live-update is out of the scope of this document. See this [`kata-runtime` issue](https://github.com/kata-containers/runtime/issues/492) for details.

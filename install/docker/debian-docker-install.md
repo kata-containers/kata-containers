@@ -27,9 +27,9 @@
 
 2. Configure Docker to use Kata Containers by default with ONE of the following methods:
 
-a. sysVinit
+a. `sysVinit`
     
-    - with sysVinit,  docker config is stored in `/etc/default/docker`, edit the options similar to the following: 
+    - with `sysVinit`, docker config is stored in `/etc/default/docker`, edit the options similar to the following:
        
     ```sh
     $ sudo sh -c "echo '# specify docker runtime for kata-containers
@@ -64,7 +64,7 @@ c. Docker `daemon.json`
 
 3. Restart the Docker systemd service with one of the following (depending on init choice):
 
-    a. sysVinit
+    a. `sysVinit`
   
     ```sh
     $ sudo /etc/init.d/docker stop
