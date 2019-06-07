@@ -130,24 +130,24 @@ by each project.
 
 ### Sidecar Istio
 
-Istio provides a [bookinfo](https://istio.io/docs/examples/bookinfo/)
+Istio provides a [`bookinfo`](https://istio.io/docs/examples/bookinfo/)
 sample, which you can rely on to inject their `envoy` proxy as a
 sidecar.
 
 You need to use their tool called `istioctl kube-inject` to inject
-your YAML file. We use their bookinfo sample as an example:
+your YAML file. We use their `bookinfo` sample as an example:
 ```
 $ istioctl kube-inject -f samples/bookinfo/kube/bookinfo.yaml -o bookinfo-injected.yaml
 ```
 
 ### Sidecar Linkerd
 
-Linkerd provides an [emojivoto](https://linkerd.io/2/getting-started/index.html)
+Linkerd provides an [`emojivoto`](https://linkerd.io/2/getting-started/index.html)
 sample, which you can rely on to inject their `linkerd` proxy as a
 sidecar.
 
 You need to use their tool called `linkerd inject` to inject your YAML
-file. We use their emojivoto sample as example:
+file. We use their `emojivoto` sample as example:
 ```
 $ wget https://raw.githubusercontent.com/runconduit/conduit-examples/master/emojivoto/emojivoto.yml
 $ linkerd inject emojivoto.yml > emojivoto-injected.yaml

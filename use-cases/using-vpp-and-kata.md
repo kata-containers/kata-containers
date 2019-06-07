@@ -6,19 +6,19 @@ extensible framework that provides out-of-the-box production quality
 switch and router functionality. VPP is a high performance packet-processing
 stack that can run on commodity CPUs. Enabling VPP with DPDK support can
 yield significant performance improvements over a Linux\* bridge providing a
-switch with DPDK vhost-user ports.
+switch with DPDK VHOST-USER ports.
 
 For more information about VPP visit their [wiki](https://wiki.fd.io/view/VPP).
 
 ## Install and configure Kata Containers
 
-Follow  the [Kata Containers' setup instructions](https://github.com/kata-containers/documentation/wiki/Developer-Guide).
+Follow  the [Kata Containers setup instructions](https://github.com/kata-containers/documentation/wiki/Developer-Guide).
 
-In order to make use of vhost-user based interfaces, the container needs to be backed
-by huge pages. Hugepage support is required for the large memory pool allocation used for
+In order to make use of VHOST-USER based interfaces, the container needs to be backed
+by huge pages. `HugePages` support is required for the large memory pool allocation used for
 DPDK packet buffers.  This is a feature which must be configured within the Linux Kernel. See
 [the DPDK documentation](https://doc.dpdk.org/guides/linux_gsg/sys_reqs.html#use-of-hugepages-in-the-linux-environment)
-for details on how to enable for the host. After enabling huge-pages support on the host system,
+for details on how to enable for the host. After enabling huge pages support on the host system,
 update the Kata configuration to enable huge page support in the guest kernel:
 
 ```

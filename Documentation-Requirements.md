@@ -53,7 +53,7 @@ the concept is referred to using a link).
 Important information that is not part of the main document flow should be
 added as a Note in bold with all content contained within a block quote:
 
-> **Note:** This is areally important point!
+> **Note:** This is a really important point!
 >
 > This particular note also spans multiple lines. The entire note should be
 > included inside the quoted block.
@@ -118,7 +118,7 @@ utility.
   in a *bash code block* with every command line prefixed with `$ ` to denote
   a shell prompt:
 
-  ```
+  <pre>
 
       ```bash
       $ echo "Hi - I am some bash code"
@@ -126,7 +126,7 @@ utility.
       $ [ $? -eq 0 ] && echo "success"
       ```
 
-  ```
+  <pre>
 
 - If a command needs to be run as the `root` user, it must be run using
   `sudo(8)`.
@@ -142,7 +142,7 @@ utility.
 - In the unusual case that you need to display command *output*, use an
   unadorned code block (\`\`\`):
 
-  ```
+  <pre>
 
       The output of the `ls(1)` command is expected to be:
 
@@ -150,7 +150,7 @@ utility.
       ls: cannot access '/foo': No such file or directory
       ```
 
-  ```
+  <pre>
 
 - Long lines should not span across multiple lines by using the '`\`'
   continuation character.

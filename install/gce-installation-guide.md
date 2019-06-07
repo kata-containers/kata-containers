@@ -18,17 +18,19 @@ $ gcloud info || { echo "ERROR: no Google Cloud SDK"; exit 1; }
 
 VM images on GCE are grouped into families under projects. Officially supported images are automatically discoverable with `gcloud compute images list`. That command produces a list similar to the following (likely with different image names):
 
-    $ gcloud compute images list
-    NAME                                                  PROJECT            FAMILY                            DEPRECATED  STATUS
-    centos-7-v20180523                                    centos-cloud       centos-7                                      READY
-    coreos-stable-1745-5-0-v20180531                      coreos-cloud       coreos-stable                                 READY
-    cos-beta-67-10575-45-0                                cos-cloud          cos-beta                                      READY
-    cos-stable-66-10452-89-0                              cos-cloud          cos-stable                                    READY
-    debian-9-stretch-v20180510                            debian-cloud       debian-9                                      READY
-    rhel-7-v20180522                                      rhel-cloud         rhel-7                                        READY
-    sles-11-sp4-v20180523                                 suse-cloud         sles-11                                       READY
-    ubuntu-1604-xenial-v20180522                          ubuntu-os-cloud    ubuntu-1604-lts                               READY
-    ubuntu-1804-bionic-v20180522                          ubuntu-os-cloud    ubuntu-1804-lts                               READY
+```bash
+$ gcloud compute images list
+NAME                                                  PROJECT            FAMILY                            DEPRECATED  STATUS
+centos-7-v20180523                                    centos-cloud       centos-7                                      READY
+coreos-stable-1745-5-0-v20180531                      coreos-cloud       coreos-stable                                 READY
+cos-beta-67-10575-45-0                                cos-cloud          cos-beta                                      READY
+cos-stable-66-10452-89-0                              cos-cloud          cos-stable                                    READY
+debian-9-stretch-v20180510                            debian-cloud       debian-9                                      READY
+rhel-7-v20180522                                      rhel-cloud         rhel-7                                        READY
+sles-11-sp4-v20180523                                 suse-cloud         sles-11                                       READY
+ubuntu-1604-xenial-v20180522                          ubuntu-os-cloud    ubuntu-1604-lts                               READY
+ubuntu-1804-bionic-v20180522                          ubuntu-os-cloud    ubuntu-1804-lts                               READY
+```
 
 Each distribution has its own project, and each project can host images for multiple versions of the distribution, typically grouped into families. We recommend you select images by project and family, rather than by name. This ensures any scripts or other automation always works with a non-deprecated image, including security updates, updates to GCE-specific scripts, etc.
 
@@ -50,21 +52,23 @@ $ gcloud compute images create \
 
 If successful, `gcloud` reports that the image was created. Verify that the image has the nested virtualization license with `gcloud compute images describe $IMAGE_NAME`. This produces output like the following (some fields have been removed for clarity and to redact personal info):
 
-    diskSizeGb: '10'
-    kind: compute#image
-    licenseCodes:
-    - '1002001'
-    - '5926592092274602096'
-    licenses:
-    - https://www.googleapis.com/compute/v1/projects/vm-options/global/licenses/enable-vmx
-    - https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/licenses/ubuntu-1804-lts
-    name: ubuntu-1804-lts-nested
-    sourceImage: https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/ubuntu-1804-bionic-v20180522
-    sourceImageId: '3280575157699667619'
-    sourceType: RAW
-    status: READY
+```yaml
+diskSizeGb: '10'
+kind: compute#image
+licenseCodes:
+  - '1002001'
+  - '5926592092274602096'
+licenses:
+  - https://www.googleapis.com/compute/v1/projects/vm-options/global/licenses/enable-vmx
+  - https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/licenses/ubuntu-1804-lts
+name: ubuntu-1804-lts-nested
+sourceImage: https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/images/ubuntu-1804-bionic-v20180522
+sourceImageId: '3280575157699667619'
+sourceType: RAW
+status: READY
+```
 
-The primary criterion of interest here is the presence of the "enable-vmx" license. Without that licence Kata will not work. Without that license Kata does not work. The presence of that license instructs the Google Compute Engine hypervisor to enable Intel's VT-x instructions in virtual machines created from the image. Note that nested virtualization is only available in VMs running on Intel Haswell or later CPU microarchitectures.
+The primary criterion of interest here is the presence of the `enable-vmx` license. Without that licence Kata will not work. Without that license Kata does not work. The presence of that license instructs the Google Compute Engine hypervisor to enable Intel's VT-x instructions in virtual machines created from the image. Note that nested virtualization is only available in VMs running on Intel Haswell or later CPU micro-architectures.
 
 ### Verify VMX is Available
 
@@ -112,17 +116,18 @@ $ gcloud compute images create \
 
 The result is an image that includes any changes made to the `kata-testing` instance as well as the `enable-vmx` flag. Verify this with `gcloud compute images describe kata-base`. The result, which omits some fields for clarity, should be similar to the following:
 
-    diskSizeGb: '10'
-    kind: compute#image
-    licenseCodes:
-    - '1002001'
-    - '5926592092274602096'
-    licenses:
-    - https://www.googleapis.com/compute/v1/projects/vm-options/global/licenses/enable-vmx
-    - https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/licenses/ubuntu-1804-lts
-    name: kata-base
-    selfLink: https://www.googleapis.com/compute/v1/projects/my-kata-project/global/images/kata-base
-    sourceDisk: https://www.googleapis.com/compute/v1/projects/my-kata-project/zones/us-west1-a/disks/kata-testing
-    sourceType: RAW
-    status: READY
-
+```yaml
+diskSizeGb: '10'
+kind: compute#image
+licenseCodes:
+  - '1002001'
+  - '5926592092274602096'
+licenses:
+  - https://www.googleapis.com/compute/v1/projects/vm-options/global/licenses/enable-vmx
+  - https://www.googleapis.com/compute/v1/projects/ubuntu-os-cloud/global/licenses/ubuntu-1804-lts
+name: kata-base
+selfLink: https://www.googleapis.com/compute/v1/projects/my-kata-project/global/images/kata-base
+sourceDisk: https://www.googleapis.com/compute/v1/projects/my-kata-project/zones/us-west1-a/disks/kata-testing
+sourceType: RAW
+status: READY
+```

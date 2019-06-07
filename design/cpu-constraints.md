@@ -23,7 +23,7 @@ Be aware that increasing this value negatively impacts the virtual machine's
 boot time and memory footprint.
 In general, we recommend that you do not edit this variable, unless you know
 what are you doing. If your container needs more than one vCPU, use
-[docker `--cpus`][1], [docker update][4], or [kubernetes `cpu` limits][2] to
+[docker `--cpus`][1], [docker update][4], or [Kubernetes `cpu` limits][2] to
 assign more resources.
 
 *Docker*
@@ -86,7 +86,7 @@ constraints with each container trying to consume 100% of vCPU, the resources
 divide in two parts, 50% of vCPU for each container because your virtual
 machine does not have enough resources to satisfy containers needs. If you want
 to give access to a greater or lesser portion of vCPUs to a specific container,
-use [docker --cpu-shares][1] or [Kubernetes `cpu` requests][2].
+use [`docker --cpu-shares`][1] or [Kubernetes `cpu` requests][2].
 
 *Docker*
 
@@ -176,8 +176,8 @@ docker run --cpus 4 -ti debian bash -c "nproc; cat /sys/fs/cgroup/cpu,cpuacct/cp
 Kata Containers runs over two layers of cgroups, the first layer is in the guest where
 only the workload is placed, the second layer is in the host that is more complex and
 might contain more than one process and task (thread) depending of the number of
-containers per POD and vCPUs per container. The following diagram represents a nginx container
-created with `docker` with the default number of vcpus.
+containers per POD and vCPUs per container. The following diagram represents a Nginx container
+created with `docker` with the default number of vCPUs.
 
 
 ```
@@ -185,7 +185,7 @@ $ docker run -dt --runtime=kata-runtime nginx
 
 
        .-------.
-       | nginx |
+       | Nginx |
     .--'-------'---.  .------------.
     | Guest Cgroup |  | Kata agent |
   .-'--------------'--'------------'.    .-----------.
@@ -202,13 +202,13 @@ vCPUs are constrained.
 
 ### cgroups in the guest
 
-Only the workload process including all its threads are placed into cpu cgroups, this means
+Only the workload process including all its threads are placed into CPU cgroups, this means
 that `kata-agent` and `systemd` run without constraints in the guest.
 
 #### CPU pinning
 
 Kata Containers tries to apply and honor the cgroups but sometimes that is not possible.
-An example of this occurs with cpu cgroups when the number of virtual CPUs (in the guest)
+An example of this occurs with CPU cgroups when the number of virtual CPUs (in the guest)
 does not match the actual number of physical host CPUs.
 In Kata Containers to have a good performance and small memory footprint, the resources are
 hot added when they are needed, therefore the number of virtual resources is not the same

@@ -10,13 +10,13 @@
 VMCache is a new function that creates VMs as caches before using it.
 It helps speed up new container creation.  
 The function consists of a server and some clients communicating
-through Unix socket.  The protocol is gRPC in [protocols/cache/cache.proto](https://github.com/kata-containers/runtime/blob/master/protocols/cache/cache.proto).  
+through Unix socket.  The protocol is gRPC in [`protocols/cache/cache.proto`](https://github.com/kata-containers/runtime/blob/master/protocols/cache/cache.proto).  
 The VMCache server will create some VMs and cache them by factory cache.
 It will convert the VM to gRPC format and transport it when gets
 requested from clients.  
-Factory grpccache is the VMCache client.  It will request gRPC format
+Factory `grpccache` is the VMCache client.  It will request gRPC format
 VM and convert it back to a VM.  If VMCache function is enabled,
-kata-runtime will request VM from factory grpccache when it creates
+`kata-runtime` will request VM from factory `grpccache` when it creates
 a new sandbox.
 
 ### How is this different to VM templating
@@ -40,7 +40,7 @@ Then you can create a VM templating for later usage by calling:
 ```
 $ sudo kata-runtime factory init
 ```
-and purge it by ctrl-c it.
+and purge it by `ctrl-c` it.
 
 ### Limitations
 * Cannot work with VM templating.
