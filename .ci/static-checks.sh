@@ -816,7 +816,6 @@ main()
 	[ -z "$repo" ] && repo="$1"
 	[ "$specific_branch" = "false" ] && specific_branch="$2"
 
-
 	if [ -z "$repo" ]
 	then
 		if [ -n "$KATA_DEV_MODE" ]
