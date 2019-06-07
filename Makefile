@@ -243,7 +243,7 @@ ifneq (,$(NEMUCMD))
 
     # nemu-specific options (all should be suffixed by "_NEMU")
     # currently, huge pages are required for virtiofsd support
-    DEFENABLEHUGEPAGES_NEMU := true
+    DEFENABLEHUGEPAGES_NEMU := false
     # nemu uses virt machine type
     DEFMACHINETYPE_NEMU := virt
     DEFBLOCKSTORAGEDRIVER_NEMU := virtio-scsi
