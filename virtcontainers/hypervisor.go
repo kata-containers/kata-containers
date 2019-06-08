@@ -31,6 +31,9 @@ const (
 	// QemuHypervisor is the QEMU hypervisor.
 	QemuHypervisor HypervisorType = "qemu"
 
+	// AcrnHypervisor is the ACRN hypervisor.
+	AcrnHypervisor HypervisorType = "acrn"
+
 	// MockHypervisor is a mock hypervisor for testing purposes
 	MockHypervisor HypervisorType = "mock"
 )
@@ -211,6 +214,9 @@ type HypervisorConfig struct {
 
 	// HypervisorPath is the hypervisor executable host path.
 	HypervisorPath string
+
+	// HypervisorCtlPath is the hypervisor ctl executable host path.
+	HypervisorCtlPath string
 
 	// BlockDeviceDriver specifies the driver to be used for block device
 	// either VirtioSCSI or VirtioBlock with the default driver being defaultBlockDriver
