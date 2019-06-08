@@ -16,6 +16,7 @@ const int ioctl_KVM_CHECK_EXTENSION = KVM_CHECK_EXTENSION;
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
@@ -311,7 +313,12 @@ var kataCheckCLICommand = cli.Command{
 		span, _ := katautils.Trace(ctx, "kata-check")
 		defer span.Finish()
 
-		err = setCPUtype()
+		runtimeConfig, ok := context.App.Metadata["runtimeConfig"].(oci.RuntimeConfig)
+		if !ok {
+			return errors.New("kata-check: cannot determine runtime config")
+		}
+
+		err = setCPUtype(runtimeConfig.HypervisorType)
 		if err != nil {
 			return err
 		}
@@ -332,7 +339,7 @@ var kataCheckCLICommand = cli.Command{
 		kataLog.Info(successMessageCapable)
 
 		if os.Geteuid() == 0 {
-			err = archHostCanCreateVMContainer()
+			err = archHostCanCreateVMContainer(runtimeConfig.HypervisorType)
 			if err != nil {
 				return err
 			}

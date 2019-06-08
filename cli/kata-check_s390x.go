@@ -7,8 +7,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"strings"
+
+	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -42,7 +44,7 @@ var archRequiredKernelModules = map[string]kernelModule{
 	},
 }
 
-func setCPUtype() error {
+func setCPUtype(hypervisorType vc.HypervisorType) error {
 	return nil
 }
 
@@ -52,7 +54,7 @@ func kvmIsUsable() error {
 	return genericKvmIsUsable()
 }
 
-func archHostCanCreateVMContainer() error {
+func archHostCanCreateVMContainer(hypervisorType vc.HypervisorType) error {
 	return kvmIsUsable()
 }
 

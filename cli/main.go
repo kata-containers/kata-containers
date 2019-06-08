@@ -254,54 +254,54 @@ func beforeSubcommands(c *cli.Context) error {
 
 	handleShowConfig(c)
 
-	if userWantsUsage(c) || (c.NArg() == 1 && (c.Args()[0] == checkCmd)) {
+	if userWantsUsage(c) {
 		// No setup required if the user just
-		// wants to see the usage statement or are
-		// running a command that does not manipulate
-		// containers.
+		// wants to see the usage statement.
 		return nil
 	}
 
-	if path := c.GlobalString("log"); path != "" {
-		f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND|os.O_SYNC, 0640)
-		if err != nil {
-			return err
-		}
-		kataLog.Logger.Out = f
-	}
-
-	switch c.GlobalString("log-format") {
-	case "text":
-		// retain logrus's default.
-	case "json":
-		kataLog.Logger.Formatter = new(logrus.JSONFormatter)
-	default:
-		return fmt.Errorf("unknown log-format %q", c.GlobalString("log-format"))
-	}
-
+	ignoreLogging := false
 	var traceRootSpan string
 
-	// Add the name of the sub-command to each log entry for easier
-	// debugging.
-	cmdName := c.Args().First()
-	if c.App.Command(cmdName) != nil {
-		kataLog = kataLog.WithField("command", cmdName)
+	subCmdIsCheckCmd := (c.NArg() == 1 && (c.Args()[0] == checkCmd))
+	if !subCmdIsCheckCmd {
+		if path := c.GlobalString("log"); path != "" {
+			f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND|os.O_SYNC, 0640)
+			if err != nil {
+				return err
+			}
+			kataLog.Logger.Out = f
+		}
 
-		// Name for the root span (used for tracing) now the
-		// sub-command name is known.
-		traceRootSpan = name + " " + cmdName
-	}
+		switch c.GlobalString("log-format") {
+		case "text":
+			// retain logrus's default.
+		case "json":
+			kataLog.Logger.Formatter = new(logrus.JSONFormatter)
+		default:
+			return fmt.Errorf("unknown log-format %q", c.GlobalString("log-format"))
+		}
 
-	// Since a context is required, pass a new (throw-away) one - we
-	// cannot use the main context as tracing hasn't been enabled yet
-	// (meaning any spans created at this point will be silently ignored).
-	setExternalLoggers(context.Background(), kataLog)
+		// Add the name of the sub-command to each log entry for easier
+		// debugging.
+		cmdName := c.Args().First()
+		if c.App.Command(cmdName) != nil {
+			kataLog = kataLog.WithField("command", cmdName)
 
-	ignoreLogging := false
+			// Name for the root span (used for tracing) now the
+			// sub-command name is known.
+			traceRootSpan = name + " " + cmdName
+		}
 
-	if c.NArg() == 1 && c.Args()[0] == envCmd {
-		// simply report the logging setup
-		ignoreLogging = true
+		// Since a context is required, pass a new (throw-away) one - we
+		// cannot use the main context as tracing hasn't been enabled yet
+		// (meaning any spans created at this point will be silently ignored).
+		setExternalLoggers(context.Background(), kataLog)
+
+		if c.NArg() == 1 && c.Args()[0] == envCmd {
+			// simply report the logging setup
+			ignoreLogging = true
+		}
 	}
 
 	configFile, runtimeConfig, err = katautils.LoadConfiguration(c.GlobalString(configFilePathOption), ignoreLogging, false)
@@ -309,19 +309,21 @@ func beforeSubcommands(c *cli.Context) error {
 		fatal(err)
 	}
 
-	debug = runtimeConfig.Debug
-	crashOnError = runtimeConfig.Debug
+	if !subCmdIsCheckCmd {
+		debug = runtimeConfig.Debug
+		crashOnError = runtimeConfig.Debug
 
-	if traceRootSpan != "" {
-		// Create the tracer.
-		//
-		// Note: no spans are created until the command-line has been parsed.
-		// This delays collection of trace data slightly but benefits the user by
-		// ensuring the first span is the name of the sub-command being
-		// invoked from the command-line.
-		err = setupTracing(c, traceRootSpan)
-		if err != nil {
-			return err
+		if traceRootSpan != "" {
+			// Create the tracer.
+			//
+			// Note: no spans are created until the command-line has been parsed.
+			// This delays collection of trace data slightly but benefits the user by
+			// ensuring the first span is the name of the sub-command being
+			// invoked from the command-line.
+			err = setupTracing(c, traceRootSpan)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
