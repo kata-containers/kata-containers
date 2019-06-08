@@ -121,6 +121,9 @@ func (hType *HypervisorType) Set(value string) error {
 	case "firecracker":
 		*hType = FirecrackerHypervisor
 		return nil
+	case "acrn":
+		*hType = AcrnHypervisor
+		return nil
 	case "mock":
 		*hType = MockHypervisor
 		return nil
@@ -136,6 +139,8 @@ func (hType *HypervisorType) String() string {
 		return string(QemuHypervisor)
 	case FirecrackerHypervisor:
 		return string(FirecrackerHypervisor)
+	case AcrnHypervisor:
+		return string(AcrnHypervisor)
 	case MockHypervisor:
 		return string(MockHypervisor)
 	default:
@@ -150,6 +155,8 @@ func newHypervisor(hType HypervisorType) (hypervisor, error) {
 		return &qemu{}, nil
 	case FirecrackerHypervisor:
 		return &firecracker{}, nil
+	case AcrnHypervisor:
+		return &acrn{}, nil
 	case MockHypervisor:
 		return &mockHypervisor{}, nil
 	default:
@@ -436,6 +443,8 @@ func (conf *HypervisorConfig) assetPath(t types.AssetType) (string, error) {
 		return conf.InitrdPath, nil
 	case types.HypervisorAsset:
 		return conf.HypervisorPath, nil
+	case types.HypervisorCtlAsset:
+		return conf.HypervisorCtlPath, nil
 	case types.FirmwareAsset:
 		return conf.FirmwarePath, nil
 	default:
@@ -481,6 +490,11 @@ func (conf *HypervisorConfig) CustomInitrdAsset() bool {
 // HypervisorAssetPath returns the VM hypervisor path
 func (conf *HypervisorConfig) HypervisorAssetPath() (string, error) {
 	return conf.assetPath(types.HypervisorAsset)
+}
+
+// HypervisorCtlAssetPath returns the VM hypervisor ctl path
+func (conf *HypervisorConfig) HypervisorCtlAssetPath() (string, error) {
+	return conf.assetPath(types.HypervisorCtlAsset)
 }
 
 // CustomHypervisorAsset returns true if the hypervisor asset is a custom one, false otherwise.

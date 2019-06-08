@@ -49,6 +49,9 @@ const (
 	// HypervisorAsset is an hypervisor asset.
 	HypervisorAsset AssetType = "hypervisor"
 
+	// HypervisorCtlAsset is an hypervisor control asset.
+	HypervisorCtlAsset AssetType = "hypervisorctl"
+
 	// FirmwareAsset is a firmware asset.
 	FirmwareAsset AssetType = "firmware"
 )
