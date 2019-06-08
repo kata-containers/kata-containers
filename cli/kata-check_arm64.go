@@ -8,6 +8,7 @@ package main
 import (
 	"fmt"
 
+	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/sirupsen/logrus"
 )
 
@@ -56,7 +57,7 @@ var archRequiredKVMExtensions = map[string]kvmExtension{
 	},
 }
 
-func setCPUtype() error {
+func setCPUtype(hypervisorType vc.HypervisorType) error {
 	return nil
 }
 
@@ -84,7 +85,7 @@ func checkKVMExtensions() error {
 	return nil
 }
 
-func archHostCanCreateVMContainer() error {
+func archHostCanCreateVMContainer(hypervisorType vc.HypervisorType) error {
 	if err := kvmIsUsable(); err != nil {
 		return err
 	}
