@@ -9,6 +9,7 @@
 package katautils
 
 var defaultHypervisorPath = "/usr/bin/qemu-lite-system-x86_64"
+var defaultHypervisorCtlPath = "/usr/bin/acrnctl"
 var defaultImagePath = "/usr/share/kata-containers/kata-containers.img"
 var defaultKernelPath = "/usr/share/kata-containers/vmlinuz.container"
 var defaultInitrdPath = "/usr/share/kata-containers/kata-containers-initrd.img"

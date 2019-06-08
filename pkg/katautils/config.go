@@ -50,6 +50,7 @@ const (
 	// supported hypervisor component types
 	firecrackerHypervisorTableType = "firecracker"
 	qemuHypervisorTableType        = "qemu"
+	acrnHypervisorTableType        = "acrn"
 
 	// supported proxy component types
 	kataProxyTableType = "kata"
@@ -84,6 +85,7 @@ type factory struct {
 type hypervisor struct {
 	Path                    string `toml:"path"`
 	Kernel                  string `toml:"kernel"`
+	CtlPath                 string `toml:"ctlpath"`
 	Initrd                  string `toml:"initrd"`
 	Image                   string `toml:"image"`
 	Firmware                string `toml:"firmware"`
@@ -158,6 +160,16 @@ func (h hypervisor) path() (string, error) {
 
 	if h.Path == "" {
 		p = defaultHypervisorPath
+	}
+
+	return ResolvePath(p)
+}
+
+func (h hypervisor) ctlpath() (string, error) {
+	p := h.CtlPath
+
+	if h.CtlPath == "" {
+		p = defaultHypervisorCtlPath
 	}
 
 	return ResolvePath(p)
@@ -602,6 +614,67 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}, nil
 }
 
+func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
+	hypervisor, err := h.path()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	hypervisorctl, err := h.ctlpath()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	kernel, err := h.kernel()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	image, err := h.image()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	if image == "" {
+		return vc.HypervisorConfig{},
+			errors.New("image must be defined in the configuration file")
+	}
+
+	firmware, err := h.firmware()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	kernelParams := h.kernelParams()
+
+	blockDriver, err := h.blockDeviceDriver()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	return vc.HypervisorConfig{
+		HypervisorPath:       hypervisor,
+		KernelPath:           kernel,
+		ImagePath:            image,
+		HypervisorCtlPath:    hypervisorctl,
+		FirmwarePath:         firmware,
+		KernelParams:         vc.DeserializeParams(strings.Fields(kernelParams)),
+		NumVCPUs:             h.defaultVCPUs(),
+		DefaultMaxVCPUs:      h.defaultMaxVCPUs(),
+		MemorySize:           h.defaultMemSz(),
+		MemSlots:             h.defaultMemSlots(),
+		EntropySource:        h.GetEntropySource(),
+		DefaultBridges:       h.defaultBridges(),
+		HugePages:            h.HugePages,
+		Mlock:                !h.Swap,
+		Debug:                h.Debug,
+		DisableNestingChecks: h.DisableNestingChecks,
+		BlockDeviceDriver:    blockDriver,
+		DisableVhostNet:      h.DisableVhostNet,
+		GuestHookPath:        h.guestHookPath(),
+	}, nil
+}
+
 func newFactoryConfig(f factory) (oci.FactoryConfig, error) {
 	if f.TemplatePath == "" {
 		f.TemplatePath = defaultTemplatePath
@@ -642,11 +715,15 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 		case qemuHypervisorTableType:
 			config.HypervisorType = vc.QemuHypervisor
 			hConfig, err = newQemuHypervisorConfig(hypervisor)
+		case acrnHypervisorTableType:
+			config.HypervisorType = vc.AcrnHypervisor
+			hConfig, err = newAcrnHypervisorConfig(hypervisor)
 		}
 
 		if err != nil {
 			return fmt.Errorf("%v: %v", configPath, err)
 		}
+
 		config.HypervisorConfig = hConfig
 	}
 
