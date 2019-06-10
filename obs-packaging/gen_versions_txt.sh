@@ -40,8 +40,14 @@ gen_version_file() {
 	qemu_lite_hash=$(git ls-remote https://github.com/${project}/qemu.git | grep "refs/heads/${qemu_lite_branch}" | awk '{print $1}')
 
 	qemu_vanilla_branch=$(get_from_kata_deps "assets.hypervisor.qemu.version" "${kata_version}")
+	# Check if qemu.version can be used to get the version and hash, otherwise use qemu.tag
+	qemu_vanilla_ref="refs/heads/${qemu_vanilla_branch}"
+	if ! (git ls-remote --heads "https://github.com/qemu/qemu.git" | grep -q "refs/heads/${qemu_vanilla_branch}"); then
+		qemu_vanilla_branch=$(get_from_kata_deps "assets.hypervisor.qemu.tag" "${kata_version}")
+		qemu_vanilla_ref="refs/tags/${qemu_vanilla_branch}^{}"
+	fi
 	qemu_vanilla_version=$(curl -s -L "https://raw.githubusercontent.com/qemu/qemu/${qemu_vanilla_branch}/VERSION")
-	qemu_vanilla_hash=$(git ls-remote https://github.com/qemu/qemu.git | grep "refs/heads/${qemu_vanilla_branch}" | awk '{print $1}')
+	qemu_vanilla_hash=$(git ls-remote https://github.com/qemu/qemu.git | grep "${qemu_vanilla_ref}" | awk '{print $1}')
 
 	kernel_version=$(get_from_kata_deps "assets.kernel.version" "${kata_version}")
 	#Remove extra 'v'
