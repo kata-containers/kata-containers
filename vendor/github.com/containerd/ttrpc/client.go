@@ -49,15 +49,7 @@ type Client struct {
 	err       error
 }
 
-type ClientOpts func(c *Client)
-
-func WithOnClose(onClose func()) ClientOpts {
-	return func(c *Client) {
-		c.closeFunc = onClose
-	}
-}
-
-func NewClient(conn net.Conn, opts ...ClientOpts) *Client {
+func NewClient(conn net.Conn) *Client {
 	c := &Client{
 		codec:     codec{},
 		conn:      conn,
@@ -66,10 +58,6 @@ func NewClient(conn net.Conn, opts ...ClientOpts) *Client {
 		closed:    make(chan struct{}),
 		done:      make(chan struct{}),
 		closeFunc: func() {},
-	}
-
-	for _, o := range opts {
-		o(c)
 	}
 
 	go c.run()
@@ -151,6 +139,11 @@ func (c *Client) Close() error {
 	})
 
 	return nil
+}
+
+// OnClose allows a close func to be called when the server is closed
+func (c *Client) OnClose(closer func()) {
+	c.closeFunc = closer
 }
 
 type message struct {

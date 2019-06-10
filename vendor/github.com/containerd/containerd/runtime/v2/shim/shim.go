@@ -20,7 +20,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"runtime"
 	"runtime/debug"
@@ -44,14 +43,8 @@ type Client struct {
 	signals chan os.Signal
 }
 
-// Publisher for events
-type Publisher interface {
-	events.Publisher
-	io.Closer
-}
-
 // Init func for the creation of a shim server
-type Init func(context.Context, string, Publisher, func()) (Shim, error)
+type Init func(context.Context, string, events.Publisher) (Shim, error)
 
 // Shim server interface
 type Shim interface {
@@ -78,8 +71,6 @@ type Config struct {
 	NoSubreaper bool
 	// NoReaper disables the shim binary from reaping any child process implicitly
 	NoReaper bool
-	// NoSetupLogger disables automatic configuration of logrus to use the shim FIFO
-	NoSetupLogger bool
 }
 
 var (
@@ -162,24 +153,19 @@ func run(id string, initFunc Init, config Config) error {
 			return err
 		}
 	}
-
-	address := fmt.Sprintf("%s.ttrpc", addressFlag)
-	publisher, err := newPublisher(address)
-	if err != nil {
-		return err
+	publisher := &remoteEventsPublisher{
+		address:              addressFlag,
+		containerdBinaryPath: containerdBinaryFlag,
+		noReaper:             config.NoReaper,
 	}
-
-	defer publisher.Close()
-
 	if namespaceFlag == "" {
 		return fmt.Errorf("shim namespace cannot be empty")
 	}
 	ctx := namespaces.WithNamespace(context.Background(), namespaceFlag)
 	ctx = context.WithValue(ctx, OptsKey{}, Opts{BundlePath: bundlePath, Debug: debugFlag})
 	ctx = log.WithLogger(ctx, log.G(ctx).WithField("runtime", id))
-	ctx, cancel := context.WithCancel(ctx)
 
-	service, err := initFunc(ctx, idFlag, publisher, cancel)
+	service, err := initFunc(ctx, idFlag, publisher)
 	if err != nil {
 		return err
 	}
@@ -189,7 +175,7 @@ func run(id string, initFunc Init, config Config) error {
 			"pid":       os.Getpid(),
 			"namespace": namespaceFlag,
 		})
-		go handleSignals(ctx, logger, signals)
+		go handleSignals(logger, signals)
 		response, err := service.Cleanup(ctx)
 		if err != nil {
 			return err
@@ -212,23 +198,11 @@ func run(id string, initFunc Init, config Config) error {
 		}
 		return nil
 	default:
-		if !config.NoSetupLogger {
-			if err := setLogger(ctx, idFlag); err != nil {
-				return err
-			}
+		if err := setLogger(ctx, idFlag); err != nil {
+			return err
 		}
 		client := NewShimClient(ctx, service, signals)
-		if err := client.Serve(); err != nil {
-			if err != context.Canceled {
-				return err
-			}
-		}
-		select {
-		case <-publisher.Done():
-			return nil
-		case <-time.After(5 * time.Second):
-			return errors.New("publisher not closed")
-		}
+		return client.Serve()
 	}
 }
 
@@ -272,7 +246,7 @@ func (s *Client) Serve() error {
 			dumpStacks(logger)
 		}
 	}()
-	return handleSignals(s.context, logger, s.signals)
+	return handleSignals(logger, s.signals)
 }
 
 // serve serves the ttrpc API over a unix socket at the provided path
@@ -305,4 +279,10 @@ func dumpStacks(logger *logrus.Entry) {
 	}
 	buf = buf[:stackSize]
 	logger.Infof("=== BEGIN goroutine stack dump ===\n%s\n=== END goroutine stack dump ===", buf)
+}
+
+type remoteEventsPublisher struct {
+	address              string
+	containerdBinaryPath string
+	noReaper             bool
 }

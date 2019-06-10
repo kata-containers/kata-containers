@@ -29,8 +29,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-const shimBinaryFormat = "containerd-shim-%s-%s.exe"
-
 func getSysProcAttr() *syscall.SysProcAttr {
 	return nil
 }
@@ -56,7 +54,7 @@ func AnonDialer(address string, timeout time.Duration) (net.Conn, error) {
 	timedOutError := errors.Errorf("timed out waiting for npipe %s", address)
 	start := time.Now()
 	for {
-		remaining := timeout - time.Since(start)
+		remaining := timeout - time.Now().Sub(start)
 		if remaining <= 0 {
 			lastError = timedOutError
 			break
@@ -73,7 +71,7 @@ func AnonDialer(address string, timeout time.Duration) (net.Conn, error) {
 		// serve it within 5 seconds. We use the passed in timeout for the
 		// `DialPipe` timeout if the pipe exists however to give the pipe time
 		// to `Accept` the connection.
-		if time.Since(start) >= 5*time.Second {
+		if time.Now().Sub(start) >= 5*time.Second {
 			lastError = timedOutError
 			break
 		}
