@@ -52,8 +52,9 @@ done
 chronic sudo -E yum -y install $pkgs_to_install
 
 if [ "$(arch)" == "x86_64" ]; then
-	echo "Install Kata Containers OBS repository"
-	obs_url="${KATA_OBS_REPO_BASE}/RHEL_7/home:katacontainers:releases:$(arch):master.repo"
+	VERSION_ID="7"
+	echo "Install Kata Containers OBS repository for CentOS (see https://github.com/kata-containers/packaging/pull/555)"
+	obs_url="${KATA_OBS_REPO_BASE}/CentOS_${VERSION_ID}/home:katacontainers:releases:$(arch):master.repo"
 	sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo "$obs_url"
 	repo_file="/etc/yum.repos.d/home\:katacontainers\:releases\:$(arch)\:master.repo"
 	sudo bash -c "echo timeout=10 >> $repo_file"
