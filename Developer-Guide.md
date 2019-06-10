@@ -652,14 +652,15 @@ the following steps, which assume the use of a rootfs image.
 
 To login to a virtual machine, you must
 [create a custom rootfs](#create-a-rootfs-image)
-containing a shell such as `bash(1)`.
+containing a shell such as `bash(1)`. For Clear Linux, you will need
+an additional `coreutils` package.
 
 For example using CentOS:
 
 ```
 $ cd $GOPATH/src/github.com/kata-containers/osbuilder/rootfs-builder
 $ export ROOTFS_DIR=${GOPATH}/src/github.com/kata-containers/osbuilder/rootfs-builder/rootfs
-$ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true EXTRA_PKGS="bash" ./rootfs.sh centos'
+$ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true EXTRA_PKGS="bash coreutils" ./rootfs.sh centos'
 ```
 
 ### Create a debug systemd service
