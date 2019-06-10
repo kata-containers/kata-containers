@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2017-2018 Intel Corporation
+# Copyright (c) 2017-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -23,10 +23,25 @@ files_to_remove=()
 
 script_name=${0##*/}
 
+# Static check functions must follow the following naming conventions:
+#
+
+# All static check function names must match this pattern.
+typeset -r check_func_regex="^static_check_"
+
+# All architecture-specific static check functions must match this pattern.
+typeset -r arch_func_regex="_arch_specific$"
+
 repo=""
 specific_branch="false"
 force="false"
 branch=${branch:-master}
+
+# Which static check functions to consider.
+handle_funcs="all"
+
+single_func_only="false"
+list_only="false"
 
 # number of seconds to wait for curl to check a URL
 typeset url_check_timeout_secs="${url_check_timeout_secs:-60}"
@@ -42,11 +57,14 @@ long_options=(
 	[help]="Display usage statement"
 	[labels]="Check labels databases"
 	[licenses]="Check licenses"
+	[list]="List tests that would run"
 	[branch]="Specify upstream branch to compare against (default '$branch')"
 	[all]="Force checking of all changes, including files in the base branch"
 	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
 	[vendor]="Check vendor files"
 	[versions]="Check versions files"
+	[no-arch]="Run/list all tests except architecture-specific ones"
+	[only-arch]="Only run/list architecture-specific tests"
 )
 
 yamllint_cmd="yamllint"
@@ -116,6 +134,40 @@ Examples:
 EOT
 }
 
+# Calls die() if the specified function is not valid.
+func_is_valid() {
+    local name="$1"
+
+    type -t "$name" &>/dev/null || die "function '$name' does not exist"
+}
+
+# Calls die() if the specified function is not valid or not a check function.
+ensure_func_is_check_func() {
+    local name="$1"
+
+    func_is_valid "$name"
+
+    { echo "$name" | grep -q "${check_func_regex}"; ret=$?; }
+
+    [ "$ret" = 0 ] || die "function '$name' is not a check function"
+}
+
+# Returns "yes" if the specified function needs to run on all architectures,
+# else "no".
+func_is_arch_specific() {
+    local name="$1"
+
+    ensure_func_is_check_func "$name"
+
+    { echo "$name" | grep -q "${arch_func_regex}"; ret=$?; }
+
+    if [ "$ret" = 0 ]; then
+        echo "yes"
+    else
+        echo "no"
+    fi
+}
+
 function remove_tmp_files() {
 	rm -rf "${files_to_remove[@]}"
 }
@@ -166,7 +218,7 @@ get_pr_changed_file_details()
 	get_pr_changed_file_details_full | grep -v "vendor/"
 }
 
-check_commits()
+static_check_commits()
 {
 	# Since this script is called from another repositories directory,
 	# ensure the utility is built before running it.
@@ -195,7 +247,7 @@ EOT
 	fi
 }
 
-check_go()
+static_check_go_arch_specific()
 {
 	local go_packages
 	local submodule_packages
@@ -274,7 +326,7 @@ check_go()
 #
 # Some repositories use a versions database to maintain version information
 # about non-golang dependencies. If found, check it for validity.
-check_versions()
+static_check_versions()
 {
 	local db="versions.yaml"
 
@@ -287,7 +339,7 @@ check_versions()
 	fi
 }
 
-check_labels()
+static_check_labels()
 {
 	[ $(uname -s) != Linux ] && info "Can only check labels under Linux" && return
 
@@ -308,7 +360,7 @@ check_labels()
 }
 
 # Ensure all files (where possible) contain an SPDX license header
-check_license_headers()
+static_check_license_headers()
 {
 	# The branch is the baseline - ignore it.
 	[ "$specific_branch" = "true" ] && return
@@ -362,7 +414,7 @@ EOT
 }
 
 # Perform basic checks on documentation files
-check_docs()
+static_check_docs()
 {
 	local cmd="xurls"
 
@@ -643,7 +695,7 @@ check_docs()
 #
 # Currently just looks for TODO/FIXME comments that should be converted to
 # (or annotated with) an Issue URL.
-check_files()
+static_check_files()
 {
 	local file
 	local files
@@ -728,7 +780,7 @@ check_files()
 #   https://github.com/kata-containers/community/blob/master/VENDORING.md
 #
 # - Ensure vendor metadata is valid.
-check_vendor()
+static_check_vendor()
 {
 	local files
 	local vendor_files
@@ -767,6 +819,54 @@ check_vendor()
 	dep ensure -no-vendor -dry-run
 }
 
+# Run the specified function (after first checking it is compatible with the
+# users architectural preferences), or simply list the function name if list
+# mode is active.
+run_or_list_check_function()
+{
+	local name="$1"
+
+	func_is_valid "$name"
+
+	local arch_func
+	local handler
+
+	arch_func=$(func_is_arch_specific "$name")
+
+	handler="info"
+
+	# If the user requested only a single function to run, we should die
+	# if the function cannot be run due to the other options specified.
+	#
+	# Whereas if this script is running all functions, just display an
+	# info message if a function cannot be run.
+	[ "$single_func_only" = "true" ] && handler="die"
+
+	if [ "$handle_funcs" = "arch-agnostic" ] && [ "$arch_func" = "yes" ]; then
+		if [ "$list_only" != "true" ]; then
+			"$handler" "Not running '$func' as requested no architecture-specific functions"
+		fi
+
+		return 0
+	fi
+
+	if [ "$handle_funcs" = "arch-specific" ] && [ "$arch_func" = "no" ]; then
+		if [ "$list_only" != "true" ]; then
+			"$handler" "Not running architecture-agnostic function '$func' as requested only architecture specific functions"
+		fi
+
+		return 0
+	fi
+
+	if [ "$list_only" = "true" ]; then
+		echo "$func"
+		return 0
+	fi
+
+	info "Running '$func' function"
+	eval "$func"
+}
+
 main()
 {
 	trap remove_tmp_files EXIT
@@ -794,10 +894,13 @@ main()
 			--docs) func=check_docs ;;
 			--files) func=check_files ;;
 			--force) force="true" ;;
-			--golang) func=check_go ;;
+			--golang) func=check_go_arch_specific ;;
 			-h|--help) usage; exit 0 ;;
 			--labels) func=check_labels;;
 			--licenses) func=check_license_headers ;;
+			--list) list_only="true" ;;
+			--no-arch) handle_funcs="arch-agnostic" ;;
+			--only-arch) handle_funcs="arch-specific" ;;
 			--repo) repo="$2"; shift ;;
 			--vendor) func=check_vendor;;
 			--versions) func=check_versions ;;
@@ -816,7 +919,6 @@ main()
 	[ -z "$repo" ] && repo="$1"
 	[ "$specific_branch" = "false" ] && specific_branch="$2"
 
-
 	if [ -z "$repo" ]
 	then
 		if [ -n "$KATA_DEV_MODE" ]
@@ -829,28 +931,34 @@ main()
 
 			info "Auto-detected repo as $repo"
 		else
-			echo >&2 "ERROR: need repo" && usage && exit 1
+			if [ "$list_only" != "true" ]; then
+				echo >&2 "ERROR: need repo" && usage && exit 1
+			fi
 		fi
 	fi
 
-	# Run user-specified check and quit
-	[ -n "$func" ] && info "running $func function" && eval "$func" && exit 0
+	local all_check_funcs=$(typeset -F|awk '{print $3}'|grep "${check_func_regex}"|sort)
 
-	# Run all checks
-	if [ -n "$TRAVIS_BRANCH" ] && [ "$TRAVIS_BRANCH" != "master" ]
-	then
-		echo "Skipping checkcommits"
-		echo "See issue: https://github.com/kata-containers/tests/issues/632"
-	else
-		check_commits
+	# Run user-specified check and quit
+	if [ -n "$func" ]; then
+		single_func_only="true"
+		run_or_list_check_function "$func"
+		exit 0
 	fi
-	check_license_headers
-	check_go
-	check_versions
-	check_docs
-	check_files
-	check_vendor
-	check_labels
+
+	for func in $all_check_funcs
+	do
+		if [ "$func" = "check_commits" ]; then
+			if [ -n "$TRAVIS_BRANCH" ] && [ "$TRAVIS_BRANCH" != "master" ]
+			then
+				echo "Skipping checkcommits"
+				echo "See issue: https://github.com/kata-containers/tests/issues/632"
+				continue
+			fi
+		fi
+
+		run_or_list_check_function "$func"
+	done
 }
 
 main "$@"
