@@ -15,12 +15,6 @@ import (
 	"syscall"
 
 	"github.com/containernetworking/plugins/pkg/ns"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
-
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
@@ -34,6 +28,11 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
+	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 )
 
 const (
@@ -1841,4 +1840,10 @@ func (s *Sandbox) calculateSandboxCPUs() uint32 {
 		}
 	}
 	return utils.CalculateVCpusFromMilliCpus(mCPU)
+}
+
+// GetHypervisorType is used for getting Hypervisor name currently used.
+// Sandbox implement DeviceReceiver interface from device/api/interface.go
+func (s *Sandbox) GetHypervisorType() string {
+	return string(s.config.HypervisorType)
 }

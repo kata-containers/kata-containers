@@ -7,10 +7,9 @@
 package api
 
 import (
-	"github.com/sirupsen/logrus"
-
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/sirupsen/logrus"
 )
 
 var devLogger = logrus.WithField("subsystem", "device")
@@ -36,6 +35,7 @@ type DeviceReceiver interface {
 	// this is only for virtio-blk and virtio-scsi support
 	GetAndSetSandboxBlockIndex() (int, error)
 	DecrementSandboxBlockIndex() error
+	GetHypervisorType() string
 
 	// this is for appending device to hypervisor boot params
 	AppendDevice(Device) error
