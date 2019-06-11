@@ -130,7 +130,7 @@ more vCPUs, you can add more using [docker update][4].
 ## Container with CPU constraint
 
 The runtime calculates the number of vCPUs required by a container with CPU
-constraints using the following formula: `(quota + (period -1)) / period`, where
+constraints using the following formula: `vCPUs = ceiling( quota / period )`, where
 `quota` specifies the number of microseconds per CPU Period that the container is
 guaranteed CPU access and `period` specifies the CPU CFS scheduler period of time
 in microseconds. The result determines the number of vCPU to hot plug into the
