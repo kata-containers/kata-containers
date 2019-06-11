@@ -12,7 +12,7 @@ spec:
   runtimeClassName: kata
   containers:
   - name: handlers-container
-    image: nginx
+    image: "${nginx_version}"
     lifecycle:
       postStart:
         exec:
