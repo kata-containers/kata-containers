@@ -36,3 +36,8 @@ func (mockDC *MockDeviceReceiver) DecrementSandboxBlockIndex() error {
 func (mockDC *MockDeviceReceiver) AppendDevice(Device) error {
 	return nil
 }
+
+// GetHypervisorType is used for getting Hypervisor name currently used.
+func (mockDC *MockDeviceReceiver) GetHypervisorType() string {
+	return ""
+}

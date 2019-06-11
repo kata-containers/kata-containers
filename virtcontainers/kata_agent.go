@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
 	aTypes "github.com/kata-containers/agent/pkg/types"
 	kataclient "github.com/kata-containers/agent/protocols/client"
 	"github.com/kata-containers/agent/protocols/grpc"
@@ -30,10 +31,8 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
-	opentracing "github.com/opentracing/opentracing-go"
-
-	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/net/context"
@@ -1084,7 +1083,12 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 			rootfs.Source = blockDrive.VirtPath
 		} else if sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock {
 			rootfs.Driver = kataBlkDevType
-			rootfs.Source = blockDrive.PCIAddr
+			if blockDrive.PCIAddr == "" {
+				rootfs.Source = blockDrive.VirtPath
+			} else {
+				rootfs.Source = blockDrive.PCIAddr
+			}
+
 		} else {
 			rootfs.Driver = kataSCSIDevType
 			rootfs.Source = blockDrive.SCSIAddr
