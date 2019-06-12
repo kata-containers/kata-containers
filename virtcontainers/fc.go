@@ -54,11 +54,8 @@ const (
 	fcDiskPoolSize = 8
 )
 
-var fcKernelParams = []Param{
+var fcKernelParams = append(commonVirtioblkKernelRootParams, []Param{
 	// The boot source is the first partition of the first block device added
-	{"root", "/dev/vda1"},
-	{"rootflags", "data=ordered,errors=remount-ro ro"},
-	{"rootfstype", "ext4"},
 	{"pci", "off"},
 	{"reboot", "k"},
 	{"panic", "1"},
@@ -70,7 +67,7 @@ var fcKernelParams = []Param{
 	// Firecracker doesn't support ACPI
 	// Fix kernel error "ACPI BIOS Error (bug)"
 	{"acpi", "off"},
-}
+}...)
 
 func (s vmmState) String() string {
 	switch s {

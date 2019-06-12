@@ -43,9 +43,12 @@ var kernelParams = []Param{
 	{"iommu.passthrough", "0"},
 }
 
+// For now, AArch64 doesn't support DAX, so we couldn't use
+// commonNvdimmKernelRootParams, the agnostic list of kernel
+// root parameters for NVDIMM
 var kernelRootParams = []Param{
 	{"root", "/dev/pmem0p1"},
-	{"rootflags", "data=ordered,errors=remount-ro rw"},
+	{"rootflags", "data=ordered,errors=remount-ro ro"},
 	{"rootfstype", "ext4"},
 }
 
