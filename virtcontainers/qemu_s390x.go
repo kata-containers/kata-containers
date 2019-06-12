@@ -39,9 +39,7 @@ var kernelParams = []Param{
 	{"console", "ttysclp0"},
 }
 
-var kernelRootParams = []Param{
-	{"root", "/dev/vda1"},
-}
+var kernelRootParams = commonVirtioblkKernelRootParams
 
 var supportedQemuMachines = []govmmQemu.Machine{
 	{
