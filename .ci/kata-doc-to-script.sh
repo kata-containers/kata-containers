@@ -71,6 +71,35 @@ Notes:
   comment.
 - <script-file> may be specified as '-' meaning send output to stdout.
 
+Limitations:
+
+- The script is unable to handle embedded code blocks like this:
+
+  \`\`\`
+
+      \`\`\`bash
+      \$ echo code in an embedded set of backticks
+      \`\`\`
+
+  \`\`\`
+
+  To overcome this issue, ensure that the outer set of backticks are replaced
+  with an HTML PRE tag:
+
+  <pre>
+
+      \`\`\`bash
+      \$ echo code in an embedded set of backticks
+      \`\`\`
+
+  </pre>
+
+  This will both render correctly on GitHub and allow this script to remove
+  the code block.
+
+  Note: this solves one problem but introduces another - this script will not
+  remove the HTML tags.
+
 ${warning}
 
 EOT
