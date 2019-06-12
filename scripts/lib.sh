@@ -96,11 +96,6 @@ build_hub() {
 	popd >>/dev/null
 }
 
-get_kata_hash_from_tag() {
-	repo=$1
-	git ls-remote --tags "https://github.com/${project}/${repo}.git" | grep "refs/tags/${kata_version}^{}" | awk '{print $1}'
-}
-
 arch_to_golang()
 {
 	local -r arch="$1"
@@ -112,4 +107,10 @@ arch_to_golang()
 		s390x) echo "s390x";;
 		*) die "unsupported architecture: $arch";;
 	esac
+}
+
+get_kata_hash() {
+	repo=$1
+	ref=$2
+	git ls-remote --heads --tags "https://github.com/${project}/${repo}.git" | grep "${ref}" | awk '{print $1}'
 }
