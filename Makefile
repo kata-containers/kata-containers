@@ -9,21 +9,51 @@ ROOTFS_BUILDER := $(MK_DIR)/rootfs-builder/rootfs.sh
 INITRD_BUILDER := $(MK_DIR)/initrd-builder/initrd_builder.sh
 IMAGE_BUILDER  := $(MK_DIR)/image-builder/image_builder.sh
 
+DISTRO                := centos
+BUILD_METHOD          := distro
+BUILD_METHOD_LIST     := distro dracut
 AGENT_INIT            ?= no
-DISTRO                ?= centos
-ROOTFS_BUILD_DEST     := $(PWD)
-IMAGES_BUILD_DEST     := $(PWD)
-DISTRO_ROOTFS         := $(ROOTFS_BUILD_DEST)/$(DISTRO)_rootfs
+ROOTFS_BUILD_DEST     := $(shell pwd)
+IMAGES_BUILD_DEST     := $(shell pwd)
 ROOTFS_MARKER_SUFFIX   := _rootfs.done
-DISTRO_ROOTFS_MARKER  := $(ROOTFS_BUILD_DEST)/.$(DISTRO)$(ROOTFS_MARKER_SUFFIX)
-DISTRO_IMAGE          := $(IMAGES_BUILD_DEST)/kata-containers.img
-DISTRO_INITRD         := $(IMAGES_BUILD_DEST)/kata-containers-initrd.img
+TARGET_ROOTFS         := $(ROOTFS_BUILD_DEST)/$(DISTRO)_rootfs
+TARGET_ROOTFS_MARKER  := $(ROOTFS_BUILD_DEST)/.$(DISTRO)$(ROOTFS_MARKER_SUFFIX)
+TARGET_IMAGE          := $(IMAGES_BUILD_DEST)/kata-containers.img
+TARGET_INITRD         := $(IMAGES_BUILD_DEST)/kata-containers-initrd.img
 
 VERSION_FILE   := ./VERSION
 VERSION        := $(shell grep -v ^\# $(VERSION_FILE))
 COMMIT_NO      := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT         := $(if $(shell git status --porcelain --untracked-files=no),${COMMIT_NO}-dirty,${COMMIT_NO})
 VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
+
+ifeq ($(filter $(BUILD_METHOD),$(BUILD_METHOD_LIST)),)
+    $(error Invalid BUILD_METHOD value '$(BUILD_METHOD)'. Supported values: $(BUILD_METHOD_LIST))
+endif
+
+ifeq (dracut,$(BUILD_METHOD))
+  DISTRO                :=
+  TARGET_ROOTFS         := dracut_rootfs
+  TARGET_ROOTFS_MARKER  := $(ROOTFS_BUILD_DEST)/.dracut$(ROOTFS_MARKER_SUFFIX)
+  # dracut specific variables
+  DRACUT_KVERSION    :=
+  DRACUT_OVERLAY_DIR := $(MK_DIR)/dracut_overlay
+  DRACUT_DIR         := $(MK_DIR)/dracut
+  DRACUT_CONF_DIR    := $(DRACUT_DIR)/dracut.conf.d
+  DRACUT_OPTIONS     := --no-compress --conf /dev/null --confdir $(DRACUT_CONF_DIR)
+
+  ifneq (,$(DRACUT_KVERSION))
+    # If a kernel version is not specified, do not make systemd load modules
+    # at startup
+    DRACUT_KMODULES  := $(shell grep "^drivers=" $(DRACUT_CONF_DIR)/10-drivers.conf | sed -E "s,^drivers=\"(.*)\"$$,\1,")
+  else
+    DRACUT_OPTIONS += --no-kernel
+  endif
+
+  ifeq (,$(DRACUT_OVERLAY_DIR))
+    $(error DRACUT_OVERLAY_DIR cannot be empty)
+  endif
+endif
 
 # Set the variable to silent logs using chronic
 OSBUILDER_USE_CHRONIC :=
@@ -53,7 +83,17 @@ rootfs-%: $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX)
 .PRECIOUS: $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX)
 $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX):: rootfs-builder/%
 	$(call silent_run,Creating rootfs for "$*",$(ROOTFS_BUILDER) -o $(VERSION_COMMIT) -r $(ROOTFS_BUILD_DEST)/$*_rootfs $*)
-	touch $@
+	@touch $@
+
+# To generate a dracut rootfs, we first generate a dracut initrd and then
+# extract it in a local folder.
+# Notes:
+# - assuming a not compressed initrd.
+.PRECIOUS: $(ROOTFS_BUILD_DEST)/.dracut$(ROOTFS_MARKER_SUFFIX)
+$(ROOTFS_BUILD_DEST)/.dracut$(ROOTFS_MARKER_SUFFIX): $(TARGET_INITRD)
+	mkdir -p $(TARGET_ROOTFS)
+	cat $< | cpio --extract --preserve-modification-time --make-directories --directory=$(TARGET_ROOTFS)
+	@touch $@
 
 image-%: $(IMAGES_BUILD_DEST)/kata-containers-image-%.img
 	@ # DONT remove. This is not cancellation rule.
@@ -73,19 +113,37 @@ $(IMAGES_BUILD_DEST)/kata-containers-initrd-%.img: rootfs-%
 all: image initrd
 
 .PHONY: rootfs
-rootfs: $(DISTRO_ROOTFS_MARKER)
+rootfs: $(TARGET_ROOTFS_MARKER)
 
 .PHONY: image
-image: $(DISTRO_IMAGE)
+image: $(TARGET_IMAGE)
 
-$(DISTRO_IMAGE): $(DISTRO_ROOTFS_MARKER)
-	$(call silent_run,Creating image based on "$(DISTRO_ROOTFS)",$(IMAGE_BUILDER) "$(DISTRO_ROOTFS)")
+$(TARGET_IMAGE): $(TARGET_ROOTFS_MARKER)
+	$(call silent_run,Creating image based on "$(TARGET_ROOTFS)",$(IMAGE_BUILDER) -o $@ "$(TARGET_ROOTFS)")
+
 
 .PHONY: initrd
-initrd: $(DISTRO_INITRD)
+initrd: $(TARGET_INITRD)
 
-$(DISTRO_INITRD): $(DISTRO_ROOTFS_MARKER)
-	$(call silent_run,Creating initrd image based on "$(DISTRO_ROOTFS)",$(INITRD_BUILDER) "$(DISTRO_ROOTFS)")
+ifeq (distro,$(BUILD_METHOD))
+$(TARGET_INITRD): $(TARGET_ROOTFS_MARKER)
+	$(call silent_run,Creating initrd image based on "$(TARGET_ROOTFS)",$(INITRD_BUILDER) "$(TARGET_ROOTFS)")
+else
+$(TARGET_INITRD): $(DRACUT_OVERLAY_DIR)
+	@echo Creating initrd image based on the host OS using dracut
+	dracut $(DRACUT_OPTIONS) --include $< / $@ $(DRACUT_KVERSION)
+endif
+
+# Notes on overlay dir:
+# - If user specified any kernel module in the dracut conf file,
+#   we need to make sure these are pre-loaded at startup using
+#   systemd modules-load.d
+$(DRACUT_OVERLAY_DIR):
+	mkdir -p $@
+	# Modules preload
+	$(ROOTFS_BUILDER) -o $(VERSION_COMMIT) -r $@
+	mkdir -p $@/etc/modules-load.d
+	echo $(DRACUT_KMODULES) | tr " " "\n" > $@/etc/modules-load.d/kata-modules.conf
 
 .PHONY: test
 test:
@@ -140,7 +198,7 @@ install-scripts:
 
 .PHONY: clean
 clean:
-	rm -rf $(DISTRO_ROOTFS_MARKER) $(DISTRO_ROOTFS) $(DISTRO_IMAGE) $(DISTRO_INITRD)
+	rm -rf $(TARGET_ROOTFS_MARKER) $(TARGET_ROOTFS) $(TARGET_IMAGE) $(TARGET_INITRD) $(DRACUT_OVERLAY_DIR)
 
 # Prints the name of the variable passed as suffix to the print- target,
 # E.g., if Makefile contains:

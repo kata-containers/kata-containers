@@ -11,7 +11,7 @@
      * [Create template files](#create-template-files)
      * [Modify template files](#modify-template-files)
      * [Expected rootfs directory content](#expected-rootfs-directory-content)
-     * [Optional - Customise the rootfs](#optional---customise-the-rootfs)
+     * [Optional - Customize the rootfs](#optional---customize-the-rootfs)
         * [Adding extra packages](#adding-extra-packages)
         * [Arbitrary rootfs changes](#arbitrary-rootfs-changes)
 
@@ -26,24 +26,24 @@ distribution. The script supports multiple distributions and can be extended
 to add further ones.
 
 ### Extra features
+
 #### Supported distributions list
-Supported distributions can be listed with:
+
+List the supported distributions by running the following:
 ```
 $ ./rootfs.sh -l
 ```
 
 #### Generate Kata specific files
-`rootfs.sh` can be used to only populate a target directory with the set of Kata
-specific files and components integrable into a generic Linux rootfs to generate
-a Kata guest OS image.
-This feature can be used when creating a rootfs with a distribution not officially
-supported by osbuilder.
-It is also used when building the rootfs using the 'dracut' build method.
+The `rootfs.sh` script can be used to populate a directory with only Kata specific files and
+components, without creating a full usable rootfs.
+This feature is used to create a rootfs based on a distribution not officially
+supported by osbuilder, and when building an image using the dracut build method.
 
-To obtain this, simply invoke `rootfs.sh` without specifying a target rootfs, e.g.:
+To achieve this, simply invoke `rootfs.sh` without specifying a target rootfs, e.g.:
 ```
-mkdir kata-overlay
-./rootfs.sh -r `pwd`/kata-overlay
+$ mkdir kata-overlay
+$ ./rootfs.sh -r "$PWD/kata-overlay"
 ```
 
 ## Rootfs requirements
@@ -177,7 +177,7 @@ After the new directory structure is created:
 After the function `build_rootfs` is called, the script expects the
 rootfs directory to contain `/sbin/init` and `/sbin/kata-agent` binaries.
 
-### Optional - Customise the rootfs
+### Optional - Customize the rootfs
 
 For particular use cases developers might want to modify the guest OS.
 
