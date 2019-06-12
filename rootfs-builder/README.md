@@ -1,13 +1,17 @@
-* [Supported base OSs](#supported-base-oss)
-* [Rootfs requirements](#rootfs-requirements)
-* [Creating a rootfs](#creating-a-rootfs)
-* [Creating a rootfs with kernel modules](#creating-a-rootfs-with-kernel-modules)
-* [Build a rootfs using Docker](#build-a-rootfs-using-docker)
-* [Adding support for a new guest OS](#adding-support-for-a-new-guest-os)
-    * [Create template files](#create-template-files)
-    * [Modify template files](#modify-template-files)
-    * [Expected rootfs directory content](#expected-rootfs-directory-content)
-    * [Optional - Customise the rootfs](#optional---customise-the-rootfs)
+* [Building a Guest OS rootfs for Kata Containers](#building-a-guest-os-rootfs-for-kata-containers)
+  * [Supported base OSs](#supported-base-oss)
+     * [Extra features](#extra-features)
+        * [Supported distributions list](#supported-distributions-list)
+        * [Generate Kata specific files](#generate-kata-specific-files)
+  * [Rootfs requirements](#rootfs-requirements)
+  * [Creating a rootfs](#creating-a-rootfs)
+  * [Creating a rootfs with kernel modules](#creating-a-rootfs-with-kernel-modules)
+  * [Build a rootfs using Docker](#build-a-rootfs-using-docker)
+  * [Adding support for a new guest OS](#adding-support-for-a-new-guest-os)
+     * [Create template files](#create-template-files)
+     * [Modify template files](#modify-template-files)
+     * [Expected rootfs directory content](#expected-rootfs-directory-content)
+     * [Optional - Customise the rootfs](#optional---customise-the-rootfs)
         * [Adding extra packages](#adding-extra-packages)
         * [Arbitrary rootfs changes](#arbitrary-rootfs-changes)
 
@@ -21,10 +25,25 @@ The `rootfs.sh` script builds a rootfs based on a particular Linux\*
 distribution. The script supports multiple distributions and can be extended
 to add further ones.
 
-To list the supported distributions, run:
-
+### Extra features
+#### Supported distributions list
+Supported distributions can be listed with:
 ```
-$ ./rootfs.sh -h
+$ ./rootfs.sh -l
+```
+
+#### Generate Kata specific files
+`rootfs.sh` can be used to only populate a target directory with the set of Kata
+specific files and components integrable into a generic Linux rootfs to generate
+a Kata guest OS image.
+This feature can be used when creating a rootfs with a distribution not officially
+supported by osbuilder.
+It is also used when building the rootfs using the 'dracut' build method.
+
+To obtain this, simply invoke `rootfs.sh` without specifying a target rootfs, e.g.:
+```
+mkdir kata-overlay
+./rootfs.sh -r `pwd`/kata-overlay
 ```
 
 ## Rootfs requirements
