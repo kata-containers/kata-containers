@@ -41,7 +41,7 @@ workloads with isolated sandboxes (i.e. Kata Containers).
 
 As a result, the CRI implementations extended their semantics for the requirements:
 
-- At the beginning, [frakti](https://github.com/kubernetes/frakti) checks the network configuration of a Pod, and
+- At the beginning, [Frakti](https://github.com/kubernetes/frakti) checks the network configuration of a Pod, and
   treat Pod with `host` network as trusted, while others are treated as untrusted.
 - The containerd introduced an annotation for untrusted Pods since [v1.0](https://github.com/containerd/cri/blob/v1.0.0-rc.0/docs/config.md):
   ```yaml
@@ -143,14 +143,14 @@ The following sections outline how to add Kata Containers to the configurations.
 #### Kata Containers as a `RuntimeClass`
 
 For 
-- Kata Containers v1.5.0 or above (including 1.5.0-rc)
+- Kata Containers v1.5.0 or above (including `1.5.0-rc`)
 - Containerd v1.2.0 or above
 - Kubernetes v1.12.0 or above
 
 The `RuntimeClass` is suggested.
 
 The following configuration includes three runtime classes:
-- `plugins.cri.containerd.runtimes.runc`: the runC, and it is the default runtime.
+- `plugins.cri.containerd.runtimes.runc`: the runc, and it is the default runtime.
 - `plugins.cri.containerd.runtimes.kata`: The function in containerd (reference [the document here](https://github.com/containerd/containerd/tree/master/runtime/v2#binary-naming)) 
   where the dot-connected string `io.containerd.kata.v2` is translated to `containerd-shim-kata-v2` (i.e. the 
   binary name of the Kata implementation of [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/master/runtime/v2)).
