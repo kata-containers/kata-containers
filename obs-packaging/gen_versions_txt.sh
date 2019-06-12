@@ -26,22 +26,34 @@ get_kata_version() {
 
 gen_version_file() {
 	local branch="$1"
-	[ -n "${branch}" ] || exit 1
+	local use_head="$2"
+	local ref="refs/heads/${branch}"
+	local kata_version="${branch}"
 
-	local kata_version=$(get_kata_version "${branch}")
-	kata_runtime_hash=$(get_kata_hash_from_tag "runtime" "${kata_version}")
-	kata_proxy_hash=$(get_kata_hash_from_tag "proxy" "${kata_version}")
-	kata_shim_hash=$(get_kata_hash_from_tag "shim" "${kata_version}")
-	kata_agent_hash=$(get_kata_hash_from_tag "agent" "${kata_version}")
-	kata_ksm_throttler_hash=$(get_kata_hash_from_tag "ksm-throttler" "${kata_version}")
+	if [ -n "$branch" ] && [ -z "${use_head}" ]; then
+		kata_version=$(get_kata_version "${branch}")
+		ref="refs/tags/${kata_version}^{}"
+	fi
+
+	kata_runtime_hash=$(get_kata_hash "runtime" "${ref}")
+	kata_proxy_hash=$(get_kata_hash "proxy" "${ref}")
+	kata_shim_hash=$(get_kata_hash "shim" "${ref}")
+	kata_agent_hash=$(get_kata_hash "agent" "${ref}")
+	kata_ksm_throttler_hash=$(get_kata_hash "ksm-throttler" "${ref}")
 
 	qemu_lite_branch=$(get_from_kata_deps "assets.hypervisor.qemu-lite.branch" "${kata_version}")
 	qemu_lite_version=$(curl -s -L "https://raw.githubusercontent.com/${project}/qemu/${qemu_lite_branch}/VERSION")
 	qemu_lite_hash=$(git ls-remote https://github.com/${project}/qemu.git | grep "refs/heads/${qemu_lite_branch}" | awk '{print $1}')
 
 	qemu_vanilla_branch=$(get_from_kata_deps "assets.hypervisor.qemu.version" "${kata_version}")
+	# Check if qemu.version can be used to get the version and hash, otherwise use qemu.tag
+	qemu_vanilla_ref="refs/heads/${qemu_vanilla_branch}"
+	if ! (git ls-remote --heads "https://github.com/qemu/qemu.git" | grep -q "refs/heads/${qemu_vanilla_branch}"); then
+		qemu_vanilla_branch=$(get_from_kata_deps "assets.hypervisor.qemu.tag" "${kata_version}")
+		qemu_vanilla_ref="refs/tags/${qemu_vanilla_branch}^{}"
+	fi
 	qemu_vanilla_version=$(curl -s -L "https://raw.githubusercontent.com/qemu/qemu/${qemu_vanilla_branch}/VERSION")
-	qemu_vanilla_hash=$(git ls-remote https://github.com/qemu/qemu.git | grep "refs/heads/${qemu_vanilla_branch}" | awk '{print $1}')
+	qemu_vanilla_hash=$(git ls-remote https://github.com/qemu/qemu.git | grep "${qemu_vanilla_ref}" | awk '{print $1}')
 
 	kernel_version=$(get_from_kata_deps "assets.kernel.version" "${kata_version}")
 	#Remove extra 'v'
@@ -52,6 +64,7 @@ gen_version_file() {
 
 	# - is not a valid char for rpmbuild
 	# see https://github.com/semver/semver/issues/145
+	kata_version=$(get_kata_version "${branch}")
 	kata_version=${kata_version/-/\~}
 	cat > "$versions_txt" <<EOT
 # This is a generated file from ${script_name}
@@ -114,12 +127,14 @@ Options:
 -h, --help        Print this help.
 --compare         Only compare the kata version at branch <kata-branch> with the
                   one in ${versions_txt} and leave the file untouched.
+--head            Use <kata-branch>'s head to generate the versions file.
 EOT
 	exit "${exit_code}"
 }
 
 main() {
 	local compareOnly=
+	local use_head=
 
 	case "${1:-}" in
 		"-h"|"--help")
@@ -127,6 +142,10 @@ main() {
 			;;
 		--compare)
 			compareOnly=1
+			shift
+			;;
+		--head)
+			use_head=1
 			shift
 			;;
 		-*)
@@ -147,7 +166,8 @@ main() {
 		echo "${kata_version} in ${versions_txt} ${compare_result} the version at branch ${branch}"
 		return
 	fi
-	gen_version_file "${branch}"
+
+	gen_version_file "${branch}" "${use_head}"
 }
 
 main $@

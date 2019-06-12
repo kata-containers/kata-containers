@@ -59,7 +59,8 @@ main() {
 	kata_version=${1:-}
 	[ -n "${kata_version}" ] || usage "1"
 
-	agent_sha=$(get_kata_hash_from_tag "agent" "${kata_version}")
+	ref="refs/tags/${kata_version}^{}"
+	agent_sha=$(get_kata_hash "agent" "${ref}")
 	agent_sha=${agent_sha:0:${short_commit_length}}
 	image_tarball=$(find -name 'kata-containers-*.tar.gz' | grep "${kata_version}" | grep "${agent_sha}") ||
 		"${script_dir}/../obs-packaging/kata-containers-image/build_image.sh" -v "${kata_version}"
