@@ -386,12 +386,15 @@ build_rootfs_distro()
 # This is used when a distro is not specified.
 prepare_overlay()
 {
-	pushd "${ROOTFS_DIR}" >> /dev/null
+	pushd "${ROOTFS_DIR}" > /dev/null
 	mkdir -p ./etc ./lib/systemd ./sbin ./var
 	ln -sf  ./usr/lib/systemd/systemd ./init
 	ln -sf  ../../init ./lib/systemd/systemd
 	ln -sf  ../init ./sbin/init
-	popd  >> /dev/null
+	# Kata sytemd unit file
+	mkdir -p ./etc/systemd/system/basic.target.wants/
+	ln -sf /usr/lib/systemd/system/kata-containers.target ./etc/systemd/system/basic.target.wants/kata-containers.target
+	popd  > /dev/null
 }
 
 # Setup an existing rootfs directory, based on the OPTIONAL distro name
@@ -405,14 +408,40 @@ setup_rootfs()
 	if [ "$PWD" != "/" ] ; then
 		rm -rf ./var/cache/ ./var/lib ./var/log ./var/tmp
 	fi
+
 	ln -s ../tmp ./var/
 
 	# For some distros tmp.mount may not be installed by default in systemd paths
 	if ! [ -f "./etc/systemd/system/tmp.mount" ] && \
 		! [ -f "./usr/lib/systemd/system/tmp.mount" ] &&
 		[ "$AGENT_INIT" != "yes" ]; then
+		local unitFile="./etc/systemd/system/tmp.mount"
 		info "Install tmp.mount in ./etc/systemd/system"
-		cp ./usr/share/systemd/tmp.mount ./etc/systemd/system/tmp.mount
+		mkdir -p `dirname "$unitFile"`
+		cp ./usr/share/systemd/tmp.mount "$unitFile" || cat > "$unitFile" << EOT
+#  This file is part of systemd.
+#
+#  systemd is free software; you can redistribute it and/or modify it
+#  under the terms of the GNU Lesser General Public License as published by
+#  the Free Software Foundation; either version 2.1 of the License, or
+#  (at your option) any later version.
+
+[Unit]
+Description=Temporary Directory (/tmp)
+Documentation=man:hier(7)
+Documentation=https://www.freedesktop.org/wiki/Software/systemd/APIFileSystems
+ConditionPathIsSymbolicLink=!/tmp
+DefaultDependencies=no
+Conflicts=umount.target
+Before=local-fs.target umount.target
+After=swap.target
+
+[Mount]
+What=tmpfs
+Where=/tmp
+Type=tmpfs
+Options=mode=1777,strictatime,nosuid,nodev
+EOT
 	fi
 
 	popd  >> /dev/null
@@ -486,7 +515,7 @@ parse_arguments()
 			l)	get_distros | sort && exit 0;;
 			o)	OSBUILDER_VERSION="${OPTARG}" ;;
 			r)	ROOTFS_DIR="${OPTARG}" ;;
-			t)	get_test_config "${OPTARG}" && exit -1;;
+			t)	get_test_config "${OPTARG}" && exit 0;;
 			*)  die "Found an invalid option";;
 		esac
 	done
