@@ -38,8 +38,8 @@ the feature can be marked as "experimental" first, and users can test it manuall
 We make no guarantees about experimental features, they can be removed entirely at any point,
 or become non-experimental at some release, so relative configuration options can change radically.
 
-An experimental feature **MUST** have a descriptive name containing only lower-case characters, numbers or '_', 
-e.g. new_hypervisor_2, the name **MUST** be unique and will never be re-used in future.
+An experimental feature **MUST** have a descriptive name containing only lower-case characters, numbers or `_`, 
+e.g. `new_hypervisor_2`, the name **MUST** be unique and will never be re-used in future.
 
 ## What's the difference between "WIP" and "experimental"?
 
