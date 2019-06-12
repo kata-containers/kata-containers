@@ -339,3 +339,23 @@ func TestIsEphemeralStorage(t *testing.T) {
 	isHostEmptyDir = Isk8sHostEmptyDir(sampleEphePath)
 	assert.False(t, isHostEmptyDir)
 }
+
+// TestBindUnmountContainerRootfsENOENTNotError tests that if a file
+// or directory attempting to be unmounted doesn't exist, then it
+// is not considered an error
+func TestBindUnmountContainerRootfsENOENTNotError(t *testing.T) {
+	testMnt := "/tmp/test_mount"
+	sID := "sandIDTest"
+	cID := "contIDTest"
+
+	// check to make sure the file doesn't exist
+	testPath := filepath.Join(testMnt, sID, cID, rootfsDir)
+	if _, err := os.Stat(testPath); !os.IsNotExist(err) {
+		if err := os.Remove(testPath); err != nil {
+			t.Fatalf("test mount file should not exist, and cannot be removed: %s", err)
+		}
+	}
+
+	err := bindUnmountContainerRootfs(context.Background(), testMnt, sID, cID)
+	assert.Nil(t, err)
+}
