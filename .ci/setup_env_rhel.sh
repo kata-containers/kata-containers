@@ -43,6 +43,7 @@ declare -A packages=(
 	[gnu_parallel_dependencies]="perl bzip2 make" \
         [libsystemd]="systemd-devel" \
 	[redis]="redis" \
+	[spell-check]="hunspell hunspell-en-GB hunspell-en-US pandoc" \
 )
 
 main()

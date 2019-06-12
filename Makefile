@@ -52,6 +52,9 @@ checkcommits:
 github-labels:
 	make -C cmd/github-labels
 
+spell-check-dictionary:
+	make -C cmd/check-spelling
+
 check-markdown:
 	make -C cmd/check-markdown
 

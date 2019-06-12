@@ -39,6 +39,7 @@ declare -A packages=( \
 	[gnu_parallel]="parallel" \
 	[libsystemd]="libsystemd-dev" \
 	[redis]="redis-server" \
+	[spell-check]="hunspell hunspell-en-gb hunspell-en-us pandoc" \
 )
 
 main()

@@ -1,0 +1,36 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+SET UTF-8
+
+# Add the following characters so they are accepted as part of a word
+WORDCHARS 0123456789'
+
+# Disable hyphenation
+BREAK 0
+
+# plural
+SFX A N 3
+SFX A 0 s [^x]
+SFX A 0 es x
+SFX A y ies
+
+# possession
+SFX B N 1
+SFX B 0 's
+
+# past tense
+SFX C N 4
+SFX C 0 d e
+SFX C 0 ed [rt]
+SFX C 0 ped p
+SFX C 0 ged g
+
+# present continuous
+SFX D N 3
+SFX D 0 ging g
+SFX D 0 ing [rt]
+SFX D e ing e
