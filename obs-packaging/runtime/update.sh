@@ -39,7 +39,14 @@ LOCAL_BUILD=false
 OBS_PUSH=false
 VERBOSE=false
 
-pkg_2_version() {
+#
+# Given the name of a package returns the full package version to be used for
+# DEB and RPM dependency constraints as follows, composed of:
+# - a version,
+# - an optional hash (only for select packages),
+# - a release number (only for "deb" packages)
+#
+pkg_required_ver() {
 	local pkg="$1"
 	local versionVar="${pkg}_version"
 	local hashVar="${pkg}_hash"
@@ -68,7 +75,10 @@ pkg_2_version() {
 			;;
 	esac
 
-	pkg_version "$version" "$release" "$gitHash"
+	local debVer=$(pkg_version "$version" "$release" "$gitHash")
+	local rpmVer=$(pkg_version "$version" "" "$gitHash")
+
+	echo  "${debVer}" "${rpmVer}"
 }
 
 
@@ -77,31 +87,56 @@ cli "$@"
 
 [ "$VERBOSE" == "true" ] && set -x
 
+declare -a pkgVersions
 # Package depedencies
 info "Requires:"
-PROXY_REQUIRED_VERSION=$(pkg_2_version "kata_proxy")
-info "proxy ${PROXY_REQUIRED_VERSION}"
+pkgVersions=($(pkg_required_ver "kata_proxy"))
+declare -A PROXY_REQUIRED_VERSION
+PROXY_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
+PROXY_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
+info "proxy ${PROXY_REQUIRED_VERSION[@]}"
 
-SHIM_REQUIRED_VERSION=$(pkg_2_version "kata_shim")
-info "shim ${SHIM_REQUIRED_VERSION}"
+declare -A SHIM_REQUIRED_VERSION
+pkgVersions=($(pkg_required_ver "kata_shim"))
+SHIM_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
+SHIM_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
+info "shim ${SHIM_REQUIRED_VERSION[@]}"
 
-KERNEL_REQUIRED_VERSION=$(pkg_2_version "kernel")
-info "kata-linux-container ${KERNEL_REQUIRED_VERSION}"
+declare -A KERNEL_REQUIRED_VERSION
+pkgVersions=($(pkg_required_ver "kernel"))
+KERNEL_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
+KERNEL_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
+info "kata-linux-container ${KERNEL_REQUIRED_VERSION[@]}"
 
-KSM_THROTTLER_REQUIRED_VERSION=$(pkg_2_version "kata_ksm_throttler")
-info "ksm-throttler ${KSM_THROTTLER_REQUIRED_VERSION}"
+declare -A KSM_THROTTLER_REQUIRED_VERSION
+pkgVersions=($(pkg_required_ver "kata_ksm_throttler"))
+KSM_THROTTLER_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
+KSM_THROTTLER_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
+info "ksm-throttler ${KSM_THROTTLER_REQUIRED_VERSION[@]}"
 
-KATA_IMAGE_REQUIRED_VERSION=$(pkg_2_version "kata_osbuilder")
-info "image ${KATA_IMAGE_REQUIRED_VERSION}"
+declare -A KATA_IMAGE_REQUIRED_VERSION
+pkgVersions=($(pkg_required_ver "kata_osbuilder"))
+KATA_IMAGE_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
+KATA_IMAGE_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
+info "image ${KATA_IMAGE_REQUIRED_VERSION[@]}"
 
 
-KATA_QEMU_VANILLA_REQUIRED_VERSION=$(pkg_2_version "qemu_vanilla")
-info "qemu-vanilla ${KATA_QEMU_VANILLA_REQUIRED_VERSION}"
+declare -A KATA_QEMU_VANILLA_REQUIRED_VERSION
+pkgVersions=($(pkg_required_ver "qemu_vanilla"))
+KATA_QEMU_VANILLA_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
+KATA_QEMU_VANILLA_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
+info "qemu-vanilla ${KATA_QEMU_VANILLA_REQUIRED_VERSION[@]}"
 
 if [ "$arch" == "x86_64" ]; then
-	KATA_QEMU_LITE_REQUIRED_VERSION=$(pkg_2_version "qemu_lite")
-	info "qemu-lite ${KATA_QEMU_LITE_REQUIRED_VERSION}"
-	replace_list+=("qemu_lite_version=${KATA_QEMU_LITE_REQUIRED_VERSION}")
+	declare -A KATA_QEMU_LITE_REQUIRED_VERSION
+	pkgVersions=($(pkg_required_ver "qemu_lite"))
+	KATA_QEMU_LITE_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
+	KATA_QEMU_LITE_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
+	info "qemu-lite ${KATA_QEMU_LITE_REQUIRED_VERSION[@]}"
+	replace_list+=( \
+		"qemu_lite_version=${KATA_QEMU_LITE_REQUIRED_VERSION["rpm"]}" \
+		"qemu_lite_version_release=${KATA_QEMU_LITE_REQUIRED_VERSION["deb"]}" \
+	)
 fi
 
 PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/runtime}
@@ -117,12 +152,18 @@ replace_list+=(
 	"HASH=$short_hashtag"
 	"RELEASE=$RELEASE"
 	"VERSION=$VERSION"
-	"kata_osbuilder_version=${KATA_IMAGE_REQUIRED_VERSION}"
-	"kata_proxy_version=${PROXY_REQUIRED_VERSION}"
-	"kata_shim_version=${SHIM_REQUIRED_VERSION}"
-	"ksm_throttler_version=${KSM_THROTTLER_REQUIRED_VERSION}"
-	"linux_container_version=${KERNEL_REQUIRED_VERSION}"
-	"qemu_vanilla_version=${KATA_QEMU_VANILLA_REQUIRED_VERSION}"
+	"kata_osbuilder_version=${KATA_IMAGE_REQUIRED_VERSION["rpm"]}"
+	"kata_osbuilder_version_release=${KATA_IMAGE_REQUIRED_VERSION["deb"]}"
+	"kata_proxy_version=${PROXY_REQUIRED_VERSION["rpm"]}"
+	"kata_proxy_version_release=${PROXY_REQUIRED_VERSION["deb"]}"
+	"kata_shim_version=${SHIM_REQUIRED_VERSION["rpm"]}"
+	"kata_shim_version_release=${SHIM_REQUIRED_VERSION["deb"]}"
+	"ksm_throttler_version=${KSM_THROTTLER_REQUIRED_VERSION["rpm"]}"
+	"ksm_throttler_version_release=${KSM_THROTTLER_REQUIRED_VERSION["deb"]}"
+	"linux_container_version=${KERNEL_REQUIRED_VERSION["rpm"]}"
+	"linux_container_version_release=${KERNEL_REQUIRED_VERSION["deb"]}"
+	"qemu_vanilla_version=${KATA_QEMU_VANILLA_REQUIRED_VERSION["rpm"]}"
+	"qemu_vanilla_version_release=${KATA_QEMU_VANILLA_REQUIRED_VERSION["deb"]}"
 )
 
 verify
