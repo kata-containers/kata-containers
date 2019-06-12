@@ -9,6 +9,7 @@
     * [Code Licensing](#code-licensing)
     * [The Release Process](#the-release-process)
 * [Help Improving the Documents](#help-improving-the-documents)
+* [Website Changes](#website-changes)
 
 The [Kata Containers](https://github.com/kata-containers)
 documentation repository hosts overall system documentation, with information
@@ -66,3 +67,9 @@ Documents that help to understand and contribute to Kata Containers.
 ## Help Improving the Documents
 
 * [Documentation Requirements](Documentation-Requirements.md)
+
+## Website Changes
+
+If you have a suggestion for how we can improve the
+[website](https://katacontainers.io), please raise an issue (or a PR) on
+[the repository that holds the source for the website](https://github.com/OpenStackweb/kata-netlify-refresh).
