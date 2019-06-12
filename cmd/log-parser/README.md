@@ -21,11 +21,11 @@ $ kata-log-parser --help
 
 The tool reads logfiles in the [`logfmt`](https://brandur.org/logfmt) structured
 logging format. For example, a logfile created by the golang
-[logrus](https://godoc.org/github.com/sirupsen/logrus) package.
+[Logrus](https://godoc.org/github.com/sirupsen/logrus) package.
 
 The tool requires that the following fields are defined for each log record:
 
-- Log level field (`level`): must be one of the logrus `LogLevel` values
+- Log level field (`level`): must be one of the Logrus `LogLevel` values
   in string format (e.g. `debug`, `info`, `error`).
 
 - Name field (`name`): a single word that specifies the name of the

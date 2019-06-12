@@ -48,7 +48,7 @@ The test measures, calculates, and stores a number of data items:
 | `uss` | USS for all the VM runtime components
 | `pss` | PSS for all the VM runtime components
 | `all_pss` | PSS of all of userspace - to monitor if we had other impact on the system
-| `dockerd` | PSS of the dockerd process
+| `dockerd` | PSS of the `dockerd` process
 | `user_smem` | `smem` "userspace" consumption value
 | `avail` | "available" memory from `free`
 | `avail_decr` | "available" memory decrease since start of test
