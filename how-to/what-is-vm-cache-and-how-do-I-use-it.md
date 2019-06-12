@@ -44,4 +44,4 @@ and purge it by `ctrl-c` it.
 
 ### Limitations
 * Cannot work with VM templating.
-* Only supports the qemu hypervisor.
+* Only supports the QEMU hypervisor.

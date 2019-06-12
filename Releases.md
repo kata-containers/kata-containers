@@ -71,7 +71,7 @@ The detailed steps to follow to create a new release are specified in the [Relea
 
 The Release Owner must follow the following process, which is designed to ensure clarity, quality, stability, and auditability of each release:
 
-- Raise a [new github issue in the kata-containers repository](https://github.com/kata-containers/kata-containers/issues/new) and assign to themselves.
+- Raise a [new GitHub issue in the `kata-containers` repository](https://github.com/kata-containers/kata-containers/issues/new) and assign to themselves.
 
   This issue is used to track the progress of the release with maximum visibility.
 

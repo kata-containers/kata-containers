@@ -152,7 +152,7 @@ utility.
 
   <pre>
 
-- Long lines should not span across multiple lines by using the '`\`'
+- Long lines should not span across multiple lines by using the `\`
   continuation character.
 
   GitHub automatically renders such blocks with scrollbars. Consequently,
