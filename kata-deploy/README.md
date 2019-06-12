@@ -10,15 +10,15 @@
     * [Remove Kata from the Kubernetes cluster](#remove-kata-from-the-kubernetes-cluster)
 * [`kata-deploy` details](#kata-deploy-details)
     * [Dockerfile](#dockerfile)
-    * [Daemonsets and RBAC](#daemonsets-and-rbac)
+    * [DaemonSets and RBAC](#daemonsets-and-rbac)
         * [Kata deploy](#kata-deploy)
         * [Kata cleanup](#kata-cleanup)
 
 [`kata-deploy`](.) provides a Dockerfile, which contains all of the binaries
-and artifacts required to run Kata Containers, as well as reference daemonsets, which can
+and artifacts required to run Kata Containers, as well as reference DaemonSets, which can
 be utilized to install Kata Containers for both Docker and on a running Kubernetes cluster.
 
-Note, installation through daemonsets successfully installs `katacontainers.io/kata-runtime` on
+Note, installation through DaemonSets successfully installs `katacontainers.io/kata-runtime` on
 a node only if it uses either containerd or CRI-O CRI-shims.
 
 ## Docker quick start
@@ -174,25 +174,25 @@ Host artifacts:
 * `qemu-system-x86_64` and supporting binaries
 
 Virtual Machine artifacts:
-* `kata-containers.img`: pulled from Kata github releases page
-* `vmliuz.container`: pulled from Kata github releases page
+* `kata-containers.img`: pulled from Kata GitHub releases page
+* `vmlinuz.container`: pulled from Kata GitHub releases page
 
-### Daemonsets and RBAC
+### DaemonSets and RBAC
 
-Two daemonsets are introduced for `kata-deploy`, as well as an RBAC to facilitate
+Two DaemonSets are introduced for `kata-deploy`, as well as an RBAC to facilitate
 applying labels to the nodes.
 
 #### Kata deploy
 
-This daemonset installs the necessary Kata binaries, configuration files, and virtual machine artifacts on
-the node. Once installed, the daemonset adds a node label `katacontainers.io/kata-runtime=true` and reconfigures
+This DaemonSet installs the necessary Kata binaries, configuration files, and virtual machine artifacts on
+the node. Once installed, the DaemonSet adds a node label `katacontainers.io/kata-runtime=true` and reconfigures
 either CRI-O or containerd to register two `runtimeClasses`: `kata-qemu` (for QEMU isolation) and `kata-fc` (for Firecracker isolation).
-As a final step the daemonset restarts either CRI-O or containerd. Upon deletion, the daemonset removes the
+As a final step the DaemonSet restarts either CRI-O or containerd. Upon deletion, the DaemonSet removes the
 Kata binaries and VM artifacts and updates the node label to `katacontainers.io/kata-runtime=cleanup`.
 
 #### Kata cleanup
 
-This daemonset runs of the node has the label `katacontainers.io/kata-runtime=cleanup`. These daemonsets removes
+This DaemonSet runs of the node has the label `katacontainers.io/kata-runtime=cleanup`. These DaemonSets removes
 the `katacontainers.io/kata-runtime` label as well as restarts either CRI-O or `containerd` `systemctl`
-daemon. You cannot execute these resets during the `preStopHook` of the Kata installer daemonset,
-which necessitated this final cleanup daemonset.
+daemon. You cannot execute these resets during the `preStopHook` of the Kata installer DaemonSet,
+which necessitated this final cleanup DaemonSet.
