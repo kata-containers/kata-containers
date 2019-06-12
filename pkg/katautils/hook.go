@@ -11,7 +11,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -39,7 +38,7 @@ func runHook(ctx context.Context, hook specs.Hook, cid, bundlePath string) error
 		log.String("hook-args", strings.Join(hook.Args, " ")))
 
 	state := specs.State{
-		Pid:    os.Getpid(),
+		Pid:    syscall.Gettid(),
 		Bundle: bundlePath,
 		ID:     cid,
 	}
