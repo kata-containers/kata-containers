@@ -893,20 +893,20 @@ main()
 		case "$1" in
 			--all) specific_branch="true" ;;
 			--branch) branch="$2"; shift ;;
-			--commits) func=check_commits ;;
-			--docs) func=check_docs ;;
-			--files) func=check_files ;;
+			--commits) func=static_check_commits ;;
+			--docs) func=static_check_docs ;;
+			--files) func=static_check_files ;;
 			--force) force="true" ;;
-			--golang) func=check_go_arch_specific ;;
+			--golang) func=static_check_go_arch_specific ;;
 			-h|--help) usage; exit 0 ;;
-			--labels) func=check_labels;;
-			--licenses) func=check_license_headers ;;
+			--labels) func=static_check_labels;;
+			--licenses) func=static_check_license_headers ;;
 			--list) list_only="true" ;;
 			--no-arch) handle_funcs="arch-agnostic" ;;
 			--only-arch) handle_funcs="arch-specific" ;;
 			--repo) repo="$2"; shift ;;
-			--vendor) func=check_vendor;;
-			--versions) func=check_versions ;;
+			--vendor) func=static_check_vendor;;
+			--versions) func=static_check_versions ;;
 			--) shift; break ;;
 		esac
 
