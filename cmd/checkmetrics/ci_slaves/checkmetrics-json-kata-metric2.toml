@@ -42,7 +42,7 @@ description = "measure container average footprint with KSM"
 # within (inclusive)
 checkvar = ".\"memory-footprint-ksm\".Results | .[] | .average.Result"
 checktype = "mean"
-midval = 56088.5
+midval = 56366.5
 minpercent = 5.0
 maxpercent = 5.0
 
