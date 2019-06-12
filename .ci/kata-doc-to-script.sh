@@ -20,6 +20,12 @@ typeset -r bash_block_open="\`\`\`bash"
 typeset -r block_open="\`\`\`"
 typeset -r block_close="\`\`\`"
 
+# GitHub issue templates have a special metadata section at the top delimited
+# by this string. See:
+#
+# https://raw.githubusercontent.com/kata-containers/.github/master/.github/ISSUE_TEMPLATE/bug_report.md
+typeset -r metadata_block='---'
+
 # Used to delimit inline code blocks
 typeset -r backtick="\`"
 
@@ -119,9 +125,14 @@ doc_to_script()
 
 	if [ "$invert" = "yes" ]
 	then
+		# First, remove code blocks.
+		# Next, remove inline code in backticks.
+		# Finally, remove a metadata block as used in GitHub issue
+		# templates.
 		cat "$file" |\
 			sed -e "/^[ \>]*${block_open}/,/^[ \>]*${block_close}/d" \
-			     -e "s/${backtick}[^${backtick}]*${backtick}//g" \
+			    -e "s/${backtick}[^${backtick}]*${backtick}//g" \
+			    -e "/^${metadata_block}$/,/^${metadata_block}$/d" \
 			     > "$outfile"
 		return
 	fi
