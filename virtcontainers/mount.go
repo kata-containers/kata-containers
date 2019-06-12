@@ -15,6 +15,9 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	merr "github.com/hashicorp/go-multierror"
+	"github.com/sirupsen/logrus"
 )
 
 // DefaultShmSize is the default shm size to be used in case host
@@ -330,23 +333,28 @@ func bindUnmountContainerRootfs(ctx context.Context, sharedDir, sandboxID, cID s
 	defer span.Finish()
 
 	rootfsDest := filepath.Join(sharedDir, sandboxID, cID, rootfsDir)
-	syscall.Unmount(rootfsDest, syscall.MNT_DETACH)
-
-	return nil
+	err := syscall.Unmount(rootfsDest, syscall.MNT_DETACH)
+	if err == syscall.ENOENT {
+		logrus.Warnf("%s: %s", err, rootfsDest)
+		return nil
+	}
+	return err
 }
 
-func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) {
+func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbox) error {
 	span, _ := trace(ctx, "bindUnmountAllRootfs")
 	defer span.Finish()
 
+	var errors *merr.Error
 	for _, c := range sandbox.containers {
 		c.unmountHostMounts()
 		if c.state.Fstype == "" {
-			// Need to check for error returned by this call.
-			// See: https://github.com/containers/virtcontainers/issues/295
-			bindUnmountContainerRootfs(c.ctx, sharedDir, sandbox.id, c.id)
+			// even if error found, don't break out of loop until all mounts attempted
+			// to be unmounted, and collect all errors
+			errors = merr.Append(errors, bindUnmountContainerRootfs(c.ctx, sharedDir, sandbox.id, c.id))
 		}
 	}
+	return errors.ErrorOrNil()
 }
 
 const (

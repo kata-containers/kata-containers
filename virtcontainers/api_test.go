@@ -327,7 +327,9 @@ func TestStartSandboxKataAgentSuccessful(t *testing.T) {
 
 	// TODO: defaultSharedDir is a hyper var = /run/hyper/shared/sandboxes
 	// do we need to unmount sandboxes and containers?
-	bindUnmountAllRootfs(ctx, testDir, pImpl)
+	if err := bindUnmountAllRootfs(ctx, testDir, pImpl); err != nil {
+		t.Fatal(err)
+	}
 
 }
 
@@ -535,7 +537,9 @@ func TestRunSandboxKataAgentSuccessful(t *testing.T) {
 	pImpl, ok := p.(*Sandbox)
 	assert.True(t, ok)
 
-	bindUnmountAllRootfs(ctx, testDir, pImpl)
+	if err := bindUnmountAllRootfs(ctx, testDir, pImpl); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestRunSandboxFailing(t *testing.T) {
