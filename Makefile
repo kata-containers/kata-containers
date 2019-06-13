@@ -64,7 +64,8 @@ functional: ginkgo
 ifeq (${RUNTIME},)
 	$(error RUNTIME is not set)
 else
-	./ginkgo -failFast -v functional/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \
+		functional/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 	bash sanity/check_sanity.sh
 endif
 
@@ -177,6 +178,10 @@ $(INSTALL_TARGETS): install-%: .ci/install_%.sh
 
 list-install-targets:
 	@echo $(INSTALL_TARGETS) | tr " " "\n"
+
+help:
+	@echo Subsets of the tests can be run using the following specific make targets:
+	@echo " $(UNION)" | sed 's/ /\n\t/g'
 
 # PHONY in alphabetical order
 .PHONY: \

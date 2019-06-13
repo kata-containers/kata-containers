@@ -1,20 +1,24 @@
 # Kata Containers tests
 
-* [Getting the code](#getting-the-code)
-* [Test Content](#test-content)
-* [CI Content](#ci-content)
-    * [Centralised scripts](#centralised-scripts)
-    * [CI setup](#ci-setup)
-    * [Detecting a CI system](#detecting-a-ci-system)
-    * [Breaking Compatibility](#breaking-compatibility)
-* [CLI tools](#cli-tools)
-* [Developer Mode](#developer-mode)
-* [Run the Kata Containers tests](#run-the-kata-containers-tests)
-    * [Requirements to run Kata Containers tests](#requirements-to-run-kata-containers-tests)
-    * [Prepare an environment](#prepare-an-environment)
-    * [Run the tests](#run-the-tests)
-* [Metrics tests](#metrics-tests)
-* [Kata Admission controller webhook](#kata-admission-controller-webhook)
+* [Kata Containers tests](#kata-containers-tests)
+    * [Getting the code](#getting-the-code)
+    * [Test Content](#test-content)
+    * [CI Content](#ci-content)
+        * [Centralised scripts](#centralised-scripts)
+        * [CI setup](#ci-setup)
+        * [Detecting a CI system](#detecting-a-ci-system)
+        * [Breaking Compatibility](#breaking-compatibility)
+    * [CLI tools](#cli-tools)
+    * [Developer Mode](#developer-mode)
+    * [Run the Kata Containers tests](#run-the-kata-containers-tests)
+        * [Requirements to run Kata Containers tests](#requirements-to-run-kata-containers-tests)
+        * [Prepare an environment](#prepare-an-environment)
+        * [Run the tests](#run-the-tests)
+        * [Running subsets of tests](#running-subsets-of-tests)
+            * [Running `Bats` based tests](#running-bats-based-tests)
+            * [Running `Ginkgo` based tests](#running-ginkgo-based-tests)
+    * [Metrics tests](#metrics-tests)
+    * [Kata Admission controller webhook](#kata-admission-controller-webhook)
 
 This repository contains various types of tests and utilities (called
 "content" from now on) for testing the [Kata Containers](https://github.com/kata-containers)
@@ -216,6 +220,60 @@ You can also execute a single test suite. For example, if you want to execute
 the docker integration tests, run the following:
 ```
 $ sudo -E PATH=$PATH make docker
+```
+
+A list of available test suite `make` targets can be found by running the
+following:
+
+```
+$ make help
+```
+
+### Running subsets of tests
+
+Individual tests or subsets of tests can be selected to be run. The method of
+test selection depends on which type of test framework the test is written
+with. Most of the Kata Containers test suites are written
+using either [Bats](https://github.com/sstephenson/bats) files or with
+[Ginkgo](https://github.com/onsi/ginkgo).
+
+#### Running Bats based tests
+
+The Bats based tests are shell scripts, starting with the line:
+
+```sh
+#!/usr/bin/env bats
+```
+
+This allows the Bats files to be executed directly.  Before executing the file,
+ensure you have Bats installed. The Bats files should be executed
+from the root directory of the tests repository to ensure they can locate all other
+necessary components. An example of how a Bats test is run from the `Makefile`
+looks like:
+
+```makefile
+kubernetes:
+        bash -f .ci/install_bats.sh
+        bash -f integration/kubernetes/run_kubernetes_tests.sh
+```
+
+#### Running Ginkgo based tests
+
+Ginkgo supports selecting, filtering and excluding tests to be run using command
+line parameters. The tests repository `Makefile` supports passing the environment
+variables `FOCUS` and `SKIP` through to the `ginkgo` command in most cases. Check
+the `Makefile` specifics before you use this functionality.
+
+Ginkgo accepts [Golang regexp](https://golang.org/pkg/regexp/) regular expressions
+for the `FOCUS` and `SKIP` arguments. See the
+[Ginkgo documentation](https://onsi.github.io/ginkgo/#focused-specs) for more
+specifics. Example:
+
+```sh
+$ make docker					# all tests
+$ export FOCUS=".*CPU.*"; $ make docker		# any test with 'CPU' in its name
+$ export FOCUS="CPU constraints"; $ make docker	# One specific test
+$ export SKIP="CPU constraints"; $ make docker	# Skip one specific test
 ```
 
 ## Metrics tests
