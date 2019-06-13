@@ -57,7 +57,8 @@ functional: ginkgo
 ifeq (${RUNTIME},)
 	$(error RUNTIME is not set)
 else
-	./ginkgo -failFast -v functional/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \
+		functional/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 	bash sanity/check_sanity.sh
 endif
 
