@@ -42,7 +42,7 @@ Then, make sure the containerd works with the [examples in it](containerd-kata.m
 ### Install Kubernetes
 
 - Follow the instructions for
-  [kubeadm installation](https://kubernetes.io/docs/setup/independent/install-kubeadm/).
+  [`kubeadm` installation](https://kubernetes.io/docs/setup/independent/install-kubeadm/).
 
 - Check `kubeadm` is now available
 
@@ -130,7 +130,7 @@ $ sudo systemctl daemon-reload
 A pod network plugin is needed to allow pods to communicate with each other.
 
 - Install the `flannel` plugin by following the
-  [Using kubeadm to Create a Cluster](https://kubernetes.io/docs/setup/independent/create-cluster-kubeadm/#instructions)
+  [Using `kubeadm` to Create a Cluster](https://kubernetes.io/docs/setup/independent/create-cluster-kubeadm/#instructions)
   guide, starting from the **Installing a pod network** section.
 
 - Create a pod network using flannel
