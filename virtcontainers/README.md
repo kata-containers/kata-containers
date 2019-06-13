@@ -31,7 +31,7 @@ runtimes.
 
 # Background
 
-The few existing VM-based container runtimes (Clear Containers, runv, rkt's
+The few existing VM-based container runtimes (Clear Containers, runV, rkt's
 KVM stage 1) all share the same hardware virtualization semantics but use different
 code bases to implement them. `virtcontainers`'s goal is to factorize this code into
 a common Go library.
@@ -214,8 +214,8 @@ __Runtime network setup with CNM__
 __Drawbacks of CNM__
 
 There are three drawbacks about using CNM instead of CNI:
-* The way we call into it is not very explicit: Have to re-exec dockerd binary so that it can accept parameters and execute the prestart hook related to network setup.
-* Implicit way to designate the network namespace: Instead of explicitly giving the netns to dockerd, we give it the PID of our runtime so that it can find the netns from this PID. This means we have to make sure being in the right netns while calling the hook, otherwise the VETH pair will be created with the wrong netns.
+* The way we call into it is not very explicit: Have to re-exec `dockerd` binary so that it can accept parameters and execute the prestart hook related to network setup.
+* Implicit way to designate the network namespace: Instead of explicitly giving the netns to `dockerd`, we give it the PID of our runtime so that it can find the netns from this PID. This means we have to make sure being in the right netns while calling the hook, otherwise the VETH pair will be created with the wrong netns.
 * No results are back from the hook: We have to scan the network interfaces to discover which one has been created inside the netns. This introduces more latency in the code because it forces us to scan the network in the `CreateSandbox` path, which is critical for starting the VM as quick as possible.
 
 # Storage
@@ -236,7 +236,7 @@ Ability to hotplug block devices has been added, which makes it possible to use 
 
 ## How to check if container uses devicemapper block device as its rootfs
 
-Start a container. Call mount(8) within the container. You should see '/' mounted on /dev/vda device.
+Start a container. Call `mount(8)` within the container. You should see `/` mounted on `/dev/vda` device.
 
 # Devices
 
@@ -254,10 +254,10 @@ visibility and which is isolated from other groups.  VFIO uses this information
 to enforce safe ownership of devices for userspace. 
 
 You will need Intel VT-d capable hardware. Check if IOMMU is enabled in your host
-kernel by verifying `CONFIG_VFIO_NOIOMMU` is not in the kernel config. If it is set,
+kernel by verifying `CONFIG_VFIO_NOIOMMU` is not in the kernel configuration. If it is set,
 you will need to rebuild your kernel.
 
-The following kernel configs need to be enabled:
+The following kernel configuration options need to be enabled:
 ```
 CONFIG_VFIO_IOMMU_TYPE1=m 
 CONFIG_VFIO=m

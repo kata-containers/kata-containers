@@ -11,7 +11,7 @@
     * [Full details](#full-details)
 
 This package provides a small set of test utilities. See the
-[godoc](https://godoc.org/github.com/kata-containers/runtime/pkg/katatestutils)
+[GoDoc](https://godoc.org/github.com/kata-containers/runtime/pkg/katatestutils)
 for full details.
 
 ## Test Constraints
@@ -175,4 +175,4 @@ func TestOldKernelVersion(t *testing.T) {
 ### Full details
 
 The public API is shown in [`constraints_api.go`](constraints_api.go) or
-the [godoc](https://godoc.org/github.com/kata-containers/runtime/pkg/katatestutils).
+the [GoDoc](https://godoc.org/github.com/kata-containers/runtime/pkg/katatestutils).

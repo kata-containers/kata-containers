@@ -14,7 +14,6 @@ Table of Contents
 - docker
 - CNI
 - golang
-- gometalinter
 
 A number of these can be installed using the
 [virtcontainers-setup.sh](../utils/virtcontainers-setup.sh) script.
