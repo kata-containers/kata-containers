@@ -15,6 +15,30 @@ source "${script_dir}/../../scripts/lib.sh"
 config_dir="${script_dir}/../../scripts/"
 nemu_tar="kata-nemu-static.tar.gz"
 
+if [ $# -ne 0 ];then
+       arch="$1"
+       case "$arch" in
+	       aarch64) dpkg_arch="arm64"
+		       Dockerfile="Dockerfile_cross"
+		       ;;
+	       ppc64le) arch="powerpc64le"
+		       dpkg_arch="ppc64el"
+		       Dockerfile="Dockerfile_cross"
+		       ;;
+	       s390x) dpkg_arch=$arch
+		       Dockerfile="Dockerfile_cross"
+		       ;;
+	       x86_64) dpkg_arch="amd64"
+		       $arch="amd64"
+		       Dockerfile="Dockerfile"
+		       ;;
+	       *) die "$arch is not support for cross compile" ;;
+       esac
+else
+       arch=""
+       dpkg_arch=""
+fi
+
 nemu_repo="${nemu_repo:-}"
 nemu_version="${nemu_version:-}"
 nemu_ovmf_repo="${nemu_ovmf_repo:-}"
@@ -58,8 +82,10 @@ sudo docker build \
 	--build-arg VIRTIOFSD_RELEASE="${nemu_virtiofsd_release}" \
 	--build-arg VIRTIOFSD="${nemu_virtiofsd_binary}" \
 	--build-arg PREFIX="${prefix}" \
+	--build-arg DPKG_ARCH="${dpkg_arch}" \
+	--build-arg GEN_ARCH="${arch}" \
 	"${config_dir}" \
-	-f "${script_dir}/Dockerfile" \
+	-f "${script_dir}/$Dockerfile" \
 	-t nemu-static
 
 sudo docker run \
