@@ -3,9 +3,9 @@
 
 ## Run the osbuilder tests
 
-osbuilder provides a test script that creates all images and initrds for all
-supported distributions and then tests them to ensure a Kata Container can
-be created with each.
+osbuilder provides a test script that creates all rootfs disk images and
+initrd images for all supported distributions and then tests them to ensure a
+Kata Container can be created with each.
 
 Before the build phase, the test script installs the Docker container manager
 and all the Kata components required to run test containers. This step can be
