@@ -18,6 +18,7 @@ echo "Install chronic"
 sudo -E apt install -y moreutils
 
 declare -A minimal_packages=( \
+	[spell-check]="hunspell hunspell-en-gb hunspell-en-us pandoc" \
 	[yaml_validator]="yamllint" \
 )
 
@@ -39,7 +40,6 @@ declare -A packages=( \
 	[gnu_parallel]="parallel" \
 	[libsystemd]="libsystemd-dev" \
 	[redis]="redis-server" \
-	[spell-check]="hunspell hunspell-en-gb hunspell-en-us pandoc" \
 )
 
 main()

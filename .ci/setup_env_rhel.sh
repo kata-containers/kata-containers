@@ -22,6 +22,7 @@ echo "Install chronic"
 sudo -E yum install -y moreutils
 
 declare -A minimal_packages=( \
+	[spell-check]="hunspell hunspell-en-GB hunspell-en-US pandoc" \
 	[yamllint]="yamllint"
 )
 
@@ -43,7 +44,6 @@ declare -A packages=(
 	[gnu_parallel_dependencies]="perl bzip2 make" \
         [libsystemd]="systemd-devel" \
 	[redis]="redis" \
-	[spell-check]="hunspell hunspell-en-GB hunspell-en-US pandoc" \
 )
 
 main()

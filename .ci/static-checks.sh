@@ -692,6 +692,14 @@ static_check_docs()
 
 		exit 1
 	fi
+
+	# Now, spell check the docs
+	cmd="${tests_repo_dir}/cmd/check-spelling/kata-spell-check.sh"
+
+	for doc in $docs
+	do
+		"$cmd" check "$doc" || die "spell check failed for document $doc"
+	done
 }
 
 # Tests to apply to all files.
