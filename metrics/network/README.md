@@ -33,7 +33,7 @@ are used to test both servers for the maximum amount of throughput.
 and Virtual Set Size (VSS) of the hypervisor footprint on the host using
 `smem` while running a transfer of one GB with `nuttcp`.
 
-- `network-metrics-nginx-ab-benchmark.sh` uses an nginx container and runs the apache
+- `network-metrics-nginx-ab-benchmark.sh` uses an Nginx container and runs the Apache
 benchmarking tool on the host to calculate the requests per second.
 
 - `network-latency.sh` measures the latency using ping. The ping utility measures

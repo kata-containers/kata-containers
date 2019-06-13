@@ -15,7 +15,7 @@ for instance) impact.
 ## `docker_memory_usage`
 
 This test measures the PSS footprint of the runtime components whilst
-launching a number of small ([busybox](https://hub.docker.com/_/busybox/)) containers.
+launching a number of small ([BusyBox](https://hub.docker.com/_/busybox/)) containers.
 
 ## `fast_footprint`
 

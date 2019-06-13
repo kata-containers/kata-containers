@@ -53,7 +53,7 @@ $ ./makereport.sh
 ```
 
 The report generation tool uses [`Rmarkdown`](https://github.com/rstudio/rmarkdown),
-[R](https://www.r-project.org/about.html) and [pandoc](https://pandoc.org/) to produce
+[R](https://www.r-project.org/about.html) and [Pandoc](https://pandoc.org/) to produce
 a PDF report. To avoid the need for all users to set up a working environment
 with all the necessary tooling, the `makereport.sh` script utilises a `Dockerfile` with
 the environment pre-defined in order to produce the report. Thus, you need to
