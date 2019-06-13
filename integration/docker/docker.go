@@ -29,9 +29,6 @@ const (
 	// Image used to run containers
 	Image = "busybox"
 
-	// PostgresImage is the postgres image
-	PostgresImage = "postgres"
-
 	// DebianImage is the debian image
 	DebianImage = "debian"
 
@@ -104,7 +101,6 @@ func init() {
 	images = []string{
 		Image,
 		AlpineImage,
-		PostgresImage,
 		DebianImage,
 		FedoraImage,
 		CentosImage,
