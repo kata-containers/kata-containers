@@ -19,7 +19,8 @@ const (
 )
 
 func asUser(user string, groups bool, fail bool) TableEntry {
-	additionalGroups := []string{"cdrom", "games", "video", "audio"}
+	// Some groups that do exist in the base image already
+	additionalGroups := []string{"cdrom", "floppy", "video", "audio"}
 	groupsMsg := fmt.Sprintf(" with additional groups %v", additionalGroups)
 	if !groups {
 		groupsMsg = fmt.Sprintf(" without additional groups")
@@ -52,7 +53,7 @@ var _ = Describe("users and groups", func() {
 			if user != "" {
 				cmd = append(cmd, "-u", user)
 			}
-			cmd = append(cmd, PostgresImage, "id")
+			cmd = append(cmd, Image, "id")
 
 			stdout, stderr, exitCode := dockerRun(cmd...)
 			if fail {
@@ -86,8 +87,15 @@ var _ = Describe("users and groups", func() {
 
 			fields := strings.Fields(stdout)
 
-			// uid + gid + groups = 3
-			Expect(fields).To(HaveLen(3))
+			// busybox id/image is a bit odd in that it does not have any
+			// users in extra groups by default. If you have a --group-add or
+			// you are the root user you will get the '3 field' output. If you
+			// are non-root, you will not (and only get two fields).
+			if len(additionalGroups) != 0 || user == "root" || user == "" {
+				Expect(fields).To(HaveLen(3))
+			} else {
+				Expect(fields).To(HaveLen(2))
+			}
 
 			// check user (uid)
 			Expect(fields[0]).To(ContainSubstring(fmt.Sprintf("(%s)", u)))
@@ -104,18 +112,18 @@ var _ = Describe("users and groups", func() {
 		asUser("", withoutAdditionalGroups, shouldNotFail),
 		asUser("root", withAdditionalGroups, shouldNotFail),
 		asUser("root", withoutAdditionalGroups, shouldNotFail),
-		asUser("postgres", withAdditionalGroups, shouldNotFail),
-		asUser("postgres", withoutAdditionalGroups, shouldNotFail),
-		asUser(":postgres", withAdditionalGroups, shouldNotFail),
-		asUser(":postgres", withoutAdditionalGroups, shouldNotFail),
-		asUser("postgres:postgres", withAdditionalGroups, shouldNotFail),
-		asUser("postgres:postgres", withoutAdditionalGroups, shouldNotFail),
-		asUser("root:postgres", withAdditionalGroups, shouldNotFail),
-		asUser("root:postgres", withoutAdditionalGroups, shouldNotFail),
+		asUser("mail", withAdditionalGroups, shouldNotFail),
+		asUser("mail", withoutAdditionalGroups, shouldNotFail),
+		asUser(":mail", withAdditionalGroups, shouldNotFail),
+		asUser(":mail", withoutAdditionalGroups, shouldNotFail),
+		asUser("mail:mail", withAdditionalGroups, shouldNotFail),
+		asUser("mail:mail", withoutAdditionalGroups, shouldNotFail),
+		asUser("root:mail", withAdditionalGroups, shouldNotFail),
+		asUser("root:mail", withoutAdditionalGroups, shouldNotFail),
 		asUser("nonexistentuser", withAdditionalGroups, shouldFail),
 		asUser("nonexistentuser", withoutAdditionalGroups, shouldFail),
-		asUser("nonexistentuser:postgres", withAdditionalGroups, shouldFail),
-		asUser("nonexistentuser:postgres", withoutAdditionalGroups, shouldFail),
+		asUser("nonexistentuser:mail", withAdditionalGroups, shouldFail),
+		asUser("nonexistentuser:mail", withoutAdditionalGroups, shouldFail),
 		asUser(":nonexistentuser", withAdditionalGroups, shouldFail),
 		asUser(":nonexistentuser", withoutAdditionalGroups, shouldFail),
 	)
