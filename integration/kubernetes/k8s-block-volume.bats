@@ -48,8 +48,10 @@ setup() {
 	# Verify persistent volume claim is bound
 	kubectl get pvc | grep "Bound"
 
+	# Add the e2fsprogs package to get mkfs.ext4 installed
+	kubectl exec "$pod_name" -- sh -c "apk add --no-cache e2fsprogs"
 	# make fs, mount device and write on it
-	kubectl exec "$pod_name" -- sh -c "mkfs -t ext4 $ctr_dev_path"
+	kubectl exec "$pod_name" -- sh -c "mkfs.ext4 $ctr_dev_path"
 	ctr_mount_path="/mnt"
 	ctr_message="Hello World"
 	ctr_file="${ctr_mount_path}/file.txt"

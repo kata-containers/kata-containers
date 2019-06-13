@@ -11,7 +11,7 @@ spec:
   selector:
     matchLabels:
       app: hello-world
-  replicas: 2
+  replicas: 1
   template:
     metadata:
       labels:
@@ -21,6 +21,6 @@ spec:
       runtimeClassName: kata
       containers:
       - name: hello-world
-        image: gcr.io/google-samples/node-hello:1.0
+        image: gcr.io/google-samples/hello-app:1.0
         ports:
         - containerPort: 8080

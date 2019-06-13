@@ -6,7 +6,7 @@ spec:
   runtimeClassName: kata
   containers:
     - name: my-container
-      image: debian
+      image: alpine
       command: ["tail", "-f", "/dev/null"]
       volumeDevices:
         - devicePath: DEVICE_PATH
