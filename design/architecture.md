@@ -139,10 +139,10 @@ QEMU version called [`qemu-lite`](https://github.com/kata-containers/qemu/tree/q
 custom machine accelerators that are not available in the upstream version of QEMU.
 These custom machine accelerators are described below.
 
-- nofw: this machine accelerator is x86 specific and only supported by `pc` and `q35`
+- `nofw`: this machine accelerator is x86 specific and only supported by `pc` and `q35`
 machine types. `nofw` is used to boot an ELF format kernel by skipping the BIOS/firmware
 in the guest. This custom machine accelerator improves boot time significantly.
-- static-prt: this machine accelerator is x86 specific and only supported by `pc`
+- `static-prt`: this machine accelerator is x86 specific and only supported by `pc`
 and `q35` machine types. `static-prt` is used to reduce the interpretation burden
 for guest ACPI component.
 
@@ -406,7 +406,7 @@ process.
 and signals and thus acts as an encapsulation layer between the container process
 reaper and the `kata-agent`. `kata-shim`:
 
-- Connects to `kata-proxy` on a unix domain socket. The socket url is passed from
+- Connects to `kata-proxy` on a Unix domain socket. The socket URL is passed from
   `kata-runtime` to `kata-shim` when the former spawns the latter along with a
   `containerID` and `execID`. The `containerID` and `execID` are used to identify
   the true container process that the shim process will be shadowing or representing.
