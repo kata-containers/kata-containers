@@ -121,7 +121,7 @@ func (q *qemuPPC64le) cpuModel() string {
 
 func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory {
 
-	if qemuMajorVersion >= 2 && qemuMinorVersion >= 10 {
+	if (qemuMajorVersion > 2) || (qemuMajorVersion == 2 && qemuMinorVersion >= 10) {
 		q.Logger().Debug("Aligning maxmem to multiples of 256MB. Assumption: Kernel Version >= 4.11")
 		hostMemoryMb -= (hostMemoryMb % 256)
 	} else {
