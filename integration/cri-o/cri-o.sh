@@ -13,6 +13,15 @@ source "${SCRIPT_PATH}/crio_skip_tests.sh"
 source "${SCRIPT_PATH}/../../metrics/lib/common.bash"
 source /etc/os-release || source /usr/lib/os-release
 
+# Skip the cri-o tests if TEST_CRIO is not true
+# and we are on a CI job.
+# For non CI execution, run the cri-o tests always.
+if [ "$CI" = true ] && [ "$TEST_CRIO" != true ]
+then
+	echo "Skipping cri-o tests as TEST_CRIO is not true"
+	exit
+fi
+
 crio_repository="github.com/cri-o/cri-o"
 crio_repository_path="$GOPATH/src/${crio_repository}"
 

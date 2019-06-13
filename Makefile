@@ -7,8 +7,15 @@
 # The time limit in seconds for each test
 TIMEOUT := 120
 
+DOCKER_DEPENDENCY = docker
+ifeq (${CI}, true)
+	ifneq (${TEST_DOCKER}, true)
+		DOCKER_DEPENDENCY =
+	endif
+endif
+
 # union for 'make test'
-UNION := functional debug-console docker crio docker-compose network netmon \
+UNION := functional debug-console $(DOCKER_DEPENDENCY) crio docker-compose network netmon \
 	docker-stability oci openshift kubernetes swarm vm-factory \
 	entropy ramdisk shimv2 tracing
 
