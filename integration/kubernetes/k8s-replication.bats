@@ -9,6 +9,10 @@ load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../lib/common.bash"
 
 setup() {
+	versions_file="${BATS_TEST_DIRNAME}/../../versions.yaml"
+	nginx_version=$("${GOPATH}/bin/yq" read "$versions_file" "docker_images.nginx.version")
+	nginx_image="nginx:$nginx_version"
+
 	export KUBECONFIG="$HOME/.kube/config"
 	get_pod_config_dir
 }
@@ -19,8 +23,12 @@ setup() {
 	wait_time=20
 	sleep_time=2
 
+	# Create yaml
+	sed -e "s/\${nginx_version}/${nginx_image}/" \
+		"${pod_config_dir}/replication-controller.yaml" > "${pod_config_dir}/test-replication-controller.yaml"
+
 	# Create replication controller
-	kubectl create -f "${pod_config_dir}/replication-controller.yaml"
+	kubectl create -f "${pod_config_dir}/test-replication-controller.yaml"
 
 	# Check replication controller
 	kubectl describe replicationcontrollers/"$replication_name" | grep "replication-controller"
@@ -39,6 +47,7 @@ setup() {
 }
 
 teardown() {
+	rm -f "${pod_config_dir}/test-replication-controller.yaml"
 	kubectl delete pod "$pod_name"
 	kubectl delete rc "$replication_name"
 }

@@ -25,8 +25,13 @@ setup() {
 @test "Verify nginx connectivity between pods" {
 	wait_time=30
 	sleep_time=3
-	kubectl create -f "${pod_config_dir}/${deployment}.yaml"
-	kubectl wait --for=condition=Available deployment/${deployment}
+
+	# Create test .yaml
+	sed -e "s/\${nginx_version}/${nginx_image}/" \
+		"${pod_config_dir}/${deployment}.yaml" > "${pod_config_dir}/test-${deployment}.yaml"
+
+	kubectl create -f "${pod_config_dir}/test-${deployment}.yaml"
+	kubectl wait --for=condition=Available --timeout=60s deployment/${deployment}
 	kubectl expose deployment/${deployment}
 
 	busybox_pod="test-nginx"
@@ -39,6 +44,7 @@ setup() {
 }
 
 teardown() {
+	rm -f "${pod_config_dir}/test-${deployment}.yaml"
 	kubectl delete deployment "$deployment"
 	kubectl delete service "$deployment"
 	kubectl delete pod "$busybox_pod"

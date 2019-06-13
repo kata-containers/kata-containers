@@ -20,6 +20,6 @@ spec:
       runtimeClassName: kata
       containers:
       - name: nginxtest
-        image: nginx
+        image: "${nginx_version}"
         ports:
         - containerPort: 80

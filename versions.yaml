@@ -33,7 +33,7 @@ docker_images:
   nginx:
     description: "Proxy server for HTTP, HTTPS, SMTP, POP3 and IMAP protocols"
     url: "https://hub.docker.com/_/nginx/"
-    version: "1.14"
+    version: "1.17.0-alpine"
 
 externals:
   description: "Third-party projects used specifically for testing"
