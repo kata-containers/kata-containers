@@ -20,6 +20,9 @@ KATA_KSM_THROTTLER_JOB="kata-ksm-throttler"
 # more formats).
 export KATA_DOCKER_TIMEOUT=30
 
+# Number of seconds to wait for a general network operation to complete.
+export KATA_NET_TIMEOUT=30
+
 # Ensure GOPATH set
 if command -v go > /dev/null; then
 	export GOPATH=${GOPATH:-$(go env GOPATH)}
