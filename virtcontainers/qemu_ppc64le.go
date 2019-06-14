@@ -30,8 +30,6 @@ const defaultQemuMachineOptions = "accel=kvm,usb=off,cap-cfpc=broken,cap-sbbc=br
 
 const defaultMemMaxPPC64le = 32256 // Restrict MemMax to 32Gb on PPC64le
 
-const qmpCapMigrationBypassSharedMemory = "bypass-shared-memory"
-
 const qmpMigrationWaitTimeout = 5 * time.Second
 
 var qemuPaths = map[string]string{
