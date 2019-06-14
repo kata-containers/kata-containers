@@ -12,7 +12,7 @@ export GOPATH=/usr/src/packages/BUILD/go
 export GOROOT=/usr/src/packages/BUILD/local/go
 export DH_OPTIONS
 
-export DEFAULT_QEMU=qemu-lite-system-x86_64
+export DEFAULT_QEMU=qemu-vanilla-x86_64
 
 GO_VERSION=@GO_VERSION@
 
