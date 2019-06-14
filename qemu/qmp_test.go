@@ -1349,6 +1349,23 @@ func TestExecuteVirtSerialPortAdd(t *testing.T) {
 	<-disconnectedCh
 }
 
+// Check migration incoming
+func TestExecuteMigrationIncoming(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("migrate-incoming", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecuteMigrationIncoming(context.Background(), "uri")
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks migration status
 func TestExecuteQueryMigration(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)

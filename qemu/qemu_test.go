@@ -725,6 +725,16 @@ func TestAppendIncomingExec(t *testing.T) {
 	testAppend(source, incomingStringExec, t)
 }
 
+var incomingStringDefer = "-S -incoming defer"
+
+func TestAppendIncomingDefer(t *testing.T) {
+	source := Incoming{
+		MigrationType: MigrationDefer,
+	}
+
+	testAppend(source, incomingStringDefer, t)
+}
+
 func TestBadName(t *testing.T) {
 	c := &Config{}
 	c.appendName()

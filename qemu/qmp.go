@@ -1457,3 +1457,11 @@ func (q *QMP) ExecuteQueryMigration(ctx context.Context) (MigrationStatus, error
 
 	return status, nil
 }
+
+// ExecuteMigrationIncoming start migration from incoming uri.
+func (q *QMP) ExecuteMigrationIncoming(ctx context.Context, uri string) error {
+	args := map[string]interface{}{
+		"uri": uri,
+	}
+	return q.executeCommand(ctx, "migrate-incoming", args, nil)
+}
