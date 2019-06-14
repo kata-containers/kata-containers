@@ -23,7 +23,7 @@ guides on how to use release scripts instead of do all the checklist manually.
 
 - [hub](https://github.com/github/hub)
 
-- OBS account with permissions on /home:katacontainers (https://build.opensuse.org/project/subprojects/home:katacontainers)
+- OBS account with permissions on [`/home:katacontainers`](https://build.opensuse.org/project/subprojects/home:katacontainers)
 
 - GitHub permissions to push tags and creates Releases in Kata repositories.
 
