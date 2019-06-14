@@ -27,8 +27,6 @@ const defaultQemuMachineType = QemuPC
 
 const defaultQemuMachineOptions = "accel=kvm,kernel_irqchip,nvdimm"
 
-const qmpCapMigrationBypassSharedMemory = "bypass-shared-memory"
-
 const qmpMigrationWaitTimeout = 5 * time.Second
 
 var qemuPaths = map[string]string{
