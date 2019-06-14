@@ -1,4 +1,4 @@
-# kata-manager
+# `kata-manager`
 
 * [Overview](#overview)
     * [For full details](#for-full-details)

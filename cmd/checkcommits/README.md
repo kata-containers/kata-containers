@@ -1,4 +1,4 @@
-# checkcommits
+# `checkcommits`
 
 * [Overview](#overview)
 * [Handling long lines](#handling-long-lines)

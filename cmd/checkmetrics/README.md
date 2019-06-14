@@ -1,4 +1,4 @@
-# checkmetrics
+# `checkmetrics`
 
 * [Overview](#overview)
     * [JSON file format](#json-file-format)
