@@ -1397,6 +1397,8 @@ const (
 	MigrationFD = 1
 	// MigrationExec is the migration incoming type based on commands.
 	MigrationExec = 2
+	// MigrationDefer is the defer incoming type
+	MigrationDefer = 3
 )
 
 // Incoming controls migration source preparation
@@ -1779,6 +1781,8 @@ func (config *Config) appendIncoming() {
 	case MigrationFD:
 		chFDs := config.appendFDs([]*os.File{config.Incoming.FD})
 		uri = fmt.Sprintf("fd:%d", chFDs[0])
+	case MigrationDefer:
+		uri = "defer"
 	default:
 		return
 	}
