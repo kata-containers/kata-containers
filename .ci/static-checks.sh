@@ -600,7 +600,7 @@ static_check_docs()
 		# Git repo URL check
 		if echo "$url"|grep -q '^https.*git'
 		then
-			git ls-remote "$url" > /dev/null 2>&1 && continue
+			timeout "${KATA_NET_TIMEOUT}" git ls-remote "$url" > /dev/null 2>&1 && continue
 		fi
 
 		info "Checking URL $url"
