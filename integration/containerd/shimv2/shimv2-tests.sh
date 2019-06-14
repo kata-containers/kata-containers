@@ -25,9 +25,4 @@ if [[ "$ID" =~ ^opensuse.*$ ]] || [ "$ID" == sles ] || [ "$ID" == rhel ]; then
 	exit
 fi
 
-if [ "$ID" != "centos" ]; then
-	${SCRIPT_PATH}/../cri/integration-tests.sh
-else
-	issue="https://github.com/kata-containers/tests/issues/1047"
-	echo "Skip shimv2 on $ID, see: $issue"
-fi
+${SCRIPT_PATH}/../cri/integration-tests.sh
