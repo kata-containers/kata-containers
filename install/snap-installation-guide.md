@@ -1,4 +1,4 @@
-# Install Kata Containers from snapcraft.io
+# Install Kata Containers from `snapcraft.io`
 
 Kata Containers can be installed in any Linux distribution that supports
 [snapd](https://docs.snapcraft.io/installing-snapd).
