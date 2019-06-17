@@ -1,4 +1,4 @@
-# Installing with kata-manager
+# Installing with `kata-manager`
 
 * [Introduction](#introduction)
 * [Full Installation](#full-installation)

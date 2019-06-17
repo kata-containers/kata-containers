@@ -1,4 +1,4 @@
-# Installing with kata-doc-to-script
+# Installing with `kata-doc-to-script`
 
 * [Introduction](#introduction)
 * [Packages Installation](#packages-installation)
