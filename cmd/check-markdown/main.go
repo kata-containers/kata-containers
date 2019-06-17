@@ -295,16 +295,14 @@ func realMain() error {
 			Usage:       "perform tests on the specified document",
 			Description: "Exit code denotes success",
 			Action: func(c *cli.Context) error {
-				handleDoc(c, false)
-				return nil
+				return handleDoc(c, false)
 			},
 		},
 		{
 			Name:  "toc",
 			Usage: "display a markdown Table of Contents",
 			Action: func(c *cli.Context) error {
-				handleDoc(c, true)
-				return nil
+				return handleDoc(c, true)
 			},
 		},
 		{
