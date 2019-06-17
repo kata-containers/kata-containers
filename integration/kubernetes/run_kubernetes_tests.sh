@@ -8,14 +8,22 @@
 set -e
 
 source /etc/os-release || source /usr/lib/os-release
-kubernetes_dir=$(dirname $0)
+kubernetes_dir=$(dirname "$(readlink -f "$0")")
+cidir="${kubernetes_dir}/../../.ci/"
+source "${cidir}/lib.sh"
 
-# Currently, Kubernetes tests only work on Ubuntu.
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+
+# Currently, Kubernetes tests only work on Ubuntu and Centos.
 # We should delete this condition, when it works for other Distros.
-if [ "$ID" != ubuntu  ]; then
+if [ "$ID" != "ubuntu" ] && [ "$ID" != "centos" ]; then
 	echo "Skip Kubernetes tests on $ID"
 	echo "kubernetes tests on $ID aren't supported yet"
-	exit
+	exit 0
+fi
+
+if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
+	die "Kubernetes tests will not run with $KATA_HYPERVISOR"
 fi
 
 # Docker is required to initialize kubeadm, even if we are
