@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -34,13 +34,13 @@ declare -A packages=( \
 	[redis]="redis" \
 )
 
-pkgs_to_install=${packages[@]}
+pkgs_to_install=
 
-for j in ${packages[@]}; do
-	pkgs=$(echo "$j")
+for pkgs in "${packages[@]}"; do
 	info "The following package will be installed: $pkgs"
 	pkgs_to_install+=" $pkgs"
 done
+
 chronic sudo -E dnf -y install $pkgs_to_install
 
 echo "Install kata containers dependencies"

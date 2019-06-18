@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2017-2018 Intel Corporation
+# Copyright (c) 2017-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -38,13 +38,13 @@ declare -A packages=( \
 	[redis]="redis-server" \
 )
 
-pkgs_to_install=${packages[@]}
+pkgs_to_install=
 
-for j in ${packages[@]}; do
-	pkgs=$(echo "$j")
+for pkgs in "${packages[@]}"; do
 	info "The following package will be installed: $pkgs"
 	pkgs_to_install+=" $pkgs"
 done
+
 chronic sudo -E apt -y install $pkgs_to_install
 
 if [ "$VERSION_ID" == "16.04" ] && [ "$(arch)" != "ppc64le" ]; then

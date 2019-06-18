@@ -42,13 +42,13 @@ declare -A packages=(
 	[redis]="redis" \
 )
 
-pkgs_to_install=${packages[@]}
+pkgs_to_install=
 
-for j in ${packages[@]}; do
-	pkgs=$(echo "$j")
+for pkgs in "${packages[@]}"; do
 	info "The following package will be installed: $pkgs"
 	pkgs_to_install+=" $pkgs"
 done
+
 chronic sudo -E yum -y install $pkgs_to_install
 
 if [ "$(arch)" == "x86_64" ]; then
