@@ -1355,6 +1355,9 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) (int, error) {
 
 func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 	memoryDevices, err := q.qmpMonitorCh.qmp.ExecQueryMemoryDevices(q.qmpMonitorCh.ctx)
+	share := false
+	target := ""
+	memoryBack := "memory-backend-ram"
 	if err != nil {
 		return 0, fmt.Errorf("failed to query memory devices: %v", err)
 	}
@@ -1368,7 +1371,20 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 		}
 		memDev.slot = maxSlot + 1
 	}
-	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, "memory-backend-ram", "mem"+strconv.Itoa(memDev.slot), "", memDev.sizeMB, false)
+	if q.qemuConfig.Knobs.HugePages {
+		// we are setting all the bits that govmm sets when hugepages are enabled.
+		// https://github.com/intel/govmm/blob/master/qemu/qemu.go#L1677
+		target = "/dev/hugepages"
+		memoryBack = "memory-backend-file"
+		share = true
+	} else if q.config.SharedFS == config.VirtioFS || q.config.FileBackedMemRootDir != "" {
+		target = q.qemuConfig.Memory.Path
+		memoryBack = "memory-backend-file"
+	}
+	if q.qemuConfig.Knobs.FileBackedMemShared {
+		share = true
+	}
+	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, memoryBack, "mem"+strconv.Itoa(memDev.slot), target, memDev.sizeMB, share)
 	if err != nil {
 		q.Logger().WithError(err).Error("hotplug memory")
 		return 0, err
