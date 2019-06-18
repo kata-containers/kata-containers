@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2017-2018 Intel Corporation
+# Copyright (c) 2017-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -147,4 +147,5 @@ main() {
 		sudo -E PATH=$PATH bash -c "echo 1 > /proc/sys/fs/may_detach_mounts"
 	fi
 }
+
 main $*
