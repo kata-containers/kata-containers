@@ -203,7 +203,7 @@ die()
 info()
 {
 	s="$*"
-	echo -e "INFO: $s\n" >&2
+	echo -en "INFO: $s\n" >&2
 }
 
 debug()
@@ -514,7 +514,21 @@ test_distros()
 
 	# Check for build failures (`wait` remembers up to CHILD_MAX bg processes exit status)
 	for j in ${bgJobs[@]}; do
-		wait $j || die "Background build job failed"
+		if ! wait $j; then
+			info "Background rootfs build job failed:"
+			#find completed an uncompleted jobs checking for the rootfs marker
+			local marker=$(make print-ROOTFS_MARKER_SUFFIX)
+			[ -z "$marker" ] &&  die "Invalid rootfs marker"
+			typeset -a completed=($(find ${tmp_rootfs} -name ".*${marker}" -exec basename {} \; | sed -E "s/\.(.+)${marker}/\1/"))
+			for d in "${distrosSystemd[@]} ${distrosAgent[@]}"; do
+				if [[ "${completed[@]}" =~ $d ]]; then
+					info "- $c : completed"
+				else
+					info "- $c : failed"
+				fi
+			done
+			die "rootfs build failed"
+		fi
 	done
 
 	# TODO: once support for rootfs images with kata-agent as init is in place,
