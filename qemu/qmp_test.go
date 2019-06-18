@@ -1273,7 +1273,7 @@ func TestExecHotplugMemory(t *testing.T) {
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
-	err := q.ExecHotplugMemory(context.Background(), "memory-backend-ram", "mem0", "", 128)
+	err := q.ExecHotplugMemory(context.Background(), "memory-backend-ram", "mem0", "", 128, true)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v\n", err)
 	}
