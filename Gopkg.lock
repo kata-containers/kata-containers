@@ -206,17 +206,6 @@
   version = "v0.3.3"
 
 [[projects]]
-  digest = "1:351337e3b022de09e72306f1f9711314cc4bd407c15e8d328e218c655fd55731"
-  name = "github.com/firecracker-microvm/firecracker-go-sdk"
-  packages = [
-    "client",
-    "client/models",
-    "client/operations",
-  ]
-  pruneopts = "NUT"
-  revision = "961461227bddf7e40a1d690634e866c343910f86"
-
-[[projects]]
   branch = "master"
   digest = "1:ce0cdcf4a121add67d3c6f7cc08e6233275d0f417852f025b790d35da88fab10"
   name = "github.com/globalsign/mgo"
@@ -716,9 +705,6 @@
     "github.com/cri-o/cri-o/pkg/annotations",
     "github.com/dlespiau/covertool/pkg/cover",
     "github.com/docker/go-units",
-    "github.com/firecracker-microvm/firecracker-go-sdk/client",
-    "github.com/firecracker-microvm/firecracker-go-sdk/client/models",
-    "github.com/firecracker-microvm/firecracker-go-sdk/client/operations",
     "github.com/go-ini/ini",
     "github.com/go-openapi/runtime/client",
     "github.com/go-openapi/strfmt",
