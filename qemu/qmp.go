@@ -1285,7 +1285,7 @@ func (q *QMP) ExecQueryCpusFast(ctx context.Context) ([]CPUInfoFast, error) {
 }
 
 // ExecHotplugMemory adds size of MiB memory to the guest
-func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string, size int) error {
+func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string, size int, share bool) error {
 	props := map[string]interface{}{"size": uint64(size) << 20}
 	args := map[string]interface{}{
 		"qom-type": qomtype,
@@ -1294,6 +1294,9 @@ func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string
 	}
 	if mempath != "" {
 		props["mem-path"] = mempath
+	}
+	if share {
+		props["share"] = true
 	}
 	err := q.executeCommand(ctx, "object-add", args, nil)
 	if err != nil {
