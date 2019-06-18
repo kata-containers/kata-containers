@@ -125,3 +125,12 @@ install-scripts:
 .PHONY: clean
 clean:
 	rm -rf $(DISTRO_ROOTFS_MARKER) $(DISTRO_ROOTFS) $(DISTRO_IMAGE) $(DISTRO_INITRD)
+
+# Prints the name of the variable passed as suffix to the print- target,
+# E.g., if Makefile contains:
+# MY_MAKE_VAR := foobar
+# Then:
+# $ make printf-MY_MAKE_VAR
+# Will print "foobar"
+print-%:
+	@echo $($*)
