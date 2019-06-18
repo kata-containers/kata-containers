@@ -953,7 +953,7 @@ func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, dev
 		// PCI address is in the format bridge-addr/device-addr eg. "03/02"
 		drive.PCIAddr = fmt.Sprintf("%02x", bridge.Addr) + "/" + addr
 
-		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, true, q.arch.runNested()); err != nil {
+		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, 0, true, q.arch.runNested()); err != nil {
 			return err
 		}
 	} else {
@@ -1363,7 +1363,7 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 		}
 		memDev.slot = maxSlot + 1
 	}
-	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, "memory-backend-ram", "mem"+strconv.Itoa(memDev.slot), "", memDev.sizeMB)
+	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, "memory-backend-ram", "mem"+strconv.Itoa(memDev.slot), "", memDev.sizeMB, false)
 	if err != nil {
 		q.Logger().WithError(err).Error("hotplug memory")
 		return 0, err
