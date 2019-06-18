@@ -21,6 +21,10 @@ sudo -E yum -y update
 echo "Install chronic"
 sudo -E yum install -y moreutils
 
+declare -A minimal_packages=( \
+	[yamllint]="yamllint"
+)
+
 declare -A packages=(
 	[kata_containers_dependencies]="libtool libtool-ltdl-devel device-mapper-persistent-data lvm2 device-mapper-devel libtool-ltdl bzip2 m4 patch gettext-devel automake alien autoconf bc pixman-devel coreutils" \
 	[qemu_dependencies]="libcap-devel libcap-ng-devel libattr-devel libcap-ng-devel librbd1-devel flex libfdt-devel" \
@@ -31,7 +35,6 @@ declare -A packages=(
 	[build_tools]="python pkgconfig zlib-devel" \
 	[os_tree]="ostree-devel" \
 	[libudev-dev]="libgudev1-devel" \
-	[yamllint]="yamllint"
 	[metrics_dependencies]="smem jq" \
 	[cri-containerd_dependencies]="libseccomp-devel btrfs-progs-devel" \
 	[crudini]="crudini" \
@@ -42,30 +45,47 @@ declare -A packages=(
 	[redis]="redis" \
 )
 
-pkgs_to_install=
+main()
+{
+	local setup_type="$1"
+	[ -z "$setup_type" ] && die "need setup type"
 
-for pkgs in "${packages[@]}"; do
-	info "The following package will be installed: $pkgs"
-	pkgs_to_install+=" $pkgs"
-done
+	local pkgs_to_install
+	local pkgs
 
-chronic sudo -E yum -y install $pkgs_to_install
+	for pkgs in "${minimal_packages[@]}"; do
+		pkgs_to_install+=" $pkgs"
+	done
 
-if [ "$(arch)" == "x86_64" ]; then
-	VERSION_ID="7"
-	echo "Install Kata Containers OBS repository for CentOS (see https://github.com/kata-containers/packaging/pull/555)"
-	obs_url="${KATA_OBS_REPO_BASE}/CentOS_${VERSION_ID}/home:katacontainers:releases:$(arch):master.repo"
-	sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo "$obs_url"
-	repo_file="/etc/yum.repos.d/home\:katacontainers\:releases\:$(arch)\:master.repo"
-	sudo bash -c "echo timeout=10 >> $repo_file"
-	sudo bash -c "echo retries=2 >> $repo_file"
-fi
+	if [ "$setup_type" = "default" ]; then
+		for pkgs in "${packages[@]}"; do
+			info "The following package will be installed: $pkgs"
+			pkgs_to_install+=" $pkgs"
+		done
+	fi
 
-echo "Install GNU parallel"
-# GNU parallel not available in Centos repos, so build it instead.
-build_install_parallel
+	chronic sudo -E yum -y install $pkgs_to_install
 
-if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
-	echo "Install ${KATA_KSM_THROTTLER_JOB}"
-	sudo -E yum install ${KATA_KSM_THROTTLER_JOB}
-fi
+	[ "$setup_type" = "minimal" ] && exit 0
+
+	if [ "$(arch)" == "x86_64" ]; then
+		VERSION_ID="7"
+		echo "Install Kata Containers OBS repository for CentOS (see https://github.com/kata-containers/packaging/pull/555)"
+		obs_url="${KATA_OBS_REPO_BASE}/CentOS_${VERSION_ID}/home:katacontainers:releases:$(arch):master.repo"
+		sudo -E VERSION_ID=$VERSION_ID yum-config-manager --add-repo "$obs_url"
+		repo_file="/etc/yum.repos.d/home\:katacontainers\:releases\:$(arch)\:master.repo"
+		sudo bash -c "echo timeout=10 >> $repo_file"
+		sudo bash -c "echo retries=2 >> $repo_file"
+	fi
+
+	echo "Install GNU parallel"
+	# GNU parallel not available in Centos repos, so build it instead.
+	build_install_parallel
+
+	if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
+		echo "Install ${KATA_KSM_THROTTLER_JOB}"
+		sudo -E yum install ${KATA_KSM_THROTTLER_JOB}
+	fi
+}
+
+main "$@"

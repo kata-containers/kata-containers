@@ -24,9 +24,12 @@ KUBERNETES="${KUBERNETES:-yes}"
 OPENSHIFT="${OPENSHIFT:-yes}"
 
 setup_distro_env() {
+	local setup_type="$1"
+	[ -z "$setup_type" ] && die "need setup type"
+
 	local script
 
-	echo "Set up environment"
+	echo "Set up environment ($setup_type)"
 
 	if [[ "$ID" =~ ^opensuse.*$ ]]; then
 		script="${cidir}/setup_env_opensuse.sh"
@@ -37,7 +40,7 @@ setup_distro_env() {
 	[ -n "$script" ] || die "Failed to determine distro setup script"
 	[ -e "$script" ] || die "Unrecognised distribution: ${ID}"
 
-	bash -f "${script}"
+	bash -f "${script}" "${setup_type}"
 
 	sudo systemctl start haveged
 }
@@ -123,8 +126,19 @@ install_extra_tools() {
 }
 
 main() {
-	bash -f "${cidir}/install_go.sh" -p -f
-	setup_distro_env
+	local setup_type="default"
+
+	# Travis only needs a very basic setup
+	set +o nounset
+	[ "$TRAVIS" = "true" ] && setup_type="minimal"
+	set -o nounset
+
+	[ "$setup_type" = "default" ] && bash -f "${cidir}/install_go.sh" -p -f
+
+	setup_distro_env "$setup_type"
+
+	[ "$setup_type" = "minimal" ] && info "finished minimal setup" && exit 0
+
 	install_docker
 	enable_nested_virtualization
 	install_kata
