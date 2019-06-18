@@ -24,25 +24,20 @@ KUBERNETES="${KUBERNETES:-yes}"
 OPENSHIFT="${OPENSHIFT:-yes}"
 
 setup_distro_env() {
+	local script
+
 	echo "Set up environment"
-	if [ "$ID" == centos ]; then
-		bash -f "${cidir}/setup_env_centos.sh"
-	elif [ "$ID" == fedora ]; then
-		bash -f "${cidir}/setup_env_fedora.sh"
-	elif [ "$ID" == ubuntu ]; then
-		bash -f "${cidir}/setup_env_ubuntu.sh"
-	elif [ "$ID" == debian ]; then
-		bash -f "${cidir}/setup_env_debian.sh"
-	elif [[ "$ID" =~ ^opensuse.*$ ]]; then
-		bash -f "${cidir}/setup_env_opensuse.sh"
-	elif [ "$ID" == sles ]; then
-		bash -f "${cidir}/setup_env_sles.sh"
-	elif [ "$ID" == rhel ]; then
-		bash -f "${cidir}/setup_env_rhel.sh"
+
+	if [[ "$ID" =~ ^opensuse.*$ ]]; then
+		script="${cidir}/setup_env_opensuse.sh"
 	else
-		die "ERROR: Unrecognised distribution: ${ID}."
-		exit 1
+		script="${cidir}/setup_env_${ID}.sh"
 	fi
+
+	[ -n "$script" ] || die "Failed to determine distro setup script"
+	[ -e "$script" ] || die "Unrecognised distribution: ${ID}"
+
+	bash -f "${script}"
 
 	sudo systemctl start haveged
 }
