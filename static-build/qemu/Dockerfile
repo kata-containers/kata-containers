@@ -3,6 +3,7 @@ from ubuntu:16.04
 ARG QEMU_REPO
 # commit/tag/branch
 ARG QEMU_VERSION
+ARG PREFIX
 
 WORKDIR /root/qemu
 RUN apt-get update
@@ -39,7 +40,7 @@ RUN git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
 ADD configure-hypervisor.sh /root/configure-hypervisor.sh
 
-RUN PREFIX=/opt/kata /root/configure-hypervisor.sh -s kata-qemu | xargs ./configure \
+RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | xargs ./configure \
        --with-pkgversion=kata-static
 
 RUN make -j$(nproc)
