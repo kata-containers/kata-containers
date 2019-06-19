@@ -26,6 +26,9 @@ fi
 [ -n "$qemu_repo" ] || die "failed to get qemu repo"
 
 [ -n "$qemu_version" ] || qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.version")
+if ! (git ls-remote --heads "${qemu_url}" | grep -q "refs/heads/${qemu_version}"); then
+	qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.tag")
+fi
 [ -n "$qemu_version" ] || die "failed to get qemu version"
 
 info "Build ${qemu_repo} version: ${qemu_version}"
