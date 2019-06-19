@@ -65,10 +65,16 @@ export KUBECONFIG="$HOME/.kube/config"
 kubectl get nodes
 kubectl get pods
 
-# kube-flannel config file taken from k8s 1.12 documentation:
-flannel_config="https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml"
+arch=$("${SCRIPT_PATH}/../../.ci/kata-arch.sh")
+#Load arch-specific configure file
+if [ -f "${SCRIPT_PATH}/../../.ci/${arch}/kubernetes/init.sh" ]; then
+        source "${SCRIPT_PATH}/../../.ci/${arch}/kubernetes/init.sh"
+fi
 
-kubectl apply -f "$flannel_config"
+# default network plugin should be flannel, and its config file is taken from k8s 1.12 documentation:
+network_plugin_config=${network_plugin_config:-https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml}
+
+kubectl apply -f "$network_plugin_config"
 
 # The kube-dns pod usually takes around 120 seconds to get ready
 # This instruction will wait until it is up and running, so we can
