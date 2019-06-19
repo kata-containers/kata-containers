@@ -395,7 +395,12 @@ if [ ${distro} == ubuntu ] || [ ${distro} == debian ] ; then
 fi
 
 info "Configure chrony file ${chrony_conf_file}"
-echo "refclock PHC /dev/ptp0 poll 3 dpoll -2 offset 0" >> ${chrony_conf_file}
+cat >> "${chrony_conf_file}" <<EOT
+refclock PHC /dev/ptp0 poll 3 dpoll -2 offset 0
+# Step the system clock instead of slewing it if the adjustment is larger than
+# one second, at any time
+makestep 1 -1
+EOT
 
 # Comment out ntp sources for chrony to be extra careful
 # Reference:  https://chrony.tuxfamily.org/doc/3.4/chrony.conf.html
