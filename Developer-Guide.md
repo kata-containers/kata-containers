@@ -636,17 +636,22 @@ boot the virtual machine.
 If you want to login to a virtual machine that hosts your containers, complete
 the following steps, which assume the use of a rootfs image.
 
-> **Note:** The debug console instructions below assume a systemd based guest
-> O/S image meaning you must create a rootfs for a distro that supports
-> systemd. Currently, all distros supported by
-> [osbuilder](https://github.com/kata-containers/osbuilder) support systemd,
-> except for Alpine Linux. To check if a distro supports systemd look for
-> `INIT_PROCESS=systemd` in the `config.sh` osbuilder rootfs config file for
-> the distro you wish to build a rootfs for (for example see the [Clear Linux
-> `config.sh`
-> file](https://github.com/kata-containers/osbuilder/blob/master/rootfs-builder/clearlinux/config.sh)).
-> For non-systemd based distros, you will need to create an equivalent system
-> service using that distros init system syntax instead.
+> **Note:** The following debug console instructions assume a systemd-based guest
+> O/S image. This means you must create a rootfs for a distro that supports systemd.
+> Currently, all distros supported by [osbuilder](https://github.com/kata-containers/osbuilder) support systemd
+> except for Alpine Linux. 
+>
+> Look for `INIT_PROCESS=systemd` in the `config.sh` osbuilder rootfs config file
+> to verify an osbuilder distro supports systemd for the distro you want to build rootfs for.
+> For an example, see the [Clear Linux config.sh file](https://github.com/kata-containers/osbuilder/blob/master/rootfs-builder/clearlinux/config.sh).
+>
+> For a non-systemd-based distro, create an equivalent system
+> service using that distro’s init system syntax. Alternatively, you can build a distro
+> that contains a shell (e.g. `bash(1)`). In this circumstance it is likely you need to install
+> additional packages in the rootfs and add “agent.debug_console” to kernel parameters in the runtime
+> config file. This tells the Kata agent to launch the console directly.
+>
+> Once these steps are taken you can connect to the virtual machine using the [debug console](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md#connect-to-the-virtual-machine-using-the-debug-console).
 
 ### Create a custom image containing a shell
 
