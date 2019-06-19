@@ -16,6 +16,7 @@ Containers](https://github.com/kata-containers) project.
 
 All documents must:
 
+- Be written in simple English.
 - Be written in [GitHub Flavored Markdown](https://github.github.com/gfm) format.
 - Have a `.md` file extension.
 - Include a TOC (table of contents) at the top of the document with links to
