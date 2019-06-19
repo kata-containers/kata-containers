@@ -83,5 +83,12 @@ func trace(parent context.Context, name string) (opentracing.Span, context.Conte
 
 	span.SetTag("source", "shim")
 
+	// This is slightly confusing: when tracing is disabled, trace spans
+	// are still created - but the tracer used is a NOP. Therefore, only
+	// display the message when tracing is really enabled.
+	if tracing {
+		shimLog.Debugf("created span %v", span)
+	}
+
 	return span, ctx
 }
