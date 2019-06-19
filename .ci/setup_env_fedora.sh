@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -14,6 +14,10 @@ source "${cidir}/lib.sh"
 echo "Install chronic"
 sudo -E dnf -y install moreutils
 
+declare -A minimal_packages=( \
+	[yaml_validator]="yamllint" \
+)
+
 declare -A packages=( \
 	[general_dependencies]="dnf-plugins-core python pkgconfig util-linux libgpg-error-devel" \
 	[kata_containers_dependencies]="libtool automake autoconf bc pixman numactl-libs" \
@@ -23,7 +27,6 @@ declare -A packages=( \
 	[crio_dependencies]="btrfs-progs-devel device-mapper-devel glib2-devel glibc-devel glibc-static gpgme-devel libassuan-devel libseccomp-devel libselinux-devel" \
 	[bison_binary]="bison" \
 	[os_tree]="ostree-devel" \
-	[yaml_validator]="yamllint" \
 	[metrics_dependencies]="smem jq" \
 	[cri-containerd_dependencies]="libseccomp-devel btrfs-progs-devel libseccomp-static" \
 	[crudini]="crudini" \
@@ -34,25 +37,43 @@ declare -A packages=( \
 	[redis]="redis" \
 )
 
-pkgs_to_install=${packages[@]}
+main()
+{
+	local setup_type="$1"
+	[ -z "$setup_type" ] && die "need setup type"
 
-for j in ${packages[@]}; do
-	pkgs=$(echo "$j")
-	info "The following package will be installed: $pkgs"
-	pkgs_to_install+=" $pkgs"
-done
-chronic sudo -E dnf -y install $pkgs_to_install
+	local pkgs_to_install
+	local pkgs
 
-echo "Install kata containers dependencies"
-chronic sudo -E dnf -y groupinstall "Development tools"
+	for pkgs in "${minimal_packages[@]}"; do
+		info "The following package will be installed: $pkgs"
+		pkgs_to_install+=" $pkgs"
+	done
 
-if [ "$(arch)" == "x86_64" ]; then
-	echo "Install Kata Containers OBS repository"
-	obs_url="${KATA_OBS_REPO_BASE}/Fedora_$VERSION_ID/home:katacontainers:releases:$(arch):master.repo"
-	sudo -E VERSION_ID=$VERSION_ID dnf config-manager --add-repo "$obs_url"
-fi
+	if [ "$setup_type" = "default" ]; then
+		for pkgs in "${packages[@]}"; do
+			info "The following package will be installed: $pkgs"
+			pkgs_to_install+=" $pkgs"
+		done
+	fi
 
-if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
-	echo "Install ${KATA_KSM_THROTTLER_JOB}"
-	chronic sudo -E dnf -y install ${KATA_KSM_THROTTLER_JOB}
-fi
+	chronic sudo -E dnf -y install $pkgs_to_install
+
+	[ "$setup_type" = "minimal" ] && exit 0
+
+	echo "Install kata containers dependencies"
+	chronic sudo -E dnf -y groupinstall "Development tools"
+
+	if [ "$(arch)" == "x86_64" ]; then
+		echo "Install Kata Containers OBS repository"
+		obs_url="${KATA_OBS_REPO_BASE}/Fedora_$VERSION_ID/home:katacontainers:releases:$(arch):master.repo"
+		sudo -E VERSION_ID=$VERSION_ID dnf config-manager --add-repo "$obs_url"
+	fi
+
+	if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
+		echo "Install ${KATA_KSM_THROTTLER_JOB}"
+		chronic sudo -E dnf -y install ${KATA_KSM_THROTTLER_JOB}
+	fi
+}
+
+main "$@"

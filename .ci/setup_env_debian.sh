@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -15,6 +15,10 @@ export DEBIAN_FRONTEND=noninteractive
 echo "Install chronic"
 sudo -E apt -y install moreutils
 
+declare -A minimal_packages=( \
+	[yaml_validator]="yamllint" \
+)
+
 declare -A packages=( \
 	[general_dependencies]="curl git" \
 	[kata_containers_dependencies]="libtool automake autotools-dev autoconf bc alien libpixman-1-dev coreutils parted" \
@@ -26,7 +30,6 @@ declare -A packages=( \
 	[build_tools]="build-essential python pkg-config zlib1g-dev" \
 	[crio_dependencies_for_debian]="libdevmapper-dev btrfs-tools util-linux" \
 	[os_tree]="libostree-dev" \
-	[yaml_validator]="yamllint" \
 	[metrics_dependencies]="smem jq" \
 	[cri-containerd_dependencies]="libseccomp-dev libapparmor-dev btrfs-tools  make gcc pkg-config" \
 	[crudini]="crudini" \
@@ -37,40 +40,58 @@ declare -A packages=( \
 	[redis]="redis-server" \
 )
 
-pkgs_to_install=${packages[@]}
+main()
+{
+	local setup_type="$1"
+	[ -z "$setup_type" ] && die "need setup type"
 
-for j in ${packages[@]}; do
-	pkgs=$(echo "$j")
-	info "The following package will be installed: $pkgs"
-	pkgs_to_install+=" $pkgs"
-done
-chronic sudo -E apt -y install $pkgs_to_install
+	local pkgs_to_install
+	local pkgs
 
-echo "Enable librbd1 repository"
-sudo bash -c "cat <<EOF > /etc/apt/sources.list.d/unstable.list
-deb http://deb.debian.org/debian unstable main contrib non-free
-deb-src http://deb.debian.org/debian unstable main contrib non-free
-EOF"
+	for pkgs in "${minimal_packages[@]}"; do
+		info "The following package will be installed: $pkgs"
+		pkgs_to_install+=" $pkgs"
+	done
 
-echo "Lower priority than stable"
-sudo bash -c "cat <<EOF > /etc/apt/preferences.d/unstable
-Package: *
-Pin: release a=unstable
-Pin-Priority: 10
-EOF"
+	if [ "$setup_type" = "default" ]; then
+		for pkgs in "${packages[@]}"; do
+			info "The following package will be installed: $pkgs"
+			pkgs_to_install+=" $pkgs"
+		done
+	fi
 
-echo "Install librbd1"
-chronic sudo -E apt update && sudo -E apt install -y -t unstable librbd1
+	chronic sudo -E apt -y install $pkgs_to_install
 
-if [ "$(arch)" == "x86_64" ]; then
-	echo "Install Kata Containers OBS repository"
-	obs_url="${KATA_OBS_REPO_BASE}/Debian_${VERSION_ID}"
-	sudo sh -c "echo 'deb $obs_url /' > /etc/apt/sources.list.d/kata-containers.list"
-	curl -sL  "${obs_url}/Release.key" | sudo apt-key add -
-	chronic sudo -E apt-get update
-fi
+	[ "$setup_type" = "minimal" ] && exit 0
 
-if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
-	echo "Install ${KATA_KSM_THROTTLER_JOB}"
-	chronic sudo -E apt install -y ${KATA_KSM_THROTTLER_JOB}
-fi
+	echo "Enable librbd1 repository"
+	sudo bash -c "cat <<EOF > /etc/apt/sources.list.d/unstable.list
+	deb http://deb.debian.org/debian unstable main contrib non-free
+	deb-src http://deb.debian.org/debian unstable main contrib non-free
+	EOF"
+
+	echo "Lower priority than stable"
+	sudo bash -c "cat <<EOF > /etc/apt/preferences.d/unstable
+	Package: *
+	Pin: release a=unstable
+	Pin-Priority: 10
+	EOF"
+
+	echo "Install librbd1"
+	chronic sudo -E apt update && sudo -E apt install -y -t unstable librbd1
+
+	if [ "$(arch)" == "x86_64" ]; then
+		echo "Install Kata Containers OBS repository"
+		obs_url="${KATA_OBS_REPO_BASE}/Debian_${VERSION_ID}"
+		sudo sh -c "echo 'deb $obs_url /' > /etc/apt/sources.list.d/kata-containers.list"
+		curl -sL  "${obs_url}/Release.key" | sudo apt-key add -
+		chronic sudo -E apt-get update
+	fi
+
+	if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
+		echo "Install ${KATA_KSM_THROTTLER_JOB}"
+		chronic sudo -E apt install -y ${KATA_KSM_THROTTLER_JOB}
+	fi
+}
+
+main "$@"

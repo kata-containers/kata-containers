@@ -27,6 +27,10 @@ sudo -E zypper refresh
 echo "Install chronic"
 sudo -E zypper -n install moreutils
 
+declare -A minimal_packages=( \
+	[yaml_validator_dependencies]="python-setuptools" \
+)
+
 declare -A packages=( \
 	[general_dependencies]="curl git patch"
 	[kata_containers_dependencies]="libtool automake autoconf bc libpixman-1-0-devel coreutils" \
@@ -36,7 +40,6 @@ declare -A packages=( \
 	[bison_binary]="bison" \
 	[libudev-dev]="libudev-devel" \
 	[build_tools]="python zlib-devel" \
-	[yaml_validator_dependencies]="python-setuptools" \
 	[metrics_dependencies]="jq" \
 	[cri-containerd_dependencies]="libseccomp-devel libapparmor-devel make pkg-config" \
 	[haveged]="haveged" \
@@ -45,30 +48,48 @@ declare -A packages=( \
 	[redis]="redis" \
 )
 
-pkgs_to_install=${packages[@]}
+main() 
+{
+	local setup_type="$1"
+	[ -z "$setup_type" ] && die "need setup type"
 
-for j in ${packages[@]}; do
-	pkgs=$(echo "$j")
-	info "The following package will be installed: $pkgs"
-	pkgs_to_install+=" $pkgs"
-done
-chronic sudo -E zypper -n install $pkgs_to_install
+	local pkgs_to_install
+	local pkgs
 
-echo "Install Build Tools"
-chronic sudo -E zypper -n install -t pattern "Basis-Devel"
+	for pkgs in "${minimal_packages[@]}"; do
+		info "The following package will be installed: $pkgs"
+		pkgs_to_install+=" $pkgs"
+	done
 
-echo "Install YAML validator"
-chronic sudo -E easy_install pip
-chronic sudo -E pip install yamllint
+	if [ "$setup_type" = "default" ]; then
+		for pkgs in "${packages[@]}"; do
+			info "The following package will be installed: $pkgs"
+			pkgs_to_install+=" $pkgs"
+		done
+	fi
 
-if [ "$(arch)" == "x86_64" ]; then
-	echo "Install Kata Containers OBS repository"
-	obs_url="${KATA_OBS_REPO_BASE}/SLE_${VERSION//-/_}/"
-	chronic sudo -E zypper addrepo --no-gpgcheck "${obs_url}/home:katacontainers:releases:$(arch):master.repo"
-fi
+	chronic sudo -E zypper -n install $pkgs_to_install
 
-echo "Add crudini repo"
-VERSIONID="12_SP1"
-crudini_repo="https://download.opensuse.org/repositories/Cloud:OpenStack:Liberty/SLE_${VERSIONID}/Cloud:OpenStack:Liberty.repo"
-chronic sudo -E zypper addrepo --no-gpgcheck ${crudini_repo}
-chronic sudo -E zypper refresh
+	echo "Install YAML validator"
+	chronic sudo -E easy_install pip
+	chronic sudo -E pip install yamllint
+
+	[ "$setup_type" = "minimal" ] && exit 0
+
+	echo "Install Build Tools"
+	chronic sudo -E zypper -n install -t pattern "Basis-Devel"
+
+	if [ "$(arch)" == "x86_64" ]; then
+		echo "Install Kata Containers OBS repository"
+		obs_url="${KATA_OBS_REPO_BASE}/SLE_${VERSION//-/_}/"
+		chronic sudo -E zypper addrepo --no-gpgcheck "${obs_url}/home:katacontainers:releases:$(arch):master.repo"
+	fi
+
+	echo "Add crudini repo"
+	VERSIONID="12_SP1"
+	crudini_repo="https://download.opensuse.org/repositories/Cloud:OpenStack:Liberty/SLE_${VERSIONID}/Cloud:OpenStack:Liberty.repo"
+	chronic sudo -E zypper addrepo --no-gpgcheck ${crudini_repo}
+	chronic sudo -E zypper refresh
+}
+
+main "$@"

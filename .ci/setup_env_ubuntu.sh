@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2017-2018 Intel Corporation
+# Copyright (c) 2017-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -17,6 +17,10 @@ sudo -E apt update
 echo "Install chronic"
 sudo -E apt install -y moreutils
 
+declare -A minimal_packages=( \
+	[yaml_validator]="yamllint" \
+)
+
 declare -A packages=( \
 	[kata_containers_dependencies]="libtool automake autotools-dev autoconf bc alien libpixman-1-dev coreutils" \
 	[qemu_dependencies]="libcap-dev libattr1-dev libcap-ng-dev librbd-dev" \
@@ -27,7 +31,6 @@ declare -A packages=( \
 	[libudev-dev]="libudev-dev" \
 	[build_tools]="build-essential python pkg-config zlib1g-dev" \
 	[crio_dependencies_for_ubuntu]="libdevmapper-dev btrfs-tools util-linux" \
-	[yaml_validator]="yamllint" \
 	[metrics_dependencies]="smem jq" \
 	[cri-containerd_dependencies]="libseccomp-dev libapparmor-dev btrfs-tools  make gcc pkg-config" \
 	[crudini]="crudini" \
@@ -38,32 +41,50 @@ declare -A packages=( \
 	[redis]="redis-server" \
 )
 
-pkgs_to_install=${packages[@]}
+main()
+{
+	local setup_type="$1"
+	[ -z "$setup_type" ] && die "need setup type"
 
-for j in ${packages[@]}; do
-	pkgs=$(echo "$j")
-	info "The following package will be installed: $pkgs"
-	pkgs_to_install+=" $pkgs"
-done
-chronic sudo -E apt -y install $pkgs_to_install
+	local pkgs_to_install
+	local pkgs
 
-if [ "$VERSION_ID" == "16.04" ] && [ "$(arch)" != "ppc64le" ]; then
-	chronic sudo -E add-apt-repository ppa:alexlarsson/flatpak -y
-	chronic sudo -E apt update
-fi
+	for pkgs in "${minimal_packages[@]}"; do
+		info "The following package will be installed: $pkgs"
+		pkgs_to_install+=" $pkgs"
+	done
 
-echo "Install os-tree"
-chronic sudo -E apt install -y libostree-dev
+	if [ "$setup_type" = "default" ]; then
+		for pkgs in "${packages[@]}"; do
+			info "The following package will be installed: $pkgs"
+			pkgs_to_install+=" $pkgs"
+		done
+	fi
 
-if [ "$(arch)" == "x86_64" ]; then
-	echo "Install Kata Containers OBS repository"
-	obs_url="$KATA_OBS_REPO_BASE/xUbuntu_$(lsb_release -rs)/"
-	sudo sh -c "echo 'deb $obs_url /' > /etc/apt/sources.list.d/kata-containers.list"
-	curl -sL  "${obs_url}/Release.key" | sudo apt-key add -
-	chronic sudo -E apt-get update
-fi
+	chronic sudo -E apt -y install $pkgs_to_install
 
-if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
-	echo "Install ${KATA_KSM_THROTTLER_JOB}"
-	chronic sudo -E apt install -y ${KATA_KSM_THROTTLER_JOB}
-fi
+	[ "$setup_type" = "minimal" ] && exit 0
+
+	if [ "$VERSION_ID" == "16.04" ] && [ "$(arch)" != "ppc64le" ]; then
+		chronic sudo -E add-apt-repository ppa:alexlarsson/flatpak -y
+		chronic sudo -E apt update
+	fi
+
+	echo "Install os-tree"
+	chronic sudo -E apt install -y libostree-dev
+
+	if [ "$(arch)" == "x86_64" ]; then
+		echo "Install Kata Containers OBS repository"
+		obs_url="$KATA_OBS_REPO_BASE/xUbuntu_$(lsb_release -rs)/"
+		sudo sh -c "echo 'deb $obs_url /' > /etc/apt/sources.list.d/kata-containers.list"
+		curl -sL  "${obs_url}/Release.key" | sudo apt-key add -
+		chronic sudo -E apt-get update
+	fi
+
+	if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
+		echo "Install ${KATA_KSM_THROTTLER_JOB}"
+		chronic sudo -E apt install -y ${KATA_KSM_THROTTLER_JOB}
+	fi
+}
+
+main "$@"

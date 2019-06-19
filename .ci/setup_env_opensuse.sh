@@ -14,8 +14,12 @@ source "${cidir}/lib.sh"
 echo "Install chronic"
 sudo -E zypper -n install moreutils
 
+declare -A minimal_packages=( \
+	[yaml_validator_dependencies]="python-setuptools" \
+)
+
 declare -A packages=( \
-	[general_dependencies]="curl python-setuptools git libcontainers-common libdevmapper1_03 util-linux" \
+	[general_dependencies]="curl git libcontainers-common libdevmapper1_03 util-linux" \
 	[kata_containers_dependencies]="libtool automake autoconf bc perl-Alien-SDL libpixman-1-0-devel coreutils python2-pkgconfig" \
 	[qemu_dependencies]="libcap-devel libattr1 libcap-ng-devel librbd-devel" \
 	[kernel_dependencies]="libelf-devel flex glibc-devel-static thin-provisioning-tools" \
@@ -33,21 +37,39 @@ declare -A packages=( \
 	[redis]="redis" \
 )
 
-pkgs_to_install=${packages[@]}
+main()
+{
+	local setup_type="$1"
+	[ -z "$setup_type" ] && die "need setup type"
 
-for j in ${packages[@]}; do
-	pkgs=$(echo "$j")
-	info "The following package will be installed: $pkgs"
-	pkgs_to_install+=" $pkgs"
-done
-chronic sudo -E zypper -n install $pkgs_to_install
+	local pkgs_to_install
+	local pkgs
 
-echo "Install YAML validator"
-chronic sudo -E easy_install pip
-chronic sudo -E pip install yamllint
+	for pkgs in "${minimal_packages[@]}"; do
+		info "The following package will be installed: $pkgs"
+		pkgs_to_install+=" $pkgs"
+	done
 
-if [ "$(arch)" == "x86_64" ]; then
-	echo "Install Kata Containers OBS repository"
-	obs_url="${KATA_OBS_REPO_BASE}/openSUSE_Leap_${VERSION_ID}"
-	chronic sudo -E zypper addrepo --no-gpgcheck "${obs_url}/home:katacontainers:releases:$(arch):master.repo"
-fi
+	if [ "$setup_type" = "default" ]; then
+		for pkgs in "${packages[@]}"; do
+			info "The following package will be installed: $pkgs"
+			pkgs_to_install+=" $pkgs"
+		done
+	fi
+
+	chronic sudo -E zypper -n install $pkgs_to_install
+
+	echo "Install YAML validator"
+	chronic sudo -E easy_install pip
+	chronic sudo -E pip install yamllint
+
+	[ "$setup_type" = "minimal" ] && exit 0
+
+	if [ "$(arch)" == "x86_64" ]; then
+		echo "Install Kata Containers OBS repository"
+		obs_url="${KATA_OBS_REPO_BASE}/openSUSE_Leap_${VERSION_ID}"
+		chronic sudo -E zypper addrepo --no-gpgcheck "${obs_url}/home:katacontainers:releases:$(arch):master.repo"
+	fi
+}
+
+main "$@"
