@@ -45,11 +45,11 @@ export PATH=${GOPATH}/bin:/usr/local/go/bin:/usr/sbin:/sbin:${PATH}
 kata_repo_dir="${GOPATH}/src/${kata_repo}"
 tests_repo_dir="${GOPATH}/src/${tests_repo}"
 
-arch=$("${tests_repo_dir}/.ci/kata-arch.sh")
-
 # Get the tests repository
 mkdir -p $(dirname "${tests_repo_dir}")
 [ -d "${tests_repo_dir}" ] || git clone "https://${tests_repo}.git" "${tests_repo_dir}"
+
+arch=$("${tests_repo_dir}/.ci/kata-arch.sh")
 
 # Get the repository of the PR to be tested
 mkdir -p $(dirname "${kata_repo_dir}")
