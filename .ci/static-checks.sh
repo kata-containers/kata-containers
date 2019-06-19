@@ -416,6 +416,62 @@ EOT
 	fi
 }
 
+check_url()
+{
+	local url="$1"
+	local invalid_urls_dir="$2"
+
+	local curl_out=$(mktemp)
+	files_to_remove+=("${curl_out}")
+
+	info "Checking URL $url"
+
+	# Process specific file to avoid out-of-order writes
+	local invalid_file=$(printf "%s/%d" "$invalid_urls_dir" "$$")
+
+	local ret
+
+	{ curl -sIL --max-time "$url_check_timeout_secs" "$url" &>"$curl_out"; ret=$?; } || true
+
+	# A transitory error, or the URL is incorrect,
+	# but capture either way.
+	if [ "$ret" -ne 0 ]; then
+		echo "$url" >> "${invalid_file}"
+		exit
+	fi
+
+	local http_statuses
+
+	http_statuses=$(grep -E "^HTTP" "$curl_out" | awk '{print $2}' || true)
+	if [ -z "$http_statuses" ]; then
+		echo "$url" >> "${invalid_file}"
+		exit
+	fi
+
+	local status
+
+	for status in $http_statuses
+	do
+		# Ignore the following ranges of status codes:
+		#
+		# - 1xx: Informational codes.
+		# - 2xx: Success codes.
+		# - 3xx: Redirection codes.
+		# - 405: Specifically to handle some sites
+		#   which get upset by "curl -L" when the
+		#   redirection is not required.
+		#
+		# Anything else is considered an error.
+		#
+		# See https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
+
+		if ! echo "$status" | grep -qE "^(1[0-9][0-9]|2[0-9][0-9]|3[0-9][0-9]|405)"; then
+			echo "$url" >> "$invalid_file"
+			exit
+		fi
+	done
+}
+
 # Perform basic checks on documentation files
 static_check_docs()
 {
@@ -603,64 +659,11 @@ static_check_docs()
 			timeout "${KATA_NET_TIMEOUT}" git ls-remote "$url" > /dev/null 2>&1 && continue
 		fi
 
-		info "Checking URL $url"
-
 		# Check the URL, saving it if invalid
 		#
 		# Each URL is checked in a separate process as each unique URL
 		# requires us to hit the network.
-		(
-			local ret
-
-			local curl_out=$(mktemp)
-			files_to_remove+=("${curl_out}")
-
-			# Process specific file to avoid out-of-order writes
-			local invalid_file=$(printf "%s/%d" "$invalid_urls_dir" "$$")
-
-			{ curl -sIL --max-time "$url_check_timeout_secs" "$url" &>"$curl_out"; ret=$?; } || true
-
-			# A transitory error, or the URL is incorrect,
-			# but capture either way.
-			if [ "$ret" -ne 0 ]; then
-				echo "$url" >> "${invalid_file}"
-				exit
-			fi
-
-			local http_statuses
-
-			http_statuses=$(grep -E "^HTTP" "$curl_out" | awk '{print $2}' || true)
-
-
-			# No status codes is an error
-			if [ -z "$http_statuses" ]; then
-				echo "$url" >> "${invalid_file}"
-				exit
-			fi
-
-			local status
-
-			for status in $http_statuses
-			do
-				# Ignore the following ranges of status codes:
-				#
-				# - 1xx: Informational codes.
-				# - 2xx: Success codes.
-				# - 3xx: Redirection codes.
-				# - 405: Specifically to handle some sites
-				#   which get upset by "curl -L" when the
-				#   redirection is not required.
-				#
-				# Anything else is considered an error.
-				#
-				# See https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
-
-				if ! echo "$status" | grep -qE "^(1[0-9][0-9]|2[0-9][0-9]|3[0-9][0-9]|405)"; then
-					echo "$url" >> "$invalid_file"
-					exit
-				fi
-			done
-		) &
+		check_url "$url" "$invalid_urls_dir" &
 	done
 
 	# Synchronisation point
