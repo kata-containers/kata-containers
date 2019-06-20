@@ -35,5 +35,5 @@ cd firecracker
 git checkout ${firecracker_version}
 ./tools/devtool --unattended build --release -- --features vsock
 
-ln -s ./build/release/firecracker ./firecracker-static
-ln -s ./build/release/jailer ./jailer-static
+ln -s ./build/release-musl/firecracker ./firecracker-static
+ln -s ./build/release-musl/jailer ./jailer-static
