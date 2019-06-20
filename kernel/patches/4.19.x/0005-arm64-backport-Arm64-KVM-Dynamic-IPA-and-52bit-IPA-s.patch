@@ -1,6 +1,6 @@
-From 6823b343a7c5f6fc3b93d4a00e919d14cb6a4adb Mon Sep 17 00:00:00 2001
+From a4ed45e6019646ace9f0ec9d1780122f6a2b75d2 Mon Sep 17 00:00:00 2001
 From: Penny Zheng <penny.zheng@arm.com>
-Date: Tue, 19 Feb 2019 16:05:44 +0800
+Date: Thu, 20 Jun 2019 17:55:53 +0800
 Subject: [PATCH 5/5] arm64: backport Arm64 KVM Dynamic IPA and 52bit IPA
  support to 4.19.X
 
@@ -52,10 +52,10 @@ Signed-off-by: Penny Zheng <penny.zheng@arm.com>
  delete mode 100644 arch/arm64/kvm/hyp/s2-setup.c
 
 diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
-index f5acf35c712f..f28de4b3c5c7 100644
+index 92eb1f42240d..1124b6d8d2db 100644
 --- a/Documentation/admin-guide/kernel-parameters.txt
 +++ b/Documentation/admin-guide/kernel-parameters.txt
-@@ -2758,6 +2758,10 @@
+@@ -2751,6 +2751,10 @@
  
  	noclflush	[BUGS=X86] Don't use the CLFLUSH instruction
  
@@ -258,10 +258,10 @@ index 460d616bb2d6..f6a7ea805232 100644
  
  #endif	/* __ARM_S2_PGTABLE_H_ */
 diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
-index 881bea194d53..d77da7a56eb5 100644
+index 1b1a0e95c751..f9162da575a9 100644
 --- a/arch/arm64/Kconfig
 +++ b/arch/arm64/Kconfig
-@@ -1139,6 +1139,19 @@ config ARM64_RAS_EXTN
+@@ -1132,6 +1132,19 @@ config ARM64_RAS_EXTN
  	  and access the new registers if the system supports the extension.
  	  Platform RAS features may additionally depend on firmware support.
  
@@ -282,17 +282,17 @@ index 881bea194d53..d77da7a56eb5 100644
  
  config ARM64_SVE
 diff --git a/arch/arm64/include/asm/cpucaps.h b/arch/arm64/include/asm/cpucaps.h
-index ae1f70450fb2..0f009abdd8cf 100644
+index 25ce9056cf64..5538e927b380 100644
 --- a/arch/arm64/include/asm/cpucaps.h
 +++ b/arch/arm64/include/asm/cpucaps.h
-@@ -51,7 +51,8 @@
- #define ARM64_SSBD				30
+@@ -52,7 +52,8 @@
  #define ARM64_MISMATCHED_CACHE_TYPE		31
  #define ARM64_HAS_STAGE2_FWB			32
-+#define ARM64_HAS_CNP				33
+ #define ARM64_WORKAROUND_1463225		33
++#define ARM64_HAS_CNP                           34
  
--#define ARM64_NCAPS				33
-+#define ARM64_NCAPS				34
+-#define ARM64_NCAPS				34
++#define ARM64_NCAPS				35
  
  #endif /* __ASM_CPUCAPS_H */
 diff --git a/arch/arm64/include/asm/cpufeature.h b/arch/arm64/include/asm/cpufeature.h
@@ -349,18 +349,18 @@ index 1717ba1db35d..6dc5823d5f12 100644
  
  #endif
 diff --git a/arch/arm64/include/asm/kvm_arm.h b/arch/arm64/include/asm/kvm_arm.h
-index 8b284cbf8162..bc2327d4a505 100644
+index aa45df752a16..6f602af5263c 100644
 --- a/arch/arm64/include/asm/kvm_arm.h
 +++ b/arch/arm64/include/asm/kvm_arm.h
-@@ -110,6 +110,7 @@
- #define VTCR_EL2_RES1		(1U << 31)
+@@ -107,6 +107,7 @@
+ #define VTCR_EL2_RES1		(1 << 31)
  #define VTCR_EL2_HD		(1 << 22)
  #define VTCR_EL2_HA		(1 << 21)
 +#define VTCR_EL2_PS_SHIFT	TCR_EL2_PS_SHIFT
  #define VTCR_EL2_PS_MASK	TCR_EL2_PS_MASK
  #define VTCR_EL2_TG0_MASK	TCR_TG0_MASK
  #define VTCR_EL2_TG0_4K		TCR_TG0_4K
-@@ -123,62 +124,150 @@
+@@ -120,62 +121,150 @@
  #define VTCR_EL2_IRGN0_WBWA	TCR_IRGN0_WBWA
  #define VTCR_EL2_SL0_SHIFT	6
  #define VTCR_EL2_SL0_MASK	(3 << VTCR_EL2_SL0_SHIFT)
@@ -541,7 +541,7 @@ index 8b284cbf8162..bc2327d4a505 100644
  #define VTTBR_VMID_SHIFT  (UL(48))
  #define VTTBR_VMID_MASK(size) (_AT(u64, (1 << size) - 1) << VTTBR_VMID_SHIFT)
  
-@@ -226,6 +315,13 @@
+@@ -223,6 +312,13 @@
  
  /* Hyp Prefetch Fault Address Register (HPFAR/HDFAR) */
  #define HPFAR_MASK	(~UL(0xf))
@@ -1158,7 +1158,7 @@ index 8b68099348e5..d352f6df8d2c 100644
  	return (boundary - 1 < end - 1) ? boundary : end;
  }
 diff --git a/arch/arm64/kernel/cpufeature.c b/arch/arm64/kernel/cpufeature.c
-index 93f69d82225d..e14d600d7877 100644
+index e238b7932096..734f44e63bbb 100644
 --- a/arch/arm64/kernel/cpufeature.c
 +++ b/arch/arm64/kernel/cpufeature.c
 @@ -20,6 +20,7 @@
@@ -1177,8 +1177,8 @@ index 93f69d82225d..e14d600d7877 100644
  
  /*
   * NOTE: Any changes to the visibility of features should be kept in
-@@ -873,6 +875,29 @@ static bool has_cache_dic(const struct arm64_cpu_capabilities *entry,
- 	return ctr & BIT(CTR_DIC_SHIFT);
+@@ -859,6 +861,29 @@ static bool has_cache_dic(const struct arm64_cpu_capabilities *entry,
+ 	return read_sanitised_ftr_reg(SYS_CTR_EL0) & BIT(CTR_DIC_SHIFT);
  }
  
 +static bool nocnp;
@@ -1207,7 +1207,7 @@ index 93f69d82225d..e14d600d7877 100644
  #ifdef CONFIG_UNMAP_KERNEL_AT_EL0
  static int __kpti_forced; /* 0: not forced, >0: forced on, <0: forced off */
  
-@@ -1235,6 +1260,19 @@ static const struct arm64_cpu_capabilities arm64_features[] = {
+@@ -1221,6 +1246,19 @@ static const struct arm64_cpu_capabilities arm64_features[] = {
  		.matches = has_hw_dbm,
  		.cpu_enable = cpu_enable_hw_dbm,
  	},
@@ -1227,7 +1227,7 @@ index 93f69d82225d..e14d600d7877 100644
  #endif
  	{},
  };
-@@ -1672,6 +1710,11 @@ cpufeature_pan_not_uao(const struct arm64_cpu_capabilities *entry, int __unused)
+@@ -1658,6 +1696,11 @@ cpufeature_pan_not_uao(const struct arm64_cpu_capabilities *entry, int __unused)
  	return (cpus_have_const_cap(ARM64_HAS_PAN) && !cpus_have_const_cap(ARM64_HAS_UAO));
  }
  
@@ -1400,7 +1400,7 @@ index 603e1ee83e89..000000000000
 -	return parange;
 -}
 diff --git a/arch/arm64/kvm/hyp/switch.c b/arch/arm64/kvm/hyp/switch.c
-index a1c32c1f2267..f6e02cc4d856 100644
+index ca46153d7915..7cc175c88a37 100644
 --- a/arch/arm64/kvm/hyp/switch.c
 +++ b/arch/arm64/kvm/hyp/switch.c
 @@ -198,7 +198,7 @@ void deactivate_traps_vhe_put(void)
@@ -1422,10 +1422,10 @@ index a1c32c1f2267..f6e02cc4d856 100644
  }
  
 diff --git a/arch/arm64/kvm/hyp/tlb.c b/arch/arm64/kvm/hyp/tlb.c
-index c041eab3dce0..7fcc9c1a5f45 100644
+index 131c7772703c..4dbd9c69a96d 100644
 --- a/arch/arm64/kvm/hyp/tlb.c
 +++ b/arch/arm64/kvm/hyp/tlb.c
-@@ -35,7 +35,7 @@ static void __hyp_text __tlb_switch_to_guest_vhe(struct kvm *kvm,
+@@ -30,7 +30,7 @@ static void __hyp_text __tlb_switch_to_guest_vhe(struct kvm *kvm)
  	 * bits. Changing E2H is impossible (goodbye TTBR1_EL2), so
  	 * let's flip TGE before executing the TLB operation.
  	 */
@@ -1434,9 +1434,9 @@ index c041eab3dce0..7fcc9c1a5f45 100644
  	val = read_sysreg(hcr_el2);
  	val &= ~HCR_TGE;
  	write_sysreg(val, hcr_el2);
-@@ -45,7 +45,7 @@ static void __hyp_text __tlb_switch_to_guest_vhe(struct kvm *kvm,
- static void __hyp_text __tlb_switch_to_guest_nvhe(struct kvm *kvm,
- 						  unsigned long *flags)
+@@ -39,7 +39,7 @@ static void __hyp_text __tlb_switch_to_guest_vhe(struct kvm *kvm)
+ 
+ static void __hyp_text __tlb_switch_to_guest_nvhe(struct kvm *kvm)
  {
 -	write_sysreg(kvm->arch.vttbr, vttbr_el2);
 +	__load_guest_stage2(kvm);
@@ -1700,7 +1700,7 @@ index 251be353f950..c6a2f49b2d2e 100644
  #ifdef KVM_CAP_IRQ_ROUTING
  
 diff --git a/virt/kvm/arm/arm.c b/virt/kvm/arm/arm.c
-index 91495045ad5a..abcd29db2d7a 100644
+index 02bac8abd206..d63ce2007eec 100644
 --- a/virt/kvm/arm/arm.c
 +++ b/virt/kvm/arm/arm.c
 @@ -120,8 +120,9 @@ int kvm_arch_init_vm(struct kvm *kvm, unsigned long type)
@@ -1723,7 +1723,7 @@ index 91495045ad5a..abcd29db2d7a 100644
  		r = 1;
  		break;
  	case KVM_CAP_ARM_SET_DEVICE_ADDR:
-@@ -240,7 +242,7 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
+@@ -243,7 +245,7 @@ int kvm_vm_ioctl_check_extension(struct kvm *kvm, long ext)
  		r = 1;
  		break;
  	default:
@@ -1732,7 +1732,7 @@ index 91495045ad5a..abcd29db2d7a 100644
  		break;
  	}
  	return r;
-@@ -498,7 +500,7 @@ static bool need_new_vmid_gen(struct kvm *kvm)
+@@ -501,7 +503,7 @@ static bool need_new_vmid_gen(struct kvm *kvm)
  static void update_vttbr(struct kvm *kvm)
  {
  	phys_addr_t pgd_phys;
@@ -1741,7 +1741,7 @@ index 91495045ad5a..abcd29db2d7a 100644
  
  	if (!need_new_vmid_gen(kvm))
  		return;
-@@ -540,9 +542,9 @@ static void update_vttbr(struct kvm *kvm)
+@@ -543,9 +545,9 @@ static void update_vttbr(struct kvm *kvm)
  
  	/* update vttbr to be used with the new vmid */
  	pgd_phys = virt_to_phys(kvm->arch.pgd);
@@ -1753,7 +1753,7 @@ index 91495045ad5a..abcd29db2d7a 100644
  
  	smp_wmb();
  	WRITE_ONCE(kvm->arch.vmid_gen, atomic64_read(&kvm_vmid_gen));
-@@ -1306,16 +1308,10 @@ static void cpu_hyp_reinit(void)
+@@ -1324,16 +1326,10 @@ static void cpu_hyp_reinit(void)
  {
  	cpu_hyp_reset();
  
@@ -1772,7 +1772,7 @@ index 91495045ad5a..abcd29db2d7a 100644
  
  	kvm_arm_init_debug();
  
-@@ -1411,6 +1407,8 @@ static int init_common_resources(void)
+@@ -1429,6 +1425,8 @@ static int init_common_resources(void)
  	kvm_vmid_bits = kvm_get_vmid_bits();
  	kvm_info("%d-bit VMID\n", kvm_vmid_bits);
  
@@ -1782,7 +1782,7 @@ index 91495045ad5a..abcd29db2d7a 100644
  }
  
 diff --git a/virt/kvm/arm/mmu.c b/virt/kvm/arm/mmu.c
-index 2f405b0be25c..c23a1b323aad 100644
+index ed162a6c57c5..7e477b3cae5b 100644
 --- a/virt/kvm/arm/mmu.c
 +++ b/virt/kvm/arm/mmu.c
 @@ -45,7 +45,6 @@ static phys_addr_t hyp_idmap_vector;
@@ -2022,7 +2022,7 @@ index 2f405b0be25c..c23a1b323aad 100644
  		if (ret)
  			goto out;
  		spin_lock(&kvm->mmu_lock);
-@@ -1302,19 +1303,21 @@ static void stage2_wp_ptes(pmd_t *pmd, phys_addr_t addr, phys_addr_t end)
+@@ -1296,19 +1297,21 @@ static void stage2_wp_ptes(pmd_t *pmd, phys_addr_t addr, phys_addr_t end)
  
  /**
   * stage2_wp_pmds - write protect PUD range
@@ -2047,7 +2047,7 @@ index 2f405b0be25c..c23a1b323aad 100644
  		if (!pmd_none(*pmd)) {
  			if (pmd_thp_or_huge(*pmd)) {
  				if (!kvm_s2pmd_readonly(pmd))
-@@ -1334,18 +1337,19 @@ static void stage2_wp_pmds(pud_t *pud, phys_addr_t addr, phys_addr_t end)
+@@ -1328,18 +1331,19 @@ static void stage2_wp_pmds(pud_t *pud, phys_addr_t addr, phys_addr_t end)
    *
    * Process PUD entries, for a huge PUD we cause a panic.
    */
@@ -2073,7 +2073,7 @@ index 2f405b0be25c..c23a1b323aad 100644
  		}
  	} while (pud++, addr = next, addr != end);
  }
-@@ -1361,7 +1365,7 @@ static void stage2_wp_range(struct kvm *kvm, phys_addr_t addr, phys_addr_t end)
+@@ -1355,7 +1359,7 @@ static void stage2_wp_range(struct kvm *kvm, phys_addr_t addr, phys_addr_t end)
  	pgd_t *pgd;
  	phys_addr_t next;
  
@@ -2082,7 +2082,7 @@ index 2f405b0be25c..c23a1b323aad 100644
  	do {
  		/*
  		 * Release kvm_mmu_lock periodically if the memory region is
-@@ -1375,9 +1379,9 @@ static void stage2_wp_range(struct kvm *kvm, phys_addr_t addr, phys_addr_t end)
+@@ -1369,9 +1373,9 @@ static void stage2_wp_range(struct kvm *kvm, phys_addr_t addr, phys_addr_t end)
  		cond_resched_lock(&kvm->mmu_lock);
  		if (!READ_ONCE(kvm->arch.pgd))
  			break;
@@ -2095,7 +2095,7 @@ index 2f405b0be25c..c23a1b323aad 100644
  	} while (pgd++, addr = next, addr != end);
  }
  
-@@ -1526,7 +1530,7 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
+@@ -1520,7 +1524,7 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
  	up_read(&current->mm->mmap_sem);
  
  	/* We need minimum second+third level pages */
@@ -2104,7 +2104,7 @@ index 2f405b0be25c..c23a1b323aad 100644
  				     KVM_NR_MEM_OBJS);
  	if (ret)
  		return ret;
-@@ -1769,7 +1773,7 @@ int kvm_handle_guest_abort(struct kvm_vcpu *vcpu, struct kvm_run *run)
+@@ -1763,7 +1767,7 @@ int kvm_handle_guest_abort(struct kvm_vcpu *vcpu, struct kvm_run *run)
  	}
  
  	/* Userspace should not be able to register out-of-bounds IPAs */
@@ -2113,7 +2113,7 @@ index 2f405b0be25c..c23a1b323aad 100644
  
  	if (fault_status == FSC_ACCESS) {
  		handle_access_fault(vcpu, fault_ipa);
-@@ -2068,7 +2072,7 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
+@@ -2062,7 +2066,7 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
  	 * space addressable by the KVM guest IPA space.
  	 */
  	if (memslot->base_gfn + memslot->npages >=
@@ -2273,5 +2273,5 @@ index a2a175b08b17..b3d1f0985117 100644
  }
  
 -- 
-2.20.1
+2.17.1
 
