@@ -28,6 +28,7 @@ echo "Install chronic"
 sudo -E zypper -n install moreutils
 
 declare -A minimal_packages=( \
+	[spell-check]="hunspell myspell-en_GB myspell-en_US pandoc" \
 	[yaml_validator_dependencies]="python-setuptools" \
 )
 

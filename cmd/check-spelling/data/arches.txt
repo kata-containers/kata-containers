@@ -1,0 +1,21 @@
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Description: List of architectures.
+
+# Architectures
+
+aarch64/B
+amd64/B
+arm64/B
+ppc64el/B
+ppc64le/B
+s390x/B
+x86_64/B
+x86/B
+
+# Micro architecture names
+
+Haswell/B
+Ivybridge/B

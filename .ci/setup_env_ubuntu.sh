@@ -18,6 +18,7 @@ echo "Install chronic"
 sudo -E apt install -y moreutils
 
 declare -A minimal_packages=( \
+	[spell-check]="hunspell hunspell-en-gb hunspell-en-us pandoc" \
 	[yaml_validator]="yamllint" \
 )
 
