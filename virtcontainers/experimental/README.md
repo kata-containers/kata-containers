@@ -1,7 +1,7 @@
 # Experimental package description
 
 * [What are "experimental" features?](#what-are-experimental-features)
-* [What's the difference between "WIP" and "experimental"?](#what-s-the-difference-between-wip-and-experimental)
+* [What's the difference between "WIP" and "experimental"?](#whats-the-difference-between-wip-and-experimental)
 * [When should "experimental" features be moved out from "experimental"?](#when-should-experimental-features-be-moved-out-from-experimental)
 * [Can "experimental" features fail the CI temporarily?](#can-experimental-features-fail-the-ci-temporarily)
 
