@@ -8,4 +8,10 @@
 set -e
 
 cidir=$(dirname "$0")
-bash "${cidir}/static-checks.sh"
+source "${cidir}/lib.sh"
+
+clone_tests_repo
+
+pushd "${tests_repo_dir}"
+.ci/setup.sh
+popd
