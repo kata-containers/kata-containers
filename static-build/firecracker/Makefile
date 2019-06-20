@@ -7,3 +7,4 @@ build:
 clean:
 	rm -rf "$(MK_DIR)/firecracker"
 	rm "$(MK_DIR)/firecracker-static"
+	rm "$(MK_DIR)/jailer-static"

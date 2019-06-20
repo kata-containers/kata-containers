@@ -127,6 +127,7 @@ install_firecracker() {
 	info "Install static firecracker"
 	mkdir -p "${destdir}/opt/kata/bin/"
 	sudo install -D --owner root --group root --mode 0744  firecracker/firecracker-static "${destdir}/opt/kata/bin/firecracker"
+	sudo install -D --owner root --group root --mode 0744  firecracker/jailer-static "${destdir}/opt/kata/bin/jailer"
 
 }
 
