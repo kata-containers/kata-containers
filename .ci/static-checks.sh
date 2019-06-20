@@ -437,7 +437,8 @@ check_url()
 	# but capture either way.
 	if [ "$ret" -ne 0 ]; then
 		echo "$url" >> "${invalid_file}"
-		exit
+
+		die "check failed for URL $url after $url_check_max_tries tries"
 	fi
 
 	local http_statuses
@@ -445,7 +446,7 @@ check_url()
 	http_statuses=$(grep -E "^HTTP" "$curl_out" | awk '{print $2}' || true)
 	if [ -z "$http_statuses" ]; then
 		echo "$url" >> "${invalid_file}"
-		exit
+		die "no HTTP status codes for URL $url"
 	fi
 
 	local status
@@ -467,7 +468,7 @@ check_url()
 
 		if ! echo "$status" | grep -qE "^(1[0-9][0-9]|2[0-9][0-9]|3[0-9][0-9]|405)"; then
 			echo "$url" >> "$invalid_file"
-			exit
+			die "found HTTP error status codes for URL $url"
 		fi
 	done
 }
