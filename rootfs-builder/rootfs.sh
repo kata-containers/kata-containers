@@ -385,6 +385,15 @@ fi
 info "Create symlink to /tmp in /var to create private temporal directories with systemd"
 rm -rf ./var/tmp
 ln -s ../tmp ./var/
+
+# For some distros tmp.mount may not be installed by default in systemd paths
+if ! [ -f "./etc/systemd/system/tmp.mount" ] && \
+   ! [ -f "./usr/lib/systemd/system/tmp.mount" ] &&
+   [ "$AGENT_INIT" != "yes" ]; then
+	info "Install tmp.mount in ./etc/systemd/system"
+	cp ./usr/share/systemd/tmp.mount ./etc/systemd/system/tmp.mount
+fi
+
 popd  >> /dev/null
 
 [ -n "${KERNEL_MODULES_DIR}" ] && copy_kernel_modules ${KERNEL_MODULES_DIR} ${ROOTFS_DIR}
