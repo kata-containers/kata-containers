@@ -46,6 +46,9 @@ list_only="false"
 # number of seconds to wait for curl to check a URL
 typeset url_check_timeout_secs="${url_check_timeout_secs:-60}"
 
+# number of attempts that will be made to check an individual URL.
+typeset url_check_max_tries="${url_check_max_tries:-3}"
+
 typeset -A long_options
 
 long_options=(
@@ -431,7 +434,7 @@ check_url()
 
 	local ret
 
-	{ curl -sIL --max-time "$url_check_timeout_secs" "$url" &>"$curl_out"; ret=$?; } || true
+	{ curl -sIL --max-time "$url_check_timeout_secs" --retry "$url_check_max_tries" "$url" &>"$curl_out"; ret=$?; } || true
 
 	# A transitory error, or the URL is incorrect,
 	# but capture either way.
