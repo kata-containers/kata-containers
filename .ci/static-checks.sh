@@ -405,6 +405,7 @@ static_check_license_headers()
 		--exclude="*.yaml" \
 		--exclude="*.pb.go" \
 		--exclude="*.gpl.c" \
+		--exclude="virtcontainers/pkg/firecracker/*" \
 		-EL "\<${pattern}\>" \
 		$files || true)
 
