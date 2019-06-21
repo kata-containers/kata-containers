@@ -36,12 +36,14 @@ info "Build ${qemu_repo} version: ${qemu_version}"
 
 http_proxy="${http_proxy:-}"
 https_proxy="${https_proxy:-}"
+prefix="${prefix:-"/opt/kata"}"
 
 sudo docker build \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg QEMU_REPO="${qemu_repo}" \
 	--build-arg QEMU_VERSION="${qemu_version}" \
+	--build-arg PREFIX="${prefix}" \
 	"${config_dir}" \
 	-f "${script_dir}/Dockerfile" \
 	-t qemu-static
