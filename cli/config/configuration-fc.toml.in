@@ -12,6 +12,11 @@
 
 [hypervisor.firecracker]
 path = "@FCPATH@"
+# Path for the jailer specific to firecracker
+# If the jailer path is not set kata will launch firecracker
+# without a jail. If the jailer is set firecracker will be
+# launched in a jailed enviornment created by the jailer
+jailer_path = "@FCJAILERPATH@"
 kernel = "@KERNELPATH_FC@"
 image = "@IMAGEPATH@"
 
