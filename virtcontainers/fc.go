@@ -19,11 +19,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/firecracker-microvm/firecracker-go-sdk/client"
-	models "github.com/firecracker-microvm/firecracker-go-sdk/client/models"
-	ops "github.com/firecracker-microvm/firecracker-go-sdk/client/operations"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client"
+	models "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/models"
+	ops "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/operations"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -195,7 +195,7 @@ func (fc *firecracker) vmRunning() bool {
 	}
 
 	// Be explicit
-	switch resp.Payload.State {
+	switch *resp.Payload.State {
 	case models.InstanceInfoStateStarting:
 		// Unsure what we should do here
 		fc.Logger().WithField("unexpected-state", models.InstanceInfoStateStarting).Debug("vmRunning")
@@ -370,9 +370,9 @@ func (fc *firecracker) fcSetVMBaseConfig(mem int64, vcpus int64, htEnabled bool)
 
 	param := ops.NewPutMachineConfigurationParams()
 	cfg := &models.MachineConfiguration{
-		HtEnabled:  htEnabled,
-		MemSizeMib: mem,
-		VcpuCount:  vcpus,
+		HtEnabled:  &htEnabled,
+		MemSizeMib: &mem,
+		VcpuCount:  &vcpus,
 	}
 	param.SetBody(cfg)
 	_, err := fc.client().Operations.PutMachineConfiguration(param)
@@ -389,8 +389,9 @@ func (fc *firecracker) fcStartVM() error {
 	fc.fcClient = fc.newFireClient()
 
 	actionParams := ops.NewCreateSyncActionParams()
+	actionType := "InstanceStart"
 	actionInfo := &models.InstanceActionInfo{
-		ActionType: "InstanceStart",
+		ActionType: &actionType,
 	}
 	actionParams.SetInfo(actionInfo)
 	_, err := fc.client().Operations.CreateSyncAction(actionParams)
@@ -535,8 +536,9 @@ func (fc *firecracker) fcAddVsock(vs kataVSOCK) error {
 
 	vsockParams := ops.NewPutGuestVsockByIDParams()
 	vsockID := "root"
+	ctxID := int64(vs.contextID)
 	vsock := &models.Vsock{
-		GuestCid: int64(vs.contextID),
+		GuestCid: &ctxID,
 		ID:       &vsockID,
 	}
 	vsockParams.SetID(vsockID)
@@ -562,7 +564,7 @@ func (fc *firecracker) fcAddNetDevice(endpoint Endpoint) error {
 		AllowMmdsRequests: false,
 		GuestMac:          endpoint.HardwareAddr(),
 		IfaceID:           &ifaceID,
-		HostDevName:       endpoint.NetworkPair().TapInterface.TAPIface.Name,
+		HostDevName:       &endpoint.NetworkPair().TapInterface.TAPIface.Name,
 	}
 	cfg.SetBody(ifaceCfg)
 	cfg.SetIfaceID(ifaceID)
@@ -614,8 +616,9 @@ func (fc *firecracker) fcUpdateBlockDrive(drive config.BlockDrive) error {
 	// Rescan needs to used only if the VM is running
 	if fc.vmRunning() {
 		actionParams := ops.NewCreateSyncActionParams()
+		actionType := "BlockDeviceRescan"
 		actionInfo := &models.InstanceActionInfo{
-			ActionType: "BlockDeviceRescan",
+			ActionType: &actionType,
 			Payload:    driveID,
 		}
 		actionParams.SetInfo(actionInfo)
