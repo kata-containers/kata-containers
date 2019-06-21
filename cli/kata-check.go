@@ -11,6 +11,7 @@ package main
 #include <linux/kvm.h>
 
 const int ioctl_KVM_CREATE_VM = KVM_CREATE_VM;
+const int ioctl_KVM_CHECK_EXTENSION = KVM_CHECK_EXTENSION;
 */
 import "C"
 
@@ -38,6 +39,15 @@ type kernelModule struct {
 
 	// if it is definitely required
 	required bool
+}
+
+// nolint: structcheck, unused, deadcode
+type kvmExtension struct {
+	// description
+	desc string
+
+	// extension identifier
+	id int
 }
 
 type vmContainerCapableDetails struct {
@@ -387,4 +397,43 @@ func genericKvmIsUsable() error {
 	fieldLogger.WithField("feature", "create-vm").Info("feature available")
 
 	return nil
+}
+
+// genericCheckKVMExtension allows to query about the specific kvm extensions
+// nolint: unused, deadcode
+func genericCheckKVMExtensions(extensions map[string]kvmExtension) (map[string]int, error) {
+	results := make(map[string]int)
+
+	flags := syscall.O_RDWR | syscall.O_CLOEXEC
+	kvm, err := syscall.Open(kvmDevice, flags, 0)
+	if err != nil {
+		return results, err
+	}
+	defer syscall.Close(kvm)
+
+	for name, extension := range extensions {
+		fields := logrus.Fields{
+			"type":        "kvm extension",
+			"name":        name,
+			"description": extension.desc,
+			"id":          extension.id,
+		}
+
+		ret, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
+			uintptr(kvm),
+			uintptr(C.ioctl_KVM_CHECK_EXTENSION),
+			uintptr(extension.id))
+
+		// Generally return value(ret) 0 means no and 1 means yes,
+		// but some extensions may report additional information in the integer return value.
+		if errno != 0 || ret <= 0 {
+			kataLog.WithFields(fields).Error("is not supported")
+			return results, errno
+		}
+
+		results[name] = int(ret)
+		kataLog.WithFields(fields).Info("kvm extension is supported")
+	}
+
+	return results, nil
 }
