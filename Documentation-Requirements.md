@@ -6,6 +6,10 @@
 * [Files and command names](#files-and-command-names)
 * [Code blocks](#code-blocks)
 * [Images](#images)
+* [Spelling](#spelling)
+* [Names](#names)
+* [Version numbers](#version-numbers)
+* [The apostrophe](#the-apostrophe)
 
 # Introduction
 
@@ -16,6 +20,7 @@ Containers](https://github.com/kata-containers) project.
 
 All documents must:
 
+- Be written in simple English.
 - Be written in [GitHub Flavored Markdown](https://github.github.com/gfm) format.
 - Have a `.md` file extension.
 - Include a TOC (table of contents) at the top of the document with links to
@@ -139,7 +144,20 @@ utility.
 - All lines beginning `# ` should be comment lines, *NOT* commands to run as
   the `root` user.
 
-- In the unusual case that you need to display command *output*, use an
+- Try to avoid showing the *output* of commands.
+
+  The reasons for this:
+
+  - Command output can change, leading to confusion when the output the user
+    sees does not match the output in the documentation.
+
+  - There is the risk the user will get confused between what parts of the
+    block refer to the commands they should type and the output that they
+    should not.
+
+  - It can make the document look overly "busy" or complex.
+
+  In the unusual case that you need to display command *output*, use an
   unadorned code block (\`\`\`):
 
   <pre>
@@ -177,3 +195,41 @@ source file and re-generating the binary format image file.
 Ideally, the format of all image source files is an open standard, non-binary
 one such as SVG. Text formats are highly preferable because you can manipulate
 and compare them with standard tools (e.g. `diff(1)`).
+
+# Spelling
+
+Since this project uses a number of terms not found in conventional
+dictionaries, we have a
+[spell checking tool](https://github.com/kata-containers/tests/tree/master/cmd/check-spelling)
+that checks both dictionary words and the additional terms we use.
+
+Run the spell checking tool on your document before raising a PR to ensure it
+is free of mistakes.
+
+If your document introduces new terms, you need to update the custom
+dictionary used by the spell checking tool to incorporate the new words.
+
+# Names
+
+Occasionally documents need to specify the name of people. Write such names in
+backticks. The main reason for this is to keep the [spell checker](#spelling) happy (since
+it cannot manage all possible names). However, since backticks render in a
+fixed-width font, this makes the names clearer:
+
+> Welcome to `Clark Kent`, the newest member of the Kata Containers Architecture Committee.
+
+# Version numbers
+
+Write version number in backticks. This keeps the [spell checker](#spelling)
+happy and since backticks render in a fixed-width font, it also makes the
+numbers clearer:
+
+> Ensure you are using at least version `1.2.3-alpha3.wibble.1` of the tool.
+
+# The apostrophe
+
+The apostrophe character (`'`) must **only** be used for showing possession
+("Peter's book") and for standard contractions (such as "don't").
+
+Use double-quotes ("...") in all other circumstances you use quotes outside of
+[code blocks](#code-blocks).

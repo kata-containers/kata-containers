@@ -5,7 +5,7 @@
 #
 
 sudo: required
-dist: trusty
+dist: xenial
 
 language: go
 os:
@@ -15,8 +15,11 @@ os:
 go:
   - "1.10.x"
 
-before_script:
+before_install:
   - ".ci/setup.sh"
+
+before_script:
+  - ".ci/static-checks.sh"
 
 script:
   - ".ci/run.sh"
