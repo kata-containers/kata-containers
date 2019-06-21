@@ -36,12 +36,15 @@ RUN apt-get install -y \
 RUN cd  .. && git clone "${QEMU_REPO}" qemu
 RUN git checkout "${QEMU_VERSION}"
 RUN git clone https://github.com/qemu/capstone.git capstone
-RUN git clone  https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
+RUN git clone https://github.com/qemu/keycodemapdb.git ui/keycodemapdb
 
-ADD configure-hypervisor.sh /root/configure-hypervisor.sh
+ADD scripts/configure-hypervisor.sh /root/configure-hypervisor.sh
+ADD qemu/patches/* /root/kata_qemu_patches
+
+RUN for patch in /root/kata_qemu_patches/*.patch; do git apply "$patch"; done
 
 RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | xargs ./configure \
-       --with-pkgversion=kata-static
+	--with-pkgversion=kata-static
 
 RUN make -j$(nproc)
 RUN make install DESTDIR=/tmp/qemu-static
