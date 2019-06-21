@@ -47,6 +47,15 @@ var archRequiredKernelModules = map[string]kernelModule{
 	},
 }
 
+// archRequiredKVMExtensions maps a required kvm extension to a human-readable
+// description of what this extension intends to do and its unique identifier.
+var archRequiredKVMExtensions = map[string]kvmExtension{
+	"KVM_CAP_ARM_VM_IPA_SIZE": {
+		desc: "Maximum IPA shift supported by the host",
+		id:   165,
+	},
+}
+
 func setCPUtype() error {
 	return nil
 }
@@ -57,8 +66,30 @@ func kvmIsUsable() error {
 	return genericKvmIsUsable()
 }
 
+func checkKVMExtensions() error {
+	results, err := genericCheckKVMExtensions(archRequiredKVMExtensions)
+	if err != nil {
+		return err
+	}
+
+	// different host supports different maximum IPA limit
+	ipa := results["KVM_CAP_ARM_VM_IPA_SIZE"]
+	fields := logrus.Fields{
+		"type": "kvm extension",
+		"name": "KVM_CAP_ARM_VM_IPA_SIZE",
+	}
+
+	kataLog.WithFields(fields).Infof("IPA limit size: %d bits.", ipa)
+
+	return nil
+}
+
 func archHostCanCreateVMContainer() error {
-	return kvmIsUsable()
+	if err := kvmIsUsable(); err != nil {
+		return err
+	}
+
+	return checkKVMExtensions()
 }
 
 // hostIsVMContainerCapable checks to see if the host is theoretically capable
