@@ -382,6 +382,30 @@ func TestHandleEphemeralStorage(t *testing.T) {
 		"Ephemeral mount point didn't match: got %s, expecting %s", epheMountPoint, expected)
 }
 
+func TestHandleLocalStorage(t *testing.T) {
+	k := kataAgent{}
+	var ociMounts []specs.Mount
+	mountSource := "mountPoint"
+
+	mount := specs.Mount{
+		Type:   KataLocalDevType,
+		Source: mountSource,
+	}
+
+	sandboxID := "sandboxid"
+	rootfsSuffix := "rootfs"
+
+	ociMounts = append(ociMounts, mount)
+	localStorages := k.handleLocalStorage(ociMounts, sandboxID, rootfsSuffix)
+
+	assert.NotNil(t, localStorages)
+	assert.Equal(t, len(localStorages), 1)
+
+	localMountPoint := localStorages[0].GetMountPoint()
+	expected := filepath.Join(kataGuestSharedDir, sandboxID, rootfsSuffix, KataLocalDevType, filepath.Base(mountSource))
+	assert.Equal(t, localMountPoint, expected)
+}
+
 func TestAppendDevicesEmptyContainerDeviceList(t *testing.T) {
 	k := kataAgent{}
 
