@@ -1,0 +1,19 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+trigger:
+- master
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+- script: echo setup
+  displayName: 'setup CI'
+
+- script: |
+    echo This is an initial CI job
+  displayName: 'Run CI'
