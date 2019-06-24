@@ -26,6 +26,6 @@ PACKAGES="util-linux-bin iptables-bin libudev0-shim chrony"
 INIT_PROCESS=systemd
 # List of zero or more architectures to exclude from build,
 # as reported by  `uname -m`
-ARCH_EXCLUDE_LIST=(ppc64le)
+ARCH_EXCLUDE_LIST=( aarch64 ppc64le s390x )
 
 [ "$SECCOMP" = "yes" ] && PACKAGES+=" libseccomp" || true
