@@ -10,6 +10,7 @@
         * [Breaking Compatibility](#breaking-compatibility)
     * [CLI tools](#cli-tools)
     * [Developer Mode](#developer-mode)
+    * [Write a new Unit Test](#write-a-new-unit-test)
     * [Run the Kata Containers tests](#run-the-kata-containers-tests)
         * [Requirements to run Kata Containers tests](#requirements-to-run-kata-containers-tests)
         * [Prepare an environment](#prepare-an-environment)
@@ -156,6 +157,9 @@ functionality; it is still possible that PRs raised for code repositories will
 still fail under the automated CI systems since those systems are running all
 possible tests.
 
+## Write a new Unit Test
+
+See the [unit test advice documentation](Unit-Test-Advice.md).
 
 ## Run the Kata Containers tests
 
