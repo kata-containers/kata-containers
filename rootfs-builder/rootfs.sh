@@ -17,6 +17,7 @@ AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
+GO_VERSION=
 export GOPATH=${GOPATH:-${HOME}/go}
 
 lib_file="${script_dir}/../scripts/lib.sh"
@@ -24,9 +25,6 @@ source "$lib_file"
 
 # Default architecture
 ARCH=$(uname -m)
-
-# Load default versions for golang and other componets
-source "${script_dir}/versions.txt"
 
 # distro-specific config file
 typeset -r CONFIG_SH="config.sh"
@@ -247,6 +245,53 @@ error_handler()
 	fi
 }
 
+detect_go_version()
+{
+	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq)
+	[ -z "$yq" ] && die "'yq' application not found (needed to parsing minimum Go version required)"
+
+	local runtimeRevision=
+
+	if [ "${AGENT_VERSION:-master}" == "master" ]; then
+		# This matches both AGENT_VERSION == "" and AGENT_VERSION == "master"
+		runtimeRevision="master"
+	else
+		# Detect runtime revision by fetching the agent's VERSION file
+		runtimeRevision="$(curl -fsSL https://raw.githubusercontent.com/kata-containers/agent/${AGENT_VERSION:-master}/VERSION)"
+		[ -z "$runtimeRevision" ] && die "Could not detect the agent version for the given AGENT_VERSION='${AGENT_VERSION:-master}'"
+	fi
+
+	typeset -r runtimeVersionsURL="https://raw.githubusercontent.com/kata-containers/runtime/${runtimeRevision}/versions.yaml"
+	GO_VERSION="$(curl -fsSL "$runtimeVersionsURL" | $yq r - "languages.golang.version")"
+
+	[ "$?" == "0" ] && [ "$GO_VERSION" != "null" ]
+}
+
+# Compares two SEMVER-style versions passed as arguments, up to the MINOR version
+# number.
+# Returns a zero exit code if the version specified by the first argument is
+# older OR equal than / to the version in the second argument, non-zero exit
+# code otherwise.
+compare_versions()
+{
+	typeset -i -a v1=($(echo "$1" | awk 'BEGIN {FS = "."} {print $1" "$2}'))
+	typeset -i -a v2=($(echo "$2" | awk 'BEGIN {FS = "."} {print $1" "$2}'))
+
+	# Sanity check: first version can't be all zero
+	[ "${v1[0]}" -eq "0" ] && \
+		[ "${v1[1]}" -eq "0" ] && \
+		die "Failed to parse version number"
+
+	# Major
+	[ "${v1[0]}" -gt "${v2[0]}" ] && { false; return; }
+
+	# Minor
+	[ "${v1[0]}" -eq "${v2[0]}" ] && \
+		[ "${v1[1]}" -gt "${v2[1]}" ] && { false; return; }
+
+	true
+}
+
 while getopts a:hlo:r:t: opt
 do
 	case $opt in
@@ -311,7 +356,18 @@ fi
 
 mkdir -p ${ROOTFS_DIR}
 
-if [ -n "${USE_DOCKER}" ] ; then
+detect_go_version ||
+		die "Could not detect the required Go version for AGENT_VERSION='${AGENT_VERSION:-master}'."
+
+echo "Required Go version: $GO_VERSION"
+
+if [ -z "${USE_DOCKER}" ] ; then
+	#Generate an error if the local Go version is too old
+	foundVersion=$(go version | sed -E "s/^.+([0-9]+\.[0-9]+\.[0-9]+).*$/\1/g")
+
+	compare_versions "$GO_VERSION" $foundVersion || \
+		die "Your Go version $foundVersion is older than the minimum expected Go version $GO_VERSION"
+else
 	image_name="${distro}-rootfs-osbuilder"
 
 	generate_dockerfile "${distro_config_dir}"

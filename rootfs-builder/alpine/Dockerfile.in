@@ -5,4 +5,14 @@
 
 From golang:@GO_VERSION@-alpine
 
-RUN apk update && apk add git make bash gcc musl-dev linux-headers apk-tools-static libseccomp libseccomp-dev
+RUN apk update && apk add \
+    git \
+    make \
+    bash \
+    gcc \
+    musl-dev \
+    linux-headers \
+    apk-tools-static \
+    libseccomp \
+    libseccomp-dev \
+    curl
