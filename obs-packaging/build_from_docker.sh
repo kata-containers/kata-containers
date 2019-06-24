@@ -19,6 +19,7 @@ http_proxy=${http_proxy:-}
 https_proxy=${https_proxy:-}
 no_proxy=${no_proxy:-}
 PUSH=${PUSH:-}
+BUILD_HEAD="${BUILD_HEAD:-false}"
 
 # shellcheck source=scripts/obs-docker.sh
 source "${script_dir}/scripts/obs-docker.sh"
@@ -44,7 +45,7 @@ get_image() {
 		echo "branch not provided"
 		return 1
 	fi
-	if "${script_dir}/download_image.sh" "${branch}"; then
+	if [ ${BUILD_HEAD} = "false" ] && "${script_dir}/download_image.sh" "${branch}"; then
 		echo "OK image downloaded"
 		find . -name 'kata-containers-'"${branch}"'-*.tar.gz' || die "Failed to find downloaded image"
 		return 0

@@ -137,9 +137,26 @@ EOT
 }
 
 main() {
+	case "${1:-}" in
+		"-h"|"--help")
+			usage Help
+			;;
+		--ci)
+			create_ci_subproject=true
+			shift
+			;;
+		-*)
+			die "Invalid option: ${1:-}"
+			;;
+	esac
 	local branch="${1:-}"
 	[ -n "${branch}" ] || usage "missing branch" "1"
-	project_branch="${home_project}:releases:${arch_target}:${branch}"
+	if [ "${create_ci_subproject:-false}" == "true" ];then
+		release_type="ci"
+	else
+		release_type="releases"
+	fi
+	project_branch="${home_project}:${release_type}:${arch_target}:${branch}"
 	create_meta_xml "${project_branch}" "${branch}"
 	info "Creating/Updating project with name ${project_branch}"
 	# Update /Create project metadata.
