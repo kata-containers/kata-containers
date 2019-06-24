@@ -42,6 +42,10 @@ source ${test_config}
 typeset -A built_images
 typeset -A built_initrds
 
+# If set, show the reason why a container using the built images/initrds could
+# not be started. Needed only after all images/initrd built successfully
+typeset -A showKataRunFailure=
+
 usage()
 {
 	cat <<EOT
@@ -148,7 +152,7 @@ exit_handler()
 		rm -rf "${tmp_dir}"
 
 		# Restore the default image in config file
-		[ -n "${TRAVIS:-}" ] || chronic $mgr configure-image
+		[ -n "${TRAVIS:-}" ] || silent_run $mgr configure-image
 
 		return
 	fi
@@ -174,8 +178,7 @@ exit_handler()
 		return
 	fi
 
-	# Travis tests do not install kata
-	[ -n "${TRAVIS:-}" ] && return
+	[ -z "${showKataRunFailure}" ] && return
 
 	info "local runtime config:"
 	cat /etc/kata-containers/configuration.toml >&2
@@ -190,7 +193,7 @@ exit_handler()
 	sudo -E ps -efwww | egrep "docker|kata" >&2
 
 	# Restore the default image in config file
-	chronic $mgr configure-image
+	silent_run $mgr configure-image
 }
 
 die()
@@ -203,7 +206,7 @@ die()
 info()
 {
 	s="$*"
-	echo -e "INFO: $s\n" >&2
+	echo -en "INFO: $s\n" >&2
 }
 
 debug()
@@ -211,6 +214,15 @@ debug()
 	[ -z "${TEST_DEBUG:-}" ] && return
 	s="$*"
 	echo -e "DBG: $s" >&2
+}
+
+# Run a command in silent mode using chronic.
+# The command output is printed only if the command fails
+silent_run()
+{
+	typeset -a commandLine=("$@")
+	info "running: ${commandLine[@]}"
+	chronic "${commandLine[@]}"
 }
 
 
@@ -268,7 +280,7 @@ setup()
 		[ -n "$cfgRuntime" ] || die "${RUNTIME} is not a configured runtime for docker"
 		[ -x "$cfgRuntime" ] || die "docker ${RUNTIME} is linked to an invalid executable: $cfgRuntime"
 	fi
-	chronic $mgr enable-debug
+	silent_run $mgr enable-debug
 
 	# Ensure "docker build" works
 	set_runtime "${docker_build_runtime}"
@@ -352,9 +364,11 @@ install_image_create_container()
 	# Travis doesn't support VT-x
 	[ -n "${TRAVIS:-}" ] && return
 
-	chronic $mgr reset-config
-	chronic $mgr configure-image "$file"
+	showKataRunFailure=1
+	silent_run $mgr reset-config
+	silent_run $mgr configure-image "$file"
 	create_container
+	showKataRunFailure=
 }
 
 install_initrd_create_container()
@@ -367,9 +381,11 @@ install_initrd_create_container()
 	# Travis doesn't support VT-x
 	[ -n "${TRAVIS:-}" ] && return
 
-	chronic $mgr reset-config
-	chronic $mgr configure-initrd "$file"
+	showKataRunFailure=1
+	silent_run $mgr reset-config
+	silent_run $mgr configure-initrd "$file"
 	create_container
+	showKataRunFailure=
 }
 
 # Displays a list of distros which can be tested
@@ -402,6 +418,12 @@ call_make() {
 	if [ -z "$CI" ]; then
 	  ((makeJobs=$(nproc) / 2))
 	fi
+
+	# When calling make, do not use the silent_run wrapper, pass the
+	# OSBUILDER_USE_CHRONIC instead.
+	# In this way running make in parallel mode will, in case of failure, just
+	# show the print out of the single target failing.
+	makeVars+=(OSBUILDER_USE_CHRONIC=1)
 
 	info "Starting make with \n\
 	# of // jobs:  ${makeJobs:-[unlimited]} \n\
@@ -437,7 +459,6 @@ show_rootfs_metadata() {
 	[ $# -ne 1 ] && die "show_rootfs_metadata: wrong number of arguments"
 	local rootfs_path=$1
 	local osbuilder_file_fullpath="${rootfs_path}/${osbuilder_file}"
-	echo -e "$separator"
 	yamllint "${osbuilder_file_fullpath}"
 
 	info "osbuilder metadata file for $d:"
@@ -458,14 +479,11 @@ test_distros()
 {
 	local distro="$1"
 	get_distros_config "$distro"
-	local separator="~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n"
 	local commonMakeVars=( \
 		USE_DOCKER=true \
 		ROOTFS_BUILD_DEST="$tmp_rootfs" \
 		IMAGES_BUILD_DEST="$images_dir" \
 		DEBUG=1 )
-
-	echo -e "$separator"
 
 	# If a distro was specified, filter out the distro list to only include that distro
 	if [ -n "$distro" ]; then
@@ -514,7 +532,21 @@ test_distros()
 
 	# Check for build failures (`wait` remembers up to CHILD_MAX bg processes exit status)
 	for j in ${bgJobs[@]}; do
-		wait $j || die "Background build job failed"
+		if ! wait $j; then
+			info "Background rootfs build job failed:"
+			#find completed an uncompleted jobs checking for the rootfs marker
+			local marker=$(make print-ROOTFS_MARKER_SUFFIX)
+			[ -z "$marker" ] &&  die "Invalid rootfs marker"
+			typeset -a completed=($(find ${tmp_rootfs} -name ".*${marker}" -exec basename {} \; | sed -E "s/\.(.+)${marker}/\1/"))
+			for d in "${distrosSystemd[@]} ${distrosAgent[@]}"; do
+				if [[ "${completed[@]}" =~ $d ]]; then
+					info "- $d : completed"
+				else
+					info "- $d : failed"
+				fi
+			done
+			die "rootfs build failed"
+		fi
 	done
 
 	# TODO: once support for rootfs images with kata-agent as init is in place,
@@ -533,12 +565,10 @@ test_distros()
 		fi
 
 		show_rootfs_metadata "$rootfs_path"
-		echo -e "$separator"
 		info "Making rootfs image for ${d}"
 		make_image ${commonMakeVars[@]} $d
 		local image_size=$(stat -c "%s" "${image_path}")
 
-		echo -e "$separator"
 		built_images["${d}"]="${rootfs_size}:${image_size}"
 		info "Creating container for ${d}"
 		install_image_create_container $image_path
@@ -558,22 +588,17 @@ test_distros()
 
 
 		if [ "$KATA_HYPERVISOR" != "firecracker" ]; then
-			echo -e "$separator"
 			info "Making initrd image for ${d}"
 			make_initrd ${commonMakeVars[@]} AGENT_INIT=yes $d
 			local initrd_size=$(stat -c "%s" "${initrd_path}")
 
-			echo -e "$separator"
 			built_initrds["${d}"]="${rootfs_size}:${initrd_size}"
 			info "Creating container for ${d}"
 			install_initrd_create_container $initrd_path
 		fi
 	done
 
-	echo -e "$separator"
 	show_stats
-
-	echo -e "$separator"
 }
 
 main()

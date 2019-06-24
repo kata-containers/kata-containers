@@ -14,7 +14,8 @@ DISTRO                ?= centos
 ROOTFS_BUILD_DEST     := $(PWD)
 IMAGES_BUILD_DEST     := $(PWD)
 DISTRO_ROOTFS         := $(ROOTFS_BUILD_DEST)/$(DISTRO)_rootfs
-DISTRO_ROOTFS_MARKER  := $(ROOTFS_BUILD_DEST)/.$(DISTRO)_rootfs.done
+ROOTFS_MARKER_SUFFIX   := _rootfs.done
+DISTRO_ROOTFS_MARKER  := $(ROOTFS_BUILD_DEST)/.$(DISTRO)$(ROOTFS_MARKER_SUFFIX)
 DISTRO_IMAGE          := $(IMAGES_BUILD_DEST)/kata-containers.img
 DISTRO_INITRD         := $(IMAGES_BUILD_DEST)/kata-containers-initrd.img
 
@@ -24,15 +25,34 @@ COMMIT_NO      := $(shell git rev-parse HEAD 2> /dev/null || true)
 COMMIT         := $(if $(shell git status --porcelain --untracked-files=no),${COMMIT_NO}-dirty,${COMMIT_NO})
 VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
 
+# Set the variable to silent logs using chronic
+OSBUILDER_USE_CHRONIC :=
+
+# silent_run allows running make recipes using the chronic wrapper, so logs are
+# muted if the recipe command succeeds.
+# Arguments:
+# - Message
+# - Command to run
+ifeq (,$(OSBUILDER_USE_CHRONIC))
+  define silent_run
+    @echo $(1)
+    $(2)
+  endef
+else
+  define silent_run
+    @echo $(1) with command: $(2)
+    @chronic $(2)
+  endef
+endif
+
 ################################################################################
 
-rootfs-%: $(ROOTFS_BUILD_DEST)/.%_rootfs.done
+rootfs-%: $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX)
 	@ # DONT remove. This is not cancellation rule.
 
-.PRECIOUS: $(ROOTFS_BUILD_DEST)/.%_rootfs.done
-$(ROOTFS_BUILD_DEST)/.%_rootfs.done:: rootfs-builder/%
-	@echo Creating rootfs for "$*"
-	$(ROOTFS_BUILDER) -o $(VERSION_COMMIT) -r $(ROOTFS_BUILD_DEST)/$*_rootfs $*
+.PRECIOUS: $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX)
+$(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX):: rootfs-builder/%
+	$(call silent_run,Creating rootfs for "$*",$(ROOTFS_BUILDER) -o $(VERSION_COMMIT) -r $(ROOTFS_BUILD_DEST)/$*_rootfs $*)
 	touch $@
 
 image-%: $(IMAGES_BUILD_DEST)/kata-containers-image-%.img
@@ -40,16 +60,14 @@ image-%: $(IMAGES_BUILD_DEST)/kata-containers-image-%.img
 
 .PRECIOUS: $(IMAGES_BUILD_DEST)/kata-containers-image-%.img
 $(IMAGES_BUILD_DEST)/kata-containers-image-%.img: rootfs-%
-	@echo Creating image based on $^
-	$(IMAGE_BUILDER) -o $@ $(ROOTFS_BUILD_DEST)/$*_rootfs
+	$(call silent_run,Creating image based on $^,$(IMAGE_BUILDER) -o $@ $(ROOTFS_BUILD_DEST)/$*_rootfs)
 
 initrd-%: $(IMAGES_BUILD_DEST)/kata-containers-initrd-%.img
 	@ # DONT remove. This is not cancellation rule.
 
 .PRECIOUS: $(IMAGES_BUILD_DEST)/kata-containers-initrd-%.img
 $(IMAGES_BUILD_DEST)/kata-containers-initrd-%.img: rootfs-%
-	@echo Creating initrd image for $*
-	$(INITRD_BUILDER) -o $@ $(ROOTFS_BUILD_DEST)/$*_rootfs
+	$(call silent_run,Creating initrd image for $*,$(INITRD_BUILDER) -o $@ $(ROOTFS_BUILD_DEST)/$*_rootfs)
 
 .PHONY: all
 all: image initrd
@@ -61,15 +79,13 @@ rootfs: $(DISTRO_ROOTFS_MARKER)
 image: $(DISTRO_IMAGE)
 
 $(DISTRO_IMAGE): $(DISTRO_ROOTFS_MARKER)
-	@echo Creating image based on "$(DISTRO_ROOTFS)"
-	$(IMAGE_BUILDER) "$(DISTRO_ROOTFS)"
+	$(call silent_run,Creating image based on "$(DISTRO_ROOTFS)",$(IMAGE_BUILDER) "$(DISTRO_ROOTFS)")
 
 .PHONY: initrd
 initrd: $(DISTRO_INITRD)
 
 $(DISTRO_INITRD): $(DISTRO_ROOTFS_MARKER)
-	@echo Creating initrd image based on "$(DISTRO_ROOTFS)"
-	$(INITRD_BUILDER) "$(DISTRO_ROOTFS)"
+	$(call silent_run,Creating initrd image based on "$(DISTRO_ROOTFS)",$(INITRD_BUILDER) "$(DISTRO_ROOTFS)")
 
 .PHONY: test
 test:
@@ -125,3 +141,12 @@ install-scripts:
 .PHONY: clean
 clean:
 	rm -rf $(DISTRO_ROOTFS_MARKER) $(DISTRO_ROOTFS) $(DISTRO_IMAGE) $(DISTRO_INITRD)
+
+# Prints the name of the variable passed as suffix to the print- target,
+# E.g., if Makefile contains:
+# MY_MAKE_VAR := foobar
+# Then:
+# $ make printf-MY_MAKE_VAR
+# Will print "foobar"
+print-%:
+	@echo $($*)
