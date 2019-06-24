@@ -60,6 +60,7 @@ declare -A packages=( \
 	[gnu_parallel_dependencies]="perl bzip2 make" \
 	[libsystemd]="systemd-devel" \
 	[redis]="redis" \
+	[versionlock]="yum-versionlock" \
 )
 
 main()
