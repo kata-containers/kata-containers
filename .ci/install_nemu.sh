@@ -8,6 +8,7 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -o errtrace
 
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
@@ -15,12 +16,14 @@ source /etc/os-release || source /usr/lib/os-release
 
 versions_file="${cidir}/../versions.yaml"
 arch=$("${cidir}"/kata-arch.sh -d)
+latest_build_url="http://jenkins.katacontainers.io/job/nemu-nightly-${arch}/lastSuccessfulBuild/artifact/artifacts"
+nemu_repo=$(get_version "assets.hypervisor.nemu.url")
+nemu_version=$(get_version "assets.hypervisor.nemu.version")
+NEMU_TAR="kata-nemu-static.tar.gz"
 
 install_nemu() {
-	local nemu_repo=$(get_version "assets.hypervisor.nemu.url")
-	local nemu_version=$(get_version "assets.hypervisor.nemu.version")
+	info "build nemu from source"
 	PACKAGING_REPO="github.com/kata-containers/packaging"
-	NEMU_TAR="kata-nemu-static.tar.gz"
 	case "$arch" in
 	x86_64)
 		local nemu_bin="nemu-system-${arch}"
@@ -34,7 +37,10 @@ install_nemu() {
 
 	prefix="${KATA_NEMU_DESTDIR}" ${GOPATH}/src/${PACKAGING_REPO}/static-build/nemu/build-static-nemu.sh
 	sudo tar -xvf ${NEMU_TAR} -C /
-	rm ${NEMU_TAR}
+	# We need to move the tar file to a specific location so we
+	# can know where it is and then we can perform the build cache
+	# operations
+	sudo mv ${NEMU_TAR} /tmp
 }
 
 install_firmware() {
@@ -49,6 +55,36 @@ install_firmware() {
 	rm -f "${firmware}"
 }
 
-install_nemu
-# NEMU static tar now also includes the OVMF.fd bios file.
-#install_firmware
+install_prebuilt_nemu() {
+	install_directory="/tmp"
+	pushd "${install_directory}"
+	sudo -E curl -fL --progress-bar "${latest_build_url}/${NEMU_TAR}" -o "${NEMU_TAR}" || return 1
+	info "Install pre-built nemu version"
+	sudo tar -xvf "${NEMU_TAR}" -C /
+
+	info "Verify download checksum"
+	sudo -E curl -fsOL "${latest_build_url}/sha256sum-${NEMU_TAR}" || return 1
+	sudo sha256sum -c "sha256sum-${NEMU_TAR}" || return 1
+	popd
+}
+
+main() {
+	cached_nemu_version=$(curl -sfL "${latest_build_url}/latest") || cached_nemu_version="none"
+	info "current nemu : ${nemu_version}"
+	info "cached nemu  : ${cached_nemu_version}"
+	# Currently in our CI we are only installing and running nemu on x86_64 that is the
+	# main reason of why we will only install the prebuilt nemu on this arch, this
+	# can change once that we have nemu installation on other archs
+	if [ "$cached_nemu_version" == "$nemu_version" ] && [ "$arch" == "x86_64" ]; then
+		# If installing nemu fails,
+		# then build and install it from sources.
+		if ! install_prebuilt_nemu; then
+			info "failed to install cached nemu, trying to build from source"
+			install_nemu
+		fi
+	else
+		install_nemu
+	fi
+}
+
+main
