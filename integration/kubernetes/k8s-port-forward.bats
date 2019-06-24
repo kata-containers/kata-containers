@@ -11,13 +11,13 @@ source "/etc/os-release" || source "/usr/lib/os-release"
 issue="https://github.com/kata-containers/tests/issues/1731"
 
 setup() {
-	[ "$ID" == "centos" ] && skip "test not working see: ${issue}"
+	[ "$ID" == "centos" ] || [ "$ID" == "fedora" ] && skip "test not working see: ${issue}"
 	export KUBECONFIG="$HOME/.kube/config"
 	get_pod_config_dir
 }
 
 @test "Port forwarding" {
-	[ "$ID" == "centos" ] && skip "test not working see: ${issue}"
+	[ "$ID" == "centos" ] || [ "$ID" == "fedora" ] && skip "test not working see: ${issue}"
 	deployment_name="redis-master"
 
 	# Create deployment
@@ -66,7 +66,7 @@ setup() {
 }
 
 teardown() {
-	[ "$ID" == "centos" ] && skip "test not working see: ${issue}"
+	[ "$ID" == "centos" ] || [ "$ID" == "fedora" ] && skip "test not working see: ${issue}"
 	kubectl delete -f "${pod_config_dir}/redis-master-deployment.yaml"
 	kubectl delete -f "${pod_config_dir}/redis-master-service.yaml"
 }

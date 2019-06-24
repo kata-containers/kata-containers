@@ -19,13 +19,21 @@ cidir=$(dirname "$0")
 source /etc/os-release || source /usr/lib/os-release
 kubernetes_version=$(get_version "externals.kubernetes.version")
 
-if [ "$ID" != "ubuntu" ] && [ "$ID" != "centos" ]; then
+if [ "$ID" != "ubuntu" ] && [ "$ID" != "centos" ] && [ "$ID" != "fedora" ]; then
         echo "Currently this script does not work on $ID. Skipped Kubernetes Setup"
         exit 0
 fi
 
 if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
 	die "Kubernetes will not work with $KATA_HYPERVISOR"
+fi
+
+# Install CRI-O with its proper kubernetes version
+if [ "$ID" == "fedora" ]; then
+	echo "Install CRI-O"
+	export KUBERNETES="yes"
+	bash -f "${cidir}/install_crio.sh"
+	bash -f "${cidir}/configure_crio_for_kata.sh"
 fi
 
 if [ "$ID" == "ubuntu" ]; then
@@ -38,8 +46,14 @@ if [ "$ID" == "ubuntu" ]; then
 	curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 	chronic sudo -E apt update
 	chronic sudo -E apt install --allow-downgrades -y kubelet="$kubernetes_version" kubeadm="$kubernetes_version" kubectl="$kubernetes_version"
-elif [ "$ID" == "centos" ]; then
-	sudo yum versionlock docker-ce
+elif [ "$ID" == "centos" ] || [ "$ID" == "fedora" ]; then
+	if [ "$ID" == "centos" ]; then
+		sudo yum versionlock docker-ce
+	fi
+
+	if [ "$ID" == "fedora" ]; then
+		sudo dnf versionlock docker-ce
+	fi
 
 	sudo bash -c "cat <<EOF > /etc/yum.repos.d/kubernetes.repo
 	[kubernetes]

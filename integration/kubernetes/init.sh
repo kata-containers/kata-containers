@@ -13,9 +13,12 @@ set -o pipefail
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../../.ci/lib.sh"
 source "${SCRIPT_PATH}/../../lib/common.bash"
+source "/etc/os-release" || source "/usr/lib/os-release"
 
 cri_runtime="${CRI_RUNTIME:-crio}"
 kubernetes_version=$(get_version "externals.kubernetes.version")
+
+[ "$ID" == "fedora" ] && bash "${SCRIPT_PATH}/../../.ci/install_kubernetes.sh"
 
 case "${cri_runtime}" in
 containerd)
