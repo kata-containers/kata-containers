@@ -36,6 +36,7 @@ declare -A packages=( \
 	[gnu_parallel]="parallel" \
 	[libsystemd]="systemd-devel" \
 	[redis]="redis" \
+	[versionlock]="python3-dnf-plugin-versionlock" \
 )
 
 main()

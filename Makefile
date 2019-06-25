@@ -15,8 +15,8 @@ ifeq (${CI}, true)
 endif
 
 # union for 'make test'
-UNION := functional debug-console $(DOCKER_DEPENDENCY) crio docker-compose network netmon \
-	docker-stability oci openshift kubernetes swarm vm-factory \
+UNION := functional debug-console $(DOCKER_DEPENDENCY) openshift crio docker-compose network \
+	docker-stability oci netmon kubernetes swarm vm-factory \
 	entropy ramdisk shimv2 tracing
 
 # filter scheme script for docker integration test suites

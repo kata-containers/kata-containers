@@ -32,6 +32,13 @@ crio_repo=$(get_version "externals.crio.url")
 crio_repo="${crio_repo#*//}"
 crio_config_file="/etc/crio/crio.conf"
 
+# Remove CRI-O repository if already exists on Fedora
+if [ "$ID" == "fedora" ]; then
+	if [ -d "${GOPATH}/src/${crio_repo}" ]; then
+		sudo rm -r "${GOPATH}/src/${crio_repo}"
+	fi
+fi
+
 go get -d "$crio_repo" || true
 pushd "${GOPATH}/src/${crio_repo}"
 
@@ -43,7 +50,11 @@ then
 	# the kubernetes version that we support (usually latest stable).
 	# Sometimes these versions differ.
 	if [ "$ID" == "fedora" ]; then
-		crio_version=$(get_version "externals.crio.meta.openshift")
+		if [ "$KUBERNETES" == "yes" ]; then
+			crio_version=$(get_version "externals.crio.version")
+		else
+			crio_version=$(get_version "externals.crio.meta.openshift")
+		fi
 	else
 		crio_version=$(get_version "externals.crio.version")
 	fi

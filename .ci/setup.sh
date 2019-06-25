@@ -102,6 +102,15 @@ install_extra_tools() {
 		source "${cidir}/${arch}/lib_setup_${arch}.sh"
 	fi
 
+	# Do not install immediately kubernetes on Fedora as
+	# first we will run Openshift with its correspondent CRI-O
+	# version and then we will install kubernetes with its
+	# correspondent CRI-O version in order to not break the
+	# compatibility matrix
+	if [ "$ID" == "fedora" ]; then
+		export KUBERNETES="no"
+	fi
+
 	[ "${CRIO}" = "yes" ] &&
 		echo "Install CRI-O" &&
 		bash -f "${cidir}/install_crio.sh" &&
