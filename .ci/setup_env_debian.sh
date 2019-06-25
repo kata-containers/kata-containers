@@ -65,22 +65,6 @@ main()
 
 	[ "$setup_type" = "minimal" ] && exit 0
 
-	echo "Enable librbd1 repository"
-	sudo bash -c "cat <<EOF > /etc/apt/sources.list.d/unstable.list
-	deb http://deb.debian.org/debian unstable main contrib non-free
-	deb-src http://deb.debian.org/debian unstable main contrib non-free
-	EOF"
-
-	echo "Lower priority than stable"
-	sudo bash -c "cat <<EOF > /etc/apt/preferences.d/unstable
-	Package: *
-	Pin: release a=unstable
-	Pin-Priority: 10
-	EOF"
-
-	echo "Install librbd1"
-	chronic sudo -E apt update && sudo -E apt install -y -t unstable librbd1
-
 	if [ "$(arch)" == "x86_64" ]; then
 		echo "Install Kata Containers OBS repository"
 		obs_url="${KATA_OBS_REPO_BASE}/Debian_${VERSION_ID}"
