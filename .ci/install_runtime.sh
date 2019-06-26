@@ -51,6 +51,16 @@ if [ -e "${NEW_RUNTIME_CONFIG}" ]; then
 	runtime_config_path="${NEW_RUNTIME_CONFIG}"
 fi
 
+if [ "$KATA_HYPERVISOR" = "firecracker" ]; then
+	echo "Enable firecracker configuration.toml"
+	sudo mv "${PKGDEFAULTSDIR}/configuration-fc.toml" "${PKGDEFAULTSDIR}/configuration.toml"
+fi
+
+if [ "$KATA_HYPERVISOR" = "nemu" ]; then
+	echo "Enable nemu configuration.toml"
+	sudo mv "${PKGDEFAULTSDIR}/configuration-nemu.toml" "${PKGDEFAULTSDIR}/configuration.toml"
+fi
+
 if [ -z "${METRICS_CI}" ]; then
 	echo "Enabling all debug options in file ${runtime_config_path}"
 	sudo sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${runtime_config_path}"
@@ -104,12 +114,6 @@ fi
 if [ "$MACHINETYPE" == "q35" ]; then
 	echo "Use machine_type q35"
 	sudo sed -i -e 's|machine_type = "pc"|machine_type = "q35"|' "${runtime_config_path}"
-fi
-
-if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
-	echo "Enable firecracker configuration.toml"
-	path="/usr/share/defaults/kata-containers"
-	sudo mv ${path}/configuration-fc.toml ${path}/configuration.toml
 fi
 
 # Enable experimental features if KATA_EXPERIMENTAL_FEATURES is set to true

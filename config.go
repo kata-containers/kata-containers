@@ -46,6 +46,7 @@ type hypervisor struct {
 	DisableNestingChecks  bool   `toml:"disable_nesting_checks"`
 	EnableIOThreads       bool   `toml:"enable_iothreads"`
 	Vsock                 bool   `toml:"use_vsock"`
+	SharedFS              string `toml:"shared_fs"`
 }
 
 type proxy struct {
