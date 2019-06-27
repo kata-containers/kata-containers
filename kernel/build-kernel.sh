@@ -210,7 +210,7 @@ setup_kernel() {
 		cd "${kernel_path}" || exit 1
 		for p in ${kernel_patches}; do
 			info "Applying patch $p"
-			patch -p1 <"$p"
+			patch -p1 --fuzz 0 <"$p"
 		done
 
 		[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
