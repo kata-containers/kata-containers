@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 
 	"github.com/containerd/containerd/mount"
@@ -36,51 +35,17 @@ func cReap(s *service, status int, id, execid string, exitat time.Time) {
 func cleanupContainer(ctx context.Context, sid, cid, bundlePath string) error {
 	logrus.WithField("Service", "Cleanup").WithField("container", cid).Info("Cleanup container")
 
+	err := vci.CleanupContainer(ctx, sid, cid, true)
+	if err != nil {
+		logrus.WithError(err).WithField("container", cid).Warn("failed to cleanup container")
+		return err
+	}
+
 	rootfs := filepath.Join(bundlePath, "rootfs")
-	sandbox, err := vci.FetchSandbox(ctx, sid)
-	if err != nil {
-		return err
-	}
-
-	status, err := sandbox.StatusContainer(cid)
-	if err != nil {
-		logrus.WithError(err).WithField("container", cid).Warn("failed to get container status")
-		return err
-	}
-
-	if oci.StateToOCIState(status.State.State) != oci.StateStopped {
-		err := sandbox.KillContainer(cid, syscall.SIGKILL, true)
-		if err != nil {
-			logrus.WithError(err).WithField("container", cid).Warn("failed to kill container")
-			return err
-		}
-	}
-
-	if _, err = sandbox.StopContainer(cid); err != nil {
-		logrus.WithError(err).WithField("container", cid).Warn("failed to stop container")
-		return err
-	}
-
-	if _, err := sandbox.DeleteContainer(cid); err != nil {
-		logrus.WithError(err).WithField("container", cid).Warn("failed to remove container")
-	}
 
 	if err := mount.UnmountAll(rootfs, 0); err != nil {
 		logrus.WithError(err).WithField("container", cid).Warn("failed to cleanup container rootfs")
-	}
-
-	if len(sandbox.GetAllContainers()) == 0 {
-		err = sandbox.Stop(true)
-		if err != nil {
-			logrus.WithError(err).WithField("sandbox", sid).Warn("failed to stop sandbox")
-			return err
-		}
-
-		err = sandbox.Delete()
-		if err != nil {
-			logrus.WithError(err).WithField("sandbox", sid).Warnf("failed to delete sandbox")
-			return err
-		}
+		return err
 	}
 
 	return nil

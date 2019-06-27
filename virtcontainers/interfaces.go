@@ -54,6 +54,8 @@ type VC interface {
 	ListInterfaces(ctx context.Context, sandboxID string) ([]*vcTypes.Interface, error)
 	UpdateRoutes(ctx context.Context, sandboxID string, routes []*vcTypes.Route) ([]*vcTypes.Route, error)
 	ListRoutes(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error)
+
+	CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error
 }
 
 // VCSandbox is the Sandbox interface
@@ -78,7 +80,7 @@ type VCSandbox interface {
 	CreateContainer(contConfig ContainerConfig) (VCContainer, error)
 	DeleteContainer(contID string) (VCContainer, error)
 	StartContainer(containerID string) (VCContainer, error)
-	StopContainer(containerID string) (VCContainer, error)
+	StopContainer(containerID string, force bool) (VCContainer, error)
 	KillContainer(containerID string, signal syscall.Signal, all bool) error
 	StatusContainer(containerID string) (ContainerStatus, error)
 	StatsContainer(containerID string) (ContainerStats, error)
