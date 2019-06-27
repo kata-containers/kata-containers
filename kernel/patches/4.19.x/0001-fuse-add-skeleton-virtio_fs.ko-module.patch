@@ -1,4 +1,4 @@
-From e480fb43fda5d90a6277e969ac74b9a5a60c3f05 Mon Sep 17 00:00:00 2001
+From 9a821958eb0b586b526af5490c811f28ec062d94 Mon Sep 17 00:00:00 2001
 From: Stefan Hajnoczi <stefanha@redhat.com>
 Date: Tue, 12 Jun 2018 09:41:17 +0100
 Subject: [PATCH] fuse: add skeleton virtio_fs.ko module
@@ -534,7 +534,7 @@ Signed-off-by: Vivek Goyal <vgoyal@redhat.com>
  create mode 100644 include/uapi/linux/virtio_fs.h
 
 diff --git a/drivers/dax/super.c b/drivers/dax/super.c
-index 6e928f37d084..74f3bf7ae822 100644
+index 6e928f37d..74f3bf7ae 100644
 --- a/drivers/dax/super.c
 +++ b/drivers/dax/super.c
 @@ -52,7 +52,8 @@ EXPORT_SYMBOL_GPL(dax_read_unlock);
@@ -548,7 +548,7 @@ index 6e928f37d084..74f3bf7ae822 100644
  	if (pgoff)
  		*pgoff = PHYS_PFN(phys_off);
 diff --git a/drivers/virtio/virtio_mmio.c b/drivers/virtio/virtio_mmio.c
-index 4cd9ea5c75be..9642fa8dbeb0 100644
+index 4cd9ea5c7..9642fa8db 100644
 --- a/drivers/virtio/virtio_mmio.c
 +++ b/drivers/virtio/virtio_mmio.c
 @@ -494,6 +494,37 @@ static const char *vm_bus_name(struct virtio_device *vdev)
@@ -598,7 +598,7 @@ index 4cd9ea5c75be..9642fa8dbeb0 100644
  
  
 diff --git a/drivers/virtio/virtio_pci_modern.c b/drivers/virtio/virtio_pci_modern.c
-index 07571daccfec..51c9e6eca5ac 100644
+index 07571dacc..51c9e6eca 100644
 --- a/drivers/virtio/virtio_pci_modern.c
 +++ b/drivers/virtio/virtio_pci_modern.c
 @@ -446,6 +446,112 @@ static void del_vq(struct virtio_pci_vq_info *info)
@@ -731,7 +731,7 @@ index 07571daccfec..51c9e6eca5ac 100644
  
  /**
 diff --git a/fs/dax.c b/fs/dax.c
-index 09fa70683c41..408a06b74335 100644
+index 75a289c31..8c55d4bdf 100644
 --- a/fs/dax.c
 +++ b/fs/dax.c
 @@ -1021,12 +1021,12 @@ static int dax_writeback_one(struct dax_device *dax_dev,
@@ -790,7 +790,7 @@ index 09fa70683c41..408a06b74335 100644
  	if (!IS_ALIGNED(offset, sector_size))
  		return false;
 diff --git a/fs/ext2/inode.c b/fs/ext2/inode.c
-index e4bb9386c045..c9b024dafe09 100644
+index e4bb9386c..c9b024daf 100644
 --- a/fs/ext2/inode.c
 +++ b/fs/ext2/inode.c
 @@ -956,7 +956,7 @@ static int
@@ -803,7 +803,7 @@ index e4bb9386c045..c9b024dafe09 100644
  
  const struct address_space_operations ext2_aops = {
 diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
-index 2c43c5b92229..a94aff38cda4 100644
+index 05dc5a4ba..221824742 100644
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
 @@ -2949,7 +2949,7 @@ static int ext4_dax_writepages(struct address_space *mapping,
@@ -816,7 +816,7 @@ index 2c43c5b92229..a94aff38cda4 100644
  				     nr_to_write - wbc->nr_to_write);
  	percpu_up_read(&sbi->s_journal_flag_rwsem);
 diff --git a/fs/fuse/Kconfig b/fs/fuse/Kconfig
-index 76f09ce7e5b2..46e9a8ff9f7a 100644
+index 76f09ce7e..46e9a8ff9 100644
 --- a/fs/fuse/Kconfig
 +++ b/fs/fuse/Kconfig
 @@ -26,3 +26,14 @@ config CUSE
@@ -835,7 +835,7 @@ index 76f09ce7e5b2..46e9a8ff9f7a 100644
 +	  If you want to share files between guests or with the host, answer Y
 +          or M.
 diff --git a/fs/fuse/Makefile b/fs/fuse/Makefile
-index 60da84a86dab..d125ff826f2d 100644
+index 60da84a86..d125ff826 100644
 --- a/fs/fuse/Makefile
 +++ b/fs/fuse/Makefile
 @@ -4,5 +4,6 @@
@@ -846,7 +846,7 @@ index 60da84a86dab..d125ff826f2d 100644
  
  fuse-objs := dev.o dir.o file.o inode.o control.o xattr.o acl.o
 diff --git a/fs/fuse/cuse.c b/fs/fuse/cuse.c
-index 8f68181256c0..d49d64f42768 100644
+index 8f6818125..d49d64f42 100644
 --- a/fs/fuse/cuse.c
 +++ b/fs/fuse/cuse.c
 @@ -503,9 +503,10 @@ static int cuse_channel_open(struct inode *inode, struct file *file)
@@ -863,7 +863,7 @@ index 8f68181256c0..d49d64f42768 100644
  		kfree(cc);
  		return -ENOMEM;
 diff --git a/fs/fuse/dev.c b/fs/fuse/dev.c
-index baaed4d05b22..24d4a9b93fb6 100644
+index 6ee471b72..601da8d58 100644
 --- a/fs/fuse/dev.c
 +++ b/fs/fuse/dev.c
 @@ -103,6 +103,7 @@ void fuse_request_free(struct fuse_req *req)
@@ -1091,7 +1091,7 @@ index baaed4d05b22..24d4a9b93fb6 100644
  		return -ENOMEM;
  
 diff --git a/fs/fuse/dir.c b/fs/fuse/dir.c
-index 82a13221775e..3f923fe7841a 100644
+index 82a132217..3f923fe78 100644
 --- a/fs/fuse/dir.c
 +++ b/fs/fuse/dir.c
 @@ -44,12 +44,26 @@ union fuse_dentry {
@@ -1151,7 +1151,7 @@ index 82a13221775e..3f923fe7841a 100644
  
  	clear_bit(FUSE_I_SIZE_UNSTABLE, &fi->state);
 diff --git a/fs/fuse/file.c b/fs/fuse/file.c
-index bd500c3b7858..51faed351c7c 100644
+index 9a22aa580..7333b449e 100644
 --- a/fs/fuse/file.c
 +++ b/fs/fuse/file.c
 @@ -18,8 +18,18 @@
@@ -1398,8 +1398,8 @@ index bd500c3b7858..51faed351c7c 100644
 -		file->f_op = &fuse_direct_io_file_operations;
  	if (!(ff->open_flags & FOPEN_KEEP_CACHE))
  		invalidate_inode_pages2(inode->i_mapping);
- 	if (ff->open_flags & FOPEN_NONSEEKABLE)
-@@ -202,7 +421,7 @@ int fuse_open_common(struct inode *inode, struct file *file, bool isdir)
+ 	if (ff->open_flags & FOPEN_STREAM)
+@@ -204,7 +423,7 @@ int fuse_open_common(struct inode *inode, struct file *file, bool isdir)
  	int err;
  	bool lock_inode = (file->f_flags & O_TRUNC) &&
  			  fc->atomic_o_trunc &&
@@ -1408,7 +1408,7 @@ index bd500c3b7858..51faed351c7c 100644
  
  	err = generic_file_open(inode, file);
  	if (err)
-@@ -250,6 +469,7 @@ void fuse_release_common(struct file *file, bool isdir)
+@@ -252,6 +471,7 @@ void fuse_release_common(struct file *file, bool isdir)
  	struct fuse_file *ff = file->private_data;
  	struct fuse_req *req = ff->reserved_req;
  	int opcode = isdir ? FUSE_RELEASEDIR : FUSE_RELEASE;
@@ -1416,7 +1416,7 @@ index bd500c3b7858..51faed351c7c 100644
  
  	fuse_prepare_release(ff, file->f_flags, opcode);
  
-@@ -270,8 +490,20 @@ void fuse_release_common(struct file *file, bool isdir)
+@@ -272,8 +492,20 @@ void fuse_release_common(struct file *file, bool isdir)
  	 * Make the release synchronous if this is a fuseblk mount,
  	 * synchronous RELEASE is allowed (and desirable) in this case
  	 * because the server can be trusted not to screw up.
@@ -1438,7 +1438,7 @@ index bd500c3b7858..51faed351c7c 100644
  }
  
  static int fuse_open(struct inode *inode, struct file *file)
-@@ -916,11 +1148,23 @@ static int fuse_readpages(struct file *file, struct address_space *mapping,
+@@ -918,11 +1150,23 @@ static int fuse_readpages(struct file *file, struct address_space *mapping,
  	return err;
  }
  
@@ -1463,7 +1463,7 @@ index bd500c3b7858..51faed351c7c 100644
  	/*
  	 * In auto invalidate mode, always update attributes on read.
  	 * Otherwise, only update if we attempt to read past EOF (to ensure
-@@ -1168,9 +1412,14 @@ static ssize_t fuse_perform_write(struct kiocb *iocb,
+@@ -1170,9 +1414,14 @@ static ssize_t fuse_perform_write(struct kiocb *iocb,
  	return res > 0 ? res : err;
  }
  
@@ -1478,7 +1478,7 @@ index bd500c3b7858..51faed351c7c 100644
  	struct address_space *mapping = file->f_mapping;
  	ssize_t written = 0;
  	ssize_t written_buffered = 0;
-@@ -1178,6 +1427,11 @@ static ssize_t fuse_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
+@@ -1180,6 +1429,11 @@ static ssize_t fuse_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
  	ssize_t err;
  	loff_t endbyte = 0;
  
@@ -1490,7 +1490,7 @@ index bd500c3b7858..51faed351c7c 100644
  	if (get_fuse_conn(inode)->writeback_cache) {
  		/* Update size (EOF optimization) and mode (SUID clearing) */
  		err = fuse_update_attributes(mapping->host, file);
-@@ -1442,16 +1696,279 @@ static ssize_t fuse_direct_write_iter(struct kiocb *iocb, struct iov_iter *from)
+@@ -1444,16 +1698,279 @@ static ssize_t fuse_direct_write_iter(struct kiocb *iocb, struct iov_iter *from)
  	/* Don't allow parallel writes to the same file */
  	inode_lock(inode);
  	res = generic_write_checks(iocb, from);
@@ -1774,7 +1774,7 @@ index bd500c3b7858..51faed351c7c 100644
  static void fuse_writepage_free(struct fuse_conn *fc, struct fuse_req *req)
  {
  	int i;
-@@ -1901,6 +2418,17 @@ static int fuse_writepages_fill(struct page *page,
+@@ -1903,6 +2420,17 @@ static int fuse_writepages_fill(struct page *page,
  	return err;
  }
  
@@ -1792,7 +1792,7 @@ index bd500c3b7858..51faed351c7c 100644
  static int fuse_writepages(struct address_space *mapping,
  			   struct writeback_control *wbc)
  {
-@@ -2074,8 +2602,20 @@ static const struct vm_operations_struct fuse_file_vm_ops = {
+@@ -2076,8 +2604,20 @@ static const struct vm_operations_struct fuse_file_vm_ops = {
  	.page_mkwrite	= fuse_page_mkwrite,
  };
  
@@ -1813,7 +1813,7 @@ index bd500c3b7858..51faed351c7c 100644
  	if ((vma->vm_flags & VM_SHARED) && (vma->vm_flags & VM_MAYWRITE))
  		fuse_link_write_file(file);
  
-@@ -2095,6 +2635,103 @@ static int fuse_direct_mmap(struct file *file, struct vm_area_struct *vma)
+@@ -2097,6 +2637,103 @@ static int fuse_direct_mmap(struct file *file, struct vm_area_struct *vma)
  	return generic_file_mmap(file, vma);
  }
  
@@ -1917,7 +1917,7 @@ index bd500c3b7858..51faed351c7c 100644
  static int convert_fuse_file_lock(struct fuse_conn *fc,
  				  const struct fuse_file_lock *ffl,
  				  struct file_lock *fl)
-@@ -2938,8 +3575,12 @@ fuse_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
+@@ -2940,8 +3577,12 @@ fuse_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
  	return ret;
  }
  
@@ -1932,7 +1932,7 @@ index bd500c3b7858..51faed351c7c 100644
  {
  	struct fuse_file *ff = file->private_data;
  	struct inode *inode = file_inode(file);
-@@ -2953,8 +3594,6 @@ static long fuse_file_fallocate(struct file *file, int mode, loff_t offset,
+@@ -2955,8 +3596,6 @@ static long fuse_file_fallocate(struct file *file, int mode, loff_t offset,
  		.mode = mode
  	};
  	int err;
@@ -1941,7 +1941,7 @@ index bd500c3b7858..51faed351c7c 100644
  
  	if (mode & ~(FALLOC_FL_KEEP_SIZE | FALLOC_FL_PUNCH_HOLE))
  		return -EOPNOTSUPP;
-@@ -2962,17 +3601,13 @@ static long fuse_file_fallocate(struct file *file, int mode, loff_t offset,
+@@ -2964,17 +3603,13 @@ static long fuse_file_fallocate(struct file *file, int mode, loff_t offset,
  	if (fc->no_fallocate)
  		return -EOPNOTSUPP;
  
@@ -1965,8 +1965,8 @@ index bd500c3b7858..51faed351c7c 100644
 +		fuse_sync_writes(inode);
  	}
  
- 	if (!(mode & FALLOC_FL_KEEP_SIZE))
-@@ -2999,18 +3634,42 @@ static long fuse_file_fallocate(struct file *file, int mode, loff_t offset,
+ 	if (!(mode & FALLOC_FL_KEEP_SIZE) &&
+@@ -3008,18 +3643,42 @@ static long fuse_file_fallocate(struct file *file, int mode, loff_t offset,
  			file_update_time(file);
  	}
  
@@ -2012,7 +2012,7 @@ index bd500c3b7858..51faed351c7c 100644
  	return err;
  }
  
-@@ -3018,38 +3677,21 @@ static const struct file_operations fuse_file_operations = {
+@@ -3027,38 +3686,21 @@ static const struct file_operations fuse_file_operations = {
  	.llseek		= fuse_file_llseek,
  	.read_iter	= fuse_file_read_iter,
  	.write_iter	= fuse_file_write_iter,
@@ -2054,7 +2054,7 @@ index bd500c3b7858..51faed351c7c 100644
  static const struct address_space_operations fuse_file_aops  = {
  	.readpage	= fuse_readpage,
  	.writepage	= fuse_writepage,
-@@ -3063,8 +3705,271 @@ static const struct address_space_operations fuse_file_aops  = {
+@@ -3072,8 +3714,271 @@ static const struct address_space_operations fuse_file_aops  = {
  	.write_end	= fuse_write_end,
  };
  
@@ -2327,7 +2327,7 @@ index bd500c3b7858..51faed351c7c 100644
 +		pr_debug("fuse: fuse_dax_free_memory() failed with err=%d\n", ret);
  }
 diff --git a/fs/fuse/fuse_i.h b/fs/fuse/fuse_i.h
-index cec8b8e74969..1149281ab1e8 100644
+index cec8b8e74..1149281ab 100644
 --- a/fs/fuse/fuse_i.h
 +++ b/fs/fuse/fuse_i.h
 @@ -43,6 +43,20 @@
@@ -2610,7 +2610,7 @@ index cec8b8e74969..1149281ab1e8 100644
 +
  #endif /* _FS_FUSE_I_H */
 diff --git a/fs/fuse/inode.c b/fs/fuse/inode.c
-index db9e60b7eb69..dd16c7f6a561 100644
+index db9e60b7e..dd16c7f6a 100644
 --- a/fs/fuse/inode.c
 +++ b/fs/fuse/inode.c
 @@ -22,6 +22,8 @@
@@ -3193,7 +3193,7 @@ index db9e60b7eb69..dd16c7f6a561 100644
  	.owner		= THIS_MODULE,
 diff --git a/fs/fuse/virtio_fs.c b/fs/fuse/virtio_fs.c
 new file mode 100644
-index 000000000000..a0a2cd1cefc7
+index 000000000..a0a2cd1ce
 --- /dev/null
 +++ b/fs/fuse/virtio_fs.c
 @@ -0,0 +1,1121 @@
@@ -4319,7 +4319,7 @@ index 000000000000..a0a2cd1cefc7
 +MODULE_ALIAS_FS(KBUILD_MODNAME);
 +MODULE_DEVICE_TABLE(virtio, id_table);
 diff --git a/fs/splice.c b/fs/splice.c
-index b3daa971f597..d0bfbc13a417 100644
+index 485e409ef..c74f18098 100644
 --- a/fs/splice.c
 +++ b/fs/splice.c
 @@ -365,7 +365,7 @@ static ssize_t kernel_readv(struct file *file, const struct kvec *vec,
@@ -4340,7 +4340,7 @@ index b3daa971f597..d0bfbc13a417 100644
  /*
   * Send 'sd->len' bytes to socket from 'sd->file' at position 'sd->pos'
 diff --git a/fs/xfs/xfs_aops.c b/fs/xfs/xfs_aops.c
-index b697866946d2..c97f8a0cb47b 100644
+index b69786694..c97f8a0cb 100644
 --- a/fs/xfs/xfs_aops.c
 +++ b/fs/xfs/xfs_aops.c
 @@ -953,7 +953,7 @@ xfs_dax_writepages(
@@ -4353,7 +4353,7 @@ index b697866946d2..c97f8a0cb47b 100644
  
  STATIC int
 diff --git a/include/linux/dax.h b/include/linux/dax.h
-index 450b28db9533..a8461841f148 100644
+index 450b28db9..a8461841f 100644
 --- a/include/linux/dax.h
 +++ b/include/linux/dax.h
 @@ -85,7 +85,8 @@ static inline void fs_put_dax(struct dax_device *dax_dev)
@@ -4377,10 +4377,10 @@ index 450b28db9533..a8461841f148 100644
  	return -EOPNOTSUPP;
  }
 diff --git a/include/linux/fs.h b/include/linux/fs.h
-index 7b6084854bfe..1c5ef6bf46e5 100644
+index d4e1b43a5..374122b5b 100644
 --- a/include/linux/fs.h
 +++ b/include/linux/fs.h
-@@ -2991,6 +2991,8 @@ extern void block_sync_page(struct page *page);
+@@ -3000,6 +3000,8 @@ extern void block_sync_page(struct page *page);
  /* fs/splice.c */
  extern ssize_t generic_file_splice_read(struct file *, loff_t *,
  		struct pipe_inode_info *, size_t, unsigned int);
@@ -4390,7 +4390,7 @@ index 7b6084854bfe..1c5ef6bf46e5 100644
  		struct file *, loff_t *, size_t, unsigned int);
  extern ssize_t generic_splice_sendpage(struct pipe_inode_info *pipe,
 diff --git a/include/linux/virtio_config.h b/include/linux/virtio_config.h
-index 32baf8e26735..8f85d1d8a895 100644
+index 32baf8e26..8f85d1d8a 100644
 --- a/include/linux/virtio_config.h
 +++ b/include/linux/virtio_config.h
 @@ -10,6 +10,11 @@
@@ -4439,10 +4439,10 @@ index 32baf8e26735..8f85d1d8a895 100644
  {
  	return virtio_has_feature(vdev, VIRTIO_F_VERSION_1) ||
 diff --git a/include/uapi/linux/fuse.h b/include/uapi/linux/fuse.h
-index 92fa24c24c92..dbc5013ad747 100644
+index 2170e58a2..2f35b3791 100644
 --- a/include/uapi/linux/fuse.h
 +++ b/include/uapi/linux/fuse.h
-@@ -381,6 +381,8 @@ enum fuse_opcode {
+@@ -383,6 +383,8 @@ enum fuse_opcode {
  	FUSE_READDIRPLUS   = 44,
  	FUSE_RENAME2       = 45,
  	FUSE_LSEEK         = 46,
@@ -4451,7 +4451,7 @@ index 92fa24c24c92..dbc5013ad747 100644
  
  	/* CUSE specific operations */
  	CUSE_INIT          = 4096,
-@@ -792,4 +794,36 @@ struct fuse_lseek_out {
+@@ -794,4 +796,36 @@ struct fuse_lseek_out {
  	uint64_t	offset;
  };
  
@@ -4490,7 +4490,7 @@ index 92fa24c24c92..dbc5013ad747 100644
  #endif /* _LINUX_FUSE_H */
 diff --git a/include/uapi/linux/virtio_fs.h b/include/uapi/linux/virtio_fs.h
 new file mode 100644
-index 000000000000..d4bb549568eb
+index 000000000..d4bb54956
 --- /dev/null
 +++ b/include/uapi/linux/virtio_fs.h
 @@ -0,0 +1,44 @@
@@ -4539,7 +4539,7 @@ index 000000000000..d4bb549568eb
 +
 +#endif /* _UAPI_LINUX_VIRTIO_FS_H */
 diff --git a/include/uapi/linux/virtio_ids.h b/include/uapi/linux/virtio_ids.h
-index 6d5c3b2d4f4d..884b0e2734bb 100644
+index 6d5c3b2d4..884b0e273 100644
 --- a/include/uapi/linux/virtio_ids.h
 +++ b/include/uapi/linux/virtio_ids.h
 @@ -43,5 +43,6 @@
@@ -4550,7 +4550,7 @@ index 6d5c3b2d4f4d..884b0e2734bb 100644
  
  #endif /* _LINUX_VIRTIO_IDS_H */
 diff --git a/include/uapi/linux/virtio_mmio.h b/include/uapi/linux/virtio_mmio.h
-index c4b09689ab64..0650f91bea6c 100644
+index c4b09689a..0650f91be 100644
 --- a/include/uapi/linux/virtio_mmio.h
 +++ b/include/uapi/linux/virtio_mmio.h
 @@ -122,6 +122,17 @@
@@ -4572,7 +4572,7 @@ index c4b09689ab64..0650f91bea6c 100644
  #define VIRTIO_MMIO_CONFIG_GENERATION	0x0fc
  
 diff --git a/include/uapi/linux/virtio_pci.h b/include/uapi/linux/virtio_pci.h
-index 90007a1abcab..31841a60a4ad 100644
+index 90007a1ab..31841a60a 100644
 --- a/include/uapi/linux/virtio_pci.h
 +++ b/include/uapi/linux/virtio_pci.h
 @@ -113,6 +113,8 @@
@@ -4600,5 +4600,5 @@ index 90007a1abcab..31841a60a4ad 100644
  #define VIRTIO_PCI_CAP_VNDR		0
  #define VIRTIO_PCI_CAP_NEXT		1
 -- 
-2.20.1
+2.19.2
 
