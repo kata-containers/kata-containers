@@ -8,16 +8,16 @@ load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../lib/common.bash"
 source "/etc/os-release" || source "/usr/lib/os-release"
 
-issue="https://github.com/kata-containers/tests/issues/1731"
+issue="https://github.com/kata-containers/runtime/issues/1834"
 
 setup() {
-	[ "$ID" == "centos" ] || [ "$ID" == "fedora" ] && skip "test not working see: ${issue}"
+	skip "test not working see: ${issue}"
 	export KUBECONFIG="$HOME/.kube/config"
 	get_pod_config_dir
 }
 
 @test "Port forwarding" {
-	[ "$ID" == "centos" ] || [ "$ID" == "fedora" ] && skip "test not working see: ${issue}"
+	skip "test not working see: ${issue}"
 	deployment_name="redis-master"
 
 	# Create deployment
@@ -55,7 +55,7 @@ setup() {
 	ok="0"
 
 	for _ in $(seq 1 "$retries"); do
-		if sudo -E redis-cli ping | grep -q "PONG" ; then
+		if sudo -E redis-cli -p 7000 ping | grep -q "PONG" ; then
 			ok="1"
 			break;
 		fi
@@ -66,7 +66,7 @@ setup() {
 }
 
 teardown() {
-	[ "$ID" == "centos" ] || [ "$ID" == "fedora" ] && skip "test not working see: ${issue}"
+	skip "test not working see: ${issue}"
 	kubectl delete -f "${pod_config_dir}/redis-master-deployment.yaml"
 	kubectl delete -f "${pod_config_dir}/redis-master-service.yaml"
 }
