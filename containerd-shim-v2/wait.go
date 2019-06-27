@@ -65,7 +65,7 @@ func wait(s *service, c *container, execID string) (int32, error) {
 				logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to delete sandbox")
 			}
 		} else {
-			if _, err = s.sandbox.StopContainer(c.id); err != nil {
+			if _, err = s.sandbox.StopContainer(c.id, false); err != nil {
 				logrus.WithError(err).WithField("container", c.id).Warn("stop container failed")
 			}
 		}

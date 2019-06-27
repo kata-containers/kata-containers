@@ -1181,7 +1181,7 @@ func (s *Sandbox) StartContainer(containerID string) (VCContainer, error) {
 }
 
 // StopContainer stops a container in the sandbox
-func (s *Sandbox) StopContainer(containerID string) (VCContainer, error) {
+func (s *Sandbox) StopContainer(containerID string, force bool) (VCContainer, error) {
 	// Fetch the container.
 	c, err := s.findContainer(containerID)
 	if err != nil {
@@ -1189,7 +1189,7 @@ func (s *Sandbox) StopContainer(containerID string) (VCContainer, error) {
 	}
 
 	// Stop it.
-	if err := c.stop(false); err != nil {
+	if err := c.stop(force); err != nil {
 		return nil, err
 	}
 
