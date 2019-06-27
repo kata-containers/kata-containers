@@ -25,6 +25,7 @@ const testKernel = "kernel"
 const testInitrd = "initrd"
 const testImage = "image"
 const testHypervisor = "hypervisor"
+const testHypervisorCtl = "hypervisorctl"
 const testBundle = "bundle"
 
 const testDisabledAsNonRoot = "Test disabled as requires root privileges"
@@ -41,6 +42,10 @@ var testQemuKernelPath = ""
 var testQemuInitrdPath = ""
 var testQemuImagePath = ""
 var testQemuPath = ""
+var testAcrnKernelPath = ""
+var testAcrnImagePath = ""
+var testAcrnPath = ""
+var testAcrnCtlPath = ""
 var testHyperstartCtlSocket = ""
 var testHyperstartTtySocket = ""
 
@@ -59,6 +64,18 @@ func setup() {
 	os.Mkdir(filepath.Join(testDir, testBundle), store.DirMode)
 
 	for _, filename := range []string{testQemuKernelPath, testQemuInitrdPath, testQemuImagePath, testQemuPath} {
+		_, err := os.Create(filename)
+		if err != nil {
+			fmt.Printf("Could not recreate %s:%v", filename, err)
+			os.Exit(1)
+		}
+	}
+}
+
+func setupAcrn() {
+	os.Mkdir(filepath.Join(testDir, testBundle), store.DirMode)
+
+	for _, filename := range []string{testAcrnKernelPath, testAcrnImagePath, testAcrnPath, testAcrnCtlPath} {
 		_, err := os.Create(filename)
 		if err != nil {
 			fmt.Printf("Could not recreate %s:%v", filename, err)
@@ -101,6 +118,13 @@ func TestMain(m *testing.M) {
 	testQemuPath = filepath.Join(testDir, testHypervisor)
 
 	setup()
+
+	testAcrnKernelPath = filepath.Join(testDir, testKernel)
+	testAcrnImagePath = filepath.Join(testDir, testImage)
+	testAcrnPath = filepath.Join(testDir, testHypervisor)
+	testAcrnCtlPath = filepath.Join(testDir, testHypervisorCtl)
+
+	setupAcrn()
 
 	// allow the tests to run without affecting the host system.
 	store.ConfigStoragePath = filepath.Join(testDir, store.StoragePathSuffix, "config")
