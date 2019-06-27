@@ -16,6 +16,7 @@ checkbox/A
 codebase
 commandline
 config/AB
+crypto		# Cryptography
 DaemonSet/AB
 devicemapper/B
 dialer
