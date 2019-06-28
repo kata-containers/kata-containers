@@ -233,7 +233,7 @@ calculate_required_disk_size() {
 			die "Could not format loop device: ${device}"
 		fi
 		mount "${device}p1" "${mount_dir}"
-		avail="$(df -h --output=avail "${mount_dir}" | tail -n1 | sed 's/[M ]//g')"
+		avail="$(df -BM --output=avail "${mount_dir}" | tail -n1 | sed 's/[M ]//g')"
 		umount "${mount_dir}"
 		losetup -d "${device}"
 
