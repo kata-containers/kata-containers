@@ -9,6 +9,8 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
+script_name="$(basename "${BASH_SOURCE[0]}")"
+
 handle_error() {
 	local exit_code="${?}"
 	local line_number="${1:-}"
@@ -24,7 +26,7 @@ run_in_docker() {
 		# shellcheck source=scripts/obs-docker.sh
 		source "${script_dir}/scripts/obs-docker.sh"
 		packaging_repo_dir=$(cd "${script_dir}/.." && pwd)
-		docker_run "${packaging_repo_dir}/obs-packaging/wait-obs.sh"
+		docker_run "${packaging_repo_dir}/obs-packaging/wait-obs.sh" $@
 		exit 0
 	fi
 }
@@ -32,6 +34,8 @@ run_in_docker() {
 
 # Check all project has finshed the build
 wait_finish_building() {
+	while osc pr -q | grep '(building)'; do sleep 5; done
+	# just in case something goes wrong
 	while osc pr -q | grep '(building)'; do sleep 5; done
 }
 
@@ -45,7 +49,7 @@ is_published() {
 			continue
 		fi
 		if ! echo "${c}" | grep 'published'; then
-			echo "${c}"
+			echo "waiting for : ${c}"
 			return 1
 		fi
 	done
@@ -63,14 +67,45 @@ check_failed(){
 	failed_query=$(osc pr -c  -s  F)
 	regex=".*failed.*"
 	if [[ ${failed_query} =~ ${regex} ]];then
-		printf "%s" "${failed_query}" | column -t -s\;
-		return 1
+		echo "ERROR: Build failed"
+		osc pr -V -s 'F'
+		exit 1
 	fi
+	echo "Nothing failed"
+	osc pr -q -c | tail -n +2 | column -t -s\;
 	return 0
 }
 
+usage() {
+	msg="${1:-}"
+	exit_code=$"${2:-0}"
+	cat <<EOT
+${msg}
+Usage:
+${script_name} [--options]
+
+options:
+	-h, --help: Show this help
+	--no-wait-publish : no wait that OBS publish packages
+EOT
+	exit "${exit_code}"
+}
+
 main() {
-	run_in_docker
+	run_in_docker  $@
+	local no_wait_publish="false"
+	case "${1:-}" in
+		"-h"|"--help")
+			usage "Help" 0
+			;;
+		--no-wait-publish)
+			no_wait_publish="true"
+			shift
+			;;
+		-*)
+			usage "Invalid option: ${1:-}" 1
+			;;
+	esac
 	OBS_SUBPROJECT="${OBS_SUBPROJECT:-releases:x86_64:alpha}"
 	project="home:katacontainers:${OBS_SUBPROJECT}"
 	echo "Checkout: ${project}"
@@ -84,6 +119,11 @@ main() {
 	echo "Check failed"
 	check_failed
 	echo "OK - build did not fail"
+
+	if [ "${no_wait_publish}" == "true" ];then
+		echo " Requested not wait for publish"
+		exit
+	fi
 
 	echo "Wait for published"
 	wait_published
