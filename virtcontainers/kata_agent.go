@@ -1173,7 +1173,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	epheStorages := k.handleEphemeralStorage(ociSpec.Mounts)
 	ctrStorages = append(ctrStorages, epheStorages...)
 
-	localStorages := k.handleLocalStorage(ociSpec.Mounts, sandbox.id)
+	localStorages := k.handleLocalStorage(ociSpec.Mounts, sandbox.id, c.rootfsSuffix)
 	ctrStorages = append(ctrStorages, localStorages...)
 
 	// We replace all OCI mount sources that match our container mount
@@ -1285,7 +1285,7 @@ func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) []*grpc.Storage
 
 // handleLocalStorage handles local storage within the VM
 // by creating a directory in the VM from the source of the mount point.
-func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string) []*grpc.Storage {
+func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string, rootfsSuffix string) []*grpc.Storage {
 	var localStorages []*grpc.Storage
 	for idx, mnt := range mounts {
 		if mnt.Type == KataLocalDevType {
@@ -1294,7 +1294,7 @@ func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string) [
 			// We rely on the fact that the first container in the VM has the same ID as the sandbox ID.
 			// In Kubernetes, this is usually the pause container and we depend on it existing for
 			// local directories to work.
-			mounts[idx].Source = filepath.Join(kataGuestSharedDir, sandboxID, KataLocalDevType, filepath.Base(mnt.Source))
+			mounts[idx].Source = filepath.Join(kataGuestSharedDir, sandboxID, rootfsSuffix, KataLocalDevType, filepath.Base(mnt.Source))
 
 			// Create a storage struct so that the kata agent is able to create the
 			// directory inside the VM.
