@@ -13,6 +13,7 @@ backtick/AB
 backtrace
 bootloader/AB
 checkbox/A
+chipset/AB
 codebase
 commandline
 config/AB
