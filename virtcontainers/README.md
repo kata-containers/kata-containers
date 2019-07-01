@@ -43,7 +43,7 @@ or the [Kubernetes CRI][cri]) to the `virtcontainers` API.
 `virtcontainers` was used as a foundational package for the [Clear Containers][cc] [runtime][cc-runtime] implementation.
 
 [oci]: https://github.com/opencontainers/runtime-spec
-[cri]: https://github.com/kubernetes/community/blob/master/contributors/devel/container-runtime-interface.md
+[cri]: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-node/container-runtime-interface.md
 [cc]: https://github.com/clearcontainers/
 [cc-runtime]: https://github.com/clearcontainers/runtime/
 
