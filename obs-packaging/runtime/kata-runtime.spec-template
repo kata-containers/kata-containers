@@ -4,7 +4,7 @@
 %global IMPORTNAME %{DOMAIN}/%{ORG}/%{PROJECT}
 %global GO_VERSION @GO_VERSION@
 
-%global DEFAULT_QEMU qemu-lite-system-x86_64
+%global DEFAULT_QEMU qemu-vanilla-system-x86_64
 
 %define LIBEXECDIR /usr/libexec
 
