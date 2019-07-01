@@ -21,8 +21,7 @@ env:
   - target_branch=$TRAVIS_BRANCH
 
 before_install:
-  - sudo apt update -y -qq
-  - sudo apt install -y -qq curl	# for yq installer
+  - ".ci/setup.sh"
 
 before_script:
   - ".ci/static-checks.sh"
