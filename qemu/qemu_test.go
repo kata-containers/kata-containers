@@ -27,6 +27,13 @@ import (
 const agentUUID = "4cb19522-1e18-439a-883a-f9b2a3a95f5e"
 const volumeUUID = "67d86208-b46c-4465-9018-e14187d4010"
 
+var (
+	deviceNetworkPCIString   = "-netdev tap,id=tap0,vhost=on,ifname=ceth0,downscript=no,script=no -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true,romfile=efi-virtio.rom"
+	deviceNetworkPCIStringMq = "-netdev tap,id=tap0,vhost=on,fds=3:4 -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true,mq=on,vectors=6,romfile=efi-virtio.rom"
+)
+
+const DevNo = "fe.1.1234"
+
 func testAppend(structure interface{}, expected string, t *testing.T) {
 	var config Config
 	testConfigAppend(&config, structure, expected, t)
@@ -136,6 +143,10 @@ func TestAppendDeviceFS(t *testing.T) {
 		ROMFile:       "efi-virtio.rom",
 	}
 
+	if isVirtioCCW[fsdev.Driver] {
+		fsdev.DevNo = DevNo
+	}
+
 	testAppend(fsdev, deviceFSString, t)
 }
 
@@ -151,6 +162,10 @@ func TestAppendDeviceNetwork(t *testing.T) {
 		MACAddress:    "01:02:de:ad:be:ef",
 		DisableModern: true,
 		ROMFile:       "efi-virtio.rom",
+	}
+
+	if isVirtioCCW[netdev.Driver] {
+		netdev.DevNo = DevNo
 	}
 
 	testAppend(netdev, deviceNetworkString, t)
@@ -180,6 +195,9 @@ func TestAppendDeviceNetworkMq(t *testing.T) {
 		DisableModern: true,
 		ROMFile:       "efi-virtio.rom",
 	}
+	if isVirtioCCW[netdev.Driver] {
+		netdev.DevNo = DevNo
+	}
 
 	testAppend(netdev, deviceNetworkStringMq, t)
 }
@@ -199,6 +217,10 @@ func TestAppendDeviceNetworkPCI(t *testing.T) {
 		MACAddress:    "01:02:de:ad:be:ef",
 		DisableModern: true,
 		ROMFile:       romfile,
+	}
+
+	if !isVirtioPCI[netdev.Driver] {
+		t.Skip("Test valid only for PCI devices")
 	}
 
 	testAppend(netdev, deviceNetworkPCIString, t)
@@ -231,6 +253,10 @@ func TestAppendDeviceNetworkPCIMq(t *testing.T) {
 		ROMFile:       romfile,
 	}
 
+	if !isVirtioPCI[netdev.Driver] {
+		t.Skip("Test valid only for PCI devices")
+	}
+
 	testAppend(netdev, deviceNetworkPCIStringMq, t)
 }
 
@@ -240,6 +266,9 @@ func TestAppendDeviceSerial(t *testing.T) {
 		ID:            "serial0",
 		DisableModern: true,
 		ROMFile:       romfile,
+	}
+	if isVirtioCCW[sdev.Driver] {
+		sdev.DevNo = DevNo
 	}
 
 	testAppend(sdev, deviceSerialString, t)
@@ -256,7 +285,9 @@ func TestAppendDeviceSerialPort(t *testing.T) {
 		Path:     "/tmp/char.sock",
 		Name:     "channel.0",
 	}
-
+	if isVirtioCCW[chardev.Driver] {
+		chardev.DevNo = DevNo
+	}
 	testAppend(chardev, deviceSerialPortString, t)
 }
 
@@ -273,7 +304,9 @@ func TestAppendDeviceBlock(t *testing.T) {
 		DisableModern: true,
 		ROMFile:       romfile,
 	}
-
+	if isVirtioCCW[blkdev.Driver] {
+		blkdev.DevNo = DevNo
+	}
 	testAppend(blkdev, deviceBlockString, t)
 }
 
@@ -281,6 +314,10 @@ func TestAppendDeviceVFIO(t *testing.T) {
 	vfioDevice := VFIODevice{
 		BDF:     "02:10.0",
 		ROMFile: romfile,
+	}
+
+	if isVirtioCCW[Vfio] {
+		vfioDevice.DevNo = DevNo
 	}
 
 	testAppend(vfioDevice, deviceVFIOString, t)
@@ -293,6 +330,10 @@ func TestAppendVSOCK(t *testing.T) {
 		VHostFD:       nil,
 		DisableModern: true,
 		ROMFile:       romfile,
+	}
+
+	if isVirtioCCW[VHostVSock] {
+		vsockDevice.DevNo = DevNo
 	}
 
 	testAppend(vsockDevice, deviceVSOCKString, t)
@@ -332,6 +373,11 @@ func TestAppendVirtioRng(t *testing.T) {
 	rngDevice := RngDevice{
 		ID:      "rng0",
 		ROMFile: romfile,
+	}
+
+	if isVirtioCCW[VirtioRng] {
+		rngDevice.DevNo = DevNo
+		deviceString += ",devno=" + rngDevice.DevNo
 	}
 
 	testAppend(rngDevice, objectString+" "+deviceString, t)
@@ -389,6 +435,11 @@ func TestAppendDeviceSCSIController(t *testing.T) {
 		ID:      "foo",
 		ROMFile: romfile,
 	}
+
+	if isVirtioCCW[VirtioScsi] {
+		scsiCon.DevNo = DevNo
+	}
+
 	testAppend(scsiCon, deviceSCSIControllerStr, t)
 
 	scsiCon.Bus = "pci.0"
