@@ -323,3 +323,41 @@ check_git_version() {
 
 	echo "${result}"
 }
+
+# Obtain a list of the files the PR changed.
+# Returns the information in format "${filter}\t${file}".
+get_pr_changed_file_details_full()
+{
+	# List of filters used to restrict the types of file changes.
+	# See git-diff-tree(1) for further info.
+	local filters=""
+
+	# Added file
+	filters+="A"
+
+	# Copied file
+	filters+="C"
+
+	# Modified file
+	filters+="M"
+
+	# Renamed file
+	filters+="R"
+
+	# Unmerged (U) and Unknown (X) files. These particular filters
+	# shouldn't be necessary but just in case...
+	filters+="UX"
+
+	git diff-tree \
+		-r \
+		--name-status \
+		--diff-filter="${filters}" \
+		"origin/${branch}" HEAD
+}
+
+# Obtain a list of the files the PR changed, ignoring vendor files.
+# Returns the information in format "${filter}\t${file}".
+get_pr_changed_file_details()
+{
+	get_pr_changed_file_details_full | grep -v "vendor/"
+}
