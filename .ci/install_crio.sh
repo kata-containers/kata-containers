@@ -39,9 +39,6 @@ if [ "$ID" == "fedora" ]; then
 	fi
 fi
 
-go get -d "$crio_repo" || true
-pushd "${GOPATH}/src/${crio_repo}"
-
 if [ "$ghprbGhRepository" != "${crio_repo/github.com\/}" ]
 then
 	# For Fedora, we use CRI-O version that is compatible with the
@@ -55,23 +52,23 @@ then
 		else
 			crio_version=$(get_version "externals.crio.meta.openshift")
 		fi
+		crictl_version=$(get_version "externals.crio.meta.crictl")
+		crictl_tag_prefix=""
 	else
 		crio_version=$(get_version "externals.crio.version")
+		crictl_version=$(get_test_version "externals.critools.version")
+		crictl_tag_prefix="v"
 	fi
-
-	git fetch
-	git checkout "${crio_version}"
 fi
 
-echo "Get CRI Tools"
-critools_repo="${kubernetes_sigs_org}/cri-tools"
-go get "$critools_repo" || true
-pushd "${GOPATH}/src/${critools_repo}"
-critools_version=$(grep "ENV CRICTL_COMMIT" "${GOPATH}/src/${crio_repo}/Dockerfile" | cut -d " " -f3)
-git checkout "${critools_version}"
-go install ./cmd/crictl
-sudo install "${GOPATH}/bin/crictl" /usr/bin
-popd
+echo "Installing CRI Tools"
+crictl_url=https://github.com/kubernetes-sigs/cri-tools/releases/download/v$crictl_version/crictl-$crictl_tag_prefix$crictl_version-linux-"$(${cidir}/kata-arch.sh -g)".tar.gz
+curl -Ls "$crictl_url" | sudo tar xfz - -C /usr/local/bin
+
+go get -d "$crio_repo" || true
+pushd "${GOPATH}/src/${crio_repo}"
+git fetch
+git checkout "${crio_version}"
 
 echo "Installing CRI-O"
 make clean
