@@ -12,7 +12,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "${script_dir}/../../scripts/lib.sh"
 
-config_dir="${script_dir}/../../scripts/"
+packaging_dir="${script_dir}/../.."
 qemu_tar="kata-qemu-static.tar.gz"
 
 qemu_repo="${qemu_repo:-}"
@@ -44,7 +44,7 @@ sudo docker build \
 	--build-arg QEMU_REPO="${qemu_repo}" \
 	--build-arg QEMU_VERSION="${qemu_version}" \
 	--build-arg PREFIX="${prefix}" \
-	"${config_dir}" \
+	"${packaging_dir}" \
 	-f "${script_dir}/Dockerfile" \
 	-t qemu-static
 
