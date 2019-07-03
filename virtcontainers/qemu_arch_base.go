@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -48,8 +49,8 @@ type qemuArch interface {
 	//capabilities returns the capabilities supported by QEMU
 	capabilities() types.Capabilities
 
-	// bridges returns the number bridges for the machine type
-	bridges(number uint32) []types.Bridge
+	// bridges sets the number bridges for the machine type
+	bridges(number uint32)
 
 	// cpuTopology returns the CPU topology for the given amount of vcpus
 	cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP
@@ -70,7 +71,7 @@ type qemuArch interface {
 	appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread)
 
 	// appendBridges appends bridges to devices
-	appendBridges(devices []govmmQemu.Device, bridges []types.Bridge) []govmmQemu.Device
+	appendBridges(devices []govmmQemu.Device) []govmmQemu.Device
 
 	// append9PVolume appends a 9P volume to devices
 	append9PVolume(devices []govmmQemu.Device, volume types.Volume) []govmmQemu.Device
@@ -96,6 +97,21 @@ type qemuArch interface {
 	// appendRNGDevice appends a RNG device to devices
 	appendRNGDevice(devices []govmmQemu.Device, rngDevice config.RNGDev) []govmmQemu.Device
 
+	// addDeviceToBridge adds devices to the bus
+	addDeviceToBridge(ID string, t types.Type) (string, types.Bridge, error)
+
+	// removeDeviceFromBridge removes devices to the bus
+	removeDeviceFromBridge(ID string) error
+
+	// getBridges grants access to Bridges
+	getBridges() []types.Bridge
+
+	// setBridges grants access to Bridges
+	setBridges(bridges []types.Bridge)
+
+	// addBridge adds a new Bridge to the list of Bridges
+	addBridge(types.Bridge)
+
 	// handleImagePath handles the Hypervisor Config image path
 	handleImagePath(config HypervisorConfig)
 
@@ -117,6 +133,7 @@ type qemuArchBase struct {
 	kernelParamsNonDebug  []Param
 	kernelParamsDebug     []Param
 	kernelParams          []Param
+	Bridges               []types.Bridge
 }
 
 const (
@@ -242,14 +259,10 @@ func (q *qemuArchBase) capabilities() types.Capabilities {
 	return caps
 }
 
-func (q *qemuArchBase) bridges(number uint32) []types.Bridge {
-	var bridges []types.Bridge
-
+func (q *qemuArchBase) bridges(number uint32) {
 	for i := uint32(0); i < number; i++ {
-		bridges = append(bridges, types.NewBridge(types.PCI, fmt.Sprintf("%s-bridge-%d", types.PCI, i), make(map[uint32]string), 0))
+		q.Bridges = append(q.Bridges, types.NewBridge(types.PCI, fmt.Sprintf("%s-bridge-%d", types.PCI, i), make(map[uint32]string), 0))
 	}
-
-	return bridges
 }
 
 func (q *qemuArchBase) cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP {
@@ -347,14 +360,14 @@ func (q *qemuArchBase) appendSCSIController(devices []govmmQemu.Device, enableIO
 }
 
 // appendBridges appends to devices the given bridges
-func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device, bridges []types.Bridge) []govmmQemu.Device {
-	for idx, b := range bridges {
+func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
+	for idx, b := range q.Bridges {
 		t := govmmQemu.PCIBridge
 		if b.Type == types.PCIE {
 			t = govmmQemu.PCIEBridge
 		}
 
-		bridges[idx].Addr = bridgePCIStartAddr + idx
+		q.Bridges[idx].Addr = bridgePCIStartAddr + idx
 
 		devices = append(devices,
 			govmmQemu.BridgeDevice{
@@ -364,7 +377,7 @@ func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device, bridges []types
 				// Each bridge is required to be assigned a unique chassis id > 0
 				Chassis: idx + 1,
 				SHPC:    true,
-				Addr:    strconv.FormatInt(int64(bridges[idx].Addr), 10),
+				Addr:    strconv.FormatInt(int64(q.Bridges[idx].Addr), 10),
 			},
 		)
 	}
@@ -587,4 +600,54 @@ func (q *qemuArchBase) setIgnoreSharedMemoryMigrationCaps(ctx context.Context, q
 		},
 	})
 	return err
+}
+
+func (q *qemuArchBase) addDeviceToBridge(ID string, t types.Type) (string, types.Bridge, error) {
+	var err error
+	var addr uint32
+
+	if len(q.Bridges) == 0 {
+		return "", types.Bridge{}, errors.New("failed to get available address from bridges")
+	}
+
+	// looking for an empty address in the bridges
+	for _, b := range q.Bridges {
+		if t != b.Type {
+			continue
+		}
+		addr, err = b.AddDevice(ID)
+		if err == nil {
+			switch t {
+			case types.PCI, types.PCIE:
+				return fmt.Sprintf("%02x", addr), b, nil
+			}
+		}
+	}
+
+	return "", types.Bridge{}, fmt.Errorf("no more bridge slots available")
+}
+
+func (q *qemuArchBase) removeDeviceFromBridge(ID string) error {
+	var err error
+	for _, b := range q.Bridges {
+		err = b.RemoveDevice(ID)
+		if err == nil {
+			// device was removed correctly
+			return nil
+		}
+	}
+
+	return err
+}
+
+func (q *qemuArchBase) getBridges() []types.Bridge {
+	return q.Bridges
+}
+
+func (q *qemuArchBase) setBridges(bridges []types.Bridge) {
+	q.Bridges = bridges
+}
+
+func (q *qemuArchBase) addBridge(b types.Bridge) {
+	q.Bridges = append(q.Bridges, b)
 }

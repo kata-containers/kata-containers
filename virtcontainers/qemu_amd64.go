@@ -122,8 +122,8 @@ func (q *qemuAmd64) capabilities() types.Capabilities {
 	return caps
 }
 
-func (q *qemuAmd64) bridges(number uint32) []types.Bridge {
-	return genericBridges(number, q.machineType)
+func (q *qemuAmd64) bridges(number uint32) {
+	q.Bridges = genericBridges(number, q.machineType)
 }
 
 func (q *qemuAmd64) cpuModel() string {
@@ -173,6 +173,6 @@ func (q *qemuAmd64) appendImage(devices []govmmQemu.Device, path string) ([]govm
 }
 
 // appendBridges appends to devices the given bridges
-func (q *qemuAmd64) appendBridges(devices []govmmQemu.Device, bridges []types.Bridge) []govmmQemu.Device {
-	return genericAppendBridges(devices, bridges, q.machineType)
+func (q *qemuAmd64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
+	return genericAppendBridges(devices, q.Bridges, q.machineType)
 }
