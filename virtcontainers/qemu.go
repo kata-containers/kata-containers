@@ -266,9 +266,11 @@ func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 		create = true
 	}
 
+	q.arch.setBridges(q.state.Bridges)
+
 	if create {
 		q.Logger().Debug("Creating bridges")
-		q.state.Bridges = q.arch.bridges(q.config.DefaultBridges)
+		q.arch.bridges(q.config.DefaultBridges)
 
 		q.Logger().Debug("Creating UUID")
 		q.state.UUID = uuid.Generate().String()
@@ -403,7 +405,7 @@ func (q *qemu) buildDevices(initrdPath string) ([]govmmQemu.Device, *govmmQemu.I
 
 	// Add bridges before any other devices. This way we make sure that
 	// bridge gets the first available PCI address i.e bridgePCIStartAddr
-	devices = q.arch.appendBridges(devices, q.state.Bridges)
+	devices = q.arch.appendBridges(devices)
 
 	devices = q.arch.appendConsole(devices, console)
 
@@ -1986,6 +1988,7 @@ func (q *qemu) toGrpc() ([]byte, error) {
 
 func (q *qemu) storeState() error {
 	if q.store != nil {
+		q.state.Bridges = q.arch.getBridges()
 		if err := q.store.Store(store.Hypervisor, q.state); err != nil {
 			return err
 		}
@@ -2004,7 +2007,7 @@ func (q *qemu) save() (s persistapi.HypervisorState) {
 	s.HotpluggedMemory = q.state.HotpluggedMemory
 	s.HotplugVFIOOnRootBus = q.state.HotplugVFIOOnRootBus
 
-	for _, bridge := range q.state.Bridges {
+	for _, bridge := range q.arch.getBridges() {
 		s.Bridges = append(s.Bridges, persistapi.Bridge{
 			DeviceAddr: bridge.Devices,
 			Type:       string(bridge.Type),
@@ -2028,8 +2031,7 @@ func (q *qemu) load(s persistapi.HypervisorState) {
 	q.state.VirtiofsdPid = s.VirtiofsdPid
 
 	for _, bridge := range s.Bridges {
-		b := types.NewBridge(types.Type(bridge.Type), bridge.ID, bridge.DeviceAddr, bridge.Addr)
-		q.state.Bridges = append(q.state.Bridges, b)
+		q.state.Bridges = append(q.state.Bridges, types.NewBridge(types.Type(bridge.Type), bridge.ID, bridge.DeviceAddr, bridge.Addr))
 	}
 
 	for _, cpu := range s.HotpluggedVCPUs {
