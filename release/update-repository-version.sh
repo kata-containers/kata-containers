@@ -25,11 +25,23 @@ cleanup() {
 
 trap cleanup EXIT
 
+handle_error() {
+	local exit_code="${?}"
+	local line_number="${1:-}"
+	echo "Failed at $line_number: ${BASH_COMMAND}"
+	exit "${exit_code}"
+}
+trap 'handle_error $LINENO' ERR
+
 get_changes() {
 	local current_version=$1
 	[ -n "${current_version}" ] || die "current version not provided"
 
-	changes=$(git log --oneline "${current_version}..HEAD") || die "failed to get logs"
+	# If for some reason there is not a tag this could fail
+	# better fail and write the error in the PR
+	if ! changes=$(git log --oneline "${current_version}..HEAD"); then
+		echo "failed to get logs"
+	fi
 	if [ "${changes}" == "" ]; then
 		echo "Version bump no changes"
 		return
@@ -84,6 +96,11 @@ bump_repo() {
 
 	info "Updating VERSION file"
 	echo "${new_version}" >VERSION
+	if git diff --exit-code; then
+		info "${repo} already in version ${new_version}"
+		cat VERSION
+		return 0
+	fi
 
 	info "Creating PR message"
 	notes_file=notes.md
@@ -139,7 +156,6 @@ repos=(
 	"runtime"
 	"shim"
 )
-
 
 main(){
 	while getopts "hp" opt; do
