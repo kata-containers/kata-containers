@@ -5,7 +5,10 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-set -e
+set -o errexit
+set -o nounset
+set -o pipefail
+set -o errtrace
 
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
@@ -18,51 +21,44 @@ CURRENT_QEMU_TAG=$(get_version "assets.hypervisor.qemu.tag")
 QEMU_REPO_URL=$(get_version "assets.hypervisor.qemu.url")
 # Remove 'https://' from the repo url to be able to git clone the repo
 QEMU_REPO=${QEMU_REPO_URL/https:\/\//}
-PACKAGED_QEMU="qemu"
 QEMU_ARCH=$(${cidir}/kata-arch.sh -d)
+PACKAGING_REPO="github.com/kata-containers/packaging"
+ARCH=$("${cidir}"/kata-arch.sh -d)
+QEMU_TAR="kata-qemu-static.tar.gz"
+
+qemu_latest_build_url="http://jenkins.katacontainers.io/job/qemu-nightly-$(uname -m)/lastSuccessfulBuild/artifact/artifacts"
 
 # option "--shallow-submodules" was introduced in git v2.9.0
 GIT_SHADOW_VERSION="2.9.0"
 
-get_packaged_qemu_commit() {
-	if [ "$ID" == "ubuntu" ] || [ "$ID" == "debian" ]; then
-		qemu_commit=$(sudo apt-cache madison $PACKAGED_QEMU \
-			| awk '{print $3}' | cut -d'+' -f1 | cut -d':' -f2)
-	elif [ "$ID" == "fedora" ]; then
-		qemu_commit=$(sudo dnf --showduplicate list ${PACKAGED_QEMU}.${QEMU_ARCH} \
-			| awk '/'$PACKAGED_QEMU'/ {print $2}' | cut -d':' -f2 | cut -d'.' -f1-2)
-	elif [ "$ID" == "centos" ] || [ "$ID" == "rhel" ]; then
-		qemu_commit=$(sudo yum --showduplicate list $PACKAGED_QEMU \
-			| awk '/'$PACKAGED_QEMU'/ {print $2}' | cut -d':' -f2 | cut -d'.' -f1-2)
-	elif [[ "$ID" =~ ^opensuse.*$ ]] || [ "$ID" == "sles" ]; then
-		qemu_commit=$(sudo zypper info $PACKAGED_QEMU \
-			| grep "Version" | cut -d':' -f2 | cut -d'.' -f1-2 | tr -d '[:space:]')
-	fi
+build_static_qemu() {
+	info "building static QEMU"
+	# only x86_64 is supported for building static QEMU
+	[ "$ARCH" != "x86_64" ] && return 1
 
-	echo "${qemu_commit}"
+	go get -d "${PACKAGING_REPO}" || true
+	prefix="${KATA_QEMU_DESTDIR}" "${GOPATH}/src/${PACKAGING_REPO}/static-build/qemu/build-static-qemu.sh"
 }
 
-install_packaged_qemu() {
-	rc=0
-	# Timeout to download packages from OBS
-	limit=180
-	if [ "$ID"  == "ubuntu" ] || [ "$ID" == "debian" ]; then
-		chronic sudo apt remove -y "$PACKAGED_QEMU" || true
-		chronic sudo apt install -y "$PACKAGED_QEMU" || rc=1
-	elif [ "$ID"  == "fedora" ]; then
-		chronic sudo dnf remove -y "$PACKAGED_QEMU" || true
-		chronic sudo dnf install -y "$PACKAGED_QEMU" || rc=1
-	elif [ "$ID"  == "centos" ] || [ "$ID"  == "rhel" ]; then
-		chronic sudo yum remove -y "$PACKAGED_QEMU" || true
-		chronic sudo yum install -y "$PACKAGED_QEMU" || rc=1
-	elif [[ "$ID" =~ ^opensuse.*$ ]] || [ "$ID" == "sles" ]; then
-		chronic sudo zypper -n remove "$PACKAGED_QEMU" || true
-		chronic sudo zypper -n install "$PACKAGED_QEMU" || rc=1
-	else
-		die "Unrecognized distro"
-	fi
+uncompress_static_qemu() {
+	local qemu_tar_location="$1"
+	[ -n "$qemu_tar_location" ] || die "provide the location of the QEMU compressed file"
+	
+	sudo tar -xf "${qemu_tar_location}" -C /
+}
 
-	return "$rc"
+build_and_install_static_qemu(){
+	build_static_qemu
+	uncompress_static_qemu "$QEMU_TAR"
+}
+
+install_cached_qemu(){
+	info "Installing cached QEMU"
+	curl -fL --progress-bar "${qemu_latest_build_url}/${QEMU_TAR}" -o "${QEMU_TAR}" || return 1
+	curl -fsOL "${qemu_latest_build_url}/sha256sum-${QEMU_TAR}" || return 1
+	
+	sha256sum -c "sha256sum-${QEMU_TAR}" || return 1
+	uncompress_static_qemu "$QEMU_TAR"
 }
 
 clone_qemu_repo() {
@@ -78,10 +74,9 @@ clone_qemu_repo() {
 
 build_and_install_qemu() {
 	if [ -n "$(command -v qemu-system-${QEMU_ARCH})" ] && [ -n "$KATA_DEV_MODE" ]; then
-		die "Qemu will not be installed"
+		die "QEMU will not be installed"
 	fi
 
-	PACKAGING_REPO="github.com/kata-containers/packaging"
 	QEMU_CONFIG_SCRIPT="${GOPATH}/src/${PACKAGING_REPO}/scripts/configure-hypervisor.sh"
 
 	mkdir -p "${GOPATH}/src"
@@ -102,11 +97,11 @@ build_and_install_qemu() {
 		git apply "$patch"
 	done
 
-	echo "Build Qemu"
+	echo "Build QEMU"
 	"${QEMU_CONFIG_SCRIPT}" "qemu" | xargs ./configure
 	make -j $(nproc)
 
-	echo "Install Qemu"
+	echo "Install QEMU"
 	sudo -E make install
 	popd
 }
@@ -119,14 +114,21 @@ fi
 main() {
 	case "$QEMU_ARCH" in
 		"x86_64")
-			packaged_qemu_commit=$(get_packaged_qemu_commit)
-			short_current_qemu_commit=${CURRENT_QEMU_COMMIT:0:10}
-			if [ "$packaged_qemu_commit" == "$short_current_qemu_commit" ]; then
-				# If installing packaged qemu from OBS fails,
-				# then build and install it from sources.
-				install_packaged_qemu || build_and_install_qemu
-			else
+			cached_qemu_version=$(curl -sfL "${qemu_latest_build_url}/latest") || cached_qemu_version="none"
+			info "current QEMU version: $CURRENT_QEMU_VERSION"
+			info "cached QEMU version: $cached_qemu_version"
+
+			# When testing initrd, build qemu instead of using the cached qemu
+			# as there seems to be an issue with the statically built qemu when
+			# running the factory-vm tests.
+			if [ "${AGENT_INIT:-}" == "yes" ]; then
 				build_and_install_qemu
+			elif [ "$cached_qemu_version" == "$CURRENT_QEMU_VERSION" ]; then
+				# If installing cached QEMU fails,
+				# then build and install it from sources.
+				install_cached_qemu || build_and_install_static_qemu
+			else
+				build_and_install_static_qemu
 			fi
 			;;
 		"ppc64le"|"s390x")
