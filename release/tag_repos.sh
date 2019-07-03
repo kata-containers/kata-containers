@@ -40,6 +40,7 @@ EOT
 
 Args:
 status : Get Current ${PROJECT} tags status
+pre-release :  Takes a version to check all the components match with it (but not the runtime)
 tag    : Create tags for ${PROJECT}
 
 Options:
@@ -90,12 +91,26 @@ not_stable_branch=(
 	"ksm-throttler"
 )
 
+# The pre-release option at the check_versions function receives
+# the runtime VERSION in order to check all the components match with it,
+# this has the purpose that all the components have the same version before
+# merging the runtime version
 check_versions() {
+	version_to_check=${1:-}
+	if [ -z "${version_to_check}" ];then
+		info "Query the version from latest runtime in branch ${branch}"
+	else
+		kata_version="${version_to_check}"
+	fi
 
 	info "Tagging ${PROJECT} with version ${kata_version}"
 	info "Check all repos has version ${kata_version} in VERSION file"
 
 	for repo in "${repos[@]}"; do
+		if [ ! -z "${version_to_check}" ] && [ "${repo}" == "runtime" ]; then
+			info "Not checking runtime because we want the rest of repos are in ${version_to_check}"
+			continue
+		fi
 		repo_version=$(curl -Ls "${URL_RAW_FILE}/${repo}/${branch}/VERSION" | grep -v -P "^#")
 		info "${repo} is in $repo_version"
 		[ "${repo_version}" == "${kata_version}" ] || die "${repo} is not in version ${kata_version}"
@@ -174,40 +189,47 @@ create_github_release() {
 	fi
 }
 
-while getopts "b:hp" opt; do
-	case $opt in
-	b) branch="${OPTARG}" ;;
-	h) usage && exit 0 ;;
-	p) PUSH="true" ;;
+main () {
+	while getopts "b:hp" opt; do
+		case $opt in
+		b) branch="${OPTARG}" ;;
+		h) usage && exit 0 ;;
+		p) PUSH="true" ;;
+		esac
+	done
+	shift $((OPTIND - 1))
+
+	subcmd=${1:-""}
+	shift || true
+	kata_version=$(curl -Ls "${URL_RAW_FILE}/runtime/${branch}/VERSION" | grep -v -P "^#")
+
+	[ -z "${subcmd}" ] && usage && exit 0
+
+	pushd "${tmp_dir}" >>/dev/null
+
+	case "${subcmd}" in
+	status)
+		check_versions
+		;;
+	pre-release)
+		check_versions ${1}
+		;;
+	tag)
+		check_versions
+		repos+=("${repos_not_versions[@]}")
+		tag_repos
+		if [ "${PUSH}" == "true" ]; then
+			push_tags
+		else
+			info "tags not pushed, use -p option to push the tags"
+		fi
+		;;
+	*)
+		usage && die "Invalid argument ${subcmd}"
+		;;
+
 	esac
-done
-shift $((OPTIND - 1))
 
-subcmd=${1:-""}
-kata_version=$(curl -Ls "${URL_RAW_FILE}/runtime/${branch}/VERSION" | grep -v -P "^#")
-
-[ -z "${subcmd}" ] && usage && exit 0
-
-pushd "${tmp_dir}" >>/dev/null
-
-case "${subcmd}" in
-status)
-	check_versions
-	;;
-tag)
-	check_versions
-	repos+=("${repos_not_versions[@]}")
-	tag_repos
-	if [ "${PUSH}" == "true" ]; then
-		push_tags
-	else
-		info "tags not pushed, use -p option to push the tags"
-	fi
-	;;
-*)
-	usage && die "Invalid argument ${subcmd}"
-	;;
-
-esac
-
-popd >>/dev/null
+	popd >>/dev/null
+}
+main "$@"
