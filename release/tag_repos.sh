@@ -20,6 +20,8 @@ readonly URL_RAW_FILE="https://raw.githubusercontent.com/${OWNER}"
 #The runtime version is used as reference of latest release
 # This is set to the right value later.
 kata_version=""
+# Set if a new stable branch is created
+stable_branch=""
 
 source "${script_dir}/../scripts/lib.sh"
 
@@ -122,6 +124,17 @@ tag_repos() {
 			info "Creating tag ${tag} for ${repo}"
 			git tag -a "${tag}" -s -m "${PROJECT} release ${tag}"
 		fi
+		if [[ ! ${not_stable_branch[*]} =~ ${repo} ]] && [ "${branch}" == "master" ]; then
+			if echo "${tag}" | grep -oP '.*-rc0$'; then
+				info "This is a rc0 for master - creating stable branch"
+				stable_branch=$(echo ${tag} | awk 'BEGIN{FS=OFS="."}{print $1 "." $2}')
+				stable_branch="stable-${stable_branch}"
+				info "creating branch ${stable_branch} for ${repo}"
+				git checkout -b  "${stable_branch}" "${branch}"
+
+			fi
+		fi
+
 		popd >>/dev/null
 	done
 }
@@ -136,6 +149,10 @@ push_tags() {
 		info "Push tag ${tag} for ${repo}"
 		git push origin "${tag}"
 		create_github_release "${PWD}" "${tag}"
+		if [ "${stable_branch}" != "" ] && [[ ! ${not_stable_branch[*]} =~ ${repo} ]]; then
+			info "Pushing stable ${stable_branch} branch for ${repo}"
+			git push origin ${stable_branch}
+		fi
 		popd >>/dev/null
 	done
 }
