@@ -25,6 +25,7 @@ before_install:
 
 before_script:
   - ".ci/static-checks.sh"
+  - ".ci/versions_checker.sh"
 
 install:
   - cd ${TRAVIS_BUILD_DIR}
