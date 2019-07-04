@@ -14,7 +14,7 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
-[ -z "${DEBUG:-}"  ] || set -x
+[ -z "${DEBUG:-}" ] || set -x
 readonly script_dir=$(dirname $(readlink -f "$0"))
 readonly packaging_dir="${script_dir}/../.."
 
@@ -30,10 +30,9 @@ fi
 
 # Push to anywhere, variable used by release scripts to push
 PUSH=1
-# dont use release kata image
-BUILD_HEAD=true
+BUILD_HEAD=${BUILD_HEAD:-${CI:-}}
 
-if [ "${CI:-}" == "true" ];then
+if [ "${CI:-}" == "true" ]; then
 	SUBPROJECT_TYPE="ci"
 else
 	SUBPROJECT_TYPE="releases"
@@ -55,13 +54,25 @@ echo "INFO: BUILD_HEAD=${BUILD_HEAD}"
 echo "INFO: BRANCH=${BRANCH}"
 echo "INFO: OBS_BRANCH=${OBS_SUBPROJECT}"
 echo "INFO: PUSH=${PUSH}"
+echo "INFO: SUBPROJECT_TYPE=${SUBPROJECT_TYPE}"
 
 # Export in all pipeline tasks
-cd "${packaging_dir}/obs-packaging"  || exit 1
-echo "Building for head gen versions ..."
-./gen_versions_txt.sh --head "${BRANCH}"
+cd "${packaging_dir}/obs-packaging" || exit 1
+gen_versions_cmd="./gen_versions_txt.sh"
+if [ "${BUILD_HEAD}" = "true" ]; then
+	echo "Building for head gen versions ..."
+	gen_versions_cmd+=" --head"
+fi
+
+${gen_versions_cmd} "${BRANCH}"
+
 # print versions just for debug/info
 cat versions.txt
 export NEW_VERSION=$(curl -s -L https://raw.githubusercontent.com/kata-containers/runtime/${BRANCH}/VERSION)
-script -qefc bash -c './create-repo-branch.sh --ci ${OBS_BRANCH}'
+create_repo_cmd="./create-repo-branch.sh"
+if [ "${CI:-}" = "true" ]; then
+	create_repo_cmd+=" --ci"
+fi
+create_repo_cmd+=" ${OBS_BRANCH}"
+script -qefc bash -c "${create_repo_cmd}"
 script -qefc bash -c './build_from_docker.sh ${NEW_VERSION}'
