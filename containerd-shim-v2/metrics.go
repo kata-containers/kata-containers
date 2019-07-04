@@ -31,13 +31,14 @@ func marshalMetrics(s *service, containerID string) (*google_protobuf.Any, error
 
 func statsToMetrics(cgStats *vc.CgroupStats) *cgroups.Metrics {
 	var hugetlb []*cgroups.HugetlbStat
-	for _, v := range cgStats.HugetlbStats {
+	for pageSize, v := range cgStats.HugetlbStats {
 		hugetlb = append(
 			hugetlb,
 			&cgroups.HugetlbStat{
-				Usage:   v.Usage,
-				Max:     v.MaxUsage,
-				Failcnt: v.Failcnt,
+				Usage:    v.Usage,
+				Max:      v.MaxUsage,
+				Failcnt:  v.Failcnt,
+				Pagesize: pageSize,
 			})
 	}
 
