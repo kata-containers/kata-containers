@@ -27,7 +27,7 @@ var (
 	deviceSerialString             = "-device virtio-serial-pci,disable-modern=true,id=serial0,romfile=efi-virtio.rom"
 	deviceVhostUserNetString       = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -netdev type=vhost-user,id=net1,chardev=char1,vhostforce -device virtio-net-pci,netdev=net1,mac=00:11:22:33:44:55,romfile=efi-virtio.rom"
 	deviceVSOCKString              = "-device vhost-vsock-pci,disable-modern=true,id=vhost-vsock-pci0,guest-cid=4,romfile=efi-virtio.rom"
-	deviceVFIOString               = "-device vfio-pci,host=02:10.0,romfile=efi-virtio.rom"
+	deviceVFIOString               = "-device vfio-pci,host=02:10.0,x-pci-vendor-id=0x1234,x-pci-device-id=0x5678,romfile=efi-virtio.rom"
 	deviceSCSIControllerStr        = "-device virtio-scsi-pci,id=foo,disable-modern=false,romfile=efi-virtio.rom"
 	deviceSCSIControllerBusAddrStr = "-device virtio-scsi-pci,id=foo,bus=pci.0,addr=00:04.0,disable-modern=true,iothread=iothread1,romfile=efi-virtio.rom"
 	deviceVhostUserSCSIString      = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -device vhost-user-scsi-pci,id=scsi1,chardev=char1,romfile=efi-virtio.rom"
