@@ -280,22 +280,33 @@ func TestQemuAddDeviceSerialPortDev(t *testing.T) {
 }
 
 func TestQemuAddDeviceKataVSOCK(t *testing.T) {
+	assert := assert.New(t)
+
+	dir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(dir)
+
+	vsockFilename := filepath.Join(dir, "vsock")
+
 	contextID := uint64(3)
 	port := uint32(1024)
-	vHostFD := os.NewFile(1, "vsock")
+
+	vsockFile, err := os.Create(vsockFilename)
+	assert.NoError(err)
+	defer vsockFile.Close()
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.VSOCKDevice{
 			ID:        fmt.Sprintf("vsock-%d", contextID),
 			ContextID: contextID,
-			VHostFD:   vHostFD,
+			VHostFD:   vsockFile,
 		},
 	}
 
 	vsock := kataVSOCK{
 		contextID: contextID,
 		port:      port,
-		vhostFd:   vHostFD,
+		vhostFd:   vsockFile,
 	}
 
 	testQemuAddDevice(t, vsock, vSockPCIDev, expectedOut)
