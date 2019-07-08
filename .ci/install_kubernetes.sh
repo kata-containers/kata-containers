@@ -39,10 +39,9 @@ fi
 if [ "$ID" == "ubuntu" ]; then
 	sudo bash -c "cat <<EOF > /etc/apt/sources.list.d/kubernetes.list
 	deb http://apt.kubernetes.io/ kubernetes-xenial-unstable main
-	EOF"
+EOF"
 
 	chronic sudo -E sed -i 's/^[ \t]*//' /etc/apt/sources.list.d/kubernetes.list
-	chronic sudo -E sed -i '$ d' /etc/apt/sources.list.d/kubernetes.list
 	curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 	chronic sudo -E apt update
 	chronic sudo -E apt install --allow-downgrades -y kubelet="$kubernetes_version" kubeadm="$kubernetes_version" kubectl="$kubernetes_version"
@@ -63,10 +62,9 @@ elif [ "$ID" == "centos" ] || [ "$ID" == "fedora" ]; then
 	gpgcheck=1
 	repo_gpgcheck=1
 	gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
-	EOF"
+EOF"
 
 	chronic sudo -E sed -i 's/^[ \t]*//' /etc/yum.repos.d/kubernetes.repo
-	chronic sudo -E sed -i '$ d' /etc/yum.repos.d/kubernetes.repo
 	install_kubernetes_version=$(echo $kubernetes_version | cut -d'-' -f1)
 	chronic sudo -E yum -y update
 	chronic sudo -E yum install -y kubelet-"$install_kubernetes_version" kubeadm-"$install_kubernetes_version" kubectl-"$install_kubernetes_version" --disableexcludes=kubernetes
