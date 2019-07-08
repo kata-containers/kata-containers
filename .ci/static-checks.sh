@@ -519,10 +519,10 @@ static_check_docs()
 		docs_status=$(get_pr_changed_file_details || true)
 		docs_status=$(echo "$docs_status" | grep "\.md$" || true)
 
-		docs=$(echo "$docs_status" | awk '{print $NF}')
+		docs=$(echo "$docs_status" | awk '{print $NF}' | sort)
 
 		# Newly-added docs
-		new_docs=$(echo "$docs_status" | awk '/^A/ {print $NF}')
+		new_docs=$(echo "$docs_status" | awk '/^A/ {print $NF}' | sort)
 
 		for doc in $new_docs
 		do
