@@ -104,6 +104,9 @@ type SandboxConfig struct {
 	// SystemdCgroup enables systemd cgroup support
 	SystemdCgroup bool
 
+	// SandboxCgroupOnly enables cgroup only at podlevel in the host
+	SandboxCgroupOnly bool
+
 	DisableGuestSeccomp bool
 
 	// Experimental features enabled

@@ -404,6 +404,12 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # (default: false)
 #disable_new_netns = true
 
+# if enable, the runtime use the parent cgroup of a container PodSandbox.  This
+# should be enabled for users where the caller setup the parent cgroup of the
+# containers running in a sandbox so all the resouces of the kata container run
+# in the same cgroup and performance isolation its more accurate.
+sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
+
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
 # They may break compatibility, and are prepared for a big version bump.
