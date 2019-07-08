@@ -52,6 +52,8 @@ typeset url_check_max_tries="${url_check_max_tries:-3}"
 typeset -A long_options
 
 long_options=(
+	[all]="Force checking of all changes, including files in the base branch"
+	[branch]="Specify upstream branch to compare against (default '$branch')"
 	[commits]="Check commits"
 	[docs]="Check document files"
 	[files]="Check files"
@@ -61,13 +63,11 @@ long_options=(
 	[labels]="Check labels databases"
 	[licenses]="Check licenses"
 	[list]="List tests that would run"
-	[branch]="Specify upstream branch to compare against (default '$branch')"
-	[all]="Force checking of all changes, including files in the base branch"
+	[no-arch]="Run/list all tests except architecture-specific ones"
+	[only-arch]="Only run/list architecture-specific tests"
 	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
 	[vendor]="Check vendor files"
 	[versions]="Check versions files"
-	[no-arch]="Run/list all tests except architecture-specific ones"
-	[only-arch]="Only run/list architecture-specific tests"
 )
 
 yamllint_cmd="yamllint"
