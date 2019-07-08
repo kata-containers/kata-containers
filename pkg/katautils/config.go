@@ -133,6 +133,7 @@ type runtime struct {
 	Tracing             bool     `toml:"enable_tracing"`
 	DisableNewNetNs     bool     `toml:"disable_new_netns"`
 	DisableGuestSeccomp bool     `toml:"disable_guest_seccomp"`
+	SandboxCgroupOnly   bool     `toml:"sandbox_cgroup_only"`
 	Experimental        []string `toml:"experimental"`
 	InterNetworkModel   string   `toml:"internetworking_model"`
 }
@@ -1054,6 +1055,7 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 		config.ProxyConfig = vc.ProxyConfig{Debug: config.Debug}
 	}
 
+	config.SandboxCgroupOnly = tomlConf.Runtime.SandboxCgroupOnly
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
 	for _, f := range tomlConf.Runtime.Experimental {
 		feature := exp.Get(f)

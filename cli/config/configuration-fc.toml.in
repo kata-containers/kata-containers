@@ -330,6 +330,14 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # (default: false)
 #disable_new_netns = true
 
+# if enable, the runtime will add all the kata processes inside one dedicated cgroup.
+# The container cgroups in the host are not created, just one single cgroup per sandbox.
+# The sandbox cgroup is not constrained by the runtime
+# The runtime caller is free to restrict or collect cgroup stats of the overall Kata sandbox.
+# The sandbox cgroup path is the parent cgroup of a container with the PodSandbox annotation.
+# See: https://godoc.org/github.com/kata-containers/runtime/virtcontainers#ContainerType
+sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
+
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
 # They may break compatibility, and are prepared for a big version bump.
