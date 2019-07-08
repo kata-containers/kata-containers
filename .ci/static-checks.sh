@@ -68,6 +68,7 @@ long_options=(
 	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
 	[vendor]="Check vendor files"
 	[versions]="Check versions files"
+	[xml]="Check XML files"
 )
 
 yamllint_cmd="yamllint"
@@ -838,6 +839,58 @@ static_check_vendor()
 	dep ensure -no-vendor -dry-run
 }
 
+static_check_xml()
+{
+	local all_xml
+	local files
+
+	all_xml=$(find . -name "*.xml" | grep -v "/vendor/" | sort || true)
+
+	if [ "$specific_branch" = "true" ]
+	then
+		info "Checking all XML files in $branch branch"
+		files="$all_xml"
+	else
+		info "Checking local branch for changed XML files only"
+
+		local xml_status
+
+		xml_status=$(get_pr_changed_file_details || true)
+		xml_status=$(echo "$xml_status" | grep "\.xml$" || true)
+
+		files=$(echo "$xml_status" | awk '{print $NF}')
+	fi
+
+	[ -z "$files" ] && info "No XML files to check" && return
+
+	local file
+
+	for file in $files
+	do
+		info "Checking XML file '$file'"
+
+		local contents
+
+		# Most XML documents are specified as XML 1.0 since, with the
+		# advent of XML 1.0 (Fifth Edition), XML 1.1 is "almost
+		# redundant" due to XML 1.0 providing the majority of XML 1.1
+		# features. xmllint doesn't support XML 1.1 seemingly for this
+		# reason, so the only check we can do is to (crudely) force
+		# the document to be an XML 1.0 one since XML 1.1 documents
+		# can mostly be represented as XML 1.0.
+		#
+		# This is only really required since Jenkins creates XML 1.1
+		# documents.
+		contents=$(sed "s/xml version='1.1'/xml version='1.0'/g" "$file")
+
+		local ret
+
+		{ chronic xmllint -format - <<< "$contents"; ret=$?; } || true
+
+		[ "$ret" -eq 0 ] || die "failed to check XML file '$file'"
+	done
+}
+
 # Run the specified function (after first checking it is compatible with the
 # users architectural preferences), or simply list the function name if list
 # mode is active.
@@ -923,6 +976,7 @@ main()
 			--repo) repo="$2"; shift ;;
 			--vendor) func=static_check_vendor;;
 			--versions) func=static_check_versions ;;
+			--xml) func=static_check_xml ;;
 			--) shift; break ;;
 		esac
 

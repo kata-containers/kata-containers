@@ -38,6 +38,7 @@ sudo -E yum -y install moreutils
 
 declare -A minimal_packages=( \
 	[spell-check]="hunspell hunspell-en-GB hunspell-en-US pandoc" \
+	[xml_validator]="libxml2" \
 	[yaml_validator]="yamllint" \
 )
 
