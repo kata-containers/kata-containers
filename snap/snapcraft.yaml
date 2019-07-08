@@ -1,5 +1,5 @@
 name: kata-containers
-version: "1.8.0-alpha0"
+version: "1.8.0-rc0"
 summary: Build lightweight VMs that seamlessly plug into the containers ecosystem
 description: |
   Kata Containers is an open source project and community working to build a
