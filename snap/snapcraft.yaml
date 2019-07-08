@@ -206,65 +206,22 @@ parts:
         TARGET=kata-ksm-throttler
 
   kernel:
-    override-pull: |
-      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${SNAPCRAFT_PROJECT_VERSION}/versions.yaml
-      version="$(curl -sSL ${versions_url} | yq r - assets.kernel.version | tr -d v)"
-      url="$(curl -sSL ${versions_url} | yq r - assets.kernel.url)"
-      curl -LO ${url}/linux-${version}.tar.xz
-      tar -xf linux-${version}.tar.xz --strip-components=1
-    after: [kernel-dump]
-    plugin: kernel
+    after: [kernel-dump, scripts-dump, yq]
+    plugin: nil
     build-packages:
       - libelf-dev
       - curl
       - build-essential
       - bison
       - flex
-    build-snaps:
-      - yq
     override-build: |
-      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${SNAPCRAFT_PROJECT_VERSION}/versions.yaml
-      version="$(curl -sSL ${versions_url} | yq r - assets.kernel.version | tr -d v)"
-      x_version="$(echo $version | sed -e 's|.[[:digit:]]*$||').x"
-      case "$(uname -m)" in
-        "x86_64")
-          config="x86_64_kata_kvm_${x_version}"
-        ;;
+      yq=$(realpath ../../yq/build/yq)
 
-        "ppc64le")
-          config="powerpc_kata_kvm_${x_version}"
-        ;;
-
-        "aarch64")
-          config="arm64_kata_kvm_${x_version}"
-        ;;
-
-        "s390x")
-          config="s390_kata_kvm_${x_version}"
-        ;;
-
-        *)
-          echo "ERROR: Unsupported architecture $(uname -m)"
-          exit 1
-        ;;
-      esac
-
-      make mrproper
-
-
-      # Apply patches
-      for patch in ${SNAPCRAFT_STAGE}/kernel/patches/${x_version}/*.patch; do
-        echo "Applying $(basename "$patch") ..."
-        patch \
-          --batch \
-          --forward \
-          --strip 1 \
-          --input "$patch"
-      done
-
-      # Copy config file
-      cp ${SNAPCRAFT_STAGE}/kernel/configs/${config} .config
-      make -s oldconfig EXTRAVERSION=".container" > /dev/null
+      # Say 'no' to everithing, fix issues with incomplete .config files
+      yes "n" | ${SNAPCRAFT_STAGE}/kernel/build-kernel.sh setup
+      kernel_dir_prefix="kata-linux-"
+      cd ${kernel_dir_prefix}*
+      version=$(basename ${PWD} | sed 's|'"${kernel_dir_prefix}"'||' | cut -d- -f1)
       make -j $(($(nproc)-1)) EXTRAVERSION=".container"
 
       kernel_suffix=${version}.container
@@ -286,6 +243,14 @@ parts:
     plugin: dump
     organize:
       '*' : kernel/
+    prime:
+      - -*
+
+  scripts-dump:
+    source: scripts
+    plugin: dump
+    organize:
+      '*' : scripts/
     prime:
       - -*
 
