@@ -1568,6 +1568,7 @@ CONFIG_NET_CORE=y
 # CONFIG_MACVLAN is not set
 # CONFIG_IPVLAN is not set
 # CONFIG_VXLAN is not set
+# CONFIG_GTP is not set
 # CONFIG_MACSEC is not set
 # CONFIG_NETCONSOLE is not set
 CONFIG_TUN=y
@@ -1782,6 +1783,7 @@ CONFIG_UNIX98_PTYS=y
 # CONFIG_NOZOMI is not set
 # CONFIG_N_GSM is not set
 # CONFIG_TRACE_SINK is not set
+# CONFIG_LDISC_AUTOLOAD is not set
 # CONFIG_DEVMEM is not set
 # CONFIG_DEVKMEM is not set
 
@@ -1831,7 +1833,6 @@ CONFIG_HW_RANDOM_INTEL=y
 # CONFIG_HW_RANDOM_VIA is not set
 CONFIG_HW_RANDOM_VIRTIO=y
 # CONFIG_NVRAM is not set
-# CONFIG_R3964 is not set
 # CONFIG_APPLICOM is not set
 # CONFIG_MWAVE is not set
 # CONFIG_RAW_DRIVER is not set
