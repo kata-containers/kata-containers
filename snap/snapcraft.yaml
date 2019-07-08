@@ -141,17 +141,20 @@ parts:
       make install LIBEXECDIR=${SNAPCRAFT_PART_INSTALL}/usr/libexec
 
   image:
-    source: http://github.com/kata-containers/osbuilder
-    source-type: git
     after: [go]
-    plugin: make
+    plugin: nil
     build-packages:
       - docker.io
       - cpio
     override-build: |
+      yq=$(realpath ../../yq/build/yq)
+      pkg_name=osbuilder
+
       # set GOPATH
       export GOPATH=$(realpath go)
-      mkdir -p "${GOPATH}"
+      pkg_gopath=${GOPATH}/src/github.com/${SNAPCRAFT_PROJECT_NAME}/${pkg_name}
+      mkdir -p ${pkg_gopath}
+
       # go was built in parts/go/build
       export GOROOT=$(realpath ../../go/build)
       export PATH="${GOROOT}/bin:${PATH}"
@@ -160,6 +163,10 @@ parts:
         sudo -E systemctl set-environment http_proxy=$http_proxy || true
         sudo -E systemctl set-environment https_proxy=$https_proxy || true
       fi
+
+      # Copy yq binary. It's used in the container
+      mkdir -p "${GOPATH}/bin/"
+      cp -a "${yq}" "${GOPATH}/bin/"
 
       echo "Unmasking docker service"
       sudo -E systemctl unmask docker.service || true
@@ -171,8 +178,9 @@ parts:
       echo "Starting docker"
       sudo -E systemctl start docker || true
 
-      # use the same go version for all packages
-      sed -i 's|^GO_VERSION=.*|GO_VERSION='$(go version | cut -d' ' -f3 | tr -d go)'|g' rootfs-builder/versions.txt
+      # download source
+      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
+      cd ${pkg_gopath}
 
       sudo -E PATH=$PATH make AGENT_VERSION=${SNAPCRAFT_PROJECT_VERSION} DISTRO=alpine AGENT_INIT=yes USE_DOCKER=1 initrd
 
