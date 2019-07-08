@@ -264,7 +264,7 @@ parts:
 
   qemu:
     plugin: make
-    after: [qemu-scripts-dump, qemu-lite-patches-dump, qemu-aarch64-patches-dump]
+    after: [scripts-dump, qemu-patches-dump, qemu-aarch64-patches-dump, yq]
     build-packages:
       - gcc
       - python
@@ -279,26 +279,25 @@ parts:
       - libfdt-dev
       - curl
       - libcapstone-dev
-    build-snaps:
-      - yq
     override-build: |
+      yq=$(realpath ../../yq/build/yq)
       pkg_name="qemu"
 
       versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${SNAPCRAFT_PROJECT_VERSION}/versions.yaml
       # arch-specific definition
       case "$(uname -m)" in
         "aarch64")
-          branch="$(curl -sSL ${versions_url} | yq r - assets.hypervisor.qemu.architecture.aarch64.branch)"
-          url="$(curl -sSL ${versions_url} | yq r - assets.hypervisor.qemu.url)"
-          commit="$(curl -sSL ${versions_url} | yq r - assets.hypervisor.qemu.architecture.aarch64.commit)"
+          branch="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.architecture.aarch64.branch)"
+          url="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.url)"
+          commit="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.architecture.aarch64.commit)"
           patch_dir="${SNAPCRAFT_STAGE}/qemu-aarch64/patches/"
         ;;
 
         *)
-          branch="$(curl -sSL ${versions_url} | yq r - assets.hypervisor.qemu-lite.branch)"
-          url="$(curl -sSL ${versions_url} | yq r - assets.hypervisor.qemu-lite.url)"
-          commit="$(curl -sSL ${versions_url} | yq r - assets.hypervisor.qemu-lite.commit)"
-          patch_dir="${SNAPCRAFT_STAGE}/qemu-lite/patches/"
+          branch="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.tag)"
+          url="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.url)"
+          patch_dir="${SNAPCRAFT_STAGE}/qemu/patches/4.0.x"
+          commit=""
         ;;
       esac
 
@@ -306,7 +305,7 @@ parts:
       pkg_repo_dir="${pkg_name}-repo"
       git clone --branch ${branch} --single-branch ${url} "${pkg_repo_dir}"
       cd ${pkg_repo_dir}
-      git checkout ${commit}
+      [ -z "${commit}" ] || git checkout ${commit}
 
       [ -n "$(ls -A ui/keycodemapdb)" ] || git clone https://github.com/qemu/keycodemapdb ui/keycodemapdb/
       [ -n "$(ls -A capstone)" ] || git clone https://github.com/qemu/capstone capstone
@@ -321,9 +320,9 @@ parts:
           --input "$patch"
       done
 
-      chmod +x ${SNAPCRAFT_STAGE}/qemu/scripts/configure-hypervisor.sh
+      chmod +x ${SNAPCRAFT_STAGE}/scripts/configure-hypervisor.sh
       # static build
-      echo "$(${SNAPCRAFT_STAGE}/qemu/scripts/configure-hypervisor.sh -s qemu) \
+      echo "$(${SNAPCRAFT_STAGE}/scripts/configure-hypervisor.sh -s qemu) \
         --disable-rbd
         --prefix=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr \
         --datadir=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/share \
@@ -346,18 +345,11 @@ parts:
       # Hack: move qemu to /
       "snap/kata-containers/current/": "./"
 
-  qemu-scripts-dump:
-    source: scripts
+  qemu-patches-dump:
+    source: qemu/patches/
     plugin: dump
     organize:
-      '*' : qemu/scripts/
-    prime:
-      - -*
-  qemu-lite-patches-dump:
-    source: obs-packaging/qemu-lite/patches/
-    plugin: dump
-    organize:
-      '*' : qemu-lite/patches/
+      '*' : qemu/patches/
     prime:
       - -*
   qemu-aarch64-patches-dump:
