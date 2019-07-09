@@ -945,15 +945,17 @@ main()
 
 	local long_option_names="${!long_options[@]}"
 
-	local args=$(getopt \
+	local args
+
+	args=$(getopt \
 		-n "$script_name" \
 		-a \
 		--options="h" \
 		--longoptions="$long_option_names" \
 		-- "$@")
+	[ $? -eq 0 ] || { usage >&2; exit 1; }
 
 	eval set -- "$args"
-	[ $? -ne 0 ] && { usage >&2; exit 1; }
 
 	local func=
 
