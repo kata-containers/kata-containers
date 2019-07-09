@@ -66,14 +66,6 @@ main()
 
 	[ "$setup_type" = "minimal" ] && exit 0
 
-	if [ "$(arch)" == "x86_64" ]; then
-		echo "Install Kata Containers OBS repository"
-		obs_url="${KATA_OBS_REPO_BASE}/Debian_${VERSION_ID}"
-		sudo sh -c "echo 'deb $obs_url /' > /etc/apt/sources.list.d/kata-containers.list"
-		curl -sL  "${obs_url}/Release.key" | sudo apt-key add -
-		chronic sudo -E apt-get update
-	fi
-
 	if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
 		echo "Install ${KATA_KSM_THROTTLER_JOB}"
 		chronic sudo -E apt install -y ${KATA_KSM_THROTTLER_JOB}
