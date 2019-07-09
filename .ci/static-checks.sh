@@ -60,6 +60,7 @@ long_options=(
 	[force]="Force a skipped test to run"
 	[golang]="Check '.go' files"
 	[help]="Display usage statement"
+	[json]="Check JSON files"
 	[labels]="Check labels databases"
 	[licenses]="Check licenses"
 	[list]="List tests that would run"
@@ -929,6 +930,43 @@ static_check_shell()
 	done
 }
 
+static_check_json()
+{
+	local all_json
+	local json_files
+
+	all_json=$(find . -name "*.json" | grep -v "/vendor/" | sort || true)
+
+	if [ "$specific_branch" = "true" ]
+	then
+		info "Checking all JSON in $branch branch"
+		json_files="$all_json"
+	else
+		info "Checking local branch for changed JSON only"
+
+		local json_status
+		json_status=$(get_pr_changed_file_details || true)
+		json_status=$(echo "$json_status" | grep "\.json$" || true)
+
+		json_files=$(echo "$json_status" | awk '{print $NF}')
+	fi
+
+	[ -z "$json_files" ] && info "No JSON files to check" && return 0
+
+	local json
+
+	for json in $json_files
+	do
+		info "Checking JSON file '$json'"
+
+		local ret
+
+		{ chronic jq -S . "$json"; ret=$?; } || true
+
+		[ "$ret" -eq 0 ] || die "failed to check JSON file '$json'"
+	done
+}
+
 # Run the specified function (after first checking it is compatible with the
 # users architectural preferences), or simply list the function name if list
 # mode is active.
@@ -1008,6 +1046,7 @@ main()
 			--force) force="true" ;;
 			--golang) func=static_check_go_arch_specific ;;
 			-h|--help) usage; exit 0 ;;
+			--json) func=static_check_json ;;
 			--labels) func=static_check_labels;;
 			--licenses) func=static_check_license_headers ;;
 			--list) list_only="true" ;;
