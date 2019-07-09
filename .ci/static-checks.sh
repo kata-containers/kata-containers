@@ -52,6 +52,8 @@ typeset url_check_max_tries="${url_check_max_tries:-3}"
 typeset -A long_options
 
 long_options=(
+	[all]="Force checking of all changes, including files in the base branch"
+	[branch]="Specify upstream branch to compare against (default '$branch')"
 	[commits]="Check commits"
 	[docs]="Check document files"
 	[files]="Check files"
@@ -61,13 +63,12 @@ long_options=(
 	[labels]="Check labels databases"
 	[licenses]="Check licenses"
 	[list]="List tests that would run"
-	[branch]="Specify upstream branch to compare against (default '$branch')"
-	[all]="Force checking of all changes, including files in the base branch"
+	[no-arch]="Run/list all tests except architecture-specific ones"
+	[only-arch]="Only run/list architecture-specific tests"
 	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
 	[vendor]="Check vendor files"
 	[versions]="Check versions files"
-	[no-arch]="Run/list all tests except architecture-specific ones"
-	[only-arch]="Only run/list architecture-specific tests"
+	[xml]="Check XML files"
 )
 
 yamllint_cmd="yamllint"
@@ -218,7 +219,7 @@ get_pr_changed_file_details_full()
 # Returns the information in format "${filter}\t${file}".
 get_pr_changed_file_details()
 {
-	get_pr_changed_file_details_full | grep -v "vendor/"
+	get_pr_changed_file_details_full | grep -vE "\<vendor/"
 }
 
 static_check_commits()
@@ -507,7 +508,7 @@ static_check_docs()
 	local new_urls
 	local url
 
-	all_docs=$(find . -name "*.md" | grep -v "vendor/" | sort || true)
+	all_docs=$(find . -name "*.md" | grep -v "/vendor/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -519,10 +520,10 @@ static_check_docs()
 		docs_status=$(get_pr_changed_file_details || true)
 		docs_status=$(echo "$docs_status" | grep "\.md$" || true)
 
-		docs=$(echo "$docs_status" | awk '{print $NF}')
+		docs=$(echo "$docs_status" | awk '{print $NF}' | sort)
 
 		# Newly-added docs
-		new_docs=$(echo "$docs_status" | awk '/^A/ {print $NF}')
+		new_docs=$(echo "$docs_status" | awk '/^A/ {print $NF}' | sort)
 
 		for doc in $new_docs
 		do
@@ -733,7 +734,7 @@ static_check_files()
 	then
 		info "Checking all files in $branch branch"
 
-		files=$(find . -type f | egrep -v "(.git|vendor)/" || true)
+		files=$(find . -type f | egrep -v "/(.git|vendor)/" || true)
 	else
 		info "Checking local branch for changed files only"
 
@@ -820,7 +821,7 @@ static_check_vendor()
 	if [ -n "$files" ]
 	then
 		# PR changed files so check if it changed any vendored files
-		vendor_files=$(echo "$files" | grep "vendor/" || true)
+		vendor_files=$(echo "$files" | grep -E "\<vendor/" || true)
 
 		if [ -n "$vendor_files" ]
 		then
@@ -836,6 +837,58 @@ static_check_vendor()
 
 	# Check, but don't touch!
 	dep ensure -no-vendor -dry-run
+}
+
+static_check_xml()
+{
+	local all_xml
+	local files
+
+	all_xml=$(find . -name "*.xml" | grep -v "/vendor/" | sort || true)
+
+	if [ "$specific_branch" = "true" ]
+	then
+		info "Checking all XML files in $branch branch"
+		files="$all_xml"
+	else
+		info "Checking local branch for changed XML files only"
+
+		local xml_status
+
+		xml_status=$(get_pr_changed_file_details || true)
+		xml_status=$(echo "$xml_status" | grep "\.xml$" || true)
+
+		files=$(echo "$xml_status" | awk '{print $NF}')
+	fi
+
+	[ -z "$files" ] && info "No XML files to check" && return
+
+	local file
+
+	for file in $files
+	do
+		info "Checking XML file '$file'"
+
+		local contents
+
+		# Most XML documents are specified as XML 1.0 since, with the
+		# advent of XML 1.0 (Fifth Edition), XML 1.1 is "almost
+		# redundant" due to XML 1.0 providing the majority of XML 1.1
+		# features. xmllint doesn't support XML 1.1 seemingly for this
+		# reason, so the only check we can do is to (crudely) force
+		# the document to be an XML 1.0 one since XML 1.1 documents
+		# can mostly be represented as XML 1.0.
+		#
+		# This is only really required since Jenkins creates XML 1.1
+		# documents.
+		contents=$(sed "s/xml version='1.1'/xml version='1.0'/g" "$file")
+
+		local ret
+
+		{ chronic xmllint -format - <<< "$contents"; ret=$?; } || true
+
+		[ "$ret" -eq 0 ] || die "failed to check XML file '$file'"
+	done
 }
 
 # Run the specified function (after first checking it is compatible with the
@@ -923,6 +976,7 @@ main()
 			--repo) repo="$2"; shift ;;
 			--vendor) func=static_check_vendor;;
 			--versions) func=static_check_versions ;;
+			--xml) func=static_check_xml ;;
 			--) shift; break ;;
 		esac
 

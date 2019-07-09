@@ -17,6 +17,7 @@ sudo -E apt -y install moreutils
 
 declare -A minimal_packages=( \
 	[spell-check]="hunspell hunspell-en-gb hunspell-en-us pandoc" \
+	[xml_validator]="libxml2-utils" \
 	[yaml_validator]="yamllint" \
 )
 
