@@ -40,6 +40,11 @@ import (
 // such as SeaBIOS or OVMF for instance, to handle this directly.
 const romFile = ""
 
+// disable-modern is a option to QEMU that will fall back to using 0.9 version
+// of virtio. Since moving to QEMU4.0, we can start using virtio 1.0 version.
+// Default value is false.
+const defaultDisableModern = false
+
 type qmpChannel struct {
 	ctx     context.Context
 	path    string
@@ -953,7 +958,7 @@ func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, dev
 		// PCI address is in the format bridge-addr/device-addr eg. "03/02"
 		drive.PCIAddr = fmt.Sprintf("%02x", bridge.Addr) + "/" + addr
 
-		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, 0, true, q.arch.runNested()); err != nil {
+		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, 0, true, defaultDisableModern); err != nil {
 			return err
 		}
 	} else {
@@ -968,7 +973,7 @@ func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, dev
 			return err
 		}
 
-		if err = q.qmpMonitorCh.qmp.ExecuteSCSIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, bus, romFile, scsiID, lun, true, q.arch.runNested()); err != nil {
+		if err = q.qmpMonitorCh.qmp.ExecuteSCSIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, bus, romFile, scsiID, lun, true, defaultDisableModern); err != nil {
 			return err
 		}
 	}
@@ -1119,7 +1124,7 @@ func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) error {
 		if machine.Type == QemuCCWVirtio {
 			return q.qmpMonitorCh.qmp.ExecuteNetCCWDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, int(q.config.NumVCPUs))
 		}
-		return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs), q.arch.runNested())
+		return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs), defaultDisableModern)
 	}
 
 	if err := q.removeDeviceFromBridge(tap.ID); err != nil {
