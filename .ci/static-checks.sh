@@ -218,7 +218,7 @@ get_pr_changed_file_details_full()
 # Returns the information in format "${filter}\t${file}".
 get_pr_changed_file_details()
 {
-	get_pr_changed_file_details_full | grep -v "vendor/"
+	get_pr_changed_file_details_full | grep -vE "\<vendor/"
 }
 
 static_check_commits()
@@ -507,7 +507,7 @@ static_check_docs()
 	local new_urls
 	local url
 
-	all_docs=$(find . -name "*.md" | grep -v "vendor/" | sort || true)
+	all_docs=$(find . -name "*.md" | grep -v "/vendor/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -733,7 +733,7 @@ static_check_files()
 	then
 		info "Checking all files in $branch branch"
 
-		files=$(find . -type f | egrep -v "(.git|vendor)/" || true)
+		files=$(find . -type f | egrep -v "/(.git|vendor)/" || true)
 	else
 		info "Checking local branch for changed files only"
 
@@ -820,7 +820,7 @@ static_check_vendor()
 	if [ -n "$files" ]
 	then
 		# PR changed files so check if it changed any vendored files
-		vendor_files=$(echo "$files" | grep "vendor/" || true)
+		vendor_files=$(echo "$files" | grep -E "\<vendor/" || true)
 
 		if [ -n "$vendor_files" ]
 		then
