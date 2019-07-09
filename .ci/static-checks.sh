@@ -76,6 +76,12 @@ long_options=(
 yamllint_cmd="yamllint"
 have_yamllint_cmd=$(command -v "$yamllint_cmd" || true)
 
+chronic=chronic
+
+# Disable chronic on OSX to avoid having to update the Travis config files
+# for additional packages on that platform.
+[ "$(uname -s)" == "Darwin" ] && chronic=
+
 usage()
 {
 	cat <<EOT
@@ -887,7 +893,7 @@ static_check_xml()
 
 		local ret
 
-		{ chronic xmllint -format - <<< "$contents"; ret=$?; } || true
+		{ $chronic xmllint -format - <<< "$contents"; ret=$?; } || true
 
 		[ "$ret" -eq 0 ] || die "failed to check XML file '$file'"
 	done
@@ -924,7 +930,7 @@ static_check_shell()
 
 		local ret
 
-		{ chronic bash -n "$script"; ret=$?; } || true
+		{ $chronic bash -n "$script"; ret=$?; } || true
 
 		[ "$ret" -eq 0 ] || die "check for script '$script' failed"
 	done
@@ -961,7 +967,7 @@ static_check_json()
 
 		local ret
 
-		{ chronic jq -S . "$json"; ret=$?; } || true
+		{ $chronic jq -S . "$json"; ret=$?; } || true
 
 		[ "$ret" -eq 0 ] || die "failed to check JSON file '$json'"
 	done
