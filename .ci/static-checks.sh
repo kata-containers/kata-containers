@@ -66,6 +66,7 @@ long_options=(
 	[no-arch]="Run/list all tests except architecture-specific ones"
 	[only-arch]="Only run/list architecture-specific tests"
 	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
+	[scripts]="Check script files"
 	[vendor]="Check vendor files"
 	[versions]="Check versions files"
 	[xml]="Check XML files"
@@ -891,6 +892,43 @@ static_check_xml()
 	done
 }
 
+static_check_shell()
+{
+	local all_scripts
+	local scripts
+
+	all_scripts=$(find . \( -name "*.sh" -o -name "*.bash" \) | grep -v "/vendor/" | sort || true)
+
+	if [ "$specific_branch" = "true" ]
+	then
+		info "Checking all scripts in $branch branch"
+		scripts="$all_scripts"
+	else
+		info "Checking local branch for changed scripts only"
+
+		local scripts_status
+		scripts_status=$(get_pr_changed_file_details || true)
+		scripts_status=$(echo "$scripts_status" | grep -E "\.(sh|bash)$" || true)
+
+		scripts=$(echo "$scripts_status" | awk '{print $NF}')
+	fi
+
+	[ -z "$scripts" ] && info "No scripts to check" && return 0
+
+	local script
+
+	for script in $scripts
+	do
+		info "Checking script file '$script'"
+
+		local ret
+
+		{ chronic bash -n "$script"; ret=$?; } || true
+
+		[ "$ret" -eq 0 ] || die "check for script '$script' failed"
+	done
+}
+
 # Run the specified function (after first checking it is compatible with the
 # users architectural preferences), or simply list the function name if list
 # mode is active.
@@ -976,6 +1014,7 @@ main()
 			--no-arch) handle_funcs="arch-agnostic" ;;
 			--only-arch) handle_funcs="arch-specific" ;;
 			--repo) repo="$2"; shift ;;
+			--scripts) func=static_check_shell ;;
 			--vendor) func=static_check_vendor;;
 			--versions) func=static_check_versions ;;
 			--xml) func=static_check_xml ;;
