@@ -10,10 +10,40 @@ grade: stable
 confinement: classic
 
 parts:
-  go:
+  yq:
+    plugin: nil
+    prime:
+      - -*
+    build-packages:
+      - curl
     override-build: |
+      yq_path="yq"
+      yq_pkg="github.com/mikefarah/yq"
+      goos="linux"
+      case "$(uname -m)" in
+        aarch64) goarch="arm64";;
+        ppc64le) goarch="ppc64le";;
+        x86_64) goarch="amd64";;
+        s390x) goarch="s390x";;
+        *) echo "unsupported architecture: $(uname -m)"; exit 1;;
+      esac
+
+      # Workaround to get latest release from github (to not use github token).
+      # Get the redirection to latest release on github.
+      yq_latest_url=$(curl -Ls -o /dev/null -w %{url_effective} "https://${yq_pkg}/releases/latest")
+      # The redirected url should include the latest release version
+      # https://github.com/mikefarah/yq/releases/tag/<VERSION-HERE>
+      yq_version=$(basename "${yq_latest_url}")
+      yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos}_${goarch}"
+      curl -o "${yq_path}" -LSsf ${yq_url}
+      chmod +x ${yq_path}
+
+  go:
+    after: [yq]
+    override-build: |
+      yq=$(realpath ../../yq/build/yq)
       versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${SNAPCRAFT_PROJECT_VERSION}/versions.yaml
-      version="$(curl -sSL ${versions_url} | yq r - languages.golang.version)"
+      version="$(curl -sSL ${versions_url} | ${yq} r - languages.golang.version)"
       curl -LO https://dl.google.com/go/go${version}.src.tar.gz
       tar -xf go${version}.src.tar.gz --strip-components=1
       cd src && env GOROOT_BOOTSTRAP=$(go env GOROOT | tr -d '\n') ./make.bash
@@ -21,8 +51,6 @@ parts:
       - golang-go
       - g++
       - curl
-    build-snaps:
-      - yq
     plugin: nil
     prime:
       - -*
