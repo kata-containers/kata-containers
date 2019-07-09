@@ -901,6 +901,12 @@ type VFIODevice struct {
 
 	// DevNo identifies the ccw devices for s390x architecture
 	DevNo string
+
+	// VendorID specifies vendor id
+	VendorID string
+
+	// DeviceID specifies device id
+	DeviceID string
 }
 
 // Valid returns true if the VFIODevice structure is valid and complete.
@@ -917,6 +923,12 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s,host=%s", driver, vfioDev.BDF))
 	if isVirtioPCI[driver] {
+		if vfioDev.VendorID != "" {
+			deviceParams = append(deviceParams, fmt.Sprintf(",x-pci-vendor-id=%s", vfioDev.VendorID))
+		}
+		if vfioDev.DeviceID != "" {
+			deviceParams = append(deviceParams, fmt.Sprintf(",x-pci-device-id=%s", vfioDev.DeviceID))
+		}
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", vfioDev.ROMFile))
 	}
 

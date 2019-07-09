@@ -312,8 +312,10 @@ func TestAppendDeviceBlock(t *testing.T) {
 
 func TestAppendDeviceVFIO(t *testing.T) {
 	vfioDevice := VFIODevice{
-		BDF:     "02:10.0",
-		ROMFile: romfile,
+		BDF:      "02:10.0",
+		ROMFile:  romfile,
+		VendorID: "0x1234",
+		DeviceID: "0x5678",
 	}
 
 	if isVirtioCCW[Vfio] {
