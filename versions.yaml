@@ -191,6 +191,7 @@ externals:
     version: "v1.14.6"
     meta:
       openshift: "6273bea4c9ed788aeb3d051ebf2d030060c05b6c"
+      crictl: 1.0.0-beta.2
 
   cri-containerd:
     description: |
