@@ -60,12 +60,14 @@ long_options=(
 	[force]="Force a skipped test to run"
 	[golang]="Check '.go' files"
 	[help]="Display usage statement"
+	[json]="Check JSON files"
 	[labels]="Check labels databases"
 	[licenses]="Check licenses"
 	[list]="List tests that would run"
 	[no-arch]="Run/list all tests except architecture-specific ones"
 	[only-arch]="Only run/list architecture-specific tests"
 	[repo:]="Specify GitHub URL of repo to use (github.com/user/repo)"
+	[scripts]="Check script files"
 	[vendor]="Check vendor files"
 	[versions]="Check versions files"
 	[xml]="Check XML files"
@@ -73,6 +75,12 @@ long_options=(
 
 yamllint_cmd="yamllint"
 have_yamllint_cmd=$(command -v "$yamllint_cmd" || true)
+
+chronic=chronic
+
+# Disable chronic on OSX to avoid having to update the Travis config files
+# for additional packages on that platform.
+[ "$(uname -s)" == "Darwin" ] && chronic=
 
 usage()
 {
@@ -885,9 +893,83 @@ static_check_xml()
 
 		local ret
 
-		{ chronic xmllint -format - <<< "$contents"; ret=$?; } || true
+		{ $chronic xmllint -format - <<< "$contents"; ret=$?; } || true
 
 		[ "$ret" -eq 0 ] || die "failed to check XML file '$file'"
+	done
+}
+
+static_check_shell()
+{
+	local all_scripts
+	local scripts
+
+	all_scripts=$(find . \( -name "*.sh" -o -name "*.bash" \) | grep -v "/vendor/" | sort || true)
+
+	if [ "$specific_branch" = "true" ]
+	then
+		info "Checking all scripts in $branch branch"
+		scripts="$all_scripts"
+	else
+		info "Checking local branch for changed scripts only"
+
+		local scripts_status
+		scripts_status=$(get_pr_changed_file_details || true)
+		scripts_status=$(echo "$scripts_status" | grep -E "\.(sh|bash)$" || true)
+
+		scripts=$(echo "$scripts_status" | awk '{print $NF}')
+	fi
+
+	[ -z "$scripts" ] && info "No scripts to check" && return 0
+
+	local script
+
+	for script in $scripts
+	do
+		info "Checking script file '$script'"
+
+		local ret
+
+		{ $chronic bash -n "$script"; ret=$?; } || true
+
+		[ "$ret" -eq 0 ] || die "check for script '$script' failed"
+	done
+}
+
+static_check_json()
+{
+	local all_json
+	local json_files
+
+	all_json=$(find . -name "*.json" | grep -v "/vendor/" | sort || true)
+
+	if [ "$specific_branch" = "true" ]
+	then
+		info "Checking all JSON in $branch branch"
+		json_files="$all_json"
+	else
+		info "Checking local branch for changed JSON only"
+
+		local json_status
+		json_status=$(get_pr_changed_file_details || true)
+		json_status=$(echo "$json_status" | grep "\.json$" || true)
+
+		json_files=$(echo "$json_status" | awk '{print $NF}')
+	fi
+
+	[ -z "$json_files" ] && info "No JSON files to check" && return 0
+
+	local json
+
+	for json in $json_files
+	do
+		info "Checking JSON file '$json'"
+
+		local ret
+
+		{ $chronic jq -S . "$json"; ret=$?; } || true
+
+		[ "$ret" -eq 0 ] || die "failed to check JSON file '$json'"
 	done
 }
 
@@ -945,15 +1027,17 @@ main()
 
 	local long_option_names="${!long_options[@]}"
 
-	local args=$(getopt \
+	local args
+
+	args=$(getopt \
 		-n "$script_name" \
 		-a \
 		--options="h" \
 		--longoptions="$long_option_names" \
 		-- "$@")
+	[ $? -eq 0 ] || { usage >&2; exit 1; }
 
 	eval set -- "$args"
-	[ $? -ne 0 ] && { usage >&2; exit 1; }
 
 	local func=
 
@@ -968,12 +1052,14 @@ main()
 			--force) force="true" ;;
 			--golang) func=static_check_go_arch_specific ;;
 			-h|--help) usage; exit 0 ;;
+			--json) func=static_check_json ;;
 			--labels) func=static_check_labels;;
 			--licenses) func=static_check_license_headers ;;
 			--list) list_only="true" ;;
 			--no-arch) handle_funcs="arch-agnostic" ;;
 			--only-arch) handle_funcs="arch-specific" ;;
 			--repo) repo="$2"; shift ;;
+			--scripts) func=static_check_shell ;;
 			--vendor) func=static_check_vendor;;
 			--versions) func=static_check_versions ;;
 			--xml) func=static_check_xml ;;
