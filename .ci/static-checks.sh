@@ -414,6 +414,7 @@ static_check_license_headers()
 		--exclude="vendor/*" \
 		--exclude="VERSION" \
 		--exclude="virtcontainers/pkg/firecracker/*" \
+		--exclude="*.xml" \
 		--exclude="*.yaml" \
 		-EL "\<${pattern}\>" \
 		$files || true)
