@@ -47,6 +47,11 @@ if [ -e "${NEW_RUNTIME_CONFIG}" ]; then
 	runtime_config_path="${NEW_RUNTIME_CONFIG}"
 fi
 
+if [ "$KATA_HYPERVISOR" = "acrn" ]; then
+	echo "Enable acrn configuration.toml"
+	sudo mv "${PKGDEFAULTSDIR}/configuration-acrn.toml" "${PKGDEFAULTSDIR}/configuration.toml"
+fi
+
 if [ "$KATA_HYPERVISOR" = "firecracker" ]; then
 	echo "Enable firecracker configuration.toml"
 	sudo mv "${PKGDEFAULTSDIR}/configuration-fc.toml" "${PKGDEFAULTSDIR}/configuration.toml"
