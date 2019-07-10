@@ -64,14 +64,6 @@ main()
 	echo "Install YAML validator"
 	chronic sudo -E easy_install pip
 	chronic sudo -E pip install yamllint
-
-	[ "$setup_type" = "minimal" ] && exit 0
-
-	if [ "$(arch)" == "x86_64" ]; then
-		echo "Install Kata Containers OBS repository"
-		obs_url="${KATA_OBS_REPO_BASE}/openSUSE_Leap_${VERSION_ID}"
-		chronic sudo -E zypper addrepo --no-gpgcheck "${obs_url}/home:katacontainers:releases:$(arch):master.repo"
-	fi
 }
 
 main "$@"

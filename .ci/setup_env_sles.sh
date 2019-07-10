@@ -81,12 +81,6 @@ main()
 	echo "Install Build Tools"
 	chronic sudo -E zypper -n install -t pattern "Basis-Devel"
 
-	if [ "$(arch)" == "x86_64" ]; then
-		echo "Install Kata Containers OBS repository"
-		obs_url="${KATA_OBS_REPO_BASE}/SLE_${VERSION//-/_}/"
-		chronic sudo -E zypper addrepo --no-gpgcheck "${obs_url}/home:katacontainers:releases:$(arch):master.repo"
-	fi
-
 	echo "Add crudini repo"
 	VERSIONID="12_SP1"
 	crudini_repo="https://download.opensuse.org/repositories/Cloud:OpenStack:Liberty/SLE_${VERSIONID}/Cloud:OpenStack:Liberty.repo"

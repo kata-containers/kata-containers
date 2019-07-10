@@ -67,12 +67,6 @@ main()
 	echo "Install kata containers dependencies"
 	chronic sudo -E dnf -y groupinstall "Development tools"
 
-	if [ "$(arch)" == "x86_64" ]; then
-		echo "Install Kata Containers OBS repository"
-		obs_url="${KATA_OBS_REPO_BASE}/Fedora_$VERSION_ID/home:katacontainers:releases:$(arch):master.repo"
-		sudo -E VERSION_ID=$VERSION_ID dnf config-manager --add-repo "$obs_url"
-	fi
-
 	if [ "$KATA_KSM_THROTTLER" == "yes" ]; then
 		echo "Install ${KATA_KSM_THROTTLER_JOB}"
 		chronic sudo -E dnf -y install ${KATA_KSM_THROTTLER_JOB}
