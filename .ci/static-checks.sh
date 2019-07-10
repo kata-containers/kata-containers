@@ -399,22 +399,24 @@ static_check_license_headers()
 		--exclude=".git/*" \
 		--exclude=".gitignore" \
 		--exclude="Gopkg.lock" \
-		--exclude="LICENSE" \
-		--exclude="vendor/*" \
-		--exclude="VERSION" \
+		--exclude="*.gpl.c" \
 		--exclude="*.jpg" \
 		--exclude="*.json" \
+		--exclude="LICENSE" \
 		--exclude="*.md" \
+		--exclude="*.pb.go" \
 		--exclude="*.png" \
 		--exclude="*.pub" \
 		--exclude="*.service" \
 		--exclude="*.svg" \
 		--exclude="*.toml" \
 		--exclude="*.txt" \
-		--exclude="*.yaml" \
-		--exclude="*.pb.go" \
-		--exclude="*.gpl.c" \
+		--exclude="vendor/*" \
+		--exclude="VERSION" \
 		--exclude="virtcontainers/pkg/firecracker/*" \
+		--exclude="*.xml" \
+		--exclude="*.yaml" \
+		--exclude="*.yml" \
 		-EL "\<${pattern}\>" \
 		$files || true)
 
