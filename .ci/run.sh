@@ -28,7 +28,7 @@ if [ "$SNAP_CI" == "true" ] && [ "$ID" == "ubuntu" ]; then
 	sudo -E PATH="$PATH" bash -c \
 		 "make functional docker crio docker-compose network netmon \
 		 docker-stability oci openshift kubernetes swarm \
-		 entropy ramdisk shimv2 tracing"
+		 entropy ramdisk tracing"
 else
 	.ci/run.sh
 fi
