@@ -39,16 +39,17 @@ NEW_RUNTIME_CONFIG="${PKGDEFAULTSDIR}/configuration.toml"
 # Note: This will also install the config file.
 build_and_install "github.com/kata-containers/runtime" "" "true"
 
-# Check system supports running Kata Containers
-kata_runtime_path=$(command -v kata-runtime)
-sudo -E PATH=$PATH "$kata_runtime_path" kata-check
-
 if [ -e "${NEW_RUNTIME_CONFIG}" ]; then
 	# Remove the legacy config file
 	sudo rm -f "${runtime_config_path}"
 
 	# Use the new path
 	runtime_config_path="${NEW_RUNTIME_CONFIG}"
+fi
+
+if [ "$KATA_HYPERVISOR" = "acrn" ]; then
+	echo "Enable acrn configuration.toml"
+	sudo mv "${PKGDEFAULTSDIR}/configuration-acrn.toml" "${PKGDEFAULTSDIR}/configuration.toml"
 fi
 
 if [ "$KATA_HYPERVISOR" = "firecracker" ]; then
@@ -60,6 +61,10 @@ if [ "$KATA_HYPERVISOR" = "nemu" ]; then
 	echo "Enable nemu configuration.toml"
 	sudo mv "${PKGDEFAULTSDIR}/configuration-nemu.toml" "${PKGDEFAULTSDIR}/configuration.toml"
 fi
+
+# Check system supports running Kata Containers
+kata_runtime_path=$(command -v kata-runtime)
+sudo -E PATH=$PATH "$kata_runtime_path" kata-check
 
 if [ -z "${METRICS_CI}" ]; then
 	echo "Enabling all debug options in file ${runtime_config_path}"
