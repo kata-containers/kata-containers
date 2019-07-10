@@ -263,7 +263,7 @@ parts:
 
   qemu:
     plugin: make
-    after: [scripts-dump, qemu-patches-dump, qemu-aarch64-patches-dump, yq]
+    after: [scripts-dump, qemu-patches-dump, qemu-aarch64-patches-dump, yq, qemu-configs-dump]
     build-packages:
       - gcc
       - python
@@ -282,6 +282,7 @@ parts:
     override-build: |
       yq=$(realpath ../../yq/build/yq)
       pkg_name="qemu"
+      configs_dir="${SNAPCRAFT_STAGE}/qemu/default-configs"
 
       versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${SNAPCRAFT_PROJECT_VERSION}/versions.yaml
       # arch-specific definition
@@ -296,7 +297,7 @@ parts:
         *)
           branch="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.tag)"
           url="$(curl -sSL ${versions_url} | ${yq} r - assets.hypervisor.qemu.url)"
-          patch_dir="${SNAPCRAFT_STAGE}/qemu/patches/4.0.x"
+          patch_dir="${SNAPCRAFT_STAGE}/qemu/patches/$(echo ${branch} | cut -d. -f1-2 | tr -d v).x"
           commit=""
         ;;
       esac
@@ -329,6 +330,9 @@ parts:
         --libexecdir=/snap/${SNAPCRAFT_PROJECT_NAME}/current/usr/libexec/qemu" \
         | xargs ./configure
 
+      # Copy QEMU configurations (Kconfigs)
+      cp -a ${configs_dir} .
+
       # build and install
       make -j $(($(nproc)-1))
       make install DESTDIR=${SNAPCRAFT_PART_INSTALL}
@@ -357,6 +361,13 @@ parts:
     plugin: dump
     organize:
       '*' : qemu-aarch64/patches/
+    prime:
+      - -*
+  qemu-configs-dump:
+    source: qemu/default-configs/
+    plugin: dump
+    organize:
+      '*' : qemu/default-configs/
     prime:
       - -*
 
