@@ -688,7 +688,7 @@ func generateVMSocket(id string, useVsock bool) (interface{}, error) {
 		}, nil
 	}
 
-	path, err := utils.BuildSocketPath(filepath.Join(store.RunVMStoragePath, id), defaultSocketName)
+	path, err := utils.BuildSocketPath(filepath.Join(store.RunVMStoragePath(), id), defaultSocketName)
 	if err != nil {
 		return nil, err
 	}

@@ -1103,7 +1103,7 @@ func (c *Container) stop(force bool) error {
 		return err
 	}
 
-	if err := bindUnmountContainerRootfs(c.ctx, kataHostSharedDir, c.sandbox.id, c.id); err != nil && !force {
+	if err := bindUnmountContainerRootfs(c.ctx, kataHostSharedDir(), c.sandbox.id, c.id); err != nil && !force {
 		return err
 	}
 
@@ -1350,7 +1350,7 @@ func (c *Container) plugDevice(devicePath string) error {
 	if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
 		b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
 			HostPath:      devicePath,
-			ContainerPath: filepath.Join(kataGuestSharedDir, c.id),
+			ContainerPath: filepath.Join(kataGuestSharedDir(), c.id),
 			DevType:       "b",
 			Major:         int64(unix.Major(stat.Rdev)),
 			Minor:         int64(unix.Minor(stat.Rdev)),

@@ -289,7 +289,7 @@ func TestQemuGetSandboxConsole(t *testing.T) {
 		ctx: context.Background(),
 	}
 	sandboxID := "testSandboxID"
-	expected := filepath.Join(store.RunVMStoragePath, sandboxID, consoleSocket)
+	expected := filepath.Join(store.RunVMStoragePath(), sandboxID, consoleSocket)
 
 	result, err := q.getSandboxConsole(sandboxID)
 	assert.NoError(err)
@@ -496,7 +496,9 @@ func TestQemuVirtiofsdArgs(t *testing.T) {
 	}
 
 	savedKataHostSharedDir := kataHostSharedDir
-	kataHostSharedDir = "test-share-dir"
+	kataHostSharedDir = func() string {
+		return "test-share-dir"
+	}
 	defer func() {
 		kataHostSharedDir = savedKataHostSharedDir
 	}()
