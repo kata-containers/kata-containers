@@ -26,6 +26,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/kata-containers/agent/protocols/grpc"
+	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
@@ -764,8 +765,10 @@ func (s *Sandbox) Delete() error {
 		}
 	}
 
-	if err := s.cgroupsDelete(); err != nil {
-		return err
+	if !rootless.IsRootless() {
+		if err := s.cgroupsDelete(); err != nil {
+			return err
+		}
 	}
 
 	globalSandboxList.removeSandbox(s.id)
