@@ -11,6 +11,9 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/kata-containers/runtime/pkg/rootless"
 )
 
 const ctrsMappingDirMode = os.FileMode(0750)
@@ -22,6 +25,11 @@ func SetCtrsMapTreePath(path string) {
 	ctrsMapTreePath = path
 }
 
+// doUpdatePath returns whether a ctrsMapTreePath needs to be updated with a rootless prefix
+func doUpdatePath() bool {
+	return rootless.IsRootless() && !strings.HasPrefix(ctrsMapTreePath, rootless.GetRootlessDir())
+}
+
 // FetchContainerIDMapping This function assumes it should find only one file inside the container
 // ID directory. If there are several files, we could not determine which
 // file name corresponds to the sandbox ID associated, and this would throw
@@ -29,6 +37,10 @@ func SetCtrsMapTreePath(path string) {
 func FetchContainerIDMapping(containerID string) (string, error) {
 	if containerID == "" {
 		return "", fmt.Errorf("Missing container ID")
+	}
+
+	if doUpdatePath() {
+		SetCtrsMapTreePath(filepath.Join(rootless.GetRootlessDir(), ctrsMapTreePath))
 	}
 
 	dirPath := filepath.Join(ctrsMapTreePath, containerID)
@@ -62,6 +74,9 @@ func AddContainerIDMapping(ctx context.Context, containerID, sandboxID string) e
 		return fmt.Errorf("Missing sandbox ID")
 	}
 
+	if doUpdatePath() {
+		SetCtrsMapTreePath(filepath.Join(rootless.GetRootlessDir(), ctrsMapTreePath))
+	}
 	parentPath := filepath.Join(ctrsMapTreePath, containerID)
 
 	if err := os.RemoveAll(parentPath); err != nil {
@@ -86,6 +101,9 @@ func DelContainerIDMapping(ctx context.Context, containerID string) error {
 		return fmt.Errorf("Missing container ID")
 	}
 
+	if doUpdatePath() {
+		SetCtrsMapTreePath(filepath.Join(rootless.GetRootlessDir(), ctrsMapTreePath))
+	}
 	path := filepath.Join(ctrsMapTreePath, containerID)
 
 	return os.RemoveAll(path)
