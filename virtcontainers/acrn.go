@@ -370,7 +370,7 @@ func (a *acrn) startSandbox(timeoutSecs int) error {
 		a.Logger().WithField("default-kernel-parameters", formatted).Debug()
 	}
 
-	vmPath := filepath.Join(store.RunVMStoragePath, a.id)
+	vmPath := filepath.Join(store.RunVMStoragePath(), a.id)
 	err := os.MkdirAll(vmPath, store.DirMode)
 	if err != nil {
 		return err
@@ -574,7 +574,7 @@ func (a *acrn) getSandboxConsole(id string) (string, error) {
 	span, _ := a.trace("getSandboxConsole")
 	defer span.Finish()
 
-	return utils.BuildSocketPath(store.RunVMStoragePath, id, acrnConsoleSocket)
+	return utils.BuildSocketPath(store.RunVMStoragePath(), id, acrnConsoleSocket)
 }
 
 func (a *acrn) saveSandbox() error {

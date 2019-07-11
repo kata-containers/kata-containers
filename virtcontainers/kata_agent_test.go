@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io/ioutil"
@@ -25,6 +26,7 @@ import (
 
 	aTypes "github.com/kata-containers/agent/pkg/types"
 	pb "github.com/kata-containers/agent/protocols/grpc"
+	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
@@ -359,7 +361,7 @@ func TestHandleEphemeralStorage(t *testing.T) {
 	epheStorages := k.handleEphemeralStorage(ociMounts)
 
 	epheMountPoint := epheStorages[0].GetMountPoint()
-	expected := filepath.Join(ephemeralPath, filepath.Base(mountSource))
+	expected := filepath.Join(ephemeralPath(), filepath.Base(mountSource))
 	assert.Equal(t, epheMountPoint, expected,
 		"Ephemeral mount point didn't match: got %s, expecting %s", epheMountPoint, expected)
 }
@@ -384,7 +386,7 @@ func TestHandleLocalStorage(t *testing.T) {
 	assert.Equal(t, len(localStorages), 1)
 
 	localMountPoint := localStorages[0].GetMountPoint()
-	expected := filepath.Join(kataGuestSharedDir, sandboxID, rootfsSuffix, KataLocalDevType, filepath.Base(mountSource))
+	expected := filepath.Join(kataGuestSharedDir(), sandboxID, rootfsSuffix, KataLocalDevType, filepath.Base(mountSource))
 	assert.Equal(t, localMountPoint, expected)
 }
 
@@ -531,7 +533,7 @@ func TestHandleShm(t *testing.T) {
 	assert.NotEmpty(g.Mounts[0].Destination)
 	assert.Equal(g.Mounts[0].Destination, "/dev/shm")
 	assert.Equal(g.Mounts[0].Type, "bind")
-	assert.NotEmpty(g.Mounts[0].Source, filepath.Join(kataGuestSharedDir, shmDir))
+	assert.NotEmpty(g.Mounts[0].Source, filepath.Join(kataGuestSharedDir(), shmDir))
 	assert.Equal(g.Mounts[0].Options, []string{"rbind"})
 
 	sandbox.shmSize = 0
@@ -896,7 +898,10 @@ func TestKataCleanupSandbox(t *testing.T) {
 	assert := assert.New(t)
 
 	kataHostSharedDirSaved := kataHostSharedDir
-	kataHostSharedDir, _ = ioutil.TempDir("", "kata-cleanup")
+	kataHostSharedDir = func() string {
+		td, _ := ioutil.TempDir("", "kata-cleanup")
+		return td
+	}
 	defer func() {
 		kataHostSharedDir = kataHostSharedDirSaved
 	}()
@@ -904,7 +909,7 @@ func TestKataCleanupSandbox(t *testing.T) {
 	s := Sandbox{
 		id: "testFoo",
 	}
-	dir := path.Join(kataHostSharedDir, s.id)
+	dir := path.Join(kataHostSharedDir(), s.id)
 	err := os.MkdirAll(dir, 0777)
 	assert.Nil(err)
 
@@ -1108,5 +1113,31 @@ func TestKataAgentSetDefaultTraceConfigOptions(t *testing.T) {
 		if d.expectDefaultTraceType {
 			assert.Equalf(config.TraceType, defaultAgentTraceType, "test %d (%+v)", i, d)
 		}
+	}
+}
+
+func TestKataAgentDirs(t *testing.T) {
+	assert := assert.New(t)
+
+	uidmapFile, err := os.OpenFile("/proc/self/uid_map", os.O_RDONLY, 0)
+	assert.NoError(err)
+
+	line, err := bufio.NewReader(uidmapFile).ReadBytes('\n')
+	assert.NoError(err)
+
+	uidmap := strings.Fields(string(line))
+	expectedRootless := (uidmap[0] == "0" && uidmap[1] != "0")
+	assert.Equal(expectedRootless, rootless.IsRootless())
+
+	if expectedRootless {
+		assert.Equal(kataHostSharedDir(), os.Getenv("XDG_RUNTIME_DIR")+defaultKataHostSharedDir)
+		assert.Equal(kataGuestSharedDir(), os.Getenv("XDG_RUNTIME_DIR")+defaultKataGuestSharedDir)
+		assert.Equal(kataGuestSandboxDir(), os.Getenv("XDG_RUNTIME_DIR")+defaultKataGuestSandboxDir)
+		assert.Equal(ephemeralPath(), os.Getenv("XDG_RUNTIME_DIR")+defaultEphemeralPath)
+	} else {
+		assert.Equal(kataHostSharedDir(), defaultKataHostSharedDir)
+		assert.Equal(kataGuestSharedDir(), defaultKataGuestSharedDir)
+		assert.Equal(kataGuestSandboxDir(), defaultKataGuestSandboxDir)
+		assert.Equal(ephemeralPath(), defaultEphemeralPath)
 	}
 }

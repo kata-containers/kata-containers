@@ -126,18 +126,25 @@ func TestMain(m *testing.M) {
 
 	setupAcrn()
 
+	ConfigStoragePathSaved := store.ConfigStoragePath
+	RunStoragePathSaved := store.RunStoragePath
 	// allow the tests to run without affecting the host system.
-	store.ConfigStoragePath = filepath.Join(testDir, store.StoragePathSuffix, "config")
-	store.RunStoragePath = filepath.Join(testDir, store.StoragePathSuffix, "run")
+	store.ConfigStoragePath = func() string { return filepath.Join(testDir, store.StoragePathSuffix, "config") }
+	store.RunStoragePath = func() string { return filepath.Join(testDir, store.StoragePathSuffix, "run") }
 	fs.TestSetRunStoragePath(filepath.Join(testDir, "vc", "sbs"))
 
+	defer func() {
+		store.ConfigStoragePath = ConfigStoragePathSaved
+		store.RunStoragePath = RunStoragePathSaved
+	}()
+
 	// set now that configStoragePath has been overridden.
-	sandboxDirConfig = filepath.Join(store.ConfigStoragePath, testSandboxID)
-	sandboxFileConfig = filepath.Join(store.ConfigStoragePath, testSandboxID, store.ConfigurationFile)
-	sandboxDirState = filepath.Join(store.RunStoragePath, testSandboxID)
-	sandboxDirLock = filepath.Join(store.RunStoragePath, testSandboxID)
-	sandboxFileState = filepath.Join(store.RunStoragePath, testSandboxID, store.StateFile)
-	sandboxFileLock = filepath.Join(store.RunStoragePath, testSandboxID, store.LockFile)
+	sandboxDirConfig = filepath.Join(store.ConfigStoragePath(), testSandboxID)
+	sandboxFileConfig = filepath.Join(store.ConfigStoragePath(), testSandboxID, store.ConfigurationFile)
+	sandboxDirState = filepath.Join(store.RunStoragePath(), testSandboxID)
+	sandboxDirLock = filepath.Join(store.RunStoragePath(), testSandboxID)
+	sandboxFileState = filepath.Join(store.RunStoragePath(), testSandboxID, store.StateFile)
+	sandboxFileLock = filepath.Join(store.RunStoragePath(), testSandboxID, store.LockFile)
 
 	testHyperstartCtlSocket = filepath.Join(testDir, "test_hyper.sock")
 	testHyperstartTtySocket = filepath.Join(testDir, "test_tty.sock")
