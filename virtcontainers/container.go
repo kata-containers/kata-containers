@@ -26,6 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/runtime/virtcontainers/store"
@@ -909,7 +910,7 @@ func (c *Container) create() (err error) {
 	}
 	c.process = *process
 
-	if !c.sandbox.config.SandboxCgroupOnly {
+	if !c.sandbox.config.SandboxCgroupOnly || !rootless.IsRootless() {
 		if err = c.cgroupsCreate(); err != nil {
 			return
 		}
@@ -940,7 +941,8 @@ func (c *Container) delete() error {
 		return err
 	}
 
-	if !c.sandbox.config.SandboxCgroupOnly {
+	// If running rootless, there are no cgroups to remove
+	if !c.sandbox.config.SandboxCgroupOnly || !rootless.IsRootless() {
 		if err := c.cgroupsDelete(); err != nil {
 			return err
 		}
