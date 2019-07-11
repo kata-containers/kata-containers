@@ -32,7 +32,7 @@
 
 [[constraint]]
   name = "github.com/vishvananda/netlink"
-  revision = "c2a3de3b38bd00f07290c3c5e12b4dbc04ec8666"
+  revision = "c8c507c80ea28385caac72b682dd066e44943913"
 
 [[constraint]]
   name = "github.com/vishvananda/netns"
@@ -40,7 +40,7 @@
 
 [[constraint]]
   name = "golang.org/x/sys"
-  revision = "1d2aa6dbdea45adaaebb9905d0666e4537563829"
+  revision = "88d2dcc510266da9f7f8c7f34e1940716cab5f5c"
 
 [[constraint]]
   name = "github.com/sirupsen/logrus"

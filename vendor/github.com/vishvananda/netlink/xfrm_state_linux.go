@@ -69,8 +69,10 @@ func writeReplayEsn(replayWindow int) []byte {
 		ReplayWindow: uint32(replayWindow),
 	}
 
-	// taken from iproute2/ip/xfrm_state.c:
-	replayEsn.BmpLen = uint32((replayWindow + (4 * 8) - 1) / (4 * 8))
+	// Linux stores the bitmap to identify the already received sequence packets in blocks of uint32 elements.
+	// Therefore bitmap length is the minimum number of uint32 elements needed. The following is a ceiling operation.
+	bytesPerElem := int(unsafe.Sizeof(replayEsn.BmpLen)) // Any uint32 variable is good for this
+	replayEsn.BmpLen = uint32((replayWindow + (bytesPerElem * 8) - 1) / (bytesPerElem * 8))
 
 	return replayEsn.Serialize()
 }
@@ -157,6 +159,9 @@ func (h *Handle) xfrmStateAddOrUpdate(state *XfrmState, nlProto int) error {
 		req.AddData(out)
 	}
 
+	ifId := nl.NewRtAttr(nl.XFRMA_IF_ID, nl.Uint32Attr(uint32(state.Ifid)))
+	req.AddData(ifId)
+
 	_, err := req.Execute(unix.NETLINK_XFRM, 0)
 	return err
 }
@@ -182,12 +187,7 @@ func (h *Handle) xfrmStateAllocSpi(state *XfrmState) (*XfrmState, error) {
 		return nil, err
 	}
 
-	s, err := parseXfrmState(msgs[0], FAMILY_ALL)
-	if err != nil {
-		return nil, err
-	}
-
-	return s, err
+	return parseXfrmState(msgs[0], FAMILY_ALL)
 }
 
 // XfrmStateDel will delete an xfrm state from the system. Note that
@@ -272,6 +272,9 @@ func (h *Handle) xfrmStateGetOrDelete(state *XfrmState, nlProto int) (*XfrmState
 		out := nl.NewRtAttr(nl.XFRMA_SRCADDR, state.Src.To16())
 		req.AddData(out)
 	}
+
+	ifId := nl.NewRtAttr(nl.XFRMA_IF_ID, nl.Uint32Attr(uint32(state.Ifid)))
+	req.AddData(ifId)
 
 	resType := nl.XFRM_MSG_NEWSA
 	if nlProto == nl.XFRM_MSG_DELSA {
@@ -370,6 +373,8 @@ func parseXfrmState(m []byte, family int) (*XfrmState, error) {
 			state.Mark = new(XfrmMark)
 			state.Mark.Value = mark.Value
 			state.Mark.Mask = mark.Mask
+		case nl.XFRMA_IF_ID:
+			state.Ifid = int(native.Uint32(attr.Value))
 		}
 	}
 
@@ -392,11 +397,7 @@ func (h *Handle) XfrmStateFlush(proto Proto) error {
 	req.AddData(&nl.XfrmUsersaFlush{Proto: uint8(proto)})
 
 	_, err := req.Execute(unix.NETLINK_XFRM, 0)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return err
 }
 
 func limitsToLft(lmts XfrmStateLimits, lft *nl.XfrmLifetimeCfg) {
