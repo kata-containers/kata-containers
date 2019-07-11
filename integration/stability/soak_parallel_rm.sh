@@ -46,6 +46,11 @@ if [ "$ID" == "debian" ]; then
 	exit
 fi
 
+if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
+	echo "Skip soak test (see https://github.com/kata-containers/tests/issues/1804)"
+	exit
+fi
+
 check_vsock_active() {
 	vsock_configured=$($RUNTIME_PATH kata-env | awk '/UseVSock/ {print $3}')
 	vsock_supported=$($RUNTIME_PATH kata-env | awk '/SupportVSock/ {print $3}')

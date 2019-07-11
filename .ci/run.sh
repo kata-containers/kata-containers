@@ -25,8 +25,6 @@ case "${CI_JOB}" in
 	"FIRECRACKER"|"NEMU")
 		echo "INFO: Running docker integration tests"
 		sudo -E PATH="$PATH" bash -c "make docker"
-		echo "INFO: Running soak test"
-		sudo -E PATH="$PATH" bash -c "make docker-stability"
 		echo "INFO: Running oci call test"
 		sudo -E PATH="$PATH" bash -c "make oci"
 		echo "INFO: Running networking tests"
