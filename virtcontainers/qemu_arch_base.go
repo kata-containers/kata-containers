@@ -514,6 +514,21 @@ func genericNetwork(endpoint Endpoint, vhost, nestedRun bool, index int) (govmmQ
 			FDs:           ep.VMFds,
 			VhostFDs:      ep.VhostFds,
 		}
+	case *TuntapEndpoint:
+		netPair := ep.NetworkPair()
+		d = govmmQemu.NetDevice{
+			Type:          govmmQemu.NetDeviceType("tap"),
+			Driver:        govmmQemu.VirtioNet,
+			ID:            fmt.Sprintf("network-%d", index),
+			IFName:        netPair.TAPIface.Name,
+			MACAddress:    netPair.TAPIface.HardAddr,
+			DownScript:    "no",
+			Script:        "no",
+			VHost:         vhost,
+			DisableModern: nestedRun,
+			FDs:           netPair.VMFds,
+			VhostFDs:      netPair.VhostFds,
+		}
 	default:
 		return govmmQemu.NetDevice{}, fmt.Errorf("Unknown type for endpoint")
 	}
