@@ -9,9 +9,8 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"strings"
-
 	runtim "runtime"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/kata-containers/runtime/pkg/katautils"
@@ -358,7 +357,7 @@ func getHypervisorInfo(config oci.RuntimeConfig) HypervisorInfo {
 }
 
 func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err error) {
-	err = setCPUtype()
+	err = setCPUtype(config.HypervisorType)
 	if err != nil {
 		return EnvInfo{}, err
 	}

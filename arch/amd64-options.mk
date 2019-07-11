@@ -16,3 +16,7 @@ FCCMD := firecracker
 
 # NEMU binary name
 NEMUCMD := nemu-system-x86_64
+
+#ACRN binary name
+ACRNCMD := acrn-dm
+ACRNCTLCMD := acrnctl

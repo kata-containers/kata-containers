@@ -8,6 +8,8 @@
 package main
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,6 +17,10 @@ import (
 
 func testSetCPUTypeGeneric(t *testing.T) {
 	assert := assert.New(t)
+
+	tmpdir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
 
 	savedArchRequiredCPUFlags := archRequiredCPUFlags
 	savedArchRequiredCPUAttribs := archRequiredCPUAttribs
@@ -30,7 +36,10 @@ func testSetCPUTypeGeneric(t *testing.T) {
 	assert.Empty(archRequiredCPUAttribs)
 	assert.NotEmpty(archRequiredKernelModules)
 
-	setCPUtype()
+	_, config, err := makeRuntimeConfig(tmpdir)
+	assert.NoError(err)
+
+	setCPUtype(config.HypervisorType)
 
 	assert.Equal(archRequiredCPUFlags, savedArchRequiredCPUFlags)
 	assert.Equal(archRequiredCPUAttribs, savedArchRequiredCPUAttribs)

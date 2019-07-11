@@ -8,12 +8,13 @@ package main
 import (
 	"fmt"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/kata-containers/runtime/pkg/katautils"
+	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/sirupsen/logrus"
-	"regexp"
-	"strconv"
 )
 
 const (
@@ -55,11 +56,11 @@ var archRequiredKernelModules = map[string]kernelModule{
 	},
 }
 
-func setCPUtype() error {
+func setCPUtype(hypervisorType vc.HypervisorType) error {
 	return nil
 }
 
-func archHostCanCreateVMContainer() error {
+func archHostCanCreateVMContainer(hypervisorType vc.HypervisorType) error {
 	return kvmIsUsable()
 }
 
