@@ -53,6 +53,9 @@ func TestCCCheckCLIFunction(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
+	_, config, err := makeRuntimeConfig(dir)
+	assert.NoError(err)
+
 	savedSysModuleDir := sysModuleDir
 	savedProcCPUInfo := procCPUInfo
 
@@ -98,6 +101,7 @@ func TestCCCheckCLIFunction(t *testing.T) {
 
 	ctx := createCLIContext(nil)
 	ctx.App.Name = "foo"
+	ctx.App.Metadata["runtimeConfig"] = config
 
 	// create buffer to save logger output
 	buf := &bytes.Buffer{}

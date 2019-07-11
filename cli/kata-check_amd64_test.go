@@ -55,6 +55,9 @@ func TestCCCheckCLIFunction(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
+	_, config, err := makeRuntimeConfig(dir)
+	assert.NoError(err)
+
 	savedSysModuleDir := sysModuleDir
 	savedProcCPUInfo := procCPUInfo
 
@@ -108,6 +111,7 @@ func TestCCCheckCLIFunction(t *testing.T) {
 
 	ctx := createCLIContext(nil)
 	ctx.App.Name = "foo"
+	ctx.App.Metadata["runtimeConfig"] = config
 
 	// create buffer to save logger output
 	buf := &bytes.Buffer{}
@@ -514,6 +518,10 @@ foo     : bar
 func TestSetCPUtype(t *testing.T) {
 	assert := assert.New(t)
 
+	tmpdir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
 	savedArchRequiredCPUFlags := archRequiredCPUFlags
 	savedArchRequiredCPUAttribs := archRequiredCPUAttribs
 	savedArchRequiredKernelModules := archRequiredKernelModules
@@ -528,7 +536,10 @@ func TestSetCPUtype(t *testing.T) {
 	archRequiredCPUAttribs = map[string]string{}
 	archRequiredKernelModules = map[string]kernelModule{}
 
-	setCPUtype()
+	_, config, err := makeRuntimeConfig(tmpdir)
+	assert.NoError(err)
+
+	setCPUtype(config.HypervisorType)
 
 	assert.NotEmpty(archRequiredCPUFlags)
 	assert.NotEmpty(archRequiredCPUAttribs)

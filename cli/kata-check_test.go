@@ -659,6 +659,9 @@ func TestCheckCLIFunctionFail(t *testing.T) {
 	}
 	defer os.RemoveAll(dir)
 
+	_, config, err := makeRuntimeConfig(dir)
+	assert.NoError(err)
+
 	oldProcCPUInfo := procCPUInfo
 
 	// doesn't exist
@@ -670,6 +673,7 @@ func TestCheckCLIFunctionFail(t *testing.T) {
 
 	ctx := createCLIContext(nil)
 	ctx.App.Name = "foo"
+	ctx.App.Metadata["runtimeConfig"] = config
 
 	fn, ok := kataCheckCLICommand.Action.(func(context *cli.Context) error)
 	assert.True(ok)

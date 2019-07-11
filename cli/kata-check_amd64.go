@@ -7,11 +7,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io/ioutil"
 	"strings"
+	"syscall"
+	"unsafe"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -24,6 +26,17 @@ const (
 	msgKernelVirtio           = "Host kernel accelerator for virtio"
 	msgKernelVirtioNet        = "Host kernel accelerator for virtio network"
 	msgKernelVirtioVhostVsock = "Host Support for Linux VM Sockets"
+	cpuFlagVMX                = "vmx"
+	cpuFlagLM                 = "lm"
+	cpuFlagSVM                = "svm"
+	cpuFlagSSE4_1             = "sse4_1"
+	kernelModvhm              = "vhm_dev"
+	kernelModvhost            = "vhost"
+	kernelModvhostnet         = "vhost_net"
+	kernelModvhostvsock       = "vhost_vsock"
+	kernelModkvm              = "kvm"
+	kernelModkvmintel         = "kvm_intel"
+	kernelModkvmamd           = "kvm_amd"
 )
 
 // CPU types
@@ -32,6 +45,28 @@ const (
 	cpuTypeAMD     = 1
 	cpuTypeUnknown = -1
 )
+
+const acrnDevice = "/dev/acrn_vhm"
+
+// ioctl_ACRN_CREATE_VM is the IOCTL to create VM in ACRN.
+// Current Linux mainstream kernel doesn't have support for ACRN.
+// Due to this several macros are not defined in Linux headers.
+// Until the support is available, directly use the value instead
+// of macros.
+//https://github.com/kata-containers/runtime/issues/1784
+const ioctl_ACRN_CREATE_VM = 0x43000010  //nolint
+const ioctl_ACRN_DESTROY_VM = 0x43000011 //nolint
+
+type acrn_create_vm struct { //nolint
+	vmid      uint16 //nolint
+	reserved0 uint16 //nolint
+	vcpu_num  uint16 //nolint
+	reserved1 uint16 //nolint
+	uuid      [16]uint8
+	vm_flag   uint64    //nolint
+	req_buf   uint64    //nolint
+	reserved2 [16]uint8 //nolint
+}
 
 // cpuType save the CPU type
 var cpuType int
@@ -49,7 +84,7 @@ var archRequiredCPUAttribs map[string]string
 // required module parameters.
 var archRequiredKernelModules map[string]kernelModule
 
-func setCPUtype() error {
+func setCPUtype(hypervisorType vc.HypervisorType) error {
 	cpuType = getCPUtype()
 
 	if cpuType == cpuTypeUnknown {
@@ -66,64 +101,88 @@ func setCPUtype() error {
 				"unrestricted_guest": "Y",
 			}
 		}
-		archRequiredCPUFlags = map[string]string{
-			"vmx":    "Virtualization support",
-			"lm":     "64Bit CPU",
-			"sse4_1": "SSE4.1",
+
+		switch hypervisorType {
+		case "firecracker":
+			fallthrough
+		case "qemu":
+			archRequiredCPUFlags = map[string]string{
+				cpuFlagVMX:    "Virtualization support",
+				cpuFlagLM:     "64Bit CPU",
+				cpuFlagSSE4_1: "SSE4.1",
+			}
+			archRequiredCPUAttribs = map[string]string{
+				archGenuineIntel: "Intel Architecture CPU",
+			}
+			archRequiredKernelModules = map[string]kernelModule{
+				kernelModkvm: {
+					desc: msgKernelVM,
+				},
+				kernelModkvmintel: {
+					desc:       "Intel KVM",
+					parameters: kvmIntelParams,
+				},
+				kernelModvhost: {
+					desc: msgKernelVirtio,
+				},
+				kernelModvhostnet: {
+					desc: msgKernelVirtioNet,
+				},
+				kernelModvhostvsock: {
+					desc:     msgKernelVirtioVhostVsock,
+					required: false,
+				},
+			}
+		case "acrn":
+			archRequiredCPUFlags = map[string]string{
+				cpuFlagLM:     "64Bit CPU",
+				cpuFlagSSE4_1: "SSE4.1",
+			}
+			archRequiredCPUAttribs = map[string]string{
+				archGenuineIntel: "Intel Architecture CPU",
+			}
+			archRequiredKernelModules = map[string]kernelModule{
+				kernelModvhm: {
+					desc: "Intel ACRN",
+				},
+				kernelModvhost: {
+					desc: msgKernelVirtio,
+				},
+				kernelModvhostnet: {
+					desc: msgKernelVirtioNet,
+				},
+			}
+		default:
+			return fmt.Errorf("setCPUtype: Unknown hypervisor type %s", hypervisorType)
 		}
-		archRequiredCPUAttribs = map[string]string{
-			archGenuineIntel: "Intel Architecture CPU",
-		}
-		archRequiredKernelModules = map[string]kernelModule{
-			"kvm": {
-				desc:     msgKernelVM,
-				required: true,
-			},
-			"kvm_intel": {
-				desc:       "Intel KVM",
-				parameters: kvmIntelParams,
-				required:   true,
-			},
-			"vhost": {
-				desc:     msgKernelVirtio,
-				required: true,
-			},
-			"vhost_net": {
-				desc:     msgKernelVirtioNet,
-				required: true,
-			},
-			"vhost_vsock": {
-				desc:     msgKernelVirtioVhostVsock,
-				required: false,
-			},
-		}
+
 	} else if cpuType == cpuTypeAMD {
 		archRequiredCPUFlags = map[string]string{
-			"svm":    "Virtualization support",
-			"lm":     "64Bit CPU",
-			"sse4_1": "SSE4.1",
+			cpuFlagSVM:    "Virtualization support",
+			cpuFlagLM:     "64Bit CPU",
+			cpuFlagSSE4_1: "SSE4.1",
 		}
 		archRequiredCPUAttribs = map[string]string{
 			archAuthenticAMD: "AMD Architecture CPU",
 		}
 		archRequiredKernelModules = map[string]kernelModule{
-			"kvm": {
+			kernelModkvm: {
 				desc:     msgKernelVM,
 				required: true,
 			},
-			"kvm_amd": {
+			kernelModkvmamd: {
 				desc:     "AMD KVM",
 				required: true,
 			},
-			"vhost": {
+			kernelModvhost: {
 				desc:     msgKernelVirtio,
 				required: true,
 			},
-			"vhost_net": {
+			kernelModvhostnet: {
 				desc:     msgKernelVirtioNet,
 				required: true,
 			},
-			"vhost_vsock": {
+			kernelModvhostvsock: {
 				desc:     msgKernelVirtioVhostVsock,
 				required: false,
 			},
@@ -155,8 +214,72 @@ func kvmIsUsable() error {
 	return genericKvmIsUsable()
 }
 
-func archHostCanCreateVMContainer() error {
-	return kvmIsUsable()
+// acrnIsUsable determines if it will be possible to create a full virtual machine
+// by creating a minimal VM and then deleting it.
+func acrnIsUsable() error {
+	flags := syscall.O_RDWR | syscall.O_CLOEXEC
+
+	f, err := syscall.Open(acrnDevice, flags, 0)
+	if err != nil {
+		return err
+	}
+	defer syscall.Close(f)
+
+	fieldLogger := kataLog.WithField("check-type", "full")
+
+	fieldLogger.WithField("device", acrnDevice).Info("device available")
+
+	createVM := acrn_create_vm{
+		uuid: [16]uint8{
+			0xd2, 0x79, 0x54, 0x38, 0x25, 0xd6, 0x11, 0xe8,
+			0x86, 0x4e, 0xcb, 0x7a, 0x18, 0xb3, 0x46, 0x43,
+		},
+	}
+
+	ret, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(f),
+		uintptr(ioctl_ACRN_CREATE_VM),
+		uintptr(unsafe.Pointer(&createVM)))
+	if ret != 0 || errno != 0 {
+		if errno == syscall.EBUSY {
+			fieldLogger.WithField("reason", "another hypervisor running").Error("cannot create VM")
+		}
+		fieldLogger.WithFields(logrus.Fields{
+			"ret":   ret,
+			"errno": errno,
+		}).Info("Create VM Error")
+		return errno
+	}
+
+	ret, _, errno = syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(f),
+		uintptr(ioctl_ACRN_DESTROY_VM),
+		0)
+	if ret != 0 || errno != 0 {
+		fieldLogger.WithFields(logrus.Fields{
+			"ret":   ret,
+			"errno": errno,
+		}).Info("Destroy VM Error")
+		return errno
+	}
+
+	fieldLogger.WithField("feature", "create-vm").Info("feature available")
+
+	return nil
+}
+
+func archHostCanCreateVMContainer(hypervisorType vc.HypervisorType) error {
+
+	switch hypervisorType {
+	case "qemu":
+		fallthrough
+	case "firecracker":
+		return kvmIsUsable()
+	case "acrn":
+		return acrnIsUsable()
+	default:
+		return fmt.Errorf("archHostCanCreateVMContainer: Unknown hypervisor type %s", hypervisorType)
+	}
 }
 
 // hostIsVMContainerCapable checks to see if the host is theoretically capable
