@@ -68,14 +68,17 @@ export KUBECONFIG="$HOME/.kube/config"
 kubectl get nodes
 kubectl get pods
 
+# default network plugin should be flannel, and its config file is taken from k8s 1.12 documentation
+flannel_version="bc79dd1505b0c8681ece4de4c0d86c5cd2643275"
+flannel_url="https://raw.githubusercontent.com/coreos/flannel/${flannel_version}/Documentation/kube-flannel.yml"
+
 arch=$("${SCRIPT_PATH}/../../.ci/kata-arch.sh")
 #Load arch-specific configure file
 if [ -f "${SCRIPT_PATH}/../../.ci/${arch}/kubernetes/init.sh" ]; then
         source "${SCRIPT_PATH}/../../.ci/${arch}/kubernetes/init.sh"
 fi
 
-# default network plugin should be flannel, and its config file is taken from k8s 1.12 documentation:
-network_plugin_config=${network_plugin_config:-https://raw.githubusercontent.com/coreos/flannel/bc79dd1505b0c8681ece4de4c0d86c5cd2643275/Documentation/kube-flannel.yml}
+network_plugin_config=${network_plugin_config:-$flannel_url}
 
 kubectl apply -f "$network_plugin_config"
 
