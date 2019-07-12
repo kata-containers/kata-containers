@@ -25,6 +25,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -1058,12 +1059,12 @@ func (q *QMP) ExecuteDeviceDel(ctx context.Context, devID string) error {
 
 // ExecutePCIDeviceAdd is the PCI version of ExecuteDeviceAdd. This function can be used
 // to hot plug PCI devices on PCI(E) bridges, unlike ExecuteDeviceAdd this function receive the
-// device address on its parent bus. bus is optional. shared denotes if the drive can be shared
-// allowing it to be passed more than once.
+// device address on its parent bus. bus is optional. queues specifies the number of queues of
+// a block device. shared denotes if the drive can be shared allowing it to be passed more than once.
 // disableModern indicates if virtio version 1.0 should be replaced by the
 // former version 0.9, as there is a KVM bug that occurs when using virtio
 // 1.0 in nested environments.
-func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus, romfile string, shared, disableModern bool) error {
+func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver, addr, bus, romfile string, queues int, shared, disableModern bool) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": driver,
@@ -1075,6 +1076,9 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 	}
 	if shared && (q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 10)) {
 		args["share-rw"] = "on"
+	}
+	if queues > 0 {
+		args["num-queues"] = strconv.Itoa(queues)
 	}
 	if isVirtioPCI[DeviceDriver(driver)] {
 		args["romfile"] = romfile
@@ -1281,7 +1285,7 @@ func (q *QMP) ExecQueryCpusFast(ctx context.Context) ([]CPUInfoFast, error) {
 }
 
 // ExecHotplugMemory adds size of MiB memory to the guest
-func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string, size int) error {
+func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string, size int, share bool) error {
 	props := map[string]interface{}{"size": uint64(size) << 20}
 	args := map[string]interface{}{
 		"qom-type": qomtype,
@@ -1290,6 +1294,9 @@ func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string
 	}
 	if mempath != "" {
 		props["mem-path"] = mempath
+	}
+	if share {
+		props["share"] = true
 	}
 	err := q.executeCommand(ctx, "object-add", args, nil)
 	if err != nil {
@@ -1452,4 +1459,12 @@ func (q *QMP) ExecuteQueryMigration(ctx context.Context) (MigrationStatus, error
 	}
 
 	return status, nil
+}
+
+// ExecuteMigrationIncoming start migration from incoming uri.
+func (q *QMP) ExecuteMigrationIncoming(ctx context.Context, uri string) error {
+	args := map[string]interface{}{
+		"uri": uri,
+	}
+	return q.executeCommand(ctx, "migrate-incoming", args, nil)
 }

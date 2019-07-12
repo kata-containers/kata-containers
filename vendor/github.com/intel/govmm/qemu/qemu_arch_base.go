@@ -47,6 +47,7 @@ var isVirtioPCI = map[DeviceDriver]bool{
 	VirtioNetPCI:        true,
 	VirtioSerial:        true,
 	VirtioBlock:         true,
+	VirtioBlockPCI:      true,
 	Console:             false,
 	VirtioSerialPort:    false,
 	VHostVSock:          true,
