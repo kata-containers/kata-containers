@@ -46,11 +46,6 @@ if [ "$ID" == "debian" ]; then
 	exit
 fi
 
-if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
-	echo "Skip soak test (see https://github.com/kata-containers/tests/issues/1804)"
-	exit
-fi
-
 check_vsock_active() {
 	vsock_configured=$($RUNTIME_PATH kata-env | awk '/UseVSock/ {print $3}')
 	vsock_supported=$($RUNTIME_PATH kata-env | awk '/SupportVSock/ {print $3}')
@@ -110,10 +105,10 @@ check_all_running() {
 			((goterror++))
 		fi
 
-		# check we have the right number of qemu's
-		how_many_qemus=$(pgrep -a -f ${HYPERVISOR_PATH} | wc -l)
-		if (( ${how_many_running} != ${how_many_qemus} )); then
-			echo "Wrong number of qemus running (${how_many_running} != ${how_many_qemus}) - stopping"
+		# check we have the right number of vm's
+		how_many_vms=$(pgrep -a $(basename ${HYPERVISOR_PATH} | cut -d '-' -f1) | wc -l)
+		if (( ${how_many_running} != ${how_many_vms} )); then
+			echo "Wrong number of $KATA_HYPERVISOR running (${how_many_running} != ${how_many_vms}) - stopping"
 			((goterror++))
 		fi
 
