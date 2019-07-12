@@ -29,6 +29,8 @@ func (t AssetType) Annotations() (string, string, error) {
 		return annotations.InitrdPath, annotations.InitrdHash, nil
 	case HypervisorAsset:
 		return annotations.HypervisorPath, annotations.HypervisorHash, nil
+	case JailerAsset:
+		return annotations.JailerPath, annotations.JailerHash, nil
 	case FirmwareAsset:
 		return annotations.FirmwarePath, annotations.FirmwareHash, nil
 	}
@@ -51,6 +53,8 @@ const (
 
 	// HypervisorCtlAsset is an hypervisor control asset.
 	HypervisorCtlAsset AssetType = "hypervisorctl"
+	// JailerAsset is an jailer asset.
+	JailerAsset AssetType = "jailer"
 
 	// FirmwareAsset is a firmware asset.
 	FirmwareAsset AssetType = "firmware"
@@ -87,6 +91,8 @@ func (a *Asset) Valid() bool {
 	case InitrdAsset:
 		return true
 	case HypervisorAsset:
+		return true
+	case JailerAsset:
 		return true
 	case FirmwareAsset:
 		return true

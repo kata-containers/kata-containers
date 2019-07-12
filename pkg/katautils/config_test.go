@@ -514,6 +514,8 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	proxyPath := path.Join(dir, "proxy")
 	hypervisorPath := path.Join(dir, "hypervisor")
 	defaultHypervisorPath = hypervisorPath
+	jailerPath := path.Join(dir, "jailer")
+	defaultJailerPath = jailerPath
 	netmonPath := path.Join(dir, "netmon")
 
 	imagePath := path.Join(dir, "image.img")
@@ -524,12 +526,14 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	savedDefaultImagePath := defaultImagePath
 	savedDefaultInitrdPath := defaultInitrdPath
 	savedDefaultHypervisorPath := defaultHypervisorPath
+	savedDefaultJailerPath := defaultJailerPath
 	savedDefaultKernelPath := defaultKernelPath
 
 	defer func() {
 		defaultImagePath = savedDefaultImagePath
 		defaultInitrdPath = savedDefaultInitrdPath
 		defaultHypervisorPath = savedDefaultHypervisorPath
+		defaultJailerPath = savedDefaultJailerPath
 		defaultKernelPath = savedDefaultKernelPath
 	}()
 
@@ -538,9 +542,10 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 	defaultImagePath = imagePath
 	defaultInitrdPath = initrdPath
 	defaultHypervisorPath = hypervisorPath
+	defaultJailerPath = jailerPath
 	defaultKernelPath = kernelPath
 
-	for _, file := range []string{defaultImagePath, defaultInitrdPath, defaultHypervisorPath, defaultKernelPath} {
+	for _, file := range []string{defaultImagePath, defaultInitrdPath, defaultHypervisorPath, defaultJailerPath, defaultKernelPath} {
 		err = WriteFile(file, "foo", testFileMode)
 		if err != nil {
 			t.Fatal(err)
@@ -588,6 +593,11 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		t.Error(err)
 	}
 
+	err = createEmptyFile(jailerPath)
+	if err != nil {
+		t.Error(err)
+	}
+
 	err = createEmptyFile(netmonPath)
 	if err != nil {
 		t.Error(err)
@@ -600,6 +610,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 	expectedHypervisorConfig := vc.HypervisorConfig{
 		HypervisorPath:        defaultHypervisorPath,
+		JailerPath:            defaultJailerPath,
 		KernelPath:            defaultKernelPath,
 		ImagePath:             defaultImagePath,
 		InitrdPath:            defaultInitrdPath,

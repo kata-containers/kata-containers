@@ -104,7 +104,7 @@ func TestQemuCreateSandbox(t *testing.T) {
 		t.Fatalf("Could not create parent directory %s: %v", parentDir, err)
 	}
 
-	if err := q.createSandbox(context.Background(), sandbox.id, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
+	if err := q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
 		t.Fatal(err)
 	}
 
@@ -148,7 +148,7 @@ func TestQemuCreateSandboxMissingParentDirFail(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := q.createSandbox(context.Background(), sandbox.id, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
+	if err := q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
 		t.Fatalf("Qemu createSandbox() is not expected to fail because of missing parent directory for storage: %v", err)
 	}
 }
@@ -505,7 +505,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	}
 	q := &qemu{}
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
-	if err = q.createSandbox(context.Background(), sandbox.id, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
+	if err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, true)
@@ -522,7 +522,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
 	sandbox.config.HypervisorConfig.MemoryPath = fallbackFileBackedMemDir
 
-	err = q.createSandbox(context.Background(), sandbox.id, &sandbox.config.HypervisorConfig, sandbox.store)
+	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store)
 
 	expectErr := errors.New("VM templating has been enabled with either virtio-fs or file backed memory and this configuration will not work")
 	assert.Equal(expectErr, err)
@@ -534,7 +534,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	}
 	q = &qemu{}
 	sandbox.config.HypervisorConfig.FileBackedMemRootDir = "/tmp/xyzabc"
-	if err = q.createSandbox(context.Background(), sandbox.id, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
+	if err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
 		t.Fatal(err)
 	}
 	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, false)

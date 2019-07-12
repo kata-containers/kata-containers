@@ -28,7 +28,7 @@ func TestMockHypervisorCreateSandbox(t *testing.T) {
 	ctx := context.Background()
 
 	// wrong config
-	if err := m.createSandbox(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, nil); err == nil {
+	if err := m.createSandbox(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig, nil); err == nil {
 		t.Fatal()
 	}
 
@@ -38,7 +38,7 @@ func TestMockHypervisorCreateSandbox(t *testing.T) {
 		HypervisorPath: fmt.Sprintf("%s/%s", testDir, testHypervisor),
 	}
 
-	if err := m.createSandbox(ctx, sandbox.config.ID, &sandbox.config.HypervisorConfig, nil); err != nil {
+	if err := m.createSandbox(ctx, sandbox.config.ID, NetworkNamespace{}, &sandbox.config.HypervisorConfig, nil); err != nil {
 		t.Fatal(err)
 	}
 }
