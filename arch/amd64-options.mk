@@ -13,6 +13,8 @@ QEMUCMD := qemu-system-x86_64
 
 # Firecracker binary name
 FCCMD := firecracker
+# Firecracker's jailer binary name
+FCJAILERCMD := jailer
 
 # NEMU binary name
 NEMUCMD := nemu-system-x86_64

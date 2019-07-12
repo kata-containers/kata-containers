@@ -447,7 +447,7 @@ func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memo
 }
 
 // createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.
-func (q *qemu) createSandbox(ctx context.Context, id string, hypervisorConfig *HypervisorConfig, store *store.VCStore) error {
+func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, store *store.VCStore) error {
 	// Save the tracing context
 	q.ctx = ctx
 
