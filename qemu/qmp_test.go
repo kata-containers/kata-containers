@@ -1069,9 +1069,14 @@ func TestQMPCPUDeviceAdd(t *testing.T) {
 	driver := "qemu64-x86_64-cpu"
 	cpuID := "cpu-0"
 	socketID := "0"
+	dieID := "0"
 	coreID := "1"
 	threadID := "0"
-	err := q.ExecuteCPUDeviceAdd(context.Background(), driver, cpuID, socketID, coreID, threadID, "")
+	q.version = &QMPVersion{
+		Major: 4,
+		Minor: 1,
+	}
+	err := q.ExecuteCPUDeviceAdd(context.Background(), driver, cpuID, socketID, dieID, coreID, threadID, "")
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
@@ -1090,6 +1095,7 @@ func TestQMPExecuteQueryHotpluggableCPUs(t *testing.T) {
 		Properties: CPUProperties{
 			Node:   1,
 			Socket: 3,
+			Die:    1,
 			Core:   2,
 			Thread: 4,
 		},
