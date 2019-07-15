@@ -149,6 +149,7 @@ type QMPVersion struct {
 type CPUProperties struct {
 	Node   int `json:"node-id"`
 	Socket int `json:"socket-id"`
+	Die    int `json:"die-id"`
 	Core   int `json:"core-id"`
 	Thread int `json:"thread-id"`
 }
@@ -1162,7 +1163,7 @@ func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsd
 // node/board the CPU belongs to, coreID is the core number within socket the CPU belongs to, threadID is the
 // thread number within core the CPU belongs to. Note that socketID and threadID are not a requirement for
 // architecures like ppc64le.
-func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, coreID, threadID, romfile string) error {
+func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, dieID, coreID, threadID, romfile string) error {
 	args := map[string]interface{}{
 		"driver":  driver,
 		"id":      cpuID,
@@ -1175,6 +1176,12 @@ func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, 
 
 	if threadID != "" {
 		args["thread-id"] = threadID
+	}
+
+	if q.version.Major > 4 || (q.version.Major == 4 && q.version.Minor >= 1) {
+		if dieID != "" {
+			args["die-id"] = dieID
+		}
 	}
 
 	if isVirtioPCI[DeviceDriver(driver)] {
