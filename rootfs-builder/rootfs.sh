@@ -497,6 +497,9 @@ if [ ${distro} == ubuntu ] || [ ${distro} == debian ] ; then
 	chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
 fi
 
+info "Create ${ROOTFS_DIR}/etc"
+mkdir -p "${ROOTFS_DIR}/etc"
+
 info "Configure chrony file ${chrony_conf_file}"
 cat >> "${chrony_conf_file}" <<EOT
 refclock PHC /dev/ptp0 poll 3 dpoll -2 offset 0
