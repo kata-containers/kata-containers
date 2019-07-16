@@ -107,6 +107,17 @@ then
 	fi
 fi
 
+# Check if we can fastpath return/skip the CI
+# Specifically do this **after** we have potentially done the static
+# checks, as we always want to run those.
+# Work around the 'set -e' dying if the check fails by using a bash
+# '{ group command }' to encapsulate.
+{ .ci/ci-fast-return.sh; ret=$?; } || true
+if [ "$ret" -eq 0 ]; then
+	echo "Short circuit fast path skipping the rest of the CI."
+	exit 0
+fi
+
 # Setup Kata Containers Environment
 #
 # - If the repo is "tests", this will call the script living in that repo
