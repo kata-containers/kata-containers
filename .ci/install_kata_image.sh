@@ -60,9 +60,9 @@ install_ci_cache_image() {
 	pushd "${IMAGE_DIR}" >/dev/null
 	local image_path=$(readlink -f "${IMAGE_DIR}/${image_name}")
 
-	sudo -E curl -fsOL "${latest_build_url}/sha256sum-${type}-tarball"
+	sudo -E curl -fsOL "${latest_build_url}/${type}-tarball.sha256sum"
 	sudo -E curl -fsL "${latest_build_url}/${image_name}.tar.xz" -o "${image_path}.tar.xz"
-	sudo sha256sum -c "sha256sum-${type}-tarball"
+	sudo sha256sum -c "${type}-tarball.sha256sum"
 
 	sudo -E curl -fsOL "${latest_build_url}/sha256sum-${type}"
 	sudo tar xfv "${image_path}.tar.xz"
