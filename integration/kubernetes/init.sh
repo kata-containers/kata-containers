@@ -18,6 +18,11 @@ source "/etc/os-release" || source "/usr/lib/os-release"
 cri_runtime="${CRI_RUNTIME:-crio}"
 kubernetes_version=$(get_version "externals.kubernetes.version")
 
+# store iptables if CI running on bare-metal
+BAREMETAL="${BAREMETAL:-false}"
+iptables_cache="${SCRIPT_PATH}/iptables_cache"
+[ "${BAREMETAL}" == true ] && iptables-save > "$iptables_cache"
+
 [ "$ID" == "fedora" ] && bash "${SCRIPT_PATH}/../../.ci/install_kubernetes.sh"
 
 case "${cri_runtime}" in
@@ -54,7 +59,6 @@ kubeadm_config_file="$(mktemp --tmpdir kubeadm_config.XXXXXX.yaml)"
 sed -e "s|CRI_RUNTIME_SOCKET|${cri_runtime_socket}|" "${kubeadm_config_template}" > "${kubeadm_config_file}"
 sed -i "s|KUBERNETES_VERSION|v${kubernetes_version/-*}|" "${kubeadm_config_file}"
 
-BAREMETAL="${BAREMETAL:-false}"
 if [ "${BAREMETAL}" == true ] && [[ $(wc -l /proc/swaps | awk '{print $1}') -gt 1 ]]; then
 	sudo swapoff -a || true
 fi
