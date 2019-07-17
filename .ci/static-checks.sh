@@ -1071,7 +1071,7 @@ main()
 
 	for func in $all_check_funcs
 	do
-		if [ "$func" = "check_commits" ]; then
+		if [ "$func" = "static_check_commits" ]; then
 			if [ -n "$TRAVIS_BRANCH" ] && [ "$TRAVIS_BRANCH" != "master" ]
 			then
 				echo "Skipping checkcommits"
