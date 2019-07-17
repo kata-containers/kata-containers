@@ -24,3 +24,26 @@ sudo -E rm -rf "$HOME/.kube"
 # Remove existing CNI configurations and binaries.
 sudo rm -rf /var/lib/cni/networks/*
 sudo rm -rf /opt/cni/bin/*
+
+# delete containers resource created by runc
+cri_runtime="${CRI_RUNTIME:-crio}"
+case "${cri_runtime}" in
+containerd)
+        readonly runc_path=$(command -v runc)
+        ;;
+crio)
+        readonly runc_path="/usr/local/bin/crio-runc"
+        ;;
+*)
+        echo "Runtime ${cri_runtime} not supported"
+	exit 0
+        ;;
+esac
+
+runc_container_union="$($runc_path list)"
+if [ -n "$runc_container_union" ]; then
+	while IFS='$\n' read runc_container; do
+		container_id="$(echo "$runc_container" | awk '{print $1}')"
+		[ "$container_id" != "ID" ] && $runc_path delete -f $container_id
+	done <<< "${runc_container_union}"
+fi
