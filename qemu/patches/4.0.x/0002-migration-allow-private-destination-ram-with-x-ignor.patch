@@ -1,0 +1,73 @@
+From b17fbbe55cba95ad323b27c2f9f3e22eb6364d4b Mon Sep 17 00:00:00 2001
+From: Peng Tao <tao.peng@linux.alibaba.com>
+Date: Fri, 14 Jun 2019 14:35:13 +0800
+Subject: [PATCH] migration: allow private destination ram with x-ignore-shared
+
+By removing the share ram check, qemu is able to migrate
+to private destination ram when x-ignore-shared capability
+is on. Then we can create multiple destination VMs based
+on the same source VM.
+
+This changes the x-ignore-shared migration capability to
+work similar to Lai's original bypass-shared-memory
+work(https://lists.gnu.org/archive/html/qemu-devel/2018-04/msg00003.html)
+which enables kata containers (https://katacontainers.io)
+to implement the VM templating feature.
+
+An example usage in kata containers(https://katacontainers.io):
+1. Start the source VM:
+   qemu-system-x86 -m 2G \
+     -object memory-backend-file,id=mem0,size=2G,share=on,mem-path=/tmpfs/template-memory \
+     -numa node,memdev=mem0
+2. Stop the template VM, set migration x-ignore-shared capability,
+   migrate "exec:cat>/tmpfs/state", quit it
+3. Start target VM:
+   qemu-system-x86 -m 2G \
+     -object memory-backend-file,id=mem0,size=2G,share=off,mem-path=/tmpfs/template-memory \
+     -numa node,memdev=mem0 \
+     -incoming defer
+4. connect to target VM qmp, set migration x-ignore-shared capability,
+migrate_incoming "exec:cat /tmpfs/state"
+5. create more target VMs repeating 3 and 4
+
+Cc: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Cc: Yury Kotov <yury-kotov@yandex-team.ru>
+Cc: Jiangshan Lai <laijs@hyper.sh>
+Cc: Xu Wang <xu@hyper.sh>
+Signed-off-by: Peng Tao <tao.peng@linux.alibaba.com>
+Reviewed-by: Juan Quintela <quintela@redhat.com>
+Reviewed-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+Message-Id: <1560494113-1141-1-git-send-email-tao.peng@linux.alibaba.com>
+Signed-off-by: Juan Quintela <quintela@redhat.com>
+---
+ migration/ram.c | 7 -------
+ 1 file changed, 7 deletions(-)
+
+diff --git a/migration/ram.c b/migration/ram.c
+index 8a6ad61d3d..8622b4dc49 100644
+--- a/migration/ram.c
++++ b/migration/ram.c
+@@ -3426,7 +3426,6 @@ static int ram_save_setup(QEMUFile *f, void *opaque)
+         }
+         if (migrate_ignore_shared()) {
+             qemu_put_be64(f, block->mr->addr);
+-            qemu_put_byte(f, ramblock_is_ignored(block) ? 1 : 0);
+         }
+     }
+ 
+@@ -4393,12 +4392,6 @@ static int ram_load(QEMUFile *f, void *opaque, int version_id)
+                     }
+                     if (migrate_ignore_shared()) {
+                         hwaddr addr = qemu_get_be64(f);
+-                        bool ignored = qemu_get_byte(f);
+-                        if (ignored != ramblock_is_ignored(block)) {
+-                            error_report("RAM block %s should %s be migrated",
+-                                         id, ignored ? "" : "not");
+-                            ret = -EINVAL;
+-                        }
+                         if (ramblock_is_ignored(block) &&
+                             block->mr->addr != addr) {
+                             error_report("Mismatched GPAs for block %s "
+-- 
+2.17.1
+
