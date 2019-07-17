@@ -28,8 +28,7 @@ runtime_repo="${runtime_repo:-github.com/kata-containers/runtime}"
 # This script is intended to execute under Jenkins
 # If we do not know where the Jenkins defined WORKSPACE area is
 # then quit
-if [ -z "${WORKSPACE}" ]
-then
+if [ -z "${WORKSPACE}" ]; then
 	echo "Jenkins WORKSPACE env var not set - exiting" >&2
 	exit 1
 fi
@@ -93,13 +92,11 @@ fi
 "${GOPATH}/src/${tests_repo}/.ci/resolve-kata-dependencies.sh"
 
 # Run the static analysis tools
-if [ -z "${METRICS_CI}" ]
-then
+if [ -z "${METRICS_CI}" ]; then
 	# We also run static checks on travis for x86 and ppc64le,
 	# so run them on jenkins only on architectures that travis
 	# do not support.
-	if [ "$arch" = "s390x" ] || [ "$arch" = "aarch64" ]
-	then
+	if [ "$arch" = "s390x" ] || [ "$arch" = "aarch64" ]; then
 		specific_branch=""
 		# If not a PR, we are testing on stable or master branch.
 		[ -z "$pr_number" ] && specific_branch="true"
@@ -112,7 +109,10 @@ fi
 # checks, as we always want to run those.
 # Work around the 'set -e' dying if the check fails by using a bash
 # '{ group command }' to encapsulate.
-{ ${tests_repo_dir}/.ci/ci-fast-return.sh; ret=$?; } || true
+{
+	${tests_repo_dir}/.ci/ci-fast-return.sh
+	ret=$?
+} || true
 if [ "$ret" -eq 0 ]; then
 	echo "Short circuit fast path skipping the rest of the CI."
 	exit 0
@@ -124,13 +124,19 @@ fi
 #   directly.
 # - If the repo is not "tests", call the repo-specific script (which is
 #   expected to call the script of the same name in the "tests" repo).
-if [  "$CI_JOB" == "CRI_CONTAINERD_K8S" ]; then
+case "${CI_JOB}" in
+"CRI_CONTAINERD_K8S")
 	# This job only tests containerd + k8s
 	export CRI_CONTAINERD="yes"
 	export KUBERNETES="yes"
 	export CRIO="no"
 	export OPENSHIFT="no"
-fi
+	;;
+"SANDBOX_CGROUP_ONLY")
+	# Used by runtime makefile to enable option on intall
+	export DEFSANDBOXCGROUPONLY=true
+	;;
+esac
 .ci/setup.sh
 
 # Now we have all the components installed, log that info before we
@@ -142,12 +148,9 @@ else
 	echo "WARN: Kata runtime is not installed"
 fi
 
-if [ -z "${METRICS_CI}" ]
-then
-	if [ "${kata_repo}" != "${tests_repo}" ]
-	then
-		if [ "${ID}" == "rhel" ] && [ "${kata_repo}" == "${runtime_repo}" ]
-		then
+if [ -z "${METRICS_CI}" ]; then
+	if [ "${kata_repo}" != "${tests_repo}" ]; then
+		if [ "${ID}" == "rhel" ] && [ "${kata_repo}" == "${runtime_repo}" ]; then
 			echo "INFO: issue ${unit_issue}"
 		else
 			echo "INFO: Running unit tests for repo $kata_repo"
