@@ -5,46 +5,32 @@
 
 package types
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestBlockDeviceCapability(t *testing.T) {
 	var caps Capabilities
 
-	if caps.IsBlockDeviceSupported() {
-		t.Fatal()
-	}
-
+	assert.False(t, caps.IsBlockDeviceSupported())
 	caps.SetBlockDeviceSupport()
-
-	if !caps.IsBlockDeviceSupported() {
-		t.Fatal()
-	}
+	assert.True(t, caps.IsBlockDeviceSupported())
 }
 
 func TestBlockDeviceHotplugCapability(t *testing.T) {
 	var caps Capabilities
 
-	if caps.IsBlockDeviceHotplugSupported() {
-		t.Fatal()
-	}
-
+	assert.False(t, caps.IsBlockDeviceHotplugSupported())
 	caps.SetBlockDeviceHotplugSupport()
-
-	if !caps.IsBlockDeviceHotplugSupported() {
-		t.Fatal()
-	}
+	assert.True(t, caps.IsBlockDeviceHotplugSupported())
 }
 
 func TestFsSharingCapability(t *testing.T) {
 	var caps Capabilities
 
-	if !caps.IsFsSharingSupported() {
-		t.Fatal()
-	}
-
+	assert.True(t, caps.IsFsSharingSupported())
 	caps.SetFsSharingUnsupported()
-
-	if caps.IsFsSharingSupported() {
-		t.Fatal()
-	}
+	assert.False(t, caps.IsFsSharingSupported())
 }

@@ -10,21 +10,18 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func testSetHypervisorType(t *testing.T, value string, expected HypervisorType) {
 	var hypervisorType HypervisorType
+	assert := assert.New(t)
 
 	err := (&hypervisorType).Set(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if hypervisorType != expected {
-		t.Fatal()
-	}
+	assert.NoError(err)
+	assert.Equal(hypervisorType, expected)
 }
 
 func TestSetQemuHypervisorType(t *testing.T) {
@@ -37,23 +34,18 @@ func TestSetMockHypervisorType(t *testing.T) {
 
 func TestSetUnknownHypervisorType(t *testing.T) {
 	var hypervisorType HypervisorType
+	assert := assert.New(t)
 
 	err := (&hypervisorType).Set("unknown")
-	if err == nil {
-		t.Fatal()
-	}
-
-	if hypervisorType == QemuHypervisor ||
-		hypervisorType == MockHypervisor {
-		t.Fatal()
-	}
+	assert.Error(err)
+	assert.NotEqual(hypervisorType, QemuHypervisor)
+	assert.NotEqual(hypervisorType, MockHypervisor)
 }
 
 func testStringFromHypervisorType(t *testing.T, hypervisorType HypervisorType, expected string) {
 	hypervisorTypeStr := (&hypervisorType).String()
-	if hypervisorTypeStr != expected {
-		t.Fatal()
-	}
+	assert := assert.New(t)
+	assert.Equal(hypervisorTypeStr, expected)
 }
 
 func TestStringFromQemuHypervisorType(t *testing.T) {
@@ -72,14 +64,10 @@ func TestStringFromUnknownHypervisorType(t *testing.T) {
 }
 
 func testNewHypervisorFromHypervisorType(t *testing.T, hypervisorType HypervisorType, expected hypervisor) {
+	assert := assert.New(t)
 	hy, err := newHypervisor(hypervisorType)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(hy, expected) == false {
-		t.Fatal()
-	}
+	assert.NoError(err)
+	assert.Exactly(hy, expected)
 }
 
 func TestNewHypervisorFromQemuHypervisorType(t *testing.T) {
@@ -96,25 +84,18 @@ func TestNewHypervisorFromMockHypervisorType(t *testing.T) {
 
 func TestNewHypervisorFromUnknownHypervisorType(t *testing.T) {
 	var hypervisorType HypervisorType
+	assert := assert.New(t)
 
 	hy, err := newHypervisor(hypervisorType)
-	if err == nil {
-		t.Fatal()
-	}
-
-	if hy != nil {
-		t.Fatal()
-	}
+	assert.Error(err)
+	assert.Nil(hy)
 }
 
 func testHypervisorConfigValid(t *testing.T, hypervisorConfig *HypervisorConfig, success bool) {
 	err := hypervisorConfig.valid()
-	if success && err != nil {
-		t.Fatal()
-	}
-	if !success && err == nil {
-		t.Fatal()
-	}
+	assert := assert.New(t)
+	assert.False(success && err != nil)
+	assert.False(!success && err == nil)
 }
 
 func TestHypervisorConfigNoKernelPath(t *testing.T) {
@@ -182,6 +163,7 @@ func TestHypervisorConfigValidTemplateConfig(t *testing.T) {
 }
 
 func TestHypervisorConfigDefaults(t *testing.T) {
+	assert := assert.New(t)
 	hypervisorConfig := &HypervisorConfig{
 		KernelPath:     fmt.Sprintf("%s/%s", testDir, testKernel),
 		ImagePath:      fmt.Sprintf("%s/%s", testDir, testImage),
@@ -201,12 +183,11 @@ func TestHypervisorConfigDefaults(t *testing.T) {
 		Msize9p:           defaultMsize9p,
 	}
 
-	if reflect.DeepEqual(hypervisorConfig, hypervisorConfigDefaultsExpected) == false {
-		t.Fatal()
-	}
+	assert.Exactly(hypervisorConfig, hypervisorConfigDefaultsExpected)
 }
 
 func TestAppendParams(t *testing.T) {
+	assert := assert.New(t)
 	paramList := []Param{
 		{
 			Key:   "param1",
@@ -226,16 +207,13 @@ func TestAppendParams(t *testing.T) {
 	}
 
 	paramList = appendParam(paramList, "param2", "value2")
-	if reflect.DeepEqual(paramList, expectedParams) == false {
-		t.Fatal()
-	}
+	assert.Exactly(paramList, expectedParams)
 }
 
 func testSerializeParams(t *testing.T, params []Param, delim string, expected []string) {
+	assert := assert.New(t)
 	result := SerializeParams(params, delim)
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatal()
-	}
+	assert.Exactly(result, expected)
 }
 
 func TestSerializeParamsNoParamNoValue(t *testing.T) {
@@ -301,10 +279,9 @@ func TestSerializeParams(t *testing.T) {
 }
 
 func testDeserializeParams(t *testing.T, parameters []string, expected []Param) {
+	assert := assert.New(t)
 	result := DeserializeParams(parameters)
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatal()
-	}
+	assert.Exactly(result, expected)
 }
 
 func TestDeserializeParamsNil(t *testing.T) {
@@ -354,32 +331,31 @@ func TestDeserializeParams(t *testing.T) {
 
 func TestAddKernelParamValid(t *testing.T) {
 	var config HypervisorConfig
+	assert := assert.New(t)
 
 	expected := []Param{
 		{"foo", "bar"},
 	}
 
 	err := config.AddKernelParam(expected[0])
-	if err != nil || reflect.DeepEqual(config.KernelParams, expected) == false {
-		t.Fatal()
-	}
+	assert.NoError(err)
+	assert.Exactly(config.KernelParams, expected)
 }
 
 func TestAddKernelParamInvalid(t *testing.T) {
 	var config HypervisorConfig
+	assert := assert.New(t)
 
 	invalid := []Param{
 		{"", "bar"},
 	}
 
 	err := config.AddKernelParam(invalid[0])
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
 }
 
 func TestGetHostMemorySizeKb(t *testing.T) {
-
+	assert := assert.New(t)
 	type testData struct {
 		contents       string
 		expectedResult int
@@ -409,31 +385,23 @@ func TestGetHostMemorySizeKb(t *testing.T) {
 	}
 
 	dir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
 	file := filepath.Join(dir, "meminfo")
-	if _, err := getHostMemorySizeKb(file); err == nil {
-		t.Fatalf("expected failure as file %q does not exist", file)
-	}
+	_, err = getHostMemorySizeKb(file)
+	assert.Error(err)
 
 	for _, d := range data {
-		if err := ioutil.WriteFile(file, []byte(d.contents), os.FileMode(0640)); err != nil {
-			t.Fatal(err)
-		}
+		err = ioutil.WriteFile(file, []byte(d.contents), os.FileMode(0640))
+		assert.NoError(err)
 		defer os.Remove(file)
 
 		hostMemKb, err := getHostMemorySizeKb(file)
 
-		if (d.expectError && err == nil) || (!d.expectError && err != nil) {
-			t.Fatalf("got %d, input %v", hostMemKb, d)
-		}
-
-		if reflect.DeepEqual(hostMemKb, d.expectedResult) {
-			t.Fatalf("got %d, input %v", hostMemKb, d)
-		}
+		assert.False((d.expectError && err == nil))
+		assert.False((!d.expectError && err != nil))
+		assert.NotEqual(hostMemKb, d.expectedResult)
 	}
 }
 
@@ -446,21 +414,16 @@ type testNestedVMMData struct {
 
 // nolint: unused, deadcode
 func genericTestRunningOnVMM(t *testing.T, data []testNestedVMMData) {
+	assert := assert.New(t)
 	for _, d := range data {
 		f, err := ioutil.TempFile("", "cpuinfo")
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(err)
 		defer os.Remove(f.Name())
 		defer f.Close()
 
 		n, err := f.Write(d.content)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if n != len(d.content) {
-			t.Fatalf("Only %d bytes written out of %d expected", n, len(d.content))
-		}
+		assert.NoError(err)
+		assert.Equal(n, len(d.content))
 
 		running, err := RunningOnVMM(f.Name())
 		if !d.expectedErr && err != nil {
@@ -469,8 +432,6 @@ func genericTestRunningOnVMM(t *testing.T, data []testNestedVMMData) {
 			t.Fatalf("This test should fail")
 		}
 
-		if running != d.expected {
-			t.Fatalf("Expecting running on VMM = %t, Got %t", d.expected, running)
-		}
+		assert.Equal(running, d.expected)
 	}
 }

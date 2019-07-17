@@ -7,12 +7,12 @@ package virtcontainers
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func testIsSandbox(t *testing.T, cType ContainerType, expected bool) {
-	if result := cType.IsSandbox(); result != expected {
-		t.Fatalf("Got %t, Expecting %t", result, expected)
-	}
+	assert.Equal(t, cType.IsSandbox(), expected)
 }
 
 func TestIsPodSandboxTrue(t *testing.T) {

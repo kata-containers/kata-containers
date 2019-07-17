@@ -19,6 +19,7 @@ import (
 
 	. "github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -41,23 +42,15 @@ func getMockKataShimBinPath() string {
 
 func testKataShimStart(t *testing.T, sandbox *Sandbox, params ShimParams, expectFail bool) {
 	s := &kataShim{}
+	assert := assert.New(t)
 
 	pid, err := s.start(sandbox, params)
 	if expectFail {
-		if err == nil || pid != -1 {
-			t.Fatalf("This test should fail (sandbox %+v, params %+v, expectFail %t)",
-				sandbox, params, expectFail)
-		}
+		assert.Error(err)
+		assert.Equal(pid, -1)
 	} else {
-		if err != nil {
-			t.Fatalf("This test should pass (sandbox %+v, params %+v, expectFail %t): %s",
-				sandbox, params, expectFail, err)
-		}
-
-		if pid == -1 {
-			t.Fatalf("This test should pass (sandbox %+v, params %+v, expectFail %t)",
-				sandbox, params, expectFail)
-		}
+		assert.NoError(err)
+		assert.NotEqual(pid, -1)
 	}
 }
 
@@ -145,9 +138,7 @@ func TestKataShimStartParamsContainerEmptyFailure(t *testing.T) {
 
 func TestKataShimStartParamsInvalidCommand(t *testing.T) {
 	dir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	defer os.RemoveAll(dir)
 
 	cmd := filepath.Join(dir, "does-not-exist")
@@ -199,9 +190,8 @@ func startKataShimStartWithoutConsoleSuccessful(t *testing.T, detach bool) (*os.
 
 func TestKataShimStartSuccessful(t *testing.T) {
 	rStdout, wStdout, saveStdout, sandbox, params, err := startKataShimStartWithoutConsoleSuccessful(t, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert := assert.New(t)
+	assert.NoError(err)
 
 	defer func() {
 		os.Stdout = saveStdout
@@ -212,20 +202,14 @@ func TestKataShimStartSuccessful(t *testing.T) {
 	testKataShimStart(t, sandbox, params, false)
 
 	bufStdout := make([]byte, 1024)
-	if _, err := rStdout.Read(bufStdout); err != nil {
-		t.Fatal(err)
-	}
-
-	if !strings.Contains(string(bufStdout), ShimStdoutOutput) {
-		t.Fatalf("Substring %q not found in %q", ShimStdoutOutput, string(bufStdout))
-	}
+	_, err = rStdout.Read(bufStdout)
+	assert.NoError(err)
+	assert.True(strings.Contains(string(bufStdout), ShimStdoutOutput))
 }
 
 func TestKataShimStartDetachSuccessful(t *testing.T) {
 	rStdout, wStdout, saveStdout, sandbox, params, err := startKataShimStartWithoutConsoleSuccessful(t, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	defer func() {
 		os.Stdout = saveStdout
@@ -255,9 +239,7 @@ func TestKataShimStartDetachSuccessful(t *testing.T) {
 
 	select {
 	case err := <-readCh:
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(t, err)
 	case <-time.After(time.Duration(20) * time.Millisecond):
 		return
 	}
@@ -327,10 +309,7 @@ func TestKataShimStartWithConsoleSuccessful(t *testing.T) {
 
 	master, console, err := newConsole()
 	t.Logf("Console created for tests:%s\n", console)
-
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	sandbox := &Sandbox{
 		config: &SandboxConfig{

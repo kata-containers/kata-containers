@@ -33,6 +33,7 @@ func init() {
 }
 
 func TestIsSystemMount(t *testing.T) {
+	assert := assert.New(t)
 	tests := []struct {
 		mnt      string
 		expected bool
@@ -51,13 +52,12 @@ func TestIsSystemMount(t *testing.T) {
 
 	for _, test := range tests {
 		result := isSystemMount(test.mnt)
-		if result != test.expected {
-			t.Fatalf("Expected result for path %s : %v, got %v", test.mnt, test.expected, result)
-		}
+		assert.Exactly(result, test.expected)
 	}
 }
 
 func TestIsHostDevice(t *testing.T) {
+	assert := assert.New(t)
 	tests := []struct {
 		mnt      string
 		expected bool
@@ -70,13 +70,12 @@ func TestIsHostDevice(t *testing.T) {
 
 	for _, test := range tests {
 		result := isHostDevice(test.mnt)
-		if result != test.expected {
-			t.Fatalf("Expected result for path %s : %v, got %v", test.mnt, test.expected, result)
-		}
+		assert.Equal(result, test.expected)
 	}
 }
 
 func TestIsHostDeviceCreateFile(t *testing.T) {
+	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(ktu.TestDisabledNeedRoot)
 	}
@@ -84,125 +83,92 @@ func TestIsHostDeviceCreateFile(t *testing.T) {
 
 	path := "/dev/foobar"
 	f, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	f.Close()
 
-	if isHostDevice(path) != false {
-		t.Fatalf("Expected result for path %s : %v, got %v", path, false, true)
-	}
-
-	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
-	}
+	assert.False(isHostDevice(path))
+	assert.NoError(os.Remove(path))
 }
 
 func TestMajorMinorNumber(t *testing.T) {
+	assert := assert.New(t)
 	devices := []string{"/dev/zero", "/dev/net/tun"}
 
 	for _, device := range devices {
 		cmdStr := fmt.Sprintf("ls -l %s | awk '{print $5$6}'", device)
 		cmd := exec.Command("sh", "-c", cmdStr)
 		output, err := cmd.Output()
-
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(err)
 
 		data := bytes.Split(output, []byte(","))
-		if len(data) < 2 {
-			t.Fatal()
-		}
+		assert.False(len(data) < 2)
 
 		majorStr := strings.TrimSpace(string(data[0]))
 		minorStr := strings.TrimSpace(string(data[1]))
 
 		majorNo, err := strconv.Atoi(majorStr)
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(err)
 
 		minorNo, err := strconv.Atoi(minorStr)
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(err)
 
 		stat := syscall.Stat_t{}
 		err = syscall.Stat(device, &stat)
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(err)
 
 		// Get major and minor numbers for the device itself. Note the use of stat.Rdev instead of Dev.
 		major := major(stat.Rdev)
 		minor := minor(stat.Rdev)
 
-		if minor != minorNo {
-			t.Fatalf("Expected minor number for device %s: %d, Got :%d", device, minorNo, minor)
-		}
-
-		if major != majorNo {
-			t.Fatalf("Expected major number for device %s : %d, Got :%d", device, majorNo, major)
-		}
+		assert.Equal(minor, minorNo)
+		assert.Equal(major, majorNo)
 	}
 }
 
 func TestGetDeviceForPathRoot(t *testing.T) {
+	assert := assert.New(t)
 	dev, err := getDeviceForPath("/")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	expected := "/"
 
-	if dev.mountPoint != expected {
-		t.Fatalf("Expected %s mountpoint, got %s", expected, dev.mountPoint)
-	}
+	assert.Equal(dev.mountPoint, expected)
 }
 
 func TestGetDeviceForPathValidMount(t *testing.T) {
+	assert := assert.New(t)
 	dev, err := getDeviceForPath("/proc")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	expected := "/proc"
 
-	if dev.mountPoint != expected {
-		t.Fatalf("Expected %s mountpoint, got %s", expected, dev.mountPoint)
-	}
+	assert.Equal(dev.mountPoint, expected)
 }
 
 func TestGetDeviceForPathEmptyPath(t *testing.T) {
+	assert := assert.New(t)
 	_, err := getDeviceForPath("")
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
 }
 
 func TestGetDeviceForPath(t *testing.T) {
-	dev, err := getDeviceForPath("///")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert := assert.New(t)
 
-	if dev.mountPoint != "/" {
-		t.Fatal(err)
-	}
+	dev, err := getDeviceForPath("///")
+	assert.NoError(err)
+
+	assert.Equal(dev.mountPoint, "/")
 
 	_, err = getDeviceForPath("/../../.././././../.")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	_, err = getDeviceForPath("/root/file with spaces")
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
 }
 
 func TestGetDeviceForPathBindMount(t *testing.T) {
+	assert := assert.New(t)
+
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(ktu.TestDisabledNeedRoot)
 	}
@@ -214,130 +180,107 @@ func TestGetDeviceForPathBindMount(t *testing.T) {
 	os.Remove(dest)
 
 	err := os.MkdirAll(source, mountPerm)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	defer os.Remove(source)
 
 	err = os.MkdirAll(dest, mountPerm)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	defer os.Remove(dest)
 
 	err = bindMount(context.Background(), source, dest, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	defer syscall.Unmount(dest, syscall.MNT_DETACH)
 
 	destFile := filepath.Join(dest, "test")
 	_, err = os.Create(destFile)
-	if err != nil {
-		fmt.Println("Could not create test file:", err)
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	defer os.Remove(destFile)
 
 	sourceDev, _ := getDeviceForPath(source)
 	destDev, _ := getDeviceForPath(destFile)
 
-	if sourceDev != destDev {
-		t.Fatal()
-	}
+	assert.Equal(sourceDev, destDev)
 }
 
 func TestGetDevicePathAndFsTypeEmptyMount(t *testing.T) {
+	assert := assert.New(t)
 	_, _, err := GetDevicePathAndFsType("")
-
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
 }
 
 func TestGetDevicePathAndFsTypeSuccessful(t *testing.T) {
+	assert := assert.New(t)
+
 	path, fstype, err := GetDevicePathAndFsType("/proc")
+	assert.NoError(err)
 
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if path != "proc" || fstype != "proc" {
-		t.Fatal(err)
-	}
+	assert.Equal(path, "proc")
+	assert.Equal(fstype, "proc")
 }
 
 func TestIsDeviceMapper(t *testing.T) {
+	assert := assert.New(t)
+
 	// known major, minor for /dev/tty
 	major := 5
 	minor := 0
 
 	isDM, err := isDeviceMapper(major, minor)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if isDM {
-		t.Fatal()
-	}
+	assert.NoError(err)
+	assert.False(isDM)
 
 	// fake the block device format
 	blockFormatTemplate = "/sys/dev/char/%d:%d"
 	isDM, err = isDeviceMapper(major, minor)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !isDM {
-		t.Fatal()
-	}
+	assert.NoError(err)
+	assert.True(isDM)
 }
 
 func TestIsDockerVolume(t *testing.T) {
+	assert := assert.New(t)
 	path := "/var/lib/docker/volumes/00da1347c7cf4f15db35f/_data"
 	isDockerVolume := IsDockerVolume(path)
-	assert.True(t, isDockerVolume)
+	assert.True(isDockerVolume)
 
 	path = "/var/lib/testdir"
 	isDockerVolume = IsDockerVolume(path)
-	assert.False(t, isDockerVolume)
+	assert.False(isDockerVolume)
 }
 
 func TestIsEphemeralStorage(t *testing.T) {
+	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(ktu.TestDisabledNeedRoot)
 	}
 
 	dir, err := ioutil.TempDir(testDir, "foo")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer os.RemoveAll(dir)
 
 	sampleEphePath := filepath.Join(dir, K8sEmptyDir, "tmp-volume")
 	err = os.MkdirAll(sampleEphePath, testDirMode)
-	assert.Nil(t, err)
+	assert.Nil(err)
 
 	err = syscall.Mount("tmpfs", sampleEphePath, "tmpfs", 0, "")
-	assert.Nil(t, err)
+	assert.NoError(err)
 	defer syscall.Unmount(sampleEphePath, 0)
 
 	isEphe := IsEphemeralStorage(sampleEphePath)
-	assert.True(t, isEphe)
+	assert.True(isEphe)
 
 	isHostEmptyDir := Isk8sHostEmptyDir(sampleEphePath)
-	assert.False(t, isHostEmptyDir)
+	assert.False(isHostEmptyDir)
 
 	sampleEphePath = "/var/lib/kubelet/pods/366c3a75-4869-11e8-b479-507b9ddd5ce4/volumes/cache-volume"
 	isEphe = IsEphemeralStorage(sampleEphePath)
-	assert.False(t, isEphe)
+	assert.False(isEphe)
 
 	isHostEmptyDir = Isk8sHostEmptyDir(sampleEphePath)
-	assert.False(t, isHostEmptyDir)
+	assert.False(isHostEmptyDir)
 }
 
 // TestBindUnmountContainerRootfsENOENTNotError tests that if a file
@@ -347,15 +290,14 @@ func TestBindUnmountContainerRootfsENOENTNotError(t *testing.T) {
 	testMnt := "/tmp/test_mount"
 	sID := "sandIDTest"
 	cID := "contIDTest"
+	assert := assert.New(t)
 
 	// check to make sure the file doesn't exist
 	testPath := filepath.Join(testMnt, sID, cID, rootfsDir)
 	if _, err := os.Stat(testPath); !os.IsNotExist(err) {
-		if err := os.Remove(testPath); err != nil {
-			t.Fatalf("test mount file should not exist, and cannot be removed: %s", err)
-		}
+		assert.NoError(os.Remove(testPath))
 	}
 
 	err := bindUnmountContainerRootfs(context.Background(), testMnt, sID, cID)
-	assert.Nil(t, err)
+	assert.NoError(err)
 }

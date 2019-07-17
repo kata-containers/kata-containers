@@ -5,19 +5,18 @@
 
 package virtcontainers
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func testEndpointTypeSet(t *testing.T, value string, expected EndpointType) {
 	var endpointType EndpointType
 
 	err := endpointType.Set(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if endpointType != expected {
-		t.Fatal()
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, endpointType, expected)
 }
 
 func TestPhysicalEndpointTypeSet(t *testing.T) {
@@ -43,18 +42,12 @@ func TestMacvtapEndpointTypeSet(t *testing.T) {
 func TestEndpointTypeSetFailure(t *testing.T) {
 	var endpointType EndpointType
 
-	err := endpointType.Set("wrong-value")
-	if err == nil {
-		t.Fatal(err)
-	}
+	assert.Error(t, endpointType.Set("wrong-value"))
 }
 
 func testEndpointTypeString(t *testing.T, endpointType *EndpointType, expected string) {
 	result := endpointType.String()
-
-	if result != expected {
-		t.Fatal()
-	}
+	assert.Equal(t, result, expected)
 }
 
 func TestPhysicalEndpointTypeString(t *testing.T) {

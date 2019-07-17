@@ -9,6 +9,8 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var dataFlagsFieldWithoutHypervisor = []byte(`
@@ -69,16 +71,12 @@ func TestRunningOnVMM(t *testing.T) {
 
 func TestRunningOnVMMNotExistingCPUInfoPathFailure(t *testing.T) {
 	f, err := ioutil.TempFile("", "cpuinfo")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	filePath := f.Name()
 
 	f.Close()
 	os.Remove(filePath)
-
-	if _, err := RunningOnVMM(filePath); err == nil {
-		t.Fatalf("Should fail because %q file path does not exist", filePath)
-	}
+	_, err = RunningOnVMM(filePath)
+	assert.Error(t, err)
 }

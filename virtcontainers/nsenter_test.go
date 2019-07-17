@@ -8,19 +8,16 @@ package virtcontainers
 import (
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func testNsEnterFormatArgs(t *testing.T, args []string, expected string) {
 	nsenter := &nsenter{}
 
 	cmd, err := nsenter.formatArgs(args)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if strings.Join(cmd, " ") != expected {
-		t.Fatal()
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, strings.Join(cmd, " "), expected)
 }
 
 func TestNsEnterFormatArgsHello(t *testing.T) {

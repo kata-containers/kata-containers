@@ -7,11 +7,13 @@ package virtcontainers
 
 import (
 	"net"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCreateVethNetworkEndpoint(t *testing.T) {
+	assert := assert.New(t)
 	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
 
 	expected := &VethEndpoint{
@@ -33,9 +35,7 @@ func TestCreateVethNetworkEndpoint(t *testing.T) {
 	}
 
 	result, err := createVethNetworkEndpoint(4, "", DefaultNetInterworkingModel)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	// the resulting ID  will be random - so let's overwrite to test the rest of the flow
 	result.NetPair.ID = "uniqueTestID-4"
@@ -43,12 +43,11 @@ func TestCreateVethNetworkEndpoint(t *testing.T) {
 	// the resulting mac address will be random - so lets overwrite it
 	result.NetPair.VirtIface.HardAddr = macAddr.String()
 
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
-	}
+	assert.Exactly(result, expected)
 }
 
 func TestCreateVethNetworkEndpointChooseIfaceName(t *testing.T) {
+	assert := assert.New(t)
 	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
 
 	expected := &VethEndpoint{
@@ -70,9 +69,7 @@ func TestCreateVethNetworkEndpointChooseIfaceName(t *testing.T) {
 	}
 
 	result, err := createVethNetworkEndpoint(4, "eth1", DefaultNetInterworkingModel)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	// the resulting ID will be random - so let's overwrite to test the rest of the flow
 	result.NetPair.ID = "uniqueTestID-4"
@@ -80,9 +77,7 @@ func TestCreateVethNetworkEndpointChooseIfaceName(t *testing.T) {
 	// the resulting mac address will be random - so lets overwrite it
 	result.NetPair.VirtIface.HardAddr = macAddr.String()
 
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
-	}
+	assert.Exactly(result, expected)
 }
 
 func TestCreateVethNetworkEndpointInvalidArgs(t *testing.T) {
@@ -91,6 +86,8 @@ func TestCreateVethNetworkEndpointInvalidArgs(t *testing.T) {
 		ifName string
 	}
 
+	assert := assert.New(t)
+
 	// all elements are expected to result in failure
 	failingValues := []endpointValues{
 		{-1, "bar"},
@@ -98,9 +95,7 @@ func TestCreateVethNetworkEndpointInvalidArgs(t *testing.T) {
 	}
 
 	for _, d := range failingValues {
-		result, err := createVethNetworkEndpoint(d.idx, d.ifName, DefaultNetInterworkingModel)
-		if err == nil {
-			t.Fatalf("expected invalid endpoint for %v, got %v", d, result)
-		}
+		_, err := createVethNetworkEndpoint(d.idx, d.ifName, DefaultNetInterworkingModel)
+		assert.Error(err)
 	}
 }

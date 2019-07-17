@@ -58,20 +58,18 @@ func testGenerateKataProxySockDir() (string, error) {
 }
 
 func TestKataAgentConnect(t *testing.T) {
+	assert := assert.New(t)
 	proxy := mock.ProxyUnixMock{
 		ClientHandler: proxyHandlerDiscard,
 	}
 
 	sockDir, err := testGenerateKataProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer os.RemoveAll(sockDir)
 
 	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
-	if err := proxy.Start(testKataProxyURL); err != nil {
-		t.Fatal(err)
-	}
+	err = proxy.Start(testKataProxyURL)
+	assert.NoError(err)
 	defer proxy.Stop()
 
 	k := &kataAgent{
@@ -81,30 +79,24 @@ func TestKataAgentConnect(t *testing.T) {
 		},
 	}
 
-	if err := k.connect(); err != nil {
-		t.Fatal(err)
-	}
-
-	if k.client == nil {
-		t.Fatal("Kata agent client is not properly initialized")
-	}
+	err = k.connect()
+	assert.NoError(err)
+	assert.NotNil(k.client)
 }
 
 func TestKataAgentDisconnect(t *testing.T) {
+	assert := assert.New(t)
 	proxy := mock.ProxyUnixMock{
 		ClientHandler: proxyHandlerDiscard,
 	}
 
 	sockDir, err := testGenerateKataProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer os.RemoveAll(sockDir)
 
 	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
-	if err := proxy.Start(testKataProxyURL); err != nil {
-		t.Fatal(err)
-	}
+	err = proxy.Start(testKataProxyURL)
+	assert.NoError(err)
 	defer proxy.Stop()
 
 	k := &kataAgent{
@@ -114,17 +106,9 @@ func TestKataAgentDisconnect(t *testing.T) {
 		},
 	}
 
-	if err := k.connect(); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := k.disconnect(); err != nil {
-		t.Fatal(err)
-	}
-
-	if k.client != nil {
-		t.Fatal("Kata agent client pointer should be nil")
-	}
+	assert.NoError(k.connect())
+	assert.NoError(k.disconnect())
+	assert.Nil(k.client)
 }
 
 type gRPCProxy struct{}
@@ -816,15 +800,11 @@ func TestAgentNetworkOperation(t *testing.T) {
 	}
 
 	sockDir, err := testGenerateKataProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer os.RemoveAll(sockDir)
 
 	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
-	if err := proxy.Start(testKataProxyURL); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(proxy.Start(testKataProxyURL))
 	defer proxy.Stop()
 
 	k := &kataAgent{
@@ -956,9 +936,8 @@ func TestKataCleanupSandbox(t *testing.T) {
 	k := &kataAgent{}
 	k.cleanup(s.id)
 
-	if _, err = os.Stat(dir); os.IsExist(err) {
-		t.Fatalf("%s still exists\n", dir)
-	}
+	_, err = os.Stat(dir)
+	assert.False(os.IsExist(err))
 }
 
 func TestKataAgentKernelParams(t *testing.T) {

@@ -7,11 +7,13 @@ package virtcontainers
 
 import (
 	"net"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCreateIPVlanEndpoint(t *testing.T) {
+	assert := assert.New(t)
 	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x04}
 
 	expected := &IPVlanEndpoint{
@@ -34,9 +36,7 @@ func TestCreateIPVlanEndpoint(t *testing.T) {
 	}
 
 	result, err := createIPVlanNetworkEndpoint(5, "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	// the resulting ID  will be random - so let's overwrite to test the rest of the flow
 	result.NetPair.ID = "uniqueTestID-5"
@@ -44,7 +44,5 @@ func TestCreateIPVlanEndpoint(t *testing.T) {
 	// the resulting mac address will be random - so lets overwrite it
 	result.NetPair.VirtIface.HardAddr = macAddr.String()
 
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
-	}
+	assert.Exactly(result, expected)
 }

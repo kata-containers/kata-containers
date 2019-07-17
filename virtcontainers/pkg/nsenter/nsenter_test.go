@@ -51,15 +51,11 @@ func TestGetFileFromNSEmptyNSPathFailure(t *testing.T) {
 
 func TestGetFileFromNSNotExistingNSPathFailure(t *testing.T) {
 	nsFile, err := ioutil.TempFile("", "not-existing-ns-path")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	nsFilePath := nsFile.Name()
 	nsFile.Close()
 
-	if err := os.Remove(nsFilePath); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, os.Remove(nsFilePath))
 
 	nsFile, err = getFileFromNS(nsFilePath)
 	assert.NotNil(t, err, "Not existing path should result as a failure")
@@ -68,9 +64,7 @@ func TestGetFileFromNSNotExistingNSPathFailure(t *testing.T) {
 
 func TestGetFileFromNSWrongNSPathFailure(t *testing.T) {
 	nsFile, err := ioutil.TempFile("", "wrong-ns-path")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	nsFilePath := nsFile.Name()
 	nsFile.Close()
 
@@ -125,9 +119,7 @@ func TestSetNSUnknownNSTypeFailure(t *testing.T) {
 
 func TestSetNSWrongFileFailure(t *testing.T) {
 	nsFile, err := ioutil.TempFile("", "wrong-ns-path")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	defer func() {
 		nsFilePath := nsFile.Name()
 		nsFile.Close()
@@ -182,9 +174,7 @@ func TestNsEnterSuccessful(t *testing.T) {
 	}
 
 	sleepPID, err := startSleepBinary(sleepDuration, cloneFlags)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	defer func() {
 		if sleepPID > 1 {
 			unix.Kill(sleepPID, syscall.SIGKILL)
