@@ -275,7 +275,6 @@ setup()
 	[ ! -d "${tests_repo_dir}" ] && git clone "https://${tests_repo}" "${tests_repo_dir}"
 
 	if [ -z "${KATA_DEV_MODE:-}" ]; then
-		"${tests_repo_dir}/.ci/setup.sh"
 		mkdir -p /etc/kata-containers/
 		sudo cp -a /usr/share/defaults/kata-containers/configuration.toml /etc/kata-containers/configuration.toml
 	else
