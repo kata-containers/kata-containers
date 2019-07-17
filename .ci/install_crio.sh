@@ -39,6 +39,10 @@ if [ "$ID" == "fedora" ]; then
 	fi
 fi
 
+crio_version=$(get_version "externals.crio.version")
+crictl_version=$(get_test_version "externals.critools.version")
+crictl_tag_prefix="v"
+
 if [ "$ghprbGhRepository" != "${crio_repo/github.com\/}" ]
 then
 	# For Fedora, we use CRI-O version that is compatible with the
@@ -54,10 +58,6 @@ then
 		fi
 		crictl_version=$(get_version "externals.crio.meta.crictl")
 		crictl_tag_prefix=""
-	else
-		crio_version=$(get_version "externals.crio.version")
-		crictl_version=$(get_test_version "externals.critools.version")
-		crictl_tag_prefix="v"
 	fi
 fi
 
