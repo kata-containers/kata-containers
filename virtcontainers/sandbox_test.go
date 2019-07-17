@@ -14,7 +14,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"reflect"
 	"sync"
 	"syscall"
 	"testing"
@@ -84,27 +83,20 @@ func testCreateSandbox(t *testing.T, id string,
 
 func TestCreateEmptySandbox(t *testing.T) {
 	_, err := testCreateSandbox(t, testSandboxID, MockHypervisor, HypervisorConfig{}, NoopAgentType, NetworkConfig{}, nil, nil)
-	if err == nil {
-		t.Fatalf("VirtContainers should not allow empty sandboxes")
-	}
+	assert.Error(t, err)
 	defer cleanUp()
 }
 
 func TestCreateEmptyHypervisorSandbox(t *testing.T) {
 	_, err := testCreateSandbox(t, testSandboxID, QemuHypervisor, HypervisorConfig{}, NoopAgentType, NetworkConfig{}, nil, nil)
-	if err == nil {
-		t.Fatalf("VirtContainers should not allow sandboxes with empty hypervisors")
-	}
+	assert.Error(t, err)
 	defer cleanUp()
 }
 
 func TestCreateMockSandbox(t *testing.T) {
 	hConfig := newHypervisorConfig(nil, nil)
-
 	_, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	defer cleanUp()
 }
 
@@ -132,9 +124,8 @@ func TestCalculateSandboxCPUs(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sandbox.config.Containers = tt.containers
-			if got := sandbox.calculateSandboxCPUs(); got != tt.want {
-				t.Errorf("calculateSandboxCPUs() = %v, want %v", got, tt.want)
-			}
+			got := sandbox.calculateSandboxCPUs()
+			assert.Equal(t, got, tt.want)
 		})
 	}
 }
@@ -162,20 +153,16 @@ func TestCalculateSandboxMem(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sandbox.config.Containers = tt.containers
-			if got := sandbox.calculateSandboxMemory(); got != tt.want {
-				t.Errorf("calculateSandboxMemory() = %v, want %v", got, tt.want)
-			}
+			got := sandbox.calculateSandboxMemory()
+			assert.Equal(t, got, tt.want)
 		})
 	}
 }
 
 func TestCreateSandboxEmptyID(t *testing.T) {
 	hConfig := newHypervisorConfig(nil, nil)
-
-	p, err := testCreateSandbox(t, "", MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, nil, nil)
-	if err == nil {
-		t.Fatalf("Expected sandbox with empty ID to fail, but got sandbox %v", p)
-	}
+	_, err := testCreateSandbox(t, "", MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, nil, nil)
+	assert.Error(t, err)
 	defer cleanUp()
 }
 
@@ -183,9 +170,7 @@ func testSandboxStateTransition(t *testing.T, state types.StateString, newState 
 	hConfig := newHypervisorConfig(nil, nil)
 
 	p, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, nil, nil)
-	if err != nil {
-		return err
-	}
+	assert.NoError(t, err)
 	defer cleanUp()
 
 	p.state = types.SandboxState{
@@ -197,51 +182,37 @@ func testSandboxStateTransition(t *testing.T, state types.StateString, newState 
 
 func TestSandboxStateReadyRunning(t *testing.T) {
 	err := testSandboxStateTransition(t, types.StateReady, types.StateRunning)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 }
 
 func TestSandboxStateRunningPaused(t *testing.T) {
 	err := testSandboxStateTransition(t, types.StateRunning, types.StatePaused)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 }
 
 func TestSandboxStatePausedRunning(t *testing.T) {
 	err := testSandboxStateTransition(t, types.StatePaused, types.StateRunning)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 }
 
 func TestSandboxStatePausedStopped(t *testing.T) {
 	err := testSandboxStateTransition(t, types.StatePaused, types.StateStopped)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 }
 
 func TestSandboxStateRunningStopped(t *testing.T) {
 	err := testSandboxStateTransition(t, types.StateRunning, types.StateStopped)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 }
 
 func TestSandboxStateReadyPaused(t *testing.T) {
 	err := testSandboxStateTransition(t, types.StateReady, types.StateStopped)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 }
 
 func TestSandboxStatePausedReady(t *testing.T) {
 	err := testSandboxStateTransition(t, types.StateStopped, types.StateReady)
-	if err == nil {
-		t.Fatal("Invalid transition from Ready to Paused")
-	}
+	assert.Error(t, err)
 }
 
 func testStateValid(t *testing.T, stateStr types.StateString, expected bool) {
@@ -250,9 +221,7 @@ func testStateValid(t *testing.T, stateStr types.StateString, expected bool) {
 	}
 
 	ok := state.Valid()
-	if ok != expected {
-		t.Fatal()
-	}
+	assert.Equal(t, ok, expected)
 }
 
 func TestStateValidSuccessful(t *testing.T) {
@@ -272,9 +241,7 @@ func TestValidTransitionFailingOldStateMismatch(t *testing.T) {
 	}
 
 	err := state.ValidTransition(types.StateRunning, types.StateStopped)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(t, err)
 }
 
 func TestVolumesSetSuccessful(t *testing.T) {
@@ -294,13 +261,8 @@ func TestVolumesSetSuccessful(t *testing.T) {
 	}
 
 	err := volumes.Set(volStr)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(*volumes, expected) == false {
-		t.Fatal()
-	}
+	assert.NoError(t, err)
+	assert.Exactly(t, *volumes, expected)
 }
 
 func TestVolumesSetFailingTooFewArguments(t *testing.T) {
@@ -309,9 +271,7 @@ func TestVolumesSetFailingTooFewArguments(t *testing.T) {
 	volStr := "mountTag1 mountTag2"
 
 	err := volumes.Set(volStr)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(t, err)
 }
 
 func TestVolumesSetFailingTooManyArguments(t *testing.T) {
@@ -320,9 +280,7 @@ func TestVolumesSetFailingTooManyArguments(t *testing.T) {
 	volStr := "mountTag1:hostPath1:Foo1 mountTag2:hostPath2:Foo2"
 
 	err := volumes.Set(volStr)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(t, err)
 }
 
 func TestVolumesSetFailingVoidArguments(t *testing.T) {
@@ -331,9 +289,7 @@ func TestVolumesSetFailingVoidArguments(t *testing.T) {
 	volStr := ": : :"
 
 	err := volumes.Set(volStr)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(t, err)
 }
 
 func TestVolumesStringSuccessful(t *testing.T) {
@@ -351,9 +307,7 @@ func TestVolumesStringSuccessful(t *testing.T) {
 	expected := "mountTag1:hostPath1 mountTag2:hostPath2"
 
 	result := volumes.String()
-	if result != expected {
-		t.Fatal()
-	}
+	assert.Equal(t, result, expected)
 }
 
 func TestSocketsSetSuccessful(t *testing.T) {
@@ -377,13 +331,8 @@ func TestSocketsSetSuccessful(t *testing.T) {
 	}
 
 	err := sockets.Set(sockStr)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(*sockets, expected) == false {
-		t.Fatal()
-	}
+	assert.NoError(t, err)
+	assert.Exactly(t, *sockets, expected)
 }
 
 func TestSocketsSetFailingWrongArgsAmount(t *testing.T) {
@@ -392,9 +341,7 @@ func TestSocketsSetFailingWrongArgsAmount(t *testing.T) {
 	sockStr := "devID1:id1:hostPath1"
 
 	err := sockets.Set(sockStr)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(t, err)
 }
 
 func TestSocketsSetFailingVoidArguments(t *testing.T) {
@@ -403,9 +350,7 @@ func TestSocketsSetFailingVoidArguments(t *testing.T) {
 	sockStr := ":::"
 
 	err := sockets.Set(sockStr)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(t, err)
 }
 
 func TestSocketsStringSuccessful(t *testing.T) {
@@ -427,27 +372,22 @@ func TestSocketsStringSuccessful(t *testing.T) {
 	expected := "devID1:id1:hostPath1:Name1 devID2:id2:hostPath2:Name2"
 
 	result := sockets.String()
-	if result != expected {
-		t.Fatal()
-	}
+	assert.Equal(t, result, expected)
 }
 
 func TestSandboxListSuccessful(t *testing.T) {
 	sandbox := &Sandbox{}
 
 	sandboxList, err := sandbox.list()
-	if sandboxList != nil || err != nil {
-		t.Fatal()
-	}
+	assert.NoError(t, err)
+	assert.Nil(t, sandboxList)
 }
 
 func TestSandboxEnterSuccessful(t *testing.T) {
 	sandbox := &Sandbox{}
 
 	err := sandbox.enter([]string{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 }
 
 func testCheckInitSandboxAndContainerStates(p *Sandbox, initialSandboxState types.SandboxState, c *Container, initialContainerState types.ContainerState) error {
@@ -464,10 +404,8 @@ func testCheckInitSandboxAndContainerStates(p *Sandbox, initialSandboxState type
 
 func testForceSandboxStateChangeAndCheck(t *testing.T, p *Sandbox, newSandboxState types.SandboxState) error {
 	// force sandbox state change
-	if err := p.setSandboxState(newSandboxState.State); err != nil {
-		t.Fatalf("Unexpected error: %v (sandbox %+v)", err, p)
-	}
-
+	err := p.setSandboxState(newSandboxState.State)
+	assert.NoError(t, err)
 	// check the in-memory state is correct
 	if p.state.State != newSandboxState.State {
 		return fmt.Errorf("Expected state %v, got %v", newSandboxState.State, p.state.State)
@@ -478,9 +416,8 @@ func testForceSandboxStateChangeAndCheck(t *testing.T, p *Sandbox, newSandboxSta
 
 func testForceContainerStateChangeAndCheck(t *testing.T, p *Sandbox, c *Container, newContainerState types.ContainerState) error {
 	// force container state change
-	if err := c.setContainerState(newContainerState.State); err != nil {
-		t.Fatalf("Unexpected error: %v (sandbox %+v)", err, p)
-	}
+	err := c.setContainerState(newContainerState.State)
+	assert.NoError(t, err)
 
 	// check the in-memory state is correct
 	if c.state.State != newContainerState.State {
@@ -512,18 +449,15 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	contID := "505"
 	contConfig := newTestContainerConfigNoop(contID)
 	hConfig := newHypervisorConfig(nil, nil)
+	assert := assert.New(t)
 
 	// create a sandbox
 	p, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, []ContainerConfig{contConfig}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer cleanUp()
 
 	l := len(p.GetAllContainers())
-	if l != 1 {
-		t.Fatalf("Expected 1 container found %v", l)
-	}
+	assert.Equal(l, 1)
 
 	initialSandboxState := types.SandboxState{
 		State: types.StateReady,
@@ -535,9 +469,7 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 	}
 
 	c, err := p.findContainer(contID)
-	if err != nil {
-		t.Fatalf("Failed to retrieve container %v: %v", contID, err)
-	}
+	assert.NoError(err)
 
 	// check initial sandbox and container states
 	if err := testCheckInitSandboxAndContainerStates(p, initialSandboxState, c, initialContainerState); err != nil {
@@ -546,9 +478,7 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 
 	// persist to disk
 	err = p.storeSandbox()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	newSandboxState := types.SandboxState{
 		State: types.StateRunning,
@@ -568,18 +498,14 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 
 	// force state to be read from disk
 	p2, err := fetchSandbox(context.Background(), p.ID())
-	if err != nil {
-		t.Fatalf("Failed to fetch sandbox %v: %v", p.ID(), err)
-	}
+	assert.NoError(err)
 
 	if err := testCheckSandboxOnDiskState(p2, newSandboxState); err != nil {
 		t.Error(err)
 	}
 
 	c2, err := p2.findContainer(contID)
-	if err != nil {
-		t.Fatalf("Failed to find container %v: %v", contID, err)
-	}
+	assert.NoError(err)
 
 	if err := testCheckContainerOnDiskState(c2, newContainerState); err != nil {
 		t.Error(err)
@@ -587,15 +513,11 @@ func TestSandboxSetSandboxAndContainerState(t *testing.T) {
 
 	// revert sandbox state to allow it to be deleted
 	err = p.setSandboxState(initialSandboxState.State)
-	if err != nil {
-		t.Fatalf("Unexpected error: %v (sandbox %+v)", err, p)
-	}
+	assert.NoError(err)
 
 	// clean up
 	err = p.Delete()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestGetContainer(t *testing.T) {
@@ -612,15 +534,11 @@ func TestGetContainer(t *testing.T) {
 	}
 
 	c := sandbox.GetContainer("noid")
-	if c != nil {
-		t.Fatal()
-	}
+	assert.Nil(t, c)
 
 	for _, id := range containerIDs {
 		c = sandbox.GetContainer(id)
-		if c == nil {
-			t.Fatal()
-		}
+		assert.NotNil(t, c)
 	}
 }
 
@@ -640,13 +558,12 @@ func TestGetAllContainers(t *testing.T) {
 	list := sandbox.GetAllContainers()
 
 	for _, c := range list {
-		if containers[c.ID()] == nil {
-			t.Fatal()
-		}
+		assert.NotNil(t, containers[c.ID()], nil)
 	}
 }
 
 func TestSetAnnotations(t *testing.T) {
+	assert := assert.New(t)
 	sandbox := Sandbox{
 		ctx:             context.Background(),
 		id:              "abcxyz123",
@@ -659,9 +576,8 @@ func TestSetAnnotations(t *testing.T) {
 	}
 
 	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+
 	sandbox.store = vcStore
 
 	keyAnnotation := "annotation2"
@@ -674,13 +590,8 @@ func TestSetAnnotations(t *testing.T) {
 	sandbox.SetAnnotations(newAnnotations)
 
 	v, err := sandbox.Annotations(keyAnnotation)
-	if err != nil {
-		t.Fatal()
-	}
-
-	if v != valueAnnotation {
-		t.Fatal()
-	}
+	assert.NoError(err)
+	assert.Equal(v, valueAnnotation)
 
 	//Change the value of an annotation
 	valueAnnotation = "123"
@@ -689,69 +600,50 @@ func TestSetAnnotations(t *testing.T) {
 	sandbox.SetAnnotations(newAnnotations)
 
 	v, err = sandbox.Annotations(keyAnnotation)
-	if err != nil {
-		t.Fatal()
-	}
-
-	if v != valueAnnotation {
-		t.Fatal()
-	}
+	assert.NoError(err)
+	assert.Equal(v, valueAnnotation)
 }
 
 func TestSandboxGetContainer(t *testing.T) {
+	assert := assert.New(t)
 
 	emptySandbox := Sandbox{}
 	_, err := emptySandbox.findContainer("")
-	if err == nil {
-		t.Fatal("Expected error for containerless sandbox")
-	}
+	assert.Error(err)
 
 	_, err = emptySandbox.findContainer("foo")
-	if err == nil {
-		t.Fatal("Expected error for containerless sandbox and invalid containerID")
-	}
+	assert.Error(err)
 
 	hConfig := newHypervisorConfig(nil, nil)
 	p, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer cleanUp()
 
 	contID := "999"
 	contConfig := newTestContainerConfigNoop(contID)
 	nc, err := newContainer(p, contConfig)
-	if err != nil {
-		t.Fatalf("Failed to create container %+v in sandbox %+v: %v", contConfig, p, err)
-	}
+	assert.NoError(err)
 
-	if err := p.addContainer(nc); err != nil {
-		t.Fatalf("Could not add container to sandbox %v", err)
-	}
+	err = p.addContainer(nc)
+	assert.NoError(err)
 
 	got := false
 	for _, c := range p.GetAllContainers() {
 		c2, err := p.findContainer(c.ID())
-		if err != nil {
-			t.Fatalf("Failed to find container %v: %v", c.ID(), err)
-		}
-
-		if c2.ID() != c.ID() {
-			t.Fatalf("Expected container %v but got %v", c.ID(), c2.ID())
-		}
+		assert.NoError(err)
+		assert.Equal(c2.ID(), c.ID())
 
 		if c2.ID() == contID {
 			got = true
 		}
 	}
 
-	if !got {
-		t.Fatalf("Failed to find container %v", contID)
-	}
+	assert.True(got)
 }
 
 func TestContainerStateSetFstype(t *testing.T) {
 	var err error
+	assert := assert.New(t)
 
 	containers := []ContainerConfig{
 		{
@@ -762,33 +654,29 @@ func TestContainerStateSetFstype(t *testing.T) {
 
 	hConfig := newHypervisorConfig(nil, nil)
 	sandbox, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, containers, nil)
-	assert.Nil(t, err)
+	assert.Nil(err)
 	defer cleanUp()
 
 	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(t, err)
+	assert.Nil(err)
 	sandbox.store = vcStore
 
 	c := sandbox.GetContainer("100")
-	if c == nil {
-		t.Fatal()
-	}
+	assert.NotNil(c)
+
 	cImpl, ok := c.(*Container)
-	assert.True(t, ok)
+	assert.True(ok)
 
 	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, c.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+
 	cImpl.store = containerStore
 
 	path := store.ContainerRuntimeRootPath(testSandboxID, c.ID())
 	stateFilePath := filepath.Join(path, store.StateFile)
 
 	f, err := os.Create(stateFilePath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	state := types.ContainerState{
 		State:  "ready",
@@ -803,25 +691,17 @@ func TestContainerStateSetFstype(t *testing.T) {
 	}`
 
 	n, err := f.WriteString(stateData)
-	if err != nil || n != len(stateData) {
-		f.Close()
-		t.Fatal()
-	}
-	f.Close()
+	defer f.Close()
+	assert.NoError(err)
+	assert.Equal(n, len(stateData))
 
 	newFstype := "ext4"
-	if err := cImpl.setStateFstype(newFstype); err != nil {
-		t.Fatal(err)
-	}
-
-	if cImpl.state.Fstype != newFstype {
-		t.Fatal()
-	}
+	err = cImpl.setStateFstype(newFstype)
+	assert.NoError(err)
+	assert.Equal(cImpl.state.Fstype, newFstype)
 
 	fileData, err := ioutil.ReadFile(stateFilePath)
-	if err != nil {
-		t.Fatal()
-	}
+	assert.NoError(err)
 
 	// experimental features doesn't write state.json
 	if sandbox.supportNewStore() {
@@ -830,17 +710,9 @@ func TestContainerStateSetFstype(t *testing.T) {
 
 	var res types.ContainerState
 	err = json.Unmarshal([]byte(string(fileData)), &res)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if res.Fstype != newFstype {
-		t.Fatal()
-	}
-
-	if res.State != state.State {
-		t.Fatal()
-	}
+	assert.NoError(err)
+	assert.Equal(res.Fstype, newFstype)
+	assert.Equal(res.State, state.State)
 }
 
 const vfioPath = "/dev/vfio/"
@@ -1299,9 +1171,7 @@ func TestAttachBlockDevice(t *testing.T) {
 	// create state file
 	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
 	err = os.MkdirAll(path, store.DirMode)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	defer os.RemoveAll(path)
 
@@ -1309,9 +1179,7 @@ func TestAttachBlockDevice(t *testing.T) {
 	os.Remove(stateFilePath)
 
 	_, err = os.Create(stateFilePath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	defer os.Remove(stateFilePath)
 
 	path = "/dev/hda"
@@ -1396,9 +1264,7 @@ func TestPreAddDevice(t *testing.T) {
 	// create state file
 	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
 	err = os.MkdirAll(path, store.DirMode)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
 	defer os.RemoveAll(path)
 
@@ -1406,9 +1272,7 @@ func TestPreAddDevice(t *testing.T) {
 	os.Remove(stateFilePath)
 
 	_, err = os.Create(stateFilePath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	defer os.Remove(stateFilePath)
 
 	path = "/dev/hda"
@@ -1559,14 +1423,10 @@ func TestSandboxUpdateResources(t *testing.T) {
 		[]ContainerConfig{contConfig1, contConfig2},
 		nil)
 
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	assert.NoError(t, err)
 	err = s.updateResources()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
+
 	containerMemLimit := int64(1000)
 	containerCPUPeriod := uint64(1000)
 	containerCPUQouta := int64(5)
@@ -1583,9 +1443,7 @@ func TestSandboxUpdateResources(t *testing.T) {
 		c.Resources.CPU.Quota = &containerCPUQouta
 	}
 	err = s.updateResources()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 }
 
 func TestSandboxExperimentalFeature(t *testing.T) {

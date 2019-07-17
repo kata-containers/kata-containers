@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,6 +16,7 @@ import (
 )
 
 func TestVhostUserSocketPath(t *testing.T) {
+	assert := assert.New(t)
 
 	// First test case: search for existing:
 	addresses := []netlink.Addr{
@@ -39,23 +39,16 @@ func TestVhostUserSocketPath(t *testing.T) {
 	expectedResult := fmt.Sprintf("%s/%s", expectedPath, expectedFileName)
 
 	err := os.Mkdir(expectedPath, 0777)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	_, err = os.Create(expectedResult)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	netinfo := NetworkInfo{
 		Addrs: addresses,
 	}
 
 	path, _ := vhostUserSocketPath(netinfo)
-
-	if path != expectedResult {
-		t.Fatalf("Got %+v\nExpecting %+v", path, expectedResult)
-	}
+	assert.Equal(path, expectedResult)
 
 	// Second test case: search doesn't include matching vsock:
 	addressesFalse := []netlink.Addr{
@@ -71,23 +64,14 @@ func TestVhostUserSocketPath(t *testing.T) {
 	}
 
 	path, _ = vhostUserSocketPath(netinfoFail)
-	if path != "" {
-		t.Fatalf("Got %+v\nExpecting %+v", path, "")
-	}
+	assert.Empty(path)
 
-	err = os.Remove(expectedResult)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = os.Remove(expectedPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	assert.NoError(os.Remove(expectedResult))
+	assert.NoError(os.Remove(expectedPath))
 }
 
 func TestVhostUserEndpointAttach(t *testing.T) {
+	assert := assert.New(t)
 	v := &VhostUserEndpoint{
 		SocketPath:   "/tmp/sock",
 		HardAddr:     "mac-addr",
@@ -97,9 +81,7 @@ func TestVhostUserEndpointAttach(t *testing.T) {
 	h := &mockHypervisor{}
 
 	err := v.Attach(h)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestVhostUserEndpoint_HotAttach(t *testing.T) {
@@ -134,6 +116,7 @@ func TestCreateVhostUserEndpoint(t *testing.T) {
 	macAddr := net.HardwareAddr{0x02, 0x00, 0xCA, 0xFE, 0x00, 0x48}
 	ifcName := "vhost-deadbeef"
 	socket := "/tmp/vhu_192.168.0.1"
+	assert := assert.New(t)
 
 	netinfo := NetworkInfo{
 		Iface: NetlinkIface{
@@ -152,11 +135,6 @@ func TestCreateVhostUserEndpoint(t *testing.T) {
 	}
 
 	result, err := createVhostUserEndpoint(netinfo, socket)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("\n\tGot %v\n\tExpecting %v", result, expected)
-	}
+	assert.NoError(err)
+	assert.Exactly(result, expected)
 }

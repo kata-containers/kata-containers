@@ -6,8 +6,9 @@
 package virtcontainers
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCreateMacvtapEndpoint(t *testing.T) {
@@ -22,11 +23,6 @@ func TestCreateMacvtapEndpoint(t *testing.T) {
 	}
 
 	result, err := createMacvtapNetworkEndpoint(netInfo)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("\nGot: %+v, \n\nExpected: %+v", result, expected)
-	}
+	assert.NoError(t, err)
+	assert.Exactly(t, result, expected)
 }
