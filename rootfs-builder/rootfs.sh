@@ -14,17 +14,12 @@ script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-}
 GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
-GO_RUNTIME_PKG=${GO_RUNTIME_PKG:-github.com/kata-containers/runtime}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 GO_VERSION="null"
-#https://github.com/kata-containers/tests/blob/master/.ci/jenkins_job_build.sh
-# Give preference to variable set by CI
-KATA_BRANCH=${branch:-}
-KATA_BRANCH=${KATA_BRANCH:-master}
 export GOPATH=${GOPATH:-${HOME}/go}
 
 lib_file="${script_dir}/../scripts/lib.sh"
@@ -191,51 +186,6 @@ docker_extra_args()
 	echo "$args"
 }
 
-generate_dockerfile()
-{
-	dir="$1"
-
-	case "$(uname -m)" in
-		"ppc64le")
-			goarch=ppc64le
-			;;
-
-		"aarch64")
-			goarch=arm64
-			;;
-		"s390x")
-			goarch=s390x
-			;;
-
-		*)
-			goarch=amd64
-			;;
-	esac
-
-	[ -n "$http_proxy" ] && readonly set_proxy="RUN sed -i '$ a proxy="$http_proxy"' /etc/dnf/dnf.conf /etc/yum.conf; true"
-
-	curlOptions=("-OL")
-	[ -n "$http_proxy" ] && curlOptions+=("-x $http_proxy")
-	readonly install_go="
-RUN cd /tmp ; curl ${curlOptions[@]} https://storage.googleapis.com/golang/go${GO_VERSION}.linux-${goarch}.tar.gz
-RUN tar -C /usr/ -xzf /tmp/go${GO_VERSION}.linux-${goarch}.tar.gz
-ENV GOROOT=/usr/go
-ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
-"
-
-	readonly dockerfile_template="Dockerfile.in"
-	[ -d "${dir}" ] || die "${dir}: not a directory"
-	pushd ${dir}
-	[ -f "${dockerfile_template}" ] || die "${dockerfile_template}: file not found"
-	sed \
-		-e "s|@GO_VERSION@|${GO_VERSION}|g" \
-		-e "s|@OS_VERSION@|${OS_VERSION}|g" \
-		-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
-		-e "s|@SET_PROXY@|${set_proxy}|g" \
-		${dockerfile_template} > Dockerfile
-	popd
-}
-
 setup_agent_init()
 {
 	agent_bin="$1"
@@ -274,50 +224,6 @@ error_handler()
 		touch "$(dirname ${ROOTFS_DIR})/${distro}_fail"
 		exit 0
 	fi
-}
-
-detect_go_version()
-{
-	info "Detecting agent go version"
-	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq)
-	[ -z "$yq" ] && die "'yq' application not found (needed to parsing minimum Go version required)"
-
-	local runtimeRevision=""
-
-	# Detect runtime revision by fetching the agent's VERSION file
-	local runtime_version_url="https://raw.githubusercontent.com/kata-containers/agent/${AGENT_VERSION:-master}/VERSION"
-	info "Detecting runtime version using ${runtime_version_url}"
-
-	if runtimeRevision="$(curl -fsSL ${runtime_version_url})"; then
-		[ -n "${runtimeRevision}" ] || die "failed to get agent version"
-		typeset -r runtimeVersionsURL="https://raw.githubusercontent.com/kata-containers/runtime/${runtimeRevision}/versions.yaml"
-		info "Getting golang version from ${runtimeVersionsURL}"
-		# This may fail if we are a kata bump.
-		if GO_VERSION="$(curl -fsSL "$runtimeVersionsURL" | $yq r - "languages.golang.version")"; then
-			[ "$GO_VERSION" != "null" ]
-			return 0
-		fi
-	fi
-
-	info "Agent version has not match with a runtime version, assumming it is a PR"
-	local kata_runtime_pkg_dir="${GOPATH}/src/${GO_RUNTIME_PKG}"
-	if [ ! -d "${kata_runtime_pkg_dir}" ];then
-		info "There is not runtime repository in filesystem (${kata_runtime_pkg_dir})"
-		local runtime_versions_url="https://raw.githubusercontent.com/kata-containers/runtime/${KATA_BRANCH}/versions.yaml"
-		info "Get versions file from ${runtime_versions_url}"
-		GO_VERSION="$(curl -fsSL "${runtime_versions_url}" | $yq r - "languages.golang.version")"
-		if [ "$?" == "0" ] && [ "$GO_VERSION" != "null" ]; then
-			return 0
-		fi
-
-		return 1
-	fi
-
-	local kata_versions_file="${kata_runtime_pkg_dir}/versions.yaml"
-	info "Get Go version from ${kata_versions_file}"
-	GO_VERSION="$(cat "${kata_versions_file}"  | $yq r - "languages.golang.version")"
-
-	[ "$?" == "0" ] && [ "$GO_VERSION" != "null" ]
 }
 
 # Compares two SEMVER-style versions passed as arguments, up to the MINOR version
