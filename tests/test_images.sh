@@ -25,6 +25,7 @@ readonly MACHINE_TYPE=`uname -m`
 readonly CI=${CI:-}
 readonly KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 readonly ci_results_dir="/var/osbuilder/tests"
+readonly dracut_dir=${script_dir}/../dracut
 
 # all distro tests must have this prefix
 readonly test_func_prefix="test_distro_"
@@ -35,7 +36,6 @@ readonly docker_build_runtime="runc"
 build_images=1
 build_initrds=1
 typeset -a distrosSystemd distrosAgent
-source ${test_config}
 # Hashes used to keep track of image sizes.
 # - Key: name of distro.
 # - Value: colon-separated roots and image sizes ("${rootfs_size}:${image_size}").
@@ -45,6 +45,9 @@ typeset -A built_initrds
 # If set, show the reason why a container using the built images/initrds could
 # not be started. Needed only after all images/initrd built successfully
 typeset -A showKataRunFailure=
+
+source ${test_config}
+source "${script_dir}/../scripts/lib.sh"
 
 usage()
 {
@@ -178,7 +181,11 @@ exit_handler()
 		return
 	fi
 
-	[ -z "${showKataRunFailure}" ] && return
+	if [ -z "${showKataRunFailure}" ]; then
+		# Restore the default image in config file
+		silent_run $mgr configure-image
+		return
+	fi
 
 	info "local runtime config:"
 	cat /etc/kata-containers/configuration.toml >&2
@@ -414,6 +421,9 @@ call_make() {
 		fi
 	done
 
+	# Set a default make target
+	[ "${#makeTargets[@]}" = "0" ] && makeTargets+=($targetType)
+
 	makeJobs=
 	if [ -z "$CI" ]; then
 	  ((makeJobs=$(nproc) / 2))
@@ -524,9 +534,9 @@ test_distros()
 
 	if [ "$KATA_HYPERVISOR" != "firecracker" ]; then
 		if [ ${#distrosAgent[@]} -gt 0 ]; then
-	  	info "building all rootfses with kata-agent as init"
-	  	make_rootfs ${commonMakeVars[@]} AGENT_INIT=yes "${distrosAgent[@]}" &
-	  	bgJobs+=($!)
+		info "building all rootfses with kata-agent as init"
+		make_rootfs ${commonMakeVars[@]} AGENT_INIT=yes "${distrosAgent[@]}" &
+		bgJobs+=($!)
 		fi
 	fi
 
@@ -601,6 +611,47 @@ test_distros()
 	show_stats
 }
 
+test_dracut()
+{
+	local initrd_path="${images_dir}/kata-containers-initrd-dracut.img"
+	local image_path="${images_dir}/kata-containers-image-dracut.img"
+	local rootfs_path="${tmp_rootfs}/dracut_rootfs"
+
+	detect_go_version ||
+		die "Could not detect the required Go version for AGENT_VERSION='${AGENT_VERSION:-master}'."
+	generate_dockerfile ${dracut_dir}
+	info "Creating container for dracut"
+	silent_run docker build -t dracut-test-osbuilder ${dracut_dir}
+
+	typeset -a dockerRunArgs=(\
+		--rm   \
+		--runtime=runc \
+		-v "${images_dir}:${images_dir}" \
+		-v "${script_dir}/..":"${tmp_dir}" \
+		-v "${tmp_rootfs}:${tmp_rootfs}" \
+		-v /etc/localtime:/etc/localtime:ro \
+		dracut-test-osbuilder \
+	)
+	typeset -a makeVars=(BUILD_METHOD=dracut TARGET_INITRD="${initrd_path}" TARGET_IMAGE=${image_path} TARGET_ROOTFS=${rootfs_path})
+
+	info "Making image for dracut inside a container"
+	silent_run docker run ${dockerRunArgs[@]} make -C ${tmp_dir} ${makeVars[@]} rootfs
+	make_image USE_DOCKER=1 ${makeVars[@]}
+	local image_size=$(stat -c "%s" "${image_path}")
+	local rootfs_size=$(get_rootfs_size "$rootfs_path")
+	built_images["dracut"]="${rootfs_size}:${image_size}"
+	info "Creating container for dracut"
+	install_image_create_container $image_path
+
+	if [ "$KATA_HYPERVISOR" != "firecracker" ]; then
+		info "Making initrd for dracut inside a container"
+		silent_run docker run ${dockerRunArgs[@]} make -C ${tmp_dir} ${makeVars[@]} AGENT_INIT=yes clean initrd
+		local initrd_size=$(stat -c "%s" "${initrd_path}")
+		built_initrds["dracut"]="${rootfs_size}:${initrd_size}"
+		install_initrd_create_container $initrd_path
+	fi
+}
+
 main()
 {
 	local args=$(getopt \
@@ -648,7 +699,10 @@ main()
 	trap exit_handler EXIT ERR
 	setup
 
-	test_distros "$distro"
+	# Run only if distro is not dracut
+	[ "${distro:-}" != "dracut" ] && test_distros "$distro"
+	# Run if distro is empty or it is dracut
+	[ -z "$distro" ] || [ "$distro" = "dracut" ] && test_dracut
 
 	# We shouldn't really need a message like this but the CI can fail in
 	# mysterious ways so make it clear!
