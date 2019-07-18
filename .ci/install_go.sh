@@ -96,6 +96,10 @@ if command -v go; then
 	fi
 fi
 
+if [ "$(uname -s)" == "Darwin" ]; then
+	goarch=amd64
+fi
+
 case "$(arch)" in
 	"aarch64")
 		goarch=arm64
@@ -118,8 +122,9 @@ case "$(arch)" in
 esac
 
 info "Download go version ${go_version}"
-curl -OL "https://storage.googleapis.com/golang/go${go_version}.linux-${goarch}.tar.gz"
+kernel_name=$(uname -s)
+curl -OL "https://storage.googleapis.com/golang/go${go_version}.${kernel_name,,}-${goarch}.tar.gz"
 info "Install go"
 mkdir -p "${install_dest}"
-sudo tar -C "${install_dest}" -xzf "go${go_version}.linux-${goarch}.tar.gz"
+sudo tar -C "${install_dest}" -xzf "go${go_version}.${kernel_name,,}-${goarch}.tar.gz"
 popd
