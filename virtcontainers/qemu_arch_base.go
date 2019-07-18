@@ -102,8 +102,8 @@ type qemuArch interface {
 	// supportGuestMemoryHotplug returns if the guest supports memory hotplug
 	supportGuestMemoryHotplug() bool
 
-	// setBypassSharedMemoryMigrationCaps set bypass-shared-memory capability for migration
-	setBypassSharedMemoryMigrationCaps(context.Context, *govmmQemu.QMP) error
+	// setIgnoreSharedMemoryMigrationCaps set bypass-shared-memory capability for migration
+	setIgnoreSharedMemoryMigrationCaps(context.Context, *govmmQemu.QMP) error
 }
 
 type qemuArchBase struct {
@@ -153,6 +153,8 @@ const (
 
 	// QemuCCWVirtio is a QEMU virt machine type for for s390x
 	QemuCCWVirtio = "s390-ccw-virtio"
+
+	qmpCapMigrationIgnoreShared = "x-ignore-shared"
 )
 
 // kernelParamsNonDebug is a list of the default kernel
@@ -579,10 +581,10 @@ func (q *qemuArchBase) supportGuestMemoryHotplug() bool {
 	return true
 }
 
-func (q *qemuArchBase) setBypassSharedMemoryMigrationCaps(ctx context.Context, qmp *govmmQemu.QMP) error {
+func (q *qemuArchBase) setIgnoreSharedMemoryMigrationCaps(ctx context.Context, qmp *govmmQemu.QMP) error {
 	err := qmp.ExecSetMigrationCaps(ctx, []map[string]interface{}{
 		{
-			"capability": qmpCapMigrationBypassSharedMemory,
+			"capability": qmpCapMigrationIgnoreShared,
 			"state":      true,
 		},
 	})
