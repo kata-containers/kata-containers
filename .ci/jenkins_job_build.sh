@@ -112,7 +112,7 @@ fi
 # checks, as we always want to run those.
 # Work around the 'set -e' dying if the check fails by using a bash
 # '{ group command }' to encapsulate.
-{ .ci/ci-fast-return.sh; ret=$?; } || true
+{ ${tests_repo_dir}/.ci/ci-fast-return.sh; ret=$?; } || true
 if [ "$ret" -eq 0 ]; then
 	echo "Short circuit fast path skipping the rest of the CI."
 	exit 0
