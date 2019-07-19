@@ -162,6 +162,9 @@ then
 
 	# Code coverage
 	bash <(curl -s https://codecov.io/bash)
+else
+	echo "Running the metrics tests:"
+	.ci/run_metrics_PR_ci.sh
 fi
 
 popd
