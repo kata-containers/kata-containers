@@ -1458,6 +1458,9 @@ func TestGetNetNs(t *testing.T) {
 }
 
 func TestStartNetworkMonitor(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("Test disabled as requires root user")
+	}
 	trueBinPath, err := exec.LookPath("true")
 	assert.Nil(t, err)
 	assert.NotEmpty(t, trueBinPath)
