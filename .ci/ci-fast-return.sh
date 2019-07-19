@@ -67,6 +67,8 @@ local_info() {
 #  to the empty string)
 #
 read_yaml() {
+	${cidir}/install_yq.sh >&2
+
 	res=$(yq read "$1" "$2")
 	[ "$res" == "null" ] && res=""
 	echo $res
