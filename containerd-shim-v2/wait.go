@@ -51,7 +51,7 @@ func wait(s *service, c *container, execID string) (int32, error) {
 		// sandbox.
 
 		if c.cType.IsSandbox() {
-			if err = s.sandbox.Stop(); err != nil {
+			if err = s.sandbox.Stop(true); err != nil {
 				logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
 			}
 

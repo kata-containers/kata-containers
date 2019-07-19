@@ -946,7 +946,7 @@ func (c *Container) start() error {
 	if err := c.sandbox.agent.startContainer(c.sandbox, c); err != nil {
 		c.Logger().WithError(err).Error("Failed to start container")
 
-		if err := c.stop(); err != nil {
+		if err := c.stop(true); err != nil {
 			c.Logger().WithError(err).Warn("Failed to stop container")
 		}
 		return err
@@ -955,7 +955,7 @@ func (c *Container) start() error {
 	return c.setContainerState(types.StateRunning)
 }
 
-func (c *Container) stop() error {
+func (c *Container) stop(force bool) error {
 	span, _ := c.trace("stop")
 	defer span.Finish()
 
@@ -999,7 +999,7 @@ func (c *Container) stop() error {
 	// return an error, but instead try to kill it forcefully.
 	if err := waitForShim(c.process.Pid); err != nil {
 		// Force the container to be killed.
-		if err := c.kill(syscall.SIGKILL, true); err != nil {
+		if err := c.kill(syscall.SIGKILL, true); err != nil && !force {
 			return err
 		}
 
@@ -1007,7 +1007,7 @@ func (c *Container) stop() error {
 		// to succeed. Indeed, we have already given a second chance
 		// to the container by trying to kill it with SIGKILL, there
 		// is no reason to try to go further if we got an error.
-		if err := waitForShim(c.process.Pid); err != nil {
+		if err := waitForShim(c.process.Pid); err != nil && !force {
 			return err
 		}
 	}
@@ -1045,15 +1045,15 @@ func (c *Container) stop() error {
 		}
 	}()
 
-	if err := c.sandbox.agent.stopContainer(c.sandbox, *c); err != nil {
+	if err := c.sandbox.agent.stopContainer(c.sandbox, *c); err != nil && !force {
 		return err
 	}
 
-	if err := c.detachDevices(); err != nil {
+	if err := c.detachDevices(); err != nil && !force {
 		return err
 	}
 
-	if err := c.removeDrive(); err != nil {
+	if err := c.removeDrive(); err != nil && !force {
 		return err
 	}
 

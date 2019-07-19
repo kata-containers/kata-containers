@@ -1161,7 +1161,7 @@ func (s *Sandbox) StopContainer(containerID string) (VCContainer, error) {
 	}
 
 	// Stop it.
-	if err := c.stop(); err != nil {
+	if err := c.stop(false); err != nil {
 		return nil, err
 	}
 
@@ -1427,7 +1427,8 @@ func (s *Sandbox) Start() error {
 
 // Stop stops a sandbox. The containers that are making the sandbox
 // will be destroyed.
-func (s *Sandbox) Stop() error {
+// When force is true, ignore guest related stop failures.
+func (s *Sandbox) Stop(force bool) error {
 	span, _ := s.trace("stop")
 	defer span.Finish()
 
@@ -1441,12 +1442,12 @@ func (s *Sandbox) Stop() error {
 	}
 
 	for _, c := range s.containers {
-		if err := c.stop(); err != nil {
+		if err := c.stop(force); err != nil {
 			return err
 		}
 	}
 
-	if err := s.stopVM(); err != nil {
+	if err := s.stopVM(); err != nil && !force {
 		return err
 	}
 
@@ -1455,7 +1456,7 @@ func (s *Sandbox) Stop() error {
 	}
 
 	// Remove the network.
-	if err := s.removeNetwork(); err != nil {
+	if err := s.removeNetwork(); err != nil && !force {
 		return err
 	}
 
