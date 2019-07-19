@@ -419,6 +419,28 @@ func TestQemuArchBaseAppendVFIODevice(t *testing.T) {
 	testQemuArchBaseAppend(t, vfDevice, expectedOut)
 }
 
+func TestQemuArchBaseAppendVFIODeviceWithVendorDeviceID(t *testing.T) {
+	bdf := "02:10.1"
+	vendorID := "0x1234"
+	deviceID := "0x5678"
+
+	expectedOut := []govmmQemu.Device{
+		govmmQemu.VFIODevice{
+			BDF:      bdf,
+			VendorID: vendorID,
+			DeviceID: deviceID,
+		},
+	}
+
+	vfDevice := config.VFIODev{
+		BDF:      bdf,
+		VendorID: vendorID,
+		DeviceID: deviceID,
+	}
+
+	testQemuArchBaseAppend(t, vfDevice, expectedOut)
+}
+
 func TestQemuArchBaseAppendSCSIController(t *testing.T) {
 	var devices []govmmQemu.Device
 	assert := assert.New(t)
