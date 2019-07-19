@@ -822,9 +822,13 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 		"driver": driver,
 		"drive":  blockdevID,
 	}
-	if bus != "" {
+
+	if isVirtioCCW[DeviceDriver(driver)] {
+		args["devno"] = bus
+	} else if bus != "" {
 		args["bus"] = bus
 	}
+
 	if shared && (q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 10)) {
 		args["share-rw"] = "on"
 	}
@@ -870,8 +874,14 @@ func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, drive
 		"id":     devID,
 		"driver": driver,
 		"drive":  blockdevID,
-		"bus":    bus,
 	}
+
+	if isVirtioCCW[DeviceDriver(driver)] {
+		args["devno"] = bus
+	} else {
+		args["bus"] = bus
+	}
+
 	if scsiID >= 0 {
 		args["scsi-id"] = scsiID
 	}
@@ -1023,13 +1033,13 @@ func (q *QMP) ExecuteNetPCIDeviceAdd(ctx context.Context, netdevID, devID, macAd
 // using the device_add command. devID is the id of the device to add.
 // Must be valid QMP identifier. netdevID is the id of nic added by previous netdev_add.
 // queues is the number of queues of a nic.
-func (q *QMP) ExecuteNetCCWDeviceAdd(ctx context.Context, netdevID, devID, macAddr, addr, bus string, queues int) error {
+func (q *QMP) ExecuteNetCCWDeviceAdd(ctx context.Context, netdevID, devID, macAddr, bus string, queues int) error {
 	args := map[string]interface{}{
 		"id":     devID,
 		"driver": VirtioNetCCW,
 		"netdev": netdevID,
 		"mac":    macAddr,
-		"addr":   addr,
+		"devno":  bus,
 	}
 
 	if queues > 0 {
