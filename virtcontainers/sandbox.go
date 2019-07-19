@@ -1180,14 +1180,15 @@ func (s *Sandbox) KillContainer(containerID string, signal syscall.Signal, all b
 	}
 
 	// Send a signal to the process.
-	if err := c.kill(signal, all); err != nil {
-		return err
+	err = c.kill(signal, all)
+
+	// SIGKILL should never fail otherwise it is
+	// impossible to clean things up.
+	if signal == syscall.SIGKILL {
+		return nil
 	}
 
-	if err = s.storeSandbox(); err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // DeleteContainer deletes a container from the sandbox
