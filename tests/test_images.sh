@@ -547,7 +547,7 @@ test_distros()
 			local marker=$(make print-ROOTFS_MARKER_SUFFIX)
 			[ -z "$marker" ] &&  die "Invalid rootfs marker"
 			typeset -a completed=($(find ${tmp_rootfs} -name ".*${marker}" -exec basename {} \; | sed -E "s/\.(.+)${marker}/\1/"))
-			for d in "${distrosSystemd[@]} ${distrosAgent[@]}"; do
+			for d in "${distrosSystemd[@]}" "${distrosAgent[@]}"; do
 				if [[ "${completed[@]}" =~ $d ]]; then
 					info "- $d : completed"
 				else
