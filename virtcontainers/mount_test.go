@@ -344,6 +344,9 @@ func TestIsEphemeralStorage(t *testing.T) {
 // or directory attempting to be unmounted doesn't exist, then it
 // is not considered an error
 func TestBindUnmountContainerRootfsENOENTNotError(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("Test disabled as requires root user")
+	}
 	testMnt := "/tmp/test_mount"
 	sID := "sandIDTest"
 	cID := "contIDTest"
