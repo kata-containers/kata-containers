@@ -7,10 +7,13 @@ package virtcontainers
 
 import (
 	"sync"
+	"syscall"
 	"time"
+
+	"github.com/pkg/errors"
 )
 
-const defaultCheckInterval = 10 * time.Second
+const defaultCheckInterval = 1 * time.Second
 
 type monitor struct {
 	sync.Mutex
@@ -52,6 +55,7 @@ func (m *monitor) newWatcher() (chan error, error) {
 					m.wg.Done()
 					return
 				case <-tick.C:
+					m.watchHypervisor()
 					m.watchAgent()
 				}
 			}
@@ -62,6 +66,8 @@ func (m *monitor) newWatcher() (chan error, error) {
 }
 
 func (m *monitor) notify(err error) {
+	m.sandbox.agent.markDead()
+
 	m.Lock()
 	defer m.Unlock()
 
@@ -115,6 +121,15 @@ func (m *monitor) stop() {
 func (m *monitor) watchAgent() {
 	err := m.sandbox.agent.check()
 	if err != nil {
-		m.notify(err)
+		// TODO: define and export error types
+		m.notify(errors.Wrapf(err, "failed to ping agent"))
 	}
+}
+
+func (m *monitor) watchHypervisor() error {
+	if err := syscall.Kill(m.sandbox.hypervisor.pid(), syscall.Signal(0)); err != nil {
+		m.notify(errors.Wrapf(err, "failed to ping hypervisor process"))
+		return err
+	}
+	return nil
 }
