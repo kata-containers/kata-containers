@@ -34,7 +34,7 @@ func (p *noProxy) start(params proxyParams) (int, string, error) {
 		return -1, "", fmt.Errorf("AgentURL cannot be empty")
 	}
 
-	return 0, params.agentURL, nil
+	return params.hid, params.agentURL, nil
 }
 
 // stop is noProxy stop implementation for proxy interface.

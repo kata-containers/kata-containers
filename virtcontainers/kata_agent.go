@@ -616,6 +616,7 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 
 	proxyParams := proxyParams{
 		id:         sandbox.id,
+		hid:        sandbox.hypervisor.pid(),
 		path:       sandbox.config.ProxyConfig.Path,
 		agentURL:   agentURL,
 		consoleURL: consoleURL,
@@ -1600,7 +1601,14 @@ func (k *kataAgent) connect() error {
 		return nil
 	}
 
-	k.Logger().WithField("url", k.state.URL).Info("New client")
+	if k.state.ProxyPid > 0 {
+		// check that proxy is running before talk with it avoiding long timeouts
+		if err := syscall.Kill(k.state.ProxyPid, syscall.Signal(0)); err != nil {
+			return errors.New("Proxy is not running")
+		}
+	}
+
+	k.Logger().WithField("url", k.state.URL).WithField("proxy", k.state.ProxyPid).Info("New client")
 	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL, k.proxyBuiltIn)
 	if err != nil {
 		k.dead = true
@@ -1791,13 +1799,6 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	span, _ := k.trace("sendReq")
 	span.SetTag("request", request)
 	defer span.Finish()
-
-	if k.state.ProxyPid > 0 {
-		// check that proxy is running before talk with it avoiding long timeouts
-		if err := syscall.Kill(k.state.ProxyPid, syscall.Signal(0)); err != nil {
-			return nil, fmt.Errorf("Proxy is not running: %v", err)
-		}
-	}
 
 	if err := k.connect(); err != nil {
 		return nil, err

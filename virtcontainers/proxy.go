@@ -28,6 +28,7 @@ type proxyParams struct {
 	agentURL   string
 	consoleURL string
 	logger     *logrus.Entry
+	hid        int
 	debug      bool
 }
 

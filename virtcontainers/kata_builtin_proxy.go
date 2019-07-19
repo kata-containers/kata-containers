@@ -64,7 +64,7 @@ func (p *kataBuiltInProxy) start(params proxyParams) (int, string, error) {
 		}
 	}
 
-	return -1, params.agentURL, nil
+	return params.hid, params.agentURL, nil
 }
 
 // stop is the proxy stop implementation for kata builtin proxy.
