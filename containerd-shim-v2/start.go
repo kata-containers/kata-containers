@@ -30,6 +30,12 @@ func startContainer(ctx context.Context, s *service, c *container) error {
 		if err != nil {
 			return err
 		}
+		// Start monitor after starting sandbox
+		s.monitor, err = s.sandbox.Monitor()
+		if err != nil {
+			return err
+		}
+		go watchSandbox(s)
 	} else {
 		_, err := s.sandbox.StartContainer(c.id)
 		if err != nil {
