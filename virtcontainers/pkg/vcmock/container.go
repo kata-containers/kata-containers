@@ -38,12 +38,6 @@ func (c *Container) GetPid() int {
 	return c.MockPid
 }
 
-// SetPid implements the VCContainer function of the same name.
-func (c *Container) SetPid(pid int) error {
-	c.MockPid = pid
-	return nil
-}
-
 // GetAnnotations implements the VCContainer function of the same name.
 func (c *Container) GetAnnotations() map[string]string {
 	return c.MockAnnotations

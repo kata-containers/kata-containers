@@ -368,16 +368,6 @@ func (c *Container) GetPid() int {
 	return c.process.Pid
 }
 
-// SetPid sets and stores the given pid as the pid of container's process.
-func (c *Container) SetPid(pid int) error {
-	c.process.Pid = pid
-
-	if !c.sandbox.supportNewStore() {
-		return c.storeProcess()
-	}
-	return nil
-}
-
 func (c *Container) setStateFstype(fstype string) error {
 	c.state.Fstype = fstype
 
