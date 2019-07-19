@@ -2069,6 +2069,12 @@ func (k *kataAgent) copyFile(src, dst string) error {
 	return nil
 }
 
+func (k *kataAgent) markDead() {
+	k.Logger().Infof("mark agent dead")
+	k.dead = true
+	k.disconnect()
+}
+
 func (k *kataAgent) cleanup(id string) {
 	path := k.getSharePath(id)
 	k.Logger().WithField("path", path).Infof("cleanup agent")

@@ -228,5 +228,8 @@ func (n *noopAgent) copyFile(src, dst string) error {
 	return nil
 }
 
+func (n *noopAgent) markDead() {
+}
+
 func (n *noopAgent) cleanup(id string) {
 }
