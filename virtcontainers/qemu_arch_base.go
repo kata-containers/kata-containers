@@ -551,7 +551,9 @@ func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev conf
 
 	devices = append(devices,
 		govmmQemu.VFIODevice{
-			BDF: vfioDev.BDF,
+			BDF:      vfioDev.BDF,
+			VendorID: vfioDev.VendorID,
+			DeviceID: vfioDev.DeviceID,
 		},
 	)
 

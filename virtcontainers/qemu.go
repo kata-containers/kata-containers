@@ -1172,7 +1172,7 @@ func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) error {
 			return err
 		}
 		if machine.Type == QemuCCWVirtio {
-			return q.qmpMonitorCh.qmp.ExecuteNetCCWDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, int(q.config.NumVCPUs))
+			return q.qmpMonitorCh.qmp.ExecuteNetCCWDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), bridge.ID, int(q.config.NumVCPUs))
 		}
 		return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs), defaultDisableModern)
 	}

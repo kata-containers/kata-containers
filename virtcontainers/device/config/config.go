@@ -167,6 +167,12 @@ type VFIODev struct {
 
 	// sysfsdev of VFIO mediated device
 	SysfsDev string
+
+	// VendorID specifies vendor id
+	VendorID string
+
+	// DeviceID specifies device id
+	DeviceID string
 }
 
 // RNGDev represents a random number generator device
