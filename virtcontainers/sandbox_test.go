@@ -1350,7 +1350,7 @@ func TestSandboxStopStopped(t *testing.T) {
 		ctx:   context.Background(),
 		state: types.SandboxState{State: types.StateStopped},
 	}
-	err := s.Stop()
+	err := s.Stop(false)
 
 	assert.Nil(t, err)
 }

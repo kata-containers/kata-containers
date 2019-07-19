@@ -235,7 +235,7 @@ func StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 
 // StopSandbox is the virtcontainers sandbox stopping entry point.
 // StopSandbox will talk to the given agent to stop an existing sandbox and destroy all containers within that sandbox.
-func StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
+func StopSandbox(ctx context.Context, sandboxID string, force bool) (VCSandbox, error) {
 	span, ctx := trace(ctx, "StopSandbox")
 	defer span.Finish()
 
@@ -257,7 +257,7 @@ func StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
 	defer s.releaseStatelessSandbox()
 
 	// Stop it.
-	err = s.Stop()
+	err = s.Stop(force)
 	if err != nil {
 		return nil, err
 	}
@@ -596,7 +596,7 @@ func statusContainer(sandbox *Sandbox, containerID string) (ContainerStatus, err
 						"state": container.state.State,
 						"pid":   container.process.Pid}).
 						Info("container isn't running")
-					if err := container.stop(); err != nil {
+					if err := container.stop(true); err != nil {
 						return ContainerStatus{}, err
 					}
 				}

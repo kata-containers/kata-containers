@@ -74,7 +74,7 @@ func (s *Sandbox) Start() error {
 }
 
 // Stop implements the VCSandbox function of the same name.
-func (s *Sandbox) Stop() error {
+func (s *Sandbox) Stop(force bool) error {
 	return nil
 }
 

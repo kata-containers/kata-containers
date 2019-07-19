@@ -152,7 +152,7 @@ func kill(ctx context.Context, containerID, signal string, all bool) error {
 
 	switch containerType {
 	case vc.PodSandbox:
-		_, err = vci.StopSandbox(ctx, sandboxID)
+		_, err = vci.StopSandbox(ctx, sandboxID, signum == syscall.SIGKILL)
 	case vc.PodContainer:
 		_, err = vci.StopContainer(ctx, sandboxID, containerID)
 	default:
