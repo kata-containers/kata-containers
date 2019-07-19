@@ -136,6 +136,7 @@ type kataAgent struct {
 	keepConn       bool
 	proxyBuiltIn   bool
 	dynamicTracing bool
+	dead           bool
 
 	vmSocket interface{}
 	ctx      context.Context
@@ -1581,6 +1582,9 @@ func (k *kataAgent) statsContainer(sandbox *Sandbox, c Container) (*ContainerSta
 }
 
 func (k *kataAgent) connect() error {
+	if k.dead {
+		return errors.New("Dead agent")
+	}
 	// lockless quick pass
 	if k.client != nil {
 		return nil
@@ -1599,6 +1603,7 @@ func (k *kataAgent) connect() error {
 	k.Logger().WithField("url", k.state.URL).Info("New client")
 	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL, k.proxyBuiltIn)
 	if err != nil {
+		k.dead = true
 		return err
 	}
 
