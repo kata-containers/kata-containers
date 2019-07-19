@@ -10,6 +10,8 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
+source /etc/os-release || source /usr/lib/os-release
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cri_repository="github.com/containerd/cri"
 containerd_repository="github.com/containerd/containerd"
@@ -25,10 +27,16 @@ source "${script_dir}/lib.sh"
 CONTAINERD_OS=$(go env GOOS)
 CONTAIENRD_ARCH=$(go env GOARCH)
 
-cri_containerd_version=$(get_version "externals.cri-containerd.version")
+cri_containerd_tarball_version=$(get_version "externals.cri-containerd.version")
 cri_containerd_repo=$(get_version "externals.cri-containerd.url")
 
-source /etc/os-release || source /usr/lib/os-release
+echo "Get cri_containerd version"
+go get "${containerd_repository}"
+cri_containerd_version=$(
+	cd "${GOPATH}/src/${containerd_repository}";
+	git checkout "v${cri_containerd_tarball_version}" >&2;
+	cat vendor.conf | grep "github.com/containerd/cri" | awk '{print $2}';
+)
 
 echo "Set up environment"
 if [ "$ID" == centos ]; then
@@ -52,10 +60,9 @@ install_from_source() {
 
 install_from_static_tarball() {
 	echo "Trying to install containerd from static tarball"
-	local tarball_url
-	tarball_url=$(get_version "externals.cri-containerd.tarball_url")
+	local tarball_url=$(get_version "externals.cri-containerd.tarball_url")
 
-	tarball_name="cri-containerd-${cri_containerd_version}.${CONTAINERD_OS}-${CONTAIENRD_ARCH}.tar.gz"
+	local tarball_name="cri-containerd-${cri_containerd_tarball_version}.${CONTAINERD_OS}-${CONTAIENRD_ARCH}.tar.gz"
 	local url="${tarball_url}/${tarball_name}"
 
 	echo "Download tarball from ${url}"
@@ -65,19 +72,11 @@ install_from_static_tarball() {
 	fi
 
 	sudo tar -xvf "${tarball_name}" -C /
-	echo "Get containerd source"
-	go get "${containerd_repository}"
-	echo "checkout to ${cri_containerd_version}"
-	cri_version=$(
-		cd "${GOPATH}/src/${containerd_repository}";
-		git checkout "v${cri_containerd_version}" >&2;
-		cat vendor.conf | grep "github.com/containerd/cri" | awk '{print $2}';
-	)
-	echo "vendored cri version ${cri_version}"
+	echo "vendored cri version ${cri_containerd_version}"
 	(
 		cd "${GOPATH}/src/${cri_containerd_repo}" >>/dev/null
-		echo "checkout to cri version ${cri_version}"
-		git checkout "${cri_version}"
+		echo "checkout to cri version ${cri_containerd_version}"
+		git checkout "${cri_containerd_version}"
 	)
 }
 
