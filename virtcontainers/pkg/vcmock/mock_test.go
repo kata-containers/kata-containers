@@ -339,22 +339,22 @@ func TestVCMockStopSandbox(t *testing.T) {
 	assert.Nil(m.StopSandboxFunc)
 
 	ctx := context.Background()
-	_, err := m.StopSandbox(ctx, testSandboxID)
+	_, err := m.StopSandbox(ctx, testSandboxID, false)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 
-	m.StopSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
+	m.StopSandboxFunc = func(ctx context.Context, sandboxID string, force bool) (vc.VCSandbox, error) {
 		return &Sandbox{}, nil
 	}
 
-	sandbox, err := m.StopSandbox(ctx, testSandboxID)
+	sandbox, err := m.StopSandbox(ctx, testSandboxID, false)
 	assert.NoError(err)
 	assert.Equal(sandbox, &Sandbox{})
 
 	// reset
 	m.StopSandboxFunc = nil
 
-	_, err = m.StopSandbox(ctx, testSandboxID)
+	_, err = m.StopSandbox(ctx, testSandboxID, false)
 	assert.Error(err)
 	assert.True(IsMockError(err))
 }

@@ -971,10 +971,6 @@ func (c *Container) stop() error {
 		return nil
 	}
 
-	if c.sandbox.state.State != types.StateReady && c.sandbox.state.State != types.StateRunning {
-		return fmt.Errorf("Sandbox not ready or running, impossible to stop the container")
-	}
-
 	if err := c.state.ValidTransition(c.state.State, types.StateStopped); err != nil {
 		return err
 	}
