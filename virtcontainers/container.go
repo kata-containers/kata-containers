@@ -1049,6 +1049,14 @@ func (c *Container) stop(force bool) error {
 		return err
 	}
 
+	if err := c.unmountHostMounts(); err != nil && !force {
+		return err
+	}
+
+	if err := bindUnmountContainerRootfs(c.ctx, kataHostSharedDir, c.sandbox.id, c.id); err != nil && !force {
+		return err
+	}
+
 	if err := c.detachDevices(); err != nil && !force {
 		return err
 	}

@@ -1419,19 +1419,8 @@ func (k *kataAgent) stopContainer(sandbox *Sandbox, c Container) error {
 	span, _ := k.trace("stopContainer")
 	defer span.Finish()
 
-	req := &grpc.RemoveContainerRequest{
-		ContainerId: c.id,
-	}
-
-	if _, err := k.sendReq(req); err != nil {
-		return err
-	}
-
-	if err := c.unmountHostMounts(); err != nil {
-		return err
-	}
-
-	return bindUnmountContainerRootfs(k.ctx, kataHostSharedDir, sandbox.id, c.id)
+	_, err := k.sendReq(&grpc.RemoveContainerRequest{ContainerId: c.id})
+	return err
 }
 
 func (k *kataAgent) signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error {
@@ -2075,9 +2064,12 @@ func (k *kataAgent) markDead() {
 	k.disconnect()
 }
 
-func (k *kataAgent) cleanup(id string) {
-	path := k.getSharePath(id)
+func (k *kataAgent) cleanup(s *Sandbox) {
+	path := k.getSharePath(s.id)
 	k.Logger().WithField("path", path).Infof("cleanup agent")
+	if err := bindUnmountAllRootfs(k.ctx, path, s); err != nil {
+		k.Logger().WithError(err).Errorf("failed to unmount container share path %s", path)
+	}
 	if err := os.RemoveAll(path); err != nil {
 		k.Logger().WithError(err).Errorf("failed to cleanup vm share path %s", path)
 	}

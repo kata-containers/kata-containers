@@ -231,5 +231,5 @@ func (n *noopAgent) copyFile(src, dst string) error {
 func (n *noopAgent) markDead() {
 }
 
-func (n *noopAgent) cleanup(id string) {
+func (n *noopAgent) cleanup(s *Sandbox) {
 }
