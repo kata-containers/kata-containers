@@ -19,16 +19,13 @@ matrix:
 language: go
 go_import_path: github.com/kata-containers/tests
 
-go:
-  - "1.11.x"
-  - stable
-
 env:
   - target_branch=$TRAVIS_BRANCH
 
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then .ci/setup.sh; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then travis_retry brew install bash yamllint gnu-getopt; fi
+  - bash .ci/install_go.sh -p -f
 
 script:
   - bash .ci/static-checks.sh github.com/kata-containers/tests
