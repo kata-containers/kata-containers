@@ -7,6 +7,8 @@ package virtcontainers
 
 import (
 	"fmt"
+
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 )
 
 // Endpoint represents a physical or virtual network interface.
@@ -24,6 +26,9 @@ type Endpoint interface {
 	Detach(netNsCreated bool, netNsPath string) error
 	HotAttach(h hypervisor) error
 	HotDetach(h hypervisor, netNsCreated bool, netNsPath string) error
+
+	save() persistapi.NetworkEndpoint
+	load(persistapi.NetworkEndpoint)
 }
 
 // EndpointType identifies the type of the network endpoint.

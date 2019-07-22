@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 )
 
 // IPVlanEndpoint represents a ipvlan endpoint that is bridged to the VM
@@ -117,4 +118,53 @@ func (endpoint *IPVlanEndpoint) HotAttach(h hypervisor) error {
 // HotDetach for physical endpoint not supported yet
 func (endpoint *IPVlanEndpoint) HotDetach(h hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("IPVlanEndpoint does not support Hot detach")
+}
+
+func (endpoint *IPVlanEndpoint) save() (s persistapi.NetworkEndpoint) {
+	s.Type = string(endpoint.Type())
+	s.IPVlan = &persistapi.IPVlanEndpoint{
+		NetPair: persistapi.NetworkInterfacePair{
+			TapInterface: persistapi.TapInterface{
+				ID:   endpoint.NetPair.TapInterface.ID,
+				Name: endpoint.NetPair.TapInterface.Name,
+				TAPIface: persistapi.NetworkInterface{
+					Name:     endpoint.NetPair.TapInterface.TAPIface.Name,
+					HardAddr: endpoint.NetPair.TapInterface.TAPIface.HardAddr,
+					Addrs:    endpoint.NetPair.TapInterface.TAPIface.Addrs,
+				},
+			},
+			VirtIface: persistapi.NetworkInterface{
+				Name:     endpoint.NetPair.VirtIface.Name,
+				HardAddr: endpoint.NetPair.VirtIface.HardAddr,
+				Addrs:    endpoint.NetPair.VirtIface.Addrs,
+			},
+			NetInterworkingModel: int(endpoint.NetPair.NetInterworkingModel),
+		},
+	}
+	return
+}
+
+func (endpoint *IPVlanEndpoint) load(s persistapi.NetworkEndpoint) {
+	endpoint.EndpointType = IPVlanEndpointType
+
+	if s.IPVlan != nil {
+		iface := s.IPVlan
+		endpoint.NetPair = NetworkInterfacePair{
+			TapInterface: TapInterface{
+				ID:   iface.NetPair.TapInterface.ID,
+				Name: iface.NetPair.TapInterface.Name,
+				TAPIface: NetworkInterface{
+					Name:     iface.NetPair.TapInterface.TAPIface.Name,
+					HardAddr: iface.NetPair.TapInterface.TAPIface.HardAddr,
+					Addrs:    iface.NetPair.TapInterface.TAPIface.Addrs,
+				},
+			},
+			VirtIface: NetworkInterface{
+				Name:     iface.NetPair.VirtIface.Name,
+				HardAddr: iface.NetPair.VirtIface.HardAddr,
+				Addrs:    iface.NetPair.VirtIface.Addrs,
+			},
+			NetInterworkingModel: NetInterworkingModel(iface.NetPair.NetInterworkingModel),
+		}
+	}
 }
