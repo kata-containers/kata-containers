@@ -8,12 +8,12 @@ package persistapi
 
 // ============= sandbox level resources =============
 
-// ProxyState save proxy state data
-type ProxyState struct {
+// AgentState save agent state data
+type AgentState struct {
 	// Pid of proxy process
-	Pid int
+	ProxyPid int
 
-	// URL to connect to proxy
+	// URL to connect to agent
 	URL string
 }
 
@@ -46,8 +46,8 @@ type SandboxState struct {
 	// HypervisorState saves hypervisor specific data
 	HypervisorState HypervisorState
 
-	// ProxyState saves state data of proxy process
-	ProxyState ProxyState
+	// AgentState saves state data of agent
+	AgentState AgentState
 
 	// Network saves network configuration of sandbox
 	Network NetworkInfo

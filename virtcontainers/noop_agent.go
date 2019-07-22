@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/agent/protocols/grpc"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -233,3 +234,11 @@ func (n *noopAgent) markDead() {
 
 func (n *noopAgent) cleanup(s *Sandbox) {
 }
+
+// save is the Noop agent state saver. It does nothing.
+func (n *noopAgent) save() (s persistapi.AgentState) {
+	return
+}
+
+// load is the Noop agent state loader. It does nothing.
+func (n *noopAgent) load(s persistapi.AgentState) {}
