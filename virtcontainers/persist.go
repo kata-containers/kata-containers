@@ -160,6 +160,17 @@ func (s *Sandbox) dumpAgent(ss *persistapi.SandboxState) {
 	}
 }
 
+func (s *Sandbox) dumpNetwork(ss *persistapi.SandboxState) {
+	ss.Network = persistapi.NetworkInfo{
+		NetNsPath:    s.networkNS.NetNsPath,
+		NetmonPID:    s.networkNS.NetmonPID,
+		NetNsCreated: s.networkNS.NetNsCreated,
+	}
+	for _, e := range s.networkNS.Endpoints {
+		ss.Network.Endpoints = append(ss.Network.Endpoints, e.save())
+	}
+}
+
 func (s *Sandbox) Save() error {
 	var (
 		ss = persistapi.SandboxState{}
@@ -173,6 +184,7 @@ func (s *Sandbox) Save() error {
 	s.dumpProcess(cs)
 	s.dumpMounts(cs)
 	s.dumpAgent(&ss)
+	s.dumpNetwork(&ss)
 
 	if err := s.newStore.ToDisk(ss, cs); err != nil {
 		return err
@@ -248,6 +260,38 @@ func (c *Container) loadContProcess(cs persistapi.ContainerState) {
 	}
 }
 
+func (s *Sandbox) loadNetwork(netInfo persistapi.NetworkInfo) {
+	s.networkNS = NetworkNamespace{
+		NetNsPath:    netInfo.NetNsPath,
+		NetmonPID:    netInfo.NetmonPID,
+		NetNsCreated: netInfo.NetNsCreated,
+	}
+
+	for _, e := range netInfo.Endpoints {
+		var ep Endpoint
+		switch EndpointType(e.Type) {
+		case PhysicalEndpointType:
+			ep = &PhysicalEndpoint{}
+		case VethEndpointType:
+			ep = &VethEndpoint{}
+		case VhostUserEndpointType:
+			ep = &VhostUserEndpoint{}
+		case BridgedMacvlanEndpointType:
+			ep = &BridgedMacvlanEndpoint{}
+		case MacvtapEndpointType:
+			ep = &MacvtapEndpoint{}
+		case TapEndpointType:
+			ep = &TapEndpoint{}
+		case IPVlanEndpointType:
+			ep = &IPVlanEndpoint{}
+		default:
+			continue
+		}
+		ep.load(e)
+		s.networkNS.Endpoints = append(s.networkNS.Endpoints, ep)
+	}
+}
+
 // Restore will restore sandbox data from persist file on disk
 func (s *Sandbox) Restore() error {
 	ss, _, err := s.newStore.FromDisk(s.id)
@@ -259,6 +303,7 @@ func (s *Sandbox) Restore() error {
 	s.loadHypervisor(ss.HypervisorState)
 	s.loadDevices(ss.Devices)
 	s.loadAgent(ss.AgentState)
+	s.loadNetwork(ss.Network)
 	return nil
 }
 

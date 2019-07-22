@@ -11,6 +11,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/vishvananda/netlink"
 
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 )
 
@@ -186,4 +187,36 @@ func unTapNetwork(name string) error {
 		return fmt.Errorf("Could not remove TAP %s: %s", name, err)
 	}
 	return nil
+}
+
+func (endpoint *TapEndpoint) save() (s persistapi.NetworkEndpoint) {
+	s.Type = string(endpoint.Type())
+	s.Tap = &persistapi.TapEndpoint{
+		TapInterface: persistapi.TapInterface{
+			ID:   endpoint.TapInterface.ID,
+			Name: endpoint.TapInterface.Name,
+			TAPIface: persistapi.NetworkInterface{
+				Name:     endpoint.TapInterface.TAPIface.Name,
+				HardAddr: endpoint.TapInterface.TAPIface.HardAddr,
+				Addrs:    endpoint.TapInterface.TAPIface.Addrs,
+			},
+		},
+	}
+	return
+}
+func (endpoint *TapEndpoint) load(s persistapi.NetworkEndpoint) {
+	endpoint.EndpointType = TapEndpointType
+
+	if s.Tap != nil {
+		iface := s.Tap
+		endpoint.TapInterface = TapInterface{
+			ID:   iface.TapInterface.ID,
+			Name: iface.TapInterface.Name,
+			TAPIface: NetworkInterface{
+				Name:     iface.TapInterface.TAPIface.Name,
+				HardAddr: iface.TapInterface.TAPIface.HardAddr,
+				Addrs:    iface.TapInterface.TAPIface.Addrs,
+			},
+		}
+	}
 }

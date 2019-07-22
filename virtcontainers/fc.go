@@ -324,11 +324,13 @@ func (fc *firecracker) fcInit(timeout int) error {
 
 	// Fetch sandbox network to be able to access it from the sandbox structure.
 	var networkNS NetworkNamespace
-	if err := fc.store.Load(store.Network, &networkNS); err == nil {
-		if networkNS.NetNsPath == "" {
-			fc.Logger().WithField("NETWORK NAMESPACE NULL", networkNS).Warn()
+	if fc.store != nil {
+		if err := fc.store.Load(store.Network, &networkNS); err == nil {
+			if networkNS.NetNsPath == "" {
+				fc.Logger().WithField("NETWORK NAMESPACE NULL", networkNS).Warn()
+			}
+			fc.netNSPath = networkNS.NetNsPath
 		}
-		fc.netNSPath = networkNS.NetNsPath
 	}
 
 	err := os.MkdirAll(fc.jailerRoot, store.DirMode)
