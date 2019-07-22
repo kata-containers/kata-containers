@@ -764,7 +764,7 @@ func (s *Sandbox) Delete() error {
 		s.Logger().WithError(err).Error("failed to cleanup hypervisor")
 	}
 
-	s.agent.cleanup(s.id)
+	s.agent.cleanup(s)
 
 	return s.store.Delete()
 }

@@ -322,6 +322,9 @@ func TestStartSandboxFailing(t *testing.T) {
 }
 
 func TestStopSandboxNoopAgentSuccessful(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
 	defer cleanUp()
 	assert := assert.New(t)
 
@@ -910,6 +913,9 @@ func TestStartContainerFailingSandboxNotStarted(t *testing.T) {
 }
 
 func TestStopContainerNoopAgentSuccessful(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
 	defer cleanUp()
 	assert := assert.New(t)
 
@@ -942,6 +948,9 @@ func TestStopContainerNoopAgentSuccessful(t *testing.T) {
 }
 
 func TestStopContainerFailingNoSandbox(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
 	defer cleanUp()
 
 	contID := "100"
@@ -951,6 +960,9 @@ func TestStopContainerFailingNoSandbox(t *testing.T) {
 }
 
 func TestStopContainerFailingNoContainer(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
 	defer cleanUp()
 	assert := assert.New(t)
 
