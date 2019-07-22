@@ -22,6 +22,7 @@ import (
 
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client"
 	models "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/models"
 	ops "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/operations"
@@ -234,8 +235,10 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 
 	// No need to return an error from there since there might be nothing
 	// to fetch if this is the first time the hypervisor is created.
-	if err := fc.store.Load(store.Hypervisor, &fc.info); err != nil {
-		fc.Logger().WithField("function", "init").WithError(err).Info("No info could be fetched")
+	if fc.store != nil {
+		if err := fc.store.Load(store.Hypervisor, &fc.info); err != nil {
+			fc.Logger().WithField("function", "init").WithError(err).Info("No info could be fetched")
+		}
 	}
 
 	return nil
@@ -388,7 +391,10 @@ func (fc *firecracker) fcInit(timeout int) error {
 	fc.state.set(apiReady)
 
 	// Store VMM information
-	return fc.store.Store(store.Hypervisor, fc.info)
+	if fc.store != nil {
+		return fc.store.Store(store.Hypervisor, fc.info)
+	}
+	return nil
 }
 
 func (fc *firecracker) fcEnd() (err error) {
@@ -987,4 +993,14 @@ func (fc *firecracker) fromGrpc(ctx context.Context, hypervisorConfig *Hyperviso
 
 func (fc *firecracker) toGrpc() ([]byte, error) {
 	return nil, errors.New("firecracker is not supported by VM cache")
+}
+
+func (fc *firecracker) save() (s persistapi.HypervisorState) {
+	s.Pid = fc.pid()
+	s.Type = string(FirecrackerHypervisor)
+	return
+}
+
+func (fc *firecracker) load(s persistapi.HypervisorState) {
+	fc.info.PID = s.Pid
 }

@@ -57,7 +57,9 @@ func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistap
 	}
 }
 
-func (s *Sandbox) dumpHypervisor(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) {
+func (s *Sandbox) dumpHypervisor(ss *persistapi.SandboxState) {
+	ss.HypervisorState = s.hypervisor.save()
+	// BlockIndex will be moved from sandbox state to hypervisor state later
 	ss.HypervisorState.BlockIndex = s.state.BlockIndex
 }
 
@@ -160,7 +162,7 @@ func (s *Sandbox) Save() error {
 
 	s.dumpVersion(&ss)
 	s.dumpState(&ss, cs)
-	s.dumpHypervisor(&ss, cs)
+	s.dumpHypervisor(&ss)
 	s.dumpDevices(&ss, cs)
 	s.dumpProcess(cs)
 	s.dumpMounts(cs)
@@ -188,6 +190,10 @@ func (c *Container) loadContState(cs persistapi.ContainerState) {
 		Fstype:        cs.Rootfs.FsType,
 		CgroupPath:    cs.CgroupPath,
 	}
+}
+
+func (s *Sandbox) loadHypervisor(hs persistapi.HypervisorState) {
+	s.hypervisor.load(hs)
 }
 
 func (s *Sandbox) loadDevices(devStates []persistapi.DeviceState) {
@@ -237,6 +243,7 @@ func (s *Sandbox) Restore() error {
 	}
 
 	s.loadState(ss)
+	s.loadHypervisor(ss.HypervisorState)
 	s.loadDevices(ss.Devices)
 	return nil
 }

@@ -474,12 +474,10 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	}
 
 	if s.supportNewStore() {
-		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, nil)
-
-		if err := s.Restore(); err == nil && s.state.State != "" {
+		// Restored successfully from newstore before.
+		if s.state.State != "" {
 			return s, nil
 		}
-
 	} else {
 		devices, err := s.store.LoadDevices()
 		if err != nil {
@@ -574,8 +572,20 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		}
 	}()
 
-	if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.store); err != nil {
-		return nil, err
+	if s.supportNewStore() {
+		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, nil)
+
+		// Ignore the error. Restore can fail for a new sandbox
+		s.Restore()
+
+		// new store doesn't require hypervisor to be stored immediately
+		if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, nil); err != nil {
+			return nil, err
+		}
+	} else {
+		if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.store); err != nil {
+			return nil, err
+		}
 	}
 
 	agentConfig, err := newAgentConfig(sandboxConfig.AgentType, sandboxConfig.AgentConfig)
@@ -913,6 +923,12 @@ func (s *Sandbox) AddInterface(inf *vcTypes.Interface) (*vcTypes.Interface, erro
 		return nil, err
 	}
 
+	if s.supportNewStore() {
+		if err := s.Save(); err != nil {
+			return nil, err
+		}
+	}
+
 	// Add network for vm
 	inf.PciAddr = endpoint.PciAddr()
 	return s.agent.updateInterface(inf)
@@ -930,6 +946,13 @@ func (s *Sandbox) RemoveInterface(inf *vcTypes.Interface) (*vcTypes.Interface, e
 			if err := s.store.Store(store.Network, s.networkNS); err != nil {
 				return inf, err
 			}
+
+			if s.supportNewStore() {
+				if err := s.Save(); err != nil {
+					return inf, err
+				}
+			}
+
 			break
 		}
 	}
