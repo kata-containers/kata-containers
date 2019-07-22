@@ -154,6 +154,12 @@ func (s *Sandbox) dumpMounts(cs map[string]persistapi.ContainerState) {
 	}
 }
 
+func (s *Sandbox) dumpAgent(ss *persistapi.SandboxState) {
+	if s.agent != nil {
+		ss.AgentState = s.agent.save()
+	}
+}
+
 func (s *Sandbox) Save() error {
 	var (
 		ss = persistapi.SandboxState{}
@@ -166,6 +172,7 @@ func (s *Sandbox) Save() error {
 	s.dumpDevices(&ss, cs)
 	s.dumpProcess(cs)
 	s.dumpMounts(cs)
+	s.dumpAgent(&ss)
 
 	if err := s.newStore.ToDisk(ss, cs); err != nil {
 		return err
@@ -194,6 +201,12 @@ func (c *Container) loadContState(cs persistapi.ContainerState) {
 
 func (s *Sandbox) loadHypervisor(hs persistapi.HypervisorState) {
 	s.hypervisor.load(hs)
+}
+
+func (s *Sandbox) loadAgent(as persistapi.AgentState) {
+	if s.agent != nil {
+		s.agent.load(as)
+	}
 }
 
 func (s *Sandbox) loadDevices(devStates []persistapi.DeviceState) {
@@ -245,6 +258,7 @@ func (s *Sandbox) Restore() error {
 	s.loadState(ss)
 	s.loadHypervisor(ss.HypervisorState)
 	s.loadDevices(ss.Devices)
+	s.loadAgent(ss.AgentState)
 	return nil
 }
 
