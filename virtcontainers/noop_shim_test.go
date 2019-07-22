@@ -7,20 +7,18 @@ package virtcontainers
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNoopShimStart(t *testing.T) {
+	assert := assert.New(t)
 	s := &noopShim{}
 	sandbox := &Sandbox{}
 	params := ShimParams{}
 	expected := 0
 
 	pid, err := s.start(sandbox, params)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if pid != expected {
-		t.Fatalf("PID should be %d", expected)
-	}
+	assert.NoError(err)
+	assert.Equal(pid, expected)
 }

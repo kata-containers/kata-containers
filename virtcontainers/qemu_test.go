@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -42,6 +41,7 @@ func newQemuConfig() HypervisorConfig {
 func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected string, debug bool) {
 	qemuConfig := newQemuConfig()
 	qemuConfig.KernelParams = kernelParams
+	assert := assert.New(t)
 
 	if debug == true {
 		qemuConfig.Debug = true
@@ -53,9 +53,7 @@ func testQemuKernelParameters(t *testing.T, kernelParams []Param, expected strin
 	}
 
 	params := q.kernelParameters()
-	if params != expected {
-		t.Fatalf("Got: %v, Expecting: %v", params, expected)
-	}
+	assert.Equal(params, expected)
 }
 
 func TestQemuKernelParameters(t *testing.T) {
@@ -78,6 +76,7 @@ func TestQemuKernelParameters(t *testing.T) {
 func TestQemuCreateSandbox(t *testing.T) {
 	qemuConfig := newQemuConfig()
 	q := &qemu{}
+	assert := assert.New(t)
 
 	sandbox := &Sandbox{
 		ctx: context.Background(),
@@ -88,40 +87,29 @@ func TestQemuCreateSandbox(t *testing.T) {
 	}
 
 	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+
 	sandbox.store = vcStore
 
 	// Create the hypervisor fake binary
 	testQemuPath := filepath.Join(testDir, testHypervisor)
 	_, err = os.Create(testQemuPath)
-	if err != nil {
-		t.Fatalf("Could not create hypervisor file %s: %v", testQemuPath, err)
-	}
+	assert.NoError(err)
 
 	// Create parent dir path for hypervisor.json
 	parentDir := store.SandboxConfigurationRootPath(sandbox.id)
-	if err := os.MkdirAll(parentDir, store.DirMode); err != nil {
-		t.Fatalf("Could not create parent directory %s: %v", parentDir, err)
-	}
+	assert.NoError(os.MkdirAll(parentDir, store.DirMode))
 
-	if err := q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.RemoveAll(parentDir); err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(qemuConfig, q.config) == false {
-		t.Fatalf("Got %v\nExpecting %v", q.config, qemuConfig)
-	}
+	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store)
+	assert.NoError(err)
+	assert.NoError(os.RemoveAll(parentDir))
+	assert.Exactly(qemuConfig, q.config)
 }
 
 func TestQemuCreateSandboxMissingParentDirFail(t *testing.T) {
 	qemuConfig := newQemuConfig()
 	q := &qemu{}
+	assert := assert.New(t)
 
 	sandbox := &Sandbox{
 		ctx: context.Background(),
@@ -132,30 +120,24 @@ func TestQemuCreateSandboxMissingParentDirFail(t *testing.T) {
 	}
 
 	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	sandbox.store = vcStore
 
 	// Create the hypervisor fake binary
 	testQemuPath := filepath.Join(testDir, testHypervisor)
 	_, err = os.Create(testQemuPath)
-	if err != nil {
-		t.Fatalf("Could not create hypervisor file %s: %v", testQemuPath, err)
-	}
+	assert.NoError(err)
 
 	// Ensure parent dir path for hypervisor.json does not exist.
 	parentDir := store.SandboxConfigurationRootPath(sandbox.id)
-	if err := os.RemoveAll(parentDir); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(os.RemoveAll(parentDir))
 
-	if err := q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
-		t.Fatalf("Qemu createSandbox() is not expected to fail because of missing parent directory for storage: %v", err)
-	}
+	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store)
+	assert.NoError(err)
 }
 
 func TestQemuCPUTopology(t *testing.T) {
+	assert := assert.New(t)
 	vcpus := 1
 
 	q := &qemu{
@@ -175,15 +157,13 @@ func TestQemuCPUTopology(t *testing.T) {
 	}
 
 	smp := q.cpuTopology()
-
-	if reflect.DeepEqual(smp, expectedOut) == false {
-		t.Fatalf("Got %v\nExpecting %v", smp, expectedOut)
-	}
+	assert.Exactly(smp, expectedOut)
 }
 
 func TestQemuMemoryTopology(t *testing.T) {
 	mem := uint32(1000)
 	slots := uint32(8)
+	assert := assert.New(t)
 
 	q := &qemu{
 		arch: &qemuArchBase{},
@@ -194,9 +174,7 @@ func TestQemuMemoryTopology(t *testing.T) {
 	}
 
 	hostMemKb, err := getHostMemorySizeKb(procMemInfo)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	memMax := fmt.Sprintf("%dM", int(float64(hostMemKb)/1024))
 
 	expectedOut := govmmQemu.Memory{
@@ -206,29 +184,20 @@ func TestQemuMemoryTopology(t *testing.T) {
 	}
 
 	memory, err := q.memoryTopology()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(memory, expectedOut) == false {
-		t.Fatalf("Got %v\nExpecting %v", memory, expectedOut)
-	}
+	assert.NoError(err)
+	assert.Exactly(memory, expectedOut)
 }
 
 func testQemuAddDevice(t *testing.T, devInfo interface{}, devType deviceType, expected []govmmQemu.Device) {
+	assert := assert.New(t)
 	q := &qemu{
 		ctx:  context.Background(),
 		arch: &qemuArchBase{},
 	}
 
 	err := q.addDevice(devInfo, devType)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(q.qemuConfig.Devices, expected) == false {
-		t.Fatalf("Got %v\nExpecting %v", q.qemuConfig.Devices, expected)
-	}
+	assert.NoError(err)
+	assert.Exactly(q.qemuConfig.Devices, expected)
 }
 
 func TestQemuAddDeviceFsDev(t *testing.T) {
@@ -315,6 +284,7 @@ func TestQemuAddDeviceKataVSOCK(t *testing.T) {
 }
 
 func TestQemuGetSandboxConsole(t *testing.T) {
+	assert := assert.New(t)
 	q := &qemu{
 		ctx: context.Background(),
 	}
@@ -322,25 +292,19 @@ func TestQemuGetSandboxConsole(t *testing.T) {
 	expected := filepath.Join(store.RunVMStoragePath, sandboxID, consoleSocket)
 
 	result, err := q.getSandboxConsole(sandboxID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if result != expected {
-		t.Fatalf("Got %s\nExpecting %s", result, expected)
-	}
+	assert.NoError(err)
+	assert.Equal(result, expected)
 }
 
 func TestQemuCapabilities(t *testing.T) {
+	assert := assert.New(t)
 	q := &qemu{
 		ctx:  context.Background(),
 		arch: &qemuArchBase{},
 	}
 
 	caps := q.capabilities()
-	if !caps.IsBlockDeviceHotplugSupported() {
-		t.Fatal("Block device hotplug should be supported")
-	}
+	assert.True(caps.IsBlockDeviceHotplugSupported())
 }
 
 func TestQemuQemuPath(t *testing.T) {
@@ -402,9 +366,7 @@ func TestHotplugUnsupportedDeviceType(t *testing.T) {
 	}
 
 	vcStore, err := store.NewVCSandboxStore(q.ctx, q.id)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	q.store = vcStore
 
 	_, err = q.hotplugAddDevice(&memoryDevice{0, 128, uint64(0), false}, fsDev)
@@ -502,23 +464,21 @@ func TestQemuFileBackedMem(t *testing.T) {
 
 	// Check default Filebackedmem location for virtio-fs
 	sandbox, err := createQemuSandboxConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+
 	q := &qemu{}
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
-	if err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
-		t.Fatal(err)
-	}
+	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store)
+	assert.NoError(err)
+
 	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, true)
 	assert.Equal(q.qemuConfig.Knobs.FileBackedMemShared, true)
 	assert.Equal(q.qemuConfig.Memory.Path, fallbackFileBackedMemDir)
 
 	// Check failure for VM templating
 	sandbox, err = createQemuSandboxConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+
 	q = &qemu{}
 	sandbox.config.HypervisorConfig.BootToBeTemplate = true
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
@@ -531,14 +491,12 @@ func TestQemuFileBackedMem(t *testing.T) {
 
 	// Check Setting of non-existent shared-mem path
 	sandbox, err = createQemuSandboxConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+
 	q = &qemu{}
 	sandbox.config.HypervisorConfig.FileBackedMemRootDir = "/tmp/xyzabc"
-	if err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
-		t.Fatal(err)
-	}
+	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store)
+	assert.NoError(err)
 	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, false)
 	assert.Equal(q.qemuConfig.Knobs.FileBackedMemShared, false)
 	assert.Equal(q.qemuConfig.Memory.Path, "")

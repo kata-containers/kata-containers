@@ -7,9 +7,10 @@ package virtcontainers
 
 import (
 	"os/exec"
-	"reflect"
 	"syscall"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -18,15 +19,11 @@ const (
 
 func testSetShimType(t *testing.T, value string, expected ShimType) {
 	var shimType ShimType
+	assert := assert.New(t)
 
 	err := (&shimType).Set(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if shimType != expected {
-		t.Fatalf("Got %s\nExpecting %s", shimType, expected)
-	}
+	assert.NoError(err)
+	assert.Equal(shimType, expected)
 }
 
 func TestSetKataShimType(t *testing.T) {
@@ -39,24 +36,19 @@ func TestSetNoopShimType(t *testing.T) {
 
 func TestSetUnknownShimType(t *testing.T) {
 	var shimType ShimType
+	assert := assert.New(t)
 
 	unknownType := "unknown"
 
 	err := (&shimType).Set(unknownType)
-	if err == nil {
-		t.Fatalf("Should fail because %s type used", unknownType)
-	}
-
-	if shimType == NoopShimType {
-		t.Fatalf("%s shim type was not expected", shimType)
-	}
+	assert.Error(err)
+	assert.NotEqual(shimType, NoopShimType)
 }
 
 func testStringFromShimType(t *testing.T, shimType ShimType, expected string) {
 	shimTypeStr := (&shimType).String()
-	if shimTypeStr != expected {
-		t.Fatalf("Got %s\nExpecting %s", shimTypeStr, expected)
-	}
+	assert := assert.New(t)
+	assert.Equal(shimTypeStr, expected)
 }
 
 func TestStringFromKataShimType(t *testing.T) {
@@ -80,14 +72,10 @@ func TestStringFromUnknownShimType(t *testing.T) {
 }
 
 func testNewShimFromShimType(t *testing.T, shimType ShimType, expected shim) {
+	assert := assert.New(t)
 	result, err := newShim(shimType)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("Got %+v\nExpecting %+v", result, expected)
-	}
+	assert.NoError(err)
+	assert.Exactly(result, expected)
 }
 
 func TestNewShimFromKataShimType(t *testing.T) {
@@ -110,19 +98,16 @@ func TestNewShimFromKataBuiltInShimType(t *testing.T) {
 
 func TestNewShimFromUnknownShimType(t *testing.T) {
 	var shimType ShimType
+	assert := assert.New(t)
 
 	_, err := newShim(shimType)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func testNewShimConfigFromSandboxConfig(t *testing.T, sandboxConfig SandboxConfig, expected interface{}) {
+	assert := assert.New(t)
 	result := newShimConfig(sandboxConfig)
-
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("Got %+v\nExpecting %+v", result, expected)
-	}
+	assert.Exactly(result, expected)
 }
 
 func TestNewShimConfigFromKataShimSandboxConfig(t *testing.T) {
@@ -163,64 +148,51 @@ func TestNewShimConfigFromUnknownShimSandboxConfig(t *testing.T) {
 }
 
 func testRunSleep0AndGetPid(t *testing.T) int {
+	assert := assert.New(t)
+
 	binPath, err := exec.LookPath(testRunningProcess)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	cmd := exec.Command(binPath, "0")
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
+	err = cmd.Start()
+	assert.NoError(err)
 
 	pid := cmd.Process.Pid
-
-	if err := cmd.Wait(); err != nil {
-		t.Fatal(err)
-	}
+	err = cmd.Wait()
+	assert.NoError(err)
 
 	return pid
 }
 
 func testRunSleep999AndGetCmd(t *testing.T) *exec.Cmd {
+	assert := assert.New(t)
+
 	binPath, err := exec.LookPath(testRunningProcess)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	cmd := exec.Command(binPath, "999")
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-
+	err = cmd.Start()
+	assert.NoError(err)
 	return cmd
 }
 
 func TestStopShimSuccessfulProcessNotRunning(t *testing.T) {
+	assert := assert.New(t)
 	pid := testRunSleep0AndGetPid(t)
-
-	if err := stopShim(pid); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(stopShim(pid))
 }
 
 func TestStopShimSuccessfulProcessRunning(t *testing.T) {
+	assert := assert.New(t)
 	cmd := testRunSleep999AndGetCmd(t)
-
-	if err := stopShim(cmd.Process.Pid); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(stopShim(cmd.Process.Pid))
 }
 
 func testIsShimRunning(t *testing.T, pid int, expected bool) {
+	assert := assert.New(t)
 	running, err := isShimRunning(pid)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if running != expected {
-		t.Fatalf("Expecting running=%t, Got running=%t", expected, running)
-	}
+	assert.NoError(err)
+	assert.Equal(running, expected)
 }
 
 func TestIsShimRunningFalse(t *testing.T) {
@@ -231,41 +203,35 @@ func TestIsShimRunningFalse(t *testing.T) {
 
 func TestIsShimRunningTrue(t *testing.T) {
 	cmd := testRunSleep999AndGetCmd(t)
+	assert := assert.New(t)
 
 	testIsShimRunning(t, cmd.Process.Pid, true)
 
-	if err := syscall.Kill(cmd.Process.Pid, syscall.SIGKILL); err != nil {
-		t.Fatal(err)
-	}
+	err := syscall.Kill(cmd.Process.Pid, syscall.SIGKILL)
+	assert.NoError(err)
 }
 
 func TestWaitForShimInvalidPidSuccessful(t *testing.T) {
 	wrongValuesList := []int{0, -1, -100}
+	assert := assert.New(t)
 
 	for _, val := range wrongValuesList {
-		if err := waitForShim(val); err != nil {
-			t.Fatal(err)
-		}
+		err := waitForShim(val)
+		assert.NoError(err)
 	}
 }
 
 func TestWaitForShimNotRunningSuccessful(t *testing.T) {
 	pid := testRunSleep0AndGetPid(t)
-
-	if err := waitForShim(pid); err != nil {
-		t.Fatal(err)
-	}
+	assert := assert.New(t)
+	assert.NoError(waitForShim(pid))
 }
 
 func TestWaitForShimRunningForTooLongFailure(t *testing.T) {
 	cmd := testRunSleep999AndGetCmd(t)
+	assert := assert.New(t)
 
 	waitForShimTimeout = 0.1
-	if err := waitForShim(cmd.Process.Pid); err == nil {
-		t.Fatal(err)
-	}
-
-	if err := syscall.Kill(cmd.Process.Pid, syscall.SIGKILL); err != nil {
-		t.Fatal(err)
-	}
+	assert.Error(waitForShim(cmd.Process.Pid))
+	assert.NoError(syscall.Kill(cmd.Process.Pid, syscall.SIGKILL))
 }

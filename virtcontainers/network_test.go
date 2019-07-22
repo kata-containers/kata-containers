@@ -18,28 +18,20 @@ import (
 )
 
 func TestCreateDeleteNetNS(t *testing.T) {
+	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
 	netNSPath, err := createNetNS()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if netNSPath == "" {
-		t.Fatal()
-	}
+	assert.NoError(err)
+	assert.NotEmpty(netNSPath)
 
 	_, err = os.Stat(netNSPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	err = deleteNetNS(netNSPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestGenerateInterfacesAndRoutes(t *testing.T) {

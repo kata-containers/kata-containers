@@ -18,9 +18,7 @@ func TestRunningOnVMM(t *testing.T) {
 	expectedOutput := false
 
 	f, err := ioutil.TempFile("", "cpuinfo")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer os.Remove(f.Name())
 	defer f.Close()
 

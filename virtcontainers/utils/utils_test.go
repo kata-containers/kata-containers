@@ -17,127 +17,91 @@ import (
 )
 
 func TestFileCopySuccessful(t *testing.T) {
+	assert := assert.New(t)
 	fileContent := "testContent"
 
 	srcFile, err := ioutil.TempFile("", "test_src_copy")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer os.Remove(srcFile.Name())
 	defer srcFile.Close()
 
 	dstFile, err := ioutil.TempFile("", "test_dst_copy")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer os.Remove(dstFile.Name())
 
 	dstPath := dstFile.Name()
 
-	if err := dstFile.Close(); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(dstFile.Close())
 
-	if _, err := srcFile.WriteString(fileContent); err != nil {
-		t.Fatal(err)
-	}
+	_, err = srcFile.WriteString(fileContent)
+	assert.NoError(err)
 
-	if err := FileCopy(srcFile.Name(), dstPath); err != nil {
-		t.Fatal(err)
-	}
+	err = FileCopy(srcFile.Name(), dstPath)
+	assert.NoError(err)
 
 	dstContent, err := ioutil.ReadFile(dstPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if string(dstContent) != fileContent {
-		t.Fatalf("Got %q\nExpecting %q", string(dstContent), fileContent)
-	}
+	assert.NoError(err)
+	assert.Equal(string(dstContent), fileContent)
 
 	srcInfo, err := srcFile.Stat()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	dstInfo, err := os.Stat(dstPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
-	if dstInfo.Mode() != srcInfo.Mode() {
-		t.Fatalf("Got FileMode %d\nExpecting FileMode %d", dstInfo.Mode(), srcInfo.Mode())
-	}
-
-	if dstInfo.IsDir() != srcInfo.IsDir() {
-		t.Fatalf("Got IsDir() = %t\nExpecting IsDir() = %t", dstInfo.IsDir(), srcInfo.IsDir())
-	}
-
-	if dstInfo.Size() != srcInfo.Size() {
-		t.Fatalf("Got Size() = %d\nExpecting Size() = %d", dstInfo.Size(), srcInfo.Size())
-	}
+	assert.Equal(dstInfo.Mode(), srcInfo.Mode())
+	assert.Equal(dstInfo.IsDir(), srcInfo.IsDir())
+	assert.Equal(dstInfo.Size(), srcInfo.Size())
 }
 
 func TestFileCopySourceEmptyFailure(t *testing.T) {
-	if err := FileCopy("", "testDst"); err == nil {
-		t.Fatal("This test should fail because source path is empty")
-	}
+	assert := assert.New(t)
+	err := FileCopy("", "testDst")
+	assert.Error(err)
 }
 
 func TestFileCopyDestinationEmptyFailure(t *testing.T) {
-	if err := FileCopy("testSrc", ""); err == nil {
-		t.Fatal("This test should fail because destination path is empty")
-	}
+	assert := assert.New(t)
+	err := FileCopy("testSrc", "")
+	assert.Error(err)
 }
 
 func TestFileCopySourceNotExistFailure(t *testing.T) {
+	assert := assert.New(t)
 	srcFile, err := ioutil.TempFile("", "test_src_copy")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	srcPath := srcFile.Name()
+	assert.NoError(srcFile.Close())
+	assert.NoError(os.Remove(srcPath))
 
-	if err := srcFile.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.Remove(srcPath); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := FileCopy(srcPath, "testDest"); err == nil {
-		t.Fatal("This test should fail because source file does not exist")
-	}
+	err = FileCopy(srcPath, "testDest")
+	assert.Error(err)
 }
 
 func TestGenerateRandomBytes(t *testing.T) {
+	assert := assert.New(t)
 	bytesNeeded := 8
 	randBytes, err := GenerateRandomBytes(bytesNeeded)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(randBytes) != bytesNeeded {
-		t.Fatalf("Failed to generate %d random bytes", bytesNeeded)
-	}
+	assert.NoError(err)
+	assert.Equal(len(randBytes), bytesNeeded)
 }
 
 func TestRevereString(t *testing.T) {
+	assert := assert.New(t)
 	str := "Teststr"
 	reversed := ReverseString(str)
-
-	if reversed != "rtstseT" {
-		t.Fatal("Incorrect String Reversal")
-	}
+	assert.Equal(reversed, "rtstseT")
 }
 
 func TestWriteToFile(t *testing.T) {
+	assert := assert.New(t)
+
 	err := WriteToFile("/file-does-not-exist", []byte("test-data"))
-	assert.NotNil(t, err)
+	assert.NotNil(err)
 
 	tmpFile, err := ioutil.TempFile("", "test_append_file")
-	assert.Nil(t, err)
+	assert.NoError(err)
 
 	filename := tmpFile.Name()
 	defer os.Remove(filename)
@@ -146,12 +110,12 @@ func TestWriteToFile(t *testing.T) {
 
 	testData := []byte("test-data")
 	err = WriteToFile(filename, testData)
-	assert.Nil(t, err)
+	assert.NoError(err)
 
 	data, err := ioutil.ReadFile(filename)
-	assert.Nil(t, err)
+	assert.NoError(err)
 
-	assert.True(t, reflect.DeepEqual(testData, data))
+	assert.True(reflect.DeepEqual(testData, data))
 }
 
 func TestConstraintsToVCPUs(t *testing.T) {
@@ -172,14 +136,13 @@ func TestConstraintsToVCPUs(t *testing.T) {
 }
 
 func TestGetVirtDriveNameInvalidIndex(t *testing.T) {
+	assert := assert.New(t)
 	_, err := GetVirtDriveName(-1)
-
-	if err == nil {
-		t.Fatal(err)
-	}
+	assert.Error(err)
 }
 
 func TestGetVirtDriveName(t *testing.T) {
+	assert := assert.New(t)
 	tests := []struct {
 		index         int
 		expectedDrive string
@@ -193,17 +156,14 @@ func TestGetVirtDriveName(t *testing.T) {
 
 	for _, test := range tests {
 		driveName, err := GetVirtDriveName(test.index)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if driveName != test.expectedDrive {
-			t.Fatalf("Incorrect drive Name: Got: %s, Expecting :%s", driveName, test.expectedDrive)
-
-		}
+		assert.NoError(err)
+		assert.Equal(driveName, test.expectedDrive)
 	}
 }
 
 func TestGetSCSIIdLun(t *testing.T) {
+	assert := assert.New(t)
+
 	tests := []struct {
 		index          int
 		expectedScsiID int
@@ -222,18 +182,17 @@ func TestGetSCSIIdLun(t *testing.T) {
 
 	for _, test := range tests {
 		scsiID, lun, err := GetSCSIIdLun(test.index)
-		assert.Nil(t, err)
-
-		if scsiID != test.expectedScsiID && lun != test.expectedLun {
-			t.Fatalf("Expecting scsi-id:lun %d:%d,  Got %d:%d", test.expectedScsiID, test.expectedLun, scsiID, lun)
-		}
+		assert.NoError(err)
+		assert.Equal(scsiID, test.expectedScsiID)
+		assert.Equal(lun, test.expectedLun)
 	}
 
 	_, _, err := GetSCSIIdLun(maxSCSIDevices + 1)
-	assert.NotNil(t, err)
+	assert.NotNil(err)
 }
 
 func TestGetSCSIAddress(t *testing.T) {
+	assert := assert.New(t)
 	tests := []struct {
 		index               int
 		expectedSCSIAddress string
@@ -247,9 +206,8 @@ func TestGetSCSIAddress(t *testing.T) {
 
 	for _, test := range tests {
 		scsiAddr, err := GetSCSIAddress(test.index)
-		assert.Nil(t, err)
-		assert.Equal(t, scsiAddr, test.expectedSCSIAddress)
-
+		assert.NoError(err)
+		assert.Equal(scsiAddr, test.expectedSCSIAddress)
 	}
 }
 

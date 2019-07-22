@@ -39,133 +39,111 @@ func testCreateNoopContainer() (*Sandbox, *Container, error) {
 func TestNoopAgentInit(t *testing.T) {
 	n := &noopAgent{}
 	sandbox := &Sandbox{}
+	assert := assert.New(t)
 
 	disableVMShutdown, err := n.init(context.Background(), sandbox, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if disableVMShutdown != false {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.False(disableVMShutdown)
 }
 
 func TestNoopAgentExec(t *testing.T) {
 	n := &noopAgent{}
 	cmd := types.Cmd{}
+	assert := assert.New(t)
+
 	sandbox, container, err := testCreateNoopContainer()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer cleanUp()
 
-	if _, err = n.exec(sandbox, *container, cmd); err != nil {
-		t.Fatal(err)
-	}
+	_, err = n.exec(sandbox, *container, cmd)
+	assert.NoError(err)
 }
 
 func TestNoopAgentStartSandbox(t *testing.T) {
 	n := &noopAgent{}
 	sandbox := &Sandbox{}
+	assert := assert.New(t)
 
 	err := n.startSandbox(sandbox)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentStopSandbox(t *testing.T) {
 	n := &noopAgent{}
 	sandbox := &Sandbox{}
+	assert := assert.New(t)
 
 	err := n.stopSandbox(sandbox)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentCreateContainer(t *testing.T) {
 	n := &noopAgent{}
+	assert := assert.New(t)
 	sandbox, container, err := testCreateNoopContainer()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer cleanUp()
 
-	if err := n.startSandbox(sandbox); err != nil {
-		t.Fatal(err)
-	}
+	err = n.startSandbox(sandbox)
+	assert.NoError(err)
 
-	if _, err := n.createContainer(sandbox, container); err != nil {
-		t.Fatal(err)
-	}
+	_, err = n.createContainer(sandbox, container)
+	assert.NoError(err)
 }
 
 func TestNoopAgentStartContainer(t *testing.T) {
 	n := &noopAgent{}
+	assert := assert.New(t)
+
 	sandbox, container, err := testCreateNoopContainer()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer cleanUp()
 
 	err = n.startContainer(sandbox, container)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentStopContainer(t *testing.T) {
 	n := &noopAgent{}
+	assert := assert.New(t)
 	sandbox, container, err := testCreateNoopContainer()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer cleanUp()
 
 	err = n.stopContainer(sandbox, *container)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentStatsContainer(t *testing.T) {
 	n := &noopAgent{}
+	assert := assert.New(t)
 	sandbox, container, err := testCreateNoopContainer()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+
 	defer cleanUp()
 	_, err = n.statsContainer(sandbox, *container)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentPauseContainer(t *testing.T) {
 	n := &noopAgent{}
+	assert := assert.New(t)
 	sandbox, container, err := testCreateNoopContainer()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+
 	defer cleanUp()
 	err = n.pauseContainer(sandbox, *container)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentResumeContainer(t *testing.T) {
 	n := &noopAgent{}
+	assert := assert.New(t)
 	sandbox, container, err := testCreateNoopContainer()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer cleanUp()
 	err = n.resumeContainer(sandbox, *container)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentConfigure(t *testing.T) {
@@ -173,102 +151,88 @@ func TestNoopAgentConfigure(t *testing.T) {
 	h := &mockHypervisor{}
 	id := "foobar"
 	sharePath := "foobarDir"
+	assert := assert.New(t)
 	err := n.configure(h, id, sharePath, true, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentGetVMPath(t *testing.T) {
 	n := &noopAgent{}
 	path := n.getVMPath("")
-	if path != "" {
-		t.Fatal("getSharePath returns non empty path")
-	}
+	assert := assert.New(t)
+	assert.Empty(path)
 }
 
 func TestNoopAgentGetSharePath(t *testing.T) {
 	n := &noopAgent{}
 	path := n.getSharePath("")
-	if path != "" {
-		t.Fatal("getSharePath returns non empty path")
-	}
+	assert := assert.New(t)
+	assert.Empty(path)
 }
 
 func TestNoopAgentStartProxy(t *testing.T) {
+	assert := assert.New(t)
 	n := &noopAgent{}
 	sandbox, _, err := testCreateNoopContainer()
-	if err != nil {
-		t.Fatal(err)
-	}
+
+	assert.NoError(err)
 	defer cleanUp()
 	err = n.startProxy(sandbox)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentProcessListContainer(t *testing.T) {
+	assert := assert.New(t)
 	n := &noopAgent{}
 	sandbox, container, err := testCreateNoopContainer()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer cleanUp()
 	_, err = n.processListContainer(sandbox, *container, ProcessListOptions{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentReseedRNG(t *testing.T) {
+	assert := assert.New(t)
 	n := &noopAgent{}
 	err := n.reseedRNG([]byte{})
-	if err != nil {
-		t.Fatal("reseedRNG failed")
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentUpdateInterface(t *testing.T) {
+	assert := assert.New(t)
 	n := &noopAgent{}
 	_, err := n.updateInterface(nil)
-	if err != nil {
-		t.Fatal("updateInterface failed")
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentListInterfaces(t *testing.T) {
+	assert := assert.New(t)
 	n := &noopAgent{}
 	_, err := n.listInterfaces()
-	if err != nil {
-		t.Fatal("listInterfaces failed")
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentUpdateRoutes(t *testing.T) {
+	assert := assert.New(t)
 	n := &noopAgent{}
 	_, err := n.updateRoutes(nil)
-	if err != nil {
-		t.Fatal("updateRoutes failed")
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentListRoutes(t *testing.T) {
 	n := &noopAgent{}
+	assert := assert.New(t)
 	_, err := n.listRoutes()
-	if err != nil {
-		t.Fatal("listRoutes failed")
-	}
+	assert.NoError(err)
 }
 
 func TestNoopAgentRSetProxy(t *testing.T) {
 	n := &noopAgent{}
 	p := &noopProxy{}
 	s := &Sandbox{}
+	assert := assert.New(t)
 	err := n.setProxy(s, p, 0, "")
-	if err != nil {
-		t.Fatal("set proxy failed")
-	}
+	assert.NoError(err)
 }
 
 func TestNoopGetAgentUrl(t *testing.T) {

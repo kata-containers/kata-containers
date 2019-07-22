@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -117,22 +116,21 @@ func newTestSandboxConfigKataAgent() SandboxConfig {
 
 func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
 
 	p, err := CreateSandbox(context.Background(), config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
+	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
@@ -142,9 +140,8 @@ func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
 	config := newTestSandboxConfigKataAgent()
 
 	sockDir, err := testGenerateKataProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+
 	defer os.RemoveAll(sockDir)
 
 	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
@@ -156,63 +153,55 @@ func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
 		GRPCImplementer: impl,
 		GRPCRegister:    gRPCRegister,
 	}
-	if err := kataProxyMock.Start(testKataProxyURL); err != nil {
-		t.Fatal(err)
-	}
+	err = kataProxyMock.Start(testKataProxyURL)
+	assert.NoError(err)
 	defer kataProxyMock.Stop()
 
 	p, err := CreateSandbox(context.Background(), config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestCreateSandboxFailing(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	config := SandboxConfig{}
 
 	p, err := CreateSandbox(context.Background(), config, nil)
-	if p.(*Sandbox) != nil || err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
+	assert.Nil(p.(*Sandbox))
 }
 
 func TestDeleteSandboxNoopAgentSuccessful(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	ctx := context.Background()
 	config := newTestSandboxConfigNoop()
 
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	p, err = DeleteSandbox(ctx, p.ID())
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	_, err = os.Stat(sandboxDir)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
 }
 
 func TestDeleteSandboxKataAgentSuccessful(t *testing.T) {
+	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
@@ -222,9 +211,8 @@ func TestDeleteSandboxKataAgentSuccessful(t *testing.T) {
 	config := newTestSandboxConfigKataAgent()
 
 	sockDir, err := testGenerateKataProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+
 	defer os.RemoveAll(sockDir)
 
 	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
@@ -236,58 +224,52 @@ func TestDeleteSandboxKataAgentSuccessful(t *testing.T) {
 		GRPCImplementer: impl,
 		GRPCRegister:    gRPCRegister,
 	}
-	if err := kataProxyMock.Start(testKataProxyURL); err != nil {
-		t.Fatal(err)
-	}
+	err = kataProxyMock.Start(testKataProxyURL)
+	assert.NoError(err)
 	defer kataProxyMock.Stop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	p, err = DeleteSandbox(ctx, p.ID())
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	_, err = os.Stat(sandboxDir)
-	if err == nil {
-		t.Fatal(err)
-	}
+	assert.Error(err)
 }
 
 func TestDeleteSandboxFailing(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	sandboxDir := store.SandboxConfigurationRootPath(testSandboxID)
 	os.Remove(sandboxDir)
 
 	p, err := DeleteSandbox(context.Background(), testSandboxID)
-	if p != nil || err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
+	assert.Nil(p)
 }
 
 func TestStartSandboxNoopAgentSuccessful(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
 
 	p, _, err := createAndStartSandbox(context.Background(), config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 }
 
 func TestStartSandboxKataAgentSuccessful(t *testing.T) {
+	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
@@ -297,9 +279,7 @@ func TestStartSandboxKataAgentSuccessful(t *testing.T) {
 	config := newTestSandboxConfigKataAgent()
 
 	sockDir, err := testGenerateKataProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer os.RemoveAll(sockDir)
 
 	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
@@ -311,119 +291,112 @@ func TestStartSandboxKataAgentSuccessful(t *testing.T) {
 		GRPCImplementer: impl,
 		GRPCRegister:    gRPCRegister,
 	}
-	if err := kataProxyMock.Start(testKataProxyURL); err != nil {
-		t.Fatal(err)
-	}
+	err = kataProxyMock.Start(testKataProxyURL)
+	assert.NoError(err)
 	defer kataProxyMock.Stop()
 
 	ctx := context.Background()
 	p, _, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	pImpl, ok := p.(*Sandbox)
-	assert.True(t, ok)
+	assert.True(ok)
 
 	// TODO: defaultSharedDir is a hyper var = /run/hyper/shared/sandboxes
 	// do we need to unmount sandboxes and containers?
-	if err := bindUnmountAllRootfs(ctx, testDir, pImpl); err != nil {
-		t.Fatal(err)
-	}
-
+	err = bindUnmountAllRootfs(ctx, testDir, pImpl)
+	assert.NoError(err)
 }
 
 func TestStartSandboxFailing(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	sandboxDir := store.SandboxConfigurationRootPath(testSandboxID)
 	os.Remove(sandboxDir)
 
 	p, err := StartSandbox(context.Background(), testSandboxID)
-	if p != nil || err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
+	assert.Nil(p)
 }
 
 func TestStopSandboxNoopAgentSuccessful(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, _, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	vp, err := StopSandbox(ctx, p.ID())
-	if vp == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(vp)
 }
 
 func TestPauseThenResumeSandboxNoopAgentSuccessful(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 
 	p, _, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	contID := "100"
 	contConfig := newTestContainerConfigNoop(contID)
 
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	p, err = PauseSandbox(ctx, p.ID())
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	pImpl, ok := p.(*Sandbox)
-	assert.True(t, ok)
+	assert.True(ok)
 
 	expectedState := types.StatePaused
 
-	assert.Equal(t, pImpl.state.State, expectedState, "unexpected paused sandbox state")
+	assert.Equal(pImpl.state.State, expectedState, "unexpected paused sandbox state")
 
 	for i, c := range p.GetAllContainers() {
 		cImpl, ok := c.(*Container)
-		assert.True(t, ok)
+		assert.True(ok)
 
-		assert.Equal(t, expectedState, cImpl.state.State,
+		assert.Equal(expectedState, cImpl.state.State,
 			fmt.Sprintf("paused container %d has unexpected state", i))
 	}
 
 	p, err = ResumeSandbox(ctx, p.ID())
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	pImpl, ok = p.(*Sandbox)
-	assert.True(t, ok)
+	assert.True(ok)
 
 	expectedState = types.StateRunning
 
-	assert.Equal(t, pImpl.state.State, expectedState, "unexpected resumed sandbox state")
+	assert.Equal(pImpl.state.State, expectedState, "unexpected resumed sandbox state")
 
 	for i, c := range p.GetAllContainers() {
 		cImpl, ok := c.(*Container)
-		assert.True(t, ok)
+		assert.True(ok)
 
-		assert.Equal(t, cImpl.state.State, expectedState,
+		assert.Equal(cImpl.state.State, expectedState,
 			fmt.Sprintf("resumed container %d has unexpected state", i))
 	}
 }
 
 func TestStopSandboxKataAgentSuccessful(t *testing.T) {
+	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
@@ -433,9 +406,7 @@ func TestStopSandboxKataAgentSuccessful(t *testing.T) {
 	config := newTestSandboxConfigKataAgent()
 
 	sockDir, err := testGenerateKataProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer os.RemoveAll(sockDir)
 
 	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
@@ -447,21 +418,18 @@ func TestStopSandboxKataAgentSuccessful(t *testing.T) {
 		GRPCImplementer: impl,
 		GRPCRegister:    gRPCRegister,
 	}
-	if err := kataProxyMock.Start(testKataProxyURL); err != nil {
-		t.Fatal(err)
-	}
+	err = kataProxyMock.Start(testKataProxyURL)
+	assert.NoError(err)
 	defer kataProxyMock.Stop()
 
 	ctx := context.Background()
 	p, _, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	p, err = StopSandbox(ctx, p.ID())
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 }
 
 func TestStopSandboxFailing(t *testing.T) {
@@ -471,29 +439,27 @@ func TestStopSandboxFailing(t *testing.T) {
 	os.Remove(sandboxDir)
 
 	p, err := StopSandbox(context.Background(), testSandboxID)
-	if p != nil || err == nil {
-		t.Fatal()
-	}
+	assert.Error(t, err)
+	assert.Nil(t, p)
 }
 
 func TestRunSandboxNoopAgentSuccessful(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
 
 	p, err := RunSandbox(context.Background(), config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestRunSandboxKataAgentSuccessful(t *testing.T) {
+	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
@@ -503,9 +469,8 @@ func TestRunSandboxKataAgentSuccessful(t *testing.T) {
 	config := newTestSandboxConfigKataAgent()
 
 	sockDir, err := testGenerateKataProxySockDir()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+
 	defer os.RemoveAll(sockDir)
 
 	testKataProxyURL := fmt.Sprintf(testKataProxyURLTempl, sockDir)
@@ -517,76 +482,66 @@ func TestRunSandboxKataAgentSuccessful(t *testing.T) {
 		GRPCImplementer: impl,
 		GRPCRegister:    gRPCRegister,
 	}
-	if err := kataProxyMock.Start(testKataProxyURL); err != nil {
-		t.Fatal(err)
-	}
+	err = kataProxyMock.Start(testKataProxyURL)
+	assert.NoError(err)
 	defer kataProxyMock.Stop()
 
 	ctx := context.Background()
 	p, err := RunSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	pImpl, ok := p.(*Sandbox)
-	assert.True(t, ok)
+	assert.True(ok)
 
-	if err := bindUnmountAllRootfs(ctx, testDir, pImpl); err != nil {
-		t.Fatal(err)
-	}
+	err = bindUnmountAllRootfs(ctx, testDir, pImpl)
+	assert.NoError(err)
 }
 
 func TestRunSandboxFailing(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	config := SandboxConfig{}
 
 	p, err := RunSandbox(context.Background(), config, nil)
-	if p != nil || err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
+	assert.Nil(p)
 }
 
 func TestListSandboxSuccessful(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	_, err = ListSandbox(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestListSandboxNoSandboxDirectory(t *testing.T) {
 	defer cleanUp()
 
 	_, err := ListSandbox(context.Background())
-	if err != nil {
-		t.Fatal(fmt.Sprintf("unexpected ListSandbox error from non-existent sandbox directory: %v", err))
-	}
+	assert.NoError(t, err)
 }
 
 func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
 	cgroupPath, err := renameCgroupPath(utils.DefaultCgroupPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	hypervisorConfig := HypervisorConfig{
 		KernelPath:        filepath.Join(testDir, testKernel),
@@ -625,32 +580,26 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	status, err := StatusSandbox(ctx, p.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	// Copy the start time as we can't pretend we know what that
 	// value will be.
 	expectedStatus.ContainersStatus[0].StartTime = status.ContainersStatus[0].StartTime
 
-	if reflect.DeepEqual(status, expectedStatus) == false {
-		t.Fatalf("Got sandbox status %v\n expecting %v", status, expectedStatus)
-	}
+	assert.Exactly(status, expectedStatus)
 }
 
 func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
 	cgroupPath, err := renameCgroupPath(utils.DefaultCgroupPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	hypervisorConfig := HypervisorConfig{
 		KernelPath:        filepath.Join(testDir, testKernel),
@@ -689,67 +638,57 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	p, err = StartSandbox(ctx, p.ID())
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	status, err := StatusSandbox(ctx, p.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	// Copy the start time as we can't pretend we know what that
 	// value will be.
 	expectedStatus.ContainersStatus[0].StartTime = status.ContainersStatus[0].StartTime
 
-	if reflect.DeepEqual(status, expectedStatus) == false {
-		t.Fatalf("Got sandbox status %v\n expecting %v", status, expectedStatus)
-	}
+	assert.Exactly(status, expectedStatus)
 }
 
 func TestStatusSandboxFailingFetchSandboxConfig(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	store.DeleteAll()
 	globalSandboxList.removeSandbox(p.ID())
 
 	_, err = StatusSandbox(ctx, p.ID())
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
 }
 
 func TestStatusPodSandboxFailingFetchSandboxState(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	store.DeleteAll()
 	globalSandboxList.removeSandbox(p.ID())
 
 	_, err = StatusSandbox(ctx, p.ID())
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
 }
 
 func newTestContainerConfigNoop(contID string) ContainerConfig {
@@ -766,145 +705,126 @@ func newTestContainerConfigNoop(contID string) ContainerConfig {
 
 func TestCreateContainerSuccessful(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	contConfig := newTestContainerConfigNoop(contID)
 
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	contDir := filepath.Join(sandboxDir, contID)
 	_, err = os.Stat(contDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestCreateContainerFailingNoSandbox(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	p, err = DeleteSandbox(ctx, p.ID())
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
 
 	contConfig := newTestContainerConfigNoop(contID)
 
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c != nil || err == nil {
-		t.Fatal(err)
-	}
+	assert.Error(err)
+	assert.Nil(c)
 }
 
 func TestDeleteContainerSuccessful(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	contConfig := newTestContainerConfigNoop(contID)
 
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	contDir := filepath.Join(sandboxDir, contID)
 	_, err = os.Stat(contDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	c, err = DeleteContainer(ctx, p.ID(), contID)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	_, err = os.Stat(contDir)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
 }
 
 func TestDeleteContainerFailingNoSandbox(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	c, err := DeleteContainer(context.Background(), testSandboxID, contID)
-	if c != nil || err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
+	assert.Nil(c)
 }
 
 func TestDeleteContainerFailingNoContainer(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	c, err := DeleteContainer(ctx, p.ID(), contID)
-	if c != nil || err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
+	assert.Nil(c)
 }
 
 func TestStartContainerNoopAgentSuccessful(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
@@ -912,26 +832,21 @@ func TestStartContainerNoopAgentSuccessful(t *testing.T) {
 	ctx := context.Background()
 
 	p, sandboxDir, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 	contConfig := newTestContainerConfigNoop(contID)
 
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	contDir := filepath.Join(sandboxDir, contID)
 	_, err = os.Stat(contDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	c, err = StartContainer(ctx, p.ID(), contID)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 }
 
 func TestStartContainerFailingNoSandbox(t *testing.T) {
@@ -939,74 +854,64 @@ func TestStartContainerFailingNoSandbox(t *testing.T) {
 
 	contID := "100"
 	c, err := StartContainer(context.Background(), testSandboxID, contID)
-	if c != nil || err == nil {
-		t.Fatal()
-	}
+	assert.Error(t, err)
+	assert.Nil(t, c)
 }
 
 func TestStartContainerFailingNoContainer(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	c, err := StartContainer(ctx, p.ID(), contID)
-	if c != nil || err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
+	assert.Nil(c)
 }
 
 func TestStartContainerFailingSandboxNotStarted(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	contConfig := newTestContainerConfigNoop(contID)
 
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	contDir := filepath.Join(sandboxDir, contID)
 	_, err = os.Stat(contDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	_, err = StartContainer(ctx, p.ID(), contID)
-	if err == nil {
-		t.Fatal("Function should have failed")
-	}
+	assert.Error(err)
 }
 
 func TestStopContainerNoopAgentSuccessful(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
@@ -1014,32 +919,26 @@ func TestStopContainerNoopAgentSuccessful(t *testing.T) {
 	ctx := context.Background()
 
 	p, sandboxDir, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	contConfig := newTestContainerConfigNoop(contID)
 
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	contDir := filepath.Join(sandboxDir, contID)
 	_, err = os.Stat(contDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	c, err = StartContainer(ctx, p.ID(), contID)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	c, err = StopContainer(ctx, p.ID(), contID)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 }
 
 func TestStopContainerFailingNoSandbox(t *testing.T) {
@@ -1047,37 +946,34 @@ func TestStopContainerFailingNoSandbox(t *testing.T) {
 
 	contID := "100"
 	c, err := StopContainer(context.Background(), testSandboxID, contID)
-	if c != nil || err == nil {
-		t.Fatal()
-	}
+	assert.Error(t, err)
+	assert.Nil(t, c)
 }
 
 func TestStopContainerFailingNoContainer(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	c, err := StopContainer(ctx, p.ID(), contID)
-	if c != nil || err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
+	assert.Nil(c)
 }
 
 func testKillContainerFromContReadySuccessful(t *testing.T, signal syscall.Signal) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
@@ -1085,26 +981,21 @@ func testKillContainerFromContReadySuccessful(t *testing.T, signal syscall.Signa
 	ctx := context.Background()
 
 	p, sandboxDir, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	contConfig := newTestContainerConfigNoop(contID)
 
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	contDir := filepath.Join(sandboxDir, contID)
 	_, err = os.Stat(contDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
-	if err := KillContainer(ctx, p.ID(), contID, signal, false); err != nil {
-		t.Fatal()
-	}
+	err = KillContainer(ctx, p.ID(), contID, signal, false)
+	assert.NoError(err)
 }
 
 func TestKillContainerFromContReadySuccessful(t *testing.T) {
@@ -1120,6 +1011,7 @@ func TestKillContainerFromContReadySuccessful(t *testing.T) {
 
 func TestEnterContainerNoopAgentSuccessful(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
@@ -1127,75 +1019,67 @@ func TestEnterContainerNoopAgentSuccessful(t *testing.T) {
 	ctx := context.Background()
 
 	p, sandboxDir, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	contConfig := newTestContainerConfigNoop(contID)
 
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	contDir := filepath.Join(sandboxDir, contID)
 	_, err = os.Stat(contDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	c, err = StartContainer(ctx, p.ID(), contID)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	cmd := newBasicTestCmd()
 
 	_, c, _, err = EnterContainer(ctx, p.ID(), contID, cmd)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 }
 
 func TestEnterContainerFailingNoSandbox(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 	contID := "100"
 	cmd := newBasicTestCmd()
 
 	_, c, _, err := EnterContainer(context.Background(), testSandboxID, contID, cmd)
-	if c != nil || err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
+	assert.Nil(c)
 }
 
 func TestEnterContainerFailingNoContainer(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	cmd := newBasicTestCmd()
 
 	_, c, _, err := EnterContainer(ctx, p.ID(), contID, cmd)
-	if c != nil || err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
+	assert.Nil(c)
 }
 
 func TestEnterContainerFailingContNotStarted(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
@@ -1203,124 +1087,98 @@ func TestEnterContainerFailingContNotStarted(t *testing.T) {
 	ctx := context.Background()
 
 	p, sandboxDir, err := createAndStartSandbox(ctx, config)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	contConfig := newTestContainerConfigNoop(contID)
 
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	contDir := filepath.Join(sandboxDir, contID)
 	_, err = os.Stat(contDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	cmd := newBasicTestCmd()
 
 	_, c, _, err = EnterContainer(ctx, p.ID(), contID, cmd)
-	if c == nil || err != nil {
-		t.Fatal()
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 }
 
 func TestStatusContainerSuccessful(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	contConfig := newTestContainerConfigNoop(contID)
 
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	contDir := filepath.Join(sandboxDir, contID)
 	_, err = os.Stat(contDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	status, err := StatusContainer(ctx, p.ID(), contID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	pImpl, ok := p.(*Sandbox)
-	assert.True(t, ok)
+	assert.True(ok)
 
 	cImpl, ok := c.(*Container)
-	assert.True(t, ok)
+	assert.True(ok)
 
-	if status.StartTime.Equal(cImpl.process.StartTime) == false {
-		t.Fatalf("Got container start time %v, expecting %v", status.StartTime, cImpl.process.StartTime)
-	}
-
-	if reflect.DeepEqual(pImpl.config.Containers[0].Annotations, status.Annotations) == false {
-		t.Fatalf("Got annotations %v\n expecting %v", status.Annotations, pImpl.config.Containers[0].Annotations)
-	}
+	assert.True(status.StartTime.Equal(cImpl.process.StartTime))
+	assert.Exactly(pImpl.config.Containers[0].Annotations, status.Annotations)
 }
 
 func TestStatusContainerStateReady(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	// (homage to a great album! ;)
 	contID := "101"
 
 	config := newTestSandboxConfigNoop()
 	cgroupPath, err := renameCgroupPath(utils.DefaultCgroupPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	contConfig := newTestContainerConfigNoop(contID)
 
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	contDir := filepath.Join(sandboxDir, contID)
 	_, err = os.Stat(contDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	// fresh lookup
 	p2, err := fetchSandbox(ctx, p.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer p2.releaseStatelessSandbox()
 
 	expectedStatus := ContainerStatus{
@@ -1337,71 +1195,56 @@ func TestStatusContainerStateReady(t *testing.T) {
 	defer p2.wg.Wait()
 
 	status, err := statusContainer(p2, contID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	// Copy the start time as we can't pretend we know what that
 	// value will be.
 	expectedStatus.StartTime = status.StartTime
 
-	if reflect.DeepEqual(status, expectedStatus) == false {
-		t.Fatalf("Got container status %v, expected %v", status, expectedStatus)
-	}
+	assert.Exactly(status, expectedStatus)
 }
 
 func TestStatusContainerStateRunning(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	// (homage to a great album! ;)
 	contID := "101"
 
 	config := newTestSandboxConfigNoop()
 	cgroupPath, err := renameCgroupPath(utils.DefaultCgroupPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	p, err = StartSandbox(ctx, p.ID())
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	contConfig := newTestContainerConfigNoop(contID)
 
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	c, err = StartContainer(ctx, p.ID(), c.ID())
-	if c == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(c)
 
 	contDir := filepath.Join(sandboxDir, contID)
 	_, err = os.Stat(contDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	// fresh lookup
 	p2, err := fetchSandbox(ctx, p.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer p2.releaseStatelessSandbox()
 
 	expectedStatus := ContainerStatus{
@@ -1418,59 +1261,51 @@ func TestStatusContainerStateRunning(t *testing.T) {
 	defer p2.wg.Wait()
 
 	status, err := statusContainer(p2, contID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	// Copy the start time as we can't pretend we know what that
 	// value will be.
 	expectedStatus.StartTime = status.StartTime
 
-	if reflect.DeepEqual(status, expectedStatus) == false {
-		t.Fatalf("Got container status %v, expected %v", status, expectedStatus)
-	}
+	assert.Exactly(status, expectedStatus)
 }
 
 func TestStatusContainerFailing(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	store.DeleteAll()
 	globalSandboxList.removeSandbox(p.ID())
 
 	_, err = StatusContainer(ctx, p.ID(), contID)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
 }
 
 func TestStatsContainerFailing(t *testing.T) {
 	defer cleanUp()
+	assert := assert.New(t)
 
 	contID := "100"
 	config := newTestSandboxConfigNoop()
 
 	ctx := context.Background()
 	p, err := CreateSandbox(ctx, config, nil)
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	store.DeleteAll()
 	globalSandboxList.removeSandbox(p.ID())
 
 	_, err = StatsContainer(ctx, p.ID(), contID)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
 }
 
 func TestStatsContainer(t *testing.T) {
@@ -1495,9 +1330,8 @@ func TestStatsContainer(t *testing.T) {
 	assert.NotNil(p)
 
 	p, err = StartSandbox(ctx, p.ID())
-	if p == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.NotNil(p)
 
 	pImpl, ok := p.(*Sandbox)
 	assert.True(ok)
@@ -1661,9 +1495,8 @@ func TestFetchSandbox(t *testing.T) {
 	ctx := context.Background()
 
 	s, err := CreateSandbox(ctx, config, nil)
-	if s == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
+	assert.NotNil(t, s)
 
 	fetched, err := FetchSandbox(ctx, s.ID())
 	assert.Nil(t, err, "%v", err)
@@ -1680,9 +1513,8 @@ func TestFetchStatefulSandbox(t *testing.T) {
 	ctx := context.Background()
 
 	s, err := CreateSandbox(ctx, config, nil)
-	if s == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
+	assert.NotNil(t, s)
 
 	fetched, err := FetchSandbox(ctx, s.ID())
 	assert.Nil(t, err, "%v", err)
@@ -1702,9 +1534,9 @@ func TestReleaseSandbox(t *testing.T) {
 	config := newTestSandboxConfigNoop()
 
 	s, err := CreateSandbox(context.Background(), config, nil)
-	if s == nil || err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
+	assert.NotNil(t, s)
+
 	err = s.Release()
 	assert.Nil(t, err, "sandbox release failed: %v", err)
 }

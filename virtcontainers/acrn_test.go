@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
@@ -37,6 +36,7 @@ func newAcrnConfig() HypervisorConfig {
 }
 
 func testAcrnKernelParameters(t *testing.T, kernelParams []Param, debug bool) {
+	assert := assert.New(t)
 	acrnConfig := newAcrnConfig()
 	acrnConfig.KernelParams = kernelParams
 
@@ -52,9 +52,7 @@ func testAcrnKernelParameters(t *testing.T, kernelParams []Param, debug bool) {
 	expected := fmt.Sprintf("panic=1 maxcpus=%d foo=foo bar=bar", a.config.NumVCPUs)
 
 	params := a.kernelParameters()
-	if params != expected {
-		t.Fatalf("Got: %v, Expecting: %v", params, expected)
-	}
+	assert.Equal(params, expected)
 }
 
 func TestAcrnKernelParameters(t *testing.T) {
@@ -74,35 +72,27 @@ func TestAcrnKernelParameters(t *testing.T) {
 }
 
 func TestAcrnCapabilities(t *testing.T) {
+	assert := assert.New(t)
 	a := &acrn{
 		ctx:  context.Background(),
 		arch: &acrnArchBase{},
 	}
 
 	caps := a.capabilities()
-	if !caps.IsBlockDeviceSupported() {
-		t.Fatal("Block device should be supported")
-	}
-
-	if !caps.IsBlockDeviceHotplugSupported() {
-		t.Fatal("Block device hotplug should be supported")
-	}
+	assert.True(caps.IsBlockDeviceSupported())
+	assert.True(caps.IsBlockDeviceHotplugSupported())
 }
 
 func testAcrnAddDevice(t *testing.T, devInfo interface{}, devType deviceType, expected []Device) {
+	assert := assert.New(t)
 	a := &acrn{
 		ctx:  context.Background(),
 		arch: &acrnArchBase{},
 	}
 
 	err := a.addDevice(devInfo, devType)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(a.acrnConfig.Devices, expected) == false {
-		t.Fatalf("Got %v\nExpecting %v", a.acrnConfig.Devices, expected)
-	}
+	assert.NoError(err)
+	assert.Exactly(a.acrnConfig.Devices, expected)
 }
 
 func TestAcrnAddDeviceSerialPortDev(t *testing.T) {
@@ -204,6 +194,7 @@ func TestAcrnUpdateBlockDeviceInvalidIdx(t *testing.T) {
 }
 
 func TestAcrnGetSandboxConsole(t *testing.T) {
+	assert := assert.New(t)
 	a := &acrn{
 		ctx: context.Background(),
 	}
@@ -211,16 +202,12 @@ func TestAcrnGetSandboxConsole(t *testing.T) {
 	expected := filepath.Join(store.RunVMStoragePath, sandboxID, consoleSocket)
 
 	result, err := a.getSandboxConsole(sandboxID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if result != expected {
-		t.Fatalf("Got %s\nExpecting %s", result, expected)
-	}
+	assert.NoError(err)
+	assert.Equal(result, expected)
 }
 
 func TestAcrnCreateSandbox(t *testing.T) {
+	assert := assert.New(t)
 	acrnConfig := newAcrnConfig()
 	a := &acrn{}
 
@@ -233,35 +220,27 @@ func TestAcrnCreateSandbox(t *testing.T) {
 	}
 
 	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	sandbox.store = vcStore
 
-	if err = globalSandboxList.addSandbox(sandbox); err != nil {
-		t.Fatalf("Could not add sandbox to global list: %v", err)
-	}
+	err = globalSandboxList.addSandbox(sandbox)
+	assert.NoError(err)
 
 	defer globalSandboxList.removeSandbox(sandbox.id)
 
 	// Create the hypervisor fake binary
 	testAcrnPath := filepath.Join(testDir, testHypervisor)
 	_, err = os.Create(testAcrnPath)
-	if err != nil {
-		t.Fatalf("Could not create hypervisor file %s: %v", testAcrnPath, err)
-	}
+	assert.NoError(err)
 
-	if err := a.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store); err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(acrnConfig, a.config) == false {
-		t.Fatalf("Got %v\nExpecting %v", a.config, acrnConfig)
-	}
+	err = a.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store)
+	assert.NoError(err)
+	assert.Exactly(acrnConfig, a.config)
 }
 
 func TestAcrnMemoryTopology(t *testing.T) {
 	mem := uint32(1000)
+	assert := assert.New(t)
 
 	a := &acrn{
 		arch: &acrnArchBase{},
@@ -275,11 +254,6 @@ func TestAcrnMemoryTopology(t *testing.T) {
 	}
 
 	memory, err := a.memoryTopology()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(memory, expectedOut) == false {
-		t.Fatalf("Got %v\nExpecting %v", memory, expectedOut)
-	}
+	assert.NoError(err)
+	assert.Exactly(memory, expectedOut)
 }

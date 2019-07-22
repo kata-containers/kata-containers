@@ -12,7 +12,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strconv"
 	"testing"
@@ -90,10 +89,9 @@ func createConfig(fileName string, fileData string) (string, error) {
 }
 
 func TestMinimalSandboxConfig(t *testing.T) {
+	assert := assert.New(t)
 	configPath, err := createConfig("config.json", minimalConfig)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	savedFunc := config.GetHostPathFunc
 
@@ -171,20 +169,15 @@ func TestMinimalSandboxConfig(t *testing.T) {
 	var minimalOCISpec CompatOCISpec
 
 	//Marshal and unmarshall json to compare  sandboxConfig and expectedSandboxConfig
-	if err := json.Unmarshal([]byte(minimalConfig), &minimalOCISpec); err != nil {
-		t.Fatal(err)
-	}
+	err = json.Unmarshal([]byte(minimalConfig), &minimalOCISpec)
+	assert.NoError(err)
 	if minimalOCISpec.Process != nil {
 		caps, err := ContainerCapabilities(minimalOCISpec)
-		if err != nil {
-			t.Fatal(err)
-		}
+		assert.NoError(err)
 		minimalOCISpec.Process.Capabilities = caps
 	}
 	ociSpecJSON, err := json.Marshal(minimalOCISpec)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	devInfo := config.DeviceInfo{
 		ContainerPath: "/dev/vfio/17",
@@ -240,30 +233,18 @@ func TestMinimalSandboxConfig(t *testing.T) {
 	}
 
 	ociSpec, err := ParseConfigJSON(tempBundlePath)
-	if err != nil {
-		t.Fatalf("Could not parse config.json: %v", err)
-	}
+	assert.NoError(err)
 
 	sandboxConfig, err := SandboxConfig(ociSpec, runtimeConfig, tempBundlePath, containerID, consolePath, false, true)
-	if err != nil {
-		t.Fatalf("Could not create Sandbox configuration %v", err)
-	}
+	assert.NoError(err)
 
-	if reflect.DeepEqual(sandboxConfig, expectedSandboxConfig) == false {
-		t.Fatalf("Got %v\n expecting %v", sandboxConfig, expectedSandboxConfig)
-	}
-
-	if err := os.Remove(configPath); err != nil {
-		t.Fatal(err)
-	}
+	assert.Exactly(sandboxConfig, expectedSandboxConfig)
+	assert.NoError(os.Remove(configPath))
 }
 
 func testStatusToOCIStateSuccessful(t *testing.T, cStatus vc.ContainerStatus, expected specs.State) {
 	ociState := StatusToOCIState(cStatus)
-
-	if reflect.DeepEqual(ociState, expected) == false {
-		t.Fatalf("Got %v\n expecting %v", ociState, expected)
-	}
+	assert.Exactly(t, ociState, expected)
 }
 
 func TestStatusToOCIStateSuccessfulWithReadyState(t *testing.T) {
@@ -405,33 +386,25 @@ func TestStatusToOCIStateSuccessfulWithNoState(t *testing.T) {
 
 func TestStateToOCIState(t *testing.T) {
 	var state types.StateString
+	assert := assert.New(t)
 
-	if ociState := StateToOCIState(state); ociState != "" {
-		t.Fatalf("Expecting \"created\" state, got \"%s\"", ociState)
-	}
+	assert.Empty(StateToOCIState(state))
 
 	state = types.StateReady
-	if ociState := StateToOCIState(state); ociState != "created" {
-		t.Fatalf("Expecting \"created\" state, got \"%s\"", ociState)
-	}
+	assert.Equal(StateToOCIState(state), "created")
 
 	state = types.StateRunning
-	if ociState := StateToOCIState(state); ociState != "running" {
-		t.Fatalf("Expecting \"created\" state, got \"%s\"", ociState)
-	}
+	assert.Equal(StateToOCIState(state), "running")
 
 	state = types.StateStopped
-	if ociState := StateToOCIState(state); ociState != "stopped" {
-		t.Fatalf("Expecting \"created\" state, got \"%s\"", ociState)
-	}
+	assert.Equal(StateToOCIState(state), "stopped")
 
 	state = types.StatePaused
-	if ociState := StateToOCIState(state); ociState != "paused" {
-		t.Fatalf("Expecting \"paused\" state, got \"%s\"", ociState)
-	}
+	assert.Equal(StateToOCIState(state), "paused")
 }
 
 func TestEnvVars(t *testing.T) {
+	assert := assert.New(t)
 	envVars := []string{"foo=bar", "TERM=xterm", "HOME=/home/foo", "TERM=\"bar\"", "foo=\"\""}
 	expectecVcEnvVars := []types.EnvVar{
 		{
@@ -457,54 +430,36 @@ func TestEnvVars(t *testing.T) {
 	}
 
 	vcEnvVars, err := EnvVars(envVars)
-	if err != nil {
-		t.Fatalf("Could not create environment variable slice %v", err)
-	}
-
-	if reflect.DeepEqual(vcEnvVars, expectecVcEnvVars) == false {
-		t.Fatalf("Got %v\n expecting %v", vcEnvVars, expectecVcEnvVars)
-	}
+	assert.NoError(err)
+	assert.Exactly(vcEnvVars, expectecVcEnvVars)
 }
 
 func TestMalformedEnvVars(t *testing.T) {
+	assert := assert.New(t)
 	envVars := []string{"foo"}
-	r, err := EnvVars(envVars)
-	if err == nil {
-		t.Fatalf("EnvVars() succeeded unexpectedly: [%s] variable=%s value=%s", envVars[0], r[0].Var, r[0].Value)
-	}
+	_, err := EnvVars(envVars)
+	assert.Error(err)
 
 	envVars = []string{"=foo"}
-	r, err = EnvVars(envVars)
-	if err == nil {
-		t.Fatalf("EnvVars() succeeded unexpectedly: [%s] variable=%s value=%s", envVars[0], r[0].Var, r[0].Value)
-	}
+	_, err = EnvVars(envVars)
+	assert.Error(err)
 
 	envVars = []string{"=foo="}
-	r, err = EnvVars(envVars)
-	if err == nil {
-		t.Fatalf("EnvVars() succeeded unexpectedly: [%s] variable=%s value=%s", envVars[0], r[0].Var, r[0].Value)
-	}
+	_, err = EnvVars(envVars)
+	assert.Error(err)
 }
 
 func TestGetConfigPath(t *testing.T) {
 	expected := filepath.Join(tempBundlePath, "config.json")
-
 	configPath := getConfigPath(tempBundlePath)
-
-	if configPath != expected {
-		t.Fatalf("Got %s, Expecting %s", configPath, expected)
-	}
+	assert.Equal(t, configPath, expected)
 }
 
 func testGetContainerTypeSuccessful(t *testing.T, annotations map[string]string, expected vc.ContainerType) {
+	assert := assert.New(t)
 	containerType, err := GetContainerType(annotations)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if containerType != expected {
-		t.Fatalf("Got %s, Expecting %s", containerType, expected)
-	}
+	assert.NoError(err)
+	assert.Equal(containerType, expected)
 }
 
 func TestGetContainerTypePodSandbox(t *testing.T) {
@@ -525,26 +480,19 @@ func TestGetContainerTypePodContainer(t *testing.T) {
 
 func TestGetContainerTypeFailure(t *testing.T) {
 	expected := vc.UnknownContainerType
+	assert := assert.New(t)
 
 	containerType, err := GetContainerType(map[string]string{})
-	if err == nil {
-		t.Fatalf("This test should fail because annotations is empty")
-	}
-
-	if containerType != expected {
-		t.Fatalf("Got %s, Expecting %s", containerType, expected)
-	}
+	assert.Error(err)
+	assert.Equal(containerType, expected)
 }
 
 func testContainerTypeSuccessful(t *testing.T, ociSpec CompatOCISpec, expected vc.ContainerType) {
 	containerType, err := ociSpec.ContainerType()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert := assert.New(t)
 
-	if containerType != expected {
-		t.Fatalf("Got %s, Expecting %s", containerType, expected)
-	}
+	assert.NoError(err)
+	assert.Equal(containerType, expected)
 }
 
 func TestContainerTypePodSandbox(t *testing.T) {
@@ -575,54 +523,43 @@ func TestContainerTypeFailure(t *testing.T) {
 	var ociSpec CompatOCISpec
 	expected := vc.UnknownContainerType
 	unknownType := "unknown_type"
+	assert := assert.New(t)
 
 	ociSpec.Annotations = map[string]string{
 		annotations.ContainerType: unknownType,
 	}
 
 	containerType, err := ociSpec.ContainerType()
-	if err == nil {
-		t.Fatalf("This test should fail because the container type is %s", unknownType)
-	}
-
-	if containerType != expected {
-		t.Fatalf("Got %s, Expecting %s", containerType, expected)
-	}
+	assert.Error(err)
+	assert.Equal(containerType, expected)
 }
 
 func TestSandboxIDSuccessful(t *testing.T) {
 	var ociSpec CompatOCISpec
 	testSandboxID := "testSandboxID"
+	assert := assert.New(t)
 
 	ociSpec.Annotations = map[string]string{
 		annotations.SandboxID: testSandboxID,
 	}
 
 	sandboxID, err := ociSpec.SandboxID()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if sandboxID != testSandboxID {
-		t.Fatalf("Got %s, Expecting %s", sandboxID, testSandboxID)
-	}
+	assert.NoError(err)
+	assert.Equal(sandboxID, testSandboxID)
 }
 
 func TestSandboxIDFailure(t *testing.T) {
 	var ociSpec CompatOCISpec
+	assert := assert.New(t)
 
 	sandboxID, err := ociSpec.SandboxID()
-	if err == nil {
-		t.Fatalf("This test should fail because annotations is empty")
-	}
-
-	if sandboxID != "" {
-		t.Fatalf("Got %s, Expecting empty sandbox ID", sandboxID)
-	}
+	assert.Error(err)
+	assert.Empty(sandboxID)
 }
 
 func TestAddKernelParamValid(t *testing.T) {
 	var config RuntimeConfig
+	assert := assert.New(t)
 
 	expected := []vc.Param{
 		{
@@ -632,9 +569,8 @@ func TestAddKernelParamValid(t *testing.T) {
 	}
 
 	err := config.AddKernelParam(expected[0])
-	if err != nil || reflect.DeepEqual(config.HypervisorConfig.KernelParams, expected) == false {
-		t.Fatal()
-	}
+	assert.NoError(err)
+	assert.Exactly(config.HypervisorConfig.KernelParams, expected)
 }
 
 func TestAddKernelParamInvalid(t *testing.T) {
@@ -648,9 +584,7 @@ func TestAddKernelParamInvalid(t *testing.T) {
 	}
 
 	err := config.AddKernelParam(invalid[0])
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(t, err)
 }
 
 func TestDeviceTypeFailure(t *testing.T) {
