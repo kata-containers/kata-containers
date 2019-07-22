@@ -14,9 +14,7 @@ import (
 func TestIOStream(t *testing.T) {
 	hConfig := newHypervisorConfig(nil, nil)
 	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, []ContainerConfig{}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 	defer cleanUp()
 
 	contID := "foo"

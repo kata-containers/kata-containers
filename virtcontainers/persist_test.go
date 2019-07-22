@@ -45,26 +45,24 @@ func testCreateExpSandbox() (*Sandbox, error) {
 }
 
 func TestSupportNewStore(t *testing.T) {
+	assert := assert.New(t)
 	hConfig := newHypervisorConfig(nil, nil)
 	sandbox, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer cleanUp()
 
 	// not support experimental
-	assert.False(t, sandbox.supportNewStore())
+	assert.False(sandbox.supportNewStore())
 
 	// support experimental
 	sandbox, err = testCreateExpSandbox()
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.True(t, sandbox.supportNewStore())
+	assert.NoError(err)
+	assert.True(sandbox.supportNewStore())
 }
 
 func TestSandboxRestore(t *testing.T) {
 	var err error
+	assert := assert.New(t)
 	sconfig := SandboxConfig{
 		ID:           "test-exp",
 		Experimental: []exp.Feature{persist.NewStoreFeature},
@@ -81,24 +79,24 @@ func TestSandboxRestore(t *testing.T) {
 		config:     &sconfig,
 	}
 
-	if sandbox.newStore, err = persist.GetDriver("fs"); err != nil || sandbox.newStore == nil {
-		t.Fatalf("failed to get fs persist driver")
-	}
+	sandbox.newStore, err = persist.GetDriver("fs")
+	assert.NoError(err)
+	assert.NotNil(sandbox.newStore)
 
 	// if we don't call ToDisk, we can get nothing from disk
 	err = sandbox.Restore()
 	assert.NotNil(t, err)
-	assert.True(t, os.IsNotExist(err))
+	assert.True(os.IsNotExist(err))
 
 	// disk data are empty
 	err = sandbox.Save()
-	assert.Nil(t, err)
+	assert.NoError(err)
 
 	err = sandbox.Restore()
-	assert.Nil(t, err)
-	assert.Equal(t, sandbox.state.State, types.StateString(""))
-	assert.Equal(t, sandbox.state.GuestMemoryBlockSizeMB, uint32(0))
-	assert.Equal(t, sandbox.state.BlockIndex, 0)
+	assert.NoError(err)
+	assert.Equal(sandbox.state.State, types.StateString(""))
+	assert.Equal(sandbox.state.GuestMemoryBlockSizeMB, uint32(0))
+	assert.Equal(sandbox.state.BlockIndex, 0)
 
 	// set state data and save again
 	sandbox.state.State = types.StateString("running")
@@ -106,15 +104,15 @@ func TestSandboxRestore(t *testing.T) {
 	sandbox.state.BlockIndex = 2
 	// flush data to disk
 	err = sandbox.Save()
-	assert.Nil(t, err)
+	assert.Nil(err)
 
 	// empty the sandbox
 	sandbox.state = types.SandboxState{}
 
 	// restore data from disk
 	err = sandbox.Restore()
-	assert.Nil(t, err)
-	assert.Equal(t, sandbox.state.State, types.StateString("running"))
-	assert.Equal(t, sandbox.state.GuestMemoryBlockSizeMB, uint32(1024))
-	assert.Equal(t, sandbox.state.BlockIndex, 2)
+	assert.Nil(err)
+	assert.Equal(sandbox.state.State, types.StateString("running"))
+	assert.Equal(sandbox.state.GuestMemoryBlockSizeMB, uint32(1024))
+	assert.Equal(sandbox.state.BlockIndex, 2)
 }

@@ -6,21 +6,18 @@
 package virtcontainers
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func testSetAgentType(t *testing.T, value string, expected AgentType) {
 	var agentType AgentType
+	assert := assert.New(t)
 
 	err := (&agentType).Set(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if agentType != expected {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
+	assert.Equal(agentType, expected)
 }
 
 func TestSetNoopAgentType(t *testing.T) {
@@ -33,22 +30,16 @@ func TestSetKataAgentType(t *testing.T) {
 
 func TestSetUnknownAgentType(t *testing.T) {
 	var agentType AgentType
+	assert := assert.New(t)
 
 	err := (&agentType).Set("unknown")
-	if err == nil {
-		t.Fatal()
-	}
-
-	if agentType == NoopAgentType {
-		t.Fatal()
-	}
+	assert.Error(err)
+	assert.NotEqual(agentType, NoopAgentType)
 }
 
 func testStringFromAgentType(t *testing.T, agentType AgentType, expected string) {
 	agentTypeStr := (&agentType).String()
-	if agentTypeStr != expected {
-		t.Fatal()
-	}
+	assert.Equal(t, agentTypeStr, expected)
 }
 
 func TestStringFromNoopAgentType(t *testing.T) {
@@ -66,10 +57,7 @@ func TestStringFromUnknownAgentType(t *testing.T) {
 
 func testNewAgentFromAgentType(t *testing.T, agentType AgentType, expected agent) {
 	ag := newAgent(agentType)
-
-	if reflect.DeepEqual(ag, expected) == false {
-		t.Fatal()
-	}
+	assert.Exactly(t, ag, expected)
 }
 
 func TestNewAgentFromNoopAgentType(t *testing.T) {
@@ -87,14 +75,8 @@ func TestNewAgentFromUnknownAgentType(t *testing.T) {
 
 func testNewAgentConfig(t *testing.T, config SandboxConfig, expected interface{}) {
 	agentConfig, err := newAgentConfig(config.AgentType, config.AgentConfig)
-	if err != nil {
-		t.Fatal(err)
-
-	}
-
-	if reflect.DeepEqual(agentConfig, expected) == false {
-		t.Fatal()
-	}
+	assert.NoError(t, err)
+	assert.Exactly(t, agentConfig, expected)
 }
 
 func TestNewAgentConfigFromNoopAgentType(t *testing.T) {

@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -43,9 +42,7 @@ func TestGetAnnotations(t *testing.T) {
 	containerAnnotations := container.GetAnnotations()
 
 	for k, v := range containerAnnotations {
-		if annotations[k] != v {
-			t.Fatalf("Expecting ['%s']='%s', Got ['%s']='%s'\n", k, annotations[k], k, v)
-		}
+		assert.Equal(t, annotations[k], v)
 	}
 }
 
@@ -84,10 +81,7 @@ func TestContainerSandbox(t *testing.T) {
 	}
 
 	sandbox := container.Sandbox()
-
-	if !reflect.DeepEqual(sandbox, expectedSandbox) {
-		t.Fatalf("Expecting %+v\nGot %+v", expectedSandbox, sandbox)
-	}
+	assert.Exactly(t, sandbox, expectedSandbox)
 }
 
 func TestContainerRemoveDrive(t *testing.T) {
@@ -140,53 +134,37 @@ func TestContainerRemoveDrive(t *testing.T) {
 }
 
 func testSetupFakeRootfs(t *testing.T) (testRawFile, loopDev, mntDir string, err error) {
+	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
 
 	tmpDir, err := ioutil.TempDir("", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	testRawFile = filepath.Join(tmpDir, "raw.img")
-	if _, err := os.Stat(testRawFile); !os.IsNotExist(err) {
-		os.Remove(testRawFile)
-	}
+	_, err = os.Stat(testRawFile)
+	assert.True(os.IsNotExist(err))
 
 	output, err := exec.Command("losetup", "-f").CombinedOutput()
-	if err != nil {
-		t.Fatalf("Skipping test since no loop device available for tests : %s, %s", output, err)
-		return
-	}
+	assert.NoError(err)
 	loopDev = strings.TrimSpace(string(output[:]))
 
-	output, err = exec.Command("fallocate", "-l", "256K", testRawFile).CombinedOutput()
-	if err != nil {
-		t.Fatalf("fallocate failed %s %s", output, err)
-	}
+	_, err = exec.Command("fallocate", "-l", "256K", testRawFile).CombinedOutput()
+	assert.NoError(err)
 
-	output, err = exec.Command("mkfs.ext4", "-F", testRawFile).CombinedOutput()
-	if err != nil {
-		t.Fatalf("mkfs.ext4 failed for %s:  %s, %s", testRawFile, output, err)
-	}
+	_, err = exec.Command("mkfs.ext4", "-F", testRawFile).CombinedOutput()
+	assert.NoError(err)
 
-	output, err = exec.Command("losetup", loopDev, testRawFile).CombinedOutput()
-	if err != nil {
-		t.Fatalf("Losetup for %s at %s failed : %s, %s ", loopDev, testRawFile, output, err)
-		return
-	}
+	_, err = exec.Command("losetup", loopDev, testRawFile).CombinedOutput()
+	assert.NoError(err)
 
 	mntDir = filepath.Join(tmpDir, "rootfs")
 	err = os.Mkdir(mntDir, store.DirMode)
-	if err != nil {
-		t.Fatalf("Error creating dir %s: %s", mntDir, err)
-	}
+	assert.NoError(err)
 
 	err = syscall.Mount(loopDev, mntDir, "ext4", uintptr(0), "")
-	if err != nil {
-		t.Fatalf("Error while mounting loop device %s at %s: %s", loopDev, mntDir, err)
-	}
+	assert.NoError(err)
 	return
 }
 
@@ -208,6 +186,7 @@ func cleanupFakeRootfsSetup(testRawFile, loopDev, mntDir string) {
 }
 
 func TestContainerAddDriveDir(t *testing.T) {
+	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
@@ -216,9 +195,7 @@ func TestContainerAddDriveDir(t *testing.T) {
 
 	defer cleanupFakeRootfsSetup(testRawFile, loopDev, fakeRootfs)
 
-	if err != nil {
-		t.Fatalf("Error while setting up fake rootfs: %v, Skipping test", err)
-	}
+	assert.NoError(err)
 
 	sandbox := &Sandbox{
 		ctx:        context.Background(),
@@ -236,12 +213,12 @@ func TestContainerAddDriveDir(t *testing.T) {
 	defer store.DeleteAll()
 
 	sandboxStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(t, err)
+	assert.Nil(err)
 	sandbox.store = sandboxStore
 
-	if sandbox.newStore, err = persist.GetDriver("fs"); err != nil || sandbox.newStore == nil {
-		t.Fatalf("failed to get fs persist driver")
-	}
+	sandbox.newStore, err = persist.GetDriver("fs")
+	assert.NoError(err)
+	assert.NotNil(sandbox.newStore)
 
 	contID := "100"
 	container := Container{
@@ -251,7 +228,7 @@ func TestContainerAddDriveDir(t *testing.T) {
 	}
 
 	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, container.id)
-	assert.Nil(t, err)
+	assert.Nil(err)
 	container.store = containerStore
 
 	// create state file
@@ -260,9 +237,7 @@ func TestContainerAddDriveDir(t *testing.T) {
 	os.Remove(stateFilePath)
 
 	_, err = os.Create(stateFilePath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	// Make the checkStorageDriver func variable point to a fake check function
 	savedFunc := checkStorageDriver
@@ -277,13 +252,9 @@ func TestContainerAddDriveDir(t *testing.T) {
 	container.state.Fstype = ""
 
 	err = container.hotplugDrive()
-	if err != nil {
-		t.Fatalf("Error with hotplugDrive :%v", err)
-	}
+	assert.NoError(err)
 
-	if container.state.Fstype == "" {
-		t.Fatal()
-	}
+	assert.NotEmpty(container.state.Fstype)
 }
 
 func TestContainerRootfsPath(t *testing.T) {

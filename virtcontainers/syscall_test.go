@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestBindMountInvalidSourceSymlink(t *testing.T) {
@@ -21,9 +22,7 @@ func TestBindMountInvalidSourceSymlink(t *testing.T) {
 	os.Remove(source)
 
 	err := bindMount(context.Background(), source, "", false)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(t, err)
 }
 
 func TestBindMountFailingMount(t *testing.T) {
@@ -31,24 +30,20 @@ func TestBindMountFailingMount(t *testing.T) {
 	fakeSource := filepath.Join(testDir, "fooFile")
 	os.Remove(source)
 	os.Remove(fakeSource)
+	assert := assert.New(t)
 
 	_, err := os.OpenFile(fakeSource, os.O_CREATE, mountPerm)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	err = os.Symlink(fakeSource, source)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	err = bindMount(context.Background(), source, "", false)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
 }
 
 func TestBindMountSuccessful(t *testing.T) {
+	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
@@ -60,24 +55,19 @@ func TestBindMountSuccessful(t *testing.T) {
 	os.Remove(dest)
 
 	err := os.MkdirAll(source, mountPerm)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	err = os.MkdirAll(dest, mountPerm)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	err = bindMount(context.Background(), source, dest, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	syscall.Unmount(dest, 0)
 }
 
 func TestBindMountReadonlySuccessful(t *testing.T) {
+	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
@@ -89,35 +79,25 @@ func TestBindMountReadonlySuccessful(t *testing.T) {
 	os.Remove(dest)
 
 	err := os.MkdirAll(source, mountPerm)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	err = os.MkdirAll(dest, mountPerm)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	err = bindMount(context.Background(), source, dest, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	defer syscall.Unmount(dest, 0)
 
 	// should not be able to create file in read-only mount
 	destFile := filepath.Join(dest, "foo")
 	_, err = os.OpenFile(destFile, os.O_CREATE, mountPerm)
-	if err == nil {
-		t.Fatal(err)
-	}
+	assert.Error(err)
 }
 
 func TestEnsureDestinationExistsNonExistingSource(t *testing.T) {
 	err := ensureDestinationExists("", "")
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(t, err)
 }
 
 func TestEnsureDestinationExistsWrongParentDir(t *testing.T) {
@@ -125,16 +105,13 @@ func TestEnsureDestinationExistsWrongParentDir(t *testing.T) {
 	dest := filepath.Join(source, "fooDest")
 	os.Remove(source)
 	os.Remove(dest)
+	assert := assert.New(t)
 
 	_, err := os.OpenFile(source, os.O_CREATE, mountPerm)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	err = ensureDestinationExists(source, dest)
-	if err == nil {
-		t.Fatal()
-	}
+	assert.Error(err)
 }
 
 func TestEnsureDestinationExistsSuccessfulSrcDir(t *testing.T) {
@@ -142,16 +119,13 @@ func TestEnsureDestinationExistsSuccessfulSrcDir(t *testing.T) {
 	dest := filepath.Join(testDir, "fooDirDest")
 	os.Remove(source)
 	os.Remove(dest)
+	assert := assert.New(t)
 
 	err := os.MkdirAll(source, mountPerm)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	err = ensureDestinationExists(source, dest)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }
 
 func TestEnsureDestinationExistsSuccessfulSrcFile(t *testing.T) {
@@ -159,14 +133,11 @@ func TestEnsureDestinationExistsSuccessfulSrcFile(t *testing.T) {
 	dest := filepath.Join(testDir, "fooDirDest")
 	os.Remove(source)
 	os.Remove(dest)
+	assert := assert.New(t)
 
 	_, err := os.OpenFile(source, os.O_CREATE, mountPerm)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	err = ensureDestinationExists(source, dest)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 }

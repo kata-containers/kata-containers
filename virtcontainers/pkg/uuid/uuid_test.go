@@ -5,7 +5,11 @@
 
 package uuid
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 // Test UUID parsing and string conversation.
 //
@@ -13,6 +17,7 @@ import "testing"
 //
 // The original strings and the strings generated from the UUIDs match.
 func TestUUID(t *testing.T) {
+	assert := assert.New(t)
 	testUUIDs := []string{
 		"f81d4fae-7dec-11d0-a765-00a0c91e6bf6",
 		"30dedd5c-48d9-45d3-8b44-f973e4f35e48",
@@ -25,13 +30,9 @@ func TestUUID(t *testing.T) {
 
 	for _, s := range testUUIDs {
 		uuid, err := Parse(s)
-		if err != nil {
-			t.Fatalf("Unable to parse %s: %s", s, err)
-		}
+		assert.NoError(err)
 		s2 := uuid.String()
-		if s != s2 {
-			t.Fatalf("%s and %s do not match", s, s2)
-		}
+		assert.Equal(s, s2)
 	}
 }
 
@@ -43,19 +44,14 @@ func TestUUID(t *testing.T) {
 // The UUIDs are generated correctly, their version number is correct,
 // and they can be parsed.
 func TestGenUUID(t *testing.T) {
+	assert := assert.New(t)
 	for i := 0; i < 100; i++ {
 		u := Generate()
 		s := u.String()
-		if s[14] != '4' {
-			t.Fatalf("Invalid UUID.  Version number is incorrect")
-		}
+		assert.EqualValues(s[14], '4')
 		u2, err := Parse(s)
-		if err != nil {
-			t.Fatalf("Failed to parse UUID %s : %s", s, err)
-		}
-		if u != u2 {
-			t.Fatalf("Generated and Parsed UUIDs are not equal")
-		}
+		assert.NoError(err)
+		assert.Equal(u, u2)
 	}
 }
 
@@ -77,8 +73,6 @@ func TestBadUUID(t *testing.T) {
 
 	for _, s := range badTestUUIDs {
 		_, err := Parse(s)
-		if err == nil {
-			t.Fatalf("uuid.Parse should fail to parse %s", s)
-		}
+		assert.Error(t, err)
 	}
 }

@@ -43,6 +43,8 @@ func TestPhysicalEndpoint_HotDetach(t *testing.T) {
 }
 
 func TestIsPhysicalIface(t *testing.T) {
+	assert := assert.New(t)
+
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
@@ -52,9 +54,7 @@ func TestIsPhysicalIface(t *testing.T) {
 	testMACAddr := "00:00:00:00:00:01"
 
 	hwAddr, err := net.ParseMAC(testMACAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 
 	link := &netlink.Bridge{
 		LinkAttrs: netlink.LinkAttrs{
@@ -66,26 +66,19 @@ func TestIsPhysicalIface(t *testing.T) {
 	}
 
 	n, err := ns.NewNS()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer n.Close()
 
 	netnsHandle, err := netns.GetFromPath(n.Path())
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer netnsHandle.Close()
 
 	netlinkHandle, err := netlink.NewHandleAt(netnsHandle)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(err)
 	defer netlinkHandle.Delete()
 
-	if err := netlinkHandle.LinkAdd(link); err != nil {
-		t.Fatal(err)
-	}
+	err = netlinkHandle.LinkAdd(link)
+	assert.NoError(err)
 
 	var isPhysical bool
 	err = doNetNS(n.Path(), func(_ ns.NetNS) error {
@@ -93,12 +86,6 @@ func TestIsPhysicalIface(t *testing.T) {
 		isPhysical, err = isPhysicalIface(testNetIface)
 		return err
 	})
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if isPhysical == true {
-		t.Fatalf("Got %+v\nExpecting %+v", isPhysical, false)
-	}
+	assert.NoError(err)
+	assert.False(isPhysical)
 }

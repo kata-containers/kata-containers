@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/store"
@@ -22,15 +21,11 @@ var testDefaultLogger = logrus.WithField("proxy", "test")
 
 func testSetProxyType(t *testing.T, value string, expected ProxyType) {
 	var proxyType ProxyType
+	assert := assert.New(t)
 
 	err := (&proxyType).Set(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if proxyType != expected {
-		t.Fatalf("Got %s\nExpecting %s", proxyType, expected)
-	}
+	assert.NoError(err)
+	assert.Equal(proxyType, expected)
 }
 
 func TestSetKataProxyType(t *testing.T) {
@@ -51,26 +46,20 @@ func TestSetKataBuiltInProxyType(t *testing.T) {
 
 func TestSetUnknownProxyType(t *testing.T) {
 	var proxyType ProxyType
+	assert := assert.New(t)
 
 	unknownType := "unknown"
 
 	err := (&proxyType).Set(unknownType)
-	if err == nil {
-		t.Fatalf("Should fail because %s type used", unknownType)
-	}
-
-	if proxyType == NoopProxyType ||
-		proxyType == NoProxyType ||
-		proxyType == KataProxyType {
-		t.Fatalf("%s proxy type was not expected", proxyType)
-	}
+	assert.Error(err)
+	assert.NotEqual(proxyType, NoopProxyType)
+	assert.NotEqual(proxyType, NoProxyType)
+	assert.NotEqual(proxyType, KataProxyType)
 }
 
 func testStringFromProxyType(t *testing.T, proxyType ProxyType, expected string) {
 	proxyTypeStr := (&proxyType).String()
-	if proxyTypeStr != expected {
-		t.Fatalf("Got %s\nExpecting %s", proxyTypeStr, expected)
-	}
+	assert.Equal(t, proxyTypeStr, expected)
 }
 
 func TestStringFromKataProxyType(t *testing.T) {
@@ -100,13 +89,9 @@ func TestStringFromUnknownProxyType(t *testing.T) {
 
 func testNewProxyFromProxyType(t *testing.T, proxyType ProxyType, expected proxy) {
 	result, err := newProxy(proxyType)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if reflect.DeepEqual(result, expected) == false {
-		t.Fatalf("Got %+v\nExpecting %+v", result, expected)
-	}
+	assert := assert.New(t)
+	assert.NoError(err)
+	assert.Exactly(result, expected)
 }
 
 func TestNewProxyFromKataProxyType(t *testing.T) {
@@ -135,22 +120,18 @@ func TestNewProxyFromKataBuiltInProxyType(t *testing.T) {
 
 func TestNewProxyFromUnknownProxyType(t *testing.T) {
 	var proxyType ProxyType
-
 	_, err := newProxy(proxyType)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 }
 
 func testNewProxyFromSandboxConfig(t *testing.T, sandboxConfig SandboxConfig) {
-	if _, err := newProxy(sandboxConfig.ProxyType); err != nil {
-		t.Fatal(err)
-	}
+	assert := assert.New(t)
 
-	if err := validateProxyConfig(sandboxConfig.ProxyConfig); err != nil {
-		t.Fatal(err)
-	}
+	_, err := newProxy(sandboxConfig.ProxyType)
+	assert.NoError(err)
 
+	err = validateProxyConfig(sandboxConfig.ProxyConfig)
+	assert.NoError(err)
 }
 
 var testProxyPath = "proxy-path"
@@ -169,9 +150,7 @@ func TestNewProxyConfigFromKataProxySandboxConfig(t *testing.T) {
 }
 
 func TestNewProxyConfigNoPathFailure(t *testing.T) {
-	if err := validateProxyConfig(ProxyConfig{}); err == nil {
-		t.Fatal("Should fail because ProxyConfig has no Path")
-	}
+	assert.Error(t, validateProxyConfig(ProxyConfig{}))
 }
 
 const sandboxID = "123456789"
@@ -196,25 +175,17 @@ func testDefaultProxyURL(expectedURL string, socketType string, sandboxID string
 func TestDefaultProxyURLUnix(t *testing.T) {
 	path := filepath.Join(store.SandboxRuntimeRootPath(sandboxID), "proxy.sock")
 	socketPath := fmt.Sprintf("unix://%s", path)
-
-	if err := testDefaultProxyURL(socketPath, SocketTypeUNIX, sandboxID); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, testDefaultProxyURL(socketPath, SocketTypeUNIX, sandboxID))
 }
 
 func TestDefaultProxyURLVSock(t *testing.T) {
-	if err := testDefaultProxyURL("", SocketTypeVSOCK, sandboxID); err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, testDefaultProxyURL("", SocketTypeVSOCK, sandboxID))
 }
 
 func TestDefaultProxyURLUnknown(t *testing.T) {
 	path := filepath.Join(store.SandboxRuntimeRootPath(sandboxID), "proxy.sock")
 	socketPath := fmt.Sprintf("unix://%s", path)
-
-	if err := testDefaultProxyURL(socketPath, "foobar", sandboxID); err == nil {
-		t.Fatal()
-	}
+	assert.Error(t, testDefaultProxyURL(socketPath, "foobar", sandboxID))
 }
 
 func testProxyStart(t *testing.T, agent agent, proxy proxy) {
