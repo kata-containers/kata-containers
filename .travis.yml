@@ -14,9 +14,6 @@ os:
 - linux-ppc64le
 go_import_path: github.com/kata-containers/runtime
 
-go:
-  - "1.11.x"
-
 env:
   - target_branch=$TRAVIS_BRANCH
 
@@ -24,6 +21,7 @@ before_install:
   - ".ci/setup.sh"
 
 before_script:
+  - ".ci/install_go.sh"
   - ".ci/static-checks.sh"
   - ".ci/versions_checker.sh"
 
