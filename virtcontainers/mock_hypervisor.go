@@ -10,6 +10,7 @@ import (
 	"errors"
 	"os"
 
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 )
@@ -114,3 +115,9 @@ func (m *mockHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *Hypervi
 func (m *mockHypervisor) toGrpc() ([]byte, error) {
 	return nil, errors.New("firecracker is not supported by VM cache")
 }
+
+func (m *mockHypervisor) save() (s persistapi.HypervisorState) {
+	return
+}
+
+func (m *mockHypervisor) load(s persistapi.HypervisorState) {}

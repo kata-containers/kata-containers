@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -230,7 +231,18 @@ func (a *acrn) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 	a.store = vcStore
 	a.config = *hypervisorConfig
 	a.arch = newAcrnArch(a.config)
-	if err = a.store.Load(store.Hypervisor, &a.state); err != nil {
+
+	var create bool
+
+	if a.store != nil { //use old store
+		if err = a.store.Load(store.Hypervisor, &a.info); err != nil {
+			create = true
+		}
+	} else if a.info.PID == 0 { // new store
+		create = true
+	}
+
+	if create {
 		// acrn currently supports only known UUIDs for security
 		// reasons (FuSa). When launching VM, only these pre-defined
 		// UUID should be used else VM launch will fail. acrn team is
@@ -246,13 +258,9 @@ func (a *acrn) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 			return err
 		}
 
-		if err = a.store.Store(store.Hypervisor, a.state); err != nil {
+		if err = a.storeInfo(); err != nil {
 			return err
 		}
-	}
-
-	if err = a.store.Load(store.Hypervisor, &a.info); err != nil {
-		a.Logger().WithField("function", "setup").WithError(err).Info("No info could be fetched")
 	}
 
 	return nil
@@ -618,4 +626,25 @@ func (a *acrn) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 
 func (a *acrn) toGrpc() ([]byte, error) {
 	return nil, errors.New("acrn is not supported by VM cache")
+}
+
+func (a *acrn) storeInfo() error {
+	if a.store != nil {
+		if err := a.store.Store(store.Hypervisor, a.info); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *acrn) save() (s persistapi.HypervisorState) {
+	s.Pid = a.pid()
+	s.Type = string(AcrnHypervisor)
+	s.UUID = a.state.UUID
+	return
+}
+
+func (a *acrn) load(s persistapi.HypervisorState) {
+	a.info.PID = s.Pid
+	a.state.UUID = s.UUID
 }
