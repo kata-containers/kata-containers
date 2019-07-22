@@ -113,6 +113,7 @@ docker-stability:
 	cd integration/stability && \
 	export ITERATIONS=2 && export MAX_CONTAINERS=20 && ./soak_parallel_rm.sh
 	cd integration/stability && ./bind_mount_linux.sh
+	cd integration/stability && ./hypervisor_stability_kill_test.sh
 
 kubernetes:
 	bash -f .ci/install_bats.sh
