@@ -200,7 +200,7 @@ func TestDeleteSandbox(t *testing.T) {
 	assert.Error(err)
 	assert.True(vcmock.IsMockError(err))
 
-	testingImpl.StopSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.StopSandboxFunc = func(ctx context.Context, sandboxID string, force bool) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
@@ -310,7 +310,7 @@ func TestDeleteSandboxRunning(t *testing.T) {
 		}, nil
 	}
 
-	testingImpl.StopSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.StopSandboxFunc = func(ctx context.Context, sandboxID string, force bool) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 
@@ -564,7 +564,7 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 		}, nil
 	}
 
-	testingImpl.StopSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
+	testingImpl.StopSandboxFunc = func(ctx context.Context, sandboxID string, force bool) (vc.VCSandbox, error) {
 		return sandbox, nil
 	}
 

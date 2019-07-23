@@ -70,7 +70,7 @@ func cleanupContainer(ctx context.Context, sid, cid, bundlePath string) error {
 	}
 
 	if len(sandbox.GetAllContainers()) == 0 {
-		err = sandbox.Stop()
+		err = sandbox.Stop(true)
 		if err != nil {
 			logrus.WithError(err).WithField("sandbox", sid).Warn("failed to stop sandbox")
 			return err

@@ -84,9 +84,9 @@ func (m *VCMock) StartSandbox(ctx context.Context, sandboxID string) (vc.VCSandb
 }
 
 // StopSandbox implements the VC function of the same name.
-func (m *VCMock) StopSandbox(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
+func (m *VCMock) StopSandbox(ctx context.Context, sandboxID string, force bool) (vc.VCSandbox, error) {
 	if m.StopSandboxFunc != nil {
-		return m.StopSandboxFunc(ctx, sandboxID)
+		return m.StopSandboxFunc(ctx, sandboxID, force)
 	}
 
 	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)

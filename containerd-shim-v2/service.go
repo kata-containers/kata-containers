@@ -114,6 +114,7 @@ type service struct {
 	containers map[string]*container
 	config     *oci.RuntimeConfig
 	events     chan interface{}
+	monitor    chan error
 
 	cancel func()
 

@@ -368,16 +368,6 @@ func (c *Container) GetPid() int {
 	return c.process.Pid
 }
 
-// SetPid sets and stores the given pid as the pid of container's process.
-func (c *Container) SetPid(pid int) error {
-	c.process.Pid = pid
-
-	if !c.sandbox.supportNewStore() {
-		return c.storeProcess()
-	}
-	return nil
-}
-
 func (c *Container) setStateFstype(fstype string) error {
 	c.state.Fstype = fstype
 
@@ -956,7 +946,7 @@ func (c *Container) start() error {
 	if err := c.sandbox.agent.startContainer(c.sandbox, c); err != nil {
 		c.Logger().WithError(err).Error("Failed to start container")
 
-		if err := c.stop(); err != nil {
+		if err := c.stop(true); err != nil {
 			c.Logger().WithError(err).Warn("Failed to stop container")
 		}
 		return err
@@ -965,7 +955,7 @@ func (c *Container) start() error {
 	return c.setContainerState(types.StateRunning)
 }
 
-func (c *Container) stop() error {
+func (c *Container) stop(force bool) error {
 	span, _ := c.trace("stop")
 	defer span.Finish()
 
@@ -979,10 +969,6 @@ func (c *Container) stop() error {
 	if c.state.State == types.StateStopped {
 		c.Logger().Info("Container already stopped")
 		return nil
-	}
-
-	if c.sandbox.state.State != types.StateReady && c.sandbox.state.State != types.StateRunning {
-		return fmt.Errorf("Sandbox not ready or running, impossible to stop the container")
 	}
 
 	if err := c.state.ValidTransition(c.state.State, types.StateStopped); err != nil {
@@ -1013,7 +999,7 @@ func (c *Container) stop() error {
 	// return an error, but instead try to kill it forcefully.
 	if err := waitForShim(c.process.Pid); err != nil {
 		// Force the container to be killed.
-		if err := c.kill(syscall.SIGKILL, true); err != nil {
+		if err := c.kill(syscall.SIGKILL, true); err != nil && !force {
 			return err
 		}
 
@@ -1021,7 +1007,7 @@ func (c *Container) stop() error {
 		// to succeed. Indeed, we have already given a second chance
 		// to the container by trying to kill it with SIGKILL, there
 		// is no reason to try to go further if we got an error.
-		if err := waitForShim(c.process.Pid); err != nil {
+		if err := waitForShim(c.process.Pid); err != nil && !force {
 			return err
 		}
 	}
@@ -1059,15 +1045,23 @@ func (c *Container) stop() error {
 		}
 	}()
 
-	if err := c.sandbox.agent.stopContainer(c.sandbox, *c); err != nil {
+	if err := c.sandbox.agent.stopContainer(c.sandbox, *c); err != nil && !force {
 		return err
 	}
 
-	if err := c.detachDevices(); err != nil {
+	if err := c.unmountHostMounts(); err != nil && !force {
 		return err
 	}
 
-	if err := c.removeDrive(); err != nil {
+	if err := bindUnmountContainerRootfs(c.ctx, kataHostSharedDir, c.sandbox.id, c.id); err != nil && !force {
+		return err
+	}
+
+	if err := c.detachDevices(); err != nil && !force {
+		return err
+	}
+
+	if err := c.removeDrive(); err != nil && !force {
 		return err
 	}
 

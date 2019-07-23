@@ -32,7 +32,7 @@ type VC interface {
 	RunSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error)
 	StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
 	StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error)
-	StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
+	StopSandbox(ctx context.Context, sandboxID string, force bool) (VCSandbox, error)
 
 	CreateContainer(ctx context.Context, sandboxID string, containerConfig ContainerConfig) (VCSandbox, VCContainer, error)
 	DeleteContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error)
@@ -68,7 +68,7 @@ type VCSandbox interface {
 	SetAnnotations(annotations map[string]string) error
 
 	Start() error
-	Stop() error
+	Stop(force bool) error
 	Pause() error
 	Resume() error
 	Release() error
@@ -110,5 +110,4 @@ type VCContainer interface {
 	ID() string
 	Sandbox() VCSandbox
 	Process() Process
-	SetPid(pid int) error
 }

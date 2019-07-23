@@ -112,7 +112,7 @@ func delete(ctx context.Context, containerID string, force bool) error {
 
 	switch containerType {
 	case vc.PodSandbox:
-		if err := deleteSandbox(ctx, sandboxID); err != nil {
+		if err := deleteSandbox(ctx, sandboxID, force); err != nil {
 			return err
 		}
 	case vc.PodContainer:
@@ -131,7 +131,7 @@ func delete(ctx context.Context, containerID string, force bool) error {
 	return katautils.DelContainerIDMapping(ctx, containerID)
 }
 
-func deleteSandbox(ctx context.Context, sandboxID string) error {
+func deleteSandbox(ctx context.Context, sandboxID string, force bool) error {
 	span, _ := katautils.Trace(ctx, "deleteSandbox")
 	defer span.Finish()
 
@@ -141,7 +141,7 @@ func deleteSandbox(ctx context.Context, sandboxID string) error {
 	}
 
 	if oci.StateToOCIState(status.State.State) != oci.StateStopped {
-		if _, err := vci.StopSandbox(ctx, sandboxID); err != nil {
+		if _, err := vci.StopSandbox(ctx, sandboxID, force); err != nil {
 			return err
 		}
 	}

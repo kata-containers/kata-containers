@@ -322,6 +322,9 @@ func TestStartSandboxFailing(t *testing.T) {
 }
 
 func TestStopSandboxNoopAgentSuccessful(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
 	defer cleanUp()
 	assert := assert.New(t)
 
@@ -332,7 +335,7 @@ func TestStopSandboxNoopAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	vp, err := StopSandbox(ctx, p.ID())
+	vp, err := StopSandbox(ctx, p.ID(), false)
 	assert.NoError(err)
 	assert.NotNil(vp)
 }
@@ -427,7 +430,7 @@ func TestStopSandboxKataAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	p, err = StopSandbox(ctx, p.ID())
+	p, err = StopSandbox(ctx, p.ID(), false)
 	assert.NoError(err)
 	assert.NotNil(p)
 }
@@ -438,7 +441,7 @@ func TestStopSandboxFailing(t *testing.T) {
 	sandboxDir := store.SandboxConfigurationRootPath(testSandboxID)
 	os.Remove(sandboxDir)
 
-	p, err := StopSandbox(context.Background(), testSandboxID)
+	p, err := StopSandbox(context.Background(), testSandboxID, false)
 	assert.Error(t, err)
 	assert.Nil(t, p)
 }
@@ -910,6 +913,9 @@ func TestStartContainerFailingSandboxNotStarted(t *testing.T) {
 }
 
 func TestStopContainerNoopAgentSuccessful(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
 	defer cleanUp()
 	assert := assert.New(t)
 
@@ -942,6 +948,9 @@ func TestStopContainerNoopAgentSuccessful(t *testing.T) {
 }
 
 func TestStopContainerFailingNoSandbox(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
 	defer cleanUp()
 
 	contID := "100"
@@ -951,6 +960,9 @@ func TestStopContainerFailingNoSandbox(t *testing.T) {
 }
 
 func TestStopContainerFailingNoContainer(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
 	defer cleanUp()
 	assert := assert.New(t)
 
@@ -1461,7 +1473,7 @@ func createStartStopDeleteSandbox(b *testing.B, sandboxConfig SandboxConfig) {
 	}
 
 	// Stop sandbox
-	_, err = StopSandbox(ctx, p.ID())
+	_, err = StopSandbox(ctx, p.ID(), false)
 	if err != nil {
 		b.Fatalf("Could not stop sandbox: %s", err)
 	}
