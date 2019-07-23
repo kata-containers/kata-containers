@@ -773,7 +773,6 @@ type VCContainer interface {
 	ID() string
 	Sandbox() VCSandbox
 	Process() Process
-	SetPid(pid int) error
 }
 ```
 

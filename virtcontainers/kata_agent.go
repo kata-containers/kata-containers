@@ -136,6 +136,7 @@ type kataAgent struct {
 	keepConn       bool
 	proxyBuiltIn   bool
 	dynamicTracing bool
+	dead           bool
 
 	vmSocket interface{}
 	ctx      context.Context
@@ -615,6 +616,7 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 
 	proxyParams := proxyParams{
 		id:         sandbox.id,
+		hid:        sandbox.hypervisor.pid(),
 		path:       sandbox.config.ProxyConfig.Path,
 		agentURL:   agentURL,
 		consoleURL: consoleURL,
@@ -1417,19 +1419,8 @@ func (k *kataAgent) stopContainer(sandbox *Sandbox, c Container) error {
 	span, _ := k.trace("stopContainer")
 	defer span.Finish()
 
-	req := &grpc.RemoveContainerRequest{
-		ContainerId: c.id,
-	}
-
-	if _, err := k.sendReq(req); err != nil {
-		return err
-	}
-
-	if err := c.unmountHostMounts(); err != nil {
-		return err
-	}
-
-	return bindUnmountContainerRootfs(k.ctx, kataHostSharedDir, sandbox.id, c.id)
+	_, err := k.sendReq(&grpc.RemoveContainerRequest{ContainerId: c.id})
+	return err
 }
 
 func (k *kataAgent) signalProcess(c *Container, processID string, signal syscall.Signal, all bool) error {
@@ -1581,6 +1572,9 @@ func (k *kataAgent) statsContainer(sandbox *Sandbox, c Container) (*ContainerSta
 }
 
 func (k *kataAgent) connect() error {
+	if k.dead {
+		return errors.New("Dead agent")
+	}
 	// lockless quick pass
 	if k.client != nil {
 		return nil
@@ -1596,9 +1590,17 @@ func (k *kataAgent) connect() error {
 		return nil
 	}
 
-	k.Logger().WithField("url", k.state.URL).Info("New client")
+	if k.state.ProxyPid > 0 {
+		// check that proxy is running before talk with it avoiding long timeouts
+		if err := syscall.Kill(k.state.ProxyPid, syscall.Signal(0)); err != nil {
+			return errors.New("Proxy is not running")
+		}
+	}
+
+	k.Logger().WithField("url", k.state.URL).WithField("proxy", k.state.ProxyPid).Info("New client")
 	client, err := kataclient.NewAgentClient(k.ctx, k.state.URL, k.proxyBuiltIn)
 	if err != nil {
+		k.dead = true
 		return err
 	}
 
@@ -1786,13 +1788,6 @@ func (k *kataAgent) sendReq(request interface{}) (interface{}, error) {
 	span, _ := k.trace("sendReq")
 	span.SetTag("request", request)
 	defer span.Finish()
-
-	if k.state.ProxyPid > 0 {
-		// check that proxy is running before talk with it avoiding long timeouts
-		if err := syscall.Kill(k.state.ProxyPid, syscall.Signal(0)); err != nil {
-			return nil, fmt.Errorf("Proxy is not running: %v", err)
-		}
-	}
 
 	if err := k.connect(); err != nil {
 		return nil, err
@@ -2063,9 +2058,18 @@ func (k *kataAgent) copyFile(src, dst string) error {
 	return nil
 }
 
-func (k *kataAgent) cleanup(id string) {
-	path := k.getSharePath(id)
+func (k *kataAgent) markDead() {
+	k.Logger().Infof("mark agent dead")
+	k.dead = true
+	k.disconnect()
+}
+
+func (k *kataAgent) cleanup(s *Sandbox) {
+	path := k.getSharePath(s.id)
 	k.Logger().WithField("path", path).Infof("cleanup agent")
+	if err := bindUnmountAllRootfs(k.ctx, path, s); err != nil {
+		k.Logger().WithError(err).Errorf("failed to unmount container share path %s", path)
+	}
 	if err := os.RemoveAll(path); err != nil {
 		k.Logger().WithError(err).Errorf("failed to cleanup vm share path %s", path)
 	}

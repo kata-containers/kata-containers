@@ -29,7 +29,7 @@ var (
 		return &vcmock.Container{}, nil
 	}
 
-	testStopSandboxFuncReturnNil = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
+	testStopSandboxFuncReturnNil = func(ctx context.Context, sandboxID string, force bool) (vc.VCSandbox, error) {
 		return &vcmock.Sandbox{}, nil
 	}
 )

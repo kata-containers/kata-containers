@@ -52,8 +52,8 @@ func (impl *VCImpl) StartSandbox(ctx context.Context, sandboxID string) (VCSandb
 }
 
 // StopSandbox implements the VC function of the same name.
-func (impl *VCImpl) StopSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
-	return StopSandbox(ctx, sandboxID)
+func (impl *VCImpl) StopSandbox(ctx context.Context, sandboxID string, force bool) (VCSandbox, error) {
+	return StopSandbox(ctx, sandboxID, force)
 }
 
 // RunSandbox implements the VC function of the same name.

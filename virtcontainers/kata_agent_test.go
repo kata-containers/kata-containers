@@ -933,8 +933,8 @@ func TestKataCleanupSandbox(t *testing.T) {
 	err := os.MkdirAll(dir, 0777)
 	assert.Nil(err)
 
-	k := &kataAgent{}
-	k.cleanup(s.id)
+	k := &kataAgent{ctx: context.Background()}
+	k.cleanup(&s)
 
 	_, err = os.Stat(dir)
 	assert.False(os.IsExist(err))

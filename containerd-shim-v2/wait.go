@@ -6,9 +6,11 @@
 package containerdshim
 
 import (
+	"path"
 	"time"
 
 	"github.com/containerd/containerd/api/types/task"
+	"github.com/containerd/containerd/mount"
 	"github.com/sirupsen/logrus"
 )
 
@@ -51,7 +53,7 @@ func wait(s *service, c *container, execID string) (int32, error) {
 		// sandbox.
 
 		if c.cType.IsSandbox() {
-			if err = s.sandbox.Stop(); err != nil {
+			if err = s.sandbox.Stop(true); err != nil {
 				logrus.WithField("sandbox", s.sandbox.ID()).Error("failed to stop sandbox")
 			}
 
@@ -81,4 +83,42 @@ func wait(s *service, c *container, execID string) (int32, error) {
 	go cReap(s, int(ret), c.id, execID, timeStamp)
 
 	return ret, nil
+}
+
+func watchSandbox(s *service) {
+	if s.monitor == nil {
+		return
+	}
+	err := <-s.monitor
+	if err == nil {
+		return
+	}
+	s.monitor = nil
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// sandbox malfunctioning, cleanup as much as we can
+	logrus.WithError(err).Warn("sandbox stopped unexpectedly")
+	err = s.sandbox.Stop(true)
+	if err != nil {
+		logrus.WithError(err).Warn("stop sandbox failed")
+	}
+	err = s.sandbox.Delete()
+	if err != nil {
+		logrus.WithError(err).Warn("delete sandbox failed")
+	}
+
+	if s.mount {
+		for _, c := range s.containers {
+			rootfs := path.Join(c.bundle, "rootfs")
+			logrus.WithField("rootfs", rootfs).WithField("id", c.id).Debug("container umount rootfs")
+			if err := mount.UnmountAll(rootfs, 0); err != nil {
+				logrus.WithError(err).Warn("failed to cleanup rootfs mount")
+			}
+		}
+	}
+	s.containers = make(map[string]*container)
+
+	// Existing container/exec will be cleaned up by its waiters.
+	// No need to send async events here.
 }
