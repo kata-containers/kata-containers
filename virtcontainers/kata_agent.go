@@ -2080,10 +2080,11 @@ func (k *kataAgent) cleanup(s *Sandbox) {
 	}
 }
 
-func (k *kataAgent) save() (s persistapi.AgentState) {
-	s.ProxyPid = k.state.ProxyPid
-	s.URL = k.state.URL
-	return
+func (k *kataAgent) save() persistapi.AgentState {
+	return persistapi.AgentState{
+		ProxyPid: k.state.ProxyPid,
+		URL:      k.state.URL,
+	}
 }
 
 func (k *kataAgent) load(s persistapi.AgentState) {

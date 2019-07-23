@@ -107,3 +107,79 @@ func (endpointType *EndpointType) String() string {
 		return ""
 	}
 }
+
+func saveTapIf(tapif *TapInterface) *persistapi.TapInterface {
+	if tapif == nil {
+		return nil
+	}
+
+	return &persistapi.TapInterface{
+		ID:   tapif.ID,
+		Name: tapif.Name,
+		TAPIface: persistapi.NetworkInterface{
+			Name:     tapif.TAPIface.Name,
+			HardAddr: tapif.TAPIface.HardAddr,
+			Addrs:    tapif.TAPIface.Addrs,
+		},
+	}
+}
+
+func loadTapIf(tapif *persistapi.TapInterface) *TapInterface {
+	if tapif == nil {
+		return nil
+	}
+
+	return &TapInterface{
+		ID:   tapif.ID,
+		Name: tapif.Name,
+		TAPIface: NetworkInterface{
+			Name:     tapif.TAPIface.Name,
+			HardAddr: tapif.TAPIface.HardAddr,
+			Addrs:    tapif.TAPIface.Addrs,
+		},
+	}
+}
+
+func saveNetIfPair(pair *NetworkInterfacePair) *persistapi.NetworkInterfacePair {
+	if pair == nil {
+		return nil
+	}
+
+	epVirtIf := pair.VirtIface
+
+	tapif := saveTapIf(&pair.TapInterface)
+
+	virtif := persistapi.NetworkInterface{
+		Name:     epVirtIf.Name,
+		HardAddr: epVirtIf.HardAddr,
+		Addrs:    epVirtIf.Addrs,
+	}
+
+	return &persistapi.NetworkInterfacePair{
+		TapInterface:         *tapif,
+		VirtIface:            virtif,
+		NetInterworkingModel: int(pair.NetInterworkingModel),
+	}
+}
+
+func loadNetIfPair(pair *persistapi.NetworkInterfacePair) *NetworkInterfacePair {
+	if pair == nil {
+		return nil
+	}
+
+	savedVirtIf := pair.VirtIface
+
+	tapif := loadTapIf(&pair.TapInterface)
+
+	virtif := NetworkInterface{
+		Name:     savedVirtIf.Name,
+		HardAddr: savedVirtIf.HardAddr,
+		Addrs:    savedVirtIf.Addrs,
+	}
+
+	return &NetworkInterfacePair{
+		TapInterface:         *tapif,
+		VirtIface:            virtif,
+		NetInterworkingModel: NetInterworkingModel(pair.NetInterworkingModel),
+	}
+}

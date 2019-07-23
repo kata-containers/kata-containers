@@ -285,6 +285,7 @@ func (s *Sandbox) loadNetwork(netInfo persistapi.NetworkInfo) {
 		case IPVlanEndpointType:
 			ep = &IPVlanEndpoint{}
 		default:
+			s.Logger().WithField("endpoint-type", e.Type).Error("unknown endpoint type")
 			continue
 		}
 		ep.load(e)
