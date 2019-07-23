@@ -24,6 +24,7 @@ import (
 	kataclient "github.com/kata-containers/agent/protocols/client"
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
@@ -286,8 +287,10 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 	k.proxyBuiltIn = isProxyBuiltIn(sandbox.config.ProxyType)
 
 	// Fetch agent runtime info.
-	if err := sandbox.store.Load(store.Agent, &k.state); err != nil {
-		k.Logger().Debug("Could not retrieve anything from storage")
+	if !sandbox.supportNewStore() {
+		if err := sandbox.store.Load(store.Agent, &k.state); err != nil {
+			k.Logger().Debug("Could not retrieve anything from storage")
+		}
 	}
 
 	return disableVMShutdown, nil
@@ -686,7 +689,7 @@ func (k *kataAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string)
 	k.proxy = proxy
 	k.state.ProxyPid = pid
 	k.state.URL = url
-	if sandbox != nil {
+	if sandbox != nil && !sandbox.supportNewStore() {
 		if err := sandbox.store.Store(store.Agent, k.state); err != nil {
 			return err
 		}
@@ -841,9 +844,11 @@ func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 	// clean up agent state
 	k.state.ProxyPid = -1
 	k.state.URL = ""
-	if err := sandbox.store.Store(store.Agent, k.state); err != nil {
-		// ignore error
-		k.Logger().WithError(err).WithField("sandbox", sandbox.id).Error("failed to clean up agent state")
+	if !sandbox.supportNewStore() {
+		if err := sandbox.store.Store(store.Agent, k.state); err != nil {
+			// ignore error
+			k.Logger().WithError(err).WithField("sandbox", sandbox.id).Error("failed to clean up agent state")
+		}
 	}
 
 	return nil
@@ -2073,4 +2078,16 @@ func (k *kataAgent) cleanup(s *Sandbox) {
 	if err := os.RemoveAll(path); err != nil {
 		k.Logger().WithError(err).Errorf("failed to cleanup vm share path %s", path)
 	}
+}
+
+func (k *kataAgent) save() persistapi.AgentState {
+	return persistapi.AgentState{
+		ProxyPid: k.state.ProxyPid,
+		URL:      k.state.URL,
+	}
+}
+
+func (k *kataAgent) load(s persistapi.AgentState) {
+	k.state.ProxyPid = s.ProxyPid
+	k.state.URL = s.URL
 }

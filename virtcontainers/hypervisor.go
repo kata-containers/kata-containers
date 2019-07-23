@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 )
@@ -670,4 +671,7 @@ type hypervisor interface {
 	pid() int
 	fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error
 	toGrpc() ([]byte, error)
+
+	save() persistapi.HypervisorState
+	load(persistapi.HypervisorState)
 }

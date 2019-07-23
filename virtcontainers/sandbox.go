@@ -467,20 +467,18 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 		s.Logger().WithField("features", s.config.Experimental).Infof("Enable experimental features")
 	}
 
-	// Fetch sandbox network to be able to access it from the sandbox structure.
-	var networkNS NetworkNamespace
-	if err := s.store.Load(store.Network, &networkNS); err == nil {
-		s.networkNS = networkNS
-	}
-
 	if s.supportNewStore() {
-		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, nil)
-
-		if err := s.Restore(); err == nil && s.state.State != "" {
+		// Restored successfully from newstore before.
+		if s.state.State != "" {
 			return s, nil
 		}
-
 	} else {
+		// Fetch sandbox network to be able to access it from the sandbox structure.
+		var networkNS NetworkNamespace
+		if err := s.store.Load(store.Network, &networkNS); err == nil {
+			s.networkNS = networkNS
+		}
+
 		devices, err := s.store.LoadDevices()
 		if err != nil {
 			s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("load sandbox devices failed")
@@ -565,17 +563,24 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		if err != nil {
 			s.Logger().WithError(err).WithField("sandboxid", s.id).Error("Create new sandbox failed")
 			globalSandboxList.removeSandbox(s.id)
-		}
-	}()
-
-	defer func() {
-		if err != nil {
 			s.store.Delete()
 		}
 	}()
 
-	if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.store); err != nil {
-		return nil, err
+	if s.supportNewStore() {
+		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, nil)
+
+		// Ignore the error. Restore can fail for a new sandbox
+		s.Restore()
+
+		// new store doesn't require hypervisor to be stored immediately
+		if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, nil); err != nil {
+			return nil, err
+		}
+	} else {
+		if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.store); err != nil {
+			return nil, err
+		}
 	}
 
 	agentConfig, err := newAgentConfig(sandboxConfig.AgentType, sandboxConfig.AgentConfig)
@@ -836,7 +841,10 @@ func (s *Sandbox) createNetwork() error {
 	}
 
 	// Store the network
-	return s.store.Store(store.Network, s.networkNS)
+	if !s.supportNewStore() {
+		return s.store.Store(store.Network, s.networkNS)
+	}
+	return nil
 }
 
 func (s *Sandbox) postCreatedNetwork() error {
@@ -909,8 +917,14 @@ func (s *Sandbox) AddInterface(inf *vcTypes.Interface) (*vcTypes.Interface, erro
 
 	// Update the sandbox storage
 	s.networkNS.Endpoints = append(s.networkNS.Endpoints, endpoint)
-	if err := s.store.Store(store.Network, s.networkNS); err != nil {
-		return nil, err
+	if s.supportNewStore() {
+		if err := s.Save(); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := s.store.Store(store.Network, s.networkNS); err != nil {
+			return nil, err
+		}
 	}
 
 	// Add network for vm
@@ -927,9 +941,17 @@ func (s *Sandbox) RemoveInterface(inf *vcTypes.Interface) (*vcTypes.Interface, e
 				return inf, err
 			}
 			s.networkNS.Endpoints = append(s.networkNS.Endpoints[:i], s.networkNS.Endpoints[i+1:]...)
-			if err := s.store.Store(store.Network, s.networkNS); err != nil {
-				return inf, err
+
+			if s.supportNewStore() {
+				if err := s.Save(); err != nil {
+					return inf, err
+				}
+			} else {
+				if err := s.store.Store(store.Network, s.networkNS); err != nil {
+					return inf, err
+				}
 			}
+
 			break
 		}
 	}
@@ -1001,8 +1023,11 @@ func (s *Sandbox) startVM() (err error) {
 				return err
 			}
 		}
-		if err := s.store.Store(store.Network, s.networkNS); err != nil {
-			return err
+
+		if !s.supportNewStore() {
+			if err := s.store.Store(store.Network, s.networkNS); err != nil {
+				return err
+			}
 		}
 	}
 

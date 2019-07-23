@@ -8,50 +8,12 @@ package persistapi
 
 // ============= sandbox level resources =============
 
-// SetFunc is function hook used for setting sandbox/container state
-// It can be registered to dynamically set state files when dump
-type SetFunc (func(*SandboxState, map[string]ContainerState) error)
-
-// Bridge is a bridge where devices can be hot plugged
-type Bridge struct {
-	// DeviceAddr contains information about devices plugged and its address in the bridge
-	DeviceAddr map[uint32]string
-
-	// Type is the type of the bridge (pci, pcie, etc)
-	Type string
-
-	//ID is used to identify the bridge in the hypervisor
-	ID string
-
-	// Addr is the PCI/e slot of the bridge
-	Addr int
-}
-
-// CPUDevice represents a CPU device which was hot-added in a running VM
-type CPUDevice struct {
-	// ID is used to identify this CPU in the hypervisor options.
-	ID string
-}
-
-// HypervisorState saves state of hypervisor
-// Refs: virtcontainers/qemu.go:QemuState
-type HypervisorState struct {
-	Pid     int
-	Bridges []Bridge
-	// HotpluggedCPUs is the list of CPUs that were hot-added
-	HotpluggedVCPUs      []CPUDevice
-	HotpluggedMemory     int
-	UUID                 string
-	HotplugVFIOOnRootBus bool
-	BlockIndex           int
-}
-
-// ProxyState save proxy state data
-type ProxyState struct {
+// AgentState save agent state data
+type AgentState struct {
 	// Pid of proxy process
-	Pid int
+	ProxyPid int
 
-	// URL to connect to proxy
+	// URL to connect to agent
 	URL string
 }
 
@@ -84,8 +46,8 @@ type SandboxState struct {
 	// HypervisorState saves hypervisor specific data
 	HypervisorState HypervisorState
 
-	// ProxyState saves state data of proxy process
-	ProxyState ProxyState
+	// AgentState saves state data of agent
+	AgentState AgentState
 
 	// Network saves network configuration of sandbox
 	Network NetworkInfo

@@ -14,6 +14,7 @@ import (
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/safchain/ethtool"
 )
 
@@ -199,4 +200,26 @@ func bindNICToVFIO(endpoint *PhysicalEndpoint) error {
 
 func bindNICToHost(endpoint *PhysicalEndpoint) error {
 	return drivers.BindDevicetoHost(endpoint.BDF, endpoint.Driver, endpoint.VendorDeviceID)
+}
+
+func (endpoint *PhysicalEndpoint) save() persistapi.NetworkEndpoint {
+	return persistapi.NetworkEndpoint{
+		Type: string(endpoint.Type()),
+
+		Physical: &persistapi.PhysicalEndpoint{
+			BDF:            endpoint.BDF,
+			Driver:         endpoint.Driver,
+			VendorDeviceID: endpoint.VendorDeviceID,
+		},
+	}
+}
+
+func (endpoint *PhysicalEndpoint) load(s persistapi.NetworkEndpoint) {
+	endpoint.EndpointType = PhysicalEndpointType
+
+	if s.Physical != nil {
+		endpoint.BDF = s.Physical.BDF
+		endpoint.Driver = s.Physical.Driver
+		endpoint.VendorDeviceID = s.Physical.VendorDeviceID
+	}
 }

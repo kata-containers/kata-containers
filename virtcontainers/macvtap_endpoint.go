@@ -8,6 +8,8 @@ package virtcontainers
 import (
 	"fmt"
 	"os"
+
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 )
 
 // MacvtapEndpoint represents a macvtap endpoint
@@ -101,4 +103,21 @@ func (endpoint *MacvtapEndpoint) SetPciAddr(pciAddr string) {
 // NetworkPair returns the network pair of the endpoint.
 func (endpoint *MacvtapEndpoint) NetworkPair() *NetworkInterfacePair {
 	return nil
+}
+
+func (endpoint *MacvtapEndpoint) save() persistapi.NetworkEndpoint {
+	return persistapi.NetworkEndpoint{
+		Type: string(endpoint.Type()),
+
+		Macvtap: &persistapi.MacvtapEndpoint{
+			PCIAddr: endpoint.PCIAddr,
+		},
+	}
+}
+func (endpoint *MacvtapEndpoint) load(s persistapi.NetworkEndpoint) {
+	endpoint.EndpointType = MacvtapEndpointType
+
+	if s.Macvtap != nil {
+		endpoint.PCIAddr = s.Macvtap.PCIAddr
+	}
 }

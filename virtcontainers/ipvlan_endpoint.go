@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 )
 
 // IPVlanEndpoint represents a ipvlan endpoint that is bridged to the VM
@@ -117,4 +118,24 @@ func (endpoint *IPVlanEndpoint) HotAttach(h hypervisor) error {
 // HotDetach for physical endpoint not supported yet
 func (endpoint *IPVlanEndpoint) HotDetach(h hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("IPVlanEndpoint does not support Hot detach")
+}
+
+func (endpoint *IPVlanEndpoint) save() persistapi.NetworkEndpoint {
+	netpair := saveNetIfPair(&endpoint.NetPair)
+
+	return persistapi.NetworkEndpoint{
+		Type: string(endpoint.Type()),
+		IPVlan: &persistapi.IPVlanEndpoint{
+			NetPair: *netpair,
+		},
+	}
+}
+
+func (endpoint *IPVlanEndpoint) load(s persistapi.NetworkEndpoint) {
+	endpoint.EndpointType = IPVlanEndpointType
+
+	if s.IPVlan != nil {
+		netpair := loadNetIfPair(&s.IPVlan.NetPair)
+		endpoint.NetPair = *netpair
+	}
 }

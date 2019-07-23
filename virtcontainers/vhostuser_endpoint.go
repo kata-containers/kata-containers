@@ -11,6 +11,7 @@ import (
 	"os"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
@@ -148,4 +149,23 @@ func vhostUserSocketPath(info interface{}) (string, error) {
 		return "", nil
 	}
 
+}
+
+func (endpoint *VhostUserEndpoint) save() persistapi.NetworkEndpoint {
+	return persistapi.NetworkEndpoint{
+		Type: string(endpoint.Type()),
+		VhostUser: &persistapi.VhostUserEndpoint{
+			IfaceName: endpoint.IfaceName,
+			PCIAddr:   endpoint.PCIAddr,
+		},
+	}
+}
+
+func (endpoint *VhostUserEndpoint) load(s persistapi.NetworkEndpoint) {
+	endpoint.EndpointType = VhostUserEndpointType
+
+	if s.VhostUser != nil {
+		endpoint.IfaceName = s.VhostUser.IfaceName
+		endpoint.PCIAddr = s.VhostUser.PCIAddr
+	}
 }
