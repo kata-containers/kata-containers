@@ -143,51 +143,22 @@ func (endpoint *VethEndpoint) HotDetach(h hypervisor, netNsCreated bool, netNsPa
 	return nil
 }
 
-func (endpoint *VethEndpoint) save() (s persistapi.NetworkEndpoint) {
-	s.Type = string(endpoint.Type())
-	s.Veth = &persistapi.VethEndpoint{
-		NetPair: persistapi.NetworkInterfacePair{
-			TapInterface: persistapi.TapInterface{
-				ID:   endpoint.NetPair.TapInterface.ID,
-				Name: endpoint.NetPair.TapInterface.Name,
-				TAPIface: persistapi.NetworkInterface{
-					Name:     endpoint.NetPair.TapInterface.TAPIface.Name,
-					HardAddr: endpoint.NetPair.TapInterface.TAPIface.HardAddr,
-					Addrs:    endpoint.NetPair.TapInterface.TAPIface.Addrs,
-				},
-			},
-			VirtIface: persistapi.NetworkInterface{
-				Name:     endpoint.NetPair.VirtIface.Name,
-				HardAddr: endpoint.NetPair.VirtIface.HardAddr,
-				Addrs:    endpoint.NetPair.VirtIface.Addrs,
-			},
-			NetInterworkingModel: int(endpoint.NetPair.NetInterworkingModel),
+func (endpoint *VethEndpoint) save() persistapi.NetworkEndpoint {
+	netpair := saveNetIfPair(&endpoint.NetPair)
+
+	return persistapi.NetworkEndpoint{
+		Type: string(endpoint.Type()),
+		Veth: &persistapi.VethEndpoint{
+			NetPair: *netpair,
 		},
 	}
-	return
 }
 
 func (endpoint *VethEndpoint) load(s persistapi.NetworkEndpoint) {
 	endpoint.EndpointType = VethEndpointType
 
 	if s.Veth != nil {
-		iface := s.Veth
-		endpoint.NetPair = NetworkInterfacePair{
-			TapInterface: TapInterface{
-				ID:   iface.NetPair.TapInterface.ID,
-				Name: iface.NetPair.TapInterface.Name,
-				TAPIface: NetworkInterface{
-					Name:     iface.NetPair.TapInterface.TAPIface.Name,
-					HardAddr: iface.NetPair.TapInterface.TAPIface.HardAddr,
-					Addrs:    iface.NetPair.TapInterface.TAPIface.Addrs,
-				},
-			},
-			VirtIface: NetworkInterface{
-				Name:     iface.NetPair.VirtIface.Name,
-				HardAddr: iface.NetPair.VirtIface.HardAddr,
-				Addrs:    iface.NetPair.VirtIface.Addrs,
-			},
-			NetInterworkingModel: NetInterworkingModel(iface.NetPair.NetInterworkingModel),
-		}
+		netpair := loadNetIfPair(&s.Veth.NetPair)
+		endpoint.NetPair = *netpair
 	}
 }

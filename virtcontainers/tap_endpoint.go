@@ -189,34 +189,21 @@ func unTapNetwork(name string) error {
 	return nil
 }
 
-func (endpoint *TapEndpoint) save() (s persistapi.NetworkEndpoint) {
-	s.Type = string(endpoint.Type())
-	s.Tap = &persistapi.TapEndpoint{
-		TapInterface: persistapi.TapInterface{
-			ID:   endpoint.TapInterface.ID,
-			Name: endpoint.TapInterface.Name,
-			TAPIface: persistapi.NetworkInterface{
-				Name:     endpoint.TapInterface.TAPIface.Name,
-				HardAddr: endpoint.TapInterface.TAPIface.HardAddr,
-				Addrs:    endpoint.TapInterface.TAPIface.Addrs,
-			},
+func (endpoint *TapEndpoint) save() persistapi.NetworkEndpoint {
+	tapif := saveTapIf(&endpoint.TapInterface)
+
+	return persistapi.NetworkEndpoint{
+		Type: string(endpoint.Type()),
+		Tap: &persistapi.TapEndpoint{
+			TapInterface: *tapif,
 		},
 	}
-	return
 }
 func (endpoint *TapEndpoint) load(s persistapi.NetworkEndpoint) {
 	endpoint.EndpointType = TapEndpointType
 
 	if s.Tap != nil {
-		iface := s.Tap
-		endpoint.TapInterface = TapInterface{
-			ID:   iface.TapInterface.ID,
-			Name: iface.TapInterface.Name,
-			TAPIface: NetworkInterface{
-				Name:     iface.TapInterface.TAPIface.Name,
-				HardAddr: iface.TapInterface.TAPIface.HardAddr,
-				Addrs:    iface.TapInterface.TAPIface.Addrs,
-			},
-		}
+		tapif := loadTapIf(&s.Tap.TapInterface)
+		endpoint.TapInterface = *tapif
 	}
 }

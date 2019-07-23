@@ -105,15 +105,18 @@ func (endpoint *MacvtapEndpoint) NetworkPair() *NetworkInterfacePair {
 	return nil
 }
 
-func (endpoint *MacvtapEndpoint) save() (s persistapi.NetworkEndpoint) {
-	s.Type = string(endpoint.Type())
-	s.Macvtap = &persistapi.MacvtapEndpoint{
-		PCIAddr: endpoint.PCIAddr,
+func (endpoint *MacvtapEndpoint) save() persistapi.NetworkEndpoint {
+	return persistapi.NetworkEndpoint{
+		Type: string(endpoint.Type()),
+
+		Macvtap: &persistapi.MacvtapEndpoint{
+			PCIAddr: endpoint.PCIAddr,
+		},
 	}
-	return
 }
 func (endpoint *MacvtapEndpoint) load(s persistapi.NetworkEndpoint) {
 	endpoint.EndpointType = MacvtapEndpointType
+
 	if s.Macvtap != nil {
 		endpoint.PCIAddr = s.Macvtap.PCIAddr
 	}

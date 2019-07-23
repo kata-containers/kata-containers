@@ -202,18 +202,21 @@ func bindNICToHost(endpoint *PhysicalEndpoint) error {
 	return drivers.BindDevicetoHost(endpoint.BDF, endpoint.Driver, endpoint.VendorDeviceID)
 }
 
-func (endpoint *PhysicalEndpoint) save() (s persistapi.NetworkEndpoint) {
-	s.Type = string(endpoint.Type())
-	s.Physical = &persistapi.PhysicalEndpoint{
-		BDF:            endpoint.BDF,
-		Driver:         endpoint.Driver,
-		VendorDeviceID: endpoint.VendorDeviceID,
+func (endpoint *PhysicalEndpoint) save() persistapi.NetworkEndpoint {
+	return persistapi.NetworkEndpoint{
+		Type: string(endpoint.Type()),
+
+		Physical: &persistapi.PhysicalEndpoint{
+			BDF:            endpoint.BDF,
+			Driver:         endpoint.Driver,
+			VendorDeviceID: endpoint.VendorDeviceID,
+		},
 	}
-	return
 }
 
 func (endpoint *PhysicalEndpoint) load(s persistapi.NetworkEndpoint) {
 	endpoint.EndpointType = PhysicalEndpointType
+
 	if s.Physical != nil {
 		endpoint.BDF = s.Physical.BDF
 		endpoint.Driver = s.Physical.Driver

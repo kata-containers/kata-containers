@@ -117,51 +117,22 @@ func (endpoint *BridgedMacvlanEndpoint) HotDetach(h hypervisor, netNsCreated boo
 	return fmt.Errorf("BridgedMacvlanEndpoint does not support Hot detach")
 }
 
-func (endpoint *BridgedMacvlanEndpoint) save() (s persistapi.NetworkEndpoint) {
-	s.Type = string(endpoint.Type())
-	s.BridgedMacvlan = &persistapi.BridgedMacvlanEndpoint{
-		NetPair: persistapi.NetworkInterfacePair{
-			TapInterface: persistapi.TapInterface{
-				ID:   endpoint.NetPair.TapInterface.ID,
-				Name: endpoint.NetPair.TapInterface.Name,
-				TAPIface: persistapi.NetworkInterface{
-					Name:     endpoint.NetPair.TapInterface.TAPIface.Name,
-					HardAddr: endpoint.NetPair.TapInterface.TAPIface.HardAddr,
-					Addrs:    endpoint.NetPair.TapInterface.TAPIface.Addrs,
-				},
-			},
-			VirtIface: persistapi.NetworkInterface{
-				Name:     endpoint.NetPair.VirtIface.Name,
-				HardAddr: endpoint.NetPair.VirtIface.HardAddr,
-				Addrs:    endpoint.NetPair.VirtIface.Addrs,
-			},
-			NetInterworkingModel: int(endpoint.NetPair.NetInterworkingModel),
+func (endpoint *BridgedMacvlanEndpoint) save() persistapi.NetworkEndpoint {
+	netpair := saveNetIfPair(&endpoint.NetPair)
+
+	return persistapi.NetworkEndpoint{
+		Type: string(endpoint.Type()),
+		BridgedMacvlan: &persistapi.BridgedMacvlanEndpoint{
+			NetPair: *netpair,
 		},
 	}
-	return
 }
 
 func (endpoint *BridgedMacvlanEndpoint) load(s persistapi.NetworkEndpoint) {
 	endpoint.EndpointType = BridgedMacvlanEndpointType
 
 	if s.BridgedMacvlan != nil {
-		iface := s.BridgedMacvlan
-		endpoint.NetPair = NetworkInterfacePair{
-			TapInterface: TapInterface{
-				ID:   iface.NetPair.TapInterface.ID,
-				Name: iface.NetPair.TapInterface.Name,
-				TAPIface: NetworkInterface{
-					Name:     iface.NetPair.TapInterface.TAPIface.Name,
-					HardAddr: iface.NetPair.TapInterface.TAPIface.HardAddr,
-					Addrs:    iface.NetPair.TapInterface.TAPIface.Addrs,
-				},
-			},
-			VirtIface: NetworkInterface{
-				Name:     iface.NetPair.VirtIface.Name,
-				HardAddr: iface.NetPair.VirtIface.HardAddr,
-				Addrs:    iface.NetPair.VirtIface.Addrs,
-			},
-			NetInterworkingModel: NetInterworkingModel(iface.NetPair.NetInterworkingModel),
-		}
+		netpair := loadNetIfPair(&s.BridgedMacvlan.NetPair)
+		endpoint.NetPair = *netpair
 	}
 }

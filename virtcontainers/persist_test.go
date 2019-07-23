@@ -83,7 +83,7 @@ func TestSandboxRestore(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(sandbox.newStore)
 
-	// if we don't call ToDisk, we can get nothing from disk
+	// if we don't call Save(), we can get nothing from disk
 	err = sandbox.Restore()
 	assert.NotNil(t, err)
 	assert.True(os.IsNotExist(err))
