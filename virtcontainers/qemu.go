@@ -29,9 +29,11 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
+
 	"golang.org/x/sys/unix"
 )
 
@@ -252,7 +254,17 @@ func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 		q.nvdimmCount = 0
 	}
 
-	if err = q.store.Load(store.Hypervisor, &q.state); err != nil {
+	var create bool
+	if q.store != nil { //use old store
+		if err := q.store.Load(store.Hypervisor, &q.state); err != nil {
+			// hypervisor doesn't exist, create new one
+			create = true
+		}
+	} else if q.state.UUID == "" { // new store
+		create = true
+	}
+
+	if create {
 		q.Logger().Debug("Creating bridges")
 		q.state.Bridges = q.arch.bridges(q.config.DefaultBridges)
 
@@ -267,7 +279,7 @@ func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 			return err
 		}
 
-		if err = q.store.Store(store.Hypervisor, q.state); err != nil {
+		if err = q.storeState(); err != nil {
 			return err
 		}
 	}
@@ -1222,7 +1234,7 @@ func (q *qemu) hotplugAddDevice(devInfo interface{}, devType deviceType) (interf
 		return data, err
 	}
 
-	return data, q.store.Store(store.Hypervisor, q.state)
+	return data, q.storeState()
 }
 
 func (q *qemu) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
@@ -1234,7 +1246,7 @@ func (q *qemu) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (int
 		return data, err
 	}
 
-	return data, q.store.Store(store.Hypervisor, q.state)
+	return data, q.storeState()
 }
 
 func (q *qemu) hotplugCPUs(vcpus uint32, op operation) (uint32, error) {
@@ -1314,12 +1326,12 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		hotpluggedVCPUs++
 		if hotpluggedVCPUs == amount {
 			// All vCPUs were hotplugged
-			return amount, q.store.Store(store.Hypervisor, q.state)
+			return amount, q.storeState()
 		}
 	}
 
 	// All vCPUs were NOT hotplugged
-	if err := q.store.Store(store.Hypervisor, q.state); err != nil {
+	if err := q.storeState(); err != nil {
 		q.Logger().Errorf("failed to save hypervisor state after hotplug %d vCPUs: %v", hotpluggedVCPUs, err)
 	}
 
@@ -1339,7 +1351,7 @@ func (q *qemu) hotplugRemoveCPUs(amount uint32) (uint32, error) {
 		// get the last vCPUs and try to remove it
 		cpu := q.state.HotpluggedVCPUs[len(q.state.HotpluggedVCPUs)-1]
 		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, cpu.ID); err != nil {
-			_ = q.store.Store(store.Hypervisor, q.state)
+			q.storeState()
 			return i, fmt.Errorf("failed to hotunplug CPUs, only %d CPUs were hotunplugged: %v", i, err)
 		}
 
@@ -1347,7 +1359,7 @@ func (q *qemu) hotplugRemoveCPUs(amount uint32) (uint32, error) {
 		q.state.HotpluggedVCPUs = q.state.HotpluggedVCPUs[:len(q.state.HotpluggedVCPUs)-1]
 	}
 
-	return amount, q.store.Store(store.Hypervisor, q.state)
+	return amount, q.storeState()
 }
 
 func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) (int, error) {
@@ -1453,7 +1465,7 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 		}
 	}
 	q.state.HotpluggedMemory += memDev.sizeMB
-	return memDev.sizeMB, q.store.Store(store.Hypervisor, q.state)
+	return memDev.sizeMB, q.storeState()
 }
 
 func (q *qemu) pauseSandbox() error {
@@ -1906,4 +1918,58 @@ func (q *qemu) toGrpc() ([]byte, error) {
 	}
 
 	return json.Marshal(&qp)
+}
+
+func (q *qemu) storeState() error {
+	if q.store != nil {
+		if err := q.store.Store(store.Hypervisor, q.state); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (q *qemu) save() (s persistapi.HypervisorState) {
+	s.Pid = q.pid()
+	s.Type = string(QemuHypervisor)
+	s.UUID = q.state.UUID
+	s.HotpluggedMemory = q.state.HotpluggedMemory
+	s.HotplugVFIOOnRootBus = q.state.HotplugVFIOOnRootBus
+
+	for _, bridge := range q.state.Bridges {
+		s.Bridges = append(s.Bridges, persistapi.Bridge{
+			DeviceAddr: bridge.Address,
+			Type:       string(bridge.Type),
+			ID:         bridge.ID,
+			Addr:       bridge.Addr,
+		})
+	}
+
+	for _, cpu := range q.state.HotpluggedVCPUs {
+		s.HotpluggedVCPUs = append(s.HotpluggedVCPUs, persistapi.CPUDevice{
+			ID: cpu.ID,
+		})
+	}
+	return
+}
+
+func (q *qemu) load(s persistapi.HypervisorState) {
+	q.state.UUID = s.UUID
+	q.state.HotpluggedMemory = s.HotpluggedMemory
+	q.state.HotplugVFIOOnRootBus = s.HotplugVFIOOnRootBus
+
+	for _, bridge := range s.Bridges {
+		q.state.Bridges = append(q.state.Bridges, types.PCIBridge{
+			Address: bridge.DeviceAddr,
+			Type:    types.PCIType(bridge.Type),
+			ID:      bridge.ID,
+			Addr:    bridge.Addr,
+		})
+	}
+
+	for _, cpu := range s.HotpluggedVCPUs {
+		q.state.HotpluggedVCPUs = append(q.state.HotpluggedVCPUs, CPUDevice{
+			ID: cpu.ID,
+		})
+	}
 }

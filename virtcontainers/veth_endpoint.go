@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 )
 
 // VethEndpoint gathers a network pair and its properties.
@@ -140,4 +141,24 @@ func (endpoint *VethEndpoint) HotDetach(h hypervisor, netNsCreated bool, netNsPa
 		return err
 	}
 	return nil
+}
+
+func (endpoint *VethEndpoint) save() persistapi.NetworkEndpoint {
+	netpair := saveNetIfPair(&endpoint.NetPair)
+
+	return persistapi.NetworkEndpoint{
+		Type: string(endpoint.Type()),
+		Veth: &persistapi.VethEndpoint{
+			NetPair: *netpair,
+		},
+	}
+}
+
+func (endpoint *VethEndpoint) load(s persistapi.NetworkEndpoint) {
+	endpoint.EndpointType = VethEndpointType
+
+	if s.Veth != nil {
+		netpair := loadNetIfPair(&s.Veth.NetPair)
+		endpoint.NetPair = *netpair
+	}
 }

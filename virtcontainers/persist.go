@@ -57,7 +57,9 @@ func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistap
 	}
 }
 
-func (s *Sandbox) dumpHypervisor(ss *persistapi.SandboxState, cs map[string]persistapi.ContainerState) {
+func (s *Sandbox) dumpHypervisor(ss *persistapi.SandboxState) {
+	ss.HypervisorState = s.hypervisor.save()
+	// BlockIndex will be moved from sandbox state to hypervisor state later
 	ss.HypervisorState.BlockIndex = s.state.BlockIndex
 }
 
@@ -152,6 +154,23 @@ func (s *Sandbox) dumpMounts(cs map[string]persistapi.ContainerState) {
 	}
 }
 
+func (s *Sandbox) dumpAgent(ss *persistapi.SandboxState) {
+	if s.agent != nil {
+		ss.AgentState = s.agent.save()
+	}
+}
+
+func (s *Sandbox) dumpNetwork(ss *persistapi.SandboxState) {
+	ss.Network = persistapi.NetworkInfo{
+		NetNsPath:    s.networkNS.NetNsPath,
+		NetmonPID:    s.networkNS.NetmonPID,
+		NetNsCreated: s.networkNS.NetNsCreated,
+	}
+	for _, e := range s.networkNS.Endpoints {
+		ss.Network.Endpoints = append(ss.Network.Endpoints, e.save())
+	}
+}
+
 func (s *Sandbox) Save() error {
 	var (
 		ss = persistapi.SandboxState{}
@@ -160,10 +179,12 @@ func (s *Sandbox) Save() error {
 
 	s.dumpVersion(&ss)
 	s.dumpState(&ss, cs)
-	s.dumpHypervisor(&ss, cs)
+	s.dumpHypervisor(&ss)
 	s.dumpDevices(&ss, cs)
 	s.dumpProcess(cs)
 	s.dumpMounts(cs)
+	s.dumpAgent(&ss)
+	s.dumpNetwork(&ss)
 
 	if err := s.newStore.ToDisk(ss, cs); err != nil {
 		return err
@@ -187,6 +208,16 @@ func (c *Container) loadContState(cs persistapi.ContainerState) {
 		BlockDeviceID: cs.Rootfs.BlockDeviceID,
 		Fstype:        cs.Rootfs.FsType,
 		CgroupPath:    cs.CgroupPath,
+	}
+}
+
+func (s *Sandbox) loadHypervisor(hs persistapi.HypervisorState) {
+	s.hypervisor.load(hs)
+}
+
+func (s *Sandbox) loadAgent(as persistapi.AgentState) {
+	if s.agent != nil {
+		s.agent.load(as)
 	}
 }
 
@@ -229,6 +260,39 @@ func (c *Container) loadContProcess(cs persistapi.ContainerState) {
 	}
 }
 
+func (s *Sandbox) loadNetwork(netInfo persistapi.NetworkInfo) {
+	s.networkNS = NetworkNamespace{
+		NetNsPath:    netInfo.NetNsPath,
+		NetmonPID:    netInfo.NetmonPID,
+		NetNsCreated: netInfo.NetNsCreated,
+	}
+
+	for _, e := range netInfo.Endpoints {
+		var ep Endpoint
+		switch EndpointType(e.Type) {
+		case PhysicalEndpointType:
+			ep = &PhysicalEndpoint{}
+		case VethEndpointType:
+			ep = &VethEndpoint{}
+		case VhostUserEndpointType:
+			ep = &VhostUserEndpoint{}
+		case BridgedMacvlanEndpointType:
+			ep = &BridgedMacvlanEndpoint{}
+		case MacvtapEndpointType:
+			ep = &MacvtapEndpoint{}
+		case TapEndpointType:
+			ep = &TapEndpoint{}
+		case IPVlanEndpointType:
+			ep = &IPVlanEndpoint{}
+		default:
+			s.Logger().WithField("endpoint-type", e.Type).Error("unknown endpoint type")
+			continue
+		}
+		ep.load(e)
+		s.networkNS.Endpoints = append(s.networkNS.Endpoints, ep)
+	}
+}
+
 // Restore will restore sandbox data from persist file on disk
 func (s *Sandbox) Restore() error {
 	ss, _, err := s.newStore.FromDisk(s.id)
@@ -237,7 +301,10 @@ func (s *Sandbox) Restore() error {
 	}
 
 	s.loadState(ss)
+	s.loadHypervisor(ss.HypervisorState)
 	s.loadDevices(ss.Devices)
+	s.loadAgent(ss.AgentState)
+	s.loadNetwork(ss.Network)
 	return nil
 }
 

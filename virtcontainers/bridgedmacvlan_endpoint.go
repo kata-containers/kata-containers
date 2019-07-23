@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 )
 
 // BridgedMacvlanEndpoint represents a macvlan endpoint that is bridged to the VM
@@ -114,4 +115,24 @@ func (endpoint *BridgedMacvlanEndpoint) HotAttach(h hypervisor) error {
 // HotDetach for physical endpoint not supported yet
 func (endpoint *BridgedMacvlanEndpoint) HotDetach(h hypervisor, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("BridgedMacvlanEndpoint does not support Hot detach")
+}
+
+func (endpoint *BridgedMacvlanEndpoint) save() persistapi.NetworkEndpoint {
+	netpair := saveNetIfPair(&endpoint.NetPair)
+
+	return persistapi.NetworkEndpoint{
+		Type: string(endpoint.Type()),
+		BridgedMacvlan: &persistapi.BridgedMacvlanEndpoint{
+			NetPair: *netpair,
+		},
+	}
+}
+
+func (endpoint *BridgedMacvlanEndpoint) load(s persistapi.NetworkEndpoint) {
+	endpoint.EndpointType = BridgedMacvlanEndpointType
+
+	if s.BridgedMacvlan != nil {
+		netpair := loadNetIfPair(&s.BridgedMacvlan.NetPair)
+		endpoint.NetPair = *netpair
+	}
 }
