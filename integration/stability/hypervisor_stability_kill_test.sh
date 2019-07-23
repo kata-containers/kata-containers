@@ -21,26 +21,22 @@ PAYLOAD_ARGS="${PAYLOAD_ARGS:-tail -f /dev/null}"
 # Set the runtime if not set already
 RUNTIME="${RUNTIME:-kata-runtime}"
 
-KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
-
-if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
-	issue="https://github.com/kata-containers/tests/issues/1849"
-	echo "Skip hypervisor stability kill test, see: $issue"
-	exit
-fi
+HYPERVISOR_NAME=$(basename ${HYPERVISOR_PATH})
 
 setup()  {
 	clean_env
 	sudo docker run --runtime=$RUNTIME -d --name $CONTAINER_NAME $IMAGE $PAYLOAD_ARGS
-	num=$(ps aux | grep ${HYPERVISOR_PATH} | grep -v grep | wc -l)
+	num=$(ps aux | grep ${HYPERVISOR_NAME} | grep -Ev "grep|PATH|defunct" | wc -l)
 	[ ${num} -eq 1 ] || die "hypervisor count:${num} expected:1"
 }
 
 kill_hypervisor()  {
-	pid=$(ps aux | grep ${HYPERVISOR_PATH} | grep -v grep | awk '{print $2}')
+	pid=$(ps aux | grep ${HYPERVISOR_NAME} | grep -Ev "grep|PATH|defunct" | awk '{print $2}')
 	[ -n ${pid} ] || die "failed to find hypervisor pid"
 	sudo kill -KILL ${pid} || die "failed to kill hypervisor (pid ${pid})"
-	num=$(ps aux | grep ${HYPERVISOR_PATH} | grep -v grep | wc -l)
+	# signal is async and we've seen failures hypervisor not being killed immediately.
+	sleep 1
+	num=$(ps aux | grep ${HYPERVISOR_NAME} | grep -Ev "grep|PATH|defunct" | wc -l)
 	[ ${num} -eq 0 ] || die "hypervisor count:${num} expected:0"
 	sudo docker rm -f $CONTAINER_NAME
 	[ $? -eq 0 ] || die "failed to force removing container $CONTAINER_NAME"
