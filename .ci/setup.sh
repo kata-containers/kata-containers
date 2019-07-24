@@ -67,6 +67,9 @@ if [ "$SNAP_CI" == "true" ] && [ "$ID" == "ubuntu" ]; then
 	sudo cp "${snap_confile}" "${etc_confile}"
 	sudo cp "${snap_confile}" "${usr_confile}"
 
+	# Use the same version of tests to test the snap
+	git -C "${tests_repo_dir}" checkout "$(basename kata-containers_*.snap | cut -d_ -f2)"
+
 	"${tests_repo_dir}/cmd/container-manager/manage_ctr_mgr.sh" docker configure -r kata-runtime -f
 fi
 
