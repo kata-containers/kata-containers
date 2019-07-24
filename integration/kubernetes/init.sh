@@ -20,8 +20,11 @@ kubernetes_version=$(get_version "externals.kubernetes.version")
 
 # store iptables if CI running on bare-metal
 BAREMETAL="${BAREMETAL:-false}"
-iptables_cache="${SCRIPT_PATH}/iptables_cache"
-[ "${BAREMETAL}" == true ] && iptables-save > "$iptables_cache"
+iptables_cache="${KATA_TESTS_DATADIR}/iptables_cache"
+if [ "${BAREMETAL}" == true ]; then
+	[ -d "${KATA_TESTS_DATADIR}" ] || sudo mkdir -p "${KATA_TESTS_DATADIR}"
+	iptables-save > "$iptables_cache"
+fi
 
 [ "$ID" == "fedora" ] && bash "${SCRIPT_PATH}/../../.ci/install_kubernetes.sh"
 

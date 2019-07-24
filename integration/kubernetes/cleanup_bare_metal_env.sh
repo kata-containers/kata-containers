@@ -9,13 +9,14 @@ set -o nounset
 set -o pipefail
 
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
-iptables_cache="${SCRIPT_PATH}/iptables_cache"
+source "${SCRIPT_PATH}/../../lib/common.bash"
+
+iptables_cache="${KATA_TESTS_DATADIR}/iptables_cache"
 
 # The kubeadm reset process does not reset or clean up iptables rules
 # you must do it manually
 # Here, we restore the iptables based on the previously cached file.
 sudo iptables-restore < "$iptables_cache"
-sudo rm -rf "$iptables_cache"
 
 # The kubeadm reset process does not clean your kubeconfig files.
 # you must remove them manually.
