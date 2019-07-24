@@ -228,7 +228,7 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-libnfs)
 
 	# Starting from QEMU 4.1, libssh replaces to libssh2
-	if [ "$(echo "${qemu_version_major}.${qemu_version_minor}" >= 4.1 | bc)" == "1" ]; then
+	if [ "$(echo "${qemu_version_major}.${qemu_version_minor} >= 4.1" | bc)" == "1" ]; then
 		qemu_options+=(size:--disable-libssh)
 	else
 		qemu_options+=(size:--disable-libssh2)
