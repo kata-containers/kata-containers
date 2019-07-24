@@ -166,6 +166,9 @@ main() {
 
 	pushd "${GOPATH}/src/${cri_containerd_repo}"
 
+	# Make sure the right artifacts are going to be built
+	make clean
+
 	check_daemon_setup
 
 	info "containerd(cri): testing using runtime: ${containerd_runtime_test}"
