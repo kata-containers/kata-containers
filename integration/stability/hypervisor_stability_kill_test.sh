@@ -21,6 +21,14 @@ PAYLOAD_ARGS="${PAYLOAD_ARGS:-tail -f /dev/null}"
 # Set the runtime if not set already
 RUNTIME="${RUNTIME:-kata-runtime}"
 
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+
+if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
+	issue="https://github.com/kata-containers/tests/issues/1849"
+	echo "Skip hypervisor stability kill test, see: $issue"
+	exit
+fi
+
 setup()  {
 	clean_env
 	sudo docker run --runtime=$RUNTIME -d --name $CONTAINER_NAME $IMAGE $PAYLOAD_ARGS
