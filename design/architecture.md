@@ -428,7 +428,7 @@ which is shared between containers
 
 In order to do so, container engines will usually add one end of a virtual
 ethernet (`veth`) pair into the container networking namespace. The other end of
-the `veth` pair is added to the container network.
+the `veth` pair is added to the host networking namespace.
 
 This is a very namespace-centric approach as many hypervisors (in particular QEMU)
 cannot handle `veth` interfaces. Typically, `TAP` interfaces are created for VM
