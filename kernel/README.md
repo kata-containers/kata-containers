@@ -107,7 +107,7 @@ In order to do Kata Kernel changes. There are places to contribute:
   # example:
   $ arch=x86_64
   $ hypervisor_target=kvm
-  $ major_kernel_versio=4.14
+  $ major_kernel_version=4.19
 
   # Resulting file
   $ name: x86_64_kata_kvm_4.19.x
