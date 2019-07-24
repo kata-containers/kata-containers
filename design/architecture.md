@@ -38,7 +38,7 @@ The [Kata Containers runtime (`kata-runtime`)](https://github.com/kata-container
 is compatible with the [OCI](https://github.com/opencontainers) [runtime specification](https://github.com/opencontainers/runtime-spec)
 and therefore works seamlessly with the
 [Docker\* Engine](https://www.docker.com/products/docker-engine) pluggable runtime
-architecture. It also supports the [Kubernetes\* Container Runtime Interface (CRI)](https://github.com/kubernetes/community/blob/master/contributors/devel/container-runtime-interface.md)
+architecture. It also supports the [Kubernetes\* Container Runtime Interface (CRI)](https://github.com/kubernetes/community/blob/master/contributors/devel/sig-node/container-runtime-interface.md)
 through the [CRI-O\*](https://github.com/kubernetes-incubator/cri-o) and
 [Containerd CRI Plugin\*](https://github.com/containerd/cri) implementation. In other words, you can transparently
 select between the [default Docker and CRI shim runtime (runc)](https://github.com/opencontainers/runc)
