@@ -17,7 +17,15 @@ override_dh_auto_build:
 	tar xzf /usr/src/packages/SOURCES/$(KERNEL_CONFIGS).tar.gz
 	rm -f .config
 	find $(KERNEL_CONFIGS) -name "$(KERNEL_ARCH)_kata_kvm_*" -exec cp {} .config \;
+	if [ ! -f .config ]; then
+		# Use fragments to generate the .config
+		frag_dir="kata-kernel-configs/fragments"
+		err_msg="not in final"
+		r="$(KCONFIG_CONFIG=.config ARCH=${kernelArch} scripts/kconfig/merge_config.sh -r -n ${frag_dir}/common/* ${frag_dir}/${kernelArch}/* | grep "${err_msg}")" || true
+		[ -z "${r}" ] || (@echo "ERROR: ${r}"; exit 1)
+	fi
 	[ -f .config ] || (@echo "ERROR: cannot find the kernel config file for the $(KERNEL_ARCH) architecture"; exit 1)
+
 	# https://github.com/kata-containers/packaging/issues/394 enable reproducible builds:
 	export KBUILD_BUILD_USER=katabuilduser
 	export KBUILD_BUILD_HOST=katabuildhost
