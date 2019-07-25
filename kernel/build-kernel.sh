@@ -35,6 +35,8 @@ readonly patches_repo_dir="${GOPATH}/src/${patches_repo}"
 readonly default_patches_dir="${patches_repo_dir}/kernel/patches/"
 # Default path to search config for kata
 readonly default_kernel_config_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs"
+# Default path to search for kernel config fragments
+readonly default_config_frags_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs/fragments"
 #Path to kernel directory
 kernel_path=""
 #
@@ -136,11 +138,80 @@ get_major_kernel_version() {
 	echo "${major_version}.${minor_version}"
 }
 
+# Make a kernel config file from generic and arch specific
+# fragments
+# - arg1 - path to arch specific fragments
+# - arg2 - path to kernel sources
+#
+get_kernel_frag_path() {
+	local arch_path="$1"
+	local common_path="${arch_path}/../common"
+	local kernel_path="$2"
+	local cmdpath="${kernel_path}/scripts/kconfig/merge_config.sh"
+	local config_path="${arch_path}/.config"
+
+	local arch_configs="$(ls ${arch_path}/*.conf)"
+	local common_configs="$(ls ${common_path}/*.conf)"
+
+	# These are the strings that the kernel merge_config.sh script kicks out
+	# when it reports an error or warning condition. We search for them in the
+	# output to try and fail when we think something has been misconfigured.
+	local not_in_string="not in final"
+	local redefined_string="not in final"
+	local redundant_string="not in final"
+
+	# Later, if we need to add kernel version specific subdirs in order to
+	# handle specific cases, then add the path definition and search/list/cat
+	# here.
+	local all_configs="${common_configs} ${arch_configs}"
+
+	info "Constructing config from fragments: ${config_path}"
+	local results=$(export KCONFIG_CONFIG=${config_path}; \
+					export ARCH=${arch_target}; \
+					cd ${kernel_path}; ${cmdpath} -r -n ${all_configs})
+
+	# Did we request any entries that did not make it?
+	local missing=$(echo $results | grep -v -q "${not_in_string}"; echo $?)
+	if [ ${missing} -ne 0 ]; then
+		info "Some CONFIG elements failed to make the final .config:"
+		info "${results}"
+		info "Generated config file can be found in ${config_path}"
+		die "Failed to construct requested .config file"
+	fi
+
+	# Did we define something as two different values?
+	local redefined=$(echo ${results} | grep -v -q "${redefined_string}"; echo $?)
+	if [ ${redefined} -ne 0 ]; then
+		info "Some CONFIG elements are redefined in fragments:"
+		info "${results}"
+		info "Generated config file can be found in ${config_path}"
+		die "Failed to construct requested .config file"
+	fi
+
+	# Did we define something twice? Nominally this may not be an error, and it
+	# might be convenient to allow it, but for now, let's pick up on them.
+	local redundant=$(echo ${results} | grep -v -q "${redundant_string}"; echo $?)
+	if [ ${redundant} -ne 0 ]; then
+		info "Some CONFIG elements failed to make the final .config"
+		info "${results}"
+		info "Generated config file can be found in ${config_path}"
+		die "Failed to construct requested .config file"
+	fi
+
+	echo "${config_path}"
+}
+
+# Locate and return the path to the relevant kernel config file
+# - arg1: kernel version
+# - arg2: hypervisor target
+# - arg3: arch target
+# - arg4: kernel source path
 get_default_kernel_config() {
 	local version="${1}"
 
 	local hypervisor="$2"
 	local kernel_arch="$3"
+	local kernel_path="$4"
 
 	[ -n "${version}" ] || die "kernel version not provided"
 	[ -n "${hypervisor}" ] || die "hypervisor not provided"
@@ -148,7 +219,14 @@ get_default_kernel_config() {
 
 	local kernel_ver
 	kernel_ver=$(get_major_kernel_version "${version}")
-	config="${default_kernel_config_dir}/${kernel_arch}_kata_${hypervisor}_${major_kernel}.x"
+
+	archfragdir="${default_config_frags_dir}/${kernel_arch}"
+	if [ -d "${archfragdir}" ]; then
+		config="$(get_kernel_frag_path ${archfragdir} ${kernel_path})"
+	else
+		config="${default_kernel_config_dir}/${kernel_arch}_kata_${hypervisor}_${major_kernel}.x"
+	fi
+
 	[ -f "${config}" ] || die "failed to find default config ${config}"
 	echo "${config}"
 }
@@ -214,8 +292,9 @@ setup_kernel() {
 		done
 
 		[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
-		[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}")
+		[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
 
+		info "Copying config file from: ${kernel_config_path}"
 		cp "${kernel_config_path}" ./.config
 		make oldconfig
 	)
