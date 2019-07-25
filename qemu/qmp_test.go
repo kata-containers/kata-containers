@@ -1059,29 +1059,32 @@ func TestQMPPCIVFIOMediatedDeviceAdd(t *testing.T) {
 
 // Checks that CPU are correctly added using device_add
 func TestQMPCPUDeviceAdd(t *testing.T) {
-	connectedCh := make(chan *QMPVersion)
-	disconnectedCh := make(chan struct{})
-	buf := newQMPTestCommandBuffer(t)
-	buf.AddCommand("device_add", nil, "return", nil)
-	cfg := QMPConfig{Logger: qmpTestLogger{}}
-	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
-	checkVersion(t, connectedCh)
-	driver := "qemu64-x86_64-cpu"
+	drivers := []string{"host-x86_64-cpu", "host-s390x-cpu", "host-powerpc64-cpu"}
 	cpuID := "cpu-0"
 	socketID := "0"
 	dieID := "0"
 	coreID := "1"
 	threadID := "0"
-	q.version = &QMPVersion{
+	version := &QMPVersion{
 		Major: 4,
 		Minor: 1,
 	}
-	err := q.ExecuteCPUDeviceAdd(context.Background(), driver, cpuID, socketID, dieID, coreID, threadID, "")
-	if err != nil {
-		t.Fatalf("Unexpected error %v", err)
+	for _, d := range drivers {
+		connectedCh := make(chan *QMPVersion)
+		disconnectedCh := make(chan struct{})
+		buf := newQMPTestCommandBuffer(t)
+		buf.AddCommand("device_add", nil, "return", nil)
+		cfg := QMPConfig{Logger: qmpTestLogger{}}
+		q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+		checkVersion(t, connectedCh)
+		q.version = version
+		err := q.ExecuteCPUDeviceAdd(context.Background(), d, cpuID, socketID, dieID, coreID, threadID, "")
+		if err != nil {
+			t.Fatalf("Unexpected error %v", err)
+		}
+		q.Shutdown()
+		<-disconnectedCh
 	}
-	q.Shutdown()
-	<-disconnectedCh
 }
 
 // Checks that hotpluggable CPUs are listed correctly
