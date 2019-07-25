@@ -86,3 +86,7 @@
 [[constraint]]
   branch = "master"
   name = "github.com/prometheus/procfs"
+
+[[constraint]]
+  name = "github.com/blang/semver"
+  version = "3.6.1"
