@@ -8,7 +8,7 @@ import (
 	"errors"
 	"strconv"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // metricsCheck is a placeholder struct for us to attach the methods to and make
