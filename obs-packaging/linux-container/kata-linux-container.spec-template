@@ -80,7 +80,14 @@ BuildKernel() {
     # Runtime .config selection based on kernelArch
     rm -f .config
     find kata-kernel-configs -name "${kernelArch}_kata_kvm_*" -exec cp {} .config \;
-	[ -f .config ] || (echo "ERROR: cannot find the kernel config file for the ${kernelArch} architecture"; exit 1)
+    if [ ! -f .config ]; then
+        # Use fragments to generate the .config
+        frag_dir="kata-kernel-configs/fragments"
+        err_msg="not in final"
+        r="$(KCONFIG_CONFIG=.config ARCH=${kernelArch} scripts/kconfig/merge_config.sh -r -n ${frag_dir}/common/* ${frag_dir}/${kernelArch}/* | grep "${err_msg}")" || true
+        [ -z "${r}" ] || (echo "ERROR: ${r}"; exit 1)
+    fi
+    [ -f .config ] || (echo "ERROR: cannot find the kernel config file for the ${kernelArch} architecture"; exit 1)
 
     %if 0%{?rhel_version} || 0%{?suse_version}
     # RHEL in OBS has updated gcc.

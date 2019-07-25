@@ -50,10 +50,10 @@ RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 
 kernel_sha256=$(curl -L -s -f ${KR_SHA} | awk '/linux-'${VERSION}'.tar.xz/ {print $1}')
 
-# Copy the kernel config files for all architecture
+# Copy the kernel config files and fragments for all architecture
 mkdir -p configs
 readonly configs_dir="kernel/configs"
-find "${SCRIPT_DIR}/../../${configs_dir}" -name "*_kata_kvm_${KR_LTS}.x" -exec tar --transform="s,${configs_dir},${KR_CONFIGS}," -czf ${KR_CONFIGS}.tar.gz {} +
+find "${SCRIPT_DIR}/../../${configs_dir}" \( -name "*_kata_kvm_${KR_LTS}.x" -o -name fragments \) -exec tar --transform="s,${configs_dir},${KR_CONFIGS}," -czf ${KR_CONFIGS}.tar.gz {} +
 
 replace_list=(
 	"VERSION=${VERSION}"
