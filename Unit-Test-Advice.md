@@ -65,7 +65,7 @@ func TestJoinParamsWithDash(t *testing.T) {
         // Call the function under test
         result, err := joinParamsWithDash(d.param1, d.param2)
 
-        if expectError {
+        if d.expectError {
             assert.Error(err, msg)
 
             // If an error is expected, there is no point
