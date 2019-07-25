@@ -63,10 +63,10 @@ path="/usr/local/bin/kata-runtime"
 
 if [ -f $docker_configuration_file ]; then
 	# Check devicemapper flag
-	check_devicemapper=$(grep -w '"storage-driver": "${driver}"' $docker_configuration_file | wc -l)
+	check_devicemapper=$(grep -w '"storage-driver": "'${driver}'"' $docker_configuration_file | wc -l)
 	[ $check_devicemapper -eq 0 ] && die "${driver} is not enabled at $docker_configuration_file"
 	# Check kata runtime flag
-	check_kata=$(grep -w '"path": "${path}"' $docker_configuration_file | wc -l)
+	check_kata=$(grep -w '"path": "'${path}'"' $docker_configuration_file | wc -l)
 	[ $check_kata -eq 0 ] && die "Kata Runtime path not found at $docker_configuration_file"
 else
 	cat <<-EOF | sudo tee "$docker_configuration_file"
