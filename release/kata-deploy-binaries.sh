@@ -131,6 +131,18 @@ install_firecracker() {
 
 }
 
+install_docker_config_script() {
+	local docker_config_script_name="kata-configure-docker.sh"
+	local docker_config_script="${script_dir}/../static-build/scripts/${docker_config_script_name}"
+
+	local script_dest_dir="${destdir}/opt/kata/share/scripts"
+
+	mkdir -p "$script_dest_dir"
+
+	sudo install --owner root --group root --mode 0755 \
+		"$docker_config_script" "$script_dest_dir"
+}
+
 #Install all components that are not assets
 install_kata_components() {
 	for p in "${projects[@]}"; do
@@ -200,6 +212,8 @@ main() {
 	install_qemu
 	install_nemu
 	install_firecracker
+	install_docker_config_script
+
 	tarball_name="${destdir}.tar.xz"
 	pushd "${destdir}" >>/dev/null
 	tar cfJ "${tarball_name}" "./opt"
