@@ -379,6 +379,8 @@ static_check_license_headers()
 		--exclude="*.xml" \
 		--exclude="*.yaml" \
 		--exclude="*.yml" \
+		--exclude="go.mod" \
+		--exclude="go.sum" \
 		-EL "\<${pattern}\>" \
 		$files || true)
 
