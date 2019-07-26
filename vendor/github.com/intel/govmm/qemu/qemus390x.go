@@ -63,6 +63,27 @@ var isVirtioPCI = map[DeviceDriver]bool{
 	PCIePCIBridgeDriver: false,
 }
 
+// isVirtioCCW returns if the device is a ccw device
+var isVirtioCCW = map[DeviceDriver]bool{
+	NVDIMM:              false,
+	Virtio9P:            true,
+	VirtioNetCCW:        true,
+	VirtioSerial:        true,
+	VirtioBlock:         true,
+	VirtioBlockCCW:      true,
+	Console:             false,
+	VirtioSerialPort:    false,
+	VHostVSock:          true,
+	VirtioRng:           true,
+	VirtioBalloon:       true,
+	VhostUserSCSI:       false,
+	VhostUserBlk:        false,
+	Vfio:                true,
+	VirtioScsi:          true,
+	PCIBridgeDriver:     false,
+	PCIePCIBridgeDriver: false,
+}
+
 // QemuDeviceParam converts to the QEMU -device parameter notation
 // This function has been reimplemented for the s390x architecture to deal
 // with the VHOSTUSER case. Vhost user devices are not implemented on s390x
