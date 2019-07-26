@@ -96,7 +96,7 @@ ci_cleanup() {
 	fi
 }
 
-create_continerd_config() {
+create_containerd_config() {
 	local runtime="$1"
 	[ -n "${runtime}" ] || die "need runtime to create config"
 
@@ -143,7 +143,7 @@ trap err_report ERR
 
 check_daemon_setup() {
 	info "containerd(cri): Check daemon works with runc"
-	create_continerd_config "runc"
+	create_containerd_config "runc"
 
 	sudo -E PATH="${PATH}:/usr/local/bin" \
 		REPORT_DIR="${REPORT_DIR}" \
@@ -170,7 +170,7 @@ main() {
 
 	info "containerd(cri): testing using runtime: ${containerd_runtime_test}"
 
-	create_continerd_config "${containerd_runtime_test}"
+	create_containerd_config "${containerd_runtime_test}"
 
 	info "containerd(cri): Running cri-tools"
 	sudo -E PATH="${PATH}:/usr/local/bin" \
