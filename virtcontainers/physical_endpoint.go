@@ -80,8 +80,16 @@ func (endpoint *PhysicalEndpoint) Attach(h hypervisor) error {
 	}
 
 	// TODO: use device manager as general device management entrance
+	var vendorID, deviceID string
+	if splits := strings.Split(endpoint.VendorDeviceID, " "); len(splits) == 2 {
+		vendorID = splits[0]
+		deviceID = splits[1]
+	}
+
 	d := config.VFIODev{
-		BDF: endpoint.BDF,
+		BDF:      endpoint.BDF,
+		VendorID: vendorID,
+		DeviceID: deviceID,
 	}
 
 	return h.addDevice(d, vfioDev)
