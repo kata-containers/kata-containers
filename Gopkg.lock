@@ -391,11 +391,11 @@
   revision = "2f1d1f20f75d5404f53b9edf6b53ed5505508675"
 
 [[projects]]
-  digest = "1:6b643bd5e349019c33430301a3e5c38324c3014c423fe5e7cf857a8dd341efe2"
+  digest = "1:bba46c73858fda3e8066d66553615bd271f1ee811a0bf19f239ea2fb1e313f22"
   name = "github.com/intel/govmm"
   packages = ["qemu"]
   pruneopts = "NUT"
-  revision = "52b2309a558fe89b3e81b85440144b535288ce4f"
+  revision = "e0505242c0670f1a522f5b2d827e4a7e4062a14d"
 
 [[projects]]
   digest = "1:36dfd4701e98a9d8371dd3053e32d4f29e82b07bcc9e655db82138f9273bcb0f"
