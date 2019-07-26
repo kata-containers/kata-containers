@@ -13,8 +13,14 @@ VC_POD_DIR="${VC_POD_DIR:-/var/lib/vc/sbs}"
 # Sandbox runtime directory
 RUN_SBS_DIR="${RUN_SBS_DIR:-/run/vc/sbs}"
 
+# Kata tests directory used for storing various test-related artifacts.
+KATA_TESTS_BASEDIR="${KATA_TESTS_LOGDIR:-/var/log/kata-tests}"
+
 # Directory that can be used for storing test logs.
-KATA_TESTS_LOGDIR="${KATA_TESTS_LOGDIR:-/var/log/kata-tests}"
+KATA_TESTS_LOGDIR="${KATA_TESTS_LOGDIR:-${KATA_TESTS_BASEDIR}/logs}"
+
+# Directory that can be used for storing test data.
+KATA_TESTS_DATADIR="${KATA_TESTS_DATADIR:-${KATA_TESTS_BASEDIR}/data}"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 

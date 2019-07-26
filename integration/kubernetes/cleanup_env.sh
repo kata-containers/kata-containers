@@ -33,6 +33,12 @@ sudo ip link set dev flannel.1 down
 sudo ip link del cni0
 sudo ip link del flannel.1
 
+# if CI run in bare-metal, we need a set of extra clean
+BAREMETAL="${BAREMETAL:-false}"
+if [ "${BAREMETAL}" == true ] && [ -f "${SCRIPT_PATH}/cleanup_bare_metal_env.sh" ];  then
+	bash -f "${SCRIPT_PATH}/cleanup_bare_metal_env.sh"
+fi
+
 # Check no kata processes are left behind after reseting kubernetes
 check_processes
 

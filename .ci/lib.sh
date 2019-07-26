@@ -282,6 +282,9 @@ gen_clean_arch() {
 		GOCACHE=${GOCACHE:-$HOME/.cache/go-build}
 	fi
 	[ -d "$GOCACHE" ] && sudo rm -rf ${GOCACHE}/*
+
+	info "Clean transient test data and logs which has been stored under ${KATA_TESTS_BASEDIR}"
+	[ -d "${KATA_TESTS_BASEDIR}" ] && sudo rm -rf ${KATA_TESTS_BASEDIR}/*
 }
 
 build_install_parallel() {
