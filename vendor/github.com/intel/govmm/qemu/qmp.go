@@ -149,6 +149,7 @@ type QMPVersion struct {
 type CPUProperties struct {
 	Node   int `json:"node-id"`
 	Socket int `json:"socket-id"`
+	Die    int `json:"die-id"`
 	Core   int `json:"core-id"`
 	Thread int `json:"thread-id"`
 }
@@ -1157,24 +1158,54 @@ func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsd
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
+// isSocketIDSupported returns if the cpu driver supports the socket id option
+func isSocketIDSupported(driver string) bool {
+	if driver == "host-s390x-cpu" || driver == "host-powerpc64-cpu" {
+		return false
+	}
+	return true
+}
+
+// isThreadIDSupported returns if the cpu driver supports the thread id option
+func isThreadIDSupported(driver string) bool {
+	if driver == "host-s390x-cpu" || driver == "host-powerpc64-cpu" {
+		return false
+	}
+	return true
+}
+
+// isDieIDSupported returns if the cpu driver and the qemu version support the die id option
+func (q *QMP) isDieIDSupported(driver string) bool {
+	if (q.version.Major > 4 || (q.version.Major == 4 && q.version.Minor >= 1)) && driver == "host-x86_64-cpu" {
+		return true
+	}
+	return false
+}
+
 // ExecuteCPUDeviceAdd adds a CPU to a QEMU instance using the device_add command.
 // driver is the CPU model, cpuID must be a unique ID to identify the CPU, socketID is the socket number within
 // node/board the CPU belongs to, coreID is the core number within socket the CPU belongs to, threadID is the
 // thread number within core the CPU belongs to. Note that socketID and threadID are not a requirement for
 // architecures like ppc64le.
-func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, coreID, threadID, romfile string) error {
+func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, dieID, coreID, threadID, romfile string) error {
 	args := map[string]interface{}{
 		"driver":  driver,
 		"id":      cpuID,
 		"core-id": coreID,
 	}
 
-	if socketID != "" {
+	if socketID != "" && isSocketIDSupported(driver) {
 		args["socket-id"] = socketID
 	}
 
-	if threadID != "" {
+	if threadID != "" && isThreadIDSupported(driver) {
 		args["thread-id"] = threadID
+	}
+
+	if q.isDieIDSupported(driver) {
+		if dieID != "" {
+			args["die-id"] = dieID
+		}
 	}
 
 	if isVirtioPCI[DeviceDriver(driver)] {

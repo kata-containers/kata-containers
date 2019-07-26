@@ -1307,6 +1307,7 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		driver := hc.Type
 		cpuID := fmt.Sprintf("cpu-%d", len(q.state.HotpluggedVCPUs))
 		socketID := fmt.Sprintf("%d", hc.Properties.Socket)
+		dieID := fmt.Sprintf("%d", hc.Properties.Die)
 		coreID := fmt.Sprintf("%d", hc.Properties.Core)
 		threadID := fmt.Sprintf("%d", hc.Properties.Thread)
 
@@ -1314,9 +1315,10 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		if machine.Type == "pseries" || machine.Type == "s390-ccw-virtio" {
 			socketID = ""
 			threadID = ""
+			dieID = ""
 		}
 
-		if err := q.qmpMonitorCh.qmp.ExecuteCPUDeviceAdd(q.qmpMonitorCh.ctx, driver, cpuID, socketID, coreID, threadID, romFile); err != nil {
+		if err := q.qmpMonitorCh.qmp.ExecuteCPUDeviceAdd(q.qmpMonitorCh.ctx, driver, cpuID, socketID, dieID, coreID, threadID, romFile); err != nil {
 			// don't fail, let's try with other CPU
 			continue
 		}
