@@ -6,7 +6,7 @@
 
 package main
 
-import "github.com/Sirupsen/logrus"
+import "github.com/sirupsen/logrus"
 
 // LinkType represents the type of a link in a markdown document.
 type LinkType int

@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"strconv"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // jsonRecord has no data - the data is loaded and processed and stored

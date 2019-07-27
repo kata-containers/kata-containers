@@ -20,8 +20,8 @@ import (
 	"os"
 	"path"
 
-	log "github.com/Sirupsen/logrus"
 	"github.com/olekukonko/tablewriter"
+	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
 )
 

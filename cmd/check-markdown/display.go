@@ -11,7 +11,7 @@ import (
 	"os"
 	"sort"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 )
 
 var outputFile = os.Stdout

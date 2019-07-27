@@ -810,7 +810,7 @@ static_check_vendor()
 	go get github.com/golang/dep/cmd/dep
 
 	# Check, but don't touch!
-	dep ensure -no-vendor -dry-run
+	dep check
 }
 
 static_check_xml()

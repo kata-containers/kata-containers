@@ -5,8 +5,8 @@
 package main
 
 import (
-	log "github.com/Sirupsen/logrus"
 	"github.com/montanaflynn/stats"
+	log "github.com/sirupsen/logrus"
 )
 
 type statistics struct {
