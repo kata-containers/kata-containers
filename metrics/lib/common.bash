@@ -21,6 +21,7 @@ KSM_BASE="/sys/kernel/mm/ksm"
 KSM_ENABLE_FILE="${KSM_BASE}/run"
 KSM_PAGES_FILE="${KSM_BASE}/pages_to_scan"
 KSM_SLEEP_FILE="${KSM_BASE}/sleep_millisecs"
+KSM_PAGES_SHARED="${KSM_BASE}/pages_shared"
 
 # The settings we use for an 'aggresive' KSM setup
 # Scan 1000 pages every 50ms - 20,000 pages/s
@@ -296,7 +297,7 @@ wait_ksm_settle(){
 	for ((t=0; t<$1; t++)); do
 
 		newscan=$(cat /sys/kernel/mm/ksm/full_scans)
-		newpages=$(cat /sys/kernel/mm/ksm/pages_shared)
+		newpages=$(cat "${KSM_PAGES_SHARED}")
 		[[ "$newpages" -eq 0 ]] && echo "No need to wait for KSM to settle" && return
 
 		if (( newscan != oldscan )); then
