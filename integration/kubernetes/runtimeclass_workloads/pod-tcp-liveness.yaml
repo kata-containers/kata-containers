@@ -8,12 +8,14 @@ kind: Pod
 metadata:
   name: tcptest
   labels:
-    app: goproxy
+    app: tcp-liveness
 spec:
   runtimeClassName: kata
   containers:
-  - name: goproxy
-    image: k8s.gcr.io/goproxy:0.1
+  - name: tcp-liveness
+    image: gcr.io/kubernetes-e2e-test-images/agnhost:2.2
+    args:
+    - liveness
     ports:
     - containerPort: 8080
     readinessProbe:
