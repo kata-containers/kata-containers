@@ -339,7 +339,7 @@ main()
 {
 	setup
 
-	[ -z "$1" ] && die "need command"
+	[ -z "${1:-}" ] && die "need command"
 
 	case "$1" in
 		check) shift && spell_check_file "$1" ;;
