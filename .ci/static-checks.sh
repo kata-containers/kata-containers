@@ -482,7 +482,7 @@ static_check_docs()
 	local new_urls
 	local url
 
-	all_docs=$(find . -name "*.md" | grep -v "/vendor/" | sort || true)
+	all_docs=$(git ls-files "*.md" | grep -v "/vendor/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -551,9 +551,6 @@ static_check_docs()
 
 	sort -u "$md_links" > "$tmp"
 	mv "$tmp" "$md_links"
-
-	# Remove initial "./" added by find(1).
-	md_docs_to_check=$(echo "$md_docs_to_check"|sed 's,^\./,,g')
 
 	# A list of markdown files that do not have to be referenced by any
 	# other markdown file.
@@ -629,7 +626,7 @@ static_check_docs()
 
 		# Sigh.
 		echo "$url"|grep -q 'https://example.com' && continue
-		
+
 		# Google APIs typically require an auth token.
 		echo "$url"|grep -q 'https://www.googleapis.com' && continue
 
@@ -708,7 +705,7 @@ static_check_files()
 	then
 		info "Checking all files in $branch branch"
 
-		files=$(find . -type f | egrep -v "/(.git|vendor)/" || true)
+		files=$(git ls-files | egrep -v "/(.git|vendor)/" || true)
 	else
 		info "Checking local branch for changed files only"
 
@@ -818,7 +815,7 @@ static_check_xml()
 	local all_xml
 	local files
 
-	all_xml=$(find . -name "*.xml" | grep -v "/vendor/" | sort || true)
+	all_xml=$(git ls-files "*.xml" | grep -v "/vendor/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -870,7 +867,7 @@ static_check_shell()
 	local all_scripts
 	local scripts
 
-	all_scripts=$(find . \( -name "*.sh" -o -name "*.bash" \) | grep -v "/vendor/" | sort || true)
+	all_scripts=$(git ls-files "*.sh" "*.bash" | grep -v "/vendor/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -907,7 +904,7 @@ static_check_json()
 	local all_json
 	local json_files
 
-	all_json=$(find . -name "*.json" | grep -v "/vendor/" | sort || true)
+	all_json=$(git ls-files "*.json" | grep -v "/vendor/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
