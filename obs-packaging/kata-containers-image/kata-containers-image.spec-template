@@ -28,8 +28,8 @@ tar xfz kata-containers.tar.gz
 image=$(find ${PWD} -type f -name '*.img')
 initrd=$(find ${PWD} -type f -name '*.initrd')
 popd
-install -p "${image}" ${ImageDir}/
-install -p "${initrd}"  ${ImageDir}/
+install -m 0400 -p "${image}" ${ImageDir}/
+install -m 0400 -p "${initrd}"  ${ImageDir}/
 ln -s /usr/share/kata-containers/$(basename "${image}") ${ImageDir}/kata-containers.img
 ln -s /usr/share/kata-containers/$(basename "${initrd}")  ${ImageDir}/kata-containers-initrd.img
 
