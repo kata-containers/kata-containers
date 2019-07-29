@@ -13,9 +13,9 @@ spec:
   runtimeClassName: kata
   containers:
   - name: liveness
-    image: k8s.gcr.io/liveness
+    image: gcr.io/kubernetes-e2e-test-images/agnhost:2.2
     args:
-    - /server
+    - liveness
     livenessProbe:
       httpGet:
         path: /healthz
