@@ -12,6 +12,8 @@ kubernetes_dir=$(dirname "$(readlink -f "$0")")
 cidir="${kubernetes_dir}/../../.ci/"
 source "${cidir}/lib.sh"
 
+arch="$(uname -m)"
+
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
 # Currently, Kubernetes tests only work on Ubuntu, Centos and Fedora.
@@ -30,33 +32,45 @@ fi
 # using cri-o as the runtime.
 systemctl is-active --quiet docker || sudo systemctl start docker
 
+K8S_TEST_UNION=("k8s-attach-handlers.bats" \
+	"k8s-block-volume.bats" \
+	"k8s-configmap.bats" \
+	"k8s-cpu-ns.bats" \
+	"k8s-credentials-secrets.bats" \
+	"k8s-custom-dns.bats" \
+	"k8s-empty-dirs.bats" \
+	"k8s-env.bats" \
+	"k8s-expose-ip.bats" \
+	"k8s-job.bats" \
+	"k8s-limit-range.bats" \
+	"k8s-liveness-probes.bats" \
+	"k8s-memory.bats" \
+	"k8s-parallel.bats" \
+	"k8s-pid-ns.bats" \
+	"k8s-pod-quota.bats" \
+	"k8s-port-forward.bats" \
+	"k8s-projected-volume.bats" \
+	"k8s-qos-pods.bats" \
+	"k8s-replication.bats" \
+	"k8s-security-context.bats" \
+	"k8s-shared-volume.bats" \
+	"k8s-sysctls.bats" \
+	"k8s-uts+ipc-ns.bats" \
+	"k8s-volume.bats" \
+	"nginx.bats")
+
+# we may need to skip a few test cases when running on non-x86_64 arch
+if [ -f "${cidir}/${arch}/configuration_${arch}.yaml" ]; then
+	config_file="${cidir}/${arch}/configuration_${arch}.yaml"
+	arch_k8s_test_union=$(${cidir}/filter/filter_k8s_test.sh ${config_file} "${K8S_TEST_UNION[*]}")
+	mapfile -d " " -t K8S_TEST_UNION <<< "${arch_k8s_test_union}"
+fi
+
 pushd "$kubernetes_dir"
 ./init.sh
-bats k8s-replication.bats
-bats nginx.bats
-bats k8s-uts+ipc-ns.bats
-bats k8s-env.bats
-bats k8s-port-forward.bats
-bats k8s-empty-dirs.bats
-bats k8s-limit-range.bats
-bats k8s-credentials-secrets.bats
-bats k8s-configmap.bats
-bats k8s-custom-dns.bats
-bats k8s-pid-ns.bats
-bats k8s-cpu-ns.bats
-bats k8s-parallel.bats
-bats k8s-security-context.bats
-bats k8s-liveness-probes.bats
-bats k8s-attach-handlers.bats
-bats k8s-qos-pods.bats
-bats k8s-pod-quota.bats
-bats k8s-sysctls.bats
-bats k8s-volume.bats
-bats k8s-projected-volume.bats
-bats k8s-job.bats
-bats k8s-memory.bats
-bats k8s-block-volume.bats
-bats k8s-shared-volume.bats
-bats k8s-expose-ip.bats
+for K8S_TEST_ENTRY in ${K8S_TEST_UNION[@]}
+do
+	bats "${K8S_TEST_ENTRY}"
+done
 ./cleanup_env.sh
 popd
