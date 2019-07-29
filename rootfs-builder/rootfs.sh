@@ -14,17 +14,12 @@ script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-}
 GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
-GO_RUNTIME_PKG=${GO_RUNTIME_PKG:-github.com/kata-containers/runtime}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 GO_VERSION="null"
-#https://github.com/kata-containers/tests/blob/master/.ci/jenkins_job_build.sh
-# Give preference to variable set by CI
-KATA_BRANCH=${branch:-}
-KATA_BRANCH=${KATA_BRANCH:-master}
 export GOPATH=${GOPATH:-${HOME}/go}
 
 lib_file="${script_dir}/../scripts/lib.sh"
@@ -52,18 +47,31 @@ typeset -r CONFIG_ARCH_SH="config_${ARCH}.sh"
 # build_rootfs() function.
 typeset -r LIB_SH="rootfs_lib.sh"
 
+# rootfs distro name specified by the user
+typeset distro=
+
+# Absolute path to the rootfs root folder
+typeset ROOTFS_DIR
+
+# Absolute path in the rootfs to the "init" executable / symlink.
+# Typically something like "${ROOTFS_DIR}/init
+typeset init=
+
 #$1: Error code if want to exit different to 0
 usage()
 {
 	error="${1:-0}"
 	cat <<EOT
 
-Usage: ${script_name} [options] <distro>
+Usage: ${script_name} [options] [DISTRO]
 
-Build a rootfs based on <distro> OS, to be included in a Kata Containers
-image.
+Build and setup a rootfs directory based on DISTRO OS, used to create
+Kata Containers images or initramfs.
 
-Supported <distro> values:
+When no DISTRO is provided, an existing base rootfs at ROOTFS_DIR is provisioned
+with the Kata specific components and configuration.
+
+Supported DISTRO values:
 $(get_distros | tr "\n" " ")
 
 Options:
@@ -75,7 +83,7 @@ Options:
                     yaml description.
   -r <directory>    Specify the rootfs base directory. Overrides the ROOTFS_DIR
                     environment variable.
-  -t                Print the test configuration for <distro> and exit
+  -t DISTRO         Print the test configuration for DISTRO and exit
                     immediately.
 
 Environment Variables:
@@ -100,7 +108,7 @@ DISTRO_REPO         Use host repositories to install guest packages.
 GO_AGENT_PKG        URL of the Git repository hosting the agent package.
                     Default value: ${GO_AGENT_PKG}
 
-GRACEFUL_EXIT       If set, and if the <distro> configuration specifies a
+GRACEFUL_EXIT       If set, and if the DISTRO configuration specifies a
                     non-empty BUILD_CAN_FAIL variable, do not return with an
                     error code in case any of the build step fails.
                     This is used when running CI jobs, to tolerate failures for
@@ -112,7 +120,7 @@ KERNEL_MODULES_DIR  Path to a directory containing kernel modules to include in
                     Default value: <empty>
 
 ROOTFS_DIR          Path to the directory that is populated with the rootfs.
-                    Default value: <${script_name} path>/rootfs-<distro-name>
+                    Default value: <${script_name} path>/rootfs-<DISTRO-name>
 
 USE_DOCKER          If set, build the rootfs inside a container (requires
                     Docker).
@@ -137,7 +145,9 @@ get_distros() {
 }
 
 get_test_config() {
-	local distro="$1"
+	local -r distro="$1"
+	[ -z "$distro" ] && die "No distro name specified"
+
 	local config="${script_dir}/${distro}/config.sh"
 	source ${config}
 
@@ -174,51 +184,6 @@ docker_extra_args()
 	esac
 
 	echo "$args"
-}
-
-generate_dockerfile()
-{
-	dir="$1"
-
-	case "$(uname -m)" in
-		"ppc64le")
-			goarch=ppc64le
-			;;
-
-		"aarch64")
-			goarch=arm64
-			;;
-		"s390x")
-			goarch=s390x
-			;;
-
-		*)
-			goarch=amd64
-			;;
-	esac
-
-	[ -n "$http_proxy" ] && readonly set_proxy="RUN sed -i '$ a proxy="$http_proxy"' /etc/dnf/dnf.conf /etc/yum.conf; true"
-
-	curlOptions=("-OL")
-	[ -n "$http_proxy" ] && curlOptions+=("-x $http_proxy")
-	readonly install_go="
-RUN cd /tmp ; curl ${curlOptions[@]} https://storage.googleapis.com/golang/go${GO_VERSION}.linux-${goarch}.tar.gz
-RUN tar -C /usr/ -xzf /tmp/go${GO_VERSION}.linux-${goarch}.tar.gz
-ENV GOROOT=/usr/go
-ENV PATH=\$PATH:\$GOROOT/bin:\$GOPATH/bin
-"
-
-	readonly dockerfile_template="Dockerfile.in"
-	[ -d "${dir}" ] || die "${dir}: not a directory"
-	pushd ${dir}
-	[ -f "${dockerfile_template}" ] || die "${dockerfile_template}: file not found"
-	sed \
-		-e "s|@GO_VERSION@|${GO_VERSION}|g" \
-		-e "s|@OS_VERSION@|${OS_VERSION}|g" \
-		-e "s|@INSTALL_GO@|${install_go//$'\n'/\\n}|g" \
-		-e "s|@SET_PROXY@|${set_proxy}|g" \
-		${dockerfile_template} > Dockerfile
-	popd
 }
 
 setup_agent_init()
@@ -261,50 +226,6 @@ error_handler()
 	fi
 }
 
-detect_go_version()
-{
-	info "Detecting agent go version"
-	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq)
-	[ -z "$yq" ] && die "'yq' application not found (needed to parsing minimum Go version required)"
-
-	local runtimeRevision=""
-
-	# Detect runtime revision by fetching the agent's VERSION file
-	local runtime_version_url="https://raw.githubusercontent.com/kata-containers/agent/${AGENT_VERSION:-master}/VERSION"
-	info "Detecting runtime version using ${runtime_version_url}"
-
-	if runtimeRevision="$(curl -fsSL ${runtime_version_url})"; then
-		[ -n "${runtimeRevision}" ] || die "failed to get agent version"
-		typeset -r runtimeVersionsURL="https://raw.githubusercontent.com/kata-containers/runtime/${runtimeRevision}/versions.yaml"
-		info "Getting golang version from ${runtimeVersionsURL}"
-		# This may fail if we are a kata bump.
-		if GO_VERSION="$(curl -fsSL "$runtimeVersionsURL" | $yq r - "languages.golang.version")"; then
-			[ "$GO_VERSION" != "null" ]
-			return 0
-		fi
-	fi
-
-	info "Agent version has not match with a runtime version, assumming it is a PR"
-	local kata_runtime_pkg_dir="${GOPATH}/src/${GO_RUNTIME_PKG}"
-	if [ ! -d "${kata_runtime_pkg_dir}" ];then
-		info "There is not runtime repository in filesystem (${kata_runtime_pkg_dir})"
-		local runtime_versions_url="https://raw.githubusercontent.com/kata-containers/runtime/${KATA_BRANCH}/versions.yaml"
-		info "Get versions file from ${runtime_versions_url}"
-		GO_VERSION="$(curl -fsSL "${runtime_versions_url}" | $yq r - "languages.golang.version")"
-		if [ "$?" == "0" ] && [ "$GO_VERSION" != "null" ]; then
-			return 0
-		fi
-
-		return 1
-	fi
-
-	local kata_versions_file="${kata_runtime_pkg_dir}/versions.yaml"
-	info "Get Go version from ${kata_versions_file}"
-	GO_VERSION="$(cat "${kata_versions_file}"  | $yq r - "languages.golang.version")"
-
-	[ "$?" == "0" ] && [ "$GO_VERSION" != "null" ]
-}
-
 # Compares two SEMVER-style versions passed as arguments, up to the MINOR version
 # number.
 # Returns a zero exit code if the version specified by the first argument is
@@ -330,229 +251,293 @@ compare_versions()
 	true
 }
 
-while getopts a:hlo:r:t: opt
-do
-	case $opt in
-		a)	AGENT_VERSION="${OPTARG}" ;;
-		h)	usage ;;
-		l)	get_distros | sort && exit 0;;
-		o)	OSBUILDER_VERSION="${OPTARG}" ;;
-		r)	ROOTFS_DIR="${OPTARG}" ;;
-		t)	get_test_config "${OPTARG}" && exit 0;;
-	esac
-done
+check_env_variables()
+{
+	# Fetch the first element from GOPATH as working directory
+	# as go get only works against the first item in the GOPATH
+	[ -z "$GOPATH" ] && die "GOPATH not set"
+	GOPATH_LOCAL="${GOPATH%%:*}"
 
-shift $(($OPTIND - 1))
+	[ "$AGENT_INIT" == "yes" -o "$AGENT_INIT" == "no" ] || die "AGENT_INIT($AGENT_INIT) is invalid (must be yes or no)"
 
-# Fetch the first element from GOPATH as working directory
-# as go get only works against the first item in the GOPATH
-[ -z "$GOPATH" ] && die "GOPATH not set"
-GOPATH_LOCAL="${GOPATH%%:*}"
+	[ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
 
-[ "$AGENT_INIT" == "yes" -o "$AGENT_INIT" == "no" ] || die "AGENT_INIT($AGENT_INIT) is invalid (must be yes or no)"
+	[ -n "${OSBUILDER_VERSION}" ] || die "need osbuilder version"
+}
 
-[ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
+# Builds a rootfs based on the distro name provided as argument
+build_rootfs_distro()
+{
+	[ -n "${distro}" ] || usage 1
+	distro_config_dir="${script_dir}/${distro}"
 
-[ -z "${OSBUILDER_VERSION}" ] && die "need osbuilder version"
+	# Source config.sh from distro
+	rootfs_config="${distro_config_dir}/${CONFIG_SH}"
+	source "${rootfs_config}"
 
-distro="$1"
+	# Source arch-specific config file
+	rootfs_arch_config="${distro_config_dir}/${CONFIG_ARCH_SH}"
+	if [ -f "${rootfs_arch_config}" ]; then
+		source "${rootfs_arch_config}"
+	fi
 
-[ -n "${distro}" ] || usage 1
-distro_config_dir="${script_dir}/${distro}"
+	[ -d "${distro_config_dir}" ] || die "Not found configuration directory ${distro_config_dir}"
 
-# Source config.sh from distro
-rootfs_config="${distro_config_dir}/${CONFIG_SH}"
-source "${rootfs_config}"
+	if [ -z "$ROOTFS_DIR" ]; then
+		 ROOTFS_DIR="${script_dir}/rootfs-${OS_NAME}"
+	fi
 
-# Source arch-specific config file
-rootfs_arch_config="${distro_config_dir}/${CONFIG_ARCH_SH}"
-if [ -f "${rootfs_arch_config}" ]; then
-	source "${rootfs_arch_config}"
-fi
+	if [ -e "${distro_config_dir}/${LIB_SH}" ];then
+		rootfs_lib="${distro_config_dir}/${LIB_SH}"
+		info "rootfs_lib.sh file found. Loading content"
+		source "${rootfs_lib}"
+	fi
 
-[ -d "${distro_config_dir}" ] || die "Not found configuration directory ${distro_config_dir}"
+	CONFIG_DIR=${distro_config_dir}
+	check_function_exist "build_rootfs"
 
-if [ -z "$ROOTFS_DIR" ]; then
-     ROOTFS_DIR="${script_dir}/rootfs-${OS_NAME}"
-fi
+	if [ -z "$INSIDE_CONTAINER" ] ; then
+		# Capture errors, but only outside of the docker container
+		trap error_handler ERR
+	fi
 
-init="${ROOTFS_DIR}/sbin/init"
+	mkdir -p ${ROOTFS_DIR}
 
-if [ -e "${distro_config_dir}/${LIB_SH}" ];then
-    rootfs_lib="${distro_config_dir}/${LIB_SH}"
-    info "rootfs_lib.sh file found. Loading content"
-    source "${rootfs_lib}"
-fi
-
-CONFIG_DIR=${distro_config_dir}
-check_function_exist "build_rootfs"
-
-if [ -z "$INSIDE_CONTAINER" ] ; then
-	# Capture errors, but only outside of the docker container
-	trap error_handler ERR
-fi
-
-mkdir -p ${ROOTFS_DIR}
-
-detect_go_version ||
+	detect_go_version ||
 		die "Could not detect the required Go version for AGENT_VERSION='${AGENT_VERSION:-master}'."
 
-echo "Required Go version: $GO_VERSION"
+	echo "Required Go version: $GO_VERSION"
 
-if [ -z "${USE_DOCKER}" ] ; then
-	#Generate an error if the local Go version is too old
-	foundVersion=$(go version | sed -E "s/^.+([0-9]+\.[0-9]+\.[0-9]+).*$/\1/g")
+	if [ -z "${USE_DOCKER}" ] ; then
+		#Generate an error if the local Go version is too old
+		foundVersion=$(go version | sed -E "s/^.+([0-9]+\.[0-9]+\.[0-9]+).*$/\1/g")
 
-	compare_versions "$GO_VERSION" $foundVersion || \
-		die "Your Go version $foundVersion is older than the minimum expected Go version $GO_VERSION"
-else
-	image_name="${distro}-rootfs-osbuilder"
-
-	generate_dockerfile "${distro_config_dir}"
-	docker build  \
-		--build-arg http_proxy="${http_proxy}" \
-		--build-arg https_proxy="${https_proxy}" \
-		-t "${image_name}" "${distro_config_dir}"
-
-	# fake mapping if KERNEL_MODULES_DIR is unset
-	kernel_mod_dir=${KERNEL_MODULES_DIR:-${ROOTFS_DIR}}
-
-	docker_run_args=""
-	docker_run_args+=" --rm"
-	docker_run_args+=" --runtime ${DOCKER_RUNTIME}"
-
-	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-		docker_run_args+=" --env GO_AGENT_PKG=${GO_AGENT_PKG}"
+		compare_versions "$GO_VERSION" $foundVersion || \
+			die "Your Go version $foundVersion is older than the minimum expected Go version $GO_VERSION"
 	else
-		docker_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
-		docker_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
+		image_name="${distro}-rootfs-osbuilder"
+
+		generate_dockerfile "${distro_config_dir}"
+		docker build  \
+			--build-arg http_proxy="${http_proxy}" \
+			--build-arg https_proxy="${https_proxy}" \
+			-t "${image_name}" "${distro_config_dir}"
+
+		# fake mapping if KERNEL_MODULES_DIR is unset
+		kernel_mod_dir=${KERNEL_MODULES_DIR:-${ROOTFS_DIR}}
+
+		docker_run_args=""
+		docker_run_args+=" --rm"
+		docker_run_args+=" --runtime ${DOCKER_RUNTIME}"
+
+		if [ -z "${AGENT_SOURCE_BIN}" ] ; then
+			docker_run_args+=" --env GO_AGENT_PKG=${GO_AGENT_PKG}"
+		else
+			docker_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
+			docker_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
+		fi
+
+		docker_run_args+=" $(docker_extra_args $distro)"
+
+		# Relabel volumes so SELinux allows access (see docker-run(1))
+		if command -v selinuxenabled > /dev/null && selinuxenabled ; then
+			for volume_dir in "${script_dir}" \
+					  "${ROOTFS_DIR}" \
+					  "${script_dir}/../scripts" \
+					  "${kernel_mod_dir}" \
+					  "${GOPATH_LOCAL}"; do
+				chcon -Rt svirt_sandbox_file_t "$volume_dir"
+			done
+		fi
+
+		#Make sure we use a compatible runtime to build rootfs
+		# In case Clear Containers Runtime is installed we dont want to hit issue:
+		#https://github.com/clearcontainers/runtime/issues/828
+		docker run  \
+			--env https_proxy="${https_proxy}" \
+			--env http_proxy="${http_proxy}" \
+			--env AGENT_VERSION="${AGENT_VERSION}" \
+			--env ROOTFS_DIR="/rootfs" \
+			--env AGENT_BIN="${AGENT_BIN}" \
+			--env AGENT_INIT="${AGENT_INIT}" \
+			--env GOPATH="${GOPATH_LOCAL}" \
+			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
+			--env EXTRA_PKGS="${EXTRA_PKGS}" \
+			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
+			--env INSIDE_CONTAINER=1 \
+			--env SECCOMP="${SECCOMP}" \
+			--env DEBUG="${DEBUG}" \
+			-v "${script_dir}":"/osbuilder" \
+			-v "${ROOTFS_DIR}":"/rootfs" \
+			-v "${script_dir}/../scripts":"/scripts" \
+			-v "${kernel_mod_dir}":"${kernel_mod_dir}" \
+			-v "${GOPATH_LOCAL}":"${GOPATH_LOCAL}" \
+			$docker_run_args \
+			${image_name} \
+			bash /osbuilder/rootfs.sh "${distro}"
+
+		exit $?
 	fi
 
-	docker_run_args+=" $(docker_extra_args $distro)"
+	build_rootfs ${ROOTFS_DIR}
+}
 
-	# Relabel volumes so SELinux allows access (see docker-run(1))
-	if command -v selinuxenabled > /dev/null && selinuxenabled ; then
-		for volume_dir in "${script_dir}" \
-				  "${ROOTFS_DIR}" \
-				  "${script_dir}/../scripts" \
-				  "${kernel_mod_dir}" \
-				  "${GOPATH_LOCAL}"; do
-			chcon -Rt svirt_sandbox_file_t "$volume_dir"
-		done
+# Used to create a minimal directory tree where the agent can be instaleld.
+# This is used when a distro is not specified.
+prepare_overlay()
+{
+	pushd "${ROOTFS_DIR}" > /dev/null
+	mkdir -p ./etc ./lib/systemd ./sbin ./var
+	ln -sf  ./usr/lib/systemd/systemd ./init
+	ln -sf  ../../init ./lib/systemd/systemd
+	ln -sf  ../init ./sbin/init
+	# Kata sytemd unit file
+	mkdir -p ./etc/systemd/system/basic.target.wants/
+	ln -sf /usr/lib/systemd/system/kata-containers.target ./etc/systemd/system/basic.target.wants/kata-containers.target
+	popd  > /dev/null
+}
+
+# Setup an existing rootfs directory, based on the OPTIONAL distro name
+# provided as argument
+setup_rootfs()
+{
+	[ -z "$distro" ] && prepare_overlay
+
+	info "Create symlink to /tmp in /var to create private temporal directories with systemd"
+	pushd "${ROOTFS_DIR}" >> /dev/null
+	if [ "$PWD" != "/" ] ; then
+		rm -rf ./var/cache/ ./var/lib ./var/log ./var/tmp
 	fi
 
-	#Make sure we use a compatible runtime to build rootfs
-	# In case Clear Containers Runtime is installed we dont want to hit issue:
-	#https://github.com/clearcontainers/runtime/issues/828
-	docker run  \
-		--env https_proxy="${https_proxy}" \
-		--env http_proxy="${http_proxy}" \
-		--env AGENT_VERSION="${AGENT_VERSION}" \
-		--env ROOTFS_DIR="/rootfs" \
-		--env AGENT_BIN="${AGENT_BIN}" \
-		--env AGENT_INIT="${AGENT_INIT}" \
-		--env GOPATH="${GOPATH_LOCAL}" \
-		--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
-		--env EXTRA_PKGS="${EXTRA_PKGS}" \
-		--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
-		--env INSIDE_CONTAINER=1 \
-		--env SECCOMP="${SECCOMP}" \
-		--env DEBUG="${DEBUG}" \
-		-v "${script_dir}":"/osbuilder" \
-		-v "${ROOTFS_DIR}":"/rootfs" \
-		-v "${script_dir}/../scripts":"/scripts" \
-		-v "${kernel_mod_dir}":"${kernel_mod_dir}" \
-		-v "${GOPATH_LOCAL}":"${GOPATH_LOCAL}" \
-		$docker_run_args \
-		${image_name} \
-		bash /osbuilder/rootfs.sh "${distro}"
+	ln -s ../tmp ./var/
 
-	exit $?
-fi
+	# For some distros tmp.mount may not be installed by default in systemd paths
+	if ! [ -f "./etc/systemd/system/tmp.mount" ] && \
+		! [ -f "./usr/lib/systemd/system/tmp.mount" ] &&
+		[ "$AGENT_INIT" != "yes" ]; then
+		local unitFile="./etc/systemd/system/tmp.mount"
+		info "Install tmp.mount in ./etc/systemd/system"
+		mkdir -p `dirname "$unitFile"`
+		cp ./usr/share/systemd/tmp.mount "$unitFile" || cat > "$unitFile" << EOT
+#  This file is part of systemd.
+#
+#  systemd is free software; you can redistribute it and/or modify it
+#  under the terms of the GNU Lesser General Public License as published by
+#  the Free Software Foundation; either version 2.1 of the License, or
+#  (at your option) any later version.
 
-build_rootfs ${ROOTFS_DIR}
-pushd "${ROOTFS_DIR}" >> /dev/null
-if [ "$PWD" != "/" ] ; then
-	rm -rf ./var/cache/ ./var/lib ./var/log
-fi
+[Unit]
+Description=Temporary Directory (/tmp)
+Documentation=man:hier(7)
+Documentation=https://www.freedesktop.org/wiki/Software/systemd/APIFileSystems
+ConditionPathIsSymbolicLink=!/tmp
+DefaultDependencies=no
+Conflicts=umount.target
+Before=local-fs.target umount.target
+After=swap.target
 
-info "Create symlink to /tmp in /var to create private temporal directories with systemd"
-rm -rf ./var/tmp
-ln -s ../tmp ./var/
+[Mount]
+What=tmpfs
+Where=/tmp
+Type=tmpfs
+Options=mode=1777,strictatime,nosuid,nodev
+EOT
+	fi
 
-# For some distros tmp.mount may not be installed by default in systemd paths
-if ! [ -f "./etc/systemd/system/tmp.mount" ] && \
-   ! [ -f "./usr/lib/systemd/system/tmp.mount" ] &&
-   [ "$AGENT_INIT" != "yes" ]; then
-	info "Install tmp.mount in ./etc/systemd/system"
-	cp ./usr/share/systemd/tmp.mount ./etc/systemd/system/tmp.mount
-fi
+	popd  >> /dev/null
 
-popd  >> /dev/null
+	[ -n "${KERNEL_MODULES_DIR}" ] && copy_kernel_modules ${KERNEL_MODULES_DIR} ${ROOTFS_DIR}
 
-[ -n "${KERNEL_MODULES_DIR}" ] && copy_kernel_modules ${KERNEL_MODULES_DIR} ${ROOTFS_DIR}
+	chrony_conf_file="${ROOTFS_DIR}/etc/chrony.conf"
+	if [ "${distro}" == "ubuntu" ] || [ "${distro}" == "debian" ] ; then
+		chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
+	fi
 
-chrony_conf_file="${ROOTFS_DIR}/etc/chrony.conf"
-if [ ${distro} == ubuntu ] || [ ${distro} == debian ] ; then
-	chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
-fi
+	info "Create ${ROOTFS_DIR}/etc"
+	mkdir -p "${ROOTFS_DIR}/etc"
 
-info "Create ${ROOTFS_DIR}/etc"
-mkdir -p "${ROOTFS_DIR}/etc"
-
-info "Configure chrony file ${chrony_conf_file}"
-cat >> "${chrony_conf_file}" <<EOT
+	info "Configure chrony file ${chrony_conf_file}"
+	cat >> "${chrony_conf_file}" <<EOT
 refclock PHC /dev/ptp0 poll 3 dpoll -2 offset 0
 # Step the system clock instead of slewing it if the adjustment is larger than
 # one second, at any time
 makestep 1 -1
 EOT
 
-# Comment out ntp sources for chrony to be extra careful
-# Reference:  https://chrony.tuxfamily.org/doc/3.4/chrony.conf.html
-sed -i 's/^\(server \|pool \|peer \)/# &/g'  ${chrony_conf_file}
+	# Comment out ntp sources for chrony to be extra careful
+	# Reference:  https://chrony.tuxfamily.org/doc/3.4/chrony.conf.html
+	sed -i 's/^\(server \|pool \|peer \)/# &/g'  ${chrony_conf_file}
 
-chrony_systemd_service="${ROOTFS_DIR}/usr/lib/systemd/system/chronyd.service"
-if [ ${distro} == ubuntu ] || [ ${distro} == debian ] ; then
-	chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
-fi
+	# The CC on s390x for fedora needs to be manually set to gcc when the golang is downloaded from the main page.
+	# See issue: https://github.com/kata-containers/osbuilder/issues/217
+	[ "$distro" == "fedora" ] && [ "$ARCH" == "s390x" ] && export CC=gcc
 
-if [ -f "$chrony_systemd_service" ]; then
-	sed -i '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' ${chrony_systemd_service}
-fi
+	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
+	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
-# The CC on s390x for fedora needs to be manually set to gcc when the golang is downloaded from the main page.
-# See issue: https://github.com/kata-containers/osbuilder/issues/217
-[ "$distro" == fedora ] && [ "$ARCH" == "s390x" ] && export CC=gcc
+	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
+		info "Pull Agent source code"
+		go get -d "${GO_AGENT_PKG}" || true
+		OK "Pull Agent source code"
 
-AGENT_DIR="${ROOTFS_DIR}/usr/bin"
-AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
+		info "Build agent"
+		pushd "${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
+		[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful"
+		make clean
+		make INIT=${AGENT_INIT}
+		make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
+		popd
+	else
+		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
+		OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
+	fi
 
-if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-	info "Pull Agent source code"
-	go get -d "${GO_AGENT_PKG}" || true
-	OK "Pull Agent source code"
+	[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
+	OK "Agent installed"
 
-	info "Build agent"
-	pushd "${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
-	[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful"
-	make clean
-	make INIT=${AGENT_INIT}
-	make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
-	popd
-else
-	cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
-	OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
-fi
+	[ "${AGENT_INIT}" == "yes" ] && setup_agent_init "${AGENT_DEST}" "${init}"
 
-[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
-OK "Agent installed"
+	info "Check init is installed"
+	[ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
+	OK "init is installed"
 
-[ "${AGENT_INIT}" == "yes" ] && setup_agent_init "${AGENT_DEST}" "${init}"
+	info "Creating summary file"
+	create_summary_file "${ROOTFS_DIR}"
+}
 
-info "Check init is installed"
-[ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
-OK "init is installed"
+parse_arguments()
+{
+	while getopts a:hlo:r:t: opt
+	do
+		case $opt in
+			a)	AGENT_VERSION="${OPTARG}" ;;
+			h)	usage ;;
+			l)	get_distros | sort && exit 0;;
+			o)	OSBUILDER_VERSION="${OPTARG}" ;;
+			r)	ROOTFS_DIR="${OPTARG}" ;;
+			t)	get_test_config "${OPTARG}" && exit 0;;
+			*)  die "Found an invalid option";;
+		esac
+	done
 
-info "Creating summary file"
-create_summary_file "${ROOTFS_DIR}"
+	shift $(($OPTIND - 1))
+	distro="$1"
+}
+
+main()
+{
+	parse_arguments $*
+	check_env_variables
+	init="${ROOTFS_DIR}/sbin/init"
+
+	if [ -n "$distro" ]; then
+		build_rootfs_distro
+	else
+		#Make sure ROOTFS_DIR is set correctly
+		[ -d "${ROOTFS_DIR}" ] || die "Invalid rootfs directory: '$ROOTFS_DIR'"
+	fi
+
+	setup_rootfs
+}
+
+main $*
