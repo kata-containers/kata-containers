@@ -204,7 +204,7 @@ shell script with the following:
 
 ```bash
 #!/bin/bash
-KATA_CONF_FILE=/etc/kata-containers/firecracker.toml containerd-shim-kata-v2
+KATA_CONF_FILE=/etc/kata-containers/firecracker.toml containerd-shim-kata-v2 $@
 ```
 
 Name it as `/usr/local/bin/containerd-shim-katafc-v2` and reference it in the configuration of containerd:
