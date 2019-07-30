@@ -97,7 +97,11 @@ if [ "$ID" == "ubuntu" ]; then
 	if sudo fdisk -l "$LVM_DEVICE" | grep "${LVM_DEVICE}[1-9]"; then
 		die "detected partitions on block device: ${LVM_DEVICE}. Will not continue"
 	fi
-	export STORAGE_OPTIONS="$DM_STORAGE_OPTIONS --storage-opt dm.directlvm_device=${LVM_DEVICE}"
+	# When using devicemapper, do not run tests in parallel as each test
+	# will launch a new cri-o process which will try to use same block device.
+	export JOBS=1 \
+		STORAGE_OPTIONS="$DM_STORAGE_OPTIONS --storage-opt dm.directlvm_device=${LVM_DEVICE}"
+
 fi
 
 # On other distros or on ZUUL, use overlay.
