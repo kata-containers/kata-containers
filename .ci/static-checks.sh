@@ -780,6 +780,17 @@ static_check_vendor()
 	local vendor_files
 	local result
 
+	# Check if repo has been changed to use go modules
+	if [ -f "go.mod" ]; then
+		info "go.mod file found, running go mod verify instead"
+		# This verifies the integrity of modules in the local cache.
+		# This does not really verify the integrity of vendored code:
+		# https://github.com/golang/go/issues/27348
+		# Once that is added we need to add an extra step to verify vendored code.
+		GO111MODULE=on go mod verify
+		return
+	fi
+
 	# All vendor operations should modify this file
 	local vendor_ctl_file="Gopkg.lock"
 
