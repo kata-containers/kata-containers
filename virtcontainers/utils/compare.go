@@ -60,6 +60,8 @@ func deepCompareValue(foo, bar reflect.Value) bool {
 		return compareSlice(foo, bar)
 	case reflect.Struct:
 		return compareStruct(foo, bar)
+	case reflect.Interface:
+		return reflect.DeepEqual(foo.Interface(), bar.Interface())
 	default:
 		return foo.Interface() == bar.Interface()
 	}

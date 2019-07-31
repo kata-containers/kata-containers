@@ -324,6 +324,19 @@ path = "@SHIMPATH@"
 #trace_mode = "dynamic"
 #trace_type = "isolated"
 
+# Comma separated list of kernel modules and their parameters.
+# These modules will be loaded in the guest kernel using modprobe(8).
+# The following example can be used to load two kernel modules with parameters
+#  - kernel_modules=["e1000e InterruptThrottleRate=3000,3000,3000 EEE=1", "i915 enable_ppgtt=0"]
+# The first word is considered as the module name and the rest as its parameters.
+# Container will not be started when:
+#  * A kernel module is specified and the modprobe command is not installed in the guest
+#    or it fails loading the module.
+#  * The module is not available in the guest or it doesn't met the guest kernel
+#    requirements, like architecture and version.
+#
+kernel_modules=[]
+
 [netmon]
 # If enabled, the network monitoring process gets started when the
 # sandbox is created. This allows for the detection of some additional

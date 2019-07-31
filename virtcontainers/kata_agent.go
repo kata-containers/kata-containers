@@ -101,12 +101,13 @@ const (
 // KataAgentConfig is a structure storing information needed
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
-	LongLiveConn bool
-	UseVSock     bool
-	Debug        bool
-	Trace        bool
-	TraceMode    string
-	TraceType    string
+	LongLiveConn  bool
+	UseVSock      bool
+	Debug         bool
+	Trace         bool
+	TraceMode     string
+	TraceType     string
+	KernelModules []string
 }
 
 type kataVSOCK struct {
@@ -140,6 +141,7 @@ type kataAgent struct {
 	proxyBuiltIn   bool
 	dynamicTracing bool
 	dead           bool
+	kmodules       []string
 
 	vmSocket interface{}
 	ctx      context.Context
@@ -272,6 +274,7 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 
 		disableVMShutdown = k.handleTraceSettings(c)
 		k.keepConn = c.LongLiveConn
+		k.kmodules = c.KernelModules
 	default:
 		return false, vcTypes.ErrInvalidConfigType
 	}
@@ -745,6 +748,56 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 		return err
 	}
 
+	storages := setupStorages(sandbox)
+
+	kmodules := setupKernelModules(k.kmodules)
+
+	req := &grpc.CreateSandboxRequest{
+		Hostname:      hostname,
+		Storages:      storages,
+		SandboxPidns:  sandbox.sharePidNs,
+		SandboxId:     sandbox.id,
+		GuestHookPath: sandbox.config.HypervisorConfig.GuestHookPath,
+		KernelModules: kmodules,
+	}
+
+	_, err = k.sendReq(req)
+	if err != nil {
+		return err
+	}
+
+	if k.dynamicTracing {
+		_, err = k.sendReq(&grpc.StartTracingRequest{})
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func setupKernelModules(kmodules []string) []*grpc.KernelModule {
+	modules := []*grpc.KernelModule{}
+
+	for _, m := range kmodules {
+		l := strings.Fields(strings.TrimSpace(m))
+		if len(l) == 0 {
+			continue
+		}
+
+		module := &grpc.KernelModule{Name: l[0]}
+		modules = append(modules, module)
+		if len(l) == 1 {
+			continue
+		}
+
+		module.Parameters = append(module.Parameters, l[1:]...)
+	}
+
+	return modules
+}
+
+func setupStorages(sandbox *Sandbox) []*grpc.Storage {
 	storages := []*grpc.Storage{}
 	caps := sandbox.hypervisor.capabilities()
 
@@ -803,27 +856,7 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 		storages = append(storages, shmStorage)
 	}
 
-	req := &grpc.CreateSandboxRequest{
-		Hostname:      hostname,
-		Storages:      storages,
-		SandboxPidns:  sandbox.sharePidNs,
-		SandboxId:     sandbox.id,
-		GuestHookPath: sandbox.config.HypervisorConfig.GuestHookPath,
-	}
-
-	_, err = k.sendReq(req)
-	if err != nil {
-		return err
-	}
-
-	if k.dynamicTracing {
-		_, err = k.sendReq(&grpc.StartTracingRequest{})
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return storages
 }
 
 func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
