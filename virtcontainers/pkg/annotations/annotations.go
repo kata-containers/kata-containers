@@ -55,6 +55,19 @@ const (
 
 	// ContainerTypeKey is the annotation key to fetch container type.
 	ContainerTypeKey = vcAnnotationsPrefix + "pkg.oci.container_type"
+
+	// KernelModules is the annotation key for passing the list of kernel
+	// modules and their parameters that will be loaded in the guest kernel.
+	// Semicolon separated list of kernel modules and their parameters.
+	// These modules will be loaded in the guest kernel using modprobe(8).
+	// The following example can be used to load two kernel modules with parameters
+	///
+	//   annotations:
+	//     com.github.containers.virtcontainers.KernelModules: "e1000e InterruptThrottleRate=3000,3000,3000 EEE=1; i915 enable_ppgtt=0"
+	//
+	// The first word is considered as the module name and the rest as its parameters.
+	//
+	KernelModules = vcAnnotationsPrefix + "KernelModules"
 )
 
 const (
