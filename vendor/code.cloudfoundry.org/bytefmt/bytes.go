@@ -7,26 +7,26 @@ package bytefmt
 
 import (
 	"errors"
-	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 const (
-	BYTE = 1.0 << (10 * iota)
+	BYTE = 1 << (10 * iota)
 	KILOBYTE
 	MEGABYTE
 	GIGABYTE
 	TERABYTE
+	PETABYTE
+	EXABYTE
 )
 
-var (
-	bytesPattern             = regexp.MustCompile(`(?i)^(-?\d+(?:\.\d+)?)([KMGT]i?B?|B)$`)
-	invalidByteQuantityError = errors.New("byte quantity must be a positive integer with a unit of measurement like M, MB, MiB, G, GiB, or GB")
-)
+var invalidByteQuantityError = errors.New("byte quantity must be a positive integer with a unit of measurement like M, MB, MiB, G, GiB, or GB")
 
 // ByteSize returns a human-readable byte string of the form 10M, 12.5K, and so forth.  The following units are available:
+//	E: Exabyte
+//	P: Petabyte
 //	T: Terabyte
 //	G: Gigabyte
 //	M: Megabyte
@@ -35,9 +35,15 @@ var (
 // The unit that results in the smallest number greater than or equal to 1 is always chosen.
 func ByteSize(bytes uint64) string {
 	unit := ""
-	value := float32(bytes)
+	value := float64(bytes)
 
 	switch {
+	case bytes >= EXABYTE:
+		unit = "E"
+		value = value / EXABYTE
+	case bytes >= PETABYTE:
+		unit = "P"
+		value = value / PETABYTE
 	case bytes >= TERABYTE:
 		unit = "T"
 		value = value / TERABYTE
@@ -56,9 +62,9 @@ func ByteSize(bytes uint64) string {
 		return "0"
 	}
 
-	stringValue := fmt.Sprintf("%.1f", value)
-	stringValue = strings.TrimSuffix(stringValue, ".0")
-	return fmt.Sprintf("%s%s", stringValue, unit)
+	result := strconv.FormatFloat(value, 'f', 1, 64)
+	result = strings.TrimSuffix(result, ".0")
+	return result + unit
 }
 
 // ToMegabytes parses a string formatted by ByteSize as megabytes.
@@ -76,31 +82,40 @@ func ToMegabytes(s string) (uint64, error) {
 // MB = M = MiB = 1024 * K
 // GB = G = GiB = 1024 * M
 // TB = T = TiB = 1024 * G
+// PB = P = PiB = 1024 * T
+// EB = E = EiB = 1024 * P
 func ToBytes(s string) (uint64, error) {
-	parts := bytesPattern.FindStringSubmatch(strings.TrimSpace(s))
-	if len(parts) < 3 {
+	s = strings.TrimSpace(s)
+	s = strings.ToUpper(s)
+
+	i := strings.IndexFunc(s, unicode.IsLetter)
+
+	if i == -1 {
 		return 0, invalidByteQuantityError
 	}
 
-	value, err := strconv.ParseFloat(parts[1], 64)
-	if err != nil || value <= 0 {
+	bytesString, multiple := s[:i], s[i:]
+	bytes, err := strconv.ParseFloat(bytesString, 64)
+	if err != nil || bytes <= 0 {
 		return 0, invalidByteQuantityError
 	}
 
-	var bytes uint64
-	unit := strings.ToUpper(parts[2])
-	switch unit[:1] {
-	case "T":
-		bytes = uint64(value * TERABYTE)
-	case "G":
-		bytes = uint64(value * GIGABYTE)
-	case "M":
-		bytes = uint64(value * MEGABYTE)
-	case "K":
-		bytes = uint64(value * KILOBYTE)
+	switch multiple {
+	case "E", "EB", "EIB":
+		return uint64(bytes * EXABYTE), nil
+	case "P", "PB", "PIB":
+		return uint64(bytes * PETABYTE), nil
+	case "T", "TB", "TIB":
+		return uint64(bytes * TERABYTE), nil
+	case "G", "GB", "GIB":
+		return uint64(bytes * GIGABYTE), nil
+	case "M", "MB", "MIB":
+		return uint64(bytes * MEGABYTE), nil
+	case "K", "KB", "KIB":
+		return uint64(bytes * KILOBYTE), nil
 	case "B":
-		bytes = uint64(value * BYTE)
+		return uint64(bytes), nil
+	default:
+		return 0, invalidByteQuantityError
 	}
-
-	return bytes, nil
 }

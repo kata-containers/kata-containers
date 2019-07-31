@@ -19,6 +19,10 @@
 #  name = "github.com/x/y"
 #  version = "2.4.0"
 
+[[override]]
+  name = "gopkg.in/fsnotify.v1"
+  source = "https://github.com/fsnotify/fsnotify.git"
+  version = "v1.4.7"
 
 [[constraint]]
   name = "github.com/urfave/cli"
@@ -26,7 +30,7 @@
 
 [[constraint]]
   name = "github.com/onsi/ginkgo"
-  version = "=1.3.1"
+  version = "=1.8.0"
 
 [[constraint]]
   name = "github.com/onsi/gomega"
