@@ -1588,3 +1588,38 @@ func TestMainLoopEventBeforeGreeting(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+func TestQMPExecQueryQmpSchema(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	schemaInfo := []SchemaInfo{
+		{
+			MetaType: "command",
+			Name:     "object-add",
+		},
+		{
+			MetaType: "event",
+			Name:     "VSOCK_RUNNING",
+		},
+	}
+	buf.AddCommand("query-qmp-schema", nil, "return", schemaInfo)
+	cfg := QMPConfig{
+		Logger:      qmpTestLogger{},
+		MaxCapacity: 1024,
+	}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	info, err := q.ExecQueryQmpSchema(context.Background())
+	if err != nil {
+		t.Fatalf("Unexpected error: %v\n", err)
+	}
+	if len(schemaInfo) != 2 {
+		t.Fatalf("Expected schema infos length equals to 2\n")
+	}
+	if reflect.DeepEqual(info, schemaInfo) == false {
+		t.Fatalf("Expected %v equals to %v\n", info, schemaInfo)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
