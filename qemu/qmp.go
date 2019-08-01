@@ -84,6 +84,9 @@ type QMPConfig struct {
 	// logger is used by the qmpStart function and all the go routines
 	// it spawns to log information.
 	Logger QMPLog
+
+	// specify the capacity of buffer used by receive QMP response.
+	MaxCapacity int
 }
 
 type qmpEventFilter struct {
@@ -242,8 +245,19 @@ type MigrationStatus struct {
 	XbzrleCache  MigrationXbzrleCache     `json:"xbzrle-cache,omitempty"`
 }
 
+// SchemaInfo represents all QMP wire ABI
+type SchemaInfo struct {
+	MetaType string `json:"meta-type"`
+	Name     string `json:"name"`
+}
+
 func (q *QMP) readLoop(fromVMCh chan<- []byte) {
 	scanner := bufio.NewScanner(q.conn)
+	if q.cfg.MaxCapacity > 0 {
+		buffer := make([]byte, q.cfg.MaxCapacity)
+		scanner.Buffer(buffer, q.cfg.MaxCapacity)
+	}
+
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if q.cfg.Logger.V(1) {
@@ -260,6 +274,7 @@ func (q *QMP) readLoop(fromVMCh chan<- []byte) {
 
 		fromVMCh <- sendLine
 	}
+	q.cfg.Logger.Infof("sanner return error: %v", scanner.Err())
 	close(fromVMCh)
 }
 
@@ -1508,4 +1523,25 @@ func (q *QMP) ExecuteMigrationIncoming(ctx context.Context, uri string) error {
 		"uri": uri,
 	}
 	return q.executeCommand(ctx, "migrate-incoming", args, nil)
+}
+
+// ExecQueryQmpSchema query all QMP wire ABI and returns a slice
+func (q *QMP) ExecQueryQmpSchema(ctx context.Context) ([]SchemaInfo, error) {
+	response, err := q.executeCommandWithResponse(ctx, "query-qmp-schema", nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// convert response to json
+	data, err := json.Marshal(response)
+	if err != nil {
+		return nil, fmt.Errorf("unable to extract memory devices information: %v", err)
+	}
+
+	var schemaInfo []SchemaInfo
+	if err = json.Unmarshal(data, &schemaInfo); err != nil {
+		return nil, fmt.Errorf("unable to convert json to schemaInfo: %v", err)
+	}
+
+	return schemaInfo, nil
 }
