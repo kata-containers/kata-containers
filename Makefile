@@ -119,6 +119,9 @@ kubernetes:
 	bash -f .ci/install_bats.sh
 	bash -f integration/kubernetes/run_kubernetes_tests.sh
 
+ksm:
+	bash -f integration/ksm/ksm_test.sh
+
 swarm:
 	systemctl is-active --quiet docker || sudo systemctl start docker
 	bash -f .ci/install_bats.sh
