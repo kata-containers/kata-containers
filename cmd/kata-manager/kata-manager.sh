@@ -304,14 +304,6 @@ exec_document()
 
 	info "$msg"
 
-	# verify that we have OBS packages for the distro VERSION_ID
-	check_version=$(grep -E "\<${VERSION_ID}\>" "${install_script}" || true)
-
-	if [ -z "${check_version}" ]; then
-		rm -f "${install_script}"
-		die "OBS packages not available on ${ID} ${VERSION_ID}"
-	fi
-
 	# run the installation
 	bash "${install_script}"
 
