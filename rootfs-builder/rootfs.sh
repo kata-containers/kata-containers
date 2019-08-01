@@ -468,6 +468,15 @@ EOT
 	# Reference:  https://chrony.tuxfamily.org/doc/3.4/chrony.conf.html
 	sed -i 's/^\(server \|pool \|peer \)/# &/g'  ${chrony_conf_file}
 
+	chrony_systemd_service="${ROOTFS_DIR}/usr/lib/systemd/system/chronyd.service"
+	if [ ${distro} == ubuntu ] || [ ${distro} == debian ] ; then
+		chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
+	fi
+
+	if [ -f "$chrony_systemd_service" ]; then
+		sed -i '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' ${chrony_systemd_service}
+	fi
+
 	# The CC on s390x for fedora needs to be manually set to gcc when the golang is downloaded from the main page.
 	# See issue: https://github.com/kata-containers/osbuilder/issues/217
 	[ "$distro" == "fedora" ] && [ "$ARCH" == "s390x" ] && export CC=gcc
