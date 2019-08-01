@@ -12,7 +12,7 @@ Fedora_29::Fedora:29::standard
 Fedora_30::Fedora:30::standard
 # FIXME: https://github.com/kata-containers/packaging/issues/510
 #RHEL_7::RedHat:RHEL-7::standard
-SLE_12_SP3::SUSE:SLE-12-SP3:GA::standard
+SLE_12_SP4::SUSE:SLE-12-SP4:GA::standard
 openSUSE_Leap_15.0::openSUSE:Leap:15.0::standard
 openSUSE_Leap_15.1::openSUSE:Leap:15.1::standard
 openSUSE_Tumbleweed::openSUSE:Factory::snapshot
