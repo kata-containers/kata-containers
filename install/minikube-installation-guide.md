@@ -32,6 +32,9 @@ This installation guide has only been verified under a Minikube Linux installati
 > - This installation guide may not work for macOS installations of Minikube, due to the lack of
 nested virtualization support on that platform.
 > - This installation guide has not been tested on a Windows installation.
+> - Kata under Minikube does not currently support Kata Firecracker (`kata-fc`).
+>   Although the `kata-fc` binary will be installed as part of these instructions,
+>   via `kata-deploy`, pods cannot be launched with `kata-fc`, and will fail to start.
 
 Before commencing installation, it is strongly recommended you read the
 [Minikube installation guide](https://kubernetes.io/docs/tasks/tools/install-minikube/).
