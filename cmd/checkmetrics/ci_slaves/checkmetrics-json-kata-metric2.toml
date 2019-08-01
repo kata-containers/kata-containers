@@ -16,7 +16,7 @@ description = "measure container lifecycle timings"
 # within (inclusive)
 checkvar = ".\"boot-times\".Results | .[] | .\"to-workload\".Result"
 checktype = "mean"
-midval = 0.85
+midval = 0.80
 minpercent = 5.0
 maxpercent = 5.0
 
@@ -29,7 +29,7 @@ description = "measure container average footprint"
 # within (inclusive)
 checkvar = ".\"memory-footprint\".Results | .[] | .average.Result"
 checktype = "mean"
-midval = 132458.0
+midval = 122904.0
 minpercent = 5.0
 maxpercent = 5.0
 
@@ -42,7 +42,7 @@ description = "measure container average footprint with KSM"
 # within (inclusive)
 checkvar = ".\"memory-footprint-ksm\".Results | .[] | .average.Result"
 checktype = "mean"
-midval = 56366.5
+midval = 49821.0
 minpercent = 5.0
 maxpercent = 5.0
 
