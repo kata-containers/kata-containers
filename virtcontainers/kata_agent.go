@@ -66,24 +66,26 @@ var (
 	kataGuestSandboxDir   = "/run/kata-containers/sandbox/"
 	type9pFs              = "9p"
 	typeVirtioFS          = "virtio_fs"
+	typeVirtioFSNoCache   = "none"
 	vsockSocketScheme     = "vsock"
 	// port numbers below 1024 are called privileged ports. Only a process with
 	// CAP_NET_BIND_SERVICE capability may bind to these port numbers.
-	vSockPort                = 1024
-	kata9pDevType            = "9p"
-	kataMmioBlkDevType       = "mmioblk"
-	kataBlkDevType           = "blk"
-	kataSCSIDevType          = "scsi"
-	kataNvdimmDevType        = "nvdimm"
-	kataVirtioFSDevType      = "virtio-fs"
-	sharedDir9pOptions       = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
-	sharedDirVirtioFSOptions = []string{"default_permissions,allow_other,rootmode=040000,user_id=0,group_id=0,dax,tag=" + mountGuest9pTag, "nodev"}
-	shmDir                   = "shm"
-	kataEphemeralDevType     = "ephemeral"
-	ephemeralPath            = filepath.Join(kataGuestSandboxDir, kataEphemeralDevType)
-	grpcMaxDataSize          = int64(1024 * 1024)
-	localDirOptions          = []string{"mode=0777"}
-	maxHostnameLen           = 64
+	vSockPort                   = 1024
+	kata9pDevType               = "9p"
+	kataMmioBlkDevType          = "mmioblk"
+	kataBlkDevType              = "blk"
+	kataSCSIDevType             = "scsi"
+	kataNvdimmDevType           = "nvdimm"
+	kataVirtioFSDevType         = "virtio-fs"
+	sharedDir9pOptions          = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
+	sharedDirVirtioFSOptions    = []string{"default_permissions,allow_other,rootmode=040000,user_id=0,group_id=0,tag=" + mountGuest9pTag, "nodev"}
+	sharedDirVirtioFSDaxOptions = "dax"
+	shmDir                      = "shm"
+	kataEphemeralDevType        = "ephemeral"
+	ephemeralPath               = filepath.Join(kataGuestSandboxDir, kataEphemeralDevType)
+	grpcMaxDataSize             = int64(1024 * 1024)
+	localDirOptions             = []string{"mode=0777"}
+	maxHostnameLen              = 64
 )
 
 const (
@@ -754,6 +756,14 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 		// (resolv.conf, etc...) and potentially all container
 		// rootfs will reside.
 		if sandbox.config.HypervisorConfig.SharedFS == config.VirtioFS {
+			// If virtio-fs uses either of the two cache options 'auto, always',
+			// the guest directory can be mounted with option 'dax' allowing it to
+			// directly map contents from the host. When set to 'none', the mount
+			// options should not contain 'dax' lest the virtio-fs daemon crashing
+			// with an invalid address reference.
+			if sandbox.config.HypervisorConfig.VirtioFSCache != typeVirtioFSNoCache {
+				sharedDirVirtioFSOptions = append(sharedDirVirtioFSOptions, sharedDirVirtioFSDaxOptions)
+			}
 			sharedVolume := &grpc.Storage{
 				Driver:     kataVirtioFSDevType,
 				Source:     "none",
