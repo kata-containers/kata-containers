@@ -180,11 +180,12 @@ check_rootfs() {
 	OK "init is installed"
 
 
+	systemd_path="/lib/systemd/systemd"
+	systemd="${rootfs}${systemd_path}"
+
 	# check agent or systemd
 	case "${AGENT_INIT}" in
 		"no")
-			systemd_path="/lib/systemd/systemd"
-			systemd="${rootfs}${systemd_path}"
 			if [ ! -x "${systemd}" ] && [ ! -L "${systemd}" ]; then
 				error "${systemd_path} is not installed in ${rootfs}"
 				return 1
@@ -193,12 +194,18 @@ check_rootfs() {
 			;;
 
 		"yes")
-			agent_path="/usr/bin/${AGENT_BIN}"
+			agent_path="/sbin/init"
 			agent="${rootfs}${agent_path}"
 			if  [ ! -x "${agent}" ]; then
 				error "${agent_path} is not installed in ${rootfs}. Use AGENT_BIN env variable to change the expected agent binary name"
 				return 1
 			fi
+			# checksum must be different to system
+			if [ -f "${systemd}" ] && cmp -s "${systemd}" "${agent}"; then
+			   error "The agent is not the init process. ${agent_path} is systemd"
+			   return 1
+			fi
+
 			OK "Agent installed"
 			;;
 
