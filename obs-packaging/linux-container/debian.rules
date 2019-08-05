@@ -8,6 +8,12 @@ KATA_MULTIARCH="/usr/src/packages/SOURCES/kata-multiarch.sh"
 KERNEL_ARCH=$(shell /bin/bash $(KATA_MULTIARCH) -a $(HOST_ARCH))
 KERNEL_IMAGE=$(shell /bin/bash $(KATA_MULTIARCH) -i $(HOST_ARCH))
 KERNEL_CONFIGS=kata-kernel-configs
+KERNEL_FRAG_COMMON_DIR="$(KERNEL_CONFIGS)/fragments/common"
+KERNEL_FRAG_ARCH_DIR="$(KERNEL_CONFIGS)/fragments/$(KERNEL_ARCH)"
+
+# used in merge_config.sh
+export KCONFIG_CONFIG=.config
+export ARCH=$(KERNEL_ARCH)
 
 %:
 	dh $@
@@ -17,14 +23,13 @@ override_dh_auto_build:
 	tar xzf /usr/src/packages/SOURCES/$(KERNEL_CONFIGS).tar.gz
 	rm -f .config
 	find $(KERNEL_CONFIGS) -name "$(KERNEL_ARCH)_kata_kvm_*" -exec cp {} .config \;
-	if [ ! -f .config ]; then
-		# Use fragments to generate the .config
-		frag_dir="kata-kernel-configs/fragments"
-		err_msg="not in final"
-		r="$(KCONFIG_CONFIG=.config ARCH=${kernelArch} scripts/kconfig/merge_config.sh -r -n ${frag_dir}/common/* ${frag_dir}/${kernelArch}/* | grep "${err_msg}")" || true
-		[ -z "${r}" ] || (@echo "ERROR: ${r}"; exit 1)
+	if [ ! -f .config ]; then \
+		scripts/kconfig/merge_config.sh -r -n $(KERNEL_FRAG_COMMON_DIR)/* $(KERNEL_FRAG_ARCH_DIR)/* ; \
+		if [ ! -f .config ]; then \
+			echo "ERROR: cannot find the kernel config file for the $(KERNEL_ARCH) architecture"; \
+			exit 1; \
+		fi \
 	fi
-	[ -f .config ] || (@echo "ERROR: cannot find the kernel config file for the $(KERNEL_ARCH) architecture"; exit 1)
 
 	# https://github.com/kata-containers/packaging/issues/394 enable reproducible builds:
 	export KBUILD_BUILD_USER=katabuilduser
