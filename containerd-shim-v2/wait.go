@@ -117,7 +117,6 @@ func watchSandbox(s *service) {
 			}
 		}
 	}
-	s.containers = make(map[string]*container)
 
 	// Existing container/exec will be cleaned up by its waiters.
 	// No need to send async events here.
