@@ -27,3 +27,7 @@ docker:
     - Checking CPU cgroups in the host
   Context:
   It:
+
+kubernetes:
+  - k8s-cpu-ns
+  - k8s-limit-range
