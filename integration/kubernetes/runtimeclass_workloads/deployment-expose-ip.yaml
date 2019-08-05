@@ -21,6 +21,8 @@ spec:
       runtimeClassName: kata
       containers:
       - name: hello-world
-        image: gcr.io/google-samples/hello-app:1.0
+        image: gcr.io/kubernetes-e2e-test-images/agnhost:2.2
+        args:
+        - netexec
         ports:
         - containerPort: 8080
