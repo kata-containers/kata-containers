@@ -448,7 +448,7 @@ setup() {
 
 @test "[run application] start server in a vault container" {
 	image="vault"
-	docker run --rm --runtime=$RUNTIME -i -e 'VAULT_DEV_ROOT_TOKEN_ID=mytest' $image timeout -t 10 vault server -dev
+	docker run --rm --runtime=$RUNTIME -i -e 'VAULT_DEV_ROOT_TOKEN_ID=mytest' $image timeout 10 vault server -dev
 }
 
 @test "[perl application] start wordpress container" {
