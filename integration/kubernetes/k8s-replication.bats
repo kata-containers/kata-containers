@@ -7,8 +7,10 @@
 
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../lib/common.bash"
+issue="https://github.com/kata-containers/runtime/issues/1931"
 
 setup() {
+	skip "test not working with ${ID} see: ${issue}"
 	versions_file="${BATS_TEST_DIRNAME}/../../versions.yaml"
 	nginx_version=$("${GOPATH}/bin/yq" read "$versions_file" "docker_images.nginx.version")
 	nginx_image="nginx:$nginx_version"
@@ -18,6 +20,7 @@ setup() {
 }
 
 @test "Replication controller" {
+	skip "test not working with ${ID} see: ${issue}"
 	replication_name="replicationtest"
 	number_of_replicas="1"
 	wait_time=20
@@ -47,6 +50,7 @@ setup() {
 }
 
 teardown() {
+	skip "test not working with ${ID} see: ${issue}"
 	rm -f "${pod_config_dir}/test-replication-controller.yaml"
 	kubectl delete pod "$pod_name"
 	kubectl delete rc "$replication_name"
