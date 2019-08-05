@@ -11,6 +11,10 @@ set -o errtrace
 
 script_name="$(basename "${BASH_SOURCE[0]}")"
 
+OBS_PROJECT=${OBS_PROJECT:-"home:katacontainers:"}
+# Project to wait for
+project=""
+
 handle_error() {
 	local exit_code="${?}"
 	local line_number="${1:-}"
@@ -31,12 +35,33 @@ run_in_docker() {
 	fi
 }
 
-
 # Check all project has finshed the build
 wait_finish_building() {
-	while osc pr -q | grep '(building)'; do sleep 5; done
-	# just in case something goes wrong
-	while osc pr -q | grep '(building)'; do sleep 5; done
+	local out
+	while true; do
+		sleep 10
+		out=$(osc api "/build/${project}/_result")
+		if echo "${out}" | grep '<details>failed</details>'; then
+			echo "Project ${project} has failed packages"
+			osc pr
+			exit 1
+		fi
+		if echo "${out}" | grep 'code="blocked"'; then
+			echo "Project ${project} has blocked packages, waiting"
+			continue
+		fi
+		if echo "${out}" | grep 'code="excluded"'; then
+			echo "Project ${project} has excluded packages, waiting"
+			continue
+		fi
+		if echo "${out}" | grep 'state="building"'; then
+			echo "Project ${project} is still building, waiting"
+			continue
+		fi
+		echo "No jobs with building status were found"
+		echo "${out}"
+		break
+	done
 }
 
 # obs distro final status is 'published'
@@ -63,10 +88,9 @@ wait_published() {
 	done
 }
 
-check_failed(){
-	failed_query=$(osc pr -c  -s  F)
-	regex=".*failed.*"
-	if [[ ${failed_query} =~ ${regex} ]];then
+check_failed() {
+	failed_query=$(osc pr -c -s F)
+	if [[ ${failed_query} =~ failed ]]; then
 		echo "ERROR: Build failed"
 		osc pr -V -s 'F'
 		exit 1
@@ -92,22 +116,25 @@ EOT
 }
 
 main() {
-	run_in_docker  $@
+	run_in_docker $@
 	local no_wait_publish="false"
 	case "${1:-}" in
-		"-h"|"--help")
-			usage "Help" 0
-			;;
-		--no-wait-publish)
-			no_wait_publish="true"
-			shift
-			;;
-		-*)
-			usage "Invalid option: ${1:-}" 1
-			;;
+	"-h" | "--help")
+		usage "Help" 0
+		;;
+	--no-wait-publish)
+		no_wait_publish="true"
+		shift
+		;;
+	-*)
+		usage "Invalid option: ${1:-}" 1
+		;;
 	esac
-	OBS_SUBPROJECT="${OBS_SUBPROJECT:-releases:x86_64:alpha}"
-	project="home:katacontainers:${OBS_SUBPROJECT}"
+	project=${1:-}
+	if [ "${project}" == "" ]; then
+		OBS_SUBPROJECT="${OBS_SUBPROJECT:-}"
+		project="${OBS_PROJECT}${OBS_SUBPROJECT}"
+	fi
 	echo "Checkout: ${project}"
 	osc co "$project" || true
 	cd "$project" || exit 1
@@ -120,7 +147,7 @@ main() {
 	check_failed
 	echo "OK - build did not fail"
 
-	if [ "${no_wait_publish}" == "true" ];then
+	if [ "${no_wait_publish}" == "true" ]; then
 		echo " Requested not wait for publish"
 		exit
 	fi

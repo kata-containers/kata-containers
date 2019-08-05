@@ -27,7 +27,7 @@ user = ${OBS_USER}
 pass = ${OBS_PASS}
 eom
 		fi
-	) >> /dev/null
+	) >>/dev/null
 	if [ ! -e "${OSCRC}" ]; then
 		echo "${OSCRC}, please  do 'export OBS_USER=your_user ; export OBS_PASS=your_pass' to configure osc for first time."
 		exit 1
@@ -56,6 +56,7 @@ docker_run() {
 		--env GO_ARCH="${GO_ARCH}" \
 		--env PUSH="${PUSH:-}" \
 		--env DEBUG="${DEBUG:-}" \
+		--env OBS_PROJECT="${OBS_PROJECT:-}" \
 		--env OBS_SUBPROJECT="${OBS_SUBPROJECT:-}" \
 		-v "${cache_dir}":/var/tmp/osbuild-packagecache/ \
 		-v "${_obs_docker_packaging_repo_dir}":"${_obs_docker_packaging_repo_dir}" \
