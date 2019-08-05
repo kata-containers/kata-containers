@@ -326,8 +326,8 @@ setup() {
 	docker run --rm --runtime=$RUNTIME -i $image bash -c "echo 'public class HW{public static void main(String[]a){System.out.println(\"HelloWorld\");}}' > HW.java && javac HW.java && java HW"
 }
 
-@test "[display text] run an opensuse container" {
-	image="opensuse"
+@test "[display text] run an opensuse leap container" {
+	image="opensuse/leap"
 	docker run --rm --runtime=$RUNTIME -i $image sh -c "echo "testing" > test.txt | cat /test.txt | grep testing"
 }
 
