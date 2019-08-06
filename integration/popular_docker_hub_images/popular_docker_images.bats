@@ -458,7 +458,7 @@ setup() {
 
 @test "[run application] start zookeeper container" {
 	image="zookeeper"
-	docker run --rm --runtime=$RUNTIME -i $image zkServer.sh start
+	docker run --rm --runtime=$RUNTIME -i $image zkServer.sh
 }
 
 teardown() {
