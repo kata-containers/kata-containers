@@ -1170,6 +1170,10 @@ func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*vcTypes.Interfa
 		for _, route := range endpoint.Properties().Routes {
 			var r vcTypes.Route
 
+			if route.Protocol == unix.RTPROT_KERNEL {
+				continue
+			}
+
 			if route.Dst != nil {
 				r.Dest = route.Dst.String()
 
