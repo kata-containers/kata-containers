@@ -1044,7 +1044,7 @@ func LoadConfiguration(configPath string, ignoreLogging, builtIn bool) (resolved
 	if config.HypervisorConfig.UseVSock {
 		kataUtilsLogger.Info("VSOCK supported, configure to not use proxy")
 		config.ProxyType = vc.NoProxyType
-		config.ProxyConfig = vc.ProxyConfig{}
+		config.ProxyConfig = vc.ProxyConfig{Debug: config.Debug}
 	}
 
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
