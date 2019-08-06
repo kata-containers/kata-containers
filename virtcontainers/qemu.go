@@ -658,6 +658,8 @@ func (q *qemu) setupVirtiofsd(timeout int) (remain int, err error) {
 			}
 		}
 		q.Logger().Info("virtiofsd quits")
+		// Wait to release resources of virtiofsd process
+		cmd.Process.Wait()
 		q.stopSandbox()
 	}()
 
