@@ -23,8 +23,8 @@ sudo iptables-restore < "$iptables_cache"
 sudo -E rm -rf "$HOME/.kube"
 
 # Remove existing CNI configurations and binaries.
-sudo rm -rf /var/lib/cni/networks/*
-sudo rm -rf /opt/cni/bin/*
+sudo sh -c 'rm -rf /var/lib/cni/networks/*'
+sudo sh -c 'rm -rf /opt/cni/bin/*'
 
 # delete containers resource created by runc
 cri_runtime="${CRI_RUNTIME:-crio}"
