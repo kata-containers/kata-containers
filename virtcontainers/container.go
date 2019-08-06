@@ -1196,8 +1196,8 @@ func (c *Container) pause() error {
 		return err
 	}
 
-	if c.state.State != types.StateRunning && c.state.State != types.StateReady {
-		return fmt.Errorf("Container not running or ready, impossible to pause")
+	if c.state.State != types.StateRunning {
+		return fmt.Errorf("Container not running, impossible to pause")
 	}
 
 	if err := c.sandbox.agent.pauseContainer(c.sandbox, *c); err != nil {
