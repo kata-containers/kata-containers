@@ -20,10 +20,6 @@ var GetKernelParamsFunc = getKernelParams
 
 var systemdKernelParam = []vc.Param{
 	{
-		Key:   "init",
-		Value: "/usr/lib/systemd/systemd",
-	},
-	{
 		Key:   "systemd.unit",
 		Value: systemdUnitName,
 	},
