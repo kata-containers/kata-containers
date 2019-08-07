@@ -10,20 +10,30 @@ set -o nounset
 set -o pipefail
 
 crio_config_file="/etc/crio/crio.conf"
+runc_flag="\/usr\/local\/bin\/crio-runc"
+kata_flag="\/usr\/local\/bin\/kata-runtime"
 
 minor_crio_version=$(crio --version | head -1 | cut -d '.' -f2)
 
 if [ "$minor_crio_version" -ge "12" ]; then
 	echo "Configure runtimes map for RuntimeClass feature"
 	echo "- Set runc as default runtime"
-	sudo sed -i 's!runtime_path =.*!runtime_path = "/usr/local/bin/crio-runc"!' "$crio_config_file"
-	sudo sed -i 's!runtime_type =.*!runtime_type = "oci"!' "$crio_config_file"
+	runc_configured=$(grep -q $runc_flag $crio_config_file; echo "$?")
+	if [[ $runc_configured -ne 0 ]]; then
+		sudo sed -i 's!runtime_path =.*!runtime_path = "/usr/local/bin/crio-runc"!' "$crio_config_file"
+		sudo sed -i '/runtime_root/d' "$crio_config_file"
+		sudo sed -i '/runtime_type/d' "$crio_config_file"
+	fi
 	echo "- Add kata-runtime to the runtimes map"
-	sudo sed -i '/crio-runc/a[crio.runtime.runtimes.kata]' "$crio_config_file"
-	sudo sed -i '/kata/aruntime_path = "/usr/local/bin/kata-runtime"' "$crio_config_file"
-	sudo sed -i 's!runtime_root =.*!runtime_root = "/run/vc"!' "$crio_config_file"
-	sudo sed -i '/crio-runc/a runtime_root = "/run/runc"' "$crio_config_file"
-	sudo sed -i '/crio-runc/a runtime_type = "oci"' "$crio_config_file"
+	kata_configured=$(grep -q $kata_flag $crio_config_file; echo "$?")
+	if [[ $kata_configured -ne 0 ]]; then
+		sudo sed -i '/crio-runc/a [crio.runtime.runtimes.kata]' "$crio_config_file"
+		sudo sed -i '/crio\.runtime\.runtimes\.kata/a runtime_path = "/usr/local/bin/kata-runtime"' "$crio_config_file"
+		sudo sed -i '/kata-runtime/a runtime_root = "/run/vc"' "$crio_config_file"
+		sudo sed -i '/\/run\/vc/a runtime_type = "oci"' "$crio_config_file"
+		sudo sed -i '/crio-runc/a runtime_type = "oci"' "$crio_config_file"
+		sudo sed -i '/crio-runc/a runtime_root = "/run/runc"' "$crio_config_file"
+	fi
 else
 	echo "Configure runtimes for trusted/untrusted annotations"
 	sudo sed -i 's!^#* *runtime =.*!runtime = "/usr/local/bin/crio-runc"!' "$crio_config_file"
