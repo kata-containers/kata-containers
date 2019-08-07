@@ -73,6 +73,8 @@ const (
 	StatePaused = "paused"
 )
 
+const KernelModulesSeparator = ";"
+
 // CompatOCIProcess is a structure inheriting from spec.Process defined
 // in runtime-spec/specs-go package. The goal is to be compatible with
 // both v1.0.0-rc4 and v1.0.0-rc5 since the latter introduced a change
@@ -450,6 +452,13 @@ func addAssetAnnotations(ocispec CompatOCISpec, config *vc.SandboxConfig) {
 		}
 
 		config.Annotations[a] = value
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.KernelModules]; ok {
+		if c, ok := config.AgentConfig.(*vc.KataAgentConfig); ok {
+			modules := strings.Split(value, KernelModulesSeparator)
+			c.KernelModules = modules
+		}
 	}
 }
 
