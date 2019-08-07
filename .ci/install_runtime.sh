@@ -20,6 +20,7 @@ arch=$("${cidir}"/kata-arch.sh -d)
 
 # enable verbose build
 export V=1
+tag="$1"
 
 # tell the runtime build to use sane defaults
 export SYSTEM_BUILD_TYPE=kata
@@ -37,7 +38,7 @@ runtime_config_path="${SYSCONFDIR}/kata-containers/configuration.toml"
 PKGDEFAULTSDIR="${SHAREDIR}/defaults/kata-containers"
 NEW_RUNTIME_CONFIG="${PKGDEFAULTSDIR}/configuration.toml"
 # Note: This will also install the config file.
-build_and_install "github.com/kata-containers/runtime" "" "true"
+build_and_install "github.com/kata-containers/runtime" "" "true" "${tag}"
 
 if [ -e "${NEW_RUNTIME_CONFIG}" ]; then
 	# Remove the legacy config file
