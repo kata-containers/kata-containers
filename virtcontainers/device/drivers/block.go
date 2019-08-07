@@ -84,6 +84,8 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 		switch customOptions["block-driver"] {
 		case "virtio-blk":
 			globalIdx = index
+		case "virtio-blk-ccw":
+			globalIdx = index
 		case "virtio-mmio":
 			//With firecracker the rootfs for the VM itself
 			//sits at /dev/vda and consumes the first index.
@@ -164,6 +166,7 @@ func (device *BlockDevice) Save() persistapi.DeviceState {
 			SCSIAddr: drive.SCSIAddr,
 			NvdimmID: drive.NvdimmID,
 			VirtPath: drive.VirtPath,
+			DevNo:    drive.DevNo,
 		}
 	}
 	return ds
@@ -188,6 +191,7 @@ func (device *BlockDevice) Load(ds persistapi.DeviceState) {
 		SCSIAddr: bd.SCSIAddr,
 		NvdimmID: bd.NvdimmID,
 		VirtPath: bd.VirtPath,
+		DevNo:    bd.DevNo,
 	}
 }
 

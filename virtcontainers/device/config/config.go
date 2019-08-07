@@ -48,6 +48,9 @@ const (
 	// VirtioBlock means use virtio-blk for hotplugging drives
 	VirtioBlock = "virtio-blk"
 
+	// VirtioBlockCCW means use virtio-blk for hotplugging drives
+	VirtioBlockCCW = "virtio-blk-ccw"
+
 	// VirtioSCSI means use virtio-scsi for hotplugging drives
 	VirtioSCSI = "virtio-scsi"
 
@@ -138,6 +141,9 @@ type BlockDrive struct {
 
 	// VirtPath at which the device appears inside the VM, outside of the container mount namespace
 	VirtPath string
+
+	// DevNo identifies the css bus id for virtio-blk-ccw
+	DevNo string
 }
 
 // VFIODeviceType indicates VFIO device type
