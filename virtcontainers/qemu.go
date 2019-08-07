@@ -725,6 +725,11 @@ func (q *qemu) startSandbox(timeout int) error {
 	if err != nil {
 		return err
 	}
+	// append logfile only on debug
+	if q.config.Debug {
+		q.qemuConfig.LogFile = filepath.Join(vmPath, "qemu.log")
+	}
+
 	defer func() {
 		if err != nil {
 			if err := os.RemoveAll(vmPath); err != nil {
@@ -849,6 +854,19 @@ func (q *qemu) stopSandbox() error {
 		q.cleanupVM()
 		q.stopped = true
 	}()
+
+	if q.config.Debug && q.qemuConfig.LogFile != "" {
+		f, err := os.OpenFile(q.qemuConfig.LogFile, os.O_RDONLY, 0)
+		if err == nil {
+			scanner := bufio.NewScanner(f)
+			for scanner.Scan() {
+				q.Logger().Debug(scanner.Text())
+			}
+			if err := scanner.Err(); err != nil {
+				q.Logger().WithError(err).Debug("read qemu log failed")
+			}
+		}
+	}
 
 	err := q.qmpSetup()
 	if err != nil {
