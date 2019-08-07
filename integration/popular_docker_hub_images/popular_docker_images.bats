@@ -441,11 +441,6 @@ setup() {
 	docker run --rm --runtime=$RUNTIME -i $image sh -c 'if [ -f /etc/bash.bashrc ]; then echo "/etc/bash.bashrc exists"; fi'
 }
 
-@test "[run application] search nano in an ubuntu upstart container" {
-	image="ubuntu-upstart"
-	docker run --rm --runtime=$RUNTIME -i $image bash -c "apt-cache search nano"
-}
-
 @test "[run application] start server in a vault container" {
 	image="vault"
 	docker run --rm --runtime=$RUNTIME -i -e 'VAULT_DEV_ROOT_TOKEN_ID=mytest' $image timeout 10 vault server -dev
