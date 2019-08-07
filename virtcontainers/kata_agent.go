@@ -75,6 +75,7 @@ var (
 	kata9pDevType               = "9p"
 	kataMmioBlkDevType          = "mmioblk"
 	kataBlkDevType              = "blk"
+	kataBlkCCWDevType           = "blk-ccw"
 	kataSCSIDevType             = "scsi"
 	kataNvdimmDevType           = "nvdimm"
 	kataVirtioFSDevType         = "virtio-fs"
@@ -1106,6 +1107,9 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 			kataDevice.Type = kataMmioBlkDevType
 			kataDevice.Id = d.VirtPath
 			kataDevice.VmPath = d.VirtPath
+		case config.VirtioBlockCCW:
+			kataDevice.Type = kataBlkCCWDevType
+			kataDevice.Id = d.DevNo
 		case config.VirtioBlock:
 			kataDevice.Type = kataBlkDevType
 			kataDevice.Id = d.PCIAddr
@@ -1160,11 +1164,14 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 			k.Logger().Error("malformed block drive")
 			return nil, fmt.Errorf("malformed block drive")
 		}
-
-		if sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio {
+		switch {
+		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio:
 			rootfs.Driver = kataMmioBlkDevType
 			rootfs.Source = blockDrive.VirtPath
-		} else if sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock {
+		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlockCCW:
+			rootfs.Driver = kataBlkCCWDevType
+			rootfs.Source = blockDrive.DevNo
+		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
 			rootfs.Driver = kataBlkDevType
 			if blockDrive.PCIAddr == "" {
 				rootfs.Source = blockDrive.VirtPath
@@ -1172,10 +1179,14 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 				rootfs.Source = blockDrive.PCIAddr
 			}
 
-		} else {
+		case sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI:
+
 			rootfs.Driver = kataSCSIDevType
 			rootfs.Source = blockDrive.SCSIAddr
+		default:
+			return nil, fmt.Errorf("Unknown block device driver: %s", sandbox.config.HypervisorConfig.BlockDeviceDriver)
 		}
+
 		rootfs.MountPoint = rootPathParent
 		rootfs.Fstype = c.state.Fstype
 
@@ -1281,7 +1292,10 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	// Note this call modifies the list of container devices to make sure
 	// all hotplugged devices are unplugged, so this needs be done
 	// after devices passed with --device are handled.
-	volumeStorages := k.handleBlockVolumes(c)
+	volumeStorages, err := k.handleBlockVolumes(c)
+	if err != nil {
+		return nil, err
+	}
 	if err := k.replaceOCIMountsForStorages(ociSpec, volumeStorages); err != nil {
 		return nil, err
 	}
@@ -1400,7 +1414,7 @@ func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string, r
 
 // handleBlockVolumes handles volumes that are block devices files
 // by passing the block devices as Storage to the agent.
-func (k *kataAgent) handleBlockVolumes(c *Container) []*grpc.Storage {
+func (k *kataAgent) handleBlockVolumes(c *Container) ([]*grpc.Storage, error) {
 
 	var volumeStorages []*grpc.Storage
 
@@ -1418,7 +1432,7 @@ func (k *kataAgent) handleBlockVolumes(c *Container) []*grpc.Storage {
 		if !c.sandbox.supportNewStore() {
 			if err := c.storeDevices(); err != nil {
 				k.Logger().WithField("device", id).WithError(err).Error("store device failed")
-				return nil
+				return nil, err
 			}
 		}
 
@@ -1427,22 +1441,28 @@ func (k *kataAgent) handleBlockVolumes(c *Container) []*grpc.Storage {
 		device := c.sandbox.devManager.GetDeviceByID(id)
 		if device == nil {
 			k.Logger().WithField("device", id).Error("failed to find device by id")
-			return nil
+			return nil, fmt.Errorf("Failed to find device by id (id=%s)", id)
 		}
 		blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
 		if !ok || blockDrive == nil {
 			k.Logger().Error("malformed block drive")
 			continue
 		}
-		if c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock {
+		switch {
+		case c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlockCCW:
+			vol.Driver = kataBlkCCWDevType
+			vol.Source = blockDrive.DevNo
+		case c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
 			vol.Driver = kataBlkDevType
 			vol.Source = blockDrive.PCIAddr
-		} else if c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio {
+		case c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio:
 			vol.Driver = kataMmioBlkDevType
 			vol.Source = blockDrive.VirtPath
-		} else {
+		case c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI:
 			vol.Driver = kataSCSIDevType
 			vol.Source = blockDrive.SCSIAddr
+		default:
+			return nil, fmt.Errorf("Unknown block device driver: %s", c.sandbox.config.HypervisorConfig.BlockDeviceDriver)
 		}
 
 		vol.MountPoint = m.Destination
@@ -1452,7 +1472,7 @@ func (k *kataAgent) handleBlockVolumes(c *Container) []*grpc.Storage {
 		volumeStorages = append(volumeStorages, vol)
 	}
 
-	return volumeStorages
+	return volumeStorages, nil
 }
 
 // handlePidNamespace checks if Pid namespace for a container needs to be shared with its sandbox
