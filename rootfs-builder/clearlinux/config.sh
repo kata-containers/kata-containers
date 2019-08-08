@@ -15,7 +15,7 @@ clr_url="https://download.clearlinux.org"
 
 BASE_URL="${clr_url}/releases/${OS_VERSION}/${REPO_NAME}/${ARCH}/os/"
 
-PACKAGES="libudev0-shim"
+PACKAGES="libudev0-shim kmod-bin"
 
 #Optional packages:
 # systemd: An init system that will start kata-agent if kata-agent
