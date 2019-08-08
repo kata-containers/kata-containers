@@ -28,14 +28,14 @@ sudo -E kubeadm reset -f --cri-socket="${cri_runtime_socket}"
 
 sudo systemctl stop "${cri_runtime}"
 
-sudo ip link set dev cni0 down
-sudo ip link set dev flannel.1 down
-sudo ip link del cni0
-sudo ip link del flannel.1
+sudo ip link set dev cni0 down || true
+sudo ip link set dev flannel.1 down || true
+sudo ip link del cni0 || true
+sudo ip link del flannel.1 || true
 
 # if CI run in bare-metal, we need a set of extra clean
 BAREMETAL="${BAREMETAL:-false}"
-if [ "${BAREMETAL}" == true ] && [ -f "${SCRIPT_PATH}/cleanup_bare_metal_env.sh" ];  then
+if [ "${BAREMETAL}" == true ] && [ -f "${SCRIPT_PATH}/cleanup_bare_metal_env.sh" ]; then
 	bash -f "${SCRIPT_PATH}/cleanup_bare_metal_env.sh"
 fi
 
