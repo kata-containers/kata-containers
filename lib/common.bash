@@ -22,6 +22,9 @@ KATA_TESTS_LOGDIR="${KATA_TESTS_LOGDIR:-${KATA_TESTS_BASEDIR}/logs}"
 # Directory that can be used for storing test data.
 KATA_TESTS_DATADIR="${KATA_TESTS_DATADIR:-${KATA_TESTS_BASEDIR}/data}"
 
+# Directory that can be used for storing cache kata components
+KATA_TESTS_CACHEDIR="${KATA_TESTS_CACHEDIR:-${KATA_TESTS_BASEDIR}/cache}"
+
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
 die() {

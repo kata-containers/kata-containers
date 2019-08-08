@@ -12,6 +12,7 @@ set -o errtrace
 
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
+source "${cidir}/../lib/common.bash"
 source /etc/os-release || source /usr/lib/os-release
 
 KATA_DEV_MODE="${KATA_DEV_MODE:-}"
@@ -25,7 +26,6 @@ QEMU_ARCH=$(${cidir}/kata-arch.sh -d)
 PACKAGING_REPO="github.com/kata-containers/packaging"
 ARCH=$("${cidir}"/kata-arch.sh -d)
 QEMU_TAR="kata-qemu-static.tar.gz"
-
 qemu_latest_build_url="http://jenkins.katacontainers.io/job/qemu-nightly-$(uname -m)/lastSuccessfulBuild/artifact/artifacts"
 
 # option "--shallow-submodules" was introduced in git v2.9.0
@@ -38,27 +38,32 @@ build_static_qemu() {
 
 	go get -d "${PACKAGING_REPO}" || true
 	prefix="${KATA_QEMU_DESTDIR}" "${GOPATH}/src/${PACKAGING_REPO}/static-build/qemu/build-static-qemu.sh"
+
+	# We need to move the tar file to a specific location so we
+	# can know where it is and then we can perform the build cache
+	# operations
+	sudo mkdir -p "${KATA_TESTS_CACHEDIR}"
+	sudo mv ${QEMU_TAR} ${KATA_TESTS_CACHEDIR}
 }
 
 uncompress_static_qemu() {
 	local qemu_tar_location="$1"
 	[ -n "$qemu_tar_location" ] || die "provide the location of the QEMU compressed file"
-	
 	sudo tar -xf "${qemu_tar_location}" -C /
 }
 
-build_and_install_static_qemu(){
+build_and_install_static_qemu() {
 	build_static_qemu
-	uncompress_static_qemu "$QEMU_TAR"
+	uncompress_static_qemu "${KATA_TESTS_CACHEDIR}/${QEMU_TAR}"
 }
 
-install_cached_qemu(){
+install_cached_qemu() {
 	info "Installing cached QEMU"
 	curl -fL --progress-bar "${qemu_latest_build_url}/${QEMU_TAR}" -o "${QEMU_TAR}" || return 1
 	curl -fsOL "${qemu_latest_build_url}/sha256sum-${QEMU_TAR}" || return 1
-	
+
 	sha256sum -c "sha256sum-${QEMU_TAR}" || return 1
-	uncompress_static_qemu "$QEMU_TAR"
+	uncompress_static_qemu "${KATA_TESTS_CACHEDIR}/${QEMU_TAR}"
 }
 
 clone_qemu_repo() {

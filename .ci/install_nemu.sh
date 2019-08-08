@@ -12,6 +12,7 @@ set -o errtrace
 
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
+source "${cidir}/../lib/common.bash"
 source /etc/os-release || source /usr/lib/os-release
 
 versions_file="${cidir}/../versions.yaml"
@@ -40,7 +41,8 @@ install_nemu() {
 	# We need to move the tar file to a specific location so we
 	# can know where it is and then we can perform the build cache
 	# operations
-	sudo mv ${NEMU_TAR} /tmp
+	sudo mkdir -p "${KATA_TESTS_CACHEDIR}"
+	sudo mv ${NEMU_TAR} ${KATA_TESTS_CACHEDIR}
 }
 
 install_firmware() {
@@ -56,8 +58,7 @@ install_firmware() {
 }
 
 install_prebuilt_nemu() {
-	install_directory="/tmp"
-	pushd "${install_directory}"
+	pushd "${KATA_TESTS_CACHEDIR}"
 	sudo -E curl -fL --progress-bar "${latest_build_url}/${NEMU_TAR}" -o "${NEMU_TAR}" || return 1
 	info "Install pre-built nemu version"
 	sudo tar -xvf "${NEMU_TAR}" -C /
