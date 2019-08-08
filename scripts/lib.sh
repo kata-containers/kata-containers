@@ -170,7 +170,7 @@ create_summary_file()
 	local -r filename="osbuilder.yaml"
 	local file="${dir}/${filename}"
 
-	local -r now=$(date '+%Y-%m-%dT%T.%N%zZ')
+	local -r now=$(date -u -d@${SOURCE_DATE_EPOCH:-$(date +%s.%N)} '+%Y-%m-%dT%T.%N%zZ')
 
 	# sanitise package lists
 	PACKAGES=$(echo "$PACKAGES"|tr ' ' '\n'|sort -u|tr '\n' ' ')
