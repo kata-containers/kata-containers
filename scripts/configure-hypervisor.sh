@@ -16,7 +16,8 @@
 
 script_name=${0##*/}
 
-arch=$(uname -m)
+arch="${3:-$(uname -m)}"
+
 
 # Array of configure options.
 #
@@ -192,6 +193,18 @@ show_array() {
 
 generate_qemu_options() {
 	#---------------------------------------------------------------------
+	#check if cross-compile is needed
+	host=$(uname -m)
+	if [ $arch != $host ];then
+		case $arch in
+			aarch64) qemu_options+=(size:--cross-prefix=aarch64-linux-gnu-);;
+			ppc64le) qemu_options+=(size:--cross-prefix=powerpc64le-linux-gnu-);;
+			s390x) exit;;
+			x86_64);;
+			*) exit;;
+		esac
+	fi
+
 	# Disabled options
 
 	# bluetooth support not required
@@ -252,7 +265,9 @@ generate_qemu_options() {
 
 	# Disable TCG support
 	case "$arch" in
-	aarch64) ;;
+	aarch64)
+		echo $hypervisor | grep -q nemu && qemu_options+=(size:--disable-tcg)
+		;;
 	x86_64) qemu_options+=(size:--disable-tcg) ;;
 	ppc64le) ;;
 	s390x) qemu_options+=(size:--disable-tcg) ;;
