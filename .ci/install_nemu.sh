@@ -36,7 +36,7 @@ install_nemu() {
 
 	go get -d "${PACKAGING_REPO}" || true
 
-	prefix="${KATA_NEMU_DESTDIR}" ${GOPATH}/src/${PACKAGING_REPO}/static-build/nemu/build-static-nemu.sh
+	prefix="${KATA_NEMU_DESTDIR}" ${GOPATH}/src/${PACKAGING_REPO}/static-build/nemu/build-static-nemu.sh "${arch}"
 	sudo tar -xvf ${NEMU_TAR} -C /
 	# We need to move the tar file to a specific location so we
 	# can know where it is and then we can perform the build cache
