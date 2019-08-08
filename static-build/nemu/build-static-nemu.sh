@@ -14,6 +14,7 @@ source "${script_dir}/../../scripts/lib.sh"
 
 config_dir="${script_dir}/../../scripts/"
 nemu_tar="kata-nemu-static.tar.gz"
+Dockerfile="Dockerfile"
 
 if [ $# -ne 0 ];then
        arch="$1"
@@ -29,8 +30,7 @@ if [ $# -ne 0 ];then
 		       Dockerfile="Dockerfile_cross"
 		       ;;
 	       x86_64) dpkg_arch="amd64"
-		       $arch="amd64"
-		       Dockerfile="Dockerfile"
+		       arch="amd64"
 		       ;;
 	       *) die "$arch is not support for cross compile" ;;
        esac
