@@ -15,12 +15,12 @@ clr_url="https://download.clearlinux.org"
 
 BASE_URL="${clr_url}/releases/${OS_VERSION}/${REPO_NAME}/${ARCH}/os/"
 
-PACKAGES="util-linux-bin iptables-bin libudev0-shim chrony"
+PACKAGES="libudev0-shim"
 
 #Optional packages:
 # systemd: An init system that will start kata-agent if kata-agent
 #          itself is not configured as init process.
-[ "$AGENT_INIT" == "no" ] && PACKAGES+=" systemd" || true
+[ "$AGENT_INIT" == "no" ] && PACKAGES+=" systemd chrony iptables-bin util-linux-bin" || true
 
 # Init process must be one of {systemd,kata-agent}
 INIT_PROCESS=systemd
