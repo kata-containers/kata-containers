@@ -430,7 +430,7 @@ func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) g
 		memory.Path = q.config.MemoryPath
 
 		if q.config.BootToBeTemplate {
-			knobs.FileBackedMemShared = true
+			knobs.MemShared = true
 		}
 
 		if q.config.BootFromTemplate {
@@ -454,7 +454,7 @@ func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memo
 	}
 
 	knobs.FileBackedMem = true
-	knobs.FileBackedMemShared = true
+	knobs.MemShared = true
 	memory.Path = target
 }
 
@@ -521,6 +521,9 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 			q.setupFileBackedMem(&knobs, &memory)
 		} else {
 			return errors.New("VM templating has been enabled with either virtio-fs or file backed memory and this configuration will not work")
+		}
+		if q.config.HugePages {
+			knobs.MemPrealloc = true
 		}
 	}
 
@@ -1484,7 +1487,7 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 		target = q.qemuConfig.Memory.Path
 		memoryBack = "memory-backend-file"
 	}
-	if q.qemuConfig.Knobs.FileBackedMemShared {
+	if q.qemuConfig.Knobs.MemShared {
 		share = true
 	}
 	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, memoryBack, "mem"+strconv.Itoa(memDev.slot), target, memDev.sizeMB, share)
