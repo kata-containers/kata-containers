@@ -158,7 +158,7 @@ EOT
 
 main() {
 	local OPTIND
-	while getopts ":hiknqr:" opt; do
+	while getopts "hiknqr" opt; do
 		case "$opt" in
                h)
                         usage
@@ -188,7 +188,7 @@ main() {
  	[[ -z "$build_nemu" ]] && \
 	[[ -z "$build_image" ]] && \
 	[[ -z "$build_image_initrd" ]] && \
-		help && die "Must choose at least one option"
+		usage && die "Must choose at least one option"
 
         mkdir -p "${WORKSPACE}/artifacts"
         pushd "${WORKSPACE}/artifacts"
