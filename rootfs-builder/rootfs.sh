@@ -401,8 +401,6 @@ prepare_overlay()
 # provided as argument
 setup_rootfs()
 {
-	[ -z "$distro" ] && prepare_overlay
-
 	info "Create symlink to /tmp in /var to create private temporal directories with systemd"
 	pushd "${ROOTFS_DIR}" >> /dev/null
 	if [ "$PWD" != "/" ] ; then
@@ -448,13 +446,20 @@ EOT
 
 	[ -n "${KERNEL_MODULES_DIR}" ] && copy_kernel_modules ${KERNEL_MODULES_DIR} ${ROOTFS_DIR}
 
-	chrony_conf_file="${ROOTFS_DIR}/etc/chrony.conf"
-	if [ "${distro}" == "ubuntu" ] || [ "${distro}" == "debian" ] ; then
-		chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
-	fi
-
 	info "Create ${ROOTFS_DIR}/etc"
 	mkdir -p "${ROOTFS_DIR}/etc"
+
+	case "${distro}" in
+		"ubuntu" | "debian")
+			echo "I am ubuntu or debian"
+			chrony_conf_file="${ROOTFS_DIR}/etc/chrony/chrony.conf"
+			chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
+			;;
+		*)
+			chrony_conf_file="${ROOTFS_DIR}/etc/chrony.conf"
+			chrony_systemd_service="${ROOTFS_DIR}/usr/lib/systemd/system/chronyd.service"
+			;;
+	esac
 
 	info "Configure chrony file ${chrony_conf_file}"
 	cat >> "${chrony_conf_file}" <<EOT
@@ -467,11 +472,6 @@ EOT
 	# Comment out ntp sources for chrony to be extra careful
 	# Reference:  https://chrony.tuxfamily.org/doc/3.4/chrony.conf.html
 	sed -i 's/^\(server \|pool \|peer \)/# &/g'  ${chrony_conf_file}
-
-	chrony_systemd_service="${ROOTFS_DIR}/usr/lib/systemd/system/chronyd.service"
-	if [ ${distro} == ubuntu ] || [ ${distro} == debian ] ; then
-		chrony_systemd_service="${ROOTFS_DIR}/lib/systemd/system/chrony.service"
-	fi
 
 	if [ -f "$chrony_systemd_service" ]; then
 		sed -i '/^\[Unit\]/a ConditionPathExists=\/dev\/ptp0' ${chrony_systemd_service}
@@ -533,6 +533,23 @@ parse_arguments()
 	distro="$1"
 }
 
+detect_host_distro()
+{
+	source /etc/os-release
+
+	case "$ID" in
+		"*suse*")
+			distro="suse"
+			;;
+		"clear-linux-os")
+			distro="clearlinux"
+			;;
+		*)
+			distro="$ID"
+			;;
+	esac
+}
+
 main()
 {
 	parse_arguments $*
@@ -544,6 +561,10 @@ main()
 	else
 		#Make sure ROOTFS_DIR is set correctly
 		[ -d "${ROOTFS_DIR}" ] || die "Invalid rootfs directory: '$ROOTFS_DIR'"
+
+		# Set the distro for dracut build method
+		detect_host_distro
+		prepare_overlay
 	fi
 
 	setup_rootfs
