@@ -45,6 +45,8 @@ runc_container_union="$($runc_path list)"
 if [ -n "$runc_container_union" ]; then
 	while IFS='$\n' read runc_container; do
 		container_id="$(echo "$runc_container" | awk '{print $1}')"
-		[ "$container_id" != "ID" ] && $runc_path delete -f $container_id
+		if [ "$container_id" != "ID" ]; then
+			$runc_path delete -f $container_id
+		fi
 	done <<< "${runc_container_union}"
 fi

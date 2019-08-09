@@ -28,6 +28,9 @@ if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
 	die "Kubernetes tests will not run with $KATA_HYPERVISOR"
 fi
 
+# Using trap to ensure the cleanup occurs when the script exists.
+trap '${kubernetes_dir}/cleanup_env.sh' EXIT
+
 # Docker is required to initialize kubeadm, even if we are
 # using cri-o as the runtime.
 systemctl is-active --quiet docker || sudo systemctl start docker
@@ -72,5 +75,4 @@ for K8S_TEST_ENTRY in ${K8S_TEST_UNION[@]}
 do
 	bats "${K8S_TEST_ENTRY}"
 done
-./cleanup_env.sh
 popd
