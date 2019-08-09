@@ -249,6 +249,19 @@ delete_kata_repo_registrations()
 	esac
 }
 
+delete_crio_stale_resource() {
+	# stale cri-o related binary
+	sudo rm -rf /usr/local/bin/crio
+	sudo sh -c 'rm -rf /usr/local/libexec/crio/*'
+	sudo rm -rf /usr/local/bin/crio-runc
+	# stale cri-o related configuration
+	sudo rm -rf /etc/crio/crio.conf
+	sudo rm -rf /usr/local/share/oci-umount/oci-umount.d/crio-umount.conf
+	sudo rm -rf /etc/crictl.yaml
+	# stale cri-o systemd service file
+	sudo rm -rf /etc/systemd/system/crio.service
+}
+
 gen_clean_arch() {
 	# Set up some vars
 	stale_process_union=( "docker-containerd-shim" )
@@ -266,6 +279,8 @@ gen_clean_arch() {
 	delete_stale_kata_resource
 	info "Remove installed kata packages"
 	${GOPATH}/src/${tests_repo}/cmd/kata-manager/kata-manager.sh remove-packages
+	info "Remove installed cri-o related binaries and configuration"
+	delete_crio_stale_resource
 	info "Remove installed kubernetes packages and configuration"
 	if [ "$ID" == ubuntu ]; then
 		sudo rm -rf /etc/systemd/system/kubelet.service.d
