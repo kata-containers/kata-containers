@@ -371,9 +371,11 @@ path = "@NETMONPATH@"
 # the container network interface
 # Options:
 #
-#   - bridged
+#   - bridged (Deprecated)
 #     Uses a linux bridge to interconnect the container interface to
 #     the VM. Works for most cases except macvlan and ipvlan.
+#     ***NOTE: This feature has been deprecated with plans to remove this
+#     feature in the future. Please use other network models listed below.
 #
 #   - macvtap
 #     Used when the Container network interface can be bridged using
