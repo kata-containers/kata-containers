@@ -20,6 +20,8 @@ The `build-kernel.sh` script requires an installed Golang version matching the
 ## Setup kernel source code
 
 ```bash
+$ go get -d -u github.com/kata-containers/packaging
+$ cd $GOPATH/src/github.com/kata-containers/packaging/kernel
 $ ./build-kernel.sh setup
 ```
 
