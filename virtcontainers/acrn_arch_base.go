@@ -711,8 +711,6 @@ func (a *acrnArchBase) appendSocket(devices []Device, socket types.Socket) []Dev
 
 func networkModelToAcrnType(model NetInterworkingModel) NetDeviceType {
 	switch model {
-	case NetXConnectBridgedModel:
-		return TAP
 	case NetXConnectMacVtapModel:
 		return MACVTAP
 	default:
