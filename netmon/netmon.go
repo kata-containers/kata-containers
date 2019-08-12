@@ -307,6 +307,11 @@ func convertRoutes(netRoutes []netlink.Route) []vcTypes.Route {
 	// by Kata yet.
 	for _, netRoute := range netRoutes {
 		dst := ""
+
+		if netRoute.Protocol == unix.RTPROT_KERNEL {
+			continue
+		}
+
 		if netRoute.Dst != nil {
 			if netRoute.Dst.IP.To4() != nil {
 				dst = netRoute.Dst.String()
