@@ -300,7 +300,7 @@ ifneq (,$(ACRNCMD))
 
     # acrn-specific options (all should be suffixed by "_ACRN")
     DEFBLOCKSTORAGEDRIVER_ACRN := virtio-blk
-    DEFNETWORKMODEL_ACRN := bridged
+    DEFNETWORKMODEL_ACRN := macvtap
     KERNEL_NAME_ACRN = $(call MAKE_KERNEL_NAME,$(KERNELTYPE))
     KERNELPATH_ACRN = $(KERNELDIR)/$(KERNEL_NAME_ACRN)
 endif
