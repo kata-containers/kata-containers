@@ -12,7 +12,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-const defaultCheckInterval = 1 * time.Second
+const (
+	defaultCheckInterval = 1 * time.Second
+	watcherChannelSize   = 128
+)
 
 type monitor struct {
 	sync.Mutex
@@ -37,7 +40,7 @@ func (m *monitor) newWatcher() (chan error, error) {
 	m.Lock()
 	defer m.Unlock()
 
-	watcher := make(chan error, 1)
+	watcher := make(chan error, watcherChannelSize)
 	m.watchers = append(m.watchers, watcher)
 
 	if !m.running {
@@ -83,7 +86,14 @@ func (m *monitor) notify(err error) {
 	}()
 
 	for _, c := range m.watchers {
-		c <- err
+		// throw away message can not write to channel
+		// make it not stuck, the first error is useful.
+		select {
+		case c <- err:
+
+		default:
+			virtLog.WithField("channel-size", watcherChannelSize).Warnf("watcher channel is full, throw notify message")
+		}
 	}
 }
 
@@ -98,8 +108,8 @@ func (m *monitor) stop() {
 		return
 	}
 
+	m.stopCh <- true
 	defer func() {
-		m.stopCh <- true
 		m.watchers = nil
 		m.running = false
 	}()
