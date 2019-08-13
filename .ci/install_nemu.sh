@@ -58,7 +58,6 @@ install_firmware() {
 }
 
 install_prebuilt_nemu() {
-	pushd "${KATA_TESTS_CACHEDIR}"
 	sudo -E curl -fL --progress-bar "${latest_build_url}/${NEMU_TAR}" -o "${NEMU_TAR}" || return 1
 	info "Install pre-built nemu version"
 	sudo tar -xvf "${NEMU_TAR}" -C /
@@ -66,7 +65,6 @@ install_prebuilt_nemu() {
 	info "Verify download checksum"
 	sudo -E curl -fsOL "${latest_build_url}/sha256sum-${NEMU_TAR}" || return 1
 	sudo sha256sum -c "sha256sum-${NEMU_TAR}" || return 1
-	popd
 }
 
 main() {

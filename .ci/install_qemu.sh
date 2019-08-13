@@ -63,7 +63,7 @@ install_cached_qemu() {
 	curl -fsOL "${qemu_latest_build_url}/sha256sum-${QEMU_TAR}" || return 1
 
 	sha256sum -c "sha256sum-${QEMU_TAR}" || return 1
-	uncompress_static_qemu "${KATA_TESTS_CACHEDIR}/${QEMU_TAR}"
+	uncompress_static_qemu "${QEMU_TAR}"
 }
 
 clone_qemu_repo() {
