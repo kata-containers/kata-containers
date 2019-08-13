@@ -251,6 +251,13 @@ type SchemaInfo struct {
 	Name     string `json:"name"`
 }
 
+// StatusInfo represents guest running status
+type StatusInfo struct {
+	Running    bool   `json:"running"`
+	SingleStep bool   `json:"singlestep"`
+	Status     string `json:"status"`
+}
+
 func (q *QMP) readLoop(fromVMCh chan<- []byte) {
 	scanner := bufio.NewScanner(q.conn)
 	if q.cfg.MaxCapacity > 0 {
@@ -1544,4 +1551,24 @@ func (q *QMP) ExecQueryQmpSchema(ctx context.Context) ([]SchemaInfo, error) {
 	}
 
 	return schemaInfo, nil
+}
+
+// ExecuteQueryStatus queries guest status
+func (q *QMP) ExecuteQueryStatus(ctx context.Context) (StatusInfo, error) {
+	response, err := q.executeCommandWithResponse(ctx, "query-status", nil, nil, nil)
+	if err != nil {
+		return StatusInfo{}, err
+	}
+
+	data, err := json.Marshal(response)
+	if err != nil {
+		return StatusInfo{}, fmt.Errorf("unable to extract migrate status information: %v", err)
+	}
+
+	var status StatusInfo
+	if err = json.Unmarshal(data, &status); err != nil {
+		return StatusInfo{}, fmt.Errorf("unable to convert migrate status information: %v", err)
+	}
+
+	return status, nil
 }

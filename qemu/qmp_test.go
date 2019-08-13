@@ -1623,3 +1623,30 @@ func TestQMPExecQueryQmpSchema(t *testing.T) {
 	q.Shutdown()
 	<-disconnectedCh
 }
+
+func TestQMPExecQueryQmpStatus(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	statusInfo := StatusInfo{
+		Running:    true,
+		SingleStep: false,
+		Status:     "running",
+	}
+	buf.AddCommand("query-status", nil, "return", statusInfo)
+	cfg := QMPConfig{
+		Logger:      qmpTestLogger{},
+		MaxCapacity: 1024,
+	}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	info, err := q.ExecuteQueryStatus(context.Background())
+	if err != nil {
+		t.Fatalf("Unexpected error: %v\n", err)
+	}
+	if reflect.DeepEqual(info, statusInfo) == false {
+		t.Fatalf("Expected %v equals to %v\n", info, statusInfo)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
