@@ -982,9 +982,7 @@ func (q *qemu) removeDeviceFromBridge(ID string) error {
 	return err
 }
 
-func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, devID string) error {
-	var err error
-
+func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, devID string) (err error) {
 	if q.config.BlockDeviceDriver == config.Nvdimm {
 		var blocksize int64
 		file, err := os.Open(drive.File)
@@ -1012,12 +1010,24 @@ func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, dev
 		return err
 	}
 
+	defer func() {
+		if err != nil {
+			q.qmpMonitorCh.qmp.ExecuteBlockdevDel(q.qmpMonitorCh.ctx, drive.ID)
+		}
+	}()
+
 	if q.config.BlockDeviceDriver == config.VirtioBlock {
 		driver := "virtio-blk-pci"
 		addr, bridge, err := q.addDeviceToBridge(drive.ID)
 		if err != nil {
 			return err
 		}
+
+		defer func() {
+			if err != nil {
+				q.removeDeviceFromBridge(drive.ID)
+			}
+		}()
 
 		// PCI address is in the format bridge-addr/device-addr eg. "03/02"
 		drive.PCIAddr = fmt.Sprintf("%02x", bridge.Addr) + "/" + addr
@@ -1074,8 +1084,8 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 	return err
 }
 
-func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) error {
-	err := q.qmpSetup()
+func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) (err error) {
+	err = q.qmpSetup()
 	if err != nil {
 		return err
 	}
@@ -1101,6 +1111,12 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) error {
 		if err != nil {
 			return err
 		}
+
+		defer func() {
+			if err != nil {
+				q.removeDeviceFromBridge(devID)
+			}
+		}()
 
 		switch device.Type {
 		case config.VFIODeviceNormalType:
@@ -1148,8 +1164,8 @@ func (q *qemu) hotAddNetDevice(name, hardAddr string, VMFds, VhostFds []*os.File
 	return q.qmpMonitorCh.qmp.ExecuteNetdevAddByFds(q.qmpMonitorCh.ctx, "tap", name, VMFdNames, VhostFdNames)
 }
 
-func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) error {
-	err := q.qmpSetup()
+func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) (err error) {
+	err = q.qmpSetup()
 	if err != nil {
 		return err
 	}
@@ -1168,15 +1184,27 @@ func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) error {
 
 	devID := "virtio-" + tap.ID
 	if op == addDevice {
-
 		if err = q.hotAddNetDevice(tap.Name, endpoint.HardwareAddr(), tap.VMFds, tap.VhostFds); err != nil {
 			return err
 		}
+
+		defer func() {
+			if err != nil {
+				q.qmpMonitorCh.qmp.ExecuteNetdevDel(q.qmpMonitorCh.ctx, tap.Name)
+			}
+		}()
 
 		addr, bridge, err := q.addDeviceToBridge(tap.ID)
 		if err != nil {
 			return err
 		}
+
+		defer func() {
+			if err != nil {
+				q.removeDeviceFromBridge(tap.ID)
+			}
+		}()
+
 		pciAddr := fmt.Sprintf("%02x/%s", bridge.Addr, addr)
 		endpoint.SetPciAddr(pciAddr)
 
