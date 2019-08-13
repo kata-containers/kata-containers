@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -24,17 +23,17 @@ import (
 	"unsafe"
 
 	govmmQemu "github.com/intel/govmm/qemu"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/opentracing/opentracing-go"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
-
-	"golang.org/x/sys/unix"
 )
 
 // romFile is the file name of the ROM that can be used for virtio-pci devices.
@@ -2014,4 +2013,22 @@ func (q *qemu) load(s persistapi.HypervisorState) {
 			ID: cpu.ID,
 		})
 	}
+}
+
+func (q *qemu) check() error {
+	err := q.qmpSetup()
+	if err != nil {
+		return err
+	}
+
+	status, err := q.qmpMonitorCh.qmp.ExecuteQueryStatus(q.qmpMonitorCh.ctx)
+	if err != nil {
+		return err
+	}
+
+	if status.Status == "internal-error" || status.Status == "guest-panicked" {
+		return errors.Errorf("guest failure: %s", status.Status)
+	}
+
+	return nil
 }

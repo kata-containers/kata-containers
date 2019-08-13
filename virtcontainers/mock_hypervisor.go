@@ -121,3 +121,7 @@ func (m *mockHypervisor) save() (s persistapi.HypervisorState) {
 }
 
 func (m *mockHypervisor) load(s persistapi.HypervisorState) {}
+
+func (m *mockHypervisor) check() error {
+	return nil
+}

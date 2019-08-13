@@ -1006,3 +1006,11 @@ func (fc *firecracker) save() (s persistapi.HypervisorState) {
 func (fc *firecracker) load(s persistapi.HypervisorState) {
 	fc.info.PID = s.Pid
 }
+
+func (fc *firecracker) check() error {
+	if err := syscall.Kill(fc.pid(), syscall.Signal(0)); err != nil {
+		return errors.Wrapf(err, "failed to ping fc process")
+	}
+
+	return nil
+}
