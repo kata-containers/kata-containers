@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/pkg/errors"
@@ -127,7 +126,7 @@ func (m *monitor) watchAgent() {
 }
 
 func (m *monitor) watchHypervisor() error {
-	if err := syscall.Kill(m.sandbox.hypervisor.pid(), syscall.Signal(0)); err != nil {
+	if err := m.sandbox.hypervisor.check(); err != nil {
 		m.notify(errors.Wrapf(err, "failed to ping hypervisor process"))
 		return err
 	}

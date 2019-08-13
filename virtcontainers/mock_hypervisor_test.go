@@ -82,3 +82,9 @@ func TestMockHypervisorDisconnect(t *testing.T) {
 
 	m.disconnect()
 }
+
+func TestMockHypervisorCheck(t *testing.T) {
+	var m *mockHypervisor
+
+	assert.NoError(t, m.check())
+}
