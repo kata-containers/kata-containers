@@ -11,9 +11,11 @@ set -o pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "${script_dir}/../../scripts/lib.sh"
+source "${script_dir}/../qemu.blacklist"
 
 packaging_dir="${script_dir}/../.."
 qemu_tar="kata-qemu-static.tar.gz"
+qemu_tmp_tar="kata-qemu-static-tmp.tar.gz"
 
 qemu_repo="${qemu_repo:-}"
 qemu_version="${qemu_version:-}"
@@ -54,3 +56,7 @@ sudo docker run \
 	mv "/tmp/qemu-static/${qemu_tar}" /share/
 
 sudo chown ${USER}:${USER} "${PWD}/${qemu_tar}"
+
+# Remove blacklisted binaries
+gzip -d < "${qemu_tar}" | tar --delete --wildcards -f - ${qemu_black_list[*]} | gzip > "${qemu_tmp_tar}"
+mv -f "${qemu_tmp_tar}" "${qemu_tar}"
