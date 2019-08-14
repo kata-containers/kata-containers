@@ -8,7 +8,8 @@
 set -e
 
 cidir=$(dirname "$0")
+tag="$1"
 
 source "${cidir}/lib.sh"
 
-build_and_install "github.com/kata-containers/agent"
+build_and_install "github.com/kata-containers/agent" "" "" "${tag}"

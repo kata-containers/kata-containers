@@ -10,6 +10,7 @@ set -o nounset
 set -o pipefail
 
 cidir=$(dirname "$0")
+tag="${1:-""}"
 source /etc/os-release || source /usr/lib/os-release
 source "${cidir}/lib.sh"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
@@ -32,10 +33,10 @@ else
 fi
 
 echo "Install shim"
-"${cidir}/install_shim.sh"
+"${cidir}/install_shim.sh" "${tag}"
 
 echo "Install proxy"
-"${cidir}/install_proxy.sh"
+"${cidir}/install_proxy.sh" "${tag}"
 
 echo "Install runtime"
-"${cidir}/install_runtime.sh"
+"${cidir}/install_runtime.sh" "${tag}"

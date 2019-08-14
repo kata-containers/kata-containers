@@ -88,8 +88,9 @@ function build_version() {
 function build() {
 	github_project="$1"
 	make_target="$2"
+	version="${3:-"HEAD"}"
 
-	build_version "${github_project}" "${make_target}" "HEAD"
+	build_version "${github_project}" "${make_target}" "${version}"
 }
 
 function build_and_install() {
