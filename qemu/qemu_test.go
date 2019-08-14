@@ -64,7 +64,7 @@ func testConfigAppend(config *Config, structure interface{}, expected string, t 
 	case SMP:
 		config.SMP = s
 		if err := config.appendCPUs(); err != nil {
-			t.Fatalf("Unexpected error: %v\n", err)
+			t.Fatalf("Unexpected error: %v", err)
 		}
 
 	case QMPSocket:
