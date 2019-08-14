@@ -12,7 +12,7 @@ ARG VIRTIOFSD
 ARG PREFIX
 
 WORKDIR /root/nemu
-RUN apt-get update
+RUN apt-get update && apt-get upgrade -y
 RUN apt-get install -y \
 	    autoconf \
 	    automake \
