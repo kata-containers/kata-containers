@@ -1,4 +1,4 @@
-from ubuntu:16.04
+from ubuntu:18.04
 
 ARG QEMU_REPO
 # commit/tag/branch
