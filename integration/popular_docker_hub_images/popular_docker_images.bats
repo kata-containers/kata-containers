@@ -161,6 +161,12 @@ setup() {
 	docker run --rm --runtime=$RUNTIME -i $image bash -c "echo -e '#include<stdio.h>\nint main (void)\n{printf(\"Hello\");return 0;}' > demo.c && gcc demo.c -o demo && ./demo"
 }
 
+
+@test "[gradle] run a gradle container" {
+	image="gradle"
+	docker run --rm --runtime=$RUNTIME -i $image bash -c "echo -e 'public class CL{public static void main(String[]a){System.out.println(\"KataContainers\");}}' > CL.java && javac CL.java && java CL"
+}
+
 @test "[java file] run an instance in a glassfish container" {
 	image="glassfish"
 	docker run --rm --runtime=$RUNTIME -i $image bash -c "echo 'public class T{public static void main(String[]a){System.out.println(\"Test\");}}' > T.java && javac T.java && java T"
@@ -294,6 +300,11 @@ setup() {
 @test "[display configuration] configuration file neurodebian" {
 	image="neurodebian"
 	docker run --rm --runtime=$RUNTIME $image cat /etc/apt/sources.list.d/neurodebian.sources.list
+}
+
+@test "[nextcloud] run nextcloud container" {
+	image="nextcloud"
+	docker run --rm --runtime=$RUNTIME -i $image bash -c "php -r 'print(\"kata-runtime\");'"
 }
 
 @test "[display configuration] run nginx container" {
