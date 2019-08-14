@@ -76,6 +76,7 @@ https_proxy="${https_proxy:-}"
 prefix="${prefix:-"/opt/kata"}"
 
 sudo docker build \
+	--no-cache \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg NEMU_REPO="${nemu_repo}" \
