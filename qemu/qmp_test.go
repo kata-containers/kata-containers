@@ -1110,13 +1110,13 @@ func TestQMPExecuteQueryHotpluggableCPUs(t *testing.T) {
 	checkVersion(t, connectedCh)
 	hotCPUs, err := q.ExecuteQueryHotpluggableCPUs(context.Background())
 	if err != nil {
-		t.Fatalf("Unexpected error: %v\n", err)
+		t.Fatalf("Unexpected error: %v", err)
 	}
 	if len(hotCPUs) != 1 {
 		t.Fatalf("Expected hot CPUs length equals to 1\n")
 	}
 	if reflect.DeepEqual(hotCPUs[0], hotCPU) == false {
-		t.Fatalf("Expected %v equals to %v\n", hotCPUs[0], hotCPU)
+		t.Fatalf("Expected %v equals to %v", hotCPUs[0], hotCPU)
 	}
 	q.Shutdown()
 	<-disconnectedCh
@@ -1146,13 +1146,13 @@ func TestQMPExecuteQueryMemoryDevices(t *testing.T) {
 	checkVersion(t, connectedCh)
 	memDevices, err := q.ExecQueryMemoryDevices(context.Background())
 	if err != nil {
-		t.Fatalf("Unexpected error: %v\n", err)
+		t.Fatalf("Unexpected error: %v", err)
 	}
 	if len(memDevices) != 1 {
 		t.Fatalf("Expected memory devices length equals to 1\n")
 	}
 	if reflect.DeepEqual(memDevices[0], memoryDevices) == false {
-		t.Fatalf("Expected %v equals to %v\n", memDevices[0], memoryDevices)
+		t.Fatalf("Expected %v equals to %v", memDevices[0], memoryDevices)
 	}
 	q.Shutdown()
 	<-disconnectedCh
@@ -1184,13 +1184,13 @@ func TestQMPExecuteQueryCpus(t *testing.T) {
 	checkVersion(t, connectedCh)
 	cpus, err := q.ExecQueryCpus(context.Background())
 	if err != nil {
-		t.Fatalf("Unexpected error: %v\n", err)
+		t.Fatalf("Unexpected error: %v", err)
 	}
 	if len(cpus) != 1 {
 		t.Fatalf("Expected memory devices length equals to 1\n")
 	}
 	if reflect.DeepEqual(cpus[0], cpuInfo) == false {
-		t.Fatalf("Expected %v equals to %v\n", cpus[0], cpuInfo)
+		t.Fatalf("Expected %v equals to %v", cpus[0], cpuInfo)
 	}
 	q.Shutdown()
 	<-disconnectedCh
@@ -1220,13 +1220,13 @@ func TestQMPExecuteQueryCpusFast(t *testing.T) {
 	checkVersion(t, connectedCh)
 	cpus, err := q.ExecQueryCpusFast(context.Background())
 	if err != nil {
-		t.Fatalf("Unexpected error: %v\n", err)
+		t.Fatalf("Unexpected error: %v", err)
 	}
 	if len(cpus) != 1 {
 		t.Fatalf("Expected memory devices length equals to 1\n")
 	}
 	if reflect.DeepEqual(cpus[0], cpuInfoFast) == false {
-		t.Fatalf("Expected %v equals to %v\n", cpus[0], cpuInfoFast)
+		t.Fatalf("Expected %v equals to %v", cpus[0], cpuInfoFast)
 	}
 	q.Shutdown()
 	<-disconnectedCh
@@ -1249,7 +1249,7 @@ func TestExecSetMigrationCaps(t *testing.T) {
 	}
 	err := q.ExecSetMigrationCaps(context.Background(), caps)
 	if err != nil {
-		t.Fatalf("Unexpected error: %v\n", err)
+		t.Fatalf("Unexpected error: %v", err)
 	}
 	q.Shutdown()
 	<-disconnectedCh
@@ -1266,7 +1266,7 @@ func TestExecSetMigrateArguments(t *testing.T) {
 	checkVersion(t, connectedCh)
 	err := q.ExecSetMigrateArguments(context.Background(), "exec:foobar")
 	if err != nil {
-		t.Fatalf("Unexpected error: %v\n", err)
+		t.Fatalf("Unexpected error: %v", err)
 	}
 	q.Shutdown()
 	<-disconnectedCh
@@ -1284,7 +1284,7 @@ func TestExecHotplugMemory(t *testing.T) {
 	checkVersion(t, connectedCh)
 	err := q.ExecHotplugMemory(context.Background(), "memory-backend-ram", "mem0", "", 128, true)
 	if err != nil {
-		t.Fatalf("Unexpected error: %v\n", err)
+		t.Fatalf("Unexpected error: %v", err)
 	}
 	q.Shutdown()
 	<-disconnectedCh
@@ -1419,7 +1419,7 @@ func TestExecuteQueryMigration(t *testing.T) {
 		t.Fatalf("Unexpected error %v", err)
 	}
 	if !reflect.DeepEqual(s, status) {
-		t.Fatalf("expected %v\n got %v", status, s)
+		t.Fatalf("expected %v got %v", status, s)
 	}
 	q.Shutdown()
 	<-disconnectedCh
@@ -1538,7 +1538,7 @@ func TestExecuteNVDIMMDeviceAdd(t *testing.T) {
 	checkVersion(t, connectedCh)
 	err := q.ExecuteNVDIMMDeviceAdd(context.Background(), "nvdimm0", "/dev/rbd0", 1024)
 	if err != nil {
-		t.Fatalf("Unexpected error: %v\n", err)
+		t.Fatalf("Unexpected error: %v", err)
 	}
 	q.Shutdown()
 	<-disconnectedCh
@@ -1612,13 +1612,40 @@ func TestQMPExecQueryQmpSchema(t *testing.T) {
 	checkVersion(t, connectedCh)
 	info, err := q.ExecQueryQmpSchema(context.Background())
 	if err != nil {
-		t.Fatalf("Unexpected error: %v\n", err)
+		t.Fatalf("Unexpected error: %v", err)
 	}
 	if len(schemaInfo) != 2 {
 		t.Fatalf("Expected schema infos length equals to 2\n")
 	}
 	if reflect.DeepEqual(info, schemaInfo) == false {
-		t.Fatalf("Expected %v equals to %v\n", info, schemaInfo)
+		t.Fatalf("Expected %v equals to %v", info, schemaInfo)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
+func TestQMPExecQueryQmpStatus(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	statusInfo := StatusInfo{
+		Running:    true,
+		SingleStep: false,
+		Status:     "running",
+	}
+	buf.AddCommand("query-status", nil, "return", statusInfo)
+	cfg := QMPConfig{
+		Logger:      qmpTestLogger{},
+		MaxCapacity: 1024,
+	}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	info, err := q.ExecuteQueryStatus(context.Background())
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if reflect.DeepEqual(info, statusInfo) == false {
+		t.Fatalf("Expected %v equals to %v", info, statusInfo)
 	}
 	q.Shutdown()
 	<-disconnectedCh

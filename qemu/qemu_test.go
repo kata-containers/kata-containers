@@ -64,7 +64,7 @@ func testConfigAppend(config *Config, structure interface{}, expected string, t 
 	case SMP:
 		config.SMP = s
 		if err := config.appendCPUs(); err != nil {
-			t.Fatalf("Unexpected error: %v\n", err)
+			t.Fatalf("Unexpected error: %v", err)
 		}
 
 	case QMPSocket:
@@ -488,16 +488,16 @@ func TestAppendEmptyDevice(t *testing.T) {
 func TestAppendKnobsAllTrue(t *testing.T) {
 	var knobsString = "-no-user-config -nodefaults -nographic -daemonize -realtime mlock=on -S"
 	knobs := Knobs{
-		NoUserConfig:        true,
-		NoDefaults:          true,
-		NoGraphic:           true,
-		Daemonize:           true,
-		MemPrealloc:         true,
-		FileBackedMem:       true,
-		FileBackedMemShared: true,
-		Realtime:            true,
-		Mlock:               true,
-		Stopped:             true,
+		NoUserConfig:  true,
+		NoDefaults:    true,
+		NoGraphic:     true,
+		Daemonize:     true,
+		MemPrealloc:   true,
+		FileBackedMem: true,
+		MemShared:     true,
+		Realtime:      true,
+		Mlock:         true,
+		Stopped:       true,
 	}
 
 	testAppend(knobs, knobsString, t)
@@ -506,15 +506,15 @@ func TestAppendKnobsAllTrue(t *testing.T) {
 func TestAppendKnobsAllFalse(t *testing.T) {
 	var knobsString = "-realtime mlock=off"
 	knobs := Knobs{
-		NoUserConfig:        false,
-		NoDefaults:          false,
-		NoGraphic:           false,
-		MemPrealloc:         false,
-		FileBackedMem:       false,
-		FileBackedMemShared: false,
-		Realtime:            false,
-		Mlock:               false,
-		Stopped:             false,
+		NoUserConfig:  false,
+		NoDefaults:    false,
+		NoGraphic:     false,
+		MemPrealloc:   false,
+		FileBackedMem: false,
+		MemShared:     false,
+		Realtime:      false,
+		Mlock:         false,
+		Stopped:       false,
 	}
 
 	testAppend(knobs, knobsString, t)
@@ -533,10 +533,10 @@ func TestAppendMemoryHugePages(t *testing.T) {
 	testConfigAppend(conf, conf.Memory, memString, t)
 
 	knobs := Knobs{
-		HugePages:           true,
-		MemPrealloc:         true,
-		FileBackedMem:       true,
-		FileBackedMemShared: true,
+		HugePages:     true,
+		MemPrealloc:   true,
+		FileBackedMem: true,
+		MemShared:     true,
 	}
 	knobsString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=/dev/hugepages,share=on,prealloc=on -numa node,memdev=dimm1"
 	mlockFalseString := "-realtime mlock=off"
@@ -557,17 +557,16 @@ func TestAppendMemoryMemPrealloc(t *testing.T) {
 	testConfigAppend(conf, conf.Memory, memString, t)
 
 	knobs := Knobs{
-		MemPrealloc:         true,
-		FileBackedMem:       true,
-		FileBackedMemShared: true,
+		MemPrealloc: true,
+		MemShared:   true,
 	}
-	knobsString := "-object memory-backend-ram,id=dimm1,size=1G,prealloc=on -numa node,memdev=dimm1"
+	knobsString := "-object memory-backend-ram,id=dimm1,size=1G,share=on,prealloc=on -numa node,memdev=dimm1"
 	mlockFalseString := "-realtime mlock=off"
 
 	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
 }
 
-func TestAppendMemoryFileBackedMemShared(t *testing.T) {
+func TestAppendMemoryMemShared(t *testing.T) {
 	conf := &Config{
 		Memory: Memory{
 			Size:   "1G",
@@ -580,8 +579,8 @@ func TestAppendMemoryFileBackedMemShared(t *testing.T) {
 	testConfigAppend(conf, conf.Memory, memString, t)
 
 	knobs := Knobs{
-		FileBackedMem:       true,
-		FileBackedMemShared: true,
+		FileBackedMem: true,
+		MemShared:     true,
 	}
 	knobsString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,share=on -numa node,memdev=dimm1"
 	mlockFalseString := "-realtime mlock=off"
@@ -602,10 +601,33 @@ func TestAppendMemoryFileBackedMem(t *testing.T) {
 	testConfigAppend(conf, conf.Memory, memString, t)
 
 	knobs := Knobs{
-		FileBackedMem:       true,
-		FileBackedMemShared: false,
+		FileBackedMem: true,
+		MemShared:     false,
 	}
 	knobsString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar -numa node,memdev=dimm1"
+	mlockFalseString := "-realtime mlock=off"
+
+	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
+}
+
+func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
+	conf := &Config{
+		Memory: Memory{
+			Size:   "1G",
+			Slots:  8,
+			MaxMem: "3G",
+			Path:   "foobar",
+		},
+	}
+	memString := "-m 1G,slots=8,maxmem=3G"
+	testConfigAppend(conf, conf.Memory, memString, t)
+
+	knobs := Knobs{
+		FileBackedMem: true,
+		MemShared:     true,
+		MemPrealloc:   true,
+	}
+	knobsString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,share=on,prealloc=on -numa node,memdev=dimm1"
 	mlockFalseString := "-realtime mlock=off"
 
 	testConfigAppend(conf, knobs, memString+" "+knobsString+" "+mlockFalseString, t)
@@ -712,7 +734,8 @@ func TestAppendQMPSocketServer(t *testing.T) {
 }
 
 var pidfile = "/run/vc/vm/iamsandboxid/pidfile"
-var qemuString = "-name cc-qemu -cpu host -uuid " + agentUUID + " -pidfile " + pidfile
+var logfile = "/run/vc/vm/iamsandboxid/logfile"
+var qemuString = "-name cc-qemu -cpu host -uuid " + agentUUID + " -pidfile " + pidfile + " -D " + logfile
 
 func TestAppendStrings(t *testing.T) {
 	config := Config{
@@ -721,12 +744,14 @@ func TestAppendStrings(t *testing.T) {
 		UUID:     agentUUID,
 		CPUModel: "host",
 		PidFile:  pidfile,
+		LogFile:  logfile,
 	}
 
 	config.appendName()
 	config.appendCPUModel()
 	config.appendUUID()
 	config.appendPidFile()
+	config.appendLogFile()
 
 	result := strings.Join(config.qemuParams, " ")
 	if result != qemuString {
@@ -984,7 +1009,7 @@ func TestBadMemoryKnobs(t *testing.T) {
 
 	c = &Config{
 		Knobs: Knobs{
-			HugePages: true,
+			MemShared: true,
 		},
 	}
 	c.appendMemoryKnobs()
@@ -995,19 +1020,6 @@ func TestBadMemoryKnobs(t *testing.T) {
 	c = &Config{
 		Knobs: Knobs{
 			MemPrealloc: true,
-		},
-	}
-	c.appendMemoryKnobs()
-	if len(c.qemuParams) != 0 {
-		t.Errorf("Expected empty qemuParams, found %s", c.qemuParams)
-	}
-
-	c = &Config{
-		Knobs: Knobs{
-			FileBackedMem: true,
-		},
-		Memory: Memory{
-			Size: "1024",
 		},
 	}
 	c.appendMemoryKnobs()
