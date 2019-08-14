@@ -63,7 +63,9 @@ run_sonobuoy() {
 
 	# Uncompress results
 	ls | grep tar.gz | xargs tar -xvf
-	e2e_result_log="${e2e_result_dir}/plugins/e2e/results/e2e.log"
+
+	# e2e results log will be on "plugins/e2e" directory
+	e2e_result_log=$(find ./plugins/e2e -name "e2e.log")
 	info "Results of the e2e tests can be found on: $e2e_result_log"
 
 	# If on CI, display the e2e log on the console.
