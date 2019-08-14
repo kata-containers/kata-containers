@@ -24,8 +24,6 @@ CRI_RUNTIME="${CRI_RUNTIME:-crio}"
 # Overall Sonobuoy timeout in minutes.
 WAIT_TIME=${WAIT_TIME:-180}
 
-SONOBUOY_KATA_YAML="${SCRIPT_PATH}/sonobuoy_kata.yaml"
-
 create_kata_webhook() {
 	pushd "${SCRIPT_PATH}/../../../kata-webhook" >> /dev/null
 	# Create certificates for the kata webhook
