@@ -93,6 +93,8 @@ type qemu struct {
 	ctx context.Context
 
 	nvdimmCount int
+
+	stopped bool
 }
 
 const (
@@ -835,8 +837,16 @@ func (q *qemu) stopSandbox() error {
 	span, _ := q.trace("stopSandbox")
 	defer span.Finish()
 
-	defer q.cleanupVM()
 	q.Logger().Info("Stopping Sandbox")
+	if q.stopped {
+		q.Logger().Info("Already stopped")
+		return nil
+	}
+
+	defer func() {
+		q.cleanupVM()
+		q.stopped = true
+	}()
 
 	err := q.qmpSetup()
 	if err != nil {
