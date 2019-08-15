@@ -1887,7 +1887,7 @@ func (s *Sandbox) cgroupsUpdate() error {
 		return fmt.Errorf("Could not load cgroup %v: %v", s.state.CgroupPath, err)
 	}
 
-	if err := s.constrainHypervisor(cgroup); err != nil {
+	if err := s.constrainHypervisorVCPUs(cgroup); err != nil {
 		return err
 	}
 
@@ -1940,11 +1940,10 @@ func (s *Sandbox) cgroupsDelete() error {
 	return noConstraintsCgroup.Delete()
 }
 
-func (s *Sandbox) constrainHypervisor(cgroup cgroups.Cgroup) error {
+func (s *Sandbox) constrainHypervisorVCPUs(cgroup cgroups.Cgroup) error {
 	pids := s.hypervisor.getPids()
 	if len(pids) == 0 || pids[0] == 0 {
 		return fmt.Errorf("Invalid hypervisor PID: %+v", pids)
-
 	}
 
 	// Move hypervisor into cgroups without constraints,
