@@ -862,7 +862,7 @@ func (s *Sandbox) removeNetwork() error {
 		}
 	}
 
-	return s.network.Remove(s.ctx, &s.networkNS, s.hypervisor, s.factory != nil)
+	return s.network.Remove(s.ctx, &s.networkNS, s.hypervisor)
 }
 
 func (s *Sandbox) generateNetInfo(inf *vcTypes.Interface) (NetworkInfo, error) {
@@ -1473,16 +1473,16 @@ func (s *Sandbox) Stop(force bool) error {
 		}
 	}
 
-	// Remove the network.
-	if err := s.removeNetwork(); err != nil && !force {
-		return err
-	}
-
 	if err := s.stopVM(); err != nil && !force {
 		return err
 	}
 
 	if err := s.setSandboxState(types.StateStopped); err != nil {
+		return err
+	}
+
+	// Remove the network.
+	if err := s.removeNetwork(); err != nil && !force {
 		return err
 	}
 
