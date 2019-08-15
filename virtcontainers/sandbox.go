@@ -758,7 +758,7 @@ func (s *Sandbox) Delete() error {
 		}
 	}
 
-	if err := s.deleteCgroups(); err != nil {
+	if err := s.cgroupsDelete(); err != nil {
 		return err
 	}
 
@@ -1148,7 +1148,7 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 		return nil, err
 	}
 
-	if err = s.updateCgroups(); err != nil {
+	if err = s.cgroupsUpdate(); err != nil {
 		return nil, err
 	}
 
@@ -1325,7 +1325,7 @@ func (s *Sandbox) UpdateContainer(containerID string, resources specs.LinuxResou
 		return err
 	}
 
-	if err := s.updateCgroups(); err != nil {
+	if err := s.cgroupsUpdate(); err != nil {
 		return err
 	}
 
@@ -1416,7 +1416,7 @@ func (s *Sandbox) createContainers() error {
 		}
 	}
 
-	if err := s.updateCgroups(); err != nil {
+	if err := s.cgroupsUpdate(); err != nil {
 		return err
 	}
 	if err := s.storeSandbox(); err != nil {
@@ -1876,7 +1876,7 @@ func (s *Sandbox) GetHypervisorType() string {
 	return string(s.config.HypervisorType)
 }
 
-func (s *Sandbox) updateCgroups() error {
+func (s *Sandbox) cgroupsUpdate() error {
 	if s.state.CgroupPath == "" {
 		s.Logger().Warn("sandbox's cgroup won't be updated: cgroup path is empty")
 		return nil
@@ -1908,7 +1908,7 @@ func (s *Sandbox) updateCgroups() error {
 	return nil
 }
 
-func (s *Sandbox) deleteCgroups() error {
+func (s *Sandbox) cgroupsDelete() error {
 	s.Logger().Debug("Deleting sandbox cgroup")
 
 	path := cgroupNoConstraintsPath(s.state.CgroupPath)

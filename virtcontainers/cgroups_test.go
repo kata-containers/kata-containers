@@ -133,12 +133,12 @@ func TestUpdateCgroups(t *testing.T) {
 	}
 
 	// empty path
-	err := s.updateCgroups()
+	err := s.cgroupsUpdate()
 	assert.NoError(err)
 
 	// path doesn't exist
 	s.state.CgroupPath = "/abc/123/rgb"
-	err = s.updateCgroups()
+	err = s.cgroupsUpdate()
 	assert.Error(err)
 
 	if os.Getuid() != 0 {
@@ -152,7 +152,7 @@ func TestUpdateCgroups(t *testing.T) {
 	s.hypervisor = &mockHypervisor{mockPid: 0}
 
 	// bad pid
-	err = s.updateCgroups()
+	err = s.cgroupsUpdate()
 	assert.Error(err)
 
 	// fake workload
@@ -161,7 +161,7 @@ func TestUpdateCgroups(t *testing.T) {
 	s.hypervisor = &mockHypervisor{mockPid: cmd.Process.Pid}
 
 	// no containers
-	err = s.updateCgroups()
+	err = s.cgroupsUpdate()
 	assert.NoError(err)
 
 	s.config = &SandboxConfig{}
@@ -186,11 +186,11 @@ func TestUpdateCgroups(t *testing.T) {
 		},
 	}
 
-	err = s.updateCgroups()
+	err = s.cgroupsUpdate()
 	assert.NoError(err)
 
 	// cleanup
 	assert.NoError(cmd.Process.Kill())
-	err = s.deleteCgroups()
+	err = s.cgroupsDelete()
 	assert.NoError(err)
 }
