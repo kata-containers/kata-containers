@@ -1480,22 +1480,16 @@ func (n *Network) PostAdd(ctx context.Context, ns *NetworkNamespace, hotplug boo
 
 // Remove network endpoints in the network namespace. It also deletes the network
 // namespace in case the namespace has been created by us.
-func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor hypervisor, hotunplug bool) error {
+func (n *Network) Remove(ctx context.Context, ns *NetworkNamespace, hypervisor hypervisor) error {
 	span, _ := n.trace(ctx, "remove")
 	defer span.Finish()
 
 	for _, endpoint := range ns.Endpoints {
 		// Detach for an endpoint should enter the network namespace
 		// if required.
-		networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotunplug", hotunplug).Info("Detaching endpoint")
-		if hotunplug {
-			if err := endpoint.HotDetach(hypervisor, ns.NetNsCreated, ns.NetNsPath); err != nil {
-				return err
-			}
-		} else {
-			if err := endpoint.Detach(ns.NetNsCreated, ns.NetNsPath); err != nil {
-				return err
-			}
+		networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Detaching endpoint")
+		if err := endpoint.Detach(ns.NetNsCreated, ns.NetNsPath); err != nil {
+			return err
 		}
 	}
 
