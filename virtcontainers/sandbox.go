@@ -9,11 +9,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 
+	"github.com/containerd/cgroups"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
@@ -1871,4 +1874,196 @@ func (s *Sandbox) calculateSandboxCPUs() uint32 {
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
 func (s *Sandbox) GetHypervisorType() string {
 	return string(s.config.HypervisorType)
+}
+
+func (s *Sandbox) updateCgroups() error {
+	if s.state.CgroupPath == "" {
+		s.Logger().Warn("sandbox's cgroup won't be updated: cgroup path is empty")
+		return nil
+	}
+
+	cgroup, err := cgroupsLoadFunc(V1Constraints, cgroups.StaticPath(s.state.CgroupPath))
+	if err != nil {
+		return fmt.Errorf("Could not load cgroup %v: %v", s.state.CgroupPath, err)
+	}
+
+	if err := s.constrainHypervisor(cgroup); err != nil {
+		return err
+	}
+
+	if len(s.containers) <= 1 {
+		// nothing to update
+		return nil
+	}
+
+	resources, err := s.resources()
+	if err != nil {
+		return err
+	}
+
+	if err := cgroup.Update(&resources); err != nil {
+		return fmt.Errorf("Could not update cgroup %v: %v", s.state.CgroupPath, err)
+	}
+
+	return nil
+}
+
+func (s *Sandbox) deleteCgroups() error {
+	s.Logger().Debug("Deleting sandbox cgroup")
+
+	path := cgroupNoConstraintsPath(s.state.CgroupPath)
+	s.Logger().WithField("path", path).Debug("Deleting no constraints cgroup")
+	noConstraintsCgroup, err := cgroupsLoadFunc(V1NoConstraints, cgroups.StaticPath(path))
+	if err == cgroups.ErrCgroupDeleted {
+		// cgroup already deleted
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("Could not load cgroup without constraints %v: %v", path, err)
+	}
+
+	// move running process here, that way cgroup can be removed
+	parent, err := parentCgroup(V1NoConstraints, path)
+	if err != nil {
+		// parent cgroup doesn't exist, that means there are no process running
+		// and the no constraints cgroup was removed.
+		s.Logger().WithError(err).Warn("Parent cgroup doesn't exist")
+		return nil
+	}
+
+	if err := noConstraintsCgroup.MoveTo(parent); err != nil {
+		// Don't fail, cgroup can be deleted
+		s.Logger().WithError(err).Warn("Could not move process from no constraints to parent cgroup")
+	}
+
+	return noConstraintsCgroup.Delete()
+}
+
+func (s *Sandbox) constrainHypervisor(cgroup cgroups.Cgroup) error {
+	pids := s.hypervisor.getPids()
+	if len(pids) == 0 || pids[0] == 0 {
+		return fmt.Errorf("Invalid hypervisor PID: %+v", pids)
+
+	}
+
+	// Move hypervisor into cgroups without constraints,
+	// those cgroups are not yet supported.
+	resources := &specs.LinuxResources{}
+	path := cgroupNoConstraintsPath(s.state.CgroupPath)
+	noConstraintsCgroup, err := cgroupsNewFunc(V1NoConstraints, cgroups.StaticPath(path), resources)
+	if err != nil {
+		return fmt.Errorf("Could not create cgroup %v: %v", path, err)
+
+	}
+	for _, pid := range pids {
+		if pid <= 0 {
+			s.Logger().Warnf("Invalid hypervisor pid: %d", pid)
+			continue
+		}
+
+		if err := noConstraintsCgroup.Add(cgroups.Process{Pid: pid}); err != nil {
+			return fmt.Errorf("Could not add hypervisor PID %d to cgroup %v: %v", pid, path, err)
+		}
+
+	}
+
+	// when new container joins, new CPU could be hotplugged, so we
+	// have to query fresh vcpu info from hypervisor for every time.
+	tids, err := s.hypervisor.getThreadIDs()
+	if err != nil {
+		return fmt.Errorf("failed to get thread ids from hypervisor: %v", err)
+	}
+	if len(tids.vcpus) == 0 {
+		// If there's no tid returned from the hypervisor, this is not
+		// a bug. It simply means there is nothing to constrain, hence
+		// let's return without any error from here.
+		return nil
+	}
+
+	// We are about to move just the vcpus (threads) into cgroups with constraints.
+	// Move whole hypervisor process whould be easier but the IO/network performance
+	// whould be impacted.
+	for _, i := range tids.vcpus {
+		// In contrast, AddTask will write thread id to `tasks`
+		// After this, vcpu threads are in "vcpu" sub-cgroup, other threads in
+		// qemu will be left in parent cgroup untouched.
+		if err := cgroup.AddTask(cgroups.Process{
+			Pid: i,
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Sandbox) resources() (specs.LinuxResources, error) {
+	resources := specs.LinuxResources{
+		CPU: s.cpuResources(),
+	}
+
+	return resources, nil
+}
+
+func (s *Sandbox) cpuResources() *specs.LinuxCPU {
+	// Use default period and quota if they are not specified.
+	// Container will inherit the constraints from its parent.
+	quota := int64(0)
+	period := uint64(0)
+	shares := uint64(0)
+	realtimePeriod := uint64(0)
+	realtimeRuntime := int64(0)
+
+	cpu := &specs.LinuxCPU{
+		Quota:           &quota,
+		Period:          &period,
+		Shares:          &shares,
+		RealtimePeriod:  &realtimePeriod,
+		RealtimeRuntime: &realtimeRuntime,
+	}
+
+	for _, c := range s.containers {
+		ann := c.GetAnnotations()
+		if ann[annotations.ContainerTypeKey] == string(PodSandbox) {
+			// skip sandbox container
+			continue
+		}
+
+		if c.config.Resources.CPU == nil {
+			continue
+		}
+
+		if c.config.Resources.CPU.Shares != nil {
+			shares = uint64(math.Max(float64(*c.config.Resources.CPU.Shares), float64(shares)))
+		}
+
+		if c.config.Resources.CPU.Quota != nil {
+			quota += *c.config.Resources.CPU.Quota
+		}
+
+		if c.config.Resources.CPU.Period != nil {
+			period = uint64(math.Max(float64(*c.config.Resources.CPU.Period), float64(period)))
+		}
+
+		if c.config.Resources.CPU.Cpus != "" {
+			cpu.Cpus += c.config.Resources.CPU.Cpus + ","
+		}
+
+		if c.config.Resources.CPU.RealtimeRuntime != nil {
+			realtimeRuntime += *c.config.Resources.CPU.RealtimeRuntime
+		}
+
+		if c.config.Resources.CPU.RealtimePeriod != nil {
+			realtimePeriod += *c.config.Resources.CPU.RealtimePeriod
+		}
+
+		if c.config.Resources.CPU.Mems != "" {
+			cpu.Mems += c.config.Resources.CPU.Mems + ","
+		}
+	}
+
+	cpu.Cpus = strings.Trim(cpu.Cpus, " \n\t,")
+
+	return validCPUResources(cpu)
 }
