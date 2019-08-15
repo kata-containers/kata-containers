@@ -24,8 +24,6 @@ CRI_RUNTIME="${CRI_RUNTIME:-crio}"
 # Overall Sonobuoy timeout in minutes.
 WAIT_TIME=${WAIT_TIME:-180}
 
-SONOBUOY_KATA_YAML="${SCRIPT_PATH}/sonobuoy_kata.yaml"
-
 create_kata_webhook() {
 	pushd "${SCRIPT_PATH}/../../../kata-webhook" >> /dev/null
 	# Create certificates for the kata webhook
@@ -65,7 +63,9 @@ run_sonobuoy() {
 
 	# Uncompress results
 	ls | grep tar.gz | xargs tar -xvf
-	e2e_result_log="${e2e_result_dir}/plugins/e2e/results/e2e.log"
+
+	# e2e results log will be on "plugins/e2e" directory
+	e2e_result_log=$(find ./plugins/e2e -name "e2e.log")
 	info "Results of the e2e tests can be found on: $e2e_result_log"
 
 	# If on CI, display the e2e log on the console.
