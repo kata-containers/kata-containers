@@ -8,7 +8,7 @@
         * [events command](#events-command)
         * [update command](#update-command)
     * [Networking](#networking)
-        * [Docker swarm support](#docker-swarm-support)
+        * [Docker swarm and compose support](#docker-swarm-and-compose-support)
     * [Resource management](#resource-management)
         * [docker run and shared memory](#docker-run-and-shared-memory)
         * [docker run and sysctl](#docker-run-and-sysctl)
@@ -114,7 +114,7 @@ All other configurations are supported and are working properly.
 
 ## Networking
 
-### Docker swarm support
+### Docker swarm and compose support
 
 The newest version of Docker supported is specified by the
 `externals.docker.version` variable in the
@@ -126,6 +126,8 @@ by the `externals.docker.meta.swarm-version` variable in the
 [versions database](https://github.com/kata-containers/runtime/blob/master/versions.yaml).
 
 See issue https://github.com/kata-containers/runtime/issues/175 for more information.
+
+Docker compose normally uses custom networks, so also has the same limitations.
 
 ## Resource management
 
