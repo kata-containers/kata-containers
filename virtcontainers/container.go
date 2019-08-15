@@ -879,7 +879,7 @@ func (c *Container) create() (err error) {
 	}
 	c.process = *process
 
-	if err = c.newCgroups(); err != nil {
+	if err = c.cgroupsCreate(); err != nil {
 		return
 	}
 
@@ -908,7 +908,7 @@ func (c *Container) delete() error {
 		return err
 	}
 
-	if err := c.deleteCgroups(); err != nil {
+	if err := c.cgroupsDelete(); err != nil {
 		return err
 	}
 
@@ -1200,7 +1200,7 @@ func (c *Container) update(resources specs.LinuxResources) error {
 		return err
 	}
 
-	if err := c.updateCgroups(resources); err != nil {
+	if err := c.cgroupsUpdate(resources); err != nil {
 		return err
 	}
 
@@ -1422,8 +1422,8 @@ func (c *Container) detachDevices() error {
 	return nil
 }
 
-// creates a new cgroup and return the cgroups path
-func (c *Container) newCgroups() (err error) {
+// cgroupsCreate creates cgroups on the host for the associated container
+func (c *Container) cgroupsCreate() (err error) {
 	ann := c.GetAnnotations()
 
 	config, ok := ann[annotations.ConfigJSONKey]
@@ -1469,7 +1469,8 @@ func (c *Container) newCgroups() (err error) {
 	return nil
 }
 
-func (c *Container) deleteCgroups() error {
+// cgroupsDelete deletes the cgroups on the host for the associated container
+func (c *Container) cgroupsDelete() error {
 	cgroup, err := cgroupsLoadFunc(cgroups.V1,
 		cgroups.StaticPath(c.state.CgroupPath))
 
@@ -1503,7 +1504,8 @@ func (c *Container) deleteCgroups() error {
 	return nil
 }
 
-func (c *Container) updateCgroups(resources specs.LinuxResources) error {
+// cgroupsUpdate updates cgroups on the host for the associated container
+func (c *Container) cgroupsUpdate(resources specs.LinuxResources) error {
 	cgroup, err := cgroupsLoadFunc(cgroups.V1,
 		cgroups.StaticPath(c.state.CgroupPath))
 	if err != nil {
