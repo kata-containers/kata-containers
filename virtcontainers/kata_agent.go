@@ -59,7 +59,7 @@ var (
 	errorMissingOCISpec         = errors.New("Missing OCI specification")
 	defaultKataHostSharedDir    = "/run/kata-containers/shared/sandboxes/"
 	defaultKataGuestSharedDir   = "/run/kata-containers/shared/containers/"
-	mountGuest9pTag             = "kataShared"
+	mountGuestTag               = "kataShared"
 	defaultKataGuestSandboxDir  = "/run/kata-containers/sandbox/"
 	type9pFs                    = "9p"
 	typeVirtioFS                = "virtio_fs"
@@ -72,7 +72,7 @@ var (
 	kataNvdimmDevType           = "nvdimm"
 	kataVirtioFSDevType         = "virtio-fs"
 	sharedDir9pOptions          = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
-	sharedDirVirtioFSOptions    = []string{"default_permissions,allow_other,rootmode=040000,user_id=0,group_id=0,dax,tag=" + mountGuest9pTag, "nodev"}
+	sharedDirVirtioFSOptions    = []string{"default_permissions,allow_other,rootmode=040000,user_id=0,group_id=0", "nodev"}
 	sharedDirVirtioFSDaxOptions = "dax"
 	shmDir                      = "shm"
 	kataEphemeralDevType        = "ephemeral"
@@ -401,7 +401,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 	// Create shared directory and add the shared volume if filesystem sharing is supported.
 	// This volume contains all bind mounted container bundles.
 	sharedVolume := types.Volume{
-		MountTag: mountGuest9pTag,
+		MountTag: mountGuestTag,
 		HostPath: sharePath,
 	}
 
@@ -872,7 +872,7 @@ func setupStorages(sandbox *Sandbox) []*grpc.Storage {
 			}
 			sharedVolume := &grpc.Storage{
 				Driver:     kataVirtioFSDevType,
-				Source:     "none",
+				Source:     mountGuestTag,
 				MountPoint: kataGuestSharedDir(),
 				Fstype:     typeVirtioFS,
 				Options:    sharedDirVirtioFSOptions,
@@ -884,7 +884,7 @@ func setupStorages(sandbox *Sandbox) []*grpc.Storage {
 
 			sharedVolume := &grpc.Storage{
 				Driver:     kata9pDevType,
-				Source:     mountGuest9pTag,
+				Source:     mountGuestTag,
 				MountPoint: kataGuestSharedDir(),
 				Fstype:     type9pFs,
 				Options:    sharedDir9pOptions,
