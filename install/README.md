@@ -88,7 +88,7 @@ Manual installation instructions are available for [these distributions](#suppor
 |-----------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
 |[CentOS](centos-installation-guide.md)                           | 7                                                                                                                 |
 |[Debian](debian-installation-guide.md)                           | 9                                                                                                                 |
-|[Fedora](fedora-installation-guide.md)                           | 27, 28, 29                                                                                                        |
+|[Fedora](fedora-installation-guide.md)                           | 28, 29, 30                                                                                                        |
 |[openSUSE](opensuse-installation-guide.md)                       | [Leap](opensuse-leap-installation-guide.md) (42.3, 15)<br>[Tumbleweed](opensuse-tumbleweed-installation-guide.md) |
 |[Red Hat Enterprise Linux (RHEL)](rhel-installation-guide.md)    | 7                                                                                                                 |
 |[SUSE Linux Enterprise Server (SLES)](sles-installation-guide.md)| SLES 12 SP3                                                                                                       |
