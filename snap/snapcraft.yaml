@@ -90,9 +90,8 @@ parts:
         SKIP_GO_VERSION_CHECK=1 \
         QEMUCMD=qemu-system-$arch
 
-      # A snap is read-only squashfs, unfourtunately it's not possible to use the rootfs image with DAX
-      # since rw access is required therefore initrd image must be used instead.
-      sed -i -e '/^image =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
+      # Set rootfs image by default
+      sed -i -e '/^initrd =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
 
   proxy:
     after: [go]
@@ -182,11 +181,11 @@ parts:
       git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
 
-      sudo -E PATH=$PATH make AGENT_VERSION=${SNAPCRAFT_PROJECT_VERSION} DISTRO=alpine AGENT_INIT=yes USE_DOCKER=1 initrd
+      sudo -E PATH=$PATH make AGENT_VERSION=${SNAPCRAFT_PROJECT_VERSION} DISTRO=clearlinux AGENT_INIT=yes USE_DOCKER=1 image
 
       kata_image_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
       mkdir -p ${kata_image_dir}
-      cp kata-containers-initrd.img ${kata_image_dir}
+      cp kata-containers.img ${kata_image_dir}
 
   ksm-throttler:
     after: [go]
