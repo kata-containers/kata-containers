@@ -1456,8 +1456,8 @@ type Knobs struct {
 	// be set.
 	FileBackedMem bool
 
-	// FileBackedMemShared will set the FileBackedMem device as shared.
-	FileBackedMemShared bool
+	// MemShared will set the memory device as shared.
+	MemShared bool
 
 	// Mlock will control locking of memory
 	// Only active when Realtime is set to true
@@ -1556,6 +1556,9 @@ type Config struct {
 
 	// PidFile is the -pidfile parameter
 	PidFile string
+
+	// LogFile is the -D parameter
+	LogFile string
 
 	qemuParams []string
 }
@@ -1755,46 +1758,34 @@ func (config *Config) appendKernel() {
 }
 
 func (config *Config) appendMemoryKnobs() {
-	if config.Knobs.HugePages {
-		if config.Memory.Size != "" {
-			dimmName := "dimm1"
-			objMemParam := "memory-backend-file,id=" + dimmName + ",size=" + config.Memory.Size + ",mem-path=/dev/hugepages,share=on,prealloc=on"
-			numaMemParam := "node,memdev=" + dimmName
-
-			config.qemuParams = append(config.qemuParams, "-object")
-			config.qemuParams = append(config.qemuParams, objMemParam)
-
-			config.qemuParams = append(config.qemuParams, "-numa")
-			config.qemuParams = append(config.qemuParams, numaMemParam)
-		}
-	} else if config.Knobs.MemPrealloc {
-		if config.Memory.Size != "" {
-			dimmName := "dimm1"
-			objMemParam := "memory-backend-ram,id=" + dimmName + ",size=" + config.Memory.Size + ",prealloc=on"
-			numaMemParam := "node,memdev=" + dimmName
-
-			config.qemuParams = append(config.qemuParams, "-object")
-			config.qemuParams = append(config.qemuParams, objMemParam)
-
-			config.qemuParams = append(config.qemuParams, "-numa")
-			config.qemuParams = append(config.qemuParams, numaMemParam)
-		}
-	} else if config.Knobs.FileBackedMem {
-		if config.Memory.Size != "" && config.Memory.Path != "" {
-			dimmName := "dimm1"
-			objMemParam := "memory-backend-file,id=" + dimmName + ",size=" + config.Memory.Size + ",mem-path=" + config.Memory.Path
-			if config.Knobs.FileBackedMemShared {
-				objMemParam += ",share=on"
-			}
-			numaMemParam := "node,memdev=" + dimmName
-
-			config.qemuParams = append(config.qemuParams, "-object")
-			config.qemuParams = append(config.qemuParams, objMemParam)
-
-			config.qemuParams = append(config.qemuParams, "-numa")
-			config.qemuParams = append(config.qemuParams, numaMemParam)
-		}
+	if config.Memory.Size == "" {
+		return
 	}
+
+	var objMemParam, numaMemParam string
+	dimmName := "dimm1"
+	if config.Knobs.HugePages {
+		objMemParam = "memory-backend-file,id=" + dimmName + ",size=" + config.Memory.Size + ",mem-path=/dev/hugepages"
+		numaMemParam = "node,memdev=" + dimmName
+	} else if config.Knobs.FileBackedMem && config.Memory.Path != "" {
+		objMemParam = "memory-backend-file,id=" + dimmName + ",size=" + config.Memory.Size + ",mem-path=" + config.Memory.Path
+		numaMemParam = "node,memdev=" + dimmName
+	} else {
+		objMemParam = "memory-backend-ram,id=" + dimmName + ",size=" + config.Memory.Size
+		numaMemParam = "node,memdev=" + dimmName
+	}
+
+	if config.Knobs.MemShared {
+		objMemParam += ",share=on"
+	}
+	if config.Knobs.MemPrealloc {
+		objMemParam += ",prealloc=on"
+	}
+	config.qemuParams = append(config.qemuParams, "-object")
+	config.qemuParams = append(config.qemuParams, objMemParam)
+
+	config.qemuParams = append(config.qemuParams, "-numa")
+	config.qemuParams = append(config.qemuParams, numaMemParam)
 }
 
 func (config *Config) appendKnobs() {
@@ -1880,6 +1871,13 @@ func (config *Config) appendPidFile() {
 	}
 }
 
+func (config *Config) appendLogFile() {
+	if config.LogFile != "" {
+		config.qemuParams = append(config.qemuParams, "-D")
+		config.qemuParams = append(config.qemuParams, config.LogFile)
+	}
+}
+
 // LaunchQemu can be used to launch a new qemu instance.
 //
 // The Config parameter contains a set of qemu parameters and settings.
@@ -1906,6 +1904,7 @@ func LaunchQemu(config Config, logger QMPLog) (string, error) {
 	config.appendIOThreads()
 	config.appendIncoming()
 	config.appendPidFile()
+	config.appendLogFile()
 
 	if err := config.appendCPUs(); err != nil {
 		return "", err

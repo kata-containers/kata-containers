@@ -4,6 +4,7 @@ package vsock
 
 import (
 	"net"
+	"time"
 
 	"golang.org/x/sys/unix"
 )
@@ -13,13 +14,14 @@ var _ net.Listener = &listener{}
 // A listener is the net.Listener implementation for connection-oriented
 // VM sockets.
 type listener struct {
-	fd   fd
+	fd   listenFD
 	addr *Addr
 }
 
 // Addr and Close implement the net.Listener interface for listener.
-func (l *listener) Addr() net.Addr { return l.addr }
-func (l *listener) Close() error   { return l.fd.Close() }
+func (l *listener) Addr() net.Addr                { return l.addr }
+func (l *listener) Close() error                  { return l.fd.Close() }
+func (l *listener) SetDeadline(t time.Time) error { return l.fd.SetDeadline(t) }
 
 // Accept accepts a single connection from the listener, and sets up
 // a net.Conn backed by conn.
@@ -30,49 +32,34 @@ func (l *listener) Accept() (net.Conn, error) {
 	}
 
 	savm := sa.(*unix.SockaddrVM)
-	remoteAddr := &Addr{
+	remote := &Addr{
 		ContextID: savm.CID,
 		Port:      savm.Port,
 	}
 
-	return newConn(cfd, l.addr.fileName(), l.addr, remoteAddr)
+	return newConn(cfd, l.addr, remote)
 }
 
-// listenStream is the entry point for ListenStream on Linux.
-func listenStream(port uint32) (net.Listener, error) {
-	var cid uint32
-	if err := localContextID(sysFS{}, &cid); err != nil {
-		return nil, err
-	}
-
-	fd, err := unix.Socket(unix.AF_VSOCK, unix.SOCK_STREAM, 0)
+// listen is the entry point for Listen on Linux.
+func listen(cid, port uint32) (*Listener, error) {
+	lfd, err := newListenFD()
 	if err != nil {
 		return nil, err
 	}
 
-	lfd := &sysFD{fd: fd}
-	return listenStreamLinuxHandleError(lfd, cid, port)
+	return listenLinux(lfd, cid, port)
 }
 
-// listenStreamLinuxHandleError ensures that any errors from listenStreamLinux
-// result in the socket being cleaned up properly.
-func listenStreamLinuxHandleError(lfd fd, cid, port uint32) (net.Listener, error) {
-	l, err := listenStreamLinux(lfd, cid, port)
-	if err != nil {
-		// If any system calls fail during setup, the socket must be closed
-		// to avoid file descriptor leaks.
-		_ = lfd.Close()
-		return nil, err
-	}
+// listenLinux is the entry point for tests on Linux.
+func listenLinux(lfd listenFD, cid, port uint32) (l *Listener, err error) {
+	defer func() {
+		if err != nil {
+			// If any system calls fail during setup, the socket must be closed
+			// to avoid file descriptor leaks.
+			_ = lfd.EarlyClose()
+		}
+	}()
 
-	return l, nil
-}
-
-// TODO(mdlayher): fine-tune this number instead of just picking one.
-const listenBacklog = 32
-
-// listenStreamLinux is the entry point for tests on Linux.
-func listenStreamLinux(lfd fd, cid, port uint32) (net.Listener, error) {
 	// Zero-value for "any port" is friendlier in Go than a constant.
 	if port == 0 {
 		port = unix.VMADDR_PORT_ANY
@@ -83,20 +70,26 @@ func listenStreamLinux(lfd fd, cid, port uint32) (net.Listener, error) {
 		Port: port,
 	}
 
-	if err := lfd.SetNonblock(true); err != nil {
-		return nil, err
-	}
-
 	if err := lfd.Bind(sa); err != nil {
 		return nil, err
 	}
 
-	if err := lfd.Listen(listenBacklog); err != nil {
+	if err := lfd.Listen(unix.SOMAXCONN); err != nil {
 		return nil, err
 	}
 
 	lsa, err := lfd.Getsockname()
 	if err != nil {
+		return nil, err
+	}
+
+	// Done with blocking mode setup, transition to non-blocking before the
+	// caller has a chance to start calling things concurrently that might make
+	// the locking situation tricky.
+	//
+	// Note: if any calls fail after this point, lfd.Close should be invoked
+	// for cleanup because the socket is now non-blocking.
+	if err := lfd.SetNonblocking("vsock-listen"); err != nil {
 		return nil, err
 	}
 
@@ -106,8 +99,10 @@ func listenStreamLinux(lfd fd, cid, port uint32) (net.Listener, error) {
 		Port:      lsavm.Port,
 	}
 
-	return &listener{
-		fd:   lfd,
-		addr: addr,
+	return &Listener{
+		l: &listener{
+			fd:   lfd,
+			addr: addr,
+		},
 	}, nil
 }

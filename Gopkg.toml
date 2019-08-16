@@ -20,7 +20,7 @@
 
 [[constraint]]
   name = "github.com/opencontainers/runtime-spec"
-  revision = "5806c35637336642129d03657419829569abc5aa"
+  revision = "a1b50f621a48ad13f8f696a162f684a241307db0"
 
 [[constraint]]
   name = "github.com/stretchr/testify"
@@ -48,7 +48,7 @@
 
 [[constraint]]
   name = "github.com/intel/govmm"
-  revision = "e0505242c0670f1a522f5b2d827e4a7e4062a14d"
+  revision = "e6644f4a25ae570a6d1c4c6efe6c3be7526bbaa3"
 
 [[constraint]]
   name = "github.com/kata-containers/agent"
@@ -68,7 +68,7 @@
 
 [[constraint]]
   name = "github.com/gogo/protobuf"
-  revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
+  revision = "4cbf7e384e768b4e01799441fdf2a706a5635ae7"
 
 [[override]]
   branch = "master"
