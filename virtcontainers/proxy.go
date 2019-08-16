@@ -6,12 +6,22 @@
 package virtcontainers
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"net"
 	"path/filepath"
 
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/sirupsen/logrus"
 )
+
+var buildinProxyConsoleProto = consoleProtoUnix
+
+type proxyBuiltin struct {
+	sandboxID string
+	conn      net.Conn
+}
 
 // ProxyConfig is a structure storing information needed from any
 // proxy in order to be properly initialized.
@@ -160,4 +170,92 @@ type proxy interface {
 
 	//check if the proxy has watched the vm console.
 	consoleWatched() bool
+}
+
+func (p *proxyBuiltin) watchConsole(proto, console string, logger *logrus.Entry) (err error) {
+	var (
+		scanner *bufio.Scanner
+		conn    net.Conn
+	)
+
+	switch proto {
+	case consoleProtoUnix:
+		conn, err = net.Dial("unix", console)
+		if err != nil {
+			return err
+		}
+		// TODO: please see
+		// https://github.com/kata-containers/runtime/issues/1940.
+	case consoleProtoPty:
+		fallthrough
+	default:
+		return fmt.Errorf("unknown console proto %s", proto)
+	}
+
+	p.conn = conn
+
+	go func() {
+		scanner = bufio.NewScanner(conn)
+		for scanner.Scan() {
+			logger.WithFields(logrus.Fields{
+				"sandbox":   p.sandboxID,
+				"vmconsole": scanner.Text(),
+			}).Debug("reading guest console")
+		}
+
+		if err := scanner.Err(); err != nil {
+			if err == io.EOF {
+				logger.Info("console watcher quits")
+			} else {
+				logger.WithError(err).WithFields(logrus.Fields{
+					"console-protocol": proto,
+					"console-socket":   console,
+				}).Error("Failed to read agent logs")
+			}
+		}
+	}()
+
+	return nil
+}
+
+// check if the proxy has watched the vm console.
+func (p *proxyBuiltin) consoleWatched() bool {
+	return p.conn != nil
+}
+
+// start is the proxy start implementation for builtin proxy.
+// It starts the console watcher for the guest.
+// It returns agentURL to let agent connect directly.
+func (p *proxyBuiltin) start(params proxyParams) (int, string, error) {
+	if params.logger == nil {
+		return -1, "", fmt.Errorf("Invalid proxy parameter: proxy logger is not set")
+	}
+
+	if p.consoleWatched() {
+		return -1, "", fmt.Errorf("The console has been watched for sandbox %s", params.id)
+	}
+
+	params.logger.Debug("Start to watch the console")
+
+	p.sandboxID = params.id
+
+	if params.debug {
+		err := p.watchConsole(buildinProxyConsoleProto, params.consoleURL, params.logger)
+		if err != nil {
+			p.sandboxID = ""
+			return -1, "", err
+		}
+	}
+
+	return params.hid, params.agentURL, nil
+}
+
+// stop is the proxy stop implementation for builtin proxy.
+func (p *proxyBuiltin) stop(pid int) error {
+	if p.conn != nil {
+		p.conn.Close()
+		p.conn = nil
+		p.sandboxID = ""
+	}
+	return nil
 }

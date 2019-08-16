@@ -32,12 +32,9 @@ func TestKataBuiltinProxy(t *testing.T) {
 
 	params.consoleURL = "foobarconsole"
 	err = p.validateParams(params)
-	assert.NotNil(err)
-
-	params.logger = logrus.WithField("proxy", params.id)
-	err = p.validateParams(params)
 	assert.Nil(err)
 
+	params.logger = logrus.WithField("proxy", params.id)
 	buildinProxyConsoleProto = "foobarproto"
 	_, _, err = p.start(params)
 	assert.NotNil(err)
