@@ -1471,6 +1471,12 @@ func (c *Container) cgroupsCreate() (err error) {
 
 // cgroupsDelete deletes the cgroups on the host for the associated container
 func (c *Container) cgroupsDelete() error {
+
+	if c.state.CgroupPath == "" {
+		c.Logger().Debug("container does not have host cgroups: nothing to update")
+		return nil
+	}
+
 	cgroup, err := cgroupsLoadFunc(cgroups.V1,
 		cgroups.StaticPath(c.state.CgroupPath))
 
@@ -1506,6 +1512,11 @@ func (c *Container) cgroupsDelete() error {
 
 // cgroupsUpdate updates cgroups on the host for the associated container
 func (c *Container) cgroupsUpdate(resources specs.LinuxResources) error {
+
+	if c.state.CgroupPath == "" {
+		c.Logger().Debug("container does not have host cgroups: nothing to update")
+		return nil
+	}
 	cgroup, err := cgroupsLoadFunc(cgroups.V1,
 		cgroups.StaticPath(c.state.CgroupPath))
 	if err != nil {
