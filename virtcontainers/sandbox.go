@@ -1902,7 +1902,7 @@ func (s *Sandbox) cgroupsUpdate() error {
 	}
 
 	if err := cgroup.Update(&resources); err != nil {
-		return fmt.Errorf("Could not update cgroup %v: %v", s.state.CgroupPath, err)
+		return fmt.Errorf("Could not update sandbox cgroup path='%v' error='%v'", s.state.CgroupPath, err)
 	}
 
 	return nil
