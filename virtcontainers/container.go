@@ -879,8 +879,10 @@ func (c *Container) create() (err error) {
 	}
 	c.process = *process
 
-	if err = c.cgroupsCreate(); err != nil {
-		return
+	if !c.sandbox.config.SandboxCgroupOnly {
+		if err = c.cgroupsCreate(); err != nil {
+			return
+		}
 	}
 
 	if !c.sandbox.supportNewStore() {
@@ -908,8 +910,10 @@ func (c *Container) delete() error {
 		return err
 	}
 
-	if err := c.cgroupsDelete(); err != nil {
-		return err
+	if !c.sandbox.config.SandboxCgroupOnly {
+		if err := c.cgroupsDelete(); err != nil {
+			return err
+		}
 	}
 
 	return c.store.Delete()
@@ -1200,8 +1204,10 @@ func (c *Container) update(resources specs.LinuxResources) error {
 		return err
 	}
 
-	if err := c.cgroupsUpdate(resources); err != nil {
-		return err
+	if !c.sandbox.config.SandboxCgroupOnly {
+		if err := c.cgroupsUpdate(resources); err != nil {
+			return err
+		}
 	}
 
 	return c.sandbox.agent.updateContainer(c.sandbox, *c, resources)
