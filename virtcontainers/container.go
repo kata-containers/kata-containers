@@ -1498,7 +1498,7 @@ func (c *Container) cgroupsDelete() error {
 	}
 
 	if err := cgroup.Delete(); err != nil {
-		return fmt.Errorf("Could not delete container cgroup %v: %v", c.state.CgroupPath, err)
+		return fmt.Errorf("Could not delete container cgroup path='%v': error='%v'", c.state.CgroupPath, err)
 	}
 
 	return nil
@@ -1519,7 +1519,7 @@ func (c *Container) cgroupsUpdate(resources specs.LinuxResources) error {
 
 	// update cgroup
 	if err := cgroup.Update(&r); err != nil {
-		return fmt.Errorf("Could not update cgroup %v: %v", c.state.CgroupPath, err)
+		return fmt.Errorf("Could not update container cgroup path='%v': error='%v'", c.state.CgroupPath, err)
 	}
 
 	// store new resources
