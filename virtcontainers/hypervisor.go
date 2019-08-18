@@ -260,6 +260,9 @@ type HypervisorConfig struct {
 	// VirtioFSCache cache mode for fs version cache or "none"
 	VirtioFSCache string
 
+	// VirtioFSExtraArgs passes options to virtiofsd daemon
+	VirtioFSExtraArgs []string
+
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.
 	// For example, if there is a value for the "kernel" key in this map,
