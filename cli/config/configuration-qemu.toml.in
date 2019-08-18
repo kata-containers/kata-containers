@@ -108,6 +108,14 @@ virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 # Default size of DAX cache in MiB
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
 
+# Extra args for virtiofsd daemon
+#
+# Format example:
+#   ["-o", "arg1=xxx,arg2", "-o", "hello world", "--arg3=yyy"]
+#
+# see `virtiofsd -h` for possible options.
+virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
+
 # Cache mode:
 #
 #  - none
