@@ -671,6 +671,7 @@ type hypervisor interface {
 	pid() int
 	fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error
 	toGrpc() ([]byte, error)
+	check() error
 
 	save() persistapi.HypervisorState
 	load(persistapi.HypervisorState)

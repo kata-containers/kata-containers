@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -16,13 +15,15 @@ import (
 	"syscall"
 	"time"
 
+	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
-	opentracing "github.com/opentracing/opentracing-go"
-	"github.com/sirupsen/logrus"
 )
 
 // AcrnState keeps Acrn's state
@@ -647,4 +648,12 @@ func (a *acrn) save() (s persistapi.HypervisorState) {
 func (a *acrn) load(s persistapi.HypervisorState) {
 	a.info.PID = s.Pid
 	a.state.UUID = s.UUID
+}
+
+func (a *acrn) check() error {
+	if err := syscall.Kill(a.pid(), syscall.Signal(0)); err != nil {
+		return errors.Wrapf(err, "failed to ping acrn process")
+	}
+
+	return nil
 }

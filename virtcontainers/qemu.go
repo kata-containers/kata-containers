@@ -10,7 +10,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -24,17 +23,17 @@ import (
 	"unsafe"
 
 	govmmQemu "github.com/intel/govmm/qemu"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/opentracing/opentracing-go"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
-
-	"golang.org/x/sys/unix"
 )
 
 // romFile is the file name of the ROM that can be used for virtio-pci devices.
@@ -431,7 +430,7 @@ func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) g
 		memory.Path = q.config.MemoryPath
 
 		if q.config.BootToBeTemplate {
-			knobs.FileBackedMemShared = true
+			knobs.MemShared = true
 		}
 
 		if q.config.BootFromTemplate {
@@ -455,7 +454,7 @@ func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memo
 	}
 
 	knobs.FileBackedMem = true
-	knobs.FileBackedMemShared = true
+	knobs.MemShared = true
 	memory.Path = target
 }
 
@@ -522,6 +521,9 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 			q.setupFileBackedMem(&knobs, &memory)
 		} else {
 			return errors.New("VM templating has been enabled with either virtio-fs or file backed memory and this configuration will not work")
+		}
+		if q.config.HugePages {
+			knobs.MemPrealloc = true
 		}
 	}
 
@@ -723,6 +725,11 @@ func (q *qemu) startSandbox(timeout int) error {
 	if err != nil {
 		return err
 	}
+	// append logfile only on debug
+	if q.config.Debug {
+		q.qemuConfig.LogFile = filepath.Join(vmPath, "qemu.log")
+	}
+
 	defer func() {
 		if err != nil {
 			if err := os.RemoveAll(vmPath); err != nil {
@@ -847,6 +854,19 @@ func (q *qemu) stopSandbox() error {
 		q.cleanupVM()
 		q.stopped = true
 	}()
+
+	if q.config.Debug && q.qemuConfig.LogFile != "" {
+		f, err := os.OpenFile(q.qemuConfig.LogFile, os.O_RDONLY, 0)
+		if err == nil {
+			scanner := bufio.NewScanner(f)
+			for scanner.Scan() {
+				q.Logger().Debug(scanner.Text())
+			}
+			if err := scanner.Err(); err != nil {
+				q.Logger().WithError(err).Debug("read qemu log failed")
+			}
+		}
+	}
 
 	err := q.qmpSetup()
 	if err != nil {
@@ -1485,7 +1505,7 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 		target = q.qemuConfig.Memory.Path
 		memoryBack = "memory-backend-file"
 	}
-	if q.qemuConfig.Knobs.FileBackedMemShared {
+	if q.qemuConfig.Knobs.MemShared {
 		share = true
 	}
 	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, memoryBack, "mem"+strconv.Itoa(memDev.slot), target, memDev.sizeMB, share)
@@ -2014,4 +2034,22 @@ func (q *qemu) load(s persistapi.HypervisorState) {
 			ID: cpu.ID,
 		})
 	}
+}
+
+func (q *qemu) check() error {
+	err := q.qmpSetup()
+	if err != nil {
+		return err
+	}
+
+	status, err := q.qmpMonitorCh.qmp.ExecuteQueryStatus(q.qmpMonitorCh.ctx)
+	if err != nil {
+		return err
+	}
+
+	if status.Status == "internal-error" || status.Status == "guest-panicked" {
+		return errors.Errorf("guest failure: %s", status.Status)
+	}
+
+	return nil
 }
