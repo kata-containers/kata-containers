@@ -80,7 +80,7 @@
   unused-packages = true
 
 [[constraint]]
-  revision = "5017d4e9a9cf2d4381db99eacd9baf84b95bfb14"
+  revision = "c4b9ac5c7601384c965b9646fc515884e091ebb9"
   name = "github.com/containerd/cgroups"
 
 [[constraint]]
