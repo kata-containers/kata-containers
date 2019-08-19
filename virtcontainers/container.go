@@ -24,6 +24,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -610,6 +611,20 @@ func (c *Container) unmountHostMounts() error {
 					"error":     err,
 				}).Warn("Could not umount")
 				return err
+			}
+
+			if m.Type == "bind" {
+				s, err := os.Stat(m.HostPath)
+				if err != nil {
+					return errors.Wrapf(err, "Could not stat host-path %v", m.HostPath)
+				}
+				// Remove the empty file or directory
+				if s.Mode().IsRegular() && s.Size() == 0 {
+					os.Remove(m.HostPath)
+				}
+				if s.Mode().IsDir() {
+					syscall.Rmdir(m.HostPath)
+				}
 			}
 
 			span.Finish()
