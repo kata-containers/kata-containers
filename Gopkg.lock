@@ -332,7 +332,7 @@
   version = "v5.0.1"
 
 [[projects]]
-  digest = "1:0dfc35f448d29c2ff6a29fb3a6643f44175dc2a07925b1add2dea74e1dd6bf8d"
+  digest = "1:1f05c5d4f7fe7a5ce1c509907a9f367f89e0c23de046263b8e298a7e350d0153"
   name = "github.com/gogo/protobuf"
   packages = [
     "gogoproto",
@@ -342,7 +342,7 @@
     "types",
   ]
   pruneopts = "NUT"
-  revision = "342cbe0a04158f6dcb03ca0079991a51a4248c02"
+  revision = "4cbf7e384e768b4e01799441fdf2a706a5635ae7"
 
 [[projects]]
   digest = "1:2d0636a8c490d2272dd725db26f74a537111b99b9dbdda0d8b98febe63702aa4"
@@ -391,11 +391,11 @@
   revision = "2f1d1f20f75d5404f53b9edf6b53ed5505508675"
 
 [[projects]]
-  digest = "1:bba46c73858fda3e8066d66553615bd271f1ee811a0bf19f239ea2fb1e313f22"
+  digest = "1:47de8e5ccb45c6f00a2b4a62327601f7884830016267b470b42688f9c82d4b7d"
   name = "github.com/intel/govmm"
   packages = ["qemu"]
   pruneopts = "NUT"
-  revision = "e0505242c0670f1a522f5b2d827e4a7e4062a14d"
+  revision = "e6644f4a25ae570a6d1c4c6efe6c3be7526bbaa3"
 
 [[projects]]
   digest = "1:22e399f891fccaac4700943a9465f2623bb361653d5e0d4a9974573cd5e69070"
@@ -421,11 +421,11 @@
   revision = "6243d8e04c3f819e79757e8bc3faa15c3cb27003"
 
 [[projects]]
-  digest = "1:f3e11773cc8a305f97b42c276f62d92899c9b0c1c3c584a667149b18f18a530a"
+  digest = "1:b09f78822be5d574e052d4e377b133bac445cdbcbfaf884e0704f870e509ef21"
   name = "github.com/mdlayher/vsock"
   packages = ["."]
   pruneopts = "NUT"
-  revision = "676f733b747cd6406f297a51bd086ee8ec8abdbe"
+  revision = "7b7533a7ca4eba7dd23dab2de70e25ca6eecf7e2"
 
 [[projects]]
   digest = "1:6a65dcd0d14fc0595ee982afc3c59deb5b769ca374455c80c649d92f8a152930"
@@ -456,11 +456,11 @@
   revision = "0351df1c5a66838d0c392b4ac4cf9450de844e2d"
 
 [[projects]]
-  digest = "1:0d447d4961f4f9270457fbc20d0261bba8d3056f395efd2e2480e2dfa4487a60"
+  digest = "1:7a58202c5cdf3d2c1eb0621fe369315561cea7f036ad10f0f0479ac36bcc95eb"
   name = "github.com/opencontainers/runtime-spec"
   packages = ["specs-go"]
   pruneopts = "NUT"
-  revision = "5806c35637336642129d03657419829569abc5aa"
+  revision = "a1b50f621a48ad13f8f696a162f684a241307db0"
 
 [[projects]]
   digest = "1:7da29c22bcc5c2ffb308324377dc00b5084650348c2799e573ed226d8cc9faf0"

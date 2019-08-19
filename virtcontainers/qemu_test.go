@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -20,6 +19,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -445,7 +445,7 @@ func TestQemuAddDeviceToBridge(t *testing.T) {
 	// fail to add device to bridge cause no more available bridge slot
 	_, _, err := q.addDeviceToBridge("qemu-bridge-31")
 	exceptErr := errors.New("no more bridge slots available")
-	assert.Equal(exceptErr, err)
+	assert.Equal(exceptErr.Error(), err.Error())
 
 	// addDeviceToBridge fails cause q.state.Bridges == 0
 	config.HypervisorMachineType = QemuPCLite
@@ -456,7 +456,7 @@ func TestQemuAddDeviceToBridge(t *testing.T) {
 	q.state.Bridges = q.arch.bridges(q.config.DefaultBridges)
 	_, _, err = q.addDeviceToBridge("qemu-bridge")
 	exceptErr = errors.New("failed to get available address from bridges")
-	assert.Equal(exceptErr, err)
+	assert.Equal(exceptErr.Error(), err.Error())
 }
 
 func TestQemuFileBackedMem(t *testing.T) {
@@ -472,7 +472,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	assert.NoError(err)
 
 	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, true)
-	assert.Equal(q.qemuConfig.Knobs.FileBackedMemShared, true)
+	assert.Equal(q.qemuConfig.Knobs.MemShared, true)
 	assert.Equal(q.qemuConfig.Memory.Path, fallbackFileBackedMemDir)
 
 	// Check failure for VM templating
@@ -487,7 +487,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store)
 
 	expectErr := errors.New("VM templating has been enabled with either virtio-fs or file backed memory and this configuration will not work")
-	assert.Equal(expectErr, err)
+	assert.Equal(expectErr.Error(), err.Error())
 
 	// Check Setting of non-existent shared-mem path
 	sandbox, err = createQemuSandboxConfig()
@@ -498,7 +498,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store)
 	assert.NoError(err)
 	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, false)
-	assert.Equal(q.qemuConfig.Knobs.FileBackedMemShared, false)
+	assert.Equal(q.qemuConfig.Knobs.MemShared, false)
 	assert.Equal(q.qemuConfig.Memory.Path, "")
 }
 
