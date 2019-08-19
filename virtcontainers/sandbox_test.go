@@ -1473,3 +1473,97 @@ func TestSandboxExperimentalFeature(t *testing.T) {
 	assert.NotNil(t, exp.Get(testFeature.Name))
 	assert.True(t, sconfig.valid())
 }
+
+func TestSandbox_joinSandboxCgroup(t *testing.T) {
+
+	mockValidCgroup := &Sandbox{}
+	mockValidCgroup.state.CgroupPath = "/my/cgroup"
+
+	tests := []struct {
+		name    string
+		s       *Sandbox
+		wantErr bool
+	}{
+		{"New Config", &Sandbox{}, false},
+		{"Mock cgroup path", mockValidCgroup, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.s.joinSandboxCgroup(); (err != nil) != tt.wantErr {
+				t.Errorf("Sandbox.joinSandboxCgroup() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestSandbox_SetupSandboxCgroupOnly(t *testing.T) {
+	sandboxContainer := ContainerConfig{}
+	sandboxContainer.Annotations = make(map[string]string)
+	sandboxContainer.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
+
+	emptyJSONLinux := ContainerConfig{}
+	emptyJSONLinux.Annotations = make(map[string]string)
+	emptyJSONLinux.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
+	emptyJSONLinux.Annotations[annotations.ConfigJSONKey] = "{}"
+
+	successfulContainer := ContainerConfig{}
+	successfulContainer.Annotations = make(map[string]string)
+	successfulContainer.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
+	successfulContainer.Annotations[annotations.ConfigJSONKey] = "{\"linux\": { \"cgroupsPath\": \"/myRuntime/myContainer\" }}"
+
+	tests := []struct {
+		name    string
+		s       *Sandbox
+		wantErr bool
+	}{
+		{
+			"New sandbox",
+			&Sandbox{},
+			true,
+		},
+		{
+			"New sandbox, new config",
+			&Sandbox{config: &SandboxConfig{}},
+			true,
+		},
+		{
+			"sandbox, container no sandbox type",
+			&Sandbox{
+				config: &SandboxConfig{Containers: []ContainerConfig{
+					{},
+				}}},
+			true,
+		},
+		{
+			"sandbox, container sandbox type",
+			&Sandbox{
+				config: &SandboxConfig{Containers: []ContainerConfig{
+					sandboxContainer,
+				}}},
+			true,
+		},
+		{
+			"sandbox, empty linux json",
+			&Sandbox{
+				config: &SandboxConfig{Containers: []ContainerConfig{
+					emptyJSONLinux,
+				}}},
+			false,
+		},
+		{
+			"sandbox, successful config",
+			&Sandbox{
+				config: &SandboxConfig{Containers: []ContainerConfig{
+					successfulContainer,
+				}}},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.s.setupSandboxCgroupOnly(); (err != nil) != tt.wantErr {
+				t.Errorf("Sandbox.SetupSandboxCgroupOnly() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

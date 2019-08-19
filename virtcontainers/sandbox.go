@@ -7,11 +7,13 @@ package virtcontainers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math"
 	"net"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -2068,4 +2070,73 @@ func (s *Sandbox) cpuResources() *specs.LinuxCPU {
 	cpu.Cpus = strings.Trim(cpu.Cpus, " \n\t,")
 
 	return validCPUResources(cpu)
+}
+
+// setupSandboxCgroup creates sandbox cgroups for the sandbox config
+func (s *Sandbox) setupSandboxCgroupOnly() error {
+	var PodSandboxConfig *ContainerConfig
+
+	if s.config == nil {
+		return fmt.Errorf("Sandbox config is nil")
+	}
+
+	for _, cConfig := range s.config.Containers {
+		if cConfig.Annotations[annotations.ContainerTypeKey] == string(PodSandbox) {
+			PodSandboxConfig = &cConfig
+			break
+		}
+	}
+
+	if PodSandboxConfig == nil {
+		return fmt.Errorf("Failed to find cgroup path for Sandbox: Container of type '%s' not found", PodSandbox)
+	}
+
+	configJSON, ok := PodSandboxConfig.Annotations[annotations.ConfigJSONKey]
+	if !ok {
+		return fmt.Errorf("Could not find json config in annotations for container '%s'", PodSandboxConfig.ID)
+	}
+
+	var spec specs.Spec
+	if err := json.Unmarshal([]byte(configJSON), &spec); err != nil {
+		return err
+	}
+
+	if spec.Linux == nil {
+		// Cgroup path is optional, just skip the setup
+		return nil
+	}
+	validContainerCgroup := utils.ValidCgroupPath(spec.Linux.CgroupsPath)
+
+	// Use the parent cgroup of the container sandbox as the sandbox cgroup
+
+	s.state.CgroupPath = filepath.Join(filepath.Dir(validContainerCgroup), cgroupKataPrefix+"_"+PodSandboxConfig.ID)
+	_, err := cgroupsNewFunc(cgroups.V1, cgroups.StaticPath(s.state.CgroupPath), &specs.LinuxResources{})
+	if err != nil {
+		return fmt.Errorf("Could not create sandbox cgroup in %v: %v", s.state.CgroupPath, err)
+
+	}
+
+	return nil
+}
+
+// joinSandboxCgroup adds the runtime PID to the sandbox defined in sandboxes' CgroupPath
+func (s *Sandbox) joinSandboxCgroup() error {
+
+	if s.state.CgroupPath == "" {
+		// This is an optional value
+		return nil
+	}
+
+	cgroup, err := cgroupsLoadFunc(cgroups.V1, cgroups.StaticPath(s.state.CgroupPath))
+	if err != nil {
+		return fmt.Errorf("Could not load sandbox cgroup in %v: %v", s.state.CgroupPath, err)
+	}
+
+	s.Logger().WithField("cgroup:", s.state.CgroupPath).Debug("joining to sandbox cgroup")
+	runtimePid := os.Getpid()
+
+	if err := cgroup.Add(cgroups.Process{Pid: runtimePid}); err != nil {
+		return fmt.Errorf("Could not add runtime PID %d to sandbox cgroup:  %v", runtimePid, err)
+	}
+	return nil
 }
