@@ -72,11 +72,15 @@ func (m *mockCgroup) Subsystems() []cgroups.Subsystem {
 	return nil
 }
 
-func mockCgroupNew(hierarchy cgroups.Hierarchy, path cgroups.Path, resources *specs.LinuxResources) (cgroups.Cgroup, error) {
+func (m *mockCgroup) Tasks(cgroups.Name, bool) ([]cgroups.Task, error) {
+	return nil, nil
+}
+
+func mockCgroupNew(hierarchy cgroups.Hierarchy, path cgroups.Path, resources *specs.LinuxResources, opts ...cgroups.InitOpts) (cgroups.Cgroup, error) {
 	return &mockCgroup{}, nil
 }
 
-func mockCgroupLoad(hierarchy cgroups.Hierarchy, path cgroups.Path) (cgroups.Cgroup, error) {
+func mockCgroupLoad(hierarchy cgroups.Hierarchy, path cgroups.Path, opts ...cgroups.InitOpts) (cgroups.Cgroup, error) {
 	return &mockCgroup{}, nil
 }
 
