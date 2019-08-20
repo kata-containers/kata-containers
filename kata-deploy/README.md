@@ -75,6 +75,12 @@ $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/m
 $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/kata-deploy/base/kata-deploy.yaml
 ```
 
+or on a [k3s](https://k3s.io/) cluster:
+
+```sh
+$ kubectl apply -k github.com/kata-containers/packaging/kata-deploy/kata-deploy/overlays/k3s
+```
+
 ### Run a sample workload
 
 
