@@ -11,9 +11,11 @@ set -o pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "${script_dir}/../../scripts/lib.sh"
+source "${script_dir}/../qemu.blacklist"
 
 config_dir="${script_dir}/../../scripts/"
 nemu_tar="kata-nemu-static.tar.gz"
+nemu_tmp_tar="kata-nemu-static-tmp.tar.gz"
 Dockerfile="Dockerfile"
 
 if [ $# -ne 0 ];then
@@ -74,6 +76,7 @@ https_proxy="${https_proxy:-}"
 prefix="${prefix:-"/opt/kata"}"
 
 sudo docker build \
+	--no-cache \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg NEMU_REPO="${nemu_repo}" \
@@ -94,3 +97,7 @@ sudo docker run \
 	mv "/tmp/nemu-static/${nemu_tar}" /share/
 
 sudo chown ${USER}:${USER} "${PWD}/${nemu_tar}"
+
+# Remove blacklisted binaries
+gzip -d < "${nemu_tar}" | tar --delete --wildcards -f - ${qemu_black_list[*]} | gzip > "${nemu_tmp_tar}"
+mv -f "${nemu_tmp_tar}" "${nemu_tar}"

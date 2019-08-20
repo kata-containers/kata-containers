@@ -1,4 +1,4 @@
-from ubuntu:16.04
+from ubuntu:18.04
 
 ARG QEMU_REPO
 # commit/tag/branch
@@ -6,7 +6,7 @@ ARG QEMU_VERSION
 ARG PREFIX
 
 WORKDIR /root/qemu
-RUN apt-get update
+RUN apt-get update && apt-get upgrade -y
 RUN apt-get install -y \
 	    autoconf \
 	    automake \
