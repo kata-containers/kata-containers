@@ -7,12 +7,14 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"html/template"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
@@ -42,6 +44,8 @@ type testCPUDetail struct {
 	expectedModel  string
 	expectError    bool
 }
+
+var fakeCPUData = testCPUData{"", "", false}
 
 func createFile(file, contents string) error {
 	return ioutil.WriteFile(file, []byte(contents), testFileMode)
@@ -189,6 +193,92 @@ func genericTestGetCPUDetails(t *testing.T, validVendor string, validModel strin
 	}
 }
 
+func genericCheckCLIFunction(t *testing.T, cpuData []testCPUData, moduleData []testModuleData) {
+	assert := assert.New(t)
+
+	dir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	_, config, err := makeRuntimeConfig(dir)
+	assert.NoError(err)
+
+	savedSysModuleDir := sysModuleDir
+	savedProcCPUInfo := procCPUInfo
+
+	cpuInfoFile := filepath.Join(dir, "cpuinfo")
+
+	// XXX: override
+	sysModuleDir = filepath.Join(dir, "sys/module")
+	procCPUInfo = cpuInfoFile
+
+	defer func() {
+		sysModuleDir = savedSysModuleDir
+		procCPUInfo = savedProcCPUInfo
+	}()
+
+	// Replace sysModuleDir in moduleData with the test temp path
+	for i := range moduleData {
+		moduleData[i].path = strings.Replace(moduleData[i].path, savedSysModuleDir, sysModuleDir, 1)
+	}
+
+	err = os.MkdirAll(sysModuleDir, testDirMode)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0666)
+	assert.NoError(err)
+	defer devNull.Close()
+
+	savedLogOutput := kataLog.Logger.Out
+
+	// discard normal output
+	kataLog.Logger.Out = devNull
+
+	defer func() {
+		kataLog.Logger.Out = savedLogOutput
+	}()
+
+	setupCheckHostIsVMContainerCapable(assert, cpuInfoFile, cpuData, moduleData)
+
+	flagSet := &flag.FlagSet{}
+	ctx := createCLIContext(flagSet)
+	ctx.App.Name = "foo"
+	ctx.App.Metadata["runtimeConfig"] = config
+
+	// create buffer to save logger output
+	buf := &bytes.Buffer{}
+
+	// capture output this time
+	kataLog.Logger.Out = buf
+
+	fn, ok := kataCheckCLICommand.Action.(func(context *cli.Context) error)
+	assert.True(ok)
+
+	err = fn(ctx)
+	assert.NoError(err)
+
+	output := buf.String()
+
+	for _, c := range cpuData {
+		if c == fakeCPUData {
+			continue
+		}
+
+		assert.True(findAnchoredString(output, c.vendorID))
+		for _, flag := range strings.Fields(c.flags) {
+			assert.True(findAnchoredString(output, flag))
+		}
+	}
+
+	for _, m := range moduleData {
+		name := path.Base(m.path)
+		assert.True(findAnchoredString(output, name))
+	}
+}
 func TestCheckGetCPUInfo(t *testing.T) {
 	assert := assert.New(t)
 
@@ -671,7 +761,8 @@ func TestCheckCLIFunctionFail(t *testing.T) {
 		procCPUInfo = oldProcCPUInfo
 	}()
 
-	ctx := createCLIContext(nil)
+	flagSet := &flag.FlagSet{}
+	ctx := createCLIContext(flagSet)
 	ctx.App.Name = "foo"
 	ctx.App.Metadata["runtimeConfig"] = config
 
