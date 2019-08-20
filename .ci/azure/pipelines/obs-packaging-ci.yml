@@ -24,7 +24,12 @@ jobs:
       sudo apt-get install -y git
       git config --global user.email "azure-pipeline@kata.io"
       git config --global user.name "azure-pipeline"
+      .ci/packaging/setup.sh
     displayName: 'Setup'
+    env:
+      CI: true
+      branch: $(system.pullRequest.targetBranch)
+      GITHUB_PR: $(system.pullRequest.pullRequestNumber)
 
   - bash: |
       # This is set by azure, but we use the same variable
