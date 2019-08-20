@@ -260,11 +260,17 @@ func beforeSubcommands(c *cli.Context) error {
 		return nil
 	}
 
-	ignoreLogging := false
+	ignoreConfigLogs := false
 	var traceRootSpan string
 
-	subCmdIsCheckCmd := (c.NArg() == 1 && (c.Args()[0] == checkCmd))
-	if !subCmdIsCheckCmd {
+	subCmdIsCheckCmd := (c.NArg() >= 1 && (c.Args()[0] == checkCmd))
+	if subCmdIsCheckCmd {
+		// checkCmd will use the default logrus logger to stderr
+		// raise the logger default level to warn
+		kataLog.Logger.SetLevel(logrus.WarnLevel)
+		// do not print configuration logs for checkCmd
+		ignoreConfigLogs = true
+	} else {
 		if path := c.GlobalString("log"); path != "" {
 			f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND|os.O_SYNC, 0640)
 			if err != nil {
@@ -300,11 +306,11 @@ func beforeSubcommands(c *cli.Context) error {
 
 		if c.NArg() == 1 && c.Args()[0] == envCmd {
 			// simply report the logging setup
-			ignoreLogging = true
+			ignoreConfigLogs = true
 		}
 	}
 
-	configFile, runtimeConfig, err = katautils.LoadConfiguration(c.GlobalString(configFilePathOption), ignoreLogging, false)
+	configFile, runtimeConfig, err = katautils.LoadConfiguration(c.GlobalString(configFilePathOption), ignoreConfigLogs, false)
 	if err != nil {
 		fatal(err)
 	}
