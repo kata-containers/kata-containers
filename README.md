@@ -60,7 +60,7 @@ technologies:
 ### Hardware requirements
 
 The runtime has a built-in command to determine if your host system is capable
-of running a Kata Container:
+of running and creating a Kata Container:
 
 ```bash
 $ kata-runtime kata-check
@@ -68,8 +68,13 @@ $ kata-runtime kata-check
 
 > **Note:**
 >
-> If you run the previous command as the `root` user, further checks will be
-> performed (e.g. it will check if another incompatible hypervisor is running).
+> - By default, only a brief success / failure message is printed.
+> If more details are needed, the `--verbose` flag can be used to display the
+> list of all the checks performed.
+>
+> - `root` permission is needed to check if the system is capable of running
+> Kata containers. In this case, additional checks are performed (e.g., if another
+> incompatible hypervisor is running).
 
 ## Download and install
 

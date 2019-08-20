@@ -304,7 +304,18 @@ func genericHostIsVMContainerCapable(details vmContainerCapableDetails) error {
 var kataCheckCLICommand = cli.Command{
 	Name:  checkCmd,
 	Usage: "tests if system can run " + project,
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:  "verbose, v",
+			Usage: "display the list of checks performed",
+		},
+	},
+
 	Action: func(context *cli.Context) error {
+		verbose := context.Bool("verbose")
+		if verbose {
+			kataLog.Logger.SetLevel(logrus.InfoLevel)
+		}
 		ctx, err := cliContextToContext(context)
 		if err != nil {
 			return err
@@ -335,8 +346,7 @@ var kataCheckCLICommand = cli.Command{
 		if err != nil {
 			return err
 		}
-
-		kataLog.Info(successMessageCapable)
+		fmt.Println(successMessageCapable)
 
 		if os.Geteuid() == 0 {
 			err = archHostCanCreateVMContainer(runtimeConfig.HypervisorType)
@@ -344,7 +354,7 @@ var kataCheckCLICommand = cli.Command{
 				return err
 			}
 
-			kataLog.Info(successMessageCreate)
+			fmt.Println(successMessageCreate)
 		}
 
 		return nil
