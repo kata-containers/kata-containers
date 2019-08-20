@@ -47,12 +47,14 @@ get_from_kata_deps() {
 	else
 		versions_file="versions-${branch}.yaml"
 	fi
+
+	#make sure yq is installed
+	install_yq >&2
+
 	if [ ! -e "${versions_file}" ]; then
 		yaml_url="https://raw.githubusercontent.com/kata-containers/runtime/${branch}/versions.yaml"
 		echo "versions file (${versions_file}) does not exist" >&2
 		echo "Download from ${yaml_url}" >&2
-		#make sure yq is installed
-		install_yq >&2
 		curl --silent -o "${versions_file}" "$yaml_url"
 	fi
 	result=$("${GOPATH}/bin/yq" read "$versions_file" "$dependency")
