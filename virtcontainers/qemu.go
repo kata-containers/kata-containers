@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -602,13 +603,13 @@ func (q *qemu) vhostFSSocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(store.RunVMStoragePath(), id, vhostFSSocket)
 }
 
-func (q *qemu) virtiofsdArgs(sockPath string) []string {
+func (q *qemu) virtiofsdArgs(fd uintptr) []string {
 	// The daemon will terminate when the vhost-user socket
 	// connection with QEMU closes.  Therefore we do not keep track
 	// of this child process after returning from this function.
 	sourcePath := filepath.Join(kataHostSharedDir(), q.id)
 	args := []string{
-		"-o", "vhost_user_socket=" + sockPath,
+		fmt.Sprintf("--fd=%v", fd),
 		"-o", "source=" + sourcePath,
 		"-o", "cache=" + q.config.VirtioFSCache}
 	if q.config.Debug {
@@ -623,82 +624,41 @@ func (q *qemu) virtiofsdArgs(sockPath string) []string {
 	return args
 }
 
-func (q *qemu) setupVirtiofsd(timeout int) (remain int, err error) {
+func (q *qemu) setupVirtiofsd() (err error) {
+	var listener *net.UnixListener
+	var fd *os.File
+
 	sockPath, err := q.vhostFSSocketPath(q.id)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	cmd := exec.Command(q.config.VirtioFSDaemon, q.virtiofsdArgs(sockPath)...)
-	stderr, err := cmd.StderrPipe()
+	listener, err = net.ListenUnix("unix", &net.UnixAddr{
+		Name: sockPath,
+		Net:  "unix",
+	})
 	if err != nil {
-		return 0, err
+		return err
 	}
+	listener.SetUnlinkOnClose(false)
 
-	if err = cmd.Start(); err != nil {
-		return 0, err
-	}
-	defer func() {
-		if err != nil {
-			cmd.Process.Kill()
-		} else {
-			q.state.VirtiofsdPid = cmd.Process.Pid
-		}
-	}()
-
-	// Wait for socket to become available
-	sockReady := make(chan error, 1)
-	timeStart := time.Now()
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		var sent bool
-		for scanner.Scan() {
-			if q.config.Debug {
-				q.Logger().WithField("source", "virtiofsd").Debug(scanner.Text())
-			}
-			if !sent && strings.Contains(scanner.Text(), "Waiting for vhost-user socket connection...") {
-				sockReady <- nil
-				sent = true
-			}
-		}
-		if !sent {
-			if err := scanner.Err(); err != nil {
-				sockReady <- err
-			} else {
-				sockReady <- fmt.Errorf("virtiofsd did not announce socket connection")
-			}
-		}
-		q.Logger().Info("virtiofsd quits")
-		// Wait to release resources of virtiofsd process
-		cmd.Process.Wait()
-		q.stopSandbox()
-	}()
-
-	return q.waitVirtiofsd(timeStart, timeout, sockReady,
-		fmt.Sprintf("virtiofsd (pid=%d) socket %s", cmd.Process.Pid, sockPath))
-}
-
-func (q *qemu) waitVirtiofsd(start time.Time, timeout int, ready chan error, errMsg string) (int, error) {
-	var err error
-
-	timeoutDuration := time.Duration(timeout) * time.Second
-	select {
-	case err = <-ready:
-	case <-time.After(timeoutDuration):
-		err = fmt.Errorf("timed out waiting for %s", errMsg)
-	}
+	fd, err = listener.File()
+	listener.Close() // no longer needed since fd is a dup
+	listener = nil
 	if err != nil {
-		return 0, err
+		return err
 	}
 
-	// Now reduce timeout by the elapsed time
-	elapsed := time.Since(start)
-	if elapsed < timeoutDuration {
-		timeout = timeout - int(elapsed.Seconds())
-	} else {
-		timeout = 0
+	const sockFd = 3 // Cmd.ExtraFiles[] fds are numbered starting from 3
+	cmd := exec.Command(q.config.VirtioFSDaemon, q.virtiofsdArgs(sockFd)...)
+	cmd.ExtraFiles = append(cmd.ExtraFiles, fd)
+
+	err = cmd.Start()
+	if err == nil {
+		q.state.VirtiofsdPid = cmd.Process.Pid
 	}
-	return timeout, nil
+	fd.Close()
+	return err
 }
 
 // startSandbox will start the Sandbox's VM.
@@ -746,7 +706,7 @@ func (q *qemu) startSandbox(timeout int) error {
 	}()
 
 	if q.config.SharedFS == config.VirtioFS {
-		timeout, err = q.setupVirtiofsd(timeout)
+		err = q.setupVirtiofsd()
 		if err != nil {
 			return err
 		}
@@ -769,7 +729,7 @@ func (q *qemu) startSandbox(timeout int) error {
 		return fmt.Errorf("failed to launch qemu: %s, error messages from qemu log: %s", err, strErr)
 	}
 
-	err = q.waitSandbox(timeout) // the virtiofsd deferred checks err's value
+	err = q.waitSandbox(timeout)
 	if err != nil {
 		return err
 	}
