@@ -985,8 +985,8 @@ func (fc *firecracker) cleanup() error {
 	return nil
 }
 
-func (fc *firecracker) pid() int {
-	return fc.info.PID
+func (fc *firecracker) getPids() []int {
+	return []int{fc.info.PID}
 }
 
 func (fc *firecracker) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error {
@@ -998,7 +998,7 @@ func (fc *firecracker) toGrpc() ([]byte, error) {
 }
 
 func (fc *firecracker) save() (s persistapi.HypervisorState) {
-	s.Pid = fc.pid()
+	s.Pid = fc.info.PID
 	s.Type = string(FirecrackerHypervisor)
 	return
 }
@@ -1008,7 +1008,7 @@ func (fc *firecracker) load(s persistapi.HypervisorState) {
 }
 
 func (fc *firecracker) check() error {
-	if err := syscall.Kill(fc.pid(), syscall.Signal(0)); err != nil {
+	if err := syscall.Kill(fc.info.PID, syscall.Signal(0)); err != nil {
 		return errors.Wrapf(err, "failed to ping fc process")
 	}
 

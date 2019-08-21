@@ -648,6 +648,14 @@ func RunningOnVMM(cpuInfoPath string) (bool, error) {
 	return false, fmt.Errorf("Couldn't find %q from %q output", flagsField, cpuInfoPath)
 }
 
+func getHypervisorPid(h hypervisor) int {
+	pids := h.getPids()
+	if len(pids) == 0 {
+		return 0
+	}
+	return pids[0]
+}
+
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
@@ -668,7 +676,9 @@ type hypervisor interface {
 	hypervisorConfig() HypervisorConfig
 	getThreadIDs() (vcpuThreadIDs, error)
 	cleanup() error
-	pid() int
+	// getPids returns a slice of hypervisor related process ids.
+	// The hypervisor pid must be put at index 0.
+	getPids() []int
 	fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error
 	toGrpc() ([]byte, error)
 	check() error

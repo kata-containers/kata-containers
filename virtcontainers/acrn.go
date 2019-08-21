@@ -617,8 +617,8 @@ func (a *acrn) cleanup() error {
 	return nil
 }
 
-func (a *acrn) pid() int {
-	return a.info.PID
+func (a *acrn) getPids() []int {
+	return []int{a.info.PID}
 }
 
 func (a *acrn) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error {
@@ -639,7 +639,7 @@ func (a *acrn) storeInfo() error {
 }
 
 func (a *acrn) save() (s persistapi.HypervisorState) {
-	s.Pid = a.pid()
+	s.Pid = a.info.PID
 	s.Type = string(AcrnHypervisor)
 	s.UUID = a.state.UUID
 	return
@@ -651,7 +651,7 @@ func (a *acrn) load(s persistapi.HypervisorState) {
 }
 
 func (a *acrn) check() error {
-	if err := syscall.Kill(a.pid(), syscall.Signal(0)); err != nil {
+	if err := syscall.Kill(a.info.PID, syscall.Signal(0)); err != nil {
 		return errors.Wrapf(err, "failed to ping acrn process")
 	}
 
