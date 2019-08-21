@@ -326,6 +326,7 @@ debug: true
 To run a container with Kata Containers through the containerd command line, you can run the following:
 
 ```bash
+$ sudo ctr image pull docker.io/library/busybox:latest
 $ sudo ctr run --runtime io.containerd.run.kata.v2 -t --rm docker.io/library/busybox:latest hello sh
 ```
 
