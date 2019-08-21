@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	govmmQemu "github.com/intel/govmm/qemu"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
@@ -503,34 +502,14 @@ func TestQemuVirtiofsdArgs(t *testing.T) {
 		kataHostSharedDir = savedKataHostSharedDir
 	}()
 
-	result := "-o vhost_user_socket=bar1 -o source=test-share-dir/foo -o cache=none -d"
-	args := q.virtiofsdArgs("bar1")
+	result := "--fd=123 -o source=test-share-dir/foo -o cache=none -d"
+	args := q.virtiofsdArgs(123)
 	assert.Equal(strings.Join(args, " "), result)
 
 	q.config.Debug = false
-	result = "-o vhost_user_socket=bar2 -o source=test-share-dir/foo -o cache=none -f"
-	args = q.virtiofsdArgs("bar2")
+	result = "--fd=123 -o source=test-share-dir/foo -o cache=none -f"
+	args = q.virtiofsdArgs(123)
 	assert.Equal(strings.Join(args, " "), result)
-}
-
-func TestQemuWaitVirtiofsd(t *testing.T) {
-	assert := assert.New(t)
-
-	q := &qemu{}
-
-	ready := make(chan error, 1)
-	timeout := 5
-
-	ready <- nil
-	remain, err := q.waitVirtiofsd(time.Now(), timeout, ready, "")
-	assert.Nil(err)
-	assert.True(remain <= timeout)
-	assert.True(remain >= 0)
-
-	timeout = 0
-	remain, err = q.waitVirtiofsd(time.Now(), timeout, ready, "")
-	assert.NotNil(err)
-	assert.True(remain == 0)
 }
 
 func TestQemuGetpids(t *testing.T) {
