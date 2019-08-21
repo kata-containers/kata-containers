@@ -611,7 +611,8 @@ func (q *qemu) virtiofsdArgs(fd uintptr) []string {
 	args := []string{
 		fmt.Sprintf("--fd=%v", fd),
 		"-o", "source=" + sourcePath,
-		"-o", "cache=" + q.config.VirtioFSCache}
+		"-o", "cache=" + q.config.VirtioFSCache,
+		"--syslog"}
 	if q.config.Debug {
 		args = append(args, "-d")
 	} else {

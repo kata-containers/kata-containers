@@ -502,12 +502,12 @@ func TestQemuVirtiofsdArgs(t *testing.T) {
 		kataHostSharedDir = savedKataHostSharedDir
 	}()
 
-	result := "--fd=123 -o source=test-share-dir/foo -o cache=none -d"
+	result := "--fd=123 -o source=test-share-dir/foo -o cache=none --syslog -d"
 	args := q.virtiofsdArgs(123)
 	assert.Equal(strings.Join(args, " "), result)
 
 	q.config.Debug = false
-	result = "--fd=123 -o source=test-share-dir/foo -o cache=none -f"
+	result = "--fd=123 -o source=test-share-dir/foo -o cache=none --syslog -f"
 	args = q.virtiofsdArgs(123)
 	assert.Equal(strings.Join(args, " "), result)
 }
