@@ -209,9 +209,9 @@ func (s *Sandbox) deleteCgroups() error {
 }
 
 func (s *Sandbox) constrainHypervisor(cgroup cgroups.Cgroup) error {
-	pid := s.hypervisor.pid()
-	if pid <= 0 {
-		return fmt.Errorf("Invalid hypervisor PID: %d", pid)
+	pids := s.hypervisor.getPids()
+	if len(pids) == 0 || pids[0] == 0 {
+		return fmt.Errorf("Invalid hypervisor PID: %+v", pids)
 	}
 
 	// Move hypervisor into cgroups without constraints,
@@ -222,9 +222,14 @@ func (s *Sandbox) constrainHypervisor(cgroup cgroups.Cgroup) error {
 	if err != nil {
 		return fmt.Errorf("Could not create cgroup %v: %v", path, err)
 	}
-
-	if err := noConstraintsCgroup.Add(cgroups.Process{Pid: pid}); err != nil {
-		return fmt.Errorf("Could not add hypervisor PID %d to cgroup %v: %v", pid, path, err)
+	for _, pid := range pids {
+		if pid <= 0 {
+			s.Logger().Warnf("Invalid hypervisor pid: %d", pid)
+			continue
+		}
+		if err := noConstraintsCgroup.Add(cgroups.Process{Pid: pid}); err != nil {
+			return fmt.Errorf("Could not add hypervisor PID %d to cgroup %v: %v", pid, path, err)
+		}
 	}
 
 	// when new container joins, new CPU could be hotplugged, so we

@@ -568,3 +568,40 @@ func TestQemuWaitVirtiofsd(t *testing.T) {
 	assert.NotNil(err)
 	assert.True(remain == 0)
 }
+
+func TestQemuGetpids(t *testing.T) {
+	assert := assert.New(t)
+
+	qemuConfig := newQemuConfig()
+	q := &qemu{}
+	pids := q.getPids()
+	assert.NotNil(pids)
+	assert.True(len(pids) == 1)
+	assert.True(pids[0] == 0)
+
+	q = &qemu{
+		config: qemuConfig,
+	}
+	f, err := ioutil.TempFile("", "qemu-test-")
+	assert.Nil(err)
+	tmpfile := f.Name()
+	f.Close()
+	defer os.Remove(tmpfile)
+
+	q.qemuConfig.PidFile = tmpfile
+	pids = q.getPids()
+	assert.True(len(pids) == 1)
+	assert.True(pids[0] == 0)
+
+	err = ioutil.WriteFile(tmpfile, []byte("100"), 0)
+	assert.Nil(err)
+	pids = q.getPids()
+	assert.True(len(pids) == 1)
+	assert.True(pids[0] == 100)
+
+	q.state.VirtiofsdPid = 200
+	pids = q.getPids()
+	assert.True(len(pids) == 2)
+	assert.True(pids[0] == 100)
+	assert.True(pids[1] == 200)
+}
