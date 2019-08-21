@@ -239,7 +239,9 @@ func (p *proxyBuiltin) start(params proxyParams) (int, string, error) {
 
 	p.sandboxID = params.id
 
-	if params.debug {
+	// For firecracker, it hasn't support the console watching and it's consoleURL
+	// will be set empty.
+	if params.debug && params.consoleURL != "" {
 		err := p.watchConsole(buildinProxyConsoleProto, params.consoleURL, params.logger)
 		if err != nil {
 			p.sandboxID = ""
