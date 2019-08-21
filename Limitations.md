@@ -231,6 +231,8 @@ This is also true with using `securityContext privileged=true` with Kubernetes.
 The container may also be granted full access to a subset of host devices
 (https://github.com/kata-containers/runtime/issues/1568).
 
+See [Privileged Kata Containers](how-to/privileged.md) for how to configure some of this behavior.
+
 # Miscellaneous
 
 This section lists limitations where the possible solutions are uncertain.
