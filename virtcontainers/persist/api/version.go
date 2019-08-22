@@ -15,5 +15,5 @@ const (
 	// If you can't be sure if the change in persistapi package
 	// requires a bump of CurPersistVersion or not, do it for peace!
 	// --@WeiZhang555
-	CurPersistVersion uint = 1
+	CurPersistVersion uint = 2
 )

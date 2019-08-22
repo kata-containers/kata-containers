@@ -67,6 +67,7 @@ type QemuState struct {
 	HotpluggedMemory     int
 	UUID                 string
 	HotplugVFIOOnRootBus bool
+	VirtiofsdPid         int
 }
 
 // qemu is an Hypervisor interface implementation for the Linux qemu hypervisor.
@@ -459,14 +460,14 @@ func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memo
 }
 
 // createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.
-func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, store *store.VCStore) error {
+func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore) error {
 	// Save the tracing context
 	q.ctx = ctx
 
 	span, _ := q.trace("createSandbox")
 	defer span.Finish()
 
-	if err := q.setup(id, hypervisorConfig, store); err != nil {
+	if err := q.setup(id, hypervisorConfig, vcStore); err != nil {
 		return err
 	}
 
@@ -558,8 +559,6 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		return err
 	}
 
-	pidFile := q.pidFile()
-
 	qemuConfig := govmmQemu.Config{
 		Name:        fmt.Sprintf("sandbox-%s", q.id),
 		UUID:        q.state.UUID,
@@ -578,7 +577,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		VGA:         "none",
 		GlobalParam: "kvm-pit.lost_tick_policy=discard",
 		Bios:        firmwarePath,
-		PidFile:     pidFile,
+		PidFile:     filepath.Join(store.RunVMStoragePath, q.id, "pid"),
 	}
 
 	if ioThread != nil {
@@ -636,6 +635,8 @@ func (q *qemu) setupVirtiofsd(timeout int) (remain int, err error) {
 	defer func() {
 		if err != nil {
 			cmd.Process.Kill()
+		} else {
+			q.state.VirtiofsdPid = cmd.Process.Pid
 		}
 	}()
 
@@ -741,6 +742,9 @@ func (q *qemu) startSandbox(timeout int) error {
 	if q.config.SharedFS == config.VirtioFS {
 		timeout, err = q.setupVirtiofsd(timeout)
 		if err != nil {
+			return err
+		}
+		if err = q.storeState(); err != nil {
 			return err
 		}
 	}
@@ -1910,24 +1914,26 @@ func (q *qemu) cleanup() error {
 	return nil
 }
 
-func (q *qemu) pidFile() string {
-	return filepath.Join(store.RunVMStoragePath, q.id, "pid")
-}
-
-func (q *qemu) pid() int {
-	data, err := ioutil.ReadFile(q.pidFile())
+func (q *qemu) getPids() []int {
+	data, err := ioutil.ReadFile(q.qemuConfig.PidFile)
 	if err != nil {
 		q.Logger().WithError(err).Error("Could not read qemu pid file")
-		return 0
+		return []int{0}
 	}
 
 	pid, err := strconv.Atoi(strings.Trim(string(data), "\n\t "))
 	if err != nil {
 		q.Logger().WithError(err).Error("Could not convert string to int")
-		return 0
+		return []int{0}
 	}
 
-	return pid
+	var pids []int
+	pids = append(pids, pid)
+	if q.state.VirtiofsdPid != 0 {
+		pids = append(pids, q.state.VirtiofsdPid)
+	}
+
+	return pids
 }
 
 type qemuGrpc struct {
@@ -1992,7 +1998,11 @@ func (q *qemu) storeState() error {
 }
 
 func (q *qemu) save() (s persistapi.HypervisorState) {
-	s.Pid = q.pid()
+	pids := q.getPids()
+	if len(pids) != 0 {
+		s.Pid = pids[0]
+	}
+	s.VirtiofsdPid = q.state.VirtiofsdPid
 	s.Type = string(QemuHypervisor)
 	s.UUID = q.state.UUID
 	s.HotpluggedMemory = q.state.HotpluggedMemory
@@ -2019,6 +2029,7 @@ func (q *qemu) load(s persistapi.HypervisorState) {
 	q.state.UUID = s.UUID
 	q.state.HotpluggedMemory = s.HotpluggedMemory
 	q.state.HotplugVFIOOnRootBus = s.HotplugVFIOOnRootBus
+	q.state.VirtiofsdPid = s.VirtiofsdPid
 
 	for _, bridge := range s.Bridges {
 		q.state.Bridges = append(q.state.Bridges, types.PCIBridge{
