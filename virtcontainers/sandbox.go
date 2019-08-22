@@ -1138,10 +1138,6 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 		return nil, err
 	}
 
-	if err := s.store.Store(store.Configuration, *(s.config)); err != nil {
-		return nil, err
-	}
-
 	if err := s.updateCgroups(); err != nil {
 		return nil, err
 	}
@@ -1240,11 +1236,6 @@ func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
 			s.config.Containers = append(s.config.Containers[:idx], s.config.Containers[idx+1:]...)
 			break
 		}
-	}
-
-	// Store sandbox config
-	if err := s.store.Store(store.Configuration, *(s.config)); err != nil {
-		return nil, err
 	}
 
 	if err = s.storeSandbox(); err != nil {
