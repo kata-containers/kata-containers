@@ -28,6 +28,7 @@ GPU/AB
 gRPC/AB
 GVT/AB
 IOMMU/AB
+IoT/AB	# Internet of Things
 IOV/AB
 JSON/AB
 k8s/B
