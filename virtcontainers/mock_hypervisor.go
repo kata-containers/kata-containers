@@ -104,8 +104,8 @@ func (m *mockHypervisor) cleanup() error {
 	return nil
 }
 
-func (m *mockHypervisor) pid() int {
-	return m.mockPid
+func (m *mockHypervisor) getPids() []int {
+	return []int{m.mockPid}
 }
 
 func (m *mockHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error {

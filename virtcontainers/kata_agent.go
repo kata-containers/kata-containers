@@ -657,7 +657,7 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 
 	proxyParams := proxyParams{
 		id:         sandbox.id,
-		hid:        sandbox.hypervisor.pid(),
+		hid:        getHypervisorPid(sandbox.hypervisor),
 		path:       sandbox.config.ProxyConfig.Path,
 		agentURL:   agentURL,
 		consoleURL: consoleURL,

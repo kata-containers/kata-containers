@@ -39,5 +39,6 @@ type HypervisorState struct {
 	// HotpluggedCPUs is the list of CPUs that were hot-added
 	HotpluggedVCPUs      []CPUDevice
 	HotpluggedMemory     int
+	VirtiofsdPid         int
 	HotplugVFIOOnRootBus bool
 }

@@ -475,7 +475,7 @@ func (v *VM) ToGrpc(config VMConfig) (*pb.GrpcVM, error) {
 
 func (v *VM) GetVMStatus() *pb.GrpcVMStatus {
 	return &pb.GrpcVMStatus{
-		Pid:    int64(v.hypervisor.pid()),
+		Pid:    int64(getHypervisorPid(v.hypervisor)),
 		Cpu:    v.cpu,
 		Memory: v.memory,
 	}
