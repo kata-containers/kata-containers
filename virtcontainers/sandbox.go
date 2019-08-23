@@ -1116,6 +1116,13 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 	// Update sandbox config.
 	s.config.Containers = append(s.config.Containers, contConfig)
 
+	defer func() {
+		if err != nil && len(s.config.Containers) > 0 {
+			// delete container config
+			s.config.Containers = s.config.Containers[:len(s.config.Containers)-1]
+		}
+	}()
+
 	// Sandbox is reponsable to update VM resources needed by Containers
 	err = s.updateResources()
 	if err != nil {
@@ -1128,7 +1135,7 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 	}
 
 	// Add the container to the containers list in the sandbox.
-	if err := s.addContainer(c); err != nil {
+	if err = s.addContainer(c); err != nil {
 		return nil, err
 	}
 
@@ -1138,11 +1145,7 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 		return nil, err
 	}
 
-	if err := s.store.Store(store.Configuration, *(s.config)); err != nil {
-		return nil, err
-	}
-
-	if err := s.updateCgroups(); err != nil {
+	if err = s.updateCgroups(); err != nil {
 		return nil, err
 	}
 
@@ -1240,11 +1243,6 @@ func (s *Sandbox) DeleteContainer(containerID string) (VCContainer, error) {
 			s.config.Containers = append(s.config.Containers[:idx], s.config.Containers[idx+1:]...)
 			break
 		}
-	}
-
-	// Store sandbox config
-	if err := s.store.Store(store.Configuration, *(s.config)); err != nil {
-		return nil, err
 	}
 
 	if err = s.storeSandbox(); err != nil {
