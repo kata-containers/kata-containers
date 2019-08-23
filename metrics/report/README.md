@@ -1,6 +1,7 @@
 * [Kata Containers metrics report generator](#kata-containers-metrics-report-generator)
    * [Data gathering](#data-gathering)
    * [Report generation](#report-generation)
+   * [Debugging and development](#debugging-and-development)
 
 # Kata Containers metrics report generator
 
@@ -61,3 +62,24 @@ have Docker installed on your system in order to run the report generation.
 
 The resulting `metrics_report.pdf` is generated into the `output` subdirectory of the `report`
 directory.
+
+## Debugging and development
+
+To aid in script development and debugging, the `makereport.sh` script offers a debug
+facility via the `-d` command line option. Using this option will place you into a `bash`
+shell within the running `Dockerfile` image used to generate the report, whilst also
+mapping your host side `R` scripts from the `report_dockerfile` subdirectory into the
+container, thus facilitating a "live" edit/reload/run development cycle.
+From there you can examine the Docker image environment, and execute the generation scripts.
+E.g., to test the `scaling.R` script, you can execute:
+
+```sh
+$ makereport.sh -d
+# R
+> source('/inputdir/Env.R')
+> source('/scripts/lifecycle-time.R')
+```
+
+You can then edit the `report_dockerfile/lifecycle-time.R` file on the host, and re-run
+the `source('/scripts/lifecycle-time.R')` command inside the still running `R` container
+to re-execute the newly edited script.

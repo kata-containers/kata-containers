@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -21,6 +21,11 @@ HOSTOUTPUTDIR="${SCRIPT_PATH}/output"
 
 GUESTINPUTDIR="/inputdir/"
 GUESTOUTPUTDIR="/outputdir/"
+
+# If in debugging mode, we also map in the scripts dir so you can
+# dynamically edit and re-load them at the R prompt
+HOSTSCRIPTDIR="${SCRIPT_PATH}/report_dockerfile"
+GUESTSCRIPTDIR="/scripts/"
 
 setup() {
 	echo "Checking subdirectories"
@@ -47,9 +52,46 @@ setup() {
 }
 
 run() {
-	docker run -ti --rm -v ${HOSTINPUTDIR}:${GUESTINPUTDIR} -v ${HOSTOUTPUTDIR}:${GUESTOUTPUTDIR} ${IMAGE}
+	docker run -ti --rm -v ${HOSTINPUTDIR}:${GUESTINPUTDIR} -v ${HOSTOUTPUTDIR}:${GUESTOUTPUTDIR} ${extra_volumes} ${IMAGE} ${extra_command}
+	ls -la ${HOSTOUTPUTDIR}/*
 }
 
-setup
-run
-ls -la ${HOSTOUTPUTDIR}/*
+help() {
+	usage=$(cat << EOF
+Usage: $0 [-h] [options]
+   Description:
+        This script generates a metrics report document
+        from the results directory one level up in the
+        directory tree (../results).
+   Options:
+        -d,         Run in debug (interactive) mode
+        -h,         Print this help
+EOF
+)
+	echo "$usage"
+}
+
+main() {
+
+	local OPTIND
+	while getopts "d" opt;do
+		case ${opt} in
+		d)
+			# In debug mode, run a shell instead of the default report generation
+			extra_command="bash"
+			extra_volumes="-v ${HOSTSCRIPTDIR}:${GUESTSCRIPTDIR}"
+			;;
+		?)
+		    # parse failure
+		    help
+		    die "Failed to parse arguments"
+		    ;;
+		esac
+	done
+	shift $((OPTIND-1))
+
+	setup
+	run
+}
+
+main "$@"
