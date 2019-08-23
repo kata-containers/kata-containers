@@ -23,6 +23,9 @@ SCRIPT_DIR=$(dirname $0)
 PKG_NAME="qemu-vanilla"
 VERSION=$qemu_vanilla_version
 
+PATCHES_VERSION="$(echo $VERSION | cut -d "." -f 1,2).x"
+ln -sfT "${SCRIPT_DIR}/../../qemu/patches/${PATCHES_VERSION}" "${SCRIPT_DIR}/patches"
+
 GENERATED_FILES=(qemu-vanilla.dsc qemu-vanilla.spec debian.rules _service debian.control)
 STATIC_FILES=(debian.compat "${SCRIPT_DIR}/../../scripts/configure-hypervisor.sh" qemu-vanilla-rpmlintrc)
 
