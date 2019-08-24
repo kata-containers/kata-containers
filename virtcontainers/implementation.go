@@ -176,3 +176,10 @@ func (impl *VCImpl) UpdateRoutes(ctx context.Context, sandboxID string, routes [
 func (impl *VCImpl) ListRoutes(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error) {
 	return ListRoutes(ctx, sandboxID)
 }
+
+// CleanupContaienr is used by shimv2 to stop and delete a container exclusively, once there is no container
+// in the sandbox left, do stop the sandbox and delete it. Those serial operations will be done exclusively by
+// locking the sandbox.
+func (impl *VCImpl) CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error {
+	return CleanupContainer(ctx, sandboxID, containerID, force)
+}
