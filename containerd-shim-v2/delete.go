@@ -23,7 +23,7 @@ func deleteContainer(ctx context.Context, s *service, c *container) error {
 			return err
 		}
 		if status.State.State != types.StateStopped {
-			_, err = s.sandbox.StopContainer(c.id)
+			_, err = s.sandbox.StopContainer(c.id, false)
 			if err != nil {
 				return err
 			}

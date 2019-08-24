@@ -70,9 +70,10 @@ type VCMock struct {
 
 	AddDeviceFunc func(ctx context.Context, sandboxID string, info config.DeviceInfo) (api.Device, error)
 
-	AddInterfaceFunc    func(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error)
-	RemoveInterfaceFunc func(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error)
-	ListInterfacesFunc  func(ctx context.Context, sandboxID string) ([]*vcTypes.Interface, error)
-	UpdateRoutesFunc    func(ctx context.Context, sandboxID string, routes []*vcTypes.Route) ([]*vcTypes.Route, error)
-	ListRoutesFunc      func(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error)
+	AddInterfaceFunc     func(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error)
+	RemoveInterfaceFunc  func(ctx context.Context, sandboxID string, inf *vcTypes.Interface) (*vcTypes.Interface, error)
+	ListInterfacesFunc   func(ctx context.Context, sandboxID string) ([]*vcTypes.Interface, error)
+	UpdateRoutesFunc     func(ctx context.Context, sandboxID string, routes []*vcTypes.Route) ([]*vcTypes.Route, error)
+	ListRoutesFunc       func(ctx context.Context, sandboxID string) ([]*vcTypes.Route, error)
+	CleanupContainerFunc func(ctx context.Context, sandboxID, containerID string, force bool) error
 }

@@ -109,7 +109,7 @@ func (s *Sandbox) StartContainer(contID string) (vc.VCContainer, error) {
 }
 
 // StopContainer implements the VCSandbox function of the same name.
-func (s *Sandbox) StopContainer(contID string) (vc.VCContainer, error) {
+func (s *Sandbox) StopContainer(contID string, force bool) (vc.VCContainer, error) {
 	return &Container{}, nil
 }
 
