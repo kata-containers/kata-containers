@@ -1,0 +1,29 @@
+From cf8c67cfaac7cdef766032cf012c7c586c4826d2 Mon Sep 17 00:00:00 2001
+From: Julio Montes <julio.montes@intel.com>
+Date: Fri, 23 Aug 2019 14:04:03 +0000
+Subject: [PATCH] configure: get right version of python
+
+In some systems the version of python is printed out together with the
+version of GCC, omit GCC version to get the right version of python.
+
+Signed-off-by: Julio Montes <julio.montes@intel.com>
+---
+ configure | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/configure b/configure
+index 714e7fb6a1..f22262dc60 100755
+--- a/configure
++++ b/configure
+@@ -1864,7 +1864,7 @@ if ! $python -c 'import sys; sys.exit(sys.version_info < (2,7))'; then
+ fi
+ 
+ # Preserve python version since some functionality is dependent on it
+-python_version=$($python -V 2>&1 | sed -e 's/Python\ //')
++python_version=$($python -V 2>&1 | head -1 | cut -d' ' -f2)
+ 
+ # Suppress writing compiled files
+ python="$python -B"
+-- 
+2.17.2
+

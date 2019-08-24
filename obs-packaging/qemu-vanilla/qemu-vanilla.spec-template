@@ -14,6 +14,7 @@ License  : BSD-2-Clause BSD-3-Clause GPL-2.0 GPL-2.0+ LGPL-2.0+ LGPL-2.1
 Requires: qemu-vanilla-bin
 Requires: qemu-vanilla-data
 BuildRequires : automake
+BuildRequires : bc
 BuildRequires : bison
 BuildRequires : flex
 BuildRequires : gcc-c++
