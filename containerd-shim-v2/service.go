@@ -675,6 +675,14 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 			return nil, err
 		}
 		processID = execs.id
+		if processID == "" {
+			logrus.WithFields(logrus.Fields{
+				"sandbox":   s.sandbox.ID(),
+				"Container": c.id,
+				"ExecID":    r.ExecID,
+			}).Debug("Id of exec process to be signalled is empty")
+			return empty, errors.New("The exec process does not exist")
+		}
 	}
 
 	return empty, s.sandbox.SignalProcess(c.id, processID, signum, r.All)
