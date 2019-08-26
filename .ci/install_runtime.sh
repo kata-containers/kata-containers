@@ -131,7 +131,7 @@ fi
 
 # Enable virtio-blk device driver only for ubuntu with initrd for this moment
 # see https://github.com/kata-containers/tests/issues/1603
-if [ "$ID" == ubuntu ] && [ x"${TEST_INITRD}" == x"yes" ] && [ "$VERSION_ID" != "16.04" ]; then
+if [ "$ID" == ubuntu ] && [ x"${TEST_INITRD}" == x"yes" ] && [ "$VERSION_ID" != "16.04" ] && [ "$arch" != "ppc64le" ]; then
 	echo "Set virtio-blk as the block device driver on $ID"
 	sudo sed -i 's/block_device_driver = "virtio-scsi"/block_device_driver = "virtio-blk"/' "${runtime_config_path}"
 fi
