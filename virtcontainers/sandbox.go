@@ -1907,21 +1907,37 @@ func (s *Sandbox) cgroupsUpdate() error {
 
 func (s *Sandbox) cgroupsDelete() error {
 	s.Logger().Debug("Deleting sandbox cgroup")
+	if s.state.CgroupPath == "" {
+		s.Logger().Warnf("sandox cgroups path is empty")
+		return nil
+	}
 
-	path := cgroupNoConstraintsPath(s.state.CgroupPath)
-	s.Logger().WithField("path", path).Debug("Deleting no constraints cgroup")
-	noConstraintsCgroup, err := cgroupsLoadFunc(V1NoConstraints, cgroups.StaticPath(path))
+	var path string
+	cgroupSubystems := V1NoConstraints
+
+	if s.config.SandboxCgroupOnly {
+		// Override V1NoConstraints, if SandboxCgroupOnly is enabled
+		cgroupSubystems = cgroups.V1
+		path = s.state.CgroupPath
+		s.Logger().WithField("path", path).Debug("Deleting sandbox cgroups (all subsystems)")
+	} else {
+		path = cgroupNoConstraintsPath(s.state.CgroupPath)
+		s.Logger().WithField("path", path).Debug("Deleting no constraints cgroup")
+	}
+
+	sandboxCgroups, err := cgroupsLoadFunc(cgroupSubystems, cgroups.StaticPath(path))
 	if err == cgroups.ErrCgroupDeleted {
 		// cgroup already deleted
+		s.Logger().Warnf("cgroup already deleted: '%s'", err)
 		return nil
 	}
 
 	if err != nil {
-		return fmt.Errorf("Could not load cgroup without constraints %v: %v", path, err)
+		return fmt.Errorf("Could not load cgroups %v: %v", path, err)
 	}
 
 	// move running process here, that way cgroup can be removed
-	parent, err := parentCgroup(V1NoConstraints, path)
+	parent, err := parentCgroup(cgroupSubystems, path)
 	if err != nil {
 		// parent cgroup doesn't exist, that means there are no process running
 		// and the no constraints cgroup was removed.
@@ -1929,12 +1945,12 @@ func (s *Sandbox) cgroupsDelete() error {
 		return nil
 	}
 
-	if err := noConstraintsCgroup.MoveTo(parent); err != nil {
+	if err := sandboxCgroups.MoveTo(parent); err != nil {
 		// Don't fail, cgroup can be deleted
-		s.Logger().WithError(err).Warn("Could not move process from no constraints to parent cgroup")
+		s.Logger().WithError(err).Warnf("Could not move process from %s to parent cgroup", path)
 	}
 
-	return noConstraintsCgroup.Delete()
+	return sandboxCgroups.Delete()
 }
 
 func (s *Sandbox) constrainHypervisorVCPUs(cgroup cgroups.Cgroup) error {
