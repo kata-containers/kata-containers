@@ -134,3 +134,7 @@ func (n NetDeviceType) QemuNetdevParam() string {
 
 	}
 }
+
+func isDimmSupported() bool {
+	return false
+}
