@@ -138,7 +138,7 @@ these commands is potentially challenging.
 See issue https://github.com/clearcontainers/runtime/issues/341 and [the constraints challenge](#the-constraints-challenge) for more information.
 
 For CPUs resource management see
-[CPU constraints](design/cpu-constraints.md).
+[CPU constraints](design/vcpu-handling.md).
 
 ### docker run and shared memory
 
