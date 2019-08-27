@@ -1,64 +1,86 @@
 # Run Kata Containers with Kubernetes
 
-* [Pre-requisites](#pre-requisites)
 * [Run Kata Containers with Kubernetes](#run-kata-containers-with-kubernetes)
+  * [Prerequisites](#prerequisites)
   * [Install a CRI implementation](#install-a-cri-implementation)
      * [CRI-O](#cri-o)
+        * [Kubernetes Runtime Class (CRI-O v1.12 )](#kubernetes-runtime-class-cri-o-v112)
+        * [Untrusted annotation (until CRI-O v1.12)](#untrusted-annotation-until-cri-o-v112)
+        * [Network namespace management](#network-namespace-management)
      * [containerd with CRI plugin](#containerd-with-cri-plugin)
   * [Install Kubernetes](#install-kubernetes)
      * [Configure for CRI-O](#configure-for-cri-o)
      * [Configure for containerd](#configure-for-containerd)
   * [Run a Kubernetes pod with Kata Containers](#run-a-kubernetes-pod-with-kata-containers)
 
-## Pre-requisites
-This guide requires Kata Containers available on your system, and it can be installed
-following [this guide](https://github.com/kata-containers/documentation/blob/master/install/README.md).
-
+## Prerequisites
+This guide requires Kata Containers available on your system, install-able by following [this guide](https://github.com/kata-containers/documentation/blob/master/install/README.md).
 
 ## Install a CRI implementation
 
-Kata Containers runtime is an OCI compatible runtime and cannot directly
-interact with the CRI API level. For this reason we rely on a CRI
-implementation to translate CRI into OCI. There are two supported ways
-called [CRI-O](https://github.com/kubernetes-incubator/cri-o) and
-[CRI-containerd](https://github.com/containerd/cri). It is up to you to
-choose the one that you want, but you have to pick one. After choosing
-either CRI-O or CRI-containerd, you must make the appropriate changes
-to ensure it relies on the Kata Containers runtime.
+Kubernetes CRI (Container Runtime Interface) implementations allow using any
+OCI-compatible runtime with Kubernetes, such as the Kata Containers runtime.
 
-As of Kata Containers 1.5, using `shimv2` with containerd 1.2.0 or above is the preferred
-way to run Kata Containers with Kubernetes ([see the howto](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers)).
-The CRI-O will catch up soon.
+Kata Containers support both the [CRI-O](https://github.com/kubernetes-incubator/cri-o) and
+[CRI-containerd](https://github.com/containerd/cri) CRI implementations.
+
+After choosing one CRI implementation, you must make the appropriate configuration
+to ensure it integrates with Kata Containers.
+
+Kata Containers 1.5 introduced the `shimv2` for containerd 1.2.0, reducing the components
+required to spawn pods and containers, and this is the preferred way to run Kata Containers with Kubernetes ([as documented here](https://github.com/kata-containers/documentation/blob/master/how-to/how-to-use-k8s-with-cri-containerd-and-kata.md#configure-containerd-to-use-kata-containers)).
+
+An equivalent shim implementation for CRI-O is planned.
 
 ### CRI-O
+For CRI-O installation instructions, refer to the [CRI-O Tutorial](https://github.com/kubernetes-incubator/cri-o/blob/master/tutorial.md) page.
 
-If you select CRI-O, follow the "CRI-O Tutorial" instructions
-[here](https://github.com/kubernetes-incubator/cri-o/blob/master/tutorial.md)
-to properly install it.
+The following sections show how to set up the CRI-O configuration file (default path: `/etc/crio/crio.conf`) for Kata.
 
-Once you have installed CRI-O, you need to modify the CRI-O configuration
-with information about different container runtimes. By default, we choose
-`runc`, but in this case we also specify Kata Containers runtime to run
-__untrusted__ workloads. In other words, this defines an alternative runtime
-to be used when the workload cannot be trusted and a higher level of security
+Unless otherwise stated, all the following settings are specific to the `crio.runtime` table:
+```toml
+# The "crio.runtime" table contains settings pertaining to the OCI
+# runtime used and options for how to set up and manage the OCI runtime.
+[crio.runtime]
+```
+A comprehensive documentation of the configuration file can be found [here](https://github.com/cri-o/cri-o/blob/master/docs/crio.conf.5.md).
+
+> **Note**: After any change to this file, the CRI-O daemon have to be restarted with:
+>````
+>$ sudo systemctl restart crio
+>````
+
+#### Kubernetes Runtime Class (CRI-O v1.12+)
+The [Kubernetes Runtime Class](https://kubernetes.io/docs/concepts/containers/runtime-class/)
+is the preferred way of specifying the container runtime configuration to run a Pod's containers.
+To use this feature, Kata must added as a runtime handler with:
+
+```toml
+[crio.runtime.runtimes.kata-runtime]
+  runtime_path = "/usr/bin/kata-runtime"
+  runtime_type = "oci"
+```
+
+You can also add multiple entries to specify alternatives hypervisors, e.g.:
+```toml
+[crio.runtime.runtimes.kata-qemu]
+  runtime_path = "/usr/bin/kata-runtime"
+  runtime_type = "oci"
+
+[crio.runtime.runtimes.kata-fc]
+  runtime_path = "/usr/bin/kata-runtime"
+  runtime_type = "oci"
+```
+
+#### Untrusted annotation (until CRI-O v1.12)
+The untrusted annotation is used to specify a runtime for __untrusted__ workloads, i.e.
+a runtime to be used when the workload cannot be trusted and a higher level of security
 is required. An additional flag can be used to let CRI-O know if a workload
 should be considered _trusted_ or _untrusted_ by default.
 For further details, see the documentation
 [here](https://github.com/kata-containers/documentation/blob/master/design/architecture.md#mixing-vm-based-and-namespace-based-runtimes).
 
-Additionally, we need CRI-O to perform the network namespace management.
-Otherwise, when the VM starts the network will not be available.
-
-The following is an example of how to modify the `/etc/crio/crio.conf` file
-in order to apply the previous explanations, and therefore get Kata Containers
-runtime to invoke by CRI-O.
-
 ```toml
-# The "crio.runtime" table contains settings pertaining to the OCI
-# runtime used and options for how to set up and manage the OCI runtime.
-[crio.runtime]
-manage_network_ns_lifecycle = true
-
 # runtime is the OCI compatible runtime used for trusted container workloads.
 # This is a mandatory setting as this runtime will be the default one
 # and will also be used for untrusted container workloads if
@@ -86,12 +108,13 @@ runtime_untrusted_workload = "/usr/bin/kata-runtime"
 # runtime. If default_container_trust is set to "trusted", crio will use the trusted
 # container runtime for all containers.
 default_workload_trust = "untrusted"
-
 ```
 
-Restart CRI-O to take changes into account
-```
-$ sudo systemctl restart crio
+#### Network namespace management
+To enable networking for the workloads run by Kata, CRI-O needs to be configured to
+manage network namespaces, by setting the following key to `true`:
+```toml
+manage_network_ns_lifecycle = true
 ```
 
 ### containerd with CRI plugin
