@@ -9,3 +9,4 @@
 - [Setting Sysctls with Kata](how-to-use-sysctls-with-kata.md)
 - [What Is VMCache and How To Enable It](what-is-vm-cache-and-how-do-I-use-it.md)
 - [What Is VM Templating and How To Enable It](what-is-vm-templating-and-how-do-I-use-it.md)
+- [Run Kata Containers with Kubernetes](run-kata-with-k8s.md)
