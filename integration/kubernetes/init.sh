@@ -67,9 +67,10 @@ esac
 check_processes
 
 # Remove existing CNI configurations:
-sudo rm -rf /var/lib/cni/networks/*
-sudo rm -rf /etc/cni/net.d/*
+cni_config_dir="/etc/cni/net.d"
 cni_interface="cni0"
+sudo rm -rf /var/lib/cni/networks/*
+sudo rm -rf "${cni_config_dir}"/*
 if ip a show "$cni_interface"; then
 	sudo ip link set dev "$cni_interface" down
 	sudo ip link del "$cni_interface"
@@ -114,6 +115,14 @@ kubectl apply -f "$network_plugin_config"
 
 # we need to ensure a few specific pods ready and running
 wait_pods_ready
+
+# Add 'cniVersion' to the flannel configuration file.
+# Fix needed just for flannel to let cni release ip addresses,
+# we should remove after https://github.com/coreos/flannel/pull/1135
+# gets merged and we update flannel_version above.
+if [ "$network_plugin_config" == "$flannel_url" ]; then
+	sudo sed -i '/cbr0/a\  "cniVersion": "0.3.1",' "${cni_config_dir}/10-flannel.conflist"
+fi
 
 runtimeclass_files_path="${SCRIPT_PATH}/runtimeclass_workloads"
 echo "Create kata RuntimeClass resource"
