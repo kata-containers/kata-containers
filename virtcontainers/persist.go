@@ -63,8 +63,8 @@ func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistap
 
 func (s *Sandbox) dumpHypervisor(ss *persistapi.SandboxState) {
 	ss.HypervisorState = s.hypervisor.save()
-	// BlockIndex will be moved from sandbox state to hypervisor state later
-	ss.HypervisorState.BlockIndex = s.state.BlockIndex
+	// BlockIndexMap will be moved from sandbox state to hypervisor state later
+	ss.HypervisorState.BlockIndexMap = s.state.BlockIndexMap
 }
 
 func deviceToDeviceState(devices []api.Device) (dss []persistapi.DeviceState) {
@@ -318,7 +318,7 @@ func (s *Sandbox) Save() error {
 func (s *Sandbox) loadState(ss persistapi.SandboxState) {
 	s.state.PersistVersion = ss.PersistVersion
 	s.state.GuestMemoryBlockSizeMB = ss.GuestMemoryBlockSizeMB
-	s.state.BlockIndex = ss.HypervisorState.BlockIndex
+	s.state.BlockIndexMap = ss.HypervisorState.BlockIndexMap
 	s.state.State = types.StateString(ss.State)
 	s.state.CgroupPath = ss.CgroupPath
 	s.state.CgroupPaths = ss.CgroupPaths

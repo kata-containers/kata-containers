@@ -28,7 +28,7 @@ func (mockDC *MockDeviceReceiver) GetAndSetSandboxBlockIndex() (int, error) {
 }
 
 // DecrementSandboxBlockIndex decreases virtio-blk index by one
-func (mockDC *MockDeviceReceiver) DecrementSandboxBlockIndex() error {
+func (mockDC *MockDeviceReceiver) UnsetSandboxBlockIndex(int) error {
 	return nil
 }
 
