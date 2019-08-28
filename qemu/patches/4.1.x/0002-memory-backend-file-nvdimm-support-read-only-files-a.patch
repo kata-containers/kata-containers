@@ -1,7 +1,7 @@
-From 8fa3c7a1b430dfde30baa64d237cce6f41244f65 Mon Sep 17 00:00:00 2001
+From f116c58ab18762b1fdf5b5908af8612bf933d159 Mon Sep 17 00:00:00 2001
 From: Julio Montes <julio.montes@intel.com>
 Date: Mon, 8 Jul 2019 21:19:36 +0000
-Subject: [PATCH 2/2] memory-backend-file/nvdimm: support read-only files as
+Subject: [PATCH 2/3] memory-backend-file/nvdimm: support read-only files as
  memory-backends
 
 Currently is not possible to use a file that is part of a read-only
