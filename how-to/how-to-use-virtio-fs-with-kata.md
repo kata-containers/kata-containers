@@ -21,7 +21,7 @@ This document describes how to get Kata Containers to work with virtio-fs.
 
 ## Pre-requisites
 
-* This feature currently requires the host to have hugepages support enabled. Enable this with the `sysctl vm.nr_hugepages=1024` command on the host.
+* Before Kata 1.8 this feature required the host to have hugepages support enabled. Enable this with the `sysctl vm.nr_hugepages=1024` command on the host.
 
 ## Install Kata Containers with virtio-fs support
 
