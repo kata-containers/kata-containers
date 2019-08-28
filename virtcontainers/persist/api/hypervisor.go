@@ -29,9 +29,9 @@ type CPUDevice struct {
 type HypervisorState struct {
 	Pid int
 	// Type of hypervisor, E.g. qemu/firecracker/acrn.
-	Type       string
-	BlockIndex int
-	UUID       string
+	Type          string
+	BlockIndexMap map[int]struct{}
+	UUID          string
 
 	// Belows are qemu specific
 	// Refs: virtcontainers/qemu.go:QemuState

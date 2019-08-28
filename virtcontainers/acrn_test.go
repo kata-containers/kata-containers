@@ -226,6 +226,7 @@ func TestAcrnCreateSandbox(t *testing.T) {
 		config: &SandboxConfig{
 			HypervisorConfig: acrnConfig,
 		},
+		state: types.SandboxState{BlockIndexMap: make(map[int]struct{})},
 	}
 
 	err = globalSandboxList.addSandbox(sandbox)
