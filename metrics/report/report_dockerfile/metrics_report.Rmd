@@ -1,22 +1,8 @@
 ---
-# Copyright (c) 2018 Intel Corporation
+# Copyright (c) 2018-2019 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
-title: "Kata Containers metrics report"
-author: "Auto generated"
-date: "`r format(Sys.time(), '%d %B, %Y')`"
-output:
-  pdf_document:
-urlcolor: blue
 ---
-
-```{r setup, include=FALSE}
-#Set these opts to get pdf images which fit into beamer slides better
-opts_chunk$set(dev = 'pdf')
-# Pick up any env set by the invoking script, such as the root dir of the
-# results data tree
-source("/inputdir/Env.R")
-```
 \pagebreak
 
 # Introduction
@@ -33,7 +19,7 @@ measures the PSS footprint of all the container runtime components whilst runnin
 of parallel containers. The results are the mean footprint proportion for a single
 container.
 
-```{r, echo=FALSE, fig.cap="Memory PSS footprint"}
+```{r memory-footprint, echo=FALSE, fig.cap="Memory PSS footprint"}
 source('memory-footprint.R')
 ```
 \pagebreak
@@ -46,7 +32,7 @@ of containers. For this test, [KSM](https://en.wikipedia.org/wiki/Kernel_same-pa
 containers, and their average system memory footprint cost and density (how many
 containers you can fit per Gb) is calculated.
 
-```{r, echo=FALSE, fig.cap="System Memory density"}
+```{r footprint-density, echo=FALSE, fig.cap="System Memory density"}
 test_name_extra="-ksm"
 source('footprint-density.R')
 rm(test_name_extra)
@@ -60,7 +46,7 @@ measures the memory inside a container taken by the container runtime. It shows 
 The *% Consumed* is the key row in the table, which compares the *Requested* against *Total* values.
 
 
-```{r, echo=FALSE, fig.cap="System Memory density"}
+```{r mem-in-cont, echo=FALSE, fig.cap="System Memory density"}
 source('mem-in-cont.R')
 ```
 \pagebreak
@@ -74,7 +60,7 @@ Docker container lifecycle take for the first launched container.
 
 To decode the stats table, the prefixes are 'to(`2`)' and '`i`n'. The suffixes are '`k`ernel', '`w`orkload' and '`q`uit'. 'tot' is the total time for a complete container start-to-finished cycle.
 
-```{r, echo=FALSE, fig.cap="Execution lifecycle times"}
+```{r lifecycle-time, echo=FALSE, fig.cap="Execution lifecycle times"}
 source('lifecycle-time.R')
 ```
 \pagebreak
@@ -88,7 +74,7 @@ This test measures using separate random read and write tests.
 
 ## Reads
 
-```{r, echo=FALSE, fig.cap="Storage I/O Reads", results='asis'}
+```{r fio-reads, echo=FALSE, fig.cap="Storage I/O Reads", results='asis'}
 source('fio-reads.R')
 ```
 
@@ -96,7 +82,7 @@ source('fio-reads.R')
 
 ## Writes
 
-```{r, echo=FALSE, fig.cap="Storage I/O Writes", results='asis'}
+```{r fio-writes, echo=FALSE, fig.cap="Storage I/O Writes", results='asis'}
 source('fio-writes.R')
 ```
 \pagebreak
@@ -109,7 +95,7 @@ this [test](https://github.com/kata-containers/tests/blob/master/metrics/network
 As local container-to-container networking is a pure local software activity, this test
 is a reasonable way to show changes in network stack processing costs.
 
-```{r, echo=FALSE, fig.cap="Storage I/O Writes", results='asis'}
+```{r network-cpu, echo=FALSE, fig.cap="Storage I/O Writes", results='asis'}
 source('network-cpu.R')
 ```
 \pagebreak
@@ -120,6 +106,6 @@ This table describes the test system details, as derived from the information co
 in the test results files.
 
 
-```{r, echo=FALSE, fig.cap="System configuration details"}
+```{r dut, echo=FALSE, fig.cap="System configuration details"}
 source('dut-details.R')
 ```
