@@ -71,7 +71,7 @@ is_a_kata_runtime(){
 
 # Try to find the real runtime path for the docker runtime passed in $1
 get_docker_kata_path(){
-	local jpaths=$(docker info --format "{{json .Runtimes}}" || true)
+	local jpaths=$(sudo docker info --format "{{json .Runtimes}}" || true)
 	local rpath=$(jq .\"$1\".path <<< "$jpaths")
 	# Now we have to de-quote it..
 	rpath="${rpath%\"}"
@@ -214,7 +214,7 @@ clean_env()
 	# Docker has a built in 10s default timeout, so make ours
 	# longer than that.
 	KATA_DOCKER_TIMEOUT=${KATA_DOCKER_TIMEOUT:-30}
-	containers_running=$(timeout ${KATA_DOCKER_TIMEOUT} docker ps -q)
+	containers_running=$(sudo timeout ${KATA_DOCKER_TIMEOUT} docker ps -q)
 
 	if [ ! -z "$containers_running" ]; then
 		# First stop all containers that are running
