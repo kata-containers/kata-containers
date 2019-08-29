@@ -854,3 +854,54 @@ func TestCheckKernelParamHandler(t *testing.T) {
 	// single error (due to "param1"'s value being different)
 	checkKernelParamHandler(assert, testDataToCreate, testDataToExpect, nil, false, uint32(1))
 }
+
+func TestArchRequiredKernelModules(t *testing.T) {
+	assert := assert.New(t)
+
+	tmpdir, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
+	_, config, err := makeRuntimeConfig(tmpdir)
+	assert.NoError(err)
+
+	err = setCPUtype(config.HypervisorType)
+	assert.NoError(err)
+
+	if len(archRequiredKernelModules) == 0 {
+		// No modules to check
+		return
+	}
+
+	dir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	savedModProbeCmd := modProbeCmd
+	savedSysModuleDir := sysModuleDir
+
+	// XXX: override
+	sysModuleDir = filepath.Join(dir, "sys/module")
+	modProbeCmd = "false"
+
+	defer func() {
+		sysModuleDir = savedSysModuleDir
+		modProbeCmd = savedModProbeCmd
+	}()
+
+	// Running check with no modules
+	count, err := checkKernelModules(archRequiredKernelModules, nil)
+	assert.NoError(err)
+
+	// Test that count returned matches the # of modules with required set.
+	expectedCount := 0
+	for _, module := range archRequiredKernelModules {
+		if module.required {
+			expectedCount++
+		}
+	}
+
+	assert.EqualValues(count, expectedCount)
+}

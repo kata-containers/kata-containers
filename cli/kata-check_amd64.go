@@ -116,17 +116,21 @@ func setCPUtype(hypervisorType vc.HypervisorType) error {
 			}
 			archRequiredKernelModules = map[string]kernelModule{
 				kernelModkvm: {
-					desc: msgKernelVM,
+					desc:     msgKernelVM,
+					required: true,
 				},
 				kernelModkvmintel: {
 					desc:       "Intel KVM",
 					parameters: kvmIntelParams,
+					required:   true,
 				},
 				kernelModvhost: {
-					desc: msgKernelVirtio,
+					desc:     msgKernelVirtio,
+					required: true,
 				},
 				kernelModvhostnet: {
-					desc: msgKernelVirtioNet,
+					desc:     msgKernelVirtioNet,
+					required: true,
 				},
 				kernelModvhostvsock: {
 					desc:     msgKernelVirtioVhostVsock,
@@ -143,13 +147,16 @@ func setCPUtype(hypervisorType vc.HypervisorType) error {
 			}
 			archRequiredKernelModules = map[string]kernelModule{
 				kernelModvhm: {
-					desc: "Intel ACRN",
+					desc:     "Intel ACRN",
+					required: false,
 				},
 				kernelModvhost: {
-					desc: msgKernelVirtio,
+					desc:     msgKernelVirtio,
+					required: false,
 				},
 				kernelModvhostnet: {
-					desc: msgKernelVirtioNet,
+					desc:     msgKernelVirtioNet,
+					required: false,
 				},
 			}
 		default:
