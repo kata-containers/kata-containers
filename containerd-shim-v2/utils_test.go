@@ -53,6 +53,7 @@ var (
 	testDir       = ""
 	testBundleDir = ""
 	tc            ktu.TestConstraint
+	ctrEngine     = katautils.CtrEngine{}
 )
 
 // testingImpl is a concrete mock RVC implementation used for testing
@@ -72,26 +73,33 @@ func init() {
 	if err != nil {
 		panic(fmt.Sprintf("ERROR: failed to create test directory: %v", err))
 	}
-
 	fmt.Printf("INFO: test directory is %v\n", testDir)
 
-	fmt.Printf("INFO: ensuring docker is running\n")
-	output, err := katautils.RunCommandFull([]string{"docker", "version"}, true)
-	if err != nil {
-		panic(fmt.Sprintf("ERROR: docker daemon is not installed, not running, or not accessible to current user: %v (error %v)",
+	var output string
+	for _, name := range katautils.DockerLikeCtrEngines {
+		fmt.Printf("INFO: checking for container engine: %s\n", name)
+
+		output, err = ctrEngine.Init(name)
+		if err == nil {
+			break
+		}
+	}
+
+	if ctrEngine.Name == "" {
+		panic(fmt.Sprintf("ERROR: Docker-like container engine not accessible to current user: %v (error %v)",
 			output, err))
 	}
 
 	// Do this now to avoid hitting the test timeout value due to
 	// slow network response.
-	fmt.Printf("INFO: ensuring required docker image (%v) is available\n", testDockerImage)
-
+	fmt.Printf("INFO: ensuring required container image (%v) is available\n", testDockerImage)
 	// Only hit the network if the image doesn't exist locally
-	_, err = katautils.RunCommand([]string{"docker", "inspect", "--type=image", testDockerImage})
+	_, err = ctrEngine.Inspect(testDockerImage)
 	if err == nil {
-		fmt.Printf("INFO: docker image %v already exists locally\n", testDockerImage)
+		fmt.Printf("INFO: container image %v already exists locally\n", testDockerImage)
 	} else {
-		_, err = katautils.RunCommand([]string{"docker", "pull", testDockerImage})
+		fmt.Printf("INFO: pulling container image %v\n", testDockerImage)
+		_, err = ctrEngine.Pull(testDockerImage)
 		if err != nil {
 			panic(err)
 		}
@@ -309,38 +317,18 @@ func createRootfs(dir string) error {
 		return err
 	}
 
-	container, err := katautils.RunCommand([]string{"docker", "create", testDockerImage})
+	container, err := ctrEngine.Create(testDockerImage)
 	if err != nil {
 		return err
 	}
 
-	cmd1 := sysExec.Command("docker", "export", container)
-	cmd2 := sysExec.Command("tar", "-C", dir, "-xvf", "-")
-
-	cmd1Stdout, err := cmd1.StdoutPipe()
-	if err != nil {
-		return err
-	}
-
-	cmd2.Stdin = cmd1Stdout
-
-	err = cmd2.Start()
-	if err != nil {
-		return err
-	}
-
-	err = cmd1.Run()
-	if err != nil {
-		return err
-	}
-
-	err = cmd2.Wait()
+	err = ctrEngine.GetRootfs(container, dir)
 	if err != nil {
 		return err
 	}
 
 	// Clean up
-	_, err = katautils.RunCommand([]string{"docker", "rm", container})
+	_, err = ctrEngine.Rm(container)
 	if err != nil {
 		return err
 	}
