@@ -455,9 +455,10 @@ func addAssetAnnotations(ocispec CompatOCISpec, config *vc.SandboxConfig) {
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.KernelModules]; ok {
-		if c, ok := config.AgentConfig.(*vc.KataAgentConfig); ok {
+		if c, ok := config.AgentConfig.(vc.KataAgentConfig); ok {
 			modules := strings.Split(value, KernelModulesSeparator)
 			c.KernelModules = modules
+			config.AgentConfig = c
 		}
 	}
 }
