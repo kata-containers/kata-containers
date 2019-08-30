@@ -915,6 +915,8 @@ func TestCreateContainer(t *testing.T) {
 	_, err = s.CreateContainer(contConfig)
 	assert.NotNil(t, err, "Should failed to create a duplicated container")
 	assert.Equal(t, len(s.config.Containers), 1, "Container config list length from sandbox structure should be 1")
+	ret := store.VCContainerStoreExists(s.ctx, testSandboxID, contID)
+	assert.True(t, ret, "Should not delete container store that already existed")
 }
 
 func TestDeleteContainer(t *testing.T) {
@@ -1004,6 +1006,47 @@ func TestEnterContainer(t *testing.T) {
 
 	_, _, err = s.EnterContainer(contID, cmd)
 	assert.Nil(t, err, "Enter container failed: %v", err)
+}
+
+func TestDeleteStoreWhenCreateContainerFail(t *testing.T) {
+	hypervisorConfig := newHypervisorConfig(nil, nil)
+	s, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hypervisorConfig, NoopAgentType, NetworkConfig{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanUp()
+
+	contID := "999"
+	contConfig := newTestContainerConfigNoop(contID)
+	contConfig.RootFs = RootFs{Target: "", Mounted: true}
+	s.state.CgroupPath = filepath.Join(testDir, "bad-cgroup")
+	_, err = s.CreateContainer(contConfig)
+	assert.NotNil(t, err, "Should fail to create container due to wrong cgroup")
+	ret := store.VCContainerStoreExists(s.ctx, testSandboxID, contID)
+	assert.False(t, ret, "Should delete configuration root after failed to create a container")
+}
+
+func TestDeleteStoreWhenNewContainerFail(t *testing.T) {
+	hConfig := newHypervisorConfig(nil, nil)
+	p, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanUp()
+
+	contID := "999"
+	contConfig := newTestContainerConfigNoop(contID)
+	contConfig.DeviceInfos = []config.DeviceInfo{
+		{
+			ContainerPath: "",
+			DevType:       "",
+		},
+	}
+	_, err = newContainer(p, contConfig)
+	assert.NotNil(t, err, "New container with invalid device info should fail")
+	storePath := store.ContainerConfigurationRootPath(testSandboxID, contID)
+	_, err = os.Stat(storePath)
+	assert.NotNil(t, err, "Should delete configuration root after failed to create a container")
 }
 
 func TestMonitor(t *testing.T) {

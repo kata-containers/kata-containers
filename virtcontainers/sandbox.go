@@ -1107,6 +1107,7 @@ func (s *Sandbox) fetchContainers() error {
 // This should be called only when the sandbox is already created.
 // It will add new container config to sandbox.config.Containers
 func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, error) {
+	storeAlreadyExists := store.VCContainerStoreExists(s.ctx, s.id, contConfig.ID)
 	// Create the container.
 	c, err := newContainer(s, contConfig)
 	if err != nil {
@@ -1117,9 +1118,16 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 	s.config.Containers = append(s.config.Containers, contConfig)
 
 	defer func() {
-		if err != nil && len(s.config.Containers) > 0 {
-			// delete container config
-			s.config.Containers = s.config.Containers[:len(s.config.Containers)-1]
+		if err != nil {
+			if len(s.config.Containers) > 0 {
+				// delete container config
+				s.config.Containers = s.config.Containers[:len(s.config.Containers)-1]
+			}
+			if !storeAlreadyExists {
+				if delerr := c.store.Delete(); delerr != nil {
+					c.Logger().WithError(delerr).WithField("cid", c.id).Error("delete store failed")
+				}
+			}
 		}
 	}()
 
