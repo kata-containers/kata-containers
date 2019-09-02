@@ -521,6 +521,10 @@ func TestAppendKnobsAllFalse(t *testing.T) {
 }
 
 func TestAppendMemoryHugePages(t *testing.T) {
+	if !isDimmSupported() {
+		t.Skip("Dimm not supported")
+	}
+
 	conf := &Config{
 		Memory: Memory{
 			Size:   "1G",
@@ -545,6 +549,10 @@ func TestAppendMemoryHugePages(t *testing.T) {
 }
 
 func TestAppendMemoryMemPrealloc(t *testing.T) {
+	if !isDimmSupported() {
+		t.Skip("Dimm not supported")
+	}
+
 	conf := &Config{
 		Memory: Memory{
 			Size:   "1G",
@@ -567,6 +575,10 @@ func TestAppendMemoryMemPrealloc(t *testing.T) {
 }
 
 func TestAppendMemoryMemShared(t *testing.T) {
+	if !isDimmSupported() {
+		t.Skip("Dimm not supported")
+	}
+
 	conf := &Config{
 		Memory: Memory{
 			Size:   "1G",
@@ -589,6 +601,10 @@ func TestAppendMemoryMemShared(t *testing.T) {
 }
 
 func TestAppendMemoryFileBackedMem(t *testing.T) {
+	if !isDimmSupported() {
+		t.Skip("Dimm not supported")
+	}
+
 	conf := &Config{
 		Memory: Memory{
 			Size:   "1G",
@@ -611,6 +627,10 @@ func TestAppendMemoryFileBackedMem(t *testing.T) {
 }
 
 func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
+	if !isDimmSupported() {
+		t.Skip("Dimm not supported")
+	}
+
 	conf := &Config{
 		Memory: Memory{
 			Size:   "1G",

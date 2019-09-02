@@ -1761,7 +1761,9 @@ func (config *Config) appendMemoryKnobs() {
 	if config.Memory.Size == "" {
 		return
 	}
-
+	if !isDimmSupported() {
+		return
+	}
 	var objMemParam, numaMemParam string
 	dimmName := "dimm1"
 	if config.Knobs.HugePages {
