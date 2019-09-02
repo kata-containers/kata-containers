@@ -718,10 +718,18 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		ctx:           sandbox.ctx,
 	}
 
+	storeAlreadyExists := store.VCContainerStoreExists(sandbox.ctx, c.sandboxID, c.id)
 	ctrStore, err := store.NewVCContainerStore(sandbox.ctx, c.sandboxID, c.id)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err != nil && !storeAlreadyExists {
+			if delerr := c.store.Delete(); delerr != nil {
+				c.Logger().WithError(delerr).WithField("cid", c.id).Error("delete store failed")
+			}
+		}
+	}()
 
 	c.store = ctrStore
 
