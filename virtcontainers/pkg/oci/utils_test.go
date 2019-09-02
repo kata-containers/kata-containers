@@ -14,9 +14,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/cri-o/cri-o/pkg/annotations"
+	spec "github.com/opencontainers/runtime-spec/specs-go"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
@@ -789,4 +791,43 @@ func TestMain(m *testing.M) {
 	defer os.RemoveAll(tempBundlePath)
 
 	os.Exit(m.Run())
+}
+
+func TestAddAssetAnnotations(t *testing.T) {
+	assert := assert.New(t)
+
+	expectedAnnotations := map[string]string{
+		vcAnnotations.KernelPath:    "/abc/rgb/kernel",
+		vcAnnotations.ImagePath:     "/abc/rgb/image",
+		vcAnnotations.InitrdPath:    "/abc/rgb/initrd",
+		vcAnnotations.KernelHash:    "3l2353we871g",
+		vcAnnotations.ImageHash:     "52ss2550983",
+		vcAnnotations.AssetHashType: "sha",
+	}
+
+	config := vc.SandboxConfig{
+		Annotations: make(map[string]string),
+		AgentConfig: vc.KataAgentConfig{},
+	}
+
+	ocispec := CompatOCISpec{
+		Spec: spec.Spec{
+			Annotations: expectedAnnotations,
+		},
+	}
+
+	addAssetAnnotations(ocispec, &config)
+	assert.Exactly(expectedAnnotations, config.Annotations)
+
+	expectedAgentConfig := vc.KataAgentConfig{
+		KernelModules: []string{
+			"e1000e InterruptThrottleRate=3000,3000,3000 EEE=1",
+			"i915 enable_ppgtt=0",
+		},
+	}
+
+	ocispec.Annotations[vcAnnotations.KernelModules] = strings.Join(expectedAgentConfig.KernelModules, KernelModulesSeparator)
+	addAssetAnnotations(ocispec, &config)
+	assert.Exactly(expectedAgentConfig, config.AgentConfig)
+
 }
