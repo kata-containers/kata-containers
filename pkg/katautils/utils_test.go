@@ -149,43 +149,43 @@ func realMakeOCIBundle(bundleDir string) error {
 // createRootfs creates a minimal root filesystem below the specified
 // directory.
 func createRootfs(dir string) error {
-	err := os.MkdirAll(dir, testDirMode)
+	var (
+		output string
+		err    error
+	)
+
+	ctrEngine := CtrEngine{}
+	for _, name := range DockerLikeCtrEngines {
+		fmt.Printf("INFO: checking for container engine: %s\n", name)
+
+		output, err = ctrEngine.Init(name)
+		if err == nil {
+			break
+		}
+	}
+
+	if ctrEngine.Name == "" {
+		panic(fmt.Sprintf("ERROR: Docker-like container engine not accessible to current user: %v (error %v)",
+			output, err))
+	}
+
+	err = os.MkdirAll(dir, testDirMode)
 	if err != nil {
 		return err
 	}
 
-	container, err := RunCommand([]string{"docker", "create", testDockerImage})
+	container, err := ctrEngine.Create(testDockerImage)
 	if err != nil {
 		return err
 	}
 
-	cmd1 := exec.Command("docker", "export", container)
-	cmd2 := exec.Command("tar", "-C", dir, "-xvf", "-")
-
-	cmd1Stdout, err := cmd1.StdoutPipe()
-	if err != nil {
-		return err
-	}
-
-	cmd2.Stdin = cmd1Stdout
-
-	err = cmd2.Start()
-	if err != nil {
-		return err
-	}
-
-	err = cmd1.Run()
-	if err != nil {
-		return err
-	}
-
-	err = cmd2.Wait()
+	err = ctrEngine.GetRootfs(container, dir)
 	if err != nil {
 		return err
 	}
 
 	// Clean up
-	_, err = RunCommand([]string{"docker", "rm", container})
+	_, err = ctrEngine.Rm(container)
 	if err != nil {
 		return err
 	}
