@@ -16,10 +16,6 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// from <linux/vhost.h>
-// VHOST_VSOCK_SET_GUEST_CID = _IOW(VHOST_VIRTIO, 0x60, __u64)
-const ioctlVhostVsockSetGuestCid = 0x4008AF60
-
 var ioctlFunc = Ioctl
 
 // maxUInt represents the maximum valid value for the context ID.
@@ -78,6 +74,7 @@ func FindContextID() (*os.File, uint64, error) {
 		}
 	}
 
+	ioctlVhostVsockSetGuestCid := getIoctlVhostVsockGuestCid()
 	// Last chance to get a free context ID.
 	for cid := contextID - 1; cid >= firstContextID; cid-- {
 		if err = ioctlFunc(vsockFd.Fd(), ioctlVhostVsockSetGuestCid, uintptr(unsafe.Pointer(&cid))); err == nil {
