@@ -105,3 +105,7 @@ func (n NetDeviceType) QemuDeviceParam() DeviceDriver {
 
 	}
 }
+
+func isDimmSupported() bool {
+	return true
+}
