@@ -5,6 +5,7 @@
   * [Assets](#assets)
     * [Guest kernel](#guest-kernel)
     * [Root filesystem image](#root-filesystem-image)
+    * [Initrd image](#initrd-image)
 * [Agent](#agent)
 * [Runtime](#runtime)
     * [Configuration](#configuration)
@@ -195,7 +196,9 @@ For example, when `docker run -ti ubuntu date` is run:
 
 ##### Initrd image
 
-placeholder
+A compressed `cpio(1)` archive, created from a rootfs which is loaded into memory and used as part of the Linux startup process. During startup, the kernel unpacks it into a special instance of a `tmpfs` that becomes the initial root filesystem.
+
+The only service running in the context of the initrd is the [Agent](#agent) as the init daemon. The real workload the user wishes to run is created using libcontainer, creating a container in the same manner that is done by `runc`.
 
 ## Agent
 
