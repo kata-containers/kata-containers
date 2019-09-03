@@ -229,7 +229,7 @@ externals:
     uscan-url: >-
       https://github.com/kubernetes/kubernetes/tags
       .*/v?([\d\.]+)\.tar\.gz
-    version: "1.15.1-00"
+    version: "1.15.3-00"
 
   openshift:
     description: |
