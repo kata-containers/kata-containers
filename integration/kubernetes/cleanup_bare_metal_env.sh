@@ -50,3 +50,10 @@ if [ -n "$runc_container_union" ]; then
 		fi
 	done <<< "${runc_container_union}"
 fi
+
+# delete stale veth interfaces, which is named after vethXXX.
+veth_interfaces_union=$(sudo ip link | grep "veth" | awk '{print $2}' | cut -d '@' -f1)
+while read veth_interface; do
+	sudo ip link set dev $veth_interface down
+	sudo ip link del $veth_interface
+done <<< "$veth_interfaces_union"
