@@ -164,6 +164,7 @@ get_kernel_frag_path() {
 
 	local arch_configs="$(ls ${arch_path}/*.conf)"
 	local common_configs="$(ls ${common_path}/*.conf)"
+	local experimental_configs="$(ls ${common_path}/experimental/*.conf)"
 
 	# These are the strings that the kernel merge_config.sh script kicks out
 	# when it reports an error or warning condition. We search for them in the
@@ -176,6 +177,9 @@ get_kernel_frag_path() {
 	# handle specific cases, then add the path definition and search/list/cat
 	# here.
 	local all_configs="${common_configs} ${arch_configs}"
+	if [[ ${experimental_kernel} == "true" ]]; then
+		all_configs="${all_configs} ${experimental_configs}"
+	fi
 
 	info "Constructing config from fragments: ${config_path}"
 	local results=$(export KCONFIG_CONFIG=${config_path}; \
