@@ -88,11 +88,11 @@ arch_to_kernel() {
 	local -r arch="$1"
 
 	case "$arch" in
-	aarch64) echo "arm64" ;;
-	ppc64le) echo "powerpc" ;;
-	x86_64) echo "$arch" ;;
-	s390x) echo "s390" ;;
-	*) die "unsupported architecture: $arch" ;;
+		aarch64) echo "arm64" ;;
+		ppc64le) echo "powerpc" ;;
+		x86_64) echo "$arch" ;;
+		s390x) echo "s390" ;;
+		*) die "unsupported architecture: $arch" ;;
 	esac
 }
 
@@ -167,8 +167,8 @@ get_kernel_frag_path() {
 
 	info "Constructing config from fragments: ${config_path}"
 	local results=$(export KCONFIG_CONFIG=${config_path}; \
-					export ARCH=${arch_target}; \
-					cd ${kernel_path}; ${cmdpath} -r -n ${all_configs})
+		export ARCH=${arch_target}; \
+		cd ${kernel_path}; ${cmdpath} -r -n ${all_configs})
 
 	# Did we request any entries that did not make it?
 	local missing=$(echo $results | grep -v -q "${not_in_string}"; echo $?)
@@ -285,18 +285,18 @@ setup_kernel() {
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
 	(
-		cd "${kernel_path}" || exit 1
-		for p in ${kernel_patches}; do
-			info "Applying patch $p"
-			patch -p1 --fuzz 0 <"$p"
-		done
+	cd "${kernel_path}" || exit 1
+	for p in ${kernel_patches}; do
+		info "Applying patch $p"
+		patch -p1 --fuzz 0 <"$p"
+	done
 
-		[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
-		[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
+	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
+	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
 
-		info "Copying config file from: ${kernel_config_path}"
-		cp "${kernel_config_path}" ./.config
-		make oldconfig
+	info "Copying config file from: ${kernel_config_path}"
+	cp "${kernel_config_path}" ./.config
+	make oldconfig
 	)
 }
 
@@ -350,31 +350,31 @@ install_kata() {
 main() {
 	while getopts "a:c:hk:p:t:v:" opt; do
 		case "$opt" in
-		a)
-			arch_target="${OPTARG}"
-			;;
-		c)
-			kernel_config_path="${OPTARG}"
-			;;
+			a)
+				arch_target="${OPTARG}"
+				;;
+			c)
+				kernel_config_path="${OPTARG}"
+				;;
 
-		h)
-			usage
-			exit 0
-			;;
+			h)
+				usage
+				exit 0
+				;;
 
-		k)
-			kernel_path="${OPTARG}"
-			;;
+			k)
+				kernel_path="${OPTARG}"
+				;;
 
-		t)
-			hypervisor_target="${OPTARG}"
-			;;
-		p)
-			patches_path="${OPTARG}"
-			;;
-		v)
-			kernel_version="${OPTARG}"
-			;;
+			t)
+				hypervisor_target="${OPTARG}"
+				;;
+			p)
+				patches_path="${OPTARG}"
+				;;
+			v)
+				kernel_version="${OPTARG}"
+				;;
 		esac
 	done
 
@@ -400,21 +400,21 @@ main() {
 	info "Kernel version: ${kernel_version}"
 
 	case "${subcmd}" in
-	build)
-		build_kernel "${kernel_path}"
-		;;
-	install)
-		build_kernel "${kernel_path}"
-		install_kata "${kernel_path}"
-		;;
-	setup)
-		setup_kernel "${kernel_path}"
-		[ -d "${kernel_path}" ] || die "${kernel_path} does not exist"
-		echo "Kernel source ready: ${kernel_path} "
-		;;
-	*)
-		usage 1
-		;;
+		build)
+			build_kernel "${kernel_path}"
+			;;
+		install)
+			build_kernel "${kernel_path}"
+			install_kata "${kernel_path}"
+			;;
+		setup)
+			setup_kernel "${kernel_path}"
+			[ -d "${kernel_path}" ] || die "${kernel_path} does not exist"
+			echo "Kernel source ready: ${kernel_path} "
+			;;
+		*)
+			usage 1
+			;;
 
 	esac
 }
