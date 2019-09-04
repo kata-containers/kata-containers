@@ -51,6 +51,11 @@ setup() {
 	docker run --rm --runtime=$RUNTIME $image cat /etc/alpine-release
 }
 
+@test "[run application] run an amazonlinux container" {
+	image="amazonlinux"
+	docker run --rm --runtime=$RUNTIME -i $image bash -c "amazon-linux-extras install -y firecracker; firecracker --help"
+}
+
 @test "[display version] run an arangodb container" {
 	image="arangodb/arangodb"
 	docker run --rm --runtime=$RUNTIME -e ARANGO_ROOT_PASSWORD=secretword -e ARANGO_NO_AUTH=1 -p 8529:8529 $image foxx-manager --version
@@ -129,6 +134,11 @@ setup() {
 @test "[command options] run an instance in a docker container" {
 	image="docker"
 	docker run --rm --runtime=$RUNTIME -i $image sh -c "docker inspect --help"
+}
+
+@test "[run application] run an instance in an eclipse-mosquitto container" {
+	image="eclipse-mosquitto"
+	docker run --rm --runtime=$RUNTIME -i $image sh -c "mosquitto -d"
 }
 
 @test "[display directory] run an instance in an elixir container" {
