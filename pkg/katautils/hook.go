@@ -16,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opentracing/opentracing-go/log"
 	"github.com/sirupsen/logrus"
@@ -111,7 +110,7 @@ func runHooks(ctx context.Context, hooks []specs.Hook, cid, bundlePath, hookType
 }
 
 // PreStartHooks run the hooks before start container
-func PreStartHooks(ctx context.Context, spec oci.CompatOCISpec, cid, bundlePath string) error {
+func PreStartHooks(ctx context.Context, spec specs.Spec, cid, bundlePath string) error {
 	// If no hook available, nothing needs to be done.
 	if spec.Hooks == nil {
 		return nil
@@ -121,7 +120,7 @@ func PreStartHooks(ctx context.Context, spec oci.CompatOCISpec, cid, bundlePath 
 }
 
 // PostStartHooks run the hooks just after start container
-func PostStartHooks(ctx context.Context, spec oci.CompatOCISpec, cid, bundlePath string) error {
+func PostStartHooks(ctx context.Context, spec specs.Spec, cid, bundlePath string) error {
 	// If no hook available, nothing needs to be done.
 	if spec.Hooks == nil {
 		return nil
@@ -131,7 +130,7 @@ func PostStartHooks(ctx context.Context, spec oci.CompatOCISpec, cid, bundlePath
 }
 
 // PostStopHooks run the hooks after stop container
-func PostStopHooks(ctx context.Context, spec oci.CompatOCISpec, cid, bundlePath string) error {
+func PostStopHooks(ctx context.Context, spec specs.Spec, cid, bundlePath string) error {
 	// If no hook available, nothing needs to be done.
 	if spec.Hooks == nil {
 		return nil
