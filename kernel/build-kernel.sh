@@ -39,6 +39,8 @@ readonly default_kernel_config_dir="${GOPATH}/src/${kernel_config_repo}/kernel/c
 readonly default_config_frags_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs/fragments"
 #Path to kernel directory
 kernel_path=""
+#Experimental kernel support. Pull from virtio-fs GitLab instead of kernel.org
+experimental_kernel="false"
 #
 patches_path=""
 #
@@ -90,44 +92,54 @@ arch_to_kernel() {
 	case "$arch" in
 		aarch64) echo "arm64" ;;
 		ppc64le) echo "powerpc" ;;
-		x86_64) echo "$arch" ;;
 		s390x) echo "s390" ;;
+		x86_64) echo "$arch" ;;
 		*) die "unsupported architecture: $arch" ;;
 	esac
 }
 
 get_kernel() {
 	local version="${1:-}"
-	#Remove extra 'v'
-	version=${version#v}
 
 	local kernel_path=${2:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ ! -d "${kernel_path}" ] || die "kernel_path already exist"
 
-	major_version=$(echo "${version}" | cut -d. -f1)
-	kernel_tarball="linux-${version}.tar.xz"
 
-	curl --fail -OL "https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
-	grep "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"
-
-	if [ -f "${kernel_tarball}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
-		info "invalid kernel tarball ${kernel_tarball} removing "
-		rm -f "${kernel_tarball}"
-	fi
-	if [ ! -f "${kernel_tarball}" ]; then
-		info "Download kernel version ${version}"
-		info "Download kernel"
-		curl --fail -OL "https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
+	if [[ ${experimental_kernel} == "true" ]]; then
+		kernel_tarball="linux-${version}.tar.gz"
+		curl --fail -OL "https://gitlab.com/virtio-fs/linux/-/archive/${version}/${kernel_tarball}"
+		tar xvf "${kernel_tarball}"
+		mv "linux-${version}" "${kernel_path}"
 	else
-		info "kernel tarball already downloaded"
+
+		#Remove extra 'v'
+		version=${version#v}
+
+		major_version=$(echo "${version}" | cut -d. -f1)
+		kernel_tarball="linux-${version}.tar.xz"
+
+		curl --fail -OL "https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
+		grep "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"
+
+		if [ -f "${kernel_tarball}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
+			info "invalid kernel tarball ${kernel_tarball} removing "
+			rm -f "${kernel_tarball}"
+		fi
+		if [ ! -f "${kernel_tarball}" ]; then
+			info "Download kernel version ${version}"
+			info "Download kernel"
+			curl --fail -OL "https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
+		else
+			info "kernel tarball already downloaded"
+		fi
+
+		sha256sum -c "${kernel_tarball}.sha256"
+
+		tar xf "${kernel_tarball}"
+
+		mv "linux-${version}" "${kernel_path}"
 	fi
-
-	sha256sum -c "${kernel_tarball}.sha256"
-
-	tar xf "${kernel_tarball}"
-
-	mv "linux-${version}" "${kernel_path}"
 }
 
 get_major_kernel_version() {
@@ -348,7 +360,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:c:hk:p:t:v:" opt; do
+	while getopts "a:c:hk:p:t:v:e" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -356,21 +368,21 @@ main() {
 			c)
 				kernel_config_path="${OPTARG}"
 				;;
-
+			e)
+				experimental_kernel="true"
+				;;
 			h)
 				usage
 				exit 0
 				;;
-
 			k)
 				kernel_path="${OPTARG}"
 				;;
-
-			t)
-				hypervisor_target="${OPTARG}"
-				;;
 			p)
 				patches_path="${OPTARG}"
+				;;
+			t)
+				hypervisor_target="${OPTARG}"
 				;;
 			v)
 				kernel_version="${OPTARG}"
