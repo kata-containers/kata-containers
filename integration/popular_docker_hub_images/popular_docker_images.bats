@@ -177,6 +177,11 @@ setup() {
 	docker run --rm --runtime=$RUNTIME -i $image bash -c "echo -e 'public class CL{public static void main(String[]a){System.out.println(\"KataContainers\");}}' > CL.java && javac CL.java && java CL"
 }
 
+@test "[groovy] run a groovy container" {
+	image="groovy"
+	docker run --runtime=$RUNTIME --rm -i -e hola=caracol $image groovy bash -c "groovy -e \"println System.getenv().each{println it}\" | grep 'hola=caracol'"
+}
+
 @test "[java file] run an instance in a glassfish container" {
 	image="glassfish"
 	docker run --rm --runtime=$RUNTIME -i $image bash -c "echo 'public class T{public static void main(String[]a){System.out.println(\"Test\");}}' > T.java && javac T.java && java T"
@@ -280,6 +285,11 @@ setup() {
 @test "[display configuration] start an instance of a mariadb container" {
 	image="mariadb"
 	docker run --rm --runtime=$RUNTIME -i -e MYSQL_ROOT_PASSWORD=secretword  $image bash -c "cat /etc/mysql/mariadb.cnf | grep character"
+}
+
+@test "[matomo]" run a matomo container" [
+	image="matomo"
+	docker run --runtime=$RUNTIME --rm -i $image bash -c "php -r 'print(\"Kata Containers\");'"
 }
 
 @test "[java application] check memory maven container" {
