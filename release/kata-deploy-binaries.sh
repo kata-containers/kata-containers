@@ -120,6 +120,14 @@ install_qemu() {
 	tar xf kata-qemu-static.tar.gz -C "${destdir}"
 }
 
+# Install static qemu-virtiofsd asset
+install_qemu_virtiofsd() {
+	info "build static qemu-virtiofs"
+	"${script_dir}/../static-build/qemu-virtiofsd/build-static-qemu.sh"
+	info "Install static qemu-virtiofsd"
+	tar xf kata-qemu-static.tar.gz -C "${destdir}"
+}
+
 # Install static firecracker asset
 install_firecracker() {
 	info "build static firecracker"
@@ -210,6 +218,7 @@ main() {
 	install_kata_components
 	install_kernel
 	install_qemu
+	install_qemu_virtiofsd
 	install_nemu
 	install_firecracker
 	install_docker_config_script
