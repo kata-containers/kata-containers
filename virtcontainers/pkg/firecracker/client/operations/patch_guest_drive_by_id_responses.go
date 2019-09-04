@@ -24,21 +24,18 @@ type PatchGuestDriveByIDReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PatchGuestDriveByIDReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewPatchGuestDriveByIDNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPatchGuestDriveByIDBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPatchGuestDriveByIDDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -89,6 +86,10 @@ func (o *PatchGuestDriveByIDBadRequest) Error() string {
 	return fmt.Sprintf("[PATCH /drives/{drive_id}][%d] patchGuestDriveByIdBadRequest  %+v", 400, o.Payload)
 }
 
+func (o *PatchGuestDriveByIDBadRequest) GetPayload() *models.Error {
+	return o.Payload
+}
+
 func (o *PatchGuestDriveByIDBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
 
 	o.Payload = new(models.Error)
@@ -125,6 +126,10 @@ func (o *PatchGuestDriveByIDDefault) Code() int {
 
 func (o *PatchGuestDriveByIDDefault) Error() string {
 	return fmt.Sprintf("[PATCH /drives/{drive_id}][%d] patchGuestDriveByID default  %+v", o._statusCode, o.Payload)
+}
+
+func (o *PatchGuestDriveByIDDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PatchGuestDriveByIDDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

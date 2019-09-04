@@ -24,21 +24,18 @@ type PatchMmdsReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PatchMmdsReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewPatchMmdsNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPatchMmdsBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPatchMmdsDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -89,6 +86,10 @@ func (o *PatchMmdsBadRequest) Error() string {
 	return fmt.Sprintf("[PATCH /mmds][%d] patchMmdsBadRequest  %+v", 400, o.Payload)
 }
 
+func (o *PatchMmdsBadRequest) GetPayload() *models.Error {
+	return o.Payload
+}
+
 func (o *PatchMmdsBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
 
 	o.Payload = new(models.Error)
@@ -125,6 +126,10 @@ func (o *PatchMmdsDefault) Code() int {
 
 func (o *PatchMmdsDefault) Error() string {
 	return fmt.Sprintf("[PATCH /mmds][%d] PatchMmds default  %+v", o._statusCode, o.Payload)
+}
+
+func (o *PatchMmdsDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PatchMmdsDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
