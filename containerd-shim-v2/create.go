@@ -46,7 +46,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		return nil, err
 	}
 
-	containerType, err := ociSpec.ContainerType()
+	containerType, err := oci.ContainerType(*ociSpec)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +125,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 	return container, nil
 }
 
-func loadSpec(r *taskAPI.CreateTaskRequest) (*oci.CompatOCISpec, string, error) {
+func loadSpec(r *taskAPI.CreateTaskRequest) (*specs.Spec, string, error) {
 	// Checks the MUST and MUST NOT from OCI runtime specification
 	bundlePath, err := validBundle(r.ID, r.Bundle)
 	if err != nil {

@@ -13,8 +13,10 @@ import (
 	"testing"
 
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 )
 
 func TestDeleteContainerSuccessAndFail(t *testing.T) {
@@ -24,9 +26,9 @@ func TestDeleteContainerSuccessAndFail(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	_, err := readOCIConfigJSON(configPath)
+	_, err := oci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	s := &service{
@@ -42,20 +44,18 @@ func TestDeleteContainerSuccessAndFail(t *testing.T) {
 	assert.NoError(err)
 }
 
-func testConfigSetup(t *testing.T) (rootPath string, configPath string) {
+func testConfigSetup(t *testing.T) (rootPath string, bundlePath string) {
 	assert := assert.New(t)
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
 
-	bundlePath := filepath.Join(tmpdir, "bundle")
+	bundlePath = filepath.Join(tmpdir, "bundle")
 	err = os.MkdirAll(bundlePath, testDirMode)
 	assert.NoError(err)
 
 	err = createOCIConfig(bundlePath)
 	assert.NoError(err)
 
-	// config json path
-	configPath = filepath.Join(bundlePath, "config.json")
-	return tmpdir, configPath
+	return tmpdir, bundlePath
 }

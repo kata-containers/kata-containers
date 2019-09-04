@@ -18,7 +18,7 @@ import (
 
 	criContainerdAnnotations "github.com/containerd/cri-containerd/pkg/annotations"
 	crioAnnotations "github.com/cri-o/cri-o/pkg/annotations"
-	spec "github.com/opencontainers/runtime-spec/specs-go"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
@@ -75,24 +75,24 @@ const (
 
 const KernelModulesSeparator = ";"
 
-// CompatOCIProcess is a structure inheriting from spec.Process defined
+// compatOCIProcess is a structure inheriting from specs.Process defined
 // in runtime-spec/specs-go package. The goal is to be compatible with
 // both v1.0.0-rc4 and v1.0.0-rc5 since the latter introduced a change
 // about the type of the Capabilities field.
 // Refer to: https://github.com/opencontainers/runtime-spec/commit/37391fb
-type CompatOCIProcess struct {
-	spec.Process
+type compatOCIProcess struct {
+	specs.Process
 	Capabilities interface{} `json:"capabilities,omitempty" platform:"linux"` //nolint:govet
 }
 
-// CompatOCISpec is a structure inheriting from spec.Spec defined
+// compatOCISpec is a structure inheriting from specs.Spec defined
 // in runtime-spec/specs-go package. It relies on the CompatOCIProcess
 // structure declared above, in order to be compatible with both
 // v1.0.0-rc4 and v1.0.0-rc5.
 // Refer to: https://github.com/opencontainers/runtime-spec/commit/37391fb
-type CompatOCISpec struct {
-	spec.Spec
-	Process *CompatOCIProcess `json:"process,omitempty"` //nolint:govet
+type compatOCISpec struct {
+	specs.Spec
+	Process *compatOCIProcess `json:"process,omitempty"` //nolint:govet
 }
 
 // FactoryConfig is a structure to set the VM factory configuration.
@@ -162,7 +162,7 @@ func SetLogger(ctx context.Context, logger *logrus.Entry) {
 	ociLog = logger.WithFields(fields)
 }
 
-func cmdEnvs(spec CompatOCISpec, envs []types.EnvVar) []types.EnvVar {
+func cmdEnvs(spec specs.Spec, envs []types.EnvVar) []types.EnvVar {
 	for _, env := range spec.Process.Env {
 		kv := strings.Split(env, "=")
 		if len(kv) < 2 {
@@ -179,7 +179,7 @@ func cmdEnvs(spec CompatOCISpec, envs []types.EnvVar) []types.EnvVar {
 	return envs
 }
 
-func newMount(m spec.Mount) vc.Mount {
+func newMount(m specs.Mount) vc.Mount {
 	return vc.Mount{
 		Source:      m.Source,
 		Destination: m.Destination,
@@ -188,8 +188,8 @@ func newMount(m spec.Mount) vc.Mount {
 	}
 }
 
-func containerMounts(spec CompatOCISpec) []vc.Mount {
-	ociMounts := spec.Spec.Mounts
+func containerMounts(spec specs.Spec) []vc.Mount {
+	ociMounts := spec.Mounts
 
 	if ociMounts == nil {
 		return []vc.Mount{}
@@ -212,7 +212,7 @@ func contains(s []string, e string) bool {
 	return false
 }
 
-func newLinuxDeviceInfo(d spec.LinuxDevice) (*config.DeviceInfo, error) {
+func newLinuxDeviceInfo(d specs.LinuxDevice) (*config.DeviceInfo, error) {
 	allowedDeviceTypes := []string{"c", "b", "u", "p"}
 
 	if !contains(allowedDeviceTypes, d.Type) {
@@ -244,8 +244,8 @@ func newLinuxDeviceInfo(d spec.LinuxDevice) (*config.DeviceInfo, error) {
 	return &deviceInfo, nil
 }
 
-func containerDeviceInfos(spec CompatOCISpec) ([]config.DeviceInfo, error) {
-	ociLinuxDevices := spec.Spec.Linux.Devices
+func containerDeviceInfos(spec specs.Spec) ([]config.DeviceInfo, error) {
+	ociLinuxDevices := spec.Linux.Devices
 
 	if ociLinuxDevices == nil {
 		return []config.DeviceInfo{}, nil
@@ -264,9 +264,14 @@ func containerDeviceInfos(spec CompatOCISpec) ([]config.DeviceInfo, error) {
 	return devices, nil
 }
 
-func containerCapabilities(s CompatOCISpec) (types.LinuxCapabilities, error) {
+// containerCapabilities return a LinuxCapabilities for virtcontainer
+func containerCapabilities(s compatOCISpec) (specs.LinuxCapabilities, error) {
+	if s.Process == nil {
+		return specs.LinuxCapabilities{}, fmt.Errorf("containerCapabilities, Process is nil")
+	}
+
 	capabilities := s.Process.Capabilities
-	var c types.LinuxCapabilities
+	var c specs.LinuxCapabilities
 
 	// In spec v1.0.0-rc4, capabilities was a list of strings. This was changed
 	// to an object with v1.0.0-rc5.
@@ -305,7 +310,7 @@ func containerCapabilities(s CompatOCISpec) (types.LinuxCapabilities, error) {
 			list = append(list, str.(string))
 		}
 
-		c = types.LinuxCapabilities{
+		c = specs.LinuxCapabilities{
 			Bounding:    list,
 			Effective:   list,
 			Inheritable: list,
@@ -322,15 +327,7 @@ func containerCapabilities(s CompatOCISpec) (types.LinuxCapabilities, error) {
 	return c, nil
 }
 
-// ContainerCapabilities return a LinuxCapabilities for virtcontainer
-func ContainerCapabilities(s CompatOCISpec) (types.LinuxCapabilities, error) {
-	if s.Process == nil {
-		return types.LinuxCapabilities{}, fmt.Errorf("ContainerCapabilities, Process is nil")
-	}
-	return containerCapabilities(s)
-}
-
-func networkConfig(ocispec CompatOCISpec, config RuntimeConfig) (vc.NetworkConfig, error) {
+func networkConfig(ocispec specs.Spec, config RuntimeConfig) (vc.NetworkConfig, error) {
 	linux := ocispec.Linux
 	if linux == nil {
 		return vc.NetworkConfig{}, ErrNoLinux
@@ -339,7 +336,7 @@ func networkConfig(ocispec CompatOCISpec, config RuntimeConfig) (vc.NetworkConfi
 	var netConf vc.NetworkConfig
 
 	for _, n := range linux.Namespaces {
-		if n.Type != spec.NetworkNamespace {
+		if n.Type != specs.NetworkNamespace {
 			continue
 		}
 
@@ -366,26 +363,29 @@ func getConfigPath(bundlePath string) string {
 }
 
 // ParseConfigJSON unmarshals the config.json file.
-func ParseConfigJSON(bundlePath string) (CompatOCISpec, error) {
+func ParseConfigJSON(bundlePath string) (specs.Spec, error) {
 	configPath := getConfigPath(bundlePath)
 	ociLog.Debugf("converting %s", configPath)
 
 	configByte, err := ioutil.ReadFile(configPath)
 	if err != nil {
-		return CompatOCISpec{}, err
+		return specs.Spec{}, err
 	}
 
-	var ocispec CompatOCISpec
-	if err := json.Unmarshal(configByte, &ocispec); err != nil {
-		return CompatOCISpec{}, err
+	var compSpec compatOCISpec
+	if err := json.Unmarshal(configByte, &compSpec); err != nil {
+		return specs.Spec{}, err
 	}
-	caps, err := ContainerCapabilities(ocispec)
+
+	caps, err := containerCapabilities(compSpec)
 	if err != nil {
-		return CompatOCISpec{}, err
+		return specs.Spec{}, err
 	}
-	ocispec.Process.Capabilities = caps
 
-	return ocispec, nil
+	compSpec.Spec.Process = &compSpec.Process.Process
+	compSpec.Spec.Process.Capabilities = &caps
+
+	return compSpec.Spec, nil
 }
 
 // GetContainerType determines which type of container matches the annotations
@@ -402,7 +402,7 @@ func GetContainerType(annotations map[string]string) (vc.ContainerType, error) {
 
 // ContainerType returns the type of container and if the container type was
 // found from CRI servers annotations.
-func (spec *CompatOCISpec) ContainerType() (vc.ContainerType, error) {
+func ContainerType(spec specs.Spec) (vc.ContainerType, error) {
 	for _, key := range CRIContainerTypeKeyList {
 		containerTypeVal, ok := spec.Annotations[key]
 		if !ok {
@@ -424,7 +424,7 @@ func (spec *CompatOCISpec) ContainerType() (vc.ContainerType, error) {
 
 // SandboxID determines the sandbox ID related to an OCI configuration. This function
 // is expected to be called only when the container type is "PodContainer".
-func (spec *CompatOCISpec) SandboxID() (string, error) {
+func SandboxID(spec specs.Spec) (string, error) {
 	for _, key := range CRISandboxNameKeyList {
 		sandboxID, ok := spec.Annotations[key]
 		if ok {
@@ -435,7 +435,7 @@ func (spec *CompatOCISpec) SandboxID() (string, error) {
 	return "", fmt.Errorf("Could not find sandbox ID")
 }
 
-func addAssetAnnotations(ocispec CompatOCISpec, config *vc.SandboxConfig) {
+func addAssetAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) {
 	assetAnnotations := []string{
 		vcAnnotations.KernelPath,
 		vcAnnotations.ImagePath,
@@ -465,7 +465,7 @@ func addAssetAnnotations(ocispec CompatOCISpec, config *vc.SandboxConfig) {
 
 // SandboxConfig converts an OCI compatible runtime configuration file
 // to a virtcontainers sandbox configuration structure.
-func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid, console string, detach, systemdCgroup bool) (vc.SandboxConfig, error) {
+func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, console string, detach, systemdCgroup bool) (vc.SandboxConfig, error) {
 	containerConfig, err := ContainerConfig(ocispec, bundlePath, cid, console, detach)
 	if err != nil {
 		return vc.SandboxConfig{}, err
@@ -528,7 +528,7 @@ func SandboxConfig(ocispec CompatOCISpec, runtime RuntimeConfig, bundlePath, cid
 
 // ContainerConfig converts an OCI compatible runtime configuration
 // file to a virtcontainers container configuration structure.
-func ContainerConfig(ocispec CompatOCISpec, bundlePath, cid, console string, detach bool) (vc.ContainerConfig, error) {
+func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach bool) (vc.ContainerConfig, error) {
 	ociSpecJSON, err := json.Marshal(ocispec)
 	if err != nil {
 		return vc.ContainerConfig{}, err
@@ -564,17 +564,13 @@ func ContainerConfig(ocispec CompatOCISpec, bundlePath, cid, console string, det
 	}
 
 	if ocispec.Process != nil {
-		caps, ok := ocispec.Process.Capabilities.(types.LinuxCapabilities)
-		if !ok {
-			return vc.ContainerConfig{}, fmt.Errorf("Unexpected format for capabilities: %v", ocispec.Process.Capabilities)
-		}
-		cmd.Capabilities = caps
+		cmd.Capabilities = ocispec.Process.Capabilities
 	}
 
 	containerConfig := vc.ContainerConfig{
 		ID:             cid,
 		RootFs:         rootfs,
-		ReadonlyRootfs: ocispec.Spec.Root.Readonly,
+		ReadonlyRootfs: ocispec.Root.Readonly,
 		Cmd:            cmd,
 		Annotations: map[string]string{
 			vcAnnotations.ConfigJSONKey: string(ociSpecJSON),
@@ -585,7 +581,7 @@ func ContainerConfig(ocispec CompatOCISpec, bundlePath, cid, console string, det
 		Resources:   *ocispec.Linux.Resources,
 	}
 
-	cType, err := ocispec.ContainerType()
+	cType, err := ContainerType(ocispec)
 	if err != nil {
 		return vc.ContainerConfig{}, err
 	}
@@ -622,9 +618,9 @@ func getShmSize(c vc.ContainerConfig) (uint64, error) {
 }
 
 // StatusToOCIState translates a virtcontainers container status into an OCI state.
-func StatusToOCIState(status vc.ContainerStatus) spec.State {
-	return spec.State{
-		Version:     spec.Version,
+func StatusToOCIState(status vc.ContainerStatus) specs.State {
+	return specs.State{
+		Version:     specs.Version,
 		ID:          status.ID,
 		Status:      StateToOCIState(status.State.State),
 		Pid:         status.PID,
@@ -684,15 +680,15 @@ func EnvVars(envs []string) ([]types.EnvVar, error) {
 
 // GetOCIConfig returns an OCI spec configuration from the annotation
 // stored into the container status.
-func GetOCIConfig(status vc.ContainerStatus) (CompatOCISpec, error) {
+func GetOCIConfig(status vc.ContainerStatus) (specs.Spec, error) {
 	ociConfigStr, ok := status.Annotations[vcAnnotations.ConfigJSONKey]
 	if !ok {
-		return CompatOCISpec{}, fmt.Errorf("Annotation[%s] not found", vcAnnotations.ConfigJSONKey)
+		return specs.Spec{}, fmt.Errorf("Annotation[%s] not found", vcAnnotations.ConfigJSONKey)
 	}
 
-	var ociSpec CompatOCISpec
+	var ociSpec specs.Spec
 	if err := json.Unmarshal([]byte(ociConfigStr), &ociSpec); err != nil {
-		return CompatOCISpec{}, err
+		return specs.Spec{}, err
 	}
 
 	return ociSpec, nil
