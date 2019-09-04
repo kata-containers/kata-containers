@@ -742,13 +742,15 @@ func (fc *firecracker) fcAddVsock(vs kataVSOCK) error {
 	vsockParams := ops.NewPutGuestVsockByIDParams()
 	vsockID := "root"
 	ctxID := int64(vs.contextID)
+	udsPath := ""
 	vsock := &models.Vsock{
 		GuestCid: &ctxID,
-		ID:       &vsockID,
+		UdsPath: &udsPath,
+		VsockID: &vsockID,
 	}
 	vsockParams.SetID(vsockID)
 	vsockParams.SetBody(vsock)
-	_, _, err := fc.client().Operations.PutGuestVsockByID(vsockParams)
+	_, err := fc.client().Operations.PutGuestVsockByID(vsockParams)
 	if err != nil {
 		return err
 	}
