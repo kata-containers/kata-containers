@@ -24,21 +24,18 @@ type PutGuestBootSourceReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PutGuestBootSourceReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewPutGuestBootSourceNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPutGuestBootSourceBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPutGuestBootSourceDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -89,6 +86,10 @@ func (o *PutGuestBootSourceBadRequest) Error() string {
 	return fmt.Sprintf("[PUT /boot-source][%d] putGuestBootSourceBadRequest  %+v", 400, o.Payload)
 }
 
+func (o *PutGuestBootSourceBadRequest) GetPayload() *models.Error {
+	return o.Payload
+}
+
 func (o *PutGuestBootSourceBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
 
 	o.Payload = new(models.Error)
@@ -125,6 +126,10 @@ func (o *PutGuestBootSourceDefault) Code() int {
 
 func (o *PutGuestBootSourceDefault) Error() string {
 	return fmt.Sprintf("[PUT /boot-source][%d] putGuestBootSource default  %+v", o._statusCode, o.Payload)
+}
+
+func (o *PutGuestBootSourceDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutGuestBootSourceDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

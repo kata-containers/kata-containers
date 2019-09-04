@@ -24,21 +24,18 @@ type CreateSyncActionReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *CreateSyncActionReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewCreateSyncActionNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewCreateSyncActionBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewCreateSyncActionDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -89,6 +86,10 @@ func (o *CreateSyncActionBadRequest) Error() string {
 	return fmt.Sprintf("[PUT /actions][%d] createSyncActionBadRequest  %+v", 400, o.Payload)
 }
 
+func (o *CreateSyncActionBadRequest) GetPayload() *models.Error {
+	return o.Payload
+}
+
 func (o *CreateSyncActionBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
 
 	o.Payload = new(models.Error)
@@ -125,6 +126,10 @@ func (o *CreateSyncActionDefault) Code() int {
 
 func (o *CreateSyncActionDefault) Error() string {
 	return fmt.Sprintf("[PUT /actions][%d] createSyncAction default  %+v", o._statusCode, o.Payload)
+}
+
+func (o *CreateSyncActionDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *CreateSyncActionDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

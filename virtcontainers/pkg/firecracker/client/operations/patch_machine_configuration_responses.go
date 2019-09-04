@@ -24,21 +24,18 @@ type PatchMachineConfigurationReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PatchMachineConfigurationReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewPatchMachineConfigurationNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPatchMachineConfigurationBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPatchMachineConfigurationDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -89,6 +86,10 @@ func (o *PatchMachineConfigurationBadRequest) Error() string {
 	return fmt.Sprintf("[PATCH /machine-config][%d] patchMachineConfigurationBadRequest  %+v", 400, o.Payload)
 }
 
+func (o *PatchMachineConfigurationBadRequest) GetPayload() *models.Error {
+	return o.Payload
+}
+
 func (o *PatchMachineConfigurationBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
 
 	o.Payload = new(models.Error)
@@ -125,6 +126,10 @@ func (o *PatchMachineConfigurationDefault) Code() int {
 
 func (o *PatchMachineConfigurationDefault) Error() string {
 	return fmt.Sprintf("[PATCH /machine-config][%d] patchMachineConfiguration default  %+v", o._statusCode, o.Payload)
+}
+
+func (o *PatchMachineConfigurationDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PatchMachineConfigurationDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
