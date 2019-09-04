@@ -37,6 +37,7 @@ readonly default_patches_dir="${patches_repo_dir}/kernel/patches/"
 readonly default_kernel_config_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs"
 # Default path to search for kernel config fragments
 readonly default_config_frags_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs/fragments"
+readonly default_config_whitelist="${GOPATH}/src/${kernel_config_repo}/kernel/configs/fragments/whitelist.conf"
 #Path to kernel directory
 kernel_path=""
 #Experimental kernel support. Pull from virtio-fs GitLab instead of kernel.org
@@ -109,7 +110,7 @@ get_kernel() {
 	if [[ ${experimental_kernel} == "true" ]]; then
 		kernel_tarball="linux-${version}.tar.gz"
 		curl --fail -OL "https://gitlab.com/virtio-fs/linux/-/archive/${version}/${kernel_tarball}"
-		tar xvf "${kernel_tarball}"
+		tar xf "${kernel_tarball}"
 		mv "linux-${version}" "${kernel_path}"
 	else
 
@@ -182,9 +183,20 @@ get_kernel_frag_path() {
 	fi
 
 	info "Constructing config from fragments: ${config_path}"
-	local results=$(export KCONFIG_CONFIG=${config_path}; \
-		export ARCH=${arch_target}; \
-		cd ${kernel_path}; ${cmdpath} -r -n ${all_configs})
+
+
+	export KCONFIG_CONFIG=${config_path}
+	export ARCH=${arch_target}
+	cd ${kernel_path}
+
+	local results
+	results=$( ${cmdpath} -r -n ${all_configs} )
+	# Only consider results highlighting "not in final"
+	results=$(grep "${not_in_string}" <<< "$results")
+	# Do not care about options that are in whitelist if using experimental kernel
+	if [[ ${experimental_kernel} == "true" ]]; then
+		results=$(grep -v -f ${default_config_whitelist} <<< "$results")
+	fi
 
 	# Did we request any entries that did not make it?
 	local missing=$(echo $results | grep -v -q "${not_in_string}"; echo $?)
@@ -268,6 +280,7 @@ get_config_version() {
 setup_kernel() {
 	local kernel_path=${1:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
+
 	if [ -d "$kernel_path" ]; then
 		info "${kernel_path} already exist"
 		return
@@ -295,7 +308,6 @@ setup_kernel() {
 		kernel_patches=$(find "${patches_dir_for_version}" -name '*.patch' -type f)
 	else
 		info "kernel patches directory does not exit"
-
 	fi
 
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
