@@ -745,14 +745,10 @@ func (k *kataAgent) setProxyFromGrpc(proxy proxy, pid int, url string) {
 }
 
 func (k *kataAgent) getDNS(sandbox *Sandbox) ([]string, error) {
-	ociSpecJSON, ok := sandbox.config.Annotations[vcAnnotations.ConfigJSONKey]
-	if !ok {
-		return nil, errorMissingOCISpec
-	}
-
-	ociSpec := &specs.Spec{}
-	if err := json.Unmarshal([]byte(ociSpecJSON), ociSpec); err != nil {
-		return nil, err
+	ociSpec := sandbox.GetOCISpec()
+	if ociSpec == nil {
+		k.Logger().Debug("Sandbox OCI spec not found. Sandbox DNS will not be set.")
+		return nil, nil
 	}
 
 	ociMounts := ociSpec.Mounts
@@ -1260,11 +1256,6 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	span, _ := k.trace("createContainer")
 	defer span.Finish()
 
-	ociSpecJSON, ok := c.config.Annotations[vcAnnotations.ConfigJSONKey]
-	if !ok {
-		return nil, errorMissingOCISpec
-	}
-
 	var ctrStorages []*grpc.Storage
 	var ctrDevices []*grpc.Device
 	var rootfs *grpc.Storage
@@ -1291,9 +1282,9 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 		ctrStorages = append(ctrStorages, rootfs)
 	}
 
-	ociSpec := &specs.Spec{}
-	if err = json.Unmarshal([]byte(ociSpecJSON), ociSpec); err != nil {
-		return nil, err
+	ociSpec := c.GetOCISpec()
+	if ociSpec == nil {
+		return nil, errorMissingOCISpec
 	}
 
 	// Handle container mounts

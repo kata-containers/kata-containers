@@ -13,13 +13,15 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/urfave/cli"
+
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/kata-containers/runtime/virtcontainers/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/urfave/cli"
 )
 
 func testRemoveCgroupsPathSuccessful(t *testing.T, cgroupsPathList []string) {
@@ -153,7 +155,8 @@ func TestDeleteSandbox(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
@@ -165,11 +168,11 @@ func TestDeleteSandbox(t *testing.T) {
 			ID: sandbox.ID(),
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-				vcAnnotations.ConfigJSONKey:    configJSON,
 			},
 			State: types.ContainerState{
 				State: "ready",
 			},
+			Spec: &ociSpec,
 		}, nil
 	}
 
@@ -231,7 +234,7 @@ func TestDeleteInvalidContainerType(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
@@ -243,11 +246,11 @@ func TestDeleteInvalidContainerType(t *testing.T) {
 			ID: sandbox.ID(),
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: "InvalidType",
-				vcAnnotations.ConfigJSONKey:    configJSON,
 			},
 			State: types.ContainerState{
 				State: "created",
 			},
+			Spec: &ociSpec,
 		}, nil
 	}
 
@@ -270,7 +273,7 @@ func TestDeleteSandboxRunning(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
@@ -282,11 +285,11 @@ func TestDeleteSandboxRunning(t *testing.T) {
 			ID: sandbox.ID(),
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-				vcAnnotations.ConfigJSONKey:    configJSON,
 			},
 			State: types.ContainerState{
 				State: "running",
 			},
+			Spec: &ociSpec,
 		}, nil
 	}
 
@@ -350,7 +353,7 @@ func TestDeleteRunningContainer(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	path, err := createTempContainerIDMapping(sandbox.MockContainers[0].ID(), sandbox.MockContainers[0].ID())
@@ -362,11 +365,11 @@ func TestDeleteRunningContainer(t *testing.T) {
 			ID: sandbox.MockContainers[0].ID(),
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-				vcAnnotations.ConfigJSONKey:    configJSON,
 			},
 			State: types.ContainerState{
 				State: "running",
 			},
+			Spec: &ociSpec,
 		}, nil
 	}
 
@@ -433,7 +436,7 @@ func TestDeleteContainer(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	path, err := createTempContainerIDMapping(sandbox.MockContainers[0].ID(), sandbox.MockContainers[0].ID())
@@ -445,11 +448,11 @@ func TestDeleteContainer(t *testing.T) {
 			ID: sandbox.MockContainers[0].ID(),
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-				vcAnnotations.ConfigJSONKey:    configJSON,
 			},
 			State: types.ContainerState{
 				State: "ready",
 			},
+			Spec: &ociSpec,
 		}, nil
 	}
 
@@ -533,7 +536,7 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
@@ -545,11 +548,11 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 			ID: sandbox.ID(),
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-				vcAnnotations.ConfigJSONKey:    configJSON,
 			},
 			State: types.ContainerState{
 				State: "ready",
 			},
+			Spec: &ociSpec,
 		}, nil
 	}
 

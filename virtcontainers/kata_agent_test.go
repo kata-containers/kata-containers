@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -30,7 +29,6 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
-	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/store"
@@ -747,13 +745,10 @@ func TestAgentCreateContainer(t *testing.T) {
 			Fstype: "xfs",
 		},
 		config: &ContainerConfig{
+			Spec:        &specs.Spec{},
 			Annotations: map[string]string{},
 		},
 	}
-
-	ociSpec, err := json.Marshal(&specs.Spec{})
-	assert.Nil(err)
-	container.config.Annotations[vcAnnotations.ConfigJSONKey] = string(ociSpec[:])
 
 	impl := &gRPCProxy{}
 

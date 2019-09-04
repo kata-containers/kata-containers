@@ -7,7 +7,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"io/ioutil"
 	"os"
@@ -62,16 +61,13 @@ func TestStartSandbox(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	ociSpecJSON, err := json.Marshal(specs.Spec{})
-	assert.NoError(err)
-
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: sandbox.ID(),
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-				vcAnnotations.ConfigJSONKey:    string(ociSpecJSON),
 			},
+			Spec: &specs.Spec{},
 		}, nil
 	}
 
@@ -140,16 +136,13 @@ func TestStartContainerSucessFailure(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	ociSpecJSON, err := json.Marshal(specs.Spec{})
-	assert.NoError(err)
-
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: testContainerID,
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-				vcAnnotations.ConfigJSONKey:    string(ociSpecJSON),
 			},
+			Spec: &specs.Spec{},
 		}, nil
 	}
 
@@ -218,16 +211,13 @@ func TestStartCLIFunctionSuccess(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	ociSpecJSON, err := json.Marshal(specs.Spec{})
-	assert.NoError(err)
-
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
 		return vc.ContainerStatus{
 			ID: testContainerID,
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-				vcAnnotations.ConfigJSONKey:    string(ociSpecJSON),
 			},
+			Spec: &specs.Spec{},
 		}, nil
 	}
 

@@ -7,10 +7,8 @@ package oci
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -74,26 +72,6 @@ const (
 )
 
 const KernelModulesSeparator = ";"
-
-// compatOCIProcess is a structure inheriting from specs.Process defined
-// in runtime-spec/specs-go package. The goal is to be compatible with
-// both v1.0.0-rc4 and v1.0.0-rc5 since the latter introduced a change
-// about the type of the Capabilities field.
-// Refer to: https://github.com/opencontainers/runtime-spec/commit/37391fb
-type compatOCIProcess struct {
-	specs.Process
-	Capabilities interface{} `json:"capabilities,omitempty" platform:"linux"` //nolint:govet
-}
-
-// compatOCISpec is a structure inheriting from specs.Spec defined
-// in runtime-spec/specs-go package. It relies on the CompatOCIProcess
-// structure declared above, in order to be compatible with both
-// v1.0.0-rc4 and v1.0.0-rc5.
-// Refer to: https://github.com/opencontainers/runtime-spec/commit/37391fb
-type compatOCISpec struct {
-	specs.Spec
-	Process *compatOCIProcess `json:"process,omitempty"` //nolint:govet
-}
 
 // FactoryConfig is a structure to set the VM factory configuration.
 type FactoryConfig struct {
@@ -267,69 +245,6 @@ func containerDeviceInfos(spec specs.Spec) ([]config.DeviceInfo, error) {
 	return devices, nil
 }
 
-// containerCapabilities return a LinuxCapabilities for virtcontainer
-func containerCapabilities(s compatOCISpec) (specs.LinuxCapabilities, error) {
-	if s.Process == nil {
-		return specs.LinuxCapabilities{}, fmt.Errorf("containerCapabilities, Process is nil")
-	}
-
-	capabilities := s.Process.Capabilities
-	var c specs.LinuxCapabilities
-
-	// In spec v1.0.0-rc4, capabilities was a list of strings. This was changed
-	// to an object with v1.0.0-rc5.
-	// Check for the interface type to support both the versions.
-	switch caps := capabilities.(type) {
-	case map[string]interface{}:
-		for key, value := range caps {
-			switch val := value.(type) {
-			case []interface{}:
-				var list []string
-
-				for _, str := range val {
-					list = append(list, str.(string))
-				}
-
-				switch key {
-				case "bounding":
-					c.Bounding = list
-				case "effective":
-					c.Effective = list
-				case "inheritable":
-					c.Inheritable = list
-				case "ambient":
-					c.Ambient = list
-				case "permitted":
-					c.Permitted = list
-				}
-
-			default:
-				return c, fmt.Errorf("Unexpected format for capabilities: %v", caps)
-			}
-		}
-	case []interface{}:
-		var list []string
-		for _, str := range caps {
-			list = append(list, str.(string))
-		}
-
-		c = specs.LinuxCapabilities{
-			Bounding:    list,
-			Effective:   list,
-			Inheritable: list,
-			Ambient:     list,
-			Permitted:   list,
-		}
-	case nil:
-		ociLog.Debug("Empty capabilities have been passed")
-		return c, nil
-	default:
-		return c, fmt.Errorf("Unexpected format for capabilities: %v", caps)
-	}
-
-	return c, nil
-}
-
 func networkConfig(ocispec specs.Spec, config RuntimeConfig) (vc.NetworkConfig, error) {
 	linux := ocispec.Linux
 	if linux == nil {
@@ -357,38 +272,6 @@ func networkConfig(ocispec specs.Spec, config RuntimeConfig) (vc.NetworkConfig, 
 	}
 
 	return netConf, nil
-}
-
-// getConfigPath returns the full config path from the bundle
-// path provided.
-func getConfigPath(bundlePath string) string {
-	return filepath.Join(bundlePath, "config.json")
-}
-
-// ParseConfigJSON unmarshals the config.json file.
-func ParseConfigJSON(bundlePath string) (specs.Spec, error) {
-	configPath := getConfigPath(bundlePath)
-	ociLog.Debugf("converting %s", configPath)
-
-	configByte, err := ioutil.ReadFile(configPath)
-	if err != nil {
-		return specs.Spec{}, err
-	}
-
-	var compSpec compatOCISpec
-	if err := json.Unmarshal(configByte, &compSpec); err != nil {
-		return specs.Spec{}, err
-	}
-
-	caps, err := containerCapabilities(compSpec)
-	if err != nil {
-		return specs.Spec{}, err
-	}
-
-	compSpec.Spec.Process = &compSpec.Process.Process
-	compSpec.Spec.Process.Capabilities = &caps
-
-	return compSpec.Spec, nil
 }
 
 // GetContainerType determines which type of container matches the annotations
@@ -484,11 +367,6 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		return vc.SandboxConfig{}, err
 	}
 
-	ociSpecJSON, err := json.Marshal(ocispec)
-	if err != nil {
-		return vc.SandboxConfig{}, err
-	}
-
 	sandboxConfig := vc.SandboxConfig{
 		ID: cid,
 
@@ -511,7 +389,6 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		Containers: []vc.ContainerConfig{containerConfig},
 
 		Annotations: map[string]string{
-			vcAnnotations.ConfigJSONKey: string(ociSpecJSON),
 			vcAnnotations.BundlePathKey: bundlePath,
 		},
 
@@ -522,6 +399,9 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		SandboxCgroupOnly: runtime.SandboxCgroupOnly,
 
 		DisableGuestSeccomp: runtime.DisableGuestSeccomp,
+
+		// Q: Is this really necessary? @weizhang555
+		// Spec: &ocispec,
 
 		Experimental: runtime.Experimental,
 	}
@@ -534,11 +414,6 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 // ContainerConfig converts an OCI compatible runtime configuration
 // file to a virtcontainers container configuration structure.
 func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach bool) (vc.ContainerConfig, error) {
-	ociSpecJSON, err := json.Marshal(ocispec)
-	if err != nil {
-		return vc.ContainerConfig{}, err
-	}
-
 	rootfs := vc.RootFs{Target: ocispec.Root.Path, Mounted: true}
 	if !filepath.IsAbs(rootfs.Target) {
 		rootfs.Target = filepath.Join(bundlePath, ocispec.Root.Path)
@@ -578,12 +453,12 @@ func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach
 		ReadonlyRootfs: ocispec.Root.Readonly,
 		Cmd:            cmd,
 		Annotations: map[string]string{
-			vcAnnotations.ConfigJSONKey: string(ociSpecJSON),
 			vcAnnotations.BundlePathKey: bundlePath,
 		},
 		Mounts:      containerMounts(ocispec),
 		DeviceInfos: deviceInfos,
 		Resources:   *ocispec.Linux.Resources,
+		Spec:        &ocispec,
 	}
 
 	cType, err := ContainerType(ocispec)
@@ -686,15 +561,9 @@ func EnvVars(envs []string) ([]types.EnvVar, error) {
 // GetOCIConfig returns an OCI spec configuration from the annotation
 // stored into the container status.
 func GetOCIConfig(status vc.ContainerStatus) (specs.Spec, error) {
-	ociConfigStr, ok := status.Annotations[vcAnnotations.ConfigJSONKey]
-	if !ok {
-		return specs.Spec{}, fmt.Errorf("Annotation[%s] not found", vcAnnotations.ConfigJSONKey)
+	if status.Spec == nil {
+		return specs.Spec{}, fmt.Errorf("missing OCI spec for container")
 	}
 
-	var ociSpec specs.Spec
-	if err := json.Unmarshal([]byte(ociConfigStr), &ociSpec); err != nil {
-		return specs.Spec{}, err
-	}
-
-	return ociSpec, nil
+	return *status.Spec, nil
 }

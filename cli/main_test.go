@@ -25,6 +25,7 @@ import (
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -148,20 +149,6 @@ func runUnitTests(m *testing.M) {
 	os.RemoveAll(testDir)
 
 	os.Exit(ret)
-}
-
-// Read fail that should contain a specs.Spec and
-// return its JSON representation on success
-func readOCIConfigJSON(bundlePath string) (string, error) {
-	ociSpec, err := oci.ParseConfigJSON(bundlePath)
-	if err != nil {
-		return "", nil
-	}
-	ociSpecJSON, err := json.Marshal(ociSpec)
-	if err != nil {
-		return "", err
-	}
-	return string(ociSpecJSON), err
 }
 
 // TestMain is the common main function used by ALL the test functions
@@ -347,7 +334,7 @@ func realMakeOCIBundle(bundleDir string) error {
 
 	// Note the unusual parameter (a directory, not the config
 	// file to parse!)
-	spec, err := oci.ParseConfigJSON(bundleDir)
+	spec, err := compatoci.ParseConfigJSON(bundleDir)
 	if err != nil {
 		return err
 	}
@@ -412,11 +399,12 @@ func writeOCIConfigFile(spec specs.Spec, configPath string) error {
 	return ioutil.WriteFile(configPath, bytes, testFileMode)
 }
 
-func newSingleContainerStatus(containerID string, containerState types.ContainerState, annotations map[string]string) vc.ContainerStatus {
+func newSingleContainerStatus(containerID string, containerState types.ContainerState, annotations map[string]string, spec *specs.Spec) vc.ContainerStatus {
 	return vc.ContainerStatus{
 		ID:          containerID,
 		State:       containerState,
 		Annotations: annotations,
+		Spec:        spec,
 	}
 }
 

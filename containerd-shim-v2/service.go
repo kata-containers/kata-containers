@@ -15,24 +15,25 @@ import (
 	"time"
 
 	eventstypes "github.com/containerd/containerd/api/events"
+	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/events"
 	"github.com/containerd/containerd/namespaces"
 	cdruntime "github.com/containerd/containerd/runtime"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
-	"github.com/kata-containers/runtime/pkg/katautils"
-	vc "github.com/kata-containers/runtime/virtcontainers"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	"github.com/kata-containers/runtime/virtcontainers/types"
-	"github.com/opencontainers/runtime-spec/specs-go"
-
-	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/typeurl"
 	ptypes "github.com/gogo/protobuf/types"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+
+	"github.com/kata-containers/runtime/pkg/katautils"
+	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
 const (
@@ -291,7 +292,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 		return nil, err
 	}
 
-	ociSpec, err := oci.ParseConfigJSON(path)
+	ociSpec, err := compatoci.ParseConfigJSON(path)
 	if err != nil {
 		return nil, err
 	}

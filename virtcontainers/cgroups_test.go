@@ -174,6 +174,7 @@ func TestUpdateCgroups(t *testing.T) {
 			},
 			config: &ContainerConfig{
 				Annotations: containerAnnotations,
+				Spec:        newEmptySpec(),
 			},
 		},
 		"xyz": {
@@ -182,6 +183,7 @@ func TestUpdateCgroups(t *testing.T) {
 			},
 			config: &ContainerConfig{
 				Annotations: containerAnnotations,
+				Spec:        newEmptySpec(),
 			},
 		},
 	}
