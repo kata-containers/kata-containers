@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,7 +16,6 @@ import (
 	"testing"
 
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/store"
@@ -30,15 +30,24 @@ const (
 )
 
 var sandboxAnnotations = map[string]string{
-	"sandbox.foo":             "sandbox.bar",
-	"sandbox.hello":           "sandbox.world",
-	annotations.ConfigJSONKey: `{"linux":{"resources":{}}}`,
+	"sandbox.foo":   "sandbox.bar",
+	"sandbox.hello": "sandbox.world",
 }
 
 var containerAnnotations = map[string]string{
-	"container.foo":           "container.bar",
-	"container.hello":         "container.world",
-	annotations.ConfigJSONKey: `{"linux":{"resources":{}}}`,
+	"container.foo":   "container.bar",
+	"container.hello": "container.world",
+}
+
+func newEmptySpec() *specs.Spec {
+	return &specs.Spec{
+		Linux: &specs.Linux{
+			Resources: &specs.LinuxResources{},
+		},
+		Process: &specs.Process{
+			Capabilities: &specs.LinuxCapabilities{},
+		},
+	}
 }
 
 func newBasicTestCmd() types.Cmd {
@@ -59,12 +68,19 @@ func newBasicTestCmd() types.Cmd {
 }
 
 func newTestSandboxConfigNoop() SandboxConfig {
+	bundlePath := filepath.Join(testDir, testBundle)
+	containerAnnotations["com.github.containers.virtcontainers.pkg.oci.bundle_path"] = bundlePath
+	// containerAnnotations["com.github.containers.virtcontainers.pkg.oci.container_type"] = "pod_sandbox"
+
+	emptySpec := newEmptySpec()
+
 	// Define the container command and bundle.
 	container := ContainerConfig{
 		ID:          containerID,
-		RootFs:      RootFs{Target: filepath.Join(testDir, testBundle), Mounted: true},
+		RootFs:      RootFs{Target: bundlePath, Mounted: true},
 		Cmd:         newBasicTestCmd(),
 		Annotations: containerAnnotations,
+		Spec:        emptySpec,
 	}
 
 	// Sets the hypervisor configuration.
@@ -88,28 +104,24 @@ func newTestSandboxConfigNoop() SandboxConfig {
 		ProxyType: NoopProxyType,
 	}
 
+	configFile := filepath.Join(bundlePath, "config.json")
+	f, err := os.OpenFile(configFile, os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		return SandboxConfig{}
+	}
+	defer f.Close()
+
+	if err := json.NewEncoder(f).Encode(emptySpec); err != nil {
+		return SandboxConfig{}
+	}
+
 	return sandboxConfig
 }
 
 func newTestSandboxConfigKataAgent() SandboxConfig {
-	// Sets the hypervisor configuration.
-	hypervisorConfig := HypervisorConfig{
-		KernelPath:     filepath.Join(testDir, testKernel),
-		ImagePath:      filepath.Join(testDir, testImage),
-		HypervisorPath: filepath.Join(testDir, testHypervisor),
-	}
-
-	sandboxConfig := SandboxConfig{
-		ID:               testSandboxID,
-		HypervisorType:   MockHypervisor,
-		HypervisorConfig: hypervisorConfig,
-
-		AgentType: KataContainersAgent,
-
-		Annotations: sandboxAnnotations,
-
-		ProxyType: NoopProxyType,
-	}
+	sandboxConfig := newTestSandboxConfigNoop()
+	sandboxConfig.AgentType = KataContainersAgent
+	sandboxConfig.Containers = nil
 
 	return sandboxConfig
 }
@@ -577,6 +589,7 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 				PID:         0,
 				RootFs:      filepath.Join(testDir, testBundle),
 				Annotations: containerAnnotations,
+				Spec:        newEmptySpec(),
 			},
 		},
 	}
@@ -593,7 +606,7 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 	// value will be.
 	expectedStatus.ContainersStatus[0].StartTime = status.ContainersStatus[0].StartTime
 
-	assert.Exactly(status, expectedStatus)
+	assert.Equal(status, expectedStatus)
 }
 
 func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
@@ -635,6 +648,7 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 				PID:         0,
 				RootFs:      filepath.Join(testDir, testBundle),
 				Annotations: containerAnnotations,
+				Spec:        newEmptySpec(),
 			},
 		},
 	}
@@ -701,6 +715,7 @@ func newTestContainerConfigNoop(contID string) ContainerConfig {
 		RootFs:      RootFs{Target: filepath.Join(testDir, testBundle), Mounted: true},
 		Cmd:         newBasicTestCmd(),
 		Annotations: containerAnnotations,
+		Spec:        newEmptySpec(),
 	}
 
 	return container
@@ -1202,6 +1217,7 @@ func TestStatusContainerStateReady(t *testing.T) {
 		PID:         0,
 		RootFs:      filepath.Join(testDir, testBundle),
 		Annotations: containerAnnotations,
+		Spec:        newEmptySpec(),
 	}
 
 	defer p2.wg.Wait()
@@ -1268,6 +1284,7 @@ func TestStatusContainerStateRunning(t *testing.T) {
 		PID:         0,
 		RootFs:      filepath.Join(testDir, testBundle),
 		Annotations: containerAnnotations,
+		Spec:        newEmptySpec(),
 	}
 
 	defer p2.wg.Wait()

@@ -20,6 +20,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 )
@@ -79,7 +80,7 @@ func TestExecuteErrors(t *testing.T) {
 	}
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, types.ContainerState{}, annotations), nil
+		return newSingleContainerStatus(testContainerID, types.ContainerState{}, annotations, &specs.Spec{Process: &specs.Process{}}), nil
 	}
 
 	defer func() {
@@ -93,17 +94,16 @@ func TestExecuteErrors(t *testing.T) {
 	// Container state undefined
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations = map[string]string{
 		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
 	containerState := types.ContainerState{}
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, containerState, annotations), nil
+		return newSingleContainerStatus(testContainerID, containerState, annotations, &ociSpec), nil
 	}
 
 	err = execute(context.Background(), ctx)
@@ -115,7 +115,7 @@ func TestExecuteErrors(t *testing.T) {
 		State: types.StatePaused,
 	}
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, containerState, annotations), nil
+		return newSingleContainerStatus(testContainerID, containerState, annotations, &ociSpec), nil
 	}
 
 	err = execute(context.Background(), ctx)
@@ -127,7 +127,7 @@ func TestExecuteErrors(t *testing.T) {
 		State: types.StateStopped,
 	}
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, containerState, annotations), nil
+		return newSingleContainerStatus(testContainerID, containerState, annotations, &ociSpec), nil
 	}
 
 	err = execute(context.Background(), ctx)
@@ -152,12 +152,11 @@ func TestExecuteErrorReadingProcessJson(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
 		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
 	state := types.ContainerState{
@@ -169,7 +168,7 @@ func TestExecuteErrorReadingProcessJson(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, state, annotations), nil
+		return newSingleContainerStatus(testContainerID, state, annotations, &ociSpec), nil
 	}
 
 	defer func() {
@@ -201,12 +200,11 @@ func TestExecuteErrorOpeningConsole(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
 		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
 	state := types.ContainerState{
@@ -218,7 +216,7 @@ func TestExecuteErrorOpeningConsole(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, state, annotations), nil
+		return newSingleContainerStatus(testContainerID, state, annotations, &ociSpec), nil
 	}
 
 	defer func() {
@@ -268,12 +266,11 @@ func TestExecuteWithFlags(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
 		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
 	state := types.ContainerState{
@@ -285,7 +282,7 @@ func TestExecuteWithFlags(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, state, annotations), nil
+		return newSingleContainerStatus(testContainerID, state, annotations, &ociSpec), nil
 	}
 
 	defer func() {
@@ -358,12 +355,11 @@ func TestExecuteWithFlagsDetached(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
 		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
 	state := types.ContainerState{
@@ -375,7 +371,7 @@ func TestExecuteWithFlagsDetached(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, state, annotations), nil
+		return newSingleContainerStatus(testContainerID, state, annotations, &ociSpec), nil
 	}
 
 	defer func() {
@@ -437,12 +433,11 @@ func TestExecuteWithInvalidProcessJson(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
 		vcAnnotations.ContainerTypeKey: string(vc.PodSandbox),
-		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
 	state := types.ContainerState{
@@ -454,7 +449,7 @@ func TestExecuteWithInvalidProcessJson(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, state, annotations), nil
+		return newSingleContainerStatus(testContainerID, state, annotations, &ociSpec), nil
 	}
 
 	defer func() {
@@ -489,12 +484,11 @@ func TestExecuteWithValidProcessJson(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
 		vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
 	state := types.ContainerState{
@@ -506,7 +500,7 @@ func TestExecuteWithValidProcessJson(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, state, annotations), nil
+		return newSingleContainerStatus(testContainerID, state, annotations, &ociSpec), nil
 	}
 
 	defer func() {
@@ -590,12 +584,11 @@ func TestExecuteWithEmptyEnvironmentValue(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
 		vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-		vcAnnotations.ConfigJSONKey:    configJSON,
 	}
 
 	state := types.ContainerState{
@@ -607,7 +600,7 @@ func TestExecuteWithEmptyEnvironmentValue(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, state, annotations), nil
+		return newSingleContainerStatus(testContainerID, state, annotations, &ociSpec), nil
 	}
 
 	defer func() {

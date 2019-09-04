@@ -18,7 +18,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -124,7 +124,7 @@ func realMakeOCIBundle(bundleDir string) error {
 
 	// Note the unusual parameter (a directory, not the config
 	// file to parse!)
-	spec, err := oci.ParseConfigJSON(bundleDir)
+	spec, err := compatoci.ParseConfigJSON(bundleDir)
 	if err != nil {
 		return err
 	}

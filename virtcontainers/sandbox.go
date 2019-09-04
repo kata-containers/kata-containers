@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -20,6 +19,12 @@ import (
 
 	"github.com/containerd/cgroups"
 	"github.com/containernetworking/plugins/pkg/ns"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
+	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
+
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
@@ -29,15 +34,11 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
-	specs "github.com/opencontainers/runtime-spec/specs-go"
-	opentracing "github.com/opentracing/opentracing-go"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	"github.com/vishvananda/netlink"
 )
 
 const (
@@ -1089,7 +1090,15 @@ func (s *Sandbox) addContainer(c *Container) error {
 // in the guest. This should only be used when fetching a
 // sandbox that already exists.
 func (s *Sandbox) fetchContainers() error {
-	for _, contConfig := range s.config.Containers {
+	for i, contConfig := range s.config.Containers {
+		// Add spec from bundle path
+		spec, err := compatoci.GetContainerSpec(contConfig.Annotations)
+		if err != nil {
+			return err
+		}
+		contConfig.Spec = &spec
+		s.config.Containers[i] = contConfig
+
 		c, err := newContainer(s, contConfig)
 		if err != nil {
 			return err
@@ -2090,45 +2099,21 @@ func (s *Sandbox) cpuResources() *specs.LinuxCPU {
 
 // setupSandboxCgroup creates and joins sandbox cgroups for the sandbox config
 func (s *Sandbox) setupSandboxCgroup() error {
-	var podSandboxConfig *ContainerConfig
+	spec := s.GetOCISpec()
 
-	if s.config == nil {
-		return fmt.Errorf("Sandbox config is nil")
-	}
-
-	// get the container associated with the PodSandbox annotation. In Kubernetes, this
-	// represents the pause container. In Docker, this is the container. We derive the
-	// cgroup path from this container.
-	for _, cConfig := range s.config.Containers {
-		if cConfig.Annotations[annotations.ContainerTypeKey] == string(PodSandbox) {
-			podSandboxConfig = &cConfig
-			break
-		}
-	}
-
-	if podSandboxConfig == nil {
-		return fmt.Errorf("Failed to find cgroup path for sandbox: Container of type '%s' not found", PodSandbox)
-	}
-
-	configJSON, ok := podSandboxConfig.Annotations[annotations.ConfigJSONKey]
-	if !ok {
-		return fmt.Errorf("Could not find json config in annotations for container '%s'", podSandboxConfig.ID)
-	}
-
-	var spec specs.Spec
-	if err := json.Unmarshal([]byte(configJSON), &spec); err != nil {
-		return err
+	if spec == nil {
+		return errorMissingOCISpec
 	}
 
 	if spec.Linux == nil {
 		// Cgroup path is optional, though expected. If not defined, skip the setup
-		s.Logger().WithField("sandboxid", podSandboxConfig.ID).Warning("no cgroup path provided for pod sandbox, not creating sandbox cgroup")
+		s.Logger().WithField("sandboxid", s.id).Warning("no cgroup path provided for pod sandbox, not creating sandbox cgroup")
 		return nil
 	}
 	validContainerCgroup := utils.ValidCgroupPath(spec.Linux.CgroupsPath)
 
 	// Create a Kata sandbox cgroup with the cgroup of the sandbox container as the parent
-	s.state.CgroupPath = filepath.Join(filepath.Dir(validContainerCgroup), cgroupKataPrefix+"_"+podSandboxConfig.ID)
+	s.state.CgroupPath = filepath.Join(filepath.Dir(validContainerCgroup), cgroupKataPrefix+"_"+s.id)
 	cgroup, err := cgroupsNewFunc(cgroups.V1, cgroups.StaticPath(s.state.CgroupPath), &specs.LinuxResources{})
 	if err != nil {
 		return fmt.Errorf("Could not create sandbox cgroup in %v: %v", s.state.CgroupPath, err)
@@ -2142,4 +2127,39 @@ func (s *Sandbox) setupSandboxCgroup() error {
 	}
 
 	return nil
+}
+
+func (s *Sandbox) sandboxContConf() *ContainerConfig {
+	var podSandboxConfig *ContainerConfig
+
+	if s.config == nil {
+		return nil
+	}
+
+	// get the container associated with the PodSandbox annotation. In Kubernetes, this
+	// represents the pause container. In Docker, this is the container. We derive the
+	// cgroup path from this container.
+	for _, cConfig := range s.config.Containers {
+		if cConfig.Annotations[annotations.ContainerTypeKey] == string(PodSandbox) {
+			podSandboxConfig = &cConfig
+			break
+		}
+	}
+
+	if podSandboxConfig == nil {
+		return nil
+	}
+
+	return podSandboxConfig
+}
+
+// GetOCISpec returns sandbox's OCI specification
+func (s *Sandbox) GetOCISpec() *specs.Spec {
+	conf := s.sandboxContConf()
+	if conf == nil {
+		return nil
+	}
+
+	// First container is sandbox container as default
+	return conf.Spec
 }

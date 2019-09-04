@@ -13,22 +13,21 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/containerd/typeurl"
-	vc "github.com/kata-containers/runtime/virtcontainers"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	"github.com/pkg/errors"
-
-	taskAPI "github.com/containerd/containerd/runtime/v2/task"
-
-	"github.com/kata-containers/runtime/pkg/katautils"
-	"github.com/opencontainers/runtime-spec/specs-go"
-
 	containerd_types "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/mount"
+	taskAPI "github.com/containerd/containerd/runtime/v2/task"
+	"github.com/containerd/typeurl"
+	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	// only register the proto type
 	_ "github.com/containerd/containerd/runtime/linux/runctypes"
 	crioption "github.com/containerd/cri-containerd/pkg/api/runtimeoptions/v1"
+
+	"github.com/kata-containers/runtime/pkg/katautils"
+	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 )
 
 func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*container, error) {
@@ -132,7 +131,7 @@ func loadSpec(r *taskAPI.CreateTaskRequest) (*specs.Spec, string, error) {
 		return nil, "", err
 	}
 
-	ociSpec, err := oci.ParseConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	if err != nil {
 		return nil, "", err
 	}
