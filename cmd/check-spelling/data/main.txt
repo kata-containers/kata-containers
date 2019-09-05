@@ -77,7 +77,7 @@ templating
 timestamp/AB
 tracability
 unbootable
-uncomment
+uncomment/ACD
 unported
 unskip/AC
 untrusted
