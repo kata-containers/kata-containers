@@ -92,19 +92,17 @@ func (q *qemuS390x) bridges(number uint32) {
 
 // appendConsole appends a console to devices.
 // The function has been overwriten to correctly set the driver to the CCW device
-func (q *qemuS390x) appendConsole(devices []govmmQemu.Device, path string) []govmmQemu.Device {
+func (q *qemuS390x) appendConsole(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
 	id := "serial0"
 	addr, b, err := q.addDeviceToBridge(id, types.CCW)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append console")
-		return devices
+		return devices, fmt.Errorf("Failed to append console %v", err)
 	}
 
 	var devno string
 	devno, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append console")
-		return devices
+		return devices, fmt.Errorf("Failed to append console %v", err)
 	}
 
 	serial := govmmQemu.SerialDevice{
@@ -126,37 +124,24 @@ func (q *qemuS390x) appendConsole(devices []govmmQemu.Device, path string) []gov
 
 	devices = append(devices, console)
 
-	return devices
+	return devices, nil
 }
 
-func (q *qemuS390x) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
-	drive, err := genericImage(path)
-	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append image")
-		return nil, err
-	}
-
-	return q.appendBlockDevice(devices, drive), nil
-}
-
-func (q *qemuS390x) appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) []govmmQemu.Device {
+func (q *qemuS390x) appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error) {
 	d, err := genericBlockDevice(drive, false)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append blk-dev")
-		return devices
+		return devices, fmt.Errorf("Failed to append blk-dev %v", err)
 	}
 	addr, b, err := q.addDeviceToBridge(drive.ID, types.CCW)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append blk-dev")
-		return devices
+		return devices, fmt.Errorf("Failed to append blk-dev %v", err)
 	}
 	d.DevNo, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append blk-dev")
-		return devices
+		return devices, fmt.Errorf("Failed to append blk-dev %v", err)
 	}
 	devices = append(devices, d)
-	return devices
+	return devices, nil
 }
 
 // appendVhostUserDevice throws an error if vhost devices are tried to be used.
@@ -171,39 +156,34 @@ func (q *qemuS390x) supportGuestMemoryHotplug() bool {
 	return false
 }
 
-func (q *qemuS390x) appendNetwork(devices []govmmQemu.Device, endpoint Endpoint) []govmmQemu.Device {
+func (q *qemuS390x) appendNetwork(devices []govmmQemu.Device, endpoint Endpoint) ([]govmmQemu.Device, error) {
 	d, err := genericNetwork(endpoint, false, false, q.networkIndex)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append network")
-		return devices
+		return devices, fmt.Errorf("Failed to append network %v", err)
 	}
 	q.networkIndex++
 	addr, b, err := q.addDeviceToBridge(d.ID, types.CCW)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append network")
-		return devices
+		return devices, fmt.Errorf("Failed to append network %v", err)
 	}
 	d.DevNo, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append network")
-		return devices
+		return devices, fmt.Errorf("Failed to append network %v", err)
 	}
 
 	devices = append(devices, d)
-	return devices
+	return devices, nil
 }
 
-func (q *qemuS390x) appendRNGDevice(devices []govmmQemu.Device, rngDev config.RNGDev) []govmmQemu.Device {
+func (q *qemuS390x) appendRNGDevice(devices []govmmQemu.Device, rngDev config.RNGDev) ([]govmmQemu.Device, error) {
 	addr, b, err := q.addDeviceToBridge(rngDev.ID, types.CCW)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append RNG-Device")
-		return devices
+		return devices, fmt.Errorf("Failed to append RNG-Device %v", err)
 	}
 	var devno string
 	devno, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append RNG-Device")
-		return devices
+		return devices, fmt.Errorf("Failed to append RNG-Device %v", err)
 	}
 
 	devices = append(devices,
@@ -214,26 +194,24 @@ func (q *qemuS390x) appendRNGDevice(devices []govmmQemu.Device, rngDev config.RN
 		},
 	)
 
-	return devices
+	return devices, nil
 }
 
-func (q *qemuS390x) append9PVolume(devices []govmmQemu.Device, volume types.Volume) []govmmQemu.Device {
+func (q *qemuS390x) append9PVolume(devices []govmmQemu.Device, volume types.Volume) ([]govmmQemu.Device, error) {
 	if volume.MountTag == "" || volume.HostPath == "" {
-		return devices
+		return devices, nil
 	}
 	d := generic9PVolume(volume, false)
 	addr, b, err := q.addDeviceToBridge(d.ID, types.CCW)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append 9p-Volume")
-		return devices
+		return devices, fmt.Errorf("Failed to append 9p-Volume %v", err)
 	}
 	d.DevNo, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append 9p-Volume")
-		return devices
+		return devices, fmt.Errorf("Failed to append 9p-Volume %v", err)
 	}
 	devices = append(devices, d)
-	return devices
+	return devices, nil
 }
 
 // appendBridges appends to devices the given bridges
@@ -241,19 +219,17 @@ func (q *qemuS390x) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device
 	return genericAppendBridges(devices, q.Bridges, q.machineType)
 }
 
-func (q *qemuS390x) appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread) {
+func (q *qemuS390x) appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
 	d, t := genericSCSIController(enableIOThreads, q.nestedRun)
 	addr, b, err := q.addDeviceToBridge(d.ID, types.CCW)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append scsi-controller")
-		return devices, nil
+		return devices, nil, fmt.Errorf("Failed to append scsi-controller %v", err)
 	}
 	d.DevNo, err = b.AddressFormatCCW(addr)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemus390x").WithError(err).Error("Failed to append scsi-controller")
-		return devices, nil
+		return devices, nil, fmt.Errorf("Failed to append scsi-controller %v", err)
 	}
 
 	devices = append(devices, d)
-	return devices, t
+	return devices, t, nil
 }

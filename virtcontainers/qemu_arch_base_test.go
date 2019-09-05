@@ -238,11 +238,11 @@ func testQemuArchBaseAppend(t *testing.T, structure interface{}, expected []govm
 
 	switch s := structure.(type) {
 	case types.Volume:
-		devices = qemuArchBase.append9PVolume(devices, s)
+		devices, err = qemuArchBase.append9PVolume(devices, s)
 	case types.Socket:
 		devices = qemuArchBase.appendSocket(devices, s)
 	case config.BlockDrive:
-		devices = qemuArchBase.appendBlockDevice(devices, s)
+		devices, err = qemuArchBase.appendBlockDevice(devices, s)
 	case config.VFIODev:
 		devices = qemuArchBase.appendVFIODevice(devices, s)
 	case config.VhostUserDeviceAttrs:
@@ -255,6 +255,7 @@ func testQemuArchBaseAppend(t *testing.T, structure interface{}, expected []govm
 
 func TestQemuArchBaseAppendConsoles(t *testing.T) {
 	var devices []govmmQemu.Device
+	var err error
 	assert := assert.New(t)
 	qemuArchBase := newQemuArchBase()
 
@@ -274,7 +275,8 @@ func TestQemuArchBaseAppendConsoles(t *testing.T) {
 		},
 	}
 
-	devices = qemuArchBase.appendConsole(devices, path)
+	devices, err = qemuArchBase.appendConsole(devices, path)
+	assert.NoError(err)
 	assert.Equal(expectedOut, devices)
 }
 
@@ -484,16 +486,19 @@ func TestQemuArchBaseAppendSCSIController(t *testing.T) {
 		},
 	}
 
-	devices, ioThread := qemuArchBase.appendSCSIController(devices, false)
+	devices, ioThread, err := qemuArchBase.appendSCSIController(devices, false)
 	assert.Equal(expectedOut, devices)
 	assert.Nil(ioThread)
+	assert.NoError(err)
 
-	_, ioThread = qemuArchBase.appendSCSIController(devices, true)
+	_, ioThread, err = qemuArchBase.appendSCSIController(devices, true)
 	assert.NotNil(ioThread)
+	assert.NoError(err)
 }
 
 func TestQemuArchBaseAppendNetwork(t *testing.T) {
 	var devices []govmmQemu.Device
+	var err error
 	assert := assert.New(t)
 	qemuArchBase := newQemuArchBase()
 
@@ -551,7 +556,9 @@ func TestQemuArchBaseAppendNetwork(t *testing.T) {
 		},
 	}
 
-	devices = qemuArchBase.appendNetwork(devices, macvlanEp)
-	devices = qemuArchBase.appendNetwork(devices, macvtapEp)
+	devices, err = qemuArchBase.appendNetwork(devices, macvlanEp)
+	assert.NoError(err)
+	devices, err = qemuArchBase.appendNetwork(devices, macvtapEp)
+	assert.NoError(err)
 	assert.Equal(expectedOut, devices)
 }

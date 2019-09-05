@@ -407,7 +407,10 @@ func (q *qemu) buildDevices(initrdPath string) ([]govmmQemu.Device, *govmmQemu.I
 	// bridge gets the first available PCI address i.e bridgePCIStartAddr
 	devices = q.arch.appendBridges(devices)
 
-	devices = q.arch.appendConsole(devices, console)
+	devices, err = q.arch.appendConsole(devices, console)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	if initrdPath == "" {
 		devices, err = q.appendImage(devices)
@@ -418,7 +421,7 @@ func (q *qemu) buildDevices(initrdPath string) ([]govmmQemu.Device, *govmmQemu.I
 
 	var ioThread *govmmQemu.IOThread
 	if q.config.BlockDeviceDriver == config.VirtioSCSI {
-		devices, ioThread = q.arch.appendSCSIController(devices, q.config.EnableIOThreads)
+		return q.arch.appendSCSIController(devices, q.config.EnableIOThreads)
 	}
 
 	return devices, ioThread, nil
@@ -590,7 +593,10 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		ID:       rngID,
 		Filename: q.config.EntropySource,
 	}
-	qemuConfig.Devices = q.arch.appendRNGDevice(qemuConfig.Devices, rngDev)
+	qemuConfig.Devices, err = q.arch.appendRNGDevice(qemuConfig.Devices, rngDev)
+	if err != nil {
+		return err
+	}
 
 	q.qemuConfig = qemuConfig
 
@@ -1578,7 +1584,7 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 			q.qemuConfig.Devices, err = q.arch.appendVhostUserDevice(q.qemuConfig.Devices, vhostDev)
 		} else {
 			q.Logger().WithField("volume-type", "virtio-9p").Info("adding volume")
-			q.qemuConfig.Devices = q.arch.append9PVolume(q.qemuConfig.Devices, v)
+			q.qemuConfig.Devices, err = q.arch.append9PVolume(q.qemuConfig.Devices, v)
 		}
 	case types.Socket:
 		q.qemuConfig.Devices = q.arch.appendSocket(q.qemuConfig.Devices, v)
@@ -1586,9 +1592,9 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 		q.fds = append(q.fds, v.vhostFd)
 		q.qemuConfig.Devices = q.arch.appendVSockPCI(q.qemuConfig.Devices, v)
 	case Endpoint:
-		q.qemuConfig.Devices = q.arch.appendNetwork(q.qemuConfig.Devices, v)
+		q.qemuConfig.Devices, err = q.arch.appendNetwork(q.qemuConfig.Devices, v)
 	case config.BlockDrive:
-		q.qemuConfig.Devices = q.arch.appendBlockDevice(q.qemuConfig.Devices, v)
+		q.qemuConfig.Devices, err = q.arch.appendBlockDevice(q.qemuConfig.Devices, v)
 	case config.VhostUserDeviceAttrs:
 		q.qemuConfig.Devices, err = q.arch.appendVhostUserDevice(q.qemuConfig.Devices, v)
 	case config.VFIODev:
