@@ -77,13 +77,8 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 
 	// Move runtime to sandbox cgroup so all process are created there.
 	if s.config.SandboxCgroupOnly {
-		if err := s.setupSandboxCgroupOnly(); err != nil {
+		if err := s.setupSandboxCgroup(); err != nil {
 			return nil, err
-
-		}
-		if err := s.joinSandboxCgroup(); err != nil {
-			return nil, err
-
 		}
 	}
 

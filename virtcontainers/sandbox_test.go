@@ -1474,6 +1474,7 @@ func TestSandboxExperimentalFeature(t *testing.T) {
 	assert.True(t, sconfig.valid())
 }
 
+/*
 func TestSandbox_joinSandboxCgroup(t *testing.T) {
 
 	mockValidCgroup := &Sandbox{}
@@ -1495,8 +1496,9 @@ func TestSandbox_joinSandboxCgroup(t *testing.T) {
 		})
 	}
 }
+*/
 
-func TestSandbox_SetupSandboxCgroupOnly(t *testing.T) {
+func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 	sandboxContainer := ContainerConfig{}
 	sandboxContainer.Annotations = make(map[string]string)
 	sandboxContainer.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
@@ -1561,7 +1563,7 @@ func TestSandbox_SetupSandboxCgroupOnly(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.s.setupSandboxCgroupOnly(); (err != nil) != tt.wantErr {
+			if err := tt.s.setupSandboxCgroup(); (err != nil) != tt.wantErr {
 				t.Errorf("Sandbox.SetupSandboxCgroupOnly() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
