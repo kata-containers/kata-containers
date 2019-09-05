@@ -12,15 +12,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAddRemoveDevice(t *testing.T) {
+func testAddRemoveDevice(t *testing.T, b *Bridge) {
 	assert := assert.New(t)
-
-	// create a bridge
-	bridges := []*PCIBridge{{make(map[uint32]string), PCI, "rgb123", 5}}
 
 	// add device
 	devID := "abc123"
-	b := bridges[0]
+
 	addr, err := b.AddDevice(devID)
 	assert.NoError(err)
 	if addr < 1 {
@@ -35,13 +32,29 @@ func TestAddRemoveDevice(t *testing.T) {
 	assert.NoError(err)
 
 	// add device when the bridge is full
-	bridges[0].Address = make(map[uint32]string)
-	for i := uint32(1); i <= pciBridgeMaxCapacity; i++ {
-		bridges[0].Address[i] = fmt.Sprintf("%d", i)
+	b.Devices = make(map[uint32]string)
+	for i := uint32(1); i <= b.MaxCapacity; i++ {
+		b.Devices[i] = fmt.Sprintf("%d", i)
 	}
 	addr, err = b.AddDevice(devID)
 	assert.Error(err)
 	if addr != 0 {
 		assert.Fail("address should be 0")
 	}
+}
+
+func TestAddRemoveDevicePCI(t *testing.T) {
+
+	// create a pci bridge
+	bridges := []*Bridge{{make(map[uint32]string), "rgb123", 5, PCI, PCIBridgeMaxCapacity}}
+
+	testAddRemoveDevice(t, bridges[0])
+}
+
+func TestAddRemoveDeviceCCW(t *testing.T) {
+
+	// create a CCW bridge
+	bridges := []*Bridge{{make(map[uint32]string), "rgb123", 5, CCW, CCWBridgeMaxCapacity}}
+
+	testAddRemoveDevice(t, bridges[0])
 }

@@ -105,11 +105,12 @@ func TestQemuArm64AppendBridges(t *testing.T) {
 
 	arm64 := newTestQemu(QemuVirt)
 
-	bridges := arm64.bridges(1)
+	arm64.bridges(1)
+	bridges := arm64.getBridges()
 	assert.Len(bridges, 1)
 
 	devices = []govmmQemu.Device{}
-	devices = arm64.appendBridges(devices, bridges)
+	devices = arm64.appendBridges(devices)
 	assert.Len(devices, 1)
 
 	expectedOut := []govmmQemu.Device{

@@ -61,7 +61,7 @@ type CPUDevice struct {
 
 // QemuState keeps Qemu's state
 type QemuState struct {
-	Bridges []types.PCIBridge
+	Bridges []types.Bridge
 	// HotpluggedCPUs is the list of CPUs that were hot-added
 	HotpluggedVCPUs      []CPUDevice
 	HotpluggedMemory     int
@@ -266,9 +266,11 @@ func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 		create = true
 	}
 
+	q.arch.setBridges(q.state.Bridges)
+
 	if create {
 		q.Logger().Debug("Creating bridges")
-		q.state.Bridges = q.arch.bridges(q.config.DefaultBridges)
+		q.arch.bridges(q.config.DefaultBridges)
 
 		q.Logger().Debug("Creating UUID")
 		q.state.UUID = uuid.Generate().String()
@@ -403,7 +405,7 @@ func (q *qemu) buildDevices(initrdPath string) ([]govmmQemu.Device, *govmmQemu.I
 
 	// Add bridges before any other devices. This way we make sure that
 	// bridge gets the first available PCI address i.e bridgePCIStartAddr
-	devices = q.arch.appendBridges(devices, q.state.Bridges)
+	devices = q.arch.appendBridges(devices)
 
 	devices = q.arch.appendConsole(devices, console)
 
@@ -984,38 +986,6 @@ func (q *qemu) qmpShutdown() {
 	}
 }
 
-func (q *qemu) addDeviceToBridge(ID string) (string, types.PCIBridge, error) {
-	var err error
-	var addr uint32
-
-	if len(q.state.Bridges) == 0 {
-		return "", types.PCIBridge{}, errors.New("failed to get available address from bridges")
-	}
-
-	// looking for an empty address in the bridges
-	for _, b := range q.state.Bridges {
-		addr, err = b.AddDevice(ID)
-		if err == nil {
-			return fmt.Sprintf("%02x", addr), b, nil
-		}
-	}
-
-	return "", types.PCIBridge{}, fmt.Errorf("no more bridge slots available")
-}
-
-func (q *qemu) removeDeviceFromBridge(ID string) error {
-	var err error
-	for _, b := range q.state.Bridges {
-		err = b.RemoveDevice(ID)
-		if err == nil {
-			// device was removed correctly
-			return nil
-		}
-	}
-
-	return err
-}
-
 func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, devID string) (err error) {
 	if q.config.BlockDeviceDriver == config.Nvdimm {
 		var blocksize int64
@@ -1050,16 +1020,36 @@ func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, dev
 		}
 	}()
 
-	if q.config.BlockDeviceDriver == config.VirtioBlock {
+	switch {
+	case q.config.BlockDeviceDriver == config.VirtioBlockCCW:
+		driver := "virtio-blk-ccw"
+
+		addr, bridge, err := q.arch.addDeviceToBridge(drive.ID, types.CCW)
+		if err != nil {
+			return err
+		}
+		var devNoHotplug string
+		devNoHotplug, err = bridge.AddressFormatCCW(addr)
+		if err != nil {
+			return err
+		}
+		drive.DevNo, err = bridge.AddressFormatCCWForVirtServer(addr)
+		if err != nil {
+			return err
+		}
+		if err = q.qmpMonitorCh.qmp.ExecuteDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, devNoHotplug, "", true, false); err != nil {
+			return err
+		}
+	case q.config.BlockDeviceDriver == config.VirtioBlock:
 		driver := "virtio-blk-pci"
-		addr, bridge, err := q.addDeviceToBridge(drive.ID)
+		addr, bridge, err := q.arch.addDeviceToBridge(drive.ID, types.PCI)
 		if err != nil {
 			return err
 		}
 
 		defer func() {
 			if err != nil {
-				q.removeDeviceFromBridge(drive.ID)
+				q.arch.removeDeviceFromBridge(drive.ID)
 			}
 		}()
 
@@ -1069,7 +1059,7 @@ func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, dev
 		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, 0, true, defaultDisableModern); err != nil {
 			return err
 		}
-	} else {
+	case q.config.BlockDeviceDriver == config.VirtioSCSI:
 		driver := "scsi-hd"
 
 		// Bus exposed by the SCSI Controller
@@ -1084,6 +1074,8 @@ func (q *qemu) hotplugAddBlockDevice(drive *config.BlockDrive, op operation, dev
 		if err = q.qmpMonitorCh.qmp.ExecuteSCSIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, bus, romFile, scsiID, lun, true, defaultDisableModern); err != nil {
 			return err
 		}
+	default:
+		return fmt.Errorf("Block device %s not recognized", q.config.BlockDeviceDriver)
 	}
 
 	return nil
@@ -1101,7 +1093,7 @@ func (q *qemu) hotplugBlockDevice(drive *config.BlockDrive, op operation) error 
 		err = q.hotplugAddBlockDevice(drive, op, devID)
 	} else {
 		if q.config.BlockDeviceDriver == config.VirtioBlock {
-			if err := q.removeDeviceFromBridge(drive.ID); err != nil {
+			if err := q.arch.removeDeviceFromBridge(drive.ID); err != nil {
 				return err
 			}
 		}
@@ -1141,14 +1133,14 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) (err erro
 			}
 		}
 
-		addr, bridge, err := q.addDeviceToBridge(devID)
+		addr, bridge, err := q.arch.addDeviceToBridge(devID, types.PCI)
 		if err != nil {
 			return err
 		}
 
 		defer func() {
 			if err != nil {
-				q.removeDeviceFromBridge(devID)
+				q.arch.removeDeviceFromBridge(devID)
 			}
 		}()
 
@@ -1162,7 +1154,7 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) (err erro
 		}
 	} else {
 		if !q.state.HotplugVFIOOnRootBus {
-			if err := q.removeDeviceFromBridge(devID); err != nil {
+			if err := q.arch.removeDeviceFromBridge(devID); err != nil {
 				return err
 			}
 		}
@@ -1228,14 +1220,14 @@ func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) (err error) {
 			}
 		}()
 
-		addr, bridge, err := q.addDeviceToBridge(tap.ID)
+		addr, bridge, err := q.arch.addDeviceToBridge(tap.ID, types.PCI)
 		if err != nil {
 			return err
 		}
 
 		defer func() {
 			if err != nil {
-				q.removeDeviceFromBridge(tap.ID)
+				q.arch.removeDeviceFromBridge(tap.ID)
 			}
 		}()
 
@@ -1248,12 +1240,14 @@ func (q *qemu) hotplugNetDevice(endpoint Endpoint, op operation) (err error) {
 			return err
 		}
 		if machine.Type == QemuCCWVirtio {
-			return q.qmpMonitorCh.qmp.ExecuteNetCCWDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), bridge.ID, int(q.config.NumVCPUs))
+			devNoHotplug := fmt.Sprintf("fe.%x.%x", bridge.Addr, addr)
+			return q.qmpMonitorCh.qmp.ExecuteNetCCWDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), devNoHotplug, int(q.config.NumVCPUs))
 		}
 		return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs), defaultDisableModern)
+
 	}
 
-	if err := q.removeDeviceFromBridge(tap.ID); err != nil {
+	if err := q.arch.removeDeviceFromBridge(tap.ID); err != nil {
 		return err
 	}
 
@@ -1750,7 +1744,7 @@ func (q *qemu) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint32, probe boo
 
 // genericAppendBridges appends to devices the given bridges
 // nolint: unused, deadcode
-func genericAppendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge, machineType string) []govmmQemu.Device {
+func genericAppendBridges(devices []govmmQemu.Device, bridges []types.Bridge, machineType string) []govmmQemu.Device {
 	bus := defaultPCBridgeBus
 	switch machineType {
 	case QemuQ35, QemuVirt:
@@ -1761,6 +1755,9 @@ func genericAppendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge,
 		t := govmmQemu.PCIBridge
 		if b.Type == types.PCIE {
 			t = govmmQemu.PCIEBridge
+		}
+		if b.Type == types.CCW {
+			continue
 		}
 
 		bridges[idx].Addr = bridgePCIStartAddr + idx
@@ -1781,10 +1778,9 @@ func genericAppendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge,
 	return devices
 }
 
-// nolint: unused, deadcode
-func genericBridges(number uint32, machineType string) []types.PCIBridge {
-	var bridges []types.PCIBridge
-	var bt types.PCIType
+func genericBridges(number uint32, machineType string) []types.Bridge {
+	var bridges []types.Bridge
+	var bt types.Type
 
 	switch machineType {
 	case QemuQ35:
@@ -1798,17 +1794,13 @@ func genericBridges(number uint32, machineType string) []types.PCIBridge {
 	case QemuPseries:
 		bt = types.PCI
 	case QemuCCWVirtio:
-		bt = types.PCI
+		bt = types.CCW
 	default:
 		return nil
 	}
 
 	for i := uint32(0); i < number; i++ {
-		bridges = append(bridges, types.PCIBridge{
-			Type:    bt,
-			ID:      fmt.Sprintf("%s-bridge-%d", bt, i),
-			Address: make(map[uint32]string),
-		})
+		bridges = append(bridges, types.NewBridge(bt, fmt.Sprintf("%s-bridge-%d", bt, i), make(map[uint32]string), 0))
 	}
 
 	return bridges
@@ -1990,6 +1982,7 @@ func (q *qemu) toGrpc() ([]byte, error) {
 
 func (q *qemu) storeState() error {
 	if q.store != nil {
+		q.state.Bridges = q.arch.getBridges()
 		if err := q.store.Store(store.Hypervisor, q.state); err != nil {
 			return err
 		}
@@ -2008,9 +2001,9 @@ func (q *qemu) save() (s persistapi.HypervisorState) {
 	s.HotpluggedMemory = q.state.HotpluggedMemory
 	s.HotplugVFIOOnRootBus = q.state.HotplugVFIOOnRootBus
 
-	for _, bridge := range q.state.Bridges {
+	for _, bridge := range q.arch.getBridges() {
 		s.Bridges = append(s.Bridges, persistapi.Bridge{
-			DeviceAddr: bridge.Address,
+			DeviceAddr: bridge.Devices,
 			Type:       string(bridge.Type),
 			ID:         bridge.ID,
 			Addr:       bridge.Addr,
@@ -2032,12 +2025,7 @@ func (q *qemu) load(s persistapi.HypervisorState) {
 	q.state.VirtiofsdPid = s.VirtiofsdPid
 
 	for _, bridge := range s.Bridges {
-		q.state.Bridges = append(q.state.Bridges, types.PCIBridge{
-			Address: bridge.DeviceAddr,
-			Type:    types.PCIType(bridge.Type),
-			ID:      bridge.ID,
-			Addr:    bridge.Addr,
-		})
+		q.state.Bridges = append(q.state.Bridges, types.NewBridge(types.Type(bridge.Type), bridge.ID, bridge.DeviceAddr, bridge.Addr))
 	}
 
 	for _, cpu := range s.HotpluggedVCPUs {
