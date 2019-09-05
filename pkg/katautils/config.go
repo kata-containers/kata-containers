@@ -340,7 +340,7 @@ func (h hypervisor) defaultBridges() uint32 {
 }
 
 func (h hypervisor) blockDeviceDriver() (string, error) {
-	supportedBlockDrivers := []string{config.VirtioSCSI, config.VirtioBlock, config.VirtioMmio, config.Nvdimm}
+	supportedBlockDrivers := []string{config.VirtioSCSI, config.VirtioBlock, config.VirtioMmio, config.Nvdimm, config.VirtioBlockCCW}
 
 	if h.BlockDeviceDriver == "" {
 		return defaultBlockDeviceDriver, nil

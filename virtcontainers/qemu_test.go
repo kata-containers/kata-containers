@@ -421,44 +421,6 @@ func TestQemuGrpc(t *testing.T) {
 	assert.True(q.id == q2.id)
 }
 
-func TestQemuAddDeviceToBridge(t *testing.T) {
-	assert := assert.New(t)
-
-	config := newQemuConfig()
-	config.DefaultBridges = defaultBridges
-
-	// addDeviceToBridge successfully
-	config.HypervisorMachineType = QemuPC
-	q := &qemu{
-		config: config,
-		arch:   newQemuArch(config),
-	}
-
-	q.state.Bridges = q.arch.bridges(q.config.DefaultBridges)
-	// get pciBridgeMaxCapacity value from virtcontainers/types/pci.go
-	const pciBridgeMaxCapacity = 30
-	for i := uint32(1); i <= pciBridgeMaxCapacity; i++ {
-		_, _, err := q.addDeviceToBridge(fmt.Sprintf("qemu-bridge-%d", i))
-		assert.Nil(err)
-	}
-
-	// fail to add device to bridge cause no more available bridge slot
-	_, _, err := q.addDeviceToBridge("qemu-bridge-31")
-	exceptErr := errors.New("no more bridge slots available")
-	assert.Equal(exceptErr.Error(), err.Error())
-
-	// addDeviceToBridge fails cause q.state.Bridges == 0
-	config.HypervisorMachineType = QemuPCLite
-	q = &qemu{
-		config: config,
-		arch:   newQemuArch(config),
-	}
-	q.state.Bridges = q.arch.bridges(q.config.DefaultBridges)
-	_, _, err = q.addDeviceToBridge("qemu-bridge")
-	exceptErr = errors.New("failed to get available address from bridges")
-	assert.Equal(exceptErr.Error(), err.Error())
-}
-
 func TestQemuFileBackedMem(t *testing.T) {
 	assert := assert.New(t)
 

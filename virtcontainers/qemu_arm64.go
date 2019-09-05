@@ -14,7 +14,6 @@ import (
 	"time"
 
 	govmmQemu "github.com/intel/govmm/qemu"
-	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/sirupsen/logrus"
 )
 
@@ -162,13 +161,13 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 	return q
 }
 
-func (q *qemuArm64) bridges(number uint32) []types.PCIBridge {
-	return genericBridges(number, q.machineType)
+func (q *qemuArm64) bridges(number uint32) {
+	q.Bridges = genericBridges(number, q.machineType)
 }
 
 // appendBridges appends to devices the given bridges
-func (q *qemuArm64) appendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge) []govmmQemu.Device {
-	return genericAppendBridges(devices, bridges, q.machineType)
+func (q *qemuArm64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
+	return genericAppendBridges(devices, q.Bridges, q.machineType)
 }
 
 func (q *qemuArm64) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {

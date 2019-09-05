@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -48,8 +49,8 @@ type qemuArch interface {
 	//capabilities returns the capabilities supported by QEMU
 	capabilities() types.Capabilities
 
-	// bridges returns the number bridges for the machine type
-	bridges(number uint32) []types.PCIBridge
+	// bridges sets the number bridges for the machine type
+	bridges(number uint32)
 
 	// cpuTopology returns the CPU topology for the given amount of vcpus
 	cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP
@@ -70,7 +71,7 @@ type qemuArch interface {
 	appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread)
 
 	// appendBridges appends bridges to devices
-	appendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge) []govmmQemu.Device
+	appendBridges(devices []govmmQemu.Device) []govmmQemu.Device
 
 	// append9PVolume appends a 9P volume to devices
 	append9PVolume(devices []govmmQemu.Device, volume types.Volume) []govmmQemu.Device
@@ -96,6 +97,21 @@ type qemuArch interface {
 	// appendRNGDevice appends a RNG device to devices
 	appendRNGDevice(devices []govmmQemu.Device, rngDevice config.RNGDev) []govmmQemu.Device
 
+	// addDeviceToBridge adds devices to the bus
+	addDeviceToBridge(ID string, t types.Type) (string, types.Bridge, error)
+
+	// removeDeviceFromBridge removes devices to the bus
+	removeDeviceFromBridge(ID string) error
+
+	// getBridges grants access to Bridges
+	getBridges() []types.Bridge
+
+	// setBridges grants access to Bridges
+	setBridges(bridges []types.Bridge)
+
+	// addBridge adds a new Bridge to the list of Bridges
+	addBridge(types.Bridge)
+
 	// handleImagePath handles the Hypervisor Config image path
 	handleImagePath(config HypervisorConfig)
 
@@ -117,6 +133,7 @@ type qemuArchBase struct {
 	kernelParamsNonDebug  []Param
 	kernelParamsDebug     []Param
 	kernelParams          []Param
+	Bridges               []types.Bridge
 }
 
 const (
@@ -242,18 +259,10 @@ func (q *qemuArchBase) capabilities() types.Capabilities {
 	return caps
 }
 
-func (q *qemuArchBase) bridges(number uint32) []types.PCIBridge {
-	var bridges []types.PCIBridge
-
+func (q *qemuArchBase) bridges(number uint32) {
 	for i := uint32(0); i < number; i++ {
-		bridges = append(bridges, types.PCIBridge{
-			Type:    types.PCI,
-			ID:      fmt.Sprintf("%s-bridge-%d", types.PCI, i),
-			Address: make(map[uint32]string),
-		})
+		q.Bridges = append(q.Bridges, types.NewBridge(types.PCI, fmt.Sprintf("%s-bridge-%d", types.PCI, i), make(map[uint32]string), 0))
 	}
-
-	return bridges
 }
 
 func (q *qemuArchBase) cpuTopology(vcpus, maxvcpus uint32) govmmQemu.SMP {
@@ -306,14 +315,14 @@ func (q *qemuArchBase) appendConsole(devices []govmmQemu.Device, path string) []
 	return devices
 }
 
-func (q *qemuArchBase) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+func genericImage(path string) (config.BlockDrive, error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, err
+		return config.BlockDrive{}, err
 	}
 
 	randBytes, err := utils.GenerateRandomBytes(8)
 	if err != nil {
-		return nil, err
+		return config.BlockDrive{}, err
 	}
 
 	id := utils.MakeNameID("image", hex.EncodeToString(randBytes), maxDevIDSize)
@@ -324,13 +333,21 @@ func (q *qemuArchBase) appendImage(devices []govmmQemu.Device, path string) ([]g
 		ID:     id,
 	}
 
+	return drive, nil
+}
+
+func (q *qemuArchBase) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+	drive, err := genericImage(path)
+	if err != nil {
+		return nil, err
+	}
 	return q.appendBlockDevice(devices, drive), nil
 }
 
-func (q *qemuArchBase) appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread) {
+func genericSCSIController(enableIOThreads, nestedRun bool) (govmmQemu.SCSIController, *govmmQemu.IOThread) {
 	scsiController := govmmQemu.SCSIController{
 		ID:            scsiControllerID,
-		DisableModern: q.nestedRun,
+		DisableModern: nestedRun,
 	}
 
 	var t *govmmQemu.IOThread
@@ -345,20 +362,27 @@ func (q *qemuArchBase) appendSCSIController(devices []govmmQemu.Device, enableIO
 		scsiController.IOThread = t.ID
 	}
 
-	devices = append(devices, scsiController)
+	return scsiController, t
+}
 
+func (q *qemuArchBase) appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread) {
+	d, t := genericSCSIController(enableIOThreads, q.nestedRun)
+	devices = append(devices, d)
 	return devices, t
 }
 
 // appendBridges appends to devices the given bridges
-func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device, bridges []types.PCIBridge) []govmmQemu.Device {
-	for idx, b := range bridges {
+func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device {
+	for idx, b := range q.Bridges {
+		if b.Type == types.CCW {
+			continue
+		}
 		t := govmmQemu.PCIBridge
 		if b.Type == types.PCIE {
 			t = govmmQemu.PCIEBridge
 		}
 
-		bridges[idx].Addr = bridgePCIStartAddr + idx
+		q.Bridges[idx].Addr = bridgePCIStartAddr + idx
 
 		devices = append(devices,
 			govmmQemu.BridgeDevice{
@@ -368,7 +392,7 @@ func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device, bridges []types
 				// Each bridge is required to be assigned a unique chassis id > 0
 				Chassis: idx + 1,
 				SHPC:    true,
-				Addr:    strconv.FormatInt(int64(bridges[idx].Addr), 10),
+				Addr:    strconv.FormatInt(int64(q.Bridges[idx].Addr), 10),
 			},
 		)
 	}
@@ -376,28 +400,30 @@ func (q *qemuArchBase) appendBridges(devices []govmmQemu.Device, bridges []types
 	return devices
 }
 
-func (q *qemuArchBase) append9PVolume(devices []govmmQemu.Device, volume types.Volume) []govmmQemu.Device {
-	if volume.MountTag == "" || volume.HostPath == "" {
-		return devices
-	}
-
+func generic9PVolume(volume types.Volume, nestedRun bool) govmmQemu.FSDevice {
 	devID := fmt.Sprintf("extra-9p-%s", volume.MountTag)
 	if len(devID) > maxDevIDSize {
 		devID = devID[:maxDevIDSize]
 	}
 
-	devices = append(devices,
-		govmmQemu.FSDevice{
-			Driver:        govmmQemu.Virtio9P,
-			FSDriver:      govmmQemu.Local,
-			ID:            devID,
-			Path:          volume.HostPath,
-			MountTag:      volume.MountTag,
-			SecurityModel: govmmQemu.None,
-			DisableModern: q.nestedRun,
-		},
-	)
+	return govmmQemu.FSDevice{
+		Driver:        govmmQemu.Virtio9P,
+		FSDriver:      govmmQemu.Local,
+		ID:            devID,
+		Path:          volume.HostPath,
+		MountTag:      volume.MountTag,
+		SecurityModel: govmmQemu.None,
+		DisableModern: nestedRun,
+	}
+}
 
+func (q *qemuArchBase) append9PVolume(devices []govmmQemu.Device, volume types.Volume) []govmmQemu.Device {
+	if volume.MountTag == "" || volume.HostPath == "" {
+		return devices
+	}
+
+	d := generic9PVolume(volume, q.nestedRun)
+	devices = append(devices, d)
 	return devices
 }
 
@@ -452,70 +478,83 @@ func networkModelToQemuType(model NetInterworkingModel) govmmQemu.NetDeviceType 
 	}
 }
 
-func (q *qemuArchBase) appendNetwork(devices []govmmQemu.Device, endpoint Endpoint) []govmmQemu.Device {
+func genericNetwork(endpoint Endpoint, vhost, nestedRun bool, index int) (govmmQemu.NetDevice, error) {
+	var d govmmQemu.NetDevice
 	switch ep := endpoint.(type) {
 	case *VethEndpoint, *BridgedMacvlanEndpoint, *IPVlanEndpoint:
 		netPair := ep.NetworkPair()
-		devices = append(devices,
-			govmmQemu.NetDevice{
-				Type:          networkModelToQemuType(netPair.NetInterworkingModel),
-				Driver:        govmmQemu.VirtioNet,
-				ID:            fmt.Sprintf("network-%d", q.networkIndex),
-				IFName:        netPair.TAPIface.Name,
-				MACAddress:    netPair.TAPIface.HardAddr,
-				DownScript:    "no",
-				Script:        "no",
-				VHost:         q.vhost,
-				DisableModern: q.nestedRun,
-				FDs:           netPair.VMFds,
-				VhostFDs:      netPair.VhostFds,
-			},
-		)
-		q.networkIndex++
+		d = govmmQemu.NetDevice{
+			Type:          networkModelToQemuType(netPair.NetInterworkingModel),
+			Driver:        govmmQemu.VirtioNet,
+			ID:            fmt.Sprintf("network-%d", index),
+			IFName:        netPair.TAPIface.Name,
+			MACAddress:    netPair.TAPIface.HardAddr,
+			DownScript:    "no",
+			Script:        "no",
+			VHost:         vhost,
+			DisableModern: nestedRun,
+			FDs:           netPair.VMFds,
+			VhostFDs:      netPair.VhostFds,
+		}
 	case *MacvtapEndpoint:
-		devices = append(devices,
-			govmmQemu.NetDevice{
-				Type:          govmmQemu.MACVTAP,
-				Driver:        govmmQemu.VirtioNet,
-				ID:            fmt.Sprintf("network-%d", q.networkIndex),
-				IFName:        ep.Name(),
-				MACAddress:    ep.HardwareAddr(),
-				DownScript:    "no",
-				Script:        "no",
-				VHost:         q.vhost,
-				DisableModern: q.nestedRun,
-				FDs:           ep.VMFds,
-				VhostFDs:      ep.VhostFds,
-			},
-		)
-		q.networkIndex++
-
+		d = govmmQemu.NetDevice{
+			Type:          govmmQemu.MACVTAP,
+			Driver:        govmmQemu.VirtioNet,
+			ID:            fmt.Sprintf("network-%d", index),
+			IFName:        ep.Name(),
+			MACAddress:    ep.HardwareAddr(),
+			DownScript:    "no",
+			Script:        "no",
+			VHost:         vhost,
+			DisableModern: nestedRun,
+			FDs:           ep.VMFds,
+			VhostFDs:      ep.VhostFds,
+		}
+	default:
+		return govmmQemu.NetDevice{}, fmt.Errorf("Unknown type for endpoint")
 	}
 
+	return d, nil
+}
+
+func (q *qemuArchBase) appendNetwork(devices []govmmQemu.Device, endpoint Endpoint) []govmmQemu.Device {
+	d, err := genericNetwork(endpoint, q.vhost, q.nestedRun, q.networkIndex)
+	if err != nil {
+		virtLog.WithField("subsystem", "qemuArch").WithError(err).Error("Failed to append network")
+		return devices
+	}
+	q.networkIndex++
+	devices = append(devices, d)
 	return devices
 }
 
-func (q *qemuArchBase) appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) []govmmQemu.Device {
+func genericBlockDevice(drive config.BlockDrive, nestedRun bool) (govmmQemu.BlockDevice, error) {
 	if drive.File == "" || drive.ID == "" || drive.Format == "" {
-		return devices
+		return govmmQemu.BlockDevice{}, fmt.Errorf("Empty File, ID or Format for drive %v", drive)
 	}
 
 	if len(drive.ID) > maxDevIDSize {
 		drive.ID = drive.ID[:maxDevIDSize]
 	}
 
-	devices = append(devices,
-		govmmQemu.BlockDevice{
-			Driver:        govmmQemu.VirtioBlock,
-			ID:            drive.ID,
-			File:          drive.File,
-			AIO:           govmmQemu.Threads,
-			Format:        govmmQemu.BlockDeviceFormat(drive.Format),
-			Interface:     "none",
-			DisableModern: q.nestedRun,
-		},
-	)
+	return govmmQemu.BlockDevice{
+		Driver:        govmmQemu.VirtioBlock,
+		ID:            drive.ID,
+		File:          drive.File,
+		AIO:           govmmQemu.Threads,
+		Format:        govmmQemu.BlockDeviceFormat(drive.Format),
+		Interface:     "none",
+		DisableModern: nestedRun,
+	}, nil
+}
 
+func (q *qemuArchBase) appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) []govmmQemu.Device {
+	d, err := genericBlockDevice(drive, q.nestedRun)
+	if err != nil {
+		virtLog.WithField("subsystem", "qemuArch").WithError(err).Error("Failed to append block device")
+		return devices
+	}
+	devices = append(devices, d)
 	return devices
 }
 
@@ -591,4 +630,56 @@ func (q *qemuArchBase) setIgnoreSharedMemoryMigrationCaps(ctx context.Context, q
 		},
 	})
 	return err
+}
+
+func (q *qemuArchBase) addDeviceToBridge(ID string, t types.Type) (string, types.Bridge, error) {
+	var err error
+	var addr uint32
+
+	if len(q.Bridges) == 0 {
+		return "", types.Bridge{}, errors.New("failed to get available address from bridges")
+	}
+
+	// looking for an empty address in the bridges
+	for _, b := range q.Bridges {
+		if t != b.Type {
+			continue
+		}
+		addr, err = b.AddDevice(ID)
+		if err == nil {
+			switch t {
+			case types.CCW:
+				return fmt.Sprintf("%04x", addr), b, nil
+			case types.PCI, types.PCIE:
+				return fmt.Sprintf("%02x", addr), b, nil
+			}
+		}
+	}
+
+	return "", types.Bridge{}, fmt.Errorf("no more bridge slots available")
+}
+
+func (q *qemuArchBase) removeDeviceFromBridge(ID string) error {
+	var err error
+	for _, b := range q.Bridges {
+		err = b.RemoveDevice(ID)
+		if err == nil {
+			// device was removed correctly
+			return nil
+		}
+	}
+
+	return err
+}
+
+func (q *qemuArchBase) getBridges() []types.Bridge {
+	return q.Bridges
+}
+
+func (q *qemuArchBase) setBridges(bridges []types.Bridge) {
+	q.Bridges = bridges
+}
+
+func (q *qemuArchBase) addBridge(b types.Bridge) {
+	q.Bridges = append(q.Bridges, b)
 }

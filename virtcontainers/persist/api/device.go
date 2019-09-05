@@ -38,6 +38,9 @@ type BlockDrive struct {
 
 	// VirtPath at which the device appears inside the VM, outside of the container mount namespace
 	VirtPath string
+
+	// DevNo
+	DevNo string
 }
 
 // VFIODev represents a VFIO drive used for hotplugging

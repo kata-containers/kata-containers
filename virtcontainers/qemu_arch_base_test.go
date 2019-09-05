@@ -18,6 +18,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -147,14 +148,44 @@ func TestQemuArchBaseBridges(t *testing.T) {
 	qemuArchBase := newQemuArchBase()
 	len := 5
 
-	bridges := qemuArchBase.bridges(uint32(len))
+	qemuArchBase.bridges(uint32(len))
+	bridges := qemuArchBase.getBridges()
 	assert.Len(bridges, len)
 
 	for i, b := range bridges {
 		id := fmt.Sprintf("%s-bridge-%d", types.PCI, i)
 		assert.Equal(types.PCI, b.Type)
 		assert.Equal(id, b.ID)
-		assert.NotNil(b.Address)
+		assert.NotNil(b.Devices)
+	}
+}
+
+func TestQemuAddDeviceToBridge(t *testing.T) {
+	assert := assert.New(t)
+
+	// addDeviceToBridge successfully
+	q := newQemuArchBase()
+	q.machineType = QemuPC
+
+	q.bridges(1)
+	for i := uint32(1); i <= types.PCIBridgeMaxCapacity; i++ {
+		_, _, err := q.addDeviceToBridge(fmt.Sprintf("qemu-bridge-%d", i), types.PCI)
+		assert.Nil(err)
+	}
+
+	// fail to add device to bridge cause no more available bridge slot
+	_, _, err := q.addDeviceToBridge("qemu-bridge-31", types.PCI)
+	exceptErr := errors.New("no more bridge slots available")
+	assert.Equal(exceptErr.Error(), err.Error())
+
+	// addDeviceToBridge fails cause q.Bridges == 0
+	q = newQemuArchBase()
+	q.machineType = QemuPCLite
+	q.bridges(0)
+	_, _, err = q.addDeviceToBridge("qemu-bridge", types.PCI)
+	if assert.Error(err) {
+		exceptErr = errors.New("failed to get available address from bridges")
+		assert.Equal(exceptErr.Error(), err.Error())
 	}
 }
 
@@ -283,10 +314,11 @@ func TestQemuArchBaseAppendBridges(t *testing.T) {
 	assert := assert.New(t)
 	qemuArchBase := newQemuArchBase()
 
-	bridges := qemuArchBase.bridges(1)
+	qemuArchBase.bridges(1)
+	bridges := qemuArchBase.getBridges()
 	assert.Len(bridges, 1)
 
-	devices = qemuArchBase.appendBridges(devices, bridges)
+	devices = qemuArchBase.appendBridges(devices)
 	assert.Len(devices, 1)
 
 	expectedOut := []govmmQemu.Device{

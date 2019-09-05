@@ -40,29 +40,32 @@ func TestQemuAmd64Bridges(t *testing.T) {
 	amd64 := newTestQemu(QemuPC)
 	len := 5
 
-	bridges := amd64.bridges(uint32(len))
+	amd64.bridges(uint32(len))
+	bridges := amd64.getBridges()
 	assert.Len(bridges, len)
 
 	for i, b := range bridges {
 		id := fmt.Sprintf("%s-bridge-%d", types.PCI, i)
 		assert.Equal(types.PCI, b.Type)
 		assert.Equal(id, b.ID)
-		assert.NotNil(b.Address)
+		assert.NotNil(b.Devices)
 	}
 
 	amd64 = newTestQemu(QemuQ35)
-	bridges = amd64.bridges(uint32(len))
+	amd64.bridges(uint32(len))
+	bridges = amd64.getBridges()
 	assert.Len(bridges, len)
 
 	for i, b := range bridges {
 		id := fmt.Sprintf("%s-bridge-%d", types.PCI, i)
 		assert.Equal(types.PCI, b.Type)
 		assert.Equal(id, b.ID)
-		assert.NotNil(b.Address)
+		assert.NotNil(b.Devices)
 	}
 
 	amd64 = newTestQemu(QemuQ35 + QemuPC)
-	bridges = amd64.bridges(uint32(len))
+	amd64.bridges(uint32(len))
+	bridges = amd64.getBridges()
 	assert.Nil(bridges)
 }
 
@@ -143,10 +146,11 @@ func TestQemuAmd64AppendBridges(t *testing.T) {
 	// check PC
 	amd64 := newTestQemu(QemuPC)
 
-	bridges := amd64.bridges(1)
+	amd64.bridges(1)
+	bridges := amd64.getBridges()
 	assert.Len(bridges, 1)
 
-	devices = amd64.appendBridges(devices, bridges)
+	devices = amd64.appendBridges(devices)
 	assert.Len(devices, 1)
 
 	expectedOut := []govmmQemu.Device{
@@ -165,11 +169,12 @@ func TestQemuAmd64AppendBridges(t *testing.T) {
 	// Check Q35
 	amd64 = newTestQemu(QemuQ35)
 
-	bridges = amd64.bridges(1)
+	amd64.bridges(1)
+	bridges = amd64.getBridges()
 	assert.Len(bridges, 1)
 
 	devices = []govmmQemu.Device{}
-	devices = amd64.appendBridges(devices, bridges)
+	devices = amd64.appendBridges(devices)
 	assert.Len(devices, 1)
 
 	expectedOut = []govmmQemu.Device{
