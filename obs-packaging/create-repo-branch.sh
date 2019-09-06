@@ -153,9 +153,12 @@ main() {
 	[ -n "${branch}" ] || usage "missing branch" "1"
 	if [ "${create_ci_subproject:-false}" == "true" ];then
 		release_type="ci"
+	elif [ "$arch_target" == "ppc64le" ]; then
+		release_type="alpha"
 	else
 		release_type="releases"
 	fi
+
 	project_branch="${home_project}:${release_type}:${arch_target}:${branch}"
 	create_meta_xml "${project_branch}" "${branch}"
 	info "Creating/Updating project with name ${project_branch}"
