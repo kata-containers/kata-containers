@@ -11,6 +11,10 @@ os:
   - linux
   - linux-ppc64le
 
+matrix:
+  allow_failures:
+    - os: linux-ppc64le
+
 language: bash
 
 services:
