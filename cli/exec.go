@@ -23,7 +23,7 @@ import (
 )
 
 type execParams struct {
-	ociProcess   oci.CompatOCIProcess
+	ociProcess   specs.Process
 	cID          string
 	pidFile      string
 	console      string
@@ -119,7 +119,7 @@ EXAMPLE:
 	},
 }
 
-func generateExecParams(context *cli.Context, specProcess *oci.CompatOCIProcess) (execParams, error) {
+func generateExecParams(context *cli.Context, specProcess *specs.Process) (execParams, error) {
 	ctxArgs := context.Args()
 
 	params := execParams{
@@ -133,7 +133,7 @@ func generateExecParams(context *cli.Context, specProcess *oci.CompatOCIProcess)
 	}
 
 	if context.String("process") != "" {
-		var ociProcess oci.CompatOCIProcess
+		var ociProcess specs.Process
 
 		fileContent, err := ioutil.ReadFile(context.String("process"))
 		if err != nil {

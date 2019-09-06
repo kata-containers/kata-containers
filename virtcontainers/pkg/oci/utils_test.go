@@ -135,7 +135,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		Interactive:         true,
 		Console:             consolePath,
 		NoNewPrivileges:     true,
-		Capabilities: types.LinuxCapabilities{
+		Capabilities: &specs.LinuxCapabilities{
 			Bounding:    capList,
 			Effective:   capList,
 			Inheritable: capList,
@@ -168,17 +168,18 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		},
 	}
 
-	var minimalOCISpec CompatOCISpec
+	var minimalOCISpec compatOCISpec
 
 	//Marshal and unmarshall json to compare  sandboxConfig and expectedSandboxConfig
 	err = json.Unmarshal([]byte(minimalConfig), &minimalOCISpec)
 	assert.NoError(err)
 	if minimalOCISpec.Process != nil {
-		caps, err := ContainerCapabilities(minimalOCISpec)
+		caps, err := containerCapabilities(minimalOCISpec)
 		assert.NoError(err)
-		minimalOCISpec.Process.Capabilities = caps
+		minimalOCISpec.Spec.Process = &minimalOCISpec.Process.Process
+		minimalOCISpec.Spec.Process.Capabilities = &caps
 	}
-	ociSpecJSON, err := json.Marshal(minimalOCISpec)
+	ociSpecJSON, err := json.Marshal(minimalOCISpec.Spec)
 	assert.NoError(err)
 
 	devInfo := config.DeviceInfo{
@@ -489,8 +490,8 @@ func TestGetContainerTypeFailure(t *testing.T) {
 	assert.Equal(containerType, expected)
 }
 
-func testContainerTypeSuccessful(t *testing.T, ociSpec CompatOCISpec, expected vc.ContainerType) {
-	containerType, err := ociSpec.ContainerType()
+func testContainerTypeSuccessful(t *testing.T, ociSpec specs.Spec, expected vc.ContainerType) {
+	containerType, err := ContainerType(ociSpec)
 	assert := assert.New(t)
 
 	assert.NoError(err)
@@ -498,7 +499,7 @@ func testContainerTypeSuccessful(t *testing.T, ociSpec CompatOCISpec, expected v
 }
 
 func TestContainerTypePodSandbox(t *testing.T) {
-	var ociSpec CompatOCISpec
+	var ociSpec specs.Spec
 
 	ociSpec.Annotations = map[string]string{
 		annotations.ContainerType: annotations.ContainerTypeSandbox,
@@ -508,7 +509,7 @@ func TestContainerTypePodSandbox(t *testing.T) {
 }
 
 func TestContainerTypePodContainer(t *testing.T) {
-	var ociSpec CompatOCISpec
+	var ociSpec specs.Spec
 
 	ociSpec.Annotations = map[string]string{
 		annotations.ContainerType: annotations.ContainerTypeContainer,
@@ -518,11 +519,11 @@ func TestContainerTypePodContainer(t *testing.T) {
 }
 
 func TestContainerTypePodSandboxEmptyAnnotation(t *testing.T) {
-	testContainerTypeSuccessful(t, CompatOCISpec{}, vc.PodSandbox)
+	testContainerTypeSuccessful(t, specs.Spec{}, vc.PodSandbox)
 }
 
 func TestContainerTypeFailure(t *testing.T) {
-	var ociSpec CompatOCISpec
+	var ociSpec specs.Spec
 	expected := vc.UnknownContainerType
 	unknownType := "unknown_type"
 	assert := assert.New(t)
@@ -531,13 +532,13 @@ func TestContainerTypeFailure(t *testing.T) {
 		annotations.ContainerType: unknownType,
 	}
 
-	containerType, err := ociSpec.ContainerType()
+	containerType, err := ContainerType(ociSpec)
 	assert.Error(err)
 	assert.Equal(containerType, expected)
 }
 
 func TestSandboxIDSuccessful(t *testing.T) {
-	var ociSpec CompatOCISpec
+	var ociSpec specs.Spec
 	testSandboxID := "testSandboxID"
 	assert := assert.New(t)
 
@@ -545,16 +546,16 @@ func TestSandboxIDSuccessful(t *testing.T) {
 		annotations.SandboxID: testSandboxID,
 	}
 
-	sandboxID, err := ociSpec.SandboxID()
+	sandboxID, err := SandboxID(ociSpec)
 	assert.NoError(err)
 	assert.Equal(sandboxID, testSandboxID)
 }
 
 func TestSandboxIDFailure(t *testing.T) {
-	var ociSpec CompatOCISpec
+	var ociSpec specs.Spec
 	assert := assert.New(t)
 
-	sandboxID, err := ociSpec.SandboxID()
+	sandboxID, err := SandboxID(ociSpec)
 	assert.Error(err)
 	assert.Empty(sandboxID)
 }
@@ -590,7 +591,7 @@ func TestAddKernelParamInvalid(t *testing.T) {
 }
 
 func TestDeviceTypeFailure(t *testing.T) {
-	var ociSpec CompatOCISpec
+	var ociSpec specs.Spec
 
 	invalidDeviceType := "f"
 	ociSpec.Linux = &specs.Linux{}
@@ -615,7 +616,7 @@ func TestContains(t *testing.T) {
 }
 
 func TestDevicePathEmpty(t *testing.T) {
-	var ociSpec CompatOCISpec
+	var ociSpec specs.Spec
 
 	ociSpec.Linux = &specs.Linux{}
 	ociSpec.Linux.Devices = []specs.LinuxDevice{
@@ -631,9 +632,9 @@ func TestDevicePathEmpty(t *testing.T) {
 }
 
 func TestContainerCapabilities(t *testing.T) {
-	var ociSpec CompatOCISpec
+	var ociSpec compatOCISpec
 
-	ociSpec.Process = &CompatOCIProcess{}
+	ociSpec.Process = &compatOCIProcess{}
 	ociSpec.Process.Capabilities = map[string]interface{}{
 		"bounding":    []interface{}{"CAP_KILL"},
 		"effective":   []interface{}{"CAP_KILL", "CAP_LEASE"},
@@ -642,7 +643,7 @@ func TestContainerCapabilities(t *testing.T) {
 		"ambient":     []interface{}{""},
 	}
 
-	c, err := ContainerCapabilities(ociSpec)
+	c, err := containerCapabilities(ociSpec)
 	assert.Nil(t, err)
 	assert.Equal(t, c.Bounding, []string{"CAP_KILL"})
 	assert.Equal(t, c.Effective, []string{"CAP_KILL", "CAP_LEASE"})
@@ -652,7 +653,7 @@ func TestContainerCapabilities(t *testing.T) {
 
 	ociSpec.Process.Capabilities = []interface{}{"CAP_LEASE", "CAP_SETUID"}
 
-	c, err = ContainerCapabilities(ociSpec)
+	c, err = containerCapabilities(ociSpec)
 	assert.Nil(t, err)
 	assert.Equal(t, c.Bounding, []string{"CAP_LEASE", "CAP_SETUID"})
 	assert.Equal(t, c.Effective, []string{"CAP_LEASE", "CAP_SETUID"})
@@ -662,7 +663,7 @@ func TestContainerCapabilities(t *testing.T) {
 
 	ociSpec.Process.Capabilities = nil
 
-	c, err = ContainerCapabilities(ociSpec)
+	c, err = containerCapabilities(ociSpec)
 	assert.Nil(t, err)
 	assert.Equal(t, c.Bounding, []string(nil))
 	assert.Equal(t, c.Effective, []string(nil))
@@ -673,9 +674,9 @@ func TestContainerCapabilities(t *testing.T) {
 
 // use specs.Spec to decode the spec, the content of capabilities is [] string
 func TestCompatOCISpecWithArray(t *testing.T) {
-	compatOCISpec := CompatOCISpec{}
+	compatOCISpec := compatOCISpec{}
 	err := json.Unmarshal([]byte(capabilitiesSpecArray), &compatOCISpec)
-	assert.Nil(t, err, "use CompatOCISpec to decode capabilitiesSpecArray failed")
+	assert.Nil(t, err, "use compatOCISpec to decode capabilitiesSpecArray failed")
 
 	ociSpecJSON, err := json.Marshal(compatOCISpec)
 	assert.Nil(t, err, "encode compatOCISpec failed")
@@ -686,7 +687,7 @@ func TestCompatOCISpecWithArray(t *testing.T) {
 	err = json.Unmarshal(ociSpecJSON, &ociSpec)
 	assert.NotNil(t, err, "This test should fail")
 
-	caps, err := ContainerCapabilities(compatOCISpec)
+	caps, err := containerCapabilities(compatOCISpec)
 	assert.Nil(t, err, "decode capabilities failed")
 	compatOCISpec.Process.Capabilities = caps
 
@@ -700,9 +701,9 @@ func TestCompatOCISpecWithArray(t *testing.T) {
 
 // use specs.Spec to decode the spec, the content of capabilities is struct
 func TestCompatOCISpecWithStruct(t *testing.T) {
-	compatOCISpec := CompatOCISpec{}
+	compatOCISpec := compatOCISpec{}
 	err := json.Unmarshal([]byte(capabilitiesSpecStruct), &compatOCISpec)
-	assert.Nil(t, err, "use CompatOCISpec to decode capabilitiesSpecStruct failed")
+	assert.Nil(t, err, "use compatOCISpec to decode capabilitiesSpecStruct failed")
 
 	ociSpecJSON, err := json.Marshal(compatOCISpec)
 	assert.Nil(t, err, "encode compatOCISpec failed")
@@ -810,10 +811,8 @@ func TestAddAssetAnnotations(t *testing.T) {
 		AgentConfig: vc.KataAgentConfig{},
 	}
 
-	ocispec := CompatOCISpec{
-		Spec: spec.Spec{
-			Annotations: expectedAnnotations,
-		},
+	ocispec := spec.Spec{
+		Annotations: expectedAnnotations,
 	}
 
 	addAssetAnnotations(ocispec, &config)

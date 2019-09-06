@@ -118,7 +118,7 @@ func create(ctx context.Context, containerID, bundlePath, console, pidFilePath s
 		return err
 	}
 
-	containerType, err := ociSpec.ContainerType()
+	containerType, err := oci.ContainerType(ociSpec)
 	if err != nil {
 		return err
 	}

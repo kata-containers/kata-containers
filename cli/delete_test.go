@@ -128,22 +128,20 @@ func TestDeleteInvalidConfig(t *testing.T) {
 	assert.False(vcmock.IsMockError(err))
 }
 
-func testConfigSetup(t *testing.T) (rootPath string, configPath string) {
+func testConfigSetup(t *testing.T) (rootPath string, bundlePath string) {
 	assert := assert.New(t)
 
 	tmpdir, err := ioutil.TempDir("", "")
 	assert.NoError(err)
 
-	bundlePath := filepath.Join(tmpdir, "bundle")
+	bundlePath = filepath.Join(tmpdir, "bundle")
 	err = os.MkdirAll(bundlePath, testDirMode)
 	assert.NoError(err)
 
 	err = createOCIConfig(bundlePath)
 	assert.NoError(err)
 
-	// config json path
-	configPath = filepath.Join(bundlePath, "config.json")
-	return tmpdir, configPath
+	return tmpdir, bundlePath
 }
 
 func TestDeleteSandbox(t *testing.T) {
@@ -153,9 +151,9 @@ func TestDeleteSandbox(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
@@ -231,9 +229,9 @@ func TestDeleteInvalidContainerType(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
@@ -270,9 +268,9 @@ func TestDeleteSandboxRunning(t *testing.T) {
 		MockID: testSandboxID,
 	}
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())
@@ -350,9 +348,9 @@ func TestDeleteRunningContainer(t *testing.T) {
 		},
 	}
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	path, err := createTempContainerIDMapping(sandbox.MockContainers[0].ID(), sandbox.MockContainers[0].ID())
@@ -433,9 +431,9 @@ func TestDeleteContainer(t *testing.T) {
 		},
 	}
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	path, err := createTempContainerIDMapping(sandbox.MockContainers[0].ID(), sandbox.MockContainers[0].ID())
@@ -533,9 +531,9 @@ func TestDeleteCLIFunctionSuccess(t *testing.T) {
 		},
 	}
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	path, err := createTempContainerIDMapping(sandbox.ID(), sandbox.ID())

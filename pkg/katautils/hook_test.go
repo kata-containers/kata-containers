@@ -13,7 +13,6 @@ import (
 
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	. "github.com/kata-containers/runtime/virtcontainers/pkg/mock"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
@@ -96,26 +95,22 @@ func TestPreStartHooks(t *testing.T) {
 	ctx := context.Background()
 
 	// Hooks field is nil
-	spec := oci.CompatOCISpec{}
+	spec := specs.Spec{}
 	err := PreStartHooks(ctx, spec, "", "")
 	assert.NoError(err)
 
 	// Hooks list is empty
-	spec = oci.CompatOCISpec{
-		Spec: specs.Spec{
-			Hooks: &specs.Hooks{},
-		},
+	spec = specs.Spec{
+		Hooks: &specs.Hooks{},
 	}
 	err = PreStartHooks(ctx, spec, "", "")
 	assert.NoError(err)
 
 	// Run with timeout 0
 	hook := createHook(0)
-	spec = oci.CompatOCISpec{
-		Spec: specs.Spec{
-			Hooks: &specs.Hooks{
-				Prestart: []specs.Hook{hook},
-			},
+	spec = specs.Spec{
+		Hooks: &specs.Hooks{
+			Prestart: []specs.Hook{hook},
 		},
 	}
 	err = PreStartHooks(ctx, spec, testSandboxID, testBundlePath)
@@ -123,11 +118,9 @@ func TestPreStartHooks(t *testing.T) {
 
 	// Failure due to wrong hook
 	hook = createWrongHook()
-	spec = oci.CompatOCISpec{
-		Spec: specs.Spec{
-			Hooks: &specs.Hooks{
-				Prestart: []specs.Hook{hook},
-			},
+	spec = specs.Spec{
+		Hooks: &specs.Hooks{
+			Prestart: []specs.Hook{hook},
 		},
 	}
 	err = PreStartHooks(ctx, spec, testSandboxID, testBundlePath)
@@ -144,26 +137,22 @@ func TestPostStartHooks(t *testing.T) {
 	ctx := context.Background()
 
 	// Hooks field is nil
-	spec := oci.CompatOCISpec{}
+	spec := specs.Spec{}
 	err := PostStartHooks(ctx, spec, "", "")
 	assert.NoError(err)
 
 	// Hooks list is empty
-	spec = oci.CompatOCISpec{
-		Spec: specs.Spec{
-			Hooks: &specs.Hooks{},
-		},
+	spec = specs.Spec{
+		Hooks: &specs.Hooks{},
 	}
 	err = PostStartHooks(ctx, spec, "", "")
 	assert.NoError(err)
 
 	// Run with timeout 0
 	hook := createHook(0)
-	spec = oci.CompatOCISpec{
-		Spec: specs.Spec{
-			Hooks: &specs.Hooks{
-				Poststart: []specs.Hook{hook},
-			},
+	spec = specs.Spec{
+		Hooks: &specs.Hooks{
+			Poststart: []specs.Hook{hook},
 		},
 	}
 	err = PostStartHooks(ctx, spec, testSandboxID, testBundlePath)
@@ -171,11 +160,9 @@ func TestPostStartHooks(t *testing.T) {
 
 	// Failure due to wrong hook
 	hook = createWrongHook()
-	spec = oci.CompatOCISpec{
-		Spec: specs.Spec{
-			Hooks: &specs.Hooks{
-				Poststart: []specs.Hook{hook},
-			},
+	spec = specs.Spec{
+		Hooks: &specs.Hooks{
+			Poststart: []specs.Hook{hook},
 		},
 	}
 	err = PostStartHooks(ctx, spec, testSandboxID, testBundlePath)
@@ -192,26 +179,22 @@ func TestPostStopHooks(t *testing.T) {
 	ctx := context.Background()
 
 	// Hooks field is nil
-	spec := oci.CompatOCISpec{}
+	spec := specs.Spec{}
 	err := PostStopHooks(ctx, spec, "", "")
 	assert.NoError(err)
 
 	// Hooks list is empty
-	spec = oci.CompatOCISpec{
-		Spec: specs.Spec{
-			Hooks: &specs.Hooks{},
-		},
+	spec = specs.Spec{
+		Hooks: &specs.Hooks{},
 	}
 	err = PostStopHooks(ctx, spec, "", "")
 	assert.NoError(err)
 
 	// Run with timeout 0
 	hook := createHook(0)
-	spec = oci.CompatOCISpec{
-		Spec: specs.Spec{
-			Hooks: &specs.Hooks{
-				Poststop: []specs.Hook{hook},
-			},
+	spec = specs.Spec{
+		Hooks: &specs.Hooks{
+			Poststop: []specs.Hook{hook},
 		},
 	}
 	err = PostStopHooks(ctx, spec, testSandboxID, testBundlePath)
@@ -219,11 +202,9 @@ func TestPostStopHooks(t *testing.T) {
 
 	// Failure due to wrong hook
 	hook = createWrongHook()
-	spec = oci.CompatOCISpec{
-		Spec: specs.Spec{
-			Hooks: &specs.Hooks{
-				Poststop: []specs.Hook{hook},
-			},
+	spec = specs.Spec{
+		Hooks: &specs.Hooks{
+			Poststop: []specs.Hook{hook},
 		},
 	}
 	err = PostStopHooks(ctx, spec, testSandboxID, testBundlePath)

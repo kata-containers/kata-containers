@@ -13,13 +13,14 @@ import (
 	"os"
 	"testing"
 
+	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/stretchr/testify/assert"
+	"github.com/urfave/cli"
+
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
-	"github.com/stretchr/testify/assert"
-	"github.com/urfave/cli"
 )
 
 func TestStartInvalidArgs(t *testing.T) {
@@ -61,7 +62,7 @@ func TestStartSandbox(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	ociSpecJSON, err := json.Marshal(oci.CompatOCISpec{})
+	ociSpecJSON, err := json.Marshal(specs.Spec{})
 	assert.NoError(err)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
@@ -139,7 +140,7 @@ func TestStartContainerSucessFailure(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	ociSpecJSON, err := json.Marshal(oci.CompatOCISpec{})
+	ociSpecJSON, err := json.Marshal(specs.Spec{})
 	assert.NoError(err)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
@@ -217,7 +218,7 @@ func TestStartCLIFunctionSuccess(t *testing.T) {
 	assert.NoError(err)
 	defer os.RemoveAll(path)
 
-	ociSpecJSON, err := json.Marshal(oci.CompatOCISpec{})
+	ociSpecJSON, err := json.Marshal(specs.Spec{})
 	assert.NoError(err)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {

@@ -17,6 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/opencontainers/runtime-spec/specs-go"
+
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
@@ -213,29 +215,6 @@ func newTestRuntimeConfig(dir, consolePath string, create bool) (oci.RuntimeConf
 	}, nil
 }
 
-// readOCIConfig returns an OCI spec.
-func readOCIConfigFile(configPath string) (oci.CompatOCISpec, error) {
-	if configPath == "" {
-		return oci.CompatOCISpec{}, errors.New("BUG: need config file path")
-	}
-
-	data, err := ioutil.ReadFile(configPath)
-	if err != nil {
-		return oci.CompatOCISpec{}, err
-	}
-
-	var ociSpec oci.CompatOCISpec
-	if err := json.Unmarshal(data, &ociSpec); err != nil {
-		return oci.CompatOCISpec{}, err
-	}
-	caps, err := oci.ContainerCapabilities(ociSpec)
-	if err != nil {
-		return oci.CompatOCISpec{}, err
-	}
-	ociSpec.Process.Capabilities = caps
-	return ociSpec, nil
-}
-
 // realMakeOCIBundle will create an OCI bundle (including the "config.json"
 // config file) in the directory specified (which must already exist).
 //
@@ -336,7 +315,7 @@ func createRootfs(dir string) error {
 	return nil
 }
 
-func writeOCIConfigFile(spec oci.CompatOCISpec, configPath string) error {
+func writeOCIConfigFile(spec specs.Spec, configPath string) error {
 	if configPath == "" {
 		return errors.New("BUG: need config file path")
 	}
@@ -347,19 +326,4 @@ func writeOCIConfigFile(spec oci.CompatOCISpec, configPath string) error {
 	}
 
 	return ioutil.WriteFile(configPath, bytes, testFileMode)
-}
-
-// Read fail that should contain a CompatOCISpec and
-// return its JSON representation on success
-func readOCIConfigJSON(configFile string) (string, error) {
-	bundlePath := filepath.Dir(configFile)
-	ociSpec, err := oci.ParseConfigJSON(bundlePath)
-	if err != nil {
-		return "", nil
-	}
-	ociSpecJSON, err := json.Marshal(ociSpec)
-	if err != nil {
-		return "", err
-	}
-	return string(ociSpecJSON), err
 }

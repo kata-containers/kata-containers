@@ -14,13 +14,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	vc "github.com/kata-containers/runtime/virtcontainers"
-	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
-	"github.com/kata-containers/runtime/virtcontainers/types"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/urfave/cli"
+
+	vc "github.com/kata-containers/runtime/virtcontainers"
+	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
+	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
 func TestExecCLIFunction(t *testing.T) {
@@ -90,9 +91,9 @@ func TestExecuteErrors(t *testing.T) {
 	assert.False(vcmock.IsMockError(err))
 
 	// Container state undefined
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations = map[string]string{
@@ -149,9 +150,9 @@ func TestExecuteErrorReadingProcessJson(t *testing.T) {
 	flagSet.Parse([]string{testContainerID})
 	ctx := createCLIContext(flagSet)
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
@@ -198,9 +199,9 @@ func TestExecuteErrorOpeningConsole(t *testing.T) {
 	flagSet.Parse([]string{testContainerID})
 	ctx := createCLIContext(flagSet)
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
@@ -265,9 +266,9 @@ func TestExecuteWithFlags(t *testing.T) {
 	flagSet.Parse([]string{testContainerID, "/tmp/foo"})
 	ctx := createCLIContext(flagSet)
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
@@ -355,9 +356,9 @@ func TestExecuteWithFlagsDetached(t *testing.T) {
 	flagSet.Parse([]string{testContainerID, "/tmp/foo"})
 	ctx := createCLIContext(flagSet)
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
@@ -434,9 +435,9 @@ func TestExecuteWithInvalidProcessJson(t *testing.T) {
 	flagSet.Parse([]string{testContainerID})
 	ctx := createCLIContext(flagSet)
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
@@ -486,9 +487,9 @@ func TestExecuteWithValidProcessJson(t *testing.T) {
 	flagSet.Parse([]string{testContainerID, "/tmp/foo"})
 	ctx := createCLIContext(flagSet)
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
@@ -587,9 +588,9 @@ func TestExecuteWithEmptyEnvironmentValue(t *testing.T) {
 	flagSet.Parse([]string{testContainerID})
 	ctx := createCLIContext(flagSet)
 
-	rootPath, configPath := testConfigSetup(t)
+	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	annotations := map[string]string{
@@ -698,7 +699,7 @@ func TestGenerateExecParams(t *testing.T) {
 	flagSet.String("apparmor", apparmor, "")
 
 	ctx := createCLIContext(flagSet)
-	process := &oci.CompatOCIProcess{}
+	process := &specs.Process{}
 	params, err := generateExecParams(ctx, process)
 	assert.NoError(err)
 
@@ -771,7 +772,7 @@ func TestGenerateExecParamsWithProcessJsonFile(t *testing.T) {
 
 	defer os.Remove(processPath)
 
-	process := &oci.CompatOCIProcess{}
+	process := &specs.Process{}
 	params, err := generateExecParams(ctx, process)
 	assert.NoError(err)
 

@@ -188,9 +188,6 @@ func testRunContainerSetup(t *testing.T) runContainerData {
 	err = makeOCIBundle(bundlePath)
 	assert.NoError(err)
 
-	// config json path
-	configPath := filepath.Join(bundlePath, specConfig)
-
 	// sandbox id and container id must be the same otherwise delete will not works
 	sandbox := &vcmock.Sandbox{
 		MockID: testContainerID,
@@ -208,7 +205,7 @@ func testRunContainerSetup(t *testing.T) runContainerData {
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, consolePath, true)
 	assert.NoError(err)
 
-	configJSON, err := readOCIConfigJSON(configPath)
+	configJSON, err := readOCIConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	return runContainerData{
