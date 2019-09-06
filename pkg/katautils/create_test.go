@@ -47,30 +47,7 @@ func init() {
 	tc = ktu.NewTestConstraint(false)
 }
 
-// readOCIConfig returns an OCI spec.
-func readOCIConfigFile(configPath string) (oci.CompatOCISpec, error) {
-	if configPath == "" {
-		return oci.CompatOCISpec{}, errors.New("BUG: need config file path")
-	}
-
-	data, err := ioutil.ReadFile(configPath)
-	if err != nil {
-		return oci.CompatOCISpec{}, err
-	}
-
-	var ociSpec oci.CompatOCISpec
-	if err := json.Unmarshal(data, &ociSpec); err != nil {
-		return oci.CompatOCISpec{}, err
-	}
-	caps, err := oci.ContainerCapabilities(ociSpec)
-	if err != nil {
-		return oci.CompatOCISpec{}, err
-	}
-	ociSpec.Process.Capabilities = caps
-	return ociSpec, nil
-}
-
-func writeOCIConfigFile(spec oci.CompatOCISpec, configPath string) error {
+func writeOCIConfigFile(spec specs.Spec, configPath string) error {
 	if configPath == "" {
 		return errors.New("BUG: need config file path")
 	}
@@ -205,7 +182,7 @@ func TestSetEphemeralStorageType(t *testing.T) {
 	assert.Nil(err)
 	defer syscall.Unmount(ephePath, 0)
 
-	ociSpec := oci.CompatOCISpec{}
+	ociSpec := specs.Spec{}
 	var ociMounts []specs.Mount
 	mount := specs.Mount{
 		Source: ephePath,
@@ -298,7 +275,7 @@ func TestCreateSandboxConfigFail(t *testing.T) {
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
 	assert.True(FileExists(ociConfigFile))
 
-	spec, err := readOCIConfigFile(ociConfigFile)
+	spec, err := oci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	quota := int64(0)
@@ -346,7 +323,7 @@ func TestCreateSandboxFail(t *testing.T) {
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
 	assert.True(FileExists(ociConfigFile))
 
-	spec, err := readOCIConfigFile(ociConfigFile)
+	spec, err := oci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	rootFs := vc.RootFs{Mounted: true}
@@ -376,7 +353,7 @@ func TestCreateContainerContainerConfigFail(t *testing.T) {
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
 	assert.True(FileExists(ociConfigFile))
 
-	spec, err := readOCIConfigFile(ociConfigFile)
+	spec, err := oci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	// Set invalid container type
@@ -419,7 +396,7 @@ func TestCreateContainerFail(t *testing.T) {
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
 	assert.True(FileExists(ociConfigFile))
 
-	spec, err := readOCIConfigFile(ociConfigFile)
+	spec, err := oci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	// set expected container type and sandboxID
@@ -469,7 +446,7 @@ func TestCreateContainer(t *testing.T) {
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
 	assert.True(FileExists(ociConfigFile))
 
-	spec, err := readOCIConfigFile(ociConfigFile)
+	spec, err := oci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	// set expected container type and sandboxID

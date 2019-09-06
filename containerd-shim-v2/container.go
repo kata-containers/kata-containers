@@ -11,15 +11,15 @@ import (
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/errdefs"
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
+	"github.com/opencontainers/runtime-spec/specs-go"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 )
 
 type container struct {
 	s        *service
 	ttyio    *ttyIO
-	spec     *oci.CompatOCISpec
+	spec     *specs.Spec
 	exitTime time.Time
 	execs    map[string]*exec
 	exitIOch chan struct{}
@@ -35,14 +35,14 @@ type container struct {
 	terminal bool
 }
 
-func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.ContainerType, spec *oci.CompatOCISpec) (*container, error) {
+func newContainer(s *service, r *taskAPI.CreateTaskRequest, containerType vc.ContainerType, spec *specs.Spec) (*container, error) {
 	if r == nil {
 		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, " CreateTaskRequest points to nil")
 	}
 
 	// in order to avoid deferencing a nil pointer in test
 	if spec == nil {
-		spec = &oci.CompatOCISpec{}
+		spec = &specs.Spec{}
 	}
 
 	c := &container{

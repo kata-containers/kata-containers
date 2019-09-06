@@ -150,10 +150,9 @@ func runUnitTests(m *testing.M) {
 	os.Exit(ret)
 }
 
-// Read fail that should contain a CompatOCISpec and
+// Read fail that should contain a specs.Spec and
 // return its JSON representation on success
-func readOCIConfigJSON(configFile string) (string, error) {
-	bundlePath := filepath.Dir(configFile)
+func readOCIConfigJSON(bundlePath string) (string, error) {
 	ociSpec, err := oci.ParseConfigJSON(bundlePath)
 	if err != nil {
 		return "", nil
@@ -400,30 +399,7 @@ func makeOCIBundle(bundleDir string) error {
 	return nil
 }
 
-// readOCIConfig returns an OCI spec.
-func readOCIConfigFile(configPath string) (oci.CompatOCISpec, error) {
-	if configPath == "" {
-		return oci.CompatOCISpec{}, errors.New("BUG: need config file path")
-	}
-
-	data, err := ioutil.ReadFile(configPath)
-	if err != nil {
-		return oci.CompatOCISpec{}, err
-	}
-
-	var ociSpec oci.CompatOCISpec
-	if err := json.Unmarshal(data, &ociSpec); err != nil {
-		return oci.CompatOCISpec{}, err
-	}
-	caps, err := oci.ContainerCapabilities(ociSpec)
-	if err != nil {
-		return oci.CompatOCISpec{}, err
-	}
-	ociSpec.Process.Capabilities = caps
-	return ociSpec, nil
-}
-
-func writeOCIConfigFile(spec oci.CompatOCISpec, configPath string) error {
+func writeOCIConfigFile(spec specs.Spec, configPath string) error {
 	if configPath == "" {
 		return errors.New("BUG: need config file path")
 	}
