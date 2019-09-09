@@ -133,6 +133,120 @@ func TestContainerRemoveDrive(t *testing.T) {
 	assert.Nil(t, err, "remove drive should succeed")
 }
 
+func TestUnmountHostMountsRemoveBindHostPath(t *testing.T) {
+	if tc.NotValid(ktu.NeedRoot()) {
+		t.Skip(testDisabledAsNonRoot)
+	}
+
+	createFakeMountDir := func(t *testing.T, dir, prefix string) string {
+		name, err := ioutil.TempDir(dir, "test-mnt-"+prefix+"-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return name
+	}
+
+	createFakeMountFile := func(t *testing.T, dir, prefix string) string {
+		f, err := ioutil.TempFile(dir, "test-mnt-"+prefix+"-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.Close()
+		return f.Name()
+	}
+
+	doUnmountCheck := func(src, dest, hostPath, nonEmptyHostpath, devPath string) {
+		mounts := []Mount{
+			{
+				Source:      src,
+				Destination: dest,
+				HostPath:    hostPath,
+				Type:        "bind",
+			},
+			{
+				Source:      src,
+				Destination: dest,
+				HostPath:    nonEmptyHostpath,
+				Type:        "bind",
+			},
+			{
+				Source:      src,
+				Destination: dest,
+				HostPath:    devPath,
+				Type:        "dev",
+			},
+		}
+
+		c := Container{
+			mounts: mounts,
+			ctx:    context.Background(),
+		}
+
+		if err := bindMount(c.ctx, src, hostPath, false); err != nil {
+			t.Fatal(err)
+		}
+		defer syscall.Unmount(hostPath, 0)
+		if err := bindMount(c.ctx, src, nonEmptyHostpath, false); err != nil {
+			t.Fatal(err)
+		}
+		defer syscall.Unmount(nonEmptyHostpath, 0)
+		if err := bindMount(c.ctx, src, devPath, false); err != nil {
+			t.Fatal(err)
+		}
+		defer syscall.Unmount(devPath, 0)
+
+		err := c.unmountHostMounts()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, path := range [3]string{src, dest, devPath} {
+			if _, err := os.Stat(path); err != nil {
+				if os.IsNotExist(err) {
+					t.Fatalf("path %s should not be removed", path)
+				} else {
+					t.Fatal(err)
+				}
+			}
+		}
+
+		if _, err := os.Stat(hostPath); err == nil {
+			t.Fatal("empty host-path should be removed")
+		} else if !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+
+		if _, err := os.Stat(nonEmptyHostpath); err != nil {
+			if os.IsNotExist(err) {
+				t.Fatal("non-empty host-path should not be removed")
+			} else {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	src := createFakeMountDir(t, testDir, "src")
+	dest := createFakeMountDir(t, testDir, "dest")
+	hostPath := createFakeMountDir(t, testDir, "host-path")
+	nonEmptyHostpath := createFakeMountDir(t, testDir, "non-empty-host-path")
+	devPath := createFakeMountDir(t, testDir, "dev-hostpath")
+	createFakeMountDir(t, nonEmptyHostpath, "nop")
+	doUnmountCheck(src, dest, hostPath, nonEmptyHostpath, devPath)
+
+	src = createFakeMountFile(t, testDir, "src")
+	dest = createFakeMountFile(t, testDir, "dest")
+	hostPath = createFakeMountFile(t, testDir, "host-path")
+	nonEmptyHostpath = createFakeMountFile(t, testDir, "non-empty-host-path")
+	devPath = createFakeMountFile(t, testDir, "dev-host-path")
+	f, err := os.OpenFile(nonEmptyHostpath, os.O_WRONLY, os.FileMode(0640))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString("nop\n")
+	f.Close()
+	doUnmountCheck(src, dest, hostPath, nonEmptyHostpath, devPath)
+}
+
 func testSetupFakeRootfs(t *testing.T) (testRawFile, loopDev, mntDir string, err error) {
 	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {
