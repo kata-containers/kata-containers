@@ -43,10 +43,10 @@ ifeq (dracut,$(BUILD_METHOD))
   DRACUT_OPTIONS     := --no-compress --conf /dev/null --confdir $(DRACUT_CONF_DIR)
 
   ifneq (,$(DRACUT_KVERSION))
-    # If a kernel version is not specified, do not make systemd load modules
-    # at startup
     DRACUT_KMODULES  := $(shell grep "^drivers=" $(DRACUT_CONF_DIR)/10-drivers.conf | sed -E "s,^drivers=\"(.*)\"$$,\1,")
   else
+    # If a kernel version is not specified, do not make systemd load modules
+    # at startup
     DRACUT_OPTIONS += --no-kernel
   endif
 
