@@ -616,6 +616,9 @@ func (q *qemu) virtiofsdArgs(sockPath string) []string {
 		args = append(args, "-f")
 	}
 
+	if len(q.config.VirtioFSExtraArgs) != 0 {
+		args = append(args, q.config.VirtioFSExtraArgs...)
+	}
 	return args
 }
 
