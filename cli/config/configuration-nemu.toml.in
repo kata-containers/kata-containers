@@ -123,6 +123,14 @@ virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
 #    Metadata, data, and pathname lookup are cached in guest and never expire.
 virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 
+# Extra args for virtiofsd daemon
+#
+# Format example:
+#   ["-o", "arg1=xxx,arg2", "-o", "hello world", "--arg3=yyy"]
+#
+# see `virtiofsd -h` for possible options.
+virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
+
 # Block storage driver to be used for the hypervisor in case the container
 # rootfs is backed by a block device. This is virtio-scsi, virtio-blk
 # or nvdimm.

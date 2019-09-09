@@ -83,44 +83,45 @@ type factory struct {
 }
 
 type hypervisor struct {
-	Path                    string `toml:"path"`
-	JailerPath              string `toml:"jailer_path"`
-	Kernel                  string `toml:"kernel"`
-	CtlPath                 string `toml:"ctlpath"`
-	Initrd                  string `toml:"initrd"`
-	Image                   string `toml:"image"`
-	Firmware                string `toml:"firmware"`
-	MachineAccelerators     string `toml:"machine_accelerators"`
-	KernelParams            string `toml:"kernel_params"`
-	MachineType             string `toml:"machine_type"`
-	BlockDeviceDriver       string `toml:"block_device_driver"`
-	EntropySource           string `toml:"entropy_source"`
-	SharedFS                string `toml:"shared_fs"`
-	VirtioFSDaemon          string `toml:"virtio_fs_daemon"`
-	VirtioFSCache           string `toml:"virtio_fs_cache"`
-	VirtioFSCacheSize       uint32 `toml:"virtio_fs_cache_size"`
-	BlockDeviceCacheSet     bool   `toml:"block_device_cache_set"`
-	BlockDeviceCacheDirect  bool   `toml:"block_device_cache_direct"`
-	BlockDeviceCacheNoflush bool   `toml:"block_device_cache_noflush"`
-	NumVCPUs                int32  `toml:"default_vcpus"`
-	DefaultMaxVCPUs         uint32 `toml:"default_maxvcpus"`
-	MemorySize              uint32 `toml:"default_memory"`
-	MemSlots                uint32 `toml:"memory_slots"`
-	MemOffset               uint32 `toml:"memory_offset"`
-	DefaultBridges          uint32 `toml:"default_bridges"`
-	Msize9p                 uint32 `toml:"msize_9p"`
-	DisableBlockDeviceUse   bool   `toml:"disable_block_device_use"`
-	MemPrealloc             bool   `toml:"enable_mem_prealloc"`
-	HugePages               bool   `toml:"enable_hugepages"`
-	FileBackedMemRootDir    string `toml:"file_mem_backend"`
-	Swap                    bool   `toml:"enable_swap"`
-	Debug                   bool   `toml:"enable_debug"`
-	DisableNestingChecks    bool   `toml:"disable_nesting_checks"`
-	EnableIOThreads         bool   `toml:"enable_iothreads"`
-	UseVSock                bool   `toml:"use_vsock"`
-	HotplugVFIOOnRootBus    bool   `toml:"hotplug_vfio_on_root_bus"`
-	DisableVhostNet         bool   `toml:"disable_vhost_net"`
-	GuestHookPath           string `toml:"guest_hook_path"`
+	Path                    string   `toml:"path"`
+	JailerPath              string   `toml:"jailer_path"`
+	Kernel                  string   `toml:"kernel"`
+	CtlPath                 string   `toml:"ctlpath"`
+	Initrd                  string   `toml:"initrd"`
+	Image                   string   `toml:"image"`
+	Firmware                string   `toml:"firmware"`
+	MachineAccelerators     string   `toml:"machine_accelerators"`
+	KernelParams            string   `toml:"kernel_params"`
+	MachineType             string   `toml:"machine_type"`
+	BlockDeviceDriver       string   `toml:"block_device_driver"`
+	EntropySource           string   `toml:"entropy_source"`
+	SharedFS                string   `toml:"shared_fs"`
+	VirtioFSDaemon          string   `toml:"virtio_fs_daemon"`
+	VirtioFSCache           string   `toml:"virtio_fs_cache"`
+	VirtioFSExtraArgs       []string `toml:"virtio_fs_extra_args"`
+	VirtioFSCacheSize       uint32   `toml:"virtio_fs_cache_size"`
+	BlockDeviceCacheSet     bool     `toml:"block_device_cache_set"`
+	BlockDeviceCacheDirect  bool     `toml:"block_device_cache_direct"`
+	BlockDeviceCacheNoflush bool     `toml:"block_device_cache_noflush"`
+	NumVCPUs                int32    `toml:"default_vcpus"`
+	DefaultMaxVCPUs         uint32   `toml:"default_maxvcpus"`
+	MemorySize              uint32   `toml:"default_memory"`
+	MemSlots                uint32   `toml:"memory_slots"`
+	MemOffset               uint32   `toml:"memory_offset"`
+	DefaultBridges          uint32   `toml:"default_bridges"`
+	Msize9p                 uint32   `toml:"msize_9p"`
+	DisableBlockDeviceUse   bool     `toml:"disable_block_device_use"`
+	MemPrealloc             bool     `toml:"enable_mem_prealloc"`
+	HugePages               bool     `toml:"enable_hugepages"`
+	FileBackedMemRootDir    string   `toml:"file_mem_backend"`
+	Swap                    bool     `toml:"enable_swap"`
+	Debug                   bool     `toml:"enable_debug"`
+	DisableNestingChecks    bool     `toml:"disable_nesting_checks"`
+	EnableIOThreads         bool     `toml:"enable_iothreads"`
+	UseVSock                bool     `toml:"use_vsock"`
+	HotplugVFIOOnRootBus    bool     `toml:"hotplug_vfio_on_root_bus"`
+	DisableVhostNet         bool     `toml:"disable_vhost_net"`
+	GuestHookPath           string   `toml:"guest_hook_path"`
 }
 
 type proxy struct {
@@ -618,6 +619,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		VirtioFSDaemon:          h.VirtioFSDaemon,
 		VirtioFSCacheSize:       h.VirtioFSCacheSize,
 		VirtioFSCache:           h.VirtioFSCache,
+		VirtioFSExtraArgs:       h.VirtioFSExtraArgs,
 		MemPrealloc:             h.MemPrealloc,
 		HugePages:               h.HugePages,
 		FileBackedMemRootDir:    h.FileBackedMemRootDir,
