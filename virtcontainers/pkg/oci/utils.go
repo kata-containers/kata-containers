@@ -141,6 +141,9 @@ type RuntimeConfig struct {
 	//Determines if create a netns for hypervisor process
 	DisableNewNetNs bool
 
+	//Determines kata processes are managed only in sandbox cgroup
+	SandboxCgroupOnly bool
+
 	//Experimental features enabled
 	Experimental []exp.Feature
 }
@@ -515,6 +518,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		ShmSize: shmSize,
 
 		SystemdCgroup: systemdCgroup,
+
+		SandboxCgroupOnly: runtime.SandboxCgroupOnly,
 
 		DisableGuestSeccomp: runtime.DisableGuestSeccomp,
 
