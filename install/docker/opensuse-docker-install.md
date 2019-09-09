@@ -20,9 +20,10 @@
    For more information on installing Docker please refer to the
    [Docker Guide](https://software.opensuse.org/package/docker).
 
-2. Configure the Docker daemon to use Kata Containers by default, with one of the following methods:
+2. Configure Docker to use Kata Containers by default with **ONE** of the following methods:
 
-   1. Specify the runtime options in `/etc/sysconfig/docker`:
+   1. Specify the runtime options in `/etc/sysconfig/docker` (this is the default and is applied automatically if you select the
+      [automatic installation](https://github.com/kata-containers/documentation/tree/master/install#automatic-installation) option)
 
        ```bash
        $ DOCKER_SYSCONFIG=/etc/sysconfig/docker
