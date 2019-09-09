@@ -67,7 +67,7 @@ $ git pull
    The commands from above will create a GitHub pull request in the Kata projects.
    Work with the Kata approvers to verify that the CI works and the PR are merged.
  
-   Note: There is not `VERSION` file in some repositories like `tests`. They are
+   Note: There is no `VERSION` file in some repositories like `tests`. They are
    tagged with the version that was used to test Kata Containers.
  
 2. Create GitHub tags:
