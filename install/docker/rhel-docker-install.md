@@ -22,9 +22,10 @@
    For more information on installing Docker please refer to the
    [Docker Guide](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux_atomic_host/7/html-single/getting_started_with_containers/#getting_docker_in_rhel_7).
 
-2. Configure Docker to use Kata Containers by default with one of the following methods:
+2. Configure Docker to use Kata Containers by default with **ONE** of the following methods:
 
-   1. systemd
+   1. systemd (this is the default and is applied automatically if you select the
+      [automatic installation](https://github.com/kata-containers/documentation/tree/master/install#automatic-installation) option)
 
        ```bash
        $ sudo mkdir -p /etc/systemd/system/docker.service.d/
