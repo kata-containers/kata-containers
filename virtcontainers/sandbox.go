@@ -7,13 +7,18 @@ package virtcontainers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 
+	"github.com/containerd/cgroups"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
@@ -100,6 +105,9 @@ type SandboxConfig struct {
 
 	// SystemdCgroup enables systemd cgroup support
 	SystemdCgroup bool
+
+	// SandboxCgroupOnly enables cgroup only at podlevel in the host
+	SandboxCgroupOnly bool
 
 	DisableGuestSeccomp bool
 
@@ -755,7 +763,7 @@ func (s *Sandbox) Delete() error {
 		}
 	}
 
-	if err := s.deleteCgroups(); err != nil {
+	if err := s.cgroupsDelete(); err != nil {
 		return err
 	}
 
@@ -1073,14 +1081,6 @@ func (s *Sandbox) addContainer(c *Container) error {
 	}
 	s.containers[c.id] = c
 
-	ann := c.GetAnnotations()
-	if ann[annotations.ContainerTypeKey] == string(PodSandbox) {
-		s.state.CgroupPath = c.state.CgroupPath
-		if !s.supportNewStore() {
-			return s.store.Store(store.State, s.state)
-		}
-	}
-
 	return nil
 }
 
@@ -1153,7 +1153,7 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 		return nil, err
 	}
 
-	if err = s.updateCgroups(); err != nil {
+	if err = s.cgroupsUpdate(); err != nil {
 		return nil, err
 	}
 
@@ -1330,7 +1330,7 @@ func (s *Sandbox) UpdateContainer(containerID string, resources specs.LinuxResou
 		return err
 	}
 
-	if err := s.updateCgroups(); err != nil {
+	if err := s.cgroupsUpdate(); err != nil {
 		return err
 	}
 
@@ -1421,7 +1421,7 @@ func (s *Sandbox) createContainers() error {
 		}
 	}
 
-	if err := s.updateCgroups(); err != nil {
+	if err := s.cgroupsUpdate(); err != nil {
 		return err
 	}
 	if err := s.storeSandbox(); err != nil {
@@ -1879,4 +1879,267 @@ func (s *Sandbox) calculateSandboxCPUs() uint32 {
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
 func (s *Sandbox) GetHypervisorType() string {
 	return string(s.config.HypervisorType)
+}
+
+func (s *Sandbox) cgroupsUpdate() error {
+	if s.state.CgroupPath == "" {
+		s.Logger().Warn("sandbox's cgroup won't be updated: cgroup path is empty")
+		return nil
+	}
+
+	cgroup, err := cgroupsLoadFunc(V1Constraints, cgroups.StaticPath(s.state.CgroupPath))
+	if err != nil {
+		return fmt.Errorf("Could not load cgroup %v: %v", s.state.CgroupPath, err)
+	}
+
+	if err := s.constrainHypervisorVCPUs(cgroup); err != nil {
+		return err
+	}
+
+	if len(s.containers) <= 1 {
+		// nothing to update
+		return nil
+	}
+
+	resources, err := s.resources()
+	if err != nil {
+		return err
+	}
+
+	if err := cgroup.Update(&resources); err != nil {
+		return fmt.Errorf("Could not update sandbox cgroup path='%v' error='%v'", s.state.CgroupPath, err)
+	}
+
+	return nil
+}
+
+func (s *Sandbox) cgroupsDelete() error {
+	s.Logger().Debug("Deleting sandbox cgroup")
+	if s.state.CgroupPath == "" {
+		s.Logger().Warnf("sandox cgroups path is empty")
+		return nil
+	}
+
+	var path string
+	cgroupSubystems := V1NoConstraints
+
+	if s.config.SandboxCgroupOnly {
+		// Override V1NoConstraints, if SandboxCgroupOnly is enabled
+		cgroupSubystems = cgroups.V1
+		path = s.state.CgroupPath
+		s.Logger().WithField("path", path).Debug("Deleting sandbox cgroups (all subsystems)")
+	} else {
+		path = cgroupNoConstraintsPath(s.state.CgroupPath)
+		s.Logger().WithField("path", path).Debug("Deleting no constraints cgroup")
+	}
+
+	sandboxCgroups, err := cgroupsLoadFunc(cgroupSubystems, cgroups.StaticPath(path))
+	if err == cgroups.ErrCgroupDeleted {
+		// cgroup already deleted
+		s.Logger().Warnf("cgroup already deleted: '%s'", err)
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("Could not load cgroups %v: %v", path, err)
+	}
+
+	// move running process here, that way cgroup can be removed
+	parent, err := parentCgroup(cgroupSubystems, path)
+	if err != nil {
+		// parent cgroup doesn't exist, that means there are no process running
+		// and the no constraints cgroup was removed.
+		s.Logger().WithError(err).Warn("Parent cgroup doesn't exist")
+		return nil
+	}
+
+	if err := sandboxCgroups.MoveTo(parent); err != nil {
+		// Don't fail, cgroup can be deleted
+		s.Logger().WithError(err).Warnf("Could not move process from %s to parent cgroup", path)
+	}
+
+	return sandboxCgroups.Delete()
+}
+
+func (s *Sandbox) constrainHypervisorVCPUs(cgroup cgroups.Cgroup) error {
+	pids := s.hypervisor.getPids()
+	if len(pids) == 0 || pids[0] == 0 {
+		return fmt.Errorf("Invalid hypervisor PID: %+v", pids)
+	}
+
+	// Move hypervisor into cgroups without constraints,
+	// those cgroups are not yet supported.
+	resources := &specs.LinuxResources{}
+	path := cgroupNoConstraintsPath(s.state.CgroupPath)
+	noConstraintsCgroup, err := cgroupsNewFunc(V1NoConstraints, cgroups.StaticPath(path), resources)
+	if err != nil {
+		return fmt.Errorf("Could not create cgroup %v: %v", path, err)
+
+	}
+	for _, pid := range pids {
+		if pid <= 0 {
+			s.Logger().Warnf("Invalid hypervisor pid: %d", pid)
+			continue
+		}
+
+		if err := noConstraintsCgroup.Add(cgroups.Process{Pid: pid}); err != nil {
+			return fmt.Errorf("Could not add hypervisor PID %d to cgroup %v: %v", pid, path, err)
+		}
+
+	}
+
+	// when new container joins, new CPU could be hotplugged, so we
+	// have to query fresh vcpu info from hypervisor for every time.
+	tids, err := s.hypervisor.getThreadIDs()
+	if err != nil {
+		return fmt.Errorf("failed to get thread ids from hypervisor: %v", err)
+	}
+	if len(tids.vcpus) == 0 {
+		// If there's no tid returned from the hypervisor, this is not
+		// a bug. It simply means there is nothing to constrain, hence
+		// let's return without any error from here.
+		return nil
+	}
+
+	// We are about to move just the vcpus (threads) into cgroups with constraints.
+	// Move whole hypervisor process whould be easier but the IO/network performance
+	// whould be impacted.
+	for _, i := range tids.vcpus {
+		// In contrast, AddTask will write thread id to `tasks`
+		// After this, vcpu threads are in "vcpu" sub-cgroup, other threads in
+		// qemu will be left in parent cgroup untouched.
+		if err := cgroup.AddTask(cgroups.Process{
+			Pid: i,
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Sandbox) resources() (specs.LinuxResources, error) {
+	resources := specs.LinuxResources{
+		CPU: s.cpuResources(),
+	}
+
+	return resources, nil
+}
+
+func (s *Sandbox) cpuResources() *specs.LinuxCPU {
+	// Use default period and quota if they are not specified.
+	// Container will inherit the constraints from its parent.
+	quota := int64(0)
+	period := uint64(0)
+	shares := uint64(0)
+	realtimePeriod := uint64(0)
+	realtimeRuntime := int64(0)
+
+	cpu := &specs.LinuxCPU{
+		Quota:           &quota,
+		Period:          &period,
+		Shares:          &shares,
+		RealtimePeriod:  &realtimePeriod,
+		RealtimeRuntime: &realtimeRuntime,
+	}
+
+	for _, c := range s.containers {
+		ann := c.GetAnnotations()
+		if ann[annotations.ContainerTypeKey] == string(PodSandbox) {
+			// skip sandbox container
+			continue
+		}
+
+		if c.config.Resources.CPU == nil {
+			continue
+		}
+
+		if c.config.Resources.CPU.Shares != nil {
+			shares = uint64(math.Max(float64(*c.config.Resources.CPU.Shares), float64(shares)))
+		}
+
+		if c.config.Resources.CPU.Quota != nil {
+			quota += *c.config.Resources.CPU.Quota
+		}
+
+		if c.config.Resources.CPU.Period != nil {
+			period = uint64(math.Max(float64(*c.config.Resources.CPU.Period), float64(period)))
+		}
+
+		if c.config.Resources.CPU.Cpus != "" {
+			cpu.Cpus += c.config.Resources.CPU.Cpus + ","
+		}
+
+		if c.config.Resources.CPU.RealtimeRuntime != nil {
+			realtimeRuntime += *c.config.Resources.CPU.RealtimeRuntime
+		}
+
+		if c.config.Resources.CPU.RealtimePeriod != nil {
+			realtimePeriod += *c.config.Resources.CPU.RealtimePeriod
+		}
+
+		if c.config.Resources.CPU.Mems != "" {
+			cpu.Mems += c.config.Resources.CPU.Mems + ","
+		}
+	}
+
+	cpu.Cpus = strings.Trim(cpu.Cpus, " \n\t,")
+
+	return validCPUResources(cpu)
+}
+
+// setupSandboxCgroup creates and joins sandbox cgroups for the sandbox config
+func (s *Sandbox) setupSandboxCgroup() error {
+	var podSandboxConfig *ContainerConfig
+
+	if s.config == nil {
+		return fmt.Errorf("Sandbox config is nil")
+	}
+
+	// get the container associated with the PodSandbox annotation. In Kubernetes, this
+	// represents the pause container. In Docker, this is the container. We derive the
+	// cgroup path from this container.
+	for _, cConfig := range s.config.Containers {
+		if cConfig.Annotations[annotations.ContainerTypeKey] == string(PodSandbox) {
+			podSandboxConfig = &cConfig
+			break
+		}
+	}
+
+	if podSandboxConfig == nil {
+		return fmt.Errorf("Failed to find cgroup path for sandbox: Container of type '%s' not found", PodSandbox)
+	}
+
+	configJSON, ok := podSandboxConfig.Annotations[annotations.ConfigJSONKey]
+	if !ok {
+		return fmt.Errorf("Could not find json config in annotations for container '%s'", podSandboxConfig.ID)
+	}
+
+	var spec specs.Spec
+	if err := json.Unmarshal([]byte(configJSON), &spec); err != nil {
+		return err
+	}
+
+	if spec.Linux == nil {
+		// Cgroup path is optional, though expected. If not defined, skip the setup
+		s.Logger().WithField("sandboxid", podSandboxConfig.ID).Warning("no cgroup path provided for pod sandbox, not creating sandbox cgroup")
+		return nil
+	}
+	validContainerCgroup := utils.ValidCgroupPath(spec.Linux.CgroupsPath)
+
+	// Create a Kata sandbox cgroup with the cgroup of the sandbox container as the parent
+	s.state.CgroupPath = filepath.Join(filepath.Dir(validContainerCgroup), cgroupKataPrefix+"_"+podSandboxConfig.ID)
+	cgroup, err := cgroupsNewFunc(cgroups.V1, cgroups.StaticPath(s.state.CgroupPath), &specs.LinuxResources{})
+	if err != nil {
+		return fmt.Errorf("Could not create sandbox cgroup in %v: %v", s.state.CgroupPath, err)
+
+	}
+
+	// Add the runtime to the Kata sandbox cgroup
+	runtimePid := os.Getpid()
+	if err := cgroup.Add(cgroups.Process{Pid: runtimePid}); err != nil {
+		return fmt.Errorf("Could not add runtime PID %d to sandbox cgroup:  %v", runtimePid, err)
+	}
+
+	return nil
 }

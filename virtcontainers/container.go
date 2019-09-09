@@ -887,8 +887,10 @@ func (c *Container) create() (err error) {
 	}
 	c.process = *process
 
-	if err = c.newCgroups(); err != nil {
-		return
+	if !c.sandbox.config.SandboxCgroupOnly {
+		if err = c.cgroupsCreate(); err != nil {
+			return
+		}
 	}
 
 	if !c.sandbox.supportNewStore() {
@@ -916,8 +918,10 @@ func (c *Container) delete() error {
 		return err
 	}
 
-	if err := c.deleteCgroups(); err != nil {
-		return err
+	if !c.sandbox.config.SandboxCgroupOnly {
+		if err := c.cgroupsDelete(); err != nil {
+			return err
+		}
 	}
 
 	return c.store.Delete()
@@ -1208,8 +1212,10 @@ func (c *Container) update(resources specs.LinuxResources) error {
 		return err
 	}
 
-	if err := c.updateCgroups(resources); err != nil {
-		return err
+	if !c.sandbox.config.SandboxCgroupOnly {
+		if err := c.cgroupsUpdate(resources); err != nil {
+			return err
+		}
 	}
 
 	return c.sandbox.agent.updateContainer(c.sandbox, *c, resources)
@@ -1430,8 +1436,8 @@ func (c *Container) detachDevices() error {
 	return nil
 }
 
-// creates a new cgroup and return the cgroups path
-func (c *Container) newCgroups() (err error) {
+// cgroupsCreate creates cgroups on the host for the associated container
+func (c *Container) cgroupsCreate() (err error) {
 	ann := c.GetAnnotations()
 
 	config, ok := ann[annotations.ConfigJSONKey]
@@ -1477,7 +1483,14 @@ func (c *Container) newCgroups() (err error) {
 	return nil
 }
 
-func (c *Container) deleteCgroups() error {
+// cgroupsDelete deletes the cgroups on the host for the associated container
+func (c *Container) cgroupsDelete() error {
+
+	if c.state.CgroupPath == "" {
+		c.Logger().Debug("container does not have host cgroups: nothing to update")
+		return nil
+	}
+
 	cgroup, err := cgroupsLoadFunc(cgroups.V1,
 		cgroups.StaticPath(c.state.CgroupPath))
 
@@ -1505,13 +1518,19 @@ func (c *Container) deleteCgroups() error {
 	}
 
 	if err := cgroup.Delete(); err != nil {
-		return fmt.Errorf("Could not delete container cgroup %v: %v", c.state.CgroupPath, err)
+		return fmt.Errorf("Could not delete container cgroup path='%v': error='%v'", c.state.CgroupPath, err)
 	}
 
 	return nil
 }
 
-func (c *Container) updateCgroups(resources specs.LinuxResources) error {
+// cgroupsUpdate updates cgroups on the host for the associated container
+func (c *Container) cgroupsUpdate(resources specs.LinuxResources) error {
+
+	if c.state.CgroupPath == "" {
+		c.Logger().Debug("container does not have host cgroups: nothing to update")
+		return nil
+	}
 	cgroup, err := cgroupsLoadFunc(cgroups.V1,
 		cgroups.StaticPath(c.state.CgroupPath))
 	if err != nil {
@@ -1525,7 +1544,7 @@ func (c *Container) updateCgroups(resources specs.LinuxResources) error {
 
 	// update cgroup
 	if err := cgroup.Update(&r); err != nil {
-		return fmt.Errorf("Could not update cgroup %v: %v", c.state.CgroupPath, err)
+		return fmt.Errorf("Could not update container cgroup path='%v': error='%v'", c.state.CgroupPath, err)
 	}
 
 	// store new resources
