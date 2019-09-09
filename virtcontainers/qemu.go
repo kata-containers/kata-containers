@@ -1587,7 +1587,7 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 		q.qemuConfig.Devices = q.arch.appendSocket(q.qemuConfig.Devices, v)
 	case kataVSOCK:
 		q.fds = append(q.fds, v.vhostFd)
-		q.qemuConfig.Devices = q.arch.appendVSockPCI(q.qemuConfig.Devices, v)
+		q.qemuConfig.Devices, err = q.arch.appendVSock(q.qemuConfig.Devices, v)
 	case Endpoint:
 		q.qemuConfig.Devices = q.arch.appendNetwork(q.qemuConfig.Devices, v)
 	case config.BlockDrive:

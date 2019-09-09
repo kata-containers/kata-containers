@@ -7,11 +7,10 @@ package virtcontainers
 
 import (
 	"fmt"
-	"time"
-
 	govmmQemu "github.com/intel/govmm/qemu"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/types"
+	"time"
 )
 
 type qemuS390x struct {
@@ -256,4 +255,29 @@ func (q *qemuS390x) appendSCSIController(devices []govmmQemu.Device, enableIOThr
 
 	devices = append(devices, d)
 	return devices, t
+}
+
+func (q *qemuS390x) appendVSock(devices []govmmQemu.Device, vsock kataVSOCK) ([]govmmQemu.Device, error) {
+	var devno string
+	id := fmt.Sprintf("vsock-%d", vsock.contextID)
+	addr, b, err := q.addDeviceToBridge(id, types.CCW)
+	if err != nil {
+		return devices, fmt.Errorf("Failed to append VSock: %v", err)
+	}
+	devno, err = b.AddressFormatCCW(addr)
+	if err != nil {
+		return devices, fmt.Errorf("Failed to append VSock: %v", err)
+	}
+	devices = append(devices,
+		govmmQemu.VSOCKDevice{
+			ID:            id,
+			ContextID:     vsock.contextID,
+			VHostFD:       vsock.vhostFd,
+			DisableModern: false,
+			DevNo:         devno,
+		},
+	)
+
+	return devices, nil
+
 }
