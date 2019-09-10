@@ -148,7 +148,11 @@ func (q *qemuPPC64le) appendImage(devices []govmmQemu.Device, path string) ([]go
 		ID:     id,
 	}
 
-	return q.appendBlockDevice(devices, drive), nil
+	devices, err = q.appendBlockDevice(devices, drive)
+	if err != nil {
+		return nil, err
+	}
+	return devices, nil
 }
 
 // appendBridges appends to devices the given bridges
