@@ -20,7 +20,7 @@ echo "Install perl-IPC-Run"
 sudo -E zypper -n install perl-IPC-Run
 
 echo "Add repo for moreutils"
-moreutils_repo="https://download.opensuse.org/repositories/utilities/SLE_${VERSION//-/_}_Backports/utilities.repo"
+moreutils_repo="https://download.opensuse.org/repositories/utilities/SLE_12_SP3_Backports/utilities.repo"
 sudo -E zypper addrepo --no-gpgcheck ${moreutils_repo}
 sudo -E zypper refresh
 
