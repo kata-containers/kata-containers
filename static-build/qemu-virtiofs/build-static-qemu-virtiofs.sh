@@ -11,11 +11,12 @@ set -o pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "${script_dir}/../../scripts/lib.sh"
+source "${script_dir}/../qemu.blacklist"
 
 packaging_dir="${script_dir}/../.."
-qemu_virtiofs_repo="https://gitlab.com/virtio-fs/qemu.git"
+qemu_virtiofs_repo=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.url")
 # This tag will be supported on the runtime versions.yaml
-qemu_virtiofs_tag="virtio-fs-v0.3"
+qemu_virtiofs_tag=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.tag")
 qemu_tar="kata-qemu-static.tar.gz"
 qemu_tmp_tar="kata-qemu-static-tmp.tar.gz"
 
