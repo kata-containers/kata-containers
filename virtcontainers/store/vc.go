@@ -25,7 +25,7 @@ import (
 //
 // VCStore simply dispatches items into the right Store.
 type VCStore struct {
-	config, state *Store
+	config, state, uuid *Store
 }
 
 func (s *VCStore) itemToStore(item Item) *Store {
@@ -34,6 +34,8 @@ func (s *VCStore) itemToStore(item Item) *Store {
 		return s.config
 	case State, Network, Hypervisor, Agent, Process, Lock, Mounts, Devices, DeviceIDs:
 		return s.state
+	case UUID:
+		return s.uuid
 	}
 
 	return s.state
@@ -51,9 +53,15 @@ func NewVCStore(ctx context.Context, configRoot, stateRoot string) (*VCStore, er
 		return nil, err
 	}
 
+	uuid, err := New(ctx, VCStoreUUIDPath())
+	if err != nil {
+		return nil, err
+	}
+
 	return &VCStore{
 		config: config,
 		state:  state,
+		uuid:   uuid,
 	}, nil
 }
 
@@ -109,7 +117,7 @@ func (s *VCStore) Delete() error {
 	return nil
 }
 
-// LoadSandboxState loads an returns a virtcontainer state
+// LoadState loads an returns a virtcontainer state
 func (s *VCStore) LoadState() (types.SandboxState, error) {
 	var state types.SandboxState
 
@@ -254,6 +262,11 @@ func SandboxConfigurationItemPath(id string, item Item) (string, error) {
 	}
 
 	return filepath.Join(ConfigStoragePath, id, itemFile), nil
+}
+
+// VCStoreUUIDPath returns a virtcontainers runtime uuid URL.
+func VCStoreUUIDPath() string {
+	return filesystemScheme + "://" + VMUUIDStoragePath
 }
 
 // SandboxRuntimeRoot returns a virtcontainers sandbox runtime root URL.
