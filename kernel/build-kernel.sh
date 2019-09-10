@@ -37,8 +37,11 @@ readonly default_patches_dir="${patches_repo_dir}/kernel/patches/"
 readonly default_kernel_config_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs"
 # Default path to search for kernel config fragments
 readonly default_config_frags_dir="${GOPATH}/src/${kernel_config_repo}/kernel/configs/fragments"
+readonly default_config_whitelist="${GOPATH}/src/${kernel_config_repo}/kernel/configs/fragments/whitelist.conf"
 #Path to kernel directory
 kernel_path=""
+#Experimental kernel support. Pull from virtio-fs GitLab instead of kernel.org
+experimental_kernel="false"
 #
 patches_path=""
 #
@@ -88,46 +91,56 @@ arch_to_kernel() {
 	local -r arch="$1"
 
 	case "$arch" in
-	aarch64) echo "arm64" ;;
-	ppc64le) echo "powerpc" ;;
-	x86_64) echo "$arch" ;;
-	s390x) echo "s390" ;;
-	*) die "unsupported architecture: $arch" ;;
+		aarch64) echo "arm64" ;;
+		ppc64le) echo "powerpc" ;;
+		s390x) echo "s390" ;;
+		x86_64) echo "$arch" ;;
+		*) die "unsupported architecture: $arch" ;;
 	esac
 }
 
 get_kernel() {
 	local version="${1:-}"
-	#Remove extra 'v'
-	version=${version#v}
 
 	local kernel_path=${2:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ ! -d "${kernel_path}" ] || die "kernel_path already exist"
 
-	major_version=$(echo "${version}" | cut -d. -f1)
-	kernel_tarball="linux-${version}.tar.xz"
 
-	curl --fail -OL "https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
-	grep "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"
-
-	if [ -f "${kernel_tarball}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
-		info "invalid kernel tarball ${kernel_tarball} removing "
-		rm -f "${kernel_tarball}"
-	fi
-	if [ ! -f "${kernel_tarball}" ]; then
-		info "Download kernel version ${version}"
-		info "Download kernel"
-		curl --fail -OL "https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
+	if [[ ${experimental_kernel} == "true" ]]; then
+		kernel_tarball="linux-${version}.tar.gz"
+		curl --fail -OL "https://gitlab.com/virtio-fs/linux/-/archive/${version}/${kernel_tarball}"
+		tar xf "${kernel_tarball}"
+		mv "linux-${version}" "${kernel_path}"
 	else
-		info "kernel tarball already downloaded"
+
+		#Remove extra 'v'
+		version=${version#v}
+
+		major_version=$(echo "${version}" | cut -d. -f1)
+		kernel_tarball="linux-${version}.tar.xz"
+
+		curl --fail -OL "https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
+		grep "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"
+
+		if [ -f "${kernel_tarball}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
+			info "invalid kernel tarball ${kernel_tarball} removing "
+			rm -f "${kernel_tarball}"
+		fi
+		if [ ! -f "${kernel_tarball}" ]; then
+			info "Download kernel version ${version}"
+			info "Download kernel"
+			curl --fail -OL "https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
+		else
+			info "kernel tarball already downloaded"
+		fi
+
+		sha256sum -c "${kernel_tarball}.sha256"
+
+		tar xf "${kernel_tarball}"
+
+		mv "linux-${version}" "${kernel_path}"
 	fi
-
-	sha256sum -c "${kernel_tarball}.sha256"
-
-	tar xf "${kernel_tarball}"
-
-	mv "linux-${version}" "${kernel_path}"
 }
 
 get_major_kernel_version() {
@@ -152,6 +165,7 @@ get_kernel_frag_path() {
 
 	local arch_configs="$(ls ${arch_path}/*.conf)"
 	local common_configs="$(ls ${common_path}/*.conf)"
+	local experimental_configs="$(ls ${common_path}/experimental/*.conf)"
 
 	# These are the strings that the kernel merge_config.sh script kicks out
 	# when it reports an error or warning condition. We search for them in the
@@ -164,11 +178,25 @@ get_kernel_frag_path() {
 	# handle specific cases, then add the path definition and search/list/cat
 	# here.
 	local all_configs="${common_configs} ${arch_configs}"
+	if [[ ${experimental_kernel} == "true" ]]; then
+		all_configs="${all_configs} ${experimental_configs}"
+	fi
 
 	info "Constructing config from fragments: ${config_path}"
-	local results=$(export KCONFIG_CONFIG=${config_path}; \
-					export ARCH=${arch_target}; \
-					cd ${kernel_path}; ${cmdpath} -r -n ${all_configs})
+
+
+	export KCONFIG_CONFIG=${config_path}
+	export ARCH=${arch_target}
+	cd ${kernel_path}
+
+	local results
+	results=$( ${cmdpath} -r -n ${all_configs} )
+	# Only consider results highlighting "not in final"
+	results=$(grep "${not_in_string}" <<< "$results")
+	# Do not care about options that are in whitelist if using experimental kernel
+	if [[ ${experimental_kernel} == "true" ]]; then
+		results=$(grep -v -f ${default_config_whitelist} <<< "$results")
+	fi
 
 	# Did we request any entries that did not make it?
 	local missing=$(echo $results | grep -v -q "${not_in_string}"; echo $?)
@@ -252,6 +280,7 @@ get_config_version() {
 setup_kernel() {
 	local kernel_path=${1:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
+
 	if [ -d "$kernel_path" ]; then
 		info "${kernel_path} already exist"
 		return
@@ -279,24 +308,23 @@ setup_kernel() {
 		kernel_patches=$(find "${patches_dir_for_version}" -name '*.patch' -type f)
 	else
 		info "kernel patches directory does not exit"
-
 	fi
 
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
 	(
-		cd "${kernel_path}" || exit 1
-		for p in ${kernel_patches}; do
-			info "Applying patch $p"
-			patch -p1 --fuzz 0 <"$p"
-		done
+	cd "${kernel_path}" || exit 1
+	for p in ${kernel_patches}; do
+		info "Applying patch $p"
+		patch -p1 --fuzz 0 <"$p"
+	done
 
-		[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
-		[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
+	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
+	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
 
-		info "Copying config file from: ${kernel_config_path}"
-		cp "${kernel_config_path}" ./.config
-		make oldconfig
+	info "Copying config file from: ${kernel_config_path}"
+	cp "${kernel_config_path}" ./.config
+	make oldconfig
 	)
 }
 
@@ -348,33 +376,33 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:c:hk:p:t:v:" opt; do
+	while getopts "a:c:hk:p:t:v:e" opt; do
 		case "$opt" in
-		a)
-			arch_target="${OPTARG}"
-			;;
-		c)
-			kernel_config_path="${OPTARG}"
-			;;
-
-		h)
-			usage
-			exit 0
-			;;
-
-		k)
-			kernel_path="${OPTARG}"
-			;;
-
-		t)
-			hypervisor_target="${OPTARG}"
-			;;
-		p)
-			patches_path="${OPTARG}"
-			;;
-		v)
-			kernel_version="${OPTARG}"
-			;;
+			a)
+				arch_target="${OPTARG}"
+				;;
+			c)
+				kernel_config_path="${OPTARG}"
+				;;
+			e)
+				experimental_kernel="true"
+				;;
+			h)
+				usage
+				exit 0
+				;;
+			k)
+				kernel_path="${OPTARG}"
+				;;
+			p)
+				patches_path="${OPTARG}"
+				;;
+			t)
+				hypervisor_target="${OPTARG}"
+				;;
+			v)
+				kernel_version="${OPTARG}"
+				;;
 		esac
 	done
 
@@ -400,21 +428,21 @@ main() {
 	info "Kernel version: ${kernel_version}"
 
 	case "${subcmd}" in
-	build)
-		build_kernel "${kernel_path}"
-		;;
-	install)
-		build_kernel "${kernel_path}"
-		install_kata "${kernel_path}"
-		;;
-	setup)
-		setup_kernel "${kernel_path}"
-		[ -d "${kernel_path}" ] || die "${kernel_path} does not exist"
-		echo "Kernel source ready: ${kernel_path} "
-		;;
-	*)
-		usage 1
-		;;
+		build)
+			build_kernel "${kernel_path}"
+			;;
+		install)
+			build_kernel "${kernel_path}"
+			install_kata "${kernel_path}"
+			;;
+		setup)
+			setup_kernel "${kernel_path}"
+			[ -d "${kernel_path}" ] || die "${kernel_path} does not exist"
+			echo "Kernel source ready: ${kernel_path} "
+			;;
+		*)
+			usage 1
+			;;
 
 	esac
 }
