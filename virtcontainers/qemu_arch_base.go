@@ -62,19 +62,19 @@ type qemuArch interface {
 	memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory
 
 	// appendConsole appends a console to devices
-	appendConsole(devices []govmmQemu.Device, path string) []govmmQemu.Device
+	appendConsole(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error)
 
 	// appendImage appends an image to devices
 	appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error)
 
 	// appendSCSIController appens a SCSI controller to devices
-	appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread)
+	appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread, error)
 
 	// appendBridges appends bridges to devices
 	appendBridges(devices []govmmQemu.Device) []govmmQemu.Device
 
 	// append9PVolume appends a 9P volume to devices
-	append9PVolume(devices []govmmQemu.Device, volume types.Volume) []govmmQemu.Device
+	append9PVolume(devices []govmmQemu.Device, volume types.Volume) ([]govmmQemu.Device, error)
 
 	// appendSocket appends a socket to devices
 	appendSocket(devices []govmmQemu.Device, socket types.Socket) []govmmQemu.Device
@@ -83,10 +83,10 @@ type qemuArch interface {
 	appendVSock(devices []govmmQemu.Device, vsock kataVSOCK) ([]govmmQemu.Device, error)
 
 	// appendNetwork appends a endpoint device to devices
-	appendNetwork(devices []govmmQemu.Device, endpoint Endpoint) []govmmQemu.Device
+	appendNetwork(devices []govmmQemu.Device, endpoint Endpoint) ([]govmmQemu.Device, error)
 
 	// appendBlockDevice appends a block drive to devices
-	appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) []govmmQemu.Device
+	appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error)
 
 	// appendVhostUserDevice appends a vhost user device to devices
 	appendVhostUserDevice(devices []govmmQemu.Device, drive config.VhostUserDeviceAttrs) ([]govmmQemu.Device, error)
@@ -95,7 +95,7 @@ type qemuArch interface {
 	appendVFIODevice(devices []govmmQemu.Device, vfioDevice config.VFIODev) []govmmQemu.Device
 
 	// appendRNGDevice appends a RNG device to devices
-	appendRNGDevice(devices []govmmQemu.Device, rngDevice config.RNGDev) []govmmQemu.Device
+	appendRNGDevice(devices []govmmQemu.Device, rngDevice config.RNGDev) ([]govmmQemu.Device, error)
 
 	// addDeviceToBridge adds devices to the bus
 	addDeviceToBridge(ID string, t types.Type) (string, types.Bridge, error)
@@ -293,7 +293,7 @@ func (q *qemuArchBase) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8
 	return memory
 }
 
-func (q *qemuArchBase) appendConsole(devices []govmmQemu.Device, path string) []govmmQemu.Device {
+func (q *qemuArchBase) appendConsole(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
 	serial := govmmQemu.SerialDevice{
 		Driver:        govmmQemu.VirtioSerial,
 		ID:            "serial0",
@@ -312,7 +312,7 @@ func (q *qemuArchBase) appendConsole(devices []govmmQemu.Device, path string) []
 
 	devices = append(devices, console)
 
-	return devices
+	return devices, nil
 }
 
 func genericImage(path string) (config.BlockDrive, error) {
@@ -341,7 +341,11 @@ func (q *qemuArchBase) appendImage(devices []govmmQemu.Device, path string) ([]g
 	if err != nil {
 		return nil, err
 	}
-	return q.appendBlockDevice(devices, drive), nil
+	devices, err = q.appendBlockDevice(devices, drive)
+	if err != nil {
+		return nil, err
+	}
+	return devices, nil
 }
 
 func genericSCSIController(enableIOThreads, nestedRun bool) (govmmQemu.SCSIController, *govmmQemu.IOThread) {
@@ -365,10 +369,10 @@ func genericSCSIController(enableIOThreads, nestedRun bool) (govmmQemu.SCSIContr
 	return scsiController, t
 }
 
-func (q *qemuArchBase) appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread) {
+func (q *qemuArchBase) appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
 	d, t := genericSCSIController(enableIOThreads, q.nestedRun)
 	devices = append(devices, d)
-	return devices, t
+	return devices, t, nil
 }
 
 // appendBridges appends to devices the given bridges
@@ -417,14 +421,14 @@ func generic9PVolume(volume types.Volume, nestedRun bool) govmmQemu.FSDevice {
 	}
 }
 
-func (q *qemuArchBase) append9PVolume(devices []govmmQemu.Device, volume types.Volume) []govmmQemu.Device {
+func (q *qemuArchBase) append9PVolume(devices []govmmQemu.Device, volume types.Volume) ([]govmmQemu.Device, error) {
 	if volume.MountTag == "" || volume.HostPath == "" {
-		return devices
+		return devices, nil
 	}
 
 	d := generic9PVolume(volume, q.nestedRun)
 	devices = append(devices, d)
-	return devices
+	return devices, nil
 }
 
 func (q *qemuArchBase) appendSocket(devices []govmmQemu.Device, socket types.Socket) []govmmQemu.Device {
@@ -517,15 +521,14 @@ func genericNetwork(endpoint Endpoint, vhost, nestedRun bool, index int) (govmmQ
 	return d, nil
 }
 
-func (q *qemuArchBase) appendNetwork(devices []govmmQemu.Device, endpoint Endpoint) []govmmQemu.Device {
+func (q *qemuArchBase) appendNetwork(devices []govmmQemu.Device, endpoint Endpoint) ([]govmmQemu.Device, error) {
 	d, err := genericNetwork(endpoint, q.vhost, q.nestedRun, q.networkIndex)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemuArch").WithError(err).Error("Failed to append network")
-		return devices
+		return devices, fmt.Errorf("Failed to append network %v", err)
 	}
 	q.networkIndex++
 	devices = append(devices, d)
-	return devices
+	return devices, nil
 }
 
 func genericBlockDevice(drive config.BlockDrive, nestedRun bool) (govmmQemu.BlockDevice, error) {
@@ -548,14 +551,13 @@ func genericBlockDevice(drive config.BlockDrive, nestedRun bool) (govmmQemu.Bloc
 	}, nil
 }
 
-func (q *qemuArchBase) appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) []govmmQemu.Device {
+func (q *qemuArchBase) appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error) {
 	d, err := genericBlockDevice(drive, q.nestedRun)
 	if err != nil {
-		virtLog.WithField("subsystem", "qemuArch").WithError(err).Error("Failed to append block device")
-		return devices
+		return devices, fmt.Errorf("Failed to append block device %v", err)
 	}
 	devices = append(devices, d)
-	return devices
+	return devices, nil
 }
 
 func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, attr config.VhostUserDeviceAttrs) ([]govmmQemu.Device, error) {
@@ -599,7 +601,7 @@ func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev conf
 	return devices
 }
 
-func (q *qemuArchBase) appendRNGDevice(devices []govmmQemu.Device, rngDev config.RNGDev) []govmmQemu.Device {
+func (q *qemuArchBase) appendRNGDevice(devices []govmmQemu.Device, rngDev config.RNGDev) ([]govmmQemu.Device, error) {
 	devices = append(devices,
 		govmmQemu.RngDevice{
 			ID:       rngDev.ID,
@@ -607,7 +609,7 @@ func (q *qemuArchBase) appendRNGDevice(devices []govmmQemu.Device, rngDev config
 		},
 	)
 
-	return devices
+	return devices, nil
 }
 
 func (q *qemuArchBase) handleImagePath(config HypervisorConfig) {
