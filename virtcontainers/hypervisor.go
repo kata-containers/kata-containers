@@ -172,7 +172,7 @@ func newHypervisor(hType HypervisorType) (hypervisor, error) {
 	case FirecrackerHypervisor:
 		return &firecracker{}, nil
 	case AcrnHypervisor:
-		return &acrn{}, nil
+		return &Acrn{}, nil
 	case MockHypervisor:
 		return &mockHypervisor{}, nil
 	default:

@@ -6,6 +6,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"unsafe"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/sirupsen/logrus"
 )
 
@@ -231,17 +233,26 @@ func acrnIsUsable() error {
 		return err
 	}
 	defer syscall.Close(f)
+	kataLog.WithField("device", acrnDevice).Info("device available")
 
-	fieldLogger := kataLog.WithField("check-type", "full")
-
-	fieldLogger.WithField("device", acrnDevice).Info("device available")
-
-	createVM := acrn_create_vm{
-		uuid: [16]uint8{
-			0xd2, 0x79, 0x54, 0x38, 0x25, 0xd6, 0x11, 0xe8,
-			0x86, 0x4e, 0xcb, 0x7a, 0x18, 0xb3, 0x46, 0x43,
-		},
+	acrnInst := vc.Acrn{}
+	vcStore, err := store.NewVCSandboxStore(context.Background(), "kata-check")
+	if err != nil {
+		return err
 	}
+
+	uuidStr, err := acrnInst.GetNextAvailableUUID(vcStore)
+	if err != nil {
+		return err
+	}
+
+	uuid, err := acrnInst.GetACRNUUIDBytes(uuidStr)
+	if err != nil {
+		return fmt.Errorf("Converting UUID str to bytes failed, Err:%s", err)
+	}
+
+	var createVM acrn_create_vm
+	createVM.uuid = uuid
 
 	ret, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
 		uintptr(f),
@@ -249,9 +260,9 @@ func acrnIsUsable() error {
 		uintptr(unsafe.Pointer(&createVM)))
 	if ret != 0 || errno != 0 {
 		if errno == syscall.EBUSY {
-			fieldLogger.WithField("reason", "another hypervisor running").Error("cannot create VM")
+			kataLog.WithField("reason", "another hypervisor running").Error("cannot create VM")
 		}
-		fieldLogger.WithFields(logrus.Fields{
+		kataLog.WithFields(logrus.Fields{
 			"ret":   ret,
 			"errno": errno,
 		}).Info("Create VM Error")
@@ -263,14 +274,14 @@ func acrnIsUsable() error {
 		uintptr(ioctl_ACRN_DESTROY_VM),
 		0)
 	if ret != 0 || errno != 0 {
-		fieldLogger.WithFields(logrus.Fields{
+		kataLog.WithFields(logrus.Fields{
 			"ret":   ret,
 			"errno": errno,
 		}).Info("Destroy VM Error")
 		return errno
 	}
 
-	fieldLogger.WithField("feature", "create-vm").Info("feature available")
+	kataLog.WithField("feature", "create-vm").Info("feature available")
 
 	return nil
 }

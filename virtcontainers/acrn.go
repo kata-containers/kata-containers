@@ -14,6 +14,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unsafe"
 
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
@@ -21,25 +22,57 @@ import (
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
-// AcrnState keeps Acrn's state
+// ACRN currently supports only known UUIDs for security
+// reasons (FuSa). When launching VM, only these pre-defined
+// UUID should be used else VM launch will fail. The main
+// of purpose UUID is is not used for image identification
+// but generating vSeed (virtual seed which takes UUID
+// as one of the parameter) which is used during VM boot.
+
+// acrnUUIDsToIdx lists Idx corresponding to the UUID
+var acrnUUIDsToIdx = map[string]uint8{
+	"a7ada506-1ab0-4b6b-a0da-e513ca9b8c2f": 0,
+	"dbeae168-26e4-4084-9227-622193e56325": 1,
+	"18ed60cd-e9ea-4bf4-8f87-8523fc8347a3": 2,
+	"3f90b6f8-449a-4e72-b99c-063a889fc422": 3,
+	"1ae8587b-e599-4b59-8260-6d14ac166a55": 4,
+	"75f3b94b-49ed-48fc-b019-577ef45adf2b": 5,
+	"ca62cf3c-8359-47e8-a3f7-de2d682dfb02": 6,
+	"e3189497-c3f6-4b97-9e2c-18ac0ab9064d": 7,
+}
+
+// acrnIdxToUUIDs lists UUIDs corresponding to the Idx
+var acrnIdxToUUIDs = map[uint8]string{
+	0: "a7ada506-1ab0-4b6b-a0da-e513ca9b8c2f",
+	1: "dbeae168-26e4-4084-9227-622193e56325",
+	2: "18ed60cd-e9ea-4bf4-8f87-8523fc8347a3",
+	3: "3f90b6f8-449a-4e72-b99c-063a889fc422",
+	4: "1ae8587b-e599-4b59-8260-6d14ac166a55",
+	5: "75f3b94b-49ed-48fc-b019-577ef45adf2b",
+	6: "ca62cf3c-8359-47e8-a3f7-de2d682dfb02",
+	7: "e3189497-c3f6-4b97-9e2c-18ac0ab9064d",
+}
+
+// AcrnInfo keeps track of UUID availability
+type AcrnInfo struct {
+	UUIDAvailability [8]uint8
+}
+
+// AcrnState keeps track of VM UUID, PID.
 type AcrnState struct {
 	UUID string
+	PID  int
 }
 
-// AcrnInfo keeps PID of the hypervisor
-type AcrnInfo struct {
-	PID int
-}
-
-// acrn is an Hypervisor interface implementation for the Linux acrn hypervisor.
-type acrn struct {
-	id string
-
+// Acrn is an Hypervisor interface implementation for the Linux acrn hypervisor.
+type Acrn struct {
+	id         string
 	store      *store.VCStore
 	config     HypervisorConfig
 	acrnConfig Config
@@ -49,17 +82,41 @@ type acrn struct {
 	ctx        context.Context
 }
 
+type acrnPlatformInfo struct {
+	cpuNum            uint16     //nolint
+	reserved0         [126]uint8 //nolint
+	maxVCPUsPerVM     uint16     //nolint
+	maxKataContainers uint8
+	reserved1         [125]uint8 //nolint
+}
+
+const acrnDevice = "/dev/acrn_vhm"
+
+// ioctl_ACRN_CREATE_VM is the IOCTL to create VM in ACRN.
+// Current Linux mainstream kernel doesn't have support for ACRN.
+// Due to this several macros are not defined in Linux headers.
+// Until the support is available, directly use the value instead
+// of macros.
+//https://github.com/kata-containers/runtime/issues/1784
+const ioctl_ACRN_GET_PLATFORM_INFO = 0x43000003 //nolint
+
 const (
 	acrnConsoleSocket          = "console.sock"
 	acrnStopSandboxTimeoutSecs = 15
 )
+
+//UUIDBusy marks a particular UUID as busy
+const UUIDBusy = 1
+
+//UUIDFree marks a particular UUID as free
+const UUIDFree = 0
 
 // agnostic list of kernel parameters
 var acrnDefaultKernelParameters = []Param{
 	{"panic", "1"},
 }
 
-func (a *acrn) kernelParameters() string {
+func (a *Acrn) kernelParameters() string {
 	// get a list of arch kernel parameters
 	params := a.arch.kernelParameters(a.config.Debug)
 
@@ -79,20 +136,20 @@ func (a *acrn) kernelParameters() string {
 	return strings.Join(paramsStr, " ")
 }
 
-// Adds all capabilities supported by acrn implementation of hypervisor interface
-func (a *acrn) capabilities() types.Capabilities {
+// Adds all capabilities supported by Acrn implementation of hypervisor interface
+func (a *Acrn) capabilities() types.Capabilities {
 	span, _ := a.trace("capabilities")
 	defer span.Finish()
 
 	return a.arch.capabilities()
 }
 
-func (a *acrn) hypervisorConfig() HypervisorConfig {
+func (a *Acrn) hypervisorConfig() HypervisorConfig {
 	return a.config
 }
 
 // get the acrn binary path
-func (a *acrn) acrnPath() (string, error) {
+func (a *Acrn) acrnPath() (string, error) {
 	p, err := a.config.HypervisorAssetPath()
 	if err != nil {
 		return "", err
@@ -113,7 +170,7 @@ func (a *acrn) acrnPath() (string, error) {
 }
 
 // get the ACRNCTL binary path
-func (a *acrn) acrnctlPath() (string, error) {
+func (a *Acrn) acrnctlPath() (string, error) {
 	ctlpath, err := a.config.HypervisorCtlAssetPath()
 	if err != nil {
 		return "", err
@@ -134,11 +191,11 @@ func (a *acrn) acrnctlPath() (string, error) {
 }
 
 // Logger returns a logrus logger appropriate for logging acrn messages
-func (a *acrn) Logger() *logrus.Entry {
+func (a *Acrn) Logger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "acrn")
 }
 
-func (a *acrn) trace(name string) (opentracing.Span, context.Context) {
+func (a *Acrn) trace(name string) (opentracing.Span, context.Context) {
 	if a.ctx == nil {
 		a.Logger().WithField("type", "bug").Error("trace called before context set")
 		a.ctx = context.Background()
@@ -152,13 +209,13 @@ func (a *acrn) trace(name string) (opentracing.Span, context.Context) {
 	return span, ctx
 }
 
-func (a *acrn) memoryTopology() (Memory, error) {
+func (a *Acrn) memoryTopology() (Memory, error) {
 	memMb := uint64(a.config.MemorySize)
 
 	return a.arch.memoryTopology(memMb), nil
 }
 
-func (a *acrn) appendImage(devices []Device, imagePath string) ([]Device, error) {
+func (a *Acrn) appendImage(devices []Device, imagePath string) ([]Device, error) {
 	if imagePath == "" {
 		return nil, fmt.Errorf("Image path is empty: %s", imagePath)
 	}
@@ -180,7 +237,7 @@ func (a *acrn) appendImage(devices []Device, imagePath string) ([]Device, error)
 	return devices, nil
 }
 
-func (a *acrn) buildDevices(imagePath string) ([]Device, error) {
+func (a *Acrn) buildDevices(imagePath string) ([]Device, error) {
 	var devices []Device
 
 	if imagePath == "" {
@@ -219,7 +276,7 @@ func (a *acrn) buildDevices(imagePath string) ([]Device, error) {
 }
 
 // setup sets the Acrn structure up.
-func (a *acrn) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore) error {
+func (a *Acrn) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore) error {
 	span, _ := a.trace("setup")
 	defer span.Finish()
 
@@ -234,28 +291,32 @@ func (a *acrn) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 	a.arch = newAcrnArch(a.config)
 
 	var create bool
+	var uuid string
 
 	if a.store != nil { //use old store
-		if err = a.store.Load(store.Hypervisor, &a.info); err != nil {
+		if err = a.store.Load(store.Hypervisor, &a.state); err != nil {
 			create = true
 		}
-	} else if a.info.PID == 0 { // new store
+	} else if a.state.UUID == "" { // new store
 		create = true
 	}
 
 	if create {
-		// acrn currently supports only known UUIDs for security
-		// reasons (FuSa). When launching VM, only these pre-defined
-		// UUID should be used else VM launch will fail. acrn team is
-		// working on a solution to expose these pre-defined UUIDs
-		// to Kata in order for it to launch VMs successfully.
-		// Until this support is available, Kata is limited to
-		// launch 1 VM (using the default UUID).
-		// https://github.com/kata-containers/runtime/issues/1785
+		a.Logger().Debug("Setting UUID")
+		if uuid, err = a.GetNextAvailableUUID(nil); err != nil {
+			return err
+		}
+		a.state.UUID = uuid
+		Idx := acrnUUIDsToIdx[uuid]
+		a.info.UUIDAvailability[Idx] = UUIDBusy
 
 		// The path might already exist, but in case of VM templating,
 		// we have to create it since the sandbox has not created it yet.
 		if err = os.MkdirAll(store.SandboxRuntimeRootPath(id), store.DirMode); err != nil {
+			return err
+		}
+
+		if err = a.storeState(); err != nil {
 			return err
 		}
 
@@ -267,7 +328,7 @@ func (a *acrn) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 	return nil
 }
 
-func (a *acrn) createDummyVirtioBlkDev(devices []Device) ([]Device, error) {
+func (a *Acrn) createDummyVirtioBlkDev(devices []Device) ([]Device, error) {
 	span, _ := a.trace("createDummyVirtioBlkDev")
 	defer span.Finish()
 
@@ -287,7 +348,7 @@ func (a *acrn) createDummyVirtioBlkDev(devices []Device) ([]Device, error) {
 }
 
 // createSandbox is the Hypervisor sandbox creation.
-func (a *acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, store *store.VCStore) error {
+func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, store *store.VCStore) error {
 	// Save the tracing context
 	a.ctx = ctx
 
@@ -319,8 +380,9 @@ func (a *acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		Params:    a.kernelParameters(),
 	}
 
-	// Disabling UUID check until the below is fixed.
-	// https://github.com/kata-containers/runtime/issues/1785
+	if a.state.UUID == "" {
+		return fmt.Errorf("ACRN UUID should not be empty")
+	}
 
 	devices, err := a.buildDevices(imagePath)
 	if err != nil {
@@ -338,6 +400,7 @@ func (a *acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	}
 
 	acrnConfig := Config{
+		UUID:     a.state.UUID,
 		ACPIVirt: true,
 		Path:     acrnPath,
 		CtlPath:  acrnctlPath,
@@ -354,7 +417,7 @@ func (a *acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 }
 
 // startSandbox will start the Sandbox's VM.
-func (a *acrn) startSandbox(timeoutSecs int) error {
+func (a *Acrn) startSandbox(timeoutSecs int) error {
 	span, _ := a.trace("startSandbox")
 	defer span.Finish()
 
@@ -389,7 +452,7 @@ func (a *acrn) startSandbox(timeoutSecs int) error {
 	if err != nil {
 		return fmt.Errorf("%s", strErr)
 	}
-	a.info.PID = PID
+	a.state.PID = PID
 
 	if err = a.waitSandbox(timeoutSecs); err != nil {
 		a.Logger().WithField("acrn wait failed:", err).Debug()
@@ -397,12 +460,15 @@ func (a *acrn) startSandbox(timeoutSecs int) error {
 	}
 
 	//Store VMM information
-	return a.store.Store(store.Hypervisor, a.info)
+	if err = a.storeState(); err != nil {
+		return err
+	}
 
+	return nil
 }
 
 // waitSandbox will wait for the Sandbox's VM to be up and running.
-func (a *acrn) waitSandbox(timeoutSecs int) error {
+func (a *Acrn) waitSandbox(timeoutSecs int) error {
 	span, _ := a.trace("waitSandbox")
 	defer span.Finish()
 
@@ -416,7 +482,7 @@ func (a *acrn) waitSandbox(timeoutSecs int) error {
 }
 
 // stopSandbox will stop the Sandbox's VM.
-func (a *acrn) stopSandbox() (err error) {
+func (a *Acrn) stopSandbox() (err error) {
 	span, _ := a.trace("stopSandbox")
 	defer span.Finish()
 
@@ -430,7 +496,23 @@ func (a *acrn) stopSandbox() (err error) {
 		}
 	}()
 
-	pid := a.info.PID
+	// Mark the UUID as free
+	uuid := a.state.UUID
+	Idx := acrnUUIDsToIdx[uuid]
+
+	if err = a.store.Load(store.UUID, &a.info); err != nil {
+		a.Logger().Info("Failed to load UUID availabiity info")
+		return err
+	}
+
+	a.info.UUIDAvailability[Idx] = UUIDFree
+
+	if err = a.storeInfo(); err != nil {
+		a.Logger().Info("Failed to store UUID availabiity info")
+		return err
+	}
+
+	pid := a.state.PID
 
 	// Check if VM process is running, in case it is not, let's
 	// return from here.
@@ -468,7 +550,7 @@ func (a *acrn) stopSandbox() (err error) {
 
 }
 
-func (a *acrn) updateBlockDevice(drive *config.BlockDrive) error {
+func (a *Acrn) updateBlockDevice(drive *config.BlockDrive) error {
 	var err error
 	if drive.File == "" || drive.Index >= AcrnBlkDevPoolSz {
 		return fmt.Errorf("Empty filepath or invalid drive index, Dive ID:%s, Drive Index:%d",
@@ -494,7 +576,7 @@ func (a *acrn) updateBlockDevice(drive *config.BlockDrive) error {
 	return err
 }
 
-func (a *acrn) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
+func (a *Acrn) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := a.trace("hotplugAddDevice")
 	defer span.Finish()
 
@@ -508,7 +590,7 @@ func (a *acrn) hotplugAddDevice(devInfo interface{}, devType deviceType) (interf
 	}
 }
 
-func (a *acrn) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
+func (a *Acrn) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := a.trace("hotplugRemoveDevice")
 	defer span.Finish()
 
@@ -517,7 +599,7 @@ func (a *acrn) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (int
 	return nil, nil
 }
 
-func (a *acrn) pauseSandbox() error {
+func (a *Acrn) pauseSandbox() error {
 	span, _ := a.trace("pauseSandbox")
 	defer span.Finish()
 
@@ -526,7 +608,7 @@ func (a *acrn) pauseSandbox() error {
 	return nil
 }
 
-func (a *acrn) resumeSandbox() error {
+func (a *Acrn) resumeSandbox() error {
 	span, _ := a.trace("resumeSandbox")
 	defer span.Finish()
 
@@ -535,8 +617,8 @@ func (a *acrn) resumeSandbox() error {
 	return nil
 }
 
-// addDevice will add extra devices to Acrn command line.
-func (a *acrn) addDevice(devInfo interface{}, devType deviceType) error {
+// addDevice will add extra devices to acrn command line.
+func (a *Acrn) addDevice(devInfo interface{}, devType deviceType) error {
 	var err error
 	span, _ := a.trace("addDevice")
 	defer span.Finish()
@@ -570,14 +652,14 @@ func (a *acrn) addDevice(devInfo interface{}, devType deviceType) error {
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-func (a *acrn) getSandboxConsole(id string) (string, error) {
+func (a *Acrn) getSandboxConsole(id string) (string, error) {
 	span, _ := a.trace("getSandboxConsole")
 	defer span.Finish()
 
 	return utils.BuildSocketPath(store.RunVMStoragePath, id, acrnConsoleSocket)
 }
 
-func (a *acrn) saveSandbox() error {
+func (a *Acrn) saveSandbox() error {
 	a.Logger().Info("save sandbox")
 
 	// Not supported. return success
@@ -585,14 +667,14 @@ func (a *acrn) saveSandbox() error {
 	return nil
 }
 
-func (a *acrn) disconnect() {
+func (a *Acrn) disconnect() {
 	span, _ := a.trace("disconnect")
 	defer span.Finish()
 
 	// Not supported.
 }
 
-func (a *acrn) getThreadIDs() (vcpuThreadIDs, error) {
+func (a *Acrn) getThreadIDs() (vcpuThreadIDs, error) {
 	span, _ := a.trace("getThreadIDs")
 	defer span.Finish()
 
@@ -602,62 +684,138 @@ func (a *acrn) getThreadIDs() (vcpuThreadIDs, error) {
 	return vcpuThreadIDs{}, nil
 }
 
-func (a *acrn) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error) {
+func (a *Acrn) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, memoryDevice, error) {
 	return 0, memoryDevice{}, nil
 }
 
-func (a *acrn) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
+func (a *Acrn) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
 	return 0, 0, nil
 }
 
-func (a *acrn) cleanup() error {
+func (a *Acrn) cleanup() error {
 	span, _ := a.trace("cleanup")
 	defer span.Finish()
 
 	return nil
 }
 
-func (a *acrn) getPids() []int {
-	return []int{a.info.PID}
+func (a *Acrn) getPids() []int {
+	return []int{a.state.PID}
 }
 
-func (a *acrn) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error {
+func (a *Acrn) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error {
 	return errors.New("acrn is not supported by VM cache")
 }
 
-func (a *acrn) toGrpc() ([]byte, error) {
+func (a *Acrn) toGrpc() ([]byte, error) {
 	return nil, errors.New("acrn is not supported by VM cache")
 }
 
-func (a *acrn) storeInfo() error {
-	if a.store != nil {
-		if err := a.store.Store(store.Hypervisor, a.info); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (a *acrn) save() (s persistapi.HypervisorState) {
-	s.Pid = a.info.PID
+func (a *Acrn) save() (s persistapi.HypervisorState) {
+	s.Pid = a.state.PID
 	s.Type = string(AcrnHypervisor)
 	s.UUID = a.state.UUID
 	return
 }
 
-func (a *acrn) load(s persistapi.HypervisorState) {
-	a.info.PID = s.Pid
+func (a *Acrn) load(s persistapi.HypervisorState) {
+	a.state.PID = s.Pid
 	a.state.UUID = s.UUID
 }
 
-func (a *acrn) check() error {
-	if err := syscall.Kill(a.info.PID, syscall.Signal(0)); err != nil {
+func (a *Acrn) check() error {
+	if err := syscall.Kill(a.state.PID, syscall.Signal(0)); err != nil {
 		return errors.Wrapf(err, "failed to ping acrn process")
 	}
 
 	return nil
 }
 
-func (a *acrn) generateSocket(id string, useVsock bool) (interface{}, error) {
+func (a *Acrn) generateSocket(id string, useVsock bool) (interface{}, error) {
 	return generateVMSocket(id, useVsock)
+}
+
+// GetACRNUUIDBytes returns UUID bytes that is used for VM creation
+func (a *Acrn) GetACRNUUIDBytes(uid string) (uuid.UUID, error) {
+	return uuid.Parse(uid)
+}
+
+// GetNextAvailableUUID returns next available UUID VM creation
+// If no validl UUIDs are available it returns err.
+func (a *Acrn) GetNextAvailableUUID(uuidstore *store.VCStore) (string, error) {
+	var MaxVMSupported uint8
+	var Idx uint8
+	var uuidStr string
+	var err error
+
+	if uuidstore == nil {
+		uuidstore = a.store
+	}
+
+	if uuidstore != nil { //use old store
+		if err = uuidstore.Load(store.UUID, &a.info); err != nil {
+			a.Logger().Infof("Load UUID store failed")
+		}
+	}
+
+	if MaxVMSupported, err = a.GetMaxSupportedACRNVM(); err != nil {
+		return "", fmt.Errorf("IOCTL GetMaxSupportedACRNVM failed")
+	}
+
+	for Idx = 0; Idx < MaxVMSupported; Idx++ {
+		if a.info.UUIDAvailability[Idx] == UUIDFree {
+			uuidStr = acrnIdxToUUIDs[Idx]
+			break
+		}
+	}
+
+	if uuidStr == "" {
+		return "", fmt.Errorf("Invalid UUID: Max VMs reached")
+	}
+
+	return uuidStr, nil
+}
+
+// GetMaxSupportedACRNVM checks the max number of VMs that can be
+// launched from kata-runtime.
+func (a *Acrn) GetMaxSupportedACRNVM() (uint8, error) {
+	flags := syscall.O_RDWR | syscall.O_CLOEXEC
+
+	f, err := syscall.Open(acrnDevice, flags, 0)
+	if err != nil {
+		return 0, err
+	}
+	defer syscall.Close(f)
+
+	var platformInfo acrnPlatformInfo
+
+	ret, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(f),
+		uintptr(ioctl_ACRN_GET_PLATFORM_INFO),
+		uintptr(unsafe.Pointer(&platformInfo)))
+	if ret != 0 || errno != 0 {
+		return 0, errno
+	}
+
+	return platformInfo.maxKataContainers, nil
+}
+
+func (a *Acrn) storeState() error {
+	if a.store != nil {
+		if err := a.store.Store(store.Hypervisor, a.state); err != nil {
+			a.Logger().WithError(err).Error("failed to store acrn state")
+			return err
+		}
+	}
+	return nil
+}
+
+func (a *Acrn) storeInfo() error {
+	if a.store != nil {
+		if err := a.store.Store(store.UUID, a.info); err != nil {
+			a.Logger().WithError(err).Error("failed to store acrn info")
+			return err
+		}
+	}
+	return nil
 }
