@@ -145,16 +145,6 @@ type KataAgentConfig struct {
 	KernelModules []string
 }
 
-type kataVSOCK struct {
-	contextID uint64
-	port      uint32
-	vhostFd   *os.File
-}
-
-func (s *kataVSOCK) String() string {
-	return fmt.Sprintf("%s://%d:%d", vsockSocketScheme, s.contextID, s.port)
-}
-
 // KataAgentState is the structure describing the data stored from this
 // agent implementation.
 type KataAgentState struct {
@@ -340,7 +330,7 @@ func (k *kataAgent) agentURL() (string, error) {
 	switch s := k.vmSocket.(type) {
 	case types.Socket:
 		return s.HostPath, nil
-	case kataVSOCK:
+	case types.VSock:
 		return s.String(), nil
 	case types.HybridVSock:
 		return s.String(), nil
@@ -390,12 +380,12 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 		if err != nil {
 			return err
 		}
-	case kataVSOCK:
-		s.vhostFd, s.contextID, err = utils.FindContextID()
+	case types.VSock:
+		s.VhostFd, s.ContextID, err = utils.FindContextID()
 		if err != nil {
 			return err
 		}
-		s.port = uint32(vSockPort)
+		s.Port = uint32(vSockPort)
 		if err = h.addDevice(s, vSockPCIDev); err != nil {
 			return err
 		}
