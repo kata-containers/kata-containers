@@ -1591,8 +1591,8 @@ func (q *qemu) addDevice(devInfo interface{}, devType deviceType) error {
 		}
 	case types.Socket:
 		q.qemuConfig.Devices = q.arch.appendSocket(q.qemuConfig.Devices, v)
-	case kataVSOCK:
-		q.fds = append(q.fds, v.vhostFd)
+	case types.VSock:
+		q.fds = append(q.fds, v.VhostFd)
 		q.qemuConfig.Devices, err = q.arch.appendVSock(q.qemuConfig.Devices, v)
 	case Endpoint:
 		q.qemuConfig.Devices, err = q.arch.appendNetwork(q.qemuConfig.Devices, v)
