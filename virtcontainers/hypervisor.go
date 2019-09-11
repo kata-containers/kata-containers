@@ -104,6 +104,10 @@ const (
 
 	// memoryDevice is memory device type
 	memoryDev
+
+	// hybridVirtioVsockDev is a hybrid virtio-vsock device supported
+	// only on certain hypervisors, like firecracker.
+	hybridVirtioVsockDev
 )
 
 type memoryDevice struct {
