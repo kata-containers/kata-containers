@@ -13,6 +13,8 @@ source "${SCRIPT_PATH}/crio_skip_tests.sh"
 source "${SCRIPT_PATH}/../../metrics/lib/common.bash"
 source /etc/os-release || source /usr/lib/os-release
 
+export JOBS="${JOBS:-$(nproc)}"
+
 # Skip the cri-o tests if TEST_CRIO is not true
 # and we are on a CI job.
 # For non CI execution, run the cri-o tests always.
