@@ -342,6 +342,8 @@ func (k *kataAgent) agentURL() (string, error) {
 		return s.HostPath, nil
 	case kataVSOCK:
 		return s.String(), nil
+	case types.HybridVSock:
+		return s.String(), nil
 	default:
 		return "", fmt.Errorf("Invalid socket type")
 	}
@@ -398,6 +400,11 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 			return err
 		}
 		k.vmSocket = s
+	case types.HybridVSock:
+		err = h.addDevice(s, hybridVirtioVsockDev)
+		if err != nil {
+			return err
+		}
 	default:
 		return vcTypes.ErrInvalidConfigType
 	}

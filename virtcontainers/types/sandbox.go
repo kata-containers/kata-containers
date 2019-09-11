@@ -29,6 +29,8 @@ const (
 	StateStopped StateString = "stopped"
 )
 
+const HybridVSockScheme = "hvsock"
+
 // SandboxState is a sandbox state structure
 type SandboxState struct {
 	State StateString `json:"state"`
@@ -159,6 +161,21 @@ func (v *Volumes) String() string {
 	}
 
 	return strings.Join(volSlice, " ")
+}
+
+// HybridVSock defines a hybrid vsocket to communicate between
+// the host and any process inside the VM.
+// This is a virtio-vsock implementation based on AF_VSOCK on the
+// guest side and multiple AF_UNIX sockets on the host side.
+// This kind of socket is not supported in all hypervisors.
+// Firecracker supports it.
+type HybridVSock struct {
+	UdsPath string
+	Port    uint32
+}
+
+func (s *HybridVSock) String() string {
+	return fmt.Sprintf("%s://%s:%d", HybridVSockScheme, s.UdsPath, s.Port)
 }
 
 // Socket defines a socket to communicate between
