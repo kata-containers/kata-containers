@@ -58,6 +58,12 @@ const (
 	// We attach a pool of placeholder drives before the guest has started, and then
 	// patch the replace placeholder drives with drives with actual contents.
 	fcDiskPoolSize = 8
+
+	defaultHybridVSocketName = "kata.hvsock"
+
+	// This is the first usable vsock context ID. All the vsocks can use the same
+	// ID, since it's only used in the guest.
+	defaultGuestVSockCID = int64(0x3)
 )
 
 var fcKernelParams = append(commonVirtioblkKernelRootParams, []Param{
@@ -737,30 +743,33 @@ func (fc *firecracker) resumeSandbox() error {
 	return nil
 }
 
-func (fc *firecracker) fcAddVsock(vs kataVSOCK) error {
+func (fc *firecracker) fcAddVsock(hvs types.HybridVSock) error {
 	span, _ := fc.trace("fcAddVsock")
 	defer span.Finish()
 
+	udsPath := hvs.UdsPath
+	if fc.jailed {
+		udsPath = filepath.Join("/", defaultHybridVSocketName)
+	}
+
 	vsockParams := ops.NewPutGuestVsockByIDParams()
 	vsockID := "root"
-	ctxID := int64(vs.contextID)
-	udsPath := ""
+	ctxID := defaultGuestVSockCID
 	vsock := &models.Vsock{
 		GuestCid: &ctxID,
-		UdsPath: &udsPath,
-		VsockID: &vsockID,
+		UdsPath:  &udsPath,
+		VsockID:  &vsockID,
 	}
 	vsockParams.SetID(vsockID)
 	vsockParams.SetBody(vsock)
+
 	_, err := fc.client().Operations.PutGuestVsockByID(vsockParams)
 	if err != nil {
 		return err
 	}
-	//Still racy. There is no way to send an fd to the firecracker
-	//REST API. We could release this just before we start the instance
-	//but even that will not eliminate the race
-	vs.vhostFd.Close()
+
 	return nil
+
 }
 
 func (fc *firecracker) fcAddNetDevice(endpoint Endpoint) error {
@@ -878,8 +887,8 @@ func (fc *firecracker) addDevice(devInfo interface{}, devType deviceType) error 
 	case config.BlockDrive:
 		fc.Logger().WithField("device-type-blockdrive", devInfo).Info("Adding device")
 		return fc.fcAddBlockDrive(v)
-	case kataVSOCK:
-		fc.Logger().WithField("device-type-vsock", devInfo).Info("Adding device")
+	case types.HybridVSock:
+		fc.Logger().WithField("device-type-hybrid-vsock", devInfo).Info("Adding device")
 		return fc.fcAddVsock(v)
 	default:
 		fc.Logger().WithField("unknown-device-type", devInfo).Error("Adding device")
