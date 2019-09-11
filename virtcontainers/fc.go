@@ -261,6 +261,8 @@ func (fc *firecracker) newFireClient() *client.Firecracker {
 	}
 
 	transport := httptransport.New(client.DefaultHost, client.DefaultBasePath, client.DefaultSchemes)
+	transport.SetLogger(fc.Logger())
+	transport.SetDebug(fc.Logger().Logger.Level == logrus.DebugLevel)
 	transport.Transport = socketTransport
 	httpClient.SetTransport(transport)
 
