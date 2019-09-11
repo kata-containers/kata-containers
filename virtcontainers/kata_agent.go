@@ -88,6 +88,7 @@ var (
 	grpcMaxDataSize             = int64(1024 * 1024)
 	localDirOptions             = []string{"mode=0777"}
 	maxHostnameLen              = 64
+	GuestDNSFile                = "/etc/resolv.conf"
 )
 
 const (
@@ -743,6 +744,34 @@ func (k *kataAgent) setProxyFromGrpc(proxy proxy, pid int, url string) {
 	k.state.URL = url
 }
 
+func (k *kataAgent) getDNS(sandbox *Sandbox) ([]string, error) {
+	ociSpecJSON, ok := sandbox.config.Annotations[vcAnnotations.ConfigJSONKey]
+	if !ok {
+		return nil, errorMissingOCISpec
+	}
+
+	ociSpec := &specs.Spec{}
+	if err := json.Unmarshal([]byte(ociSpecJSON), ociSpec); err != nil {
+		return nil, err
+	}
+
+	ociMounts := ociSpec.Mounts
+
+	for _, m := range ociMounts {
+		if m.Destination == GuestDNSFile {
+			content, err := ioutil.ReadFile(m.Source)
+			if err != nil {
+				return nil, fmt.Errorf("Could not read file %s: %s", m.Source, err)
+			}
+			dns := strings.Split(string(content), "\n")
+			return dns, nil
+
+		}
+	}
+	k.Logger().Debug("DNS file not present in ociMounts. Sandbox DNS will not be set.")
+	return nil, nil
+}
+
 func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 	span, _ := k.trace("startSandbox")
 	defer span.Finish()
@@ -757,10 +786,14 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 			k.proxy.stop(k.state.ProxyPid)
 		}
 	}()
-
 	hostname := sandbox.config.Hostname
 	if len(hostname) > maxHostnameLen {
 		hostname = hostname[:maxHostnameLen]
+	}
+
+	dns, err := k.getDNS(sandbox)
+	if err != nil {
+		return err
 	}
 
 	// check grpc server is serving
@@ -788,6 +821,7 @@ func (k *kataAgent) startSandbox(sandbox *Sandbox) error {
 
 	req := &grpc.CreateSandboxRequest{
 		Hostname:      hostname,
+		Dns:           dns,
 		Storages:      storages,
 		SandboxPidns:  sandbox.sharePidNs,
 		SandboxId:     sandbox.id,
