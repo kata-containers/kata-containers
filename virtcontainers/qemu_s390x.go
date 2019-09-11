@@ -126,6 +126,18 @@ func (q *qemuS390x) appendConsole(devices []govmmQemu.Device, path string) ([]go
 	return devices, nil
 }
 
+func (q *qemuS390x) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+	drive, err := genericImage(path)
+	if err != nil {
+		return nil, err
+	}
+	devices, err = q.appendBlockDevice(devices, drive)
+	if err != nil {
+		return nil, err
+	}
+	return devices, nil
+}
+
 func (q *qemuS390x) appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error) {
 	d, err := genericBlockDevice(drive, false)
 	if err != nil {
