@@ -90,18 +90,17 @@ install_image() {
 #Install kernel asset
 install_kernel() {
 	go get "github.com/${project}/packaging" || true
-	pushd ${GOPATH}/src/github.com/${project}/packaging >>/dev/null
-	git checkout "${kata_version}-kernel-config" ||
+	(
+		cd ${GOPATH}/src/github.com/${project}/packaging >>/dev/null
+		git checkout "${kata_version}-kernel-config" ||
 		git checkout "${kata_version}"
-	popd >>/dev/null
-	pushd "${script_dir}/../kernel" >>/dev/null
 
-	info "build kernel"
-	./build-kernel.sh setup
-	./build-kernel.sh build
-	info "install kernel"
-	DESTDIR="${destdir}" PREFIX="${prefix}" ./build-kernel.sh install
-	popd >>/dev/null
+		info "build kernel"
+		./kernel/build-kernel.sh setup
+		./kernel/build-kernel.sh build
+		info "install kernel"
+		DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh install
+	)
 }
 
 # Install static nemu asset
