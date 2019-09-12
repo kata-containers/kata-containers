@@ -144,12 +144,11 @@
   revision = "7d11b49dc0769f6dbb0d1b19f3d48524d1bad9ad"
 
 [[projects]]
-  branch = "master"
-  digest = "1:25435262330720ca0cade25af7ee7fb96d0cb70cc1ea0c0961694681c12a90e6"
+  digest = "1:c710f7b09759fe5ef0122a55a14afa8fab25a51a56e0826c24499563ef9e0e92"
   name = "github.com/containerd/ttrpc"
   packages = ["."]
   pruneopts = "NUT"
-  revision = "69144327078caa5a2f1d5eda8bea6110bf16eeb3"
+  revision = "92c8520ef9f86600c650dd540266a007bf03670f"
 
 [[projects]]
   branch = "master"

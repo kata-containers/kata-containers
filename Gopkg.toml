@@ -71,6 +71,10 @@
   revision = "4cbf7e384e768b4e01799441fdf2a706a5635ae7"
 
 [[override]]
+  name = "github.com/containerd/ttrpc"
+  revision = "92c8520ef9f86600c650dd540266a007bf03670f"
+
+[[override]]
   branch = "master"
   name = "github.com/hashicorp/yamux"
 
