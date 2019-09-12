@@ -47,7 +47,6 @@ declare -A packages=( \
 	[haveged]="haveged" \
  	[gnu_parallel]="gnu_parallel" \
 	[libsystemd]="systemd-devel" \
-	[redis]="redis" \
 )
 
 main() 
@@ -75,6 +74,12 @@ main()
 	echo "Install YAML validator"
 	chronic sudo -E easy_install pip
 	chronic sudo -E pip install yamllint
+
+	echo "Add redis repo and install redis"
+	redis_repo="https://download.opensuse.org/repositories/server:database/SLE_${VERSION//-/_}/server:database.repo"
+	chronic sudo -E zypper addrepo --no-gpgcheck ${redis_repo}
+	chronic sudo -E zypper refresh
+	chronic sudo -E zypper -n install redis
 
 	[ "$setup_type" = "minimal" ] && exit 0
 
