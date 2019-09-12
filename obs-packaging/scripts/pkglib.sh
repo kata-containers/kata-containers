@@ -6,7 +6,14 @@
 source_dir_pkg_lib=$(dirname "${BASH_SOURCE[0]}")
 source_dir_pkg_lib=$(realpath "${source_dir_pkg_lib}")
 source "${source_dir_pkg_lib}/../../scripts/lib.sh"
-source "${source_dir_pkg_lib}/../versions.txt"
+
+# Verify that versions.txt exists
+version_file="${source_dir_pkg_lib}/../versions.txt"
+if [ -f "${version_file}" ]; then
+	source "${version_file}"
+else
+	die "${version_file} does not exist, you need to run first the gen_versions_txt.sh"
+fi
 
 PACKAGING_DIR=/var/packaging
 LOG_DIR=${PACKAGING_DIR}/build_logs
