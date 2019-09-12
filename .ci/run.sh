@@ -13,8 +13,6 @@ cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 source /etc/os-release
 
-SNAP_CI="${SNAP_CI:-false}"
-
 pushd "${tests_repo_dir}"
 .ci/run.sh
 popd
