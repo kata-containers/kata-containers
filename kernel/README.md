@@ -92,9 +92,9 @@ configs are up-to-date on a CI version.
 In order to do Kata Kernel changes. There are places to contribute:
 
 1. [Kata runtime versions file][runtime-versions-file]: This file points to the
-   recommended to use by Kata. To update the kernel version send a pull request
-   to update that version. The Kata CI will run all the use cases and verify it
-   works.
+   recommended versions to be used by Kata. To update the kernel version send a
+   pull request to update that version. The Kata CI will run all the use cases
+   and verify it works.
 
 1. Kata packaging repository. This repository contains all the kernel configs
    and patches recommended for Kata Containers kernel:
