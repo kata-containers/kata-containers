@@ -125,3 +125,7 @@ func (m *mockHypervisor) load(s persistapi.HypervisorState) {}
 func (m *mockHypervisor) check() error {
 	return nil
 }
+
+func (m *mockHypervisor) generateSocket(id string, useVsock bool) (interface{}, error) {
+	return types.Socket{HostPath: "/tmp/socket", Name: "socket"}, nil
+}

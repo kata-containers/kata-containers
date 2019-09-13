@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
 
 // HypervisorType describes an hypervisor type.
@@ -52,6 +54,15 @@ const (
 	defaultBridges = 1
 
 	defaultBlockDriver = config.VirtioSCSI
+
+	defaultSocketName        = "kata.sock"
+	defaultSocketDeviceID    = "channel0"
+	defaultSocketChannelName = "agent.channel.0"
+	defaultSocketID          = "charch0"
+
+	// port numbers below 1024 are called privileged ports. Only a process with
+	// CAP_NET_BIND_SERVICE capability may bind to these port numbers.
+	vSockPort = 1024
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
@@ -663,6 +674,33 @@ func getHypervisorPid(h hypervisor) int {
 	return pids[0]
 }
 
+func generateVMSocket(id string, useVsock bool) (interface{}, error) {
+	if useVsock {
+		vhostFd, contextID, err := utils.FindContextID()
+		if err != nil {
+			return nil, err
+		}
+
+		return types.VSock{
+			VhostFd:   vhostFd,
+			ContextID: contextID,
+			Port:      uint32(vSockPort),
+		}, nil
+	}
+
+	path, err := utils.BuildSocketPath(filepath.Join(store.RunVMStoragePath, id), defaultSocketName)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.Socket{
+		DeviceID: defaultSocketDeviceID,
+		ID:       defaultSocketID,
+		HostPath: path,
+		Name:     defaultSocketChannelName,
+	}, nil
+}
+
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
@@ -692,4 +730,7 @@ type hypervisor interface {
 
 	save() persistapi.HypervisorState
 	load(persistapi.HypervisorState)
+
+	// generate the socket to communicate the host and guest
+	generateSocket(id string, useVsock bool) (interface{}, error)
 }

@@ -121,6 +121,7 @@ func newTestSandboxConfigNoop() SandboxConfig {
 func newTestSandboxConfigKataAgent() SandboxConfig {
 	sandboxConfig := newTestSandboxConfigNoop()
 	sandboxConfig.AgentType = KataContainersAgent
+	sandboxConfig.AgentConfig = KataAgentConfig{}
 	sandboxConfig.Containers = nil
 
 	return sandboxConfig

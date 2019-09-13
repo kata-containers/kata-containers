@@ -657,3 +657,7 @@ func (a *acrn) check() error {
 
 	return nil
 }
+
+func (a *acrn) generateSocket(id string, useVsock bool) (interface{}, error) {
+	return generateVMSocket(id, useVsock)
+}

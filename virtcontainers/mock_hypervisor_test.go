@@ -88,3 +88,11 @@ func TestMockHypervisorCheck(t *testing.T) {
 
 	assert.NoError(t, m.check())
 }
+
+func TestMockGenerateSocket(t *testing.T) {
+	var m *mockHypervisor
+
+	i, err := m.generateSocket("a", true)
+	assert.NoError(t, err)
+	assert.NotNil(t, i)
+}
