@@ -1027,3 +1027,17 @@ func (fc *firecracker) check() error {
 
 	return nil
 }
+
+func (fc *firecracker) generateSocket(id string, useVsock bool) (interface{}, error) {
+	if !useVsock {
+		return nil, fmt.Errorf("Can't start firecracker: vsocks is disabled")
+	}
+
+	fc.Logger().Debug("Using hybrid-vsock endpoint")
+	udsPath := filepath.Join(fc.jailerRoot, defaultHybridVSocketName)
+
+	return types.HybridVSock{
+		UdsPath: udsPath,
+		Port:    uint32(vSockPort),
+	}, nil
+}

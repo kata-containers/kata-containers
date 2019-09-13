@@ -2061,3 +2061,7 @@ func (q *qemu) check() error {
 
 	return nil
 }
+
+func (q *qemu) generateSocket(id string, useVsock bool) (interface{}, error) {
+	return generateVMSocket(id, useVsock)
+}
