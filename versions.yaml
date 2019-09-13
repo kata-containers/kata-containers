@@ -119,6 +119,12 @@ assets:
           branch: "master"
           tag: "v3.1.0-rc2"
           commit: "47c1cc30e440860aa695358f7c2dd0b9d7b53d16"
+
+    qemu-experimental:
+      description: "QEMU with virtiofs 3.0"
+      url: "https://gitlab.com/virtio-fs/qemu.git"
+      tag: "virtio-fs-v0.3"
+
   image:
     description: |
       Root filesystem disk image used to boot the guest virtual
@@ -165,6 +171,11 @@ assets:
     uscan-url: >-
       https://mirrors.edge.kernel.org/pub/linux/kernel/v4.x/linux-(4\.19\..+)\.tar\.gz
     version: "v4.19.71"
+
+  kernel-experimental:
+    description: "Linux kernel with virtiofs 3.0"
+    url: "https://gitlab.com/virtio-fs/linux.git"
+    tag: "virtio-fs-v0.3"
 
 components:
   description: "Core system functionality"
