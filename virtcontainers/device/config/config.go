@@ -144,6 +144,9 @@ type BlockDrive struct {
 
 	// DevNo identifies the css bus id for virtio-blk-ccw
 	DevNo string
+
+	// ShareRW enables multiple qemu instances to share the File
+	ShareRW bool
 }
 
 // VFIODeviceType indicates VFIO device type
