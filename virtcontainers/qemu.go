@@ -763,7 +763,15 @@ func (q *qemu) startSandbox(timeout int) error {
 	var strErr string
 	strErr, err = govmmQemu.LaunchQemu(q.qemuConfig, newQMPLogger())
 	if err != nil {
-		return fmt.Errorf("fail to launch qemu: %s, error messages from qemu log: %s", err, strErr)
+		if q.config.Debug && q.qemuConfig.LogFile != "" {
+			b, err := ioutil.ReadFile(q.qemuConfig.LogFile)
+			if err == nil {
+				strErr += string(b)
+			}
+		}
+
+		q.Logger().WithError(err).Errorf("failed to launch qemu: %s", strErr)
+		return fmt.Errorf("failed to launch qemu: %s, error messages from qemu log: %s", err, strErr)
 	}
 
 	err = q.waitSandbox(timeout) // the virtiofsd deferred checks err's value
