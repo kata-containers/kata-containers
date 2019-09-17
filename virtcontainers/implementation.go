@@ -122,6 +122,11 @@ func (impl *VCImpl) StatsContainer(ctx context.Context, sandboxID, containerID s
 	return StatsContainer(ctx, sandboxID, containerID)
 }
 
+// StatsSandbox implements the VC function of the same name.
+func (impl *VCImpl) StatsSandbox(ctx context.Context, sandboxID string) (SandboxStats, []ContainerStats, error) {
+	return StatsSandbox(ctx, sandboxID)
+}
+
 // KillContainer implements the VC function of the same name.
 func (impl *VCImpl) KillContainer(ctx context.Context, sandboxID, containerID string, signal syscall.Signal, all bool) error {
 	return KillContainer(ctx, sandboxID, containerID, signal, all)
