@@ -8,11 +8,8 @@
         * [Set environment variables (Every Reboot)](#set-environment-variables-every-reboot)
     * [Prepare the Clear Linux Host](#prepare-the-clear-linux-host)
         * [Identify which PCI Bus the Intel QAT card is on](#identify-which-pci-bus-the-intel-qat-card-is-on)
-        * [Install necessary bundles for Clear Linux and disable kernel updates](#install-necessary-bundles-for-clear-linux-and-disable-kernel-updates)
-        * [Allow insecure modules to load to host](#allow-insecure-modules-to-load-to-host)
-        * [Replace Clear Linux kernel with LTS kernel](#replace-clear-linux-kernel-with-lts-kernel)
+        * [Install necessary bundles for Clear Linux](#install-necessary-bundles-for-clear-linux)
         * [Download Intel QAT drivers](#download-intel-qat-drivers)
-        * [Compile Intel QAT drivers against host kernel](#compile-intel-qat-drivers-against-host-kernel)
         * [Copy Intel QAT configuration files and enable Virtual Functions](#copy-intel-qat-configuration-files-and-enable-virtual-functions)
         * [Expose and Bind Intel QAT virtual functions to VFIO-PCI (Every reboot)](#expose-and-bind-intel-qat-virtual-functions-to-vfio-pci-every-reboot)
         * [Check Intel QAT virtual functions are enabled](#check-intel-qat-virtual-functions-are-enabled)
@@ -30,7 +27,6 @@
         * [Troubleshooting](#troubleshooting)
     * [Optional Scripts](#optional-scripts)
         * [Verify Intel QAT card counters are incremented](#verify-intel-qat-card-counters-are-incremented)
-
 
 # Introduction
 
@@ -59,7 +55,7 @@ and custom Kata Containers rootfs.
 There are some steps to complete only once, some steps to complete with every
 reboot, and some steps to complete when the host kernel changes.
 
-## Script variables 
+## Script variables
 
 The following list of variables must be set before running through the 
 scripts. These variables refer to locations to store modules and configuration 
@@ -97,38 +93,17 @@ chipset by executing the following.
 $ for i in 0434 0435 37c8 1f18 1f19; do lspci -d 8086:$i; done
 ```
 
-### Install necessary bundles for Clear Linux and disable kernel updates
+### Install necessary bundles for Clear Linux
 
-You need the Linux kernel headers to compile the out-of-tree kernel modules to
-support Intel QAT on the host. The `os-clr-on-clr` is a large development 
-bundle that you can install instead to include everything below with 
-additional items. This guide installs the Linux LTS kernel version `4.19` from
-2018 because the crypto modules are set to `m` and not `y`, which allows you
-to replace them with the out-of-tree driver. Otherwise you need to build your
-own Clear Linux kernel with the QAT drivers compiled in.
+Clear Linux version 30780 (Released August 13, 2019) includes a 
+`linux-firmware-qat` bundle that has the necessary QAT firmware along with a
+functional QAT host driver that works with Kata Containers. 
 
 ```sh
-$ sudo swupd autoupdate --disable
-$ sudo swupd bundle-add network-basic kernel-lts2018 linux-lts-dev linux-dev make c-basic go-basic containers-virt dev-utils devpkg-elfutils devpkg-systemd
+$ sudo swupd bundle-add network-basic linux-firmware-qat make c-basic go-basic containers-virt dev-utils devpkg-elfutils devpkg-systemd
+$ sudo clr-boot-manager update
 $ sudo systemctl start docker
 $ sudo systemctl enable docker
-```
-
-### Allow insecure modules to load to host
-
-```sh
-$ sudo mkdir -p /etc/kernel/cmdline.d
-$ cat << EOF | sudo tee /etc/kernel/cmdline.d/load-modules.conf
-module.sig_unenforce
-EOF
-$ sudo clr-boot-manager update
-```
-
-### Replace Clear Linux kernel with LTS kernel
-
-```sh
-$ lts_kernel=$(sudo clr-boot-manager list-kernels | grep lts2018 | head -n 1)
-$ sudo clr-boot-manager set-kernel $lts_kernel
 $ sudo reboot
 ```
 
@@ -140,31 +115,13 @@ Make sure to check the website for the latest version.
 ```sh
 $ mkdir -p $QAT_SRC
 $ cd $QAT_SRC
-$ curl -O $QAT_DRIVER_URL
-$ QAT_DRIVER_NAME=$(echo $QAT_DRIVER_URL | rev | cut -d"/" -f1 | rev)
-$ tar xzvf $QAT_DRIVER_NAME
-```
-
-### Compile Intel QAT drivers against host kernel 
-
-Now, the Linux kernel headers bundle `linux-dev` is present. This replaces any
-existing modules provided by Clear Linux. If the Clear Linux kernel updates,
-you must rebuild and reinstall these modules against the kernel. By doing it
-this way you no longer have to rely on your distribution to include the QAT
-firmware. These modules will load at every reboot and add the `qat_service`
-helper script.
-
-
-```sh
-$ cd $QAT_SRC
-$ ./configure --disable-qat-lkcf  
-$ sudo -E make install -j$(nproc)
-$ sudo chown -R $USER:$USER $QAT_SRC
+$ curl -L $QAT_DRIVER_URL | tar zx
 ```
 
 ### Copy Intel QAT configuration files and enable Virtual Functions
 
-Learn more about customizing configuration files at the 
+Modify the instructions below as necessary if using a different QAT hardware 
+platform. You can learn more about customizing configuration files at the 
 [Intel QAT Engine repository](https://github.com/intel/QAT_Engine/#copy-the-correct-intel-quickassist-technology-driver-config-files)
 This section starts from a base config file and changes the `SSL` section to 
 `SHIM` to support the OpenSSL engine. There are more tweaks that you can make
@@ -172,11 +129,12 @@ depending on the use case and how many Intel QAT engines should be run. You
 can find more information about how to customize in the 
 [Intel® QuickAssist Technology Software for Linux* - Programmer's Guide.](https://01.org/sites/default/files/downloads/336210qatswprogrammersguiderev006.pdf) 
 
+> **Note: This section assumes that a QAT `c6xx` platform is used.**
+
 ```sh
 $ mkdir -p $QAT_CONF_LOCATION
-$ cp $QAT_SRC/build/c6xxvf_dev0.conf.vm $QAT_CONF_LOCATION/c6xxvf_dev0.conf
+$ cp $QAT_SRC/quickassist/utilities/adf_ctl/conf_files/c6xxvf_dev0.conf.vm $QAT_CONF_LOCATION/c6xxvf_dev0.conf
 $ sed -i 's/\[SSL\]/\[SHIM\]/g' $QAT_CONF_LOCATION/c6xxvf_dev0.conf
-$ for i in {1..15}; do cp $QAT_CONF_LOCATION/c6xxvf_dev0.conf $QAT_CONF_LOCATION/c6xxvf_dev$i.conf; done
 ```
 
 ### Expose and Bind Intel QAT virtual functions to VFIO-PCI (Every reboot)
@@ -196,7 +154,7 @@ enabled.
 
 ```sh
 $ sudo modprobe vfio-pci
-$ QAT_PCI_BUS_PF_NUMBERS=$(lspci | grep Quick | cut -d ' ' -f 1)
+$ QAT_PCI_BUS_PF_NUMBERS=$((lspci -d :435 && lspci -d :37c8 && lspci -d :19e2 && lspci -d :6f54) | cut -d ' ' -f 1)
 $ QAT_PCI_BUS_PF_1=$(echo $QAT_PCI_BUS_PF_NUMBERS | cut -d ' ' -f 1)
 $ echo 16 | sudo tee /sys/bus/pci/devices/0000:$QAT_PCI_BUS_PF_1/sriov_numvfs
 $ QAT_PCI_ID_VF=$(cat /sys/bus/pci/devices/0000:${QAT_PCI_BUS_PF_1}/virtfn0/uevent | grep PCI_ID)
@@ -244,15 +202,22 @@ There are some patches that must be installed as well, which the
 `build-kernel.sh` script should automatically apply. If you are using a
 different kernel version, then you might need to manually apply them. Since
 the Kata Containers kernel has a minimal set of kernel flags set, you must
-update the config to set some of the `CRYPTO` and `STACKPROTECTOR` flags to
-enabled. This might change with different kernel versions. We tested the
-following instructions with kernel `v4.19.28-41`.
-
+create a QAT kernel fragment with the necessary `CONFIG_CRYPTO_*` options set.
+Update the config to set some of the `CRYPTO` flags to enabled. This might
+change with different kernel versions. We tested the following instructions
+with kernel `v4.19.28-41`.
 
 ```sh
 $ mkdir -p $GOPATH
 $ cd $GOPATH
 $ go get -v github.com/kata-containers/packaging
+$ cat << EOF > $GOPATH/src/github.com/kata-containers/packaging/kernel/configs/fragments/common/qat.conf
+CONFIG_PCIEAER=y
+CONFIG_UIO=y
+CONFIG_CRYPTO_HW=y
+CONFIG_CRYPTO_DEV_QAT_C62XVF=m
+CONFIG_CRYPTO_CBC=y
+EOF
 $ $GOPATH/src/github.com/kata-containers/packaging/kernel/build-kernel.sh setup
 ```
 
@@ -261,18 +226,9 @@ $ $GOPATH/src/github.com/kata-containers/packaging/kernel/build-kernel.sh setup
 ```sh
 $ export LINUX_VER=$(ls -d kata*)
 $ sed -i 's/EXTRAVERSION =/EXTRAVERSION = .qat.container/' $LINUX_VER/Makefile
-```
-Change kernel config options to support QAT and compile the kernel.
-```sh
-$ sed -i 's/# CONFIG_PCI_IOV is not set/CONFIG_PCI_IOV=Y/' $LINUX_VER/.config
-$ sed -i 's/# CONFIG_CRYPTO_SHA1 is not set/CONFIG_CRYPTO_SHA1=Y/' $LINUX_VER/.config
-$ sed -i 's/# CONFIG_CRYPTO_DH is not set/CONFIG_CRYPTO_DH=Y/' $LINUX_VER/.config
-$ sed -i 's/# CONFIG_STACKPROTECTOR is not set/CONFIG_STACKPROTECTOR=Y/' $LINUX_VER/.config
 $ $GOPATH/src/github.com/kata-containers/packaging/kernel/build-kernel.sh build
 ```
 
-> **Note: There may be additional kernel parameters that need to be set to yes 
-> when compiling.**
 
 ### Copy Kata kernel
 
@@ -399,7 +355,7 @@ It might require you to add an `IPC_LOCK` capability to your Docker runtime
 depending on which rootfs you use.
 
 ```sh
-$ sudo docker run -it --runtime=kata-runtime --cap-add=IPC_LOCK --device=/dev/vfio/90 -v /dev:/dev -v ${QAT_CONF_LOCATION}:/etc openssl-qat-engine bash
+$ sudo docker run -it --runtime=kata-runtime --cap-add=IPC_LOCK --cap-add=SYS_ADMIN --device=/dev/vfio/90 -v /dev:/dev -v ${QAT_CONF_LOCATION}:/etc openssl-qat-engine bash
 ```
 
 Below are some commands to run in the container image to verify Intel QAT is 
