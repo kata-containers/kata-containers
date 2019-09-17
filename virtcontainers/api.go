@@ -758,6 +758,46 @@ func StatsContainer(ctx context.Context, sandboxID, containerID string) (Contain
 	return s.StatsContainer(containerID)
 }
 
+// StatsSandbox is the virtcontainers sandbox stats entry point.
+// StatsSandbox returns a detailed sandbox stats.
+func StatsSandbox(ctx context.Context, sandboxID string) (SandboxStats, []ContainerStats, error) {
+	span, ctx := trace(ctx, "StatsSandbox")
+	defer span.Finish()
+
+	if sandboxID == "" {
+		return SandboxStats{}, []ContainerStats{}, vcTypes.ErrNeedSandboxID
+	}
+
+	lockFile, err := rLockSandbox(ctx, sandboxID)
+	if err != nil {
+		return SandboxStats{}, []ContainerStats{}, err
+	}
+
+	defer unlockSandbox(ctx, sandboxID, lockFile)
+
+	s, err := fetchSandbox(ctx, sandboxID)
+	if err != nil {
+		return SandboxStats{}, []ContainerStats{}, err
+	}
+	defer s.releaseStatelessSandbox()
+
+	sandboxStats, err := s.Stats()
+	if err != nil {
+		return SandboxStats{}, []ContainerStats{}, err
+	}
+
+	containerStats := []ContainerStats{}
+	for _, c := range s.containers {
+		cstats, err := s.StatsContainer(c.id)
+		if err != nil {
+			return SandboxStats{}, []ContainerStats{}, err
+		}
+		containerStats = append(containerStats, cstats)
+	}
+
+	return sandboxStats, containerStats, nil
+}
+
 func togglePauseContainer(ctx context.Context, sandboxID, containerID string, pause bool) error {
 	if sandboxID == "" {
 		return vcTypes.ErrNeedSandboxID

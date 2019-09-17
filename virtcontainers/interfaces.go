@@ -41,6 +41,7 @@ type VC interface {
 	StartContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error)
 	StatusContainer(ctx context.Context, sandboxID, containerID string) (ContainerStatus, error)
 	StatsContainer(ctx context.Context, sandboxID, containerID string) (ContainerStats, error)
+	StatsSandbox(ctx context.Context, sandboxID string) (SandboxStats, []ContainerStats, error)
 	StopContainer(ctx context.Context, sandboxID, containerID string) (VCContainer, error)
 	ProcessListContainer(ctx context.Context, sandboxID, containerID string, options ProcessListOptions) (ProcessList, error)
 	UpdateContainer(ctx context.Context, sandboxID, containerID string, resources specs.LinuxResources) error

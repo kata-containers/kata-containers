@@ -200,6 +200,15 @@ func (m *VCMock) StatsContainer(ctx context.Context, sandboxID, containerID stri
 	return vc.ContainerStats{}, fmt.Errorf("%s: %s (%+v): sandboxID: %v, containerID: %v", mockErrorPrefix, getSelf(), m, sandboxID, containerID)
 }
 
+// StatsSandbox implements the VC function of the same name.
+func (m *VCMock) StatsSandbox(ctx context.Context, sandboxID string) (vc.SandboxStats, []vc.ContainerStats, error) {
+	if m.StatsContainerFunc != nil {
+		return m.StatsSandboxFunc(ctx, sandboxID)
+	}
+
+	return vc.SandboxStats{}, []vc.ContainerStats{}, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
+}
+
 // KillContainer implements the VC function of the same name.
 func (m *VCMock) KillContainer(ctx context.Context, sandboxID, containerID string, signal syscall.Signal, all bool) error {
 	if m.KillContainerFunc != nil {
