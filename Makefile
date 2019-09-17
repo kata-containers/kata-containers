@@ -172,7 +172,7 @@ DEFENTROPYSOURCE := /dev/urandom
 
 DEFDISABLEBLOCK := false
 DEFSHAREDFS := virtio-9p
-DEFSHAREDFS_NEMU := virtio-fs
+DEFSHAREDFS_NEMU := virtio-9p
 DEFVIRTIOFSDAEMON := $(VIRTIOFSDBINDIR)/virtiofsd-x86_64
 # Default DAX mapping cache size in MiB
 DEFVIRTIOFSCACHESIZE := 1024
