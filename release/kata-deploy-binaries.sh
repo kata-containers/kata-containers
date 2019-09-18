@@ -103,6 +103,17 @@ install_kernel() {
 	)
 }
 
+#Install experimental kernel asset
+install_experimental_kernel() {
+	pushd ${GOPATH}/src/github.com/${project}/packaging
+	info "build experimental kernel"
+	./kernel/build-kernel.sh -e setup
+	./kernel/build-kernel.sh -e build
+	info "install experimental kernel"
+	DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh -e install
+	popd
+}
+
 # Install static nemu asset
 install_nemu() {
 	info "build static nemu"
@@ -122,8 +133,8 @@ install_qemu() {
 # Install static qemu-virtiofsd asset
 install_qemu_virtiofsd() {
 	info "build static qemu-virtiofs"
-	"${script_dir}/../static-build/qemu-virtiofsd/build-static-qemu.sh"
-	info "Install static qemu-virtiofsd"
+	"${script_dir}/../static-build/qemu-virtiofs/build-static-qemu-virtiofs.sh"
+	info "Install static qemu-virtiofs"
 	tar xf kata-qemu-static.tar.gz -C "${destdir}"
 }
 
@@ -216,6 +227,7 @@ main() {
 	install_image
 	install_kata_components
 	install_kernel
+	install_experimental_kernel
 	install_qemu
 	install_qemu_virtiofsd
 	install_nemu

@@ -44,5 +44,6 @@ RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | sed -e 's|--
 RUN make -j$(nproc)
 RUN make -j$(nproc) virtiofsd
 RUN make install DESTDIR=/tmp/qemu-virtiofs-static
+RUN mv /tmp/qemu-virtiofs-static/"${PREFIX}"/bin/qemu-system-x86_64 /tmp/qemu-virtiofs-static/"${PREFIX}"/bin/qemu-virtiofs-system-x86_64
 RUN chmod +x virtiofsd && mv virtiofsd /tmp/qemu-virtiofs-static/opt/kata/bin/
 RUN cd /tmp/qemu-virtiofs-static && tar -czvf kata-qemu-static.tar.gz *
