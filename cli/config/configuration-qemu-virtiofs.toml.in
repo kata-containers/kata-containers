@@ -98,9 +98,9 @@ default_memory = @DEFMEMSZ@
 disable_block_device_use = @DEFDISABLEBLOCK@
 
 # Shared file system type:
-#   - virtio-9p (default)
-#   - virtio-fs
-shared_fs = "@DEFSHAREDFS_NEMU@"
+#   - virtio-fs (default)
+#   - virtio-9p
+shared_fs = "@DEFSHAREDFS_QEMU_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
