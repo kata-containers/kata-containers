@@ -1846,7 +1846,7 @@ func (s *Sandbox) updateResources() error {
 	if err != nil {
 		return err
 	}
-	s.Logger().Debugf("Sandbox memory size: %d Byte", newMemory)
+	s.Logger().Debugf("Sandbox memory size: %d MB", newMemory)
 	if s.state.GuestMemoryHotplugProbe && updatedMemoryDevice.addr != 0 {
 		//notify the guest kernel about memory hot-add event, before onlining them
 		s.Logger().Debugf("notify guest kernel memory hot-add event via probe interface, memory device located at 0x%x", updatedMemoryDevice.addr)
