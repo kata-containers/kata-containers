@@ -65,9 +65,11 @@ function configure_crio() {
 	cp -n "$crio_conf_file" "$crio_conf_file_backup"
 
 	local kata_qemu_path="/opt/kata/bin/kata-qemu"
+	local kata_qemu_virtiofs_path="/opt/kata/bin/kata-qemu-virtiofs"
 	local kata_nemu_path="/opt/kata/bin/kata-nemu"
 	local kata_fc_path="/opt/kata/bin/kata-fc"
 	local kata_qemu_conf="crio.runtime.runtimes.kata-qemu"
+	local kata_qemu_virtiofs_conf="crio.runtime.runtimes.kata-qemu-virtiofs"
 	local kata_nemu_conf="crio.runtime.runtimes.kata-nemu"
 	local kata_fc_conf="crio.runtime.runtimes.kata-fc"
 
@@ -83,6 +85,20 @@ function configure_crio() {
   runtime_path = "${kata_qemu_path}"
 EOT
 	fi
+
+        # add kata-qemu-virtiofs config
+	if grep -q "^\[$kata_qemu_virtiofs_conf\]" $crio_conf_file; then
+		echo "Configuration exists $kata_qemu_virtiofs_conf, overwriting"
+		sed -i "/^\[$kata_qemu_virtiofs_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_qemu_path}\"#" $crio_conf_file
+	else
+		cat <<EOT | tee -a "$crio_conf_file"
+
+# Path to the Kata Containers runtime binary that uses the QEMU hypervisor.
+[$kata_qemu_conf]
+  runtime_path = "${kata_qemu_virtiofs_path}"
+EOT
+        fi
+
 
 	# add kata-nemu config
 	if grep -q "^\[$kata_nemu_conf\]" $crio_conf_file; then

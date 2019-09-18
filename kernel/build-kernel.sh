@@ -78,10 +78,12 @@ Commands:
 
 Options:
 
-	-c <path>: Path to config file to build a the kernel
+	-c <path>: Path to config file to build a the kernel.
+	-e       : Enable experimental kernel.
 	-h       : Display this help.
-	-k <path>: Path to kernel to build
+	-k <path>: Path to kernel to build.
 	-p <path>: Path to a directory with patches to apply to kernel.
+	-t       : Hypervisor_target.
 	-v       : Kernel version to use if kernel path not provided.
 EOT
 }
@@ -414,9 +416,13 @@ main() {
 
 	# If not kernel version take it from versions.yaml
 	if [ -z "$kernel_version" ]; then
-		kernel_version=$(get_from_kata_deps "assets.kernel.version")
-		#Remove extra 'v'
-		kernel_version="${kernel_version#v}"
+		if [[ ${experimental_kernel} == "true" ]]; then
+			kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag")
+		else
+			kernel_version=$(get_from_kata_deps "assets.kernel.version")
+			#Remove extra 'v'
+			kernel_version="${kernel_version#v}"
+		fi
 	fi
 
 	if [ -z "${kernel_path}" ]; then
