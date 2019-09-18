@@ -24,6 +24,9 @@ moreutils_repo="https://download.opensuse.org/repositories/utilities/SLE_12_SP3_
 sudo -E zypper addrepo --no-gpgcheck ${moreutils_repo}
 sudo -E zypper refresh
 
+echo "Add repo for hunspell and pandoc packages"
+SUSEConnect -p PackageHub/${VERSION_ID}/${arch}
+
 echo "Install chronic"
 sudo -E zypper -n install moreutils
 
