@@ -22,6 +22,7 @@ import (
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 )
@@ -236,7 +237,7 @@ func realMakeOCIBundle(bundleDir string) error {
 
 	// Note the unusual parameter (a directory, not the config
 	// file to parse!)
-	spec, err := oci.ParseConfigJSON(bundleDir)
+	spec, err := compatoci.ParseConfigJSON(bundleDir)
 	if err != nil {
 		return err
 	}

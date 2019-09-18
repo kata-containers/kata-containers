@@ -14,6 +14,7 @@ import (
 
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/urfave/cli"
 )
@@ -113,7 +114,7 @@ func create(ctx context.Context, containerID, bundlePath, console, pidFilePath s
 		return err
 	}
 
-	ociSpec, err := oci.ParseConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	if err != nil {
 		return err
 	}

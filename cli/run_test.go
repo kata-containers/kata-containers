@@ -16,13 +16,16 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/stretchr/testify/assert"
+	"github.com/urfave/cli"
+
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
-	"github.com/stretchr/testify/assert"
-	"github.com/urfave/cli"
 )
 
 func TestRunCliAction(t *testing.T) {
@@ -155,7 +158,7 @@ type runContainerData struct {
 	pidFilePath   string
 	consolePath   string
 	bundlePath    string
-	configJSON    string
+	spec          *specs.Spec
 	sandbox       *vcmock.Sandbox
 	runtimeConfig oci.RuntimeConfig
 	process       *os.Process
@@ -205,15 +208,15 @@ func testRunContainerSetup(t *testing.T) runContainerData {
 	runtimeConfig, err := newTestRuntimeConfig(tmpdir, consolePath, true)
 	assert.NoError(err)
 
-	configJSON, err := readOCIConfigJSON(bundlePath)
+	ociSpec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	return runContainerData{
 		pidFilePath:   pidFilePath,
 		consolePath:   consolePath,
 		bundlePath:    bundlePath,
-		configJSON:    configJSON,
 		sandbox:       sandbox,
+		spec:          &ociSpec,
 		runtimeConfig: runtimeConfig,
 		process:       cmd.Process,
 		tmpDir:        tmpdir,
@@ -259,8 +262,8 @@ func TestRunContainerSuccessful(t *testing.T) {
 			ID: d.sandbox.ID(),
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-				vcAnnotations.ConfigJSONKey:    d.configJSON,
 			},
+			Spec: d.spec,
 		}, nil
 	}
 
@@ -368,8 +371,8 @@ func TestRunContainerDetachSuccessful(t *testing.T) {
 			ID: d.sandbox.ID(),
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-				vcAnnotations.ConfigJSONKey:    d.configJSON,
 			},
+			Spec: d.spec,
 		}, nil
 	}
 
@@ -439,8 +442,8 @@ func TestRunContainerDeleteFail(t *testing.T) {
 			ID: d.sandbox.ID(),
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-				vcAnnotations.ConfigJSONKey:    d.configJSON,
 			},
+			Spec: d.spec,
 		}, nil
 	}
 
@@ -513,8 +516,8 @@ func TestRunContainerWaitFail(t *testing.T) {
 			ID: d.sandbox.ID(),
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-				vcAnnotations.ConfigJSONKey:    d.configJSON,
 			},
+			Spec: d.spec,
 		}, nil
 	}
 
@@ -595,8 +598,8 @@ func TestRunContainerStartFail(t *testing.T) {
 			ID: d.sandbox.ID(),
 			Annotations: map[string]string{
 				vcAnnotations.ContainerTypeKey: string(vc.PodContainer),
-				vcAnnotations.ConfigJSONKey:    d.configJSON,
 			},
+			Spec: d.spec,
 		}, nil
 	}
 
