@@ -12,9 +12,11 @@ import (
 	"os"
 	"testing"
 
+	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/stretchr/testify/assert"
+
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/types"
-	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -41,7 +43,7 @@ func TestPauseCLIFunctionSuccessful(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
+		return newSingleContainerStatus(testContainerID, state, map[string]string{}, &specs.Spec{}), nil
 	}
 
 	defer func() {
@@ -87,7 +89,7 @@ func TestPauseCLIFunctionPauseContainerFailure(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
+		return newSingleContainerStatus(testContainerID, state, map[string]string{}, &specs.Spec{}), nil
 	}
 
 	defer func() {
@@ -114,7 +116,7 @@ func TestResumeCLIFunctionSuccessful(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
+		return newSingleContainerStatus(testContainerID, state, map[string]string{}, &specs.Spec{}), nil
 	}
 
 	defer func() {
@@ -159,7 +161,7 @@ func TestResumeCLIFunctionPauseContainerFailure(t *testing.T) {
 	defer os.RemoveAll(path)
 
 	testingImpl.StatusContainerFunc = func(ctx context.Context, sandboxID, containerID string) (vc.ContainerStatus, error) {
-		return newSingleContainerStatus(testContainerID, state, map[string]string{}), nil
+		return newSingleContainerStatus(testContainerID, state, map[string]string{}, &specs.Spec{}), nil
 	}
 
 	defer func() {

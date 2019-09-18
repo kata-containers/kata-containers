@@ -18,6 +18,7 @@ import (
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/pkg/katautils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -322,7 +323,7 @@ func TestCreateInvalidContainerType(t *testing.T) {
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
 	assert.True(katautils.FileExists(ociConfigFile))
 
-	spec, err := oci.ParseConfigJSON(bundlePath)
+	spec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	// Force an invalid container type
@@ -367,7 +368,7 @@ func TestCreateContainerInvalid(t *testing.T) {
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
 	assert.True(katautils.FileExists(ociConfigFile))
 
-	spec, err := oci.ParseConfigJSON(bundlePath)
+	spec, err := compatoci.ParseConfigJSON(bundlePath)
 
 	assert.NoError(err)
 
@@ -432,7 +433,7 @@ func TestCreateProcessCgroupsPathSuccessful(t *testing.T) {
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
 	assert.True(katautils.FileExists(ociConfigFile))
 
-	spec, err := oci.ParseConfigJSON(bundlePath)
+	spec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	// Force sandbox-type container
@@ -535,7 +536,7 @@ func TestCreateCreateCgroupsFilesFail(t *testing.T) {
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
 	assert.True(katautils.FileExists(ociConfigFile))
 
-	spec, err := oci.ParseConfigJSON(bundlePath)
+	spec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	// Force sandbox-type container
@@ -622,7 +623,7 @@ func TestCreateCreateCreatePidFileFail(t *testing.T) {
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
 	assert.True(katautils.FileExists(ociConfigFile))
 
-	spec, err := oci.ParseConfigJSON(bundlePath)
+	spec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	// Force sandbox-type container
@@ -697,7 +698,7 @@ func TestCreate(t *testing.T) {
 	ociConfigFile := filepath.Join(bundlePath, "config.json")
 	assert.True(katautils.FileExists(ociConfigFile))
 
-	spec, err := oci.ParseConfigJSON(bundlePath)
+	spec, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	// Force sandbox-type container

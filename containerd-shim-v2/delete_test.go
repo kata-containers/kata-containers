@@ -15,7 +15,7 @@ import (
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/vcmock"
 )
 
@@ -28,7 +28,7 @@ func TestDeleteContainerSuccessAndFail(t *testing.T) {
 
 	rootPath, bundlePath := testConfigSetup(t)
 	defer os.RemoveAll(rootPath)
-	_, err := oci.ParseConfigJSON(bundlePath)
+	_, err := compatoci.ParseConfigJSON(bundlePath)
 	assert.NoError(err)
 
 	s := &service{

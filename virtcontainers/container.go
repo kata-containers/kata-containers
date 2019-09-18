@@ -9,7 +9,6 @@ package virtcontainers
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -18,7 +17,6 @@ import (
 	"time"
 
 	"github.com/containerd/cgroups"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -80,6 +78,7 @@ type ContainerStatus struct {
 	PID       int
 	StartTime time.Time
 	RootFs    string
+	Spec      *specs.Spec
 
 	// Annotations allow clients to store arbitrary values,
 	// for example to add additional status values required
@@ -250,6 +249,9 @@ type ContainerConfig struct {
 
 	// Resources container resources
 	Resources specs.LinuxResources
+
+	// Raw OCI specification, it won't be saved to disk.
+	Spec *specs.Spec `json:"_"`
 }
 
 // valid checks that the container configuration is valid.
@@ -401,6 +403,11 @@ func (c *Container) setStateFstype(fstype string) error {
 // GetAnnotations returns container's annotations
 func (c *Container) GetAnnotations() map[string]string {
 	return c.config.Annotations
+}
+
+// GetOCISpec returns container's OCI specification
+func (c *Container) GetOCISpec() *specs.Spec {
+	return c.config.Spec
 }
 
 // storeContainer stores a container config.
@@ -1453,16 +1460,9 @@ func (c *Container) detachDevices() error {
 
 // cgroupsCreate creates cgroups on the host for the associated container
 func (c *Container) cgroupsCreate() (err error) {
-	ann := c.GetAnnotations()
-
-	config, ok := ann[annotations.ConfigJSONKey]
-	if !ok {
-		return fmt.Errorf("Could not find json config in annotations")
-	}
-
-	var spec specs.Spec
-	if err := json.Unmarshal([]byte(config), &spec); err != nil {
-		return err
+	spec := c.GetOCISpec()
+	if spec == nil {
+		return errorMissingOCISpec
 	}
 
 	// https://github.com/kata-containers/runtime/issues/168
