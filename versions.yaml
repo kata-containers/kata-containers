@@ -76,7 +76,7 @@ assets:
       uscan-url: >-
         https://github.com/firecracker-microvm/firecracker/tags
         .*/v?(\d\S+)\.tar\.gz
-      version: "v0.17.0"
+      version: "v0.18.0"
 
     nemu:
       description: "Reduced-emulation VMM that uses KVM"
