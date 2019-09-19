@@ -370,10 +370,16 @@ install_kata() {
 
 	install --mode 0644 -D "vmlinux" "${install_path}/${vmlinux}"
 	install --mode 0644 -D ./.config "${install_path}/config-${kernel_version}"
-	ln -sf "${vmlinuz}" "${install_path}/vmlinuz.container"
-	ln -sf "${vmlinux}" "${install_path}/vmlinux.container"
-	ls -la "${install_path}/vmlinux.container"
-	ls -la "${install_path}/vmlinuz.container"
+	if [[ ${experimental_kernel} == "true" ]]; then
+		sufix="-virtiofs.container"
+	else
+		sufix=".container"
+	fi
+
+	ln -sf "${vmlinuz}" "${install_path}/vmlinuz${sufix}"
+	ln -sf "${vmlinux}" "${install_path}/vmlinux${sufix}"
+	ls -la "${install_path}/vmlinux${sufix}"
+	ls -la "${install_path}/vmlinuz${sufix}"
 	popd >>/dev/null
 }
 
@@ -427,7 +433,11 @@ main() {
 
 	if [ -z "${kernel_path}" ]; then
 		config_version=$(get_config_version)
-		kernel_path="${PWD}/kata-linux-${kernel_version}-${config_version}"
+		if [[ ${experimental_kernel} == "true" ]]; then
+			kernel_path="${PWD}/kata-linux-experimental-${kernel_version}-${config_version}"
+		else
+			kernel_path="${PWD}/kata-linux-${kernel_version}-${config_version}"
+		fi
 		info "Config version: ${config_version}"
 	fi
 
