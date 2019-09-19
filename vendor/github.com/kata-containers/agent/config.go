@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017 Intel Corporation
+// Copyright (c) 2017-2019 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -8,6 +8,7 @@ package main
 
 import (
 	"io/ioutil"
+	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -19,7 +20,15 @@ const (
 	optionPrefix      = "agent."
 	logLevelFlag      = optionPrefix + "log"
 	devModeFlag       = optionPrefix + "devmode"
+	traceModeFlag     = optionPrefix + "trace"
+	useVsockFlag      = optionPrefix + "use_vsock"
+	debugConsoleFlag  = optionPrefix + "debug_console"
 	kernelCmdlineFile = "/proc/cmdline"
+	traceModeStatic   = "static"
+	traceModeDynamic  = "dynamic"
+	traceTypeIsolated = "isolated"
+	traceTypeCollated = "collated"
+	defaultTraceType  = traceTypeIsolated
 )
 
 type agentConfig struct {
@@ -56,13 +65,6 @@ func (c *agentConfig) getConfig(cmdLineFile string) error {
 	return nil
 }
 
-func (c *agentConfig) applyConfig(s *sandbox) {
-	agentLog.Logger.SetLevel(c.logLevel)
-	if c.logLevel == logrus.DebugLevel {
-		s.enableGrpcTrace = true
-	}
-}
-
 //Parse a string that represents a kernel cmdline option
 func (c *agentConfig) parseCmdlineOption(option string) error {
 	const (
@@ -75,6 +77,16 @@ func (c *agentConfig) parseCmdlineOption(option string) error {
 		crashOnError = true
 		debug = true
 
+		return nil
+	}
+
+	if option == debugConsoleFlag {
+		debugConsole = true
+		return nil
+	}
+
+	if option == traceModeFlag {
+		enableTracing(traceModeStatic, defaultTraceType)
 		return nil
 	}
 
@@ -94,6 +106,25 @@ func (c *agentConfig) parseCmdlineOption(option string) error {
 		if level == logrus.DebugLevel {
 			debug = true
 		}
+	case traceModeFlag:
+		switch split[valuePosition] {
+		case traceTypeIsolated:
+			enableTracing(traceModeStatic, traceTypeIsolated)
+		case traceTypeCollated:
+			enableTracing(traceModeStatic, traceTypeCollated)
+		}
+	case useVsockFlag:
+		flag, err := strconv.ParseBool(split[valuePosition])
+		if err != nil {
+			return err
+		}
+		if flag {
+			agentLog.Debug("Param passed to use vsock channel")
+			commCh = vsockCh
+		} else {
+			agentLog.Debug("Param passed to NOT use vsock channel")
+			commCh = serialCh
+		}
 	default:
 		if strings.HasPrefix(split[optionPosition], optionPrefix) {
 			return grpcStatus.Errorf(codes.NotFound, "Unknown option %s", split[optionPosition])
@@ -102,4 +133,18 @@ func (c *agentConfig) parseCmdlineOption(option string) error {
 
 	return nil
 
+}
+
+func enableTracing(traceMode, traceType string) {
+	tracing = true
+
+	// Enable in case this generates more trace spans
+	debug = true
+
+	collatedTrace = traceType == traceTypeCollated
+
+	agentLog.WithFields(logrus.Fields{
+		"trace-mode": traceMode,
+		"trace-type": traceType,
+	}).Info("enabled tracing")
 }

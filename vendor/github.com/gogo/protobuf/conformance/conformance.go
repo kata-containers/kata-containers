@@ -39,7 +39,7 @@ import (
 	"io"
 	"os"
 
-	pb "github.com/gogo/protobuf/_conformance/conformance_proto"
+	pb "github.com/gogo/protobuf/conformance/internal/conformance_proto"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
 )
@@ -101,13 +101,6 @@ func handle(req *pb.ConformanceRequest) *pb.ConformanceResponse {
 		err = proto.Unmarshal(p.ProtobufPayload, &msg)
 	case *pb.ConformanceRequest_JsonPayload:
 		err = jsonpb.UnmarshalString(p.JsonPayload, &msg)
-		if err != nil && err.Error() == "unmarshaling Any not supported yet" {
-			return &pb.ConformanceResponse{
-				Result: &pb.ConformanceResponse_Skipped{
-					Skipped: err.Error(),
-				},
-			}
-		}
 	default:
 		return &pb.ConformanceResponse{
 			Result: &pb.ConformanceResponse_RuntimeError{

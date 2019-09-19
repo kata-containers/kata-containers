@@ -7,15 +7,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
-	"os"
+	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/kata-containers/agent/pkg/uevent"
 	pb "github.com/kata-containers/agent/protocols/grpc"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
@@ -25,22 +26,38 @@ import (
 
 const (
 	driver9pType        = "9p"
+	driverVirtioFSType  = "virtio-fs"
 	driverBlkType       = "blk"
+	driverBlkCCWType    = "blk-ccw"
+	driverMmioBlkType   = "mmioblk"
 	driverSCSIType      = "scsi"
+	driverNvdimmType    = "nvdimm"
 	driverEphemeralType = "ephemeral"
+	driverLocalType     = "local"
 )
 
 const (
-	rootBusPath = "/devices/pci0000:00"
-	pciBusMode  = 0220
+	pciBusMode = 0220
 )
 
 var (
-	sysBusPrefix     = sysfsDir + "/bus/pci/devices"
-	pciBusRescanFile = sysfsDir + "/bus/pci/rescan"
-	pciBusPathFormat = "%s/%s/pci_bus/"
-	systemDevPath    = "/dev"
+	sysBusPrefix        = sysfsDir + "/bus/pci/devices"
+	pciBusRescanFile    = sysfsDir + "/bus/pci/rescan"
+	pciBusPathFormat    = "%s/%s/pci_bus/"
+	systemDevPath       = "/dev"
+	timeoutHotplug      = 3
+	getSCSIDevPath      = getSCSIDevPathImpl
+	getPCIDeviceName    = getPCIDeviceNameImpl
+	getDevicePCIAddress = getDevicePCIAddressImpl
+	scanSCSIBus         = scanSCSIBusImpl
 )
+
+// CCW variables
+var (
+	blkCCWSuffix = "virtio"
+)
+
+const maxDeviceIDValue = 3
 
 // SCSI variables
 var (
@@ -49,17 +66,18 @@ var (
 	// is always 0.
 	scsiHostChannel = "0:0:"
 	sysClassPrefix  = sysfsDir + "/class"
-	scsiDiskPrefix  = filepath.Join(sysClassPrefix, "scsi_disk", scsiHostChannel)
 	scsiBlockSuffix = "block"
-	scsiDiskSuffix  = filepath.Join("/device", scsiBlockSuffix)
 	scsiHostPath    = filepath.Join(sysClassPrefix, "scsi_host")
 )
 
-type deviceHandler func(device pb.Device, spec *pb.Spec, s *sandbox) error
+type deviceHandler func(ctx context.Context, device pb.Device, spec *pb.Spec, s *sandbox) error
 
 var deviceHandlerList = map[string]deviceHandler{
-	driverBlkType:  virtioBlkDeviceHandler,
-	driverSCSIType: virtioSCSIDeviceHandler,
+	driverMmioBlkType: virtioMmioBlkDeviceHandler,
+	driverBlkType:     virtioBlkDeviceHandler,
+	driverBlkCCWType:  virtioBlkCCWDeviceHandler,
+	driverSCSIType:    virtioSCSIDeviceHandler,
+	driverNvdimmType:  nvdimmDeviceHandler,
 }
 
 func rescanPciBus() error {
@@ -70,7 +88,7 @@ func rescanPciBus() error {
 // identifier provided. This should be in the format: "bridgeAddr/deviceAddr".
 // Here, bridgeAddr is the address at which the brige is attached on the root bus,
 // while deviceAddr is the address at which the device is attached on the bridge.
-func getDevicePCIAddress(pciID string) (string, error) {
+func getDevicePCIAddressImpl(pciID string) (string, error) {
 	tokens := strings.Split(pciID, "/")
 
 	if len(tokens) != 2 {
@@ -109,32 +127,20 @@ func getDevicePCIAddress(pciID string) (string, error) {
 	return bridgeDevicePCIAddr, nil
 }
 
-func getPCIDeviceName(s *sandbox, pciID string) (string, error) {
-	pciAddr, err := getDevicePCIAddress(pciID)
-	if err != nil {
-		return "", err
-	}
-
+func getDeviceName(s *sandbox, devID string) (string, error) {
 	var devName string
 	var notifyChan chan string
 
-	fieldLogger := agentLog.WithField("pciID", pciID)
+	fieldLogger := agentLog.WithField("devID", devID)
 
-	// Check if the PCI identifier is in PCI device map.
+	// Check if the dev identifier is in PCI device map.
 	s.Lock()
 	for key, value := range s.pciDeviceMap {
-		if strings.Contains(key, pciAddr) {
+		if strings.Contains(key, devID) {
 			devName = value
-			fieldLogger.Info("Device found in pci device map")
+			fieldLogger.Infof("Device: %s found in pci device map", devID)
 			break
 		}
-	}
-
-	// Rescan pci bus if we need to wait for a new pci device
-	if err = rescanPciBus(); err != nil {
-		fieldLogger.WithError(err).Error("Failed to scan pci bus")
-		s.Unlock()
-		return "", err
 	}
 
 	// If device is not found in the device map, hotplug event has not
@@ -144,32 +150,74 @@ func getPCIDeviceName(s *sandbox, pciID string) (string, error) {
 	// global udev listener.
 	if devName == "" {
 		notifyChan = make(chan string, 1)
-		s.deviceWatchers[pciAddr] = notifyChan
+		s.deviceWatchers[devID] = notifyChan
 	}
 	s.Unlock()
 
 	if devName == "" {
-		fieldLogger.Info("Waiting on channel for device notification")
+		fieldLogger.Infof("Waiting on channel for device: %s notification", devID)
 		select {
 		case devName = <-notifyChan:
 		case <-time.After(time.Duration(timeoutHotplug) * time.Second):
 			s.Lock()
-			delete(s.deviceWatchers, pciAddr)
+			delete(s.deviceWatchers, devID)
 			s.Unlock()
 
 			return "", grpcStatus.Errorf(codes.DeadlineExceeded,
 				"Timeout reached after %ds waiting for device %s",
-				timeoutHotplug, pciAddr)
+				timeoutHotplug, devID)
 		}
 	}
 
 	return filepath.Join(systemDevPath, devName), nil
 }
 
+func getPCIDeviceNameImpl(s *sandbox, pciID string) (string, error) {
+	pciAddr, err := getDevicePCIAddress(pciID)
+	if err != nil {
+		return "", err
+	}
+
+	fieldLogger := agentLog.WithField("pciAddr", pciAddr)
+
+	// Rescan pci bus if we need to wait for a new pci device
+	if err = rescanPciBus(); err != nil {
+		fieldLogger.WithError(err).Error("Failed to scan pci bus")
+		return "", err
+	}
+
+	return getDeviceName(s, pciAddr)
+}
+
+// device.Id should be the predicted device name (vda, vdb, ...)
+// device.VmPath already provides a way to send it in
+func virtioMmioBlkDeviceHandler(_ context.Context, device pb.Device, spec *pb.Spec, s *sandbox) error {
+	if device.VmPath == "" {
+		return fmt.Errorf("Invalid path for virtioMmioBlkDevice")
+	}
+
+	return updateSpecDeviceList(device, spec)
+}
+
+func virtioBlkCCWDeviceHandler(ctx context.Context, device pb.Device, spec *pb.Spec, s *sandbox) error {
+	devPath, err := getBlkCCWDevPath(s, device.Id)
+	if err != nil {
+		return err
+	}
+
+	if devPath == "" {
+		return grpcStatus.Errorf(codes.InvalidArgument,
+			"Storage source is empty")
+	}
+
+	device.VmPath = devPath
+	return updateSpecDeviceList(device, spec)
+}
+
 // device.Id should be the PCI address in the format  "bridgeAddr/deviceAddr".
 // Here, bridgeAddr is the address at which the brige is attached on the root bus,
 // while deviceAddr is the address at which the device is attached on the bridge.
-func virtioBlkDeviceHandler(device pb.Device, spec *pb.Spec, s *sandbox) error {
+func virtioBlkDeviceHandler(_ context.Context, device pb.Device, spec *pb.Spec, s *sandbox) error {
 	// Get the device node path based on the PCI device address
 	devPath, err := getPCIDeviceName(s, device.Id)
 	if err != nil {
@@ -181,14 +229,18 @@ func virtioBlkDeviceHandler(device pb.Device, spec *pb.Spec, s *sandbox) error {
 }
 
 // device.Id should be the SCSI address of the disk in the format "scsiID:lunID"
-func virtioSCSIDeviceHandler(device pb.Device, spec *pb.Spec, s *sandbox) error {
+func virtioSCSIDeviceHandler(ctx context.Context, device pb.Device, spec *pb.Spec, s *sandbox) error {
 	// Retrieve the device path from SCSI address.
-	devPath, err := getSCSIDevPath(device.Id)
+	devPath, err := getSCSIDevPath(s, device.Id)
 	if err != nil {
 		return err
 	}
 	device.VmPath = devPath
 
+	return updateSpecDeviceList(device, spec)
+}
+
+func nvdimmDeviceHandler(_ context.Context, device pb.Device, spec *pb.Spec, s *sandbox) error {
 	return updateSpecDeviceList(device, spec)
 }
 
@@ -266,70 +318,8 @@ func updateSpecDeviceList(device pb.Device, spec *pb.Spec) error {
 		device.VmPath)
 }
 
-type checkUeventCb func(uEv *uevent.Uevent) bool
-
-func waitForDevice(devicePath, deviceName string, checkUevent checkUeventCb) error {
-	uEvHandler, err := uevent.NewHandler()
-	if err != nil {
-		return err
-	}
-	defer uEvHandler.Close()
-
-	fieldLogger := agentLog.WithField("device", deviceName)
-
-	// Check if the device already exists.
-	if _, err := os.Stat(devicePath); err == nil {
-		fieldLogger.Info("Device already hotplugged, quit listening")
-		return nil
-	}
-
-	fieldLogger.Info("Started listening for uevents for device hotplug")
-
-	// Channel to signal when desired uevent has been received.
-	done := make(chan bool)
-
-	go func() {
-		// This loop will be either ended if the hotplugged device is
-		// found by listening to the netlink socket, or it will end
-		// after the function returns and the uevent handler is closed.
-		for {
-			uEv, err := uEvHandler.Read()
-			if err != nil {
-				fieldLogger.Error(err)
-				continue
-			}
-
-			fieldLogger = fieldLogger.WithFields(logrus.Fields{
-				"uevent-action":    uEv.Action,
-				"uevent-devpath":   uEv.DevPath,
-				"uevent-subsystem": uEv.SubSystem,
-				"uevent-seqnum":    uEv.SeqNum,
-			})
-
-			fieldLogger.Info("Got uevent")
-
-			if checkUevent(uEv) {
-				fieldLogger.Info("Hotplug event received")
-				break
-			}
-		}
-
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(time.Duration(timeoutHotplug) * time.Second):
-		return grpcStatus.Errorf(codes.DeadlineExceeded,
-			"Timeout reached after %ds waiting for device %s",
-			timeoutHotplug, deviceName)
-	}
-
-	return nil
-}
-
 // scanSCSIBus scans SCSI bus for the given SCSI address(SCSI-Id and LUN)
-func scanSCSIBus(scsiAddr string) error {
+func scanSCSIBusImpl(scsiAddr string) error {
 	files, err := ioutil.ReadDir(scsiHostPath)
 	if err != nil {
 		return err
@@ -357,58 +347,73 @@ func scanSCSIBus(scsiAddr string) error {
 	return nil
 }
 
-// findSCSIDisk finds the SCSI disk name associated with the given SCSI path.
-// This approach eliminates the need to predict the disk name on the host side,
-// but we do need to rescan SCSI bus for this.
-func findSCSIDisk(scsiPath string) (string, error) {
-	files, err := ioutil.ReadDir(scsiPath)
-	if err != nil {
-		return "", err
-	}
-
-	if len(files) != 1 {
-		return "", grpcStatus.Errorf(codes.Internal,
-			"Expecting a single SCSI device, found %v",
-			files)
-	}
-
-	return files[0].Name(), nil
-}
-
-// getSCSIDevPath scans SCSI bus looking for the provided SCSI address, then
+// getSCSIDevPathImpl scans SCSI bus looking for the provided SCSI address, then
 // it waits for the SCSI disk to become available and returns the device path
 // associated with the disk.
-func getSCSIDevPath(scsiAddr string) (string, error) {
+func getSCSIDevPathImpl(s *sandbox, scsiAddr string) (string, error) {
 	if err := scanSCSIBus(scsiAddr); err != nil {
 		return "", err
 	}
 
-	devPath := filepath.Join(scsiDiskPrefix+scsiAddr, scsiDiskSuffix)
+	devPath := filepath.Join(scsiHostChannel+scsiAddr, scsiBlockSuffix)
 
-	checkUevent := func(uEv *uevent.Uevent) bool {
-		devSubPath := filepath.Join(scsiHostChannel+scsiAddr, scsiBlockSuffix)
-		return (uEv.Action == "add" &&
-			strings.Contains(uEv.DevPath, devSubPath))
-	}
-	if err := waitForDevice(devPath, scsiAddr, checkUevent); err != nil {
-		return "", err
-	}
-
-	scsiDiskName, err := findSCSIDisk(devPath)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(devPrefix, scsiDiskName), nil
+	return getDeviceName(s, devPath)
 }
 
-func addDevices(devices []*pb.Device, spec *pb.Spec, s *sandbox) error {
+// checkCCWBusFormat checks the format for the ccw bus. It needs to be in the form 0.<n>.<dddd>
+// n is the subchannel set ID - integer from 0 up to 3
+// dddd is the device id - integer in hex up to 0xffff
+// See https://www.ibm.com/support/knowledgecenter/en/linuxonibm/com.ibm.linux.z.ldva/ldva_r_XML_Address.html
+func checkCCWBusFormat(bus string) error {
+	busFormat := strings.Split(bus, ".")
+	if len(busFormat) != 3 {
+		return fmt.Errorf("Wrong bus format. It needs to be in the form 0.<n>.<dddd>, got %s", bus)
+	}
+
+	bus0, err := strconv.ParseInt(busFormat[0], 10, 32)
+	if err != nil {
+		return err
+	}
+	if bus0 != 0 {
+		return fmt.Errorf("Wrong bus format. First digit needs to be 0 instead is %d", bus0)
+	}
+
+	bus1, err := strconv.ParseInt(busFormat[1], 10, 32)
+	if err != nil {
+		return err
+	}
+	if bus1 > maxDeviceIDValue {
+		return fmt.Errorf("Wrong bus format. Second digit must be lower than %d instead is %d", maxDeviceIDValue, bus1)
+	}
+
+	if len(busFormat[2]) != 4 {
+		return fmt.Errorf("Wrong bus format. Third digit must be in the form <dddd>, got %s", bus)
+	}
+	busFormat[2] = "0x" + busFormat[2]
+	_, err = strconv.ParseInt(busFormat[2], 0, 32)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// getBlkCCWDevPath returns the CCW block path based on the bus ID
+func getBlkCCWDevPath(s *sandbox, bus string) (string, error) {
+	if err := checkCCWBusFormat(bus); err != nil {
+		return "", err
+	}
+
+	return getDeviceName(s, path.Join(bus, blkCCWSuffix))
+}
+
+func addDevices(ctx context.Context, devices []*pb.Device, spec *pb.Spec, s *sandbox) error {
 	for _, device := range devices {
 		if device == nil {
 			continue
 		}
 
-		err := addDevice(device, spec, s)
+		err := addDevice(ctx, device, spec, s)
 		if err != nil {
 			return err
 		}
@@ -418,7 +423,7 @@ func addDevices(devices []*pb.Device, spec *pb.Spec, s *sandbox) error {
 	return nil
 }
 
-func addDevice(device *pb.Device, spec *pb.Spec, s *sandbox) error {
+func addDevice(ctx context.Context, device *pb.Device, spec *pb.Spec, s *sandbox) error {
 	if device == nil {
 		return grpcStatus.Error(codes.InvalidArgument, "invalid device")
 	}
@@ -458,5 +463,5 @@ func addDevice(device *pb.Device, spec *pb.Spec, s *sandbox) error {
 			"Unknown device type %q", device.Type)
 	}
 
-	return devHandler(*device, spec, s)
+	return devHandler(ctx, *device, spec, s)
 }
