@@ -728,6 +728,9 @@ type BlockDevice struct {
 
 	// DevNo identifies the ccw devices for s390x architecture
 	DevNo string
+
+	// ShareRW enables multiple qemu instances to share the File
+	ShareRW bool
 }
 
 // Valid returns true if the BlockDevice structure is valid and complete.
@@ -764,6 +767,10 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 
 	if isVirtioCCW[blkdev.Driver] {
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", blkdev.DevNo))
+	}
+
+	if blkdev.ShareRW {
+		deviceParams = append(deviceParams, fmt.Sprintf(",share-rw=on"))
 	}
 
 	blkParams = append(blkParams, fmt.Sprintf("id=%s", blkdev.ID))
