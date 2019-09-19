@@ -121,9 +121,12 @@ get_kernel() {
 
 		major_version=$(echo "${version}" | cut -d. -f1)
 		kernel_tarball="linux-${version}.tar.xz"
-
-		curl --fail -OL "https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
-		grep "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"
+        
+                if [ ! -f sha256sums.asc ] || ! grep -q "${kernel_tarball}" sha256sums.asc; then
+                        info "Download kernel checksum file: sha256sums.asc"
+                        curl --fail -OL "https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
+                fi
+                grep "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"
 
 		if [ -f "${kernel_tarball}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
 			info "invalid kernel tarball ${kernel_tarball} removing "
