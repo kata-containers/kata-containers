@@ -12,8 +12,7 @@
 
 [hypervisor.qemu]
 path = "@QEMUVIRTIOFSPATH@"
-kernel = "@KERNELPATH@"
-initrd = "@INITRDPATH@"
+kernel = "@KERNELVIRTIOFSPATH@"
 image = "@IMAGEPATH@"
 machine_type = "@MACHINETYPE@"
 
