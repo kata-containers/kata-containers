@@ -29,10 +29,13 @@ import (
 const (
 	unixSocketScheme  = "unix"
 	vsockSocketScheme = "vsock"
+	hybridVSockScheme = "hvsock"
 )
 
 var defaultDialTimeout = 15 * time.Second
 var defaultCloseTimeout = 5 * time.Second
+
+var hybridVSockPort uint32
 
 // AgentClient is an agent gRPC client connection wrapper for agentgrpc.AgentServiceClient
 type AgentClient struct {
@@ -77,6 +80,9 @@ type dialer func(string, time.Duration) (net.Conn, error)
 //   - unix://<unix socket path>
 //   - vsock://<cid>:<port>
 //   - <unix socket path>
+//   - hvsock://<path>:<port>. Firecracker implements the virtio-vsock device
+//     model, and mediates communication between AF_UNIX sockets (on the host end)
+//     and AF_VSOCK sockets (on the guest end).
 func NewAgentClient(ctx context.Context, sock string, enableYamux bool) (*AgentClient, error) {
 	grpcAddr, parsedAddr, err := parse(sock)
 	if err != nil {
@@ -158,6 +164,21 @@ func parse(sock string) (string, *url.URL, error) {
 		} else {
 			grpcAddr = unixSocketScheme + ":///" + addr.Host + "/" + addr.Path
 		}
+	case hybridVSockScheme:
+		if addr.Path == "" {
+			return "", nil, grpcStatus.Errorf(codes.InvalidArgument, "Invalid hybrid vsock scheme: %s", sock)
+		}
+		hvsocket := strings.Split(addr.Path, ":")
+		if len(hvsocket) != 2 {
+			return "", nil, grpcStatus.Errorf(codes.InvalidArgument, "Invalid hybrid vsock scheme: %s", sock)
+		}
+		// Save port since agent dialer not sent the port to the hybridVSock dialer
+		var port uint64
+		if port, err = strconv.ParseUint(hvsocket[1], 10, 32); err != nil {
+			return "", nil, grpcStatus.Errorf(codes.InvalidArgument, "Invalid hybrid vsock port %s: %v", sock, err)
+		}
+		hybridVSockPort = uint32(port)
+		grpcAddr = hybridVSockScheme + ":" + hvsocket[0]
 	default:
 		return "", nil, grpcStatus.Errorf(codes.InvalidArgument, "Invalid scheme: %s", sock)
 	}
@@ -190,6 +211,8 @@ func agentDialer(addr *url.URL, enableYamux bool) dialer {
 	switch addr.Scheme {
 	case vsockSocketScheme:
 		d = vsockDialer
+	case hybridVSockScheme:
+		d = hybridVSockDialer
 	case unixSocketScheme:
 		fallthrough
 	default:
@@ -274,6 +297,18 @@ func parseGrpcVsockAddr(sock string) (uint32, uint32, error) {
 	return uint32(cid), uint32(port), nil
 }
 
+func parseGrpcHybridVSockAddr(sock string) (string, error) {
+	sp := strings.Split(sock, ":")
+	if len(sp) != 2 {
+		return "", grpcStatus.Errorf(codes.InvalidArgument, "Invalid hybrid vsock address: %s", sock)
+	}
+	if sp[0] != hybridVSockScheme {
+		return "", grpcStatus.Errorf(codes.InvalidArgument, "Invalid hybrid vsock URL scheme: %s", sock)
+	}
+
+	return sp[1], nil
+}
+
 // This would bypass the grpc dialer backoff strategy and handle dial timeout
 // internally. Because we do not have a large number of concurrent dialers,
 // it is not reasonable to have such aggressive backoffs which would kill kata
@@ -333,5 +368,39 @@ func vsockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 
 	timeoutErr := grpcStatus.Errorf(codes.DeadlineExceeded, "timed out connecting to vsock %d:%d", cid, port)
 
+	return commonDialer(timeout, dialFunc, timeoutErr)
+}
+
+func hybridVSockDialer(sock string, timeout time.Duration) (net.Conn, error) {
+	udsPath, err := parseGrpcHybridVSockAddr(sock)
+	if err != nil {
+		return nil, err
+	}
+
+	dialFunc := func() (net.Conn, error) {
+		conn, err := net.DialTimeout("unix", udsPath, timeout)
+		if err != nil {
+			return nil, err
+		}
+		// Once the connection is opened, the following command MUST BE sent,
+		// the hypervisor needs to know the port number where the agent is listening in order to
+		// create the connection
+		if _, err = conn.Write([]byte(fmt.Sprintf("CONNECT %d\n", hybridVSockPort))); err != nil {
+			conn.Close()
+			return nil, err
+		}
+
+		// Read EOT (End of transmission) byte
+		eot := make([]byte, 32)
+		if _, err = conn.Read(eot); err != nil {
+			// Just close the connection, gRPC will dial again
+			// without errors
+			conn.Close()
+		}
+
+		return conn, nil
+	}
+
+	timeoutErr := grpcStatus.Errorf(codes.DeadlineExceeded, "timed out connecting to hybrid vsocket %s", sock)
 	return commonDialer(timeout, dialFunc, timeoutErr)
 }
