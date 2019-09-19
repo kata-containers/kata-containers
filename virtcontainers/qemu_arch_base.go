@@ -548,6 +548,7 @@ func genericBlockDevice(drive config.BlockDrive, nestedRun bool) (govmmQemu.Bloc
 		Format:        govmmQemu.BlockDeviceFormat(drive.Format),
 		Interface:     "none",
 		DisableModern: nestedRun,
+		ShareRW:       drive.ShareRW,
 	}, nil
 }
 

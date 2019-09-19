@@ -131,6 +131,7 @@ func (q *qemuS390x) appendImage(devices []govmmQemu.Device, path string) ([]govm
 	if err != nil {
 		return nil, err
 	}
+	drive.ShareRW = true
 	devices, err = q.appendBlockDevice(devices, drive)
 	if err != nil {
 		return nil, err
