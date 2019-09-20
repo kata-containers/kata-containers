@@ -10,8 +10,8 @@ jobs:
     - name : the ok ok 
       run: |  
         echo "hello worold"
-        apt-get update
-        apt-get install -y docker-ce git
+        sudo apt-get update
+        sudo apt-get install -y docker-ce git
         echo "still?"
         git clone https://github.com/kata-containers/packaging
         cd packaging
