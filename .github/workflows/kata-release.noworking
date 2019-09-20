@@ -7,8 +7,20 @@ jobs:
   publish-artifacts:
     runs-on: ubuntu-latest
     steps:
+    - name: install-dependencies
+    - run: |
+        apt-get upate
+        apt-get install -y docker-ce git
+        git clone https://github.com/kata-containers/packaging
+        cd packaging/obs-packages
+        ./gen_versions_file.txt
+        cd ../release
+        echo "maybe it worked"
+        tree
+    - name: publish-images    
+    - run : wget all the things
     - name: publish-images 
-    - uses: TBD
+    - run : ./publish-images.sh
     with:
       args: tag? sha?
     - name: create-static-binaries

@@ -1,0 +1,19 @@
+# When a release page is published, start the release artifact process
+on: release
+name: Build, Test, and Publish kata-deploy
+
+jobs:
+  # create image and upload to release page (can we get branch information from release tag?
+  publish-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+    - name: install-dependencies
+    - run: |
+        apt-get upate
+        apt-get install -y docker-ce git
+        git clone https://github.com/kata-containers/packaging
+        cd packaging/obs-packages
+        ./gen_versions_file.txt
+        cd ../release
+        echo "maybe it worked"
+        tree
