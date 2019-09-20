@@ -1,5 +1,8 @@
 # When a release page is published, start the release artifact process
-on: push.tag
+on:
+ push:
+  tags:
+  - '*'
 name: Build, Test, and Publish kata-deploy
 
 jobs:
