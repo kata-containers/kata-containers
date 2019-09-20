@@ -30,6 +30,8 @@ kernel_repo_dir="${GOPATH}/src/${kernel_repo}"
 kernel_arch="$(arch)"
 readonly tmp_dir="$(mktemp -d -t install-kata-XXXXXXXXXXX)"
 packaged_kernel="kata-linux-container"
+#Experimental kernel support. Pull from virtio-fs GitLab instead of kernel.org
+experimental_kernel="${experimental_kernel:-false}"
 
 exit_handler() {
 	rm -rf "${tmp_dir}"
@@ -45,8 +47,12 @@ download_repo() {
 }
 
 get_current_kernel_version() {
-	kernel_version=$(get_version "assets.kernel.version")
-	echo "${kernel_version/v/}"
+	if [ "$experimental_kernel" == "true" ]; then
+		kernel_version=$(get_version "assets.kernel-experimental.tag")
+	else
+		kernel_version=$(get_version "assets.kernel.version")
+		echo "${kernel_version/v/}"
+	fi
 }
 
 get_kata_config_version() {
@@ -55,13 +61,22 @@ get_kata_config_version() {
 }
 
 build_and_install_kernel() {
-	# Always build and install the kernel version found locally
-	info "Install kernel from sources"
-	pushd "${tmp_dir}" >> /dev/null
-	"${kernel_repo_dir}/kernel/build-kernel.sh" -v "${kernel_version}" "setup"
-	"${kernel_repo_dir}/kernel/build-kernel.sh" -v "${kernel_version}" "build"
-	sudo -E PATH="$PATH" "${kernel_repo_dir}/kernel/build-kernel.sh" -v "${kernel_version}" "install"
-	popd >> /dev/null
+	if [ ${experimental_kernel} == "true" ]; then
+		info "Install experimental kernel"
+		pushd "${tmp_dir}" >> /dev/null
+		"${kernel_repo_dir}/kernel/build-kernel.sh" -e setup
+		"${kernel_repo_dir}/kernel/build-kernel.sh" -e build
+		sudo -E PATH="$PATH" "${kernel_repo_dir}/kernel/build-kernel.sh" -e install
+		popd >> /dev/null
+	else
+		# Always build and install the kernel version found locally
+		info "Install kernel from sources"
+		pushd "${tmp_dir}" >> /dev/null
+		"${kernel_repo_dir}/kernel/build-kernel.sh" -v "${kernel_version}" "setup"
+		"${kernel_repo_dir}/kernel/build-kernel.sh" -v "${kernel_version}" "build"
+		sudo -E PATH="$PATH" "${kernel_repo_dir}/kernel/build-kernel.sh" -v "${kernel_version}" "install"
+		popd >> /dev/null
+	fi
 }
 
 # $1 kernel_binary: binary to install could be vmlinux or vmlinuz
@@ -105,16 +120,20 @@ main() {
 	cached_kernel_version=$(curl -sfL "${latest_build_url}/latest") || cached_kernel_version="none"
 	info "current kernel : ${current_kernel_version}"
 	info "cached kernel  : ${cached_kernel_version}"
-	if [ "$cached_kernel_version" == "$current_kernel_version" ] && [ "$kernel_arch" == "x86_64" ]; then
-		# If installing kernel fails,
-		# then build and install it from sources.
-		if ! install_prebuilt_kernel; then
-			info "failed to install cached kernel, trying to build from source"
+	if [ "${experimental_kernel}" == "false" ]; then
+		if [ "$cached_kernel_version" == "$current_kernel_version" ] && [ "$kernel_arch" == "x86_64" ]; then
+			# If installing kernel fails,
+			# then build and install it from sources.
+			if ! install_prebuilt_kernel; then
+				info "failed to install cached kernel, trying to build from source"
+				build_and_install_kernel
+			fi
+		else
 			build_and_install_kernel
 		fi
-
 	else
 		build_and_install_kernel
+
 	fi
 }
 
