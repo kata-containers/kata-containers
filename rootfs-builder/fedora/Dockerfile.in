@@ -8,16 +8,36 @@ From docker.io/fedora:@OS_VERSION@
 @SET_PROXY@
 
 RUN dnf -y update && dnf install -y \
-chrony \
-curl \
-gcc \
-git \
-libseccomp \
-libseccomp-devel \
-make \
-pkgconfig \
-redhat-release \
-systemd
+    autoconf \
+    automake \
+    binutils \
+    chrony \
+    cmake \
+    coreutils \
+    curl \
+    gcc \
+    gcc-c++ \
+    git \
+    glibc-common \
+    glibc-devel \
+    glibc-headers \
+    glibc-static \
+    glibc-utils \
+    libseccomp \
+    libseccomp-devel \
+    libstdc++-devel \
+    libstdc++-static \
+    m4 \
+    make \
+    pkgconfig \
+    redhat-release \
+    sed \
+    systemd \
+    tar \
+    vim \
+    which
 
 # This will install the proper golang to build Kata components
+@INSTALL_MUSL@
 @INSTALL_GO@
+@INSTALL_RUST@

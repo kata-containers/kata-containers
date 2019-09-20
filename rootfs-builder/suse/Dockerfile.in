@@ -15,4 +15,6 @@ COPY install-packages.sh config.sh /
 RUN chmod +x /install-packages.sh; /install-packages.sh
 
 # This will install the proper golang to build Kata components
+@INSTALL_MUSL@
 @INSTALL_GO@
+@INSTALL_RUST@

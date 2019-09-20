@@ -7,7 +7,33 @@
 from docker.io/debian:@OS_VERSION@
 
 # RUN commands
-RUN apt-get update && apt-get install -y curl wget systemd debootstrap git build-essential chrony
+RUN apt-get update && apt-get install -y \
+    autoconf \
+    automake \
+    binutils \
+    build-essential \
+    chrony \
+    cmake \
+    coreutils \
+    curl \
+    debianutils \
+    debootstrap \
+    g++ \
+    gcc \
+    git \
+    libc-dev \
+    libstdc++-6-dev \
+    m4 \
+    make \
+    musl \
+    musl-dev \
+    musl-tools \
+    sed \
+    systemd \
+    tar \
+    vim \
+    wget
+
 # This will install the proper golang to build Kata components
 @INSTALL_GO@
-
+@INSTALL_RUST@
