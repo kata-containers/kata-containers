@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: install-dependencies
-    run: |
+      run: |
         apt-get upate
         apt-get install -y docker-ce git
         git clone https://github.com/kata-containers/packaging
