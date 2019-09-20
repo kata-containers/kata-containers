@@ -259,8 +259,8 @@ ifneq (,$(QEMUVIRTIOFSCMD))
 	# qemu-specific options (all should be suffixed by "_QEMU")
 	DEFBLOCKSTORAGEDRIVER_QEMU_VIRTIOFS := virtio-fs
 	DEFNETWORKMODEL_QEMU := tcfilter
-	KERNELNAME = $(call MAKE_KERNEL_NAME,$(KERNELTYPE))
-	KERNELPATH = $(KERNELDIR)/$(KERNELNAME)
+	KERNELNAMEVIRTIOFS = $(call MAKE_KERNEL_VIRTIOFS_NAME,$(KERNELTYPE))
+	KERNELVIRTIOFSPATH = $(KERNELDIR)/$(KERNELNAMEVIRTIOFS)
 endif
 
 ifneq (,$(NEMUCMD))
@@ -524,6 +524,11 @@ define MAKE_KERNEL_NAME
 $(if $(findstring uncompressed,$1),vmlinux.container,vmlinuz.container)
 endef
 
+define MAKE_KERNEL_VIRTIOFS_NAME
+$(if $(findstring uncompressed,$1),vmlinux-virtiofs.container,vmlinuz-virtiofs.container)
+endef
+
+
 GENERATED_FILES += $(CLI_DIR)/config-generated.go
 
 $(TARGET_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
@@ -567,6 +572,7 @@ $(GENERATED_FILES): %: %.in $(MAKEFILE_LIST) VERSION .git-commit
 		-e "s|@KERNELPATH_ACRN@|$(KERNELPATH_ACRN)|g" \
 		-e "s|@KERNELPATH_FC@|$(KERNELPATH_FC)|g" \
 		-e "s|@KERNELPATH@|$(KERNELPATH)|g" \
+		-e "s|@KERNELVIRTIOFSPATH@|$(KERNELVIRTIOFSPATH)|g" \
 		-e "s|@INITRDPATH@|$(INITRDPATH)|g" \
 		-e "s|@FIRMWAREPATH@|$(FIRMWAREPATH)|g" \
 		-e "s|@FIRMWAREPATH_NEMU@|$(FIRMWAREPATH_NEMU)|g" \
