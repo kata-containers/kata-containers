@@ -6,52 +6,56 @@
 package annotations
 
 const (
-	vcAnnotationsPrefix = "com.github.containers.virtcontainers."
+	kataAnnotationsPrefix     = "io.kata-containers."
+	kataConfAnnotationsPrefix = kataAnnotationsPrefix + "config."
+	kataAnnotHypervisorPrefix = kataConfAnnotationsPrefix + "hypervisor."
+	kataAnnotAgentPrefix      = kataConfAnnotationsPrefix + "agent."
+	kataAnnotRuntimePrefix    = kataConfAnnotationsPrefix + "runtime." // nolint: unused
 
 	// KernelPath is a sandbox annotation for passing a per container path pointing at the kernel needed to boot the container VM.
-	KernelPath = vcAnnotationsPrefix + "KernelPath"
+	KernelPath = kataAnnotHypervisorPrefix + "kernel"
 
 	// ImagePath is a sandbox annotation for passing a per container path pointing at the guest image that will run in the container VM.
-	ImagePath = vcAnnotationsPrefix + "ImagePath"
+	ImagePath = kataAnnotHypervisorPrefix + "image"
 
 	// InitrdPath is a sandbox annotation for passing a per container path pointing at the guest initrd image that will run in the container VM.
-	InitrdPath = vcAnnotationsPrefix + "InitrdPath"
+	InitrdPath = kataAnnotHypervisorPrefix + "initrd"
 
 	// HypervisorPath is a sandbox annotation for passing a per container path pointing at the hypervisor that will run the container VM.
-	HypervisorPath = vcAnnotationsPrefix + "HypervisorPath"
+	HypervisorPath = kataAnnotHypervisorPrefix + "path"
 
 	// JailerPath is a sandbox annotation for passing a per container path pointing at the jailer that will constrain the container VM.
-	JailerPath = vcAnnotationsPrefix + "JailerPath"
+	JailerPath = kataAnnotHypervisorPrefix + "jailer_path"
 
 	// FirmwarePath is a sandbox annotation for passing a per container path pointing at the guest firmware that will run the container VM.
-	FirmwarePath = vcAnnotationsPrefix + "FirmwarePath"
+	FirmwarePath = kataAnnotHypervisorPrefix + "firmware"
 
 	// KernelHash is a sandbox annotation for passing a container kernel image SHA-512 hash value.
-	KernelHash = vcAnnotationsPrefix + "KernelHash"
+	KernelHash = kataAnnotHypervisorPrefix + "kernel_hash"
 
 	// ImageHash is an sandbox annotation for passing a container guest image SHA-512 hash value.
-	ImageHash = vcAnnotationsPrefix + "ImageHash"
+	ImageHash = kataAnnotHypervisorPrefix + "image_hash"
 
 	// InitrdHash is an sandbox annotation for passing a container guest initrd SHA-512 hash value.
-	InitrdHash = vcAnnotationsPrefix + "InitrdHash"
+	InitrdHash = kataAnnotHypervisorPrefix + "initrd_hash"
 
 	// HypervisorHash is an sandbox annotation for passing a container hypervisor binary SHA-512 hash value.
-	HypervisorHash = vcAnnotationsPrefix + "HypervisorHash"
+	HypervisorHash = kataAnnotHypervisorPrefix + "hypervisor_hash"
 
 	// JailerHash is an sandbox annotation for passing a jailer binary SHA-512 hash value.
-	JailerHash = vcAnnotationsPrefix + "JailerHash"
+	JailerHash = kataAnnotHypervisorPrefix + "jailer_hash"
 
 	// FirmwareHash is an sandbox annotation for passing a container guest firmware SHA-512 hash value.
-	FirmwareHash = vcAnnotationsPrefix + "FirmwareHash"
+	FirmwareHash = kataAnnotHypervisorPrefix + "firmware_hash"
 
 	// AssetHashType is the hash type used for assets verification
-	AssetHashType = vcAnnotationsPrefix + "AssetHashType"
+	AssetHashType = kataAnnotationsPrefix + "asset_hash_type"
 
 	// BundlePathKey is the annotation key to fetch the OCI configuration file path.
-	BundlePathKey = vcAnnotationsPrefix + "pkg.oci.bundle_path"
+	BundlePathKey = kataAnnotationsPrefix + "pkg.oci.bundle_path"
 
 	// ContainerTypeKey is the annotation key to fetch container type.
-	ContainerTypeKey = vcAnnotationsPrefix + "pkg.oci.container_type"
+	ContainerTypeKey = kataAnnotationsPrefix + "pkg.oci.container_type"
 
 	// KernelModules is the annotation key for passing the list of kernel
 	// modules and their parameters that will be loaded in the guest kernel.
@@ -60,11 +64,11 @@ const (
 	// The following example can be used to load two kernel modules with parameters
 	///
 	//   annotations:
-	//     com.github.containers.virtcontainers.KernelModules: "e1000e InterruptThrottleRate=3000,3000,3000 EEE=1; i915 enable_ppgtt=0"
+	//     io.kata-containers.config.agent.kernel_modules: "e1000e InterruptThrottleRate=3000,3000,3000 EEE=1; i915 enable_ppgtt=0"
 	//
 	// The first word is considered as the module name and the rest as its parameters.
 	//
-	KernelModules = vcAnnotationsPrefix + "KernelModules"
+	KernelModules = kataAnnotAgentPrefix + "kernel_modules"
 )
 
 const (
