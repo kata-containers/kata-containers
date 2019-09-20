@@ -14,6 +14,12 @@ script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-}
 GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
+RUST_AGENT_PKG=${RUST_AGENT_PKG:-github.com/kata-containers/kata-containers}
+RUST_AGENT=${RUST_AGENT:-no}
+RUST_VERSION="null"
+RUST_SRC_PATH=${RUST_SRC_PATH:-${HOME}/rust}
+CMAKE_VERSION=${CMAKE_VERSION:-"null"}
+MUSL_VERSION=${MUSL_VERSION:-"null"}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
@@ -94,6 +100,15 @@ AGENT_BIN           Name of the agent binary (used when running sanity checks on
 AGENT_INIT          When set to "yes", use ${AGENT_BIN} as init process in place
                     of systemd.
                     Default value: no
+
+RUST_AGENT          When set to "yes", build kata-agent from kata-rust-agent instead of go agent
+                    Default value: "no"
+
+RUST_AGENT_PKG      URL of the Git repository hosting the agent package.
+                    Default value: ${RUST_AGENT_PKG}
+
+RUST_SRC_PATH       Path of the source code
+                    Default value: ${RUST_SRC_PATH}
 
 AGENT_VERSION       Version of the agent to include in the rootfs.
                     Default value: ${AGENT_VERSION:-<not set>}
@@ -264,6 +279,11 @@ check_env_variables()
 
 	[ "$AGENT_INIT" == "yes" -o "$AGENT_INIT" == "no" ] || die "AGENT_INIT($AGENT_INIT) is invalid (must be yes or no)"
 
+	if [ -z "${AGENT_SOURCE_BIN}" ]; then
+		[ "$RUST_AGENT" == "yes" -o "$RUST_AGENT" == "no" ] || die "RUST_AGENT($RUST_AGENT) is invalid (must be yes or no)"
+		mkdir -p ${RUST_SRC_PATH} || :
+	fi
+
 	[ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
 
 	[ -n "${OSBUILDER_VERSION}" ] || die "need osbuilder version"
@@ -312,12 +332,39 @@ build_rootfs_distro()
 
 	echo "Required Go version: $GO_VERSION"
 
+	# need to detect rustc's version too?
+	detect_rust_version ||
+		die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-master}'."
+
+	echo "Required rust version: $RUST_VERSION"
+
+	detect_cmake_version ||
+		die "Could not detect the required cmake version for AGENT_VERSION='${AGENT_VERSION:-master}'."
+
+	echo "Required cmake version: $CMAKE_VERSION"
+
+	detect_musl_version ||
+		die "Could not detect the required musl version for AGENT_VERSION='${AGENT_VERSION:-master}'."
+
+	echo "Required musl version: $MUSL_VERSION"
+
 	if [ -z "${USE_DOCKER}" ] && [ -z "${USE_PODMAN}" ]; then
 		#Generate an error if the local Go version is too old
 		foundVersion=$(go version | sed -E "s/^.+([0-9]+\.[0-9]+\.[0-9]+).*$/\1/g")
 
-		compare_versions "$GO_VERSION" $foundVersion || \
-			die "Your Go version $foundVersion is older than the minimum expected Go version $GO_VERSION"
+		compare_versions "${GO_VERSION}" "${foundVersion}" || \
+			die "Your Go version ${foundVersion} is older than the minimum expected Go version ${GO_VERSION}"
+
+		if [ "${RUST_AGENT}" == "yes" ]; then
+			source "${HOME}/.cargo/env"
+			foundVersion=$(rustc --version | sed -E "s/^.+([0-9]+\.[0-9]+\.[0-9]+).*$/\1/g")
+
+			compare_versions "${RUST_VERSION}" "${foundVersion}" || \
+				die "Your rust version ${foundVersion} is older than the minimum expected rust version ${RUST_VERSION}"
+
+			foundVersion=$(cmake --version | grep "[0-9]\+.[0-9]\+.[0-9]\+" | sed -E "s/^.+([0-9]+\.[0-9]+\.[0-9]+).*$/\1/g")
+
+		fi
 	else
 		if [ -n "${USE_DOCKER}" ]; then
 			container_engine="docker"
@@ -327,6 +374,7 @@ build_rootfs_distro()
 
 		image_name="${distro}-rootfs-osbuilder"
 
+		# setup to install go or rust here
 		generate_dockerfile "${distro_config_dir}"
 		"$container_engine" build  \
 			--build-arg http_proxy="${http_proxy}" \
@@ -341,7 +389,12 @@ build_rootfs_distro()
 		docker_run_args+=" --runtime ${DOCKER_RUNTIME}"
 
 		if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-			docker_run_args+=" --env GO_AGENT_PKG=${GO_AGENT_PKG}"
+			if [ "$RUST_AGENT" == "no" ]; then
+				docker_run_args+=" --env GO_AGENT_PKG=${GO_AGENT_PKG}"
+			else
+				docker_run_args+=" --env RUST_AGENT_PKG=${RUST_AGENT_PKG} -v ${RUST_SRC_PATH}:${RUST_SRC_PATH} --env RUST_SRC_PATH=${RUST_SRC_PATH}"
+			fi
+			docker_run_args+=" --env RUST_AGENT=${RUST_AGENT} -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 		else
 			docker_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
 			docker_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
@@ -351,11 +404,16 @@ build_rootfs_distro()
 
 		# Relabel volumes so SELinux allows access (see docker-run(1))
 		if command -v selinuxenabled > /dev/null && selinuxenabled ; then
+			SRC_VOL=("${GOPATH_LOCAL}")
+			if [ "${RUST_AGENT}" == "yes" ]; then
+				SRC_VOL+=("${RUST_SRC_PATH}")
+			fi
+
 			for volume_dir in "${script_dir}" \
 					  "${ROOTFS_DIR}" \
 					  "${script_dir}/../scripts" \
 					  "${kernel_mod_dir}" \
-					  "${GOPATH_LOCAL}"; do
+					  "${SRC_VOL[@]}"; do
 				chcon -Rt svirt_sandbox_file_t "$volume_dir"
 			done
 		fi
@@ -370,18 +428,17 @@ build_rootfs_distro()
 			--env ROOTFS_DIR="/rootfs" \
 			--env AGENT_BIN="${AGENT_BIN}" \
 			--env AGENT_INIT="${AGENT_INIT}" \
-			--env GOPATH="${GOPATH_LOCAL}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
 			--env DEBUG="${DEBUG}" \
+			--env HOME="/root" \
 			-v "${script_dir}":"/osbuilder" \
 			-v "${ROOTFS_DIR}":"/rootfs" \
 			-v "${script_dir}/../scripts":"/scripts" \
 			-v "${kernel_mod_dir}":"${kernel_mod_dir}" \
-			-v "${GOPATH_LOCAL}":"${GOPATH_LOCAL}" \
 			$docker_run_args \
 			${image_name} \
 			bash /osbuilder/rootfs.sh "${distro}"
@@ -501,11 +558,31 @@ EOT
 
 		info "Build agent"
 		pushd "${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
-		[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful"
+		[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful" || info "checkout failed!"
 		make clean
 		make INIT=${AGENT_INIT}
 		make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
 		popd
+		if [ "$RUST_AGENT" == "yes" ]; then
+			# build rust agent
+			info "Build rust agent"
+			# The PATH /.cargo/bin is apparently wrong
+			# looks like $HOME is resolved to empty when
+			# container is started
+			source "${HOME}/.cargo/env"
+			local -r agent_dir="$(basename ${RUST_AGENT_PKG})/src/agent"
+			pushd "${RUST_SRC_PATH}"
+			if [ ! -d ${RUST_SRC_PATH}/${agent_dir} ]; then
+				git clone https://${RUST_AGENT_PKG}.git
+			fi
+			cd ${agent_dir}
+			# checkout correct version
+			[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful"
+			make clean
+			make
+			make install DESTDIR="${ROOTFS_DIR}"
+			popd
+		fi
 	else
 		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
 		OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
@@ -550,6 +627,29 @@ parse_arguments()
 
 	shift $(($OPTIND - 1))
 	distro="$1"
+	arch=$(uname -m)
+
+	if [ "${distro}" == "alpine" -o "${distro}" == "euleros" ]; then
+		if [ "${RUST_AGENT}" == "yes" ]; then
+			die "rust agent cannot be built on ${distro}.
+alpine: only has stable/nightly-x86_64-unknown-linux-musl toolchain. It does not support proc-macro compilation.
+See issue: https://github.com/kata-containers/osbuilder/issues/386
+euleros: 1. Missing libstdc++.a
+         2. kernel is 3.10.x, there is no vsock support
+You can build rust agent on your host and then copy it into
+image's rootfs(eg. rootfs-builder/rootfs/usr/bin), and then
+use image_builder.sh to build image with the rootfs. Please
+refer to documentation for how to use customer agent.
+See issue: https://github.com/kata-containers/osbuilder/issues/387"
+		fi
+	fi
+
+	if [ "${RUST_AGENT}" == "yes" ] && [ "${arch}" == "s390x" -o "${arch}" == "ppc64le" ]; then
+		die "Cannot build rust agent on ppc64le.
+musl cannot be built on ppc64le because of long double
+reprentation is broken. And rust has no musl target on ppc64le.
+See issue: https://github.com/kata-containers/osbuilder/issues/388"
+	fi
 }
 
 detect_host_distro()

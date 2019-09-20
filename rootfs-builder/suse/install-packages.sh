@@ -24,6 +24,27 @@ zypper --non-interactive addrepo ${SUSE_FULLURL_UPDATE} osbuilder-update
 # in Leap
 ulimit -n 1024
 zypper --non-interactive refresh
-zypper --non-interactive install --no-recommends --force-resolution curl git gcc make python3-kiwi tar
+zypper --non-interactive install --no-recommends --force-resolution \
+    autoconf \
+    automake \
+    binutils \
+    cmake \
+    coreutils \
+    curl \
+    gcc \
+    gcc-c++ \
+    git \
+    glibc-devel \
+    glibc-devel-static \
+    glibc-utils \
+    libstdc++-devel \
+    linux-glibc-devel \
+    m4 \
+    make \
+    python3-kiwi \
+    sed \
+    tar \
+    vim \
+    which
 zypper --non-interactive clean --all
 
