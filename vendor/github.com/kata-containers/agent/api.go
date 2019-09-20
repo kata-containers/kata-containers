@@ -35,8 +35,6 @@ const (
 // Global
 const (
 	agentName       = "kata-agent"
-	exitSuccess     = 0
-	exitFailure     = 1
 	defaultLogLevel = logrus.InfoLevel
 	selfBinPath     = "/proc/self/exe"
 )

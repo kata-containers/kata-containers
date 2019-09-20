@@ -5,12 +5,16 @@
 package main
 
 import (
+	"crypto/sha256"
 	"flag"
+	"hash"
 	"io"
 	"log"
 	"os"
+	"time"
 
 	"github.com/mdlayher/vsock"
+	"github.com/mdlayher/vsock/internal/vsutil"
 )
 
 var (
@@ -24,6 +28,9 @@ func main() {
 
 		flagContextID = flag.Uint("c", 0, "send only: context ID of the remote VM socket")
 		flagPort      = flag.Uint("p", 0, "- receive: port ID to listen on (random port by default)\n\t- send: port ID to connect to")
+
+		flagHash    = flag.Bool("h", false, "display a checksum hash of the input or output data after transfer completes")
+		flagTimeout = flag.Duration("t", 0, "receive only: timeout for read operations (default: no timeout)")
 	)
 
 	flag.Parse()
@@ -43,9 +50,9 @@ func main() {
 			log.Fatalf(`vscp: context ID flag "-c" not valid for receive operation`)
 		}
 
-		receive(target, uint32(*flagPort))
+		receive(target, uint32(*flagPort), *flagTimeout, *flagHash)
 	case *flagSend:
-		send(target, uint32(*flagContextID), uint32(*flagPort))
+		send(target, uint32(*flagContextID), uint32(*flagPort), *flagHash)
 	default:
 		flag.PrintDefaults()
 	}
@@ -54,7 +61,7 @@ func main() {
 // receive starts a server and receives data from a remote client using
 // VM sockets.  The data is written to target, which may be a file,
 // or stdout, if no file is specified.
-func receive(target string, port uint32) {
+func receive(target string, port uint32, timeout time.Duration, checksum bool) {
 	// Log helper functions.
 	logf := func(format string, a ...interface{}) {
 		logf("receive: "+format, a...)
@@ -80,6 +87,13 @@ func receive(target string, port uint32) {
 		w = f
 	}
 
+	// Optionally compute a checksum of the data.
+	var h hash.Hash
+	if checksum {
+		h = sha256.New()
+		w = io.MultiWriter(w, h)
+	}
+
 	logf("opening listener: %d", port)
 
 	l, err := vsock.Listen(port)
@@ -92,11 +106,18 @@ func receive(target string, port uint32) {
 	log.Printf("receive: listening: %s", l.Addr())
 
 	// Accept a single connection, and receive stream from that connection.
-	c, err := l.Accept()
+	c, err := vsutil.Accept(l, timeout)
 	if err != nil {
 		fatalf("failed to accept: %v", err)
 	}
+	_ = l.Close()
 	defer c.Close()
+
+	if timeout != 0 {
+		if err := c.SetDeadline(time.Now().Add(timeout)); err != nil {
+			fatalf("failed to set timeout: %v", err)
+		}
+	}
 
 	logf("server: %s", c.LocalAddr())
 	logf("client: %s", c.RemoteAddr())
@@ -107,12 +128,16 @@ func receive(target string, port uint32) {
 	}
 
 	logf("transfer complete")
+
+	if h != nil {
+		log.Printf("sha256 checksum: %x", h.Sum(nil))
+	}
 }
 
 // send dials a server and sends data to it using VM sockets.  The data
 // is read from target, which may be a file, or stdin if no file or "-"
 // is specified.
-func send(target string, cid, port uint32) {
+func send(target string, cid, port uint32, checksum bool) {
 	// Log helper functions.
 	logf := func(format string, a ...interface{}) {
 		logf("send: "+format, a...)
@@ -138,6 +163,13 @@ func send(target string, cid, port uint32) {
 		r = f
 	}
 
+	// Optionally compute a checksum of the data.
+	var h hash.Hash
+	if checksum {
+		h = sha256.New()
+		r = io.TeeReader(r, h)
+	}
+
 	logf("dialing: %d.%d", cid, port)
 
 	// Dial a remote server and send a stream to that server.
@@ -156,6 +188,10 @@ func send(target string, cid, port uint32) {
 	}
 
 	logf("transfer complete")
+
+	if h != nil {
+		log.Printf("sha256 checksum: %x", h.Sum(nil))
+	}
 }
 
 // logf shows verbose logging if -v is specified, or does nothing

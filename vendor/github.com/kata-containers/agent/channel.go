@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2017 Intel Corporation
+// Copyright (c) 2017-2019 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -7,6 +7,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -44,23 +45,34 @@ type channel interface {
 // can be calculated by using the following operation:
 // (channelExistMaxTries * channelExistWaitTime) / 1000 = timeout in seconds
 // If there are neither vsocks nor serial ports, an error is returned.
-func newChannel() (channel, error) {
+func newChannel(ctx context.Context) (channel, error) {
+	span, _ := trace(ctx, "channel", "newChannel")
+	defer span.Finish()
+
 	var serialErr error
-	var serialPath string
 	var vsockErr error
-	var vSockSupported bool
+	var ch channel
 
 	for i := 0; i < channelExistMaxTries; i++ {
-		// check vsock path
-		if _, err := os.Stat(vSockDevPath); err == nil {
-			if vSockSupported, vsockErr = isAFVSockSupportedFunc(); vSockSupported && vsockErr == nil {
-				return &vSockChannel{}, nil
+		switch commCh {
+		case serialCh:
+			if ch, serialErr = checkForSerialChannel(ctx); serialErr == nil && ch.(*serialChannel) != nil {
+				return ch, nil
 			}
-		}
+		case vsockCh:
+			if ch, vsockErr = checkForVsockChannel(ctx); vsockErr == nil && ch.(*vSockChannel) != nil {
+				return ch, nil
+			}
 
-		// Check serial port path
-		if serialPath, serialErr = findVirtualSerialPath(serialChannelName); serialErr == nil {
-			return &serialChannel{serialPath: serialPath}, nil
+		case unknownCh:
+			// If we have not been explicitly passed if vsock is used or not, maybe due to
+			// an older runtime, try to check for vsock support.
+			if ch, vsockErr = checkForVsockChannel(ctx); vsockErr == nil && ch.(*vSockChannel) != nil {
+				return ch, nil
+			}
+			if ch, serialErr = checkForSerialChannel(ctx); serialErr == nil && ch.(*serialChannel) != nil {
+				return ch, nil
+			}
 		}
 
 		time.Sleep(channelExistWaitTime)
@@ -75,6 +87,41 @@ func newChannel() (channel, error) {
 	}
 
 	return nil, fmt.Errorf("Neither vsocks nor serial ports were found")
+}
+
+func checkForSerialChannel(ctx context.Context) (*serialChannel, error) {
+	span, _ := trace(ctx, "channel", "checkForSerialChannel")
+	defer span.Finish()
+
+	// Check serial port path
+	serialPath, serialErr := findVirtualSerialPath(serialChannelName)
+	if serialErr == nil {
+		span.SetTag("channel-type", "serial")
+		span.SetTag("serial-path", serialPath)
+		agentLog.Debug("Serial channel type detected")
+		return &serialChannel{serialPath: serialPath}, nil
+	}
+
+	return nil, serialErr
+}
+
+func checkForVsockChannel(ctx context.Context) (*vSockChannel, error) {
+	span, _ := trace(ctx, "channel", "checkForVsockChannel")
+	defer span.Finish()
+
+	// check vsock path
+	if _, err := os.Stat(vSockDevPath); err != nil {
+		return nil, err
+	}
+
+	vSockSupported, vsockErr := isAFVSockSupportedFunc()
+	if vSockSupported && vsockErr == nil {
+		span.SetTag("channel-type", "vsock")
+		agentLog.Debug("Vsock channel type detected")
+		return &vSockChannel{}, nil
+	}
+
+	return nil, fmt.Errorf("Vsock not found : %s", vsockErr)
 }
 
 type vSockChannel struct {
@@ -124,7 +171,7 @@ func (c *serialChannel) wait() error {
 	var events [1]unix.EpollEvent
 
 	fd := c.serialConn.Fd()
-	if fd <= 0 {
+	if fd == 0 {
 		return fmt.Errorf("serial port IO closed")
 	}
 
@@ -221,23 +268,51 @@ func (c *serialChannel) teardown() error {
 	return c.serialConn.Close()
 }
 
+// isAFVSockSupported checks if vsock channel is used by the runtime
+// by checking for devices under the vhost-vsock driver path.
+// It returns true if a device is found for the vhost-vsock driver.
 func isAFVSockSupported() (bool, error) {
-	fd, err := unix.Socket(unix.AF_VSOCK, unix.SOCK_STREAM, 0)
-	if err != nil {
-		// This case is valid. It means AF_VSOCK is not a supported
-		// domain on this system.
-		if err == unix.EAFNOSUPPORT {
-			return false, nil
-		}
+	// Driver path for virtio-vsock
+	sysVsockPath := "/sys/bus/virtio/drivers/vmw_vsock_virtio_transport/"
 
+	files, err := ioutil.ReadDir(sysVsockPath)
+
+	// This should not happen for a hypervisor with vsock driver
+	if err != nil {
 		return false, err
 	}
 
-	if err := unix.Close(fd); err != nil {
-		return true, err
+	// standard driver files that should be ignored
+	driverFiles := []string{"bind", "uevent", "unbind"}
+
+	for _, file := range files {
+		for _, f := range driverFiles {
+			if file.Name() == f {
+				continue
+			}
+		}
+
+		fPath := filepath.Join(sysVsockPath, file.Name())
+		fInfo, err := os.Lstat(fPath)
+		if err != nil {
+			return false, err
+		}
+
+		if fInfo.Mode()&os.ModeSymlink == 0 {
+			continue
+		}
+
+		link, err := os.Readlink(fPath)
+		if err != nil {
+			return false, err
+		}
+
+		if strings.Contains(link, "devices") {
+			return true, nil
+		}
 	}
 
-	return true, nil
+	return false, nil
 }
 
 func findVirtualSerialPath(serialName string) (string, error) {
@@ -264,7 +339,7 @@ func findVirtualSerialPath(serialName string) (string, error) {
 			return "", err
 		}
 
-		if strings.Contains(string(content), serialName) == true {
+		if strings.Contains(string(content), serialName) {
 			return filepath.Join(devRootPath, port), nil
 		}
 	}

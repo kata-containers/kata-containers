@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2018 Intel Corporation
+// Copyright (c) 2018-2019 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"strings"
 	"sync"
 
 	"golang.org/x/sys/unix"
@@ -144,54 +145,17 @@ func updateLink(netHandle *netlink.Handle, link netlink.Link, iface *types.Inter
 		return grpcStatus.Errorf(codes.Internal, "Could not set MTU %d for interface %v: %v", iface.Mtu, link, err)
 	}
 
+	if iface.RawFlags&unix.IFF_NOARP == uint32(unix.IFF_NOARP) {
+		agentLog.WithField("link", link).Info("Set NOARP")
+		if err := netHandle.LinkSetARPOff(link); err != nil {
+			return grpcStatus.Errorf(codes.Internal, "Could not set NOARP %d for interface %v: %v",
+				iface.RawFlags, link, err)
+		}
+	}
+
 	return nil
 }
 
-func (s *sandbox) addInterface(netHandle *netlink.Handle, iface *types.Interface) (resultingIfc *types.Interface, err error) {
-	if iface == nil {
-		return nil, errNoIF
-	}
-
-	s.network.ifacesLock.Lock()
-	defer s.network.ifacesLock.Unlock()
-
-	if netHandle == nil {
-		netHandle, err = netlink.NewHandle(unix.NETLINK_ROUTE)
-		if err != nil {
-			return nil, err
-		}
-		defer netHandle.Delete()
-	}
-
-	hwAddr, err := net.ParseMAC(iface.HwAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	link := &netlink.Device{
-		LinkAttrs: netlink.LinkAttrs{
-			MTU:          int(iface.Mtu),
-			TxQLen:       -1,
-			Name:         iface.Name,
-			HardwareAddr: hwAddr,
-		},
-	}
-
-	// Create the link.
-	if err := netHandle.LinkAdd(link); err != nil {
-		return nil, err
-	}
-
-	// Set the link up.
-	if err := netHandle.LinkSetUp(link); err != nil {
-		return iface, err
-	}
-
-	// Update sandbox interface list.
-	s.network.ifaces[iface.Name] = iface
-
-	return iface, nil
-}
 func (s *sandbox) removeInterface(netHandle *netlink.Handle, iface *types.Interface) (resultingIfc *types.Interface, err error) {
 	if iface == nil {
 		return nil, errNoIF
@@ -393,6 +357,11 @@ func (s *sandbox) deleteRoutes(netHandle *netlink.Handle) error {
 			continue
 		}
 
+		// If route is installed by kernel, do not delete
+		if initRoute.Protocol == unix.RTPROT_KERNEL {
+			continue
+		}
+
 		err = netHandle.RouteDel(&initRoute)
 		if err != nil {
 			//If there was an error deleting some of the initial routes,
@@ -565,6 +534,14 @@ func (s *sandbox) processRoute(netHandle *netlink.Handle, route *types.Route) (*
 	return netRoute, nil
 }
 
+func checkDuplicateRoute(rt, netRoute *netlink.Route) bool {
+	if rt.Dst == nil {
+		return netRoute.Dst == nil && rt.Gw.Equal(netRoute.Gw)
+	}
+
+	return netRoute.Dst != nil && (rt.Dst.String() == netRoute.Dst.String()) && rt.Src.Equal(netRoute.Src)
+}
+
 func (s *sandbox) updateRoute(netHandle *netlink.Handle, route *types.Route, add bool) (err error) {
 	s.network.routesLock.Lock()
 	defer s.network.routesLock.Unlock()
@@ -584,10 +561,30 @@ func (s *sandbox) updateRoute(netHandle *netlink.Handle, route *types.Route, add
 
 	if add {
 		if err := netHandle.RouteAdd(netRoute); err != nil {
-			return grpcStatus.Errorf(codes.Internal, "Could not add route dest(%s)/gw(%s)/dev(%s): %v",
+			// Doing a string comparison here for lack of error codes from upstream
+			if strings.Contains(err.Error(), "file exists") {
+				agentLog.Infof("Route exists, will try to delete duplicate route first")
+
+				rts, _ := netHandle.RouteList(nil, netlink.FAMILY_ALL)
+				for _, rt := range rts {
+					if checkDuplicateRoute(&rt, netRoute) {
+						// Delete route first
+						if err := netHandle.RouteDel(&rt); err != nil {
+							return grpcStatus.Errorf(codes.Internal, "Could not add route dest(%s)/gw(%s)/dev(%s), duplicate route exists, error deleting existing route: %v", route.Dest, route.Gateway, route.Device, err)
+						}
+
+						if err := netHandle.RouteAdd(netRoute); err != nil {
+							break
+						}
+
+						s.network.routes = append(s.network.routes, *route)
+						return nil
+					}
+				}
+			}
+			return grpcStatus.Errorf(codes.Internal, "Could not add/replace route dest(%s)/gw(%s)/dev(%s): %v",
 				route.Dest, route.Gateway, route.Device, err)
 		}
-
 		// Add route to sandbox route list.
 		s.network.routes = append(s.network.routes, *route)
 	} else {
@@ -640,6 +637,9 @@ func (s *sandbox) removeNetwork() error {
 
 // Bring up localhost network interface.
 func (s *sandbox) handleLocalhost() error {
+	span, _ := s.trace("handleLocalhost")
+	defer span.Finish()
+
 	// If not running as the init daemon, there is nothing to do as the
 	// localhost interface will already exist.
 	if os.Getpid() != 1 {

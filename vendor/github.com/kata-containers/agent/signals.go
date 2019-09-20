@@ -1,4 +1,4 @@
-// Copyright 2018 Intel Corporation.
+// Copyright 2018-2019 Intel Corporation.
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -37,7 +38,7 @@ func handlePanic() {
 		msg := fmt.Sprintf("%s", r)
 		agentLog.WithField("panic", msg).Error("fatal error")
 
-		die()
+		die(rootContext)
 	}
 }
 
@@ -85,7 +86,8 @@ func handledSignals() []syscall.Signal {
 	return signals
 }
 
-func die() {
+func die(ctx context.Context) {
+	stopTracing(ctx)
 	backtrace()
 
 	if crashOnError {

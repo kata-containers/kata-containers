@@ -287,26 +287,6 @@ func (m *mockServer) DestroySandbox(ctx context.Context, req *pb.DestroySandboxR
 	return &types.Empty{}, nil
 }
 
-func (m *mockServer) AddInterface(context.Context, *pb.AddInterfaceRequest) (*pbTypes.Interface, error) {
-	mockLock.RLock()
-	defer mockLock.RUnlock()
-	if err := m.podExist(); err != nil {
-		return nil, err
-	}
-
-	return nil, nil
-}
-
-func (m *mockServer) RemoveInterface(context.Context, *pb.RemoveInterfaceRequest) (*pbTypes.Interface, error) {
-	mockLock.RLock()
-	defer mockLock.RUnlock()
-	if err := m.podExist(); err != nil {
-		return nil, err
-	}
-
-	return nil, nil
-}
-
 func (m *mockServer) UpdateInterface(ctx context.Context, req *pb.UpdateInterfaceRequest) (*pbTypes.Interface, error) {
 	mockLock.RLock()
 	defer mockLock.RUnlock()
@@ -418,5 +398,33 @@ func (m *mockServer) GetGuestDetails(ctx context.Context, req *pb.GuestDetailsRe
 		return nil, err
 	}
 
+	return nil, nil
+}
+
+func (m *mockServer) MemHotplugByProbe(ctx context.Context, req *pb.MemHotplugByProbeRequest) (*types.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
+	if err := m.podExist(); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
+func (m *mockServer) SetGuestDateTime(ctx context.Context, req *pb.SetGuestDateTimeRequest) (*types.Empty, error) {
+	return &types.Empty{}, nil
+}
+
+func (m *mockServer) CopyFile(ctx context.Context, req *pb.CopyFileRequest) (*types.Empty, error) {
+	mockLock.RLock()
+	defer mockLock.RUnlock()
+	return nil, m.podExist()
+}
+
+func (m *mockServer) StartTracing(ctx context.Context, req *pb.StartTracingRequest) (*types.Empty, error) {
+	return nil, nil
+}
+
+func (m *mockServer) StopTracing(ctx context.Context, req *pb.StopTracingRequest) (*types.Empty, error) {
 	return nil, nil
 }
