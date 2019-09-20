@@ -17,7 +17,7 @@ jobs:
         cd packaging
         echo `pwd`
         echo "done...."
-        docker run -it alpine sh -c date
+        docker run alpine sh -c date
         cd obs-packaging
         ./gen_versions_file.sh "stable-1.8"
         cd ../release
