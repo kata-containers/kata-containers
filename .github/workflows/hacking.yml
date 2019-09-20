@@ -17,5 +17,9 @@ jobs:
         cd packaging
         echo `pwd`
         echo "done...."
-        curl -fsSL https://get.docker.com | bash
-
+        docker run -it alpine sh -c date
+        cd obs-packaging
+        ./gen_versions_file.sh "stable-1.8"
+        cd ../release
+        ./publish-kata-image.sh "1.8.2"
+        ./kata-deploy-binaries.sh "1.8.2"
