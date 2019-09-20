@@ -1,5 +1,5 @@
 # When a release page is published, start the release artifact process
-on: push
+on: push.tag
 name: Build, Test, and Publish kata-deploy
 
 jobs:
@@ -13,13 +13,26 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y curl git
         echo "still?"
-        git clone https://github.com/kata-containers/packaging
-        cd packaging
+        # for test development:
+        git clone https://github.com/egernst/packaging-1
+        cd packaging-1
         echo `pwd`
+        echo `ls`
+        cd release
+        echo `pwd`
+        echo `ls`
+
+        #./build-artifacts $GITHUB_TAG
+        echo "github tag" $GITHUB_TAG
+        echo "github sha" 
+        echo $GITHUB_SHA
+
         echo "done...."
-        docker run alpine sh -c date
-        cd obs-packaging
-        ./gen_versions_txt.sh "stable-1.8"
-        cd ../release
-        ./publish-kata-image.sh "1.8.2"
-        ./kata-deploy-binaries.sh "1.8.2"
+
+        #        docker run alpine sh -c date
+        #        cd obs-packaging
+        #        
+        #./gen_versions_txt.sh "stable-1.8"
+        #        cd ../release
+        #        ./publish-kata-image.sh "1.8.2"
+        #        ./kata-deploy-binaries.sh "1.8.2"
