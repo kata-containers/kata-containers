@@ -20,6 +20,9 @@ readonly GOPATH="${tmp_dir}/go"
 push=false
 export GOPATH
 workdir="${WORKDIR:-$PWD}"
+# This flag help us to test and run this script with changes
+# that are local
+test_local="false"
 
 exit_handler() {
 	[ -d "${tmp_dir}" ] || sudo rm -rf "${tmp_dir}"
@@ -58,6 +61,7 @@ version: The kata version that will be use to create the tarball
 options:
 
 -h      : Show this help
+-l      : Run this script to test changes locally
 -p      : push tarball to ${project_to_attach}
 -w <dir>: directory where tarball will be created
 
@@ -89,23 +93,34 @@ install_image() {
 
 #Install kernel asset
 install_kernel() {
-	go get "github.com/${project}/packaging" || true
-	(
-		cd ${GOPATH}/src/github.com/${project}/packaging >>/dev/null
+	if [[ "$test_local" == "true" ]]; then
+		pushd "${script_dir}/../"
+	else
+		go get "github.com/${project}/packaging" || true
+		pushd ${GOPATH}/src/github.com/${project}/packaging >>/dev/null
 		git checkout "${kata_version}-kernel-config" ||
 		git checkout "${kata_version}"
+	fi
 
-		info "build kernel"
-		./kernel/build-kernel.sh setup
-		./kernel/build-kernel.sh build
-		info "install kernel"
-		DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh install
-	)
+	info "build kernel"
+	./kernel/build-kernel.sh setup
+	./kernel/build-kernel.sh build
+	info "install kernel"
+	DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh install
+	popd
 }
 
 #Install experimental kernel asset
 install_experimental_kernel() {
-	pushd ${GOPATH}/src/github.com/${project}/packaging
+	if [[ "$test_local" == "true" ]]; then
+		pushd "${script_dir}/../"
+	else
+		go get "github.com/${project}/packaging" || true
+		pushd ${GOPATH}/src/github.com/${project}/packaging >>/dev/null
+		git checkout "${kata_version}-kernel-config" ||
+		git checkout "${kata_version}"
+	fi
+
 	info "build experimental kernel"
 	./kernel/build-kernel.sh -e setup
 	./kernel/build-kernel.sh -e build
@@ -208,9 +223,10 @@ EOT
 }
 
 main() {
-	while getopts "hpw:" opt; do
+	while getopts "hlpw:" opt; do
 		case $opt in
 		h) usage 0 ;;
+		l) test_local="true" ;;
 		p) push="true" ;;
 		w) workdir="${OPTARG}" ;;
 		esac
@@ -226,8 +242,8 @@ main() {
 	mkdir -p "${destdir}"
 	install_image
 	install_kata_components
-	install_kernel
 	install_experimental_kernel
+	install_kernel
 	install_qemu
 	install_qemu_virtiofsd
 	install_nemu
