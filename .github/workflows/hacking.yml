@@ -18,25 +18,12 @@ jobs:
         echo "still?"
         # for test development:
         git clone https://github.com/egernst/packaging-1
-        cd packaging-1
+        cd packaging-1/release
+
+        tag=`echo $GITHUB_REF | cut -d/ -f3-`
         echo `pwd`
         echo `ls`
-        cd release
-        echo `pwd`
 
-        echo "github reference" 
-        echo $GITHUB_REF
-        tag=`echo $GITHUB_REF | cut -d/ -f3-`
-        echo "tag: " $tag
-
-        #./build-artifacts $GITHUB_REF
+        ./build-artifacts.sh $GITHUB_REF
 
         echo "done...."
-
-        #        docker run alpine sh -c date
-        #        cd obs-packaging
-        #        
-        #./gen_versions_txt.sh "stable-1.8"
-        #        cd ../release
-        #        ./publish-kata-image.sh "1.8.2"
-        #        ./kata-deploy-binaries.sh "1.8.2"
