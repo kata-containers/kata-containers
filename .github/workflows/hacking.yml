@@ -10,4 +10,5 @@ jobs:
     - name : the ok ok 
       run: |  
         echo "hello worold"
+        apt-get update
         echo "still?"
