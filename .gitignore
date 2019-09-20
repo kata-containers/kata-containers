@@ -7,6 +7,7 @@
 /cli/config/configuration-fc.toml
 /cli/config/configuration-nemu.toml
 /cli/config/configuration-qemu.toml
+/cli/config/configuration-qemu-virtiofs.toml
 /cli/config-generated.go
 /cli/coverage.html
 /containerd-shim-kata-v2
