@@ -26,10 +26,11 @@ jobs:
         echo `ls`
 
         #./build-artifacts $GITHUB_TAG
-        echo "github tag" $GITHUB_TAG
+        echo "github tag?" $GITHUB_REF
         echo "github sha" 
         echo $GITHUB_SHA
 
+        echo `git branch -a --contains $GITHUB_SHA`
         echo "done...."
 
         #        docker run alpine sh -c date
