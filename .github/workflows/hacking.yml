@@ -19,7 +19,7 @@ jobs:
         echo "done...."
         docker run alpine sh -c date
         cd obs-packaging
-        ./gen_versions_file.sh "stable-1.8"
+        ./gen_versions_txt.sh "stable-1.8"
         cd ../release
         ./publish-kata-image.sh "1.8.2"
         ./kata-deploy-binaries.sh "1.8.2"
