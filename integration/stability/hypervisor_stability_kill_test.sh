@@ -26,17 +26,17 @@ HYPERVISOR_NAME=$(basename ${HYPERVISOR_PATH})
 setup()  {
 	clean_env
 	sudo docker run --runtime=$RUNTIME -d --name $CONTAINER_NAME $IMAGE $PAYLOAD_ARGS
-	num=$(ps aux | grep ${HYPERVISOR_NAME} | grep -Ev "grep|PATH|defunct" | wc -l)
+	num=$(pidof ${HYPERVISOR_NAME} | wc -w)
 	[ ${num} -eq 1 ] || die "hypervisor count:${num} expected:1"
 }
 
 kill_hypervisor()  {
-	pid=$(ps aux | grep ${HYPERVISOR_NAME} | grep -Ev "grep|PATH|defunct" | awk '{print $2}')
+	pid=$(pidof ${HYPERVISOR_NAME})
 	[ -n ${pid} ] || die "failed to find hypervisor pid"
 	sudo kill -KILL ${pid} || die "failed to kill hypervisor (pid ${pid})"
 	# signal is async and we've seen failures hypervisor not being killed immediately.
 	sleep 1
-	num=$(ps aux | grep ${HYPERVISOR_NAME} | grep -Ev "grep|PATH|defunct" | wc -l)
+	num=$(pidof ${HYPERVISOR_NAME} | wc -w)
 	[ ${num} -eq 0 ] || die "hypervisor count:${num} expected:0"
 	sudo docker rm -f $CONTAINER_NAME
 	[ $? -eq 0 ] || die "failed to force removing container $CONTAINER_NAME"
