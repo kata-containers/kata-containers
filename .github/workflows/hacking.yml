@@ -7,12 +7,6 @@ jobs:
   publish-artifacts:
     runs-on: ubuntu-latest
     steps:
-    - run: |
-        apt-get upate
-        apt-get install -y docker-ce git
-        git clone https://github.com/kata-containers/packaging
-        cd packaging/obs-packages
-        ./gen_versions_file.txt
-        cd ../release
-        echo "maybe it worked"
-        tree
+    - name : the fuck
+      run: 
+        echo "hello worold"
