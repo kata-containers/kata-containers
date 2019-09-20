@@ -30,7 +30,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	"github.com/blang/semver"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	fcmodels "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/models"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -65,6 +67,9 @@ const (
 	// ID, since it's only used in the guest.
 	defaultGuestVSockCID = int64(0x3)
 )
+
+// Specify the minimum version of firecracker supported
+var fcMinSupportedVersion = semver.MustParse("0.18.0")
 
 var fcKernelParams = append(commonVirtioblkKernelRootParams, []Param{
 	// The boot source is the first partition of the first block device added
@@ -296,6 +301,23 @@ func (fc *firecracker) vmRunning() bool {
 	}
 }
 
+func (fc *firecracker) checkVersion(vmmInfo *fcmodels.InstanceInfo) error {
+	if vmmInfo == nil || vmmInfo.VmmVersion == nil {
+		return fmt.Errorf("Unknown firecracker version")
+	}
+
+	v, err := semver.Make(*vmmInfo.VmmVersion)
+	if err != nil {
+		return fmt.Errorf("Malformed firecracker version: %v", err)
+	}
+
+	if v.LT(fcMinSupportedVersion) {
+		return fmt.Errorf("version %v is not supported. Minimum supported version of firecracker is %v", v.String(), fcMinSupportedVersion.String())
+	}
+
+	return nil
+}
+
 // waitVMM will wait for timeout seconds for the VMM to be up and running.
 // This does not mean that the VM is up and running. It only indicates that the VMM is up and
 // running and able to handle commands to setup and launch a VM
@@ -309,8 +331,11 @@ func (fc *firecracker) waitVMM(timeout int) error {
 
 	timeStart := time.Now()
 	for {
-		_, err := fc.client().Operations.DescribeInstance(nil)
+		vmmInfo, err := fc.client().Operations.DescribeInstance(nil)
 		if err == nil {
+			if err := fc.checkVersion(vmmInfo.Payload); err != nil {
+				return err
+			}
 			return nil
 		}
 
