@@ -1,0 +1,55 @@
+# When a release page is published, start the release artifact process
+on: release
+name: Build, Test, and Publish kata-deploy
+
+jobs:
+  # create image and upload to release page (can we get branch information from release tag?
+  publish-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+    - name: publish-images 
+    - uses: TBD
+    with:
+      args: tag? sha?
+    - name: create-static-binaries
+    - uses: TBD
+    with: tag?
+
+    # test the artifacts
+  kata-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: tag-filter
+      uses: actions/bin/filter@master
+      with:
+        args: tag
+    - name: docker-build
+      uses: actions/docker/cli@master
+      with:
+        args: build --build-arg KATA_VER=${GITHUB_REF##*/} -t katadocker/kata-deploy-ci:${{
+          github.sha }} ./kata-deploy
+    - name: docker-login
+      uses: actions/docker/login@master
+      env:
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+    - name: docker-push-sha
+      uses: actions/docker/cli@master
+      with:
+        args: push katadocker/kata-deploy-ci:${{ github.sha }}
+    - name: aks-test
+      uses: ./kata-deploy/action
+      env:
+        AZ_APPID: ${{ secrets.AZ_APPID }}
+        AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
+        AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+        AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+    - name: docker-tag-ref
+      uses: actions/docker/cli@master
+      with:
+        args: tag katadocker/kata-deploy-ci:${{ github.sha }} katadocker/kata-deploy:${GITHUB_REF##*/}
+    - name: docker-push-ref
+      uses: actions/docker/cli@master
+      with:
+        args: push katadocker/kata-deploy:${GITHUB_REF##*/}
