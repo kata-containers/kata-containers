@@ -13,8 +13,8 @@ jobs:
     - name : the ok ok 
       run: |  
         echo "hello worold"
-        sudo apt-get update
-        sudo apt-get install -y curl git
+        #sudo apt-get update
+        #sudo apt-get install -y curl git
         echo "still?"
         # for test development:
         git clone https://github.com/egernst/packaging-1
@@ -23,14 +23,14 @@ jobs:
         echo `ls`
         cd release
         echo `pwd`
-        echo `ls`
 
-        #./build-artifacts $GITHUB_TAG
-        echo "github tag?" $GITHUB_REF
-        echo "github sha" 
-        echo $GITHUB_SHA
+        echo "github reference" 
+        echo $GITHUB_REF
+        tag=`echo $GITHUB_REF | cut -d/ -f3-`
+        echo "tag: " $tag
 
-        echo `git branch -a --contains $GITHUB_SHA`
+        #./build-artifacts $GITHUB_REF
+
         echo "done...."
 
         #        docker run alpine sh -c date
