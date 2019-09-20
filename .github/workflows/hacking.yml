@@ -7,6 +7,7 @@ jobs:
   publish-artifacts:
     runs-on: ubuntu-latest
     steps:
-    - name : the fuck
-      run: 
+    - name : the ok ok 
+      run: |  
         echo "hello worold"
+        echo "still?"
