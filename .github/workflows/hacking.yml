@@ -11,4 +11,9 @@ jobs:
       run: |  
         echo "hello worold"
         apt-get update
+        apt-get install -y docker-ce git
         echo "still?"
+        git clone https://github.com/kata-containers/packaging
+        cd packaging
+        echo `pwd`
+        echo "done...."
