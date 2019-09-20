@@ -11,9 +11,11 @@ jobs:
       run: |  
         echo "hello worold"
         sudo apt-get update
-        sudo apt-get install -y docker git
+        sudo apt-get install -y curl git
         echo "still?"
         git clone https://github.com/kata-containers/packaging
         cd packaging
         echo `pwd`
         echo "done...."
+        curl -fsSL https://get.docker.com | bash
+
