@@ -281,7 +281,7 @@ func (q *QMP) readLoop(fromVMCh chan<- []byte) {
 
 		fromVMCh <- sendLine
 	}
-	q.cfg.Logger.Infof("sanner return error: %v", scanner.Err())
+	q.cfg.Logger.Infof("scanner return error: %v", scanner.Err())
 	close(fromVMCh)
 }
 
