@@ -627,25 +627,6 @@ func TestAgentPathAPI(t *testing.T) {
 	path1 = k1.getSharePath(id)
 	path2 = k2.getSharePath(id)
 	assert.Equal(path1, path2)
-
-	// generateVMSocket
-	c := KataAgentConfig{}
-	err := k1.generateVMSocket(id, c)
-	assert.Nil(err)
-	err = k2.generateVMSocket(id, c)
-	assert.Nil(err)
-	assert.Equal(k1, k2)
-
-	err = k1.generateVMSocket(id, c)
-	assert.Nil(err)
-	_, ok := k1.vmSocket.(types.Socket)
-	assert.True(ok)
-
-	c.UseVSock = true
-	err = k2.generateVMSocket(id, c)
-	assert.Nil(err)
-	_, ok = k2.vmSocket.(kataVSOCK)
-	assert.True(ok)
 }
 
 func TestAgentConfigure(t *testing.T) {
@@ -843,20 +824,19 @@ func TestKataAgentSetProxy(t *testing.T) {
 
 func TestKataGetAgentUrl(t *testing.T) {
 	assert := assert.New(t)
+	var err error
 
-	k := &kataAgent{}
-	err := k.generateVMSocket("foobar", KataAgentConfig{})
-	assert.Nil(err)
+	k := &kataAgent{vmSocket: types.Socket{HostPath: "/abc"}}
+	assert.NoError(err)
 	url, err := k.getAgentURL()
 	assert.Nil(err)
 	assert.NotEmpty(url)
 
-	err = k.generateVMSocket("foobar", KataAgentConfig{UseVSock: true})
-	assert.Nil(err)
+	k.vmSocket = types.VSock{}
+	assert.NoError(err)
 	url, err = k.getAgentURL()
 	assert.Nil(err)
 	assert.NotEmpty(url)
-
 }
 
 func TestKataCopyFile(t *testing.T) {

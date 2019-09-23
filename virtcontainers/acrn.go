@@ -547,7 +547,7 @@ func (a *acrn) addDevice(devInfo interface{}, devType deviceType) error {
 		err = nil
 	case types.Socket:
 		a.acrnConfig.Devices = a.arch.appendSocket(a.acrnConfig.Devices, v)
-	case kataVSOCK:
+	case types.VSock:
 		// Not supported. return success
 		err = nil
 	case Endpoint:
@@ -656,4 +656,8 @@ func (a *acrn) check() error {
 	}
 
 	return nil
+}
+
+func (a *acrn) generateSocket(id string, useVsock bool) (interface{}, error) {
+	return generateVMSocket(id, useVsock)
 }

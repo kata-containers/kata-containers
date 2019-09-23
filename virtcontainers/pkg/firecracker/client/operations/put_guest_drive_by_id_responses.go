@@ -24,21 +24,18 @@ type PutGuestDriveByIDReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PutGuestDriveByIDReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewPutGuestDriveByIDNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPutGuestDriveByIDBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPutGuestDriveByIDDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -89,6 +86,10 @@ func (o *PutGuestDriveByIDBadRequest) Error() string {
 	return fmt.Sprintf("[PUT /drives/{drive_id}][%d] putGuestDriveByIdBadRequest  %+v", 400, o.Payload)
 }
 
+func (o *PutGuestDriveByIDBadRequest) GetPayload() *models.Error {
+	return o.Payload
+}
+
 func (o *PutGuestDriveByIDBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
 
 	o.Payload = new(models.Error)
@@ -125,6 +126,10 @@ func (o *PutGuestDriveByIDDefault) Code() int {
 
 func (o *PutGuestDriveByIDDefault) Error() string {
 	return fmt.Sprintf("[PUT /drives/{drive_id}][%d] putGuestDriveByID default  %+v", o._statusCode, o.Payload)
+}
+
+func (o *PutGuestDriveByIDDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutGuestDriveByIDDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

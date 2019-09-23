@@ -31,7 +31,6 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
-	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
@@ -53,25 +52,17 @@ const (
 )
 
 var (
-	checkRequestTimeout   = 30 * time.Second
-	defaultRequestTimeout = 60 * time.Second
-	defaultKataSocketName = "kata.sock"
-	defaultKataChannel    = "agent.channel.0"
-	defaultKataDeviceID   = "channel0"
-	defaultKataID         = "charch0"
-	errorMissingProxy     = errors.New("Missing proxy pointer")
-	errorMissingOCISpec   = errors.New("Missing OCI specification")
-	kataHostSharedDir     = "/run/kata-containers/shared/sandboxes/"
-	kataGuestSharedDir    = "/run/kata-containers/shared/containers/"
-	mountGuest9pTag       = "kataShared"
-	kataGuestSandboxDir   = "/run/kata-containers/sandbox/"
-	type9pFs              = "9p"
-	typeVirtioFS          = "virtio_fs"
-	typeVirtioFSNoCache   = "none"
-	vsockSocketScheme     = "vsock"
-	// port numbers below 1024 are called privileged ports. Only a process with
-	// CAP_NET_BIND_SERVICE capability may bind to these port numbers.
-	vSockPort                   = 1024
+	checkRequestTimeout         = 30 * time.Second
+	defaultRequestTimeout       = 60 * time.Second
+	errorMissingProxy           = errors.New("Missing proxy pointer")
+	errorMissingOCISpec         = errors.New("Missing OCI specification")
+	kataHostSharedDir           = "/run/kata-containers/shared/sandboxes/"
+	kataGuestSharedDir          = "/run/kata-containers/shared/containers/"
+	mountGuest9pTag             = "kataShared"
+	kataGuestSandboxDir         = "/run/kata-containers/sandbox/"
+	type9pFs                    = "9p"
+	typeVirtioFS                = "virtio_fs"
+	typeVirtioFSNoCache         = "none"
 	kata9pDevType               = "9p"
 	kataMmioBlkDevType          = "mmioblk"
 	kataBlkDevType              = "blk"
@@ -145,16 +136,6 @@ type KataAgentConfig struct {
 	KernelModules []string
 }
 
-type kataVSOCK struct {
-	contextID uint64
-	port      uint32
-	vhostFd   *os.File
-}
-
-func (s *kataVSOCK) String() string {
-	return fmt.Sprintf("%s://%d:%d", vsockSocketScheme, s.contextID, s.port)
-}
-
 // KataAgentState is the structure describing the data stored from this
 // agent implementation.
 type KataAgentState struct {
@@ -206,31 +187,6 @@ func (k *kataAgent) getVMPath(id string) string {
 
 func (k *kataAgent) getSharePath(id string) string {
 	return filepath.Join(kataHostSharedDir, id)
-}
-
-func (k *kataAgent) generateVMSocket(id string, c KataAgentConfig) error {
-	if c.UseVSock {
-		// We want to go through VSOCK. The VM VSOCK endpoint will be our gRPC.
-		k.Logger().Debug("agent: Using vsock VM socket endpoint")
-		// We dont know yet the context ID - set empty vsock configuration
-		k.vmSocket = kataVSOCK{}
-	} else {
-		k.Logger().Debug("agent: Using unix socket form VM socket endpoint")
-		// We need to generate a host UNIX socket path for the emulated serial port.
-		kataSock, err := utils.BuildSocketPath(k.getVMPath(id), defaultKataSocketName)
-		if err != nil {
-			return err
-		}
-
-		k.vmSocket = types.Socket{
-			DeviceID: defaultKataDeviceID,
-			ID:       defaultKataID,
-			HostPath: kataSock,
-			Name:     defaultKataChannel,
-		}
-	}
-
-	return nil
 }
 
 // KataAgentSetDefaultTraceConfigOptions validates agent trace options and
@@ -303,10 +259,6 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 
 	switch c := config.(type) {
 	case KataAgentConfig:
-		if err := k.generateVMSocket(sandbox.id, c); err != nil {
-			return false, err
-		}
-
 		disableVMShutdown = k.handleTraceSettings(c)
 		k.keepConn = c.LongLiveConn
 		k.kmodules = c.KernelModules
@@ -340,7 +292,9 @@ func (k *kataAgent) agentURL() (string, error) {
 	switch s := k.vmSocket.(type) {
 	case types.Socket:
 		return s.HostPath, nil
-	case kataVSOCK:
+	case types.VSock:
+		return s.String(), nil
+	case types.HybridVSock:
 		return s.String(), nil
 	default:
 		return "", fmt.Errorf("Invalid socket type")
@@ -357,10 +311,11 @@ func (k *kataAgent) capabilities() types.Capabilities {
 }
 
 func (k *kataAgent) internalConfigure(h hypervisor, id, sharePath string, builtin bool, config interface{}) error {
+	var err error
 	if config != nil {
 		switch c := config.(type) {
 		case KataAgentConfig:
-			if err := k.generateVMSocket(id, c); err != nil {
+			if k.vmSocket, err = h.generateSocket(id, c.UseVSock); err != nil {
 				return err
 			}
 			k.keepConn = c.LongLiveConn
@@ -388,16 +343,15 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 		if err != nil {
 			return err
 		}
-	case kataVSOCK:
-		s.vhostFd, s.contextID, err = utils.FindContextID()
-		if err != nil {
-			return err
-		}
-		s.port = uint32(vSockPort)
+	case types.VSock:
 		if err = h.addDevice(s, vSockPCIDev); err != nil {
 			return err
 		}
-		k.vmSocket = s
+	case types.HybridVSock:
+		err = h.addDevice(s, hybridVirtioVsockDev)
+		if err != nil {
+			return err
+		}
 	default:
 		return vcTypes.ErrInvalidConfigType
 	}
@@ -431,7 +385,7 @@ func (k *kataAgent) createSandbox(sandbox *Sandbox) error {
 	span, _ := k.trace("createSandbox")
 	defer span.Finish()
 
-	return k.configure(sandbox.hypervisor, sandbox.id, k.getSharePath(sandbox.id), k.proxyBuiltIn, nil)
+	return k.configure(sandbox.hypervisor, sandbox.id, k.getSharePath(sandbox.id), k.proxyBuiltIn, sandbox.config.AgentConfig)
 }
 
 func cmdToKataProcess(cmd types.Cmd) (process *grpc.Process, err error) {

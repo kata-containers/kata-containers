@@ -24,28 +24,18 @@ type PutGuestVsockByIDReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PutGuestVsockByIDReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
-	case 201:
-		result := NewPutGuestVsockByIDCreated()
-		if err := result.readResponse(response, consumer, o.formats); err != nil {
-			return nil, err
-		}
-		return result, nil
-
 	case 204:
 		result := NewPutGuestVsockByIDNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPutGuestVsockByIDBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPutGuestVsockByIDDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -58,27 +48,6 @@ func (o *PutGuestVsockByIDReader) ReadResponse(response runtime.ClientResponse, 
 	}
 }
 
-// NewPutGuestVsockByIDCreated creates a PutGuestVsockByIDCreated with default headers values
-func NewPutGuestVsockByIDCreated() *PutGuestVsockByIDCreated {
-	return &PutGuestVsockByIDCreated{}
-}
-
-/*PutGuestVsockByIDCreated handles this case with default header values.
-
-Vsock created
-*/
-type PutGuestVsockByIDCreated struct {
-}
-
-func (o *PutGuestVsockByIDCreated) Error() string {
-	return fmt.Sprintf("[PUT /vsocks/{id}][%d] putGuestVsockByIdCreated ", 201)
-}
-
-func (o *PutGuestVsockByIDCreated) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
-
-	return nil
-}
-
 // NewPutGuestVsockByIDNoContent creates a PutGuestVsockByIDNoContent with default headers values
 func NewPutGuestVsockByIDNoContent() *PutGuestVsockByIDNoContent {
 	return &PutGuestVsockByIDNoContent{}
@@ -86,7 +55,7 @@ func NewPutGuestVsockByIDNoContent() *PutGuestVsockByIDNoContent {
 
 /*PutGuestVsockByIDNoContent handles this case with default header values.
 
-Vsock updated
+Vsock created/updated
 */
 type PutGuestVsockByIDNoContent struct {
 }
@@ -115,6 +84,10 @@ type PutGuestVsockByIDBadRequest struct {
 
 func (o *PutGuestVsockByIDBadRequest) Error() string {
 	return fmt.Sprintf("[PUT /vsocks/{id}][%d] putGuestVsockByIdBadRequest  %+v", 400, o.Payload)
+}
+
+func (o *PutGuestVsockByIDBadRequest) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutGuestVsockByIDBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
@@ -153,6 +126,10 @@ func (o *PutGuestVsockByIDDefault) Code() int {
 
 func (o *PutGuestVsockByIDDefault) Error() string {
 	return fmt.Sprintf("[PUT /vsocks/{id}][%d] putGuestVsockByID default  %+v", o._statusCode, o.Payload)
+}
+
+func (o *PutGuestVsockByIDDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutGuestVsockByIDDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
