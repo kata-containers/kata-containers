@@ -41,9 +41,9 @@ go get -d ${firecracker_repo} || true
 # Checkout to specific version
 pushd "${GOPATH}/src/${firecracker_repo}"
 git checkout tags/${firecracker_version}
-./tools/devtool --unattended build --release -- --features vsock
-sudo install ${GOPATH}/src/${firecracker_repo}/build/release-musl/firecracker /usr/bin/
-sudo install ${GOPATH}/src/${firecracker_repo}/build/release-musl/jailer /usr/bin/
+./tools/devtool --unattended build --release
+sudo install ${GOPATH}/src/${firecracker_repo}/build/cargo_target/x86_64-*-linux-musl/release/firecracker /usr/bin/
+sudo install ${GOPATH}/src/${firecracker_repo}/build/cargo_target/x86_64-*-linux-musl/release/jailer /usr/bin/
 popd
 
 echo "Install and configure docker"
