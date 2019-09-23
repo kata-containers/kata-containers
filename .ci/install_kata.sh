@@ -14,6 +14,7 @@ tag="${1:-""}"
 source /etc/os-release || source /usr/lib/os-release
 source "${cidir}/lib.sh"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+experimental_qemu="${experimental_qemu:-false}"
 
 echo "Install kata-containers image"
 "${cidir}/install_kata_image.sh"
@@ -28,8 +29,13 @@ elif [ "$KATA_HYPERVISOR" == "nemu" ]; then
 	echo "Install Nemu"
 	"${cidir}/install_nemu.sh"
 else
-	echo "Install Qemu"
-	"${cidir}/install_qemu.sh"
+	if [ "$experimental_qemu" == "true" ]; then
+		echo "Install experimental Qemu"
+		"${cidir}/install_qemu_experimental.sh"
+	else
+		echo "Install Qemu"
+		"${cidir}/install_qemu.sh"
+	fi
 fi
 
 echo "Install shim"

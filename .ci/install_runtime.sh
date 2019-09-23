@@ -39,6 +39,7 @@ PKGDEFAULTSDIR="${SHAREDIR}/defaults/kata-containers"
 NEW_RUNTIME_CONFIG="${PKGDEFAULTSDIR}/configuration.toml"
 # Note: This will also install the config file.
 build_and_install "github.com/kata-containers/runtime" "" "true" "${tag}"
+experimental_qemu="${experimental_qemu:-false}"
 
 if [ -e "${NEW_RUNTIME_CONFIG}" ]; then
 	# Remove the legacy config file
@@ -61,6 +62,11 @@ fi
 if [ "$KATA_HYPERVISOR" = "nemu" ]; then
 	echo "Enable nemu configuration.toml"
 	sudo mv "${PKGDEFAULTSDIR}/configuration-nemu.toml" "${PKGDEFAULTSDIR}/configuration.toml"
+fi
+
+if [ "$KATA_HYPERVISOR" = "qemu" ] && [ "$experimental_qemu" == "true" ]; then
+	echo "Enable qemu virtiofs configuration.toml"
+	sudo mv "${PKGDEFAULTSDIR}/configuration-qemu-virtiofs.toml" "${PKGDEFAULTSDIR}/configuration.toml"
 fi
 
 # Check system supports running Kata Containers
