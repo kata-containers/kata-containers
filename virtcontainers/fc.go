@@ -30,7 +30,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	"github.com/blang/semver"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	fcmodels "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/models"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -58,7 +60,16 @@ const (
 	// We attach a pool of placeholder drives before the guest has started, and then
 	// patch the replace placeholder drives with drives with actual contents.
 	fcDiskPoolSize = 8
+
+	defaultHybridVSocketName = "kata.hvsock"
+
+	// This is the first usable vsock context ID. All the vsocks can use the same
+	// ID, since it's only used in the guest.
+	defaultGuestVSockCID = int64(0x3)
 )
+
+// Specify the minimum version of firecracker supported
+var fcMinSupportedVersion = semver.MustParse("0.18.0")
 
 var fcKernelParams = append(commonVirtioblkKernelRootParams, []Param{
 	// The boot source is the first partition of the first block device added
@@ -261,6 +272,8 @@ func (fc *firecracker) newFireClient() *client.Firecracker {
 	}
 
 	transport := httptransport.New(client.DefaultHost, client.DefaultBasePath, client.DefaultSchemes)
+	transport.SetLogger(fc.Logger())
+	transport.SetDebug(fc.Logger().Logger.Level == logrus.DebugLevel)
 	transport.Transport = socketTransport
 	httpClient.SetTransport(transport)
 
@@ -288,6 +301,23 @@ func (fc *firecracker) vmRunning() bool {
 	}
 }
 
+func (fc *firecracker) checkVersion(vmmInfo *fcmodels.InstanceInfo) error {
+	if vmmInfo == nil || vmmInfo.VmmVersion == nil {
+		return fmt.Errorf("Unknown firecracker version")
+	}
+
+	v, err := semver.Make(*vmmInfo.VmmVersion)
+	if err != nil {
+		return fmt.Errorf("Malformed firecracker version: %v", err)
+	}
+
+	if v.LT(fcMinSupportedVersion) {
+		return fmt.Errorf("version %v is not supported. Minimum supported version of firecracker is %v", v.String(), fcMinSupportedVersion.String())
+	}
+
+	return nil
+}
+
 // waitVMM will wait for timeout seconds for the VMM to be up and running.
 // This does not mean that the VM is up and running. It only indicates that the VMM is up and
 // running and able to handle commands to setup and launch a VM
@@ -301,8 +331,11 @@ func (fc *firecracker) waitVMM(timeout int) error {
 
 	timeStart := time.Now()
 	for {
-		_, err := fc.client().Operations.DescribeInstance(nil)
+		vmmInfo, err := fc.client().Operations.DescribeInstance(nil)
 		if err == nil {
+			if err := fc.checkVersion(vmmInfo.Payload); err != nil {
+				return err
+			}
 			return nil
 		}
 
@@ -735,28 +768,33 @@ func (fc *firecracker) resumeSandbox() error {
 	return nil
 }
 
-func (fc *firecracker) fcAddVsock(vs kataVSOCK) error {
+func (fc *firecracker) fcAddVsock(hvs types.HybridVSock) error {
 	span, _ := fc.trace("fcAddVsock")
 	defer span.Finish()
 
+	udsPath := hvs.UdsPath
+	if fc.jailed {
+		udsPath = filepath.Join("/", defaultHybridVSocketName)
+	}
+
 	vsockParams := ops.NewPutGuestVsockByIDParams()
 	vsockID := "root"
-	ctxID := int64(vs.contextID)
+	ctxID := defaultGuestVSockCID
 	vsock := &models.Vsock{
 		GuestCid: &ctxID,
-		ID:       &vsockID,
+		UdsPath:  &udsPath,
+		VsockID:  &vsockID,
 	}
 	vsockParams.SetID(vsockID)
 	vsockParams.SetBody(vsock)
-	_, _, err := fc.client().Operations.PutGuestVsockByID(vsockParams)
+
+	_, err := fc.client().Operations.PutGuestVsockByID(vsockParams)
 	if err != nil {
 		return err
 	}
-	//Still racy. There is no way to send an fd to the firecracker
-	//REST API. We could release this just before we start the instance
-	//but even that will not eliminate the race
-	vs.vhostFd.Close()
+
 	return nil
+
 }
 
 func (fc *firecracker) fcAddNetDevice(endpoint Endpoint) error {
@@ -874,8 +912,8 @@ func (fc *firecracker) addDevice(devInfo interface{}, devType deviceType) error 
 	case config.BlockDrive:
 		fc.Logger().WithField("device-type-blockdrive", devInfo).Info("Adding device")
 		return fc.fcAddBlockDrive(v)
-	case kataVSOCK:
-		fc.Logger().WithField("device-type-vsock", devInfo).Info("Adding device")
+	case types.HybridVSock:
+		fc.Logger().WithField("device-type-hybrid-vsock", devInfo).Info("Adding device")
 		return fc.fcAddVsock(v)
 	default:
 		fc.Logger().WithField("unknown-device-type", devInfo).Error("Adding device")
@@ -1013,4 +1051,18 @@ func (fc *firecracker) check() error {
 	}
 
 	return nil
+}
+
+func (fc *firecracker) generateSocket(id string, useVsock bool) (interface{}, error) {
+	if !useVsock {
+		return nil, fmt.Errorf("Can't start firecracker: vsocks is disabled")
+	}
+
+	fc.Logger().Debug("Using hybrid-vsock endpoint")
+	udsPath := filepath.Join(fc.jailerRoot, defaultHybridVSocketName)
+
+	return types.HybridVSock{
+		UdsPath: udsPath,
+		Port:    uint32(vSockPort),
+	}, nil
 }

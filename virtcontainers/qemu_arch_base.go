@@ -80,7 +80,7 @@ type qemuArch interface {
 	appendSocket(devices []govmmQemu.Device, socket types.Socket) []govmmQemu.Device
 
 	// appendVSock appends a vsock PCI to devices
-	appendVSock(devices []govmmQemu.Device, vsock kataVSOCK) ([]govmmQemu.Device, error)
+	appendVSock(devices []govmmQemu.Device, vsock types.VSock) ([]govmmQemu.Device, error)
 
 	// appendNetwork appends a endpoint device to devices
 	appendNetwork(devices []govmmQemu.Device, endpoint Endpoint) ([]govmmQemu.Device, error)
@@ -451,12 +451,12 @@ func (q *qemuArchBase) appendSocket(devices []govmmQemu.Device, socket types.Soc
 	return devices
 }
 
-func (q *qemuArchBase) appendVSock(devices []govmmQemu.Device, vsock kataVSOCK) ([]govmmQemu.Device, error) {
+func (q *qemuArchBase) appendVSock(devices []govmmQemu.Device, vsock types.VSock) ([]govmmQemu.Device, error) {
 	devices = append(devices,
 		govmmQemu.VSOCKDevice{
-			ID:            fmt.Sprintf("vsock-%d", vsock.contextID),
-			ContextID:     vsock.contextID,
-			VHostFD:       vsock.vhostFd,
+			ID:            fmt.Sprintf("vsock-%d", vsock.ContextID),
+			ContextID:     vsock.ContextID,
+			VHostFD:       vsock.VhostFd,
 			DisableModern: q.nestedRun,
 		},
 	)

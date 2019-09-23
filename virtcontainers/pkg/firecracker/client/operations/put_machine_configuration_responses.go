@@ -24,21 +24,18 @@ type PutMachineConfigurationReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PutMachineConfigurationReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
-
 	case 204:
 		result := NewPutMachineConfigurationNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
-
 	case 400:
 		result := NewPutMachineConfigurationBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
-
 	default:
 		result := NewPutMachineConfigurationDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -89,6 +86,10 @@ func (o *PutMachineConfigurationBadRequest) Error() string {
 	return fmt.Sprintf("[PUT /machine-config][%d] putMachineConfigurationBadRequest  %+v", 400, o.Payload)
 }
 
+func (o *PutMachineConfigurationBadRequest) GetPayload() *models.Error {
+	return o.Payload
+}
+
 func (o *PutMachineConfigurationBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
 
 	o.Payload = new(models.Error)
@@ -125,6 +126,10 @@ func (o *PutMachineConfigurationDefault) Code() int {
 
 func (o *PutMachineConfigurationDefault) Error() string {
 	return fmt.Sprintf("[PUT /machine-config][%d] putMachineConfiguration default  %+v", o._statusCode, o.Payload)
+}
+
+func (o *PutMachineConfigurationDefault) GetPayload() *models.Error {
+	return o.Payload
 }
 
 func (o *PutMachineConfigurationDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

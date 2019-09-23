@@ -7,6 +7,7 @@ package types
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -27,6 +28,11 @@ const (
 
 	// StateStopped represents a sandbox/container that has been stopped.
 	StateStopped StateString = "stopped"
+)
+
+const (
+	HybridVSockScheme = "hvsock"
+	VSockScheme       = "vsock"
 )
 
 // SandboxState is a sandbox state structure
@@ -159,6 +165,35 @@ func (v *Volumes) String() string {
 	}
 
 	return strings.Join(volSlice, " ")
+}
+
+// VSock defines a virtio-socket to communicate between
+// the host and any process inside the VM.
+// This kind of socket is not supported in all hypervisors.
+// QEMU and NEMU support it.
+type VSock struct {
+	ContextID uint64
+	Port      uint32
+	VhostFd   *os.File
+}
+
+func (s *VSock) String() string {
+	return fmt.Sprintf("%s://%d:%d", VSockScheme, s.ContextID, s.Port)
+}
+
+// HybridVSock defines a hybrid vsocket to communicate between
+// the host and any process inside the VM.
+// This is a virtio-vsock implementation based on AF_VSOCK on the
+// guest side and multiple AF_UNIX sockets on the host side.
+// This kind of socket is not supported in all hypervisors.
+// Firecracker supports it.
+type HybridVSock struct {
+	UdsPath string
+	Port    uint32
+}
+
+func (s *HybridVSock) String() string {
+	return fmt.Sprintf("%s://%s:%d", HybridVSockScheme, s.UdsPath, s.Port)
 }
 
 // Socket defines a socket to communicate between
