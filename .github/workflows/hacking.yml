@@ -24,6 +24,6 @@ jobs:
         echo `pwd`
         echo `ls`
 
-        ./build-artifacts.sh $tag
+        bash -x ./build-artifacts.sh $tag
 
         echo "done...."
