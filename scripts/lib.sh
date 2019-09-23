@@ -289,7 +289,7 @@ detect_go_version()
 		typeset -r runtimeVersionsURL="https://raw.githubusercontent.com/kata-containers/runtime/${runtimeRevision}/versions.yaml"
 		info "Getting golang version from ${runtimeVersionsURL}"
 		# This may fail if we are a kata bump.
-		if GO_VERSION="$(curl -fsSL "$runtimeVersionsURL" | $yq r - "languages.golang.version")"; then
+		if GO_VERSION="$(curl -fsSL "$runtimeVersionsURL" | tac | tac | $yq r - "languages.golang.version")"; then
 			[ "$GO_VERSION" != "null" ]
 			return 0
 		fi
@@ -301,7 +301,7 @@ detect_go_version()
 		info "There is not runtime repository in filesystem (${kata_runtime_pkg_dir})"
 		local runtime_versions_url="https://raw.githubusercontent.com/kata-containers/runtime/${KATA_BRANCH}/versions.yaml"
 		info "Get versions file from ${runtime_versions_url}"
-		GO_VERSION="$(curl -fsSL "${runtime_versions_url}" | $yq r - "languages.golang.version")"
+		GO_VERSION="$(curl -fsSL "${runtime_versions_url}" | tac | tac | $yq r - "languages.golang.version")"
 		if [ "$?" == "0" ] && [ "$GO_VERSION" != "null" ]; then
 			return 0
 		fi
