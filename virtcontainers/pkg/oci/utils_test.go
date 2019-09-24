@@ -645,7 +645,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestAddAssetAnnotations(t *testing.T) {
+func TestAddAnnotations(t *testing.T) {
 	assert := assert.New(t)
 
 	expectedAnnotations := map[string]string{
@@ -666,7 +666,7 @@ func TestAddAssetAnnotations(t *testing.T) {
 		Annotations: expectedAnnotations,
 	}
 
-	addAssetAnnotations(ocispec, &config)
+	addAnnotations(ocispec, &config)
 	assert.Exactly(expectedAnnotations, config.Annotations)
 
 	expectedAgentConfig := vc.KataAgentConfig{
@@ -677,7 +677,46 @@ func TestAddAssetAnnotations(t *testing.T) {
 	}
 
 	ocispec.Annotations[vcAnnotations.KernelModules] = strings.Join(expectedAgentConfig.KernelModules, KernelModulesSeparator)
-	addAssetAnnotations(ocispec, &config)
+	addAnnotations(ocispec, &config)
 	assert.Exactly(expectedAgentConfig, config.AgentConfig)
 
+	expectedHyperConfig := vc.HypervisorConfig{
+		KernelParams: []vc.Param{
+			{
+				Key:   "vsyscall",
+				Value: "emulate",
+			},
+			{
+				Key:   "iommu",
+				Value: "on",
+			},
+		},
+	}
+
+	ocispec.Annotations[vcAnnotations.KernelParams] = "vsyscall=emulate iommu=on"
+	addAnnotations(ocispec, &config)
+	assert.Exactly(expectedHyperConfig, config.HypervisorConfig)
+
+	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "1"
+	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "2"
+	ocispec.Annotations[vcAnnotations.DefaultMemory] = "4096"
+
+	addAnnotations(ocispec, &config)
+	assert.Equal(config.HypervisorConfig.NumVCPUs, uint32(1))
+	assert.Equal(config.HypervisorConfig.DefaultMaxVCPUs, uint32(2))
+	assert.Equal(config.HypervisorConfig.MemorySize, uint32(4096))
+
+	// In case an absurd large value is provided, the config value if not over-ridden
+	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "655536"
+	addAnnotations(ocispec, &config)
+	assert.Equal(config.HypervisorConfig.NumVCPUs, uint32(1))
+
+	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "-1"
+	err := addAnnotations(ocispec, &config)
+	assert.NoError(err)
+
+	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "1"
+	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "-2"
+	err = addAnnotations(ocispec, &config)
+	assert.NoError(err)
 }
