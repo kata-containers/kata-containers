@@ -12,6 +12,7 @@ GO_RUNTIME_PKG=${GO_RUNTIME_PKG:-github.com/kata-containers/runtime}
 # Give preference to variable set by CI
 KATA_BRANCH=${branch:-}
 KATA_BRANCH=${KATA_BRANCH:-master}
+yq_file="${script_dir}/../scripts/install-yq.sh"
 
 error()
 {
@@ -273,7 +274,9 @@ detect_go_version()
 {
 	info "Detecting agent go version"
 	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq)
-	[ -z "$yq" ] && die "'yq' application not found (needed to parsing minimum Go version required)"
+	if [ -z "$yq" ]; then
+		source "$yq_file"
+	fi
 
 	local runtimeRevision=""
 
