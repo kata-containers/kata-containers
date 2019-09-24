@@ -23,6 +23,7 @@ Options:
 
  -d, --default         : Show arch(1) architecture (this is the default).
  -g, --golang          : Show architecture name using golang naming.
+ -r, --rust            : Shoe architecture name using rust naming
  -h, --help            : Show this help.
  -k, --kernel          : Show architecture name compatible with Linux* build system.
 
@@ -41,6 +42,18 @@ arch_to_golang()
 		s390x) echo "s390x";;
 		*) die "unsupported architecture: $arch";;
 	esac
+}
+
+# Convert architecture to the name used by rust
+arch_to_rust()
+{
+	local arch="$1"
+
+	if [ "${arch}" == "ppc64le" ]; then
+		arch="powerpc64le"
+	fi
+
+	echo "${arch}"
 }
 
 # Convert architecture to the name used by the Linux kernel build system
@@ -69,8 +82,8 @@ main()
 	local args=$("$getopt_cmd" \
 		-n "$script_name" \
 		-a \
-		--options="dghk" \
-		--longoptions="default golang help kernel" \
+		--options="dgrhk" \
+		--longoptions="default golang  rust help kernel" \
 		-- "$@")
 
 	eval set -- "$args"
@@ -82,6 +95,8 @@ main()
 			-d|--default) ;;
 
 			-g|--golang) type="golang";;
+
+			-r|--rust) type="rust";;
 
 			-h|--help)
 				usage
@@ -103,6 +118,7 @@ main()
 	case "$type" in
 		default) echo "$arch";;
 		golang) arch_to_golang "$arch";;
+		rust) arch_to_rust "${arch}";;
 		kernel) arch_to_kernel "$arch";;
 	esac
 }
