@@ -71,6 +71,22 @@ EOT
 	exit "${return_code}"
 }
 
+#Verify that hub is installed and in case that is not
+# install it to avoid issues when we try to push
+verify_hub() {
+	check_command=$(whereis hub | cut -d':' -f2)
+	# Install hub if is not installed
+	if [ -z ${check_command} ]; then
+		hub_repo="github.com/github/hub"
+		hub_url="https://${hub_repo}"
+		go get -d ${hub_repo} || true
+		pushd ${GOPATH}/src/${hub_repo}
+		make
+		make install prefix=/usr/local
+		popd
+	fi
+}
+
 #Install guest image/initrd asset
 install_image() {
 	image_destdir="${destdir}/${prefix}/share/kata-containers/"
@@ -236,6 +252,10 @@ main() {
 	kata_version=${1:-}
 	[ -n "${kata_version}" ] || usage 1
 	info "Requested version: ${kata_version}"
+
+	if [[ "$test_local" == "true" ]]; then
+		verify_hub
+	fi
 
 	destdir="${workdir}/kata-static-${kata_version}-$(uname -m)"
 	info "DESTDIR ${destdir}"
