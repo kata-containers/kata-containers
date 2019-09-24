@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	goruntime "runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -321,6 +322,18 @@ func SandboxID(spec specs.Spec) (string, error) {
 	return "", fmt.Errorf("Could not find sandbox ID")
 }
 
+func addAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) error {
+	addAssetAnnotations(ocispec, config)
+	if err := addHypervisorConfigOverrides(ocispec, config); err != nil {
+		return err
+	}
+
+	if err := addAgentConfigOverrides(ocispec, config); err != nil {
+		return err
+	}
+	return nil
+}
+
 func addAssetAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) {
 	assetAnnotations := []string{
 		vcAnnotations.KernelPath,
@@ -342,7 +355,56 @@ func addAssetAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) {
 
 		config.Annotations[a] = value
 	}
+}
 
+func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error {
+
+	if value, ok := ocispec.Annotations[vcAnnotations.DefaultVCPUs]; ok {
+		vcpus, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			return fmt.Errorf("Error encountered parsing annotation for default_vcpus: %v, please specify numeric value", err)
+		}
+
+		numCPUs := goruntime.NumCPU()
+
+		// Assign the override only if value is valid, else fallback to what is provided by the config
+		if uint32(vcpus) < uint32(numCPUs) {
+			config.HypervisorConfig.NumVCPUs = uint32(vcpus)
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs]; ok {
+		maxVCPUs, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			return fmt.Errorf("Error encountered parsing annotation for default_maxvcpus: %v, please specify positive numeric value", err)
+		}
+
+		numCPUs := goruntime.NumCPU()
+		max := uint32(maxVCPUs)
+		if max < uint32(numCPUs) && max < vc.MaxQemuVCPUs() {
+			config.HypervisorConfig.DefaultMaxVCPUs = max
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.DefaultMemory]; ok {
+		memorySz, err := strconv.ParseUint(value, 10, 32)
+		if err != nil || memorySz < 8 {
+			return fmt.Errorf("Error encountered parsing annotation for default_memory: %v, please specify positive numeric value greater than 8", err)
+		}
+
+		config.HypervisorConfig.MemorySize = uint32(memorySz)
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.KernelParams]; ok {
+		if value != "" {
+			config.HypervisorConfig.KernelParams = vc.DeserializeParams(strings.Fields(value))
+		}
+	}
+
+	return nil
+}
+
+func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error {
 	if value, ok := ocispec.Annotations[vcAnnotations.KernelModules]; ok {
 		if c, ok := config.AgentConfig.(vc.KataAgentConfig); ok {
 			modules := strings.Split(value, KernelModulesSeparator)
@@ -350,6 +412,8 @@ func addAssetAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) {
 			config.AgentConfig = c
 		}
 	}
+
+	return nil
 }
 
 // SandboxConfig converts an OCI compatible runtime configuration file
@@ -409,7 +473,9 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid, c
 		Experimental: runtime.Experimental,
 	}
 
-	addAssetAnnotations(ocispec, &sandboxConfig)
+	if err := addAnnotations(ocispec, &sandboxConfig); err != nil {
+		return vc.SandboxConfig{}, err
+	}
 
 	return sandboxConfig, nil
 }

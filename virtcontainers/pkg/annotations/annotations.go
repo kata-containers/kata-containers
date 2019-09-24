@@ -69,6 +69,18 @@ const (
 	// The first word is considered as the module name and the rest as its parameters.
 	//
 	KernelModules = kataAnnotAgentPrefix + "kernel_modules"
+
+	// DefaultVCPUs is a sandbox annotation for passing the default vcpus assigned for a VM by the hypervisor.
+	DefaultVCPUs = kataAnnotHypervisorPrefix + "default_vcpus"
+
+	// DefaultVCPUs is a sandbox annotation that specifies the maximum number of vCPUs allocated for the VM by the hypervisor.
+	DefaultMaxVCPUs = kataAnnotHypervisorPrefix + "default_max_vcpus"
+
+	// DefaultMemory is a sandbox annotation for the memory assigned for a VM by the hypervisor.
+	DefaultMemory = kataAnnotHypervisorPrefix + "default_memory"
+
+	// KernelParams is a sandbox annotation for passing additional guest kernel parameters.
+	KernelParams = kataAnnotHypervisorPrefix + "kernel_params"
 )
 
 const (
