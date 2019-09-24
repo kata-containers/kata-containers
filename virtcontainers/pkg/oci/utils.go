@@ -326,8 +326,11 @@ func addAssetAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) {
 		vcAnnotations.KernelPath,
 		vcAnnotations.ImagePath,
 		vcAnnotations.InitrdPath,
+		vcAnnotations.FirmwarePath,
 		vcAnnotations.KernelHash,
 		vcAnnotations.ImageHash,
+		vcAnnotations.InitrdHash,
+		vcAnnotations.FirmwareHash,
 		vcAnnotations.AssetHashType,
 	}
 
