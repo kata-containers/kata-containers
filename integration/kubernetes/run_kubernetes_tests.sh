@@ -38,6 +38,7 @@ systemctl is-active --quiet docker || sudo systemctl start docker
 K8S_TEST_UNION=("k8s-attach-handlers.bats" \
 	"k8s-block-volume.bats" \
 	"k8s-configmap.bats" \
+	"k8s-copy-file.bats" \
 	"k8s-cpu-ns.bats" \
 	"k8s-credentials-secrets.bats" \
 	"k8s-custom-dns.bats" \
