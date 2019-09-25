@@ -246,9 +246,9 @@ func (q *qemuS390x) appendSCSIController(devices []govmmQemu.Device, enableIOThr
 	return devices, t, nil
 }
 
-func (q *qemuS390x) appendVSock(devices []govmmQemu.Device, vsock kataVSOCK) ([]govmmQemu.Device, error) {
+func (q *qemuS390x) appendVSock(devices []govmmQemu.Device, vsock types.VSock) ([]govmmQemu.Device, error) {
 	var devno string
-	id := fmt.Sprintf("vsock-%d", vsock.contextID)
+	id := fmt.Sprintf("vsock-%d", vsock.ContextID)
 	addr, b, err := q.addDeviceToBridge(id, types.CCW)
 	if err != nil {
 		return devices, fmt.Errorf("Failed to append VSock: %v", err)
@@ -260,8 +260,8 @@ func (q *qemuS390x) appendVSock(devices []govmmQemu.Device, vsock kataVSOCK) ([]
 	devices = append(devices,
 		govmmQemu.VSOCKDevice{
 			ID:            id,
-			ContextID:     vsock.contextID,
-			VHostFD:       vsock.vhostFd,
+			ContextID:     vsock.ContextID,
+			VHostFD:       vsock.VhostFd,
 			DisableModern: false,
 			DevNo:         devno,
 		},
