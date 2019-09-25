@@ -26,9 +26,11 @@ const defaultQemuPath = "/usr/bin/qemu-system-aarch64"
 
 const defaultQemuMachineType = QemuVirt
 
+const qemuNvdimmOption = "nvdimm"
+
 const qmpMigrationWaitTimeout = 10 * time.Second
 
-var defaultQemuMachineOptions = "usb=off,accel=kvm,nvdimm,gic-version=" + getGuestGICVersion()
+var defaultQemuMachineOptions = "usb=off,accel=kvm,gic-version=" + getGuestGICVersion()
 
 var qemuPaths = map[string]string{
 	QemuVirt: defaultQemuPath,
@@ -153,6 +155,12 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 	}
 
 	if config.ImagePath != "" {
+		for i := range q.supportedQemuMachines {
+			q.supportedQemuMachines[i].Options = strings.Join([]string{
+				q.supportedQemuMachines[i].Options,
+				qemuNvdimmOption,
+			}, ",")
+		}
 		q.kernelParams = append(q.kernelParams, kernelRootParams...)
 		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
 		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)

@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"os"
+	"strings"
 	"time"
 
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -25,7 +26,9 @@ const defaultQemuPath = "/usr/bin/qemu-system-x86_64"
 
 const defaultQemuMachineType = QemuPC
 
-const defaultQemuMachineOptions = "accel=kvm,kernel_irqchip,nvdimm"
+const qemuNvdimmOption = "nvdimm"
+
+const defaultQemuMachineOptions = "accel=kvm,kernel_irqchip"
 
 const qmpMigrationWaitTimeout = 5 * time.Second
 
@@ -101,6 +104,15 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 			kernelParams:          kernelParams,
 		},
 		vmFactory: factory,
+	}
+
+	if config.ImagePath != "" {
+		for i := range q.supportedQemuMachines {
+			q.supportedQemuMachines[i].Options = strings.Join([]string{
+				q.supportedQemuMachines[i].Options,
+				qemuNvdimmOption,
+			}, ",")
+		}
 	}
 
 	q.handleImagePath(config)
