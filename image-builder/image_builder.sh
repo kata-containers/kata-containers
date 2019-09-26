@@ -391,9 +391,6 @@ create_rootfs_image() {
 	info "Creating empty machine-id to allow systemd to bind-mount it"
 	touch "${mount_dir}/etc/machine-id"
 
-	info "Creating empty resolv.conf to allow kata-agent to bind-mount it"
-	touch "${mount_dir}/etc/resolv.conf"
-
 	info "Unmounting root partition"
 	umount "${mount_dir}"
 	OK "Root partition unmounted"
