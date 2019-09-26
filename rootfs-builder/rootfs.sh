@@ -510,6 +510,15 @@ EOT
 	[ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 	OK "init is installed"
 
+	# Create an empty /etc/resolv.conf, to allow agent to bind mount container resolv.conf to Kata VM
+	dns_file="${ROOTFS_DIR}/etc/resolv.conf"
+	if [ -L "$dns_file" ]; then
+		# if /etc/resolv.conf is a link, it cannot be used for bind mount
+		rm -f "$dns_file"
+	fi
+	info "Create /etc/resolv.conf file in rootfs if not exist"
+	touch "$dns_file"
+
 	info "Creating summary file"
 	create_summary_file "${ROOTFS_DIR}"
 }
