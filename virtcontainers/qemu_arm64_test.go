@@ -17,10 +17,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func newTestQemu(machineType string) qemuArch {
-	config := HypervisorConfig{
+func qemuConfig(machineType string) HypervisorConfig {
+	return HypervisorConfig{
 		HypervisorMachineType: machineType,
 	}
+}
+
+func newTestQemu(machineType string) qemuArch {
+	config := qemuConfig(machineType)
 	return newQemuArch(config)
 }
 
@@ -130,7 +134,6 @@ func TestQemuArm64AppendBridges(t *testing.T) {
 func TestQemuArm64AppendImage(t *testing.T) {
 	var devices []govmmQemu.Device
 	assert := assert.New(t)
-	arm64 := newTestQemu(QemuVirt)
 
 	f, err := ioutil.TempFile("", "img")
 	assert.NoError(err)
@@ -139,6 +142,17 @@ func TestQemuArm64AppendImage(t *testing.T) {
 
 	imageStat, err := f.Stat()
 	assert.NoError(err)
+
+	// save default supportedQemuMachines options
+	machinesCopy := make([]govmmQemu.Machine, len(supportedQemuMachines))
+	assert.Equal(len(supportedQemuMachines), copy(machinesCopy, supportedQemuMachines))
+
+	cfg := qemuConfig(QemuVirt)
+	cfg.ImagePath = f.Name()
+	arm64 := newQemuArch(cfg)
+	for _, m := range arm64.(*qemuArm64).supportedQemuMachines {
+		assert.Contains(m.Options, qemuNvdimmOption)
+	}
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.Object{
@@ -153,6 +167,20 @@ func TestQemuArm64AppendImage(t *testing.T) {
 
 	devices, err = arm64.appendImage(devices, f.Name())
 	assert.NoError(err)
-
 	assert.Equal(expectedOut, devices)
+
+	// restore default supportedQemuMachines options
+	assert.Equal(len(supportedQemuMachines), copy(supportedQemuMachines, machinesCopy))
+}
+
+func TestQemuArm64WithInitrd(t *testing.T) {
+	assert := assert.New(t)
+
+	cfg := qemuConfig(QemuVirt)
+	cfg.InitrdPath = "dummy-initrd"
+	arm64 := newQemuArch(cfg)
+
+	for _, m := range arm64.(*qemuArm64).supportedQemuMachines {
+		assert.NotContains(m.Options, qemuNvdimmOption)
+	}
 }
