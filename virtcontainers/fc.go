@@ -191,6 +191,8 @@ func (fc *firecracker) bindMount(ctx context.Context, source, destination string
 		return fmt.Errorf("Could not create destination mount point %v: %v", destination, err)
 	}
 
+	fc.Logger().WithFields(logrus.Fields{"src": absSource, "dst": destination}).Debug("Bind mounting resource")
+
 	if err := syscall.Mount(absSource, destination, "bind", syscall.MS_BIND|syscall.MS_SLAVE, ""); err != nil {
 		return fmt.Errorf("Could not bind mount %v to %v: %v", absSource, destination, err)
 	}
@@ -717,9 +719,10 @@ func (fc *firecracker) createDiskPool() error {
 
 func (fc *firecracker) umountResource(jailedPath string) {
 	hostPath := filepath.Join(fc.jailerRoot, jailedPath)
+	fc.Logger().WithField("resource", hostPath).Debug("Unmounting resource")
 	err := syscall.Unmount(hostPath, syscall.MNT_DETACH)
 	if err != nil {
-		fc.Logger().WithField("umountResource failed", err).Info()
+		fc.Logger().WithError(err).Error("Failed to umount resource")
 	}
 }
 
