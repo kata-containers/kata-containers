@@ -841,24 +841,18 @@ func (fc *firecracker) fcAddBlockDrive(drive config.BlockDrive) error {
 }
 
 // Firecracker supports replacing the host drive used once the VM has booted up
-func (fc *firecracker) fcUpdateBlockDrive(drive config.BlockDrive) error {
+func (fc *firecracker) fcUpdateBlockDrive(path, id string) error {
 	span, _ := fc.trace("fcUpdateBlockDrive")
 	defer span.Finish()
 
 	// Use the global block index as an index into the pool of the devices
 	// created for firecracker.
-	driveID := fcDriveIndexToID(drive.Index)
 	driveParams := ops.NewPatchGuestDriveByIDParams()
-	driveParams.SetDriveID(driveID)
+	driveParams.SetDriveID(id)
 
-	jailedDrive, err := fc.fcJailResource(drive.File, driveID)
-	if err != nil {
-		fc.Logger().WithField("fcUpdateBlockDrive failed", err).Error()
-		return err
-	}
 	driveFc := &models.PartialDrive{
-		DriveID:    &driveID,
-		PathOnHost: &jailedDrive, //This is the only property that can be modified
+		DriveID:    &id,
+		PathOnHost: &path, //This is the only property that can be modified
 	}
 
 	driveParams.SetBody(driveFc)
@@ -872,11 +866,10 @@ func (fc *firecracker) fcUpdateBlockDrive(drive config.BlockDrive) error {
 		actionType := "BlockDeviceRescan"
 		actionInfo := &models.InstanceActionInfo{
 			ActionType: &actionType,
-			Payload:    driveID,
+			Payload:    id,
 		}
 		actionParams.SetInfo(actionInfo)
-		_, err = fc.client().Operations.CreateSyncAction(actionParams)
-		if err != nil {
+		if _, err := fc.client().Operations.CreateSyncAction(actionParams); err != nil {
 			return err
 		}
 	}
@@ -920,6 +913,31 @@ func (fc *firecracker) addDevice(devInfo interface{}, devType deviceType) error 
 	return nil
 }
 
+// hotplugBlockDevice supported in Firecracker VMM
+// hot add or remove a block device.
+func (fc *firecracker) hotplugBlockDevice(drive config.BlockDrive, op operation) (interface{}, error) {
+	var path string
+	var err error
+	driveID := fcDriveIndexToID(drive.Index)
+
+	if op == addDevice {
+		//The drive placeholder has to exist prior to Update
+		path, err = fc.fcJailResource(drive.File, driveID)
+		if err != nil {
+			fc.Logger().WithError(err).WithField("resource", drive.File).Error("Could not jail resource")
+			return nil, err
+		}
+	} else {
+		// umount the disk, it's no longer needed.
+		fc.umountResource(driveID)
+		// use previous raw file created at createDiskPool, that way
+		// the resource is released by firecracker and it can be destroyed in the host
+		path = filepath.Join(fc.jailerRoot, driveID)
+	}
+
+	return nil, fc.fcUpdateBlockDrive(path, driveID)
+}
+
 // hotplugAddDevice supported in Firecracker VMM
 func (fc *firecracker) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := fc.trace("hotplugAddDevice")
@@ -927,19 +945,29 @@ func (fc *firecracker) hotplugAddDevice(devInfo interface{}, devType deviceType)
 
 	switch devType {
 	case blockDev:
-		//The drive placeholder has to exist prior to Update
-		return nil, fc.fcUpdateBlockDrive(*devInfo.(*config.BlockDrive))
+		return fc.hotplugBlockDevice(*devInfo.(*config.BlockDrive), addDevice)
 	default:
 		fc.Logger().WithFields(logrus.Fields{"devInfo": devInfo,
 			"deviceType": devType}).Warn("hotplugAddDevice: unsupported device")
-		return nil, fmt.Errorf("hotplugAddDevice: unsupported device: devInfo:%v, deviceType%v",
+		return nil, fmt.Errorf("Could not hot add device: unsupported device: %v, type: %v",
 			devInfo, devType)
 	}
 }
 
-// hotplugRemoveDevice supported in Firecracker VMM, but no-op
+// hotplugRemoveDevice supported in Firecracker VMM
 func (fc *firecracker) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	return nil, nil
+	span, _ := fc.trace("hotplugRemoveDevice")
+	defer span.Finish()
+
+	switch devType {
+	case blockDev:
+		return fc.hotplugBlockDevice(*devInfo.(*config.BlockDrive), removeDevice)
+	default:
+		fc.Logger().WithFields(logrus.Fields{"devInfo": devInfo,
+			"deviceType": devType}).Error("hotplugRemoveDevice: unsupported device")
+		return nil, fmt.Errorf("Could not hot remove device: unsupported device: %v, type: %v",
+			devInfo, devType)
+	}
 }
 
 // getSandboxConsole builds the path of the console where we can read
