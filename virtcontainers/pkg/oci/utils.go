@@ -358,19 +358,166 @@ func addAssetAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) {
 }
 
 func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error {
+	if err := addHypervisorCPUOverrides(ocispec, config); err != nil {
+		return err
+	}
 
+	if err := addHypervisorMemoryOverrides(ocispec, config); err != nil {
+		return err
+	}
+
+	if err := addHypervisorBlockOverrides(ocispec, config); err != nil {
+		return err
+	}
+
+	if err := addHypervisporVirtioFsOverrides(ocispec, config); err != nil {
+		return err
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.KernelParams]; ok {
+		if value != "" {
+			params := vc.DeserializeParams(strings.Fields(value))
+			for _, param := range params {
+				if err := config.HypervisorConfig.AddKernelParam(param); err != nil {
+					return fmt.Errorf("Error adding kernel parameters in annotation kernel_params : %v", err)
+				}
+			}
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.MachineType]; ok {
+		if value != "" {
+			config.HypervisorConfig.HypervisorMachineType = value
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.MachineAccelerators]; ok {
+		if value != "" {
+			config.HypervisorConfig.MachineAccelerators = value
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.DisableVhostNet]; ok {
+		disableVhostNet, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for disable_vhost_net: Please specify boolean value 'true|false'")
+		}
+
+		config.HypervisorConfig.DisableVhostNet = disableVhostNet
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.GuestHookPath]; ok {
+		if value != "" {
+			config.HypervisorConfig.GuestHookPath = value
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.UseVSock]; ok {
+		useVsock, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for use_vsock: Please specify boolean value 'true|false'")
+		}
+
+		config.HypervisorConfig.UseVSock = useVsock
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus]; ok {
+		hotplugVFIOOnRootBus, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for hotplug_vfio_on_root_bus: Please specify boolean value 'true|false'")
+		}
+
+		config.HypervisorConfig.HotplugVFIOOnRootBus = hotplugVFIOOnRootBus
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.EntropySource]; ok {
+		if value != "" {
+			config.HypervisorConfig.EntropySource = value
+		}
+	}
+
+	return nil
+}
+
+func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if value, ok := ocispec.Annotations[vcAnnotations.DefaultMemory]; ok {
+		memorySz, err := strconv.ParseUint(value, 10, 32)
+		if err != nil || memorySz < 8 {
+			return fmt.Errorf("Error encountered parsing annotation for default_memory: %v, please specify positive numeric value greater than 8", err)
+		}
+
+		sbConfig.HypervisorConfig.MemorySize = uint32(memorySz)
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.MemSlots]; ok {
+		mslots, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for memory_slots: %v, please specify positive numeric value", err)
+		}
+
+		if mslots > 0 {
+			sbConfig.HypervisorConfig.MemSlots = uint32(mslots)
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.MemOffset]; ok {
+		moffset, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for memory_offset: %v, please specify positive numeric value", err)
+		}
+
+		if moffset > 0 {
+			sbConfig.HypervisorConfig.MemOffset = uint32(moffset)
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.MemPrealloc]; ok {
+		memPrealloc, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for enable_mem_prealloc: Please specify boolean value 'true|false'")
+		}
+
+		sbConfig.HypervisorConfig.MemPrealloc = memPrealloc
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.EnableSwap]; ok {
+		enableSwap, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for enable_swap: Please specify boolean value 'true|false'")
+		}
+
+		sbConfig.HypervisorConfig.Mlock = !enableSwap
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.FileBackedMemRootDir]; ok {
+		sbConfig.HypervisorConfig.FileBackedMemRootDir = value
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.HugePages]; ok {
+		hugePages, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for enable_hugepages: Please specify boolean value 'true|false'")
+		}
+
+		sbConfig.HypervisorConfig.HugePages = hugePages
+	}
+	return nil
+}
+
+func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
 	if value, ok := ocispec.Annotations[vcAnnotations.DefaultVCPUs]; ok {
 		vcpus, err := strconv.ParseUint(value, 10, 32)
 		if err != nil {
-			return fmt.Errorf("Error encountered parsing annotation for default_vcpus: %v, please specify numeric value", err)
+			return fmt.Errorf("Error encountered parsing annotation default_vcpus: %v, please specify numeric value", err)
 		}
 
 		numCPUs := goruntime.NumCPU()
 
-		// Assign the override only if value is valid, else fallback to what is provided by the config
-		if uint32(vcpus) < uint32(numCPUs) {
-			config.HypervisorConfig.NumVCPUs = uint32(vcpus)
+		if uint32(vcpus) > uint32(numCPUs) {
+			return fmt.Errorf("Number of cpus %d specified in annotation default_vcpus is greater than the number of CPUs %d on the system", vcpus, numCPUs)
 		}
+
+		sbConfig.HypervisorConfig.NumVCPUs = uint32(vcpus)
 	}
 
 	if value, ok := ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs]; ok {
@@ -381,24 +528,130 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) 
 
 		numCPUs := goruntime.NumCPU()
 		max := uint32(maxVCPUs)
-		if max < uint32(numCPUs) && max < vc.MaxQemuVCPUs() {
-			config.HypervisorConfig.DefaultMaxVCPUs = max
+
+		if max > uint32(numCPUs) {
+			return fmt.Errorf("Number of cpus %d in annotation default_maxvcpus is greater than the number of CPUs %d on the system", max, numCPUs)
+		}
+
+		if sbConfig.HypervisorType == vc.QemuHypervisor && max > vc.MaxQemuVCPUs() {
+			return fmt.Errorf("Number of cpus %d in annotation default_maxvcpus is greater than max no of CPUs %d supported for qemu", max, vc.MaxQemuVCPUs())
+		}
+
+		sbConfig.HypervisorConfig.DefaultMaxVCPUs = max
+	}
+
+	return nil
+}
+
+func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if value, ok := ocispec.Annotations[vcAnnotations.BlockDeviceDriver]; ok {
+		supportedBlockDrivers := []string{config.VirtioSCSI, config.VirtioBlock, config.VirtioMmio, config.Nvdimm, config.VirtioBlockCCW}
+
+		valid := false
+		for _, b := range supportedBlockDrivers {
+			if b == value {
+				sbConfig.HypervisorConfig.BlockDeviceDriver = value
+				valid = true
+			}
+		}
+
+		if !valid {
+			return fmt.Errorf("Invalid hypervisor block storage driver %v specified in annotation (supported drivers: %v)", value, supportedBlockDrivers)
 		}
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.DefaultMemory]; ok {
-		memorySz, err := strconv.ParseUint(value, 10, 32)
-		if err != nil || memorySz < 8 {
-			return fmt.Errorf("Error encountered parsing annotation for default_memory: %v, please specify positive numeric value greater than 8", err)
+	if value, ok := ocispec.Annotations[vcAnnotations.DisableBlockDeviceUse]; ok {
+		disableBlockDeviceUse, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for disable_block_device_use: Please specify boolean value 'true|false'")
 		}
 
-		config.HypervisorConfig.MemorySize = uint32(memorySz)
+		sbConfig.HypervisorConfig.DisableBlockDeviceUse = disableBlockDeviceUse
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.KernelParams]; ok {
-		if value != "" {
-			config.HypervisorConfig.KernelParams = vc.DeserializeParams(strings.Fields(value))
+	if value, ok := ocispec.Annotations[vcAnnotations.EnableIOThreads]; ok {
+		enableIOThreads, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for enable_iothreads: Please specify boolean value 'true|false'")
 		}
+
+		sbConfig.HypervisorConfig.EnableIOThreads = enableIOThreads
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.BlockDeviceCacheSet]; ok {
+		blockDeviceCacheSet, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for block_device_cache_set: Please specify boolean value 'true|false'")
+		}
+
+		sbConfig.HypervisorConfig.BlockDeviceCacheSet = blockDeviceCacheSet
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.BlockDeviceCacheDirect]; ok {
+		blockDeviceCacheDirect, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for block_device_cache_direct: Please specify boolean value 'true|false'")
+		}
+
+		sbConfig.HypervisorConfig.BlockDeviceCacheDirect = blockDeviceCacheDirect
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.BlockDeviceCacheNoflush]; ok {
+		blockDeviceCacheNoflush, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for block_device_cache_noflush: Please specify boolean value 'true|false'")
+		}
+
+		sbConfig.HypervisorConfig.BlockDeviceCacheNoflush = blockDeviceCacheNoflush
+	}
+
+	return nil
+}
+
+func addHypervisporVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if value, ok := ocispec.Annotations[vcAnnotations.SharedFS]; ok {
+		supportedSharedFS := []string{config.Virtio9P, config.VirtioFS}
+		valid := false
+		for _, fs := range supportedSharedFS {
+			if fs == value {
+				sbConfig.HypervisorConfig.SharedFS = value
+				valid = true
+			}
+		}
+
+		if !valid {
+			return fmt.Errorf("Invalid hypervisor shared file system %v specified for annotation shared_fs, (supported file systems: %v)", value, supportedSharedFS)
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.VirtioFSDaemon]; ok {
+		sbConfig.HypervisorConfig.VirtioFSDaemon = value
+	}
+
+	if sbConfig.HypervisorConfig.SharedFS == config.VirtioFS && sbConfig.HypervisorConfig.VirtioFSDaemon == "" {
+		return fmt.Errorf("cannot enable virtio-fs without daemon path")
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.VirtioFSCache]; ok {
+		sbConfig.HypervisorConfig.VirtioFSCache = value
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.VirtioFSCacheSize]; ok {
+		cacheSize, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for virtio_fs_cache_size: %v, please specify positive numeric value", err)
+		}
+
+		sbConfig.HypervisorConfig.VirtioFSCacheSize = uint32(cacheSize)
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.Msize9p]; ok {
+		msize9p, err := strconv.ParseUint(value, 10, 32)
+		if err != nil || msize9p == 0 {
+			return fmt.Errorf("Error parsing annotation for msize_9p, please specify positive numeric value")
+		}
+
+		sbConfig.HypervisorConfig.Msize9p = uint32(msize9p)
 	}
 
 	return nil
