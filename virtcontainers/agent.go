@@ -126,6 +126,9 @@ type agent interface {
 	// check will check the agent liveness
 	check() error
 
+	// tell whether the agent is long  live connected or not
+	longLiveConn() bool
+
 	// disconnect will disconnect the connection to the agent
 	disconnect() error
 
