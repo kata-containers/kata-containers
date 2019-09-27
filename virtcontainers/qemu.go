@@ -119,11 +119,6 @@ var defaultKernelParameters = []Param{
 	{"panic", "1"},
 }
 
-const (
-	addDevice operation = iota
-	removeDevice
-)
-
 type qmpLogger struct {
 	logger *logrus.Entry
 }
