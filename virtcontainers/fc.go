@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -493,6 +492,24 @@ func (fc *firecracker) client() *client.Firecracker {
 	return fc.connection
 }
 
+func (fc *firecracker) createJailedDrive(name string) (string, error) {
+	// Don't bind mount the resource, just create a raw file
+	// that can be bind-mounted later
+	r := filepath.Join(fc.jailerRoot, name)
+	f, err := os.Create(r)
+	if err != nil {
+		return "", err
+	}
+	f.Close()
+
+	if fc.jailed {
+		// use path relative to the jail
+		r = filepath.Join("/", name)
+	}
+
+	return r, nil
+}
+
 func (fc *firecracker) fcJailResource(src, dst string) (string, error) {
 	if src == "" || dst == "" {
 		return "", fmt.Errorf("fcJailResource: invalid jail locations: src:%v, dst:%v",
@@ -652,7 +669,9 @@ func (fc *firecracker) startSandbox(timeout int) error {
 	}
 
 	fc.fcSetVMRootfs(image)
-	fc.createDiskPool()
+	if err := fc.createDiskPool(); err != nil {
+		return err
+	}
 
 	for _, d := range fc.pendingDevices {
 		if err = fc.addDevice(d.dev, d.devType); err != nil {
@@ -683,21 +702,8 @@ func (fc *firecracker) createDiskPool() error {
 		isRootDevice := false
 
 		// Create a temporary file as a placeholder backend for the drive
-		//hostURL, err := fc.store.Raw("")
-		hostURL, err := fc.store.Raw(driveID)
+		jailedDrive, err := fc.createJailedDrive(driveID)
 		if err != nil {
-			return err
-		}
-
-		// We get a full URL from Raw(), we need to parse it.
-		u, err := url.Parse(hostURL)
-		if err != nil {
-			return err
-		}
-
-		jailedDrive, err := fc.fcJailResource(u.Path, driveID)
-		if err != nil {
-			fc.Logger().WithField("createDiskPool failed", err).Error()
 			return err
 		}
 
@@ -733,17 +739,6 @@ func (fc *firecracker) cleanupJail() {
 
 	fc.umountResource(fcKernel)
 	fc.umountResource(fcRootfs)
-
-	for i := 0; i < fcDiskPoolSize; i++ {
-		fc.umountResource(fcDriveIndexToID(i))
-	}
-
-	//Run through the list second time as may have bindmounted
-	//to the same location twice. In the future this needs to
-	//be tracked so that we do not do this blindly
-	for i := 0; i < fcDiskPoolSize; i++ {
-		fc.umountResource(fcDriveIndexToID(i))
-	}
 
 	fc.Logger().WithField("cleaningJail", fc.vmPath).Info()
 	if err := os.RemoveAll(fc.vmPath); err != nil {
