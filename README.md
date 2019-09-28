@@ -68,6 +68,7 @@ This section describes the terms used for all documentation in this repository.
 ## Building
 
 The top-level `Makefile` contains an example of how to use the available components.
+Set `DEBUG=true` to execute build scripts in debug mode.
 
 Two build methods are available, `distro` and `dracut`.
 By default, the `distro` build method is used, and this creates a rootfs using
