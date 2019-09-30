@@ -20,6 +20,7 @@ source "${cidir}/lib.sh"
 source "/etc/os-release" || source "/usr/lib/os-release"
 
 latest_build_url="http://jenkins.katacontainers.io/job/kernel-nightly-$(uname -m)/lastSuccessfulBuild/artifact/artifacts"
+experimental_latest_build_url="http://jenkins.katacontainers.io/job/kernel-experimental-nightly-$(uname -m)/lastSuccessfulBuild/artifact/artifacts"
 kernel_dir="/usr/share/kata-containers"
 
 kernel_repo_name="packaging"
@@ -87,7 +88,11 @@ install_cached_kernel(){
 	sudo mkdir -p "${kernel_dir}"
 	local kernel_binary_name="${kernel_binary}-${cached_kernel_version}"
 	local kernel_binary_path="${kernel_dir}/${kernel_binary_name}"
-	sudo -E curl -fL --progress-bar "${latest_build_url}/${kernel_binary_name}" -o "${kernel_binary_path}" || return 1
+	if [ ${experimental_kernel} == "true" ]; then
+		sudo -E curl -fL --progress-bar "${experimental_latest_build_url}/${kernel_binary_name}" -o "${kernel_binary_path}" || return 1
+	else
+		sudo -E curl -fL --progress-bar "${latest_build_url}/${kernel_binary_name}" -o "${kernel_binary_path}" || return 1
+	fi
 	kernel_symlink="${kernel_dir}/${kernel_binary}.container"
 	info "Installing ${kernel_binary_path} and symlink ${kernel_symlink}"
 	sudo -E ln -sf "${kernel_binary_path}" "${kernel_symlink}"
@@ -117,23 +122,22 @@ main() {
 	kernel_version="$(get_current_kernel_version)"
 	kata_config_version="$(get_kata_config_version)"
 	current_kernel_version="${kernel_version}-${kata_config_version}"
-	cached_kernel_version=$(curl -sfL "${latest_build_url}/latest") || cached_kernel_version="none"
+	if [ "${experimental_kernel}" == "false" ]; then
+		cached_kernel_version=$(curl -sfL "${latest_build_url}/latest") || cached_kernel_version="none"
+	else
+		cached_kernel_version=$(curl -sfL "${experimental_latest_build_url}/latest") || cached_kernel_version="none"
+	fi
 	info "current kernel : ${current_kernel_version}"
 	info "cached kernel  : ${cached_kernel_version}"
-	if [ "${experimental_kernel}" == "false" ]; then
-		if [ "$cached_kernel_version" == "$current_kernel_version" ] && [ "$kernel_arch" == "x86_64" ]; then
-			# If installing kernel fails,
-			# then build and install it from sources.
-			if ! install_prebuilt_kernel; then
-				info "failed to install cached kernel, trying to build from source"
-				build_and_install_kernel
-			fi
-		else
+	if [ "$cached_kernel_version" == "$current_kernel_version" ] && [ "$kernel_arch" == "x86_64" ]; then
+		# If installing kernel fails,
+		# then build and install it from sources.
+		if ! install_prebuilt_kernel; then
+			info "failed to install cached kernel, trying to build from source"
 			build_and_install_kernel
 		fi
 	else
 		build_and_install_kernel
-
 	fi
 }
 
