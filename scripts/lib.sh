@@ -12,6 +12,7 @@ GO_RUNTIME_PKG=${GO_RUNTIME_PKG:-github.com/kata-containers/runtime}
 # Give preference to variable set by CI
 KATA_BRANCH=${branch:-}
 KATA_BRANCH=${KATA_BRANCH:-master}
+yq_file="${script_dir}/../scripts/install-yq.sh"
 
 error()
 {
@@ -273,7 +274,9 @@ detect_go_version()
 {
 	info "Detecting agent go version"
 	typeset -r yq=$(command -v yq || command -v ${GOPATH}/bin/yq)
-	[ -z "$yq" ] && die "'yq' application not found (needed to parsing minimum Go version required)"
+	if [ -z "$yq" ]; then
+		source "$yq_file"
+	fi
 
 	local runtimeRevision=""
 
@@ -286,7 +289,7 @@ detect_go_version()
 		typeset -r runtimeVersionsURL="https://raw.githubusercontent.com/kata-containers/runtime/${runtimeRevision}/versions.yaml"
 		info "Getting golang version from ${runtimeVersionsURL}"
 		# This may fail if we are a kata bump.
-		if GO_VERSION="$(curl -fsSL "$runtimeVersionsURL" | $yq r - "languages.golang.version")"; then
+		if GO_VERSION="$(curl -fsSL "$runtimeVersionsURL" | tac | tac | $yq r - "languages.golang.version")"; then
 			[ "$GO_VERSION" != "null" ]
 			return 0
 		fi
@@ -298,7 +301,7 @@ detect_go_version()
 		info "There is not runtime repository in filesystem (${kata_runtime_pkg_dir})"
 		local runtime_versions_url="https://raw.githubusercontent.com/kata-containers/runtime/${KATA_BRANCH}/versions.yaml"
 		info "Get versions file from ${runtime_versions_url}"
-		GO_VERSION="$(curl -fsSL "${runtime_versions_url}" | $yq r - "languages.golang.version")"
+		GO_VERSION="$(curl -fsSL "${runtime_versions_url}" | tac | tac | $yq r - "languages.golang.version")"
 		if [ "$?" == "0" ] && [ "$GO_VERSION" != "null" ]; then
 			return 0
 		fi
