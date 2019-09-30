@@ -714,13 +714,34 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 }
 
 func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error {
-	if value, ok := ocispec.Annotations[vcAnnotations.KernelModules]; ok {
-		if c, ok := config.AgentConfig.(vc.KataAgentConfig); ok {
-			modules := strings.Split(value, KernelModulesSeparator)
-			c.KernelModules = modules
-			config.AgentConfig = c
-		}
+	c, ok := config.AgentConfig.(vc.KataAgentConfig)
+	if !ok {
+		return nil
 	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.KernelModules]; ok {
+		modules := strings.Split(value, KernelModulesSeparator)
+		c.KernelModules = modules
+		config.AgentConfig = c
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.AgentTrace]; ok {
+		trace, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for agent.trace: Please specify boolean value 'true|false'")
+		}
+		c.Trace = trace
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.AgentTraceMode]; ok {
+		c.TraceMode = value
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.AgentTraceType]; ok {
+		c.TraceType = value
+	}
+
+	config.AgentConfig = c
 
 	return nil
 }
