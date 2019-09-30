@@ -181,6 +181,26 @@ const (
 )
 
 const (
+	kataAnnotRuntimePrefix = kataConfAnnotationsPrefix + "runtime."
+
+	// DisableGuestSeccomp is a sandbox annotation that determines if seccomp should be applied inside guest.
+	DisableGuestSeccomp = kataAnnotRuntimePrefix + "disable_guest_seccomp"
+
+	// SandboxCgroupOnly is a sandbox annotation that determines if kata processes are managed only in sandbox cgroup.
+	SandboxCgroupOnly = kataAnnotRuntimePrefix + "sandbox_cgroup_only"
+
+	// Experimental is a sandbox annotation that determines if experimental features enabled.
+	Experimental = kataAnnotRuntimePrefix + "experimental"
+
+	// InterNetworkModel is a sandbox annotaion that determines how the VM should be connected to the
+	//the container network interface.
+	InterNetworkModel = kataAnnotRuntimePrefix + "internetworking_model"
+
+	// DisableNewNetNs is a sandbox annotation that determines if create a netns for hypervisor process.
+	DisableNewNetNs = kataAnnotRuntimePrefix + "disable_new_netns"
+)
+
+const (
 	kataAnnotAgentPrefix = kataConfAnnotationsPrefix + "agent."
 
 	// KernelModules is the annotation key for passing the list of kernel

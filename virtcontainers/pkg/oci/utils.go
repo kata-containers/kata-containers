@@ -328,6 +328,10 @@ func addAnnotations(ocispec specs.Spec, config *vc.SandboxConfig) error {
 		return err
 	}
 
+	if err := addRuntimeConfigOverrides(ocispec, config); err != nil {
+		return err
+	}
+
 	if err := addAgentConfigOverrides(ocispec, config); err != nil {
 		return err
 	}
@@ -652,6 +656,58 @@ func addHypervisporVirtioFsOverrides(ocispec specs.Spec, sbConfig *vc.SandboxCon
 		}
 
 		sbConfig.HypervisorConfig.Msize9p = uint32(msize9p)
+	}
+
+	return nil
+}
+
+func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if value, ok := ocispec.Annotations[vcAnnotations.DisableGuestSeccomp]; ok {
+		disableGuestSeccomp, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for disable_guest_seccomp: Please specify boolean value 'true|false'")
+		}
+
+		sbConfig.DisableGuestSeccomp = disableGuestSeccomp
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.SandboxCgroupOnly]; ok {
+		sandboxCgroupOnly, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for sandbox_cgroup_only: Please specify boolean value 'true|false'")
+		}
+
+		sbConfig.SandboxCgroupOnly = sandboxCgroupOnly
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.Experimental]; ok {
+		features := strings.Split(value, " ")
+		sbConfig.Experimental = []exp.Feature{}
+
+		for _, f := range features {
+			feature := exp.Get(f)
+			if feature == nil {
+				return fmt.Errorf("Unsupported experimental feature %s specified in annotation %v", f, vcAnnotations.Experimental)
+			}
+			sbConfig.Experimental = append(sbConfig.Experimental, *feature)
+		}
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.DisableNewNetNs]; ok {
+		disableNewNetNs, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for experimental: Please specify boolean value 'true|false'")
+		}
+		sbConfig.NetworkConfig.DisableNewNetNs = disableNewNetNs
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.InterNetworkModel]; ok {
+		runtimeConfig := RuntimeConfig{}
+		if err := runtimeConfig.InterNetworkModel.SetModel(value); err != nil {
+			return fmt.Errorf("Unknown network model specified in annotation %s", vcAnnotations.InterNetworkModel)
+		}
+
+		sbConfig.NetworkConfig.InterworkingModel = runtimeConfig.InterNetworkModel
 	}
 
 	return nil
