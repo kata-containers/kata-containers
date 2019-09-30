@@ -180,6 +180,7 @@ const (
 	BlockDeviceCacheNoflush = kataAnnotHypervisorPrefix + "block_device_cache_noflush"
 )
 
+// Agent related annotations
 const (
 	kataAnnotRuntimePrefix = kataConfAnnotationsPrefix + "runtime."
 
@@ -215,6 +216,15 @@ const (
 	// The first word is considered as the module name and the rest as its parameters.
 	//
 	KernelModules = kataAnnotAgentPrefix + "kernel_modules"
+
+	// AgentTrace is a sandbox annotation to enable tracing for the agent.
+	AgentTrace = kataAnnotAgentPrefix + "enable_tracing"
+
+	// AgentTraceMode is a sandbox annotation to specify the trace mode for the agent.
+	AgentTraceMode = kataAnnotAgentPrefix + "trace_mode"
+
+	// AgentTraceMode is a sandbox annotation to specify the trace type for the agent.
+	AgentTraceType = kataAnnotAgentPrefix + "trace_type"
 )
 
 const (
