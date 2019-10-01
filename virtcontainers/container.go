@@ -26,6 +26,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/runtime/virtcontainers/store"
@@ -909,7 +910,7 @@ func (c *Container) create() (err error) {
 	}
 	c.process = *process
 
-	if !c.sandbox.config.SandboxCgroupOnly {
+	if !c.sandbox.config.SandboxCgroupOnly || !rootless.IsRootless() {
 		if err = c.cgroupsCreate(); err != nil {
 			return
 		}
@@ -940,7 +941,8 @@ func (c *Container) delete() error {
 		return err
 	}
 
-	if !c.sandbox.config.SandboxCgroupOnly {
+	// If running rootless, there are no cgroups to remove
+	if !c.sandbox.config.SandboxCgroupOnly || !rootless.IsRootless() {
 		if err := c.cgroupsDelete(); err != nil {
 			return err
 		}
@@ -1103,7 +1105,7 @@ func (c *Container) stop(force bool) error {
 		return err
 	}
 
-	if err := bindUnmountContainerRootfs(c.ctx, kataHostSharedDir, c.sandbox.id, c.id); err != nil && !force {
+	if err := bindUnmountContainerRootfs(c.ctx, kataHostSharedDir(), c.sandbox.id, c.id); err != nil && !force {
 		return err
 	}
 
@@ -1350,7 +1352,7 @@ func (c *Container) plugDevice(devicePath string) error {
 	if c.checkBlockDeviceSupport() && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
 		b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
 			HostPath:      devicePath,
-			ContainerPath: filepath.Join(kataGuestSharedDir, c.id),
+			ContainerPath: filepath.Join(kataGuestSharedDir(), c.id),
 			DevType:       "b",
 			Major:         int64(unix.Major(stat.Rdev)),
 			Minor:         int64(unix.Minor(stat.Rdev)),

@@ -2,35 +2,10 @@ package nl
 
 import (
 	"unsafe"
-
-	"golang.org/x/sys/unix"
 )
 
 const (
 	DEFAULT_CHANGE = 0xFFFFFFFF
-	// doesn't exist in syscall
-	IFLA_VFINFO_LIST = unix.IFLA_IFALIAS + 1 + iota
-	IFLA_STATS64
-	IFLA_VF_PORTS
-	IFLA_PORT_SELF
-	IFLA_AF_SPEC
-	IFLA_GROUP
-	IFLA_NET_NS_FD
-	IFLA_EXT_MASK
-	IFLA_PROMISCUITY
-	IFLA_NUM_TX_QUEUES
-	IFLA_NUM_RX_QUEUES
-	IFLA_CARRIER
-	IFLA_PHYS_PORT_ID
-	IFLA_CARRIER_CHANGES
-	IFLA_PHYS_SWITCH_ID
-	IFLA_LINK_NETNSID
-	IFLA_PHYS_PORT_NAME
-	IFLA_PROTO_DOWN
-	IFLA_GSO_MAX_SEGS
-	IFLA_GSO_MAX_SIZE
-	IFLA_PAD
-	IFLA_XDP
 )
 
 const (
@@ -119,6 +94,10 @@ const (
 	IFLA_MACVLAN_UNSPEC = iota
 	IFLA_MACVLAN_MODE
 	IFLA_MACVLAN_FLAGS
+	IFLA_MACVLAN_MACADDR_MODE
+	IFLA_MACVLAN_MACADDR
+	IFLA_MACVLAN_MACADDR_DATA
+	IFLA_MACVLAN_MACADDR_COUNT
 	IFLA_MACVLAN_MAX = IFLA_MACVLAN_FLAGS
 )
 
@@ -128,6 +107,13 @@ const (
 	MACVLAN_MODE_BRIDGE   = 4
 	MACVLAN_MODE_PASSTHRU = 8
 	MACVLAN_MODE_SOURCE   = 16
+)
+
+const (
+	MACVLAN_MACADDR_ADD = iota
+	MACVLAN_MACADDR_DEL
+	MACVLAN_MACADDR_FLUSH
+	MACVLAN_MACADDR_SET
 )
 
 const (
@@ -231,9 +217,11 @@ const (
 	IFLA_VF_RSS_QUERY_EN /* RSS Redirection Table and Hash Key query
 	 * on/off switch
 	 */
-	IFLA_VF_STATS /* network device statistics */
-	IFLA_VF_TRUST /* Trust state of VF */
-	IFLA_VF_MAX   = IFLA_VF_TRUST
+	IFLA_VF_STATS        /* network device statistics */
+	IFLA_VF_TRUST        /* Trust state of VF */
+	IFLA_VF_IB_NODE_GUID /* VF Infiniband node GUID */
+	IFLA_VF_IB_PORT_GUID /* VF Infiniband port GUID */
+	IFLA_VF_MAX          = IFLA_VF_IB_PORT_GUID
 )
 
 const (
@@ -262,6 +250,7 @@ const (
 	SizeofVfLinkState  = 0x08
 	SizeofVfRssQueryEn = 0x08
 	SizeofVfTrust      = 0x08
+	SizeofVfGUID       = 0x10
 )
 
 // struct ifla_vf_mac {
@@ -444,6 +433,30 @@ func (msg *VfTrust) Serialize() []byte {
 	return (*(*[SizeofVfTrust]byte)(unsafe.Pointer(msg)))[:]
 }
 
+// struct ifla_vf_guid {
+//   __u32 vf;
+//   __u32 rsvd;
+//   __u64 guid;
+// };
+
+type VfGUID struct {
+	Vf   uint32
+	Rsvd uint32
+	GUID uint64
+}
+
+func (msg *VfGUID) Len() int {
+	return SizeofVfGUID
+}
+
+func DeserializeVfGUID(b []byte) *VfGUID {
+	return (*VfGUID)(unsafe.Pointer(&b[0:SizeofVfGUID][0]))
+}
+
+func (msg *VfGUID) Serialize() []byte {
+	return (*(*[SizeofVfGUID]byte)(unsafe.Pointer(msg)))[:]
+}
+
 const (
 	XDP_FLAGS_UPDATE_IF_NOEXIST = 1 << iota
 	XDP_FLAGS_SKB_MODE
@@ -559,4 +572,26 @@ const (
 const (
 	GTP_ROLE_GGSN = iota
 	GTP_ROLE_SGSN
+)
+
+const (
+	IFLA_XFRM_UNSPEC = iota
+	IFLA_XFRM_LINK
+	IFLA_XFRM_IF_ID
+
+	IFLA_XFRM_MAX = iota - 1
+)
+
+const (
+	IFLA_TUN_UNSPEC = iota
+	IFLA_TUN_OWNER
+	IFLA_TUN_GROUP
+	IFLA_TUN_TYPE
+	IFLA_TUN_PI
+	IFLA_TUN_VNET_HDR
+	IFLA_TUN_PERSIST
+	IFLA_TUN_MULTI_QUEUE
+	IFLA_TUN_NUM_QUEUES
+	IFLA_TUN_NUM_DISABLED_QUEUES
+	IFLA_TUN_MAX = IFLA_TUN_NUM_DISABLED_QUEUES
 )

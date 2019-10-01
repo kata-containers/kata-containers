@@ -1423,8 +1423,8 @@ func checkSandboxRemains() error {
 	if err = checkDirNotExist(sandboxDirState); err != nil {
 		return fmt.Errorf("%s still exists", sandboxDirState)
 	}
-	if err = checkDirNotExist(path.Join(kataHostSharedDir, testSandboxID)); err != nil {
-		return fmt.Errorf("%s still exists", path.Join(kataHostSharedDir, testSandboxID))
+	if err = checkDirNotExist(path.Join(kataHostSharedDir(), testSandboxID)); err != nil {
+		return fmt.Errorf("%s still exists", path.Join(kataHostSharedDir(), testSandboxID))
 	}
 	if _, err = globalSandboxList.lookupSandbox(testSandboxID); err == nil {
 		return fmt.Errorf("globalSandboxList for %s stil exists", testSandboxID)

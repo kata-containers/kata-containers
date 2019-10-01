@@ -41,6 +41,20 @@ type LinkAttrs struct {
 	NetNsID      int
 	NumTxQueues  int
 	NumRxQueues  int
+	GSOMaxSize   uint32
+	GSOMaxSegs   uint32
+	Vfs          []VfInfo // virtual functions available on link
+}
+
+// VfInfo represents configuration of virtual function
+type VfInfo struct {
+	ID        int
+	Mac       net.HardwareAddr
+	Vlan      int
+	Qos       int
+	TxRate    int
+	Spoofchk  bool
+	LinkState uint32
 }
 
 // LinkOperState represents the values of the IFLA_OPERSTATE link
@@ -223,6 +237,7 @@ type Bridge struct {
 	LinkAttrs
 	MulticastSnooping *bool
 	HelloTime         *uint32
+	VlanFiltering     *bool
 }
 
 func (bridge *Bridge) Attrs() *LinkAttrs {
@@ -236,7 +251,8 @@ func (bridge *Bridge) Type() string {
 // Vlan links have ParentIndex set in their Attrs()
 type Vlan struct {
 	LinkAttrs
-	VlanId int
+	VlanId       int
+	VlanProtocol VlanProtocol
 }
 
 func (vlan *Vlan) Attrs() *LinkAttrs {
@@ -262,6 +278,9 @@ const (
 type Macvlan struct {
 	LinkAttrs
 	Mode MacvlanMode
+
+	// MACAddrs is only populated for Macvlan SOURCE links
+	MACAddrs []net.HardwareAddr
 }
 
 func (macvlan *Macvlan) Attrs() *LinkAttrs {
@@ -287,10 +306,13 @@ type TuntapFlag uint16
 // Tuntap links created via /dev/tun/tap, but can be destroyed via netlink
 type Tuntap struct {
 	LinkAttrs
-	Mode   TuntapMode
-	Flags  TuntapFlag
-	Queues int
-	Fds    []*os.File
+	Mode       TuntapMode
+	Flags      TuntapFlag
+	NonPersist bool
+	Queues     int
+	Fds        []*os.File
+	Owner      uint32
+	Group      uint32
 }
 
 func (tuntap *Tuntap) Attrs() *LinkAttrs {
@@ -386,6 +408,43 @@ func (ipvlan *IPVlan) Type() string {
 	return "ipvlan"
 }
 
+// VlanProtocol type
+type VlanProtocol int
+
+func (p VlanProtocol) String() string {
+	s, ok := VlanProtocolToString[p]
+	if !ok {
+		return fmt.Sprintf("VlanProtocol(%d)", p)
+	}
+	return s
+}
+
+// StringToVlanProtocol returns vlan protocol, or unknown is the s is invalid.
+func StringToVlanProtocol(s string) VlanProtocol {
+	mode, ok := StringToVlanProtocolMap[s]
+	if !ok {
+		return VLAN_PROTOCOL_UNKNOWN
+	}
+	return mode
+}
+
+// VlanProtocol possible values
+const (
+	VLAN_PROTOCOL_UNKNOWN VlanProtocol = 0
+	VLAN_PROTOCOL_8021Q   VlanProtocol = 0x8100
+	VLAN_PROTOCOL_8021AD  VlanProtocol = 0x88A8
+)
+
+var VlanProtocolToString = map[VlanProtocol]string{
+	VLAN_PROTOCOL_8021Q:  "802.1q",
+	VLAN_PROTOCOL_8021AD: "802.1ad",
+}
+
+var StringToVlanProtocolMap = map[string]VlanProtocol{
+	"802.1q":  VLAN_PROTOCOL_8021Q,
+	"802.1ad": VLAN_PROTOCOL_8021AD,
+}
+
 // BondMode type
 type BondMode int
 
@@ -397,7 +456,7 @@ func (b BondMode) String() string {
 	return s
 }
 
-// StringToBondMode returns bond mode, or uknonw is the s is invalid.
+// StringToBondMode returns bond mode, or unknown is the s is invalid.
 func StringToBondMode(s string) BondMode {
 	mode, ok := StringToBondModeMap[s]
 	if !ok {
@@ -488,7 +547,7 @@ func (b BondXmitHashPolicy) String() string {
 	return s
 }
 
-// StringToBondXmitHashPolicy returns bond lacp arte, or uknonw is the s is invalid.
+// StringToBondXmitHashPolicy returns bond lacp arte, or unknown is the s is invalid.
 func StringToBondXmitHashPolicy(s string) BondXmitHashPolicy {
 	lacp, ok := StringToBondXmitHashPolicyMap[s]
 	if !ok {
@@ -533,7 +592,7 @@ func (b BondLacpRate) String() string {
 	return s
 }
 
-// StringToBondLacpRate returns bond lacp arte, or uknonw is the s is invalid.
+// StringToBondLacpRate returns bond lacp arte, or unknown is the s is invalid.
 func StringToBondLacpRate(s string) BondLacpRate {
 	lacp, ok := StringToBondLacpRateMap[s]
 	if !ok {
@@ -702,6 +761,9 @@ func (gretap *Gretap) Attrs() *LinkAttrs {
 }
 
 func (gretap *Gretap) Type() string {
+	if gretap.Local.To4() == nil {
+		return "ip6gretap"
+	}
 	return "gretap"
 }
 
@@ -763,7 +825,10 @@ func (vti *Vti) Attrs() *LinkAttrs {
 	return &vti.LinkAttrs
 }
 
-func (iptun *Vti) Type() string {
+func (vti *Vti) Type() string {
+	if vti.Local.To4() == nil {
+		return "vti6"
+	}
 	return "vti"
 }
 
@@ -790,6 +855,9 @@ func (gretun *Gretun) Attrs() *LinkAttrs {
 }
 
 func (gretun *Gretun) Type() string {
+	if gretun.Local.To4() == nil {
+		return "ip6gre"
+	}
 	return "gre"
 }
 
@@ -822,11 +890,26 @@ func (gtp *GTP) Type() string {
 	return "gtp"
 }
 
+// Virtual XFRM Interfaces
+//	Named "xfrmi" to prevent confusion with XFRM objects
+type Xfrmi struct {
+	LinkAttrs
+	Ifid uint32
+}
+
+func (xfrm *Xfrmi) Attrs() *LinkAttrs {
+	return &xfrm.LinkAttrs
+}
+
+func (xfrm *Xfrmi) Type() string {
+	return "xfrm"
+}
+
 // iproute2 supported devices;
 // vlan | veth | vcan | dummy | ifb | macvlan | macvtap |
 // bridge | bond | ipoib | ip6tnl | ipip | sit | vxlan |
-// gre | gretap | ip6gre | ip6gretap | vti | nlmon |
-// bond_slave | ipvlan
+// gre | gretap | ip6gre | ip6gretap | vti | vti6 | nlmon |
+// bond_slave | ipvlan | xfrm
 
 // LinkNotFoundError wraps the various not found errors when
 // getting/reading links. This is intended for better error

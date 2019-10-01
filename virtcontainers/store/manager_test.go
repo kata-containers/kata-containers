@@ -112,17 +112,24 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
+	ConfigStoragePathSaved := ConfigStoragePath
+	RunStoragePathSaved := RunStoragePath
 	// allow the tests to run without affecting the host system.
-	ConfigStoragePath = filepath.Join(testDir, StoragePathSuffix, "config")
-	RunStoragePath = filepath.Join(testDir, StoragePathSuffix, "run")
+	ConfigStoragePath = func() string { return filepath.Join(testDir, StoragePathSuffix, "config") }
+	RunStoragePath = func() string { return filepath.Join(testDir, StoragePathSuffix, "run") }
+
+	defer func() {
+		ConfigStoragePath = ConfigStoragePathSaved
+		RunStoragePath = RunStoragePathSaved
+	}()
 
 	// set now that ConfigStoragePath has been overridden.
-	sandboxDirConfig = filepath.Join(ConfigStoragePath, testSandboxID)
-	sandboxFileConfig = filepath.Join(ConfigStoragePath, testSandboxID, ConfigurationFile)
-	sandboxDirState = filepath.Join(RunStoragePath, testSandboxID)
-	sandboxDirLock = filepath.Join(RunStoragePath, testSandboxID)
-	sandboxFileState = filepath.Join(RunStoragePath, testSandboxID, StateFile)
-	sandboxFileLock = filepath.Join(RunStoragePath, testSandboxID, LockFile)
+	sandboxDirConfig = filepath.Join(ConfigStoragePath(), testSandboxID)
+	sandboxFileConfig = filepath.Join(ConfigStoragePath(), testSandboxID, ConfigurationFile)
+	sandboxDirState = filepath.Join(RunStoragePath(), testSandboxID)
+	sandboxDirLock = filepath.Join(RunStoragePath(), testSandboxID)
+	sandboxFileState = filepath.Join(RunStoragePath(), testSandboxID, StateFile)
+	sandboxFileLock = filepath.Join(RunStoragePath(), testSandboxID, LockFile)
 
 	ret := m.Run()
 

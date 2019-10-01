@@ -307,7 +307,7 @@ func ListSandbox(ctx context.Context) ([]SandboxStatus, error) {
 	span, ctx := trace(ctx, "ListSandbox")
 	defer span.Finish()
 
-	dir, err := os.Open(store.ConfigStoragePath)
+	dir, err := os.Open(store.ConfigStoragePath())
 	if err != nil {
 		if os.IsNotExist(err) {
 			// No sandbox directory is not an error

@@ -571,14 +571,14 @@
   revision = "ac249472b7de27a9e8990819566d9be95ab5b816"
 
 [[projects]]
-  digest = "1:51b28ecbdddc7e0260899b64d8cf13343bb8f66b4b00585b46c775509755095a"
+  digest = "1:20e951ad7c44ad80db56404d70d310dee73dafb3828108cf9157a21ce64be480"
   name = "github.com/vishvananda/netlink"
   packages = [
     ".",
     "nl",
   ]
   pruneopts = "NUT"
-  revision = "c2a3de3b38bd00f07290c3c5e12b4dbc04ec8666"
+  revision = "c8c507c80ea28385caac72b682dd066e44943913"
 
 [[projects]]
   digest = "1:7e1f976c4a3aebfcce0bffc7f0fa16903e9c826f6591e0797a91b5fffa1e2f70"
@@ -611,14 +611,14 @@
   revision = "a8b9294777976932365dabb6640cf1468d95c70f"
 
 [[projects]]
-  digest = "1:2fd19a8bed3f4ba8e3b26620f114efec5f39c7b02635a89a915b1cbaefeab5ff"
+  digest = "1:8a6926e1c2cd5be0a71125e5e4ac317d76ffc95478f440d151717fb2b23e42c5"
   name = "golang.org/x/sys"
   packages = [
     "unix",
     "windows",
   ]
   pruneopts = "NUT"
-  revision = "1d2aa6dbdea45adaaebb9905d0666e4537563829"
+  revision = "88d2dcc510266da9f7f8c7f34e1940716cab5f5c"
 
 [[projects]]
   digest = "1:e33513a825fcd765e97b5de639a2f7547542d1a8245df0cef18e1fd390b778a9"

@@ -338,7 +338,7 @@ func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 }
 
 func (q *qemu) qmpSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(store.RunVMStoragePath, id, qmpSocket)
+	return utils.BuildSocketPath(store.RunVMStoragePath(), id, qmpSocket)
 }
 
 func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
@@ -582,7 +582,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		VGA:         "none",
 		GlobalParam: "kvm-pit.lost_tick_policy=discard",
 		Bios:        firmwarePath,
-		PidFile:     filepath.Join(store.RunVMStoragePath, q.id, "pid"),
+		PidFile:     filepath.Join(store.RunVMStoragePath(), q.id, "pid"),
 	}
 
 	if ioThread != nil {
@@ -604,14 +604,14 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 }
 
 func (q *qemu) vhostFSSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(store.RunVMStoragePath, id, vhostFSSocket)
+	return utils.BuildSocketPath(store.RunVMStoragePath(), id, vhostFSSocket)
 }
 
 func (q *qemu) virtiofsdArgs(sockPath string) []string {
 	// The daemon will terminate when the vhost-user socket
 	// connection with QEMU closes.  Therefore we do not keep track
 	// of this child process after returning from this function.
-	sourcePath := filepath.Join(kataHostSharedDir, q.id)
+	sourcePath := filepath.Join(kataHostSharedDir(), q.id)
 	args := []string{
 		"-o", "vhost_user_socket=" + sockPath,
 		"-o", "source=" + sourcePath,
@@ -732,7 +732,7 @@ func (q *qemu) startSandbox(timeout int) error {
 		q.fds = []*os.File{}
 	}()
 
-	vmPath := filepath.Join(store.RunVMStoragePath, q.id)
+	vmPath := filepath.Join(store.RunVMStoragePath(), q.id)
 	err := os.MkdirAll(vmPath, store.DirMode)
 	if err != nil {
 		return err
@@ -908,7 +908,7 @@ func (q *qemu) stopSandbox() error {
 func (q *qemu) cleanupVM() error {
 
 	// cleanup vm path
-	dir := filepath.Join(store.RunVMStoragePath, q.id)
+	dir := filepath.Join(store.RunVMStoragePath(), q.id)
 
 	// If it's a symlink, remove both dir and the target.
 	// This can happen when vm template links a sandbox to a vm.
@@ -1623,7 +1623,7 @@ func (q *qemu) getSandboxConsole(id string) (string, error) {
 	span, _ := q.trace("getSandboxConsole")
 	defer span.Finish()
 
-	return utils.BuildSocketPath(store.RunVMStoragePath, id, consoleSocket)
+	return utils.BuildSocketPath(store.RunVMStoragePath(), id, consoleSocket)
 }
 
 func (q *qemu) saveSandbox() error {

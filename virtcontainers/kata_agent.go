@@ -23,6 +23,7 @@ import (
 	aTypes "github.com/kata-containers/agent/pkg/types"
 	kataclient "github.com/kata-containers/agent/protocols/client"
 	"github.com/kata-containers/agent/protocols/grpc"
+	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
@@ -56,10 +57,10 @@ var (
 	defaultRequestTimeout       = 60 * time.Second
 	errorMissingProxy           = errors.New("Missing proxy pointer")
 	errorMissingOCISpec         = errors.New("Missing OCI specification")
-	kataHostSharedDir           = "/run/kata-containers/shared/sandboxes/"
-	kataGuestSharedDir          = "/run/kata-containers/shared/containers/"
+	defaultKataHostSharedDir    = "/run/kata-containers/shared/sandboxes/"
+	defaultKataGuestSharedDir   = "/run/kata-containers/shared/containers/"
 	mountGuest9pTag             = "kataShared"
-	kataGuestSandboxDir         = "/run/kata-containers/sandbox/"
+	defaultKataGuestSandboxDir  = "/run/kata-containers/sandbox/"
 	type9pFs                    = "9p"
 	typeVirtioFS                = "virtio_fs"
 	typeVirtioFSNoCache         = "none"
@@ -71,11 +72,11 @@ var (
 	kataNvdimmDevType           = "nvdimm"
 	kataVirtioFSDevType         = "virtio-fs"
 	sharedDir9pOptions          = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
-	sharedDirVirtioFSOptions    = []string{"default_permissions,allow_other,rootmode=040000,user_id=0,group_id=0,tag=" + mountGuest9pTag, "nodev"}
+	sharedDirVirtioFSOptions    = []string{"default_permissions,allow_other,rootmode=040000,user_id=0,group_id=0,dax,tag=" + mountGuest9pTag, "nodev"}
 	sharedDirVirtioFSDaxOptions = "dax"
 	shmDir                      = "shm"
 	kataEphemeralDevType        = "ephemeral"
-	ephemeralPath               = filepath.Join(kataGuestSandboxDir, kataEphemeralDevType)
+	defaultEphemeralPath        = filepath.Join(defaultKataGuestSandboxDir, kataEphemeralDevType)
 	grpcMaxDataSize             = int64(1024 * 1024)
 	localDirOptions             = []string{"mode=0777"}
 	maxHostnameLen              = 64
@@ -123,6 +124,40 @@ const (
 	grpcStartTracingRequest      = "grpc.StartTracingRequest"
 	grpcStopTracingRequest       = "grpc.StopTracingRequest"
 )
+
+// The function is declared this way for mocking in unit tests
+var kataHostSharedDir = func() string {
+	if rootless.IsRootless() {
+		// filepath.Join removes trailing slashes, but it is necessary for mounting
+		return filepath.Join(rootless.GetRootlessDir(), defaultKataHostSharedDir) + "/"
+	}
+	return defaultKataHostSharedDir
+}
+
+// The function is declared this way for mocking in unit tests
+var kataGuestSharedDir = func() string {
+	if rootless.IsRootless() {
+		// filepath.Join removes trailing slashes, but it is necessary for mounting
+		return filepath.Join(rootless.GetRootlessDir(), defaultKataGuestSharedDir) + "/"
+	}
+	return defaultKataGuestSharedDir
+}
+
+// The function is declared this way for mocking in unit tests
+var kataGuestSandboxDir = func() string {
+	if rootless.IsRootless() {
+		// filepath.Join removes trailing slashes, but it is necessary for mounting
+		return filepath.Join(rootless.GetRootlessDir(), defaultKataGuestSandboxDir) + "/"
+	}
+	return defaultKataGuestSandboxDir
+}
+
+func ephemeralPath() string {
+	if rootless.IsRootless() {
+		return filepath.Join(kataGuestSandboxDir(), kataEphemeralDevType)
+	}
+	return defaultEphemeralPath
+}
 
 // KataAgentConfig is a structure storing information needed
 // to reach the Kata Containers agent.
@@ -182,11 +217,11 @@ func (k *kataAgent) Logger() *logrus.Entry {
 }
 
 func (k *kataAgent) getVMPath(id string) string {
-	return filepath.Join(store.RunVMStoragePath, id)
+	return filepath.Join(store.RunVMStoragePath(), id)
 }
 
 func (k *kataAgent) getSharePath(id string) string {
-	return filepath.Join(kataHostSharedDir, id)
+	return filepath.Join(kataHostSharedDir(), id)
 }
 
 // KataAgentSetDefaultTraceConfigOptions validates agent trace options and
@@ -838,7 +873,7 @@ func setupStorages(sandbox *Sandbox) []*grpc.Storage {
 			sharedVolume := &grpc.Storage{
 				Driver:     kataVirtioFSDevType,
 				Source:     "none",
-				MountPoint: kataGuestSharedDir,
+				MountPoint: kataGuestSharedDir(),
 				Fstype:     typeVirtioFS,
 				Options:    sharedDirVirtioFSOptions,
 			}
@@ -850,7 +885,7 @@ func setupStorages(sandbox *Sandbox) []*grpc.Storage {
 			sharedVolume := &grpc.Storage{
 				Driver:     kata9pDevType,
 				Source:     mountGuest9pTag,
-				MountPoint: kataGuestSharedDir,
+				MountPoint: kataGuestSharedDir(),
 				Fstype:     type9pFs,
 				Options:    sharedDir9pOptions,
 			}
@@ -860,7 +895,7 @@ func setupStorages(sandbox *Sandbox) []*grpc.Storage {
 	}
 
 	if sandbox.shmSize > 0 {
-		path := filepath.Join(kataGuestSandboxDir, shmDir)
+		path := filepath.Join(kataGuestSandboxDir(), shmDir)
 		shmSizeOption := fmt.Sprintf("size=%d", sandbox.shmSize)
 
 		shmStorage := &grpc.Storage{
@@ -970,7 +1005,7 @@ func (k *kataAgent) replaceOCIMountsForStorages(spec *specs.Spec, volumeStorages
 			// Create a temporary location to mount the Storage. Mounting to the correct location
 			// will be handled by the OCI mount structure.
 			filename := fmt.Sprintf("%s-%s", uuid.Generate().String(), filepath.Base(m.Destination))
-			path := filepath.Join(kataGuestSharedDir, filename)
+			path := filepath.Join(kataGuestSharedDir(), filename)
 
 			k.Logger().Debugf("Replacing OCI mount source (%s) with %s", m.Source, path)
 			ociMounts[index].Source = path
@@ -1052,7 +1087,7 @@ func (k *kataAgent) handleShm(grpcSpec *grpc.Spec, sandbox *Sandbox) {
 		if sandbox.shmSize > 0 {
 			grpcSpec.Mounts[idx].Type = "bind"
 			grpcSpec.Mounts[idx].Options = []string{"rbind"}
-			grpcSpec.Mounts[idx].Source = filepath.Join(kataGuestSandboxDir, shmDir)
+			grpcSpec.Mounts[idx].Source = filepath.Join(kataGuestSandboxDir(), shmDir)
 			k.Logger().WithField("shm-size", sandbox.shmSize).Info("Using sandbox shm")
 		} else {
 			sizeOption := fmt.Sprintf("size=%d", DefaultShmSize)
@@ -1121,7 +1156,7 @@ func (k *kataAgent) rollbackFailingContainerCreation(c *Container) {
 			k.Logger().WithError(err2).Error("rollback failed unmountHostMounts()")
 		}
 
-		if err2 := bindUnmountContainerRootfs(k.ctx, kataHostSharedDir, c.sandbox.id, c.id); err2 != nil {
+		if err2 := bindUnmountContainerRootfs(k.ctx, kataHostSharedDir(), c.sandbox.id, c.id); err2 != nil {
 			k.Logger().WithError(err2).Error("rollback failed bindUnmountContainerRootfs()")
 		}
 	}
@@ -1189,7 +1224,7 @@ func (k *kataAgent) buildContainerRootfs(sandbox *Sandbox, c *Container, rootPat
 	// (kataGuestSharedDir) is already mounted in the
 	// guest. We only need to mount the rootfs from
 	// the host and it will show up in the guest.
-	if err := bindMountContainerRootfs(k.ctx, kataHostSharedDir, sandbox.id, c.id, c.rootFs.Target, false); err != nil {
+	if err := bindMountContainerRootfs(k.ctx, kataHostSharedDir(), sandbox.id, c.id, c.rootFs.Target, false); err != nil {
 		return nil, err
 	}
 
@@ -1215,7 +1250,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	var rootfs *grpc.Storage
 
 	// This is the guest absolute root path for that container.
-	rootPathParent := filepath.Join(kataGuestSharedDir, c.id)
+	rootPathParent := filepath.Join(kataGuestSharedDir(), c.id)
 	rootPath := filepath.Join(rootPathParent, c.rootfsSuffix)
 
 	// In case the container creation fails, the following defer statement
@@ -1242,7 +1277,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 	}
 
 	// Handle container mounts
-	newMounts, ignoredMounts, err := c.mountSharedDirMounts(kataHostSharedDir, kataGuestSharedDir)
+	newMounts, ignoredMounts, err := c.mountSharedDirMounts(kataHostSharedDir(), kataGuestSharedDir())
 	if err != nil {
 		return nil, err
 	}
@@ -1345,7 +1380,7 @@ func (k *kataAgent) handleEphemeralStorage(mounts []specs.Mount) []*grpc.Storage
 	for idx, mnt := range mounts {
 		if mnt.Type == KataEphemeralDevType {
 			// Set the mount source path to a path that resides inside the VM
-			mounts[idx].Source = filepath.Join(ephemeralPath, filepath.Base(mnt.Source))
+			mounts[idx].Source = filepath.Join(ephemeralPath(), filepath.Base(mnt.Source))
 			// Set the mount type to "bind"
 			mounts[idx].Type = "bind"
 
@@ -1374,7 +1409,7 @@ func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string, r
 			// We rely on the fact that the first container in the VM has the same ID as the sandbox ID.
 			// In Kubernetes, this is usually the pause container and we depend on it existing for
 			// local directories to work.
-			mounts[idx].Source = filepath.Join(kataGuestSharedDir, sandboxID, rootfsSuffix, KataLocalDevType, filepath.Base(mnt.Source))
+			mounts[idx].Source = filepath.Join(kataGuestSharedDir(), sandboxID, rootfsSuffix, KataLocalDevType, filepath.Base(mnt.Source))
 
 			// Create a storage struct so that the kata agent is able to create the
 			// directory inside the VM.
