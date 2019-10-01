@@ -1,0 +1,26 @@
+From 2317a63d2acab16be4655ec87542a2bf3d75551b Mon Sep 17 00:00:00 2001
+From: "Dr. David Alan Gilbert" <dgilbert@redhat.com>
+Date: Thu, 26 Sep 2019 18:41:34 +0100
+Subject: [PATCH] virtiofsd: Add time to seccomp
+
+Needed by static builds
+
+Signed-off-by: Dr. David Alan Gilbert <dgilbert@redhat.com>
+---
+ contrib/virtiofsd/seccomp.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/contrib/virtiofsd/seccomp.c b/contrib/virtiofsd/seccomp.c
+index 3b92c6ee13..374bab2bef 100644
+--- a/contrib/virtiofsd/seccomp.c
++++ b/contrib/virtiofsd/seccomp.c
+@@ -75,6 +75,7 @@ static const int syscall_whitelist[] = {
+ 	SCMP_SYS(setresuid),
+ 	SCMP_SYS(set_robust_list),
+ 	SCMP_SYS(symlinkat),
++	SCMP_SYS(time), /* Rarely needed, except on static builds */
+ 	SCMP_SYS(tgkill),
+ 	SCMP_SYS(unlinkat),
+ 	SCMP_SYS(utimensat),
+-- 
+2.21.0
