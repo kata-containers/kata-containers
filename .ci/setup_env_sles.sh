@@ -16,6 +16,12 @@ perl_repo="https://download.opensuse.org/repositories/devel:languages:perl/SLE_$
 sudo -E zypper addrepo --no-gpgcheck ${perl_repo}
 sudo -E zypper refresh
 
+echo "Add repo for myspell"
+leap_repo="http://download.opensuse.org/update/leap/15.0/oss/"
+leap_repo_name="leap-oss"
+sudo -E zypper addrepo --no-gpgcheck ${leap_repo} ${leap_repo_name}
+sudo -E zypper refresh  ${leap_repo_name}
+
 echo "Install perl-IPC-Run"
 sudo -E zypper -n install perl-IPC-Run
 
