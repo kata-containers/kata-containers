@@ -14,7 +14,7 @@ import (
 )
 
 func TestStoreVCRoots(t *testing.T) {
-	rootURL := filesystemScheme + "://" + ConfigStoragePath
+	rootURL := filesystemScheme + "://" + ConfigStoragePath()
 	sandboxID := "sandbox"
 	containerID := "container"
 	sConfigRoot := rootURL + "/" + sandboxID

@@ -53,6 +53,9 @@ const (
 	// TapEndpointType is tap network interface.
 	TapEndpointType EndpointType = "tap"
 
+	// TuntapEndpointType is a tap network interface.
+	TuntapEndpointType EndpointType = "tuntap"
+
 	// IPVlanEndpointType is ipvlan network interface.
 	IPVlanEndpointType EndpointType = "ipvlan"
 )
@@ -78,6 +81,9 @@ func (endpointType *EndpointType) Set(value string) error {
 	case "tap":
 		*endpointType = TapEndpointType
 		return nil
+	case "tuntap":
+		*endpointType = TuntapEndpointType
+		return nil
 	case "ipvlan":
 		*endpointType = IPVlanEndpointType
 		return nil
@@ -101,6 +107,8 @@ func (endpointType *EndpointType) String() string {
 		return string(MacvtapEndpointType)
 	case TapEndpointType:
 		return string(TapEndpointType)
+	case TuntapEndpointType:
+		return string(TuntapEndpointType)
 	case IPVlanEndpointType:
 		return string(IPVlanEndpointType)
 	default:
@@ -181,5 +189,35 @@ func loadNetIfPair(pair *persistapi.NetworkInterfacePair) *NetworkInterfacePair 
 		TapInterface:         *tapif,
 		VirtIface:            virtif,
 		NetInterworkingModel: NetInterworkingModel(pair.NetInterworkingModel),
+	}
+}
+
+func saveTuntapIf(tuntapif *TuntapInterface) *persistapi.TuntapInterface {
+	if tuntapif == nil {
+		return nil
+	}
+
+	return &persistapi.TuntapInterface{
+		Name: tuntapif.Name,
+		TAPIface: persistapi.NetworkInterface{
+			Name:     tuntapif.TAPIface.Name,
+			HardAddr: tuntapif.TAPIface.HardAddr,
+			Addrs:    tuntapif.TAPIface.Addrs,
+		},
+	}
+}
+
+func loadTuntapIf(tuntapif *persistapi.TuntapInterface) *TuntapInterface {
+	if tuntapif == nil {
+		return nil
+	}
+
+	return &TuntapInterface{
+		Name: tuntapif.Name,
+		TAPIface: NetworkInterface{
+			Name:     tuntapif.TAPIface.Name,
+			HardAddr: tuntapif.TAPIface.HardAddr,
+			Addrs:    tuntapif.TAPIface.Addrs,
+		},
 	}
 }

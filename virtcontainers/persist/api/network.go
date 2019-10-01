@@ -26,6 +26,12 @@ type TapInterface struct {
 	// remove VMFds and VhostFds
 }
 
+// TuntapInterface defines a tap interface
+type TuntapInterface struct {
+	Name     string
+	TAPIface NetworkInterface
+}
+
 // NetworkInterfacePair defines a pair between VM and virtual network interfaces.
 type NetworkInterfacePair struct {
 	TapInterface
@@ -47,6 +53,10 @@ type MacvtapEndpoint struct {
 
 type TapEndpoint struct {
 	TapInterface TapInterface
+}
+
+type TuntapEndpoint struct {
+	TuntapInterface TuntapInterface
 }
 
 type BridgedMacvlanEndpoint struct {
@@ -80,6 +90,7 @@ type NetworkEndpoint struct {
 	Macvtap        *MacvtapEndpoint        `json:",omitempty"`
 	Tap            *TapEndpoint            `json:",omitempty"`
 	IPVlan         *IPVlanEndpoint         `json:",omitempty"`
+	Tuntap         *TuntapEndpoint         `json:",omitempty"`
 }
 
 // NetworkInfo contains network information of sandbox

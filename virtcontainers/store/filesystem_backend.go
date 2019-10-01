@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
@@ -65,15 +66,36 @@ const VMPathSuffix = "vm"
 
 // ConfigStoragePath is the sandbox configuration directory.
 // It will contain one config.json file for each created sandbox.
-var ConfigStoragePath = filepath.Join("/var/lib", StoragePathSuffix, SandboxPathSuffix)
+// The function is declared this way for mocking in unit tests
+var ConfigStoragePath = func() string {
+	path := filepath.Join("/var/lib", StoragePathSuffix, SandboxPathSuffix)
+	if rootless.IsRootless() {
+		return filepath.Join(rootless.GetRootlessDir(), path)
+	}
+	return path
+}
 
 // RunStoragePath is the sandbox runtime directory.
 // It will contain one state.json and one lock file for each created sandbox.
-var RunStoragePath = filepath.Join("/run", StoragePathSuffix, SandboxPathSuffix)
+// The function is declared this way for mocking in unit tests
+var RunStoragePath = func() string {
+	path := filepath.Join("/run", StoragePathSuffix, SandboxPathSuffix)
+	if rootless.IsRootless() {
+		return filepath.Join(rootless.GetRootlessDir(), path)
+	}
+	return path
+}
 
 // RunVMStoragePath is the vm directory.
 // It will contain all guest vm sockets and shared mountpoints.
-var RunVMStoragePath = filepath.Join("/run", StoragePathSuffix, VMPathSuffix)
+// The function is declared this way for mocking in unit tests
+var RunVMStoragePath = func() string {
+	path := filepath.Join("/run", StoragePathSuffix, VMPathSuffix)
+	if rootless.IsRootless() {
+		return filepath.Join(rootless.GetRootlessDir(), path)
+	}
+	return path
+}
 
 func itemToFile(item Item) (string, error) {
 	switch item {

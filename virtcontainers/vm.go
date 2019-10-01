@@ -286,7 +286,7 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 }
 
 func buildVMSharePath(id string) string {
-	return filepath.Join(store.RunVMStoragePath, id, "shared")
+	return filepath.Join(store.RunVMStoragePath(), id, "shared")
 }
 
 func (v *VM) logger() logrus.FieldLogger {
