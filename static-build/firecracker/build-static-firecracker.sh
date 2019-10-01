@@ -33,7 +33,7 @@ info "Build ${firecracker_repo} version: ${firecracker_version}"
 git clone ${firecracker_repo}
 cd firecracker
 git checkout ${firecracker_version}
-./tools/devtool --unattended build --release -- --features vsock
+./tools/devtool --unattended build --release
 
-ln -s ./build/release-musl/firecracker ./firecracker-static
-ln -s ./build/release-musl/jailer ./jailer-static
+ln -s ./build/cargo_target/x86_64-unknown-linux-musl/release/firecracker ./firecracker-static
+ln -s ./build/cargo_target/x86_64-unknown-linux-musl/release/jailer ./jailer-static
