@@ -304,7 +304,7 @@ func (h hypervisor) defaultMaxVCPUs() uint32 {
 }
 
 func (h hypervisor) defaultMemSz() uint32 {
-	if h.MemorySize < 8 {
+	if h.MemorySize < vc.MinHypervisorMemory {
 		return defaultMemSize // MiB
 	}
 
