@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-From golang:@GO_VERSION@-alpine
+From docker.io/golang:@GO_VERSION@-alpine
 
 RUN apk update && apk add \
     git \

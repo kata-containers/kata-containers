@@ -88,6 +88,8 @@ Extra environment variables:
 	AGENT_INIT: Use kata agent as init process
 	FS_TYPE:    Filesystem type to use. Only xfs and ext4 are supported.
 	USE_DOCKER: If set will build image in a Docker Container (requries docker)
+		    DEFAULT: not set
+	USE_PODMAN: If set and USE_DOCKER not set, will build image in a Podman Container (requries podman)
 	            DEFAULT: not set
 
 
@@ -117,8 +119,8 @@ EOT
 }
 
 
-# build the image using docker
-build_with_docker() {
+# build the image using container engine
+build_with_container() {
 	local rootfs="$1"
 	local image="$2"
 	local fs_type="$3"
@@ -126,16 +128,16 @@ build_with_docker() {
 	local root_free_space="$5"
 	local agent_bin="$6"
 	local agent_init="$7"
-	local docker_image_name="image-builder-osbuilder"
+	local container_image_name="image-builder-osbuilder"
 	local shared_files=""
 
 	image_dir=$(readlink -f "$(dirname "${image}")")
 	image_name=$(basename "${image}")
 
-	docker build  \
+	"${container_engine}" build  \
 		   --build-arg http_proxy="${http_proxy}" \
 		   --build-arg https_proxy="${https_proxy}" \
-		   -t "${docker_image_name}" "${script_dir}"
+		   -t "${container_image_name}" "${script_dir}"
 
 	readonly mke2fs_conf="/etc/mke2fs.conf"
 	if [ -f "${mke2fs_conf}" ]; then
@@ -145,7 +147,7 @@ build_with_docker() {
 	#Make sure we use a compatible runtime to build rootfs
 	# In case Clear Containers Runtime is installed we dont want to hit issue:
 	#https://github.com/clearcontainers/runtime/issues/828
-	docker run  \
+	"${container_engine}" run  \
 		   --rm \
 		   --runtime runc  \
 		   --privileged \
@@ -161,7 +163,7 @@ build_with_docker() {
 		   -v "${rootfs}":"/rootfs" \
 		   -v "${image_dir}":"/image" \
 		   ${shared_files} \
-		   ${docker_image_name} \
+		   ${container_image_name} \
 		   bash "/osbuilder/${script_name}" -o "/image/${image_name}" /rootfs
 }
 
@@ -466,9 +468,15 @@ main() {
 		exit 0
 	fi
 
-	if [ -n "${USE_DOCKER}" ] ; then
-		build_with_docker "${rootfs}" "${image}" "${fs_type}" "${block_size}" \
-						  "${root_free_space}" "${agent_bin}" "${agent_init}"
+	if [ -n "${USE_DOCKER}" ]; then
+		container_engine="docker"
+	elif [ -n "${USE_PODMAN}" ]; then
+		container_engine="podman"
+	fi
+
+	if [ -n "$container_engine" ]; then
+		build_with_container "${rootfs}" "${image}" "${fs_type}" "${block_size}" \
+						  "${root_free_space}" "${agent_bin}" "${agent_init}" "${container_engine}"
 		exit $?
 	fi
 

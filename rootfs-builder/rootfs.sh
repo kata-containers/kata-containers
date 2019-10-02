@@ -126,6 +126,10 @@ USE_DOCKER          If set, build the rootfs inside a container (requires
                     Docker).
                     Default value: <not set>
 
+USE_PODMAN          If set and USE_DOCKER not set, then build the rootfs inside
+                    a podman container (requires podman).
+                    Default value: <not set>
+
 DOCKER_RUNTIME      Docker runtime to use when USE_DOCKER is set.
                     Default value: runc
 
@@ -177,7 +181,7 @@ docker_extra_args()
 		args+=" --cap-add SYS_ADMIN"
 		# When AppArmor is enabled, mounting inside a container is blocked with docker-default profile.
 		# See https://github.com/moby/moby/issues/16429
-		args+=" --security-opt apparmor:unconfined"
+		args+=" --security-opt apparmor=unconfined"
 		;;
 	*)
 		;;
@@ -308,17 +312,23 @@ build_rootfs_distro()
 
 	echo "Required Go version: $GO_VERSION"
 
-	if [ -z "${USE_DOCKER}" ] ; then
+	if [ -z "${USE_DOCKER}" ] && [ -z "${USE_PODMAN}" ]; then
 		#Generate an error if the local Go version is too old
 		foundVersion=$(go version | sed -E "s/^.+([0-9]+\.[0-9]+\.[0-9]+).*$/\1/g")
 
 		compare_versions "$GO_VERSION" $foundVersion || \
 			die "Your Go version $foundVersion is older than the minimum expected Go version $GO_VERSION"
 	else
+		if [ -n "${USE_DOCKER}" ]; then
+			container_engine="docker"
+		elif [ -n "${USE_PODMAN}" ]; then
+			container_engine="podman"
+		fi
+
 		image_name="${distro}-rootfs-osbuilder"
 
 		generate_dockerfile "${distro_config_dir}"
-		docker build  \
+		"$container_engine" build  \
 			--build-arg http_proxy="${http_proxy}" \
 			--build-arg https_proxy="${https_proxy}" \
 			-t "${image_name}" "${distro_config_dir}"
@@ -353,7 +363,7 @@ build_rootfs_distro()
 		#Make sure we use a compatible runtime to build rootfs
 		# In case Clear Containers Runtime is installed we dont want to hit issue:
 		#https://github.com/clearcontainers/runtime/issues/828
-		docker run  \
+		"$container_engine" run  \
 			--env https_proxy="${https_proxy}" \
 			--env http_proxy="${http_proxy}" \
 			--env AGENT_VERSION="${AGENT_VERSION}" \
