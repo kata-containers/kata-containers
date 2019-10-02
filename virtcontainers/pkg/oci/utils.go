@@ -446,8 +446,12 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) 
 func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
 	if value, ok := ocispec.Annotations[vcAnnotations.DefaultMemory]; ok {
 		memorySz, err := strconv.ParseUint(value, 10, 32)
-		if err != nil || memorySz < 8 {
+		if err != nil {
 			return fmt.Errorf("Error encountered parsing annotation for default_memory: %v, please specify positive numeric value greater than 8", err)
+		}
+
+		if memorySz < vc.MinHypervisorMemory {
+			return fmt.Errorf("Memory specified in annotation %s is less than minimum required %d, please specify a larger value", vcAnnotations.DefaultMemory, vc.MinHypervisorMemory)
 		}
 
 		sbConfig.HypervisorConfig.MemorySize = uint32(memorySz)
