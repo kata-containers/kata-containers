@@ -33,6 +33,15 @@ cache_qemu_artifacts() {
 	create_cache_asset "$qemu_tar" "${current_qemu_version}"
 }
 
+# This builds qemu experimental
+cache_qemu_experimental_artifacts() {
+	pushd "${tests_repo_dir}"
+	local current_qemu_experimental_tag=$(get_version "assets.hypervisor.qemu-experimental.tag")
+	popd
+	local qemu_experimental_tar="kata-qemu-static.tar.gz"
+	create_cache_asset "$qemu_experimental_tar" "${current_qemu_experimental_tag}"
+}
+
 # This builds the kernel by specifying the kernel version from
 # /usr/share/kata-containers and the kernel version
 cache_kernel_artifacts() {
@@ -146,6 +155,7 @@ Usage: $script_name [options]
 Description: This script builds the cache of several Kata components.
 Options:
 
+-a      Run qemu experimental cache
 -h      Shows help
 -i      Run image cache
 -k      Run kernel cache
@@ -158,12 +168,15 @@ EOT
 
 main() {
 	local OPTIND
-	while getopts "hiknqr" opt; do
+	while getopts "ahiknqr" opt; do
 		case "$opt" in
-               h)
-                        usage
-                        exit 0;
-                        ;;
+		a)
+			build_qemu_experimental="true"
+			;;
+		h)
+			usage
+			exit 0;
+			;;
 		i)
 			build_image="true"
 			;;
@@ -185,6 +198,7 @@ main() {
 
 	[[ -z "$build_kernel" ]] && \
 	[[ -z "$build_qemu" ]] && \
+	[[ -z "$build_qemu_experimental" ]] && \
  	[[ -z "$build_nemu" ]] && \
 	[[ -z "$build_image" ]] && \
 	[[ -z "$build_image_initrd" ]] && \
@@ -197,6 +211,8 @@ main() {
 	[ "$build_kernel" == "true" ] && cache_kernel_artifacts
 
 	[ "$build_qemu" == "true" ] && cache_qemu_artifacts
+
+	[ "$build_qemu_experimental" == "true" ] && cache_qemu_experimental_artifacts
 
 	[ "$build_nemu" == "true" ] && cache_nemu_artifacts
 
