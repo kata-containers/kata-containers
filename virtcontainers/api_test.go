@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/store"
@@ -69,7 +70,7 @@ func newBasicTestCmd() types.Cmd {
 
 func newTestSandboxConfigNoop() SandboxConfig {
 	bundlePath := filepath.Join(testDir, testBundle)
-	containerAnnotations["com.github.containers.virtcontainers.pkg.oci.bundle_path"] = bundlePath
+	containerAnnotations[annotations.BundlePathKey] = bundlePath
 	// containerAnnotations["com.github.containers.virtcontainers.pkg.oci.container_type"] = "pod_sandbox"
 
 	emptySpec := newEmptySpec()
