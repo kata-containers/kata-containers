@@ -69,6 +69,10 @@ const (
 	// CAP_NET_BIND_SERVICE capability may bind to these port numbers.
 	vSockPort = 1024
 
+	// Port where the agent will send the logs. Logs are sent through the vsock in cases
+	// where the hypervisor has no console.sock, i.e firecracker
+	vSockLogsPort = 1025
+
 	// MinHypervisorMemory is the minimum memory required for a VM.
 	MinHypervisorMemory = 256
 )
