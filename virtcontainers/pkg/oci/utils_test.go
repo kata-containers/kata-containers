@@ -645,7 +645,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestAddAnnotations(t *testing.T) {
+func TestAddAssetAnnotations(t *testing.T) {
 	assert := assert.New(t)
 
 	expectedAnnotations := map[string]string{
@@ -659,7 +659,6 @@ func TestAddAnnotations(t *testing.T) {
 
 	config := vc.SandboxConfig{
 		Annotations: make(map[string]string),
-		AgentConfig: vc.KataAgentConfig{},
 	}
 
 	ocispec := specs.Spec{
@@ -668,6 +667,19 @@ func TestAddAnnotations(t *testing.T) {
 
 	addAnnotations(ocispec, &config)
 	assert.Exactly(expectedAnnotations, config.Annotations)
+}
+
+func TestAddAgentAnnotations(t *testing.T) {
+	assert := assert.New(t)
+
+	config := vc.SandboxConfig{
+		Annotations: make(map[string]string),
+		AgentConfig: vc.KataAgentConfig{},
+	}
+
+	ocispec := specs.Spec{
+		Annotations: make(map[string]string),
+	}
 
 	expectedAgentConfig := vc.KataAgentConfig{
 		KernelModules: []string{
@@ -679,6 +691,18 @@ func TestAddAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.KernelModules] = strings.Join(expectedAgentConfig.KernelModules, KernelModulesSeparator)
 	addAnnotations(ocispec, &config)
 	assert.Exactly(expectedAgentConfig, config.AgentConfig)
+}
+
+func TestAddHypervisorAnnotations(t *testing.T) {
+	assert := assert.New(t)
+
+	config := vc.SandboxConfig{
+		Annotations: make(map[string]string),
+	}
+
+	ocispec := specs.Spec{
+		Annotations: make(map[string]string),
+	}
 
 	expectedHyperConfig := vc.HypervisorConfig{
 		KernelParams: []vc.Param{
@@ -694,29 +718,102 @@ func TestAddAnnotations(t *testing.T) {
 	}
 
 	ocispec.Annotations[vcAnnotations.KernelParams] = "vsyscall=emulate iommu=on"
-	addAnnotations(ocispec, &config)
+	addHypervisorConfigOverrides(ocispec, &config)
 	assert.Exactly(expectedHyperConfig, config.HypervisorConfig)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "1"
-	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "2"
-	ocispec.Annotations[vcAnnotations.DefaultMemory] = "4096"
+	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "1"
+	ocispec.Annotations[vcAnnotations.DefaultMemory] = "1024"
+	ocispec.Annotations[vcAnnotations.MemSlots] = "20"
+	ocispec.Annotations[vcAnnotations.MemOffset] = "512"
+	ocispec.Annotations[vcAnnotations.MemPrealloc] = "true"
+	ocispec.Annotations[vcAnnotations.EnableSwap] = "true"
+	ocispec.Annotations[vcAnnotations.FileBackedMemRootDir] = "/dev/shm"
+	ocispec.Annotations[vcAnnotations.HugePages] = "true"
+	ocispec.Annotations[vcAnnotations.BlockDeviceDriver] = "virtio-scsi"
+	ocispec.Annotations[vcAnnotations.DisableBlockDeviceUse] = "true"
+	ocispec.Annotations[vcAnnotations.EnableIOThreads] = "true"
+	ocispec.Annotations[vcAnnotations.BlockDeviceCacheSet] = "true"
+	ocispec.Annotations[vcAnnotations.BlockDeviceCacheDirect] = "true"
+	ocispec.Annotations[vcAnnotations.BlockDeviceCacheNoflush] = "true"
+	ocispec.Annotations[vcAnnotations.SharedFS] = "virtio-fs"
+	ocispec.Annotations[vcAnnotations.VirtioFSDaemon] = "/home/virtiofsd"
+	ocispec.Annotations[vcAnnotations.VirtioFSCache] = "/home/cache"
+	ocispec.Annotations[vcAnnotations.Msize9p] = "512"
+	ocispec.Annotations[vcAnnotations.MachineType] = "q35"
+	ocispec.Annotations[vcAnnotations.MachineAccelerators] = "nofw"
+	ocispec.Annotations[vcAnnotations.DisableVhostNet] = "true"
+	ocispec.Annotations[vcAnnotations.GuestHookPath] = "/usr/bin/"
+	ocispec.Annotations[vcAnnotations.UseVSock] = "true"
+	ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus] = "true"
+	ocispec.Annotations[vcAnnotations.EntropySource] = "/dev/urandom"
 
 	addAnnotations(ocispec, &config)
 	assert.Equal(config.HypervisorConfig.NumVCPUs, uint32(1))
-	assert.Equal(config.HypervisorConfig.DefaultMaxVCPUs, uint32(2))
-	assert.Equal(config.HypervisorConfig.MemorySize, uint32(4096))
+	assert.Equal(config.HypervisorConfig.DefaultMaxVCPUs, uint32(1))
+	assert.Equal(config.HypervisorConfig.MemorySize, uint32(1024))
+	assert.Equal(config.HypervisorConfig.MemSlots, uint32(20))
+	assert.Equal(config.HypervisorConfig.MemOffset, uint32(512))
+	assert.Equal(config.HypervisorConfig.MemPrealloc, true)
+	assert.Equal(config.HypervisorConfig.Mlock, false)
+	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
+	assert.Equal(config.HypervisorConfig.HugePages, true)
+	assert.Equal(config.HypervisorConfig.BlockDeviceDriver, "virtio-scsi")
+	assert.Equal(config.HypervisorConfig.DisableBlockDeviceUse, true)
+	assert.Equal(config.HypervisorConfig.EnableIOThreads, true)
+	assert.Equal(config.HypervisorConfig.BlockDeviceCacheSet, true)
+	assert.Equal(config.HypervisorConfig.BlockDeviceCacheDirect, true)
+	assert.Equal(config.HypervisorConfig.BlockDeviceCacheNoflush, true)
+	assert.Equal(config.HypervisorConfig.SharedFS, "virtio-fs")
+	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "/home/virtiofsd")
+	assert.Equal(config.HypervisorConfig.VirtioFSCache, "/home/cache")
+	assert.Equal(config.HypervisorConfig.Msize9p, uint32(512))
+	assert.Equal(config.HypervisorConfig.HypervisorMachineType, "q35")
+	assert.Equal(config.HypervisorConfig.MachineAccelerators, "nofw")
+	assert.Equal(config.HypervisorConfig.DisableVhostNet, true)
+	assert.Equal(config.HypervisorConfig.GuestHookPath, "/usr/bin/")
+	assert.Equal(config.HypervisorConfig.UseVSock, true)
+	assert.Equal(config.HypervisorConfig.HotplugVFIOOnRootBus, true)
+	assert.Equal(config.HypervisorConfig.EntropySource, "/dev/urandom")
 
 	// In case an absurd large value is provided, the config value if not over-ridden
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "655536"
-	addAnnotations(ocispec, &config)
-	assert.Equal(config.HypervisorConfig.NumVCPUs, uint32(1))
+	err := addAnnotations(ocispec, &config)
+	assert.Error(err)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "-1"
-	err := addAnnotations(ocispec, &config)
-	assert.NoError(err)
+	err = addAnnotations(ocispec, &config)
+	assert.Error(err)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "1"
-	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "-2"
+	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "-1"
 	err = addAnnotations(ocispec, &config)
-	assert.NoError(err)
+	assert.Error(err)
+
+	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "1"
+	ocispec.Annotations[vcAnnotations.DefaultMemory] = fmt.Sprintf("%d", vc.MinHypervisorMemory+1)
+	assert.Error(err)
+}
+
+func TestAddRuntimeAnnotations(t *testing.T) {
+	assert := assert.New(t)
+
+	config := vc.SandboxConfig{
+		Annotations: make(map[string]string),
+	}
+
+	ocispec := specs.Spec{
+		Annotations: make(map[string]string),
+	}
+
+	ocispec.Annotations[vcAnnotations.DisableGuestSeccomp] = "true"
+	ocispec.Annotations[vcAnnotations.SandboxCgroupOnly] = "true"
+	ocispec.Annotations[vcAnnotations.DisableNewNetNs] = "true"
+	ocispec.Annotations[vcAnnotations.InterNetworkModel] = "macvtap"
+
+	addAnnotations(ocispec, &config)
+	assert.Equal(config.DisableGuestSeccomp, true)
+	assert.Equal(config.SandboxCgroupOnly, true)
+	assert.Equal(config.NetworkConfig.DisableNewNetNs, true)
+	assert.Equal(config.NetworkConfig.InterworkingModel, vc.NetXConnectMacVtapModel)
 }
