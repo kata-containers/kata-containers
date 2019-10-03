@@ -21,6 +21,7 @@ import (
 
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
+	kataclient "github.com/kata-containers/agent/protocols/client"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client"
 	models "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/models"
@@ -83,6 +84,9 @@ var fcKernelParams = append(commonVirtioblkKernelRootParams, []Param{
 	// Firecracker doesn't support ACPI
 	// Fix kernel error "ACPI BIOS Error (bug)"
 	{"acpi", "off"},
+
+	// Tell agent where to send the logs
+	{"agent.log_vport", fmt.Sprintf("%d", vSockLogsPort)},
 }...)
 
 func (s vmmState) String() string {
@@ -977,11 +981,8 @@ func (fc *firecracker) hotplugRemoveDevice(devInfo interface{}, devType deviceTy
 
 // getSandboxConsole builds the path of the console where we can read
 // logs coming from the sandbox.
-//
-// we can get logs from firecracker itself; WIP on enabling.  Who needs
-// logs when you're just hacking?
 func (fc *firecracker) getSandboxConsole(id string) (string, error) {
-	return "", nil
+	return fmt.Sprintf("%s://%s:%d", kataclient.HybridVSockScheme, filepath.Join(fc.jailerRoot, defaultHybridVSocketName), vSockLogsPort), nil
 }
 
 func (fc *firecracker) disconnect() {
