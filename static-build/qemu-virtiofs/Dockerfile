@@ -27,6 +27,7 @@ RUN apt-get install -y \
 	    libpixman-1-dev \
 	    libseccomp-dev \
 	    libtool \
+	    patch \
 	    pkg-config \
 	    pkg-config \
 	    python \
@@ -38,6 +39,8 @@ RUN apt-get install -y \
 
 RUN cd  .. && git clone "${QEMU_VIRTIOFS_REPO}" qemu-virtiofs
 RUN git checkout "${QEMU_VIRTIOFS_TAG}"
+ADD qemu/patches/virtiofsd/0001-add-time-to-seccomp.patch /root/0001-add-time-to-seccomp.patch
+RUN patch -p1 < /root/0001-add-time-to-seccomp.patch
 ADD scripts/configure-hypervisor.sh /root/configure-hypervisor.sh
 RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | sed -e 's|--enable-rbd||g' -e 's|--disable-seccomp||g' | xargs ./configure \
 	--with-pkgversion=kata-static
