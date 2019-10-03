@@ -5,6 +5,7 @@
 package docker
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/kata-containers/tests"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -57,13 +59,42 @@ func containerCgroupParent(name string) (string, error) {
 	return strings.Trim(stdout, "\n\t "), nil
 }
 
-func containerCgroupPath(name string, t cgroupType) (string, error) {
+func isPodCgroupOnlyEnabled() (bool, error) {
+	type RuntimeEnv struct {
+		SandboxCgroupOnly bool
+	}
+	type KataEnvSandboxCgroupOnly struct {
+		Runtime RuntimeEnv
+	}
+	strCmd := "kata-env --json"
+	cmd := tests.NewCommand(tests.Runtime, strings.Fields(strCmd)...)
+
+	stdout, stderr, exitCode := cmd.Run()
+	if exitCode != 0 {
+		return false, fmt.Errorf("Failed to run '%s %s' exit code: %d output '%s'",
+			tests.Runtime,
+			strCmd,
+			exitCode,
+			stdout+stderr)
+	}
+	kenv := KataEnvSandboxCgroupOnly{}
+	if err := json.Unmarshal([]byte(stdout), &kenv); err != nil {
+		return false, err
+
+	}
+
+	return kenv.Runtime.SandboxCgroupOnly, nil
+}
+
+func containerCgroupPath(name string, t cgroupType, SandboxCgroupOnly bool) (string, error) {
 	parentCgroup := dockerCgroupName
+
 	if path, err := containerCgroupParent(name); err != nil && path != "" {
 		parentCgroup = path
 	}
 
 	if id, err := containerID(name); err == nil && id != "" {
+
 		cgroupPath := fmt.Sprintf("%s_%s", cgroupPathPrefix, id)
 		return filepath.Join(sysCgroupPath, string(t), parentCgroup, cgroupPath), nil
 	}
@@ -76,13 +107,13 @@ func addProcessToCgroup(pid int, cgroupPath string) error {
 		[]byte(fmt.Sprintf("%v", pid)), os.FileMode(0775))
 }
 
-func checkCPUCgroups(name string, expected expectedCPUValues) error {
-	cpuCgroupPath, err := containerCgroupPath(name, cgroupCPU)
+func checkCPUCgroups(name string, expected expectedCPUValues, SandboxCgroupOnly bool) error {
+	cpuCgroupPath, err := containerCgroupPath(name, cgroupCPU, SandboxCgroupOnly)
 	if err != nil {
 		return err
 	}
 
-	cpusetCgroupPath, err := containerCgroupPath(name, cgroupCpuset)
+	cpusetCgroupPath, err := containerCgroupPath(name, cgroupCpuset, SandboxCgroupOnly)
 	if err != nil {
 		return err
 	}
@@ -98,9 +129,15 @@ func checkCPUCgroups(name string, expected expectedCPUValues) error {
 			return err
 		}
 
+		if SandboxCgroupOnly {
+			// Just return and not skip we still want to check the cgroup exist
+			fmt.Fprintf(GinkgoWriter, "PodCgroupOnly enabled, cgroup is managed by caller, will not check values")
+			continue
+		}
+
 		cv := strings.Trim(string(c), "\n\t ")
 		if cv != v {
-			return fmt.Errorf("Cgroup %v, expected: %v, got: %v", r, cv, v)
+			return fmt.Errorf("Cgroup %v, expected: %v, got: %v", r, v, cv)
 		}
 	}
 
@@ -109,16 +146,22 @@ func checkCPUCgroups(name string, expected expectedCPUValues) error {
 
 var _ = Describe("Checking CPU cgroups in the host", func() {
 	var (
-		args             []string
-		id               string
-		cpuCgroupPath    string
-		cpusetCgroupPath string
-		err              error
-		exitCode         int
-		expected         expectedCPUValues
+		args              []string
+		id                string
+		cpuCgroupPath     string
+		cpusetCgroupPath  string
+		err               error
+		exitCode          int
+		expected          expectedCPUValues
+		SandboxCgroupOnly bool
 	)
 
 	BeforeEach(func() {
+		SandboxCgroupOnly, err = isPodCgroupOnlyEnabled()
+		if err != nil {
+			Expect(err).ToNot(HaveOccurred())
+		}
+
 		id = randomDockerName()
 		args = []string{"--cpus=1", "--cpu-shares=800", "--cpuset-cpus=0", "-dt", "--name", id, Image, "sh"}
 	})
@@ -138,11 +181,11 @@ var _ = Describe("Checking CPU cgroups in the host", func() {
 				Expect(exitCode).To(BeZero())
 
 				// check that cpu cgroups exist
-				cpuCgroupPath, err = containerCgroupPath(id, cgroupCPU)
+				cpuCgroupPath, err = containerCgroupPath(id, cgroupCPU, SandboxCgroupOnly)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(cpuCgroupPath).Should(BeADirectory())
 
-				cpusetCgroupPath, err = containerCgroupPath(id, cgroupCpuset)
+				cpusetCgroupPath, err = containerCgroupPath(id, cgroupCpuset, SandboxCgroupOnly)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(cpusetCgroupPath).Should(BeADirectory())
 
@@ -166,6 +209,9 @@ var _ = Describe("Checking CPU cgroups in the host", func() {
 	Describe("checking whether cgroups are updated", func() {
 		Context("updating container cpu and cpuset cgroup", func() {
 			It("should be updated", func() {
+				if SandboxCgroupOnly {
+					Skip("PodCgroupOnly enabled, host cgroup should be managed by caller")
+				}
 				_, _, exitCode = dockerRun(args...)
 				Expect(exitCode).To(BeZero())
 
@@ -180,7 +226,7 @@ var _ = Describe("Checking CPU cgroups in the host", func() {
 				_, _, exitCode = dockerUpdate("--cpus=2.5", "--cpu-shares", expected.shares, "--cpuset-cpus", expected.cpuset, id)
 				Expect(exitCode).To(BeZero())
 
-				err = checkCPUCgroups(id, expected)
+				err = checkCPUCgroups(id, expected, SandboxCgroupOnly)
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(RemoveDockerContainer(id)).To(BeTrue())
@@ -199,7 +245,7 @@ var _ = Describe("Checking CPU cgroups in the host", func() {
 				expected.period = "100000"
 				expected.cpuset = "0"
 
-				err = checkCPUCgroups(id, expected)
+				err = checkCPUCgroups(id, expected, SandboxCgroupOnly)
 				Expect(err).ToNot(HaveOccurred())
 
 				Expect(RemoveDockerContainer(id)).To(BeTrue())

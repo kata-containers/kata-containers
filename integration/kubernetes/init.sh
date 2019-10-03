@@ -78,6 +78,20 @@ fi
 
 echo "Start ${cri_runtime} service"
 sudo systemctl start ${cri_runtime}
+max_cri_socket_check=5
+wait_time_cri_socket_check=5
+
+for i in $(seq ${max_cri_socket_check}); do
+	#when the test runs two times in the CI, the second time crio takes some time to be ready
+	sleep "${wait_time_cri_socket_check}"
+	if [ -f "${cri_runtime_socket}" ]; then
+		break
+	fi
+
+	echo "Waiting for cri socket ${cri_runtime_socket} (try ${i})"
+done
+
+sudo systemctl status "${cri_runtime}"
 
 echo "Init cluster using ${cri_runtime_socket}"
 kubeadm_config_template="${SCRIPT_PATH}/kubeadm/config.yaml"
