@@ -68,6 +68,9 @@ const (
 	// port numbers below 1024 are called privileged ports. Only a process with
 	// CAP_NET_BIND_SERVICE capability may bind to these port numbers.
 	vSockPort = 1024
+
+	// MinHypervisorMemory is the minimum memory required for a VM.
+	MinHypervisorMemory = 256
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
