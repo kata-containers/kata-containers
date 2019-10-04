@@ -9,9 +9,15 @@ sudo: required
 dist: xenial
 
 language: go
+
 os:
-- linux
-- linux-ppc64le
+  - linux
+  - linux-ppc64le
+
+matrix:
+  allow_failures:
+    - os: linux-ppc64le
+
 go_import_path: github.com/kata-containers/runtime
 
 env:
