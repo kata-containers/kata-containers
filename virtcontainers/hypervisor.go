@@ -28,6 +28,11 @@ type HypervisorType string
 type operation int
 
 const (
+	addDevice operation = iota
+	removeDevice
+)
+
+const (
 	// FirecrackerHypervisor is the FC hypervisor.
 	FirecrackerHypervisor HypervisorType = "firecracker"
 
