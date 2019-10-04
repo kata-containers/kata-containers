@@ -618,6 +618,11 @@ func (fc *firecracker) fcStartVM() error {
 		return err
 	}
 
+	// make sure 'others' don't have access to this socket
+	if err := os.Chmod(filepath.Join(fc.jailerRoot, defaultHybridVSocketName), 0640); err != nil {
+		return fmt.Errorf("Could not change socket permissions: %v", err)
+	}
+
 	fc.state.set(vmReady)
 	return nil
 }
