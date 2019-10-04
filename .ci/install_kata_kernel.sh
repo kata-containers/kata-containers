@@ -108,7 +108,11 @@ install_prebuilt_kernel() {
 
 	pushd "${kernel_dir}" >/dev/null
 	info "Verify download checksum"
-	sudo -E curl -fsOL "${latest_build_url}/sha256sum-kernel" || return 1
+	if [ ${experimental_kernel} == "true" ]; then
+		sudo -E curl -fsOL "${experimental_latest_build_url}/sha256sum-kernel" || return 1
+	else
+		sudo -E curl -fsOL "${latest_build_url}/sha256sum-kernel" || return 1
+        fi
 	sudo sha256sum -c "sha256sum-kernel" || return 1
 	popd >/dev/null
 }
