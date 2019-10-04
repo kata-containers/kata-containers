@@ -50,6 +50,7 @@ download_repo() {
 get_current_kernel_version() {
 	if [ "$experimental_kernel" == "true" ]; then
 		kernel_version=$(get_version "assets.kernel-experimental.tag")
+		echo "${kernel_version}"
 	else
 		kernel_version=$(get_version "assets.kernel.version")
 		echo "${kernel_version/v/}"
@@ -98,7 +99,6 @@ install_cached_kernel(){
 	sudo -E ln -sf "${kernel_binary_path}" "${kernel_symlink}"
 }
 
-
 install_prebuilt_kernel() {
 	info "Install pre-built kernel version"
 
@@ -108,7 +108,11 @@ install_prebuilt_kernel() {
 
 	pushd "${kernel_dir}" >/dev/null
 	info "Verify download checksum"
-	sudo -E curl -fsOL "${latest_build_url}/sha256sum-kernel" || return 1
+	if [ ${experimental_kernel} == "true" ]; then
+		sudo -E curl -fsOL "${experimental_latest_build_url}/sha256sum-kernel" || return 1
+	else
+		sudo -E curl -fsOL "${latest_build_url}/sha256sum-kernel" || return 1
+        fi
 	sudo sha256sum -c "sha256sum-kernel" || return 1
 	popd >/dev/null
 }
