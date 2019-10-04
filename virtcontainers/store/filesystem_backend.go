@@ -47,6 +47,9 @@ const (
 
 	// DevicesFile is the file name storing a container's devices.
 	DevicesFile = "devices.json"
+
+	// uuidFile is the file name storing a guest VM uuid state.
+	uuidFile = "uuid.json"
 )
 
 // DirMode is the permission bits used for creating a directory
@@ -63,6 +66,9 @@ const SandboxPathSuffix = "sbs"
 
 // VMPathSuffix is the suffix used for guest VMs.
 const VMPathSuffix = "vm"
+
+// UUIDPathSuffix is the suffix used for uuid storage
+const UUIDPathSuffix = "uuid"
 
 // ConfigStoragePath is the sandbox configuration directory.
 // It will contain one config.json file for each created sandbox.
@@ -97,6 +103,10 @@ var RunVMStoragePath = func() string {
 	return path
 }
 
+// VMUUIDStoragePath is the uuid directory.
+// It will contain all uuid info used by guest vm.
+var VMUUIDStoragePath = filepath.Join("/var/lib", StoragePathSuffix, UUIDPathSuffix)
+
 func itemToFile(item Item) (string, error) {
 	switch item {
 	case Configuration:
@@ -117,6 +127,8 @@ func itemToFile(item Item) (string, error) {
 		return MountsFile, nil
 	case Devices, DeviceIDs:
 		return DevicesFile, nil
+	case UUID:
+		return uuidFile, nil
 	}
 
 	return "", fmt.Errorf("Unknown item %s", item)

@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -44,7 +43,7 @@ func testAcrnKernelParameters(t *testing.T, kernelParams []Param, debug bool) {
 		acrnConfig.Debug = true
 	}
 
-	a := &acrn{
+	a := &Acrn{
 		config: acrnConfig,
 		arch:   &acrnArchBase{},
 	}
@@ -73,7 +72,7 @@ func TestAcrnKernelParameters(t *testing.T) {
 
 func TestAcrnCapabilities(t *testing.T) {
 	assert := assert.New(t)
-	a := &acrn{
+	a := &Acrn{
 		ctx:  context.Background(),
 		arch: &acrnArchBase{},
 	}
@@ -85,7 +84,7 @@ func TestAcrnCapabilities(t *testing.T) {
 
 func testAcrnAddDevice(t *testing.T, devInfo interface{}, devType deviceType, expected []Device) {
 	assert := assert.New(t)
-	a := &acrn{
+	a := &Acrn{
 		ctx:  context.Background(),
 		arch: &acrnArchBase{},
 	}
@@ -139,7 +138,7 @@ func TestAcrnHotplugUnsupportedDeviceType(t *testing.T) {
 	assert := assert.New(t)
 
 	acrnConfig := newAcrnConfig()
-	a := &acrn{
+	a := &Acrn{
 		ctx:    context.Background(),
 		id:     "acrnTest",
 		config: acrnConfig,
@@ -156,7 +155,7 @@ func TestAcrnUpdateBlockDeviceInvalidPath(t *testing.T) {
 	index := 1
 
 	acrnConfig := newAcrnConfig()
-	a := &acrn{
+	a := &Acrn{
 		ctx:    context.Background(),
 		id:     "acrnBlkTest",
 		config: acrnConfig,
@@ -178,7 +177,7 @@ func TestAcrnUpdateBlockDeviceInvalidIdx(t *testing.T) {
 	index := AcrnBlkDevPoolSz + 1
 
 	acrnConfig := newAcrnConfig()
-	a := &acrn{
+	a := &Acrn{
 		ctx:    context.Background(),
 		id:     "acrnBlkTest",
 		config: acrnConfig,
@@ -195,7 +194,7 @@ func TestAcrnUpdateBlockDeviceInvalidIdx(t *testing.T) {
 
 func TestAcrnGetSandboxConsole(t *testing.T) {
 	assert := assert.New(t)
-	a := &acrn{
+	a := &Acrn{
 		ctx: context.Background(),
 	}
 	sandboxID := "testSandboxID"
@@ -209,7 +208,7 @@ func TestAcrnGetSandboxConsole(t *testing.T) {
 func TestAcrnCreateSandbox(t *testing.T) {
 	assert := assert.New(t)
 	acrnConfig := newAcrnConfig()
-	a := &acrn{}
+	a := &Acrn{}
 
 	sandbox := &Sandbox{
 		ctx: context.Background(),
@@ -219,6 +218,11 @@ func TestAcrnCreateSandbox(t *testing.T) {
 		},
 	}
 
+	// Even though this test doesn't need to create a vcStore,
+	// we are forced to create a vcStore as GetAndSetSandboxBlockIndex()
+	// which is called from createSandbox needs a valid vcStore. vcStore
+	// creation can be removed once https://github.com/kata-containers/runtime/issues/2026
+	// issue is resolved.
 	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
 	assert.NoError(err)
 	sandbox.store = vcStore
@@ -228,12 +232,10 @@ func TestAcrnCreateSandbox(t *testing.T) {
 
 	defer globalSandboxList.removeSandbox(sandbox.id)
 
-	// Create the hypervisor fake binary
-	testAcrnPath := filepath.Join(testDir, testHypervisor)
-	_, err = os.Create(testAcrnPath)
-	assert.NoError(err)
-
-	err = a.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store)
+	//set PID to 1 to ignore hypercall to get UUID and set a random UUID
+	a.state.PID = 1
+	a.state.UUID = "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
+	err = a.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, nil)
 	assert.NoError(err)
 	assert.Exactly(acrnConfig, a.config)
 }
@@ -242,7 +244,7 @@ func TestAcrnMemoryTopology(t *testing.T) {
 	mem := uint32(1000)
 	assert := assert.New(t)
 
-	a := &acrn{
+	a := &Acrn{
 		arch: &acrnArchBase{},
 		config: HypervisorConfig{
 			MemorySize: mem,
