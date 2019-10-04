@@ -48,6 +48,9 @@ const (
 
 	// DeviceIDs represents a set of reference IDs item to be stored.
 	DeviceIDs
+
+	// UUID represents a set of uuids item to be stored.
+	UUID
 )
 
 func (i Item) String() string {
