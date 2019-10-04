@@ -50,6 +50,7 @@ download_repo() {
 get_current_kernel_version() {
 	if [ "$experimental_kernel" == "true" ]; then
 		kernel_version=$(get_version "assets.kernel-experimental.tag")
+		echo "${kernel_version}"
 	else
 		kernel_version=$(get_version "assets.kernel.version")
 		echo "${kernel_version/v/}"
@@ -97,7 +98,6 @@ install_cached_kernel(){
 	info "Installing ${kernel_binary_path} and symlink ${kernel_symlink}"
 	sudo -E ln -sf "${kernel_binary_path}" "${kernel_symlink}"
 }
-
 
 install_prebuilt_kernel() {
 	info "Install pre-built kernel version"
