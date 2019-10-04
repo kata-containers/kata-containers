@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -190,6 +189,8 @@ func (fc *firecracker) bindMount(ctx context.Context, source, destination string
 	if err := ensureDestinationExists(absSource, destination); err != nil {
 		return fmt.Errorf("Could not create destination mount point %v: %v", destination, err)
 	}
+
+	fc.Logger().WithFields(logrus.Fields{"src": absSource, "dst": destination}).Debug("Bind mounting resource")
 
 	if err := syscall.Mount(absSource, destination, "bind", syscall.MS_BIND|syscall.MS_SLAVE, ""); err != nil {
 		return fmt.Errorf("Could not bind mount %v to %v: %v", absSource, destination, err)
@@ -491,6 +492,24 @@ func (fc *firecracker) client() *client.Firecracker {
 	return fc.connection
 }
 
+func (fc *firecracker) createJailedDrive(name string) (string, error) {
+	// Don't bind mount the resource, just create a raw file
+	// that can be bind-mounted later
+	r := filepath.Join(fc.jailerRoot, name)
+	f, err := os.Create(r)
+	if err != nil {
+		return "", err
+	}
+	f.Close()
+
+	if fc.jailed {
+		// use path relative to the jail
+		r = filepath.Join("/", name)
+	}
+
+	return r, nil
+}
+
 func (fc *firecracker) fcJailResource(src, dst string) (string, error) {
 	if src == "" || dst == "" {
 		return "", fmt.Errorf("fcJailResource: invalid jail locations: src:%v, dst:%v",
@@ -650,7 +669,9 @@ func (fc *firecracker) startSandbox(timeout int) error {
 	}
 
 	fc.fcSetVMRootfs(image)
-	fc.createDiskPool()
+	if err := fc.createDiskPool(); err != nil {
+		return err
+	}
 
 	for _, d := range fc.pendingDevices {
 		if err = fc.addDevice(d.dev, d.devType); err != nil {
@@ -681,21 +702,8 @@ func (fc *firecracker) createDiskPool() error {
 		isRootDevice := false
 
 		// Create a temporary file as a placeholder backend for the drive
-		//hostURL, err := fc.store.Raw("")
-		hostURL, err := fc.store.Raw(driveID)
+		jailedDrive, err := fc.createJailedDrive(driveID)
 		if err != nil {
-			return err
-		}
-
-		// We get a full URL from Raw(), we need to parse it.
-		u, err := url.Parse(hostURL)
-		if err != nil {
-			return err
-		}
-
-		jailedDrive, err := fc.fcJailResource(u.Path, driveID)
-		if err != nil {
-			fc.Logger().WithField("createDiskPool failed", err).Error()
 			return err
 		}
 
@@ -717,9 +725,10 @@ func (fc *firecracker) createDiskPool() error {
 
 func (fc *firecracker) umountResource(jailedPath string) {
 	hostPath := filepath.Join(fc.jailerRoot, jailedPath)
+	fc.Logger().WithField("resource", hostPath).Debug("Unmounting resource")
 	err := syscall.Unmount(hostPath, syscall.MNT_DETACH)
 	if err != nil {
-		fc.Logger().WithField("umountResource failed", err).Info()
+		fc.Logger().WithError(err).Error("Failed to umount resource")
 	}
 }
 
@@ -730,17 +739,6 @@ func (fc *firecracker) cleanupJail() {
 
 	fc.umountResource(fcKernel)
 	fc.umountResource(fcRootfs)
-
-	for i := 0; i < fcDiskPoolSize; i++ {
-		fc.umountResource(fcDriveIndexToID(i))
-	}
-
-	//Run through the list second time as may have bindmounted
-	//to the same location twice. In the future this needs to
-	//be tracked so that we do not do this blindly
-	for i := 0; i < fcDiskPoolSize; i++ {
-		fc.umountResource(fcDriveIndexToID(i))
-	}
 
 	fc.Logger().WithField("cleaningJail", fc.vmPath).Info()
 	if err := os.RemoveAll(fc.vmPath); err != nil {
@@ -843,24 +841,18 @@ func (fc *firecracker) fcAddBlockDrive(drive config.BlockDrive) error {
 }
 
 // Firecracker supports replacing the host drive used once the VM has booted up
-func (fc *firecracker) fcUpdateBlockDrive(drive config.BlockDrive) error {
+func (fc *firecracker) fcUpdateBlockDrive(path, id string) error {
 	span, _ := fc.trace("fcUpdateBlockDrive")
 	defer span.Finish()
 
 	// Use the global block index as an index into the pool of the devices
 	// created for firecracker.
-	driveID := fcDriveIndexToID(drive.Index)
 	driveParams := ops.NewPatchGuestDriveByIDParams()
-	driveParams.SetDriveID(driveID)
+	driveParams.SetDriveID(id)
 
-	jailedDrive, err := fc.fcJailResource(drive.File, driveID)
-	if err != nil {
-		fc.Logger().WithField("fcUpdateBlockDrive failed", err).Error()
-		return err
-	}
 	driveFc := &models.PartialDrive{
-		DriveID:    &driveID,
-		PathOnHost: &jailedDrive, //This is the only property that can be modified
+		DriveID:    &id,
+		PathOnHost: &path, //This is the only property that can be modified
 	}
 
 	driveParams.SetBody(driveFc)
@@ -874,11 +866,10 @@ func (fc *firecracker) fcUpdateBlockDrive(drive config.BlockDrive) error {
 		actionType := "BlockDeviceRescan"
 		actionInfo := &models.InstanceActionInfo{
 			ActionType: &actionType,
-			Payload:    driveID,
+			Payload:    id,
 		}
 		actionParams.SetInfo(actionInfo)
-		_, err = fc.client().Operations.CreateSyncAction(actionParams)
-		if err != nil {
+		if _, err := fc.client().Operations.CreateSyncAction(actionParams); err != nil {
 			return err
 		}
 	}
@@ -922,6 +913,31 @@ func (fc *firecracker) addDevice(devInfo interface{}, devType deviceType) error 
 	return nil
 }
 
+// hotplugBlockDevice supported in Firecracker VMM
+// hot add or remove a block device.
+func (fc *firecracker) hotplugBlockDevice(drive config.BlockDrive, op operation) (interface{}, error) {
+	var path string
+	var err error
+	driveID := fcDriveIndexToID(drive.Index)
+
+	if op == addDevice {
+		//The drive placeholder has to exist prior to Update
+		path, err = fc.fcJailResource(drive.File, driveID)
+		if err != nil {
+			fc.Logger().WithError(err).WithField("resource", drive.File).Error("Could not jail resource")
+			return nil, err
+		}
+	} else {
+		// umount the disk, it's no longer needed.
+		fc.umountResource(driveID)
+		// use previous raw file created at createDiskPool, that way
+		// the resource is released by firecracker and it can be destroyed in the host
+		path = filepath.Join(fc.jailerRoot, driveID)
+	}
+
+	return nil, fc.fcUpdateBlockDrive(path, driveID)
+}
+
 // hotplugAddDevice supported in Firecracker VMM
 func (fc *firecracker) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
 	span, _ := fc.trace("hotplugAddDevice")
@@ -929,19 +945,29 @@ func (fc *firecracker) hotplugAddDevice(devInfo interface{}, devType deviceType)
 
 	switch devType {
 	case blockDev:
-		//The drive placeholder has to exist prior to Update
-		return nil, fc.fcUpdateBlockDrive(*devInfo.(*config.BlockDrive))
+		return fc.hotplugBlockDevice(*devInfo.(*config.BlockDrive), addDevice)
 	default:
 		fc.Logger().WithFields(logrus.Fields{"devInfo": devInfo,
 			"deviceType": devType}).Warn("hotplugAddDevice: unsupported device")
-		return nil, fmt.Errorf("hotplugAddDevice: unsupported device: devInfo:%v, deviceType%v",
+		return nil, fmt.Errorf("Could not hot add device: unsupported device: %v, type: %v",
 			devInfo, devType)
 	}
 }
 
-// hotplugRemoveDevice supported in Firecracker VMM, but no-op
+// hotplugRemoveDevice supported in Firecracker VMM
 func (fc *firecracker) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	return nil, nil
+	span, _ := fc.trace("hotplugRemoveDevice")
+	defer span.Finish()
+
+	switch devType {
+	case blockDev:
+		return fc.hotplugBlockDevice(*devInfo.(*config.BlockDrive), removeDevice)
+	default:
+		fc.Logger().WithFields(logrus.Fields{"devInfo": devInfo,
+			"deviceType": devType}).Error("hotplugRemoveDevice: unsupported device")
+		return nil, fmt.Errorf("Could not hot remove device: unsupported device: %v, type: %v",
+			devInfo, devType)
+	}
 }
 
 // getSandboxConsole builds the path of the console where we can read
