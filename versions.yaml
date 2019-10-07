@@ -193,7 +193,7 @@ externals:
   cni-plugins:
     description: "CNI network plugins"
     url: "https://github.com/containernetworking/plugins"
-    commit: "7f98c94613021d8b57acfa1a2f0c8d0f6fd7ae5a"
+    commit: "485be65581341430f9106a194a98f0f2412245fb"
 
   crio:
     description: |
