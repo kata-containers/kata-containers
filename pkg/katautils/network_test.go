@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/stretchr/testify/assert"
@@ -127,7 +128,7 @@ func TestSetupNetworkNamespace(t *testing.T) {
 	assert.Error(err)
 
 	// Existent netns path
-	n, err := ns.NewNS()
+	n, err := testutils.NewNS()
 	assert.NoError(err)
 	config = &vc.NetworkConfig{
 		NetNSPath: n.Path(),
