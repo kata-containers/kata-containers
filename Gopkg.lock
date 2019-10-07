@@ -159,19 +159,11 @@
   revision = "2a93cfde8c20b23de8eb84a5adbc234ddf7a9e8d"
 
 [[projects]]
-  digest = "1:827ed8a74e55981880c4d77f8472d638bceb899188104ba7bf24a9548fd97292"
-  name = "github.com/containernetworking/cni"
-  packages = ["pkg/types"]
-  pruneopts = "NUT"
-  revision = "a7885cb6f8ab03fba07852ded351e4f5e7a112bf"
-  version = "v0.6.0"
-
-[[projects]]
-  digest = "1:1552ba1ba0d0f3596966cca53601a5f59c257ca7ace87f41708a2480835c5286"
+  digest = "1:bcf22f6210505381c098d3ab8c039b1c435b6ee1e4cbb51563310c79328e1d28"
   name = "github.com/containernetworking/plugins"
   packages = ["pkg/ns"]
   pruneopts = "NUT"
-  revision = "7f98c94613021d8b57acfa1a2f0c8d0f6fd7ae5a"
+  revision = "485be65581341430f9106a194a98f0f2412245fb"
 
 [[projects]]
   digest = "1:6f614c5193761d29b3184a170380672cafd025306261ce7810e2dd99907184c4"
