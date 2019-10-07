@@ -79,7 +79,7 @@
   revision = "cc6d2ea263b2471faabce371255777a365bf8306"
 
 [[projects]]
-  digest = "1:d8c142235347425a65639a05da73ed2632892798999e3e2b24a9bc4b125c0a05"
+  digest = "1:f8d2fe5562a0d0acd37243885ffc628d4366e6ec77ad2c30fe977ab14688cb0d"
   name = "github.com/kata-containers/agent"
   packages = [
     "pkg/types",
@@ -88,7 +88,7 @@
     "protocols/mockserver",
   ]
   pruneopts = "NT"
-  revision = "3ffb7ca1067565a45ee9fbfcb109eb85e7e899af"
+  revision = "32c87e75c2e4c014961f104c3c59b87f2aee3384"
 
 [[projects]]
   digest = "1:f0491ec759a06331ed36c81e8b0846058a36b4ae9d9b8ca4a60c46d223e4fcea"

@@ -11,6 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
@@ -27,6 +28,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 	"github.com/kata-containers/agent/pkg/uevent"
 	pb "github.com/kata-containers/agent/protocols/grpc"
+	"github.com/mdlayher/vsock"
 	"github.com/opencontainers/runc/libcontainer"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	_ "github.com/opencontainers/runc/libcontainer/nsenter"
@@ -166,6 +168,9 @@ var crashOnError = false
 
 // if true, a shell (bash or sh) is started only if it's available in the rootfs.
 var debugConsole = false
+
+// Specify a vsock port where logs are written.
+var logsVSockPort = uint32(0)
 
 // commType is used to denote the communication channel type used.
 type commType int
@@ -941,7 +946,30 @@ func announce() error {
 	return nil
 }
 
-func (s *sandbox) initLogger() error {
+func logsToVPort() {
+	l, err := vsock.Listen(logsVSockPort)
+	if err != nil {
+		// no body listening
+		return
+	}
+	c, err := l.Accept()
+	if err != nil {
+		l.Close()
+		// no connection
+		return
+	}
+
+	r, w := io.Pipe()
+	agentLog.Logger.Out = w
+	io.Copy(c, r)
+
+	w.Close()
+	r.Close()
+	c.Close()
+	l.Close()
+}
+
+func (s *sandbox) initLogger(ctx context.Context) error {
 	agentLog.Logger.Formatter = &logrus.TextFormatter{DisableColors: true, TimestampFormat: time.RFC3339Nano}
 
 	config := newConfig(defaultLogLevel)
@@ -952,6 +980,28 @@ func (s *sandbox) initLogger() error {
 	agentLog.Logger.SetLevel(config.logLevel)
 
 	agentLog = agentLog.WithField("debug_console", debugConsole)
+
+	if logsVSockPort != 0 {
+		go func() {
+			// save original logger's output to restore it when there
+			// is no process reading the logs in the host
+			out := agentLog.Logger.Out
+			for {
+				select {
+				case <-ctx.Done():
+					// stop the thread
+					return
+				default:
+					logsToVPort()
+					if agentLog.Logger.Out != out {
+						agentLog.Logger.Out = out
+					}
+					// waiting for the logs reader
+					time.Sleep(time.Millisecond * 500)
+				}
+			}
+		}()
+	}
 
 	return announce()
 }
@@ -1370,13 +1420,13 @@ func realMain() error {
 		stopServer:     make(chan struct{}),
 	}
 
-	if err = s.initLogger(); err != nil {
-		return fmt.Errorf("failed to setup logger: %v", err)
-	}
-
 	rootSpan, rootContext, err = setupTracing(agentName)
 	if err != nil {
 		return fmt.Errorf("failed to setup tracing: %v", err)
+	}
+
+	if err = s.initLogger(rootContext); err != nil {
+		return fmt.Errorf("failed to setup logger: %v", err)
 	}
 
 	if err := setupDebugConsole(rootContext, debugConsolePath); err != nil {
