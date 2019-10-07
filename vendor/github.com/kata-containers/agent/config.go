@@ -19,6 +19,7 @@ import (
 const (
 	optionPrefix      = "agent."
 	logLevelFlag      = optionPrefix + "log"
+	logsVSockPortFlag = optionPrefix + "log_vport"
 	devModeFlag       = optionPrefix + "devmode"
 	traceModeFlag     = optionPrefix + "trace"
 	useVsockFlag      = optionPrefix + "use_vsock"
@@ -106,6 +107,12 @@ func (c *agentConfig) parseCmdlineOption(option string) error {
 		if level == logrus.DebugLevel {
 			debug = true
 		}
+	case logsVSockPortFlag:
+		port, err := strconv.ParseUint(split[valuePosition], 10, 32)
+		if err != nil {
+			return err
+		}
+		logsVSockPort = uint32(port)
 	case traceModeFlag:
 		switch split[valuePosition] {
 		case traceTypeIsolated:

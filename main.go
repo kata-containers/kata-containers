@@ -18,14 +18,27 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/kata-containers/agent/protocols/client"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 	context "golang.org/x/net/context"
 )
+
+type socketAddress struct {
+	scheme string
+	path   string
+	port   uint32
+}
+
+func (s *socketAddress) string() string {
+	return fmt.Sprintf("%s:%s:%d", s.scheme, s.path, s.port)
+}
 
 const (
 	shimName    = "kata-shim"
@@ -36,6 +49,15 @@ const (
 	// and couple of threads for our parallel user code, such as the copy
 	// code in shim.go
 	maxThreads = 6
+
+	// timeout for dialing to a hybrid vsock
+	hybridVSockDialTimeout = time.Second
+
+	// maximum number of tries to connect hybrid vsock
+	hybridVSockMaxConnectTries = 20
+
+	// delay before trying to connect again
+	hybridVSockConnectDelay = time.Millisecond * 300
 )
 
 // version is the shim version. This variable is populated at build time.
@@ -101,19 +123,66 @@ func setThreads() {
 	}
 }
 
-func unixAddr(uri string) (string, error) {
+func socketAddr(uri string) (socketAddress, error) {
 	if uri == "" {
-		return "", errors.New("empty uri")
+		return socketAddress{}, errors.New("empty uri")
 
 	}
 	addr, err := url.Parse(uri)
 	if err != nil {
-		return "", err
+		return socketAddress{}, err
 	}
-	if addr.Scheme != "" && addr.Scheme != "unix" {
-		return "", errors.New("invalid address scheme")
+
+	switch addr.Scheme {
+	case "", client.UnixSocketScheme:
+		return socketAddress{
+			scheme: client.UnixSocketScheme,
+			path:   addr.Host + addr.Path,
+			port:   0,
+		}, nil
+	case client.HybridVSockScheme:
+		hvsocket := strings.Split(addr.Path, ":")
+		// expected path:port
+		if len(hvsocket) != 2 {
+			return socketAddress{}, fmt.Errorf("Invalid hybrid vsock scheme: %s", uri)
+		}
+
+		var port uint64
+		if port, err = strconv.ParseUint(hvsocket[1], 10, 32); err != nil {
+			return socketAddress{}, fmt.Errorf("Invalid hybrid vsock port %s: %v", uri, err)
+		}
+
+		return socketAddress{
+			scheme: client.HybridVSockScheme,
+			path:   hvsocket[0],
+			port:   uint32(port),
+		}, nil
+	default:
+		return socketAddress{}, errors.New("invalid address scheme")
 	}
-	return addr.Host + addr.Path, nil
+}
+
+func socketDial(addr socketAddress) (net.Conn, error) {
+	switch addr.scheme {
+	case client.UnixSocketScheme:
+		return net.Dial("unix", addr.path)
+	case client.HybridVSockScheme:
+		var err error
+		var conn net.Conn
+		for i := 0; i < hybridVSockMaxConnectTries; i++ {
+			conn, err = client.HybridVSockDialer(addr.string(), hybridVSockDialTimeout)
+			if err == nil {
+				c := conn.(*net.UnixConn)
+				if f, e := c.File(); e == nil && f != nil {
+					return conn, nil
+				}
+			}
+			time.Sleep(hybridVSockConnectDelay)
+		}
+		return nil, fmt.Errorf("unable to connect hybrid vsock: %v", err)
+	default:
+		return nil, errors.New("invalid socket address")
+	}
 }
 
 func printAgentLogs(sock string) error {
@@ -122,7 +191,7 @@ func printAgentLogs(sock string) error {
 		return nil
 	}
 
-	agentLogsAddr, err := unixAddr(sock)
+	agentLogsAddr, err := socketAddr(sock)
 	if err != nil {
 		logger().WithField("socket-address", sock).WithError(err).Fatal("invalid agent logs socket address")
 		return err
@@ -131,7 +200,7 @@ func printAgentLogs(sock string) error {
 	// Check permissions socket for "other" is 0.
 	// For security reasons, the socket shouldn't be accessible
 	// for the "other" group.
-	fileInfo, err := os.Stat(agentLogsAddr)
+	fileInfo, err := os.Stat(agentLogsAddr.path)
 	if err != nil {
 		return err
 	}
@@ -142,11 +211,6 @@ func printAgentLogs(sock string) error {
 		return fmt.Errorf("All socket permissions for 'other' should be disabled, got %3.3o", other)
 	}
 
-	conn, err := net.Dial("unix", agentLogsAddr)
-	if err != nil {
-		return err
-	}
-
 	// Allow log messages coming from the agent to be distinguished from
 	// messages originating from the shim itself.
 	agentLogger := logger().WithFields(logrus.Fields{
@@ -154,6 +218,11 @@ func printAgentLogs(sock string) error {
 	})
 
 	go func() {
+		conn, err := socketDial(agentLogsAddr)
+		if err != nil {
+			agentLogger.WithError(err).Error("Could not connect logs socket")
+			return
+		}
 		scanner := bufio.NewScanner(conn)
 		for scanner.Scan() {
 			agentLogger.Infof("%s\n", scanner.Text())

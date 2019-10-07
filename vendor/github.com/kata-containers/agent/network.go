@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"syscall"
 
 	"golang.org/x/sys/unix"
 
@@ -25,11 +26,13 @@ import (
 )
 
 var (
-	errNoHandle = grpcStatus.Errorf(codes.InvalidArgument, "Need network handle")
-	errNoIF     = grpcStatus.Errorf(codes.InvalidArgument, "Need network interface")
-	errNoLink   = grpcStatus.Errorf(codes.InvalidArgument, "Need network link")
-	errNoMAC    = grpcStatus.Errorf(codes.InvalidArgument, "Need hardware address")
-	errNoRoutes = grpcStatus.Errorf(codes.InvalidArgument, "Need network routes")
+	errNoHandle             = grpcStatus.Errorf(codes.InvalidArgument, "Need network handle")
+	errNoIF                 = grpcStatus.Errorf(codes.InvalidArgument, "Need network interface")
+	errNoLink               = grpcStatus.Errorf(codes.InvalidArgument, "Need network link")
+	errNoMAC                = grpcStatus.Errorf(codes.InvalidArgument, "Need hardware address")
+	errNoRoutes             = grpcStatus.Errorf(codes.InvalidArgument, "Need network routes")
+	guestDNSFile            = "/etc/resolv.conf"
+	kataGuestSandboxDNSFile = "/run/kata-containers/sandbox/resolv.conf"
 )
 
 const (
@@ -609,8 +612,31 @@ func (s *sandbox) updateRoute(netHandle *netlink.Handle, route *types.Route, add
 // DNS //
 /////////
 
-func setupDNS(dns []string) error {
-	return nil
+func setupDNS(dns []string) (err error) {
+	var file *os.File
+
+	if len(dns) == 0 {
+		agentLog.Debug("Did not set sandbox DNS as DNS not received as part of grpc request.")
+		return nil
+	}
+	if file, err = os.Create(kataGuestSandboxDNSFile); err != nil {
+		return err
+	}
+	defer file.Close()
+
+	for i, line := range dns {
+		if i == (len(dns) - 1) {
+			_, err = file.WriteString(strings.TrimSpace(line))
+		} else {
+			_, err = file.WriteString(strings.TrimSpace(line) + "\n")
+		}
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return mount(kataGuestSandboxDNSFile, guestDNSFile, "bind", syscall.MS_BIND, "")
 }
 
 ////////////
