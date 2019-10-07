@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
@@ -65,7 +66,7 @@ func TestIsPhysicalIface(t *testing.T) {
 		},
 	}
 
-	n, err := ns.NewNS()
+	n, err := testutils.NewNS()
 	assert.NoError(err)
 	defer n.Close()
 

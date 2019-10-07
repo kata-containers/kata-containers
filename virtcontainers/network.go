@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -1070,7 +1071,7 @@ func removeTCFiltering(endpoint Endpoint) error {
 }
 
 func createNetNS() (string, error) {
-	n, err := ns.NewNS()
+	n, err := testutils.NewNS()
 	if err != nil {
 		return "", err
 	}
