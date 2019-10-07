@@ -11,7 +11,9 @@ import (
 	"io"
 	"net"
 	"path/filepath"
+	"strings"
 
+	kataclient "github.com/kata-containers/agent/protocols/client"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/sirupsen/logrus"
 )
@@ -241,7 +243,8 @@ func (p *proxyBuiltin) start(params proxyParams) (int, string, error) {
 
 	// For firecracker, it hasn't support the console watching and it's consoleURL
 	// will be set empty.
-	if params.debug && params.consoleURL != "" {
+	// TODO: add support for hybrid vsocks, see https://github.com/kata-containers/runtime/issues/2098
+	if params.debug && params.consoleURL != "" && !strings.HasPrefix(params.consoleURL, kataclient.HybridVSockScheme) {
 		err := p.watchConsole(buildinProxyConsoleProto, params.consoleURL, params.logger)
 		if err != nil {
 			p.sandboxID = ""
