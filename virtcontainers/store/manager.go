@@ -100,25 +100,23 @@ type manager struct {
 
 var stores = &manager{stores: make(map[string]*Store)}
 
-func (m *manager) addStore(s *Store) (err error) {
+func (m *manager) addStore(s *Store) (rs *Store, err error) {
 	if s == nil {
-		return fmt.Errorf("Store can not be nil")
+		return nil, fmt.Errorf("Store can not be nil")
 	}
 
 	if s.url == "" {
-		return fmt.Errorf("Store URL can not be nil")
+		return nil, fmt.Errorf("Store URL can not be nil")
 	}
 
 	m.Lock()
 	defer m.Unlock()
 
-	if m.stores[s.url] != nil {
-		return fmt.Errorf("Store %s already added", s.url)
+	if m.stores[s.url] == nil {
+		m.stores[s.url] = s
 	}
 
-	m.stores[s.url] = s
-
-	return nil
+	return m.stores[s.url], nil
 }
 
 func (m *manager) removeStore(url string) {
@@ -165,11 +163,11 @@ func New(ctx context.Context, storeURL string) (*Store, error) {
 	s.backend = backend
 
 	// Create new backend
-	if err := s.backend.new(ctx, s.path, s.host); err != nil {
+	if err = s.backend.new(ctx, s.path, s.host); err != nil {
 		return nil, err
 	}
 
-	if err := stores.addStore(s); err != nil {
+	if s, err = stores.addStore(s); err != nil {
 		return nil, err
 	}
 

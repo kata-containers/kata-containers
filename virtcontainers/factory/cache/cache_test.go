@@ -14,6 +14,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/factory/direct"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 )
 
 func TestTemplateFactory(t *testing.T) {
@@ -32,6 +33,12 @@ func TestTemplateFactory(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
+	var savedStorePath = store.VCStorePrefix
+	store.VCStorePrefix = testDir
+	defer func() {
+		store.VCStorePrefix = savedStorePath
+	}()
 
 	// New
 	f := New(ctx, 2, direct.New(ctx, vmConfig))

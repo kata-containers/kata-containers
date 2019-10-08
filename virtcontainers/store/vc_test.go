@@ -8,6 +8,8 @@ package store
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -99,6 +101,17 @@ func TestStoreVCSandboxFileNegative(t *testing.T) {
 }
 
 func TestStoreVCNewVCSandboxStore(t *testing.T) {
+	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
+	defer func() {
+		os.RemoveAll(testDir)
+	}()
+
+	var savedStorePath = VCStorePrefix
+	VCStorePrefix = testDir
+	defer func() {
+		VCStorePrefix = savedStorePath
+	}()
+
 	_, err := NewVCSandboxStore(context.Background(), testSandboxID)
 	assert.Nil(t, err)
 
@@ -107,6 +120,17 @@ func TestStoreVCNewVCSandboxStore(t *testing.T) {
 }
 
 func TestStoreVCNewVCContainerStore(t *testing.T) {
+	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
+	defer func() {
+		os.RemoveAll(testDir)
+	}()
+
+	var savedStorePath = VCStorePrefix
+	VCStorePrefix = testDir
+	defer func() {
+		VCStorePrefix = savedStorePath
+	}()
+
 	_, err := NewVCContainerStore(context.Background(), testSandboxID, "foobar")
 	assert.Nil(t, err)
 

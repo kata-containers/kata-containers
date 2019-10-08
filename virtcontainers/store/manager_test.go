@@ -55,14 +55,15 @@ func TestManagerAddStore(t *testing.T) {
 	assert.NotNil(t, newStore, "findStore failed")
 
 	// Duplicate, should fail
-	err = stores.addStore(s)
-	assert.NotNil(t, err, "addStore should have failed")
+	ns, err := stores.addStore(s)
+	assert.Nil(t, err, "addStore should not failed")
+	assert.Equal(t, s, ns)
 
 	// Try with an empty URL
 	sEmpty, err := New(context.Background(), storeRoot)
 	assert.Nil(t, err)
 	sEmpty.url = ""
-	err = stores.addStore(sEmpty)
+	_, err = stores.addStore(sEmpty)
 	assert.NotNil(t, err, "addStore should have failed on an empty store URL")
 
 }
