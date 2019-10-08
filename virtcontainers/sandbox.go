@@ -477,31 +477,12 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 		s.Logger().WithField("features", s.config.Experimental).Infof("Enable experimental features")
 	}
 
-	if s.supportNewStore() {
-		// Restored successfully from newstore before.
-		if s.state.State != "" {
-			return s, nil
-		}
-	} else {
-		// Fetch sandbox network to be able to access it from the sandbox structure.
-		var networkNS NetworkNamespace
-		if err := s.store.Load(store.Network, &networkNS); err == nil {
-			s.networkNS = networkNS
-		}
-
-		devices, err := s.store.LoadDevices()
-		if err != nil {
-			s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("load sandbox devices failed")
-		}
-		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
-
-		// Sandbox state has been loaded from storage.
-		// If the Stae is not empty, this is a re-creation, i.e.
-		// we don't need to talk to the guest's agent, but only
-		// want to create the sandbox and its containers in memory.
-		if s.state.State != "" {
-			return s, nil
-		}
+	// Sandbox state has been loaded from storage.
+	// If the Stae is not empty, this is a re-creation, i.e.
+	// we don't need to talk to the guest's agent, but only
+	// want to create the sandbox and its containers in memory.
+	if s.state.State != "" {
+		return s, nil
 	}
 
 	// Below code path is called only during create, because of earlier check.
@@ -586,6 +567,18 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 			return nil, err
 		}
 	} else {
+		// Fetch sandbox network to be able to access it from the sandbox structure.
+		var networkNS NetworkNamespace
+		if err = s.store.Load(store.Network, &networkNS); err == nil {
+			s.networkNS = networkNS
+		}
+
+		devices, err := s.store.LoadDevices()
+		if err != nil {
+			s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("load sandbox devices failed")
+		}
+		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
+
 		// Load sandbox state. The hypervisor.createSandbox call, may need to access statei.
 		state, err := s.store.LoadState()
 		if err == nil {
