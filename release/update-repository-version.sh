@@ -36,6 +36,10 @@ trap 'handle_error $LINENO' ERR
 get_changes() {
 	local current_version=$1
 	[ -n "${current_version}" ] || die "current version not provided"
+	if [ "${current_version}" == "new" ];then
+		echo "Starting to version this repository"
+		return
+	fi
 
 	# If for some reason there is not a tag this could fail
 	# better fail and write the error in the PR
@@ -91,15 +95,19 @@ bump_repo() {
 	git checkout "origin/${target_branch}" -b "${branch}"
 
 	# All repos we build should have a VERSION file
-	[ -f "VERSION" ] || die "VERSION file not found "
-	current_version="$(cat ./VERSION | grep -v '#')"
+	if [ ! -f "VERSION" ]; then
+		current_version="new"
+		echo "${new_version}" >VERSION
+	else
+		current_version="$(grep -v '#' ./VERSION)"
 
-	info "Updating VERSION file"
-	echo "${new_version}" >VERSION
-	if git diff --exit-code; then
-		info "${repo} already in version ${new_version}"
-		cat VERSION
-		return 0
+		info "Updating VERSION file"
+		echo "${new_version}" >VERSION
+		if git diff --exit-code; then
+			info "${repo} already in version ${new_version}"
+			cat VERSION
+			return 0
+		fi
 	fi
 
 	info "Creating PR message"
@@ -147,14 +155,15 @@ EOT
 	exit "$exit_code"
 }
 
-# The tests repository is not included due to does not provide VERSION file.
 repos=(
 	"agent"
 	"ksm-throttler"
 	"osbuilder"
+	"packaging"
 	"proxy"
 	"runtime"
 	"shim"
+	"tests"
 )
 
 main(){
@@ -167,15 +176,6 @@ main(){
 
 	shift $((OPTIND - 1))
 
-	declare -A bump_stable
-	# ksm-throttler is a project with low activity
-	# Also it has low interdependency with other Kata projects.
-	# Lets keep this as a single branch to simplify maintenance.
-	bump_stable[ksm-throttler]=no
-	# The image format is not likely to happen, unless a breaking change happens
-	# If image format breaks Kata major version should change 1.X to 2.X
-	# Lets keep this as a single branch to simplify maintenance.
-	bump_stable[osbuilder]=no
 
 	new_version=${1:-}
 	target_branch=${2:-}
@@ -183,11 +183,6 @@ main(){
 	[ -n "${target_branch}" ] || die "no target branch"
 	for repo in "${repos[@]}"
 	do
-		echo "Bump ${repo} has stable : ${bump_stable[$repo]:-yes}"
-		if [ ${bump_stable[$repo]:-yes} == "no" ] && [[ ${target_branch} =~ .*stable-.* ]] ;then
-			echo "Not stable branch supported"
-			continue
-		fi
 		pushd "$tmp_dir" >>/dev/null
 		bump_repo "${repo}" "${new_version}" "${target_branch}"
 		popd >>/dev/null
