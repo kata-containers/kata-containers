@@ -120,7 +120,15 @@ $(get_changes "$current_version")
 EOT
 	cat "${notes_file}"
 
-	git add -u
+	if (echo "${current_version}" | grep "alpha") && (echo "${new_version}" | grep -v "alpha");then
+		info "update move from alpha, check if new version is rc0"
+		if echo "$new_version" | grep -v "rc0"; then
+			die "bump should be from alph to rc0"
+		fi
+		info "OK"
+	fi
+
+	git add VERSION
 	info "Creating commit with new changes"
 	commit_msg="$(generate_commit $new_version $current_version)"
 	git commit -s -m "${commit_msg}"
