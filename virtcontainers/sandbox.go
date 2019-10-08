@@ -495,13 +495,11 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 		}
 		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
 
-		// We first try to fetch the sandbox state from storage.
-		// If it exists, this means this is a re-creation, i.e.
+		// Sandbox state has been loaded from storage.
+		// If the Stae is not empty, this is a re-creation, i.e.
 		// we don't need to talk to the guest's agent, but only
 		// want to create the sandbox and its containers in memory.
-		state, err := s.store.LoadState()
-		if err == nil && state.State != "" {
-			s.state = state
+		if s.state.State != "" {
 			return s, nil
 		}
 	}
@@ -588,6 +586,12 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 			return nil, err
 		}
 	} else {
+		// Load sandbox state. The hypervisor.createSandbox call, may need to access statei.
+		state, err := s.store.LoadState()
+		if err == nil {
+			s.state = state
+		}
+
 		if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.store); err != nil {
 			return nil, err
 		}
