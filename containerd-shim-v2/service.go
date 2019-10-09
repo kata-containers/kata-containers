@@ -592,17 +592,17 @@ func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes
 	err = s.sandbox.PauseContainer(r.ID)
 	if err == nil {
 		c.status = task.StatusPaused
+		s.send(&eventstypes.TaskPaused{
+			ContainerID: c.id,
+		})
 		return empty, nil
 	}
 
-	c.status, err = s.getContainerStatus(c.id)
-	if err != nil {
+	if status, err := s.getContainerStatus(c.id); err != nil {
 		c.status = task.StatusUnknown
+	} else {
+		c.status = status
 	}
-
-	s.send(&eventstypes.TaskPaused{
-		ContainerID: c.id,
-	})
 
 	return empty, err
 }
@@ -624,17 +624,17 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptyp
 	err = s.sandbox.ResumeContainer(c.id)
 	if err == nil {
 		c.status = task.StatusRunning
+		s.send(&eventstypes.TaskResumed{
+			ContainerID: c.id,
+		})
 		return empty, nil
 	}
 
-	c.status, err = s.getContainerStatus(c.id)
-	if err != nil {
+	if status, err := s.getContainerStatus(c.id); err != nil {
 		c.status = task.StatusUnknown
+	} else {
+		c.status = status
 	}
-
-	s.send(&eventstypes.TaskResumed{
-		ContainerID: c.id,
-	})
 
 	return empty, err
 }
