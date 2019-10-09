@@ -145,14 +145,6 @@ install_experimental_kernel() {
 	popd
 }
 
-# Install static nemu asset
-install_nemu() {
-	info "build static nemu"
-	"${script_dir}/../static-build/nemu/build-static-nemu.sh"
-	info "Install static nemu"
-	tar xf kata-nemu-static.tar.gz -C "${destdir}"
-}
-
 # Install static qemu asset
 install_qemu() {
 	info "build static qemu"
@@ -266,7 +258,6 @@ main() {
 	install_kernel
 	install_qemu
 	install_qemu_virtiofsd
-	install_nemu
 	install_firecracker
 	install_docker_config_script
 
