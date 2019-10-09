@@ -63,6 +63,8 @@ main() {
 		die "Unsupported architecture: $arch"
 	fi
 	cached_qemu_experimental_version=$(curl -sfL "${qemu_experimental_latest_build_url}/latest") || cached_qemu_experimental_version="none"
+	info "Cached qemu experimental version: $cached_qemu_experimental_version"
+	info "Current qemu experimental version: $CURRENT_QEMU_TAG"
 	mkdir -p "${INSTALL_LOCATION}"
 	if [ "$cached_qemu_experimental_version" == "$CURRENT_QEMU_TAG" ]; then
 		install_cached_qemu_experimental || build_and_install_static_experimental_qemu
