@@ -22,7 +22,7 @@ pushd $GOPATH/src/github.com/containernetworking/plugins
 git checkout "$plugins_version"
 
 echo "Build CNI plugins"
-./build.sh
+./build_linux.sh
 
 echo "Install CNI binaries"
 cni_bin_path="/opt/cni"
