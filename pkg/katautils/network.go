@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"golang.org/x/sys/unix"
 )
@@ -59,7 +60,7 @@ func SetupNetworkNamespace(config *vc.NetworkConfig) error {
 	}
 
 	if config.NetNSPath == "" {
-		n, err := ns.NewNS()
+		n, err := testutils.NewNS()
 		if err != nil {
 			return err
 		}
