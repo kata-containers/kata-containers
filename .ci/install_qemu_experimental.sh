@@ -23,7 +23,7 @@ QEMU_TAR="kata-qemu-static.tar.gz"
 arch=$("${cidir}"/kata-arch.sh -d)
 QEMU_PATH="/opt/kata/bin/qemu-virtiofs-system-x86_64"
 VIRTIOFS_PATH="/opt/kata/bin/virtiofsd"
-qemu_experimental_latest_build_url="${jenkins_url}/job/qemu-experimental-$(uname -m)/${cached_artifacts_path}"
+qemu_experimental_latest_build_url="${jenkins_url}/job/qemu-experimental-nightly-$(uname -m)/${cached_artifacts_path}"
 
 uncompress_experimental_qemu() {
 	local qemu_tar_location="$1"
