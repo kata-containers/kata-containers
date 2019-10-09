@@ -1,4 +1,4 @@
-// +build !s390x
+// +build !arm64,!ppc64le,!s390x
 
 // Copyright (c) 2019 IBM
 //
