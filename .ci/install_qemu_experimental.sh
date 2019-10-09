@@ -36,7 +36,7 @@ install_cached_qemu_experimental() {
 	curl -fL --progress-bar "${qemu_experimental_latest_build_url}/${QEMU_TAR}" -o "${QEMU_TAR}" || return 1
 	curl -fsOL "${qemu_experimental_latest_build_url}/sha256sum-${QEMU_TAR}" || return 1
 	sha256sum -c "sha256sum-${QEMU_TAR}" || return 1
-	uncompress_static_qemu "${QEMU_TAR}"
+	uncompress_experimental_qemu "${QEMU_TAR}"
 	sudo -E ln -sf "${QEMU_PATH}" "/usr/bin"
 	sudo -E ln -sf "${VIRTIOFS_PATH}" "/usr/bin"
 }
