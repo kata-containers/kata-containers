@@ -1,4 +1,4 @@
-// Copyright 2015-2017 CNI authors
+// Copyright 2016 CNI authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,25 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build !linux
+package version
 
-package ns
+import (
+	"encoding/json"
+	"fmt"
+)
 
-import "github.com/containernetworking/cni/pkg/types"
+// ConfigDecoder can decode the CNI version available in network config data
+type ConfigDecoder struct{}
 
-// Returns an object representing the current OS thread's network namespace
-func GetCurrentNS() (NetNS, error) {
-	return nil, types.NotImplementedError
-}
-
-func NewNS() (NetNS, error) {
-	return nil, types.NotImplementedError
-}
-
-func (ns *netNS) Close() error {
-	return types.NotImplementedError
-}
-
-func (ns *netNS) Set() error {
-	return types.NotImplementedError
+func (*ConfigDecoder) Decode(jsonBytes []byte) (string, error) {
+	var conf struct {
+		CNIVersion string `json:"cniVersion"`
+	}
+	err := json.Unmarshal(jsonBytes, &conf)
+	if err != nil {
+		return "", fmt.Errorf("decoding version from network config: %s", err)
+	}
+	if conf.CNIVersion == "" {
+		return "0.1.0", nil
+	}
+	return conf.CNIVersion, nil
 }
