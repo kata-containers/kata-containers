@@ -18,11 +18,9 @@ source /etc/os-release || source /usr/lib/os-release
 KATA_DEV_MODE="${KATA_DEV_MODE:-}"
 
 CURRENT_QEMU_TAG=$(get_version "assets.hypervisor.qemu-experimental.tag")
-QEMU_REPO_URL=$(get_version "assets.hypervisor.qemu-experimental.url")
 PACKAGING_REPO="github.com/kata-containers/packaging"
 QEMU_TAR="kata-qemu-static.tar.gz"
 arch=$("${cidir}"/kata-arch.sh -d)
-INSTALL_LOCATION="/tmp/qemu-virtiofs-static/opt/kata/bin/"
 QEMU_PATH="/opt/kata/bin/qemu-virtiofs-system-x86_64"
 VIRTIOFS_PATH="/opt/kata/bin/virtiofsd"
 qemu_experimental_latest_build_url="${jenkins_url}/job/qemu-experimental-$(uname -m)/${cached_artifacts_path}"
@@ -65,7 +63,6 @@ main() {
 	cached_qemu_experimental_version=$(curl -sfL "${qemu_experimental_latest_build_url}/latest") || cached_qemu_experimental_version="none"
 	info "Cached qemu experimental version: $cached_qemu_experimental_version"
 	info "Current qemu experimental version: $CURRENT_QEMU_TAG"
-	mkdir -p "${INSTALL_LOCATION}"
 	if [ "$cached_qemu_experimental_version" == "$CURRENT_QEMU_TAG" ]; then
 		install_cached_qemu_experimental || build_and_install_static_experimental_qemu
 	else
