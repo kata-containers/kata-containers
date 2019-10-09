@@ -17,7 +17,7 @@ source /etc/os-release || source /usr/lib/os-release
 
 versions_file="${cidir}/../versions.yaml"
 arch=$("${cidir}"/kata-arch.sh -d)
-latest_build_url="http://jenkins.katacontainers.io/job/nemu-nightly-${arch}/lastSuccessfulBuild/artifact/artifacts"
+latest_build_url="${jenkins_url}/job/nemu-nightly-${arch}/${cached_artifacts_path}"
 nemu_repo=$(get_version "assets.hypervisor.nemu.url")
 nemu_version=$(get_version "assets.hypervisor.nemu.version")
 NEMU_TAR="kata-nemu-static.tar.gz"

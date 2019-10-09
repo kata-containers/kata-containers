@@ -49,7 +49,7 @@ IMAGE_OS_VERSION_KEY="assets.${IMG_TYPE}.architecture.$(uname -m).version"
 agent_path="${GOPATH}/src/github.com/kata-containers/agent"
 osbuilder_repo="github.com/kata-containers/osbuilder"
 osbuilder_path="${GOPATH}/src/${osbuilder_repo}"
-latest_build_url="http://jenkins.katacontainers.io/job/image-nightly-$(uname -m)/lastSuccessfulBuild/artifact/artifacts"
+latest_build_url="${jenkins_url}/job/image-nightly-$(uname -m)/${cached_artifacts_path}"
 
 install_ci_cache_image() {
 	type=${1}

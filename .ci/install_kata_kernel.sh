@@ -19,8 +19,8 @@ cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 source "/etc/os-release" || source "/usr/lib/os-release"
 
-latest_build_url="http://jenkins.katacontainers.io/job/kernel-nightly-$(uname -m)/lastSuccessfulBuild/artifact/artifacts"
-experimental_latest_build_url="http://jenkins.katacontainers.io/job/kernel-experimental-nightly-$(uname -m)/lastSuccessfulBuild/artifact/artifacts"
+latest_build_url="${jenkins_url}/job/kernel-nightly-$(uname -m)/${cached_artifacts_path}"
+experimental_latest_build_url="${jenkins_url}/job/kernel-experimental-nightly-$(uname -m)/${cached_artifacts_path}"
 kernel_dir="/usr/share/kata-containers"
 
 kernel_repo_name="packaging"
