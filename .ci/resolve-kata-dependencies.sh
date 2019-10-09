@@ -14,6 +14,7 @@ runtime_repo="${runtime_repo:-github.com/kata-containers/runtime}"
 shim_repo="${shim_repo:-github.com/kata-containers/shim}"
 tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 packaging_repo="${packaging_repo:-github.com/kata-containers/packaging}"
+osbuilder_repo="${osbuilder_repo:-github.com/kata-containers/osbuilder}"
 
 apply_depends_on() {
 	# kata_repo variable is set by the jenkins_job_build.sh
@@ -61,7 +62,14 @@ apply_depends_on() {
 }
 
 clone_repos() {
-	local kata_repos=( "${agent_repo}" "${proxy_repo}" "${runtime_repo}" "${shim_repo}" "${tests_repo}" "${packaging_repo}" )
+	local kata_repos=(
+	"${agent_repo}"
+	"${osbuilder_repo}"
+	"${packaging_repo}"
+	"${proxy_repo}"
+	"${runtime_repo}"
+	"${shim_repo}"
+	"${tests_repo}")
 	for repo in "${kata_repos[@]}"
 	do
 		echo "Cloning ${repo}"
@@ -94,13 +102,8 @@ clone_repos() {
 			# And show what we rebased on top of to aid debugging
 			git log --oneline "origin/${branch}~1..HEAD"
 		else
-			# Packaging repo only has master branch, so we
-			# cannot checkout to a different branch.
-			if  [ "${repo}" != "${packaging_repo}" ]
-			then
-				echo "Checking out to ${branch}"
-				git fetch origin && git checkout "$branch"
-			fi
+			echo "Checking out to ${branch}"
+			git fetch origin && git checkout "$branch"
 		fi
 		popd
 	done
