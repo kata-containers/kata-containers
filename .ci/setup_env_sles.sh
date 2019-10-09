@@ -10,6 +10,7 @@ set -e
 cidir=$(dirname "$0")
 source "/etc/os-release" || source "/usr/lib/os-release"
 source "${cidir}/lib.sh"
+arch=$("${cidir}"/kata-arch.sh -d)
 
 echo "Add repo for perl-IPC-Run"
 perl_repo="https://download.opensuse.org/repositories/devel:languages:perl/SLE_${VERSION//-/_}/devel:languages:perl.repo"
