@@ -26,7 +26,7 @@ QEMU_ARCH=$(${cidir}/kata-arch.sh -d)
 PACKAGING_REPO="github.com/kata-containers/packaging"
 ARCH=$("${cidir}"/kata-arch.sh -d)
 QEMU_TAR="kata-qemu-static.tar.gz"
-qemu_latest_build_url="http://jenkins.katacontainers.io/job/qemu-nightly-$(uname -m)/lastSuccessfulBuild/artifact/artifacts"
+qemu_latest_build_url="${jenkins_url}/job/qemu-nightly-$(uname -m)/${cached_artifacts_path}"
 
 # option "--shallow-submodules" was introduced in git v2.9.0
 GIT_SHADOW_VERSION="2.9.0"

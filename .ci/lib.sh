@@ -39,6 +39,11 @@ source "${lib_script}"
 
 export KATA_OBS_REPO_BASE="http://download.opensuse.org/repositories/home:/katacontainers:/releases:/$(arch):/master"
 
+# Jenkins master URL
+jenkins_url="http://jenkins.katacontainers.io"
+# Path where cached artifacts are found.
+cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
+
 # If we fail for any reason a message will be displayed
 die() {
 	msg="$*"

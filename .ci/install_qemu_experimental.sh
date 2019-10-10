@@ -18,14 +18,12 @@ source /etc/os-release || source /usr/lib/os-release
 KATA_DEV_MODE="${KATA_DEV_MODE:-}"
 
 CURRENT_QEMU_TAG=$(get_version "assets.hypervisor.qemu-experimental.tag")
-QEMU_REPO_URL=$(get_version "assets.hypervisor.qemu-experimental.url")
 PACKAGING_REPO="github.com/kata-containers/packaging"
 QEMU_TAR="kata-qemu-static.tar.gz"
 arch=$("${cidir}"/kata-arch.sh -d)
-INSTALL_LOCATION="/tmp/qemu-virtiofs-static/opt/kata/bin/"
 QEMU_PATH="/opt/kata/bin/qemu-virtiofs-system-x86_64"
 VIRTIOFS_PATH="/opt/kata/bin/virtiofsd"
-qemu_experimental_latest_build_url="http://jenkins.katacontainers.io/job/qemu-experimental-$(uname -m)/lastSuccessfulBuild/artifact/artifacts"
+qemu_experimental_latest_build_url="${jenkins_url}/job/qemu-experimental-nightly-$(uname -m)/${cached_artifacts_path}"
 
 uncompress_experimental_qemu() {
 	local qemu_tar_location="$1"
@@ -38,16 +36,16 @@ install_cached_qemu_experimental() {
 	curl -fL --progress-bar "${qemu_experimental_latest_build_url}/${QEMU_TAR}" -o "${QEMU_TAR}" || return 1
 	curl -fsOL "${qemu_experimental_latest_build_url}/sha256sum-${QEMU_TAR}" || return 1
 	sha256sum -c "sha256sum-${QEMU_TAR}" || return 1
-	uncompress_static_qemu "${QEMU_TAR}"
-	sudo -E ln -s "${QEMU_PATH}" "/usr/bin"
-	sudo -E ln -s "${VIRTIOFS_PATH}" "/usr/bin"
+	uncompress_experimental_qemu "${QEMU_TAR}"
+	sudo -E ln -sf "${QEMU_PATH}" "/usr/bin"
+	sudo -E ln -sf "${VIRTIOFS_PATH}" "/usr/bin"
 }
 
 build_and_install_static_experimental_qemu() {
 	build_experimental_qemu
 	uncompress_experimental_qemu "${KATA_TESTS_CACHEDIR}/${QEMU_TAR}"
-	sudo -E ln -s "${QEMU_PATH}" "/usr/bin"
-	sudo -E ln -s "${VIRTIOFS_PATH}" "/usr/bin"
+	sudo -E ln -sf "${QEMU_PATH}" "/usr/bin"
+	sudo -E ln -sf "${VIRTIOFS_PATH}" "/usr/bin"
 }
 
 build_experimental_qemu() {
@@ -63,7 +61,8 @@ main() {
 		die "Unsupported architecture: $arch"
 	fi
 	cached_qemu_experimental_version=$(curl -sfL "${qemu_experimental_latest_build_url}/latest") || cached_qemu_experimental_version="none"
-	mkdir -p "${INSTALL_LOCATION}"
+	info "Cached qemu experimental version: $cached_qemu_experimental_version"
+	info "Current qemu experimental version: $CURRENT_QEMU_TAG"
 	if [ "$cached_qemu_experimental_version" == "$CURRENT_QEMU_TAG" ]; then
 		install_cached_qemu_experimental || build_and_install_static_experimental_qemu
 	else
