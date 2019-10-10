@@ -857,6 +857,12 @@ func (c *Container) rollbackFailingContainerCreation() {
 	if err := c.removeDrive(); err != nil {
 		c.Logger().WithError(err).Error("rollback failed removeDrive()")
 	}
+	if err := c.unmountHostMounts(); err != nil {
+		c.Logger().WithError(err).Error("rollback failed unmountHostMounts()")
+	}
+	if err := bindUnmountContainerRootfs(c.ctx, kataHostSharedDir(), c.sandbox.id, c.id); err != nil {
+		c.Logger().WithError(err).Error("rollback failed bindUnmountContainerRootfs()")
+	}
 }
 
 func (c *Container) checkBlockDeviceSupport() bool {
