@@ -6,7 +6,7 @@
 package annotations
 
 const (
-	kataAnnotationsPrefix     = "io.kata-containers."
+	kataAnnotationsPrefix     = "io.katacontainers."
 	kataConfAnnotationsPrefix = kataAnnotationsPrefix + "config."
 	kataAnnotHypervisorPrefix = kataConfAnnotationsPrefix + "hypervisor."
 
