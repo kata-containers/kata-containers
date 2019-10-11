@@ -271,7 +271,7 @@ func SandboxConfigurationItemPath(id string, item Item) (string, error) {
 
 // VCStoreUUIDPath returns a virtcontainers runtime uuid URL.
 func VCStoreUUIDPath() string {
-	return filesystemScheme + "://" + filepath.Join(VCStorePrefix, VMUUIDStoragePath)
+	return filesystemScheme + "://" + filepath.Join(VCStorePrefix, VMUUIDStoragePath())
 }
 
 // SandboxRuntimeRoot returns a virtcontainers sandbox runtime root URL.
