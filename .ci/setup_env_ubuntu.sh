@@ -43,6 +43,25 @@ declare -A packages=( \
 	[redis]="redis-server" \
 )
 
+rust_agent_pkgs=()
+rust_agent_pkgs+=("build-essential")
+rust_agent_pkgs+=("g++")
+rust_agent_pkgs+=("make")
+rust_agent_pkgs+=("cmake")
+rust_agent_pkgs+=("automake")
+rust_agent_pkgs+=("autoconf")
+rust_agent_pkgs+=("m4")
+rust_agent_pkgs+=("libc6-dev")
+rust_agent_pkgs+=("libstdc++-8-dev")
+rust_agent_pkgs+=("coreutils")
+rust_agent_pkgs+=("binutils")
+rust_agent_pkgs+=("debianutils")
+rust_agent_pkgs+=("gcc")
+rust_agent_pkgs+=("musl")
+rust_agent_pkgs+=("musl-dev")
+rust_agent_pkgs+=("musl-tools")
+rust_agent_pkgs+=("git")
+
 main()
 {
 	local setup_type="$1"
@@ -61,6 +80,11 @@ main()
 			info "The following package will be installed: $pkgs"
 			pkgs_to_install+=" $pkgs"
 		done
+	fi
+
+	# packages for rust agent, build on 18.04 or later
+	if [ ! "${VERSION_ID}" < "18.04" ]; then
+		pkgs_to_install+=" ${rust_agent_pkgs[@]}"
 	fi
 
 	chronic sudo -E apt -y install $pkgs_to_install

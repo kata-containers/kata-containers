@@ -59,6 +59,7 @@ long_options=(
 	[files]="Check files"
 	[force]="Force a skipped test to run"
 	[golang]="Check '.go' files"
+	[rust]="Check '.rs' files"
 	[help]="Display usage statement"
 	[json]="Check JSON files"
 	[labels]="Check labels databases"
@@ -223,6 +224,9 @@ EOT
 
 static_check_go_arch_specific()
 {
+	if [ "${RUST_AGENT:-}" == "yes" ]; then
+		return
+	fi
 	local go_packages
 	local submodule_packages
 	local all_packages
@@ -297,6 +301,17 @@ static_check_go_arch_specific()
 	echo "$dirs" | sed 's/^ *//g' | tr ' ' '\n'
 
 	eval "$linter" "${linter_args}" "$dirs"
+}
+
+static_check_rust_arch_specific()
+{
+	if [ "${RUST_AGENT:-}" != "yes" ]; then
+		return
+	fi
+
+	find . -type f -name "*.rs"  | egrep -v "target/|grpc-rs/|protocols/" | xargs rustfmt --check > /dev/null 2>&1
+
+	[ $? -eq 0 ] || die "crate not formatted by rustfmt."
 }
 
 # Check the "versions database".
@@ -381,6 +396,9 @@ static_check_license_headers()
 		--exclude="*.yml" \
 		--exclude="go.mod" \
 		--exclude="go.sum" \
+		--exclude="*.lock" \
+		--exclude="grpc-rs/*" \
+		--exclude="target/*" \
 		-EL "\<${pattern}\>" \
 		$files || true)
 
@@ -482,7 +500,7 @@ static_check_docs()
 	local new_urls
 	local url
 
-	all_docs=$(git ls-files "*.md" | grep -v "^vendor/" | sort || true)
+	all_docs=$(git ls-files "*.md" | grep -v "/\(vendor\|grpc-rs\|target\)/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -705,7 +723,7 @@ static_check_files()
 	then
 		info "Checking all files in $branch branch"
 
-		files=$(git ls-files | grep -v "^(.git|vendor)/" || true)
+		files=$(git ls-files | egrep -v "/(.git|vendor|grpc-rs|target)/" || true)
 	else
 		info "Checking local branch for changed files only"
 
@@ -773,6 +791,9 @@ static_check_files()
 # - Ensure vendor metadata is valid.
 static_check_vendor()
 {
+	if [ "${RUST_AGENT:-}" == "yes" ]; then
+		return
+	fi
 	local files
 	local vendor_files
 	local result
@@ -826,7 +847,7 @@ static_check_xml()
 	local all_xml
 	local files
 
-	all_xml=$(git ls-files "*.xml" | grep -v "^vendor/" | sort || true)
+	all_xml=$(git ls-files "*.xml" | grep -v "/\(vendor\|grpc-rs\|target\)/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -878,7 +899,7 @@ static_check_shell()
 	local all_scripts
 	local scripts
 
-	all_scripts=$(git ls-files "*.sh" "*.bash" | grep -v "^vendor/" | sort || true)
+	all_scripts=$(git ls-files "*.sh" "*.bash" | grep -v "/\(vendor\|grpc-rs\|target\)/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -915,7 +936,7 @@ static_check_json()
 	local all_json
 	local json_files
 
-	all_json=$(git ls-files "*.json" | grep -v "^vendor/" | sort || true)
+	all_json=$(git ls-files "*.json" | grep -v "/\(vendor\|grpc-rs\|target\)/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -1025,6 +1046,7 @@ main()
 			--files) func=static_check_files ;;
 			--force) force="true" ;;
 			--golang) func=static_check_go_arch_specific ;;
+			--rust) func=static_check_rust_arch_specific ;;
 			-h|--help) usage; exit 0 ;;
 			--json) func=static_check_json ;;
 			--labels) func=static_check_labels;;
