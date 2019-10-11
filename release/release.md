@@ -32,7 +32,13 @@ guides on how to use release scripts instead of do all the checklist manually.
 - You should configure your GitHub to use your ssh keys (to push to branches). See https://help.github.com/articles/adding-a-new-ssh-key-to-your-github-account/.
     * As an alternative, configure hub to push and fork with HTTPS, `git config --global hub.protocol https` (Not tested yet) *
 
-- [Docker](https://docs.docker.com/install/)
+- [Docker](https://docs.docker.com/install/). 
+  Additionally, the step to generate static binaries requires you to be part of the `docker` group.
+  ```bash
+  $ sudo usermod -a -G docker ${USER}
+  $ # Reinitialize user env for the user
+  $ newgrp -
+  ```
 
 - Get the [Packaging](https://github.com/kata-containers/packaging) Kata repository
 
@@ -96,8 +102,8 @@ $ git pull
    ```bash
    $ cd ${GOPATH}/src/github.com/kata-containers/packaging/obs-packaging
    # Optional, if release is a new stable branch ./create-repo-branch.sh ${BRANCH}
-   $./gen_versions_txt.sh ${BRANCH}
-   $PUSH=1 OBS_SUBPROJECT="releases:$(uname -m):${BRANCH}" ./build_from_docker.sh ${NEW_VERSION}
+   $ ./gen_versions_txt.sh ${BRANCH}
+   $ PUSH=1 OBS_SUBPROJECT="releases:$(uname -m):${BRANCH}" ./build_from_docker.sh ${NEW_VERSION}
    ```
 
 6. Test packages
@@ -109,7 +115,7 @@ make sure the packages install and work. To help with this you can use the [pack
    ```bash
    $ cd ${GOPATH}/src/github.com/kata-containers/packaging/release
    # Note: OLD_VERSION is where the script should start to get changes.
-   $ ./runtime-release-notes.sh OLD_VERSION ${NEW_VERSION} > notes.md
+   $ ./runtime-release-notes.sh ${OLD_VERSION} ${NEW_VERSION} > notes.md
    # Add the release notes in GitHub runtime.
    $ hub -C "${GOPATH}/src/github.com/kata-containers/runtime" release edit -F notes.md "${NEW_VERSION}"
    ```
