@@ -621,7 +621,7 @@ func TestSandboxGetContainer(t *testing.T) {
 
 	contID := "999"
 	contConfig := newTestContainerConfigNoop(contID)
-	nc, err := newContainer(p, contConfig)
+	nc, err := newContainer(p, &contConfig)
 	assert.NoError(err)
 
 	err = p.addContainer(nc)
@@ -1043,7 +1043,7 @@ func TestDeleteStoreWhenNewContainerFail(t *testing.T) {
 			DevType:       "",
 		},
 	}
-	_, err = newContainer(p, contConfig)
+	_, err = newContainer(p, &contConfig)
 	assert.NotNil(t, err, "New container with invalid device info should fail")
 	storePath := store.ContainerConfigurationRootPath(testSandboxID, contID)
 	_, err = os.Stat(storePath)
