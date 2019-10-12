@@ -83,7 +83,7 @@ main()
 	fi
 
 	# packages for rust agent, build on 18.04 or later
-	if [ ! "${VERSION_ID}" < "18.04" ]; then
+	if [[ ! "${VERSION_ID}" < "18.04" ]]; then
 		pkgs_to_install+=" ${rust_agent_pkgs[@]}"
 	fi
 
