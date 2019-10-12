@@ -1099,7 +1099,7 @@ func (s *Sandbox) fetchContainers() error {
 		contConfig.Spec = &spec
 		s.config.Containers[i] = contConfig
 
-		c, err := newContainer(s, contConfig)
+		c, err := newContainer(s, &s.config.Containers[i])
 		if err != nil {
 			return err
 		}
@@ -1118,7 +1118,7 @@ func (s *Sandbox) fetchContainers() error {
 func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, error) {
 	storeAlreadyExists := store.VCContainerStoreExists(s.ctx, s.id, contConfig.ID)
 	// Create the container.
-	c, err := newContainer(s, contConfig)
+	c, err := newContainer(s, &contConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -1417,7 +1417,7 @@ func (s *Sandbox) createContainers() error {
 
 	for _, contConfig := range s.config.Containers {
 
-		c, err := newContainer(s, contConfig)
+		c, err := newContainer(s, &contConfig)
 		if err != nil {
 			return err
 		}

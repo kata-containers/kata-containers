@@ -717,7 +717,7 @@ func (c *Container) createBlockDevices() error {
 }
 
 // newContainer creates a Container structure from a sandbox and a container configuration.
-func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, error) {
+func newContainer(sandbox *Sandbox, contConfig *ContainerConfig) (*Container, error) {
 	span, _ := sandbox.trace("newContainer")
 	defer span.Finish()
 
@@ -729,7 +729,7 @@ func newContainer(sandbox *Sandbox, contConfig ContainerConfig) (*Container, err
 		id:            contConfig.ID,
 		sandboxID:     sandbox.id,
 		rootFs:        contConfig.RootFs,
-		config:        &contConfig,
+		config:        contConfig,
 		sandbox:       sandbox,
 		runPath:       store.ContainerRuntimeRootPath(sandbox.id, contConfig.ID),
 		configPath:    store.ContainerConfigurationRootPath(sandbox.id, contConfig.ID),
@@ -812,7 +812,7 @@ func (c *Container) createMounts() error {
 	return nil
 }
 
-func (c *Container) createDevices(contConfig ContainerConfig) error {
+func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	// If sandbox supports "newstore", only newly created container can reach this function,
 	// so we don't call restore when `supportNewStore` is true
 	if !c.sandbox.supportNewStore() {
