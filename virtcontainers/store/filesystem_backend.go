@@ -105,7 +105,14 @@ var RunVMStoragePath = func() string {
 
 // VMUUIDStoragePath is the uuid directory.
 // It will contain all uuid info used by guest vm.
-var VMUUIDStoragePath = filepath.Join("/var/lib", StoragePathSuffix, UUIDPathSuffix)
+var VMUUIDStoragePath = func() string {
+	path := filepath.Join("/var/lib", StoragePathSuffix, UUIDPathSuffix)
+	if rootless.IsRootless() {
+		return filepath.Join(rootless.GetRootlessDir(), path)
+	}
+	return path
+
+}
 
 func itemToFile(item Item) (string, error) {
 	switch item {
