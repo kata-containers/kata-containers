@@ -61,3 +61,8 @@ externals:
 
   critools:
     version: 1.14.0
+
+  sonobuoy:
+    description: "Tool to run kubernetes e2e conformance tests"
+    url: "https://github.com/vmware-tanzu/sonobuoy"
+    version: "0.16.1"
