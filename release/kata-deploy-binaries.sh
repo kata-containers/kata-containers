@@ -227,6 +227,12 @@ ${prefix}/bin/kata-runtime --kata-config "${prefix}/share/defaults/${project}/co
 EOT
 	sudo chmod +x kata-nemu
 
+	cat <<EOT | sudo tee kata-qemu-virtiofs
+#!/bin/bash
+${prefix}/bin/kata-runtime --kata-config "${prefix}/share/defaults/${project}/configuration-qemu-virtiofs.toml" \$@
+EOT
+	sudo chmod +x kata-qemu-virtiofs
+
 	popd
 }
 
