@@ -17,7 +17,9 @@ set -o pipefail
 export KUBECONFIG=$HOME/.kube/config
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../../../lib/common.bash"
+source "${SCRIPT_PATH}/../../../.ci/lib.sh"
 
+CI=${CI:-false}
 RUNTIME="${RUNTIME:-kata-runtime}"
 CRI_RUNTIME="${CRI_RUNTIME:-crio}"
 
@@ -32,6 +34,20 @@ create_kata_webhook() {
 	# Apply kata-webhook deployment
 	kubectl apply -f deploy/
 	popd
+}
+
+get_sonobuoy() {
+	sonobuoy_repo=$(get_test_version "externals.sonobuoy.url")
+	version=$(get_test_version "externals.sonobuoy.version")
+	arch="$(${SCRIPT_PATH}/../../../.ci/kata-arch.sh --golang)"
+	sonobuoy_tar="sonobuoy_${version}_linux_${arch}.tar.gz"
+	install_path="/usr/bin"
+
+	curl -LO "${sonobuoy_repo}/releases/download/v${version}/${sonobuoy_tar}"
+	sudo tar -xzf "${sonobuoy_tar}" -C "$install_path"
+	sudo chmod +x "${install_path}/sonobuoy"
+	rm -f "${sonobuoy_tar}"
+
 }
 
 run_sonobuoy() {
@@ -85,12 +101,11 @@ cleanup() {
 }
 
 main() {
-	sonobuoy_repo="github.com/heptio/sonobuoy"
-	go get -u "$sonobuoy_repo"
-
 	if [ "$RUNTIME" == "kata-runtime" ]; then
 		create_kata_webhook
 	fi
+
+	get_sonobuoy
 	run_sonobuoy
 	cleanup
 }
