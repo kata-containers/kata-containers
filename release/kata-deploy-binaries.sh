@@ -109,15 +109,7 @@ install_image() {
 
 #Install kernel asset
 install_kernel() {
-	if [[ "$test_local" == "true" ]]; then
-		pushd "${script_dir}/../"
-	else
-		go get "github.com/${project}/packaging" || true
-		pushd ${GOPATH}/src/github.com/${project}/packaging >>/dev/null
-		git checkout "${kata_version}-kernel-config" ||
-		git checkout "${kata_version}"
-	fi
-
+	pushd "${script_dir}/../"
 	info "build kernel"
 	./kernel/build-kernel.sh setup
 	./kernel/build-kernel.sh build
@@ -128,15 +120,7 @@ install_kernel() {
 
 #Install experimental kernel asset
 install_experimental_kernel() {
-	if [[ "$test_local" == "true" ]]; then
-		pushd "${script_dir}/../"
-	else
-		go get "github.com/${project}/packaging" || true
-		pushd ${GOPATH}/src/github.com/${project}/packaging >>/dev/null
-		git checkout "${kata_version}-kernel-config" ||
-		git checkout "${kata_version}"
-	fi
-
+	pushd "${script_dir}/../"
 	info "build experimental kernel"
 	./kernel/build-kernel.sh -e setup
 	./kernel/build-kernel.sh -e build
