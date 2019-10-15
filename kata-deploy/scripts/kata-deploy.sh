@@ -14,9 +14,10 @@ containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
 
 shims=(
-	"qemu"
-	"nemu"
 	"fc"
+	"nemu"
+	"qemu"
+	"qemu-virtiofs"
 )
 
 # If we fail for any reason a message will be displayed
@@ -93,7 +94,7 @@ EOT
 	else
 		cat <<EOT | tee -a "$crio_conf_file"
 
-# Path to the Kata Containers runtime binary that uses the QEMU hypervisor.
+# Path to the Kata Containers runtime binary that uses the QEMU hypervisor with virtiofs support.
 [$kata_qemu_conf]
   runtime_path = "${kata_qemu_virtiofs_path}"
 EOT
@@ -160,6 +161,10 @@ function configure_containerd() {
         runtime_type = "io.containerd.kata-qemu.v2"
         [plugins.cri.containerd.runtimes.kata-qemu.options]
 	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-qemu.toml"
+     [plugins.cri.containerd.runtimes.kata-qemu-virtiofs]
+        runtime_type = "io.containerd.kata-qemu-virtiofs.v2"
+        [plugins.cri.containerd.runtimes.kata-qemu-virtiofs.options]
+	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-qemu-virtiofs.toml"
      [plugins.cri.containerd.runtimes.kata-nemu]
         runtime_type = "io.containerd.kata-nemu.v2"
         [plugins.cri.containerd.runtimes.kata-nemu.options]
