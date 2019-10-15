@@ -18,7 +18,8 @@ qemu_virtiofs_repo=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.url
 # This tag will be supported on the runtime versions.yaml
 qemu_virtiofs_tag=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.tag")
 qemu_tar="kata-qemu-static.tar.gz"
-qemu_tmp_tar="kata-qemu-static-tmp.tar.gz"
+qemu_virtiofs_tar="kata-qemu-virtiofs-static.tar.gz"
+qemu_tmp_tar="kata-qemu-virtiofs-static-tmp.tar.gz"
 
 info "Build ${qemu_virtiofs_repo} tag: ${qemu_virtiofs_tag}"
 
@@ -46,4 +47,4 @@ sudo chown ${USER}:${USER} "${PWD}/${qemu_tar}"
 
 # Remove blacklisted binaries
 gzip -d < "${qemu_tar}" | tar --delete --wildcards -f - ${qemu_black_list[*]} | gzip > "${qemu_tmp_tar}"
-mv -f "${qemu_tmp_tar}" "${qemu_tar}"
+mv -f "${qemu_tmp_tar}" "${qemu_virtiofs_tar}"
