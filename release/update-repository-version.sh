@@ -123,7 +123,7 @@ EOT
 	if (echo "${current_version}" | grep "alpha") && (echo "${new_version}" | grep -v "alpha");then
 		info "update move from alpha, check if new version is rc0"
 		if echo "$new_version" | grep -v "rc0"; then
-			die "bump should be from alph to rc0"
+			die "bump should be from alpha to rc0"
 		fi
 		info "OK"
 	fi
