@@ -142,7 +142,7 @@ install_qemu_virtiofsd() {
 	info "build static qemu-virtiofs"
 	"${script_dir}/../static-build/qemu-virtiofs/build-static-qemu-virtiofs.sh"
 	info "Install static qemu-virtiofs"
-	tar xf kata-qemu-static.tar.gz -C "${destdir}"
+	tar xf kata-qemu-virtiofs-static.tar.gz -C "${destdir}"
 }
 
 # Install static firecracker asset
