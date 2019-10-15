@@ -91,7 +91,7 @@ for i in $(seq ${max_cri_socket_check}); do
 	echo "Waiting for cri socket ${cri_runtime_socket} (try ${i})"
 done
 
-sudo systemctl status "${cri_runtime}"
+sudo systemctl status "${cri_runtime}" --no-pager
 
 echo "Init cluster using ${cri_runtime_socket}"
 kubeadm_config_template="${SCRIPT_PATH}/kubeadm/config.yaml"
