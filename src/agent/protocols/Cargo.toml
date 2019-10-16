@@ -1,0 +1,10 @@
+[package]
+name = "protocols"
+version = "0.1.0"
+authors = ["Hui Zhu <teawater@hyper.sh>"]
+edition = "2018"
+
+[dependencies]
+grpcio = { git="https://github.com/alipay/grpc-rs", branch="rust_agent" }
+protobuf = "2.6.1"
+futures = "0.1.27"
