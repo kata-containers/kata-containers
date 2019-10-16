@@ -14,9 +14,10 @@ containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
 
 shims=(
-	"qemu"
-	"nemu"
 	"fc"
+	"nemu"
+	"qemu"
+	"qemu-virtiofs"
 )
 
 # If we fail for any reason a message will be displayed
@@ -93,12 +94,11 @@ EOT
 	else
 		cat <<EOT | tee -a "$crio_conf_file"
 
-# Path to the Kata Containers runtime binary that uses the QEMU hypervisor.
+# Path to the Kata Containers runtime binary that uses the QEMU hypervisor with virtiofs support.
 [$kata_qemu_conf]
   runtime_path = "${kata_qemu_virtiofs_path}"
 EOT
         fi
-
 
 	# add kata-nemu config
 	if grep -q "^\[$kata_nemu_conf\]" $crio_conf_file; then
@@ -160,6 +160,10 @@ function configure_containerd() {
         runtime_type = "io.containerd.kata-qemu.v2"
         [plugins.cri.containerd.runtimes.kata-qemu.options]
 	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-qemu.toml"
+     [plugins.cri.containerd.runtimes.kata-qemu-virtiofs]
+        runtime_type = "io.containerd.kata-qemu-virtiofs.v2"
+        [plugins.cri.containerd.runtimes.kata-qemu-virtiofs.options]
+	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-qemu-virtiofs.toml"
      [plugins.cri.containerd.runtimes.kata-nemu]
         runtime_type = "io.containerd.kata-nemu.v2"
         [plugins.cri.containerd.runtimes.kata-nemu.options]
@@ -167,7 +171,7 @@ function configure_containerd() {
 EOT
 	#Currently containerd has an assumption on the location of the shimv2 implementation
 	#Until support is added (see https://github.com/containerd/containerd/issues/3073),
-    #create a link in /usr/local/bin/ to the v2-shim implementation in /opt/kata/bin.
+	#create a link in /usr/local/bin/ to the v2-shim implementation in /opt/kata/bin.
 
 	mkdir -p /usr/local/bin
 
@@ -188,7 +192,7 @@ EOT
 #!/bin/bash
 KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-${shim}.toml /opt/kata/bin/containerd-shim-kata-v2 \$@
 EOT
-       chmod +x $shim_file
+	chmod +x $shim_file
 	done
 }
 
