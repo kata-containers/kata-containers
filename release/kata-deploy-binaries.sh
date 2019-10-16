@@ -24,6 +24,9 @@ workdir="${WORKDIR:-$PWD}"
 # that are local
 test_local="false"
 
+destdir="${workdir}/kata-static"
+mkdir -p "${destdir}"
+
 exit_handler() {
 	[ -d "${tmp_dir}" ] || sudo rm -rf "${tmp_dir}"
 }
