@@ -92,6 +92,7 @@ verify_hub() {
 
 #Install guest image/initrd asset
 install_image() {
+	kata_version=${1:-kata_version}
 	image_destdir="${destdir}/${prefix}/share/kata-containers/"
 	info "Create image"
 	image_tarball=$(find . -name 'kata-containers-'"${kata_version}"'-*.tar.gz')
@@ -180,6 +181,7 @@ install_docker_config_script() {
 
 #Install all components that are not assets
 install_kata_components() {
+	kata_version=${1:-kata_version}
 	for p in "${projects[@]}"; do
 		echo "Download ${p}"
 		go get "github.com/${project}/$p" || true
