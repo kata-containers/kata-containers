@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -48,6 +49,7 @@ const romFile = ""
 const defaultDisableModern = false
 
 type qmpChannel struct {
+	sync.Mutex
 	ctx     context.Context
 	path    string
 	qmp     *govmmQemu.QMP
@@ -921,6 +923,9 @@ func (q *qemu) togglePauseSandbox(pause bool) error {
 }
 
 func (q *qemu) qmpSetup() error {
+	q.qmpMonitorCh.Lock()
+	defer q.qmpMonitorCh.Unlock()
+
 	if q.qmpMonitorCh.qmp != nil {
 		return nil
 	}
@@ -949,6 +954,9 @@ func (q *qemu) qmpSetup() error {
 }
 
 func (q *qemu) qmpShutdown() {
+	q.qmpMonitorCh.Lock()
+	defer q.qmpMonitorCh.Unlock()
+
 	if q.qmpMonitorCh.qmp != nil {
 		q.qmpMonitorCh.qmp.Shutdown()
 		// wait on disconnected channel to be sure that the qmp channel has
