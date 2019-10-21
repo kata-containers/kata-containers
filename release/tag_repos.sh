@@ -40,7 +40,7 @@ EOT
 
 Args:
 status : Get Current ${PROJECT} tags status
-pre-release :  Takes a version to check all the components match with it (but not the runtime)
+pre-release <target-version>:  Takes a version to check all the components match with it (but not the runtime)
 tag    : Create tags for ${PROJECT}
 
 Options:
@@ -69,27 +69,15 @@ info() {
 
 repos=(
 	"agent"
+	"ksm-throttler"
+	"osbuilder"
+	"packaging"
 	"proxy"
 	"runtime"
 	"shim"
-)
-# Tag versions that do not have a VERSIONS file
-# But we want to know the version compatible with a kata release.
-repos_not_versions=(
 	"tests"
-	"packaging"
-	"osbuilder"
-	"ksm-throttler"
 )
 
-# List of repositories that does not have stable branch.
-# We want to do is just push the tags to master branch
-# since we don't maintain a seperate branch for following repos.
-not_stable_branch=(
-	"packaging"
-	"osbuilder"
-	"ksm-throttler"
-)
 
 # The pre-release option at the check_versions function receives
 # the runtime VERSION in order to check all the components match with it,
@@ -117,6 +105,17 @@ check_versions() {
 	done
 }
 
+do_tag(){
+	local tag=${1:-}
+	[ -n "${tag}" ] || die "No tag not provided"
+	if git rev-parse -q --verify "refs/tags/${tag}"; then
+		info "$repo already has tag"
+	else
+		info "Creating tag ${tag} for ${repo}"
+		git tag -a "${tag}" -s -m "${PROJECT} release ${tag}"
+	fi
+}
+
 tag_repos() {
 
 	info "Creating tag ${kata_version} in all repos"
@@ -124,22 +123,24 @@ tag_repos() {
 		git clone --quiet "https://github.com/${OWNER}/${repo}.git"
 		pushd "${repo}" >>/dev/null
 		git remote set-url --push origin "git@github.com:${OWNER}/${repo}.git"
+		git fetch origin
+		git checkout "${branch}"
+		version_from_file=$(cat ./VERSION)
+		info "Check VERSION file has ${kata_version}"
+		if [ "${version_from_file}" != "${kata_version}" ];then
+			die "mismatch: VERSION file (${version_from_file}) and runtime version ${kata_version}"
+		else
+			echo "OK"
+		fi
 		git fetch origin --tags
 		tag="$kata_version"
-		if [[ ! ${not_stable_branch[*]} =~ ${repo} ]]; then
-			info "Checkout to ${branch} in ${repo}"
-			git checkout "${branch}"
-		else
-			info "Checkout(${branch}) not need for ${repo}"
+		if [[ "packaging" == "${repo}" ]];then
+			do_tag "${tag}-kernel-config"
 		fi
-		[[ "packaging" == "${repo}" ]] && tag="${tag}-kernel-config"
-		if git rev-parse -q --verify "refs/tags/${tag}"; then
-			info "$repo already has tag "
-		else
-			info "Creating tag ${tag} for ${repo}"
-			git tag -a "${tag}" -s -m "${PROJECT} release ${tag}"
-		fi
-		if [[ ! ${not_stable_branch[*]} =~ ${repo} ]] && [ "${branch}" == "master" ]; then
+
+		do_tag "${tag}"
+
+		if [ "${branch}" == "master" ]; then
 			if echo "${tag}" | grep -oP '.*-rc0$'; then
 				info "This is a rc0 for master - creating stable branch"
 				stable_branch=$(echo ${tag} | awk 'BEGIN{FS=OFS="."}{print $1 "." $2}')
@@ -160,11 +161,15 @@ push_tags() {
 	for repo in "${repos[@]}"; do
 		pushd "${repo}" >>/dev/null
 		tag="$kata_version"
-		[[ "packaging" == "${repo}" ]] && tag="${tag}-kernel-config"
+		if [[ "packaging" == "${repo}" ]];then
+			ktag="${tag}-kernel-config"
+			info "Push tag ${ktag} for ${repo}"
+			git push origin "${ktag}"
+		fi
 		info "Push tag ${tag} for ${repo}"
 		git push origin "${tag}"
 		create_github_release "${PWD}" "${tag}"
-		if [ "${stable_branch}" != "" ] && [[ ! ${not_stable_branch[*]} =~ ${repo} ]]; then
+		if [ "${stable_branch}" != "" ]; then
 			info "Pushing stable ${stable_branch} branch for ${repo}"
 			git push origin ${stable_branch}
 		fi
@@ -212,11 +217,12 @@ main () {
 		check_versions
 		;;
 	pre-release)
-		check_versions ${1}
+		local target_version=${1:-}
+		[ -n "${target_version}" ] || die "No version provided"
+		check_versions "${target_version}"
 		;;
 	tag)
 		check_versions
-		repos+=("${repos_not_versions[@]}")
 		tag_repos
 		if [ "${PUSH}" == "true" ]; then
 			push_tags
