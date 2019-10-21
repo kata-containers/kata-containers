@@ -24,7 +24,10 @@ env:
   - target_branch=$TRAVIS_BRANCH
 
 before_install:
+  - git remote set-branches --add origin "${TRAVIS_BRANCH}"
+  - git fetch
   - ".ci/setup.sh"
+  - ".ci/versions_checker.sh"
 
 before_script:
   - ".ci/install_go.sh"
