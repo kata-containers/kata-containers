@@ -1,0 +1,34 @@
+on: push
+
+name: Build, Test, and Publish kata-deploy
+
+jobs:
+  kata-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: build-and-push-kata-deploy-ci
+        run: |
+          git clone https://github.com/amshinde/kata-packaging
+          pushd ./kata-packaging
+          git checkout 1.9.0-rc0
+          pkg_sha=$(git rev-parse HEAD)
+          popd
+          wget -q https://github.com/kata-containers/runtime/releases/download/1.9.0-rc0/kata-static-1.9.0-rc0-x86_64.tar.xz 
+          mv kata-static-1.9.0-rc0-x86_64.tar.xz ./kata-packaging/kata-deploy/kata-static.tar.xz
+          docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t katadocker/kata-deploy-ci:$pkg_sha ./kata-packaging/kata-deploy
+          docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
+          docker push katadocker/kata-deploy-ci:$pkg_sha
+          echo ::set-env name=PKG_SHA::$pkg_sha
+      - name: test-kata-deploy-ci-in-aks
+        uses: ./kata-packaging/kata-deploy/action
+        with:
+          packaging-sha: env.PKG_SHA
+        env: 
+          PKG_SHA: ${{ env.PKG_SHA }}
+          AZ_APPID: ${{ secrets.AZ_APPID }}
+          AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
+          AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+          AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+      - name: did-we-make-it
+        run: | 
+                echo "weeee"
