@@ -341,5 +341,3 @@ jobs:
           # tag the container image we created and push to DockerHub
           docker tag katadocker/kata-deploy-ci:${{ env.PKG_SHA }} katadocker/kata-deploy:${{ env.TAG }}
           docker push katadocker/kata-deploy:${{ env.TAG }}
-          
-          
