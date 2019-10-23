@@ -500,7 +500,7 @@ static_check_docs()
 	local new_urls
 	local url
 
-	all_docs=$(git ls-files "*.md" | grep -v "/\(vendor\|grpc-rs\|target\)/" | sort || true)
+	all_docs=$(git ls-files "*.md" | grep -Ev "(vendor|grpc-rs|target)/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -847,7 +847,7 @@ static_check_xml()
 	local all_xml
 	local files
 
-	all_xml=$(git ls-files "*.xml" | grep -v "/\(vendor\|grpc-rs\|target\)/" | sort || true)
+	all_xml=$(git ls-files "*.xml" | grep -Ev "/(vendor|grpc-rs|target)/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -899,7 +899,7 @@ static_check_shell()
 	local all_scripts
 	local scripts
 
-	all_scripts=$(git ls-files "*.sh" "*.bash" | grep -v "/\(vendor\|grpc-rs\|target\)/" | sort || true)
+	all_scripts=$(git ls-files "*.sh" "*.bash" | grep -Ev "/(vendor|grpc-rs|target)/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -936,7 +936,7 @@ static_check_json()
 	local all_json
 	local json_files
 
-	all_json=$(git ls-files "*.json" | grep -v "/\(vendor\|grpc-rs\|target\)/" | sort || true)
+	all_json=$(git ls-files "*.json" | grep -Ev "/(vendor|grpc-rs|target)/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
