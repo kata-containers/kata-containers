@@ -26,12 +26,13 @@ get_kata_version() {
 
 gen_version_file() {
 	local branch="$1"
-	local use_head="$2"
+	local kata_version="$2"
 	local ref="refs/heads/${branch}"
-	local kata_version="${branch}"
 
-	if [ -n "$branch" ] && [ -z "${use_head}" ]; then
-		kata_version=$(get_kata_version "${branch}")
+	if  [ "${kata_version}" == "HEAD" ]; then
+		kata_version="${branch}"
+		ref="refs/heads/${branch}"
+	else
 		ref="refs/tags/${kata_version}^{}"
 	fi
 
@@ -135,6 +136,7 @@ EOT
 main() {
 	local compareOnly=
 	local use_head=
+	local use_tag=
 
 	case "${1:-}" in
 		"-h"|"--help")
@@ -148,13 +150,57 @@ main() {
 			use_head=1
 			shift
 			;;
+		--tag)
+			use_tag=1
+			shift
+			;;
 		-*)
 			die "Invalid option: ${1:-}" "1"
 			shift
 			;;
 	esac
-	local branch="${1:-}"
-	[ -n "${branch}" ] || die "No branch specified" "1"
+
+	local kata_version=
+	if [ -n "$use_tag" ]; then
+		if [ -n "${use_head}" ]; then
+		       die "tag and head options are mutually exclusive"
+		fi
+
+		# We are generating versions based on the provided tag
+		local tag="${1:-}"
+		[ -n "${tag}" ] || die "No tag specified" "1"
+
+		# use the runtime's repository to determine branch information
+		local repo="github.com/kata-containers/runtime"
+		local repo_dir="runtime"
+		git clone --quiet "https://${repo}.git" "${repo_dir}"
+		pushd "${repo_dir}" >> /dev/null
+		local branch=$(git branch -r -q --contains "${tag}" | grep -E "master|stable" | grep -v HEAD)
+
+		popd >> /dev/null
+		rm -rf ${repo_dir}
+
+		[ -n "${branch}" ] || die "branch for tag ${tag} not found"
+
+		# in the event this is on master as well as stable, or multiple stables, just pick the first branch
+		# (ie, 1.8.0-alpha0 may live on stable-1.8 as well as master: we'd just use master in this case)
+		branch=$(echo ${branch} | awk -F" " '{print $1}')
+
+		# format will be origin/<branch-name> - let's drop origin:
+		branch=$(echo ${branch} | awk -F"/" '{print $2}')
+
+		echo "generating versions for tag ${tag} which is on branch ${branch}"
+		kata_version=${tag}
+	else
+		local branch="${1:-}"
+		[ -n "${branch}" ] || die "No branch specified" "1"
+
+		if [ -n "${use_head}" ]; then
+			kata_version="HEAD"
+		else
+			kata_version=$(get_kata_version "${branch}")
+		fi
+	fi
 
 	if [ -n "$compareOnly" ]; then
 		source "./${versions_txt}" || exit 1
@@ -167,7 +213,7 @@ main() {
 		return
 	fi
 
-	gen_version_file "${branch}" "${use_head}"
+	gen_version_file "${branch}" "${kata_version}"
 }
 
 main $@
