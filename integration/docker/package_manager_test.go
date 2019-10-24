@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 
+	. "github.com/kata-containers/tests"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -69,6 +70,9 @@ var _ = Describe("[Serial Test] package manager update test", func() {
 
 	Context("check dnf update", func() {
 		It("should not fail", func() {
+			if KataConfig.Hypervisor[DefaultHypervisor].SharedFS == "virtio-fs" {
+				Skip("Skip issue: https://github.com/kata-containers/tests/issues/2008")
+			}
 			args = append(args, "-td", "--name", id, FedoraImage, "sh")
 			_, _, exitCode := dockerRun(args...)
 			Expect(exitCode).To(BeZero())
@@ -87,7 +91,9 @@ var _ = Describe("[Serial Test] package manager update test", func() {
 
 	Context("check yum update", func() {
 		It("should not fail", func() {
-			Skip("Test Failing, see: https://github.com/kata-containers/tests/issues/1270")
+			if KataConfig.Hypervisor[DefaultHypervisor].SharedFS == "virtio-fs" {
+				Skip("Skip issue: https://github.com/kata-containers/tests/issues/2008")
+			}
 			args = append(args, "--rm", "-td", "--name", id, CentosImage, "sh")
 			_, _, exitCode := dockerRun(args...)
 			Expect(exitCode).To(BeZero())
