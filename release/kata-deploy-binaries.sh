@@ -24,6 +24,9 @@ workdir="${WORKDIR:-$PWD}"
 # that are local
 test_local="false"
 
+destdir="${workdir}/kata-static"
+mkdir -p "${destdir}"
+
 exit_handler() {
 	[ -d "${tmp_dir}" ] || sudo rm -rf "${tmp_dir}"
 }
@@ -89,6 +92,7 @@ verify_hub() {
 
 #Install guest image/initrd asset
 install_image() {
+	kata_version=${1:-kata_version}
 	image_destdir="${destdir}/${prefix}/share/kata-containers/"
 	info "Create image"
 	image_tarball=$(find . -name 'kata-containers-'"${kata_version}"'-*.tar.gz')
@@ -105,43 +109,36 @@ install_image() {
 	ln -sf "${image}" kata-containers.img
 	ln -sf "${initrd}" kata-containers-initrd.img
 	popd >>/dev/null
+	pushd ${destdir}
+	tar -czvf ../kata-image.tar.gz *
+	popd
 }
 
 #Install kernel asset
 install_kernel() {
-	if [[ "$test_local" == "true" ]]; then
-		pushd "${script_dir}/../"
-	else
-		go get "github.com/${project}/packaging" || true
-		pushd ${GOPATH}/src/github.com/${project}/packaging >>/dev/null
-		git checkout "${kata_version}-kernel-config" ||
-		git checkout "${kata_version}"
-	fi
-
+	pushd "${script_dir}/../"
 	info "build kernel"
 	./kernel/build-kernel.sh setup
 	./kernel/build-kernel.sh build
 	info "install kernel"
 	DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh install
 	popd
+	pushd ${destdir}
+	tar -czvf ../kata-kernel.tar.gz *
+	popd
 }
 
 #Install experimental kernel asset
 install_experimental_kernel() {
-	if [[ "$test_local" == "true" ]]; then
-		pushd "${script_dir}/../"
-	else
-		go get "github.com/${project}/packaging" || true
-		pushd ${GOPATH}/src/github.com/${project}/packaging >>/dev/null
-		git checkout "${kata_version}-kernel-config" ||
-		git checkout "${kata_version}"
-	fi
-
+	pushd "${script_dir}/../"
 	info "build experimental kernel"
 	./kernel/build-kernel.sh -e setup
 	./kernel/build-kernel.sh -e build
 	info "install experimental kernel"
 	DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh -e install
+	popd
+	pushd ${destdir}
+	tar -czvf ../kata-kernel-experimental.tar.gz *
 	popd
 }
 
@@ -149,16 +146,12 @@ install_experimental_kernel() {
 install_qemu() {
 	info "build static qemu"
 	"${script_dir}/../static-build/qemu/build-static-qemu.sh"
-	info "Install static qemu"
-	tar xf kata-qemu-static.tar.gz -C "${destdir}"
 }
 
 # Install static qemu-virtiofsd asset
 install_qemu_virtiofsd() {
 	info "build static qemu-virtiofs"
 	"${script_dir}/../static-build/qemu-virtiofs/build-static-qemu-virtiofs.sh"
-	info "Install static qemu-virtiofs"
-	tar xf kata-qemu-static.tar.gz -C "${destdir}"
 }
 
 # Install static firecracker asset
@@ -169,7 +162,9 @@ install_firecracker() {
 	mkdir -p "${destdir}/opt/kata/bin/"
 	sudo install -D --owner root --group root --mode 0744  firecracker/firecracker-static "${destdir}/opt/kata/bin/firecracker"
 	sudo install -D --owner root --group root --mode 0744  firecracker/jailer-static "${destdir}/opt/kata/bin/jailer"
-
+	pushd ${destdir}
+	tar -czvf ../kata-firecracker-static.tar.gz *
+	popd
 }
 
 install_docker_config_script() {
@@ -186,6 +181,7 @@ install_docker_config_script() {
 
 #Install all components that are not assets
 install_kata_components() {
+	kata_version=${1:-kata_version}
 	for p in "${projects[@]}"; do
 		echo "Download ${p}"
 		go get "github.com/${project}/$p" || true
@@ -234,6 +230,16 @@ EOT
 	sudo chmod +x kata-qemu-virtiofs
 
 	popd
+	pushd ${destdir}
+	tar -czvf ../kata-components.tar.gz *
+	popd
+}
+
+untar_qemu_binaries() {
+	info "Install static qemu"
+	tar xf kata-qemu-static.tar.gz -C "${destdir}"
+	info "Install static qemu-virtiofs"
+	tar xf kata-qemu-virtiofs-static.tar.gz -C "${destdir}"
 }
 
 main() {
@@ -267,6 +273,8 @@ main() {
 	install_firecracker
 	install_docker_config_script
 
+	untar_qemu_binaries
+
 	tarball_name="${destdir}.tar.xz"
 	pushd "${destdir}" >>/dev/null
 	tar cfJ "${tarball_name}" "./opt"
@@ -278,4 +286,6 @@ main() {
 	fi
 }
 
-main $@
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main $@
+fi
