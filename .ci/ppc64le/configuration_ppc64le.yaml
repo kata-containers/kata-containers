@@ -26,6 +26,7 @@ docker:
     - run container and update its memory constraints
     - check dmesg logs errors
     - memory constraints
+    - check yum update
   Context:
     - run container exceeding memory constraints
   It:
