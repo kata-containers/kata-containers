@@ -38,6 +38,10 @@ docker_images:
 externals:
   description: "Third-party projects used specifically for testing"
 
+  flannel:
+    url: "https://github.com/coreos/flannel"
+    version: "862c448ef28fd890e2ac4e5fddc49e7fe9693b31"
+
   xurls:
     description: |
       Tool used by the CI to check URLs in documents and code comments.

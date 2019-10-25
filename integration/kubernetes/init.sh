@@ -114,7 +114,7 @@ kubectl get nodes
 kubectl get pods
 
 # default network plugin should be flannel, and its config file is taken from k8s 1.12 documentation
-flannel_version="bc79dd1505b0c8681ece4de4c0d86c5cd2643275"
+flannel_version="$(get_test_version "externals.flannel.version")"
 flannel_url="https://raw.githubusercontent.com/coreos/flannel/${flannel_version}/Documentation/kube-flannel.yml"
 
 arch=$("${SCRIPT_PATH}/../../.ci/kata-arch.sh")
@@ -129,14 +129,6 @@ kubectl apply -f "$network_plugin_config"
 
 # we need to ensure a few specific pods ready and running
 wait_pods_ready
-
-# Add 'cniVersion' to the flannel configuration file.
-# Fix needed just for flannel to let cni release ip addresses,
-# we should remove after https://github.com/coreos/flannel/pull/1135
-# gets merged and we update flannel_version above.
-if [ "$network_plugin_config" == "$flannel_url" ]; then
-	sudo sed -i '/cbr0/a\  "cniVersion": "0.3.1",' "${cni_config_dir}/10-flannel.conflist"
-fi
 
 runtimeclass_files_path="${SCRIPT_PATH}/runtimeclass_workloads"
 echo "Create kata RuntimeClass resource"
