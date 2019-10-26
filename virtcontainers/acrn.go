@@ -124,7 +124,7 @@ func (a *Acrn) kernelParameters() string {
 	params = append(params, acrnDefaultKernelParameters...)
 
 	// set the maximum number of vCPUs
-	params = append(params, Param{"maxcpus", fmt.Sprintf("%d", a.config.NumVCPUs)})
+	params = append(params, Param{"maxcpus", fmt.Sprintf("%d", a.config.DefaultMaxVCPUs)})
 
 	// add the params specified by the provided config. As the kernel
 	// honours the last parameter value set and since the config-provided
@@ -405,7 +405,6 @@ func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		Path:     acrnPath,
 		CtlPath:  acrnctlPath,
 		Memory:   memory,
-		NumCPU:   a.config.NumVCPUs,
 		Devices:  devices,
 		Kernel:   kernel,
 		Name:     fmt.Sprintf("sandbox-%s", a.id),
