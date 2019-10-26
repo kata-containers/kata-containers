@@ -48,7 +48,7 @@ func testAcrnKernelParameters(t *testing.T, kernelParams []Param, debug bool) {
 		arch:   &acrnArchBase{},
 	}
 
-	expected := fmt.Sprintf("panic=1 maxcpus=%d foo=foo bar=bar", a.config.NumVCPUs)
+	expected := fmt.Sprintf("panic=1 maxcpus=%d foo=foo bar=bar", a.config.DefaultMaxVCPUs)
 
 	params := a.kernelParameters()
 	assert.Equal(params, expected)
@@ -218,11 +218,6 @@ func TestAcrnCreateSandbox(t *testing.T) {
 		},
 	}
 
-	// Even though this test doesn't need to create a vcStore,
-	// we are forced to create a vcStore as GetAndSetSandboxBlockIndex()
-	// which is called from createSandbox needs a valid vcStore. vcStore
-	// creation can be removed once https://github.com/kata-containers/runtime/issues/2026
-	// issue is resolved.
 	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
 	assert.NoError(err)
 	sandbox.store = vcStore
