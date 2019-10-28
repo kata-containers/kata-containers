@@ -11,9 +11,7 @@ test:
   - docker-compose
   - docker-stability
   - entropy
-  - cri-containerd
 
-# Same model as is for aarch64
 docker:
   Describe:
     - CPUs and CPU set
