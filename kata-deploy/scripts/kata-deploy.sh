@@ -95,7 +95,7 @@ EOT
 		cat <<EOT | tee -a "$crio_conf_file"
 
 # Path to the Kata Containers runtime binary that uses the QEMU hypervisor with virtiofs support.
-[$kata_qemu_conf]
+[$kata_qemu_virtiofs_conf]
   runtime_path = "${kata_qemu_virtiofs_path}"
 EOT
         fi
