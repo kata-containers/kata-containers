@@ -52,6 +52,10 @@ collect_logs()
 	local -r kernel_log_path="${log_copy_dest}/${kernel_log_filename}"
 	local -r kernel_log_prefix="kernel_"
 
+	local -r tracing_log_filename="kata-runtime-traces.json"
+	local -r tracing_log_path="${log_copy_dest}/${tracing_log_filename}"
+	local -r tracing_log_prefix="tracing_"
+
 	local -r virtiofs_log_filename="virtiofs.log"
 	local -r virtiofs_log_path="${log_copy_dest}/${virtiofs_log_filename}"
 	local -r virtiofs_log_prefix="virtiofs_"
@@ -92,6 +96,9 @@ collect_logs()
 
 		[ "${have_collect_script}" = "yes" ] && sudo -E PATH="$PATH" "${collect_script_path}" > "${collect_data_log_path}"
 
+		tracing_log_directory="/var/log/kata-tests/logs/traces/"
+		cp "${tracing_log_directory}/${tracing_log_filename}" "${tracing_log_path}"
+
 		# Split them in 5 MiB subfiles to avoid too large files.
 		local -r subfile_size=5242880
 
@@ -105,6 +112,7 @@ collect_logs()
 		split -b "${subfile_size}" -d "${docker_log_path}" "${docker_log_prefix}"
 		split -b "${subfile_size}" -d "${kubelet_log_path}" "${kubelet_log_prefix}"
 		split -b "${subfile_size}" -d "${kernel_log_path}" "${kernel_log_prefix}"
+		split -b "${subfile_size}" -d "${tracing_log_path}" "${tracing_log_prefix}"
 		split -b "${subfile_size}" -d "${virtiofs_log_path}" "${virtiofs_log_prefix}"
 
 		[ "${have_collect_script}" = "yes" ] &&  split -b "${subfile_size}" -d "${collect_data_log_path}" "${collect_data_log_prefix}"
@@ -171,6 +179,9 @@ collect_logs()
 
 		echo "Kernel Log:"
 		sudo journalctl --no-pager -t kernel
+
+		echo "Runtime Tracing Log:"
+		cat "${tracing_log_directory}/${tracing_log_filename}"
 
 		echo "Virtiofs Log:"
 		sudo journalctl --no-pager -t virtiofs
