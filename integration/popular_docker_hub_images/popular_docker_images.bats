@@ -287,7 +287,7 @@ setup() {
 	docker run --rm --runtime=$RUNTIME -i -e MYSQL_ROOT_PASSWORD=secretword  $image bash -c "cat /etc/mysql/mariadb.cnf | grep character"
 }
 
-@test "[matomo]" run a matomo container" [
+@test "[matomo]" run a matomo container" {
 	image="matomo"
 	docker run --runtime=$RUNTIME --rm -i $image bash -c "php -r 'print(\"Kata Containers\");'"
 }
