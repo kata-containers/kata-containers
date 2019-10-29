@@ -27,7 +27,7 @@ jaeger_docker_container_name="jaeger"
 # disable tracing.
 cleanup(){
 	stop_jaeger 2>/dev/null || true
-	.ci/configure_tracing_for_kata.sh disable
+	"${SCRIPT_PATH}/../.ci/configure_tracing_for_kata.sh" disable
 }
 
 trap cleanup EXIT
@@ -257,7 +257,7 @@ main()
 
 	start_jaeger
 
-	.ci/configure_tracing_for_kata.sh enable
+	"${SCRIPT_PATH}/../.ci/configure_tracing_for_kata.sh" enable
 
 	info "Checking runtime spans"
 	run_test "$runtime_min_spans" "$runtime_service"
