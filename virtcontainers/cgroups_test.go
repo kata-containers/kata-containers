@@ -130,6 +130,7 @@ func TestUpdateCgroups(t *testing.T) {
 		state: types.SandboxState{
 			CgroupPath: "",
 		},
+		config: &SandboxConfig{SandboxCgroupOnly: false},
 	}
 
 	// empty path
