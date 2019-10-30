@@ -68,13 +68,6 @@ ci_config() {
 			sudo -E PATH=$PATH "$RUNTIME" factory init
 		fi
 	fi
-	if [ -n "${CI}" ]; then
-		(
-		echo "Install cni config for cri-containerd test"
-		cd "${GOPATH}/src/${cri_containerd_repo}"
-		./hack/install/install-cni-config.sh
-		)
-	fi
 }
 
 ci_cleanup() {
