@@ -72,7 +72,7 @@ get_release_info() {
 }
 
 changes() {
-	echo "**FIXME - massage this section by hand to produce a summary please**"
+	echo "**FIXME - message this section by hand to produce a summary please**"
 
 	echo "### Shortlog"
 	for cr in $(git log --merges "${previous_release}".."${new_release}" | grep 'Merge:' | awk '{print $2".."$3}'); do
