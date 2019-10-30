@@ -1,16 +1,39 @@
 name: kata-containers
-version: "master"
 summary: Build lightweight VMs that seamlessly plug into the containers ecosystem
 description: |
   Kata Containers is an open source project and community working to build a
   standard implementation of lightweight Virtual Machines (VMs) that feel and
   perform like containers, but provide the workload isolation and security
   advantages of VMs
-grade: stable
 confinement: classic
+adopt-info: metadata
 
 parts:
+  metadata:
+    plugin: nil
+    prime:
+      - -*
+    build-packages:
+      - git
+      - git-extras
+    override-pull: |
+      branch="master"
+
+      # kata CI or launchpad snap-master
+      if [ "${CI}" = "true" ] || echo "${SNAPCRAFT_IMAGE_INFO}" | egrep -o "build_url.*" | grep  -q "${branch}"; then
+        snapcraftctl set-grade "devel"
+      else
+        # Get the latest stable version
+        runtime_url="https://github.com/kata-containers/runtime"
+        branch=$(git ls-remote --tags ${runtime_url}  | egrep -o "refs.*" | egrep -v "\-alpha|\-rc|{}" | cut -d/ -f3 | sort -r | head -1)
+        snapcraftctl set-grade "stable"
+      fi
+
+      snapcraftctl set-version "${branch}"
+      echo "${branch}" | tee ${SNAPCRAFT_STAGE}/kata_version
+
   yq:
+    after: [metadata]
     plugin: nil
     prime:
       - -*
@@ -41,8 +64,9 @@ parts:
   go:
     after: [yq]
     override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
       yq=$(realpath ../../yq/build/yq)
-      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${SNAPCRAFT_PROJECT_VERSION}/versions.yaml
+      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${kata_version}/versions.yaml
       version="$(curl -sSL ${versions_url} | ${yq} r - languages.golang.version)"
       curl -LO https://dl.google.com/go/go${version}.src.tar.gz
       tar -xf go${version}.src.tar.gz --strip-components=1
@@ -60,6 +84,7 @@ parts:
     plugin: nil
     build-attributes: [no-patchelf]
     override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
       pkg_name=runtime
 
       # set GOPATH
@@ -71,7 +96,7 @@ parts:
       mkdir -p ${pkg_gopath}
 
       # download source
-      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
+      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
 
       # build and install
@@ -98,6 +123,7 @@ parts:
     plugin: nil
     build-attributes: [no-patchelf]
     override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
       pkg_name=proxy
 
       # set GOPATH
@@ -109,7 +135,7 @@ parts:
       mkdir -p ${pkg_gopath}
 
       # download source
-      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
+      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
 
       # build and install
@@ -121,6 +147,7 @@ parts:
     plugin: nil
     build-attributes: [no-patchelf]
     override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
       pkg_name=shim
 
       # set GOPATH
@@ -132,7 +159,7 @@ parts:
       mkdir -p ${pkg_gopath}
 
       # download source
-      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
+      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
 
       # build and install
@@ -192,6 +219,7 @@ parts:
     plugin: nil
     build-attributes: [no-patchelf]
     override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
       pkg_name=ksm-throttler
 
       # set GOPATH
@@ -203,7 +231,7 @@ parts:
       mkdir -p ${pkg_gopath}
 
       # download source
-      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
+      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
 
       # build and install
@@ -280,11 +308,12 @@ parts:
       - libcapstone-dev
       - bc
     override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
       yq=$(realpath ../../yq/build/yq)
       pkg_name="qemu"
       configs_dir="${SNAPCRAFT_STAGE}/qemu/default-configs"
 
-      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${SNAPCRAFT_PROJECT_VERSION}/versions.yaml
+      versions_url=https://raw.githubusercontent.com/kata-containers/runtime/${kata_version}/versions.yaml
       # arch-specific definition
       case "$(uname -m)" in
         "aarch64")
