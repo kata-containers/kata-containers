@@ -125,7 +125,7 @@ make sure the packages install and work. To help with this you can use the [pack
    Publish in [Slack and Kata mailing list][join-us-kata] that new release is ready.
 
 8. Send changes to upstream.
-If you found any issue during the release process and you fix it, please send it back.
+If you found any issue during the release process and you fixed it, please send it back.
 After your changes are merged, tag Kata packaging with `${NEW_VERSION}` to identify the code used for the release.
 
 
