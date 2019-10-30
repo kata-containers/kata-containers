@@ -80,7 +80,7 @@ parts:
       - -*
 
   runtime:
-    after: [go]
+    after: [go, image]
     plugin: nil
     build-attributes: [no-patchelf]
     override-build: |
@@ -115,8 +115,13 @@ parts:
         SKIP_GO_VERSION_CHECK=1 \
         QEMUCMD=qemu-system-$arch
 
-      # Set rootfs image by default
-      sed -i -e '/^initrd =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
+      if [ -e ${SNAPCRAFT_STAGE}/kata-containers.img ]; then
+        # Use rootfs image by default
+        sed -i -e '/^initrd =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
+      else
+        # Use initrd by default
+        sed -i -e '/^image =/d' ${SNAPCRAFT_PART_INSTALL}/usr/share/defaults/${SNAPCRAFT_PROJECT_NAME}/configuration.toml
+      fi
 
   proxy:
     after: [go]
@@ -170,11 +175,16 @@ parts:
     after: [go]
     plugin: nil
     build-packages:
-      - docker.io
       - cpio
+      - git
+      - iptables
+      - software-properties-common
+      - uidmap
     override-build: |
+      kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
       yq=$(realpath ../../yq/build/yq)
       pkg_name=osbuilder
+      cni_plugings_repo="github.com/containernetworking/plugins"
 
       # set GOPATH
       export GOPATH=$(realpath go)
@@ -184,35 +194,58 @@ parts:
       # go was built in parts/go/build
       export GOROOT=$(realpath ../../go/build)
       export PATH="${GOROOT}/bin:${PATH}"
-      if [ -n "$http_proxy" ]; then
-        echo "Setting proxy $http_proxy"
-        sudo -E systemctl set-environment http_proxy=$http_proxy || true
-        sudo -E systemctl set-environment https_proxy=$https_proxy || true
-      fi
+
+      # install podman
+      sudo add-apt-repository -y ppa:projectatomic/ppa
+      sudo apt-get update
+      sudo apt-get -y install podman
+
+      # Build and install cni plugings
+      echo "Retrieve CNI plugins repository"
+      go get -d ${cni_plugings_repo} || true
+      cd $GOPATH/src/${cni_plugings_repo}
+
+      echo "Build CNI plugins"
+      ./build_linux.sh
+
+      echo "Install CNI binaries"
+      cni_bin_path="/opt/cni"
+      sudo mkdir -p ${cni_bin_path}
+      sudo cp -a bin ${cni_bin_path}
 
       # Copy yq binary. It's used in the container
       mkdir -p "${GOPATH}/bin/"
       cp -a "${yq}" "${GOPATH}/bin/"
 
-      echo "Unmasking docker service"
-      sudo -E systemctl unmask docker.service || true
-      sudo -E systemctl unmask docker.socket || true
-
-      echo "Adding $USER into docker group"
-      sudo -E gpasswd -a $USER docker
-
-      echo "Starting docker"
-      sudo -E systemctl start docker || true
-
       # download source
-      git clone -b ${SNAPCRAFT_PROJECT_VERSION} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
+      git clone -b ${kata_version} https://github.com/kata-containers/${pkg_name} ${pkg_gopath}
       cd ${pkg_gopath}
 
-      sudo -E PATH=$PATH make AGENT_VERSION=${SNAPCRAFT_PROJECT_VERSION} DISTRO=clearlinux AGENT_INIT=yes USE_DOCKER=1 image
+      # build image
+      export AGENT_VERSION=${kata_version}
+      export AGENT_INIT=yes
+      export USE_PODMAN=1
+      export DEBUG=1
+      case "$(uname -m)" in
+        aarch64|ppc64le|s390x)
+          sudo -E PATH=$PATH DISTRO=alpine make initrd
+        ;;
+        x86_64)
+          # In some build systems it's impossible to build a rootfs image, try with the initrd image
+          sudo -E PATH=$PATH DISTRO=clearlinux make image || sudo -E PATH=$PATH DISTRO=alpine make initrd
+        ;;
+        *) echo "unsupported architecture: $(uname -m)"; exit 1;;
+      esac
 
+      # Install image
       kata_image_dir=${SNAPCRAFT_PART_INSTALL}/usr/share/kata-containers
       mkdir -p ${kata_image_dir}
-      cp kata-containers.img ${kata_image_dir}
+      cp kata-containers*.img ${kata_image_dir}
+      if [ -e kata-containers.img ]; then
+        touch ${SNAPCRAFT_STAGE}/kata-containers.img
+      else
+        touch ${SNAPCRAFT_STAGE}/kata-containers-initrd.img
+      fi
 
   ksm-throttler:
     after: [go]
