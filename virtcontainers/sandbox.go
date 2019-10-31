@@ -1852,10 +1852,12 @@ func (s *Sandbox) AddDevice(info config.DeviceInfo) (api.Device, error) {
 	return b, nil
 }
 
+// updateResources will calculate the resources required for the virtual machine, and
+// adjust the virtual machine sizing accordingly. For a given sandbox, it will calculate the
+// number of vCPUs required based on the sum of container requests, plus default CPUs for the VM.
+// Similar is done for memory. If changes in memory or CPU are made, the VM will be updated and
+// the agent will online the applicable CPU and memory.
 func (s *Sandbox) updateResources() error {
-	// the hypervisor.MemorySize is the amount of memory reserved for
-	// the VM and contaniners without memory limit
-
 	if s == nil {
 		return errors.New("sandbox is nil")
 	}
@@ -1868,8 +1870,9 @@ func (s *Sandbox) updateResources() error {
 	// Add default vcpus for sandbox
 	sandboxVCPUs += s.hypervisor.hypervisorConfig().NumVCPUs
 
-	sandboxMemoryByte := int64(s.hypervisor.hypervisorConfig().MemorySize) << utils.MibToBytesShift
-	sandboxMemoryByte += s.calculateSandboxMemory()
+	sandboxMemoryByte := s.calculateSandboxMemory()
+	// Add default / rsvd memory for sandbox.
+	sandboxMemoryByte += int64(s.hypervisor.hypervisorConfig().MemorySize) << utils.MibToBytesShift
 
 	// Update VCPUs
 	s.Logger().WithField("cpus-sandbox", sandboxVCPUs).Debugf("Request to hypervisor to update vCPUs")
@@ -1877,7 +1880,8 @@ func (s *Sandbox) updateResources() error {
 	if err != nil {
 		return err
 	}
-	// The CPUs were increased, ask agent to online them
+
+	// If the CPUs were increased, ask agent to online them
 	if oldCPUs < newCPUs {
 		vcpusAdded := newCPUs - oldCPUs
 		if err := s.agent.onlineCPUMem(vcpusAdded, true); err != nil {
@@ -1894,7 +1898,7 @@ func (s *Sandbox) updateResources() error {
 	}
 	s.Logger().Debugf("Sandbox memory size: %d MB", newMemory)
 	if s.state.GuestMemoryHotplugProbe && updatedMemoryDevice.addr != 0 {
-		//notify the guest kernel about memory hot-add event, before onlining them
+		// notify the guest kernel about memory hot-add event, before onlining them
 		s.Logger().Debugf("notify guest kernel memory hot-add event via probe interface, memory device located at 0x%x", updatedMemoryDevice.addr)
 		if err := s.agent.memHotplugByProbe(updatedMemoryDevice.addr, uint32(updatedMemoryDevice.sizeMB), s.state.GuestMemoryBlockSizeMB); err != nil {
 			return err
@@ -1936,7 +1940,19 @@ func (s *Sandbox) GetHypervisorType() string {
 	return string(s.config.HypervisorType)
 }
 
+// cgroupsUpdate will:
+//  1) get the v1constraints cgroup associated with the stored cgroup path
+//  2) (re-)add hypervisor vCPU threads to the appropriate cgroup
+//  3) If we are managing sandbox cgroup, update the v1constraints cgroup size
 func (s *Sandbox) cgroupsUpdate() error {
+
+	// If Kata is configured for SandboxCgroupOnly, the VMM and its processes are already
+	// in the Kata sandbox cgroup (inherited). No need to move threads/processes, and we should
+	// rely on parent's cgroup CPU/memory values
+	if s.config.SandboxCgroupOnly {
+		return nil
+	}
+
 	if s.state.CgroupPath == "" {
 		s.Logger().Warn("sandbox's cgroup won't be updated: cgroup path is empty")
 		return nil
@@ -1947,7 +1963,7 @@ func (s *Sandbox) cgroupsUpdate() error {
 		return fmt.Errorf("Could not load cgroup %v: %v", s.state.CgroupPath, err)
 	}
 
-	if err := s.constrainHypervisorVCPUs(cgroup); err != nil {
+	if err := s.constrainHypervisor(cgroup); err != nil {
 		return err
 	}
 
@@ -1968,6 +1984,8 @@ func (s *Sandbox) cgroupsUpdate() error {
 	return nil
 }
 
+// cgroupsDelete will move the running processes in the sandbox cgroup
+// to the parent and then delete the sandbox cgroup
 func (s *Sandbox) cgroupsDelete() error {
 	s.Logger().Debug("Deleting sandbox cgroup")
 	if s.state.CgroupPath == "" {
@@ -1976,19 +1994,19 @@ func (s *Sandbox) cgroupsDelete() error {
 	}
 
 	var path string
-	cgroupSubystems := V1NoConstraints
+	var cgroupSubsystems cgroups.Hierarchy
 
 	if s.config.SandboxCgroupOnly {
-		// Override V1NoConstraints, if SandboxCgroupOnly is enabled
-		cgroupSubystems = cgroups.V1
+		cgroupSubsystems = cgroups.V1
 		path = s.state.CgroupPath
 		s.Logger().WithField("path", path).Debug("Deleting sandbox cgroups (all subsystems)")
 	} else {
+		cgroupSubsystems = V1NoConstraints
 		path = cgroupNoConstraintsPath(s.state.CgroupPath)
 		s.Logger().WithField("path", path).Debug("Deleting no constraints cgroup")
 	}
 
-	sandboxCgroups, err := cgroupsLoadFunc(cgroupSubystems, cgroups.StaticPath(path))
+	sandboxCgroups, err := cgroupsLoadFunc(cgroupSubsystems, cgroups.StaticPath(path))
 	if err == cgroups.ErrCgroupDeleted {
 		// cgroup already deleted
 		s.Logger().Warnf("cgroup already deleted: '%s'", err)
@@ -2000,7 +2018,7 @@ func (s *Sandbox) cgroupsDelete() error {
 	}
 
 	// move running process here, that way cgroup can be removed
-	parent, err := parentCgroup(cgroupSubystems, path)
+	parent, err := parentCgroup(cgroupSubsystems, path)
 	if err != nil {
 		// parent cgroup doesn't exist, that means there are no process running
 		// and the no constraints cgroup was removed.
@@ -2016,35 +2034,50 @@ func (s *Sandbox) cgroupsDelete() error {
 	return sandboxCgroups.Delete()
 }
 
-func (s *Sandbox) constrainHypervisorVCPUs(cgroup cgroups.Cgroup) error {
+// constrainHypervisor will place the VMM and vCPU threads into cgroups.
+func (s *Sandbox) constrainHypervisor(cgroup cgroups.Cgroup) error {
+	// VMM threads are only placed into the constrained cgroup if SandboxCgroupOnly is being set.
+	// This is the "correct" behavior, but if the parent cgroup isn't set up correctly to take
+	// Kata/VMM into account, Kata may fail to boot due to being overconstrained.
+	// If !SandboxCgroupOnly, place the VMM into an unconstrained cgroup, and the vCPU threads into constrained
+	// cgroup
+	if s.config.SandboxCgroupOnly {
+		// Kata components were moved into the sandbox-cgroup already, so VMM
+		// will already land there as well. No need to take action
+		return nil
+	}
+
 	pids := s.hypervisor.getPids()
 	if len(pids) == 0 || pids[0] == 0 {
 		return fmt.Errorf("Invalid hypervisor PID: %+v", pids)
 	}
 
-	// Move hypervisor into cgroups without constraints,
-	// those cgroups are not yet supported.
+	// VMM threads are only placed into the constrained cgroup if SandboxCgroupOnly is being set.
+	// This is the "correct" behavior, but if the parent cgroup isn't set up correctly to take
+	// Kata/VMM into account, Kata may fail to boot due to being overconstrained.
+	// If !SandboxCgroupOnly, place the VMM into an unconstrained cgroup, and the vCPU threads into constrained
+	// cgroup
+	// Move the VMM into cgroups without constraints, those cgroups are not yet supported.
 	resources := &specs.LinuxResources{}
 	path := cgroupNoConstraintsPath(s.state.CgroupPath)
-	noConstraintsCgroup, err := cgroupsNewFunc(V1NoConstraints, cgroups.StaticPath(path), resources)
+	vmmCgroup, err := cgroupsNewFunc(V1NoConstraints, cgroups.StaticPath(path), resources)
 	if err != nil {
 		return fmt.Errorf("Could not create cgroup %v: %v", path, err)
-
 	}
+
 	for _, pid := range pids {
 		if pid <= 0 {
 			s.Logger().Warnf("Invalid hypervisor pid: %d", pid)
 			continue
 		}
 
-		if err := noConstraintsCgroup.Add(cgroups.Process{Pid: pid}); err != nil {
-			return fmt.Errorf("Could not add hypervisor PID %d to cgroup %v: %v", pid, path, err)
+		if err := vmmCgroup.Add(cgroups.Process{Pid: pid}); err != nil {
+			return fmt.Errorf("Could not add hypervisor PID %d to cgroup: %v", pid, err)
 		}
-
 	}
 
 	// when new container joins, new CPU could be hotplugged, so we
-	// have to query fresh vcpu info from hypervisor for every time.
+	// have to query fresh vcpu info from hypervisor every time.
 	tids, err := s.hypervisor.getThreadIDs()
 	if err != nil {
 		return fmt.Errorf("failed to get thread ids from hypervisor: %v", err)
@@ -2056,9 +2089,9 @@ func (s *Sandbox) constrainHypervisorVCPUs(cgroup cgroups.Cgroup) error {
 		return nil
 	}
 
-	// We are about to move just the vcpus (threads) into cgroups with constraints.
-	// Move whole hypervisor process whould be easier but the IO/network performance
-	// whould be impacted.
+	// Move vcpus (threads) into cgroups with constraints.
+	// Move whole hypervisor process would be easier but the IO/network performance
+	// would be over-constrained.
 	for _, i := range tids.vcpus {
 		// In contrast, AddTask will write thread id to `tasks`
 		// After this, vcpu threads are in "vcpu" sub-cgroup, other threads in
