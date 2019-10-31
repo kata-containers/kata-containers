@@ -42,6 +42,7 @@ use std::sync::{Arc, Mutex};
 use std::{io, thread};
 use unistd::Pid;
 
+mod config;
 mod device;
 mod logging;
 mod mount;
@@ -63,6 +64,8 @@ mod grpc;
 const NAME: &'static str = "kata-agent";
 const VSOCK_ADDR: &'static str = "vsock://-1";
 const VSOCK_PORT: u16 = 1024;
+const KERNEL_CMDLINE_FILE: &'static str = "/proc/cmdline";
+const CONSOLE_PATH: &'static str = "/dev/console";
 
 lazy_static! {
     static ref GLOBAL_DEVICE_WATCHER: Arc<Mutex<HashMap<String, Sender<String>>>> =
@@ -84,8 +87,17 @@ fn announce(logger: &Logger) {
 }
 
 fn main() -> Result<()> {
+    env::set_var("RUST_BACKTRACE", "full");
+
+    lazy_static::initialize(&SHELLS);
+
+    let mut config = config::agentConfig::new();
+
+    config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
+
     let writer = io::stdout();
-    let logger = logging::create_logger(NAME, "agent", slog::Level::Info, writer);
+
+    let logger = logging::create_logger(NAME, "agent", config.log_level, writer);
 
     announce(&logger);
 
@@ -93,14 +105,9 @@ fn main() -> Result<()> {
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
     let _guard = slog_scope::set_global_logger(logger.new(o!("subsystem" => "grpc")));
 
-    env::set_var("RUST_BACKTRACE", "full");
-
-    lazy_static::initialize(&SHELLS);
-    parse_cmdline(KERNEL_CMDLINE_FILE)?;
-
     let shells = SHELLS.clone();
 
-    let shell_handle = if unsafe { DEBUG_CONSOLE } {
+    let shell_handle = if config.debug_console {
         let thread_logger = logger.clone();
 
         thread::spawn(move || {
@@ -157,7 +164,7 @@ fn main() -> Result<()> {
 
     handle.join().unwrap();
 
-    if unsafe { DEBUG_CONSOLE } {
+    if config.debug_console {
         shell_handle.join().unwrap();
     }
 
@@ -273,14 +280,6 @@ fn init_agent_as_init(logger: &Logger) -> Result<()> {
     Ok(())
 }
 
-const LOG_LEVEL_FLAG: &'static str = "agent.log";
-const DEV_MODE_FLAG: &'static str = "agent.devmode";
-const TRACE_MODE_FLAG: &'static str = "agent.trace";
-const USE_VSOCK_FLAG: &'static str = "agent.use_vsock";
-const DEBUG_CONSOLE_FLAG: &'static str = "agent.debug_console";
-const KERNEL_CMDLINE_FILE: &'static str = "/proc/cmdline";
-const CONSOLE_PATH: &'static str = "/dev/console";
-
 lazy_static! {
     static ref SHELLS: Arc<Mutex<Vec<String>>> = {
         let mut v = Vec::new();
@@ -294,30 +293,8 @@ lazy_static! {
     };
 }
 
-pub static mut DEBUG_CONSOLE: bool = false;
 // pub static mut LOG_LEVEL: ;
-pub static mut DEV_MODE: bool = false;
 // pub static mut TRACE_MODE: ;
-
-fn parse_cmdline(file: &str) -> Result<()> {
-    let cmdline = fs::read_to_string(file)?;
-    let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
-    for param in params.iter() {
-        if param.starts_with(DEBUG_CONSOLE_FLAG) {
-            unsafe {
-                DEBUG_CONSOLE = true;
-            }
-        }
-
-        if param.starts_with(DEV_MODE_FLAG) {
-            unsafe {
-                DEV_MODE = true;
-            }
-        }
-    }
-
-    Ok(())
-}
 
 use nix::fcntl::{self, OFlag};
 use nix::sys::stat::Mode;
@@ -400,162 +377,5 @@ mod tests {
             result.unwrap_err().to_string(),
             "Error Code: 'invalid shell'"
         );
-    }
-
-    #[test]
-    fn test_parse_cmdline() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            contents: &'a str,
-            debug_console: bool,
-            dev_mode: bool,
-        }
-
-        let tests = &[
-            TestData {
-                contents: "",
-                debug_console: false,
-                dev_mode: false,
-            },
-            TestData {
-                contents: "foo",
-                debug_console: false,
-                dev_mode: false,
-            },
-            TestData {
-                contents: "foo bar",
-                debug_console: false,
-                dev_mode: false,
-            },
-            TestData {
-                contents: "foo bar",
-                debug_console: false,
-                dev_mode: false,
-            },
-            TestData {
-                contents: "foo agent bar",
-                debug_console: false,
-                dev_mode: false,
-            },
-            TestData {
-                contents: "foo debug_console agent bar devmode",
-                debug_console: false,
-                dev_mode: false,
-            },
-            TestData {
-                contents: "agent.debug_console",
-                debug_console: true,
-                dev_mode: false,
-            },
-            TestData {
-                contents: "   agent.debug_console ",
-                debug_console: true,
-                dev_mode: false,
-            },
-            TestData {
-                contents: "agent.debug_console foo",
-                debug_console: true,
-                dev_mode: false,
-            },
-            TestData {
-                contents: " agent.debug_console foo",
-                debug_console: true,
-                dev_mode: false,
-            },
-            TestData {
-                contents: "foo agent.debug_console bar",
-                debug_console: true,
-                dev_mode: false,
-            },
-            TestData {
-                contents: "foo agent.debug_console",
-                debug_console: true,
-                dev_mode: false,
-            },
-            TestData {
-                contents: "foo agent.debug_console ",
-                debug_console: true,
-                dev_mode: false,
-            },
-            TestData {
-                contents: "agent.devmode",
-                debug_console: false,
-                dev_mode: true,
-            },
-            TestData {
-                contents: "   agent.devmode ",
-                debug_console: false,
-                dev_mode: true,
-            },
-            TestData {
-                contents: "agent.devmode foo",
-                debug_console: false,
-                dev_mode: true,
-            },
-            TestData {
-                contents: " agent.devmode foo",
-                debug_console: false,
-                dev_mode: true,
-            },
-            TestData {
-                contents: "foo agent.devmode bar",
-                debug_console: false,
-                dev_mode: true,
-            },
-            TestData {
-                contents: "foo agent.devmode",
-                debug_console: false,
-                dev_mode: true,
-            },
-            TestData {
-                contents: "foo agent.devmode ",
-                debug_console: false,
-                dev_mode: true,
-            },
-            TestData {
-                contents: "agent.devmode agent.debug_console",
-                debug_console: true,
-                dev_mode: true,
-            },
-        ];
-
-        let dir = tempdir().expect("failed to create tmpdir");
-
-        // First, check a missing file is handled
-        let file_path = dir.path().join("enoent");
-
-        let filename = file_path.to_str().expect("failed to create filename");
-
-        let result = parse_cmdline(&filename.to_owned());
-        assert!(result.is_err());
-
-        // Now, test various combinations of file contents
-        for (i, d) in tests.iter().enumerate() {
-            // Reset
-            unsafe {
-                DEBUG_CONSOLE = false;
-                DEV_MODE = false;
-            };
-
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let file_path = dir.path().join("cmdline");
-
-            let filename = file_path.to_str().expect("failed to create filename");
-
-            let mut file =
-                File::create(filename).expect(&format!("{}: failed to create file", msg));
-
-            file.write_all(d.contents.as_bytes())
-                .expect(&format!("{}: failed to write file contents", msg));
-
-            let result = parse_cmdline(filename);
-            assert!(result.is_ok(), "{}", msg);
-
-            unsafe {
-                assert_eq!(d.debug_console, DEBUG_CONSOLE, "{}", msg);
-                assert_eq!(d.dev_mode, DEV_MODE, "{}", msg);
-            };
-        }
     }
 }
