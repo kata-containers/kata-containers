@@ -36,7 +36,7 @@ const cgroupKataPrefix = "kata"
 var cgroupsLoadFunc = cgroups.Load
 var cgroupsNewFunc = cgroups.New
 
-// V1Constraints returns the cgroups that are compatible with th VC architecture
+// V1Constraints returns the cgroups that are compatible with the VC architecture
 // and hypervisor, constraints can be applied to these cgroups.
 func V1Constraints() ([]cgroups.Subsystem, error) {
 	root, err := cgroupV1MountPoint()
@@ -51,7 +51,7 @@ func V1Constraints() ([]cgroups.Subsystem, error) {
 	return cgroupsSubsystems(subsystems)
 }
 
-// V1NoConstraints returns the cgroups that are *not* compatible with th VC
+// V1NoConstraints returns the cgroups that are *not* compatible with the VC
 // architecture and hypervisor, constraints MUST NOT be applied to these cgroups.
 func V1NoConstraints() ([]cgroups.Subsystem, error) {
 	root, err := cgroupV1MountPoint()
