@@ -281,6 +281,16 @@ languages:
         building Kata
       newest-version: "1.12.3"
 
+  rust:
+    description: "rust language"
+    notes: "'version' is the default minimum version used by this project."
+    version: "1.38.0"
+    meta:
+      description: |
+        'newest-version' is the latest version known to work when
+        building Kata
+      newest-version: "stable"
+
 specs:
   description: "Details of important specifications"
 
