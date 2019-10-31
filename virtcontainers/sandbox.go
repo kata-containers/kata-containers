@@ -63,6 +63,12 @@ type SandboxStatus struct {
 	Annotations map[string]string
 }
 
+// SandboxStats describes a sandbox's stats
+type SandboxStats struct {
+	CgroupStats CgroupStats
+	Cpus        int
+}
+
 // SandboxConfig is a Sandbox configuration.
 type SandboxConfig struct {
 	ID string
@@ -1367,6 +1373,46 @@ func (s *Sandbox) StatsContainer(containerID string) (ContainerStats, error) {
 	return *stats, nil
 }
 
+// Stats returns the stats of a running sandbox
+func (s *Sandbox) Stats() (SandboxStats, error) {
+	if s.state.CgroupPath == "" {
+		return SandboxStats{}, fmt.Errorf("sandbox cgroup path is emtpy")
+	}
+
+	var path string
+	var cgroupSubsystems cgroups.Hierarchy
+
+	if s.config.SandboxCgroupOnly {
+		cgroupSubsystems = cgroups.V1
+		path = s.state.CgroupPath
+	} else {
+		cgroupSubsystems = V1NoConstraints
+		path = cgroupNoConstraintsPath(s.state.CgroupPath)
+	}
+
+	cgroup, err := cgroupsLoadFunc(cgroupSubsystems, cgroups.StaticPath(path))
+	if err != nil {
+		return SandboxStats{}, fmt.Errorf("Could not load sandbox cgroup in %v: %v", s.state.CgroupPath, err)
+	}
+
+	metrics, err := cgroup.Stat(cgroups.ErrorHandler(cgroups.IgnoreNotExist))
+	if err != nil {
+		return SandboxStats{}, err
+	}
+
+	stats := SandboxStats{}
+
+	stats.CgroupStats.CPUStats.CPUUsage.TotalUsage = metrics.CPU.Usage.Total
+	stats.CgroupStats.MemoryStats.Usage.Usage = metrics.Memory.Usage.Usage
+	tids, err := s.hypervisor.getThreadIDs()
+	if err != nil {
+		return stats, err
+	}
+	stats.Cpus = len(tids.vcpus)
+
+	return stats, nil
+}
+
 // PauseContainer pauses a running container.
 func (s *Sandbox) PauseContainer(containerID string) error {
 	// Fetch the container.
@@ -2125,7 +2171,6 @@ func (s *Sandbox) setupSandboxCgroup() error {
 	if err := cgroup.Add(cgroups.Process{Pid: runtimePid}); err != nil {
 		return fmt.Errorf("Could not add runtime PID %d to sandbox cgroup:  %v", runtimePid, err)
 	}
-
 	return nil
 }
 
