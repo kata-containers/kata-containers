@@ -32,6 +32,10 @@ collect_logs()
 	local -r vc_throttler_log_path="${log_copy_dest}/${vc_throttler_log_filename}"
 	local -r vc_throttler_log_prefix="kata-vc_throttler_"
 
+	local -r containerd_log_filename="containerd.log"
+	local -r containerd_log_path="${log_copy_dest}/${containerd_log_filename}"
+	local -r containerd_log_prefix="containerd_"
+
 	local -r crio_log_filename="crio.log"
 	local -r crio_log_path="${log_copy_dest}/${crio_log_filename}"
 	local -r crio_log_prefix="crio_"
@@ -88,6 +92,7 @@ collect_logs()
 		sudo journalctl --no-pager -u kata-ksm-throttler > "${ksm_throttler_log_path}"
 		sudo journalctl --no-pager -u kata-vc-throttler > "${vc_throttler_log_path}"
 
+		sudo journalctl --no-pager -u containerd > "${containerd_log_path}"
 		sudo journalctl --no-pager -u crio > "${crio_log_path}"
 		sudo journalctl --no-pager -u docker > "${docker_log_path}"
 		sudo journalctl --no-pager -u kubelet > "${kubelet_log_path}"
@@ -108,6 +113,7 @@ collect_logs()
 		split -b "${subfile_size}" -d "${shim_log_path}" "${shim_log_prefix}"
 		split -b "${subfile_size}" -d "${ksm_throttler_log_path}" "${ksm_throttler_log_prefix}"
 		split -b "${subfile_size}" -d "${vc_throttler_log_path}" "${vc_throttler_log_prefix}"
+		split -b "${subfile_size}" -d "${containerd_log_path}" "${containerd_log_prefix}"
 		split -b "${subfile_size}" -d "${crio_log_path}" "${crio_log_prefix}"
 		split -b "${subfile_size}" -d "${docker_log_path}" "${docker_log_prefix}"
 		split -b "${subfile_size}" -d "${kubelet_log_path}" "${kubelet_log_prefix}"
@@ -121,6 +127,7 @@ collect_logs()
 		prefixes+=" ${kata_runtime_log_prefix}"
 		prefixes+=" ${proxy_log_prefix}"
 		prefixes+=" ${shim_log_prefix}"
+		prefixes+=" ${containerd_log_prefix}"
 		prefixes+=" ${crio_log_prefix}"
 		prefixes+=" ${docker_log_prefix}"
 		prefixes+=" ${kubelet_log_prefix}"
@@ -167,6 +174,9 @@ collect_logs()
 
 		echo "Kata Containers Virtcontainers Throttler Log:"
 		sudo journalctl --no-pager -u kata-vc-throttler
+
+		echo "Containerd Log:"
+		sudo journalctl --no-pager -u containerd
 
 		echo "CRI-O Log:"
 		sudo journalctl --no-pager -u crio
