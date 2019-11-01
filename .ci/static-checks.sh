@@ -602,12 +602,14 @@ static_check_docs()
 
 	info "Checking document code blocks"
 
+	local doc_to_script_cmd="${cidir}/kata-doc-to-script.sh"
+
 	for doc in $docs
 	do
-		bash "${cidir}/kata-doc-to-script.sh" -csv "$doc"
+		bash "${doc_to_script_cmd}" -csv "$doc"
 
 		# Look for URLs in the document
-		urls=$($cmd "$doc")
+		urls=$("${doc_to_script_cmd}" -i "$doc" - | "$cmd")
 
 		# Gather URLs
 		for url in $urls
