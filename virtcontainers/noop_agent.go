@@ -32,6 +32,10 @@ func (n *noopAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 	return false, nil
 }
 
+func (n *noopAgent) longLiveConn() bool {
+	return false
+}
+
 // createSandbox is the Noop agent sandbox creation implementation. It does nothing.
 func (n *noopAgent) createSandbox(sandbox *Sandbox) error {
 	return nil

@@ -224,6 +224,10 @@ func (k *kataAgent) getSharePath(id string) string {
 	return filepath.Join(kataHostSharedDir(), id)
 }
 
+func (k *kataAgent) longLiveConn() bool {
+	return k.keepConn
+}
+
 // KataAgentSetDefaultTraceConfigOptions validates agent trace options and
 // sets defaults.
 func KataAgentSetDefaultTraceConfigOptions(config *KataAgentConfig) error {
@@ -617,6 +621,7 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 	defer span.Finish()
 
 	var err error
+	var agentURL string
 
 	if k.proxy == nil {
 		return errorMissingProxy
@@ -627,18 +632,25 @@ func (k *kataAgent) startProxy(sandbox *Sandbox) error {
 	}
 
 	if k.state.URL != "" {
-		k.Logger().WithFields(logrus.Fields{
-			"sandbox":   sandbox.id,
-			"proxy-pid": k.state.ProxyPid,
-			"proxy-url": k.state.URL,
-		}).Infof("proxy already started")
-		return nil
-	}
-
-	// Get agent socket path to provide it to the proxy.
-	agentURL, err := k.agentURL()
-	if err != nil {
-		return err
+		// For keepConn case, when k.state.URL isn't nil, it means shimv2 had disconnected from
+		// sandbox and try to relaunch sandbox again. Here it needs to start proxy again to watch
+		// the hypervisor console.
+		if k.keepConn {
+			agentURL = k.state.URL
+		} else {
+			k.Logger().WithFields(logrus.Fields{
+				"sandbox":   sandbox.id,
+				"proxy-pid": k.state.ProxyPid,
+				"proxy-url": k.state.URL,
+			}).Infof("proxy already started")
+			return nil
+		}
+	} else {
+		// Get agent socket path to provide it to the proxy.
+		agentURL, err = k.agentURL()
+		if err != nil {
+			return err
+		}
 	}
 
 	consoleURL, err := sandbox.hypervisor.getSandboxConsole(sandbox.id)
