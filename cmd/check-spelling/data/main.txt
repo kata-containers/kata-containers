@@ -76,6 +76,8 @@ teardown
 templating
 timestamp/AB
 tracability
+udev/B
+uevent/AB
 unbootable
 uncomment/ACD
 unported
