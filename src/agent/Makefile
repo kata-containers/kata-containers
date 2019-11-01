@@ -23,7 +23,7 @@ COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
 # Exported to allow cargo to see it
 export VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
 
-BUILD_TYPE = release
+BUILD_TYPE = debug
 
 ARCH = $(shell uname -m)
 LIBC = musl
