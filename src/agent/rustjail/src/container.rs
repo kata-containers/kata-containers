@@ -1351,8 +1351,14 @@ impl LinuxContainer {
     */
 }
 
+// Handle the differing rlimit types for different targets
+#[cfg(target_env = "musl")]
+type RlimitsType = libc::c_int;
+#[cfg(target_env = "gnu")]
+type RlimitsType = libc::__rlimit_resource_t;
+
 lazy_static! {
-    pub static ref RLIMITMAPS: HashMap<String, libc::c_int> = {
+    pub static ref RLIMITMAPS: HashMap<String, RlimitsType> = {
         let mut m = HashMap::new();
         m.insert("RLIMIT_CPU".to_string(), libc::RLIMIT_CPU);
         m.insert("RLIMIT_FSIZE".to_string(), libc::RLIMIT_FSIZE);
@@ -1386,7 +1392,7 @@ fn setrlimit(limit: &POSIXRlimit) -> Result<()> {
         return Err(nix::Error::Sys(Errno::EINVAL).into());
     };
 
-    let ret = unsafe { libc::setrlimit(res as i32, &rl as *const libc::rlimit) };
+    let ret = unsafe { libc::setrlimit(res as RlimitsType, &rl as *const libc::rlimit) };
 
     Errno::result(ret).map(drop)?;
 
