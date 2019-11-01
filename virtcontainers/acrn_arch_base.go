@@ -306,9 +306,6 @@ type Config struct {
 
 	// ACPI virtualization support
 	ACPIVirt bool
-
-	// NumCPU is the number of CPUs for guest
-	NumCPU uint32
 }
 
 // MaxAcrnVCPUs returns the maximum number of vCPUs supported
@@ -571,14 +568,6 @@ func (config *Config) appendMemory() {
 	}
 }
 
-func (config *Config) appendCPUs() {
-	if config.NumCPU != 0 {
-		config.acrnParams = append(config.acrnParams, "-c")
-		config.acrnParams = append(config.acrnParams, fmt.Sprintf("%d", config.NumCPU))
-	}
-
-}
-
 func (config *Config) appendKernel() {
 	if config.Kernel.Path == "" {
 		return
@@ -603,7 +592,6 @@ func LaunchAcrn(config Config, logger *logrus.Entry) (int, string, error) {
 	config.appendUUID()
 	config.appendACPI()
 	config.appendMemory()
-	config.appendCPUs()
 	config.appendDevices()
 	config.appendKernel()
 	config.appendName()
