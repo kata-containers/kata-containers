@@ -45,9 +45,7 @@ The `rust-agent` depends on [`grpc-rs`](https://github.com/pingcap/grpc-rs) by P
 ### Build from Source
 The rust-agent need to be built with rust nightly, and static linked with musl.
 ```bash
-rustup toolchain install nightly
-rustup default nightly
-rustup target add x86_64-unknown-linux-musl --toolchain=nightly
+rustup target add x86_64-unknown-linux-musl
 git submodule update --init --recursive  
 sudo ln -s /usr/bin/g++ /bin/musl-g++  
 cargo build --target x86_64-unknown-linux-musl --release
