@@ -588,24 +588,22 @@ pub fn get_cgroup_mounts(logger: &Logger, cg_path: &str) -> Result<Vec<INIT_MOUN
             }
         }
 
-        match CGROUPS.get_key_value(fields[0]) {
-            Some((key, value)) => {
-                if *key == "" {
-                    continue;
-                }
+        if fields[0] == "" {
+            continue;
+        }
 
-                if *key == "devices" {
-                    has_device_cgroup = true;
-                }
+        if fields[0] == "devices" {
+            has_device_cgroup = true;
+        }
 
-                cg_mounts.push(INIT_MOUNT {
-                    fstype: "cgroup",
-                    src: "cgroup",
-                    dest: *value,
-                    options: vec!["nosuid", "nodev", "noexec", "relatime", *key],
-                });
-            }
-            None => continue,
+        if let Some(value) = CGROUPS.get(&fields[0]) {
+            let key = CGROUPS.keys().find(|&&f| f == fields[0]).unwrap();
+            cg_mounts.push(INIT_MOUNT {
+                fstype: "cgroup",
+                src: "cgroup",
+                dest: *value,
+                options: vec!["nosuid", "nodev", "noexec", "relatime", key]
+            });
         }
     }
 
