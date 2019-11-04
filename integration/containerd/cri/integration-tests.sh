@@ -158,6 +158,9 @@ main() {
 	info "Stop crio service"
 	systemctl is-active --quiet crio && sudo systemctl stop crio
 
+	info "Stop containerd service"
+	systemctl is-active --quiet containerd && sudo systemctl stop containerd
+
 	# Configure enviroment if running in CI
 	ci_config
 
