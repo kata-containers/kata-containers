@@ -6,6 +6,7 @@
 package experimental
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 )
@@ -22,8 +23,11 @@ type Feature struct {
 	ExpRelease string
 }
 
+type contextKey struct{}
+
 var (
 	supportedFeatures = make(map[string]Feature)
+	expContextKey     = contextKey{}
 )
 
 // Register register a new experimental feature
@@ -60,4 +64,17 @@ func validateFeature(feature Feature) error {
 	}
 
 	return nil
+}
+
+func ContextWithExp(ctx context.Context, names []string) context.Context {
+	return context.WithValue(ctx, expContextKey, names)
+}
+
+func ExpFromContext(ctx context.Context) []string {
+	value := ctx.Value(expContextKey)
+	if value == nil {
+		return nil
+	}
+	names := value.([]string)
+	return names
 }

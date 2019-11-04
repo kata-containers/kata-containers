@@ -21,6 +21,7 @@ import (
 	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/pkg/signals"
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
 	vf "github.com/kata-containers/runtime/virtcontainers/factory"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -346,6 +347,11 @@ func beforeSubcommands(c *cli.Context) error {
 		"arguments": `"` + args + `"`,
 	}
 
+	err = addExpFeatures(c, runtimeConfig)
+	if err != nil {
+		return err
+	}
+
 	kataLog.WithFields(fields).Info()
 
 	// make the data accessible to the sub-commands.
@@ -398,6 +404,24 @@ func setupTracing(context *cli.Context, rootSpanName string) error {
 	context.App.Metadata["tracer"] = tracer
 	context.App.Metadata["context"] = ctx
 
+	return nil
+}
+
+// add supported experimental features in context
+func addExpFeatures(clictx *cli.Context, runtimeConfig oci.RuntimeConfig) error {
+	ctx, err := cliContextToContext(clictx)
+	if err != nil {
+		return err
+	}
+
+	var exps []string
+	for _, e := range runtimeConfig.Experimental {
+		exps = append(exps, e.Name)
+	}
+
+	ctx = exp.ContextWithExp(ctx, exps)
+	// Add tracer to metadata and update the context
+	clictx.App.Metadata["context"] = ctx
 	return nil
 }
 

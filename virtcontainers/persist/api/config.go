@@ -6,17 +6,9 @@
 
 package persistapi
 
-// Param is a key/value representation for hypervisor and kernel parameters.
-type Param struct {
-	Key   string
-	Value string
-}
-
-// Asset saves hypervisor asset
-type Asset struct {
-	Path   string `json:"path"`
-	Custom bool   `json:"bool"`
-}
+import (
+	specs "github.com/opencontainers/runtime-spec/specs-go"
+)
 
 // HypervisorConfig saves configurations of sandbox hypervisor
 type HypervisorConfig struct {
@@ -42,11 +34,8 @@ type HypervisorConfig struct {
 	// MemOffset specifies memory space for nvdimm device
 	MemOffset uint32
 
-	// KernelParams are additional guest kernel parameters.
-	KernelParams []Param
-
-	// HypervisorParams are additional hypervisor parameters.
-	HypervisorParams []Param
+	// VirtioFSCacheSize is the DAX cache size in MiB
+	VirtioFSCacheSize uint32
 
 	// KernelPath is the guest kernel host path.
 	KernelPath string
@@ -66,6 +55,12 @@ type HypervisorConfig struct {
 
 	// HypervisorPath is the hypervisor executable host path.
 	HypervisorPath string
+
+	// HypervisorCtlPath is the hypervisor ctl executable host path.
+	HypervisorCtlPath string
+
+	// JailerPath is the jailer executable host path.
+	JailerPath string
 
 	// BlockDeviceDriver specifies the driver to be used for block device
 	// either VirtioSCSI or VirtioBlock with the default driver being defaultBlockDriver
@@ -87,11 +82,19 @@ type HypervisorConfig struct {
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
 	EntropySource string
 
-	// customAssets is a map of assets.
-	// Each value in that map takes precedence over the configured assets.
-	// For example, if there is a value for the "kernel" key in this map,
-	// it will be used for the sandbox's kernel path instead of KernelPath.
-	CustomAssets map[string]*Asset
+	// Shared file system type:
+	//   - virtio-9p (default)
+	//   - virtio-fs
+	SharedFS string
+
+	// VirtioFSDaemon is the virtio-fs vhost-user daemon path
+	VirtioFSDaemon string
+
+	// VirtioFSCache cache mode for fs version cache or "none"
+	VirtioFSCache string
+
+	// VirtioFSExtraArgs passes options to virtiofsd daemon
+	VirtioFSExtraArgs []string
 
 	// BlockDeviceCacheSet specifies cache-related options will be set to block devices or not.
 	BlockDeviceCacheSet bool
@@ -154,6 +157,10 @@ type HypervisorConfig struct {
 
 	// GuestHookPath is the path within the VM that will be used for 'drop-in' hooks
 	GuestHookPath string
+
+	// VMid is the id of the VM that create the hypervisor if the VM is created by the factory.
+	// VMid is "" if the hypervisor is not created by the factory.
+	VMid string
 }
 
 // KataAgentConfig is a structure storing information needed
@@ -186,6 +193,18 @@ type ShimConfig struct {
 
 // NetworkConfig is the network configuration related to a network.
 type NetworkConfig struct {
+	NetNSPath         string
+	NetNsCreated      bool
+	DisableNewNetNs   bool
+	InterworkingModel int
+}
+
+type ContainerConfig struct {
+	ID          string
+	Annotations map[string]string
+	RootFs      string
+	// Resources for recoding update
+	Resources specs.LinuxResources
 }
 
 // SandboxConfig is a sandbox configuration.
@@ -195,17 +214,15 @@ type SandboxConfig struct {
 	HypervisorConfig HypervisorConfig
 
 	// only one agent config can be non-nil according to agent type
-	AgentType        string
-	KataAgentConfig  *KataAgentConfig  `json:",omitempty"`
-	HyperstartConfig *HyperstartConfig `json:",omitempty"`
+	AgentType       string
+	KataAgentConfig *KataAgentConfig `json:",omitempty"`
 
 	ProxyType   string
 	ProxyConfig ProxyConfig
 
 	ShimType       string
-	KataShimConfig ShimConfig
+	KataShimConfig *ShimConfig
 
-	NetworkModel  string
 	NetworkConfig NetworkConfig
 
 	ShmSize uint64
@@ -220,11 +237,18 @@ type SandboxConfig struct {
 	// SystemdCgroup enables systemd cgroup support
 	SystemdCgroup bool
 
+	// SandboxCgroupOnly enables cgroup only at podlevel in the host
+	SandboxCgroupOnly bool
+
+	DisableGuestSeccomp bool
+
 	// Experimental enables experimental features
-	Experimental bool
+	Experimental []string
 
 	// Information for fields not saved:
 	// * Annotation: this is kind of casual data, we don't need casual data in persist file,
 	// 				if you know this data needs to persist, please gives it
 	//				a specific field
+
+	ContainerConfigs []ContainerConfig
 }
