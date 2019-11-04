@@ -2,15 +2,26 @@
 
 * [Overview](#overview)
 * [Assertions](#assertions)
+    * [golang assertions](#golang-assertions)
+    * [rust assertions](#rust-assertions)
 * [Table driven tests](#table-driven-tests)
+    * [golang table driven tests](#golang-table-driven-tests)
+    * [rust table driven tests](#rust-table-driven-tests)
 * [Temporary files](#temporary-files)
+    * [golang temporary files](#golang-temporary-files)
+    * [rust temporary files](#rust-temporary-files)
 * [User running the test](#user-running-the-test)
+    * [running golang tests as different users](#running-golang-tests-as-different-users)
+    * [running rust tests as different users](#running-rust-tests-as-different-users)
 
 ## Overview
 
-This document offers advice on writing a new `golang` unit test (UT).
+This document offers advice on writing a Unit Test (UT) in
+[`golang`](https://golang.org) and [`rust`](https://www.rust-lang.org).
 
 ## Assertions
+
+### golang assertions
 
 Use the `testify` assertions package to create a new assertion object as this
 keeps the test code free from distracting `if` tests:
@@ -24,14 +35,47 @@ func TestSomething(t *testing.T) {
 }
 ```
 
+### rust assertions
+
+Use the standard set of `assert!()` macros.
+
 ## Table driven tests
 
 Try to write tests using a table-based approach. This allows you to distill
 the logic into a compact table (rather than spreading the tests across
-multiple `Test*` functions). It also makes it easy to cover all the
+multiple test functions). It also makes it easy to cover all the
 interesting boundary conditions:
 
+### golang table driven tests
+
+Assume the following function:
+
 ```go
+// The function under test.
+//
+// Accepts a string and an integer and returns the
+// result of sticking them together separated by a dash as a string.
+func joinParamsWithDash(str string, num int) (string, error) {
+    if str == "" {
+        return "", errors.New("string cannot be blank")
+    }
+
+    if num <= 0 {
+        return "", errors.New("number must be positive")
+    }
+
+    return fmt.Sprintf("%s-%d", str, num), nil
+}
+```
+
+A table driven approach to testing it:
+
+```go
+import (
+    "testing"
+    "github.com/stretchr/testify/assert"
+)
+
 func TestJoinParamsWithDash(t *testing.T) {
     assert := assert.New(t)
 
@@ -45,13 +89,14 @@ func TestJoinParamsWithDash(t *testing.T) {
 
     // List of tests to run including the expected results
     data := []testData{
-        // failure scenarios
+        // Failure scenarios
         {"", -1, "", true},
-        {"",  0, "", true},
-        {"",  1, "", true},
+        {"", 0, "", true},
+        {"", 1, "", true},
+        {"foo", 0, "", true},
         {"foo", -1, "", true},
 
-        // success scenarios
+        // Success scenarios
         {"foo", 1, "foo-1", false},
         {"bar", 42, "bar-42", false},
     }
@@ -64,6 +109,9 @@ func TestJoinParamsWithDash(t *testing.T) {
 
         // Call the function under test
         result, err := joinParamsWithDash(d.param1, d.param2)
+
+        // update the message for more information on failure
+        msg = fmt.Sprintf("%s, result: %q, err: %v", msg, result, err)
 
         if d.expectError {
             assert.Error(err, msg)
@@ -79,9 +127,110 @@ func TestJoinParamsWithDash(t *testing.T) {
 }
 ```
 
+### rust table driven tests
+
+Assume the following function:
+
+```rust
+// Convenience type to allow Result return types to only specify the type
+// for the true case; failures are specified as static strings.
+pub type Result<T> = std::result::Result<T, &'static str>;
+
+// The function under test.
+//
+// Accepts a string and an integer and returns the
+// result of sticking them together separated by a dash as a string.
+fn join_params_with_dash(str: &str, num: i32) -> Result<String> {
+    if str == "" {
+        return Err("string cannot be blank");
+    }
+
+    if num <= 0 {
+        return Err("number must be positive");
+    }
+
+    let result = format!("{}-{}", str, num);
+
+    Ok(result)
+}
+
+```
+
+A table driven approach to testing it:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_join_params_with_dash() {
+        // This is a type used to record all details of the inputs
+        // and outputs of the function under test.
+        #[derive(Debug)]
+        struct TestData<'a> {
+            str: &'a str,
+            num: i32,
+            result: Result<String>,
+        }
+    
+        // The tests can now be specified as a set of inputs and outputs
+        let tests = &[
+            // Failure scenarios
+            TestData {
+                str: "",
+                num: 0,
+                result: Err("string cannot be blank"),
+            },
+            TestData {
+                str: "foo",
+                num: -1,
+                result: Err("number must be positive"),
+            },
+
+            // Success scenarios
+            TestData {
+                str: "foo",
+                num: 42,
+                result: Ok("foo-42".to_string()),
+            },
+            TestData {
+                str: "-",
+                num: 1,
+                result: Ok("--1".to_string()),
+            },
+        ];
+    
+        // Run the tests
+        for (i, d) in tests.iter().enumerate() {
+            // Create a string containing details of the test
+            let msg = format!("test[{}]: {:?}", i, d);
+    
+            // Call the function under test
+            let result = join_params_with_dash(d.str, d.num);
+    
+            // Update the test details string with the results of the call
+            let msg = format!("{}, result: {:?}", msg, result);
+    
+            // Perform the checks
+            if d.result.is_ok() {
+                assert!(result == d.result, msg);
+                continue;
+            }
+    
+            let expected_error = format!("{}", d.result.as_ref().unwrap_err());
+            let actual_error = format!("{}", result.unwrap_err());
+            assert!(actual_error == expected_error, msg);
+        }
+    }
+}
+```
+
 ## Temporary files
 
-Always delete temporary files on success:
+Always delete temporary files on success.
+
+### golang temporary files
 
 ```go
 func TestSomething(t *testing.T) {
@@ -96,6 +245,30 @@ func TestSomething(t *testing.T) {
 
     // Add test logic that will use the tmpdir here...
 }
+```
+
+### rust temporary files
+
+Use the `tempfile` crate which allows files and directories to be deleted
+automatically:
+
+```rust
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_something() {
+
+        // Create a temporary directory (which will be deleted automatically
+        let dir = tempdir().expect("failed to create tmpdir");
+
+        let filename = dir.path().join("file.txt");
+
+        // create filename ...
+    }
+}
+
 ```
 
 ## User running the test
@@ -114,6 +287,47 @@ Some repositories already provide utility functions to skip a test:
 - if running as `root`
 - if not running as `root`
 
+### running golang tests as different users
+
 The runtime repository has the most comprehensive set of skip abilities. See:
 
 - https://github.com/kata-containers/runtime/tree/master/pkg/katatestutils
+
+### running rust tests as different users
+
+One method is to use the `nix` crate along with some custom macros:
+
+```
+#[cfg(test)]
+mod tests {
+    #[allow(unused_macros)]
+    macro_rules! skip_if_root {
+        () => {
+            if nix::unistd::Uid::effective().is_root() {
+                println!("INFO: skipping {} which needs non-root", module_path!());
+                return;
+            }
+        };
+    }
+
+    #[allow(unused_macros)]
+    macro_rules! skip_if_not_root {
+        () => {
+            if !nix::unistd::Uid::effective().is_root() {
+                println!("INFO: skipping {} which needs root", module_path!());
+                return;
+            }
+        };
+    }
+
+    #[test]
+    fn test_that_must_be_run_as_root() {
+        // Not running as the superuser, so skip.
+        skip_if_not_root!();
+
+        // Run test *iff* the user running the test is root
+
+        // ...
+    }
+}
+```
