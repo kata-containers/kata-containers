@@ -101,8 +101,11 @@ collect_logs()
 
 		[ "${have_collect_script}" = "yes" ] && sudo -E PATH="$PATH" "${collect_script_path}" > "${collect_data_log_path}"
 
-		tracing_log_directory="/var/log/kata-tests/logs/traces/"
-		cp "${tracing_log_directory}/${tracing_log_filename}" "${tracing_log_path}"
+		tracing_log_directory="/var/log/kata-tests/logs/traces"
+
+		if [ -f "${tracing_log_directory}/${tracing_log_filename}" ]; then
+			cp "${tracing_log_directory}/${tracing_log_filename}" "${tracing_log_path}"
+		fi
 
 		# Split them in 5 MiB subfiles to avoid too large files.
 		local -r subfile_size=5242880
