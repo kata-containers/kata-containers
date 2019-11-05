@@ -18,14 +18,16 @@ cat << EOT | sudo tee /etc/containerd/config.toml
 [plugins]
   [plugins.cri]
     [plugins.cri.containerd]
-      [plugins.cri.containerd.runtimes.runc]
-        runtime_type = "io.containerd.runtime.v1.linux"
-        [plugins.cri.containerd.runtimes.runc.options]
-          Runtime = "runc"
-          RuntimeRoot = "${runc_path}"
-      [plugins.cri.containerd.runtimes.kata]
-        runtime_type = "io.containerd.runtime.v1.linux"
-        [plugins.cri.containerd.runtimes.kata.options]
-          Runtime = "kata-runtime"
-          RuntimeRoot = "${kata_runtime_path}"
+      [plugins.cri.containerd.runtimes]
+        [plugins.cri.containerd.runtimes.runc]
+           runtime_type = "io.containerd.runc.v1"
+           [plugins.cri.containerd.runtimes.runc.options]
+             BinaryName = "${runc_path}"
+             Root = ""
+        [plugins.cri.containerd.runtimes.kata]
+           runtime_type = "io.containerd.runc.v1"
+           pod_annotations = ["io.kata-containers.*"]
+           [plugins.cri.containerd.runtimes.kata.options]
+             BinaryName = "${kata_runtime_path}"
+             Root = ""
 EOT
