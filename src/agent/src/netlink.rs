@@ -2437,6 +2437,9 @@ impl RtnlHandle {
         for grpcroute in rt {
             if grpcroute.gateway.as_str() == "" {
                 let r = RtRoute::from(grpcroute.clone());
+                if r.index == -1 {
+                    continue;
+                }
                 self.add_one_route(&r)?;
             }
         }
@@ -2444,6 +2447,9 @@ impl RtnlHandle {
         for grpcroute in rt {
             if grpcroute.gateway.as_str() != "" {
                 let r = RtRoute::from(grpcroute.clone());
+                if r.index == -1 {
+                    continue;
+                }
                 self.add_one_route(&r)?;
             }
         }
@@ -2754,7 +2760,10 @@ impl From<Route> for RtRoute {
 
         let index = {
             let mut rh = RtnlHandle::new(NETLINK_ROUTE, 0).unwrap();
-            rh.find_link_by_name(r.device.as_str()).unwrap().ifi_index
+            match rh.find_link_by_name(r.device.as_str()) {
+                Ok(ifi) => ifi.ifi_index,
+                Err(_) => -1,
+            }
         };
 
         let (dest, dst_len) = if r.dest.is_empty() {
