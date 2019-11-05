@@ -885,6 +885,66 @@ func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 	assert.Error(err)
 }
 
+func TestNewClhHypervisorConfig(t *testing.T) {
+
+	assert := assert.New(t)
+
+	tmpdir, err := ioutil.TempDir(testDir, "")
+	assert.NoError(err)
+	defer os.RemoveAll(tmpdir)
+
+	hypervisorPath := path.Join(tmpdir, "hypervisor")
+	kernelPath := path.Join(tmpdir, "kernel")
+	imagePath := path.Join(tmpdir, "image")
+	virtioFsDaemon := path.Join(tmpdir, "virtiofsd")
+
+	for _, file := range []string{imagePath, hypervisorPath, kernelPath, virtioFsDaemon} {
+		err = createEmptyFile(file)
+		assert.NoError(err)
+	}
+
+	hypervisor := hypervisor{
+		Path:           hypervisorPath,
+		Kernel:         kernelPath,
+		Image:          imagePath,
+		VirtioFSDaemon: virtioFsDaemon,
+		VirtioFSCache:  "always",
+	}
+	config, err := newClhHypervisorConfig(hypervisor)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if config.HypervisorPath != hypervisor.Path {
+		t.Errorf("Expected hypervisor path %v, got %v", hypervisor.Path, config.HypervisorPath)
+	}
+
+	if config.KernelPath != hypervisor.Kernel {
+		t.Errorf("Expected kernel path %v, got %v", hypervisor.Kernel, config.KernelPath)
+	}
+
+	if config.ImagePath != hypervisor.Image {
+		t.Errorf("Expected image path %v, got %v", hypervisor.Image, config.ImagePath)
+	}
+
+	if config.ImagePath != hypervisor.Image {
+		t.Errorf("Expected image path %v, got %v", hypervisor.Image, config.ImagePath)
+	}
+
+	if config.UseVSock != true {
+		t.Errorf("Expected UseVSock %v, got %v", true, config.UseVSock)
+	}
+
+	if config.DisableVhostNet != true {
+		t.Errorf("Expected DisableVhostNet %v, got %v", true, config.DisableVhostNet)
+	}
+
+	if config.VirtioFSCache != "always" {
+		t.Errorf("Expected VirtioFSCache %v, got %v", true, config.VirtioFSCache)
+	}
+
+}
+
 func TestNewShimConfig(t *testing.T) {
 	dir, err := ioutil.TempDir(testDir, "shim-config-")
 	if err != nil {
