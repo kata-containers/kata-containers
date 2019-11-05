@@ -9,6 +9,8 @@ set -e
 [ -n "${KATA_DEV_MODE:-}" ] && exit 0
 
 cidir=$(dirname "$0")
+source "${cidir}/lib.sh"
+
 rustarch=$(${cidir}/kata-arch.sh --rust)
 # release="nightly"
 # recent functional version
