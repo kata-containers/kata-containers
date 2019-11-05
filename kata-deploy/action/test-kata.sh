@@ -57,7 +57,7 @@ function waitForLabelRemoval() {
 
 function run_test() {
     PKG_SHA=$1
-    YAMLPATH="https://raw.githubusercontent.com/amshinde/kata-packaging/$PKG_SHA/kata-deploy"
+    YAMLPATH="https://raw.githubusercontent.com/kata-containers/packaging/$PKG_SHA/kata-deploy"
     echo "verify connectivity with a pod using Kata"
 
     deployment=""
@@ -102,7 +102,7 @@ function test_kata() {
     #kubectl all the things
     kubectl get pods,nodes --all-namespaces
 
-    YAMLPATH="https://raw.githubusercontent.com/amshinde/kata-packaging/$PKG_SHA/kata-deploy"
+    YAMLPATH="https://raw.githubusercontent.com/kata-containers/packaging/$PKG_SHA/kata-deploy"
 
     kubectl apply -f "$YAMLPATH/kata-rbac.yaml"
 
