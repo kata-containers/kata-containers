@@ -12,13 +12,12 @@ use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use crate::mount::{
-    DRIVERBLKTYPE, DRIVERMMIOBLKTYPE, DRIVERNVDIMMTYPE, DRIVERSCSITYPE, TIMEOUT_HOTPLUG,
+    DRIVERBLKTYPE, DRIVERMMIOBLKTYPE, DRIVERNVDIMMTYPE, DRIVERSCSITYPE,
 };
 use crate::sandbox::Sandbox;
-use crate::GLOBAL_DEVICE_WATCHER;
+use crate::{GLOBAL_DEVICE_WATCHER, AGENT_CONFIG};
 use protocols::agent::Device;
 use protocols::oci::Spec;
 
@@ -174,7 +173,10 @@ pub fn get_device_name(sandbox: Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<S
     if dev_name == "" {
         info!(sl!(), "Waiting on channel for device notification\n");
 
-        match rx.recv_timeout(Duration::from_secs(TIMEOUT_HOTPLUG)) {
+        let agent_config = AGENT_CONFIG.clone();
+        let config = agent_config.read().unwrap();
+
+        match rx.recv_timeout(config.hotplug_timeout) {
             Ok(name) => dev_name = name,
             Err(_) => {
                 let watcher = GLOBAL_DEVICE_WATCHER.clone();
@@ -182,8 +184,8 @@ pub fn get_device_name(sandbox: Arc<Mutex<Sandbox>>, dev_addr: &str) -> Result<S
                 w.remove_entry(dev_addr);
 
                 return Err(ErrorKind::ErrorCode(format!(
-                    "Timeout reached after {} waiting for device {}",
-                    TIMEOUT_HOTPLUG, dev_addr
+                    "Timeout reached after {:?} waiting for device {}",
+                    config.hotplug_timeout, dev_addr
                 ))
                 .into());
             }
