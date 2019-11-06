@@ -24,6 +24,16 @@ go build
 go install
 popd
 
+echo "Install conmon"
+conmon_url=$(get_version "externals.conmon.url")
+conmon_version=$(get_version "externals.conmon.version")
+conmon_repo=${conmon_url/https:\/\/}
+go get -d "${conmon_repo}" || true
+pushd "$GOPATH/src/${conmon_repo}"
+make
+sudo -E make install
+popd
+
 echo "Get CRI-O sources"
 kubernetes_sigs_org="github.com/kubernetes-sigs"
 ghprbGhRepository="${ghprbGhRepository:-}"
