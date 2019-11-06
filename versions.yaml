@@ -195,6 +195,11 @@ externals:
     url: "https://github.com/containernetworking/plugins"
     commit: "485be65581341430f9106a194a98f0f2412245fb"
 
+  conmon:
+    description: "An OCI container runtime monitor"
+    url: "https://github.com/containers/conmon"
+    version: "v2.0.1"
+
   crio:
     description: |
       OCI-based Kubernetes Container Runtime Interface implementation
@@ -210,6 +215,11 @@ externals:
     url: "github.com/containerd/cri"
     tarball_url: "https://storage.googleapis.com/cri-containerd-release"
     version: "1.2.7"
+
+  critools:
+    description: "CLI tool for Container Runtime Interface (CRI)"
+    url: "https://github.com/kubernetes-sigs/cri-tools"
+    version: "1.16.1"
 
   docker:
     description: "Moby project container manager"
