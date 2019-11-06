@@ -40,7 +40,8 @@ if [ "$ID" == "fedora" ]; then
 fi
 
 crio_version=$(get_version "externals.crio.version")
-crictl_version=$(get_test_version "externals.critools.version")
+crictl_repo=$(get_version "externals.critools.url")
+crictl_version=$(get_version "externals.critools.version")
 crictl_tag_prefix="v"
 
 if [ "$ghprbGhRepository" != "${crio_repo/github.com\/}" ]
@@ -62,7 +63,7 @@ then
 fi
 
 echo "Installing CRI Tools"
-crictl_url=https://github.com/kubernetes-sigs/cri-tools/releases/download/v$crictl_version/crictl-$crictl_tag_prefix$crictl_version-linux-"$(${cidir}/kata-arch.sh -g)".tar.gz
+crictl_url="${crictl_repo}/releases/download/v${crictl_version}/crictl-${crictl_tag_prefix}${crictl_version}-linux-$(${cidir}/kata-arch.sh -g).tar.gz"
 curl -Ls "$crictl_url" | sudo tar xfz - -C /usr/local/bin
 
 go get -d "$crio_repo" || true

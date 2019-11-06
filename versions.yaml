@@ -63,9 +63,6 @@ externals:
     url: "https://ftp.gnu.org/gnu/parallel"
     version: "20190222"
 
-  critools:
-    version: 1.14.0
-
   sonobuoy:
     description: "Tool to run kubernetes e2e conformance tests"
     url: "https://github.com/vmware-tanzu/sonobuoy"
