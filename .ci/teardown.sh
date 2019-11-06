@@ -121,7 +121,9 @@ collect_logs()
 		split -b "${subfile_size}" -d "${docker_log_path}" "${docker_log_prefix}"
 		split -b "${subfile_size}" -d "${kubelet_log_path}" "${kubelet_log_prefix}"
 		split -b "${subfile_size}" -d "${kernel_log_path}" "${kernel_log_prefix}"
-		split -b "${subfile_size}" -d "${tracing_log_path}" "${tracing_log_prefix}"
+		if [ -f "${tracing_log_directory}/${tracing_log_filename}" ]; then
+			split -b "${subfile_size}" -d "${tracing_log_path}" "${tracing_log_prefix}"
+		fi
 		split -b "${subfile_size}" -d "${virtiofs_log_path}" "${virtiofs_log_prefix}"
 
 		[ "${have_collect_script}" = "yes" ] &&  split -b "${subfile_size}" -d "${collect_data_log_path}" "${collect_data_log_prefix}"
@@ -193,8 +195,10 @@ collect_logs()
 		echo "Kernel Log:"
 		sudo journalctl --no-pager -t kernel
 
-		echo "Runtime Tracing Log:"
-		cat "${tracing_log_directory}/${tracing_log_filename}"
+		if [ -f "${tracing_log_directory}/${tracing_log_filename}" ]; then
+			echo "Runtime Tracing Log:"
+			cat "${tracing_log_directory}/${tracing_log_filename}"
+		fi
 
 		echo "Virtiofs Log:"
 		sudo journalctl --no-pager -t virtiofs
