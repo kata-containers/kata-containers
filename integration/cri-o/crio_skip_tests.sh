@@ -14,3 +14,12 @@ declare -a skipCRIOTests=(
 'test "ctr with run_as_user set to 100 should get 101 as the gid for redis:alpine"'
 'test "additional devices permissions"'
 );
+
+if [ "${KATA_HYPERVISOR}" == "firecracker" ]; then
+	# This is a limitation in firecracker, the maximum number
+	# of block devices supported is 8, but this test tries to attach
+	# more than 10
+	skipCRIOTests+=(
+		'test "privileged ctr device add"'
+	)
+fi

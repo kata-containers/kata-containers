@@ -40,6 +40,10 @@ case "${CI_JOB}" in
 		sudo -E PATH="$PATH" bash -c "make oci"
 		echo "INFO: Running networking tests"
 		sudo -E PATH="$PATH" bash -c "make network"
+		if [ "${CI_JOB}" == "FIRECRACKER" ]; then
+			echo "INFO: Running crio tests"
+			sudo -E PATH="$PATH" bash -c "make crio"
+		fi
 		;;
 	*)
 		echo "INFO: Running checks"
