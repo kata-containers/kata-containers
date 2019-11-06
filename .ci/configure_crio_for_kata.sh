@@ -21,18 +21,14 @@ if [ "$minor_crio_version" -ge "12" ]; then
 	runc_configured=$(grep -q $runc_flag $crio_config_file; echo "$?")
 	if [[ $runc_configured -ne 0 ]]; then
 		sudo sed -i 's!runtime_path =.*!runtime_path = "/usr/local/bin/crio-runc"!' "$crio_config_file"
-		sudo sed -i '/runtime_root/d' "$crio_config_file"
-		sudo sed -i '/runtime_type/d' "$crio_config_file"
 	fi
 	echo "- Add kata-runtime to the runtimes map"
 	kata_configured=$(grep -q $kata_flag $crio_config_file; echo "$?")
 	if [[ $kata_configured -ne 0 ]]; then
-		sudo sed -i '/crio-runc/a [crio.runtime.runtimes.kata]' "$crio_config_file"
-		sudo sed -i '/crio\.runtime\.runtimes\.kata/a runtime_path = "/usr/local/bin/kata-runtime"' "$crio_config_file"
-		sudo sed -i '/kata-runtime/a runtime_root = "/run/vc"' "$crio_config_file"
+		sudo sed -i '/\/run\/runc/a [crio.runtime.runtimes.kata]' "$crio_config_file"
+		sudo sed -i '/crio\.runtime\.runtimes\.kata\]/a runtime_path = "/usr/local/bin/kata-runtime"' "$crio_config_file"
+		sudo sed -i '/kata-runtime"/a runtime_root = "/run/vc"' "$crio_config_file"
 		sudo sed -i '/\/run\/vc/a runtime_type = "oci"' "$crio_config_file"
-		sudo sed -i '/crio-runc/a runtime_type = "oci"' "$crio_config_file"
-		sudo sed -i '/crio-runc/a runtime_root = "/run/runc"' "$crio_config_file"
 	fi
 else
 	echo "Configure runtimes for trusted/untrusted annotations"
