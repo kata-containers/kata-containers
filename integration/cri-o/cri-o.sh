@@ -14,6 +14,7 @@ source "${SCRIPT_PATH}/../../metrics/lib/common.bash"
 source /etc/os-release || source /usr/lib/os-release
 
 export JOBS="${JOBS:-$(nproc)}"
+export CONTAINER_RUNTIME="${CONTAINER_RUNTIME:-$RUNTIME}"
 
 # Skip the cri-o tests if TEST_CRIO is not true
 # and we are on a CI job.
@@ -127,6 +128,7 @@ if systemctl is-active --quiet docker; then
 	sudo systemctl stop docker
 fi
 
+echo "Running cri-o tests with runtime: $CONTAINER_RUNTIME"
 ./test_runner.sh ctr.bats
 
 popd
