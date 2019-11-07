@@ -1,4 +1,4 @@
-# Install Kata Containers on Amazon Web Services 
+# Install Kata Containers on Amazon Web Services
 
 * [Install and Configure AWS CLI](#install-and-configure-aws-cli)
 * [Create or Import an EC2 SSH key pair](#create-or-import-an-ec2-ssh-key-pair)
