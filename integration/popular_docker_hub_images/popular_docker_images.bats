@@ -467,6 +467,11 @@ setup() {
 	if docker run --rm --runtime=$RUNTIME -i $image traefik --version | grep "EXEC spawning"; then false; else true; fi
 }
 
+@test "[teamspeak] run a teamspeak container" {
+	image="teamspeak"
+	docker run --rm --runtime=$RUNTIME -i -p 9987:9987/udp -p 10011:10011 -p 30033:30033 -e TS3SERVER_LICENSE=accept $image sh -c "printf 'Kata Containers'"
+}
+
 @test "[run application] run an instance in an ubuntu debootstrap container" {
 	image="ubuntu-debootstrap"
 	docker run --rm --runtime=$RUNTIME -i $image sh -c 'if [ -f /etc/bash.bashrc ]; then echo "/etc/bash.bashrc exists"; fi'
