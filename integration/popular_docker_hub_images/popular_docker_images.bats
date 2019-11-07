@@ -179,7 +179,7 @@ setup() {
 
 @test "[groovy] run a groovy container" {
 	image="groovy"
-	docker run --runtime=$RUNTIME --rm -i -e hola=caracol $image groovy bash -c "groovy -e \"println System.getenv().each{println it}\" | grep 'hola=caracol'"
+	docker run --runtime=$RUNTIME --rm -i -e hola=caracol $image bash -c "groovy -e \"println System.getenv().each{println it}\" | grep 'hola=caracol'"
 }
 
 @test "[java file] run an instance in a glassfish container" {
