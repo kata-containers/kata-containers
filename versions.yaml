@@ -195,11 +195,16 @@ externals:
     url: "https://github.com/containernetworking/plugins"
     commit: "485be65581341430f9106a194a98f0f2412245fb"
 
+  conmon:
+    description: "An OCI container runtime monitor"
+    url: "https://github.com/containers/conmon"
+    version: "v2.0.1"
+
   crio:
     description: |
       OCI-based Kubernetes Container Runtime Interface implementation
     url: "https://github.com/cri-o/cri-o"
-    version: "v1.15.0"
+    version: "v1.16.0"
     meta:
       openshift: "6273bea4c9ed788aeb3d051ebf2d030060c05b6c"
       crictl: 1.0.0-beta.2
@@ -210,6 +215,11 @@ externals:
     url: "github.com/containerd/cri"
     tarball_url: "https://storage.googleapis.com/cri-containerd-release"
     version: "1.2.7"
+
+  critools:
+    description: "CLI tool for Container Runtime Interface (CRI)"
+    url: "https://github.com/kubernetes-sigs/cri-tools"
+    version: "1.16.1"
 
   docker:
     description: "Moby project container manager"
@@ -240,7 +250,7 @@ externals:
     uscan-url: >-
       https://github.com/kubernetes/kubernetes/tags
       .*/v?([\d\.]+)\.tar\.gz
-    version: "1.15.3-00"
+    version: "1.16.2-00"
 
   openshift:
     description: |
