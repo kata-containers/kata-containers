@@ -57,6 +57,7 @@ fi
 if [ "$KATA_HYPERVISOR" = "firecracker" ]; then
 	echo "Enable firecracker configuration.toml"
 	sudo mv "${PKGDEFAULTSDIR}/configuration-fc.toml" "${PKGDEFAULTSDIR}/configuration.toml"
+	sudo sed -i '/jailer_path/d' "${PKGDEFAULTSDIR}/configuration.toml"
 fi
 
 if [ "$KATA_HYPERVISOR" = "nemu" ]; then
