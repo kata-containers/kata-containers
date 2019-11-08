@@ -5,7 +5,7 @@
 
 OS_NAME="Alpine"
 
-OS_VERSION=${OS_VERSION:-v3.7}
+OS_VERSION=${OS_VERSION:-latest-stable}
 
 BASE_PACKAGES="alpine-base"
 
