@@ -688,7 +688,6 @@ fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
 }
 
 #[cfg(test)]
-
 mod tests {
     use super::*;
     use libc::umount;
@@ -697,54 +696,11 @@ mod tests {
     use std::io::Write;
     use std::path::PathBuf;
     use tempfile::tempdir;
-
-    #[allow(unused_macros)]
-    macro_rules! skip_if_root {
-        () => {
-            if nix::unistd::Uid::effective().is_root() {
-                println!("INFO: skipping {} which needs non-root", module_path!());
-                return;
-            }
-        };
-    }
-
-    #[allow(unused_macros)]
-    macro_rules! skip_if_not_root {
-        () => {
-            if !nix::unistd::Uid::effective().is_root() {
-                println!("INFO: skipping {} which needs root", module_path!());
-                return;
-            }
-        };
-    }
-
-    #[allow(unused_macros)]
-    macro_rules! skip_loop_if_root {
-        ($msg:expr) => {
-            if nix::unistd::Uid::effective().is_root() {
-                println!(
-                    "INFO: skipping loop {} in {} which needs non-root",
-                    $msg,
-                    module_path!()
-                );
-                continue;
-            }
-        };
-    }
-
-    #[allow(unused_macros)]
-    macro_rules! skip_loop_if_not_root {
-        ($msg:expr) => {
-            if !nix::unistd::Uid::effective().is_root() {
-                println!(
-                    "INFO: skipping loop {} in {} which needs root",
-                    $msg,
-                    module_path!()
-                );
-                continue;
-            }
-        };
-    }
+    use crate::{
+        skip_if_not_root,
+        skip_loop_if_not_root,
+        skip_loop_if_root,
+    };
 
     #[derive(Debug, PartialEq)]
     enum TestUserType {
