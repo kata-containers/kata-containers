@@ -4,12 +4,15 @@
 //
 use rustjail::errors::*;
 use std::fs;
+use std::time;
 
 const DEBUG_CONSOLE_FLAG: &'static str = "agent.debug_console";
 const DEV_MODE_FLAG: &'static str = "agent.devmode";
 const LOG_LEVEL_FLAG: &'static str = "agent.log";
+const HOTPLUG_TIMOUT_FLAG: &'static str = "agent.hotplug_timeout";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
+const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 
 // FIXME: unused
 const TRACE_MODE_FLAG: &'static str = "agent.trace";
@@ -20,6 +23,7 @@ pub struct agentConfig {
     pub debug_console: bool,
     pub dev_mode: bool,
     pub log_level: slog::Level,
+    pub hotplug_timeout: time::Duration,
 }
 
 impl agentConfig {
@@ -28,6 +32,7 @@ impl agentConfig {
             debug_console: false,
             dev_mode: false,
             log_level: DEFAULT_LOG_LEVEL,
+            hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
         }
     }
 
@@ -46,6 +51,14 @@ impl agentConfig {
             if param.starts_with(LOG_LEVEL_FLAG) {
                 let level = get_log_level(param)?;
                 self.log_level = level;
+            }
+
+            if param.starts_with(HOTPLUG_TIMOUT_FLAG) {
+                let hotplugTimeout = get_hotplug_timeout(param)?;
+                // ensure the timeout is a positive value
+                if hotplugTimeout.as_secs() > 0 {
+                    self.hotplug_timeout = hotplugTimeout;
+                }
             }
         }
 
@@ -100,16 +113,41 @@ fn get_log_level(param: &str) -> Result<slog::Level> {
     Ok(level)
 }
 
+fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
+    let fields: Vec<&str> = param.split("=").collect();
+
+    if fields.len() != 2 {
+        return Err(ErrorKind::ErrorCode(String::from("invalid hotplug timeout parameter")).into());
+    }
+
+    let key = fields[0];
+    if key != HOTPLUG_TIMOUT_FLAG {
+        return Err(ErrorKind::ErrorCode(String::from("invalid hotplug timeout key name")).into());
+    }
+
+    let value = fields[1].parse::<u64>();
+    if value.is_err() {
+        return Err(ErrorKind::ErrorCode(String::from("unable to parse hotplug timeout")).into());
+    }
+
+    Ok(time::Duration::from_secs(value.unwrap()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs::File;
     use std::io::Write;
     use tempfile::tempdir;
+    use std::time;
 
     const ERR_INVALID_LOG_LEVEL: &str = "invalid log level";
     const ERR_INVALID_LOG_LEVEL_PARAM: &str = "invalid log level parameter";
     const ERR_INVALID_LOG_LEVEL_KEY: &str = "invalid log level key name";
+
+    const ERR_INVALID_HOTPLUG_TIMEOUT: &str = "invalid hotplug timeout parameter";
+    const ERR_INVALID_HOTPLUG_TIMEOUT_PARAM: &str = "unable to parse hotplug timeout";
+    const ERR_INVALID_HOTPLUG_TIMEOUT_KEY: &str = "invalid hotplug timeout key name";
 
     // helper function to make errors less crazy-long
     fn make_err(desc: &str) -> Error {
@@ -121,7 +159,7 @@ mod tests {
     // 1: expected Result
     // 2: actual Result
     // 3: string used to identify the test on error
-    macro_rules! assert_log_level {
+    macro_rules! assert_result {
         ($expected_result:expr, $actual_result:expr, $msg:expr) => {
             if $expected_result.is_ok() {
                 let expected_level = $expected_result.as_ref().unwrap();
@@ -145,6 +183,7 @@ mod tests {
         assert_eq!(config.debug_console, false);
         assert_eq!(config.dev_mode, false);
         assert_eq!(config.log_level, DEFAULT_LOG_LEVEL);
+        assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
     }
 
     #[test]
@@ -154,6 +193,7 @@ mod tests {
             contents: &'a str,
             debug_console: bool,
             dev_mode: bool,
+            hotplug_timeout: time::Duration,
         }
 
         let tests = &[
@@ -161,106 +201,139 @@ mod tests {
                 contents: "",
                 debug_console: false,
                 dev_mode: false,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "foo",
                 debug_console: false,
                 dev_mode: false,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "foo bar",
                 debug_console: false,
                 dev_mode: false,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "foo bar",
                 debug_console: false,
                 dev_mode: false,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "foo agent bar",
                 debug_console: false,
                 dev_mode: false,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "foo debug_console agent bar devmode",
                 debug_console: false,
                 dev_mode: false,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "agent.debug_console",
                 debug_console: true,
                 dev_mode: false,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "   agent.debug_console ",
                 debug_console: true,
                 dev_mode: false,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "agent.debug_console foo",
                 debug_console: true,
                 dev_mode: false,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: " agent.debug_console foo",
                 debug_console: true,
                 dev_mode: false,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "foo agent.debug_console bar",
                 debug_console: true,
                 dev_mode: false,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "foo agent.debug_console",
                 debug_console: true,
                 dev_mode: false,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "foo agent.debug_console ",
                 debug_console: true,
                 dev_mode: false,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "agent.devmode",
                 debug_console: false,
                 dev_mode: true,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "   agent.devmode ",
                 debug_console: false,
                 dev_mode: true,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "agent.devmode foo",
                 debug_console: false,
                 dev_mode: true,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: " agent.devmode foo",
                 debug_console: false,
                 dev_mode: true,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "foo agent.devmode bar",
                 debug_console: false,
                 dev_mode: true,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "foo agent.devmode",
                 debug_console: false,
                 dev_mode: true,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "foo agent.devmode ",
                 debug_console: false,
                 dev_mode: true,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
             TestData {
                 contents: "agent.devmode agent.debug_console",
                 debug_console: true,
                 dev_mode: true,
+                hotplug_timeout: time::Duration::from_secs(3),
+            },
+            TestData {
+                contents: "agent.devmode agent.debug_console agent.hotplug_timeout=100",
+                debug_console: true,
+                dev_mode: true,
+                hotplug_timeout: time::Duration::from_secs(100),
+            },
+            TestData {
+                contents: "agent.devmode agent.debug_console agent.hotplug_timeout=0",
+                debug_console: true,
+                dev_mode: true,
+                hotplug_timeout: time::Duration::from_secs(3),
             },
         ];
 
@@ -292,12 +365,14 @@ mod tests {
             let mut config = agentConfig::new();
             assert!(config.debug_console == false, msg);
             assert!(config.dev_mode == false, msg);
+            assert!(config.hotplug_timeout == time::Duration::from_secs(3), msg);
 
             let result = config.parse_cmdline(filename);
             assert!(result.is_ok(), "{}", msg);
 
             assert_eq!(d.debug_console, config.debug_console, "{}", msg);
             assert_eq!(d.dev_mode, config.dev_mode, "{}", msg);
+            assert_eq!(d.hotplug_timeout, config.hotplug_timeout, "{}", msg);
         }
     }
 
@@ -371,7 +446,7 @@ mod tests {
 
             let msg = format!("{}: result: {:?}", msg, result);
 
-            assert_log_level!(d.result, result, format!("{}", msg));
+            assert_result!(d.result, result, format!("{}", msg));
         }
     }
 
@@ -465,7 +540,77 @@ mod tests {
 
             let msg = format!("{}: result: {:?}", msg, result);
 
-            assert_log_level!(d.result, result, format!("{}", msg));
+            assert_result!(d.result, result, format!("{}", msg));
+        }
+    }
+
+    #[test]
+    fn test_get_hotplug_timeout() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            param: &'a str,
+            result: Result<time::Duration>,
+        }
+
+        let tests = &[
+            TestData {
+                param: "",
+                result: Err(make_err(ERR_INVALID_HOTPLUG_TIMEOUT)),
+            },
+            TestData {
+                param: "agent.hotplug_timeout",
+                result: Err(make_err(ERR_INVALID_HOTPLUG_TIMEOUT)),
+            },
+            TestData {
+                param: "foo=bar",
+                result: Err(make_err(ERR_INVALID_HOTPLUG_TIMEOUT_KEY)),
+            },
+            TestData {
+                param: "agent.hotplug_timeot=1",
+                result: Err(make_err(ERR_INVALID_HOTPLUG_TIMEOUT_KEY)),
+            },
+            TestData {
+                param: "agent.hotplug_timeout=1",
+                result: Ok(time::Duration::from_secs(1)),
+            },
+            TestData {
+                param: "agent.hotplug_timeout=3",
+                result: Ok(time::Duration::from_secs(3)),
+            },
+            TestData {
+                param: "agent.hotplug_timeout=3600",
+                result: Ok(time::Duration::from_secs(3600)),
+            },
+            TestData {
+                param: "agent.hotplug_timeout=0",
+                result: Ok(time::Duration::from_secs(0)),
+            },
+            TestData {
+                param: "agent.hotplug_timeout=-1",
+                result: Err(make_err(ERR_INVALID_HOTPLUG_TIMEOUT_PARAM)),
+            },
+            TestData {
+                param: "agent.hotplug_timeout=4jbsdja",
+                result: Err(make_err(ERR_INVALID_HOTPLUG_TIMEOUT_PARAM)),
+            },
+            TestData {
+                param: "agent.hotplug_timeout=foo",
+                result: Err(make_err(ERR_INVALID_HOTPLUG_TIMEOUT_PARAM)),
+            },
+            TestData {
+                param: "agent.hotplug_timeout=j",
+                result: Err(make_err(ERR_INVALID_HOTPLUG_TIMEOUT_PARAM)),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = get_hotplug_timeout(d.param);
+
+            let msg = format!("{}: result: {:?}", msg, result);
+
+            assert_result!(d.result, result, format!("{}", msg));
         }
     }
 }

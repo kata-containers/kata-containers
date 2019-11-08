@@ -38,7 +38,7 @@ use std::os::unix::fs::{self as unixfs};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::{io, thread};
 use unistd::Pid;
 
@@ -71,6 +71,7 @@ const CONSOLE_PATH: &'static str = "/dev/console";
 lazy_static! {
     static ref GLOBAL_DEVICE_WATCHER: Arc<Mutex<HashMap<String, Sender<String>>>> =
         Arc::new(Mutex::new(HashMap::new()));
+    static ref AGENT_CONFIG: Arc<RwLock<agentConfig>> = Arc::new(RwLock::new(config::agentConfig::new()));
 }
 
 use std::mem::MaybeUninit;
@@ -92,8 +93,9 @@ fn main() -> Result<()> {
 
     lazy_static::initialize(&SHELLS);
 
-    let mut config = config::agentConfig::new();
-
+    lazy_static::initialize(&AGENT_CONFIG);
+    let agentConfig = AGENT_CONFIG.clone();
+    let mut config = agentConfig.write().unwrap();
     config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
 
     let writer = io::stdout();
@@ -302,6 +304,7 @@ use nix::sys::stat::Mode;
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use crate::config::agentConfig;
 
 fn setup_debug_console(shells: Vec<String>) -> Result<()> {
     for shell in shells.iter() {
