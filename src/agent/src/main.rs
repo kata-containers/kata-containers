@@ -53,6 +53,7 @@ pub mod random;
 mod sandbox;
 mod uevent;
 mod version;
+#[cfg(test)] mod test_utils;
 
 use mount::{cgroups_mount, general_mount};
 use sandbox::Sandbox;
