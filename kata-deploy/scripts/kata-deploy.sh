@@ -141,13 +141,10 @@ function configure_containerd() {
 	if [ -f "$containerd_conf_file" ]; then
 		cp "$containerd_conf_file" "$containerd_conf_file_backup"
 	fi
-	# TODO: While there isn't a default here anyway, it'd probably be best to
-	#  add sed magic to insert into appropriate location if config.toml already exists
-	# https://github.com/kata-containers/packaging/issues/307
-	cat <<EOT | tee "$containerd_conf_file"
-[plugins]
-  [plugins.cri]
-   [plugins.cri.containerd]
+	cat <<EOT | tee -a "$containerd_conf_file"
+[[plugins]]
+  [[plugins.cri]]
+   [[plugins.cri.containerd]]
      [plugins.cri.containerd.runtimes.kata]
         runtime_type = "io.containerd.kata.v2"
         [plugins.cri.containerd.runtimes.kata.options]
