@@ -2,13 +2,16 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: pod-annotate-webhook
   labels:
     app: pod-annotate-webhook
 spec:
+  selector:
+    matchLabels:
+      app: pod-annotate-webhook
   replicas: 1
   template:
     metadata:
