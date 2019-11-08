@@ -62,7 +62,8 @@ K8S_TEST_UNION=("k8s-attach-handlers.bats" \
 	"k8s-sysctls.bats" \
 	"k8s-uts+ipc-ns.bats" \
 	"k8s-volume.bats" \
-	"nginx.bats")
+	"nginx.bats" \
+	"k8s-hugepages.bats")
 
 # we may need to skip a few test cases when running on non-x86_64 arch
 if [ -f "${cidir}/${arch}/configuration_${arch}.yaml" ]; then
