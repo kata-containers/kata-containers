@@ -107,9 +107,20 @@ create_maintainers_xml_nodes() {
 	done
 }
 
+create_publish_xml_node() {
+	# publishing is enabled by default, so only update the config
+	# when we want to disable publishing
+	if [ "${publish_repo:-true}" == "false" ];then
+		echo "  <publish>"
+		echo "    <disable/>"
+		echo "  </publish>"
+	fi
+}
+
 create_meta_xml() {
 	project="${1:-}"
 	branch="${2:-}"
+	publish_repo="${3:-true}"
 	[ -n "${project}" ] || die "project is empty"
 	[ -n "${branch}" ] || die "branch is empty"
 
@@ -119,6 +130,7 @@ create_meta_xml() {
 <project name="${project}">
   <title>Branch project for Kata Containers branch ${branch}</title>
   <description>This project is the Kata Containers branch ${branch}</description>
+$(create_publish_xml_node)
 $(create_maintainers_xml_nodes)
 $(create_repos_xml_nodes)
 </project>
@@ -143,6 +155,7 @@ main() {
 			;;
 		--ci)
 			create_ci_subproject=true
+			publish_repo=false
 			shift
 			;;
 		-*)
@@ -160,7 +173,7 @@ main() {
 	fi
 
 	project_branch="${home_project}:${release_type}:${arch_target}:${branch}"
-	create_meta_xml "${project_branch}" "${branch}"
+	create_meta_xml "${project_branch}" "${branch}" "${publish_repo}"
 	info "Creating/Updating project with name ${project_branch}"
 	# Update /Create project metadata.
 	docker_run osc meta prj "${project_branch}" -F meta_project.xml
