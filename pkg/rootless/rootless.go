@@ -90,7 +90,7 @@ func setRootless() error {
 		if err != nil {
 			return parseError
 		}
-		rangeUID, err := strconv.ParseUint(ids[1], 10, 0)
+		rangeUID, err := strconv.ParseUint(ids[2], 10, 0)
 		if err != nil || rangeUID == 0 {
 			return parseError
 		}
