@@ -600,7 +600,7 @@ pub fn get_cgroup_mounts(logger: &Logger, cg_path: &str) -> Result<Vec<INIT_MOUN
                 fstype: "cgroup",
                 src: "cgroup",
                 dest: *value,
-                options: vec!["nosuid", "nodev", "noexec", "relatime", key]
+                options: vec!["nosuid", "nodev", "noexec", "relatime", key],
             });
         }
     }
@@ -688,17 +688,13 @@ fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{skip_if_not_root, skip_loop_if_not_root, skip_loop_if_root};
     use libc::umount;
     use std::fs::File;
     use std::fs::OpenOptions;
     use std::io::Write;
     use std::path::PathBuf;
     use tempfile::tempdir;
-    use crate::{
-        skip_if_not_root,
-        skip_loop_if_not_root,
-        skip_loop_if_root,
-    };
 
     #[derive(Debug, PartialEq)]
     enum TestUserType {
