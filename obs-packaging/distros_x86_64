@@ -18,3 +18,4 @@ openSUSE_Leap_15.1::openSUSE:Leap:15.1::standard
 openSUSE_Tumbleweed::openSUSE:Factory::snapshot
 xUbuntu_16.04::Ubuntu:16.04::universe,universe-update,update
 xUbuntu_18.04::Ubuntu:18.04::universe
+xUbuntu_19.04::Ubuntu:19.04::universe
