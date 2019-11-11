@@ -13,11 +13,9 @@ use std::path::Path;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
-use crate::mount::{
-    DRIVERBLKTYPE, DRIVERMMIOBLKTYPE, DRIVERNVDIMMTYPE, DRIVERSCSITYPE,
-};
+use crate::mount::{DRIVERBLKTYPE, DRIVERMMIOBLKTYPE, DRIVERNVDIMMTYPE, DRIVERSCSITYPE};
 use crate::sandbox::Sandbox;
-use crate::{GLOBAL_DEVICE_WATCHER, AGENT_CONFIG};
+use crate::{AGENT_CONFIG, GLOBAL_DEVICE_WATCHER};
 use protocols::agent::Device;
 use protocols::oci::Spec;
 
