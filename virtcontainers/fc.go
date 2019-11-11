@@ -69,7 +69,7 @@ const (
 )
 
 // Specify the minimum version of firecracker supported
-var fcMinSupportedVersion = semver.MustParse("0.18.0")
+var fcMinSupportedVersion = semver.MustParse("0.19.0")
 
 var fcKernelParams = append(commonVirtioblkKernelRootParams, []Param{
 	// The boot source is the first partition of the first block device added
