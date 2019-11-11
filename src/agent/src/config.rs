@@ -138,8 +138,8 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::Write;
-    use tempfile::tempdir;
     use std::time;
+    use tempfile::tempdir;
 
     const ERR_INVALID_LOG_LEVEL: &str = "invalid log level";
     const ERR_INVALID_LOG_LEVEL_PARAM: &str = "invalid log level parameter";

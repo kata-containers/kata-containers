@@ -51,9 +51,10 @@ pub mod netlink;
 mod network;
 pub mod random;
 mod sandbox;
+#[cfg(test)]
+mod test_utils;
 mod uevent;
 mod version;
-#[cfg(test)] mod test_utils;
 
 use mount::{cgroups_mount, general_mount};
 use sandbox::Sandbox;
@@ -71,7 +72,8 @@ const CONSOLE_PATH: &'static str = "/dev/console";
 lazy_static! {
     static ref GLOBAL_DEVICE_WATCHER: Arc<Mutex<HashMap<String, Sender<String>>>> =
         Arc::new(Mutex::new(HashMap::new()));
-    static ref AGENT_CONFIG: Arc<RwLock<agentConfig>> = Arc::new(RwLock::new(config::agentConfig::new()));
+    static ref AGENT_CONFIG: Arc<RwLock<agentConfig>> =
+        Arc::new(RwLock::new(config::agentConfig::new()));
 }
 
 use std::mem::MaybeUninit;
@@ -299,12 +301,12 @@ lazy_static! {
 // pub static mut LOG_LEVEL: ;
 // pub static mut TRACE_MODE: ;
 
+use crate::config::agentConfig;
 use nix::fcntl::{self, OFlag};
 use nix::sys::stat::Mode;
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use crate::config::agentConfig;
 
 fn setup_debug_console(shells: Vec<String>) -> Result<()> {
     for shell in shells.iter() {
