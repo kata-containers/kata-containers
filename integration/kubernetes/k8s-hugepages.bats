@@ -15,8 +15,6 @@ setup() {
 
 	# Enable hugepages
 	sudo sed -i 's/#enable_hugepages = true/enable_hugepages = true/g' ${RUNTIME_CONFIG_PATH}
-	# Enable sandbox_cgroup_only
-	sudo sed -i 's/sandbox_cgroup_only=false/sandbox_cgroup_only=true/g' ${RUNTIME_CONFIG_PATH}
 
 	pod_name="test-env"
 	get_pod_config_dir
@@ -35,13 +33,30 @@ setup() {
 	kubectl exec $pod_name -- sh -c $cmd | grep "MY_POD_NAME=$pod_name"
 }
 
+
+@test "Hugepages and sandbox cgroup" {
+	skip "test not working see: ${issue}"
+	# Enable sandbox_cgroup_only
+	sudo sed -i 's/sandbox_cgroup_only=false/sandbox_cgroup_only=true/g' ${RUNTIME_CONFIG_PATH}
+
+	# Create pod
+	kubectl create -f "${pod_config_dir}/pod-env.yaml"
+
+	# Check pod creation
+	kubectl wait --for=condition=Ready pod "$pod_name"
+
+	# Print environment variables
+	cmd="printenv"
+	kubectl exec $pod_name -- sh -c $cmd | grep "MY_POD_NAME=$pod_name"
+
+	# Disable sandbox_cgroup_only
+	sudo sed -i 's/sandbox_cgroup_only=false/sandbox_cgroup_only=true/g' ${RUNTIME_CONFIG_PATH}
+}
+
 teardown() {
 	skip "test not working see: ${issue}"
 	kubectl delete pod "$pod_name"
 
 	# Disable hugepages
 	sudo sed -i 's/enable_hugepages = true/#enable_hugepages = true/g' ${RUNTIME_CONFIG_PATH}
-
-	# Disable sandbox_cgroup_only
-	sudo sed -i 's/sandbox_cgroup_only=false/sandbox_cgroup_only=true/g' ${RUNTIME_CONFIG_PATH}
 }
