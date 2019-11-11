@@ -144,6 +144,8 @@ extract_kata_env(){
 	PROXY_VERSION="0.0.0"
 	if [ "$KATA_HYPERVISOR" == firecracker ]; then
 		HYPERVISOR_PATH="/usr/bin/firecracker"
+	elif [ "$experimental_qemu" == "true" ]; then
+		HYPERVISOR_PATH="/usr/bin/qemu-virtiofs-system-$(uname -m)"
 	else
 		# We would use $(${cidir}/kata-arch.sh -d) here but we don't know
 		# that the callee has set up ${cidir} for us.
