@@ -39,6 +39,8 @@ install_cached_qemu_experimental() {
 	uncompress_experimental_qemu "${QEMU_TAR}"
 	sudo -E ln -sf "${QEMU_PATH}" "/usr/bin"
 	sudo -E ln -sf "${VIRTIOFS_PATH}" "/usr/bin"
+	sudo mkdir -p "${KATA_TESTS_CACHEDIR}"
+	sudo mv "${QEMU_TAR}" "${KATA_TESTS_CACHEDIR}"
 }
 
 build_and_install_static_experimental_qemu() {
