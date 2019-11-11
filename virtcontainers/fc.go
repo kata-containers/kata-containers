@@ -299,7 +299,7 @@ func (fc *firecracker) vmRunning() bool {
 		return false
 	case models.InstanceInfoStateRunning:
 		return true
-	case models.InstanceInfoStateUninitialized, models.InstanceInfoStateHalting, models.InstanceInfoStateHalted:
+	case models.InstanceInfoStateUninitialized:
 		return false
 	default:
 		return false
@@ -784,7 +784,7 @@ func (fc *firecracker) fcAddVsock(hvs types.HybridVSock) error {
 		udsPath = filepath.Join("/", defaultHybridVSocketName)
 	}
 
-	vsockParams := ops.NewPutGuestVsockByIDParams()
+	vsockParams := ops.NewPutGuestVsockParams()
 	vsockID := "root"
 	ctxID := defaultGuestVSockCID
 	vsock := &models.Vsock{
@@ -792,10 +792,9 @@ func (fc *firecracker) fcAddVsock(hvs types.HybridVSock) error {
 		UdsPath:  &udsPath,
 		VsockID:  &vsockID,
 	}
-	vsockParams.SetID(vsockID)
 	vsockParams.SetBody(vsock)
 
-	_, err := fc.client().Operations.PutGuestVsockByID(vsockParams)
+	_, err := fc.client().Operations.PutGuestVsock(vsockParams)
 	if err != nil {
 		return err
 	}
