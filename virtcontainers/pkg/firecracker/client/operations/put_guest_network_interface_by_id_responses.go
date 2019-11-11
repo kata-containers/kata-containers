@@ -24,18 +24,21 @@ type PutGuestNetworkInterfaceByIDReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PutGuestNetworkInterfaceByIDReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
+
 	case 204:
 		result := NewPutGuestNetworkInterfaceByIDNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
+
 	case 400:
 		result := NewPutGuestNetworkInterfaceByIDBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
+
 	default:
 		result := NewPutGuestNetworkInterfaceByIDDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -86,10 +89,6 @@ func (o *PutGuestNetworkInterfaceByIDBadRequest) Error() string {
 	return fmt.Sprintf("[PUT /network-interfaces/{iface_id}][%d] putGuestNetworkInterfaceByIdBadRequest  %+v", 400, o.Payload)
 }
 
-func (o *PutGuestNetworkInterfaceByIDBadRequest) GetPayload() *models.Error {
-	return o.Payload
-}
-
 func (o *PutGuestNetworkInterfaceByIDBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
 
 	o.Payload = new(models.Error)
@@ -126,10 +125,6 @@ func (o *PutGuestNetworkInterfaceByIDDefault) Code() int {
 
 func (o *PutGuestNetworkInterfaceByIDDefault) Error() string {
 	return fmt.Sprintf("[PUT /network-interfaces/{iface_id}][%d] putGuestNetworkInterfaceByID default  %+v", o._statusCode, o.Payload)
-}
-
-func (o *PutGuestNetworkInterfaceByIDDefault) GetPayload() *models.Error {
-	return o.Payload
 }
 
 func (o *PutGuestNetworkInterfaceByIDDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
