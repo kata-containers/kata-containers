@@ -9,6 +9,9 @@ package katautils
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"strconv"
+	"strings"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	vf "github.com/kata-containers/runtime/virtcontainers/factory"
@@ -115,6 +118,10 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 		sandboxConfig.Stateful = true
 	}
 
+	if err := checkForFIPS(&sandboxConfig); err != nil {
+		return nil, vc.Process{}, err
+	}
+
 	if !rootFs.Mounted && len(sandboxConfig.Containers) == 1 {
 		if rootFs.Source != "" {
 			realPath, err := ResolvePath(rootFs.Source)
@@ -173,6 +180,35 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	}
 
 	return sandbox, containers[0].Process(), nil
+}
+
+var procFIPS = "/proc/sys/crypto/fips_enabled"
+
+func checkForFIPS(sandboxConfig *vc.SandboxConfig) error {
+	content, err := ioutil.ReadFile(procFIPS)
+	if err != nil {
+		// In case file cannot be found or read, simply return
+		return nil
+	}
+
+	enabled, err := strconv.Atoi(strings.Trim(string(content), "\n\t "))
+	if err != nil {
+		// Unexpected format, ignore and simply return early
+		return nil
+	}
+
+	if enabled == 1 {
+		param := vc.Param{
+			Key:   "fips",
+			Value: "1",
+		}
+
+		if err := sandboxConfig.HypervisorConfig.AddKernelParam(param); err != nil {
+			return fmt.Errorf("Error enabling fips mode : %v", err)
+		}
+	}
+
+	return nil
 }
 
 // CreateContainer create a container
