@@ -98,10 +98,20 @@ fn main() -> Result<()> {
     lazy_static::initialize(&AGENT_CONFIG);
     let agentConfig = AGENT_CONFIG.clone();
     let mut config = agentConfig.write().unwrap();
+
+    if unistd::getpid() == Pid::from_raw(1) {
+        // Init a temporary logger used by init agent as init process
+        // since before do the base mount, it wouldn't access "/proc/cmdline"
+        // to get the customzied debug level. 
+        let writer = io::stdout();
+        let logger = logging::create_logger(NAME, "agent", slog::Level::Debug, writer);
+        init_agent_as_init(&logger)?;
+    }
+
     config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
 
     let writer = io::stdout();
-
+    // Recreate a logger with the log level get from "/proc/cmdline".
     let logger = logging::create_logger(NAME, "agent", config.log_level, writer);
 
     announce(&logger);
@@ -127,10 +137,6 @@ fn main() -> Result<()> {
     } else {
         unsafe { MaybeUninit::zeroed().assume_init() }
     };
-
-    if unistd::getpid() == Pid::from_raw(1) {
-        init_agent_as_init(&logger)?;
-    }
 
     // Initialize unique sandbox structure.
     let s = Sandbox::new(&logger).map_err(|e| {
