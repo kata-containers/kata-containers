@@ -24,18 +24,21 @@ type PatchGuestNetworkInterfaceByIDReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *PatchGuestNetworkInterfaceByIDReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
+
 	case 204:
 		result := NewPatchGuestNetworkInterfaceByIDNoContent()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
+
 	case 400:
 		result := NewPatchGuestNetworkInterfaceByIDBadRequest()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return nil, result
+
 	default:
 		result := NewPatchGuestNetworkInterfaceByIDDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -86,10 +89,6 @@ func (o *PatchGuestNetworkInterfaceByIDBadRequest) Error() string {
 	return fmt.Sprintf("[PATCH /network-interfaces/{iface_id}][%d] patchGuestNetworkInterfaceByIdBadRequest  %+v", 400, o.Payload)
 }
 
-func (o *PatchGuestNetworkInterfaceByIDBadRequest) GetPayload() *models.Error {
-	return o.Payload
-}
-
 func (o *PatchGuestNetworkInterfaceByIDBadRequest) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
 
 	o.Payload = new(models.Error)
@@ -126,10 +125,6 @@ func (o *PatchGuestNetworkInterfaceByIDDefault) Code() int {
 
 func (o *PatchGuestNetworkInterfaceByIDDefault) Error() string {
 	return fmt.Sprintf("[PATCH /network-interfaces/{iface_id}][%d] patchGuestNetworkInterfaceByID default  %+v", o._statusCode, o.Payload)
-}
-
-func (o *PatchGuestNetworkInterfaceByIDDefault) GetPayload() *models.Error {
-	return o.Payload
 }
 
 func (o *PatchGuestNetworkInterfaceByIDDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

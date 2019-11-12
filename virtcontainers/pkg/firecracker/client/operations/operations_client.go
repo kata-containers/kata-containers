@@ -48,13 +48,8 @@ func (a *Client) GetMmds(params *GetMmdsParams) (*GetMmdsOK, error) {
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*GetMmdsOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*GetMmdsDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*GetMmdsOK), nil
+
 }
 
 /*
@@ -81,13 +76,8 @@ func (a *Client) PatchMmds(params *PatchMmdsParams) (*PatchMmdsNoContent, error)
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*PatchMmdsNoContent)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*PatchMmdsDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*PatchMmdsNoContent), nil
+
 }
 
 /*
@@ -114,13 +104,8 @@ func (a *Client) PutMmds(params *PutMmdsParams) (*PutMmdsNoContent, error) {
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*PutMmdsNoContent)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*PutMmdsDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*PutMmdsNoContent), nil
+
 }
 
 /*
@@ -147,13 +132,8 @@ func (a *Client) CreateSyncAction(params *CreateSyncActionParams) (*CreateSyncAc
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*CreateSyncActionNoContent)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*CreateSyncActionDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*CreateSyncActionNoContent), nil
+
 }
 
 /*
@@ -180,13 +160,8 @@ func (a *Client) DescribeInstance(params *DescribeInstanceParams) (*DescribeInst
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*DescribeInstanceOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*DescribeInstanceDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*DescribeInstanceOK), nil
+
 }
 
 /*
@@ -215,13 +190,8 @@ func (a *Client) GetMachineConfiguration(params *GetMachineConfigurationParams) 
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*GetMachineConfigurationOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*GetMachineConfigurationDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*GetMachineConfigurationOK), nil
+
 }
 
 /*
@@ -250,13 +220,8 @@ func (a *Client) PatchGuestDriveByID(params *PatchGuestDriveByIDParams) (*PatchG
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*PatchGuestDriveByIDNoContent)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*PatchGuestDriveByIDDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*PatchGuestDriveByIDNoContent), nil
+
 }
 
 /*
@@ -285,13 +250,8 @@ func (a *Client) PatchGuestNetworkInterfaceByID(params *PatchGuestNetworkInterfa
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*PatchGuestNetworkInterfaceByIDNoContent)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*PatchGuestNetworkInterfaceByIDDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*PatchGuestNetworkInterfaceByIDNoContent), nil
+
 }
 
 /*
@@ -320,13 +280,8 @@ func (a *Client) PatchMachineConfiguration(params *PatchMachineConfigurationPara
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*PatchMachineConfigurationNoContent)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*PatchMachineConfigurationDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*PatchMachineConfigurationNoContent), nil
+
 }
 
 /*
@@ -355,13 +310,8 @@ func (a *Client) PutGuestBootSource(params *PutGuestBootSourceParams) (*PutGuest
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*PutGuestBootSourceNoContent)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*PutGuestBootSourceDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*PutGuestBootSourceNoContent), nil
+
 }
 
 /*
@@ -390,13 +340,8 @@ func (a *Client) PutGuestDriveByID(params *PutGuestDriveByIDParams) (*PutGuestDr
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*PutGuestDriveByIDNoContent)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*PutGuestDriveByIDDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*PutGuestDriveByIDNoContent), nil
+
 }
 
 /*
@@ -425,48 +370,38 @@ func (a *Client) PutGuestNetworkInterfaceByID(params *PutGuestNetworkInterfaceBy
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*PutGuestNetworkInterfaceByIDNoContent)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*PutGuestNetworkInterfaceByIDDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*PutGuestNetworkInterfaceByIDNoContent), nil
+
 }
 
 /*
-PutGuestVsockByID creates new vsock with ID specified by the id parameter
+PutGuestVsock creates updates a vsock device
 
-If the vsock device with the specified ID already exists, its body will be updated based on the new input. May fail if update is not possible.
+The first call creates the device with the configuration specified in body. Subsequent calls will update the device configuration. May fail if update is not possible.
 */
-func (a *Client) PutGuestVsockByID(params *PutGuestVsockByIDParams) (*PutGuestVsockByIDNoContent, error) {
+func (a *Client) PutGuestVsock(params *PutGuestVsockParams) (*PutGuestVsockNoContent, error) {
 	// TODO: Validate the params before sending
 	if params == nil {
-		params = NewPutGuestVsockByIDParams()
+		params = NewPutGuestVsockParams()
 	}
 
 	result, err := a.transport.Submit(&runtime.ClientOperation{
-		ID:                 "putGuestVsockByID",
+		ID:                 "putGuestVsock",
 		Method:             "PUT",
-		PathPattern:        "/vsocks/{id}",
+		PathPattern:        "/vsock",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
 		Params:             params,
-		Reader:             &PutGuestVsockByIDReader{formats: a.formats},
+		Reader:             &PutGuestVsockReader{formats: a.formats},
 		Context:            params.Context,
 		Client:             params.HTTPClient,
 	})
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*PutGuestVsockByIDNoContent)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*PutGuestVsockByIDDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*PutGuestVsockNoContent), nil
+
 }
 
 /*
@@ -493,13 +428,8 @@ func (a *Client) PutLogger(params *PutLoggerParams) (*PutLoggerNoContent, error)
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*PutLoggerNoContent)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*PutLoggerDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*PutLoggerNoContent), nil
+
 }
 
 /*
@@ -528,13 +458,8 @@ func (a *Client) PutMachineConfiguration(params *PutMachineConfigurationParams) 
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*PutMachineConfigurationNoContent)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*PutMachineConfigurationDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+	return result.(*PutMachineConfigurationNoContent), nil
+
 }
 
 // SetTransport changes the transport on the client
