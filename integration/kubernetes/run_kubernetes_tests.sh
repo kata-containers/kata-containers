@@ -60,6 +60,7 @@ K8S_TEST_UNION=("k8s-attach-handlers.bats" \
 	"k8s-security-context.bats" \
 	"k8s-shared-volume.bats" \
 	"k8s-sysctls.bats" \
+	"k8s-number-cpus.bats" \
 	"k8s-uts+ipc-ns.bats" \
 	"k8s-volume.bats" \
 	"nginx.bats" \
