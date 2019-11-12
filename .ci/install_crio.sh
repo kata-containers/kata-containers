@@ -54,6 +54,8 @@ crictl_repo=$(get_version "externals.critools.url")
 crictl_version=$(get_version "externals.critools.version")
 crictl_tag_prefix="v"
 
+go get -d "$crio_repo" || true
+
 if [ "$ghprbGhRepository" != "${crio_repo/github.com\/}" ]
 then
 	# For Fedora, we use CRI-O version that is compatible with the
@@ -70,17 +72,15 @@ then
 		crictl_version=$(get_version "externals.crio.meta.crictl")
 		crictl_tag_prefix=""
 	fi
+
+	# Only fetch and checkout if we are not testing changes in the cri-o repo. 
+	pushd "${GOPATH}/src/${crio_repo}"
+	git fetch
+	git checkout "${crio_version}"
+	popd
 fi
 
-echo "Installing CRI Tools"
-crictl_url="${crictl_repo}/releases/download/v${crictl_version}/crictl-${crictl_tag_prefix}${crictl_version}-linux-$(${cidir}/kata-arch.sh -g).tar.gz"
-curl -Ls "$crictl_url" | sudo tar xfz - -C /usr/local/bin
-
-go get -d "$crio_repo" || true
 pushd "${GOPATH}/src/${crio_repo}"
-git fetch
-git checkout "${crio_version}"
-
 echo "Installing CRI-O"
 make clean
 if [ "$ID" == "centos" ] || [ "$ID" == "fedora" ]; then
@@ -95,6 +95,16 @@ make test-binaries
 sudo -E PATH=$PATH sh -c "make install"
 sudo -E PATH=$PATH sh -c "make install.config"
 
+containers_config_path="/etc/containers"
+echo "Copy containers policy from CRI-O repo to $containers_config_path"
+sudo mkdir -p "$containers_config_path"
+sudo install -m0444 test/policy.json "$containers_config_path"
+popd
+
+# Install cri-tools
+echo "Installing CRI Tools"
+crictl_url="${crictl_repo}/releases/download/v${crictl_version}/crictl-${crictl_tag_prefix}${crictl_version}-linux-$(${cidir}/kata-arch.sh -g).tar.gz"
+curl -Ls "$crictl_url" | sudo tar xfz - -C /usr/local/bin
 
 # Change socket format and pause image used for infra containers
 # Needed for cri-o 1.10
@@ -102,12 +112,6 @@ if crio --version | grep '1.10'; then
 	sudo sed -i 's|/var|unix:///var|' /etc/crictl.yaml
 	sudo sed -i 's|kubernetes/pause|k8s.gcr.io/pause|' "$crio_config_file"
 fi
-
-containers_config_path="/etc/containers"
-echo "Copy containers policy from CRI-O repo to $containers_config_path"
-sudo mkdir -p "$containers_config_path"
-sudo install -m0444 test/policy.json "$containers_config_path"
-popd
 
 echo "Install runc for CRI-O"
 runc_version=$(get_version "externals.runc.version")
