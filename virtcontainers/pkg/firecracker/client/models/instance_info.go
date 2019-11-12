@@ -25,7 +25,7 @@ type InstanceInfo struct {
 
 	// The current detailed state of the Firecracker instance. This value is read-only for the control-plane.
 	// Required: true
-	// Enum: [Uninitialized Starting Running Halting Halted]
+	// Enum: [Uninitialized Starting Running]
 	State *string `json:"state"`
 
 	// MicroVM hypervisor build version.
@@ -68,7 +68,7 @@ var instanceInfoTypeStatePropEnum []interface{}
 
 func init() {
 	var res []string
-	if err := json.Unmarshal([]byte(`["Uninitialized","Starting","Running","Halting","Halted"]`), &res); err != nil {
+	if err := json.Unmarshal([]byte(`["Uninitialized","Starting","Running"]`), &res); err != nil {
 		panic(err)
 	}
 	for _, v := range res {
@@ -86,12 +86,6 @@ const (
 
 	// InstanceInfoStateRunning captures enum value "Running"
 	InstanceInfoStateRunning string = "Running"
-
-	// InstanceInfoStateHalting captures enum value "Halting"
-	InstanceInfoStateHalting string = "Halting"
-
-	// InstanceInfoStateHalted captures enum value "Halted"
-	InstanceInfoStateHalted string = "Halted"
 )
 
 // prop value enum
