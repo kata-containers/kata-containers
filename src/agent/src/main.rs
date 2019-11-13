@@ -109,7 +109,7 @@ fn main() -> Result<()> {
     if unistd::getpid() == Pid::from_raw(1) {
         // Init a temporary logger used by init agent as init process
         // since before do the base mount, it wouldn't access "/proc/cmdline"
-        // to get the customzied debug level. 
+        // to get the customzied debug level.
         let writer = io::stdout();
         let logger = logging::create_logger(NAME, "agent", slog::Level::Debug, writer);
         init_agent_as_init(&logger)?;
