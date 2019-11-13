@@ -103,17 +103,16 @@ container processes.
 
 ## Hypervisor
 
-Kata Containers is designed to support multiple hypervisors.  For the 1.0 release,
-Kata Containers uses just [QEMU](http://www.qemu-project.org/)/[KVM](http://www.linux-kvm.org/page/Main_Page)
-to create virtual machines where containers will run:
+Kata Containers is designed to support multiple virtual machine monitors (VMMs) and hypervisors.
 
-![QEMU/KVM](arch-images/qemu.png)
+As of the 1.9 release, Kata Containers supports [QEMU](http://www.qemu-project.org/)/[KVM](http://www.linux-kvm.org/page/Main_Page),
+[Firecracker](https://github.com/firecracker-microvm/firecracker)/KVM, as well as the [ACRN hypervisor](https://projectacrn.org/).
 
 ### QEMU/KVM
 
 Depending on the host architecture, Kata Containers supports various machine types,
 for example `pc` and `q35` on x86 systems, `virt` on ARM systems and `pseries` on IBM Power systems. The default Kata Containers
-machine type is `pc`. The default machine type and its [`Machine accelerators`](#machine-accelerators) can
+machine type is `pc`. The machine type and its [`Machine accelerators`](#machine-accelerators) can
 be changed by editing the runtime [`configuration`](#configuration) file.
 
 The following QEMU features are used in Kata Containers to manage resource constraints, improve
@@ -134,19 +133,6 @@ are used in Kata Containers:
 `q35` machine types. `nvdimm` is used to provide the root filesystem as a persistent
 memory device to the Virtual Machine.
 
-Although Kata Containers can run with any recent QEMU release, Kata Containers
-boot time, memory footprint and 9p IO are significantly optimized by using a specific
-QEMU version called [`qemu-lite`](https://github.com/kata-containers/qemu/tree/qemu-lite-2.11.0) and
-custom machine accelerators that are not available in the upstream version of QEMU.
-These custom machine accelerators are described below.
-
-- `nofw`: this machine accelerator is x86 specific and only supported by `pc` and `q35`
-machine types. `nofw` is used to boot an ELF format kernel by skipping the BIOS/firmware
-in the guest. This custom machine accelerator improves boot time significantly.
-- `static-prt`: this machine accelerator is x86 specific and only supported by `pc`
-and `q35` machine types. `static-prt` is used to reduce the interpretation burden
-for guest ACPI component.
-
 #### Hot plug devices
 
 The Kata Containers VM starts with a minimum amount of resources, allowing for faster boot time and a reduction in memory footprint.  As the container launch progresses, devices are hotplugged to the VM. For example, when a CPU constraint is specified which includes additional CPUs, they can be hot added.  Kata Containers has support for hot-adding the following devices:
@@ -154,6 +140,13 @@ The Kata Containers VM starts with a minimum amount of resources, allowing for f
 - Virtio SCSI
 - VFIO
 - CPU
+
+### Firecracker/KVM
+
+As of the 1.5 release of Kata Containers, Firecracker VMM is supported. Because of its limited
+device support, Firecracker does not support filesystem sharing (good for security and footprint!) As a result,
+only block-based storage drivers are supported. Similarly, Firecracker does not support updating
+container resources after boot (there is not any device hotplug support), nor does it support VFIO. 
 
 ### Assets
 
