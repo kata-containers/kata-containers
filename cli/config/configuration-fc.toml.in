@@ -160,9 +160,6 @@ use_vsock = true
 # Default false
 #hotplug_vfio_on_root_bus = true
 
-# If host doesn't support vhost_net, set to true. Thus we won't create vhost fds for nics.
-# Default false
-#disable_vhost_net = true
 #
 # Default entropy source.
 # The path to a host source of entropy (including a real hardware RNG)

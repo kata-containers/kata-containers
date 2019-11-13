@@ -533,6 +533,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableNestingChecks:  h.DisableNestingChecks,
 		BlockDeviceDriver:     blockDriver,
 		EnableIOThreads:       h.EnableIOThreads,
+		DisableVhostNet:       true, // vhost-net backend is not supported in Firecracker
 		UseVSock:              true,
 		GuestHookPath:         h.guestHookPath(),
 	}, nil
