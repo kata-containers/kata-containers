@@ -170,7 +170,6 @@ func (v *Volumes) String() string {
 // VSock defines a virtio-socket to communicate between
 // the host and any process inside the VM.
 // This kind of socket is not supported in all hypervisors.
-// QEMU and NEMU support it.
 type VSock struct {
 	ContextID uint64
 	Port      uint32

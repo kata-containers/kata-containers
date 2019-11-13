@@ -19,9 +19,6 @@ FCCMD := firecracker
 # Firecracker's jailer binary name
 FCJAILERCMD := jailer
 
-# NEMU binary name
-NEMUCMD := nemu-system-x86_64
-
 #ACRN binary name
 ACRNCMD := acrn-dm
 ACRNCTLCMD := acrnctl
