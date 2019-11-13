@@ -1,7 +1,7 @@
-on: 
-  push: 
-    tags:
-     - '*'
+#on: 
+#  push: 
+#    tags:
+#     - '*'
 
 jobs:
   get-artifact-list:
