@@ -314,6 +314,25 @@ static_check_rust_arch_specific()
 	[ $? -eq 0 ] || die "crate not formatted by rustfmt."
 }
 
+# Install yamllint in the different Linux distributions
+install_yamllint()
+{
+	source /etc/os-release || source /usr/lib/os-release
+
+	package="yamllint"
+
+	case "$ID" in
+		centos|rhel) sudo yum -y install $package ;;
+		debian|ubuntu) sudo apt-get -y install $package ;;
+		fedora) sudo dnf -y install $package ;;
+		*) die "Please install yamllint on $ID" ;;
+	esac
+
+	have_yamllint_cmd=$(command -v "$yamllint_cmd" || true)
+
+	[ -z "$have_yamllint_cmd" ] && info "Cannot install $package" && return
+}
+
 # Check the "versions database".
 #
 # Some repositories use a versions database to maintain version information
@@ -321,6 +340,11 @@ static_check_rust_arch_specific()
 static_check_versions()
 {
 	local db="versions.yaml"
+
+	if [ -z "$have_yamllint_cmd" ]; then
+		info "Installing yamllint"
+		install_yamllint
+	fi
 
 	[ ! -e "$db" ] && return
 
