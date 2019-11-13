@@ -17,9 +17,8 @@ packaging_dir="${script_dir}/../.."
 qemu_virtiofs_repo=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.url")
 # This tag will be supported on the runtime versions.yaml
 qemu_virtiofs_tag=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.tag")
-qemu_tar="kata-qemu-static.tar.gz"
-qemu_virtiofs_tar="kata-qemu-virtiofs-static.tar.gz"
-qemu_tmp_tar="kata-qemu-virtiofs-static-tmp.tar.gz"
+qemu_virtiofs_tar="kata-static-qemu-virtiofsd.tar.gz"
+qemu_tmp_tar="kata-static-qemu-virtiofsd-tmp.tar.gz"
 
 info "Build ${qemu_virtiofs_repo} tag: ${qemu_virtiofs_tag}"
 
@@ -41,10 +40,10 @@ sudo docker build \
 sudo docker run \
 	-i \
 	-v "${PWD}":/share qemu-virtiofs-static \
-	mv "/tmp/qemu-virtiofs-static/${qemu_tar}" /share/
+	mv "/tmp/qemu-virtiofs-static/${qemu_virtiofs_tar}" /share/
 
-sudo chown ${USER}:${USER} "${PWD}/${qemu_tar}"
+sudo chown ${USER}:${USER} "${PWD}/${qemu_virtiofs_tar}"
 
 # Remove blacklisted binaries
-gzip -d < "${qemu_tar}" | tar --delete --wildcards -f - ${qemu_black_list[*]} | gzip > "${qemu_tmp_tar}"
+gzip -d < "${qemu_virtiofs_tar}" | tar --delete --wildcards -f - ${qemu_black_list[*]} | gzip > "${qemu_tmp_tar}"
 mv -f "${qemu_tmp_tar}" "${qemu_virtiofs_tar}"
