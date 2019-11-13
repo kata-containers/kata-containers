@@ -83,14 +83,21 @@ fn announce(logger: &Logger) {
         Ok(s) => s,
         Err(_) => String::from(""),
     };
+
     info!(logger, "announce";
     "agent-commit" => commit.as_str(),
+
+    // Avoid any possibility of confusion with the old agent
+    "agent-type" => "rust",
+
     "agent-version" =>  version::AGENT_VERSION,
     "api-version" => version::API_VERSION,
     );
 }
 
 fn main() -> Result<()> {
+    let args: Vec<String> = env::args().collect();
+
     env::set_var("RUST_BACKTRACE", "full");
 
     lazy_static::initialize(&SHELLS);
@@ -115,6 +122,13 @@ fn main() -> Result<()> {
     let logger = logging::create_logger(NAME, "agent", config.log_level, writer);
 
     announce(&logger);
+
+    if args.len() == 2 && args[1] == "--version" {
+        // force logger to flush
+        drop(logger);
+
+        exit(0);
+    }
 
     // This "unused" variable is required as it enables the global (and crucially static) logger,
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
@@ -312,7 +326,7 @@ use nix::fcntl::{self, OFlag};
 use nix::sys::stat::Mode;
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
+use std::process::{exit, Command, Stdio};
 
 fn setup_debug_console(shells: Vec<String>) -> Result<()> {
     for shell in shells.iter() {
