@@ -5,7 +5,7 @@
 
 //use crate::container::Container;
 use crate::mount::{get_mount_fs_type, remove_mounts, TYPEROOTFS};
-use crate::namespace::{setup_persistent_ns, Namespace, NSTYPEIPC, NSTYPEUTS};
+use crate::namespace::Namespace;
 use crate::netlink::{RtnlHandle, NETLINK_ROUTE};
 use crate::network::Network;
 use libc::pid_t;
@@ -48,7 +48,7 @@ impl Sandbox {
         let logger = logger.new(o!("subsystem" => "sandbox"));
 
         Ok(Sandbox {
-            logger: logger,
+            logger: logger.clone(),
             id: "".to_string(),
             hostname: "".to_string(),
             network: Network::new(),
@@ -56,12 +56,8 @@ impl Sandbox {
             mounts: Vec::new(),
             container_mounts: HashMap::new(),
             pci_device_map: HashMap::new(),
-            shared_utsns: Namespace {
-                path: "".to_string(),
-            },
-            shared_ipcns: Namespace {
-                path: "".to_string(),
-            },
+            shared_utsns: Namespace::new(&logger),
+            shared_ipcns: Namespace::new(&logger),
             storages: HashMap::new(),
             running: false,
             no_pivot_root: fs_type.eq(TYPEROOTFS),
@@ -129,29 +125,28 @@ impl Sandbox {
 
     pub fn setup_shared_namespaces(&mut self) -> Result<bool> {
         // Set up shared IPC namespace
-        self.shared_ipcns = match setup_persistent_ns(self.logger.clone(), NSTYPEIPC) {
+        self.shared_ipcns = match Namespace::new(&self.logger).as_ipc().setup() {
             Ok(ns) => ns,
             Err(err) => {
                 return Err(ErrorKind::ErrorCode(format!(
-                    "Failed to setup persisten IPC namespace with error: {}",
-                    &err
+                    "Failed to setup persistent IPC namespace with error: {}",
+                    err
                 ))
                 .into())
             }
         };
 
-        // Set up shared UTS namespace
-        self.shared_utsns = match setup_persistent_ns(self.logger.clone(), NSTYPEUTS) {
+        // // Set up shared UTS namespace
+        self.shared_utsns = match Namespace::new(&self.logger).as_uts().setup() {
             Ok(ns) => ns,
             Err(err) => {
                 return Err(ErrorKind::ErrorCode(format!(
-                    "Failed to setup persisten UTS namespace with error: {} ",
-                    &err
+                    "Failed to setup persistent UTS namespace with error: {}",
+                    err
                 ))
                 .into())
             }
         };
-
         Ok(true)
     }
 
