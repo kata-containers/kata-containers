@@ -341,3 +341,34 @@ jobs:
           # tag the container image we created and push to DockerHub
           docker tag katadocker/kata-deploy-ci:${{ env.PKG_SHA }} katadocker/kata-deploy:${{ env.TAG }}
           docker push katadocker/kata-deploy:${{ env.TAG }}
+
+upload-static-tarball:
+    needs: gather-artifacts
+    needs: kata-deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout code
+        uses: actions/checkout@master
+      - name: install-go
+        uses: actions/setup-go@v1
+        with:
+          go-version: '1.13.x'
+      - name: get-artifacts
+        uses: actions/download-artifact@master
+        with:
+          name: release-candidate
+      - name: install hub
+        run: |
+                git clone \
+                  --config transfer.fsckobjects=false \
+                  --config receive.fsckobjects=false \
+                  --config fetch.fsckobjects=false \
+                  https://github.com/github/hub.git
+                cd hub
+                sudo make install prefix=/usr/local
+      - name: push static tarball to github
+        run: |
+                tag=`echo $GITHUB_REF | cut -d/ -f3-`
+                git clone https://github.com/kata-containers/runtime.git
+                cd runtime
+                GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a ../release-candidate/kata-static.tar.xz "${tag}"
