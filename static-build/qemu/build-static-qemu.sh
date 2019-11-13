@@ -14,8 +14,8 @@ source "${script_dir}/../../scripts/lib.sh"
 source "${script_dir}/../qemu.blacklist"
 
 packaging_dir="${script_dir}/../.."
-qemu_tar="kata-qemu-static.tar.gz"
-qemu_tmp_tar="kata-qemu-static-tmp.tar.gz"
+qemu_tar="kata-static-qemu.tar.gz"
+qemu_tmp_tar="kata-static-qemu-tmp.tar.gz"
 
 qemu_repo="${qemu_repo:-}"
 qemu_version="${qemu_version:-}"
