@@ -467,15 +467,8 @@ func (q *qemuArchBase) appendVSock(devices []govmmQemu.Device, vsock types.VSock
 
 func networkModelToQemuType(model NetInterworkingModel) govmmQemu.NetDeviceType {
 	switch model {
-	case NetXConnectBridgedModel:
-		return govmmQemu.MACVTAP //TODO: We should rename MACVTAP to .NET_FD
 	case NetXConnectMacVtapModel:
 		return govmmQemu.MACVTAP
-	//case ModelEnlightened:
-	// Here the Network plugin will create a VM native interface
-	// which could be MacVtap, IpVtap, SRIOV, veth-tap, vhost-user
-	// In these cases we will determine the interface type here
-	// and pass in the native interface through
 	default:
 		//TAP should work for most other cases
 		return govmmQemu.TAP

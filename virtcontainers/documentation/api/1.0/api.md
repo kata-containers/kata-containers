@@ -278,21 +278,9 @@ const (
 	// NetXConnectDefaultModel Ask to use DefaultNetInterworkingModel
 	NetXConnectDefaultModel NetInterworkingModel = iota
 
-	// NetXConnectBridgedModel uses a linux bridge to interconnect
-	// the container interface to the VM. This is the
-	// safe default that works for most cases except
-	// macvlan and ipvlan
-	NetXConnectBridgedModel
-
 	// NetXConnectMacVtapModel can be used when the Container network
 	// interface can be bridged using macvtap
 	NetXConnectMacVtapModel
-
-	// NetXConnectEnlightenedModel can be used when the Network plugins
-	// are enlightened to create VM native interfaces
-	// when requested by the runtime
-	// This will be used for vethtap, macvtap, ipvtap
-	NetXConnectEnlightenedModel
 
 	// NetXConnectInvalidModel is the last item to check valid values by IsValid()
 	NetXConnectInvalidModel
