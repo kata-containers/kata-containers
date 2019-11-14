@@ -12,7 +12,7 @@ set -o pipefail
 
 main() {
 	artifact_stage=${1:-}
-	artifact=$(echo  ${artifact_stage} | sed -n -e 's/^install_//p')
+	artifact=$(echo  ${artifact_stage} | sed -n -e 's/^install_//p' | sed -r 's/_/-/g')
 	if [ -z "${artifact}" ]; then
 		"Scripts needs artifact name to build"
 		exit 1
@@ -50,6 +50,8 @@ main() {
 	${artifact_stage}
 	#install_kernel
         popd		
+	#mv $HOME/go/src/github.com/kata-containers/packaging/release/kata-kernel.tar.gz .
+	mv $HOME/go/src/github.com/amshinde/kata-packaging/release/kata-static-${artifact}.tar.gz .
 }
 
 main $@

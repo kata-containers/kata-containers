@@ -35,7 +35,6 @@ jobs:
          if grep -q "install_kernel" ./artifact-list/artifact-list.txt; then
            $GITHUB_WORKSPACE/.github/workflows/generate-artifact-tarball.sh "install_kernel" $GITHUB_REF
            echo ::set-env name=artifact-built::true
-           mv $HOME/go/src/github.com/kata-containers/packaging/release/kata-kernel.tar.gz .
            ls -la $GITHUB_WORKSPACE
          else
            echo ::set-env name=artifact-built::false
@@ -45,4 +44,4 @@ jobs:
         uses: actions/upload-artifact@master
         with: 
           name: kata-artifacts
-          path: kata-kernel.tar.gz
+          path: kata-static-kernel.tar.gz
