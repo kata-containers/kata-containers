@@ -28,8 +28,8 @@ jobs:
         uses: actions/download-artifact@master
         with:
           name: artifact-list
-        #- run: |
-        # sudo apt-get update && sudo apt install -y flex bison libelf-dev bc iptables
+      - run: |
+         sudo apt-get update && sudo apt install -y flex bison libelf-dev bc iptables
       - name: build-kernel
         run: |
          if grep -q "install_kernel" ./artifact-list/artifact-list.txt; then
