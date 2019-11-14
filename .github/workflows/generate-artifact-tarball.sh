@@ -30,11 +30,13 @@ main() {
 	echo tag: "$tag"		
 	echo artifact "$artifact"
 	echo artifact_stage "$artifact_stage"
-	tag="1.9.0-rc0"
+	#tag="1.9.0-rc0"
 
         export GOPATH=$HOME/go
-        go get github.com/kata-containers/packaging || true
-        pushd $GOPATH/src/github.com/kata-containers/packaging/release >>/dev/null
+        #go get github.com/kata-containers/packaging || true
+        go get github.com/amshinde/kata-packaging || true
+        #pushd $GOPATH/src/github.com/kata-containers/packaging/release >>/dev/null
+	pushd $GOPATH/src/github.com/amshinde/kata-packaging/release >>/dev/null
 	git checkout $tag
         #git checkout master
         pushd ../obs-packaging
@@ -45,8 +47,8 @@ main() {
         ls -la
         echo $pwd  
         source ./kata-deploy-binaries.sh
-	#${artifact_stage}
-	install_kernel
+	${artifact_stage}
+	#install_kernel
         popd		
 }
 

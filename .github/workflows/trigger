@@ -2,9 +2,9 @@ VERSION=1.9.0-rc0
 
 pushd ~/go/src/github.com/kata-containers/packaging
 git tag --delete $VERSION
-git push archana :$VERSION
-git tag -a $VERSION -m "test tag - $VERSION" && git push archana $VERSION
+git push origin :$VERSION
+git tag -a $VERSION -m "test tag - $VERSION" && git push origin $VERSION
 popd
 git tag --delete $VERSION
-git push egernst :$VERSION
-git tag -a $VERSION -m "test tag - $VERSION" && git push egernst $VERSION
+git push amshinde :$VERSION
+git tag -a $VERSION -m "test tag - $VERSION" && git push amshinde $VERSION
