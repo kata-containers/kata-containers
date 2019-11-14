@@ -6,8 +6,10 @@
 package virtcontainers
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -31,6 +33,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/blang/semver"
+	"github.com/containerd/console"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	fcmodels "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/models"
 	"github.com/kata-containers/runtime/virtcontainers/store"
@@ -77,16 +80,12 @@ var fcKernelParams = append(commonVirtioblkKernelRootParams, []Param{
 	{"reboot", "k"},
 	{"panic", "1"},
 	{"iommu", "off"},
-	{"8250.nr_uarts", "0"},
 	{"net.ifnames", "0"},
 	{"random.trust_cpu", "on"},
 
 	// Firecracker doesn't support ACPI
 	// Fix kernel error "ACPI BIOS Error (bug)"
 	{"acpi", "off"},
-
-	// Tell agent where to send the logs
-	{"agent.log_vport", fmt.Sprintf("%d", vSockLogsPort)},
 }...)
 
 func (s vmmState) String() string {
@@ -388,13 +387,17 @@ func (fc *firecracker) fcInit(timeout int) error {
 	var args []string
 	var cmd *exec.Cmd
 
+	if !fc.config.Debug && fc.stateful {
+		args = append(args, "--daemonize")
+	}
+
 	//https://github.com/firecracker-microvm/firecracker/blob/master/docs/jailer.md#jailer-usage
 	//--seccomp-level specifies whether seccomp filters should be installed and how restrictive they should be. Possible values are:
 	//0 : disabled.
 	//1 : basic filtering. This prohibits syscalls not whitelisted by Firecracker.
 	//2 (default): advanced filtering. This adds further checks on some of the parameters of the allowed syscalls.
 	if fc.jailed {
-		args = []string{
+		args = append(args,
 			"--id", fc.id,
 			"--node", "0", //FIXME: Comprehend NUMA topology or explicit ignore
 			"--seccomp-level", "2",
@@ -402,8 +405,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 			"--uid", "0", //https://github.com/kata-containers/runtime/issues/1869
 			"--gid", "0",
 			"--chroot-base-dir", fc.chrootBaseDir,
-			"--daemonize",
-		}
+		)
 		if fc.netNSPath != "" {
 			args = append(args, "--netns", fc.netNSPath)
 		}
@@ -412,6 +414,16 @@ func (fc *firecracker) fcInit(timeout int) error {
 		args = []string{"--api-sock", fc.socketPath}
 		cmd = exec.Command(fc.config.HypervisorPath, args...)
 
+	}
+
+	if fc.config.Debug && fc.stateful {
+		stdin, err := fc.watchConsole()
+		if err != nil {
+			return err
+		}
+
+		cmd.Stderr = stdin
+		cmd.Stdout = stdin
 	}
 
 	fc.Logger().WithField("hypervisor args", args).Debug()
@@ -660,6 +672,16 @@ func (fc *firecracker) startSandbox(timeout int) error {
 	kernelPath, err := fc.config.KernelAssetPath()
 	if err != nil {
 		return err
+	}
+
+	if fc.config.Debug && fc.stateful {
+		fcKernelParams = append(fcKernelParams, Param{"console", "ttyS0"})
+	} else {
+		fcKernelParams = append(fcKernelParams, []Param{
+			{"8250.nr_uarts", "0"},
+			// Tell agent where to send the logs
+			{"agent.log_vport", fmt.Sprintf("%d", vSockLogsPort)},
+		}...)
 	}
 
 	kernelParams := append(fc.config.KernelParams, fcKernelParams...)
@@ -1098,4 +1120,38 @@ func (fc *firecracker) generateSocket(id string, useVsock bool) (interface{}, er
 		UdsPath: udsPath,
 		Port:    uint32(vSockPort),
 	}, nil
+}
+
+func (fc *firecracker) watchConsole() (*os.File, error) {
+	master, slave, err := console.NewPty()
+	if err != nil {
+		fc.Logger().WithField("Error create pseudo tty", err).Debug()
+		return nil, err
+	}
+
+	stdio, err := os.OpenFile(slave, syscall.O_RDWR, 0700)
+	if err != nil {
+		fc.Logger().WithError(err).Debugf("open pseudo tty %s", slave)
+		return nil, err
+	}
+
+	go func() {
+		scanner := bufio.NewScanner(master)
+		for scanner.Scan() {
+			fc.Logger().WithFields(logrus.Fields{
+				"sandbox":   fc.id,
+				"vmconsole": scanner.Text(),
+			}).Infof("reading guest console")
+		}
+
+		if err := scanner.Err(); err != nil {
+			if err == io.EOF {
+				fc.Logger().Info("console watcher quits")
+			} else {
+				fc.Logger().WithError(err).Error("Failed to read guest console")
+			}
+		}
+	}()
+
+	return stdio, nil
 }
