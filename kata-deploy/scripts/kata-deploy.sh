@@ -78,9 +78,9 @@ function configure_crio() {
 	local kata_qemu_virtiofs_conf="crio.runtime.runtimes.kata-qemu-virtiofs"
 
 	# add kata-qemu config
-	if grep -q "^\[$kata_qemu_conf\]" $crio_conf_file; then
+	if grep -q "\[$kata_qemu_conf\]" $crio_conf_file; then
 		echo "Configuration exists $kata_qemu_conf, overwriting"
-		sed -i "/^\[$kata_qemu_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_qemu_path}\"#" $crio_conf_file 
+		sed -i "/\[$kata_qemu_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_qemu_path}\"#" $crio_conf_file
 	else
 		cat <<EOT | tee -a "$crio_conf_file"
 
@@ -91,9 +91,9 @@ EOT
 	fi
 
         # add kata-qemu-virtiofs config
-	if grep -q "^\[$kata_qemu_virtiofs_conf\]" $crio_conf_file; then
+	if grep -q "\[$kata_qemu_virtiofs_conf\]" $crio_conf_file; then
 		echo "Configuration exists $kata_qemu_virtiofs_conf, overwriting"
-		sed -i "/^\[$kata_qemu_virtiofs_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_qemu_path}\"#" $crio_conf_file
+		sed -i "/\[$kata_qemu_virtiofs_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_qemu_virtiofs_path}\"#" $crio_conf_file
 	else
 		cat <<EOT | tee -a "$crio_conf_file"
 
@@ -104,9 +104,9 @@ EOT
         fi
 
 	# add kata-fc config
-	if grep -q "^\[$kata_fc_conf\]" $crio_conf_file; then
+	if grep -q "\[$kata_fc_conf\]" $crio_conf_file; then
 		echo "Configuration exists for $kata_fc_conf, overwriting"
-		sed -i "/^\[$kata_fc_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_fc_path}\"#" $crio_conf_file 
+		sed -i "/\[$kata_fc_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_fc_path}\"#" $crio_conf_file
 	else
 		cat <<EOT | tee -a "$crio_conf_file"
 
@@ -117,9 +117,9 @@ EOT
 	fi
 
 	# add kata-clh config
-	if grep -q "^\[$kata_clh_conf\]" $crio_conf_file; then
+	if grep -q "\[$kata_clh_conf\]" $crio_conf_file; then
 		echo "Configuration exists $kata_clh_conf, overwriting"
-		sed -i "/^\[$kata_clh_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_clh_path}\"#" $crio_conf_file
+		sed -i "/\[$kata_clh_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_clh_path}\"#" $crio_conf_file
 	else
 		cat <<EOT | tee -a "$crio_conf_file"
 
@@ -135,6 +135,43 @@ EOT
 		|| sed -i '/\[crio.runtime\]/a manage_network_ns_lifecycle = true' $crio_conf_file
 }
 
+function configure_containerd_runtime() {
+	local runtime="kata"
+	local configuration="configuration"
+	if [ -n "${1-}" ]; then
+		if [ "$1" == "cloud-hypervisor" ]; then
+			runtime+="-clh"
+			configuration+="-clh"
+		else
+			runtime+="-$1"
+			configuration+="-$1"
+		fi
+	fi
+	local runtime_table="plugins.cri.containerd.runtimes.$runtime"
+	local runtime_type="io.containerd.$runtime.v2"
+	local options_table="$runtime_table.options"
+	local config_path="/opt/kata/share/defaults/kata-containers/$configuration.toml"
+	if grep -q "\[$runtime_table\]" $containerd_conf_file; then
+		echo "Configuration exists for $runtime_table, overwriting"
+		sed -i "/\[$runtime_table\]/,+1s#runtime_type.*#runtime_type = \"${runtime_type}\"#" $containerd_conf_file
+	else
+		cat <<EOT | tee -a "$containerd_conf_file"
+[$runtime_table]
+  runtime_type = "${runtime_type}"
+EOT
+	fi
+
+	if grep -q "\[$options_table\]" $containerd_conf_file; then
+		echo "Configuration exists for $options_table, overwriting"
+		sed -i "/\[$options_table\]/,+1s#ConfigPath.*#ConfigPath = \"${config_path}\"#" $containerd_conf_file
+	else
+		cat <<EOT | tee -a "$containerd_conf_file"
+  [$options_table]
+    ConfigPath = "${config_path}"
+EOT
+	fi
+}
+
 function configure_containerd() {
 	# Configure containerd to use Kata:
 	echo "Add Kata Containers as a supported runtime for containerd"
@@ -142,33 +179,13 @@ function configure_containerd() {
 	mkdir -p /etc/containerd/
 
 	if [ -f "$containerd_conf_file" ]; then
-		cp "$containerd_conf_file" "$containerd_conf_file_backup"
+		# backup the config.toml only if a backup doesn't already exist (don't override original)
+		cp -n "$containerd_conf_file" "$containerd_conf_file_backup"
 	fi
-	cat <<EOT | tee -a "$containerd_conf_file"
-[[plugins]]
-  [[plugins.cri]]
-   [[plugins.cri.containerd]]
-     [plugins.cri.containerd.runtimes.kata]
-        runtime_type = "io.containerd.kata.v2"
-        [plugins.cri.containerd.runtimes.kata.options]
-	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration.toml"
-     [plugins.cri.containerd.runtimes.kata-fc]
-        runtime_type = "io.containerd.kata-fc.v2"
-        [plugins.cri.containerd.runtimes.kata-fc.options]
-	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-fc.toml"
-     [plugins.cri.containerd.runtimes.kata-qemu]
-        runtime_type = "io.containerd.kata-qemu.v2"
-        [plugins.cri.containerd.runtimes.kata-qemu.options]
-	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-qemu.toml"
-     [plugins.cri.containerd.runtimes.kata-qemu-virtiofs]
-        runtime_type = "io.containerd.kata-qemu-virtiofs.v2"
-        [plugins.cri.containerd.runtimes.kata-qemu-virtiofs.options]
-	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-qemu-virtiofs.toml"
-     [plugins.cri.containerd.runtimes.kata-clh]
-        runtime_type = "io.containerd.kata-clh.v2"
-        [plugins.cri.containerd.runtimes.kata-clh.options]
-	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-clh.toml"
-EOT
+
+	# Add default Kata runtime configuration
+	configure_containerd_runtime
+
 	#Currently containerd has an assumption on the location of the shimv2 implementation
 	#Until support is added (see https://github.com/containerd/containerd/issues/3073),
 	#create a link in /usr/local/bin/ to the v2-shim implementation in /opt/kata/bin.
@@ -176,6 +193,8 @@ EOT
 	mkdir -p /usr/local/bin
 
 	for shim in "${shims[@]}"; do
+		configure_containerd_runtime $shim
+
 		local shim_binary="containerd-shim-kata-${shim}-v2"
 		local shim_file="/usr/local/bin/${shim_binary}"
 		local shim_backup="/usr/local/bin/${shim_binary}.bak"
