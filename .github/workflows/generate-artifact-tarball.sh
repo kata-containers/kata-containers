@@ -44,12 +44,16 @@ main() {
 	./gen_versions_txt.sh $tag
         popd
 
+        echo Directory for running deploy script: $pwd  
         ls -la
-        echo $pwd  
         source ./kata-deploy-binaries.sh
 	${artifact_stage}
-	#install_kernel
+	echo "Dir while doing final pop:" $pwd
         popd		
+
+	echo "Done installing"
+	echo PWD, should be top dir: $pwd
+        ls -la
 	#mv $HOME/go/src/github.com/kata-containers/packaging/release/kata-kernel.tar.gz .
 	mv $HOME/go/src/github.com/amshinde/kata-packaging/release/kata-static-${artifact}.tar.gz .
 }
