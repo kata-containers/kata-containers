@@ -12,7 +12,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-docker_config_file="${docker_config_file:-/etc/docker/daemon.json}"
+docker_config_dir="/etc/docker"
+docker_config_file="${docker_config_file:-${docker_config_dir}/daemon.json}"
 
 # The static version of Kata Containers is entirely contained within
 # this directory.
@@ -39,6 +40,8 @@ configure_docker()
 	local file="$1"
 	[ -z "$file" ] && die "need file"
 
+	mkdir -p "${docker_config_dir}"
+
 	if [ -e "$docker_config_file" ]
 	then
 		local today=$(date '+%Y-%m-%d')
@@ -47,6 +50,9 @@ configure_docker()
 		info "Backing up original Docker config file '$docker_config_file' to '$backup'"
 
 		sudo cp "${docker_config_file}" "${docker_config_file}.${today}"
+	else
+		# Create a minimal valid JSON document
+		echo "{}" > "${docker_config_file}"
 	fi
 
 	local config_files=$(tar tvf "$file" |\
