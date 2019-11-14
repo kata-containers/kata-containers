@@ -46,6 +46,7 @@ sudo docker build \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg QEMU_REPO="${qemu_repo}" \
 	--build-arg QEMU_VERSION="${qemu_version}" \
+	--build-arg QEMU_TARBALL="${qemu_tar}" \
 	--build-arg PREFIX="${prefix}" \
 	"${packaging_dir}" \
 	-f "${script_dir}/Dockerfile" \

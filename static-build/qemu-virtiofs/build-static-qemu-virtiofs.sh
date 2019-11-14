@@ -32,6 +32,7 @@ sudo docker build \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg QEMU_VIRTIOFS_REPO="${qemu_virtiofs_repo}" \
 	--build-arg QEMU_VIRTIOFS_TAG="${qemu_virtiofs_tag}" \
+	--build-arg QEMU_TARBALL="${qemu_virtiofs_tar}" \
 	--build-arg PREFIX="${prefix}" \
 	"${packaging_dir}" \
 	-f "${script_dir}/Dockerfile" \

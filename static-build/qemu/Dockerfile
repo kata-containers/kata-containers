@@ -3,6 +3,7 @@ from ubuntu:18.04
 ARG QEMU_REPO
 # commit/tag/branch
 ARG QEMU_VERSION
+ARG QEMU_TARBALL
 ARG PREFIX
 
 WORKDIR /root/qemu
@@ -54,4 +55,4 @@ RUN PREFIX="${PREFIX}" /root/configure-hypervisor.sh -s kata-qemu | xargs ./conf
 
 RUN make -j$(nproc)
 RUN make install DESTDIR=/tmp/qemu-static
-RUN cd /tmp/qemu-static && tar -czvf kata-qemu-static.tar.gz *
+RUN cd /tmp/qemu-static && tar -czvf "${QEMU_TARBALL}" *
