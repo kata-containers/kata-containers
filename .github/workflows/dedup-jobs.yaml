@@ -28,28 +28,15 @@ jobs:
         uses: actions/download-artifact@master
         with:
           name: artifact-list
+        #- run: |
+        # sudo apt-get update && sudo apt install -y flex bison libelf-dev bc iptables
       - name: build-kernel
         run: |
          if grep -q "install_kernel" ./artifact-list/artifact-list.txt; then
-           ls -la $GITHUB_WORKSPACE
-           .github/workflows/generate-artifact-tarball.sh "install_kernel" $GITHUB_REF
-           # install kernel dependencies
-           sudo apt-get update && sudo apt install -y flex bison libelf-dev bc iptables
-           export GOPATH=$HOME/go
-           go get github.com/kata-containers/packaging || true
-           pushd $GOPATH/src/github.com/kata-containers/packaging/release >>/dev/null
-           # Get versions information
-           tag=`echo $GITHUB_REF | cut -d/ -f3-`
-           git checkout $tag
-           pushd ../obs-packaging
-           ./gen_versions_txt.sh $tag
-           popd
-           # Build the kernel:
-           source ./kata-deploy-binaries.sh
-           install_kernel
+           $GITHUB_WORKSPACE/.github/workflows/generate-artifact-tarball.sh "install_kernel" $GITHUB_REF
            echo ::set-env name=artifact-built::true
-           popd >>/dev/null
            mv $HOME/go/src/github.com/kata-containers/packaging/release/kata-kernel.tar.gz .
+           ls -la $GITHUB_WORKSPACE
          else
            echo ::set-env name=artifact-built::false
          fi
