@@ -306,3 +306,35 @@ var _ = Describe("check dmesg logs errors", func() {
 		})
 	})
 })
+
+var _ = Describe("run and check kata-runtime list", func() {
+	var (
+		args            []string
+		id              string
+		exitCode        int
+		containerStdout string
+		stdout          string
+	)
+
+	BeforeEach(func() {
+		id = randomDockerName()
+	})
+
+	AfterEach(func() {
+		Expect(RemoveDockerContainer(id)).To(BeTrue())
+		Expect(ExistDockerContainer(id)).NotTo(BeTrue())
+	})
+
+	Context("Running a container and then run kata-runtime list", func() {
+		It("should not fail", func() {
+			args = []string{"-td", "--name", id, Image, "sh"}
+			containerStdout, _, exitCode = dockerRun(args...)
+			Expect(exitCode).To(Equal(0))
+
+			cmd := NewCommand("kata-runtime", "list", "--q")
+			stdout, _, exitCode = cmd.Run()
+			Expect(exitCode).To(BeZero())
+			Expect(stdout).To(ContainSubstring(containerStdout))
+		})
+	})
+})
