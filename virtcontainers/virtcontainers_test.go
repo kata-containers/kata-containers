@@ -46,6 +46,7 @@ var testAcrnKernelPath = ""
 var testAcrnImagePath = ""
 var testAcrnPath = ""
 var testAcrnCtlPath = ""
+
 var testHyperstartCtlSocket = ""
 var testHyperstartTtySocket = ""
 
