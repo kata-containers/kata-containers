@@ -22,3 +22,6 @@ FCJAILERCMD := jailer
 #ACRN binary name
 ACRNCMD := acrn-dm
 ACRNCTLCMD := acrnctl
+
+# cloud-hypervisor binary name
+CLHCMD := cloud-hypervisor
