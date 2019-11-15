@@ -18,6 +18,7 @@ shims=(
 	"nemu"
 	"qemu"
 	"qemu-virtiofs"
+	"cloud-hypervisor"
 )
 
 # If we fail for any reason a message will be displayed
@@ -32,7 +33,7 @@ function print_usage() {
 }
 
 function get_container_runtime() {
-	local runtime=$(kubectl describe node $NODE_NAME)
+	local runtime="$(kubectl describe node $NODE_NAME)"
 	if [ "$?" -ne 0 ]; then
                 die "invalid node name"
 	fi
@@ -55,7 +56,7 @@ function configure_cri_runtime() {
 		;;
 	esac
 	systemctl daemon-reload
-	systemctl restart $1
+	systemctl restart "$1"
 }
 
 function configure_crio() {
@@ -65,14 +66,20 @@ function configure_crio() {
 	# backup the CRIO.conf only if a backup doesn't already exist (don't override original)
 	cp -n "$crio_conf_file" "$crio_conf_file_backup"
 
-	local kata_qemu_path="/opt/kata/bin/kata-qemu"
-	local kata_qemu_virtiofs_path="/opt/kata/bin/kata-qemu-virtiofs"
-	local kata_nemu_path="/opt/kata/bin/kata-nemu"
+	local kata_clh_path="/opt/kata/bin/kata-clh"
+	local kata_clh_conf="crio.runtime.runtimes.kata-clh"
+
 	local kata_fc_path="/opt/kata/bin/kata-fc"
-	local kata_qemu_conf="crio.runtime.runtimes.kata-qemu"
-	local kata_qemu_virtiofs_conf="crio.runtime.runtimes.kata-qemu-virtiofs"
-	local kata_nemu_conf="crio.runtime.runtimes.kata-nemu"
 	local kata_fc_conf="crio.runtime.runtimes.kata-fc"
+
+	local kata_nemu_path="/opt/kata/bin/kata-nemu"
+	local kata_nemu_conf="crio.runtime.runtimes.kata-nemu"
+
+	local kata_qemu_path="/opt/kata/bin/kata-qemu"
+	local kata_qemu_conf="crio.runtime.runtimes.kata-qemu"
+
+	local kata_qemu_virtiofs_path="/opt/kata/bin/kata-qemu-virtiofs"
+	local kata_qemu_virtiofs_conf="crio.runtime.runtimes.kata-qemu-virtiofs"
 
 	# add kata-qemu config
 	if grep -q "^\[$kata_qemu_conf\]" $crio_conf_file; then
@@ -126,10 +133,23 @@ EOT
 EOT
 	fi
 
-  # Replace if exists, insert otherwise
-  grep -Fq 'manage_network_ns_lifecycle =' $crio_conf_file \
-  && sed -i '/manage_network_ns_lifecycle =/c manage_network_ns_lifecycle = true' $crio_conf_file \
-  || sed -i '/\[crio.runtime\]/a manage_network_ns_lifecycle = true' $crio_conf_file
+	# add kata-clh config
+	if grep -q "^\[$kata_clh_conf\]" $crio_conf_file; then
+		echo "Configuration exists $kata_clh_conf, overwriting"
+		sed -i "/^\[$kata_clh_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_clh_path}\"#" $crio_conf_file
+	else
+		cat <<EOT | tee -a "$crio_conf_file"
+
+# Path to the Kata Containers runtime binary that uses the Cloud Hypervisor.
+[$kata_clh_conf]
+  runtime_path = "${kata_clh_path}"
+EOT
+	fi
+
+	# Replace if exists, insert otherwise
+	grep -Fq 'manage_network_ns_lifecycle =' $crio_conf_file \
+		&& sed -i '/manage_network_ns_lifecycle =/c manage_network_ns_lifecycle = true' $crio_conf_file \
+		|| sed -i '/\[crio.runtime\]/a manage_network_ns_lifecycle = true' $crio_conf_file
 }
 
 function configure_containerd() {
@@ -165,6 +185,10 @@ function configure_containerd() {
         runtime_type = "io.containerd.kata-nemu.v2"
         [plugins.cri.containerd.runtimes.kata-nemu.options]
 	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-nemu.toml"
+     [plugins.cri.containerd.runtimes.kata-clh]
+        runtime_type = "io.containerd.kata-clh.v2"
+        [plugins.cri.containerd.runtimes.kata-clh.options]
+	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-clh.toml"
 EOT
 	#Currently containerd has an assumption on the location of the shimv2 implementation
 	#Until support is added (see https://github.com/containerd/containerd/issues/3073),
@@ -172,24 +196,24 @@ EOT
 
 	mkdir -p /usr/local/bin
 
-	for shim in ${shims[@]}; do
+	for shim in "${shims[@]}"; do
 		local shim_binary="containerd-shim-kata-${shim}-v2"
 		local shim_file="/usr/local/bin/${shim_binary}"
 		local shim_backup="/usr/local/bin/${shim_binary}.bak"
 
-		if [ -f ${shim_file} ]; then
+		if [ -f "${shim_file}" ]; then
 			echo "warning: ${shim_binary} already exists" >&2
-			if [ ! -f ${shim_backup} ]; then
-				mv ${shim_file} ${shim_backup}
+			if [ ! -f "${shim_backup}" ]; then
+				mv "${shim_file}" "${shim_backup}"
 			else
-				rm ${shim_file}
+				rm "${shim_file}"
 			fi
 		fi
        cat << EOT | tee "$shim_file"
 #!/bin/bash
 KATA_CONF_FILE=/opt/kata/share/defaults/kata-containers/configuration-${shim}.toml /opt/kata/bin/containerd-shim-kata-v2 \$@
 EOT
-	chmod +x $shim_file
+	chmod +x "$shim_file"
 	done
 }
 
@@ -225,14 +249,14 @@ function cleanup_containerd() {
 	#Until support is added (see https://github.com/containerd/containerd/issues/3073), we manage
 	# a reference to the v2-shim implementation
 
-	for shim in ${shims[@]}; do
+	for shim in "${shims[@]}"; do
 		local shim_binary="containerd-shim-kata-${shim}-v2"
 		local shim_file="/usr/local/bin/${shim_binary}"
 		local shim_backup="/usr/local/bin/${shim_binary}.bak"
 
-		rm ${shim_file} || true
+		rm "${shim_file}" || true
 
-		if [ -f ${shim_backup} ]; then
+		if [ -f "${shim_backup}" ]; then
 			mv "$shim_backup" "$shim_file"
 		fi
 	done
@@ -240,15 +264,15 @@ function cleanup_containerd() {
 }
 
 function reset_runtime() {
-	kubectl label node $NODE_NAME katacontainers.io/kata-runtime-
+	kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
 	systemctl daemon-reload
-	systemctl restart $1
+	systemctl restart "$1"
 	systemctl restart kubelet
 }
 
 function main() {
 	# script requires that user is root
-	euid=`id -u`
+	euid=$(id -u)
 	if [[ $euid -ne 0 ]]; then
 	   die  "This script must be run as root"
 	fi
@@ -261,7 +285,7 @@ function main() {
 	fi
 
 	action=${1:-}
-	if [ -z $action ]; then
+	if [ -z "$action" ]; then
 		print_usage
 		die "invalid arguments"
 	fi
@@ -269,16 +293,16 @@ function main() {
 	# only install / remove / update if we are dealing with CRIO or containerd
 	if [ "$runtime" == "crio" ] || [ "$runtime" == "containerd" ]; then
 
-		case $action in
+		case "$action" in
 		install)
 
 			install_artifacts
-			configure_cri_runtime $runtime
-			kubectl label node $NODE_NAME --overwrite katacontainers.io/kata-runtime=true
+			configure_cri_runtime "$runtime"
+			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
 			;;
 		cleanup)
-			cleanup_cri_runtime $runtime
-			kubectl label node $NODE_NAME --overwrite katacontainers.io/kata-runtime=cleanup
+			cleanup_cri_runtime "$runtime"
+			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
 			remove_artifacts
 			;;
 		reset)
@@ -296,4 +320,4 @@ function main() {
 	sleep infinity
 }
 
-main $@
+main "$@"

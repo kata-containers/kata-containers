@@ -51,6 +51,10 @@ function configure_docker() {
      "kata-fc": {
       "path": "/opt/kata/bin/kata-runtime",
       "runtimeArgs": [ "--kata-config", "/opt/kata/share/defaults/kata-containers/configuration-fc.toml" ]
+    },
+     "kata-clh": {
+      "path": "/opt/kata/bin/kata-runtime",
+      "runtimeArgs": [ "--kata-config", "/opt/kata/share/defaults/kata-containers/configuration-clh.toml" ]
     }
   }
 }

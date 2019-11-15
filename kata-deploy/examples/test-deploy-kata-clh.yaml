@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    run: php-apache-kata-clh
+  name: php-apache-kata-clh
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: php-apache-kata-clh
+  template:
+    metadata:
+      labels:
+        run: php-apache-kata-clh
+    spec:
+      runtimeClassName: kata-clh
+      containers:
+      - image: k8s.gcr.io/hpa-example
+        imagePullPolicy: Always
+        name: php-apache
+        ports:
+        - containerPort: 80
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 200m
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: php-apache-kata-clh
+spec:
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+  selector:
+    run: php-apache-kata-clh
+  sessionAffinity: None
+  type: ClusterIP
