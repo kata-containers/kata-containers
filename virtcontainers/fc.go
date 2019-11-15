@@ -46,7 +46,7 @@ type vmmState uint8
 
 const (
 	notReady vmmState = iota
-	apiReady
+	cfReady
 	vmReady
 )
 
@@ -96,8 +96,8 @@ func (s vmmState) String() string {
 	switch s {
 	case notReady:
 		return "FC not ready"
-	case apiReady:
-		return "FC API ready"
+	case cfReady:
+		return "FC configure ready"
 	case vmReady:
 		return "FC VM ready"
 	}
@@ -446,7 +446,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 		return err
 	}
 
-	fc.state.set(apiReady)
+	fc.state.set(cfReady)
 
 	// Store VMM information
 	if fc.store != nil {
