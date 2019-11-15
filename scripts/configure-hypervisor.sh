@@ -77,7 +77,7 @@ Options:
 
 Example:
 
-	$ $script_name qemu-lite
+	$ $script_name qemu
 
 EOT
 }
