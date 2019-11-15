@@ -141,8 +141,9 @@ type firecracker struct {
 	config         HypervisorConfig
 	pendingDevices []firecrackerDevice // Devices to be added when the FC API is ready
 
-	state  firecrackerState
-	jailed bool //Set to true if jailer is enabled
+	state    firecrackerState
+	jailed   bool //Set to true if jailer is enabled
+	stateful bool //Set to true if running with shimv2
 }
 
 type firecrackerDevice struct {
@@ -211,7 +212,7 @@ func (fc *firecracker) bindMount(ctx context.Context, source, destination string
 
 // For firecracker this call only sets the internal structure up.
 // The sandbox will be created and started through startSandbox().
-func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore) error {
+func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore, stateful bool) error {
 	fc.ctx = ctx
 
 	span, _ := fc.trace("createSandbox")
@@ -223,6 +224,7 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	fc.store = vcStore
 	fc.state.set(notReady)
 	fc.config = *hypervisorConfig
+	fc.stateful = stateful
 
 	// When running with jailer all resources need to be under
 	// a specific location and that location needs to have

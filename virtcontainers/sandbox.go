@@ -569,7 +569,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		s.Restore()
 
 		// new store doesn't require hypervisor to be stored immediately
-		if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, nil); err != nil {
+		if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, nil, s.stateful); err != nil {
 			return nil, err
 		}
 	} else {
@@ -591,7 +591,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 			s.state = state
 		}
 
-		if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.store); err != nil {
+		if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.store, s.stateful); err != nil {
 			return nil, err
 		}
 	}
