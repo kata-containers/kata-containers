@@ -78,28 +78,6 @@ assets:
         .*/v?(\d\S+)\.tar\.gz
       version: "v0.19.0"
 
-    nemu:
-      description: "Reduced-emulation VMM that uses KVM"
-      url: "https://github.com/intel/nemu"
-      uscan-url: >-
-        https://github.com/intel/nemu/tags
-        .*/release-?(\d\S+)\.tar\.gz
-      version: "release-2019-05-21"
-
-    nemu-ovmf:
-      description: "OVMF firmware used by nemu VMM"
-      url: "https://github.com/intel/ovmf-virt"
-      uscan-url: >-
-        https://github.com/intel/ovmf-virt/tags
-        .*/?(\d\S+)\.tar\.gz
-      version: "0.6"
-
-    qemu-lite:
-      description: "lightweight VMM that uses KVM"
-      url: "https://github.com/kata-containers/qemu"
-      branch: "qemu-lite-2.11.0"
-      commit: "87517afd726526e6e32a3e0be07eca34b8cc6962"
-
     qemu:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
