@@ -316,6 +316,11 @@ var _ = Describe("run and check kata-runtime list", func() {
 		stdout          string
 	)
 
+	if os.Getuid() != 0 {
+		GinkgoT().Skip("only root user can run kata-runtime list")
+		return
+	}
+
 	BeforeEach(func() {
 		id = randomDockerName()
 	})
