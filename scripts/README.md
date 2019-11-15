@@ -13,5 +13,5 @@ areas including performance, memory footprint and security.
 Example usage:
 
 ```
-  $ configure-hypervisor.sh qemu-lite
+  $ configure-hypervisor.sh qemu
 ```
