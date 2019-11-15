@@ -44,10 +44,6 @@ function configure_docker() {
       "path": "/opt/kata/bin/kata-runtime",
       "runtimeArgs": [ "--kata-config", "/opt/kata/share/defaults/kata-containers/configuration-qemu-virtiofs.toml" ]
     },
-    "kata-nemu": {
-      "path": "/opt/kata/bin/kata-runtime",
-      "runtimeArgs": [ "--kata-config", "/opt/kata/share/defaults/kata-containers/configuration-nemu.toml" ]
-    },
      "kata-fc": {
       "path": "/opt/kata/bin/kata-runtime",
       "runtimeArgs": [ "--kata-config", "/opt/kata/share/defaults/kata-containers/configuration-fc.toml" ]

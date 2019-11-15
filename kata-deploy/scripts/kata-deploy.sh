@@ -15,7 +15,6 @@ containerd_conf_file_backup="${containerd_conf_file}.bak"
 
 shims=(
 	"fc"
-	"nemu"
 	"qemu"
 	"qemu-virtiofs"
 	"cloud-hypervisor"
@@ -72,9 +71,6 @@ function configure_crio() {
 	local kata_fc_path="/opt/kata/bin/kata-fc"
 	local kata_fc_conf="crio.runtime.runtimes.kata-fc"
 
-	local kata_nemu_path="/opt/kata/bin/kata-nemu"
-	local kata_nemu_conf="crio.runtime.runtimes.kata-nemu"
-
 	local kata_qemu_path="/opt/kata/bin/kata-qemu"
 	local kata_qemu_conf="crio.runtime.runtimes.kata-qemu"
 
@@ -106,19 +102,6 @@ EOT
   runtime_path = "${kata_qemu_virtiofs_path}"
 EOT
         fi
-
-	# add kata-nemu config
-	if grep -q "^\[$kata_nemu_conf\]" $crio_conf_file; then
-		echo "Configuration exists $kata_nemu_conf, overwriting"
-		sed -i "/^\[$kata_nemu_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_nemu_path}\"#" $crio_conf_file
-	else
-		cat <<EOT | tee -a "$crio_conf_file"
-
-# Path to the Kata Containers runtime binary that uses the NEMU hypervisor.
-[$kata_nemu_conf]
-  runtime_path = "${kata_nemu_path}"
-EOT
-	fi
 
 	# add kata-fc config
 	if grep -q "^\[$kata_fc_conf\]" $crio_conf_file; then
@@ -181,10 +164,6 @@ function configure_containerd() {
         runtime_type = "io.containerd.kata-qemu-virtiofs.v2"
         [plugins.cri.containerd.runtimes.kata-qemu-virtiofs.options]
 	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-qemu-virtiofs.toml"
-     [plugins.cri.containerd.runtimes.kata-nemu]
-        runtime_type = "io.containerd.kata-nemu.v2"
-        [plugins.cri.containerd.runtimes.kata-nemu.options]
-	      ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-nemu.toml"
      [plugins.cri.containerd.runtimes.kata-clh]
         runtime_type = "io.containerd.kata-clh.v2"
         [plugins.cri.containerd.runtimes.kata-clh.options]
