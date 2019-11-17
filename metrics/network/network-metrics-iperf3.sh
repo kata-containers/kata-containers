@@ -167,7 +167,7 @@ function check_iperf3_server() {
 	while [ 1 ]; do
 		if ! bash -c "$test_cmd" > /dev/null 2>&1; then
 			echo "waiting for server..."
-			count=$((count++))
+			(( count++ ))
 			sleep $period
 		else
 			echo "iperf3 server is up!"
