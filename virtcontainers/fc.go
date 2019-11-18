@@ -36,7 +36,6 @@ import (
 	"github.com/blang/semver"
 	"github.com/containerd/console"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	fcmodels "github.com/kata-containers/runtime/virtcontainers/pkg/firecracker/client/models"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -108,7 +107,8 @@ func (s vmmState) String() string {
 // FirecrackerInfo contains information related to the hypervisor that we
 // want to store on disk
 type FirecrackerInfo struct {
-	PID int
+	PID     int
+	Version string
 }
 
 type firecrackerState struct {
@@ -311,12 +311,27 @@ func (fc *firecracker) vmRunning() bool {
 	}
 }
 
-func (fc *firecracker) checkVersion(vmmInfo *fcmodels.InstanceInfo) error {
-	if vmmInfo == nil || vmmInfo.VmmVersion == nil {
-		return fmt.Errorf("Unknown firecracker version")
+func (fc *firecracker) getVersionNumber() (string, error) {
+	args := []string{"--version"}
+	checkCMD := exec.Command(fc.config.HypervisorPath, args...)
+
+	data, err := checkCMD.Output()
+	if err != nil {
+		return "", fmt.Errorf("Running checking FC version command failed: %v", err)
 	}
 
-	v, err := semver.Make(*vmmInfo.VmmVersion)
+	var version string
+	fields := strings.Split(string(data), " ")
+	if len(fields) > 1 {
+		version = strings.TrimSpace(fields[1])
+		return version, nil
+	}
+
+	return "", errors.New("getting FC version failed, the output is malformed")
+}
+
+func (fc *firecracker) checkVersion(version string) error {
+	v, err := semver.Make(version)
 	if err != nil {
 		return fmt.Errorf("Malformed firecracker version: %v", err)
 	}
@@ -343,7 +358,7 @@ func (fc *firecracker) waitVMM(timeout int) error {
 	for {
 		vmmInfo, err := fc.client().Operations.DescribeInstance(nil)
 		if err == nil {
-			if err := fc.checkVersion(vmmInfo.Payload); err != nil {
+			if err := fc.checkVersion(fc.info.Version); err != nil {
 				return err
 			}
 			return nil
@@ -387,6 +402,15 @@ func (fc *firecracker) fcInit(timeout int) error {
 			}
 		}
 	}()
+
+	//FC version set and check
+	if fc.info.Version, err = fc.getVersionNumber(); err != nil {
+		return err
+	}
+
+	if err := fc.checkVersion(fc.info.Version); err != nil {
+		return err
+	}
 
 	var args []string
 	var cmd *exec.Cmd
