@@ -161,7 +161,7 @@ function check_iperf3_server() {
 	local test_cmd="iperf3 -c "$server_address" -t 1"
 
 	# check tools dependencies
-	local cmds=("netstat")
+	local cmds=("netstat" "iperf3")
 	check_cmds "${cmds[@]}"
 
 	while [ 1 ]; do
