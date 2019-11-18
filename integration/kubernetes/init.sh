@@ -84,7 +84,7 @@ wait_time_cri_socket_check=5
 for i in $(seq ${max_cri_socket_check}); do
 	#when the test runs two times in the CI, the second time crio takes some time to be ready
 	sleep "${wait_time_cri_socket_check}"
-	if [ -f "${cri_runtime_socket}" ]; then
+	if [ -e "${cri_runtime_socket}" ]; then
 		break
 	fi
 
