@@ -42,10 +42,6 @@ gen_version_file() {
 	kata_agent_hash=$(get_kata_hash "agent" "${ref}")
 	kata_ksm_throttler_hash=$(get_kata_hash "ksm-throttler" "${ref}")
 
-	qemu_lite_branch=$(get_from_kata_deps "assets.hypervisor.qemu-lite.branch" "${kata_version}")
-	qemu_lite_version=$(curl -s -L "https://raw.githubusercontent.com/${project}/qemu/${qemu_lite_branch}/VERSION")
-	qemu_lite_hash=$(git ls-remote https://github.com/${project}/qemu.git | grep "refs/heads/${qemu_lite_branch}" | awk '{print $1}')
-
 	qemu_vanilla_branch=$(get_from_kata_deps "assets.hypervisor.qemu.version" "${kata_version}")
 	# Check if qemu.version can be used to get the version and hash, otherwise use qemu.tag
 	qemu_vanilla_ref="refs/heads/${qemu_vanilla_branch}"
@@ -89,9 +85,6 @@ kata_ksm_throttler_hash=${kata_ksm_throttler_hash}
 
 # Dependencies
 kata_osbuilder_version=${kata_version}
-
-qemu_lite_version=${qemu_lite_version}
-qemu_lite_hash=${qemu_lite_hash}
 
 qemu_vanilla_version=${qemu_vanilla_version}
 qemu_vanilla_hash=${qemu_vanilla_hash}

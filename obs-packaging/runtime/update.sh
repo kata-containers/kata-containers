@@ -127,18 +127,6 @@ KATA_QEMU_VANILLA_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
 KATA_QEMU_VANILLA_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
 info "qemu-vanilla ${KATA_QEMU_VANILLA_REQUIRED_VERSION[@]}"
 
-if [ "$arch" == "x86_64" ]; then
-	declare -A KATA_QEMU_LITE_REQUIRED_VERSION
-	pkgVersions=($(pkg_required_ver "qemu_lite"))
-	KATA_QEMU_LITE_REQUIRED_VERSION["deb"]=${pkgVersions[0]}
-	KATA_QEMU_LITE_REQUIRED_VERSION["rpm"]=${pkgVersions[1]}
-	info "qemu-lite ${KATA_QEMU_LITE_REQUIRED_VERSION[@]}"
-	replace_list+=( \
-		"qemu_lite_version=${KATA_QEMU_LITE_REQUIRED_VERSION["rpm"]}" \
-		"qemu_lite_version_release=${KATA_QEMU_LITE_REQUIRED_VERSION["deb"]}" \
-	)
-fi
-
 PROJECT_REPO=${PROJECT_REPO:-home:${OBS_PROJECT}:${OBS_SUBPROJECT}/runtime}
 RELEASE=$(get_obs_pkg_release "${PROJECT_REPO}")
 ((RELEASE++))

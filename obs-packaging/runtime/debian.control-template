@@ -14,7 +14,6 @@ Depends: kata-containers-image (= @kata_osbuilder_version_release@),
          kata-proxy (= @kata_proxy_version_release@),
          kata-shim (= @kata_shim_version_release@),
          kata-ksm-throttler(= @ksm_throttler_version_release@),
-         qemu-lite(= @qemu_lite_version_release@) [amd64],
          qemu-vanilla(= @qemu_vanilla_version_release@)
 Description:
  An Open Containers Initiative (OCI) "runtime" that launches an Intel VT-x

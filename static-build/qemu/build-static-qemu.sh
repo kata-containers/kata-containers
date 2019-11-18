@@ -14,8 +14,8 @@ source "${script_dir}/../../scripts/lib.sh"
 source "${script_dir}/../qemu.blacklist"
 
 packaging_dir="${script_dir}/../.."
-qemu_tar="kata-qemu-static.tar.gz"
-qemu_tmp_tar="kata-qemu-static-tmp.tar.gz"
+qemu_tar="kata-static-qemu.tar.gz"
+qemu_tmp_tar="kata-static-qemu-tmp.tar.gz"
 
 qemu_repo="${qemu_repo:-}"
 qemu_version="${qemu_version:-}"
@@ -46,6 +46,7 @@ sudo docker build \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg QEMU_REPO="${qemu_repo}" \
 	--build-arg QEMU_VERSION="${qemu_version}" \
+	--build-arg QEMU_TARBALL="${qemu_tar}" \
 	--build-arg PREFIX="${prefix}" \
 	"${packaging_dir}" \
 	-f "${script_dir}/Dockerfile" \
