@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx-deployment-nemu
+  name: nginx-deployment-clh
 spec:
   selector:
     matchLabels:
@@ -12,7 +12,7 @@ spec:
       labels:
         app: nginx
     spec:
-      runtimeClassName: kata-nemu
+      runtimeClassName: kata-clh
       containers:
       - name: nginx
         image: nginx:1.14
