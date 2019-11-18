@@ -110,7 +110,7 @@ install_image() {
 	ln -sf "${initrd}" kata-containers-initrd.img
 	popd >>/dev/null
 	pushd ${destdir}
-	tar -czvf ../kata-image.tar.gz *
+	tar -czvf ../kata-static-image.tar.gz *
 	popd
 }
 
@@ -124,7 +124,7 @@ install_kernel() {
 	DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh install
 	popd
 	pushd ${destdir}
-	tar -czvf ../kata-kernel.tar.gz *
+	tar -czvf ../kata-static-kernel.tar.gz *
 	popd
 }
 
@@ -138,7 +138,7 @@ install_experimental_kernel() {
 	DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh -e install
 	popd
 	pushd ${destdir}
-	tar -czvf ../kata-kernel-experimental.tar.gz *
+	tar -czvf ../kata-static-experimental-kernel.tar.gz *
 	popd
 }
 
@@ -163,7 +163,7 @@ install_firecracker() {
 	sudo install -D --owner root --group root --mode 0744  firecracker/firecracker-static "${destdir}/opt/kata/bin/firecracker"
 	sudo install -D --owner root --group root --mode 0744  firecracker/jailer-static "${destdir}/opt/kata/bin/jailer"
 	pushd ${destdir}
-	tar -czvf ../kata-firecracker-static.tar.gz *
+	tar -czvf ../kata-static-firecracker.tar.gz *
 	popd
 }
 
@@ -231,15 +231,15 @@ EOT
 
 	popd
 	pushd ${destdir}
-	tar -czvf ../kata-components.tar.gz *
+	tar -czvf ../kata-static-kata-components.tar.gz *
 	popd
 }
 
 untar_qemu_binaries() {
 	info "Install static qemu"
-	tar xf kata-qemu-static.tar.gz -C "${destdir}"
+	tar xf kata-static-qemu.tar.gz -C "${destdir}"
 	info "Install static qemu-virtiofs"
-	tar xf kata-qemu-virtiofs-static.tar.gz -C "${destdir}"
+	tar xf kata-static-qemu-virtiofsd.tar.gz -C "${destdir}"
 }
 
 main() {

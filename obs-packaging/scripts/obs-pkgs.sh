@@ -11,8 +11,6 @@
 
 typeset -a OBS_PKGS_PROJECTS
 
-[ "$(uname -m)" = "x86_64" ] && OBS_PKGS_PROJECTS+=(qemu-lite)
-
 OBS_PKGS_PROJECTS+=(
 	qemu-vanilla
 	linux-container

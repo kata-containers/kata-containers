@@ -3,6 +3,7 @@ from ubuntu:18.04
 ARG QEMU_VIRTIOFS_REPO
 # commit/tag/branch
 ARG QEMU_VIRTIOFS_TAG
+ARG QEMU_TARBALL
 ARG PREFIX
 
 WORKDIR /root/qemu-virtiofs
@@ -49,4 +50,4 @@ RUN make -j$(nproc) virtiofsd
 RUN make install DESTDIR=/tmp/qemu-virtiofs-static
 RUN mv /tmp/qemu-virtiofs-static/"${PREFIX}"/bin/qemu-system-x86_64 /tmp/qemu-virtiofs-static/"${PREFIX}"/bin/qemu-virtiofs-system-x86_64
 RUN chmod +x virtiofsd && mv virtiofsd /tmp/qemu-virtiofs-static/opt/kata/bin/
-RUN cd /tmp/qemu-virtiofs-static && tar -czvf kata-qemu-static.tar.gz *
+RUN cd /tmp/qemu-virtiofs-static && tar -czvf "${QEMU_TARBALL}"  *
