@@ -225,6 +225,9 @@ func (s *Sandbox) Logger() *logrus.Entry {
 
 // Annotations returns any annotation that a user could have stored through the sandbox.
 func (s *Sandbox) Annotations(key string) (string, error) {
+	s.annotationsLock.RLock()
+	defer s.annotationsLock.RUnlock()
+
 	value, exist := s.config.Annotations[key]
 	if !exist {
 		return "", fmt.Errorf("Annotations key %s does not exist", key)
