@@ -334,6 +334,48 @@ func TestCreateSandboxFail(t *testing.T) {
 	assert.True(vcmock.IsMockError(err))
 }
 
+func TestCheckForFips(t *testing.T) {
+	assert := assert.New(t)
+
+	path, err := ioutil.TempDir("", "")
+	assert.NoError(err)
+	defer os.RemoveAll(path)
+
+	val := procFIPS
+	procFIPS = filepath.Join(path, "fips-enabled")
+	defer func() {
+		procFIPS = val
+	}()
+
+	err = ioutil.WriteFile(procFIPS, []byte("1"), 0644)
+	assert.NoError(err)
+
+	hconfig := vc.HypervisorConfig{
+		KernelParams: []vc.Param{
+			{Key: "init", Value: "/sys/init"},
+		},
+	}
+	config := vc.SandboxConfig{
+		HypervisorConfig: hconfig,
+	}
+	assert.NoError(checkForFIPS(&config))
+
+	params := config.HypervisorConfig.KernelParams
+	assert.Equal(len(params), 2)
+	assert.Equal(params[1].Key, "fips")
+	assert.Equal(params[1].Value, "1")
+
+	config.HypervisorConfig = hconfig
+	err = ioutil.WriteFile(procFIPS, []byte("unexpected contents"), 0644)
+	assert.NoError(err)
+	assert.NoError(checkForFIPS(&config))
+	assert.Equal(config.HypervisorConfig, hconfig)
+
+	assert.NoError(os.Remove(procFIPS))
+	assert.NoError(checkForFIPS(&config))
+	assert.Equal(config.HypervisorConfig, hconfig)
+}
+
 func TestCreateContainerContainerConfigFail(t *testing.T) {
 	assert := assert.New(t)
 

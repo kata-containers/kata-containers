@@ -212,9 +212,10 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # Default false
 #hotplug_vfio_on_root_bus = true
 
-# If host doesn't support vhost_net, set to true. Thus we won't create vhost fds for nics.
-# Default false
+# If vhost-net backend for virtio-net is not desired, set to true. Default is false, which trades off
+# security (vhost-net runs ring0) for network I/O performance. 
 #disable_vhost_net = true
+
 #
 # Default entropy source.
 # The path to a host source of entropy (including a real hardware RNG)

@@ -42,6 +42,9 @@ const (
 	// AcrnHypervisor is the ACRN hypervisor.
 	AcrnHypervisor HypervisorType = "acrn"
 
+	// ClhHypervisor is the ICH hypervisor.
+	ClhHypervisor HypervisorType = "clh"
+
 	// MockHypervisor is a mock hypervisor for testing purposes
 	MockHypervisor HypervisorType = "mock"
 )
@@ -152,6 +155,9 @@ func (hType *HypervisorType) Set(value string) error {
 	case "acrn":
 		*hType = AcrnHypervisor
 		return nil
+	case "clh":
+		*hType = ClhHypervisor
+		return nil
 	case "mock":
 		*hType = MockHypervisor
 		return nil
@@ -169,6 +175,8 @@ func (hType *HypervisorType) String() string {
 		return string(FirecrackerHypervisor)
 	case AcrnHypervisor:
 		return string(AcrnHypervisor)
+	case ClhHypervisor:
+		return string(ClhHypervisor)
 	case MockHypervisor:
 		return string(MockHypervisor)
 	default:
@@ -185,6 +193,8 @@ func newHypervisor(hType HypervisorType) (hypervisor, error) {
 		return &firecracker{}, nil
 	case AcrnHypervisor:
 		return &Acrn{}, nil
+	case ClhHypervisor:
+		return &cloudHypervisor{}, nil
 	case MockHypervisor:
 		return &mockHypervisor{}, nil
 	default:
@@ -716,7 +726,7 @@ func generateVMSocket(id string, useVsock bool) (interface{}, error) {
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
 type hypervisor interface {
-	createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, store *store.VCStore) error
+	createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, store *store.VCStore, stateful bool) error
 	startSandbox(timeout int) error
 	stopSandbox() error
 	pauseSandbox() error

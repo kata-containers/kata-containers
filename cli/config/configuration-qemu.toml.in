@@ -213,9 +213,10 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # Default false
 #hotplug_vfio_on_root_bus = true
 
-# If host doesn't support vhost_net, set to true. Thus we won't create vhost fds for nics.
-# Default false
+# If vhost-net backend for virtio-net is not desired, set to true. Default is false, which trades off
+# security (vhost-net runs ring0) for network I/O performance. 
 #disable_vhost_net = true
+
 #
 # Default entropy source.
 # The path to a host source of entropy (including a real hardware RNG)
@@ -379,12 +380,6 @@ path = "@NETMONPATH@"
 # the container network interface
 # Options:
 #
-#   - bridged (Deprecated)
-#     Uses a linux bridge to interconnect the container interface to
-#     the VM. Works for most cases except macvlan and ipvlan.
-#     ***NOTE: This feature has been deprecated with plans to remove this
-#     feature in the future. Please use other network models listed below.
-#
 #   - macvtap
 #     Used when the Container network interface can be bridged using
 #     macvtap.
@@ -413,7 +408,7 @@ disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
 # If enabled, the runtime will not create a network namespace for shim and hypervisor processes.
 # This option may have some potential impacts to your host. It should only be used when you know what you're doing.
 # `disable_new_netns` conflicts with `enable_netmon`
-# `disable_new_netns` conflicts with `internetworking_model=bridged` and `internetworking_model=macvtap`. It works only
+# `disable_new_netns` conflicts with `internetworking_model=tcfilter` and `internetworking_model=macvtap`. It works only
 # with `internetworking_model=none`. The tap device will be in the host network namespace and can connect to a bridge
 # (like OVS) directly.
 # If you are using docker, `disable_new_netns` only works with `docker run --net=none`

@@ -348,7 +348,7 @@ func (a *Acrn) createDummyVirtioBlkDev(devices []Device) ([]Device, error) {
 }
 
 // createSandbox is the Hypervisor sandbox creation.
-func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, store *store.VCStore) error {
+func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, store *store.VCStore, stateful bool) error {
 	// Save the tracing context
 	a.ctx = ctx
 

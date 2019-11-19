@@ -24,12 +24,14 @@ type DescribeInstanceReader struct {
 // ReadResponse reads a server response into the received o.
 func (o *DescribeInstanceReader) ReadResponse(response runtime.ClientResponse, consumer runtime.Consumer) (interface{}, error) {
 	switch response.Code() {
+
 	case 200:
 		result := NewDescribeInstanceOK()
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
 			return nil, err
 		}
 		return result, nil
+
 	default:
 		result := NewDescribeInstanceDefault(response.Code())
 		if err := result.readResponse(response, consumer, o.formats); err != nil {
@@ -57,10 +59,6 @@ type DescribeInstanceOK struct {
 
 func (o *DescribeInstanceOK) Error() string {
 	return fmt.Sprintf("[GET /][%d] describeInstanceOK  %+v", 200, o.Payload)
-}
-
-func (o *DescribeInstanceOK) GetPayload() *models.InstanceInfo {
-	return o.Payload
 }
 
 func (o *DescribeInstanceOK) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {
@@ -99,10 +97,6 @@ func (o *DescribeInstanceDefault) Code() int {
 
 func (o *DescribeInstanceDefault) Error() string {
 	return fmt.Sprintf("[GET /][%d] describeInstance default  %+v", o._statusCode, o.Payload)
-}
-
-func (o *DescribeInstanceDefault) GetPayload() *models.Error {
-	return o.Payload
 }
 
 func (o *DescribeInstanceDefault) readResponse(response runtime.ClientResponse, consumer runtime.Consumer, formats strfmt.Registry) error {

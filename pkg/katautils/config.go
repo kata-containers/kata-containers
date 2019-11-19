@@ -49,6 +49,7 @@ var (
 const (
 	// supported hypervisor component types
 	firecrackerHypervisorTableType = "firecracker"
+	clhHypervisorTableType         = "clh"
 	qemuHypervisorTableType        = "qemu"
 	acrnHypervisorTableType        = "acrn"
 
@@ -533,6 +534,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableNestingChecks:  h.DisableNestingChecks,
 		BlockDeviceDriver:     blockDriver,
 		EnableIOThreads:       h.EnableIOThreads,
+		DisableVhostNet:       true, // vhost-net backend is not supported in Firecracker
 		UseVSock:              true,
 		GuestHookPath:         h.guestHookPath(),
 	}, nil
@@ -700,6 +702,92 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}, nil
 }
 
+func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
+	hypervisor, err := h.path()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	kernel, err := h.kernel()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	initrd, image, err := h.getInitrdAndImage()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	if initrd != "" {
+		return vc.HypervisorConfig{},
+			errors.New("having an initrd defined in the configuration file is not supported")
+	}
+
+	if image == "" {
+		return vc.HypervisorConfig{},
+			errors.New("image must be defined in the configuration file")
+	}
+
+	firmware, err := h.firmware()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	machineAccelerators := h.machineAccelerators()
+	kernelParams := h.kernelParams()
+	machineType := h.machineType()
+
+	blockDriver, err := h.blockDeviceDriver()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	sharedFS := config.VirtioFS
+
+	if h.VirtioFSDaemon == "" {
+		return vc.HypervisorConfig{},
+			errors.New("virtio-fs daemon path is missing in configuration file")
+	}
+
+	return vc.HypervisorConfig{
+		HypervisorPath:          hypervisor,
+		KernelPath:              kernel,
+		InitrdPath:              initrd,
+		ImagePath:               image,
+		FirmwarePath:            firmware,
+		MachineAccelerators:     machineAccelerators,
+		KernelParams:            vc.DeserializeParams(strings.Fields(kernelParams)),
+		HypervisorMachineType:   machineType,
+		NumVCPUs:                h.defaultVCPUs(),
+		DefaultMaxVCPUs:         h.defaultMaxVCPUs(),
+		MemorySize:              h.defaultMemSz(),
+		MemSlots:                h.defaultMemSlots(),
+		MemOffset:               h.defaultMemOffset(),
+		EntropySource:           h.GetEntropySource(),
+		DefaultBridges:          h.defaultBridges(),
+		DisableBlockDeviceUse:   h.DisableBlockDeviceUse,
+		SharedFS:                sharedFS,
+		VirtioFSDaemon:          h.VirtioFSDaemon,
+		VirtioFSCacheSize:       h.VirtioFSCacheSize,
+		VirtioFSCache:           h.VirtioFSCache,
+		MemPrealloc:             h.MemPrealloc,
+		HugePages:               h.HugePages,
+		FileBackedMemRootDir:    h.FileBackedMemRootDir,
+		Mlock:                   !h.Swap,
+		Debug:                   h.Debug,
+		DisableNestingChecks:    h.DisableNestingChecks,
+		BlockDeviceDriver:       blockDriver,
+		BlockDeviceCacheSet:     h.BlockDeviceCacheSet,
+		BlockDeviceCacheDirect:  h.BlockDeviceCacheDirect,
+		BlockDeviceCacheNoflush: h.BlockDeviceCacheNoflush,
+		EnableIOThreads:         h.EnableIOThreads,
+		Msize9p:                 h.msize9p(),
+		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
+		DisableVhostNet:         true,
+		UseVSock:                true,
+	}, nil
+}
+
 func newFactoryConfig(f factory) (oci.FactoryConfig, error) {
 	if f.TemplatePath == "" {
 		f.TemplatePath = defaultTemplatePath
@@ -743,6 +831,9 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 		case acrnHypervisorTableType:
 			config.HypervisorType = vc.AcrnHypervisor
 			hConfig, err = newAcrnHypervisorConfig(hypervisor)
+		case clhHypervisorTableType:
+			config.HypervisorType = vc.ClhHypervisor
+			hConfig, err = newClhHypervisorConfig(hypervisor)
 		}
 
 		if err != nil {
