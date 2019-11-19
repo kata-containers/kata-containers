@@ -533,8 +533,8 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir s
 // It also updates the container mount list with the HostPath info, and store
 // container mounts to the storage. This way, we will have the HostPath info
 // available when we will need to unmount those mounts.
-func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) ([]Mount, []Mount, error) {
-	var sharedDirMounts []Mount
+func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (map[string]Mount, []Mount, error) {
+	sharedDirMounts := make(map[string]Mount)
 	var ignoredMounts []Mount
 	for idx, m := range c.mounts {
 		// Skip mounting certain system paths from the source on the host side
@@ -607,7 +607,7 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 			ReadOnly:    readonly,
 		}
 
-		sharedDirMounts = append(sharedDirMounts, sharedDirMount)
+		sharedDirMounts[sharedDirMount.Destination] = sharedDirMount
 	}
 
 	if !c.sandbox.supportNewStore() {
