@@ -916,7 +916,7 @@ func (c *Container) create() (err error) {
 	}
 	c.process = *process
 
-	if !c.sandbox.config.SandboxCgroupOnly || !rootless.IsRootless() {
+	if !rootless.IsRootless() && !c.sandbox.config.SandboxCgroupOnly {
 		if err = c.cgroupsCreate(); err != nil {
 			return
 		}

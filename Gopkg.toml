@@ -78,6 +78,10 @@
   branch = "master"
   name = "github.com/hashicorp/yamux"
 
+[[constraint]]
+  revision = "0650fd9eeb50bab4fc99dceb9f2e14cf58f36e7f"
+  name = "github.com/containerd/console"
+
 [prune]
   non-go = true
   go-tests = true
