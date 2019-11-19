@@ -167,6 +167,19 @@ install_firecracker() {
 	popd
 }
 
+# Install static cloud-hypervisor asset
+install_clh() {
+	info "build static cloud-hypervisor"
+	"${script_dir}/../static-build/cloud-hypervisor/build-static-clh.sh"
+	info "Install static cloud-hypervisor"
+	mkdir -p "${destdir}/opt/kata/bin/"
+	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor"
+	pushd "${destdir}"
+	# create tarball for github release action
+	tar -czvf ../kata-static-clh.tar.gz *
+	popd
+}
+
 install_docker_config_script() {
 	local docker_config_script_name="kata-configure-docker.sh"
 	local docker_config_script="${script_dir}/../static-build/scripts/${docker_config_script_name}"
@@ -268,6 +281,7 @@ main() {
 	install_kata_components
 	install_experimental_kernel
 	install_kernel
+	install_clh
 	install_qemu
 	install_qemu_virtiofsd
 	install_firecracker
