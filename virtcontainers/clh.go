@@ -508,14 +508,11 @@ func (clh *cloudHypervisor) terminate() (err error) {
 	}
 	clh.Logger().WithField("PID", pid).Info("Stopping Cloud Hypervisor")
 
-	// Check if VM process is running, in case it is not, let's
-	// return from here.
-	if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
-		return nil
-	}
-
 	// Send a SIGTERM to the VM process to try to stop it properly
 	if err = syscall.Kill(pid, syscall.SIGTERM); err != nil {
+		if err == syscall.ESRCH {
+			return nil
+		}
 		return err
 	}
 
