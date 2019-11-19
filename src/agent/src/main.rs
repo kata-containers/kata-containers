@@ -104,7 +104,6 @@ fn main() -> Result<()> {
 
     lazy_static::initialize(&AGENT_CONFIG);
     let agentConfig = AGENT_CONFIG.clone();
-    let mut config = agentConfig.write().unwrap();
 
     if unistd::getpid() == Pid::from_raw(1) {
         // Init a temporary logger used by init agent as init process
@@ -115,8 +114,15 @@ fn main() -> Result<()> {
         init_agent_as_init(&logger)?;
     }
 
-    config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
+    // once parsed cmdline and set the config, release the write lock
+    // as soon as possible in case other thread would get read lock on
+    // it.
+    {
+        let mut config = agentConfig.write().unwrap();
+        config.parse_cmdline(KERNEL_CMDLINE_FILE)?;
+    }
 
+    let config = agentConfig.read().unwrap();
     let writer = io::stdout();
     // Recreate a logger with the log level get from "/proc/cmdline".
     let logger = logging::create_logger(NAME, "agent", config.log_level, writer);
