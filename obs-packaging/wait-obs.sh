@@ -50,14 +50,15 @@ wait_finish_building() {
 			echo "Project ${project} has blocked packages, waiting"
 			continue
 		fi
-		if echo "${out}" | grep 'code="excluded"'; then
-			echo "Project ${project} has excluded packages, waiting"
-			continue
-		fi
 		if echo "${out}" | grep 'state="building"'; then
 			echo "Project ${project} is still building, waiting"
 			continue
 		fi
+		if echo "${out}" | grep 'code="excluded"'; then
+			echo "Project ${project} has excluded packages left, quit waiting"
+			break
+		fi
+
 		echo "No jobs with building status were found"
 		echo "${out}"
 		break
