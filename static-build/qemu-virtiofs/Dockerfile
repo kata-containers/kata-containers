@@ -41,6 +41,7 @@ RUN apt-get install -y \
 RUN cd  .. && git clone "${QEMU_VIRTIOFS_REPO}" qemu-virtiofs
 RUN git checkout "${QEMU_VIRTIOFS_TAG}"
 ADD qemu/patches/virtiofsd/0001-add-time-to-seccomp.patch /root/0001-add-time-to-seccomp.patch
+ADD qemu/patches/virtiofsd/0002-libvhost-user-Fix-the-VHOST_USER_PROTOCOL_F_SLAVE_SE.patch /root/0002-libvhost-user-Fix-the-VHOST_USER_PROTOCOL_F_SLAVE_SE.patch
 RUN patch -p1 < /root/0001-add-time-to-seccomp.patch
 RUN patch -p1 < /root/0002-libvhost-user-Fix-the-VHOST_USER_PROTOCOL_F_SLAVE_SE.patch
 ADD scripts/configure-hypervisor.sh /root/configure-hypervisor.sh
