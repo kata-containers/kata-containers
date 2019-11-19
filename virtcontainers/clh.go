@@ -192,13 +192,6 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		iommu: false,
 	})
 
-	// Add the hybrid vsock device to hypervisor
-	clh.cliBuilder.SetVsock(&CLIVsock{
-		cid:        3,
-		socketPath: clh.socketPath,
-		iommu:      false,
-	})
-
 	// set the initial root/boot disk of hypervisor
 	imagePath, err := clh.config.ImageAssetPath()
 	if err != nil {
@@ -436,7 +429,18 @@ func (clh *cloudHypervisor) addDevice(devInfo interface{}, devType deviceType) e
 			device: v.Name(),
 			mac:    v.HardwareAddr(),
 		})
-
+	case types.HybridVSock:
+		clh.Logger().WithFields(log.Fields{
+			"function": "addDevice",
+			"path":     v.UdsPath,
+			"cid":      v.ContextID,
+			"port":     v.Port,
+		}).Info("Adding HybridVSock")
+		clh.cliBuilder.SetVsock(&CLIVsock{
+			cid:        uint32(v.ContextID),
+			socketPath: v.UdsPath,
+			iommu:      false,
+		})
 	default:
 		clh.Logger().WithField("function", "addDevice").Warnf("Add device of type %v is not supported.", v)
 	}
@@ -544,7 +548,7 @@ func (clh *cloudHypervisor) reset() {
 
 func (clh *cloudHypervisor) generateSocket(id string, useVsock bool) (interface{}, error) {
 	if !useVsock {
-		return nil, fmt.Errorf("Can't generate socket path for cloud-hypervisor: vsocks is disabled")
+		return nil, fmt.Errorf("Can't generate hybrid vsocket for cloud-hypervisor: vsocks is disabled")
 	}
 
 	udsPath, err := clh.vsockSocketPath(id)
@@ -552,11 +556,15 @@ func (clh *cloudHypervisor) generateSocket(id string, useVsock bool) (interface{
 		clh.Logger().Info("Can't generate socket path for cloud-hypervisor")
 		return types.HybridVSock{}, err
 	}
-	clh.Logger().WithField("function", "generateSocket").Infof("Using hybrid vsock %s:%d", udsPath, vSockPort)
+	_, cid, err := utils.FindContextID()
+	if err != nil {
+		return nil, err
+	}
 	clh.socketPath = udsPath
 	return types.HybridVSock{
-		UdsPath: udsPath,
-		Port:    uint32(vSockPort),
+		UdsPath:   udsPath,
+		ContextID: cid,
+		Port:      uint32(vSockPort),
 	}, nil
 }
 
