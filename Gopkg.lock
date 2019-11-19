@@ -89,7 +89,6 @@
   revision = "c4b9ac5c7601384c965b9646fc515884e091ebb9"
 
 [[projects]]
-  branch = "master"
   digest = "1:da4daad2ec1737eec4ebeeed7afedb631711f96bbac0c361a17a4d0369d00c6d"
   name = "github.com/containerd/console"
   packages = ["."]
@@ -707,6 +706,7 @@
     "github.com/BurntSushi/toml",
     "github.com/blang/semver",
     "github.com/containerd/cgroups",
+    "github.com/containerd/console",
     "github.com/containerd/containerd/api/events",
     "github.com/containerd/containerd/api/types",
     "github.com/containerd/containerd/api/types/task",
