@@ -513,15 +513,11 @@ func (a *Acrn) stopSandbox() (err error) {
 
 	pid := a.state.PID
 
-	// Check if VM process is running, in case it is not, let's
-	// return from here.
-	if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
-		a.Logger().Info("acrn VM already stopped")
-		return nil
-	}
-
 	// Send signal to the VM process to try to stop it properly
 	if err = syscall.Kill(pid, syscall.SIGINT); err != nil {
+		if err == syscall.ESRCH {
+			return nil
+		}
 		a.Logger().Info("Sending signal to stop acrn VM failed")
 		return err
 	}
