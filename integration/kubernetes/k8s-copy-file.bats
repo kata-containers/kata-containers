@@ -33,6 +33,23 @@ setup() {
 	kubectl exec $pod_name -- sh -c "cat /tmp/$file_name | grep $content"
 }
 
+@test "Copy from pod to host" {
+	# Create pod
+	kubectl create -f "${pod_config_dir}/pod-env.yaml"
+
+	# Check pod creation
+	kubectl wait --for=condition=Ready pod "$pod_name"
+
+	# Create a file in the pod
+	kubectl exec "$pod_name" -- sh -c "cd /tmp && echo $content > $file_name"
+
+	# Copy file from pod to host
+	kubectl cp "$pod_name":/tmp/"$file_name" "$file_name"
+
+	# Verify content
+	cat "$file_name" | grep "$content"
+}
+
 teardown() {
 	rm -f "$file_name"
 	kubectl delete pod "$pod_name"
