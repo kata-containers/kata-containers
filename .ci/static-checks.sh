@@ -330,7 +330,9 @@ install_yamllint()
 
 	have_yamllint_cmd=$(command -v "$yamllint_cmd" || true)
 
-	[ -z "$have_yamllint_cmd" ] && info "Cannot install $package" && return
+	if [ -z "$have_yamllint_cmd" ]; then
+		info "Cannot install $package" && return
+	fi
 }
 
 # Check the "versions database".
