@@ -22,18 +22,30 @@ echo "Install kata-containers image"
 echo "Install Kata Containers Kernel"
 "${cidir}/install_kata_kernel.sh" "${tag}"
 
-if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
-	echo "Install Firecracker"
-	"${cidir}/install_firecracker.sh"
-else
+install_qemu(){
+	echo "Installing qemu"
 	if [ "$experimental_qemu" == "true" ]; then
 		echo "Install experimental Qemu"
 		"${cidir}/install_qemu_experimental.sh"
 	else
-		echo "Install Qemu"
 		"${cidir}/install_qemu.sh"
 	fi
-fi
+}
+
+case "${KATA_HYPERVISOR}" in
+	"cloud-hypervisor")
+		"${cidir}/install_cloud_hypervisor.sh"
+		;;
+	"firecracker")
+		"${cidir}/install_firecracker.sh"
+		;;
+	"qemu")
+		install_qemu
+		;;
+	*)
+		die "${KATA_HYPERVISOR} not supported for CI install"
+		;;
+esac
 
 echo "Install shim"
 "${cidir}/install_shim.sh" "${tag}"

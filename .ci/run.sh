@@ -31,7 +31,7 @@ case "${CI_JOB}" in
 		"${cidir}/toggle_sandbox_cgroup_only.sh" false
 		sudo rm -f "/etc/kata-containers/configuration.toml"
 		;;
-	"FIRECRACKER" | "NEMU")
+	"FIRECRACKER" | "CLOUD-HYPERVISOR")
 		echo "INFO: Running docker integration tests"
 		sudo -E PATH="$PATH" bash -c "make docker"
 		echo "INFO: Running soak test"
@@ -40,10 +40,8 @@ case "${CI_JOB}" in
 		sudo -E PATH="$PATH" bash -c "make oci"
 		echo "INFO: Running networking tests"
 		sudo -E PATH="$PATH" bash -c "make network"
-		if [ "${CI_JOB}" == "FIRECRACKER" ]; then
-			echo "INFO: Running crio tests"
-			sudo -E PATH="$PATH" bash -c "make crio"
-		fi
+		echo "INFO: Running crio tests"
+		sudo -E PATH="$PATH" bash -c "make crio"
 		;;
 	*)
 		echo "INFO: Running checks"
