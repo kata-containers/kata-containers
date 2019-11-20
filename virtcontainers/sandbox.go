@@ -677,19 +677,7 @@ func unlockSandbox(ctx context.Context, sandboxID, token string) error {
 }
 
 func supportNewStore(ctx context.Context) bool {
-	if exp.Get("newstore") == nil {
-		return false
-	}
-
-	// check if client context enabled "newstore" feature
-	exps := exp.ExpFromContext(ctx)
-	for _, v := range exps {
-		if v == "newstore" {
-			return true
-		}
-	}
-
-	return false
+	return true
 }
 
 // fetchSandbox fetches a sandbox config from a sandbox ID and returns a sandbox.
@@ -811,6 +799,12 @@ func (s *Sandbox) Delete() error {
 	}
 
 	s.agent.cleanup(s)
+
+	if s.supportNewStore() {
+		if err := s.newStore.Destroy(); err != nil {
+			return err
+		}
+	}
 
 	return s.store.Delete()
 }

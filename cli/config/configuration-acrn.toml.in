@@ -231,9 +231,7 @@ sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
 
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
-# They may break compatibility, and are prepared for a big version bump.
+# they may break compatibility, and are prepared for a big version bump.
 # Supported experimental features:
-# 1. "newstore": new persist storage driver which breaks backward compatibility,
-#				expected to move out of experimental in 2.0.0.
 # (default: [])
 experimental=@DEFAULTEXPFEATURES@

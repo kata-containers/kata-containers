@@ -8,6 +8,7 @@ package cache
 import (
 	"context"
 	"io/ioutil"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,10 +35,14 @@ func TestTemplateFactory(t *testing.T) {
 
 	ctx := context.Background()
 
-	var savedStorePath = store.VCStorePrefix
-	store.VCStorePrefix = testDir
+	ConfigStoragePathSaved := store.ConfigStoragePath
+	RunStoragePathSaved := store.RunStoragePath
+	// allow the tests to run without affecting the host system.
+	store.ConfigStoragePath = func() string { return filepath.Join(testDir, store.StoragePathSuffix, "config") }
+	store.RunStoragePath = func() string { return filepath.Join(testDir, store.StoragePathSuffix, "run") }
 	defer func() {
-		store.VCStorePrefix = savedStorePath
+		store.ConfigStoragePath = ConfigStoragePathSaved
+		store.RunStoragePath = RunStoragePathSaved
 	}()
 
 	// New

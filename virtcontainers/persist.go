@@ -444,12 +444,7 @@ func (c *Container) Restore() error {
 }
 
 func (s *Sandbox) supportNewStore() bool {
-	for _, f := range s.config.Experimental {
-		if f == persist.NewStoreFeature && exp.Get("newstore") != nil {
-			return true
-		}
-	}
-	return false
+	return true
 }
 
 func loadSandboxConfig(id string) (*SandboxConfig, error) {
