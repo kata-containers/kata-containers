@@ -3,20 +3,20 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use futures::*;
-use grpcio::{EnvBuilder, Server, ServerBuilder};
-use grpcio::{RpcStatus, RpcStatusCode};
 use std::sync::{Arc, Mutex};
+use ttrpc;
 
 use oci::{LinuxNamespace, Spec};
 use protobuf::{RepeatedField, SingularPtrField};
-use protocols::agent::CopyFileRequest;
 use protocols::agent::{
-    AgentDetails, GuestDetailsResponse, ListProcessesResponse, ReadStreamResponse,
-    WaitProcessResponse, WriteStreamResponse,
+    AgentDetails, CopyFileRequest, GuestDetailsResponse, Interfaces, ListProcessesResponse,
+    ReadStreamResponse, Routes, StatsContainerResponse, WaitProcessResponse, WriteStreamResponse,
 };
 use protocols::empty::Empty;
-use protocols::health::{HealthCheckResponse, HealthCheckResponse_ServingStatus};
+use protocols::health::{
+    HealthCheckResponse, HealthCheckResponse_ServingStatus, VersionCheckResponse,
+};
+use protocols::types::Interface;
 use rustjail;
 use rustjail::container::{BaseContainer, LinuxContainer};
 use rustjail::errors::*;
@@ -66,15 +66,14 @@ macro_rules! sl {
 }
 
 #[derive(Clone)]
-struct agentService {
+pub struct agentService {
     sandbox: Arc<Mutex<Sandbox>>,
     test: u32,
 }
 
 impl agentService {
-    fn do_create_container(&mut self, req: protocols::agent::CreateContainerRequest) -> Result<()> {
+    fn do_create_container(&self, req: protocols::agent::CreateContainerRequest) -> Result<()> {
         let cid = req.container_id.clone();
-        let eid = req.exec_id.clone();
 
         let mut oci_spec = req.OCI.clone();
 
@@ -145,7 +144,7 @@ impl agentService {
             let tp = Process::new(
                 &sl!(),
                 &oci.process.as_ref().unwrap(),
-                eid.as_str(),
+                cid.as_str(),
                 true,
                 pipe_size,
             )?;
@@ -163,7 +162,7 @@ impl agentService {
         Ok(())
     }
 
-    fn do_start_container(&mut self, req: protocols::agent::StartContainerRequest) -> Result<()> {
+    fn do_start_container(&self, req: protocols::agent::StartContainerRequest) -> Result<()> {
         let cid = req.container_id.clone();
 
         let sandbox = self.sandbox.clone();
@@ -181,7 +180,7 @@ impl agentService {
         Ok(())
     }
 
-    fn do_remove_container(&mut self, req: protocols::agent::RemoveContainerRequest) -> Result<()> {
+    fn do_remove_container(&self, req: protocols::agent::RemoveContainerRequest) -> Result<()> {
         let cid = req.container_id.clone();
         let mut cmounts: Vec<String> = vec![];
 
@@ -222,7 +221,7 @@ impl agentService {
         }
 
         // timeout != 0
-        let s = Arc::clone(&self.sandbox);
+        let s = self.sandbox.clone();
         let cid2 = cid.clone();
         let (tx, rx) = mpsc::channel();
 
@@ -249,7 +248,7 @@ impl agentService {
             );
         }
 
-        let s = Arc::clone(&self.sandbox);
+        let s = self.sandbox.clone();
         let mut sandbox = s.lock().unwrap();
 
         // Find the sandbox storage used by this container
@@ -276,13 +275,13 @@ impl agentService {
         Ok(())
     }
 
-    fn do_exec_process(&mut self, req: protocols::agent::ExecProcessRequest) -> Result<()> {
+    fn do_exec_process(&self, req: protocols::agent::ExecProcessRequest) -> Result<()> {
         let cid = req.container_id.clone();
         let exec_id = req.exec_id.clone();
 
         info!(sl!(), "cid: {} eid: {}", cid.clone(), exec_id.clone());
 
-        let s = Arc::clone(&self.sandbox);
+        let s = self.sandbox.clone();
         let mut sandbox = s.lock().unwrap();
 
         // ignore string_user, not sure what it is
@@ -310,10 +309,10 @@ impl agentService {
         Ok(())
     }
 
-    fn do_signal_process(&mut self, req: protocols::agent::SignalProcessRequest) -> Result<()> {
+    fn do_signal_process(&self, req: protocols::agent::SignalProcessRequest) -> Result<()> {
         let cid = req.container_id.clone();
         let eid = req.exec_id.clone();
-        let s = Arc::clone(&self.sandbox);
+        let s = self.sandbox.clone();
         let mut sandbox = s.lock().unwrap();
         let mut init = false;
 
@@ -345,12 +344,12 @@ impl agentService {
     }
 
     fn do_wait_process(
-        &mut self,
+        &self,
         req: protocols::agent::WaitProcessRequest,
     ) -> Result<protocols::agent::WaitProcessResponse> {
         let cid = req.container_id.clone();
         let eid = req.exec_id.clone();
-        let s = Arc::clone(&self.sandbox);
+        let s = self.sandbox.clone();
         let mut resp = WaitProcessResponse::new();
         let pid: pid_t;
         let mut exit_pipe_r: RawFd = -1;
@@ -424,7 +423,7 @@ impl agentService {
     }
 
     fn do_write_stream(
-        &mut self,
+        &self,
         req: protocols::agent::WriteStreamRequest,
     ) -> Result<protocols::agent::WriteStreamResponse> {
         let cid = req.container_id.clone();
@@ -437,7 +436,7 @@ impl agentService {
             "exec-id" => eid.clone()
         );
 
-        let s = Arc::clone(&self.sandbox);
+        let s = self.sandbox.clone();
         let mut sandbox = s.lock().unwrap();
         let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
 
@@ -453,14 +452,6 @@ impl agentService {
         match unistd::write(fd, req.data.as_slice()) {
             Ok(v) => {
                 if v < l {
-                    /*
-                    let f = sink.fail(RpcStatus::new(
-                        RpcStatusCode::InvalidArgument,
-                        Some(format!("write error"))))
-                    .map_err(|_e| error!(sl!(), "write error"));
-                    ctx.spawn(f);
-                    return;
-                    */
                     info!(sl!(), "write {} bytes", v);
                     l = v;
                 }
@@ -482,7 +473,7 @@ impl agentService {
     }
 
     fn do_read_stream(
-        &mut self,
+        &self,
         req: protocols::agent::ReadStreamRequest,
         stdout: bool,
     ) -> Result<protocols::agent::ReadStreamResponse> {
@@ -492,7 +483,7 @@ impl agentService {
         let mut fd: RawFd = -1;
         info!(sl!(), "read stdout for {}/{}", cid.clone(), eid.clone());
         {
-            let s = Arc::clone(&self.sandbox);
+            let s = self.sandbox.clone();
             let mut sandbox = s.lock().unwrap();
 
             let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
@@ -521,150 +512,95 @@ impl agentService {
     }
 }
 
-impl protocols::agent_grpc::AgentService for agentService {
+impl protocols::agent_ttrpc::AgentService for agentService {
     fn create_container(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::CreateContainerRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
-        if let Err(_) = self.do_create_container(req) {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Internal,
-                    Some("fail to create container".to_string()),
-                ))
-                .map_err(|_e| error!(sl!(), "container create fail"));
-            ctx.spawn(f);
-            return;
-        } else {
-            let resp = Empty::new();
-            let f = sink
-                .success(resp)
-                .map_err(move |_e| error!(sl!(), "fail to create container"));
-            ctx.spawn(f);
+    ) -> ttrpc::Result<Empty> {
+        match self.do_create_container(req) {
+            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            ))),
+            Ok(_) => Ok(Empty::new()),
         }
     }
 
     fn start_container(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::StartContainerRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
-        if let Err(_) = self.do_start_container(req) {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Internal,
-                    Some("fail to find container".to_string()),
-                ))
-                .map_err(move |_e| error!(sl!(), "get container fail"));
-            ctx.spawn(f);
-            return;
+    ) -> ttrpc::Result<Empty> {
+        match self.do_start_container(req) {
+            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            ))),
+            Ok(_) => {
+                info!(sl!(), "exec process!\n");
+                Ok(Empty::new())
+            }
         }
-
-        info!(sl!(), "exec process!\n");
-
-        let resp = Empty::new();
-        let f = sink
-            .success(resp)
-            .map_err(move |_e| error!(sl!(), "fail to create container"));
-        ctx.spawn(f);
     }
 
     fn remove_container(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::RemoveContainerRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
-        if let Err(_) = self.do_remove_container(req) {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Internal,
-                    Some(String::from("fail to remove container")),
-                ))
-                .map_err(move |_e| error!(sl!(), "remove container failed"));
-            ctx.spawn(f);
-        } else {
-            let resp = Empty::new();
-            let f = sink
-                .success(resp)
-                .map_err(|_e| error!(sl!(), "cannot destroy container"));
-            ctx.spawn(f);
+    ) -> ttrpc::Result<Empty> {
+        match self.do_remove_container(req) {
+            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            ))),
+            Ok(_) => Ok(Empty::new()),
         }
     }
     fn exec_process(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ExecProcessRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
-        if let Err(e) = self.do_exec_process(req) {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Internal,
-                    Some(format!("{}", e)),
-                ))
-                .map_err(|_e| error!(sl!(), "fail to exec process!"));
-            ctx.spawn(f);
-        } else {
-            let resp = Empty::new();
-            let f = sink
-                .success(resp)
-                .map_err(move |_e| error!(sl!(), "cannot exec process"));
-            ctx.spawn(f);
+    ) -> ttrpc::Result<Empty> {
+        match self.do_exec_process(req) {
+            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            ))),
+            Ok(_) => Ok(Empty::new()),
         }
     }
     fn signal_process(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::SignalProcessRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
-        if let Err(_) = self.do_signal_process(req) {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Internal,
-                    Some(String::from("fail to signal process!")),
-                ))
-                .map_err(|_e| error!(sl!(), "fail to signal process!"));
-            ctx.spawn(f);
-        } else {
-            let resp = Empty::new();
-            let f = sink
-                .success(resp)
-                .map_err(|_e| error!(sl!(), "cannot signal process"));
-            ctx.spawn(f);
+    ) -> ttrpc::Result<Empty> {
+        match self.do_signal_process(req) {
+            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            ))),
+            Ok(_) => Ok(Empty::new()),
         }
     }
     fn wait_process(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::WaitProcessRequest,
-        sink: ::grpcio::UnarySink<protocols::agent::WaitProcessResponse>,
-    ) {
-        if let Ok(resp) = self.do_wait_process(req) {
-            let f = sink
-                .success(resp)
-                .map_err(|_e| error!(sl!(), "cannot wait process"));
-            ctx.spawn(f);
-        } else {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Internal,
-                    Some(String::from("fail to wait process!")),
-                ))
-                .map_err(|_e| error!(sl!(), "fail to wait process!"));
-            ctx.spawn(f);
+    ) -> ttrpc::Result<WaitProcessResponse> {
+        match self.do_wait_process(req) {
+            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            ))),
+            Ok(resp) => Ok(resp),
         }
     }
     fn list_processes(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ListProcessesRequest,
-        sink: ::grpcio::UnarySink<protocols::agent::ListProcessesResponse>,
-    ) {
+    ) -> ttrpc::Result<ListProcessesResponse> {
         let cid = req.container_id.clone();
         let format = req.format.clone();
         let mut args = req.args.clone().into_vec();
@@ -676,14 +612,10 @@ impl protocols::agent_grpc::AgentService for agentService {
         let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
             Some(cr) => cr,
             None => {
-                let f = sink
-                    .fail(RpcStatus::new(
-                        RpcStatusCode::InvalidArgument,
-                        Some(String::from("invalid container id")),
-                    ))
-                    .map_err(|_e| error!(sl!(), "invalid container id!"));
-                ctx.spawn(f);
-                return;
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INVALID_ARGUMENT,
+                    "invalid container id".to_string(),
+                )));
             }
         };
 
@@ -693,21 +625,13 @@ impl protocols::agent_grpc::AgentService for agentService {
             "table" => {}
             "json" => {
                 resp.process_list = serde_json::to_vec(&pids).unwrap();
-                let f = sink
-                    .success(resp)
-                    .map_err(|_e| error!(sl!(), "cannot handle json resp"));
-                ctx.spawn(f);
-                return;
+                return Ok(resp);
             }
             _ => {
-                let f = sink
-                    .fail(RpcStatus::new(
-                        RpcStatusCode::InvalidArgument,
-                        Some(String::from("invalid format")),
-                    ))
-                    .map_err(|_e| error!(sl!(), "invalid format!"));
-                ctx.spawn(f);
-                return;
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INVALID_ARGUMENT,
+                    "invalid format!".to_string(),
+                )));
             }
         }
 
@@ -761,18 +685,13 @@ impl protocols::agent_grpc::AgentService for agentService {
         }
 
         resp.process_list = Vec::from(result);
-
-        let f = sink
-            .success(resp)
-            .map_err(|_e| error!(sl!(), "list processes failed"));
-        ctx.spawn(f);
+        Ok(resp)
     }
     fn update_container(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::UpdateContainerRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
+    ) -> ttrpc::Result<Empty> {
         let cid = req.container_id.clone();
         let res = req.resources;
 
@@ -782,14 +701,10 @@ impl protocols::agent_grpc::AgentService for agentService {
         let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
             Some(cr) => cr,
             None => {
-                let f = sink
-                    .fail(RpcStatus::new(
-                        RpcStatusCode::Internal,
-                        Some("invalid container id".to_string()),
-                    ))
-                    .map_err(|_e| error!(sl!(), "invalid container id!"));
-                ctx.spawn(f);
-                return;
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INTERNAL,
+                    "invalid container id".to_string(),
+                )));
             }
         };
 
@@ -798,33 +713,24 @@ impl protocols::agent_grpc::AgentService for agentService {
         if res.is_some() {
             let ociRes = rustjail::resources_grpc_to_oci(&res.unwrap());
             match ctr.set(ociRes) {
-                Err(_e) => {
-                    let f = sink
-                        .fail(RpcStatus::new(
-                            RpcStatusCode::Internal,
-                            Some("internal error".to_string()),
-                        ))
-                        .map_err(|_e| error!(sl!(), "internal error!"));
-                    ctx.spawn(f);
-                    return;
+                Err(e) => {
+                    return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                        ttrpc::Code::INTERNAL,
+                        e.to_string(),
+                    )));
                 }
 
-                Ok(()) => {}
+                Ok(_) => return Ok(resp),
             }
         }
 
-        let f = sink
-            .success(resp)
-            .map_err(|_e| error!(sl!(), "update container failed!"));
-
-        ctx.spawn(f);
+        Ok(resp)
     }
     fn stats_container(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::StatsContainerRequest,
-        sink: ::grpcio::UnarySink<protocols::agent::StatsContainerResponse>,
-    ) {
+    ) -> ttrpc::Result<StatsContainerResponse> {
         let cid = req.container_id.clone();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -832,123 +738,65 @@ impl protocols::agent_grpc::AgentService for agentService {
         let ctr: &mut LinuxContainer = match sandbox.get_container(cid.as_str()) {
             Some(cr) => cr,
             None => {
-                let f = sink
-                    .fail(RpcStatus::new(
-                        RpcStatusCode::Internal,
-                        Some("invalid container id!".to_string()),
-                    ))
-                    .map_err(|_e| error!(sl!(), "invalid container id!"));
-                ctx.spawn(f);
-                return;
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INTERNAL,
+                    "invalid container id".to_string(),
+                )));
             }
         };
 
-        let resp = match ctr.stats() {
-            Err(_e) => {
-                let f = sink
-                    .fail(RpcStatus::new(
-                        RpcStatusCode::Internal,
-                        Some("internal error!".to_string()),
-                    ))
-                    .map_err(|_e| error!(sl!(), "internal error!"));
-                ctx.spawn(f);
-                return;
-            }
-
-            Ok(r) => r,
-        };
-
-        let f = sink
-            .success(resp)
-            .map_err(|_e| error!(sl!(), "stats containers failed!"));
-        ctx.spawn(f);
-    }
-    fn pause_container(
-        &mut self,
-        _ctx: ::grpcio::RpcContext,
-        _req: protocols::agent::PauseContainerRequest,
-        _sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
-    }
-    fn resume_container(
-        &mut self,
-        _ctx: ::grpcio::RpcContext,
-        _req: protocols::agent::ResumeContainerRequest,
-        _sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
+        match ctr.stats() {
+            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            ))),
+            Ok(resp) => Ok(resp),
+        }
     }
     fn write_stdin(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::WriteStreamRequest,
-        sink: ::grpcio::UnarySink<protocols::agent::WriteStreamResponse>,
-    ) {
-        if let Ok(resp) = self.do_write_stream(req) {
-            let f = sink
-                .success(resp)
-                .map_err(|_e| error!(sl!(), "writestream request failed!"));
-
-            ctx.spawn(f);
-        } else {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::InvalidArgument,
-                    Some(String::from("write stream failed")),
-                ))
-                .map_err(move |_e| error!(sl!(), "write stream failed"));
-            ctx.spawn(f);
+    ) -> ttrpc::Result<WriteStreamResponse> {
+        match self.do_write_stream(req) {
+            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            ))),
+            Ok(resp) => Ok(resp),
         }
     }
     fn read_stdout(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ReadStreamRequest,
-        sink: ::grpcio::UnarySink<protocols::agent::ReadStreamResponse>,
-    ) {
-        if let Ok(resp) = self.do_read_stream(req, true) {
-            let f = sink
-                .success(resp)
-                .map_err(move |_e| error!(sl!(), "read stdout error!"));
-
-            ctx.spawn(f);
-        } else {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Internal,
-                    Some(String::from("failed to read stdout")),
-                ))
-                .map_err(move |_e| error!(sl!(), "read stdout failed"));
-            ctx.spawn(f);
+    ) -> ttrpc::Result<ReadStreamResponse> {
+        match self.do_read_stream(req, true) {
+            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            ))),
+            Ok(resp) => Ok(resp),
         }
     }
     fn read_stderr(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ReadStreamRequest,
-        sink: ::grpcio::UnarySink<protocols::agent::ReadStreamResponse>,
-    ) {
-        if let Ok(resp) = self.do_read_stream(req, false) {
-            let f = sink
-                .success(resp)
-                .map_err(move |_e| error!(sl!(), "read stderr error!"));
-
-            ctx.spawn(f);
-        } else {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Internal,
-                    Some(String::from("failed to read stderr")),
-                ))
-                .map_err(move |_e| error!(sl!(), "read stderr failed"));
-            ctx.spawn(f);
+    ) -> ttrpc::Result<ReadStreamResponse> {
+        match self.do_read_stream(req, false) {
+            Err(e) => Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            ))),
+            Ok(resp) => Ok(resp),
         }
     }
     fn close_stdin(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::CloseStdinRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
+    ) -> ttrpc::Result<Empty> {
         let cid = req.container_id.clone();
         let eid = req.exec_id.clone();
         let s = Arc::clone(&self.sandbox);
@@ -957,14 +805,10 @@ impl protocols::agent_grpc::AgentService for agentService {
         let p = match find_process(&mut sandbox, cid.as_str(), eid.as_str(), false) {
             Ok(v) => v,
             Err(_) => {
-                let f = sink
-                    .fail(RpcStatus::new(
-                        RpcStatusCode::InvalidArgument,
-                        Some(String::from("invalid argument")),
-                    ))
-                    .map_err(|_e| error!(sl!(), "invalid argument"));
-                ctx.spawn(f);
-                return;
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INVALID_ARGUMENT,
+                    "invalid argument".to_string(),
+                )));
             }
         };
 
@@ -978,47 +822,33 @@ impl protocols::agent_grpc::AgentService for agentService {
             p.parent_stdin = None;
         }
 
-        let resp = Empty::new();
-
-        let f = sink
-            .success(resp)
-            .map_err(|_e| error!(sl!(), "close stdin failed"));
-        ctx.spawn(f);
+        Ok(Empty::new())
     }
 
     fn tty_win_resize(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::TtyWinResizeRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
+    ) -> ttrpc::Result<Empty> {
         let cid = req.container_id.clone();
         let eid = req.exec_id.clone();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
         let p = match find_process(&mut sandbox, cid.as_str(), eid.as_str(), false) {
             Ok(v) => v,
-            Err(e) => {
-                let f = sink
-                    .fail(RpcStatus::new(
-                        RpcStatusCode::InvalidArgument,
-                        Some(format!("invalid argument: {}", e)),
-                    ))
-                    .map_err(|_e| error!(sl!(), "invalid argument"));
-                ctx.spawn(f);
-                return;
+            Err(_e) => {
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::UNAVAILABLE,
+                    "cannot find the process".to_string(),
+                )));
             }
         };
 
         if p.term_master.is_none() {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Unavailable,
-                    Some("no tty".to_string()),
-                ))
-                .map_err(|_e| error!(sl!(), "tty resize"));
-            ctx.spawn(f);
-            return;
+            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::UNAVAILABLE,
+                "no tty".to_string(),
+            )));
         }
 
         let fd = p.term_master.unwrap();
@@ -1032,29 +862,20 @@ impl protocols::agent_grpc::AgentService for agentService {
 
             let err = libc::ioctl(fd, TIOCSWINSZ, &win);
             if let Err(_) = Errno::result(err).map(drop) {
-                let f = sink
-                    .fail(RpcStatus::new(
-                        RpcStatusCode::Internal,
-                        Some("ioctl error".to_string()),
-                    ))
-                    .map_err(|_e| error!(sl!(), "ioctl error!"));
-                ctx.spawn(f);
-                return;
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INTERNAL,
+                    "ioctl error".to_string(),
+                )));
             }
         }
 
-        let empty = protocols::empty::Empty::new();
-        let f = sink
-            .success(empty)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-        ctx.spawn(f)
+        Ok(Empty::new())
     }
     fn update_interface(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::UpdateInterfaceRequest,
-        sink: ::grpcio::UnarySink<protocols::types::Interface>,
-    ) {
+    ) -> ttrpc::Result<Interface> {
         let interface = req.interface.clone();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -1068,28 +889,20 @@ impl protocols::agent_grpc::AgentService for agentService {
         let iface = match rtnl.update_interface(interface.as_ref().unwrap()) {
             Ok(v) => v,
             Err(_) => {
-                let f = sink
-                    .fail(RpcStatus::new(
-                        RpcStatusCode::Internal,
-                        Some("update interface".to_string()),
-                    ))
-                    .map_err(|_e| error!(sl!(), "update interface"));
-                ctx.spawn(f);
-                return;
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INTERNAL,
+                    "update interface".to_string(),
+                )));
             }
         };
 
-        let f = sink
-            .success(iface)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-        ctx.spawn(f)
+        Ok(iface)
     }
     fn update_routes(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::UpdateRoutesRequest,
-        sink: ::grpcio::UnarySink<protocols::agent::Routes>,
-    ) {
+    ) -> ttrpc::Result<Routes> {
         let mut routes = protocols::agent::Routes::new();
         let rs = req.routes.clone().unwrap().Routes.into_vec();
 
@@ -1105,14 +918,10 @@ impl protocols::agent_grpc::AgentService for agentService {
         let crs = match rtnl.list_routes() {
             Ok(routes) => routes,
             Err(_) => {
-                let f = sink
-                    .fail(RpcStatus::new(
-                        RpcStatusCode::Internal,
-                        Some("update routes".to_string()),
-                    ))
-                    .map_err(|_e| error!(sl!(), "update routes"));
-                ctx.spawn(f);
-                return;
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INTERNAL,
+                    "update routes".to_string(),
+                )));
             }
         };
         let v = match rtnl.update_routes(rs.as_ref()) {
@@ -1122,18 +931,13 @@ impl protocols::agent_grpc::AgentService for agentService {
 
         routes.set_Routes(RepeatedField::from_vec(v));
 
-        let f = sink
-            .success(routes)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-
-        ctx.spawn(f)
+        Ok(routes)
     }
     fn list_interfaces(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
-        req: protocols::agent::ListInterfacesRequest,
-        sink: ::grpcio::UnarySink<protocols::agent::Interfaces>,
-    ) {
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
+        _req: protocols::agent::ListInterfacesRequest,
+    ) -> ttrpc::Result<Interfaces> {
         let mut interface = protocols::agent::Interfaces::new();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -1146,30 +950,22 @@ impl protocols::agent_grpc::AgentService for agentService {
         let v = match rtnl.list_interfaces() {
             Ok(value) => value,
             Err(_) => {
-                let f = sink
-                    .fail(RpcStatus::new(
-                        RpcStatusCode::Internal,
-                        Some("list interface".to_string()),
-                    ))
-                    .map_err(|_e| error!(sl!(), "list interface"));
-                ctx.spawn(f);
-                return;
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INTERNAL,
+                    "list interface".to_string(),
+                )));
             }
         };
 
         interface.set_Interfaces(RepeatedField::from_vec(v));
 
-        let f = sink
-            .success(interface)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-        ctx.spawn(f)
+        Ok(interface)
     }
     fn list_routes(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
-        req: protocols::agent::ListRoutesRequest,
-        sink: ::grpcio::UnarySink<protocols::agent::Routes>,
-    ) {
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
+        _req: protocols::agent::ListRoutesRequest,
+    ) -> ttrpc::Result<Routes> {
         let mut routes = protocols::agent::Routes::new();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
@@ -1183,58 +979,37 @@ impl protocols::agent_grpc::AgentService for agentService {
         let v = match rtnl.list_routes() {
             Ok(value) => value,
             Err(_) => {
-                let f = sink
-                    .fail(RpcStatus::new(
-                        RpcStatusCode::Internal,
-                        Some("list routes".to_string()),
-                    ))
-                    .map_err(|_e| error!(sl!(), "list routes"));
-                ctx.spawn(f);
-                return;
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INTERNAL,
+                    "list routes".to_string(),
+                )));
             }
         };
 
         routes.set_Routes(RepeatedField::from_vec(v));
 
-        let f = sink
-            .success(routes)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-        ctx.spawn(f)
+        Ok(routes)
     }
     fn start_tracing(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::StartTracingRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
+    ) -> ttrpc::Result<Empty> {
         info!(sl!(), "start_tracing {:?} self.test={}", req, self.test);
-        self.test = 2;
-        let empty = protocols::empty::Empty::new();
-        let f = sink
-            .success(empty)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-        ctx.spawn(f)
+        Ok(Empty::new())
     }
     fn stop_tracing(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
-        req: protocols::agent::StopTracingRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
-        let empty = protocols::empty::Empty::new();
-        let f = sink
-            .success(empty)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-        ctx.spawn(f)
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
+        _req: protocols::agent::StopTracingRequest,
+    ) -> ttrpc::Result<Empty> {
+        Ok(Empty::new())
     }
     fn create_sandbox(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::CreateSandboxRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
-        let mut err = "".to_string();
-
+    ) -> ttrpc::Result<Empty> {
         {
             let sandbox = self.sandbox.clone();
             let mut s = sandbox.lock().unwrap();
@@ -1251,16 +1026,12 @@ impl protocols::agent_grpc::AgentService for agentService {
 
             match s.setup_shared_namespaces() {
                 Ok(_) => (),
-                Err(e) => err = e.to_string(),
-            }
-            if err.len() != 0 {
-                let rpc_status =
-                    grpcio::RpcStatus::new(grpcio::RpcStatusCode::FailedPrecondition, Some(err));
-                let f = sink
-                    .fail(rpc_status)
-                    .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-                ctx.spawn(f);
-                return;
+                Err(e) => {
+                    return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                        ttrpc::Code::INTERNAL,
+                        e.to_string(),
+                    )))
+                }
             }
         }
 
@@ -1270,31 +1041,21 @@ impl protocols::agent_grpc::AgentService for agentService {
                 let mut s = sandbox.lock().unwrap();
                 s.mounts = m
             }
-            Err(e) => err = e.to_string(),
+            Err(e) => {
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INTERNAL,
+                    e.to_string(),
+                )))
+            }
         };
 
-        if err.len() != 0 {
-            let rpc_status =
-                grpcio::RpcStatus::new(grpcio::RpcStatusCode::FailedPrecondition, Some(err));
-            let f = sink
-                .fail(rpc_status)
-                .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-            ctx.spawn(f);
-            return;
-        }
-
-        let empty = protocols::empty::Empty::new();
-        let f = sink
-            .success(empty)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-        ctx.spawn(f)
+        Ok(Empty::new())
     }
     fn destroy_sandbox(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
-        req: protocols::agent::DestroySandboxRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
+        _req: protocols::agent::DestroySandboxRequest,
+    ) -> ttrpc::Result<Empty> {
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
         // destroy all containers, clean up, notify agent to exit
@@ -1304,70 +1065,46 @@ impl protocols::agent_grpc::AgentService for agentService {
         sandbox.sender.as_ref().unwrap().send(1).unwrap();
         sandbox.sender = None;
 
-        let empty = protocols::empty::Empty::new();
-        let f = sink
-            .success(empty)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-        ctx.spawn(f)
+        Ok(Empty::new())
     }
     fn online_cpu_mem(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::OnlineCPUMemRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
+    ) -> ttrpc::Result<Empty> {
         // sleep 5 seconds for debug
         // thread::sleep(Duration::new(5, 0));
         let s = Arc::clone(&self.sandbox);
         let sandbox = s.lock().unwrap();
-        let empty = protocols::empty::Empty::new();
 
-        if let Err(_) = sandbox.online_cpu_memory(&req) {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Internal,
-                    Some("Internal error".to_string()),
-                ))
-                .map_err(|_e| error!(sl!(), "cannot online memory/cpu"));
-            ctx.spawn(f);
-            return;
+        if let Err(e) = sandbox.online_cpu_memory(&req) {
+            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            )));
         }
 
-        let f = sink
-            .success(empty)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-
-        ctx.spawn(f)
+        Ok(Empty::new())
     }
     fn reseed_random_dev(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::ReseedRandomDevRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
-        let empty = protocols::empty::Empty::new();
-        if let Err(_) = random::reseed_rng(req.data.as_slice()) {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Internal,
-                    Some("Internal error".to_string()),
-                ))
-                .map_err(|_e| error!(sl!(), "fail to reseed rng!"));
-            ctx.spawn(f);
-            return;
+    ) -> ttrpc::Result<Empty> {
+        if let Err(e) = random::reseed_rng(req.data.as_slice()) {
+            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            )));
         }
 
-        let f = sink
-            .success(empty)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-        ctx.spawn(f)
+        Ok(Empty::new())
     }
     fn get_guest_details(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::GuestDetailsRequest,
-        sink: ::grpcio::UnarySink<protocols::agent::GuestDetailsResponse>,
-    ) {
+    ) -> ttrpc::Result<GuestDetailsResponse> {
         info!(sl!(), "get guest details!");
         let mut resp = GuestDetailsResponse::new();
         // to get memory block size
@@ -1376,17 +1113,12 @@ impl protocols::agent_grpc::AgentService for agentService {
                 resp.mem_block_size_bytes = u;
                 resp.support_mem_hotplug_probe = v;
             }
-
-            Err(_) => {
+            Err(e) => {
                 info!(sl!(), "fail to get memory info!");
-                let f = sink
-                    .fail(RpcStatus::new(
-                        RpcStatusCode::Internal,
-                        Some(String::from("internal error")),
-                    ))
-                    .map_err(|_e| error!(sl!(), "cannot get memory info!"));
-                ctx.spawn(f);
-                return;
+                return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                    ttrpc::Code::INTERNAL,
+                    e.to_string(),
+                )));
             }
         }
 
@@ -1394,115 +1126,76 @@ impl protocols::agent_grpc::AgentService for agentService {
         let detail = get_agent_details();
         resp.agent_details = SingularPtrField::some(detail);
 
-        let f = sink
-            .success(resp)
-            .map_err(|_e| error!(sl!(), "cannot get guest detail"));
-        ctx.spawn(f);
+        Ok(resp)
     }
     fn mem_hotplug_by_probe(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::MemHotplugByProbeRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
-        let empty = protocols::empty::Empty::new();
-
-        if let Err(_) = do_mem_hotplug_by_probe(&req.memHotplugProbeAddr) {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Internal,
-                    Some("internal error!".to_string()),
-                ))
-                .map_err(|_e| error!(sl!(), "cannont mem hotplug by probe!"));
-            ctx.spawn(f);
-            return;
+    ) -> ttrpc::Result<Empty> {
+        if let Err(e) = do_mem_hotplug_by_probe(&req.memHotplugProbeAddr) {
+            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            )));
         }
 
-        let f = sink
-            .success(empty)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-        ctx.spawn(f)
+        Ok(Empty::new())
     }
     fn set_guest_date_time(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::SetGuestDateTimeRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
-        let empty = protocols::empty::Empty::new();
-        if let Err(_) = do_set_guest_date_time(req.Sec, req.Usec) {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Internal,
-                    Some("internal error!".to_string()),
-                ))
-                .map_err(|_e| error!(sl!(), "cannot set guest time!"));
-            ctx.spawn(f);
-            return;
+    ) -> ttrpc::Result<Empty> {
+        if let Err(e) = do_set_guest_date_time(req.Sec, req.Usec) {
+            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            )));
         }
 
-        let f = sink
-            .success(empty)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-        ctx.spawn(f)
+        Ok(Empty::new())
     }
     fn copy_file(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::agent::CopyFileRequest,
-        sink: ::grpcio::UnarySink<protocols::empty::Empty>,
-    ) {
-        let empty = protocols::empty::Empty::new();
-        if let Err(_) = do_copy_file(&req) {
-            let f = sink
-                .fail(RpcStatus::new(
-                    RpcStatusCode::Internal,
-                    Some("Internal error!".to_string()),
-                ))
-                .map_err(|_e| error!(sl!(), "cannot copy file!"));
-            ctx.spawn(f);
-            return;
+    ) -> ttrpc::Result<Empty> {
+        if let Err(e) = do_copy_file(&req) {
+            return Err(ttrpc::Error::RpcStatus(ttrpc::get_status(
+                ttrpc::Code::INTERNAL,
+                e.to_string(),
+            )));
         }
 
-        let f = sink
-            .success(empty)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-        ctx.spawn(f)
+        Ok(Empty::new())
     }
 }
 
 #[derive(Clone)]
 struct healthService;
-impl protocols::health_grpc::Health for healthService {
+impl protocols::health_ttrpc::Health for healthService {
     fn check(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         _req: protocols::health::CheckRequest,
-        sink: ::grpcio::UnarySink<protocols::health::HealthCheckResponse>,
-    ) {
+    ) -> ttrpc::Result<HealthCheckResponse> {
         let mut resp = HealthCheckResponse::new();
         resp.set_status(HealthCheckResponse_ServingStatus::SERVING);
 
-        let f = sink
-            .success(resp)
-            .map_err(|_e| error!(sl!(), "cannot get health status"));
-
-        ctx.spawn(f);
+        Ok(resp)
     }
     fn version(
-        &mut self,
-        ctx: ::grpcio::RpcContext,
+        &self,
+        _ctx: &ttrpc::TtrpcContext,
         req: protocols::health::CheckRequest,
-        sink: ::grpcio::UnarySink<protocols::health::VersionCheckResponse>,
-    ) {
+    ) -> ttrpc::Result<VersionCheckResponse> {
         info!(sl!(), "version {:?}", req);
         let mut rep = protocols::health::VersionCheckResponse::new();
         rep.agent_version = AGENT_VERSION.to_string();
         rep.grpc_version = API_VERSION.to_string();
-        let f = sink
-            .success(rep)
-            .map_err(move |e| error!(sl!(), "failed to reply {:?}: {:?}", req, e));
-        ctx.spawn(f)
+
+        Ok(rep)
     }
 }
 
@@ -1628,34 +1321,33 @@ fn find_process<'a>(
     Ok(p)
 }
 
-pub fn start<S: Into<String>>(sandbox: Arc<Mutex<Sandbox>>, host: S, port: u16) -> Server {
-    let env = Arc::new(
-        EnvBuilder::new()
-            .cq_count(1)
-            .wait_thread_count_default(5)
-            .wait_thread_count_min(1)
-            .wait_thread_count_max(10)
-            .build(),
-    );
-    let worker = agentService {
-        sandbox: sandbox,
+pub fn start<S: Into<String>>(s: Arc<Mutex<Sandbox>>, host: S, port: u16) -> ttrpc::Server {
+    let agent_service = Box::new(agentService {
+        sandbox: s,
         test: 1,
-    };
-    let service = protocols::agent_grpc::create_agent_service(worker);
-    let hservice = protocols::health_grpc::create_health(healthService);
-    let mut server = ServerBuilder::new(env)
-        .register_service(service)
-        .register_service(hservice)
-        .requests_slot_per_cq(1024)
-        .bind(host, port)
-        .build()
-        .unwrap();
-    server.start();
-    info!(sl!(), "gRPC server started");
-    for &(ref host, port) in server.bind_addrs() {
-        info!(sl!(), "listening"; "host" => host,
-        "port" => port);
-    }
+    }) as Box<dyn protocols::agent_ttrpc::AgentService + Send + Sync>;
+
+    let agent_worker = Arc::new(agent_service);
+
+    let health_service =
+        Box::new(healthService {}) as Box<dyn protocols::health_ttrpc::Health + Send + Sync>;
+    let health_worker = Arc::new(health_service);
+
+    let aservice = protocols::agent_ttrpc::create_agent_service(agent_worker);
+
+    let hservice = protocols::health_ttrpc::create_health(health_worker);
+
+    let mut addr: String = host.into();
+    addr.push_str(":");
+    addr.push_str(&port.to_string());
+
+    let server = ttrpc::Server::new()
+        .bind(addr.as_str())
+        .unwrap()
+        .register_service(aservice)
+        .register_service(hservice);
+
+    info!(sl!(), "ttRPC server started");
 
     server
 }
