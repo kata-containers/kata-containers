@@ -25,9 +25,6 @@ echo "Install Kata Containers Kernel"
 if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
 	echo "Install Firecracker"
 	"${cidir}/install_firecracker.sh"
-elif [ "$KATA_HYPERVISOR" == "nemu" ]; then
-	echo "Install Nemu"
-	"${cidir}/install_nemu.sh"
 else
 	if [ "$experimental_qemu" == "true" ]; then
 		echo "Install experimental Qemu"
