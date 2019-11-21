@@ -139,10 +139,10 @@ func (fs *FS) ToDisk(ss persistapi.SandboxState, cs map[string]persistapi.Contai
 			return err
 		}
 
+		defer cf.Close()
 		if err := json.NewEncoder(cf).Encode(cstate); err != nil {
 			return err
 		}
-		cf.Close()
 	}
 
 	return nil
