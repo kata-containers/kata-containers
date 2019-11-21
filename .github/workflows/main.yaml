@@ -184,6 +184,33 @@ jobs:
           name: kata-artifacts
           path: kata-static-firecracker.tar.gz
 
+  # Job for building cloud-hypervisor
+  build-clh:
+    runs-on: ubuntu-16.04
+    needs: get-artifact-list
+    env:
+      buildstr: "install_clh"
+    steps:
+      - uses: actions/checkout@v1
+      - name: get-artifact-list
+        uses: actions/download-artifact@master
+        with:
+          name: artifact-list
+      - name: build-clh
+        run: |
+         if grep -q $buildstr ./artifact-list/artifact-list.txt; then
+           $GITHUB_WORKSPACE/.github/workflows/generate-artifact-tarball.sh $buildstr
+           echo ::set-env name=artifact-built::true
+         else
+           echo ::set-env name=artifact-built::false
+         fi
+      - name: store-artifacts
+        if: env.artifact-built == 'true'
+        uses: actions/upload-artifact@master
+        with:
+          name: kata-artifacts
+          path: kata-static-clh.tar.gz
+
   # Job for building kata components
   build-kata-components:
     runs-on: ubuntu-16.04
