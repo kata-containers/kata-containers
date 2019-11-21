@@ -41,11 +41,6 @@ MAX_CONTAINERS="${MAX_CONTAINERS:-110}"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
-if [ "$ID" == "debian" ]; then
-	echo "Skip soak test on ${ID} (see: https://github.com/kata-containers/runtime/issues/1132)"
-	exit
-fi
-
 check_vsock_active() {
 	vsock_configured=$($RUNTIME_PATH kata-env | awk '/UseVSock/ {print $3}')
 	vsock_supported=$($RUNTIME_PATH kata-env | awk '/SupportVSock/ {print $3}')
