@@ -201,11 +201,11 @@ func (fs *FS) FromDisk(sid string) (persistapi.SandboxState, map[string]persista
 			return ss, nil, err
 		}
 
+		defer cf.Close()
 		var cstate persistapi.ContainerState
 		if err := json.NewDecoder(cf).Decode(&cstate); err != nil {
 			return ss, nil, err
 		}
-		cf.Close()
 
 		fs.containerState[cid] = cstate
 	}
