@@ -1523,13 +1523,21 @@ func (s *Sandbox) Start() error {
 		return err
 	}
 
+	prevState := s.state.State
+
 	if err := s.setSandboxState(types.StateRunning); err != nil {
 		return err
 	}
 
+	var startErr error
+	defer func() {
+		if startErr != nil {
+			s.setSandboxState(prevState)
+		}
+	}()
 	for _, c := range s.containers {
-		if err := c.start(); err != nil {
-			return err
+		if startErr = c.start(); startErr != nil {
+			return startErr
 		}
 	}
 
