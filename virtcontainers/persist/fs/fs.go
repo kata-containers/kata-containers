@@ -126,12 +126,22 @@ func (fs *FS) ToDisk(ss persistapi.SandboxState, cs map[string]persistapi.Contai
 		return err
 	}
 
+	var dirCreationErr error
+	var createdDirs []string
+	defer func() {
+		if dirCreationErr != nil && len(createdDirs) > 0 {
+			for _, dir := range createdDirs {
+				os.RemoveAll(dir)
+			}
+		}
+	}()
 	// persist container configuration data
 	for cid, cstate := range fs.containerState {
 		cdir := filepath.Join(sandboxDir, cid)
-		if err := os.MkdirAll(cdir, dirMode); err != nil {
-			return err
+		if dirCreationErr = os.MkdirAll(cdir, dirMode); dirCreationErr != nil {
+			return dirCreationErr
 		}
+		createdDirs = append(createdDirs, cdir)
 
 		cfile := filepath.Join(cdir, persistFile)
 		cf, err := os.OpenFile(cfile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileMode)
