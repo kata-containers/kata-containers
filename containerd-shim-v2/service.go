@@ -65,6 +65,10 @@ func New(ctx context.Context, id string, publisher events.Publisher) (cdshim.Shi
 	// it will output into stdio, from which containerd would like
 	// to get the shim's socket address.
 	logrus.SetOutput(ioutil.Discard)
+	opts := ctx.Value(cdshim.OptsKey{}).(cdshim.Opts)
+	if !opts.Debug {
+		logrus.SetLevel(logrus.WarnLevel)
+	}
 	vci.SetLogger(ctx, logger)
 	katautils.SetLogger(ctx, logger, logger.Logger.Level)
 
@@ -141,7 +145,10 @@ func newCommand(ctx context.Context, containerdBinary, id, containerdAddress str
 		"-address", containerdAddress,
 		"-publish-binary", containerdBinary,
 		"-id", id,
-		"-debug",
+	}
+	opts := ctx.Value(cdshim.OptsKey{}).(cdshim.Opts)
+	if opts.Debug {
+		args = append(args, "-debug")
 	}
 	cmd := sysexec.Command(self, args...)
 	cmd.Dir = cwd
