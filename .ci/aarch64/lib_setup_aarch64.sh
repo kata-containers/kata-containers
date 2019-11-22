@@ -18,6 +18,12 @@ check_test_union()
 	echo "false"
 }
 
-CRIO=$(check_test_union crio)
 KUBERNETES=$(check_test_union kubernetes)
+# if we do k8s integration test, CRI-O is the default CRI runtime
+# we have specific env `CRI_CONTAINERD_K8S` for k8s running with containerd-cri.
+if [ "$KUBERNETES" == "true" ]; then
+	CRIO="true"
+else
+	CRIO="false"
+fi
 OPENSHIFT=$(check_test_union openshift)
