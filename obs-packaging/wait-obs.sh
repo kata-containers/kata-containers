@@ -50,6 +50,10 @@ wait_finish_building() {
 			echo "Project ${project} has blocked packages, waiting"
 			continue
 		fi
+		if echo "${out}" | grep 'code="unresolvable"'; then
+			echo "Project ${project} has unresolvable packages"
+			exit 1
+		fi
 		if echo "${out}" | grep 'state="building"'; then
 			echo "Project ${project} is still building, waiting"
 			continue
