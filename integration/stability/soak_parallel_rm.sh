@@ -33,7 +33,7 @@ RUNTIME_PATH=$(command -v $RUNTIME)
 # The place where virtcontainers keeps its active pod info
 # This is ultimately what 'kata-runtime list' uses to get its info, but
 # we can also check it for sanity directly
-VC_POD_DIR="${VC_POD_DIR:-/var/lib/vc/sbs}"
+VC_POD_DIR="${VC_POD_DIR:-/run/vc/sbs}"
 
 # let's cap the test. If you want to run until you hit the memory limit
 # then just set this to a very large number

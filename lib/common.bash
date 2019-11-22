@@ -8,7 +8,7 @@
 # are being used by our metrics and integration tests
 
 # Place where virtcontainers keeps its active pod info
-VC_POD_DIR="${VC_POD_DIR:-/var/lib/vc/sbs}"
+VC_POD_DIR="${VC_POD_DIR:-/run/vc/sbs}"
 
 # Sandbox runtime directory
 RUN_SBS_DIR="${RUN_SBS_DIR:-/run/vc/sbs}"
