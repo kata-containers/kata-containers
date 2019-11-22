@@ -187,8 +187,9 @@ func (s *VSock) String() string {
 // This kind of socket is not supported in all hypervisors.
 // Firecracker supports it.
 type HybridVSock struct {
-	UdsPath string
-	Port    uint32
+	UdsPath   string
+	ContextID uint64
+	Port      uint32
 }
 
 func (s *HybridVSock) String() string {
