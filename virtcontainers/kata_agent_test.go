@@ -728,7 +728,7 @@ func TestAgentCreateContainer(t *testing.T) {
 			Fstype: "xfs",
 		},
 		config: &ContainerConfig{
-			Spec:        &specs.Spec{},
+			CustomSpec:  &specs.Spec{},
 			Annotations: map[string]string{},
 		},
 	}

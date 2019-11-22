@@ -252,7 +252,7 @@ type ContainerConfig struct {
 	Resources specs.LinuxResources
 
 	// Raw OCI specification, it won't be saved to disk.
-	Spec *specs.Spec `json:"-"`
+	CustomSpec *specs.Spec `json:"-"`
 }
 
 // valid checks that the container configuration is valid.
@@ -406,9 +406,17 @@ func (c *Container) GetAnnotations() map[string]string {
 	return c.config.Annotations
 }
 
-// GetOCISpec returns container's OCI specification
-func (c *Container) GetOCISpec() *specs.Spec {
-	return c.config.Spec
+// GetPatchedOCISpec returns container's OCI specification
+// This OCI specification was patched when the sandbox was created
+// by containerCapabilities(), SetEphemeralStorageType() and others
+// in order to support:
+// * capabilities
+// * Ephemeral storage
+// * k8s empty dir
+// If you need the original (vanilla) OCI spec,
+// use compatoci.GetContainerSpec() instead.
+func (c *Container) GetPatchedOCISpec() *specs.Spec {
+	return c.config.CustomSpec
 }
 
 // storeContainer stores a container config.
@@ -1469,7 +1477,7 @@ func (c *Container) detachDevices() error {
 
 // cgroupsCreate creates cgroups on the host for the associated container
 func (c *Container) cgroupsCreate() (err error) {
-	spec := c.GetOCISpec()
+	spec := c.GetPatchedOCISpec()
 	if spec == nil {
 		return errorMissingOCISpec
 	}

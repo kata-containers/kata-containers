@@ -649,7 +649,7 @@ func TestContainerStateSetFstype(t *testing.T) {
 		{
 			ID:          "100",
 			Annotations: containerAnnotations,
-			Spec:        newEmptySpec(),
+			CustomSpec:  newEmptySpec(),
 		},
 	}
 
@@ -1524,7 +1524,7 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 	sandboxContainer.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
 
 	emptyJSONLinux := ContainerConfig{
-		Spec: newEmptySpec(),
+		CustomSpec: newEmptySpec(),
 	}
 	emptyJSONLinux.Annotations = make(map[string]string)
 	emptyJSONLinux.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
@@ -1532,7 +1532,7 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 	cloneSpec1 := newEmptySpec()
 	cloneSpec1.Linux.CgroupsPath = "/myRuntime/myContainer"
 	successfulContainer := ContainerConfig{
-		Spec: cloneSpec1,
+		CustomSpec: cloneSpec1,
 	}
 	successfulContainer.Annotations = make(map[string]string)
 	successfulContainer.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
