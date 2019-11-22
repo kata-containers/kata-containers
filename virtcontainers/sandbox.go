@@ -1961,6 +1961,12 @@ func (s *Sandbox) updateResources() error {
 func (s *Sandbox) calculateSandboxMemory() int64 {
 	memorySandbox := int64(0)
 	for _, c := range s.config.Containers {
+		// Do not hot add again non-running containers resources
+		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
+			s.Logger().WithField("container-id", c.ID).Debug("Do not taking into account memory resources of not running containers")
+			continue
+		}
+
 		if m := c.Resources.Memory; m != nil && m.Limit != nil {
 			memorySandbox += *m.Limit
 		}
@@ -1972,6 +1978,12 @@ func (s *Sandbox) calculateSandboxCPUs() uint32 {
 	mCPU := uint32(0)
 
 	for _, c := range s.config.Containers {
+		// Do not hot add again non-running containers resources
+		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
+			s.Logger().WithField("container-id", c.ID).Debug("Do not taking into account CPU resources of not running containers")
+			continue
+		}
+
 		if cpu := c.Resources.CPU; cpu != nil {
 			if cpu.Period != nil && cpu.Quota != nil {
 				mCPU += utils.CalculateMilliCPUs(*cpu.Quota, *cpu.Period)
