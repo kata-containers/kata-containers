@@ -861,7 +861,10 @@ func ContainerConfig(ocispec specs.Spec, bundlePath, cid, console string, detach
 		Mounts:      containerMounts(ocispec),
 		DeviceInfos: deviceInfos,
 		Resources:   *ocispec.Linux.Resources,
-		Spec:        &ocispec,
+
+		// This is a custom OCI spec modified at SetEphemeralStorageType()
+		// to support ephemeral storage and k8s empty dir.
+		CustomSpec: &ocispec,
 	}
 
 	cType, err := ContainerType(ocispec)

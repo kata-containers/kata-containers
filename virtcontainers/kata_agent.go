@@ -746,7 +746,7 @@ func (k *kataAgent) setProxyFromGrpc(proxy proxy, pid int, url string) {
 }
 
 func (k *kataAgent) getDNS(sandbox *Sandbox) ([]string, error) {
-	ociSpec := sandbox.GetOCISpec()
+	ociSpec := sandbox.GetPatchedOCISpec()
 	if ociSpec == nil {
 		k.Logger().Debug("Sandbox OCI spec not found. Sandbox DNS will not be set.")
 		return nil, nil
@@ -1283,7 +1283,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 		ctrStorages = append(ctrStorages, rootfs)
 	}
 
-	ociSpec := c.GetOCISpec()
+	ociSpec := c.GetPatchedOCISpec()
 	if ociSpec == nil {
 		return nil, errorMissingOCISpec
 	}
