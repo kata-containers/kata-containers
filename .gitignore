@@ -4,6 +4,7 @@
 .git-commit
 .git-commit.tmp
 /cli/config/configuration-acrn.toml
+/cli/config/configuration-clh.toml
 /cli/config/configuration-fc.toml
 /cli/config/configuration-nemu.toml
 /cli/config/configuration-qemu.toml
