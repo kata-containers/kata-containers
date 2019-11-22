@@ -589,42 +589,40 @@ func StatusContainer(ctx context.Context, sandboxID, containerID string) (Contai
 // taken from the caller, even if we simply return the container status without
 // taking any action regarding the container.
 func statusContainer(sandbox *Sandbox, containerID string) (ContainerStatus, error) {
-	for _, container := range sandbox.containers {
-		if container.id == containerID {
-			// We have to check for the process state to make sure
-			// we update the status in case the process is supposed
-			// to be running but has been killed or terminated.
-			if (container.state.State == types.StateReady ||
-				container.state.State == types.StateRunning ||
-				container.state.State == types.StatePaused) &&
-				container.process.Pid > 0 {
+	if container, ok := sandbox.containers[containerID]; ok {
+		// We have to check for the process state to make sure
+		// we update the status in case the process is supposed
+		// to be running but has been killed or terminated.
+		if (container.state.State == types.StateReady ||
+			container.state.State == types.StateRunning ||
+			container.state.State == types.StatePaused) &&
+			container.process.Pid > 0 {
 
-				running, err := isShimRunning(container.process.Pid)
-				if err != nil {
-					return ContainerStatus{}, err
-				}
-
-				if !running {
-					virtLog.WithFields(logrus.Fields{
-						"state": container.state.State,
-						"pid":   container.process.Pid}).
-						Info("container isn't running")
-					if err := container.stop(true); err != nil {
-						return ContainerStatus{}, err
-					}
-				}
+			running, err := isShimRunning(container.process.Pid)
+			if err != nil {
+				return ContainerStatus{}, err
 			}
 
-			return ContainerStatus{
-				ID:          container.id,
-				State:       container.state,
-				PID:         container.process.Pid,
-				StartTime:   container.process.StartTime,
-				RootFs:      container.config.RootFs.Target,
-				Spec:        container.GetOCISpec(),
-				Annotations: container.config.Annotations,
-			}, nil
+			if !running {
+				virtLog.WithFields(logrus.Fields{
+					"state": container.state.State,
+					"pid":   container.process.Pid}).
+					Info("container isn't running")
+				if err := container.stop(true); err != nil {
+					return ContainerStatus{}, err
+				}
+			}
 		}
+
+		return ContainerStatus{
+			ID:          container.id,
+			State:       container.state,
+			PID:         container.process.Pid,
+			StartTime:   container.process.StartTime,
+			RootFs:      container.config.RootFs.Target,
+			Spec:        container.GetOCISpec(),
+			Annotations: container.config.Annotations,
+		}, nil
 	}
 
 	// No matching containers in the sandbox

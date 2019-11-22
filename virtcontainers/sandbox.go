@@ -752,10 +752,8 @@ func (s *Sandbox) findContainer(containerID string) (*Container, error) {
 		return nil, vcTypes.ErrNeedContainerID
 	}
 
-	for id, c := range s.containers {
-		if containerID == id {
-			return c, nil
-		}
+	if c, ok := s.containers[containerID]; ok {
+		return c, nil
 	}
 
 	return nil, errors.Wrapf(vcTypes.ErrNoSuchContainer, "Could not find the container %q from the sandbox %q containers list",
@@ -1324,21 +1322,20 @@ func (s *Sandbox) StatusContainer(containerID string) (ContainerStatus, error) {
 		return ContainerStatus{}, vcTypes.ErrNeedContainerID
 	}
 
-	for id, c := range s.containers {
+	if c, ok := s.containers[containerID]; ok {
 		rootfs := c.config.RootFs.Source
 		if c.config.RootFs.Mounted {
 			rootfs = c.config.RootFs.Target
 		}
-		if id == containerID {
-			return ContainerStatus{
-				ID:          c.id,
-				State:       c.state,
-				PID:         c.process.Pid,
-				StartTime:   c.process.StartTime,
-				RootFs:      rootfs,
-				Annotations: c.config.Annotations,
-			}, nil
-		}
+
+		return ContainerStatus{
+			ID:          c.id,
+			State:       c.state,
+			PID:         c.process.Pid,
+			StartTime:   c.process.StartTime,
+			RootFs:      rootfs,
+			Annotations: c.config.Annotations,
+		}, nil
 	}
 
 	return ContainerStatus{}, vcTypes.ErrNoSuchContainer
