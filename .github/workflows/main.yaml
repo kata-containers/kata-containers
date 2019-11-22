@@ -103,6 +103,32 @@ jobs:
           name: kata-artifacts
           path: kata-static-qemu.tar.gz
 
+  build-nemu:
+    runs-on: ubuntu-16.04
+    needs: get-artifact-list
+    env:
+      buildstr: "install_nemu"
+    steps:
+      - uses: actions/checkout@v1
+      - name: get-artifact-list
+        uses: actions/download-artifact@master
+        with:
+          name: artifact-list
+      - name: build-nemu
+        run: |
+         if grep -q $buildstr ./artifact-list/artifact-list.txt; then
+           $GITHUB_WORKSPACE/.github/workflows/generate-artifact-tarball.sh $buildstr
+           echo ::set-env name=artifact-built::true
+         else
+           echo ::set-env name=artifact-built::false
+         fi
+      - name: store-artifacts
+        if: env.artifact-built == 'true'
+        uses: actions/upload-artifact@master
+        with:
+          name: kata-artifacts
+          path: kata-static-nemu.tar.gz
+
   # Job for building the QEMU binaries with virtiofs support
   build-qemu-virtiofsd:
     runs-on: ubuntu-16.04
@@ -240,7 +266,7 @@ jobs:
 
   gather-artifacts:
     runs-on: ubuntu-16.04
-    needs: [build-kernel, build-qemu, build-qemu-virtiofsd, build-image, build-firecracker, build-kata-components]
+    needs: [build-kernel, build-qemu, build-qemu-virtiofsd, build-image, build-firecracker, build-kata-components, build-nemu]
     steps:
       - uses: actions/checkout@v1
       - name: get-artifacts
