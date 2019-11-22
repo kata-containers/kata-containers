@@ -3,14 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use serde;
 use serde::{Deserialize, Serialize};
 use serde_json;
 
 use std::error::Error;
-use std::fmt::{self, Formatter};
+use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::fs::File;
 use std::io;
+
+pub type Result<T> = std::result::Result<T, SerializeError>;
 
 #[derive(Debug)]
 pub enum SerializeError {
@@ -18,8 +19,8 @@ pub enum SerializeError {
     Json(serde_json::Error),
 }
 
-impl fmt::Display for SerializeError {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+impl Display for SerializeError {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match *self {
             SerializeError::Io(ref e) => e.fmt(f),
             SerializeError::Json(ref e) => e.fmt(f),
@@ -55,33 +56,33 @@ impl From<serde_json::Error> for SerializeError {
     }
 }
 
-pub fn to_writer<W, T>(o: &T, mut w: W) -> Result<(), SerializeError>
+pub fn to_writer<W, T>(o: &T, w: W) -> Result<()>
 where
     W: io::Write,
     T: Serialize,
 {
-    Ok(serde_json::to_writer(&mut w, &o)?)
+    Ok(serde_json::to_writer(w, o)?)
 }
 
-pub fn serialize<T>(o: &T, path: &str) -> Result<(), SerializeError>
+pub fn serialize<T>(o: &T, path: &str) -> Result<()>
 where
     T: Serialize,
 {
-    let mut f = File::create(path)?;
-    Ok(serde_json::to_writer(&mut f, &o)?)
+    let f = File::create(path)?;
+    Ok(serde_json::to_writer(f, o)?)
 }
 
-pub fn to_string<T>(o: &T) -> Result<String, SerializeError>
+pub fn to_string<T>(o: &T) -> Result<String>
 where
     T: Serialize,
 {
-    Ok(serde_json::to_string(&o)?)
+    Ok(serde_json::to_string(o)?)
 }
 
-pub fn deserialize<T>(path: &str) -> Result<T, SerializeError>
+pub fn deserialize<T>(path: &str) -> Result<T>
 where
     for<'a> T: Deserialize<'a>,
 {
     let f = File::open(path)?;
-    Ok(serde_json::from_reader(&f)?)
+    Ok(serde_json::from_reader(f)?)
 }

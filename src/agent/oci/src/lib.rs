@@ -11,7 +11,8 @@ extern crate serde_json;
 use libc::mode_t;
 use std::collections::HashMap;
 
-pub mod serialize;
+mod serialize;
+pub use serialize::{to_string, to_writer, Result, SerializeError};
 
 #[allow(dead_code)]
 fn is_false(b: bool) -> bool {
@@ -57,11 +58,11 @@ pub struct Spec {
 }
 
 impl Spec {
-    pub fn load(path: &str) -> Result<Spec, serialize::SerializeError> {
+    pub fn load(path: &str) -> Result<Spec> {
         serialize::deserialize(path)
     }
 
-    pub fn save(&self, path: &str) -> Result<(), serialize::SerializeError> {
+    pub fn save(&self, path: &str) -> Result<()> {
         serialize::serialize(self, path)
     }
 }
