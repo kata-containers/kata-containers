@@ -6,53 +6,53 @@
 use serde::{Deserialize, Serialize};
 use serde_json;
 
-use std::error::Error;
+use std::error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use std::fs::File;
 use std::io;
 
-pub type Result<T> = std::result::Result<T, SerializeError>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
-pub enum SerializeError {
+pub enum Error {
     Io(io::Error),
     Json(serde_json::Error),
 }
 
-impl Display for SerializeError {
+impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match *self {
-            SerializeError::Io(ref e) => e.fmt(f),
-            SerializeError::Json(ref e) => e.fmt(f),
+            Error::Io(ref e) => e.fmt(f),
+            Error::Json(ref e) => e.fmt(f),
         }
     }
 }
 
-impl Error for SerializeError {
+impl error::Error for Error {
     fn description(&self) -> &str {
         match *self {
-            SerializeError::Io(ref e) => e.description(),
-            SerializeError::Json(ref e) => e.description(),
+            Error::Io(ref e) => e.description(),
+            Error::Json(ref e) => e.description(),
         }
     }
 
-    fn cause(&self) -> Option<&dyn Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         match *self {
-            SerializeError::Io(ref e) => Some(e),
-            SerializeError::Json(ref e) => Some(e),
+            Error::Io(ref e) => Some(e),
+            Error::Json(ref e) => Some(e),
         }
     }
 }
 
-impl From<io::Error> for SerializeError {
-    fn from(e: io::Error) -> SerializeError {
-        SerializeError::Io(e)
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Error {
+        Error::Io(e)
     }
 }
 
-impl From<serde_json::Error> for SerializeError {
-    fn from(e: serde_json::Error) -> SerializeError {
-        SerializeError::Json(e)
+impl From<serde_json::Error> for Error {
+    fn from(e: serde_json::Error) -> Error {
+        Error::Json(e)
     }
 }
 

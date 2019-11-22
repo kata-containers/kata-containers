@@ -12,7 +12,7 @@ use libc::mode_t;
 use std::collections::HashMap;
 
 mod serialize;
-pub use serialize::{to_string, to_writer, Result, SerializeError};
+pub use serialize::{to_string, to_writer, Error, Result};
 
 #[allow(dead_code)]
 fn is_false(b: bool) -> bool {
