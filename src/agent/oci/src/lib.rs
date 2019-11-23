@@ -8,12 +8,11 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 
-use std::collections::HashMap;
-// use std::io::Write;
 use libc::mode_t;
-// use std::any::Any;
+use std::collections::HashMap;
 
-pub mod serialize;
+mod serialize;
+pub use serialize::{to_string, to_writer, Error, Result};
 
 #[allow(dead_code)]
 fn is_false(b: bool) -> bool {
@@ -59,16 +58,15 @@ pub struct Spec {
 }
 
 impl Spec {
-    pub fn load(path: &str) -> Result<Spec, serialize::SerializeError> {
+    pub fn load(path: &str) -> Result<Spec> {
         serialize::deserialize(path)
     }
 
-    pub fn save(&self, path: &str) -> Result<(), serialize::SerializeError> {
+    pub fn save(&self, path: &str) -> Result<()> {
         serialize::serialize(self, path)
     }
 }
 
-#[allow(dead_code)]
 pub type LinuxRlimit = POSIXRlimit;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -250,20 +248,13 @@ pub struct LinuxNamespace {
 
 pub type LinuxNamespaceType = String;
 
-#[allow(dead_code)]
-pub const PIDNAMESPACE: &'static str = "pid";
-#[allow(dead_code)]
-pub const NETWORKNAMESPACE: &'static str = "network";
-#[allow(dead_code)]
-pub const MOUNTNAMESPACE: &'static str = "mount";
-#[allow(dead_code)]
-pub const IPCNAMESPACE: &'static str = "ipc";
-#[allow(dead_code)]
-pub const USERNAMESPACE: &'static str = "user";
-#[allow(dead_code)]
-pub const UTSNAMESPACE: &'static str = "uts";
-#[allow(dead_code)]
-pub const CGROUPNAMESPACE: &'static str = "cgroup";
+pub const PIDNAMESPACE: &str = "pid";
+pub const NETWORKNAMESPACE: &str = "network";
+pub const MOUNTNAMESPACE: &str = "mount";
+pub const IPCNAMESPACE: &str = "ipc";
+pub const USERNAMESPACE: &str = "user";
+pub const UTSNAMESPACE: &str = "uts";
+pub const CGROUPNAMESPACE: &str = "cgroup";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LinuxIDMapping {
@@ -722,72 +713,42 @@ pub struct LinuxSeccomp {
 
 pub type Arch = String;
 
-#[allow(dead_code)]
-pub const ARCHX86: &'static str = "SCMP_ARCH_X86";
-#[allow(dead_code)]
-pub const ARCHX86_64: &'static str = "SCMP_ARCH_X86_64";
-#[allow(dead_code)]
-pub const ARCHX32: &'static str = "SCMP_ARCH_X32";
-#[allow(dead_code)]
-pub const ARCHARM: &'static str = "SCMP_ARCH_ARM";
-#[allow(dead_code)]
-pub const ARCHAARCH64: &'static str = "SCMP_ARCH_AARCH64";
-#[allow(dead_code)]
-pub const ARCHMIPS: &'static str = "SCMP_ARCH_MIPS";
-#[allow(dead_code)]
-pub const ARCHMIPS64: &'static str = "SCMP_ARCH_MIPS64";
-#[allow(dead_code)]
-pub const ARCHMIPS64N32: &'static str = "SCMP_ARCH_MIPS64N32";
-#[allow(dead_code)]
-pub const ARCHMIPSEL: &'static str = "SCMP_ARCH_MIPSEL";
-#[allow(dead_code)]
-pub const ARCHMIPSEL64: &'static str = "SCMP_ARCH_MIPSEL64";
-#[allow(dead_code)]
-pub const ARCHMIPSEL64N32: &'static str = "SCMP_ARCH_MIPSEL64N32";
-#[allow(dead_code)]
-pub const ARCHPPC: &'static str = "SCMP_ARCH_PPC";
-#[allow(dead_code)]
-pub const ARCHPPC64: &'static str = "SCMP_ARCH_PPC64";
-#[allow(dead_code)]
-pub const ARCHPPC64LE: &'static str = "SCMP_ARCH_PPC64LE";
-#[allow(dead_code)]
-pub const ARCHS390: &'static str = "SCMP_ARCH_S390";
-#[allow(dead_code)]
-pub const ARCHS390X: &'static str = "SCMP_ARCH_S390X";
-#[allow(dead_code)]
-pub const ARCHPARISC: &'static str = "SCMP_ARCH_PARISC";
-#[allow(dead_code)]
-pub const ARCHPARISC64: &'static str = "SCMP_ARCH_PARISC64";
+pub const ARCHX86: &str = "SCMP_ARCH_X86";
+pub const ARCHX86_64: &str = "SCMP_ARCH_X86_64";
+pub const ARCHX32: &str = "SCMP_ARCH_X32";
+pub const ARCHARM: &str = "SCMP_ARCH_ARM";
+pub const ARCHAARCH64: &str = "SCMP_ARCH_AARCH64";
+pub const ARCHMIPS: &str = "SCMP_ARCH_MIPS";
+pub const ARCHMIPS64: &str = "SCMP_ARCH_MIPS64";
+pub const ARCHMIPS64N32: &str = "SCMP_ARCH_MIPS64N32";
+pub const ARCHMIPSEL: &str = "SCMP_ARCH_MIPSEL";
+pub const ARCHMIPSEL64: &str = "SCMP_ARCH_MIPSEL64";
+pub const ARCHMIPSEL64N32: &str = "SCMP_ARCH_MIPSEL64N32";
+pub const ARCHPPC: &str = "SCMP_ARCH_PPC";
+pub const ARCHPPC64: &str = "SCMP_ARCH_PPC64";
+pub const ARCHPPC64LE: &str = "SCMP_ARCH_PPC64LE";
+pub const ARCHS390: &str = "SCMP_ARCH_S390";
+pub const ARCHS390X: &str = "SCMP_ARCH_S390X";
+pub const ARCHPARISC: &str = "SCMP_ARCH_PARISC";
+pub const ARCHPARISC64: &str = "SCMP_ARCH_PARISC64";
 
 pub type LinuxSeccompAction = String;
 
-#[allow(dead_code)]
-pub const ACTKILL: &'static str = "SCMP_ACT_KILL";
-#[allow(dead_code)]
-pub const ACTTRAP: &'static str = "SCMP_ACT_TRAP";
-#[allow(dead_code)]
-pub const ACTERRNO: &'static str = "SCMP_ACT_ERRNO";
-#[allow(dead_code)]
-pub const ACTTRACE: &'static str = "SCMP_ACT_TRACE";
-#[allow(dead_code)]
-pub const ACTALLOW: &'static str = "SCMP_ACT_ALLOW";
+pub const ACTKILL: &str = "SCMP_ACT_KILL";
+pub const ACTTRAP: &str = "SCMP_ACT_TRAP";
+pub const ACTERRNO: &str = "SCMP_ACT_ERRNO";
+pub const ACTTRACE: &str = "SCMP_ACT_TRACE";
+pub const ACTALLOW: &str = "SCMP_ACT_ALLOW";
 
 pub type LinuxSeccompOperator = String;
 
-#[allow(dead_code)]
-pub const OPNOTEQUAL: &'static str = "SCMP_CMP_NE";
-#[allow(dead_code)]
-pub const OPLESSTHAN: &'static str = "SCMP_CMP_LT";
-#[allow(dead_code)]
-pub const OPLESSEQUAL: &'static str = "SCMP_CMP_LE";
-#[allow(dead_code)]
-pub const OPEQUALTO: &'static str = "SCMP_CMP_EQ";
-#[allow(dead_code)]
-pub const OPGREATEREQUAL: &'static str = "SCMP_CMP_GE";
-#[allow(dead_code)]
-pub const OPGREATERTHAN: &'static str = "SCMP_CMP_GT";
-#[allow(dead_code)]
-pub const OPMASKEDEQUAL: &'static str = "SCMP_CMP_MASKED_EQ";
+pub const OPNOTEQUAL: &str = "SCMP_CMP_NE";
+pub const OPLESSTHAN: &str = "SCMP_CMP_LT";
+pub const OPLESSEQUAL: &str = "SCMP_CMP_LE";
+pub const OPEQUALTO: &str = "SCMP_CMP_EQ";
+pub const OPGREATEREQUAL: &str = "SCMP_CMP_GE";
+pub const OPGREATERTHAN: &str = "SCMP_CMP_GT";
+pub const OPMASKEDEQUAL: &str = "SCMP_CMP_MASKED_EQ";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LinuxSeccompArg {
