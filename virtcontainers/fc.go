@@ -622,6 +622,9 @@ func (fc *firecracker) fcSetLogger() error {
 	defer span.Finish()
 
 	fcLogLevel := "Error"
+	if fc.config.Debug {
+		fcLogLevel = "Debug"
+	}
 
 	// listen to log fifo file and transfer error info
 	jailedLogFifo, err := fc.fcListenToFifo(fcLogFifo)
