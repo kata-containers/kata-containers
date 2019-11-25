@@ -74,6 +74,9 @@ const (
 	// FirecrackerHypervisor is firecracker
 	FirecrackerHypervisor = "firecracker"
 
+	// CloudHypervisor is cloud-hypervisor
+	CloudHypervisor = "clh"
+
 	// DefaultProxy default proxy
 	DefaultProxy = "kata"
 
