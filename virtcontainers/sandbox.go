@@ -1683,6 +1683,12 @@ func (s *Sandbox) resumeSetStates() error {
 // block device is assigned to a container in the sandbox.
 func (s *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
 	currentIndex := s.state.BlockIndex
+	var err error
+	defer func() {
+		if err != nil {
+			s.state.BlockIndex = currentIndex
+		}
+	}()
 
 	// Increment so that container gets incremented block index
 	s.state.BlockIndex++
@@ -1701,12 +1707,19 @@ func (s *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
 // decrementSandboxBlockIndex decrements the current sandbox block index.
 // This is used to recover from failure while adding a block device.
 func (s *Sandbox) decrementSandboxBlockIndex() error {
+	var err error
+	original := s.state.BlockIndex
 	s.state.BlockIndex--
+	defer func() {
+		if err != nil {
+			s.state.BlockIndex = original
+		}
+	}()
 
 	if !s.supportNewStore() {
 		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
 		// update on-disk state
-		if err := s.store.Store(store.State, s.state); err != nil {
+		if err = s.store.Store(store.State, s.state); err != nil {
 			return err
 		}
 	}
