@@ -104,7 +104,6 @@ func (s *CloudHypervisorState) reset() {
 type cloudHypervisor struct {
 	id        string
 	state     CloudHypervisorState
-	store     *store.VCStore
 	config    HypervisorConfig
 	ctx       context.Context
 	APIClient clhClient
@@ -139,7 +138,7 @@ var clhDebugKernelParams = []Param{
 
 // For cloudHypervisor this call only sets the internal structure up.
 // The VM will be created and started through startSandbox().
-func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore, stateful bool) error {
+func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error {
 	clh.ctx = ctx
 
 	span, _ := clh.trace("createSandbox")
@@ -151,7 +150,6 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	}
 
 	clh.id = id
-	clh.store = vcStore
 	clh.config = *hypervisorConfig
 	clh.state.state = clhNotReady
 
@@ -187,12 +185,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 
 	}
 
-	// No need to return an error from there since there might be nothing
-	// to fetch if this is the first time the hypervisor is created.
-	err = clh.store.Load(store.Hypervisor, &clh.state)
-	if err != nil {
-		clh.Logger().WithField("function", "createSandbox").WithError(err).Info("Sandbox not found creating ")
-	} else {
+	if clh.state.PID > 0 {
 		clh.Logger().WithField("function", "createSandbox").Info("Sandbox already exist, loading from state")
 		clh.virtiofsd = &virtiofsd{
 			PID:        clh.state.VirtiofsdPID,
@@ -202,6 +195,10 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		}
 		return nil
 	}
+
+	// No need to return an error from there since there might be nothing
+	// to fetch if this is the first time the hypervisor is created.
+	clh.Logger().WithField("function", "createSandbox").WithError(err).Info("Sandbox not found creating ")
 
 	// Set initial memomory size of the virtual machine
 	clh.vmconfig.Memory.Size = int64(clh.config.MemorySize) << utils.MibToBytesShift
@@ -323,9 +320,6 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 			return err
 		}
 		clh.state.VirtiofsdPID = pid
-		if err = clh.storeState(); err != nil {
-			return err
-		}
 	} else {
 		return errors.New("cloud-hypervisor only supports virtio based file sharing")
 	}
@@ -350,10 +344,6 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 	}
 
 	clh.state.state = clhReady
-	if err = clh.storeState(); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -431,7 +421,7 @@ func (clh *cloudHypervisor) stopSandbox() (err error) {
 	return clh.terminate()
 }
 
-func (clh *cloudHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error {
+func (clh *cloudHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
 	return errors.New("cloudHypervisor is not supported by VM cache")
 }
 
@@ -442,6 +432,7 @@ func (clh *cloudHypervisor) toGrpc() ([]byte, error) {
 func (clh *cloudHypervisor) save() (s persistapi.HypervisorState) {
 	s.Pid = clh.state.PID
 	s.Type = string(ClhHypervisor)
+	s.VirtiofsdPid = clh.state.VirtiofsdPID
 	return
 }
 
@@ -589,7 +580,6 @@ func (clh *cloudHypervisor) terminate() (err error) {
 
 func (clh *cloudHypervisor) reset() {
 	clh.state.reset()
-	clh.storeState()
 }
 
 func (clh *cloudHypervisor) generateSocket(id string, useVsock bool) (interface{}, error) {
@@ -633,17 +623,7 @@ func (clh *cloudHypervisor) logFilePath(id string) (string, error) {
 	return utils.BuildSocketPath(store.RunVMStoragePath(), id, clhLogFile)
 }
 
-func (clh *cloudHypervisor) storeState() error {
-	if clh.store != nil {
-		if err := clh.store.Store(store.Hypervisor, clh.state); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (clh *cloudHypervisor) waitVMM(timeout uint) error {
-
 	clhRunning, err := clh.isClhRunning(timeout)
 
 	if err != nil {
