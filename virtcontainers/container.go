@@ -252,7 +252,7 @@ type ContainerConfig struct {
 	Resources specs.LinuxResources
 
 	// Raw OCI specification, it won't be saved to disk.
-	Spec *specs.Spec `json:"_"`
+	Spec *specs.Spec `json:"-"`
 }
 
 // valid checks that the container configuration is valid.
