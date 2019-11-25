@@ -1130,7 +1130,7 @@ func (s *Sandbox) fetchContainers() error {
 		if err != nil {
 			return err
 		}
-		contConfig.Spec = &spec
+		contConfig.CustomSpec = &spec
 		s.config.Containers[i] = contConfig
 
 		c, err := newContainer(s, &s.config.Containers[i])
@@ -2213,7 +2213,7 @@ func (s *Sandbox) cpuResources() *specs.LinuxCPU {
 
 // setupSandboxCgroup creates and joins sandbox cgroups for the sandbox config
 func (s *Sandbox) setupSandboxCgroup() error {
-	spec := s.GetOCISpec()
+	spec := s.GetPatchedOCISpec()
 
 	if spec == nil {
 		return errorMissingOCISpec
@@ -2242,9 +2242,16 @@ func (s *Sandbox) setupSandboxCgroup() error {
 	return nil
 }
 
-func (s *Sandbox) sandboxContConf() *ContainerConfig {
-	var podSandboxConfig *ContainerConfig
-
+// GetPatchedOCISpec returns sandbox's OCI specification
+// This OCI specification was patched when the sandbox was created
+// by containerCapabilities(), SetEphemeralStorageType() and others
+// in order to support:
+// * capabilities
+// * Ephemeral storage
+// * k8s empty dir
+// If you need the original (vanilla) OCI spec,
+// use compatoci.GetContainerSpec() instead.
+func (s *Sandbox) GetPatchedOCISpec() *specs.Spec {
 	if s.config == nil {
 		return nil
 	}
@@ -2254,25 +2261,9 @@ func (s *Sandbox) sandboxContConf() *ContainerConfig {
 	// cgroup path from this container.
 	for _, cConfig := range s.config.Containers {
 		if cConfig.Annotations[annotations.ContainerTypeKey] == string(PodSandbox) {
-			podSandboxConfig = &cConfig
-			break
+			return cConfig.CustomSpec
 		}
 	}
 
-	if podSandboxConfig == nil {
-		return nil
-	}
-
-	return podSandboxConfig
-}
-
-// GetOCISpec returns sandbox's OCI specification
-func (s *Sandbox) GetOCISpec() *specs.Spec {
-	conf := s.sandboxContConf()
-	if conf == nil {
-		return nil
-	}
-
-	// First container is sandbox container as default
-	return conf.Spec
+	return nil
 }
