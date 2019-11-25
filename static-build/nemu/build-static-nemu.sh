@@ -14,8 +14,8 @@ source "${script_dir}/../../scripts/lib.sh"
 source "${script_dir}/../qemu.blacklist"
 
 config_dir="${script_dir}/../../scripts/"
-nemu_tar="kata-nemu-static.tar.gz"
-nemu_tmp_tar="kata-nemu-static-tmp.tar.gz"
+nemu_tar="kata-static-nemu.tar.gz"
+nemu_tmp_tar="kata-static-nemu-tmp.tar.gz"
 Dockerfile="Dockerfile"
 
 if [ $# -ne 0 ];then
@@ -45,24 +45,25 @@ nemu_repo="${nemu_repo:-}"
 nemu_version="${nemu_version:-}"
 nemu_ovmf_repo="${nemu_ovmf_repo:-}"
 nemu_ovmf_version="${nemu_ovmf_version:-}"
+kata_version="${kata_version:-}"
 
 if [ -z "$nemu_repo" ]; then
 	info "Get nemu information from runtime versions.yaml"
-	nemu_repo=$(get_from_kata_deps "assets.hypervisor.nemu.url")
+	nemu_repo=$(get_from_kata_deps "assets.hypervisor.nemu.url" "$kata_version")
 fi
 [ -n "$nemu_repo" ] || die "failed to get nemu repo"
 
-[ -n "$nemu_version" ] || nemu_version=$(get_from_kata_deps "assets.hypervisor.nemu.version")
+[ -n "$nemu_version" ] || nemu_version=$(get_from_kata_deps "assets.hypervisor.nemu.version" "$kata_version")
 [ -n "$nemu_version" ] || die "failed to get nemu version"
 
 if [ -z "$nemu_ovmf_repo" ]; then
 	info "Get nemu information from runtime versions.yaml"
-	nemu_ovmf_repo=$(get_from_kata_deps "assets.hypervisor.nemu-ovmf.url")
+	nemu_ovmf_repo=$(get_from_kata_deps "assets.hypervisor.nemu-ovmf.url" "$kata_version")
 	[ -n "$nemu_ovmf_repo" ] || die "failed to get nemu ovmf repo url"
 fi
 
 if [ -z "$nemu_ovmf_version" ]; then
-	nemu_ovmf_version=$(get_from_kata_deps "assets.hypervisor.nemu-ovmf.version")
+	nemu_ovmf_version=$(get_from_kata_deps "assets.hypervisor.nemu-ovmf.version" "$kata_version")
 	[ -n "$nemu_ovmf_version" ] || die "failed to get nemu ovmf version"
 fi
 
