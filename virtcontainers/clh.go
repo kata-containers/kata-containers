@@ -9,8 +9,10 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,6 +22,7 @@ import (
 	"time"
 
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	chclient "github.com/kata-containers/runtime/virtcontainers/pkg/cloud-hypervisor/client"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -42,7 +45,14 @@ const (
 )
 
 const (
+	// Values are mandatory by http API
+	// Values based on:
+	// github.com/cloud-hypervisor/cloud-hypervisor/blob/v0.3.0/vmm/src/config.rs#L395
+	clhFsQueues           = 1
+	clhFsQueueSize        = 1024
 	clhTimeout            = 10
+	clhAPITimeout         = 1
+	clhStopSandboxTimeout = 3
 	clhSocket             = "clh.sock"
 	clhAPISocket          = "clh-api.sock"
 	clhLogFile            = "clh.log"
@@ -68,6 +78,7 @@ type CloudHypervisorState struct {
 	state        clhState
 	PID          int
 	VirtiofsdPID int
+	apiSocket    string
 }
 
 func (s *CloudHypervisorState) reset() {
@@ -77,15 +88,15 @@ func (s *CloudHypervisorState) reset() {
 }
 
 type cloudHypervisor struct {
-	id         string
-	state      CloudHypervisorState
-	store      *store.VCStore
-	config     HypervisorConfig
-	ctx        context.Context
-	socketPath string
-	version    CloudHypervisorVersion
-	cliBuilder *DefaultCLIBuilder
-	cmdOutput  bytes.Buffer
+	id        string
+	state     CloudHypervisorState
+	store     *store.VCStore
+	config    HypervisorConfig
+	ctx       context.Context
+	APIClient *chclient.DefaultApiService
+	version   CloudHypervisorVersion
+	vmconfig  chclient.VmConfig
+	cmdOutput bytes.Buffer
 }
 
 var clhKernelParams = []Param{
@@ -111,6 +122,8 @@ var clhDebugKernelParams = []Param{
 //
 //###########################################################
 
+// For cloudHypervisor this call only sets the internal structure up.
+// The VM will be created and started through startSandbox().
 func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore, stateful bool) error {
 	clh.ctx = ctx
 
@@ -131,11 +144,13 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	clhPath, perr := clh.clhPath()
 	if perr != nil {
 		return perr
+
 	}
 	if strings.HasSuffix(clhPath, "cloud-hypervisor") {
 		err = clh.getAvailableVersion()
 		if err != nil {
 			return err
+
 		}
 
 		if clh.version.Major < supportedMajorVersion && clh.version.Minor < supportedMinorVersion {
@@ -146,15 +161,8 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 				supportedMinorVersion)
 			return errors.New(errorMessage)
 		}
-	}
-	clh.cliBuilder = &DefaultCLIBuilder{}
 
-	socketPath, err := clh.vsockSocketPath(id)
-	if err != nil {
-		clh.Logger().Info("Invalid socket path for cloud-hypervisor")
-		return nil
 	}
-	clh.socketPath = socketPath
 
 	clh.Logger().WithField("function", "createSandbox").Info("creating Sandbox")
 
@@ -164,41 +172,41 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		clh.Logger().WithField("function", "createSandbox").WithError(err).Info("No info could be fetched")
 	}
 
-	// Set initial memomory size of the cloud hypervisor
-	clh.cliBuilder.SetMemory(&CLIMemory{
-		memorySize:  clh.config.MemorySize,
-		backingFile: "/dev/shm",
-	})
-	// Set initial amount of cpu's for the cloud hypervisor
-	clh.cliBuilder.SetCpus(&CLICpus{
-		cpus: clh.config.NumVCPUs,
-	})
+	// Set initial memomory size of the virtual machine
+	clh.vmconfig.Memory.Size = int64(clh.config.MemorySize) << utils.MibToBytesShift
+	clh.vmconfig.Memory.File = "/dev/shm"
+	// Set initial amount of cpu's for the virtual machine
+	clh.vmconfig.Cpus = chclient.CpuConfig{
+		// cast to int32, as openAPI has a limitation that it does not support unsigned values
+		CpuCount: int32(clh.config.NumVCPUs),
+	}
 
 	// Add the kernel path
 	kernelPath, err := clh.config.KernelAssetPath()
 	if err != nil {
 		return err
 	}
-	clh.cliBuilder.SetKernel(&CLIKernel{
-		path: kernelPath,
-	})
+	clh.vmconfig.Kernel = chclient.KernelConfig{
+		Path: kernelPath,
+	}
 
 	// First take the default parameters defined by this driver
-	clh.cliBuilder.AddKernelParameters(clhKernelParams)
+	params := clhKernelParams
 
 	// Followed by extra debug parameters if debug enabled in configuration file
 	if clh.config.Debug {
-		clh.cliBuilder.AddKernelParameters(clhDebugKernelParams)
+		params = append(params, clhDebugKernelParams...)
 	}
 
 	// Followed by extra debug parameters defined in the configuration file
-	clh.cliBuilder.AddKernelParameters(clh.config.KernelParams)
+	params = append(params, clh.config.KernelParams...)
+
+	clh.vmconfig.Cmdline.Args = kernelParamsToString(params)
 
 	// set random device generator to hypervisor
-	clh.cliBuilder.SetRng(&CLIRng{
-		src:   clh.config.EntropySource,
-		iommu: false,
-	})
+	clh.vmconfig.Rng = chclient.RngConfig{
+		Src: clh.config.EntropySource,
+	}
 
 	// set the initial root/boot disk of hypervisor
 	imagePath, err := clh.config.ImageAssetPath()
@@ -206,34 +214,14 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		return err
 	}
 
-	if imagePath != "" {
-		clh.cliBuilder.SetDisk(&CLIDisk{
-			path:  imagePath,
-			iommu: false,
-		})
+	if imagePath == "" {
+		return errors.New("image path is empty")
 	}
 
-	// set the virtio-fs to the hypervisor
-	vfsdSockPath, err := clh.virtioFsSocketPath(clh.id)
-	if err != nil {
-		return err
+	disk := chclient.DiskConfig{
+		Path: imagePath,
 	}
-	if clh.config.VirtioFSCache == virtioFsCacheAlways {
-		clh.cliBuilder.SetFs(&CLIFs{
-			tag:        "kataShared",
-			socketPath: vfsdSockPath,
-			queues:     1,
-			queueSize:  512,
-			dax:        true,
-		})
-	} else {
-		clh.cliBuilder.SetFs(&CLIFs{
-			tag:        "kataShared",
-			socketPath: vfsdSockPath,
-			queues:     1,
-			queueSize:  512,
-		})
-	}
+	clh.vmconfig.Disks = append(clh.vmconfig.Disks, disk)
 
 	// set the serial console to the cloud hypervisor
 	if clh.config.Debug {
@@ -241,40 +229,39 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		if err != nil {
 			return err
 		}
-		clh.cliBuilder.SetSerial(&CLISerialConsole{
-			consoleType: cctFILE,
-			filePath:    serialPath,
-		})
-		logFilePath, err := clh.logFilePath(clh.id)
-		if err != nil {
-			return err
+		clh.vmconfig.Serial = chclient.ConsoleConfig{
+			Mode: cctFILE,
+			File: serialPath,
 		}
-		clh.cliBuilder.SetLogFile(&CLILogFile{
-			path: logFilePath,
-		})
+
+	} else {
+		clh.vmconfig.Serial = chclient.ConsoleConfig{
+			Mode: cctOFF,
+		}
 	}
 
-	clh.cliBuilder.SetConsole(&CLIConsole{
-		consoleType: cctOFF,
-	})
+	clh.vmconfig.Console = chclient.ConsoleConfig{
+		Mode: cctOFF,
+	}
 
-	// Move the API endpoint socket location for the
-	// by default enabled api endpoint
+	// Overwrite the default value of HTTP API socket path for cloud hypervisor
 	apiSocketPath, err := clh.apiSocketPath(id)
 	if err != nil {
 		clh.Logger().Info("Invalid api socket path for cloud-hypervisor")
 		return nil
 	}
-	clh.cliBuilder.SetAPISocket(&CLIAPISocket{
-		socketPath: apiSocketPath,
-	})
+	clh.state.apiSocket = apiSocketPath
 
 	return nil
 }
 
+// startSandbox will start the VMM and boot the virtual machine for the given sandbox.
 func (clh *cloudHypervisor) startSandbox(timeout int) error {
 	span, _ := clh.trace("startSandbox")
 	defer span.Finish()
+
+	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	defer cancel()
 
 	clh.Logger().WithField("function", "startSandbox").Info("starting Sandbox")
 
@@ -302,19 +289,26 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 	if err != nil {
 		return fmt.Errorf("failed to launch cloud-hypervisor: %s, error messages from log: %s", err, strErr)
 	}
+	clh.state.PID = pid
+
 	if err := clh.waitVMM(clhTimeout); err != nil {
 		clh.Logger().WithField("error", err).WithField("output", clh.cmdOutput.String()).Warn("cloud-hypervisor init failed")
 		clh.shutdownVirtiofsd()
 		return err
 	}
 
-	clh.state.PID = pid
+	if err := clh.bootVM(ctx); err != nil {
+		return err
+	}
+
 	clh.state.state = clhReady
 	clh.storeState()
 
 	return nil
 }
 
+// getSandboxConsole builds the path of the console where we can read
+// logs coming from the sandbox.
 func (clh *cloudHypervisor) getSandboxConsole(id string) (string, error) {
 	clh.Logger().WithField("function", "getSandboxConsole").WithField("id", id).Info("Get Sandbox Console")
 	return "", nil
@@ -408,7 +402,7 @@ func (clh *cloudHypervisor) load(s persistapi.HypervisorState) {
 
 func (clh *cloudHypervisor) check() error {
 	cl := clh.client()
-	ctx, cancel := context.WithTimeout(context.Background(), clhApiTimeout*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
 	defer cancel()
 
 	_, _, err := cl.VmmPingGet(ctx)
@@ -431,25 +425,14 @@ func (clh *cloudHypervisor) addDevice(devInfo interface{}, devType deviceType) e
 
 	switch v := devInfo.(type) {
 	case Endpoint:
-		clh.Logger().WithField("function", "addDevice").Infof("Adding Endpoint of type %v", v)
-		clh.cliBuilder.AddNet(CLINet{
-			device: v.Name(),
-			mac:    v.HardwareAddr(),
-		})
+		clh.addNet(v)
 	case types.HybridVSock:
-		clh.Logger().WithFields(log.Fields{
-			"function": "addDevice",
-			"path":     v.UdsPath,
-			"cid":      v.ContextID,
-			"port":     v.Port,
-		}).Info("Adding HybridVSock")
-		clh.cliBuilder.SetVsock(&CLIVsock{
-			cid:        uint32(v.ContextID),
-			socketPath: v.UdsPath,
-			iommu:      false,
-		})
+		clh.addVSock(defaultGuestVSockCID, v.UdsPath)
+	case types.Volume:
+		err = clh.addVolume(v)
 	default:
 		clh.Logger().WithField("function", "addDevice").Warnf("Add device of type %v is not supported.", v)
+		return fmt.Errorf("Not implemented support for %s", v)
 	}
 
 	return err
@@ -465,6 +448,7 @@ func (clh *cloudHypervisor) Logger() *log.Entry {
 	return virtLog.WithField("subsystem", "cloudHypervisor")
 }
 
+// Adds all capabilities supported by cloudHypervisor implementation of hypervisor interface
 func (clh *cloudHypervisor) capabilities() types.Capabilities {
 	span, _ := clh.trace("capabilities")
 	defer span.Finish()
@@ -525,11 +509,20 @@ func (clh *cloudHypervisor) terminate() (err error) {
 	}
 	clh.Logger().WithField("PID", pid).Info("Stopping Cloud Hypervisor")
 
-	// Send a SIGTERM to the VM process to try to stop it properly
-	if err = syscall.Kill(pid, syscall.SIGTERM); err != nil {
-		if err == syscall.ESRCH {
-			return nil
-		}
+	clhRunning, err := clh.isClhRunning(clhStopSandboxTimeout)
+
+	if err != nil {
+		return err
+	}
+
+	if !clhRunning {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), clhStopSandboxTimeout*time.Second)
+	defer cancel()
+
+	if _, err = clh.client().ShutdownVMM(ctx); err != nil {
 		return err
 	}
 
@@ -540,8 +533,8 @@ func (clh *cloudHypervisor) terminate() (err error) {
 			return nil
 		}
 
-		if time.Since(tInit).Seconds() >= fcStopSandboxTimeout {
-			clh.Logger().Warnf("VM still running after waiting %ds", fcStopSandboxTimeout)
+		if time.Since(tInit).Seconds() >= clhStopSandboxTimeout {
+			clh.Logger().Warnf("VM still running after waiting %ds", clhStopSandboxTimeout)
 			break
 		}
 
@@ -573,7 +566,6 @@ func (clh *cloudHypervisor) generateSocket(id string, useVsock bool) (interface{
 	if err != nil {
 		return nil, err
 	}
-	clh.socketPath = udsPath
 	return types.HybridVSock{
 		UdsPath:   udsPath,
 		ContextID: cid,
@@ -733,44 +725,19 @@ func (clh *cloudHypervisor) storeState() error {
 	return nil
 }
 
-func (clh *cloudHypervisor) waitVMM(timeout int) error {
+func (clh *cloudHypervisor) waitVMM(timeout uint) error {
 
-	var err error
-	timeoutDuration := time.Duration(timeout) * time.Second
+	clhRunning, err := clh.isClhRunning(timeout)
 
-	sockReady := make(chan error, 1)
-	go func() {
-		udsPath, err := clh.vsockSocketPath(clh.id)
-		if err != nil {
-			sockReady <- err
-		}
-
-		for {
-			addr, err := net.ResolveUnixAddr("unix", udsPath)
-			if err != nil {
-				sockReady <- err
-			}
-			conn, err := net.DialUnix("unix", nil, addr)
-
-			if err != nil {
-				time.Sleep(50 * time.Millisecond)
-			} else {
-				conn.Close()
-				sockReady <- nil
-
-				break
-			}
-		}
-	}()
-
-	select {
-	case err = <-sockReady:
-	case <-time.After(timeoutDuration):
-		err = fmt.Errorf("timed out waiting for cloud-hypervisor vsock")
+	if err != nil {
+		return err
 	}
 
-	time.Sleep(1000 * time.Millisecond)
-	return err
+	if !clhRunning {
+		return fmt.Errorf("CLH is not running")
+	}
+
+	return nil
 }
 
 func (clh *cloudHypervisor) clhPath() (string, error) {
@@ -795,6 +762,7 @@ func (clh *cloudHypervisor) getAvailableVersion() error {
 	clhPath, err := clh.clhPath()
 	if err != nil {
 		return err
+
 	}
 
 	cmd := exec.Command(clhPath, "--version")
@@ -806,30 +774,37 @@ func (clh *cloudHypervisor) getAvailableVersion() error {
 	words := strings.Fields(string(out))
 	if len(words) != 2 {
 		return errors.New("Failed to parse cloud-hypervisor version response. Illegal length")
+
 	}
 	versionSplit := strings.SplitN(words[1], ".", -1)
 	if len(versionSplit) != 3 {
 		return errors.New("Failed to parse cloud-hypervisor version field. Illegal length")
+
 	}
 
 	major, err := strconv.ParseUint(versionSplit[0], 10, 64)
 	if err != nil {
 		return err
+
 	}
 	minor, err := strconv.ParseUint(versionSplit[1], 10, 64)
 	if err != nil {
 		return err
+
 	}
 	revision, err := strconv.ParseUint(versionSplit[2], 10, 64)
 	if err != nil {
 		return err
+
 	}
+
 	clh.version = CloudHypervisorVersion{
 		Major:    int(major),
 		Minor:    int(minor),
 		Revision: int(revision),
 	}
 	return nil
+
 }
 
 func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
@@ -840,17 +815,22 @@ func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
 	if err != nil {
 		return "", -1, err
 	}
-	director := &CommandLineDirector{}
 
-	cli, err := director.Build(clh.cliBuilder)
-	if err != nil {
-		return "", -1, err
+	args := []string{cscApisocket, clh.state.apiSocket}
+	if clh.config.Debug {
+
+		logfile, err := clh.logFilePath(clh.id)
+		if err != nil {
+			return "", -1, err
+		}
+		args = append(args, cscLogFile)
+		args = append(args, logfile)
 	}
 
 	clh.Logger().WithField("path", clhPath).Info()
-	clh.Logger().WithField("args", strings.Join(cli.args, " ")).Info()
+	clh.Logger().WithField("args", strings.Join(args, " ")).Info()
 
-	cmd := exec.Command(clhPath, cli.args...)
+	cmd := exec.Command(clhPath, args...)
 	cmd.Stdout = &clh.cmdOutput
 	cmd.Stderr = &clh.cmdOutput
 
@@ -882,10 +862,8 @@ func MaxClhVCPUs() uint32 {
 //###########################################################################
 
 const (
-	cctOFF  string = "off"
-	cctFILE string = "file"
-	cctNULL string = "null"
-	cctTTY  string = "tty"
+	cctOFF  string = "Off"
+	cctFILE string = "File"
 )
 
 const (
@@ -1184,16 +1162,11 @@ func (o *CLILogFile) Build(cmdline *CommandLine) {
 //****************************************
 // The kernel command line
 //****************************************
-type CLICmdline struct {
-	params []Param
-}
 
-func (o *CLICmdline) Build(cmdline *CommandLine) {
-
-	cmdline.args = append(cmdline.args, cscCmdline)
+func kernelParamsToString(params []Param) string {
 
 	var paramBuilder strings.Builder
-	for _, p := range o.params {
+	for _, p := range params {
 		paramBuilder.WriteString(p.Key)
 		if len(p.Value) > 0 {
 
@@ -1202,141 +1175,195 @@ func (o *CLICmdline) Build(cmdline *CommandLine) {
 		}
 		paramBuilder.WriteString(" ")
 	}
-	cmdline.args = append(cmdline.args, strings.TrimSpace(paramBuilder.String()))
-
+	return strings.TrimSpace(paramBuilder.String())
 }
 
-//**********************************
-// The Default Builder
-//**********************************
-type DefaultCLIBuilder struct {
-	console   *CLIConsole
-	serial    *CLISerialConsole
-	apiSocket *CLIAPISocket
-	cpus      *CLICpus
-	memory    *CLIMemory
-	kernel    *CLIKernel
-	disk      *CLIDisk
-	fs        *CLIFs
-	rng       *CLIRng
-	logFile   *CLILogFile
-	vsock     *CLIVsock
-	cmdline   *CLICmdline
-	nets      *CLINets
-}
+//****************************************
+// API calls
+//****************************************
+func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 
-func (d *DefaultCLIBuilder) AddKernelParameters(params []Param) {
+	pid := clh.state.PID
 
-	if d.cmdline == nil {
-		d.cmdline = &CLICmdline{}
-	}
-	d.cmdline.params = append(d.cmdline.params, params...)
-}
-
-func (d *DefaultCLIBuilder) SetConsole(console *CLIConsole) {
-	d.console = console
-}
-
-func (d *DefaultCLIBuilder) SetCpus(cpus *CLICpus) {
-	d.cpus = cpus
-}
-
-func (d *DefaultCLIBuilder) SetDisk(disk *CLIDisk) {
-	d.disk = disk
-}
-
-func (d *DefaultCLIBuilder) SetFs(fs *CLIFs) {
-	d.fs = fs
-}
-
-func (d *DefaultCLIBuilder) SetKernel(kernel *CLIKernel) {
-	d.kernel = kernel
-}
-
-func (d *DefaultCLIBuilder) SetMemory(memory *CLIMemory) {
-	d.memory = memory
-}
-
-func (d *DefaultCLIBuilder) AddNet(net CLINet) {
-	if d.nets == nil {
-		d.nets = &CLINets{}
-	}
-	d.nets.networks = append(d.nets.networks, net)
-}
-
-func (d *DefaultCLIBuilder) SetRng(rng *CLIRng) {
-	d.rng = rng
-}
-
-func (d *DefaultCLIBuilder) SetSerial(serial *CLISerialConsole) {
-	d.serial = serial
-}
-
-func (d *DefaultCLIBuilder) SetVsock(vsock *CLIVsock) {
-	d.vsock = vsock
-}
-
-func (d *DefaultCLIBuilder) SetAPISocket(apiSocket *CLIAPISocket) {
-	d.apiSocket = apiSocket
-}
-
-func (d *DefaultCLIBuilder) SetLogFile(logFile *CLILogFile) {
-	d.logFile = logFile
-}
-
-func (d *DefaultCLIBuilder) GetCommandLine() (*CommandLine, error) {
-
-	cmdLine := &CommandLine{}
-
-	if d.serial != nil {
-		d.serial.Build(cmdLine)
+	// Check if clh process is running, in case it is not, let's
+	// return from here.
+	if err := syscall.Kill(pid, syscall.Signal(0)); err != nil {
+		return false, nil
 	}
 
-	if d.console != nil {
-		d.console.Build(cmdLine)
+	timeStart := time.Now()
+	cl := clh.client()
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+		defer cancel()
+		_, _, err := cl.VmmPingGet(ctx)
+		if err == nil {
+			return true, nil
+		}
+
+		if time.Since(timeStart).Seconds() > float64(timeout) {
+			return false, fmt.Errorf("Failed to connect to API (timeout %ds): %s", timeout, openAPIClientError(err))
+		}
+
+		time.Sleep(time.Duration(10) * time.Millisecond)
 	}
 
-	if d.apiSocket != nil {
-		d.apiSocket.Build(cmdLine)
-	}
-
-	if d.logFile != nil {
-		d.logFile.Build(cmdLine)
-	}
-
-	if d.cpus != nil {
-		d.cpus.Build(cmdLine)
-	}
-	if d.memory != nil {
-		d.memory.Build(cmdLine)
-	}
-	if d.disk != nil {
-		d.disk.Build(cmdLine)
-	}
-	if d.rng != nil {
-		d.rng.Build(cmdLine)
-	}
-	if d.vsock != nil {
-		d.vsock.Build(cmdLine)
-	}
-	if d.fs != nil {
-		d.fs.Build(cmdLine)
-	}
-	if d.kernel != nil {
-		d.kernel.Build(cmdLine)
-	}
-	if d.nets != nil {
-		d.nets.Build(cmdLine)
-	}
-	if d.cmdline != nil {
-		d.cmdline.Build(cmdLine)
-	}
-
-	return cmdLine, nil
 }
 
-type CommandLineDirector struct{}
+func (clh *cloudHypervisor) client() *chclient.DefaultApiService {
+	if clh.APIClient == nil {
+		clh.APIClient = clh.newAPIClient()
+	}
 
-func (s *CommandLineDirector) Build(builder CommandLineBuilder) (*CommandLine, error) {
-	return builder.GetCommandLine()
+	return clh.APIClient
+}
+
+func (clh *cloudHypervisor) newAPIClient() *chclient.DefaultApiService {
+
+	cfg := chclient.NewConfiguration()
+
+	socketTransport := &http.Transport{
+		DialContext: func(ctx context.Context, network, path string) (net.Conn, error) {
+			addr, err := net.ResolveUnixAddr("unix", clh.state.apiSocket)
+			if err != nil {
+				return nil, err
+
+			}
+
+			return net.DialUnix("unix", nil, addr)
+		},
+	}
+
+	cfg.HTTPClient = http.DefaultClient
+	cfg.HTTPClient.Transport = socketTransport
+
+	return chclient.NewAPIClient(cfg).DefaultApi
+}
+
+func openAPIClientError(err error) error {
+
+	if err == nil {
+		return nil
+	}
+
+	reason := ""
+	if apierr, ok := err.(chclient.GenericOpenAPIError); ok {
+		reason = string(apierr.Body())
+	}
+
+	return fmt.Errorf("error: %v reason: %s", err, reason)
+}
+
+func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
+
+	cl := clh.client()
+
+	if clh.config.Debug {
+		bodyBuf, err := json.Marshal(clh.vmconfig)
+		if err != nil {
+			return err
+		}
+		clh.Logger().WithField("body", string(bodyBuf)).Debug("VM config")
+	}
+	_, err := cl.CreateVM(ctx, clh.vmconfig)
+
+	if err != nil {
+		return openAPIClientError(err)
+	}
+
+	info, _, err := cl.VmInfoGet(ctx)
+
+	if err != nil {
+		return openAPIClientError(err)
+	}
+
+	clh.Logger().Debugf("VM state after create: %#v", info)
+
+	if info.State != "Created" {
+		return fmt.Errorf("VM state is not 'Created' after 'CreateVM'")
+	}
+
+	clh.Logger().Debug("Booting VM")
+	_, err = cl.BootVM(ctx)
+
+	if err != nil {
+		return openAPIClientError(err)
+	}
+
+	info, _, err = cl.VmInfoGet(ctx)
+
+	if err != nil {
+		return openAPIClientError(err)
+	}
+
+	clh.Logger().Debugf("VM state after boot: %#v", info)
+
+	if info.State != "Running" {
+		return fmt.Errorf("VM state is not 'Running' after 'BootVM'")
+	}
+
+	return nil
+}
+
+func (clh *cloudHypervisor) addVSock(cid int64, path string) {
+	clh.Logger().WithFields(log.Fields{
+		"path": path,
+		"cid":  cid,
+	}).Info("Adding HybridVSock")
+
+	clh.vmconfig.Vsock = append(clh.vmconfig.Vsock, chclient.VsockConfig{Cid: cid, Sock: path})
+}
+
+func (clh *cloudHypervisor) addNet(e Endpoint) {
+	clh.Logger().WithField("endpoint-type", e).Debugf("Adding Endpoint of type %v", e)
+	mac := e.HardwareAddr()
+	tapPath := e.NetworkPair().TapInterface.TAPIface.Name
+	clh.Logger().WithFields(log.Fields{
+		"mac": mac,
+		"tap": tapPath,
+	}).Info("Adding Net")
+
+	// FIXME: This is required by CH
+	// remove after PR is merged:
+	// https://github.com/cloud-hypervisor/cloud-hypervisor/pull/480
+	ip := "0.0.0.0"
+	mask := "0.0.0.0"
+	clh.vmconfig.Net = append(clh.vmconfig.Net, chclient.NetConfig{Mac: mac, Tap: tapPath, Ip: ip, Mask: mask})
+}
+
+// Add shared Volume using virtiofs
+func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
+	if clh.config.SharedFS != config.VirtioFS {
+		return fmt.Errorf("shared fs method not supported %s", clh.config.SharedFS)
+	}
+
+	vfsdSockPath, err := clh.virtioFsSocketPath(clh.id)
+	if err != nil {
+		return err
+	}
+
+	if clh.config.VirtioFSCache == virtioFsCacheAlways {
+		clh.vmconfig.Fs = []chclient.FsConfig{
+			{
+				Tag:       volume.MountTag,
+				CacheSize: int64(clh.config.VirtioFSCacheSize << 20),
+				Sock:      vfsdSockPath,
+				NumQueues: clhFsQueues,
+				QueueSize: clhFsQueueSize,
+			},
+		}
+	} else {
+		clh.vmconfig.Fs = []chclient.FsConfig{
+			{
+				Tag:       volume.MountTag,
+				Sock:      vfsdSockPath,
+				NumQueues: clhFsQueues,
+				QueueSize: clhFsQueueSize,
+			},
+		}
+
+	}
+
+	clh.Logger().Debug("Adding share volume to hypervisor: ", volume.MountTag)
+	return nil
 }
