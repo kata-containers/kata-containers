@@ -41,6 +41,7 @@ use libc::{self, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use serde_json;
 use std::fs;
 use std::os::unix::io::RawFd;
+use std::os::unix::prelude::PermissionsExt;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
 use std::thread;
@@ -55,7 +56,7 @@ use std::path::PathBuf;
 const SYSFS_MEMORY_BLOCK_SIZE_PATH: &'static str = "/sys/devices/system/memory/block_size_bytes";
 const SYSFS_MEMORY_HOTPLUG_PROBE_PATH: &'static str = "/sys/devices/system/memory/probe";
 pub const SYSFS_MEMORY_ONLINE_PATH: &'static str = "/sys/devices/system/memory";
-const CONTAINER_BASE: &'static str = "/run/agent";
+const CONTAINER_BASE: &'static str = "/run/kata-containers";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -1685,7 +1686,7 @@ fn do_set_guest_date_time(sec: i64, usec: i64) -> Result<()> {
 }
 
 fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
-    let path = fs::canonicalize(req.path.as_str())?;
+    let path = PathBuf::from(req.path.as_str());
 
     if !path.starts_with(CONTAINER_BASE) {
         return Err(nix::Error::Sys(Errno::EINVAL).into());
@@ -1705,14 +1706,10 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
         }
     }
 
-    let ret = unsafe {
-        libc::chmod(
-            dir.to_str().unwrap().as_ptr() as *const libc::c_char,
-            req.dir_mode,
-        )
-    };
-
-    let _ = Errno::result(ret).map(drop)?;
+    std::fs::set_permissions(
+        dir.to_str().unwrap(),
+        std::fs::Permissions::from_mode(req.dir_mode),
+    )?;
 
     let mut tmpfile = path.clone();
     tmpfile.set_extension("tmp");
@@ -1722,22 +1719,16 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
         .create(true)
         .truncate(false)
         .open(tmpfile.to_str().unwrap())?;
-    file.write_all_at(req.data.as_slice(), req.offset as u64)?;
 
+    file.write_all_at(req.data.as_slice(), req.offset as u64)?;
     let st = stat::stat(tmpfile.to_str().unwrap())?;
 
     if st.st_size != req.file_size {
         return Ok(());
     }
 
-    let ret = unsafe {
-        libc::chmod(
-            tmpfile.to_str().unwrap().as_ptr() as *const libc::c_char,
-            req.file_mode,
-        )
-    };
+    file.set_permissions(std::fs::Permissions::from_mode(req.file_mode))?;
 
-    let _ = Errno::result(ret).map(drop)?;
     unistd::chown(
         tmpfile.to_str().unwrap(),
         Some(Uid::from_raw(req.uid as u32)),
