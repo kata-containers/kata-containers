@@ -604,10 +604,11 @@
   revision = "8dd112bcdc25174059e45e07517d9fc663123347"
 
 [[projects]]
-  digest = "1:b20c63a56900e442d5f435613fefc9392cbe8849467510fcc3869dbdad9441bb"
+  digest = "1:514d2147b3fd915870b534e3578feed1c40a82aa751a015b160785616bfa2130"
   name = "golang.org/x/net"
   packages = [
     "context",
+    "context/ctxhttp",
     "http2",
     "http2/hpack",
     "idna",
@@ -617,6 +618,17 @@
   ]
   pruneopts = "NUT"
   revision = "a8b9294777976932365dabb6640cf1468d95c70f"
+
+[[projects]]
+  branch = "master"
+  digest = "1:f3a2e6d7423b8c19cdb2203cda9672900cc43012ea69f30ff6874dd453f44aec"
+  name = "golang.org/x/oauth2"
+  packages = [
+    ".",
+    "internal",
+  ]
+  pruneopts = "NUT"
+  revision = "5d9234df094ce600ff541158d1491aa10d078a47"
 
 [[projects]]
   digest = "1:8a6926e1c2cd5be0a71125e5e4ac317d76ffc95478f440d151717fb2b23e42c5"
@@ -651,6 +663,22 @@
   pruneopts = "NUT"
   revision = "f21a4dfb5e38f5895301dc265a8def02365cc3d0"
   version = "v0.3.0"
+
+[[projects]]
+  digest = "1:c8131c929081f0fa26901a27eec93162a44afb3fc89a38573520dd4e3f1b1621"
+  name = "google.golang.org/appengine"
+  packages = [
+    "internal",
+    "internal/base",
+    "internal/datastore",
+    "internal/log",
+    "internal/remote_api",
+    "internal/urlfetch",
+    "urlfetch",
+  ]
+  pruneopts = "NUT"
+  revision = "971852bfffca25b069c31162ae8f247a3dba083b"
+  version = "v1.6.5"
 
 [[projects]]
   branch = "master"
@@ -760,6 +788,7 @@
     "github.com/vishvananda/netlink",
     "github.com/vishvananda/netns",
     "golang.org/x/net/context",
+    "golang.org/x/oauth2",
     "golang.org/x/sys/unix",
     "google.golang.org/grpc",
     "google.golang.org/grpc/codes",
