@@ -175,7 +175,7 @@ func TestMain(m *testing.M) {
 	// allow the tests to run without affecting the host system.
 	store.ConfigStoragePath = func() string { return filepath.Join(testDir, store.StoragePathSuffix, "config") }
 	store.RunStoragePath = func() string { return filepath.Join(testDir, store.StoragePathSuffix, "run") }
-	fs.TestSetRunStoragePath(filepath.Join(testDir, "vc", "sbs"))
+	fs.TestSetRunStoragePath(filepath.Join(testDir, "vc", "run"))
 
 	defer func() {
 		store.ConfigStoragePath = ConfigStoragePathSaved

@@ -338,8 +338,6 @@ type Container struct {
 	systemMountsInfo SystemMountsInfo
 
 	ctx context.Context
-
-	store *store.VCStore
 }
 
 // ID returns the container identifier string.
@@ -391,13 +389,6 @@ func (c *Container) GetPid() int {
 func (c *Container) setStateFstype(fstype string) error {
 	c.state.Fstype = fstype
 
-	if !c.sandbox.supportNewStore() {
-		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
-		if err := c.storeState(); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -421,48 +412,10 @@ func (c *Container) GetPatchedOCISpec() *specs.Spec {
 
 // storeContainer stores a container config.
 func (c *Container) storeContainer() error {
-	if c.sandbox.supportNewStore() {
-		if err := c.sandbox.Save(); err != nil {
-			return err
-		}
-		return nil
+	if err := c.sandbox.Save(); err != nil {
+		return err
 	}
-	return c.store.Store(store.Configuration, *(c.config))
-}
-
-func (c *Container) storeProcess() error {
-	return c.store.Store(store.Process, c.process)
-}
-
-func (c *Container) storeMounts() error {
-	return c.store.Store(store.Mounts, c.mounts)
-}
-
-func (c *Container) storeDevices() error {
-	return c.store.Store(store.DeviceIDs, c.devices)
-}
-
-func (c *Container) storeState() error {
-	return c.store.Store(store.State, c.state)
-}
-
-func (c *Container) loadMounts() ([]Mount, error) {
-	var mounts []Mount
-	if err := c.store.Load(store.Mounts, &mounts); err != nil {
-		return []Mount{}, err
-	}
-
-	return mounts, nil
-}
-
-func (c *Container) loadDevices() ([]ContainerDevice, error) {
-	var devices []ContainerDevice
-
-	if err := c.store.Load(store.DeviceIDs, &devices); err != nil {
-		return []ContainerDevice{}, err
-	}
-
-	return devices, nil
+	return nil
 }
 
 // setContainerState sets both the in-memory and on-disk state of the
@@ -476,17 +429,9 @@ func (c *Container) setContainerState(state types.StateString) error {
 	// update in-memory state
 	c.state.State = state
 
-	if c.sandbox.supportNewStore() {
-		// flush data to storage
-		if err := c.sandbox.Save(); err != nil {
-			return err
-		}
-	} else {
-		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
-		// update on-disk state
-		if err := c.store.Store(store.State, c.state); err != nil {
-			return err
-		}
+	// flush data to storage
+	if err := c.sandbox.Save(); err != nil {
+		return err
 	}
 
 	return nil
@@ -571,13 +516,6 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 			if err := c.sandbox.devManager.AttachDevice(m.BlockDeviceID, c.sandbox); err != nil {
 				return nil, nil, err
 			}
-
-			if !c.sandbox.supportNewStore() {
-				if err := c.sandbox.storeSandboxDevices(); err != nil {
-					//TODO: roll back?
-					return nil, nil, err
-				}
-			}
 			continue
 		}
 
@@ -618,12 +556,6 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 		}
 
 		sharedDirMounts[sharedDirMount.Destination] = sharedDirMount
-	}
-
-	if !c.sandbox.supportNewStore() {
-		if err := c.storeMounts(); err != nil {
-			return nil, nil, err
-		}
 	}
 
 	return sharedDirMounts, ignoredMounts, nil
@@ -751,46 +683,19 @@ func newContainer(sandbox *Sandbox, contConfig *ContainerConfig) (*Container, er
 		ctx:           sandbox.ctx,
 	}
 
-	storeAlreadyExists := store.VCContainerStoreExists(sandbox.ctx, c.sandboxID, c.id)
-	ctrStore, err := store.NewVCContainerStore(sandbox.ctx, c.sandboxID, c.id)
-	if err != nil {
+	// experimental runtime use "persist.json" instead of legacy "state.json" as storage
+	err := c.Restore()
+	if err == nil {
+		//container restored
+		return c, nil
+	}
+
+	// Unexpected error
+	if !os.IsNotExist(err) && err != errContainerPersistNotExist {
 		return nil, err
 	}
-	defer func() {
-		if err != nil && !storeAlreadyExists {
-			if delerr := c.store.Delete(); delerr != nil {
-				c.Logger().WithError(delerr).WithField("cid", c.id).Error("delete store failed")
-			}
-		}
-	}()
 
-	c.store = ctrStore
-
-	// experimental runtime use "persist.json" instead of legacy "state.json" as storage
-	if c.sandbox.supportNewStore() {
-		err := c.Restore()
-		if err == nil {
-			//container restored
-			return c, nil
-		}
-
-		// Unexpected error
-		if !os.IsNotExist(err) && err != errContainerPersistNotExist {
-			return nil, err
-		}
-		// Go to next step for first created container
-	} else {
-		state, err := c.store.LoadContainerState()
-		if err == nil {
-			c.state = state
-		}
-
-		var process Process
-		if err := c.store.Load(store.Process, &process); err == nil {
-			c.process = process
-		}
-	}
-
+	// Go to next step for first created container
 	if err = c.createMounts(); err != nil {
 		return nil, err
 	}
@@ -803,17 +708,6 @@ func newContainer(sandbox *Sandbox, contConfig *ContainerConfig) (*Container, er
 }
 
 func (c *Container) createMounts() error {
-	// If sandbox supports "newstore", only newly created container can reach this function,
-	// so we don't call restore when `supportNewStore` is true
-	if !c.sandbox.supportNewStore() {
-		mounts, err := c.loadMounts()
-		if err == nil {
-			// restore mounts from disk
-			c.mounts = mounts
-			return nil
-		}
-	}
-
 	// Create block devices for newly created container
 	if err := c.createBlockDevices(); err != nil {
 		return err
@@ -823,18 +717,6 @@ func (c *Container) createMounts() error {
 }
 
 func (c *Container) createDevices(contConfig *ContainerConfig) error {
-	// If sandbox supports "newstore", only newly created container can reach this function,
-	// so we don't call restore when `supportNewStore` is true
-	if !c.sandbox.supportNewStore() {
-		// Devices will be found in storage after create stage has completed.
-		// We load devices from storage at all other stages.
-		storedDevices, err := c.loadDevices()
-		if err == nil {
-			c.devices = storedDevices
-			return nil
-		}
-	}
-
 	// If devices were not found in storage, create Device implementations
 	// from the configuration. This should happen at create.
 	var storedDevices []ContainerDevice
@@ -914,12 +796,6 @@ func (c *Container) create() (err error) {
 	// inside the VM
 	c.getSystemMountInfo()
 
-	if !c.sandbox.supportNewStore() {
-		if err = c.storeDevices(); err != nil {
-			return
-		}
-	}
-
 	process, err := c.sandbox.agent.createContainer(c.sandbox, c)
 	if err != nil {
 		return err
@@ -928,13 +804,6 @@ func (c *Container) create() (err error) {
 
 	if !rootless.IsRootless() && !c.sandbox.config.SandboxCgroupOnly {
 		if err = c.cgroupsCreate(); err != nil {
-			return
-		}
-	}
-
-	if !c.sandbox.supportNewStore() {
-		// Store the container process returned by the agent.
-		if err = c.storeProcess(); err != nil {
 			return
 		}
 	}
@@ -964,7 +833,7 @@ func (c *Container) delete() error {
 		}
 	}
 
-	return c.store.Delete()
+	return c.sandbox.storeSandbox()
 }
 
 // checkSandboxRunning validates the container state.
@@ -1383,12 +1252,6 @@ func (c *Container) plugDevice(devicePath string) error {
 		if err := c.sandbox.devManager.AttachDevice(b.DeviceID(), c.sandbox); err != nil {
 			return err
 		}
-
-		if !c.sandbox.supportNewStore() {
-			if err := c.sandbox.storeSandboxDevices(); err != nil {
-				return err
-			}
-		}
 	}
 	return nil
 }
@@ -1419,12 +1282,6 @@ func (c *Container) removeDrive() (err error) {
 				return err
 			}
 		}
-
-		if !c.sandbox.supportNewStore() {
-			if err := c.sandbox.storeSandboxDevices(); err != nil {
-				return err
-			}
-		}
 	}
 
 	return nil
@@ -1436,12 +1293,6 @@ func (c *Container) attachDevices() error {
 	// and rollbackFailingContainerCreation could do all the rollbacks
 	for _, dev := range c.devices {
 		if err := c.sandbox.devManager.AttachDevice(dev.ID, c.sandbox); err != nil {
-			return err
-		}
-	}
-
-	if !c.sandbox.supportNewStore() {
-		if err := c.sandbox.storeSandboxDevices(); err != nil {
 			return err
 		}
 	}
@@ -1465,12 +1316,6 @@ func (c *Container) detachDevices() error {
 			if err != manager.ErrDeviceNotExist {
 				return err
 			}
-		}
-	}
-
-	if !c.sandbox.supportNewStore() {
-		if err := c.sandbox.storeSandboxDevices(); err != nil {
-			return err
 		}
 	}
 	return nil

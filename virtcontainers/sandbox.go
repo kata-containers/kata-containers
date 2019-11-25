@@ -597,23 +597,9 @@ func (s *Sandbox) storeSandbox() error {
 	span, _ := s.trace("storeSandbox")
 	defer span.Finish()
 
-	if s.supportNewStore() {
-		// flush data to storage
-		if err := s.Save(); err != nil {
-			return err
-		}
-	} else {
-		err := s.store.Store(store.Configuration, *(s.config))
-		if err != nil {
-			return err
-		}
-
-		for _, container := range s.containers {
-			err = container.store.Store(store.Configuration, *(container.config))
-			if err != nil {
-				return err
-			}
-		}
+	// flush data to storage
+	if err := s.Save(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -777,7 +763,7 @@ func (s *Sandbox) Delete() error {
 	s.agent.cleanup(s)
 
 	if s.supportNewStore() {
-		if err := s.newStore.Destroy(); err != nil {
+		if err := s.newStore.Destroy(s.id); err != nil {
 			return err
 		}
 	}
@@ -1070,7 +1056,6 @@ func (s *Sandbox) stopVM() error {
 	if s.disableVMShutdown {
 		// Do not kill the VM - allow the agent to shut it down
 		// (only used to support static agent tracing).
-		s.Logger().Info("Not stopping VM")
 		return nil
 	}
 
@@ -1118,7 +1103,6 @@ func (s *Sandbox) fetchContainers() error {
 // This should be called only when the sandbox is already created.
 // It will add new container config to sandbox.config.Containers
 func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, error) {
-	storeAlreadyExists := store.VCContainerStoreExists(s.ctx, s.id, contConfig.ID)
 	// Create the container.
 	c, err := newContainer(s, &contConfig)
 	if err != nil {
@@ -1134,11 +1118,6 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 				// delete container config
 				s.config.Containers = s.config.Containers[:len(s.config.Containers)-1]
 			}
-			if !storeAlreadyExists {
-				if delerr := c.store.Delete(); delerr != nil {
-					c.Logger().WithError(delerr).WithField("cid", c.id).Error("delete store failed")
-				}
-			}
 		}
 	}()
 
@@ -1152,16 +1131,17 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 		return nil, err
 	}
 
+	defer func() {
+		// Rollback if error happens.
+		if err != nil {
+			s.removeContainer(c.id)
+		}
+	}()
+
 	// Sandbox is reponsable to update VM resources needed by Containers
 	// Update resources after having added containers to the sandbox, since
 	// container status is requiered to know if more resources should be added.
 	err = s.updateResources()
-	if err != nil {
-		return nil, err
-	}
-
-	// Store it.
-	err = c.storeContainer()
 	if err != nil {
 		return nil, err
 	}

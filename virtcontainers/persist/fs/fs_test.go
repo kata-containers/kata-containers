@@ -40,18 +40,25 @@ func TestFsLock(t *testing.T) {
 		os.RemoveAll(testDir)
 	}()
 
-	fs.sandboxState.SandboxContainer = "test-fs-driver"
-	sandboxDir, err := fs.sandboxDir()
+	sid := "test-fs-driver"
+	fs.sandboxState.SandboxContainer = sid
+	sandboxDir, err := fs.sandboxDir(sid)
 	assert.Nil(t, err)
 
 	err = os.MkdirAll(sandboxDir, dirMode)
 	assert.Nil(t, err)
 
-	assert.Nil(t, fs.lock())
-	assert.NotNil(t, fs.lock())
+	unlockFunc, err := fs.Lock(sid, false)
+	assert.Nil(t, err)
+	unlockFunc2, err := fs.Lock(sid, false)
+	assert.Nil(t, err)
+	_, err = fs.Lock(sid, true)
+	assert.NotNil(t, err)
 
-	assert.Nil(t, fs.unlock())
-	assert.Nil(t, fs.unlock())
+	assert.Nil(t, unlockFunc())
+	// double unlock should return error
+	assert.NotNil(t, unlockFunc())
+	assert.Nil(t, unlockFunc2())
 }
 
 func TestFsDriver(t *testing.T) {
@@ -88,7 +95,7 @@ func TestFsDriver(t *testing.T) {
 	assert.Equal(t, ss.SandboxContainer, id)
 	assert.Equal(t, ss.State, "")
 
-	// flush all to disk
+	// flush all to disk.
 	ss.State = "running"
 	assert.Nil(t, fs.ToDisk(ss, cs))
 	ss, cs, err = fs.FromDisk(id)
@@ -99,9 +106,31 @@ func TestFsDriver(t *testing.T) {
 	assert.Equal(t, ss.SandboxContainer, id)
 	assert.Equal(t, ss.State, "running")
 
-	assert.Nil(t, fs.Destroy())
+	// add new container state.
+	cs["test-container"] = persistapi.ContainerState{
+		State: "ready",
+	}
+	assert.Nil(t, fs.ToDisk(ss, cs))
+	ss, cs, err = fs.FromDisk(id)
+	assert.Nil(t, err)
+	assert.NotNil(t, ss)
+	assert.Equal(t, len(cs), 1)
+	c, ok := cs["test-container"]
+	assert.True(t, ok)
+	assert.Equal(t, c.State, "ready")
 
-	dir, err := fs.sandboxDir()
+	// clean all container.
+	cs = make(map[string]persistapi.ContainerState)
+	assert.Nil(t, fs.ToDisk(ss, cs))
+	ss, cs, err = fs.FromDisk(id)
+	assert.Nil(t, err)
+	assert.NotNil(t, ss)
+	assert.Equal(t, len(cs), 0)
+
+	// destroy whole sandbox dir.
+	assert.Nil(t, fs.Destroy(id))
+
+	dir, err := fs.sandboxDir(id)
 	assert.Nil(t, err)
 	assert.NotEqual(t, len(dir), 0)
 

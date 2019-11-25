@@ -51,8 +51,6 @@ var RunStoragePath = func() string {
 type FS struct {
 	sandboxState   *persistapi.SandboxState
 	containerState map[string]persistapi.ContainerState
-
-	lockFile *os.File
 }
 
 var fsLog = logrus.WithField("source", "virtcontainers/persist/fs")
@@ -77,21 +75,21 @@ func Init() (persistapi.PersistDriver, error) {
 	}, nil
 }
 
-func (fs *FS) sandboxDir() (string, error) {
-	id := fs.sandboxState.SandboxContainer
-	if id == "" {
-		return "", fmt.Errorf("sandbox container id required")
-	}
-
-	return filepath.Join(RunStoragePath(), id), nil
+func (fs *FS) sandboxDir(sandboxID string) (string, error) {
+	return filepath.Join(RunStoragePath(), sandboxID), nil
 }
 
 // ToDisk sandboxState and containerState to disk
 func (fs *FS) ToDisk(ss persistapi.SandboxState, cs map[string]persistapi.ContainerState) (retErr error) {
+	id := ss.SandboxContainer
+	if id == "" {
+		return fmt.Errorf("sandbox container id required")
+	}
+
 	fs.sandboxState = &ss
 	fs.containerState = cs
 
-	sandboxDir, err := fs.sandboxDir()
+	sandboxDir, err := fs.sandboxDir(id)
 	if err != nil {
 		return err
 	}
@@ -100,15 +98,10 @@ func (fs *FS) ToDisk(ss persistapi.SandboxState, cs map[string]persistapi.Contai
 		return err
 	}
 
-	if err := fs.lock(); err != nil {
-		return err
-	}
-	defer fs.unlock()
-
 	// if error happened, destroy all dirs
 	defer func() {
 		if retErr != nil {
-			if err := fs.Destroy(); err != nil {
+			if err := fs.Destroy(id); err != nil {
 				fs.Logger().WithError(err).Errorf("failed to destroy dirs")
 			}
 		}
@@ -155,6 +148,27 @@ func (fs *FS) ToDisk(ss persistapi.SandboxState, cs map[string]persistapi.Contai
 		}
 	}
 
+	// Walk sandbox dir and find container.
+	files, err := ioutil.ReadDir(sandboxDir)
+	if err != nil {
+		return err
+	}
+
+	// Remove non-existing containers
+	for _, file := range files {
+		if !file.IsDir() {
+			continue
+		}
+		// Container dir exists.
+		cid := file.Name()
+
+		// Container should be removed when container id doesn't exist in cs.
+		if _, ok := cs[cid]; !ok {
+			if err := os.RemoveAll(filepath.Join(sandboxDir, cid)); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -165,17 +179,10 @@ func (fs *FS) FromDisk(sid string) (persistapi.SandboxState, map[string]persista
 		return ss, nil, fmt.Errorf("restore requires sandbox id")
 	}
 
-	fs.sandboxState.SandboxContainer = sid
-
-	sandboxDir, err := fs.sandboxDir()
+	sandboxDir, err := fs.sandboxDir(sid)
 	if err != nil {
 		return ss, nil, err
 	}
-
-	if err := fs.lock(); err != nil {
-		return ss, nil, err
-	}
-	defer fs.unlock()
 
 	// get sandbox configuration from persist data
 	sandboxFile := filepath.Join(sandboxDir, persistFile)
@@ -224,8 +231,12 @@ func (fs *FS) FromDisk(sid string) (persistapi.SandboxState, map[string]persista
 }
 
 // Destroy removes everything from disk
-func (fs *FS) Destroy() error {
-	sandboxDir, err := fs.sandboxDir()
+func (fs *FS) Destroy(sandboxID string) error {
+	if sandboxID == "" {
+		return fmt.Errorf("sandbox container id required")
+	}
+
+	sandboxDir, err := fs.sandboxDir(sandboxID)
 	if err != nil {
 		return err
 	}
@@ -236,39 +247,42 @@ func (fs *FS) Destroy() error {
 	return nil
 }
 
-func (fs *FS) lock() error {
-	sandboxDir, err := fs.sandboxDir()
+func (fs *FS) Lock(sandboxID string, exclusive bool) (func() error, error) {
+	if sandboxID == "" {
+		return nil, fmt.Errorf("sandbox container id required")
+	}
+
+	sandboxDir, err := fs.sandboxDir(sandboxID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	f, err := os.Open(sandboxDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	var lockType int
+	if exclusive {
+		lockType = syscall.LOCK_EX | syscall.LOCK_NB
+	} else {
+		lockType = syscall.LOCK_SH | syscall.LOCK_NB
+	}
+
+	if err := syscall.Flock(int(f.Fd()), lockType); err != nil {
 		f.Close()
-		return err
+		return nil, err
 	}
-	fs.lockFile = f
 
-	return nil
-}
+	unlockFunc := func() error {
+		defer f.Close()
+		if err := syscall.Flock(int(f.Fd()), syscall.LOCK_UN); err != nil {
+			return err
+		}
 
-func (fs *FS) unlock() error {
-	if fs.lockFile == nil {
 		return nil
 	}
-
-	lockFile := fs.lockFile
-	defer lockFile.Close()
-	fs.lockFile = nil
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN); err != nil {
-		return err
-	}
-
-	return nil
+	return unlockFunc, nil
 }
 
 // TestSetRunStoragePath set RunStoragePath to path

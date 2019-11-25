@@ -13,5 +13,8 @@ type PersistDriver interface {
 	// We only support get data for one whole sandbox
 	FromDisk(sid string) (SandboxState, map[string]ContainerState, error)
 	// Destroy will remove everything from storage
-	Destroy() error
+	Destroy(sid string) error
+	// Lock locks the persist driver, "exclusive" decides whether the lock is exclusive or shared.
+	// It returns Unlock Function and errors
+	Lock(sid string, exclusive bool) (func() error, error)
 }
