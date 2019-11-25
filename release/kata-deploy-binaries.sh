@@ -116,12 +116,13 @@ install_image() {
 
 #Install kernel asset
 install_kernel() {
+	kata_version=${1:-$kata_version}
 	pushd "${script_dir}/../"
 	info "build kernel"
 	./kernel/build-kernel.sh setup
 	./kernel/build-kernel.sh build
 	info "install kernel"
-	DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh install
+	kata_version="${kata_version}" DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh install
 	popd
 	pushd ${destdir}
 	tar -czvf ../kata-static-kernel.tar.gz *
@@ -130,12 +131,13 @@ install_kernel() {
 
 #Install experimental kernel asset
 install_experimental_kernel() {
+	kata_version=${1:-$kata_version}
 	pushd "${script_dir}/../"
 	info "build experimental kernel"
 	./kernel/build-kernel.sh -e setup
 	./kernel/build-kernel.sh -e build
 	info "install experimental kernel"
-	DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh -e install
+	kata_version="${kata_version}" DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh -e install
 	popd
 	pushd ${destdir}
 	tar -czvf ../kata-static-experimental-kernel.tar.gz *
@@ -144,20 +146,23 @@ install_experimental_kernel() {
 
 # Install static qemu asset
 install_qemu() {
+	kata_version=${1:-$kata_version}
 	info "build static qemu"
-	"${script_dir}/../static-build/qemu/build-static-qemu.sh"
+	kata_version="${kata_version}" "${script_dir}/../static-build/qemu/build-static-qemu.sh"
 }
 
 # Install static qemu-virtiofsd asset
 install_qemu_virtiofsd() {
+	kata_version=${1:-$kata_version}
 	info "build static qemu-virtiofs"
-	"${script_dir}/../static-build/qemu-virtiofs/build-static-qemu-virtiofs.sh"
+	kata_version="${kata_version}" "${script_dir}/../static-build/qemu-virtiofs/build-static-qemu-virtiofs.sh"
 }
 
 # Install static firecracker asset
 install_firecracker() {
+	kata_version=${1:-$kata_version}
 	info "build static firecracker"
-	[ -f "firecracker/firecracker-static" ] || "${script_dir}/../static-build/firecracker/build-static-firecracker.sh"
+	[ -f "firecracker/firecracker-static" ] || kata_version="${kata_version}" "${script_dir}/../static-build/firecracker/build-static-firecracker.sh"
 	info "Install static firecracker"
 	mkdir -p "${destdir}/opt/kata/bin/"
 	sudo install -D --owner root --group root --mode 0744  firecracker/firecracker-static "${destdir}/opt/kata/bin/firecracker"
@@ -169,8 +174,9 @@ install_firecracker() {
 
 # Install static cloud-hypervisor asset
 install_clh() {
+	kata_version=${1:-$kata_version}
 	info "build static cloud-hypervisor"
-	"${script_dir}/../static-build/cloud-hypervisor/build-static-clh.sh"
+	kata_version="${kata_version}" "${script_dir}/../static-build/cloud-hypervisor/build-static-clh.sh"
 	info "Install static cloud-hypervisor"
 	mkdir -p "${destdir}/opt/kata/bin/"
 	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor"

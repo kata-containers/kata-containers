@@ -14,6 +14,7 @@ set -o pipefail
 
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+kata_version="${kata_version:-}"
 
 #project_name
 readonly project_name="kata-containers"
@@ -427,9 +428,9 @@ main() {
 	# If not kernel version take it from versions.yaml
 	if [ -z "$kernel_version" ]; then
 		if [[ ${experimental_kernel} == "true" ]]; then
-			kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag")
+			kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag" "${kata_version}")
 		else
-			kernel_version=$(get_from_kata_deps "assets.kernel.version")
+			kernel_version=$(get_from_kata_deps "assets.kernel.version" "${kata_version}")
 			#Remove extra 'v'
 			kernel_version="${kernel_version#v}"
 		fi

@@ -13,10 +13,11 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/../../scripts/lib.sh"
 source "${script_dir}/../qemu.blacklist"
 
+kata_version="${kata_version:-}"
 packaging_dir="${script_dir}/../.."
-qemu_virtiofs_repo=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.url")
+qemu_virtiofs_repo=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.url" "${kata_version}")
 # This tag will be supported on the runtime versions.yaml
-qemu_virtiofs_tag=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.tag")
+qemu_virtiofs_tag=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.tag" "${kata_version}") 
 qemu_virtiofs_tar="kata-static-qemu-virtiofsd.tar.gz"
 qemu_tmp_tar="kata-static-qemu-virtiofsd-tmp.tar.gz"
 
