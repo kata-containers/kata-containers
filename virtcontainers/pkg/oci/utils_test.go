@@ -156,7 +156,7 @@ func TestMinimalSandboxConfig(t *testing.T) {
 		Resources: specs.LinuxResources{Devices: []specs.LinuxDeviceCgroup{
 			{Allow: false, Type: "", Major: (*int64)(nil), Minor: (*int64)(nil), Access: "rwm"},
 		}},
-		Spec: &spec,
+		CustomSpec: &spec,
 	}
 
 	expectedNetworkConfig := vc.NetworkConfig{}

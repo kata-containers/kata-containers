@@ -81,7 +81,7 @@ func newTestSandboxConfigNoop() SandboxConfig {
 		RootFs:      RootFs{Target: bundlePath, Mounted: true},
 		Cmd:         newBasicTestCmd(),
 		Annotations: containerAnnotations,
-		Spec:        emptySpec,
+		CustomSpec:  emptySpec,
 	}
 
 	// Sets the hypervisor configuration.
@@ -717,7 +717,7 @@ func newTestContainerConfigNoop(contID string) ContainerConfig {
 		RootFs:      RootFs{Target: filepath.Join(testDir, testBundle), Mounted: true},
 		Cmd:         newBasicTestCmd(),
 		Annotations: containerAnnotations,
-		Spec:        newEmptySpec(),
+		CustomSpec:  newEmptySpec(),
 	}
 
 	return container

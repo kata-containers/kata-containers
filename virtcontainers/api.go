@@ -620,7 +620,7 @@ func statusContainer(sandbox *Sandbox, containerID string) (ContainerStatus, err
 			PID:         container.process.Pid,
 			StartTime:   container.process.StartTime,
 			RootFs:      container.config.RootFs.Target,
-			Spec:        container.GetOCISpec(),
+			Spec:        container.GetPatchedOCISpec(),
 			Annotations: container.config.Annotations,
 		}, nil
 	}
