@@ -13,6 +13,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/types"
+	"github.com/mitchellh/mapstructure"
 )
 
 var (
@@ -171,6 +172,119 @@ func (s *Sandbox) dumpNetwork(ss *persistapi.SandboxState) {
 	}
 }
 
+func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
+	sconfig := s.config
+	ss.Config = persistapi.SandboxConfig{
+		HypervisorType: string(sconfig.HypervisorType),
+		AgentType:      string(sconfig.AgentType),
+		ProxyType:      string(sconfig.ProxyType),
+		ProxyConfig: persistapi.ProxyConfig{
+			Path:  sconfig.ProxyConfig.Path,
+			Debug: sconfig.ProxyConfig.Debug,
+		},
+		ShimType: string(sconfig.ShimType),
+		NetworkConfig: persistapi.NetworkConfig{
+			NetNSPath:         sconfig.NetworkConfig.NetNSPath,
+			NetNsCreated:      sconfig.NetworkConfig.NetNsCreated,
+			DisableNewNetNs:   sconfig.NetworkConfig.DisableNewNetNs,
+			InterworkingModel: int(sconfig.NetworkConfig.InterworkingModel),
+		},
+
+		ShmSize:             sconfig.ShmSize,
+		SharePidNs:          sconfig.SharePidNs,
+		Stateful:            sconfig.Stateful,
+		SystemdCgroup:       sconfig.SystemdCgroup,
+		SandboxCgroupOnly:   sconfig.SandboxCgroupOnly,
+		DisableGuestSeccomp: sconfig.DisableGuestSeccomp,
+	}
+
+	for _, e := range sconfig.Experimental {
+		ss.Config.Experimental = append(ss.Config.Experimental, e.Name)
+	}
+
+	ss.Config.HypervisorConfig = persistapi.HypervisorConfig{
+		NumVCPUs:                sconfig.HypervisorConfig.NumVCPUs,
+		DefaultMaxVCPUs:         sconfig.HypervisorConfig.DefaultMaxVCPUs,
+		MemorySize:              sconfig.HypervisorConfig.MemorySize,
+		DefaultBridges:          sconfig.HypervisorConfig.DefaultBridges,
+		Msize9p:                 sconfig.HypervisorConfig.Msize9p,
+		MemSlots:                sconfig.HypervisorConfig.MemSlots,
+		MemOffset:               sconfig.HypervisorConfig.MemOffset,
+		VirtioFSCacheSize:       sconfig.HypervisorConfig.VirtioFSCacheSize,
+		KernelPath:              sconfig.HypervisorConfig.KernelPath,
+		ImagePath:               sconfig.HypervisorConfig.ImagePath,
+		InitrdPath:              sconfig.HypervisorConfig.InitrdPath,
+		FirmwarePath:            sconfig.HypervisorConfig.FirmwarePath,
+		MachineAccelerators:     sconfig.HypervisorConfig.MachineAccelerators,
+		HypervisorPath:          sconfig.HypervisorConfig.HypervisorPath,
+		HypervisorCtlPath:       sconfig.HypervisorConfig.HypervisorCtlPath,
+		JailerPath:              sconfig.HypervisorConfig.JailerPath,
+		BlockDeviceDriver:       sconfig.HypervisorConfig.BlockDeviceDriver,
+		HypervisorMachineType:   sconfig.HypervisorConfig.HypervisorMachineType,
+		MemoryPath:              sconfig.HypervisorConfig.MemoryPath,
+		DevicesStatePath:        sconfig.HypervisorConfig.DevicesStatePath,
+		EntropySource:           sconfig.HypervisorConfig.EntropySource,
+		SharedFS:                sconfig.HypervisorConfig.SharedFS,
+		VirtioFSDaemon:          sconfig.HypervisorConfig.VirtioFSDaemon,
+		VirtioFSCache:           sconfig.HypervisorConfig.VirtioFSCache,
+		VirtioFSExtraArgs:       sconfig.HypervisorConfig.VirtioFSExtraArgs[:],
+		BlockDeviceCacheSet:     sconfig.HypervisorConfig.BlockDeviceCacheSet,
+		BlockDeviceCacheDirect:  sconfig.HypervisorConfig.BlockDeviceCacheDirect,
+		BlockDeviceCacheNoflush: sconfig.HypervisorConfig.BlockDeviceCacheNoflush,
+		DisableBlockDeviceUse:   sconfig.HypervisorConfig.DisableBlockDeviceUse,
+		EnableIOThreads:         sconfig.HypervisorConfig.EnableIOThreads,
+		Debug:                   sconfig.HypervisorConfig.Debug,
+		MemPrealloc:             sconfig.HypervisorConfig.MemPrealloc,
+		HugePages:               sconfig.HypervisorConfig.HugePages,
+		FileBackedMemRootDir:    sconfig.HypervisorConfig.FileBackedMemRootDir,
+		Realtime:                sconfig.HypervisorConfig.Realtime,
+		Mlock:                   sconfig.HypervisorConfig.Mlock,
+		DisableNestingChecks:    sconfig.HypervisorConfig.DisableNestingChecks,
+		UseVSock:                sconfig.HypervisorConfig.UseVSock,
+		HotplugVFIOOnRootBus:    sconfig.HypervisorConfig.HotplugVFIOOnRootBus,
+		BootToBeTemplate:        sconfig.HypervisorConfig.BootToBeTemplate,
+		BootFromTemplate:        sconfig.HypervisorConfig.BootFromTemplate,
+		DisableVhostNet:         sconfig.HypervisorConfig.DisableVhostNet,
+		GuestHookPath:           sconfig.HypervisorConfig.GuestHookPath,
+		VMid:                    sconfig.HypervisorConfig.VMid,
+	}
+
+	if sconfig.AgentType == "kata" {
+		var sagent KataAgentConfig
+		err := mapstructure.Decode(sconfig.AgentConfig, &sagent)
+		if err != nil {
+			s.Logger().WithError(err).Error("internal error: KataAgentConfig failed to decode")
+		} else {
+			ss.Config.KataAgentConfig = &persistapi.KataAgentConfig{
+				LongLiveConn: sagent.LongLiveConn,
+				UseVSock:     sagent.UseVSock,
+			}
+		}
+	}
+
+	if sconfig.ShimType == "kataShim" {
+		var shim ShimConfig
+		err := mapstructure.Decode(sconfig.ShimConfig, &shim)
+		if err != nil {
+			s.Logger().WithError(err).Error("internal error: ShimConfig failed to decode")
+		} else {
+			ss.Config.KataShimConfig = &persistapi.ShimConfig{
+				Path:  shim.Path,
+				Debug: shim.Debug,
+			}
+		}
+	}
+
+	for _, contConf := range sconfig.Containers {
+		ss.Config.ContainerConfigs = append(ss.Config.ContainerConfigs, persistapi.ContainerConfig{
+			ID:          contConf.ID,
+			Annotations: contConf.Annotations,
+			RootFs:      contConf.RootFs.Target,
+			Resources:   contConf.Resources,
+		})
+	}
+}
+
 func (s *Sandbox) Save() error {
 	var (
 		ss = persistapi.SandboxState{}
@@ -185,6 +299,7 @@ func (s *Sandbox) Save() error {
 	s.dumpMounts(cs)
 	s.dumpAgent(&ss)
 	s.dumpNetwork(&ss)
+	s.dumpConfig(&ss)
 
 	if err := s.newStore.ToDisk(ss, cs); err != nil {
 		return err
@@ -334,4 +449,120 @@ func (s *Sandbox) supportNewStore() bool {
 		}
 	}
 	return false
+}
+
+func loadSandboxConfig(id string) (*SandboxConfig, error) {
+	store, err := persist.GetDriver("fs")
+	if err != nil || store == nil {
+		return nil, errors.New("failed to get fs persist driver")
+	}
+
+	ss, _, err := store.FromDisk(id)
+	if err != nil {
+		return nil, err
+	}
+
+	savedConf := ss.Config
+	sconfig := &SandboxConfig{
+		ID:             id,
+		HypervisorType: HypervisorType(savedConf.HypervisorType),
+		AgentType:      AgentType(savedConf.AgentType),
+		ProxyType:      ProxyType(savedConf.ProxyType),
+		ProxyConfig: ProxyConfig{
+			Path:  savedConf.ProxyConfig.Path,
+			Debug: savedConf.ProxyConfig.Debug,
+		},
+		ShimType: ShimType(savedConf.ShimType),
+		NetworkConfig: NetworkConfig{
+			NetNSPath:         savedConf.NetworkConfig.NetNSPath,
+			NetNsCreated:      savedConf.NetworkConfig.NetNsCreated,
+			DisableNewNetNs:   savedConf.NetworkConfig.DisableNewNetNs,
+			InterworkingModel: NetInterworkingModel(savedConf.NetworkConfig.InterworkingModel),
+		},
+
+		ShmSize:             savedConf.ShmSize,
+		SharePidNs:          savedConf.SharePidNs,
+		Stateful:            savedConf.Stateful,
+		SystemdCgroup:       savedConf.SystemdCgroup,
+		SandboxCgroupOnly:   savedConf.SandboxCgroupOnly,
+		DisableGuestSeccomp: savedConf.DisableGuestSeccomp,
+	}
+
+	for _, name := range savedConf.Experimental {
+		sconfig.Experimental = append(sconfig.Experimental, *exp.Get(name))
+	}
+
+	hconf := savedConf.HypervisorConfig
+	sconfig.HypervisorConfig = HypervisorConfig{
+		NumVCPUs:                hconf.NumVCPUs,
+		DefaultMaxVCPUs:         hconf.DefaultMaxVCPUs,
+		MemorySize:              hconf.MemorySize,
+		DefaultBridges:          hconf.DefaultBridges,
+		Msize9p:                 hconf.Msize9p,
+		MemSlots:                hconf.MemSlots,
+		MemOffset:               hconf.MemOffset,
+		VirtioFSCacheSize:       hconf.VirtioFSCacheSize,
+		KernelPath:              hconf.KernelPath,
+		ImagePath:               hconf.ImagePath,
+		InitrdPath:              hconf.InitrdPath,
+		FirmwarePath:            hconf.FirmwarePath,
+		MachineAccelerators:     hconf.MachineAccelerators,
+		HypervisorPath:          hconf.HypervisorPath,
+		HypervisorCtlPath:       hconf.HypervisorCtlPath,
+		JailerPath:              hconf.JailerPath,
+		BlockDeviceDriver:       hconf.BlockDeviceDriver,
+		HypervisorMachineType:   hconf.HypervisorMachineType,
+		MemoryPath:              hconf.MemoryPath,
+		DevicesStatePath:        hconf.DevicesStatePath,
+		EntropySource:           hconf.EntropySource,
+		SharedFS:                hconf.SharedFS,
+		VirtioFSDaemon:          hconf.VirtioFSDaemon,
+		VirtioFSCache:           hconf.VirtioFSCache,
+		VirtioFSExtraArgs:       hconf.VirtioFSExtraArgs[:],
+		BlockDeviceCacheSet:     hconf.BlockDeviceCacheSet,
+		BlockDeviceCacheDirect:  hconf.BlockDeviceCacheDirect,
+		BlockDeviceCacheNoflush: hconf.BlockDeviceCacheNoflush,
+		DisableBlockDeviceUse:   hconf.DisableBlockDeviceUse,
+		EnableIOThreads:         hconf.EnableIOThreads,
+		Debug:                   hconf.Debug,
+		MemPrealloc:             hconf.MemPrealloc,
+		HugePages:               hconf.HugePages,
+		FileBackedMemRootDir:    hconf.FileBackedMemRootDir,
+		Realtime:                hconf.Realtime,
+		Mlock:                   hconf.Mlock,
+		DisableNestingChecks:    hconf.DisableNestingChecks,
+		UseVSock:                hconf.UseVSock,
+		HotplugVFIOOnRootBus:    hconf.HotplugVFIOOnRootBus,
+		BootToBeTemplate:        hconf.BootToBeTemplate,
+		BootFromTemplate:        hconf.BootFromTemplate,
+		DisableVhostNet:         hconf.DisableVhostNet,
+		GuestHookPath:           hconf.GuestHookPath,
+		VMid:                    hconf.VMid,
+	}
+
+	if savedConf.AgentType == "kata" {
+		sconfig.AgentConfig = KataAgentConfig{
+			LongLiveConn: savedConf.KataAgentConfig.LongLiveConn,
+			UseVSock:     savedConf.KataAgentConfig.UseVSock,
+		}
+	}
+
+	if savedConf.ShimType == "kataShim" {
+		sconfig.ShimConfig = ShimConfig{
+			Path:  savedConf.KataShimConfig.Path,
+			Debug: savedConf.KataShimConfig.Debug,
+		}
+	}
+
+	for _, contConf := range savedConf.ContainerConfigs {
+		sconfig.Containers = append(sconfig.Containers, ContainerConfig{
+			ID:          contConf.ID,
+			Annotations: contConf.Annotations,
+			Resources:   contConf.Resources,
+			RootFs: RootFs{
+				Target: contConf.RootFs,
+			},
+		})
+	}
+	return sconfig, nil
 }

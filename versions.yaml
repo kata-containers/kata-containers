@@ -70,6 +70,13 @@ assets:
   hypervisor:
     description: "Component used to create virtual machines"
 
+    cloud_hypervisor:
+      description: "Cloud Hypervisor is an open source Virtual Machine Monitor"
+      url: "https://github.com/intel/cloud-hypervisor"
+      uscan-url: >-
+        https://github.com/intel/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
+      version: "v0.3.0"
+
     firecracker:
       description: "Firecracker micro-VMM"
       url: "https://github.com/firecracker-microvm/firecracker"
