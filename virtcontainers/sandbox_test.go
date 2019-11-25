@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -668,17 +667,6 @@ func TestContainerStateSetFstype(t *testing.T) {
 	cImpl, ok := c.(*Container)
 	assert.True(ok)
 
-	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, c.ID())
-	assert.NoError(err)
-
-	cImpl.store = containerStore
-
-	path := store.ContainerRuntimeRootPath(testSandboxID, c.ID())
-	stateFilePath := filepath.Join(path, store.StateFile)
-
-	f, err := os.Create(stateFilePath)
-	assert.NoError(err)
-
 	state := types.ContainerState{
 		State:  "ready",
 		Fstype: "vfs",
@@ -686,34 +674,10 @@ func TestContainerStateSetFstype(t *testing.T) {
 
 	cImpl.state = state
 
-	stateData := `{
-		"state":"ready",
-		"fstype":"vfs",
-	}`
-
-	n, err := f.WriteString(stateData)
-	defer f.Close()
-	assert.NoError(err)
-	assert.Equal(n, len(stateData))
-
 	newFstype := "ext4"
 	err = cImpl.setStateFstype(newFstype)
 	assert.NoError(err)
 	assert.Equal(cImpl.state.Fstype, newFstype)
-
-	fileData, err := ioutil.ReadFile(stateFilePath)
-	assert.NoError(err)
-
-	// experimental features doesn't write state.json
-	if sandbox.supportNewStore() {
-		return
-	}
-
-	var res types.ContainerState
-	err = json.Unmarshal([]byte(string(fileData)), &res)
-	assert.NoError(err)
-	assert.Equal(res.Fstype, newFstype)
-	assert.Equal(res.State, state.State)
 }
 
 const vfioPath = "/dev/vfio/"
@@ -916,8 +880,6 @@ func TestCreateContainer(t *testing.T) {
 	_, err = s.CreateContainer(contConfig)
 	assert.NotNil(t, err, "Should failed to create a duplicated container")
 	assert.Equal(t, len(s.config.Containers), 1, "Container config list length from sandbox structure should be 1")
-	ret := store.VCContainerStoreExists(s.ctx, testSandboxID, contID)
-	assert.True(t, ret, "Should not delete container store that already existed")
 }
 
 func TestDeleteContainer(t *testing.T) {
@@ -1023,8 +985,6 @@ func TestDeleteStoreWhenCreateContainerFail(t *testing.T) {
 	s.state.CgroupPath = filepath.Join(testDir, "bad-cgroup")
 	_, err = s.CreateContainer(contConfig)
 	assert.NotNil(t, err, "Should fail to create container due to wrong cgroup")
-	ret := store.VCContainerStoreExists(s.ctx, testSandboxID, contID)
-	assert.False(t, ret, "Should delete configuration root after failed to create a container")
 }
 
 func TestDeleteStoreWhenNewContainerFail(t *testing.T) {
@@ -1306,10 +1266,6 @@ func TestPreAddDevice(t *testing.T) {
 		sandboxID: testSandboxID,
 	}
 	container.state.State = types.StateReady
-
-	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, container.id)
-	assert.Nil(t, err)
-	container.store = containerStore
 
 	// create state file
 	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())

@@ -139,7 +139,7 @@ func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 }
@@ -176,7 +176,7 @@ func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 }
@@ -203,7 +203,7 @@ func TestDeleteSandboxNoopAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -248,7 +248,7 @@ func TestDeleteSandboxKataAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -264,7 +264,7 @@ func TestDeleteSandboxFailing(t *testing.T) {
 	defer cleanUp()
 	assert := assert.New(t)
 
-	sandboxDir := store.SandboxConfigurationRootPath(testSandboxID)
+	sandboxDir := store.SandboxRuntimeRootPath(testSandboxID)
 	os.Remove(sandboxDir)
 
 	p, err := DeleteSandbox(context.Background(), testSandboxID)
@@ -328,7 +328,7 @@ func TestStartSandboxFailing(t *testing.T) {
 	defer cleanUp()
 	assert := assert.New(t)
 
-	sandboxDir := store.SandboxConfigurationRootPath(testSandboxID)
+	sandboxDir := store.SandboxRuntimeRootPath(testSandboxID)
 	os.Remove(sandboxDir)
 
 	p, err := StartSandbox(context.Background(), testSandboxID)
@@ -395,7 +395,7 @@ func TestStopSandboxKataAgentSuccessful(t *testing.T) {
 func TestStopSandboxFailing(t *testing.T) {
 	defer cleanUp()
 
-	sandboxDir := store.SandboxConfigurationRootPath(testSandboxID)
+	sandboxDir := store.SandboxRuntimeRootPath(testSandboxID)
 	os.Remove(sandboxDir)
 
 	p, err := StopSandbox(context.Background(), testSandboxID, false)
@@ -413,7 +413,7 @@ func TestRunSandboxNoopAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 }
@@ -451,7 +451,7 @@ func TestRunSandboxKataAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -680,7 +680,7 @@ func TestCreateContainerSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -734,7 +734,7 @@ func TestDeleteContainerSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -778,7 +778,7 @@ func TestDeleteContainerFailingNoContainer(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -835,7 +835,7 @@ func TestStartContainerFailingNoContainer(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -856,7 +856,7 @@ func TestStartContainerFailingSandboxNotStarted(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -936,7 +936,7 @@ func TestStopContainerFailingNoContainer(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -1040,7 +1040,7 @@ func TestEnterContainerFailingNoContainer(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -1093,7 +1093,7 @@ func TestStatusContainerSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -1136,7 +1136,7 @@ func TestStatusContainerStateReady(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -1199,7 +1199,7 @@ func TestStatusContainerStateRunning(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -1414,7 +1414,7 @@ func createAndStartSandbox(ctx context.Context, config SandboxConfig) (sandbox V
 		return nil, "", err
 	}
 
-	sandboxDir = store.SandboxConfigurationRootPath(sandbox.ID())
+	sandboxDir = store.SandboxRuntimeRootPath(sandbox.ID())
 	_, err = os.Stat(sandboxDir)
 	if err != nil {
 		return nil, "", err
@@ -1699,7 +1699,7 @@ func TestCleanupContainer(t *testing.T) {
 		CleanupContainer(ctx, p.ID(), c.ID(), true)
 	}
 
-	sandboxDir := store.SandboxConfigurationRootPath(p.ID())
+	sandboxDir := store.SandboxRuntimeRootPath(p.ID())
 
 	_, err = os.Stat(sandboxDir)
 	if err == nil {

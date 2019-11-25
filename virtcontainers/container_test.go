@@ -341,18 +341,6 @@ func TestContainerAddDriveDir(t *testing.T) {
 		rootFs:  RootFs{Target: fakeRootfs, Mounted: true},
 	}
 
-	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, container.id)
-	assert.Nil(err)
-	container.store = containerStore
-
-	// create state file
-	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
-	stateFilePath := filepath.Join(path, store.StateFile)
-	os.Remove(stateFilePath)
-
-	_, err = os.Create(stateFilePath)
-	assert.NoError(err)
-
 	// Make the checkStorageDriver func variable point to a fake check function
 	savedFunc := checkStorageDriver
 	checkStorageDriver = func(major, minor int) (bool, error) {
@@ -405,11 +393,6 @@ func TestContainerRootfsPath(t *testing.T) {
 		rootFs:       RootFs{Target: fakeRootfs, Mounted: true},
 		rootfsSuffix: "rootfs",
 	}
-	cvcstore, err := store.NewVCContainerStore(context.Background(),
-		sandbox.id,
-		container.id)
-	assert.Nil(t, err)
-	container.store = cvcstore
 
 	container.hotplugDrive()
 	assert.Empty(t, container.rootfsSuffix)
