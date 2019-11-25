@@ -30,6 +30,7 @@ use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
 use crate::device::{add_devices, rescan_pci_bus};
+use crate::linux_abi::*;
 use crate::mount::{add_storages, remove_mounts, STORAGEHANDLERLIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::netlink::{RtnlHandle, NETLINK_ROUTE};
@@ -53,9 +54,6 @@ use std::io::{BufRead, BufReader};
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
 
-const SYSFS_MEMORY_BLOCK_SIZE_PATH: &str = "/sys/devices/system/memory/block_size_bytes";
-const SYSFS_MEMORY_HOTPLUG_PROBE_PATH: &str = "/sys/devices/system/memory/probe";
-pub const SYSFS_MEMORY_ONLINE_PATH: &str = "/sys/devices/system/memory";
 const CONTAINER_BASE: &str = "/run/kata-containers";
 
 // Convenience macro to obtain the scope logger

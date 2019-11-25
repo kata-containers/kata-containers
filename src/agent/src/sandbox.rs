@@ -4,6 +4,7 @@
 //
 
 //use crate::container::Container;
+use crate::linux_abi::*;
 use crate::mount::{get_mount_fs_type, remove_mounts, TYPEROOTFS};
 use crate::namespace::Namespace;
 use crate::netlink::{RtnlHandle, NETLINK_ROUTE};
@@ -220,10 +221,6 @@ impl Sandbox {
     }
 }
 
-pub const CPU_ONLINE_PATH: &str = "/sys/devices/system/cpu";
-pub const MEMORY_ONLINE_PATH: &str = "/sys/devices/system/memory";
-pub const ONLINE_FILE: &str = "online";
-
 fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Result<i32> {
     let mut count = 0;
     let re = Regex::new(pattern)?;
@@ -235,7 +232,7 @@ fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Res
         let p = entry.path();
 
         if re.is_match(name) {
-            let file = format!("{}/{}", p.to_str().unwrap(), ONLINE_FILE);
+            let file = format!("{}/{}", p.to_str().unwrap(), SYSFS_ONLINE_FILE);
             info!(logger, "{}", file.as_str());
             let c = fs::read_to_string(file.as_str())?;
 
@@ -258,10 +255,10 @@ fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Res
 }
 
 fn online_cpus(logger: &Logger, num: i32) -> Result<i32> {
-    online_resources(logger, CPU_ONLINE_PATH, r"cpu[0-9]+", num)
+    online_resources(logger, SYSFS_CPU_ONLINE_PATH, r"cpu[0-9]+", num)
 }
 
 fn online_memory(logger: &Logger) -> Result<()> {
-    online_resources(logger, MEMORY_ONLINE_PATH, r"memory[0-9]+", -1)?;
+    online_resources(logger, SYSFS_MEMORY_ONLINE_PATH, r"memory[0-9]+", -1)?;
     Ok(())
 }
