@@ -13,6 +13,7 @@ import (
 
 	deviceApi "github.com/kata-containers/runtime/virtcontainers/device/api"
 	deviceConfig "github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -307,7 +308,14 @@ func ListSandbox(ctx context.Context) ([]SandboxStatus, error) {
 	span, ctx := trace(ctx, "ListSandbox")
 	defer span.Finish()
 
-	dir, err := os.Open(store.ConfigStoragePath())
+	var sbsdir string
+	if supportNewStore(ctx) {
+		sbsdir = fs.RunStoragePath()
+	} else {
+		sbsdir = store.RunStoragePath()
+	}
+
+	dir, err := os.Open(sbsdir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// No sandbox directory is not an error

@@ -417,6 +417,7 @@ func (c *Container) storeContainer() error {
 		if err := c.sandbox.Save(); err != nil {
 			return err
 		}
+		return nil
 	}
 	return c.store.Store(store.Configuration, *(c.config))
 }

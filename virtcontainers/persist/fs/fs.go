@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"github.com/kata-containers/runtime/pkg/rootless"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/sirupsen/logrus"
 )
@@ -36,9 +37,15 @@ const storagePathSuffix = "vc"
 // sandboxPathSuffix is the suffix used for sandbox storage
 const sandboxPathSuffix = "sbs"
 
-// runStoragePath is the sandbox runtime directory.
+// RunStoragePath is the sandbox runtime directory.
 // It will contain one state.json and one lock file for each created sandbox.
-var runStoragePath = filepath.Join("/run", storagePathSuffix, sandboxPathSuffix)
+var RunStoragePath = func() string {
+	path := filepath.Join("/run", storagePathSuffix, sandboxPathSuffix)
+	if rootless.IsRootless() {
+		return filepath.Join(rootless.GetRootlessDir(), path)
+	}
+	return path
+}
 
 // FS storage driver implementation
 type FS struct {
@@ -76,7 +83,7 @@ func (fs *FS) sandboxDir() (string, error) {
 		return "", fmt.Errorf("sandbox container id required")
 	}
 
-	return filepath.Join(runStoragePath, id), nil
+	return filepath.Join(RunStoragePath(), id), nil
 }
 
 // ToDisk sandboxState and containerState to disk
@@ -119,12 +126,22 @@ func (fs *FS) ToDisk(ss persistapi.SandboxState, cs map[string]persistapi.Contai
 		return err
 	}
 
+	var dirCreationErr error
+	var createdDirs []string
+	defer func() {
+		if dirCreationErr != nil && len(createdDirs) > 0 {
+			for _, dir := range createdDirs {
+				os.RemoveAll(dir)
+			}
+		}
+	}()
 	// persist container configuration data
 	for cid, cstate := range fs.containerState {
 		cdir := filepath.Join(sandboxDir, cid)
-		if err := os.MkdirAll(cdir, dirMode); err != nil {
-			return err
+		if dirCreationErr = os.MkdirAll(cdir, dirMode); dirCreationErr != nil {
+			return dirCreationErr
 		}
+		createdDirs = append(createdDirs, cdir)
 
 		cfile := filepath.Join(cdir, persistFile)
 		cf, err := os.OpenFile(cfile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fileMode)
@@ -132,10 +149,10 @@ func (fs *FS) ToDisk(ss persistapi.SandboxState, cs map[string]persistapi.Contai
 			return err
 		}
 
+		defer cf.Close()
 		if err := json.NewEncoder(cf).Encode(cstate); err != nil {
 			return err
 		}
-		cf.Close()
 	}
 
 	return nil
@@ -194,11 +211,11 @@ func (fs *FS) FromDisk(sid string) (persistapi.SandboxState, map[string]persista
 			return ss, nil, err
 		}
 
+		defer cf.Close()
 		var cstate persistapi.ContainerState
 		if err := json.NewDecoder(cf).Decode(&cstate); err != nil {
 			return ss, nil, err
 		}
-		cf.Close()
 
 		fs.containerState[cid] = cstate
 	}
@@ -254,8 +271,10 @@ func (fs *FS) unlock() error {
 	return nil
 }
 
-// TestSetRunStoragePath set runStoragePath to path
+// TestSetRunStoragePath set RunStoragePath to path
 // this function is only used for testing purpose
 func TestSetRunStoragePath(path string) {
-	runStoragePath = path
+	RunStoragePath = func() string {
+		return path
+	}
 }

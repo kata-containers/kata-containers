@@ -225,6 +225,9 @@ func (s *Sandbox) Logger() *logrus.Entry {
 
 // Annotations returns any annotation that a user could have stored through the sandbox.
 func (s *Sandbox) Annotations(key string) (string, error) {
+	s.annotationsLock.RLock()
+	defer s.annotationsLock.RUnlock()
+
 	value, exist := s.config.Annotations[key]
 	if !exist {
 		return "", fmt.Errorf("Annotations key %s does not exist", key)
@@ -242,7 +245,10 @@ func (s *Sandbox) SetAnnotations(annotations map[string]string) error {
 		s.config.Annotations[k] = v
 	}
 
-	return s.store.Store(store.Configuration, *(s.config))
+	if !s.supportNewStore() {
+		return s.store.Store(store.Configuration, *(s.config))
+	}
+	return nil
 }
 
 // GetAnnotations returns sandbox's annotations
@@ -617,25 +623,24 @@ func (s *Sandbox) storeSandbox() error {
 	span, _ := s.trace("storeSandbox")
 	defer span.Finish()
 
-	err := s.store.Store(store.Configuration, *(s.config))
-	if err != nil {
-		return err
-	}
-
-	for _, container := range s.containers {
-		err = container.store.Store(store.Configuration, *(container.config))
-		if err != nil {
-			return err
-		}
-	}
-
 	if s.supportNewStore() {
 		// flush data to storage
 		if err := s.Save(); err != nil {
 			return err
 		}
-	}
+	} else {
+		err := s.store.Store(store.Configuration, *(s.config))
+		if err != nil {
+			return err
+		}
 
+		for _, container := range s.containers {
+			err = container.store.Store(store.Configuration, *(container.config))
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -673,6 +678,22 @@ func unlockSandbox(ctx context.Context, sandboxID, token string) error {
 	return store.Unlock(token)
 }
 
+func supportNewStore(ctx context.Context) bool {
+	if exp.Get("newstore") == nil {
+		return false
+	}
+
+	// check if client context enabled "newstore" feature
+	exps := exp.ExpFromContext(ctx)
+	for _, v := range exps {
+		if v == "newstore" {
+			return true
+		}
+	}
+
+	return false
+}
+
 // fetchSandbox fetches a sandbox config from a sandbox ID and returns a sandbox.
 func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err error) {
 	virtLog.Info("fetch sandbox")
@@ -685,15 +706,24 @@ func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err 
 		return sandbox, err
 	}
 
-	// We're bootstrapping
-	vcStore, err := store.NewVCSandboxStore(ctx, sandboxID)
-	if err != nil {
-		return nil, err
-	}
-
 	var config SandboxConfig
-	if err := vcStore.Load(store.Configuration, &config); err != nil {
-		return nil, err
+
+	if supportNewStore(ctx) {
+		c, err := loadSandboxConfig(sandboxID)
+		if err != nil {
+			return nil, err
+		}
+		config = *c
+	} else {
+		// We're bootstrapping
+		vcStore, err := store.NewVCSandboxStore(ctx, sandboxID)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := vcStore.Load(store.Configuration, &config); err != nil {
+			return nil, err
+		}
 	}
 
 	// fetchSandbox is not suppose to create new sandbox VM.
@@ -1493,13 +1523,21 @@ func (s *Sandbox) Start() error {
 		return err
 	}
 
+	prevState := s.state.State
+
 	if err := s.setSandboxState(types.StateRunning); err != nil {
 		return err
 	}
 
+	var startErr error
+	defer func() {
+		if startErr != nil {
+			s.setSandboxState(prevState)
+		}
+	}()
 	for _, c := range s.containers {
-		if err := c.start(); err != nil {
-			return err
+		if startErr = c.start(); startErr != nil {
+			return startErr
 		}
 	}
 

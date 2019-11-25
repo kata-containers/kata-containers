@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/containerd/fifo"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 	kataclient "github.com/kata-containers/agent/protocols/client"
@@ -62,13 +63,16 @@ const (
 	// firecracker guest VM.
 	// We attach a pool of placeholder drives before the guest has started, and then
 	// patch the replace placeholder drives with drives with actual contents.
-	fcDiskPoolSize = 8
-
+	fcDiskPoolSize           = 8
 	defaultHybridVSocketName = "kata.hvsock"
 
 	// This is the first usable vsock context ID. All the vsocks can use the same
 	// ID, since it's only used in the guest.
 	defaultGuestVSockCID = int64(0x3)
+
+	// This is related to firecracker logging scheme
+	fcLogFifo     = "logs.fifo"
+	fcMetricsFifo = "metrics.fifo"
 )
 
 // Specify the minimum version of firecracker supported
@@ -467,14 +471,11 @@ func (fc *firecracker) fcEnd() (err error) {
 
 	pid := fc.info.PID
 
-	// Check if VM process is running, in case it is not, let's
-	// return from here.
-	if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
-		return nil
-	}
-
 	// Send a SIGTERM to the VM process to try to stop it properly
 	if err = syscall.Kill(pid, syscall.SIGTERM); err != nil {
+		if err == syscall.ESRCH {
+			return nil
+		}
 		return err
 	}
 
@@ -616,6 +617,69 @@ func (fc *firecracker) fcSetVMBaseConfig(mem int64, vcpus int64, htEnabled bool)
 	return err
 }
 
+func (fc *firecracker) fcSetLogger() error {
+	span, _ := fc.trace("fcSetLogger")
+	defer span.Finish()
+
+	fcLogLevel := "Error"
+
+	// listen to log fifo file and transfer error info
+	jailedLogFifo, err := fc.fcListenToFifo(fcLogFifo)
+	if err != nil {
+		return fmt.Errorf("Failed setting log: %s", err)
+	}
+
+	// listen to metrics file and transfer error info
+	jailedMetricsFifo, err := fc.fcListenToFifo(fcMetricsFifo)
+	if err != nil {
+		return fmt.Errorf("Failed setting log: %s", err)
+	}
+
+	param := ops.NewPutLoggerParams()
+	cfg := &models.Logger{
+		Level:       &fcLogLevel,
+		LogFifo:     &jailedLogFifo,
+		MetricsFifo: &jailedMetricsFifo,
+		Options:     []string{},
+	}
+	param.SetBody(cfg)
+	_, err = fc.client().Operations.PutLogger(param)
+
+	return err
+}
+
+func (fc *firecracker) fcListenToFifo(fifoName string) (string, error) {
+	fcFifoPath := filepath.Join(fc.vmPath, fifoName)
+	fcFifo, err := fifo.OpenFifo(context.Background(), fcFifoPath, syscall.O_CREAT|syscall.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return "", fmt.Errorf("Failed to open/create fifo file %s", err)
+	}
+
+	jailedFifoPath, err := fc.fcJailResource(fcFifoPath, fifoName)
+	if err != nil {
+		return "", err
+	}
+
+	go func() {
+		scanner := bufio.NewScanner(fcFifo)
+		for scanner.Scan() {
+			fc.Logger().WithFields(logrus.Fields{
+				"fifoName": fifoName,
+				"contents": scanner.Text()}).Error("firecracker failed")
+		}
+
+		if err := scanner.Err(); err != nil {
+			fc.Logger().WithError(err).Errorf("Failed reading firecracker fifo file")
+		}
+
+		if err := fcFifo.Close(); err != nil {
+			fc.Logger().WithError(err).Errorf("Failed closing firecracker fifo file")
+		}
+	}()
+
+	return jailedFifoPath, nil
+}
+
 func (fc *firecracker) fcStartVM() error {
 	fc.Logger().Info("start firecracker virtual machine")
 	span, _ := fc.trace("fcStartVM")
@@ -712,6 +776,10 @@ func (fc *firecracker) startSandbox(timeout int) error {
 		}
 	}
 
+	if err := fc.fcSetLogger(); err != nil {
+		return err
+	}
+
 	if err := fc.fcStartVM(); err != nil {
 		return err
 	}
@@ -772,6 +840,8 @@ func (fc *firecracker) cleanupJail() {
 
 	fc.umountResource(fcKernel)
 	fc.umountResource(fcRootfs)
+	fc.umountResource(fcLogFifo)
+	fc.umountResource(fcMetricsFifo)
 
 	fc.Logger().WithField("cleaningJail", fc.vmPath).Info()
 	if err := os.RemoveAll(fc.vmPath); err != nil {
