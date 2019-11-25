@@ -10,6 +10,7 @@ use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::sync::{mpsc, Arc, Mutex};
 
+use crate::linux_abi::*;
 use crate::mount::{DRIVERBLKTYPE, DRIVERMMIOBLKTYPE, DRIVERNVDIMMTYPE, DRIVERSCSITYPE};
 use crate::sandbox::Sandbox;
 use crate::{AGENT_CONFIG, GLOBAL_DEVICE_WATCHER};
@@ -23,34 +24,6 @@ macro_rules! sl {
         slog_scope::logger().new(o!("subsystem" => "device"))
     };
 }
-
-#[cfg(any(
-    target_arch = "x86_64",
-    target_arch = "x86",
-    target_arch = "powerpc64le",
-    target_arch = "s390x"
-))]
-pub const ROOT_BUS_PATH: &str = "/devices/pci0000:00";
-#[cfg(target_arch = "arm")]
-pub const ROOT_BUS_PATH: &str = "/devices/platform/4010000000.pcie/pci0000:00";
-
-pub const SYSFS_DIR: &str = "/sys";
-
-const SYS_BUS_PREFIX: &str = "/sys/bus/pci/devices";
-const PCI_BUS_RESCAN_FILE: &str = "/sys/bus/pci/rescan";
-const SYSTEM_DEV_PATH: &str = "/dev";
-
-// SCSI const
-
-// Here in "0:0", the first number is the SCSI host number because
-// only one SCSI controller has been plugged, while the second number
-// is always 0.
-pub const SCSI_HOST_CHANNEL: &str = "0:0:";
-const SYS_CLASS_PREFIX: &str = "/sys/class";
-const SCSI_DISK_PREFIX: &str = "/sys/class/scsi_disk/0:0:";
-pub const SCSI_BLOCK_SUFFIX: &str = "block";
-const SCSI_DISK_SUFFIX: &str = "/device/block";
-const SCSI_HOST_PATH: &str = "/sys/class/scsi_host";
 
 // DeviceHandler is the type of callback to be defined to handle every type of device driver.
 type DeviceHandler = fn(&Device, &mut Spec, &Arc<Mutex<Sandbox>>) -> Result<()>;
@@ -69,7 +42,7 @@ lazy_static! {
 }
 
 pub fn rescan_pci_bus() -> Result<()> {
-    online_device(PCI_BUS_RESCAN_FILE)
+    online_device(SYSFS_PCI_BUS_RESCAN_FILE)
 }
 
 pub fn online_device(path: &str) -> Result<()> {
@@ -100,7 +73,7 @@ fn get_pci_device_address(pci_id: &str) -> Result<String> {
     let pci_bridge_addr = format!("0000:00:{}.0", bridge_id);
 
     // Find out the bus exposed by bridge
-    let bridge_bus_path = format!("{}/{}/pci_bus/", SYS_BUS_PREFIX, pci_bridge_addr);
+    let bridge_bus_path = format!("{}/{}/pci_bus/", SYSFS_PCI_BUS_PREFIX, pci_bridge_addr);
 
     let files_slice: Vec<_> = fs::read_dir(&bridge_bus_path)
         .unwrap()
@@ -199,9 +172,14 @@ fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
     // Channel is always 0 because we have only one SCSI controller.
     let scan_data = format!("0 {} {}", tokens[0], tokens[1]);
 
-    for entry in fs::read_dir(SCSI_HOST_PATH)? {
+    for entry in fs::read_dir(SYSFS_SCSI_HOST_PATH)? {
         let host = entry?.file_name();
-        let scan_path = format!("{}/{}/{}", SCSI_HOST_PATH, host.to_str().unwrap(), "scan");
+        let scan_path = format!(
+            "{}/{}/{}",
+            SYSFS_SCSI_HOST_PATH,
+            host.to_str().unwrap(),
+            "scan"
+        );
 
         fs::write(scan_path, &scan_data)?;
     }

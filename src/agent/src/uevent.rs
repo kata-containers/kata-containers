@@ -3,22 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::device::{online_device, ROOT_BUS_PATH, SCSI_BLOCK_SUFFIX, SYSFS_DIR};
-use crate::grpc::SYSFS_MEMORY_ONLINE_PATH;
+use crate::device::online_device;
+use crate::linux_abi::*;
 use crate::netlink::{RtnlHandle, NETLINK_UEVENT};
 use crate::sandbox::Sandbox;
 use crate::GLOBAL_DEVICE_WATCHER;
 use slog::Logger;
 use std::sync::{Arc, Mutex};
 use std::thread;
-
-pub const U_EVENT_ACTION: &str = "ACTION";
-pub const U_EVENT_ACTION_ADD: &str = "add";
-pub const U_EVENT_DEV_PATH: &str = "DEVPATH";
-pub const U_EVENT_SUB_SYSTEM: &str = "SUBSYSTEM";
-pub const U_EVENT_SEQ_NUM: &str = "SEQNUM";
-pub const U_EVENT_DEV_NAME: &str = "DEVNAME";
-pub const U_EVENT_INTERFACE: &str = "INTERFACE";
 
 #[derive(Debug, Default)]
 struct Uevent {
@@ -58,7 +50,7 @@ impl Uevent {
     fn is_block_add_event(&self) -> bool {
         self.action == U_EVENT_ACTION_ADD
             && self.subsystem == "block"
-            && self.devpath.starts_with(ROOT_BUS_PATH)
+            && self.devpath.starts_with(PCI_ROOT_BUS_PATH)
             && self.devname != ""
     }
 
@@ -77,7 +69,7 @@ impl Uevent {
         let empties: Vec<_> = w
             .iter()
             .filter(|(dev_addr, _)| {
-                let pci_p = format!("{}/{}", ROOT_BUS_PATH, *dev_addr);
+                let pci_p = format!("{}/{}", PCI_ROOT_BUS_PATH, *dev_addr);
 
                 // blk block device
                 devpath.starts_with(pci_p.as_str()) ||
