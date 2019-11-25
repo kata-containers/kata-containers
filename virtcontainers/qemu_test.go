@@ -99,7 +99,7 @@ func TestQemuCreateSandbox(t *testing.T) {
 	parentDir := store.SandboxConfigurationRootPath(sandbox.id)
 	assert.NoError(os.MkdirAll(parentDir, store.DirMode))
 
-	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store, false)
+	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
 	assert.NoError(err)
 	assert.NoError(os.RemoveAll(parentDir))
 	assert.Exactly(qemuConfig, q.config)
@@ -131,7 +131,7 @@ func TestQemuCreateSandboxMissingParentDirFail(t *testing.T) {
 	parentDir := store.SandboxConfigurationRootPath(sandbox.id)
 	assert.NoError(os.RemoveAll(parentDir))
 
-	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store, false)
+	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
 	assert.NoError(err)
 }
 
@@ -364,11 +364,7 @@ func TestHotplugUnsupportedDeviceType(t *testing.T) {
 		config: qemuConfig,
 	}
 
-	vcStore, err := store.NewVCSandboxStore(q.ctx, q.id)
-	assert.NoError(err)
-	q.store = vcStore
-
-	_, err = q.hotplugAddDevice(&memoryDevice{0, 128, uint64(0), false}, fsDev)
+	_, err := q.hotplugAddDevice(&memoryDevice{0, 128, uint64(0), false}, fsDev)
 	assert.Error(err)
 	_, err = q.hotplugRemoveDevice(&memoryDevice{0, 128, uint64(0), false}, fsDev)
 	assert.Error(err)
@@ -414,7 +410,7 @@ func TestQemuGrpc(t *testing.T) {
 	assert.Nil(err)
 
 	var q2 qemu
-	err = q2.fromGrpc(context.Background(), &config, nil, json)
+	err = q2.fromGrpc(context.Background(), &config, json)
 	assert.Nil(err)
 
 	assert.True(q.id == q2.id)
@@ -429,7 +425,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 
 	q := &qemu{}
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
-	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store, false)
+	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
 	assert.NoError(err)
 
 	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, true)
@@ -445,7 +441,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
 	sandbox.config.HypervisorConfig.MemoryPath = fallbackFileBackedMemDir
 
-	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store, false)
+	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
 
 	expectErr := errors.New("VM templating has been enabled with either virtio-fs or file backed memory and this configuration will not work")
 	assert.Equal(expectErr.Error(), err.Error())
@@ -456,7 +452,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 
 	q = &qemu{}
 	sandbox.config.HypervisorConfig.FileBackedMemRootDir = "/tmp/xyzabc"
-	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store, false)
+	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
 	assert.NoError(err)
 	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, false)
 	assert.Equal(q.qemuConfig.Knobs.MemShared, false)

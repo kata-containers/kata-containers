@@ -34,8 +34,6 @@ type VM struct {
 	memory uint32
 
 	cpuDelta uint32
-
-	store *store.VCStore
 }
 
 // VMConfig is a collection of all info that a new blackbox VM needs.
@@ -157,22 +155,13 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 
 	virtLog.WithField("vm", id).WithField("config", config).Info("create new vm")
 
-	vcStore, err := store.NewVCStore(ctx,
-		store.SandboxConfigurationRoot(id),
-		store.SandboxRuntimeRoot(id))
-	if err != nil {
-		return nil, err
-	}
-
 	defer func() {
 		if err != nil {
 			virtLog.WithField("vm", id).WithError(err).Error("failed to create new vm")
-			virtLog.WithField("vm", id).Errorf("Deleting store for %s", id)
-			vcStore.Delete()
 		}
 	}()
 
-	if err = hypervisor.createSandbox(ctx, id, NetworkNamespace{}, &config.HypervisorConfig, vcStore, false); err != nil {
+	if err = hypervisor.createSandbox(ctx, id, NetworkNamespace{}, &config.HypervisorConfig, false); err != nil {
 		return nil, err
 	}
 
@@ -230,7 +219,6 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		proxyURL:   url,
 		cpu:        config.HypervisorConfig.NumVCPUs,
 		memory:     config.HypervisorConfig.MemorySize,
-		store:      vcStore,
 	}, nil
 }
 
@@ -243,22 +231,13 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		return nil, err
 	}
 
-	vcStore, err := store.NewVCStore(ctx,
-		store.SandboxConfigurationRoot(v.Id),
-		store.SandboxRuntimeRoot(v.Id))
-	if err != nil {
-		return nil, err
-	}
-
 	defer func() {
 		if err != nil {
 			virtLog.WithField("vm", v.Id).WithError(err).Error("failed to create new vm from Grpc")
-			virtLog.WithField("vm", v.Id).Errorf("Deleting store for %s", v.Id)
-			vcStore.Delete()
 		}
 	}()
 
-	err = hypervisor.fromGrpc(ctx, &config.HypervisorConfig, vcStore, v.Hypervisor)
+	err = hypervisor.fromGrpc(ctx, &config.HypervisorConfig, v.Hypervisor)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +318,7 @@ func (v *VM) Stop() error {
 		return err
 	}
 
-	return v.store.Delete()
+	return nil
 }
 
 // AddCPUs adds num of CPUs to the VM.

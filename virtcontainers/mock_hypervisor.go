@@ -11,7 +11,6 @@ import (
 	"os"
 
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 )
 
@@ -27,7 +26,7 @@ func (m *mockHypervisor) hypervisorConfig() HypervisorConfig {
 	return HypervisorConfig{}
 }
 
-func (m *mockHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, store *store.VCStore, stateful bool) error {
+func (m *mockHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error {
 	err := hypervisorConfig.valid()
 	if err != nil {
 		return err
@@ -108,7 +107,7 @@ func (m *mockHypervisor) getPids() []int {
 	return []int{m.mockPid}
 }
 
-func (m *mockHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error {
+func (m *mockHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
 	return errors.New("mockHypervisor is not supported by VM cache")
 }
 

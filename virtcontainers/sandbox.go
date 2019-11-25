@@ -566,38 +566,14 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		}
 	}()
 
-	if s.supportNewStore() {
-		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, nil)
+	s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, nil)
 
-		// Ignore the error. Restore can fail for a new sandbox
-		s.Restore()
+	// Ignore the error. Restore can fail for a new sandbox
+	s.Restore()
 
-		// new store doesn't require hypervisor to be stored immediately
-		if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, nil, s.stateful); err != nil {
-			return nil, err
-		}
-	} else {
-		// Fetch sandbox network to be able to access it from the sandbox structure.
-		var networkNS NetworkNamespace
-		if err = s.store.Load(store.Network, &networkNS); err == nil {
-			s.networkNS = networkNS
-		}
-
-		devices, err := s.store.LoadDevices()
-		if err != nil {
-			s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("load sandbox devices failed")
-		}
-		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
-
-		// Load sandbox state. The hypervisor.createSandbox call, may need to access statei.
-		state, err := s.store.LoadState()
-		if err == nil {
-			s.state = state
-		}
-
-		if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.store, s.stateful); err != nil {
-			return nil, err
-		}
+	// new store doesn't require hypervisor to be stored immediately
+	if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.stateful); err != nil {
+		return nil, err
 	}
 
 	agentConfig, err := newAgentConfig(sandboxConfig.AgentType, sandboxConfig.AgentConfig)
