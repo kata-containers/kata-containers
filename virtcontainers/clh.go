@@ -7,9 +7,9 @@ package virtcontainers
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -84,6 +84,7 @@ type cloudHypervisor struct {
 	socketPath string
 	version    CloudHypervisorVersion
 	cliBuilder *DefaultCLIBuilder
+	cmdOutput  bytes.Buffer
 }
 
 var clhKernelParams = []Param{
@@ -295,7 +296,7 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 		return fmt.Errorf("failed to launch cloud-hypervisor: %s, error messages from log: %s", err, strErr)
 	}
 	if err := clh.waitVMM(clhTimeout); err != nil {
-		clh.Logger().WithField("error", err).Warn("cloud-hypervisor init failed")
+		clh.Logger().WithField("error", err).WithField("output", clh.cmdOutput.String()).Warn("cloud-hypervisor init failed")
 		clh.shutdownVirtiofsd()
 		return err
 	}
@@ -836,11 +837,12 @@ func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
 	clh.Logger().WithField("args", strings.Join(cli.args, " ")).Info()
 
 	cmd := exec.Command(clhPath, cli.args...)
-	cmd.Stderr = ioutil.Discard
+	cmd.Stdout = &clh.cmdOutput
+	cmd.Stderr = &clh.cmdOutput
 
 	if clh.config.Debug {
 		cmd.Env = os.Environ()
-		cmd.Env = append(cmd.Env, "RUST_BACKTRACE=FULL")
+		cmd.Env = append(cmd.Env, "RUST_BACKTRACE=full")
 	}
 
 	if err := cmd.Start(); err != nil {
