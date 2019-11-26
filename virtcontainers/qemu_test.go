@@ -16,6 +16,7 @@ import (
 
 	govmmQemu "github.com/intel/govmm/qemu"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/pkg/errors"
@@ -85,18 +86,13 @@ func TestQemuCreateSandbox(t *testing.T) {
 		},
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.NoError(err)
-
-	sandbox.store = vcStore
-
 	// Create the hypervisor fake binary
 	testQemuPath := filepath.Join(testDir, testHypervisor)
-	_, err = os.Create(testQemuPath)
+	_, err := os.Create(testQemuPath)
 	assert.NoError(err)
 
 	// Create parent dir path for hypervisor.json
-	parentDir := store.SandboxConfigurationRootPath(sandbox.id)
+	parentDir := store.SandboxRuntimeRootPath(sandbox.id)
 	assert.NoError(os.MkdirAll(parentDir, store.DirMode))
 
 	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
@@ -118,17 +114,13 @@ func TestQemuCreateSandboxMissingParentDirFail(t *testing.T) {
 		},
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.NoError(err)
-	sandbox.store = vcStore
-
 	// Create the hypervisor fake binary
 	testQemuPath := filepath.Join(testDir, testHypervisor)
-	_, err = os.Create(testQemuPath)
+	_, err := os.Create(testQemuPath)
 	assert.NoError(err)
 
 	// Ensure parent dir path for hypervisor.json does not exist.
-	parentDir := store.SandboxConfigurationRootPath(sandbox.id)
+	parentDir := store.SandboxRuntimeRootPath(sandbox.id)
 	assert.NoError(os.RemoveAll(parentDir))
 
 	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
@@ -470,11 +462,11 @@ func createQemuSandboxConfig() (*Sandbox, error) {
 		},
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
+	newStore, err := persist.GetDriver("fs")
 	if err != nil {
 		return &Sandbox{}, err
 	}
-	sandbox.store = vcStore
+	sandbox.newStore = newStore
 
 	return &sandbox, nil
 }

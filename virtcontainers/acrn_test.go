@@ -218,11 +218,7 @@ func TestAcrnCreateSandbox(t *testing.T) {
 		},
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.NoError(err)
-	sandbox.store = vcStore
-
-	err = globalSandboxList.addSandbox(sandbox)
+	err := globalSandboxList.addSandbox(sandbox)
 	assert.NoError(err)
 
 	defer globalSandboxList.removeSandbox(sandbox.id)

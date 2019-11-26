@@ -443,10 +443,6 @@ func (c *Container) Restore() error {
 	return nil
 }
 
-func (s *Sandbox) supportNewStore() bool {
-	return true
-}
-
 func loadSandboxConfig(id string) (*SandboxConfig, error) {
 	store, err := persist.GetDriver("fs")
 	if err != nil || store == nil {

@@ -574,11 +574,6 @@ func TestSetAnnotations(t *testing.T) {
 		},
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.NoError(err)
-
-	sandbox.store = vcStore
-
 	keyAnnotation := "annotation2"
 	valueAnnotation := "xyz"
 	newAnnotations := map[string]string{
@@ -657,10 +652,6 @@ func TestContainerStateSetFstype(t *testing.T) {
 	assert.Nil(err)
 	defer cleanUp()
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(err)
-	sandbox.store = vcStore
-
 	c := sandbox.GetContainer("100")
 	assert.NotNil(c)
 
@@ -737,14 +728,8 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 		config:     &SandboxConfig{},
 	}
 
-	store, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(t, err)
-	sandbox.store = store
-
 	containers[c.id].sandbox = &sandbox
 
-	err = sandbox.storeSandboxDevices()
-	assert.Nil(t, err, "Error while store sandbox devices %s", err)
 	err = containers[c.id].attachDevices()
 	assert.Nil(t, err, "Error while attaching devices %s", err)
 
@@ -1005,7 +990,7 @@ func TestDeleteStoreWhenNewContainerFail(t *testing.T) {
 	}
 	_, err = newContainer(p, &contConfig)
 	assert.NotNil(t, err, "New container with invalid device info should fail")
-	storePath := store.ContainerConfigurationRootPath(testSandboxID, contID)
+	storePath := store.ContainerRuntimeRootPath(testSandboxID, contID)
 	_, err = os.Stat(storePath)
 	assert.NotNil(t, err, "Should delete configuration root after failed to create a container")
 }
@@ -1168,10 +1153,6 @@ func TestAttachBlockDevice(t *testing.T) {
 		ctx:        context.Background(),
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(t, err)
-	sandbox.store = vcStore
-
 	contID := "100"
 	container := Container{
 		sandbox: sandbox,
@@ -1180,17 +1161,10 @@ func TestAttachBlockDevice(t *testing.T) {
 
 	// create state file
 	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
-	err = os.MkdirAll(path, store.DirMode)
+	err := os.MkdirAll(path, store.DirMode)
 	assert.NoError(t, err)
 
 	defer os.RemoveAll(path)
-
-	stateFilePath := filepath.Join(path, store.StateFile)
-	os.Remove(stateFilePath)
-
-	_, err = os.Create(stateFilePath)
-	assert.NoError(t, err)
-	defer os.Remove(stateFilePath)
 
 	path = "/dev/hda"
 	deviceInfo := config.DeviceInfo{
@@ -1255,10 +1229,6 @@ func TestPreAddDevice(t *testing.T) {
 		ctx:        context.Background(),
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(t, err)
-	sandbox.store = vcStore
-
 	contID := "100"
 	container := Container{
 		sandbox:   sandbox,
@@ -1269,17 +1239,10 @@ func TestPreAddDevice(t *testing.T) {
 
 	// create state file
 	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
-	err = os.MkdirAll(path, store.DirMode)
+	err := os.MkdirAll(path, store.DirMode)
 	assert.NoError(t, err)
 
 	defer os.RemoveAll(path)
-
-	stateFilePath := filepath.Join(path, store.StateFile)
-	os.Remove(stateFilePath)
-
-	_, err = os.Create(stateFilePath)
-	assert.NoError(t, err)
-	defer os.Remove(stateFilePath)
 
 	path = "/dev/hda"
 	deviceInfo := config.DeviceInfo{

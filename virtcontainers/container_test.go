@@ -92,18 +92,13 @@ func TestContainerRemoveDrive(t *testing.T) {
 		config:     &SandboxConfig{},
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(t, err)
-
-	sandbox.store = vcStore
-
 	container := Container{
 		sandbox: sandbox,
 		id:      "testContainer",
 	}
 
 	container.state.Fstype = ""
-	err = container.removeDrive()
+	err := container.removeDrive()
 
 	// hotplugRemoveDevice for hypervisor should not be called.
 	// test should pass without a hypervisor created for the container's sandbox.
@@ -123,8 +118,6 @@ func TestContainerRemoveDrive(t *testing.T) {
 	_, ok := device.(*drivers.BlockDevice)
 	assert.True(t, ok)
 	err = device.Attach(devReceiver)
-	assert.Nil(t, err)
-	err = sandbox.storeSandboxDevices()
 	assert.Nil(t, err)
 
 	container.state.Fstype = "xfs"
@@ -324,15 +317,11 @@ func TestContainerAddDriveDir(t *testing.T) {
 		},
 	}
 
-	defer store.DeleteAll()
-
-	sandboxStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(err)
-	sandbox.store = sandboxStore
-
 	sandbox.newStore, err = persist.GetDriver("fs")
 	assert.NoError(err)
 	assert.NotNil(sandbox.newStore)
+
+	defer sandbox.newStore.Destroy(sandbox.id)
 
 	contID := "100"
 	container := Container{
@@ -384,9 +373,7 @@ func TestContainerRootfsPath(t *testing.T) {
 			},
 		},
 	}
-	vcstore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	sandbox.store = vcstore
-	assert.Nil(t, err)
+
 	container := Container{
 		id:           "rootfstestcontainerid",
 		sandbox:      sandbox,

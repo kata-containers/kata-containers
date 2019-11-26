@@ -317,13 +317,6 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 
 	k.proxyBuiltIn = isProxyBuiltIn(sandbox.config.ProxyType)
 
-	// Fetch agent runtime info.
-	if !sandbox.supportNewStore() {
-		if err := sandbox.store.Load(store.Agent, &k.state); err != nil {
-			k.Logger().Debug("Could not retrieve anything from storage")
-		}
-	}
-
 	return disableVMShutdown, nil
 }
 
@@ -730,12 +723,6 @@ func (k *kataAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string)
 	k.proxy = proxy
 	k.state.ProxyPid = pid
 	k.state.URL = url
-	if sandbox != nil && !sandbox.supportNewStore() {
-		if err := sandbox.store.Store(store.Agent, k.state); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -952,13 +939,6 @@ func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 	// clean up agent state
 	k.state.ProxyPid = -1
 	k.state.URL = ""
-	if !sandbox.supportNewStore() {
-		if err := sandbox.store.Store(store.Agent, k.state); err != nil {
-			// ignore error
-			k.Logger().WithError(err).WithField("sandbox", sandbox.id).Error("failed to clean up agent state")
-		}
-	}
-
 	return nil
 }
 
