@@ -8,8 +8,8 @@ use std::time;
 
 const DEBUG_CONSOLE_FLAG: &'static str = "agent.debug_console";
 const DEV_MODE_FLAG: &'static str = "agent.devmode";
-const LOG_LEVEL_FLAG: &'static str = "agent.log";
-const HOTPLUG_TIMOUT_FLAG: &'static str = "agent.hotplug_timeout";
+const LOG_LEVEL_OPTION: &'static str = "agent.log";
+const HOTPLUG_TIMOUT_OPTION: &'static str = "agent.hotplug_timeout";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
@@ -40,20 +40,20 @@ impl agentConfig {
         let cmdline = fs::read_to_string(file)?;
         let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
         for param in params.iter() {
-            if param.starts_with(DEBUG_CONSOLE_FLAG) {
+            if param.eq(&DEBUG_CONSOLE_FLAG) {
                 self.debug_console = true;
             }
 
-            if param.starts_with(DEV_MODE_FLAG) {
+            if param.eq(&DEV_MODE_FLAG) {
                 self.dev_mode = true;
             }
 
-            if param.starts_with(LOG_LEVEL_FLAG) {
+            if param.starts_with(format!("{}=", LOG_LEVEL_OPTION).as_str()) {
                 let level = get_log_level(param)?;
                 self.log_level = level;
             }
 
-            if param.starts_with(HOTPLUG_TIMOUT_FLAG) {
+            if param.starts_with(format!("{}=", HOTPLUG_TIMOUT_OPTION).as_str()) {
                 let hotplugTimeout = get_hotplug_timeout(param)?;
                 // ensure the timeout is a positive value
                 if hotplugTimeout.as_secs() > 0 {
@@ -102,7 +102,7 @@ fn get_log_level(param: &str) -> Result<slog::Level> {
 
     let key = fields[0];
 
-    if key != LOG_LEVEL_FLAG {
+    if key != LOG_LEVEL_OPTION {
         return Err(ErrorKind::ErrorCode(String::from("invalid log level key name").into()).into());
     }
 
@@ -121,7 +121,7 @@ fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
     }
 
     let key = fields[0];
-    if key != HOTPLUG_TIMOUT_FLAG {
+    if key != HOTPLUG_TIMOUT_OPTION {
         return Err(ErrorKind::ErrorCode(String::from("invalid hotplug timeout key name")).into());
     }
 
@@ -193,147 +193,199 @@ mod tests {
             contents: &'a str,
             debug_console: bool,
             dev_mode: bool,
+            log_level: slog::Level,
             hotplug_timeout: time::Duration,
         }
 
         let tests = &[
             TestData {
+                contents: "agent.debug_consolex agent.devmode",
+                debug_console: false,
+                dev_mode: true,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+            },
+            TestData {
+                contents: "agent.debug_console agent.devmodex",
+                debug_console: true,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+            },
+            TestData {
+                contents: "agent.logx=debug",
+                debug_console: false,
+                dev_mode: false,
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+            },
+            TestData {
+                contents: "agent.log=debug",
+                debug_console: false,
+                dev_mode: false,
+                log_level: slog::Level::Debug,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+            },
+            TestData {
                 contents: "",
                 debug_console: false,
                 dev_mode: false,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "foo",
                 debug_console: false,
                 dev_mode: false,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "foo bar",
                 debug_console: false,
                 dev_mode: false,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "foo bar",
                 debug_console: false,
                 dev_mode: false,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "foo agent bar",
                 debug_console: false,
                 dev_mode: false,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "foo debug_console agent bar devmode",
                 debug_console: false,
                 dev_mode: false,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "agent.debug_console",
                 debug_console: true,
                 dev_mode: false,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "   agent.debug_console ",
                 debug_console: true,
                 dev_mode: false,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "agent.debug_console foo",
                 debug_console: true,
                 dev_mode: false,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: " agent.debug_console foo",
                 debug_console: true,
                 dev_mode: false,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "foo agent.debug_console bar",
                 debug_console: true,
                 dev_mode: false,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "foo agent.debug_console",
                 debug_console: true,
                 dev_mode: false,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "foo agent.debug_console ",
                 debug_console: true,
                 dev_mode: false,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "agent.devmode",
                 debug_console: false,
                 dev_mode: true,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "   agent.devmode ",
                 debug_console: false,
                 dev_mode: true,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "agent.devmode foo",
                 debug_console: false,
                 dev_mode: true,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: " agent.devmode foo",
                 debug_console: false,
                 dev_mode: true,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "foo agent.devmode bar",
                 debug_console: false,
                 dev_mode: true,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "foo agent.devmode",
                 debug_console: false,
                 dev_mode: true,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "foo agent.devmode ",
                 debug_console: false,
                 dev_mode: true,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console",
                 debug_console: true,
                 dev_mode: true,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.hotplug_timeout=100",
                 debug_console: true,
                 dev_mode: true,
+                log_level: DEFAULT_LOG_LEVEL,
                 hotplug_timeout: time::Duration::from_secs(100),
             },
             TestData {
                 contents: "agent.devmode agent.debug_console agent.hotplug_timeout=0",
                 debug_console: true,
                 dev_mode: true,
-                hotplug_timeout: time::Duration::from_secs(3),
+                log_level: DEFAULT_LOG_LEVEL,
+                hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
             },
         ];
 
@@ -372,6 +424,7 @@ mod tests {
 
             assert_eq!(d.debug_console, config.debug_console, "{}", msg);
             assert_eq!(d.dev_mode, config.dev_mode, "{}", msg);
+            assert_eq!(d.log_level, config.log_level, "{}", msg);
             assert_eq!(d.hotplug_timeout, config.hotplug_timeout, "{}", msg);
         }
     }
