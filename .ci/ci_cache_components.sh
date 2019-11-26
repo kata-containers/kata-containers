@@ -29,7 +29,7 @@ cache_qemu_artifacts() {
 	pushd "${tests_repo_dir}"
 	local current_qemu_version=$(get_version "assets.hypervisor.qemu.version")
 	popd
-	local qemu_tar="kata-qemu-static.tar.gz"
+	local qemu_tar="kata-static-qemu.tar.gz"
 	create_cache_asset "$qemu_tar" "${current_qemu_version}"
 }
 
