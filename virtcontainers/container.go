@@ -968,10 +968,8 @@ func (c *Container) stop(force bool) error {
 	defer func() {
 		// Save device and drive data.
 		// TODO: can we merge this saving with setContainerState()?
-		if c.sandbox.supportNewStore() {
-			if err := c.sandbox.Save(); err != nil {
-				c.Logger().WithError(err).Info("save container state failed")
-			}
+		if err := c.sandbox.Save(); err != nil {
+			c.Logger().WithError(err).Info("save container state failed")
 		}
 	}()
 

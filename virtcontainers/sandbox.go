@@ -175,9 +175,7 @@ type Sandbox struct {
 	factory    Factory
 	hypervisor hypervisor
 	agent      agent
-	store      *store.VCStore
-	// store is used to replace VCStore step by step
-	newStore persistapi.PersistDriver
+	newStore   persistapi.PersistDriver
 
 	network Network
 	monitor *monitor
@@ -243,10 +241,6 @@ func (s *Sandbox) SetAnnotations(annotations map[string]string) error {
 
 	for k, v := range annotations {
 		s.config.Annotations[k] = v
-	}
-
-	if !s.supportNewStore() {
-		return s.store.Store(store.Configuration, *(s.config))
 	}
 	return nil
 }
@@ -454,12 +448,6 @@ func (s *Sandbox) getAndStoreGuestDetails() error {
 			s.seccompSupported = guestDetailRes.AgentDetails.SupportsSeccomp
 		}
 		s.state.GuestMemoryHotplugProbe = guestDetailRes.SupportMemHotplugProbe
-
-		if !s.supportNewStore() {
-			if err = s.store.Store(store.State, s.state); err != nil {
-				return err
-			}
-		}
 	}
 
 	return nil
@@ -543,15 +531,8 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		ctx:             ctx,
 	}
 
-	vcStore, err := store.NewVCSandboxStore(ctx, s.id)
-	if err != nil {
-		return nil, err
-	}
-
-	s.store = vcStore
-
 	if s.newStore, err = persist.GetDriver("fs"); err != nil || s.newStore == nil {
-		return nil, fmt.Errorf("failed to get fs persist driver")
+		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
 
 	if err = globalSandboxList.addSandbox(s); err != nil {
@@ -562,7 +543,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		if err != nil {
 			s.Logger().WithError(err).WithField("sandboxid", s.id).Error("Create new sandbox failed")
 			globalSandboxList.removeSandbox(s.id)
-			s.store.Delete()
+			s.newStore.Destroy(s.id)
 		}
 	}()
 
@@ -586,10 +567,6 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	return s, nil
-}
-
-func (s *Sandbox) storeSandboxDevices() error {
-	return s.store.StoreDevices(s.devManager.GetAllDevices())
 }
 
 // storeSandbox stores a sandbox config.
@@ -622,10 +599,6 @@ func rwLockSandbox(sandboxID string) (func() error, error) {
 	return store.Lock(sandboxID, true)
 }
 
-func supportNewStore(ctx context.Context) bool {
-	return true
-}
-
 // fetchSandbox fetches a sandbox config from a sandbox ID and returns a sandbox.
 func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err error) {
 	virtLog.Info("fetch sandbox")
@@ -640,23 +613,11 @@ func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err 
 
 	var config SandboxConfig
 
-	if supportNewStore(ctx) {
-		c, err := loadSandboxConfig(sandboxID)
-		if err != nil {
-			return nil, err
-		}
-		config = *c
-	} else {
-		// We're bootstrapping
-		vcStore, err := store.NewVCSandboxStore(ctx, sandboxID)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := vcStore.Load(store.Configuration, &config); err != nil {
-			return nil, err
-		}
+	c, err := loadSandboxConfig(sandboxID)
+	if err != nil {
+		return nil, err
 	}
+	config = *c
 
 	// fetchSandbox is not suppose to create new sandbox VM.
 	sandbox, err = createSandbox(ctx, config, nil)
@@ -746,13 +707,7 @@ func (s *Sandbox) Delete() error {
 
 	s.agent.cleanup(s)
 
-	if s.supportNewStore() {
-		if err := s.newStore.Destroy(s.id); err != nil {
-			return err
-		}
-	}
-
-	return s.store.Delete()
+	return s.newStore.Destroy(s.id)
 }
 
 func (s *Sandbox) startNetworkMonitor() error {
@@ -819,11 +774,6 @@ func (s *Sandbox) createNetwork() error {
 				return err
 			}
 		}
-	}
-
-	// Store the network
-	if !s.supportNewStore() {
-		return s.store.Store(store.Network, s.networkNS)
 	}
 	return nil
 }
@@ -898,14 +848,8 @@ func (s *Sandbox) AddInterface(inf *vcTypes.Interface) (*vcTypes.Interface, erro
 
 	// Update the sandbox storage
 	s.networkNS.Endpoints = append(s.networkNS.Endpoints, endpoint)
-	if s.supportNewStore() {
-		if err := s.Save(); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := s.store.Store(store.Network, s.networkNS); err != nil {
-			return nil, err
-		}
+	if err := s.Save(); err != nil {
+		return nil, err
 	}
 
 	// Add network for vm
@@ -923,14 +867,8 @@ func (s *Sandbox) RemoveInterface(inf *vcTypes.Interface) (*vcTypes.Interface, e
 			}
 			s.networkNS.Endpoints = append(s.networkNS.Endpoints[:i], s.networkNS.Endpoints[i+1:]...)
 
-			if s.supportNewStore() {
-				if err := s.Save(); err != nil {
-					return inf, err
-				}
-			} else {
-				if err := s.store.Store(store.Network, s.networkNS); err != nil {
-					return inf, err
-				}
+			if err := s.Save(); err != nil {
+				return inf, err
 			}
 
 			break
@@ -1001,12 +939,6 @@ func (s *Sandbox) startVM() (err error) {
 
 		if s.config.NetworkConfig.NetmonConfig.Enable {
 			if err := s.startNetworkMonitor(); err != nil {
-				return err
-			}
-		}
-
-		if !s.supportNewStore() {
-			if err := s.store.Store(store.Network, s.networkNS); err != nil {
 				return err
 			}
 		}
@@ -1316,9 +1248,6 @@ func (s *Sandbox) UpdateContainer(containerID string, resources specs.LinuxResou
 		return err
 	}
 
-	if err := c.storeContainer(); err != nil {
-		return err
-	}
 	if err = s.storeSandbox(); err != nil {
 		return err
 	}
@@ -1550,11 +1479,6 @@ func (s *Sandbox) setSandboxState(state types.StateString) error {
 
 	// update in-memory state
 	s.state.State = state
-
-	// update on-disk state
-	if !s.supportNewStore() {
-		return s.store.Store(store.State, s.state)
-	}
 	return nil
 }
 
@@ -1573,14 +1497,6 @@ func (s *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
 	// Increment so that container gets incremented block index
 	s.state.BlockIndex++
 
-	if !s.supportNewStore() {
-		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
-		// update on-disk state
-		if err := s.store.Store(store.State, s.state); err != nil {
-			return -1, err
-		}
-	}
-
 	return currentIndex, nil
 }
 
@@ -1595,14 +1511,6 @@ func (s *Sandbox) decrementSandboxBlockIndex() error {
 			s.state.BlockIndex = original
 		}
 	}()
-
-	if !s.supportNewStore() {
-		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
-		// update on-disk state
-		if err = s.store.Store(store.State, s.state); err != nil {
-			return err
-		}
-	}
 
 	return nil
 }
@@ -1732,12 +1640,6 @@ func (s *Sandbox) AddDevice(info config.DeviceInfo) (api.Device, error) {
 			s.devManager.DetachDevice(b.DeviceID(), s)
 		}
 	}()
-
-	if !s.supportNewStore() {
-		if err = s.storeSandboxDevices(); err != nil {
-			return nil, err
-		}
-	}
 
 	return b, nil
 }
