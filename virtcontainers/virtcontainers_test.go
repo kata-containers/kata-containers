@@ -42,6 +42,9 @@ var testQemuKernelPath = ""
 var testQemuInitrdPath = ""
 var testQemuImagePath = ""
 var testQemuPath = ""
+var testClhKernelPath = ""
+var testClhImagePath = ""
+var testClhPath = ""
 var testAcrnKernelPath = ""
 var testAcrnImagePath = ""
 var testAcrnPath = ""
@@ -77,6 +80,18 @@ func setupAcrn() {
 	os.Mkdir(filepath.Join(testDir, testBundle), store.DirMode)
 
 	for _, filename := range []string{testAcrnKernelPath, testAcrnImagePath, testAcrnPath, testAcrnCtlPath} {
+		_, err := os.Create(filename)
+		if err != nil {
+			fmt.Printf("Could not recreate %s:%v", filename, err)
+			os.Exit(1)
+		}
+	}
+}
+
+func setupClh() {
+	os.Mkdir(filepath.Join(testDir, testBundle), store.DirMode)
+
+	for _, filename := range []string{testClhKernelPath, testClhImagePath, testClhPath} {
 		_, err := os.Create(filename)
 		if err != nil {
 			fmt.Printf("Could not recreate %s:%v", filename, err)
@@ -126,6 +141,12 @@ func TestMain(m *testing.M) {
 	testAcrnCtlPath = filepath.Join(testDir, testHypervisorCtl)
 
 	setupAcrn()
+
+	testClhKernelPath = filepath.Join(testDir, testKernel)
+	testClhImagePath = filepath.Join(testDir, testImage)
+	testClhPath = filepath.Join(testDir, testHypervisor)
+
+	setupClh()
 
 	ConfigStoragePathSaved := store.ConfigStoragePath
 	RunStoragePathSaved := store.RunStoragePath
