@@ -1174,12 +1174,6 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 		}
 	}()
 
-	// Sandbox is reponsable to update VM resources needed by Containers
-	err = s.updateResources()
-	if err != nil {
-		return nil, err
-	}
-
 	err = c.create()
 	if err != nil {
 		return nil, err
@@ -1187,6 +1181,14 @@ func (s *Sandbox) CreateContainer(contConfig ContainerConfig) (VCContainer, erro
 
 	// Add the container to the containers list in the sandbox.
 	if err = s.addContainer(c); err != nil {
+		return nil, err
+	}
+
+	// Sandbox is reponsable to update VM resources needed by Containers
+	// Update resources after having added containers to the sandbox, since
+	// container status is requiered to know if more resources should be added.
+	err = s.updateResources()
+	if err != nil {
 		return nil, err
 	}
 
@@ -1226,7 +1228,13 @@ func (s *Sandbox) StartContainer(containerID string) (VCContainer, error) {
 	}
 
 	s.Logger().Info("Container is started")
-	//Fixme Container delete from sandbox, need to update resources
+
+	// Update sandbox resources in case a stopped container
+	// is started
+	err = s.updateResources()
+	if err != nil {
+		return nil, err
+	}
 
 	return c, nil
 }
@@ -1484,10 +1492,6 @@ func (s *Sandbox) createContainers() error {
 	span, _ := s.trace("createContainers")
 	defer span.Finish()
 
-	if err := s.updateResources(); err != nil {
-		return err
-	}
-
 	for _, contConfig := range s.config.Containers {
 
 		c, err := newContainer(s, &contConfig)
@@ -1501,6 +1505,12 @@ func (s *Sandbox) createContainers() error {
 		if err := s.addContainer(c); err != nil {
 			return err
 		}
+	}
+
+	// Update resources after having added containers to the sandbox, since
+	// container status is requiered to know if more resources should be added.
+	if err := s.updateResources(); err != nil {
+		return err
 	}
 
 	if err := s.cgroupsUpdate(); err != nil {
@@ -1961,6 +1971,12 @@ func (s *Sandbox) updateResources() error {
 func (s *Sandbox) calculateSandboxMemory() int64 {
 	memorySandbox := int64(0)
 	for _, c := range s.config.Containers {
+		// Do not hot add again non-running containers resources
+		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
+			s.Logger().WithField("container-id", c.ID).Debug("Do not taking into account memory resources of not running containers")
+			continue
+		}
+
 		if m := c.Resources.Memory; m != nil && m.Limit != nil {
 			memorySandbox += *m.Limit
 		}
@@ -1972,6 +1988,12 @@ func (s *Sandbox) calculateSandboxCPUs() uint32 {
 	mCPU := uint32(0)
 
 	for _, c := range s.config.Containers {
+		// Do not hot add again non-running containers resources
+		if cont, ok := s.containers[c.ID]; ok && cont.state.State == types.StateStopped {
+			s.Logger().WithField("container-id", c.ID).Debug("Do not taking into account CPU resources of not running containers")
+			continue
+		}
+
 		if cpu := c.Resources.CPU; cpu != nil {
 			if cpu.Period != nil && cpu.Quota != nil {
 				mCPU += utils.CalculateMilliCPUs(*cpu.Quota, *cpu.Period)
