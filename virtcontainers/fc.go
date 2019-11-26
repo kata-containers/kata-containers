@@ -123,7 +123,7 @@ func (s *firecrackerState) set(state vmmState) {
 	s.state = state
 }
 
-// firecracker is an Hypervisor interface implementation for the firecracker hypervisor.
+// firecracker is an Hypervisor interface implementation for the firecracker VMM.
 type firecracker struct {
 	id            string //Unique ID per pod. Normally maps to the sandbox id
 	vmPath        string //All jailed VM assets need to be under this
@@ -713,8 +713,8 @@ func (fc *firecracker) fcStartVM() error {
 }
 
 // startSandbox will start the hypervisor for the given sandbox.
-// In the context of firecracker, this will start the hypervisor,
-// for configuration, but not yet start the actual virtual machine
+// In the context of firecracker, this will start the vmm,
+// for configuration and then start the actual virtual machine.
 func (fc *firecracker) startSandbox(timeout int) error {
 	span, _ := fc.trace("startSandbox")
 	defer span.Finish()
