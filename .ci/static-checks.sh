@@ -668,6 +668,7 @@ static_check_docs()
 		# Ignore local URLs. The only time these are used is in
 		# examples (meaning these URLs won't exist).
 		echo "$url" | grep -q "^file://" && continue
+		echo "$url" | grep -q "^http://localhost" && continue
 
 		# Ignore the install guide URLs that contain a shell variable
 		echo "$url" | grep -q "\\$" && continue
