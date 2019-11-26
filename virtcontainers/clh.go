@@ -680,7 +680,7 @@ func (clh *cloudHypervisor) virtiofsdArgs(sockPath string) ([]string, error) {
 
 func (clh *cloudHypervisor) shutdownVirtiofsd() (err error) {
 
-	err = syscall.Kill(-clh.state.VirtiofsdPID, syscall.SIGKILL)
+	err = syscall.Kill(clh.state.VirtiofsdPID, syscall.SIGKILL)
 
 	if err != nil {
 		clh.state.VirtiofsdPID = 0
