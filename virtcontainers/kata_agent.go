@@ -962,15 +962,11 @@ func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 	return nil
 }
 
-func (k *kataAgent) replaceOCIMountSource(spec *specs.Spec, guestMounts []Mount) error {
+func (k *kataAgent) replaceOCIMountSource(spec *specs.Spec, guestMounts map[string]Mount) error {
 	ociMounts := spec.Mounts
 
 	for index, m := range ociMounts {
-		for _, guestMount := range guestMounts {
-			if guestMount.Destination != m.Destination {
-				continue
-			}
-
+		if guestMount, ok := guestMounts[m.Destination]; ok {
 			k.Logger().Debugf("Replacing OCI mount (%s) source %s with %s", m.Destination, m.Source, guestMount.Source)
 			ociMounts[index].Source = guestMount.Source
 		}
