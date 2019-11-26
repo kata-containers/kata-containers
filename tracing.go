@@ -43,6 +43,14 @@ func createTracer(name string) (opentracing.Tracer, error) {
 			Type:  "const",
 			Param: 1,
 		},
+
+		// Ensure that Jaeger logs each span.
+		// This is essential as it is used by:
+		//
+		// https: //github.com/kata-containers/tests/blob/master/tracing/tracing-test.sh
+		Reporter: &config.ReporterConfig{
+			LogSpans: tracing,
+		},
 	}
 
 	logger := traceLogger{}
@@ -87,6 +95,8 @@ func trace(parent context.Context, name string) (opentracing.Span, context.Conte
 	// are still created - but the tracer used is a NOP. Therefore, only
 	// display the message when tracing is really enabled.
 	if tracing {
+		// This log message is *essential*: it is used by:
+		// https: //github.com/kata-containers/tests/blob/master/tracing/tracing-test.sh
 		shimLog.Debugf("created span %v", span)
 	}
 
