@@ -15,7 +15,7 @@
    >   If you wish to use a block based backend, see the options listed on https://github.com/kata-containers/documentation/issues/407.
 
    ```bash
-   $ sudo apt-get -y install apt-transport-https ca-certificates curl gnupg2 software-properties-common  
+   $ sudo apt-get -y install apt-transport-https ca-certificates curl gnupg2 software-properties-common
    $ curl -fsSL https://download.docker.com/linux/$(. /etc/os-release; echo "$ID")/gpg | sudo apt-key add -
    $ sudo add-apt-repository "deb https://download.docker.com/linux/$(. /etc/os-release; echo "$ID") $(lsb_release -cs) stable"
    $ sudo apt-get update
@@ -28,14 +28,14 @@
 2. Configure Docker to use Kata Containers by default with **ONE** of the following methods:
 
 a. `sysVinit`
-    
+
     - with `sysVinit`, docker config is stored in `/etc/default/docker`, edit the options similar to the following:
-       
+
     ```sh
     $ sudo sh -c "echo '# specify docker runtime for kata-containers
     DOCKER_OPTS=\"-D --add-runtime kata-runtime=/usr/bin/kata-runtime --default-runtime=kata-runtime\"' >> /etc/default/docker"
     ```
-    
+
 b. systemd (this is the default and is applied automatically if you select the
       [automatic installation](https://github.com/kata-containers/documentation/tree/master/install#automatic-installation) option)
 
@@ -49,6 +49,12 @@ b. systemd (this is the default and is applied automatically if you select the
     ```
 
 c. Docker `daemon.json`
+
+    Create docker configuration folder.
+
+    ```
+    $ sudo mkdir -p /etc/docker
+    ```
 
     Add the following definitions to `/etc/docker/daemon.json`:
 
@@ -66,7 +72,7 @@ c. Docker `daemon.json`
 3. Restart the Docker systemd service with one of the following (depending on init choice):
 
     a. `sysVinit`
-  
+
     ```sh
     $ sudo /etc/init.d/docker stop
     $ sudo /etc/init.d/docker start
@@ -77,7 +83,7 @@ c. Docker `daemon.json`
     ```sh
     $ tail -f /var/log/docker.log
     ```
-    
+
     b. systemd
 
     ```bash

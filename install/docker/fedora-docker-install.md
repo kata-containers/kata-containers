@@ -39,18 +39,24 @@
 
    2. Docker `daemon.json`
 
-       Add the following definitions to `/etc/docker/daemon.json`:
+      Create docker configuration folder.
 
-       ```json
-       {
-         "default-runtime": "kata-runtime",
-         "runtimes": {
-           "kata-runtime": {
-             "path": "/usr/bin/kata-runtime"
-           }
-         }
-       }
-       ```
+      ```
+      $ sudo mkdir -p /etc/docker
+      ```
+
+      Add the following definitions to `/etc/docker/daemon.json`:
+
+      ```json
+      {
+        "default-runtime": "kata-runtime",
+        "runtimes": {
+          "kata-runtime": {
+            "path": "/usr/bin/kata-runtime"
+          }
+        }
+      }
+      ```
 
 3. Restart the Docker systemd service with the following commands:
 
