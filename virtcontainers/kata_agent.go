@@ -416,8 +416,8 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 	return h.addDevice(sharedVolume, fsDev)
 }
 
-func (k *kataAgent) configureFromGrpc(id string, builtin bool, config interface{}) error {
-	return k.internalConfigure(nil, id, "", builtin, config)
+func (k *kataAgent) configureFromGrpc(h hypervisor, id string, builtin bool, config interface{}) error {
+	return k.internalConfigure(h, id, "", builtin, config)
 }
 
 func (k *kataAgent) createSandbox(sandbox *Sandbox) error {

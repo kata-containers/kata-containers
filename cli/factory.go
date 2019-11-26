@@ -88,7 +88,7 @@ func (s *cacheServer) Quit(ctx context.Context, empty *types.Empty) (*types.Empt
 		time.Sleep(time.Second)
 		s.quit()
 	}()
-	return nil, nil
+	return &types.Empty{}, nil
 }
 
 func (s *cacheServer) Status(ctx context.Context, empty *types.Empty) (*pb.GrpcStatus, error) {

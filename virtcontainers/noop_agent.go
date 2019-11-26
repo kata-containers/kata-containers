@@ -181,7 +181,7 @@ func (n *noopAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 	return nil
 }
 
-func (n *noopAgent) configureFromGrpc(id string, builtin bool, config interface{}) error {
+func (n *noopAgent) configureFromGrpc(h hypervisor, id string, builtin bool, config interface{}) error {
 	return nil
 }
 

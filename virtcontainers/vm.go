@@ -264,7 +264,7 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 	}
 
 	agent := newAgent(config.AgentType)
-	agent.configureFromGrpc(v.Id, isProxyBuiltIn(config.ProxyType), config.AgentConfig)
+	agent.configureFromGrpc(hypervisor, v.Id, isProxyBuiltIn(config.ProxyType), config.AgentConfig)
 
 	proxy, err := newProxy(config.ProxyType)
 	if err != nil {
