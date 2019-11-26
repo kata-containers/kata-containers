@@ -417,6 +417,7 @@ static_check_license_headers()
 		--exclude="vendor/*" \
 		--exclude="VERSION" \
 		--exclude="virtcontainers/pkg/firecracker/*" \
+		--exclude="virtcontainers/pkg/cloud-hypervisor*" \
 		--exclude="*.xml" \
 		--exclude="*.yaml" \
 		--exclude="*.yml" \
