@@ -14,6 +14,8 @@ import (
 	"time"
 
 	pb "github.com/kata-containers/runtime/protocols/cache"
+	"github.com/kata-containers/runtime/virtcontainers/persist"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/sirupsen/logrus"
@@ -34,6 +36,8 @@ type VM struct {
 	memory uint32
 
 	cpuDelta uint32
+
+	store persistapi.PersistDriver
 }
 
 // VMConfig is a collection of all info that a new blackbox VM needs.
@@ -155,9 +159,16 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 
 	virtLog.WithField("vm", id).WithField("config", config).Info("create new vm")
 
+	store, err := persist.GetDriver("fs")
+	if err != nil {
+		return nil, err
+	}
+
 	defer func() {
 		if err != nil {
 			virtLog.WithField("vm", id).WithError(err).Error("failed to create new vm")
+			virtLog.WithField("vm", id).Errorf("Deleting store for %s", id)
+			store.Destroy(id)
 		}
 	}()
 
@@ -219,6 +230,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		proxyURL:   url,
 		cpu:        config.HypervisorConfig.NumVCPUs,
 		memory:     config.HypervisorConfig.MemorySize,
+		store:      store,
 	}, nil
 }
 
@@ -231,9 +243,16 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		return nil, err
 	}
 
+	store, err := persist.GetDriver("fs")
+	if err != nil {
+		return nil, err
+	}
+
 	defer func() {
 		if err != nil {
 			virtLog.WithField("vm", v.Id).WithError(err).Error("failed to create new vm from Grpc")
+			virtLog.WithField("vm", v.Id).Errorf("Deleting store for %s", v.Id)
+			store.Destroy(v.Id)
 		}
 	}()
 
@@ -261,6 +280,7 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		cpu:        v.Cpu,
 		memory:     v.Memory,
 		cpuDelta:   v.CpuDelta,
+		store:      store,
 	}, nil
 }
 
@@ -318,7 +338,7 @@ func (v *VM) Stop() error {
 		return err
 	}
 
-	return nil
+	return v.store.Destroy(v.id)
 }
 
 // AddCPUs adds num of CPUs to the VM.
