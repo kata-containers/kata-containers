@@ -10,6 +10,8 @@ const DEBUG_CONSOLE_FLAG: &'static str = "agent.debug_console";
 const DEV_MODE_FLAG: &'static str = "agent.devmode";
 const LOG_LEVEL_FLAG: &'static str = "agent.log";
 const HOTPLUG_TIMOUT_FLAG: &'static str = "agent.hotplug_timeout";
+const LOG_VPORT_FLAG: &'static str = "agent.log_vport";
+const DEBUG_CONSOLE_VPORT_FLAG: &'static str = "agent.debug_console_vport";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
@@ -24,6 +26,8 @@ pub struct agentConfig {
     pub dev_mode: bool,
     pub log_level: slog::Level,
     pub hotplug_timeout: time::Duration,
+    pub debug_console_vport: u32,
+    pub log_vport: u32,
 }
 
 impl agentConfig {
@@ -33,6 +37,8 @@ impl agentConfig {
             dev_mode: false,
             log_level: DEFAULT_LOG_LEVEL,
             hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+            debug_console_vport: 0,
+            log_vport: 0,
         }
     }
 
@@ -40,7 +46,17 @@ impl agentConfig {
         let cmdline = fs::read_to_string(file)?;
         let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
         for param in params.iter() {
-            if param.starts_with(DEBUG_CONSOLE_FLAG) {
+            if param.starts_with(DEBUG_CONSOLE_VPORT_FLAG) {
+                self.debug_console = true;
+                self.debug_console_vport = parse_port(param)?;
+            }
+
+            if param.starts_with(LOG_VPORT_FLAG) {
+                self.log_vport = parse_port(param)?;
+            }
+
+            if param.starts_with(DEBUG_CONSOLE_FLAG) && !param.starts_with(DEBUG_CONSOLE_VPORT_FLAG)
+            {
                 self.debug_console = true;
             }
 
@@ -48,7 +64,7 @@ impl agentConfig {
                 self.dev_mode = true;
             }
 
-            if param.starts_with(LOG_LEVEL_FLAG) {
+            if param.starts_with(LOG_LEVEL_FLAG) && !param.starts_with(LOG_VPORT_FLAG) {
                 let level = get_log_level(param)?;
                 self.log_level = level;
             }
@@ -64,6 +80,15 @@ impl agentConfig {
 
         Ok(())
     }
+}
+
+fn parse_port(s: &str) -> Result<u32> {
+    let fields: Vec<&str> = s.split("=").collect();
+    if fields.len() != 2 {
+        return Err(ErrorKind::ErrorCode(String::from("Invalid port parameter")).into());
+    }
+
+    Ok(fields[1].parse::<u32>()?)
 }
 
 // Map logrus (https://godoc.org/github.com/sirupsen/logrus)
