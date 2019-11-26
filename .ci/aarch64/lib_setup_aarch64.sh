@@ -6,18 +6,25 @@
 
 set -e
 
-filter_test_script="${cidir}/${arch}/filter_test_aarch64.sh"
+filter_test_script="${cidir}/filter/filter_test_union.sh"
+config_file="${cidir}/aarch64/configuration_aarch64.yaml"
 
 check_test_union()
 {
-	local test_union=$(bash -f ${filter_test_script})
+	local test_union=$(${filter_test_script} ${config_file})
 	flag="$1"
 	# regex match
-	[[ ${test_union} =~ ${flag} ]] && echo "true"
+	[[ ${test_union} =~ ${flag} ]] && echo "yes" && exit 0
 
-	echo "false"
+	echo "no"
 }
 
-CRIO=$(check_test_union crio)
 KUBERNETES=$(check_test_union kubernetes)
+# if we do k8s integration test, CRI-O is the default CRI runtime
+# we have specific env `CRI_CONTAINERD_K8S` for k8s running with containerd-cri.
+if [ "$KUBERNETES" == "yes" ]; then
+	CRIO="yes"
+else
+	CRIO="no"
+fi
 OPENSHIFT=$(check_test_union openshift)
