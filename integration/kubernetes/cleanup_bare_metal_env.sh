@@ -51,9 +51,14 @@ if [ -n "$runc_container_union" ]; then
 	done <<< "${runc_container_union}"
 fi
 
+# when pipeline consists of grep, it may fail unnecessarily
+# when no line selected.
+veth_interfaces_union=$(set +o pipefail; sudo ip link | grep "veth" | awk '{print $2}' | cut -d '@' -f1)
+
 # delete stale veth interfaces, which is named after vethXXX.
-veth_interfaces_union=$(sudo ip link | grep "veth" | awk '{print $2}' | cut -d '@' -f1)
-while read veth_interface; do
-	sudo ip link set dev $veth_interface down
-	sudo ip link del $veth_interface
-done <<< "$veth_interfaces_union"
+if [ -n "$veth_interfaces_union" ]; then
+	while read veth_interface; do
+		sudo ip link set dev $veth_interface down
+		sudo ip link del $veth_interface
+	done <<< "$veth_interfaces_union"
+fi
