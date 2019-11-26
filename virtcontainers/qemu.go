@@ -1942,6 +1942,7 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 
 	q.qemuConfig.SMP = qp.QemuSMP
 
+	q.arch.setBridges(q.state.Bridges)
 	return nil
 }
 
