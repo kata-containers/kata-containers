@@ -28,7 +28,7 @@ func getFsDriver() (*FS, error) {
 	return fs, nil
 }
 
-func TestFsLock(t *testing.T) {
+func TestFsLockShared(t *testing.T) {
 	fs, err := getFsDriver()
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
@@ -48,17 +48,42 @@ func TestFsLock(t *testing.T) {
 	err = os.MkdirAll(sandboxDir, dirMode)
 	assert.Nil(t, err)
 
+	// Take 2 shared locks
 	unlockFunc, err := fs.Lock(sid, false)
 	assert.Nil(t, err)
+
 	unlockFunc2, err := fs.Lock(sid, false)
 	assert.Nil(t, err)
-	_, err = fs.Lock(sid, true)
-	assert.NotNil(t, err)
 
 	assert.Nil(t, unlockFunc())
-	// double unlock should return error
-	assert.NotNil(t, unlockFunc())
 	assert.Nil(t, unlockFunc2())
+	assert.NotNil(t, unlockFunc2())
+}
+
+func TestFsLockExclusive(t *testing.T) {
+	fs, err := getFsDriver()
+	assert.Nil(t, err)
+	assert.NotNil(t, fs)
+
+	sid := "test-fs-driver"
+	fs.sandboxState.SandboxContainer = sid
+	sandboxDir, err := fs.sandboxDir(sid)
+	assert.Nil(t, err)
+
+	err = os.MkdirAll(sandboxDir, dirMode)
+	assert.Nil(t, err)
+
+	// Take 1 exclusive lock
+	unlockFunc, err := fs.Lock(sid, true)
+	assert.Nil(t, err)
+
+	assert.Nil(t, unlockFunc())
+
+	unlockFunc, err = fs.Lock(sid, true)
+	assert.Nil(t, err)
+
+	assert.Nil(t, unlockFunc())
+	assert.NotNil(t, unlockFunc())
 }
 
 func TestFsDriver(t *testing.T) {

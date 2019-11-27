@@ -264,9 +264,9 @@ func (fs *FS) Lock(sandboxID string, exclusive bool) (func() error, error) {
 
 	var lockType int
 	if exclusive {
-		lockType = syscall.LOCK_EX | syscall.LOCK_NB
+		lockType = syscall.LOCK_EX
 	} else {
-		lockType = syscall.LOCK_SH | syscall.LOCK_NB
+		lockType = syscall.LOCK_SH
 	}
 
 	if err := syscall.Flock(int(f.Fd()), lockType); err != nil {
