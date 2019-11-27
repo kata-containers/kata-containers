@@ -33,3 +33,4 @@ docker:
 kubernetes:
   - k8s-cpu-ns
   - k8s-limit-range
+  - k8s-number-cpus
