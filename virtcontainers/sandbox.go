@@ -604,38 +604,22 @@ func (s *Sandbox) storeSandbox() error {
 	return nil
 }
 
-func rLockSandbox(ctx context.Context, sandboxID string) (string, error) {
-	store, err := store.NewVCSandboxStore(ctx, sandboxID)
+func rLockSandbox(sandboxID string) (func() error, error) {
+	store, err := persist.GetDriver("fs")
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
 
-	return store.RLock()
+	return store.Lock(sandboxID, false)
 }
 
-func rwLockSandbox(ctx context.Context, sandboxID string) (string, error) {
-	store, err := store.NewVCSandboxStore(ctx, sandboxID)
+func rwLockSandbox(sandboxID string) (func() error, error) {
+	store, err := persist.GetDriver("fs")
 	if err != nil {
-		return "", err
+		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
 
-	return store.Lock()
-}
-
-func unlockSandbox(ctx context.Context, sandboxID, token string) error {
-	// If the store no longer exists, we won't be able to unlock.
-	// Creating a new store for locking an item that does not even exist
-	// does not make sense.
-	if !store.VCSandboxStoreExists(ctx, sandboxID) {
-		return nil
-	}
-
-	store, err := store.NewVCSandboxStore(ctx, sandboxID)
-	if err != nil {
-		return err
-	}
-
-	return store.Unlock(token)
+	return store.Lock(sandboxID, true)
 }
 
 func supportNewStore(ctx context.Context) bool {
