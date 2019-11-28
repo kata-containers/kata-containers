@@ -16,8 +16,8 @@ import (
 	pb "github.com/kata-containers/runtime/protocols/cache"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/sirupsen/logrus"
 )
 
@@ -285,7 +285,7 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 }
 
 func buildVMSharePath(id string) string {
-	return filepath.Join(store.RunVMStoragePath(), id, "shared")
+	return filepath.Join(fs.RunVMStoragePath(), id, "shared")
 }
 
 func (v *VM) logger() logrus.FieldLogger {

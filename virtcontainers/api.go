@@ -16,7 +16,6 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
@@ -50,7 +49,6 @@ func SetLogger(ctx context.Context, logger *logrus.Entry) {
 	virtLog = logger.WithFields(fields)
 
 	deviceApi.SetLogger(virtLog)
-	store.SetLogger(virtLog)
 	compatoci.SetLogger(virtLog)
 }
 

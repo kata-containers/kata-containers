@@ -17,7 +17,7 @@ import (
 	govmmQemu "github.com/intel/govmm/qemu"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
-	"github.com/kata-containers/runtime/virtcontainers/store"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -92,8 +92,8 @@ func TestQemuCreateSandbox(t *testing.T) {
 	assert.NoError(err)
 
 	// Create parent dir path for hypervisor.json
-	parentDir := store.SandboxRuntimeRootPath(sandbox.id)
-	assert.NoError(os.MkdirAll(parentDir, store.DirMode))
+	parentDir := filepath.Join(fs.RunStoragePath(), sandbox.id)
+	assert.NoError(os.MkdirAll(parentDir, DirMode))
 
 	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
 	assert.NoError(err)
@@ -120,7 +120,7 @@ func TestQemuCreateSandboxMissingParentDirFail(t *testing.T) {
 	assert.NoError(err)
 
 	// Ensure parent dir path for hypervisor.json does not exist.
-	parentDir := store.SandboxRuntimeRootPath(sandbox.id)
+	parentDir := filepath.Join(fs.RunStoragePath(), sandbox.id)
 	assert.NoError(os.RemoveAll(parentDir))
 
 	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
@@ -280,7 +280,7 @@ func TestQemuGetSandboxConsole(t *testing.T) {
 		ctx: context.Background(),
 	}
 	sandboxID := "testSandboxID"
-	expected := filepath.Join(store.RunVMStoragePath(), sandboxID, consoleSocket)
+	expected := filepath.Join(fs.RunVMStoragePath(), sandboxID, consoleSocket)
 
 	result, err := q.getSandboxConsole(sandboxID)
 	assert.NoError(err)

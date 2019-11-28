@@ -29,7 +29,6 @@ import (
 	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 )
 
 // https://github.com/torvalds/linux/blob/master/include/uapi/linux/major.h
@@ -322,8 +321,6 @@ type Container struct {
 
 	sandbox *Sandbox
 
-	runPath       string
-	configPath    string
 	containerPath string
 	rootfsSuffix  string
 
@@ -673,8 +670,6 @@ func newContainer(sandbox *Sandbox, contConfig *ContainerConfig) (*Container, er
 		rootFs:        contConfig.RootFs,
 		config:        contConfig,
 		sandbox:       sandbox,
-		runPath:       store.ContainerRuntimeRootPath(sandbox.id, contConfig.ID),
-		configPath:    store.ContainerConfigurationRootPath(sandbox.id, contConfig.ID),
 		containerPath: filepath.Join(sandbox.id, contConfig.ID),
 		rootfsSuffix:  "rootfs",
 		state:         types.ContainerState{},

@@ -21,7 +21,6 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -267,7 +266,7 @@ func testSetupFakeRootfs(t *testing.T) (testRawFile, loopDev, mntDir string, err
 	assert.NoError(err)
 
 	mntDir = filepath.Join(tmpDir, "rootfs")
-	err = os.Mkdir(mntDir, store.DirMode)
+	err = os.Mkdir(mntDir, DirMode)
 	assert.NoError(err)
 
 	err = syscall.Mount(loopDev, mntDir, "ext4", uintptr(0), "")

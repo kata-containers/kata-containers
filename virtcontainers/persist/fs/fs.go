@@ -37,10 +37,24 @@ const storagePathSuffix = "vc"
 // sandboxPathSuffix is the suffix used for sandbox storage
 const sandboxPathSuffix = "sbs"
 
+// vmPathSuffix is the suffix used for guest VMs.
+const vmPathSuffix = "vm"
+
 // RunStoragePath is the sandbox runtime directory.
 // It will contain one state.json and one lock file for each created sandbox.
 var RunStoragePath = func() string {
 	path := filepath.Join("/run", storagePathSuffix, sandboxPathSuffix)
+	if rootless.IsRootless() {
+		return filepath.Join(rootless.GetRootlessDir(), path)
+	}
+	return path
+}
+
+// RunVMStoragePath is the vm directory.
+// It will contain all guest vm sockets and shared mountpoints.
+// The function is declared this way for mocking in unit tests
+var RunVMStoragePath = func() string {
+	path := filepath.Join("/run", storagePathSuffix, vmPathSuffix)
 	if rootless.IsRootless() {
 		return filepath.Join(rootless.GetRootlessDir(), path)
 	}

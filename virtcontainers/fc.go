@@ -38,7 +38,6 @@ import (
 	"github.com/blang/semver"
 	"github.com/containerd/console"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
@@ -76,6 +75,8 @@ const (
 	fcMetricsFifo = "metrics.fifo"
 
 	defaultFcConfig = "fcConfig.json"
+	// storagePathSuffix mirrors persist/fs/fs.go:storagePathSuffix
+	storagePathSuffix = "vc"
 )
 
 // Specify the minimum version of firecracker supported
@@ -244,8 +245,8 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	// Also jailer based on the id implicitly sets up cgroups under
 	// <cgroups_base>/<exec_file_name>/<id>/
 	hypervisorName := filepath.Base(hypervisorConfig.HypervisorPath)
-	//store.ConfigStoragePath cannot be used as we need exec perms
-	fc.chrootBaseDir = filepath.Join("/var/lib/", store.StoragePathSuffix)
+	//fs.RunStoragePath cannot be used as we need exec perms
+	fc.chrootBaseDir = filepath.Join("/run", storagePathSuffix)
 
 	fc.vmPath = filepath.Join(fc.chrootBaseDir, hypervisorName, fc.id)
 	fc.jailerRoot = filepath.Join(fc.vmPath, "root") // auto created by jailer
@@ -374,7 +375,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 	}
 
 	// Fetch sandbox network to be able to access it from the sandbox structure.
-	err := os.MkdirAll(fc.jailerRoot, store.DirMode)
+	err := os.MkdirAll(fc.jailerRoot, DirMode)
 	if err != nil {
 		return err
 	}

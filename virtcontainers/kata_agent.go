@@ -26,11 +26,11 @@ import (
 	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
@@ -217,7 +217,7 @@ func (k *kataAgent) Logger() *logrus.Entry {
 }
 
 func (k *kataAgent) getVMPath(id string) string {
-	return filepath.Join(store.RunVMStoragePath(), id)
+	return filepath.Join(fs.RunVMStoragePath(), id)
 }
 
 func (k *kataAgent) getSharePath(id string) string {
@@ -402,7 +402,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 		HostPath: sharePath,
 	}
 
-	if err = os.MkdirAll(sharedVolume.HostPath, store.DirMode); err != nil {
+	if err = os.MkdirAll(sharedVolume.HostPath, DirMode); err != nil {
 		return err
 	}
 
@@ -2126,7 +2126,7 @@ func (k *kataAgent) copyFile(src, dst string) error {
 
 	cpReq := &grpc.CopyFileRequest{
 		Path:     dst,
-		DirMode:  uint32(store.DirMode),
+		DirMode:  uint32(DirMode),
 		FileMode: st.Mode,
 		FileSize: fileSize,
 		Uid:      int32(st.Uid),
