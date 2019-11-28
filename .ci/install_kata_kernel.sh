@@ -33,6 +33,7 @@ readonly tmp_dir="$(mktemp -d -t install-kata-XXXXXXXXXXX)"
 packaged_kernel="kata-linux-container"
 #Experimental kernel support. Pull from virtio-fs GitLab instead of kernel.org
 experimental_kernel="${experimental_kernel:-false}"
+tag="${1:-""}"
 
 exit_handler() {
 	rm -rf "${tmp_dir}"
@@ -44,6 +45,7 @@ download_repo() {
 	echo "Download and update ${kernel_repo}"
 	pushd ${tmp_dir}
 	go get -d -u "${kernel_repo}" || true
+	[ -z "${tag}" ] || git -C "${kernel_repo_dir}" checkout -b "${tag}" "${tag}"
 	popd
 }
 

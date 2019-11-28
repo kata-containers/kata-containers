@@ -103,8 +103,9 @@ function build_and_install() {
 	github_project="$1"
 	make_target="$2"
 	test_not_gopath_set="$3"
+	tag="$4"
 
-	build "${github_project}" "${make_target}"
+	build "${github_project}" "${make_target}" "${tag}"
 	pushd "${GOPATH}/src/${github_project}"
 	if [ "$test_not_gopath_set" = "true" ]; then
 		info "Installing ${github_project} in No GO command or GOPATH not set mode"
