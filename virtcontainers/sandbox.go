@@ -37,7 +37,6 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
@@ -46,6 +45,9 @@ const (
 	// vmStartTimeout represents the time in seconds a sandbox can wait before
 	// to consider the VM starting operation failed.
 	vmStartTimeout = 10
+
+	// DirMode is the permission bits used for creating a directory
+	DirMode = os.FileMode(0750) | os.ModeDir
 )
 
 // SandboxStatus describes a sandbox status.
@@ -187,9 +189,6 @@ type Sandbox struct {
 	volumes []types.Volume
 
 	containers map[string]*Container
-
-	runPath    string
-	configPath string
 
 	state types.SandboxState
 
@@ -519,8 +518,6 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		config:          &sandboxConfig,
 		volumes:         sandboxConfig.Volumes,
 		containers:      map[string]*Container{},
-		runPath:         store.SandboxRuntimeRootPath(sandboxConfig.ID),
-		configPath:      store.SandboxConfigurationRootPath(sandboxConfig.ID),
 		state:           types.SandboxState{},
 		annotationsLock: &sync.RWMutex{},
 		wg:              &sync.WaitGroup{},

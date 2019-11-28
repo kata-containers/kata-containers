@@ -21,8 +21,8 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
@@ -682,7 +682,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 	testDeviceBDFPath := "0000:00:1c.0"
 
 	devicesDir := filepath.Join(tmpDir, testFDIOGroup, "devices")
-	err = os.MkdirAll(devicesDir, store.DirMode)
+	err = os.MkdirAll(devicesDir, DirMode)
 	assert.Nil(t, err)
 
 	deviceFile := filepath.Join(devicesDir, testDeviceBDFPath)
@@ -990,7 +990,7 @@ func TestDeleteStoreWhenNewContainerFail(t *testing.T) {
 	}
 	_, err = newContainer(p, &contConfig)
 	assert.NotNil(t, err, "New container with invalid device info should fail")
-	storePath := store.ContainerRuntimeRootPath(testSandboxID, contID)
+	storePath := filepath.Join(fs.RunStoragePath(), testSandboxID, contID)
 	_, err = os.Stat(storePath)
 	assert.NotNil(t, err, "Should delete configuration root after failed to create a container")
 }
@@ -1160,8 +1160,8 @@ func TestAttachBlockDevice(t *testing.T) {
 	}
 
 	// create state file
-	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
-	err := os.MkdirAll(path, store.DirMode)
+	path := filepath.Join(fs.RunStoragePath(), testSandboxID, container.ID())
+	err := os.MkdirAll(path, DirMode)
 	assert.NoError(t, err)
 
 	defer os.RemoveAll(path)
@@ -1238,8 +1238,8 @@ func TestPreAddDevice(t *testing.T) {
 	container.state.State = types.StateReady
 
 	// create state file
-	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
-	err := os.MkdirAll(path, store.DirMode)
+	path := filepath.Join(fs.RunStoragePath(), testSandboxID, container.ID())
+	err := os.MkdirAll(path, DirMode)
 	assert.NoError(t, err)
 
 	defer os.RemoveAll(path)
@@ -1336,9 +1336,6 @@ func checkDirNotExist(path string) error {
 
 func checkSandboxRemains() error {
 	var err error
-	if err = checkDirNotExist(sandboxDirConfig); err != nil {
-		return fmt.Errorf("%s still exists", sandboxDirConfig)
-	}
 	if err = checkDirNotExist(sandboxDirState); err != nil {
 		return fmt.Errorf("%s still exists", sandboxDirState)
 	}

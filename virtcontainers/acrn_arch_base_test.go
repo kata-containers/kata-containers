@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/store"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -106,7 +106,7 @@ func TestAcrnArchBaseAppendConsoles(t *testing.T) {
 	assert := assert.New(t)
 	acrnArchBase := newAcrnArchBase()
 
-	path := filepath.Join(store.SandboxRuntimeRootPath(sandboxID), consoleSocket)
+	path := filepath.Join(filepath.Join(fs.RunStoragePath(), sandboxID), consoleSocket)
 
 	expectedOut := []Device{
 		ConsoleDevice{

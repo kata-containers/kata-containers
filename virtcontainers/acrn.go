@@ -24,8 +24,8 @@ import (
 	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
@@ -327,7 +327,7 @@ func (a *Acrn) setup(id string, hypervisorConfig *HypervisorConfig) error {
 
 		// The path might already exist, but in case of VM templating,
 		// we have to create it since the sandbox has not created it yet.
-		if err = os.MkdirAll(store.SandboxRuntimeRootPath(id), store.DirMode); err != nil {
+		if err = os.MkdirAll(filepath.Join(fs.RunStoragePath(), id), DirMode); err != nil {
 			return err
 		}
 
@@ -443,8 +443,8 @@ func (a *Acrn) startSandbox(timeoutSecs int) error {
 		a.Logger().WithField("default-kernel-parameters", formatted).Debug()
 	}
 
-	vmPath := filepath.Join(store.RunVMStoragePath(), a.id)
-	err := os.MkdirAll(vmPath, store.DirMode)
+	vmPath := filepath.Join(fs.RunVMStoragePath(), a.id)
+	err := os.MkdirAll(vmPath, DirMode)
 	if err != nil {
 		return err
 	}
@@ -657,7 +657,7 @@ func (a *Acrn) getSandboxConsole(id string) (string, error) {
 	span, _ := a.trace("getSandboxConsole")
 	defer span.Finish()
 
-	return utils.BuildSocketPath(store.RunVMStoragePath(), id, acrnConsoleSocket)
+	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, acrnConsoleSocket)
 }
 
 func (a *Acrn) saveSandbox() error {
@@ -802,7 +802,7 @@ func (a *Acrn) storeInfo() error {
 	if os.IsNotExist(err) {
 		// Root directory
 		a.Logger().WithField("path", dirPath).Debugf("Creating UUID directory")
-		if err := os.MkdirAll(dirPath, store.DirMode); err != nil {
+		if err := os.MkdirAll(dirPath, DirMode); err != nil {
 			return err
 		}
 	} else if err != nil {

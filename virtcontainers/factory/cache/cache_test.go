@@ -15,7 +15,7 @@ import (
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/factory/direct"
-	"github.com/kata-containers/runtime/virtcontainers/store"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 )
 
 func TestTemplateFactory(t *testing.T) {
@@ -35,14 +35,11 @@ func TestTemplateFactory(t *testing.T) {
 
 	ctx := context.Background()
 
-	ConfigStoragePathSaved := store.ConfigStoragePath
-	RunStoragePathSaved := store.RunStoragePath
+	runPathSave := fs.RunStoragePath()
+	fs.TestSetRunStoragePath(filepath.Join(testDir, "vc", "run"))
 	// allow the tests to run without affecting the host system.
-	store.ConfigStoragePath = func() string { return filepath.Join(testDir, store.StoragePathSuffix, "config") }
-	store.RunStoragePath = func() string { return filepath.Join(testDir, store.StoragePathSuffix, "run") }
 	defer func() {
-		store.ConfigStoragePath = ConfigStoragePathSaved
-		store.RunStoragePath = RunStoragePathSaved
+		fs.TestSetRunStoragePath(runPathSave)
 	}()
 
 	// New

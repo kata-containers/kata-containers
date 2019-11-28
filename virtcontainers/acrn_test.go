@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/store"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -198,7 +198,7 @@ func TestAcrnGetSandboxConsole(t *testing.T) {
 		ctx: context.Background(),
 	}
 	sandboxID := "testSandboxID"
-	expected := filepath.Join(store.RunVMStoragePath(), sandboxID, consoleSocket)
+	expected := filepath.Join(fs.RunVMStoragePath(), sandboxID, consoleSocket)
 
 	result, err := a.getSandboxConsole(sandboxID)
 	assert.NoError(err)
