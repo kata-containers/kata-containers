@@ -407,7 +407,12 @@ func (clh *cloudHypervisor) load(s persistapi.HypervisorState) {
 }
 
 func (clh *cloudHypervisor) check() error {
-	return nil
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(context.Background(), clhApiTimeout*time.Second)
+	defer cancel()
+
+	_, _, err := cl.VmmPingGet(ctx)
+	return err
 }
 
 func (clh *cloudHypervisor) getPids() []int {
