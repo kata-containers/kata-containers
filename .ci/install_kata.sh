@@ -17,10 +17,10 @@ KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 experimental_qemu="${experimental_qemu:-false}"
 
 echo "Install kata-containers image"
-"${cidir}/install_kata_image.sh"
+"${cidir}/install_kata_image.sh" "${tag}"
 
 echo "Install Kata Containers Kernel"
-"${cidir}/install_kata_kernel.sh"
+"${cidir}/install_kata_kernel.sh" "${tag}"
 
 if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
 	echo "Install Firecracker"
