@@ -17,4 +17,12 @@ type PersistDriver interface {
 	// Lock locks the persist driver, "exclusive" decides whether the lock is exclusive or shared.
 	// It returns Unlock Function and errors
 	Lock(sid string, exclusive bool) (func() error, error)
+
+	// GlobalWrite writes "data" to "StorageRootPath"/"relativePath";
+	// GlobalRead reads "data" from "StorageRootPath"/"relativePath";
+	// these functions are used for writing/reading some global data,
+	// they are specially designed for ACRN so far.
+	// Don't use them too much unless you have no other choice! @weizhang555
+	GlobalWrite(relativePath string, data []byte) error
+	GlobalRead(relativePath string) ([]byte, error)
 }

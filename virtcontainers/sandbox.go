@@ -547,7 +547,9 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, nil)
 
 	// Ignore the error. Restore can fail for a new sandbox
-	s.Restore()
+	if err := s.Restore(); err != nil {
+		s.Logger().WithError(err).Debug("restore sandbox failed")
+	}
 
 	// new store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.stateful); err != nil {
