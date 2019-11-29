@@ -48,8 +48,6 @@ type VCMock struct {
 	DeleteSandboxFunc  func(ctx context.Context, sandboxID string) (vc.VCSandbox, error)
 	ListSandboxFunc    func(ctx context.Context) ([]vc.SandboxStatus, error)
 	FetchSandboxFunc   func(ctx context.Context, sandboxID string) (vc.VCSandbox, error)
-	PauseSandboxFunc   func(ctx context.Context, sandboxID string) (vc.VCSandbox, error)
-	ResumeSandboxFunc  func(ctx context.Context, sandboxID string) (vc.VCSandbox, error)
 	RunSandboxFunc     func(ctx context.Context, sandboxConfig vc.SandboxConfig) (vc.VCSandbox, error)
 	StartSandboxFunc   func(ctx context.Context, sandboxID string) (vc.VCSandbox, error)
 	StatusSandboxFunc  func(ctx context.Context, sandboxID string) (vc.SandboxStatus, error)

@@ -1599,48 +1599,6 @@ func (s *Sandbox) Stop(force bool) error {
 	return nil
 }
 
-// Pause pauses the sandbox
-func (s *Sandbox) Pause() error {
-	if err := s.hypervisor.pauseSandbox(); err != nil {
-		return err
-	}
-
-	//After the sandbox is paused, it's needed to stop its monitor,
-	//Otherwise, its monitors will receive timeout errors if it is
-	//paused for a long time, thus its monitor will not tell it's a
-	//crash caused timeout or just a paused timeout.
-	if s.monitor != nil {
-		s.monitor.stop()
-	}
-
-	if err := s.pauseSetStates(); err != nil {
-		return err
-	}
-
-	if err := s.storeSandbox(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// Resume resumes the sandbox
-func (s *Sandbox) Resume() error {
-	if err := s.hypervisor.resumeSandbox(); err != nil {
-		return err
-	}
-
-	if err := s.resumeSetStates(); err != nil {
-		return err
-	}
-
-	if err := s.storeSandbox(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // list lists all sandbox running on the host.
 func (s *Sandbox) list() ([]Sandbox, error) {
 	return nil, nil
@@ -1666,26 +1624,6 @@ func (s *Sandbox) setSandboxState(state types.StateString) error {
 		return s.store.Store(store.State, s.state)
 	}
 	return nil
-}
-
-func (s *Sandbox) pauseSetStates() error {
-	// XXX: When a sandbox is paused, all its containers are forcibly
-	// paused too.
-	if err := s.setContainersState(types.StatePaused); err != nil {
-		return err
-	}
-
-	return s.setSandboxState(types.StatePaused)
-}
-
-func (s *Sandbox) resumeSetStates() error {
-	// XXX: Resuming a paused sandbox puts all containers back into the
-	// running state.
-	if err := s.setContainersState(types.StateRunning); err != nil {
-		return err
-	}
-
-	return s.setSandboxState(types.StateRunning)
 }
 
 // getAndSetSandboxBlockIndex retrieves sandbox block index and increments it for
@@ -1735,55 +1673,6 @@ func (s *Sandbox) decrementSandboxBlockIndex() error {
 	}
 
 	return nil
-}
-
-func (s *Sandbox) setContainersState(state types.StateString) error {
-	if state == "" {
-		return vcTypes.ErrNeedState
-	}
-
-	for _, c := range s.containers {
-		if err := c.setContainerState(state); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// togglePauseSandbox pauses a sandbox if pause is set to true, else it resumes it.
-func togglePauseSandbox(ctx context.Context, sandboxID string, pause bool) (*Sandbox, error) {
-	span, ctx := trace(ctx, "togglePauseSandbox")
-	defer span.Finish()
-
-	if sandboxID == "" {
-		return nil, vcTypes.ErrNeedSandbox
-	}
-
-	lockFile, err := rwLockSandbox(ctx, sandboxID)
-	if err != nil {
-		return nil, err
-	}
-	defer unlockSandbox(ctx, sandboxID, lockFile)
-
-	// Fetch the sandbox from storage and create it.
-	s, err := fetchSandbox(ctx, sandboxID)
-	if err != nil {
-		return nil, err
-	}
-	defer s.releaseStatelessSandbox()
-
-	if pause {
-		err = s.Pause()
-	} else {
-		err = s.Resume()
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return s, nil
 }
 
 // HotplugAddDevice is used for add a device to sandbox
