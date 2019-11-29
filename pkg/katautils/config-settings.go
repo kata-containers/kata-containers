@@ -45,6 +45,7 @@ const defaultMsize9p uint32 = 8192
 const defaultHotplugVFIOOnRootBus bool = false
 const defaultEntropySource = "/dev/urandom"
 const defaultGuestHookPath string = ""
+const defaultVirtioFSCacheMode = "none"
 
 const defaultTemplatePath string = "/run/vc/vm/template"
 const defaultVMCacheEndpoint string = "/var/run/kata-containers/cache.sock"

@@ -164,6 +164,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		GuestHookPath:         defaultGuestHookPath,
 		SharedFS:              sharedFS,
 		VirtioFSDaemon:        "/path/to/virtiofsd",
+		VirtioFSCache:         defaultVirtioFSCacheMode,
 	}
 
 	agentConfig := vc.KataAgentConfig{}
@@ -624,6 +625,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
 		Msize9p:               defaultMsize9p,
 		GuestHookPath:         defaultGuestHookPath,
+		VirtioFSCache:         defaultVirtioFSCacheMode,
 	}
 
 	expectedAgentConfig := vc.KataAgentConfig{}
@@ -1369,6 +1371,23 @@ func TestDefaultBridges(t *testing.T) {
 	h.DefaultBridges = maxPCIBridges
 	bridges = h.defaultBridges()
 	assert.Equal(maxPCIBridges, bridges)
+}
+
+func TestDefaultVirtioFSCache(t *testing.T) {
+	assert := assert.New(t)
+
+	h := hypervisor{VirtioFSCache: ""}
+
+	cache := h.defaultVirtioFSCache()
+	assert.Equal(defaultVirtioFSCacheMode, cache)
+
+	h.VirtioFSCache = "always"
+	cache = h.defaultVirtioFSCache()
+	assert.Equal("always", cache)
+
+	h.VirtioFSCache = "none"
+	cache = h.defaultVirtioFSCache()
+	assert.Equal("none", cache)
 }
 
 func TestDefaultFirmware(t *testing.T) {

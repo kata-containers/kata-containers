@@ -320,7 +320,6 @@ func beforeSubcommands(c *cli.Context) error {
 	if err != nil {
 		fatal(err)
 	}
-
 	if !subCmdIsCheckCmd {
 		debug = runtimeConfig.Debug
 		crashOnError = runtimeConfig.Debug
