@@ -1,0 +1,45 @@
+#
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# We need to skip some docker integration tests as they are not
+# running correctly using Firecracker. We will skip them using
+# the ginkgo flag 'skip=REGEXP'.
+test:
+  - docker
+docker:
+  Describe:
+    - CPU constraints
+    - CPUs and CPU set
+    - Hot plug CPUs
+    - Hotplug memory when create containers
+    - Update CPU constraints
+    - Update number of CPUs
+    - build with docker
+    - capabilities
+    - diff
+    - docker commit
+    - docker cp
+    - docker cp with volume attached
+    - docker env
+    - docker exec
+    - docker exit code
+    - docker privileges
+    - docker top
+    - docker volume
+    - inspect
+    - load with docker
+    - memory constraints
+    - package manager update test
+    - pause with docker
+    - restart
+    - run container and update its memory constraints
+    - run container with docker
+    - run hot plug block devices
+    - terminal with docker
+    - ulimits
+    - users and groups
+  Context:
+    - remove bind-mount source before container exits
+  It:

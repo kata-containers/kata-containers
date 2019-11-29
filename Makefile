@@ -25,8 +25,11 @@ FILTER_FILE = .ci/filter/filter_docker_test.sh
 # skipped docker integration tests for Firecraker
 # Firecracker configuration file
 FIRECRACKER_CONFIG = .ci/hypervisors/firecracker/configuration_firecracker.yaml
+# Firecracker configuration file
+CLH_CONFIG = .ci/hypervisors/clh/configuration_clh.yaml
 ifneq ($(wildcard $(FILTER_FILE)),)
 SKIP_FIRECRACKER := $(shell bash -c '$(FILTER_FILE) $(FIRECRACKER_CONFIG)')
+SKIP_CLH := $(shell bash -c '$(FILTER_FILE) $(CLH_CONFIG)')
 endif
 
 # get arch
@@ -82,6 +85,9 @@ endif
 
 ifeq ($(KATA_HYPERVISOR),firecracker)
 	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP_FIRECRACKER}" \
+		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+else ifeq ($(KATA_HYPERVISOR),cloud-hypervisor)
+	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP_CLH}" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 else ifeq ($(ARCH),$(filter $(ARCH), aarch64 s390x ppc64le))
 	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \
