@@ -77,16 +77,6 @@ func (impl *VCImpl) StatusSandbox(ctx context.Context, sandboxID string) (Sandbo
 	return StatusSandbox(ctx, sandboxID)
 }
 
-// PauseSandbox implements the VC function of the same name.
-func (impl *VCImpl) PauseSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
-	return PauseSandbox(ctx, sandboxID)
-}
-
-// ResumeSandbox implements the VC function of the same name.
-func (impl *VCImpl) ResumeSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
-	return ResumeSandbox(ctx, sandboxID)
-}
-
 // CreateContainer implements the VC function of the same name.
 func (impl *VCImpl) CreateContainer(ctx context.Context, sandboxID string, containerConfig ContainerConfig) (VCSandbox, VCContainer, error) {
 	return CreateContainer(ctx, sandboxID, containerConfig)

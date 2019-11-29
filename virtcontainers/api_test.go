@@ -354,64 +354,6 @@ func TestStopSandboxNoopAgentSuccessful(t *testing.T) {
 	assert.NotNil(vp)
 }
 
-func TestPauseThenResumeSandboxNoopAgentSuccessful(t *testing.T) {
-	defer cleanUp()
-	assert := assert.New(t)
-
-	config := newTestSandboxConfigNoop()
-
-	ctx := context.Background()
-
-	p, _, err := createAndStartSandbox(ctx, config)
-	assert.NoError(err)
-	assert.NotNil(p)
-
-	contID := "100"
-	contConfig := newTestContainerConfigNoop(contID)
-
-	_, c, err := CreateContainer(ctx, p.ID(), contConfig)
-	assert.NoError(err)
-	assert.NotNil(c)
-
-	p, err = PauseSandbox(ctx, p.ID())
-	assert.NoError(err)
-	assert.NotNil(p)
-
-	pImpl, ok := p.(*Sandbox)
-	assert.True(ok)
-
-	expectedState := types.StatePaused
-
-	assert.Equal(pImpl.state.State, expectedState, "unexpected paused sandbox state")
-
-	for i, c := range p.GetAllContainers() {
-		cImpl, ok := c.(*Container)
-		assert.True(ok)
-
-		assert.Equal(expectedState, cImpl.state.State,
-			fmt.Sprintf("paused container %d has unexpected state", i))
-	}
-
-	p, err = ResumeSandbox(ctx, p.ID())
-	assert.NoError(err)
-	assert.NotNil(p)
-
-	pImpl, ok = p.(*Sandbox)
-	assert.True(ok)
-
-	expectedState = types.StateRunning
-
-	assert.Equal(pImpl.state.State, expectedState, "unexpected resumed sandbox state")
-
-	for i, c := range p.GetAllContainers() {
-		cImpl, ok := c.(*Container)
-		assert.True(ok)
-
-		assert.Equal(cImpl.state.State, expectedState,
-			fmt.Sprintf("resumed container %d has unexpected state", i))
-	}
-}
-
 func TestStopSandboxKataAgentSuccessful(t *testing.T) {
 	assert := assert.New(t)
 	if tc.NotValid(ktu.NeedRoot()) {

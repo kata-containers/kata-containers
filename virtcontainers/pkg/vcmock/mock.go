@@ -119,24 +119,6 @@ func (m *VCMock) StatusSandbox(ctx context.Context, sandboxID string) (vc.Sandbo
 	return vc.SandboxStatus{}, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
 }
 
-// PauseSandbox implements the VC function of the same name.
-func (m *VCMock) PauseSandbox(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
-	if m.PauseSandboxFunc != nil {
-		return m.PauseSandboxFunc(ctx, sandboxID)
-	}
-
-	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
-}
-
-// ResumeSandbox implements the VC function of the same name.
-func (m *VCMock) ResumeSandbox(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
-	if m.ResumeSandboxFunc != nil {
-		return m.ResumeSandboxFunc(ctx, sandboxID)
-	}
-
-	return nil, fmt.Errorf("%s: %s (%+v): sandboxID: %v", mockErrorPrefix, getSelf(), m, sandboxID)
-}
-
 // CreateContainer implements the VC function of the same name.
 func (m *VCMock) CreateContainer(ctx context.Context, sandboxID string, containerConfig vc.ContainerConfig) (vc.VCSandbox, vc.VCContainer, error) {
 	if m.CreateContainerFunc != nil {
