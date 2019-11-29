@@ -200,16 +200,6 @@ SHIMV2_DIR = $(CLI_DIR)/$(SHIMV2)
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 VERSION := ${shell cat ./VERSION}
 
-# Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
-# git revision string.  They will only be rebuilt if the revision string
-# actually changes.
-.PHONY: .git-commit.tmp
-.git-commit: .git-commit.tmp
-	@cmp $< $@ >/dev/null 2>&1 || cp $< $@
-.git-commit.tmp:
-	@echo -n "$$(git rev-parse HEAD 2>/dev/null)" >$@
-	@test -n "$$(git status --porcelain --untracked-files=no)" && echo -n "-dirty" >>$@ || true
-
 # List of configuration files to build and install
 CONFIGS =
 CONFIG_PATHS =
@@ -482,6 +472,16 @@ define SHOW_ARCH
 endef
 
 all: runtime containerd-shim-v2 netmon
+
+# Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
+# git revision string.  They will only be rebuilt if the revision string
+# actually changes.
+.PHONY: .git-commit.tmp
+.git-commit: .git-commit.tmp
+	@cmp $< $@ >/dev/null 2>&1 || cp $< $@
+.git-commit.tmp:
+	@echo -n "$$(git rev-parse HEAD 2>/dev/null)" >$@
+	@test -n "$$(git status --porcelain --untracked-files=no)" && echo -n "-dirty" >>$@ || true
 
 containerd-shim-v2: $(SHIMV2_OUTPUT)
 
