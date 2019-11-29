@@ -23,6 +23,7 @@ import (
 
 	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
@@ -41,7 +42,7 @@ const (
 // VMUUIDStoragePath is the uuid directory.
 // It will contain all uuid info used by guest vm.
 var VMUUIDStoragePath = func() string {
-	path := filepath.Join("/run/vc", UUIDPathSuffix)
+	path := filepath.Join(fs.StorageRootPath(), UUIDPathSuffix)
 	if rootless.IsRootless() {
 		return filepath.Join(rootless.GetRootlessDir(), path)
 	}
@@ -742,7 +743,7 @@ func (a *Acrn) GetACRNUUIDBytes(uid string) (uuid.UUID, error) {
 }
 
 // GetNextAvailableUUID returns next available UUID VM creation
-// If no validl UUIDs are available it returns err.
+// If no valid UUIDs are available it returns err.
 func (a *Acrn) GetNextAvailableUUID() (string, error) {
 	var MaxVMSupported uint8
 	var Idx uint8
@@ -796,78 +797,38 @@ func (a *Acrn) GetMaxSupportedACRNVM() (uint8, error) {
 }
 
 func (a *Acrn) storeInfo() error {
-	dirPath := VMUUIDStoragePath()
-
-	_, err := os.Stat(dirPath)
-	if os.IsNotExist(err) {
-		// Root directory
-		a.Logger().WithField("path", dirPath).Debugf("Creating UUID directory")
-		if err := os.MkdirAll(dirPath, DirMode); err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
-
-	dirf, err := os.Open(dirPath)
+	store, err := persist.GetDriver("fs")
 	if err != nil {
 		return err
 	}
-	defer dirf.Close()
-
-	if err := syscall.Flock(int(dirf.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		return err
-	}
-
-	// write data
-	f, err := os.OpenFile(filepath.Join(dirPath, uuidFile), os.O_RDWR|os.O_CREATE, 0755)
-	if err != nil {
-		return fmt.Errorf("failed to store information into uuid.json: %v", err)
-	}
-	defer f.Close()
+	relPath := filepath.Join(UUIDPathSuffix, uuidFile)
 
 	jsonOut, err := json.Marshal(a.info)
 	if err != nil {
 		return fmt.Errorf("Could not marshall data: %s", err)
 	}
-	f.Write(jsonOut)
+
+	if err := store.GlobalWrite(relPath, jsonOut); err != nil {
+		return fmt.Errorf("failed to write uuid to file: %v", err)
+	}
+
 	return nil
 }
 
 func (a *Acrn) loadInfo() error {
-	dirPath := VMUUIDStoragePath()
-
-	_, err := os.Stat(dirPath)
-	if err != nil {
-		return fmt.Errorf("failed to load ACRN information: %v", err)
-	}
-
-	dirf, err := os.Open(dirPath)
+	store, err := persist.GetDriver("fs")
 	if err != nil {
 		return err
 	}
+	relPath := filepath.Join(UUIDPathSuffix, uuidFile)
 
-	if err := syscall.Flock(int(dirf.Fd()), syscall.LOCK_SH|syscall.LOCK_NB); err != nil {
-		dirf.Close()
-		return err
-	}
-
-	defer dirf.Close()
-
-	// write data
-	f, err := os.Open(filepath.Join(dirPath, uuidFile))
+	data, err := store.GlobalRead(relPath)
 	if err != nil {
-		return fmt.Errorf("failed to load information into uuid.json: %v", err)
+		return fmt.Errorf("failed to read uuid from file: %v", err)
 	}
 
-	dec := json.NewDecoder(f)
-	if dec != nil {
-		return fmt.Errorf("failed to create json decoder")
-	}
-
-	err = dec.Decode(&a.info)
-	if err != nil {
-		return fmt.Errorf("could not decode data: %v", err)
+	if err := json.Unmarshal(data, &a.info); err != nil {
+		return fmt.Errorf("failed to unmarshal uuid info: %v", err)
 	}
 	return nil
 }

@@ -1364,7 +1364,6 @@ func TestProcessListContainer(t *testing.T) {
 
 	pImpl, ok := p.(*Sandbox)
 	assert.True(ok)
-	// defer store.DeleteAll()
 
 	contConfig := newTestContainerConfigNoop(contID)
 	_, c, err := CreateContainer(ctx, p.ID(), contConfig)

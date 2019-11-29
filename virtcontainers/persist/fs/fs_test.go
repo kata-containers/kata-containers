@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
@@ -28,7 +29,27 @@ func getFsDriver() (*FS, error) {
 	return fs, nil
 }
 
+func initTestDir() func() {
+	testDir, _ := ioutil.TempDir("", "vc-tmp-")
+	// allow the tests to run without affecting the host system.
+	rootSave := StorageRootPath()
+	StorageRootPath = func() string {
+		return filepath.Join(testDir, "vc")
+	}
+
+	os.MkdirAll(testDir, dirMode)
+
+	return func() {
+		StorageRootPath = func() string {
+			return rootSave
+		}
+		os.RemoveAll(testDir)
+	}
+}
+
 func TestFsLockShared(t *testing.T) {
+	defer initTestDir()()
+
 	fs, err := getFsDriver()
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
@@ -61,6 +82,8 @@ func TestFsLockShared(t *testing.T) {
 }
 
 func TestFsLockExclusive(t *testing.T) {
+	defer initTestDir()()
+
 	fs, err := getFsDriver()
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
@@ -87,6 +110,8 @@ func TestFsLockExclusive(t *testing.T) {
 }
 
 func TestFsDriver(t *testing.T) {
+	defer initTestDir()()
+
 	fs, err := getFsDriver()
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
@@ -162,4 +187,26 @@ func TestFsDriver(t *testing.T) {
 	_, err = os.Stat(dir)
 	assert.NotNil(t, err)
 	assert.True(t, os.IsNotExist(err))
+}
+
+func TestGlobalReadWrite(t *testing.T) {
+	defer initTestDir()()
+
+	relPath := "test/123/aaa.json"
+	data := "hello this is testing global read write"
+
+	fs, err := getFsDriver()
+	assert.Nil(t, err)
+	assert.NotNil(t, fs)
+
+	err = fs.GlobalWrite(relPath, []byte(data))
+	assert.Nil(t, err)
+
+	out, err := fs.GlobalRead(relPath)
+	assert.Nil(t, err)
+	assert.Equal(t, string(out), data)
+
+	out, err = fs.GlobalRead("nonexist")
+	assert.NotNil(t, err)
+	assert.Nil(t, out)
 }

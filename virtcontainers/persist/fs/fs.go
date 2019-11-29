@@ -23,10 +23,10 @@ import (
 const persistFile = "persist.json"
 
 // dirMode is the permission bits used for creating a directory
-const dirMode = os.FileMode(0700)
+const dirMode = os.FileMode(0700) | os.ModeDir
 
 // fileMode is the permission bits used for creating a file
-const fileMode = os.FileMode(0640)
+const fileMode = os.FileMode(0600)
 
 // storagePathSuffix is the suffix used for all storage paths
 //
@@ -40,25 +40,33 @@ const sandboxPathSuffix = "sbs"
 // vmPathSuffix is the suffix used for guest VMs.
 const vmPathSuffix = "vm"
 
-// RunStoragePath is the sandbox runtime directory.
-// It will contain one state.json and one lock file for each created sandbox.
-var RunStoragePath = func() string {
-	path := filepath.Join("/run", storagePathSuffix, sandboxPathSuffix)
+var StorageRootPath = func() string {
+	path := filepath.Join("/run", storagePathSuffix)
 	if rootless.IsRootless() {
 		return filepath.Join(rootless.GetRootlessDir(), path)
 	}
 	return path
 }
 
+// RunStoragePath is the sandbox runtime directory.
+// It will contain one state.json and one lock file for each created sandbox.
+var RunStoragePath = func() string {
+	return filepath.Join(StorageRootPath(), sandboxPathSuffix)
+}
+
 // RunVMStoragePath is the vm directory.
 // It will contain all guest vm sockets and shared mountpoints.
 // The function is declared this way for mocking in unit tests
 var RunVMStoragePath = func() string {
-	path := filepath.Join("/run", storagePathSuffix, vmPathSuffix)
-	if rootless.IsRootless() {
-		return filepath.Join(rootless.GetRootlessDir(), path)
+	return filepath.Join(StorageRootPath(), vmPathSuffix)
+}
+
+// TestSetRunStoragePath set RunStoragePath to path
+// this function is only used for testing purpose
+func TestSetRunStoragePath(path string) {
+	RunStoragePath = func() string {
+		return path
 	}
-	return path
 }
 
 // FS storage driver implementation
@@ -299,10 +307,57 @@ func (fs *FS) Lock(sandboxID string, exclusive bool) (func() error, error) {
 	return unlockFunc, nil
 }
 
-// TestSetRunStoragePath set RunStoragePath to path
-// this function is only used for testing purpose
-func TestSetRunStoragePath(path string) {
-	RunStoragePath = func() string {
-		return path
+func (fs *FS) GlobalWrite(relativePath string, data []byte) error {
+	path := filepath.Join(StorageRootPath(), relativePath)
+	path, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return fmt.Errorf("failed to find abs path for %q: %v", relativePath, err)
 	}
+
+	dir := filepath.Dir(path)
+
+	_, err = os.Stat(dir)
+	if os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, dirMode); err != nil {
+			fs.Logger().WithError(err).Errorf("failed to create dir %q", dir)
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, fileMode)
+	if err != nil {
+		fs.Logger().WithError(err).Errorf("failed to open file %q for writting", path)
+		return err
+	}
+	defer f.Close()
+
+	if _, err := f.Write(data); err != nil {
+		fs.Logger().WithError(err).Errorf("failed to write file %q: %v ", path, err)
+		return err
+	}
+	return nil
+}
+
+func (fs *FS) GlobalRead(relativePath string) ([]byte, error) {
+	path := filepath.Join(StorageRootPath(), relativePath)
+	path, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return nil, fmt.Errorf("failed to find abs path for %q: %v", relativePath, err)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		fs.Logger().WithError(err).Errorf("failed to open file %q for reading", path)
+		return nil, err
+	}
+	defer f.Close()
+
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		fs.Logger().WithError(err).Errorf("failed to read file %q: %v ", path, err)
+		return nil, err
+	}
+	return data, nil
 }
