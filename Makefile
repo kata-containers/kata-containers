@@ -17,7 +17,7 @@ endif
 # union for 'make test'
 UNION := functional debug-console $(DOCKER_DEPENDENCY) openshift crio docker-compose network \
 	docker-stability oci netmon kubernetes swarm vm-factory \
-	entropy ramdisk shimv2 tracing time-drift
+	entropy ramdisk shimv2 tracing time-drift compatibility
 
 # filter scheme script for docker integration test suites
 FILTER_FILE = .ci/filter/filter_docker_test.sh
@@ -185,6 +185,9 @@ tracing:
 time-drift:
 	bats integration/time_drift/time_drift.bats
 
+compatibility:
+	bash -f integration/compatibility/run.sh
+
 test: ${UNION}
 
 check: checkcommits log-parser
@@ -201,6 +204,7 @@ help:
 
 # PHONY in alphabetical order
 .PHONY: \
+	compatibility \
 	check \
 	checkcommits \
 	crio \
