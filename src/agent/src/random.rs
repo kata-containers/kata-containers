@@ -10,7 +10,7 @@ use nix::sys::stat::Mode;
 use rustjail::errors::*;
 use std::fs;
 
-pub const RNGDEV: &'static str = "/dev/random";
+pub const RNGDEV: &str = "/dev/random";
 pub const RNDADDTOENTCNT: libc::c_int = 0x40045201;
 pub const RNDRESEEDRNG: libc::c_int = 0x5207;
 

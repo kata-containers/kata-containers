@@ -221,9 +221,9 @@ impl Sandbox {
     }
 }
 
-pub const CPU_ONLINE_PATH: &'static str = "/sys/devices/system/cpu";
-pub const MEMORY_ONLINE_PATH: &'static str = "/sys/devices/system/memory";
-pub const ONLINE_FILE: &'static str = "online";
+pub const CPU_ONLINE_PATH: &str = "/sys/devices/system/cpu";
+pub const MEMORY_ONLINE_PATH: &str = "/sys/devices/system/memory";
+pub const ONLINE_FILE: &str = "online";
 
 fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Result<i32> {
     let mut count = 0;

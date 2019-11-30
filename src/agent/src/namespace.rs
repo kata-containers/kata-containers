@@ -17,10 +17,10 @@ use crate::mount::{BareMount, FLAGS};
 use slog::Logger;
 
 //use container::Process;
-const PERSISTENT_NS_DIR: &'static str = "/var/run/sandbox-ns";
-pub const NSTYPEIPC: &'static str = "ipc";
-pub const NSTYPEUTS: &'static str = "uts";
-pub const NSTYPEPID: &'static str = "pid";
+const PERSISTENT_NS_DIR: &str = "/var/run/sandbox-ns";
+pub const NSTYPEIPC: &str = "ipc";
+pub const NSTYPEUTS: &str = "uts";
+pub const NSTYPEPID: &str = "pid";
 
 pub fn get_current_thread_ns_path(ns_type: &str) -> String {
     format!(

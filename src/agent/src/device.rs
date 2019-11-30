@@ -32,27 +32,27 @@ macro_rules! sl {
     target_arch = "powerpc64le",
     target_arch = "s390x"
 ))]
-pub const ROOT_BUS_PATH: &'static str = "/devices/pci0000:00";
+pub const ROOT_BUS_PATH: &str = "/devices/pci0000:00";
 #[cfg(target_arch = "arm")]
-pub const ROOT_BUS_PATH: &'static str = "/devices/platform/4010000000.pcie/pci0000:00";
+pub const ROOT_BUS_PATH: &str = "/devices/platform/4010000000.pcie/pci0000:00";
 
-pub const SYSFS_DIR: &'static str = "/sys";
+pub const SYSFS_DIR: &str = "/sys";
 
-const SYS_BUS_PREFIX: &'static str = "/sys/bus/pci/devices";
-const PCI_BUS_RESCAN_FILE: &'static str = "/sys/bus/pci/rescan";
-const SYSTEM_DEV_PATH: &'static str = "/dev";
+const SYS_BUS_PREFIX: &str = "/sys/bus/pci/devices";
+const PCI_BUS_RESCAN_FILE: &str = "/sys/bus/pci/rescan";
+const SYSTEM_DEV_PATH: &str = "/dev";
 
 // SCSI const
 
 // Here in "0:0", the first number is the SCSI host number because
 // only one SCSI controller has been plugged, while the second number
 // is always 0.
-pub const SCSI_HOST_CHANNEL: &'static str = "0:0:";
-const SYS_CLASS_PREFIX: &'static str = "/sys/class";
-const SCSI_DISK_PREFIX: &'static str = "/sys/class/scsi_disk/0:0:";
-pub const SCSI_BLOCK_SUFFIX: &'static str = "block";
-const SCSI_DISK_SUFFIX: &'static str = "/device/block";
-const SCSI_HOST_PATH: &'static str = "/sys/class/scsi_host";
+pub const SCSI_HOST_CHANNEL: &str = "0:0:";
+const SYS_CLASS_PREFIX: &str = "/sys/class";
+const SCSI_DISK_PREFIX: &str = "/sys/class/scsi_disk/0:0:";
+pub const SCSI_BLOCK_SUFFIX: &str = "block";
+const SCSI_DISK_SUFFIX: &str = "/device/block";
+const SCSI_HOST_PATH: &str = "/sys/class/scsi_host";
 
 // DeviceHandler is the type of callback to be defined to handle every
 // type of device driver.

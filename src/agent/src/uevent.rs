@@ -11,12 +11,12 @@ use crate::GLOBAL_DEVICE_WATCHER;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-pub const U_EVENT_ACTION: &'static str = "ACTION";
-pub const U_EVENT_DEV_PATH: &'static str = "DEVPATH";
-pub const U_EVENT_SUB_SYSTEM: &'static str = "SUBSYSTEM";
-pub const U_EVENT_SEQ_NUM: &'static str = "SEQNUM";
-pub const U_EVENT_DEV_NAME: &'static str = "DEVNAME";
-pub const U_EVENT_INTERFACE: &'static str = "INTERFACE";
+pub const U_EVENT_ACTION: &str = "ACTION";
+pub const U_EVENT_DEV_PATH: &str = "DEVPATH";
+pub const U_EVENT_SUB_SYSTEM: &str = "SUBSYSTEM";
+pub const U_EVENT_SEQ_NUM: &str = "SEQNUM";
+pub const U_EVENT_DEV_NAME: &str = "DEVNAME";
+pub const U_EVENT_INTERFACE: &str = "INTERFACE";
 
 #[derive(Debug, Default)]
 pub struct Uevent {
