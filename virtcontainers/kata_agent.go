@@ -975,20 +975,13 @@ func (k *kataAgent) replaceOCIMountSource(spec *specs.Spec, guestMounts map[stri
 	return nil
 }
 
-func (k *kataAgent) removeIgnoredOCIMount(spec *specs.Spec, ignoredMounts []Mount) error {
+func (k *kataAgent) removeIgnoredOCIMount(spec *specs.Spec, ignoredMounts map[string]Mount) error {
 	var mounts []specs.Mount
 
 	for _, m := range spec.Mounts {
-		found := false
-		for _, ignoredMount := range ignoredMounts {
-			if ignoredMount.Source == m.Source {
-				k.Logger().WithField("removed-mount", m.Source).Debug("Removing OCI mount")
-				found = true
-				break
-			}
-		}
-
-		if !found {
+		if _, found := ignoredMounts[m.Source]; found {
+			k.Logger().WithField("removed-mount", m.Source).Debug("Removing OCI mount")
+		} else {
 			mounts = append(mounts, m)
 		}
 	}
