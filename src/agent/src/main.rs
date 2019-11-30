@@ -63,11 +63,11 @@ use uevent::watch_uevents;
 
 mod grpc;
 
-const NAME: &'static str = "kata-agent";
-const VSOCK_ADDR: &'static str = "vsock://-1";
+const NAME: &str = "kata-agent";
+const VSOCK_ADDR: &str = "vsock://-1";
 const VSOCK_PORT: u16 = 1024;
-const KERNEL_CMDLINE_FILE: &'static str = "/proc/cmdline";
-const CONSOLE_PATH: &'static str = "/dev/console";
+const KERNEL_CMDLINE_FILE: &str = "/proc/cmdline";
+const CONSOLE_PATH: &str = "/dev/console";
 
 lazy_static! {
     static ref GLOBAL_DEVICE_WATCHER: Arc<Mutex<HashMap<String, Sender<String>>>> =

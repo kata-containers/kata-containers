@@ -27,23 +27,23 @@ use crate::protocols::agent::Storage;
 use crate::Sandbox;
 use slog::Logger;
 
-const DRIVER9PTYPE: &'static str = "9p";
-const DRIVERVIRTIOFSTYPE: &'static str = "virtio-fs";
-pub const DRIVERBLKTYPE: &'static str = "blk";
-pub const DRIVERMMIOBLKTYPE: &'static str = "mmioblk";
-pub const DRIVERSCSITYPE: &'static str = "scsi";
-pub const DRIVERNVDIMMTYPE: &'static str = "nvdimm";
-const DRIVEREPHEMERALTYPE: &'static str = "ephemeral";
-const DRIVERLOCALTYPE: &'static str = "local";
+const DRIVER9PTYPE: &str = "9p";
+const DRIVERVIRTIOFSTYPE: &str = "virtio-fs";
+pub const DRIVERBLKTYPE: &str = "blk";
+pub const DRIVERMMIOBLKTYPE: &str = "mmioblk";
+pub const DRIVERSCSITYPE: &str = "scsi";
+pub const DRIVERNVDIMMTYPE: &str = "nvdimm";
+const DRIVEREPHEMERALTYPE: &str = "ephemeral";
+const DRIVERLOCALTYPE: &str = "local";
 
-pub const TYPEROOTFS: &'static str = "rootfs";
+pub const TYPEROOTFS: &str = "rootfs";
 
-pub const PROCMOUNTSTATS: &'static str = "/proc/self/mountstats";
+pub const PROCMOUNTSTATS: &str = "/proc/self/mountstats";
 
-const ROOTBUSPATH: &'static str = "/devices/pci0000:00";
+const ROOTBUSPATH: &str = "/devices/pci0000:00";
 
-const CGROUPPATH: &'static str = "/sys/fs/cgroup";
-const PROCCGROUPS: &'static str = "/proc/cgroups";
+const CGROUPPATH: &str = "/sys/fs/cgroup";
+const PROCCGROUPS: &str = "/proc/cgroups";
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 lazy_static! {
