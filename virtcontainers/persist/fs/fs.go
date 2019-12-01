@@ -69,6 +69,12 @@ func TestSetRunStoragePath(path string) {
 	}
 }
 
+func TestSetStorageRootPath(path string) {
+	StorageRootPath = func() string {
+		return path
+	}
+}
+
 // FS storage driver implementation
 type FS struct {
 	sandboxState   *persistapi.SandboxState
@@ -319,7 +325,7 @@ func (fs *FS) GlobalWrite(relativePath string, data []byte) error {
 	_, err = os.Stat(dir)
 	if os.IsNotExist(err) {
 		if err := os.MkdirAll(dir, dirMode); err != nil {
-			fs.Logger().WithError(err).Errorf("failed to create dir %q", dir)
+			fs.Logger().WithError(err).WithField("directory", dir).Error("failed to create dir")
 			return err
 		}
 	} else if err != nil {
@@ -328,13 +334,13 @@ func (fs *FS) GlobalWrite(relativePath string, data []byte) error {
 
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, fileMode)
 	if err != nil {
-		fs.Logger().WithError(err).Errorf("failed to open file %q for writting", path)
+		fs.Logger().WithError(err).WithField("file", path).Error("failed to open file for writting")
 		return err
 	}
 	defer f.Close()
 
 	if _, err := f.Write(data); err != nil {
-		fs.Logger().WithError(err).Errorf("failed to write file %q: %v ", path, err)
+		fs.Logger().WithError(err).WithField("file", path).Error("failed to write file")
 		return err
 	}
 	return nil
@@ -349,14 +355,14 @@ func (fs *FS) GlobalRead(relativePath string) ([]byte, error) {
 
 	f, err := os.Open(path)
 	if err != nil {
-		fs.Logger().WithError(err).Errorf("failed to open file %q for reading", path)
+		fs.Logger().WithError(err).WithField("file", path).Error("failed to open file for reading")
 		return nil, err
 	}
 	defer f.Close()
 
 	data, err := ioutil.ReadAll(f)
 	if err != nil {
-		fs.Logger().WithError(err).Errorf("failed to read file %q: %v ", path, err)
+		fs.Logger().WithError(err).WithField("file", path).Error("failed to read file")
 		return nil, err
 	}
 	return data, nil

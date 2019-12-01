@@ -33,16 +33,12 @@ func initTestDir() func() {
 	testDir, _ := ioutil.TempDir("", "vc-tmp-")
 	// allow the tests to run without affecting the host system.
 	rootSave := StorageRootPath()
-	StorageRootPath = func() string {
-		return filepath.Join(testDir, "vc")
-	}
+	TestSetStorageRootPath(filepath.Join(testDir, "vc"))
 
 	os.MkdirAll(testDir, dirMode)
 
 	return func() {
-		StorageRootPath = func() string {
-			return rootSave
-		}
+		TestSetStorageRootPath(rootSave)
 		os.RemoveAll(testDir)
 	}
 }
@@ -53,13 +49,6 @@ func TestFsLockShared(t *testing.T) {
 	fs, err := getFsDriver()
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
-
-	testDir, err := ioutil.TempDir("", "fs-tmp-")
-	assert.Nil(t, err)
-	TestSetRunStoragePath(testDir)
-	defer func() {
-		os.RemoveAll(testDir)
-	}()
 
 	sid := "test-fs-driver"
 	fs.sandboxState.SandboxContainer = sid
@@ -115,13 +104,6 @@ func TestFsDriver(t *testing.T) {
 	fs, err := getFsDriver()
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
-
-	testDir, err := ioutil.TempDir("", "fs-tmp-")
-	assert.Nil(t, err)
-	TestSetRunStoragePath(testDir)
-	defer func() {
-		os.RemoveAll(testDir)
-	}()
 
 	ss := persistapi.SandboxState{}
 	cs := make(map[string]persistapi.ContainerState)

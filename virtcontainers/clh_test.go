@@ -13,8 +13,8 @@ import (
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	chclient "github.com/kata-containers/runtime/virtcontainers/pkg/cloud-hypervisor/client"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
@@ -184,7 +184,7 @@ func TestCloudHypervisorCleanupVM(t *testing.T) {
 		t.Errorf("cloudHypervisor.cleanupVM() expected error != %v", err)
 	}
 
-	dir := filepath.Join(store.RunVMStoragePath(), clh.id)
+	dir := filepath.Join(fs.RunVMStoragePath(), clh.id)
 	os.MkdirAll(dir, os.ModePerm)
 
 	if err := clh.cleanupVM(false); err != nil {
