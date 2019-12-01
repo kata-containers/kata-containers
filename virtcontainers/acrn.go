@@ -805,7 +805,7 @@ func (a *Acrn) storeInfo() error {
 
 	jsonOut, err := json.Marshal(a.info)
 	if err != nil {
-		return fmt.Errorf("Could not marshall data: %s", err)
+		return fmt.Errorf("Could not marshal data: %s", err)
 	}
 
 	if err := store.GlobalWrite(relPath, jsonOut); err != nil {

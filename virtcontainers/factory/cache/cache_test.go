@@ -8,6 +8,7 @@ package cache
 import (
 	"context"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -18,10 +19,19 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 )
 
+var rootPathSave = fs.StorageRootPath()
+
 func TestTemplateFactory(t *testing.T) {
 	assert := assert.New(t)
 
 	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
+	fs.TestSetStorageRootPath(filepath.Join(testDir, "vc"))
+
+	defer func() {
+		os.RemoveAll(testDir)
+		fs.TestSetStorageRootPath(rootPathSave)
+	}()
+
 	hyperConfig := vc.HypervisorConfig{
 		KernelPath: testDir,
 		ImagePath:  testDir,

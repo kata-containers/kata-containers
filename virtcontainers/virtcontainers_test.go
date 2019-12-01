@@ -51,8 +51,6 @@ var testVirtiofsdPath = ""
 var testHyperstartCtlSocket = ""
 var testHyperstartTtySocket = ""
 
-var savedRunVMStoragePathFunc func() string
-
 // cleanUp Removes any stale sandbox/container state that can affect
 // the next test to run.
 func cleanUp() {
@@ -160,10 +158,13 @@ func TestMain(m *testing.M) {
 
 	// allow the tests to run without affecting the host system.
 	runPathSave := fs.RunStoragePath()
+	rootPathSave := fs.StorageRootPath()
 	fs.TestSetRunStoragePath(filepath.Join(testDir, "vc", "run"))
+	fs.TestSetStorageRootPath(filepath.Join(testDir, "vc"))
 
 	defer func() {
 		fs.TestSetRunStoragePath(runPathSave)
+		fs.TestSetStorageRootPath(rootPathSave)
 	}()
 
 	// set now that configStoragePath has been overridden.
