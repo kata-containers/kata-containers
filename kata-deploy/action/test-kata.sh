@@ -17,13 +17,13 @@ function die() {
 
 function waitForProcess() {
     wait_time="$1"
-    sleep_time="$2"
-    cmd="$3"
+    cmd="$2"
+    sleep_time=5
+    echo "waiting for process $cmd"
     while [ "$wait_time" -gt 0 ]; do
         if eval "$cmd"; then
             return 0
         else
-            echo "waiting"
             sleep "$sleep_time"
             wait_time=$((wait_time-sleep_time))
         fi
@@ -35,16 +35,16 @@ function waitForProcess() {
 # timeout expires
 function waitForLabelRemoval() {
     wait_time="$1"
-    sleep_time="$2"
+    sleep_time=5
 
+    echo "waiting for kata-runtime label to be removed"
     while [[ "$wait_time" -gt 0 ]]; do
         # if a node is found which matches node-select, the output will include a column for node name,
         # NAME. Let's look for that 
-        if [[ -z $(kubectl get nodes --selector katacontainers.io/kata-runtime | grep NAME) ]]
+        if [[ -z $(kubectl get nodes --selector katacontainers.io/kata-runtime 2>&1 | grep NAME) ]]
         then
             return 0
         else
-            echo "waiting for kata-runtime label to be removed"
             sleep "$sleep_time"
             wait_time=$((wait_time-sleep_time))
         fi
@@ -56,10 +56,8 @@ function waitForLabelRemoval() {
     return 1
 }
 
-
 function run_test() {
-    PKG_SHA=$1
-    YAMLPATH="https://raw.githubusercontent.com/kata-containers/packaging/$PKG_SHA/kata-deploy"
+    YAMLPATH="./kata-deploy"
     echo "verify connectivity with a pod using Kata"
 
     deployment=""
@@ -67,7 +65,6 @@ function run_test() {
     busybox_image="busybox"
     cmd="kubectl get pods | grep $busybox_pod | grep Completed"
     wait_time=120
-    sleep_time=3
 
     configurations=("nginx-deployment-qemu" "nginx-deployment-qemu-virtiofs")
     for deployment in "${configurations[@]}"; do
@@ -83,7 +80,7 @@ function run_test() {
 
       # test pod connectivity:
       kubectl run $busybox_pod --restart=Never --image="$busybox_image" -- wget --timeout=5 "$deployment"
-      waitForProcess "$wait_time" "$sleep_time" "$cmd"
+      waitForProcess "$wait_time" "$cmd"
       kubectl logs "$busybox_pod" | grep "index.html"
       kubectl describe pod "$busybox_pod"
 
@@ -99,12 +96,19 @@ function test_kata() {
     set -x
 
     [[ -z "$PKG_SHA" ]] && die "no PKG_SHA provided"
-    echo "$PKG_SHA"
 
-    #kubectl all the things
-    kubectl get pods,nodes --all-namespaces
+    # This action could be called in two contexts:
+    #  1. Packaging workflows: testing in packaging repository, where we assume yaml/packaging
+    #   bits under test are already part of teh action workspace.
+    #  2. From kata-containers: when creating a release, the appropriate packaging repository is
+    #   not yet part of the workspace, and we will need to clone
+    if [[ ! -d ./kata-deploy ]]; then
+        git clone https://github.com/kata-containers/packaging packaging
+        cd packaging
+        git checkout $PKG_SHA
+    fi
 
-    YAMLPATH="https://raw.githubusercontent.com/kata-containers/packaging/$PKG_SHA/kata-deploy"
+    YAMLPATH="./kata-deploy"
 
     kubectl apply -f "$YAMLPATH/kata-rbac/base/kata-rbac.yaml"
 
@@ -114,17 +118,14 @@ function test_kata() {
 
     kubectl get runtimeclasses
 
-    curl -LO "$YAMLPATH/kata-deploy/base/kata-deploy.yaml"
-    curl -LO "$YAMLPATH/kata-cleanup/base/kata-cleanup.yaml"
-
     # update deployment daemonset to utilize the container under test:
-    sed -i "s#katadocker/kata-deploy#katadocker/kata-deploy-ci:${PKG_SHA}#g" kata-deploy.yaml
-    sed -i "s#katadocker/kata-deploy#katadocker/kata-deploy-ci:${PKG_SHA}#g" kata-cleanup.yaml
+    sed -i "s#katadocker/kata-deploy#katadocker/kata-deploy-ci:${PKG_SHA}#g" $YAMLPATH/kata-deploy/base/kata-deploy.yaml
+    sed -i "s#katadocker/kata-deploy#katadocker/kata-deploy-ci:${PKG_SHA}#g" $YAMLPATH/kata-cleanup/base/kata-cleanup.yaml
 
-    cat kata-deploy.yaml
+    cat $YAMLPATH/kata-deploy/base/kata-deploy.yaml
 
     # deploy kata:
-    kubectl apply -f kata-deploy.yaml
+    kubectl apply -f $YAMLPATH/kata-deploy/base/kata-deploy.yaml
 
     # in case the control plane is slow, give it a few seconds to accept the yaml, otherwise
     # our 'wait' for deployment status will fail to find the deployment at all. If it can't persist
@@ -137,29 +138,25 @@ function test_kata() {
     # show running pods, and labels of nodes
     kubectl get pods,nodes --all-namespaces --show-labels
 
-    run_test $PKG_SHA
+    run_test
 
     kubectl get pods,nodes --show-labels
 
     # Remove Kata
-    kubectl delete -f kata-deploy.yaml
+    kubectl delete -f $YAMLPATH/kata-deploy/base/kata-deploy.yaml
     kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
 
     kubectl get pods,nodes --show-labels
 
-    kubectl apply -f kata-cleanup.yaml
+    kubectl apply -f $YAMLPATH/kata-cleanup/base/kata-cleanup.yaml
 
     # The cleanup daemonset will run a single time, since it will clear the node-label. Thus, its difficult to
     # check the daemonset's status for completion. instead, let's wait until the kata-runtime labels are removed
     # from all of the worker nodes. If this doesn't happen after 2 minutes, let's fail
-    timeout=20
-    sleeptime=6
-    waitForLabelRemoval $timeout $sleeptime
+    timeout=120
+    waitForLabelRemoval $timeout
 
-    kubectl delete -f kata-cleanup.yaml
-
-    rm kata-cleanup.yaml
-    rm kata-deploy.yaml
+    kubectl delete -f $YAMLPATH/kata-cleanup/base/kata-cleanup.yaml
 
     set +x
 }
