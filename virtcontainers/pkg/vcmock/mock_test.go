@@ -197,60 +197,6 @@ func TestVCMockListSandbox(t *testing.T) {
 	assert.True(IsMockError(err))
 }
 
-func TestVCMockPauseSandbox(t *testing.T) {
-	assert := assert.New(t)
-
-	m := &VCMock{}
-	assert.Nil(m.PauseSandboxFunc)
-
-	ctx := context.Background()
-	_, err := m.PauseSandbox(ctx, testSandboxID)
-	assert.Error(err)
-	assert.True(IsMockError(err))
-
-	m.PauseSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
-		return &Sandbox{}, nil
-	}
-
-	sandbox, err := m.PauseSandbox(ctx, testSandboxID)
-	assert.NoError(err)
-	assert.Equal(sandbox, &Sandbox{})
-
-	// reset
-	m.PauseSandboxFunc = nil
-
-	_, err = m.PauseSandbox(ctx, testSandboxID)
-	assert.Error(err)
-	assert.True(IsMockError(err))
-}
-
-func TestVCMockResumeSandbox(t *testing.T) {
-	assert := assert.New(t)
-
-	m := &VCMock{}
-	assert.Nil(m.ResumeSandboxFunc)
-
-	ctx := context.Background()
-	_, err := m.ResumeSandbox(ctx, testSandboxID)
-	assert.Error(err)
-	assert.True(IsMockError(err))
-
-	m.ResumeSandboxFunc = func(ctx context.Context, sandboxID string) (vc.VCSandbox, error) {
-		return &Sandbox{}, nil
-	}
-
-	sandbox, err := m.ResumeSandbox(ctx, testSandboxID)
-	assert.NoError(err)
-	assert.Equal(sandbox, &Sandbox{})
-
-	// reset
-	m.ResumeSandboxFunc = nil
-
-	_, err = m.ResumeSandbox(ctx, testSandboxID)
-	assert.Error(err)
-	assert.True(IsMockError(err))
-}
-
 func TestVCMockRunSandbox(t *testing.T) {
 	assert := assert.New(t)
 
