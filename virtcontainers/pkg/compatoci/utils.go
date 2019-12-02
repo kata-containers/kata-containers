@@ -100,6 +100,13 @@ func containerCapabilities(s compatOCISpec) (specs.LinuxCapabilities, error) {
 	return c, nil
 }
 
+// SetLogger sets up a logger for this pkg
+func SetLogger(logger *logrus.Entry) {
+	fields := ociLog.Data
+
+	ociLog = logger.WithFields(fields)
+}
+
 // ContainerCapabilities return a LinuxCapabilities for virtcontainer
 func ContainerCapabilities(s compatOCISpec) (specs.LinuxCapabilities, error) {
 	if s.Process == nil {
