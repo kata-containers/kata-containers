@@ -14,6 +14,7 @@ import (
 	deviceApi "github.com/kata-containers/runtime/virtcontainers/device/api"
 	deviceConfig "github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -50,6 +51,7 @@ func SetLogger(ctx context.Context, logger *logrus.Entry) {
 
 	deviceApi.SetLogger(virtLog)
 	store.SetLogger(virtLog)
+	compatoci.SetLogger(virtLog)
 }
 
 // CreateSandbox is the virtcontainers sandbox creation entry point.
