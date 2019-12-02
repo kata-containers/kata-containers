@@ -279,10 +279,8 @@ func (s *Sandbox) GetAllContainers() []VCContainer {
 
 // GetContainer returns the container named by the containerID.
 func (s *Sandbox) GetContainer(containerID string) VCContainer {
-	for id, c := range s.containers {
-		if id == containerID {
-			return c
-		}
+	if c, ok := s.containers[containerID]; ok {
+		return c
 	}
 	return nil
 }
