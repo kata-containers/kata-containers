@@ -200,16 +200,6 @@ SHIMV2_DIR = $(CLI_DIR)/$(SHIMV2)
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 VERSION := ${shell cat ./VERSION}
 
-# Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
-# git revision string.  They will only be rebuilt if the revision string
-# actually changes.
-.PHONY: .git-commit.tmp
-.git-commit: .git-commit.tmp
-	@cmp $< $@ >/dev/null 2>&1 || cp $< $@
-.git-commit.tmp:
-	@echo -n "$$(git rev-parse HEAD 2>/dev/null)" >$@
-	@test -n "$$(git status --porcelain --untracked-files=no)" && echo -n "-dirty" >>$@ || true
-
 # List of configuration files to build and install
 CONFIGS =
 CONFIG_PATHS =
@@ -241,25 +231,25 @@ ifneq (,$(QEMUCMD))
 endif
 
 ifneq (,$(QEMUVIRTIOFSCMD))
-	KNOWN_HYPERVISORS += $(HYPERVISOR_QEMU_VIRTIOFS)
+    KNOWN_HYPERVISORS += $(HYPERVISOR_QEMU_VIRTIOFS)
 
- 	CONFIG_FILE_QEMU_VIRTIOFS = configuration-qemu-virtiofs.toml
-	CONFIG_QEMU_VIRTIOFS = $(CLI_DIR)/config/$(CONFIG_FILE_QEMU_VIRTIOFS)
-	CONFIG_QEMU_VIRTIOFS_IN = $(CONFIG_QEMU_VIRTIOFS).in
+    CONFIG_FILE_QEMU_VIRTIOFS = configuration-qemu-virtiofs.toml
+    CONFIG_QEMU_VIRTIOFS = $(CLI_DIR)/config/$(CONFIG_FILE_QEMU_VIRTIOFS)
+    CONFIG_QEMU_VIRTIOFS_IN = $(CONFIG_QEMU_VIRTIOFS).in
 
-	CONFIG_PATH_QEMU_VIRTIOFS = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_VIRTIOFS))
-	CONFIG_PATHS += $(CONFIG_PATH_QEMU_VIRTIOFS)
+    CONFIG_PATH_QEMU_VIRTIOFS = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_VIRTIOFS))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU_VIRTIOFS)
 
-	SYSCONFIG_QEMU_VIRTIOFS = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_VIRTIOFS))
-	SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_VIRTIOFS)
+    SYSCONFIG_QEMU_VIRTIOFS = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_VIRTIOFS))
+    SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_VIRTIOFS)
 
-	CONFIGS += $(CONFIG_QEMU_VIRTIOFS)
+    CONFIGS += $(CONFIG_QEMU_VIRTIOFS)
 
-	# qemu-specific options (all should be suffixed by "_QEMU")
-	DEFBLOCKSTORAGEDRIVER_QEMU_VIRTIOFS := virtio-fs
-	DEFNETWORKMODEL_QEMU := tcfilter
-	KERNELNAMEVIRTIOFS = $(call MAKE_KERNEL_VIRTIOFS_NAME,$(KERNELTYPE))
-	KERNELVIRTIOFSPATH = $(KERNELDIR)/$(KERNELNAMEVIRTIOFS)
+    # qemu-specific options (all should be suffixed by "_QEMU")
+    DEFBLOCKSTORAGEDRIVER_QEMU_VIRTIOFS := virtio-fs
+    DEFNETWORKMODEL_QEMU := tcfilter
+    KERNELNAMEVIRTIOFS = $(call MAKE_KERNEL_VIRTIOFS_NAME,$(KERNELTYPE))
+    KERNELVIRTIOFSPATH = $(KERNELDIR)/$(KERNELNAMEVIRTIOFS)
 endif
 
 ifneq (,$(CLHCMD))
@@ -482,6 +472,16 @@ define SHOW_ARCH
 endef
 
 all: runtime containerd-shim-v2 netmon
+
+# Targets that depend on .git-commit can use $(shell cat .git-commit) to get a
+# git revision string.  They will only be rebuilt if the revision string
+# actually changes.
+.PHONY: .git-commit.tmp
+.git-commit: .git-commit.tmp
+	@cmp $< $@ >/dev/null 2>&1 || cp $< $@
+.git-commit.tmp:
+	@echo -n "$$(git rev-parse HEAD 2>/dev/null)" >$@
+	@test -n "$$(git status --porcelain --untracked-files=no)" && echo -n "-dirty" >>$@ || true
 
 containerd-shim-v2: $(SHIMV2_OUTPUT)
 
