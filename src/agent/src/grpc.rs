@@ -6,7 +6,6 @@
 use futures::*;
 use grpcio::{EnvBuilder, Server, ServerBuilder};
 use grpcio::{RpcStatus, RpcStatusCode};
-use std::sync::{Arc, Mutex};
 
 use protobuf::{RepeatedField, SingularPtrField};
 use protocols::agent::CopyFileRequest;
@@ -21,13 +20,13 @@ use rustjail;
 use rustjail::container::{BaseContainer, LinuxContainer};
 use rustjail::errors::*;
 use rustjail::process::Process;
+use rustjail::process::ProcessOperations;
 use rustjail::specconv::CreateOpts;
 
 use nix::errno::Errno;
 use nix::sys::signal::Signal;
 use nix::sys::stat;
-use nix::unistd::{self, Pid};
-use rustjail::process::ProcessOperations;
+use nix::unistd::{self, Gid, Pid, Uid};
 
 use crate::device::{add_devices, rescan_pci_bus};
 use crate::linux_abi::*;
@@ -41,18 +40,17 @@ use crate::version::{AGENT_VERSION, API_VERSION};
 use libc::{self, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use serde_json;
 use std::fs;
-use std::os::unix::io::RawFd;
-use std::os::unix::prelude::PermissionsExt;
-use std::process::{Command, Stdio};
-use std::sync::mpsc;
-use std::thread;
-use std::time::Duration;
-
-use nix::unistd::{Gid, Uid};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader};
 use std::os::unix::fs::FileExt;
+use std::os::unix::io::RawFd;
+use std::os::unix::prelude::PermissionsExt;
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 const CONTAINER_BASE: &str = "/run/kata-containers";
 
@@ -71,21 +69,24 @@ struct agentService {
 
 impl agentService {
     fn do_create_container(&mut self, req: protocols::agent::CreateContainerRequest) -> Result<()> {
-        let cid = req.container_id.clone();
-        let eid = req.exec_id.clone();
+        info!(
+            sl!(),
+            "create container";
+            "container-id" => &req.container_id,
+            "exec-id" => &req.exec_id,
+        );
 
         let mut oci_spec = req.OCI.clone();
+        let oci = match oci_spec.as_mut() {
+            Some(v) => v,
+            None => return error_code(Errno::EINVAL),
+        };
+        if oci.Process.is_none() {
+            info!(sl!(), "no process configurations!");
+            return error_code(Errno::EINVAL);
+        }
 
-        let sandbox;
-        let mut s;
-
-        let oci = oci_spec.as_mut().unwrap();
-
-        info!(sl!(), "receive createcontainer {}", &cid);
-
-        // re-scan PCI bus
-        // looking for hidden devices
-
+        // re-scan PCI bus, looking for hidden devices
         rescan_pci_bus().chain_err(|| "Could not rescan PCI bus")?;
 
         // Some devices need some extra processing (the ones invoked with
@@ -103,20 +104,17 @@ impl agentService {
         // here, the agent will rely on rustjail (using the oci.Mounts
         // list) to bind mount all of them inside the container.
         let m = add_storages(sl!(), req.storages.to_vec(), &self.sandbox)?;
-        {
-            sandbox = self.sandbox.clone();
-            s = sandbox.lock().unwrap();
-            s.container_mounts.insert(cid.clone(), m);
-        }
+        // safe to unwrap() because we don't expect poisoned lock here.
+        let mut s = self.sandbox.lock().unwrap();
+        s.container_mounts.insert(req.container_id.clone(), m);
 
         update_container_namespaces(&s, oci)?;
 
-        // write spec to bundle path, hooks might
-        // read ocispec
+        // write spec to bundle path, hooks might read ocispec
         setup_bundle(oci)?;
 
         let opts = CreateOpts {
-            cgroup_name: "".to_string(),
+            cgroup_name: String::new(),
             use_systemd_cgroup: false,
             no_pivot_root: s.no_pivot_root,
             no_new_keyring: false,
@@ -126,18 +124,9 @@ impl agentService {
         };
 
         let mut ctr: LinuxContainer =
-            LinuxContainer::new(cid.as_str(), CONTAINER_BASE, opts, &sl!())?;
-
-        let p = if oci.Process.is_some() {
-            let tp = Process::new(&sl!(), oci.get_Process(), eid.as_str(), true)?;
-            tp
-        } else {
-            info!(sl!(), "no process configurations!");
-            return Err(ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EINVAL)).into());
-        };
-
+            LinuxContainer::new(req.container_id.as_str(), CONTAINER_BASE, opts, &sl!())?;
+        let p = Process::new(&sl!(), oci.get_Process(), &req.exec_id, true)?;
         ctr.start(p)?;
-
         s.add_container(ctr);
         info!(sl!(), "created container!");
 
@@ -145,237 +134,181 @@ impl agentService {
     }
 
     fn do_start_container(&mut self, req: protocols::agent::StartContainerRequest) -> Result<()> {
-        let cid = req.container_id.clone();
-
-        let sandbox = self.sandbox.clone();
-        let mut s = sandbox.lock().unwrap();
-
-        let ctr: &mut LinuxContainer = match s.get_container(cid.as_str()) {
-            Some(cr) => cr,
-            None => {
-                return Err(ErrorKind::Nix(nix::Error::from_errno(Errno::EINVAL)).into());
-            }
-        };
-
-        ctr.exec()?;
-
-        Ok(())
+        // safe to unwrap() because we don't expect poisoned lock here.
+        let mut s = self.sandbox.lock().unwrap();
+        match s.get_container(&req.container_id) {
+            Some(ctr) => ctr.exec(),
+            None => error_code(Errno::EINVAL),
+        }
     }
 
     fn do_remove_container(&mut self, req: protocols::agent::RemoveContainerRequest) -> Result<()> {
-        let cid = req.container_id.clone();
+        let mut sandbox;
         let mut cmounts: Vec<String> = vec![];
 
         if req.timeout == 0 {
-            let s = Arc::clone(&self.sandbox);
-            let mut sandbox = s.lock().unwrap();
-            let ctr = sandbox.get_container(cid.as_str()).unwrap();
+            // safe to unwrap() because we don't expect poisoned lock here.
+            sandbox = self.sandbox.lock().unwrap();
+            if let Some(ctr) = sandbox.get_container(&req.container_id) {
+                ctr.destroy()?;
+            } else {
+                return error_code(Errno::EINVAL);
+            }
+        } else {
+            // timeout != 0
+            let s = self.sandbox.clone();
+            let cid2 = req.container_id.clone();
+            let (tx, rx) = mpsc::channel();
 
-            ctr.destroy()?;
-
-            // Find the sandbox storage used by this container
-            let mounts = sandbox.container_mounts.get(&cid);
-            if mounts.is_some() {
-                let mounts = mounts.unwrap();
-
-                remove_mounts(&mounts)?;
-
-                for m in mounts.iter() {
-                    if sandbox.storages.get(m).is_some() {
-                        cmounts.push(m.to_string());
+            let handle = thread::spawn(move || {
+                // safe to unwrap() because we don't expect poisoned lock here.
+                let mut sandbox = s.lock().unwrap();
+                if let Some(ctr) = sandbox.get_container(&cid2) {
+                    match ctr.destroy() {
+                        Ok(_) => tx.send(0),
+                        // TODO: handle error code
+                        Err(_) => tx.send(Errno::UnknownErrno as i32),
                     }
+                } else {
+                    tx.send(Errno::EINVAL as i32)
                 }
+            });
+
+            // TODO: the timeout doesn't make sense, join() will always wait for the worker thread
+            // to exit.
+            if let Ok(val) = rx.recv_timeout(Duration::from_secs(req.timeout as u64)) {
+                if val != 0 {
+                    return error_code(Errno::from_i32(val));
+                }
+            } else {
+                return error_code(Errno::ETIME);
+            }
+            if let Err(_) = handle.join() {
+                return error_code(Errno::UnknownErrno);
             }
 
-            for m in cmounts.iter() {
-                sandbox.unset_and_remove_sandbox_storage(m)?;
-            }
-
-            sandbox.container_mounts.remove(cid.as_str());
-            sandbox.containers.remove(cid.as_str());
-
-            return Ok(());
+            // safe to unwrap() because we don't expect poisoned lock here.
+            sandbox = self.sandbox.lock().unwrap();
         }
-
-        // timeout != 0
-        let s = Arc::clone(&self.sandbox);
-        let cid2 = cid.clone();
-        let (tx, rx) = mpsc::channel();
-
-        let handle = thread::spawn(move || {
-            let mut sandbox = s.lock().unwrap();
-            let ctr = sandbox.get_container(cid2.as_str()).unwrap();
-
-            ctr.destroy().unwrap();
-            tx.send(1).unwrap();
-        });
-
-        if let Err(_) = rx.recv_timeout(Duration::from_secs(req.timeout as u64)) {
-            return Err(ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::ETIME)).into());
-        }
-
-        if let Err(_) = handle.join() {
-            return Err(
-                ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::UnknownErrno)).into(),
-            );
-        }
-
-        let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
 
         // Find the sandbox storage used by this container
-        let mounts = sandbox.container_mounts.get(&cid);
-        if mounts.is_some() {
-            let mounts = mounts.unwrap();
-
+        if let Some(mounts) = sandbox.container_mounts.get(&req.container_id) {
             remove_mounts(&mounts)?;
-
             for m in mounts.iter() {
                 if sandbox.storages.get(m).is_some() {
                     cmounts.push(m.to_string());
                 }
             }
         }
-
         for m in cmounts.iter() {
             sandbox.unset_and_remove_sandbox_storage(m)?;
         }
+        sandbox.container_mounts.remove(&req.container_id);
 
-        sandbox.container_mounts.remove(&cid);
-        sandbox.containers.remove(cid.as_str());
+        sandbox.containers.remove(&req.container_id);
 
         Ok(())
     }
 
     fn do_exec_process(&mut self, req: protocols::agent::ExecProcessRequest) -> Result<()> {
-        let cid = req.container_id.clone();
-        let exec_id = req.exec_id.clone();
+        info!(
+            sl!(),
+            "exec process";
+            "container-id" => &req.container_id,
+            "exec-id" => &req.exec_id,
+        );
 
-        info!(sl!(), "cid: {} eid: {}", cid.clone(), exec_id.clone());
-
-        let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
-
-        // ignore string_user, not sure what it is
-        let ocip = if req.process.is_some() {
-            req.process.as_ref().unwrap()
-        } else {
-            return Err(ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EINVAL)).into());
-        };
-
-        let p = Process::new(&sl!(), ocip, exec_id.as_str(), false)?;
-
-        let ctr = match sandbox.get_container(cid.as_str()) {
-            Some(v) => v,
-            None => {
-                return Err(
-                    ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EINVAL)).into(),
-                );
+        // safe to unwrap() because we don't expect poisoned lock here.
+        let mut sandbox = self.sandbox.lock().unwrap();
+        if let Some(ocip) = req.process.as_ref() {
+            let p = Process::new(&sl!(), ocip, &req.exec_id, false)?;
+            if let Some(ctr) = sandbox.get_container(&req.container_id) {
+                return ctr.run(p);
             }
-        };
+        }
 
-        ctr.run(p)?;
-
-        Ok(())
+        error_code(Errno::EINVAL)
     }
 
     fn do_signal_process(&mut self, req: protocols::agent::SignalProcessRequest) -> Result<()> {
-        let cid = req.container_id.clone();
-        let eid = req.exec_id.clone();
-        let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
-
         info!(
             sl!(),
             "signal process";
-            "container-id" => cid.clone(),
-            "exec-id" => eid.clone()
+            "container-id" => &req.container_id,
+            "exec-id" => &req.exec_id,
         );
-        let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), true)?;
 
-        let mut signal = Signal::from_c_int(req.signal as i32).unwrap();
+        // safe to unwrap() because we don't expect poisoned lock here.
+        let mut sandbox = self.sandbox.lock().unwrap();
+        let p = find_process(&mut sandbox, &req.container_id, &req.exec_id, true)?;
 
-        // For container initProcess, if it hasn't installed handler for "SIGTERM" signal,
-        // it will ignore the "SIGTERM" signal sent to it, thus send it "SIGKILL" signal
-        // instead of "SIGTERM" to terminate it.
-        if p.init && signal == Signal::SIGTERM && !is_signal_handled(p.pid, req.signal) {
-            signal = Signal::SIGKILL;
+        if let Ok(mut signal) = Signal::from_c_int(req.signal as i32) {
+            // For container initProcess, if it hasn't installed handler for "SIGTERM" signal,
+            // it will ignore the "SIGTERM" signal sent to it, thus send it "SIGKILL" signal
+            // instead of "SIGTERM" to terminate it.
+            if p.init && signal == Signal::SIGTERM && !is_signal_handled(p.pid, req.signal) {
+                signal = Signal::SIGKILL;
+            }
+            p.signal(signal)?;
+            Ok(())
+        } else {
+            error_code(Errno::EINVAL)
         }
-
-        p.signal(signal)?;
-
-        Ok(())
     }
 
     fn do_wait_process(
         &mut self,
         req: protocols::agent::WaitProcessRequest,
     ) -> Result<protocols::agent::WaitProcessResponse> {
-        let cid = req.container_id.clone();
-        let eid = req.exec_id.clone();
-        let s = Arc::clone(&self.sandbox);
-        let mut resp = WaitProcessResponse::new();
-        let pid: pid_t;
-        let mut exit_pipe_r: RawFd = -1;
-        let mut buf: Vec<u8> = vec![0, 1];
-
         info!(
             sl!(),
             "wait process";
-            "container-id" => cid.clone(),
-            "exec-id" => eid.clone()
+            "container-id" => &req.container_id,
+            "exec-id" => &req.exec_id,
         );
 
-        {
-            let mut sandbox = s.lock().unwrap();
-
-            let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
-
-            if p.exit_pipe_r.is_some() {
-                exit_pipe_r = p.exit_pipe_r.unwrap();
-            }
-
-            pid = p.pid;
-        }
+        // safe to unwrap() because we don't expect poisoned lock here.
+        let mut sandbox = self.sandbox.lock().unwrap();
+        let p = find_process(&mut sandbox, &req.container_id, &req.exec_id, false)?;
+        let exit_pipe_r: RawFd = match p.exit_pipe_r.as_ref() {
+            Some(v) => *v,
+            None => -1,
+        };
+        let pid = p.pid;
+        drop(sandbox);
 
         if exit_pipe_r != -1 {
             info!(sl!(), "reading exit pipe");
+            let mut buf: Vec<u8> = vec![0, 1];
             let _ = unistd::read(exit_pipe_r, buf.as_mut_slice());
         }
 
-        let mut sandbox = s.lock().unwrap();
-        let ctr = sandbox.get_container(cid.as_str()).unwrap();
-        // need to close all fds
-        let mut p = ctr.processes.get_mut(&pid).unwrap();
-
-        if p.parent_stdin.is_some() {
-            let _ = unistd::close(p.parent_stdin.unwrap());
+        let mut resp = WaitProcessResponse::new();
+        // safe to unwrap() because we don't expect poisoned lock here.
+        let mut sandbox = self.sandbox.lock().unwrap();
+        if let Some(ctr) = sandbox.get_container(&req.container_id) {
+            // TODO: is it safe to lookup the process by the cached pid?
+            if let Some(p) = ctr.processes.get_mut(&pid) {
+                // Close all fds
+                if let Some(fd) = p.parent_stdin.take() {
+                    let _ = unistd::close(fd);
+                }
+                if let Some(fd) = p.parent_stdout.take() {
+                    let _ = unistd::close(fd);
+                }
+                if let Some(fd) = p.parent_stderr.take() {
+                    let _ = unistd::close(fd);
+                }
+                if let Some(fd) = p.term_master.take() {
+                    let _ = unistd::close(fd);
+                }
+                if let Some(fd) = p.exit_pipe_r.take() {
+                    let _ = unistd::close(fd);
+                }
+                resp.status = p.exit_code;
+                ctr.processes.remove(&pid);
+            }
         }
-
-        if p.parent_stdout.is_some() {
-            let _ = unistd::close(p.parent_stdout.unwrap());
-        }
-
-        if p.parent_stderr.is_some() {
-            let _ = unistd::close(p.parent_stderr.unwrap());
-        }
-
-        if p.term_master.is_some() {
-            let _ = unistd::close(p.term_master.unwrap());
-        }
-
-        if p.exit_pipe_r.is_some() {
-            let _ = unistd::close(p.exit_pipe_r.unwrap());
-        }
-
-        p.parent_stdin = None;
-        p.parent_stdout = None;
-        p.parent_stderr = None;
-        p.term_master = None;
-
-        resp.status = p.exit_code;
-
-        ctr.processes.remove(&pid);
 
         Ok(resp)
     }
@@ -384,27 +317,30 @@ impl agentService {
         &mut self,
         req: protocols::agent::WriteStreamRequest,
     ) -> Result<protocols::agent::WriteStreamResponse> {
-        let cid = req.container_id.clone();
-        let eid = req.exec_id.clone();
-
         info!(
             sl!(),
             "write stdin";
-            "container-id" => cid.clone(),
-            "exec-id" => eid.clone()
+            "container-id" => &req.container_id,
+            "exec-id" => &req.exec_id,
         );
 
-        let s = Arc::clone(&self.sandbox);
-        let mut sandbox = s.lock().unwrap();
-        let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
-
-        // use ptmx io
-        let fd = if p.term_master.is_some() {
-            p.term_master.unwrap()
+        // safe to unwrap() because we don't expect poisoned lock here.
+        let mut sandbox = self.sandbox.lock().unwrap();
+        let p = find_process(&mut sandbox, &req.container_id, &req.exec_id, false)?;
+        let fd_option = if p.term_master.is_some() {
+            // use ptmx io
+            p.term_master.as_ref()
         } else {
             // use piped io
-            p.parent_stdin.unwrap()
+            p.parent_stdin.as_ref()
         };
+        let fd = match fd_option {
+            Some(v) => *v,
+            None => {
+                return Err(ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EIO)).into())
+            }
+        };
+        drop(sandbox);
 
         let mut l = req.data.len();
         match unistd::write(fd, req.data.as_slice()) {
@@ -443,34 +379,32 @@ impl agentService {
         req: protocols::agent::ReadStreamRequest,
         stdout: bool,
     ) -> Result<protocols::agent::ReadStreamResponse> {
-        let cid = req.container_id;
-        let eid = req.exec_id;
+        info!(
+            sl!(),
+            "read stream";
+            "container-id" => &req.container_id,
+            "exec-id" => &req.exec_id,
+        );
 
-        let mut fd: RawFd = -1;
-        info!(sl!(), "read stdout for {}/{}", cid.clone(), eid.clone());
-        {
-            let s = Arc::clone(&self.sandbox);
-            let mut sandbox = s.lock().unwrap();
-
-            let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false)?;
-
+        // safe to unwrap() because we don't expect poisoned lock here.
+        let mut sandbox = self.sandbox.lock().unwrap();
+        let p = find_process(&mut sandbox, &req.container_id, &req.exec_id, false)?;
+        let fd_option = {
             if p.term_master.is_some() {
-                fd = p.term_master.unwrap();
+                p.term_master.as_ref()
             } else if stdout {
-                if p.parent_stdout.is_some() {
-                    fd = p.parent_stdout.unwrap();
-                }
+                p.parent_stdout.as_ref()
             } else {
-                fd = p.parent_stderr.unwrap();
+                p.parent_stderr.as_ref()
             }
-        }
-
-        if fd == -1 {
-            return Err(ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EINVAL)).into());
-        }
+        };
+        let fd = match fd_option {
+            Some(v) => *v,
+            None => return error_code(Errno::EINVAL),
+        };
+        drop(sandbox);
 
         let vector = read_stream(fd, req.len as usize)?;
-
         let mut resp = ReadStreamResponse::new();
         resp.set_data(vector);
 
@@ -1544,10 +1478,7 @@ pub fn start<S: Into<String>>(sandbox: Arc<Mutex<Sandbox>>, host: S, port: u16) 
             .wait_thread_count_max(10)
             .build(),
     );
-    let worker = agentService {
-        sandbox: sandbox,
-        test: 1,
-    };
+    let worker = agentService { sandbox, test: 1 };
     let service = protocols::agent_grpc::create_agent_service(worker);
     let hservice = protocols::health_grpc::create_health(healthService);
     let mut server = ServerBuilder::new(env)
@@ -1560,8 +1491,7 @@ pub fn start<S: Into<String>>(sandbox: Arc<Mutex<Sandbox>>, host: S, port: u16) 
     server.start();
     info!(sl!(), "gRPC server started");
     for &(ref host, port) in server.bind_addrs() {
-        info!(sl!(), "listening"; "host" => host,
-        "port" => port);
+        info!(sl!(), "listening"; "host" => host, "port" => port);
     }
 
     server
@@ -1592,17 +1522,11 @@ fn update_container_namespaces(sandbox: &Sandbox, spec: &mut Spec) -> Result<()>
 
     let namespaces = linux.Namespaces.as_mut_slice();
     for namespace in namespaces.iter_mut() {
-        if namespace.Type == NSTYPEPID {
-            pidNs = true;
-            continue;
-        }
-        if namespace.Type == NSTYPEIPC {
-            namespace.Path = sandbox.shared_ipcns.path.clone();
-            continue;
-        }
-        if namespace.Type == NSTYPEUTS {
-            namespace.Path = sandbox.shared_utsns.path.clone();
-            continue;
+        match namespace.Type {
+            NSTYPEPID => pidNs = true,
+            NSTYPEIPC => namespace.Path = sandbox.shared_ipcns.path.clone(),
+            NSTYPEUTS => namespace.Path = sandbox.shared_utsns.path.clone(),
+            _ => {}
         }
     }
 
@@ -1684,42 +1608,42 @@ fn do_set_guest_date_time(sec: i64, usec: i64) -> Result<()> {
 }
 
 fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
-    let path = PathBuf::from(req.path.as_str());
+    let path = PathBuf::from(&req.path);
 
     if !path.starts_with(CONTAINER_BASE) {
-        return Err(nix::Error::Sys(Errno::EINVAL).into());
+        return error_code(Errno::EINVAL);
     }
 
-    let parent = path.parent();
-
-    let dir = if parent.is_some() {
-        parent.unwrap().to_path_buf()
-    } else {
-        PathBuf::from("/")
+    let dir = match path.parent() {
+        Some(p) => p.to_path_buf(),
+        None => PathBuf::from("/"),
+    };
+    let dir_str = match dir.to_str() {
+        Some(v) => v,
+        None => return error_code(Errno::EINVAL),
     };
 
-    if let Err(e) = fs::create_dir_all(dir.to_str().unwrap()) {
+    if let Err(e) = fs::create_dir_all(dir_str) {
         if e.kind() != std::io::ErrorKind::AlreadyExists {
             return Err(e.into());
         }
     }
 
-    std::fs::set_permissions(
-        dir.to_str().unwrap(),
-        std::fs::Permissions::from_mode(req.dir_mode),
-    )?;
+    std::fs::set_permissions(dir_str, std::fs::Permissions::from_mode(req.dir_mode))?;
 
     let mut tmpfile = path.clone();
     tmpfile.set_extension("tmp");
+    // Safe to unwrap because the composed tmp file name should be valid.
+    let tmpfile_str = tmpfile.to_str().unwrap();
 
     let file = OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(false)
-        .open(tmpfile.to_str().unwrap())?;
+        .open(tmpfile_str)?;
 
     file.write_all_at(req.data.as_slice(), req.offset as u64)?;
-    let st = stat::stat(tmpfile.to_str().unwrap())?;
+    let st = stat::stat(tmpfile_str)?;
 
     if st.st_size != req.file_size {
         return Ok(());
@@ -1728,7 +1652,7 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
     file.set_permissions(std::fs::Permissions::from_mode(req.file_mode))?;
 
     unistd::chown(
-        tmpfile.to_str().unwrap(),
+        tmpfile_str,
         Some(Uid::from_raw(req.uid as u32)),
         Some(Gid::from_raw(req.gid as u32)),
     )?;
@@ -1739,25 +1663,34 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
 }
 
 fn setup_bundle(gspec: &Spec) -> Result<()> {
-    if gspec.Root.is_none() {
-        return Err(nix::Error::Sys(Errno::EINVAL).into());
-    }
-    let root = gspec.Root.as_ref().unwrap().Path.as_str();
-
+    let root = match gspec.Root.as_ref() {
+        Some(r) => r.Path.as_str(),
+        None => return error_code(Errno::EINVAL),
+    };
     let rootfs = fs::canonicalize(root)?;
-    let bundle_path = rootfs.parent().unwrap().to_str().unwrap();
-
-    let config = format!("{}/{}", bundle_path, "config.json");
+    let bundle_path = match rootfs.parent() {
+        Some(p) => match p.to_str() {
+            Some(v) => v,
+            None => return error_code(Errno::EINVAL),
+        },
+        None => return error_code(Errno::EINVAL),
+    };
 
     let oci = rustjail::grpc_to_oci(gspec);
-    info!(
-        sl!(),
-        "{:?}",
-        oci.process.as_ref().unwrap().console_size.as_ref()
-    );
+    match oci.process.as_ref() {
+        Some(v) => info!(sl!(), "{:?}", v.console_size.as_ref()),
+        None => debug!(sl!(), "no process info available."),
+    }
+
+    let config = format!("{}/{}", bundle_path, "config.json");
     let _ = oci.save(config.as_str());
 
     unistd::chdir(bundle_path)?;
 
     Ok(())
+}
+
+#[inline]
+fn error_code<T>(errno: Errno) -> Result<T> {
+    Err(ErrorKind::Nix(nix::Error::from_errno(errno)).into())
 }
