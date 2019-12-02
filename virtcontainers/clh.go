@@ -662,7 +662,9 @@ func (clh *cloudHypervisor) virtiofsdArgs(sockPath string) ([]string, error) {
 
 	sourcePath := filepath.Join(kataHostSharedDir(), clh.id)
 	if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
-		os.MkdirAll(sourcePath, os.ModePerm)
+		if err = os.MkdirAll(sourcePath, os.ModePerm); err != nil {
+			return nil, err
+		}
 	}
 
 	args := []string{
