@@ -102,7 +102,7 @@ impl agentService {
         // After all those storages have been processed, no matter the order
         // here, the agent will rely on rustjail (using the oci.Mounts
         // list) to bind mount all of them inside the container.
-        let m = add_storages(sl!(), req.storages.to_vec(), self.sandbox.clone())?;
+        let m = add_storages(sl!(), req.storages.to_vec(), &self.sandbox)?;
         {
             sandbox = self.sandbox.clone();
             s = sandbox.lock().unwrap();
@@ -1171,7 +1171,7 @@ impl protocols::agent_grpc::AgentService for agentService {
             }
         }
 
-        match add_storages(sl!(), req.storages.to_vec(), self.sandbox.clone()) {
+        match add_storages(sl!(), req.storages.to_vec(), &self.sandbox) {
             Ok(m) => {
                 let sandbox = self.sandbox.clone();
                 let mut s = sandbox.lock().unwrap();

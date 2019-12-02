@@ -150,7 +150,7 @@ pub fn get_scsi_device_name(sandbox: &Arc<Mutex<Sandbox>>, scsi_addr: &str) -> R
     get_device_name(sandbox, &dev_sub_path)
 }
 
-pub fn get_pci_device_name(sandbox: &Arc<Mutex<Sandbox>>, pci_id: &str) -> Result<String> {
+pub fn get_blk_device_name(sandbox: &Arc<Mutex<Sandbox>>, pci_id: &str) -> Result<String> {
     let pci_addr = get_pci_device_address(pci_id)?;
 
     rescan_pci_bus()?;
@@ -295,7 +295,7 @@ fn virtio_blk_device_handler(
     sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<()> {
     let mut dev = device.clone();
-    dev.vm_path = get_pci_device_name(sandbox, &device.id)?;
+    dev.vm_path = get_blk_device_name(sandbox, &device.id)?;
     update_spec_device_list(&dev, spec)
 }
 

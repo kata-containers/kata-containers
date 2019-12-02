@@ -3,30 +3,25 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use rustjail::errors::*;
 use std::collections::HashMap;
 use std::ffi::CString;
-use std::fs;
-use std::io;
-use std::iter::FromIterator;
+use std::fs::{self, File};
+use std::io::{self, BufRead, BufReader};
 use std::os::unix::fs::PermissionsExt;
-
 use std::path::Path;
 use std::ptr::null;
 use std::sync::{Arc, Mutex};
 
 use libc::{c_void, mount};
 use nix::mount::{self, MsFlags};
-
 use regex::Regex;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use rustjail::errors::*;
+use slog::Logger;
 
-use crate::device::{get_pci_device_name, get_scsi_device_name, online_device};
+use crate::device::{get_blk_device_name, get_scsi_device_name, online_device};
 use crate::linux_abi::*;
 use crate::protocols::agent::Storage;
 use crate::Sandbox;
-use slog::Logger;
 
 pub const DRIVER9PTYPE: &str = "9p";
 pub const DRIVERVIRTIOFSTYPE: &str = "virtio-fs";
@@ -123,27 +118,20 @@ lazy_static! {
 
 // StorageHandler is the type of callback to be defined to handle every
 // type of storage driver.
-type StorageHandler = fn(&Logger, &Storage, Arc<Mutex<Sandbox>>) -> Result<String>;
+type StorageHandler = fn(&Logger, &Storage, &Arc<Mutex<Sandbox>>) -> Result<String>;
 
 // StorageHandlerList lists the supported drivers.
 #[cfg_attr(rustfmt, rustfmt_skip)]
 lazy_static! {
     pub static ref STORAGEHANDLERLIST: HashMap<&'static str, StorageHandler> = {
-    	let mut m = HashMap::new();
-    let blk: StorageHandler = virtio_blk_storage_handler;
-        m.insert(DRIVERBLKTYPE, blk);
-	let p9: StorageHandler= virtio9p_storage_handler;
-        m.insert(DRIVER9PTYPE, p9);
-	let virtiofs: StorageHandler = virtiofs_storage_handler;
-        m.insert(DRIVERVIRTIOFSTYPE, virtiofs);
-    let ephemeral: StorageHandler = ephemeral_storage_handler;
-        m.insert(DRIVEREPHEMERALTYPE, ephemeral);
-    let virtiommio: StorageHandler = virtiommio_blk_storage_handler;
-        m.insert(DRIVERMMIOBLKTYPE, virtiommio);
-    let local: StorageHandler = local_storage_handler;
-        m.insert(DRIVERLOCALTYPE, local);
-    let scsi: StorageHandler = virtio_scsi_storage_handler;
-        m.insert(DRIVERSCSITYPE, scsi);
+        let mut m: HashMap<&'static str, StorageHandler> = HashMap::new();
+        m.insert(DRIVERBLKTYPE, virtio_blk_storage_handler);
+        m.insert(DRIVER9PTYPE, virtio9p_storage_handler);
+        m.insert(DRIVERVIRTIOFSTYPE, virtiofs_storage_handler);
+        m.insert(DRIVEREPHEMERALTYPE, ephemeral_storage_handler);
+        m.insert(DRIVERMMIOBLKTYPE, virtiommio_blk_storage_handler);
+        m.insert(DRIVERLOCALTYPE, local_storage_handler);
+        m.insert(DRIVERSCSITYPE, virtio_scsi_storage_handler);
         m
     };
 }
@@ -163,54 +151,44 @@ pub struct BareMount<'a> {
 // * ensure the source exists
 impl<'a> BareMount<'a> {
     pub fn new(
-        s: &'a str,
-        d: &'a str,
+        source: &'a str,
+        destination: &'a str,
         fs_type: &'a str,
         flags: MsFlags,
         options: &'a str,
         logger: &Logger,
     ) -> Self {
         BareMount {
-            source: s,
-            destination: d,
-            fs_type: fs_type,
-            flags: flags,
-            options: options,
+            source,
+            destination,
+            fs_type,
+            flags,
+            options,
             logger: logger.new(o!("subsystem" => "baremount")),
         }
     }
 
     pub fn mount(&self) -> Result<()> {
-        let source;
-        let dest;
-        let fs_type;
-        let mut options = null();
-        let cstr_options: CString;
-        let cstr_source: CString;
-        let cstr_dest: CString;
-        let cstr_fs_type: CString;
-
         if self.source.len() == 0 {
             return Err(ErrorKind::ErrorCode("need mount source".to_string()).into());
         }
+        let cstr_source = CString::new(self.source)?;
+        let source = cstr_source.as_ptr();
 
         if self.destination.len() == 0 {
             return Err(ErrorKind::ErrorCode("need mount destination".to_string()).into());
         }
-
-        cstr_source = CString::new(self.source)?;
-        source = cstr_source.as_ptr();
-
-        cstr_dest = CString::new(self.destination)?;
-        dest = cstr_dest.as_ptr();
+        let cstr_dest = CString::new(self.destination)?;
+        let dest = cstr_dest.as_ptr();
 
         if self.fs_type.len() == 0 {
             return Err(ErrorKind::ErrorCode("need mount FS type".to_string()).into());
         }
+        let cstr_fs_type = CString::new(self.fs_type)?;
+        let fs_type = cstr_fs_type.as_ptr();
 
-        cstr_fs_type = CString::new(self.fs_type)?;
-        fs_type = cstr_fs_type.as_ptr();
-
+        let mut options = null();
+        let cstr_options: CString;
         if self.options.len() > 0 {
             cstr_options = CString::new(self.options)?;
             options = cstr_options.as_ptr() as *const c_void;
@@ -235,6 +213,7 @@ impl<'a> BareMount<'a> {
             ))
             .into());
         }
+
         Ok(())
     }
 }
@@ -242,19 +221,17 @@ impl<'a> BareMount<'a> {
 fn ephemeral_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let s = sandbox.clone();
-    let mut sb = s.lock().unwrap();
+    // Safe to unwrap() because we don't expect a poisoned lock.
+    let mut sb = sandbox.lock().unwrap();
     let new_storage = sb.set_sandbox_storage(&storage.mount_point);
 
     if !new_storage {
         return Ok("".to_string());
     }
 
-    if let Err(err) = fs::create_dir_all(Path::new(&storage.mount_point)) {
-        return Err(err.into());
-    }
+    fs::create_dir_all(&storage.mount_point)?;
 
     common_storage_handler(logger, storage)
 }
@@ -262,10 +239,10 @@ fn ephemeral_storage_handler(
 fn local_storage_handler(
     _logger: &Logger,
     storage: &Storage,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
-    let s = sandbox.clone();
-    let mut sb = s.lock().unwrap();
+    // Safe to unwrap() because we don't expect a poisoned lock.
+    let mut sb = sandbox.lock().unwrap();
     let new_storage = sb.set_sandbox_storage(&storage.mount_point);
 
     if !new_storage {
@@ -275,16 +252,11 @@ fn local_storage_handler(
     fs::create_dir_all(&storage.mount_point)?;
 
     let opts_vec: Vec<String> = storage.options.to_vec();
-
     let opts = parse_options(opts_vec);
-    let mode = opts.get("mode");
-    if mode.is_some() {
-        let mode = mode.unwrap();
+    if let Some(mode) = opts.get("mode") {
         let mut permission = fs::metadata(&storage.mount_point)?.permissions();
-
         let o_mode = u32::from_str_radix(mode, 8)?;
         permission.set_mode(o_mode);
-
         fs::set_permissions(&storage.mount_point, permission)?;
     }
 
@@ -294,7 +266,7 @@ fn local_storage_handler(
 fn virtio9p_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    _sandbox: Arc<Mutex<Sandbox>>,
+    _sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     common_storage_handler(logger, storage)
 }
@@ -303,7 +275,7 @@ fn virtio9p_storage_handler(
 fn virtiommio_blk_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    _sandbox: Arc<Mutex<Sandbox>>,
+    _sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     //The source path is VmPath
     common_storage_handler(logger, storage)
@@ -313,7 +285,7 @@ fn virtiommio_blk_storage_handler(
 fn virtiofs_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    _sandbox: Arc<Mutex<Sandbox>>,
+    _sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     common_storage_handler(logger, storage)
 }
@@ -322,12 +294,12 @@ fn virtiofs_storage_handler(
 fn virtio_blk_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     let mut storage = storage.clone();
     // If hot-plugged, get the device node path based on the PCI address else
     // use the virt path provided in Storage Source
-    if storage.source.starts_with("/dev") {
+    if storage.source.starts_with("/dev/") {
         let metadata = fs::metadata(&storage.source)?;
 
         let mode = metadata.permissions().mode();
@@ -335,7 +307,7 @@ fn virtio_blk_storage_handler(
             return Err(ErrorKind::ErrorCode(format!("Invalid device {}", &storage.source)).into());
         }
     } else {
-        let dev_path = get_pci_device_name(&sandbox, &storage.source)?;
+        let dev_path = get_blk_device_name(&sandbox, &storage.source)?;
         storage.source = dev_path;
     }
 
@@ -346,7 +318,7 @@ fn virtio_blk_storage_handler(
 fn virtio_scsi_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     let mut storage = storage.clone();
 
@@ -358,10 +330,7 @@ fn virtio_scsi_storage_handler(
 }
 
 fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> {
-    // Mount the storage device.
-    let mount_point = storage.mount_point.to_string();
-
-    mount_storage(logger, storage).and(Ok(mount_point))
+    mount_storage(logger, storage).map(|_| storage.mount_point.clone())
 }
 
 // mount_storage performs the mount described by the storage structure.
@@ -370,18 +339,17 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
 
     match storage.fstype.as_str() {
         DRIVER9PTYPE | DRIVERVIRTIOFSTYPE => {
-            let dest_path = Path::new(storage.mount_point.as_str());
+            let dest_path = Path::new(&storage.mount_point);
             if !dest_path.exists() {
                 fs::create_dir_all(dest_path).chain_err(|| "Create mount destination failed")?;
             }
         }
         _ => {
-            ensure_destination_exists(storage.mount_point.as_str(), storage.fstype.as_str())?;
+            ensure_destination_exists(&storage.mount_point, &storage.fstype)?;
         }
     }
 
-    let options_vec = storage.options.to_vec();
-    let options_vec = Vec::from_iter(options_vec.iter().map(String::as_str));
+    let options_vec = storage.options.iter().map(|o| o.as_str()).collect();
     let (flags, options) = parse_mount_flags_and_options(options_vec);
 
     info!(logger, "mounting storage";
@@ -392,11 +360,11 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     );
 
     let bare_mount = BareMount::new(
-        storage.source.as_str(),
-        storage.mount_point.as_str(),
-        storage.fstype.as_str(),
+        &storage.source,
+        &storage.mount_point,
+        &storage.fstype,
         flags,
-        options.as_str(),
+        &options,
         &logger,
     );
 
@@ -405,7 +373,7 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
 
 fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
     let mut flags = MsFlags::empty();
-    let mut options: String = "".to_string();
+    let mut options: String = String::new();
 
     for opt in options_vec {
         if opt.len() != 0 {
@@ -434,28 +402,27 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
 pub fn add_storages(
     logger: Logger,
     storages: Vec<Storage>,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<Vec<String>> {
     let mut mount_list = Vec::new();
 
     for storage in storages {
-        let handler_name = storage.driver.clone();
         let logger = logger.new(o!(
             "subsystem" => "storage",
-            "storage-type" => handler_name.to_owned()));
+            "storage-type" => storage.driver.clone()));
 
-        let handler = match STORAGEHANDLERLIST.get(&handler_name.as_str()) {
+        let handler = match STORAGEHANDLERLIST.get(&storage.driver.as_str()) {
             None => {
                 return Err(ErrorKind::ErrorCode(format!(
                     "Failed to find the storage handler {}",
-                    storage.driver.to_owned()
+                    storage.driver.clone()
                 ))
                 .into());
             }
             Some(f) => f,
         };
 
-        let mount_point = match handler(&logger, &storage, sandbox.clone()) {
+        let mount_point = match handler(&logger, &storage, &sandbox) {
             // Todo need to rollback the mounted storage if err met.
             Err(e) => return Err(e),
             Ok(m) => m,
@@ -574,7 +541,7 @@ pub fn get_cgroup_mounts(logger: &Logger, cg_path: &str) -> Result<Vec<INIT_MOUN
         }
 
         // Ignore fields containing invalid numerics
-        for f in [fields[1], fields[2], fields[3]].iter() {
+        for f in &fields[1..4] {
             if f.parse::<u64>().is_err() {
                 continue 'outer;
             }
@@ -625,7 +592,7 @@ pub fn cgroups_mount(logger: &Logger) -> Result<()> {
 
     // Enable memory hierarchical account.
     // For more information see https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt
-    online_device("/sys/fs/cgroup/memory//memory.use_hierarchy")?;
+    online_device("/sys/fs/cgroup/memory/memory.use_hierarchy")?;
     Ok(())
 }
 
