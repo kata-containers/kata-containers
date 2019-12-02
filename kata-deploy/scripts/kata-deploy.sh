@@ -32,18 +32,19 @@ function print_usage() {
 }
 
 function get_container_runtime() {
-	local runtime="$(kubectl describe node $NODE_NAME)"
+
+	local runtime=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}' | awk -F '[:]' '{print $1}')
 	if [ "$?" -ne 0 ]; then
                 die "invalid node name"
 	fi
-	if echo "$runtime" | grep -qE 'Container Runtime Version.*containerd.*-k3s'; then
+	if echo "$runtime" | grep -qE 'containerd.*-k3s'; then
 		if systemctl is-active --quiet k3s-agent; then
 			echo "k3s-agent"
 		else
 			echo "k3s"
 		fi
 	else
-		echo "$runtime" | awk -F'[:]' '/Container Runtime Version/ {print $2}' | tr -d ' '
+		echo "$runtime"
 	fi
 }
 
