@@ -7,9 +7,9 @@ package virtcontainers
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -52,6 +52,7 @@ const (
 	supportedMinorVersion = 3
 	defaultClhPath        = "/usr/local/bin/cloud-hypervisor"
 	virtioFsCacheAlways   = "always"
+	maxClhVcpus           = uint32(64)
 )
 
 type CloudHypervisorVersion struct {
@@ -84,6 +85,7 @@ type cloudHypervisor struct {
 	socketPath string
 	version    CloudHypervisorVersion
 	cliBuilder *DefaultCLIBuilder
+	cmdOutput  bytes.Buffer
 }
 
 var clhKernelParams = []Param{
@@ -125,20 +127,26 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	clh.config = *hypervisorConfig
 	clh.state.state = clhNotReady
 
-	err = clh.getAvailableVersion()
-	if err != nil {
-		return err
+	// version check only applicable to 'cloud-hypervisor' executable
+	clhPath, perr := clh.clhPath()
+	if perr != nil {
+		return perr
 	}
+	if strings.HasSuffix(clhPath, "cloud-hypervisor") {
+		err = clh.getAvailableVersion()
+		if err != nil {
+			return err
+		}
 
-	if clh.version.Major < supportedMajorVersion && clh.version.Minor < supportedMinorVersion {
-		errorMessage := fmt.Sprintf("Unsupported version: cloud-hypervisor %d.%d not supported by this driver version (%d.%d)",
-			clh.version.Major,
-			clh.version.Minor,
-			supportedMajorVersion,
-			supportedMinorVersion)
-		return errors.New(errorMessage)
+		if clh.version.Major < supportedMajorVersion && clh.version.Minor < supportedMinorVersion {
+			errorMessage := fmt.Sprintf("Unsupported version: cloud-hypervisor %d.%d not supported by this driver version (%d.%d)",
+				clh.version.Major,
+				clh.version.Minor,
+				supportedMajorVersion,
+				supportedMinorVersion)
+			return errors.New(errorMessage)
+		}
 	}
-
 	clh.cliBuilder = &DefaultCLIBuilder{}
 
 	socketPath, err := clh.vsockSocketPath(id)
@@ -295,7 +303,7 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 		return fmt.Errorf("failed to launch cloud-hypervisor: %s, error messages from log: %s", err, strErr)
 	}
 	if err := clh.waitVMM(clhTimeout); err != nil {
-		clh.Logger().WithField("error", err).Warn("cloud-hypervisor init failed")
+		clh.Logger().WithField("error", err).WithField("output", clh.cmdOutput.String()).Warn("cloud-hypervisor init failed")
 		clh.shutdownVirtiofsd()
 		return err
 	}
@@ -410,12 +418,6 @@ func (clh *cloudHypervisor) getPids() []int {
 	return pids
 }
 
-//###########################################################################
-//
-// Local helper methods related to the hypervisor interface implementation
-//
-//###########################################################################
-
 func (clh *cloudHypervisor) addDevice(devInfo interface{}, devType deviceType) error {
 	span, _ := clh.trace("addDevice")
 	defer span.Finish()
@@ -447,6 +449,12 @@ func (clh *cloudHypervisor) addDevice(devInfo interface{}, devType deviceType) e
 
 	return err
 }
+
+//###########################################################################
+//
+// Local helper methods related to the hypervisor interface implementation
+//
+//###########################################################################
 
 func (clh *cloudHypervisor) Logger() *log.Entry {
 	return virtLog.WithField("subsystem", "cloudHypervisor")
@@ -681,7 +689,7 @@ func (clh *cloudHypervisor) virtiofsdArgs(sockPath string) ([]string, error) {
 
 func (clh *cloudHypervisor) shutdownVirtiofsd() (err error) {
 
-	err = syscall.Kill(-clh.state.VirtiofsdPID, syscall.SIGKILL)
+	err = syscall.Kill(clh.state.VirtiofsdPID, syscall.SIGKILL)
 
 	if err != nil {
 		clh.state.VirtiofsdPID = 0
@@ -838,11 +846,12 @@ func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
 	clh.Logger().WithField("args", strings.Join(cli.args, " ")).Info()
 
 	cmd := exec.Command(clhPath, cli.args...)
-	cmd.Stderr = ioutil.Discard
+	cmd.Stdout = &clh.cmdOutput
+	cmd.Stderr = &clh.cmdOutput
 
 	if clh.config.Debug {
 		cmd.Env = os.Environ()
-		cmd.Env = append(cmd.Env, "RUST_BACKTRACE=FULL")
+		cmd.Env = append(cmd.Env, "RUST_BACKTRACE=full")
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -856,6 +865,11 @@ func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
 	return errStr, cmd.Process.Pid, nil
 }
 
+// MaxClhVCPUs returns the maximum number of vCPUs supported
+func MaxClhVCPUs() uint32 {
+	return maxClhVcpus
+}
+
 //###########################################################################
 //
 // Cloud-hypervisor CLI builder
@@ -865,6 +879,8 @@ func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
 const (
 	cctOFF  string = "off"
 	cctFILE string = "file"
+	cctNULL string = "null"
+	cctTTY  string = "tty"
 )
 
 const (
@@ -1083,6 +1099,7 @@ type CLIFs struct {
 	queues     uint32
 	queueSize  uint32
 	dax        bool
+	cacheSize  string
 }
 
 func (o *CLIFs) Build(cmdline *CommandLine) {
@@ -1092,6 +1109,9 @@ func (o *CLIFs) Build(cmdline *CommandLine) {
 	fsarg := "tag=" + o.tag + ",sock=" + o.socketPath
 	if o.dax {
 		fsarg += ",dax=on"
+		if o.cacheSize != "" {
+			fsarg += ",cache_size=" + o.cacheSize
+		}
 	} else {
 		fsarg += ",num_queues=" + strconv.FormatUint(uint64(o.queues), 10) + ",queue_size=" + strconv.FormatUint(uint64(o.queueSize), 10)
 	}
@@ -1103,6 +1123,8 @@ func (o *CLIFs) Build(cmdline *CommandLine) {
 //****************************************
 type CLINet struct {
 	device string
+	ip     string
+	mask   string
 	mac    string
 	iommu  bool
 }
@@ -1118,13 +1140,23 @@ func (o *CLINets) Build(cmdline *CommandLine) {
 	networks := ""
 	netIndex := 1
 	for _, net := range o.networks {
-		tapName := "tap" + strconv.FormatUint(uint64(netIndex), 10)
-		netIndex++
-		if net.iommu {
-			networks += "tap=" + tapName + ",mac=" + net.mac + ",iommu=on"
-		} else {
-			networks += "tap=" + tapName + ",mac=" + net.mac
+		cnet := "tap=tap" + strconv.FormatUint(uint64(netIndex), 10)
+		if net.ip != "" && net.mask != "" {
+			cnet += ",ip=" + net.ip + ",mask=" + net.mask
 		}
+		if net.mac != "" {
+			cnet += ",mac=" + net.mac
+		}
+
+		if net.iommu {
+			cnet += ",iommu=on"
+		}
+		if netIndex > 1 {
+			networks += "," + cnet
+		} else {
+			networks += cnet
+		}
+		netIndex++
 	}
 	cmdline.args = append(cmdline.args, networks)
 }
@@ -1257,6 +1289,10 @@ func (d *DefaultCLIBuilder) GetCommandLine() (*CommandLine, error) {
 
 	if d.console != nil {
 		d.console.Build(cmdLine)
+	}
+
+	if d.apiSocket != nil {
+		d.apiSocket.Build(cmdLine)
 	}
 
 	if d.logFile != nil {
