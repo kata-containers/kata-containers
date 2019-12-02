@@ -103,8 +103,9 @@ impl Sandbox {
                 *count -= 1;
                 if *count < 1 {
                     self.storages.remove(path);
+                    return true;
                 }
-                return true;
+                false
             }
         }
     }
