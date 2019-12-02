@@ -341,7 +341,7 @@ fn virtio_blk_storage_handler(
             return Err(ErrorKind::ErrorCode(format!("Invalid device {}", &storage.source)).into());
         }
     } else {
-        let dev_path = get_pci_device_name(sandbox, &storage.source)?;
+        let dev_path = get_pci_device_name(&sandbox, &storage.source)?;
         storage.source = dev_path;
     }
 
@@ -357,7 +357,7 @@ fn virtio_scsi_storage_handler(
     let mut storage = storage.clone();
 
     // Retrieve the device path from SCSI address.
-    let dev_path = get_scsi_device_name(sandbox, &storage.source)?;
+    let dev_path = get_scsi_device_name(&sandbox, &storage.source)?;
     storage.source = dev_path;
 
     common_storage_handler(logger, &storage)

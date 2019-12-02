@@ -95,7 +95,7 @@ impl agentService {
         // updates the devices listed in the OCI spec, so that they actually
         // match real devices inside the VM. This step is necessary since we
         // cannot predict everything from the caller.
-        add_devices(req.devices.to_vec(), oci, self.sandbox.clone())?;
+        add_devices(&req.devices.to_vec(), oci, &self.sandbox)?;
 
         // Both rootfs and volumes (invoked with --volume for instance) will
         // be processed the same way. The idea is to always mount any provided
