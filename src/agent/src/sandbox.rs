@@ -36,7 +36,6 @@ pub struct Sandbox {
     pub storages: HashMap<String, u32>,
     pub running: bool,
     pub no_pivot_root: bool,
-    enable_grpc_trace: bool,
     pub sandbox_pid_ns: bool,
     pub sender: Option<Sender<i32>>,
     pub rtnl: Option<RtnlHandle>,
@@ -49,8 +48,8 @@ impl Sandbox {
 
         Ok(Sandbox {
             logger: logger.clone(),
-            id: "".to_string(),
-            hostname: "".to_string(),
+            id: String::new(),
+            hostname: String::new(),
             network: Network::new(),
             containers: HashMap::new(),
             mounts: Vec::new(),
@@ -61,17 +60,37 @@ impl Sandbox {
             storages: HashMap::new(),
             running: false,
             no_pivot_root: fs_type.eq(TYPEROOTFS),
-            enable_grpc_trace: false,
             sandbox_pid_ns: false,
             sender: None,
             rtnl: Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap()),
         })
     }
 
+    // set_sandbox_storage sets the sandbox level reference
+    // counter for the sandbox storage.
+    // This method also returns a boolean to let
+    // callers know if the storage already existed or not.
+    // It will return true if storage is new.
+    //
+    // It's assumed that caller is calling this method after
+    // acquiring a lock on sandbox.
+    pub fn set_sandbox_storage(&mut self, path: &str) -> bool {
+        match self.storages.get_mut(path) {
+            None => {
+                self.storages.insert(path.to_string(), 1);
+                true
+            }
+            Some(count) => {
+                *count += 1;
+                false
+            }
+        }
+    }
+
     // unset_sandbox_storage will decrement the sandbox storage
     // reference counter. If there aren't any containers using
     // that sandbox storage, this method will remove the
-    // storage reference from the sandbox and return 'true, nil' to
+    // storage reference from the sandbox and return 'true' to
     // let the caller know that they can clean up the storage
     // related directories by calling remove_sandbox_storage
     //
@@ -158,7 +177,7 @@ impl Sandbox {
         self.containers.get_mut(id)
     }
 
-    pub fn find_process<'a>(&'a mut self, pid: pid_t) -> Option<&'a mut Process> {
+    pub fn find_process(&mut self, pid: pid_t) -> Option<&mut Process> {
         for (_, c) in self.containers.iter_mut() {
             if c.processes.get(&pid).is_some() {
                 return c.processes.get_mut(&pid);
@@ -166,27 +185,6 @@ impl Sandbox {
         }
 
         None
-    }
-
-    // set_sandbox_storage sets the sandbox level reference
-    // counter for the sandbox storage.
-    // This method also returns a boolean to let
-    // callers know if the storage already existed or not.
-    // It will return true if storage is new.
-    //
-    // It's assumed that caller is calling this method after
-    // acquiring a lock on sandbox.
-    pub fn set_sandbox_storage(&mut self, path: &str) -> bool {
-        match self.storages.get_mut(path) {
-            None => {
-                self.storages.insert(path.to_string(), 1);
-                true
-            }
-            Some(count) => {
-                *count += 1;
-                false
-            }
-        }
     }
 
     pub fn destroy(&mut self) -> Result<()> {

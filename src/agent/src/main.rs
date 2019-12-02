@@ -34,7 +34,7 @@ use signal_hook::{iterator::Signals, SIGCHLD};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::os::unix::fs::{self as unixfs};
+use std::os::unix::fs as unixfs;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::sync::mpsc::{self, Sender};
