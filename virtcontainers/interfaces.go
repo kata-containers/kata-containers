@@ -27,8 +27,6 @@ type VC interface {
 	DeleteSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
 	FetchSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
 	ListSandbox(ctx context.Context) ([]SandboxStatus, error)
-	PauseSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
-	ResumeSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
 	RunSandbox(ctx context.Context, sandboxConfig SandboxConfig) (VCSandbox, error)
 	StartSandbox(ctx context.Context, sandboxID string) (VCSandbox, error)
 	StatusSandbox(ctx context.Context, sandboxID string) (SandboxStatus, error)
@@ -72,8 +70,6 @@ type VCSandbox interface {
 
 	Start() error
 	Stop(force bool) error
-	Pause() error
-	Resume() error
 	Release() error
 	Monitor() (chan error, error)
 	Delete() error

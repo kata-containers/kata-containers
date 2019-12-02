@@ -659,24 +659,6 @@ func KillContainer(ctx context.Context, sandboxID, containerID string, signal sy
 	return s.KillContainer(containerID, signal, all)
 }
 
-// PauseSandbox is the virtcontainers pausing entry point which pauses an
-// already running sandbox.
-func PauseSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
-	span, ctx := trace(ctx, "PauseSandbox")
-	defer span.Finish()
-
-	return togglePauseSandbox(ctx, sandboxID, true)
-}
-
-// ResumeSandbox is the virtcontainers resuming entry point which resumes
-// (or unpauses) and already paused sandbox.
-func ResumeSandbox(ctx context.Context, sandboxID string) (VCSandbox, error) {
-	span, ctx := trace(ctx, "ResumeSandbox")
-	defer span.Finish()
-
-	return togglePauseSandbox(ctx, sandboxID, false)
-}
-
 // ProcessListContainer is the virtcontainers entry point to list
 // processes running inside a container
 func ProcessListContainer(ctx context.Context, sandboxID, containerID string, options ProcessListOptions) (ProcessList, error) {
