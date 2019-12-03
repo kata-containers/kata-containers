@@ -500,6 +500,8 @@ func (clh *cloudHypervisor) terminate() (err error) {
 				}
 			}
 		}
+
+		clh.cleanupVM()
 	}()
 
 	pid := clh.state.PID
@@ -1077,5 +1079,43 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 	}
 
 	clh.Logger().Debug("Adding share volume to hypervisor: ", volume.MountTag)
+	return nil
+}
+
+// cleanupVM will remove generated files and directories related with the virtual machine
+func (clh *cloudHypervisor) cleanupVM() error {
+
+	// cleanup vm path
+	dir := filepath.Join(store.RunVMStoragePath(), clh.id)
+
+	// If it's a symlink, remove both dir and the target.
+	// This can happen when vm template links a sandbox to a vm.
+	link, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		// Well, it's just cleanup failure. Let's ignore it.
+		clh.Logger().WithError(err).WithField("dir", dir).Warn("failed to resolve vm path")
+	}
+	clh.Logger().WithField("link", link).WithField("dir", dir).Infof("cleanup vm path")
+
+	if err := os.RemoveAll(dir); err != nil {
+		clh.Logger().WithError(err).Warnf("failed to remove vm path %s", dir)
+	}
+	if link != dir && link != "" {
+		if err := os.RemoveAll(link); err != nil {
+			clh.Logger().WithError(err).WithField("link", link).Warn("failed to remove resolved vm path")
+		}
+	}
+
+	if clh.config.VMid != "" {
+		dir = store.SandboxConfigurationRootPath(clh.config.VMid)
+		if err := os.RemoveAll(dir); err != nil {
+			clh.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
+		}
+		dir = store.SandboxRuntimeRootPath(clh.config.VMid)
+		if err := os.RemoveAll(dir); err != nil {
+			clh.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
+		}
+	}
+
 	return nil
 }
