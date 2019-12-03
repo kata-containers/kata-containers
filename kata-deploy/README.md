@@ -71,8 +71,14 @@ After completing, the original `daemon.json`, if it existed, is restored and all
 ### Install Kata on a running Kubernetes cluster
 
 ```sh
-$ kubectl apply -f kata-rbac.yaml
-$ kubectl apply -f kata-deploy.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/kata-rbac/base/kata-rbac.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/packaging/master/kata-deploy/kata-deploy/base/kata-deploy.yaml
+```
+
+or on a [k3s](https://k3s.io/) cluster:
+
+```sh
+$ kubectl apply -k github.com/kata-containers/packaging/kata-deploy/kata-deploy/overlays/k3s
 ```
 
 ### Run a sample workload
