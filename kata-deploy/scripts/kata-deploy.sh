@@ -36,7 +36,15 @@ function get_container_runtime() {
 	if [ "$?" -ne 0 ]; then
                 die "invalid node name"
 	fi
-	echo "$runtime" | awk -F'[:]' '/Container Runtime Version/ {print $2}' | tr -d ' '
+	if echo "$runtime" | grep -qE 'Container Runtime Version.*containerd.*-k3s'; then
+		if systemctl is-active --quiet k3s-agent; then
+			echo "k3s-agent"
+		else
+			echo "k3s"
+		fi
+	else
+		echo "$runtime" | awk -F'[:]' '/Container Runtime Version/ {print $2}' | tr -d ' '
+	fi
 }
 
 function install_artifacts() {
@@ -50,7 +58,7 @@ function configure_cri_runtime() {
 	crio)
 		configure_crio
 		;;
-	containerd)
+	containerd | k3s | k3s-agent)
 		configure_containerd
 		;;
 	esac
@@ -225,7 +233,7 @@ function cleanup_cri_runtime() {
 	crio)
 		cleanup_crio
 		;;
-	containerd)
+	containerd | k3s | k3s-agent)
 		cleanup_containerd
 		;;
 	esac
@@ -238,7 +246,7 @@ function cleanup_crio() {
 }
 
 function cleanup_containerd() {
-	rm -f /etc/containerd/config.toml
+	rm -f $containerd_conf_file
 	if [ -f "$containerd_conf_file_backup" ]; then
 		mv "$containerd_conf_file_backup" "$containerd_conf_file"
 	fi
@@ -265,7 +273,9 @@ function reset_runtime() {
 	kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
 	systemctl daemon-reload
 	systemctl restart "$1"
-	systemctl restart kubelet
+	if [ "$1" == "crio" ] || [ "$1" == "containerd" ]; then
+		systemctl restart kubelet
+	fi
 }
 
 function main() {
@@ -280,6 +290,14 @@ function main() {
 	# CRI-O isn't consistent with the naming -- let's use crio to match the service file
 	if [ "$runtime" == "cri-o" ]; then
 		runtime="crio"
+	elif [ "$runtime" == "k3s" ] || [ "$runtime" == "k3s-agent" ]; then
+		containerd_conf_tmpl_file="${containerd_conf_file}.tmpl"
+		if [ ! -f "$containerd_conf_tmpl_file" ]; then
+			cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
+		fi
+
+		containerd_conf_file="${containerd_conf_tmpl_file}"
+		containerd_conf_file_backup="${containerd_conf_file}.bak"
 	fi
 
 	action=${1:-}
@@ -289,7 +307,7 @@ function main() {
 	fi
 
 	# only install / remove / update if we are dealing with CRIO or containerd
-	if [ "$runtime" == "crio" ] || [ "$runtime" == "containerd" ]; then
+	if [[ "$runtime" =~ ^(crio|containerd|k3s|k3s-agent)$ ]]; then
 
 		case "$action" in
 		install)
