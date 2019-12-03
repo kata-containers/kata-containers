@@ -1892,17 +1892,28 @@ func (s *Sandbox) AddDevice(info config.DeviceInfo) (api.Device, error) {
 		return nil, fmt.Errorf("device manager isn't initialized")
 	}
 
+	var err error
 	b, err := s.devManager.NewDevice(info)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err != nil {
+			s.devManager.RemoveDevice(b.DeviceID())
+		}
+	}()
 
-	if err := s.devManager.AttachDevice(b.DeviceID(), s); err != nil {
+	if err = s.devManager.AttachDevice(b.DeviceID(), s); err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err != nil {
+			s.devManager.DetachDevice(b.DeviceID(), s)
+		}
+	}()
 
 	if !s.supportNewStore() {
-		if err := s.storeSandboxDevices(); err != nil {
+		if err = s.storeSandboxDevices(); err != nil {
 			return nil, err
 		}
 	}
