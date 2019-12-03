@@ -1,6 +1,6 @@
-From db193ecf3b98ead50f57f58154b7e43c98099e0b Mon Sep 17 00:00:00 2001
+From c32f0a40dcfacbb6efd36dedbf926de3733ca94e Mon Sep 17 00:00:00 2001
 From: Penny Zheng <penny.zheng@arm.com>
-Date: Thu, 20 Jun 2019 17:55:53 +0800
+Date: Wed, 27 Nov 2019 10:03:47 +0800
 Subject: [PATCH] arm64: backport Arm64 KVM Dynamic IPA and 52bit IPA support
  to 4.19.X
 
@@ -42,20 +42,20 @@ Signed-off-by: Penny Zheng <penny.zheng@arm.com>
  include/linux/irqchip/arm-gic-v3.h            |   5 +
  include/uapi/linux/kvm.h                      |  15 ++
  virt/kvm/arm/arm.c                            |  26 +-
- virt/kvm/arm/mmu.c                            | 120 ++++-----
+ virt/kvm/arm/mmu.c                            | 119 ++++-----
  virt/kvm/arm/vgic/vgic-its.c                  |  36 +--
  virt/kvm/arm/vgic/vgic-kvm-device.c           |   2 +-
  virt/kvm/arm/vgic/vgic-mmio-v3.c              |   2 -
- 36 files changed, 767 insertions(+), 435 deletions(-)
+ 36 files changed, 766 insertions(+), 435 deletions(-)
  delete mode 100644 arch/arm64/include/asm/stage2_pgtable-nopmd.h
  delete mode 100644 arch/arm64/include/asm/stage2_pgtable-nopud.h
  delete mode 100644 arch/arm64/kvm/hyp/s2-setup.c
 
 diff --git a/Documentation/admin-guide/kernel-parameters.txt b/Documentation/admin-guide/kernel-parameters.txt
-index a29301d6e..13e57f5cf 100644
+index 475ed980b..ac6c81c76 100644
 --- a/Documentation/admin-guide/kernel-parameters.txt
 +++ b/Documentation/admin-guide/kernel-parameters.txt
-@@ -2818,6 +2818,10 @@
+@@ -2848,6 +2848,10 @@
  
  	noclflush	[BUGS=X86] Don't use the CLFLUSH instruction
  
@@ -258,10 +258,10 @@ index 460d616bb..f6a7ea805 100644
  
  #endif	/* __ARM_S2_PGTABLE_H_ */
 diff --git a/arch/arm64/Kconfig b/arch/arm64/Kconfig
-index 8790a29d0..3ba56830c 100644
+index 51fe21f5d..cf944eaed 100644
 --- a/arch/arm64/Kconfig
 +++ b/arch/arm64/Kconfig
-@@ -1150,6 +1150,19 @@ config ARM64_RAS_EXTN
+@@ -1152,6 +1152,19 @@ config ARM64_RAS_EXTN
  	  and access the new registers if the system supports the extension.
  	  Platform RAS features may additionally depend on firmware support.
  
@@ -282,24 +282,24 @@ index 8790a29d0..3ba56830c 100644
  
  config ARM64_SVE
 diff --git a/arch/arm64/include/asm/cpucaps.h b/arch/arm64/include/asm/cpucaps.h
-index 25ce9056c..5538e927b 100644
+index c3de0bbf0..00ee656d6 100644
 --- a/arch/arm64/include/asm/cpucaps.h
 +++ b/arch/arm64/include/asm/cpucaps.h
-@@ -52,7 +52,8 @@
- #define ARM64_MISMATCHED_CACHE_TYPE		31
+@@ -53,7 +53,8 @@
  #define ARM64_HAS_STAGE2_FWB			32
  #define ARM64_WORKAROUND_1463225		33
-+#define ARM64_HAS_CNP                           34
+ #define ARM64_SSBS				34
++#define ARM64_HAS_CNP                           35
  
--#define ARM64_NCAPS				34
-+#define ARM64_NCAPS				35
+-#define ARM64_NCAPS				35
++#define ARM64_NCAPS				36
  
  #endif /* __ASM_CPUCAPS_H */
 diff --git a/arch/arm64/include/asm/cpufeature.h b/arch/arm64/include/asm/cpufeature.h
-index 1717ba1db..6dc5823d5 100644
+index dda6e5056..552746324 100644
 --- a/arch/arm64/include/asm/cpufeature.h
 +++ b/arch/arm64/include/asm/cpufeature.h
-@@ -262,7 +262,7 @@ extern struct arm64_ftr_reg arm64_ftr_reg_ctrel0;
+@@ -263,7 +263,7 @@ extern struct arm64_ftr_reg arm64_ftr_reg_ctrel0;
  /*
   * CPU feature detected at boot time based on system-wide value of a
   * feature. It is safe for a late CPU to have this feature even though
@@ -308,7 +308,7 @@ index 1717ba1db..6dc5823d5 100644
   * by Linux in this case. If the system has enabled this feature already,
   * then every late CPU must have it.
   */
-@@ -508,6 +508,12 @@ static inline bool system_supports_sve(void)
+@@ -509,6 +509,12 @@ static inline bool system_supports_sve(void)
  		cpus_have_const_cap(ARM64_SVE);
  }
  
@@ -321,9 +321,9 @@ index 1717ba1db..6dc5823d5 100644
  #define ARM64_SSBD_UNKNOWN		-1
  #define ARM64_SSBD_FORCE_DISABLE	0
  #define ARM64_SSBD_KERNEL		1
-@@ -530,6 +536,26 @@ void arm64_set_ssbd_mitigation(bool state);
- static inline void arm64_set_ssbd_mitigation(bool state) {}
- #endif
+@@ -527,6 +533,26 @@ static inline int arm64_get_ssbd_state(void)
+ 
+ void arm64_set_ssbd_mitigation(bool state);
  
 +static inline u32 id_aa64mmfr0_parange_to_phys_shift(int parange)
 +{
@@ -577,7 +577,7 @@ index 102b5a5c4..aea01a09e 100644
  #define __hyp_this_cpu_ptr(sym)						\
  	({								\
 diff --git a/arch/arm64/include/asm/kvm_host.h b/arch/arm64/include/asm/kvm_host.h
-index 6abe40029..cb61992c1 100644
+index 367b2e0b6..4fc7c8f0b 100644
 --- a/arch/arm64/include/asm/kvm_host.h
 +++ b/arch/arm64/include/asm/kvm_host.h
 @@ -54,7 +54,7 @@ DECLARE_STATIC_KEY_FALSE(userspace_irqchip_in_use);
@@ -604,7 +604,7 @@ index 6abe40029..cb61992c1 100644
  
  	/* The last vcpu id that ran on each physical CPU */
  	int __percpu *last_vcpu_ran;
-@@ -451,13 +453,7 @@ int kvm_arm_vcpu_arch_get_attr(struct kvm_vcpu *vcpu,
+@@ -462,13 +464,7 @@ int kvm_arm_vcpu_arch_get_attr(struct kvm_vcpu *vcpu,
  int kvm_arm_vcpu_arch_has_attr(struct kvm_vcpu *vcpu,
  			       struct kvm_device_attr *attr);
  
@@ -619,7 +619,7 @@ index 6abe40029..cb61992c1 100644
  
  /* Guest/host FPSIMD coordination helpers */
  int kvm_arch_vcpu_run_map_fp(struct kvm_vcpu *vcpu);
-@@ -520,8 +516,12 @@ static inline int kvm_arm_have_ssbd(void)
+@@ -531,8 +527,12 @@ static inline int kvm_arm_have_ssbd(void)
  void kvm_vcpu_load_sysregs(struct kvm_vcpu *vcpu);
  void kvm_vcpu_put_sysregs(struct kvm_vcpu *vcpu);
  
@@ -1158,7 +1158,7 @@ index 8b6809934..d352f6df8 100644
  	return (boundary - 1 < end - 1) ? boundary : end;
  }
 diff --git a/arch/arm64/kernel/cpufeature.c b/arch/arm64/kernel/cpufeature.c
-index 93f69d822..e14d600d7 100644
+index 220ebfa0e..3933091fe 100644
 --- a/arch/arm64/kernel/cpufeature.c
 +++ b/arch/arm64/kernel/cpufeature.c
 @@ -20,6 +20,7 @@
@@ -1169,7 +1169,7 @@ index 93f69d822..e14d600d7 100644
  #include <linux/sort.h>
  #include <linux/stop_machine.h>
  #include <linux/types.h>
-@@ -117,6 +118,7 @@ EXPORT_SYMBOL(cpu_hwcap_keys);
+@@ -118,6 +119,7 @@ EXPORT_SYMBOL(cpu_hwcap_keys);
  static bool __maybe_unused
  cpufeature_pan_not_uao(const struct arm64_cpu_capabilities *entry, int __unused);
  
@@ -1177,8 +1177,8 @@ index 93f69d822..e14d600d7 100644
  
  /*
   * NOTE: Any changes to the visibility of features should be kept in
-@@ -873,6 +875,29 @@ static bool has_cache_dic(const struct arm64_cpu_capabilities *entry,
- 	return ctr & BIT(CTR_DIC_SHIFT);
+@@ -959,6 +961,29 @@ static bool unmap_kernel_at_el0(const struct arm64_cpu_capabilities *entry,
+ 	return !meltdown_safe;
  }
  
 +static bool nocnp;
@@ -1205,13 +1205,12 @@ index 93f69d822..e14d600d7 100644
 +}
 +
  #ifdef CONFIG_UNMAP_KERNEL_AT_EL0
- static int __kpti_forced; /* 0: not forced, >0: forced on, <0: forced off */
- 
-@@ -1235,6 +1260,19 @@ static const struct arm64_cpu_capabilities arm64_features[] = {
- 		.matches = has_hw_dbm,
+ static void
+ kpti_install_ng_mappings(const struct arm64_cpu_capabilities *__unused)
+@@ -1325,6 +1350,19 @@ static const struct arm64_cpu_capabilities arm64_features[] = {
  		.cpu_enable = cpu_enable_hw_dbm,
  	},
-+#endif
+ #endif
 +#ifdef CONFIG_ARM64_CNP
 +	{
 +		.desc = "Common not Private translations",
@@ -1224,10 +1223,11 @@ index 93f69d822..e14d600d7 100644
 +		.min_field_value = 1,
 +		.cpu_enable = cpu_enable_cnp,
 +	},
- #endif
- 	{},
- };
-@@ -1672,6 +1710,11 @@ cpufeature_pan_not_uao(const struct arm64_cpu_capabilities *entry, int __unused)
++#endif
+ #ifdef CONFIG_ARM64_SSBD
+ 	{
+ 		.desc = "Speculative Store Bypassing Safe (SSBS)",
+@@ -1775,6 +1813,11 @@ cpufeature_pan_not_uao(const struct arm64_cpu_capabilities *entry, int __unused)
  	return (cpus_have_const_cap(ARM64_HAS_PAN) && !cpus_have_const_cap(ARM64_HAS_UAO));
  }
  
@@ -1292,10 +1292,10 @@ index ea9225160..4576b86a5 100644
  
  	mrs	x4, tcr_el1
 diff --git a/arch/arm64/kvm/hyp/Makefile b/arch/arm64/kvm/hyp/Makefile
-index 2fabc2dc1..82d190432 100644
+index feef06fc7..ea710f674 100644
 --- a/arch/arm64/kvm/hyp/Makefile
 +++ b/arch/arm64/kvm/hyp/Makefile
-@@ -19,7 +19,6 @@ obj-$(CONFIG_KVM_ARM_HOST) += switch.o
+@@ -20,7 +20,6 @@ obj-$(CONFIG_KVM_ARM_HOST) += switch.o
  obj-$(CONFIG_KVM_ARM_HOST) += fpsimd.o
  obj-$(CONFIG_KVM_ARM_HOST) += tlb.o
  obj-$(CONFIG_KVM_ARM_HOST) += hyp-entry.o
@@ -1608,7 +1608,7 @@ index c127f94da..a65af49e1 100644
  
  	/*
 diff --git a/arch/arm64/mm/proc.S b/arch/arm64/mm/proc.S
-index 8cce091b6..07b951980 100644
+index ec6aa1863..d15a1b94d 100644
 --- a/arch/arm64/mm/proc.S
 +++ b/arch/arm64/mm/proc.S
 @@ -162,6 +162,12 @@ ENTRY(cpu_do_switch_mm)
@@ -1700,7 +1700,7 @@ index 251be353f..c6a2f49b2 100644
  #ifdef KVM_CAP_IRQ_ROUTING
  
 diff --git a/virt/kvm/arm/arm.c b/virt/kvm/arm/arm.c
-index 02bac8abd..d63ce2007 100644
+index d982650de..70e2fffc6 100644
 --- a/virt/kvm/arm/arm.c
 +++ b/virt/kvm/arm/arm.c
 @@ -120,8 +120,9 @@ int kvm_arch_init_vm(struct kvm *kvm, unsigned long type)
@@ -1732,7 +1732,7 @@ index 02bac8abd..d63ce2007 100644
  		break;
  	}
  	return r;
-@@ -501,7 +503,7 @@ static bool need_new_vmid_gen(struct kvm *kvm)
+@@ -512,7 +514,7 @@ static bool need_new_vmid_gen(struct kvm *kvm)
  static void update_vttbr(struct kvm *kvm)
  {
  	phys_addr_t pgd_phys;
@@ -1741,7 +1741,7 @@ index 02bac8abd..d63ce2007 100644
  
  	if (!need_new_vmid_gen(kvm))
  		return;
-@@ -543,9 +545,9 @@ static void update_vttbr(struct kvm *kvm)
+@@ -554,9 +556,9 @@ static void update_vttbr(struct kvm *kvm)
  
  	/* update vttbr to be used with the new vmid */
  	pgd_phys = virt_to_phys(kvm->arch.pgd);
@@ -1753,7 +1753,7 @@ index 02bac8abd..d63ce2007 100644
  
  	smp_wmb();
  	WRITE_ONCE(kvm->arch.vmid_gen, atomic64_read(&kvm_vmid_gen));
-@@ -1324,16 +1326,10 @@ static void cpu_hyp_reinit(void)
+@@ -1335,16 +1337,10 @@ static void cpu_hyp_reinit(void)
  {
  	cpu_hyp_reset();
  
@@ -1772,7 +1772,7 @@ index 02bac8abd..d63ce2007 100644
  
  	kvm_arm_init_debug();
  
-@@ -1429,6 +1425,8 @@ static int init_common_resources(void)
+@@ -1440,6 +1436,8 @@ static int init_common_resources(void)
  	kvm_vmid_bits = kvm_get_vmid_bits();
  	kvm_info("%d-bit VMID\n", kvm_vmid_bits);
  
@@ -1782,7 +1782,7 @@ index 02bac8abd..d63ce2007 100644
  }
  
 diff --git a/virt/kvm/arm/mmu.c b/virt/kvm/arm/mmu.c
-index 1344557a7..aad4db4fc 100644
+index bf330b493..aad4db4fc 100644
 --- a/virt/kvm/arm/mmu.c
 +++ b/virt/kvm/arm/mmu.c
 @@ -45,7 +45,6 @@ static phys_addr_t hyp_idmap_vector;
@@ -1928,7 +1928,7 @@ index 1344557a7..aad4db4fc 100644
  				kvm_flush_dcache_pud(*pud);
  			else
  				stage2_flush_pmds(kvm, pud, addr, next);
-@@ -409,10 +408,11 @@ static void stage2_flush_memslot(struct kvm *kvm,
+@@ -409,10 +408,10 @@ static void stage2_flush_memslot(struct kvm *kvm,
  	phys_addr_t next;
  	pgd_t *pgd;
  
@@ -1936,14 +1936,13 @@ index 1344557a7..aad4db4fc 100644
 +	pgd = kvm->arch.pgd + stage2_pgd_index(kvm, addr);
  	do {
 -		next = stage2_pgd_addr_end(addr, end);
--		stage2_flush_puds(kvm, pgd, addr, next);
+-		if (!stage2_pgd_none(*pgd))
 +		next = stage2_pgd_addr_end(kvm, addr, end);
 +		if (!stage2_pgd_none(kvm, *pgd))
-+			stage2_flush_puds(kvm, pgd, addr, next);
+ 			stage2_flush_puds(kvm, pgd, addr, next);
  	} while (pgd++, addr = next, addr != end);
  }
- 
-@@ -897,7 +897,7 @@ int kvm_alloc_stage2_pgd(struct kvm *kvm)
+@@ -898,7 +897,7 @@ int kvm_alloc_stage2_pgd(struct kvm *kvm)
  	}
  
  	/* Allocate the HW PGD, making sure that each page gets its own refcount */
@@ -1952,7 +1951,7 @@ index 1344557a7..aad4db4fc 100644
  	if (!pgd)
  		return -ENOMEM;
  
-@@ -986,7 +986,7 @@ void kvm_free_stage2_pgd(struct kvm *kvm)
+@@ -987,7 +986,7 @@ void kvm_free_stage2_pgd(struct kvm *kvm)
  
  	spin_lock(&kvm->mmu_lock);
  	if (kvm->arch.pgd) {
@@ -1961,7 +1960,7 @@ index 1344557a7..aad4db4fc 100644
  		pgd = READ_ONCE(kvm->arch.pgd);
  		kvm->arch.pgd = NULL;
  	}
-@@ -994,7 +994,7 @@ void kvm_free_stage2_pgd(struct kvm *kvm)
+@@ -995,7 +994,7 @@ void kvm_free_stage2_pgd(struct kvm *kvm)
  
  	/* Free the HW pgd, one page at a time */
  	if (pgd)
@@ -1970,7 +1969,7 @@ index 1344557a7..aad4db4fc 100644
  }
  
  static pud_t *stage2_get_pud(struct kvm *kvm, struct kvm_mmu_memory_cache *cache,
-@@ -1003,16 +1003,16 @@ static pud_t *stage2_get_pud(struct kvm *kvm, struct kvm_mmu_memory_cache *cache
+@@ -1004,16 +1003,16 @@ static pud_t *stage2_get_pud(struct kvm *kvm, struct kvm_mmu_memory_cache *cache
  	pgd_t *pgd;
  	pud_t *pud;
  
@@ -1991,7 +1990,7 @@ index 1344557a7..aad4db4fc 100644
  }
  
  static pmd_t *stage2_get_pmd(struct kvm *kvm, struct kvm_mmu_memory_cache *cache,
-@@ -1025,15 +1025,15 @@ static pmd_t *stage2_get_pmd(struct kvm *kvm, struct kvm_mmu_memory_cache *cache
+@@ -1026,15 +1025,15 @@ static pmd_t *stage2_get_pmd(struct kvm *kvm, struct kvm_mmu_memory_cache *cache
  	if (!pud)
  		return NULL;
  
@@ -2010,7 +2009,7 @@ index 1344557a7..aad4db4fc 100644
  }
  
  static int stage2_set_pmd_huge(struct kvm *kvm, struct kvm_mmu_memory_cache
-@@ -1207,8 +1207,9 @@ int kvm_phys_addr_ioremap(struct kvm *kvm, phys_addr_t guest_ipa,
+@@ -1208,8 +1207,9 @@ int kvm_phys_addr_ioremap(struct kvm *kvm, phys_addr_t guest_ipa,
  		if (writable)
  			pte = kvm_s2pte_mkwrite(pte);
  
@@ -2022,7 +2021,7 @@ index 1344557a7..aad4db4fc 100644
  		if (ret)
  			goto out;
  		spin_lock(&kvm->mmu_lock);
-@@ -1302,19 +1303,21 @@ static void stage2_wp_ptes(pmd_t *pmd, phys_addr_t addr, phys_addr_t end)
+@@ -1303,19 +1303,21 @@ static void stage2_wp_ptes(pmd_t *pmd, phys_addr_t addr, phys_addr_t end)
  
  /**
   * stage2_wp_pmds - write protect PUD range
@@ -2047,7 +2046,7 @@ index 1344557a7..aad4db4fc 100644
  		if (!pmd_none(*pmd)) {
  			if (pmd_thp_or_huge(*pmd)) {
  				if (!kvm_s2pmd_readonly(pmd))
-@@ -1334,18 +1337,19 @@ static void stage2_wp_pmds(pud_t *pud, phys_addr_t addr, phys_addr_t end)
+@@ -1335,18 +1337,19 @@ static void stage2_wp_pmds(pud_t *pud, phys_addr_t addr, phys_addr_t end)
    *
    * Process PUD entries, for a huge PUD we cause a panic.
    */
@@ -2073,7 +2072,7 @@ index 1344557a7..aad4db4fc 100644
  		}
  	} while (pud++, addr = next, addr != end);
  }
-@@ -1361,7 +1365,7 @@ static void stage2_wp_range(struct kvm *kvm, phys_addr_t addr, phys_addr_t end)
+@@ -1362,7 +1365,7 @@ static void stage2_wp_range(struct kvm *kvm, phys_addr_t addr, phys_addr_t end)
  	pgd_t *pgd;
  	phys_addr_t next;
  
@@ -2082,7 +2081,7 @@ index 1344557a7..aad4db4fc 100644
  	do {
  		/*
  		 * Release kvm_mmu_lock periodically if the memory region is
-@@ -1375,9 +1379,9 @@ static void stage2_wp_range(struct kvm *kvm, phys_addr_t addr, phys_addr_t end)
+@@ -1376,9 +1379,9 @@ static void stage2_wp_range(struct kvm *kvm, phys_addr_t addr, phys_addr_t end)
  		cond_resched_lock(&kvm->mmu_lock);
  		if (!READ_ONCE(kvm->arch.pgd))
  			break;
@@ -2095,7 +2094,7 @@ index 1344557a7..aad4db4fc 100644
  	} while (pgd++, addr = next, addr != end);
  }
  
-@@ -1526,7 +1530,7 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
+@@ -1527,7 +1530,7 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
  	up_read(&current->mm->mmap_sem);
  
  	/* We need minimum second+third level pages */
@@ -2104,7 +2103,7 @@ index 1344557a7..aad4db4fc 100644
  				     KVM_NR_MEM_OBJS);
  	if (ret)
  		return ret;
-@@ -1769,7 +1773,7 @@ int kvm_handle_guest_abort(struct kvm_vcpu *vcpu, struct kvm_run *run)
+@@ -1770,7 +1773,7 @@ int kvm_handle_guest_abort(struct kvm_vcpu *vcpu, struct kvm_run *run)
  	}
  
  	/* Userspace should not be able to register out-of-bounds IPAs */
@@ -2113,7 +2112,7 @@ index 1344557a7..aad4db4fc 100644
  
  	if (fault_status == FSC_ACCESS) {
  		handle_access_fault(vcpu, fault_ipa);
-@@ -2068,7 +2072,7 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
+@@ -2069,7 +2072,7 @@ int kvm_arch_prepare_memory_region(struct kvm *kvm,
  	 * space addressable by the KVM guest IPA space.
  	 */
  	if (memslot->base_gfn + memslot->npages >=
@@ -2123,7 +2122,7 @@ index 1344557a7..aad4db4fc 100644
  
  	down_read(&current->mm->mmap_sem);
 diff --git a/virt/kvm/arm/vgic/vgic-its.c b/virt/kvm/arm/vgic/vgic-its.c
-index 621bb0040..69973d980 100644
+index 0dbe332eb..7a9f47ecb 100644
 --- a/virt/kvm/arm/vgic/vgic-its.c
 +++ b/virt/kvm/arm/vgic/vgic-its.c
 @@ -241,13 +241,6 @@ static struct its_ite *find_ite(struct vgic_its *its, u32 device_id,
@@ -2212,7 +2211,7 @@ index 621bb0040..69973d980 100644
  
  	while (its->cwriter != its->creadr) {
  		int ret = kvm_read_guest_lock(kvm, cbaser + its->creadr,
-@@ -2240,7 +2224,7 @@ static int vgic_its_restore_device_tables(struct vgic_its *its)
+@@ -2241,7 +2225,7 @@ static int vgic_its_restore_device_tables(struct vgic_its *its)
  	if (!(baser & GITS_BASER_VALID))
  		return 0;
  
@@ -2221,7 +2220,7 @@ index 621bb0040..69973d980 100644
  
  	if (baser & GITS_BASER_INDIRECT) {
  		l1_esz = GITS_LVL1_ENTRY_SIZE;
-@@ -2312,7 +2296,7 @@ static int vgic_its_save_collection_table(struct vgic_its *its)
+@@ -2313,7 +2297,7 @@ static int vgic_its_save_collection_table(struct vgic_its *its)
  {
  	const struct vgic_its_abi *abi = vgic_its_get_abi(its);
  	u64 baser = its->baser_coll_table;
@@ -2230,7 +2229,7 @@ index 621bb0040..69973d980 100644
  	struct its_collection *collection;
  	u64 val;
  	size_t max_size, filled = 0;
-@@ -2361,7 +2345,7 @@ static int vgic_its_restore_collection_table(struct vgic_its *its)
+@@ -2362,7 +2346,7 @@ static int vgic_its_restore_collection_table(struct vgic_its *its)
  	if (!(baser & GITS_BASER_VALID))
  		return 0;
  
@@ -2273,5 +2272,5 @@ index a2a175b08..b3d1f0985 100644
  }
  
 -- 
-2.19.2
+2.17.1
 
