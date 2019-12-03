@@ -58,6 +58,7 @@ PREFIX="${PREFIX:-/usr}"
 source "${script_dir}/../scripts/lib.sh"
 
 usage() {
+	exit_code="$1"
 	cat <<EOT
 Overview:
 
@@ -86,6 +87,7 @@ Options:
 	-t       : Hypervisor_target.
 	-v       : Kernel version to use if kernel path not provided.
 EOT
+	exit "$exit_code"
 }
 
 # Convert architecture to the name used by the Linux kernel build system
@@ -399,8 +401,7 @@ main() {
 				experimental_kernel="true"
 				;;
 			h)
-				usage
-				exit 0
+				usage 0
 				;;
 			k)
 				kernel_path="${OPTARG}"
