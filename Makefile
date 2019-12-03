@@ -49,6 +49,9 @@ snap: $(YQ) $(VERSION_FILE)
 	fi
 	snapcraft -d
 
+obs-test:
+	@$(MK_DIR)/tests/run_obs_testing.sh
+
 cmd-kata-pkgsync:
 	@make -C $(MK_DIR)/cmd/kata-pkgsync
 
