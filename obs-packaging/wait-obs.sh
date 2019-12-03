@@ -46,6 +46,10 @@ wait_finish_building() {
 			osc pr
 			exit 1
 		fi
+		if echo "${out}" | grep '<details>broken</details>'; then
+			echo "Project ${project} has broken packages"
+			exit 1
+		fi
 		if echo "${out}" | grep 'code="blocked"'; then
 			echo "Project ${project} has blocked packages, waiting"
 			continue
