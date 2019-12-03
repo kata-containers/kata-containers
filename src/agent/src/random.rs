@@ -11,7 +11,7 @@ use rustjail::errors::*;
 use std::fs;
 
 pub const RNGDEV: &str = "/dev/random";
-pub const RNDADDTOENTCNT: libc::c_int = 0x40045201;
+pub const RNDADDTOENTCNT: libc::c_int = 0x4004_5201;
 pub const RNDRESEEDRNG: libc::c_int = 0x5207;
 
 // Handle the differing ioctl(2) request types for different targets
@@ -33,10 +33,10 @@ pub fn reseed_rng(data: &[u8]) -> Result<()> {
             &len as *const libc::c_long,
         )
     };
-    let _ = Errno::result(ret).map(drop)?;
+    Errno::result(ret).map(drop)?;
 
     let ret = unsafe { libc::ioctl(fd, RNDRESEEDRNG as IoctlRequestType, 0) };
-    let _ = Errno::result(ret).map(drop)?;
+    Errno::result(ret).map(drop)?;
 
     Ok(())
 }

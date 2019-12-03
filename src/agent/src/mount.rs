@@ -34,7 +34,7 @@ pub const DRIVERLOCALTYPE: &str = "local";
 
 pub const TYPEROOTFS: &str = "rootfs";
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     pub static ref FLAGS: HashMap<&'static str, (bool, MsFlags)> = {
         let mut m = HashMap::new();
@@ -83,7 +83,7 @@ pub struct INIT_MOUNT {
     options: Vec<&'static str>,
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static!{
     static ref CGROUPS: HashMap<&'static str, &'static str> = {
         let mut m = HashMap::new();
@@ -104,7 +104,7 @@ lazy_static!{
     };
 }
 
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     pub static ref INIT_ROOTFS_MOUNTS: Vec<INIT_MOUNT> = vec![
         INIT_MOUNT{fstype: "proc", src: "proc", dest: "/proc", options: vec!["nosuid", "nodev", "noexec"]},
@@ -121,7 +121,7 @@ lazy_static! {
 type StorageHandler = fn(&Logger, &Storage, &Arc<Mutex<Sandbox>>) -> Result<String>;
 
 // StorageHandlerList lists the supported drivers.
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     pub static ref STORAGEHANDLERLIST: HashMap<&'static str, StorageHandler> = {
         let mut m: HashMap<&'static str, StorageHandler> = HashMap::new();
@@ -169,19 +169,19 @@ impl<'a> BareMount<'a> {
     }
 
     pub fn mount(&self) -> Result<()> {
-        if self.source.len() == 0 {
+        if self.source.is_empty() {
             return Err(ErrorKind::ErrorCode("need mount source".to_string()).into());
         }
         let cstr_source = CString::new(self.source)?;
         let source = cstr_source.as_ptr();
 
-        if self.destination.len() == 0 {
+        if self.destination.is_empty() {
             return Err(ErrorKind::ErrorCode("need mount destination".to_string()).into());
         }
         let cstr_dest = CString::new(self.destination)?;
         let dest = cstr_dest.as_ptr();
 
-        if self.fs_type.len() == 0 {
+        if self.fs_type.is_empty() {
             return Err(ErrorKind::ErrorCode("need mount FS type".to_string()).into());
         }
         let cstr_fs_type = CString::new(self.fs_type)?;
@@ -189,7 +189,7 @@ impl<'a> BareMount<'a> {
 
         let mut options = null();
         let cstr_options: CString;
-        if self.options.len() > 0 {
+        if !self.options.is_empty() {
             cstr_options = CString::new(self.options)?;
             options = cstr_options.as_ptr() as *const c_void;
         }
@@ -376,17 +376,17 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
     let mut options: String = String::new();
 
     for opt in options_vec {
-        if opt.len() != 0 {
+        if !opt.is_empty() {
             match FLAGS.get(opt) {
                 Some(x) => {
                     let (_, f) = *x;
-                    flags = flags | f;
+                    flags |= f;
                 }
                 None => {
-                    if options.len() > 0 {
-                        options.push_str(format!(",{}", opt).as_str());
+                    if options.is_empty() {
+                        options.push_str(opt);
                     } else {
-                        options.push_str(format!("{}", opt).as_str());
+                        options.push_str(format!(",{}", opt).as_str());
                     }
                 }
             };
@@ -428,7 +428,7 @@ pub fn add_storages(
             Ok(m) => m,
         };
 
-        if mount_point.len() > 0 {
+        if !mount_point.is_empty() {
             mount_list.push(mount_point);
         }
     }
@@ -447,7 +447,7 @@ fn mount_to_rootfs(logger: &Logger, m: &INIT_MOUNT) -> Result<()> {
 
     if let Err(err) = bare_mount.mount() {
         if m.src != "dev" {
-            return Err(err.into());
+            return Err(err);
         }
         error!(
             logger,
@@ -523,10 +523,10 @@ pub fn get_cgroup_mounts(logger: &Logger, cg_path: &str) -> Result<Vec<INIT_MOUN
     'outer: for (_, line) in reader.lines().enumerate() {
         let line = line?;
 
-        let fields: Vec<&str> = line.split("\t").collect();
+        let fields: Vec<&str> = line.split('\t').collect();
 
         // Ignore comment header
-        if fields[0].starts_with("#") {
+        if fields[0].starts_with('#') {
             continue;
         }
 
@@ -596,7 +596,7 @@ pub fn cgroups_mount(logger: &Logger) -> Result<()> {
     Ok(())
 }
 
-pub fn remove_mounts(mounts: &Vec<String>) -> Result<()> {
+pub fn remove_mounts(mounts: &[String]) -> Result<()> {
     for m in mounts.iter() {
         mount::umount(m.as_str())?;
     }
@@ -635,7 +635,7 @@ fn ensure_destination_exists(destination: &str, fs_type: &str) -> Result<()> {
 fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
     let mut options = HashMap::new();
     for opt in option_list.iter() {
-        let fields: Vec<&str> = opt.split("=").collect();
+        let fields: Vec<&str> = opt.split('=').collect();
         if fields.len() != 2 {
             continue;
         }

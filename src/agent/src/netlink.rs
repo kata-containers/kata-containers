@@ -219,7 +219,7 @@ pub const RT_TABLE_COMPAT: libc::c_uint = 252;
 pub const RT_TABLE_DEFAULT: libc::c_uint = 253;
 pub const RT_TABLE_MAIN: libc::c_uint = 254;
 pub const RT_TABLE_LOCAL: libc::c_uint = 255;
-pub const RT_TABLE_MAX: libc::c_uint = 0xffffffff;
+pub const RT_TABLE_MAX: libc::c_uint = 0xffff_ffff;
 
 // rat_type c_ushort
 pub const RTA_UNSPEC: libc::c_ushort = 0;
@@ -1225,7 +1225,7 @@ impl RtnlHandle {
         Ok(Self {
             fd,
             local: sa,
-            seq: unsafe { libc::time(0 as *mut libc::time_t) } as __u32,
+            seq: unsafe { libc::time(std::ptr::null_mut()) } as __u32,
             dump: 0,
         })
     }
@@ -1262,7 +1262,7 @@ impl RtnlHandle {
         let mut sa: libc::sockaddr_nl = unsafe { mem::zeroed::<libc::sockaddr_nl>() };
 
         let mut iov = libc::iovec {
-            iov_base: 0 as *mut libc::c_void,
+            iov_base: std::ptr::null_mut(),
             iov_len: 0 as libc::size_t,
         };
 
@@ -1468,10 +1468,11 @@ impl RtnlHandle {
                         let addrs = parse_attrs(arta, artalen, (IFA_MAX + 1) as usize)?;
                         // fill address field of Interface
                         let mut one: IPAddress = IPAddress::default();
-                        let mut tattr: *const rtattr = addrs[IFA_LOCAL as usize];
-                        if addrs[IFA_ADDRESS as usize] as i64 != 0 {
-                            tattr = addrs[IFA_ADDRESS as usize];
-                        }
+                        let tattr = if addrs[IFA_ADDRESS as usize] as i64 != 0 {
+                            addrs[IFA_ADDRESS as usize]
+                        } else {
+                            addrs[IFA_LOCAL as usize]
+                        };
 
                         one.mask = format!("{}", (*ifa).ifa_prefixlen);
                         let a: *const u8 = RTA_DATA!(tattr) as *const u8;
@@ -1603,7 +1604,7 @@ impl RtnlHandle {
             }
         }
 
-        return Err(ErrorKind::Nix(nix::Error::Sys(Errno::ENODEV)).into());
+        Err(ErrorKind::Nix(nix::Error::Sys(Errno::ENODEV)).into())
     }
 
     fn find_link_by_name(&mut self, name: &str) -> Result<ifinfomsg> {
@@ -1639,7 +1640,7 @@ impl RtnlHandle {
             nlh = retv.as_mut_ptr() as *mut nlmsghdr;
             ifi = NLMSG_DATA!(nlh) as *mut ifinfomsg;
 
-            return Ok(ifinfomsg { ..*ifi });
+            Ok(ifinfomsg { ..*ifi })
         }
     }
 
@@ -1778,7 +1779,7 @@ impl RtnlHandle {
         Ok(())
     }
 
-    fn delete_all_addrs(&mut self, ifinfo: &ifinfomsg, addrs: &Vec<RtIPAddr>) -> Result<()> {
+    fn delete_all_addrs(&mut self, ifinfo: &ifinfomsg, addrs: &[RtIPAddr]) -> Result<()> {
         for a in addrs {
             self.delete_one_addr(ifinfo, a)?;
         }
@@ -1819,12 +1820,11 @@ impl RtnlHandle {
 
                 if ifinfo.ifi_index as u32 == (*ifa).ifa_index {
                     let attrs = parse_attrs(rta, rtalen, (IFA_MAX + 1) as usize)?;
-                    let mut t: *const rtattr = attrs[IFA_LOCAL as usize];
-
-                    if attrs[IFA_ADDRESS as usize] as i64 != 0 {
-                        t = attrs[IFA_ADDRESS as usize];
-                    }
-
+                    let t = if attrs[IFA_ADDRESS as usize] as i64 != 0 {
+                        attrs[IFA_ADDRESS as usize]
+                    } else {
+                        attrs[IFA_LOCAL as usize]
+                    };
                     let addr = getattr_var(t as *const rtattr);
 
                     del_addrs.push(RtIPAddr {
@@ -2145,7 +2145,7 @@ impl RtnlHandle {
 
                     rte.device = self
                         .get_name_by_index(*data)
-                        .unwrap_or("unknown".to_string());
+                        .unwrap_or_else(|_| "unknown".to_string());
                 }
 
                 rs.push(rte);
@@ -2272,7 +2272,7 @@ impl RtnlHandle {
         Ok(rs)
     }
 
-    fn delete_all_routes(&mut self, rs: &Vec<RtRoute>) -> Result<()> {
+    fn delete_all_routes(&mut self, rs: &[RtRoute]) -> Result<()> {
         for r in rs {
             let name = self.get_name_by_index(r.index)?;
             if name.as_str().contains("lo") || name.as_str().contains("::1") {
@@ -2430,7 +2430,7 @@ impl RtnlHandle {
         Ok(())
     }
 
-    pub fn update_routes(&mut self, rt: &Vec<Route>) -> Result<Vec<Route>> {
+    pub fn update_routes(&mut self, rt: &[Route]) -> Result<Vec<Route>> {
         let rs = self.get_all_routes()?;
         self.delete_all_routes(&rs)?;
 
@@ -2454,7 +2454,7 @@ impl RtnlHandle {
             }
         }
 
-        Ok(rt.clone())
+        Ok(rt.to_vec())
     }
     pub fn handle_localhost(&mut self) -> Result<()> {
         let ifi = self.find_link_by_name("lo")?;
@@ -2468,7 +2468,7 @@ unsafe fn parse_attrs(
     mut rtalen: u32,
     max: usize,
 ) -> Result<Vec<*const rtattr>> {
-    let mut attrs: Vec<*const rtattr> = vec![0 as *const rtattr; max as usize];
+    let mut attrs: Vec<*const rtattr> = vec![std::ptr::null(); max as usize];
 
     while RTA_OK!(rta, rtalen) {
         let rtype = (*rta).rta_type as usize;
@@ -2694,7 +2694,7 @@ unsafe fn format_address(addr: *const u8, len: u32) -> Result<String> {
         */
     }
 
-    return Err(ErrorKind::Nix(nix::Error::Sys(Errno::EINVAL)).into());
+    Err(ErrorKind::Nix(nix::Error::Sys(Errno::EINVAL)).into())
 }
 
 impl Drop for RtnlHandle {
@@ -2745,7 +2745,7 @@ fn parse_ipaddr(s: &str) -> Result<Vec<u8>> {
 }
 
 fn parse_cider(s: &str) -> Result<(Vec<u8>, u8)> {
-    let (addr, mask) = if s.contains("/") {
+    let (addr, mask) = if s.contains('/') {
         scan_fmt!(s, "{}/{}", String, u8)?
     } else {
         (s.to_string(), 0)

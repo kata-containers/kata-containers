@@ -72,7 +72,7 @@ impl Namespace {
         }
 
         let ns_path = PathBuf::from(&self.persistent_ns_dir);
-        let ns_type = self.ns_type.clone();
+        let ns_type = self.ns_type;
         let logger = self.logger.clone();
 
         let new_ns_path = ns_path.join(&ns_type.get());
@@ -92,7 +92,7 @@ impl Namespace {
             };
 
             // Create a new netns on the current thread.
-            let cf = ns_type.get_flags().clone();
+            let cf = ns_type.get_flags();
 
             if let Err(err) = unshare(cf) {
                 return Err(err.to_string());
@@ -104,12 +104,9 @@ impl Namespace {
 
             let mut flags = MsFlags::empty();
 
-            match FLAGS.get("rbind") {
-                Some(x) => {
-                    let (_, f) = *x;
-                    flags = flags | f;
-                }
-                None => (),
+            if let Some(x) = FLAGS.get("rbind") {
+                let (_, f) = *x;
+                flags |= f;
             };
 
             let bare_mount = BareMount::new(source, destination, "none", flags, "", &logger);
@@ -154,8 +151,8 @@ impl NamespaceType {
     }
 
     /// Get the associate flags with the namespace type.
-    pub fn get_flags(&self) -> CloneFlags {
-        match *self {
+    pub fn get_flags(self) -> CloneFlags {
+        match self {
             Self::IPC => CloneFlags::CLONE_NEWIPC,
             Self::UTS => CloneFlags::CLONE_NEWUTS,
             Self::PID => CloneFlags::CLONE_NEWPID,

@@ -94,7 +94,7 @@ fn logrus_to_slog_level(logrus_level: &str) -> Result<slog::Level> {
 }
 
 fn get_log_level(param: &str) -> Result<slog::Level> {
-    let fields: Vec<&str> = param.split("=").collect();
+    let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
         return Err(ErrorKind::ErrorCode(String::from("invalid log level parameter")).into());
@@ -108,7 +108,7 @@ fn get_log_level(param: &str) -> Result<slog::Level> {
 }
 
 fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
-    let fields: Vec<&str> = param.split("=").collect();
+    let fields: Vec<&str> = param.split('=').collect();
 
     if fields.len() != 2 {
         return Err(ErrorKind::ErrorCode(String::from("invalid hotplug timeout parameter")).into());

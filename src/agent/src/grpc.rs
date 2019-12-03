@@ -183,7 +183,7 @@ impl agentService {
             } else {
                 return error_code(Errno::ETIME);
             }
-            if let Err(_) = handle.join() {
+            if handle.join().is_err() {
                 return error_code(Errno::UnknownErrno);
             }
 
@@ -419,7 +419,7 @@ impl protocols::agent_grpc::AgentService for agentService {
         req: protocols::agent::CreateContainerRequest,
         sink: ::grpcio::UnarySink<protocols::empty::Empty>,
     ) {
-        if let Err(_) = self.do_create_container(req) {
+        if self.do_create_container(req).is_err() {
             let f = sink
                 .fail(RpcStatus::new(
                     RpcStatusCode::Internal,
@@ -427,7 +427,6 @@ impl protocols::agent_grpc::AgentService for agentService {
                 ))
                 .map_err(|_e| error!(sl!(), "container create fail"));
             ctx.spawn(f);
-            return;
         } else {
             let resp = Empty::new();
             let f = sink
@@ -443,7 +442,7 @@ impl protocols::agent_grpc::AgentService for agentService {
         req: protocols::agent::StartContainerRequest,
         sink: ::grpcio::UnarySink<protocols::empty::Empty>,
     ) {
-        if let Err(_) = self.do_start_container(req) {
+        if self.do_start_container(req).is_err() {
             let f = sink
                 .fail(RpcStatus::new(
                     RpcStatusCode::Internal,
@@ -469,7 +468,7 @@ impl protocols::agent_grpc::AgentService for agentService {
         req: protocols::agent::RemoveContainerRequest,
         sink: ::grpcio::UnarySink<protocols::empty::Empty>,
     ) {
-        if let Err(_) = self.do_remove_container(req) {
+        if self.do_remove_container(req).is_err() {
             let f = sink
                 .fail(RpcStatus::new(
                     RpcStatusCode::Internal,
@@ -491,7 +490,7 @@ impl protocols::agent_grpc::AgentService for agentService {
         req: protocols::agent::ExecProcessRequest,
         sink: ::grpcio::UnarySink<protocols::empty::Empty>,
     ) {
-        if let Err(_) = self.do_exec_process(req) {
+        if self.do_exec_process(req).is_err() {
             let f = sink
                 .fail(RpcStatus::new(
                     RpcStatusCode::Internal,
@@ -513,7 +512,7 @@ impl protocols::agent_grpc::AgentService for agentService {
         req: protocols::agent::SignalProcessRequest,
         sink: ::grpcio::UnarySink<protocols::empty::Empty>,
     ) {
-        if let Err(_) = self.do_signal_process(req) {
+        if self.do_signal_process(req).is_err() {
             let f = sink
                 .fail(RpcStatus::new(
                     RpcStatusCode::Internal,
@@ -590,7 +589,7 @@ impl protocols::agent_grpc::AgentService for agentService {
         }
 
         // format "table"
-        if args.len() == 0 {
+        if args.is_empty() {
             // default argument
             args = vec!["-ef".to_string()];
         }
@@ -604,13 +603,7 @@ impl protocols::agent_grpc::AgentService for agentService {
         let out: String = String::from_utf8(output.stdout).unwrap();
         let mut lines: Vec<String> = out.split('\n').map(|v| v.to_string()).collect();
 
-        let predicate = |v| {
-            if v == "PID" {
-                return true;
-            } else {
-                return false;
-            }
-        };
+        let predicate = |v| v == "PID";
 
         let pid_index = lines[0].split_whitespace().position(predicate).unwrap();
 
@@ -872,7 +865,7 @@ impl protocols::agent_grpc::AgentService for agentService {
             };
 
             let err = libc::ioctl(fd, TIOCSWINSZ, &win);
-            if let Err(_) = Errno::result(err).map(drop) {
+            if Errno::result(err).map(drop).is_err() {
                 let f = sink
                     .fail(RpcStatus::new(
                         RpcStatusCode::Internal,
@@ -1086,7 +1079,7 @@ impl protocols::agent_grpc::AgentService for agentService {
             s.hostname = req.hostname.clone();
             s.running = true;
 
-            if req.sandbox_id.len() > 0 {
+            if !req.sandbox_id.is_empty() {
                 s.id = req.sandbox_id.clone();
             }
 
@@ -1094,7 +1087,7 @@ impl protocols::agent_grpc::AgentService for agentService {
                 Ok(_) => (),
                 Err(e) => err = e.to_string(),
             }
-            if err.len() != 0 {
+            if !err.is_empty() {
                 let rpc_status =
                     grpcio::RpcStatus::new(grpcio::RpcStatusCode::FailedPrecondition, Some(err));
                 let f = sink
@@ -1114,7 +1107,7 @@ impl protocols::agent_grpc::AgentService for agentService {
             Err(e) => err = e.to_string(),
         };
 
-        if err.len() != 0 {
+        if !err.is_empty() {
             let rpc_status =
                 grpcio::RpcStatus::new(grpcio::RpcStatusCode::FailedPrecondition, Some(err));
             let f = sink
@@ -1163,7 +1156,7 @@ impl protocols::agent_grpc::AgentService for agentService {
         let sandbox = s.lock().unwrap();
         let empty = protocols::empty::Empty::new();
 
-        if let Err(_) = sandbox.online_cpu_memory(&req) {
+        if sandbox.online_cpu_memory(&req).is_err() {
             let f = sink
                 .fail(RpcStatus::new(
                     RpcStatusCode::Internal,
@@ -1187,7 +1180,7 @@ impl protocols::agent_grpc::AgentService for agentService {
         sink: ::grpcio::UnarySink<protocols::empty::Empty>,
     ) {
         let empty = protocols::empty::Empty::new();
-        if let Err(_) = random::reseed_rng(req.data.as_slice()) {
+        if random::reseed_rng(req.data.as_slice()).is_err() {
             let f = sink
                 .fail(RpcStatus::new(
                     RpcStatusCode::Internal,
@@ -1248,7 +1241,7 @@ impl protocols::agent_grpc::AgentService for agentService {
     ) {
         let empty = protocols::empty::Empty::new();
 
-        if let Err(_) = do_mem_hotplug_by_probe(&req.memHotplugProbeAddr) {
+        if do_mem_hotplug_by_probe(&req.memHotplugProbeAddr).is_err() {
             let f = sink
                 .fail(RpcStatus::new(
                     RpcStatusCode::Internal,
@@ -1271,7 +1264,7 @@ impl protocols::agent_grpc::AgentService for agentService {
         sink: ::grpcio::UnarySink<protocols::empty::Empty>,
     ) {
         let empty = protocols::empty::Empty::new();
-        if let Err(_) = do_set_guest_date_time(req.Sec, req.Usec) {
+        if do_set_guest_date_time(req.Sec, req.Usec).is_err() {
             let f = sink
                 .fail(RpcStatus::new(
                     RpcStatusCode::Internal,
@@ -1294,7 +1287,7 @@ impl protocols::agent_grpc::AgentService for agentService {
         sink: ::grpcio::UnarySink<protocols::empty::Empty>,
     ) {
         let empty = protocols::empty::Empty::new();
-        if let Err(_) = do_copy_file(&req) {
+        if do_copy_file(&req).is_err() {
             let f = sink
                 .fail(RpcStatus::new(
                     RpcStatusCode::Internal,
@@ -1353,7 +1346,7 @@ fn get_memory_info(block_size: bool, hotplug: bool) -> Result<(u64, bool)> {
     if block_size {
         match fs::read_to_string(SYSFS_MEMORY_BLOCK_SIZE_PATH) {
             Ok(v) => {
-                if v.len() == 0 {
+                if v.is_empty() {
                     info!(sl!(), "string in empty???");
                     return Err(ErrorKind::ErrorCode("Invalid block size".to_string()).into());
                 }
@@ -1522,7 +1515,7 @@ fn update_container_namespaces(sandbox: &Sandbox, spec: &mut Spec) -> Result<()>
 
     let namespaces = linux.Namespaces.as_mut_slice();
     for namespace in namespaces.iter_mut() {
-        match namespace.Type {
+        match namespace.Type.as_str() {
             NSTYPEPID => pidNs = true,
             NSTYPEIPC => namespace.Path = sandbox.shared_ipcns.path.clone(),
             NSTYPEUTS => namespace.Path = sandbox.shared_utsns.path.clone(),
@@ -1566,7 +1559,7 @@ fn is_signal_handled(pid: pid_t, signum: u32) -> bool {
             }
         };
         if line.starts_with("SigCgt:") {
-            let mask_vec: Vec<&str> = line.split(":").collect();
+            let mask_vec: Vec<&str> = line.split(':').collect();
             if mask_vec.len() != 2 {
                 warn!(sl!(), "parse the SigCgt field failed\n");
                 return false;
@@ -1586,7 +1579,7 @@ fn is_signal_handled(pid: pid_t, signum: u32) -> bool {
     false
 }
 
-fn do_mem_hotplug_by_probe(addrs: &Vec<u64>) -> Result<()> {
+fn do_mem_hotplug_by_probe(addrs: &[u64]) -> Result<()> {
     for addr in addrs.iter() {
         fs::write(SYSFS_MEMORY_HOTPLUG_PROBE_PATH, format!("{:#X}", *addr))?;
     }
@@ -1599,8 +1592,7 @@ fn do_set_guest_date_time(sec: i64, usec: i64) -> Result<()> {
         tv_usec: usec,
     };
 
-    let ret =
-        unsafe { libc::settimeofday(&tv as *const libc::timeval, 0 as *const libc::timezone) };
+    let ret = unsafe { libc::settimeofday(&tv as *const libc::timeval, std::ptr::null()) };
 
     Errno::result(ret).map(drop)?;
 

@@ -29,7 +29,7 @@ macro_rules! sl {
 type DeviceHandler = fn(&Device, &mut Spec, &Arc<Mutex<Sandbox>>) -> Result<()>;
 
 // DeviceHandlerList lists the supported drivers.
-#[cfg_attr(rustfmt, rustfmt_skip)]
+#[rustfmt::skip]
 lazy_static! {
     static ref DEVICEHANDLERLIST: HashMap<&'static str, DeviceHandler> = {
         let mut m: HashMap<&'static str, DeviceHandler> = HashMap::new();
@@ -55,7 +55,7 @@ pub fn online_device(path: &str) -> Result<()> {
 // Here, bridgeAddr is the address at which the bridge is attached on the root bus,
 // while deviceAddr is the address at which the device is attached on the bridge.
 fn get_pci_device_address(pci_id: &str) -> Result<String> {
-    let tokens: Vec<&str> = pci_id.split("/").collect();
+    let tokens: Vec<&str> = pci_id.split('/').collect();
 
     if tokens.len() != 2 {
         return Err(ErrorKind::ErrorCode(format!(
@@ -159,7 +159,7 @@ pub fn get_blk_device_name(sandbox: &Arc<Mutex<Sandbox>>, pci_id: &str) -> Resul
 
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
 fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
-    let tokens: Vec<&str> = scsi_addr.split(":").collect();
+    let tokens: Vec<&str> = scsi_addr.split(':').collect();
     if tokens.len() != 2 {
         return Err(ErrorKind::Msg(format!(
             "Unexpected format for SCSI Address: {}, expect SCSIID:LUA",

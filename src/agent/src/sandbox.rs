@@ -99,7 +99,7 @@ impl Sandbox {
     // acquiring a lock on sandbox.
     pub fn unset_sandbox_storage(&mut self, path: &str) -> bool {
         match self.storages.get_mut(path) {
-            None => return false,
+            None => false,
             Some(count) => {
                 *count -= 1;
                 if *count < 1 {
@@ -190,7 +190,7 @@ impl Sandbox {
     }
 
     pub fn destroy(&mut self) -> Result<()> {
-        for (_, ctr) in &mut self.containers {
+        for ctr in &mut self.containers.values_mut() {
             ctr.destroy()?;
         }
         Ok(())
@@ -236,7 +236,7 @@ fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Res
             info!(logger, "{}", file.as_str());
             let c = fs::read_to_string(file.as_str())?;
 
-            if c.trim().contains("0") {
+            if c.trim().contains('0') {
                 fs::write(file.as_str(), "1")?;
                 count += 1;
 
