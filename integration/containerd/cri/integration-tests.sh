@@ -191,10 +191,9 @@ main() {
 	info "containerd(cri): Running test-integration"
 
 	passing_test=(
-	TestClearContainersCreate
 	TestContainerStats
 	TestContainerListStatsWithIdFilter
-	TestContainerListStatsWithSandboxIdFilterd
+	TestContainerListStatsWithSandboxIdFilter
 	TestContainerListStatsWithIdSandboxIdFilter
 	TestDuplicateName
 	TestImageLoad
