@@ -50,6 +50,8 @@ function waitForLabelRemoval() {
         fi
     done
 
+    echo $(kubectl get pods,nodes --all-namespaces --show-labels)
+
     echo "failed to cleanup"
     return 1
 }
@@ -149,9 +151,9 @@ function test_kata() {
 
     # The cleanup daemonset will run a single time, since it will clear the node-label. Thus, its difficult to
     # check the daemonset's status for completion. instead, let's wait until the kata-runtime labels are removed
-    # from all of the worker nodes. If this doesn't happen in 45 seconds, let's fail
-    timeout=45
-    sleeptime=1
+    # from all of the worker nodes. If this doesn't happen after 2 minutes, let's fail
+    timeout=20
+    sleeptime=6
     waitForLabelRemoval $timeout $sleeptime
 
     kubectl delete -f kata-cleanup.yaml
