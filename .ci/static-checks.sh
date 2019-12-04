@@ -51,6 +51,9 @@ typeset url_check_max_tries="${url_check_max_tries:-3}"
 
 typeset -A long_options
 
+# Generated code
+ignore_clh_generated_code="virtcontainers/pkg/cloud-hypervisor/client"
+
 long_options=(
 	[all]="Force checking of all changes, including files in the base branch"
 	[branch]="Specify upstream branch to compare against (default '$branch')"
@@ -417,6 +420,7 @@ static_check_license_headers()
 		--exclude="vendor/*" \
 		--exclude="VERSION" \
 		--exclude="virtcontainers/pkg/firecracker/*" \
+		--exclude="${ignore_clh_generated_code}*" \
 		--exclude="*.xml" \
 		--exclude="*.yaml" \
 		--exclude="*.yml" \
@@ -526,7 +530,7 @@ static_check_docs()
 	local new_urls
 	local url
 
-	all_docs=$(git ls-files "*.md" | grep -Ev "(vendor|grpc-rs|target)/" | sort || true)
+	all_docs=$(git ls-files "*.md" | grep -Ev "(vendor|grpc-rs|target|${ignore_clh_generated_code})/" | sort || true)
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -542,6 +546,7 @@ static_check_docs()
 
 		# Newly-added docs
 		new_docs=$(echo "$docs_status" | awk '/^A/ {print $NF}' | sort)
+		new_docs=$(echo "$new_docs" | grep -Ev "(${ignore_clh_generated_code})" | sort)
 
 		for doc in $new_docs
 		do
@@ -663,6 +668,7 @@ static_check_docs()
 		# Ignore local URLs. The only time these are used is in
 		# examples (meaning these URLs won't exist).
 		echo "$url" | grep -q "^file://" && continue
+		echo "$url" | grep -q "^http://localhost" && continue
 
 		# Ignore the install guide URLs that contain a shell variable
 		echo "$url" | grep -q "\\$" && continue

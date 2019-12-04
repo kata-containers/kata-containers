@@ -49,26 +49,35 @@ if [ -e "${NEW_RUNTIME_CONFIG}" ]; then
 	runtime_config_path="${NEW_RUNTIME_CONFIG}"
 fi
 
-if [ "$KATA_HYPERVISOR" = "acrn" ]; then
-	echo "Enable acrn configuration.toml"
-	sudo mv "${PKGDEFAULTSDIR}/configuration-acrn.toml" "${PKGDEFAULTSDIR}/configuration.toml"
-fi
+enable_hypervisor_config(){
+	local path=$1
+	sudo mv "$path" "${PKGDEFAULTSDIR}/configuration.toml"
 
-if [ "$KATA_HYPERVISOR" = "firecracker" ]; then
-	echo "Enable firecracker configuration.toml"
-	sudo mv "${PKGDEFAULTSDIR}/configuration-fc.toml" "${PKGDEFAULTSDIR}/configuration.toml"
-	sudo sed -i '/jailer_path/d' "${PKGDEFAULTSDIR}/configuration.toml"
-fi
+}
 
-if [ "$KATA_HYPERVISOR" = "nemu" ]; then
-	echo "Enable nemu configuration.toml"
-	sudo mv "${PKGDEFAULTSDIR}/configuration-nemu.toml" "${PKGDEFAULTSDIR}/configuration.toml"
-fi
+case "${KATA_HYPERVISOR}" in
+	"acrn")
+		enable_hypervisor_config "${PKGDEFAULTSDIR}/configuration-acrn.toml"
+		;;
+	"cloud-hypervisor")
+		enable_hypervisor_config "${PKGDEFAULTSDIR}/configuration-clh.toml"
+		;;
+	"firecracker")
+		enable_hypervisor_config "${PKGDEFAULTSDIR}/configuration-fc.toml"
+		;;
+	"qemu")
+		if [ "$experimental_qemu" == "true" ]; then
+			enable_hypervisor_config "${PKGDEFAULTSDIR}/configuration-qemu-virtiofs.toml"
+		else
+			enable_hypervisor_config "${PKGDEFAULTSDIR}/configuration-qemu.toml"
+		fi
+		;;
+	*)
+		die "failed to enable config for '${KATA_HYPERVISOR}', not supported"
+		;;
+esac
 
-if [ "$KATA_HYPERVISOR" = "qemu" ] && [ "$experimental_qemu" == "true" ]; then
-	echo "Enable qemu virtiofs configuration.toml"
-	sudo mv "${PKGDEFAULTSDIR}/configuration-qemu-virtiofs.toml" "${PKGDEFAULTSDIR}/configuration.toml"
-fi
+
 
 # Check system supports running Kata Containers
 kata_runtime_path=$(command -v kata-runtime)
@@ -104,24 +113,11 @@ if [ "$USE_VSOCK" == "yes" ]; then
 	fi
 fi
 
-if [ "$KATA_HYPERVISOR" == "qemu" ]; then
-	echo "Add kata-runtime as a new/default Docker runtime."
-	"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker configure -r kata-runtime -f
-elif [ "$KATA_HYPERVISOR" == "nemu" ]; then
-	echo "Configure Nemu as Kata Hypervisor"
-	sudo crudini --set "${runtime_config_path}" hypervisor.qemu machine_type \"virt\"
-	sudo crudini --set "${runtime_config_path}" hypervisor.qemu firmware \"${KATA_NEMU_DESTDIR}/share/kata-nemu/OVMF.fd\"
-	case "$arch" in
-	x86_64)
-		sudo crudini --set "${runtime_config_path}" hypervisor.qemu path \"${KATA_NEMU_DESTDIR}/bin/nemu-system-${arch}\"
-		;;
-	*)
-		die "Unsupported architecture: $arch"
-		;;
-	esac
-	"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker configure -r kata-runtime -f
+if [ "$KATA_HYPERVISOR" == "qemu"  ]; then
+       echo "Add kata-runtime as a new/default Docker runtime."
+       "${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker configure -r kata-runtime -f
 else
-	echo "Kata runtime will not set as a default in Docker"
+       echo "Kata runtime will not set as a default in Docker"
 fi
 
 if [ "$MACHINETYPE" == "q35" ]; then

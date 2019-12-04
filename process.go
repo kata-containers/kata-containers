@@ -56,6 +56,7 @@ func HypervisorRunning(containerID string) bool {
 	var typeHypervisor = map[string]string{
 		DefaultHypervisor:     (".*-name.*" + containerID + ".*-qmp.*unix:.*/" + containerID + "/.*"),
 		FirecrackerHypervisor: (".*--api-sock.*" + containerID + ".*firecracker.sock.*"),
+		CloudHypervisor:       (".*--api-socket.*" + containerID + ".*clh-api.sock.*"),
 	}
 	for h, r := range typeHypervisor {
 		config, ok := KataConfig.Hypervisor[h]
@@ -70,6 +71,10 @@ func HypervisorRunning(containerID string) bool {
 // ProxyRunning returns true if the proxy is still running, otherwise false
 func ProxyRunning(containerID string) bool {
 	if _, ok := KataConfig.Hypervisor[FirecrackerHypervisor]; ok {
+		return false
+	}
+
+	if _, ok := KataConfig.Hypervisor[CloudHypervisor]; ok {
 		return false
 	}
 	proxyPath := KataConfig.Proxy[DefaultProxy].Path

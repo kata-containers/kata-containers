@@ -5,7 +5,7 @@
 #
 # This script help us to build the
 # cache of several kata components like
-# qemu, kernel, nemu and images with the
+# qemu, kernel and images with the
 # main purpose that being to be used at
 # the CI to reduce the execution time
 
@@ -66,16 +66,6 @@ cache_image_artifacts() {
 	create_image_tar "${image_name}"
 }
 
-# This builds nemu by specifying the nemu version from the
-# runtime versions file and the nemu tar file name
-cache_nemu_artifacts() {
-	pushd "${tests_repo_dir}"
-	local nemu_version=$(get_version "assets.hypervisor.nemu.version")
-	local nemu_tar="kata-nemu-static.tar.gz"
-	popd
-	create_cache_asset "${nemu_tar}" "${nemu_version}"
-}
-
 # This builds the initrd image by specifying the image initrd version
 # from /usr/share/kata-containers and the image initrd name
 cache_image_initrd_artifacts() {
@@ -97,13 +87,12 @@ create_image_tar(){
 	rm "${getinfo}"
 }
 
-# This function receives as arguments the component name (qemu, nemu, kernel, etc)
+# This function receives as arguments the component name (qemu, kernel, etc)
 # as well as the version
 create_cache_asset() {
 	local component_name="$1"
 	local component_version="$2"
 	local check_image=$(echo "${component_version}" | grep kata || true)
-	local check_nemu=$(echo "${component_name}" | grep nemu || true)
 	local check_qemu=$(echo "${component_name}" | grep qemu || true)
 	local check_kernel=$(echo "${component_name}" | grep -E '\<vmlinu[xz]\>' || true)
 	local check_initrd=$(echo "${component_name}" | grep initrd || true)
@@ -124,11 +113,6 @@ create_cache_asset() {
 		echo "${component_version}" >  "latest"
 	fi
 
-	# In the case of nemu and qemu we have the tar file in
-	# a specific location
-	if [ ! -z "${check_nemu}" ] || [ ! -z "${check_qemu}" ]; then
-		cp -a "${KATA_TESTS_CACHEDIR}/${component_name}" .
-	fi
 
 	# In the case of the kernel we have it in the kata dir
 	if [ ! -z "${check_kernel}" ]; then
@@ -159,7 +143,6 @@ Options:
 -h      Shows help
 -i      Run image cache
 -k      Run kernel cache
--n      Run nemu cache
 -q      Run qemu cache
 -r      Run image initrd cache
 
@@ -183,9 +166,6 @@ main() {
 		k)
 			build_kernel="true"
  			;;
-		n)
-			build_nemu="true"
-			;;
 		q)
 			build_qemu="true"
 			;;
@@ -199,7 +179,6 @@ main() {
 	[[ -z "$build_kernel" ]] && \
 	[[ -z "$build_qemu" ]] && \
 	[[ -z "$build_qemu_experimental" ]] && \
- 	[[ -z "$build_nemu" ]] && \
 	[[ -z "$build_image" ]] && \
 	[[ -z "$build_image_initrd" ]] && \
 		usage && die "Must choose at least one option"
@@ -213,8 +192,6 @@ main() {
 	[ "$build_qemu" == "true" ] && cache_qemu_artifacts
 
 	[ "$build_qemu_experimental" == "true" ] && cache_qemu_experimental_artifacts
-
-	[ "$build_nemu" == "true" ] && cache_nemu_artifacts
 
 	[ "$build_image" == "true" ] && cache_image_artifacts
 
