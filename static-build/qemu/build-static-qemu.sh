@@ -19,18 +19,19 @@ qemu_tmp_tar="kata-static-qemu-tmp.tar.gz"
 
 qemu_repo="${qemu_repo:-}"
 qemu_version="${qemu_version:-}"
+kata_version="${kata_version:-}"
 
 if [ -z "$qemu_repo" ]; then
 	info "Get qemu information from runtime versions.yaml"
-	qemu_url=$(get_from_kata_deps "assets.hypervisor.qemu.url")
+	qemu_url=$(get_from_kata_deps "assets.hypervisor.qemu.url" "${kata_version}")
 	[ -n "$qemu_url" ] || die "failed to get qemu url"
 	qemu_repo="${qemu_url}.git"
 fi
 [ -n "$qemu_repo" ] || die "failed to get qemu repo"
 
-[ -n "$qemu_version" ] || qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.version")
+[ -n "$qemu_version" ] || qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.version" "${kata_version}")
 if ! (git ls-remote --heads "${qemu_url}" | grep -q "refs/heads/${qemu_version}"); then
-	qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.tag")
+	qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.tag" "${kata_version}")
 fi
 [ -n "$qemu_version" ] || die "failed to get qemu version"
 
