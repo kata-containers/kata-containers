@@ -69,10 +69,10 @@ ci_config() {
 		fi
 	fi
 
+	SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 	if [ -n "${CI}" ]; then
 		(
 		echo "Install cni config"
-		SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 		${SCRIPT_PATH}/../../../.ci/configure_cni.sh
 		)
 	fi
@@ -169,6 +169,7 @@ main() {
 	rm -f "${CRITEST}"
 
 	pushd "${GOPATH}/src/${cri_containerd_repo}"
+	cp "${SCRIPT_PATH}/container_restart_test.go.patch" ./integration/container_restart_test.go
 
 	# Make sure the right artifacts are going to be built
 	make clean
@@ -192,6 +193,7 @@ main() {
 
 	passing_test=(
 	TestContainerStats
+	TestContainerRestart
 	TestContainerListStatsWithIdFilter
 	TestContainerListStatsWithSandboxIdFilter
 	TestContainerListStatsWithIdSandboxIdFilter
