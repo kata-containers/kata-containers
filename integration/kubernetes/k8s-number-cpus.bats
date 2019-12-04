@@ -17,6 +17,7 @@ setup() {
 	get_pod_config_dir
 }
 
+# Skip on aarch64 due to missing cpu hotplug related functionality.
 @test "Check number of cpus" {
 	skip "test not working see: ${issue}"
 	# Create pod
