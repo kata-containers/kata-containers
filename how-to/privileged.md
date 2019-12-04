@@ -6,6 +6,7 @@ that is not normally granted).
 * [Warnings](#warnings)
     * [Host Devices](#host-devices)
         * [Containerd and CRI](#containerd-and-cri)
+        * [CRI-O](#cri-o)
 
 ## Warnings
 
@@ -44,3 +45,31 @@ See below example config:
 
  - [Kata Containers with Containerd and CRI documentation](how-to-use-k8s-with-cri-containerd-and-kata.md)
  - [Containerd CRI config documentation](https://github.com/containerd/cri/blob/master/docs/config.md)
+
+#### CRI-O
+
+Similar to containerd, CRI-O allows configuring the privileged host devices
+behavior for each runtime in the CRI config. This is done with the 
+`privileged_without_host_devices` option. Setting this to `true` will disable
+ hot plugging of the host devices into the guest, even when privileged is enabled.
+
+See below example config:
+
+```toml
+[crio.runtime.runtimes.runc]
+  runtime_path = "/usr/local/bin/crio-runc"
+  runtime_type = "oci"
+  runtime_root = "/run/runc"
+  privileged_without_host_devices = false
+[crio.runtime.runtimes.kata]
+  runtime_path = "/usr/bin/kata-runtime"
+  runtime_type = "oci"
+  privileged_without_host_devices = true
+[crio.runtime.runtimes.kata-shim2]
+  runtime_path = "/usr/local/bin/containerd-shim-kata-v2"
+  runtime_type = "vm"
+  privileged_without_host_devices = true
+```
+
+ - [Kata Containers with CRI-O](https://github.com/kata-containers/documentation/blob/master/how-to/run-kata-with-k8s.md#cri-o)
+  
