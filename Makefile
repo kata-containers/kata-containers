@@ -93,7 +93,7 @@ $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX):: rootfs-builder/%
 .PRECIOUS: $(ROOTFS_BUILD_DEST)/.dracut$(ROOTFS_MARKER_SUFFIX)
 $(ROOTFS_BUILD_DEST)/.dracut$(ROOTFS_MARKER_SUFFIX): $(TARGET_INITRD)
 	mkdir -p $(TARGET_ROOTFS)
-	cat $< | cpio --extract --preserve-modification-time --make-directories --directory=$(TARGET_ROOTFS)
+	(cd $(TARGET_ROOTFS); cat $< | cpio --extract --preserve-modification-time --make-directories)
 	@touch $@
 
 image-%: $(IMAGES_BUILD_DEST)/kata-containers-image-%.img
