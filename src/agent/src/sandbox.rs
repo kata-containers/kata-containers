@@ -4,6 +4,7 @@
 //
 
 //use crate::container::Container;
+use crate::linux_abi::*;
 use crate::mount::{get_mount_fs_type, remove_mounts, TYPEROOTFS};
 use crate::namespace::Namespace;
 use crate::netlink::{RtnlHandle, NETLINK_ROUTE};
@@ -36,7 +37,6 @@ pub struct Sandbox {
     pub storages: HashMap<String, u32>,
     pub running: bool,
     pub no_pivot_root: bool,
-    enable_grpc_trace: bool,
     pub sandbox_pid_ns: bool,
     pub sender: Option<Sender<i32>>,
     pub rtnl: Option<RtnlHandle>,
@@ -49,8 +49,8 @@ impl Sandbox {
 
         Ok(Sandbox {
             logger: logger.clone(),
-            id: "".to_string(),
-            hostname: "".to_string(),
+            id: String::new(),
+            hostname: String::new(),
             network: Network::new(),
             containers: HashMap::new(),
             mounts: Vec::new(),
@@ -61,17 +61,37 @@ impl Sandbox {
             storages: HashMap::new(),
             running: false,
             no_pivot_root: fs_type.eq(TYPEROOTFS),
-            enable_grpc_trace: false,
             sandbox_pid_ns: false,
             sender: None,
             rtnl: Some(RtnlHandle::new(NETLINK_ROUTE, 0).unwrap()),
         })
     }
 
+    // set_sandbox_storage sets the sandbox level reference
+    // counter for the sandbox storage.
+    // This method also returns a boolean to let
+    // callers know if the storage already existed or not.
+    // It will return true if storage is new.
+    //
+    // It's assumed that caller is calling this method after
+    // acquiring a lock on sandbox.
+    pub fn set_sandbox_storage(&mut self, path: &str) -> bool {
+        match self.storages.get_mut(path) {
+            None => {
+                self.storages.insert(path.to_string(), 1);
+                true
+            }
+            Some(count) => {
+                *count += 1;
+                false
+            }
+        }
+    }
+
     // unset_sandbox_storage will decrement the sandbox storage
     // reference counter. If there aren't any containers using
     // that sandbox storage, this method will remove the
-    // storage reference from the sandbox and return 'true, nil' to
+    // storage reference from the sandbox and return 'true' to
     // let the caller know that they can clean up the storage
     // related directories by calling remove_sandbox_storage
     //
@@ -84,8 +104,9 @@ impl Sandbox {
                 *count -= 1;
                 if *count < 1 {
                     self.storages.remove(path);
+                    return true;
                 }
-                return true;
+                false
             }
         }
     }
@@ -158,7 +179,7 @@ impl Sandbox {
         self.containers.get_mut(id)
     }
 
-    pub fn find_process<'a>(&'a mut self, pid: pid_t) -> Option<&'a mut Process> {
+    pub fn find_process(&mut self, pid: pid_t) -> Option<&mut Process> {
         for (_, c) in self.containers.iter_mut() {
             if c.processes.get(&pid).is_some() {
                 return c.processes.get_mut(&pid);
@@ -166,27 +187,6 @@ impl Sandbox {
         }
 
         None
-    }
-
-    // set_sandbox_storage sets the sandbox level reference
-    // counter for the sandbox storage.
-    // This method also returns a boolean to let
-    // callers know if the storage already existed or not.
-    // It will return true if storage is new.
-    //
-    // It's assumed that caller is calling this method after
-    // acquiring a lock on sandbox.
-    pub fn set_sandbox_storage(&mut self, path: &str) -> bool {
-        match self.storages.get_mut(path) {
-            None => {
-                self.storages.insert(path.to_string(), 1);
-                true
-            }
-            Some(count) => {
-                *count += 1;
-                false
-            }
-        }
     }
 
     pub fn destroy(&mut self) -> Result<()> {
@@ -221,10 +221,6 @@ impl Sandbox {
     }
 }
 
-pub const CPU_ONLINE_PATH: &'static str = "/sys/devices/system/cpu";
-pub const MEMORY_ONLINE_PATH: &'static str = "/sys/devices/system/memory";
-pub const ONLINE_FILE: &'static str = "online";
-
 fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Result<i32> {
     let mut count = 0;
     let re = Regex::new(pattern)?;
@@ -236,7 +232,7 @@ fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Res
         let p = entry.path();
 
         if re.is_match(name) {
-            let file = format!("{}/{}", p.to_str().unwrap(), ONLINE_FILE);
+            let file = format!("{}/{}", p.to_str().unwrap(), SYSFS_ONLINE_FILE);
             info!(logger, "{}", file.as_str());
             let c = fs::read_to_string(file.as_str())?;
 
@@ -259,10 +255,10 @@ fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Res
 }
 
 fn online_cpus(logger: &Logger, num: i32) -> Result<i32> {
-    online_resources(logger, CPU_ONLINE_PATH, r"cpu[0-9]+", num)
+    online_resources(logger, SYSFS_CPU_ONLINE_PATH, r"cpu[0-9]+", num)
 }
 
 fn online_memory(logger: &Logger) -> Result<()> {
-    online_resources(logger, MEMORY_ONLINE_PATH, r"memory[0-9]+", -1)?;
+    online_resources(logger, SYSFS_MEMORY_ONLINE_PATH, r"memory[0-9]+", -1)?;
     Ok(())
 }

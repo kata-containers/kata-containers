@@ -6,17 +6,17 @@ use rustjail::errors::*;
 use std::fs;
 use std::time;
 
-const DEBUG_CONSOLE_FLAG: &'static str = "agent.debug_console";
-const DEV_MODE_FLAG: &'static str = "agent.devmode";
-const LOG_LEVEL_OPTION: &'static str = "agent.log";
-const HOTPLUG_TIMOUT_OPTION: &'static str = "agent.hotplug_timeout";
+const DEBUG_CONSOLE_FLAG: &str = "agent.debug_console";
+const DEV_MODE_FLAG: &str = "agent.devmode";
+const LOG_LEVEL_OPTION: &str = "agent.log";
+const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 
 // FIXME: unused
-const TRACE_MODE_FLAG: &'static str = "agent.trace";
-const USE_VSOCK_FLAG: &'static str = "agent.use_vsock";
+const TRACE_MODE_FLAG: &str = "agent.trace";
+const USE_VSOCK_FLAG: &str = "agent.use_vsock";
 
 #[derive(Debug)]
 pub struct agentConfig {
@@ -100,17 +100,11 @@ fn get_log_level(param: &str) -> Result<slog::Level> {
         return Err(ErrorKind::ErrorCode(String::from("invalid log level parameter")).into());
     }
 
-    let key = fields[0];
-
-    if key != LOG_LEVEL_OPTION {
-        return Err(ErrorKind::ErrorCode(String::from("invalid log level key name").into()).into());
+    if fields[0] != LOG_LEVEL_OPTION {
+        Err(ErrorKind::ErrorCode(String::from("invalid log level key name")).into())
+    } else {
+        Ok(logrus_to_slog_level(fields[1])?)
     }
-
-    let value = fields[1];
-
-    let level = logrus_to_slog_level(value)?;
-
-    Ok(level)
 }
 
 fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {

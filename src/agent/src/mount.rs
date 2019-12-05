@@ -23,27 +23,21 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 use crate::device::{get_pci_device_name, get_scsi_device_name, online_device};
+use crate::linux_abi::*;
 use crate::protocols::agent::Storage;
 use crate::Sandbox;
 use slog::Logger;
 
-const DRIVER9PTYPE: &'static str = "9p";
-const DRIVERVIRTIOFSTYPE: &'static str = "virtio-fs";
-pub const DRIVERBLKTYPE: &'static str = "blk";
-pub const DRIVERMMIOBLKTYPE: &'static str = "mmioblk";
-pub const DRIVERSCSITYPE: &'static str = "scsi";
-pub const DRIVERNVDIMMTYPE: &'static str = "nvdimm";
-const DRIVEREPHEMERALTYPE: &'static str = "ephemeral";
-const DRIVERLOCALTYPE: &'static str = "local";
+pub const DRIVER9PTYPE: &str = "9p";
+pub const DRIVERVIRTIOFSTYPE: &str = "virtio-fs";
+pub const DRIVERBLKTYPE: &str = "blk";
+pub const DRIVERMMIOBLKTYPE: &str = "mmioblk";
+pub const DRIVERSCSITYPE: &str = "scsi";
+pub const DRIVERNVDIMMTYPE: &str = "nvdimm";
+pub const DRIVEREPHEMERALTYPE: &str = "ephemeral";
+pub const DRIVERLOCALTYPE: &str = "local";
 
-pub const TYPEROOTFS: &'static str = "rootfs";
-
-pub const PROCMOUNTSTATS: &'static str = "/proc/self/mountstats";
-
-const ROOTBUSPATH: &'static str = "/devices/pci0000:00";
-
-const CGROUPPATH: &'static str = "/sys/fs/cgroup";
-const PROCCGROUPS: &'static str = "/proc/cgroups";
+pub const TYPEROOTFS: &str = "rootfs";
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 lazy_static! {
@@ -341,7 +335,7 @@ fn virtio_blk_storage_handler(
             return Err(ErrorKind::ErrorCode(format!("Invalid device {}", &storage.source)).into());
         }
     } else {
-        let dev_path = get_pci_device_name(sandbox, &storage.source)?;
+        let dev_path = get_pci_device_name(&sandbox, &storage.source)?;
         storage.source = dev_path;
     }
 
@@ -357,7 +351,7 @@ fn virtio_scsi_storage_handler(
     let mut storage = storage.clone();
 
     // Retrieve the device path from SCSI address.
-    let dev_path = get_scsi_device_name(sandbox, &storage.source)?;
+    let dev_path = get_scsi_device_name(&sandbox, &storage.source)?;
     storage.source = dev_path;
 
     common_storage_handler(logger, &storage)
@@ -509,7 +503,7 @@ pub fn general_mount(logger: &Logger) -> Result<()> {
 
 #[inline]
 pub fn get_mount_fs_type(mount_point: &str) -> Result<String> {
-    get_mount_fs_type_from_file(PROCMOUNTSTATS, mount_point)
+    get_mount_fs_type_from_file(PROC_MOUNTSTATS, mount_point)
 }
 
 // get_mount_fs_type returns the FS type corresponding to the passed mount point and
@@ -553,7 +547,7 @@ pub fn get_cgroup_mounts(logger: &Logger, cg_path: &str) -> Result<Vec<INIT_MOUN
     let mut cg_mounts: Vec<INIT_MOUNT> = vec![INIT_MOUNT {
         fstype: "tmpfs",
         src: "tmpfs",
-        dest: CGROUPPATH,
+        dest: SYSFS_CGROUPPATH,
         options: vec!["nosuid", "nodev", "noexec", "mode=755"],
     }];
 
@@ -613,7 +607,7 @@ pub fn get_cgroup_mounts(logger: &Logger, cg_path: &str) -> Result<Vec<INIT_MOUN
     cg_mounts.push(INIT_MOUNT {
         fstype: "tmpfs",
         src: "tmpfs",
-        dest: CGROUPPATH,
+        dest: SYSFS_CGROUPPATH,
         options: vec!["remount", "ro", "nosuid", "nodev", "noexec", "mode=755"],
     });
 
@@ -623,7 +617,7 @@ pub fn get_cgroup_mounts(logger: &Logger, cg_path: &str) -> Result<Vec<INIT_MOUN
 pub fn cgroups_mount(logger: &Logger) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "mount"));
 
-    let cgroups = get_cgroup_mounts(&logger, PROCCGROUPS)?;
+    let cgroups = get_cgroup_mounts(&logger, PROC_CGROUPS)?;
 
     for cg in cgroups.iter() {
         mount_to_rootfs(&logger, cg)?;
@@ -1103,14 +1097,14 @@ mod tests {
         let first_mount = INIT_MOUNT {
             fstype: "tmpfs",
             src: "tmpfs",
-            dest: CGROUPPATH,
+            dest: SYSFS_CGROUPPATH,
             options: vec!["nosuid", "nodev", "noexec", "mode=755"],
         };
 
         let last_mount = INIT_MOUNT {
             fstype: "tmpfs",
             src: "tmpfs",
-            dest: CGROUPPATH,
+            dest: SYSFS_CGROUPPATH,
             options: vec!["remount", "ro", "nosuid", "nodev", "noexec", "mode=755"],
         };
 

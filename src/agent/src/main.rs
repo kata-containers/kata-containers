@@ -34,7 +34,7 @@ use signal_hook::{iterator::Signals, SIGCHLD};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::os::unix::fs::{self as unixfs};
+use std::os::unix::fs as unixfs;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::sync::mpsc::{self, Sender};
@@ -44,6 +44,7 @@ use unistd::Pid;
 
 mod config;
 mod device;
+mod linux_abi;
 mod logging;
 mod mount;
 mod namespace;
@@ -63,11 +64,11 @@ use uevent::watch_uevents;
 
 mod grpc;
 
-const NAME: &'static str = "kata-agent";
-const VSOCK_ADDR: &'static str = "vsock://-1";
+const NAME: &str = "kata-agent";
+const VSOCK_ADDR: &str = "vsock://-1";
 const VSOCK_PORT: u16 = 1024;
-const KERNEL_CMDLINE_FILE: &'static str = "/proc/cmdline";
-const CONSOLE_PATH: &'static str = "/dev/console";
+const KERNEL_CMDLINE_FILE: &str = "/proc/cmdline";
+const CONSOLE_PATH: &str = "/dev/console";
 
 lazy_static! {
     static ref GLOBAL_DEVICE_WATCHER: Arc<Mutex<HashMap<String, Sender<String>>>> =

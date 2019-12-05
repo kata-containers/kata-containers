@@ -30,6 +30,7 @@ use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
 use crate::device::{add_devices, rescan_pci_bus};
+use crate::linux_abi::*;
 use crate::mount::{add_storages, remove_mounts, STORAGEHANDLERLIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::netlink::{RtnlHandle, NETLINK_ROUTE};
@@ -53,10 +54,7 @@ use std::io::{BufRead, BufReader};
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
 
-const SYSFS_MEMORY_BLOCK_SIZE_PATH: &'static str = "/sys/devices/system/memory/block_size_bytes";
-const SYSFS_MEMORY_HOTPLUG_PROBE_PATH: &'static str = "/sys/devices/system/memory/probe";
-pub const SYSFS_MEMORY_ONLINE_PATH: &'static str = "/sys/devices/system/memory";
-const CONTAINER_BASE: &'static str = "/run/kata-containers";
+const CONTAINER_BASE: &str = "/run/kata-containers";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -95,7 +93,7 @@ impl agentService {
         // updates the devices listed in the OCI spec, so that they actually
         // match real devices inside the VM. This step is necessary since we
         // cannot predict everything from the caller.
-        add_devices(req.devices.to_vec(), oci, self.sandbox.clone())?;
+        add_devices(&req.devices.to_vec(), oci, &self.sandbox)?;
 
         // Both rootfs and volumes (invoked with --volume for instance) will
         // be processed the same way. The idea is to always mount any provided
