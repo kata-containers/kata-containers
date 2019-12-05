@@ -54,6 +54,25 @@ typeset -A long_options
 # Generated code
 ignore_clh_generated_code="virtcontainers/pkg/cloud-hypervisor/client"
 
+paths_to_skip=(
+	"${ignore_clh_generated_code}"
+	"vendor"
+)
+
+skip_paths(){
+	local list=${1}
+	[ -z "$list" ] && return
+
+	for p in "${paths_to_skip[@]}"; do
+		local new_list=""
+		if new_list=$(echo "${list}" | grep -Ev "${p}"); then
+			list="${new_list}"
+		fi
+	done
+	echo "${list}"
+}
+
+
 long_options=(
 	[all]="Force checking of all changes, including files in the base branch"
 	[branch]="Specify upstream branch to compare against (default '$branch')"
@@ -253,7 +272,8 @@ static_check_go_arch_specific()
 	#   "all packages" - "submodule packages"
 	#
 	# Note: the vendor filtering is required for versions of go older than 1.9
-	go_packages=$(comm -3 "$all_packages" "$submodule_packages" | grep -v "/vendor/" || true)
+	go_packages=$(comm -3 "$all_packages" "$submodule_packages" || true)
+	go_packages=$(skip_paths "${go_packages}")
 
 	# No packages to test
 	[ -z "$go_packages" ] && return
@@ -530,7 +550,8 @@ static_check_docs()
 	local new_urls
 	local url
 
-	all_docs=$(git ls-files "*.md" | grep -Ev "(vendor|grpc-rs|target|${ignore_clh_generated_code})/" | sort || true)
+	all_docs=$(git ls-files "*.md" | grep -Ev "(grpc-rs|target)/" | sort || true)
+	all_docs=$(skip_paths "${all_docs}")
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -543,11 +564,11 @@ static_check_docs()
 		docs_status=$(echo "$docs_status" | grep "\.md$" || true)
 
 		docs=$(echo "$docs_status" | awk '{print $NF}' | sort)
-		docs=$(echo "${docs}" | grep -Ev "(${ignore_clh_generated_code})" | sort)
+		docs=$(skip_paths "${docs}")
 
 		# Newly-added docs
 		new_docs=$(echo "$docs_status" | awk '/^A/ {print $NF}' | sort)
-		new_docs=$(echo "$new_docs" | grep -Ev "(${ignore_clh_generated_code})" | sort)
+		new_docs=$(skip_paths "${new_docs}")
 
 		for doc in $new_docs
 		do
