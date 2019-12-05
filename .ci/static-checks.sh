@@ -543,6 +543,7 @@ static_check_docs()
 		docs_status=$(echo "$docs_status" | grep "\.md$" || true)
 
 		docs=$(echo "$docs_status" | awk '{print $NF}' | sort)
+		docs=$(echo "${docs}" | grep -Ev "(${ignore_clh_generated_code})" | sort)
 
 		# Newly-added docs
 		new_docs=$(echo "$docs_status" | awk '/^A/ {print $NF}' | sort)
