@@ -25,6 +25,7 @@ import (
 	"github.com/vishvananda/netns"
 	"golang.org/x/sys/unix"
 
+	"github.com/kata-containers/runtime/pkg/rootless"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -410,7 +411,12 @@ func xConnectVMNetwork(endpoint Endpoint, h hypervisor) error {
 		queues = int(h.hypervisorConfig().NumVCPUs)
 	}
 
-	disableVhostNet := h.hypervisorConfig().DisableVhostNet
+	var disableVhostNet bool
+	if rootless.IsRootless() {
+		disableVhostNet = true
+	} else {
+		disableVhostNet = h.hypervisorConfig().DisableVhostNet
+	}
 
 	if netPair.NetInterworkingModel == NetXConnectDefaultModel {
 		netPair.NetInterworkingModel = DefaultNetInterworkingModel
