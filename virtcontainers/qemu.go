@@ -655,12 +655,28 @@ func (q *qemu) setupVirtiofsd() (err error) {
 	const sockFd = 3 // Cmd.ExtraFiles[] fds are numbered starting from 3
 	cmd := exec.Command(q.config.VirtioFSDaemon, q.virtiofsdArgs(sockFd)...)
 	cmd.ExtraFiles = append(cmd.ExtraFiles, fd)
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
 
 	err = cmd.Start()
 	if err == nil {
 		q.state.VirtiofsdPid = cmd.Process.Pid
 	}
 	fd.Close()
+
+	// Monitor virtiofsd's stderr and stop sandbox if virtiofsd quits
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			q.Logger().WithField("source", "virtiofsd").Info(scanner.Text())
+		}
+		q.Logger().Info("virtiofsd quits")
+		// Wait to release resources of virtiofsd process
+		cmd.Process.Wait()
+		q.stopSandbox()
+	}()
 	return err
 }
 
