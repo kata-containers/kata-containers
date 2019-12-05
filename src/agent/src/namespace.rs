@@ -17,10 +17,10 @@ use crate::mount::{BareMount, FLAGS};
 use slog::Logger;
 
 //use container::Process;
-const PERSISTENT_NS_DIR: &'static str = "/var/run/sandbox-ns";
-pub const NSTYPEIPC: &'static str = "ipc";
-pub const NSTYPEUTS: &'static str = "uts";
-pub const NSTYPEPID: &'static str = "pid";
+const PERSISTENT_NS_DIR: &str = "/var/run/sandbox-ns";
+pub const NSTYPEIPC: &str = "ipc";
+pub const NSTYPEUTS: &str = "uts";
+pub const NSTYPEPID: &str = "pid";
 
 pub fn get_current_thread_ns_path(ns_type: &str) -> String {
     format!(
@@ -64,7 +64,7 @@ impl Namespace {
         self
     }
 
-    // setup_persistent_ns creates persistent namespace without switchin to it.
+    // setup_persistent_ns creates persistent namespace without switching to it.
     // Note, pid namespaces cannot be persisted.
     pub fn setup(mut self) -> Result<Self, String> {
         if let Err(err) = fs::create_dir_all(&self.persistent_ns_dir) {
@@ -81,14 +81,9 @@ impl Namespace {
             return Err(err.to_string());
         }
 
-        self.path = new_ns_path.into_os_string().into_string().unwrap();
+        self.path = new_ns_path.clone().into_os_string().into_string().unwrap();
 
         let new_thread = thread::spawn(move || {
-            let ns_path = ns_path.clone();
-            let ns_type = ns_type.clone();
-            let logger = logger;
-            let new_ns_path = ns_path.join(&ns_type.get());
-
             let origin_ns_path = get_current_thread_ns_path(&ns_type.get());
 
             let _origin_ns_fd = match File::open(Path::new(&origin_ns_path)) {
@@ -107,8 +102,6 @@ impl Namespace {
             let source: &str = origin_ns_path.as_str();
             let destination: &str = new_ns_path.as_path().to_str().unwrap_or("none");
 
-            let _recursive = true;
-            let _readonly = true;
             let mut flags = MsFlags::empty();
 
             match FLAGS.get("rbind") {
@@ -120,13 +113,13 @@ impl Namespace {
             };
 
             let bare_mount = BareMount::new(source, destination, "none", flags, "", &logger);
-
             if let Err(err) = bare_mount.mount() {
                 return Err(format!(
                     "Failed to mount {} to {} with err:{:?}",
                     source, destination, err
                 ));
             }
+
             Ok(())
         });
 
@@ -152,11 +145,11 @@ enum NamespaceType {
 
 impl NamespaceType {
     /// Get the string representation of the namespace type.
-    pub fn get(&self) -> String {
+    pub fn get(&self) -> &str {
         match *self {
-            Self::IPC => String::from("ipc"),
-            Self::UTS => String::from("uts"),
-            Self::PID => String::from("pid"),
+            Self::IPC => "ipc",
+            Self::UTS => "uts",
+            Self::PID => "pid",
         }
     }
 

@@ -9,7 +9,7 @@ use std::io;
 use std::io::Write;
 use std::process;
 use std::result;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 // XXX: 'writer' param used to make testing possible.
 pub fn create_logger<W>(name: &str, source: &str, level: slog::Level, writer: W) -> slog::Logger
@@ -41,16 +41,6 @@ where
     )
 }
 
-impl KV for HashSerializer {
-    fn serialize(&self, _record: &Record, serializer: &mut dyn slog::Serializer) -> slog::Result {
-        for (key, value) in self.fields.clone().into_iter() {
-            serializer.emit_str(Key::from(key), &value)?;
-        }
-
-        Ok(())
-    }
-}
-
 // Used to convert an slog::OwnedKVList into a hash map.
 struct HashSerializer {
     fields: HashMap<String, String>,
@@ -77,6 +67,16 @@ impl HashSerializer {
     }
 }
 
+impl KV for HashSerializer {
+    fn serialize(&self, _record: &Record, serializer: &mut dyn slog::Serializer) -> slog::Result {
+        for (key, value) in self.fields.iter() {
+            serializer.emit_str(Key::from(key.to_string()), value)?;
+        }
+
+        Ok(())
+    }
+}
+
 impl slog::Serializer for HashSerializer {
     fn emit_arguments(&mut self, key: Key, value: &std::fmt::Arguments) -> slog::Result {
         self.add_field(format!("{}", key), format!("{}", value));
@@ -90,13 +90,13 @@ struct UniqueDrain<D> {
 
 impl<D> UniqueDrain<D> {
     fn new(drain: D) -> Self {
-        UniqueDrain { drain: drain }
+        UniqueDrain { drain }
     }
 }
 
 impl<D> Drain for UniqueDrain<D>
 where
-    D: slog::Drain,
+    D: Drain,
 {
     type Ok = ();
     type Err = io::Error;
@@ -136,21 +136,19 @@ where
 // specified in the struct.
 struct RuntimeLevelFilter<D> {
     drain: D,
-    level: Arc<Mutex<slog::Level>>,
+    level: Mutex<slog::Level>,
 }
 
 impl<D> RuntimeLevelFilter<D> {
     fn new(drain: D, level: slog::Level) -> Self {
         RuntimeLevelFilter {
-            drain: drain,
-            level: Arc::new(Mutex::new(level)),
+            drain,
+            level: Mutex::new(level),
         }
     }
 
     fn set_level(&self, level: slog::Level) {
-        let level_ref = self.level.clone();
-
-        let mut log_level = level_ref.lock().unwrap();
+        let mut log_level = self.level.lock().unwrap();
 
         *log_level = level;
     }
@@ -168,9 +166,7 @@ where
         record: &slog::Record,
         values: &slog::OwnedKVList,
     ) -> result::Result<Self::Ok, Self::Err> {
-        let level_ref = self.level.clone();
-
-        let log_level = level_ref.lock().unwrap();
+        let log_level = self.level.lock().unwrap();
 
         if record.level().is_at_least(*log_level) {
             self.drain.log(record, values)?;
