@@ -1,11 +1,13 @@
 # Kata Containers Architecture
 
+
 * [Overview](#overview)
-* [Hypervisor](#hypervisor)
-  * [Assets](#assets)
+* [Virtualization](#virtualization)
+* [Guest assets](#guest-assets)
     * [Guest kernel](#guest-kernel)
-    * [Root filesystem image](#root-filesystem-image)
-    * [Initrd image](#initrd-image)
+    * [Guest Image](#guest-image)
+      * [Root filesystem image](#root-filesystem-image)
+      * [Initrd image](#initrd-image)
 * [Agent](#agent)
 * [Runtime](#runtime)
     * [Configuration](#configuration)
@@ -101,59 +103,17 @@ configured, `virtio-scsi` will be used. In all other cases a 9pfs VIRTIO mount p
 will be used. `kata-agent` uses this mount point as the root filesystem for the
 container processes.
 
-## Hypervisor
+## Virtualization
 
-Kata Containers is designed to support multiple virtual machine monitors (VMMs) and hypervisors.
+How Kata Containers maps container concepts to virtual machine technologies, and how this is realized in the multiple
+hypervisors and VMMs that Kata supports is described within the [virtualization documentation](./virtualization.md)
 
-As of the 1.9 release, Kata Containers supports [QEMU](http://www.qemu-project.org/)/[KVM](http://www.linux-kvm.org/page/Main_Page),
-[Firecracker](https://github.com/firecracker-microvm/firecracker)/KVM, as well as the [ACRN hypervisor](https://projectacrn.org/).
-
-### QEMU/KVM
-
-Depending on the host architecture, Kata Containers supports various machine types,
-for example `pc` and `q35` on x86 systems, `virt` on ARM systems and `pseries` on IBM Power systems. The default Kata Containers
-machine type is `pc`. The machine type and its [`Machine accelerators`](#machine-accelerators) can
-be changed by editing the runtime [`configuration`](#configuration) file.
-
-The following QEMU features are used in Kata Containers to manage resource constraints, improve
-boot time and reduce memory footprint:
-
-- Machine accelerators.
-- Hot plug devices.
-
-Each feature is documented below.
-
-#### Machine accelerators
-
-Machine accelerators are architecture specific and can be used to improve the performance
-and enable specific features of the machine types. The following machine accelerators
-are used in Kata Containers:
-
-- NVDIMM: This machine accelerator is x86 specific and only supported by `pc` and
-`q35` machine types. `nvdimm` is used to provide the root filesystem as a persistent
-memory device to the Virtual Machine.
-
-#### Hot plug devices
-
-The Kata Containers VM starts with a minimum amount of resources, allowing for faster boot time and a reduction in memory footprint.  As the container launch progresses, devices are hotplugged to the VM. For example, when a CPU constraint is specified which includes additional CPUs, they can be hot added.  Kata Containers has support for hot-adding the following devices:
-- Virtio block
-- Virtio SCSI
-- VFIO
-- CPU
-
-### Firecracker/KVM
-
-As of the 1.5 release of Kata Containers, Firecracker VMM is supported. Because of its limited
-device support, Firecracker does not support filesystem sharing (good for security and footprint!) As a result,
-only block-based storage drivers are supported. Similarly, Firecracker does not support updating
-container resources after boot (there is not any device hotplug support), nor does it support VFIO. 
-
-### Assets
+## Guest assets
 
 The hypervisor will launch a virtual machine which includes a minimal guest kernel
 and a guest image.
 
-#### Guest kernel
+### Guest kernel
 
 The guest kernel is passed to the hypervisor and used to boot the virtual
 machine. The default kernel provided in Kata Containers is highly optimized for
@@ -161,11 +121,11 @@ kernel boot time and minimal memory footprint, providing only those services
 required by a container workload. This is based on a very current upstream Linux
 kernel.
 
-#### Guest image
+### Guest image
 
 Kata Containers supports both an `initrd` and `rootfs` based minimal guest image.
 
-##### Root filesystem image
+#### Root filesystem image
 
 The default packaged root filesystem image, sometimes referred to as the "mini O/S", is a
 highly optimized container bootstrap system based on [Clear Linux](https://clearlinux.org/). It provides an extremely minimal environment and
@@ -187,7 +147,7 @@ For example, when `docker run -ti ubuntu date` is run:
   new context, first setting the root filesystem to the expected Ubuntu\* root
   filesystem.
 
-##### Initrd image
+#### Initrd image
 
 A compressed `cpio(1)` archive, created from a rootfs which is loaded into memory and used as part of the Linux startup process. During startup, the kernel unpacks it into a special instance of a `tmpfs` that becomes the initial root filesystem.
 
