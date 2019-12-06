@@ -77,7 +77,7 @@ run_workload() {
 
 	# Run the image and command and capture the results into an array...
 	declare workload_result
-	readarray -n 0 workload_result < <(docker run --rm --runtime=${RUNTIME} ${NETWORK_OPTION} ${IMAGE} sh -c "$DATECMD $DMESGCMD")
+	readarray -n 0 workload_result < <(docker run --cap-add SYSLOG --rm --runtime=${RUNTIME} ${NETWORK_OPTION} ${IMAGE} sh -c "$DATECMD $DMESGCMD")
 
 	end_time=$($DATECMD)
 
