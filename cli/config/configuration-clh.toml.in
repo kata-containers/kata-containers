@@ -62,15 +62,18 @@ default_memory = @DEFMEMSZ@
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
 
+# Default size of DAX cache in MiB
+virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
+
 # cloud-hypervisor prefers virtiofs caching (dax) for performance reasons
 virtio_fs_cache = "always"
 
 # This option changes the default hypervisor and kernel parameters
 # to enable debug output where available. This extra output is added
 # to the proxy logs, but only when proxy debug is also enabled.
-# 
+#
 # Default false
-# enable_debug = true
+#enable_debug = true
 
 [proxy.@PROJECT_TYPE@]
 path = "@PROXYPATH@"
