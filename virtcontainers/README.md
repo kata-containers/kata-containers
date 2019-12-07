@@ -79,6 +79,10 @@ The `virtcontainers` package relies on hypervisors to start and stop virtual mac
 sandboxes will be running. An hypervisor is defined by an Hypervisor interface implementation,
 and the default implementation is the QEMU one.
 
+### Update cloud-hypervisor client code
+
+See [docs](pkg/cloud-hypervisor/README.md)
+
 ## Agents
 
 During the lifecycle of a container, the runtime running on the host needs to interact with

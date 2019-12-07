@@ -1,0 +1,634 @@
+openapi: 3.0.1
+info:
+  description: Local HTTP based API for managing and inspecting a cloud-hypervisor
+    virtual machine.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  title: Cloud Hypervisor API
+  version: 0.3.0
+servers:
+- url: http://localhost/api/v1
+paths:
+  /vmm.ping:
+    get:
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VmmPingResponse'
+          description: The VMM information
+      summary: Ping the VMM to check for API server availability
+  /vmm.shutdown:
+    put:
+      operationId: shutdownVMM
+      responses:
+        204:
+          description: The VMM successfully shutdown.
+      summary: Shuts the cloud-hypervisor VMM.
+  /vm.info:
+    get:
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VmInfo'
+          description: The VM information
+      summary: Returns general information about the cloud-hypervisor Virtual Machine
+        (VM) instance.
+  /vm.create:
+    put:
+      operationId: createVM
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmConfig'
+        description: The VM configuration
+        required: true
+      responses:
+        204:
+          description: The VM instance was successfully created.
+      summary: Create the cloud-hypervisor Virtual Machine (VM) instance. The instance
+        is not booted, only created.
+  /vm.delete:
+    put:
+      operationId: deleteVM
+      responses:
+        204:
+          description: The VM instance was successfully deleted.
+      summary: Delete the cloud-hypervisor Virtual Machine (VM) instance.
+  /vm.boot:
+    put:
+      operationId: bootVM
+      responses:
+        204:
+          description: The VM instance successfully booted.
+        404:
+          description: The VM instance could not boot because it is not created yet
+      summary: Boot the previously created VM instance.
+  /vm.pause:
+    put:
+      operationId: pauseVM
+      responses:
+        204:
+          description: The VM instance successfully paused.
+        404:
+          description: The VM instance could not pause because it is not created yet
+        405:
+          description: The VM instance could not pause because it is not booted.
+      summary: Pause a previously booted VM instance.
+  /vm.resume:
+    put:
+      operationId: resumeVM
+      responses:
+        204:
+          description: The VM instance successfully paused.
+        404:
+          description: The VM instance could not resume because it is not booted yet
+        405:
+          description: The VM instance could not resume because it is not paused.
+      summary: Resume a previously paused VM instance.
+  /vm.shutdown:
+    put:
+      operationId: shutdownVM
+      responses:
+        204:
+          description: The VM instance successfully shut down.
+        404:
+          description: The VM instance could not shut down because is not created.
+        405:
+          description: The VM instance could not shut down because it is not started.
+      summary: Shut the VM instance down.
+  /vm.reboot:
+    put:
+      operationId: rebootVM
+      responses:
+        204:
+          description: The VM instance successfully rebooted.
+        404:
+          description: The VM instance could not reboot because it is not created.
+        405:
+          description: The VM instance could not reboot because it is not booted.
+      summary: Reboot the VM instance.
+components:
+  schemas:
+    VmmPingResponse:
+      description: Virtual Machine Monitor information
+      example:
+        version: version
+      properties:
+        version:
+          type: string
+      required:
+      - version
+      type: object
+    VmInfo:
+      description: Virtual Machine information
+      example:
+        state: Created
+        config:
+          console:
+            mode: "false"
+            file: file
+            iommu: false
+          memory:
+            mergeable: false
+            file: file
+            size: 6
+          disks:
+          - path: path
+            iommu: false
+          - path: path
+            iommu: false
+          cpus:
+            cpu_count: 1
+          devices:
+          - path: path
+            iommu: false
+          - path: path
+            iommu: false
+          kernel:
+            path: path
+          vhost_user_blk:
+          - wce: true
+            vu_cfg:
+              sock: sock
+              num_queues: 7
+              queue:size: 9
+          - wce: true
+            vu_cfg:
+              sock: sock
+              num_queues: 7
+              queue:size: 9
+          rng:
+            iommu: false
+            src: /dev/urandom
+          fs:
+          - sock: sock
+            num_queues: 1
+            queue_size: 5
+            cache_size: 5
+            tag: tag
+          - sock: sock
+            num_queues: 1
+            queue_size: 5
+            cache_size: 5
+            tag: tag
+          vhost_user_net:
+          - vu_cfg:
+              sock: sock
+              num_queues: 7
+              queue:size: 9
+            mac: mac
+          - vu_cfg:
+              sock: sock
+              num_queues: 7
+              queue:size: 9
+            mac: mac
+          vsock:
+          - sock: sock
+            iommu: false
+            cid: 3
+          - sock: sock
+            iommu: false
+            cid: 3
+          pmem:
+          - mergeable: false
+            file: file
+            size: 2
+            iommu: false
+          - mergeable: false
+            file: file
+            size: 2
+            iommu: false
+          cmdline:
+            args: args
+          iommu: false
+          serial:
+            mode: "false"
+            file: file
+            iommu: false
+          net:
+          - tap: tap
+            iommu: false
+            ip: ip
+            mac: mac
+            mask: mask
+          - tap: tap
+            iommu: false
+            ip: ip
+            mac: mac
+            mask: mask
+      properties:
+        config:
+          $ref: '#/components/schemas/VmConfig'
+        state:
+          enum:
+          - Created
+          - Booted
+          - Shutdown
+          type: string
+      required:
+      - config
+      - state
+      type: object
+    VmConfig:
+      description: Virtual machine configuration
+      example:
+        console:
+          mode: "false"
+          file: file
+          iommu: false
+        memory:
+          mergeable: false
+          file: file
+          size: 6
+        disks:
+        - path: path
+          iommu: false
+        - path: path
+          iommu: false
+        cpus:
+          cpu_count: 1
+        devices:
+        - path: path
+          iommu: false
+        - path: path
+          iommu: false
+        kernel:
+          path: path
+        vhost_user_blk:
+        - wce: true
+          vu_cfg:
+            sock: sock
+            num_queues: 7
+            queue:size: 9
+        - wce: true
+          vu_cfg:
+            sock: sock
+            num_queues: 7
+            queue:size: 9
+        rng:
+          iommu: false
+          src: /dev/urandom
+        fs:
+        - sock: sock
+          num_queues: 1
+          queue_size: 5
+          cache_size: 5
+          tag: tag
+        - sock: sock
+          num_queues: 1
+          queue_size: 5
+          cache_size: 5
+          tag: tag
+        vhost_user_net:
+        - vu_cfg:
+            sock: sock
+            num_queues: 7
+            queue:size: 9
+          mac: mac
+        - vu_cfg:
+            sock: sock
+            num_queues: 7
+            queue:size: 9
+          mac: mac
+        vsock:
+        - sock: sock
+          iommu: false
+          cid: 3
+        - sock: sock
+          iommu: false
+          cid: 3
+        pmem:
+        - mergeable: false
+          file: file
+          size: 2
+          iommu: false
+        - mergeable: false
+          file: file
+          size: 2
+          iommu: false
+        cmdline:
+          args: args
+        iommu: false
+        serial:
+          mode: "false"
+          file: file
+          iommu: false
+        net:
+        - tap: tap
+          iommu: false
+          ip: ip
+          mac: mac
+          mask: mask
+        - tap: tap
+          iommu: false
+          ip: ip
+          mac: mac
+          mask: mask
+      properties:
+        cpus:
+          $ref: '#/components/schemas/CpuConfig'
+        memory:
+          $ref: '#/components/schemas/MemoryConfig'
+        kernel:
+          $ref: '#/components/schemas/KernelConfig'
+        cmdline:
+          $ref: '#/components/schemas/CmdLineConfig'
+        disks:
+          items:
+            $ref: '#/components/schemas/DiskConfig'
+          type: array
+        net:
+          items:
+            $ref: '#/components/schemas/NetConfig'
+          type: array
+        rng:
+          $ref: '#/components/schemas/RngConfig'
+        fs:
+          items:
+            $ref: '#/components/schemas/FsConfig'
+          type: array
+        pmem:
+          items:
+            $ref: '#/components/schemas/PmemConfig'
+          type: array
+        serial:
+          $ref: '#/components/schemas/ConsoleConfig'
+        console:
+          $ref: '#/components/schemas/ConsoleConfig'
+        devices:
+          items:
+            $ref: '#/components/schemas/DeviceConfig'
+          type: array
+        vhost_user_net:
+          items:
+            $ref: '#/components/schemas/VhostUserNetConfig'
+          type: array
+        vhost_user_blk:
+          items:
+            $ref: '#/components/schemas/VhostUserBlkConfig'
+          type: array
+        vsock:
+          items:
+            $ref: '#/components/schemas/VsockConfig'
+          type: array
+        iommu:
+          default: false
+          type: boolean
+      required:
+      - cmdline
+      - kernel
+      type: object
+    CpuConfig:
+      example:
+        cpu_count: 1
+      properties:
+        cpu_count:
+          default: 1
+          minimum: 1
+          type: integer
+      required:
+      - cpu_count
+      type: object
+    MemoryConfig:
+      example:
+        mergeable: false
+        file: file
+        size: 6
+      properties:
+        size:
+          format: int64
+          type: integer
+        file:
+          type: string
+        mergeable:
+          default: false
+          type: boolean
+      required:
+      - size
+      type: object
+    KernelConfig:
+      example:
+        path: path
+      properties:
+        path:
+          type: string
+      required:
+      - path
+      type: object
+    CmdLineConfig:
+      example:
+        args: args
+      properties:
+        args:
+          type: string
+      required:
+      - args
+      type: object
+    DiskConfig:
+      example:
+        path: path
+        iommu: false
+      properties:
+        path:
+          type: string
+        iommu:
+          default: false
+          type: boolean
+      required:
+      - path
+      type: object
+    NetConfig:
+      example:
+        tap: tap
+        iommu: false
+        ip: ip
+        mac: mac
+        mask: mask
+      properties:
+        tap:
+          type: string
+        ip:
+          type: string
+        mask:
+          type: string
+        mac:
+          type: string
+        iommu:
+          default: false
+          type: boolean
+      required:
+      - ip
+      - mac
+      - mask
+      type: object
+    RngConfig:
+      example:
+        iommu: false
+        src: /dev/urandom
+      properties:
+        src:
+          default: /dev/urandom
+          type: string
+        iommu:
+          default: false
+          type: boolean
+      required:
+      - src
+      type: object
+    FsConfig:
+      example:
+        sock: sock
+        num_queues: 1
+        queue_size: 5
+        cache_size: 5
+        tag: tag
+      properties:
+        tag:
+          type: string
+        sock:
+          type: string
+        num_queues:
+          type: integer
+        queue_size:
+          type: integer
+        cache_size:
+          format: int64
+          type: integer
+      required:
+      - num_queues
+      - queue_size
+      - sock
+      - tag
+      type: object
+    PmemConfig:
+      example:
+        mergeable: false
+        file: file
+        size: 2
+        iommu: false
+      properties:
+        file:
+          type: string
+        size:
+          format: int64
+          type: integer
+        iommu:
+          default: false
+          type: boolean
+        mergeable:
+          default: false
+          type: boolean
+      required:
+      - file
+      - size
+      type: object
+    ConsoleConfig:
+      example:
+        mode: "false"
+        file: file
+        iommu: false
+      properties:
+        file:
+          type: string
+        mode:
+          enum:
+          - "false"
+          - Tty
+          - File
+          - None
+          type: string
+        iommu:
+          default: false
+          type: boolean
+      required:
+      - mode
+      type: object
+    DeviceConfig:
+      example:
+        path: path
+        iommu: false
+      properties:
+        path:
+          type: string
+        iommu:
+          default: false
+          type: boolean
+      required:
+      - path
+      type: object
+    VhostUserConfig:
+      example:
+        sock: sock
+        num_queues: 7
+        queue:size: 9
+      properties:
+        sock:
+          type: string
+        num_queues:
+          type: integer
+        queue:size:
+          type: integer
+      required:
+      - num_queues
+      - queue_size
+      - sock
+      type: object
+    VhostUserNetConfig:
+      example:
+        vu_cfg:
+          sock: sock
+          num_queues: 7
+          queue:size: 9
+        mac: mac
+      properties:
+        mac:
+          type: string
+        vu_cfg:
+          $ref: '#/components/schemas/VhostUserConfig'
+      required:
+      - mac
+      - vu_cfg
+      type: object
+    VhostUserBlkConfig:
+      example:
+        wce: true
+        vu_cfg:
+          sock: sock
+          num_queues: 7
+          queue:size: 9
+      properties:
+        wce:
+          type: boolean
+        vu_cfg:
+          $ref: '#/components/schemas/VhostUserConfig'
+      required:
+      - vu_cfg
+      - wce
+      type: object
+    VsockConfig:
+      example:
+        sock: sock
+        iommu: false
+        cid: 3
+      properties:
+        cid:
+          description: Guest Vsock CID
+          format: int64
+          minimum: 3
+          type: integer
+        sock:
+          description: Path to UNIX domain socket, used to proxy vsock connections.
+          type: string
+        iommu:
+          default: false
+          type: boolean
+      required:
+      - cid
+      - sock
+      type: object
