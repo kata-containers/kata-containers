@@ -489,7 +489,7 @@ func TestConstraintGRPCSpec(t *testing.T) {
 		},
 	}
 
-	constraintGRPCSpec(g, true, true)
+	constraintGRPCSpec(g, true)
 
 	// check nil fields
 	assert.Nil(g.Hooks)
