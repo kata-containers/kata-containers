@@ -41,6 +41,7 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**ShutdownVM**](docs/DefaultApi.md#shutdownvm) | **Put** /vm.shutdown | Shut the VM instance down.
 *DefaultApi* | [**ShutdownVMM**](docs/DefaultApi.md#shutdownvmm) | **Put** /vmm.shutdown | Shuts the cloud-hypervisor VMM.
 *DefaultApi* | [**VmInfoGet**](docs/DefaultApi.md#vminfoget) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
+*DefaultApi* | [**VmResizePut**](docs/DefaultApi.md#vmresizeput) | **Put** /vm.resize | Resize the VM
 *DefaultApi* | [**VmmPingGet**](docs/DefaultApi.md#vmmpingget) | **Get** /vmm.ping | Ping the VMM to check for API server availability
 
 
@@ -48,7 +49,7 @@ Class | Method | HTTP request | Description
 
  - [CmdLineConfig](docs/CmdLineConfig.md)
  - [ConsoleConfig](docs/ConsoleConfig.md)
- - [CpuConfig](docs/CpuConfig.md)
+ - [CpusConfig](docs/CpusConfig.md)
  - [DeviceConfig](docs/DeviceConfig.md)
  - [DiskConfig](docs/DiskConfig.md)
  - [FsConfig](docs/FsConfig.md)
@@ -58,10 +59,10 @@ Class | Method | HTTP request | Description
  - [PmemConfig](docs/PmemConfig.md)
  - [RngConfig](docs/RngConfig.md)
  - [VhostUserBlkConfig](docs/VhostUserBlkConfig.md)
- - [VhostUserConfig](docs/VhostUserConfig.md)
  - [VhostUserNetConfig](docs/VhostUserNetConfig.md)
  - [VmConfig](docs/VmConfig.md)
  - [VmInfo](docs/VmInfo.md)
+ - [VmResize](docs/VmResize.md)
  - [VmmPingResponse](docs/VmmPingResponse.md)
  - [VsockConfig](docs/VsockConfig.md)
 

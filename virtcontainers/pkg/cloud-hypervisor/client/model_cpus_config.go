@@ -8,9 +8,8 @@
  */
 
 package openapi
-// VhostUserConfig struct for VhostUserConfig
-type VhostUserConfig struct {
-	Sock string `json:"sock"`
-	NumQueues int32 `json:"num_queues"`
-	Queuesize int32 `json:"queue:size,omitempty"`
+// CpusConfig struct for CpusConfig
+type CpusConfig struct {
+	BootVcpus int32 `json:"boot_vcpus"`
+	MaxVcpus int32 `json:"max_vcpus"`
 }
