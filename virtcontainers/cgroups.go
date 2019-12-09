@@ -15,6 +15,12 @@ import (
 	"strings"
 
 	"github.com/containerd/cgroups"
+	"github.com/kata-containers/runtime/pkg/rootless"
+	libcontcgroups "github.com/opencontainers/runc/libcontainer/cgroups"
+	libcontcgroupsfs "github.com/opencontainers/runc/libcontainer/cgroups/fs"
+	libcontcgroupssystemd "github.com/opencontainers/runc/libcontainer/cgroups/systemd"
+	"github.com/opencontainers/runc/libcontainer/configs"
+	specconv "github.com/opencontainers/runc/libcontainer/specconv"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -192,4 +198,47 @@ func isSystemdCgroup(cgroupPath string) bool {
 	// if found string is equal to cgroupPath then
 	// it's a correct systemd cgroup path.
 	return found != nil && cgroupPath[found[0]:found[1]] == cgroupPath
+}
+
+func newCgroupManager(cgroups *configs.Cgroup, cgroupPaths map[string]string, spec *specs.Spec) (libcontcgroups.Manager, error) {
+	var err error
+
+	rootless := rootless.IsRootless()
+	systemdCgroup := isSystemdCgroup(spec.Linux.CgroupsPath)
+
+	// Create a new cgroup if the current one is nil
+	// this cgroups must be saved later
+	if cgroups == nil {
+		if cgroups, err = specconv.CreateCgroupConfig(&specconv.CreateOpts{
+			// cgroup name is taken from spec
+			CgroupName:       "",
+			UseSystemdCgroup: systemdCgroup,
+			Spec:             spec,
+			RootlessCgroups:  rootless,
+		}); err != nil {
+			return nil, fmt.Errorf("Could not create cgroup config: %v", err)
+		}
+	}
+
+	// Set cgroupPaths to nil when the map is empty, it can and will be
+	// populated by `Manager.Apply()` when the runtime or any other process
+	// is moved to the cgroup. See sandbox.setupSandboxCgroup().
+	if len(cgroupPaths) == 0 {
+		cgroupPaths = nil
+	}
+
+	if systemdCgroup {
+		systemdCgroupFunc, err := libcontcgroupssystemd.NewSystemdCgroupsManager()
+		if err != nil {
+			return nil, fmt.Errorf("Could not create systemd cgroup manager: %v", err)
+		}
+		libcontcgroupssystemd.UseSystemd()
+		return systemdCgroupFunc(cgroups, cgroupPaths), nil
+	}
+
+	return &libcontcgroupsfs.Manager{
+		Cgroups:  cgroups,
+		Rootless: rootless,
+		Paths:    cgroupPaths,
+	}, nil
 }
