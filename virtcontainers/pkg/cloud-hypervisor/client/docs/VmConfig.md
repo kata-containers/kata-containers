@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Cpus** | [**CpuConfig**](CpuConfig.md) |  | [optional] 
+**Cpus** | [**CpusConfig**](CpusConfig.md) |  | [optional] 
 **Memory** | [**MemoryConfig**](MemoryConfig.md) |  | [optional] 
 **Kernel** | [**KernelConfig**](KernelConfig.md) |  | 
 **Cmdline** | [**CmdLineConfig**](CmdLineConfig.md) |  | 

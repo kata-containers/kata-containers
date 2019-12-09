@@ -11,8 +11,8 @@ package openapi
 // NetConfig struct for NetConfig
 type NetConfig struct {
 	Tap string `json:"tap,omitempty"`
-	Ip string `json:"ip"`
-	Mask string `json:"mask"`
-	Mac string `json:"mac"`
+	Ip string `json:"ip,omitempty"`
+	Mask string `json:"mask,omitempty"`
+	Mac string `json:"mac,omitempty"`
 	Iommu bool `json:"iommu,omitempty"`
 }

@@ -113,6 +113,21 @@ paths:
         405:
           description: The VM instance could not reboot because it is not booted.
       summary: Reboot the VM instance.
+  /vm.resize:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmResize'
+        description: The target size for the VM
+        required: true
+      responses:
+        204:
+          description: The VM instance was successfully resized.
+        404:
+          description: The VM instance could not be resized because it is not created.
+      summary: Resize the VM
 components:
   schemas:
     VmmPingResponse:
@@ -137,14 +152,15 @@ components:
           memory:
             mergeable: false
             file: file
-            size: 6
+            size: 1
           disks:
           - path: path
             iommu: false
           - path: path
             iommu: false
           cpus:
-            cpu_count: 1
+            boot_vcpus: 1
+            max_vcpus: 1
           devices:
           - path: path
             iommu: false
@@ -153,40 +169,38 @@ components:
           kernel:
             path: path
           vhost_user_blk:
-          - wce: true
-            vu_cfg:
-              sock: sock
-              num_queues: 7
-              queue:size: 9
-          - wce: true
-            vu_cfg:
-              sock: sock
-              num_queues: 7
-              queue:size: 9
+          - sock: sock
+            num_queues: 2
+            queue_size: 4
+            wce: true
+          - sock: sock
+            num_queues: 2
+            queue_size: 4
+            wce: true
           rng:
             iommu: false
             src: /dev/urandom
           fs:
           - sock: sock
-            num_queues: 1
+            num_queues: 5
             queue_size: 5
-            cache_size: 5
+            cache_size: 2
+            dax: true
             tag: tag
           - sock: sock
-            num_queues: 1
+            num_queues: 5
             queue_size: 5
-            cache_size: 5
+            cache_size: 2
+            dax: true
             tag: tag
           vhost_user_net:
-          - vu_cfg:
-              sock: sock
-              num_queues: 7
-              queue:size: 9
+          - sock: sock
+            num_queues: 9
+            queue_size: 3
             mac: mac
-          - vu_cfg:
-              sock: sock
-              num_queues: 7
-              queue:size: 9
+          - sock: sock
+            num_queues: 9
+            queue_size: 3
             mac: mac
           vsock:
           - sock: sock
@@ -198,11 +212,11 @@ components:
           pmem:
           - mergeable: false
             file: file
-            size: 2
+            size: 7
             iommu: false
           - mergeable: false
             file: file
-            size: 2
+            size: 7
             iommu: false
           cmdline:
             args: args
@@ -214,14 +228,14 @@ components:
           net:
           - tap: tap
             iommu: false
-            ip: ip
+            ip: 192.168.249.1
             mac: mac
-            mask: mask
+            mask: 255.255.255.0
           - tap: tap
             iommu: false
-            ip: ip
+            ip: 192.168.249.1
             mac: mac
-            mask: mask
+            mask: 255.255.255.0
       properties:
         config:
           $ref: '#/components/schemas/VmConfig'
@@ -245,14 +259,15 @@ components:
         memory:
           mergeable: false
           file: file
-          size: 6
+          size: 1
         disks:
         - path: path
           iommu: false
         - path: path
           iommu: false
         cpus:
-          cpu_count: 1
+          boot_vcpus: 1
+          max_vcpus: 1
         devices:
         - path: path
           iommu: false
@@ -261,40 +276,38 @@ components:
         kernel:
           path: path
         vhost_user_blk:
-        - wce: true
-          vu_cfg:
-            sock: sock
-            num_queues: 7
-            queue:size: 9
-        - wce: true
-          vu_cfg:
-            sock: sock
-            num_queues: 7
-            queue:size: 9
+        - sock: sock
+          num_queues: 2
+          queue_size: 4
+          wce: true
+        - sock: sock
+          num_queues: 2
+          queue_size: 4
+          wce: true
         rng:
           iommu: false
           src: /dev/urandom
         fs:
         - sock: sock
-          num_queues: 1
+          num_queues: 5
           queue_size: 5
-          cache_size: 5
+          cache_size: 2
+          dax: true
           tag: tag
         - sock: sock
-          num_queues: 1
+          num_queues: 5
           queue_size: 5
-          cache_size: 5
+          cache_size: 2
+          dax: true
           tag: tag
         vhost_user_net:
-        - vu_cfg:
-            sock: sock
-            num_queues: 7
-            queue:size: 9
+        - sock: sock
+          num_queues: 9
+          queue_size: 3
           mac: mac
-        - vu_cfg:
-            sock: sock
-            num_queues: 7
-            queue:size: 9
+        - sock: sock
+          num_queues: 9
+          queue_size: 3
           mac: mac
         vsock:
         - sock: sock
@@ -306,11 +319,11 @@ components:
         pmem:
         - mergeable: false
           file: file
-          size: 2
+          size: 7
           iommu: false
         - mergeable: false
           file: file
-          size: 2
+          size: 7
           iommu: false
         cmdline:
           args: args
@@ -322,17 +335,17 @@ components:
         net:
         - tap: tap
           iommu: false
-          ip: ip
+          ip: 192.168.249.1
           mac: mac
-          mask: mask
+          mask: 255.255.255.0
         - tap: tap
           iommu: false
-          ip: ip
+          ip: 192.168.249.1
           mac: mac
-          mask: mask
+          mask: 255.255.255.0
       properties:
         cpus:
-          $ref: '#/components/schemas/CpuConfig'
+          $ref: '#/components/schemas/CpusConfig'
         memory:
           $ref: '#/components/schemas/MemoryConfig'
         kernel:
@@ -384,22 +397,28 @@ components:
       - cmdline
       - kernel
       type: object
-    CpuConfig:
+    CpusConfig:
       example:
-        cpu_count: 1
+        boot_vcpus: 1
+        max_vcpus: 1
       properties:
-        cpu_count:
+        boot_vcpus:
+          default: 1
+          minimum: 1
+          type: integer
+        max_vcpus:
           default: 1
           minimum: 1
           type: integer
       required:
-      - cpu_count
+      - boot_vcpus
+      - max_vcpus
       type: object
     MemoryConfig:
       example:
         mergeable: false
         file: file
-        size: 6
+        size: 1
       properties:
         size:
           format: int64
@@ -447,25 +466,24 @@ components:
       example:
         tap: tap
         iommu: false
-        ip: ip
+        ip: 192.168.249.1
         mac: mac
-        mask: mask
+        mask: 255.255.255.0
       properties:
         tap:
+          default: ""
           type: string
         ip:
+          default: 192.168.249.1
           type: string
         mask:
+          default: 255.255.255.0
           type: string
         mac:
           type: string
         iommu:
           default: false
           type: boolean
-      required:
-      - ip
-      - mac
-      - mask
       type: object
     RngConfig:
       example:
@@ -484,9 +502,10 @@ components:
     FsConfig:
       example:
         sock: sock
-        num_queues: 1
+        num_queues: 5
         queue_size: 5
-        cache_size: 5
+        cache_size: 2
+        dax: true
         tag: tag
       properties:
         tag:
@@ -494,15 +513,18 @@ components:
         sock:
           type: string
         num_queues:
+          default: 1
           type: integer
         queue_size:
+          default: 1024
           type: integer
+        dax:
+          default: true
+          type: boolean
         cache_size:
           format: int64
           type: integer
       required:
-      - num_queues
-      - queue_size
       - sock
       - tag
       type: object
@@ -510,7 +532,7 @@ components:
       example:
         mergeable: false
         file: file
-        size: 2
+        size: 7
         iommu: false
       properties:
         file:
@@ -562,54 +584,46 @@ components:
       required:
       - path
       type: object
-    VhostUserConfig:
+    VhostUserNetConfig:
       example:
         sock: sock
-        num_queues: 7
-        queue:size: 9
+        num_queues: 9
+        queue_size: 3
+        mac: mac
       properties:
         sock:
           type: string
         num_queues:
+          default: 2
           type: integer
-        queue:size:
+        queue_size:
+          default: 256
           type: integer
-      required:
-      - num_queues
-      - queue_size
-      - sock
-      type: object
-    VhostUserNetConfig:
-      example:
-        vu_cfg:
-          sock: sock
-          num_queues: 7
-          queue:size: 9
-        mac: mac
-      properties:
         mac:
           type: string
-        vu_cfg:
-          $ref: '#/components/schemas/VhostUserConfig'
       required:
-      - mac
-      - vu_cfg
+      - sock
       type: object
     VhostUserBlkConfig:
       example:
+        sock: sock
+        num_queues: 2
+        queue_size: 4
         wce: true
-        vu_cfg:
-          sock: sock
-          num_queues: 7
-          queue:size: 9
       properties:
+        sock:
+          type: string
+        num_queues:
+          default: 1
+          type: integer
+        queue_size:
+          default: 128
+          type: integer
         wce:
+          default: true
           type: boolean
-        vu_cfg:
-          $ref: '#/components/schemas/VhostUserConfig'
       required:
-      - vu_cfg
-      - wce
+      - sock
       type: object
     VsockConfig:
       example:
@@ -631,4 +645,15 @@ components:
       required:
       - cid
       - sock
+      type: object
+    VmResize:
+      example:
+        desired_vcpus: 1
+      properties:
+        desired_vcpus:
+          default: 1
+          minimum: 1
+          type: integer
+      required:
+      - desired_vcpus
       type: object
