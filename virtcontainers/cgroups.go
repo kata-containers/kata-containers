@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/containerd/cgroups"
@@ -181,4 +182,14 @@ func renameCgroupPath(path string) (string, error) {
 	cgroupPathName := fmt.Sprintf("%s_%s", cgroupKataPrefix, filepath.Base(path))
 	return filepath.Join(cgroupPathDir, cgroupPathName), nil
 
+}
+
+func isSystemdCgroup(cgroupPath string) bool {
+	// systemd cgroup path: slice:prefix:name
+	re := regexp.MustCompile(`([[:alnum:]]|\.)+:([[:alnum:]]|\.)+:([[:alnum:]]|\.)+`)
+	found := re.FindStringIndex(cgroupPath)
+
+	// if found string is equal to cgroupPath then
+	// it's a correct systemd cgroup path.
+	return found != nil && cgroupPath[found[0]:found[1]] == cgroupPath
 }

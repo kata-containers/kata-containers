@@ -197,3 +197,30 @@ func TestUpdateCgroups(t *testing.T) {
 	err = s.cgroupsDelete()
 	assert.NoError(err)
 }
+
+func TestIsSystemdCgroup(t *testing.T) {
+	assert := assert.New(t)
+
+	tests := []struct {
+		path     string
+		expected bool
+	}{
+		{"slice:kata:afhts2e5d4g5s", true},
+		{"slice.system:kata:afhts2e5d4g5s", true},
+		{"/kata/afhts2e5d4g5s", false},
+		{"a:b:c:d", false},
+		{":::", false},
+		{"", false},
+		{":", false},
+		{"::", false},
+		{":::", false},
+		{"a:b", false},
+		{"a:b:", false},
+		{":a:b", false},
+		{"@:@:@", false},
+	}
+
+	for _, t := range tests {
+		assert.Equal(t.expected, isSystemdCgroup(t.path), "invalid systemd cgroup path: %v", t.path)
+	}
+}
