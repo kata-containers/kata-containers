@@ -77,7 +77,13 @@ case "${KATA_HYPERVISOR}" in
 		;;
 esac
 
-
+if [ x"${TEST_INITRD}" == x"yes" ]; then
+	echo "Set to test initrd image"
+	sudo sed -i -e '/^image =/d' ${runtime_config_path}
+else
+	echo "Set to test rootfs image"
+	sudo sed -i -e '/^initrd =/d' ${runtime_config_path}
+fi
 
 # Check system supports running Kata Containers
 kata_runtime_path=$(command -v kata-runtime)
@@ -89,14 +95,6 @@ if [ -z "${METRICS_CI}" ]; then
 	sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' "${runtime_config_path}"
 else
 	echo "Metrics run - do not enable all debug options in file ${runtime_config_path}"
-fi
-
-if [ x"${TEST_INITRD}" == x"yes" ]; then
-	echo "Set to test initrd image"
-	sudo sed -i -e '/^image =/d' ${runtime_config_path}
-else
-	echo "Set to test rootfs image"
-	sudo sed -i -e '/^initrd =/d' ${runtime_config_path}
 fi
 
 if [ "$USE_VSOCK" == "yes" ]; then
