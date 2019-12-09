@@ -7,6 +7,7 @@
 package persistapi
 
 import (
+	"github.com/opencontainers/runc/libcontainer/configs"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -247,4 +248,8 @@ type SandboxConfig struct {
 	//				a specific field
 
 	ContainerConfigs []ContainerConfig
+
+	// Cgroups specifies specific cgroup settings for the various subsystems that the container is
+	// placed into to limit the resources the container has available
+	Cgroups *configs.Cgroup `json:"cgroups"`
 }

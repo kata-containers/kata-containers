@@ -19,6 +19,7 @@ import (
 
 	"github.com/containerd/cgroups"
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/opencontainers/runc/libcontainer/configs"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
@@ -124,6 +125,10 @@ type SandboxConfig struct {
 
 	// Experimental features enabled
 	Experimental []exp.Feature
+
+	// Cgroups specifies specific cgroup settings for the various subsystems that the container is
+	// placed into to limit the resources the container has available
+	Cgroups *configs.Cgroup `json:"cgroups"`
 }
 
 func (s *Sandbox) trace(name string) (opentracing.Span, context.Context) {
