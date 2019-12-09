@@ -55,6 +55,13 @@ cache_kernel_artifacts() {
 	done
 }
 
+# This builds cloud hypervisor
+cache_cloud_hypervisor() {
+	local cloud_hypervisor_binary="/usr/bin/cloud-hypervisor"
+	local current_cloud_hypervisor_version=$(get_version "assets.hypervisor.cloud_hypervisor.version")
+	create_cache_asset "${cloud_hypervisor_binary}" "${current_cloud_hypervisor_version}"
+}
+
 # This builds the image by specifying the image version from
 # /usr/share/kata-containers and the image name
 cache_image_artifacts() {
@@ -93,6 +100,7 @@ create_cache_asset() {
 	local component_name="$1"
 	local component_version="$2"
 	local check_image=$(echo "${component_version}" | grep kata || true)
+	local check_cloud_hypervisor=$(echo "${component_version}" | grep cloud || true)
 	local check_qemu=$(echo "${component_name}" | grep qemu || true)
 	local check_kernel=$(echo "${component_name}" | grep -E '\<vmlinu[xz]\>' || true)
 	local check_initrd=$(echo "${component_name}" | grep initrd || true)
@@ -140,6 +148,7 @@ Description: This script builds the cache of several Kata components.
 Options:
 
 -a      Run qemu experimental cache
+-c      Run cloud hypervisor cache
 -h      Shows help
 -i      Run image cache
 -k      Run kernel cache
@@ -151,10 +160,13 @@ EOT
 
 main() {
 	local OPTIND
-	while getopts "ahiknqr" opt; do
+	while getopts "achiknqr" opt; do
 		case "$opt" in
 		a)
 			build_qemu_experimental="true"
+			;;
+		c)
+			build_cloud_hypervisor="true"
 			;;
 		h)
 			usage
@@ -179,6 +191,7 @@ main() {
 	[[ -z "$build_kernel" ]] && \
 	[[ -z "$build_qemu" ]] && \
 	[[ -z "$build_qemu_experimental" ]] && \
+	[[ -z "$build_cloud_hypervisor" ]] && \
 	[[ -z "$build_image" ]] && \
 	[[ -z "$build_image_initrd" ]] && \
 		usage && die "Must choose at least one option"
@@ -188,6 +201,8 @@ main() {
         echo "artifacts:"
 
 	[ "$build_kernel" == "true" ] && cache_kernel_artifacts
+
+	[ "$build_cloud_hypervisor" == "true" ] && cache_cloud_hypervisor
 
 	[ "$build_qemu" == "true" ] && cache_qemu_artifacts
 
