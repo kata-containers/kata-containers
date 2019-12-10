@@ -124,7 +124,7 @@ get_kernel() {
 
 		major_version=$(echo "${version}" | cut -d. -f1)
 		kernel_tarball="linux-${version}.tar.xz"
-        
+
                 if [ ! -f sha256sums.asc ] || ! grep -q "${kernel_tarball}" sha256sums.asc; then
                         info "Download kernel checksum file: sha256sums.asc"
                         curl --fail -OL "https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
@@ -269,15 +269,14 @@ get_default_kernel_config() {
 
 get_config_and_patches() {
 	if [ -z "${patches_path}" ]; then
-		info "Clone config and patches"
 		patches_path="${default_patches_dir}"
 		if [ ! -d "${patches_path}" ]; then
 			tag="${kata_version}"
-			git clone "https://${patches_repo}.git" "${patches_repo_dir}"
+			git clone -q "https://${patches_repo}.git" "${patches_repo_dir}"
 			pushd "${patches_repo_dir}" >> /dev/null
 			if [ -n $tag ] ; then
 				info "checking out $tag"
-				git checkout $tag
+				git checkout -q $tag
 			fi
 			popd >> /dev/null
 		fi
