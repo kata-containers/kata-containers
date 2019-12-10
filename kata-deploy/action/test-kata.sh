@@ -106,7 +106,7 @@ function test_kata() {
 
     YAMLPATH="https://raw.githubusercontent.com/kata-containers/packaging/$PKG_SHA/kata-deploy"
 
-    kubectl apply -f "$YAMLPATH/kata-rbac.yaml"
+    kubectl apply -f "$YAMLPATH/kata-rbac/base/kata-rbac.yaml"
 
     # apply runtime classes:
     kubectl apply -f "$YAMLPATH/k8s-1.14/kata-qemu-runtimeClass.yaml"
@@ -114,8 +114,8 @@ function test_kata() {
 
     kubectl get runtimeclasses
 
-    curl -LO "$YAMLPATH/kata-deploy.yaml"
-    curl -LO "$YAMLPATH/kata-cleanup.yaml"
+    curl -LO "$YAMLPATH/kata-deploy/base/kata-deploy.yaml"
+    curl -LO "$YAMLPATH/kata-cleanup/base/kata-cleanup.yaml"
 
     # update deployment daemonset to utilize the container under test:
     sed -i "s#katadocker/kata-deploy#katadocker/kata-deploy-ci:${PKG_SHA}#g" kata-deploy.yaml
