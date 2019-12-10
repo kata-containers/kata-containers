@@ -5,6 +5,10 @@
 #
 
 all: | update-yaml generate-client-code
+MK_DIR := $(dir $(realpath $(firstword $(MAKEFILE_LIST))))
+YQ_INSTALLER := "$(MK_DIR)/../../../.ci/install-yq.sh"
+VERSIONS_FILE := "$(MK_DIR)/../../../versions.yaml"
+YQ := $(shell command -v yq 2> /dev/null)
 
 generate-client-code: clean-generated-code
 	docker run --rm \
@@ -14,8 +18,14 @@ generate-client-code: clean-generated-code
 		-g go \
 		-o /local/client
 
+
+
 update-yaml:
-	curl -OL https://raw.githubusercontent.com/cloud-hypervisor/cloud-hypervisor/master/vmm/src/api/openapi/cloud-hypervisor.yaml
+ifndef YQ
+	$(MK_DIR)/../../../.ci/install-yq.sh
+endif
+	clh_version=$(shell yq r $(VERSIONS_FILE) assets.hypervisor.cloud_hypervisor.version); \
+	curl -OL https://raw.githubusercontent.com/cloud-hypervisor/cloud-hypervisor/$$clh_version/vmm/src/api/openapi/cloud-hypervisor.yaml
 
 clean-generated-code:
 	rm "./client" -rf
