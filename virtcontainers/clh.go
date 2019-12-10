@@ -176,9 +176,10 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	clh.vmconfig.Memory.Size = int64(clh.config.MemorySize) << utils.MibToBytesShift
 	clh.vmconfig.Memory.File = "/dev/shm"
 	// Set initial amount of cpu's for the virtual machine
-	clh.vmconfig.Cpus = chclient.CpuConfig{
+	clh.vmconfig.Cpus = chclient.CpusConfig{
 		// cast to int32, as openAPI has a limitation that it does not support unsigned values
-		CpuCount: int32(clh.config.NumVCPUs),
+		BootVcpus: int32(clh.config.NumVCPUs),
+		MaxVcpus:  int32(clh.config.DefaultMaxVCPUs),
 	}
 
 	// Add the kernel path
