@@ -293,7 +293,9 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 
 	if err := clh.waitVMM(clhTimeout); err != nil {
 		clh.Logger().WithField("error", err).WithField("output", clh.cmdOutput.String()).Warn("cloud-hypervisor init failed")
-		clh.shutdownVirtiofsd()
+		if shutdownErr := clh.shutdownVirtiofsd(); shutdownErr != nil {
+			clh.Logger().WithField("error", shutdownErr).Warn("error shutting down Virtiofsd")
+		}
 		return err
 	}
 
@@ -302,7 +304,9 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 	}
 
 	clh.state.state = clhReady
-	clh.storeState()
+	if err = clh.storeState(); err != nil {
+		return err
+	}
 
 	return nil
 }
