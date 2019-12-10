@@ -342,6 +342,14 @@ func (h hypervisor) defaultBridges() uint32 {
 	return h.DefaultBridges
 }
 
+func (h hypervisor) defaultVirtioFSCache() string {
+	if h.VirtioFSCache == "" {
+		return defaultVirtioFSCacheMode
+	}
+
+	return h.VirtioFSCache
+}
+
 func (h hypervisor) blockDeviceDriver() (string, error) {
 	supportedBlockDrivers := []string{config.VirtioSCSI, config.VirtioBlock, config.VirtioMmio, config.Nvdimm, config.VirtioBlockCCW}
 
@@ -620,7 +628,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		SharedFS:                sharedFS,
 		VirtioFSDaemon:          h.VirtioFSDaemon,
 		VirtioFSCacheSize:       h.VirtioFSCacheSize,
-		VirtioFSCache:           h.VirtioFSCache,
+		VirtioFSCache:           h.defaultVirtioFSCache(),
 		VirtioFSExtraArgs:       h.VirtioFSExtraArgs,
 		MemPrealloc:             h.MemPrealloc,
 		HugePages:               h.HugePages,
@@ -1060,6 +1068,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		Msize9p:                 defaultMsize9p,
 		HotplugVFIOOnRootBus:    defaultHotplugVFIOOnRootBus,
 		GuestHookPath:           defaultGuestHookPath,
+		VirtioFSCache:           defaultVirtioFSCacheMode,
 	}
 }
 
