@@ -121,6 +121,10 @@ create_cache_asset() {
 		echo "${component_version}" >  "latest"
 	fi
 
+	# In the case of qemu we have the tar at a specific location
+	if [ ! -z "${check_qemu}" ]; then
+		cp -a "${KATA_TESTS_CACHEDIR}/${component_name}" .
+	fi
 
 	# In the case of the kernel we have it in the kata dir
 	if [ ! -z "${check_kernel}" ]; then
