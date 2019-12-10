@@ -119,8 +119,8 @@ install_kernel() {
 	kata_version=${1:-$kata_version}
 	pushd "${script_dir}/../"
 	info "build kernel"
-	./kernel/build-kernel.sh setup
-	./kernel/build-kernel.sh build
+	kata_version="${kata_version}" ./kernel/build-kernel.sh setup
+	kata_version="${kata_version}" ./kernel/build-kernel.sh build
 	info "install kernel"
 	kata_version="${kata_version}" DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh install
 	popd
@@ -134,8 +134,8 @@ install_experimental_kernel() {
 	kata_version=${1:-$kata_version}
 	pushd "${script_dir}/../"
 	info "build experimental kernel"
-	./kernel/build-kernel.sh -e setup
-	./kernel/build-kernel.sh -e build
+	kata_version="${kata_version}" ./kernel/build-kernel.sh -e setup
+	kata_version="${kata_version}" ./kernel/build-kernel.sh -e build
 	info "install experimental kernel"
 	kata_version="${kata_version}" DESTDIR="${destdir}" PREFIX="${prefix}" ./kernel/build-kernel.sh -e install
 	popd

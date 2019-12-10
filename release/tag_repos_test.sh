@@ -18,9 +18,6 @@ echo "Check tag_repos.sh -h option"
 echo "Check tag_repos.sh status"
 ./release/tag_repos.sh status | grep runtime
 
-echo "Check tag_repos.sh create tags but not push"
-./release/tag_repos.sh tag | grep "tags not pushed"
-
 echo "Check tag_repos.sh pre-release"
 ./release/tag_repos.sh pre-release $(curl -sL https://raw.githubusercontent.com/kata-containers/runtime/master/VERSION) | grep "Not checking runtime"
 
