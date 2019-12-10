@@ -14,10 +14,10 @@ readonly script_dir=$(dirname $(readlink -f "$0"))
 
 cidir=$(dirname "$0")
 arch=$("${cidir}"/kata-arch.sh -d)
+source "${cidir}/lib.sh"
 # Where real kata build script exist, via docker build to avoid install all deps
 packaging_repo="github.com/kata-containers/packaging"
 latest_build_url="${jenkins_url}/job/cloud-hypervisor-nightly-$(uname -m)/${cached_artifacts_path}"
-source "${cidir}/lib.sh"
 
 
 install_clh() {
