@@ -59,17 +59,27 @@ paths_to_skip=(
 	"vendor"
 )
 
+# Skip paths that are not statically checked
+# $1 : List of paths to check, space separated list
+# If you have a list in a bash array call in this way:
+# list=$(skip_paths "${list[@]}")
+# If you still want to use it as an array do:
+# list=(${list})
 skip_paths(){
-	local list=${1}
-	[ -z "$list" ] && return
+	local list_param="${1}"
+	[ -z "$list_param" ] && return
+	list=(${list_param})
 
 	for p in "${paths_to_skip[@]}"; do
-		local new_list=""
-		if new_list=$(echo "${list}" | grep -Ev "${p}"); then
-			list="${new_list}"
-		fi
+		new_list=()
+		for l in "${list[@]}"; do
+			if echo "${l}" | grep -v "${p}"; then
+				new_list=("${new_list[@]}" "${l}")
+			fi
+		done
+		list=("${new_list[@]}")
 	done
-	echo "${list}"
+	echo "${list[@]}"
 }
 
 
@@ -273,7 +283,7 @@ static_check_go_arch_specific()
 	#
 	# Note: the vendor filtering is required for versions of go older than 1.9
 	go_packages=$(comm -3 "$all_packages" "$submodule_packages" || true)
-	go_packages=$(skip_paths "${go_packages}")
+	go_packages=$(skip_paths "${go_packages[@]}")
 
 	# No packages to test
 	[ -z "$go_packages" ] && return
@@ -551,7 +561,7 @@ static_check_docs()
 	local url
 
 	all_docs=$(git ls-files "*.md" | grep -Ev "(grpc-rs|target)/" | sort || true)
-	all_docs=$(skip_paths "${all_docs}")
+	all_docs=$(skip_paths "${all_docs[@]}")
 
 	if [ "$specific_branch" = "true" ]
 	then
@@ -564,11 +574,11 @@ static_check_docs()
 		docs_status=$(echo "$docs_status" | grep "\.md$" || true)
 
 		docs=$(echo "$docs_status" | awk '{print $NF}' | sort)
-		docs=$(skip_paths "${docs}")
+		docs=$(skip_paths "${docs[@]}")
 
 		# Newly-added docs
 		new_docs=$(echo "$docs_status" | awk '/^A/ {print $NF}' | sort)
-		new_docs=$(skip_paths "${new_docs}")
+		new_docs=$(skip_paths "${new_docs[@]}")
 
 		for doc in $new_docs
 		do
