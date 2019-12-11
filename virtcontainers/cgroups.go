@@ -40,6 +40,9 @@ const cgroupKataPath = "/kata/"
 // from grabbing the stats data.
 const cgroupKataPrefix = "kata"
 
+// DefaultCgroupPath runtime-determined location in the cgroups hierarchy.
+const defaultCgroupPath = "/vc"
+
 var cgroupsLoadFunc = cgroups.Load
 var cgroupsNewFunc = cgroups.New
 
@@ -188,6 +191,29 @@ func renameCgroupPath(path string) (string, error) {
 	cgroupPathName := fmt.Sprintf("%s_%s", cgroupKataPrefix, filepath.Base(path))
 	return filepath.Join(cgroupPathDir, cgroupPathName), nil
 
+}
+
+// validCgroupPath returns a valid cgroup path.
+// see https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#cgroups-path
+func validCgroupPath(path string, systemdCgroup bool) (string, error) {
+	if isSystemdCgroup(path) {
+		return path, nil
+	}
+
+	if systemdCgroup {
+		return "", fmt.Errorf("malformed systemd path '%v': expected to be of form 'slice:prefix:name'", path)
+	}
+
+	// In the case of an absolute path (starting with /), the runtime MUST
+	// take the path to be relative to the cgroups mount point.
+	if filepath.IsAbs(path) {
+		return renameCgroupPath(filepath.Clean(path))
+	}
+
+	// In the case of a relative path (not starting with /), the runtime MAY
+	// interpret the path relative to a runtime-determined location in the cgroups hierarchy.
+	// clean up path and return a new path relative to defaultCgroupPath
+	return renameCgroupPath(filepath.Join(defaultCgroupPath, filepath.Clean("/"+path)))
 }
 
 func isSystemdCgroup(cgroupPath string) bool {

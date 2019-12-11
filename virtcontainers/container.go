@@ -1398,10 +1398,9 @@ func (c *Container) cgroupsCreate() (err error) {
 		resources.CPU = validCPUResources(spec.Linux.Resources.CPU)
 	}
 
-	cgroupPath := utils.ValidCgroupPath(spec.Linux.CgroupsPath)
-	c.state.CgroupPath, err = renameCgroupPath(cgroupPath)
+	c.state.CgroupPath, err = validCgroupPath(spec.Linux.CgroupsPath, c.sandbox.config.SystemdCgroup)
 	if err != nil {
-		return err
+		return fmt.Errorf("Invalid cgroup path: %v", err)
 	}
 
 	cgroup, err := cgroupsNewFunc(cgroups.V1,
