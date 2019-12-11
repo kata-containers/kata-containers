@@ -2033,32 +2033,51 @@ func (s *Sandbox) cpuResources() *specs.LinuxCPU {
 
 // setupSandboxCgroup creates and joins sandbox cgroups for the sandbox config
 func (s *Sandbox) setupSandboxCgroup() error {
+	var err error
 	spec := s.GetPatchedOCISpec()
-
 	if spec == nil {
 		return errorMissingOCISpec
 	}
 
 	if spec.Linux == nil {
-		// Cgroup path is optional, though expected. If not defined, skip the setup
 		s.Logger().WithField("sandboxid", s.id).Warning("no cgroup path provided for pod sandbox, not creating sandbox cgroup")
 		return nil
 	}
-	validContainerCgroup := utils.ValidCgroupPath(spec.Linux.CgroupsPath)
 
-	// Create a Kata sandbox cgroup with the cgroup of the sandbox container as the parent
-	s.state.CgroupPath = filepath.Join(filepath.Dir(validContainerCgroup), cgroupKataPrefix+"_"+s.id)
-	cgroup, err := cgroupsNewFunc(cgroups.V1, cgroups.StaticPath(s.state.CgroupPath), &specs.LinuxResources{})
+	s.state.CgroupPath, err = validCgroupPath(spec.Linux.CgroupsPath, s.config.SystemdCgroup)
 	if err != nil {
-		return fmt.Errorf("Could not create sandbox cgroup in %v: %v", s.state.CgroupPath, err)
-
+		return fmt.Errorf("Invalid cgroup path: %v", err)
 	}
 
-	// Add the runtime to the Kata sandbox cgroup
+	// Do not change current cgroup configuration.
+	// Create a spec without constraints
+	unconstraintSpec := specs.Spec{
+		Linux: &specs.Linux{
+			Resources:   &specs.LinuxResources{},
+			CgroupsPath: s.state.CgroupPath,
+		},
+	}
+
+	cmgr, err := newCgroupManager(s.config.Cgroups, s.state.CgroupPaths, &unconstraintSpec)
+	if err != nil {
+		return fmt.Errorf("Could not create a new cgroup manager: %v", err)
+	}
+
 	runtimePid := os.Getpid()
-	if err := cgroup.Add(cgroups.Process{Pid: runtimePid}); err != nil {
+	// Add the runtime to the Kata sandbox cgroup
+	if err := cmgr.Apply(runtimePid); err != nil {
 		return fmt.Errorf("Could not add runtime PID %d to sandbox cgroup:  %v", runtimePid, err)
 	}
+
+	// `Apply` updates manager's Cgroups and CgroupPaths,
+	// they both need to be saved since are used to create
+	// or restore a cgroup managers.
+	if s.config.Cgroups, err = cmgr.GetCgroups(); err != nil {
+		return fmt.Errorf("Could not get cgroup configuration:  %v", err)
+	}
+
+	s.state.CgroupPaths = cmgr.GetPaths()
+
 	return nil
 }
 
