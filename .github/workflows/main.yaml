@@ -266,7 +266,7 @@ jobs:
 
   gather-artifacts:
     runs-on: ubuntu-16.04
-    needs: [build-kernel, build-qemu, build-qemu-virtiofsd, build-image, build-firecracker, build-kata-components, build-nemu]
+    needs: [build-experimental-kernel, build-kernel, build-qemu, build-qemu-virtiofsd, build-image, build-firecracker, build-kata-components, build-nemu, build-clh]
     steps:
       - uses: actions/checkout@v1
       - name: get-artifacts
@@ -291,6 +291,7 @@ jobs:
         with:
           name: release-candidate
       - name: build-and-push-kata-deploy-ci
+        id: build-and-push-kata-deploy-ci
         run: |
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
           git clone https://github.com/kata-containers/packaging
@@ -302,14 +303,15 @@ jobs:
           docker build --build-arg KATA_ARTIFACTS=kata-static.tar.xz -t katadocker/kata-deploy-ci:$pkg_sha ./packaging/kata-deploy
           docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
           docker push katadocker/kata-deploy-ci:$pkg_sha
-          echo ::set-env name=PKG_SHA::$pkg_sha
+
+          echo "##[set-output name=PKG_SHA;]${pkg_sha}"
           echo ::set-env name=TAG::$tag
       - name: test-kata-deploy-ci-in-aks
         uses: ./packaging/kata-deploy/action
         with:
-          packaging-sha: env.PKG_SHA
+          packaging-sha: ${{steps.build-and-push-kata-deploy-ci.outputs.PKG_SHA}}
         env:
-          PKG_SHA: ${{ env.PKG_SHA }}
+          PKG_SHA: ${{steps.build-and-push-kata-deploy-ci.outputs.PKG_SHA}}
           AZ_APPID: ${{ secrets.AZ_APPID }}
           AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
           AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
@@ -317,8 +319,9 @@ jobs:
       - name: push-tarball
         run: |
           # tag the container image we created and push to DockerHub
-          docker tag katadocker/kata-deploy-ci:${{ env.PKG_SHA }} katadocker/kata-deploy:${{ env.TAG }}
-          docker push katadocker/kata-deploy:${{ env.TAG }}
+          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
+          docker tag katadocker/kata-deploy-ci:${{steps.build-and-push-kata-deploy-ci.outputs.PKG_SHA}} katadocker/kata-deploy:${tag}
+          docker push katadocker/kata-deploy:${tag}
 
   upload-static-tarball:
     needs: kata-deploy
@@ -339,4 +342,4 @@ jobs:
           mv release-candidate/kata-static.tar.xz release-candidate/kata-static-$tag-x86_64.tar.xz
           git clone https://github.com/kata-containers/runtime.git
           cd runtime
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a ../release-candidate/kata-static-$tag-x86_64.tar.xz "${tag}"
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a ../release-candidate/kata-static-${tag}-x86_64.tar.xz "${tag}"
