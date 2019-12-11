@@ -19,16 +19,14 @@ parts:
     override-pull: |
       branch="master"
 
-      # kata CI or launchpad snap-master
-      if [ "${CI}" = "true" ] || echo "${SNAPCRAFT_IMAGE_INFO}" | egrep -o "build_url.*" | grep  -q "${branch}"; then
-        snapcraftctl set-grade "devel"
-      else
+      # kata CI or launchpad snap-master, then build latest stable
+      if [ "${CI}" != "true" ] && ! echo "${SNAPCRAFT_IMAGE_INFO}" | egrep -o "build_url.*" | grep  -q "${branch}"; then
         # Get the latest stable version
         runtime_url="https://github.com/kata-containers/runtime"
-        branch=$(git ls-remote --tags ${runtime_url}  | egrep -o "refs.*" | egrep -v "\-alpha|\-rc|{}" | cut -d/ -f3 | sort -r | head -1)
-        snapcraftctl set-grade "stable"
+        branch=$(git ls-remote --tags ${runtime_url}  | egrep -o "refs.*" | egrep -v "\-alpha|\-rc|{}" | egrep -o "[[:digit:]]+\.[[:digit:]]+\.[[:digit:]]+" | sort -V -r | head -1)
       fi
 
+      snapcraftctl set-grade "stable"
       snapcraftctl set-version "${branch}"
       echo "${branch}" | tee ${SNAPCRAFT_STAGE}/kata_version
 
