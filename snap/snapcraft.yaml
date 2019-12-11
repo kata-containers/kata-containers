@@ -228,11 +228,11 @@ parts:
       export DEBUG=1
       case "$(uname -m)" in
         aarch64|ppc64le|s390x)
-          sudo -E PATH=$PATH DISTRO=alpine make initrd
+          sudo -E PATH=$PATH make initrd DISTRO=alpine
         ;;
         x86_64)
           # In some build systems it's impossible to build a rootfs image, try with the initrd image
-          sudo -E PATH=$PATH DISTRO=clearlinux make image || sudo -E PATH=$PATH DISTRO=alpine make initrd
+          sudo -E PATH=$PATH make image DISTRO=clearlinux || sudo -E PATH=$PATH make initrd DISTRO=alpine
         ;;
         *) echo "unsupported architecture: $(uname -m)"; exit 1;;
       esac
