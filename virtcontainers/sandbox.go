@@ -12,7 +12,6 @@ import (
 	"math"
 	"net"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
