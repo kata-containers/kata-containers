@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/intel/cloud-hypervisor"
       uscan-url: >-
         https://github.com/intel/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "ca97385da5ebb798"
+      version: "v0.4.0"
 
     firecracker:
       description: "Firecracker micro-VMM"

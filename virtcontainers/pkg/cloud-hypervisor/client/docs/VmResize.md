@@ -1,12 +1,10 @@
-# VhostUserConfig
+# VmResize
 
 ## Properties
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Sock** | **string** |  | 
-**NumQueues** | **int32** |  | 
-**Queuesize** | **int32** |  | [optional] 
+**DesiredVcpus** | **int32** |  | [default to 1]
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

@@ -123,6 +123,22 @@ paths:
         405:
           description: The VM instance could not reboot because it is not booted.
 
+  /vm.resize:
+    put:
+      summary: Resize the VM
+      requestBody:
+        description: The target size for the VM
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmResize'
+        required: true
+      responses:
+        204:
+          description: The VM instance was successfully resized.
+        404:
+          description: The VM instance could not be resized because it is not created.
+
 components:
   schemas:
 
@@ -155,7 +171,7 @@ components:
       type: object
       properties:
         cpus:
-          $ref: '#/components/schemas/CpuConfig'
+          $ref: '#/components/schemas/CpusConfig'
         memory:
           $ref: '#/components/schemas/MemoryConfig'
         kernel:
@@ -205,12 +221,17 @@ components:
           default: false
       description: Virtual machine configuration
 
-    CpuConfig:
+    CpusConfig:
       required:
-      - cpu_count
+      - boot_vcpus
+      - max_vcpus
       type: object
       properties:
-        cpu_count:
+        boot_vcpus:
+          minimum: 1
+          default: 1
+          type: integer
+        max_vcpus:
           minimum: 1
           default: 1
           type: integer
@@ -258,18 +279,17 @@ components:
           default: false
 
     NetConfig:
-      required:
-      - ip
-      - mask
-      - mac
       type: object
       properties:
         tap:
           type: string
+          default: ""
         ip:
           type: string
+          default: "192.168.249.1"
         mask:
           type: string
+          default: "255.255.255.0"
         mac:
           type: string
         iommu:
@@ -292,8 +312,6 @@ components:
       required:
       - tag
       - sock
-      - num_queues
-      - queue_size
       type: object
       properties:
         tag:
@@ -302,11 +320,17 @@ components:
           type: string
         num_queues:
           type: integer
+          default: 1
         queue_size:
           type: integer
+          default: 1024
+        dax:
+          type: boolean
+          default: true
         cache_size:
           type: integer
           format: int64
+          default: 8589934592
 
     PmemConfig:
       required:
@@ -351,41 +375,38 @@ components:
           type: boolean
           default: false
 
-    VhostUserConfig:
+    VhostUserNetConfig:
       required:
       - sock
-      - num_queues
-      - queue_size
       type: object
       properties:
         sock:
           type: string
         num_queues:
           type: integer
-        queue:size:
+          default: 2
+        queue_size:
           type: integer
-
-    VhostUserNetConfig:
-      required:
-      - mac
-      - vu_cfg
-      type: object
-      properties:
+          default: 256
         mac:
           type: string
-        vu_cfg:
-          $ref: '#/components/schemas/VhostUserConfig'
 
     VhostUserBlkConfig:
       required:
-      - wce
-      - vu_cfg
+      - sock
       type: object
       properties:
+        sock:
+          type: string
+        num_queues:
+          type: integer
+          default: 1
+        queue_size:
+          type: integer
+          default: 128
         wce:
           type: boolean
-        vu_cfg:
-          $ref: '#/components/schemas/VhostUserConfig'
+          default: true
 
     VsockConfig:
       required:
@@ -404,3 +425,13 @@ components:
         iommu:
           type: boolean
           default: false
+
+    VmResize:
+      required:
+      - desired_vcpus
+      type: object
+      properties:
+        desired_vcpus:
+          minimum: 1
+          default: 1
+          type: integer
