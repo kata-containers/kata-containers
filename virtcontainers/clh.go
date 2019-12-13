@@ -48,8 +48,6 @@ const (
 	// Values are mandatory by http API
 	// Values based on:
 	// github.com/cloud-hypervisor/cloud-hypervisor/blob/v0.3.0/vmm/src/config.rs#L395
-	clhFsQueues           = 1
-	clhFsQueueSize        = 1024
 	clhTimeout            = 10
 	clhAPITimeout         = 1
 	clhStopSandboxTimeout = 3
@@ -176,9 +174,10 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	clh.vmconfig.Memory.Size = int64(clh.config.MemorySize) << utils.MibToBytesShift
 	clh.vmconfig.Memory.File = "/dev/shm"
 	// Set initial amount of cpu's for the virtual machine
-	clh.vmconfig.Cpus = chclient.CpuConfig{
+	clh.vmconfig.Cpus = chclient.CpusConfig{
 		// cast to int32, as openAPI has a limitation that it does not support unsigned values
-		CpuCount: int32(clh.config.NumVCPUs),
+		BootVcpus: int32(clh.config.NumVCPUs),
+		MaxVcpus:  int32(clh.config.DefaultMaxVCPUs),
 	}
 
 	// Add the kernel path
@@ -1041,12 +1040,7 @@ func (clh *cloudHypervisor) addNet(e Endpoint) {
 		"tap": tapPath,
 	}).Info("Adding Net")
 
-	// FIXME: This is required by CH
-	// remove after PR is merged:
-	// https://github.com/cloud-hypervisor/cloud-hypervisor/pull/480
-	ip := "0.0.0.0"
-	mask := "0.0.0.0"
-	clh.vmconfig.Net = append(clh.vmconfig.Net, chclient.NetConfig{Mac: mac, Tap: tapPath, Ip: ip, Mask: mask})
+	clh.vmconfig.Net = append(clh.vmconfig.Net, chclient.NetConfig{Mac: mac, Tap: tapPath})
 }
 
 // Add shared Volume using virtiofs
@@ -1066,17 +1060,13 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 				Tag:       volume.MountTag,
 				CacheSize: int64(clh.config.VirtioFSCacheSize << 20),
 				Sock:      vfsdSockPath,
-				NumQueues: clhFsQueues,
-				QueueSize: clhFsQueueSize,
 			},
 		}
 	} else {
 		clh.vmconfig.Fs = []chclient.FsConfig{
 			{
-				Tag:       volume.MountTag,
-				Sock:      vfsdSockPath,
-				NumQueues: clhFsQueues,
-				QueueSize: clhFsQueueSize,
+				Tag:  volume.MountTag,
+				Sock: vfsdSockPath,
 			},
 		}
 

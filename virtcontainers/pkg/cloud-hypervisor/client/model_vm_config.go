@@ -10,7 +10,7 @@
 package openapi
 // VmConfig Virtual machine configuration
 type VmConfig struct {
-	Cpus CpuConfig `json:"cpus,omitempty"`
+	Cpus CpusConfig `json:"cpus,omitempty"`
 	Memory MemoryConfig `json:"memory,omitempty"`
 	Kernel KernelConfig `json:"kernel"`
 	Cmdline CmdLineConfig `json:"cmdline"`
