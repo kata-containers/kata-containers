@@ -31,7 +31,6 @@ qemu_black_list=(
 */share/*/sgabios.bin
 */share/*/skiboot.lid
 */share/*/slof.bin
-*/share/*/spapr-rtas.bin
 */share/*/trace-events-all
 */share/*/u-boot*
 */share/*/vgabios*
