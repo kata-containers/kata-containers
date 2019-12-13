@@ -1,0 +1,45 @@
+From f06edce09ed88568a743c6aa36343081e35cca54 Mon Sep 17 00:00:00 2001
+From: Julio Montes <julio.montes@intel.com>
+Date: Mon, 8 Jul 2019 21:19:36 +0000
+Subject: [PATCH 2/2] memory-backend-file/nvdimm: support read-only files as
+ memory-backends
+
+Currently it is not possible to use a file that is part of a read-only
+filesystem as memory backend for nvdimm devices, even if the file itself
+is not modified in the guest. Same goes for files that do not have write access.
+In order to improve the security of Virtual Machines that share
+and do not modify the memory-backend-file, QEMU should support
+read-only memory-backends.
+
+Use case:
+* Kata Containers use a memory-backed-file as read-only rootfs, and this
+  file is used to start all the virtual machines in the node.
+  It would be really bad if somehow a malicious container modified it.
+
+Signed-off-by: Julio Montes <julio.montes@intel.com>
+Signed-off-by: Archana Shinde <archana.m.shinde@intel.com>
+Message-Id: <20190708211936.8037-1-julio.montes@intel.com>
+---
+ exec.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/exec.c b/exec.c
+index ffdb518535..506a5af8c1 100644
+--- a/exec.c
++++ b/exec.c
+@@ -1819,6 +1819,12 @@ static int file_ram_open(const char *path,
+                 break;
+             }
+             g_free(filename);
++        } else if (errno == EROFS || errno == EACCES) {
++            fd = open(path, O_RDONLY);
++            if (fd >= 0) {
++                /* @path names an existing read-only file, use it */
++                break;
++            }
+         }
+         if (errno != EEXIST && errno != EINTR) {
+             error_setg_errno(errp, errno,
+-- 
+2.21.0
+
