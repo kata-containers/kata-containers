@@ -15,9 +15,15 @@ source /etc/os-release || source /usr/lib/os-release
 source "${cidir}/lib.sh"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 experimental_qemu="${experimental_qemu:-false}"
+TEST_RUST_AGENT="${TEST_RUST_AGENT:-false}"
 
-echo "Install kata-containers image"
-"${cidir}/install_kata_image.sh" "${tag}"
+if [ "${TEST_RUST_AGENT}" == true ]; then
+	echo "Install rust agent image"
+	"${cidir}/install_kata_image_rust.sh"
+else
+	echo "Install kata-containers image"
+	"${cidir}/install_kata_image.sh" "${tag}"
+fi
 
 echo "Install Kata Containers Kernel"
 "${cidir}/install_kata_kernel.sh" "${tag}"
