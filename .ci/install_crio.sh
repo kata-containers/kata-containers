@@ -30,6 +30,7 @@ conmon_version=$(get_version "externals.conmon.version")
 conmon_repo=${conmon_url/https:\/\/}
 go get -d "${conmon_repo}" || true
 pushd "$GOPATH/src/${conmon_repo}"
+git checkout "${conmon_version}"
 make
 sudo -E make install
 popd
