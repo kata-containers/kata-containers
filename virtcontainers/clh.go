@@ -45,6 +45,11 @@ const (
 )
 
 const (
+	clhStateCreated = "Created"
+	clhStateRunning = "Running"
+)
+
+const (
 	// Values are mandatory by http API
 	// Values based on:
 	// github.com/cloud-hypervisor/cloud-hypervisor/blob/v0.3.0/vmm/src/config.rs#L395
@@ -62,6 +67,19 @@ const (
 	virtioFsCacheAlways   = "always"
 	maxClhVcpus           = uint32(64)
 )
+
+// Interface that hides the implementation of openAPI client
+// If the client changes  its methods, this interface should do it as well,
+// The main purpose is to hide the client in an interface to allow mock testing.
+// This is an interface that has to match with OpenAPI CLH client
+type clhClient interface {
+	VmmPingGet(ctx context.Context) (chclient.VmmPingResponse, *http.Response, error)
+	ShutdownVMM(ctx context.Context) (*http.Response, error)
+	CreateVM(ctx context.Context, vmConfig chclient.VmConfig) (*http.Response, error)
+	// No lint: golint suggest to rename to VMInfoGet.
+	VmInfoGet(ctx context.Context) (chclient.VmInfo, *http.Response, error) //nolint:golint
+	BootVM(ctx context.Context) (*http.Response, error)
+}
 
 type CloudHypervisorVersion struct {
 	Major    int
@@ -91,7 +109,7 @@ type cloudHypervisor struct {
 	store     *store.VCStore
 	config    HypervisorConfig
 	ctx       context.Context
-	APIClient *chclient.DefaultApiService
+	APIClient clhClient
 	version   CloudHypervisorVersion
 	vmconfig  chclient.VmConfig
 	cmdOutput bytes.Buffer
@@ -927,7 +945,7 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 
 }
 
-func (clh *cloudHypervisor) client() *chclient.DefaultApiService {
+func (clh *cloudHypervisor) client() clhClient {
 	if clh.APIClient == nil {
 		clh.APIClient = clh.newAPIClient()
 	}
@@ -996,7 +1014,7 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 
 	clh.Logger().Debugf("VM state after create: %#v", info)
 
-	if info.State != "Created" {
+	if info.State != clhStateCreated {
 		return fmt.Errorf("VM state is not 'Created' after 'CreateVM'")
 	}
 
@@ -1015,7 +1033,7 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 
 	clh.Logger().Debugf("VM state after boot: %#v", info)
 
-	if info.State != "Running" {
+	if info.State != clhStateRunning {
 		return fmt.Errorf("VM state is not 'Running' after 'BootVM'")
 	}
 
