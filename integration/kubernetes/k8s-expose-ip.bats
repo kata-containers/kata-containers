@@ -7,6 +7,9 @@
 #
 # Test that IP addresses/connections of PODS are routed/exposed correctly 
 # via a loadbalancer service.
+#
+# This test is temporarily turned off on ARM CI.
+# See detailed info in PR#2157(https://github.com/kata-containers/tests/pull/2157)
 
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../lib/common.bash"
