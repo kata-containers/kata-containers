@@ -1096,13 +1096,6 @@ func (c *Container) stop(force bool) error {
 	// get failed if the process hasn't exited.
 	c.sandbox.agent.waitProcess(c, c.id)
 
-	// container was killed by force, container MUST change its state
-	// as soon as possible just in case one of below operations fail leaving
-	// the containers in a bad state.
-	if err := c.setContainerState(types.StateStopped); err != nil {
-		return err
-	}
-
 	defer func() {
 		// Save device and drive data.
 		// TODO: can we merge this saving with setContainerState()?
@@ -1130,6 +1123,13 @@ func (c *Container) stop(force bool) error {
 	}
 
 	if err := c.removeDrive(); err != nil && !force {
+		return err
+	}
+
+	// container was killed by force, container MUST change its state
+	// as soon as possible just in case one of below operations fail leaving
+	// the containers in a bad state.
+	if err := c.setContainerState(types.StateStopped); err != nil {
 		return err
 	}
 
