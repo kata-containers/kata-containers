@@ -16,6 +16,7 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
+	"github.com/kata-containers/runtime/pkg/rootless"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"golang.org/x/sys/unix"
 )
@@ -59,10 +60,20 @@ func SetupNetworkNamespace(config *vc.NetworkConfig) error {
 		return nil
 	}
 
+	var err error
+	var n ns.NetNS
+
 	if config.NetNSPath == "" {
-		n, err := testutils.NewNS()
-		if err != nil {
-			return err
+		if rootless.IsRootless() {
+			n, err = rootless.NewNS()
+			if err != nil {
+				return err
+			}
+		} else {
+			n, err = testutils.NewNS()
+			if err != nil {
+				return err
+			}
 		}
 
 		config.NetNSPath = n.Path()
