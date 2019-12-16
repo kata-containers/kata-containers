@@ -446,7 +446,9 @@ func (clh *cloudHypervisor) addDevice(devInfo interface{}, devType deviceType) e
 
 	switch v := devInfo.(type) {
 	case Endpoint:
-		clh.addNet(v)
+		if err := clh.addNet(v); err != nil {
+			return err
+		}
 	case types.HybridVSock:
 		clh.addVSock(defaultGuestVSockCID, v.UdsPath)
 	case types.Volume:
@@ -522,7 +524,7 @@ func (clh *cloudHypervisor) terminate() (err error) {
 			}
 		}
 
-		clh.cleanupVM()
+		_ = clh.cleanupVM(true)
 	}()
 
 	pid := clh.state.PID
@@ -1049,16 +1051,29 @@ func (clh *cloudHypervisor) addVSock(cid int64, path string) {
 	clh.vmconfig.Vsock = append(clh.vmconfig.Vsock, chclient.VsockConfig{Cid: cid, Sock: path})
 }
 
-func (clh *cloudHypervisor) addNet(e Endpoint) {
+func (clh *cloudHypervisor) addNet(e Endpoint) error {
 	clh.Logger().WithField("endpoint-type", e).Debugf("Adding Endpoint of type %v", e)
+
 	mac := e.HardwareAddr()
-	tapPath := e.NetworkPair().TapInterface.TAPIface.Name
+	netPair := e.NetworkPair()
+
+	if netPair == nil {
+		return errors.New("net Pair to be added is nil, needed to get TAP path")
+	}
+
+	tapPath := netPair.TapInterface.TAPIface.Name
+
+	if tapPath == "" {
+		return errors.New("TAP path in network pair is empty")
+	}
+
 	clh.Logger().WithFields(log.Fields{
 		"mac": mac,
 		"tap": tapPath,
 	}).Info("Adding Net")
 
 	clh.vmconfig.Net = append(clh.vmconfig.Net, chclient.NetConfig{Mac: mac, Tap: tapPath})
+	return nil
 }
 
 // Add shared Volume using virtiofs
@@ -1095,25 +1110,37 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 }
 
 // cleanupVM will remove generated files and directories related with the virtual machine
-func (clh *cloudHypervisor) cleanupVM() error {
+func (clh *cloudHypervisor) cleanupVM(force bool) error {
+
+	if clh.id == "" {
+		return errors.New("Hypervisor ID is empty")
+	}
 
 	// cleanup vm path
 	dir := filepath.Join(store.RunVMStoragePath(), clh.id)
 
 	// If it's a symlink, remove both dir and the target.
-	// This can happen when vm template links a sandbox to a vm.
 	link, err := filepath.EvalSymlinks(dir)
 	if err != nil {
-		// Well, it's just cleanup failure. Let's ignore it.
 		clh.Logger().WithError(err).WithField("dir", dir).Warn("failed to resolve vm path")
 	}
-	clh.Logger().WithField("link", link).WithField("dir", dir).Infof("cleanup vm path")
+
+	clh.Logger().WithFields(log.Fields{
+		"link": link,
+		"dir":  dir,
+	}).Infof("cleanup vm path")
 
 	if err := os.RemoveAll(dir); err != nil {
+		if !force {
+			return err
+		}
 		clh.Logger().WithError(err).Warnf("failed to remove vm path %s", dir)
 	}
 	if link != dir && link != "" {
 		if err := os.RemoveAll(link); err != nil {
+			if !force {
+				return err
+			}
 			clh.Logger().WithError(err).WithField("link", link).Warn("failed to remove resolved vm path")
 		}
 	}
@@ -1121,10 +1148,16 @@ func (clh *cloudHypervisor) cleanupVM() error {
 	if clh.config.VMid != "" {
 		dir = store.SandboxConfigurationRootPath(clh.config.VMid)
 		if err := os.RemoveAll(dir); err != nil {
+			if !force {
+				return err
+			}
 			clh.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
 		}
 		dir = store.SandboxRuntimeRootPath(clh.config.VMid)
 		if err := os.RemoveAll(dir); err != nil {
+			if !force {
+				return err
+			}
 			clh.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
 		}
 	}
