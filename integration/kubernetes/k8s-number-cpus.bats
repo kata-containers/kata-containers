@@ -7,10 +7,8 @@
 
 load "${BATS_TEST_DIRNAME}/../../.ci/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../lib/common.bash"
-issue="https://github.com/kata-containers/runtime/issues/2186"
 
 setup() {
-	skip "test not working see: ${issue}"
 	export KUBECONFIG="$HOME/.kube/config"
 	pod_name="cpu-test"
 	container_name="c1"
@@ -19,7 +17,6 @@ setup() {
 
 # Skip on aarch64 due to missing cpu hotplug related functionality.
 @test "Check number of cpus" {
-	skip "test not working see: ${issue}"
 	# Create pod
 	kubectl create -f "${pod_config_dir}/pod-number-cpu.yaml"
 
@@ -39,6 +36,5 @@ setup() {
 }
 
 teardown() {
-	skip "test not working see: ${issue}"
 	kubectl delete pod "$pod_name"
 }
