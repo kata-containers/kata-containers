@@ -59,7 +59,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			return nil, fmt.Errorf("cannot create another sandbox in sandbox: %s", s.sandbox.ID())
 		}
 
-		_, err := loadRuntimeConfig(s, r)
+		_, err := loadRuntimeConfig(s, r, ociSpec.Annotations)
 		if err != nil {
 			return nil, err
 		}
@@ -147,10 +147,13 @@ func loadSpec(r *taskAPI.CreateTaskRequest) (*specs.Spec, string, error) {
 	return &ociSpec, bundlePath, nil
 }
 
-func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest) (*oci.RuntimeConfig, error) {
-	var configPath string
-
-	if r.Options != nil {
+// Config override ordering(high to low):
+// 1. podsandbox annotation
+// 2. shimv2 create task option
+// 3. environment
+func loadRuntimeConfig(s *service, r *taskAPI.CreateTaskRequest, anno map[string]string) (*oci.RuntimeConfig, error) {
+	configPath := oci.GetSandboxConfigPath(anno)
+	if configPath == "" && r.Options != nil {
 		v, err := typeurl.UnmarshalAny(r.Options)
 		if err != nil {
 			return nil, err
