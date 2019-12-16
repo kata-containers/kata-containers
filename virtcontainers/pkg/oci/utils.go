@@ -309,6 +309,10 @@ func ContainerType(spec specs.Spec) (vc.ContainerType, error) {
 	return vc.PodSandbox, nil
 }
 
+func GetSandboxConfigPath(annotations map[string]string) string {
+	return annotations[vcAnnotations.SandboxConfigPathKey]
+}
+
 // SandboxID determines the sandbox ID related to an OCI configuration. This function
 // is expected to be called only when the container type is "PodContainer".
 func SandboxID(spec specs.Spec) (string, error) {
