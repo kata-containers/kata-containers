@@ -25,6 +25,7 @@ const testKernel = "kernel"
 const testInitrd = "initrd"
 const testImage = "image"
 const testHypervisor = "hypervisor"
+const testVirtiofsd = "virtiofsd"
 const testHypervisorCtl = "hypervisorctl"
 const testBundle = "bundle"
 
@@ -49,6 +50,7 @@ var testAcrnKernelPath = ""
 var testAcrnImagePath = ""
 var testAcrnPath = ""
 var testAcrnCtlPath = ""
+var testVirtiofsdPath = ""
 
 var testHyperstartCtlSocket = ""
 var testHyperstartTtySocket = ""
@@ -91,7 +93,7 @@ func setupAcrn() {
 func setupClh() {
 	os.Mkdir(filepath.Join(testDir, testBundle), store.DirMode)
 
-	for _, filename := range []string{testClhKernelPath, testClhImagePath, testClhPath} {
+	for _, filename := range []string{testClhKernelPath, testClhImagePath, testClhPath, testVirtiofsdPath} {
 		_, err := os.Create(filename)
 		if err != nil {
 			fmt.Printf("Could not recreate %s:%v", filename, err)
@@ -142,9 +144,10 @@ func TestMain(m *testing.M) {
 
 	setupAcrn()
 
-	testClhKernelPath = filepath.Join(testDir, testKernel)
-	testClhImagePath = filepath.Join(testDir, testImage)
-	testClhPath = filepath.Join(testDir, testHypervisor)
+	testVirtiofsdPath = filepath.Join(testDir, testBundle, testVirtiofsd)
+	testClhKernelPath = filepath.Join(testDir, testBundle, testKernel)
+	testClhImagePath = filepath.Join(testDir, testBundle, testImage)
+	testClhPath = filepath.Join(testDir, testBundle, testHypervisor)
 
 	setupClh()
 
