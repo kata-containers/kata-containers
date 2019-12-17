@@ -429,7 +429,7 @@ func (conf *HypervisorConfig) valid() error {
 		conf.DefaultMaxVCPUs = defaultMaxQemuVCPUs
 	}
 
-	if conf.Msize9p == 0 {
+	if conf.Msize9p == 0 && conf.SharedFS != config.VirtioFS {
 		conf.Msize9p = defaultMsize9p
 	}
 
