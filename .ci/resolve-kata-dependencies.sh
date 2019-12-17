@@ -15,6 +15,7 @@ shim_repo="${shim_repo:-github.com/kata-containers/shim}"
 tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 packaging_repo="${packaging_repo:-github.com/kata-containers/packaging}"
 osbuilder_repo="${osbuilder_repo:-github.com/kata-containers/osbuilder}"
+katacontainers_repo="${katacontainers_repo:-github.com/kata-containers/kata-containers}"
 
 apply_depends_on() {
 	# kata_repo variable is set by the jenkins_job_build.sh
@@ -64,6 +65,7 @@ apply_depends_on() {
 clone_repos() {
 	local kata_repos=(
 	"${agent_repo}"
+	"${katacontainers_repo}"
 	"${osbuilder_repo}"
 	"${packaging_repo}"
 	"${proxy_repo}"
