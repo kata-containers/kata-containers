@@ -260,6 +260,7 @@ get_default_kernel_config() {
 	if [ -d "${archfragdir}" ]; then
 		config="$(get_kernel_frag_path ${archfragdir} ${kernel_path})"
 	else
+		[ "${hypervisor}" == "firecracker" ] && hypervisor="kvm"
 		config="${default_kernel_config_dir}/${kernel_arch}_kata_${hypervisor}_${major_kernel}.x"
 	fi
 
@@ -354,6 +355,7 @@ build_kernel() {
 	make -j $(nproc) ARCH="${arch_target}"
 	[ "$arch_target" != "powerpc" ] && ([ -e "arch/${arch_target}/boot/bzImage" ] || [ -e "arch/${arch_target}/boot/Image.gz" ])
 	[ -e "vmlinux" ]
+	[ "${hypervisor_target}" == "firecracker" ] && [ "${arch_target}" == "arm64" ] && [ -e "arch/${arch_target}/boot/Image" ]
 	popd >>/dev/null
 }
 
@@ -382,8 +384,15 @@ install_kata() {
 		install --mode 0644 -D "${bzImage}" "${install_path}/${vmlinuz}"
 	fi
 
-	install --mode 0644 -D "vmlinux" "${install_path}/${vmlinux}"
+	if [ "${hypervisor_target}" == "firecracker" ] && [ "${arch_target}" == "arm64" ]; then
+		vmlinux="${vmlinux}-${hypervisor_target}"
+		install --mode 0644 -D "arch/${arch_target}/boot/Image" "${install_path}/${vmlinux}"
+	else
+		install --mode 0644 -D "vmlinux" "${install_path}/${vmlinux}"
+	fi
+
 	install --mode 0644 -D ./.config "${install_path}/config-${kernel_version}"
+
 	if [[ ${experimental_kernel} == "true" ]]; then
 		sufix="-virtiofs.container"
 	else
