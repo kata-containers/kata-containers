@@ -17,6 +17,7 @@ export PATH="$PATH:/usr/local/sbin"
 RUNTIME=${RUNTIME:-kata-runtime}
 SHIMV2_TEST=${SHIMV2_TEST:-""}
 FACTORY_TEST=${FACTORY_TEST:-""}
+KILL_VMM_TEST=${KILL_VMM_TEST:-""}
 
 default_runtime_type="io.containerd.runtime.v1.linux"
 # Type of containerd runtime to be tested
@@ -43,6 +44,8 @@ readonly cri_containerd_repo="github.com/containerd/cri"
 readonly tmp_dir=$(mktemp -t -d test-cri-containerd.XXXX)
 export REPORT_DIR="${tmp_dir}"
 readonly CONTAINERD_CONFIG_FILE="${tmp_dir}/test-containerd-config"
+readonly default_containerd_config="/etc/containerd/config.toml"
+readonly default_containerd_config_backup="$CONTAINERD_CONFIG_FILE.backup"
 readonly kata_config="/etc/kata-containers/configuration.toml"
 readonly default_kata_config="/usr/share/defaults/kata-containers/configuration.toml"
 
@@ -84,6 +87,12 @@ ci_cleanup() {
 	if [ -n "${FACTORY_TEST}" ]; then
 		echo "destroy vm template"
 		sudo -E PATH=$PATH "$RUNTIME" factory destroy
+	fi
+
+	if [ -n "${KILL_VMM_TEST}" ] && [ -e "$default_containerd_config_backup" ]; then
+		echo "restore containerd config"
+		sudo systemctl stop containerd
+		sudo cp "$default_containerd_config_backup" "$default_containerd_config"
 	fi
 
 	ID=${ID:-""}
@@ -154,6 +163,55 @@ check_daemon_setup() {
 		make -e test-integration
 }
 
+TestKilledVmmCleanup() {
+	if [ -z "${SHIMV2_TEST}" ] || [ -z "${KILL_VMM_TEST}" ]; then
+		return
+	fi
+
+	info "test killed vmm cleanup"
+
+	local pod_yaml=${REPORT_DIR}/pod.yaml
+	local container_yaml=${REPORT_DIR}/container.yaml
+	local image="busybox:latest"
+
+	cat << EOF > "${pod_yaml}"
+metadata:
+  name: busybox-sandbox1
+EOF
+
+	cat << EOF > "${container_yaml}"
+metadata:
+  name: busybox-killed-vmm
+image:
+  image: "$image"
+command:
+- top
+EOF
+
+	sudo cp "$default_containerd_config" "$default_containerd_config_backup"
+	sudo cp $CONTAINERD_CONFIG_FILE /etc/containerd/config.toml
+
+	sudo systemctl restart containerd
+
+	sudo crictl pull $image
+	podid=$(sudo crictl runp $pod_yaml)
+	cid=$(sudo crictl create $podid $container_yaml $pod_yaml)
+	sudo crictl start $cid
+
+	qemu_pid=$(ps aux|grep qemu|grep -v grep|awk '{print $2}')
+	info "kill qemu $qemu_pid"
+	sudo kill -SIGKILL $qemu_pid
+	# sleep to let shimv2 exit
+	sleep 1
+	remained=$(ps aux|grep shimv2|grep -v grep || true)
+	[ -z $remained ] || die "found remaining shimv2 process $remained"
+	info "stop pod $podid"
+	sudo crictl stopp $podid
+	info "remove pod $podid"
+	sudo crictl rmp $podid
+	info "stop containerd"
+}
+
 main() {
 
 	info "Stop crio service"
@@ -211,6 +269,8 @@ main() {
 			CONTAINERD_CONFIG_FILE="$CONTAINERD_CONFIG_FILE" \
 			make -e test-integration
 	done
+
+	TestKilledVmmCleanup
 
 	popd
 }
