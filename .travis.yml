@@ -4,6 +4,9 @@ go:
     - "1.10"
     - "1.11"
     - tip
+arch:
+    - amd64
+    - s390x
 
 go_import_path: github.com/intel/govmm
 
@@ -20,5 +23,3 @@ script:
    - go env
    - $GOPATH/bin/goveralls -v -service=travis-ci
    - gometalinter --tests --vendor --disable-all --enable=misspell --enable=vet --enable=ineffassign --enable=gofmt --enable=gocyclo --cyclo-over=15 --enable=golint --enable=errcheck --enable=deadcode --enable=staticcheck -enable=gas ./...
-   - GOARCH=s390x go install ./...
-   - go test --tags s390x_test ./...
