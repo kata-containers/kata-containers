@@ -11,7 +11,7 @@ set -o pipefail
 script_dir=$(dirname $(readlink -f "$0"))
 docker_image="cloud-hypervisor-builder"
 
-docker build -t "${docker_image}" "${script_dir}"
+sudo docker build -t "${docker_image}" "${script_dir}"
 
 if test -t 1; then
 	USE_TTY="-ti"
@@ -20,7 +20,7 @@ else
 	echo "INFO: not tty build"
 fi
 
-docker run \
+sudo docker run \
 	--rm \
 	-v "$(pwd):/$(pwd)" \
 	-w "$(pwd)" \
