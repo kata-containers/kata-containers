@@ -72,9 +72,9 @@ assets:
 
     cloud_hypervisor:
       description: "Cloud Hypervisor is an open source Virtual Machine Monitor"
-      url: "https://github.com/intel/cloud-hypervisor"
+      url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
-        https://github.com/intel/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
+        https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
       version: "v0.4.0"
 
     firecracker:
