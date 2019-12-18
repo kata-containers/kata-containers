@@ -58,7 +58,7 @@ cache_kernel_artifacts() {
 # This builds cloud hypervisor
 cache_cloud_hypervisor() {
 	local cloud_hypervisor_binary="cloud-hypervisor"
-	local cloud_hypervisor_binary_path="/usr/bin"
+	local cloud_hypervisor_binary_path="${GOPATH}/src/github.com/cloud-hypervisor/cloud-hypervisor/cloud-hypervisor/"
 	local current_cloud_hypervisor_version=$(get_version "assets.hypervisor.cloud_hypervisor.version")
 	pushd "${cloud_hypervisor_binary_path}"
 	create_cache_asset "${cloud_hypervisor_binary}" "${current_cloud_hypervisor_version}"
