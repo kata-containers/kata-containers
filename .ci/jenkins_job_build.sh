@@ -24,6 +24,13 @@ echo "Setup env for kata repository: $kata_repo"
 
 tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 runtime_repo="${runtime_repo:-github.com/kata-containers/runtime}"
+katacontainers_repo="${katacontainers_repo:-github.com/kata-containers/kata-containers}"
+
+if [ "${kata_repo}" == "${katacontainers_repo}" ]; then
+	ci_dir_name="ci"
+else
+	ci_dir_name=".ci"
+fi
 
 # This script is intended to execute under Jenkins
 # If we do not know where the Jenkins defined WORKSPACE area is
@@ -100,7 +107,7 @@ if [ -z "${METRICS_CI}" ]; then
 		specific_branch=""
 		# If not a PR, we are testing on stable or master branch.
 		[ -z "$pr_number" ] && specific_branch="true"
-		.ci/static-checks.sh "$kata_repo" "$specific_branch"
+		"${ci_dir_name}/static-checks.sh" "$kata_repo" "$specific_branch"
 	fi
 fi
 
@@ -137,7 +144,7 @@ case "${CI_JOB}" in
 	export DEFSANDBOXCGROUPONLY=true
 	;;
 esac
-.ci/setup.sh
+"${ci_dir_name}/setup.sh"
 
 # Now we have all the components installed, log that info before we
 # run the tests.
@@ -161,7 +168,7 @@ if [ -z "${METRICS_CI}" ]; then
 	# Run integration tests
 	#
 	# Note: this will run all classes of tests for ${tests_repo}.
-	.ci/run.sh
+	"${ci_dir_name}/run.sh"
 
 	# Code coverage
 	bash <(curl -s https://codecov.io/bash)
