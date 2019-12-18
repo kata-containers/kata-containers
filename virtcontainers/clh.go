@@ -600,6 +600,10 @@ func (clh *cloudHypervisor) generateSocket(id string, useVsock bool) (interface{
 
 func (clh *cloudHypervisor) setupVirtiofsd(timeout int) (remain int, err error) {
 
+	if clh.config.VirtioFSDaemon == "" {
+		return timeout, errors.New("Virtiofsd path is empty")
+	}
+
 	sockPath, perr := clh.virtioFsSocketPath(clh.id)
 	if perr != nil {
 		return 0, perr
