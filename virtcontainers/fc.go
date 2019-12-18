@@ -303,6 +303,7 @@ func (fc *firecracker) newFireClient() *client.Firecracker {
 func (fc *firecracker) vmRunning() bool {
 	resp, err := fc.client().Operations.DescribeInstance(nil)
 	if err != nil {
+		fc.Logger().WithError(err).Error("getting vm status failed")
 		return false
 	}
 
@@ -380,10 +381,6 @@ func (fc *firecracker) fcInit(timeout int) error {
 	span, _ := fc.trace("fcInit")
 	defer span.Finish()
 
-	if fc.config.JailerPath != "" {
-		fc.jailed = true
-	}
-
 	// Fetch sandbox network to be able to access it from the sandbox structure.
 	var networkNS NetworkNamespace
 	if fc.store != nil {
@@ -417,7 +414,11 @@ func (fc *firecracker) fcInit(timeout int) error {
 	}
 
 	var cmd *exec.Cmd
-	args := []string{"--config-file", fc.fcConfigPath}
+	var args []string
+
+	if fc.fcConfigPath, err = fc.fcJailResource(fc.fcConfigPath, defaultFcConfig); err != nil {
+		return err
+	}
 
 	if !fc.config.Debug && fc.stateful {
 		args = append(args, "--daemonize")
@@ -442,10 +443,13 @@ func (fc *firecracker) fcInit(timeout int) error {
 		if fc.netNSPath != "" {
 			args = append(args, "--netns", fc.netNSPath)
 		}
+		args = append(args, "--", "--config-file", fc.fcConfigPath)
 
 		cmd = exec.Command(fc.config.JailerPath, args...)
 	} else {
-		args = append(args, "--api-sock", fc.socketPath)
+		args = append(args,
+			"--api-sock", fc.socketPath,
+			"--config-file", fc.fcConfigPath)
 		cmd = exec.Command(fc.config.HypervisorPath, args...)
 	}
 
@@ -706,6 +710,10 @@ func (fc *firecracker) fcListenToFifo(fifoName string) (string, error) {
 }
 
 func (fc *firecracker) fcInitConfiguration() error {
+	if fc.config.JailerPath != "" {
+		fc.jailed = true
+	}
+
 	fc.fcSetVMBaseConfig(int64(fc.config.MemorySize),
 		int64(fc.config.NumVCPUs), false)
 
@@ -857,6 +865,7 @@ func (fc *firecracker) cleanupJail() {
 	fc.umountResource(fcRootfs)
 	fc.umountResource(fcLogFifo)
 	fc.umountResource(fcMetricsFifo)
+	fc.umountResource(defaultFcConfig)
 
 	fc.Logger().WithField("cleaningJail", fc.vmPath).Info()
 	if err := os.RemoveAll(fc.vmPath); err != nil {
