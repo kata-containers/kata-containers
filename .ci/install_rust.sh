@@ -20,7 +20,7 @@ if [ -z "${version}" ]; then
 fi
 
 if ! command -v rustup > /dev/null; then
-	curl https://sh.rustup.rs -sSf | sh
+	curl https://sh.rustup.rs -sSf | sh -s -- -y
 fi
 
 export PATH="${PATH}:${HOME}/.cargo/bin"
