@@ -1,4 +1,4 @@
-// +build !s390x,!s390x_test
+// +build !s390x
 
 /*
 // Copyright contributors to the Virtual Machine Manager for Go project
