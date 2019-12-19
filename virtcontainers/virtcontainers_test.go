@@ -11,11 +11,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/store"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -128,6 +130,14 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		fmt.Println("Could not create test directories:", err)
 		os.Exit(1)
+	}
+
+	utils.StartCmd = func(c *exec.Cmd) error {
+		//startSandbox will check if the hypervisor is alive and
+		// checks for the PID is running, lets fake it using our
+		// own PID
+		c.Process = &os.Process{Pid: os.Getpid()}
+		return nil
 	}
 
 	testQemuKernelPath = filepath.Join(testDir, testKernel)
