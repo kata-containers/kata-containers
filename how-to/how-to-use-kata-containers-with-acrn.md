@@ -4,7 +4,7 @@ This document provides an overview on how to run Kata containers with ACRN hyper
 
 - [Introduction](#introduction)
 - [Pre-requisites](#pre-requisites)
-- [Install and Configure Docker](#install-and-configure-docker)
+- [Configure Docker](#configure-docker)
 - [Configure Kata Containers with ACRN](#configure-kata-containers-with-acrn)
 
 ## Introduction
@@ -26,18 +26,40 @@ Please refer to ACRN [documentation](https://projectacrn.github.io/latest/index.
 This document requires the presence of the ACRN hypervisor and Kata Containers on your system. Install using the instructions available through the following links:
 
 - ACRN supported [Hardware](https://projectacrn.github.io/latest/hardware.html#supported-hardware).
-- ACRN [software](https://projectacrn.github.io/latest/getting-started/apl-nuc.html#use-the-script-to-set-up-acrn-automatically) setup.
+  > **Note:** Please make sure to have a minimum of 4 logical processors (HT) or cores.
+- ACRN [software](https://projectacrn.github.io/latest/tutorials/kbl-nuc-sdc.html#use-the-script-to-set-up-acrn-automatically) setup.
+- For networking, ACRN supports either MACVTAP or TAP. If MACVTAP is not enabled in the Service OS, please follow the below steps to update the kernel:
+
+  ```sh
+   $ git clone https://github.com/projectacrn/acrn-kernel.git
+   $ cd acrn-kernel
+   $ cp kernel_config_sos .config
+   $ sed -i "s/# CONFIG_MACVLAN is not set/CONFIG_MACVLAN=y/" .config
+   $ sed -i '$ i CONFIG_MACVTAP=y' .config
+   $ make clean && make olddefconfig && make && sudo make modules_install INSTALL_MOD_PATH=out/
+  ```
+  Login into Service OS and update the kernel with MACVTAP support:
+
+  ```sh
+  $ sudo mount /dev/sda1 /mnt
+  $ sudo scp -r <user name>@<host address>:<your workspace>/acrn-kernel/arch/x86/boot/bzImage /mnt/EFI/org.clearlinux/
+  $ sudo scp -r <user name>@<host address>:<your workspace>/acrn-kernel/out/lib/modules/* /lib/modules/
+  $ conf_file=$(sed -n '$ s/default //p' /mnt/loader/loader.conf).conf
+  $ kernel_img=$(sed -n 2p /mnt/loader/entries/$conf_file | cut -d'/' -f4)
+  $ sudo sed -i "s/$kernel_img/bzImage/g" /mnt/loader/entries/$conf_file
+  $ sync && sudo umount /mnt && sudo reboot
+  ```
 - Kata Containers installation: Automated installation does not seem to be supported for Clear Linux, so please use [manual installation](https://github.com/kata-containers/documentation/blob/master/Developer-Guide.md) steps.
 
 > **Note:** Create rootfs image and not initrd image.
 
 In order to run Kata with ACRN, your container stack must provide block-based storage, such as device-mapper.
 
-> **Note:** Currently, you can only launch one VM from Kata Containers using ACRN hypervisor (SDC scenario) due to [this issue](https://github.com/kata-containers/runtime/issues/1785).
+> **Note:** Currently, by design you can only launch one VM from Kata Containers using ACRN hypervisor (SDC scenario). Based on feedback from community we can increase number of VMs.
 
-## Install and Configure Docker
+## Configure Docker
 
-Install Docker 18.06 (as Docker 18.09 does not support device-mapper). To configure Docker for device-mapper and Kata,
+To configure Docker for device-mapper and Kata,
 
 1. Stop Docker daemon if it is already running.
 
