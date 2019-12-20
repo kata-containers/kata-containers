@@ -252,3 +252,9 @@ func ValidCgroupPath(path string) string {
 	// clean up path and return a new path relative to defaultCgroupPath
 	return filepath.Join(DefaultCgroupPath, filepath.Clean("/"+path))
 }
+
+// StartCmd pointer to a function to start a command.
+// Defined this way to allow mock testing.
+var StartCmd = func(c *exec.Cmd) error {
+	return c.Start()
+}
