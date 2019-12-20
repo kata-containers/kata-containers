@@ -6,7 +6,6 @@
 package virtcontainers
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -45,9 +44,13 @@ const (
 )
 
 const (
+	clhStateCreated = "Created"
+	clhStateRunning = "Running"
+)
+
+const (
 	// Values are mandatory by http API
 	// Values based on:
-	// github.com/cloud-hypervisor/cloud-hypervisor/blob/v0.3.0/vmm/src/config.rs#L395
 	clhTimeout            = 10
 	clhAPITimeout         = 1
 	clhStopSandboxTimeout = 3
@@ -62,6 +65,19 @@ const (
 	virtioFsCacheAlways   = "always"
 	maxClhVcpus           = uint32(64)
 )
+
+// Interface that hides the implementation of openAPI client
+// If the client changes  its methods, this interface should do it as well,
+// The main purpose is to hide the client in an interface to allow mock testing.
+// This is an interface that has to match with OpenAPI CLH client
+type clhClient interface {
+	VmmPingGet(ctx context.Context) (chclient.VmmPingResponse, *http.Response, error)
+	ShutdownVMM(ctx context.Context) (*http.Response, error)
+	CreateVM(ctx context.Context, vmConfig chclient.VmConfig) (*http.Response, error)
+	// No lint: golint suggest to rename to VMInfoGet.
+	VmInfoGet(ctx context.Context) (chclient.VmInfo, *http.Response, error) //nolint:golint
+	BootVM(ctx context.Context) (*http.Response, error)
+}
 
 type CloudHypervisorVersion struct {
 	Major    int
@@ -91,10 +107,11 @@ type cloudHypervisor struct {
 	store     *store.VCStore
 	config    HypervisorConfig
 	ctx       context.Context
-	APIClient *chclient.DefaultApiService
+	APIClient clhClient
 	version   CloudHypervisorVersion
 	vmconfig  chclient.VmConfig
 	cmdOutput bytes.Buffer
+	virtiofsd Virtiofsd
 }
 
 var clhKernelParams = []Param{
@@ -164,10 +181,26 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 
 	clh.Logger().WithField("function", "createSandbox").Info("creating Sandbox")
 
+	virtiofsdSocketPath, err := clh.virtioFsSocketPath(clh.id)
+	if err != nil {
+		return nil
+
+	}
+
 	// No need to return an error from there since there might be nothing
 	// to fetch if this is the first time the hypervisor is created.
-	if err := clh.store.Load(store.Hypervisor, &clh.state); err != nil {
-		clh.Logger().WithField("function", "createSandbox").WithError(err).Info("No info could be fetched")
+	err = clh.store.Load(store.Hypervisor, &clh.state)
+	if err != nil {
+		clh.Logger().WithField("function", "createSandbox").WithError(err).Info("Sandbox not found creating ")
+	} else {
+		clh.Logger().WithField("function", "createSandbox").Info("Sandbox already exist, loading from state")
+		clh.virtiofsd = &virtiofsd{
+			PID:        clh.state.VirtiofsdPID,
+			sourcePath: filepath.Join(kataHostSharedDir(), clh.id),
+			debug:      clh.config.Debug,
+			socketPath: virtiofsdSocketPath,
+		}
+		return nil
 	}
 
 	// Set initial memomory size of the virtual machine
@@ -251,6 +284,15 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	}
 	clh.state.apiSocket = apiSocketPath
 
+	clh.virtiofsd = &virtiofsd{
+		path:       clh.config.VirtioFSDaemon,
+		sourcePath: filepath.Join(kataHostSharedDir(), clh.id),
+		socketPath: virtiofsdSocketPath,
+		extraArgs:  clh.config.VirtioFSExtraArgs,
+		debug:      clh.config.Debug,
+		cache:      clh.config.VirtioFSCache,
+	}
+
 	return nil
 }
 
@@ -270,12 +312,17 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 		return err
 	}
 
+	if clh.virtiofsd == nil {
+		return errors.New("Missing virtiofsd configuration")
+	}
+
 	if clh.config.SharedFS == config.VirtioFS {
 		clh.Logger().WithField("function", "startSandbox").Info("Starting virtiofsd")
-		_, err = clh.setupVirtiofsd(timeout)
+		pid, err := clh.virtiofsd.Start(ctx)
 		if err != nil {
 			return err
 		}
+		clh.state.VirtiofsdPID = pid
 		if err = clh.storeState(); err != nil {
 			return err
 		}
@@ -292,7 +339,7 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 
 	if err := clh.waitVMM(clhTimeout); err != nil {
 		clh.Logger().WithField("error", err).WithField("output", clh.cmdOutput.String()).Warn("cloud-hypervisor init failed")
-		if shutdownErr := clh.shutdownVirtiofsd(); shutdownErr != nil {
+		if shutdownErr := clh.virtiofsd.Stop(); shutdownErr != nil {
 			clh.Logger().WithField("error", shutdownErr).Warn("error shutting down Virtiofsd")
 		}
 		return err
@@ -428,7 +475,9 @@ func (clh *cloudHypervisor) addDevice(devInfo interface{}, devType deviceType) e
 
 	switch v := devInfo.(type) {
 	case Endpoint:
-		clh.addNet(v)
+		if err := clh.addNet(v); err != nil {
+			return err
+		}
 	case types.HybridVSock:
 		clh.addVSock(defaultGuestVSockCID, v.UdsPath)
 	case types.Volume:
@@ -481,64 +530,36 @@ func (clh *cloudHypervisor) terminate() (err error) {
 	span, _ := clh.trace("terminate")
 	defer span.Finish()
 
-	defer func() {
-		if err != nil {
-			clh.Logger().Info("Terminate Cloud Hypervisor failed")
-		} else {
-			clh.Logger().Info("Cloud Hypervisor stopped")
-			clh.reset()
-			clh.Logger().Debug("removing virtiofsd and vm sockets")
-			path, err := clh.virtioFsSocketPath(clh.id)
-			if err == nil {
-				rerr := os.Remove(path)
-				if rerr != nil {
-					clh.Logger().WithField("path", path).Warn("removing virtiofsd socket failed")
-				}
-			}
-			path, err = clh.vsockSocketPath(clh.id)
-			if err == nil {
-				rerr := os.Remove(path)
-				if rerr != nil {
-					clh.Logger().WithField("path", path).Warn("removing vm socket failed")
-				}
-			}
-		}
-
-		clh.cleanupVM()
-	}()
-
 	pid := clh.state.PID
+	pidRunning := true
 	if pid == 0 {
-		clh.Logger().WithField("PID", pid).Info("Skipping kill cloud hypervisor. invalid pid")
-		return nil
+		pidRunning = false
 	}
+
 	clh.Logger().WithField("PID", pid).Info("Stopping Cloud Hypervisor")
 
-	clhRunning, err := clh.isClhRunning(clhStopSandboxTimeout)
-
-	if err != nil {
-		return err
+	if pidRunning {
+		clhRunning, _ := clh.isClhRunning(clhStopSandboxTimeout)
+		if clhRunning {
+			ctx, cancel := context.WithTimeout(context.Background(), clhStopSandboxTimeout*time.Second)
+			defer cancel()
+			if _, err = clh.client().ShutdownVMM(ctx); err != nil {
+				return err
+			}
+		}
 	}
 
-	if !clhRunning {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), clhStopSandboxTimeout*time.Second)
-	defer cancel()
-
-	if _, err = clh.client().ShutdownVMM(ctx); err != nil {
-		return err
-	}
-
+	// At this point the VMM was stop nicely, but need to check if PID is still running
 	// Wait for the VM process to terminate
 	tInit := time.Now()
 	for {
 		if err = syscall.Kill(pid, syscall.Signal(0)); err != nil {
-			return nil
+			pidRunning = false
+			break
 		}
 
 		if time.Since(tInit).Seconds() >= clhStopSandboxTimeout {
+			pidRunning = true
 			clh.Logger().Warnf("VM still running after waiting %ds", clhStopSandboxTimeout)
 			break
 		}
@@ -549,7 +570,21 @@ func (clh *cloudHypervisor) terminate() (err error) {
 
 	// Let's try with a hammer now, a SIGKILL should get rid of the
 	// VM process.
-	return syscall.Kill(pid, syscall.SIGKILL)
+	if pidRunning {
+		if err = syscall.Kill(pid, syscall.SIGKILL); err != nil {
+			return fmt.Errorf("Fatal, failed to kill hypervisor process, error: %s", err)
+		}
+	}
+
+	if clh.virtiofsd == nil {
+		return errors.New("virtiofsd config is nil, failed to stop it")
+	}
+
+	if err := clh.cleanupVM(true); err != nil {
+		return err
+	}
+
+	return clh.virtiofsd.Stop()
 }
 
 func (clh *cloudHypervisor) reset() {
@@ -576,129 +611,6 @@ func (clh *cloudHypervisor) generateSocket(id string, useVsock bool) (interface{
 		ContextID: cid,
 		Port:      uint32(vSockPort),
 	}, nil
-}
-
-func (clh *cloudHypervisor) setupVirtiofsd(timeout int) (remain int, err error) {
-
-	sockPath, perr := clh.virtioFsSocketPath(clh.id)
-	if perr != nil {
-		return 0, perr
-	}
-
-	theArgs, err := clh.virtiofsdArgs(sockPath)
-	if err != nil {
-		return 0, err
-	}
-
-	clh.Logger().WithField("path", clh.config.VirtioFSDaemon).Info()
-	clh.Logger().WithField("args", strings.Join(theArgs, " ")).Info()
-
-	cmd := exec.Command(clh.config.VirtioFSDaemon, theArgs...)
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return 0, err
-	}
-
-	if err = cmd.Start(); err != nil {
-		return 0, err
-	}
-	defer func() {
-		if err != nil {
-			clh.state.VirtiofsdPID = 0
-			cmd.Process.Kill()
-		} else {
-			clh.state.VirtiofsdPID = cmd.Process.Pid
-
-		}
-		clh.storeState()
-	}()
-
-	// Wait for socket to become available
-	sockReady := make(chan error, 1)
-	timeStart := time.Now()
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		var sent bool
-		for scanner.Scan() {
-			if clh.config.Debug {
-				clh.Logger().WithField("source", "virtiofsd").Debug(scanner.Text())
-			}
-			if !sent && strings.Contains(scanner.Text(), "Waiting for vhost-user socket connection...") {
-				sockReady <- nil
-				sent = true
-			}
-		}
-		if !sent {
-			if err := scanner.Err(); err != nil {
-				sockReady <- err
-			} else {
-				sockReady <- fmt.Errorf("virtiofsd did not announce socket connection")
-			}
-		}
-		clh.Logger().Info("virtiofsd quits")
-		// Wait to release resources of virtiofsd process
-		cmd.Process.Wait()
-
-	}()
-
-	return clh.waitVirtiofsd(timeStart, timeout, sockReady,
-		fmt.Sprintf("virtiofsd (pid=%d) socket %s", cmd.Process.Pid, sockPath))
-}
-
-func (clh *cloudHypervisor) waitVirtiofsd(start time.Time, timeout int, ready chan error, errMsg string) (int, error) {
-	var err error
-
-	timeoutDuration := time.Duration(timeout) * time.Second
-	select {
-	case err = <-ready:
-	case <-time.After(timeoutDuration):
-		err = fmt.Errorf("timed out waiting for %s", errMsg)
-	}
-	if err != nil {
-		return 0, err
-	}
-
-	// Now reduce timeout by the elapsed time
-	elapsed := time.Since(start)
-	if elapsed < timeoutDuration {
-		timeout = timeout - int(elapsed.Seconds())
-	} else {
-		timeout = 0
-	}
-	return timeout, nil
-}
-
-func (clh *cloudHypervisor) virtiofsdArgs(sockPath string) ([]string, error) {
-
-	sourcePath := filepath.Join(kataHostSharedDir(), clh.id)
-	if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
-		if err = os.MkdirAll(sourcePath, os.ModePerm); err != nil {
-			return nil, err
-		}
-	}
-
-	args := []string{
-		"-f",
-		"-o", "vhost_user_socket=" + sockPath,
-		"-o", "source=" + sourcePath,
-		"-o", "cache=" + clh.config.VirtioFSCache}
-
-	if len(clh.config.VirtioFSExtraArgs) != 0 {
-		args = append(args, clh.config.VirtioFSExtraArgs...)
-	}
-	return args, nil
-}
-
-func (clh *cloudHypervisor) shutdownVirtiofsd() (err error) {
-
-	err = syscall.Kill(clh.state.VirtiofsdPID, syscall.SIGKILL)
-
-	if err != nil {
-		clh.state.VirtiofsdPID = 0
-		clh.storeState()
-	}
-	return err
-
 }
 
 func (clh *cloudHypervisor) virtioFsSocketPath(id string) (string, error) {
@@ -844,7 +756,7 @@ func (clh *cloudHypervisor) LaunchClh() (string, int, error) {
 		cmd.Env = append(cmd.Env, "RUST_BACKTRACE=full")
 	}
 
-	if err := cmd.Start(); err != nil {
+	if err := utils.StartCmd(cmd); err != nil {
 		fmt.Println("Error starting cloudHypervisor", err)
 		if cmd.Process != nil {
 			cmd.Process.Kill()
@@ -927,7 +839,7 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 
 }
 
-func (clh *cloudHypervisor) client() *chclient.DefaultApiService {
+func (clh *cloudHypervisor) client() clhClient {
 	if clh.APIClient == nil {
 		clh.APIClient = clh.newAPIClient()
 	}
@@ -996,7 +908,7 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 
 	clh.Logger().Debugf("VM state after create: %#v", info)
 
-	if info.State != "Created" {
+	if info.State != clhStateCreated {
 		return fmt.Errorf("VM state is not 'Created' after 'CreateVM'")
 	}
 
@@ -1015,7 +927,7 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 
 	clh.Logger().Debugf("VM state after boot: %#v", info)
 
-	if info.State != "Running" {
+	if info.State != clhStateRunning {
 		return fmt.Errorf("VM state is not 'Running' after 'BootVM'")
 	}
 
@@ -1031,16 +943,29 @@ func (clh *cloudHypervisor) addVSock(cid int64, path string) {
 	clh.vmconfig.Vsock = append(clh.vmconfig.Vsock, chclient.VsockConfig{Cid: cid, Sock: path})
 }
 
-func (clh *cloudHypervisor) addNet(e Endpoint) {
+func (clh *cloudHypervisor) addNet(e Endpoint) error {
 	clh.Logger().WithField("endpoint-type", e).Debugf("Adding Endpoint of type %v", e)
+
 	mac := e.HardwareAddr()
-	tapPath := e.NetworkPair().TapInterface.TAPIface.Name
+	netPair := e.NetworkPair()
+
+	if netPair == nil {
+		return errors.New("net Pair to be added is nil, needed to get TAP path")
+	}
+
+	tapPath := netPair.TapInterface.TAPIface.Name
+
+	if tapPath == "" {
+		return errors.New("TAP path in network pair is empty")
+	}
+
 	clh.Logger().WithFields(log.Fields{
 		"mac": mac,
 		"tap": tapPath,
 	}).Info("Adding Net")
 
 	clh.vmconfig.Net = append(clh.vmconfig.Net, chclient.NetConfig{Mac: mac, Tap: tapPath})
+	return nil
 }
 
 // Add shared Volume using virtiofs
@@ -1077,25 +1002,46 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 }
 
 // cleanupVM will remove generated files and directories related with the virtual machine
-func (clh *cloudHypervisor) cleanupVM() error {
+func (clh *cloudHypervisor) cleanupVM(force bool) error {
+
+	if clh.id == "" {
+		return errors.New("Hypervisor ID is empty")
+	}
+
+	clh.Logger().Debug("removing vm sockets")
+
+	path, err := clh.vsockSocketPath(clh.id)
+	if err == nil {
+		if err := os.Remove(path); err != nil {
+			clh.Logger().WithField("path", path).Warn("removing vm socket failed")
+		}
+	}
 
 	// cleanup vm path
 	dir := filepath.Join(store.RunVMStoragePath(), clh.id)
 
 	// If it's a symlink, remove both dir and the target.
-	// This can happen when vm template links a sandbox to a vm.
 	link, err := filepath.EvalSymlinks(dir)
 	if err != nil {
-		// Well, it's just cleanup failure. Let's ignore it.
 		clh.Logger().WithError(err).WithField("dir", dir).Warn("failed to resolve vm path")
 	}
-	clh.Logger().WithField("link", link).WithField("dir", dir).Infof("cleanup vm path")
+
+	clh.Logger().WithFields(log.Fields{
+		"link": link,
+		"dir":  dir,
+	}).Infof("cleanup vm path")
 
 	if err := os.RemoveAll(dir); err != nil {
+		if !force {
+			return err
+		}
 		clh.Logger().WithError(err).Warnf("failed to remove vm path %s", dir)
 	}
 	if link != dir && link != "" {
 		if err := os.RemoveAll(link); err != nil {
+			if !force {
+				return err
+			}
 			clh.Logger().WithError(err).WithField("link", link).Warn("failed to remove resolved vm path")
 		}
 	}
@@ -1103,13 +1049,21 @@ func (clh *cloudHypervisor) cleanupVM() error {
 	if clh.config.VMid != "" {
 		dir = store.SandboxConfigurationRootPath(clh.config.VMid)
 		if err := os.RemoveAll(dir); err != nil {
+			if !force {
+				return err
+			}
 			clh.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
 		}
 		dir = store.SandboxRuntimeRootPath(clh.config.VMid)
 		if err := os.RemoveAll(dir); err != nil {
+			if !force {
+				return err
+			}
 			clh.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
 		}
 	}
+
+	clh.reset()
 
 	return nil
 }
