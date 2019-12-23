@@ -46,6 +46,7 @@ build_rust_image() {
 	sudo -E USE_DOCKER=1 DISTRO="${distro}" make -e image
 
 	image_path="/usr/share/kata-containers/"
+	sudo mkdir -p "${image_path}"
 	echo "Install rust image to ${image_path}"
 	sudo install -D "${GOPATH}/src/${osbuilder_repo}/kata-containers.img" "${image_path}"
 	popd
