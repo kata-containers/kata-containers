@@ -90,6 +90,9 @@ const (
 	// UseVSock is a sandbox annotation to specify use of vsock for agent communication.
 	UseVSock = kataAnnotHypervisorPrefix + "use_vsock"
 
+	// DisableImageNvdimm is a sandbox annotation to specify use of nvdimm device for guest rootfs image.
+	DisableImageNvdimm = kataAnnotHypervisorPrefix + "disable_image_nvdimm"
+
 	// HotplugVFIOOnRootBus is a sandbox annotation used to indicate if devices need to be hotplugged on the
 	// root bus instead of a bridge.
 	HotplugVFIOOnRootBus = kataAnnotHypervisorPrefix + "hotplug_vfio_on_root_bus"
