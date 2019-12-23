@@ -6,14 +6,10 @@
 package virtcontainers
 
 import (
-	"encoding/hex"
-	"os"
 	"time"
 
 	govmmQemu "github.com/intel/govmm/qemu"
-	deviceConfig "github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/types"
-	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -128,31 +124,6 @@ func (q *qemuPPC64le) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8)
 	}
 
 	return genericMemoryTopology(memoryMb, hostMemoryMb, slots, q.memoryOffset)
-}
-
-func (q *qemuPPC64le) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, err
-	}
-
-	randBytes, err := utils.GenerateRandomBytes(8)
-	if err != nil {
-		return nil, err
-	}
-
-	id := utils.MakeNameID("image", hex.EncodeToString(randBytes), maxDevIDSize)
-
-	drive := deviceConfig.BlockDrive{
-		File:   path,
-		Format: "raw",
-		ID:     id,
-	}
-
-	devices, err = q.appendBlockDevice(devices, drive)
-	if err != nil {
-		return nil, err
-	}
-	return devices, nil
 }
 
 // appendBridges appends to devices the given bridges

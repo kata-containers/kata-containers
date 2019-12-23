@@ -7,10 +7,11 @@ package virtcontainers
 
 import (
 	"fmt"
+	"time"
+
 	govmmQemu "github.com/intel/govmm/qemu"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/types"
-	"time"
 )
 
 type qemuS390x struct {
@@ -123,19 +124,6 @@ func (q *qemuS390x) appendConsole(devices []govmmQemu.Device, path string) ([]go
 
 	devices = append(devices, console)
 
-	return devices, nil
-}
-
-func (q *qemuS390x) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
-	drive, err := genericImage(path)
-	if err != nil {
-		return nil, err
-	}
-	drive.ShareRW = true
-	devices, err = q.appendBlockDevice(devices, drive)
-	if err != nil {
-		return nil, err
-	}
 	return devices, nil
 }
 

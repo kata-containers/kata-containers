@@ -305,6 +305,7 @@ func TestQemuArchBaseAppendImage(t *testing.T) {
 			AIO:       govmmQemu.Threads,
 			Format:    "raw",
 			Interface: "none",
+			ShareRW:   true,
 		},
 	}
 
