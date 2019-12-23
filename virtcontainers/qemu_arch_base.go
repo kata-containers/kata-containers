@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	govmmQemu "github.com/intel/govmm/qemu"
 
@@ -133,6 +134,8 @@ type qemuArchBase struct {
 	memoryOffset          uint32
 	nestedRun             bool
 	vhost                 bool
+	disableNvdimm         bool
+	dax                   bool
 	networkIndex          int
 	qemuPaths             map[string]string
 	supportedQemuMachines []govmmQemu.Machine
@@ -178,6 +181,8 @@ const (
 	QemuCCWVirtio = "s390-ccw-virtio"
 
 	qmpCapMigrationIgnoreShared = "x-ignore-shared"
+
+	qemuNvdimmOption = "nvdimm"
 )
 
 // kernelParamsNonDebug is a list of the default kernel
@@ -660,6 +665,20 @@ func (q *qemuArchBase) appendRNGDevice(devices []govmmQemu.Device, rngDev config
 
 func (q *qemuArchBase) handleImagePath(config HypervisorConfig) {
 	if config.ImagePath != "" {
+		kernelRootParams := commonVirtioblkKernelRootParams
+		if !q.disableNvdimm {
+			for i := range q.supportedQemuMachines {
+				q.supportedQemuMachines[i].Options = strings.Join([]string{
+					q.supportedQemuMachines[i].Options,
+					qemuNvdimmOption,
+				}, ",")
+			}
+			if q.dax {
+				kernelRootParams = commonNvdimmKernelRootParams
+			} else {
+				kernelRootParams = commonNvdimmNoDAXKernelRootParams
+			}
+		}
 		q.kernelParams = append(q.kernelParams, kernelRootParams...)
 		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
 		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)

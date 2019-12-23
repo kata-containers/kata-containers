@@ -25,8 +25,6 @@ const defaultQemuPath = "/usr/bin/qemu-system-aarch64"
 
 const defaultQemuMachineType = QemuVirt
 
-const qemuNvdimmOption = "nvdimm"
-
 const qmpMigrationWaitTimeout = 10 * time.Second
 
 var defaultQemuMachineOptions = "usb=off,accel=kvm,gic-version=" + getGuestGICVersion()
@@ -39,15 +37,6 @@ var kernelParams = []Param{
 	{"console", "hvc0"},
 	{"console", "hvc1"},
 	{"iommu.passthrough", "0"},
-}
-
-// For now, AArch64 doesn't support DAX, so we couldn't use
-// commonNvdimmKernelRootParams, the agnostic list of kernel
-// root parameters for NVDIMM
-var kernelRootParams = []Param{
-	{"root", "/dev/pmem0p1"},
-	{"rootflags", "data=ordered,errors=remount-ro ro"},
-	{"rootfstype", "ext4"},
 }
 
 var supportedQemuMachines = []govmmQemu.Machine{
@@ -150,20 +139,11 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 			kernelParamsNonDebug:  kernelParamsNonDebug,
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,
+			disableNvdimm:         config.DisableImageNvdimm,
 		},
 	}
 
-	if config.ImagePath != "" {
-		for i := range q.supportedQemuMachines {
-			q.supportedQemuMachines[i].Options = strings.Join([]string{
-				q.supportedQemuMachines[i].Options,
-				qemuNvdimmOption,
-			}, ",")
-		}
-		q.kernelParams = append(q.kernelParams, kernelRootParams...)
-		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
-		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
-	}
+	q.handleImagePath(config)
 
 	return q
 }
@@ -178,7 +158,10 @@ func (q *qemuArm64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device
 }
 
 func (q *qemuArm64) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
-	return q.appendNvdimmImage(devices, path)
+	if !q.disableNvdimm {
+		return q.appendNvdimmImage(devices, path)
+	}
+	return q.appendBlockImage(devices, path)
 }
 
 func (q *qemuArm64) setIgnoreSharedMemoryMigrationCaps(_ context.Context, _ *govmmQemu.QMP) error {

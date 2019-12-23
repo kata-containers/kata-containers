@@ -38,8 +38,6 @@ var kernelParams = []Param{
 	{"console", "ttysclp0"},
 }
 
-var kernelRootParams = commonVirtioblkKernelRootParams
-
 var ccwbridge = types.NewBridge(types.CCW, "", make(map[uint32]string, types.CCWBridgeMaxCapacity), 0)
 
 var supportedQemuMachines = []govmmQemu.Machine{
@@ -78,7 +76,7 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 	q.Bridges = append(q.Bridges, ccwbridge)
 
 	if config.ImagePath != "" {
-		q.kernelParams = append(q.kernelParams, kernelRootParams...)
+		q.kernelParams = append(q.kernelParams, commonVirtioblkKernelRootParams...)
 		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
 		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
 	}

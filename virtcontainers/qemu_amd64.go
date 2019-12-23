@@ -6,7 +6,6 @@
 package virtcontainers
 
 import (
-	"strings"
 	"time"
 
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -25,8 +24,6 @@ const defaultQemuPath = "/usr/bin/qemu-system-x86_64"
 
 const defaultQemuMachineType = QemuPC
 
-const qemuNvdimmOption = "nvdimm"
-
 const defaultQemuMachineOptions = "accel=kvm,kernel_irqchip"
 
 const qmpMigrationWaitTimeout = 5 * time.Second
@@ -36,8 +33,6 @@ var qemuPaths = map[string]string{
 	QemuPC:     defaultQemuPath,
 	QemuQ35:    defaultQemuPath,
 }
-
-var kernelRootParams = commonNvdimmKernelRootParams
 
 var kernelParams = []Param{
 	{"tsc", "reliable"},
@@ -101,17 +96,10 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 			kernelParamsNonDebug:  kernelParamsNonDebug,
 			kernelParamsDebug:     kernelParamsDebug,
 			kernelParams:          kernelParams,
+			disableNvdimm:         config.DisableImageNvdimm,
+			dax:                   true,
 		},
 		vmFactory: factory,
-	}
-
-	if config.ImagePath != "" {
-		for i := range q.supportedQemuMachines {
-			q.supportedQemuMachines[i].Options = strings.Join([]string{
-				q.supportedQemuMachines[i].Options,
-				qemuNvdimmOption,
-			}, ",")
-		}
 	}
 
 	q.handleImagePath(config)
@@ -158,7 +146,10 @@ func (q *qemuAmd64) memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) g
 }
 
 func (q *qemuAmd64) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
-	return q.appendNvdimmImage(devices, path)
+	if !q.disableNvdimm {
+		return q.appendNvdimmImage(devices, path)
+	}
+	return q.appendBlockImage(devices, path)
 }
 
 // appendBridges appends to devices the given bridges
