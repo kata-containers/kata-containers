@@ -32,8 +32,6 @@ var qemuPaths = map[string]string{
 	QemuPseries: defaultQemuPath,
 }
 
-var kernelRootParams = []Param{}
-
 var kernelParams = []Param{
 	{"tsc", "reliable"},
 	{"no_timer_check", ""},

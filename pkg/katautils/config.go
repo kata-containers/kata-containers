@@ -120,6 +120,7 @@ type hypervisor struct {
 	DisableNestingChecks    bool     `toml:"disable_nesting_checks"`
 	EnableIOThreads         bool     `toml:"enable_iothreads"`
 	UseVSock                bool     `toml:"use_vsock"`
+	DisableImageNvdimm      bool     `toml:"disable_image_nvdimm"`
 	HotplugVFIOOnRootBus    bool     `toml:"hotplug_vfio_on_root_bus"`
 	DisableVhostNet         bool     `toml:"disable_vhost_net"`
 	GuestHookPath           string   `toml:"guest_hook_path"`
@@ -643,6 +644,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableIOThreads:         h.EnableIOThreads,
 		Msize9p:                 h.msize9p(),
 		UseVSock:                useVSock,
+		DisableImageNvdimm:      h.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
 		DisableVhostNet:         h.DisableVhostNet,
 		GuestHookPath:           h.guestHookPath(),
@@ -1069,6 +1071,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		HotplugVFIOOnRootBus:    defaultHotplugVFIOOnRootBus,
 		GuestHookPath:           defaultGuestHookPath,
 		VirtioFSCache:           defaultVirtioFSCacheMode,
+		DisableImageNvdimm:      defaultDisableImageNvdimm,
 	}
 }
 

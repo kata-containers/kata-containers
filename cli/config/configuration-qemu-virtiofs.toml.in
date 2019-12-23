@@ -205,6 +205,11 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # Default false
 #use_vsock = true
 
+# If false and nvdimm is supported, use nvdimm device to plug guest image.
+# Otherwise virtio-block device is used.
+# Default false
+#disable_image_nvdimm = true
+
 # VFIO devices are hotplugged on a bridge by default.
 # Enable hotplugging on root bus. This may be required for devices with
 # a large PCI bar, as this is a current limitation with hotplugging on
