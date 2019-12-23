@@ -64,12 +64,14 @@ func cleanUp() {
 	store.DeleteAll()
 	os.RemoveAll(testDir)
 	os.MkdirAll(testDir, store.DirMode)
+	store.VCStorePrefix = ""
 
 	setup()
 }
 
 func setup() {
 	os.Mkdir(filepath.Join(testDir, testBundle), store.DirMode)
+	store.VCStorePrefix = testDir
 
 	for _, filename := range []string{testQemuKernelPath, testQemuInitrdPath, testQemuImagePath, testQemuPath} {
 		_, err := os.Create(filename)
