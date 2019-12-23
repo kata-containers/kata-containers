@@ -8,7 +8,6 @@ package virtcontainers
 import (
 	"context"
 	"io/ioutil"
-	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -179,29 +178,7 @@ func (q *qemuArm64) appendBridges(devices []govmmQemu.Device) []govmmQemu.Device
 }
 
 func (q *qemuArm64) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
-	imageFile, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer imageFile.Close()
-
-	imageStat, err := imageFile.Stat()
-	if err != nil {
-		return nil, err
-	}
-
-	object := govmmQemu.Object{
-		Driver:   govmmQemu.NVDIMM,
-		Type:     govmmQemu.MemoryBackendFile,
-		DeviceID: "nv0",
-		ID:       "mem0",
-		MemPath:  path,
-		Size:     (uint64)(imageStat.Size()),
-	}
-
-	devices = append(devices, object)
-
-	return devices, nil
+	return q.appendNvdimmImage(devices, path)
 }
 
 func (q *qemuArm64) setIgnoreSharedMemoryMigrationCaps(_ context.Context, _ *govmmQemu.QMP) error {

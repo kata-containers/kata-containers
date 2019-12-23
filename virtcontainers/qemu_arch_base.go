@@ -67,6 +67,12 @@ type qemuArch interface {
 	// appendImage appends an image to devices
 	appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error)
 
+	// appendBlockImage appends an image as block device
+	appendBlockImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error)
+
+	// appendNvdimmImage appends an image as nvdimm device
+	appendNvdimmImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error)
+
 	// appendSCSIController appens a SCSI controller to devices
 	appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread, error)
 
@@ -328,15 +334,46 @@ func genericImage(path string) (config.BlockDrive, error) {
 	id := utils.MakeNameID("image", hex.EncodeToString(randBytes), maxDevIDSize)
 
 	drive := config.BlockDrive{
-		File:   path,
-		Format: "raw",
-		ID:     id,
+		File:    path,
+		Format:  "raw",
+		ID:      id,
+		ShareRW: true,
 	}
 
 	return drive, nil
 }
 
+func (q *qemuArchBase) appendNvdimmImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+	imageFile, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer imageFile.Close()
+
+	imageStat, err := imageFile.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	object := govmmQemu.Object{
+		Driver:   govmmQemu.NVDIMM,
+		Type:     govmmQemu.MemoryBackendFile,
+		DeviceID: "nv0",
+		ID:       "mem0",
+		MemPath:  path,
+		Size:     (uint64)(imageStat.Size()),
+	}
+
+	devices = append(devices, object)
+
+	return devices, nil
+}
+
 func (q *qemuArchBase) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+	return q.appendBlockImage(devices, path)
+}
+
+func (q *qemuArchBase) appendBlockImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
 	drive, err := genericImage(path)
 	if err != nil {
 		return nil, err
