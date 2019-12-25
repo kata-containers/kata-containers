@@ -160,7 +160,9 @@ func TestMain(m *testing.M) {
 
 	// Make sure we have the opportunity to flush the coverage report to disk when
 	// terminating the process.
-	atexit(cover.FlushProfiles)
+	defer func() {
+		cover.FlushProfiles()
+	}()
 
 	// If the test binary name is kata-runtime.coverage, we've are being asked to
 	// run the coverage-instrumented kata-runtime.
