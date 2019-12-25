@@ -8,17 +8,26 @@ package direct
 import (
 	"context"
 	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 )
 
 func TestTemplateFactory(t *testing.T) {
 	assert := assert.New(t)
 
-	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
+	testDir, err := ioutil.TempDir("", "vmfactory-tmp-")
+	assert.Nil(err)
+	store.VCStorePrefix = testDir
+	defer func() {
+		os.RemoveAll(testDir)
+		store.VCStorePrefix = ""
+	}()
+
 	hyperConfig := vc.HypervisorConfig{
 		KernelPath: testDir,
 		ImagePath:  testDir,
