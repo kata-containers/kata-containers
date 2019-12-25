@@ -18,9 +18,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sys/unix"
+
+	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 )
 
 const testPID = 12345
+
+var tu = ktu.NewTestConstraint(true)
 
 func TestGetNSPathFromPID(t *testing.T) {
 	for nsType := range CloneFlagsTable {
@@ -165,6 +169,9 @@ func TestNsEnterEmptyNamespaceListSuccess(t *testing.T) {
 }
 
 func TestNsEnterSuccessful(t *testing.T) {
+	if tu.NotValid(ktu.NeedRoot()) {
+		t.Skip(ktu.TestDisabledNeedRoot)
+	}
 	nsList := supportedNamespaces()
 	sleepDuration := 60
 
