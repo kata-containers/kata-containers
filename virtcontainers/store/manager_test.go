@@ -23,14 +23,17 @@ var sandboxDirState = ""
 var sandboxDirLock = ""
 var sandboxFileState = ""
 var sandboxFileLock = ""
-var storeRoot = "file:///tmp/root1/"
+var storeRoot, storeRootDir = func() (string, string) {
+	dir, _ := ioutil.TempDir("", "")
+	return "file://" + dir, dir
+}()
 
 func TestNewStore(t *testing.T) {
 	s, err := New(context.Background(), storeRoot)
 	assert.Nil(t, err)
 	assert.Equal(t, s.scheme, "file")
 	assert.Equal(t, s.host, "")
-	assert.Equal(t, s.path, "/tmp/root1/")
+	assert.Equal(t, s.path, storeRootDir)
 }
 
 func TestDeleteStore(t *testing.T) {
