@@ -7,6 +7,7 @@ package fs
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"testing"
 
@@ -32,6 +33,13 @@ func TestFsLock(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
 
+	testDir, err := ioutil.TempDir("", "fs-tmp-")
+	assert.Nil(t, err)
+	TestSetRunStoragePath(testDir)
+	defer func() {
+		os.RemoveAll(testDir)
+	}()
+
 	fs.sandboxState.SandboxContainer = "test-fs-driver"
 	sandboxDir, err := fs.sandboxDir()
 	assert.Nil(t, err)
@@ -50,6 +58,13 @@ func TestFsDriver(t *testing.T) {
 	fs, err := getFsDriver()
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
+
+	testDir, err := ioutil.TempDir("", "fs-tmp-")
+	assert.Nil(t, err)
+	TestSetRunStoragePath(testDir)
+	defer func() {
+		os.RemoveAll(testDir)
+	}()
 
 	ss := persistapi.SandboxState{}
 	cs := make(map[string]persistapi.ContainerState)
