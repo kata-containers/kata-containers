@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	govmmQemu "github.com/intel/govmm/qemu"
 
@@ -66,6 +67,12 @@ type qemuArch interface {
 
 	// appendImage appends an image to devices
 	appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error)
+
+	// appendBlockImage appends an image as block device
+	appendBlockImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error)
+
+	// appendNvdimmImage appends an image as nvdimm device
+	appendNvdimmImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error)
 
 	// appendSCSIController appens a SCSI controller to devices
 	appendSCSIController(devices []govmmQemu.Device, enableIOThreads bool) ([]govmmQemu.Device, *govmmQemu.IOThread, error)
@@ -127,6 +134,8 @@ type qemuArchBase struct {
 	memoryOffset          uint32
 	nestedRun             bool
 	vhost                 bool
+	disableNvdimm         bool
+	dax                   bool
 	networkIndex          int
 	qemuPaths             map[string]string
 	supportedQemuMachines []govmmQemu.Machine
@@ -172,6 +181,8 @@ const (
 	QemuCCWVirtio = "s390-ccw-virtio"
 
 	qmpCapMigrationIgnoreShared = "x-ignore-shared"
+
+	qemuNvdimmOption = "nvdimm"
 )
 
 // kernelParamsNonDebug is a list of the default kernel
@@ -328,15 +339,46 @@ func genericImage(path string) (config.BlockDrive, error) {
 	id := utils.MakeNameID("image", hex.EncodeToString(randBytes), maxDevIDSize)
 
 	drive := config.BlockDrive{
-		File:   path,
-		Format: "raw",
-		ID:     id,
+		File:    path,
+		Format:  "raw",
+		ID:      id,
+		ShareRW: true,
 	}
 
 	return drive, nil
 }
 
+func (q *qemuArchBase) appendNvdimmImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+	imageFile, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer imageFile.Close()
+
+	imageStat, err := imageFile.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	object := govmmQemu.Object{
+		Driver:   govmmQemu.NVDIMM,
+		Type:     govmmQemu.MemoryBackendFile,
+		DeviceID: "nv0",
+		ID:       "mem0",
+		MemPath:  path,
+		Size:     (uint64)(imageStat.Size()),
+	}
+
+	devices = append(devices, object)
+
+	return devices, nil
+}
+
 func (q *qemuArchBase) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+	return q.appendBlockImage(devices, path)
+}
+
+func (q *qemuArchBase) appendBlockImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
 	drive, err := genericImage(path)
 	if err != nil {
 		return nil, err
@@ -623,6 +665,20 @@ func (q *qemuArchBase) appendRNGDevice(devices []govmmQemu.Device, rngDev config
 
 func (q *qemuArchBase) handleImagePath(config HypervisorConfig) {
 	if config.ImagePath != "" {
+		kernelRootParams := commonVirtioblkKernelRootParams
+		if !q.disableNvdimm {
+			for i := range q.supportedQemuMachines {
+				q.supportedQemuMachines[i].Options = strings.Join([]string{
+					q.supportedQemuMachines[i].Options,
+					qemuNvdimmOption,
+				}, ",")
+			}
+			if q.dax {
+				kernelRootParams = commonNvdimmKernelRootParams
+			} else {
+				kernelRootParams = commonNvdimmNoDAXKernelRootParams
+			}
+		}
 		q.kernelParams = append(q.kernelParams, kernelRootParams...)
 		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
 		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)

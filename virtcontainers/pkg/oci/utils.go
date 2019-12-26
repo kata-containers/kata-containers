@@ -429,6 +429,15 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) 
 		config.HypervisorConfig.UseVSock = useVsock
 	}
 
+	if value, ok := ocispec.Annotations[vcAnnotations.DisableImageNvdimm]; ok {
+		disableNvdimm, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for use_nvdimm: Please specify boolean value 'true|false'")
+		}
+
+		config.HypervisorConfig.DisableImageNvdimm = disableNvdimm
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus]; ok {
 		hotplugVFIOOnRootBus, err := strconv.ParseBool(value)
 		if err != nil {

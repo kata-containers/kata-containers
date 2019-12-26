@@ -745,6 +745,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.DisableVhostNet] = "true"
 	ocispec.Annotations[vcAnnotations.GuestHookPath] = "/usr/bin/"
 	ocispec.Annotations[vcAnnotations.UseVSock] = "true"
+	ocispec.Annotations[vcAnnotations.DisableImageNvdimm] = "true"
 	ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus] = "true"
 	ocispec.Annotations[vcAnnotations.EntropySource] = "/dev/urandom"
 
@@ -773,6 +774,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.DisableVhostNet, true)
 	assert.Equal(config.HypervisorConfig.GuestHookPath, "/usr/bin/")
 	assert.Equal(config.HypervisorConfig.UseVSock, true)
+	assert.Equal(config.HypervisorConfig.DisableImageNvdimm, true)
 	assert.Equal(config.HypervisorConfig.HotplugVFIOOnRootBus, true)
 	assert.Equal(config.HypervisorConfig.EntropySource, "/dev/urandom")
 

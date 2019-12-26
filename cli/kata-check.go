@@ -443,7 +443,7 @@ func genericCheckKVMExtensions(extensions map[string]kvmExtension) (map[string]i
 
 		// Generally return value(ret) 0 means no and 1 means yes,
 		// but some extensions may report additional information in the integer return value.
-		if errno != 0 || ret <= 0 {
+		if errno != 0 {
 			kataLog.WithFields(fields).Error("is not supported")
 			return results, errno
 		}

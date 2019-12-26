@@ -90,6 +90,13 @@ var commonNvdimmKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
 	{"rootfstype", "ext4"},
 }
 
+// agnostic list of kernel root parameters for NVDIMM
+var commonNvdimmNoDAXKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
+	{"root", "/dev/pmem0p1"},
+	{"rootflags", "data=ordered,errors=remount-ro ro"},
+	{"rootfstype", "ext4"},
+}
+
 // agnostic list of kernel root parameters for virtio-blk
 var commonVirtioblkKernelRootParams = []Param{ //nolint: unused, deadcode, varcheck
 	{"root", "/dev/vda1"},
@@ -351,6 +358,9 @@ type HypervisorConfig struct {
 
 	// UseVSock use a vsock for agent communication
 	UseVSock bool
+
+	// DisableImageNvdimm is used to disable guest rootfs image nvdimm devices
+	DisableImageNvdimm bool
 
 	// HotplugVFIOOnRootBus is used to indicate if devices need to be hotplugged on the
 	// root bus instead of a bridge.
