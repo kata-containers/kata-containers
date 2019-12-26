@@ -142,6 +142,9 @@ type HypervisorConfig struct {
 	// UseVSock use a vsock for agent communication
 	UseVSock bool
 
+	// DisableImageNvdimm disables nvdimm for guest rootfs image
+	DisableImageNvdimm bool
+
 	// HotplugVFIOOnRootBus is used to indicate if devices need to be hotplugged on the
 	// root bus instead of a bridge.
 	HotplugVFIOOnRootBus bool

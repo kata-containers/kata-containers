@@ -7,10 +7,11 @@ package virtcontainers
 
 import (
 	"fmt"
+	"time"
+
 	govmmQemu "github.com/intel/govmm/qemu"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/types"
-	"time"
 )
 
 type qemuS390x struct {
@@ -36,8 +37,6 @@ var qemuPaths = map[string]string{
 var kernelParams = []Param{
 	{"console", "ttysclp0"},
 }
-
-var kernelRootParams = commonVirtioblkKernelRootParams
 
 var ccwbridge = types.NewBridge(types.CCW, "", make(map[uint32]string, types.CCWBridgeMaxCapacity), 0)
 
@@ -77,7 +76,7 @@ func newQemuArch(config HypervisorConfig) qemuArch {
 	q.Bridges = append(q.Bridges, ccwbridge)
 
 	if config.ImagePath != "" {
-		q.kernelParams = append(q.kernelParams, kernelRootParams...)
+		q.kernelParams = append(q.kernelParams, commonVirtioblkKernelRootParams...)
 		q.kernelParamsNonDebug = append(q.kernelParamsNonDebug, kernelParamsSystemdNonDebug...)
 		q.kernelParamsDebug = append(q.kernelParamsDebug, kernelParamsSystemdDebug...)
 	}
@@ -123,19 +122,6 @@ func (q *qemuS390x) appendConsole(devices []govmmQemu.Device, path string) ([]go
 
 	devices = append(devices, console)
 
-	return devices, nil
-}
-
-func (q *qemuS390x) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
-	drive, err := genericImage(path)
-	if err != nil {
-		return nil, err
-	}
-	drive.ShareRW = true
-	devices, err = q.appendBlockDevice(devices, drive)
-	if err != nil {
-		return nil, err
-	}
 	return devices, nil
 }
 

@@ -248,7 +248,7 @@ func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 	if err != nil {
 		return err
 	}
-	if initrdPath == "" && imagePath != "" {
+	if initrdPath == "" && imagePath != "" && !q.config.DisableImageNvdimm {
 		q.nvdimmCount = 1
 	} else {
 		q.nvdimmCount = 0

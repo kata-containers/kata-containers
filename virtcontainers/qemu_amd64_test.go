@@ -114,7 +114,6 @@ func TestQemuAmd64MemoryTopology(t *testing.T) {
 }
 
 func TestQemuAmd64AppendImage(t *testing.T) {
-	var devices []govmmQemu.Device
 	assert := assert.New(t)
 
 	f, err := ioutil.TempFile("", "img")
@@ -131,6 +130,7 @@ func TestQemuAmd64AppendImage(t *testing.T) {
 
 	cfg := qemuConfig(QemuPC)
 	cfg.ImagePath = f.Name()
+	cfg.DisableImageNvdimm = false
 	amd64 := newQemuArch(cfg)
 	for _, m := range amd64.(*qemuAmd64).supportedQemuMachines {
 		assert.Contains(m.Options, qemuNvdimmOption)
@@ -147,9 +147,30 @@ func TestQemuAmd64AppendImage(t *testing.T) {
 		},
 	}
 
-	devices, err = amd64.appendImage(devices, f.Name())
+	devices, err := amd64.appendImage(nil, f.Name())
 	assert.NoError(err)
 	assert.Equal(expectedOut, devices)
+
+	// restore default supportedQemuMachines options
+	assert.Equal(len(supportedQemuMachines), copy(supportedQemuMachines, machinesCopy))
+
+	cfg.DisableImageNvdimm = true
+	amd64 = newQemuArch(cfg)
+	for _, m := range amd64.(*qemuAmd64).supportedQemuMachines {
+		assert.NotContains(m.Options, qemuNvdimmOption)
+	}
+
+	found := false
+	devices, err = amd64.appendImage(nil, f.Name())
+	assert.NoError(err)
+	for _, d := range devices {
+		if b, ok := d.(govmmQemu.BlockDevice); ok {
+			assert.Equal(b.Driver, govmmQemu.VirtioBlock)
+			assert.True(b.ShareRW)
+			found = true
+		}
+	}
+	assert.True(found)
 
 	// restore default supportedQemuMachines options
 	assert.Equal(len(supportedQemuMachines), copy(supportedQemuMachines, machinesCopy))
