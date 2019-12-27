@@ -20,7 +20,11 @@ type TestNoopStructure struct {
 	Field2 string
 }
 
-var rootPath = "/tmp/root1/"
+var rootPath = func() string {
+	dir, _ := ioutil.TempDir("", "")
+	return dir
+}()
+
 var expectedFilesystemData = "{\"Field1\":\"value1\",\"Field2\":\"value2\"}"
 
 func TestStoreFilesystemStore(t *testing.T) {
