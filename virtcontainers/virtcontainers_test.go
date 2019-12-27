@@ -57,19 +57,28 @@ var testVirtiofsdPath = ""
 var testHyperstartCtlSocket = ""
 var testHyperstartTtySocket = ""
 
+var savedRunVMStoragePathFunc func() string
+
 // cleanUp Removes any stale sandbox/container state that can affect
 // the next test to run.
 func cleanUp() {
 	globalSandboxList.removeSandbox(testSandboxID)
 	store.DeleteAll()
 	os.RemoveAll(testDir)
-	os.MkdirAll(testDir, store.DirMode)
+	store.VCStorePrefix = ""
+	store.RunVMStoragePath = savedRunVMStoragePathFunc
 
 	setup()
 }
 
 func setup() {
-	os.Mkdir(filepath.Join(testDir, testBundle), store.DirMode)
+	store.VCStorePrefix = testDir
+	savedRunVMStoragePathFunc = store.RunVMStoragePath
+	store.RunVMStoragePath = func() string {
+		return filepath.Join("testDir", "vm")
+	}
+	os.MkdirAll(store.RunVMStoragePath(), store.DirMode)
+	os.MkdirAll(filepath.Join(testDir, testBundle), store.DirMode)
 
 	for _, filename := range []string{testQemuKernelPath, testQemuInitrdPath, testQemuImagePath, testQemuPath} {
 		_, err := os.Create(filename)
