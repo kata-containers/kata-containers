@@ -182,12 +182,6 @@ test_coverage()
 	echo "INFO: Currently running as user '$(id -un)'"
 	for pkg in $test_packages; do
 		for user in $users; do
-			# Run virtcontainers tests only if user is root.
-			if [[ "$user" != "root" ]] && [[ "$pkg" = *"virtcontainers"* ]]; then
-				echo "Skip testing $pkg with user $user"
-				continue
-			fi
-
 			test_go_package "$pkg" "$user"
 		done
 	done
