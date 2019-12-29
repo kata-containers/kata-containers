@@ -137,6 +137,18 @@ var clhDebugKernelParams = []Param{
 //
 //###########################################################
 
+func (clh *cloudHypervisor) checkVersion() error {
+	if clh.version.Major < supportedMajorVersion || (clh.version.Major == supportedMajorVersion && clh.version.Minor < supportedMinorVersion) {
+		errorMessage := fmt.Sprintf("Unsupported version: cloud-hypervisor %d.%d not supported by this driver version (%d.%d)",
+			clh.version.Major,
+			clh.version.Minor,
+			supportedMajorVersion,
+			supportedMinorVersion)
+		return errors.New(errorMessage)
+	}
+	return nil
+}
+
 // For cloudHypervisor this call only sets the internal structure up.
 // The VM will be created and started through startSandbox().
 func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore, stateful bool) error {
@@ -168,13 +180,8 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 
 		}
 
-		if clh.version.Major < supportedMajorVersion && clh.version.Minor < supportedMinorVersion {
-			errorMessage := fmt.Sprintf("Unsupported version: cloud-hypervisor %d.%d not supported by this driver version (%d.%d)",
-				clh.version.Major,
-				clh.version.Minor,
-				supportedMajorVersion,
-				supportedMinorVersion)
-			return errors.New(errorMessage)
+		if err := clh.checkVersion(); err != nil {
+			return err
 		}
 
 	}
