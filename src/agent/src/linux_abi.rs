@@ -16,7 +16,7 @@ pub const SYSFS_PCI_BUS_RESCAN_FILE: &str = "/sys/bus/pci/rescan";
     target_arch = "x86"
 ))]
 pub const PCI_ROOT_BUS_PATH: &str = "/devices/pci0000:00";
-#[cfg(target_arch = "arm")]
+#[cfg(target_arch = "aarch64")]
 pub const PCI_ROOT_BUS_PATH: &str = "/devices/platform/4010000000.pcie/pci0000:00";
 
 pub const SYSFS_CPU_ONLINE_PATH: &str = "/sys/devices/system/cpu";
