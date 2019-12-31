@@ -27,7 +27,7 @@ where
     *d == T::default()
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Spec {
     #[serde(
         default,
@@ -69,7 +69,7 @@ impl Spec {
 
 pub type LinuxRlimit = POSIXRlimit;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Process {
     #[serde(default)]
     pub terminal: bool,
@@ -112,7 +112,7 @@ pub struct Process {
     pub selinux_label: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxCapabilities {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bounding: Vec<String>,
@@ -126,7 +126,7 @@ pub struct LinuxCapabilities {
     pub ambient: Vec<String>,
 }
 
-#[derive(Default, PartialEq, Serialize, Deserialize, Debug)]
+#[derive(Default, Serialize, Deserialize, Debug, PartialEq)]
 pub struct Box {
     #[serde(default)]
     pub height: u32,
@@ -134,7 +134,7 @@ pub struct Box {
     pub width: u32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct User {
     #[serde(default)]
     pub uid: u32,
@@ -150,7 +150,7 @@ pub struct User {
     pub username: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Root {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub path: String,
@@ -158,7 +158,7 @@ pub struct Root {
     pub readonly: bool,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Mount {
     #[serde(default)]
     pub destination: String,
@@ -170,7 +170,7 @@ pub struct Mount {
     pub options: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Hook {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub path: String,
@@ -182,7 +182,7 @@ pub struct Hook {
     pub timeout: Option<i32>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Hooks {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub prestart: Vec<Hook>,
@@ -192,7 +192,7 @@ pub struct Hooks {
     pub poststop: Vec<Hook>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Linux {
     #[serde(default, rename = "uidMappings", skip_serializing_if = "Vec::is_empty")]
     pub uid_mappings: Vec<LinuxIDMapping>,
@@ -238,7 +238,7 @@ pub struct Linux {
     pub intel_rdt: Option<LinuxIntelRdt>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxNamespace {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub r#type: LinuxNamespaceType,
@@ -256,7 +256,7 @@ pub const USERNAMESPACE: &str = "user";
 pub const UTSNAMESPACE: &str = "uts";
 pub const CGROUPNAMESPACE: &str = "cgroup";
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxIDMapping {
     #[serde(default, rename = "containerID")]
     pub container_id: u32,
@@ -266,7 +266,7 @@ pub struct LinuxIDMapping {
     pub size: u32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct POSIXRlimit {
     #[serde(default)]
     pub r#type: String,
@@ -276,7 +276,7 @@ pub struct POSIXRlimit {
     pub soft: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxHugepageLimit {
     #[serde(default, rename = "pageSize", skip_serializing_if = "String::is_empty")]
     pub page_size: String,
@@ -284,7 +284,7 @@ pub struct LinuxHugepageLimit {
     pub limit: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxInterfacePriority {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub name: String,
@@ -292,7 +292,7 @@ pub struct LinuxInterfacePriority {
     pub priority: u32,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxBlockIODevice {
     #[serde(default)]
     pub major: i64,
@@ -300,7 +300,7 @@ pub struct LinuxBlockIODevice {
     pub minor: i64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxWeightDevice {
     pub blk: LinuxBlockIODevice,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -313,14 +313,14 @@ pub struct LinuxWeightDevice {
     pub leaf_weight: Option<u16>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxThrottleDevice {
     pub blk: LinuxBlockIODevice,
     #[serde(default)]
     pub rate: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxBlockIO {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weight: Option<u16>,
@@ -362,7 +362,7 @@ pub struct LinuxBlockIO {
     pub throttle_write_iops_device: Vec<LinuxThrottleDevice>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxMemory {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<i64>,
@@ -384,7 +384,7 @@ pub struct LinuxMemory {
     pub disable_oom_killer: Option<bool>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxCPU {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shares: Option<u64>,
@@ -410,13 +410,13 @@ pub struct LinuxCPU {
     pub mems: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxPids {
     #[serde(default)]
     pub limit: i64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxNetwork {
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "classID")]
     pub class_id: Option<u32>,
@@ -424,7 +424,7 @@ pub struct LinuxNetwork {
     pub priorities: Vec<LinuxInterfacePriority>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxRdma {
     #[serde(
         default,
@@ -440,7 +440,7 @@ pub struct LinuxRdma {
     pub hca_objects: Option<u32>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxResources {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub devices: Vec<LinuxDeviceCgroup>,
@@ -464,7 +464,7 @@ pub struct LinuxResources {
     pub rdma: HashMap<String, LinuxRdma>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxDevice {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub path: String,
@@ -482,7 +482,7 @@ pub struct LinuxDevice {
     pub gid: Option<u32>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxDeviceCgroup {
     #[serde(default)]
     pub allow: bool,
@@ -496,7 +496,7 @@ pub struct LinuxDeviceCgroup {
     pub access: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Solaris {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub milestone: String,
@@ -520,13 +520,13 @@ pub struct Solaris {
     pub capped_memory: Option<SolarisCappedMemory>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct SolarisCappedCPU {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub ncpus: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct SolarisCappedMemory {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub physical: String,
@@ -534,7 +534,7 @@ pub struct SolarisCappedMemory {
     pub swap: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct SolarisAnet {
     #[serde(default, skip_serializing_if = "String::is_empty", rename = "linkname")]
     pub link_name: String,
@@ -572,7 +572,7 @@ pub struct SolarisAnet {
     pub mac_address: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct Windows<T> {
     #[serde(
         default,
@@ -594,7 +594,7 @@ pub struct Windows<T> {
     pub network: Option<WindowsNetwork>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct WindowsResources {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memory: Option<WindowsMemoryResources>,
@@ -604,13 +604,13 @@ pub struct WindowsResources {
     pub storage: Option<WindowsStorageResources>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct WindowsMemoryResources {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub limit: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct WindowsCPUResources {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub count: Option<u64>,
@@ -620,7 +620,7 @@ pub struct WindowsCPUResources {
     pub maximum: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct WindowsStorageResources {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub iops: Option<u64>,
@@ -634,7 +634,7 @@ pub struct WindowsStorageResources {
     pub sandbox_size: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct WindowsNetwork {
     #[serde(
         default,
@@ -658,7 +658,7 @@ pub struct WindowsNetwork {
     pub network_shared_container_name: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct WindowsHyperV {
     #[serde(
         default,
@@ -668,14 +668,14 @@ pub struct WindowsHyperV {
     pub utility_vm_path: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct VM {
     pub hypervisor: VMHypervisor,
     pub kernel: VMKernel,
     pub image: VMImage,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct VMHypervisor {
     #[serde(default)]
     pub path: String,
@@ -683,7 +683,7 @@ pub struct VMHypervisor {
     pub parameters: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct VMKernel {
     #[serde(default)]
     pub path: String,
@@ -693,7 +693,7 @@ pub struct VMKernel {
     pub initrd: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct VMImage {
     #[serde(default)]
     pub path: String,
@@ -701,7 +701,7 @@ pub struct VMImage {
     pub format: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxSeccomp {
     #[serde(default, rename = "defaultAction")]
     pub default_action: LinuxSeccompAction,
@@ -750,7 +750,7 @@ pub const OPGREATEREQUAL: &str = "SCMP_CMP_GE";
 pub const OPGREATERTHAN: &str = "SCMP_CMP_GT";
 pub const OPMASKEDEQUAL: &str = "SCMP_CMP_MASKED_EQ";
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxSeccompArg {
     #[serde(default)]
     pub index: u32,
@@ -762,7 +762,7 @@ pub struct LinuxSeccompArg {
     pub op: LinuxSeccompOperator,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxSyscall {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub names: Vec<String>,
@@ -772,7 +772,7 @@ pub struct LinuxSyscall {
     pub args: Vec<LinuxSeccompArg>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct LinuxIntelRdt {
     #[serde(
         default,
@@ -782,7 +782,7 @@ pub struct LinuxIntelRdt {
     pub l3_cache_schema: String,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct State {
     #[serde(
         default,
@@ -805,7 +805,812 @@ pub struct State {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn test_deserialize_state() {
+        let data = r#"{
+            "ociVersion": "0.2.0",
+            "id": "oci-container1",
+            "status": "running",
+            "pid": 4422,
+            "bundle": "/containers/redis",
+            "annotations": {
+                "myKey": "myValue"
+            }
+        }"#;
+        let expected = crate::State {
+            version: "0.2.0".to_string(),
+            id: "oci-container1".to_string(),
+            status: "running".to_string(),
+            pid: 4422,
+            bundle: "/containers/redis".to_string(),
+            annotations: [("myKey".to_string(), "myValue".to_string())]
+                .iter()
+                .cloned()
+                .collect(),
+        };
+
+        let current: crate::State = serde_json::from_str(data).unwrap();
+        assert_eq!(expected, current);
+    }
+
+    #[test]
+    fn test_deserialize_sepc() {
+        let data = r#"{
+            "ociVersion": "1.0.1",
+            "process": {
+                "terminal": true,
+                "user": {
+                    "uid": 1,
+                    "gid": 1,
+                    "additionalGids": [
+                        5,
+                        6
+                    ]
+                },
+                "args": [
+                    "sh"
+                ],
+                "env": [
+                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    "TERM=xterm"
+                ],
+                "cwd": "/",
+                "capabilities": {
+                    "bounding": [
+                        "CAP_AUDIT_WRITE",
+                        "CAP_KILL",
+                        "CAP_NET_BIND_SERVICE"
+                    ],
+                    "permitted": [
+                        "CAP_AUDIT_WRITE",
+                        "CAP_KILL",
+                        "CAP_NET_BIND_SERVICE"
+                    ],
+                    "inheritable": [
+                        "CAP_AUDIT_WRITE",
+                        "CAP_KILL",
+                        "CAP_NET_BIND_SERVICE"
+                    ],
+                    "effective": [
+                        "CAP_AUDIT_WRITE",
+                        "CAP_KILL"
+                    ],
+                    "ambient": [
+                        "CAP_NET_BIND_SERVICE"
+                    ]
+                },
+                "rlimits": [
+                    {
+                        "type": "RLIMIT_CORE",
+                        "hard": 1024,
+                        "soft": 1024
+                    },
+                    {
+                        "type": "RLIMIT_NOFILE",
+                        "hard": 1024,
+                        "soft": 1024
+                    }
+                ],
+                "apparmorProfile": "acme_secure_profile",
+                "oomScoreAdj": 100,
+                "selinuxLabel": "system_u:system_r:svirt_lxc_net_t:s0:c124,c675",
+                "noNewPrivileges": true
+            },
+            "root": {
+                "path": "rootfs",
+                "readonly": true
+            },
+            "hostname": "slartibartfast",
+            "mounts": [
+                {
+                    "destination": "/proc",
+                    "type": "proc",
+                    "source": "proc"
+                },
+                {
+                    "destination": "/dev",
+                    "type": "tmpfs",
+                    "source": "tmpfs",
+                    "options": [
+                        "nosuid",
+                        "strictatime",
+                        "mode=755",
+                        "size=65536k"
+                    ]
+                },
+                {
+                    "destination": "/dev/pts",
+                    "type": "devpts",
+                    "source": "devpts",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "newinstance",
+                        "ptmxmode=0666",
+                        "mode=0620",
+                        "gid=5"
+                    ]
+                },
+                {
+                    "destination": "/dev/shm",
+                    "type": "tmpfs",
+                    "source": "shm",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev",
+                        "mode=1777",
+                        "size=65536k"
+                    ]
+                },
+                {
+                    "destination": "/dev/mqueue",
+                    "type": "mqueue",
+                    "source": "mqueue",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev"
+                    ]
+                },
+                {
+                    "destination": "/sys",
+                    "type": "sysfs",
+                    "source": "sysfs",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev"
+                    ]
+                },
+                {
+                    "destination": "/sys/fs/cgroup",
+                    "type": "cgroup",
+                    "source": "cgroup",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev",
+                        "relatime",
+                        "ro"
+                    ]
+                }
+            ],
+            "hooks": {
+                "prestart": [
+                    {
+                        "path": "/usr/bin/fix-mounts",
+                        "args": [
+                            "fix-mounts",
+                            "arg1",
+                            "arg2"
+                        ],
+                        "env": [
+                            "key1=value1"
+                        ]
+                    },
+                    {
+                        "path": "/usr/bin/setup-network"
+                    }
+                ],
+                "poststart": [
+                    {
+                        "path": "/usr/bin/notify-start",
+                        "timeout": 5
+                    }
+                ],
+                "poststop": [
+                    {
+                        "path": "/usr/sbin/cleanup.sh",
+                        "args": [
+                            "cleanup.sh",
+                            "-f"
+                        ]
+                    }
+                ]
+            },
+            "linux": {
+                "devices": [
+                    {
+                        "path": "/dev/fuse",
+                        "type": "c",
+                        "major": 10,
+                        "minor": 229,
+                        "fileMode": 438,
+                        "uid": 0,
+                        "gid": 0
+                    },
+                    {
+                        "path": "/dev/sda",
+                        "type": "b",
+                        "major": 8,
+                        "minor": 0,
+                        "fileMode": 432,
+                        "uid": 0,
+                        "gid": 0
+                    }
+                ],
+                "uidMappings": [
+                    {
+                        "containerID": 0,
+                        "hostID": 1000,
+                        "size": 32000
+                    }
+                ],
+                "gidMappings": [
+                    {
+                        "containerID": 0,
+                        "hostID": 1000,
+                        "size": 32000
+                    }
+                ],
+                "sysctl": {
+                    "net.ipv4.ip_forward": "1",
+                    "net.core.somaxconn": "256"
+                },
+                "cgroupsPath": "/myRuntime/myContainer",
+                "resources": {
+                    "network": {
+                        "classID": 1048577,
+                        "priorities": [
+                            {
+                                "name": "eth0",
+                                "priority": 500
+                            },
+                            {
+                                "name": "eth1",
+                                "priority": 1000
+                            }
+                        ]
+                    },
+                    "pids": {
+                        "limit": 32771
+                    },
+                    "hugepageLimits": [
+                        {
+                            "pageSize": "2MB",
+                            "limit": 9223372036854772000
+                        },
+                        {
+                            "pageSize": "64KB",
+                            "limit": 1000000
+                        }
+                    ],
+                    "memory": {
+                        "limit": 536870912,
+                        "reservation": 536870912,
+                        "swap": 536870912,
+                        "kernel": -1,
+                        "kernelTCP": -1,
+                        "swappiness": 0,
+                        "disableOOMKiller": false
+                    },
+                    "cpu": {
+                        "shares": 1024,
+                        "quota": 1000000,
+                        "period": 500000,
+                        "realtimeRuntime": 950000,
+                        "realtimePeriod": 1000000,
+                        "cpus": "2-3",
+                        "mems": "0-7"
+                    },
+                    "devices": [
+                        {
+                            "allow": false,
+                            "access": "rwm"
+                        },
+                        {
+                            "allow": true,
+                            "type": "c",
+                            "major": 10,
+                            "minor": 229,
+                            "access": "rw"
+                        },
+                        {
+                            "allow": true,
+                            "type": "b",
+                            "major": 8,
+                            "minor": 0,
+                            "access": "r"
+                        }
+                    ],
+                    "blockIO": {
+                        "weight": 10,
+                        "leafWeight": 10,
+                        "weightDevice": [
+                            {
+                                "blk": {
+                                    "major": 8,
+                                    "minor": 0
+                                },
+                                "weight": 500,
+                                "leafWeight": 300
+                            },
+                            {
+                                "blk":{
+                                    "major": 8,
+                                    "minor": 16
+                                },
+                                "weight": 500
+                            }
+                        ],
+                        "throttleReadBpsDevice": [
+                            {
+                                "blk":{
+                                    "major": 8,
+                                    "minor": 0
+                                },
+                                "rate": 600
+                            }
+                        ],
+                        "throttleWriteIOPSDevice": [
+                            {
+                                "blk":{
+                                    "major": 8,
+                                    "minor": 16
+                                },
+                                "rate": 300
+                            }
+                        ]
+                    }
+                },
+                "rootfsPropagation": "slave",
+                "seccomp": {
+                    "defaultAction": "SCMP_ACT_ALLOW",
+                    "architectures": [
+                        "SCMP_ARCH_X86",
+                        "SCMP_ARCH_X32"
+                    ],
+                    "syscalls": [
+                        {
+                            "names": [
+                                "getcwd",
+                                "chmod"
+                            ],
+                            "action": "SCMP_ACT_ERRNO"
+                        }
+                    ]
+                },
+                "namespaces": [
+                    {
+                        "type": "pid"
+                    },
+                    {
+                        "type": "network"
+                    },
+                    {
+                        "type": "ipc"
+                    },
+                    {
+                        "type": "uts"
+                    },
+                    {
+                        "type": "mount"
+                    },
+                    {
+                        "type": "user"
+                    },
+                    {
+                        "type": "cgroup"
+                    }
+                ],
+                "maskedPaths": [
+                    "/proc/kcore",
+                    "/proc/latency_stats",
+                    "/proc/timer_stats",
+                    "/proc/sched_debug"
+                ],
+                "readonlyPaths": [
+                    "/proc/asound",
+                    "/proc/bus",
+                    "/proc/fs",
+                    "/proc/irq",
+                    "/proc/sys",
+                    "/proc/sysrq-trigger"
+                ],
+                "mountLabel": "system_u:object_r:svirt_sandbox_file_t:s0:c715,c811"
+            },
+            "annotations": {
+                "com.example.key1": "value1",
+                "com.example.key2": "value2"
+            }
+        }"#;
+        let expected = crate::Spec {
+            version: "1.0.1".to_string(),
+            process: Option::from(crate::Process {
+                terminal: true,
+                console_size: None,
+                user: crate::User {
+                    uid: 1,
+                    gid: 1,
+                    // incompatible with oci
+                    // additional_gids: vec![5, 6],
+                    additional_gids: vec![],
+                    username: "".to_string(),
+                },
+                args: vec!["sh".to_string()],
+                env: vec![
+                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
+                    "TERM=xterm".to_string(),
+                ],
+                cwd: "/".to_string(),
+                capabilities: Some(crate::LinuxCapabilities {
+                    bounding: vec![
+                        "CAP_AUDIT_WRITE".to_string(),
+                        "CAP_KILL".to_string(),
+                        "CAP_NET_BIND_SERVICE".to_string(),
+                    ],
+                    effective: vec!["CAP_AUDIT_WRITE".to_string(), "CAP_KILL".to_string()],
+                    inheritable: vec![
+                        "CAP_AUDIT_WRITE".to_string(),
+                        "CAP_KILL".to_string(),
+                        "CAP_NET_BIND_SERVICE".to_string(),
+                    ],
+                    permitted: vec![
+                        "CAP_AUDIT_WRITE".to_string(),
+                        "CAP_KILL".to_string(),
+                        "CAP_NET_BIND_SERVICE".to_string(),
+                    ],
+                    ambient: vec!["CAP_NET_BIND_SERVICE".to_string()],
+                }),
+                rlimits: vec![
+                    crate::POSIXRlimit {
+                        r#type: "RLIMIT_CORE".to_string(),
+                        hard: 1024,
+                        soft: 1024,
+                    },
+                    crate::POSIXRlimit {
+                        r#type: "RLIMIT_NOFILE".to_string(),
+                        hard: 1024,
+                        soft: 1024,
+                    },
+                ],
+                no_new_privileges: true,
+                apparmor_profile: "acme_secure_profile".to_string(),
+                oom_score_adj: Some(100),
+                selinux_label: "system_u:system_r:svirt_lxc_net_t:s0:c124,c675".to_string(),
+            }),
+            root: Some(crate::Root {
+                path: "rootfs".to_string(),
+                readonly: true,
+            }),
+            hostname: "slartibartfast".to_string(),
+            mounts: vec![
+                crate::Mount {
+                    destination: "/proc".to_string(),
+                    r#type: "proc".to_string(),
+                    source: "proc".to_string(),
+                    options: vec![],
+                },
+                crate::Mount {
+                    destination: "/dev".to_string(),
+                    r#type: "tmpfs".to_string(),
+                    source: "tmpfs".to_string(),
+                    options: vec![
+                        "nosuid".to_string(),
+                        "strictatime".to_string(),
+                        "mode=755".to_string(),
+                        "size=65536k".to_string(),
+                    ],
+                },
+                crate::Mount {
+                    destination: "/dev/pts".to_string(),
+                    r#type: "devpts".to_string(),
+                    source: "devpts".to_string(),
+                    options: vec![
+                        "nosuid".to_string(),
+                        "noexec".to_string(),
+                        "newinstance".to_string(),
+                        "ptmxmode=0666".to_string(),
+                        "mode=0620".to_string(),
+                        "gid=5".to_string(),
+                    ],
+                },
+                crate::Mount {
+                    destination: "/dev/shm".to_string(),
+                    r#type: "tmpfs".to_string(),
+                    source: "shm".to_string(),
+                    options: vec![
+                        "nosuid".to_string(),
+                        "noexec".to_string(),
+                        "nodev".to_string(),
+                        "mode=1777".to_string(),
+                        "size=65536k".to_string(),
+                    ],
+                },
+                crate::Mount {
+                    destination: "/dev/mqueue".to_string(),
+                    r#type: "mqueue".to_string(),
+                    source: "mqueue".to_string(),
+                    options: vec![
+                        "nosuid".to_string(),
+                        "noexec".to_string(),
+                        "nodev".to_string(),
+                    ],
+                },
+                crate::Mount {
+                    destination: "/sys".to_string(),
+                    r#type: "sysfs".to_string(),
+                    source: "sysfs".to_string(),
+                    options: vec![
+                        "nosuid".to_string(),
+                        "noexec".to_string(),
+                        "nodev".to_string(),
+                    ],
+                },
+                crate::Mount {
+                    destination: "/sys/fs/cgroup".to_string(),
+                    r#type: "cgroup".to_string(),
+                    source: "cgroup".to_string(),
+                    options: vec![
+                        "nosuid".to_string(),
+                        "noexec".to_string(),
+                        "nodev".to_string(),
+                        "relatime".to_string(),
+                        "ro".to_string(),
+                    ],
+                },
+            ],
+            hooks: Some(crate::Hooks {
+                prestart: vec![
+                    crate::Hook {
+                        path: "/usr/bin/fix-mounts".to_string(),
+                        args: vec![
+                            "fix-mounts".to_string(),
+                            "arg1".to_string(),
+                            "arg2".to_string(),
+                        ],
+                        env: vec!["key1=value1".to_string()],
+                        timeout: None,
+                    },
+                    crate::Hook {
+                        path: "/usr/bin/setup-network".to_string(),
+                        args: vec![],
+                        env: vec![],
+                        timeout: None,
+                    },
+                ],
+                poststart: vec![crate::Hook {
+                    path: "/usr/bin/notify-start".to_string(),
+                    args: vec![],
+                    env: vec![],
+                    timeout: Some(5),
+                }],
+                poststop: vec![crate::Hook {
+                    path: "/usr/sbin/cleanup.sh".to_string(),
+                    args: vec!["cleanup.sh".to_string(), "-f".to_string()],
+                    env: vec![],
+                    timeout: None,
+                }],
+            }),
+            annotations: [
+                ("com.example.key1".to_string(), "value1".to_string()),
+                ("com.example.key2".to_string(), "value2".to_string()),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            linux: Some(crate::Linux {
+                uid_mappings: vec![crate::LinuxIDMapping {
+                    container_id: 0,
+                    host_id: 1000,
+                    size: 32000,
+                }],
+                gid_mappings: vec![crate::LinuxIDMapping {
+                    container_id: 0,
+                    host_id: 1000,
+                    size: 32000,
+                }],
+                sysctl: [
+                    ("net.ipv4.ip_forward".to_string(), "1".to_string()),
+                    ("net.core.somaxconn".to_string(), "256".to_string()),
+                ]
+                .iter()
+                .cloned()
+                .collect(),
+                resources: Some(crate::LinuxResources {
+                    devices: vec![
+                        crate::LinuxDeviceCgroup {
+                            allow: false,
+                            r#type: "".to_string(),
+                            major: None,
+                            minor: None,
+                            access: "rwm".to_string(),
+                        },
+                        crate::LinuxDeviceCgroup {
+                            allow: true,
+                            r#type: "c".to_string(),
+                            major: Some(10),
+                            minor: Some(229),
+                            access: "rw".to_string(),
+                        },
+                        crate::LinuxDeviceCgroup {
+                            allow: true,
+                            r#type: "b".to_string(),
+                            major: Some(8),
+                            minor: Some(0),
+                            access: "r".to_string(),
+                        },
+                    ],
+                    memory: Some(crate::LinuxMemory {
+                        limit: Some(536870912),
+                        reservation: Some(536870912),
+                        swap: Some(536870912),
+                        kernel: Some(-1),
+                        kernel_tcp: Some(-1),
+                        // incompatible with oci
+                        swapiness: None,
+                        disable_oom_killer: Some(false),
+                    }),
+                    cpu: Some(crate::LinuxCPU {
+                        shares: Some(1024),
+                        quota: Some(1000000),
+                        period: Some(500000),
+                        realtime_runtime: Some(950000),
+                        realtime_period: Some(1000000),
+                        cpus: "2-3".to_string(),
+                        mems: "0-7".to_string(),
+                    }),
+                    pids: Some(crate::LinuxPids { limit: 32771 }),
+                    block_io: Some(crate::LinuxBlockIO {
+                        weight: Some(10),
+                        leaf_weight: Some(10),
+                        weight_device: vec![
+                            crate::LinuxWeightDevice {
+                                blk: crate::LinuxBlockIODevice { major: 8, minor: 0 },
+                                weight: Some(500),
+                                leaf_weight: Some(300),
+                            },
+                            crate::LinuxWeightDevice {
+                                blk: crate::LinuxBlockIODevice {
+                                    major: 8,
+                                    minor: 16,
+                                },
+                                weight: Some(500),
+                                leaf_weight: None,
+                            },
+                        ],
+                        throttle_read_bps_device: vec![crate::LinuxThrottleDevice {
+                            blk: crate::LinuxBlockIODevice { major: 8, minor: 0 },
+                            rate: 600,
+                        }],
+                        throttle_write_bps_device: vec![],
+                        throttle_read_iops_device: vec![],
+                        throttle_write_iops_device: vec![crate::LinuxThrottleDevice {
+                            blk: crate::LinuxBlockIODevice {
+                                major: 8,
+                                minor: 16,
+                            },
+                            rate: 300,
+                        }],
+                    }),
+                    hugepage_limits: vec![
+                        crate::LinuxHugepageLimit {
+                            page_size: "2MB".to_string(),
+                            limit: 9223372036854772000,
+                        },
+                        crate::LinuxHugepageLimit {
+                            page_size: "64KB".to_string(),
+                            limit: 1000000,
+                        },
+                    ],
+                    network: Some(crate::LinuxNetwork {
+                        class_id: Some(1048577),
+                        priorities: vec![
+                            crate::LinuxInterfacePriority {
+                                name: "eth0".to_string(),
+                                priority: 500,
+                            },
+                            crate::LinuxInterfacePriority {
+                                name: "eth1".to_string(),
+                                priority: 1000,
+                            },
+                        ],
+                    }),
+                    rdma: Default::default(),
+                }),
+                cgroups_path: "/myRuntime/myContainer".to_string(),
+                namespaces: vec![
+                    crate::LinuxNamespace {
+                        r#type: "pid".to_string(),
+                        path: "".to_string(),
+                    },
+                    crate::LinuxNamespace {
+                        r#type: "network".to_string(),
+                        path: "".to_string(),
+                    },
+                    crate::LinuxNamespace {
+                        r#type: "ipc".to_string(),
+                        path: "".to_string(),
+                    },
+                    crate::LinuxNamespace {
+                        r#type: "uts".to_string(),
+                        path: "".to_string(),
+                    },
+                    crate::LinuxNamespace {
+                        r#type: "mount".to_string(),
+                        path: "".to_string(),
+                    },
+                    crate::LinuxNamespace {
+                        r#type: "user".to_string(),
+                        path: "".to_string(),
+                    },
+                    crate::LinuxNamespace {
+                        r#type: "cgroup".to_string(),
+                        path: "".to_string(),
+                    },
+                ],
+                devices: vec![
+                    crate::LinuxDevice {
+                        path: "/dev/fuse".to_string(),
+                        r#type: "c".to_string(),
+                        major: 10,
+                        minor: 229,
+                        file_mode: Some(438),
+                        uid: Some(0),
+                        gid: Some(0),
+                    },
+                    crate::LinuxDevice {
+                        path: "/dev/sda".to_string(),
+                        r#type: "b".to_string(),
+                        major: 8,
+                        minor: 0,
+                        file_mode: Some(432),
+                        uid: Some(0),
+                        gid: Some(0),
+                    },
+                ],
+                seccomp: Some(crate::LinuxSeccomp {
+                    default_action: "SCMP_ACT_ALLOW".to_string(),
+                    architectures: vec!["SCMP_ARCH_X86".to_string(), "SCMP_ARCH_X32".to_string()],
+                    syscalls: vec![crate::LinuxSyscall {
+                        names: vec!["getcwd".to_string(), "chmod".to_string()],
+                        action: "SCMP_ACT_ERRNO".to_string(),
+                        args: vec![],
+                    }],
+                }),
+                rootfs_propagation: "slave".to_string(),
+                masked_paths: vec![
+                    "/proc/kcore".to_string(),
+                    "/proc/latency_stats".to_string(),
+                    "/proc/timer_stats".to_string(),
+                    "/proc/sched_debug".to_string(),
+                ],
+                readonly_paths: vec![
+                    "/proc/asound".to_string(),
+                    "/proc/bus".to_string(),
+                    "/proc/fs".to_string(),
+                    "/proc/irq".to_string(),
+                    "/proc/sys".to_string(),
+                    "/proc/sysrq-trigger".to_string(),
+                ],
+                mount_label: "system_u:object_r:svirt_sandbox_file_t:s0:c715,c811".to_string(),
+                intel_rdt: None,
+            }),
+            solaris: None,
+            windows: None,
+            vm: None,
+        };
+
+        // warning : incompatible with oci : https://github.com/opencontainers/runtime-spec/blob/master/config.md
+        // 1. User use addtionalGids while oci use additionalGids
+        // 2. LinuxMemory use swapiness while oci use swappiness
+        // 3. LinuxWeightDevice with blk
+        //    {
+        //        "blk": {
+        //            "major": 8,
+        //            "minor": 0
+        //        },
+        //        "weight": 500,
+        //        "leafWeight": 300
+        //    }
+        //    oci without blk
+        //    {
+        //        "major": 8,
+        //        "minor": 0,
+        //        "weight": 500,
+        //        "leafWeight": 300
+        //    }
+        let current: crate::Spec = serde_json::from_str(data).unwrap();
+        assert_eq!(expected, current);
     }
 }
