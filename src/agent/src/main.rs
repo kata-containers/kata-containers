@@ -24,6 +24,8 @@ extern crate oci;
 extern crate slog;
 extern crate slog_async;
 extern crate slog_json;
+#[macro_use]
+extern crate netlink;
 
 use futures::*;
 use nix::sys::wait::{self, WaitStatus};
@@ -48,7 +50,6 @@ mod linux_abi;
 mod logging;
 mod mount;
 mod namespace;
-pub mod netlink;
 mod network;
 pub mod random;
 mod sandbox;

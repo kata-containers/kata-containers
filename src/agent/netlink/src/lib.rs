@@ -6,8 +6,24 @@
 #![allow(non_camel_case_types)]
 #![allow(non_upper_case_globals)]
 #![allow(dead_code)]
+#![allow(unused_parens)]
+#![allow(unused_unsafe)]
 
-use libc;
+extern crate libc;
+extern crate nix;
+extern crate protobuf;
+extern crate protocols;
+extern crate rustjail;
+
+#[macro_use]
+extern crate slog;
+extern crate slog_async;
+extern crate slog_json;
+extern crate slog_scope;
+
+#[macro_use]
+extern crate scan_fmt;
+
 use nix::errno::Errno;
 use protobuf::RepeatedField;
 use protocols::types::{IPAddress, IPFamily, Interface, Route};
@@ -2834,7 +2850,7 @@ impl From<IPAddress> for RtIPAddr {
 
 #[cfg(test)]
 mod tests {
-    use crate::netlink::{nlmsghdr, NLMSG_ALIGNTO, RTA_ALIGNTO, RTM_BASE};
+    use crate::{nlmsghdr, NLMSG_ALIGNTO, RTA_ALIGNTO, RTM_BASE};
     use libc;
     use std::mem;
     #[test]
