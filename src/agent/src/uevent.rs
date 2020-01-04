@@ -5,9 +5,9 @@
 
 use crate::device::online_device;
 use crate::linux_abi::*;
-use crate::netlink::{RtnlHandle, NETLINK_UEVENT};
 use crate::sandbox::Sandbox;
 use crate::GLOBAL_DEVICE_WATCHER;
+use netlink::{RtnlHandle, NETLINK_UEVENT};
 use slog::Logger;
 use std::sync::{Arc, Mutex};
 use std::thread;

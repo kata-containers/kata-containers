@@ -33,10 +33,10 @@ use crate::device::{add_devices, rescan_pci_bus};
 use crate::linux_abi::*;
 use crate::mount::{add_storages, remove_mounts, STORAGEHANDLERLIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
-use crate::netlink::{RtnlHandle, NETLINK_ROUTE};
 use crate::random;
 use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
+use netlink::{RtnlHandle, NETLINK_ROUTE};
 
 use libc::{self, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use serde_json;
