@@ -8,6 +8,7 @@ edition = "2018"
 oci = { path = "oci" }
 rustjail = { path = "rustjail" }
 protocols = { path = "protocols" }
+netlink = { path = "netlink" }
 lazy_static = "1.3.0"
 error-chain = "0.12.1"
 grpcio = { git="https://github.com/alipay/grpc-rs", branch="rust_agent" }
