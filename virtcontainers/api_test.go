@@ -43,7 +43,8 @@ var containerAnnotations = map[string]string{
 func newEmptySpec() *specs.Spec {
 	return &specs.Spec{
 		Linux: &specs.Linux{
-			Resources: &specs.LinuxResources{},
+			Resources:   &specs.LinuxResources{},
+			CgroupsPath: defaultCgroupPath,
 		},
 		Process: &specs.Process{
 			Capabilities: &specs.LinuxCapabilities{},
