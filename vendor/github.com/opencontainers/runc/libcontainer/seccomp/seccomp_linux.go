@@ -19,7 +19,13 @@ var (
 	actTrap  = libseccomp.ActTrap
 	actKill  = libseccomp.ActKill
 	actTrace = libseccomp.ActTrace.SetReturnCode(int16(unix.EPERM))
+	actLog   = libseccomp.ActLog
 	actErrno = libseccomp.ActErrno.SetReturnCode(int16(unix.EPERM))
+)
+
+const (
+	// Linux system calls can have at most 6 arguments
+	syscallMaxArguments int = 6
 )
 
 // Filters given syscalls in a container, preventing them from being used
@@ -45,11 +51,11 @@ func InitSeccomp(config *configs.Seccomp) error {
 	for _, arch := range config.Architectures {
 		scmpArch, err := libseccomp.GetArchFromString(arch)
 		if err != nil {
-			return err
+			return fmt.Errorf("error validating Seccomp architecture: %s", err)
 		}
 
 		if err := filter.AddArch(scmpArch); err != nil {
-			return err
+			return fmt.Errorf("error adding architecture to seccomp filter: %s", err)
 		}
 	}
 
@@ -107,6 +113,8 @@ func getAction(act configs.Action) (libseccomp.ScmpAction, error) {
 		return actAllow, nil
 	case configs.Trace:
 		return actTrace, nil
+	case configs.Log:
+		return actLog, nil
 	default:
 		return libseccomp.ActInvalid, fmt.Errorf("invalid action, cannot use in rule")
 	}
@@ -170,29 +178,55 @@ func matchCall(filter *libseccomp.ScmpFilter, call *configs.Syscall) error {
 	// Convert the call's action to the libseccomp equivalent
 	callAct, err := getAction(call.Action)
 	if err != nil {
-		return err
+		return fmt.Errorf("action in seccomp profile is invalid: %s", err)
 	}
 
 	// Unconditional match - just add the rule
 	if len(call.Args) == 0 {
 		if err = filter.AddRule(callNum, callAct); err != nil {
-			return err
+			return fmt.Errorf("error adding seccomp filter rule for syscall %s: %s", call.Name, err)
 		}
 	} else {
-		// Conditional match - convert the per-arg rules into library format
+		// If two or more arguments have the same condition,
+		// Revert to old behavior, adding each condition as a separate rule
+		argCounts := make([]uint, syscallMaxArguments)
 		conditions := []libseccomp.ScmpCondition{}
 
 		for _, cond := range call.Args {
 			newCond, err := getCondition(cond)
 			if err != nil {
-				return err
+				return fmt.Errorf("error creating seccomp syscall condition for syscall %s: %s", call.Name, err)
 			}
+
+			argCounts[cond.Index] += 1
 
 			conditions = append(conditions, newCond)
 		}
 
-		if err = filter.AddRuleConditional(callNum, callAct, conditions); err != nil {
-			return err
+		hasMultipleArgs := false
+		for _, count := range argCounts {
+			if count > 1 {
+				hasMultipleArgs = true
+				break
+			}
+		}
+
+		if hasMultipleArgs {
+			// Revert to old behavior
+			// Add each condition attached to a separate rule
+			for _, cond := range conditions {
+				condArr := []libseccomp.ScmpCondition{cond}
+
+				if err = filter.AddRuleConditional(callNum, callAct, condArr); err != nil {
+					return fmt.Errorf("error adding seccomp rule for syscall %s: %s", call.Name, err)
+				}
+			}
+		} else {
+			// No conditions share same argument
+			// Use new, proper behavior
+			if err = filter.AddRuleConditional(callNum, callAct, conditions); err != nil {
+				return fmt.Errorf("error adding seccomp rule for syscall %s: %s", call.Name, err)
+			}
 		}
 	}
 
