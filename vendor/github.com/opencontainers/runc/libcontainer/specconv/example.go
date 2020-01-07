@@ -110,15 +110,18 @@ func Example() *specs.Spec {
 		},
 		Linux: &specs.Linux{
 			MaskedPaths: []string{
+				"/proc/acpi",
+				"/proc/asound",
 				"/proc/kcore",
+				"/proc/keys",
 				"/proc/latency_stats",
 				"/proc/timer_list",
 				"/proc/timer_stats",
 				"/proc/sched_debug",
 				"/sys/firmware",
+				"/proc/scsi",
 			},
 			ReadonlyPaths: []string{
-				"/proc/asound",
 				"/proc/bus",
 				"/proc/fs",
 				"/proc/irq",
@@ -154,9 +157,9 @@ func Example() *specs.Spec {
 	}
 }
 
-// ExampleRootless returns an example spec file that works with rootless
-// containers. It's essentially a modified version of the specfile from
-// Example().
+// ToRootless converts the given spec file into one that should work with
+// rootless containers (euid != 0), by removing incompatible options and adding others that
+// are needed.
 func ToRootless(spec *specs.Spec) {
 	var namespaces []specs.LinuxNamespace
 

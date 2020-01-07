@@ -75,6 +75,20 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:d219d59fcf68d1e8484fb038717cf911c60f70abfe053ef1f56bdeb6c121df7b"
+  name = "github.com/cilium/ebpf"
+  packages = [
+    ".",
+    "asm",
+    "internal",
+    "internal/btf",
+    "internal/unix",
+  ]
+  pruneopts = "NUT"
+  revision = "c8f8abaa9ece88e9be5b888e23e130e726d9afa4"
+
+[[projects]]
+  branch = "master"
   digest = "1:8ecb89af7dfe3ac401bdb0c9390b134ef96a97e85f732d2b0604fb7b3977839f"
   name = "github.com/codahale/hdrhistogram"
   packages = ["."]
@@ -469,20 +483,23 @@
   version = "v1.0.0-rc1"
 
 [[projects]]
-  digest = "1:e79493df9a0c200099f954b9976e2ad0ab50cbae0bff2fdbd5e837f40221999f"
+  digest = "1:a41704b63041a102a7435a253ee9498b1f3b2a5806c134e8c279734472e773b4"
   name = "github.com/opencontainers/runc"
   packages = [
     "libcontainer/cgroups",
+    "libcontainer/cgroups/ebpf",
+    "libcontainer/cgroups/ebpf/devicefilter",
     "libcontainer/cgroups/fs",
     "libcontainer/cgroups/systemd",
     "libcontainer/configs",
     "libcontainer/seccomp",
     "libcontainer/specconv",
     "libcontainer/system",
+    "libcontainer/user",
     "libcontainer/utils",
   ]
   pruneopts = "NUT"
-  revision = "0351df1c5a66838d0c392b4ac4cf9450de844e2d"
+  revision = "2b52db75279ca687e18156de86d845876e9ef35d"
 
 [[projects]]
   digest = "1:7a58202c5cdf3d2c1eb0621fe369315561cea7f036ad10f0f0479ac36bcc95eb"
