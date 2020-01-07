@@ -182,12 +182,23 @@
   revision = "485be65581341430f9106a194a98f0f2412245fb"
 
 [[projects]]
-  digest = "1:6f614c5193761d29b3184a170380672cafd025306261ce7810e2dd99907184c4"
+  digest = "1:1b736b39b804e69b05f0acb12bbabf5b6f7b5760db959ce58d3f5e2919f7a2c2"
   name = "github.com/coreos/go-systemd"
-  packages = ["dbus"]
+  packages = [
+    "dbus",
+    "util",
+  ]
   pruneopts = "NUT"
   revision = "9002847aa1425fb6ac49077c0a630b3b67e0fbfd"
   version = "v18"
+
+[[projects]]
+  digest = "1:6e2ff82d2fe11ee35ec8dceb4346b8144a761f1c8655592c4ebe99a92fcec327"
+  name = "github.com/coreos/pkg"
+  packages = ["dlopen"]
+  pruneopts = "NUT"
+  revision = "97fdf19511ea361ae1c100dd393cc47f8dcfa1e1"
+  version = "v4"
 
 [[projects]]
   digest = "1:04054595e5c5a35d1553a7f3464d18577caf597445d643992998643df56d4afd"
@@ -416,6 +427,14 @@
   revision = "6182fa34c64ba6eb1b6028d8b6647a86844129c4"
 
 [[projects]]
+  digest = "1:58999a98719fddbac6303cb17e8d85b945f60b72f48e3a2df6b950b97fa926f1"
+  name = "github.com/konsorten/go-windows-terminal-sequences"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "f55edac94c9bbba5d6182a4be46d86a2c9b5b50e"
+  version = "v1.0.2"
+
+[[projects]]
   branch = "master"
   digest = "1:84a5a2b67486d5d67060ac393aa255d05d24ed5ee41daecd5635ec22657b6492"
   name = "github.com/mailru/easyjson"
@@ -450,9 +469,12 @@
   version = "v1.0.0-rc1"
 
 [[projects]]
-  digest = "1:26537bc93f1e164bbc305117029de9933656ff81c4549609939212aca20a4710"
+  digest = "1:e79493df9a0c200099f954b9976e2ad0ab50cbae0bff2fdbd5e837f40221999f"
   name = "github.com/opencontainers/runc"
   packages = [
+    "libcontainer/cgroups",
+    "libcontainer/cgroups/fs",
+    "libcontainer/cgroups/systemd",
     "libcontainer/configs",
     "libcontainer/seccomp",
     "libcontainer/specconv",
@@ -521,14 +543,14 @@
   version = "v0.9.0"
 
 [[projects]]
-  digest = "1:432ba4d123dc14d6e3b71ca22051bd1a5aa20a8e466e47edabd9af46405c5cfb"
+  digest = "1:094ec7a9fae6fad197169d718b5d9991186ee42ecdb9f623dee2f25018993d39"
   name = "github.com/sirupsen/logrus"
   packages = [
     ".",
     "hooks/syslog",
   ]
   pruneopts = "NUT"
-  revision = "89742aefa4b206dcf400792f3bd35b542998eb3b"
+  revision = "v1.4.2"
 
 [[projects]]
   digest = "1:511ea0a9d99e8dc47c836f89d58db6690d16e978284b396c89dda04a72925f56"
@@ -594,14 +616,6 @@
   packages = ["."]
   pruneopts = "NUT"
   revision = "86bef332bfc3b59b7624a600bd53009ce91a9829"
-
-[[projects]]
-  branch = "master"
-  digest = "1:058e9504b9a79bfe86092974d05bb3298d2aa0c312d266d43148de289a5065d9"
-  name = "golang.org/x/crypto"
-  packages = ["ssh/terminal"]
-  pruneopts = "NUT"
-  revision = "8dd112bcdc25174059e45e07517d9fc663123347"
 
 [[projects]]
   digest = "1:514d2147b3fd915870b534e3578feed1c40a82aa751a015b160785616bfa2130"
@@ -770,6 +784,9 @@
     "github.com/kata-containers/agent/protocols/client",
     "github.com/kata-containers/agent/protocols/grpc",
     "github.com/mitchellh/mapstructure",
+    "github.com/opencontainers/runc/libcontainer/cgroups",
+    "github.com/opencontainers/runc/libcontainer/cgroups/fs",
+    "github.com/opencontainers/runc/libcontainer/cgroups/systemd",
     "github.com/opencontainers/runc/libcontainer/configs",
     "github.com/opencontainers/runc/libcontainer/specconv",
     "github.com/opencontainers/runc/libcontainer/utils",
