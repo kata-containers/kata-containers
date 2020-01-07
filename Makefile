@@ -5,7 +5,9 @@
 #
 
 DESTDIR :=
+ifeq ($(PREFIX),)
 PREFIX := /usr
+endif
 LIBEXECDIR := $(PREFIX)/libexec
 PROJECT := kata-containers
 # Override will ignore PREFIX, LIBEXECDIR and PROJECT
