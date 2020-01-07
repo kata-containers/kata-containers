@@ -40,7 +40,7 @@
 
 [[constraint]]
   name = "golang.org/x/sys"
-  revision = "ac767d655b305d4e9612f5f6e33120b9176c4ad4"
+  revision = "b016eb3dc98ea7f69ed55e8216b87187067ae621"
 
 [[constraint]]
   name = "github.com/sirupsen/logrus"
