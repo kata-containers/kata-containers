@@ -196,23 +196,12 @@
   revision = "485be65581341430f9106a194a98f0f2412245fb"
 
 [[projects]]
-  digest = "1:1b736b39b804e69b05f0acb12bbabf5b6f7b5760db959ce58d3f5e2919f7a2c2"
+  digest = "1:6f614c5193761d29b3184a170380672cafd025306261ce7810e2dd99907184c4"
   name = "github.com/coreos/go-systemd"
-  packages = [
-    "dbus",
-    "util",
-  ]
+  packages = ["dbus"]
   pruneopts = "NUT"
   revision = "9002847aa1425fb6ac49077c0a630b3b67e0fbfd"
   version = "v18"
-
-[[projects]]
-  digest = "1:6e2ff82d2fe11ee35ec8dceb4346b8144a761f1c8655592c4ebe99a92fcec327"
-  name = "github.com/coreos/pkg"
-  packages = ["dlopen"]
-  pruneopts = "NUT"
-  revision = "97fdf19511ea361ae1c100dd393cc47f8dcfa1e1"
-  version = "v4"
 
 [[projects]]
   digest = "1:04054595e5c5a35d1553a7f3464d18577caf597445d643992998643df56d4afd"
@@ -438,7 +427,7 @@
     "protocols/grpc",
   ]
   pruneopts = "NUT"
-  revision = "6182fa34c64ba6eb1b6028d8b6647a86844129c4"
+  revision = "1b3628c43660cb198ec055d78e5c7b03809cba60"
 
 [[projects]]
   digest = "1:58999a98719fddbac6303cb17e8d85b945f60b72f48e3a2df6b950b97fa926f1"
