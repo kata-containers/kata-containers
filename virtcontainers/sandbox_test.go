@@ -1454,19 +1454,22 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 	successfulContainer.Annotations[annotations.ContainerTypeKey] = string(PodSandbox)
 
 	tests := []struct {
-		name    string
-		s       *Sandbox
-		wantErr bool
+		name     string
+		s        *Sandbox
+		wantErr  bool
+		needRoot bool
 	}{
 		{
 			"New sandbox",
 			&Sandbox{},
 			true,
+			false,
 		},
 		{
 			"New sandbox, new config",
 			&Sandbox{config: &SandboxConfig{}},
 			true,
+			false,
 		},
 		{
 			"sandbox, container no sandbox type",
@@ -1475,6 +1478,7 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 					{},
 				}}},
 			true,
+			false,
 		},
 		{
 			"sandbox, container sandbox type",
@@ -1483,6 +1487,7 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 					sandboxContainer,
 				}}},
 			true,
+			false,
 		},
 		{
 			"sandbox, empty linux json",
@@ -1491,6 +1496,7 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 					emptyJSONLinux,
 				}}},
 			false,
+			true,
 		},
 		{
 			"sandbox, successful config",
@@ -1499,9 +1505,14 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 					successfulContainer,
 				}}},
 			false,
+			true,
 		},
 	}
 	for _, tt := range tests {
+		if tt.needRoot && os.Getuid() != 0 {
+			t.Skip(tt.name + "needs root")
+		}
+
 		t.Run(tt.name, func(t *testing.T) {
 			if err := tt.s.setupSandboxCgroup(); (err != nil) != tt.wantErr {
 				t.Errorf("Sandbox.SetupSandboxCgroupOnly() error = %v, wantErr %v", err, tt.wantErr)
