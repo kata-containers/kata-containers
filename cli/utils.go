@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/blang/semver"
 	"github.com/kata-containers/runtime/pkg/katautils"
 )
 
@@ -26,6 +27,11 @@ var (
 
 	// Clear Linux has a different path (for stateless support)
 	osReleaseClr = "/usr/lib/os-release"
+
+	unknownVersionInfo = VersionInfo{
+		Semver: unknown,
+		Commit: unknown,
+	}
 )
 
 func getKernelVersion() (string, error) {
@@ -142,4 +148,38 @@ func parseBoolOrAuto(s string) (*bool, error) {
 	}
 	b, err := strconv.ParseBool(s)
 	return &b, err
+}
+
+// constructVersionInfo constructs VersionInfo-type value from a version string
+// in the format of "Kata-Component version Major.Minor.Patch-rc_xxx-Commit".
+func constructVersionInfo(version string) VersionInfo {
+	fields := strings.Split(version, " ")
+	realVersion := fields[len(fields)-1]
+
+	sv, err := semver.Make(realVersion)
+	if err != nil {
+		return unknownVersionInfo
+	}
+
+	pres := strings.Split(sv.Pre[0].VersionStr, "-")
+
+	// version contains Commit info.
+	if len(pres) > 1 {
+		return VersionInfo{
+			Semver: realVersion,
+			Major:  sv.Major,
+			Minor:  sv.Minor,
+			Patch:  sv.Patch,
+			Commit: pres[1],
+		}
+	}
+
+	return VersionInfo{
+		Semver: realVersion,
+		Major:  sv.Major,
+		Minor:  sv.Minor,
+		Patch:  sv.Patch,
+		Commit: unknown,
+	}
+
 }
