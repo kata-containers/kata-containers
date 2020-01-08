@@ -17,7 +17,7 @@ shims=(
 	"fc"
 	"qemu"
 	"qemu-virtiofs"
-	"cloud-hypervisor"
+	"clh"
 )
 
 # If we fail for any reason a message will be displayed
@@ -148,13 +148,8 @@ function configure_containerd_runtime() {
 	local runtime="kata"
 	local configuration="configuration"
 	if [ -n "${1-}" ]; then
-		if [ "$1" == "cloud-hypervisor" ]; then
-			runtime+="-clh"
-			configuration+="-clh"
-		else
-			runtime+="-$1"
-			configuration+="-$1"
-		fi
+		runtime+="-$1"
+		configuration+="-$1"
 	fi
 	local runtime_table="plugins.cri.containerd.runtimes.$runtime"
 	local runtime_type="io.containerd.$runtime.v2"
