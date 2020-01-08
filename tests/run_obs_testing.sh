@@ -16,6 +16,7 @@ DOCKERFILE_PATH="${SCRIPT_PATH}/Dockerfile"
 declare -a OS_DISTRIBUTION=( \
 	'ubuntu:16.04' \
 	'ubuntu:18.04' \
+	'ubuntu:19.04' \
 	'fedora:29' \
 	'fedora:30' \
 	'opensuse/leap:15.1' \
