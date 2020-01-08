@@ -31,6 +31,7 @@ import (
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
@@ -317,6 +318,12 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 
 	k.proxyBuiltIn = isProxyBuiltIn(sandbox.config.ProxyType)
 
+	// Fetch agent runtime info.
+	if useOldStore(sandbox.ctx) {
+		if err := sandbox.store.Load(store.Agent, &k.state); err != nil {
+			k.Logger().Debug("Could not retrieve anything from storage")
+		}
+	}
 	return disableVMShutdown, nil
 }
 

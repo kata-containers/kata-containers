@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -60,10 +61,14 @@ func cleanUp() {
 	os.RemoveAll(testDir)
 	os.MkdirAll(testDir, DirMode)
 
+	store.DeleteAll()
+	store.VCStorePrefix = ""
+
 	setup()
 }
 
 func setup() {
+	store.VCStorePrefix = testDir
 	os.Mkdir(filepath.Join(testDir, testBundle), DirMode)
 
 	for _, filename := range []string{testQemuKernelPath, testQemuInitrdPath, testQemuImagePath, testQemuPath} {
