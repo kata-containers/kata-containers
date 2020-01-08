@@ -66,7 +66,7 @@ function run_test() {
     cmd="kubectl get pods | grep $busybox_pod | grep Completed"
     wait_time=120
 
-    configurations=("nginx-deployment-qemu" "nginx-deployment-qemu-virtiofs")
+    configurations=("nginx-deployment-qemu" "nginx-deployment-qemu-virtiofs" "nginx-deployment-clh")
     for deployment in "${configurations[@]}"; do
         # start the kata pod:
         kubectl apply -f "$YAMLPATH/examples/${deployment}.yaml"
@@ -113,6 +113,7 @@ function test_kata() {
     kubectl apply -f "$YAMLPATH/kata-rbac/base/kata-rbac.yaml"
 
     # apply runtime classes:
+    kubectl apply -f "$YAMLPATH/k8s-1.14/kata-clh-runtimeClass.yaml"
     kubectl apply -f "$YAMLPATH/k8s-1.14/kata-qemu-runtimeClass.yaml"
     kubectl apply -f "$YAMLPATH/k8s-1.14/kata-qemu-virtiofs-runtimeClass.yaml"
 
