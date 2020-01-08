@@ -8,4 +8,5 @@ set -e
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 
+export TEST_DOCKER=true
 run_go_test
