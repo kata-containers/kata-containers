@@ -17,7 +17,7 @@ shims=(
 	"fc"
 	"qemu"
 	"qemu-virtiofs"
-	"cloud-hypervisor"
+	"clh"
 )
 
 # If we fail for any reason a message will be displayed
@@ -32,18 +32,19 @@ function print_usage() {
 }
 
 function get_container_runtime() {
-	local runtime="$(kubectl describe node $NODE_NAME)"
+
+	local runtime=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}' | awk -F '[:]' '{print $1}')
 	if [ "$?" -ne 0 ]; then
                 die "invalid node name"
 	fi
-	if echo "$runtime" | grep -qE 'Container Runtime Version.*containerd.*-k3s'; then
+	if echo "$runtime" | grep -qE 'containerd.*-k3s'; then
 		if systemctl is-active --quiet k3s-agent; then
 			echo "k3s-agent"
 		else
 			echo "k3s"
 		fi
 	else
-		echo "$runtime" | awk -F'[:]' '/Container Runtime Version/ {print $2}' | tr -d ' '
+		echo "$runtime"
 	fi
 }
 
@@ -147,13 +148,8 @@ function configure_containerd_runtime() {
 	local runtime="kata"
 	local configuration="configuration"
 	if [ -n "${1-}" ]; then
-		if [ "$1" == "cloud-hypervisor" ]; then
-			runtime+="-clh"
-			configuration+="-clh"
-		else
-			runtime+="-$1"
-			configuration+="-$1"
-		fi
+		runtime+="-$1"
+		configuration+="-$1"
 	fi
 	local runtime_table="plugins.cri.containerd.runtimes.$runtime"
 	local runtime_type="io.containerd.$runtime.v2"

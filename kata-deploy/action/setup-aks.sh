@@ -23,9 +23,7 @@ function die() {
 function destroy_aks() {
     set +x
 
-    export KUBECONFIG="_output/$DNS_PREFIX/kubeconfig/kubeconfig.$LOCATION.json"
-    kubectl describe ds -n kube-system kata-deploy || true
-    kubectl describe ds -n kube-system kata-cleanup || true
+    export KUBECONFIG="$PWD/_output/$DNS_PREFIX/kubeconfig/kubeconfig.$LOCATION.json"
 
     az login --service-principal -u "$AZ_APPID" -p "$AZ_PASSWORD" --tenant "$AZ_TENANT_ID"
     az group delete --name "$DNS_PREFIX" --yes --no-wait
