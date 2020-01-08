@@ -37,6 +37,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
@@ -177,7 +178,9 @@ type Sandbox struct {
 	factory    Factory
 	hypervisor hypervisor
 	agent      agent
-	newStore   persistapi.PersistDriver
+	store      *store.VCStore
+	// store is used to replace VCStore step by step
+	newStore persistapi.PersistDriver
 
 	network Network
 	monitor *monitor
@@ -544,16 +547,47 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		}
 	}()
 
-	s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, nil)
+	if useOldStore(ctx) {
+		vcStore, err := store.NewVCSandboxStore(ctx, s.id)
+		if err != nil {
+			return nil, err
+		}
 
-	// Ignore the error. Restore can fail for a new sandbox
-	if err := s.Restore(); err != nil {
-		s.Logger().WithError(err).Debug("restore sandbox failed")
-	}
+		s.store = vcStore
 
-	// new store doesn't require hypervisor to be stored immediately
-	if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.stateful); err != nil {
-		return nil, err
+		// Fetch sandbox network to be able to access it from the sandbox structure.
+		var networkNS NetworkNamespace
+		if err = s.store.Load(store.Network, &networkNS); err == nil {
+			s.networkNS = networkNS
+		}
+
+		devices, err := s.store.LoadDevices()
+		if err != nil {
+			s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("load sandbox devices failed")
+		}
+		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, devices)
+
+		// Load sandbox state. The hypervisor.createSandbox call, may need to access statei.
+		state, err := s.store.LoadState()
+		if err == nil {
+			s.state = state
+		}
+
+		if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.stateful); err != nil {
+			return nil, err
+		}
+	} else {
+		s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver, nil)
+
+		// Ignore the error. Restore can fail for a new sandbox
+		if err := s.Restore(); err != nil {
+			s.Logger().WithError(err).Debug("restore sandbox failed")
+		}
+
+		// new store doesn't require hypervisor to be stored immediately
+		if err = s.hypervisor.createSandbox(ctx, s.id, s.networkNS, &sandboxConfig.HypervisorConfig, s.stateful); err != nil {
+			return nil, err
+		}
 	}
 
 	agentConfig, err := newAgentConfig(sandboxConfig.AgentType, sandboxConfig.AgentConfig)
@@ -612,12 +646,22 @@ func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err 
 
 	var config SandboxConfig
 
-	c, err := loadSandboxConfig(sandboxID)
+	// Try to load sandbox config from old store at first.
+	c, ctx, err := loadSandboxConfigFromOldStore(ctx, sandboxID)
 	if err != nil {
-		return nil, err
+		virtLog.Warningf("failed to get sandbox config from old store: %v", err)
+		// If we failed to load sandbox config from old store, try again with new store.
+		c, err = loadSandboxConfig(sandboxID)
+		if err != nil {
+			virtLog.Warningf("failed to get sandbox config from new store: %v", err)
+			return nil, err
+		}
 	}
 	config = *c
 
+	if useOldStore(ctx) {
+		virtLog.Infof("Warning: old store has been deprecated.")
+	}
 	// fetchSandbox is not suppose to create new sandbox VM.
 	sandbox, err = createSandbox(ctx, config, nil)
 	if err != nil {
@@ -1478,6 +1522,10 @@ func (s *Sandbox) setSandboxState(state types.StateString) error {
 
 	// update in-memory state
 	s.state.State = state
+
+	if useOldStore(s.ctx) {
+		return s.store.Store(store.State, s.state)
+	}
 	return nil
 }
 

@@ -29,6 +29,7 @@ import (
 	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 )
 
 // https://github.com/torvalds/linux/blob/master/include/uapi/linux/major.h
@@ -335,6 +336,8 @@ type Container struct {
 	systemMountsInfo SystemMountsInfo
 
 	ctx context.Context
+
+	store *store.VCStore
 }
 
 // ID returns the container identifier string.
@@ -426,9 +429,17 @@ func (c *Container) setContainerState(state types.StateString) error {
 	// update in-memory state
 	c.state.State = state
 
-	// flush data to storage
-	if err := c.sandbox.Save(); err != nil {
-		return err
+	if useOldStore(c.sandbox.ctx) {
+		// experimental runtime use "persist.json" which doesn't need "state.json" anymore
+		// update on-disk state
+		if err := c.store.Store(store.State, c.state); err != nil {
+			return err
+		}
+	} else {
+		// flush data to storage
+		if err := c.sandbox.Save(); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -678,31 +689,76 @@ func newContainer(sandbox *Sandbox, contConfig *ContainerConfig) (*Container, er
 		ctx:           sandbox.ctx,
 	}
 
-	// experimental runtime use "persist.json" instead of legacy "state.json" as storage
-	err := c.Restore()
-	if err == nil {
-		//container restored
-		return c, nil
-	}
+	if useOldStore(sandbox.ctx) {
+		ctrStore, err := store.NewVCContainerStore(sandbox.ctx, c.sandboxID, c.id)
+		if err != nil {
+			return nil, err
+		}
+		c.store = ctrStore
+		state, err := c.store.LoadContainerState()
+		if err == nil {
+			c.state = state
+		}
 
-	// Unexpected error
-	if !os.IsNotExist(err) && err != errContainerPersistNotExist {
-		return nil, err
+		var process Process
+		if err := c.store.Load(store.Process, &process); err == nil {
+			c.process = process
+		}
+	} else {
+		// experimental runtime use "persist.json" instead of legacy "state.json" as storage
+		err := c.Restore()
+		if err == nil {
+			//container restored
+			return c, nil
+		}
+
+		// Unexpected error
+		if !os.IsNotExist(err) && err != errContainerPersistNotExist {
+			return nil, err
+		}
 	}
 
 	// Go to next step for first created container
-	if err = c.createMounts(); err != nil {
+	if err := c.createMounts(); err != nil {
 		return nil, err
 	}
 
-	if err = c.createDevices(contConfig); err != nil {
+	if err := c.createDevices(contConfig); err != nil {
 		return nil, err
 	}
 
 	return c, nil
 }
 
+func (c *Container) loadMounts() ([]Mount, error) {
+	var mounts []Mount
+	if err := c.store.Load(store.Mounts, &mounts); err != nil {
+		return []Mount{}, err
+	}
+
+	return mounts, nil
+}
+
+func (c *Container) loadDevices() ([]ContainerDevice, error) {
+	var devices []ContainerDevice
+
+	if err := c.store.Load(store.DeviceIDs, &devices); err != nil {
+		return []ContainerDevice{}, err
+	}
+
+	return devices, nil
+}
+
 func (c *Container) createMounts() error {
+	if useOldStore(c.sandbox.ctx) {
+		mounts, err := c.loadMounts()
+		if err == nil {
+			// restore mounts from disk
+			c.mounts = mounts
+			return nil
+		}
+	}
+
 	// Create block devices for newly created container
 	if err := c.createBlockDevices(); err != nil {
 		return err
@@ -712,6 +768,18 @@ func (c *Container) createMounts() error {
 }
 
 func (c *Container) createDevices(contConfig *ContainerConfig) error {
+	// If sandbox supports "newstore", only newly created container can reach this function,
+	// so we don't call restore when `supportNewStore` is true
+	if useOldStore(c.sandbox.ctx) {
+		// Devices will be found in storage after create stage has completed.
+		// We load devices from storage at all other stages.
+		storedDevices, err := c.loadDevices()
+		if err == nil {
+			c.devices = storedDevices
+			return nil
+		}
+	}
+
 	// If devices were not found in storage, create Device implementations
 	// from the configuration. This should happen at create.
 	var storedDevices []ContainerDevice
