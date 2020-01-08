@@ -236,11 +236,11 @@ ${prefix}/bin/kata-runtime --kata-config "${prefix}/share/defaults/${project}/co
 EOT
 	sudo chmod +x kata-qemu
 
-	cat <<EOT | sudo tee kata-nemu
+	cat <<EOT | sudo tee kata-clh
 #!/bin/bash
-${prefix}/bin/kata-runtime --kata-config "${prefix}/share/defaults/${project}/configuration-nemu.toml" \$@
+${prefix}/bin/kata-runtime --kata-config "${prefix}/share/defaults/${project}/configuration-clh.toml" \$@
 EOT
-	sudo chmod +x kata-nemu
+	sudo chmod +x kata-clh
 
 	cat <<EOT | sudo tee kata-qemu-virtiofs
 #!/bin/bash
