@@ -123,10 +123,7 @@ function get_dep_from_yaml_db(){
 
 	[ ! -f "$versions_file" ] && die "cannot find $versions_file"
 
-	# directory of this script, not the caller
-	local cidir=$(dirname "${BASH_SOURCE[0]}")
-
-	${cidir}/install_yq.sh >&2
+	"${GOPATH}/src/${tests_repo}/.ci/install_yq.sh" >&2
 
 	result=$("${GOPATH}/bin/yq" read "$versions_file" "$dependency")
 	[ "$result" = "null" ] && result=""
