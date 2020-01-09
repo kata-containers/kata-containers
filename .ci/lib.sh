@@ -325,6 +325,50 @@ build_install_parallel() {
 	rm -rf "$gnu_parallel_dir" "$gnu_parallel_tar_pkg"
 }
 
+build_install_cmake() {
+	local version=$(get_version "externals.cmake.version")
+	local url=$(get_version "externals.cmake.url")
+	[ "${url}" != "null" ] && [ "${version}" != "null" ]
+	local file="cmake-${version}.tar.gz"
+	local dir="cmake-${version}"
+	local download="${url}/releases/download/v${version}/${file}"
+	local tdir=$(mktemp -d)
+
+	pushd "${tdir}"
+	curl -sLO "${download}"
+	tar -zxf "${file}"
+	cd "${dir}"
+	./bootstrap
+	make
+	sudo make install
+	popd
+	rm -fr "${tdir}"
+}
+
+build_install_musl() {
+	local version=$(get_version "externals.musl.version")
+	local url=$(get_version "externals.musl.url")
+	[ "${url}" != "null" ] && [ "${version}" != "null" ]
+	local file="musl-${version}.tar.gz"
+	local dir="musl-${version}"
+	local download="${url}/releases/${file}"
+	local tdir=$(mktemp -d)
+	local muslarch=$(uname -m)
+
+	pushd "${tdir}"
+	curl -sLO "${download}"
+	tar -zxf "${file}"
+	cd "${dir}"
+	sed -i "s/^ARCH = .*/ARCH = ${muslarch}/g"  dist/config.mak
+	./configure
+	make
+	sudo make install
+	sudo echo '"/usr/local/musl/lib"' > /etc/ld-musl-${muslarch}.path
+	export PATH=${PATH}:/usr/local/musl/bin
+	popd
+	rm -fr "${tdir}"
+}
+
 check_git_version() {
 	result="true"
 
