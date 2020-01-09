@@ -283,13 +283,11 @@ generate_qemu_options() {
 		qemu_options+=(misc:--static)
 	fi
 
-	# Disable debug and "-uuid ..." is always passed to the qemu binary so not required.
+	# Disable debug is always passed to the qemu binary so not required.
 	case "$arch" in
 	aarch64)
-		qemu_options+=(size:--disable-uuid)
 		;;
 	x86_64)
-		qemu_options+=(size:--disable-uuid)
 		qemu_options+=(size:--disable-debug-tcg)
 		qemu_options+=(size:--disable-tcg-interpreter)
 		;;
@@ -298,7 +296,6 @@ generate_qemu_options() {
 		qemu_options+=(size:--disable-tcg-interpreter)
 		;;
 	s390x)
-		qemu_options+=(size:--disable-uuid)
 		qemu_options+=(size:--disable-debug-tcg)
 		qemu_options+=(size:--disable-tcg-interpreter)
 		;;
