@@ -317,12 +317,7 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-tools)
 
 	# Disable XEN driver
-	case "$arch" in
-	aarch64) ;;
-	x86_64) qemu_options+=(size:--disable-xen) ;;
-	ppc64le) qemu_options+=(size:--disable-xen) ;;
-	s390x) qemu_options+=(size:--disable-xen) ;;
-	esac
+	qemu_options+=(size:--disable-xen)
 
 	# FIXME: why is this disabled?
 	# (for reference, it's explicitly enabled in Ubuntu 17.10 and
