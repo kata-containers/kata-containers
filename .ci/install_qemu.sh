@@ -126,7 +126,7 @@ main() {
 			# When testing initrd, build qemu instead of using the cached qemu
 			# as there seems to be an issue with the statically built qemu when
 			# running the factory-vm tests.
-			if [ "${AGENT_INIT:-}" == "yes" ]; then
+			if [ "${AGENT_INIT:-}" == "yes" ] || [ -n "${FORCE_BUILD_QEMU:-}" ]; then
 				build_and_install_qemu
 			elif [ "$cached_qemu_version" == "$CURRENT_QEMU_VERSION" ]; then
 				# If installing cached QEMU fails,
