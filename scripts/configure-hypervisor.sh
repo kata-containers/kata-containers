@@ -404,6 +404,11 @@ generate_qemu_options() {
 		qemu_options+=(arch:"--target-list=${arch}-softmmu")
 	fi
 
+	# aarch64 need to explictly set --enable-pie
+	if [ "${arch}" = "aarch64" ]; then
+		qemu_options+=(arch:"--enable-pie")
+	fi
+
 	_qemu_cflags=""
 
 	# compile with high level of optimisation
@@ -427,7 +432,7 @@ generate_qemu_options() {
 	# and take advantage of ASLR, making ROP attacks much harder to perform.
 	# (https://wiki.debian.org/Hardening)
 	case "$arch" in
-	aarch64) _qemu_cflags+=" -fPIC" ;;
+	aarch64) _qemu_cflags+=" -fPIE" ;;
 	x86_64) _qemu_cflags+=" -fPIE" ;;
 	ppc64le) _qemu_cflags+=" -fPIE" ;;
 	s390x) _qemu_cflags+=" -fPIE" ;;
@@ -444,7 +449,7 @@ generate_qemu_options() {
 	# and take advantage of ASLR, making ROP attacks much harder to perform.
 	# (https://wiki.debian.org/Hardening)
 	case "$arch" in
-	aarch64) ;;
+	aarch64) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
 	x86_64) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
 	ppc64le) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
 	s390x) [ -z "${static}" ] && _qemu_ldflags+=" -pie" ;;
