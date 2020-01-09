@@ -313,6 +313,21 @@ generate_qemu_options() {
 	# Don't build the qemu-io, qemu-nbd and qemu-image tools
 	qemu_options+=(size:--disable-tools)
 
+	# Don't build linux-user bsd-user
+	qemu_options+=(size:--disable-bsd-user)
+	qemu_options+=(size:--disable-linux-user)
+
+	# Don't build sparse check tool
+	qemu_options+=(size:--disable-sparse)
+
+	# Don't build VDE networking backend
+	qemu_options+=(size:--disable-vde)
+
+	# Don't build other options which can't be depent on build server.
+	qemu_options+=(size:--disable-xfsctl)
+	qemu_options+=(size:--disable-libxml2)
+	qemu_options+=(size:--disable-nettle)
+
 	# Disable XEN driver
 	qemu_options+=(size:--disable-xen)
 
