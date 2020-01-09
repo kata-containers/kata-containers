@@ -97,16 +97,22 @@ impl Sandbox {
     //
     // It's assumed that caller is calling this method after
     // acquiring a lock on sandbox.
-    pub fn unset_sandbox_storage(&mut self, path: &str) -> bool {
+    pub fn unset_sandbox_storage(&mut self, path: &str) -> Result<bool> {
         match self.storages.get_mut(path) {
-            None => return false,
+            None => {
+                return Err(ErrorKind::ErrorCode(format!(
+                    "Sandbox storage with path {} not found",
+                    path
+                ))
+                .into())
+            }
             Some(count) => {
                 *count -= 1;
                 if *count < 1 {
                     self.storages.remove(path);
-                    return true;
+                    return Ok(true);
                 }
-                false
+                return Ok(false);
             }
         }
     }
@@ -130,8 +136,15 @@ impl Sandbox {
     // It's assumed that caller is calling this method after
     // acquiring a lock on sandbox.
     pub fn unset_and_remove_sandbox_storage(&mut self, path: &str) -> Result<()> {
-        if self.unset_sandbox_storage(path) {
-            return self.remove_sandbox_storage(path);
+        match self.unset_sandbox_storage(path) {
+            Ok(res) => {
+                if res {
+                    return self.remove_sandbox_storage(path);
+                }
+            }
+            Err(err) => {
+                return Err(err);
+            }
         }
         Ok(())
     }
@@ -261,4 +274,280 @@ fn online_cpus(logger: &Logger, num: i32) -> Result<i32> {
 fn online_memory(logger: &Logger) -> Result<()> {
     online_resources(logger, SYSFS_MEMORY_ONLINE_PATH, r"memory[0-9]+", -1)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    //use rustjail::Error;
+    use super::Sandbox;
+    use crate::{mount::BareMount, skip_if_not_root};
+    use nix::mount::MsFlags;
+    use protocols::oci::{Linux, Root, Spec};
+    use rustjail::container::LinuxContainer;
+    use rustjail::specconv::CreateOpts;
+    use slog::Logger;
+    use tempfile::Builder;
+
+    fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), rustjail::errors::Error> {
+        let baremount = BareMount::new(src, dst, "bind", MsFlags::MS_BIND, "", &logger);
+        baremount.mount()
+    }
+
+    #[test]
+    fn set_sandbox_storage() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+
+        let tmpdir = Builder::new().tempdir().unwrap();
+        let tmpdir_path = tmpdir.path().to_str().unwrap();
+
+        // Add a new sandbox storage
+        let new_storage = s.set_sandbox_storage(&tmpdir_path);
+
+        // Check the reference counter
+        let ref_count = s.storages[tmpdir_path];
+        assert_eq!(
+            ref_count, 1,
+            "Invalid refcount, got {} expected 1.",
+            ref_count
+        );
+        assert_eq!(new_storage, true);
+
+        // Use the existing sandbox storage
+        let new_storage = s.set_sandbox_storage(&tmpdir_path);
+        assert_eq!(new_storage, false, "Should be false as already exists.");
+
+        // Since we are using existing storage, the reference counter
+        // should be 2 by now.
+        let ref_count = s.storages[tmpdir_path];
+        assert_eq!(
+            ref_count, 2,
+            "Invalid refcount, got {} expected 2.",
+            ref_count
+        );
+    }
+
+    #[test]
+    fn remove_sandbox_storage() {
+        skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let s = Sandbox::new(&logger).unwrap();
+
+        let tmpdir = Builder::new().tempdir().unwrap();
+        let tmpdir_path = tmpdir.path().to_str().unwrap();
+
+        let srcdir = Builder::new()
+            .prefix("src")
+            .tempdir_in(tmpdir_path)
+            .unwrap();
+        let srcdir_path = srcdir.path().to_str().unwrap();
+
+        let destdir = Builder::new()
+            .prefix("dest")
+            .tempdir_in(tmpdir_path)
+            .unwrap();
+        let destdir_path = destdir.path().to_str().unwrap();
+
+        let emptydir = Builder::new()
+            .prefix("empty")
+            .tempdir_in(tmpdir_path)
+            .unwrap();
+
+        assert!(
+            s.remove_sandbox_storage(&srcdir_path).is_err(),
+            "Expect Err as the directory i not a mountpoint"
+        );
+
+        assert!(s.remove_sandbox_storage("").is_err());
+
+        let invalid_dir = emptydir.path().join("invalid");
+
+        assert!(s
+            .remove_sandbox_storage(invalid_dir.to_str().unwrap())
+            .is_err());
+
+        // Now, create a double mount as this guarantees the directory cannot
+        // be deleted after the first umount.
+        for _i in 0..2 {
+            assert!(bind_mount(srcdir_path, destdir_path, &logger).is_ok());
+        }
+
+        assert!(
+            s.remove_sandbox_storage(destdir_path).is_err(),
+            "Expect fail as deletion cannot happen due to the second mount."
+        );
+
+        // This time it should work as the previous two calls have undone the double
+        // mount.
+        assert!(s.remove_sandbox_storage(destdir_path).is_ok());
+    }
+
+    #[test]
+    #[allow(unused_assignments)]
+    fn unset_and_remove_sandbox_storage() {
+        skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+
+        // FIX: This test fails, not sure why yet.
+        assert!(
+            s.unset_and_remove_sandbox_storage("/tmp/testEphePath")
+                .is_err(),
+            "Should fail because sandbox storage doesn't exist"
+        );
+
+        let tmpdir = Builder::new().tempdir().unwrap();
+        let tmpdir_path = tmpdir.path().to_str().unwrap();
+
+        let srcdir = Builder::new()
+            .prefix("src")
+            .tempdir_in(tmpdir_path)
+            .unwrap();
+        let srcdir_path = srcdir.path().to_str().unwrap();
+
+        let destdir = Builder::new()
+            .prefix("dest")
+            .tempdir_in(tmpdir_path)
+            .unwrap();
+        let destdir_path = destdir.path().to_str().unwrap();
+
+        assert!(bind_mount(srcdir_path, destdir_path, &logger).is_ok());
+
+        assert_eq!(s.set_sandbox_storage(&destdir_path), true);
+        assert!(s.unset_and_remove_sandbox_storage(&destdir_path).is_ok());
+
+        let mut other_dir_str = String::new();
+        {
+            // Create another folder in a separate scope to ensure that is
+            // deleted
+            let other_dir = Builder::new()
+                .prefix("dir")
+                .tempdir_in(tmpdir_path)
+                .unwrap();
+            let other_dir_path = other_dir.path().to_str().unwrap();
+            other_dir_str = other_dir_path.to_string();
+
+            assert_eq!(s.set_sandbox_storage(&other_dir_path), true);
+        }
+
+        assert!(s.unset_and_remove_sandbox_storage(&other_dir_str).is_err());
+    }
+
+    #[test]
+    fn unset_sandbox_storage() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+
+        let storage_path = "/tmp/testEphe";
+
+        // Add a new sandbox storage
+        assert_eq!(s.set_sandbox_storage(&storage_path), true);
+        // Use the existing sandbox storage
+        assert_eq!(
+            s.set_sandbox_storage(&storage_path),
+            false,
+            "Expects false as the storage is not new."
+        );
+
+        assert_eq!(
+            s.unset_sandbox_storage(&storage_path).unwrap(),
+            false,
+            "Expects false as there is still a storage."
+        );
+
+        // Reference counter should decrement to 1.
+        let ref_count = s.storages[storage_path];
+        assert_eq!(
+            ref_count, 1,
+            "Invalid refcount, got {} expected 1.",
+            ref_count
+        );
+
+        assert_eq!(
+            s.unset_sandbox_storage(&storage_path).unwrap(),
+            true,
+            "Expects true as there is still a storage."
+        );
+
+        // Since no container is using this sandbox storage anymore
+        // there should not be any reference in sandbox struct
+        // for the given storage
+        assert!(
+            !s.storages.contains_key(storage_path),
+            "The storages map should not contain the key {}",
+            storage_path
+        );
+
+        // If no container is using the sandbox storage, the reference
+        // counter for it should not exist.
+        assert!(
+            s.unset_sandbox_storage(&storage_path).is_err(),
+            "Expects false as the reference counter should no exist."
+        );
+    }
+
+    fn create_dummy_opts() -> CreateOpts {
+        let mut root = Root::new();
+        root.Path = String::from("/");
+
+        let linux = Linux::new();
+        let mut spec = Spec::new();
+        spec.Root = Some(root).into();
+        spec.Linux = Some(linux).into();
+
+        CreateOpts {
+            cgroup_name: "".to_string(),
+            use_systemd_cgroup: false,
+            no_pivot_root: false,
+            no_new_keyring: false,
+            spec: Some(spec),
+            rootless_euid: false,
+            rootless_cgroup: false,
+        }
+    }
+
+    fn create_linuxcontainer() -> LinuxContainer {
+        LinuxContainer::new(
+            "some_id",
+            "/run/agent",
+            create_dummy_opts(),
+            &slog_scope::logger(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn get_container_entry_exist() {
+        skip_if_not_root!();
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+        let linux_container = create_linuxcontainer();
+
+        s.containers
+            .insert("testContainerID".to_string(), linux_container);
+        let cnt = s.get_container("testContainerID");
+        assert!(cnt.is_some());
+    }
+
+    #[test]
+    fn get_container_no_entry() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+
+        let cnt = s.get_container("testContainerID");
+        assert!(cnt.is_none());
+    }
+
+    #[test]
+    fn add_and_get_container() {
+        skip_if_not_root!();
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut s = Sandbox::new(&logger).unwrap();
+        let linux_container = create_linuxcontainer();
+
+        s.add_container(linux_container);
+        assert!(s.get_container("some_id").is_some());
+    }
 }
