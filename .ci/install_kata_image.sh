@@ -29,7 +29,8 @@ ARCH="$(${cidir}/kata-arch.sh -d)"
 AGENT_INIT=${AGENT_INIT:-no}
 TEST_INITRD=${TEST_INITRD:-no}
 
-IMAGE_DIR="/usr/share/kata-containers"
+PREFIX=${PREFIX:-/usr}
+IMAGE_DIR=${PREFIX}/share/kata-containers
 IMG_LINK_NAME="kata-containers.img"
 INITRD_LINK_NAME="kata-containers-initrd.img"
 

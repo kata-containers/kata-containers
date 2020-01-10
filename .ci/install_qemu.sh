@@ -15,6 +15,7 @@ source "${cidir}/lib.sh"
 source "${cidir}/../lib/common.bash"
 source /etc/os-release || source /usr/lib/os-release
 
+PREFIX=${PREFIX:-/usr}
 KATA_DEV_MODE="${KATA_DEV_MODE:-}"
 
 CURRENT_QEMU_VERSION=$(get_version "assets.hypervisor.qemu.version")
@@ -103,7 +104,7 @@ build_and_install_qemu() {
 	done
 
 	echo "Build QEMU"
-	"${QEMU_CONFIG_SCRIPT}" "qemu" | xargs ./configure
+	"${QEMU_CONFIG_SCRIPT}" "qemu" | xargs ./configure --prefix=${PREFIX}
 	make -j $(nproc)
 
 	echo "Install QEMU"
@@ -126,7 +127,7 @@ main() {
 			# When testing initrd, build qemu instead of using the cached qemu
 			# as there seems to be an issue with the statically built qemu when
 			# running the factory-vm tests.
-			if [ "${AGENT_INIT:-}" == "yes" ]; then
+			if [ "${AGENT_INIT:-}" == "yes" ] || [ -n "${FORCE_BUILD_QEMU:-}" ]; then
 				build_and_install_qemu
 			elif [ "$cached_qemu_version" == "$CURRENT_QEMU_VERSION" ]; then
 				# If installing cached QEMU fails,
