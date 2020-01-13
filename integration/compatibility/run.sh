@@ -54,8 +54,8 @@ install_kata() {
 	sudo rm -rf "${tmp_gopath}"
 }
 
-test_backward_compatibility() {
-	info "Running backward compatibility test"
+test_forward_compatibility() {
+	info "Running foward compatibility test"
 
 	runtime_path="$1"
 	master_runtime_path="$2"
@@ -65,7 +65,7 @@ test_backward_compatibility() {
 	sudo cp "${runtime_path}" "${runtime_backup_path}"
 
 	# run a container with the current runtime
-	cont_name="backward_test"
+	cont_name="forward_test"
 	docker run -d --name "${cont_name}" --runtime="${RUNTIME}" busybox tail -f /dev/null
 
 	# switch to master runtime
@@ -81,8 +81,8 @@ test_backward_compatibility() {
 	sudo cp "${runtime_backup_path}" "${runtime_path}"
 }
 
-test_forward_compatibility() {
-	info "Running forward compatibility test"
+test_backward_compatibility() {
+	info "Running backward compatibility test"
 
 	runtime_path="$1"
 	master_runtime_path="$2"
@@ -95,7 +95,7 @@ test_forward_compatibility() {
 	sudo cp -a "${master_runtime_path}" "${runtime_path}" && sync
 
 	# Now, let's run a container with master
-	cont_name="forward_test"
+	cont_name="backward_test"
 	docker run -d --name "${cont_name}" --runtime="${RUNTIME}" busybox tail -f /dev/null
 
 	# switch to original runtime
