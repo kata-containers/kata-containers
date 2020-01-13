@@ -128,6 +128,9 @@ kubernetes:
 ksm:
 	bash -f integration/ksm/ksm_test.sh
 
+sandbox-cgroup:
+	bash -f integration/sandbox_cgroup/sandbox_cgroup_test.sh
+
 swarm:
 	systemctl is-active --quiet docker || sudo systemctl start docker
 	bash -f .ci/install_bats.sh
@@ -222,6 +225,7 @@ help:
 	oci \
 	openshift \
 	pentest \
+	sandbox-cgroup \
 	swarm \
 	netmon \
 	network \

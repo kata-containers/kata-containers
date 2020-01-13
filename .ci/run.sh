@@ -30,6 +30,9 @@ case "${CI_JOB}" in
 		# remove config created by toggle_sandbox_cgroup_only.sh
 		"${cidir}/toggle_sandbox_cgroup_only.sh" false
 		sudo rm -f "/etc/kata-containers/configuration.toml"
+
+		echo "INFO: Running docker integration tests with sandbox cgroup enabled"
+		sudo -E PATH="$PATH" bash -c "make sandbox-cgroup"
 		;;
 	"FIRECRACKER" | "CLOUD-HYPERVISOR")
 		echo "INFO: Running docker integration tests"
