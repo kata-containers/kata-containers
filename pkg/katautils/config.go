@@ -104,6 +104,8 @@ type hypervisor struct {
 	BlockDeviceCacheSet     bool     `toml:"block_device_cache_set"`
 	BlockDeviceCacheDirect  bool     `toml:"block_device_cache_direct"`
 	BlockDeviceCacheNoflush bool     `toml:"block_device_cache_noflush"`
+	EnableVhostUserStore    bool     `toml:"enable_vhost_user_store"`
+	VhostUserStorePath      string   `toml:"vhost_user_store_path"`
 	NumVCPUs                int32    `toml:"default_vcpus"`
 	DefaultMaxVCPUs         uint32   `toml:"default_maxvcpus"`
 	MemorySize              uint32   `toml:"default_memory"`
@@ -404,6 +406,13 @@ func (h hypervisor) guestHookPath() string {
 	return h.GuestHookPath
 }
 
+func (h hypervisor) vhostUserStorePath() string {
+	if h.VhostUserStorePath == "" {
+		return defaultVhostUserStorePath
+	}
+	return h.VhostUserStorePath
+}
+
 func (h hypervisor) getInitrdAndImage() (initrd string, image string, err error) {
 	initrd, errInitrd := h.initrd()
 
@@ -651,6 +660,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
 		PCIeRootPort:            h.PCIeRootPort,
 		DisableVhostNet:         h.DisableVhostNet,
+		EnableVhostUserStore:    h.EnableVhostUserStore,
+		VhostUserStorePath:      h.vhostUserStorePath(),
 		GuestHookPath:           h.guestHookPath(),
 	}, nil
 }
@@ -1078,6 +1089,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		HotplugVFIOOnRootBus:    defaultHotplugVFIOOnRootBus,
 		PCIeRootPort:            defaultPCIeRootPort,
 		GuestHookPath:           defaultGuestHookPath,
+		VhostUserStorePath:      defaultVhostUserStorePath,
 		VirtioFSCache:           defaultVirtioFSCacheMode,
 		DisableImageNvdimm:      defaultDisableImageNvdimm,
 	}

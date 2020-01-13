@@ -165,6 +165,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		MemSlots:              defaultMemSlots,
 		EntropySource:         defaultEntropySource,
 		GuestHookPath:         defaultGuestHookPath,
+		VhostUserStorePath:    defaultVhostUserStorePath,
 		SharedFS:              sharedFS,
 		VirtioFSDaemon:        "/path/to/virtiofsd",
 		VirtioFSCache:         defaultVirtioFSCacheMode,
@@ -628,6 +629,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
 		Msize9p:               defaultMsize9p,
 		GuestHookPath:         defaultGuestHookPath,
+		VhostUserStorePath:    defaultVhostUserStorePath,
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 	}
 
@@ -1196,6 +1198,21 @@ func TestHypervisorDefaultsGuestHookPath(t *testing.T) {
 	}
 	guestHookPath = h.guestHookPath()
 	assert.Equal(guestHookPath, testGuestHookPath, "custom guest hook path wrong")
+}
+
+func TestHypervisorDefaultsVhostUserStorePath(t *testing.T) {
+	assert := assert.New(t)
+
+	h := hypervisor{}
+	vhostUserStorePath := h.vhostUserStorePath()
+	assert.Equal(vhostUserStorePath, defaultVhostUserStorePath, "default vhost-user store path wrong")
+
+	testVhostUserStorePath := "/test/vhost/user/store/path"
+	h = hypervisor{
+		VhostUserStorePath: testVhostUserStorePath,
+	}
+	vhostUserStorePath = h.vhostUserStorePath()
+	assert.Equal(vhostUserStorePath, testVhostUserStorePath, "custom vhost-user store path wrong")
 }
 
 func TestProxyDefaults(t *testing.T) {
