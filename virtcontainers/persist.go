@@ -252,6 +252,8 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		BootToBeTemplate:        sconfig.HypervisorConfig.BootToBeTemplate,
 		BootFromTemplate:        sconfig.HypervisorConfig.BootFromTemplate,
 		DisableVhostNet:         sconfig.HypervisorConfig.DisableVhostNet,
+		EnableVhostUserStore:    sconfig.HypervisorConfig.EnableVhostUserStore,
+		VhostUserStorePath:      sconfig.HypervisorConfig.VhostUserStorePath,
 		GuestHookPath:           sconfig.HypervisorConfig.GuestHookPath,
 		VMid:                    sconfig.HypervisorConfig.VMid,
 	}
@@ -539,6 +541,8 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		BootToBeTemplate:        hconf.BootToBeTemplate,
 		BootFromTemplate:        hconf.BootFromTemplate,
 		DisableVhostNet:         hconf.DisableVhostNet,
+		EnableVhostUserStore:    hconf.EnableVhostUserStore,
+		VhostUserStorePath:      hconf.VhostUserStorePath,
 		GuestHookPath:           hconf.GuestHookPath,
 		VMid:                    hconf.VMid,
 	}

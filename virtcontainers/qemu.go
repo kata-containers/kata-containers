@@ -522,6 +522,15 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		}
 	}
 
+	// Vhost-user-blk/scsi process which can improve performance, like SPDK,
+	// requires shared-on hugepage to work with Qemu.
+	if q.config.EnableVhostUserStore {
+		if !q.config.HugePages {
+			return errors.New("Vhost-user-blk/scsi is enabled without HugePages. This configuration will not work")
+		}
+		knobs.MemShared = true
+	}
+
 	rtc := govmmQemu.RTC{
 		Base:     "utc",
 		DriftFix: "slew",
@@ -678,7 +687,7 @@ func (q *qemu) setupVirtiofsd() (err error) {
 	return err
 }
 
-func (q *qemu) getMemArgs() (bool, string, string) {
+func (q *qemu) getMemArgs() (bool, string, string, error) {
 	share := false
 	target := ""
 	memoryBack := "memory-backend-ram"
@@ -689,15 +698,24 @@ func (q *qemu) getMemArgs() (bool, string, string) {
 		target = "/dev/hugepages"
 		memoryBack = "memory-backend-file"
 		share = true
-	} else if q.config.SharedFS == config.VirtioFS || q.config.FileBackedMemRootDir != "" {
-		target = q.qemuConfig.Memory.Path
-		memoryBack = "memory-backend-file"
+	} else {
+		if q.config.EnableVhostUserStore {
+			// Vhost-user-blk/scsi process which can improve performance, like SPDK,
+			// requires shared-on hugepage to work with Qemu.
+			return share, target, "", fmt.Errorf("Vhost-user-blk/scsi requires hugepage memory")
+		}
+
+		if q.config.SharedFS == config.VirtioFS || q.config.FileBackedMemRootDir != "" {
+			target = q.qemuConfig.Memory.Path
+			memoryBack = "memory-backend-file"
+		}
 	}
+
 	if q.qemuConfig.Knobs.MemShared {
 		share = true
 	}
 
-	return share, target, memoryBack
+	return share, target, memoryBack, nil
 }
 
 func (q *qemu) setupVirtioMem() error {
@@ -708,7 +726,11 @@ func (q *qemu) setupVirtioMem() error {
 	// 1024 is size for nvdimm
 	sizeMB := int(maxMem) - int(q.config.MemorySize)
 
-	share, target, memoryBack := q.getMemArgs()
+	share, target, memoryBack, err := q.getMemArgs()
+	if err != nil {
+		return err
+	}
+
 	err = q.qmpSetup()
 	if err != nil {
 		return err
@@ -1551,7 +1573,11 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 		memDev.slot = maxSlot + 1
 	}
 
-	share, target, memoryBack := q.getMemArgs()
+	share, target, memoryBack, err := q.getMemArgs()
+	if err != nil {
+		return 0, err
+	}
+
 	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, memoryBack, "mem"+strconv.Itoa(memDev.slot), target, memDev.sizeMB, share)
 	if err != nil {
 		q.Logger().WithError(err).Error("hotplug memory")

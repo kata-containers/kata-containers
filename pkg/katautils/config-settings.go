@@ -49,6 +49,7 @@ const defaultEntropySource = "/dev/urandom"
 const defaultGuestHookPath string = ""
 const defaultVirtioFSCacheMode = "none"
 const defaultDisableImageNvdimm = false
+const defaultVhostUserStorePath string = "/var/run/kata-containers/vhost-user/"
 
 const defaultTemplatePath string = "/run/vc/vm/template"
 const defaultVMCacheEndpoint string = "/var/run/kata-containers/cache.sock"

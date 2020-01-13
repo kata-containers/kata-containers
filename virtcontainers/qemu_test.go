@@ -465,6 +465,33 @@ func TestQemuFileBackedMem(t *testing.T) {
 	assert.Equal(q.qemuConfig.Knobs.FileBackedMem, false)
 	assert.Equal(q.qemuConfig.Knobs.MemShared, false)
 	assert.Equal(q.qemuConfig.Memory.Path, "")
+
+	// Check setting vhost-user storage with Hugepages
+	sandbox, err = createQemuSandboxConfig()
+	assert.NoError(err)
+
+	q = &qemu{
+		store: sandbox.newStore,
+	}
+	sandbox.config.HypervisorConfig.EnableVhostUserStore = true
+	sandbox.config.HypervisorConfig.HugePages = true
+	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
+	assert.NoError(err)
+	assert.Equal(q.qemuConfig.Knobs.MemShared, true)
+
+	// Check failure for vhost-user storage
+	sandbox, err = createQemuSandboxConfig()
+	assert.NoError(err)
+
+	q = &qemu{
+		store: sandbox.newStore,
+	}
+	sandbox.config.HypervisorConfig.EnableVhostUserStore = true
+	sandbox.config.HypervisorConfig.HugePages = false
+	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
+
+	expectErr = errors.New("Vhost-user-blk/scsi is enabled without HugePages. This configuration will not work")
+	assert.Equal(expectErr.Error(), err.Error())
 }
 
 func createQemuSandboxConfig() (*Sandbox, error) {
