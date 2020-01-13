@@ -33,6 +33,11 @@ fi
 echo "Update repositories"
 sudo -E yum -y update
 
+if [ "$centos_version" == "8" ]; then
+	echo "Enable PowerTools repository"
+	sudo yum-config-manager --enable PowerTools
+fi
+
 echo "Install chronic"
 sudo -E yum -y install moreutils
 
