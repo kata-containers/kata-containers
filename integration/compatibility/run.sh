@@ -127,7 +127,8 @@ main() {
 
 	test_backward_compatibility "${runtime_path}" "${kata_dir}/bin/kata-runtime"
 
-	test_forward_compatibility "${runtime_path}" "${kata_dir}/bin/kata-runtime"
+	# Skip test: see comments https://github.com/kata-containers/runtime/pull/2239
+	#test_forward_compatibility "${runtime_path}" "${kata_dir}/bin/kata-runtime"
 }
 
 main
