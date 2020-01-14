@@ -946,6 +946,17 @@ func (q *QMP) ExecuteBlockdevDel(ctx context.Context, blockdevID string) error {
 	return q.executeCommand(ctx, "x-blockdev-del", args, nil)
 }
 
+// ExecuteChardevDel deletes a char device by sending a chardev-remove command.
+// chardevID is the id of the char device to be deleted. Typically, this will
+// match the id passed to ExecuteCharDevUnixSocketAdd. It must be a valid QMP id.
+func (q *QMP) ExecuteChardevDel(ctx context.Context, chardevID string) error {
+	args := map[string]interface{}{
+		"id": chardevID,
+	}
+
+	return q.executeCommand(ctx, "chardev-remove", args, nil)
+}
+
 // ExecuteNetdevAdd adds a Net device to a QEMU instance
 // using the netdev_add command. netdevID is the id of the device to add.
 // Must be valid QMP identifier.
