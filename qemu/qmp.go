@@ -1135,6 +1135,27 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
+// ExecutePCIVhostUserDevAdd adds a vhost-user device to a QEMU instance using the device_add command.
+// This function can be used to hot plug vhost-user devices on PCI(E) bridges.
+// It receives the bus and the device address on its parent bus. bus is optional.
+// devID is the id of the device to add.Must be valid QMP identifier. chardevID
+// is the QMP identifier of character device using a unix socket as backend.
+// driver is the name of vhost-user driver, like vhost-user-blk-pci.
+func (q *QMP) ExecutePCIVhostUserDevAdd(ctx context.Context, driver, devID, chardevID, addr, bus string) error {
+	args := map[string]interface{}{
+		"driver":  driver,
+		"id":      devID,
+		"chardev": chardevID,
+		"addr":    addr,
+	}
+
+	if bus != "" {
+		args["bus"] = bus
+	}
+
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
 // ExecuteVFIODeviceAdd adds a VFIO device to a QEMU instance
 // using the device_add command. devID is the id of the device to add.
 // Must be valid QMP identifier. bdf is the PCI bus-device-function

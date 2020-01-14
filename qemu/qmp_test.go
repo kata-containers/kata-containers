@@ -1329,6 +1329,26 @@ func TestExecutePCIVSockAdd(t *testing.T) {
 	<-disconnectedCh
 }
 
+// Checks vhost-user-pci hotplug
+func TestExecutePCIVhostUserDevAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	driver := "vhost-user-blk-pci"
+	devID := "vhost-user-blk0"
+	chardevID := "vhost-user-blk-char0"
+	err := q.ExecutePCIVhostUserDevAdd(context.Background(), driver, devID, chardevID, "1", "1")
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks getfd
 func TestExecuteGetFdD(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
