@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
@@ -28,43 +29,81 @@ func getFsDriver() (*FS, error) {
 	return fs, nil
 }
 
-func TestFsLock(t *testing.T) {
+func initTestDir() func() {
+	testDir, _ := ioutil.TempDir("", "vc-tmp-")
+	// allow the tests to run without affecting the host system.
+	rootSave := StorageRootPath()
+	TestSetStorageRootPath(filepath.Join(testDir, "vc"))
+
+	os.MkdirAll(testDir, dirMode)
+
+	return func() {
+		TestSetStorageRootPath(rootSave)
+		os.RemoveAll(testDir)
+	}
+}
+
+func TestFsLockShared(t *testing.T) {
+	defer initTestDir()()
+
 	fs, err := getFsDriver()
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
 
-	testDir, err := ioutil.TempDir("", "fs-tmp-")
-	assert.Nil(t, err)
-	TestSetRunStoragePath(testDir)
-	defer func() {
-		os.RemoveAll(testDir)
-	}()
-
-	fs.sandboxState.SandboxContainer = "test-fs-driver"
-	sandboxDir, err := fs.sandboxDir()
+	sid := "test-fs-driver"
+	fs.sandboxState.SandboxContainer = sid
+	sandboxDir, err := fs.sandboxDir(sid)
 	assert.Nil(t, err)
 
 	err = os.MkdirAll(sandboxDir, dirMode)
 	assert.Nil(t, err)
 
-	assert.Nil(t, fs.lock())
-	assert.NotNil(t, fs.lock())
+	// Take 2 shared locks
+	unlockFunc, err := fs.Lock(sid, false)
+	assert.Nil(t, err)
 
-	assert.Nil(t, fs.unlock())
-	assert.Nil(t, fs.unlock())
+	unlockFunc2, err := fs.Lock(sid, false)
+	assert.Nil(t, err)
+
+	assert.Nil(t, unlockFunc())
+	assert.Nil(t, unlockFunc2())
+	assert.NotNil(t, unlockFunc2())
 }
 
-func TestFsDriver(t *testing.T) {
+func TestFsLockExclusive(t *testing.T) {
+	defer initTestDir()()
+
 	fs, err := getFsDriver()
 	assert.Nil(t, err)
 	assert.NotNil(t, fs)
 
-	testDir, err := ioutil.TempDir("", "fs-tmp-")
+	sid := "test-fs-driver"
+	fs.sandboxState.SandboxContainer = sid
+	sandboxDir, err := fs.sandboxDir(sid)
 	assert.Nil(t, err)
-	TestSetRunStoragePath(testDir)
-	defer func() {
-		os.RemoveAll(testDir)
-	}()
+
+	err = os.MkdirAll(sandboxDir, dirMode)
+	assert.Nil(t, err)
+
+	// Take 1 exclusive lock
+	unlockFunc, err := fs.Lock(sid, true)
+	assert.Nil(t, err)
+
+	assert.Nil(t, unlockFunc())
+
+	unlockFunc, err = fs.Lock(sid, true)
+	assert.Nil(t, err)
+
+	assert.Nil(t, unlockFunc())
+	assert.NotNil(t, unlockFunc())
+}
+
+func TestFsDriver(t *testing.T) {
+	defer initTestDir()()
+
+	fs, err := getFsDriver()
+	assert.Nil(t, err)
+	assert.NotNil(t, fs)
 
 	ss := persistapi.SandboxState{}
 	cs := make(map[string]persistapi.ContainerState)
@@ -88,7 +127,7 @@ func TestFsDriver(t *testing.T) {
 	assert.Equal(t, ss.SandboxContainer, id)
 	assert.Equal(t, ss.State, "")
 
-	// flush all to disk
+	// flush all to disk.
 	ss.State = "running"
 	assert.Nil(t, fs.ToDisk(ss, cs))
 	ss, cs, err = fs.FromDisk(id)
@@ -99,13 +138,57 @@ func TestFsDriver(t *testing.T) {
 	assert.Equal(t, ss.SandboxContainer, id)
 	assert.Equal(t, ss.State, "running")
 
-	assert.Nil(t, fs.Destroy())
+	// add new container state.
+	cs["test-container"] = persistapi.ContainerState{
+		State: "ready",
+	}
+	assert.Nil(t, fs.ToDisk(ss, cs))
+	ss, cs, err = fs.FromDisk(id)
+	assert.Nil(t, err)
+	assert.NotNil(t, ss)
+	assert.Equal(t, len(cs), 1)
+	c, ok := cs["test-container"]
+	assert.True(t, ok)
+	assert.Equal(t, c.State, "ready")
 
-	dir, err := fs.sandboxDir()
+	// clean all container.
+	cs = make(map[string]persistapi.ContainerState)
+	assert.Nil(t, fs.ToDisk(ss, cs))
+	ss, cs, err = fs.FromDisk(id)
+	assert.Nil(t, err)
+	assert.NotNil(t, ss)
+	assert.Equal(t, len(cs), 0)
+
+	// destroy whole sandbox dir.
+	assert.Nil(t, fs.Destroy(id))
+
+	dir, err := fs.sandboxDir(id)
 	assert.Nil(t, err)
 	assert.NotEqual(t, len(dir), 0)
 
 	_, err = os.Stat(dir)
 	assert.NotNil(t, err)
 	assert.True(t, os.IsNotExist(err))
+}
+
+func TestGlobalReadWrite(t *testing.T) {
+	defer initTestDir()()
+
+	relPath := "test/123/aaa.json"
+	data := "hello this is testing global read write"
+
+	fs, err := getFsDriver()
+	assert.Nil(t, err)
+	assert.NotNil(t, fs)
+
+	err = fs.GlobalWrite(relPath, []byte(data))
+	assert.Nil(t, err)
+
+	out, err := fs.GlobalRead(relPath)
+	assert.Nil(t, err)
+	assert.Equal(t, string(out), data)
+
+	out, err = fs.GlobalRead("nonexist")
+	assert.NotNil(t, err)
+	assert.Nil(t, out)
 }

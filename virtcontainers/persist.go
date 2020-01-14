@@ -6,12 +6,14 @@
 package virtcontainers
 
 import (
+	"context"
 	"errors"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/mitchellh/mapstructure"
 )
@@ -443,15 +445,6 @@ func (c *Container) Restore() error {
 	return nil
 }
 
-func (s *Sandbox) supportNewStore() bool {
-	for _, f := range s.config.Experimental {
-		if f == persist.NewStoreFeature && exp.Get("newstore") != nil {
-			return true
-		}
-	}
-	return false
-}
-
 func loadSandboxConfig(id string) (*SandboxConfig, error) {
 	store, err := persist.GetDriver("fs")
 	if err != nil || store == nil {
@@ -567,4 +560,26 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		})
 	}
 	return sconfig, nil
+}
+
+var oldstoreKey = struct{}{}
+
+func loadSandboxConfigFromOldStore(ctx context.Context, sid string) (*SandboxConfig, context.Context, error) {
+	var config SandboxConfig
+	// We're bootstrapping
+	vcStore, err := store.NewVCSandboxStore(ctx, sid)
+	if err != nil {
+		return nil, ctx, err
+	}
+
+	if err := vcStore.Load(store.Configuration, &config); err != nil {
+		return nil, ctx, err
+	}
+
+	return &config, context.WithValue(ctx, oldstoreKey, true), nil
+}
+
+func useOldStore(ctx context.Context) bool {
+	v := ctx.Value(oldstoreKey)
+	return v != nil
 }

@@ -23,10 +23,10 @@ import (
 const persistFile = "persist.json"
 
 // dirMode is the permission bits used for creating a directory
-const dirMode = os.FileMode(0700)
+const dirMode = os.FileMode(0700) | os.ModeDir
 
 // fileMode is the permission bits used for creating a file
-const fileMode = os.FileMode(0640)
+const fileMode = os.FileMode(0600)
 
 // storagePathSuffix is the suffix used for all storage paths
 //
@@ -37,22 +37,48 @@ const storagePathSuffix = "vc"
 // sandboxPathSuffix is the suffix used for sandbox storage
 const sandboxPathSuffix = "sbs"
 
-// RunStoragePath is the sandbox runtime directory.
-// It will contain one state.json and one lock file for each created sandbox.
-var RunStoragePath = func() string {
-	path := filepath.Join("/run", storagePathSuffix, sandboxPathSuffix)
+// vmPathSuffix is the suffix used for guest VMs.
+const vmPathSuffix = "vm"
+
+var StorageRootPath = func() string {
+	path := filepath.Join("/run", storagePathSuffix)
 	if rootless.IsRootless() {
 		return filepath.Join(rootless.GetRootlessDir(), path)
 	}
 	return path
 }
 
+// RunStoragePath is the sandbox runtime directory.
+// It will contain one state.json and one lock file for each created sandbox.
+var RunStoragePath = func() string {
+	return filepath.Join(StorageRootPath(), sandboxPathSuffix)
+}
+
+// RunVMStoragePath is the vm directory.
+// It will contain all guest vm sockets and shared mountpoints.
+// The function is declared this way for mocking in unit tests
+var RunVMStoragePath = func() string {
+	return filepath.Join(StorageRootPath(), vmPathSuffix)
+}
+
+// TestSetRunStoragePath set RunStoragePath to path
+// this function is only used for testing purpose
+func TestSetRunStoragePath(path string) {
+	RunStoragePath = func() string {
+		return path
+	}
+}
+
+func TestSetStorageRootPath(path string) {
+	StorageRootPath = func() string {
+		return path
+	}
+}
+
 // FS storage driver implementation
 type FS struct {
 	sandboxState   *persistapi.SandboxState
 	containerState map[string]persistapi.ContainerState
-
-	lockFile *os.File
 }
 
 var fsLog = logrus.WithField("source", "virtcontainers/persist/fs")
@@ -77,21 +103,21 @@ func Init() (persistapi.PersistDriver, error) {
 	}, nil
 }
 
-func (fs *FS) sandboxDir() (string, error) {
-	id := fs.sandboxState.SandboxContainer
-	if id == "" {
-		return "", fmt.Errorf("sandbox container id required")
-	}
-
-	return filepath.Join(RunStoragePath(), id), nil
+func (fs *FS) sandboxDir(sandboxID string) (string, error) {
+	return filepath.Join(RunStoragePath(), sandboxID), nil
 }
 
 // ToDisk sandboxState and containerState to disk
 func (fs *FS) ToDisk(ss persistapi.SandboxState, cs map[string]persistapi.ContainerState) (retErr error) {
+	id := ss.SandboxContainer
+	if id == "" {
+		return fmt.Errorf("sandbox container id required")
+	}
+
 	fs.sandboxState = &ss
 	fs.containerState = cs
 
-	sandboxDir, err := fs.sandboxDir()
+	sandboxDir, err := fs.sandboxDir(id)
 	if err != nil {
 		return err
 	}
@@ -100,15 +126,10 @@ func (fs *FS) ToDisk(ss persistapi.SandboxState, cs map[string]persistapi.Contai
 		return err
 	}
 
-	if err := fs.lock(); err != nil {
-		return err
-	}
-	defer fs.unlock()
-
 	// if error happened, destroy all dirs
 	defer func() {
 		if retErr != nil {
-			if err := fs.Destroy(); err != nil {
+			if err := fs.Destroy(id); err != nil {
 				fs.Logger().WithError(err).Errorf("failed to destroy dirs")
 			}
 		}
@@ -155,6 +176,27 @@ func (fs *FS) ToDisk(ss persistapi.SandboxState, cs map[string]persistapi.Contai
 		}
 	}
 
+	// Walk sandbox dir and find container.
+	files, err := ioutil.ReadDir(sandboxDir)
+	if err != nil {
+		return err
+	}
+
+	// Remove non-existing containers
+	for _, file := range files {
+		if !file.IsDir() {
+			continue
+		}
+		// Container dir exists.
+		cid := file.Name()
+
+		// Container should be removed when container id doesn't exist in cs.
+		if _, ok := cs[cid]; !ok {
+			if err := os.RemoveAll(filepath.Join(sandboxDir, cid)); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -165,17 +207,10 @@ func (fs *FS) FromDisk(sid string) (persistapi.SandboxState, map[string]persista
 		return ss, nil, fmt.Errorf("restore requires sandbox id")
 	}
 
-	fs.sandboxState.SandboxContainer = sid
-
-	sandboxDir, err := fs.sandboxDir()
+	sandboxDir, err := fs.sandboxDir(sid)
 	if err != nil {
 		return ss, nil, err
 	}
-
-	if err := fs.lock(); err != nil {
-		return ss, nil, err
-	}
-	defer fs.unlock()
 
 	// get sandbox configuration from persist data
 	sandboxFile := filepath.Join(sandboxDir, persistFile)
@@ -224,8 +259,12 @@ func (fs *FS) FromDisk(sid string) (persistapi.SandboxState, map[string]persista
 }
 
 // Destroy removes everything from disk
-func (fs *FS) Destroy() error {
-	sandboxDir, err := fs.sandboxDir()
+func (fs *FS) Destroy(sandboxID string) error {
+	if sandboxID == "" {
+		return fmt.Errorf("sandbox container id required")
+	}
+
+	sandboxDir, err := fs.sandboxDir(sandboxID)
 	if err != nil {
 		return err
 	}
@@ -236,45 +275,95 @@ func (fs *FS) Destroy() error {
 	return nil
 }
 
-func (fs *FS) lock() error {
-	sandboxDir, err := fs.sandboxDir()
+func (fs *FS) Lock(sandboxID string, exclusive bool) (func() error, error) {
+	if sandboxID == "" {
+		return nil, fmt.Errorf("sandbox container id required")
+	}
+
+	sandboxDir, err := fs.sandboxDir(sandboxID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	f, err := os.Open(sandboxDir)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+	var lockType int
+	if exclusive {
+		lockType = syscall.LOCK_EX
+	} else {
+		lockType = syscall.LOCK_SH
+	}
+
+	if err := syscall.Flock(int(f.Fd()), lockType); err != nil {
 		f.Close()
-		return err
+		return nil, err
 	}
-	fs.lockFile = f
 
-	return nil
-}
+	unlockFunc := func() error {
+		defer f.Close()
+		if err := syscall.Flock(int(f.Fd()), syscall.LOCK_UN); err != nil {
+			return err
+		}
 
-func (fs *FS) unlock() error {
-	if fs.lockFile == nil {
 		return nil
 	}
+	return unlockFunc, nil
+}
 
-	lockFile := fs.lockFile
-	defer lockFile.Close()
-	fs.lockFile = nil
-	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN); err != nil {
+func (fs *FS) GlobalWrite(relativePath string, data []byte) error {
+	path := filepath.Join(StorageRootPath(), relativePath)
+	path, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return fmt.Errorf("failed to find abs path for %q: %v", relativePath, err)
+	}
+
+	dir := filepath.Dir(path)
+
+	_, err = os.Stat(dir)
+	if os.IsNotExist(err) {
+		if err := os.MkdirAll(dir, dirMode); err != nil {
+			fs.Logger().WithError(err).WithField("directory", dir).Error("failed to create dir")
+			return err
+		}
+	} else if err != nil {
 		return err
 	}
 
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, fileMode)
+	if err != nil {
+		fs.Logger().WithError(err).WithField("file", path).Error("failed to open file for writting")
+		return err
+	}
+	defer f.Close()
+
+	if _, err := f.Write(data); err != nil {
+		fs.Logger().WithError(err).WithField("file", path).Error("failed to write file")
+		return err
+	}
 	return nil
 }
 
-// TestSetRunStoragePath set RunStoragePath to path
-// this function is only used for testing purpose
-func TestSetRunStoragePath(path string) {
-	RunStoragePath = func() string {
-		return path
+func (fs *FS) GlobalRead(relativePath string) ([]byte, error) {
+	path := filepath.Join(StorageRootPath(), relativePath)
+	path, err := filepath.Abs(filepath.Clean(path))
+	if err != nil {
+		return nil, fmt.Errorf("failed to find abs path for %q: %v", relativePath, err)
 	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		fs.Logger().WithError(err).WithField("file", path).Error("failed to open file for reading")
+		return nil, err
+	}
+	defer f.Close()
+
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		fs.Logger().WithError(err).WithField("file", path).Error("failed to read file")
+		return nil, err
+	}
+	return data, nil
 }

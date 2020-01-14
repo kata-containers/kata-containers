@@ -29,11 +29,15 @@ import (
 )
 
 const (
-	tempBundlePath = "/tmp/virtc/ocibundle/"
-	containerID    = "virtc-oci-test"
-	consolePath    = "/tmp/virtc/console"
-	fileMode       = os.FileMode(0640)
-	dirMode        = os.FileMode(0750)
+	containerID = "virtc-oci-test"
+	fileMode    = os.FileMode(0640)
+	dirMode     = os.FileMode(0750)
+)
+
+var (
+	tempRoot       = ""
+	tempBundlePath = ""
+	consolePath    = ""
 )
 
 func createConfig(fileName string, fileData string) (string, error) {
@@ -633,16 +637,27 @@ func TestGetShmSizeBindMounted(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	var err error
+	tempRoot, err = ioutil.TempDir("", "virtc-")
+	if err != nil {
+		panic(err)
+	}
+
+	tempBundlePath = filepath.Join(tempRoot, "ocibundle")
+	consolePath = filepath.Join(tempRoot, "console")
+
 	/* Create temp bundle directory if necessary */
-	err := os.MkdirAll(tempBundlePath, dirMode)
+	err = os.MkdirAll(tempBundlePath, dirMode)
 	if err != nil {
 		fmt.Printf("Unable to create %s %v\n", tempBundlePath, err)
 		os.Exit(1)
 	}
 
-	defer os.RemoveAll(tempBundlePath)
+	ret := m.Run()
 
-	os.Exit(m.Run())
+	os.RemoveAll(tempRoot)
+
+	os.Exit(ret)
 }
 
 func TestAddAssetAnnotations(t *testing.T) {

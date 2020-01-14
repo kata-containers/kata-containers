@@ -6,7 +6,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -14,7 +13,6 @@ import (
 	"unsafe"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/sirupsen/logrus"
 )
 
@@ -238,12 +236,7 @@ func acrnIsUsable() error {
 	kataLog.WithField("device", acrnDevice).Info("device available")
 
 	acrnInst := vc.Acrn{}
-	vcStore, err := store.NewVCSandboxStore(context.Background(), "kata-check")
-	if err != nil {
-		return err
-	}
-
-	uuidStr, err := acrnInst.GetNextAvailableUUID(vcStore)
+	uuidStr, err := acrnInst.GetNextAvailableUUID()
 	if err != nil {
 		return err
 	}

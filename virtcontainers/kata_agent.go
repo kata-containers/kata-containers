@@ -26,6 +26,7 @@ import (
 	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
@@ -217,7 +218,7 @@ func (k *kataAgent) Logger() *logrus.Entry {
 }
 
 func (k *kataAgent) getVMPath(id string) string {
-	return filepath.Join(store.RunVMStoragePath(), id)
+	return filepath.Join(fs.RunVMStoragePath(), id)
 }
 
 func (k *kataAgent) getSharePath(id string) string {
@@ -318,12 +319,11 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config interface
 	k.proxyBuiltIn = isProxyBuiltIn(sandbox.config.ProxyType)
 
 	// Fetch agent runtime info.
-	if !sandbox.supportNewStore() {
+	if useOldStore(sandbox.ctx) {
 		if err := sandbox.store.Load(store.Agent, &k.state); err != nil {
 			k.Logger().Debug("Could not retrieve anything from storage")
 		}
 	}
-
 	return disableVMShutdown, nil
 }
 
@@ -409,7 +409,7 @@ func (k *kataAgent) configure(h hypervisor, id, sharePath string, builtin bool, 
 		HostPath: sharePath,
 	}
 
-	if err = os.MkdirAll(sharedVolume.HostPath, store.DirMode); err != nil {
+	if err = os.MkdirAll(sharedVolume.HostPath, DirMode); err != nil {
 		return err
 	}
 
@@ -730,12 +730,6 @@ func (k *kataAgent) setProxy(sandbox *Sandbox, proxy proxy, pid int, url string)
 	k.proxy = proxy
 	k.state.ProxyPid = pid
 	k.state.URL = url
-	if sandbox != nil && !sandbox.supportNewStore() {
-		if err := sandbox.store.Store(store.Agent, k.state); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -952,13 +946,6 @@ func (k *kataAgent) stopSandbox(sandbox *Sandbox) error {
 	// clean up agent state
 	k.state.ProxyPid = -1
 	k.state.URL = ""
-	if !sandbox.supportNewStore() {
-		if err := sandbox.store.Store(store.Agent, k.state); err != nil {
-			// ignore error
-			k.Logger().WithError(err).WithField("sandbox", sandbox.id).Error("failed to clean up agent state")
-		}
-	}
-
 	return nil
 }
 
@@ -1443,13 +1430,6 @@ func (k *kataAgent) handleBlockVolumes(c *Container) ([]*grpc.Storage, error) {
 		// Add the block device to the list of container devices, to make sure the
 		// device is detached with detachDevices() for a container.
 		c.devices = append(c.devices, ContainerDevice{ID: id, ContainerPath: m.Destination})
-
-		if !c.sandbox.supportNewStore() {
-			if err := c.storeDevices(); err != nil {
-				k.Logger().WithField("device", id).WithError(err).Error("store device failed")
-				return nil, err
-			}
-		}
 
 		vol := &grpc.Storage{}
 
@@ -2153,7 +2133,7 @@ func (k *kataAgent) copyFile(src, dst string) error {
 
 	cpReq := &grpc.CopyFileRequest{
 		Path:     dst,
-		DirMode:  uint32(store.DirMode),
+		DirMode:  uint32(DirMode),
 		FileMode: st.Mode,
 		FileSize: fileSize,
 		Uid:      int32(st.Uid),

@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/store"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -198,7 +198,7 @@ func TestAcrnGetSandboxConsole(t *testing.T) {
 		ctx: context.Background(),
 	}
 	sandboxID := "testSandboxID"
-	expected := filepath.Join(store.RunVMStoragePath(), sandboxID, consoleSocket)
+	expected := filepath.Join(fs.RunVMStoragePath(), sandboxID, consoleSocket)
 
 	result, err := a.getSandboxConsole(sandboxID)
 	assert.NoError(err)
@@ -218,11 +218,7 @@ func TestAcrnCreateSandbox(t *testing.T) {
 		},
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.NoError(err)
-	sandbox.store = vcStore
-
-	err = globalSandboxList.addSandbox(sandbox)
+	err := globalSandboxList.addSandbox(sandbox)
 	assert.NoError(err)
 
 	defer globalSandboxList.removeSandbox(sandbox.id)
@@ -230,7 +226,7 @@ func TestAcrnCreateSandbox(t *testing.T) {
 	//set PID to 1 to ignore hypercall to get UUID and set a random UUID
 	a.state.PID = 1
 	a.state.UUID = "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"
-	err = a.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, nil, false)
+	err = a.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
 	assert.NoError(err)
 	assert.Exactly(acrnConfig, a.config)
 }

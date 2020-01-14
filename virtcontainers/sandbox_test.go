@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -22,8 +21,8 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
@@ -575,11 +574,6 @@ func TestSetAnnotations(t *testing.T) {
 		},
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.NoError(err)
-
-	sandbox.store = vcStore
-
 	keyAnnotation := "annotation2"
 	valueAnnotation := "xyz"
 	newAnnotations := map[string]string{
@@ -658,26 +652,11 @@ func TestContainerStateSetFstype(t *testing.T) {
 	assert.Nil(err)
 	defer cleanUp()
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(err)
-	sandbox.store = vcStore
-
 	c := sandbox.GetContainer("100")
 	assert.NotNil(c)
 
 	cImpl, ok := c.(*Container)
 	assert.True(ok)
-
-	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, c.ID())
-	assert.NoError(err)
-
-	cImpl.store = containerStore
-
-	path := store.ContainerRuntimeRootPath(testSandboxID, c.ID())
-	stateFilePath := filepath.Join(path, store.StateFile)
-
-	f, err := os.Create(stateFilePath)
-	assert.NoError(err)
 
 	state := types.ContainerState{
 		State:  "ready",
@@ -686,34 +665,10 @@ func TestContainerStateSetFstype(t *testing.T) {
 
 	cImpl.state = state
 
-	stateData := `{
-		"state":"ready",
-		"fstype":"vfs",
-	}`
-
-	n, err := f.WriteString(stateData)
-	defer f.Close()
-	assert.NoError(err)
-	assert.Equal(n, len(stateData))
-
 	newFstype := "ext4"
 	err = cImpl.setStateFstype(newFstype)
 	assert.NoError(err)
 	assert.Equal(cImpl.state.Fstype, newFstype)
-
-	fileData, err := ioutil.ReadFile(stateFilePath)
-	assert.NoError(err)
-
-	// experimental features doesn't write state.json
-	if sandbox.supportNewStore() {
-		return
-	}
-
-	var res types.ContainerState
-	err = json.Unmarshal([]byte(string(fileData)), &res)
-	assert.NoError(err)
-	assert.Equal(res.Fstype, newFstype)
-	assert.Equal(res.State, state.State)
 }
 
 const vfioPath = "/dev/vfio/"
@@ -727,7 +682,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 	testDeviceBDFPath := "0000:00:1c.0"
 
 	devicesDir := filepath.Join(tmpDir, testFDIOGroup, "devices")
-	err = os.MkdirAll(devicesDir, store.DirMode)
+	err = os.MkdirAll(devicesDir, DirMode)
 	assert.Nil(t, err)
 
 	deviceFile := filepath.Join(devicesDir, testDeviceBDFPath)
@@ -773,14 +728,8 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 		config:     &SandboxConfig{},
 	}
 
-	store, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(t, err)
-	sandbox.store = store
-
 	containers[c.id].sandbox = &sandbox
 
-	err = sandbox.storeSandboxDevices()
-	assert.Nil(t, err, "Error while store sandbox devices %s", err)
 	err = containers[c.id].attachDevices()
 	assert.Nil(t, err, "Error while attaching devices %s", err)
 
@@ -916,8 +865,6 @@ func TestCreateContainer(t *testing.T) {
 	_, err = s.CreateContainer(contConfig)
 	assert.NotNil(t, err, "Should failed to create a duplicated container")
 	assert.Equal(t, len(s.config.Containers), 1, "Container config list length from sandbox structure should be 1")
-	ret := store.VCContainerStoreExists(s.ctx, testSandboxID, contID)
-	assert.True(t, ret, "Should not delete container store that already existed")
 }
 
 func TestDeleteContainer(t *testing.T) {
@@ -1023,8 +970,6 @@ func TestDeleteStoreWhenCreateContainerFail(t *testing.T) {
 	s.state.CgroupPath = filepath.Join(testDir, "bad-cgroup")
 	_, err = s.CreateContainer(contConfig)
 	assert.NotNil(t, err, "Should fail to create container due to wrong cgroup")
-	ret := store.VCContainerStoreExists(s.ctx, testSandboxID, contID)
-	assert.False(t, ret, "Should delete configuration root after failed to create a container")
 }
 
 func TestDeleteStoreWhenNewContainerFail(t *testing.T) {
@@ -1045,7 +990,7 @@ func TestDeleteStoreWhenNewContainerFail(t *testing.T) {
 	}
 	_, err = newContainer(p, &contConfig)
 	assert.NotNil(t, err, "New container with invalid device info should fail")
-	storePath := store.ContainerConfigurationRootPath(testSandboxID, contID)
+	storePath := filepath.Join(fs.RunStoragePath(), testSandboxID, contID)
 	_, err = os.Stat(storePath)
 	assert.NotNil(t, err, "Should delete configuration root after failed to create a container")
 }
@@ -1208,10 +1153,6 @@ func TestAttachBlockDevice(t *testing.T) {
 		ctx:        context.Background(),
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(t, err)
-	sandbox.store = vcStore
-
 	contID := "100"
 	container := Container{
 		sandbox: sandbox,
@@ -1219,18 +1160,11 @@ func TestAttachBlockDevice(t *testing.T) {
 	}
 
 	// create state file
-	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
-	err = os.MkdirAll(path, store.DirMode)
+	path := filepath.Join(fs.RunStoragePath(), testSandboxID, container.ID())
+	err := os.MkdirAll(path, DirMode)
 	assert.NoError(t, err)
 
 	defer os.RemoveAll(path)
-
-	stateFilePath := filepath.Join(path, store.StateFile)
-	os.Remove(stateFilePath)
-
-	_, err = os.Create(stateFilePath)
-	assert.NoError(t, err)
-	defer os.Remove(stateFilePath)
 
 	path = "/dev/hda"
 	deviceInfo := config.DeviceInfo{
@@ -1295,10 +1229,6 @@ func TestPreAddDevice(t *testing.T) {
 		ctx:        context.Background(),
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(t, err)
-	sandbox.store = vcStore
-
 	contID := "100"
 	container := Container{
 		sandbox:   sandbox,
@@ -1307,23 +1237,12 @@ func TestPreAddDevice(t *testing.T) {
 	}
 	container.state.State = types.StateReady
 
-	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, container.id)
-	assert.Nil(t, err)
-	container.store = containerStore
-
 	// create state file
-	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
-	err = os.MkdirAll(path, store.DirMode)
+	path := filepath.Join(fs.RunStoragePath(), testSandboxID, container.ID())
+	err := os.MkdirAll(path, DirMode)
 	assert.NoError(t, err)
 
 	defer os.RemoveAll(path)
-
-	stateFilePath := filepath.Join(path, store.StateFile)
-	os.Remove(stateFilePath)
-
-	_, err = os.Create(stateFilePath)
-	assert.NoError(t, err)
-	defer os.Remove(stateFilePath)
 
 	path = "/dev/hda"
 	deviceInfo := config.DeviceInfo{
@@ -1417,9 +1336,6 @@ func checkDirNotExist(path string) error {
 
 func checkSandboxRemains() error {
 	var err error
-	if err = checkDirNotExist(sandboxDirConfig); err != nil {
-		return fmt.Errorf("%s still exists", sandboxDirConfig)
-	}
 	if err = checkDirNotExist(sandboxDirState); err != nil {
 		return fmt.Errorf("%s still exists", sandboxDirState)
 	}
