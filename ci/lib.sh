@@ -28,12 +28,6 @@ run_static_checks()
 	bash "$tests_repo_dir/.ci/static-checks.sh" "github.com/kata-containers/kata-containers"
 }
 
-run_rust_test()
-{
-	clone_tests_repo
-	bash "$tests_repo_dir/.ci/rust-test.sh"
-}
-
 run_go_test()
 {
 	clone_tests_repo
