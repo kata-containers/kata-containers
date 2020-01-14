@@ -14,8 +14,10 @@ import (
 	"time"
 
 	pb "github.com/kata-containers/runtime/protocols/cache"
+	"github.com/kata-containers/runtime/virtcontainers/persist"
+	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/sirupsen/logrus"
 )
 
@@ -35,7 +37,7 @@ type VM struct {
 
 	cpuDelta uint32
 
-	store *store.VCStore
+	store persistapi.PersistDriver
 }
 
 // VMConfig is a collection of all info that a new blackbox VM needs.
@@ -157,9 +159,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 
 	virtLog.WithField("vm", id).WithField("config", config).Info("create new vm")
 
-	vcStore, err := store.NewVCStore(ctx,
-		store.SandboxConfigurationRoot(id),
-		store.SandboxRuntimeRoot(id))
+	store, err := persist.GetDriver("fs")
 	if err != nil {
 		return nil, err
 	}
@@ -168,11 +168,11 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		if err != nil {
 			virtLog.WithField("vm", id).WithError(err).Error("failed to create new vm")
 			virtLog.WithField("vm", id).Errorf("Deleting store for %s", id)
-			vcStore.Delete()
+			store.Destroy(id)
 		}
 	}()
 
-	if err = hypervisor.createSandbox(ctx, id, NetworkNamespace{}, &config.HypervisorConfig, vcStore, false); err != nil {
+	if err = hypervisor.createSandbox(ctx, id, NetworkNamespace{}, &config.HypervisorConfig, false); err != nil {
 		return nil, err
 	}
 
@@ -230,7 +230,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		proxyURL:   url,
 		cpu:        config.HypervisorConfig.NumVCPUs,
 		memory:     config.HypervisorConfig.MemorySize,
-		store:      vcStore,
+		store:      store,
 	}, nil
 }
 
@@ -243,9 +243,7 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		return nil, err
 	}
 
-	vcStore, err := store.NewVCStore(ctx,
-		store.SandboxConfigurationRoot(v.Id),
-		store.SandboxRuntimeRoot(v.Id))
+	store, err := persist.GetDriver("fs")
 	if err != nil {
 		return nil, err
 	}
@@ -254,11 +252,11 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		if err != nil {
 			virtLog.WithField("vm", v.Id).WithError(err).Error("failed to create new vm from Grpc")
 			virtLog.WithField("vm", v.Id).Errorf("Deleting store for %s", v.Id)
-			vcStore.Delete()
+			store.Destroy(v.Id)
 		}
 	}()
 
-	err = hypervisor.fromGrpc(ctx, &config.HypervisorConfig, vcStore, v.Hypervisor)
+	err = hypervisor.fromGrpc(ctx, &config.HypervisorConfig, v.Hypervisor)
 	if err != nil {
 		return nil, err
 	}
@@ -282,11 +280,12 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		cpu:        v.Cpu,
 		memory:     v.Memory,
 		cpuDelta:   v.CpuDelta,
+		store:      store,
 	}, nil
 }
 
 func buildVMSharePath(id string) string {
-	return filepath.Join(store.RunVMStoragePath(), id, "shared")
+	return filepath.Join(fs.RunVMStoragePath(), id, "shared")
 }
 
 func (v *VM) logger() logrus.FieldLogger {
@@ -339,7 +338,7 @@ func (v *VM) Stop() error {
 		return err
 	}
 
-	return v.store.Delete()
+	return v.store.Destroy(v.id)
 }
 
 // AddCPUs adds num of CPUs to the VM.

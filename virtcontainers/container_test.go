@@ -21,7 +21,6 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -92,18 +91,13 @@ func TestContainerRemoveDrive(t *testing.T) {
 		config:     &SandboxConfig{},
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(t, err)
-
-	sandbox.store = vcStore
-
 	container := Container{
 		sandbox: sandbox,
 		id:      "testContainer",
 	}
 
 	container.state.Fstype = ""
-	err = container.removeDrive()
+	err := container.removeDrive()
 
 	// hotplugRemoveDevice for hypervisor should not be called.
 	// test should pass without a hypervisor created for the container's sandbox.
@@ -123,8 +117,6 @@ func TestContainerRemoveDrive(t *testing.T) {
 	_, ok := device.(*drivers.BlockDevice)
 	assert.True(t, ok)
 	err = device.Attach(devReceiver)
-	assert.Nil(t, err)
-	err = sandbox.storeSandboxDevices()
 	assert.Nil(t, err)
 
 	container.state.Fstype = "xfs"
@@ -274,7 +266,7 @@ func testSetupFakeRootfs(t *testing.T) (testRawFile, loopDev, mntDir string, err
 	assert.NoError(err)
 
 	mntDir = filepath.Join(tmpDir, "rootfs")
-	err = os.Mkdir(mntDir, store.DirMode)
+	err = os.Mkdir(mntDir, DirMode)
 	assert.NoError(err)
 
 	err = syscall.Mount(loopDev, mntDir, "ext4", uintptr(0), "")
@@ -324,15 +316,11 @@ func TestContainerAddDriveDir(t *testing.T) {
 		},
 	}
 
-	defer store.DeleteAll()
-
-	sandboxStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.Nil(err)
-	sandbox.store = sandboxStore
-
 	sandbox.newStore, err = persist.GetDriver("fs")
 	assert.NoError(err)
 	assert.NotNil(sandbox.newStore)
+
+	defer sandbox.newStore.Destroy(sandbox.id)
 
 	contID := "100"
 	container := Container{
@@ -340,18 +328,6 @@ func TestContainerAddDriveDir(t *testing.T) {
 		id:      contID,
 		rootFs:  RootFs{Target: fakeRootfs, Mounted: true},
 	}
-
-	containerStore, err := store.NewVCContainerStore(sandbox.ctx, sandbox.id, container.id)
-	assert.Nil(err)
-	container.store = containerStore
-
-	// create state file
-	path := store.ContainerRuntimeRootPath(testSandboxID, container.ID())
-	stateFilePath := filepath.Join(path, store.StateFile)
-	os.Remove(stateFilePath)
-
-	_, err = os.Create(stateFilePath)
-	assert.NoError(err)
 
 	// Make the checkStorageDriver func variable point to a fake check function
 	savedFunc := checkStorageDriver
@@ -396,20 +372,13 @@ func TestContainerRootfsPath(t *testing.T) {
 			},
 		},
 	}
-	vcstore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	sandbox.store = vcstore
-	assert.Nil(t, err)
+
 	container := Container{
 		id:           "rootfstestcontainerid",
 		sandbox:      sandbox,
 		rootFs:       RootFs{Target: fakeRootfs, Mounted: true},
 		rootfsSuffix: "rootfs",
 	}
-	cvcstore, err := store.NewVCContainerStore(context.Background(),
-		sandbox.id,
-		container.id)
-	assert.Nil(t, err)
-	container.store = cvcstore
 
 	container.hotplugDrive()
 	assert.Empty(t, container.rootfsSuffix)

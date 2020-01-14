@@ -21,13 +21,13 @@ import (
 	"time"
 
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	chclient "github.com/kata-containers/runtime/virtcontainers/pkg/cloud-hypervisor/client"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
@@ -104,7 +104,6 @@ func (s *CloudHypervisorState) reset() {
 type cloudHypervisor struct {
 	id        string
 	state     CloudHypervisorState
-	store     *store.VCStore
 	config    HypervisorConfig
 	ctx       context.Context
 	APIClient clhClient
@@ -139,7 +138,7 @@ var clhDebugKernelParams = []Param{
 
 // For cloudHypervisor this call only sets the internal structure up.
 // The VM will be created and started through startSandbox().
-func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore, stateful bool) error {
+func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error {
 	clh.ctx = ctx
 
 	span, _ := clh.trace("createSandbox")
@@ -151,7 +150,6 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	}
 
 	clh.id = id
-	clh.store = vcStore
 	clh.config = *hypervisorConfig
 	clh.state.state = clhNotReady
 
@@ -187,12 +185,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 
 	}
 
-	// No need to return an error from there since there might be nothing
-	// to fetch if this is the first time the hypervisor is created.
-	err = clh.store.Load(store.Hypervisor, &clh.state)
-	if err != nil {
-		clh.Logger().WithField("function", "createSandbox").WithError(err).Info("Sandbox not found creating ")
-	} else {
+	if clh.state.PID > 0 {
 		clh.Logger().WithField("function", "createSandbox").Info("Sandbox already exist, loading from state")
 		clh.virtiofsd = &virtiofsd{
 			PID:        clh.state.VirtiofsdPID,
@@ -202,6 +195,10 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 		}
 		return nil
 	}
+
+	// No need to return an error from there since there might be nothing
+	// to fetch if this is the first time the hypervisor is created.
+	clh.Logger().WithField("function", "createSandbox").WithError(err).Info("Sandbox not found creating ")
 
 	// Set initial memomory size of the virtual machine
 	clh.vmconfig.Memory.Size = int64(clh.config.MemorySize) << utils.MibToBytesShift
@@ -306,8 +303,8 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 
 	clh.Logger().WithField("function", "startSandbox").Info("starting Sandbox")
 
-	vmPath := filepath.Join(store.RunVMStoragePath(), clh.id)
-	err := os.MkdirAll(vmPath, store.DirMode)
+	vmPath := filepath.Join(fs.RunVMStoragePath(), clh.id)
+	err := os.MkdirAll(vmPath, DirMode)
 	if err != nil {
 		return err
 	}
@@ -323,9 +320,6 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 			return err
 		}
 		clh.state.VirtiofsdPID = pid
-		if err = clh.storeState(); err != nil {
-			return err
-		}
 	} else {
 		return errors.New("cloud-hypervisor only supports virtio based file sharing")
 	}
@@ -350,10 +344,6 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 	}
 
 	clh.state.state = clhReady
-	if err = clh.storeState(); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -431,7 +421,7 @@ func (clh *cloudHypervisor) stopSandbox() (err error) {
 	return clh.terminate()
 }
 
-func (clh *cloudHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error {
+func (clh *cloudHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
 	return errors.New("cloudHypervisor is not supported by VM cache")
 }
 
@@ -442,6 +432,7 @@ func (clh *cloudHypervisor) toGrpc() ([]byte, error) {
 func (clh *cloudHypervisor) save() (s persistapi.HypervisorState) {
 	s.Pid = clh.state.PID
 	s.Type = string(ClhHypervisor)
+	s.VirtiofsdPid = clh.state.VirtiofsdPID
 	return
 }
 
@@ -589,7 +580,6 @@ func (clh *cloudHypervisor) terminate() (err error) {
 
 func (clh *cloudHypervisor) reset() {
 	clh.state.reset()
-	clh.storeState()
 }
 
 func (clh *cloudHypervisor) generateSocket(id string, useVsock bool) (interface{}, error) {
@@ -614,36 +604,26 @@ func (clh *cloudHypervisor) generateSocket(id string, useVsock bool) (interface{
 }
 
 func (clh *cloudHypervisor) virtioFsSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(store.RunVMStoragePath(), id, virtioFsSocket)
+	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, virtioFsSocket)
 }
 
 func (clh *cloudHypervisor) vsockSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(store.RunVMStoragePath(), id, clhSocket)
+	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, clhSocket)
 }
 
 func (clh *cloudHypervisor) serialPath(id string) (string, error) {
-	return utils.BuildSocketPath(store.RunVMStoragePath(), id, clhSerial)
+	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, clhSerial)
 }
 
 func (clh *cloudHypervisor) apiSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(store.RunVMStoragePath(), id, clhAPISocket)
+	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, clhAPISocket)
 }
 
 func (clh *cloudHypervisor) logFilePath(id string) (string, error) {
-	return utils.BuildSocketPath(store.RunVMStoragePath(), id, clhLogFile)
-}
-
-func (clh *cloudHypervisor) storeState() error {
-	if clh.store != nil {
-		if err := clh.store.Store(store.Hypervisor, clh.state); err != nil {
-			return err
-		}
-	}
-	return nil
+	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, clhLogFile)
 }
 
 func (clh *cloudHypervisor) waitVMM(timeout uint) error {
-
 	clhRunning, err := clh.isClhRunning(timeout)
 
 	if err != nil {
@@ -1018,7 +998,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	}
 
 	// cleanup vm path
-	dir := filepath.Join(store.RunVMStoragePath(), clh.id)
+	dir := filepath.Join(fs.RunVMStoragePath(), clh.id)
 
 	// If it's a symlink, remove both dir and the target.
 	link, err := filepath.EvalSymlinks(dir)
@@ -1047,14 +1027,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	}
 
 	if clh.config.VMid != "" {
-		dir = store.SandboxConfigurationRootPath(clh.config.VMid)
-		if err := os.RemoveAll(dir); err != nil {
-			if !force {
-				return err
-			}
-			clh.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
-		}
-		dir = store.SandboxRuntimeRootPath(clh.config.VMid)
+		dir = filepath.Join(fs.RunStoragePath(), clh.config.VMid)
 		if err := os.RemoveAll(dir); err != nil {
 			if !force {
 				return err

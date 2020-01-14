@@ -32,8 +32,8 @@ import (
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
@@ -76,8 +76,6 @@ type QemuState struct {
 // qemu is an Hypervisor interface implementation for the Linux qemu hypervisor.
 type qemu struct {
 	id string
-
-	store *store.VCStore
 
 	config HypervisorConfig
 
@@ -226,7 +224,7 @@ func (q *qemu) trace(name string) (opentracing.Span, context.Context) {
 }
 
 // setup sets the Qemu structure up.
-func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore) error {
+func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig) error {
 	span, _ := q.trace("setup")
 	defer span.Finish()
 
@@ -236,7 +234,6 @@ func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 	}
 
 	q.id = id
-	q.store = vcStore
 	q.config = *hypervisorConfig
 	q.arch = newQemuArch(q.config)
 
@@ -255,12 +252,7 @@ func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 	}
 
 	var create bool
-	if q.store != nil { //use old store
-		if err := q.store.Load(store.Hypervisor, &q.state); err != nil {
-			// hypervisor doesn't exist, create new one
-			create = true
-		}
-	} else if q.state.UUID == "" { // new store
+	if q.state.UUID == "" {
 		create = true
 	}
 
@@ -277,11 +269,7 @@ func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 
 		// The path might already exist, but in case of VM templating,
 		// we have to create it since the sandbox has not created it yet.
-		if err = os.MkdirAll(store.SandboxRuntimeRootPath(id), store.DirMode); err != nil {
-			return err
-		}
-
-		if err = q.storeState(); err != nil {
+		if err = os.MkdirAll(filepath.Join(fs.RunStoragePath(), id), DirMode); err != nil {
 			return err
 		}
 	}
@@ -336,7 +324,7 @@ func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 }
 
 func (q *qemu) qmpSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(store.RunVMStoragePath(), id, qmpSocket)
+	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, qmpSocket)
 }
 
 func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
@@ -463,14 +451,14 @@ func (q *qemu) setupFileBackedMem(knobs *govmmQemu.Knobs, memory *govmmQemu.Memo
 }
 
 // createSandbox is the Hypervisor sandbox creation implementation for govmmQemu.
-func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore, stateful bool) error {
+func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error {
 	// Save the tracing context
 	q.ctx = ctx
 
 	span, _ := q.trace("createSandbox")
 	defer span.Finish()
 
-	if err := q.setup(id, hypervisorConfig, vcStore); err != nil {
+	if err := q.setup(id, hypervisorConfig); err != nil {
 		return err
 	}
 
@@ -580,7 +568,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		VGA:         "none",
 		GlobalParam: "kvm-pit.lost_tick_policy=discard",
 		Bios:        firmwarePath,
-		PidFile:     filepath.Join(store.RunVMStoragePath(), q.id, "pid"),
+		PidFile:     filepath.Join(fs.RunVMStoragePath(), q.id, "pid"),
 	}
 
 	if ioThread != nil {
@@ -602,7 +590,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 }
 
 func (q *qemu) vhostFSSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(store.RunVMStoragePath(), id, vhostFSSocket)
+	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, vhostFSSocket)
 }
 
 func (q *qemu) virtiofsdArgs(fd uintptr) []string {
@@ -706,8 +694,8 @@ func (q *qemu) startSandbox(timeout int) error {
 		q.fds = []*os.File{}
 	}()
 
-	vmPath := filepath.Join(store.RunVMStoragePath(), q.id)
-	err := os.MkdirAll(vmPath, store.DirMode)
+	vmPath := filepath.Join(fs.RunVMStoragePath(), q.id)
+	err := os.MkdirAll(vmPath, DirMode)
 	if err != nil {
 		return err
 	}
@@ -727,9 +715,6 @@ func (q *qemu) startSandbox(timeout int) error {
 	if q.config.SharedFS == config.VirtioFS {
 		err = q.setupVirtiofsd()
 		if err != nil {
-			return err
-		}
-		if err = q.storeState(); err != nil {
 			return err
 		}
 	}
@@ -882,7 +867,7 @@ func (q *qemu) stopSandbox() error {
 func (q *qemu) cleanupVM() error {
 
 	// cleanup vm path
-	dir := filepath.Join(store.RunVMStoragePath(), q.id)
+	dir := filepath.Join(fs.RunVMStoragePath(), q.id)
 
 	// If it's a symlink, remove both dir and the target.
 	// This can happen when vm template links a sandbox to a vm.
@@ -903,11 +888,7 @@ func (q *qemu) cleanupVM() error {
 	}
 
 	if q.config.VMid != "" {
-		dir = store.SandboxConfigurationRootPath(q.config.VMid)
-		if err := os.RemoveAll(dir); err != nil {
-			q.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
-		}
-		dir = store.SandboxRuntimeRootPath(q.config.VMid)
+		dir = filepath.Join(fs.RunStoragePath(), q.config.VMid)
 		if err := os.RemoveAll(dir); err != nil {
 			q.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
 		}
@@ -1289,7 +1270,7 @@ func (q *qemu) hotplugAddDevice(devInfo interface{}, devType deviceType) (interf
 		return data, err
 	}
 
-	return data, q.storeState()
+	return data, nil
 }
 
 func (q *qemu) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
@@ -1301,7 +1282,7 @@ func (q *qemu) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (int
 		return data, err
 	}
 
-	return data, q.storeState()
+	return data, nil
 }
 
 func (q *qemu) hotplugCPUs(vcpus uint32, op operation) (uint32, error) {
@@ -1383,13 +1364,8 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		hotpluggedVCPUs++
 		if hotpluggedVCPUs == amount {
 			// All vCPUs were hotplugged
-			return amount, q.storeState()
+			return amount, nil
 		}
-	}
-
-	// All vCPUs were NOT hotplugged
-	if err := q.storeState(); err != nil {
-		q.Logger().Errorf("failed to save hypervisor state after hotplug %d vCPUs: %v", hotpluggedVCPUs, err)
 	}
 
 	return hotpluggedVCPUs, fmt.Errorf("failed to hot add vCPUs: only %d vCPUs of %d were added", hotpluggedVCPUs, amount)
@@ -1408,7 +1384,6 @@ func (q *qemu) hotplugRemoveCPUs(amount uint32) (uint32, error) {
 		// get the last vCPUs and try to remove it
 		cpu := q.state.HotpluggedVCPUs[len(q.state.HotpluggedVCPUs)-1]
 		if err := q.qmpMonitorCh.qmp.ExecuteDeviceDel(q.qmpMonitorCh.ctx, cpu.ID); err != nil {
-			q.storeState()
 			return i, fmt.Errorf("failed to hotunplug CPUs, only %d CPUs were hotunplugged: %v", i, err)
 		}
 
@@ -1416,7 +1391,7 @@ func (q *qemu) hotplugRemoveCPUs(amount uint32) (uint32, error) {
 		q.state.HotpluggedVCPUs = q.state.HotpluggedVCPUs[:len(q.state.HotpluggedVCPUs)-1]
 	}
 
-	return amount, q.storeState()
+	return amount, nil
 }
 
 func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) (int, error) {
@@ -1522,7 +1497,7 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 		}
 	}
 	q.state.HotpluggedMemory += memDev.sizeMB
-	return memDev.sizeMB, q.storeState()
+	return memDev.sizeMB, nil
 }
 
 func (q *qemu) pauseSandbox() error {
@@ -1603,7 +1578,7 @@ func (q *qemu) getSandboxConsole(id string) (string, error) {
 	span, _ := q.trace("getSandboxConsole")
 	defer span.Finish()
 
-	return utils.BuildSocketPath(store.RunVMStoragePath(), id, consoleSocket)
+	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, consoleSocket)
 }
 
 func (q *qemu) saveSandbox() error {
@@ -1938,7 +1913,7 @@ type qemuGrpc struct {
 	QemuSMP govmmQemu.SMP
 }
 
-func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error {
+func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
 	var qp qemuGrpc
 	err := json.Unmarshal(j, &qp)
 	if err != nil {
@@ -1946,7 +1921,6 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 	}
 
 	q.id = qp.ID
-	q.store = store
 	q.config = *hypervisorConfig
 	q.qmpMonitorCh.ctx = ctx
 	q.qmpMonitorCh.path = qp.QmpChannelpath
@@ -1976,16 +1950,6 @@ func (q *qemu) toGrpc() ([]byte, error) {
 	}
 
 	return json.Marshal(&qp)
-}
-
-func (q *qemu) storeState() error {
-	if q.store != nil {
-		q.state.Bridges = q.arch.getBridges()
-		if err := q.store.Store(store.Hypervisor, q.state); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func (q *qemu) save() (s persistapi.HypervisorState) {

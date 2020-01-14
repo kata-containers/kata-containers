@@ -38,7 +38,6 @@ import (
 	"github.com/blang/semver"
 	"github.com/containerd/console"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
@@ -76,6 +75,8 @@ const (
 	fcMetricsFifo = "metrics.fifo"
 
 	defaultFcConfig = "fcConfig.json"
+	// storagePathSuffix mirrors persist/fs/fs.go:storagePathSuffix
+	storagePathSuffix = "vc"
 )
 
 // Specify the minimum version of firecracker supported
@@ -143,7 +144,6 @@ type firecracker struct {
 	firecrackerd *exec.Cmd           //Tracks the firecracker process itself
 	connection   *client.Firecracker //Tracks the current active connection
 
-	store          *store.VCStore
 	ctx            context.Context
 	config         HypervisorConfig
 	pendingDevices []firecrackerDevice // Devices to be added before the FC VM ready
@@ -222,7 +222,7 @@ func (fc *firecracker) bindMount(ctx context.Context, source, destination string
 
 // For firecracker this call only sets the internal structure up.
 // The sandbox will be created and started through startSandbox().
-func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore, stateful bool) error {
+func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error {
 	fc.ctx = ctx
 
 	span, _ := fc.trace("createSandbox")
@@ -231,7 +231,6 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	//TODO: check validity of the hypervisor config provided
 	//https://github.com/kata-containers/runtime/issues/1065
 	fc.id = id
-	fc.store = vcStore
 	fc.state.set(notReady)
 	fc.config = *hypervisorConfig
 	fc.stateful = stateful
@@ -246,8 +245,8 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 	// Also jailer based on the id implicitly sets up cgroups under
 	// <cgroups_base>/<exec_file_name>/<id>/
 	hypervisorName := filepath.Base(hypervisorConfig.HypervisorPath)
-	//store.ConfigStoragePath cannot be used as we need exec perms
-	fc.chrootBaseDir = filepath.Join("/var/lib/", store.StoragePathSuffix)
+	//fs.RunStoragePath cannot be used as we need exec perms
+	fc.chrootBaseDir = filepath.Join("/run", storagePathSuffix)
 
 	fc.vmPath = filepath.Join(fc.chrootBaseDir, hypervisorName, fc.id)
 	fc.jailerRoot = filepath.Join(fc.vmPath, "root") // auto created by jailer
@@ -263,15 +262,6 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 
 	fc.fcConfig = &types.FcConfig{}
 	fc.fcConfigPath = filepath.Join(fc.vmPath, defaultFcConfig)
-
-	// No need to return an error from there since there might be nothing
-	// to fetch if this is the first time the hypervisor is created.
-	if fc.store != nil {
-		if err := fc.store.Load(store.Hypervisor, &fc.info); err != nil {
-			fc.Logger().WithField("function", "init").WithError(err).Info("No info could be fetched")
-		}
-	}
-
 	return nil
 }
 
@@ -382,17 +372,7 @@ func (fc *firecracker) fcInit(timeout int) error {
 	defer span.Finish()
 
 	// Fetch sandbox network to be able to access it from the sandbox structure.
-	var networkNS NetworkNamespace
-	if fc.store != nil {
-		if err := fc.store.Load(store.Network, &networkNS); err == nil {
-			if networkNS.NetNsPath == "" {
-				fc.Logger().WithField("NETWORK NAMESPACE NULL", networkNS).Warn()
-			}
-			fc.netNSPath = networkNS.NetNsPath
-		}
-	}
-
-	err := os.MkdirAll(fc.jailerRoot, store.DirMode)
+	err := os.MkdirAll(fc.jailerRoot, DirMode)
 	if err != nil {
 		return err
 	}
@@ -479,11 +459,6 @@ func (fc *firecracker) fcInit(timeout int) error {
 	if err := fc.waitVMMRunning(timeout); err != nil {
 		fc.Logger().WithField("fcInit failed:", err).Debug()
 		return err
-	}
-
-	// Store VMM information
-	if fc.store != nil {
-		return fc.store.Store(store.Hypervisor, fc.info)
 	}
 	return nil
 }
@@ -1164,7 +1139,7 @@ func (fc *firecracker) getPids() []int {
 	return []int{fc.info.PID}
 }
 
-func (fc *firecracker) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error {
+func (fc *firecracker) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
 	return errors.New("firecracker is not supported by VM cache")
 }
 

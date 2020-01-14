@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,13 +21,34 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 
+	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
+
+// Since ACRN is using the store in a quite abnormal way, let's first draw it back from store to here
+
+// UUIDPathSuffix is the suffix used for uuid storage
+const (
+	UUIDPathSuffix = "uuid"
+	uuidFile       = "uuid.json"
+)
+
+// VMUUIDStoragePath is the uuid directory.
+// It will contain all uuid info used by guest vm.
+var VMUUIDStoragePath = func() string {
+	path := filepath.Join(fs.StorageRootPath(), UUIDPathSuffix)
+	if rootless.IsRootless() {
+		return filepath.Join(rootless.GetRootlessDir(), path)
+	}
+	return path
+
+}
 
 // ACRN currently supports only known UUIDs for security
 // reasons (FuSa). When launching VM, only these pre-defined
@@ -73,7 +95,6 @@ type AcrnState struct {
 // Acrn is an Hypervisor interface implementation for the Linux acrn hypervisor.
 type Acrn struct {
 	id         string
-	store      *store.VCStore
 	config     HypervisorConfig
 	acrnConfig Config
 	state      AcrnState
@@ -276,7 +297,7 @@ func (a *Acrn) buildDevices(imagePath string) ([]Device, error) {
 }
 
 // setup sets the Acrn structure up.
-func (a *Acrn) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *store.VCStore) error {
+func (a *Acrn) setup(id string, hypervisorConfig *HypervisorConfig) error {
 	span, _ := a.trace("setup")
 	defer span.Finish()
 
@@ -286,24 +307,19 @@ func (a *Acrn) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 	}
 
 	a.id = id
-	a.store = vcStore
 	a.config = *hypervisorConfig
 	a.arch = newAcrnArch(a.config)
 
 	var create bool
 	var uuid string
 
-	if a.store != nil { //use old store
-		if err = a.store.Load(store.Hypervisor, &a.state); err != nil {
-			create = true
-		}
-	} else if a.state.UUID == "" { // new store
+	if a.state.UUID == "" {
 		create = true
 	}
 
 	if create {
 		a.Logger().Debug("Setting UUID")
-		if uuid, err = a.GetNextAvailableUUID(nil); err != nil {
+		if uuid, err = a.GetNextAvailableUUID(); err != nil {
 			return err
 		}
 		a.state.UUID = uuid
@@ -312,11 +328,7 @@ func (a *Acrn) setup(id string, hypervisorConfig *HypervisorConfig, vcStore *sto
 
 		// The path might already exist, but in case of VM templating,
 		// we have to create it since the sandbox has not created it yet.
-		if err = os.MkdirAll(store.SandboxRuntimeRootPath(id), store.DirMode); err != nil {
-			return err
-		}
-
-		if err = a.storeState(); err != nil {
+		if err = os.MkdirAll(filepath.Join(fs.RunStoragePath(), id), DirMode); err != nil {
 			return err
 		}
 
@@ -348,14 +360,14 @@ func (a *Acrn) createDummyVirtioBlkDev(devices []Device) ([]Device, error) {
 }
 
 // createSandbox is the Hypervisor sandbox creation.
-func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, store *store.VCStore, stateful bool) error {
+func (a *Acrn) createSandbox(ctx context.Context, id string, networkNS NetworkNamespace, hypervisorConfig *HypervisorConfig, stateful bool) error {
 	// Save the tracing context
 	a.ctx = ctx
 
 	span, _ := a.trace("createSandbox")
 	defer span.Finish()
 
-	if err := a.setup(id, hypervisorConfig, store); err != nil {
+	if err := a.setup(id, hypervisorConfig); err != nil {
 		return err
 	}
 
@@ -432,8 +444,8 @@ func (a *Acrn) startSandbox(timeoutSecs int) error {
 		a.Logger().WithField("default-kernel-parameters", formatted).Debug()
 	}
 
-	vmPath := filepath.Join(store.RunVMStoragePath(), a.id)
-	err := os.MkdirAll(vmPath, store.DirMode)
+	vmPath := filepath.Join(fs.RunVMStoragePath(), a.id)
+	err := os.MkdirAll(vmPath, DirMode)
 	if err != nil {
 		return err
 	}
@@ -455,11 +467,6 @@ func (a *Acrn) startSandbox(timeoutSecs int) error {
 
 	if err = a.waitSandbox(timeoutSecs); err != nil {
 		a.Logger().WithField("acrn wait failed:", err).Debug()
-		return err
-	}
-
-	//Store VMM information
-	if err = a.storeState(); err != nil {
 		return err
 	}
 
@@ -499,7 +506,7 @@ func (a *Acrn) stopSandbox() (err error) {
 	uuid := a.state.UUID
 	Idx := acrnUUIDsToIdx[uuid]
 
-	if err = a.store.Load(store.UUID, &a.info); err != nil {
+	if err = a.loadInfo(); err != nil {
 		a.Logger().Info("Failed to load UUID availabiity info")
 		return err
 	}
@@ -651,7 +658,7 @@ func (a *Acrn) getSandboxConsole(id string) (string, error) {
 	span, _ := a.trace("getSandboxConsole")
 	defer span.Finish()
 
-	return utils.BuildSocketPath(store.RunVMStoragePath(), id, acrnConsoleSocket)
+	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, acrnConsoleSocket)
 }
 
 func (a *Acrn) saveSandbox() error {
@@ -698,7 +705,7 @@ func (a *Acrn) getPids() []int {
 	return []int{a.state.PID}
 }
 
-func (a *Acrn) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, store *store.VCStore, j []byte) error {
+func (a *Acrn) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
 	return errors.New("acrn is not supported by VM cache")
 }
 
@@ -736,21 +743,15 @@ func (a *Acrn) GetACRNUUIDBytes(uid string) (uuid.UUID, error) {
 }
 
 // GetNextAvailableUUID returns next available UUID VM creation
-// If no validl UUIDs are available it returns err.
-func (a *Acrn) GetNextAvailableUUID(uuidstore *store.VCStore) (string, error) {
+// If no valid UUIDs are available it returns err.
+func (a *Acrn) GetNextAvailableUUID() (string, error) {
 	var MaxVMSupported uint8
 	var Idx uint8
 	var uuidStr string
 	var err error
 
-	if uuidstore == nil {
-		uuidstore = a.store
-	}
-
-	if uuidstore != nil { //use old store
-		if err = uuidstore.Load(store.UUID, &a.info); err != nil {
-			a.Logger().Infof("Load UUID store failed")
-		}
+	if err = a.loadInfo(); err != nil {
+		a.Logger().Infof("Load UUID store failed")
 	}
 
 	if MaxVMSupported, err = a.GetMaxSupportedACRNVM(); err != nil {
@@ -795,22 +796,39 @@ func (a *Acrn) GetMaxSupportedACRNVM() (uint8, error) {
 	return platformInfo.maxKataContainers, nil
 }
 
-func (a *Acrn) storeState() error {
-	if a.store != nil {
-		if err := a.store.Store(store.Hypervisor, a.state); err != nil {
-			a.Logger().WithError(err).Error("failed to store acrn state")
-			return err
-		}
+func (a *Acrn) storeInfo() error {
+	store, err := persist.GetDriver("fs")
+	if err != nil {
+		return err
 	}
+	relPath := filepath.Join(UUIDPathSuffix, uuidFile)
+
+	jsonOut, err := json.Marshal(a.info)
+	if err != nil {
+		return fmt.Errorf("Could not marshal data: %s", err)
+	}
+
+	if err := store.GlobalWrite(relPath, jsonOut); err != nil {
+		return fmt.Errorf("failed to write uuid to file: %v", err)
+	}
+
 	return nil
 }
 
-func (a *Acrn) storeInfo() error {
-	if a.store != nil {
-		if err := a.store.Store(store.UUID, a.info); err != nil {
-			a.Logger().WithError(err).Error("failed to store acrn info")
-			return err
-		}
+func (a *Acrn) loadInfo() error {
+	store, err := persist.GetDriver("fs")
+	if err != nil {
+		return err
+	}
+	relPath := filepath.Join(UUIDPathSuffix, uuidFile)
+
+	data, err := store.GlobalRead(relPath)
+	if err != nil {
+		return fmt.Errorf("failed to read uuid from file: %v", err)
+	}
+
+	if err := json.Unmarshal(data, &a.info); err != nil {
+		return fmt.Errorf("failed to unmarshal uuid info: %v", err)
 	}
 	return nil
 }

@@ -334,9 +334,3 @@ func VCSandboxStoreExists(ctx context.Context, sandboxID string) bool {
 	s := stores.findStore(SandboxConfigurationRoot(sandboxID))
 	return s != nil
 }
-
-// VCContainerStoreExists returns true if a container store already exists.
-func VCContainerStoreExists(ctx context.Context, sandboxID string, containerID string) bool {
-	s := stores.findStore(ContainerConfigurationRoot(sandboxID, containerID))
-	return s != nil
-}

@@ -35,12 +35,7 @@ const testDisabledAsNonRoot = "Test disabled as requires root privileges"
 
 // package variables set in TestMain
 var testDir = ""
-var sandboxDirConfig = ""
-var sandboxFileConfig = ""
 var sandboxDirState = ""
-var sandboxDirLock = ""
-var sandboxFileState = ""
-var sandboxFileLock = ""
 var testQemuKernelPath = ""
 var testQemuInitrdPath = ""
 var testQemuImagePath = ""
@@ -57,28 +52,24 @@ var testVirtiofsdPath = ""
 var testHyperstartCtlSocket = ""
 var testHyperstartTtySocket = ""
 
-var savedRunVMStoragePathFunc func() string
-
 // cleanUp Removes any stale sandbox/container state that can affect
 // the next test to run.
 func cleanUp() {
 	globalSandboxList.removeSandbox(testSandboxID)
-	store.DeleteAll()
+	os.RemoveAll(fs.RunStoragePath())
+	os.RemoveAll(fs.RunVMStoragePath())
 	os.RemoveAll(testDir)
+	os.MkdirAll(testDir, DirMode)
+
+	store.DeleteAll()
 	store.VCStorePrefix = ""
-	store.RunVMStoragePath = savedRunVMStoragePathFunc
 
 	setup()
 }
 
 func setup() {
 	store.VCStorePrefix = testDir
-	savedRunVMStoragePathFunc = store.RunVMStoragePath
-	store.RunVMStoragePath = func() string {
-		return filepath.Join("testDir", "vm")
-	}
-	os.MkdirAll(store.RunVMStoragePath(), store.DirMode)
-	os.MkdirAll(filepath.Join(testDir, testBundle), store.DirMode)
+	os.Mkdir(filepath.Join(testDir, testBundle), DirMode)
 
 	for _, filename := range []string{testQemuKernelPath, testQemuInitrdPath, testQemuImagePath, testQemuPath} {
 		_, err := os.Create(filename)
@@ -90,7 +81,7 @@ func setup() {
 }
 
 func setupAcrn() {
-	os.Mkdir(filepath.Join(testDir, testBundle), store.DirMode)
+	os.Mkdir(filepath.Join(testDir, testBundle), DirMode)
 
 	for _, filename := range []string{testAcrnKernelPath, testAcrnImagePath, testAcrnPath, testAcrnCtlPath} {
 		_, err := os.Create(filename)
@@ -102,7 +93,7 @@ func setupAcrn() {
 }
 
 func setupClh() {
-	os.Mkdir(filepath.Join(testDir, testBundle), store.DirMode)
+	os.Mkdir(filepath.Join(testDir, testBundle), DirMode)
 
 	for _, filename := range []string{testClhKernelPath, testClhImagePath, testClhPath, testVirtiofsdPath} {
 		_, err := os.Create(filename)
@@ -135,7 +126,7 @@ func TestMain(m *testing.M) {
 	}
 
 	fmt.Printf("INFO: Creating virtcontainers test directory %s\n", testDir)
-	err = os.MkdirAll(testDir, store.DirMode)
+	err = os.MkdirAll(testDir, DirMode)
 	if err != nil {
 		fmt.Println("Could not create test directories:", err)
 		os.Exit(1)
@@ -170,25 +161,19 @@ func TestMain(m *testing.M) {
 
 	setupClh()
 
-	ConfigStoragePathSaved := store.ConfigStoragePath
-	RunStoragePathSaved := store.RunStoragePath
 	// allow the tests to run without affecting the host system.
-	store.ConfigStoragePath = func() string { return filepath.Join(testDir, store.StoragePathSuffix, "config") }
-	store.RunStoragePath = func() string { return filepath.Join(testDir, store.StoragePathSuffix, "run") }
-	fs.TestSetRunStoragePath(filepath.Join(testDir, "vc", "sbs"))
+	runPathSave := fs.RunStoragePath()
+	rootPathSave := fs.StorageRootPath()
+	fs.TestSetRunStoragePath(filepath.Join(testDir, "vc", "run"))
+	fs.TestSetStorageRootPath(filepath.Join(testDir, "vc"))
 
 	defer func() {
-		store.ConfigStoragePath = ConfigStoragePathSaved
-		store.RunStoragePath = RunStoragePathSaved
+		fs.TestSetRunStoragePath(runPathSave)
+		fs.TestSetStorageRootPath(rootPathSave)
 	}()
 
 	// set now that configStoragePath has been overridden.
-	sandboxDirConfig = filepath.Join(store.ConfigStoragePath(), testSandboxID)
-	sandboxFileConfig = filepath.Join(store.ConfigStoragePath(), testSandboxID, store.ConfigurationFile)
-	sandboxDirState = filepath.Join(store.RunStoragePath(), testSandboxID)
-	sandboxDirLock = filepath.Join(store.RunStoragePath(), testSandboxID)
-	sandboxFileState = filepath.Join(store.RunStoragePath(), testSandboxID, store.StateFile)
-	sandboxFileLock = filepath.Join(store.RunStoragePath(), testSandboxID, store.LockFile)
+	sandboxDirState = filepath.Join(fs.RunStoragePath(), testSandboxID)
 
 	testHyperstartCtlSocket = filepath.Join(testDir, "test_hyper.sock")
 	testHyperstartTtySocket = filepath.Join(testDir, "test_tty.sock")

@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 
@@ -18,47 +17,6 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 )
-
-func testCreateExpSandbox() (*Sandbox, error) {
-	sconfig := SandboxConfig{
-		ID:               "test-exp",
-		HypervisorType:   MockHypervisor,
-		HypervisorConfig: newHypervisorConfig(nil, nil),
-		AgentType:        NoopAgentType,
-		NetworkConfig:    NetworkConfig{},
-		Volumes:          nil,
-		Containers:       nil,
-		Experimental:     []exp.Feature{persist.NewStoreFeature},
-	}
-
-	// support experimental
-	sandbox, err := createSandbox(context.Background(), sconfig, nil)
-	if err != nil {
-		return nil, fmt.Errorf("Could not create sandbox: %s", err)
-	}
-
-	if err := sandbox.agent.startSandbox(sandbox); err != nil {
-		return nil, err
-	}
-
-	return sandbox, nil
-}
-
-func TestSupportNewStore(t *testing.T) {
-	assert := assert.New(t)
-	hConfig := newHypervisorConfig(nil, nil)
-	sandbox, err := testCreateSandbox(t, testSandboxID, MockHypervisor, hConfig, NoopAgentType, NetworkConfig{}, nil, nil)
-	assert.NoError(err)
-	defer cleanUp()
-
-	// not support experimental
-	assert.False(sandbox.supportNewStore())
-
-	// support experimental
-	sandbox, err = testCreateExpSandbox()
-	assert.NoError(err)
-	assert.True(sandbox.supportNewStore())
-}
 
 func TestSandboxRestore(t *testing.T) {
 	var err error

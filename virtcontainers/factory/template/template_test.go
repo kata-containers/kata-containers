@@ -9,15 +9,19 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 )
 
 const testDisabledAsNonRoot = "Test disabled as requires root privileges"
+
+var rootPathSave = fs.StorageRootPath()
 
 func TestTemplateFactory(t *testing.T) {
 	if os.Geteuid() != 0 {
@@ -29,6 +33,13 @@ func TestTemplateFactory(t *testing.T) {
 	templateWaitForAgent = 1 * time.Microsecond
 
 	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
+	fs.TestSetStorageRootPath(filepath.Join(testDir, "vc"))
+
+	defer func() {
+		os.RemoveAll(testDir)
+		fs.TestSetStorageRootPath(rootPathSave)
+	}()
+
 	hyperConfig := vc.HypervisorConfig{
 		KernelPath: testDir,
 		ImagePath:  testDir,

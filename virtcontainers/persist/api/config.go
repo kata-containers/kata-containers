@@ -173,13 +173,6 @@ type KataAgentConfig struct {
 	UseVSock     bool
 }
 
-// HyperstartConfig is a structure storing information needed for
-// hyperstart agent initialization.
-type HyperstartConfig struct {
-	SockCtlName string
-	SockTtyName string
-}
-
 // ProxyConfig is a structure storing information needed from any
 // proxy in order to be properly initialized.
 type ProxyConfig struct {

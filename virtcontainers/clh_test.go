@@ -13,8 +13,8 @@ import (
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	chclient "github.com/kata-containers/runtime/virtcontainers/pkg/cloud-hypervisor/client"
-	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
@@ -184,7 +184,7 @@ func TestCloudHypervisorCleanupVM(t *testing.T) {
 		t.Errorf("cloudHypervisor.cleanupVM() expected error != %v", err)
 	}
 
-	dir := filepath.Join(store.RunVMStoragePath(), clh.id)
+	dir := filepath.Join(fs.RunVMStoragePath(), clh.id)
 	os.MkdirAll(dir, os.ModePerm)
 
 	if err := clh.cleanupVM(false); err != nil {
@@ -219,18 +219,8 @@ func TestClhCreateSandbox(t *testing.T) {
 		},
 	}
 
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
+	err = clh.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
 	assert.NoError(err)
-
-	sandbox.store = vcStore
-
-	// Create parent dir path for hypervisor.json
-	parentDir := store.SandboxConfigurationRootPath(sandbox.id)
-	assert.NoError(os.MkdirAll(parentDir, store.DirMode))
-
-	err = clh.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, sandbox.store, false)
-	assert.NoError(err)
-	assert.NoError(os.RemoveAll(parentDir))
 	assert.Exactly(clhConfig, clh.config)
 }
 
@@ -244,23 +234,6 @@ func TestClooudHypervisorStartSandbox(t *testing.T) {
 		APIClient: &clhClientMock{},
 		virtiofsd: &virtiofsdMock{},
 	}
-
-	sandbox := &Sandbox{
-		ctx: context.Background(),
-		id:  "testSandbox",
-		config: &SandboxConfig{
-			HypervisorConfig: clhConfig,
-		},
-	}
-
-	vcStore, err := store.NewVCSandboxStore(sandbox.ctx, sandbox.id)
-	assert.NoError(err)
-
-	sandbox.store = vcStore
-
-	// Create parent dir path for hypervisor.json
-	parentDir := store.SandboxConfigurationRootPath(sandbox.id)
-	assert.NoError(os.MkdirAll(parentDir, store.DirMode))
 
 	err = clh.startSandbox(10)
 	assert.NoError(err)
