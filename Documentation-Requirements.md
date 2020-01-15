@@ -24,7 +24,9 @@ All documents must:
 - Be written in [GitHub Flavored Markdown](https://github.github.com/gfm) format.
 - Have a `.md` file extension.
 - Include a TOC (table of contents) at the top of the document with links to
-  all heading sections.
+  all heading sections. We recommend using the
+  [`kata-check-markdown`](https://github.com/kata-containers/tests/tree/master/cmd/check-markdown)
+  tool to generate the TOC.
 - Be linked to from another document in the same repository.
 
   Although GitHub allows navigation of the entire repository, it should be
