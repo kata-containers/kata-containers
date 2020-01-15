@@ -18,11 +18,6 @@ source "${dir_path}/../../.ci/lib.sh"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 name="${name:-default_vcpus}"
 
-if [ "${KATA_HYPERVISOR}" == "firecracker" ]; then
-	info "Skip: This is not working see https://github.com/kata-containers/runtime/issues/2317"
-	exit 0
-fi
-
 function setup() {
 	clean_env
 	check_processes
