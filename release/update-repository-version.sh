@@ -165,6 +165,7 @@ EOT
 
 repos=(
 	"agent"
+	"kata-containers"
 	"ksm-throttler"
 	"osbuilder"
 	"packaging"
