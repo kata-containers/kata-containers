@@ -638,6 +638,28 @@ func TestQMPBlockdevDel(t *testing.T) {
 	<-disconnectedCh
 }
 
+// Checks that the chardev-remove command is correctly sent.
+//
+// We start a QMPLoop, send the chardev-remove command and stop the loop.
+//
+// The chardev-remove command should be correctly sent and the QMP loop should
+// exit gracefully.
+func TestQMPChardevDel(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("chardev-remove", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	q.version = checkVersion(t, connectedCh)
+	err := q.ExecuteChardevDel(context.Background(), "chardev-0")
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks that the device_del command is correctly sent.
 //
 // We start a QMPLoop, send the device_del command and wait for it to complete.
@@ -1300,6 +1322,26 @@ func TestExecutePCIVSockAdd(t *testing.T) {
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
 	err := q.ExecutePCIVSockAdd(context.Background(), "vsock-pci0", "3", "1", "1", "1", "", true)
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
+// Checks vhost-user-pci hotplug
+func TestExecutePCIVhostUserDevAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	driver := "vhost-user-blk-pci"
+	devID := "vhost-user-blk0"
+	chardevID := "vhost-user-blk-char0"
+	err := q.ExecutePCIVhostUserDevAdd(context.Background(), driver, devID, chardevID, "1", "1")
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}
