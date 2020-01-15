@@ -30,6 +30,13 @@ if [ -z $(yum repolist | grep "Extra Packages") ]; then
 	sudo -E rpm -ivh epel-release-latest-${centos_version}.noarch.rpm
 fi
 
+# Enable priority to CentOS Base repo in order to
+# avoid perl updating issues
+if [ "$centos_version" == "8" ]; then
+	sudo echo "priority=1" | sudo tee -a /etc/yum.repos.d/CentOS-Base.repo
+	sudo -E yum -y clean all
+fi
+
 echo "Update repositories"
 sudo -E yum -y update
 
