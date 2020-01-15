@@ -103,8 +103,9 @@ function test_kata() {
     #  2. From kata-containers: when creating a release, the appropriate packaging repository is
     #   not yet part of the workspace, and we will need to clone
     if [[ ! -d ./kata-deploy ]]; then
-        git clone https://github.com/kata-containers/packaging packaging
+        [[ -d  packaging ]] || git clone https://github.com/kata-containers/packaging packaging
         cd packaging
+        git fetch
         git checkout $PKG_SHA
     fi
 
