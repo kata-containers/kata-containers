@@ -27,6 +27,9 @@ var storeRoot, storeRootDir = func() (string, string) {
 	dir, _ := ioutil.TempDir("", "")
 	return "file://" + dir, dir
 }()
+var testDir = ""
+var ConfigStoragePathSaved = func() string { return "" }
+var RunStoragePathSaved = func() string { return "" }
 
 func TestNewStore(t *testing.T) {
 	s, err := New(context.Background(), storeRoot)
@@ -111,21 +114,30 @@ func TestManagerFindStore(t *testing.T) {
 // TestMain is the common main function used by ALL the test functions
 // for the store.
 func TestMain(m *testing.M) {
-	testDir, err := ioutil.TempDir("", "store-tmp-")
+	setup()
+	rt := m.Run()
+	shutdown()
+	os.Exit(rt)
+}
+
+func shutdown() {
+	os.RemoveAll(testDir)
+	ConfigStoragePath = ConfigStoragePathSaved
+	RunStoragePath = RunStoragePathSaved
+}
+
+func setup() {
+	var err error
+	testDir, err = ioutil.TempDir("", "store-tmp-")
 	if err != nil {
 		panic(err)
 	}
 
-	ConfigStoragePathSaved := ConfigStoragePath
-	RunStoragePathSaved := RunStoragePath
+	ConfigStoragePathSaved = ConfigStoragePath
+	RunStoragePathSaved = RunStoragePath
 	// allow the tests to run without affecting the host system.
 	ConfigStoragePath = func() string { return filepath.Join(testDir, StoragePathSuffix, "config") }
 	RunStoragePath = func() string { return filepath.Join(testDir, StoragePathSuffix, "run") }
-
-	defer func() {
-		ConfigStoragePath = ConfigStoragePathSaved
-		RunStoragePath = RunStoragePathSaved
-	}()
 
 	// set now that ConfigStoragePath has been overridden.
 	sandboxDirConfig = filepath.Join(ConfigStoragePath(), testSandboxID)
@@ -134,8 +146,4 @@ func TestMain(m *testing.M) {
 	sandboxDirLock = filepath.Join(RunStoragePath(), testSandboxID)
 	sandboxFileState = filepath.Join(RunStoragePath(), testSandboxID, StateFile)
 	sandboxFileLock = filepath.Join(RunStoragePath(), testSandboxID, LockFile)
-
-	ret := m.Run()
-
-	os.Exit(ret)
 }
