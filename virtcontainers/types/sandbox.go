@@ -52,6 +52,10 @@ type SandboxState struct {
 	// including the hypervisor are placed.
 	CgroupPath string `json:"cgroupPath,omitempty"`
 
+	// Path to all the cgroups setup for a container. Key is cgroup subsystem name
+	// with the value as the path.
+	CgroupPaths map[string]string `json:"cgroupPaths"`
+
 	// PersistVersion indicates current storage api version.
 	// It's also known as ABI version of kata-runtime.
 	// Note: it won't be written to disk

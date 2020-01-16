@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -1008,7 +1007,7 @@ func (k *kataAgent) replaceOCIMountsForStorages(spec *specs.Spec, volumeStorages
 	return nil
 }
 
-func constraintGRPCSpec(grpcSpec *grpc.Spec, systemdCgroup bool, passSeccomp bool) {
+func constraintGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool) {
 	// Disable Hooks since they have been handled on the host and there is
 	// no reason to send them to the agent. It would make no sense to try
 	// to apply them on the guest.
@@ -1033,18 +1032,13 @@ func constraintGRPCSpec(grpcSpec *grpc.Spec, systemdCgroup bool, passSeccomp boo
 	// - Initrd image doesn't have systemd.
 	// - Nobody will be able to modify the resources of a specific container by using systemctl set-property.
 	// - docker is not running in the VM.
-	if systemdCgroup {
+	if isSystemdCgroup(grpcSpec.Linux.CgroupsPath) {
 		// Convert systemd cgroup to cgroupfs
-		// systemd cgroup path: slice:prefix:name
-		re := regexp.MustCompile(`([[:alnum:]]|.)+:([[:alnum:]]|.)+:([[:alnum:]]|.)+`)
-		systemdCgroupPath := re.FindString(grpcSpec.Linux.CgroupsPath)
-		if systemdCgroupPath != "" {
-			slice := strings.Split(systemdCgroupPath, ":")
-			// 0 - slice: system.slice
-			// 1 - prefix: docker
-			// 2 - name: abc123
-			grpcSpec.Linux.CgroupsPath = filepath.Join("/", slice[1], slice[2])
-		}
+		slice := strings.Split(grpcSpec.Linux.CgroupsPath, ":")
+		// 0 - slice: system.slice
+		// 1 - prefix: docker
+		// 2 - name: abc123
+		grpcSpec.Linux.CgroupsPath = filepath.Join("/", slice[1], slice[2])
 	}
 
 	// Disable network namespace since it is already handled on the host by
@@ -1318,7 +1312,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 
 	// We need to constraint the spec to make sure we're not passing
 	// irrelevant information to the agent.
-	constraintGRPCSpec(grpcSpec, sandbox.config.SystemdCgroup, passSeccomp)
+	constraintGRPCSpec(grpcSpec, passSeccomp)
 
 	k.handleShm(grpcSpec, sandbox)
 

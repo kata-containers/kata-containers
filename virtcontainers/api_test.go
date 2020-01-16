@@ -22,7 +22,6 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/types"
-	"github.com/kata-containers/runtime/virtcontainers/utils"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
@@ -44,7 +43,8 @@ var containerAnnotations = map[string]string{
 func newEmptySpec() *specs.Spec {
 	return &specs.Spec{
 		Linux: &specs.Linux{
-			Resources: &specs.LinuxResources{},
+			Resources:   &specs.LinuxResources{},
+			CgroupsPath: defaultCgroupPath,
 		},
 		Process: &specs.Process{
 			Capabilities: &specs.LinuxCapabilities{},
@@ -510,7 +510,7 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
-	cgroupPath, err := renameCgroupPath(utils.DefaultCgroupPath)
+	cgroupPath, err := renameCgroupPath(defaultCgroupPath)
 	assert.NoError(err)
 
 	hypervisorConfig := HypervisorConfig{
@@ -569,7 +569,7 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
-	cgroupPath, err := renameCgroupPath(utils.DefaultCgroupPath)
+	cgroupPath, err := renameCgroupPath(defaultCgroupPath)
 	assert.NoError(err)
 
 	hypervisorConfig := HypervisorConfig{
@@ -1136,7 +1136,7 @@ func TestStatusContainerStateReady(t *testing.T) {
 	contID := "101"
 
 	config := newTestSandboxConfigNoop()
-	cgroupPath, err := renameCgroupPath(utils.DefaultCgroupPath)
+	cgroupPath, err := renameCgroupPath(defaultCgroupPath)
 	assert.NoError(err)
 
 	ctx := context.Background()
@@ -1195,7 +1195,7 @@ func TestStatusContainerStateRunning(t *testing.T) {
 	contID := "101"
 
 	config := newTestSandboxConfigNoop()
-	cgroupPath, err := renameCgroupPath(utils.DefaultCgroupPath)
+	cgroupPath, err := renameCgroupPath(defaultCgroupPath)
 	assert.NoError(err)
 
 	ctx := context.Background()

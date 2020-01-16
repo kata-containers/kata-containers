@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/opencontainers/runc/libcontainer/configs"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
 var logFile = "/tmp/mock_hook.log"
@@ -61,7 +61,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	var state configs.HookState
+	var state specs.State
 	err = json.Unmarshal(stateBuf, &state)
 	if err != nil {
 		fmt.Fprintf(f, "Could not unmarshal HookState json: %s\n", err)
