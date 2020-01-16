@@ -760,10 +760,13 @@ static_check_docs()
 	# Now, spell check the docs
 	cmd="${tests_repo_dir}/cmd/check-spelling/kata-spell-check.sh"
 
+	local docs_failed=0
 	for doc in $docs
 	do
-		"$cmd" check "$doc" || die "spell check failed for document $doc"
+		"$cmd" check "$doc" || { info "spell check failed for document $doc" && docs_failed=1; }
 	done
+
+	[ $docs_failed -ne 0 ] && die "spell check failed, See https://github.com/kata-containers/documentation/blob/master/Documentation-Requirements.md#spelling for more information."
 }
 
 # Tests to apply to all files.
