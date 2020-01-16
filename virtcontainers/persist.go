@@ -37,6 +37,7 @@ func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistap
 	ss.GuestMemoryHotplugProbe = s.state.GuestMemoryHotplugProbe
 	ss.State = string(s.state.State)
 	ss.CgroupPath = s.state.CgroupPath
+	ss.CgroupPaths = s.state.CgroupPaths
 
 	for id, cont := range s.containers {
 		state := persistapi.ContainerState{}
@@ -198,6 +199,7 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		SystemdCgroup:       sconfig.SystemdCgroup,
 		SandboxCgroupOnly:   sconfig.SandboxCgroupOnly,
 		DisableGuestSeccomp: sconfig.DisableGuestSeccomp,
+		Cgroups:             sconfig.Cgroups,
 	}
 
 	for _, e := range sconfig.Experimental {
@@ -317,6 +319,7 @@ func (s *Sandbox) loadState(ss persistapi.SandboxState) {
 	s.state.BlockIndex = ss.HypervisorState.BlockIndex
 	s.state.State = types.StateString(ss.State)
 	s.state.CgroupPath = ss.CgroupPath
+	s.state.CgroupPaths = ss.CgroupPaths
 	s.state.GuestMemoryHotplugProbe = ss.GuestMemoryHotplugProbe
 }
 
@@ -480,6 +483,7 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		SystemdCgroup:       savedConf.SystemdCgroup,
 		SandboxCgroupOnly:   savedConf.SandboxCgroupOnly,
 		DisableGuestSeccomp: savedConf.DisableGuestSeccomp,
+		Cgroups:             savedConf.Cgroups,
 	}
 
 	for _, name := range savedConf.Experimental {

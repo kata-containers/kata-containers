@@ -75,6 +75,20 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:d219d59fcf68d1e8484fb038717cf911c60f70abfe053ef1f56bdeb6c121df7b"
+  name = "github.com/cilium/ebpf"
+  packages = [
+    ".",
+    "asm",
+    "internal",
+    "internal/btf",
+    "internal/unix",
+  ]
+  pruneopts = "NUT"
+  revision = "c8f8abaa9ece88e9be5b888e23e130e726d9afa4"
+
+[[projects]]
+  branch = "master"
   digest = "1:8ecb89af7dfe3ac401bdb0c9390b134ef96a97e85f732d2b0604fb7b3977839f"
   name = "github.com/codahale/hdrhistogram"
   packages = ["."]
@@ -413,7 +427,15 @@
     "protocols/grpc",
   ]
   pruneopts = "NUT"
-  revision = "6182fa34c64ba6eb1b6028d8b6647a86844129c4"
+  revision = "1b3628c43660cb198ec055d78e5c7b03809cba60"
+
+[[projects]]
+  digest = "1:58999a98719fddbac6303cb17e8d85b945f60b72f48e3a2df6b950b97fa926f1"
+  name = "github.com/konsorten/go-windows-terminal-sequences"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "f55edac94c9bbba5d6182a4be46d86a2c9b5b50e"
+  version = "v1.0.2"
 
 [[projects]]
   branch = "master"
@@ -450,17 +472,23 @@
   version = "v1.0.0-rc1"
 
 [[projects]]
-  digest = "1:26537bc93f1e164bbc305117029de9933656ff81c4549609939212aca20a4710"
+  digest = "1:a41704b63041a102a7435a253ee9498b1f3b2a5806c134e8c279734472e773b4"
   name = "github.com/opencontainers/runc"
   packages = [
+    "libcontainer/cgroups",
+    "libcontainer/cgroups/ebpf",
+    "libcontainer/cgroups/ebpf/devicefilter",
+    "libcontainer/cgroups/fs",
+    "libcontainer/cgroups/systemd",
     "libcontainer/configs",
     "libcontainer/seccomp",
     "libcontainer/specconv",
     "libcontainer/system",
+    "libcontainer/user",
     "libcontainer/utils",
   ]
   pruneopts = "NUT"
-  revision = "0351df1c5a66838d0c392b4ac4cf9450de844e2d"
+  revision = "2b52db75279ca687e18156de86d845876e9ef35d"
 
 [[projects]]
   digest = "1:7a58202c5cdf3d2c1eb0621fe369315561cea7f036ad10f0f0479ac36bcc95eb"
@@ -521,14 +549,14 @@
   version = "v0.9.0"
 
 [[projects]]
-  digest = "1:432ba4d123dc14d6e3b71ca22051bd1a5aa20a8e466e47edabd9af46405c5cfb"
+  digest = "1:094ec7a9fae6fad197169d718b5d9991186ee42ecdb9f623dee2f25018993d39"
   name = "github.com/sirupsen/logrus"
   packages = [
     ".",
     "hooks/syslog",
   ]
   pruneopts = "NUT"
-  revision = "89742aefa4b206dcf400792f3bd35b542998eb3b"
+  revision = "v1.4.2"
 
 [[projects]]
   digest = "1:511ea0a9d99e8dc47c836f89d58db6690d16e978284b396c89dda04a72925f56"
@@ -596,14 +624,6 @@
   revision = "86bef332bfc3b59b7624a600bd53009ce91a9829"
 
 [[projects]]
-  branch = "master"
-  digest = "1:058e9504b9a79bfe86092974d05bb3298d2aa0c312d266d43148de289a5065d9"
-  name = "golang.org/x/crypto"
-  packages = ["ssh/terminal"]
-  pruneopts = "NUT"
-  revision = "8dd112bcdc25174059e45e07517d9fc663123347"
-
-[[projects]]
   digest = "1:514d2147b3fd915870b534e3578feed1c40a82aa751a015b160785616bfa2130"
   name = "golang.org/x/net"
   packages = [
@@ -631,14 +651,14 @@
   revision = "5d9234df094ce600ff541158d1491aa10d078a47"
 
 [[projects]]
-  digest = "1:5420733d35e5e562fffc7c5b99660f3587af042b5420f19b17fe0426e6a5259d"
+  digest = "1:098aac0c82ee62159695100630404a695cf27a3eec5a874427ff12bdd6d6d23d"
   name = "golang.org/x/sys"
   packages = [
     "unix",
     "windows",
   ]
   pruneopts = "NUT"
-  revision = "ac767d655b305d4e9612f5f6e33120b9176c4ad4"
+  revision = "b016eb3dc98ea7f69ed55e8216b87187067ae621"
 
 [[projects]]
   digest = "1:e33513a825fcd765e97b5de639a2f7547542d1a8245df0cef18e1fd390b778a9"
@@ -770,6 +790,9 @@
     "github.com/kata-containers/agent/protocols/client",
     "github.com/kata-containers/agent/protocols/grpc",
     "github.com/mitchellh/mapstructure",
+    "github.com/opencontainers/runc/libcontainer/cgroups",
+    "github.com/opencontainers/runc/libcontainer/cgroups/fs",
+    "github.com/opencontainers/runc/libcontainer/cgroups/systemd",
     "github.com/opencontainers/runc/libcontainer/configs",
     "github.com/opencontainers/runc/libcontainer/specconv",
     "github.com/opencontainers/runc/libcontainer/utils",

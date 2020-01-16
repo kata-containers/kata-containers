@@ -16,7 +16,7 @@
 
 [[constraint]]
   name = "github.com/opencontainers/runc"
-  revision = "0351df1c5a66838d0c392b4ac4cf9450de844e2d"
+  revision = "2b52db75279ca687e18156de86d845876e9ef35d"
 
 [[constraint]]
   name = "github.com/opencontainers/runtime-spec"
@@ -40,11 +40,11 @@
 
 [[constraint]]
   name = "golang.org/x/sys"
-  revision = "ac767d655b305d4e9612f5f6e33120b9176c4ad4"
+  revision = "b016eb3dc98ea7f69ed55e8216b87187067ae621"
 
 [[constraint]]
   name = "github.com/sirupsen/logrus"
-  revision = "89742aefa4b206dcf400792f3bd35b542998eb3b"
+  revision = "v1.4.2"
 
 [[constraint]]
   name = "github.com/intel/govmm"
@@ -52,7 +52,7 @@
 
 [[constraint]]
   name = "github.com/kata-containers/agent"
-  revision = "6182fa34c64ba6eb1b6028d8b6647a86844129c4"
+  revision = "1b3628c43660cb198ec055d78e5c7b03809cba60"
 
 [[constraint]]
   name = "github.com/containerd/cri-containerd"
