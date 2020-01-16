@@ -636,6 +636,7 @@ func TestAgentConfigure(t *testing.T) {
 
 	dir, err := ioutil.TempDir("", "kata-agent-test")
 	assert.Nil(err)
+	defer os.RemoveAll(dir)
 
 	k := &kataAgent{}
 	h := &mockHypervisor{}
@@ -758,6 +759,7 @@ func TestAgentCreateContainer(t *testing.T) {
 
 	dir, err := ioutil.TempDir("", "kata-agent-test")
 	assert.Nil(err)
+	defer os.RemoveAll(dir)
 
 	err = k.configure(&mockHypervisor{}, sandbox.id, dir, true, KataAgentConfig{})
 	assert.Nil(err)
@@ -904,8 +906,10 @@ func TestKataCleanupSandbox(t *testing.T) {
 	s := Sandbox{
 		id: "testFoo",
 	}
-	dir := path.Join(kataHostSharedDir(), s.id)
-	err := os.MkdirAll(dir, 0777)
+
+	dir := kataHostSharedDir()
+	defer os.RemoveAll(dir)
+	err := os.MkdirAll(path.Join(dir, s.id), 0777)
 	assert.Nil(err)
 
 	k := &kataAgent{ctx: context.Background()}

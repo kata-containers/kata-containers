@@ -8,6 +8,7 @@ package virtcontainers
 import (
 	"context"
 	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -17,7 +18,10 @@ import (
 func TestNewVM(t *testing.T) {
 	assert := assert.New(t)
 
-	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
+	testDir, err := ioutil.TempDir("", "vmfactory-tmp-")
+	assert.Nil(err)
+	defer os.RemoveAll(testDir)
+
 	config := VMConfig{
 		HypervisorType: MockHypervisor,
 		AgentType:      NoopAgentType,
@@ -31,7 +35,7 @@ func TestNewVM(t *testing.T) {
 	ctx := context.Background()
 
 	var vm *VM
-	_, err := NewVM(ctx, config)
+	_, err = NewVM(ctx, config)
 	assert.Error(err)
 
 	config.HypervisorConfig = hyperConfig
@@ -82,7 +86,10 @@ func TestVMConfigValid(t *testing.T) {
 	err := config.Valid()
 	assert.Error(err)
 
-	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
+	testDir, err := ioutil.TempDir("", "vmfactory-tmp-")
+	assert.Nil(err)
+	defer os.RemoveAll(testDir)
+
 	config.HypervisorConfig = HypervisorConfig{
 		KernelPath: testDir,
 		InitrdPath: testDir,
