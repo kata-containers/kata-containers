@@ -17,6 +17,12 @@ setup() {
 	sudo -E crictl pull "$busybox_image"
 
 	get_pod_config_dir
+	first_pod_config=$(mktemp --tmpdir pod_config.XXXXXX.yaml)
+	cp "$pod_config_dir/busybox-template.yaml" "$first_pod_config"
+	sed -i "s/NAME/${first_pod_name}/" "$first_pod_config"
+	second_pod_config=$(mktemp --tmpdir pod_config.XXXXXX.yaml)
+	cp "$pod_config_dir/busybox-template.yaml" "$second_pod_config"
+	sed -i "s/NAME/${second_pod_name}/" "$second_pod_config"
 
 	uts_cmd="ls -la /proc/self/ns/uts"
 	ipc_cmd="ls -la /proc/self/ns/ipc"
@@ -24,18 +30,12 @@ setup() {
 
 @test "Check UTS and IPC namespaces" {
 	# Run the first pod
-	first_pod_config=$(mktemp --tmpdir pod_config.XXXXXX.yaml)
-	cp "$pod_config_dir/busybox-template.yaml" "$first_pod_config"
-	sed -i "s/NAME/${first_pod_name}/" "$first_pod_config"
 	kubectl create -f "$first_pod_config"
 	kubectl wait --for=condition=Ready pod "$first_pod_name"
 	first_pod_uts_ns=$(kubectl exec "$first_pod_name" -- sh -c "$uts_cmd" | grep uts | cut -d ':' -f3)
 	first_pod_ipc_ns=$(kubectl exec "$first_pod_name" -- sh -c "$ipc_cmd" | grep ipc | cut -d ':' -f3)
 
 	# Run the second pod
-	second_pod_config=$(mktemp --tmpdir pod_config.XXXXXX.yaml)
-	cp "$pod_config_dir/busybox-template.yaml" "$second_pod_config"
-	sed -i "s/NAME/${second_pod_name}/" "$second_pod_config"
 	kubectl create -f "$second_pod_config"
 	kubectl wait --for=condition=Ready pod "$second_pod_name"
 	second_pod_uts_ns=$(kubectl exec "$second_pod_name" -- sh -c "$uts_cmd" | grep uts | cut -d ':' -f3)
@@ -49,4 +49,6 @@ setup() {
 teardown() {
 	kubectl delete pod "$first_pod_name"
 	kubectl delete pod "$second_pod_name"
+	rm -rf "$first_pod_config"
+	rm -rf "$second_pod_config"
 }

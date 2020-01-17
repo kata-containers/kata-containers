@@ -100,6 +100,8 @@ kubeadm_config_file="$(mktemp --tmpdir kubeadm_config.XXXXXX.yaml)"
 sed -e "s|CRI_RUNTIME_SOCKET|${cri_runtime_socket}|" "${kubeadm_config_template}" > "${kubeadm_config_file}"
 sed -i "s|KUBERNETES_VERSION|v${kubernetes_version/-*}|" "${kubeadm_config_file}"
 
+trap 'sudo -E sh -c "rm -r "${kubeadm_config_file}""' EXIT
+
 if [ "${BAREMETAL}" == true ] && [[ $(wc -l /proc/swaps | awk '{print $1}') -gt 1 ]]; then
 	sudo swapoff -a || true
 fi
