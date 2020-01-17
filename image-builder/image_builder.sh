@@ -425,6 +425,7 @@ set_dax_header() {
 	# Issue: https://github.com/kata-containers/osbuilder/issues/240
 	gcc -O2 "${script_dir}/nsdax.gpl.c" -o "${script_dir}/nsdax"
 	"${script_dir}/nsdax" "${header_image}" "${dax_header_bytes}" "${dax_alignment_bytes}"
+	rm -f "${script_dir}/nsdax"
 	sync
 
 	touch "${dax_image}"
