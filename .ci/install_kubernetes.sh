@@ -64,6 +64,14 @@ elif [ "$ID" == "centos" ] || [ "$ID" == "fedora" ]; then
 	gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 EOF"
 
+	# This issue is related with https://github.com/kubernetes/kubernetes/issues/60134
+	if [ "$ID" == "fedora" ] && [ "$VERSION_ID" == "31" ]; then
+		chronic sudo -E sed -i 's/repo_gpgcheck=1/repo_gpgcheck=0/g' /etc/yum.repos.d/kubernetes.repo
+		chronic sudo -E rpm --import https://packages.cloud.google.com/yum/doc/yum-key.gpg
+		chronic sudo -E rpm --import https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
+		chronic sudo -E yum -y clean all
+	fi
+
 	chronic sudo -E sed -i 's/^[ \t]*//' /etc/yum.repos.d/kubernetes.repo
 	install_kubernetes_version=$(echo $kubernetes_version | cut -d'-' -f1)
 	chronic sudo -E yum -y update
