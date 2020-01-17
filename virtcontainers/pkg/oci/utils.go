@@ -492,6 +492,15 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 		}
 	}
 
+	if value, ok := ocispec.Annotations[vcAnnotations.VirtioMem]; ok {
+		virtioMem, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for enable_virtio_mem: Please specify boolean value 'true|false'")
+		}
+
+		sbConfig.HypervisorConfig.VirtioMem = virtioMem
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.MemPrealloc]; ok {
 		memPrealloc, err := strconv.ParseBool(value)
 		if err != nil {

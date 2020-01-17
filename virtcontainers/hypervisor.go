@@ -307,6 +307,9 @@ type HypervisorConfig struct {
 	// VirtioFSExtraArgs passes options to virtiofsd daemon
 	VirtioFSExtraArgs []string
 
+	// File based memory backend root directory
+	FileBackedMemRootDir string
+
 	// customAssets is a map of assets.
 	// Each value in that map takes precedence over the configured assets.
 	// For example, if there is a value for the "kernel" key in this map,
@@ -341,8 +344,8 @@ type HypervisorConfig struct {
 	// HugePages specifies if the memory should be pre-allocated from huge pages
 	HugePages bool
 
-	// File based memory backend root directory
-	FileBackedMemRootDir string
+	// VirtioMem is used to enable/disable virtio-mem
+	VirtioMem bool
 
 	// Realtime Used to enable/disable realtime
 	Realtime bool

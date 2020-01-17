@@ -124,6 +124,9 @@ const (
 	// MemOffset is a sandbox annotation that specifies the memory space used for nvdimm device by the hypervisor.
 	MemOffset = kataAnnotHypervisorPrefix + "memory_offset"
 
+	// VirtioMem is a sandbox annotation that is used to enable/disable virtio-mem.
+	VirtioMem = kataAnnotHypervisorPrefix + "enable_virtio_mem"
+
 	// MemPrealloc is a sandbox annotation that specifies the memory space used for nvdimm device by the hypervisor.
 	MemPrealloc = kataAnnotHypervisorPrefix + "enable_mem_prealloc"
 
