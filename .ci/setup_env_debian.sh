@@ -23,7 +23,7 @@ declare -A minimal_packages=( \
 
 declare -A packages=( \
 	[general_dependencies]="curl git" \
-	[kata_containers_dependencies]="libtool automake autotools-dev autoconf bc alien libpixman-1-dev coreutils parted" \
+	[kata_containers_dependencies]="libtool automake autotools-dev autoconf bc libpixman-1-dev coreutils parted" \
 	[qemu_dependencies]="libcap-dev libattr1-dev libcap-ng-dev librbd-dev" \
 	[kernel_dependencies]="libelf-dev flex" \
 	[crio_dependencies]="libglib2.0-dev libseccomp-dev libapparmor-dev libgpgme11-dev go-md2man thin-provisioning-tools" \
