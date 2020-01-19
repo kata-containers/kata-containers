@@ -25,7 +25,7 @@ source "${cidir}/../../lib/common.bash"
 IMAGE="${IMAGE:-busybox}"
 CONTAINER_NAME="${CONTAINER_NAME:-test}"
 PAYLOAD_ARGS="${PAYLOAD_ARGS:-tail -f /dev/null}"
-TMP_DIR=$(mktemp -d --tmpdir=/tmp ${testname}.XXX)
+TMP_DIR=$(mktemp -d --tmpdir ${testname}.XXX)
 MOUNT_DIR="${TMP_DIR}/mount"
 BIND_DST="${MOUNT_DIR}/dst"
 BIND_SRC="${TMP_DIR}/src"

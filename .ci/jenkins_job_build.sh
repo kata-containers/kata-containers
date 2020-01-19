@@ -73,6 +73,12 @@ if [ "${BAREMETAL}" == true ]; then
 	fi
 fi
 
+# $TMPDIR may be set special value on BAREMETAL CI.
+# e.g. TMPDIR="/tmp/kata-containers" on ARM CI node.
+if [ -n "${TMPDIR}" ]; then
+	mkdir -p "${TMPDIR}"
+fi
+
 pushd "${kata_repo_dir}"
 
 pr_number=
