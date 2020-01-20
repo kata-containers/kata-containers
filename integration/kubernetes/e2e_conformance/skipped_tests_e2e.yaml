@@ -8,9 +8,7 @@
 
 containerd:
   - SchedulerPredicates
-  - should ensure that all pods are removed when a namespace is deleted
+  - Daemon set \[Serial\] should rollback without unnecessary restarts
 
 crio:
-  - InitContainer
-  - Projected downwardAPI
-  - Downward API
+  - Daemon set \[Serial\] should rollback without unnecessary restarts
