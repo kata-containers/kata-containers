@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -128,6 +129,7 @@ func TestAcrnArchBaseAppendImage(t *testing.T) {
 
 	image, err := ioutil.TempFile("", "img")
 	assert.NoError(err)
+	defer os.Remove(image.Name())
 	err = image.Close()
 	assert.NoError(err)
 
