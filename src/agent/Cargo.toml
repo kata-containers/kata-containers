@@ -20,6 +20,7 @@ prctl = "1.0.0"
 serde_json = "1.0.39"
 signal-hook = "0.1.9"
 scan_fmt = "0.2.3"
+scopeguard = "1.0.0"
 regex = "1"
 # slog:
 # - Dynamic keys required to allow HashMap keys to be slog::Serialized.

@@ -113,7 +113,9 @@ impl agentService {
 
         // write spec to bundle path, hooks might
         // read ocispec
-        setup_bundle(oci)?;
+        let olddir = setup_bundle(oci)?;
+        // restore the cwd for kata-agent process.
+        defer!(unistd::chdir(&olddir).unwrap());
 
         let opts = CreateOpts {
             cgroup_name: "".to_string(),
@@ -1738,7 +1740,7 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
     Ok(())
 }
 
-fn setup_bundle(gspec: &Spec) -> Result<()> {
+fn setup_bundle(gspec: &Spec) -> Result<PathBuf> {
     if gspec.Root.is_none() {
         return Err(nix::Error::Sys(Errno::EINVAL).into());
     }
@@ -1757,7 +1759,8 @@ fn setup_bundle(gspec: &Spec) -> Result<()> {
     );
     let _ = oci.save(config.as_str());
 
+    let olddir = unistd::getcwd().chain_err(|| "cannot getcwd")?;
     unistd::chdir(bundle_path)?;
 
-    Ok(())
+    Ok(olddir)
 }
