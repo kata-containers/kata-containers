@@ -495,9 +495,17 @@ func (c *Container) shareFiles(m Mount, idx int, hostSharedDir, guestSharedDir s
 // It also updates the container mount list with the HostPath info, and store
 // container mounts to the storage. This way, we will have the HostPath info
 // available when we will need to unmount those mounts.
-func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (map[string]Mount, map[string]Mount, error) {
-	sharedDirMounts := make(map[string]Mount)
-	ignoredMounts := make(map[string]Mount)
+func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (sharedDirMounts map[string]Mount, ignoredMounts map[string]Mount, err error) {
+	sharedDirMounts = make(map[string]Mount)
+	ignoredMounts = make(map[string]Mount)
+	var devicesToDetach []string
+	defer func() {
+		if err != nil {
+			for _, id := range devicesToDetach {
+				c.sandbox.devManager.DetachDevice(id, c.sandbox)
+			}
+		}
+	}()
 	for idx, m := range c.mounts {
 		// Skip mounting certain system paths from the source on the host side
 		// into the container as it does not make sense to do so.
@@ -521,9 +529,10 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 		// instead of passing this as a shared mount.
 		if len(m.BlockDeviceID) > 0 {
 			// Attach this block device, all other devices passed in the config have been attached at this point
-			if err := c.sandbox.devManager.AttachDevice(m.BlockDeviceID, c.sandbox); err != nil {
+			if err = c.sandbox.devManager.AttachDevice(m.BlockDeviceID, c.sandbox); err != nil {
 				return nil, nil, err
 			}
+			devicesToDetach = append(devicesToDetach, m.BlockDeviceID)
 			continue
 		}
 
@@ -534,7 +543,9 @@ func (c *Container) mountSharedDirMounts(hostSharedDir, guestSharedDir string) (
 			continue
 		}
 
-		guestDest, ignore, err := c.shareFiles(m, idx, hostSharedDir, guestSharedDir)
+		var ignore bool
+		var guestDest string
+		guestDest, ignore, err = c.shareFiles(m, idx, hostSharedDir, guestSharedDir)
 		if err != nil {
 			return nil, nil, err
 		}
