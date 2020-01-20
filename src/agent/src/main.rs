@@ -21,6 +21,9 @@ extern crate scan_fmt;
 extern crate oci;
 
 #[macro_use]
+extern crate scopeguard;
+
+#[macro_use]
 extern crate slog;
 extern crate slog_async;
 extern crate slog_json;
