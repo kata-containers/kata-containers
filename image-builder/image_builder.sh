@@ -63,11 +63,9 @@ readonly -a systemd_files=(
 # Set a default value
 AGENT_INIT=${AGENT_INIT:-no}
 
-
-# In order to support memory hotplug, image must be aligned to
-# memory section(size in MB) according to different architecture.
+# Align image to (size in MB) according to different architecture.
 case "$(uname -m)" in
-	aarch64) readonly mem_boundary_mb=1024 ;;
+	aarch64) readonly mem_boundary_mb=16 ;;
 	*) readonly mem_boundary_mb=128 ;;
 esac
 
