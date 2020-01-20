@@ -79,7 +79,15 @@ impl agentService {
         let sandbox;
         let mut s;
 
-        let oci = oci_spec.as_mut().unwrap();
+        let oci = match oci_spec.as_mut() {
+            Some(spec) => spec,
+            None => {
+                error!(sl!(), "no oci spec in the create container request!");
+                return Err(
+                    ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EINVAL)).into(),
+                );
+            }
+        };
 
         info!(sl!(), "receive createcontainer {}", &cid);
 
