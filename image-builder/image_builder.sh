@@ -8,6 +8,8 @@ set -e
 
 [ -n "${DEBUG}" ] && set -x
 
+DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
+
 readonly script_name="${0##*/}"
 readonly script_dir=$(dirname "$(readlink -f "$0")")
 readonly lib_file="${script_dir}/../scripts/lib.sh"
@@ -149,7 +151,7 @@ build_with_container() {
 	#https://github.com/clearcontainers/runtime/issues/828
 	"${container_engine}" run  \
 		   --rm \
-		   --runtime runc  \
+		   --runtime "${DOCKER_RUNTIME}"  \
 		   --privileged \
 		   --env AGENT_BIN="${agent_bin}" \
 		   --env AGENT_INIT="${agent_init}" \
