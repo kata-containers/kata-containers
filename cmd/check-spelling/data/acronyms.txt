@@ -75,6 +75,7 @@ VETH/AB
 VF/AB
 VFIO/AB
 VGPU/AB
+vhost/AB
 VHOST/AB
 virtio/AB
 VirtIO/AB
