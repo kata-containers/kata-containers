@@ -9,6 +9,14 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+source /etc/os-release || source /usr/lib/os-release
+issue="https://github.com/cri-o/cri-o/issues/3130"
+
+if [ "$ID" == "centos" ]; then
+	echo "Skip CRI-O installation on $ID, see: $issue"
+	exit
+fi
+
 crio_config_file="/etc/crio/crio.conf"
 runc_flag="\/usr\/local\/bin\/crio-runc"
 kata_flag="\/usr\/local\/bin\/kata-runtime"

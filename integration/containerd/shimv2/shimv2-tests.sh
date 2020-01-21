@@ -8,8 +8,14 @@
 # shimv2 + containerd + cri
 
 source /etc/os-release || source /usr/lib/os-release
-
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
+
+if [ "$ID" == "centos" ]; then
+	echo "Skip installation on $ID"
+	exit
+fi
+
+
 ${SCRIPT_PATH}/../../../.ci/install_cri_containerd.sh
 
 cni_bin_path="/opt/cni"

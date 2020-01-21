@@ -16,9 +16,11 @@ arch="$(uname -m)"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
-# Currently, Kubernetes tests only work on Ubuntu, Centos and Fedora.
+# Currently, Kubernetes tests only work on Ubuntu and Fedora.
 # We should delete this condition, when it works for other Distros.
-if [ "$ID" != "ubuntu" ] && [ "$ID" != "centos" ] && [ "$ID" != "fedora" ]; then
+# In the case of CentOS once that issue https://github.com/cri-o/cri-o/issues/3130
+# is being fixed we can enable Kubernetes tests.
+if [ "$ID" != "ubuntu" ] && [ "$ID" != "fedora" ]; then
 	echo "Skip Kubernetes tests on $ID"
 	echo "kubernetes tests on $ID aren't supported yet"
 	exit 0
