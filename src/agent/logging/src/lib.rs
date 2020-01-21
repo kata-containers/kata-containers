@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
+#[macro_use]
+extern crate slog;
 
 use slog::{BorrowedKV, Drain, Key, OwnedKV, OwnedKVList, Record, KV};
 use std::collections::HashMap;
@@ -145,12 +147,6 @@ impl<D> RuntimeLevelFilter<D> {
             drain,
             level: Mutex::new(level),
         }
-    }
-
-    fn set_level(&self, level: slog::Level) {
-        let mut log_level = self.level.lock().unwrap();
-
-        *log_level = level;
     }
 }
 
