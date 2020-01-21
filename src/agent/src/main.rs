@@ -25,8 +25,6 @@ extern crate scopeguard;
 
 #[macro_use]
 extern crate slog;
-extern crate slog_async;
-extern crate slog_json;
 #[macro_use]
 extern crate netlink;
 
@@ -50,7 +48,6 @@ use unistd::Pid;
 mod config;
 mod device;
 mod linux_abi;
-mod logging;
 mod mount;
 mod namespace;
 mod network;
