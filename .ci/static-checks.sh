@@ -766,7 +766,7 @@ static_check_docs()
 		"$cmd" check "$doc" || { info "spell check failed for document $doc" && docs_failed=1; }
 	done
 
-	[ $docs_failed -ne 0 ] && die "spell check failed, See https://github.com/kata-containers/documentation/blob/master/Documentation-Requirements.md#spelling for more information."
+	[ $docs_failed -eq 0 ] || die "spell check failed, See https://github.com/kata-containers/documentation/blob/master/Documentation-Requirements.md#spelling for more information."
 }
 
 # Tests to apply to all files.
