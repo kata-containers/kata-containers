@@ -1844,7 +1844,7 @@ func (s *Sandbox) cgroupsUpdate() error {
 func (s *Sandbox) cgroupsDelete() error {
 	s.Logger().Debug("Deleting sandbox cgroup")
 	if s.state.CgroupPath == "" {
-		s.Logger().Warnf("sandox cgroups path is empty")
+		s.Logger().Warnf("sandbox cgroups path is empty")
 		return nil
 	}
 
