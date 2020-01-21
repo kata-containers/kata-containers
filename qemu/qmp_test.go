@@ -1294,6 +1294,24 @@ func TestExecSetMigrateArguments(t *testing.T) {
 	<-disconnectedCh
 }
 
+// Checks add memory device
+func TestExecMemdevAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("object-add", nil, "return", nil)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecMemdevAdd(context.Background(), "memory-backend-ram", "mem0", "", 128, true, "virtio-mem-pci", "virtiomem0")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks hotplug memory
 func TestExecHotplugMemory(t *testing.T) {
 	connectedCh := make(chan *QMPVersion)
@@ -1688,6 +1706,23 @@ func TestQMPExecQueryQmpStatus(t *testing.T) {
 	}
 	if reflect.DeepEqual(info, statusInfo) == false {
 		t.Fatalf("Expected %v equals to %v", info, statusInfo)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
+// Checks qom-set
+func TestExecQomSet(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("qom-set", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	err := q.ExecQomSet(context.Background(), "virtiomem0", "requested-size", 1024)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
 	}
 	q.Shutdown()
 	<-disconnectedCh
