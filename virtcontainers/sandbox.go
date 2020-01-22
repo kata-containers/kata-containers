@@ -127,7 +127,7 @@ type SandboxConfig struct {
 
 	// Cgroups specifies specific cgroup settings for the various subsystems that the container is
 	// placed into to limit the resources the container has available
-	Cgroups *configs.Cgroup `json:"cgroups"`
+	Cgroups *configs.Cgroup
 }
 
 func (s *Sandbox) trace(name string) (opentracing.Span, context.Context) {
