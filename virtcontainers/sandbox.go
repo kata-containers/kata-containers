@@ -122,6 +122,9 @@ type SandboxConfig struct {
 
 	DisableGuestSeccomp bool
 
+	// HasCRIContainerType specifies whether container type was set explicitly through annotations or not.
+	HasCRIContainerType bool
+
 	// Experimental features enabled
 	Experimental []exp.Feature
 
@@ -2044,28 +2047,49 @@ func (s *Sandbox) setupSandboxCgroup() error {
 		return nil
 	}
 
+	s.Logger().WithField("hasCRIContainerType", s.config.HasCRIContainerType).Debug("Setting sandbox cgroup")
+
 	s.state.CgroupPath, err = validCgroupPath(spec.Linux.CgroupsPath, s.config.SystemdCgroup)
 	if err != nil {
 		return fmt.Errorf("Invalid cgroup path: %v", err)
 	}
 
-	// Do not change current cgroup configuration.
-	// Create a spec without constraints
-	unconstraintSpec := specs.Spec{
+	// Don't modify original resources, create a copy
+	resources := *spec.Linux.Resources
+	sandboxSpec := specs.Spec{
 		Linux: &specs.Linux{
-			Resources:   &specs.LinuxResources{},
-			CgroupsPath: s.state.CgroupPath,
+			Resources: &resources,
 		},
 	}
 
-	cmgr, err := newCgroupManager(s.config.Cgroups, s.state.CgroupPaths, &unconstraintSpec)
+	// kata should rely on the cgroup created and configured by
+	// container engine *only* if actual container was
+	// marked *explicitly* as sandbox through annotations.
+	if s.config.HasCRIContainerType {
+		// Do not change current cgroup configuration.
+		// Create a spec without constraints
+		sandboxSpec.Linux.Resources = &specs.LinuxResources{}
+	}
+
+	sandboxSpec.Linux.CgroupsPath = s.state.CgroupPath
+
+	// Remove this to improve device resource management, but first we need to fix some issues:
+	// - hypervisors will need access to following host's devices:
+	//   * /dev/kvm
+	//   * /dev/vhost-net
+	// - If devicemapper is the storage driver, hypervisor will need access to devicemapper devices:
+	//   * The list of cgroup devices MUST BE updated when a new container is created in the POD
+	sandboxSpec.Linux.Resources.Devices = []specs.LinuxDeviceCgroup{}
+
+	cmgr, err := newCgroupManager(s.config.Cgroups, s.state.CgroupPaths, &sandboxSpec)
 	if err != nil {
 		return fmt.Errorf("Could not create a new cgroup manager: %v", err)
 	}
 
 	runtimePid := os.Getpid()
+
 	// Add the runtime to the Kata sandbox cgroup
-	if err := cmgr.Apply(runtimePid); err != nil {
+	if err = cmgr.Apply(runtimePid); err != nil {
 		return fmt.Errorf("Could not add runtime PID %d to sandbox cgroup:  %v", runtimePid, err)
 	}
 
@@ -2077,6 +2101,10 @@ func (s *Sandbox) setupSandboxCgroup() error {
 	}
 
 	s.state.CgroupPaths = cmgr.GetPaths()
+
+	if err = cmgr.Set(&configs.Config{Cgroups: s.config.Cgroups}); err != nil {
+		return fmt.Errorf("Could not constrain cgroup: %v", err)
+	}
 
 	return nil
 }
