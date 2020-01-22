@@ -13,6 +13,7 @@ source "${cidir}/lib.sh"
 source /etc/os-release || source /usr/lib/os-release
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 MACHINETYPE="${MACHINETYPE:-pc}"
+TEST_CGROUPSV2="${TEST_CGROUPSV2:-false}"
 
 arch=$("${cidir}"/kata-arch.sh -d)
 
@@ -113,15 +114,17 @@ if [ "$USE_VSOCK" == "yes" ]; then
 	fi
 fi
 
-case "${KATA_HYPERVISOR}" in
-	"cloud-hypervisor" | "qemu")
-		echo "Add kata-runtime as a new/default Docker runtime."
-		"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker configure -r kata-runtime -f
-		;;
-	*)
-		echo "Kata runtime will not set as a default in Docker"
-		;;
-esac
+if [ "${TEST_CGROUPSV2}" == "false" ]; then
+	case "${KATA_HYPERVISOR}" in
+		"cloud-hypervisor" | "qemu")
+			echo "Add kata-runtime as a new/default Docker runtime."
+			"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker configure -r kata-runtime -f
+			;;
+		*)
+			echo "Kata runtime will not set as a default in Docker"
+			;;
+	esac
+fi
 
 if [ "$MACHINETYPE" == "q35" ]; then
 	echo "Use machine_type q35"
