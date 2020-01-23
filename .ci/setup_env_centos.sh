@@ -48,6 +48,10 @@ fi
 echo "Install chronic"
 sudo -E yum -y install moreutils
 
+if [ "$centos_version" == "8" ]; then
+	chronic sudo -E yum install pkgconf-pkg-config
+fi 
+
 declare -A minimal_packages=( \
 	[spell-check]="hunspell hunspell-en-GB hunspell-en-US pandoc" \
 	[xml_validator]="libxml2" \
@@ -55,24 +59,22 @@ declare -A minimal_packages=( \
 )
 
 declare -A packages=( \
-	[kata_containers_dependencies]="libtool libtool-ltdl-devel device-mapper-persistent-data lvm2 device-mapper-devel libtool-ltdl" \
+	[kata_containers_dependencies]="libtool libtool-ltdl-devel device-mapper-persistent-data lvm2 libtool-ltdl" \
 	[qemu_dependencies]="libcap-devel libcap-ng-devel libattr-devel libcap-ng-devel librbd1-devel flex libfdt-devel" \
 	[kernel_dependencies]="elfutils-libelf-devel flex pkgconfig" \
-	[crio_dependencies]="glibc-static libseccomp-devel libassuan-devel libgpg-error-devel device-mapper-libs btrfs-progs-devel util-linux libselinux-devel" \
+	[crio_dependencies]="libassuan-devel libgpg-error-devel device-mapper-libs util-linux libselinux-devel" \
 	[bison_binary]="bison" \
 	[libgudev1-dev]="libgudev1-devel" \
 	[general_dependencies]="gpgme-devel glib2-devel glibc-devel bzip2 m4 gettext-devel automake autoconf pixman-devel coreutils" \
 	[build_tools]="python3 pkgconfig zlib-devel" \
 	[ostree]="ostree-devel" \
 	[metrics_dependencies]="jq" \
-	[cri-containerd_dependencies]="libseccomp-devel btrfs-progs-devel" \
 	[crudini]="crudini" \
 	[procenv]="procenv" \
 	[haveged]="haveged" \
 	[gnu_parallel_dependencies]="perl bzip2 make" \
 	[libsystemd]="systemd-devel" \
 	[redis]="redis" \
-	[versionlock]="yum-versionlock" \
 )
 
 main()

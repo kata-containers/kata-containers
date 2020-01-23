@@ -12,6 +12,12 @@ set -o pipefail
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 source /etc/os-release || source /usr/lib/os-release
+issue="https://github.com/cri-o/cri-o/issues/3130"
+
+if [ "$ID" == "centos" ]; then
+	echo "Skip CRI-O installation on $ID, see: $issue"
+	exit
+fi
 
 echo "Install go-md2man"
 go_md2man_url=$(get_test_version "externals.go-md2man.url")
