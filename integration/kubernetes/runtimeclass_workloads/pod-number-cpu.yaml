@@ -15,12 +15,12 @@ spec:
     command: ["tail", "-f", "/dev/null"]
     resources:
       limits:
-        cpu: "1"
+        cpu: "500m"
   - name: c2
     image: busybox
     command:
       - sleep
-      - "1"
+      - "10"
     resources:
       limits:
-        cpu: "1"
+        cpu: "500m"
