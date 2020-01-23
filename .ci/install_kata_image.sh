@@ -28,6 +28,7 @@ ARCH="$(${cidir}/kata-arch.sh -d)"
 
 AGENT_INIT=${AGENT_INIT:-no}
 TEST_INITRD=${TEST_INITRD:-no}
+TEST_CGROUPSV2="${TEST_CGROUPSV2:-false}"
 
 PREFIX=${PREFIX:-/usr}
 IMAGE_DIR=${PREFIX}/share/kata-containers
