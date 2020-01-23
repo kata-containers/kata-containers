@@ -22,6 +22,7 @@ CRIO="${CRIO:-yes}"
 CRI_CONTAINERD="${CRI_CONTAINERD:-no}"
 KUBERNETES="${KUBERNETES:-yes}"
 OPENSHIFT="${OPENSHIFT:-yes}"
+TEST_CGROUPSV2="${TEST_CGROUPSV2:-false}"
 
 setup_distro_env() {
 	local setup_type="$1"
@@ -46,6 +47,11 @@ setup_distro_env() {
 }
 
 install_docker() {
+	if [ "${TEST_CGROUPSV2}" == "true" ]; then
+		info "Docker won't be installed: testing cgroups V2"
+		return
+	fi
+
 	if ! command -v docker >/dev/null; then
 		"${cidir}/../cmd/container-manager/manage_ctr_mgr.sh" docker install
 	fi

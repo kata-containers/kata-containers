@@ -10,9 +10,15 @@ set -e
 cidir=$(dirname "$0")
 source /etc/os-release || source /usr/lib/os-release
 source "${cidir}/lib.sh"
+TEST_CGROUPSV2="${TEST_CGROUPSV2:-false}"
 
 echo "Install chronic"
 sudo -E dnf -y install moreutils
+
+if [ "${TEST_CGROUPSV2}" == "true" ]; then
+	echo "Install podman"
+	sudo -E dnf -y install podman
+fi
 
 declare -A minimal_packages=( \
 	[spell-check]="hunspell hunspell-en-GB hunspell-en-US pandoc" \
