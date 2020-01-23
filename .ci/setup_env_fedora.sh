@@ -17,7 +17,8 @@ sudo -E dnf -y install moreutils
 
 if [ "${TEST_CGROUPSV2}" == "true" ]; then
 	echo "Install podman"
-	sudo -E dnf -y install podman
+	version=$(get_test_version "externals.podman.version")
+	sudo -E dnf -y install podman-"${version}"
 fi
 
 declare -A minimal_packages=( \

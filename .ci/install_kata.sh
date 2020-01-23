@@ -16,6 +16,7 @@ source "${cidir}/lib.sh"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 experimental_qemu="${experimental_qemu:-false}"
 TEST_RUST_AGENT="${TEST_RUST_AGENT:-false}"
+TEST_CGROUPSV2="${TEST_CGROUPSV2:-false}"
 
 if [ "${TEST_RUST_AGENT}" == true ]; then
 	echo "Install rust agent image"
@@ -64,3 +65,8 @@ echo "Install proxy"
 
 echo "Install runtime"
 "${cidir}/install_runtime.sh" "${tag}"
+
+if [ "${TEST_CGROUPSV2}" == "true" ]; then
+	echo "Configure podman with kata"
+	"${cidir}/configure_podman_for_kata.sh"
+fi
