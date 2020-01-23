@@ -15,4 +15,8 @@ type NetConfig struct {
 	Mask string `json:"mask,omitempty"`
 	Mac string `json:"mac,omitempty"`
 	Iommu bool `json:"iommu,omitempty"`
+	NumQueues int32 `json:"num_queues,omitempty"`
+	QueueSize int32 `json:"queue_size,omitempty"`
+	VhostUser bool `json:"vhost_user,omitempty"`
+	VhostSocket string `json:"vhost_socket,omitempty"`
 }

@@ -39,7 +39,6 @@ func (a *DefaultApiService) BootVM(ctx _context.Context) (*_nethttp.Response, er
 
 	// create path and map variables
 	localVarPath := a.client.cfg.BasePath + "/vm.boot"
-
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := _neturl.Values{}
 	localVarFormParams := _neturl.Values{}
@@ -104,7 +103,6 @@ func (a *DefaultApiService) CreateVM(ctx _context.Context, vmConfig VmConfig) (*
 
 	// create path and map variables
 	localVarPath := a.client.cfg.BasePath + "/vm.create"
-
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := _neturl.Values{}
 	localVarFormParams := _neturl.Values{}
@@ -170,7 +168,6 @@ func (a *DefaultApiService) DeleteVM(ctx _context.Context) (*_nethttp.Response, 
 
 	// create path and map variables
 	localVarPath := a.client.cfg.BasePath + "/vm.delete"
-
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := _neturl.Values{}
 	localVarFormParams := _neturl.Values{}
@@ -234,7 +231,6 @@ func (a *DefaultApiService) PauseVM(ctx _context.Context) (*_nethttp.Response, e
 
 	// create path and map variables
 	localVarPath := a.client.cfg.BasePath + "/vm.pause"
-
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := _neturl.Values{}
 	localVarFormParams := _neturl.Values{}
@@ -298,7 +294,6 @@ func (a *DefaultApiService) RebootVM(ctx _context.Context) (*_nethttp.Response, 
 
 	// create path and map variables
 	localVarPath := a.client.cfg.BasePath + "/vm.reboot"
-
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := _neturl.Values{}
 	localVarFormParams := _neturl.Values{}
@@ -362,7 +357,6 @@ func (a *DefaultApiService) ResumeVM(ctx _context.Context) (*_nethttp.Response, 
 
 	// create path and map variables
 	localVarPath := a.client.cfg.BasePath + "/vm.resume"
-
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := _neturl.Values{}
 	localVarFormParams := _neturl.Values{}
@@ -426,7 +420,6 @@ func (a *DefaultApiService) ShutdownVM(ctx _context.Context) (*_nethttp.Response
 
 	// create path and map variables
 	localVarPath := a.client.cfg.BasePath + "/vm.shutdown"
-
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := _neturl.Values{}
 	localVarFormParams := _neturl.Values{}
@@ -490,7 +483,6 @@ func (a *DefaultApiService) ShutdownVMM(ctx _context.Context) (*_nethttp.Respons
 
 	// create path and map variables
 	localVarPath := a.client.cfg.BasePath + "/vmm.shutdown"
-
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := _neturl.Values{}
 	localVarFormParams := _neturl.Values{}
@@ -556,7 +548,6 @@ func (a *DefaultApiService) VmInfoGet(ctx _context.Context) (VmInfo, *_nethttp.R
 
 	// create path and map variables
 	localVarPath := a.client.cfg.BasePath + "/vm.info"
-
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := _neturl.Values{}
 	localVarFormParams := _neturl.Values{}
@@ -639,7 +630,6 @@ func (a *DefaultApiService) VmResizePut(ctx _context.Context, vmResize VmResize)
 
 	// create path and map variables
 	localVarPath := a.client.cfg.BasePath + "/vm.resize"
-
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := _neturl.Values{}
 	localVarFormParams := _neturl.Values{}
@@ -707,7 +697,6 @@ func (a *DefaultApiService) VmmPingGet(ctx _context.Context) (VmmPingResponse, *
 
 	// create path and map variables
 	localVarPath := a.client.cfg.BasePath + "/vmm.ping"
-
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := _neturl.Values{}
 	localVarFormParams := _neturl.Values{}
