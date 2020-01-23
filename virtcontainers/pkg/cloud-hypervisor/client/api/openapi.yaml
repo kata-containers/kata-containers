@@ -13,7 +13,7 @@ paths:
   /vmm.ping:
     get:
       responses:
-        200:
+        "200":
           content:
             application/json:
               schema:
@@ -24,13 +24,13 @@ paths:
     put:
       operationId: shutdownVMM
       responses:
-        204:
+        "204":
           description: The VMM successfully shutdown.
       summary: Shuts the cloud-hypervisor VMM.
   /vm.info:
     get:
       responses:
-        200:
+        "200":
           content:
             application/json:
               schema:
@@ -49,7 +49,7 @@ paths:
         description: The VM configuration
         required: true
       responses:
-        204:
+        "204":
           description: The VM instance was successfully created.
       summary: Create the cloud-hypervisor Virtual Machine (VM) instance. The instance
         is not booted, only created.
@@ -57,60 +57,60 @@ paths:
     put:
       operationId: deleteVM
       responses:
-        204:
+        "204":
           description: The VM instance was successfully deleted.
       summary: Delete the cloud-hypervisor Virtual Machine (VM) instance.
   /vm.boot:
     put:
       operationId: bootVM
       responses:
-        204:
+        "204":
           description: The VM instance successfully booted.
-        404:
+        "404":
           description: The VM instance could not boot because it is not created yet
       summary: Boot the previously created VM instance.
   /vm.pause:
     put:
       operationId: pauseVM
       responses:
-        204:
+        "204":
           description: The VM instance successfully paused.
-        404:
+        "404":
           description: The VM instance could not pause because it is not created yet
-        405:
+        "405":
           description: The VM instance could not pause because it is not booted.
       summary: Pause a previously booted VM instance.
   /vm.resume:
     put:
       operationId: resumeVM
       responses:
-        204:
+        "204":
           description: The VM instance successfully paused.
-        404:
+        "404":
           description: The VM instance could not resume because it is not booted yet
-        405:
+        "405":
           description: The VM instance could not resume because it is not paused.
       summary: Resume a previously paused VM instance.
   /vm.shutdown:
     put:
       operationId: shutdownVM
       responses:
-        204:
+        "204":
           description: The VM instance successfully shut down.
-        404:
+        "404":
           description: The VM instance could not shut down because is not created.
-        405:
+        "405":
           description: The VM instance could not shut down because it is not started.
       summary: Shut the VM instance down.
   /vm.reboot:
     put:
       operationId: rebootVM
       responses:
-        204:
+        "204":
           description: The VM instance successfully rebooted.
-        404:
+        "404":
           description: The VM instance could not reboot because it is not created.
-        405:
+        "405":
           description: The VM instance could not reboot because it is not booted.
       summary: Reboot the VM instance.
   /vm.resize:
@@ -123,9 +123,9 @@ paths:
         description: The target size for the VM
         required: true
       responses:
-        204:
+        "204":
           description: The VM instance was successfully resized.
-        404:
+        "404":
           description: The VM instance could not be resized because it is not created.
       summary: Resize the VM
 components:
@@ -155,9 +155,13 @@ components:
             size: 1
           disks:
           - path: path
+            num_queues: 5
             iommu: false
+            queue_size: 5
           - path: path
+            num_queues: 5
             iommu: false
+            queue_size: 5
           cpus:
             boot_vcpus: 1
             max_vcpus: 1
@@ -170,37 +174,37 @@ components:
             path: path
           vhost_user_blk:
           - sock: sock
-            num_queues: 2
-            queue_size: 4
+            num_queues: 1
+            queue_size: 1
             wce: true
           - sock: sock
-            num_queues: 2
-            queue_size: 4
+            num_queues: 1
+            queue_size: 1
             wce: true
           rng:
             iommu: false
             src: /dev/urandom
           fs:
           - sock: sock
-            num_queues: 5
-            queue_size: 5
+            num_queues: 9
+            queue_size: 3
             cache_size: 2
             dax: true
             tag: tag
           - sock: sock
-            num_queues: 5
-            queue_size: 5
+            num_queues: 9
+            queue_size: 3
             cache_size: 2
             dax: true
             tag: tag
           vhost_user_net:
           - sock: sock
-            num_queues: 9
-            queue_size: 3
+            num_queues: 7
+            queue_size: 1
             mac: mac
           - sock: sock
-            num_queues: 9
-            queue_size: 3
+            num_queues: 7
+            queue_size: 1
             mac: mac
           vsock:
           - sock: sock
@@ -212,11 +216,11 @@ components:
           pmem:
           - mergeable: false
             file: file
-            size: 7
+            size: 4
             iommu: false
           - mergeable: false
             file: file
-            size: 7
+            size: 4
             iommu: false
           cmdline:
             args: args
@@ -227,12 +231,20 @@ components:
             iommu: false
           net:
           - tap: tap
+            num_queues: 2
             iommu: false
+            queue_size: 7
+            vhost_socket: vhost_socket
+            vhost_user: false
             ip: 192.168.249.1
             mac: mac
             mask: 255.255.255.0
           - tap: tap
+            num_queues: 2
             iommu: false
+            queue_size: 7
+            vhost_socket: vhost_socket
+            vhost_user: false
             ip: 192.168.249.1
             mac: mac
             mask: 255.255.255.0
@@ -262,9 +274,13 @@ components:
           size: 1
         disks:
         - path: path
+          num_queues: 5
           iommu: false
+          queue_size: 5
         - path: path
+          num_queues: 5
           iommu: false
+          queue_size: 5
         cpus:
           boot_vcpus: 1
           max_vcpus: 1
@@ -277,37 +293,37 @@ components:
           path: path
         vhost_user_blk:
         - sock: sock
-          num_queues: 2
-          queue_size: 4
+          num_queues: 1
+          queue_size: 1
           wce: true
         - sock: sock
-          num_queues: 2
-          queue_size: 4
+          num_queues: 1
+          queue_size: 1
           wce: true
         rng:
           iommu: false
           src: /dev/urandom
         fs:
         - sock: sock
-          num_queues: 5
-          queue_size: 5
+          num_queues: 9
+          queue_size: 3
           cache_size: 2
           dax: true
           tag: tag
         - sock: sock
-          num_queues: 5
-          queue_size: 5
+          num_queues: 9
+          queue_size: 3
           cache_size: 2
           dax: true
           tag: tag
         vhost_user_net:
         - sock: sock
-          num_queues: 9
-          queue_size: 3
+          num_queues: 7
+          queue_size: 1
           mac: mac
         - sock: sock
-          num_queues: 9
-          queue_size: 3
+          num_queues: 7
+          queue_size: 1
           mac: mac
         vsock:
         - sock: sock
@@ -319,11 +335,11 @@ components:
         pmem:
         - mergeable: false
           file: file
-          size: 7
+          size: 4
           iommu: false
         - mergeable: false
           file: file
-          size: 7
+          size: 4
           iommu: false
         cmdline:
           args: args
@@ -334,12 +350,20 @@ components:
           iommu: false
         net:
         - tap: tap
+          num_queues: 2
           iommu: false
+          queue_size: 7
+          vhost_socket: vhost_socket
+          vhost_user: false
           ip: 192.168.249.1
           mac: mac
           mask: 255.255.255.0
         - tap: tap
+          num_queues: 2
           iommu: false
+          queue_size: 7
+          vhost_socket: vhost_socket
+          vhost_user: false
           ip: 192.168.249.1
           mac: mac
           mask: 255.255.255.0
@@ -452,20 +476,32 @@ components:
     DiskConfig:
       example:
         path: path
+        num_queues: 5
         iommu: false
+        queue_size: 5
       properties:
         path:
           type: string
         iommu:
           default: false
           type: boolean
+        num_queues:
+          default: 1
+          type: integer
+        queue_size:
+          default: 128
+          type: integer
       required:
       - path
       type: object
     NetConfig:
       example:
         tap: tap
+        num_queues: 2
         iommu: false
+        queue_size: 7
+        vhost_socket: vhost_socket
+        vhost_user: false
         ip: 192.168.249.1
         mac: mac
         mask: 255.255.255.0
@@ -484,6 +520,17 @@ components:
         iommu:
           default: false
           type: boolean
+        num_queues:
+          default: 2
+          type: integer
+        queue_size:
+          default: 256
+          type: integer
+        vhost_user:
+          default: false
+          type: boolean
+        vhost_socket:
+          type: string
       type: object
     RngConfig:
       example:
@@ -502,8 +549,8 @@ components:
     FsConfig:
       example:
         sock: sock
-        num_queues: 5
-        queue_size: 5
+        num_queues: 9
+        queue_size: 3
         cache_size: 2
         dax: true
         tag: tag
@@ -532,7 +579,7 @@ components:
       example:
         mergeable: false
         file: file
-        size: 7
+        size: 4
         iommu: false
       properties:
         file:
@@ -587,8 +634,8 @@ components:
     VhostUserNetConfig:
       example:
         sock: sock
-        num_queues: 9
-        queue_size: 3
+        num_queues: 7
+        queue_size: 1
         mac: mac
       properties:
         sock:
@@ -607,8 +654,8 @@ components:
     VhostUserBlkConfig:
       example:
         sock: sock
-        num_queues: 2
-        queue_size: 4
+        num_queues: 1
+        queue_size: 1
         wce: true
       properties:
         sock:
@@ -649,11 +696,11 @@ components:
     VmResize:
       example:
         desired_vcpus: 1
+        desired_ram: 6
       properties:
         desired_vcpus:
-          default: 1
           minimum: 1
           type: integer
-      required:
-      - desired_vcpus
+        desired_ram:
+          type: integer
       type: object

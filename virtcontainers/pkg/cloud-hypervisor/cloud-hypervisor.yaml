@@ -277,6 +277,12 @@ components:
         iommu:
           type: boolean
           default: false
+        num_queues:
+          type: integer
+          default: 1
+        queue_size:
+          type: integer
+          default: 128
 
     NetConfig:
       type: object
@@ -295,6 +301,17 @@ components:
         iommu:
           type: boolean
           default: false
+        num_queues:
+          type: integer
+          default: 2
+        queue_size:
+          type: integer
+          default: 256
+        vhost_user:
+          type: boolean
+          default: false
+        vhost_socket:
+          type: string
 
     RngConfig:
       required:
@@ -427,11 +444,10 @@ components:
           default: false
 
     VmResize:
-      required:
-      - desired_vcpus
       type: object
       properties:
         desired_vcpus:
           minimum: 1
-          default: 1
+          type: integer
+        desired_ram:
           type: integer
