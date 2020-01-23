@@ -90,9 +90,9 @@ var _ = Describe("Hotplug memory when create containers", func() {
 
 			Expect(RemoveDockerContainer(id)).To(BeTrue())
 		},
-		withDockerMemory(100*1024*1024),
-		withDockerMemory(200*1024*1024),
 		withDockerMemory(500*1024*1024),
+		withDockerMemory(640*1024*1024),
+		withDockerMemory(768*1024*1024),
 		withDockerMemory(1024*1024*1024),
 	)
 })
