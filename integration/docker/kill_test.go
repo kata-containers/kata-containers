@@ -112,7 +112,8 @@ var _ = Describe("docker kill", func() {
 				args = append(args, infiniteLoop)
 			}
 
-			dockerRun(args...)
+			_, _, runExitCode := dockerRun(args...)
+			Expect(runExitCode).To(Equal(0))
 
 			if signal > 0 {
 				exitCh := make(chan bool)
