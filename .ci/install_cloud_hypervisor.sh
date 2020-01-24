@@ -36,7 +36,7 @@ install_clh() {
 	go get -d "${go_cloud_hypervisor_repo}" || true
 	# This may be downloaded before if there was a depends-on in PR, but 'go get' wont make any problem here
 	go get -d "${packaging_repo}" || true
-	pushd "${GOPATH}/src/${go_cloud_hypervisor_repo}"
+	pushd  $(dirname "${GOPATH}/src/${go_cloud_hypervisor_repo}")
 	# packaging build script expects run in the hypervisor repo parent directory
 	# It will find the hypervisor repo and checkout to the version exported above
 	${GOPATH}/src/${packaging_repo}/static-build/cloud-hypervisor/build-static-clh.sh
