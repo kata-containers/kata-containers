@@ -67,7 +67,7 @@ into account. This will be feasible in the 1.16 Kubernetes release through the `
 |    |   |   | kata-shimv2, VMM and threads:        |  | | |
 |    |   |   |  (VMM, IO-threads, vCPU threads, etc)|  | | |
 |    |   |   |                                      |  | | |
-|    |   |   | kata-sandbox-<id>                    |  | | |
+|    |   |   | kata_<sandbox-id>                    |  | | |
 |    |   |   +--------------------------------------+  | | |
 |    |   |                                             | | |
 |    |   |Pod 1                                        | | |
@@ -78,8 +78,8 @@ into account. This will be feasible in the 1.16 Kubernetes release through the `
 |    |   |   | kata-shimv2, VMM and threads:        |  | | |
 |    |   |   |  (VMM, IO-threads, vCPU threads, etc)|  | | |
 |    |   |   |                                      |  | | |
-|    |   |   | kata-sandbox-<id>                    |  | | |
-|    |   |   +--------------------------------------+  | | |  
+|    |   |   | kata_<sandbox-id>                    |  | | |
+|    |   |   +--------------------------------------+  | | |
 |    |   |Pod 2                                        | | |
 |    |   +---------------------------------------------+ | |
 |    |kubepods                                           | |
@@ -94,7 +94,7 @@ into account. This will be feasible in the 1.16 Kubernetes release through the `
 
    ```
    podCgroup=Parent(container.CgroupsPath)
-   KataSandboxCgroup=<podCgroup>/kata-sandbox-<PodSandboxID>
+   KataSandboxCgroup=<podCgroup>/kata_<PodSandboxID>
    ```
 
 2. Create the cgroup, `KataSandboxCgroup`
@@ -102,8 +102,8 @@ into account. This will be feasible in the 1.16 Kubernetes release through the `
 3. Join the `KataSandboxCgroup`
 
 Any process created by the runtime will be created in `KataSandboxCgroup`.
-The runtime will not limit the cgroup in the host, but the caller is free
-to set the proper limits for the `podCgroup`.
+The runtime will limit the cgroup in the host only if the sandbox doesn't have a
+container type annotation, but the caller is free to set the proper limits for the `podCgroup`.
 
 In the example above the pod cgroups are `/kubepods/pod1` and `/kubepods/pod2`.
 Kata creates the unrestricted sandbox cgroup under the pod cgroup.
