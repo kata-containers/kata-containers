@@ -12,3 +12,21 @@ networking:
   dnsDomain: cluster.local
   podSubnet: 10.244.0.0/16
   serviceSubnet: 10.96.0.0/12
+apiServer:
+  extraArgs:
+    feature-gates: PodOverhead=true
+scheduler:
+  extraArgs:
+    feature-gates: PodOverhead=true
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: cgroupfs
+featureGates:
+  PodOverhead: true
+systemReserved:
+  cpu: 500m
+  memory: 256Mi
+kubeReserved:
+  cpu: 500m
+  memory: 256Mi
