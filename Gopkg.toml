@@ -52,7 +52,7 @@
 
 [[constraint]]
   name = "github.com/kata-containers/agent"
-  revision = "1b3628c43660cb198ec055d78e5c7b03809cba60"
+  revision = "686708d9a8be625f9350c925ae3f038c1530a423"
 
 [[constraint]]
   name = "github.com/containerd/cri-containerd"
