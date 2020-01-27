@@ -27,6 +27,7 @@ const defaultMaxVCPUCount uint32 = 0
 const defaultMemSize uint32 = 2048 // MiB
 const defaultMemSlots uint32 = 10
 const defaultMemOffset uint32 = 0 // MiB
+const defaultVirtioMem bool = false
 const defaultBridgesCount uint32 = 1
 const defaultInterNetworkingModel = "tcfilter"
 const defaultDisableBlockDeviceUse bool = false

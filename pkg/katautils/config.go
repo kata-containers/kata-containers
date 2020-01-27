@@ -114,6 +114,7 @@ type hypervisor struct {
 	DisableBlockDeviceUse   bool     `toml:"disable_block_device_use"`
 	MemPrealloc             bool     `toml:"enable_mem_prealloc"`
 	HugePages               bool     `toml:"enable_hugepages"`
+	VirtioMem               bool     `toml:"enable_virtio_mem"`
 	FileBackedMemRootDir    string   `toml:"file_mem_backend"`
 	Swap                    bool     `toml:"enable_swap"`
 	Debug                   bool     `toml:"enable_debug"`
@@ -623,6 +624,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemorySize:              h.defaultMemSz(),
 		MemSlots:                h.defaultMemSlots(),
 		MemOffset:               h.defaultMemOffset(),
+		VirtioMem:               h.VirtioMem,
 		EntropySource:           h.GetEntropySource(),
 		DefaultBridges:          h.defaultBridges(),
 		DisableBlockDeviceUse:   h.DisableBlockDeviceUse,
@@ -773,6 +775,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MemorySize:              h.defaultMemSz(),
 		MemSlots:                h.defaultMemSlots(),
 		MemOffset:               h.defaultMemOffset(),
+		VirtioMem:               h.VirtioMem,
 		EntropySource:           h.GetEntropySource(),
 		DefaultBridges:          h.defaultBridges(),
 		DisableBlockDeviceUse:   h.DisableBlockDeviceUse,
@@ -1054,6 +1057,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		DefaultMaxVCPUs:         defaultMaxVCPUCount,
 		MemorySize:              defaultMemSize,
 		MemOffset:               defaultMemOffset,
+		VirtioMem:               defaultVirtioMem,
 		DisableBlockDeviceUse:   defaultDisableBlockDeviceUse,
 		DefaultBridges:          defaultBridgesCount,
 		MemPrealloc:             defaultEnableMemPrealloc,

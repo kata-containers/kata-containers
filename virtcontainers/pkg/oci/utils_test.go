@@ -741,6 +741,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.DefaultMemory] = "1024"
 	ocispec.Annotations[vcAnnotations.MemSlots] = "20"
 	ocispec.Annotations[vcAnnotations.MemOffset] = "512"
+	ocispec.Annotations[vcAnnotations.VirtioMem] = "true"
 	ocispec.Annotations[vcAnnotations.MemPrealloc] = "true"
 	ocispec.Annotations[vcAnnotations.EnableSwap] = "true"
 	ocispec.Annotations[vcAnnotations.FileBackedMemRootDir] = "/dev/shm"
@@ -770,6 +771,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.MemorySize, uint32(1024))
 	assert.Equal(config.HypervisorConfig.MemSlots, uint32(20))
 	assert.Equal(config.HypervisorConfig.MemOffset, uint32(512))
+	assert.Equal(config.HypervisorConfig.VirtioMem, true)
 	assert.Equal(config.HypervisorConfig.MemPrealloc, true)
 	assert.Equal(config.HypervisorConfig.Mlock, false)
 	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
