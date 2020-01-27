@@ -668,6 +668,56 @@ func (q *qemu) setupVirtiofsd() (err error) {
 	return err
 }
 
+func (q *qemu) getMemArgs() (bool, string, string) {
+	share := false
+	target := ""
+	memoryBack := "memory-backend-ram"
+
+	if q.qemuConfig.Knobs.HugePages {
+		// we are setting all the bits that govmm sets when hugepages are enabled.
+		// https://github.com/intel/govmm/blob/master/qemu/qemu.go#L1677
+		target = "/dev/hugepages"
+		memoryBack = "memory-backend-file"
+		share = true
+	} else if q.config.SharedFS == config.VirtioFS || q.config.FileBackedMemRootDir != "" {
+		target = q.qemuConfig.Memory.Path
+		memoryBack = "memory-backend-file"
+	}
+	if q.qemuConfig.Knobs.MemShared {
+		share = true
+	}
+
+	return share, target, memoryBack
+}
+
+func (q *qemu) setupVirtioMem() error {
+	maxMem, err := q.hostMemMB()
+	if err != nil {
+		return err
+	}
+	// 1024 is size for nvdimm
+	sizeMB := int(maxMem) - int(q.config.MemorySize)
+
+	share, target, memoryBack := q.getMemArgs()
+	err = q.qmpSetup()
+	if err != nil {
+		return err
+	}
+	err = q.qmpMonitorCh.qmp.ExecMemdevAdd(q.qmpMonitorCh.ctx, memoryBack, "virtiomem", target, sizeMB, share, "virtio-mem-pci", "virtiomem0")
+	if err == nil {
+		q.config.VirtioMem = true
+		q.Logger().Infof("Setup %dMB virtio-mem-pci success", sizeMB)
+	} else {
+		help := ""
+		if strings.Contains(err.Error(), "Cannot allocate memory") {
+			help = ".  Please use command \"echo 1 > /proc/sys/vm/overcommit_memory\" handle it."
+		}
+		err = fmt.Errorf("Add %dMB virtio-mem-pci fail %s%s", sizeMB, err.Error(), help)
+	}
+
+	return err
+}
+
 // startSandbox will start the Sandbox's VM.
 func (q *qemu) startSandbox(timeout int) error {
 	span, _ := q.trace("startSandbox")
@@ -742,6 +792,10 @@ func (q *qemu) startSandbox(timeout int) error {
 		if err = q.bootFromTemplate(); err != nil {
 			return err
 		}
+	}
+
+	if q.config.VirtioMem {
+		err = q.setupVirtioMem()
 	}
 
 	return err
@@ -1449,9 +1503,6 @@ func (q *qemu) hotplugMemory(memDev *memoryDevice, op operation) (int, error) {
 
 func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 	memoryDevices, err := q.qmpMonitorCh.qmp.ExecQueryMemoryDevices(q.qmpMonitorCh.ctx)
-	share := false
-	target := ""
-	memoryBack := "memory-backend-ram"
 	if err != nil {
 		return 0, fmt.Errorf("failed to query memory devices: %v", err)
 	}
@@ -1465,19 +1516,8 @@ func (q *qemu) hotplugAddMemory(memDev *memoryDevice) (int, error) {
 		}
 		memDev.slot = maxSlot + 1
 	}
-	if q.qemuConfig.Knobs.HugePages {
-		// we are setting all the bits that govmm sets when hugepages are enabled.
-		// https://github.com/intel/govmm/blob/master/qemu/qemu.go#L1677
-		target = "/dev/hugepages"
-		memoryBack = "memory-backend-file"
-		share = true
-	} else if q.config.SharedFS == config.VirtioFS || q.config.FileBackedMemRootDir != "" {
-		target = q.qemuConfig.Memory.Path
-		memoryBack = "memory-backend-file"
-	}
-	if q.qemuConfig.Knobs.MemShared {
-		share = true
-	}
+
+	share, target, memoryBack := q.getMemArgs()
 	err = q.qmpMonitorCh.qmp.ExecHotplugMemory(q.qmpMonitorCh.ctx, memoryBack, "mem"+strconv.Itoa(memDev.slot), target, memDev.sizeMB, share)
 	if err != nil {
 		q.Logger().WithError(err).Error("hotplug memory")
@@ -1661,6 +1701,17 @@ func (q *qemu) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint32, probe boo
 		return 0, memoryDevice{}, err
 	}
 	var addMemDevice memoryDevice
+	if q.config.VirtioMem && currentMemory != reqMemMB {
+		q.Logger().WithField("hotplug", "memory").Debugf("resize memory from %dMB to %dMB", currentMemory, reqMemMB)
+		sizeByte := (reqMemMB - q.config.MemorySize) * 1024 * 1024
+		err = q.qmpMonitorCh.qmp.ExecQomSet(q.qmpMonitorCh.ctx, "virtiomem0", "requested-size", uint64(sizeByte))
+		if err != nil {
+			return 0, memoryDevice{}, err
+		}
+		q.state.HotpluggedMemory = int(sizeByte / 1024 / 1024)
+		return reqMemMB, memoryDevice{}, nil
+	}
+
 	switch {
 	case currentMemory < reqMemMB:
 		//hotplug

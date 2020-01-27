@@ -97,6 +97,9 @@ type HypervisorConfig struct {
 	// VirtioFSExtraArgs passes options to virtiofsd daemon
 	VirtioFSExtraArgs []string
 
+	// File based memory backend root directory
+	FileBackedMemRootDir string
+
 	// BlockDeviceCacheSet specifies cache-related options will be set to block devices or not.
 	BlockDeviceCacheSet bool
 
@@ -125,8 +128,8 @@ type HypervisorConfig struct {
 	// HugePages specifies if the memory should be pre-allocated from huge pages
 	HugePages bool
 
-	// File based memory backend root directory
-	FileBackedMemRootDir string
+	// VirtioMem is used to enable/disable virtio-mem
+	VirtioMem bool
 
 	// Realtime Used to enable/disable realtime
 	Realtime bool

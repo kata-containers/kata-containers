@@ -946,6 +946,17 @@ func (q *QMP) ExecuteBlockdevDel(ctx context.Context, blockdevID string) error {
 	return q.executeCommand(ctx, "x-blockdev-del", args, nil)
 }
 
+// ExecuteChardevDel deletes a char device by sending a chardev-remove command.
+// chardevID is the id of the char device to be deleted. Typically, this will
+// match the id passed to ExecuteCharDevUnixSocketAdd. It must be a valid QMP id.
+func (q *QMP) ExecuteChardevDel(ctx context.Context, chardevID string) error {
+	args := map[string]interface{}{
+		"id": chardevID,
+	}
+
+	return q.executeCommand(ctx, "chardev-remove", args, nil)
+}
+
 // ExecuteNetdevAdd adds a Net device to a QEMU instance
 // using the netdev_add command. netdevID is the id of the device to add.
 // Must be valid QMP identifier.
@@ -1119,6 +1130,27 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 		if disableModern {
 			args["disable-modern"] = disableModern
 		}
+	}
+
+	return q.executeCommand(ctx, "device_add", args, nil)
+}
+
+// ExecutePCIVhostUserDevAdd adds a vhost-user device to a QEMU instance using the device_add command.
+// This function can be used to hot plug vhost-user devices on PCI(E) bridges.
+// It receives the bus and the device address on its parent bus. bus is optional.
+// devID is the id of the device to add.Must be valid QMP identifier. chardevID
+// is the QMP identifier of character device using a unix socket as backend.
+// driver is the name of vhost-user driver, like vhost-user-blk-pci.
+func (q *QMP) ExecutePCIVhostUserDevAdd(ctx context.Context, driver, devID, chardevID, addr, bus string) error {
+	args := map[string]interface{}{
+		"driver":  driver,
+		"id":      devID,
+		"chardev": chardevID,
+		"addr":    addr,
+	}
+
+	if bus != "" {
+		args["bus"] = bus
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
@@ -1347,8 +1379,8 @@ func (q *QMP) ExecQueryCpusFast(ctx context.Context) ([]CPUInfoFast, error) {
 	return cpuInfoFast, nil
 }
 
-// ExecHotplugMemory adds size of MiB memory to the guest
-func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string, size int, share bool) error {
+// ExecMemdevAdd adds size of MiB memory device to the guest
+func (q *QMP) ExecMemdevAdd(ctx context.Context, qomtype, id, mempath string, size int, share bool, driver, driverID string) error {
 	props := map[string]interface{}{"size": uint64(size) << 20}
 	args := map[string]interface{}{
 		"qom-type": qomtype,
@@ -1368,22 +1400,27 @@ func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string
 
 	defer func() {
 		if err != nil {
-			q.cfg.Logger.Errorf("Unable to hotplug memory device: %v", err)
+			q.cfg.Logger.Errorf("Unable to add memory device %s: %v", id, err)
 			err = q.executeCommand(ctx, "object-del", map[string]interface{}{"id": id}, nil)
 			if err != nil {
-				q.cfg.Logger.Warningf("Unable to clean up memory object: %v", err)
+				q.cfg.Logger.Warningf("Unable to clean up memory object %s: %v", id, err)
 			}
 		}
 	}()
 
 	args = map[string]interface{}{
-		"driver": "pc-dimm",
-		"id":     "dimm" + id,
+		"driver": driver,
+		"id":     driverID,
 		"memdev": id,
 	}
 	err = q.executeCommand(ctx, "device_add", args, nil)
 
 	return err
+}
+
+// ExecHotplugMemory adds size of MiB memory to the guest
+func (q *QMP) ExecHotplugMemory(ctx context.Context, qomtype, id, mempath string, size int, share bool) error {
+	return q.ExecMemdevAdd(ctx, qomtype, id, mempath, size, share, "pc-dimm", "dimm"+id)
 }
 
 // ExecuteNVDIMMDeviceAdd adds a block device to a QEMU instance using
@@ -1571,4 +1608,15 @@ func (q *QMP) ExecuteQueryStatus(ctx context.Context) (StatusInfo, error) {
 	}
 
 	return status, nil
+}
+
+// ExecQomSet qom-set path property value
+func (q *QMP) ExecQomSet(ctx context.Context, path, property string, value uint64) error {
+	args := map[string]interface{}{
+		"path":     path,
+		"property": property,
+		"value":    value,
+	}
+
+	return q.executeCommand(ctx, "qom-set", args, nil)
 }
