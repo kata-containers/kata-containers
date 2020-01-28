@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"reflect"
@@ -40,10 +41,12 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	//
 	address1 := &net.IPNet{IP: net.IPv4(172, 17, 0, 2), Mask: net.CIDRMask(16, 32)}
 	address2 := &net.IPNet{IP: net.IPv4(182, 17, 0, 2), Mask: net.CIDRMask(16, 32)}
+	address3 := &net.IPNet{IP: net.ParseIP("2001:db8:1::242:ac11:2"), Mask: net.CIDRMask(64, 128)}
 
 	addrs := []netlink.Addr{
 		{IPNet: address1, Label: "phyaddr1"},
 		{IPNet: address2, Label: "phyaddr2"},
+		{IPNet: address3, Label: "phyaddr3"},
 	}
 
 	// Create a couple of routes:
@@ -51,9 +54,14 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	src2 := net.IPv4(172, 17, 0, 2)
 	gw2 := net.IPv4(172, 17, 0, 1)
 
+	dstV6 := &net.IPNet{IP: net.ParseIP("2001:db8:1::"), Mask: net.CIDRMask(64, 128)}
+	gatewayV6 := net.ParseIP("2001:db8:1::1")
+
 	routes := []netlink.Route{
 		{LinkIndex: 329, Dst: nil, Src: nil, Gw: net.IPv4(172, 17, 0, 1), Scope: netlink.Scope(254)},
 		{LinkIndex: 329, Dst: dst2, Src: src2, Gw: gw2},
+		{LinkIndex: 329, Dst: dstV6, Src: nil, Gw: nil},
+		{LinkIndex: 329, Dst: nil, Src: nil, Gw: gatewayV6},
 	}
 
 	networkInfo := NetworkInfo{
@@ -83,6 +91,7 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	expectedAddresses := []*vcTypes.IPAddress{
 		{Family: netlink.FAMILY_V4, Address: "172.17.0.2", Mask: "16"},
 		{Family: netlink.FAMILY_V4, Address: "182.17.0.2", Mask: "16"},
+		{Family: netlink.FAMILY_V6, Address: "2001:db8:1::242:ac11:2", Mask: "64"},
 	}
 
 	expectedInterfaces := []*vcTypes.Interface{
@@ -92,6 +101,12 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	expectedRoutes := []*vcTypes.Route{
 		{Dest: "", Gateway: "172.17.0.1", Device: "eth0", Source: "", Scope: uint32(254)},
 		{Dest: "172.17.0.0/16", Gateway: "172.17.0.1", Device: "eth0", Source: "172.17.0.2"},
+		{Dest: "2001:db8:1::/64", Gateway: "", Device: "eth0", Source: ""},
+		{Dest: "", Gateway: "2001:db8:1::1", Device: "eth0", Source: ""},
+	}
+
+	for _, r := range resRoutes {
+		fmt.Printf("resRoute: %+v\n", r)
 	}
 
 	assert.Nil(t, err, "unexpected failure when calling generateKataInterfacesAndRoutes")

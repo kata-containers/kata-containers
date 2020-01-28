@@ -592,7 +592,7 @@ func tapNetworkPair(endpoint Endpoint, queues int, disableVhostNet bool) error {
 	}
 
 	// Clear the IP addresses from the veth interface to prevent ARP conflict
-	netPair.VirtIface.Addrs, err = netlink.AddrList(link, netlink.FAMILY_V4)
+	netPair.VirtIface.Addrs, err = netlink.AddrList(link, netlink.FAMILY_ALL)
 	if err != nil {
 		return fmt.Errorf("Unable to obtain veth IP addresses: %s", err)
 	}
@@ -954,24 +954,20 @@ func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*vcTypes.Interfa
 
 		var ipAddresses []*vcTypes.IPAddress
 		for _, addr := range endpoint.Properties().Addrs {
-			// Skip IPv6 because not supported
-			if addr.IP.To4() == nil {
-				// Skip IPv6 because not supported
-				networkLogger().WithFields(logrus.Fields{
-					"unsupported-address-type": "ipv6",
-					"address":                  addr,
-				}).Warn("unsupported address")
-				continue
-			}
 			// Skip localhost interface
 			if addr.IP.IsLoopback() {
 				continue
 			}
+
 			netMask, _ := addr.Mask.Size()
 			ipAddress := vcTypes.IPAddress{
 				Family:  netlink.FAMILY_V4,
 				Address: addr.IP.String(),
 				Mask:    fmt.Sprintf("%d", netMask),
+			}
+
+			if addr.IP.To4() == nil {
+				ipAddress.Family = netlink.FAMILY_V6
 			}
 			ipAddresses = append(ipAddresses, &ipAddress)
 		}
@@ -997,28 +993,10 @@ func generateInterfacesAndRoutes(networkNS NetworkNamespace) ([]*vcTypes.Interfa
 
 			if route.Dst != nil {
 				r.Dest = route.Dst.String()
-
-				if route.Dst.IP.To4() == nil {
-					// Skip IPv6 because not supported
-					networkLogger().WithFields(logrus.Fields{
-						"unsupported-route-type": "ipv6",
-						"destination":            r.Dest,
-					}).Warn("unsupported route")
-					continue
-				}
 			}
 
 			if route.Gw != nil {
 				gateway := route.Gw.String()
-
-				if route.Gw.To4() == nil {
-					// Skip IPv6 because is is not supported
-					networkLogger().WithFields(logrus.Fields{
-						"unsupported-route-type": "ipv6",
-						"gateway":                gateway,
-					}).Warn("unsupported route")
-					continue
-				}
 				r.Gateway = gateway
 			}
 
