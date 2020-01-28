@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
+	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
@@ -38,6 +39,10 @@ var sandboxAnnotations = map[string]string{
 var containerAnnotations = map[string]string{
 	"container.foo":   "container.bar",
 	"container.hello": "container.world",
+}
+
+func init() {
+	rootless.IsRootless = func() bool { return false }
 }
 
 func newEmptySpec() *specs.Spec {

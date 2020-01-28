@@ -24,6 +24,7 @@ import (
 	"github.com/dlespiau/covertool/pkg/cover"
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/pkg/katautils"
+	"github.com/kata-containers/runtime/pkg/rootless"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
@@ -1068,6 +1069,9 @@ func TestMainResetCLIGlobals(t *testing.T) {
 }
 
 func createTempContainerIDMapping(containerID, sandboxID string) (string, error) {
+	// Mocking rootless
+	rootless.IsRootless = func() bool { return false }
+
 	tmpDir, err := ioutil.TempDir("", "containers-mapping")
 	if err != nil {
 		return "", err
