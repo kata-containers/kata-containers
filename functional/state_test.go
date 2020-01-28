@@ -6,6 +6,8 @@ package functional
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"time"
 
 	. "github.com/kata-containers/tests"
@@ -22,6 +24,20 @@ const (
 	stateStopped  = "stopped"
 	stateWaitTime = 5
 )
+
+func distroID() string {
+	pathFile := "/etc/os-release"
+	if _, err := os.Stat(pathFile); os.IsNotExist(err) {
+		pathFile = "/usr/lib/os-release"
+	}
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("source %s; echo -n $ID", pathFile))
+	id, err := cmd.CombinedOutput()
+	if err != nil {
+		LogIfFail("couldn't find distro ID %s\n", err)
+		return ""
+	}
+	return string(id)
+}
 
 var _ = Describe("state", func() {
 	var (
@@ -41,6 +57,9 @@ var _ = Describe("state", func() {
 
 	DescribeTable("container",
 		func(status string, waitTime int) {
+			if distroID() == "centos" {
+				Skip("Issue:https://github.com/kata-containers/tests/issues/2264")
+			}
 			_, stderr, exitCode := container.Run()
 			Expect(exitCode).To(Equal(0))
 			Expect(stderr).To(BeEmpty())
