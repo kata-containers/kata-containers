@@ -101,7 +101,8 @@ The file contains comments explaining all options.
 > **Note:**
 >
 > The initial values in the configuration file provide a good default configuration.
-> You might need to modify this file if you have specialist needs.
+> You may need to modify this file to optimise or tailor your system, or if you have
+> specific requirements.
 
 Since the runtime supports a
 [stateless system](https://clearlinux.org/about),
@@ -111,8 +112,8 @@ built in to the runtime. The default location is
 system. However, if `/etc/kata-containers/configuration.toml` exists, this
 takes priority.
 
-The command below lists the full paths to the configuration files that the
-runtime attempts to load. The first path that exists is used:
+The below command lists the full paths to the configuration files that the
+runtime attempts to load. The first path that exists will be used:
 
 ```bash
 $ kata-runtime --kata-show-default-config-paths
@@ -138,7 +139,7 @@ $ kata-runtime kata-env
 ## Logging
 
 The runtime provides `--log=` and `--log-format=` options. However, the
-runtime always logs to the system log (`syslog` or `journald`).
+runtime also always logs to the system log (`syslog` or `journald`).
 
 To view runtime log output:
 
