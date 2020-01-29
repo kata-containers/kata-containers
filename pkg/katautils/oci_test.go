@@ -13,8 +13,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/stretchr/testify/assert"
 )
+
+func init() {
+	rootless.IsRootless = func() bool { return false }
+}
 
 func createTempContainerIDMapping(containerID, sandboxID string) (string, error) {
 	tmpDir, err := ioutil.TempDir("", "containers-mapping")
