@@ -154,8 +154,8 @@ assets:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v4.x/"
     uscan-url: >-
-      https://mirrors.edge.kernel.org/pub/linux/kernel/v4.x/linux-(4\.19\..+)\.tar\.gz
-    version: "v4.19.86"
+      https://mirrors.edge.kernel.org/pub/linux/kernel/v5.x/linux-(5\.4\..+)\.tar\.gz
+    version: "v5.4.15"
 
   kernel-experimental:
     description: "Linux kernel with virtiofs 3.0"
