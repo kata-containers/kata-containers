@@ -112,7 +112,7 @@ func (m *mockHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *Hypervi
 }
 
 func (m *mockHypervisor) toGrpc() ([]byte, error) {
-	return nil, errors.New("firecracker is not supported by VM cache")
+	return nil, errors.New("mockHypervisor is not supported by VM cache")
 }
 
 func (m *mockHypervisor) save() (s persistapi.HypervisorState) {
