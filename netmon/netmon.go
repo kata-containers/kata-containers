@@ -52,7 +52,7 @@ var (
 	version = "unknown"
 
 	// For simplicity the code will only focus on IPv4 addresses for now.
-	netlinkFamily = netlink.FAMILY_V4
+	netlinkFamily = netlink.FAMILY_ALL
 
 	storageParentPath = "/var/run/kata-containers/netmon/sbs"
 )
@@ -275,9 +275,14 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, linkType string, addrs []net
 		netMask, _ := addr.Mask.Size()
 
 		ipAddr := &vcTypes.IPAddress{
-			Family:  netlinkFamily,
 			Address: addr.IP.String(),
 			Mask:    fmt.Sprintf("%d", netMask),
+		}
+
+		if addr.IP.To4() != nil {
+			ipAddr.Family = netlink.FAMILY_V4
+		} else {
+			ipAddr.Family = netlink.FAMILY_V6
 		}
 
 		ipAddrs = append(ipAddrs, ipAddr)
@@ -303,8 +308,6 @@ func convertInterface(linkAttrs *netlink.LinkAttrs, linkType string, addrs []net
 func convertRoutes(netRoutes []netlink.Route) []vcTypes.Route {
 	var routes []vcTypes.Route
 
-	// Ignore routes with IPv6 addresses as this is not supported
-	// by Kata yet.
 	for _, netRoute := range netRoutes {
 		dst := ""
 
@@ -313,25 +316,30 @@ func convertRoutes(netRoutes []netlink.Route) []vcTypes.Route {
 		}
 
 		if netRoute.Dst != nil {
-			if netRoute.Dst.IP.To4() != nil {
+			dst = netRoute.Dst.String()
+			if netRoute.Dst.IP.To4() != nil || netRoute.Dst.IP.To16() != nil {
 				dst = netRoute.Dst.String()
 			} else {
-				netmonLog.WithField("destination", netRoute.Dst.IP.String()).Warn("Not IPv4 format")
+				netmonLog.WithField("destination", netRoute.Dst.IP.String()).Warn("Unexpected network address format")
 			}
 		}
 
 		src := ""
-		if netRoute.Src.To4() != nil {
-			src = netRoute.Src.String()
-		} else {
-			netmonLog.WithField("source", netRoute.Src.String()).Warn("Not IPv4 format")
+		if netRoute.Src != nil {
+			if netRoute.Src.To4() != nil || netRoute.Src.To16() != nil {
+				src = netRoute.Src.String()
+			} else {
+				netmonLog.WithField("source", netRoute.Src.String()).Warn("Unexpected network address format")
+			}
 		}
 
 		gw := ""
-		if netRoute.Gw.To4() != nil {
-			gw = netRoute.Gw.String()
-		} else {
-			netmonLog.WithField("gateway", netRoute.Gw.String()).Warn("Not IPv4 format")
+		if netRoute.Gw != nil {
+			if netRoute.Gw.To4() != nil || netRoute.Gw.To16() != nil {
+				gw = netRoute.Gw.String()
+			} else {
+				netmonLog.WithField("gateway", netRoute.Gw.String()).Warn("Unexpected network address format")
+			}
 		}
 
 		dev := ""

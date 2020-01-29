@@ -7,6 +7,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -37,6 +38,8 @@ const (
 	testHwAddr             = "02:00:ca:fe:00:48"
 	testIPAddress          = "192.168.0.15"
 	testIPAddressWithMask  = "192.168.0.15/32"
+	testIP6Address         = "2001:db8:1::242:ac11:2"
+	testIP6AddressWithMask = "2001:db8:1::/64"
 	testScope              = 1
 	testTxQLen             = -1
 	testIfaceIndex         = 5
@@ -169,6 +172,11 @@ func TestConvertInterface(t *testing.T) {
 				IP: net.ParseIP(testIPAddress),
 			},
 		},
+		{
+			IPNet: &net.IPNet{
+				IP: net.ParseIP(testIP6Address),
+			},
+		},
 	}
 
 	linkAttrs := &netlink.LinkAttrs{
@@ -186,8 +194,13 @@ func TestConvertInterface(t *testing.T) {
 		HwAddr: testHwAddr,
 		IPAddresses: []*vcTypes.IPAddress{
 			{
-				Family:  netlinkFamily,
+				Family:  netlink.FAMILY_V4,
 				Address: testIPAddress,
+				Mask:    "0",
+			},
+			{
+				Family:  netlink.FAMILY_V6,
+				Address: testIP6Address,
 				Mask:    "0",
 			},
 		},
@@ -195,12 +208,17 @@ func TestConvertInterface(t *testing.T) {
 	}
 
 	got := convertInterface(linkAttrs, linkType, addrs)
+
 	assert.True(t, reflect.DeepEqual(expected, got),
 		"Got %+v\nExpected %+v", got, expected)
 }
 
 func TestConvertRoutes(t *testing.T) {
 	ip, ipNet, err := net.ParseCIDR(testIPAddressWithMask)
+	assert.Nil(t, err)
+	assert.NotNil(t, ipNet)
+
+	_, ip6Net, err := net.ParseCIDR(testIP6AddressWithMask)
 	assert.Nil(t, err)
 	assert.NotNil(t, ipNet)
 
@@ -212,6 +230,13 @@ func TestConvertRoutes(t *testing.T) {
 			LinkIndex: -1,
 			Scope:     testScope,
 		},
+		{
+			Dst:       ip6Net,
+			Src:       nil,
+			Gw:        nil,
+			LinkIndex: -1,
+			Scope:     testScope,
+		},
 	}
 
 	expected := []vcTypes.Route{
@@ -219,6 +244,12 @@ func TestConvertRoutes(t *testing.T) {
 			Dest:    testIPAddressWithMask,
 			Gateway: testIPAddress,
 			Source:  testIPAddress,
+			Scope:   uint32(testScope),
+		},
+		{
+			Dest:    testIP6AddressWithMask,
+			Gateway: "",
+			Source:  "",
 			Scope:   uint32(testScope),
 		},
 	}
@@ -269,12 +300,40 @@ func testCreateDummyNetwork(t *testing.T, handler *netlink.Handle) (int, vcTypes
 	attrs := link.Attrs()
 	assert.NotNil(t, attrs)
 
+	addrs, err := handler.AddrList(link, netlinkFamily)
+	assert.Nil(t, err)
+
+	var ipAddrs []*vcTypes.IPAddress
+
+	// Scan addresses for ipv6 link local address which is automatically assigned
+	for _, addr := range addrs {
+		if addr.IPNet == nil {
+			continue
+		}
+
+		netMask, _ := addr.Mask.Size()
+
+		ipAddr := &vcTypes.IPAddress{
+			Address: addr.IP.String(),
+			Mask:    fmt.Sprintf("%d", netMask),
+		}
+
+		if addr.IP.To4() != nil {
+			ipAddr.Family = netlink.FAMILY_V4
+		} else {
+			ipAddr.Family = netlink.FAMILY_V6
+		}
+
+		ipAddrs = append(ipAddrs, ipAddr)
+	}
+
 	iface := vcTypes.Interface{
-		Device:   testIfaceName,
-		Name:     testIfaceName,
-		Mtu:      uint64(testMTU),
-		HwAddr:   testHwAddr,
-		LinkType: link.Type(),
+		Device:      testIfaceName,
+		Name:        testIfaceName,
+		Mtu:         uint64(testMTU),
+		HwAddr:      testHwAddr,
+		LinkType:    link.Type(),
+		IPAddresses: ipAddrs,
 	}
 
 	return attrs.Index, iface
