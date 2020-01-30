@@ -14,8 +14,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/kata-containers/runtime/pkg/rootless"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	"github.com/sirupsen/logrus"
 )
 

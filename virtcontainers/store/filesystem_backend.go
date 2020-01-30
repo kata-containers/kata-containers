@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/kata-containers/runtime/pkg/rootless"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"

@@ -18,12 +18,12 @@ import (
 	"syscall"
 
 	"github.com/kata-containers/runtime/pkg/katautils"
-	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/pkg/signals"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
 	vf "github.com/kata-containers/runtime/virtcontainers/factory"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"

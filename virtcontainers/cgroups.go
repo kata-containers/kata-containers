@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	"github.com/containerd/cgroups"
-	"github.com/kata-containers/runtime/pkg/rootless"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	libcontcgroups "github.com/opencontainers/runc/libcontainer/cgroups"
 	libcontcgroupsfs "github.com/opencontainers/runc/libcontainer/cgroups/fs"
 	libcontcgroupssystemd "github.com/opencontainers/runc/libcontainer/cgroups/systemd"
