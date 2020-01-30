@@ -18,6 +18,8 @@ source "${cidir}/lib.sh"
 # Where real kata build script exist, via docker build to avoid install all deps
 packaging_repo="github.com/kata-containers/packaging"
 latest_build_url="${jenkins_url}/job/cloud-hypervisor-nightly-$(uname -m)/${cached_artifacts_path}"
+clh_bin_name="cloud-hypervisor"
+clh_install_path="/usr/bin/${clh_bin_name}"
 
 
 install_clh() {
@@ -39,27 +41,21 @@ install_clh() {
 	pushd  $(dirname "${GOPATH}/src/${go_cloud_hypervisor_repo}")
 	# packaging build script expects run in the hypervisor repo parent directory
 	# It will find the hypervisor repo and checkout to the version exported above
-	${GOPATH}/src/${packaging_repo}/static-build/cloud-hypervisor/build-static-clh.sh
-	sudo install -D cloud-hypervisor/cloud-hypervisor /usr/bin/cloud-hypervisor
+	"${GOPATH}/src/${packaging_repo}/static-build/cloud-hypervisor/build-static-clh.sh"
+	sudo install -D "cloud-hypervisor/${clh_bin_name}"  "${clh_install_path}"
 	popd
 }
 
-install_cached_clh(){
-	local cloud_hypervisor_binary=${1:-}
-	[ -z "${cloud_hypervisor_binary}" ] && die "empty binary format"
-	info "Installing ${cloud_hypervisor_binary}"
-	local cloud_hypervisor_path="/usr/bin"
-	local cloud_hypervisor_name="cloud-hypervisor"
-	sudo -E curl -fL --progress-bar "${latest_build_url}"/"${cloud_hypervisor_binary_name}" -o "${cloud_hypervisor_binary_path}" || return 1
-}
-
 install_prebuilt_clh() {
-	local cloud_hypervisor_path="/usr/bin"
-	pushd "${cloud_hypervisor_path}" > /dev/null
+	local checksum_file="sha256sum-cloud-hypervisor"
+	curl -fsOL --progress-bar "${latest_build_url}/${clh_bin_name}" || return 1
+	curl -fsOL "${latest_build_url}/${checksum_file}" || return 1
+
 	info "Verify download checksum"
-	sudo -E curl -fsOL "${latest_build_url}/sha256sum-cloud-hypervisor" || return 1
-	sudo sha256sum -c "sha256sum-cloud-hypervisor" || return 1
-	popd > /dev/null
+	sudo sha256sum -c "${checksum_file}" || return 1
+
+	info "installing ${clh_bin_name}" "${clh_install_path}"
+	sudo install -D ${clh_bin_name} "${clh_install_path}"
 }
 
 main() {
