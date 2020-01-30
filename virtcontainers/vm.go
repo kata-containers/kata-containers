@@ -412,9 +412,9 @@ func (v *VM) assignSandbox(s *Sandbox) error {
 	// - link 9pfs share path from sandbox dir (/run/kata-containers/shared/sandboxes/sbid/) to vm dir (/run/vc/vm/vmid/shared/)
 
 	vmSharePath := buildVMSharePath(v.id)
-	vmSockDir := v.agent.getVMPath(v.id)
+	vmSockDir := filepath.Join(v.store.RunVMStoragePath(), v.id)
 	sbSharePath := s.agent.getSharePath(s.id)
-	sbSockDir := s.agent.getVMPath(s.id)
+	sbSockDir := filepath.Join(v.store.RunVMStoragePath(), s.id)
 
 	v.logger().WithFields(logrus.Fields{
 		"vmSharePath": vmSharePath,

@@ -620,11 +620,6 @@ func TestAgentPathAPI(t *testing.T) {
 	k2 := &kataAgent{}
 	id := "foobar"
 
-	// getVMPath
-	path1 := k1.getVMPath(id)
-	path2 := k2.getVMPath(id)
-	assert.Equal(path1, path2)
-
 	// getSharePath
 	path1 = k1.getSharePath(id)
 	path2 = k2.getSharePath(id)
