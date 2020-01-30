@@ -24,7 +24,6 @@ import (
 	"github.com/kata-containers/agent/protocols/grpc"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
@@ -214,10 +213,6 @@ func (k *kataAgent) trace(name string) (opentracing.Span, context.Context) {
 
 func (k *kataAgent) Logger() *logrus.Entry {
 	return virtLog.WithField("subsystem", "kata_agent")
-}
-
-func (k *kataAgent) getVMPath(id string) string {
-	return filepath.Join(fs.RunVMStoragePath(), id)
 }
 
 func (k *kataAgent) getSharePath(id string) string {

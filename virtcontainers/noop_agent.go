@@ -185,12 +185,7 @@ func (n *noopAgent) configureFromGrpc(h hypervisor, id string, builtin bool, con
 	return nil
 }
 
-// getVMPath is the Noop agent vm path getter. It does nothing.
-func (n *noopAgent) getVMPath(id string) string {
-	return ""
-}
-
-// getVMPath is the Noop agent share path getter. It does nothing.
+// getSharePath is the Noop agent share path getter. It does nothing.
 func (n *noopAgent) getSharePath(id string) string {
 	return ""
 }
