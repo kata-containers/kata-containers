@@ -205,6 +205,9 @@ compatibility:
 vcpus:
 	bash -f integration/vcpus/default_vcpus_test.sh
 
+ipv6:
+	bash -f integration/ipv6/ipv6.sh
+
 test: ${UNION}
 
 check: checkcommits log-parser
@@ -234,6 +237,7 @@ help:
 	ginkgo \
 	$(INSTALL_TARGETS) \
 	podman \
+	ipv6 \
 	kubernetes \
 	list-install-targets \
 	log-parser \
