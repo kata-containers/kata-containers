@@ -26,13 +26,13 @@ import (
 
 	aTypes "github.com/kata-containers/agent/pkg/types"
 	pb "github.com/kata-containers/agent/protocols/grpc"
-	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 )

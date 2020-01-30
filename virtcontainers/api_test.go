@@ -16,11 +16,11 @@ import (
 	"testing"
 
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
-	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
