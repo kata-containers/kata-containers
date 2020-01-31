@@ -36,12 +36,9 @@ import (
 )
 
 var (
-	// initRootless states whether the isRootless variable
-	// has been set yet
-	initRootless bool
-
 	// isRootless states whether execution is rootless or not
-	isRootless bool
+	// If nil, rootless is auto-detected
+	isRootless *bool
 
 	// lock for the initRootless and isRootless variables
 	rLock sync.Mutex
@@ -58,6 +55,10 @@ var (
 	IsRootless = isRootlessFunc
 )
 
+func SetRootless(rootless bool) {
+	isRootless = &rootless
+}
+
 // SetLogger sets up a logger for the rootless pkg
 func SetLogger(ctx context.Context, logger *logrus.Entry) {
 	fields := rootlessLog.Data
@@ -68,9 +69,9 @@ func SetLogger(ctx context.Context, logger *logrus.Entry) {
 func isRootlessFunc() bool {
 	rLock.Lock()
 	defer rLock.Unlock()
-	if !initRootless {
-		initRootless = true
-		isRootless = true
+	// auto-detect if nil
+	if isRootless == nil {
+		SetRootless(true)
 		// --rootless and --systemd-cgroup options must honoured
 		// but with the current implementation this is not possible
 		// https://github.com/kata-containers/runtime/issues/2412
@@ -80,9 +81,9 @@ func isRootlessFunc() bool {
 		if system.RunningInUserNS() {
 			return true
 		}
-		isRootless = false
+		SetRootless(false)
 	}
-	return isRootless
+	return *isRootless
 }
 
 // GetRootlessDir returns the path to the location for rootless
