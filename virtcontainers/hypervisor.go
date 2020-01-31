@@ -16,8 +16,8 @@ import (
 	"strings"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
+	"github.com/kata-containers/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
 )
@@ -193,15 +193,26 @@ func (hType *HypervisorType) String() string {
 
 // newHypervisor returns an hypervisor from and hypervisor type.
 func newHypervisor(hType HypervisorType) (hypervisor, error) {
+	store, err := persist.GetDriver()
+	if err != nil {
+		return nil, err
+	}
+
 	switch hType {
 	case QemuHypervisor:
-		return &qemu{}, nil
+		return &qemu{
+			store: store,
+		}, nil
 	case FirecrackerHypervisor:
 		return &firecracker{}, nil
 	case AcrnHypervisor:
-		return &Acrn{}, nil
+		return &Acrn{
+			store: store,
+		}, nil
 	case ClhHypervisor:
-		return &cloudHypervisor{}, nil
+		return &cloudHypervisor{
+			store: store,
+		}, nil
 	case MockHypervisor:
 		return &mockHypervisor{}, nil
 	default:
@@ -713,7 +724,7 @@ func getHypervisorPid(h hypervisor) int {
 	return pids[0]
 }
 
-func generateVMSocket(id string, useVsock bool) (interface{}, error) {
+func generateVMSocket(id string, useVsock bool, vmStogarePath string) (interface{}, error) {
 	if useVsock {
 		vhostFd, contextID, err := utils.FindContextID()
 		if err != nil {
@@ -727,7 +738,7 @@ func generateVMSocket(id string, useVsock bool) (interface{}, error) {
 		}, nil
 	}
 
-	path, err := utils.BuildSocketPath(filepath.Join(fs.RunVMStoragePath(), id), defaultSocketName)
+	path, err := utils.BuildSocketPath(filepath.Join(vmStogarePath, id), defaultSocketName)
 	if err != nil {
 		return nil, err
 	}
