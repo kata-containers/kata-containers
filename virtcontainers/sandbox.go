@@ -538,7 +538,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		ctx:             ctx,
 	}
 
-	if s.newStore, err = persist.GetDriver("fs"); err != nil || s.newStore == nil {
+	if s.newStore, err = persist.GetDriver(); err != nil || s.newStore == nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
 
@@ -622,7 +622,7 @@ func (s *Sandbox) storeSandbox() error {
 }
 
 func rLockSandbox(sandboxID string) (func() error, error) {
-	store, err := persist.GetDriver("fs")
+	store, err := persist.GetDriver()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
@@ -631,7 +631,7 @@ func rLockSandbox(sandboxID string) (func() error, error) {
 }
 
 func rwLockSandbox(sandboxID string) (func() error, error) {
-	store, err := persist.GetDriver("fs")
+	store, err := persist.GetDriver()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}

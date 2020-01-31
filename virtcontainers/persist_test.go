@@ -37,7 +37,7 @@ func TestSandboxRestore(t *testing.T) {
 		config:     &sconfig,
 	}
 
-	sandbox.newStore, err = persist.GetDriver("fs")
+	sandbox.newStore, err = persist.GetDriver()
 	assert.NoError(err)
 	assert.NotNil(sandbox.newStore)
 
