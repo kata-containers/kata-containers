@@ -15,7 +15,6 @@ import (
 	"syscall"
 
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	"github.com/sirupsen/logrus"
 )
 
@@ -40,45 +39,12 @@ const sandboxPathSuffix = "sbs"
 // vmPathSuffix is the suffix used for guest VMs.
 const vmPathSuffix = "vm"
 
-var StorageRootPath = func() string {
-	path := filepath.Join("/run", storagePathSuffix)
-	if rootless.IsRootless() {
-		return filepath.Join(rootless.GetRootlessDir(), path)
-	}
-	return path
-}
-
-// RunStoragePath is the sandbox runtime directory.
-// It will contain one state.json and one lock file for each created sandbox.
-var RunStoragePath = func() string {
-	return filepath.Join(StorageRootPath(), sandboxPathSuffix)
-}
-
-// RunVMStoragePath is the vm directory.
-// It will contain all guest vm sockets and shared mountpoints.
-// The function is declared this way for mocking in unit tests
-var RunVMStoragePath = func() string {
-	return filepath.Join(StorageRootPath(), vmPathSuffix)
-}
-
-// TestSetRunStoragePath set RunStoragePath to path
-// this function is only used for testing purpose
-func TestSetRunStoragePath(path string) {
-	RunStoragePath = func() string {
-		return path
-	}
-}
-
-func TestSetStorageRootPath(path string) {
-	StorageRootPath = func() string {
-		return path
-	}
-}
-
 // FS storage driver implementation
 type FS struct {
-	sandboxState   *persistapi.SandboxState
-	containerState map[string]persistapi.ContainerState
+	sandboxState    *persistapi.SandboxState
+	containerState  map[string]persistapi.ContainerState
+	storageRootPath string
+	driverName      string
 }
 
 var fsLog = logrus.WithField("source", "virtcontainers/persist/fs")
@@ -87,24 +53,22 @@ var fsLog = logrus.WithField("source", "virtcontainers/persist/fs")
 func (fs *FS) Logger() *logrus.Entry {
 	return fsLog.WithFields(logrus.Fields{
 		"subsystem": "persist",
+		"driver":    fs.driverName,
 	})
-}
-
-// Name returns driver name
-func Name() string {
-	return "fs"
 }
 
 // Init FS persist driver and return abstract PersistDriver
 func Init() (persistapi.PersistDriver, error) {
 	return &FS{
-		sandboxState:   &persistapi.SandboxState{},
-		containerState: make(map[string]persistapi.ContainerState),
+		sandboxState:    &persistapi.SandboxState{},
+		containerState:  make(map[string]persistapi.ContainerState),
+		storageRootPath: filepath.Join("/run", storagePathSuffix),
+		driverName:      "fs",
 	}, nil
 }
 
 func (fs *FS) sandboxDir(sandboxID string) (string, error) {
-	return filepath.Join(RunStoragePath(), sandboxID), nil
+	return filepath.Join(fs.RunStoragePath(), sandboxID), nil
 }
 
 // ToDisk sandboxState and containerState to disk
@@ -314,7 +278,7 @@ func (fs *FS) Lock(sandboxID string, exclusive bool) (func() error, error) {
 }
 
 func (fs *FS) GlobalWrite(relativePath string, data []byte) error {
-	path := filepath.Join(StorageRootPath(), relativePath)
+	path := filepath.Join(fs.storageRootPath, relativePath)
 	path, err := filepath.Abs(filepath.Clean(path))
 	if err != nil {
 		return fmt.Errorf("failed to find abs path for %q: %v", relativePath, err)
@@ -347,7 +311,7 @@ func (fs *FS) GlobalWrite(relativePath string, data []byte) error {
 }
 
 func (fs *FS) GlobalRead(relativePath string) ([]byte, error) {
-	path := filepath.Join(StorageRootPath(), relativePath)
+	path := filepath.Join(fs.storageRootPath, relativePath)
 	path, err := filepath.Abs(filepath.Clean(path))
 	if err != nil {
 		return nil, fmt.Errorf("failed to find abs path for %q: %v", relativePath, err)
@@ -366,4 +330,12 @@ func (fs *FS) GlobalRead(relativePath string) ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
+}
+
+func (fs *FS) RunStoragePath() string {
+	return filepath.Join(fs.storageRootPath, sandboxPathSuffix)
+}
+
+func (fs *FS) RunVMStoragePath() string {
+	return filepath.Join(fs.storageRootPath, vmPathSuffix)
 }
