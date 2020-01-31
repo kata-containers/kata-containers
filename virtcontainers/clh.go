@@ -21,7 +21,6 @@ import (
 	"time"
 
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	chclient "github.com/kata-containers/runtime/virtcontainers/pkg/cloud-hypervisor/client"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
@@ -111,6 +110,7 @@ type cloudHypervisor struct {
 	vmconfig  chclient.VmConfig
 	cmdOutput bytes.Buffer
 	virtiofsd Virtiofsd
+	store     persistapi.PersistDriver
 }
 
 var clhKernelParams = []Param{
@@ -303,7 +303,7 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 
 	clh.Logger().WithField("function", "startSandbox").Info("starting Sandbox")
 
-	vmPath := filepath.Join(fs.RunVMStoragePath(), clh.id)
+	vmPath := filepath.Join(clh.store.RunVMStoragePath(), clh.id)
 	err := os.MkdirAll(vmPath, DirMode)
 	if err != nil {
 		return err
@@ -604,23 +604,23 @@ func (clh *cloudHypervisor) generateSocket(id string, useVsock bool) (interface{
 }
 
 func (clh *cloudHypervisor) virtioFsSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, virtioFsSocket)
+	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, virtioFsSocket)
 }
 
 func (clh *cloudHypervisor) vsockSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, clhSocket)
+	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, clhSocket)
 }
 
 func (clh *cloudHypervisor) serialPath(id string) (string, error) {
-	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, clhSerial)
+	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, clhSerial)
 }
 
 func (clh *cloudHypervisor) apiSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, clhAPISocket)
+	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, clhAPISocket)
 }
 
 func (clh *cloudHypervisor) logFilePath(id string) (string, error) {
-	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, clhLogFile)
+	return utils.BuildSocketPath(clh.store.RunVMStoragePath(), id, clhLogFile)
 }
 
 func (clh *cloudHypervisor) waitVMM(timeout uint) error {
@@ -999,7 +999,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	}
 
 	// cleanup vm path
-	dir := filepath.Join(fs.RunVMStoragePath(), clh.id)
+	dir := filepath.Join(clh.store.RunVMStoragePath(), clh.id)
 
 	// If it's a symlink, remove both dir and the target.
 	link, err := filepath.EvalSymlinks(dir)
@@ -1028,7 +1028,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	}
 
 	if clh.config.VMid != "" {
-		dir = filepath.Join(fs.RunStoragePath(), clh.config.VMid)
+		dir = filepath.Join(clh.store.RunStoragePath(), clh.config.VMid)
 		if err := os.RemoveAll(dir); err != nil {
 			if !force {
 				return err

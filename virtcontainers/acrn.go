@@ -22,10 +22,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -38,17 +35,6 @@ const (
 	UUIDPathSuffix = "uuid"
 	uuidFile       = "uuid.json"
 )
-
-// VMUUIDStoragePath is the uuid directory.
-// It will contain all uuid info used by guest vm.
-var VMUUIDStoragePath = func() string {
-	path := filepath.Join(fs.StorageRootPath(), UUIDPathSuffix)
-	if rootless.IsRootless() {
-		return filepath.Join(rootless.GetRootlessDir(), path)
-	}
-	return path
-
-}
 
 // ACRN currently supports only known UUIDs for security
 // reasons (FuSa). When launching VM, only these pre-defined
@@ -101,6 +87,7 @@ type Acrn struct {
 	info       AcrnInfo
 	arch       acrnArch
 	ctx        context.Context
+	store      persistapi.PersistDriver
 }
 
 type acrnPlatformInfo struct {
@@ -328,7 +315,7 @@ func (a *Acrn) setup(id string, hypervisorConfig *HypervisorConfig) error {
 
 		// The path might already exist, but in case of VM templating,
 		// we have to create it since the sandbox has not created it yet.
-		if err = os.MkdirAll(filepath.Join(fs.RunStoragePath(), id), DirMode); err != nil {
+		if err = os.MkdirAll(filepath.Join(a.store.RunStoragePath(), id), DirMode); err != nil {
 			return err
 		}
 
@@ -444,7 +431,7 @@ func (a *Acrn) startSandbox(timeoutSecs int) error {
 		a.Logger().WithField("default-kernel-parameters", formatted).Debug()
 	}
 
-	vmPath := filepath.Join(fs.RunVMStoragePath(), a.id)
+	vmPath := filepath.Join(a.store.RunVMStoragePath(), a.id)
 	err := os.MkdirAll(vmPath, DirMode)
 	if err != nil {
 		return err
@@ -658,7 +645,7 @@ func (a *Acrn) getSandboxConsole(id string) (string, error) {
 	span, _ := a.trace("getSandboxConsole")
 	defer span.Finish()
 
-	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, acrnConsoleSocket)
+	return utils.BuildSocketPath(a.store.RunVMStoragePath(), id, acrnConsoleSocket)
 }
 
 func (a *Acrn) saveSandbox() error {
@@ -734,7 +721,7 @@ func (a *Acrn) check() error {
 }
 
 func (a *Acrn) generateSocket(id string, useVsock bool) (interface{}, error) {
-	return generateVMSocket(id, useVsock)
+	return generateVMSocket(id, useVsock, a.store.RunVMStoragePath())
 }
 
 // GetACRNUUIDBytes returns UUID bytes that is used for VM creation
@@ -797,10 +784,6 @@ func (a *Acrn) GetMaxSupportedACRNVM() (uint8, error) {
 }
 
 func (a *Acrn) storeInfo() error {
-	store, err := persist.GetDriver("fs")
-	if err != nil {
-		return err
-	}
 	relPath := filepath.Join(UUIDPathSuffix, uuidFile)
 
 	jsonOut, err := json.Marshal(a.info)
@@ -808,7 +791,7 @@ func (a *Acrn) storeInfo() error {
 		return fmt.Errorf("Could not marshal data: %s", err)
 	}
 
-	if err := store.GlobalWrite(relPath, jsonOut); err != nil {
+	if err := a.store.GlobalWrite(relPath, jsonOut); err != nil {
 		return fmt.Errorf("failed to write uuid to file: %v", err)
 	}
 
@@ -816,13 +799,9 @@ func (a *Acrn) storeInfo() error {
 }
 
 func (a *Acrn) loadInfo() error {
-	store, err := persist.GetDriver("fs")
-	if err != nil {
-		return err
-	}
 	relPath := filepath.Join(UUIDPathSuffix, uuidFile)
 
-	data, err := store.GlobalRead(relPath)
+	data, err := a.store.GlobalRead(relPath)
 	if err != nil {
 		return fmt.Errorf("failed to read uuid from file: %v", err)
 	}

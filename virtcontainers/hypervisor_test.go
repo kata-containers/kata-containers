@@ -72,12 +72,6 @@ func testNewHypervisorFromHypervisorType(t *testing.T, hypervisorType Hypervisor
 	assert.Exactly(hy, expected)
 }
 
-func TestNewHypervisorFromQemuHypervisorType(t *testing.T) {
-	hypervisorType := QemuHypervisor
-	expectedHypervisor := &qemu{}
-	testNewHypervisorFromHypervisorType(t, hypervisorType, expectedHypervisor)
-}
-
 func TestNewHypervisorFromMockHypervisorType(t *testing.T) {
 	hypervisorType := MockHypervisor
 	expectedHypervisor := &mockHypervisor{}
@@ -441,7 +435,7 @@ func genericTestRunningOnVMM(t *testing.T, data []testNestedVMMData) {
 func TestGenerateVMSocket(t *testing.T) {
 	assert := assert.New(t)
 
-	s, err := generateVMSocket("a", false)
+	s, err := generateVMSocket("a", false, "")
 	assert.NoError(err)
 	socket, ok := s.(types.Socket)
 	assert.True(ok)
@@ -453,7 +447,7 @@ func TestGenerateVMSocket(t *testing.T) {
 	if tc.NotValid(ktu.NeedRoot()) {
 		t.Skip(testDisabledAsNonRoot)
 	}
-	s, err = generateVMSocket("a", true)
+	s, err = generateVMSocket("a", true, "")
 	assert.NoError(err)
 	vsock, ok := s.(types.VSock)
 	assert.True(ok)

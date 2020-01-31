@@ -16,7 +16,6 @@ import (
 	pb "github.com/kata-containers/runtime/protocols/cache"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/sirupsen/logrus"
 )
@@ -159,7 +158,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 
 	virtLog.WithField("vm", id).WithField("config", config).Info("create new vm")
 
-	store, err := persist.GetDriver("fs")
+	store, err := persist.GetDriver()
 	if err != nil {
 		return nil, err
 	}
@@ -178,7 +177,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 
 	// 2. setup agent
 	agent := newAgent(config.AgentType)
-	vmSharePath := buildVMSharePath(id)
+	vmSharePath := buildVMSharePath(id, store.RunVMStoragePath())
 	err = agent.configure(hypervisor, id, vmSharePath, isProxyBuiltIn(config.ProxyType), config.AgentConfig)
 	if err != nil {
 		return nil, err
@@ -243,7 +242,7 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		return nil, err
 	}
 
-	store, err := persist.GetDriver("fs")
+	store, err := persist.GetDriver()
 	if err != nil {
 		return nil, err
 	}
@@ -284,8 +283,8 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 	}, nil
 }
 
-func buildVMSharePath(id string) string {
-	return filepath.Join(fs.RunVMStoragePath(), id, "shared")
+func buildVMSharePath(id string, vmStoragePath string) string {
+	return filepath.Join(vmStoragePath, id, "shared")
 }
 
 func (v *VM) logger() logrus.FieldLogger {
@@ -411,7 +410,7 @@ func (v *VM) assignSandbox(s *Sandbox) error {
 	// - link vm socket from sandbox dir (/run/vc/vm/sbid/<kata.sock>) to vm dir (/run/vc/vm/vmid/<kata.sock>)
 	// - link 9pfs share path from sandbox dir (/run/kata-containers/shared/sandboxes/sbid/) to vm dir (/run/vc/vm/vmid/shared/)
 
-	vmSharePath := buildVMSharePath(v.id)
+	vmSharePath := buildVMSharePath(v.id, v.store.RunVMStoragePath())
 	vmSockDir := filepath.Join(v.store.RunVMStoragePath(), v.id)
 	sbSharePath := s.agent.getSharePath(s.id)
 	sbSockDir := filepath.Join(v.store.RunVMStoragePath(), s.id)

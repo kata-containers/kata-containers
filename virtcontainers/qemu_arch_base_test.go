@@ -260,7 +260,7 @@ func TestQemuArchBaseAppendConsoles(t *testing.T) {
 	assert := assert.New(t)
 	qemuArchBase := newQemuArchBase()
 
-	path := filepath.Join(filepath.Join(fs.RunStoragePath(), sandboxID), consoleSocket)
+	path := filepath.Join(filepath.Join(fs.MockRunStoragePath(), sandboxID), consoleSocket)
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.SerialDevice{
