@@ -7,9 +7,7 @@ package factory
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 
 	vc "github.com/kata-containers/runtime/virtcontainers"
@@ -21,8 +19,6 @@ import (
 )
 
 const testDisabledAsNonRoot = "Test disabled as requires root privileges"
-
-var rootPathSave = fs.StorageRootPath()
 
 func TestNewFactory(t *testing.T) {
 	var config Config
@@ -44,17 +40,10 @@ func TestNewFactory(t *testing.T) {
 	_, err = NewFactory(ctx, config, false)
 	assert.Error(err)
 
-	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
-	fs.TestSetStorageRootPath(filepath.Join(testDir, "vc"))
-
-	defer func() {
-		os.RemoveAll(testDir)
-		fs.TestSetStorageRootPath(rootPathSave)
-	}()
-
+	defer fs.MockStorageDestroy()
 	config.VMConfig.HypervisorConfig = vc.HypervisorConfig{
-		KernelPath: testDir,
-		ImagePath:  testDir,
+		KernelPath: fs.MockStorageRootPath(),
+		ImagePath:  fs.MockStorageRootPath(),
 	}
 
 	// direct
@@ -71,7 +60,7 @@ func TestNewFactory(t *testing.T) {
 	}
 
 	config.Template = true
-	config.TemplatePath = testDir
+	config.TemplatePath = fs.MockStorageRootPath()
 	f, err = NewFactory(ctx, config, false)
 	assert.Nil(err)
 	f.CloseFactory(ctx)
@@ -119,19 +108,12 @@ func TestFactorySetLogger(t *testing.T) {
 func TestVMConfigValid(t *testing.T) {
 	assert := assert.New(t)
 
-	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
-	fs.TestSetStorageRootPath(filepath.Join(testDir, "vc"))
-
-	defer func() {
-		os.RemoveAll(testDir)
-		fs.TestSetStorageRootPath(rootPathSave)
-	}()
-
+	defer fs.MockStorageDestroy()
 	config := vc.VMConfig{
 		HypervisorType: vc.MockHypervisor,
 		HypervisorConfig: vc.HypervisorConfig{
-			KernelPath: testDir,
-			ImagePath:  testDir,
+			KernelPath: fs.MockStorageRootPath(),
+			ImagePath:  fs.MockStorageRootPath(),
 		},
 	}
 
@@ -174,13 +156,8 @@ func TestCheckVMConfig(t *testing.T) {
 	err = checkVMConfig(config1, config2)
 	assert.Nil(err)
 
-	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
-	fs.TestSetStorageRootPath(filepath.Join(testDir, "vc"))
-
-	defer func() {
-		os.RemoveAll(testDir)
-		fs.TestSetStorageRootPath(rootPathSave)
-	}()
+	testDir := fs.MockStorageRootPath()
+	defer fs.MockStorageDestroy()
 
 	config1.HypervisorConfig = vc.HypervisorConfig{
 		KernelPath: testDir,
@@ -200,13 +177,8 @@ func TestCheckVMConfig(t *testing.T) {
 func TestFactoryGetVM(t *testing.T) {
 	assert := assert.New(t)
 
-	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
-	fs.TestSetStorageRootPath(filepath.Join(testDir, "vc"))
-
-	defer func() {
-		os.RemoveAll(testDir)
-		fs.TestSetStorageRootPath(rootPathSave)
-	}()
+	testDir := fs.MockStorageRootPath()
+	defer fs.MockStorageDestroy()
 
 	hyperConfig := vc.HypervisorConfig{
 		KernelPath: testDir,
@@ -366,13 +338,8 @@ func TestDeepCompare(t *testing.T) {
 		AgentType:      vc.NoopAgentType,
 		ProxyType:      vc.NoopProxyType,
 	}
-	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
-	fs.TestSetStorageRootPath(filepath.Join(testDir, "vc"))
-
-	defer func() {
-		os.RemoveAll(testDir)
-		fs.TestSetStorageRootPath(rootPathSave)
-	}()
+	testDir := fs.MockStorageRootPath()
+	defer fs.MockStorageDestroy()
 
 	config.VMConfig.HypervisorConfig = vc.HypervisorConfig{
 		KernelPath: testDir,

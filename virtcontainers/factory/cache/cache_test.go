@@ -7,9 +7,6 @@ package cache
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,18 +16,11 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 )
 
-var rootPathSave = fs.StorageRootPath()
-
 func TestTemplateFactory(t *testing.T) {
 	assert := assert.New(t)
 
-	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
-	fs.TestSetStorageRootPath(filepath.Join(testDir, "vc"))
-
-	defer func() {
-		os.RemoveAll(testDir)
-		fs.TestSetStorageRootPath(rootPathSave)
-	}()
+	testDir := fs.MockStorageRootPath()
+	defer fs.MockStorageDestroy()
 
 	hyperConfig := vc.HypervisorConfig{
 		KernelPath: testDir,
@@ -44,13 +34,6 @@ func TestTemplateFactory(t *testing.T) {
 	}
 
 	ctx := context.Background()
-
-	runPathSave := fs.RunStoragePath()
-	fs.TestSetRunStoragePath(filepath.Join(testDir, "vc", "run"))
-	// allow the tests to run without affecting the host system.
-	defer func() {
-		fs.TestSetRunStoragePath(runPathSave)
-	}()
 
 	// New
 	f := New(ctx, 2, direct.New(ctx, vmConfig))

@@ -7,9 +7,7 @@ package template
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -21,8 +19,6 @@ import (
 
 const testDisabledAsNonRoot = "Test disabled as requires root privileges"
 
-var rootPathSave = fs.StorageRootPath()
-
 func TestTemplateFactory(t *testing.T) {
 	if os.Geteuid() != 0 {
 		t.Skip(testDisabledAsNonRoot)
@@ -32,13 +28,8 @@ func TestTemplateFactory(t *testing.T) {
 
 	templateWaitForAgent = 1 * time.Microsecond
 
-	testDir, _ := ioutil.TempDir("", "vmfactory-tmp-")
-	fs.TestSetStorageRootPath(filepath.Join(testDir, "vc"))
-
-	defer func() {
-		os.RemoveAll(testDir)
-		fs.TestSetStorageRootPath(rootPathSave)
-	}()
+	testDir := fs.MockStorageRootPath()
+	defer fs.MockStorageDestroy()
 
 	hyperConfig := vc.HypervisorConfig{
 		KernelPath: testDir,
