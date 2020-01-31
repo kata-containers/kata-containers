@@ -7,9 +7,7 @@ package fs
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
@@ -17,29 +15,21 @@ import (
 )
 
 func getFsDriver() (*FS, error) {
-	driver, err := Init()
+	driver, err := MockFSInit()
 	if err != nil {
 		return nil, fmt.Errorf("failed to init fs driver")
 	}
-	fs, ok := driver.(*FS)
+	fs, ok := driver.(*MockFS)
 	if !ok {
-		return nil, fmt.Errorf("failed to convert driver to *FS")
+		return nil, fmt.Errorf("failed to convert driver to *MockFS")
 	}
 
-	return fs, nil
+	return fs.FS, nil
 }
 
 func initTestDir() func() {
-	testDir, _ := ioutil.TempDir("", "vc-tmp-")
-	// allow the tests to run without affecting the host system.
-	rootSave := StorageRootPath()
-	TestSetStorageRootPath(filepath.Join(testDir, "vc"))
-
-	os.MkdirAll(testDir, dirMode)
-
 	return func() {
-		TestSetStorageRootPath(rootSave)
-		os.RemoveAll(testDir)
+		os.RemoveAll(MockStorageRootPath())
 	}
 }
 
