@@ -7,9 +7,6 @@ package direct
 
 import (
 	"context"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -18,28 +15,11 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 )
 
-var rootPathSave = fs.StorageRootPath()
-
 func TestTemplateFactory(t *testing.T) {
 	assert := assert.New(t)
 
-	testDir, err := ioutil.TempDir("", "vmfactory-tmp-")
-	fs.TestSetStorageRootPath(filepath.Join(testDir, "vc"))
-
-	defer func() {
-		os.RemoveAll(testDir)
-		fs.TestSetStorageRootPath(rootPathSave)
-	}()
-
-	assert.Nil(err)
-
-	runPathSave := fs.RunStoragePath()
-	fs.TestSetRunStoragePath(filepath.Join(testDir, "vc", "run"))
-
-	defer func() {
-		os.RemoveAll(testDir)
-		fs.TestSetRunStoragePath(runPathSave)
-	}()
+	testDir := fs.MockStorageRootPath()
+	defer fs.MockStorageDestroy()
 
 	hyperConfig := vc.HypervisorConfig{
 		KernelPath: testDir,
