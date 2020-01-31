@@ -13,7 +13,7 @@ import (
 
 	deviceApi "github.com/kata-containers/runtime/virtcontainers/device/api"
 	deviceConfig "github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
+	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -308,9 +308,12 @@ func ListSandbox(ctx context.Context) ([]SandboxStatus, error) {
 	span, ctx := trace(ctx, "ListSandbox")
 	defer span.Finish()
 
-	sbsdir := fs.RunStoragePath()
+	store, err := persist.GetDriver()
+	if err != nil {
+		return []SandboxStatus{}, err
+	}
 
-	dir, err := os.Open(sbsdir)
+	dir, err := os.Open(store.RunStoragePath())
 	if err != nil {
 		if os.IsNotExist(err) {
 			// No sandbox directory is not an error

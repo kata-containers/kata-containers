@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -56,8 +57,8 @@ var testHyperstartTtySocket = ""
 // the next test to run.
 func cleanUp() {
 	globalSandboxList.removeSandbox(testSandboxID)
-	os.RemoveAll(fs.RunStoragePath())
-	os.RemoveAll(fs.RunVMStoragePath())
+	os.RemoveAll(fs.MockRunStoragePath())
+	os.RemoveAll(fs.MockRunVMStoragePath())
 	os.RemoveAll(testDir)
 	os.MkdirAll(testDir, DirMode)
 
@@ -108,6 +109,8 @@ func setupClh() {
 // for this package.
 func TestMain(m *testing.M) {
 	var err error
+
+	persist.EnableMockTesting()
 
 	flag.Parse()
 
@@ -161,19 +164,8 @@ func TestMain(m *testing.M) {
 
 	setupClh()
 
-	// allow the tests to run without affecting the host system.
-	runPathSave := fs.RunStoragePath()
-	rootPathSave := fs.StorageRootPath()
-	fs.TestSetRunStoragePath(filepath.Join(testDir, "vc", "run"))
-	fs.TestSetStorageRootPath(filepath.Join(testDir, "vc"))
-
-	defer func() {
-		fs.TestSetRunStoragePath(runPathSave)
-		fs.TestSetStorageRootPath(rootPathSave)
-	}()
-
 	// set now that configStoragePath has been overridden.
-	sandboxDirState = filepath.Join(fs.RunStoragePath(), testSandboxID)
+	sandboxDirState = filepath.Join(fs.MockRunStoragePath(), testSandboxID)
 
 	testHyperstartCtlSocket = filepath.Join(testDir, "test_hyper.sock")
 	testHyperstartTtySocket = filepath.Join(testDir, "test_tty.sock")

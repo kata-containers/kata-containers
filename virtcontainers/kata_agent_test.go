@@ -621,8 +621,8 @@ func TestAgentPathAPI(t *testing.T) {
 	id := "foobar"
 
 	// getSharePath
-	path1 = k1.getSharePath(id)
-	path2 = k2.getSharePath(id)
+	path1 := k1.getSharePath(id)
+	path2 := k2.getSharePath(id)
 	assert.Equal(path1, path2)
 }
 
@@ -710,7 +710,7 @@ func TestAgentCreateContainer(t *testing.T) {
 		hypervisor: &mockHypervisor{},
 	}
 
-	newStore, err := persist.GetDriver("fs")
+	newStore, err := persist.GetDriver()
 	assert.NoError(err)
 	assert.NotNil(newStore)
 	sandbox.newStore = newStore

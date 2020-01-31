@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	kataclient "github.com/kata-containers/agent/protocols/client"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
+	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/sirupsen/logrus"
 )
 
@@ -146,7 +146,11 @@ func validateProxyConfig(proxyConfig ProxyConfig) error {
 func defaultProxyURL(id, socketType string) (string, error) {
 	switch socketType {
 	case SocketTypeUNIX:
-		socketPath := filepath.Join(filepath.Join(fs.RunStoragePath(), id), "proxy.sock")
+		store, err := persist.GetDriver()
+		if err != nil {
+			return "", err
+		}
+		socketPath := filepath.Join(filepath.Join(store.RunStoragePath(), id), "proxy.sock")
 		return fmt.Sprintf("unix://%s", socketPath), nil
 	case SocketTypeVSOCK:
 		// TODO Build the VSOCK default URL
