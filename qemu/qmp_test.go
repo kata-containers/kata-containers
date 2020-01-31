@@ -1079,6 +1079,27 @@ func TestQMPPCIVFIOMediatedDeviceAdd(t *testing.T) {
 	<-disconnectedCh
 }
 
+func TestQMPPCIVFIOPCIeDeviceAdd(t *testing.T) {
+	connectedCh := make(chan *QMPVersion)
+	disconnectedCh := make(chan struct{})
+	buf := newQMPTestCommandBuffer(t)
+	buf.AddCommand("device_add", nil, "return", nil)
+	cfg := QMPConfig{Logger: qmpTestLogger{}}
+	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
+	checkVersion(t, connectedCh)
+	bdf := "04:00.0"
+	bus := "rp0"
+	addr := "0x1"
+	romfile := ""
+	devID := fmt.Sprintf("device_%s", volumeUUID)
+	err := q.ExecutePCIVFIODeviceAdd(context.Background(), devID, bdf, addr, bus, romfile)
+	if err != nil {
+		t.Fatalf("Unexpected error %v", err)
+	}
+	q.Shutdown()
+	<-disconnectedCh
+}
+
 // Checks that CPU are correctly added using device_add
 func TestQMPCPUDeviceAdd(t *testing.T) {
 	drivers := []string{"host-x86_64-cpu", "host-s390x-cpu", "host-powerpc64-cpu"}
