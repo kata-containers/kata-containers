@@ -59,6 +59,7 @@ var isVirtioPCI = map[DeviceDriver]bool{
 	VirtioScsi:          true,
 	PCIBridgeDriver:     true,
 	PCIePCIBridgeDriver: true,
+	PCIeRootPort:        true,
 }
 
 // isVirtioCCW is a dummy map to return always false on no-s390x arch
