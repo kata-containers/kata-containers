@@ -1,3 +1,4 @@
+// Copyright (c) 2014 Docker, Inc.
 // Copyright (c) 2017 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
@@ -8,6 +9,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/kata-containers/runtime/pkg/katautils"
@@ -130,4 +132,14 @@ func genericGetCPUDetails() (vendor, model string, err error) {
 	}
 
 	return vendor, model, nil
+}
+
+// from runC
+// parseBoolOrAuto returns (nil, nil) if s is empty or "auto"
+func parseBoolOrAuto(s string) (*bool, error) {
+	if s == "" || strings.ToLower(s) == "auto" {
+		return nil, nil
+	}
+	b, err := strconv.ParseBool(s)
+	return &b, err
 }
