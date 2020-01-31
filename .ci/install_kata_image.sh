@@ -120,20 +120,24 @@ build_image() {
 		sudo -E AGENT_INIT="${AGENT_INIT}" AGENT_VERSION="${agent_commit}" \
 			GOPATH="$GOPATH" USE_DOCKER=true OS_VERSION=${os_version} ./rootfs-builder/rootfs.sh "${distro}"
 	else
-		sudo -E AGENT_INIT="${AGENT_INIT}" DOCKER_RUNTIME="crun" AGENT_VERSION="${agent_commit}" \
+		sudo AGENT_INIT="${AGENT_INIT}" DOCKER_RUNTIME="crun" AGENT_VERSION="${agent_commit}" \
 			GOPATH="$GOPATH" USE_PODMAN=true OS_VERSION=${os_version} ./rootfs-builder/rootfs.sh "${distro}"
 	fi
 
 	# Build the image
 	if [ "${TEST_INITRD}" == "no" ]; then
 		if [ "${TEST_CGROUPSV2}" == "true" ]; then
-			sudo -E AGENT_INIT="${AGENT_INIT}" DOCKER_RUNTIME="crun" USE_PODMAN=true ./image-builder/image_builder.sh "$ROOTFS_DIR"
+			sudo AGENT_INIT="${AGENT_INIT}" DOCKER_RUNTIME="crun" USE_PODMAN=true ./image-builder/image_builder.sh "$ROOTFS_DIR"
 		else
 			sudo -E AGENT_INIT="${AGENT_INIT}" USE_DOCKER=true ./image-builder/image_builder.sh "$ROOTFS_DIR"
 		fi
 		local image_name="kata-containers.img"
 	else
-		sudo -E AGENT_INIT="${AGENT_INIT}" USE_DOCKER=true ./initrd-builder/initrd_builder.sh "$ROOTFS_DIR"
+		if [ "${TEST_CGROUPSV2}" == "true" ]; then
+			sudo AGENT_INIT="${AGENT_INIT}" USE_PODMAN=true DOCKER_RUNTIME="crun" ./initrd-builder/initrd_builder.sh "$ROOTFS_DIR"
+		else
+			sudo -E AGENT_INIT="${AGENT_INIT}" USE_DOCKER=true ./initrd-builder/initrd_builder.sh "$ROOTFS_DIR"
+		fi
 		local image_name="kata-containers-initrd.img"
 	fi
 

@@ -63,6 +63,10 @@ externals:
     url: "https://ftp.gnu.org/gnu/parallel"
     version: "20190222"
 
+  podman:
+    description: "An open-source Linux tool for working with containers"
+    version: "1.6.2"
+
   sonobuoy:
     description: "Tool to run kubernetes e2e conformance tests"
     url: "https://github.com/vmware-tanzu/sonobuoy"
