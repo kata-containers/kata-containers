@@ -17,7 +17,6 @@ import (
 
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
@@ -75,7 +74,7 @@ func newBasicTestCmd() types.Cmd {
 }
 
 func rmSandboxDir(sid string) error {
-	store, err := persist.GetDriver("fs")
+	store, err := persist.GetDriver()
 	if err != nil {
 		return fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
@@ -154,7 +153,9 @@ func TestCreateSandboxNoopAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 }
@@ -191,7 +192,9 @@ func TestCreateSandboxKataAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 }
@@ -218,7 +221,9 @@ func TestDeleteSandboxNoopAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -263,7 +268,9 @@ func TestDeleteSandboxKataAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -278,9 +285,6 @@ func TestDeleteSandboxKataAgentSuccessful(t *testing.T) {
 func TestDeleteSandboxFailing(t *testing.T) {
 	defer cleanUp()
 	assert := assert.New(t)
-
-	sandboxDir := filepath.Join(fs.RunStoragePath(), testSandboxID)
-	os.Remove(sandboxDir)
 
 	p, err := DeleteSandbox(context.Background(), testSandboxID)
 	assert.Error(err)
@@ -342,9 +346,6 @@ func TestStartSandboxKataAgentSuccessful(t *testing.T) {
 func TestStartSandboxFailing(t *testing.T) {
 	defer cleanUp()
 	assert := assert.New(t)
-
-	sandboxDir := filepath.Join(fs.RunStoragePath(), testSandboxID)
-	os.Remove(sandboxDir)
 
 	p, err := StartSandbox(context.Background(), testSandboxID)
 	assert.Error(err)
@@ -410,9 +411,6 @@ func TestStopSandboxKataAgentSuccessful(t *testing.T) {
 func TestStopSandboxFailing(t *testing.T) {
 	defer cleanUp()
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), testSandboxID)
-	os.Remove(sandboxDir)
-
 	p, err := StopSandbox(context.Background(), testSandboxID, false)
 	assert.Error(t, err)
 	assert.Nil(t, p)
@@ -428,7 +426,9 @@ func TestRunSandboxNoopAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 }
@@ -466,12 +466,12 @@ func TestRunSandboxKataAgentSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
-	_, err = os.Stat(sandboxDir)
-	assert.NoError(err)
-
 	pImpl, ok := p.(*Sandbox)
 	assert.True(ok)
+
+	sandboxDir := filepath.Join(pImpl.newStore.RunStoragePath(), p.ID())
+	_, err = os.Stat(sandboxDir)
+	assert.NoError(err)
 
 	err = bindUnmountAllRootfs(ctx, testDir, pImpl)
 	assert.NoError(err)
@@ -693,7 +693,9 @@ func TestCreateContainerSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -724,7 +726,9 @@ func TestCreateContainerFailingNoSandbox(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.Error(err)
 
@@ -747,7 +751,9 @@ func TestDeleteContainerSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -791,7 +797,9 @@ func TestDeleteContainerFailingNoContainer(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -848,7 +856,9 @@ func TestStartContainerFailingNoContainer(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -869,7 +879,9 @@ func TestStartContainerFailingSandboxNotStarted(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -949,7 +961,9 @@ func TestStopContainerFailingNoContainer(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -1053,7 +1067,9 @@ func TestEnterContainerFailingNoContainer(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -1106,7 +1122,9 @@ func TestStatusContainerSuccessful(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	pImpl, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(pImpl.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -1122,9 +1140,6 @@ func TestStatusContainerSuccessful(t *testing.T) {
 
 	status, err := StatusContainer(ctx, p.ID(), contID)
 	assert.NoError(err)
-
-	pImpl, ok := p.(*Sandbox)
-	assert.True(ok)
 
 	cImpl, ok := c.(*Container)
 	assert.True(ok)
@@ -1149,7 +1164,9 @@ func TestStatusContainerStateReady(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -1212,7 +1229,9 @@ func TestStatusContainerStateRunning(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(p)
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 	_, err = os.Stat(sandboxDir)
 	assert.NoError(err)
 
@@ -1424,7 +1443,11 @@ func createAndStartSandbox(ctx context.Context, config SandboxConfig) (sandbox V
 		return nil, "", err
 	}
 
-	sandboxDir = filepath.Join(fs.RunStoragePath(), sandbox.ID())
+	s, ok := sandbox.(*Sandbox)
+	if !ok {
+		return nil, "", fmt.Errorf("Could not get Sandbox")
+	}
+	sandboxDir = filepath.Join(s.newStore.RunStoragePath(), sandbox.ID())
 	_, err = os.Stat(sandboxDir)
 	if err != nil {
 		return nil, "", err
@@ -1682,6 +1705,7 @@ func TestNetworkOperation(t *testing.T) {
 
 func TestCleanupContainer(t *testing.T) {
 	config := newTestSandboxConfigNoop()
+	assert := assert.New(t)
 
 	ctx := context.Background()
 
@@ -1709,7 +1733,9 @@ func TestCleanupContainer(t *testing.T) {
 		CleanupContainer(ctx, p.ID(), c.ID(), true)
 	}
 
-	sandboxDir := filepath.Join(fs.RunStoragePath(), p.ID())
+	s, ok := p.(*Sandbox)
+	assert.True(ok)
+	sandboxDir := filepath.Join(s.newStore.RunStoragePath(), p.ID())
 
 	_, err = os.Stat(sandboxDir)
 	if err == nil {
