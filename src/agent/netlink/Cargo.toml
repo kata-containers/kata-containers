@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 libc = "0.2.58"
-nix = "0.14.1"
+nix = "0.17.0"
 protobuf = "2.6.1"
 rustjail = { path = "../rustjail" }
 protocols = { path = "../protocols" }

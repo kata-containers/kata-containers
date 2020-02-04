@@ -15,7 +15,7 @@ grpcio = { git="https://github.com/alipay/grpc-rs", branch="rust_agent" }
 protobuf = "2.6.1"
 futures = "0.1.27"
 libc = "0.2.58"
-nix = "0.14.1"
+nix = "0.17.0"
 prctl = "1.0.0"
 serde_json = "1.0.39"
 signal-hook = "0.1.9"
