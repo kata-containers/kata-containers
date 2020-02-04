@@ -145,6 +145,9 @@ case "${CI_JOB}" in
 	export CRIO="no"
 	export OPENSHIFT="no"
 	;;
+"PODMAN")
+	export TEST_CGROUPSV2="true"
+	;;
 "SANDBOX_CGROUP_ONLY")
 	# Used by runtime makefile to enable option on intall
 	export DEFSANDBOXCGROUPONLY=true

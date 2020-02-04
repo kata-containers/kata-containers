@@ -46,6 +46,14 @@ case "${CI_JOB}" in
 		echo "INFO: Running crio tests"
 		sudo -E PATH="$PATH" bash -c "make crio"
 		;;
+	"PODMAN")
+		export TRUSTED_GROUP="kvm"
+		newgrp "${TRUSTED_GROUP}" << END
+		echo "This is running as group $(id -gn)"
+END
+		echo "INFO: Running podman integration tests"
+		bash -c "make podman"
+		;;
 	*)
 		echo "INFO: Running checks"
 		sudo -E PATH="$PATH" bash -c "make check"
