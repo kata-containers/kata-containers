@@ -65,7 +65,7 @@ func SetLogger(ctx context.Context, logger *logrus.Entry) {
 	rootlessLog = logger.WithFields(fields)
 }
 
-// IsRootless states whether kata is being ran with root or not
+// isRootlessFunc states whether kata is being ran with root or not
 func isRootlessFunc() bool {
 	rLock.Lock()
 	defer rLock.Unlock()
