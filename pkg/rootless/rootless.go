@@ -54,7 +54,7 @@ var (
 		"source": "rootless",
 	})
 
-	//The function is declared this way for mocking in unit tests
+	// IsRootless is declared this way for mocking in unit tests
 	IsRootless = isRootlessFunc
 )
 
