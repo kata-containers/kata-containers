@@ -40,6 +40,7 @@ use netlink::{RtnlHandle, NETLINK_ROUTE};
 
 use libc::{self, c_ushort, pid_t, winsize, TIOCSWINSZ};
 use serde_json;
+use std::convert::TryFrom;
 use std::fs;
 use std::os::unix::io::RawFd;
 use std::os::unix::prelude::PermissionsExt;
@@ -303,7 +304,7 @@ impl agentService {
         );
         let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), true)?;
 
-        let mut signal = Signal::from_c_int(req.signal as i32).unwrap();
+        let mut signal = Signal::try_from(req.signal as i32).unwrap();
 
         // For container initProcess, if it hasn't installed handler for "SIGTERM" signal,
         // it will ignore the "SIGTERM" signal sent to it, thus send it "SIGKILL" signal
