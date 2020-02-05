@@ -125,7 +125,19 @@ func (q *qemuS390x) appendConsole(devices []govmmQemu.Device, path string) ([]go
 	return devices, nil
 }
 
+func (q *qemuS390x) appendImage(devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error) {
+	drive, err := genericImage(path)
+	if err != nil {
+		return nil, err
+	}
+	return q.appendCCWBlockDevice(devices, drive)
+}
+
 func (q *qemuS390x) appendBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error) {
+	return q.appendCCWBlockDevice(devices, drive)
+}
+
+func (q *qemuS390x) appendCCWBlockDevice(devices []govmmQemu.Device, drive config.BlockDrive) ([]govmmQemu.Device, error) {
 	d, err := genericBlockDevice(drive, false)
 	if err != nil {
 		return devices, fmt.Errorf("Failed to append blk-dev %v", err)
