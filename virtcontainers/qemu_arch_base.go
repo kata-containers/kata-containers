@@ -127,6 +127,9 @@ type qemuArch interface {
 
 	// setIgnoreSharedMemoryMigrationCaps set bypass-shared-memory capability for migration
 	setIgnoreSharedMemoryMigrationCaps(context.Context, *govmmQemu.QMP) error
+
+	// appendPCIeRootPortDevice appends a pcie-root-port device to pcie.0 bus
+	appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32) []govmmQemu.Device
 }
 
 type qemuArchBase struct {
@@ -153,6 +156,7 @@ const (
 	defaultPCBridgeBus        = "pci.0"
 	maxDevIDSize              = 31
 	defaultMsize9p            = 8192
+	pcieRootPortPrefix        = "rp"
 )
 
 // This is the PCI start address assigned to the first bridge that
@@ -646,6 +650,7 @@ func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev conf
 			BDF:      vfioDev.BDF,
 			VendorID: vfioDev.VendorID,
 			DeviceID: vfioDev.DeviceID,
+			Bus:      vfioDev.Bus,
 		},
 	)
 
@@ -749,4 +754,9 @@ func (q *qemuArchBase) setBridges(bridges []types.Bridge) {
 
 func (q *qemuArchBase) addBridge(b types.Bridge) {
 	q.Bridges = append(q.Bridges, b)
+}
+
+// appendPCIeRootPortDevice appends to devices the given pcie-root-port
+func (q *qemuArchBase) appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32) []govmmQemu.Device {
+	return genericAppendPCIeRootPort(devices, number, q.machineType)
 }

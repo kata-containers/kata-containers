@@ -224,6 +224,13 @@ enable_iothreads = @DEFENABLEIOTHREADS@
 # Default false
 #hotplug_vfio_on_root_bus = true
 
+# Before hot plugging a PCIe device, you need to add a pcie_root_port device.
+# Use this parameter when using some large PCI bar devices, such as Nvidia GPU
+# The value means the number of pcie_root_port
+# This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
+# Default 0
+#pcie_root_port = 2
+
 # If vhost-net backend for virtio-net is not desired, set to true. Default is false, which trades off
 # security (vhost-net runs ring0) for network I/O performance. 
 #disable_vhost_net = true

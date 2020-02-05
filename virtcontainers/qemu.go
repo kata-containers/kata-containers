@@ -71,6 +71,7 @@ type QemuState struct {
 	UUID                 string
 	HotplugVFIOOnRootBus bool
 	VirtiofsdPid         int
+	PCIeRootPort         int
 }
 
 // qemu is an Hypervisor interface implementation for the Linux qemu hypervisor.
@@ -266,6 +267,7 @@ func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig) error {
 		q.state.UUID = uuid.Generate().String()
 
 		q.state.HotplugVFIOOnRootBus = q.config.HotplugVFIOOnRootBus
+		q.state.PCIeRootPort = int(q.config.PCIeRootPort)
 
 		// The path might already exist, but in case of VM templating,
 		// we have to create it since the sandbox has not created it yet.
@@ -582,6 +584,13 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 	qemuConfig.Devices, err = q.arch.appendRNGDevice(qemuConfig.Devices, rngDev)
 	if err != nil {
 		return err
+	}
+
+	// Add PCIe Root Port devices to hypervisor
+	// The pcie.0 bus do not support hot-plug, but PCIe device can be hot-plugged into PCIe Root Port.
+	// For more details, please see https://github.com/qemu/qemu/blob/master/docs/pcie.txt
+	if hypervisorConfig.PCIeRootPort > 0 {
+		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, hypervisorConfig.PCIeRootPort)
 	}
 
 	q.qemuConfig = qemuConfig
@@ -1149,17 +1158,39 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) (err erro
 	}
 
 	devID := device.ID
+	machinneType := q.hypervisorConfig().HypervisorMachineType
 
 	if op == addDevice {
+
+		buf, _ := json.Marshal(device)
+		q.Logger().WithFields(logrus.Fields{
+			"machine-type":             machinneType,
+			"hotplug-vfio-on-root-bus": q.state.HotplugVFIOOnRootBus,
+			"pcie-root-port":           q.state.PCIeRootPort,
+			"device-info":              string(buf),
+		}).Info("Start hot-plug VFIO device")
+
 		// In case HotplugVFIOOnRootBus is true, devices are hotplugged on the root bus
 		// for pc machine type instead of bridge. This is useful for devices that require
 		// a large PCI BAR which is a currently a limitation with PCI bridges.
 		if q.state.HotplugVFIOOnRootBus {
+
+			// In case MachineType is q35, a PCIe device is hotplugged on a PCIe Root Port.
+			switch machinneType {
+			case QemuQ35:
+				if device.IsPCIe && q.state.PCIeRootPort <= 0 {
+					q.Logger().WithField("dev-id", device.ID).Warn("VFIO device is a PCIe device. It's recommended to add the PCIe Root Port by setting the pcie_root_port parameter in the configuration for q35")
+					device.Bus = ""
+				}
+			default:
+				device.Bus = ""
+			}
+
 			switch device.Type {
 			case config.VFIODeviceNormalType:
-				return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, "", romFile)
+				return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, device.Bus, romFile)
 			case config.VFIODeviceMediatedType:
-				return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, "", "", romFile)
+				return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, "", device.Bus, romFile)
 			default:
 				return fmt.Errorf("Incorrect VFIO device type found")
 			}
@@ -1185,6 +1216,8 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) (err erro
 			return fmt.Errorf("Incorrect VFIO device type found")
 		}
 	} else {
+		q.Logger().WithField("dev-id", devID).Info("Start hot-unplug VFIO device")
+
 		if !q.state.HotplugVFIOOnRootBus {
 			if err := q.arch.removeDeviceFromBridge(devID); err != nil {
 				return err
@@ -1848,6 +1881,39 @@ func genericMemoryTopology(memoryMb, hostMemoryMb uint64, slots uint8, memoryOff
 	return memory
 }
 
+// genericAppendPCIeRootPort appends to devices the given pcie-root-port
+func genericAppendPCIeRootPort(devices []govmmQemu.Device, number uint32, machineType string) []govmmQemu.Device {
+	var (
+		bus           string
+		chassis       string
+		multiFunction bool
+		addr          string
+	)
+	switch machineType {
+	case QemuQ35:
+		bus = defaultBridgeBus
+		chassis = "0"
+		multiFunction = false
+		addr = "0"
+	default:
+		return devices
+	}
+
+	for i := uint32(0); i < number; i++ {
+		devices = append(devices,
+			govmmQemu.PCIeRootPortDevice{
+				ID:            fmt.Sprintf("%s%d", pcieRootPortPrefix, i),
+				Bus:           bus,
+				Chassis:       chassis,
+				Slot:          strconv.FormatUint(uint64(i), 10),
+				Multifunction: multiFunction,
+				Addr:          addr,
+			},
+		)
+	}
+	return devices
+}
+
 func (q *qemu) getThreadIDs() (vcpuThreadIDs, error) {
 	span, _ := q.trace("getThreadIDs")
 	defer span.Finish()
@@ -2013,6 +2079,7 @@ func (q *qemu) save() (s persistapi.HypervisorState) {
 	s.UUID = q.state.UUID
 	s.HotpluggedMemory = q.state.HotpluggedMemory
 	s.HotplugVFIOOnRootBus = q.state.HotplugVFIOOnRootBus
+	s.PCIeRootPort = q.state.PCIeRootPort
 
 	for _, bridge := range q.arch.getBridges() {
 		s.Bridges = append(s.Bridges, persistapi.Bridge{
@@ -2036,6 +2103,7 @@ func (q *qemu) load(s persistapi.HypervisorState) {
 	q.state.HotpluggedMemory = s.HotpluggedMemory
 	q.state.HotplugVFIOOnRootBus = s.HotplugVFIOOnRootBus
 	q.state.VirtiofsdPid = s.VirtiofsdPid
+	q.state.PCIeRootPort = s.PCIeRootPort
 
 	for _, bridge := range s.Bridges {
 		q.state.Bridges = append(q.state.Bridges, types.NewBridge(types.Type(bridge.Type), bridge.ID, bridge.DeviceAddr, bridge.Addr))
