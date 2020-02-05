@@ -1156,16 +1156,19 @@ func (q *QMP) ExecutePCIVhostUserDevAdd(ctx context.Context, driver, devID, char
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
-// ExecuteVFIODeviceAdd adds a VFIO device to a QEMU instance
-// using the device_add command. devID is the id of the device to add.
-// Must be valid QMP identifier. bdf is the PCI bus-device-function
-// of the pci device.
-func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, romfile string) error {
+// ExecuteVFIODeviceAdd adds a VFIO device to a QEMU instance using the device_add command.
+// devID is the id of the device to add. Must be valid QMP identifier.
+// bdf is the PCI bus-device-function of the pci device.
+// bus is optional. When hot plugging a PCIe device, the bus can be the ID of the pcie-root-port.
+func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile string) error {
 	args := map[string]interface{}{
 		"id":      devID,
 		"driver":  Vfio,
 		"host":    bdf,
 		"romfile": romfile,
+	}
+	if bus != "" {
+		args["bus"] = bus
 	}
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
