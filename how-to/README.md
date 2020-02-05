@@ -23,3 +23,4 @@
 - [What Is VM Templating and How To Enable It](what-is-vm-templating-and-how-do-I-use-it.md)
 - [Privileged Kata Containers](privileged.md)
 - [How to load kernel modules in Kata Containers](how-to-load-kernel-modules-with-kata.md)
+- [How to use Kata Containers with `virtio-mem`](how-to-use-virtio-mem-with-kata.md)
