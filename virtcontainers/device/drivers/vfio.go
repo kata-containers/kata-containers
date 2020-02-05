@@ -27,6 +27,11 @@ const (
 	pciDriverBindPath   = "/sys/bus/pci/drivers/%s/bind"
 	vfioNewIDPath       = "/sys/bus/pci/drivers/vfio-pci/new_id"
 	vfioRemoveIDPath    = "/sys/bus/pci/drivers/vfio-pci/remove_id"
+	pcieRootPortPrefix  = "rp"
+)
+
+var (
+	AllPCIeDevs = map[string]bool{}
 )
 
 // VFIODevice is a vfio device meant to be passed to the hypervisor
@@ -83,8 +88,14 @@ func (device *VFIODevice) Attach(devReceiver api.DeviceReceiver) (retErr error) 
 			Type:     vfioDeviceType,
 			BDF:      deviceBDF,
 			SysfsDev: deviceSysfsDev,
+			IsPCIe:   isPCIeDevice(deviceBDF),
+			Class:    getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass),
 		}
 		device.VfioDevs = append(device.VfioDevs, vfio)
+		if vfio.IsPCIe {
+			vfio.Bus = fmt.Sprintf("%s%d", pcieRootPortPrefix, len(AllPCIeDevs))
+			AllPCIeDevs[vfio.BDF] = true
+		}
 	}
 
 	// hotplug a VFIO device is actually hotplugging a group of iommu devices
