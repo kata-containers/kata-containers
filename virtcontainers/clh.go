@@ -265,7 +265,7 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 
 	} else {
 		clh.vmconfig.Serial = chclient.ConsoleConfig{
-			Mode: cctOFF,
+			Mode: cctNULL,
 		}
 	}
 
@@ -761,6 +761,7 @@ func MaxClhVCPUs() uint32 {
 const (
 	cctOFF  string = "Off"
 	cctFILE string = "File"
+	cctNULL string = "Null"
 )
 
 const (
