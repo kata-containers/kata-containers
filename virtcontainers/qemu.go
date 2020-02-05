@@ -1157,7 +1157,7 @@ func (q *qemu) hotplugVFIODevice(device *config.VFIODev, op operation) (err erro
 		if q.state.HotplugVFIOOnRootBus {
 			switch device.Type {
 			case config.VFIODeviceNormalType:
-				return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, romFile)
+				return q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, "", romFile)
 			case config.VFIODeviceMediatedType:
 				return q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, "", "", romFile)
 			default:
