@@ -44,6 +44,7 @@ const defaultEnableDebug bool = false
 const defaultDisableNestingChecks bool = false
 const defaultMsize9p uint32 = 8192
 const defaultHotplugVFIOOnRootBus bool = false
+const defaultPCIeRootPort = 0
 const defaultEntropySource = "/dev/urandom"
 const defaultGuestHookPath string = ""
 const defaultVirtioFSCacheMode = "none"

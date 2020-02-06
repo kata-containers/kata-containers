@@ -106,6 +106,9 @@ const (
 
 	// VirtioBlockCCW is the CCW block device driver
 	VirtioBlockCCW DeviceDriver = "virtio-blk-ccw"
+
+	// PCIeRootPort is a PCIe Root Port, the PCIe device should be hotplugged to this port.
+	PCIeRootPort DeviceDriver = "pcie-root-port"
 )
 
 // disableModern returns the parameters with the disable-modern option.
@@ -898,6 +901,102 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 	return qemuParams
 }
 
+// PCIeRootPortDevice represents a memory balloon device.
+type PCIeRootPortDevice struct {
+	ID string // format: rp{n}, n>=0
+
+	Bus     string // default is pcie.0
+	Chassis string // (slot, chassis) pair is mandatory and must be unique for each pcie-root-port, >=0, default is 0x00
+	Slot    string // >=0, default is 0x00
+
+	Multifunction bool   // true => "on", false => "off", default is off
+	Addr          string // >=0, default is 0x00
+
+	// The PCIE-PCI bridge can be hot-plugged only into pcie-root-port that has 'bus-reserve' property value to
+	// provide secondary bus for the hot-plugged bridge.
+	BusReserve    string
+	Pref64Reserve string // reserve prefetched MMIO aperture, 64-bit
+	Pref32Reserve string // reserve prefetched MMIO aperture, 32-bit
+	MemReserve    string // reserve non-prefetched MMIO aperture, 32-bit *only*
+	IOReserve     string // IO reservation
+
+	ROMFile string // ROMFile specifies the ROM file being used for this device.
+}
+
+// QemuParams returns the qemu parameters built out of the PCIeRootPortDevice.
+func (b PCIeRootPortDevice) QemuParams(_ *Config) []string {
+	var qemuParams []string
+	var deviceParams []string
+	driver := PCIeRootPort
+
+	deviceParams = append(deviceParams, fmt.Sprintf("%s,id=%s", driver, b.ID))
+
+	if b.Bus == "" {
+		b.Bus = "pcie.0"
+	}
+	deviceParams = append(deviceParams, fmt.Sprintf("bus=%s", b.Bus))
+
+	if b.Chassis == "" {
+		b.Chassis = "0x00"
+	}
+	deviceParams = append(deviceParams, fmt.Sprintf("chassis=%s", b.Chassis))
+
+	if b.Slot == "" {
+		b.Slot = "0x00"
+	}
+	deviceParams = append(deviceParams, fmt.Sprintf("slot=%s", b.Slot))
+
+	multifunction := "off"
+	if b.Multifunction {
+		multifunction = "on"
+		if b.Addr == "" {
+			b.Addr = "0x00"
+		}
+		deviceParams = append(deviceParams, fmt.Sprintf("addr=%s", b.Addr))
+	}
+	deviceParams = append(deviceParams, fmt.Sprintf("multifunction=%v", multifunction))
+
+	if b.BusReserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("bus-reserve=%s", b.BusReserve))
+	}
+
+	if b.Pref64Reserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("pref64-reserve=%s", b.Pref64Reserve))
+	}
+
+	if b.Pref32Reserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("pref32-reserve=%s", b.Pref32Reserve))
+	}
+
+	if b.MemReserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("mem-reserve=%s", b.MemReserve))
+	}
+
+	if b.IOReserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("io-reserve=%s", b.IOReserve))
+	}
+
+	if isVirtioPCI[driver] && b.ROMFile != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", b.ROMFile))
+	}
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+	return qemuParams
+}
+
+// Valid returns true if the PCIeRootPortDevice structure is valid and complete.
+func (b PCIeRootPortDevice) Valid() bool {
+	// the "pref32-reserve" and "pref64-reserve" hints are mutually exclusive.
+	if b.Pref64Reserve != "" && b.Pref32Reserve != "" {
+		return false
+	}
+	if b.ID == "" {
+		return false
+	}
+	return true
+}
+
 // VFIODevice represents a qemu vfio device meant for direct access by guest OS.
 type VFIODevice struct {
 	// Bus-Device-Function of device
@@ -914,6 +1013,9 @@ type VFIODevice struct {
 
 	// DeviceID specifies device id
 	DeviceID string
+
+	// Bus specifies device bus
+	Bus string
 }
 
 // Valid returns true if the VFIODevice structure is valid and complete.
@@ -937,6 +1039,10 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 			deviceParams = append(deviceParams, fmt.Sprintf(",x-pci-device-id=%s", vfioDev.DeviceID))
 		}
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", vfioDev.ROMFile))
+	}
+
+	if vfioDev.Bus != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf(",bus=%s", vfioDev.Bus))
 	}
 
 	if isVirtioCCW[driver] {

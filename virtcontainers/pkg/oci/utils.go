@@ -447,6 +447,14 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) 
 		config.HypervisorConfig.HotplugVFIOOnRootBus = hotplugVFIOOnRootBus
 	}
 
+	if value, ok := ocispec.Annotations[vcAnnotations.PCIeRootPort]; ok {
+		pcieRootPort, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for pcie_root_port: %v, Please specify an integer greater than or equal to 0", err)
+		}
+		config.HypervisorConfig.PCIeRootPort = uint32(pcieRootPort)
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.EntropySource]; ok {
 		if value != "" {
 			config.HypervisorConfig.EntropySource = value
