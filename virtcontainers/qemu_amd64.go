@@ -20,13 +20,15 @@ type qemuAmd64 struct {
 	vmFactory bool
 }
 
-const defaultQemuPath = "/usr/bin/qemu-system-x86_64"
+const (
+	defaultQemuPath = "/usr/bin/qemu-system-x86_64"
 
-const defaultQemuMachineType = QemuPC
+	defaultQemuMachineType = QemuPC
 
-const defaultQemuMachineOptions = "accel=kvm,kernel_irqchip"
+	defaultQemuMachineOptions = "accel=kvm,kernel_irqchip"
 
-const qmpMigrationWaitTimeout = 5 * time.Second
+	qmpMigrationWaitTimeout = 5 * time.Second
+)
 
 var qemuPaths = map[string]string{
 	QemuPCLite: "/usr/bin/qemu-lite-system-x86_64",

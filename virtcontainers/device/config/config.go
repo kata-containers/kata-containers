@@ -75,6 +75,12 @@ var SysDevPrefix = "/sys/dev"
 // SysIOMMUPath is static string of /sys/kernel/iommu_groups
 var SysIOMMUPath = "/sys/kernel/iommu_groups"
 
+// SysBusPciDevicesPath is static string of /sys/bus/pci/devices
+var SysBusPciDevicesPath = "/sys/bus/pci/devices"
+
+// SysBusPciSlotsPath is static string of /sys/bus/pci/slots
+var SysBusPciSlotsPath = "/sys/bus/pci/slots"
+
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
 type DeviceInfo struct {
 	// Hostpath is device path on host
@@ -165,11 +171,14 @@ const (
 
 // VFIODev represents a VFIO drive used for hotplugging
 type VFIODev struct {
-	// ID is used to identify this drive in the hypervisor options.
-	ID string
+	// IsPCIe specifies device is PCIe or PCI
+	IsPCIe bool
 
 	// Type of VFIO device
 	Type VFIODeviceType
+
+	// ID is used to identify this drive in the hypervisor options.
+	ID string
 
 	// BDF (Bus:Device.Function) of the PCI address
 	BDF string
@@ -182,6 +191,12 @@ type VFIODev struct {
 
 	// DeviceID specifies device id
 	DeviceID string
+
+	// PCI Class Code
+	Class string
+
+	// Bus of VFIO PCIe device
+	Bus string
 }
 
 // RNGDev represents a random number generator device

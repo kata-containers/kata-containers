@@ -763,6 +763,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.UseVSock] = "true"
 	ocispec.Annotations[vcAnnotations.DisableImageNvdimm] = "true"
 	ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus] = "true"
+	ocispec.Annotations[vcAnnotations.PCIeRootPort] = "2"
 	ocispec.Annotations[vcAnnotations.EntropySource] = "/dev/urandom"
 
 	addAnnotations(ocispec, &config)
@@ -793,6 +794,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(config.HypervisorConfig.UseVSock, true)
 	assert.Equal(config.HypervisorConfig.DisableImageNvdimm, true)
 	assert.Equal(config.HypervisorConfig.HotplugVFIOOnRootBus, true)
+	assert.Equal(config.HypervisorConfig.PCIeRootPort, uint32(2))
 	assert.Equal(config.HypervisorConfig.EntropySource, "/dev/urandom")
 
 	// In case an absurd large value is provided, the config value if not over-ridden

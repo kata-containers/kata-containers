@@ -82,6 +82,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	blockDeviceDriver := "virtio-scsi"
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
+	pcieRootPort := uint32(2)
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 
@@ -101,6 +102,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		BlockDeviceDriver:    blockDeviceDriver,
 		EnableIOThreads:      enableIOThreads,
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
+		PCIeRootPort:         pcieRootPort,
 		DisableNewNetNs:      disableNewNetNs,
 		DefaultVCPUCount:     defaultVCPUCount,
 		DefaultMaxVCPUCount:  defaultMaxVCPUCount,
@@ -158,6 +160,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		Mlock:                 !defaultEnableSwap,
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
+		PCIeRootPort:          pcieRootPort,
 		Msize9p:               defaultMsize9p,
 		MemSlots:              defaultMemSlots,
 		EntropySource:         defaultEntropySource,
@@ -775,6 +778,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	disableBlock := true
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
+	pcieRootPort := uint32(2)
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
 	defer func() {
 		utils.VHostVSockDevicePath = orgVHostVSockDevicePath
@@ -789,6 +793,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		DisableBlockDeviceUse: disableBlock,
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
+		PCIeRootPort:          pcieRootPort,
 		UseVSock:              true,
 	}
 
@@ -846,6 +851,10 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	if config.HotplugVFIOOnRootBus != hotplugVFIOOnRootBus {
 		t.Errorf("Expected value for HotplugVFIOOnRootBus %v, got %v", hotplugVFIOOnRootBus, config.HotplugVFIOOnRootBus)
 	}
+
+	if config.PCIeRootPort != pcieRootPort {
+		t.Errorf("Expected value for PCIeRootPort %v, got %v", pcieRootPort, config.PCIeRootPort)
+	}
 }
 
 func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
@@ -869,6 +878,7 @@ func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 	disableBlock := true
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
+	pcieRootPort := uint32(2)
 
 	hypervisor := hypervisor{
 		Path:                  hypervisorPath,
@@ -879,6 +889,7 @@ func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 		DisableBlockDeviceUse: disableBlock,
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
+		PCIeRootPort:          pcieRootPort,
 	}
 
 	_, err = newQemuHypervisorConfig(hypervisor)

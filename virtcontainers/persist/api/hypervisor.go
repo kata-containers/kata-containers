@@ -41,4 +41,5 @@ type HypervisorState struct {
 	HotpluggedMemory     int
 	VirtiofsdPid         int
 	HotplugVFIOOnRootBus bool
+	PCIeRootPort         int
 }

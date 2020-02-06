@@ -83,16 +83,18 @@ type RuntimeVersionInfo struct {
 
 // HypervisorInfo stores hypervisor details
 type HypervisorInfo struct {
-	MachineType       string
-	Version           string
-	Path              string
-	BlockDeviceDriver string
-	EntropySource     string
-	Msize9p           uint32
-	MemorySlots       uint32
-	Debug             bool
-	UseVSock          bool
-	SharedFS          string
+	MachineType          string
+	Version              string
+	Path                 string
+	BlockDeviceDriver    string
+	EntropySource        string
+	SharedFS             string
+	Msize9p              uint32
+	MemorySlots          uint32
+	PCIeRootPort         uint32
+	HotplugVFIOOnRootBus bool
+	Debug                bool
+	UseVSock             bool
 }
 
 // ProxyInfo stores proxy details
@@ -355,6 +357,9 @@ func getHypervisorInfo(config oci.RuntimeConfig) HypervisorInfo {
 		MemorySlots:       config.HypervisorConfig.MemSlots,
 		EntropySource:     config.HypervisorConfig.EntropySource,
 		SharedFS:          config.HypervisorConfig.SharedFS,
+
+		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
+		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
 	}
 }
 
