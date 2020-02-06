@@ -37,6 +37,7 @@ KSM/AB
 KVM/AB
 LTS/AB
 MACVTAP/AB
+mem/B	# For terms like "virtio-mem"
 MDEV/AB
 NEMU/AB
 NIC/AB
@@ -80,6 +81,7 @@ VHOST/AB
 virtio/AB
 VirtIO/AB
 Virtio-fs/AB
+Virtio-mem/AB
 VLAN/AB
 VM/AB
 VMCache/AB
