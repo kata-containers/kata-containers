@@ -213,6 +213,29 @@ cmd_disable_all_debug()
 	sudo sed -i -e "s/^\(kernel_params = \".*\)${agent_debug}\(.*\"\)/\1 \2/g" "$config_file"
 }
 
+cmd_disable_vsock()
+{
+	info "disabling vsock"
+	config_checks
+	sudo sed -i -e 's/^\(use_vsock.*=.*true\)/# \1/g' "${config_file}"
+}
+
+cmd_enable_vsock()
+{
+	info "enabling vsock"
+	config_checks
+	sudo sed -i -e 's/^# *\(use_vsock\).*/\1 = true/' "${config_file}"
+
+	local -r vsock_module="vhost_vsock"
+	echo "Check if ${vsock_module} is loaded"
+	if lsmod | grep -q "$vsock_module" &> /dev/null ; then
+		echo "Module ${vsock_module} is already loaded"
+	else
+		echo "Load ${vsock_module} module"
+		sudo modprobe "${vsock_module}"
+	fi
+}
+
 cmd_configure_image()
 {
 	local file="$1"
@@ -473,6 +496,8 @@ parse_args()
 		configure-initrd) cmd_configure_initrd "$1" ;;
 		disable-debug) cmd_disable_all_debug ;;
 		enable-debug) cmd_enable_full_debug ;;
+		disable-vsock) cmd_disable_vsock;;
+		enable-vsock) cmd_enable_vsock;;
 		install-docker) cmd_install_docker ;;
 		install-docker-system) cmd_install_docker_system ;;
 		install-packages) cmd_install_packages ;;
