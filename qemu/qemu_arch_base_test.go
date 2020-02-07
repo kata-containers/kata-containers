@@ -36,7 +36,7 @@ var (
 	deviceSCSIControllerBusAddrStr = "-device virtio-scsi-pci,id=foo,bus=pci.0,addr=00:04.0,disable-modern=true,iothread=iothread1,romfile=efi-virtio.rom"
 	deviceVhostUserSCSIString      = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -device vhost-user-scsi-pci,id=scsi1,chardev=char1,romfile=efi-virtio.rom"
 	deviceVhostUserBlkString       = "-chardev socket,id=char2,path=/tmp/nonexistentsocket.socket -device vhost-user-blk-pci,logical_block_size=4096,size=512M,chardev=char2,romfile=efi-virtio.rom"
-	deviceBlockString              = "-device virtio-blk,disable-modern=true,drive=hd0,scsi=off,config-wce=off,romfile=efi-virtio.rom -drive id=hd0,file=/var/lib/vm.img,aio=threads,format=qcow2,if=none"
+	deviceBlockString              = "-device virtio-blk-pci,disable-modern=true,drive=hd0,scsi=off,config-wce=off,romfile=efi-virtio.rom -drive id=hd0,file=/var/lib/vm.img,aio=threads,format=qcow2,if=none"
 	devicePCIBridgeString          = "-device pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,chassis_nr=5,shpc=on,addr=ff,romfile=efi-virtio.rom"
 	devicePCIEBridgeString         = "-device pcie-pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,addr=ff,romfile=efi-virtio.rom"
 	romfile                        = "efi-virtio.rom"
@@ -81,7 +81,7 @@ func TestAppendVirtioBalloon(t *testing.T) {
 		ROMFile: romfile,
 	}
 
-	var deviceString = "-device " + string(VirtioBalloon)
+	var deviceString = "-device " + string(VirtioBalloon) + "-" + string(TransportPCI)
 	deviceString += ",id=" + balloonDevice.ID + ",romfile=" + balloonDevice.ROMFile
 
 	var OnDeflateOnOMM = ",deflate-on-oom=on"
@@ -158,9 +158,6 @@ func TestAppendDeviceVFIOPCIe(t *testing.T) {
 		BDF: "02:00.0",
 		Bus: pcieRootPortID,
 	}
-	if isVirtioCCW[Vfio] {
-		vfioDevice.DevNo = DevNo
-	}
 	testAppend(vfioDevice, deviceVFIOPCIeSimpleString, t)
 
 	// full test
@@ -171,9 +168,6 @@ func TestAppendDeviceVFIOPCIe(t *testing.T) {
 		ROMFile:  romfile,
 		VendorID: "0x10de",
 		DeviceID: "0x15f8",
-	}
-	if isVirtioCCW[Vfio] {
-		vfioDevice.DevNo = DevNo
 	}
 	testAppend(vfioDevice, deviceVFIOPCIeFullString, t)
 }
