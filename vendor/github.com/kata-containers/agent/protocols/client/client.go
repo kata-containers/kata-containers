@@ -7,10 +7,12 @@
 package client
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +21,7 @@ import (
 	"github.com/hashicorp/yamux"
 	"github.com/mdlayher/vsock"
 	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
@@ -36,6 +39,14 @@ var defaultDialTimeout = 15 * time.Second
 var defaultCloseTimeout = 5 * time.Second
 
 var hybridVSockPort uint32
+
+var agentClientFields = logrus.Fields{
+	"name":   "agent-client",
+	"pid":    os.Getpid(),
+	"source": "agent-client",
+}
+
+var agentClientLog = logrus.WithFields(agentClientFields)
 
 // AgentClient is an agent gRPC client connection wrapper for agentgrpc.AgentServiceClient
 type AgentClient struct {
@@ -407,13 +418,24 @@ func HybridVSockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 			return nil, err
 		}
 
-		// Read EOT (End of transmission) byte
-		eot := make([]byte, 32)
-		if _, err = conn.Read(eot); err != nil {
-			// Just close the connection, gRPC will dial again
-			// without errors
+		// A trivial handshake is included in the host-initiated vsock connection protocol.
+		// It looks like this:
+		// - [host] CONNECT <port><LF>
+		// - [guest/success] OK <assigned_host_port><LF>
+		reader := bufio.NewReader(conn)
+		response, err := reader.ReadString('\n')
+		if err != nil {
 			conn.Close()
+			agentClientLog.WithField("Error", err).Debug("HybridVsock trivial handshake failed")
+			// for now, we temporarily rely on the backoff strategy from GRPC for more stable CI.
+			return conn, nil
+		} else if !strings.Contains(response, "OK") {
+			conn.Close()
+			agentClientLog.WithField("response", response).Debug("HybridVsock trivial handshake failed with malformd response code")
+			// for now, we temporarily rely on the backoff strategy from GRPC for more stable CI.
+			return conn, nil
 		}
+		agentClientLog.WithField("response", response).Debug("HybridVsock trivial handshake")
 
 		return conn, nil
 	}
