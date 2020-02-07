@@ -10,6 +10,8 @@ const DEBUG_CONSOLE_FLAG: &str = "agent.debug_console";
 const DEV_MODE_FLAG: &str = "agent.devmode";
 const LOG_LEVEL_OPTION: &str = "agent.log";
 const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
+const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
+const LOG_VPORT_OPTION: &str = "agent.log_vport";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
@@ -24,6 +26,8 @@ pub struct agentConfig {
     pub dev_mode: bool,
     pub log_level: slog::Level,
     pub hotplug_timeout: time::Duration,
+    pub debug_console_vport: i32,
+    pub log_vport: i32,
 }
 
 impl agentConfig {
@@ -33,6 +37,8 @@ impl agentConfig {
             dev_mode: false,
             log_level: DEFAULT_LOG_LEVEL,
             hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+            debug_console_vport: 0,
+            log_vport: 0,
         }
     }
 
@@ -60,10 +66,33 @@ impl agentConfig {
                     self.hotplug_timeout = hotplugTimeout;
                 }
             }
+
+            if param.starts_with(format!("{}=", DEBUG_CONSOLE_VPORT_OPTION).as_str()) {
+                let port = get_vsock_port(param)?;
+                if port > 0 {
+                    self.debug_console_vport = port;
+                }
+            }
+
+            if param.starts_with(format!("{}=", LOG_VPORT_OPTION).as_str()) {
+                let port = get_vsock_port(param)?;
+                if port > 0 {
+                    self.log_vport = port;
+                }
+            }
         }
 
         Ok(())
     }
+}
+
+fn get_vsock_port(p: &str) -> Result<i32> {
+    let fields: Vec<&str> = p.split("=").collect();
+    if fields.len() != 2 {
+        return Err(ErrorKind::ErrorCode("invalid port parameter".to_string()).into());
+    }
+
+    Ok(fields[1].parse::<i32>()?)
 }
 
 // Map logrus (https://godoc.org/github.com/sirupsen/logrus)

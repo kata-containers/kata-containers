@@ -29,6 +29,8 @@ extern crate slog;
 extern crate netlink;
 
 use futures::*;
+use nix::fcntl::{self, OFlag};
+use nix::sys::socket::{self, AddressFamily, SockAddr, SockFlag, SockType};
 use nix::sys::wait::{self, WaitStatus};
 use nix::unistd;
 use prctl::set_child_subreaper;
@@ -36,7 +38,7 @@ use rustjail::errors::*;
 use signal_hook::{iterator::Signals, SIGCHLD};
 use std::collections::HashMap;
 use std::env;
-use std::fs;
+use std::fs::{self, File};
 use std::os::unix::fs as unixfs;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
@@ -105,13 +107,17 @@ fn main() -> Result<()> {
     lazy_static::initialize(&SHELLS);
 
     lazy_static::initialize(&AGENT_CONFIG);
+
+    // support vsock log
+    let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
+    let writer = unsafe { File::from_raw_fd(wfd) };
+
     let agentConfig = AGENT_CONFIG.clone();
 
     if unistd::getpid() == Pid::from_raw(1) {
         // Init a temporary logger used by init agent as init process
         // since before do the base mount, it wouldn't access "/proc/cmdline"
         // to get the customzied debug level.
-        let writer = io::stdout();
         let logger = logging::create_logger(NAME, "agent", slog::Level::Debug, writer);
         init_agent_as_init(&logger)?;
     }
@@ -125,7 +131,32 @@ fn main() -> Result<()> {
     }
 
     let config = agentConfig.read().unwrap();
-    let writer = io::stdout();
+    let log_vport = config.log_vport as u32;
+    let log_handle = thread::spawn(move || -> Result<()> {
+        let mut reader = unsafe { File::from_raw_fd(rfd) };
+        if log_vport > 0 {
+            let listenfd = socket::socket(
+                AddressFamily::Vsock,
+                SockType::Stream,
+                SockFlag::SOCK_CLOEXEC,
+                None,
+            )?;
+            let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, log_vport);
+            socket::bind(listenfd, &addr)?;
+            socket::listen(listenfd, 1)?;
+            let datafd = socket::accept4(listenfd, SockFlag::SOCK_CLOEXEC)?;
+            let mut log_writer = unsafe { File::from_raw_fd(datafd) };
+            let _ = io::copy(&mut reader, &mut log_writer)?;
+            let _ = unistd::close(listenfd);
+            let _ = unistd::close(datafd);
+        }
+        // copy log to stdout
+        let mut stdout_writer = io::stdout();
+        let _ = io::copy(&mut reader, &mut stdout_writer)?;
+        Ok(())
+    });
+
+    let writer = unsafe { File::from_raw_fd(wfd) };
     // Recreate a logger with the log level get from "/proc/cmdline".
     let logger = logging::create_logger(NAME, "agent", config.log_level, writer);
 
@@ -143,13 +174,14 @@ fn main() -> Result<()> {
     let _guard = slog_scope::set_global_logger(logger.new(o!("subsystem" => "grpc")));
 
     let shells = SHELLS.clone();
+    let debug_console_vport = config.debug_console_vport as u32;
 
     let shell_handle = if config.debug_console {
         let thread_logger = logger.clone();
 
         thread::spawn(move || {
             let shells = shells.lock().unwrap();
-            let result = setup_debug_console(shells.to_vec());
+            let result = setup_debug_console(shells.to_vec(), debug_console_vport);
             if result.is_err() {
                 // Report error, but don't fail
                 warn!(thread_logger, "failed to setup debug console";
@@ -196,6 +228,7 @@ fn main() -> Result<()> {
     // let _ = rx.wait();
 
     handle.join().unwrap();
+    let _ = log_handle.join();
 
     if config.debug_console {
         shell_handle.join().unwrap();
@@ -330,18 +363,35 @@ lazy_static! {
 // pub static mut TRACE_MODE: ;
 
 use crate::config::agentConfig;
-use nix::fcntl::{self, OFlag};
 use nix::sys::stat::Mode;
 use std::os::unix::io::{FromRawFd, RawFd};
 use std::path::PathBuf;
 use std::process::{exit, Command, Stdio};
 
-fn setup_debug_console(shells: Vec<String>) -> Result<()> {
+fn setup_debug_console(shells: Vec<String>, port: u32) -> Result<()> {
     for shell in shells.iter() {
         let binary = PathBuf::from(shell);
         if binary.exists() {
-            let f: RawFd = fcntl::open(CONSOLE_PATH, OFlag::O_RDWR, Mode::empty())?;
+            let f: RawFd = if port > 0 {
+                let listenfd = socket::socket(
+                    AddressFamily::Vsock,
+                    SockType::Stream,
+                    SockFlag::SOCK_CLOEXEC,
+                    None,
+                )?;
+                let addr = SockAddr::new_vsock(libc::VMADDR_CID_ANY, port);
+                socket::bind(listenfd, &addr)?;
+                socket::listen(listenfd, 1)?;
+                socket::accept4(listenfd, SockFlag::SOCK_CLOEXEC)?
+            } else {
+                let mut flags = OFlag::empty();
+                flags.insert(OFlag::O_RDWR);
+                flags.insert(OFlag::O_CLOEXEC);
+                fcntl::open(CONSOLE_PATH, flags, Mode::empty())?
+            };
+
             let cmd = Command::new(shell)
+                .arg("-i")
                 .stdin(unsafe { Stdio::from_raw_fd(f) })
                 .stdout(unsafe { Stdio::from_raw_fd(f) })
                 .stderr(unsafe { Stdio::from_raw_fd(f) })
@@ -381,7 +431,7 @@ mod tests {
         let mut shells = shells_ref.lock().unwrap();
         shells.clear();
 
-        let result = setup_debug_console(shells.to_vec());
+        let result = setup_debug_console(shells.to_vec(), 0);
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "Error Code: 'no shell'");
@@ -404,7 +454,7 @@ mod tests {
 
         shells.push(shell);
 
-        let result = setup_debug_console(shells.to_vec());
+        let result = setup_debug_console(shells.to_vec(), 0);
 
         assert!(result.is_err());
         assert_eq!(
