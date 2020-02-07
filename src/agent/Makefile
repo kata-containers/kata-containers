@@ -23,11 +23,12 @@ COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
 # Exported to allow cargo to see it
 export VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
 
-BUILD_TYPE = debug
+BUILD_TYPE = release
 
 ARCH = $(shell uname -m)
 LIBC = musl
 TRIPLE = $(ARCH)-unknown-linux-$(LIBC)
+RUSTFLAGS = -C linker=musl-gcc
 
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 
@@ -52,7 +53,7 @@ default: $(TARGET) show-header
 $(TARGET): $(TARGET_PATH)
 
 $(TARGET_PATH): $(SOURCES) | show-summary
-	@cargo build --target $(TRIPLE)
+	@RUSTFLAGS="$(RUSTFLAGS)" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
 
 show-header:
 	@printf "%s - version %s (commit %s)\n\n" "$(TARGET)" "$(VERSION)" "$(COMMIT_MSG)"
@@ -64,10 +65,10 @@ clean:
 	@cargo clean
 
 check:
-	@cargo test --target $(TRIPLE)
+	@RUSTFLAGS="$(RUSTFLAGS)" cargo test --target $(TRIPLE) --$(BUILD_TYPE)
 
 run:
-	@cargo run --target $(TRIPLE)
+	@RUSTFLAGS="$(RUSTFLAGS)" cargo run --target $(TRIPLE) --$(BUILD_TYPE)
 
 show-summary: show-header
 	@printf "project:\n"
