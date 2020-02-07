@@ -36,7 +36,7 @@ build_rust_image() {
 	export ROOTFS_DIR="${GOPATH}/src/${osbuilder_repo}/rootfs-builder/rootfs"
 	distro="ubuntu"
 	sudo -E GOPATH="${GOPATH}" USE_DOCKER=true SECCOMP=no ./rootfs.sh "${distro}"
-	sudo install -o root -g root -m 0550 -t "${ROOTFS_DIR}"/bin "${GOPATH}/src/${rust_agent_repo}/src/agent/target/${arch}-unknown-linux-musl/debug/kata-agent"
+	sudo install -o root -g root -m 0550 -t "${ROOTFS_DIR}"/bin "${GOPATH}/src/${rust_agent_repo}/src/agent/target/${arch}-unknown-linux-musl/release/kata-agent"
 	sudo install -o root -g root -m 0440 ../../agent/kata-agent.service "${ROOTFS_DIR}"/usr/lib/systemd/system/
 	sudo install -o root -g root -m 0440 ../../agent/kata-containers.target "${ROOTFS_DIR}"/usr/lib/systemd/system/
 	popd
