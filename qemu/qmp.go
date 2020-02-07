@@ -846,7 +846,9 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 		"drive":  blockdevID,
 	}
 
-	if isVirtioCCW[DeviceDriver(driver)] {
+	var transport VirtioTransport
+
+	if transport.isVirtioCCW(nil) {
 		args["devno"] = bus
 	} else if bus != "" {
 		args["bus"] = bus
@@ -855,7 +857,7 @@ func (q *QMP) ExecuteDeviceAdd(ctx context.Context, blockdevID, devID, driver, b
 	if shared && (q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 10)) {
 		args["share-rw"] = "on"
 	}
-	if isVirtioPCI[DeviceDriver(driver)] {
+	if transport.isVirtioPCI(nil) {
 		args["romfile"] = romfile
 
 		if disableModern {
@@ -897,12 +899,7 @@ func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, drive
 		"id":     devID,
 		"driver": driver,
 		"drive":  blockdevID,
-	}
-
-	if isVirtioCCW[DeviceDriver(driver)] {
-		args["devno"] = bus
-	} else {
-		args["bus"] = bus
+		"bus":    bus,
 	}
 
 	if scsiID >= 0 {
@@ -913,13 +910,6 @@ func (q *QMP) ExecuteSCSIDeviceAdd(ctx context.Context, blockdevID, devID, drive
 	}
 	if shared && (q.version.Major > 2 || (q.version.Major == 2 && q.version.Minor >= 10)) {
 		args["share-rw"] = "on"
-	}
-	if isVirtioPCI[DeviceDriver(driver)] {
-		args["romfile"] = romfile
-
-		if disableModern {
-			args["disable-modern"] = disableModern
-		}
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
@@ -1124,7 +1114,10 @@ func (q *QMP) ExecutePCIDeviceAdd(ctx context.Context, blockdevID, devID, driver
 	if queues > 0 {
 		args["num-queues"] = strconv.Itoa(queues)
 	}
-	if isVirtioPCI[DeviceDriver(driver)] {
+
+	var transport VirtioTransport
+
+	if transport.isVirtioPCI(nil) {
 		args["romfile"] = romfile
 
 		if disableModern {
@@ -1161,9 +1154,18 @@ func (q *QMP) ExecutePCIVhostUserDevAdd(ctx context.Context, driver, devID, char
 // bdf is the PCI bus-device-function of the pci device.
 // bus is optional. When hot plugging a PCIe device, the bus can be the ID of the pcie-root-port.
 func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile string) error {
+	var driver string
+	var transport VirtioTransport
+
+	if transport.isVirtioCCW(nil) {
+		driver = string(VfioCCW)
+	} else {
+		driver = string(VfioPCI)
+	}
+
 	args := map[string]interface{}{
 		"id":      devID,
-		"driver":  Vfio,
+		"driver":  driver,
 		"host":    bdf,
 		"romfile": romfile,
 	}
@@ -1181,7 +1183,7 @@ func (q *QMP) ExecuteVFIODeviceAdd(ctx context.Context, devID, bdf, bus, romfile
 func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus, romfile string) error {
 	args := map[string]interface{}{
 		"id":      devID,
-		"driver":  Vfio,
+		"driver":  VfioPCI,
 		"host":    bdf,
 		"addr":    addr,
 		"romfile": romfile,
@@ -1201,7 +1203,7 @@ func (q *QMP) ExecutePCIVFIODeviceAdd(ctx context.Context, devID, bdf, addr, bus
 func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsdev, addr, bus, romfile string) error {
 	args := map[string]interface{}{
 		"id":       devID,
-		"driver":   Vfio,
+		"driver":   VfioPCI,
 		"sysfsdev": sysfsdev,
 		"romfile":  romfile,
 	}
@@ -1263,10 +1265,6 @@ func (q *QMP) ExecuteCPUDeviceAdd(ctx context.Context, driver, cpuID, socketID, 
 		if dieID != "" {
 			args["die-id"] = dieID
 		}
-	}
-
-	if isVirtioPCI[DeviceDriver(driver)] {
-		args["romfile"] = romfile
 	}
 
 	return q.executeCommand(ctx, "device_add", args, nil)
@@ -1477,7 +1475,7 @@ func (q *QMP) ExecuteBalloon(ctx context.Context, bytes uint64) error {
 // 1.0 in nested environments.
 func (q *QMP) ExecutePCIVSockAdd(ctx context.Context, id, guestCID, vhostfd, addr, bus, romfile string, disableModern bool) error {
 	args := map[string]interface{}{
-		"driver":    VHostVSock,
+		"driver":    VHostVSockPCI,
 		"id":        id,
 		"guest-cid": guestCID,
 		"vhostfd":   vhostfd,
