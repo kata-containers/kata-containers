@@ -875,7 +875,9 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 		devParams = append(devParams, string(driver))
 		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 		devParams = append(devParams, fmt.Sprintf("tag=%s", vhostuserDev.Tag))
-		devParams = append(devParams, fmt.Sprintf("cache-size=%dM", vhostuserDev.CacheSize))
+		if vhostuserDev.CacheSize != 0 {
+			devParams = append(devParams, fmt.Sprintf("cache-size=%dM", vhostuserDev.CacheSize))
+		}
 		if vhostuserDev.SharedVersions {
 			devParams = append(devParams, "versiontable=/dev/shm/fuse_shared_versions")
 		}
