@@ -13,3 +13,6 @@ export GOPATH="${GOPATH:-/tmp/go}"
 script_dir="$(dirname $(readlink -f $0))"
 
 sudo -E PATH="$PATH" bash "${script_dir}/../tests/test_images.sh"
+
+# run again to build rust agent
+sudo -E RUST_AGENT="yes" PATH="$PATH" bash "${script_dir}/../tests/test_images.sh"

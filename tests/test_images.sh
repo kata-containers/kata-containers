@@ -36,6 +36,8 @@ readonly docker_build_runtime="runc"
 build_images=1
 build_initrds=1
 typeset -a distrosSystemd distrosAgent
+distrosSystemd=()
+distrosAgent=()
 # Hashes used to keep track of image sizes.
 # - Key: name of distro.
 # - Value: colon-separated roots and image sizes ("${rootfs_size}:${image_size}").
@@ -312,7 +314,7 @@ get_distros_config()
 		distrosList=($(make list-distros))
 	fi
 
-	for d in ${distrosList[@]}; do
+	for d in ${distrosList[@]:-}; do
 		debug "Getting config for distro $d"
 		distroPattern="\<${d}\>"
 		if [[ "${skipWhenTestingAll[@]:-}" =~ $distroPattern ]]; then
@@ -372,6 +374,9 @@ install_image_create_container()
 
 	showKataRunFailure=1
 	silent_run $mgr reset-config
+	if [ "${RUST_AGENT:-}" = "yes" ]; then
+		silent_run $mgr enable-vsock
+	fi
 	silent_run $mgr configure-image "$file"
 	create_container
 	showKataRunFailure=
@@ -389,6 +394,9 @@ install_initrd_create_container()
 
 	showKataRunFailure=1
 	silent_run $mgr reset-config
+	if [ "${RUST_AGENT:-}" = "yes" ]; then
+		silent_run $mgr enable-vsock
+	fi
 	silent_run $mgr configure-initrd "$file"
 	create_container
 	showKataRunFailure=
@@ -397,7 +405,7 @@ install_initrd_create_container()
 # Displays a list of distros which can be tested
 list_distros()
 {
-	tr " " "\n" <<< "${distrosSystemd[@]} ${distrosAgent[@]}" | sort
+	tr " " "\n" <<< "${distrosSystemd[@]:-} ${distrosAgent[@]:-}" | sort
 }
 
 #
@@ -497,10 +505,10 @@ test_distros()
 	# If a distro was specified, filter out the distro list to only include that distro
 	if [ -n "$distro" ]; then
 		pattern="\<$distro\>"
-		if [[ "${distrosAgent[@]}" =~ $pattern ]]; then
+		if [[ "${distrosAgent[@]:-}" =~ $pattern ]]; then
 			distrosAgent=($distro)
 			distrosSystemd=()
-		elif [[ "${distrosSystemd[@]}" =~ $pattern ]]; then
+		elif [[ "${distrosSystemd[@]:-}" =~ $pattern ]]; then
 			distrosSystemd=($distro)
 			distrosAgent=()
 			build_initrds=
@@ -547,7 +555,7 @@ test_distros()
 			local marker=$(make print-ROOTFS_MARKER_SUFFIX)
 			[ -z "$marker" ] &&  die "Invalid rootfs marker"
 			typeset -a completed=($(find ${tmp_rootfs} -name ".*${marker}" -exec basename {} \; | sed -E "s/\.(.+)${marker}/\1/"))
-			for d in "${distrosSystemd[@]}" "${distrosAgent[@]}"; do
+			for d in "${distrosSystemd[@]:-}" "${distrosAgent[@]:-}"; do
 				if [[ "${completed[@]}" =~ $d ]]; then
 					info "- $d : completed"
 				else
@@ -561,7 +569,7 @@ test_distros()
 	# TODO: once support for rootfs images with kata-agent as init is in place,
 	# uncomment the following line
 #	for d in ${distrosSystemd[@]} ${distrosAgent[@]}; do
-	for d in ${distrosSystemd[@]}; do
+	for d in ${distrosSystemd[@]:-}; do
 		local rootfs_path="${tmp_rootfs}/${d}_rootfs"
 		local image_path="${images_dir}/kata-containers-image-$d.img"
 		local rootfs_size=$(get_rootfs_size "$rootfs_path")
@@ -583,7 +591,7 @@ test_distros()
 		install_image_create_container $image_path
 	done
 
-	for d in ${distrosAgent[@]}; do
+	for d in ${distrosAgent[@]:-}; do
 		local rootfs_path="${tmp_rootfs}/${d}_rootfs"
 		local initrd_path="${images_dir}/kata-containers-initrd-$d.img"
 		local rootfs_size=$(get_rootfs_size "$rootfs_path")
@@ -618,6 +626,13 @@ test_dracut()
 
 	detect_go_version ||
 		die "Could not detect the required Go version for AGENT_VERSION='${AGENT_VERSION:-master}'."
+	detect_rust_version ||
+		die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-master}'."
+	detect_cmake_version ||
+		die "Could not detect the required cmake version for AGENT_VERSION='${AGENT_VERSION:-master}'."
+	detect_musl_version ||
+		die "Could not detect the required musl version for AGENT_VERSION='${AGENT_VERSION:-master}'."
+
 	generate_dockerfile ${dracut_dir}
 	info "Creating container for dracut"
 	silent_run docker build -t dracut-test-osbuilder ${dracut_dir}
