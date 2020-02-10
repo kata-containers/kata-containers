@@ -56,7 +56,7 @@ function install_yq() {
 		die "Please install curl"
 	fi
 
-	local yq_version=2.3.0
+	local yq_version=3.1.0
 
 	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos}_${goarch}"
 	curl -o "${yq_path}" -LSsf ${yq_url}
