@@ -683,9 +683,10 @@ fn do_exec(logger: &Logger, path: &str, args: &[String], env: &[String]) -> Resu
     }
 
     for e in env.iter() {
-        let v: Vec<&str> = e.split("=").collect();
+        let v: Vec<&str> = e.splitn(2, "=").collect();
         if v.len() != 2 {
             info!(logger, "incorrect env config!");
+            continue;
         }
         env::set_var(v[0], v[1]);
     }
