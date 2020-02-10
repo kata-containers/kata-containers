@@ -201,10 +201,8 @@ get_kernel_frag_path() {
 	results=$( ${cmdpath} -r -n ${all_configs} )
 	# Only consider results highlighting "not in final"
 	results=$(grep "${not_in_string}" <<< "$results")
-	# Do not care about options that are in whitelist if using experimental kernel
-	if [[ ${experimental_kernel} == "true" ]]; then
-		results=$(grep -v -f ${default_config_whitelist} <<< "$results")
-	fi
+	# Do not care about options that are in whitelist
+	results=$(grep -v -f ${default_config_whitelist} <<< "$results")
 
 	# Did we request any entries that did not make it?
 	local missing=$(echo $results | grep -v -q "${not_in_string}"; echo $?)
