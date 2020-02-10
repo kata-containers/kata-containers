@@ -20,14 +20,12 @@ packaging_repo="github.com/kata-containers/packaging"
 latest_build_url="${jenkins_url}/job/cloud-hypervisor-nightly-$(uname -m)/${cached_artifacts_path}"
 clh_bin_name="cloud-hypervisor"
 clh_install_path="/usr/bin/${clh_bin_name}"
-
+cloud_hypervisor_repo=$(get_version "assets.hypervisor.cloud_hypervisor.url")
+go_cloud_hypervisor_repo=${cloud_hypervisor_repo/https:\/\//}
 
 install_clh() {
-	# Get url for cloud_hypervisor from runtime/versions.yaml
-	cloud_hypervisor_repo=$(get_version "assets.hypervisor.cloud_hypervisor.url")
 	[ -n "$cloud_hypervisor_repo" ] || die "failed to get cloud_hypervisor repo"
 	export cloud_hypervisor_repo
-	go_cloud_hypervisor_repo=${cloud_hypervisor_repo/https:\/\//}
 
 	# Get version for cloud_hypervisor from runtime/versions.yaml
 	cloud_hypervisor_version=$(get_version "assets.hypervisor.cloud_hypervisor.version")
@@ -48,6 +46,9 @@ install_clh() {
 
 install_prebuilt_clh() {
 	local checksum_file="sha256sum-cloud-hypervisor"
+	go get -d "${go_cloud_hypervisor_repo}" || true
+	pushd  $(dirname "${GOPATH}/src/${go_cloud_hypervisor_repo}")
+
 	curl -fsOL --progress-bar "${latest_build_url}/${clh_bin_name}" || return 1
 	curl -fsOL "${latest_build_url}/${checksum_file}" || return 1
 
@@ -56,6 +57,7 @@ install_prebuilt_clh() {
 
 	info "installing ${clh_bin_name}" "${clh_install_path}"
 	sudo install -D ${clh_bin_name} "${clh_install_path}"
+	popd
 }
 
 main() {
