@@ -14,10 +14,17 @@ ifeq (${CI}, true)
 	endif
 endif
 
+PODMAN_DEPENDENCY = podman
+ifeq (${CI}, true)
+        ifneq (${TEST_CGROUPSV2}, true)
+                PODMAN_DEPENDENCY =
+        endif
+endif
+
 # union for 'make test'
 UNION := functional debug-console $(DOCKER_DEPENDENCY) openshift crio docker-compose network \
 	docker-stability oci netmon kubernetes swarm vm-factory \
-	entropy ramdisk shimv2 tracing time-drift compatibility vcpus
+	entropy ramdisk shimv2 tracing time-drift compatibility vcpus $(PODMAN_DEPENDENCY)
 
 # filter scheme script for docker integration test suites
 FILTER_FILE = .ci/filter/filter_docker_test.sh
@@ -121,6 +128,10 @@ docker-stability:
 	cd integration/stability && ./bind_mount_linux.sh
 	cd integration/stability && ./hypervisor_stability_kill_test.sh
 
+podman: ginkgo
+	./ginkgo -failFast -v -focus "${FOCUS}" \
+		./integration/podman/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+
 kubernetes:
 	bash -f .ci/install_bats.sh
 	bash -f integration/kubernetes/run_kubernetes_tests.sh
@@ -222,6 +233,7 @@ help:
 	functional \
 	ginkgo \
 	$(INSTALL_TARGETS) \
+	podman \
 	kubernetes \
 	list-install-targets \
 	log-parser \
