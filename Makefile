@@ -32,7 +32,7 @@ FILTER_FILE = .ci/filter/filter_docker_test.sh
 # skipped docker integration tests for Firecraker
 # Firecracker configuration file
 FIRECRACKER_CONFIG = .ci/hypervisors/firecracker/configuration_firecracker.yaml
-# Firecracker configuration file
+# Cloud hypervisor configuration file
 CLH_CONFIG = .ci/hypervisors/clh/configuration_clh.yaml
 ifneq ($(wildcard $(FILTER_FILE)),)
 SKIP_FIRECRACKER := $(shell bash -c '$(FILTER_FILE) $(FIRECRACKER_CONFIG)')
