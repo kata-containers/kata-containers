@@ -4,6 +4,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# Set to "yes“ if binary stripping is needed.
+STRIP := no
+
 DESTDIR :=
 ifeq ($(PREFIX),)
 PREFIX := /usr
@@ -24,8 +27,13 @@ VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
 # go build common flags
 BUILDFLAGS := -buildmode=pie
 
+# whether stipping the binary
+ifeq ($(STRIP),yes)
+       KATA_LDFLAGS += -w -s
+endif
+
 $(TARGET): $(SOURCES) $(VERSION_FILE)
-	go build $(BUILDFLAGS) -o $@ -ldflags "-X main.version=$(VERSION_COMMIT)"
+	go build $(BUILDFLAGS) -o $@ -ldflags "-X main.version=$(VERSION_COMMIT) $(KATA_LDFLAGS)"
 
 test:
 	@echo "Go tests using faketty"
