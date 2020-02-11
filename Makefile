@@ -463,6 +463,11 @@ QUIET_TEST     = $(Q:@=@echo    '     TEST     '$@;)
 # go build common flags
 BUILDFLAGS := -buildmode=pie
 
+# whether stipping the binary
+ifeq ($(STRIP),yes)
+       LDFLAGS := -ldflags "-w -s"
+endif
+
 # Return non-empty string if specified directory exists
 define DIR_EXISTS
 $(shell test -d $(1) && echo "$(1)")
@@ -490,7 +495,7 @@ containerd-shim-v2: $(SHIMV2_OUTPUT)
 netmon: $(NETMON_TARGET_OUTPUT)
 
 $(NETMON_TARGET_OUTPUT): $(SOURCES) VERSION
-	$(QUIET_BUILD)(cd $(NETMON_DIR) && go build $(BUILDFLAGS) -o $@ -ldflags "-X main.version=$(VERSION)")
+	$(QUIET_BUILD)(cd $(NETMON_DIR) && go build $(BUILDFLAGS) -o $@ -ldflags "-X main.version=$(VERSION)" $(LDFLAGS))
 
 runtime: $(TARGET_OUTPUT) $(CONFIGS)
 .DEFAULT: default
@@ -527,10 +532,10 @@ endef
 GENERATED_FILES += $(CLI_DIR)/config-generated.go
 
 $(TARGET_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
-	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(BUILDFLAGS) -o $@ .)
+	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
-	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build -i -o $@ .)
+	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(LDFLAGS) -i -o $@ .)
 
 .PHONY: \
 	check \
