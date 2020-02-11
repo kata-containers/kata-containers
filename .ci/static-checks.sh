@@ -342,9 +342,9 @@ static_check_rust_arch_specific()
 		return
 	fi
 
-	find . -type f -name "*.rs"  | egrep -v "target/|grpc-rs/|protocols/" | xargs rustfmt --check > /dev/null 2>&1
+	{ find . -type f -name "*.rs"  | egrep -v "target/|grpc-rs/|protocols/" | xargs rustfmt --check > /dev/null 2>&1; ret=$?; } || true
 
-	[ $? -eq 0 ] || die "crate not formatted by rustfmt."
+	[ $ret -eq 0 ] || die "crate not formatted by rustfmt."
 }
 
 # Install yamllint in the different Linux distributions
