@@ -128,9 +128,8 @@ docker-stability:
 	cd integration/stability && ./bind_mount_linux.sh
 	cd integration/stability && ./hypervisor_stability_kill_test.sh
 
-podman: ginkgo
-	./ginkgo -failFast -v -focus "${FOCUS}" \
-		./integration/podman/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+podman:
+	bash -f integration/podman/run_podman_tests.sh
 
 kubernetes:
 	bash -f .ci/install_bats.sh

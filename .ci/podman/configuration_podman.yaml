@@ -1,0 +1,132 @@
+#
+# Copyright (c) 2020 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+# These are the set of tests from the e2e
+# podman testing that we will run.
+test:
+  - podman
+podman:
+  It:
+    - podman pod top on bogus pod
+    - podman create volume with bad volume option
+    - podman pod ps mutually exclusive flags
+    - podman pod ps no pods
+    - podman pod start bogus pod
+    - podman pod top without pod name or id
+    - podman inspect bogus pod
+    - podman pod stop bogus pod
+    - podman unpause bogus pod
+    - podman pod pause bogus pod
+    - podman pod kill bogus
+    - podman pod restart bogus pod
+    - podman ls volume with Go template
+    - podman inspect volume with Go format
+    - podman test selinux --privileged label resolv.conf
+    - podman ls volume with JSON format
+    - podman create volume with name
+    - podman container runlabel global options
+    - podman inspect volume
+    - podman run kernel-memory test
+    - podman run container with systemd
+    - podman run memory-swappiness test
+    - podman journald logs tail two lines
+    - podman create volume
+    - podman test selinux label hostname
+    - podman ls volume
+    - podman create pod with name
+    - podman pod ps id filter flag
+    - podman pod stop single empty pod
+    - podman checkpoint all running container
+    - podman pod pause a created pod by id
+    - podman restore bogus container
+    - podman journald logs latest with since duration
+    - podman empty images list in JSON format
+    - podman run selinux
+    - podman run selinux file type setup test
+    - podman journald logs tail 2 lines with timestamps
+    - podman pod start single empty pod
+    - podman diff bogus image
+    - podman port all and latest
+    - podman journald logs latest with since time
+    - podman journald logs tail 99 lines
+    - podman ps last flag
+    - podman image trust set
+    - podman journald logs for container
+    - podman checkpoint latest running container
+    - podman checkpoint and run exec in restored container
+    - podman network inspect no args
+    - podman history with json flag
+    - podman checkpoint a running container by id
+    - podman test selinux label hosts
+    - podman privileged selinux
+    - podman pod restart single empty pod
+    - podman ps with no containers is valid json format
+    - podman run add bad host
+    - podman history output flag
+    - podman checkpoint a running container by name
+    - podman checkpoint and restore container with same IP
+    - podman run device rename and bad permission test
+    - podman run network in bogus user created network namespace
+    - podman pause a checkpointed container by id
+    - podman port all and extra
+    - podman inspect specified type
+    - podman test selinux label resolv.conf
+    - podman checkpoint container with established tcp connections
+    - podman run add bad dns server
+    - podman run selinux type setup test
+    - podman network create with invalid gateway for subnet
+    - podman image List
+    - podman network rm no args
+    - podman start bogus container
+    - podman create pod with doubled name
+    - podman system info json output
+    - podman history with human flag
+    - podman stop bogus container
+    - podman checkpoint bogus container
+    - podman generate pod kube on bogus object
+    - podman wait on bogus container
+    - podman ps mutually exclusive flags
+    - podman kill bogus container
+    - podman run selinux type check test
+    - podman exec into bogus container
+    - podman history with GO template
+    - podman generate systemd bad timeout value
+    - podman diff image with json output
+    - podman run selinux grep test
+    - podman volume rm by partial name
+    - podman volume rm
+    - podman ps no containers
+    - podman generate systemd bad restart policy
+    - Podman restart bogus container
+    - podman rm bogus container
+    - podman history with quiet flag
+    - podman image trust show
+    - podman attach to bogus container
+    - podman images sort by tag
+    - podman init with no arguments
+    - podman stats with bogus container
+    - podman diff of image
+    - podman container diff of image
+    - podman images with no images prints header
+    - podman generate service kube on bogus object
+    - podman run bad device test
+    - podman run bad ipc pid test
+    - podman run user specified in container
+    - podman container mount
+    - podman ps namespace flag
+    - podman mount with json format
+    - podman attach to multiple containers
+    - podman run UID specified in container
+    - podman run entrypoint and cmd test
+    - podman container exec simple command
+    - podman run network connection with default bridge
+    - podman commit container check env variables
+    - podman commit container with pause flag
+    - podman run no user specified
+    - podman attach to the latest container
+    - podman create adds annotation
+    - podman create using existing name
+    - podman init latest container
+    - podman run with bad healthcheck timeout
