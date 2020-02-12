@@ -87,7 +87,7 @@ function configure_crio() {
 	local kata_qemu_virtiofs_conf="crio.runtime.runtimes.kata-qemu-virtiofs"
 
 	# add kata-qemu config
-	if grep -q "\[$kata_qemu_conf\]" $crio_conf_file; then
+	if grep -qEe "^\[$kata_qemu_conf\]" $crio_conf_file; then
 		echo "Configuration exists $kata_qemu_conf, overwriting"
 		sed -i "/\[$kata_qemu_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_qemu_path}\"#" $crio_conf_file
 	else
@@ -100,7 +100,7 @@ EOT
 	fi
 
         # add kata-qemu-virtiofs config
-	if grep -q "\[$kata_qemu_virtiofs_conf\]" $crio_conf_file; then
+	if grep -qEe "^\[$kata_qemu_virtiofs_conf\]" $crio_conf_file; then
 		echo "Configuration exists $kata_qemu_virtiofs_conf, overwriting"
 		sed -i "/\[$kata_qemu_virtiofs_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_qemu_virtiofs_path}\"#" $crio_conf_file
 	else
@@ -113,7 +113,7 @@ EOT
         fi
 
 	# add kata-fc config
-	if grep -q "\[$kata_fc_conf\]" $crio_conf_file; then
+	if grep -qEe "^\[$kata_fc_conf\]" $crio_conf_file; then
 		echo "Configuration exists for $kata_fc_conf, overwriting"
 		sed -i "/\[$kata_fc_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_fc_path}\"#" $crio_conf_file
 	else
@@ -126,7 +126,7 @@ EOT
 	fi
 
 	# add kata-clh config
-	if grep -q "\[$kata_clh_conf\]" $crio_conf_file; then
+	if grep -qEe "^\[$kata_clh_conf\]" $crio_conf_file; then
 		echo "Configuration exists $kata_clh_conf, overwriting"
 		sed -i "/\[$kata_clh_conf\]/,+1s#runtime_path.*#runtime_path = \"${kata_clh_path}\"#" $crio_conf_file
 	else
