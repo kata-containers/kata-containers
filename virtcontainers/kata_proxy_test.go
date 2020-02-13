@@ -5,9 +5,7 @@
 
 package virtcontainers
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestKataProxyStart(t *testing.T) {
 	agent := &kataAgent{}

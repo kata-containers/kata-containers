@@ -16,8 +16,8 @@ import (
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
-	"github.com/kata-containers/runtime/pkg/rootless"
 	vc "github.com/kata-containers/runtime/virtcontainers"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	"golang.org/x/sys/unix"
 )
 

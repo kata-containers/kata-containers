@@ -316,7 +316,7 @@ func TestContainerAddDriveDir(t *testing.T) {
 		},
 	}
 
-	sandbox.newStore, err = persist.GetDriver("fs")
+	sandbox.newStore, err = persist.GetDriver()
 	assert.NoError(err)
 	assert.NotNil(sandbox.newStore)
 

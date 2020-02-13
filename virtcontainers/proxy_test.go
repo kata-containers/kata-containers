@@ -173,7 +173,7 @@ func testDefaultProxyURL(expectedURL string, socketType string, sandboxID string
 }
 
 func TestDefaultProxyURLUnix(t *testing.T) {
-	path := filepath.Join(filepath.Join(fs.RunStoragePath(), sandboxID), "proxy.sock")
+	path := filepath.Join(filepath.Join(fs.MockRunStoragePath(), sandboxID), "proxy.sock")
 	socketPath := fmt.Sprintf("unix://%s", path)
 	assert.NoError(t, testDefaultProxyURL(socketPath, SocketTypeUNIX, sandboxID))
 }
@@ -183,7 +183,7 @@ func TestDefaultProxyURLVSock(t *testing.T) {
 }
 
 func TestDefaultProxyURLUnknown(t *testing.T) {
-	path := filepath.Join(filepath.Join(fs.RunStoragePath(), sandboxID), "proxy.sock")
+	path := filepath.Join(filepath.Join(fs.MockRunStoragePath(), sandboxID), "proxy.sock")
 	socketPath := fmt.Sprintf("unix://%s", path)
 	assert.Error(t, testDefaultProxyURL(socketPath, "foobar", sandboxID))
 }
@@ -204,7 +204,7 @@ func testProxyStart(t *testing.T, agent agent, proxy proxy) {
 	}
 
 	invalidPath := filepath.Join(tmpdir, "enoent")
-	expectedSocketPath := filepath.Join(filepath.Join(fs.RunStoragePath(), testSandboxID), "proxy.sock")
+	expectedSocketPath := filepath.Join(filepath.Join(fs.MockRunStoragePath(), testSandboxID), "proxy.sock")
 	expectedURI := fmt.Sprintf("unix://%s", expectedSocketPath)
 
 	data := []testData{

@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kata-containers/runtime/pkg/rootless"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	"github.com/stretchr/testify/assert"
 )
 

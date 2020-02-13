@@ -451,7 +451,7 @@ func (c *Container) Restore() error {
 }
 
 func loadSandboxConfig(id string) (*SandboxConfig, error) {
-	store, err := persist.GetDriver("fs")
+	store, err := persist.GetDriver()
 	if err != nil || store == nil {
 		return nil, errors.New("failed to get fs persist driver")
 	}

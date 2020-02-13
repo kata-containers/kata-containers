@@ -26,7 +26,6 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/kata-containers/agent/protocols/grpc"
-	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
@@ -36,6 +35,7 @@ import (
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/store"
 	"github.com/kata-containers/runtime/virtcontainers/types"
@@ -538,7 +538,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		ctx:             ctx,
 	}
 
-	if s.newStore, err = persist.GetDriver("fs"); err != nil || s.newStore == nil {
+	if s.newStore, err = persist.GetDriver(); err != nil || s.newStore == nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
 
@@ -622,7 +622,7 @@ func (s *Sandbox) storeSandbox() error {
 }
 
 func rLockSandbox(sandboxID string) (func() error, error) {
-	store, err := persist.GetDriver("fs")
+	store, err := persist.GetDriver()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
@@ -631,7 +631,7 @@ func rLockSandbox(sandboxID string) (func() error, error) {
 }
 
 func rwLockSandbox(sandboxID string) (func() error, error) {
-	store, err := persist.GetDriver("fs")
+	store, err := persist.GetDriver()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}

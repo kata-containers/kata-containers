@@ -17,7 +17,6 @@ import (
 	govmmQemu "github.com/intel/govmm/qemu"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -75,9 +74,13 @@ func TestQemuKernelParameters(t *testing.T) {
 
 func TestQemuCreateSandbox(t *testing.T) {
 	qemuConfig := newQemuConfig()
-	q := &qemu{}
 	assert := assert.New(t)
 
+	store, err := persist.GetDriver()
+	assert.NoError(err)
+	q := &qemu{
+		store: store,
+	}
 	sandbox := &Sandbox{
 		ctx: context.Background(),
 		id:  "testSandbox",
@@ -88,11 +91,11 @@ func TestQemuCreateSandbox(t *testing.T) {
 
 	// Create the hypervisor fake binary
 	testQemuPath := filepath.Join(testDir, testHypervisor)
-	_, err := os.Create(testQemuPath)
+	_, err = os.Create(testQemuPath)
 	assert.NoError(err)
 
 	// Create parent dir path for hypervisor.json
-	parentDir := filepath.Join(fs.RunStoragePath(), sandbox.id)
+	parentDir := filepath.Join(q.store.RunStoragePath(), sandbox.id)
 	assert.NoError(os.MkdirAll(parentDir, DirMode))
 
 	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
@@ -103,9 +106,13 @@ func TestQemuCreateSandbox(t *testing.T) {
 
 func TestQemuCreateSandboxMissingParentDirFail(t *testing.T) {
 	qemuConfig := newQemuConfig()
-	q := &qemu{}
 	assert := assert.New(t)
 
+	store, err := persist.GetDriver()
+	assert.NoError(err)
+	q := &qemu{
+		store: store,
+	}
 	sandbox := &Sandbox{
 		ctx: context.Background(),
 		id:  "testSandbox",
@@ -116,11 +123,11 @@ func TestQemuCreateSandboxMissingParentDirFail(t *testing.T) {
 
 	// Create the hypervisor fake binary
 	testQemuPath := filepath.Join(testDir, testHypervisor)
-	_, err := os.Create(testQemuPath)
+	_, err = os.Create(testQemuPath)
 	assert.NoError(err)
 
 	// Ensure parent dir path for hypervisor.json does not exist.
-	parentDir := filepath.Join(fs.RunStoragePath(), sandbox.id)
+	parentDir := filepath.Join(q.store.RunStoragePath(), sandbox.id)
 	assert.NoError(os.RemoveAll(parentDir))
 
 	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
@@ -276,11 +283,14 @@ func TestQemuAddDeviceKataVSOCK(t *testing.T) {
 
 func TestQemuGetSandboxConsole(t *testing.T) {
 	assert := assert.New(t)
+	store, err := persist.GetDriver()
+	assert.NoError(err)
 	q := &qemu{
-		ctx: context.Background(),
+		ctx:   context.Background(),
+		store: store,
 	}
 	sandboxID := "testSandboxID"
-	expected := filepath.Join(fs.RunVMStoragePath(), sandboxID, consoleSocket)
+	expected := filepath.Join(q.store.RunVMStoragePath(), sandboxID, consoleSocket)
 
 	result, err := q.getSandboxConsole(sandboxID)
 	assert.NoError(err)
@@ -415,7 +425,9 @@ func TestQemuFileBackedMem(t *testing.T) {
 	sandbox, err := createQemuSandboxConfig()
 	assert.NoError(err)
 
-	q := &qemu{}
+	q := &qemu{
+		store: sandbox.newStore,
+	}
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
 	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
 	assert.NoError(err)
@@ -428,7 +440,9 @@ func TestQemuFileBackedMem(t *testing.T) {
 	sandbox, err = createQemuSandboxConfig()
 	assert.NoError(err)
 
-	q = &qemu{}
+	q = &qemu{
+		store: sandbox.newStore,
+	}
 	sandbox.config.HypervisorConfig.BootToBeTemplate = true
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
 	sandbox.config.HypervisorConfig.MemoryPath = fallbackFileBackedMemDir
@@ -442,7 +456,9 @@ func TestQemuFileBackedMem(t *testing.T) {
 	sandbox, err = createQemuSandboxConfig()
 	assert.NoError(err)
 
-	q = &qemu{}
+	q = &qemu{
+		store: sandbox.newStore,
+	}
 	sandbox.config.HypervisorConfig.FileBackedMemRootDir = "/tmp/xyzabc"
 	err = q.createSandbox(context.Background(), sandbox.id, NetworkNamespace{}, &sandbox.config.HypervisorConfig, false)
 	assert.NoError(err)
@@ -462,7 +478,7 @@ func createQemuSandboxConfig() (*Sandbox, error) {
 		},
 	}
 
-	newStore, err := persist.GetDriver("fs")
+	newStore, err := persist.GetDriver()
 	if err != nil {
 		return &Sandbox{}, err
 	}
