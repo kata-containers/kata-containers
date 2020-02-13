@@ -26,8 +26,9 @@ docker:
     - Hotplug memory when create containers
     - run container and update its memory constraints
     - Checking CPU cgroups in the host
-    - check yum update
   Context:
+    - check dnf update
+    - check yum update
   It:
 
 kubernetes:
