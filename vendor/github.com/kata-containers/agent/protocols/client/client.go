@@ -9,6 +9,7 @@ package client
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -400,6 +401,7 @@ func HybridVSockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 	}
 
 	dialFunc := func() (net.Conn, error) {
+		handshakeTimeout := 10 * time.Second
 		conn, err := net.DialTimeout("unix", udsPath, timeout)
 		if err != nil {
 			return nil, err
@@ -418,26 +420,41 @@ func HybridVSockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 			return nil, err
 		}
 
-		// A trivial handshake is included in the host-initiated vsock connection protocol.
-		// It looks like this:
-		// - [host] CONNECT <port><LF>
-		// - [guest/success] OK <assigned_host_port><LF>
-		reader := bufio.NewReader(conn)
-		response, err := reader.ReadString('\n')
-		if err != nil {
-			conn.Close()
-			agentClientLog.WithField("Error", err).Debug("HybridVsock trivial handshake failed")
-			// for now, we temporarily rely on the backoff strategy from GRPC for more stable CI.
-			return conn, nil
-		} else if !strings.Contains(response, "OK") {
-			conn.Close()
-			agentClientLog.WithField("response", response).Debug("HybridVsock trivial handshake failed with malformd response code")
-			// for now, we temporarily rely on the backoff strategy from GRPC for more stable CI.
-			return conn, nil
-		}
-		agentClientLog.WithField("response", response).Debug("HybridVsock trivial handshake")
+		errChan := make(chan error)
 
-		return conn, nil
+		go func() {
+			reader := bufio.NewReader(conn)
+			response, err := reader.ReadString('\n')
+			if err != nil {
+				errChan <- err
+				return
+			}
+
+			agentClientLog.WithField("response", response).Debug("HybridVsock trivial handshake")
+
+			if strings.Contains(response, "OK") {
+				errChan <- nil
+			} else {
+				errChan <- errors.New("HybridVsock trivial handshake failed with malformed response code")
+			}
+		}()
+
+		select {
+		case err = <-errChan:
+			if err != nil {
+				conn.Close()
+				agentClientLog.WithField("Error", err).Debug("HybridVsock trivial handshake failed")
+				return nil, err
+
+			}
+			return conn, nil
+		case <-time.After(handshakeTimeout):
+			// Timeout: kernel vsock implementation has a race condition, where no response is given
+			// Instead of waiting forever for a response, timeout after a fair amount of time.
+			// See: https://lore.kernel.org/netdev/668b0eda8823564cd604b1663dc53fbaece0cd4e.camel@intel.com/
+			conn.Close()
+			return nil, errors.New("timeout waiting for hybrid vsocket handshake")
+		}
 	}
 
 	timeoutErr := grpcStatus.Errorf(codes.DeadlineExceeded, "timed out connecting to hybrid vsocket %s", sock)
