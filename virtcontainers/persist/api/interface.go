@@ -25,4 +25,12 @@ type PersistDriver interface {
 	// Don't use them too much unless you have no other choice! @weizhang555
 	GlobalWrite(relativePath string, data []byte) error
 	GlobalRead(relativePath string) ([]byte, error)
+
+	// RunStoragePath is the sandbox runtime directory.
+	// It will contain one state.json and one lock file for each created sandbox.
+	RunStoragePath() string
+
+	// RunVMStoragePath is the vm directory.
+	// It will contain all guest vm sockets and shared mountpoints.
+	RunVMStoragePath() string
 }

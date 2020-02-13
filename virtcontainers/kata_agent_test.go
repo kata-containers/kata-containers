@@ -26,13 +26,13 @@ import (
 
 	aTypes "github.com/kata-containers/agent/pkg/types"
 	pb "github.com/kata-containers/agent/protocols/grpc"
-	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/virtcontainers/device/api"
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	"github.com/kata-containers/runtime/virtcontainers/device/drivers"
 	"github.com/kata-containers/runtime/virtcontainers/device/manager"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 )
@@ -620,14 +620,9 @@ func TestAgentPathAPI(t *testing.T) {
 	k2 := &kataAgent{}
 	id := "foobar"
 
-	// getVMPath
-	path1 := k1.getVMPath(id)
-	path2 := k2.getVMPath(id)
-	assert.Equal(path1, path2)
-
 	// getSharePath
-	path1 = k1.getSharePath(id)
-	path2 = k2.getSharePath(id)
+	path1 := k1.getSharePath(id)
+	path2 := k2.getSharePath(id)
 	assert.Equal(path1, path2)
 }
 
@@ -715,7 +710,7 @@ func TestAgentCreateContainer(t *testing.T) {
 		hypervisor: &mockHypervisor{},
 	}
 
-	newStore, err := persist.GetDriver("fs")
+	newStore, err := persist.GetDriver()
 	assert.NoError(err)
 	assert.NotNil(newStore)
 	sandbox.newStore = newStore

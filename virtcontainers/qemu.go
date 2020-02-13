@@ -32,7 +32,6 @@ import (
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/uuid"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -97,6 +96,8 @@ type qemu struct {
 	nvdimmCount int
 
 	stopped bool
+
+	store persistapi.PersistDriver
 }
 
 const (
@@ -271,7 +272,7 @@ func (q *qemu) setup(id string, hypervisorConfig *HypervisorConfig) error {
 
 		// The path might already exist, but in case of VM templating,
 		// we have to create it since the sandbox has not created it yet.
-		if err = os.MkdirAll(filepath.Join(fs.RunStoragePath(), id), DirMode); err != nil {
+		if err = os.MkdirAll(filepath.Join(q.store.RunStoragePath(), id), DirMode); err != nil {
 			return err
 		}
 	}
@@ -326,7 +327,7 @@ func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
 }
 
 func (q *qemu) qmpSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, qmpSocket)
+	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, qmpSocket)
 }
 
 func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
@@ -570,7 +571,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 		VGA:         "none",
 		GlobalParam: "kvm-pit.lost_tick_policy=discard",
 		Bios:        firmwarePath,
-		PidFile:     filepath.Join(fs.RunVMStoragePath(), q.id, "pid"),
+		PidFile:     filepath.Join(q.store.RunVMStoragePath(), q.id, "pid"),
 	}
 
 	if ioThread != nil {
@@ -599,7 +600,7 @@ func (q *qemu) createSandbox(ctx context.Context, id string, networkNS NetworkNa
 }
 
 func (q *qemu) vhostFSSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, vhostFSSocket)
+	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, vhostFSSocket)
 }
 
 func (q *qemu) virtiofsdArgs(fd uintptr) []string {
@@ -753,7 +754,7 @@ func (q *qemu) startSandbox(timeout int) error {
 		q.fds = []*os.File{}
 	}()
 
-	vmPath := filepath.Join(fs.RunVMStoragePath(), q.id)
+	vmPath := filepath.Join(q.store.RunVMStoragePath(), q.id)
 	err := os.MkdirAll(vmPath, DirMode)
 	if err != nil {
 		return err
@@ -930,7 +931,7 @@ func (q *qemu) stopSandbox() error {
 func (q *qemu) cleanupVM() error {
 
 	// cleanup vm path
-	dir := filepath.Join(fs.RunVMStoragePath(), q.id)
+	dir := filepath.Join(q.store.RunVMStoragePath(), q.id)
 
 	// If it's a symlink, remove both dir and the target.
 	// This can happen when vm template links a sandbox to a vm.
@@ -951,7 +952,7 @@ func (q *qemu) cleanupVM() error {
 	}
 
 	if q.config.VMid != "" {
-		dir = filepath.Join(fs.RunStoragePath(), q.config.VMid)
+		dir = filepath.Join(q.store.RunStoragePath(), q.config.VMid)
 		if err := os.RemoveAll(dir); err != nil {
 			q.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
 		}
@@ -1651,7 +1652,7 @@ func (q *qemu) getSandboxConsole(id string) (string, error) {
 	span, _ := q.trace("getSandboxConsole")
 	defer span.Finish()
 
-	return utils.BuildSocketPath(fs.RunVMStoragePath(), id, consoleSocket)
+	return utils.BuildSocketPath(q.store.RunVMStoragePath(), id, consoleSocket)
 }
 
 func (q *qemu) saveSandbox() error {
@@ -2135,5 +2136,5 @@ func (q *qemu) check() error {
 }
 
 func (q *qemu) generateSocket(id string, useVsock bool) (interface{}, error) {
-	return generateVMSocket(id, useVsock)
+	return generateVMSocket(id, useVsock, q.store.RunVMStoragePath())
 }

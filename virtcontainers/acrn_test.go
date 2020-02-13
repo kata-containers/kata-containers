@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
+	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/stretchr/testify/assert"
 )
@@ -194,11 +194,16 @@ func TestAcrnUpdateBlockDeviceInvalidIdx(t *testing.T) {
 
 func TestAcrnGetSandboxConsole(t *testing.T) {
 	assert := assert.New(t)
+
+	store, err := persist.GetDriver()
+	assert.NoError(err)
+
 	a := &Acrn{
-		ctx: context.Background(),
+		ctx:   context.Background(),
+		store: store,
 	}
 	sandboxID := "testSandboxID"
-	expected := filepath.Join(fs.RunVMStoragePath(), sandboxID, consoleSocket)
+	expected := filepath.Join(a.store.RunVMStoragePath(), sandboxID, consoleSocket)
 
 	result, err := a.getSandboxConsole(sandboxID)
 	assert.NoError(err)
@@ -208,7 +213,12 @@ func TestAcrnGetSandboxConsole(t *testing.T) {
 func TestAcrnCreateSandbox(t *testing.T) {
 	assert := assert.New(t)
 	acrnConfig := newAcrnConfig()
-	a := &Acrn{}
+	store, err := persist.GetDriver()
+	assert.NoError(err)
+
+	a := &Acrn{
+		store: store,
+	}
 
 	sandbox := &Sandbox{
 		ctx: context.Background(),
@@ -218,7 +228,7 @@ func TestAcrnCreateSandbox(t *testing.T) {
 		},
 	}
 
-	err := globalSandboxList.addSandbox(sandbox)
+	err = globalSandboxList.addSandbox(sandbox)
 	assert.NoError(err)
 
 	defer globalSandboxList.removeSandbox(sandbox.id)

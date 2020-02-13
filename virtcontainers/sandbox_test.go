@@ -990,7 +990,7 @@ func TestDeleteStoreWhenNewContainerFail(t *testing.T) {
 	}
 	_, err = newContainer(p, &contConfig)
 	assert.NotNil(t, err, "New container with invalid device info should fail")
-	storePath := filepath.Join(fs.RunStoragePath(), testSandboxID, contID)
+	storePath := filepath.Join(p.newStore.RunStoragePath(), testSandboxID, contID)
 	_, err = os.Stat(storePath)
 	assert.NotNil(t, err, "Should delete configuration root after failed to create a container")
 }
@@ -1160,7 +1160,7 @@ func TestAttachBlockDevice(t *testing.T) {
 	}
 
 	// create state file
-	path := filepath.Join(fs.RunStoragePath(), testSandboxID, container.ID())
+	path := filepath.Join(fs.MockRunStoragePath(), testSandboxID, container.ID())
 	err := os.MkdirAll(path, DirMode)
 	assert.NoError(t, err)
 
@@ -1238,7 +1238,7 @@ func TestPreAddDevice(t *testing.T) {
 	container.state.State = types.StateReady
 
 	// create state file
-	path := filepath.Join(fs.RunStoragePath(), testSandboxID, container.ID())
+	path := filepath.Join(fs.MockRunStoragePath(), testSandboxID, container.ID())
 	err := os.MkdirAll(path, DirMode)
 	assert.NoError(t, err)
 

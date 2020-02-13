@@ -18,12 +18,12 @@ import (
 	"syscall"
 
 	"github.com/kata-containers/runtime/pkg/katautils"
-	"github.com/kata-containers/runtime/pkg/rootless"
 	"github.com/kata-containers/runtime/pkg/signals"
 	vc "github.com/kata-containers/runtime/virtcontainers"
 	exp "github.com/kata-containers/runtime/virtcontainers/experimental"
 	vf "github.com/kata-containers/runtime/virtcontainers/factory"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/oci"
+	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/sirupsen/logrus"
@@ -101,6 +101,11 @@ var runtimeFlags = []cli.Flag{
 		Name:  "root",
 		Value: defaultRootDirectory,
 		Usage: "root directory for storage of container state (this should be located in tmpfs)",
+	},
+	cli.StringFlag{
+		Name:  "rootless",
+		Value: "auto",
+		Usage: "ignore cgroup permission errors ('true', 'false', or 'auto')",
 	},
 	cli.BoolFlag{
 		Name:  showConfigPathsOption,
@@ -265,6 +270,19 @@ func beforeSubcommands(c *cli.Context) error {
 		// wants to see the usage statement.
 		return nil
 	}
+
+	r, err := parseBoolOrAuto(c.GlobalString("rootless"))
+	if err != nil {
+		return err
+	}
+	// If flag is true/false, assign the rootless flag.
+	// vc will not perform any auto-detection in that case.
+	// In case flag is nil or auto, vc detects if the runtime is running as rootless.
+	if r != nil {
+		rootless.SetRootless(*r)
+	}
+	// Support --systed-cgroup
+	// Issue: https://github.com/kata-containers/runtime/issues/2428
 
 	ignoreConfigLogs := false
 	var traceRootSpan string

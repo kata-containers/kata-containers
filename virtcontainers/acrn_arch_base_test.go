@@ -107,7 +107,7 @@ func TestAcrnArchBaseAppendConsoles(t *testing.T) {
 	assert := assert.New(t)
 	acrnArchBase := newAcrnArchBase()
 
-	path := filepath.Join(filepath.Join(fs.RunStoragePath(), sandboxID), consoleSocket)
+	path := filepath.Join(filepath.Join(fs.MockRunStoragePath(), sandboxID), consoleSocket)
 
 	expectedOut := []Device{
 		ConsoleDevice{

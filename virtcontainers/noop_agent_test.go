@@ -156,13 +156,6 @@ func TestNoopAgentConfigure(t *testing.T) {
 	assert.NoError(err)
 }
 
-func TestNoopAgentGetVMPath(t *testing.T) {
-	n := &noopAgent{}
-	path := n.getVMPath("")
-	assert := assert.New(t)
-	assert.Empty(path)
-}
-
 func TestNoopAgentGetSharePath(t *testing.T) {
 	n := &noopAgent{}
 	path := n.getSharePath("")

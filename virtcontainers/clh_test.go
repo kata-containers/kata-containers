@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
-	"github.com/kata-containers/runtime/virtcontainers/persist/fs"
+	"github.com/kata-containers/runtime/virtcontainers/persist"
 	chclient "github.com/kata-containers/runtime/virtcontainers/pkg/cloud-hypervisor/client"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
@@ -172,33 +172,32 @@ func TestCloudHypervisorBootVM(t *testing.T) {
 }
 
 func TestCloudHypervisorCleanupVM(t *testing.T) {
-	clh := &cloudHypervisor{}
+	assert := assert.New(t)
+	store, err := persist.GetDriver()
+	assert.NoError(err, "persist.GetDriver() unexpected error")
 
-	if err := clh.cleanupVM(true); err == nil {
-		t.Errorf("cloudHypervisor.cleanupVM() expected error != %v", err)
+	clh := &cloudHypervisor{
+		store: store,
 	}
+
+	err = clh.cleanupVM(true)
+	assert.Error(err, "persist.GetDriver() expected error")
 
 	clh.id = "cleanVMID"
 
-	if err := clh.cleanupVM(true); err != nil {
-		t.Errorf("cloudHypervisor.cleanupVM() expected error != %v", err)
-	}
+	err = clh.cleanupVM(true)
+	assert.NoError(err, "persist.GetDriver() unexpected error")
 
-	dir := filepath.Join(fs.RunVMStoragePath(), clh.id)
+	dir := filepath.Join(clh.store.RunVMStoragePath(), clh.id)
 	os.MkdirAll(dir, os.ModePerm)
 
-	if err := clh.cleanupVM(false); err != nil {
-		t.Errorf("cloudHypervisor.cleanupVM() expected error != %v", err)
-	}
-	_, err := os.Stat(dir)
+	err = clh.cleanupVM(false)
+	assert.NoError(err, "persist.GetDriver() unexpected error")
 
-	if err == nil {
-		t.Errorf("dir should not exist %s", dir)
-	}
+	_, err = os.Stat(dir)
+	assert.Error(err, "dir should not exist %s", dir)
 
-	if !os.IsNotExist(err) {
-		t.Errorf("Unexpected error = %v", err)
-	}
+	assert.True(os.IsNotExist(err), "persist.GetDriver() unexpected error")
 }
 
 func TestClhCreateSandbox(t *testing.T) {
@@ -207,8 +206,12 @@ func TestClhCreateSandbox(t *testing.T) {
 	clhConfig, err := newClhConfig()
 	assert.NoError(err)
 
+	store, err := persist.GetDriver()
+	assert.NoError(err)
+
 	clh := &cloudHypervisor{
 		config: clhConfig,
+		store:  store,
 	}
 
 	sandbox := &Sandbox{
@@ -229,10 +232,14 @@ func TestClooudHypervisorStartSandbox(t *testing.T) {
 	clhConfig, err := newClhConfig()
 	assert.NoError(err)
 
+	store, err := persist.GetDriver()
+	assert.NoError(err)
+
 	clh := &cloudHypervisor{
 		config:    clhConfig,
 		APIClient: &clhClientMock{},
 		virtiofsd: &virtiofsdMock{},
+		store:     store,
 	}
 
 	err = clh.startSandbox(10)
