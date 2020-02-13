@@ -44,6 +44,7 @@
         * [Create a container](#create-a-container)
         * [Connect to the virtual machine using the debug console](#connect-to-the-virtual-machine-using-the-debug-console)
         * [Obtain details of the image](#obtain-details-of-the-image)
+    * [Capturing kernel boot logs](#capturing-kernel-boot-logs)
     * [Running standalone](#running-standalone)
         * [Create an OCI bundle](#create-an-oci-bundle)
         * [Launch the runtime to create a container](#launch-the-runtime-to-create-a-container)
@@ -583,6 +584,41 @@ file exists and contains details of the image and how it was created:
 
 ```
 $ cat /var/lib/osbuilder/osbuilder.yaml
+```
+
+## Capturing kernel boot logs
+
+Sometimes it is useful to capture the kernel boot messages from a Kata Container
+launch. If the container launches to the point whereby you can `exec` into it, and
+if the container has the necessary components installed, often you can execute the `dmesg`
+command inside the container to view the kernel boot logs.
+
+If however you are unable to `exec` into the container, you can enable some debug
+options to have the kernel boot messages logged into the system journal.
+
+Which debug options you enable depends on if you are using the hypervisor `vsock` mode
+or not, as defined by the `use_vsock` setting in the `[hypervisor.qemu]` section of
+the configuration file. The following details the settings:
+
+- For `use_vsock = false`:
+    - Set `enable_debug = true` in both the `[hypervisor.qemu]` and `[proxy.kata]` sections
+- For `use_vsock = true`:
+    - Set `enable_debug = true` in both the `[hypervisor.qemu]` and `[shim.kata]` sections
+
+For generic information on enabling debug in the configuration file, see the
+[Enable full debug](#enable-full-debug) section.
+
+The kernel boot messages will appear in the `kata-proxy` or `kata-shim` log appropriately,
+such as:
+
+```bash
+$ sudo journalctl -t kata-proxy
+-- Logs begin at Thu 2020-02-13 16:20:40 UTC, end at Thu 2020-02-13 16:30:23 UTC. --
+...
+Feb 13 16:20:56 minikube kata-proxy[17371]: time="2020-02-13T16:20:56.608714324Z" level=info msg="[    1.418768] brd: module loaded\n" name=kata-proxy pid=17371 sandbox=a13ffb2b9b5a66f7787bdae9a427fa954a4d21ec4031d0179eee2573986a8a6e source=agent
+Feb 13 16:20:56 minikube kata-proxy[17371]: time="2020-02-13T16:20:56.628493231Z" level=info msg="[    1.438612] loop: module loaded\n" name=kata-proxy pid=17371 sandbox=a13ffb2b9b5a66f7787bdae9a427fa954a4d21ec4031d0179eee2573986a8a6e source=agent
+Feb 13 16:20:56 minikube kata-proxy[17371]: time="2020-02-13T16:20:56.67707956Z" level=info msg="[    1.487165]  pmem0: p1\n" name=kata-proxy pid=17371 sandbox=a13ffb2b9b5a66f7787bdae9a427fa954a4d21ec4031d0179eee2573986a8a6e source=agent
+...
 ```
 
 ## Running standalone
