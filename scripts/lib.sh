@@ -57,7 +57,7 @@ get_from_kata_deps() {
 		echo "Download from ${yaml_url}" >&2
 		curl --silent -o "${versions_file}" "$yaml_url"
 	fi
-	result=$("${GOPATH}/bin/yq" read "$versions_file" "$dependency")
+	result=$("${GOPATH}/bin/yq" read -X "$versions_file" "$dependency")
 	[ "$result" = "null" ] && result=""
 	echo "$result"
 }
