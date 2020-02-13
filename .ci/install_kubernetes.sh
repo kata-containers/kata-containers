@@ -19,21 +19,13 @@ cidir=$(dirname "$0")
 source /etc/os-release || source /usr/lib/os-release
 kubernetes_version=$(get_version "externals.kubernetes.version")
 
-if [ "$ID" != "ubuntu" ] && [ "$ID" != "centos" ] && [ "$ID" != "fedora" ]; then
+if [ "$ID" != "ubuntu" ] && [ "$ID" != "centos" ]; then
         echo "Currently this script does not work on $ID. Skipped Kubernetes Setup"
         exit 0
 fi
 
 if [ "$KATA_HYPERVISOR" == "firecracker" ]; then
 	die "Kubernetes will not work with $KATA_HYPERVISOR"
-fi
-
-# Install CRI-O with its proper kubernetes version
-if [ "$ID" == "fedora" ]; then
-	echo "Install CRI-O"
-	export KUBERNETES="yes"
-	bash -f "${cidir}/install_crio.sh"
-	bash -f "${cidir}/configure_crio_for_kata.sh"
 fi
 
 if [ "$ID" == "ubuntu" ]; then
@@ -45,13 +37,9 @@ EOF"
 	curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 	chronic sudo -E apt update
 	chronic sudo -E apt install --allow-downgrades -y kubelet="$kubernetes_version" kubeadm="$kubernetes_version" kubectl="$kubernetes_version"
-elif [ "$ID" == "centos" ] || [ "$ID" == "fedora" ]; then
+elif [ "$ID" == "centos" ]; then
 	if [ "$ID" == "centos" ]; then
 		sudo yum versionlock docker-ce
-	fi
-
-	if [ "$ID" == "fedora" ]; then
-		sudo dnf versionlock docker-ce
 	fi
 
 	sudo bash -c "cat <<EOF > /etc/yum.repos.d/kubernetes.repo
@@ -63,14 +51,6 @@ elif [ "$ID" == "centos" ] || [ "$ID" == "fedora" ]; then
 	repo_gpgcheck=1
 	gpgkey=https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 EOF"
-
-	# This issue is related with https://github.com/kubernetes/kubernetes/issues/60134
-	if [ "$ID" == "fedora" ] && [ "$VERSION_ID" == "31" ]; then
-		chronic sudo -E sed -i 's/repo_gpgcheck=1/repo_gpgcheck=0/g' /etc/yum.repos.d/kubernetes.repo
-		chronic sudo -E rpm --import https://packages.cloud.google.com/yum/doc/yum-key.gpg
-		chronic sudo -E rpm --import https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
-		chronic sudo -E yum -y clean all
-	fi
 
 	chronic sudo -E sed -i 's/^[ \t]*//' /etc/yum.repos.d/kubernetes.repo
 	install_kubernetes_version=$(echo $kubernetes_version | cut -d'-' -f1)
