@@ -1002,7 +1002,7 @@ func (k *kataAgent) replaceOCIMountsForStorages(spec *specs.Spec, volumeStorages
 	return nil
 }
 
-func constraintGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool) {
+func (k *kataAgent) constraintGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool) {
 	// Disable Hooks since they have been handled on the host and there is
 	// no reason to send them to the agent. It would make no sense to try
 	// to apply them on the guest.
@@ -1012,6 +1012,12 @@ func constraintGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool) {
 	// configuration.toml and guest image is seccomp capable.
 	if !passSeccomp {
 		grpcSpec.Linux.Seccomp = nil
+	}
+
+	// Disable selinux
+	if grpcSpec.Process.SelinuxLabel != "" {
+		k.Logger().Warn("Selinux label specified in config, but not supported in Kata yet, running container without selinux")
+		grpcSpec.Process.SelinuxLabel = ""
 	}
 
 	// By now only CPU constraints are supported
@@ -1307,7 +1313,7 @@ func (k *kataAgent) createContainer(sandbox *Sandbox, c *Container) (p *Process,
 
 	// We need to constraint the spec to make sure we're not passing
 	// irrelevant information to the agent.
-	constraintGRPCSpec(grpcSpec, passSeccomp)
+	k.constraintGRPCSpec(grpcSpec, passSeccomp)
 
 	k.handleShm(grpcSpec, sandbox)
 
