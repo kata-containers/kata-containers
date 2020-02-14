@@ -189,7 +189,7 @@ externals:
     description: |
       OCI-based Kubernetes Container Runtime Interface implementation
     url: "https://github.com/cri-o/cri-o"
-    version: "v1.16.0"
+    version: "0eec454168e381e460b3d6de07bf50bfd9b0d082"
     meta:
       openshift: "6273bea4c9ed788aeb3d051ebf2d030060c05b6c"
       crictl: 1.0.0-beta.2
@@ -204,7 +204,7 @@ externals:
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
     url: "https://github.com/kubernetes-sigs/cri-tools"
-    version: "1.16.1"
+    version: "1.17.0"
 
   docker:
     description: "Moby project container manager"
@@ -235,7 +235,7 @@ externals:
     uscan-url: >-
       https://github.com/kubernetes/kubernetes/tags
       .*/v?([\d\.]+)\.tar\.gz
-    version: "1.16.2-00"
+    version: "1.17.3-00"
 
   openshift:
     description: |
