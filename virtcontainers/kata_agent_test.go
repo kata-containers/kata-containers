@@ -487,9 +487,13 @@ func TestConstraintGRPCSpec(t *testing.T) {
 			},
 			CgroupsPath: "system.slice:foo:bar",
 		},
+		Process: &pb.Process{
+			SelinuxLabel: "foo",
+		},
 	}
 
-	constraintGRPCSpec(g, true)
+	k := kataAgent{}
+	k.constraintGRPCSpec(g, true)
 
 	// check nil fields
 	assert.Nil(g.Hooks)
@@ -501,6 +505,7 @@ func TestConstraintGRPCSpec(t *testing.T) {
 	assert.Nil(g.Linux.Resources.HugepageLimits)
 	assert.Nil(g.Linux.Resources.Network)
 	assert.NotNil(g.Linux.Resources.CPU)
+	assert.Equal(g.Process.SelinuxLabel, "")
 
 	// check namespaces
 	assert.Len(g.Linux.Namespaces, 1)
