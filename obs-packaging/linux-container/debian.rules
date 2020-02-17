@@ -24,7 +24,7 @@ override_dh_auto_build:
 	rm -f .config
 	find $(KERNEL_CONFIGS) -name "$(KERNEL_ARCH)_kata_kvm_*" -exec cp {} .config \;
 	if [ ! -f .config ]; then \
-		scripts/kconfig/merge_config.sh -r -n $(KERNEL_FRAG_COMMON_DIR)/* $(KERNEL_FRAG_ARCH_DIR)/* ; \
+		scripts/kconfig/merge_config.sh -r -n $(KERNEL_FRAG_COMMON_DIR)/*.conf $(KERNEL_FRAG_ARCH_DIR)/* ; \
 		if [ ! -f .config ]; then \
 			echo "ERROR: cannot find the kernel config file for the $(KERNEL_ARCH) architecture"; \
 			exit 1; \

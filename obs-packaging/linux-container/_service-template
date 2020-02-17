@@ -3,7 +3,7 @@
   <service name="download_url">
     <param name="protocol">https</param>
     <param name="host">cdn.kernel.org</param>
-    <param name="path">/pub/linux/kernel/v4.x/linux-@VERSION@.tar.xz</param>
+    <param name="path">/pub/linux/kernel/v5.x/linux-@VERSION@.tar.xz</param>
   </service>
   <service name="verify_file">
      <param name="file">_service:download_url:linux-@VERSION@.tar.xz</param>
