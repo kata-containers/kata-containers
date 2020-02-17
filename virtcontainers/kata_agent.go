@@ -66,7 +66,7 @@ var (
 	mountGuestTag               = "kataShared"
 	defaultKataGuestSandboxDir  = "/run/kata-containers/sandbox/"
 	type9pFs                    = "9p"
-	typeVirtioFS                = "virtio_fs"
+	typeVirtioFS                = "virtiofs"
 	typeVirtioFSNoCache         = "none"
 	kata9pDevType               = "9p"
 	kataMmioBlkDevType          = "mmioblk"
