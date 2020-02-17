@@ -10,7 +10,7 @@ set -o nounset
 set -o pipefail
 
 cidir=$(dirname "$0")
-source "${cidir}/lib.sh"
+source "${cidir}/../scripts/lib.sh"
 source /etc/os-release
 
 pushd "${tests_repo_dir}"

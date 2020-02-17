@@ -1,33 +1,31 @@
+#!/usr/bin/env bash
+#
+# Copyright (c) 2018-2020 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
 export GOPATH=${GOPATH:-${HOME}/go}
-kata_arch_sh="${GOPATH}/src/github.com/kata-containers/tests/.ci/kata-arch.sh"
+export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
+export tests_repo_dir="$GOPATH/src/$tests_repo"
+
 hub_bin="hub-bin"
 
-get_kata_arch() {
-	go get -u github.com/kata-containers/tests || true
-	[ -f "${kata_arch_sh}" ] || die "Not found $kata_arch_sh"
+clone_tests_repo() {
+	# KATA_CI_NO_NETWORK is (has to be) ignored if there is
+	# no existing clone.
+	if [ -d "${tests_repo_dir}" ] && [ -n "${KATA_CI_NO_NETWORK:-}" ]; then
+		return
+	fi
+
+	go get -d -u "$tests_repo" || true
 }
 
 install_yq() {
-	GOPATH=${GOPATH:-${HOME}/go}
-	local yq_path="${GOPATH}/bin/yq"
-	local yq_pkg="github.com/mikefarah/yq"
-	[ -x "${GOPATH}/bin/yq" ] && return
-
-	get_kata_arch
-	goarch=$("${kata_arch_sh}" -g)
-
-	mkdir -p "${GOPATH}/bin"
-
-	# Workaround to get latest release from github (to not use github token).
-	# Get the redirection to latest release on github.
-	yq_latest_url=$(curl -Ls -o /dev/null -w %{url_effective} "https://${yq_pkg}/releases/latest")
-	# The redirected url should include the latest release version
-	# https://github.com/mikefarah/yq/releases/tag/<VERSION-HERE>
-	yq_version=$(basename "${yq_latest_url}")
-
-	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_linux_${goarch}"
-	curl -o "${yq_path}" -L "${yq_url}"
-	chmod +x "${yq_path}"
+	clone_tests_repo
+	pushd "$tests_repo_dir"
+	.ci/install_yq.sh
+	popd
 }
 
 get_from_kata_deps() {

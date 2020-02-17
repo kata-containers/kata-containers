@@ -11,7 +11,7 @@ set -o pipefail
 CI=${CI:-}
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly toplevel_mk="${script_dir}/../Makefile"
-source "${script_dir}/lib.sh"
+source "${script_dir}/../scripts/lib.sh"
 
 make_target() {
 	target=$1
