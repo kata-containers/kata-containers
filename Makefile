@@ -35,7 +35,7 @@ test-packaging-tools:
 	@$(MK_DIR)/obs-packaging/build_from_docker.sh
 
 $(YQ):
-	@bash -c "source .ci/lib.sh; install_yq $${MK_DIR}"
+	@bash -c "source scripts/lib.sh; install_yq $${MK_DIR}"
 
 $(VERSION_FILE):
 	@curl -sO $(VERSION_FILE_URL)
