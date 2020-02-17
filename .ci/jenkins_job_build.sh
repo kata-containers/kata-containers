@@ -168,8 +168,6 @@ if [ -z "${METRICS_CI}" ]; then
 	if [ "${kata_repo}" != "${tests_repo}" ]; then
 		if [ "${ID}" == "rhel" ] && [ "${kata_repo}" == "${runtime_repo}" ]; then
 			echo "INFO: issue ${unit_issue}"
-		elif [ "${CI_JOB}" == "PODMAN" ]; then
-			echo "INFO: Unit tests skipped when running with podman"
 		else
 			echo "INFO: Running unit tests for repo $kata_repo"
 			make test
