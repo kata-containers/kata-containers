@@ -117,7 +117,7 @@ assets:
     url: "https://github.com/kata-containers/osbuilder"
     architecture:
       aarch64:
-        name: "fedora"
+        name: "ubuntu"
         version: "latest"
       ppc64le:
         name: "centos"
