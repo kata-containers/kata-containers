@@ -23,6 +23,7 @@ script_gitname="${script_dir_base}/${script_name}"
 
 cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
+source /etc/os-release || source /usr/lib/os-release
 
 # If no branch specified, compare against the master.
 # The 'branch' var is required by the get_pr() lib functions.
@@ -73,6 +74,25 @@ read_yaml() {
 	[ "$res" == "null" ] && res=""
 	echo $res
 	return 0
+}
+
+# Install jq package
+install_jq() {
+	package="jq"
+	case "$ID" in
+		centos|rhel)
+			sudo yum -y install "${package}"
+			;;
+		debian|ubuntu)
+			sudo apt-get -y install "${package}"
+			;;
+		opensuse-*|sles)
+			sudo -E zypper install -y "${package}"
+			;;
+		fedora)
+			sudo dnf -y install "${package}"
+			;;
+	esac
 }
 
 # Check if any files in ${filenames} match the egrep command line expressions
@@ -238,6 +258,8 @@ check_force_label() {
 	# Ideally we'd use a github auth token here so we don't get rate limited, but to do that we would
 	# have to expose the token into the CI scripts, which is then potentially a security hole.
 	local json=$(curl -sL https://api.github.com/repos/${ghprbGhRepository}/issues/${ghprbPullId}/labels)
+
+	install_jq
 
 	# Pull the label list out
 	local labels=$(jq .[].name <<< $json)
