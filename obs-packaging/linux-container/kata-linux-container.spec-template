@@ -83,9 +83,7 @@ BuildKernel() {
     if [ ! -f .config ]; then
         # Use fragments to generate the .config
         frag_dir="kata-kernel-configs/fragments"
-        err_msg="not in final"
-        r="$(KCONFIG_CONFIG=.config ARCH=${kernelArch} scripts/kconfig/merge_config.sh -r -n ${frag_dir}/common/*.conf ${frag_dir}/${kernelArch}/* | grep "${err_msg}")" || true
-        [ -z "${r}" ] || (echo "ERROR: ${r}"; exit 1)
+        KCONFIG_CONFIG=.config ARCH=${kernelArch} scripts/kconfig/merge_config.sh -r -n ${frag_dir}/common/*.conf ${frag_dir}/${kernelArch}/*
     fi
     [ -f .config ] || (echo "ERROR: cannot find the kernel config file for the ${kernelArch} architecture"; exit 1)
 
