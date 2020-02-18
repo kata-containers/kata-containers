@@ -298,7 +298,7 @@ func (fs *FS) GlobalWrite(relativePath string, data []byte) error {
 
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, fileMode)
 	if err != nil {
-		fs.Logger().WithError(err).WithField("file", path).Error("failed to open file for writting")
+		fs.Logger().WithError(err).WithField("file", path).Error("failed to open file for writing")
 		return err
 	}
 	defer f.Close()
