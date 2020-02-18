@@ -143,7 +143,7 @@ func TestAppendDeviceFS(t *testing.T) {
 		ROMFile:       "efi-virtio.rom",
 	}
 
-	if isVirtioCCW[fsdev.Driver] {
+	if fsdev.Transport.isVirtioCCW(nil) {
 		fsdev.DevNo = DevNo
 	}
 
@@ -164,7 +164,7 @@ func TestAppendDeviceNetwork(t *testing.T) {
 		ROMFile:       "efi-virtio.rom",
 	}
 
-	if isVirtioCCW[netdev.Driver] {
+	if netdev.Transport.isVirtioCCW(nil) {
 		netdev.DevNo = DevNo
 	}
 
@@ -195,7 +195,7 @@ func TestAppendDeviceNetworkMq(t *testing.T) {
 		DisableModern: true,
 		ROMFile:       "efi-virtio.rom",
 	}
-	if isVirtioCCW[netdev.Driver] {
+	if netdev.Transport.isVirtioCCW(nil) {
 		netdev.DevNo = DevNo
 	}
 
@@ -219,7 +219,7 @@ func TestAppendDeviceNetworkPCI(t *testing.T) {
 		ROMFile:       romfile,
 	}
 
-	if !isVirtioPCI[netdev.Driver] {
+	if !netdev.Transport.isVirtioPCI(nil) {
 		t.Skip("Test valid only for PCI devices")
 	}
 
@@ -253,7 +253,7 @@ func TestAppendDeviceNetworkPCIMq(t *testing.T) {
 		ROMFile:       romfile,
 	}
 
-	if !isVirtioPCI[netdev.Driver] {
+	if !netdev.Transport.isVirtioPCI(nil) {
 		t.Skip("Test valid only for PCI devices")
 	}
 
@@ -267,7 +267,7 @@ func TestAppendDeviceSerial(t *testing.T) {
 		DisableModern: true,
 		ROMFile:       romfile,
 	}
-	if isVirtioCCW[sdev.Driver] {
+	if sdev.Transport.isVirtioCCW(nil) {
 		sdev.DevNo = DevNo
 	}
 
@@ -285,7 +285,7 @@ func TestAppendDeviceSerialPort(t *testing.T) {
 		Path:     "/tmp/char.sock",
 		Name:     "channel.0",
 	}
-	if isVirtioCCW[chardev.Driver] {
+	if chardev.Transport.isVirtioCCW(nil) {
 		chardev.DevNo = DevNo
 	}
 	testAppend(chardev, deviceSerialPortString, t)
@@ -304,7 +304,7 @@ func TestAppendDeviceBlock(t *testing.T) {
 		DisableModern: true,
 		ROMFile:       romfile,
 	}
-	if isVirtioCCW[blkdev.Driver] {
+	if blkdev.Transport.isVirtioCCW(nil) {
 		blkdev.DevNo = DevNo
 	}
 	testAppend(blkdev, deviceBlockString, t)
@@ -318,7 +318,7 @@ func TestAppendDeviceVFIO(t *testing.T) {
 		DeviceID: "0x5678",
 	}
 
-	if isVirtioCCW[Vfio] {
+	if vfioDevice.Transport.isVirtioCCW(nil) {
 		vfioDevice.DevNo = DevNo
 	}
 
@@ -334,7 +334,7 @@ func TestAppendVSOCK(t *testing.T) {
 		ROMFile:       romfile,
 	}
 
-	if isVirtioCCW[VHostVSock] {
+	if vsockDevice.Transport.isVirtioCCW(nil) {
 		vsockDevice.DevNo = DevNo
 	}
 
@@ -368,16 +368,19 @@ func TestVSOCKValid(t *testing.T) {
 
 func TestAppendVirtioRng(t *testing.T) {
 	var objectString = "-object rng-random,id=rng0"
-	var deviceString = "-device " + string(VirtioRng) + ",rng=rng0"
-	if romfile != "" {
-		deviceString = deviceString + ",romfile=efi-virtio.rom"
-	}
+	var deviceString = "-device " + string(VirtioRng)
+
 	rngDevice := RngDevice{
 		ID:      "rng0",
 		ROMFile: romfile,
 	}
 
-	if isVirtioCCW[VirtioRng] {
+	deviceString += "-" + string(rngDevice.Transport.getName(nil)) + ",rng=rng0"
+	if romfile != "" {
+		deviceString = deviceString + ",romfile=efi-virtio.rom"
+	}
+
+	if rngDevice.Transport.isVirtioCCW(nil) {
 		rngDevice.DevNo = DevNo
 		deviceString += ",devno=" + rngDevice.DevNo
 	}
@@ -438,7 +441,7 @@ func TestAppendDeviceSCSIController(t *testing.T) {
 		ROMFile: romfile,
 	}
 
-	if isVirtioCCW[VirtioScsi] {
+	if scsiCon.Transport.isVirtioCCW(nil) {
 		scsiCon.DevNo = DevNo
 	}
 
@@ -521,7 +524,7 @@ func TestAppendKnobsAllFalse(t *testing.T) {
 }
 
 func TestAppendMemoryHugePages(t *testing.T) {
-	if !isDimmSupported() {
+	if !isDimmSupported(nil) {
 		t.Skip("Dimm not supported")
 	}
 
@@ -549,7 +552,7 @@ func TestAppendMemoryHugePages(t *testing.T) {
 }
 
 func TestAppendMemoryMemPrealloc(t *testing.T) {
-	if !isDimmSupported() {
+	if !isDimmSupported(nil) {
 		t.Skip("Dimm not supported")
 	}
 
@@ -575,7 +578,7 @@ func TestAppendMemoryMemPrealloc(t *testing.T) {
 }
 
 func TestAppendMemoryMemShared(t *testing.T) {
-	if !isDimmSupported() {
+	if !isDimmSupported(nil) {
 		t.Skip("Dimm not supported")
 	}
 
@@ -601,7 +604,7 @@ func TestAppendMemoryMemShared(t *testing.T) {
 }
 
 func TestAppendMemoryFileBackedMem(t *testing.T) {
-	if !isDimmSupported() {
+	if !isDimmSupported(nil) {
 		t.Skip("Dimm not supported")
 	}
 
@@ -627,7 +630,7 @@ func TestAppendMemoryFileBackedMem(t *testing.T) {
 }
 
 func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
-	if !isDimmSupported() {
+	if !isDimmSupported(nil) {
 		t.Skip("Dimm not supported")
 	}
 
