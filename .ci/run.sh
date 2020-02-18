@@ -34,7 +34,7 @@ case "${CI_JOB}" in
 		echo "INFO: Running docker integration tests with sandbox cgroup enabled"
 		sudo -E PATH="$PATH" bash -c "make sandbox-cgroup"
 		;;
-	"FIRECRACKER" | "CLOUD-HYPERVISOR")
+	"FIRECRACKER")
 		echo "INFO: Running docker integration tests"
 		sudo -E PATH="$PATH" bash -c "make docker"
 		echo "INFO: Running soak test"
@@ -45,6 +45,25 @@ case "${CI_JOB}" in
 		sudo -E PATH="$PATH" bash -c "make network"
 		echo "INFO: Running crio tests"
 		sudo -E PATH="$PATH" bash -c "make crio"
+		;;
+	"CLOUD-HYPERVISOR")
+		echo "INFO: Containerd checks"
+		sudo -E PATH="$PATH" bash -c "make cri-containerd"
+
+		echo "INFO: Running kubernetes tests"
+		sudo -E PATH="$PATH" bash -c "make kubernetes"
+
+		echo "INFO: Running docker integration tests"
+		sudo -E PATH="$PATH" bash -c "make docker"
+
+		echo "INFO: Running soak test"
+		sudo -E PATH="$PATH" bash -c "make docker-stability"
+
+		echo "INFO: Running oci call test"
+		sudo -E PATH="$PATH" bash -c "make oci"
+
+		echo "INFO: Running networking tests"
+		sudo -E PATH="$PATH" bash -c "make network"
 		;;
 	"PODMAN")
 		export TRUSTED_GROUP="kvm"
