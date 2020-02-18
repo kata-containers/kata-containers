@@ -1322,7 +1322,7 @@ func (s *Sandbox) StatsContainer(containerID string) (ContainerStats, error) {
 // Stats returns the stats of a running sandbox
 func (s *Sandbox) Stats() (SandboxStats, error) {
 	if s.state.CgroupPath == "" {
-		return SandboxStats{}, fmt.Errorf("sandbox cgroup path is emtpy")
+		return SandboxStats{}, fmt.Errorf("sandbox cgroup path is empty")
 	}
 
 	var path string
