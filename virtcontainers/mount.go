@@ -24,6 +24,9 @@ import (
 // IPC is used.
 const DefaultShmSize = 65536 * 1024
 
+// Sadly golang/sys doesn't have UmountNoFollow although it's there since Linux 2.6.34
+const UmountNoFollow = 0x8
+
 var rootfsDir = "rootfs"
 
 var systemMountPrefixes = []string{"/proc", "/sys"}
@@ -333,7 +336,7 @@ func bindUnmountContainerRootfs(ctx context.Context, sharedDir, sandboxID, cID s
 	defer span.Finish()
 
 	rootfsDest := filepath.Join(sharedDir, sandboxID, cID, rootfsDir)
-	err := syscall.Unmount(rootfsDest, syscall.MNT_DETACH)
+	err := syscall.Unmount(rootfsDest, syscall.MNT_DETACH|UmountNoFollow)
 	if err == syscall.ENOENT {
 		logrus.Warnf("%s: %s", err, rootfsDest)
 		return nil
