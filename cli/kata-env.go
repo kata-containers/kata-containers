@@ -74,11 +74,18 @@ type RuntimeInfo struct {
 	Path                string
 }
 
+type VersionInfo struct {
+	Semver string
+	Major  uint64
+	Minor  uint64
+	Patch  uint64
+	Commit string
+}
+
 // RuntimeVersionInfo stores details of the runtime version
 type RuntimeVersionInfo struct {
-	Semver string
-	Commit string
-	OCI    string
+	Version VersionInfo
+	OCI     string
 }
 
 // HypervisorInfo stores hypervisor details
@@ -100,7 +107,7 @@ type HypervisorInfo struct {
 // ProxyInfo stores proxy details
 type ProxyInfo struct {
 	Type    string
-	Version string
+	Version VersionInfo
 	Path    string
 	Debug   bool
 }
@@ -108,7 +115,7 @@ type ProxyInfo struct {
 // ShimInfo stores shim details
 type ShimInfo struct {
 	Type    string
-	Version string
+	Version VersionInfo
 	Path    string
 	Debug   bool
 }
@@ -140,7 +147,7 @@ type HostInfo struct {
 
 // NetmonInfo stores netmon details
 type NetmonInfo struct {
-	Version string
+	Version VersionInfo
 	Path    string
 	Debug   bool
 	Enable  bool
@@ -171,10 +178,12 @@ func getMetaInfo() MetaInfo {
 }
 
 func getRuntimeInfo(configFile string, config oci.RuntimeConfig) RuntimeInfo {
+	runtimeVersionInfo := constructVersionInfo(version)
+	runtimeVersionInfo.Commit = commit
+
 	runtimeVersion := RuntimeVersionInfo{
-		Semver: version,
-		Commit: commit,
-		OCI:    specs.Version,
+		Version: runtimeVersionInfo,
+		OCI:     specs.Version,
 	}
 
 	runtimeConfig := RuntimeConfigInfo{
@@ -250,43 +259,48 @@ func getHostInfo() (HostInfo, error) {
 	return host, nil
 }
 
-func getProxyInfo(config oci.RuntimeConfig) (ProxyInfo, error) {
+func getProxyInfo(config oci.RuntimeConfig) ProxyInfo {
 	if config.ProxyType == vc.NoProxyType {
-		return ProxyInfo{Type: string(config.ProxyType)}, nil
+		return ProxyInfo{Type: string(config.ProxyType)}
 	}
 
 	proxyConfig := config.ProxyConfig
-	version, err := getCommandVersion(proxyConfig.Path)
-	if err != nil {
-		version = unknown
+
+	var proxyVersionInfo VersionInfo
+	if version, err := getCommandVersion(proxyConfig.Path); err != nil {
+		proxyVersionInfo = unknownVersionInfo
+	} else {
+		proxyVersionInfo = constructVersionInfo(version)
 	}
 
 	proxy := ProxyInfo{
 		Type:    string(config.ProxyType),
-		Version: version,
+		Version: proxyVersionInfo,
 		Path:    proxyConfig.Path,
 		Debug:   proxyConfig.Debug,
 	}
 
-	return proxy, nil
+	return proxy
 }
 
-func getNetmonInfo(config oci.RuntimeConfig) (NetmonInfo, error) {
+func getNetmonInfo(config oci.RuntimeConfig) NetmonInfo {
 	netmonConfig := config.NetmonConfig
 
-	version, err := getCommandVersion(netmonConfig.Path)
-	if err != nil {
-		version = unknown
+	var netmonVersionInfo VersionInfo
+	if version, err := getCommandVersion(netmonConfig.Path); err != nil {
+		netmonVersionInfo = unknownVersionInfo
+	} else {
+		netmonVersionInfo = constructVersionInfo(version)
 	}
 
 	netmon := NetmonInfo{
-		Version: version,
+		Version: netmonVersionInfo,
 		Path:    netmonConfig.Path,
 		Debug:   netmonConfig.Debug,
 		Enable:  netmonConfig.Enable,
 	}
 
-	return netmon, nil
+	return netmon
 }
 
 func getCommandVersion(cmd string) (string, error) {
@@ -301,14 +315,16 @@ func getShimInfo(config oci.RuntimeConfig) (ShimInfo, error) {
 
 	shimPath := shimConfig.Path
 
-	version, err := getCommandVersion(shimPath)
-	if err != nil {
-		version = unknown
+	var shimVersionInfo VersionInfo
+	if version, err := getCommandVersion(shimConfig.Path); err != nil {
+		shimVersionInfo = unknownVersionInfo
+	} else {
+		shimVersionInfo = constructVersionInfo(version)
 	}
 
 	shim := ShimInfo{
 		Type:    string(config.ShimType),
-		Version: version,
+		Version: shimVersionInfo,
 		Path:    shimPath,
 		Debug:   shimConfig.Debug,
 	}
@@ -378,9 +394,9 @@ func getEnvInfo(configFile string, config oci.RuntimeConfig) (env EnvInfo, err e
 		return EnvInfo{}, err
 	}
 
-	proxy, _ := getProxyInfo(config)
+	proxy := getProxyInfo(config)
 
-	netmon, _ := getNetmonInfo(config)
+	netmon := getNetmonInfo(config)
 
 	shim, err := getShimInfo(config)
 	if err != nil {
