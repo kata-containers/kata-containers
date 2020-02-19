@@ -6,6 +6,7 @@
     * [Check hardware requirements](#check-hardware-requirements)
     * [Configure to use initrd or rootfs image](#configure-to-use-initrd-or-rootfs-image)
     * [Enable full debug](#enable-full-debug)
+        * [debug logs and shimv2](#debug-logs-and-shimv2)
         * [journald rate limiting](#journald-rate-limiting)
             * [systemd-journald suppressing messages](#systemd-journald-suppressing-messages)
             * [Disabling systemd-journald rate limiting](#disabling-systemd-journald-rate-limiting)
@@ -140,6 +141,21 @@ $ sudo install -o root -g root -m 0640 /usr/share/defaults/kata-containers/confi
 $ sudo sed -i -e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' /etc/kata-containers/configuration.toml
 $ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' /etc/kata-containers/configuration.toml
 ```
+
+### debug logs and shimv2
+
+If you are using `containerd` and Kata shimv2 to launch `kata-runtime`, `containerd`'s debug option 
+will determine if the `kata-runtime`'s log is forwarded to `containerd`'s log pipe. If you want to see 
+the Kata's log (including the `runtime` and `agent` logs) in the `containerd` log, then you need to 
+enable `containerd`'s debug by adding the following to your `containerd`'s config file:
+
+```toml
+[debug]
+        level = "debug"
+```
+
+For much info about the containerd's debug, please see the
+[`containerd` documentation](https://github.com/containerd/containerd/blob/master/docs/getting-started.md).
 
 ### journald rate limiting
 
