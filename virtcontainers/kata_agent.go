@@ -76,7 +76,7 @@ var (
 	kataNvdimmDevType           = "nvdimm"
 	kataVirtioFSDevType         = "virtio-fs"
 	sharedDir9pOptions          = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
-	sharedDirVirtioFSOptions    = []string{"default_permissions,allow_other,rootmode=040000,user_id=0,group_id=0", "nodev"}
+	sharedDirVirtioFSOptions    = []string{}
 	sharedDirVirtioFSDaxOptions = "dax"
 	shmDir                      = "shm"
 	kataEphemeralDevType        = "ephemeral"
