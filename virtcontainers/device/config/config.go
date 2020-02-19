@@ -153,6 +153,9 @@ type BlockDrive struct {
 
 	// ShareRW enables multiple qemu instances to share the File
 	ShareRW bool
+
+	// ReadOnly sets the device file readonly
+	ReadOnly bool
 }
 
 // VFIODeviceType indicates VFIO device type

@@ -343,10 +343,11 @@ func genericImage(path string) (config.BlockDrive, error) {
 	id := utils.MakeNameID("image", hex.EncodeToString(randBytes), maxDevIDSize)
 
 	drive := config.BlockDrive{
-		File:    path,
-		Format:  "raw",
-		ID:      id,
-		ShareRW: true,
+		File:     path,
+		Format:   "raw",
+		ID:       id,
+		ShareRW:  true,
+		ReadOnly: true,
 	}
 
 	return drive, nil
@@ -603,6 +604,7 @@ func genericBlockDevice(drive config.BlockDrive, nestedRun bool) (govmmQemu.Bloc
 		Interface:     "none",
 		DisableModern: nestedRun,
 		ShareRW:       drive.ShareRW,
+		ReadOnly:      drive.ReadOnly,
 	}, nil
 }
 

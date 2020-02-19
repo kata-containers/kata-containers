@@ -308,6 +308,7 @@ func TestQemuArchBaseAppendImage(t *testing.T) {
 			Format:    "raw",
 			Interface: "none",
 			ShareRW:   true,
+			ReadOnly:  true,
 		},
 	}
 
