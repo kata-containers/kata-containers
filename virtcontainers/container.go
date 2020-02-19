@@ -590,7 +590,7 @@ func (c *Container) unmountHostMounts() error {
 			span, _ := c.trace("unmount")
 			span.SetTag("host-path", m.HostPath)
 
-			if err := syscall.Unmount(m.HostPath, syscall.MNT_DETACH); err != nil {
+			if err := syscall.Unmount(m.HostPath, syscall.MNT_DETACH|UmountNoFollow); err != nil {
 				c.Logger().WithFields(logrus.Fields{
 					"host-path": m.HostPath,
 					"error":     err,
