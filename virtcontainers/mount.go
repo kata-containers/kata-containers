@@ -331,11 +331,24 @@ type Mount struct {
 	BlockDeviceID string
 }
 
+func isSymlink(path string) bool {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return stat.Mode()&os.ModeSymlink != 0
+}
+
 func bindUnmountContainerRootfs(ctx context.Context, sharedDir, sandboxID, cID string) error {
 	span, _ := trace(ctx, "bindUnmountContainerRootfs")
 	defer span.Finish()
 
 	rootfsDest := filepath.Join(sharedDir, sandboxID, cID, rootfsDir)
+	if isSymlink(filepath.Join(sharedDir, sandboxID, cID)) || isSymlink(rootfsDest) {
+		logrus.Warnf("container dir %s is a symlink, malicious guest?", cID)
+		return nil
+	}
+
 	err := syscall.Unmount(rootfsDest, syscall.MNT_DETACH|UmountNoFollow)
 	if err == syscall.ENOENT {
 		logrus.Warnf("%s: %s", err, rootfsDest)
@@ -350,6 +363,10 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 
 	var errors *merr.Error
 	for _, c := range sandbox.containers {
+		if isSymlink(filepath.Join(sharedDir, sandbox.id, c.id)) {
+			logrus.Warnf("container dir %s is a symlink, malicious guest?", c.id)
+			continue
+		}
 		c.unmountHostMounts()
 		if c.state.Fstype == "" {
 			// even if error found, don't break out of loop until all mounts attempted
