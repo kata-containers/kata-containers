@@ -465,7 +465,7 @@ BUILDFLAGS := -buildmode=pie
 
 # whether stipping the binary
 ifeq ($(STRIP),yes)
-       LDFLAGS := -ldflags "-w -s"
+       KATA_LDFLAGS := -ldflags "-w -s"
 endif
 
 # Return non-empty string if specified directory exists
@@ -495,7 +495,7 @@ containerd-shim-v2: $(SHIMV2_OUTPUT)
 netmon: $(NETMON_TARGET_OUTPUT)
 
 $(NETMON_TARGET_OUTPUT): $(SOURCES) VERSION
-	$(QUIET_BUILD)(cd $(NETMON_DIR) && go build $(BUILDFLAGS) -o $@ -ldflags "-X main.version=$(VERSION)" $(LDFLAGS))
+	$(QUIET_BUILD)(cd $(NETMON_DIR) && go build $(BUILDFLAGS) -o $@ -ldflags "-X main.version=$(VERSION)" $(KATA_LDFLAGS))
 
 runtime: $(TARGET_OUTPUT) $(CONFIGS)
 .DEFAULT: default
