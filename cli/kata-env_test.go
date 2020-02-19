@@ -30,10 +30,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-const testProxyVersion = "proxy version 0.1"
-const testShimVersion = "shim version 0.1"
-const testNetmonVersion = "netmon version 0.1"
-const testHypervisorVersion = "QEMU emulator version 2.7.0+git.741f430a96-6.1, Copyright (c) 2003-2016 Fabrice Bellard and the QEMU Project developers"
+var (
+	testProxyVersion      = "proxy version 0.1"
+	testShimVersion       = "shim version 0.1"
+	testNetmonVersion     = "netmon version 0.1"
+	testHypervisorVersion = "QEMU emulator version 2.7.0+git.741f430a96-6.1, Copyright (c) 2003-2016 Fabrice Bellard and the QEMU Project developers"
+)
 
 var (
 	hypervisorDebug = false
@@ -187,7 +189,7 @@ func makeRuntimeConfig(prefixDir string) (configFile string, config oci.RuntimeC
 func getExpectedProxyDetails(config oci.RuntimeConfig) (ProxyInfo, error) {
 	return ProxyInfo{
 		Type:    string(config.ProxyType),
-		Version: testProxyVersion,
+		Version: constructVersionInfo(testProxyVersion),
 		Path:    config.ProxyConfig.Path,
 		Debug:   config.ProxyConfig.Debug,
 	}, nil
@@ -195,7 +197,7 @@ func getExpectedProxyDetails(config oci.RuntimeConfig) (ProxyInfo, error) {
 
 func getExpectedNetmonDetails(config oci.RuntimeConfig) (NetmonInfo, error) {
 	return NetmonInfo{
-		Version: testNetmonVersion,
+		Version: constructVersionInfo(testNetmonVersion),
 		Path:    config.NetmonConfig.Path,
 		Debug:   config.NetmonConfig.Debug,
 		Enable:  config.NetmonConfig.Enable,
@@ -212,7 +214,7 @@ func getExpectedShimDetails(config oci.RuntimeConfig) (ShimInfo, error) {
 
 	return ShimInfo{
 		Type:    string(config.ShimType),
-		Version: testShimVersion,
+		Version: constructVersionInfo(testShimVersion),
 		Path:    shimPath,
 		Debug:   shimConfig.Debug,
 	}, nil
@@ -353,11 +355,12 @@ func getExpectedKernel(config oci.RuntimeConfig) KernelInfo {
 func getExpectedRuntimeDetails(config oci.RuntimeConfig, configFile string) RuntimeInfo {
 	runtimePath, _ := os.Executable()
 
+	runtimeVersionInfo := constructVersionInfo(version)
+	runtimeVersionInfo.Commit = commit
 	return RuntimeInfo{
 		Version: RuntimeVersionInfo{
-			Semver: version,
-			Commit: commit,
-			OCI:    specs.Version,
+			Version: runtimeVersionInfo,
+			OCI:     specs.Version,
 		},
 		Config: RuntimeConfigInfo{
 			Path: configFile,
@@ -678,7 +681,7 @@ func TestEnvGetProxyInfo(t *testing.T) {
 	expectedProxy, err := getExpectedProxyDetails(config)
 	assert.NoError(t, err)
 
-	proxy, err := getProxyInfo(config)
+	proxy := getProxyInfo(config)
 	assert.NoError(t, err)
 
 	assert.Equal(t, expectedProxy, proxy)
@@ -701,9 +704,9 @@ func TestEnvGetProxyInfoNoVersion(t *testing.T) {
 	err = os.Remove(config.ProxyConfig.Path)
 	assert.NoError(t, err)
 
-	expectedProxy.Version = unknown
+	expectedProxy.Version = unknownVersionInfo
 
-	proxy, err := getProxyInfo(config)
+	proxy := getProxyInfo(config)
 	assert.NoError(t, err)
 
 	assert.Equal(t, expectedProxy, proxy)
@@ -722,7 +725,7 @@ func TestEnvGetNetmonInfo(t *testing.T) {
 	expectedNetmon, err := getExpectedNetmonDetails(config)
 	assert.NoError(t, err)
 
-	netmon, err := getNetmonInfo(config)
+	netmon := getNetmonInfo(config)
 	assert.NoError(t, err)
 
 	assert.Equal(t, expectedNetmon, netmon)
@@ -745,9 +748,9 @@ func TestEnvGetNetmonInfoNoVersion(t *testing.T) {
 	err = os.Remove(config.NetmonConfig.Path)
 	assert.NoError(t, err)
 
-	expectedNetmon.Version = unknown
+	expectedNetmon.Version = unknownVersionInfo
 
-	netmon, err := getNetmonInfo(config)
+	netmon := getNetmonInfo(config)
 	assert.NoError(t, err)
 
 	assert.Equal(t, expectedNetmon, netmon)
@@ -792,7 +795,7 @@ func TestEnvGetShimInfoNoVersion(t *testing.T) {
 	exit 1`)
 	assert.NoError(t, err)
 
-	expectedShim.Version = unknown
+	expectedShim.Version = unknownVersionInfo
 
 	shim, err := getShimInfo(config)
 	assert.NoError(t, err)
@@ -880,14 +883,14 @@ func testEnvShowTOMLSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 
 	proxy := ProxyInfo{
 		Type:    "proxy-type",
-		Version: "proxy-version",
+		Version: constructVersionInfo(testProxyVersion),
 		Path:    "file:///proxy-url",
 		Debug:   false,
 	}
 
 	shim := ShimInfo{
 		Type:    "shim-type",
-		Version: "shim-version",
+		Version: constructVersionInfo(testShimVersion),
 		Path:    "/resolved/shim/path",
 	}
 
@@ -949,14 +952,14 @@ func testEnvShowJSONSettings(t *testing.T, tmpdir string, tmpfile *os.File) erro
 
 	proxy := ProxyInfo{
 		Type:    "proxy-type",
-		Version: "proxy-version",
+		Version: constructVersionInfo(testProxyVersion),
 		Path:    "file:///proxy-url",
 		Debug:   false,
 	}
 
 	shim := ShimInfo{
 		Type:    "shim-type",
-		Version: "shim-version",
+		Version: constructVersionInfo(testShimVersion),
 		Path:    "/resolved/shim/path",
 	}
 
