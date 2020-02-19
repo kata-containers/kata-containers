@@ -532,10 +532,10 @@ endef
 GENERATED_FILES += $(CLI_DIR)/config-generated.go
 
 $(TARGET_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST) | show-summary
-	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(LDFLAGS) $(BUILDFLAGS) -o $@ .)
+	$(QUIET_BUILD)(cd $(CLI_DIR) && go build $(KATA_LDFLAGS) $(BUILDFLAGS) -o $@ .)
 
 $(SHIMV2_OUTPUT): $(SOURCES) $(GENERATED_FILES) $(MAKEFILE_LIST)
-	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(LDFLAGS) -i -o $@ .)
+	$(QUIET_BUILD)(cd $(SHIMV2_DIR)/ && go build $(KATA_LDFLAGS) -i -o $@ .)
 
 .PHONY: \
 	check \
