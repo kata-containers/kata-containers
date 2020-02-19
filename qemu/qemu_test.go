@@ -303,6 +303,8 @@ func TestAppendDeviceBlock(t *testing.T) {
 		WCE:           false,
 		DisableModern: true,
 		ROMFile:       romfile,
+		ShareRW:       true,
+		ReadOnly:      true,
 	}
 	if blkdev.Transport.isVirtioCCW(nil) {
 		blkdev.DevNo = DevNo

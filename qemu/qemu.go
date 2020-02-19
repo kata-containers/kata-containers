@@ -971,6 +971,9 @@ type BlockDevice struct {
 	// ShareRW enables multiple qemu instances to share the File
 	ShareRW bool
 
+	// ReadOnly sets the block device in readonly mode
+	ReadOnly bool
+
 	// Transport is the virtio transport for this device.
 	Transport VirtioTransport
 }
@@ -1028,6 +1031,10 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	blkParams = append(blkParams, fmt.Sprintf(",aio=%s", blkdev.AIO))
 	blkParams = append(blkParams, fmt.Sprintf(",format=%s", blkdev.Format))
 	blkParams = append(blkParams, fmt.Sprintf(",if=%s", blkdev.Interface))
+
+	if blkdev.ReadOnly {
+		blkParams = append(blkParams, ",readonly")
+	}
 
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))

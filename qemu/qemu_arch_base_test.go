@@ -36,7 +36,7 @@ var (
 	deviceSCSIControllerBusAddrStr = "-device virtio-scsi-pci,id=foo,bus=pci.0,addr=00:04.0,disable-modern=true,iothread=iothread1,romfile=efi-virtio.rom"
 	deviceVhostUserSCSIString      = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -device vhost-user-scsi-pci,id=scsi1,chardev=char1,romfile=efi-virtio.rom"
 	deviceVhostUserBlkString       = "-chardev socket,id=char2,path=/tmp/nonexistentsocket.socket -device vhost-user-blk-pci,logical_block_size=4096,size=512M,chardev=char2,romfile=efi-virtio.rom"
-	deviceBlockString              = "-device virtio-blk-pci,disable-modern=true,drive=hd0,scsi=off,config-wce=off,romfile=efi-virtio.rom -drive id=hd0,file=/var/lib/vm.img,aio=threads,format=qcow2,if=none"
+	deviceBlockString              = "-device virtio-blk-pci,disable-modern=true,drive=hd0,scsi=off,config-wce=off,romfile=efi-virtio.rom,share-rw=on -drive id=hd0,file=/var/lib/vm.img,aio=threads,format=qcow2,if=none,readonly"
 	devicePCIBridgeString          = "-device pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,chassis_nr=5,shpc=on,addr=ff,romfile=efi-virtio.rom"
 	devicePCIEBridgeString         = "-device pcie-pci-bridge,bus=/pci-bus/pcie.0,id=mybridge,addr=ff,romfile=efi-virtio.rom"
 	romfile                        = "efi-virtio.rom"
