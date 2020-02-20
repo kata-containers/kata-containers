@@ -592,14 +592,10 @@ func (clh *cloudHypervisor) generateSocket(id string, useVsock bool) (interface{
 		clh.Logger().Info("Can't generate socket path for cloud-hypervisor")
 		return types.HybridVSock{}, err
 	}
-	_, cid, err := utils.FindContextID()
-	if err != nil {
-		return nil, err
-	}
+
 	return types.HybridVSock{
-		UdsPath:   udsPath,
-		ContextID: cid,
-		Port:      uint32(vSockPort),
+		UdsPath: udsPath,
+		Port:    uint32(vSockPort),
 	}, nil
 }
 
