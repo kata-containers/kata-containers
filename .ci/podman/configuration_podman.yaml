@@ -151,3 +151,21 @@ podman:
     - podman start multiple containers
     - podman umount many
     - podman init single container by name
+    - podman stop stopped container
+    - podman commit container with author
+    - podman kill a running container by id with a bogus signal
+    - podman import without reference
+    - podman unpause a running pod by id
+    - podman export output flag
+    - podman export bad filename
+    - podman container start single container by id
+    - podman start infra container
+    - podman start infra container different image
+    - podman tag shortname image no tag
+    - podman tag shortname
+    - podman save quiet flag
+    - podman init bogus container
+    - podman named volume copyup
+    - podman rmi all images forcibly with short options
+    - podman rmi image that is a parent of another image
+    - podman rmi all images
