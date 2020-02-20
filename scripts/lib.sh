@@ -296,9 +296,23 @@ RUN pushd /root; \
 	make install > /dev/null 2>\&1; \
 	popd
 "
-	local musl_tar="musl-${MUSL_VERSION}.tar.gz"
-	local musl_dir="musl-${MUSL_VERSION}"
-	readonly install_musl="
+	# install musl for compiling rust-agent
+	install_musl=
+	if [ "${muslarch}" == "aarch64" ]; then
+		local musl_tar="${muslarch}-linux-musl-native.tgz"
+		local musl_dir="${muslarch}-linux-musl-native"
+		install_musl="
+RUN cd /tmp; \
+	curl -sLO https://musl.cc/${musl_tar}; tar -zxf ${musl_tar}; \
+	 mkdir -p /usr/local/musl/; \
+	cp -r ${musl_dir}/* /usr/local/musl/
+ENV PATH=\$PATH:/usr/local/musl/bin
+RUN ln -sf /usr/local/musl/bin/g++ /usr/bin/g++
+"
+	else
+		local musl_tar="musl-${MUSL_VERSION}.tar.gz"
+		local musl_dir="musl-${MUSL_VERSION}"
+		install_musl="
 RUN pushd /root; \
     curl -sLO https://www.musl-libc.org/releases/${musl_tar}; tar -zxf ${musl_tar}; \
 	cd ${musl_dir}; \
@@ -310,6 +324,8 @@ RUN pushd /root; \
 	popd
 ENV PATH=\$PATH:/usr/local/musl/bin
 "
+	fi
+
 	readonly install_rust="
 RUN curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf --output /tmp/rust-init; \
     chmod a+x /tmp/rust-init; \
