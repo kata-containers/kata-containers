@@ -51,7 +51,11 @@ is dropped from maintenance.
 | `stable-1.1` | `1.1.3` | (unmaintained) |
 
 Note, the stable-1.1 branch will still exist with tag 1.1.3, but under current plans it is
-not maintained further. The next tag applied to master will be 1.4.0-rc0.
+not maintained further. The next tag applied to master will be 1.4.0-alpha0. We would then
+create a couple of alpha releases gathering features targeted for that particular release (in
+this case 1.4.0), followed by a release candidate. The release candidate marks a feature freeze.
+A new stable branch is created for the release candidate. Only bug fixes and any security issues
+are added to the branch going forward until release 1.4.0 is made.
    
 ## Backporting Process 
 
@@ -80,7 +84,7 @@ stable and master. While this is not in place currently, it should be considered
 
 ### Patch releases
 
-Releases are normally made every other week for patch releases, which include a GitHub release as
+Releases are made every three weeks, which include a GitHub release as
 well as binary packages. These patch releases are made for both stable branches, and a "release candidate"
 for the next `MAJOR` or `MINOR` is created from master. If there are no changes across all the repositories, no
 release is created and an announcement is made on the developer mailing list to highlight this.
@@ -94,8 +98,8 @@ If there is urgent need for a fix, a patch release will be made outside of the p
 
 ###  Frequency
 Minor releases are less frequent in order to provide a more stable baseline for users. They are currently
-running on a six week cadence. As the Kata Containers code base matures it is expected this will become
-a much longer duration. The release schedule can be seen on the
+running on a twelve week cadence. As the Kata Containers code base has reached a certain level of 
+maturity, we have increased the cadence from six weeks to twelve weeks. The release schedule can be seen on the
 [release rotation wiki page](https://github.com/kata-containers/community/wiki/Release-Team-Rota).
 
 ### Compatibility
