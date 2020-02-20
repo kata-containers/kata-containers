@@ -120,6 +120,7 @@ var clhKernelParams = []Param{
 	{"no_timer_check", ""}, // do not check broken timer IRQ resources
 	{"noreplace-smp", ""},  // do not replace SMP instructions
 	{"agent.log_vport", fmt.Sprintf("%d", vSockLogsPort)}, // tell the agent where to send the logs
+	{"rootflags", "data=ordered,errors=remount-ro ro"},    // mount the root filesystem as readonly
 }
 
 var clhDebugKernelParams = []Param{
@@ -248,7 +249,8 @@ func (clh *cloudHypervisor) createSandbox(ctx context.Context, id string, networ
 	}
 
 	disk := chclient.DiskConfig{
-		Path: imagePath,
+		Path:     imagePath,
+		Readonly: true,
 	}
 	clh.vmconfig.Disks = append(clh.vmconfig.Disks, disk)
 
