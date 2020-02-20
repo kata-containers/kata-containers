@@ -274,7 +274,6 @@ generate_dockerfile()
 	curlOptions=("-OL")
 	[ -n "${http_proxy:-}" ] && curlOptions+=("-x ${http_proxy:-}")
 
-	readonly dockerfile_template="Dockerfile.in"
 	readonly install_go="
 RUN cd /tmp ; curl ${curlOptions[@]} https://storage.googleapis.com/golang/go${GO_VERSION}.linux-${goarch}.tar.gz
 RUN tar -C /usr/ -xzf /tmp/go${GO_VERSION}.linux-${goarch}.tar.gz
@@ -344,7 +343,15 @@ RUN ln -sf /usr/bin/g++ /bin/musl-g++
 	# rust agent still need go to build
 	# because grpc-sys need go to build
 	pushd ${dir}
-	[ -f "${dockerfile_template}" ] || die "${dockerfile_template}: file not found"
+	dockerfile_template="Dockerfile.in"
+	dockerfile_arch_template="Dockerfile-${architecture}.in"
+	# if arch-specific docker file exists, swap the univesal one with it.
+        if [ -f "${dockerfile_arch_template}" ]; then
+                dockerfile_template="${dockerfile_arch_template}"
+        else
+                [ -f "${dockerfile_template}" ] || die "${dockerfile_template}: file not found"
+        fi
+
 	# powerpc have no musl target, don't setup rust enviroment
 	# since we cannot static link agent. Besides, there is
 	# also long double representation problem when building musl-libc
