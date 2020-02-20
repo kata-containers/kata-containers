@@ -69,7 +69,6 @@ info() {
 
 repos=(
 	"agent"
-	"kata-containers"
 	"ksm-throttler"
 	"osbuilder"
 	"packaging"
@@ -77,6 +76,7 @@ repos=(
 	"runtime"
 	"shim"
 	"tests"
+	"kata-containers"
 )
 
 
