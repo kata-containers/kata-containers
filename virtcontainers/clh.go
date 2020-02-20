@@ -59,7 +59,7 @@ const (
 	virtioFsSocket        = "virtiofsd.sock"
 	clhSerial             = "serial-tty.log"
 	supportedMajorVersion = 0
-	supportedMinorVersion = 3
+	supportedMinorVersion = 5
 	defaultClhPath        = "/usr/local/bin/cloud-hypervisor"
 	virtioFsCacheAlways   = "always"
 	maxClhVcpus           = uint32(64)
@@ -676,7 +676,6 @@ func (clh *cloudHypervisor) getAvailableVersion() error {
 	}
 
 	// Remove 'v' prefix if has one
-	clh.Logger().Error("DEBUG :", versionSplit[0])
 	versionSplit[0] = strings.TrimLeft(versionSplit[0], "v")
 	major, err := strconv.ParseUint(versionSplit[0], 10, 64)
 	if err != nil {
@@ -689,11 +688,12 @@ func (clh *cloudHypervisor) getAvailableVersion() error {
 
 	}
 
-	revisionStr := strings.SplitN(versionSplit[2], "-", -1)
-	if len(revisionStr) < 1 {
-		return errors.Errorf("Failed parse clh revision %s", versionSplit[2])
+	// revision could have aditional commit information separated by '-'
+	revisionSplit := strings.SplitN(versionSplit[2], "-", -1)
+	if len(revisionSplit) < 1 {
+		return errors.Errorf("Failed parse cloud-hypervisor revision %s", versionSplit[2])
 	}
-	revision, err := strconv.ParseUint(revisionStr[0], 10, 64)
+	revision, err := strconv.ParseUint(revisionSplit[0], 10, 64)
 	if err != nil {
 		return err
 	}
