@@ -274,6 +274,9 @@ components:
       properties:
         path:
           type: string
+        readonly:
+          type: boolean
+          default: false
         iommu:
           type: boolean
           default: false
@@ -283,6 +286,14 @@ components:
         queue_size:
           type: integer
           default: 128
+        vhost_user:
+          type: boolean
+          default: false
+        vhost_socket:
+          type: string
+        wce:
+          type: boolean
+          default: true
 
     NetConfig:
       type: object
