@@ -156,12 +156,20 @@ components:
           disks:
           - path: path
             num_queues: 5
+            readonly: false
             iommu: false
             queue_size: 5
+            vhost_socket: vhost_socket
+            vhost_user: false
+            wce: true
           - path: path
             num_queues: 5
+            readonly: false
             iommu: false
             queue_size: 5
+            vhost_socket: vhost_socket
+            vhost_user: false
+            wce: true
           cpus:
             boot_vcpus: 1
             max_vcpus: 1
@@ -275,12 +283,20 @@ components:
         disks:
         - path: path
           num_queues: 5
+          readonly: false
           iommu: false
           queue_size: 5
+          vhost_socket: vhost_socket
+          vhost_user: false
+          wce: true
         - path: path
           num_queues: 5
+          readonly: false
           iommu: false
           queue_size: 5
+          vhost_socket: vhost_socket
+          vhost_user: false
+          wce: true
         cpus:
           boot_vcpus: 1
           max_vcpus: 1
@@ -477,11 +493,18 @@ components:
       example:
         path: path
         num_queues: 5
+        readonly: false
         iommu: false
         queue_size: 5
+        vhost_socket: vhost_socket
+        vhost_user: false
+        wce: true
       properties:
         path:
           type: string
+        readonly:
+          default: false
+          type: boolean
         iommu:
           default: false
           type: boolean
@@ -491,6 +514,14 @@ components:
         queue_size:
           default: 128
           type: integer
+        vhost_user:
+          default: false
+          type: boolean
+        vhost_socket:
+          type: string
+        wce:
+          default: true
+          type: boolean
       required:
       - path
       type: object
