@@ -333,6 +333,7 @@ func getExpectedHypervisor(config oci.RuntimeConfig) HypervisorInfo {
 		Debug:             config.HypervisorConfig.Debug,
 		EntropySource:     config.HypervisorConfig.EntropySource,
 		SharedFS:          config.HypervisorConfig.SharedFS,
+		VirtioFSDaemon:    config.HypervisorConfig.VirtioFSDaemon,
 
 		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
 		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
