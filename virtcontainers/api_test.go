@@ -18,6 +18,7 @@ import (
 	ktu "github.com/kata-containers/runtime/pkg/katatestutils"
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	vccgroups "github.com/kata-containers/runtime/virtcontainers/pkg/cgroups"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/mock"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
@@ -48,7 +49,7 @@ func newEmptySpec() *specs.Spec {
 	return &specs.Spec{
 		Linux: &specs.Linux{
 			Resources:   &specs.LinuxResources{},
-			CgroupsPath: defaultCgroupPath,
+			CgroupsPath: vccgroups.DefaultCgroupPath,
 		},
 		Process: &specs.Process{
 			Capabilities: &specs.LinuxCapabilities{},
@@ -515,7 +516,7 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
-	cgroupPath, err := renameCgroupPath(defaultCgroupPath)
+	cgroupPath, err := vccgroups.RenameCgroupPath(vccgroups.DefaultCgroupPath)
 	assert.NoError(err)
 
 	hypervisorConfig := HypervisorConfig{
@@ -574,7 +575,7 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 	assert := assert.New(t)
 
 	config := newTestSandboxConfigNoop()
-	cgroupPath, err := renameCgroupPath(defaultCgroupPath)
+	cgroupPath, err := vccgroups.RenameCgroupPath(vccgroups.DefaultCgroupPath)
 	assert.NoError(err)
 
 	hypervisorConfig := HypervisorConfig{
@@ -1156,7 +1157,7 @@ func TestStatusContainerStateReady(t *testing.T) {
 	contID := "101"
 
 	config := newTestSandboxConfigNoop()
-	cgroupPath, err := renameCgroupPath(defaultCgroupPath)
+	cgroupPath, err := vccgroups.RenameCgroupPath(vccgroups.DefaultCgroupPath)
 	assert.NoError(err)
 
 	ctx := context.Background()
@@ -1217,7 +1218,7 @@ func TestStatusContainerStateRunning(t *testing.T) {
 	contID := "101"
 
 	config := newTestSandboxConfigNoop()
-	cgroupPath, err := renameCgroupPath(defaultCgroupPath)
+	cgroupPath, err := vccgroups.RenameCgroupPath(vccgroups.DefaultCgroupPath)
 	assert.NoError(err)
 
 	ctx := context.Background()

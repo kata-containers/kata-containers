@@ -11,16 +11,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/containerd/cgroups"
-	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
-	libcontcgroups "github.com/opencontainers/runc/libcontainer/cgroups"
-	libcontcgroupsfs "github.com/opencontainers/runc/libcontainer/cgroups/fs"
-	libcontcgroupssystemd "github.com/opencontainers/runc/libcontainer/cgroups/systemd"
-	"github.com/opencontainers/runc/libcontainer/configs"
-	specconv "github.com/opencontainers/runc/libcontainer/specconv"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
 
@@ -33,15 +26,6 @@ type cgroupPather interface {
 // for example /sys/fs/cgroup/memory/kata/$CGPATH
 // where path is defined by the containers manager
 const cgroupKataPath = "/kata/"
-
-// prepend a kata specific string to oci cgroup path to
-// form a different cgroup path, thus cAdvisor couldn't
-// find kata containers cgroup path on host to prevent it
-// from grabbing the stats data.
-const cgroupKataPrefix = "kata"
-
-// DefaultCgroupPath runtime-determined location in the cgroups hierarchy.
-const defaultCgroupPath = "/vc"
 
 var cgroupsLoadFunc = cgroups.Load
 var cgroupsNewFunc = cgroups.New
@@ -180,91 +164,4 @@ func validCPUResources(cpuSpec *specs.LinuxCPU) *specs.LinuxCPU {
 	}
 
 	return &cpu
-}
-
-func renameCgroupPath(path string) (string, error) {
-	if path == "" {
-		return "", fmt.Errorf("Cgroup path is empty")
-	}
-
-	cgroupPathDir := filepath.Dir(path)
-	cgroupPathName := fmt.Sprintf("%s_%s", cgroupKataPrefix, filepath.Base(path))
-	return filepath.Join(cgroupPathDir, cgroupPathName), nil
-
-}
-
-// validCgroupPath returns a valid cgroup path.
-// see https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#cgroups-path
-func validCgroupPath(path string, systemdCgroup bool) (string, error) {
-	if isSystemdCgroup(path) {
-		return path, nil
-	}
-
-	if systemdCgroup {
-		return "", fmt.Errorf("malformed systemd path '%v': expected to be of form 'slice:prefix:name'", path)
-	}
-
-	// In the case of an absolute path (starting with /), the runtime MUST
-	// take the path to be relative to the cgroups mount point.
-	if filepath.IsAbs(path) {
-		return renameCgroupPath(filepath.Clean(path))
-	}
-
-	// In the case of a relative path (not starting with /), the runtime MAY
-	// interpret the path relative to a runtime-determined location in the cgroups hierarchy.
-	// clean up path and return a new path relative to defaultCgroupPath
-	return renameCgroupPath(filepath.Join(defaultCgroupPath, filepath.Clean("/"+path)))
-}
-
-func isSystemdCgroup(cgroupPath string) bool {
-	// systemd cgroup path: slice:prefix:name
-	re := regexp.MustCompile(`([[:alnum:]]|\.)+:([[:alnum:]]|\.)+:([[:alnum:]]|\.)+`)
-	found := re.FindStringIndex(cgroupPath)
-
-	// if found string is equal to cgroupPath then
-	// it's a correct systemd cgroup path.
-	return found != nil && cgroupPath[found[0]:found[1]] == cgroupPath
-}
-
-func newCgroupManager(cgroups *configs.Cgroup, cgroupPaths map[string]string, spec *specs.Spec) (libcontcgroups.Manager, error) {
-	var err error
-
-	rootless := rootless.IsRootless()
-	systemdCgroup := isSystemdCgroup(spec.Linux.CgroupsPath)
-
-	// Create a new cgroup if the current one is nil
-	// this cgroups must be saved later
-	if cgroups == nil {
-		if cgroups, err = specconv.CreateCgroupConfig(&specconv.CreateOpts{
-			// cgroup name is taken from spec
-			CgroupName:       "",
-			UseSystemdCgroup: systemdCgroup,
-			Spec:             spec,
-			RootlessCgroups:  rootless,
-		}); err != nil {
-			return nil, fmt.Errorf("Could not create cgroup config: %v", err)
-		}
-	}
-
-	// Set cgroupPaths to nil when the map is empty, it can and will be
-	// populated by `Manager.Apply()` when the runtime or any other process
-	// is moved to the cgroup. See sandbox.setupSandboxCgroup().
-	if len(cgroupPaths) == 0 {
-		cgroupPaths = nil
-	}
-
-	if systemdCgroup {
-		systemdCgroupFunc, err := libcontcgroupssystemd.NewSystemdCgroupsManager()
-		if err != nil {
-			return nil, fmt.Errorf("Could not create systemd cgroup manager: %v", err)
-		}
-		libcontcgroupssystemd.UseSystemd()
-		return systemdCgroupFunc(cgroups, cgroupPaths), nil
-	}
-
-	return &libcontcgroupsfs.Manager{
-		Cgroups:  cgroups,
-		Rootless: rootless,
-		Paths:    cgroupPaths,
-	}, nil
 }
