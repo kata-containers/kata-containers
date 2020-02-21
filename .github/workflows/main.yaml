@@ -342,4 +342,5 @@ jobs:
           mv release-candidate/kata-static.tar.xz release-candidate/kata-static-$tag-x86_64.tar.xz
           git clone https://github.com/kata-containers/runtime.git
           cd runtime
+          ls ../release-candidate/*
           GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a ../release-candidate/kata-static-${tag}-x86_64.tar.xz "${tag}"
