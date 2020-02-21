@@ -148,6 +148,9 @@ sudo sed -i 's/^registries = \[/registries = \[ "docker.io"/' "$crio_config_file
 # Matches cri-o 1.12 file format
 sudo sed -i 's/^#registries = \[/registries = \[ "docker.io" \] /' "$crio_config_file"
 
+echo "Set cgroup manager to cgroupfs"
+sudo sed -i 's/\(^cgroup_manager =\) \"systemd\"/\1 \"cgroupfs\"/' "$crio_config_file"
+
 service_path="/etc/systemd/system"
 crio_service_file="${cidir}/data/crio.service"
 
