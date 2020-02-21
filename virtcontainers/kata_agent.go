@@ -25,6 +25,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/device/config"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	vccgroups "github.com/kata-containers/runtime/virtcontainers/pkg/cgroups"
 	ns "github.com/kata-containers/runtime/virtcontainers/pkg/nsenter"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
@@ -1033,7 +1034,7 @@ func (k *kataAgent) constraintGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool) {
 	// - Initrd image doesn't have systemd.
 	// - Nobody will be able to modify the resources of a specific container by using systemctl set-property.
 	// - docker is not running in the VM.
-	if isSystemdCgroup(grpcSpec.Linux.CgroupsPath) {
+	if vccgroups.IsSystemdCgroup(grpcSpec.Linux.CgroupsPath) {
 		// Convert systemd cgroup to cgroupfs
 		slice := strings.Split(grpcSpec.Linux.CgroupsPath, ":")
 		// 0 - slice: system.slice

@@ -1514,6 +1514,7 @@ func TestSandbox_SetupSandboxCgroup(t *testing.T) {
 		}
 
 		t.Run(tt.name, func(t *testing.T) {
+			tt.s.createCgroupManager()
 			if err := tt.s.setupSandboxCgroup(); (err != nil) != tt.wantErr {
 				t.Errorf("Sandbox.SetupSandboxCgroupOnly() error = %v, wantErr %v", err, tt.wantErr)
 			}

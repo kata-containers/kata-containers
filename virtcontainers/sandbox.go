@@ -34,6 +34,7 @@ import (
 	"github.com/kata-containers/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
+	vccgroups "github.com/kata-containers/runtime/virtcontainers/pkg/cgroups"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/runtime/virtcontainers/pkg/rootless"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
@@ -213,6 +214,8 @@ type Sandbox struct {
 	stateful          bool
 	seccompSupported  bool
 	disableVMShutdown bool
+
+	cgroupMgr *vccgroups.Manager
 
 	ctx context.Context
 }
@@ -597,6 +600,10 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		}
 	}
 
+	if err := s.createCgroupManager(); err != nil {
+		return nil, err
+	}
+
 	agentConfig, err := newAgentConfig(sandboxConfig.AgentType, sandboxConfig.AgentConfig)
 	if err != nil {
 		return nil, err
@@ -607,6 +614,46 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	return s, nil
+}
+
+func (s *Sandbox) createCgroupManager() error {
+	var err error
+	cgroupPath := ""
+
+	// Do not change current cgroup configuration.
+	// Create a spec without constraints
+	resources := specs.LinuxResources{}
+
+	if s.config == nil {
+		return fmt.Errorf("Could not create cgroup manager: empty sandbox configuration")
+	}
+
+	spec := s.GetPatchedOCISpec()
+	if spec != nil {
+		cgroupPath = spec.Linux.CgroupsPath
+
+		// kata should rely on the cgroup created and configured by
+		// container engine *only* if actual container was
+		// marked *explicitly* as sandbox through annotations.
+		if !s.config.HasCRIContainerType {
+			resources = *spec.Linux.Resources
+		}
+	}
+
+	// Create the cgroup manager, this way it can be used later
+	// to create or detroy cgroups
+	if s.cgroupMgr, err = vccgroups.New(
+		&vccgroups.Config{
+			Cgroups:     s.config.Cgroups,
+			CgroupPaths: s.state.CgroupPaths,
+			Resources:   resources,
+			CgroupPath:  cgroupPath,
+		},
+	); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // storeSandbox stores a sandbox config.
@@ -1855,14 +1902,12 @@ func (s *Sandbox) cgroupsDelete() error {
 	var cgroupSubsystems cgroups.Hierarchy
 
 	if s.config.SandboxCgroupOnly {
-		cgroupSubsystems = cgroups.V1
-		path = s.state.CgroupPath
-		s.Logger().WithField("path", path).Debug("Deleting sandbox cgroups (all subsystems)")
-	} else {
-		cgroupSubsystems = V1NoConstraints
-		path = cgroupNoConstraintsPath(s.state.CgroupPath)
-		s.Logger().WithField("path", path).Debug("Deleting no constraints cgroup")
+		return s.cgroupMgr.Destroy()
 	}
+
+	cgroupSubsystems = V1NoConstraints
+	path = cgroupNoConstraintsPath(s.state.CgroupPath)
+	s.Logger().WithField("path", path).Debug("Deleting no constraints cgroup")
 
 	sandboxCgroups, err := cgroupsLoadFunc(cgroupSubsystems, cgroups.StaticPath(path))
 	if err == cgroups.ErrCgroupDeleted {
@@ -2049,60 +2094,27 @@ func (s *Sandbox) setupSandboxCgroup() error {
 
 	s.Logger().WithField("hasCRIContainerType", s.config.HasCRIContainerType).Debug("Setting sandbox cgroup")
 
-	s.state.CgroupPath, err = validCgroupPath(spec.Linux.CgroupsPath, s.config.SystemdCgroup)
+	s.state.CgroupPath, err = vccgroups.ValidCgroupPath(spec.Linux.CgroupsPath, s.config.SystemdCgroup)
 	if err != nil {
 		return fmt.Errorf("Invalid cgroup path: %v", err)
 	}
 
-	// Don't modify original resources, create a copy
-	resources := *spec.Linux.Resources
-	sandboxSpec := specs.Spec{
-		Linux: &specs.Linux{
-			Resources: &resources,
-		},
-	}
-
-	// kata should rely on the cgroup created and configured by
-	// container engine *only* if actual container was
-	// marked *explicitly* as sandbox through annotations.
-	if s.config.HasCRIContainerType {
-		// Do not change current cgroup configuration.
-		// Create a spec without constraints
-		sandboxSpec.Linux.Resources = &specs.LinuxResources{}
-	}
-
-	sandboxSpec.Linux.CgroupsPath = s.state.CgroupPath
-
-	// Remove this to improve device resource management, but first we need to fix some issues:
-	// - hypervisors will need access to following host's devices:
-	//   * /dev/kvm
-	//   * /dev/vhost-net
-	// - If devicemapper is the storage driver, hypervisor will need access to devicemapper devices:
-	//   * The list of cgroup devices MUST BE updated when a new container is created in the POD
-	sandboxSpec.Linux.Resources.Devices = []specs.LinuxDeviceCgroup{}
-
-	cmgr, err := newCgroupManager(s.config.Cgroups, s.state.CgroupPaths, &sandboxSpec)
-	if err != nil {
-		return fmt.Errorf("Could not create a new cgroup manager: %v", err)
-	}
-
 	runtimePid := os.Getpid()
-
 	// Add the runtime to the Kata sandbox cgroup
-	if err = cmgr.Apply(runtimePid); err != nil {
+	if err = s.cgroupMgr.Add(runtimePid); err != nil {
 		return fmt.Errorf("Could not add runtime PID %d to sandbox cgroup:  %v", runtimePid, err)
 	}
 
 	// `Apply` updates manager's Cgroups and CgroupPaths,
 	// they both need to be saved since are used to create
 	// or restore a cgroup managers.
-	if s.config.Cgroups, err = cmgr.GetCgroups(); err != nil {
+	if s.config.Cgroups, err = s.cgroupMgr.GetCgroups(); err != nil {
 		return fmt.Errorf("Could not get cgroup configuration:  %v", err)
 	}
 
-	s.state.CgroupPaths = cmgr.GetPaths()
+	s.state.CgroupPaths = s.cgroupMgr.GetPaths()
 
-	if err = cmgr.Set(&configs.Config{Cgroups: s.config.Cgroups}); err != nil {
+	if err = s.cgroupMgr.Apply(); err != nil {
 		return fmt.Errorf("Could not constrain cgroup: %v", err)
 	}
 

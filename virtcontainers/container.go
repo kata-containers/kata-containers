@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/containerd/cgroups"
+	vccgroups "github.com/kata-containers/runtime/virtcontainers/pkg/cgroups"
 	vcTypes "github.com/kata-containers/runtime/virtcontainers/pkg/types"
 	"github.com/kata-containers/runtime/virtcontainers/types"
 	"github.com/kata-containers/runtime/virtcontainers/utils"
@@ -1409,7 +1410,7 @@ func (c *Container) cgroupsCreate() (err error) {
 		resources.CPU = validCPUResources(spec.Linux.Resources.CPU)
 	}
 
-	c.state.CgroupPath, err = validCgroupPath(spec.Linux.CgroupsPath, c.sandbox.config.SystemdCgroup)
+	c.state.CgroupPath, err = vccgroups.ValidCgroupPath(spec.Linux.CgroupsPath, c.sandbox.config.SystemdCgroup)
 	if err != nil {
 		return fmt.Errorf("Invalid cgroup path: %v", err)
 	}
