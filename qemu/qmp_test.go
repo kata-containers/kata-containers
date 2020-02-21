@@ -1617,7 +1617,12 @@ func TestExecuteNVDIMMDeviceAdd(t *testing.T) {
 	cfg := QMPConfig{Logger: qmpTestLogger{}}
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
-	err := q.ExecuteNVDIMMDeviceAdd(context.Background(), "nvdimm0", "/dev/rbd0", 1024)
+	q.version = &QMPVersion{
+		Major: 4,
+		Minor: 1,
+	}
+	pmem := true
+	err := q.ExecuteNVDIMMDeviceAdd(context.Background(), "nvdimm0", "/dev/rbd0", 1024, &pmem)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
