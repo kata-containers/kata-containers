@@ -7,7 +7,11 @@
   - [`SandboxCgroupOnly` disabled (default, legacy)](#sandboxcgrouponly-disabled-default-legacy)
     - [What does this method do?](#what-does-this-method-do)
       - [Impact](#impact)
-  - [Summary](#summary)
+- [Supported cgroups](#supported-cgroups)
+  - [Cgroups V1](#cgroups-v1)
+  - [Cgroups V2](#cgroups-v2)
+    - [Distro Support](#distro-support)
+- [Summary](#summary)
 
 # Host cgroup management
 
@@ -200,9 +204,132 @@ utilized unaccounted for on the host.
 [linux-config]: https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md
 [cgroupspath]: https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#cgroups-path
 
-## Summary
+# Supported cgroups
 
-| cgroup option | default? | status | pros | cons
-|-|-|-|-|-|
-| `SandboxCgroupOnly=false` | yes | legacy | Easiest to make Kata work | Unaccounted for memory and resource utilization
-| `SandboxCgroupOnly=true` | no | recommended | Complete tracking of Kata memory and CPU utilization. In Kubernetes, the Kubelet can fully constrain Kata via the pod cgroup | Requires upper layer orchestrator which sizes sandbox cgroup appropriately |
+Kata Containers supports cgroups `v1` and `v2`. In the following sections each cgroup is
+described briefly and what changes are needed in Kata Containers to support it.
+
+## Cgroups V1
+
+`Cgroups V1` are under a [`tmpfs`][1] filesystem mounted at `/sys/fs/cgroup`, where each cgroup is
+mounted under a separate cgroup filesystem. A `Cgroups v1` hierarchy may look like the following
+diagram:
+
+```
+/sys/fs/cgroup/
+├── blkio
+│   ├── cgroup.procs
+│   └── tasks
+├── cpu -> cpu,cpuacct
+├── cpuacct -> cpu,cpuacct
+├── cpu,cpuacct
+│   ├── cgroup.procs
+│   └── tasks
+├── cpuset
+│   ├── cgroup.procs
+│   └── tasks
+├── devices
+│   ├── cgroup.procs
+│   └── tasks
+├── freezer
+│   ├── cgroup.procs
+│   └── tasks
+├── hugetlb
+│   ├── cgroup.procs
+│   └── tasks
+├── memory
+│   ├── cgroup.procs
+│   └── tasks
+├── net_cls -> net_cls,net_prio
+├── net_cls,net_prio
+│   ├── cgroup.procs
+│   └── tasks
+├── net_prio -> net_cls,net_prio
+├── perf_event
+│   ├── cgroup.procs
+│   └── tasks
+├── pids
+│   ├── cgroup.procs
+│   └── tasks
+└── systemd
+    ├── cgroup.procs
+    └── tasks
+```
+
+A process can join a cgroup by writing its process id (`pid`) to `cgroup.procs` file,
+or join a cgroup partially by writing the task (thread) id (`tid`) to the `tasks` file.
+
+Kata Containers supports `v1` by default and no change in the configuration file is needed.
+To know more about `cgroups v1`, see [cgroupsv1(7)][2].
+
+## Cgroups V2
+
+`Cgroups v2` are also known as unified cgroups, unlike `cgroups v1`, the cgroups are
+mounted under the same cgroup filesystem. A `Cgroups v2` hierarchy may look like the following
+diagram:
+
+```
+/sys/fs/cgroup/system.slice
+├── cgroup.controllers
+├── cgroup.events
+├── cgroup.freeze
+├── cgroup.max.depth
+├── cgroup.max.descendants
+├── cgroup.procs
+├── cgroup.stat
+├── cgroup.subtree_control
+├── cgroup.threads
+├── cgroup.type
+├── cpu.max
+├── cpu.pressure
+├── cpu.stat
+├── cpu.weight
+├── cpu.weight.nice
+├── io.bfq.weight
+├── io.latency
+├── io.max
+├── io.pressure
+├── io.stat
+├── memory.current
+├── memory.events
+├── memory.events.local
+├── memory.high
+├── memory.low
+├── memory.max
+├── memory.min
+├── memory.oom.group
+├── memory.pressure
+├── memory.stat
+├── memory.swap.current
+├── memory.swap.events
+├── memory.swap.max
+├── pids.current
+├── pids.events
+└── pids.max
+```
+
+Same as `cgroups v1`, a process can join the cgroup by writing its process id (`pid`) to
+`cgroup.procs` file, or join a cgroup partially by writing the task (thread) id (`tid`) to
+`cgroup.threads` file.
+
+For backwards compatibility Kata Containers defaults to supporting cgroups v1 by default.
+To change this to `v2`, set `sandbox_cgroup_only=true` in the `configuration.toml` file.
+To know more about `cgroups v2`, see [cgroupsv2(7)][3].
+
+### Distro Support
+
+Many Linux distributions do not yet support `cgroups v2`, as it is quite a recent addition.
+For more information about the status of this feature see [issue #2494][4].
+
+# Summary
+
+| cgroup option | default? | status | pros | cons | cgroups
+|-|-|-|-|-|-|
+| `SandboxCgroupOnly=false` | yes | legacy | Easiest to make Kata work | Unaccounted for memory and resource utilization | v1
+| `SandboxCgroupOnly=true` | no | recommended | Complete tracking of Kata memory and CPU utilization. In Kubernetes, the Kubelet can fully constrain Kata via the pod cgroup | Requires upper layer orchestrator which sizes sandbox cgroup appropriately | v1, v2
+
+
+[1]: http://man7.org/linux/man-pages/man5/tmpfs.5.html
+[2]: http://man7.org/linux/man-pages/man7/cgroups.7.html#CGROUPS_VERSION_1
+[3]: http://man7.org/linux/man-pages/man7/cgroups.7.html#CGROUPS_VERSION_2
+[4]: https://github.com/kata-containers/runtime/issues/2494
