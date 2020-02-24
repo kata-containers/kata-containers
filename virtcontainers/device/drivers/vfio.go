@@ -187,18 +187,8 @@ func (device *VFIODevice) Load(ds persistapi.DeviceState) {
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation
 // here it shares function from *GenericDevice so we don't need duplicate codes
-
 func getVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceSysfsDev string, vfioDeviceType config.VFIODeviceType, err error) {
-	tokens := strings.Split(deviceFileName, ":")
-	vfioDeviceType = config.VFIODeviceErrorType
-	if len(tokens) == 3 {
-		vfioDeviceType = config.VFIODeviceNormalType
-	} else {
-		tokens = strings.Split(deviceFileName, "-")
-		if len(tokens) == 5 {
-			vfioDeviceType = config.VFIODeviceMediatedType
-		}
-	}
+	vfioDeviceType = GetVFIODeviceType(deviceFileName)
 
 	switch vfioDeviceType {
 	case config.VFIODeviceNormalType:

@@ -730,7 +730,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 
 	containers[c.id].sandbox = &sandbox
 
-	err = containers[c.id].attachDevices()
+	err = containers[c.id].attachDevices(c.devices)
 	assert.Nil(t, err, "Error while attaching devices %s", err)
 
 	err = containers[c.id].detachDevices()
