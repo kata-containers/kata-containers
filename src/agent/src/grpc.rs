@@ -926,7 +926,19 @@ impl protocols::agent_grpc::AgentService for agentService {
         let eid = req.exec_id.clone();
         let s = Arc::clone(&self.sandbox);
         let mut sandbox = s.lock().unwrap();
-        let p = find_process(&mut sandbox, cid.as_str(), eid.as_str(), false).unwrap();
+        let p = match find_process(&mut sandbox, cid.as_str(), eid.as_str(), false) {
+            Ok(v) => v,
+            Err(e) => {
+                let f = sink
+                    .fail(RpcStatus::new(
+                        RpcStatusCode::InvalidArgument,
+                        Some(format!("invalid argument: {}", e)),
+                    ))
+                    .map_err(|_e| error!(sl!(), "invalid argument"));
+                ctx.spawn(f);
+                return;
+            }
+        };
 
         if p.term_master.is_none() {
             let f = sink
