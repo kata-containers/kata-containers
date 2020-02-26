@@ -308,6 +308,7 @@ func TestQemuArchBaseAppendImage(t *testing.T) {
 			Format:    "raw",
 			Interface: "none",
 			ShareRW:   true,
+			ReadOnly:  true,
 		},
 	}
 
@@ -426,7 +427,7 @@ func TestQemuArchBaseAppendVhostUserDevice(t *testing.T) {
 			CharDevID:     fmt.Sprintf("char-%s", id),
 			TypeDevID:     fmt.Sprintf("net-%s", id),
 			Address:       macAddress,
-			VhostUserType: config.VhostUserNet,
+			VhostUserType: govmmQemu.VhostUserNet,
 		},
 	}
 
