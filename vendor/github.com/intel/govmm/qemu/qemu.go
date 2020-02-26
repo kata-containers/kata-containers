@@ -27,8 +27,10 @@ package qemu
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -62,6 +64,9 @@ const (
 	// NVDIMM is the Non Volatile DIMM device driver.
 	NVDIMM DeviceDriver = "nvdimm"
 
+	// VirtioNet is the virtio networking device driver.
+	VirtioNet DeviceDriver = "virtio-net"
+
 	// VirtioNetPCI is the virt-io pci networking device driver.
 	VirtioNetPCI DeviceDriver = "virtio-net-pci"
 
@@ -71,11 +76,14 @@ const (
 	// VirtioBlock is the block device driver.
 	VirtioBlock DeviceDriver = "virtio-blk"
 
-	// VirtioBlockPCI is a pci bus block device driver
-	VirtioBlockPCI DeviceDriver = "virtio-blk-pci"
-
 	// Console is the console device driver.
 	Console DeviceDriver = "virtconsole"
+
+	// Virtio9P is the 9pfs device driver.
+	Virtio9P DeviceDriver = "virtio-9p"
+
+	// VirtioSerial is the serial device driver.
+	VirtioSerial DeviceDriver = "virtio-serial"
 
 	// VirtioSerialPort is the serial port device driver.
 	VirtioSerialPort DeviceDriver = "virtserialport"
@@ -87,16 +95,16 @@ const (
 	VirtioBalloon DeviceDriver = "virtio-balloon"
 
 	//VhostUserSCSI represents a SCSI vhostuser device type.
-	VhostUserSCSI DeviceDriver = "vhost-user-scsi-pci"
+	VhostUserSCSI DeviceDriver = "vhost-user-scsi"
 
 	//VhostUserNet represents a net vhostuser device type.
-	VhostUserNet DeviceDriver = "virtio-net-pci"
+	VhostUserNet DeviceDriver = "virtio-net"
 
 	//VhostUserBlk represents a block vhostuser device type.
-	VhostUserBlk DeviceDriver = "vhost-user-blk-pci"
+	VhostUserBlk DeviceDriver = "vhost-user-blk"
 
 	//VhostUserFS represents a virtio-fs vhostuser device type
-	VhostUserFS DeviceDriver = "vhost-user-fs-pci"
+	VhostUserFS DeviceDriver = "vhost-user-fs"
 
 	// PCIBridgeDriver represents a PCI bridge device type.
 	PCIBridgeDriver DeviceDriver = "pci-bridge"
@@ -104,18 +112,87 @@ const (
 	// PCIePCIBridgeDriver represents a PCIe to PCI bridge device type.
 	PCIePCIBridgeDriver DeviceDriver = "pcie-pci-bridge"
 
-	// VirtioBlockCCW is the CCW block device driver
-	VirtioBlockCCW DeviceDriver = "virtio-blk-ccw"
+	// VfioPCI is the vfio driver with PCI transport.
+	VfioPCI DeviceDriver = "vfio-pci"
+
+	// VfioCCW is the vfio driver with CCW transport.
+	VfioCCW DeviceDriver = "vfio-ccw"
+
+	// VHostVSockPCI is a generic Vsock vhost device with PCI transport.
+	VHostVSockPCI DeviceDriver = "vhost-vsock-pci"
 
 	// PCIeRootPort is a PCIe Root Port, the PCIe device should be hotplugged to this port.
 	PCIeRootPort DeviceDriver = "pcie-root-port"
 )
 
+func isDimmSupported(config *Config) bool {
+	switch runtime.GOARCH {
+	case "amd64", "386":
+		return true
+	default:
+		return false
+	}
+}
+
+// VirtioTransport is the transport in use for a virtio device.
+type VirtioTransport string
+
+const (
+	// TransportPCI is the PCI transport for virtio device.
+	TransportPCI VirtioTransport = "pci"
+
+	// TransportCCW is the CCW transport for virtio devices.
+	TransportCCW VirtioTransport = "ccw"
+
+	// TransportMMIO is the MMIO transport for virtio devices.
+	TransportMMIO VirtioTransport = "mmio"
+)
+
+// defaultTransport returns the default transport for the current combination
+// of host's architecture and QEMU machine type.
+func (transport VirtioTransport) defaultTransport(config *Config) VirtioTransport {
+	switch runtime.GOARCH {
+	case "amd64", "386":
+		return TransportPCI
+	case "s390x":
+		return TransportCCW
+	default:
+		return TransportPCI
+	}
+}
+
+// isVirtioPCI returns true if the transport is PCI.
+func (transport VirtioTransport) isVirtioPCI(config *Config) bool {
+	if transport == "" {
+		transport = transport.defaultTransport(config)
+	}
+
+	return transport == TransportPCI
+}
+
+// isVirtioCCW returns true if the transport is CCW.
+func (transport VirtioTransport) isVirtioCCW(config *Config) bool {
+	if transport == "" {
+		transport = transport.defaultTransport(config)
+	}
+
+	return transport == TransportCCW
+}
+
+// getName returns the name of the current transport.
+func (transport VirtioTransport) getName(config *Config) string {
+	if transport == "" {
+		transport = transport.defaultTransport(config)
+	}
+
+	return string(transport)
+}
+
 // disableModern returns the parameters with the disable-modern option.
 // In case the device driver is not a PCI device and it doesn't have the option
 // an empty string is returned.
-func (driver DeviceDriver) disableModern(disable bool) string {
-	if !isVirtioPCI[driver] {
+func (transport VirtioTransport) disableModern(config *Config, disable bool) string {
+	if !transport.isVirtioPCI(config) {
 		return ""
 	}
 
@@ -258,6 +335,17 @@ type FSDevice struct {
 
 	// DevNo identifies the ccw devices for s390x architecture
 	DevNo string
+
+	// Transport is the virtio transport for this device.
+	Transport VirtioTransport
+}
+
+// Virtio9PTransport is a map of the virtio-9p device name that corresponds
+// to each transport.
+var Virtio9PTransport = map[VirtioTransport]string{
+	TransportPCI:  "virtio-9p-pci",
+	TransportCCW:  "virtio-9p-ccw",
+	TransportMMIO: "virtio-9p-device",
 }
 
 // Valid returns true if the FSDevice structure is valid and complete.
@@ -275,16 +363,16 @@ func (fsdev FSDevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 	var qemuParams []string
 
-	deviceParams = append(deviceParams, string(fsdev.Driver))
-	if s := fsdev.Driver.disableModern(fsdev.DisableModern); s != "" {
+	deviceParams = append(deviceParams, fsdev.deviceName(config))
+	if s := fsdev.Transport.disableModern(config, fsdev.DisableModern); s != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",fsdev=%s", fsdev.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",mount_tag=%s", fsdev.MountTag))
-	if isVirtioPCI[fsdev.Driver] {
+	if fsdev.Transport.isVirtioPCI(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", fsdev.ROMFile))
 	}
-	if isVirtioCCW[fsdev.Driver] {
+	if fsdev.Transport.isVirtioCCW(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", fsdev.DevNo))
 	}
 
@@ -300,6 +388,21 @@ func (fsdev FSDevice) QemuParams(config *Config) []string {
 	qemuParams = append(qemuParams, strings.Join(fsParams, ""))
 
 	return qemuParams
+}
+
+// deviceName returns the QEMU shared filesystem device name for the current
+// combination of driver and transport.
+func (fsdev FSDevice) deviceName(config *Config) string {
+	if fsdev.Transport == "" {
+		fsdev.Transport = fsdev.Transport.defaultTransport(config)
+	}
+
+	switch fsdev.Driver {
+	case Virtio9P:
+		return Virtio9PTransport[fsdev.Transport]
+	}
+
+	return string(fsdev.Driver)
 }
 
 // CharDeviceBackend is the character device backend for qemu
@@ -350,6 +453,17 @@ type CharDevice struct {
 
 	// DevNo identifies the ccw devices for s390x architecture
 	DevNo string
+
+	// Transport is the virtio transport for this device.
+	Transport VirtioTransport
+}
+
+// VirtioSerialTransport is a map of the virtio-serial device name that
+// corresponds to each transport.
+var VirtioSerialTransport = map[VirtioTransport]string{
+	TransportPCI:  "virtio-serial-pci",
+	TransportCCW:  "virtio-serial-ccw",
+	TransportMMIO: "virtio-serial-device",
 }
 
 // Valid returns true if the CharDevice structure is valid and complete.
@@ -367,9 +481,11 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 	var qemuParams []string
 
-	deviceParams = append(deviceParams, string(cdev.Driver))
-	if s := cdev.Driver.disableModern(cdev.DisableModern); s != "" {
-		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
+	deviceParams = append(deviceParams, cdev.deviceName(config))
+	if cdev.Driver == VirtioSerial {
+		if s := cdev.Transport.disableModern(config, cdev.DisableModern); s != "" {
+			deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
+		}
 	}
 	if cdev.Bus != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",bus=%s", cdev.Bus))
@@ -379,11 +495,11 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 	if cdev.Name != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",name=%s", cdev.Name))
 	}
-	if isVirtioPCI[cdev.Driver] {
+	if cdev.Driver == VirtioSerial && cdev.Transport.isVirtioPCI(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", cdev.ROMFile))
 	}
 
-	if isVirtioCCW[cdev.Driver] {
+	if cdev.Driver == VirtioSerial && cdev.Transport.isVirtioCCW(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", cdev.DevNo))
 	}
 
@@ -402,6 +518,21 @@ func (cdev CharDevice) QemuParams(config *Config) []string {
 	qemuParams = append(qemuParams, strings.Join(cdevParams, ""))
 
 	return qemuParams
+}
+
+// deviceName returns the QEMU device name for the current combination of
+// driver and transport.
+func (cdev CharDevice) deviceName(config *Config) string {
+	if cdev.Transport == "" {
+		cdev.Transport = cdev.Transport.defaultTransport(config)
+	}
+
+	switch cdev.Driver {
+	case VirtioSerial:
+		return VirtioSerialTransport[cdev.Transport]
+	}
+
+	return string(cdev.Driver)
 }
 
 // NetDeviceType is a qemu networking device type.
@@ -426,6 +557,80 @@ const (
 	// VHOSTUSER is a vhost-user port (socket)
 	VHOSTUSER NetDeviceType = "vhostuser"
 )
+
+// QemuNetdevParam converts to the QEMU -netdev parameter notation
+func (n NetDeviceType) QemuNetdevParam(netdev *NetDevice, config *Config) string {
+	if netdev.Transport == "" {
+		netdev.Transport = netdev.Transport.defaultTransport(config)
+	}
+
+	switch n {
+	case TAP:
+		return "tap"
+	case MACVTAP:
+		return "tap"
+	case IPVTAP:
+		return "tap"
+	case VETHTAP:
+		return "tap" // -netdev type=tap -device virtio-net-pci
+	case VFIO:
+		if netdev.Transport == TransportMMIO {
+			log.Fatal("vfio devices are not support with the MMIO transport")
+		}
+		return "" // -device vfio-pci (no netdev)
+	case VHOSTUSER:
+		if netdev.Transport == TransportCCW {
+			log.Fatal("vhost-user devices are not supported on IBM Z")
+		}
+		return "vhost-user" // -netdev type=vhost-user (no device)
+	default:
+		return ""
+
+	}
+}
+
+// QemuDeviceParam converts to the QEMU -device parameter notation
+func (n NetDeviceType) QemuDeviceParam(netdev *NetDevice, config *Config) DeviceDriver {
+	if netdev.Transport == "" {
+		netdev.Transport = netdev.Transport.defaultTransport(config)
+	}
+
+	var device string
+
+	switch n {
+	case TAP:
+		device = "virtio-net"
+	case MACVTAP:
+		device = "virtio-net"
+	case IPVTAP:
+		device = "virtio-net"
+	case VETHTAP:
+		device = "virtio-net" // -netdev type=tap -device virtio-net-pci
+	case VFIO:
+		if netdev.Transport == TransportMMIO {
+			log.Fatal("vfio devices are not support with the MMIO transport")
+		}
+		device = "vfio" // -device vfio-pci (no netdev)
+	case VHOSTUSER:
+		if netdev.Transport == TransportCCW {
+			log.Fatal("vhost-user devices are not supported on IBM Z")
+		}
+		return "" // -netdev type=vhost-user (no device)
+	default:
+		return ""
+	}
+
+	switch netdev.Transport {
+	case TransportPCI:
+		return DeviceDriver(device + "-pci")
+	case TransportCCW:
+		return DeviceDriver(device + "-ccw")
+	case TransportMMIO:
+		return DeviceDriver(device + "-device")
+	default:
+		return ""
+	}
+}
 
 // NetDevice represents a guest networking device
 type NetDevice struct {
@@ -472,6 +677,17 @@ type NetDevice struct {
 
 	// DevNo identifies the ccw devices for s390x architecture
 	DevNo string
+
+	// Transport is the virtio transport for this device.
+	Transport VirtioTransport
+}
+
+// VirtioNetTransport is a map of the virtio-net device name that corresponds
+// to each transport.
+var VirtioNetTransport = map[VirtioTransport]string{
+	TransportPCI:  "virtio-net-pci",
+	TransportCCW:  "virtio-net-ccw",
+	TransportMMIO: "virtio-net-device",
 }
 
 // Valid returns true if the NetDevice structure is valid and complete.
@@ -494,10 +710,10 @@ func (netdev NetDevice) Valid() bool {
 // vector flag is required. If the driver is a CCW type than the vector flag is not implemented and only
 // multi-queue option mq needs to be activated. See comment in libvirt code at
 // https://github.com/libvirt/libvirt/blob/6e7e965dcd3d885739129b1454ce19e819b54c25/src/qemu/qemu_command.c#L3633
-func (netdev NetDevice) mqParameter() string {
+func (netdev NetDevice) mqParameter(config *Config) string {
 	p := []string{",mq=on"}
 
-	if isVirtioPCI[netdev.Driver] {
+	if netdev.Transport.isVirtioPCI(config) {
 		// https://www.linux-kvm.org/page/Multiqueue
 		// -netdev tap,vhost=on,queues=N
 		// enable mq and specify msix vectors in qemu cmdline
@@ -518,11 +734,12 @@ func (netdev NetDevice) mqParameter() string {
 func (netdev NetDevice) QemuDeviceParams(config *Config) []string {
 	var deviceParams []string
 
-	if netdev.Type.QemuDeviceParam() == "" {
+	driver := netdev.Type.QemuDeviceParam(&netdev, config)
+	if driver == "" {
 		return nil
 	}
 
-	deviceParams = append(deviceParams, fmt.Sprintf("driver=%s", netdev.Type.QemuDeviceParam()))
+	deviceParams = append(deviceParams, fmt.Sprintf("driver=%s", driver))
 	deviceParams = append(deviceParams, fmt.Sprintf(",netdev=%s", netdev.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",mac=%s", netdev.MACAddress))
 
@@ -536,20 +753,20 @@ func (netdev NetDevice) QemuDeviceParams(config *Config) []string {
 			deviceParams = append(deviceParams, fmt.Sprintf(",addr=%x", addr))
 		}
 	}
-	if s := netdev.Driver.disableModern(netdev.DisableModern); s != "" {
+	if s := netdev.Transport.disableModern(config, netdev.DisableModern); s != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
 
 	if len(netdev.FDs) > 0 {
 		// Note: We are appending to the device params here
-		deviceParams = append(deviceParams, netdev.mqParameter())
+		deviceParams = append(deviceParams, netdev.mqParameter(config))
 	}
 
-	if isVirtioPCI[netdev.Driver] {
+	if netdev.Transport.isVirtioPCI(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", netdev.ROMFile))
 	}
 
-	if isVirtioCCW[netdev.Driver] {
+	if netdev.Transport.isVirtioCCW(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", netdev.DevNo))
 	}
 
@@ -560,11 +777,12 @@ func (netdev NetDevice) QemuDeviceParams(config *Config) []string {
 func (netdev NetDevice) QemuNetdevParams(config *Config) []string {
 	var netdevParams []string
 
-	if netdev.Type.QemuNetdevParam() == "" {
+	netdevType := netdev.Type.QemuNetdevParam(&netdev, config)
+	if netdevType == "" {
 		return nil
 	}
 
-	netdevParams = append(netdevParams, netdev.Type.QemuNetdevParam())
+	netdevParams = append(netdevParams, netdevType)
 	netdevParams = append(netdevParams, fmt.Sprintf(",id=%s", netdev.ID))
 
 	if netdev.VHost {
@@ -612,7 +830,7 @@ func (netdev NetDevice) QemuParams(config *Config) []string {
 		return nil // implicit error
 	}
 
-	if netdev.Type.QemuNetdevParam() != "" {
+	if netdev.Type.QemuNetdevParam(&netdev, config) != "" {
 		netdevParams = netdev.QemuNetdevParams(config)
 		if netdevParams != nil {
 			qemuParams = append(qemuParams, "-netdev")
@@ -620,7 +838,7 @@ func (netdev NetDevice) QemuParams(config *Config) []string {
 		}
 	}
 
-	if netdev.Type.QemuDeviceParam() != "" {
+	if netdev.Type.QemuDeviceParam(&netdev, config) != "" {
 		deviceParams = netdev.QemuDeviceParams(config)
 		if deviceParams != nil {
 			qemuParams = append(qemuParams, "-device")
@@ -647,6 +865,9 @@ type SerialDevice struct {
 
 	// DevNo identifies the ccw devices for s390x architecture
 	DevNo string
+
+	// Transport is the virtio transport for this device.
+	Transport VirtioTransport
 }
 
 // Valid returns true if the SerialDevice structure is valid and complete.
@@ -663,16 +884,16 @@ func (dev SerialDevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 	var qemuParams []string
 
-	deviceParams = append(deviceParams, string(dev.Driver))
-	if s := dev.Driver.disableModern(dev.DisableModern); s != "" {
+	deviceParams = append(deviceParams, dev.deviceName(config))
+	if s := dev.Transport.disableModern(config, dev.DisableModern); s != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", dev.ID))
-	if isVirtioPCI[dev.Driver] {
+	if dev.Transport.isVirtioPCI(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", dev.ROMFile))
 	}
 
-	if isVirtioCCW[dev.Driver] {
+	if dev.Transport.isVirtioCCW(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", dev.DevNo))
 	}
 
@@ -680,6 +901,21 @@ func (dev SerialDevice) QemuParams(config *Config) []string {
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
 
 	return qemuParams
+}
+
+// deviceName returns the QEMU device name for the current combination of
+// driver and transport.
+func (dev SerialDevice) deviceName(config *Config) string {
+	if dev.Transport == "" {
+		dev.Transport = dev.Transport.defaultTransport(config)
+	}
+
+	switch dev.Driver {
+	case VirtioSerial:
+		return VirtioSerialTransport[dev.Transport]
+	}
+
+	return string(dev.Driver)
 }
 
 // BlockDeviceInterface defines the type of interface the device is connected to.
@@ -734,6 +970,20 @@ type BlockDevice struct {
 
 	// ShareRW enables multiple qemu instances to share the File
 	ShareRW bool
+
+	// ReadOnly sets the block device in readonly mode
+	ReadOnly bool
+
+	// Transport is the virtio transport for this device.
+	Transport VirtioTransport
+}
+
+// VirtioBlockTransport is a map of the virtio-blk device name that corresponds
+// to each transport.
+var VirtioBlockTransport = map[VirtioTransport]string{
+	TransportPCI:  "virtio-blk-pci",
+	TransportCCW:  "virtio-blk-ccw",
+	TransportMMIO: "virtio-blk-device",
 }
 
 // Valid returns true if the BlockDevice structure is valid and complete.
@@ -751,8 +1001,8 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 	var qemuParams []string
 
-	deviceParams = append(deviceParams, string(blkdev.Driver))
-	if s := blkdev.Driver.disableModern(blkdev.DisableModern); s != "" {
+	deviceParams = append(deviceParams, blkdev.deviceName(config))
+	if s := blkdev.Transport.disableModern(config, blkdev.DisableModern); s != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf(",drive=%s", blkdev.ID))
@@ -764,11 +1014,11 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, ",config-wce=off")
 	}
 
-	if isVirtioPCI[blkdev.Driver] {
+	if blkdev.Transport.isVirtioPCI(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", blkdev.ROMFile))
 	}
 
-	if isVirtioCCW[blkdev.Driver] {
+	if blkdev.Transport.isVirtioCCW(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", blkdev.DevNo))
 	}
 
@@ -782,6 +1032,10 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	blkParams = append(blkParams, fmt.Sprintf(",format=%s", blkdev.Format))
 	blkParams = append(blkParams, fmt.Sprintf(",if=%s", blkdev.Interface))
 
+	if blkdev.ReadOnly {
+		blkParams = append(blkParams, ",readonly")
+	}
+
 	qemuParams = append(qemuParams, "-device")
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
 
@@ -789,6 +1043,21 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 	qemuParams = append(qemuParams, strings.Join(blkParams, ""))
 
 	return qemuParams
+}
+
+// deviceName returns the QEMU device name for the current combination of
+// driver and transport.
+func (blkdev BlockDevice) deviceName(config *Config) string {
+	if blkdev.Transport == "" {
+		blkdev.Transport = blkdev.Transport.defaultTransport(config)
+	}
+
+	switch blkdev.Driver {
+	case VirtioBlock:
+		return VirtioBlockTransport[blkdev.Transport]
+	}
+
+	return string(blkdev.Driver)
 }
 
 // VhostUserDevice represents a qemu vhost-user device meant to be passed
@@ -805,6 +1074,41 @@ type VhostUserDevice struct {
 
 	// ROMFile specifies the ROM file being used for this device.
 	ROMFile string
+
+	// Transport is the virtio transport for this device.
+	Transport VirtioTransport
+}
+
+// VhostUserNetTransport is a map of the virtio-net device name that
+// corresponds to each transport.
+var VhostUserNetTransport = map[VirtioTransport]string{
+	TransportPCI:  "virtio-net-pci",
+	TransportCCW:  "virtio-net-ccw",
+	TransportMMIO: "virtio-net-device",
+}
+
+// VhostUserSCSITransport is a map of the vhost-user-scsi device name that
+// corresponds to each transport.
+var VhostUserSCSITransport = map[VirtioTransport]string{
+	TransportPCI:  "vhost-user-scsi-pci",
+	TransportCCW:  "vhost-user-scsi-ccw",
+	TransportMMIO: "vhost-user-scsi-device",
+}
+
+// VhostUserBlkTransport is a map of the vhost-user-blk device name that
+// corresponds to each transport.
+var VhostUserBlkTransport = map[VirtioTransport]string{
+	TransportPCI:  "vhost-user-blk-pci",
+	TransportCCW:  "vhost-user-blk-ccw",
+	TransportMMIO: "vhost-user-blk-device",
+}
+
+// VhostUserFSTransport is a map of the vhost-user-fs device name that
+// corresponds to each transport.
+var VhostUserFSTransport = map[VirtioTransport]string{
+	TransportPCI:  "vhost-user-fs-pci",
+	TransportCCW:  "vhost-user-fs-ccw",
+	TransportMMIO: "vhost-user-fs-device",
 }
 
 // Valid returns true if there is a valid structure defined for VhostUserDevice
@@ -841,7 +1145,7 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 	var charParams []string
 	var netParams []string
 	var devParams []string
-	var driver DeviceDriver
+	var driver string
 
 	charParams = append(charParams, "socket")
 	charParams = append(charParams, fmt.Sprintf("id=%s", vhostuserDev.CharDevID))
@@ -850,32 +1154,50 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 	switch vhostuserDev.VhostUserType {
 	// if network based vhost device:
 	case VhostUserNet:
-		driver = VhostUserNet
+		driver = vhostuserDev.deviceName(config)
+		if driver == "" {
+			return nil
+		}
+
 		netParams = append(netParams, "type=vhost-user")
 		netParams = append(netParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
 		netParams = append(netParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 		netParams = append(netParams, "vhostforce")
 
-		devParams = append(devParams, string(driver))
+		devParams = append(devParams, driver)
 		devParams = append(devParams, fmt.Sprintf("netdev=%s", vhostuserDev.TypeDevID))
 		devParams = append(devParams, fmt.Sprintf("mac=%s", vhostuserDev.Address))
 	case VhostUserSCSI:
-		driver = VhostUserSCSI
-		devParams = append(devParams, string(driver))
+		driver = vhostuserDev.deviceName(config)
+		if driver == "" {
+			return nil
+		}
+
+		devParams = append(devParams, driver)
 		devParams = append(devParams, fmt.Sprintf("id=%s", vhostuserDev.TypeDevID))
 		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 	case VhostUserBlk:
-		driver = VhostUserBlk
-		devParams = append(devParams, string(driver))
+		driver = vhostuserDev.deviceName(config)
+		if driver == "" {
+			return nil
+		}
+
+		devParams = append(devParams, driver)
 		devParams = append(devParams, "logical_block_size=4096")
 		devParams = append(devParams, "size=512M")
 		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 	case VhostUserFS:
-		driver = VhostUserFS
-		devParams = append(devParams, string(driver))
+		driver = vhostuserDev.deviceName(config)
+		if driver == "" {
+			return nil
+		}
+
+		devParams = append(devParams, driver)
 		devParams = append(devParams, fmt.Sprintf("chardev=%s", vhostuserDev.CharDevID))
 		devParams = append(devParams, fmt.Sprintf("tag=%s", vhostuserDev.Tag))
-		devParams = append(devParams, fmt.Sprintf("cache-size=%dM", vhostuserDev.CacheSize))
+		if vhostuserDev.CacheSize != 0 {
+			devParams = append(devParams, fmt.Sprintf("cache-size=%dM", vhostuserDev.CacheSize))
+		}
 		if vhostuserDev.SharedVersions {
 			devParams = append(devParams, "versiontable=/dev/shm/fuse_shared_versions")
 		}
@@ -883,7 +1205,7 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 		return nil
 	}
 
-	if isVirtioPCI[driver] {
+	if vhostuserDev.Transport.isVirtioPCI(config) {
 		devParams = append(devParams, fmt.Sprintf("romfile=%s", vhostuserDev.ROMFile))
 	}
 
@@ -899,6 +1221,27 @@ func (vhostuserDev VhostUserDevice) QemuParams(config *Config) []string {
 	qemuParams = append(qemuParams, strings.Join(devParams, ","))
 
 	return qemuParams
+}
+
+// deviceName returns the QEMU device name for the current combination of
+// driver and transport.
+func (vhostuserDev VhostUserDevice) deviceName(config *Config) string {
+	if vhostuserDev.Transport == "" {
+		vhostuserDev.Transport = vhostuserDev.Transport.defaultTransport(config)
+	}
+
+	switch vhostuserDev.VhostUserType {
+	case VhostUserNet:
+		return VhostUserNetTransport[vhostuserDev.Transport]
+	case VhostUserSCSI:
+		return VhostUserSCSITransport[vhostuserDev.Transport]
+	case VhostUserBlk:
+		return VhostUserBlkTransport[vhostuserDev.Transport]
+	case VhostUserFS:
+		return VhostUserFSTransport[vhostuserDev.Transport]
+	default:
+		return ""
+	}
 }
 
 // PCIeRootPortDevice represents a memory balloon device.
@@ -921,10 +1264,13 @@ type PCIeRootPortDevice struct {
 	IOReserve     string // IO reservation
 
 	ROMFile string // ROMFile specifies the ROM file being used for this device.
+
+	// Transport is the virtio transport for this device.
+	Transport VirtioTransport
 }
 
 // QemuParams returns the qemu parameters built out of the PCIeRootPortDevice.
-func (b PCIeRootPortDevice) QemuParams(_ *Config) []string {
+func (b PCIeRootPortDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 	var deviceParams []string
 	driver := PCIeRootPort
@@ -976,7 +1322,7 @@ func (b PCIeRootPortDevice) QemuParams(_ *Config) []string {
 		deviceParams = append(deviceParams, fmt.Sprintf("io-reserve=%s", b.IOReserve))
 	}
 
-	if isVirtioPCI[driver] && b.ROMFile != "" {
+	if b.Transport.isVirtioPCI(config) && b.ROMFile != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", b.ROMFile))
 	}
 
@@ -1016,6 +1362,17 @@ type VFIODevice struct {
 
 	// Bus specifies device bus
 	Bus string
+
+	// Transport is the virtio transport for this device.
+	Transport VirtioTransport
+}
+
+// VFIODeviceTransport is a map of the vfio device name that corresponds to
+// each transport.
+var VFIODeviceTransport = map[VirtioTransport]string{
+	TransportPCI:  "vfio-pci",
+	TransportCCW:  "vfio-ccw",
+	TransportMMIO: "vfio-device",
 }
 
 // Valid returns true if the VFIODevice structure is valid and complete.
@@ -1028,10 +1385,10 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 	var deviceParams []string
 
-	driver := Vfio
+	driver := vfioDev.deviceName(config)
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s,host=%s", driver, vfioDev.BDF))
-	if isVirtioPCI[driver] {
+	if vfioDev.Transport.isVirtioPCI(config) {
 		if vfioDev.VendorID != "" {
 			deviceParams = append(deviceParams, fmt.Sprintf(",x-pci-vendor-id=%s", vfioDev.VendorID))
 		}
@@ -1045,7 +1402,7 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, fmt.Sprintf(",bus=%s", vfioDev.Bus))
 	}
 
-	if isVirtioCCW[driver] {
+	if vfioDev.Transport.isVirtioCCW(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", vfioDev.DevNo))
 	}
 
@@ -1053,6 +1410,16 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
 
 	return qemuParams
+}
+
+// deviceName returns the QEMU device name for the current combination of
+// driver and transport.
+func (vfioDev VFIODevice) deviceName(config *Config) string {
+	if vfioDev.Transport == "" {
+		vfioDev.Transport = vfioDev.Transport.defaultTransport(config)
+	}
+
+	return VFIODeviceTransport[vfioDev.Transport]
 }
 
 // SCSIController represents a SCSI controller device.
@@ -1076,6 +1443,17 @@ type SCSIController struct {
 
 	// DevNo identifies the ccw devices for s390x architecture
 	DevNo string
+
+	// Transport is the virtio transport for this device.
+	Transport VirtioTransport
+}
+
+// SCSIControllerTransport is a map of the virtio-scsi device name that
+// corresponds to each transport.
+var SCSIControllerTransport = map[VirtioTransport]string{
+	TransportPCI:  "virtio-scsi-pci",
+	TransportCCW:  "virtio-scsi-ccw",
+	TransportMMIO: "virtio-scsi-device",
 }
 
 // Valid returns true if the SCSIController structure is valid and complete.
@@ -1088,7 +1466,7 @@ func (scsiCon SCSIController) QemuParams(config *Config) []string {
 	var qemuParams []string
 	var devParams []string
 
-	driver := VirtioScsi
+	driver := scsiCon.deviceName(config)
 	devParams = append(devParams, fmt.Sprintf("%s,id=%s", driver, scsiCon.ID))
 	if scsiCon.Bus != "" {
 		devParams = append(devParams, fmt.Sprintf("bus=%s", scsiCon.Bus))
@@ -1096,17 +1474,17 @@ func (scsiCon SCSIController) QemuParams(config *Config) []string {
 	if scsiCon.Addr != "" {
 		devParams = append(devParams, fmt.Sprintf("addr=%s", scsiCon.Addr))
 	}
-	if s := driver.disableModern(scsiCon.DisableModern); s != "" {
+	if s := scsiCon.Transport.disableModern(config, scsiCon.DisableModern); s != "" {
 		devParams = append(devParams, s)
 	}
 	if scsiCon.IOThread != "" {
 		devParams = append(devParams, fmt.Sprintf("iothread=%s", scsiCon.IOThread))
 	}
-	if isVirtioPCI[driver] {
+	if scsiCon.Transport.isVirtioPCI(config) {
 		devParams = append(devParams, fmt.Sprintf("romfile=%s", scsiCon.ROMFile))
 	}
 
-	if isVirtioCCW[driver] {
+	if scsiCon.Transport.isVirtioCCW(config) {
 		devParams = append(devParams, fmt.Sprintf("devno=%s", scsiCon.DevNo))
 	}
 
@@ -1114,6 +1492,16 @@ func (scsiCon SCSIController) QemuParams(config *Config) []string {
 	qemuParams = append(qemuParams, strings.Join(devParams, ","))
 
 	return qemuParams
+}
+
+// deviceName returns the QEMU device name for the current combination of
+// driver and transport.
+func (scsiCon SCSIController) deviceName(config *Config) string {
+	if scsiCon.Transport == "" {
+		scsiCon.Transport = scsiCon.Transport.defaultTransport(config)
+	}
+
+	return SCSIControllerTransport[scsiCon.Transport]
 }
 
 // BridgeType is the type of the bridge
@@ -1194,7 +1582,8 @@ func (bridgeDev BridgeDevice) QemuParams(config *Config) []string {
 		}
 	}
 
-	if isVirtioPCI[driver] {
+	var transport VirtioTransport
+	if transport.isVirtioPCI(config) {
 		deviceParam = append(deviceParam, fmt.Sprintf(",romfile=%s", bridgeDev.ROMFile))
 	}
 
@@ -1221,6 +1610,17 @@ type VSOCKDevice struct {
 
 	// DevNo identifies the ccw devices for s390x architecture
 	DevNo string
+
+	// Transport is the virtio transport for this device.
+	Transport VirtioTransport
+}
+
+// VSOCKDeviceTransport is a map of the vhost-vsock device name that
+// corresponds to each transport.
+var VSOCKDeviceTransport = map[VirtioTransport]string{
+	TransportPCI:  "vhost-vsock-pci",
+	TransportCCW:  "vhost-vsock-ccw",
+	TransportMMIO: "vhost-vsock-device",
 }
 
 const (
@@ -1250,9 +1650,9 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 	var qemuParams []string
 
-	driver := VHostVSock
+	driver := vsock.deviceName(config)
 	deviceParams = append(deviceParams, string(driver))
-	if s := driver.disableModern(vsock.DisableModern); s != "" {
+	if s := vsock.Transport.disableModern(config, vsock.DisableModern); s != "" {
 		deviceParams = append(deviceParams, fmt.Sprintf(",%s", s))
 	}
 	if vsock.VHostFD != nil {
@@ -1262,11 +1662,11 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf(",id=%s", vsock.ID))
 	deviceParams = append(deviceParams, fmt.Sprintf(",%s=%d", VSOCKGuestCID, vsock.ContextID))
 
-	if isVirtioPCI[driver] {
+	if vsock.Transport.isVirtioPCI(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",romfile=%s", vsock.ROMFile))
 	}
 
-	if isVirtioCCW[driver] {
+	if vsock.Transport.isVirtioCCW(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf(",devno=%s", vsock.DevNo))
 	}
 
@@ -1274,6 +1674,16 @@ func (vsock VSOCKDevice) QemuParams(config *Config) []string {
 	qemuParams = append(qemuParams, strings.Join(deviceParams, ""))
 
 	return qemuParams
+}
+
+// deviceName returns the QEMU device name for the current combination of
+// driver and transport.
+func (vsock VSOCKDevice) deviceName(config *Config) string {
+	if vsock.Transport == "" {
+		vsock.Transport = vsock.Transport.defaultTransport(config)
+	}
+
+	return VSOCKDeviceTransport[vsock.Transport]
 }
 
 // RngDevice represents a random number generator device.
@@ -1290,6 +1700,16 @@ type RngDevice struct {
 	ROMFile string
 	// DevNo identifies the ccw devices for s390x architecture
 	DevNo string
+	// Transport is the virtio transport for this device.
+	Transport VirtioTransport
+}
+
+// RngDeviceTransport is a map of the virtio-rng device name that corresponds
+// to each transport.
+var RngDeviceTransport = map[VirtioTransport]string{
+	TransportPCI:  "virtio-rng-pci",
+	TransportCCW:  "virtio-rng-ccw",
+	TransportMMIO: "virtio-rng-device",
 }
 
 // Valid returns true if the RngDevice structure is valid and complete.
@@ -1298,7 +1718,7 @@ func (v RngDevice) Valid() bool {
 }
 
 // QemuParams returns the qemu parameters built out of the RngDevice.
-func (v RngDevice) QemuParams(_ *Config) []string {
+func (v RngDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 
 	//-object rng-random,filename=/dev/hwrng,id=rng0
@@ -1306,18 +1726,17 @@ func (v RngDevice) QemuParams(_ *Config) []string {
 	//-device virtio-rng-pci,rng=rng0,max-bytes=1024,period=1000
 	var deviceParams []string
 
-	driver := VirtioRng
 	objectParams = append(objectParams, "rng-random")
 	objectParams = append(objectParams, "id="+v.ID)
 
-	deviceParams = append(deviceParams, string(driver))
+	deviceParams = append(deviceParams, v.deviceName(config))
 	deviceParams = append(deviceParams, "rng="+v.ID)
 
-	if isVirtioPCI[driver] {
+	if v.Transport.isVirtioPCI(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", v.ROMFile))
 	}
 
-	if isVirtioCCW[driver] {
+	if v.Transport.isVirtioCCW(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf("devno=%s", v.DevNo))
 	}
 
@@ -1342,6 +1761,16 @@ func (v RngDevice) QemuParams(_ *Config) []string {
 	return qemuParams
 }
 
+// deviceName returns the QEMU device name for the current combination of
+// driver and transport.
+func (v RngDevice) deviceName(config *Config) string {
+	if v.Transport == "" {
+		v.Transport = v.Transport.defaultTransport(config)
+	}
+
+	return RngDeviceTransport[v.Transport]
+}
+
 // BalloonDevice represents a memory balloon device.
 type BalloonDevice struct {
 	DeflateOnOOM  bool
@@ -1353,25 +1782,35 @@ type BalloonDevice struct {
 
 	// DevNo identifies the ccw devices for s390x architecture
 	DevNo string
+
+	// Transport is the virtio transport for this device.
+	Transport VirtioTransport
+}
+
+// BalloonDeviceTransport is a map of the virtio-balloon device name that
+// corresponds to each transport.
+var BalloonDeviceTransport = map[VirtioTransport]string{
+	TransportPCI:  "virtio-balloon-pci",
+	TransportCCW:  "virtio-balloon-ccw",
+	TransportMMIO: "virtio-balloon-device",
 }
 
 // QemuParams returns the qemu parameters built out of the BalloonDevice.
-func (b BalloonDevice) QemuParams(_ *Config) []string {
+func (b BalloonDevice) QemuParams(config *Config) []string {
 	var qemuParams []string
 	var deviceParams []string
 
-	driver := VirtioBalloon
-	deviceParams = append(deviceParams, string(driver))
+	deviceParams = append(deviceParams, b.deviceName(config))
 
 	if b.ID != "" {
 		deviceParams = append(deviceParams, "id="+b.ID)
 	}
 
-	if isVirtioPCI[driver] {
+	if b.Transport.isVirtioPCI(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf("romfile=%s", b.ROMFile))
 	}
 
-	if isVirtioCCW[driver] {
+	if b.Transport.isVirtioCCW(config) {
 		deviceParams = append(deviceParams, fmt.Sprintf("devno=%s", b.DevNo))
 	}
 
@@ -1380,7 +1819,7 @@ func (b BalloonDevice) QemuParams(_ *Config) []string {
 	} else {
 		deviceParams = append(deviceParams, "deflate-on-oom=off")
 	}
-	if s := driver.disableModern(b.DisableModern); s != "" {
+	if s := b.Transport.disableModern(config, b.DisableModern); s != "" {
 		deviceParams = append(deviceParams, string(s))
 	}
 	qemuParams = append(qemuParams, "-device")
@@ -1392,6 +1831,16 @@ func (b BalloonDevice) QemuParams(_ *Config) []string {
 // Valid returns true if the balloonDevice structure is valid and complete.
 func (b BalloonDevice) Valid() bool {
 	return b.ID != ""
+}
+
+// deviceName returns the QEMU device name for the current combination of
+// driver and transport.
+func (b BalloonDevice) deviceName(config *Config) string {
+	if b.Transport == "" {
+		b.Transport = b.Transport.defaultTransport(config)
+	}
+
+	return BalloonDeviceTransport[b.Transport]
 }
 
 // RTCBaseType is the qemu RTC base time type.
@@ -1874,7 +2323,7 @@ func (config *Config) appendMemoryKnobs() {
 	if config.Memory.Size == "" {
 		return
 	}
-	if !isDimmSupported() {
+	if !isDimmSupported(config) {
 		return
 	}
 	var objMemParam, numaMemParam string
