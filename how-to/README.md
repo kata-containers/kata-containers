@@ -10,6 +10,7 @@
 - [How to use Kata Containers and Containerd](containerd-kata.md)
 - [How to use Kata Containers and CRI (containerd plugin) with Kubernetes](how-to-use-k8s-with-cri-containerd-and-kata.md)
 - [Kata Containers and service mesh for Kubernetes](service-mesh.md)
+- [How to import Kata Containers logs into Fluentd](how-to-import-kata-logs-with-fluentd.md)
 
 ## Hypervisors Integration
 - [Kata Containers with Firecracker](https://github.com/kata-containers/documentation/wiki/Initial-release-of-Kata-Containers-with-Firecracker-support)
