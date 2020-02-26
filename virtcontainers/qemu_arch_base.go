@@ -624,16 +624,19 @@ func (q *qemuArchBase) appendVhostUserDevice(devices []govmmQemu.Device, attr co
 	case config.VhostUserNet:
 		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("net", attr.DevID, maxDevIDSize)
 		qemuVhostUserDevice.Address = attr.MacAddress
+		qemuVhostUserDevice.VhostUserType = govmmQemu.VhostUserNet
 	case config.VhostUserSCSI:
 		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("scsi", attr.DevID, maxDevIDSize)
+		qemuVhostUserDevice.VhostUserType = govmmQemu.VhostUserSCSI
 	case config.VhostUserBlk:
+		qemuVhostUserDevice.VhostUserType = govmmQemu.VhostUserBlk
 	case config.VhostUserFS:
 		qemuVhostUserDevice.TypeDevID = utils.MakeNameID("fs", attr.DevID, maxDevIDSize)
 		qemuVhostUserDevice.Tag = attr.Tag
 		qemuVhostUserDevice.CacheSize = attr.CacheSize
+		qemuVhostUserDevice.VhostUserType = govmmQemu.VhostUserFS
 	}
 
-	qemuVhostUserDevice.VhostUserType = govmmQemu.DeviceDriver(attr.Type)
 	qemuVhostUserDevice.SocketPath = attr.SocketPath
 	qemuVhostUserDevice.CharDevID = utils.MakeNameID("char", attr.DevID, maxDevIDSize)
 
