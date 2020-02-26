@@ -81,6 +81,11 @@ func (c *clhClientMock) BootVM(ctx context.Context) (*http.Response, error) {
 	return nil, nil
 }
 
+//nolint:golint
+func (c *clhClientMock) VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error) {
+	return nil, nil
+}
+
 func TestCloudHypervisorAddVSock(t *testing.T) {
 	assert := assert.New(t)
 	clh := cloudHypervisor{}
