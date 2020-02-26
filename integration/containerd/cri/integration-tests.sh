@@ -253,13 +253,20 @@ main() {
 	TestContainerStats
 	TestContainerRestart
 	TestContainerListStatsWithIdFilter
-	TestContainerListStatsWithSandboxIdFilter
 	TestContainerListStatsWithIdSandboxIdFilter
 	TestDuplicateName
 	TestImageLoad
 	TestImageFSInfo
 	TestSandboxCleanRemove
 	)
+
+	if [ "${KATA_HYPERVISOR:-}" == "cloud-hypervisor" ]; then
+		issue="https://github.com/kata-containers/tests/issues/2318"
+		info "${KATA_HYPERVISOR} fails with TestContainerListStatsWithSandboxIdFilter }"
+		info "see ${issue}"
+	else
+		passing_test+=("TestContainerListStatsWithSandboxIdFilter")
+	fi
 
 	for t in "${passing_test[@]}"
 	do
