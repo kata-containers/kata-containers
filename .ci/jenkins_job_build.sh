@@ -152,6 +152,16 @@ case "${CI_JOB}" in
 	# Used by runtime makefile to enable option on intall
 	export DEFSANDBOXCGROUPONLY=true
 	;;
+"CLOUD-HYPERVISOR")
+	export CRIO="no"
+	export CRI_CONTAINERD="yes"
+	export CRI_RUNTIME="containerd"
+	export KATA_HYPERVISOR="cloud-hypervisor"
+	export KUBERNETES="yes"
+	export OPENSHIFT="no"
+	export TEST_CRIO="false"
+	export experimental_kernel="true"
+	;;
 esac
 "${ci_dir_name}/setup.sh"
 
