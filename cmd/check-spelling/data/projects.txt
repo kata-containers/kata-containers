@@ -18,6 +18,7 @@ Docker/B
 dracut/B
 Facebook/B
 fio/B
+Fluentd/B
 Frakti/B
 Git/B
 GitHub/B
@@ -31,6 +32,7 @@ Istio/B
 Jenkins/B
 journald/B
 Kata/B
+Kibana/B
 Kubelet/B
 Kubernetes/B
 Launchpad/B
@@ -39,6 +41,7 @@ libcontainer/B
 libvirt/B
 Linkerd/B
 Logrus/B
+Logstash/B
 Mellanox/B
 Minikube/B
 MITRE/B
