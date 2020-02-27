@@ -25,16 +25,14 @@ pipeline {
     stage('Bump repos') {
       agent { label 'ubuntu-lts-latest-azure' }
       steps {
-        sh '''
-        git clone https://github.com/kata-containers/packaging.git
-        cd packaging
-        '''
+        sh 'git clone https://github.com/kata-containers/packaging.git'
         withCredentials([string(credentialsId: 'katabuilder-git-bump', variable: 'GITHUB_TOKEN')]) {
-          sh '''
-          cd packaging
-          ./Jenkinsfiles/release_pieline/git_credential_cache.sh
-          ./Jenkinsfiles/release_pieline/bump.sh "${NEW_VERSION}" "${BRANCH}"
-          '''
+          dir("${WORKSPACE}/packaging/Jenkinsfiles/release_pipeline/") {
+            sh '''
+                ./git_credential_cache.sh
+                ./bump.sh "${NEW_VERSION}" "${BRANCH}"
+               '''
+          }
         }
       }
     }
