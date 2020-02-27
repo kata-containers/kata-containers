@@ -145,7 +145,6 @@ podman:
     - podman exec simple command
     - podman exec simple command with user
     - podman exec simple working directory test
-    - podman port nginx by name
     - podman mount many
     - podman wait on latest container
     - podman start multiple containers
