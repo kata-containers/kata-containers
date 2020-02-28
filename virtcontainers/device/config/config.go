@@ -113,6 +113,10 @@ type DeviceInfo struct {
 	Major int64
 	Minor int64
 
+	// Pmem enabled persistent memory. Use HostPath as backing file
+	// for a nvdimm device in the guest.
+	Pmem bool
+
 	// FileMode permission bits for the device.
 	FileMode os.FileMode
 
@@ -169,6 +173,10 @@ type BlockDrive struct {
 
 	// ReadOnly sets the device file readonly
 	ReadOnly bool
+
+	// Pmem enables persistent memory. Use File as backing file
+	// for a nvdimm device in the guest
+	Pmem bool
 }
 
 // VFIODeviceType indicates VFIO device type
