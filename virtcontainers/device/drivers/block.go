@@ -65,6 +65,11 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 		Format: "raw",
 		ID:     utils.MakeNameID("drive", device.DeviceInfo.ID, maxDevIDSize),
 		Index:  index,
+		Pmem:   device.DeviceInfo.Pmem,
+	}
+
+	if fs, ok := device.DeviceInfo.DriverOptions["fstype"]; ok {
+		drive.Format = fs
 	}
 
 	customOptions := device.DeviceInfo.DriverOptions
@@ -169,6 +174,7 @@ func (device *BlockDevice) Save() persistapi.DeviceState {
 			NvdimmID: drive.NvdimmID,
 			VirtPath: drive.VirtPath,
 			DevNo:    drive.DevNo,
+			Pmem:     drive.Pmem,
 		}
 	}
 	return ds
@@ -194,6 +200,7 @@ func (device *BlockDevice) Load(ds persistapi.DeviceState) {
 		NvdimmID: bd.NvdimmID,
 		VirtPath: bd.VirtPath,
 		DevNo:    bd.DevNo,
+		Pmem:     bd.Pmem,
 	}
 }
 
