@@ -108,7 +108,7 @@ Manual installation instructions are available for [these distributions](#suppor
 >
 > - Power users who decide to build from sources should be aware of the
 >   implications of using an unpackaged system which will not be automatically
->   updated as new [releases](../Releases.md) are made available.
+>   updated as new [releases](../Stable-Branch-Strategy.md) are made available.
 
 [Building from sources](../Developer-Guide.md#initial-setup)  allows power users
 who are comfortable building software from source to use the latest component

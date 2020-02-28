@@ -62,9 +62,8 @@ Documents that help to understand and contribute to Kata Containers.
 
 ### The Release Process
 
-* [Release strategy](Releases.md)
-* [Release Checklist](Release-Checklist.md)
-* [Stable branches](Stable-Branch-Strategy.md)
+* [Release strategy](Stable-Branch-Strategy.md)
+* [Release Process](Release-Process.md)
 
 ## Help Improving the Documents
 
