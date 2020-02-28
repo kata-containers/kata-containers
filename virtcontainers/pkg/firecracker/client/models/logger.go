@@ -31,9 +31,6 @@ type Logger struct {
 	// Required: true
 	MetricsFifo *string `json:"metrics_fifo"`
 
-	// Additional logging options. Only "LogDirtyPages" is supported.
-	Options []string `json:"options"`
-
 	// Whether or not to output the level in the logs.
 	ShowLevel *bool `json:"show_level,omitempty"`
 
