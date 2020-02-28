@@ -612,7 +612,6 @@ func (fc *firecracker) fcSetLogger() error {
 		Level:       &fcLogLevel,
 		LogFifo:     &jailedLogFifo,
 		MetricsFifo: &jailedMetricsFifo,
-		Options:     []string{},
 	}
 
 	return err
