@@ -361,7 +361,6 @@ func (fc *firecracker) fcInit(timeout int) error {
 		jailedArgs := []string{
 			"--id", fc.id,
 			"--node", "0", //FIXME: Comprehend NUMA topology or explicit ignore
-			"--seccomp-level", "2",
 			"--exec-file", fc.config.HypervisorPath,
 			"--uid", "0", //https://github.com/kata-containers/runtime/issues/1869
 			"--gid", "0",
