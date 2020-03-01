@@ -635,7 +635,7 @@ test_dracut()
 
 	typeset -a dockerRunArgs=(\
 		--rm   \
-		--runtime=runc \
+		--runtime="${docker_build_runtime}" \
 		-v "${images_dir}:${images_dir}" \
 		-v "${script_dir}/..":"${tmp_dir}" \
 		-v "${tmp_rootfs}:${tmp_rootfs}" \
