@@ -263,8 +263,6 @@ setup()
 		sudo -E mkdir -p ${ci_results_dir}
 	fi
 
-	export USE_DOCKER=true
-
 	# Travis doesn't support VT-x
 	[ -n "${TRAVIS:-}" ] && return
 
