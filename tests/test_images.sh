@@ -254,6 +254,8 @@ set_runtime()
 
 	[ -z "$name" ] && die "need name"
 
+	[ -n "${KATA_DEV_MODE}" ] && return
+
 	# Travis doesn't support VT-x
 	[ -n "${TRAVIS:-}" ] && return
 
