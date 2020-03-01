@@ -20,15 +20,13 @@ readonly tests_repo_dir="${script_dir}/../../tests"
 readonly mgr="${tests_repo_dir}/cmd/kata-manager/kata-manager.sh"
 readonly test_config=${script_dir}/test_config.sh
 readonly rootfs_builder=${script_dir}/../rootfs-builder/rootfs.sh
+readonly DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 readonly RUNTIME=${RUNTIME:-kata-runtime}
 readonly MACHINE_TYPE=`uname -m`
 readonly CI=${CI:-}
 readonly KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 readonly ci_results_dir="/var/osbuilder/tests"
 readonly dracut_dir=${script_dir}/../dracut
-
-# "docker build" does not work with a VM-based runtime
-readonly docker_build_runtime="runc"
 
 build_images=1
 build_initrds=1
@@ -286,8 +284,10 @@ setup()
 	fi
 	silent_run $mgr enable-debug
 
-	# Ensure "docker build" works
-	set_runtime "${docker_build_runtime}"
+	# "docker build" does not work with a VM-based runtime, and
+	# also does not accept a --runtime option, so our only
+	# option is to overwrite the system docker default runtime
+	set_runtime "${DOCKER_RUNTIME}"
 }
 
 # Fetches the distros test configuration from the distro-specific config.sh file.
@@ -635,7 +635,7 @@ test_dracut()
 
 	typeset -a dockerRunArgs=(\
 		--rm   \
-		--runtime="${docker_build_runtime}" \
+		--runtime="${DOCKER_RUNTIME}" \
 		-v "${images_dir}:${images_dir}" \
 		-v "${script_dir}/..":"${tmp_dir}" \
 		-v "${tmp_rootfs}:${tmp_rootfs}" \
