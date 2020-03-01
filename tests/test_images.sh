@@ -144,6 +144,15 @@ show_stats()
 	rm -f "${tmpfile}"
 }
 
+
+# Run a kata-manager.sh command
+run_mgr()
+{
+	[ -n "${KATA_DEV_MODE:-}" ] && return
+	silent_run $mgr $*
+}
+
+
 exit_handler()
 {
 	if [ "$?" -eq 0 ]
@@ -157,7 +166,7 @@ exit_handler()
 		rm -rf "${tmp_dir}"
 
 		# Restore the default image in config file
-		[ -n "${TRAVIS:-}" ] || silent_run $mgr configure-image
+		[ -n "${TRAVIS:-}" ] || run_mgr configure-image
 
 		return
 	fi
@@ -185,7 +194,7 @@ exit_handler()
 
 	if [ -z "${showKataRunFailure}" ]; then
 		# Restore the default image in config file
-		silent_run $mgr configure-image
+		run_mgr configure-image
 		return
 	fi
 
@@ -202,7 +211,7 @@ exit_handler()
 	sudo -E ps -efwww | egrep "docker|kata" >&2
 
 	# Restore the default image in config file
-	silent_run $mgr configure-image
+	run_mgr configure-image
 }
 
 die()
@@ -289,7 +298,7 @@ setup()
 		[ -n "$cfgRuntime" ] || die "${RUNTIME} is not a configured runtime for docker"
 		[ -x "$cfgRuntime" ] || die "docker ${RUNTIME} is linked to an invalid executable: $cfgRuntime"
 	fi
-	silent_run $mgr enable-debug
+	run_mgr enable-debug
 
 	# "docker build" does not work with a VM-based runtime, and
 	# also does not accept a --runtime option, so our only
@@ -376,11 +385,11 @@ install_image_create_container()
 	[ -n "${TRAVIS:-}" ] && return
 
 	showKataRunFailure=1
-	silent_run $mgr reset-config
+	run_mgr reset-config
 	if [ "${RUST_AGENT:-}" = "yes" ]; then
-		silent_run $mgr enable-vsock
+		run_mgr enable-vsock
 	fi
-	silent_run $mgr configure-image "$file"
+	run_mgr configure-image "$file"
 	create_container
 	showKataRunFailure=
 }
@@ -396,11 +405,11 @@ install_initrd_create_container()
 	[ -n "${TRAVIS:-}" ] && return
 
 	showKataRunFailure=1
-	silent_run $mgr reset-config
+	run_mgr reset-config
 	if [ "${RUST_AGENT:-}" = "yes" ]; then
-		silent_run $mgr enable-vsock
+		run_mgr enable-vsock
 	fi
-	silent_run $mgr configure-initrd "$file"
+	run_mgr configure-initrd "$file"
 	create_container
 	showKataRunFailure=
 }
