@@ -293,12 +293,6 @@ setup()
 		sudo cp -a /usr/share/defaults/kata-containers/configuration.toml /etc/kata-containers/configuration.toml
 	else
 		info "Running with KATA_DEV_MODE set, skipping installation of docker and kata packages"
-		# Make sure docker & kata are available
-		command -v docker >/dev/null || die "docker cannot be found on your PATH"
-		local cfgRuntime=
-		cfgRuntime="$(docker info --format "{{(index .Runtimes \"${RUNTIME}\").Path}}")"
-		[ -n "$cfgRuntime" ] || die "${RUNTIME} is not a configured runtime for docker"
-		[ -x "$cfgRuntime" ] || die "docker ${RUNTIME} is linked to an invalid executable: $cfgRuntime"
 	fi
 	run_mgr enable-debug
 
