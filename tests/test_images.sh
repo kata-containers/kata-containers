@@ -27,9 +27,6 @@ readonly KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 readonly ci_results_dir="/var/osbuilder/tests"
 readonly dracut_dir=${script_dir}/../dracut
 
-# all distro tests must have this prefix
-readonly test_func_prefix="test_distro_"
-
 # "docker build" does not work with a VM-based runtime
 readonly docker_build_runtime="runc"
 
