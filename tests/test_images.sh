@@ -29,6 +29,7 @@ readonly RUNTIME=${RUNTIME:-kata-runtime}
 readonly MACHINE_TYPE=`uname -m`
 readonly CI=${CI:-}
 readonly KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
+readonly KATA_DEV_MODE="${KATA_DEV_MODE:-}"
 readonly ci_results_dir="/var/osbuilder/tests"
 readonly dracut_dir=${project_dir}/dracut
 
@@ -276,7 +277,7 @@ setup()
 
 	[ ! -d "${tests_repo_dir}" ] && git clone "https://${tests_repo}" "${tests_repo_dir}"
 
-	if [ -z "${KATA_DEV_MODE:-}" ]; then
+	if [ -z "${KATA_DEV_MODE}" ]; then
 		mkdir -p /etc/kata-containers/
 		sudo cp -a /usr/share/defaults/kata-containers/configuration.toml /etc/kata-containers/configuration.toml
 	else
