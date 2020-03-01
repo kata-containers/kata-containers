@@ -494,6 +494,7 @@ test_distros()
 	get_distros_config "$distro"
 	local commonMakeVars=( \
 		USE_DOCKER=true \
+		DOCKER_RUNTIME="${DOCKER_RUNTIME}" \
 		ROOTFS_BUILD_DEST="$tmp_rootfs" \
 		IMAGES_BUILD_DEST="$images_dir" \
 		DEBUG=1 )
@@ -642,11 +643,19 @@ test_dracut()
 		-v /etc/localtime:/etc/localtime:ro \
 		dracut-test-osbuilder \
 	)
-	typeset -a makeVars=(BUILD_METHOD=dracut TARGET_INITRD="${initrd_path}" TARGET_IMAGE=${image_path} TARGET_ROOTFS=${rootfs_path})
+
+	typeset -a makeVars=(\
+		BUILD_METHOD=dracut \
+		TARGET_INITRD="${initrd_path}" \
+		TARGET_IMAGE=${image_path} \
+		TARGET_ROOTFS=${rootfs_path} \
+		USE_DOCKER=1 \
+		DOCKER_RUNTIME="${DOCKER_RUNTIME}" \
+	)
 
 	info "Making image for dracut inside a container"
 	silent_run docker run ${dockerRunArgs[@]} make -C ${tmp_dir} ${makeVars[@]} rootfs
-	make_image USE_DOCKER=1 ${makeVars[@]}
+	make_image ${makeVars[@]}
 	local image_size=$(stat -c "%s" "${image_path}")
 	local rootfs_size=$(get_rootfs_size "$rootfs_path")
 	built_images["dracut"]="${rootfs_size}:${image_size}"
