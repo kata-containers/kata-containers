@@ -29,3 +29,19 @@ func TestFCGenerateSocket(t *testing.T) {
 	assert.NotEmpty(hvsock.UdsPath)
 	assert.NotZero(hvsock.Port)
 }
+
+func TestFCTruncateID(t *testing.T) {
+	assert := assert.New(t)
+
+	fc := firecracker{}
+
+	testLongID := "3ef98eb7c6416be11e0accfed2f4e6560e07f8e33fa8d31922fd4d61747d7ead"
+	expectedID := "3ef98eb7c6416be11e0accfed2f4e656"
+	id := fc.truncateID(testLongID)
+	assert.Equal(expectedID, id)
+
+	testShortID := "3ef98eb7c6416be11"
+	expectedID = "3ef98eb7c6416be11"
+	id = fc.truncateID(testShortID)
+	assert.Equal(expectedID, id)
+}
