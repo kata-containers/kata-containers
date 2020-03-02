@@ -644,9 +644,8 @@ test_dracut()
 	typeset -a dockerRunArgs=(\
 		--rm   \
 		--runtime="${DOCKER_RUNTIME}" \
-		-v "${images_dir}:${images_dir}" \
-		-v "${project_dir}":"${tmp_dir}" \
-		-v "${tmp_rootfs}:${tmp_rootfs}" \
+		-v "${project_dir}":"${project_dir}" \
+		-v "${tmp_dir}":"${tmp_dir}" \
 		-v /etc/localtime:/etc/localtime:ro \
 		dracut-test-osbuilder \
 	)
@@ -662,7 +661,7 @@ test_dracut()
 	)
 
 	info "Making image for dracut inside a container"
-	silent_run docker run ${dockerRunArgs[@]} make -C ${tmp_dir} ${makeVars[@]} rootfs
+	silent_run docker run ${dockerRunArgs[@]} make -C ${project_dir} ${makeVars[@]} rootfs
 	make_image ${makeVars[@]}
 	local image_size=$(stat -c "%s" "${image_path}")
 	local rootfs_size=$(get_rootfs_size "$rootfs_path")
@@ -672,7 +671,7 @@ test_dracut()
 
 	if [ "$KATA_HYPERVISOR" != "firecracker" ]; then
 		info "Making initrd for dracut inside a container"
-		silent_run docker run ${dockerRunArgs[@]} make -C ${tmp_dir} ${makeVars[@]} AGENT_INIT=yes clean initrd
+		silent_run docker run ${dockerRunArgs[@]} make -C ${project_dir} ${makeVars[@]} AGENT_INIT=yes clean initrd
 		local initrd_size=$(stat -c "%s" "${initrd_path}")
 		built_initrds["dracut"]="${rootfs_size}:${initrd_size}"
 		install_initrd_create_container $initrd_path
