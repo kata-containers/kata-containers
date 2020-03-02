@@ -230,7 +230,11 @@ silent_run()
 {
 	typeset -a commandLine=("$@")
 	info "running: ${commandLine[@]}"
-	chronic "${commandLine[@]}"
+	if [ -z "${DEBUG:-}" ]; then
+		chronic "${commandLine[@]}"
+	else
+		"${commandLine[@]}"
+	fi
 }
 
 
