@@ -4,7 +4,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-set -euo pipefail
+set -o errexit
+set -o nounset
+set -o pipefail
+[ -n "${DEBUG:-}" ] && set -o xtrace
 
 readonly script_dir="$(dirname $(readlink -f $0))"
 readonly script_name=${0##*/}
