@@ -125,7 +125,15 @@ runc_version=$(get_version "externals.runc.version")
 go get -d github.com/opencontainers/runc
 pushd "${GOPATH}/src/github.com/opencontainers/runc"
 git checkout "$runc_version"
-make
+typeset -a build_union
+lib_union=(libapparmor libseccomp libselinux)
+for item in ${lib_union[*]}
+do
+if pkg-config --exists ${item}; then
+	build_union+=(${item#lib})
+fi
+done
+make BUILDTAGS="$(IFS=" "; echo "${build_union[*]}")"
 sudo -E install -D -m0755 runc "/usr/local/bin/crio-runc"
 popd
 
@@ -139,6 +147,9 @@ echo "Add docker.io registry to pull images"
 sudo sed -i 's/^registries = \[/registries = \[ "docker.io"/' "$crio_config_file"
 # Matches cri-o 1.12 file format
 sudo sed -i 's/^#registries = \[/registries = \[ "docker.io" \] /' "$crio_config_file"
+
+echo "Set cgroup manager to cgroupfs"
+sudo sed -i 's/\(^cgroup_manager =\) \"systemd\"/\1 \"cgroupfs\"/' "$crio_config_file"
 
 service_path="/etc/systemd/system"
 crio_service_file="${cidir}/data/crio.service"

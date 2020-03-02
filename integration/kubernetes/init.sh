@@ -22,20 +22,21 @@ system_pod_wait_time=120
 sleep_time=5
 wait_pods_ready()
 {
-        # Master components provide the cluster’s control plane, including kube-apisever,
-        # etcd, kube-scheduler, kube-controller-manager, etc.
-        # We need to ensure their readiness before we run any container tests.
-        local pods_status="kubectl get pods --all-namespaces"
-        local apiserver_pod="kube-apiserver.*1/1.*Running"
-        local controller_pod="kube-controller-manager.*1/1.*Running"
-        local etcd_pod="etcd.*1/1.*Running"
-        local scheduler_pod="kube-scheduler.*1/1.*Running"
+	# Master components provide the cluster’s control plane, including kube-apisever,
+	# etcd, kube-scheduler, kube-controller-manager, etc.
+	# We need to ensure their readiness before we run any container tests.
+	local pods_status="kubectl get pods --all-namespaces"
+	local apiserver_pod="kube-apiserver.*1/1.*Running"
+	local controller_pod="kube-controller-manager.*1/1.*Running"
+	local etcd_pod="etcd.*1/1.*Running"
+	local scheduler_pod="kube-scheduler.*1/1.*Running"
+	local dns_pod="coredns.*1/1.*Running"
 
-        local system_pod=($apiserver_pod $controller_pod $etcd_pod $scheduler_pod)
-        for pod_entry in "${system_pod[@]}"
-        do
-                waitForProcess "$system_pod_wait_time" "$sleep_time" "$pods_status | grep $pod_entry"
-        done
+	local system_pod=($apiserver_pod $controller_pod $etcd_pod $scheduler_pod $dns_pod)
+	for pod_entry in "${system_pod[@]}"
+	do
+		waitForProcess "$system_pod_wait_time" "$sleep_time" "$pods_status | grep $pod_entry"
+	done
 }
 
 cri_runtime="${CRI_RUNTIME:-crio}"
