@@ -258,7 +258,6 @@ set_runtime()
 
 setup()
 {
-	[ -z "$images_dir" ] && die "need images directory"
 	mkdir -p "${images_dir}"
 
 	if [ -n "$CI" ]; then
