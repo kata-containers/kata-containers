@@ -10,3 +10,8 @@ KERNELPARAMS :=
 MACHINEACCELERATORS :=
 
 QEMUCMD := qemu-system-aarch64
+
+# Firecracker binary name
+FCCMD := firecracker
+# Firecracker's jailer binary name
+FCJAILERCMD := jailer
