@@ -22,6 +22,7 @@ import (
 
 	persistapi "github.com/kata-containers/runtime/virtcontainers/persist/api"
 	chclient "github.com/kata-containers/runtime/virtcontainers/pkg/cloud-hypervisor/client"
+	"github.com/opencontainers/selinux/go-selinux/label"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -334,6 +335,15 @@ func (clh *cloudHypervisor) startSandbox(timeout int) error {
 	if clh.virtiofsd == nil {
 		return errors.New("Missing virtiofsd configuration")
 	}
+
+	// This needs to be done as late as possible, just before launching
+	// virtiofsd are executed by kata-runtime after this call, run with
+	// the SELinux label. If these processes require privileged, we do
+	// notwant to run them under confinement.
+	if err := label.SetProcessLabel(clh.config.SELinuxProcessLabel); err != nil {
+		return err
+	}
+	defer label.SetProcessLabel("")
 
 	if clh.config.SharedFS == config.VirtioFS {
 		clh.Logger().WithField("function", "startSandbox").Info("Starting virtiofsd")
