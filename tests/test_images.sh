@@ -622,6 +622,7 @@ test_dracut()
 	local initrd_path="${images_dir}/kata-containers-initrd-dracut.img"
 	local image_path="${images_dir}/kata-containers-image-dracut.img"
 	local rootfs_path="${tmp_rootfs}/dracut_rootfs"
+	local overlay_path="${tmp_rootfs}/dracut_overlay"
 
 	detect_go_version ||
 		die "Could not detect the required Go version for AGENT_VERSION='${AGENT_VERSION:-master}'."
@@ -651,6 +652,7 @@ test_dracut()
 		TARGET_INITRD="${initrd_path}" \
 		TARGET_IMAGE=${image_path} \
 		TARGET_ROOTFS=${rootfs_path} \
+		DRACUT_OVERLAY_DIR="${overlay_path}" \
 		USE_DOCKER=1 \
 		DOCKER_RUNTIME="${DOCKER_RUNTIME}" \
 	)
