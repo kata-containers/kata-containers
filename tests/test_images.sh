@@ -355,6 +355,10 @@ get_distros_config()
 
 create_container()
 {
+	# If KATA_DEV_MODE is set, we don't have any way to point kata-runtime
+	# at the image/initrd to boot, so there's nothing to do
+	[ -n "${KATA_DEV_MODE}" ] && return
+
 	out=$(mktemp)
 
 	local file="/proc/version"
