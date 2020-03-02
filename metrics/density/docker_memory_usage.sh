@@ -189,6 +189,7 @@ EOF
 # Try to work out the 'average memory footprint' of a container.
 get_docker_memory_usage(){
 	hypervisor_mem=0
+	virtiofsd_mem=0
 	shim_mem=0
 	proxy_mem=0
 	proxy_mem=0
@@ -251,6 +252,10 @@ EOF
 			die "Failed to find PSS for $HYPERVISOR_PATH"
 		fi
 
+		virtiofsd_mem="$(get_pss_memory "$VIRTIOFSD_PATH")"
+		if [ "$virtiofsd_mem" == "0" ]; then
+			echo >&2 "WARNING: Failed to find PSS for $VIRTIOFSD_PATH"
+		fi
 		shim_mem="$(get_pss_memory "$SHIM_PATH")"
 		if [ "$shim_mem" == "0" ]; then
 			die "Failed to find PSS for $SHIM_PATH"
@@ -267,7 +272,7 @@ EOF
 		fi
 
 		proxy_mem="$(bc -l <<< "scale=2; $proxy_mem / $NUM_CONTAINERS")"
-		mem_usage="$(bc -l <<< "scale=2; $hypervisor_mem + $shim_mem + $proxy_mem")"
+		mem_usage="$(bc -l <<< "scale=2; $hypervisor_mem +$virtiofsd_mem + $shim_mem + $proxy_mem")"
 		memory_usage="$mem_usage"
 
 	local json="$(cat << EOF
@@ -278,6 +283,10 @@ EOF
 		},
 		"qemus": {
 			"Result": $hypervisor_mem,
+			"Units" : "KB"
+		},
+		"virtiofsds": {
+			"Result": $virtiofsd_mem,
 			"Units" : "KB"
 		},
 		"shims": {
