@@ -11,6 +11,7 @@ set -o pipefail
 
 readonly script_dir="$(dirname $(readlink -f $0))"
 readonly script_name=${0##*/}
+readonly project_dir="$(dirname ${script_dir})"
 readonly tmp_dir=$(mktemp -t -d osbuilder-test.XXXXXXX)
 readonly tmp_rootfs="${tmp_dir}/rootfs-osbuilder"
 readonly images_dir="${tmp_dir}/images"
@@ -19,17 +20,17 @@ readonly docker_image="busybox"
 readonly systemd_docker_config_file="/etc/systemd/system/docker.service.d/kata-containers.conf"
 readonly sysconfig_docker_config_file="/etc/sysconfig/docker"
 readonly tests_repo="github.com/kata-containers/tests"
-readonly tests_repo_dir="${script_dir}/../../tests"
+readonly tests_repo_dir="${project_dir}/../tests"
 readonly mgr="${tests_repo_dir}/cmd/kata-manager/kata-manager.sh"
 readonly test_config=${script_dir}/test_config.sh
-readonly rootfs_builder=${script_dir}/../rootfs-builder/rootfs.sh
+readonly rootfs_builder=${project_dir}/rootfs-builder/rootfs.sh
 readonly DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 readonly RUNTIME=${RUNTIME:-kata-runtime}
 readonly MACHINE_TYPE=`uname -m`
 readonly CI=${CI:-}
 readonly KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 readonly ci_results_dir="/var/osbuilder/tests"
-readonly dracut_dir=${script_dir}/../dracut
+readonly dracut_dir=${project_dir}/dracut
 
 build_images=1
 build_initrds=1
@@ -47,7 +48,7 @@ typeset -A built_initrds
 typeset -A showKataRunFailure=
 
 source ${test_config}
-source "${script_dir}/../scripts/lib.sh"
+source "${project_dir}/scripts/lib.sh"
 
 usage()
 {
@@ -639,7 +640,7 @@ test_dracut()
 		--rm   \
 		--runtime="${DOCKER_RUNTIME}" \
 		-v "${images_dir}:${images_dir}" \
-		-v "${script_dir}/..":"${tmp_dir}" \
+		-v "${project_dir}":"${tmp_dir}" \
 		-v "${tmp_rootfs}:${tmp_rootfs}" \
 		-v /etc/localtime:/etc/localtime:ro \
 		dracut-test-osbuilder \
