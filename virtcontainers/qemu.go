@@ -25,6 +25,7 @@ import (
 	"unsafe"
 
 	govmmQemu "github.com/intel/govmm/qemu"
+	"github.com/opencontainers/selinux/go-selinux/label"
 	"github.com/opentracing/opentracing-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -793,6 +794,15 @@ func (q *qemu) startSandbox(timeout int) error {
 			}
 		}
 	}()
+
+	// This needs to be done as late as possible, just before launching
+	// virtiofsd are executed by kata-runtime after this call, run with
+	// the SELinux label. If these processes require privileged, we do
+	// notwant to run them under confinement.
+	if err := label.SetProcessLabel(q.config.SELinuxProcessLabel); err != nil {
+		return err
+	}
+	defer label.SetProcessLabel("")
 
 	if q.config.SharedFS == config.VirtioFS {
 		err = q.setupVirtiofsd()

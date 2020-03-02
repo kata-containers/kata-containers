@@ -98,3 +98,7 @@
 [[constraint]]
   name = "github.com/blang/semver"
   version = "3.6.1"
+
+[[constraint]]
+  name = "github.com/opencontainers/selinux"
+  version = "1.3.3"

@@ -557,6 +557,11 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		}
 	}()
 
+	spec := s.GetPatchedOCISpec()
+	if spec != nil && spec.Process.SelinuxLabel != "" {
+		sandboxConfig.HypervisorConfig.SELinuxProcessLabel = spec.Process.SelinuxLabel
+	}
+
 	if useOldStore(ctx) {
 		vcStore, err := store.NewVCSandboxStore(ctx, s.id)
 		if err != nil {
