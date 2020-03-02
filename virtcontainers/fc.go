@@ -53,7 +53,7 @@ const (
 const (
 	//fcTimeout is the maximum amount of time in seconds to wait for the VMM to respond
 	fcTimeout = 10
-	fcSocket  = "api.socket"
+	fcSocket  = "firecracker.socket"
 	//Name of the files within jailer root
 	//Having predefined names helps with cleanup
 	fcKernel             = "vmlinux"
@@ -210,7 +210,10 @@ func (fc *firecracker) createSandbox(ctx context.Context, id string, networkNS N
 
 	fc.vmPath = filepath.Join(fc.chrootBaseDir, hypervisorName, fc.id)
 	fc.jailerRoot = filepath.Join(fc.vmPath, "root") // auto created by jailer
-	fc.socketPath = filepath.Join(fc.jailerRoot, fcSocket)
+
+	// Firecracker and jailer automatically creates default API socket under /run
+	// with the name of "firecracker.socket"
+	fc.socketPath = filepath.Join(fc.jailerRoot, "run", fcSocket)
 
 	// So we need to repopulate this at startSandbox where it is valid
 	fc.netNSPath = networkNS.NetNsPath
@@ -649,7 +652,9 @@ func (fc *firecracker) fcListenToFifo(fifoName string) (string, error) {
 }
 
 func (fc *firecracker) fcInitConfiguration() error {
-	err := os.MkdirAll(fc.jailerRoot, DirMode)
+	// Firecracker API socket(firecracker.socket) is automatically created
+	// under /run dir.
+	err := os.MkdirAll(filepath.Join(fc.jailerRoot, "run"), DirMode)
 	if err != nil {
 		return err
 	}
@@ -664,7 +669,7 @@ func (fc *firecracker) fcInitConfiguration() error {
 	if fc.config.JailerPath != "" {
 		fc.jailed = true
 		if err := fc.fcRemountJailerRootWithExec(); err != nil {
-			return nil
+			return err
 		}
 	}
 
