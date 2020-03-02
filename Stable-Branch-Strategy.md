@@ -1,12 +1,47 @@
 Branch and release maintenance for the Kata Containers project.
 
-# Overview
+## Introduction 
 
-As detailed in the [release documentation](https://github.com/kata-containers/documentation/blob/master/Releases.md),
-the Kata Containers project makes use of semantic versioning.  A release version is described
-by MAJOR.MINOR.PATCH.  Early in the project, we will introduce many new features, which require
-minor version changes as well as bug fixes.  To facilitate a stable user environment, Kata will
-begin to provide stable branch-based releases and a master branch release.
+This document provides details about Kata Containers releases.
+
+## Versioning
+
+The Kata Containers project uses [semantic versioning](http://semver.org/) for all releases. 
+Semantic versions are comprised of three fields in the form:
+
+```
+MAJOR.MINOR.PATCH
+```
+
+For examples: `1.0.0`, `1.0.0-rc.5`, and `99.123.77+foo.bar.baz.5`.
+
+Semantic versioning is used since the version number is able to convey clear 
+information about how a new version relates to the previous version. 
+For example, semantic versioning can also provide assurances to allow users to know 
+when they must upgrade compared with when they might want to upgrade:
+
+- When `PATCH` increases, the new release contains important **security fixes**
+  and an upgrade is recommended.
+
+  The patch field can contain extra details after the number. 
+Dashes denote pre-release versions. `1.0.0-rc.5` in the example denotes the fifth release
+ candidate for release `1.0.0`. Plus signs denote other details. In our example, `+foo.bar.baz.5` 
+provides additional information regarding release `99.123.77` in the previous example.
+
+- When `MINOR` increases, the new release adds **new features** but *without
+  changing the existing behavior*.
+
+- When `MAJOR` increases, the new release adds **new features, bug fixes, or
+  both** and which *changes the behavior from the previous release* (incompatible with previous releases).
+
+  A major release will also likely require a change of the container manager version used, 
+for example Docker\*. Please refer to the release notes for further details.
+
+## Release Strategy
+
+Any new features added since the last release will be available in the next minor
+release. These will include bug fixes as well. To facilitate a stable user environment, 
+Kata provides stable branch-based releases and a master branch release.
 
 ## Stable branch patch criteria
 
@@ -93,6 +128,8 @@ of whether changes are introduced. The release schedule can be seen on the
 [release rotation wiki page](https://github.com/kata-containers/community/wiki/Release-Team-Rota).
 
 If there is urgent need for a fix, a patch release will be made outside of the planned schedule.
+
+The process followed for making a release can be found at [Release Process](Release-Process.md).
 
 ## Minor releases
 
