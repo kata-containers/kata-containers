@@ -68,7 +68,7 @@ paths_to_skip=(
 skip_paths(){
 	local list_param="${1}"
 	[ -z "$list_param" ] && return
-	list=(${list_param})
+	local list=(${list_param})
 
 	for p in "${paths_to_skip[@]}"; do
 		new_list=()
