@@ -47,6 +47,7 @@ BuildRequires : python
 BuildRequires : python-devel
 BuildRequires : zlib-devel
 BuildRequires : pkgconfig(pixman-1)
+BuildRequires : libpmem-devel
 
 # Patches
 @RPM_PATCH_LIST@

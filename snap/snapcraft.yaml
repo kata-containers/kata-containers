@@ -338,6 +338,7 @@ parts:
       - curl
       - libcapstone-dev
       - bc
+      - libpmem-dev
     override-build: |
       kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
       yq=$(realpath ../../yq/build/yq)

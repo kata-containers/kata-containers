@@ -330,10 +330,6 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-linux-aio)
 
 	if [[ "${qemu_version_major}" -ge 4 || ( "${qemu_version_major}" -eq 3  &&  "${qemu_version_minor}" -ge 1 ) ]]; then
-		# Disable libpmem, vNVDIMM backend (aka rootfs image) shouldn't be modifed
-		# by the guest
-		qemu_options+=(security:--disable-libpmem)
-
 		# Disable graphics
 		qemu_options+=(size:--disable-virglrenderer)
 
@@ -396,6 +392,11 @@ generate_qemu_options() {
 		fi
 		# Enable libc malloc_trim() for memory optimization.
 		qemu_options+=(speed:--enable-malloc-trim)
+
+		# According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
+		# built with libpmem support, QEMU will take necessary operations to guarantee
+		# the persistence of its own writes to the vNVDIMM backend.
+		qemu_options+=(functionality:--enable-libpmem)
 	fi
 
 	#---------------------------------------------------------------------
