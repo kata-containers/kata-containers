@@ -22,4 +22,4 @@ slog = "2.5.2"
 slog-scope = "4.1.2"
 scan_fmt = "0.2"
 regex = "1.1"
-path-absolutize = { git = "git://github.com/magiclen/path-absolutize.git", tag= "v1.1.3" }
+path-absolutize = { git = "git://github.com/magiclen/path-absolutize.git", tag= "v1.2.0" }

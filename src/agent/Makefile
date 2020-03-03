@@ -34,6 +34,22 @@ TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 DESTDIR :=
 BINDIR := /usr/bin
 
+# Define if agent will be installed as init
+INIT := no
+
+# Path to systemd unit directory if installed as not init.
+UNIT_DIR := /usr/lib/systemd/system
+
+GENERATED_FILES :=
+
+ifeq ($(INIT),no)
+    # Unit file to start kata agent in systemd systems
+    UNIT_FILES = kata-agent.service
+    GENERATED_FILES := $(UNIT_FILES)
+    # Target to be reached in systemd services
+    UNIT_FILES += kata-containers.target
+endif
+
 # Display name of command and it's version (or a message if not available).
 #
 # Arguments:
@@ -47,6 +63,10 @@ define get_toolchain_version
 $(shell printf "%s: %s\\n" "toolchain" "$(or $(shell rustup show active-toolchain 2>/dev/null), (unknown))")
 endef
 
+define INSTALL_FILE
+	install -D -m 644 $1 $(DESTDIR)$2/$1 || exit 1;
+endef
+
 default: $(TARGET) show-header
 
 $(TARGET): $(TARGET_PATH)
@@ -57,7 +77,13 @@ $(TARGET_PATH): $(SOURCES) | show-summary
 show-header:
 	@printf "%s - version %s (commit %s)\n\n" "$(TARGET)" "$(VERSION)" "$(COMMIT_MSG)"
 
-install:
+$(GENERATED_FILES): %: %.in
+	@sed \
+		-e 's|[@]bindir[@]|$(BINDIR)|g' \
+		-e 's|[@]kata-agent[@]|$(TARGET)|g' \
+		"$<" > "$@"
+
+install: build-service
 	@install -D $(TARGET_PATH) $(DESTDIR)/$(BINDIR)/$(TARGET)
 
 clean:
@@ -68,6 +94,12 @@ check:
 
 run:
 	@cargo run --target $(TRIPLE)
+
+build-service: $(GENERATED_FILES)
+ifeq ($(INIT),no)
+	@echo "Installing systemd unit files..."
+	$(foreach f,$(UNIT_FILES),$(call INSTALL_FILE,$f,$(UNIT_DIR)))
+endif
 
 show-summary: show-header
 	@printf "project:\n"
