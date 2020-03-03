@@ -12,7 +12,7 @@ use std::os::unix::io::RawFd;
 // use crate::cgroups::Manager as CgroupManager;
 // use crate::intelrdt::Manager as RdtManager;
 
-use nix::fcntl::OFlag;
+use nix::fcntl::{fcntl, FcntlArg, OFlag};
 use nix::sys::signal::{self, Signal};
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType};
 use nix::sys::wait::{self, WaitStatus};
@@ -72,7 +72,13 @@ impl ProcessOperations for Process {
 }
 
 impl Process {
-    pub fn new(logger: &Logger, ocip: &OCIProcess, id: &str, init: bool) -> Result<Self> {
+    pub fn new(
+        logger: &Logger,
+        ocip: &OCIProcess,
+        id: &str,
+        init: bool,
+        pipe_size: i32,
+    ) -> Result<Self> {
         let logger = logger.new(o!("subsystem" => "process"));
 
         let mut p = Process {
@@ -128,14 +134,54 @@ impl Process {
         p.parent_stdin = Some(pstdin);
         p.stdin = Some(stdin);
 
-        let (pstdout, stdout) = unistd::pipe2(OFlag::O_CLOEXEC)?;
+        let (pstdout, stdout) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
         p.parent_stdout = Some(pstdout);
         p.stdout = Some(stdout);
 
-        let (pstderr, stderr) = unistd::pipe2(OFlag::O_CLOEXEC)?;
+        let (pstderr, stderr) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
         p.parent_stderr = Some(pstderr);
         p.stderr = Some(stderr);
 
         Ok(p)
+    }
+}
+
+fn create_extended_pipe(flags: OFlag, pipe_size: i32) -> Result<(RawFd, RawFd)> {
+    let (r, w) = unistd::pipe2(flags)?;
+    if pipe_size > 0 {
+        fcntl(w, FcntlArg::F_SETPIPE_SZ(pipe_size))?;
+    }
+    Ok((r, w))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::process::create_extended_pipe;
+    use nix::fcntl::{fcntl, FcntlArg, OFlag};
+    use std::fs;
+    use std::os::unix::io::RawFd;
+
+    fn get_pipe_max_size() -> i32 {
+        fs::read_to_string("/proc/sys/fs/pipe-max-size")
+            .unwrap()
+            .trim()
+            .parse::<i32>()
+            .unwrap()
+    }
+
+    fn get_pipe_size(fd: RawFd) -> i32 {
+        fcntl(fd, FcntlArg::F_GETPIPE_SZ).unwrap()
+    }
+
+    #[test]
+    fn test_create_extended_pipe() {
+        // Test the default
+        let (r, w) = create_extended_pipe(OFlag::O_CLOEXEC, 0).unwrap();
+
+        // Test setting to the max size
+        let max_size = get_pipe_max_size();
+        let (r, w) = create_extended_pipe(OFlag::O_CLOEXEC, max_size).unwrap();
+        let actual_size = get_pipe_size(w);
+        assert_eq!(max_size, actual_size);
     }
 }
