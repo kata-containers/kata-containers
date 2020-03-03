@@ -26,6 +26,7 @@ RUN apt-get install -y \
 	    libglib2.0-dev git \
 	    libltdl-dev \
 	    libpixman-1-dev \
+	    libpmem-dev \
 	    libseccomp-dev \
 	    libtool \
 	    patch \
