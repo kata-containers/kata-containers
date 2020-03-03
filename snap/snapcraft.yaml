@@ -338,7 +338,6 @@ parts:
       - curl
       - libcapstone-dev
       - bc
-      - libpmem-dev
     override-build: |
       kata_version=$(cat ${SNAPCRAFT_STAGE}/kata_version)
       yq=$(realpath ../../yq/build/yq)
@@ -381,6 +380,9 @@ parts:
           --strip 1 \
           --input "$patch"
       done
+
+      # Only x86_64 supports libpmem
+      [ "$(uname -m)" = "x86_64" ] && sudo apt-get install -y libpmem-dev
 
       chmod +x ${SNAPCRAFT_STAGE}/scripts/configure-hypervisor.sh
       # static build

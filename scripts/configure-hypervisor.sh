@@ -387,16 +387,16 @@ generate_qemu_options() {
 		# for that architecture
 		if [ "$arch" == x86_64 ]; then
 			qemu_options+=(speed:--enable-avx2)
+			# According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
+			# built with libpmem support, QEMU will take necessary operations to guarantee
+			# the persistence of its own writes to the vNVDIMM backend.
+			qemu_options+=(functionality:--enable-libpmem)
 		else
 			qemu_options+=(speed:--disable-avx2)
+			qemu_options+=(functionality:--disable-libpmem)
 		fi
 		# Enable libc malloc_trim() for memory optimization.
 		qemu_options+=(speed:--enable-malloc-trim)
-
-		# According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
-		# built with libpmem support, QEMU will take necessary operations to guarantee
-		# the persistence of its own writes to the vNVDIMM backend.
-		qemu_options+=(functionality:--enable-libpmem)
 	fi
 
 	#---------------------------------------------------------------------
