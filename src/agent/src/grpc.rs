@@ -36,6 +36,7 @@ use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::random;
 use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
+use crate::AGENT_CONFIG;
 use netlink::{RtnlHandle, NETLINK_ROUTE};
 
 use libc::{self, c_ushort, pid_t, winsize, TIOCSWINSZ};
@@ -139,8 +140,9 @@ impl agentService {
         let mut ctr: LinuxContainer =
             LinuxContainer::new(cid.as_str(), CONTAINER_BASE, opts, &sl!())?;
 
+        let pipe_size = AGENT_CONFIG.read().unwrap().container_pipe_size;
         let p = if oci.Process.is_some() {
-            let tp = Process::new(&sl!(), oci.get_Process(), eid.as_str(), true)?;
+            let tp = Process::new(&sl!(), oci.get_Process(), eid.as_str(), true, pipe_size)?;
             tp
         } else {
             info!(sl!(), "no process configurations!");
@@ -274,7 +276,8 @@ impl agentService {
             return Err(ErrorKind::Nix(nix::Error::from_errno(nix::errno::Errno::EINVAL)).into());
         };
 
-        let p = Process::new(&sl!(), ocip, exec_id.as_str(), false)?;
+        let pipe_size = AGENT_CONFIG.read().unwrap().container_pipe_size;
+        let p = Process::new(&sl!(), ocip, exec_id.as_str(), false, pipe_size)?;
 
         let ctr = match sandbox.get_container(cid.as_str()) {
             Some(v) => v,
