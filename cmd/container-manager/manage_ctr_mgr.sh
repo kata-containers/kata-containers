@@ -138,7 +138,7 @@ install_docker(){
 			sudo -E apt-get -y install "${pkg_name}=${docker_version_full}"
 		elif [[ "$ID" =~ ^opensuse.*$ ]] || [ "$ID" == "sles" ]; then
 			sudo zypper removelock docker
-			sudo zypper -n  install 'docker<18.09'
+			sudo zypper -n  install 'docker<19.03'
 			sudo zypper addlock docker
 		fi
 	elif [ "$tag" == "swarm" ]; then
