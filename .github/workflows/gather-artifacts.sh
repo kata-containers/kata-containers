@@ -14,5 +14,5 @@ do
     tar -xvf $c
 done
 
-tar cfJ ../kata-static.tar.xz ./opt
+tar cvfJ ../kata-static.tar.xz ./opt
 popd >>/dev/null
