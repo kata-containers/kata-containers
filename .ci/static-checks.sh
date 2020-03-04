@@ -73,7 +73,7 @@ skip_paths(){
 	for p in "${paths_to_skip[@]}"; do
 		new_list=()
 		for l in "${list[@]}"; do
-			if echo "${l}" | grep -v "${p}"; then
+			if echo "${l}" | grep -qv "${p}"; then
 				new_list=("${new_list[@]}" "${l}")
 			fi
 		done
