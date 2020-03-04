@@ -51,7 +51,7 @@ func (device *BlockDevice) Attach(devReceiver api.DeviceReceiver) (err error) {
 
 	defer func() {
 		if err != nil {
-			devReceiver.DecrementSandboxBlockIndex()
+			devReceiver.UnsetSandboxBlockIndex(index)
 			device.bumpAttachCount(false)
 		}
 	}()
@@ -127,6 +127,8 @@ func (device *BlockDevice) Detach(devReceiver api.DeviceReceiver) error {
 	defer func() {
 		if err != nil {
 			device.bumpAttachCount(true)
+		} else {
+			devReceiver.UnsetSandboxBlockIndex(device.BlockDrive.Index)
 		}
 	}()
 

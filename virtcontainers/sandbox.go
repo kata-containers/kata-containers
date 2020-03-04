@@ -531,7 +531,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		config:          &sandboxConfig,
 		volumes:         sandboxConfig.Volumes,
 		containers:      map[string]*Container{},
-		state:           types.SandboxState{},
+		state:           types.SandboxState{BlockIndexMap: make(map[int]struct{})},
 		annotationsLock: &sync.RWMutex{},
 		wg:              &sync.WaitGroup{},
 		shmSize:         sandboxConfig.ShmSize,
@@ -1583,33 +1583,42 @@ func (s *Sandbox) setSandboxState(state types.StateString) error {
 	return nil
 }
 
-// getAndSetSandboxBlockIndex retrieves sandbox block index and increments it for
-// subsequent accesses. This index is used to maintain the index at which a
-// block device is assigned to a container in the sandbox.
+const maxBlockIndex = 65535
+
+// getAndSetSandboxBlockIndex retrieves an unused sandbox block index from
+// the BlockIndexMap and marks it as used. This index is used to maintain the
+// index at which a block device is assigned to a container in the sandbox.
 func (s *Sandbox) getAndSetSandboxBlockIndex() (int, error) {
-	currentIndex := s.state.BlockIndex
 	var err error
+	currentIndex := -1
+	for i := 0; i < maxBlockIndex; i++ {
+		if _, ok := s.state.BlockIndexMap[i]; !ok {
+			currentIndex = i
+			break
+		}
+	}
+	if currentIndex == -1 {
+		return -1, errors.New("no available block index")
+	}
+	s.state.BlockIndexMap[currentIndex] = struct{}{}
 	defer func() {
 		if err != nil {
-			s.state.BlockIndex = currentIndex
+			delete(s.state.BlockIndexMap, currentIndex)
 		}
 	}()
-
-	// Increment so that container gets incremented block index
-	s.state.BlockIndex++
 
 	return currentIndex, nil
 }
 
-// decrementSandboxBlockIndex decrements the current sandbox block index.
+// unsetSandboxBlockIndex deletes the current sandbox block index from BlockIndexMap.
 // This is used to recover from failure while adding a block device.
-func (s *Sandbox) decrementSandboxBlockIndex() error {
+func (s *Sandbox) unsetSandboxBlockIndex(index int) error {
 	var err error
-	original := s.state.BlockIndex
-	s.state.BlockIndex--
+	original := index
+	delete(s.state.BlockIndexMap, index)
 	defer func() {
 		if err != nil {
-			s.state.BlockIndex = original
+			s.state.BlockIndexMap[original] = struct{}{}
 		}
 	}()
 
@@ -1699,10 +1708,10 @@ func (s *Sandbox) GetAndSetSandboxBlockIndex() (int, error) {
 	return s.getAndSetSandboxBlockIndex()
 }
 
-// DecrementSandboxBlockIndex decrease block indexes
+// UnsetSandboxBlockIndex unsets block indexes
 // Sandbox implement DeviceReceiver interface from device/api/interface.go
-func (s *Sandbox) DecrementSandboxBlockIndex() error {
-	return s.decrementSandboxBlockIndex()
+func (s *Sandbox) UnsetSandboxBlockIndex(index int) error {
+	return s.unsetSandboxBlockIndex(index)
 }
 
 // AppendDevice can only handle vhost user device currently, it adds a

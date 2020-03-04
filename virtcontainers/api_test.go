@@ -535,6 +535,7 @@ func TestStatusSandboxSuccessfulStateReady(t *testing.T) {
 		ID: testSandboxID,
 		State: types.SandboxState{
 			State:          types.StateReady,
+			BlockIndexMap:  make(map[int]struct{}),
 			PersistVersion: 2,
 		},
 		Hypervisor:       MockHypervisor,
@@ -594,6 +595,7 @@ func TestStatusSandboxSuccessfulStateRunning(t *testing.T) {
 		ID: testSandboxID,
 		State: types.SandboxState{
 			State:          types.StateRunning,
+			BlockIndexMap:  make(map[int]struct{}),
 			PersistVersion: 2,
 		},
 		Hypervisor:       MockHypervisor,

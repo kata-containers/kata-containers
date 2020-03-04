@@ -1151,6 +1151,7 @@ func TestAttachBlockDevice(t *testing.T) {
 		hypervisor: hypervisor,
 		config:     sconfig,
 		ctx:        context.Background(),
+		state:      types.SandboxState{BlockIndexMap: make(map[int]struct{})},
 	}
 
 	contID := "100"
@@ -1180,11 +1181,21 @@ func TestAttachBlockDevice(t *testing.T) {
 	assert.True(t, ok)
 
 	container.state.State = ""
+	index, err := sandbox.getAndSetSandboxBlockIndex()
+	assert.Nil(t, err)
+	assert.Equal(t, index, 0)
+
 	err = device.Attach(sandbox)
 	assert.Nil(t, err)
+	index, err = sandbox.getAndSetSandboxBlockIndex()
+	assert.Nil(t, err)
+	assert.Equal(t, index, 2)
 
 	err = device.Detach(sandbox)
 	assert.Nil(t, err)
+	index, err = sandbox.getAndSetSandboxBlockIndex()
+	assert.Nil(t, err)
+	assert.Equal(t, index, 1)
 
 	container.state.State = types.StateReady
 	err = device.Attach(sandbox)
@@ -1227,6 +1238,7 @@ func TestPreAddDevice(t *testing.T) {
 		config:     sconfig,
 		devManager: dm,
 		ctx:        context.Background(),
+		state:      types.SandboxState{BlockIndexMap: make(map[int]struct{})},
 	}
 
 	contID := "100"

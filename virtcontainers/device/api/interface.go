@@ -34,7 +34,7 @@ type DeviceReceiver interface {
 
 	// this is only for virtio-blk and virtio-scsi support
 	GetAndSetSandboxBlockIndex() (int, error)
-	DecrementSandboxBlockIndex() error
+	UnsetSandboxBlockIndex(int) error
 	GetHypervisorType() string
 
 	// this is for appending device to hypervisor boot params
