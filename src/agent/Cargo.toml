@@ -31,3 +31,12 @@ slog = { version = "2.5.2", features = ["dynamic-keys", "max_level_trace", "rele
 slog-scope = "4.1.2"
 # for testing
 tempfile = "3.1.0"
+
+[workspace]
+members = [
+    "logging",
+    "netlink",
+    "oci",
+    "protocols",
+    "rustjail",
+]
