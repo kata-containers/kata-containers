@@ -60,6 +60,10 @@ var _ = Describe("state", func() {
 			if distroID() == "centos" {
 				Skip("Issue:https://github.com/kata-containers/tests/issues/2264")
 			}
+
+			if distroID() == "debian" {
+				Skip("Issue:https://github.com/kata-containers/tests/issues/2348")
+			}
 			_, stderr, exitCode := container.Run()
 			Expect(exitCode).To(Equal(0))
 			Expect(stderr).To(BeEmpty())
