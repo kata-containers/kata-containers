@@ -435,12 +435,14 @@ func (clh *cloudHypervisor) save() (s persistapi.HypervisorState) {
 	s.Pid = clh.state.PID
 	s.Type = string(ClhHypervisor)
 	s.VirtiofsdPid = clh.state.VirtiofsdPID
+	s.APISocket = clh.state.apiSocket
 	return
 }
 
 func (clh *cloudHypervisor) load(s persistapi.HypervisorState) {
 	clh.state.PID = s.Pid
 	clh.state.VirtiofsdPID = s.VirtiofsdPid
+	clh.state.apiSocket = s.APISocket
 }
 
 func (clh *cloudHypervisor) check() error {
