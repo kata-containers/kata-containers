@@ -104,7 +104,13 @@ build_and_install_qemu() {
 	done
 
 	echo "Build QEMU"
-	"${QEMU_CONFIG_SCRIPT}" "qemu" | xargs ./configure --prefix=${PREFIX}
+	# Not all distros have the libpmem package
+	"${QEMU_CONFIG_SCRIPT}" "qemu" |
+		if [ "${NAME}" == "Ubuntu" ] && [ "$(echo "${VERSION_ID} < 18.04" | bc -q)" == "1" ]; then
+			sed -e 's/--enable-libpmem/--disable-libpmem/g'
+		else
+			cat
+		fi | xargs ./configure --prefix=${PREFIX}
 	make -j $(nproc)
 
 	echo "Install QEMU"
