@@ -11,6 +11,10 @@ cidir=$(dirname "$0")
 source "/etc/os-release" || source "/usr/lib/os-release"
 source "${cidir}/lib.sh"
 
+# This is related with https://bugzilla.suse.com/show_bug.cgi?id=1165519
+echo "Remove openSUSE cloud repo"
+sudo zypper rr openSUSE-Leap-Cloud-Tools
+
 echo "Install chronic"
 sudo -E zypper -n install moreutils
 
