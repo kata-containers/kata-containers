@@ -1,3 +1,4 @@
+name: Publish release tarball
 on: 
   push: 
     tags:
@@ -339,7 +340,10 @@ jobs:
       - name: push static tarball to github
         run: |
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          mv release-candidate/kata-static.tar.xz release-candidate/kata-static-$tag-x86_64.tar.xz
-          git clone https://github.com/kata-containers/runtime.git
+          tarball="kata-static-$tag-x86_64.tar.xz"
+          repo="https://github.com/kata-containers/runtime.git"
+          mv release-candidate/kata-static.tar.xz "release-candidate/${tarball}"
+          git clone "${repo}"
           cd runtime
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a ../release-candidate/kata-static-${tag}-x86_64.tar.xz "${tag}"
+          echo "uploading asset '${tarball}' to '${repo}' tag: ${tag}"
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "../release-candidate/${tarball}" "${tag}"
