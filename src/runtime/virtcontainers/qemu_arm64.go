@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"runtime"
 	"strings"
@@ -167,4 +168,8 @@ func (q *qemuArm64) appendImage(devices []govmmQemu.Device, path string) ([]govm
 func (q *qemuArm64) setIgnoreSharedMemoryMigrationCaps(_ context.Context, _ *govmmQemu.QMP) error {
 	// x-ignore-shared not support in arm64 for now
 	return nil
+}
+
+func (q *qemuArm64) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
+	return devices, fmt.Errorf("Arm64 architecture does not support vIOMMU")
 }
