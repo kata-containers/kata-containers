@@ -90,7 +90,7 @@ clean:
 	@cargo clean
 
 check:
-	@cargo test --target $(TRIPLE)
+	@cargo test --all --target $(TRIPLE)
 
 run:
 	@cargo run --target $(TRIPLE)
