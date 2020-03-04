@@ -39,8 +39,8 @@ const (
 type SandboxState struct {
 	State StateString `json:"state"`
 
-	// Index of the block device passed to hypervisor.
-	BlockIndex int `json:"blockIndex"`
+	// Index map of the block device passed to hypervisor.
+	BlockIndexMap map[int]struct{} `json:"blockIndexMap"`
 
 	// GuestMemoryBlockSizeMB is the size of memory block of guestos
 	GuestMemoryBlockSizeMB uint32 `json:"guestMemoryBlockSize"`
