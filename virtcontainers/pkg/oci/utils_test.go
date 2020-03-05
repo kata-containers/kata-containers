@@ -701,10 +701,34 @@ func TestAddAgentAnnotations(t *testing.T) {
 			"e1000e InterruptThrottleRate=3000,3000,3000 EEE=1",
 			"i915 enable_ppgtt=0",
 		},
+		ContainerPipeSize: 1024,
 	}
 
 	ocispec.Annotations[vcAnnotations.KernelModules] = strings.Join(expectedAgentConfig.KernelModules, KernelModulesSeparator)
+	ocispec.Annotations[vcAnnotations.AgentContainerPipeSize] = "1024"
 	addAnnotations(ocispec, &config)
+	assert.Exactly(expectedAgentConfig, config.AgentConfig)
+}
+
+func TestContainerPipeSizeAnnotation(t *testing.T) {
+	assert := assert.New(t)
+
+	config := vc.SandboxConfig{
+		Annotations: make(map[string]string),
+		AgentConfig: vc.KataAgentConfig{},
+	}
+
+	ocispec := specs.Spec{
+		Annotations: make(map[string]string),
+	}
+
+	expectedAgentConfig := vc.KataAgentConfig{
+		ContainerPipeSize: 0,
+	}
+
+	ocispec.Annotations[vcAnnotations.AgentContainerPipeSize] = "foo"
+	err := addAnnotations(ocispec, &config)
+	assert.Error(err)
 	assert.Exactly(expectedAgentConfig, config.AgentConfig)
 }
 
