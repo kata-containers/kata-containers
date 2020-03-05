@@ -237,6 +237,11 @@ const (
 
 	// AgentTraceMode is a sandbox annotation to specify the trace type for the agent.
 	AgentTraceType = kataAnnotAgentPrefix + "trace_type"
+
+	// AgentContainerPipeSize is an annotation to specify the size of the pipes created for containers
+	AgentContainerPipeSize       = kataAnnotAgentPrefix + ContainerPipeSizeOption
+	ContainerPipeSizeOption      = "container_pipe_size"
+	ContainerPipeSizeKernelParam = "agent." + ContainerPipeSizeOption
 )
 
 const (
