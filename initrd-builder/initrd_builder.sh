@@ -70,8 +70,6 @@ OK "init is installed"
 	use AGENT_BIN env variable to change the expected agent binary name"
 OK "Agent is installed"
 
-[ "$(id -u)" -eq 0 ] || die "$0: must be run as root"
-
 # initramfs expects /init
 ln -sf /sbin/init "${ROOTFS}/init"
 
