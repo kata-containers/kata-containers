@@ -88,6 +88,7 @@ Options:
 Extra environment variables:
 	AGENT_BIN:  Use it to change the expected agent binary name
 	AGENT_INIT: Use kata agent as init process
+	NSDAX_BIN:  Use to specify path to pre-compiled 'nsdax' tool.
 	FS_TYPE:    Filesystem type to use. Only xfs and ext4 are supported.
 	USE_DOCKER: If set will build image in a Docker Container (requries docker)
 		    DEFAULT: not set
@@ -130,6 +131,8 @@ build_with_container() {
 	local root_free_space="$5"
 	local agent_bin="$6"
 	local agent_init="$7"
+	local container_engine="$8"
+	local nsdax_bin="$9"
 	local container_image_name="image-builder-osbuilder"
 	local shared_files=""
 
@@ -158,6 +161,7 @@ build_with_container() {
 		   --env FS_TYPE="${fs_type}" \
 		   --env BLOCK_SIZE="${block_size}" \
 		   --env ROOT_FREE_SPACE="${root_free_space}" \
+		   --env NSDAX_BIN="${nsdax_bin}" \
 		   --env DEBUG="${DEBUG}" \
 		   -v /dev:/dev \
 		   -v "${script_dir}":"/osbuilder" \
@@ -411,6 +415,7 @@ set_dax_header() {
 	local image="$1"
 	local img_size="$2"
 	local fs_type="$3"
+	local nsdax_bin="$4"
 
 	# rootfs start + DAX header size
 	local rootfs_offset=$((rootfs_start + dax_header_sz))
@@ -425,9 +430,12 @@ set_dax_header() {
 	info "Set DAX metadata"
 	# Set metadata header
 	# Issue: https://github.com/kata-containers/osbuilder/issues/240
-	gcc -O2 "${script_dir}/nsdax.gpl.c" -o "${script_dir}/nsdax"
-	"${script_dir}/nsdax" "${header_image}" "${dax_header_bytes}" "${dax_alignment_bytes}"
-	rm -f "${script_dir}/nsdax"
+	if [ -z "${nsdax_bin}" ] ; then
+		nsdax_bin="${script_dir}/nsdax"
+		gcc -O2 "${script_dir}/nsdax.gpl.c" -o "${nsdax_bin}"
+		trap "rm ${nsdax_bin}" EXIT
+	fi
+	"${nsdax_bin}" "${header_image}" "${dax_header_bytes}" "${dax_alignment_bytes}"
 	sync
 
 	touch "${dax_image}"
@@ -452,6 +460,7 @@ main() {
 	local image="${IMAGE:-kata-containers.img}"
 	local block_size="${BLOCK_SIZE:-4096}"
 	local root_free_space="${ROOT_FREE_SPACE:-}"
+	local nsdax_bin="${NSDAX_BIN:-}"
 
 	while getopts "ho:r:f:" opt
 	do
@@ -471,6 +480,7 @@ main() {
 		exit 0
 	fi
 
+	local container_engine
 	if [ -n "${USE_DOCKER}" ]; then
 		container_engine="docker"
 	elif [ -n "${USE_PODMAN}" ]; then
@@ -478,8 +488,11 @@ main() {
 	fi
 
 	if [ -n "$container_engine" ]; then
-		build_with_container "${rootfs}" "${image}" "${fs_type}" "${block_size}" \
-						  "${root_free_space}" "${agent_bin}" "${agent_init}" "${container_engine}"
+		build_with_container "${rootfs}" \
+			"${image}" "${fs_type}" "${block_size}" \
+			"${root_free_space}" "${agent_bin}" \
+			"${agent_init}" "${container_engine}" \
+			"${nsdax_bin}"
 		exit $?
 	fi
 
@@ -496,7 +509,7 @@ main() {
 						"${fs_type}" "${block_size}"
 
 	# insert at the beginning of the image the MBR + DAX header
-	set_dax_header "${image}" "${img_size}" "${fs_type}"
+	set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
 }
 
 main "$@"
