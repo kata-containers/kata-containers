@@ -128,6 +128,21 @@ paths:
         "404":
           description: The VM instance could not be resized because it is not created.
       summary: Resize the VM
+  /vm.add-device:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmAddDevice'
+        description: The path of the new device
+        required: true
+      responses:
+        "204":
+          description: The new device was successfully added to the VM instance.
+        "404":
+          description: The new device could not be added to the VM instance.
+      summary: Add a new device to the VM
 components:
   schemas:
     VmmPingResponse:
@@ -161,7 +176,9 @@ components:
             queue_size: 5
             vhost_socket: vhost_socket
             vhost_user: false
+            direct: false
             wce: true
+            poll_queue: true
           - path: path
             num_queues: 5
             readonly: false
@@ -169,7 +186,9 @@ components:
             queue_size: 5
             vhost_socket: vhost_socket
             vhost_user: false
+            direct: false
             wce: true
+            poll_queue: true
           cpus:
             boot_vcpus: 1
             max_vcpus: 1
@@ -180,15 +199,6 @@ components:
             iommu: false
           kernel:
             path: path
-          vhost_user_blk:
-          - sock: sock
-            num_queues: 1
-            queue_size: 1
-            wce: true
-          - sock: sock
-            num_queues: 1
-            queue_size: 1
-            wce: true
           rng:
             iommu: false
             src: /dev/urandom
@@ -205,15 +215,6 @@ components:
             cache_size: 2
             dax: true
             tag: tag
-          vhost_user_net:
-          - sock: sock
-            num_queues: 7
-            queue_size: 1
-            mac: mac
-          - sock: sock
-            num_queues: 7
-            queue_size: 1
-            mac: mac
           vsock:
           - sock: sock
             iommu: false
@@ -262,8 +263,9 @@ components:
         state:
           enum:
           - Created
-          - Booted
+          - Running
           - Shutdown
+          - Paused
           type: string
       required:
       - config
@@ -288,7 +290,9 @@ components:
           queue_size: 5
           vhost_socket: vhost_socket
           vhost_user: false
+          direct: false
           wce: true
+          poll_queue: true
         - path: path
           num_queues: 5
           readonly: false
@@ -296,7 +300,9 @@ components:
           queue_size: 5
           vhost_socket: vhost_socket
           vhost_user: false
+          direct: false
           wce: true
+          poll_queue: true
         cpus:
           boot_vcpus: 1
           max_vcpus: 1
@@ -307,15 +313,6 @@ components:
           iommu: false
         kernel:
           path: path
-        vhost_user_blk:
-        - sock: sock
-          num_queues: 1
-          queue_size: 1
-          wce: true
-        - sock: sock
-          num_queues: 1
-          queue_size: 1
-          wce: true
         rng:
           iommu: false
           src: /dev/urandom
@@ -332,15 +329,6 @@ components:
           cache_size: 2
           dax: true
           tag: tag
-        vhost_user_net:
-        - sock: sock
-          num_queues: 7
-          queue_size: 1
-          mac: mac
-        - sock: sock
-          num_queues: 7
-          queue_size: 1
-          mac: mac
         vsock:
         - sock: sock
           iommu: false
@@ -418,14 +406,6 @@ components:
           items:
             $ref: '#/components/schemas/DeviceConfig'
           type: array
-        vhost_user_net:
-          items:
-            $ref: '#/components/schemas/VhostUserNetConfig'
-          type: array
-        vhost_user_blk:
-          items:
-            $ref: '#/components/schemas/VhostUserBlkConfig'
-          type: array
         vsock:
           items:
             $ref: '#/components/schemas/VsockConfig'
@@ -498,11 +478,16 @@ components:
         queue_size: 5
         vhost_socket: vhost_socket
         vhost_user: false
+        direct: false
         wce: true
+        poll_queue: true
       properties:
         path:
           type: string
         readonly:
+          default: false
+          type: boolean
+        direct:
           default: false
           type: boolean
         iommu:
@@ -520,6 +505,9 @@ components:
         vhost_socket:
           type: string
         wce:
+          default: true
+          type: boolean
+        poll_queue:
           default: true
           type: boolean
       required:
@@ -641,7 +629,7 @@ components:
           - "false"
           - Tty
           - File
-          - None
+          - null
           type: string
         iommu:
           default: false
@@ -661,47 +649,6 @@ components:
           type: boolean
       required:
       - path
-      type: object
-    VhostUserNetConfig:
-      example:
-        sock: sock
-        num_queues: 7
-        queue_size: 1
-        mac: mac
-      properties:
-        sock:
-          type: string
-        num_queues:
-          default: 2
-          type: integer
-        queue_size:
-          default: 256
-          type: integer
-        mac:
-          type: string
-      required:
-      - sock
-      type: object
-    VhostUserBlkConfig:
-      example:
-        sock: sock
-        num_queues: 1
-        queue_size: 1
-        wce: true
-      properties:
-        sock:
-          type: string
-        num_queues:
-          default: 1
-          type: integer
-        queue_size:
-          default: 128
-          type: integer
-        wce:
-          default: true
-          type: boolean
-      required:
-      - sock
       type: object
     VsockConfig:
       example:
@@ -734,4 +681,11 @@ components:
           type: integer
         desired_ram:
           type: integer
+      type: object
+    VmAddDevice:
+      example:
+        path: path
+      properties:
+        path:
+          type: string
       type: object
