@@ -8,7 +8,7 @@ ARG PREFIX
 
 WORKDIR /root/qemu
 RUN apt-get update && apt-get upgrade -y
-RUN apt-get install -y \
+RUN apt-get --no-install-recommends install -y \
 	    autoconf \
 	    automake \
 	    bc \
