@@ -73,7 +73,10 @@ var _ = Describe("[Serial Test] package manager update test", func() {
 			if KataConfig.Hypervisor[DefaultHypervisor].SharedFS == "virtio-fs" {
 				Skip("Skip issue: https://github.com/kata-containers/tests/issues/2008")
 			}
-			args = append(args, "-td", "--name", id, FedoraImage, "sh")
+
+			// This Fedora version is used mainly because of https://github.com/kata-containers/tests/issues/2358
+			fedoraVersion := "30"
+			args = append(args, "-td", "--name", id, FedoraImage+":"+fedoraVersion, "sh")
 			_, _, exitCode := dockerRun(args...)
 			Expect(exitCode).To(BeZero())
 
