@@ -70,4 +70,4 @@ externals:
   sonobuoy:
     description: "Tool to run kubernetes e2e conformance tests"
     url: "https://github.com/vmware-tanzu/sonobuoy"
-    version: "0.16.4"
+    version: "0.17.2"
