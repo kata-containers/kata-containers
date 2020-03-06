@@ -4,6 +4,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+ifneq (,$(wildcard /usr/lib/os-release))
+include /usr/lib/os-release
+else
+include /etc/os-release
+endif
+
 # The time limit in seconds for each test
 TIMEOUT := 120
 
@@ -102,11 +108,15 @@ else ifeq ($(ARCH),$(filter $(ARCH), aarch64 s390x ppc64le))
 else ifneq (${FOCUS},)
 	./ginkgo -failFast -v -focus "${FOCUS}" -skip "${SKIP}" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
+else ifeq (centos7,$(ID)$(VERSION_ID))
+# Run tests sequentially, parallel tests fail randomly in Centos 7
+	./ginkgo -failFast -v -skip "${SKIP}" \
+		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 else
-	# Run tests in parallel, skip tests that need to be run serialized
+# Run tests in parallel, skip tests that need to be run serialized
 	./ginkgo -failFast -p -stream -v -skip "${SKIP}" -skip "\[Serial Test\]" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
-	# Now run serialized tests
+# Now run serialized tests
 	./ginkgo -failFast -v -focus "\[Serial Test\]" -skip "${SKIP}" \
 		./integration/docker/ -- -runtime=${RUNTIME} -timeout=${TIMEOUT}
 	bash sanity/check_sanity.sh
