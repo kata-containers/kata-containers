@@ -50,7 +50,7 @@ generate_dockerfile() {
 			;;
 		debian|ubuntu)
 			UPDATE="apt-get -y update"
-			DEPENDENCIES="apt-get install -y curl git gnupg2 lsb-release sudo"
+			DEPENDENCIES="apt-get --no-install-recommends install -y curl git gnupg2 lsb-release sudo"
 			;;
 		fedora)
 			UPDATE="dnf -y update"
