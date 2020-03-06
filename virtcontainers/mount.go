@@ -6,17 +6,16 @@
 package virtcontainers
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"syscall"
 
 	merr "github.com/hashicorp/go-multierror"
+	"github.com/kata-containers/runtime/virtcontainers/utils"
 	"github.com/sirupsen/logrus"
 )
 
@@ -185,59 +184,6 @@ func getDeviceForPath(path string) (device, error) {
 	}
 
 	return dev, nil
-}
-
-const (
-	procMountsFile = "/proc/mounts"
-
-	fieldsPerLine = 6
-)
-
-const (
-	procDeviceIndex = iota
-	procPathIndex
-	procTypeIndex
-)
-
-// GetDevicePathAndFsType gets the device for the mount point and the file system type
-// of the mount.
-func GetDevicePathAndFsType(mountPoint string) (devicePath, fsType string, err error) {
-	if mountPoint == "" {
-		err = fmt.Errorf("Mount point cannot be empty")
-		return
-	}
-
-	var file *os.File
-
-	file, err = os.Open(procMountsFile)
-	if err != nil {
-		return
-	}
-
-	defer file.Close()
-
-	reader := bufio.NewReader(file)
-	for {
-		var line string
-
-		line, err = reader.ReadString('\n')
-		if err == io.EOF {
-			err = fmt.Errorf("Mount %s not found", mountPoint)
-			return
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) != fieldsPerLine {
-			err = fmt.Errorf("Incorrect no of fields (expected %d, got %d)) :%s", fieldsPerLine, len(fields), line)
-			return
-		}
-
-		if mountPoint == fields[procPathIndex] {
-			devicePath = fields[procDeviceIndex]
-			fsType = fields[procTypeIndex]
-			return
-		}
-	}
 }
 
 var blockFormatTemplate = "/sys/dev/block/%d:%d/dm"
@@ -445,7 +391,7 @@ func IsEphemeralStorage(path string) bool {
 		return false
 	}
 
-	if _, fsType, _ := GetDevicePathAndFsType(path); fsType == "tmpfs" {
+	if _, fsType, _ := utils.GetDevicePathAndFsType(path); fsType == "tmpfs" {
 		return true
 	}
 
@@ -460,7 +406,7 @@ func Isk8sHostEmptyDir(path string) bool {
 		return false
 	}
 
-	if _, fsType, _ := GetDevicePathAndFsType(path); fsType != "tmpfs" {
+	if _, fsType, _ := utils.GetDevicePathAndFsType(path); fsType != "tmpfs" {
 		return true
 	}
 	return false
