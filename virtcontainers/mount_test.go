@@ -206,22 +206,6 @@ func TestGetDeviceForPathBindMount(t *testing.T) {
 	assert.Equal(sourceDev, destDev)
 }
 
-func TestGetDevicePathAndFsTypeEmptyMount(t *testing.T) {
-	assert := assert.New(t)
-	_, _, err := GetDevicePathAndFsType("")
-	assert.Error(err)
-}
-
-func TestGetDevicePathAndFsTypeSuccessful(t *testing.T) {
-	assert := assert.New(t)
-
-	path, fstype, err := GetDevicePathAndFsType("/proc")
-	assert.NoError(err)
-
-	assert.Equal(path, "proc")
-	assert.Equal(fstype, "proc")
-}
-
 func TestIsDeviceMapper(t *testing.T) {
 	assert := assert.New(t)
 
