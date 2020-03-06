@@ -22,8 +22,6 @@ type VmConfig struct {
 	Serial ConsoleConfig `json:"serial,omitempty"`
 	Console ConsoleConfig `json:"console,omitempty"`
 	Devices []DeviceConfig `json:"devices,omitempty"`
-	VhostUserNet []VhostUserNetConfig `json:"vhost_user_net,omitempty"`
-	VhostUserBlk []VhostUserBlkConfig `json:"vhost_user_blk,omitempty"`
 	Vsock []VsockConfig `json:"vsock,omitempty"`
 	Iommu bool `json:"iommu,omitempty"`
 }

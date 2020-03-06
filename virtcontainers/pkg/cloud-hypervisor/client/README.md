@@ -40,6 +40,7 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**ResumeVM**](docs/DefaultApi.md#resumevm) | **Put** /vm.resume | Resume a previously paused VM instance.
 *DefaultApi* | [**ShutdownVM**](docs/DefaultApi.md#shutdownvm) | **Put** /vm.shutdown | Shut the VM instance down.
 *DefaultApi* | [**ShutdownVMM**](docs/DefaultApi.md#shutdownvmm) | **Put** /vmm.shutdown | Shuts the cloud-hypervisor VMM.
+*DefaultApi* | [**VmAddDevicePut**](docs/DefaultApi.md#vmadddeviceput) | **Put** /vm.add-device | Add a new device to the VM
 *DefaultApi* | [**VmInfoGet**](docs/DefaultApi.md#vminfoget) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
 *DefaultApi* | [**VmResizePut**](docs/DefaultApi.md#vmresizeput) | **Put** /vm.resize | Resize the VM
 *DefaultApi* | [**VmmPingGet**](docs/DefaultApi.md#vmmpingget) | **Get** /vmm.ping | Ping the VMM to check for API server availability
@@ -58,8 +59,7 @@ Class | Method | HTTP request | Description
  - [NetConfig](docs/NetConfig.md)
  - [PmemConfig](docs/PmemConfig.md)
  - [RngConfig](docs/RngConfig.md)
- - [VhostUserBlkConfig](docs/VhostUserBlkConfig.md)
- - [VhostUserNetConfig](docs/VhostUserNetConfig.md)
+ - [VmAddDevice](docs/VmAddDevice.md)
  - [VmConfig](docs/VmConfig.md)
  - [VmInfo](docs/VmInfo.md)
  - [VmResize](docs/VmResize.md)

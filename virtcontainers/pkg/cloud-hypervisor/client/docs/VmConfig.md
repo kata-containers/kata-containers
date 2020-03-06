@@ -16,8 +16,6 @@ Name | Type | Description | Notes
 **Serial** | [**ConsoleConfig**](ConsoleConfig.md) |  | [optional] 
 **Console** | [**ConsoleConfig**](ConsoleConfig.md) |  | [optional] 
 **Devices** | [**[]DeviceConfig**](DeviceConfig.md) |  | [optional] 
-**VhostUserNet** | [**[]VhostUserNetConfig**](VhostUserNetConfig.md) |  | [optional] 
-**VhostUserBlk** | [**[]VhostUserBlkConfig**](VhostUserBlkConfig.md) |  | [optional] 
 **Vsock** | [**[]VsockConfig**](VsockConfig.md) |  | [optional] 
 **Iommu** | **bool** |  | [optional] [default to false]
 

@@ -139,6 +139,22 @@ paths:
         404:
           description: The VM instance could not be resized because it is not created.
 
+  /vm.add-device:
+    put:
+      summary: Add a new device to the VM
+      requestBody:
+        description: The path of the new device
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmAddDevice'
+        required: true
+      responses:
+        204:
+          description: The new device was successfully added to the VM instance.
+        404:
+          description: The new device could not be added to the VM instance.
+
 components:
   schemas:
 
@@ -161,7 +177,7 @@ components:
           $ref: '#/components/schemas/VmConfig'
         state:
           type: string
-          enum: [Created, Booted, Shutdown]
+          enum: [Created, Running, Shutdown, Paused]
       description: Virtual Machine information
 
     VmConfig:
@@ -204,14 +220,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/DeviceConfig'
-        vhost_user_net:
-          type: array
-          items:
-            $ref: '#/components/schemas/VhostUserNetConfig'
-        vhost_user_blk:
-          type: array
-          items:
-            $ref: '#/components/schemas/VhostUserBlkConfig'
         vsock:
           type: array
           items:
@@ -277,6 +285,9 @@ components:
         readonly:
           type: boolean
           default: false
+        direct:
+          type: boolean
+          default: false
         iommu:
           type: boolean
           default: false
@@ -292,6 +303,9 @@ components:
         vhost_socket:
           type: string
         wce:
+          type: boolean
+          default: true
+        poll_queue:
           type: boolean
           default: true
 
@@ -387,7 +401,7 @@ components:
           type: string
         mode:
           type: string
-          enum: [Off, Tty, File, None]
+          enum: [Off, Tty, File, Null]
         iommu:
           type: boolean
           default: false
@@ -402,39 +416,6 @@ components:
         iommu:
           type: boolean
           default: false
-
-    VhostUserNetConfig:
-      required:
-      - sock
-      type: object
-      properties:
-        sock:
-          type: string
-        num_queues:
-          type: integer
-          default: 2
-        queue_size:
-          type: integer
-          default: 256
-        mac:
-          type: string
-
-    VhostUserBlkConfig:
-      required:
-      - sock
-      type: object
-      properties:
-        sock:
-          type: string
-        num_queues:
-          type: integer
-          default: 1
-        queue_size:
-          type: integer
-          default: 128
-        wce:
-          type: boolean
-          default: true
 
     VsockConfig:
       required:
@@ -462,3 +443,9 @@ components:
           type: integer
         desired_ram:
           type: integer
+
+    VmAddDevice:
+      type: object
+      properties:
+        path:
+          type: string
