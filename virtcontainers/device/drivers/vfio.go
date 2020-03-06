@@ -194,6 +194,8 @@ func getVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceS
 	case config.VFIODeviceNormalType:
 		// Get bdf of device eg. 0000:00:1c.0
 		deviceBDF = getBDF(deviceFileName)
+		// Get sysfs path used by cloud-hypervisor
+		deviceSysfsDev = filepath.Join(config.SysBusPciDevicesPath, deviceFileName)
 	case config.VFIODeviceMediatedType:
 		// Get sysfsdev of device eg. /sys/devices/pci0000:00/0000:00:02.0/f79944e4-5a3d-11e8-99ce-479cbab002e4
 		sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)

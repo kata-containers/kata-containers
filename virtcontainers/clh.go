@@ -50,8 +50,11 @@ const (
 const (
 	// Values are mandatory by http API
 	// Values based on:
-	clhTimeout            = 10
-	clhAPITimeout         = 1
+	clhTimeout    = 10
+	clhAPITimeout = 1
+	// Timeout for hot-plug - hotplug devices can take more time, than usual API calls
+	// Use longer time timeout for it.
+	clhHotPlugAPITimeout  = 5
 	clhStopSandboxTimeout = 3
 	clhSocket             = "clh.sock"
 	clhAPISocket          = "clh-api.sock"
@@ -76,6 +79,7 @@ type clhClient interface {
 	VmInfoGet(ctx context.Context) (chclient.VmInfo, *http.Response, error) //nolint:golint
 	BootVM(ctx context.Context) (*http.Response, error)
 	VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error)
+	VmAddDevicePut(ctx context.Context, vmAddDevice chclient.VmAddDevice) (*http.Response, error)
 }
 
 type CloudHypervisorVersion struct {
@@ -372,9 +376,35 @@ func (clh *cloudHypervisor) getThreadIDs() (vcpuThreadIDs, error) {
 	return vcpuInfo, nil
 }
 
+func (clh *cloudHypervisor) hotPlugVFIODevice(device config.VFIODev) error {
+	cl := clh.client()
+	ctx, cancel := context.WithTimeout(context.Background(), clhHotPlugAPITimeout*time.Second)
+	defer cancel()
+
+	_, _, err := cl.VmmPingGet(ctx)
+	if err != nil {
+		return openAPIClientError(err)
+	}
+
+	_, err = cl.VmAddDevicePut(ctx, chclient.VmAddDevice{Path: device.SysfsDev})
+	if err != nil {
+		err = fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
+	}
+	return err
+}
+
 func (clh *cloudHypervisor) hotplugAddDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
-	clh.Logger().WithField("function", "hotplugAddDevice").Warn("hotplug add device not supported")
-	return nil, nil
+	span, _ := clh.trace("hotplugAddDevice")
+	defer span.Finish()
+
+	switch devType {
+	case vfioDev:
+		device := devInfo.(*config.VFIODev)
+		return nil, clh.hotPlugVFIODevice(*device)
+	default:
+		return nil, fmt.Errorf("cannot hotplug device: unsupported device type '%v'", devType)
+	}
+
 }
 
 func (clh *cloudHypervisor) hotplugRemoveDevice(devInfo interface{}, devType deviceType) (interface{}, error) {
