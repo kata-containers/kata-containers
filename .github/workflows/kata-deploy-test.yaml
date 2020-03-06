@@ -9,7 +9,7 @@ jobs:
         uses: kata-containers/slash-command-action@v1
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          command: "test"
+          command: "test-kata-deploy"
           reaction: "true"
           reaction-type: "eyes"
           allow-edits: "false"
@@ -17,7 +17,6 @@ jobs:
       - name: verify command arg is kata-deploy
         run: |
            echo "The command was '${{ steps.command.outputs.command-name }}' with arguments '${{ steps.command.outputs.command-arguments }}'"
-           [[ ${{ steps.command.outputs.command-arguments}} == "kata-deploy" ]]
   create-and-test-container:
     needs: check_comments
     runs-on: ubuntu-latest
