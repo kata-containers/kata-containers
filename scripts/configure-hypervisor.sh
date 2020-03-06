@@ -321,12 +321,15 @@ generate_qemu_options() {
 	# implicitly enabled in Fedora 27).
 	qemu_options+=(size:--disable-linux-aio)
 
-	if [[ "${qemu_version_major}" -ge 4 || ( "${qemu_version_major}" -eq 3  &&  "${qemu_version_minor}" -ge 1 ) ]]; then
+	if [[ "${qemu_version_major}" -ge 3 ]]; then
 		# Disable graphics
 		qemu_options+=(size:--disable-virglrenderer)
 
-		# Disable block replication
-		qemu_options+=(size:--disable-replication)
+		# Due to qemu commit 3ebb9c4f52, we can't disable replication in v3.0
+		if [[ "${qemu_version_major}" -ge 4 || ( "${qemu_version_major}" -eq 3 && "${qemu_version_minor}" -ge 1 ) ]]; then
+			# Disable block replication
+			qemu_options+=(size:--disable-replication)
+		fi
 
 		# Disable USB smart card reader
 		qemu_options+=(size:--disable-smartcard)
