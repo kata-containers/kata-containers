@@ -3,13 +3,15 @@
 * [Initial setup](#initial-setup)
 * [Requirements to build individual components](#requirements-to-build-individual-components)
 * [Build and install the Kata Containers runtime](#build-and-install-the-kata-containers-runtime)
-    * [Check hardware requirements](#check-hardware-requirements)
+* [Check hardware requirements](#check-hardware-requirements)
     * [Configure to use initrd or rootfs image](#configure-to-use-initrd-or-rootfs-image)
     * [Enable full debug](#enable-full-debug)
         * [debug logs and shimv2](#debug-logs-and-shimv2)
+            * [Enabling full `containerd` debug](#enabling-full-containerd-debug)
+            * [Enabling just `containerd shim` debug](#enabling-just-containerd-shim-debug)
         * [journald rate limiting](#journald-rate-limiting)
-            * [systemd-journald suppressing messages](#systemd-journald-suppressing-messages)
-            * [Disabling systemd-journald rate limiting](#disabling-systemd-journald-rate-limiting)
+            * [`systemd-journald` suppressing messages](#systemd-journald-suppressing-messages)
+            * [Disabling `systemd-journald` rate limiting](#disabling-systemd-journald-rate-limiting)
 * [Build and install Kata proxy](#build-and-install-kata-proxy)
 * [Build and install Kata shim](#build-and-install-kata-shim)
 * [Create and install rootfs and initrd image](#create-and-install-rootfs-and-initrd-image)
@@ -145,18 +147,34 @@ $ sudo sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debu
 
 ### debug logs and shimv2
 
-If you are using `containerd` and Kata shimv2 to launch `kata-runtime`, `containerd`'s debug option 
-will determine if the `kata-runtime`'s log is forwarded to `containerd`'s log pipe. If you want to see 
-the Kata's log (including the `runtime` and `agent` logs) in the `containerd` log, then you need to 
-enable `containerd`'s debug by adding the following to your `containerd`'s config file:
+If you are using `containerd` and the Kata `containerd-shimv2` to launch Kata Containers, and wish
+to enable Kata debug logging, there are two ways this can be enabled via the `containerd` configuration file,
+detailed below.
+
+The Kata logs appear in the `containerd` log files, along with logs from `containerd` itself.
+
+For more information about `containerd` debug, please see the
+[`containerd` documentation](https://github.com/containerd/containerd/blob/master/docs/getting-started.md).
+
+#### Enabling full `containerd` debug
+
+Enabling full `containerd` debug also enables the shimv2 debug. Edit the `containerd` configuration file
+to include the top level debug option such as:
 
 ```toml
 [debug]
         level = "debug"
 ```
 
-For much info about the containerd's debug, please see the
-[`containerd` documentation](https://github.com/containerd/containerd/blob/master/docs/getting-started.md).
+#### Enabling just `containerd shim` debug
+
+If you only wish to enable debug for the `containerd` shims themselves, just enable the debug
+option in the `plugins.linux` section of the `containerd` configuration file, such as:
+
+```toml
+  [plugins.linux]
+    shim_debug = true
+```
 
 ### journald rate limiting
 
