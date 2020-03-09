@@ -76,6 +76,7 @@ type clhClient interface {
 	// No lint: golint suggest to rename to VMInfoGet.
 	VmInfoGet(ctx context.Context) (chclient.VmInfo, *http.Response, error) //nolint:golint
 	BootVM(ctx context.Context) (*http.Response, error)
+	VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error)
 }
 
 type CloudHypervisorVersion struct {
@@ -391,8 +392,47 @@ func (clh *cloudHypervisor) resizeMemory(reqMemMB uint32, memoryBlockSizeMB uint
 }
 
 func (clh *cloudHypervisor) resizeVCPUs(reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
-	clh.Logger().WithField("function", "resizeVCPUs").Warn("not supported")
-	return 0, 0, nil
+	cl := clh.client()
+
+	// Retrieve the number of current vCPUs via HTTP API
+	ctx, cancel := context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	info, _, err := cl.VmInfoGet(ctx)
+	if err != nil {
+		clh.Logger().WithField("function", "resizeVCPUs").WithError(openAPIClientError(err)).Info("[clh] VmInfoGet failed")
+		return 0, 0, openAPIClientError(err)
+	}
+	// Reset the timer after the first HTTP API call
+	cancel()
+
+	currentVCPUs = uint32(info.Config.Cpus.BootVcpus)
+	newVCPUs = currentVCPUs
+
+	// Sanity check
+	if reqVCPUs == 0 {
+		clh.Logger().WithField("function", "resizeVCPUs").Debugf("Cannot resize vCPU to 0")
+		return currentVCPUs, newVCPUs, fmt.Errorf("Cannot resize vCPU to 0")
+	}
+	if reqVCPUs > clh.config.DefaultMaxVCPUs || reqVCPUs > uint32(info.Config.Cpus.MaxVcpus) {
+		clh.Logger().WithFields(log.Fields{
+			"function":              "resizeVCPUs",
+			"reqVCPUs":              reqVCPUs,
+			"configDefaultMaxVCPUs": clh.config.DefaultMaxVCPUs,
+			"clhMaxVCPUs":           info.Config.Cpus.MaxVcpus,
+		}).Debug("exceeding the maxVCPUs")
+		return currentVCPUs, newVCPUs, fmt.Errorf("Cannot resize vCPU to %d: exceeding the maximum amount of vCPUs (%d or %d)",
+			reqVCPUs, clh.config.DefaultMaxVCPUs, info.Config.Cpus.MaxVcpus)
+	}
+
+	// Resize (hot-plug) vCPUs via HTTP API
+	ctx, cancel = context.WithTimeout(context.Background(), clhAPITimeout*time.Second)
+	defer cancel()
+	if _, err = cl.VmResizePut(ctx, chclient.VmResize{DesiredVcpus: int32(reqVCPUs)}); err != nil {
+		return currentVCPUs, newVCPUs, errors.Wrap(err, "[clh] VmResizePut failed")
+	}
+
+	newVCPUs = reqVCPUs
+
+	return currentVCPUs, newVCPUs, nil
 }
 
 func (clh *cloudHypervisor) cleanup() error {
