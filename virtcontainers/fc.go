@@ -80,7 +80,7 @@ const (
 )
 
 // Specify the minimum version of firecracker supported
-var fcMinSupportedVersion = semver.MustParse("0.19.0")
+var fcMinSupportedVersion = semver.MustParse("0.21.1")
 
 var fcKernelParams = append(commonVirtioblkKernelRootParams, []Param{
 	// The boot source is the first partition of the first block device added
@@ -300,7 +300,9 @@ func (fc *firecracker) getVersionNumber() (string, error) {
 	var version string
 	fields := strings.Split(string(data), " ")
 	if len(fields) > 1 {
-		version = strings.TrimSpace(fields[1])
+		// The output format of `Firecracker --verion` is as follows
+		// Firecracker v0.21.1
+		version = strings.TrimPrefix(strings.TrimSpace(fields[1]), "v")
 		return version, nil
 	}
 
