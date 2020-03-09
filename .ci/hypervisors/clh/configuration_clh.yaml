@@ -12,7 +12,6 @@ docker:
   Describe:
     - CPU constraints
     - CPUs and CPU set
-    - Hot plug CPUs
     - Hotplug memory when create containers
     - Update CPU constraints
     - Update number of CPUs
