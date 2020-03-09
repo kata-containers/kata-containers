@@ -4,10 +4,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-set -euo pipefail
+set -o errexit
+set -o nounset
+set -o pipefail
+[ -n "${DEBUG:-}" ] && set -o xtrace
 
 readonly script_dir="$(dirname $(readlink -f $0))"
 readonly script_name=${0##*/}
+readonly project_dir="$(dirname ${script_dir})"
 readonly tmp_dir=$(mktemp -t -d osbuilder-test.XXXXXXX)
 readonly tmp_rootfs="${tmp_dir}/rootfs-osbuilder"
 readonly images_dir="${tmp_dir}/images"
@@ -16,22 +20,18 @@ readonly docker_image="busybox"
 readonly systemd_docker_config_file="/etc/systemd/system/docker.service.d/kata-containers.conf"
 readonly sysconfig_docker_config_file="/etc/sysconfig/docker"
 readonly tests_repo="github.com/kata-containers/tests"
-readonly tests_repo_dir="${script_dir}/../../tests"
+readonly tests_repo_dir="${project_dir}/../tests"
 readonly mgr="${tests_repo_dir}/cmd/kata-manager/kata-manager.sh"
 readonly test_config=${script_dir}/test_config.sh
-readonly rootfs_builder=${script_dir}/../rootfs-builder/rootfs.sh
+readonly rootfs_builder=${project_dir}/rootfs-builder/rootfs.sh
+readonly DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 readonly RUNTIME=${RUNTIME:-kata-runtime}
 readonly MACHINE_TYPE=`uname -m`
 readonly CI=${CI:-}
 readonly KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
+readonly KATA_DEV_MODE="${KATA_DEV_MODE:-}"
 readonly ci_results_dir="/var/osbuilder/tests"
-readonly dracut_dir=${script_dir}/../dracut
-
-# all distro tests must have this prefix
-readonly test_func_prefix="test_distro_"
-
-# "docker build" does not work with a VM-based runtime
-readonly docker_build_runtime="runc"
+readonly dracut_dir=${project_dir}/dracut
 
 build_images=1
 build_initrds=1
@@ -49,7 +49,7 @@ typeset -A built_initrds
 typeset -A showKataRunFailure=
 
 source ${test_config}
-source "${script_dir}/../scripts/lib.sh"
+source "${project_dir}/scripts/lib.sh"
 
 usage()
 {
@@ -144,6 +144,15 @@ show_stats()
 	rm -f "${tmpfile}"
 }
 
+
+# Run a kata-manager.sh command
+run_mgr()
+{
+	[ -n "${KATA_DEV_MODE:-}" ] && return
+	silent_run $mgr $*
+}
+
+
 exit_handler()
 {
 	if [ "$?" -eq 0 ]
@@ -157,7 +166,7 @@ exit_handler()
 		rm -rf "${tmp_dir}"
 
 		# Restore the default image in config file
-		[ -n "${TRAVIS:-}" ] || silent_run $mgr configure-image
+		[ -n "${TRAVIS:-}" ] || run_mgr configure-image
 
 		return
 	fi
@@ -185,7 +194,7 @@ exit_handler()
 
 	if [ -z "${showKataRunFailure}" ]; then
 		# Restore the default image in config file
-		silent_run $mgr configure-image
+		run_mgr configure-image
 		return
 	fi
 
@@ -202,7 +211,7 @@ exit_handler()
 	sudo -E ps -efwww | egrep "docker|kata" >&2
 
 	# Restore the default image in config file
-	silent_run $mgr configure-image
+	run_mgr configure-image
 }
 
 die()
@@ -231,7 +240,11 @@ silent_run()
 {
 	typeset -a commandLine=("$@")
 	info "running: ${commandLine[@]}"
-	chronic "${commandLine[@]}"
+	if [ -z "${DEBUG:-}" ]; then
+		chronic "${commandLine[@]}"
+	else
+		"${commandLine[@]}"
+	fi
 }
 
 
@@ -240,6 +253,8 @@ set_runtime()
 	local name="$1"
 
 	[ -z "$name" ] && die "need name"
+
+	[ -n "${KATA_DEV_MODE}" ] && return
 
 	# Travis doesn't support VT-x
 	[ -n "${TRAVIS:-}" ] && return
@@ -261,7 +276,6 @@ set_runtime()
 
 setup()
 {
-	[ -z "$images_dir" ] && die "need images directory"
 	mkdir -p "${images_dir}"
 
 	if [ -n "$CI" ]; then
@@ -269,29 +283,23 @@ setup()
 		sudo -E mkdir -p ${ci_results_dir}
 	fi
 
-	export USE_DOCKER=true
-
 	# Travis doesn't support VT-x
 	[ -n "${TRAVIS:-}" ] && return
 
 	[ ! -d "${tests_repo_dir}" ] && git clone "https://${tests_repo}" "${tests_repo_dir}"
 
-	if [ -z "${KATA_DEV_MODE:-}" ]; then
+	if [ -z "${KATA_DEV_MODE}" ]; then
 		mkdir -p /etc/kata-containers/
 		sudo cp -a /usr/share/defaults/kata-containers/configuration.toml /etc/kata-containers/configuration.toml
 	else
 		info "Running with KATA_DEV_MODE set, skipping installation of docker and kata packages"
-		# Make sure docker & kata are available
-		command -v docker >/dev/null || die "docker cannot be found on your PATH"
-		local cfgRuntime=
-		cfgRuntime="$(docker info --format "{{(index .Runtimes \"${RUNTIME}\").Path}}")"
-		[ -n "$cfgRuntime" ] || die "${RUNTIME} is not a configured runtime for docker"
-		[ -x "$cfgRuntime" ] || die "docker ${RUNTIME} is linked to an invalid executable: $cfgRuntime"
 	fi
-	silent_run $mgr enable-debug
+	run_mgr enable-debug
 
-	# Ensure "docker build" works
-	set_runtime "${docker_build_runtime}"
+	# "docker build" does not work with a VM-based runtime, and
+	# also does not accept a --runtime option, so our only
+	# option is to overwrite the system docker default runtime
+	set_runtime "${DOCKER_RUNTIME}"
 }
 
 # Fetches the distros test configuration from the distro-specific config.sh file.
@@ -347,6 +355,10 @@ get_distros_config()
 
 create_container()
 {
+	# If KATA_DEV_MODE is set, we don't have any way to point kata-runtime
+	# at the image/initrd to boot, so there's nothing to do
+	[ -n "${KATA_DEV_MODE}" ] && return
+
 	out=$(mktemp)
 
 	local file="/proc/version"
@@ -373,11 +385,11 @@ install_image_create_container()
 	[ -n "${TRAVIS:-}" ] && return
 
 	showKataRunFailure=1
-	silent_run $mgr reset-config
+	run_mgr reset-config
 	if [ "${RUST_AGENT:-}" = "yes" ]; then
-		silent_run $mgr enable-vsock
+		run_mgr enable-vsock
 	fi
-	silent_run $mgr configure-image "$file"
+	run_mgr configure-image "$file"
 	create_container
 	showKataRunFailure=
 }
@@ -393,11 +405,11 @@ install_initrd_create_container()
 	[ -n "${TRAVIS:-}" ] && return
 
 	showKataRunFailure=1
-	silent_run $mgr reset-config
+	run_mgr reset-config
 	if [ "${RUST_AGENT:-}" = "yes" ]; then
-		silent_run $mgr enable-vsock
+		run_mgr enable-vsock
 	fi
-	silent_run $mgr configure-initrd "$file"
+	run_mgr configure-initrd "$file"
 	create_container
 	showKataRunFailure=
 }
@@ -498,6 +510,7 @@ test_distros()
 	get_distros_config "$distro"
 	local commonMakeVars=( \
 		USE_DOCKER=true \
+		DOCKER_RUNTIME="${DOCKER_RUNTIME}" \
 		ROOTFS_BUILD_DEST="$tmp_rootfs" \
 		IMAGES_BUILD_DEST="$images_dir" \
 		DEBUG=1 )
@@ -623,6 +636,7 @@ test_dracut()
 	local initrd_path="${images_dir}/kata-containers-initrd-dracut.img"
 	local image_path="${images_dir}/kata-containers-image-dracut.img"
 	local rootfs_path="${tmp_rootfs}/dracut_rootfs"
+	local overlay_path="${tmp_rootfs}/dracut_overlay"
 
 	detect_go_version ||
 		die "Could not detect the required Go version for AGENT_VERSION='${AGENT_VERSION:-master}'."
@@ -639,18 +653,26 @@ test_dracut()
 
 	typeset -a dockerRunArgs=(\
 		--rm   \
-		--runtime=runc \
-		-v "${images_dir}:${images_dir}" \
-		-v "${script_dir}/..":"${tmp_dir}" \
-		-v "${tmp_rootfs}:${tmp_rootfs}" \
+		--runtime="${DOCKER_RUNTIME}" \
+		-v "${project_dir}":"${project_dir}" \
+		-v "${tmp_dir}":"${tmp_dir}" \
 		-v /etc/localtime:/etc/localtime:ro \
 		dracut-test-osbuilder \
 	)
-	typeset -a makeVars=(BUILD_METHOD=dracut TARGET_INITRD="${initrd_path}" TARGET_IMAGE=${image_path} TARGET_ROOTFS=${rootfs_path})
+
+	typeset -a makeVars=(\
+		BUILD_METHOD=dracut \
+		TARGET_INITRD="${initrd_path}" \
+		TARGET_IMAGE=${image_path} \
+		TARGET_ROOTFS=${rootfs_path} \
+		DRACUT_OVERLAY_DIR="${overlay_path}" \
+		USE_DOCKER=1 \
+		DOCKER_RUNTIME="${DOCKER_RUNTIME}" \
+	)
 
 	info "Making image for dracut inside a container"
-	silent_run docker run ${dockerRunArgs[@]} make -C ${tmp_dir} ${makeVars[@]} rootfs
-	make_image USE_DOCKER=1 ${makeVars[@]}
+	silent_run docker run ${dockerRunArgs[@]} make -C ${project_dir} ${makeVars[@]} rootfs
+	make_image ${makeVars[@]}
 	local image_size=$(stat -c "%s" "${image_path}")
 	local rootfs_size=$(get_rootfs_size "$rootfs_path")
 	built_images["dracut"]="${rootfs_size}:${image_size}"
@@ -659,7 +681,7 @@ test_dracut()
 
 	if [ "$KATA_HYPERVISOR" != "firecracker" ]; then
 		info "Making initrd for dracut inside a container"
-		silent_run docker run ${dockerRunArgs[@]} make -C ${tmp_dir} ${makeVars[@]} AGENT_INIT=yes clean initrd
+		silent_run docker run ${dockerRunArgs[@]} make -C ${project_dir} ${makeVars[@]} AGENT_INIT=yes clean initrd
 		local initrd_size=$(stat -c "%s" "${initrd_path}")
 		built_initrds["dracut"]="${rootfs_size}:${initrd_size}"
 		install_initrd_create_container $initrd_path
