@@ -35,6 +35,10 @@ const (
 	// FedoraImage is the fedora image
 	FedoraImage = "fedora"
 
+	// Fedora30Image is the fedora 30 image
+	// This Fedora version is used mainly because of https://github.com/kata-containers/tests/issues/2358
+	Fedora30Image = "fedora:30"
+
 	// StressImage is the vish/stress image
 	StressImage = "vish/stress"
 
@@ -103,6 +107,7 @@ func init() {
 		AlpineImage,
 		DebianImage,
 		FedoraImage,
+		Fedora30Image,
 		CentosImage,
 		StressImage,
 	}

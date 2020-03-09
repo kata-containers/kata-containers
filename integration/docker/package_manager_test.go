@@ -75,8 +75,7 @@ var _ = Describe("[Serial Test] package manager update test", func() {
 			}
 
 			// This Fedora version is used mainly because of https://github.com/kata-containers/tests/issues/2358
-			fedoraVersion := "30"
-			args = append(args, "-td", "--name", id, FedoraImage+":"+fedoraVersion, "sh")
+			args = append(args, "-td", "--name", id, Fedora30Image, "sh")
 			_, _, exitCode := dockerRun(args...)
 			Expect(exitCode).To(BeZero())
 
