@@ -25,7 +25,7 @@ filter_and_build()
 {
 	local dependency="$1"
 	local array_docker=$("${GOPATH_LOCAL}/bin/yq" read "${test_config_file}" "${dependency}")
-	[ "${array_docker}" = "null" ] && return
+	( [ "${array_docker}" = "null" ] || [ "${array_docker}" = "" ] ) && return
 	mapfile -t _array_docker <<< "${array_docker}"
 	for entry in "${_array_docker[@]}"
 	do

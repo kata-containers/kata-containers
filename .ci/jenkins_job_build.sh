@@ -160,6 +160,7 @@ case "${CI_JOB}" in
 	export KUBERNETES="yes"
 	export OPENSHIFT="no"
 	export TEST_CRIO="false"
+	export TEST_DOCKER="true"
 	export experimental_kernel="true"
 	;;
 esac
