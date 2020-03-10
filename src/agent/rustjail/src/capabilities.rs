@@ -10,7 +10,7 @@ use lazy_static;
 
 use crate::errors::*;
 use caps::{self, CapSet, Capability, CapsHashSet};
-use protocols::oci::LinuxCapabilities;
+use oci::LinuxCapabilities;
 use slog::Logger;
 use std::collections::HashMap;
 
@@ -103,30 +103,30 @@ pub fn drop_priviledges(logger: &Logger, caps: &LinuxCapabilities) -> Result<()>
 
     let all = caps::all();
 
-    for c in all.difference(&to_capshashset(&logger, caps.Bounding.as_ref())) {
+    for c in all.difference(&to_capshashset(&logger, caps.bounding.as_ref())) {
         caps::drop(None, CapSet::Bounding, *c)?;
     }
 
     caps::set(
         None,
         CapSet::Effective,
-        to_capshashset(&logger, caps.Effective.as_ref()),
+        to_capshashset(&logger, caps.effective.as_ref()),
     )?;
     caps::set(
         None,
         CapSet::Permitted,
-        to_capshashset(&logger, caps.Permitted.as_ref()),
+        to_capshashset(&logger, caps.permitted.as_ref()),
     )?;
     caps::set(
         None,
         CapSet::Inheritable,
-        to_capshashset(&logger, caps.Inheritable.as_ref()),
+        to_capshashset(&logger, caps.inheritable.as_ref()),
     )?;
 
     if let Err(_) = caps::set(
         None,
         CapSet::Ambient,
-        to_capshashset(&logger, caps.Ambient.as_ref()),
+        to_capshashset(&logger, caps.ambient.as_ref()),
     ) {
         warn!(logger, "failed to set ambient capability");
     }

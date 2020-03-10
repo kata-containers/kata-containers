@@ -10,7 +10,7 @@ use nix::mount::{self, MntFlags, MsFlags};
 use nix::sys::stat::{self, Mode, SFlag};
 use nix::unistd::{self, Gid, Uid};
 use nix::NixPath;
-use protocols::oci::{LinuxDevice, Mount, Spec};
+use oci::{LinuxDevice, Mount, Spec};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, OpenOptions};
 use std::os::unix;
@@ -108,14 +108,14 @@ pub fn init_rootfs(
     lazy_static::initialize(&PROPAGATION);
     lazy_static::initialize(&LINUXDEVICETYPE);
 
-    let linux = spec.Linux.as_ref().unwrap();
+    let linux = spec.linux.as_ref().unwrap();
     let mut flags = MsFlags::MS_REC;
-    match PROPAGATION.get(&linux.RootfsPropagation.as_str()) {
+    match PROPAGATION.get(&linux.rootfs_propagation.as_str()) {
         Some(fl) => flags |= *fl,
         None => flags |= MsFlags::MS_SLAVE,
     }
 
-    let rootfs = spec.Root.as_ref().unwrap().Path.as_str();
+    let rootfs = spec.root.as_ref().unwrap().path.as_str();
     let root = fs::canonicalize(rootfs)?;
     let rootfs = root.to_str().unwrap();
 
@@ -128,13 +128,13 @@ pub fn init_rootfs(
         None::<&str>,
     )?;
 
-    for m in &spec.Mounts {
+    for m in &spec.mounts {
         let (mut flags, data) = parse_mount(&m);
         if !m.destination.starts_with("/") || m.destination.contains("..") {
             return Err(ErrorKind::Nix(nix::Error::Sys(Errno::EINVAL)).into());
         }
-        if m.field_type == "cgroup" {
-            mount_cgroups(logger, m, rootfs, flags, &data, cpath, mounts)?;
+        if m.r#type == "cgroup" {
+            mount_cgroups(logger, &m, rootfs, flags, &data, cpath, mounts)?;
         } else {
             if m.destination == "/dev" {
                 flags &= !MsFlags::MS_RDONLY;
@@ -148,7 +148,7 @@ pub fn init_rootfs(
     unistd::chdir(rootfs)?;
 
     default_symlinks()?;
-    create_devices(&linux.Devices, bind_device)?;
+    create_devices(&linux.devices, bind_device)?;
     ensure_ptmx()?;
 
     unistd::chdir(&olddir)?;
@@ -168,11 +168,9 @@ fn mount_cgroups(
     // mount tmpfs
     let ctm = Mount {
         source: "tmpfs".to_string(),
-        field_type: "tmpfs".to_string(),
+        r#type: "tmpfs".to_string(),
         destination: m.destination.clone(),
-        options: RepeatedField::default(),
-        unknown_fields: UnknownFields::default(),
-        cached_size: CachedSize::default(),
+        options: Vec::new(),
     };
 
     let cflags = MsFlags::MS_NOEXEC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV;
@@ -217,11 +215,9 @@ fn mount_cgroups(
 
         let bm = Mount {
             source: source.to_string(),
-            field_type: "bind".to_string(),
+            r#type: "bind".to_string(),
             destination: destination.clone(),
-            options: RepeatedField::default(),
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            options: Vec::new(),
         };
 
         mount_from(
@@ -430,7 +426,7 @@ fn mount_from(m: &Mount, rootfs: &str, flags: MsFlags, data: &str, _label: &str)
     let d = String::from(data);
     let dest = format!("{}{}", rootfs, &m.destination);
 
-    let src = if m.field_type.as_str() == "bind" {
+    let src = if m.r#type.as_str() == "bind" {
         let src = fs::canonicalize(m.source.as_str())?;
         let dir = if src.is_file() {
             Path::new(&dest).parent().unwrap()
@@ -484,7 +480,7 @@ fn mount_from(m: &Mount, rootfs: &str, flags: MsFlags, data: &str, _label: &str)
     match mount::mount(
         Some(src.to_str().unwrap()),
         dest.as_str(),
-        Some(m.field_type.as_str()),
+        Some(m.r#type.as_str()),
         flags,
         Some(d.as_str()),
     ) {
@@ -550,8 +546,8 @@ fn create_devices(devices: &[LinuxDevice], bind: bool) -> Result<()> {
         op(dev)?;
     }
     for dev in devices {
-        if !dev.Path.starts_with("/dev") || dev.Path.contains("..") {
-            let msg = format!("{} is not a valid device path", dev.Path);
+        if !dev.path.starts_with("/dev") || dev.path.contains("..") {
+            let msg = format!("{} is not a valid device path", dev.path);
             bail!(ErrorKind::ErrorCode(msg));
         }
         op(dev)?;
@@ -581,22 +577,22 @@ lazy_static! {
 }
 
 fn mknod_dev(dev: &LinuxDevice) -> Result<()> {
-    let f = match LINUXDEVICETYPE.get(dev.Type.as_str()) {
+    let f = match LINUXDEVICETYPE.get(dev.r#type.as_str()) {
         Some(v) => v,
         None => return Err(ErrorKind::ErrorCode("invalid spec".to_string()).into()),
     };
 
     stat::mknod(
-        &dev.Path[1..],
+        &dev.path[1..],
         *f,
-        Mode::from_bits_truncate(dev.FileMode),
-        makedev(dev.Major as u64, dev.Minor as u64),
+        Mode::from_bits_truncate(dev.file_mode.unwrap_or(0)),
+        makedev(dev.major as u64, dev.minor as u64),
     )?;
 
     unistd::chown(
-        &dev.Path[1..],
-        Some(Uid::from_raw(dev.UID as uid_t)),
-        Some(Gid::from_raw(dev.GID as uid_t)),
+        &dev.path[1..],
+        Some(Uid::from_raw(dev.uid.unwrap_or(0) as uid_t)),
+        Some(Gid::from_raw(dev.gid.unwrap_or(0) as uid_t)),
     )?;
 
     Ok(())
@@ -604,7 +600,7 @@ fn mknod_dev(dev: &LinuxDevice) -> Result<()> {
 
 fn bind_dev(dev: &LinuxDevice) -> Result<()> {
     let fd = fcntl::open(
-        &dev.Path[1..],
+        &dev.path[1..],
         OFlag::O_RDWR | OFlag::O_CREAT,
         Mode::from_bits_truncate(0o644),
     )?;
@@ -612,8 +608,8 @@ fn bind_dev(dev: &LinuxDevice) -> Result<()> {
     unistd::close(fd)?;
 
     mount::mount(
-        Some(&*dev.Path),
-        &dev.Path[1..],
+        Some(&*dev.path),
+        &dev.path[1..],
         None::<&str>,
         MsFlags::MS_BIND,
         None::<&str>,
@@ -625,19 +621,19 @@ pub fn finish_rootfs(spec: &Spec) -> Result<()> {
     let olddir = unistd::getcwd()?;
     info!(sl!(), "{}", olddir.to_str().unwrap());
     unistd::chdir("/")?;
-    if spec.Linux.is_some() {
-        let linux = spec.Linux.as_ref().unwrap();
+    if spec.linux.is_some() {
+        let linux = spec.linux.as_ref().unwrap();
 
-        for path in linux.MaskedPaths.iter() {
+        for path in linux.masked_paths.iter() {
             mask_path(path)?;
         }
 
-        for path in linux.ReadonlyPaths.iter() {
+        for path in linux.readonly_paths.iter() {
             readonly_path(path)?;
         }
     }
 
-    for m in spec.Mounts.iter() {
+    for m in spec.mounts.iter() {
         if m.destination == "/dev" {
             let (flags, _) = parse_mount(m);
             if flags.contains(MsFlags::MS_RDONLY) {
@@ -652,7 +648,7 @@ pub fn finish_rootfs(spec: &Spec) -> Result<()> {
         }
     }
 
-    if spec.Root.as_ref().unwrap().Readonly {
+    if spec.root.as_ref().unwrap().readonly {
         let flags = MsFlags::MS_BIND | MsFlags::MS_RDONLY | MsFlags::MS_NODEV | MsFlags::MS_REMOUNT;
 
         mount::mount(Some("/"), "/", None::<&str>, flags, None::<&str>)?;

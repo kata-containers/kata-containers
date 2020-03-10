@@ -68,7 +68,6 @@ pub mod validator;
 
 use std::collections::HashMap;
 use std::mem::MaybeUninit;
-
 use oci::{
     Box as ociBox, Hooks as ociHooks, Linux as ociLinux, LinuxCapabilities as ociLinuxCapabilities,
     Mount as ociMount, POSIXRlimit as ociPOSIXRlimit, Process as ociProcess, Root as ociRoot,
@@ -79,7 +78,7 @@ use protocols::oci::{
     Root as grpcRoot, Spec as grpcSpec,
 };
 
-fn process_grpc_to_oci(p: &grpcProcess) -> ociProcess {
+pub fn process_grpc_to_oci(p: &grpcProcess) -> ociProcess {
     let console_size = if p.ConsoleSize.is_some() {
         let c = p.ConsoleSize.as_ref().unwrap();
         Some(ociBox {
@@ -296,7 +295,7 @@ fn blockio_grpc_to_oci(blk: &grpcLinuxBlockIO) -> ociLinuxBlockIO {
     }
 }
 
-fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
+pub fn resources_grpc_to_oci(res: &grpcLinuxResources) -> ociLinuxResources {
     let devices = {
         let mut d = Vec::new();
         for dev in res.Devices.iter() {
