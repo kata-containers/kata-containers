@@ -455,10 +455,18 @@ prepare_overlay()
 {
 	pushd "${ROOTFS_DIR}" > /dev/null
 	mkdir -p ./etc ./lib/systemd ./sbin ./var
-	ln -sf  ./usr/lib/systemd/systemd ./init
-	ln -sf  ../../init ./lib/systemd/systemd
-	ln -sf  ../init ./sbin/init
-	# Kata sytemd unit file
+
+	# This symlink hacking is mostly to make later rootfs
+	# validation work correctly for the dracut case.
+	# We skip this if /sbin/init exists in the rootfs, meaning
+	# we were passed a pre-populated rootfs directory
+	if [ ! -e ./sbin/init ]; then
+		ln -sf  ./usr/lib/systemd/systemd ./init
+		ln -sf  ../../init ./lib/systemd/systemd
+		ln -sf  ../init ./sbin/init
+	fi
+
+	# Kata systemd unit file
 	mkdir -p ./etc/systemd/system/basic.target.wants/
 	ln -sf /usr/lib/systemd/system/kata-containers.target ./etc/systemd/system/basic.target.wants/kata-containers.target
 	popd  > /dev/null
