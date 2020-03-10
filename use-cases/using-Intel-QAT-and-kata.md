@@ -68,7 +68,7 @@ Make sure to check [`01.org`](https://01.org/intel-quickassist-technology) for
 the latest driver.
 
 ```sh
-$ export QAT_DRIVER_VER=qat1.7.l.4.6.0-00025.tar.gz
+$ export QAT_DRIVER_VER=qat1.7.l.4.8.0-00005.tar.gz 
 $ export QAT_DRIVER_URL=https://01.org/sites/default/files/downloads/${QAT_DRIVER_VER}
 $ export QAT_CONF_LOCATION=~/QAT_conf
 $ export QAT_DOCKERFILE=https://raw.githubusercontent.com/intel/intel-device-plugins-for-kubernetes/master/demo/openssl-qat-engine/Dockerfile
@@ -100,10 +100,9 @@ Clear Linux version 30780 (Released August 13, 2019) includes a
 functional QAT host driver that works with Kata Containers. 
 
 ```sh
-$ sudo swupd bundle-add network-basic linux-firmware-qat make c-basic go-basic containers-virt dev-utils devpkg-elfutils devpkg-systemd
+$ sudo swupd bundle-add network-basic linux-firmware-qat make c-basic go-basic containers-virt dev-utils devpkg-elfutils devpkg-systemd devpkg-ssl
 $ sudo clr-boot-manager update
-$ sudo systemctl start docker
-$ sudo systemctl enable docker
+$ sudo systemctl enable --now docker
 $ sudo reboot
 ```
 
@@ -217,6 +216,10 @@ CONFIG_UIO=y
 CONFIG_CRYPTO_HW=y
 CONFIG_CRYPTO_DEV_QAT_C62XVF=m
 CONFIG_CRYPTO_CBC=y
+CONFIG_MODULES=y
+CONFIG_MODULE_SIG=y
+CONFIG_CRYPTO_AUTHENC=y
+CONFIG_CRYPTO_DH=y
 EOF
 $ $GOPATH/src/github.com/kata-containers/packaging/kernel/build-kernel.sh setup
 ```
@@ -281,9 +284,8 @@ $ export KERNEL_SUBLEVEL=$(awk '/^SUBLEVEL =/{print $NF}' $GOPATH/$LINUX_VER/Mak
 $ export KERNEL_EXTRAVERSION=$(awk '/^EXTRAVERSION =/{print $NF}' $GOPATH/$LINUX_VER/Makefile)
 $ export KERNEL_ROOTFS_DIR=${KERNEL_MAJOR_VERSION}.${KERNEL_PATHLEVEL}.${KERNEL_SUBLEVEL}${KERNEL_EXTRAVERSION}
 $ cd $QAT_SRC
-$ sudo -E make clean
 $ KERNEL_SOURCE_ROOT=$GOPATH/$LINUX_VER ./configure --disable-qat-lkcf --enable-icp-sriov=guest
-$ sudo -E make quickassist-all -j$(nproc)
+$ sudo -E make all -j$(nproc)
 $ sudo -E make INSTALL_MOD_PATH=$ROOTFS_DIR qat-driver-install -j$(nproc)
 ```
 The `usdm_drv` module also needs to be copied into the rootfs modules path and
