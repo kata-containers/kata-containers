@@ -354,6 +354,10 @@ func bindUnmountContainerRootfs(ctx context.Context, sharedDir, sandboxID, cID s
 		logrus.Warnf("%s: %s", err, rootfsDest)
 		return nil
 	}
+	if err := syscall.Rmdir(rootfsDest); err != nil {
+		logrus.WithError(err).WithField("rootfs-dir", rootfsDest).Warn("Could not remove container rootfs dir")
+	}
+
 	return err
 }
 
