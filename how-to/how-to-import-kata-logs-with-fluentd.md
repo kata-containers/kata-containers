@@ -11,6 +11,7 @@
     * [Directly importing JSON](#directly-importing-json)
         * [JSON in files](#json-in-files)
             * [Prefixing all keys](#prefixing-all-keys)
+* [Kata `shimv2`](#kata-shimv2)
 * [Caveats](#caveats)
 * [Summary](#summary)
 
@@ -20,6 +21,10 @@ This document describes how to import Kata Containers logs into [Fluentd](https:
 typically for importing into an
 Elastic/Fluentd/Kibana([EFK](https://github.com/kubernetes/kubernetes/tree/master/cluster/addons/fluentd-elasticsearch#running-efk-stack-in-production))
 or Elastic/Logstash/Kibana([ELK](https://www.elastic.co/elastic-stack)) stack.
+
+The majority of this document focusses on CRI-O based (classic) Kata runtime. Much of that information
+also applies to the Kata `shimv2` runtime.  Differences pertaining to Kata `shimv2` can be found in their
+[own section](#kata-shimv2).
 
 > **Note:** This document does not cover any aspect of "log rotation". It is expected that any production
 > stack already has a method in place to control node log growth.
@@ -387,6 +392,52 @@ JSON data as a single line, and then add the prefix using a JSON filter section:
     @type json
   </parse>
 </filter>
+```
+
+# Kata `shimv2`
+
+When using the Kata `shimv2` runtime with `containerd`, as described in this
+[how-to guide](containerd-kata.md#containerd-runtime-v2-api-shim-v2-api), the Kata logs are routed
+differently, and some adjustments to the above methods will be necessary to filter them in Fluentd.
+
+The Kata `shimv2` logs are different in two primary ways:
+
+- The Kata logs are directed via `containerd`, and will be captured along with the `containerd` logs,
+  such as on the containerd stdout or in the system journal.
+- In parallel, Kata `shimv2` places its logs into the system journal under the systemd name of `kata`.
+
+Below is an example Fluentd configuration fragment showing one possible method of extracting and separating
+the `containerd` and Kata logs from the system journal by filtering on the Kata `SYSLOG_IDENTIFIER` field,
+using the [Fluentd v0.12 rewrite_tag_filter](https://docs.fluentd.org/v/0.12/output/rewrite_tag_filter):
+
+```yaml
+    <source>
+      type systemd
+      path /path/to/journal
+      # capture the containerd logs
+      filters [{ "_SYSTEMD_UNIT": "containerd.service" }]
+      pos_file /tmp/systemd-containerd.pos
+      read_from_head true
+      # tag those temporarily, as we will filter them and rewrite the tags
+      tag containerd_tmp_tag
+    </source>
+
+    # filter out and split between kata entries and containerd entries
+    <match containerd_tmp_tag>
+      @type rewrite_tag_filter
+      # Tag Kata entries
+      <rule>
+        key SYSLOG_IDENTIFIER
+        pattern kata
+        tag kata_tag
+      </rule>
+      # Anything that was not matched so far, tag as containerd
+      <rule>
+        key MESSAGE
+        pattern /.+/
+        tag containerd_tag
+      </rule>
+    </match>
 ```
 
 # Caveats
