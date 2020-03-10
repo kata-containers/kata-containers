@@ -4,7 +4,7 @@
 //
 
 use lazy_static;
-use protocols::oci::{Hook, Linux, LinuxNamespace, LinuxResources, POSIXRlimit, Spec};
+use oci::{Hook, Linux, LinuxNamespace, LinuxResources, POSIXRlimit, Spec};
 use serde_json;
 use std::ffi::{CStr, CString};
 use std::fs;
@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 // use crate::sync::Cond;
 use libc::pid_t;
-use protocols::oci::{LinuxDevice, LinuxIDMapping};
+use oci::{LinuxDevice, LinuxIDMapping};
 use std::clone::Clone;
 use std::fmt::Display;
 use std::process::Command;
@@ -99,70 +99,58 @@ lazy_static! {
     pub static ref DEFAULT_DEVICES: Vec<LinuxDevice> = {
         let mut v = Vec::new();
         v.push(LinuxDevice {
-            Path: "/dev/null".to_string(),
-            Type: "c".to_string(),
-            Major: 1,
-            Minor: 3,
-            FileMode: 0o066,
-            UID: 0xffffffff,
-            GID: 0xffffffff,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            path: "/dev/null".to_string(),
+            r#type: "c".to_string(),
+            major: 1,
+            minor: 3,
+            file_mode: Some(0o066),
+            uid: Some(0xffffffff),
+            gid: Some(0xffffffff),
         });
         v.push(LinuxDevice {
-            Path: "/dev/zero".to_string(),
-            Type: "c".to_string(),
-            Major: 1,
-            Minor: 5,
-            FileMode: 0o066,
-            UID: 0xffffffff,
-            GID: 0xffffffff,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            path: "/dev/zero".to_string(),
+            r#type: "c".to_string(),
+            major: 1,
+            minor: 5,
+            file_mode: Some(0o066),
+            uid: Some(0xffffffff),
+            gid: Some(0xffffffff),
         });
         v.push(LinuxDevice {
-            Path: "/dev/full".to_string(),
-            Type: String::from("c"),
-            Major: 1,
-            Minor: 7,
-            FileMode: 0o066,
-            UID: 0xffffffff,
-            GID: 0xffffffff,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            path: "/dev/full".to_string(),
+            r#type: String::from("c"),
+            major: 1,
+            minor: 7,
+            file_mode: Some(0o066),
+            uid: Some(0xffffffff),
+            gid: Some(0xffffffff),
         });
         v.push(LinuxDevice {
-            Path: "/dev/tty".to_string(),
-            Type: "c".to_string(),
-            Major: 5,
-            Minor: 0,
-            FileMode: 0o066,
-            UID: 0xffffffff,
-            GID: 0xffffffff,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            path: "/dev/tty".to_string(),
+            r#type: "c".to_string(),
+            major: 5,
+            minor: 0,
+            file_mode: Some(0o066),
+            uid: Some(0xffffffff),
+            gid: Some(0xffffffff),
         });
         v.push(LinuxDevice {
-            Path: "/dev/urandom".to_string(),
-            Type: "c".to_string(),
-            Major: 1,
-            Minor: 9,
-            FileMode: 0o066,
-            UID: 0xffffffff,
-            GID: 0xffffffff,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            path: "/dev/urandom".to_string(),
+            r#type: "c".to_string(),
+            major: 1,
+            minor: 9,
+            file_mode: Some(0o066),
+            uid: Some(0xffffffff),
+            gid: Some(0xffffffff),
         });
         v.push(LinuxDevice {
-            Path: "/dev/random".to_string(),
-            Type: "c".to_string(),
-            Major: 1,
-            Minor: 8,
-            FileMode: 0o066,
-            UID: 0xffffffff,
-            GID: 0xffffffff,
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            path: "/dev/random".to_string(),
+            r#type: "c".to_string(),
+            major: 1,
+            minor: 8,
+            file_mode: Some(0o066),
+            uid: Some(0xffffffff),
+            gid: Some(0xffffffff),
         });
         v
     };
@@ -274,16 +262,16 @@ impl BaseContainer for LinuxContainer {
             0
         };
 
-        let root = oci.Root.as_ref().unwrap().Path.as_str();
+        let root = oci.root.as_ref().unwrap().path.as_str();
         let path = fs::canonicalize(root)?;
         let bundle = path.parent().unwrap().to_str().unwrap().to_string();
         Ok(OCIState {
-            version: oci.Version.clone(),
+            version: oci.version.clone(),
             id: self.id(),
             status,
             pid,
             bundle,
-            annotations: oci.Annotations.clone(),
+            annotations: oci.annotations.clone(),
         })
     }
 
@@ -326,10 +314,10 @@ impl BaseContainer for LinuxContainer {
             .spec
             .as_mut()
             .unwrap()
-            .Linux
+            .linux
             .as_mut()
             .unwrap()
-            .Resources = SingularPtrField::some(r);
+            .resources = Some(r);
         Ok(())
     }
 
@@ -363,11 +351,11 @@ impl BaseContainer for LinuxContainer {
         }
 
         let spec = self.config.spec.as_ref().unwrap();
-        if spec.Linux.is_none() {
+        if spec.linux.is_none() {
             return Err(ErrorKind::ErrorCode("no linux config".to_string()).into());
         }
 
-        let linux = spec.Linux.as_ref().unwrap();
+        let linux = spec.linux.as_ref().unwrap();
         // get namespace vector to join/new
         let nses = get_namespaces(&linux, p.init, self.init_process_pid)?;
         info!(self.logger, "got namespaces {:?}!\n", nses);
@@ -376,23 +364,23 @@ impl BaseContainer for LinuxContainer {
         let mut pidns = false;
         let mut userns = false;
         for ns in &nses {
-            let s = NAMESPACES.get(&ns.Type.as_str());
+            let s = NAMESPACES.get(&ns.r#type.as_str());
             if s.is_none() {
                 return Err(ErrorKind::ErrorCode("invalid ns type".to_string()).into());
             }
             let s = s.unwrap();
 
-            if ns.Path.is_empty() {
+            if ns.path.is_empty() {
                 to_new.set(*s, true);
             } else {
-                let fd = match fcntl::open(ns.Path.as_str(), OFlag::empty(), Mode::empty()) {
+                let fd = match fcntl::open(ns.path.as_str(), OFlag::empty(), Mode::empty()) {
                     Ok(v) => v,
                     Err(e) => {
                         info!(
                             self.logger,
                             "cannot open type: {} path: {}",
-                            ns.Type.clone(),
-                            ns.Path.clone()
+                            ns.r#type.clone(),
+                            ns.path.clone()
                         );
                         info!(self.logger, "error is : {}", e.as_errno().unwrap().desc());
                         return Err(e.into());
@@ -535,29 +523,27 @@ impl BaseContainer for LinuxContainer {
             mount::finish_rootfs(spec)?;
         }
 
-        if !p.oci.Cwd.is_empty() {
-            debug!(self.logger, "cwd: {}", p.oci.Cwd.as_str());
-            unistd::chdir(p.oci.Cwd.as_str())?;
+        if !p.oci.cwd.is_empty() {
+            debug!(self.logger, "cwd: {}", p.oci.cwd.as_str());
+            unistd::chdir(p.oci.cwd.as_str())?;
         }
 
         // setup uid/gid
-        info!(self.logger, "{:?}", p.oci.clone());
+        info!(self.logger, "{:?}", &p.oci);
 
-        if p.oci.User.is_some() {
-            let guser = p.oci.User.as_ref().unwrap();
+        let guser = &p.oci.user;
 
-            let uid = Uid::from_raw(guser.UID);
-            let gid = Gid::from_raw(guser.GID);
+        let uid = Uid::from_raw(guser.uid);
+        let gid = Gid::from_raw(guser.gid);
 
-            setid(uid, gid)?;
+        setid(uid, gid)?;
 
-            if !guser.AdditionalGids.is_empty() {
-                setgroups(guser.AdditionalGids.as_slice())?;
-            }
+        if guser.additional_gids.len() > 0 {
+            setgroups(guser.additional_gids.as_slice())?;
         }
 
         // NoNewPeiviledges, Drop capabilities
-        if p.oci.NoNewPrivileges {
+        if p.oci.no_new_privileges {
             if let Err(_) = prctl::set_no_new_privileges(true) {
                 return Err(
                     ErrorKind::ErrorCode("cannot set no new privileges".to_string()).into(),
@@ -565,8 +551,8 @@ impl BaseContainer for LinuxContainer {
             }
         }
 
-        if p.oci.Capabilities.is_some() {
-            let c = p.oci.Capabilities.as_ref().unwrap();
+        if p.oci.capabilities.is_some() {
+            let c = p.oci.capabilities.as_ref().unwrap();
             info!(self.logger, "drop capabilities!");
             capabilities::drop_priviledges(&self.logger, c)?;
         }
@@ -597,8 +583,8 @@ impl BaseContainer for LinuxContainer {
         }
 
         // exec process
-        let args = p.oci.Args.to_vec();
-        let env = p.oci.Env.to_vec();
+        let args = p.oci.args.to_vec();
+        let env = p.oci.env.to_vec();
         do_exec(&self.logger, &args[0], &args, &env)?;
 
         Err(ErrorKind::ErrorCode("fail to create container".to_string()).into())
@@ -624,10 +610,10 @@ impl BaseContainer for LinuxContainer {
             signal::kill(Pid::from_raw(*pid), Some(Signal::SIGKILL))?;
         }
 
-        if spec.Hooks.is_some() {
+        if spec.hooks.is_some() {
             info!(self.logger, "poststop");
-            let hooks = spec.Hooks.as_ref().unwrap();
-            for h in hooks.Poststop.iter() {
+            let hooks = spec.hooks.as_ref().unwrap();
+            for h in hooks.poststop.iter() {
                 execute_hook(&self.logger, h, &st)?;
             }
         }
@@ -724,12 +710,10 @@ fn do_exec(logger: &Logger, path: &str, args: &[String], env: &[String]) -> Resu
 fn get_namespaces(linux: &Linux, init: bool, init_pid: pid_t) -> Result<Vec<LinuxNamespace>> {
     let mut ns: Vec<LinuxNamespace> = Vec::new();
     if init {
-        for i in &linux.Namespaces {
+        for i in &linux.namespaces {
             ns.push(LinuxNamespace {
-                Type: i.Type.clone(),
-                Path: i.Path.clone(),
-                unknown_fields: UnknownFields::default(),
-                cached_size: CachedSize::default(),
+                r#type: i.r#type.clone(),
+                path: i.path.clone(),
             });
         }
     } else {
@@ -748,10 +732,8 @@ fn get_namespaces(linux: &Linux, init: bool, init_pid: pid_t) -> Result<Vec<Linu
             // since it shouldn't be join.
             if !ns_path_buf.eq(&init_ns_path_buf) {
                 ns.push(LinuxNamespace {
-                    Type: i.to_string(),
-                    Path: ns_path,
-                    unknown_fields: UnknownFields::default(),
-                    cached_size: CachedSize::default(),
+                    r#type: i.to_string(),
+                    path: ns_path,
                 });
             }
         }
@@ -829,8 +811,8 @@ fn join_namespaces(
     let (pfd, cfd) = unistd::pipe2(OFlag::O_CLOEXEC).chain_err(|| "failed to create pipe")?;
     let (crfd, pwfd) = unistd::pipe2(OFlag::O_CLOEXEC)?;
 
-    let linux = spec.Linux.as_ref().unwrap();
-    let res = linux.Resources.as_ref();
+    let linux = spec.linux.as_ref().unwrap();
+    let res = linux.resources.as_ref();
 
     match unistd::fork()? {
         ForkResult::Parent { child } => {
@@ -846,12 +828,12 @@ fn join_namespaces(
                 write_mappings(
                     &logger,
                     &format!("/proc/{}/uid_map", child.as_raw()),
-                    &linux.UIDMappings,
+                    &linux.uid_mappings,
                 )?;
                 write_mappings(
                     &logger,
                     &format!("/proc/{}/gid_map", child.as_raw()),
-                    &linux.GIDMappings,
+                    &linux.gid_mappings,
                 )?;
             }
 
@@ -908,10 +890,10 @@ fn join_namespaces(
                 let _ = read_sync(pfd)?;
 
                 // run prestart hook
-                if spec.Hooks.is_some() {
+                if spec.hooks.is_some() {
                     info!(logger, "prestart");
-                    let hooks = spec.Hooks.as_ref().unwrap();
-                    for h in hooks.Prestart.iter() {
+                    let hooks = spec.hooks.as_ref().unwrap();
+                    for h in hooks.prestart.iter() {
                         execute_hook(&logger, h, st)?;
                     }
                 }
@@ -922,10 +904,10 @@ fn join_namespaces(
                 // wait to run poststart hook
                 let _ = read_sync(pfd)?;
                 //run poststart hook
-                if spec.Hooks.is_some() {
+                if spec.hooks.is_some() {
                     info!(logger, "poststart");
-                    let hooks = spec.Hooks.as_ref().unwrap();
-                    for h in hooks.Poststart.iter() {
+                    let hooks = spec.hooks.as_ref().unwrap();
+                    for h in hooks.poststart.iter() {
                         execute_hook(&logger, h, st)?;
                     }
                 }
@@ -941,21 +923,21 @@ fn join_namespaces(
             unistd::close(pwfd)?;
             // set oom_score_adj
 
-            let p = if spec.Process.is_some() {
-                spec.Process.as_ref().unwrap()
+            let p = if spec.process.is_some() {
+                spec.process.as_ref().unwrap()
             } else {
                 return Err(nix::Error::Sys(Errno::EINVAL).into());
             };
 
-            if p.OOMScoreAdj > 0 {
+            if p.oom_score_adj.is_some() {
                 fs::write(
                     "/proc/self/oom_score_adj",
-                    p.OOMScoreAdj.to_string().as_bytes(),
+                    p.oom_score_adj.unwrap().to_string().as_bytes(),
                 )?
             }
 
             // set rlimit
-            for rl in p.Rlimits.iter() {
+            for rl in p.rlimits.iter() {
                 setrlimit(rl)?;
             }
 
@@ -1061,10 +1043,10 @@ fn join_namespaces(
     }
 
     if to_new.contains(CloneFlags::CLONE_NEWUTS) {
-        unistd::sethostname(&spec.Hostname)?;
+        unistd::sethostname(&spec.hostname)?;
     }
 
-    let rootfs = spec.Root.as_ref().unwrap().Path.as_str();
+    let rootfs = spec.root.as_ref().unwrap().path.as_str();
     let root = fs::canonicalize(rootfs)?;
     let rootfs = root.to_str().unwrap();
 
@@ -1104,7 +1086,7 @@ fn join_namespaces(
         }
 
         // setup sysctl
-        set_sysctls(&linux.Sysctl)?;
+        set_sysctls(&linux.sysctl)?;
         unistd::chdir("/")?;
         if let Err(_) = stat::stat("marker") {
             info!(logger, "not in expect root!!");
@@ -1193,11 +1175,11 @@ fn setup_stdio(p: &Process) -> Result<()> {
 fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIDMapping]) -> Result<()> {
     let mut data = String::new();
     for m in maps {
-        if m.Size == 0 {
+        if m.size == 0 {
             continue;
         }
 
-        let val = format!("{} {} {}\n", m.ContainerID, m.HostID, m.Size);
+        let val = format!("{} {} {}\n", m.container_id, m.host_id, m.size);
         data = data + &val;
     }
 
@@ -1273,16 +1255,16 @@ impl LinuxContainer {
 
         let spec = config.spec.as_ref().unwrap();
 
-        if spec.Linux.is_none() {
+        if spec.linux.is_none() {
             return Err(nix::Error::Sys(Errno::EINVAL).into());
         }
 
-        let linux = spec.Linux.as_ref().unwrap();
+        let linux = spec.linux.as_ref().unwrap();
 
-        let cpath = if linux.CgroupsPath.is_empty() {
+        let cpath = if linux.cgroups_path.is_empty() {
             format!("/{}", id.as_str())
         } else {
-            linux.CgroupsPath.clone()
+            linux.cgroups_path.clone()
         };
 
         let cgroup_manager = FsManager::new(cpath.as_str())?;
@@ -1384,12 +1366,12 @@ lazy_static! {
 
 fn setrlimit(limit: &POSIXRlimit) -> Result<()> {
     let rl = libc::rlimit {
-        rlim_cur: limit.Soft,
-        rlim_max: limit.Hard,
+        rlim_cur: limit.soft,
+        rlim_max: limit.hard,
     };
 
-    let res = if RLIMITMAPS.get(limit.Type.as_str()).is_some() {
-        *RLIMITMAPS.get(limit.Type.as_str()).unwrap()
+    let res = if RLIMITMAPS.get(limit.r#type.as_str()).is_some() {
+        *RLIMITMAPS.get(limit.r#type.as_str()).unwrap()
     } else {
         return Err(nix::Error::Sys(Errno::EINVAL).into());
     };
@@ -1445,14 +1427,14 @@ use std::time::Duration;
 fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
     let logger = logger.new(o!("action" => "execute-hook"));
 
-    let binary = PathBuf::from(h.Path.as_str());
+    let binary = PathBuf::from(h.path.as_str());
     let path = binary.canonicalize()?;
     if !path.exists() {
         return Err(ErrorKind::Nix(Error::from_errno(Errno::EINVAL)).into());
     }
 
-    let args = h.Args.clone();
-    let envs = h.Env.clone();
+    let args = h.args.clone();
+    let envs = h.env.clone();
     let state = serde_json::to_string(st)?;
     //	state.push_str("\n");
 
@@ -1565,25 +1547,27 @@ fn execute_hook(logger: &Logger, h: &Hook, st: &OCIState) -> Result<()> {
             let pid = rx.recv().unwrap();
             info!(logger, "hook grand: {}", pid);
 
-            let status: i32 = if h.Timeout > 0 {
-                match rx.recv_timeout(Duration::from_secs(h.Timeout as u64)) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        let error = if e == RecvTimeoutError::Timeout {
-                            -libc::ETIMEDOUT
-                        } else {
-                            -libc::EPIPE
-                        };
-                        let _ = signal::kill(Pid::from_raw(pid), Some(Signal::SIGKILL));
-                        error
+            let status = {
+                if let Some(timeout) = h.timeout {
+                    match rx.recv_timeout(Duration::from_secs(timeout as u64)) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            let error = if e == RecvTimeoutError::Timeout {
+                                -libc::ETIMEDOUT
+                            } else {
+                                -libc::EPIPE
+                            };
+                            let _ = signal::kill(Pid::from_raw(pid), Some(Signal::SIGKILL));
+                            error
+                        }
                     }
-                }
-            } else {
-                if let Ok(s) = rx.recv() {
-                    s
                 } else {
-                    let _ = signal::kill(Pid::from_raw(pid), Some(Signal::SIGKILL));
-                    -libc::EPIPE
+                    if let Ok(s) = rx.recv() {
+                        s
+                    } else {
+                        let _ = signal::kill(Pid::from_raw(pid), Some(Signal::SIGKILL));
+                        -libc::EPIPE
+                    }
                 }
             };
 

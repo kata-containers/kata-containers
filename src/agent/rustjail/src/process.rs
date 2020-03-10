@@ -20,7 +20,7 @@ use nix::unistd::{self, Pid};
 use nix::Result;
 
 use nix::Error;
-use protocols::oci::Process as OCIProcess;
+use oci::Process as OCIProcess;
 use slog::Logger;
 
 #[derive(Debug)]
@@ -104,7 +104,7 @@ impl Process {
 
         info!(logger, "before create console socket!");
 
-        if ocip.Terminal {
+        if ocip.terminal {
             let (psocket, csocket) = match socket::socketpair(
                 AddressFamily::Unix,
                 SockType::Stream,

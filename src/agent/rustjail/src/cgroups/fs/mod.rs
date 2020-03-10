@@ -10,12 +10,12 @@ use crate::errors::*;
 use lazy_static;
 use libc::{self, pid_t};
 use nix::errno::Errno;
+use oci::{LinuxDeviceCgroup, LinuxResources, LinuxThrottleDevice, LinuxWeightDevice};
 use protobuf::{CachedSize, RepeatedField, SingularPtrField, UnknownFields};
 use protocols::agent::{
     BlkioStats, BlkioStatsEntry, CgroupStats, CpuStats, CpuUsage, HugetlbStats, MemoryData,
     MemoryStats, PidsStats, ThrottlingData,
 };
-use protocols::oci::{LinuxDeviceCgroup, LinuxResources, LinuxThrottleDevice, LinuxWeightDevice};
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
@@ -57,63 +57,51 @@ lazy_static! {
     pub static ref DEFAULT_ALLOWED_DEVICES: Vec<LinuxDeviceCgroup> = {
         let mut v = Vec::new();
         v.push(LinuxDeviceCgroup {
-            Allow: true,
-            Type: "c".to_string(),
-            Major: WILDCARD,
-            Minor: WILDCARD,
-            Access: "m".to_string(),
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            allow: true,
+            r#type: "c".to_string(),
+            major: Some(WILDCARD),
+            minor: Some(WILDCARD),
+            access: "m".to_string(),
         });
 
         v.push(LinuxDeviceCgroup {
-            Allow: true,
-            Type: "b".to_string(),
-            Major: WILDCARD,
-            Minor: WILDCARD,
-            Access: "m".to_string(),
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            allow: true,
+            r#type: "b".to_string(),
+            major: Some(WILDCARD),
+            minor: Some(WILDCARD),
+            access: "m".to_string(),
         });
 
         v.push(LinuxDeviceCgroup {
-            Allow: true,
-            Type: "c".to_string(),
-            Major: 5,
-            Minor: 1,
-            Access: "rwm".to_string(),
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            allow: true,
+            r#type: "c".to_string(),
+            major: Some(5),
+            minor: Some(1),
+            access: "rwm".to_string(),
         });
 
         v.push(LinuxDeviceCgroup {
-            Allow: true,
-            Type: "c".to_string(),
-            Major: 136,
-            Minor: WILDCARD,
-            Access: "rwm".to_string(),
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            allow: true,
+            r#type: "c".to_string(),
+            major: Some(136),
+            minor: Some(WILDCARD),
+            access: "rwm".to_string(),
         });
 
         v.push(LinuxDeviceCgroup {
-            Allow: true,
-            Type: "c".to_string(),
-            Major: 5,
-            Minor: 2,
-            Access: "rwm".to_string(),
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            allow: true,
+            r#type: "c".to_string(),
+            major: Some(5),
+            minor: Some(2),
+            access: "rwm".to_string(),
         });
 
         v.push(LinuxDeviceCgroup {
-            Allow: true,
-            Type: "c".to_string(),
-            Major: 10,
-            Minor: 200,
-            Access: "rwm".to_string(),
-            unknown_fields: UnknownFields::default(),
-            cached_size: CachedSize::default(),
+            allow: true,
+            r#type: "c".to_string(),
+            major: Some(10),
+            minor: Some(200),
+            access: "rwm".to_string(),
         });
 
         v
@@ -419,10 +407,10 @@ impl Subsystem for CpuSet {
         let mut cpus: &str = "";
         let mut mems: &str = "";
 
-        if r.CPU.is_some() {
-            let cpu = r.CPU.as_ref().unwrap();
-            cpus = cpu.Cpus.as_str();
-            mems = cpu.Mems.as_str();
+        if r.cpu.is_some() {
+            let cpu = r.cpu.as_ref().unwrap();
+            cpus = cpu.cpus.as_str();
+            mems = cpu.mems.as_str();
         }
 
         // For updatecontainer, just set the new value
@@ -466,17 +454,25 @@ impl Subsystem for Cpu {
     }
 
     fn set(&self, dir: &str, r: &LinuxResources, _update: bool) -> Result<()> {
-        if r.CPU.is_none() {
+        if r.cpu.is_none() {
             return Ok(());
         }
 
-        let cpu = r.CPU.as_ref().unwrap();
+        let cpu = r.cpu.as_ref().unwrap();
 
-        try_write_nonzero(dir, CPU_RT_PERIOD_US, cpu.RealtimePeriod as i128)?;
-        try_write_nonzero(dir, CPU_RT_RUNTIME_US, cpu.RealtimeRuntime as i128)?;
-        write_nonzero(dir, CPU_SHARES, cpu.Shares as i128)?;
-        write_nonzero(dir, CPU_CFS_QUOTA_US, cpu.Quota as i128)?;
-        write_nonzero(dir, CPU_CFS_PERIOD_US, cpu.Period as i128)?;
+        try_write_nonzero(
+            dir,
+            CPU_RT_PERIOD_US,
+            cpu.realtime_period.unwrap_or(0) as i128,
+        )?;
+        try_write_nonzero(
+            dir,
+            CPU_RT_RUNTIME_US,
+            cpu.realtime_runtime.unwrap_or(0) as i128,
+        )?;
+        write_nonzero(dir, CPU_SHARES, cpu.shares.unwrap_or(0) as i128)?;
+        write_nonzero(dir, CPU_CFS_QUOTA_US, cpu.quota.unwrap_or(0) as i128)?;
+        write_nonzero(dir, CPU_CFS_PERIOD_US, cpu.period.unwrap_or(0) as i128)?;
 
         Ok(())
     }
@@ -599,24 +595,24 @@ impl CpuAcct {
 }
 
 fn write_device(d: &LinuxDeviceCgroup, dir: &str) -> Result<()> {
-    let file = if d.Allow { DEVICES_ALLOW } else { DEVICES_DENY };
+    let file = if d.allow { DEVICES_ALLOW } else { DEVICES_DENY };
 
-    let major = if d.Major == WILDCARD {
+    let major = if d.major.unwrap_or(0) == WILDCARD {
         "*".to_string()
     } else {
-        d.Major.to_string()
+        d.major.unwrap_or(0).to_string()
     };
 
-    let minor = if d.Minor == WILDCARD {
+    let minor = if d.minor.unwrap_or(0) == WILDCARD {
         "*".to_string()
     } else {
-        d.Minor.to_string()
+        d.minor.unwrap_or(0).to_string()
     };
 
-    let t = if d.Type.is_empty() {
+    let t = if d.r#type.is_empty() {
         "a"
     } else {
-        d.Type.as_str()
+        d.r#type.as_str()
     };
 
     let v = format!(
@@ -624,7 +620,7 @@ fn write_device(d: &LinuxDeviceCgroup, dir: &str) -> Result<()> {
         t,
         major.as_str(),
         minor.as_str(),
-        d.Access.as_str()
+        d.access.as_str()
     );
 
     info!(sl!(), "{}", v.as_str());
@@ -638,19 +634,17 @@ impl Subsystem for Devices {
     }
 
     fn set(&self, dir: &str, r: &LinuxResources, _update: bool) -> Result<()> {
-        for d in r.Devices.iter() {
+        for d in r.devices.iter() {
             write_device(d, dir)?;
         }
 
         for d in DEFAULT_DEVICES.iter() {
             let td = LinuxDeviceCgroup {
-                Allow: true,
-                Type: d.Type.clone(),
-                Major: d.Major,
-                Minor: d.Minor,
-                Access: "rwm".to_string(),
-                unknown_fields: UnknownFields::default(),
-                cached_size: CachedSize::default(),
+                allow: true,
+                r#type: d.r#type.clone(),
+                major: Some(d.major),
+                minor: Some(d.minor),
+                access: "rwm".to_string(),
             };
 
             write_device(&td, dir)?;
@@ -691,30 +685,34 @@ impl Subsystem for Memory {
     }
 
     fn set(&self, dir: &str, r: &LinuxResources, update: bool) -> Result<()> {
-        if r.Memory.is_none() {
+        if r.memory.is_none() {
             return Ok(());
         }
 
-        let memory = r.Memory.as_ref().unwrap();
+        let memory = r.memory.as_ref().unwrap();
         // initialize kmem limits for accounting
         if !update {
             try_write(dir, KMEM_LIMIT, 1)?;
             try_write(dir, KMEM_LIMIT, -1)?;
         }
 
-        write_nonzero(dir, MEMORY_LIMIT, memory.Limit as i128)?;
-        write_nonzero(dir, MEMORY_SOFT_LIMIT, memory.Reservation as i128)?;
+        write_nonzero(dir, MEMORY_LIMIT, memory.limit.unwrap_or(0) as i128)?;
+        write_nonzero(
+            dir,
+            MEMORY_SOFT_LIMIT,
+            memory.reservation.unwrap_or(0) as i128,
+        )?;
 
-        try_write_nonzero(dir, MEMSW_LIMIT, memory.Swap as i128)?;
-        try_write_nonzero(dir, KMEM_LIMIT, memory.Kernel as i128)?;
+        try_write_nonzero(dir, MEMSW_LIMIT, memory.swap.unwrap_or(0) as i128)?;
+        try_write_nonzero(dir, KMEM_LIMIT, memory.kernel.unwrap_or(0) as i128)?;
 
-        write_nonzero(dir, KMEM_TCP_LIMIT, memory.KernelTCP as i128)?;
+        write_nonzero(dir, KMEM_TCP_LIMIT, memory.kernel_tcp.unwrap_or(0) as i128)?;
 
-        if memory.Swappiness <= 100 {
-            write_file(dir, SWAPPINESS, memory.Swappiness)?;
+        if memory.swapiness.unwrap_or(0) <= 100 {
+            write_file(dir, SWAPPINESS, memory.swapiness.unwrap_or(0))?;
         }
 
-        if memory.DisableOOMKiller {
+        if memory.disable_oom_killer.unwrap_or(false) {
             write_file(dir, OOM_CONTROL, 1)?;
         }
 
@@ -808,14 +806,14 @@ impl Subsystem for Pids {
     }
 
     fn set(&self, dir: &str, r: &LinuxResources, _update: bool) -> Result<()> {
-        if r.Pids.is_none() {
+        if r.pids.is_none() {
             return Ok(());
         }
 
-        let pids = r.Pids.as_ref().unwrap();
+        let pids = r.pids.as_ref().unwrap();
 
-        let v = if pids.Limit > 0 {
-            pids.Limit.to_string()
+        let v = if pids.limit > 0 {
+            pids.limit.to_string()
         } else {
             "max".to_string()
         };
@@ -857,14 +855,14 @@ impl Pids {
 #[inline]
 fn weight(d: &LinuxWeightDevice) -> (String, String) {
     (
-        format!("{}:{} {}", d.Major, d.Minor, d.Weight),
-        format!("{}:{} {}", d.Major, d.Minor, d.LeafWeight),
+        format!("{:?} {:?}", d.blk, d.weight),
+        format!("{:?} {:?}", d.blk, d.leaf_weight),
     )
 }
 
 #[inline]
 fn rate(d: &LinuxThrottleDevice) -> String {
-    format!("{}:{} {}", d.Major, d.Minor, d.Rate)
+    format!("{:?} {}", d.blk, d.rate)
 }
 
 fn write_blkio_device<T: ToString>(dir: &str, file: &str, v: T) -> Result<()> {
@@ -895,34 +893,38 @@ impl Subsystem for Blkio {
     }
 
     fn set(&self, dir: &str, r: &LinuxResources, _update: bool) -> Result<()> {
-        if r.BlockIO.is_none() {
+        if r.block_io.is_none() {
             return Ok(());
         }
 
-        let blkio = r.BlockIO.as_ref().unwrap();
+        let blkio = r.block_io.as_ref().unwrap();
 
-        write_nonzero(dir, BLKIO_WEIGHT, blkio.Weight as i128)?;
-        write_nonzero(dir, BLKIO_LEAF_WEIGHT, blkio.LeafWeight as i128)?;
+        write_nonzero(dir, BLKIO_WEIGHT, blkio.weight.unwrap_or(0) as i128)?;
+        write_nonzero(
+            dir,
+            BLKIO_LEAF_WEIGHT,
+            blkio.leaf_weight.unwrap_or(0) as i128,
+        )?;
 
-        for d in blkio.WeightDevice.iter() {
+        for d in blkio.weight_device.iter() {
             let (w, lw) = weight(d);
             write_blkio_device(dir, BLKIO_WEIGHT_DEVICE, w)?;
             write_blkio_device(dir, BLKIO_LEAF_WEIGHT_DEVICE, lw)?;
         }
 
-        for d in blkio.ThrottleReadBpsDevice.iter() {
+        for d in blkio.throttle_read_bps_device.iter() {
             write_blkio_device(dir, BLKIO_READ_BPS_DEVICE, rate(d))?;
         }
 
-        for d in blkio.ThrottleWriteBpsDevice.iter() {
+        for d in blkio.throttle_write_bps_device.iter() {
             write_blkio_device(dir, BLKIO_WRITE_BPS_DEVICE, rate(d))?;
         }
 
-        for d in blkio.ThrottleReadIOPSDevice.iter() {
+        for d in blkio.throttle_read_iops_device.iter() {
             write_blkio_device(dir, BLKIO_READ_IOPS_DEVICE, rate(d))?;
         }
 
-        for d in blkio.ThrottleWriteIOPSDevice.iter() {
+        for d in blkio.throttle_write_iops_device.iter() {
             write_blkio_device(dir, BLKIO_WRITE_IOPS_DEVICE, rate(d))?;
         }
 
@@ -1010,9 +1012,9 @@ impl Subsystem for HugeTLB {
     }
 
     fn set(&self, dir: &str, r: &LinuxResources, _update: bool) -> Result<()> {
-        for l in r.HugepageLimits.iter() {
-            let file = format!("hugetlb.{}.limit_in_bytes", l.Pagesize);
-            write_file(dir, file.as_str(), l.Limit)?;
+        for l in r.hugepage_limits.iter() {
+            let file = format!("hugetlb.{}.limit_in_bytes", l.page_size);
+            write_file(dir, file.as_str(), l.limit)?;
         }
         Ok(())
     }
@@ -1052,13 +1054,13 @@ impl Subsystem for NetCls {
     }
 
     fn set(&self, dir: &str, r: &LinuxResources, _update: bool) -> Result<()> {
-        if r.Network.is_none() {
+        if r.network.is_none() {
             return Ok(());
         }
 
-        let network = r.Network.as_ref().unwrap();
+        let network = r.network.as_ref().unwrap();
 
-        write_nonzero(dir, NET_CLS_CLASSID, network.ClassID as i128)?;
+        write_nonzero(dir, NET_CLS_CLASSID, network.class_id.unwrap_or(0) as i128)?;
 
         Ok(())
     }
@@ -1070,14 +1072,14 @@ impl Subsystem for NetPrio {
     }
 
     fn set(&self, dir: &str, r: &LinuxResources, _update: bool) -> Result<()> {
-        if r.Network.is_none() {
+        if r.network.is_none() {
             return Ok(());
         }
 
-        let network = r.Network.as_ref().unwrap();
+        let network = r.network.as_ref().unwrap();
 
-        for p in network.Priorities.iter() {
-            let prio = format!("{} {}", p.Name, p.Priority);
+        for p in network.priorities.iter() {
+            let prio = format!("{} {}", p.name, p.priority);
 
             try_write_file(dir, NET_PRIO_IFPRIOMAP, prio)?;
         }
