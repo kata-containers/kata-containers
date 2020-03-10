@@ -1125,3 +1125,27 @@ func TestBadCPUs(t *testing.T) {
 		t.Errorf("Error expected")
 	}
 }
+
+var (
+	vIommuString        = "-device intel-iommu,intremap=on,device-iotlb=on,caching-mode=on"
+	vIommuNoCacheString = "-device intel-iommu,intremap=on,device-iotlb=on,caching-mode=off"
+)
+
+func TestIommu(t *testing.T) {
+	iommu := IommuDev{
+		Intremap:    true,
+		DeviceIotlb: true,
+		CachingMode: true,
+	}
+
+	if !iommu.Valid() {
+		t.Fatalf("iommu should be valid")
+	}
+
+	testAppend(iommu, vIommuString, t)
+
+	iommu.CachingMode = false
+
+	testAppend(iommu, vIommuNoCacheString, t)
+
+}
