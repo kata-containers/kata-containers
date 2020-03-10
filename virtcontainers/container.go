@@ -1108,6 +1108,11 @@ func (c *Container) stop(force bool) error {
 		return err
 	}
 
+	shareDir := filepath.Join(kataHostSharedDir(), c.sandbox.id, c.id)
+	if err := syscall.Rmdir(shareDir); err != nil {
+		c.Logger().WithError(err).WithField("share-dir", shareDir).Warn("Could not remove container share dir")
+	}
+
 	// container was killed by force, container MUST change its state
 	// as soon as possible just in case one of below operations fail leaving
 	// the containers in a bad state.
