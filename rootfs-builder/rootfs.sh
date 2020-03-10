@@ -544,34 +544,31 @@ EOT
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
+		if [ "$RUST_AGENT" != "yes" ]; then
+			agent_pkg="${GO_AGENT_PKG}"
+			agent_dir="${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
+		else
+			# The PATH /.cargo/bin is apparently wrong
+			# looks like $HOME is resolved to empty when
+			# container is started
+			source "${HOME}/.cargo/env"
+			agent_pkg="${RUST_AGENT_PKG}"
+			agent_dir="${GOPATH_LOCAL}/src/${RUST_AGENT_PKG}/src/agent"
+			# For now, rust-agent doesn't support seccomp yet.
+			SECCOMP="no"
+		fi
+
 		info "Pull Agent source code"
-		go get -d "${GO_AGENT_PKG}" || true
+		go get -d "${agent_pkg}" || true
 		OK "Pull Agent source code"
 
 		info "Build agent"
-		pushd "${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
+		pushd "${agent_dir}"
 		[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful" || info "checkout failed!"
 		make clean
 		make INIT=${AGENT_INIT}
 		make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
 		popd
-		if [ "$RUST_AGENT" == "yes" ]; then
-			# build rust agent
-			info "Build rust agent"
-			# The PATH /.cargo/bin is apparently wrong
-			# looks like $HOME is resolved to empty when
-			# container is started
-			source "${HOME}/.cargo/env"
-			git clone https://${RUST_AGENT_PKG}.git
-			local -r agent_dir="${GOPATH_LOCAL}/src/${RUST_AGENT_PKG}/src/agent"
-			pushd "${agent_dir}"
-			# checkout correct version
-			[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful"
-			make clean
-			make
-			make install DESTDIR="${ROOTFS_DIR}"
-			popd
-		fi
 	else
 		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
 		OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
