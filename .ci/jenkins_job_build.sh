@@ -9,6 +9,11 @@ set -e
 
 source "/etc/os-release" || source "/usr/lib/os-release"
 
+# Run noninteractive on debian and ubuntu
+if [ "$ID" == "debian" ] || [ "$ID" == "ubuntu" ]; then
+	export DEBIAN_FRONTEND=noninteractive
+fi
+
 # Unit test issue for RHEL
 unit_issue="https://github.com/kata-containers/runtime/issues/1517"
 
