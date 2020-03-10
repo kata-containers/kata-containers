@@ -199,7 +199,7 @@ create_summary_file()
 	if [ "${RUST_AGENT}" == "no" ]; then
 		agent_version=$("$agent" --version|awk '{print $NF}')
 	else
-		local -r agentdir="${RUST_SRC_PATH}/$(basename ${RUST_AGENT_PKG} .git)/src/agent"
+		local -r agentdir="${GOPATH}/src/${RUST_AGENT_PKG}/src/agent"
 		agent_version=$(cat ${agentdir}/VERSION)
 	fi
 
