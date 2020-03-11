@@ -775,6 +775,14 @@ func addAgentConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig) error
 		c.TraceType = value
 	}
 
+	if value, ok := ocispec.Annotations[vcAnnotations.AgentContainerPipeSize]; ok {
+		containerPipeSize, err := strconv.ParseUint(value, 10, 32)
+		if err != nil {
+			return fmt.Errorf("Error parsing annotation for %s: Please specify uint32 value", vcAnnotations.AgentContainerPipeSize)
+		}
+		c.ContainerPipeSize = uint32(containerPipeSize)
+	}
+
 	config.AgentConfig = c
 
 	return nil

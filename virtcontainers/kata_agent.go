@@ -162,13 +162,14 @@ func ephemeralPath() string {
 // KataAgentConfig is a structure storing information needed
 // to reach the Kata Containers agent.
 type KataAgentConfig struct {
-	LongLiveConn  bool
-	UseVSock      bool
-	Debug         bool
-	Trace         bool
-	TraceMode     string
-	TraceType     string
-	KernelModules []string
+	LongLiveConn      bool
+	UseVSock          bool
+	Debug             bool
+	Trace             bool
+	ContainerPipeSize uint32
+	TraceMode         string
+	TraceType         string
+	KernelModules     []string
 }
 
 // KataAgentState is the structure describing the data stored from this
@@ -263,6 +264,11 @@ func KataAgentKernelParams(config KataAgentConfig) []Param {
 
 	if config.Trace && config.TraceMode == agentTraceModeStatic {
 		params = append(params, Param{Key: "agent.trace", Value: config.TraceType})
+	}
+
+	if config.ContainerPipeSize > 0 {
+		containerPipeSize := strconv.FormatUint(uint64(config.ContainerPipeSize), 10)
+		params = append(params, Param{Key: vcAnnotations.ContainerPipeSizeKernelParam, Value: containerPipeSize})
 	}
 
 	return params
