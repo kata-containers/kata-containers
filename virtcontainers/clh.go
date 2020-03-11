@@ -122,6 +122,7 @@ var clhKernelParams = []Param{
 	{"noreplace-smp", ""},  // do not replace SMP instructions
 	{"agent.log_vport", fmt.Sprintf("%d", vSockLogsPort)}, // tell the agent where to send the logs
 	{"rootflags", "data=ordered,errors=remount-ro ro"},    // mount the root filesystem as readonly
+	{"rootfstype", "ext4"},
 }
 
 var clhDebugKernelParams = []Param{
