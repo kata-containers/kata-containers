@@ -15,7 +15,9 @@ import (
 	lSyslog "github.com/sirupsen/logrus/hooks/syslog"
 )
 
-var originalLoggerLevel = logrus.InfoLevel
+// Default our log level to 'Warn', rather than the logrus default
+// of 'Info', which is rather noisy.
+var originalLoggerLevel = logrus.WarnLevel
 var kataUtilsLogger = logrus.NewEntry(logrus.New())
 
 // SetLogger sets the logger for the factory.
