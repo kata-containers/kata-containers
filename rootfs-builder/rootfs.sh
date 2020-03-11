@@ -17,7 +17,6 @@ GO_AGENT_PKG=${GO_AGENT_PKG:-github.com/kata-containers/agent}
 RUST_AGENT_PKG=${RUST_AGENT_PKG:-github.com/kata-containers/kata-containers}
 RUST_AGENT=${RUST_AGENT:-no}
 RUST_VERSION="null"
-RUST_SRC_PATH=${RUST_SRC_PATH:-${HOME}/rust}
 CMAKE_VERSION=${CMAKE_VERSION:-"null"}
 MUSL_VERSION=${MUSL_VERSION:-"null"}
 AGENT_BIN=${AGENT_BIN:-kata-agent}
@@ -106,9 +105,6 @@ RUST_AGENT          When set to "yes", build kata-agent from kata-rust-agent ins
 
 RUST_AGENT_PKG      URL of the Git repository hosting the agent package.
                     Default value: ${RUST_AGENT_PKG}
-
-RUST_SRC_PATH       Path of the source code
-                    Default value: ${RUST_SRC_PATH}
 
 AGENT_VERSION       Version of the agent to include in the rootfs.
                     Default value: ${AGENT_VERSION:-<not set>}
@@ -281,7 +277,6 @@ check_env_variables()
 
 	if [ -z "${AGENT_SOURCE_BIN}" ]; then
 		[ "$RUST_AGENT" == "yes" -o "$RUST_AGENT" == "no" ] || die "RUST_AGENT($RUST_AGENT) is invalid (must be yes or no)"
-		mkdir -p ${RUST_SRC_PATH} || :
 	fi
 
 	[ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
@@ -392,7 +387,7 @@ build_rootfs_distro()
 			if [ "$RUST_AGENT" == "no" ]; then
 				docker_run_args+=" --env GO_AGENT_PKG=${GO_AGENT_PKG}"
 			else
-				docker_run_args+=" --env RUST_AGENT_PKG=${RUST_AGENT_PKG} -v ${RUST_SRC_PATH}:${RUST_SRC_PATH} --env RUST_SRC_PATH=${RUST_SRC_PATH}"
+				docker_run_args+=" --env RUST_AGENT_PKG=${RUST_AGENT_PKG}"
 			fi
 			docker_run_args+=" --env RUST_AGENT=${RUST_AGENT} -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 		else
@@ -405,9 +400,6 @@ build_rootfs_distro()
 		# Relabel volumes so SELinux allows access (see docker-run(1))
 		if command -v selinuxenabled > /dev/null && selinuxenabled ; then
 			SRC_VOL=("${GOPATH_LOCAL}")
-			if [ "${RUST_AGENT}" == "yes" ]; then
-				SRC_VOL+=("${RUST_SRC_PATH}")
-			fi
 
 			for volume_dir in "${script_dir}" \
 					  "${ROOTFS_DIR}" \
@@ -560,37 +552,31 @@ EOT
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
+		if [ "$RUST_AGENT" != "yes" ]; then
+			agent_pkg="${GO_AGENT_PKG}"
+			agent_dir="${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
+		else
+			# The PATH /.cargo/bin is apparently wrong
+			# looks like $HOME is resolved to empty when
+			# container is started
+			source "${HOME}/.cargo/env"
+			agent_pkg="${RUST_AGENT_PKG}"
+			agent_dir="${GOPATH_LOCAL}/src/${RUST_AGENT_PKG}/src/agent"
+			# For now, rust-agent doesn't support seccomp yet.
+			SECCOMP="no"
+		fi
+
 		info "Pull Agent source code"
-		go get -d "${GO_AGENT_PKG}" || true
+		go get -d "${agent_pkg}" || true
 		OK "Pull Agent source code"
 
 		info "Build agent"
-		pushd "${GOPATH_LOCAL}/src/${GO_AGENT_PKG}"
+		pushd "${agent_dir}"
 		[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful" || info "checkout failed!"
 		make clean
 		make INIT=${AGENT_INIT}
 		make install DESTDIR="${ROOTFS_DIR}" INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
 		popd
-		if [ "$RUST_AGENT" == "yes" ]; then
-			# build rust agent
-			info "Build rust agent"
-			# The PATH /.cargo/bin is apparently wrong
-			# looks like $HOME is resolved to empty when
-			# container is started
-			source "${HOME}/.cargo/env"
-			local -r agent_dir="$(basename ${RUST_AGENT_PKG})/src/agent"
-			pushd "${RUST_SRC_PATH}"
-			if [ ! -d ${RUST_SRC_PATH}/${agent_dir} ]; then
-				git clone https://${RUST_AGENT_PKG}.git
-			fi
-			cd ${agent_dir}
-			# checkout correct version
-			[ -n "${AGENT_VERSION}" ] && git checkout "${AGENT_VERSION}" && OK "git checkout successful"
-			make clean
-			make
-			make install DESTDIR="${ROOTFS_DIR}"
-			popd
-		fi
 	else
 		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
 		OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
