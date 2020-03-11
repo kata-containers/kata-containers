@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	vcAnnotations "github.com/kata-containers/runtime/virtcontainers/pkg/annotations"
 	"io/ioutil"
 	"net"
 	"os"
@@ -923,11 +924,12 @@ func TestKataAgentKernelParams(t *testing.T) {
 	assert := assert.New(t)
 
 	type testData struct {
-		debug          bool
-		trace          bool
-		traceMode      string
-		traceType      string
-		expectedParams []Param
+		debug             bool
+		trace             bool
+		containerPipeSize uint32
+		traceMode         string
+		traceType         string
+		expectedParams    []Param
 	}
 
 	debugParam := Param{Key: "agent.log", Value: "debug"}
@@ -937,58 +939,64 @@ func TestKataAgentKernelParams(t *testing.T) {
 
 	traceFooParam := Param{Key: "agent.trace", Value: "foo"}
 
+	containerPipeSizeParam := Param{Key: vcAnnotations.ContainerPipeSizeKernelParam, Value: "2097152"}
+
 	data := []testData{
-		{false, false, "", "", []Param{}},
-		{true, false, "", "", []Param{debugParam}},
+		{false, false, 0, "", "", []Param{}},
+		{true, false, 0, "", "", []Param{debugParam}},
 
-		{false, false, "foo", "", []Param{}},
-		{false, false, "foo", "", []Param{}},
-		{false, false, "", "foo", []Param{}},
-		{false, false, "", "foo", []Param{}},
-		{false, false, "foo", "foo", []Param{}},
-		{false, true, "foo", "foo", []Param{}},
+		{false, false, 0, "foo", "", []Param{}},
+		{false, false, 0, "foo", "", []Param{}},
+		{false, false, 0, "", "foo", []Param{}},
+		{false, false, 0, "", "foo", []Param{}},
+		{false, false, 0, "foo", "foo", []Param{}},
+		{false, true, 0, "foo", "foo", []Param{}},
 
-		{false, false, agentTraceModeDynamic, "", []Param{}},
-		{false, false, agentTraceModeStatic, "", []Param{}},
-		{false, false, "", agentTraceTypeIsolated, []Param{}},
-		{false, false, "", agentTraceTypeCollated, []Param{}},
-		{false, false, "foo", agentTraceTypeIsolated, []Param{}},
-		{false, false, "foo", agentTraceTypeCollated, []Param{}},
+		{false, false, 0, agentTraceModeDynamic, "", []Param{}},
+		{false, false, 0, agentTraceModeStatic, "", []Param{}},
+		{false, false, 0, "", agentTraceTypeIsolated, []Param{}},
+		{false, false, 0, "", agentTraceTypeCollated, []Param{}},
+		{false, false, 0, "foo", agentTraceTypeIsolated, []Param{}},
+		{false, false, 0, "foo", agentTraceTypeCollated, []Param{}},
 
-		{false, false, agentTraceModeDynamic, agentTraceTypeIsolated, []Param{}},
-		{false, false, agentTraceModeDynamic, agentTraceTypeCollated, []Param{}},
+		{false, false, 0, agentTraceModeDynamic, agentTraceTypeIsolated, []Param{}},
+		{false, false, 0, agentTraceModeDynamic, agentTraceTypeCollated, []Param{}},
 
-		{false, false, agentTraceModeStatic, agentTraceTypeCollated, []Param{}},
-		{false, false, agentTraceModeStatic, agentTraceTypeCollated, []Param{}},
+		{false, false, 0, agentTraceModeStatic, agentTraceTypeCollated, []Param{}},
+		{false, false, 0, agentTraceModeStatic, agentTraceTypeCollated, []Param{}},
 
-		{false, true, agentTraceModeDynamic, agentTraceTypeIsolated, []Param{}},
-		{false, true, agentTraceModeDynamic, agentTraceTypeCollated, []Param{}},
-		{true, true, agentTraceModeDynamic, agentTraceTypeCollated, []Param{debugParam}},
+		{false, true, 0, agentTraceModeDynamic, agentTraceTypeIsolated, []Param{}},
+		{false, true, 0, agentTraceModeDynamic, agentTraceTypeCollated, []Param{}},
+		{true, true, 0, agentTraceModeDynamic, agentTraceTypeCollated, []Param{debugParam}},
 
-		{false, true, "", agentTraceTypeIsolated, []Param{}},
-		{false, true, "", agentTraceTypeCollated, []Param{}},
-		{true, true, "", agentTraceTypeIsolated, []Param{debugParam}},
-		{true, true, "", agentTraceTypeCollated, []Param{debugParam}},
-		{false, true, "foo", agentTraceTypeIsolated, []Param{}},
-		{false, true, "foo", agentTraceTypeCollated, []Param{}},
-		{true, true, "foo", agentTraceTypeIsolated, []Param{debugParam}},
-		{true, true, "foo", agentTraceTypeCollated, []Param{debugParam}},
+		{false, true, 0, "", agentTraceTypeIsolated, []Param{}},
+		{false, true, 0, "", agentTraceTypeCollated, []Param{}},
+		{true, true, 0, "", agentTraceTypeIsolated, []Param{debugParam}},
+		{true, true, 0, "", agentTraceTypeCollated, []Param{debugParam}},
+		{false, true, 0, "foo", agentTraceTypeIsolated, []Param{}},
+		{false, true, 0, "foo", agentTraceTypeCollated, []Param{}},
+		{true, true, 0, "foo", agentTraceTypeIsolated, []Param{debugParam}},
+		{true, true, 0, "foo", agentTraceTypeCollated, []Param{debugParam}},
 
-		{false, true, agentTraceModeStatic, agentTraceTypeIsolated, []Param{traceIsolatedParam}},
-		{false, true, agentTraceModeStatic, agentTraceTypeCollated, []Param{traceCollatedParam}},
-		{true, true, agentTraceModeStatic, agentTraceTypeIsolated, []Param{traceIsolatedParam, debugParam}},
-		{true, true, agentTraceModeStatic, agentTraceTypeCollated, []Param{traceCollatedParam, debugParam}},
+		{false, true, 0, agentTraceModeStatic, agentTraceTypeIsolated, []Param{traceIsolatedParam}},
+		{false, true, 0, agentTraceModeStatic, agentTraceTypeCollated, []Param{traceCollatedParam}},
+		{true, true, 0, agentTraceModeStatic, agentTraceTypeIsolated, []Param{traceIsolatedParam, debugParam}},
+		{true, true, 0, agentTraceModeStatic, agentTraceTypeCollated, []Param{traceCollatedParam, debugParam}},
 
-		{false, true, agentTraceModeStatic, "foo", []Param{traceFooParam}},
-		{true, true, agentTraceModeStatic, "foo", []Param{debugParam, traceFooParam}},
+		{false, true, 0, agentTraceModeStatic, "foo", []Param{traceFooParam}},
+		{true, true, 0, agentTraceModeStatic, "foo", []Param{debugParam, traceFooParam}},
+
+		{false, false, 0, "", "", []Param{}},
+		{false, false, 2097152, "", "", []Param{containerPipeSizeParam}},
 	}
 
 	for i, d := range data {
 		config := KataAgentConfig{
-			Debug:     d.debug,
-			Trace:     d.trace,
-			TraceMode: d.traceMode,
-			TraceType: d.traceType,
+			Debug:             d.debug,
+			Trace:             d.trace,
+			TraceMode:         d.traceMode,
+			TraceType:         d.traceType,
+			ContainerPipeSize: d.containerPipeSize,
 		}
 
 		count := len(d.expectedParams)
