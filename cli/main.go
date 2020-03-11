@@ -57,8 +57,8 @@ var kataLog *logrus.Entry
 
 // originalLoggerLevel is the default log level. It is used to revert the
 // current log level back to its original value if debug output is not
-// required.
-var originalLoggerLevel logrus.Level
+// required. We set the default to 'Warn' for the runtime.
+var originalLoggerLevel = logrus.WarnLevel
 
 var debug = false
 
