@@ -27,7 +27,7 @@ echo "Install perl-IPC-Run"
 sudo -E zypper -n install perl-IPC-Run
 
 echo "Add repo for moreutils"
-moreutils_repo="https://download.opensuse.org/repositories/utilities/SLE_12_SP3_Backports/utilities.repo"
+moreutils_repo="https://download.opensuse.org/repositories/utilities/SLE_${VERSION//-/_}/utilities.repo"
 sudo -E zypper addrepo --no-gpgcheck ${moreutils_repo}
 sudo -E zypper refresh
 
@@ -51,7 +51,7 @@ declare -A packages=( \
 	[crio_dependencies]="libglib-2_0-0 libseccomp-devel libapparmor-devel libgpg-error-devel glibc-devel-static libgpgme-devel libassuan-devel glib2-devel glibc-devel util-linux" \
 	[bison_binary]="bison" \
 	[libudev-dev]="libudev-devel" \
-	[build_tools]="python zlib-devel" \
+	[build_tools]="gcc python zlib-devel" \
 	[metrics_dependencies]="jq" \
 	[cri-containerd_dependencies]="libseccomp-devel libapparmor-devel make pkg-config" \
 	[haveged]="haveged" \
@@ -59,7 +59,7 @@ declare -A packages=( \
 	[libsystemd]="systemd-devel" \
 )
 
-main() 
+main()
 {
 	local setup_type="$1"
 	[ -z "$setup_type" ] && die "need setup type"
@@ -92,9 +92,6 @@ main()
 	chronic sudo -E zypper -n install redis
 
 	[ "$setup_type" = "minimal" ] && exit 0
-
-	echo "Install Build Tools"
-	chronic sudo -E zypper -n install -t pattern "Basis-Devel"
 
 	echo "Add crudini repo"
 	VERSIONID="12_SP1"
