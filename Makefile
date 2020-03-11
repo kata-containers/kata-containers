@@ -30,7 +30,8 @@ endif
 # union for 'make test'
 UNION := functional debug-console $(DOCKER_DEPENDENCY) openshift crio docker-compose network \
 	docker-stability oci netmon kubernetes swarm vm-factory \
-	entropy ramdisk shimv2 tracing time-drift compatibility vcpus $(PODMAN_DEPENDENCY)
+	entropy ramdisk shimv2 tracing time-drift compatibility vcpus \
+	$(PODMAN_DEPENDENCY) pmem
 
 # filter scheme script for docker integration test suites
 FILTER_FILE = .ci/filter/filter_docker_test.sh
@@ -219,6 +220,9 @@ vcpus:
 ipv6:
 	bash -f integration/ipv6/ipv6.sh
 
+pmem:
+	bash -f integration/pmem/pmem_test.sh
+
 test: ${UNION}
 
 check: checkcommits log-parser
@@ -255,6 +259,7 @@ help:
 	oci \
 	openshift \
 	pentest \
+	pmem \
 	sandbox-cgroup \
 	swarm \
 	netmon \

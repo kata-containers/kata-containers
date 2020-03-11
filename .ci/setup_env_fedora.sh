@@ -28,7 +28,7 @@ declare -A minimal_packages=( \
 )
 
 declare -A packages=( \
-	[general_dependencies]="dnf-plugins-core python pkgconfig util-linux libgpg-error-devel" \
+	[general_dependencies]="xfsprogs dnf-plugins-core python pkgconfig util-linux libgpg-error-devel" \
 	[kata_containers_dependencies]="libtool automake autoconf bc pixman numactl-libs" \
 	[qemu_dependencies]="libcap-devel libattr-devel libcap-ng-devel zlib-devel pixman-devel librbd-devel libpmem-devel" \
 	[kernel_dependencies]="elfutils-libelf-devel flex" \
